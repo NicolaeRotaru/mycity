@@ -18,13 +18,18 @@ export default {
     './app/**/*.{js,ts,jsx,tsx}',
     './components/**/*.{js,ts,jsx,tsx}',
   ],
-  // Le dashboard admin (StatCard, /admin/activity) compongono classi colore in
-  // modo dinamico (`text-${color}-600`): il JIT non le rileva, quindi le mettiamo
-  // qui in safelist per garantirne il render.
+  // Rete di sicurezza per le classi colore che NON stanno dentro i `content`
+  // qui sopra: `lib/` non viene scansionato, ma ci scrive classi che finiscono
+  // a video (es. TIER_META in `lib/loyalty.ts` → `text-amber-700`).
+  // Tenute solo le tre famiglie davvero usate. Le altre sei (sky, violet,
+  // indigo, slate, pink, blue) sono fuori dalla palette del design system e non
+  // le usava nessuno: 72 classi — 1584 selettori contando le varianti di
+  // opacità, 84 KB di CSS minificato — generate a vuoto, tolte il 6/9/2026.
+  // Le dashboard admin non compongono più classi dinamiche: `app/admin/activity`
+  // e `app/admin/funnel` usano mappe statiche e lo dichiarano nei commenti.
   safelist: [
     {
-      pattern:
-        /(bg|text|border)-(sky|violet|emerald|amber|indigo|rose|slate|pink|blue)-(100|200|600|700)/,
+      pattern: /(bg|text|border)-(emerald|amber|rose)-(100|200|600|700)/,
     },
   ],
   theme: {

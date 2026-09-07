@@ -58,7 +58,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   }
 
   if (ret.status !== 'REQUESTED') {
-    return ApiErrors.conflict(`Reso gia' in stato ${ret.status}`);
+    return ApiErrors.conflict('Questo reso è già stato deciso.');
   }
 
   const admin = getAdminSupabase();
@@ -202,7 +202,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         // I soldi non sono usciti: il reso torna decidibile invece di restare
         // fermo su «approvato» senza rimborso.
         await rimettiInAttesa();
-        return ApiErrors.badGateway('Rimborso fallito: ' + (err instanceof Error ? err.message : 'unknown'));
+        return ApiErrors.badGateway("Il rimborso non è partito: riprova o scrivi all'assistenza.");
       }
     }
   }

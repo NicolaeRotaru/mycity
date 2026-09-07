@@ -516,7 +516,7 @@ function AdminUsersPageInner() {
                             const name = p.store_name ?? p.business_legal_name ?? p.full_name ?? `Utente ${p.id.slice(0, 6)}`;
                             const ok = await confirmDialog({
                               title: 'Eliminare definitivamente?',
-                              message: `${name} verrà rimosso da auth.users e il profilo anonimizzato. L'utente non potrà più accedere. Gli ordini storici restano per obblighi fiscali. Azione irreversibile.`,
+                              message: `L'account di ${name} verrà cancellato e i dati personali anonimizzati. Non potrà più accedere. Gli ordini storici restano per obblighi fiscali. Azione irreversibile.`,
                               confirmLabel: tConfirm('yesDelete'),
                               danger: true,
                               icon: Trash2,
@@ -616,7 +616,7 @@ function AdminUsersPageInner() {
                       const name = p.store_name ?? p.business_legal_name ?? p.full_name ?? `Utente ${p.id.slice(0, 6)}`;
                       const ok = await confirmDialog({
                         title: 'Eliminare definitivamente?',
-                        message: `${name} verrà rimosso da auth.users e il profilo anonimizzato. Azione irreversibile.`,
+                        message: `L'account di ${name} verrà cancellato e i dati personali anonimizzati. Azione irreversibile.`,
                         confirmLabel: tConfirm('yesDelete'), danger: true, icon: Trash2,
                       });
                       if (ok) deleteAccount.mutate(p.id);

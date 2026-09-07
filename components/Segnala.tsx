@@ -55,7 +55,7 @@ export function Segnala({
         }),
       });
       if (!res.ok) throw new Error('Segnalazione non inviata');
-      toast.success('Segnalazione ricevuta. La guardiamo e ti diciamo com è andata.');
+      toast.success('Segnalazione ricevuta. La guardiamo e ti diciamo com\'è andata.');
       setAperto(false);
       setDettaglio('');
     } catch {

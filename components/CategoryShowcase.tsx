@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   Shirt, Apple, Sparkles, Home as HomeIcon, Smartphone,
-  Leaf, Gamepad2, BookOpen, Trophy, Tag,
+  Leaf, Gamepad2, BookOpen, Trophy, Tag, ArrowRight,
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -69,6 +69,22 @@ const imgFor = (slug: string): string | null => IMG_MAP[slug] ?? null;
  * di categoria come base.
  */
 /**
+ * Quante tessere stanno in home. Il resto si raggiunge dal link «Vedi tutte le categorie»:
+ * prima il taglio era muto — sei su otto, e nessun modo di arrivare alle altre due, mentre
+ * il sottotitolo prometteva «tutte le categorie del mercato locale».
+ */
+const TESSERE_IN_HOME = 6;
+
+/**
+ * Quante foto partono subito. Le tessere sono la prima cosa con un'immagine che si vede sul
+ * telefono — e arrivano gia' dentro l'HTML grazie al precarico del server — ma erano tutte
+ * `loading="lazy"`: il browser le metteva in coda dietro al resto e le apriva a bassa
+ * priorita', quindi l'elemento piu' grande della pagina compariva tardi. Le prime quattro
+ * riempiono lo schermo di un telefono: quelle partono subito, le altre restano pigre.
+ */
+const TESSERE_SUBITO = 4;
+
+/**
  * `titolo`/`sottotitolo` stanno QUI e non nel renderer per una ragione precisa: il titolo va
  * nascosto insieme alla griglia, e l'unico che sa se la griglia ha qualcosa è questo componente.
  *
@@ -119,10 +135,21 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
   // alla sezione (`MaybeSection` nel renderer), invece di restare appeso su un vuoto.
   if (vista.mostraErrore || vista.mostraVuoto) return null;
 
+  const altreOltreLeMostrate = categories.length > TESSERE_IN_HOME;
+
   const intestazione = (titolo || sottotitolo) ? (
     <div className="text-center mb-5">
       {titolo && <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900">{titolo}</h2>}
       {sottotitolo && <p className="text-ink-500 text-sm mt-2">{sottotitolo}</p>}
+      {altreOltreLeMostrate && (
+        <Link
+          href="/categorie"
+          className="mt-2 inline-flex items-center gap-1 min-h-[44px] px-3 text-sm font-semibold text-primary-700 hover:text-primary-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2 rounded-full"
+        >
+          Vedi tutte le categorie
+          <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
+        </Link>
+      )}
     </div>
   ) : null;
 
@@ -130,7 +157,7 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
     <>
     {intestazione}
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-      {categories.slice(0, 6).map((c) => {
+      {categories.slice(0, TESSERE_IN_HOME).map((c, i) => {
         const Icon = iconFor(c.slug);
         const grad = gradFor(c.slug);
         const img = imgFor(c.slug);
@@ -149,7 +176,8 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
                 src={sizedImage(img, 'card')}
                 alt=""
                 aria-hidden
-                loading="lazy"
+                loading={i < TESSERE_SUBITO ? 'eager' : 'lazy'}
+                fetchPriority={i < TESSERE_SUBITO ? 'high' : 'auto'}
                 decoding="async"
                 className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}

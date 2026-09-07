@@ -104,8 +104,13 @@ export default function AccountShell({ children }: { children: React.ReactNode }
   return (
     <div className="container mx-auto px-4 py-6 sm:px-6 sm:py-8">
       <div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:items-start lg:gap-7">
-        {/* Sidebar desktop */}
-        <aside className="hidden lg:block lg:sticky lg:top-24">
+        {/* Sidebar desktop.
+            6/9/2026 — Si bloccava a `top-24`, cioe' 96 pixel, mentre l'intestazione appiccicata in
+            cima ne occupa 144 (`--header-height` in globals.css). I 48 pixel di differenza
+            finivano dietro la barra terracotta, che sta sopra: la parte alta della scheda identita'
+            spariva. L'offset ora lo legge dallo stesso token che usano la scheda prodotto e il
+            riepilogo del carrello, cosi' resta scritto in un posto solo. */}
+        <aside className="hidden lg:block lg:sticky lg:top-[var(--header-height)]">
           <AccountSidebar />
         </aside>
 

@@ -254,7 +254,11 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
       <div className="bg-white sm:border sm:rounded-xl flex flex-col h-[calc(100dvh-160px)] sm:h-[calc(100dvh-200px)]">
         {/* HEADER */}
         <div className="flex items-center gap-3 p-4 border-b">
-          <Link href="/messages" className="text-ink-500 hover:text-ink-700">
+          <Link
+            href="/messages"
+            aria-label="Torna a tutti i messaggi"
+            className="text-ink-500 hover:text-ink-700"
+          >
             <ArrowLeft size={20} />
           </Link>
           <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
@@ -300,7 +304,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
               const mine = it.msg.sender_id === userId;
               return (
                 <div key={it.msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] sm:max-w-[70%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
+                  <div className={`max-w-[80%] sm:max-w-[70%] rounded-2xl px-4 py-2 text-sm shadow-sm-neutral ${
                     mine ? 'bg-primary-700 text-white rounded-br-sm' : 'bg-white text-ink-900 border rounded-bl-sm'
                   }`}>
                     <p className="whitespace-pre-wrap break-words">{it.msg.body}</p>
@@ -321,7 +325,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
             type="text"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Scrivi un messaggio..."
+            placeholder="Scrivi un messaggio…"
             aria-label="Scrivi un messaggio"
             maxLength={4000}
             disabled={sendMutation.isPending}

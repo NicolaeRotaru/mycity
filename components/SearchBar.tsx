@@ -33,7 +33,7 @@ type Props = {
  *  - tasto Esc chiude, Enter va al search /search?q=...
  *  - keyboard nav (arrow up/down + enter sui suggerimenti) — MVP: clic
  */
-export default function SearchBar({ className = '', placeholder = 'Cerca prodotti, negozi, categorie...', autoFocus = false }: Props) {
+export default function SearchBar({ className = '', placeholder = 'Cerca prodotti, negozi, categorie…', autoFocus = false }: Props) {
   const router = useRouter();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
@@ -134,13 +134,22 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
 
   useEffect(() => {
     if (!open) return;
-    const onClick = (e: MouseEvent) => {
+    /**
+     * 6/9/2026 — SUL TELEFONO IL PANNELLO POTEVA RESTARE APERTO.
+     * Si ascoltava solo `mousedown`, che è un evento del mouse: su Safari iOS
+     * il tocco lo fa nascere solo sopra gli elementi che il browser considera
+     * cliccabili, quindi un dito appoggiato su un pezzo qualunque di pagina
+     * poteva non chiudere niente. `pointerdown` è lo stesso gesto per dito,
+     * penna e mouse insieme: un solo ascoltatore, tutti e tre i modi di
+     * indicare. (Il dito su un vero iPhone non l'ho potuto provare da qui.)
+     */
+    const onClick = (e: PointerEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
+    document.addEventListener('pointerdown', onClick);
+    return () => document.removeEventListener('pointerdown', onClick);
   }, [open]);
 
   /**
@@ -157,7 +166,10 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!q.trim()) return;
+    // 6/9/2026 — La lente adesso è un pulsante di invio vero. Se il campo è vuoto non c'è
+    // niente da cercare: invece di non fare nulla porta il cursore nel campo, perché un tocco
+    // che non produce niente si legge come «il sito è rotto».
+    if (!q.trim()) { inputRef.current?.focus(); return; }
     router.push(`/search?q=${encodeURIComponent(q.trim())}`);
     setOpen(false);
     inputRef.current?.blur();
@@ -174,7 +186,6 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
           restava fermo. Un'ARIA sbagliata è peggio di nessuna ARIA — quindi
           via, e al suo posto un annuncio onesto di quanti suggerimenti ci sono. */}
       <form onSubmit={submit} role="search" className="relative">
-        <Search size={18} strokeWidth={2.2} aria-hidden className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
         <input
           ref={inputRef}
           type="search"
@@ -187,14 +198,38 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
           autoFocus={autoFocus}
           className="w-full bg-white border-2 border-transparent focus-visible:ring-2 focus-visible:ring-primary-700 focus:border-primary-700 focus:bg-white text-ink-900 placeholder-ink-400 rounded-full pl-11 pr-11 py-2.5 text-sm font-medium focus:outline-none transition-colors shadow-sm"
         />
+        {/* 6/9/2026 — Qui c'era solo un disegno di lente con `pointer-events-none`: chi la
+            toccava non otteneva niente, e dentro il <form> non esisteva nessun pulsante di
+            invio. L'unico modo di cercare era premere Invio — che su un telefono si trova, ma
+            che non tutti conoscono. Adesso è un <button type="submit"> con area premibile
+            44×44, cioè il minimo comodo su schermo tattile. L'ingombro sta dentro il `pl-11`
+            (44px) del campo: il disegno non si sposta, cresce solo quello che si può premere. */}
+        {/* L'anello del fuoco è BIANCO come quello di ogni altro comando della barra in alto. Ci ho
+            sbagliato al primo giro: avevo scritto `focus-visible:outline-none` più un alone color
+            `primary-700`, cioè lo stesso terracotta del fondo della barra — un segno del fuoco
+            invisibile proprio dove serve, e la prova sulla barra in alto è diventata rossa. Bianco su
+            #A03B25 stacca 6,7 volte, e ne bastano 3. */}
+        <button
+          type="submit"
+          // Il campo si chiama gia' «Cerca»: se anche il pulsante si chiamasse cosi', chi usa un lettore
+          // di schermo sentirebbe due volte la stessa parola senza capire quale delle due fa partire.
+          aria-label="Avvia la ricerca"
+          className="absolute left-0 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-ink-400 transition-colors hover:text-ink-700 focus-visible:outline-white"
+        >
+          <Search size={18} strokeWidth={2.2} aria-hidden />
+        </button>
         {q && (
           <button
             type="button"
             onClick={() => { setQ(''); inputRef.current?.focus(); }}
             aria-label="Pulisci"
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-700"
+            // 6/9/2026 — Era un bersaglio da 16×16: la sola icona, senza spazio intorno. Le
+            // linee guida di accessibilità chiedono almeno 24×24, e su un telefono ci vuole di
+            // più. Adesso l'area premibile è 44×44 e sta dentro il `pr-11` del campo, quindi
+            // non copre mai il testo scritto. L'icona resta della stessa misura di prima.
+            className="absolute right-0 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-ink-400 transition-colors hover:text-ink-700 focus-visible:outline-white"
           >
-            <X size={16} strokeWidth={2.2} />
+            <X size={16} strokeWidth={2.2} aria-hidden />
           </button>
         )}
       </form>

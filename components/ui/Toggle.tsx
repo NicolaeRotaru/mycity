@@ -55,8 +55,18 @@ export function Toggle({
         aria-labelledby={idTitolo}
         aria-describedby={idDesc}
         onClick={() => onChange(!value)}
+        /*
+         * 6/9/2026 — DA SPENTO NON SI VEDEVA CHE LI' C'ERA UN INTERRUTTORE.
+         *
+         * La pista spenta era `bg-cream-300` (#EEDFBA) sulla pagina bianca:
+         * 1,32 di stacco, e la pallina bianca dentro la pista aveva lo stesso
+         * 1,32. Un comando deve staccare almeno 3 volte dal fondo, altrimenti
+         * chi ha la vista debole non vede ne' l'interruttore ne' da che parte
+         * sta la pallina (WCAG 1.4.11, livello AA). Con `ink-400` (#78716C) la
+         * pista stacca 4,8 dal bianco: si vede il comando e si vede lo stato.
+         */
         className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-          value ? 'bg-primary-700' : 'bg-cream-300'
+          value ? 'bg-primary-700' : 'bg-ink-400'
         }`}
       >
         <span

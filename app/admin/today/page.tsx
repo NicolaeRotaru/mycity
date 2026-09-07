@@ -162,38 +162,44 @@ export default function AdminTodayPage() {
           {stats.recentOrders.length === 0 ? (
             <p className="p-6 text-center text-sm text-ink-500">Nessun ordine ancora oggi.</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-cream-50 text-xs uppercase tracking-wider text-ink-600">
-                <tr>
-                  <th className="px-4 py-2.5 text-left">Ordine</th>
-                  <th className="px-4 py-2.5 text-left">Negozio</th>
-                  <th className="px-4 py-2.5 text-left">Cliente</th>
-                  <th className="px-4 py-2.5 text-left">Stato</th>
-                  <th className="px-4 py-2.5 text-right">Totale</th>
-                  <th className="px-4 py-2.5 text-right">Quando</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-cream-100">
-                {(stats.recentOrders as OrdineRecente[]).map((o) => (
-                  <tr key={o.id} className="hover:bg-cream-50">
-                    <td className="px-4 py-3">
-                      <Link href={`/admin/orders/${o.id}`} className="font-mono text-xs text-primary-700 hover:underline">
-                        #{o.id.slice(0, 6).toUpperCase()}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-ink-700">{o.seller?.store_name ?? '—'}</td>
-                    <td className="px-4 py-3 text-ink-700">{o.delivery_full_name ?? '—'}</td>
-                    <td className="px-4 py-3">
-                      <OrderStatusBadge status={o.delivery_status as OrderStatus} size="sm" />
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold">{formatPrice(Number(o.total_price ?? 0))}</td>
-                    <td className="px-4 py-3 text-right text-xs text-ink-500">
-                      {new Date(o.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
-                    </td>
+            /* 6/9/2026 — La tabella ha sei colonne: su un telefono non ci stanno.
+               Senza questo contenitore le ultime venivano tagliate dal bordo
+               arrotondato e non si potevano piu' raggiungere. Ora la tabella
+               scorre di lato dentro il riquadro, come le altre del sito. */
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-cream-50 text-xs uppercase tracking-wider text-ink-600">
+                  <tr>
+                    <th className="px-4 py-2.5 text-left">Ordine</th>
+                    <th className="px-4 py-2.5 text-left">Negozio</th>
+                    <th className="px-4 py-2.5 text-left">Cliente</th>
+                    <th className="px-4 py-2.5 text-left">Stato</th>
+                    <th className="px-4 py-2.5 text-right">Totale</th>
+                    <th className="px-4 py-2.5 text-right">Quando</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-cream-100">
+                  {(stats.recentOrders as OrdineRecente[]).map((o) => (
+                    <tr key={o.id} className="hover:bg-cream-50">
+                      <td className="px-4 py-3">
+                        <Link href={`/admin/orders/${o.id}`} className="font-mono text-xs text-primary-700 hover:underline">
+                          #{o.id.slice(0, 6).toUpperCase()}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-ink-700">{o.seller?.store_name ?? '—'}</td>
+                      <td className="px-4 py-3 text-ink-700">{o.delivery_full_name ?? '—'}</td>
+                      <td className="px-4 py-3">
+                        <OrderStatusBadge status={o.delivery_status as OrderStatus} size="sm" />
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold">{formatPrice(Number(o.total_price ?? 0))}</td>
+                      <td className="px-4 py-3 text-right text-xs text-ink-500">
+                        {new Date(o.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </section>

@@ -10,8 +10,25 @@ export const runtime = 'nodejs';
  * POST /api/locale  body: { locale: 'it' | 'en' }
  *
  * Setta cookie NEXT_LOCALE (1 anno, HttpOnly=false perche' UI lo legge,
- * SameSite=Lax, Secure in prod). next-intl risolve il locale via i18n.ts
- * leggendo questo cookie.
+ * SameSite=Lax, Secure in prod).
+ *
+ * ⚠️ 6/9/2026 — OGGI QUESTO COOKIE NON CAMBIA LA LINGUA, E VA DETTO QUI.
+ *
+ * La riga sopra diceva «next-intl risolve il locale via i18n.ts leggendo questo
+ * cookie»: non e' piu' vero. In `i18n.ts` il rilevamento e' spento
+ * (`RILEVAMENTO_LINGUA_ATTIVO = false`) e `getRequestConfig` torna sempre
+ * `DEFAULT_LOCALE`, cioe' italiano; il selettore di lingua e' fuori dal footer
+ * (vedi `components/Footer.tsx`) finche' la traduzione non e' completa — oggi
+ * la usano 29 file su 347. Quindi: la rotta accetta la scelta e la ricorda, e
+ * la pagina resta italiana. E' meta' funzione, ed e' una scelta dichiarata:
+ * la prova end-to-end `tests/e2e/10-security-and-i18n.spec.ts` la protegge e
+ * diventa rossa il giorno che l'interruttore si rialza.
+ *
+ * Chi passa di qui ha due strade, e nessuna delle due e' un ritocco a questa
+ * rotta: o si riaccende il rilevamento in `i18n.ts` (`resolveLocale` e' gia'
+ * scritta) e si rimette `<LocaleSwitcher />` nel footer, o si manda in pensione
+ * la coppia rotta+traduzioni. Vanno decise insieme: una lingua che si sceglie e
+ * non cambia niente e' peggio di una lingua sola.
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   let body: { locale?: unknown };

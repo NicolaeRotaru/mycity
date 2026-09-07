@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ALLOWED_IMAGE_TYPES } from '@/lib/products/uploadImages';
 import { safeImageFetch } from '@/lib/net/ssrf-guard';
-import { caricaImmagine } from '@/lib/storage/carica-immagine';
+import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 
 /**
  * Ri-ospita su storage le immagini importate da un marketplace.
@@ -157,7 +157,7 @@ export async function rehostImageUrls(
         ({ publicUrl } = await caricaImmagine(storage, {
           file: corpo,
           userId: ownerId,
-          cacheControl: '3600',
+          cacheControl: ANNO_IN_SECONDI,
           contentType,
         }));
       } catch (e) {

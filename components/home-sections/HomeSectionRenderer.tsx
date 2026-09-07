@@ -7,6 +7,7 @@ import {
   Banknote, Home as HomeIcon, Truck, RotateCcw,
 } from 'lucide-react';
 import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { CLASSI_FASCIA_BANNER, CLASSI_TESTO_FASCIA_BANNER } from '@/lib/banner-vetrina';
 import { sanitizeRichText } from '@/lib/sanitize-html';
 import { homeCtaHref, type HomeSection } from '@/lib/home-site';
@@ -44,6 +45,20 @@ export type HeroDefaults = {
   subhead: ReactNode;
   ctaPrimary: string;
 };
+
+/**
+ * QUANTA ARIA HA UNA SEZIONE. Due passi, non cinque.
+ *
+ * Le sezioni della home usavano py-4, py-5, py-6, py-6 md:py-8, py-6 md:py-10 e — nel caso
+ * peggiore — `pb-2`: padding solo in basso, cioè «Drop del giorno» incollato alla sezione
+ * sopra mentre tutte le altre respirano da entrambe le parti.
+ *
+ * Due valori soli: quello normale, e quello delle bande che hanno un fondo colorato e vanno
+ * da bordo a bordo (lì l'aria serve di più, ma solo da schermo medio in su: sul telefono
+ * allungherebbe la home, e la home è appena stata accorciata per portare i prodotti in alto).
+ */
+const SPAZIO_SEZIONE = 'py-6';
+const SPAZIO_FASCIA = 'py-6 md:py-10';
 
 const HERO_CHIPS = [
   { slug: 'alimentari',    label: 'Alimentari' },
@@ -93,7 +108,7 @@ function HomeBlock({
         <section className="relative overflow-hidden bg-gradient-to-b from-surface-0 to-surface-100">
           <div aria-hidden className="absolute -top-20 -right-20 w-[500px] h-[500px] rounded-full bg-primary-200/40 blur-3xl" />
           <div aria-hidden className="absolute -bottom-32 -left-20 w-[420px] h-[420px] rounded-full bg-accent-200/40 blur-3xl" />
-          <div className="container mx-auto px-4 sm:px-6 py-6 md:py-10 relative">
+          <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_FASCIA} relative`}>
             <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-10 items-center">
               <div className="space-y-6">
                 <span className="inline-flex items-center gap-1.5 bg-primary-100 text-primary-800 px-3 py-1 rounded-full text-xs font-semibold tracking-wide ring-1 ring-primary-200">
@@ -106,8 +121,12 @@ function HomeBlock({
                 <p className="text-lg text-ink-600 max-w-xl leading-relaxed">{subhead}</p>
 
                 <div className="flex flex-wrap gap-3">
+                  {/* Portava a /categorie: un indice di nomi, senza una foto né un prezzo. La
+                      stessa chiamata era scritta identica in fondo a «Come funziona» — due
+                      pulsanti principali uguali sulla stessa pagina. Ne resta uno, e porta
+                      dove ci sono i prodotti veri. */}
                   <HomeCtaLink
-                    href="/categorie"
+                    href="/search"
                     ctaId="hero_primary"
                     location="hero"
                     variant={heroVariant}
@@ -182,10 +201,12 @@ function HomeBlock({
       // `MaybeSection` nasconde la sezione intera quando il figlio non disegna niente — è lo stesso
       // trattamento che ha già `dropOfDay`, e adesso il figlio sa restituire `null`.
       return (
-        <MaybeSection className="container mx-auto px-4 sm:px-6 py-6">
+        <MaybeSection className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}>
+          {/* Il sottotitolo prometteva «tutte» le categorie, e la griglia ne mostra sei su otto.
+              Adesso dice cosa mostra davvero, e il link per le altre sta dentro la griglia. */}
           <CategoryShowcase
             titolo={c.heading || 'Cosa cerchi oggi?'}
-            sottotitolo={c.subheading || 'Tutte le categorie del mercato locale'}
+            sottotitolo={c.subheading || 'Le categorie più cercate'}
           />
         </MaybeSection>
       );
@@ -194,7 +215,7 @@ function HomeBlock({
     /* --------------------------------------------------------- DROP DEL GIORNO */
     case 'dropOfDay':
       return (
-        <MaybeSection className="container mx-auto px-4 sm:px-6 pb-2">
+        <MaybeSection className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}>
           <DropOfDay />
         </MaybeSection>
       );
@@ -203,7 +224,7 @@ function HomeBlock({
     case 'popularProducts': {
       const c = section.config;
       return (
-        <section className="bg-white border-y border-cream-300 py-6">
+        <section className={`bg-white border-y border-cream-300 ${SPAZIO_FASCIA}`}>
           <div className="container mx-auto px-4 sm:px-6">
             <div className="flex justify-between items-end mb-5 gap-4 flex-wrap">
               <div>
@@ -244,7 +265,7 @@ function HomeBlock({
         ? c.bullets.map((b) => ({ Icon: Check, color: 'primary' as const, t: b.title, d: b.desc }))
         : DEFAULT_TRUST_BULLETS;
       return (
-        <section className="container mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-6">
+        <section className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE} grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-6`}>
           <LiveActivityFeed />
           <div className="bg-white border border-cream-300 rounded-2xl p-6 shadow-warm">
             <h3 className="font-serif font-bold text-ink-900 text-lg mb-4">
@@ -272,7 +293,7 @@ function HomeBlock({
     case 'trustRow':
       return (
         <section className="bg-cream-50 border-y border-cream-300">
-          <div className="container mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_FASCIA} grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5`}>
             {DEFAULT_TRUST_BULLETS.map((v) => (
               <div key={v.t} className="flex items-start gap-3">
                 <span className={`shrink-0 w-11 h-11 rounded-full flex items-center justify-center ${trustColorClass(v.color)}`}>
@@ -292,7 +313,7 @@ function HomeBlock({
     case 'nearbyStores': {
       const c = section.config;
       return (
-        <section className="container mx-auto px-4 sm:px-6 py-6">
+        <section className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}>
           <div className="flex justify-between items-end mb-5 gap-4 flex-wrap">
             <div>
               <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
@@ -325,7 +346,7 @@ function HomeBlock({
       const c = section.config;
       return (
         <section className="bg-gradient-to-br from-accent-100 via-accent-50 to-cream-100 border-y border-cream-300">
-          <div className="container mx-auto px-4 sm:px-6 py-6 md:py-8 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_FASCIA} grid grid-cols-1 md:grid-cols-2 gap-8 items-center`}>
             <div>
               <span className="inline-flex items-center gap-1.5 bg-white/80 text-primary-800 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ring-1 ring-primary-200">
                 <Gift size={14} strokeWidth={2.4} />
@@ -355,7 +376,7 @@ function HomeBlock({
       const c = section.config;
       return (
         <section className="bg-ink-900 text-white">
-          <div className="container mx-auto px-4 sm:px-6 py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_FASCIA} flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4`}>
             <div className="flex items-center gap-3">
               <span className="shrink-0 w-10 h-10 rounded-full bg-white/10 ring-1 ring-white/15 flex items-center justify-center">
                 <ShieldCheck size={18} strokeWidth={2.4} className="text-accent-400" />
@@ -381,15 +402,15 @@ function HomeBlock({
 
     /* ----------------------------------------------- SEZIONI EDITORIALI (dormienti) */
     case 'shopOfMonth':
-      return <div className="container mx-auto px-4 sm:px-6 py-4"><ShopOfMonthHero /></div>;
+      return <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}><ShopOfMonthHero /></div>;
     case 'stories':
-      return <div className="container mx-auto px-4 sm:px-6 py-4"><StoriesCarousel /></div>;
+      return <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}><StoriesCarousel /></div>;
     case 'events':
-      return <div className="container mx-auto px-4 sm:px-6 py-4"><HomeEvents /></div>;
+      return <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}><HomeEvents /></div>;
     case 'promo':
-      return <div className="container mx-auto px-4 sm:px-6 py-4"><PromoDeals /></div>;
+      return <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}><PromoDeals /></div>;
     case 'trending':
-      return <div className="container mx-auto px-4 sm:px-6 py-4"><TrendingNow /></div>;
+      return <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}><TrendingNow /></div>;
 
     /* ----------------------------------------------------- BLOCCHI DI CONTENUTO */
     case 'richText': {
@@ -398,7 +419,7 @@ function HomeBlock({
       const clean = sanitizeRichText(c.body);
       if (!heading && !clean) return null;
       return (
-        <section className="container mx-auto px-4 sm:px-6 py-5">
+        <section className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}>
           <div className="bg-white border border-cream-300 rounded-2xl p-6 max-w-4xl mx-auto">
             {heading && <h2 className="text-xl sm:text-2xl font-bold font-serif text-ink-900 mb-3">{heading}</h2>}
             {clean && (
@@ -420,12 +441,15 @@ function HomeBlock({
       const external = !!href && /^https?:\/\//i.test(href);
       const ctaClass = 'inline-flex items-center gap-1.5 rounded-full bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 text-sm font-semibold shadow-warm transition-transform hover:-translate-y-0.5';
       return (
-        <section className="container mx-auto px-4 sm:px-6 py-5">
+        <section className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}>
           {/* La forma della fascia sta in `lib/banner-vetrina.ts`: qui c'era
               un'altezza fissa dentro una larghezza libera, cioè una forma
               diversa per ogni schermo, mentre al pannello si chiedeva il 16:9. */}
           <div className={CLASSI_FASCIA_BANNER}>
-            <Image src={sizedImage(c.imageUrl, 'hero')} alt={c.heading ?? ''} fill sizes="(max-width: 768px) 100vw, 1024px" className="object-cover" />
+            {/* `alt` prendeva il titolo, che sta scritto a video due righe piu' giu': chi
+                ascolta la pagina sentiva la stessa frase due volte. Adesso il testo
+                alternativo si scrive dal pannello, e vuoto vuol dire «e' solo uno sfondo». */}
+            <Image src={sizedImage(c.imageUrl, 'hero')} alt={c.alt ?? ''} fill sizes="(max-width: 768px) 100vw, 1024px" loader={caricatoreFotoRemote} className="object-cover" />
             {overlayClass && <div className={`absolute inset-0 ${overlayClass}`} aria-hidden />}
             <div className={`${CLASSI_TESTO_FASCIA_BANNER} ${textClass}`}>
               {c.heading && <h2 className="text-2xl sm:text-3xl font-bold font-serif drop-shadow">{c.heading}</h2>}
@@ -448,12 +472,12 @@ function HomeBlock({
       const items = c.items ?? [];
       if (items.length === 0) return null;
       return (
-        <section className="container mx-auto px-4 sm:px-6 py-5">
+        <section className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}>
           {c.heading && <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mb-4 text-center">{c.heading}</h2>}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-4xl mx-auto">
             {items.map((it, i) => (
               <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-cream-100 border border-cream-200">
-                <Image src={sizedImage(it.url, 'card')} alt={it.alt ?? ''} fill sizes="(max-width: 640px) 50vw, 33vw" className="object-cover" loading="lazy" />
+                <Image src={sizedImage(it.url, 'card')} alt={it.alt ?? ''} fill sizes="(max-width: 640px) 50vw, 33vw" loader={caricatoreFotoRemote} className="object-cover" loading="lazy" />
               </div>
             ))}
           </div>
@@ -469,7 +493,7 @@ function HomeBlock({
         ? `https://player.vimeo.com/video/${c.videoId}?dnt=1`
         : `https://www.youtube-nocookie.com/embed/${c.videoId}`;
       return (
-        <section className="container mx-auto px-4 sm:px-6 py-5">
+        <section className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}>
           {c.heading && <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mb-4 text-center">{c.heading}</h2>}
           <div className="relative w-full aspect-video overflow-hidden rounded-2xl border border-cream-300 bg-black max-w-4xl mx-auto">
             {isFile ? (
@@ -522,9 +546,29 @@ export default function HomeSectionRenderer({
   heroVariant: string;
   heroDefaults: HeroDefaults;
 }) {
+  /**
+   * LE STESSE QUATTRO PROMESSE, DUE VOLTE NELLA STESSA PAGINA.
+   *
+   * La scheda «Perché scegliere MyCity» dentro «Attività live» e la banda fiducia leggono lo
+   * stesso elenco (DEFAULT_TRUST_BULLETS): pagamento alla consegna, negozi locali, 30-60
+   * minuti, reso in 14 giorni. Nell'ordine di partenza ci sono tutte e due, quindi chi scorre
+   * la home le legge due volte a poche schermate di distanza — più una terza in forma corta
+   * nell'hero e una quarta nel piè di pagina.
+   *
+   * Se la scheda c'è e non è stata riscritta dal pannello, la banda è una ripetizione e non si
+   * disegna. Se invece l'admin ha messo i suoi vantaggi nella scheda, le due dicono cose
+   * diverse e restano tutte e due.
+   */
+  const schedaFiduciaGiaInPagina = sections.some(
+    (s) => s.type === 'liveActivity' && !(s.config.bullets && s.config.bullets.length > 0),
+  );
+  const daDisegnare = schedaFiduciaGiaInPagina
+    ? sections.filter((s) => s.type !== 'trustRow')
+    : sections;
+
   return (
     <>
-      {sections.map((s) => (
+      {daDisegnare.map((s) => (
         <HomeBlock key={s.id} section={s} heroVariant={heroVariant} heroDefaults={heroDefaults} />
       ))}
     </>

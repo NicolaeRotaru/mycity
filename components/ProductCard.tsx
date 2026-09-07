@@ -18,6 +18,7 @@ import { eAcceso, siPuoPremere, statoInterruttore } from '@/lib/stato-interrutto
 import { useProfile } from './hooks/useProfile';
 import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 
 interface ProductCardProps {
   id: string;
@@ -61,7 +62,7 @@ const ProductCard = ({
   const badgePct = hasDiscount
     ? (discountPercent as number)
     : (compareValid ? Math.round((1 - price / (compareAtPrice as number)) * 100) : 0);
-  const rawImg = images?.[0] ?? 'https://placehold.co/400x400/FBF7F0/C0492C?text=Foto';
+  const rawImg = images?.[0] ?? FOTO_MANCANTE;
   const img = sizedImage(rawImg, 'card');
   const router = useRouter();
   const { favorites, lettoDavvero: preferitiLetti, toggle } = useFavorites();
@@ -186,7 +187,7 @@ const ProductCard = ({
           disabled={!cuorePremibile}
           aria-label={!cuorePremibile ? 'Non sono riuscito a leggere i tuoi preferiti' : isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
           title={!cuorePremibile ? 'Non sono riuscito a leggere i tuoi preferiti: riprova fra un momento' : undefined}
-          className={`absolute top-2 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow transition-transform ${cuorePremibile ? 'hover:scale-110 hover:bg-white' : 'cursor-not-allowed opacity-60'}`}
+          className={`absolute top-2 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow-sm-neutral transition-transform ${cuorePremibile ? 'hover:scale-110 hover:bg-white' : 'cursor-not-allowed opacity-60'}`}
         >
           <Heart
             size={16}
@@ -200,7 +201,30 @@ const ProductCard = ({
       <div className="relative z-10 flex flex-1 flex-col gap-1 p-2.5">
         {storeName && (
           <div className="flex items-center gap-1.5">
-            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-[8px] font-bold text-white">
+            {/*
+              6/9/2026 — LE INIZIALI DEL NEGOZIO ERANO A OTTO PIXEL.
+              Due maiuscole dentro un cerchio da 16 punti: era il carattere più
+              piccolo di tutto il sito, poco più della metà del testo che si legge
+              normalmente, e a quella misura non si leggeva una sigla — si vedeva
+              una macchia. Ora il cerchio è 20 punti e le lettere 10 (`text-2xs`),
+              che è il gradino più piccolo dichiarato dal sistema dei caratteri:
+              la sigla si legge, e il pallino resta il segno del negozio accanto
+              al nome per esteso, che sta già qui a destra.
+
+              6/9/2026, secondo giro — LA MISURA ERA SISTEMATA, IL COLORE NO.
+              Il gradiente partiva da `primary-500` (#D55F3F): bianco sopra quel
+              colore stacca 3,79 volte, e per un testo di 10 pixel ne servono 4,5.
+              Sulla meta' chiara del cerchio le due maiuscole restavano quindi
+              sotto soglia — cioe' esattamente la macchia che il lavoro di stamattina
+              diceva di aver tolto. Adesso il gradiente parte da `primary-600`
+              (#C0492C, il colore del marchio): bianco sopra stacca 4,96 volte, e il
+              caso peggiore del cerchio — l'angolo in alto a sinistra, dove il
+              gradiente comincia — passa. L'altro capo, `primary-700`, stava gia'
+              a 6,67. L'alternativa era dichiararlo decorativo e nasconderlo al
+              lettore di schermo, ma il pallino il negozio lo dice davvero: si
+              tiene, e si legge.
+            */}
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-600 to-primary-700 text-2xs font-bold text-white">
               {initials}
             </span>
             <span className="truncate text-[11px] font-semibold text-ink-500">{storeName}</span>
@@ -252,7 +276,7 @@ const ProductCard = ({
               onClick={handleAdd}
               disabled={isOutOfStock}
               aria-label={hasVariants ? `Scegli le opzioni di ${name}` : `Aggiungi ${name} al carrello`}
-              className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
+              className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm-neutral transition-all hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
             >
               <Plus size={18} strokeWidth={2.6} aria-hidden />
             </button>

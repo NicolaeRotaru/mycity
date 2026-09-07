@@ -46,11 +46,14 @@ export type SendEmailResult =
 
 /**
  * Wrapper Resend tollerante: se RESEND_API_KEY non e' configurata, NON
- * lancia errore ma logga in console e ritorna `skipped`. Cosi' l'app
+ * lancia errore ma logga tramite logger e ritorna `skipped`. Cosi' l'app
  * resta funzionante in dev anche senza chiavi reali.
  *
- * In produzione la chiave DEVE essere impostata: monitorare i log e
- * settare alert su `[email] skipped` per accorgersene.
+ * In produzione servono DUE cose, non una: la chiave (RESEND_API_KEY) e il
+ * mittente (RESEND_FROM). Se manca una delle due si esce subito con
+ * `skipped` e una riga di errore nei log, senza chiamare Resend. Monitorare
+ * `[email] skipped` per accorgersene; il semaforo /api/health guarda tutte e
+ * due le variabili e passa a «degradato» se ne manca una.
  */
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
   const resend = getResend();
@@ -58,6 +61,29 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     // 🟡-12: niente PII (indirizzo destinatario) nei log; via logger, non console.
     logger.warn('[email] skipped: RESEND_API_KEY non configurata', { subject: input.subject });
     return { ok: false, skipped: true, reason: 'RESEND_API_KEY non configurata' };
+  }
+
+  // 6/9/2026 — SENZA MITTENTE NON SI SPEDISCE, E LO SI SA SUBITO.
+  //
+  // In produzione `env.resendFrom()` non ripiega piu' su un indirizzo che
+  // nessuno ha configurato: se RESEND_FROM manca, torna vuoto. Prima quel
+  // ripiego finiva dritto in `from:` e Resend rifiutava una busta alla volta —
+  // conferma d'ordine al cliente, avviso di nuovo ordine al negozio, rimborso —
+  // mentre il sito continuava a incassare. Un guasto di configurazione si deve
+  // scoprire una volta sola: qui non si chiama nemmeno Resend, si scrive
+  // l'errore, e /api/health dice quale variabile manca.
+  //
+  // Perche' `skipped` e non un'eccezione: e' la stessa regola gia' scelta due
+  // volte in questo file (chiave mancante, link di disiscrizione non
+  // firmabile). Chi chiama e' il webhook di Stripe o la creazione di un ordine:
+  // far cadere l'ordine perche' non parte l'email sarebbe un danno piu' grande
+  // del guasto.
+  const mittente = env.resendFrom();
+  if (!mittente) {
+    logger.error('[email] mittente non configurato: nessuna email parte. Impostare RESEND_FROM', {
+      subject: input.subject,
+    });
+    return { ok: false, skipped: true, reason: 'RESEND_FROM non configurata' };
   }
 
   // 🟠-9: un retry su errore transitorio (rete/5xx/429) riduce la perdita di
@@ -106,7 +132,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   const piede = tipo === 'marketing' ? linkStop : null;
 
   const payload = {
-    from: env.resendFrom(),
+    from: mittente,
     to: input.to,
     subject: input.subject,
     html: piede ? conPiedeDisiscrizione(input.html, piede) : input.html,

@@ -491,11 +491,15 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
 
       {/* CODICE CONSEGNA (visibile quando rider sta arrivando) */}
       {showDeliveryCode && deliveryCode?.code && (
-        <div className="mt-4 rounded-2xl bg-gradient-to-br from-olive-500 to-olive-600 p-6 text-white shadow-lg">
+        <div className="mt-4 rounded-2xl bg-gradient-to-br from-olive-500 to-olive-600 p-6 text-white shadow-warm-lg">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold uppercase tracking-widest text-olive-100">Codice consegna</p>
-              <p className="my-2 font-mono text-4xl font-extrabold tracking-[0.3em] sm:text-5xl">
+              {/* Il design system ammette due caratteri, Inter e Fraunces: `font-mono` ne portava
+                  dentro un terzo, mai dichiarato, proprio sull'elemento piu' grande della pagina.
+                  `tabular-nums` da' alle cifre la stessa larghezza — che e' il motivo per cui qui
+                  serviva un monospaziato — restando in Inter. */}
+              <p className="my-2 font-sans tabular-nums text-4xl font-extrabold tracking-[0.3em] sm:text-5xl">
                 {deliveryCode.code}
               </p>
               <p className="text-sm text-olive-100">
@@ -646,7 +650,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                       ) : <Package size={18} className="text-ink-400" aria-hidden />}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-semibold text-ink-900">{nomeDellaRigaOrdine(it)}</p>
+                      <p className="line-clamp-2 break-words text-[13px] font-semibold text-ink-900">{nomeDellaRigaOrdine(it)}</p>
                       <p className="text-xs text-ink-500">× {it.quantity}</p>
                     </div>
                     <span className="text-[13px] font-bold text-ink-900">{formatPrice(Number(it.unit_price) * it.quantity)}</span>

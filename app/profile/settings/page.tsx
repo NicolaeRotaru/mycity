@@ -235,7 +235,7 @@ export default function SettingsPage() {
       });
       if (!res.ok) {
         const corpo = await res.json().catch(() => null);
-        toast.error(apiErrorMessage(corpo, 'Esportazione non riuscita. Riprova piu tardi.'));
+        toast.error(apiErrorMessage(corpo, 'Esportazione non riuscita. Riprova più tardi.'));
         return;
       }
       const blob = await res.blob();
@@ -247,7 +247,7 @@ export default function SettingsPage() {
       URL.revokeObjectURL(url);
       toast.success('Esportazione dati scaricata');
     } catch {
-      toast.error('Esportazione non riuscita. Riprova piu tardi.');
+      toast.error('Esportazione non riuscita. Riprova più tardi.');
     }
   };
 
@@ -600,7 +600,7 @@ export default function SettingsPage() {
                     className="inline-flex items-center gap-2 bg-olive-600 hover:bg-olive-700 disabled:opacity-40 text-white px-5 py-2.5 rounded-lg font-bold transition-colors"
                   >
                     {cancelingDeletion ? (
-                      'Annullamento...'
+                      'Annullamento…'
                     ) : (
                       <>
                         <Undo2 size={18} className="text-white" aria-hidden />
@@ -657,7 +657,7 @@ export default function SettingsPage() {
                     className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-bold transition-colors"
                   >
                     {deleting ? (
-                      'Invio richiesta...'
+                      'Invio richiesta…'
                     ) : (
                       <>
                         <Trash2 size={18} className="text-white" aria-hidden />

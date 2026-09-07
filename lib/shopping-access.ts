@@ -13,6 +13,23 @@ export const EXIT_SHOPPING_QUERY = 'exit_shop';
 /** Durata sessione acquisto venditore (8h). */
 export const SHOPPING_MODE_MAX_AGE = 8 * 60 * 60;
 
+/**
+ * 6/9/2026 — LE VETRINE SORVEGLIATE NON ERANO LE VETRINE VERE.
+ *
+ * Qui dentro c'è l'elenco delle pagine su cui il venditore senza «modalità
+ * acquisto» viene rimandato alla sua dashboard. Mancavano proprio le sette
+ * destinazioni della barra sotto l'header (Tutti i negozi, Promozioni, Novità,
+ * Regali, Vicino a te, Più venduti, Piccoli prezzi) e la pagina /categorie:
+ * il negoziante col permesso scaduto apriva «Novità», vedeva i prodotti,
+ * toccava una scheda e si ritrovava sulla dashboard senza una spiegazione.
+ * C'erano invece /collections e /daily-drops, che non sono mai esistite come
+ * pagine.
+ *
+ * L'elenco resta scritto a mano — importarlo da CategoryBar trascinerebbe nel
+ * middleware un componente client con lucide-react e il client Supabase — ma
+ * ora c'è una prova che lo confronta con la barra vera e con le pagine vere:
+ * tests/unit/le-vetrine-sorvegliate-sono-le-vetrine-vere.test.ts.
+ */
 const MARKETPLACE_BROWSE_PREFIXES = [
   '/product',
   '/store',
@@ -20,12 +37,20 @@ const MARKETPLACE_BROWSE_PREFIXES = [
   '/checkout',
   '/search',
   '/category',
-  '/collections',
+  // Le sette destinazioni della barra categorie + l'indice delle categorie.
+  '/stores',
+  '/promozioni',
+  '/novita',
+  '/regali',
+  '/near',
+  '/piu-venduti',
+  '/piccoli-prezzi',
+  '/categorie',
+  // Altre vetrine del catalogo.
   '/lists',
   '/shop-of-month',
   '/events',
   '/shared-cart',
-  '/daily-drops',
   '/favorites',
 ];
 

@@ -8,11 +8,12 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Heart, Banknote, Bike, RotateCcw, Store, ShoppingCart, Ban, Check, Flame, Package, ShieldCheck, Star, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
 import { domandaProdotto } from '@/lib/queries/catalogo';
-import { addToCart } from '@/lib/cart';
+import { addToCart, cartTotal, getCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
-import { sizedImage } from '@/lib/image-url';
+import { LARGHEZZA_MASSIMA, sizedImage } from '@/lib/image-url';
 import { SIZES_FOTO_PRODOTTO } from '@/lib/preload-foto';
 import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import { FRASE_RESO, frasePagamento, promessaSpedizione } from '@/lib/promesse-pubbliche';
@@ -28,6 +29,7 @@ import { useFavorites } from '@/components/hooks/useFavorites';
 import { eAcceso, siPuoPremere, statoInterruttore } from '@/lib/stato-interruttore';
 import { useProfile } from '@/components/hooks/useProfile';
 import { useShoppingMode, useCanPurchase } from '@/components/hooks/useShoppingMode';
+import { ricordaMetodoScelto } from '@/components/checkout/PaymentMethodSelector';
 import ContactSellerButton from '@/components/ContactSellerButton';
 import ProductViewTracker from '@/components/ProductViewTracker';
 import ProductQA from '@/components/ProductQA';
@@ -56,6 +58,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { trackReviewSubmitted } from '@/lib/analytics/events';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 
 // Chiavi attributo gestite dall'accordion "Ingredienti e allergeni": vengono
 // escluse dalla griglia generica "Caratteristiche" per non duplicarle.
@@ -117,6 +120,15 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // Ordinamento + filtro "Con foto" delle recensioni (client-side, sui dati già caricati).
   const [reviewSort, setReviewSort] = useState<'recent' | 'top' | 'low'>('recent');
   const [reviewsOnlyPhoto, setReviewsOnlyPhoto] = useState(false);
+  // Il nodo della sezione recensioni. Sta in uno stato e non in una `ref` perche'
+  // la sezione non esiste al primo giro (la pagina mostra lo scheletro): con la
+  // `ref` l'osservatore si sarebbe attaccato al vuoto e non sarebbe mai scattato.
+  const [nodoRecensioni, setNodoRecensioni] = useState<HTMLElement | null>(null);
+  const [recensioniInVista, setRecensioniInVista] = useState(false);
+  // Quanto vale il carrello ADESSO, senza questo prodotto. Si legge dopo il
+  // montaggio: sul server il carrello non esiste e leggerlo qui romperebbe
+  // l'idratazione.
+  const [carrelloAttuale, setCarrelloAttuale] = useState(0);
 
   // 30/8/2026 (R068) — LA SCHEDA ARRIVAVA VUOTA NELL'HTML.
   //
@@ -151,8 +163,41 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     photo_urls: string[] | null;
     verified_purchase: boolean;
   };
-  const { data: reviews = [] } = useQuery({
-    queryKey: queryKeys.reviews.detail(id),
+  // 6/9/2026 — LE RECENSIONI PESAVANO SUL PULSANTE «AGGIUNGI AL CARRELLO».
+  //
+  // Era una domanda sola: duecento recensioni INTERE — commento e foto comprese —
+  // chieste all'apertura della pagina, in gara di banda con la foto del prodotto e
+  // col pulsante che fa comprare. Il commento e' il campo pesante, ed e' anche
+  // l'unico che nessuno legge finche' non scorre fin laggiu'.
+  //
+  // Adesso sono due domande con due pesi diversi:
+  //  · il RIEPILOGO chiede due colonne sole — voto e foto — e parte subito, perche'
+  //    la media e il numero di recensioni si leggono in alto, accanto al titolo.
+  //  · l'ELENCO porta i commenti, cioe' il grosso, e parte solo quando la sezione
+  //    delle recensioni si avvicina allo schermo.
+  //
+  // Le due chiavi nascono dalla stessa radice `queryKeys.reviews.detail(id)`: chi
+  // invalida dopo una recensione nuova le prende tutte e due, senza saperlo.
+  type RiepilogoRow = Pick<ReviewRow, 'rating' | 'photo_urls'>;
+  const { data: riepilogoRecensioni = [] } = useQuery({
+    queryKey: [...queryKeys.reviews.detail(id), 'riepilogo'],
+    queryFn: async (): Promise<RiepilogoRow[]> => {
+      const { data, error } = await supabase.from('reviews')
+        .select('rating, photo_urls').eq('product_id', id)
+        .limit(500);
+      if (error) throw error;
+      return (data ?? []) as RiepilogoRow[];
+    },
+  });
+
+  const {
+    data: reviews = [],
+    isSuccess: elencoRecensioniPronto,
+    isError: elencoRecensioniRotto,
+    refetch: ricaricaRecensioni,
+  } = useQuery({
+    queryKey: [...queryKeys.reviews.detail(id), 'elenco'],
+    enabled: recensioniInVista,
     queryFn: async (): Promise<ReviewRow[]> => {
       const { data, error } = await supabase.from('reviews')
         .select('id, rating, comment, created_at, user_id, photo_urls, verified_purchase').eq('product_id', id)
@@ -250,6 +295,37 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     setIsNew(age < NEW_PRODUCT_DAYS);
   }, [createdAt]);
 
+  // L'elenco delle recensioni parte quando la sezione si avvicina allo schermo.
+  useEffect(() => {
+    if (recensioniInVista) return;
+    // La sezione non e' ancora in pagina (scheletro, errore, prodotto assente):
+    // si aspetta, e l'effetto ripassa quando il nodo arriva.
+    if (!nodoRecensioni) return;
+    // Browser senza il sensore: si chiede subito, com'era prima. Meglio pesante
+    // che muto.
+    if (typeof IntersectionObserver === 'undefined') {
+      setRecensioniInVista(true);
+      return;
+    }
+    const osservatore = new IntersectionObserver(
+      (voci) => { if (voci.some((v) => v.isIntersecting)) setRecensioniInVista(true); },
+      // 600px di anticipo: i commenti si scaricano mentre la persona sta ancora
+      // scorrendo, cosi' quando arriva li trova gia' li'.
+      { rootMargin: '600px 0px' },
+    );
+    osservatore.observe(nodoRecensioni);
+    return () => osservatore.disconnect();
+  }, [nodoRecensioni, recensioniInVista]);
+
+  // Il carrello vive in `localStorage` e cambia anche da un'altra scheda: si
+  // rilegge a ogni `cart:updated`, l'evento che `lib/cart` emette a ogni scrittura.
+  useEffect(() => {
+    const leggi = () => setCarrelloAttuale(cartTotal(getCart()));
+    leggi();
+    window.addEventListener('cart:updated', leggi);
+    return () => window.removeEventListener('cart:updated', leggi);
+  }, []);
+
   if (isLoading) {
     return (
       <div className="container mx-auto px-6 py-8">
@@ -308,18 +384,23 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
   const images: string[] = Array.isArray(product.images) && product.images.length > 0
     ? (product.images as string[])
-    : ['https://placehold.co/600x600/F5EDD9/78716C?text=Foto+prodotto'];
+    : [FOTO_MANCANTE];
   numeroFoto.current = images.length;
 
-  const avgRating = reviews.length
-    ? reviews.reduce((s: number, r) => s + Number(r.rating), 0) / reviews.length
+  // Media, numero e istogramma nascono dal RIEPILOGO: e' l'insieme completo, e
+  // resta giusto anche quando l'elenco dei commenti non e' ancora arrivato.
+  const totaleRecensioni = riepilogoRecensioni.length;
+  const avgRating = totaleRecensioni
+    ? riepilogoRecensioni.reduce((s: number, r) => s + Number(r.rating), 0) / totaleRecensioni
     : 0;
 
   // Recensioni filtrate ("Con foto") + ordinate (recenti / voto alto / voto basso),
-  // tutto client-side sui dati già caricati: nessuna query né dato aggiuntivo.
-  const photoReviewCount = reviews.filter((r) => Array.isArray(r.photo_urls) && r.photo_urls.length > 0).length;
+  // tutto client-side sull'elenco già caricato: nessuna query né dato aggiuntivo.
+  const conFoto = (r: { photo_urls: string[] | null }) =>
+    Array.isArray(r.photo_urls) && r.photo_urls.some(fotoDiCasa);
+  const photoReviewCount = riepilogoRecensioni.filter(conFoto).length;
   const visibleReviews = (reviewsOnlyPhoto
-    ? reviews.filter((r) => Array.isArray(r.photo_urls) && r.photo_urls.length > 0)
+    ? reviews.filter(conFoto)
     : [...reviews]
   ).sort((a, b) => {
     if (reviewSort === 'top') return Number(b.rating) - Number(a.rating);
@@ -328,12 +409,6 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   });
 
   const price = Number(product.price);
-  // Le parole sulla spedizione non si scrivono qui: le decide `promessaSpedizione()`, che le fa
-  // nascere dalla cifra che la cassa addebita davvero. Scritte a mano, questa scheda prometteva
-  // «Spedizione gratuita» e non nominava da nessuna parte i 3 € di consegna che partono comunque:
-  // il cliente li vedeva per la prima volta nel carrello, cioe' dopo aver scelto.
-  const spedizione = promessaSpedizione(price);
-  const freeShipping = spedizione.sopraSoglia;
   // Prezzo pieno barrato + unità + condizione (campi di primo livello).
   const compareAt = (product as { compare_at_price?: number | string | null }).compare_at_price;
   const compareAtNum = compareAt != null ? Number(compareAt) : null;
@@ -378,6 +453,20 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // return). `qty` è il valore mostrato/usato, sempre ≤ stock disponibile.
   const maxQty = stock === undefined ? Infinity : Math.max(1, stock);
   const qty = Math.min(quantity, maxQty);
+
+  // Quanto varra' il carrello premendo «Aggiungi al carrello»: quello che c'e' gia'
+  // dentro piu' i pezzi scelti qui. `addToCart` SOMMA alla riga esistente, quindi
+  // questa e' la cifra vera, non una stima.
+  const subtotaleConQuestoProdotto = carrelloAttuale + price * qty;
+  // Le parole sulla spedizione non si scrivono qui: le decide `promessaSpedizione()`, che le fa
+  // nascere dalla cifra che la cassa addebita davvero. Scritte a mano, questa scheda prometteva
+  // «Spedizione gratuita» e non nominava da nessuna parte i 3 € di consegna che partono comunque:
+  // il cliente li vedeva per la prima volta nel carrello, cioe' dopo aver scelto.
+  //
+  // E la cifra che legge e' quella del carrello: prima la pastiglia guardava il prezzo di
+  // UN pezzo mentre la barra guardava prezzo x quantita', e i due segnali si smentivano.
+  const spedizione = promessaSpedizione(subtotaleConQuestoProdotto);
+  const freeShipping = spedizione.sopraSoglia;
 
   const sellerProfile = Array.isArray(product.profiles) ? product.profiles[0] : product.profiles;
   // Idoneità alla consegna veloce (30-60 min): override prodotto + Express del negozio.
@@ -436,6 +525,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       variantId: selectedVariant?.id,
       variantLabel: selectedVariant?.label,
     });
+    // Il pulsante promette «paghi alla consegna»: la promessa viaggia fino alla
+    // cassa, che senza questa riga si apriva sempre con la carta selezionata.
+    ricordaMetodoScelto('cod');
     router.push('/checkout');
   };
 
@@ -469,6 +561,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               }}
               className="flex h-full w-full snap-x snap-mandatory overflow-x-auto scrollbar-hide bg-surface-0"
             >
+              {/* `object-cover` era ricopiato dalle schede in griglia, dove riempire il
+                  quadrato e' giusto. Sul dettaglio la regola e' opposta, e lo dice gia'
+                  lib/image-url.ts: per `detail` l'altezza NON viene imposta «per mostrare
+                  l'intero prodotto». Il server mandava la foto intera e il foglio di stile
+                  ne buttava via i bordi: di una bottiglia sparivano il collo o l'etichetta.
+                  Con `object-contain` si vede tutta; lo sfondo del riquadro e' quello della
+                  pagina, quindi le bande non si notano — ed e' la stessa scelta che fa gia'
+                  l'ingrandimento. */}
               {images.map((img, i) => (
                 <div key={i} className="relative h-full w-full shrink-0 snap-center">
                   <Image
@@ -478,7 +578,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     priority={i === 0}
                     sizes={SIZES_FOTO_PRODOTTO}
                     loader={caricatoreFotoRemote}
-                    className="object-cover"
+                    className="object-contain"
                   />
                   <button
                     type="button"
@@ -571,9 +671,13 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             >
               ×
             </button>
+            {/* «Ingrandisci» chiedeva la stessa misura di prima (1200px) dentro un riquadro
+                largo il 95% dello schermo: su un portatile fine si vedeva la foto di prima,
+                solo piu' grande e piu' morbida. Qui si chiede la larghezza massima che il
+                sito considera sensata. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={sizedImage(images[activeImg], 'hero')}
+              src={sizedImage(images[activeImg], LARGHEZZA_MASSIMA)}
               alt={product.name}
               className="max-h-[90vh] max-w-[95vw] object-contain"
               onClick={(e) => e.stopPropagation()}
@@ -655,11 +759,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
           {/* Rating */}
           <div className="flex items-center gap-3 flex-wrap">
-            {reviews.length > 0 ? (
+            {totaleRecensioni > 0 ? (
               <>
                 <RatingStars rating={avgRating} size={18} />
                 <a href="#recensioni" className="text-sm text-ink-600 underline hover:text-primary-700">
-                  {reviews.length} recensioni
+                  {totaleRecensioni} recensioni
                 </a>
               </>
             ) : (
@@ -725,8 +829,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               </span>
             </div>
 
-            {/* Barra spedizione gratis reattiva alla quantità — versione leggera */}
-            <FreeShippingProgress subtotal={price * qty} />
+            {/* La barra riceveva `price * qty`, cioe' il solo prodotto aperto: con 25 € gia'
+                nel carrello e un articolo da 6 € scriveva «Ti mancano 24,00 €» mentre la
+                soglia era gia' passata. E la pastiglia accanto guardava il prezzo di UN
+                pezzo: con due pezzi da 18 € la barra diceva «ce l'hai» e la pastiglia non
+                compariva. Adesso i due segnali leggono la stessa cifra — quello che il
+                carrello varra' premendo «Aggiungi», visto che `addToCart` somma a quello
+                che c'e' gia'. */}
+            <FreeShippingProgress subtotal={subtotaleConQuestoProdotto} />
           </div>
 
           {/* Scheda venditore: avatar, valutazione (reale, da store_reviews),
@@ -790,7 +900,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
           )}
 
           <div>
-            <h3 className="font-bold text-sm uppercase tracking-wide text-ink-500 mb-2">Descrizione</h3>
+            {/* h2, come «Recensioni»: erano h3 sotto l'h1 del nome, quindi la scaletta
+                saltava un gradino (h1 → h3 → h2). E stavano a 14px grigi mentre il
+                paragrafo che intestano e' a 16px piu' scuro: il titolo pesava meno del
+                testo. Stessa classe per tutti i titoli di sezione della pagina. */}
+            <h2 className="font-serif text-2xl font-bold text-ink-900 mb-2">Descrizione</h2>
             <p className="text-ink-700 leading-relaxed whitespace-pre-line">{product.description}</p>
           </div>
 
@@ -805,9 +919,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               if (entries.length === 0) return null;
               return (
                 <div>
-                  <h3 className="font-bold text-sm uppercase tracking-wide text-ink-500 mb-2">
+                  <h2 className="font-serif text-2xl font-bold text-ink-900 mb-2">
                     Caratteristiche
-                  </h3>
+                  </h2>
                   <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
                     {entries.map(([key, value]) => (
                       <div
@@ -969,34 +1083,42 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       )}
 
       {/* RECENSIONI */}
-      <section id="recensioni" className="mt-12 space-y-6 scroll-mt-[var(--header-height)]">
+      {/* Il margine di scorrimento serve a non finire SOTTO l'intestazione fissa. Ma
+          l'intestazione e' `relative md:sticky` (components/Navbar.tsx): sotto md non e'
+          fissa, e quei 144px diventavano una fascia di vuoto sopra il titolo per chi
+          toccava «N recensioni» dal telefono. Da md in su torna a servire. */}
+      <section
+        id="recensioni"
+        ref={setNodoRecensioni}
+        className="mt-12 space-y-6 scroll-mt-4 md:scroll-mt-[var(--header-height)]"
+      >
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h2 className="font-serif text-2xl font-bold text-ink-900">
             Recensioni
-            {reviews.length > 0 && (
+            {totaleRecensioni > 0 && (
               <span className="ml-3 text-base font-normal text-ink-500">
-                <span className="text-accent-700">★</span> {avgRating.toFixed(1)} ({reviews.length})
+                <span className="text-accent-700">★</span> {avgRating.toFixed(1).replace('.', ',')} ({totaleRecensioni})
               </span>
             )}
           </h2>
         </div>
 
         {/* Riepilogo voti: media + distribuzione stelle (5★→1★) */}
-        {reviews.length > 0 && (
+        {totaleRecensioni > 0 && (
           <div className="bg-white border border-cream-200 rounded-xl p-5 grid gap-5 sm:grid-cols-[200px_1fr]">
             <div className="text-center sm:border-r sm:border-cream-200">
-              <div className="text-5xl font-extrabold font-serif text-ink-900">{avgRating.toFixed(1)}</div>
+              <div className="text-5xl font-extrabold font-serif text-ink-900">{avgRating.toFixed(1).replace('.', ',')}</div>
               <div className="mt-1 flex justify-center">
                 <RatingStars rating={avgRating} size={18} />
               </div>
               <p className="text-sm text-ink-500 mt-1">
-                {reviews.length} {reviews.length === 1 ? 'recensione' : 'recensioni'}
+                {totaleRecensioni} {totaleRecensioni === 1 ? 'recensione' : 'recensioni'}
               </p>
             </div>
             <div className="space-y-1.5 self-center">
               {[5, 4, 3, 2, 1].map((star) => {
-                const count = reviews.filter((r) => Math.round(Number(r.rating)) === star).length;
-                const pct = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
+                const count = riepilogoRecensioni.filter((r) => Math.round(Number(r.rating)) === star).length;
+                const pct = totaleRecensioni > 0 ? (count / totaleRecensioni) * 100 : 0;
                 return (
                   <div key={star} className="flex items-center gap-3">
                     <span className="w-10 shrink-0 text-right text-xs font-semibold text-ink-600">{star}★</span>
@@ -1013,7 +1135,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
         {/* Form nuova recensione */}
         <div className="bg-white border-2 border-primary-100 rounded-xl p-5">
-          <h3 className="font-bold text-ink-900 mb-3">Lascia la tua recensione</h3>
+          {/* h3 senza classe di misura usciva a 20px in Fraunces per la regola di
+              globals.css, cioe' piu' grande dei titoli di pari grado. Qui il grado e'
+              giusto — sta dentro la sezione «Recensioni» — e la misura e' dichiarata. */}
+          <h3 className="font-serif text-lg font-bold text-ink-900 mb-3">Lascia la tua recensione</h3>
           {!isAuthenticated ? (
             <p className="text-sm text-ink-600">
               <Link href={`/sign-in?returnTo=/product/${id}`} className="text-primary-700 font-semibold hover:underline">
@@ -1039,7 +1164,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     className="text-3xl hover:scale-110 transition-transform"
                     aria-label={`${n} ${n === 1 ? 'stella' : 'stelle'}`}
                   >
-                    <span className={n <= reviewRating ? 'text-accent-700' : 'text-ink-300'}>★</span>
+                    {/* Le stelle spente erano `text-ink-300` (#A8A29E): 2,52 a 1 sul bianco,
+                        sotto il 3 a 1 che serve a un comando da toccare. Prima del clic sono
+                        spente tutte e cinque, quindi l'unico comando della schermata stava
+                        nel grigio piu' chiaro della tavolozza. `ink-400` (#78716C) fa 4,80.
+                        Stessa cura gia' fatta in app/orders/[id]/review/page.tsx. */}
+                    <span className={n <= reviewRating ? 'text-accent-700' : 'text-ink-400'}>★</span>
                   </button>
                 ))}
               </div>
@@ -1064,7 +1194,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         </div>
 
         {/* Controlli lista: ordinamento + filtro "Con foto" (client-side) */}
-        {reviews.length > 0 && (
+        {totaleRecensioni > 0 && elencoRecensioniPronto && (
           <div className="flex flex-wrap items-center gap-2">
             <label className="inline-flex items-center gap-1.5 text-sm text-ink-500">
               Ordina
@@ -1095,12 +1225,36 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
           </div>
         )}
 
-        {/* Lista recensioni */}
-        {reviews.length === 0 ? (
+        {/* Lista recensioni — quattro stati, non uno solo: niente recensioni,
+            commenti ancora in arrivo, filtro che non pesca nulla, elenco pieno. */}
+        {totaleRecensioni === 0 ? (
           <div className="bg-white border rounded-xl p-8 text-center">
             <Star size={40} strokeWidth={1.5} className="mx-auto text-ink-300 mb-2" aria-hidden />
             <p className="text-ink-600 font-medium">Nessuna recensione ancora</p>
             <p className="text-sm text-ink-400">Sii il primo a condividere la tua esperienza</p>
+          </div>
+        ) : elencoRecensioniRotto ? (
+          <div className="bg-white border rounded-xl p-8 text-center">
+            <p className="text-ink-700 font-medium">Non sono riuscito a caricare le recensioni</p>
+            <p className="mt-1 text-sm text-ink-500">Il voto medio qui sopra è quello vero.</p>
+            <button
+              type="button"
+              onClick={() => { void ricaricaRecensioni(); }}
+              className="mt-3 text-sm font-semibold text-primary-700 hover:underline"
+            >
+              Riprova
+            </button>
+          </div>
+        ) : !elencoRecensioniPronto ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4" aria-busy="true">
+            <span className="sr-only">Carico le recensioni…</span>
+            {[0, 1].map((i) => (
+              <div key={i} className="bg-white border border-cream-200 rounded-xl p-5 animate-pulse space-y-3">
+                <div className="h-4 w-1/3 rounded bg-cream-200" />
+                <div className="h-3 w-full rounded bg-cream-100" />
+                <div className="h-3 w-4/5 rounded bg-cream-100" />
+              </div>
+            ))}
           </div>
         ) : visibleReviews.length === 0 ? (
           <div className="bg-white border rounded-xl p-8 text-center">
@@ -1134,13 +1288,21 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 </div>
                 {r.comment && <p className="text-ink-700 text-sm mb-2">{r.comment}</p>}
                 {/* Foto recensione: grid responsive (Mobile Engineer) */}
-                {Array.isArray(r.photo_urls) && r.photo_urls.length > 0 && (
+                {/* La recensione si inserisce dal browser e sull'indirizzo delle foto non
+                    c'e' nessun controllo: cosi' com'era, chi ha comprato davvero poteva
+                    piazzare un collegamento a scelta sulla pagina pubblica del prodotto,
+                    dentro la cornice di fiducia del marketplace. `fotoDiCasa` tiene solo
+                    gli indirizzi `https` del nostro archivio — la stessa regola che la
+                    scheda del reso applica gia' (components/seller/ReturnRequestCard.tsx).
+                    Il testo alternativo era «Foto recensione» per tutte e quattro: un
+                    lettore di schermo diceva quattro volte la stessa cosa. */}
+                {Array.isArray(r.photo_urls) && r.photo_urls.filter(fotoDiCasa).length > 0 && (
                   <div className="grid grid-cols-4 gap-1.5 mt-2">
-                    {r.photo_urls.slice(0, 4).map((url: string, i: number) => (
+                    {r.photo_urls.filter(fotoDiCasa).slice(0, 4).map((url: string, i: number) => (
                       <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block relative aspect-square rounded-lg overflow-hidden bg-cream-100 hover:opacity-80">
                         <Image
                           src={sizedImage(url, 'card')}
-                          alt="Foto recensione"
+                          alt={`Foto ${i + 1} della recensione`}
                           fill
                           sizes="(max-width: 768px) 25vw, 200px"
                           className="object-cover"

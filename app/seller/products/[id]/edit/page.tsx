@@ -11,6 +11,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { useConsegnaVeloceDelNegozio } from '@/lib/queries/consegna-veloce-del-negozio';
 import { normalizeCondition, type ProductCondition, type ProductUnit } from '@/lib/products/schema';
 import { type ProductVariant } from '@/lib/products/variants';
 import { saveProductVariants, loadProductVariants } from '@/lib/products/persistVariants';
@@ -56,18 +57,29 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     },
   });
 
-  const { data: offersExpress = false } = useQuery({
-    queryKey: [...queryKeys.seller.profile, 'offers-express'],
-    queryFn: async (): Promise<boolean> => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return false;
-      const { data, error } = await supabase.from('profiles').select('offers_express').eq('id', user.id).single();
-      // «Non ho letto il profilo» non è «non offre la consegna espressa»: senza questa riga il
-      // negoziante che l'ha attivata non vede il campo per impostarla, e non capisce perché.
-      if (error) throw error;
-      return Boolean((data as { offers_express?: boolean } | null)?.offers_express);
-    },
-  });
+  /**
+   * 6/9/2026 — UNA LETTURA CHE NON RIESCE NON SCRIVE PIÙ UN «NO» DEFINITIVO.
+   *
+   * Il valore di ripiego era `false`, e nessuno guardava se la lettura fosse
+   * andata a buon fine. Con la rete lenta o la sessione non ancora pronta, il
+   * modulo si apriva dicendo «Spedizione 2-3 giorni» e avvisando il negoziante
+   * di attivare la consegna veloce dal profilo — cosa che lui aveva già fatto.
+   * Il guaio grosso però era al salvataggio: un prodotto che ereditava la
+   * consegna veloce dal negozio (`express_enabled` a NULL) usciva da lì con un
+   * `false` scritto sopra, e restava escluso dalla consegna veloce anche dopo
+   * che la rete era tornata. Il negoziante cambiava il prezzo e perdeva il
+   * vantaggio commerciale, senza vedere niente.
+   *
+   * La domanda «il negozio offre la consegna veloce?» ha una funzione sola, in
+   * `lib/queries/consegna-veloce-del-negozio`: questa pagina e «Nuovo prodotto»
+   * condividono la stessa riga di cache, quindi devono condividere anche la
+   * risposta.
+   */
+  const {
+    offre: offersExpress,
+    inLettura: consegnaInLettura,
+    nonLetta: consegnaNonLetta,
+  } = useConsegnaVeloceDelNegozio();
 
   const update = useMutation({
     mutationFn: async ({ payload, variants: nextVariants }: { payload: ProductPayload; variants: ProductVariant[] }) => {
@@ -111,7 +123,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  if (isLoading || variantsLoading) return <LoadingState />;
+  if (isLoading || variantsLoading || consegnaInLettura) return <LoadingState />;
   if (error || !product) {
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
@@ -171,6 +183,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
         deleting={nascondiIlProdotto.isPending}
         productId={id}
         sellerOffersExpress={offersExpress}
+        consegnaDelNegozioNonLetta={consegnaNonLetta}
         onSubmit={(payload, ctx) => update.mutate({ payload, variants: ctx.variants })}
         onDelete={async () => {
           const ok = await confirmDialog({

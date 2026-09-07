@@ -13,7 +13,7 @@ import StoreMediaManager from './StoreMediaManager';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { friendlyError } from '@/lib/errors';
-import { caricaImmagine } from '@/lib/storage/carica-immagine';
+import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import { Input, Textarea, Checkbox } from '@/components/ui/Field';
 // 31/8/2026 (R037) — Questa e' la pagina dove il negozio legge le condizioni
 // PRIMA di firmare: la commissione qui non si scrive a mano, si prende da dove
@@ -107,11 +107,13 @@ const Field = ({
 }: { label: string; required?: boolean; error?: string; hint?: string; children: React.ReactNode }) => (
   <div>
     <label className="block text-sm font-semibold text-ink-700 mb-1">
-      {label} {required && <span className="text-rose-500" aria-label="obbligatorio">*</span>}
+      {label} {required && <span className="text-secondary-600" aria-label="obbligatorio">*</span>}
     </label>
     {children}
     {hint && !error && <p className="text-xs text-ink-400 mt-1">{hint}</p>}
-    {error && <p role="alert" aria-live="polite" className="text-xs text-rose-600 mt-1">{error}</p>}
+    {/* secondary-600 e' il bordeaux con cui components/ui/Field.tsx scrive gli errori in tutto
+        il sito: qui c'era la rose di serie di Tailwind, che tailwind.config.ts esclude a parole. */}
+    {error && <p role="alert" aria-live="polite" className="text-xs font-medium text-secondary-600 mt-1">{error}</p>}
   </div>
 );
 
@@ -155,6 +157,20 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
     accept: { 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'], 'image/webp': ['.webp'] },
     maxFiles: 1,
     maxSize: 3 * 1024 * 1024,
+    // Questo e' il primo modulo che compila un negozio nuovo, e il tetto dei 3 MB scartava senza
+    // dire niente: una foto fatta col telefono lo supera quasi sempre, e il negoziante restava a
+    // guardare un riquadro vuoto alla sua prima impressione di MyCity. Stesse parole di
+    // StoreMediaManager, cosi' il sito dice no in un modo solo.
+    onDropRejected: (rifiutati) => {
+      const motivi = rifiutati.flatMap((r) => r.errors.map((e) => e.code));
+      toast.error(
+        motivi.includes('file-too-large')
+          ? 'Foto troppo pesante: serve sotto i 3 MB.'
+          : motivi.includes('too-many-files')
+            ? 'Una foto alla volta: trascinane una sola.'
+            : 'Formato non accettato: servono foto in JPG, PNG o WEBP.',
+      );
+    },
     onDrop: async (files) => {
       const file = files[0];
       if (!file) return;
@@ -169,7 +185,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           file,
           userId: user.id,
           cartella: 'logos',
-          cacheControl: '3600',
+          cacheControl: ANNO_IN_SECONDI,
         });
         setLogoUrl(publicUrl);
         toast.success('Logo caricato');
@@ -288,18 +304,18 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           <div className="flex items-center gap-4">
             <StoreAvatar logoUrl={logoUrl} storeName={storeName} size="lg" />
             <div
-              {...getRootProps()}
+              {...getRootProps({ role: 'button', 'aria-label': 'Carica il logo del negozio: trascina il file o premi Invio' })}
               className={`flex-1 border-2 border-dashed rounded-lg p-4 cursor-pointer transition-colors text-sm ${
                 isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
               } ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}
             >
-              <input {...getInputProps()} />
+              <input {...getInputProps({ 'aria-label': 'Carica il logo del negozio' })} />
               {uploadingLogo ? <p className="text-ink-500">{tStates('loading')}</p>
                 : logoUrl ? <p className="text-ink-600"><span className="font-medium">Sostituisci</span> · trascina o clicca</p>
                 : <p className="text-ink-500"><span className="font-medium text-primary-700">Carica</span> immagine quadrata (max 3MB)</p>}
             </div>
             {logoUrl && (
-              <button type="button" onClick={() => setLogoUrl(null)} className="text-sm text-ink-500 hover:text-rose-600 underline">
+              <button type="button" onClick={() => setLogoUrl(null)} className="text-sm text-ink-500 hover:text-secondary-600 underline">
                 Rimuovi
               </button>
             )}
@@ -338,7 +354,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
               if (loc.address.trim()) setLocationError(null);
             }}
           />
-          {locationError && <p className="text-xs text-rose-600 mt-1">{locationError}</p>}
+          {locationError && <p role="alert" className="text-xs font-medium text-secondary-600 mt-1">{locationError}</p>}
         </Field>
       </Section>
 

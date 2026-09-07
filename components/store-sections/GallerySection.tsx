@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import SectionHeading from './SectionHeading';
 import type { SectionConfig, SectionContext } from './SectionContext';
 
@@ -30,6 +31,7 @@ export default function GallerySection({
               alt={it.alt ?? ''}
               fill
               sizes="(max-width: 640px) 50vw, 33vw"
+              loader={caricatoreFotoRemote}
               className="object-cover"
               loading="lazy"
             />

@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
 
@@ -51,7 +52,16 @@ export default function MessagesListPage() {
     });
   }, [router]);
 
-  const { data: conversations = [], isLoading, refetch } = useQuery({
+  /**
+   * 6/9/2026 — «NESSUNA CONVERSAZIONE» A CHI NE HA DIECI APERTE.
+   *
+   * La lettura fallisce sul serio (`if (error) throw error` qui sotto), ma la
+   * pagina prendeva solo `isLoading`: con la rete caduta il caricamento e'
+   * finito, l'elenco e' vuoto, e usciva lo stato «non hai ancora scritto a
+   * nessuno». Chi ha conversazioni aperte leggeva che non ne ha, senza modo di
+   * riprovare. Adesso l'errore ha il suo stato, con il pulsante che rilegge.
+   */
+  const { data: conversations = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.messages.conversationsByUser(userId ?? ''),
     enabled: !!userId,
     queryFn: async (): Promise<ConversationRow[]> => {
@@ -118,7 +128,13 @@ export default function MessagesListPage() {
         <p className="mt-1 text-sm text-ink-500">Conversazioni con i negozi</p>
       </header>
 
-      {conversations.length === 0 ? (
+      {isError ? (
+        <ErrorState
+          title="Non riusciamo a caricare i messaggi"
+          description="La lettura non è riuscita. Controlla la connessione e riprova."
+          onRetry={() => { void refetch(); }}
+        />
+      ) : conversations.length === 0 ? (
         <div className="bg-white border rounded-xl p-12 text-center">
           <MessageCircle size={48} className="mx-auto text-ink-500 mb-3" aria-hidden />
           <p className="text-ink-600 font-semibold mb-1">Nessuna conversazione</p>

@@ -45,10 +45,23 @@ export default function SitePreview({
   const sections = enabledSections(page);
   const isMobile = view === 'mobile';
 
+  /*
+   * 6/9/2026 — DOVE SI FERMA L'ANTEPRIMA QUANDO LA PAGINA SCORRE.
+   *
+   * Si fermava a 16px dal bordo della finestra, ma sopra di lei c'e' la barra
+   * dell'area venditore, che resta ferma anche lei ed e' piu' alta di 16px
+   * (dentro ha il campo di ricerca). Scorrendo, la barra le passava sopra e le
+   * copriva il bordo alto.
+   *
+   * Adesso si ferma sotto la barra: altezza vera della barra piu' un dito di
+   * spazio. Il valore lo scrive SellerShell in `--seller-topbar-height`. I 4rem
+   * di scorta servono quando l'anteprima viene usata fuori dal pannello
+   * venditore, dove quella barra non c'e'.
+   */
   return (
     <section
       data-theme={theme}
-      className="overflow-hidden rounded-2xl border border-cream-300 bg-white shadow-warm lg:sticky lg:top-4"
+      className="overflow-hidden rounded-2xl border border-cream-300 bg-white shadow-warm lg:sticky lg:top-[calc(var(--seller-topbar-height,4rem)+1rem)]"
       aria-label="Anteprima della vetrina"
     >
       {/* Barra "browser" finta: pallini, URL, toggle desktop/mobile */}

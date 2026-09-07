@@ -130,7 +130,7 @@ export default function ProfilePage() {
         <div className="rounded-2xl border border-cream-300 bg-white p-6">
           <h2 className="mb-4 text-lg font-bold">Dati personali</h2>
           <p className="mb-4 text-sm text-ink-500">
-            Email: <span className="font-mono">{profile.email}</span>
+            Email: <span className="break-words font-mono">{profile.email}</span>
           </p>
           <form
             onSubmit={handleSubmit((d) => update.mutate(d))}

@@ -61,6 +61,7 @@ export default function FeaturedProductsPicker({ value = [], onChange }: Props) 
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Cerca un prodotto…"
+          aria-label="Cerca un prodotto da mettere in evidenza"
           className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
         />
       </div>

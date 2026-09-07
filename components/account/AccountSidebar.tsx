@@ -11,6 +11,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { logoNegozio } from '@/lib/image-url';
 import { useProfile } from '@/components/hooks/useProfile';
 import { useNotificationsCount } from '@/components/hooks/useNotificationsCount';
 import { useMessagesUnread } from '@/components/hooks/useMessagesUnread';
@@ -114,9 +115,9 @@ export default function AccountSidebar() {
           {logo ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={logo}
+              src={logoNegozio(logo, 48)}
               alt=""
-              className="h-12 w-12 shrink-0 rounded-full object-cover"
+              className="h-12 w-12 shrink-0 rounded-full bg-white object-contain"
             />
           ) : (
             <span

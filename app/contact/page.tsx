@@ -52,7 +52,7 @@ export default function ContactPage() {
       return;
     }
     // Bot guards
-    if (honeypotRef.current) { toast.success('Messaggio inviato! Ti risponderemo entro 24h.'); return; }
+    if (honeypotRef.current) { toast.success('Messaggio inviato! Ti risponderemo entro 24 ore lavorative.'); return; }
     if (Date.now() - startedAtRef.current < 2000) { toast.success('Messaggio inviato!'); return; }
     // 🟡-2: CAPTCHA come su signup (se configurato).
     if (TURNSTILE_SITE_KEY && !captchaToken && !captchaRotto) { toast.error('Completa la verifica anti-bot'); return; }
@@ -68,7 +68,7 @@ export default function ContactPage() {
         const err = await res.json().catch(() => ({}));
         throw new Error(apiErrorMessage(err, 'Invio non riuscito'));
       }
-      toast.success('Messaggio inviato! Ti risponderemo entro 24h lavorative.');
+      toast.success('Messaggio inviato! Ti risponderemo entro 24 ore lavorative.');
       setForm({ name: '', email: '', subject: 'Domanda generale', message: '' });
     } catch (err) {
       rigeneraGettone();
@@ -90,7 +90,7 @@ export default function ContactPage() {
           <div className="mb-2"><Mail size={28} className="text-primary-600" aria-hidden /></div>
           <div className="font-bold">Email</div>
           <div className="text-sm text-ink-600">info@mycity.it</div>
-          <div className="text-xs text-ink-500 mt-1">Risposta entro 24h</div>
+          <div className="text-xs text-ink-500 mt-1">Risposta entro 24 ore lavorative</div>
         </a>
         {/*
           Qui c'era un numero finto stampato come se fosse vero — «+39 300 000 0000» — e il link

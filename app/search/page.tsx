@@ -3,9 +3,10 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownWideNarrow, X, Tag, PackageCheck, Check, Search, ChevronRight } from 'lucide-react';
+import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownWideNarrow, X, Tag, PackageCheck, Check, Search } from 'lucide-react';
 import ProductGrid from '@/components/ProductGrid';
 import SponsoredCarousel from '@/components/SponsoredCarousel';
+import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -15,6 +16,15 @@ import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 import { useTranslations } from 'next-intl';
 
 type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating' | 'discount_desc';
+
+/** Una categoria del marketplace. `parent_id` vuoto = e' una delle nove principali. */
+type Categoria = {
+  id: string;
+  slug: string;
+  name: string;
+  icon: string | null;
+  parent_id: string | null;
+};
 
 const SORT_OPTIONS: SortOption[] = ['relevance', 'newest', 'price_asc', 'price_desc', 'discount_desc', 'rating'];
 
@@ -109,17 +119,49 @@ function SearchInner() {
     router.replace(nuovo ? `/search?${nuovo}` : '/search', { scroll: false });
   }, [q, categoryId, minPrice, maxPrice, onlyOpenStores, freeShipping, onlyPromo, onlyInStock, minRating, sort, params, router]);
 
+  /**
+   * 6/9/2026 — LA LISTA DELLE CATEGORIE ERA PIATTA, E DUE SI CHIAMAVANO UGUALE.
+   *
+   * Qui si leggevano solo `id, slug, name`: madri e figlie finivano in fila per nome, tutte
+   * allo stesso livello. Settantadue righe da scorrere, e in mezzo due voci «Bambini» una
+   * dietro l'altra — l'abbigliamento per bambini (madre: Abbigliamento) e i libri per bambini
+   * (madre: Libri). Chi cerca un vestito per il figlio e prende quella sbagliata vede libri, e
+   * conclude che i negozi non hanno quello che cerca: un errore che non dice mai di esserlo.
+   *
+   * Leggendo anche `parent_id` la stessa lista si puo' disegnare a gruppi, e il nome della
+   * madre diventa quello che distingue le due «Bambini». `icon` e' l'emoji della categoria:
+   * serve alle scorciatoie di «Forse cercavi».
+   *
+   * ⚠️ Questa chiave di cache la usa anche `components/seller/site/CategorySelect.tsx`, che
+   * legge `id, name, slug, parent_id`. Chi arriva primo riempie la cache: `parent_id` c'e' in
+   * tutti e due, quindi i gruppi reggono comunque; l'emoji puo' mancare, e per questo sotto
+   * ha sempre il suo ripiego.
+   */
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.categories.allList,
-    queryFn: async (): Promise<Array<{ id: string; slug: string; name: string }>> => {
+    queryFn: async (): Promise<Categoria[]> => {
       const { data, error } = await supabase
         .from('categories')
-        .select('id, slug, name')
+        .select('id, slug, name, icon, parent_id')
         .order('name');
       if (error) throw error;
-      return (data ?? []) as Array<{ id: string; slug: string; name: string }>;
+      return (data ?? []) as Categoria[];
     },
   });
+
+  // Le nove categorie principali, le loro figlie, e le figlie rimaste senza madre (che non
+  // vanno perse: sparirebbero dal filtro senza che nessuno se ne accorga).
+  const madri = categories.filter((c) => !c.parent_id);
+  const figlieDi = (idMadre: string) => categories.filter((c) => c.parent_id === idMadre);
+  const orfane = categories.filter((c) => c.parent_id && !categories.some((m) => m.id === c.parent_id));
+
+  /** «Bambini» da solo non dice niente: sotto Libri e sotto Abbigliamento sono due cose diverse. */
+  const nomeConLaSuaMadre = (id: string): string => {
+    const c = categories.find((x) => x.id === id);
+    if (!c) return '';
+    const madre = c.parent_id ? categories.find((x) => x.id === c.parent_id) : undefined;
+    return madre ? `${madre.name} › ${c.name}` : c.name;
+  };
 
   const reset = () => {
     setCategoryId('');
@@ -166,7 +208,7 @@ function SearchInner() {
   // Chip dei filtri attivi: ciascuno rimovibile, riflette lo stato reale di
   // filtri/ordinamento/prezzo. La clear di ogni chip tocca solo il proprio stato.
   type Chip = { key: string; label: string; clear: () => void };
-  const categoryName = categories.find((c) => c.id === categoryId)?.name;
+  const categoryName = categoryId ? nomeConLaSuaMadre(categoryId) : undefined;
   const chips: Chip[] = [];
   if (categoryId) chips.push({ key: 'cat', label: t('filterCategory', { name: categoryName ?? '' }), clear: () => setCategoryId('') });
   if (minPrice > 0 && maxPrice < 500) chips.push({ key: 'price', label: t('filterPriceRange', { min: minPrice, max: maxPrice }), clear: () => { setMinPrice(0); setMaxPrice(500); setMinPrezzoInCorso(0); setMaxPrezzoInCorso(500); } });
@@ -179,8 +221,15 @@ function SearchInner() {
   if (onlyOpenStores) chips.push({ key: 'open', label: t('chip.openNow'), clear: () => setOnlyOpenStores(false) });
   if (sort !== 'relevance') chips.push({ key: 'sort', label: t(`sort.${sort}`), clear: () => setSort('relevance') });
 
-  // "Forse cercavi": categorie reali (già caricate da Supabase) come scorciatoie.
-  const didYouMean = categories.slice(0, 6);
+  // "Forse cercavi": le scorciatoie dopo una ricerca a vuoto.
+  //
+  // 6/9/2026 — erano `categories.slice(0, 6)`, cioe' le prime sei righe di una lista ordinata
+  // per nome: Abbigliamento, Abbigliamento sportivo, Abiti & Gonne, Accessori, Accessori &
+  // Borse, Accessori sport. Una sola su sei era una categoria principale. Chi cercava «pane» e
+  // non trovava niente si vedeva proporre gonne e borse — e quello e' esattamente il momento in
+  // cui decide se restare o chiudere la scheda. Ora sono le categorie principali, cioe' le vie
+  // d'uscita vere.
+  const didYouMean = madri;
 
   // Controlli filtro condivisi tra colonna desktop e bottom-sheet mobile.
   const filterControls = (
@@ -210,7 +259,22 @@ function SearchInner() {
             className="w-full bg-cream-50 border border-cream-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
           >
             <option value="">{t('allCategories')}</option>
-            {categories.map((c) => (
+            {/* Un gruppo per categoria principale: la voce «Bambini» sotto Libri e quella
+                sotto Abbigliamento smettono di essere indistinguibili, e le settantadue
+                righe diventano nove blocchi da scorrere. */}
+            {madri.map((m) => {
+              const figlie = figlieDi(m.id);
+              if (figlie.length === 0) return <option key={m.id} value={m.id}>{m.name}</option>;
+              return (
+                <optgroup key={m.id} label={m.name}>
+                  <option value={m.id}>{m.name}</option>
+                  {figlie.map((f) => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </optgroup>
+              );
+            })}
+            {orfane.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
@@ -338,37 +402,6 @@ function SearchInner() {
         {filterControls}
       </aside>
 
-      {/* MOBILE: azioni "Ordina" + "Filtri", compatte e allineate a destra */}
-      <div className="md:hidden flex items-center justify-end gap-2">
-        <button
-          ref={sortTriggerRef}
-          onClick={() => setSortOpen(true)}
-          aria-label={t('sortBy')}
-          className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-3 py-1.5 text-sm font-semibold text-ink-700 shadow-sm hover:bg-cream-50 transition-colors"
-        >
-          <ArrowDownWideNarrow size={15} strokeWidth={2.2} className="text-ink-500" />
-          <span>{t('sortShort')}</span>
-        </button>
-        <button
-          ref={filterTriggerRef}
-          onClick={() => setFiltersOpen(true)}
-          aria-label={t('filters')}
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold shadow-sm transition-colors ${
-            activeFilters > 0
-              ? 'bg-primary-700 text-white hover:bg-primary-800'
-              : 'bg-white text-primary-700 border border-primary-200 hover:bg-primary-50'
-          }`}
-        >
-          <Filter size={15} strokeWidth={2.4} className={activeFilters > 0 ? 'text-white' : 'text-primary-600'} />
-          <span>{t('filters')}</span>
-          {activeFilters > 0 && (
-            <span className="bg-white text-primary-700 text-[10px] font-extrabold rounded-full min-w-[1.1rem] px-1 py-0.5 leading-none">
-              {activeFilters}
-            </span>
-          )}
-        </button>
-      </div>
-
       {/* MOBILE: bottom-sheet filtri */}
       {filtersOpen && (
         <div className="md:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={t('filters')}>
@@ -445,21 +478,24 @@ function SearchInner() {
       {/* 148 — Il layout dell'applicazione ha già un <main>: questo secondo,
           annidato dentro il primo, rompe la navigazione per landmark — chi usa
           un lettore di schermo salta al «contenuto principale» e ne trova due. */}
+      {/* 6/9/2026 — DUE COSE STAVANO SOPRA IL TITOLO, E NESSUNA DELLE DUE DICEVA DOVE SI E'.
+          ① Su telefono la colonna dei filtri e' nascosta, quindi il primo blocco visibile era
+             quello dei pulsanti «Ordina» e «Filtri»: due bottoni sospesi in cima, prima di
+             sapere su che pagina si e' e cosa si e' cercato. La pagina categoria — che e' la sua
+             gemella — fa il contrario da sempre: intestazione a tutta larghezza, poi il resto.
+          ② Il primo figlio della colonna risultati era il carosello a pagamento. Chi ha appena
+             premuto invio non trovava la conferma di cosa sta guardando.
+          Ordine di adesso: dove sono → cosa ho cercato → quanti risultati → come li ordino e
+          filtro → gli spazi sponsorizzati → i prodotti. Il carosello resta sopra la griglia,
+          quindi la visibilita' venduta non cala. */}
       <div className="md:col-span-3 space-y-6">
-        <SponsoredCarousel placement="search_top" />
         <div className="space-y-3">
-          {/* Breadcrumb accessibile: Home › Ricerca */}
-          <nav aria-label="Breadcrumb">
-            <ol className="flex flex-wrap items-center gap-1.5 text-[13px] text-ink-500">
-              <li className="inline-flex items-center gap-1.5">
-                <Link href="/" className="hover:text-ink-700 transition-colors">{tn('home')}</Link>
-                <ChevronRight size={13} className="text-ink-400 shrink-0" aria-hidden />
-              </li>
-              <li>
-                <span className="text-ink-700" aria-current="page">{tn('search')}</span>
-              </li>
-            </ol>
-          </nav>
+          {/* Dato strutturato spento: una pagina di risultati non va nell'indice di Google,
+              e una scheda `BreadcrumbList` li' dentro e' solo rumore. */}
+          <Breadcrumb
+            items={[{ label: tn('home'), href: '/' }, { label: tn('search') }]}
+            datiStrutturati={false}
+          />
 
           <h1 className="text-2xl md:text-3xl font-serif font-bold text-ink-900">
             {q ? t.rich('resultsFor', { q, hl: (chunks) => <span className="text-primary-700">{chunks}</span> }) : t('allProducts')}
@@ -512,7 +548,42 @@ function SearchInner() {
               </button>
             </div>
           )}
+
+          {/* MOBILE: azioni "Ordina" + "Filtri", subito sotto il titolo e il conteggio.
+              Su schermo grande i filtri stanno nella colonna a sinistra, quindi qui
+              spariscono. */}
+          <div className="md:hidden flex items-center justify-end gap-2">
+            <button
+              ref={sortTriggerRef}
+              onClick={() => setSortOpen(true)}
+              aria-label={t('sortBy')}
+              className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-3 py-1.5 text-sm font-semibold text-ink-700 shadow-sm hover:bg-cream-50 transition-colors"
+            >
+              <ArrowDownWideNarrow size={15} strokeWidth={2.2} className="text-ink-500" />
+              <span>{t('sortShort')}</span>
+            </button>
+            <button
+              ref={filterTriggerRef}
+              onClick={() => setFiltersOpen(true)}
+              aria-label={t('filters')}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold shadow-sm transition-colors ${
+                activeFilters > 0
+                  ? 'bg-primary-700 text-white hover:bg-primary-800'
+                  : 'bg-white text-primary-700 border border-primary-200 hover:bg-primary-50'
+              }`}
+            >
+              <Filter size={15} strokeWidth={2.4} className={activeFilters > 0 ? 'text-white' : 'text-primary-600'} />
+              <span>{t('filters')}</span>
+              {activeFilters > 0 && (
+                <span className="bg-white text-primary-700 text-[10px] font-extrabold rounded-full min-w-[1.1rem] px-1 py-0.5 leading-none">
+                  {activeFilters}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
+
+        <SponsoredCarousel placement="search_top" />
 
         <ProductGrid
           search={q || undefined}
@@ -543,7 +614,9 @@ function SearchInner() {
                         href={`/category/${c.slug}`}
                         className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3.5 py-1.5 text-[13px] font-semibold text-primary-800 hover:bg-primary-100 transition-colors"
                       >
-                        <Search size={13} strokeWidth={2.4} aria-hidden /> {c.name}
+                        {c.icon
+                          ? <span aria-hidden>{c.icon}</span>
+                          : <Search size={13} strokeWidth={2.4} aria-hidden />} {c.name}
                       </Link>
                     ))}
                   </div>

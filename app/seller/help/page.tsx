@@ -20,7 +20,7 @@ export default function SellerHelpPage() {
         <Link href="/contact" className="bg-gradient-to-br from-primary-600 to-secondary-600 text-white rounded-xl p-5 hover:shadow-lg transition-all">
           <div className="mb-2"><Mail size={24} className="text-white" aria-hidden /></div>
           <p className="font-bold">Contatta il team</p>
-          <p className="text-xs text-primary-100 mt-1">Risposta entro 24h</p>
+          <p className="text-xs text-primary-100 mt-1">Risposta entro 24 ore lavorative</p>
         </Link>
         <a href="mailto:venditori@mycity.it" className="bg-white border rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
           <div className="mb-2"><Mail size={24} className="text-primary-600" aria-hidden /></div>

@@ -5,7 +5,7 @@ import Script from 'next/script';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { readConsent } from '@/lib/consent';
 import { scriptDiAvvioGtag } from '@/lib/analytics/gtag-avvio';
-import { chiaveDellaPaginaVista } from '@/lib/analytics/tracciamento';
+import { chiaveDellaPaginaVista, indirizzoDaSpedire } from '@/lib/analytics/tracciamento';
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? '';
 
@@ -47,12 +47,23 @@ export default function GoogleAnalytics() {
   // tocco di filtro sulla pagina dei risultati. La chiave adesso tiene il percorso e la sola
   // ricerca, ed è la stessa che usa il beacon di attività.
   const paginaVista = chiaveDellaPaginaVista(pathname ?? '/', searchParams);
+  //
+  // 6/9/2026 — LA CHIAVE DICE QUANDO MANDARE, NON COSA MANDARE.
+  //
+  // L'indirizzo spedito veniva ricostruito dalla chiave qui sopra, che della coda tiene solo la
+  // ricerca. Così sparivano `utm_source`, `utm_campaign` e `gclid`: chi arrivava da un annuncio
+  // pagato risultava «diretto», e il ritorno della spesa pubblicitaria non si poteva leggere.
+  // Adesso l'indirizzo lo costruisce `indirizzoDaSpedire`, che tiene i parametri di campagna e
+  // lascia fuori tutto il resto — il testo cercato compreso.
+  const indirizzoCampagna = indirizzoDaSpedire(pathname ?? '/', searchParams);
   useEffect(() => {
     if (!analyticsOn || !GA_ID || !window.gtag) return;
     window.gtag('event', 'page_view', {
       page_path: paginaVista,
-      page_location: window.location.origin + paginaVista,
+      page_location: window.location.origin + indirizzoCampagna,
     });
+    // `paginaVista` resta la dipendenza: è lei che decide quando questa pagina è una pagina nuova.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paginaVista, analyticsOn]);
 
   // Consent Mode update quando consenso cambia

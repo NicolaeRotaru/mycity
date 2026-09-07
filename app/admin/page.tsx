@@ -175,13 +175,13 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
           <HealthTile icon={Euro} tone="olive" label="GMV (ordini consegnati)" value={formatPrice(gmv)} hint={`AOV ${formatPrice(aov)}`} />
           <HealthTile icon={Percent} tone="primary" label={`Commissioni (${MARKETPLACE_FEE_BPS / 100}% del subtotale)`} value={formatPrice(commissions)} hint="trattenuta reale sugli ordini consegnati" />
-          <HealthTile icon={Timer} tone="accent" label="Tasso di consegna" value={`${fulfillmentRate.toFixed(1)}%`} hint="obiettivo ≥ 95%" />
-          <HealthTile icon={Store} tone="secondary" label="Tasso di annullamento" value={`${cancelRate.toFixed(1)}%`} hint={`${canceled} ordini annullati`} />
+          <HealthTile icon={Timer} tone="accent" label="Tasso di consegna" value={`${fulfillmentRate.toFixed(1).replace('.', ',')}%`} hint="obiettivo ≥ 95%" />
+          <HealthTile icon={Store} tone="secondary" label="Tasso di annullamento" value={`${cancelRate.toFixed(1).replace('.', ',')}%`} hint={`${canceled} ordini annullati`} />
           <HealthTile
             icon={CreditCard}
             tone={pagamentiDaGuardare ? 'accent' : 'primary'}
             label="Pagamenti riusciti (30 giorni)"
-            value={tassoPagamenti === null ? '—' : `${(tassoPagamenti * 100).toFixed(1)}%`}
+            value={tassoPagamenti === null ? '—' : `${(tassoPagamenti * 100).toFixed(1).replace('.', ',')}%`}
             hint={
               pagamenti && pagamenti.tentativi > 0
                 ? `${pagamenti.riusciti} su ${pagamenti.tentativi} tentativi con carta${motivoPrincipale ? ` · piu frequente: ${motivoPrincipale.codice}` : ''}`

@@ -6,7 +6,7 @@ import caricatoreFotoRemote from '@/lib/image-loader';
 import { Camera, X, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
-import { caricaImmagine } from '@/lib/storage/carica-immagine';
+import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 
 type Props = {
   userId: string;
@@ -29,6 +29,52 @@ function messaggioDi(err: unknown): string {
   if (err instanceof Error) return err.message;
   if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message);
   return '';
+}
+
+/**
+ * 6/9/2026 — QUI DAVANTI C'E' UN CLIENTE CHE ALLEGA LA FOTO DEL PANE, NON UN PROGRAMMATORE.
+ *
+ * ── Cosa gli arrivava sullo schermo ──────────────────────────────────────────────────────────
+ * Quattro frasi, tali e quali: «Bucket "reviews" non esiste. Chiedi all'admin di crearlo
+ * (public, max 5MB)», «caricaImmagine senza file», «percorso non ammesso (la prima cartella e'
+ * «xyz»: il database accetta solo l'identificativo di chi carica…)» e il ripiego «Upload
+ * fallito», che non e' nemmeno italiano. Nessuna gli dice cosa fare. Tre su quattro sono guasti
+ * NOSTRI, su cui lui non puo' fare niente: leggerne il motivo tecnico non lo aiuta, gli fa solo
+ * pensare di aver sbagliato qualcosa e lasciare la recensione a meta'.
+ *
+ * ── Perche' una LISTA CHIUSA e non una traduzione caso per caso ──────────────────────────────
+ * Il ripiego di prima era «mostra il messaggio che ti arriva, qualunque sia»: una rete di
+ * sicurezza che si comportava da porta aperta, perche' ogni errore nuovo — dello storage, della
+ * porta dei caricamenti, di una libreria — usciva in inglese senza che nessuno lo decidesse.
+ * `friendlyError` non basta da solo: il suo ultimo ramo lascia passare qualunque frase corta che
+ * cominci per lettera, e «caricaImmagine senza file» passa quel filtro.
+ * Qui sotto ci sono le UNICHE tre cose su cui chi carica puo' agire davvero. Tutto il resto —
+ * conosciuto o no, oggi o fra sei mesi — esce come «non riusciamo a salvare la foto», che e' la
+ * verita' e dice anche come uscirne: la recensione si puo' lasciare comunque.
+ */
+const NON_RIUSCIAMO_A_SALVARE =
+  'Non riusciamo a salvare la foto in questo momento. Riprova fra poco: la recensione puoi lasciarla anche senza foto.';
+const FORMATO_NON_ACCETTATO = 'Questa foto è in un formato che non accettiamo: usa un JPG, un PNG o un WEBP.';
+const FOTO_TROPPO_PESANTE = `La foto è troppo pesante: tieniti sotto i ${MAX_SIZE_MB} MB, o scattane una più leggera.`;
+const RETE_CADUTA = 'Connessione persa mentre caricavamo la foto. Controlla la rete e riprova.';
+
+/**
+ * Le uniche frasi grezze su cui chi carica puo' fare qualcosa. Fuori da questa lista: guasto
+ * nostro, e si dice cosi'. L'ordine conta: si ferma alla prima che riconosce.
+ */
+const FRASI_DI_CARICAMENTO: Array<[RegExp, string]> = [
+  [/formato non accettato|mime type|not supported/i, FORMATO_NON_ACCETTATO],
+  [/troppo pesante|exceeded the maximum allowed size|payload too large/i, FOTO_TROPPO_PESANTE],
+  [/network|fetch|timeout|aborted|connessione/i, RETE_CADUTA],
+];
+
+/** L'unica cosa che puo' finire davanti a chi carica: una delle quattro frasi qui sopra. */
+function frasePerChiCarica(err: unknown): string {
+  const grezzo = messaggioDi(err);
+  for (const [quando, dire] of FRASI_DI_CARICAMENTO) {
+    if (quando.test(grezzo)) return dire;
+  }
+  return NON_RIUSCIAMO_A_SALVARE;
 }
 
 /**
@@ -70,24 +116,13 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
         // sbagliarla bisogna riscrivere una chiamata a `.upload()`, che e' una
         // modifica visibile in una revisione — non una stringa cambiata di
         // nascosto.
-        let percorso: string;
-        let publicUrl: string;
-        try {
-          ({ percorso, publicUrl } = await caricaImmagine(supabase, {
-            file,
-            userId,
-            cartella: productId,
-            secchio: SECCHIO_RECENSIONI,
-            cacheControl: '3600',
-          }));
-        } catch (err) {
-          // Se il magazzino non esiste, dillo con parole che si capiscono.
-          if (messaggioDi(err).includes('not found')) {
-            toast.error('Bucket "reviews" non esiste. Chiedi all\'admin di crearlo (public, max 5MB).');
-            return;
-          }
-          throw err;
-        }
+        const { percorso, publicUrl } = await caricaImmagine(supabase, {
+          file,
+          userId,
+          cartella: productId,
+          secchio: SECCHIO_RECENSIONI,
+          cacheControl: ANNO_IN_SECONDI,
+        });
 
         newUrls.push({ url: publicUrl, path: percorso });
       }
@@ -97,7 +132,7 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
       onUploaded(next.map((f) => f.url));
       if (newUrls.length > 0) toast.success(`${newUrls.length} foto caricat${newUrls.length === 1 ? 'a' : 'e'}`);
     } catch (err) {
-      toast.error(messaggioDi(err) || 'Upload fallito');
+      toast.error(frasePerChiCarica(err));
     } finally {
       setUploading(false);
       // reset input

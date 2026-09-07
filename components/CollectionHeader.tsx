@@ -1,5 +1,5 @@
-import Link from 'next/link';
-import { ChevronRight, type LucideIcon } from 'lucide-react';
+import { type LucideIcon } from 'lucide-react';
+import { Breadcrumb } from '@/components/ui/Breadcrumb';
 
 export type CrumbItem = {
   /** Etichetta mostrata nel breadcrumb. */
@@ -61,27 +61,12 @@ export default function CollectionHeader({
 
   return (
     <header className="mb-5">
-      <nav aria-label="Breadcrumb" className="mb-2.5">
-        <ol className="flex flex-wrap items-center gap-1.5 text-[13px] text-ink-500">
-          {crumbs.map((c, i) => {
-            const isLast = i === crumbs.length - 1;
-            return (
-              <li key={`${c.label}-${i}`} className="inline-flex items-center gap-1.5">
-                {c.href && !isLast ? (
-                  <Link href={c.href} className="hover:text-ink-700 transition-colors">
-                    {c.label}
-                  </Link>
-                ) : (
-                  <span className={isLast ? 'text-ink-700' : undefined} aria-current={isLast ? 'page' : undefined}>
-                    {c.label}
-                  </span>
-                )}
-                {!isLast && <ChevronRight size={13} className="text-ink-400 shrink-0" aria-hidden />}
-              </li>
-            );
-          })}
-        </ol>
-      </nav>
+      {/* 6/9/2026 — qui il briciolo di pane era riscritto a mano, con una misura di testo e una
+          posizione della freccia diverse da quelle del componente condiviso: lo stesso punto di
+          riferimento cambiava aspetto passando da una collezione a un prodotto. Ora e' quello
+          condiviso. Il dato strutturato resta spento: `app/category/[slug]/page.tsx` stampa gia'
+          il suo `BreadcrumbList`, e due schede uguali sulla stessa pagina confondono Google. */}
+      <Breadcrumb items={crumbs} className="mb-2.5" datiStrutturati={false} />
 
       <div className="flex items-center gap-3.5">
         <span

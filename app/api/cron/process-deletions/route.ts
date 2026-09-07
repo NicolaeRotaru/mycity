@@ -119,6 +119,7 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   // oltre quei periodi (l'azione/evento resta, la PII no). Best-effort, idempotente.
   try {
     const monthsAgo = (m: number) => new Date(Date.now() - m * 30 * 86_400_000).toISOString();
+    const giorniFa = (g: number) => new Date(Date.now() - g * 86_400_000).toISOString();
     // 27/8/2026 (R059) — ERANO 14 MESI, E NE AVEVAMO DICHIARATI 12.
     //
     // Nella tabella della conservazione, sulla riga «Sicurezza, anti-frode»,
@@ -238,6 +239,38 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       .delete()
       .lt('created_at', monthsAgo(24)), fallite);
 
+    // 6/9/2026 — L'ISCRIZIONE CHE NESSUNO HA MAI CONFERMATO RESTAVA QUI PER
+    // SEMPRE.
+    //
+    // Il modulo della newsletter e' pubblico: chiunque puo' scriverci
+    // l'indirizzo di un altro e far partire l'email di conferma. Finche'
+    // quell'altro non clicca, la riga resta in piedi con dentro il suo
+    // indirizzo, l'indirizzo di rete di chi l'ha scritto e il gettone di
+    // conferma. Il doppio consenso c'era, la scadenza del tentativo no:
+    // l'unica cancellazione di questa tabella era per l'email di chi cancella
+    // il proprio account, cioe' quasi mai. Un tentativo di trenta giorni fa non
+    // e' un consenso in attesa: e' il dato di una persona che non ci ha mai
+    // detto di si'.
+    //
+    // I quattro filtri servono tutti, e i due di mezzo sono quelli facili da
+    // dimenticare:
+    //  · `active` falso — le iscrizioni piu' vecchie della migrazione 115 hanno
+    //    `confirmed_at` vuoto perche' quella colonna non esisteva ancora, e sono
+    //    iscritti veri (la 015 metteva `active` a vero). Senza questo filtro la
+    //    potatura buttava via meta' della lista, e in silenzio.
+    //  · `unsubscribed_at` vuoto — chi si e' cancellato dalla lista (la 118
+    //    spegne `active` e scrive la data) tiene la sua riga: e' la prova che
+    //    non lo vuole piu', e cancellarla vuol dire rischiare di riscrivergli.
+    //
+    // Trenta giorni: la conferma si clicca lo stesso giorno o mai piu'.
+    await pota('newsletter_subscribers', admin
+      .from('newsletter_subscribers')
+      .delete()
+      .is('confirmed_at', null)
+      .is('unsubscribed_at', null)
+      .eq('active', false)
+      .lt('created_at', giorniFa(30)), fallite);
+
     // 27/8/2026 (R056) — I DOCUMENTI DI CHI VIENE RESPINTO.
     //
     // La funzione esisteva dalla migrazione 119 col commento «il cron cancella
@@ -285,6 +318,21 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     logger.warn('[cron-deletions] prune retention IP/UA parziale', { e });
   }
 
+  // 6/9/2026 — ANCHE QUESTO NUMERO NON LO GUARDAVA NESSUNO.
+  //
+  // `retentionFallite` usciva solo nel corpo della risposta, ed e' parola per
+  // parola il difetto chiuso tre giorni fa una riga piu' sotto, sulle
+  // cancellazioni: il corpo lo riceve lo scheduler, che guarda il codice di
+  // stato e lo butta via. Intanto le potature diventavano otto e nessuna
+  // sapeva farsi sentire quando veniva rifiutata.
+  //
+  // Una potatura che non passa non e' un dettaglio tecnico: sono indirizzi di
+  // rete, foto della porta di casa e email di persone che con noi non hanno
+  // nessun rapporto, tenute oltre il tempo che dichiariamo nella pagina
+  // pubblica. E non si aggiusta da sola: se il database rifiuta stanotte,
+  // rifiutera' anche domani.
+  if (fallite.n > 0) await svegliaPerLaRitenzione(admin, fallite.n);
+
   // Chiama la function SQL che ritorna gli userId scaduti
   const { data: expired, error: rpcErr } = await admin.rpc('process_expired_deletions');
   if (rpcErr) {
@@ -295,7 +343,12 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   const scadute = (expired ?? []) as Array<{ user_id: string; deleted_at: string | null }>;
   const userIds: string[] = scadute.map((r) => r.user_id);
   if (userIds.length === 0) {
-    return NextResponse.json({ processed: 0, message: 'No accounts to process', retentionFallite: fallite.n });
+    // Le notti senza cancellazioni da fare sono la maggioranza: se il conto
+    // delle potature non riuscite non pesa QUI, non pesa quasi mai.
+    return NextResponse.json(
+      { processed: 0, message: 'No accounts to process', retentionFallite: fallite.n },
+      { status: fallite.n > 0 ? 500 : 200 },
+    );
   }
 
   const results = { ok: 0, errors: [] as string[] };
@@ -361,21 +414,14 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     // (`withCronAuth`). Un 500 fa due cose insieme: rende rossa l'esecuzione
     // nel pannello dei lavori periodici, e NON scrive il battito — cosi' se la
     // cosa va avanti anche il sorvegliante se ne accorge da solo.
-    { status: verdetto.daSvegliare ? 500 : 200 },
+    { status: verdetto.daSvegliare || fallite.n > 0 ? 500 : 200 },
   );
 });
 
 /**
- * Sveglia un amministratore. Best-effort di proposito: se la notifica non
- * riesce, la notte resta rossa lo stesso (il 500 qui sopra non dipende da
- * questa funzione) — un allarme che non parte non deve poter cancellare il
- * guasto che doveva annunciare.
- *
- * Perche' la notifica in-app e non l'email: la posta ce l'ha gia' in mano il
- * sorvegliante (`operational-alerts`), che manda un messaggio solo ogni sei ore
- * per la stessa cosa. Qui si scrive nel pannello, che e' il posto dove un
- * amministratore guarda comunque, e nel registro degli errori, che arriva a
- * Sentry.
+ * Sveglia un amministratore quando delle cancellazioni non sono state eseguite.
+ * Il testo dell'avviso lo prepara `lib/cron-cancellazioni.ts`: e' una decisione,
+ * e le decisioni si provano senza far girare tutta la notte.
  */
 async function sveglia(admin: Admin, verdetto: VerdettoGiro): Promise<void> {
   logger.error('[cron-deletions] richieste di cancellazione non eseguite', {
@@ -383,11 +429,57 @@ async function sveglia(admin: Admin, verdetto: VerdettoGiro): Promise<void> {
     scadute: verdetto.scadute,
     riga: verdetto.riga,
   });
+  await avvisaAmministratori(
+    admin,
+    'Cancellazioni account non eseguite',
+    verdetto.riga ?? 'Il giro notturno delle cancellazioni non e andato a buon fine.',
+  );
+}
+
+/**
+ * 6/9/2026 — La stessa sveglia, per le pulizie dei dati vecchi.
+ *
+ * Non e' una cancellazione mancata, ma il difetto e' identico: un conto esatto
+ * che restava dentro una risposta HTTP. Qui si dice cosa e' successo con parole
+ * che si leggono di notte, e la notte finisce rossa (il 500 sta nella rotta):
+ * cosi' l'esecuzione diventa rossa nel pannello dei lavori periodici e il
+ * battito non viene scritto, quindi se ne accorge anche il sorvegliante.
+ */
+async function svegliaPerLaRitenzione(admin: Admin, quante: number): Promise<void> {
+  logger.error('[cron-deletions] pulizie di ritenzione non riuscite: i dati oltre la finestra restano dove sono', {
+    quante,
+  });
+  const quali = quante === 1
+    ? 'Stanotte una pulizia dei dati vecchi non è riuscita.'
+    : `Stanotte ${quante} pulizie dei dati vecchi non sono riuscite.`;
+  await avvisaAmministratori(
+    admin,
+    'Dati vecchi non cancellati',
+    `${quali} I dati che dovevamo cancellare sono ancora al loro posto, oltre il tempo che ` +
+      'promettiamo nella pagina della privacy. Non si sistema da sola: se il database ha detto di ' +
+      'no stanotte, dirà di no anche domani.',
+  );
+}
+
+/**
+ * Scrive l'avviso nel pannello degli amministratori.
+ *
+ * Best-effort di proposito: se la notifica non riesce, la notte resta rossa lo
+ * stesso (il 500 non dipende da questa funzione) — un allarme che non parte non
+ * deve poter cancellare il guasto che doveva annunciare.
+ *
+ * Perche' la notifica in-app e non l'email: la posta ce l'ha gia' in mano il
+ * sorvegliante (`operational-alerts`), che manda un messaggio solo ogni sei ore
+ * per la stessa cosa. Qui si scrive nel pannello, che e' il posto dove un
+ * amministratore guarda comunque, e nel registro degli errori, che arriva a
+ * Sentry.
+ */
+async function avvisaAmministratori(admin: Admin, titolo: string, riga: string): Promise<void> {
   try {
     const { data: amministratori } = await admin
       .from('profiles').select('id').eq('role', 'admin').limit(10);
     if (!amministratori || amministratori.length === 0) {
-      logger.error('[cron-deletions] nessun amministratore a cui dirlo: allarme non recapitato');
+      logger.error('[cron-deletions] nessun amministratore a cui dirlo: allarme non recapitato', { titolo });
       return;
     }
     const { error } = await admin.from('notifications').insert(
@@ -396,8 +488,8 @@ async function sveglia(admin: Admin, verdetto: VerdettoGiro): Promise<void> {
         // Categoria di sistema: non e' una promozione e non si spegne con gli
         // interruttori del marketing (#33).
         category: 'system',
-        title: 'Cancellazioni account non eseguite',
-        body: verdetto.riga ?? 'Il giro notturno delle cancellazioni non e andato a buon fine.',
+        title: titolo,
+        body: riga,
         link: '/admin/users',
       })),
     );

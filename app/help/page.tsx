@@ -121,7 +121,7 @@ export default function HelpPage() {
             <FileText size={24} className="text-primary-600 shrink-0" aria-hidden />
             <div>
               <div className="font-semibold text-sm">Form contatti</div>
-              <div className="text-xs text-ink-500">Risposta entro 24h</div>
+              <div className="text-xs text-ink-500">Risposta entro 24 ore lavorative</div>
             </div>
           </Link>
         </div>

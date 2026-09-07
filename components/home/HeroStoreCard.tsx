@@ -115,7 +115,11 @@ export default function HeroStoreCard() {
               pill "Aperto ora / Chiuso" sovrapposta in alto a sinistra. */}
           <div className="relative h-44 w-full overflow-hidden">
             {cover ? (
-              <Image src={sizedImage(cover, 'hero')} alt="" fill sizes="(max-width: 768px) 100vw, 384px" loader={caricatoreFotoRemote} className="object-cover" />
+              // Il `sizes` diceva «100vw sotto i 768px», ma sotto i 768 questa scheda non
+              // c'è: il contenitore è `hidden md:flex`. Su un telefono faceva scegliere al
+              // browser una foto a tutta larghezza per una cosa che non compare. La misura
+              // vera è una sola: 384 punti, la larghezza della scheda (max-w-sm).
+              <Image src={sizedImage(cover, 'hero')} alt="" fill sizes="384px" loader={caricatoreFotoRemote} className="object-cover" />
             ) : (
               <div aria-hidden className="absolute inset-0 bg-gradient-to-br from-primary-500 via-primary-600 to-secondary-600">
                 <span className="absolute inset-0 flex items-center justify-center text-white/40">
@@ -142,7 +146,7 @@ export default function HeroStoreCard() {
                 {reviews && (
                   <span className="inline-flex items-center gap-1 font-semibold text-ink-800">
                     <Star size={13} className="fill-accent-500 text-accent-500" aria-hidden />
-                    {reviews.avg.toFixed(1)}
+                    {reviews.avg.toFixed(1).replace('.', ',')}
                     <span className="font-normal text-ink-400">· {reviews.count} recensioni</span>
                   </span>
                 )}

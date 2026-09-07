@@ -6,8 +6,9 @@ import { useDropzone } from 'react-dropzone';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { friendlyError } from '@/lib/errors';
-import { caricaImmagine } from '@/lib/storage/carica-immagine';
+import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 
 /**
  * Carica un'immagine nel bucket pubblico 'products' e ritorna l'URL pubblico https.
@@ -26,7 +27,7 @@ export async function uploadSiteImage(file: File): Promise<string> {
     file,
     userId: user.id,
     cartella: 'site',
-    cacheControl: '3600',
+    cacheControl: ANNO_IN_SECONDI,
   });
   return publicUrl;
 }
@@ -35,7 +36,11 @@ export async function uploadSiteImage(file: File): Promise<string> {
 export function SingleImageUpload({ value, onChange }: { value: string; onChange: (url: string) => void }) {
   const [busy, setBusy] = useState(false);
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { 'image/*': [] },
+    accept: {
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/png': ['.png'],
+      'image/webp': ['.webp'],
+    },
     maxFiles: 1,
     onDrop: async (files) => {
       const f = files[0];
@@ -55,7 +60,7 @@ export function SingleImageUpload({ value, onChange }: { value: string; onChange
     <div>
       {value && (
         <div className="relative w-full h-40 rounded-lg overflow-hidden mb-2 border border-cream-200">
-          <Image src={sizedImage(value, 480, { quadrato: true })} alt="" fill sizes="480px" className="object-cover" />
+          <Image src={sizedImage(value, 480, { quadrato: true })} alt="" fill sizes="480px" loader={caricatoreFotoRemote} className="object-cover" />
           <button
             type="button"
             onClick={() => onChange('')}
@@ -66,12 +71,12 @@ export function SingleImageUpload({ value, onChange }: { value: string; onChange
         </div>
       )}
       <div
-        {...getRootProps()}
+        {...getRootProps({ role: 'button', 'aria-label': "Carica un'immagine: trascina il file o premi Invio" })}
         className={`border-2 border-dashed rounded-lg p-4 cursor-pointer text-sm text-center transition-colors ${
           isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
         } ${busy ? 'opacity-50 pointer-events-none' : ''}`}
       >
-        <input {...getInputProps()} />
+        <input {...getInputProps({ 'aria-label': "Carica un'immagine" })} />
         {busy ? 'Caricamento…' : value ? 'Sostituisci immagine' : "Trascina o clicca per caricare un'immagine"}
       </div>
     </div>

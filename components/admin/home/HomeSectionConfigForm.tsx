@@ -141,7 +141,7 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       return (
         <div className="space-y-3">
           <Input label="Titolo" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} placeholder="Cosa cerchi oggi?" />
-          <Input label="Sottotitolo" value={c.subheading ?? ''} maxLength={200} onChange={(e) => set({ subheading: e.target.value })} placeholder="Tutte le categorie del mercato locale" />
+          <Input label="Sottotitolo" value={c.subheading ?? ''} maxLength={200} onChange={(e) => set({ subheading: e.target.value })} placeholder="Le categorie più cercate" />
         </div>
       );
     }
@@ -245,6 +245,13 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       return (
         <div className="space-y-3">
           <ImageUrlField label="Immagine banner" value={c.imageUrl ?? ''} onChange={(url) => set({ imageUrl: url })} pathPrefix="home" hint={CONSIGLIO_IMMAGINE_BANNER} />
+          <Input
+            label="Testo alternativo"
+            value={c.alt ?? ''}
+            maxLength={120}
+            onChange={(e) => set({ alt: e.target.value })}
+            hint="Cosa si vede nella foto, per chi non la vede. Lascialo vuoto se l'immagine è solo uno sfondo."
+          />
           <Input label="Titolo" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
           <Input label="Sottotitolo" value={c.subheading ?? ''} maxLength={200} onChange={(e) => set({ subheading: e.target.value })} />
           <Select label="Sovrapposizione" value={c.overlay ?? 'dark'} onChange={(e) => set({ overlay: e.target.value as 'light' | 'dark' | 'none' })}>

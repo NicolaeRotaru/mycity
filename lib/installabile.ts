@@ -65,3 +65,34 @@ export function eApple(userAgent: string, puntiDiTocco = 0): boolean {
   if (/iPhone|iPad|iPod/i.test(userAgent)) return true;
   return /Macintosh/i.test(userAgent) && puntiDiTocco > 1;
 }
+
+/**
+ * PERCHÉ SU QUESTO TELEFONO LE NOTIFICHE NON SI POSSONO ACCENDERE.
+ *
+ * IL DIFETTO CHE QUESTO PEZZO CHIUDE. La pagina delle impostazioni conosceva due soli stati: le
+ * notifiche si possono attivare, oppure «il tuo browser non supporta le notifiche push». Su iPhone
+ * usciva sempre la seconda frase — e non è vera. Da iOS 16.4 le notifiche esistono, ma **solo
+ * dentro l'app aggiunta alla schermata Home**: finché il sito è aperto in Safari, `PushManager`
+ * non c'è, quindi il controllo lo scambiava per un browser vecchio.
+ *
+ * Chi legge «il tuo browser non supporta» chiude la pagina: nessuno gli ha detto che bastano due
+ * gesti — Condividi, poi «Aggiungi a Home» — e che tornando lì il pulsante c'è. Sono i clienti da
+ * telefono, cioè quasi tutti, e le notifiche dell'ordine sono il motivo per cui riaprono l'app.
+ *
+ * Le risposte sono due e non una, come per l'installazione qui sopra:
+ *
+ *   · `iphone-da-installare` → è un iPhone o un iPad NON ancora in schermata Home: si spiegano i
+ *                              due gesti, perché dopo quelli le notifiche funzionano davvero.
+ *   · `browser-senza-push`   → il browser non le sa fare, o le chiavi non sono configurate: qui
+ *                              non c'è niente da suggerire, e promettere sarebbe peggio.
+ *
+ * ⚠️ La domanda «è già installata?» viene PRIMA. Un iPhone che è già in schermata Home e che
+ * comunque non espone le notifiche non va rimandato a installare una cosa che ha già: quello è un
+ * caso di browser senza push, e le istruzioni sarebbero un giro a vuoto.
+ */
+export type PercheNienteNotifiche = 'iphone-da-installare' | 'browser-senza-push';
+
+export function percheNienteNotifiche(s: { eApple: boolean; giaInstallata: boolean }): PercheNienteNotifiche {
+  if (s.giaInstallata) return 'browser-senza-push';
+  return s.eApple ? 'iphone-da-installare' : 'browser-senza-push';
+}

@@ -28,7 +28,7 @@ const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
   const thumbs = products.slice(0, 3);
   const href = `/store/${store.id}`;
   const km =
-    distanceKm == null ? null : distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1)} km`;
+    distanceKm == null ? null : distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1).replace('.', ',')} km`;
 
   return (
     <Link
@@ -49,7 +49,7 @@ const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
           {reviews ? (
             <span className="inline-flex items-center gap-1 font-bold text-ink-800">
               <Star size={13} className="fill-accent-500 text-accent-500" aria-hidden />
-              {reviews.avg.toFixed(1)}
+              {reviews.avg.toFixed(1).replace('.', ',')}
               <span className="font-normal text-ink-400">({reviews.count})</span>
             </span>
           ) : (

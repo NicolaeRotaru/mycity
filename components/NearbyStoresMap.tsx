@@ -61,7 +61,11 @@ const NearbyStoresMap = ({
       });
 
       const center = userPos ?? PIACENZA;
-      const map = L.map(divRef.current).setView([center.lat, center.lng], 13);
+      // Qui la mappa e' la vista che la persona ha scelto e occupa quasi tutto lo schermo:
+      // trascinarla e' proprio quello che vuole fare, quindi il dito resta libero di spostarla.
+      // Si spegne solo lo zoom con la rotellina, che col mouse rubava lo scorrimento della
+      // pagina senza che nessuno l'avesse chiesto.
+      const map = L.map(divRef.current, { scrollWheelZoom: false }).setView([center.lat, center.lng], 13);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap',
         maxZoom: 19,

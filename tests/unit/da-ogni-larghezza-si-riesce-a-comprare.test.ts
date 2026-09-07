@@ -152,7 +152,11 @@ describe('③ a 360 pixel la barra in fondo ci sta, prezzo a tre cifre compreso'
 
   it('il conto si fa su numeri letti dal file, non riscritti qui', () => {
     expect(dentroLaCard).toBe(312);
-    expect(stepper).toBe(98);
+    // 6/9/2026 — Era 98 (due pulsanti da 36px). I due tasti della quantita' sono passati a 44px,
+    // il minimo che Apple e Google indicano per il dito e la misura che il carrello usava gia':
+    // 2×44 + 24 di casella del numero + 2 di bordi = 114. La prova che conta e' quella sotto —
+    // «stepper + pulsante + prezzo stanno dentro la card» — e a 360 pixel ci sta ancora.
+    expect(stepper).toBe(114);
     expect(spazi).toBeGreaterThan(0);
   });
 

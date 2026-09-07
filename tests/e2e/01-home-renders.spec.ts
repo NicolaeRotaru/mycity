@@ -49,12 +49,28 @@ test.describe('Home page', () => {
     // Il titolo dice di quale citta' si parla. Il resto della frase e' testo di
     // vendita e cambia: legarci una prova significa riscriverla a ogni giro.
     await expect(page.locator('h1')).toContainText(/Piacenza/i);
-    await expect(page.locator('text=Inizia a esplorare')).toBeVisible();
+    // 6/9/2026 — QUI C'ERA SCRITTO «Inizia a esplorare», ED ERA UN TERNO AL LOTTO.
+    //
+    // La home e' un test A/B con due bracci: il pulsante dice «Inizia a
+    // esplorare» in uno e «Scopri cosa c'e' oggi» nell'altro, e il braccio si
+    // calcola da indirizzo di rete + browser (middleware.ts). Cioe' questa
+    // prova non misurava se il pulsante c'era: misurava quale meta'
+    // dell'esperimento toccava alla macchina che la eseguiva. Sul computer
+    // della CI e' uscito il secondo braccio, e la prova e' diventata rossa su
+    // una home che funziona.
+    //
+    // Quello che deve restare vero e' che il pulsante principale dell'hero
+    // esista, si veda e porti dove ci sono i prodotti — comunque lo chiamiamo
+    // questa settimana. Lo cerchiamo per identita' (`data-cta`), e pretendiamo
+    // che qualcosa ci sia scritto sopra.
+    const invito = page.locator('[data-cta="hero_primary"]');
+    await expect(invito).toBeVisible();
+    await expect(invito).not.toBeEmpty();
   });
 
   test('navigates to search', async ({ page }) => {
     await page.goto('/');
-    await page.click('text=Inizia a esplorare');
+    await page.click('[data-cta="hero_primary"]');
     // 3/9/2026 — il pulsante porta a /categorie da quando la home apre sulle
     // categorie invece che sulla ricerca vuota. Quello che deve restare vero e'
     // che porti via dalla home, su una pagina dove si guardano i prodotti.

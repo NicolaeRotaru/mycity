@@ -150,7 +150,7 @@ export default function AdminBrandingPage() {
       <section className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6 space-y-4">
         <h2 className="font-semibold text-ink-900">Nome del marketplace (wordmark)</h2>
         <p className="text-sm text-ink-500 -mt-2">
-          Anteprima: <span className="font-serif font-bold text-lg"><span className="text-primary-700">{b.wordmark.accent}</span>{b.wordmark.rest}</span>
+          Anteprima: <span className="font-serif font-extrabold text-lg"><span className="text-accent-700">{b.wordmark.accent}</span>{b.wordmark.rest}</span>
         </p>
         <div className="grid grid-cols-2 gap-3">
           <Input label="Parte evidenziata" value={b.wordmark.accent} maxLength={20} onChange={(e) => commit({ ...b, wordmark: { ...b.wordmark, accent: e.target.value } })} />

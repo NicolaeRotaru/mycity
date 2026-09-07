@@ -25,6 +25,22 @@ export default function HomeCtaLink({ href, ctaId, location, variant, className,
   return (
     <Link
       href={href}
+      /*
+       * 6/9/2026 — IL PULSANTE SI RICONOSCEVA SOLO DALLE PAROLE STAMPATE SOPRA.
+       *
+       * La home e' un test A/B: il pulsante principale dice «Inizia a esplorare»
+       * in un braccio e «Scopri cosa c'e' oggi» nell'altro, e il braccio si
+       * calcola da indirizzo di rete + browser. La prova nel browser cercava il
+       * testo del primo braccio, quindi il suo esito non dipendeva dal fatto che
+       * il pulsante funzionasse: dipendeva da quale meta' dell'esperimento
+       * toccava alla macchina che la eseguiva.
+       *
+       * L'identificativo del punto d'ingresso c'era gia' — lo riceviamo per
+       * misurare i click — ma restava dentro il componente. Adesso e' anche
+       * nell'HTML: chi deve ritrovare questo pulsante lo cerca per quello che
+       * e', non per come e' scritto oggi.
+       */
+      data-cta={ctaId}
       className={className}
       onClick={() => {
         void trackHomeCtaClicked(ctaId, { location, href, variant });

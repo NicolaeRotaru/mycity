@@ -14,6 +14,26 @@ import { Button } from '@/components/ui/Button';
 import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
 import { X, Hourglass, Home, Mail } from 'lucide-react';
 
+/**
+ * QUANTO CI METTIAMO A RISPONDERE A CHI CHIEDE DI VENDERE — scritto una volta sola.
+ *
+ * 6/9/2026 — LA STESSA PAGINA PROMETTEVA DUE TEMPI DIVERSI. Il messaggio subito
+ * dopo l'invio diceva «entro 48h», il riquadro «Richiesta in valutazione» — la
+ * stessa pagina, dieci righe piu' sotto — diceva «entro 48 ore lavorative».
+ * Non e' la stessa promessa: 48 ore di calendario da un venerdi' sera scadono
+ * di domenica, 48 ore lavorative scadono martedi'. Il negoziante che scrive
+ * venerdi' e non sente nessuno lunedi' pensa che MyCity non risponda — e il
+ * primo contatto con un negozio nuovo parte gia' con un dubbio.
+ *
+ * Due frasi scritte a mano nello stesso file si separano il giorno dopo. Qui
+ * il tempo e' UNO: si cambia qui e cambiano tutti e due i punti.
+ *
+ * (La casa naturale sarebbe `lib/promesse-pubbliche.ts`, dove vivono le altre
+ * promesse pubbliche; quel file sta fuori dal perimetro di questo lotto e il
+ * trasloco resta da fare.)
+ */
+const TEMPO_RISPOSTA_NEGOZI = '48 ore lavorative';
+
 const fetchProfile = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Non autenticato');
@@ -81,7 +101,7 @@ export default function SellPage() {
     },
     onSuccess: () => {
       invalidaProfiloDiChiEntrato(qc);
-      toast.success('Richiesta inviata! Ti contatteremo entro 48h.');
+      toast.success(`Richiesta inviata! Ti contatteremo entro ${TEMPO_RISPOSTA_NEGOZI}.`);
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -165,7 +185,7 @@ function PendingNotice({ requestedAt }: { requestedAt: string | null }) {
         )}
       </p>
       <p className="text-sm text-ink-500 mb-6">
-        Ti contatteremo entro <strong>48 ore lavorative</strong> via email e con una notifica in piattaforma.
+        Ti contatteremo entro <strong>{TEMPO_RISPOSTA_NEGOZI}</strong> via email e con una notifica in piattaforma.
         Nel frattempo puoi continuare a comprare normalmente.
       </p>
       <div className="flex flex-wrap gap-2 justify-center text-sm">

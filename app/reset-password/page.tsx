@@ -42,8 +42,28 @@ function translateError(msg: string): string {
     return 'Troppi tentativi. Riprova fra qualche minuto.';
   if (m.includes('not authenticated') || m.includes('no session'))
     return 'Sessione persa. Apri di nuovo il link dall\'email.';
-  // Niente match: mostra il messaggio originale per debug
-  return msg ? `Errore: ${msg}` : 'Errore durante l\'aggiornamento della password';
+  /**
+   * 6/9/2026 — IL RIPIEGO MOSTRAVA L'INGLESE DI SUPABASE PRECEDUTO DA «Errore:».
+   *
+   * Qui c'era `return msg ? \`Errore: ${msg}\` : …`, col commento «mostra il
+   * messaggio originale per debug»: un aiuto per chi sviluppa, rimasto acceso
+   * davanti a chi sta rientrando nel proprio account. I sei casi qui sopra
+   * coprono gli errori frequenti, quindi ci si finisce di rado — ma chi ci
+   * finisce legge una frase inglese che non dice ne' cosa e' andato storto ne'
+   * cosa fare, proprio nel momento in cui e' gia' chiuso fuori.
+   *
+   * Il messaggio grezzo serve, ma serve a NOI: va nel registro (e da li' a
+   * Sentry), non a schermo. A schermo resta la strada d'uscita.
+   *
+   * La frase e' volutamente neutra e non nomina la password: `translateError`
+   * la usano DUE punti — l'aggiornamento della password e la richiesta di un
+   * nuovo link — e «non siamo riusciti ad aggiornare la password» sarebbe
+   * falsa nel secondo.
+   */
+  if (msg) {
+    logger.error(new Error(msg), { context: 'reset-password:messaggio-non-tradotto' });
+  }
+  return 'Qualcosa non ha funzionato. Riprova, oppure richiedi un nuovo link qui sotto.';
 }
 
 function ResetPasswordInner() {

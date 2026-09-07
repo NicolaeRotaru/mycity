@@ -16,6 +16,7 @@ import {
   Clock, ChefHat, Package, Bike, Hand, Truck, CheckCircle2, XCircle,
   type LucideIcon,
 } from 'lucide-react';
+import { RITIRO_IN_NEGOZIO_ATTIVO } from './constants';
 
 export const ORDER_STATUS_ICON: Record<OrderStatus, LucideIcon> = {
   NEW:              Clock,
@@ -28,10 +29,26 @@ export const ORDER_STATUS_ICON: Record<OrderStatus, LucideIcon> = {
   CANCELED:         XCircle,
 };
 
+/**
+ * L'etichetta di READY nasce dall'interruttore del ritiro, non da una frase scritta a mano.
+ *
+ * Il difetto: il ritiro in negozio e' spento (`RITIRO_IN_NEGOZIO_ATTIVO = false`), il fattorino
+ * passa a prendere l'ordine, e al cliente che aspetta a casa la targhetta diceva «Pronto per il
+ * ritiro» — che lui legge come «vai a ritirarlo tu». Il sottotitolo della pagina ordine lo
+ * spiegava («Pronto in negozio · un rider sta per ritirarlo»), ma l'etichetta da sola no, e
+ * l'etichetta gira anche dove il sottotitolo non c'e' (targhetta di stato, riga della timeline).
+ *
+ * Ripasso: chi ritira e' il rider, non il cliente. La parola «ritiro» torna da se' il giorno in
+ * cui il ritiro in negozio si riaccende, perche' nasce da quello stesso interruttore.
+ */
+export function etichettaPronto(ritiroAttivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO): string {
+  return ritiroAttivo ? 'Pronto per il ritiro' : 'Pronto per il rider';
+}
+
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   NEW:              'Ordine ricevuto',
   ACCEPTED:         'In preparazione',
-  READY:            'Pronto per il ritiro',
+  READY:            etichettaPronto(),
   ASSIGNED:         'Rider in arrivo',
   PICKED_UP:        'Ritirato',
   OUT_FOR_DELIVERY: 'In consegna',

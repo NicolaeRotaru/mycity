@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { comeSiInstalla, eApple, type ComeSiInstalla } from '@/lib/installabile';
 import { fondoDiChiGalleggia, corsieSotto } from '@/lib/ui/barra-in-fondo';
 import { seguiAltezza, osservatoreDelBrowser } from '@/lib/altezza-banner';
+import { track } from '@/lib/analytics/posthog';
 
 /** La corsia che questo banner occupa, in fondo allo schermo. */
 const MIA_CORSIA = '--altezza-banner-installa';
@@ -121,7 +122,25 @@ export default function PWAInstallBanner() {
     return seguiAltezza(bannerRef.current, document.documentElement, osservatoreDelBrowser, MIA_CORSIA);
   }, [modo]);
 
-  const dismiss = () => {
+  // 6/9/2026 — QUESTO BANNER NON DICEVA A NESSUNO SE FUNZIONAVA.
+  //
+  // Invitava a installare e non lasciava traccia: nessuno sapeva quante volte era comparso, quante
+  // volte era stato accettato e quante chiuso. Senza il denominatore — le volte che si mostra — un
+  // conteggio di installazioni non e' un tasso, e la domanda «il banner porta installazioni o solo
+  // fastidio?» non aveva risposta. Tre eventi, gli stessi tre momenti che vive la persona.
+  //
+  // `modo` distingue le due strade: su iPhone si mostrano istruzioni e non un pulsante, quindi
+  // mescolare i due casi in un numero solo lo renderebbe illeggibile.
+  const mostrato = useRef<ComeSiInstalla | null>(null);
+  useEffect(() => {
+    if (modo === 'niente') return;
+    if (mostrato.current === modo) return;
+    mostrato.current = modo;
+    void track('pwa_banner_mostrato', { modo });
+  }, [modo]);
+
+  const dismiss = (accettato = false) => {
+    if (!accettato) void track('pwa_banner_rifiutato', { modo });
     setDismissed(true);
     setModo('niente');
   };
@@ -130,8 +149,12 @@ export default function PWAInstallBanner() {
     if (!promptEvent) return;
     await promptEvent.prompt();
     const choice = await promptEvent.userChoice;
+    void track(
+      choice.outcome === 'accepted' ? 'pwa_banner_accettato' : 'pwa_banner_rifiutato',
+      { modo },
+    );
     if (choice.outcome === 'accepted') {
-      dismiss();
+      dismiss(true);
     }
   };
 
@@ -168,8 +191,16 @@ export default function PWAInstallBanner() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-bold text-ink-900 text-sm">Metti MyCity in schermata Home</p>
+          {/* 6/9/2026 — QUI SI PROMETTEVANO LE «NOTIFICHE ORDINI», E INSTALLARE NON NE ATTIVA NESSUNA.
+              L'iscrizione alle notifiche si chiede in un solo punto di tutto il sito, la pagina
+              impostazioni: chi installava credendo di averle accese non riceveva niente, e la prima
+              volta che se ne accorgeva era un ordine di cui non aveva saputo nulla. Promettere una
+              cosa che non arriva costa più fiducia di quanta ne porti l'installazione.
+              Resta aperto il pezzo grosso: proporre le notifiche nel momento in cui servono — a
+              ordine confermato, «ti avvisiamo quando il rider parte» — che vive nella pagina di
+              conferma ordine, fuori da questo file. */}
           <p className="text-xs text-ink-600 mt-0.5">
-            Accesso veloce + notifiche ordini. Niente app store.
+            Si apre dall&apos;icona, veloce anche con rete debole. Niente app store.
           </p>
           {modo === 'istruzioni' ? (
             // Su iPhone non esiste un pulsante che installa: si dicono i due gesti, e basta.
@@ -186,18 +217,26 @@ export default function PWAInstallBanner() {
           ) : null}
           <div className="flex gap-2 mt-3">
             {modo === 'pulsante' ? <Button onClick={install} size="sm">Installa</Button> : null}
+            {/* 6/9/2026 — I DUE MODI DI CHIUDERE ERANO PIU' PICCOLI DEL POLLICE.
+                Il pulsante era alto quanto il suo testo, circa 28 pixel, e la
+                croce qui sotto circa 24: sotto i 44 che servono per centrarli
+                al primo tocco. Il banner sta in fondo allo schermo, sopra la
+                barra delle schede: chi sbagliava mira apriva una scheda che non
+                voleva, e il banner restava li'. L'area cresce, il testo no. */}
             <button
-              onClick={dismiss}
-              className="text-ink-500 hover:text-ink-700 px-3 py-1.5 text-xs"
+              onClick={() => dismiss()}
+              className="inline-flex min-h-[44px] items-center text-ink-500 hover:text-ink-700 px-3 text-xs"
             >
               {modo === 'istruzioni' ? 'Ho capito' : 'Più tardi'}
             </button>
           </div>
         </div>
         <button
-          onClick={dismiss}
+          onClick={() => dismiss()}
           aria-label="Chiudi"
-          className="text-ink-400 hover:text-ink-700 p-1 -mt-1 -mr-1"
+          // I margini negativi tengono la croce dov'era: cresce l'area da
+          // toccare, non lo spazio che occupa nel banner.
+          className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-ink-400 hover:text-ink-700 p-3 -mt-3 -mr-3"
         >
           <X size={16} />
         </button>

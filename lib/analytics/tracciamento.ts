@@ -96,6 +96,59 @@ export function __dimenticaLeRicerche(): void {
 }
 
 /**
+ * I parametri con cui si capisce DA DOVE arriva una persona: li scrive la campagna, non lei. Sono
+ * i pezzi che Google legge per dire «questa visita l'ha portata quell'annuncio».
+ */
+const PARAMETRI_DI_CAMPAGNA = [
+  'utm_source',
+  'utm_medium',
+  'utm_campaign',
+  'utm_term',
+  'utm_content',
+  'utm_id',
+  'gclid',
+  'gbraid',
+  'wbraid',
+  'fbclid',
+  'msclkid',
+  'ttclid',
+];
+
+/**
+ * 6/9/2026 — LA VISITA CHE ARRIVA DA UNA CAMPAGNA RISULTAVA ARRIVATA DAL NULLA.
+ *
+ * `chiaveDellaPaginaVista` serve a decidere QUANDO mandare una pagina vista: due indirizzi che
+ * differiscono per un filtro sono la stessa pagina. Ma la stessa stringa veniva anche SPEDITA come
+ * indirizzo, e lì dentro della coda restava solo `q`. Sparivano `utm_source`, `utm_medium`,
+ * `utm_campaign` e `gclid` — cioè esattamente i pezzi con cui Google capisce da dove arriva la
+ * persona. Chi cliccava un post sponsorizzato e atterrava su «/?utm_source=facebook» risultava
+ * arrivato su «/» e basta: ogni visita comprata finiva sotto «diretto», e il ritorno della spesa
+ * non si poteva leggere.
+ *
+ * Sono due cose diverse e adesso le fanno due funzioni diverse: quella sopra dice QUANDO, questa
+ * dice COSA si spedisce.
+ *
+ * ⚠️ È un elenco di cose ammesse, non di cose vietate: esce solo quello che sta qui sopra. Il testo
+ * cercato — `q`, dove la gente scrive la propria email o il numero d'ordine — non è nell'elenco,
+ * quindi da qui non esce, oggi né quando qualcuno aggiungerà un parametro nuovo alla ricerca.
+ */
+export function indirizzoDaSpedire(
+  percorso: string,
+  parametri?: URLSearchParams | { toString(): string } | null,
+): string {
+  const testo = parametri ? String(parametri) : '';
+  if (!testo) return percorso;
+  const letti = new URLSearchParams(testo);
+  const tenuti = new URLSearchParams();
+  for (const nome of PARAMETRI_DI_CAMPAGNA) {
+    const valore = letti.get(nome);
+    if (valore) tenuti.set(nome, valore);
+  }
+  const coda = tenuti.toString();
+  return coda ? `${percorso}?${coda}` : percorso;
+}
+
+/**
  * L'identità della pagina vista: percorso più i soli parametri che contano, col VALORE nascosto.
  * Due indirizzi che differiscono per un filtro danno la stessa chiave, quindi una pagina vista
  * sola; due ricerche diverse danno due chiavi diverse — ma quello che le distingue è il posto in

@@ -20,7 +20,7 @@ import type Stripe from 'stripe';
 import { applyConnectAccountStatus } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { notifyAdmins } from './comune';
+import { notifyAdmins, provaAMandare } from './comune';
 
 /**
  * transfer.reversed → un transfer al seller/rider è stato revertito (claw-back o
@@ -55,12 +55,84 @@ export async function handleAccountUpdated(acct: Stripe.Account) {
   await applyConnectAccountStatus(acct);
 }
 
-/** payout.failed → il bonifico bancario di un connected account è fallito: alert admin. */
-export async function handlePayoutFailed(payout: Stripe.Payout) {
-  await notifyAdmins(
-    '⚠️ Payout bancario fallito',
-    `Payout ${payout.id} fallito (${((payout.amount ?? 0) / 100).toFixed(2)}€): ${payout.failure_message ?? 'motivo sconosciuto'}.`,
-    '/admin',
+/**
+ * payout.failed → la banca del negozio ha rifiutato il bonifico.
+ *
+ * 6/9/2026 — LO SCOPRIVA SOLO L'AMMINISTRATORE, E SENZA SAPERE DI CHI ERA.
+ *
+ * Qui c'era una campanella e basta: un avviso agli amministratori col codice
+ * del bonifico (`po_1abc`) e l'importo. Non il nome del negozio — l'evento
+ * arriva da un conto Connect e nessuno risaliva al profilo — e soprattutto
+ * nessun avviso al negoziante. Pane Quotidiano cambia IBAN, il bonifico di
+ * 120 € rimbalza, e lui nella pagina Guadagni continua a leggere «versato»
+ * mentre in banca non trova niente. Se ne accorge lui, giorni dopo.
+ *
+ * Adesso si risale al profilo dal conto Connect (`stripe_account_id`), si
+ * avvisa il negoziante con il motivo e dove correggere l'IBAN, e il nome del
+ * negozio entra anche nell'avviso agli amministratori.
+ *
+ * COSA NON SI FA, DI PROPOSITO: non si rimettono gli ordini in coda al giro
+ * dei bonifici. `payout_status = 'TRANSFERRED'` racconta il trasferimento
+ * dalla piattaforma al conto Stripe del negozio, che è RIUSCITO: qui a
+ * fallire è il passaggio successivo, dal conto Stripe alla sua banca, e i
+ * soldi sono ancora sul suo saldo Stripe. Riaprire quegli ordini farebbe
+ * partire un secondo trasferimento — cioè pagherebbe il negozio due volte.
+ * Il rimedio è l'IBAN corretto: da lì Stripe riprova da solo.
+ *
+ * Nessuno dei due avvisi fa fallire il gestore: un avviso non partito non
+ * deve far ritentare a Stripe un evento che non muove soldi.
+ */
+export async function handlePayoutFailed(payout: Stripe.Payout, accountId?: string | null) {
+  const admin = getAdminSupabase();
+  const importo = ((payout.amount ?? 0) / 100).toFixed(2);
+  const motivo = payout.failure_message ?? 'motivo sconosciuto';
+
+  // Il conto Connect è l'unico filo che porta al negozio: l'evento non nomina
+  // nessuno. `payout.destination` è il conto bancario, non il profilo.
+  let negozio: { id: string; store_name: string | null } | null = null;
+  if (accountId) {
+    const { data, error } = await admin
+      .from('profiles')
+      .select('id, store_name')
+      .eq('stripe_account_id', accountId)
+      .limit(1);
+    if (error) logger.error(error, { context: 'payout-failed-profilo', accountId });
+    negozio = (data?.[0] as { id: string; store_name: string | null } | undefined) ?? null;
+  }
+
+  if (negozio) {
+    const destinatario = negozio.id;
+    await provaAMandare('avviso di bonifico rifiutato al negozio', { payoutId: payout.id, sellerId: destinatario }, async () => {
+      const { error } = await admin.from('notifications').insert({
+        user_id: destinatario,
+        // 'system': un avviso di servizio non si spegne dagli interruttori
+        // delle notifiche, e questo è il tipo di cosa che si deve sapere.
+        category: 'system',
+        title: '⚠️ Il bonifico non è arrivato in banca',
+        body:
+          `La tua banca ha rifiutato il versamento di ${importo} €: ${motivo}. ` +
+          'Controlla l\'IBAN nei dati di pagamento del negozio: appena è corretto Stripe riprova da solo.',
+        link: '/seller/earnings',
+      });
+      if (error) throw new Error(error.message);
+    });
+  }
+
+  const chi = negozio
+    ? negozio.store_name?.trim() || `il negozio ${negozio.id.slice(0, 8)}`
+    : 'un negozio non riconosciuto';
+  await provaAMandare('avviso di bonifico rifiutato agli amministratori', { payoutId: payout.id }, () =>
+    notifyAdmins(
+      '⚠️ Bonifico al negozio rifiutato dalla banca',
+      `Il versamento di ${importo} € a ${chi} è stato rifiutato: ${motivo}. Bonifico ${payout.id}.` +
+        (negozio
+          ? ' Il negoziante è stato avvisato di correggere l\'IBAN.'
+          : ' Il conto Connect non è riconosciuto qui: va cercato su Stripe, e il negoziante non sa niente.'),
+      '/admin',
+    ),
   );
-  logger.warn('[stripe] payout.failed', { payoutId: payout.id, failure: payout.failure_message });
+
+  logger.warn('[stripe] payout.failed', {
+    payoutId: payout.id, accountId: accountId ?? null, sellerId: negozio?.id ?? null, failure: payout.failure_message,
+  });
 }

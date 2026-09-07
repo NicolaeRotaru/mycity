@@ -159,6 +159,10 @@ const richTextConfig = z.object({
 
 const bannerConfig = z.object({
   imageUrl: optionalHttpsUrl,
+  // Il testo alternativo dell'immagine. Mancava solo qui: la galleria ce l'ha (`galleryConfig`),
+  // e il banner ripiegava sul titolo — che sta gia' scritto a video due righe sotto, quindi un
+  // lettore di schermo leggeva la stessa frase due volte. Vuoto = immagine di solo sfondo.
+  alt: shortText(120),
   heading: shortText(120),
   subheading: shortText(200),
   overlay: z.enum(['light', 'dark', 'none']).default('dark'),

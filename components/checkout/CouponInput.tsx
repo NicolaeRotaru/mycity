@@ -43,7 +43,7 @@ export function CouponInput({
           <button
             type="button"
             onClick={onRemove}
-            className="inline-flex min-h-[44px] items-center px-3 py-2 text-xs text-rose-600 hover:underline"
+            className="inline-flex min-h-[44px] items-center px-3 py-2 text-xs text-secondary-600 hover:underline"
           >
             Rimuovi
           </button>
@@ -74,8 +74,13 @@ export function CouponInput({
               {applying ? 'Verifico…' : 'Applica'}
             </Button>
           </div>
+          {/* 6/9/2026 — era rose-600. Nella stessa colonna della cassa i campi indirizzo passano
+              dalla primitiva Field, che scrive l'errore in secondary-600, il bordeaux del marchio:
+              il cliente vedeva il CAP sbagliato di un colore e il codice sconto rifiutato di un
+              altro, per la stessa cosa. E la rose di serie di Tailwind tailwind.config.ts la
+              esclude a parole. */}
           {couponError && (
-            <p id="codice-sconto-errore" role="alert" className="text-xs text-rose-600">{couponError}</p>
+            <p id="codice-sconto-errore" role="alert" className="text-xs text-secondary-600">{couponError}</p>
           )}
         </div>
       )}

@@ -37,6 +37,23 @@ function isRole(v: string | null): v is Role {
   return v === 'buyer' || v === 'seller' || v === 'rider';
 }
 
+/**
+ * 6/9/2026 — CHI VOLEVA SOLO PAGARE IL PANE DOVEVA PRIMA DICHIARARSI.
+ *
+ * Il modulo apriva con «Come vuoi usare MyCity?» e tre mattonelle — Acquirente,
+ * Venditore, Rider — e il pulsante finale diceva «Registrati come acquirente».
+ * Chi ci arriva dal carrello o dal checkout non sta scegliendo un mestiere: sta
+ * finendo un ordine, e quella domanda e' un passo in piu' dentro il percorso
+ * d'acquisto. La risposta e' gia' scritta nel link da cui arriva.
+ *
+ * Sta fuori dal componente e su una riga sola perche' in questa repo un .tsx
+ * non si puo' importare in una prova (jsx: preserve): la prova rilegge QUESTA
+ * riga dal sorgente e ci fa passare dentro gli indirizzi veri.
+ */
+function arrivaDaUnOrdine(returnTo: string): boolean {
+  return /^\/(checkout|cart)(\/|\?|$)/.test(returnTo);
+}
+
 function SignUpInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -52,9 +69,11 @@ function SignUpInner() {
    * di conferma porta a /auth/callback, che accetta solo percorsi interni.
    */
   const returnTo = searchParams.get('returnTo') ?? '';
+  // Dal carrello o dal checkout si sta comprando: niente scelta del ruolo.
+  const dalCarrello = arrivaDaUnOrdine(returnTo);
   // Ruolo preselezionato dai link di reclutamento (/sign-up?role=seller|rider).
   const roleParam = searchParams.get('role');
-  const initialRole: Role = isRole(roleParam) ? roleParam : 'buyer';
+  const initialRole: Role = dalCarrello ? 'buyer' : isRole(roleParam) ? roleParam : 'buyer';
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -194,6 +213,7 @@ function SignUpInner() {
         </div>
       )}
 
+      {dalCarrello ? null : (
       <fieldset className="mb-5">
         <legend className="mb-2 text-sm font-medium text-ink-700">Come vuoi usare MyCity?</legend>
         <div className="grid grid-cols-3 gap-2">
@@ -216,6 +236,7 @@ function SignUpInner() {
           ))}
         </div>
       </fieldset>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
@@ -240,12 +261,18 @@ function SignUpInner() {
           inputMode="email"
           leading={<Mail size={18} aria-hidden />}
         />
+        {/* 6/9/2026 — LA REGOLA DELLA PASSWORD SPARIVA ALLA PRIMA LETTERA DIGITATA.
+            «Almeno 8 caratteri» stava nel grigio dentro al campo, e quel grigio
+            se ne va appena si scrive: la regola spariva proprio nel momento in
+            cui serviva. Chi sbagliava se ne accorgeva dall'errore, che torna in
+            inglese da Supabase. `hint` resta scritto sotto al campo mentre si
+            digita, ed è già collegato al campo per chi legge con la voce. */}
         <PasswordInput
           id="signup-password"
           label="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="Almeno 8 caratteri"
+          hint="Almeno 8 caratteri"
           required
           minLength={8}
           autoComplete="new-password"
@@ -282,7 +309,11 @@ function SignUpInner() {
         )}
 
         <Button type="submit" size="lg" loading={isLoading} iconRight={ArrowRight} fullWidth>
-          {isLoading ? 'Registrazione in corso...' : `Registrati come ${selectedRole.title.toLowerCase()}`}
+          {isLoading
+            ? 'Registrazione in corso…'
+            : dalCarrello
+              ? 'Crea l\'account e continua l\'ordine'
+              : `Registrati come ${selectedRole.title.toLowerCase()}`}
         </Button>
       </form>
 

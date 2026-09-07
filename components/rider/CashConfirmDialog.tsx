@@ -4,7 +4,9 @@ import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { apiErrorMessage } from '@/lib/errors';
+import { apiErrorMessage, friendlyError } from '@/lib/errors';
+import { sizedImage } from '@/lib/image-url';
+import { formatPriceFromCents } from '@/lib/format';
 import { useTranslations } from 'next-intl';
 import { Banknote, Camera } from 'lucide-react';
 
@@ -30,6 +32,12 @@ export default function CashConfirmDialog({ orderId, expectedCents, compensoTenu
   const tStates = useTranslations('states');
   const tActions = useTranslations('actions');
   const [open, setOpen] = useState(false);
+  // 6/9/2026 — QUESTO `toFixed(2)` RESTA, ED E' VOLUTO.
+  // Non e' una cifra da leggere: e' il valore dentro `<input type="number">`,
+  // che il browser accetta solo col punto decimale e che qui sotto rileggiamo
+  // con `parseFloat`. Scriverlo «35,00 €» svuoterebbe il campo e il fattorino
+  // si troverebbe la casella vuota al momento di dichiarare i contanti.
+  // Le cifre da LEGGERE, qui sotto, passano invece da `formatPriceFromCents`.
   const [amount, setAmount] = useState((expectedCents / 100).toFixed(2));
   const [cashPhoto, setCashPhoto] = useState<string | null>(null);
   const [deliveryPhoto, setDeliveryPhoto] = useState<string | null>(null);
@@ -81,12 +89,20 @@ export default function CashConfirmDialog({ orderId, expectedCents, compensoTenu
         }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(apiErrorMessage(data, 'Errore'));
+      if (!r.ok) throw new Error(apiErrorMessage(data));
       toast.success('Incasso confermato');
       setOpen(false);
       onConfirmed?.();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Errore');
+      // 6/9/2026 — L'AVVISO DICEVA SOLTANTO «ERRORE».
+      // Quando quello che viene lanciato non e' un Error — capita con un
+      // reject nudo o con una stringa — restava la parola secca «Errore»: non
+      // dice cosa e' successo ne' cosa fare, e chi la legge puo' solo
+      // riprovare a caso. `friendlyError` tiene il messaggio del server
+      // quando c'e' ed e' leggibile, e altrimenti mette la frase che il sito
+      // usa gia' dappertutto: «Qualcosa non ha funzionato. Riprova fra un
+      // momento.»
+      toast.error(friendlyError(e));
     } finally {
       setSubmitting(false);
     }
@@ -140,9 +156,9 @@ export default function CashConfirmDialog({ orderId, expectedCents, compensoTenu
           className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2 text-lg font-mono"
         />
         <p className="mt-1 text-xs text-ink-500">
-          Previsto: €{(expectedCents / 100).toFixed(2)}
+          Previsto: {formatPriceFromCents(expectedCents)}
           {compensoTenutoCents > 0 && (
-            <> — hai già trattenuto €{(compensoTenutoCents / 100).toFixed(2)} di compenso.</>
+            <> — hai già trattenuto {formatPriceFromCents(compensoTenutoCents)} di compenso.</>
           )}
         </p>
 
@@ -200,7 +216,7 @@ function PhotoSlot({
       </div>
       <div className="mt-1 flex h-24 items-center justify-center rounded-lg border-2 border-dashed border-cream-300 bg-cream-50">
         {url ? (
-          <img src={url} alt="" loading="lazy" className="h-full w-full rounded-lg object-cover" />
+          <img src={sizedImage(url, 400)} alt="" loading="lazy" className="h-full w-full rounded-lg object-cover" />
         ) : uploading ? (
           <span className="text-xl text-ink-400">…</span>
         ) : (

@@ -1,6 +1,6 @@
 'use client';
 
-import { Banknote, Check, Lock, RotateCcw, Store } from 'lucide-react';
+import { AlertTriangle, Banknote, Check, Lock, RotateCcw, Store } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 
 /**
@@ -26,8 +26,38 @@ type Props = {
   paymentMethod: 'cod' | 'card';
   /** Disabilita il submit (es. carrello vuoto o articoli senza disponibilità). */
   disabled?: boolean;
+  /**
+   * PERCHE' l'ordine non parte, in italiano, gia' pronto da leggere.
+   *
+   * Va insieme a `disabled`: chi spegne il pulsante deve dire il motivo. Se
+   * arriva, qui sopra al pulsante compare il riquadro che lo spiega.
+   */
+  motivoBlocco?: string | null;
   couponSection?: React.ReactNode;
 };
+
+/**
+ * Porta la persona sul primo riquadro che spiega perche' l'ordine non parte.
+ *
+ * 6/9/2026 — Sta qui, esportata, perche' i pulsanti che chiudono l'acquisto
+ * sono DUE: questo (di fianco, sul computer) e la barra incollata in fondo
+ * (sul telefono, l'unico che si vede davvero). Scritta due volte si sarebbe
+ * separata al primo ritocco.
+ *
+ * I riquadri sono gia' nella pagina, sopra il pulsante, e portano
+ * `role="alert"`: si scorre fino al primo e gli si mette il fuoco, cosi' anche
+ * chi usa un lettore di schermo se lo sente leggere.
+ */
+export function vaiAlPrimoBlocco(): boolean {
+  const primoBlocco = document.querySelector<HTMLElement>('[role="alert"]');
+  // Nessun riquadro a schermo vuol dire pulsante muto: chi chiama lo deve
+  // sapere, invece di credere di aver spiegato qualcosa.
+  if (!primoBlocco) return false;
+  primoBlocco.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  primoBlocco.setAttribute('tabindex', '-1');
+  primoBlocco.focus();
+  return true;
+}
 
 export function OrderSummary({
   subtotal,
@@ -40,6 +70,7 @@ export function OrderSummary({
   isCheckingOut,
   paymentMethod,
   disabled = false,
+  motivoBlocco = null,
   couponSection,
 }: Props) {
   return (
@@ -87,6 +118,27 @@ export function OrderSummary({
         </div>
       </div>
 
+      {/* 6/9/2026 — UN PULSANTE SPENTO SENZA UNA RIGA CHE DICA PERCHE'.
+          Il pulsante sbiadito rimandava al «primo riquadro con role=alert»
+          che sta piu' su nella pagina. Ma i riquadri li avevano solo alcuni
+          motivi di blocco: quando a fermare l'ordine era la fascia oraria non
+          c'era nessun riquadro, e il pulsante si premeva senza che succedesse
+          niente.
+          Adesso il motivo arriva insieme al blocco (`motivoBlocco` vive con
+          `disabled`) e si legge qui, attaccato al pulsante: qualunque sia la
+          causa — anche una che ancora non esiste — chi non puo' pagare vede
+          scritto perche'. `role="alert"` lo fa anche annunciare a chi non
+          vede, e lo rende il bersaglio di `vaiAlPrimoBlocco`. */}
+      {disabled && motivoBlocco && (
+        <p
+          role="alert"
+          className="mx-5 mb-3 flex items-start gap-2 rounded-lg border border-accent-200 bg-accent-50 px-3 py-2 text-sm text-accent-900"
+        >
+          <AlertTriangle size={16} strokeWidth={2.2} className="shrink-0 mt-0.5" aria-hidden />
+          <span><strong>Non puoi ancora ordinare.</strong> {motivoBlocco}</span>
+        </p>
+      )}
+
       {/* 22/8/2026 — IL PULSANTE SPARIVA DALLA TASTIERA.
           Quando c'era qualcosa da sistemare (merce finita, variante da
           scegliere) il pulsante veniva `disabled`, e un elemento disabilitato
@@ -104,10 +156,7 @@ export function OrderSummary({
           disabled && !isCheckingOut
             ? (e) => {
                 e.preventDefault();
-                const primoBlocco = document.querySelector<HTMLElement>('[role="alert"]');
-                primoBlocco?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-                primoBlocco?.setAttribute('tabindex', '-1');
-                primoBlocco?.focus();
+                vaiAlPrimoBlocco();
               }
             : undefined
         }

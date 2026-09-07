@@ -252,6 +252,23 @@ Data: ......................................................`}
           alle spese di spedizione né alla quota di consegna. Eventuali variazioni saranno
           comunicate con preavviso di 30 giorni come da art. 15.
         </p>
+        {/* 6/9/2026 — I dati dei clienti mancavano dagli obblighi del negozio.
+            L'informativa promette all'Acquirente «li condividiamo solo con il
+            negozio e il rider necessari al tuo ordine», ma qui, dove il
+            Venditore accetta le regole, non c'era una riga che glielo
+            imponesse: nessun limite d'uso, nessun divieto di pubblicita' o di
+            cessione, nessun obbligo di cancellare. Il negozio ha anche una
+            pagina «Clienti» con nome e storico degli ordini. */}
+        <p>
+          <strong>Dati dei clienti.</strong> Per ogni ordine il Venditore riceve nome,
+          telefono e indirizzo dell&apos;Acquirente. Su quei dati è titolare autonomo del
+          trattamento e si impegna a: usarli solo per preparare, consegnare e assistere
+          quell&apos;ordine, compresi resi, reclami e obblighi di legge (fiscali e
+          contabili); non usarli per pubblicità, newsletter o altri messaggi promozionali
+          senza un consenso raccolto in proprio; non cederli né comunicarli ad altri,
+          salvo obbligo di legge; cancellarli quando non servono più. Il mancato rispetto
+          di questi impegni è motivo di sospensione o chiusura dell&apos;account Venditore.
+        </p>
       </LegalSection>
 
       <LegalSection id="rider" heading="10. Obblighi dei Rider">
@@ -259,6 +276,19 @@ Data: ......................................................`}
           I Rider operano come lavoratori autonomi o parasubordinati. Devono essere in possesso
           di assicurazione RC, patente di guida valida (se applicabile), idoneità sanitaria (se
           consegnano alimenti), e rispettare il codice della strada e le norme di igiene.
+        </p>
+        {/* 6/9/2026 — Stessa lacuna del punto 9: il Rider vede il telefono e
+            l'indirizzo di casa dell'Acquirente, e fra i suoi obblighi non
+            c'era nessuna riga sull'uso di quei dati. */}
+        <p>
+          <strong>Dati dei clienti.</strong> Per ogni consegna il Rider riceve nome,
+          telefono e indirizzo dell&apos;Acquirente. Su quei dati è titolare autonomo del
+          trattamento e si impegna a: usarli solo per portare a termine quella consegna e
+          per gli obblighi di legge; non contattare l&apos;Acquirente per motivi diversi
+          dalla consegna; non usarli per pubblicità e non cederli a nessuno; non
+          conservarli sul proprio telefono, in appunti o in fotografie, una volta chiusa
+          la consegna. Il mancato rispetto di questi impegni è motivo di sospensione o
+          chiusura dell&apos;account Rider.
         </p>
       </LegalSection>
 

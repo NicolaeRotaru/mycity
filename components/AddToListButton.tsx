@@ -32,7 +32,7 @@ export default function AddToListButton({ productId }: { productId: string }) {
   useBottomSheetA11y(open, pannelloRef, avvioRef, () => setOpen(false));
   const [newListTitle, setNewListTitle] = useState('');
 
-  const { data: lists = [] } = useQuery({
+  const { data: lists = [], isLoading: caricoListe } = useQuery({
     queryKey: queryKeys.lists.mineMin,
     enabled: open,
     queryFn: async (): Promise<List[]> => {
@@ -144,7 +144,15 @@ export default function AddToListButton({ productId }: { productId: string }) {
               <button onClick={() => setOpen(false)} aria-label="Chiudi"><X size={20} /></button>
             </div>
             <div className="p-5 space-y-3 max-h-[60vh] overflow-y-auto">
-              {lists.length === 0 ? (
+              {/* 6/9/2026 — La query parte all'apertura del pannello (`enabled:
+                  open`), quindi per un istante `lists` è `[]`: chi le liste ce
+                  le aveva leggeva «Non hai ancora liste» e poi le vedeva
+                  comparire. Il vuoto si dice solo dopo aver letto davvero. */}
+              {caricoListe ? (
+                <ul className="space-y-2" aria-busy="true" aria-hidden>
+                  {[0, 1].map((i) => <li key={i} className="h-[60px] rounded-lg skeleton" />)}
+                </ul>
+              ) : lists.length === 0 ? (
                 <p className="text-sm text-ink-500">Non hai ancora liste. Creane una qui sotto.</p>
               ) : (
                 <ul className="space-y-2">
@@ -154,7 +162,8 @@ export default function AddToListButton({ productId }: { productId: string }) {
                       <li key={l.id}>
                         <button
                           onClick={() => toggle.mutate(l.id)}
-                          className={`w-full flex items-center gap-3 p-3 rounded-lg border ${
+                          disabled={toggle.isPending}
+                          className={`w-full flex items-center gap-3 p-3 rounded-lg border disabled:opacity-60 disabled:cursor-not-allowed ${
                             inIt ? 'bg-olive-50 border-olive-200' : 'bg-cream-50 border-cream-200 hover:bg-cream-100'
                           }`}
                         >

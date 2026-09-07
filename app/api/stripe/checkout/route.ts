@@ -2,7 +2,7 @@ import { prezziDelCarrello } from '@/lib/ordini/prezzi';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
-import { createMultiSellerCheckoutSession, getStripe, isStripeConfigured } from '@/lib/stripe/client';
+import { createMultiSellerCheckoutSession, getStripe, isStripeConfigured, RiservaTroppoCorta } from '@/lib/stripe/client';
 import { createHash } from 'node:crypto';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
@@ -12,11 +12,13 @@ import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
+import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { motivoNegozioChiuso, negozioPuoServire } from '@/lib/store-hours';
-import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
+import { fetchActiveDiscounts } from '@/lib/promotions';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
+import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/riconcilia-consenso';
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
@@ -366,53 +368,35 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     let groupSubtotalCents = 0;
 
     for (const it of g.items) {
-      const p = products.find((x) => x.id === it.productId);
-      if (!p) {
-        return ApiErrors.notFound(`Prodotto ${it.productId} non trovato`);
-      }
-      if (p.seller_id !== g.sellerId) {
-        return ApiErrors.invalidRequest(`Prodotto ${p.name} non appartiene al venditore indicato.`);
-      }
-      // Nota: l'approvazione del venditore è già garantita dall'RLS
-      // (migration 023: solo prodotti `available` di venditori approvati sono
-      // leggibili) — un prodotto non leggibile cade sul `if (!p)` qui sopra.
-      // `products` NON ha una colonna is_approved: si controlla solo lo status.
-      if (p.status !== 'available') {
-        return ApiErrors.invalidRequest(`Prodotto ${p.name} non disponibile.`);
-      }
+      /**
+       * 6/9/2026 — LA STESSA REGOLA DEI CONTANTI, NON UNA SUA COPIA.
+       *
+       * Prodotto esistente, del negozio giusto, disponibile, variante valida e
+       * sua, scorte, prezzo scontato: erano trenta righe identiche a quelle di
+       * app/api/orders/cod/route.ts. Adesso decidono insieme, in
+       * lib/ordini/valida-carrello.ts — messaggi e codici di risposta invariati.
+       */
+      const esito = validaRigaDelCarrello({
+        riga: it,
+        sellerId: g.sellerId,
+        prodotti: products,
+        varianti: variantMap,
+        sconti: discountMap,
+      });
+      if (!esito.ok) return rispostaPerCarrelloNonVendibile(esito.scarto);
 
-      const hasVariants = Boolean((p as { has_variants?: boolean }).has_variants);
-      let variantId: string | null = null;
-      let variantLabel: string | null = null;
-      if (hasVariants) {
-        if (!it.variantId) {
-          return ApiErrors.invalidRequest(`Scegli un'opzione (es. taglia/colore) per ${p.name}.`);
-        }
-        const v = variantMap.get(it.variantId);
-        if (!v || v.product_id !== p.id) {
-          return ApiErrors.invalidRequest(`Variante non valida per ${p.name}.`);
-        }
-        if (v.stock < it.quantity) {
-          return ApiErrors.conflict(`Disponibilità insufficiente per ${p.name} (${v.label}): ${v.stock} disponibili.`);
-        }
-        variantId = v.id;
-        variantLabel = v.label;
-      } else if (typeof p.stock === 'number' && p.stock < it.quantity) {
-        return ApiErrors.conflict(`Stock insufficiente per ${p.name} (${p.stock} disponibili).`);
-      }
-
-      const unitCents = discountedUnitCents(p.price, discountMap.get(p.id) ?? 0);
+      const p = esito.prodotto;
       const cover = Array.isArray(p.images) ? p.images[0] : null;
       stripeItems.push({
-        productId: p.id,
-        name: variantLabel ? `${p.name} (${variantLabel})` : p.name,
-        quantity: it.quantity,
-        unitAmountCents: unitCents,
+        productId: esito.riga.productId,
+        name: esito.riga.variantLabel ? `${p.name} (${esito.riga.variantLabel})` : p.name,
+        quantity: esito.riga.quantity,
+        unitAmountCents: esito.riga.unitCents,
         imageUrl: typeof cover === 'string' ? cover : undefined,
-        variantId,
-        variantLabel,
+        variantId: esito.riga.variantId,
+        variantLabel: esito.riga.variantLabel,
       });
-      groupSubtotalCents += unitCents * it.quantity;
+      groupSubtotalCents += esito.riga.unitCents * esito.riga.quantity;
     }
 
     stripeGroups.push({
@@ -434,26 +418,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     return ApiErrors.invalidRequest('Importo non valido.');
   }
 
-  // 4a. Coupon: ri-validato e ri-calcolato dal coupon reale (mai dal client).
-  let couponDiscountCents = 0;
-  let couponFreeShipping = false;
-  let validatedCouponCode: string | null = null;
-  if (body.couponCode && body.couponCode.trim()) {
-    const couponRes = await validateCoupon(body.couponCode, grandSubtotalCents / 100, user.id, supa);
-    if (!couponRes.ok) {
-      return ApiErrors.invalidRequest(`Coupon non valido: ${couponRes.reason}`);
-    }
-    couponDiscountCents = Math.max(0, Math.round(couponRes.discount * 100));
-    couponFreeShipping = couponRes.freeShipping;
-    validatedCouponCode = couponRes.coupon.code;
-    // Claim atomico prima di procedere con Stripe (fix #36 — race condition coupon).
-    const { data: claimed, error: claimErr } = await admin.rpc('claim_coupon', { p_code: validatedCouponCode });
-    if (claimErr || !claimed) {
-      return ApiErrors.invalidRequest('Coupon non disponibile: potrebbe essere esaurito nel frattempo.');
-    }
-  }
-
-  // 4b. Spedizione per gruppo: ricalcolata server-side con la STESSA logica
+  // 4a. Dove va la consegna: le coordinate servono sia alla zona (qui sotto) sia
+  // al prezzo della spedizione, ricalcolato server-side con la STESSA logica
   // distanza-based della UI (lib/shipping.ts), usando le coordinate negozio dal
   // DB e quelle di consegna inviate dal client. Coupon FREE_SHIPPING o soglia
   // raggiunta ⇒ 0. Si ignora qualunque importo di spedizione dal client.
@@ -473,6 +439,54 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       city: body.delivery.city,
       zip: body.delivery.zip,
     }));
+
+  /**
+   * 6/9/2026 — FIN DOVE ARRIVIAMO, DETTO PRIMA DI APRIRE IL PAGAMENTO.
+   *
+   * Nessun punto del progetto guardava se l'indirizzo fosse dentro la zona che
+   * serviamo: una consegna a Milano passava, e sopra i 30 euro passava pure
+   * gratis. Qui si ferma prima che il cliente metta la carta — sull'altra strada
+   * (contanti) il controllo è lo stesso, e la regola vive in un posto solo
+   * (`fuoriZonaDiConsegna`, lib/ordini/zona-di-consegna.ts).
+   *
+   * Sta PRIMA della rivendicazione del codice sconto: dopo, un rifiuto per zona
+   * lascerebbe il buono bruciato senza che nessuno abbia comprato niente.
+   *
+   * Coordinate mancanti = non si blocca: passa come prima.
+   */
+  if (!body.pickupInStore) {
+    for (const s of sellers ?? []) {
+      const fuori = fuoriZonaDiConsegna({
+        storeLat: s.store_lat ?? null,
+        storeLng: s.store_lng ?? null,
+        deliveryLat: coordPerLaMappa?.lat ?? null,
+        deliveryLng: coordPerLaMappa?.lng ?? null,
+      });
+      if (fuori) {
+        logger.info('[stripe] consegna fuori zona: pagamento non aperto', { sellerId: s.id });
+        return ApiErrors.invalidRequest(motivoFuoriZona(s.store_name));
+      }
+    }
+  }
+
+  // 4b. Coupon: ri-validato e ri-calcolato dal coupon reale (mai dal client).
+  let couponDiscountCents = 0;
+  let couponFreeShipping = false;
+  let validatedCouponCode: string | null = null;
+  if (body.couponCode && body.couponCode.trim()) {
+    const couponRes = await validateCoupon(body.couponCode, grandSubtotalCents / 100, user.id, supa);
+    if (!couponRes.ok) {
+      return ApiErrors.invalidRequest(`Coupon non valido: ${couponRes.reason}`);
+    }
+    couponDiscountCents = Math.max(0, Math.round(couponRes.discount * 100));
+    couponFreeShipping = couponRes.freeShipping;
+    validatedCouponCode = couponRes.coupon.code;
+    // Claim atomico prima di procedere con Stripe (fix #36 — race condition coupon).
+    const { data: claimed, error: claimErr } = await admin.rpc('claim_coupon', { p_code: validatedCouponCode });
+    if (claimErr || !claimed) {
+      return ApiErrors.invalidRequest('Coupon non disponibile: potrebbe essere esaurito nel frattempo.');
+    }
+  }
 
   /**
    * 22/8/2026 — IL CONTO LO FA UNA FUNZIONE SOLA, LA STESSA DEI CONTANTI.
@@ -726,7 +740,19 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     // rispondeva un oggetto nudo, come la rotta dei contanti prima di ieri.
     return apiSuccess({ id: session.id, url: session.url });
   } catch (e) {
-    logger.error('[stripe] checkout creation failed', e);
+    /**
+     * 6/9/2026 — LA RISERVA TROPPO CORTA NON È UN GUASTO NOSTRO.
+     *
+     * Se alla merce riservata resta meno di mezz'ora, Stripe non può tenere
+     * aperta una cassa che scada insieme a lei: prima si alzava la scadenza al
+     * minimo e si apriva lo stesso, e la pagina di pagamento sopravviveva alla
+     * merce. Adesso non si parte: la pulizia qui sotto è la stessa (merce
+     * rimessa in vendita, codice sconto restituito, riga di intento annullata),
+     * cambia solo cosa legge il cliente — «rifai l'ordine», non «errore».
+     */
+    const carrelloScaduto = e instanceof RiservaTroppoCorta;
+    if (carrelloScaduto) logger.warn('[stripe] riserva troppo corta per aprire la cassa', { message: (e as Error).message });
+    else logger.error('[stripe] checkout creation failed', e);
     // Rilascia la riserva di stock e marca il pending come CANCELED (no orphan).
     await admin.rpc('restore_stock', { p_items: stockItems });
     // Il codice sconto era già stato «consumato» prima di creare la sessione:
@@ -737,6 +763,9 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       .from('pending_checkouts')
       .update({ status: 'CANCELED' })
       .eq('id', pending.id);
+    if (carrelloScaduto) {
+      return ApiErrors.conflict('Il carrello è scaduto. Rimetti i prodotti nel carrello e riprova.');
+    }
     return ApiErrors.internal('Errore nella creazione del pagamento.');
   }
 });

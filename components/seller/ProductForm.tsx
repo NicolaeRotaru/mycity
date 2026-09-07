@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -87,7 +87,14 @@ interface ProductFormProps {
   /** create: scarta la bozza in corso (svuota l'autosalvataggio e torna indietro). */
   onDiscard?: () => void;
   productId?: string;
-  sellerOffersExpress?: boolean;
+  sellerOffersExpress?: boolean | null;
+  /**
+   * 6/9/2026 — «NON SO SE IL NEGOZIO OFFRE LA CONSEGNA VELOCE» non è «non la
+   * offre». Quando la lettura delle impostazioni del negozio fallisce, il
+   * modulo lo dice invece di mostrare l'avviso sbagliato («attivala dal
+   * profilo») a chi l'ha già attiva.
+   */
+  consegnaDelNegozioNonLetta?: boolean;
   /** create: chiave localStorage per l'autosalvataggio della bozza. */
   autosaveKey?: string;
 }
@@ -104,6 +111,7 @@ export default function ProductForm({
   onDiscard,
   productId,
   sellerOffersExpress = false,
+  consegnaDelNegozioNonLetta = false,
   autosaveKey,
 }: ProductFormProps) {
   const schema = useMemo(
@@ -136,6 +144,7 @@ export default function ProductForm({
   const [uploading, setUploading] = useState(false);
   const [attributes, setAttributes] = useState<Record<string, unknown>>(initialValues?.attributes ?? {});
   const [tags, setTags] = useState<string[]>(initialValues?.tags ?? []);
+  const idTag = useId();
   const [tagInput, setTagInput] = useState('');
   const [unit, setUnit] = useState<ProductUnit>((initialValues?.unit as ProductUnit) ?? 'pezzo');
   const [condition, setCondition] = useState<ProductCondition | ''>((initialValues?.condition as ProductCondition) ?? '');
@@ -148,8 +157,23 @@ export default function ProductForm({
       ? true
       : initialValues?.expressEnabled === false
         ? false
-        : sellerOffersExpress,
+        : Boolean(sellerOffersExpress),
   );
+  /**
+   * 6/9/2026 — IL TEMPO DI CONSEGNA L'HA SCELTO IL NEGOZIANTE, O L'ABBIAMO
+   * INDOVINATO NOI?
+   *
+   * Serve a distinguere le due cose al momento del salvataggio. Quando il
+   * prodotto eredita la consegna dal negozio (`express_enabled` a NULL) e le
+   * impostazioni del negozio non si sono lette, quello che si vede a video è un
+   * ripiego, non una scelta: salvarlo scriverebbe un «no» che nessuno ha
+   * chiesto. Diventa vero solo se il negoziante tocca davvero il selettore.
+   */
+  const [consegnaSceltaDalNegoziante, setConsegnaSceltaDalNegoziante] = useState(false);
+  const scegliTempoDiConsegna = (veloce: boolean) => {
+    setFastDelivery(veloce);
+    setConsegnaSceltaDalNegoziante(true);
+  };
   const [status, setStatus] = useState<string>(initialValues?.status ?? 'available');
   const [variants, setVariants] = useState<ProductVariant[]>(initialValues?.variants ?? []);
   // Assi di variante attivi (chiave campo → valori). Ricostruiti dalle varianti
@@ -626,6 +650,26 @@ export default function ProductForm({
         status: finalStatus,
       });
       if (hasVariants) payload.stock = totalVariantStock(variants);
+      /**
+       * 6/9/2026 — UN SALVATAGGIO SCRIVE SOLO QUELLO CHE L'UTENTE HA CHIESTO.
+       *
+       * Il modulo avvisava del rischio e lasciava il pulsante acceso: chi
+       * entrava per cambiare il prezzo, con le impostazioni del negozio non
+       * lette, usciva col prodotto tolto dalla consegna veloce. Il selettore
+       * mostrava «Spedizione 2-3 giorni», ma era un ripiego, non una scelta —
+       * e il salvataggio lo scriveva in banca dati come se fosse una scelta.
+       *
+       * Un avviso non è un freno. Se non sappiamo cosa offre il negozio e il
+       * negoziante non ha toccato il selettore, il campo non parte proprio: in
+       * banca dati resta quello che c'era, e il prezzo si salva lo stesso.
+       * Disabilitare il pulsante l'avrebbe lasciato senza poter salvare niente
+       * per colpa di una lettura che non c'entra col suo lavoro.
+       *
+       * LA PROVA: tests/unit/il-salvataggio-non-scrive-quello-che-nessuno-ha-toccato.test.ts
+       */
+      if (consegnaDelNegozioNonLetta && !consegnaSceltaDalNegoziante) {
+        delete (payload as Partial<ProductPayload>).express_enabled;
+      }
       onSubmit(payload, { intent, variants });
     });
 
@@ -853,7 +897,7 @@ export default function ProductForm({
 
         {/* Tag / parole chiave */}
         <div className="border-t pt-4">
-          <label className="block text-sm font-medium text-ink-700 mb-1">Tag / parole chiave</label>
+          <label htmlFor={idTag} className="block text-sm font-medium text-ink-700 mb-1">Tag / parole chiave</label>
           <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-cream-300 p-2">
             {tags.map((t) => (
               <span key={t} className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700">
@@ -862,6 +906,7 @@ export default function ProductForm({
               </span>
             ))}
             <input
+              id={idTag}
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={(e) => {
@@ -882,7 +927,7 @@ export default function ProductForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => setFastDelivery(true)}
+              onClick={() => scegliTempoDiConsegna(true)}
               aria-pressed={fastDelivery}
               className={cn(
                 'flex items-start gap-2.5 rounded-lg border-2 p-3 text-left transition',
@@ -899,7 +944,7 @@ export default function ProductForm({
             </button>
             <button
               type="button"
-              onClick={() => setFastDelivery(false)}
+              onClick={() => scegliTempoDiConsegna(false)}
               aria-pressed={!fastDelivery}
               className={cn(
                 'flex items-start gap-2.5 rounded-lg border-2 p-3 text-left transition',
@@ -915,11 +960,19 @@ export default function ProductForm({
               </span>
             </button>
           </div>
-          {fastDelivery && !sellerOffersExpress && (
-            <p className="text-xs text-ink-400 mt-1.5">
-              La consegna veloce richiede l&apos;Express attivo per il negozio: attivalo dal{' '}
-              <Link href="/seller/profile" className="text-primary-700 hover:underline">profilo negozio</Link>.
+          {consegnaDelNegozioNonLetta ? (
+            <p className="text-xs text-amber-700 mt-1.5">
+              Non riesco a leggere le impostazioni di consegna del tuo negozio. Il resto lo salvi
+              tranquillo: il tempo di consegna di questo prodotto resta com&apos;è, a meno che tu non
+              scelga qui sopra. Per vederlo giusto, ricarica la pagina.
             </p>
+          ) : (
+            fastDelivery && !sellerOffersExpress && (
+              <p className="text-xs text-ink-400 mt-1.5">
+                La consegna veloce richiede l&apos;Express attivo per il negozio: attivalo dal{' '}
+                <Link href="/seller/profile" className="text-primary-700 hover:underline">profilo negozio</Link>.
+              </p>
+            )
           )}
         </div>
 

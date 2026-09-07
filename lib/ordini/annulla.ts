@@ -43,7 +43,11 @@ export type EsitoAnnullo =
  */
 export const COLONNE_ANNULLO =
   'id, user_id, seller_id, total_price, payment_method, payment_status, delivery_status, ' +
-  'stripe_payment_intent, wallet_applied_cents, cash_confirmed_at, refunded_amount_cents, coupon_code';
+  'stripe_payment_intent, wallet_applied_cents, cash_confirmed_at, refunded_amount_cents, coupon_code, ' +
+  // 6/9/2026 — La targa del CARRELLO. Un carrello con due negozi diventa due
+  // ordini che portano lo stesso codice sconto, rivendicato una volta sola: per
+  // sapere se restituirlo bisogna sapere se l'altro ordine lo tiene ancora.
+  'stripe_session_id';
 
 export type OrdineDaAnnullare = {
   id: string;
@@ -58,6 +62,8 @@ export type OrdineDaAnnullare = {
   cash_confirmed_at?: string | null;
   refunded_amount_cents?: number | null;
   coupon_code?: string | null;
+  /** Sugli ordini con carta: la sessione di pagamento, cioè il carrello di origine. */
+  stripe_session_id?: string | null;
 };
 
 /**
@@ -129,9 +135,62 @@ export async function annullaERimborsa(
    * nella stessa istruzione (lo stesso schema di `claim_coupon`). La seconda
    * chiamata, da qualunque strada arrivi, non scala più niente.
    */
+  /**
+   * 6/9/2026 — IL CODICE TORNAVA IN CIRCOLO MENTRE UN ALTRO ORDINE LO USAVA ANCORA.
+   *
+   * Il codice si rivendica UNA volta per carrello (`claim_coupon`, in cassa), ma
+   * ogni negozio del carrello diventa un ordine suo, e ognuno porta scritto
+   * `coupon_code`. Annullare o farsi rifiutare l'ordine del negozio A
+   * restituiva il codice PER INTERO mentre l'ordine del negozio B teneva ancora
+   * lo sconto: un codice monouso tornava riutilizzabile, e le campagne «primi
+   * 50» duravano piu' di 50.
+   *
+   * Qui si guarda se un altro ordine dello stesso carrello, non annullato, porta
+   * ancora quel codice. In quel caso non si restituisce niente: lo fara'
+   * l'ultimo ordine del carrello che se ne va.
+   *
+   * LIMITE DICHIARATO, e vale solo per i contanti: il carrello pagato alla
+   * consegna non ha una targa sulle righe dell'ordine (la chiave del tentativo
+   * vive in `cod_checkout_attempts`, e cercarla per ordine sarebbe una
+   * scansione senza indice). Li' si restituisce come prima — meglio un uso
+   * regalato che un cliente che perde il buono senza aver comprato (R121). La
+   * chiusura completa vuole una colonna «carrello» sugli ordini: e' una
+   * migrazione, quindi si firma a parte.
+   */
+  async function unAltroOrdineDelCarrelloTieneIlCodice(codice: string): Promise<boolean> {
+    const carrello = order.stripe_session_id?.trim();
+    if (!carrello) return false;
+    try {
+      const { data, error } = await admin
+        .from('orders')
+        .select('id')
+        .eq('stripe_session_id', carrello)
+        .eq('coupon_code', codice)
+        .neq('id', order.id)
+        .neq('delivery_status', 'CANCELED')
+        .limit(1);
+      if (error) {
+        // Non si sa: si restituisce come prima. Un uso in piu' e' un costo
+        // nostro, un buono perso e' un cliente che non ricompra.
+        logger.warn('[annullaERimborsa] fratelli del carrello non letti', { orderId: order.id, err: error.message });
+        return false;
+      }
+      return (data ?? []).length > 0;
+    } catch (err) {
+      logger.warn('[annullaERimborsa] fratelli del carrello non letti', { orderId: order.id, err });
+      return false;
+    }
+  }
+
   async function restituisciCoupon(): Promise<void> {
     const codice = order.coupon_code?.trim();
     if (!codice) return;
+    if (await unAltroOrdineDelCarrelloTieneIlCodice(codice)) {
+      logger.info('[annullaERimborsa] codice sconto non restituito: un altro ordine dello stesso carrello lo tiene', {
+        orderId: order.id,
+      });
+      return;
+    }
     try {
       const { error: cErr } = await admin.rpc('release_coupon', { p_code: codice, p_order_id: order.id });
       if (!cErr) return;

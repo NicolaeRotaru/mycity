@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Crown, ArrowRight, Vote } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { queryKeys } from '@/lib/queries/keys';
 import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
 
@@ -107,6 +108,7 @@ export default function ShopOfMonthHero() {
                 alt={seller.store_name ?? ''}
                 fill
                 sizes="(max-width: 768px) 100vw, 500px"
+                loader={caricatoreFotoRemote}
                 className="object-cover"
               />
             </div>

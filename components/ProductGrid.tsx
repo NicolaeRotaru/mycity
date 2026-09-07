@@ -37,6 +37,39 @@ export type SortOption = OrdineGriglia;
 // disegna devono guardare la stessa definizione.
 export type GridMaxColumns = ColonneMassime;
 
+/**
+ * IL SEGNO CHE LA GRIGLIA SI STA AGGIORNANDO.
+ *
+ * 6/9/2026, secondo giro — LO STESSO SEGNALE CANCELLAVA I PRODOTTI A CHI VEDE POCO.
+ *
+ * Il segnale di prima schiariva tutta la griglia a meta' (`opacity-50`) lasciando
+ * le schede cliccabili. Una schiaritura sul contenitore non tocca solo il grigio
+ * di sfondo: mescola col fondo pagina OGNI cosa che sta dentro. Rifatto il conto
+ * sui colori veri di `tailwind.config.ts`, mentre arrivavano i nuovi risultati il
+ * nome del prodotto passava da 15,9 a 3,3 volte il fondo (ne servono 4,5), il nome
+ * del negozio a 2,3, e il «+» che mette nel carrello a 2,1 (ne servono 3). Cioe':
+ * chi tocca un filtro su una rete lenta smette di leggere i prodotti che stava
+ * guardando, e il pulsante che fa comprare quasi sparisce — proprio la persona per
+ * cui il segnale era stato pensato.
+ *
+ * Il segnale adesso e' una riga sottile sopra la griglia: si vede che sta
+ * lavorando, e non tocca il contrasto di niente. Restano dov'erano `aria-busy`
+ * sul contenitore e la riga «Aggiorno i risultati…» per chi ascolta.
+ *
+ * `animate-progress-fill` e non una pulsazione: una pulsazione fa ballare
+ * l'opacita', ed e' esattamente la cosa da cui veniamo. La riga ha un colore
+ * fermo — `primary-700` sul fondo pagina stacca 6,3 volte — e chi ha chiesto meno
+ * animazioni la vede comparire ferma, che e' comunque il segnale.
+ */
+function BarraSiAggiorna({ acceso }: { acceso: boolean }) {
+  if (!acceso) return null;
+  return (
+    <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-cream-200" aria-hidden>
+      <div className="h-full w-full rounded-full bg-primary-700 animate-progress-fill" />
+    </div>
+  );
+}
+
 interface Props {
   categoryId?: string;
   /** Più categorie (es. categoria padre + sottocategorie): usa IN al posto di EQ. */
@@ -56,6 +89,16 @@ interface Props {
   sort?: SortOption;
   /** Layout "rail" orizzontale scrollabile (per le righe curate della home). */
   rail?: boolean;
+  /**
+   * 6/9/2026 — Le prime quattro foto vengono chieste al browser come urgenti
+   * (`priority`, che diventa un precaricamento). Ha senso solo se questa
+   * griglia e' la prima cosa della pagina. Chi mette la griglia sotto qualcos'
+   * altro — una collezione di negozio, per esempio — passa `false`: le foto si
+   * caricano quando servono, senza rubare la coda a quello che si sta guardando.
+   * Resta acceso di serie per non cambiare le pagine in cui la griglia E' la
+   * prima cosa (novita', piu-venduti, ricerca, categoria).
+   */
+  prioritaPrimeFoto?: boolean;
   /** Modalità "sezione" (solo con `rail`): mostra un'intestazione "titolo + Vedi tutto"
    *  sopra la rail e si auto-nasconde quando non ci sono prodotti. Usata nelle pagine
    *  categoria-hub, una rail per sottocategoria. */
@@ -84,7 +127,7 @@ interface Props {
   maxColumns?: GridMaxColumns;
 }
 
-const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
+const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, prioritaPrimeFoto = true, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
   /**
    * #127 — Il catalogo si fermava a 96 prodotti e non lo diceva.
    *
@@ -192,6 +235,28 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   });
 
   const { isLoading, isError, refetch, isFetching } = domanda;
+
+  /**
+   * 6/9/2026 — CAMBIANDO UN FILTRO LA GRIGLIA RESTAVA IDENTICA, SENZA UN SEGNO.
+   *
+   * La lettura tiene a schermo i prodotti di prima mentre arrivano i nuovi
+   * (`placeholderData: keepPreviousData`), e la chiave della domanda contiene prezzo,
+   * disponibilità, negozio aperto, voto minimo e ordinamento. Quindi al cambio di un filtro parte
+   * una lettura nuova ma `isLoading` resta falso: per chi guarda non succede niente, e su una rete
+   * lenta si tocca il filtro due o tre volte pensando che non abbia preso.
+   *
+   * Adesso mentre si aggiorna compare una riga sottile sopra la griglia (`BarraSiAggiorna`), il
+   * contenitore si dichiara occupato (`aria-busy`), e chi usa un lettore di schermo sente una riga
+   * che glielo dice.
+   *
+   * ⚠️ LA GRIGLIA NON SI SCHIARISCE PIU'. Il primo tentativo la portava a meta' opacita': il perche'
+   * non si puo' fare sta scritto sopra `BarraSiAggiorna`, coi contrasti rifatti sui colori veri.
+   * ⚠️ NON si spegne il tocco sui prodotti: durante un aggiornamento le schede vecchie sono ancora
+   * vere e cliccabili, e togliere il tocco farebbe perdere il prodotto a chi lo stava premendo.
+   * ⚠️ E NON conta il «Carica altri prodotti»: lì si aggiungono righe in fondo, il pulsante dice
+   * già «Carico…», e schiarire tutta la griglia sarebbe uno sfarfallio senza motivo.
+   */
+  const stoAggiornando = isFetching && !domanda.isFetchingNextPage;
   // Le pagine gia' lette si uniscono togliendo i doppioni: mentre si sfoglia un
   // prodotto nuovo puo' entrare in cima e spostare tutte le righe di uno.
   const products = unisciPagine(domanda.data?.pages ?? []);
@@ -305,11 +370,24 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       // Ridondante ma innocuo: il filtro vero ora e' nella query (#91).
       arr = arr.filter((p) => p.stock == null || p.stock > 0);
     }
+    /**
+     * 6/9/2026 — «PIÙ RECENSITI» ORDINAVA PER MEDIA DEI VOTI, NON PER QUANTE RECENSIONI CI SONO.
+     *
+     * Questo ordinamento si chiama «Più recensiti» in italiano e «Most reviewed» in inglese, ma
+     * confrontava `avg`: un prodotto con UNA recensione a cinque stelle scavalcava uno con
+     * quaranta recensioni a 4,8. Chi cerca il prodotto più recensito cerca la prova che in tanti
+     * l'hanno comprato — cioè il numero, non la media. Il voto alto ha già la sua strada: il
+     * filtro «voto minimo» qui sopra, e nella scheda prodotto l'ordinamento «Voto più alto».
+     *
+     * A parità di numero di recensioni decide la media, così due prodotti con lo stesso conto non
+     * escono in un ordine che cambia a ogni caricamento.
+     */
     if (sort === 'rating') {
       arr = [...arr].sort((a, b) => {
-        const ra = ratings[a.id]?.avg ?? 0;
-        const rb = ratings[b.id]?.avg ?? 0;
-        return rb - ra;
+        const ca = ratings[a.id]?.count ?? 0;
+        const cb = ratings[b.id]?.count ?? 0;
+        if (cb !== ca) return cb - ca;
+        return (ratings[b.id]?.avg ?? 0) - (ratings[a.id]?.avg ?? 0);
       });
     }
     if (sort === 'discount_desc') {
@@ -362,16 +440,30 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // Sezione = fila con intestazione: si comporta come un blocco autonomo
   // (titolo + "Vedi tutto") e scompare del tutto quando è vuota.
   const isSection = formaFila && !!title;
+  /**
+   * 6/9/2026 — I TITOLI DELLE FILE VENIVANO TAGLIATI INVECE DI ANDARE A CAPO.
+   *
+   * Tutte e due le varianti dell'intestazione (con link e senza) avevano `truncate`: una riga
+   * sola, il resto mozzato con tre puntini. Il titolo divide la riga col collegamento «Vedi
+   * tutto», che e' `shrink-0` e quindi non cede spazio: su uno schermo da 320px al titolo ne
+   * restano circa 180, cioe' una dozzina di lettere in Fraunces grassetto a 20px. Nomi come
+   * «Abbigliamento sportivo» o «Latticini & Formaggi» non ci stavano — e il nome della
+   * sottocategoria e' l'unica cosa che dice alla persona cosa sta guardando.
+   *
+   * `line-clamp-2` fa quello che serve: va a capo, e taglia solo dopo la seconda riga. La
+   * misura parte piu' piccola sul telefono (`text-lg`) e risale da tablet in su, cosi' il
+   * caso da 320px sta dentro senza toccare come si vede da grande.
+   */
   const sectionHeader = title ? (
     <div className="mb-4 flex items-end justify-between gap-4">
       {titleHref ? (
         <Link href={titleHref} className="group min-w-0">
-          <h2 className="truncate font-serif text-xl font-bold text-ink-900 transition-colors group-hover:text-primary-700 md:text-2xl">
+          <h2 className="line-clamp-2 font-serif text-lg font-bold text-ink-900 transition-colors group-hover:text-primary-700 sm:text-xl md:text-2xl">
             {title}
           </h2>
         </Link>
       ) : (
-        <h2 className="truncate font-serif text-xl font-bold text-ink-900 md:text-2xl">{title}</h2>
+        <h2 className="line-clamp-2 min-w-0 font-serif text-lg font-bold text-ink-900 sm:text-xl md:text-2xl">{title}</h2>
       )}
       {seeAllHref && (
         <Link
@@ -477,7 +569,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       // corrispondeva a niente di visibile.
       compareAtPrice={p.compare_at_price != null ? Number(p.compare_at_price) : null}
       hasVariants={p.has_variants ?? false}
-      priority={i < 4}
+      priority={prioritaPrimeFoto && i < 4}
     />
   );
 
@@ -486,13 +578,22 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // impedisce alle due forme di tornare a divergere.
   if (formaFila) {
     const railRow = (
-      <div className={CLASSI_FILA}>
-        {filtered.map((p, i) => (
-          <div key={p.id} className={CLASSI_CASELLA_FILA}>
-            {renderCard(p, i)}
-          </div>
-        ))}
-      </div>
+      <>
+        <BarraSiAggiorna acceso={stoAggiornando} />
+        <div
+          className={CLASSI_FILA}
+          aria-busy={stoAggiornando}
+        >
+          {filtered.map((p, i) => (
+            <div key={p.id} className={CLASSI_CASELLA_FILA}>
+              {renderCard(p, i)}
+            </div>
+          ))}
+        </div>
+        <p role="status" aria-live="polite" className="sr-only">
+          {stoAggiornando ? 'Aggiorno i risultati…' : ''}
+        </p>
+      </>
     );
     if (!isSection) return railRow;
     return (
@@ -537,11 +638,18 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
 
   return (
     <>
-      <div className={classiDellaGriglia}>
+      <BarraSiAggiorna acceso={stoAggiornando} />
+      <div
+        className={classiDellaGriglia}
+        aria-busy={stoAggiornando}
+      >
         {filtered.map((p, i) => (
           <div key={p.id}>{renderCard(p, i)}</div>
         ))}
       </div>
+      <p role="status" aria-live="polite" className="sr-only">
+        {stoAggiornando ? 'Aggiorno i risultati…' : ''}
+      </p>
       {forseCeNeSonoAltri && (
         <div className="mt-6 flex justify-center">
           <button

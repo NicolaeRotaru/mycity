@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,7 +16,7 @@ import type { StoreMediaItem } from './StoreMediaCarousel';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Input, Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
-import { caricaImmagine } from '@/lib/storage/carica-immagine';
+import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { StoreHours } from '@/lib/store-hours';
 import { storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
 import CustomizationSection from './seller/CustomizationSection';
@@ -60,6 +60,9 @@ interface Props {
 const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }: Props) => {
   const tStates = useTranslations('states');
   const tForms = useTranslations('forms');
+  // Un identificativo generato: questo modulo puo' comparire piu' volte nella stessa pagina, e
+  // due campi con lo stesso `id` fanno leggere al lettore di schermo sempre il primo.
+  const idSlogan = useId();
 
   const showBranding = mode !== 'contact';
   const showContact = mode !== 'branding';
@@ -106,8 +109,25 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
   const storeName = watch('storeName');
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { 'image/*': [] },
+    // Il riquadro diceva «image/*» — SVG compreso — ma il deposito accetta solo sette tipi:
+    // il logo del grafico partiva, saliva e veniva respinto alla fine. Adesso non parte.
+    accept: {
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/png': ['.png'],
+      'image/webp': ['.webp'],
+    },
     maxFiles: 1,
+    // Il filtro qui sopra scarta, ma scartava in silenzio: chi trascinava una foto dell'iPhone
+    // (HEIC) la vedeva sparire e non capiva se stesse caricando o no. Stesse parole di
+    // StoreMediaManager, perche' il sito deve dire no in un modo solo.
+    onDropRejected: (rifiutati) => {
+      const troppi = rifiutati.some((r) => r.errors.some((e) => e.code === 'too-many-files'));
+      toast.error(
+        troppi
+          ? 'Una foto alla volta: trascinane una sola.'
+          : 'Formato non accettato: servono foto in JPG, PNG o WEBP.',
+      );
+    },
     onDrop: async (files) => {
       const file = files[0];
       if (!file) return;
@@ -122,7 +142,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
           file,
           userId: user.id,
           cartella: 'logos',
-          cacheControl: '3600',
+          cacheControl: ANNO_IN_SECONDI,
         });
         setLogoUrl(publicUrl);
         toast.success('Logo caricato');
@@ -183,12 +203,12 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
             <div className="flex items-center gap-4">
               <StoreAvatar logoUrl={logoUrl} storeName={storeName || defaultValues?.storeName} size="lg" />
               <div
-                {...getRootProps()}
+                {...getRootProps({ role: 'button', 'aria-label': 'Carica il logo del negozio: trascina il file o premi Invio' })}
                 className={`flex-1 border-2 border-dashed rounded-lg p-4 cursor-pointer transition-colors text-sm ${
                   isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
                 } ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}
               >
-                <input {...getInputProps()} />
+                <input {...getInputProps({ 'aria-label': 'Carica il logo del negozio' })} />
                 {uploadingLogo ? (
                   <LoadingState variant="inline" />
                 ) : logoUrl ? (
@@ -205,7 +225,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
                 <button
                   type="button"
                   onClick={() => setLogoUrl(null)}
-                  className="text-sm text-ink-500 hover:text-red-600 underline"
+                  className="text-sm text-ink-500 hover:text-secondary-600 underline"
                 >
                   Rimuovi
                 </button>
@@ -257,7 +277,9 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
               if (loc.address.trim()) setLocationError(null);
             }}
           />
-          {locationError && <p className="text-red-500 text-sm">{locationError}</p>}
+          {/* Era red-500: un terzo colore per «hai sbagliato questo campo», mentre la primitiva
+              Field usa secondary-600 in tutto il resto del sito. */}
+          {locationError && <p role="alert" className="text-sm font-medium text-secondary-600">{locationError}</p>}
 
           <CustomizationSection title="Orari di apertura" description="Quando i clienti ti trovano aperto" icon={<Clock size={18} />} defaultOpen>
             <StoreHoursEditor value={hours} onChange={setHours} />
@@ -284,8 +306,9 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
               onChange={(key) => setCustom({ ...custom, theme: { ...custom.theme, coverStyle: key } })}
             />
             <div>
-              <label className="block text-sm font-medium text-ink-700 mb-1">Slogan (opzionale)</label>
+              <label htmlFor={idSlogan} className="block text-sm font-medium text-ink-700 mb-1">Slogan (opzionale)</label>
               <input
+                id={idSlogan}
                 type="text"
                 value={custom.tagline ?? ''}
                 maxLength={80}
@@ -321,7 +344,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
             </div>
           </CustomizationSection>
 
-          {customError && <p className="text-red-500 text-sm">{customError}</p>}
+          {customError && <p role="alert" className="text-sm font-medium text-secondary-600">{customError}</p>}
         </div>
       )}
 

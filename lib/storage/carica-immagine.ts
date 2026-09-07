@@ -75,6 +75,56 @@ export interface EsitoCaricamento {
   publicUrl: string;
 }
 
+/**
+ * I SETTE TIPI CHE IL DEPOSITO ACCETTA DAVVERO, e i 10 MB che non supera.
+ *
+ * Sono la copia esatta di quello che sta scritto in `migrations/070_storage_and_rls_hardening.sql`
+ * (secchi `products`, `reviews`, `stories`) e in `migrations/127_minori_22_agosto.sql`. Il
+ * controllo stava in un punto solo — il caricamento delle foto di prodotto — invece che qui, nella
+ * porta che tutti attraversano: chi ha aggiunto gli altri punti ha chiamato la porta, che è la cosa
+ * giusta, e si e' portato via l'assenza del controllo.
+ *
+ * Il caso che si vede in negozio: il grafico consegna il logo in SVG, il negoziante lo trascina,
+ * aspetta il caricamento e alla fine si prende un errore. Adesso il file sbagliato non parte
+ * nemmeno, e la frase che legge e' in italiano.
+ *
+ * ⚠️ COSA QUESTO CONTROLLO NON FA, detto chiaro: guarda solo i tipi `image/…`. Un video passa come
+ * prima — StoreMediaManager ne carica uno per negozio — anche se il deposito lo rifiuta comunque,
+ * perche' nella sua lista i video non ci sono. Quello e' un guasto piu' grande di questa riga e va
+ * riparato dove nasce, non nascosto qui dentro.
+ */
+export const TIPI_IMMAGINE_AMMESSI = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+] as const;
+
+/** 10 MiB: e' il `file_size_limit` dei secchi immagine. */
+export const MAX_BYTE_CARICAMENTO = 10 * 1024 * 1024;
+
+/**
+ * UN ANNO, ed e' il tempo giusto per un file che non cambia mai.
+ *
+ * Ogni caricamento scriveva `3600` — un'ora — su un indirizzo che e' unico per caricamento:
+ * quella foto, a quell'indirizzo, e' sempre la stessa. La facevamo riscaricare ogni ora per
+ * niente, e ogni riscaricamento e' un lampeggio in piu' su una connessione lenta. Chi non lo
+ * passa affatto (ImageUrlField) prendeva il valore di serie dello storage, che e' ancora piu'
+ * corto: adesso il valore giusto e' il DEFAULT della porta, cosi' non si dimentica piu'.
+ */
+export const ANNO_IN_SECONDI = '31536000';
+
+/** Quanto pesa il corpo, che arrivi dal browser (`File.size`) o dal server (`Buffer.byteLength`). */
+function pesoDi(file: unknown): number | null {
+  const c = file as { size?: unknown; byteLength?: unknown };
+  if (typeof c?.size === 'number') return c.size;
+  if (typeof c?.byteLength === 'number') return c.byteLength;
+  return null;
+}
+
 export async function caricaImmagine(
   client: ClientDiCaricamento,
   richiesta: RichiestaCaricamento,
@@ -86,7 +136,7 @@ export async function caricaImmagine(
     staff = false,
     secchio = SECCHIO_PUBBLICO,
     upsert = false,
-    cacheControl,
+    cacheControl = ANNO_IN_SECONDI,
     etichetta,
     contentType,
     quando = Date.now(),
@@ -94,6 +144,21 @@ export async function caricaImmagine(
   } = richiesta;
 
   if (!file) throw new Error('caricaImmagine senza file');
+
+  // I due controlli che il deposito fa alla fine, fatti qui all'inizio: cosi' il file che verrebbe
+  // rifiutato non parte, e chi carica legge una frase che dice cosa fare invece dell'inglese dello
+  // storage. Le stesse frasi le conosce anche `friendlyError`, per i casi che arrivano da la'.
+  const tipoDichiarato = String(contentType || file.type || '').toLowerCase();
+  if (
+    tipoDichiarato.startsWith('image/') &&
+    !(TIPI_IMMAGINE_AMMESSI as readonly string[]).includes(tipoDichiarato)
+  ) {
+    throw new Error('Formato non accettato: usa una foto JPG, PNG o WEBP.');
+  }
+  const peso = pesoDi(file);
+  if (peso !== null && peso > MAX_BYTE_CARICAMENTO) {
+    throw new Error("La foto è troppo pesante: il limite è 10 MB. Riducila o scattane un'altra.");
+  }
 
   const codaPulita = String(etichetta ?? '').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
   const marchio = codaPulita ? `${caso}-${codaPulita}` : caso;

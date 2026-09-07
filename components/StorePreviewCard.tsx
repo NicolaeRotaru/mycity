@@ -64,7 +64,7 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
         {distanceKm !== undefined && distanceKm !== null && (
           <span className="absolute right-2.5 top-2.5 z-20 inline-flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-0.5 text-[11px] font-bold text-ink-900 shadow-warm">
             <MapPin size={11} strokeWidth={2.4} />
-            {distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1)} km`}
+            {distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1).replace('.', ',')} km`}
           </span>
         )}
         {/* Logo a cavallo del cover, in basso a sinistra */}
@@ -86,7 +86,7 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
           {reviews ? (
             <span className="inline-flex items-center gap-1 font-semibold text-ink-800">
               <Star size={13} className="fill-accent-500 text-accent-500" aria-hidden />
-              {reviews.avg.toFixed(1)}
+              {reviews.avg.toFixed(1).replace('.', ',')}
               <span className="font-normal text-ink-400">({reviews.count})</span>
             </span>
           ) : (

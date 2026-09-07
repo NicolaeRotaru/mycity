@@ -3,10 +3,9 @@ import { z } from 'zod';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { rateLimitAsync } from '@/lib/rate-limit';
-import { logger } from '@/lib/logger';
 import { env } from '@/lib/env';
 import { AiConfigError } from '@/lib/ai/client';
-import { AiCallError } from '@/lib/ai/run';
+import { mapAiError } from '@/lib/ai/run';
 import { fetchExternalSnapshot, resolveCategoryFromSlug } from '@/lib/products/externalSync';
 import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 
@@ -63,10 +62,11 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     });
   } catch (err) {
     if (err instanceof AiConfigError) return ApiErrors.unavailable('API key Anthropic non valida.');
-    const status = err instanceof AiCallError ? err.status : undefined;
-    logger.error('Errore import marketplace', { feature: 'marketplace-import', status });
-    if (status === 401) return ApiErrors.unavailable('API key Anthropic non valida.');
-    if (status === 429) return ApiErrors.rateLimited(60);
-    return ApiErrors.badGateway('Errore nel servizio AI. Riprova.');
+    // 6/9/2026 — LA MAPPA SCRITTA A MANO NON CONOSCEVA IL FRENO DI SPESA.
+    //
+    // A budget del giorno finito questa rotta rispondeva «Errore nel servizio
+    // AI. Riprova.»: invitava a ritentare una cosa che non poteva riuscire fino
+    // a domani. mapAiError e' l'unico posto dove i casi si distinguono.
+    return mapAiError(err, 'marketplace-import');
   }
 });

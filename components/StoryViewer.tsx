@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { X, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage, logoNegozio } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 /**
  * Viewer fullscreen riusabile per le storie (Instagram-like).
@@ -200,6 +201,7 @@ export default function StoryViewer({ stories, startIndex = 0, onClose }: Props)
             alt={active.caption ?? `Storia di ${active.seller?.store_name ?? 'un negozio'}`}
             fill
             sizes="(max-width: 768px) 90vw, 500px"
+            loader={caricatoreFotoRemote}
             className="object-cover"
             priority
           />

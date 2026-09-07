@@ -55,7 +55,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             quindi non vedi la dashboard venditori.
           </p>
           <p className="text-sm text-ink-500 mb-6 max-w-md mx-auto">
-            Se hai un'attività e vuoi vendere su MyCity puoi inviare la richiesta. Approvazione entro 48h,
+            Se hai un'attività e vuoi vendere su MyCity puoi inviare la richiesta. Approvazione entro 48 ore lavorative,
             poi avrai una vetrina dedicata. Abbonamento €50/mese e commissione {COMMISSIONE_DEL_PERCENTO} sulle vendite.
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm">

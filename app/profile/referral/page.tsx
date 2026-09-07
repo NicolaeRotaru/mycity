@@ -92,8 +92,10 @@ export default function ReferralPage() {
 
       {/* CODICE */}
       <div className="bg-gradient-to-br from-primary-600 to-secondary-600 text-white rounded-2xl p-6 text-center">
-        <p className="text-xs uppercase tracking-widest text-primary-100 mb-2">Il tuo codice</p>
-        <p className="font-mono text-4xl font-extrabold tracking-wider mb-4">{profile.referral_code}</p>
+        <p className="text-xs uppercase tracking-widest text-white mb-2">Il tuo codice</p>
+        {/* Stesso motivo del codice di consegna: niente terzo carattere fuori dal design system.
+            Le cifre restano allineate con `tabular-nums`, il codice resta in Inter. */}
+        <p className="font-sans tabular-nums text-4xl font-extrabold tracking-wider mb-4">{profile.referral_code}</p>
         <button
           onClick={copy}
           className="inline-flex items-center gap-2 bg-white text-primary-800 hover:bg-primary-50 px-6 py-2.5 rounded-lg font-bold"
@@ -121,7 +123,7 @@ export default function ReferralPage() {
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => void trackReferralSent('whatsapp')}
-            className="inline-flex items-center justify-center gap-2 bg-olive-500 hover:bg-olive-600 text-white px-4 py-2.5 rounded-lg font-semibold text-sm text-center"
+            className="inline-flex items-center justify-center gap-2 bg-olive-600 hover:bg-olive-700 text-white px-4 py-2.5 rounded-lg font-semibold text-sm text-center"
           >
             <MessageCircle size={16} className="text-white" aria-hidden />
             WhatsApp

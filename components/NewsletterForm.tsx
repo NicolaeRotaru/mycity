@@ -92,11 +92,16 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
         <Inbox size={14} aria-hidden /> {t('blurb')}
       </p>
       <div className="flex gap-2">
+        {/* Il campo aveva per unico nome il segnaposto, che sparisce appena si scrive e che un
+            lettore di schermo non e' tenuto a leggere: chi arrivava qui da tastiera trovava una
+            casella senza nome, nel pie' di pagina di ogni pagina del sito. */}
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder={t('placeholder')}
+          aria-label={t('placeholder')}
+          autoComplete="email"
           required
           className={`flex-1 min-w-0 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 ${
             isLight

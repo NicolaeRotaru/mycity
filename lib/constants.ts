@@ -17,6 +17,46 @@ export const SHIPPING_PER_ORDER = 4.9;
 export const SPEDIZIONE_BASE_EUR = 2.5;
 export const SPEDIZIONE_PER_KM_EUR = 1.2;
 /**
+ * FIN DOVE SI CONSEGNA — in chilometri in linea d'aria dal negozio.
+ *
+ * 6/9/2026 — IL SITO ACCETTAVA UNA CONSEGNA A MILANO E NON CHIEDEVA UN
+ * CENTESIMO DI SPEDIZIONE. Il perimetro del servizio — Piacenza e dintorni —
+ * viveva solo nei testi del sito: non c'era un controllo, in nessun punto del
+ * progetto. Lo schema della cassa accetta qualunque CAP, e la soglia della
+ * spedizione gratuita (30 € per negozio) azzera il prezzo PRIMA di guardare la
+ * distanza: negozio a Piacenza, consegna a Milano, 60 km, carrello da 35 € →
+ * spedizione 0,00 e ordine accettato. Al fattorino spettano lo stesso i suoi
+ * 3 €, e quei 60 km li avremmo pagati noi. Sotto i 30 € succedeva il rovescio:
+ * la stessa consegna veniva quotata oltre 70 € alla cassa dopo che il carrello
+ * aveva scritto 4,90.
+ *
+ * DA DOVE VIENE IL NUMERO — non è inventato, ed è il più LARGO fra i due
+ * riferimenti che il progetto ha già, perché una zona più stretta di quello che
+ * serviamo oggi rifiuterebbe clienti veri:
+ *   · la promessa pubblica «in 30-60 minuti dalla conferma del negozio, nei
+ *     comuni serviti» (lib/promesse-pubbliche.ts), con la stima di consegna a
+ *     15 minuti di preparazione più il viaggio a 25 km/h (`deliveryEtaMinutes`,
+ *     lib/geo.ts), sta in piedi fino a circa 19 km;
+ *   · la prova sui soldi tests/unit/soldi-storni-sconti-e-compensi.test.ts
+ *     percorre come caso normale una consegna a ~24 km, quotata 8,50 €: quella
+ *     distanza il sito la serve già oggi.
+ * Si prende la seconda, arrotondata a 25. Dentro ci stanno Piacenza e la sua
+ * cintura fino a Fiorenzuola e Castel San Giovanni; fuori restano Cremona
+ * (35 km), Lodi (35 km) e Milano (60 km) — i casi che non sappiamo servire.
+ *
+ * ⚠️ I due riferimenti non vanno d'accordo, ed è una cosa da decidere, non da
+ * nascondere: a 24 km la promessa dei 30-60 minuti è già rotta oggi, prima e
+ * a prescindere da questo controllo. O si stringe la zona o si cambia la
+ * promessa.
+ *
+ * 🟡 IL NUMERO È UNA DECISIONE COMMERCIALE, NON TECNICA: dice a chi possiamo
+ * vendere. Sta qui, in una riga, apposta perché cambiarlo sia una firma e non
+ * una caccia al tesoro. Chi lo alza si prenda anche il compenso del fattorino
+ * (`COMPENSO_RIDER_CENTS`), che è fisso e non cresce coi chilometri.
+ */
+export const RAGGIO_CONSEGNA_KM = 25;
+
+/**
  * Sconto percentuale per ritiro in negozio.
  *
  * Vale 0 perche' il ritiro in negozio e' MESSO DA PARTE: Nicola, 20/8/2026,
@@ -87,7 +127,7 @@ export const MARKETPLACE_FEE_BPS = 1000; // 10.00%
 // (quel file importa questo, e il giro si chiuderebbe su se stesso), ma il numero e' lo stesso e
 // una prova tiene le due frasi allineate.
 export const VALUE_PROPS = [
-  { icon: 'Truck',      title: 'Spedizione gratuita',      subtitle: `sopra €${FREE_SHIPPING_THRESHOLD} per negozio${PLATFORM_DELIVERY_FEE_CENTS > 0 ? ` · ${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} di consegna` : ''}` },
+  { icon: 'Truck',      title: 'Spedizione gratuita',      subtitle: `sopra ${FREE_SHIPPING_THRESHOLD} € per negozio${PLATFORM_DELIVERY_FEE_CENTS > 0 ? ` · ${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} di consegna` : ''}` },
   { icon: 'BanknoteArrowUp', title: 'Pagamento alla consegna', subtitle: 'in contanti, zero rischi' },
   { icon: 'Store',      title: '100% locale',              subtitle: 'venditori della tua città' },
   { icon: 'Zap',        title: 'Consegna rapida',          subtitle: `in ${EXPRESS_ETA_LABEL} dalla conferma del negozio` },

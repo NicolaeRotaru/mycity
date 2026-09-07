@@ -103,7 +103,7 @@ export default function SellerPromotionsPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Promozione creata! È già attiva e visibile ai buyer.');
+      toast.success('Promozione creata! È già attiva e visibile ai clienti.');
       qc.invalidateQueries({ queryKey: queryKeys.seller.promotions });
       setShowWizard(false);
     },

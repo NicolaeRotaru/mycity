@@ -288,7 +288,7 @@ export default function SellerAnalyticsPage() {
     insights.push({
       icon: PackageX, tone: 'secondary',
       title: 'Conversione sotto la media',
-      body: `Tante visite ma pochi ordini (${analytics.conversionRate.toFixed(1)}%). Una promo a tempo può creare urgenza.`,
+      body: `Tante visite ma pochi ordini (${analytics.conversionRate.toFixed(1).replace('.', ',')}%). Una promo a tempo può creare urgenza.`,
       ctaLabel: 'Crea una promo', ctaHref: '/seller/promotions',
     });
   }
@@ -340,7 +340,7 @@ export default function SellerAnalyticsPage() {
         <KpiCard
           icon={TrendingUp}
           label="Conversion rate"
-          value={analytics.conversionRate == null ? '—' : `${analytics.conversionRate.toFixed(1)}%`}
+          value={analytics.conversionRate == null ? '—' : `${analytics.conversionRate.toFixed(1).replace('.', ',')}%`}
           // Il campione, dichiarato: le visite si contano solo su chi accetta i
           // cookie, quindi questo numero e' un indizio, non una misura. E senza
           // le visite il tasso non c'e': un «0,0%» direbbe che nessuno compra.
@@ -355,10 +355,12 @@ export default function SellerAnalyticsPage() {
               : analytics.conversionRate >= 2 ? 'olive' : analytics.conversionRate >= 1 ? 'accent' : 'secondary'
           }
         />
+        {/* Con la virgola: in italiano il voto si scrive «4,5», ed e' cosi' che
+            lo scrive la pagina delle recensioni del rider. */}
         <KpiCard
           icon={Star}
           label="Rating medio"
-          value={analytics.avgRating != null && analytics.avgRating > 0 ? analytics.avgRating.toFixed(1) + ' ★' : '—'}
+          value={analytics.avgRating != null && analytics.avgRating > 0 ? analytics.avgRating.toFixed(1).replace('.', ',') + ' ★' : '—'}
           delta={
             analytics.visiteIgnote
               ? 'Non sono riuscito a leggere le recensioni'
@@ -484,7 +486,7 @@ export default function SellerAnalyticsPage() {
 const INSIGHT_TONE: Record<Insight['tone'], { bg: string; border: string; fg: string; btn: string }> = {
   olive:     { bg: 'bg-olive-50',     border: 'border-olive-200',     fg: 'text-olive-700',     btn: 'bg-olive-600 hover:bg-olive-700' },
   secondary: { bg: 'bg-secondary-50', border: 'border-secondary-200', fg: 'text-secondary-600', btn: 'bg-secondary-600 hover:bg-secondary-700' },
-  accent:    { bg: 'bg-accent-50',    border: 'border-accent-200',    fg: 'text-accent-700',    btn: 'bg-accent-600 hover:bg-accent-700 text-white' },
+  accent:    { bg: 'bg-accent-50',    border: 'border-accent-200',    fg: 'text-accent-700',    btn: 'bg-accent-700 hover:bg-accent-800 text-white' },
 };
 
 function InsightCard({ icon: Icon, tone, title, body, ctaLabel, ctaHref }: Insight) {

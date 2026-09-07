@@ -67,15 +67,31 @@ pg_dump \
 # migrazione. Ripristinando solo questo dump si ottiene un database senza
 # nessun utente, quindi senza nessun profilo, negozio o ordine collegabile a
 # una persona: nessuno riuscirebbe piu' ad accedere. Non era un backup, era un
-# file. Qui si aggiunge un secondo dump della sola tabella degli utenti (il
-# resto dello schema `auth` e' roba interna di Supabase, che si ricrea da se').
+# file. Qui si aggiunge un secondo dump delle tabelle di `auth` che servono per
+# tornare a entrare (il resto dello schema e' roba interna di Supabase, che si
+# ricrea da se').
+#
+# 6/9/2026 — LA SOLA TABELLA DEGLI UTENTI NON BASTAVA.
+#
+# Il sito fa entrare anche con Google (components/ui/AuthShell.tsx): il legame
+# fra la persona e il suo account Google non vive in `auth.users`, vive in
+# `auth.identities`. E chi ha acceso la doppia verifica ha i suoi fattori in
+# `auth.mfa_factors`. Copiando la sola tabella degli utenti, dopo un ripristino
+# i secondi fattori sparivano in silenzio — chi si era protetto di piu' si
+# ritrovava senza protezione — e il collegamento con Google restava appeso al
+# riaggancio automatico per email, che nessuno ha mai provato.
+#
+# `auth.mfa_challenges` no: sono le richieste in corso, durano minuti e non
+# servono a nessun ripristino.
 UTENTI="$BACKUP_DIR/mycity_${TS}_utenti.dump"
-echo "[backup] Dump degli utenti (auth.users) → $UTENTI"
+echo "[backup] Dump degli utenti (auth.users, auth.identities, auth.mfa_factors) → $UTENTI"
 pg_dump \
   --format=custom \
   --no-owner \
   --no-acl \
   --table=auth.users \
+  --table=auth.identities \
+  --table=auth.mfa_factors \
   --file="$UTENTI" \
   "$DB_URL"
 
@@ -201,7 +217,24 @@ SECCHI_FOTO="${STORAGE_SYNC_BUCKETS:-products stories reviews}"
 # Deve stare FUORI dalla cartella di destinazione, altrimenti rclone rifiuta di
 # partire (e allora la notte diventa rossa, che e' il comportamento giusto: una
 # copia che non parte va vista).
-STORICO_FOTO="${STORAGE_SYNC_STORICO:-${DESTINAZIONE_FOTO}-storico}"
+#
+# 6/9/2026 — E LA BARRA IN FONDO SPEGNEVA TUTTO.
+#
+# Il valore predefinito si ricava dalla destinazione: "b2:mycity-foto" diventa
+# "b2:mycity-foto-storico", un secchio accanto. Ma se la destinazione e' scritta
+# con la barra in fondo — "b2:mycity-foto/", che e' un modo legittimo di
+# scrivere un percorso — lo storico diventava "b2:mycity-foto/-storico", cioe'
+# DENTRO lo stesso secchio della copia. Provato: rclone non si lamenta (le due
+# cartelle sono affiancate, non una dentro l'altra), gira e non dice niente. Ed
+# e' peggio che fermarsi: la rete di sicurezza finisce nello stesso secchio da
+# cui dovrebbe difendere, e il giorno che quel secchio sparisce — cancellato,
+# chiave rubata, guasto del fornitore — si porta via anche lo storico. Una
+# riparazione nata per proteggere le foto non puo' dipendere da un carattere.
+DEST_PULITA="$DESTINAZIONE_FOTO"
+while [[ "$DEST_PULITA" == */ && ${#DEST_PULITA} -gt 1 ]]; do
+  DEST_PULITA="${DEST_PULITA%/}"
+done
+STORICO_FOTO="${STORAGE_SYNC_STORICO:-${DEST_PULITA}-storico}"
 
 if [[ -z "$SORGENTE_FOTO" || -z "$DESTINAZIONE_FOTO" ]]; then
   echo "[backup] esito-foto: non-configurato — l'elenco delle immagini e' nella copia, i FILE no." >&2
@@ -210,6 +243,27 @@ elif ! command -v rclone >/dev/null 2>&1; then
   echo "[backup] esito-foto: fallita — la copia delle foto e' configurata ma rclone non e' installato: nessun file e' stato copiato." >&2
   exit 4
 else
+  # 6/9/2026 — LO STORICO E' UN SECCHIO A PARTE, E NESSUNO L'AVEVA MAI CREATO.
+  #
+  # `--backup-dir` scrive in un secchio DIVERSO da quello di destinazione:
+  # qualcuno deve averlo creato e la chiave deve poterci scrivere. Se non c'e',
+  # la copia delle foto puo' fallire per intero, e la notte in cui serve non
+  # c'e' nessuna copia nuova.
+  #
+  # Qui si prova a crearlo: `mkdir` su un remote non fa danno se esiste gia'. Se
+  # non si riesce — chiave senza permesso, fornitore che vuole il secchio creato
+  # a mano — NON si esce: si dice e basta, e a decidere resta la copia vera qui
+  # sotto. Spegnere una copia che magari funziona sarebbe lo stesso errore di
+  # prima, al contrario.
+  if ! rclone lsd "$STORICO_FOTO" >/dev/null 2>&1; then
+    echo "[backup] Lo storico delle foto ($STORICO_FOTO) non risponde: provo a crearlo."
+    if rclone mkdir "$STORICO_FOTO" >/dev/null 2>&1; then
+      echo "[backup] Storico delle foto pronto: $STORICO_FOTO"
+    else
+      echo "[backup] ATTENZIONE: lo storico $STORICO_FOTO non esiste e non sono riuscito a crearlo. Se la copia qui sotto fallisce, e' questo: serve il secchio gia' creato presso il fornitore con una chiave che possa scriverci, oppure STORAGE_SYNC_STORICO che punti a uno che esiste." >&2
+    fi
+  fi
+
   for secchio in $SECCHI_FOTO; do
     echo "[backup] Foto: ${SORGENTE_FOTO}${secchio} → ${DESTINAZIONE_FOTO}/${secchio}"
     echo "[backup] Le foto sparite dall'origine finiscono in ${STORICO_FOTO}/${TS}/${secchio}, non nel cestino."

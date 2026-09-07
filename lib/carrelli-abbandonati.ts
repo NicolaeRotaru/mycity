@@ -69,6 +69,92 @@ export async function marcaCarrelloRecuperato(
 }
 
 /**
+ * QUANTO RENDE DAVVERO L'EMAIL «HAI DIMENTICATO QUALCOSA».
+ *
+ * 6/9/2026 — «RECUPERATO» RISPONDEVA A DUE DOMANDE DIVERSE. `marcaCarrelloRecuperato`
+ * mette `recovered = true` su ogni carrello di chi ha appena comprato, e fa bene:
+ * serve a non mandare l'email di un carrello già diventato ordine. Ma nella
+ * colonna finiscono insieme due persone diverse: chi è tornato GRAZIE all'email
+ * e chi è tornato da solo dieci minuti dopo, senza aver ricevuto niente.
+ *
+ * Chi un giorno guarderà «quanto rende il recupero carrelli» contando le righe
+ * con `recovered = true` leggerà un numero più alto del vero, e terrà accesa una
+ * leva che magari non porta niente. È una delle poche leve di ricavo già
+ * costruite: decidere su un numero gonfiato costa tempo e fiducia.
+ *
+ * Le due domande hanno già due campi: `recovery_email_sent_at` dice se l'email è
+ * partita, `recovered_at` quando il carrello è tornato. Serviva la funzione che
+ * li mette insieme, in un posto solo, accanto a chi scrive quel dato — così il
+ * numero non se lo inventa ogni cruscotto per conto suo.
+ *
+ * 🟢 Pura: conta righe già lette, niente rete. Una prova la ESEGUE.
+ */
+export type RigaDiRecupero = {
+  recovered?: boolean | null;
+  recovered_at?: string | null;
+  recovery_email_sent_at?: string | null;
+};
+
+export type RendimentoRecupero = {
+  /** A quanti è partita l'email «hai dimenticato qualcosa». */
+  emailInviate: number;
+  /** Quanti carrelli sono tornati, per qualunque motivo. È il numero che si leggeva prima. */
+  tornatiInTutto: number;
+  /** Quanti sono tornati DOPO aver ricevuto l'email: questo è il rendimento della campagna. */
+  tornatiDopoLEmail: number;
+  /** Tornati senza aver mai ricevuto l'email: sarebbero tornati comunque. */
+  tornatiDaSoli: number;
+  /**
+   * Tornati con l'email partita ma senza il QUANDO: succede solo se la
+   * migrazione 148 non è ancora applicata (`recovered_at` assente). Non si
+   * contano nel rendimento — dichiararli è meglio che gonfiare il numero.
+   */
+  tornatiSenzaData: number;
+};
+
+export function contaRendimentoRecupero(righe: RigaDiRecupero[]): RendimentoRecupero {
+  const conto: RendimentoRecupero = {
+    emailInviate: 0,
+    tornatiInTutto: 0,
+    tornatiDopoLEmail: 0,
+    tornatiDaSoli: 0,
+    tornatiSenzaData: 0,
+  };
+  for (const riga of righe) {
+    const inviata = riga.recovery_email_sent_at ?? null;
+    if (inviata) conto.emailInviate++;
+    if (!riga.recovered) continue;
+    conto.tornatiInTutto++;
+    if (!inviata) {
+      conto.tornatiDaSoli++;
+      continue;
+    }
+    const tornatoIl = riga.recovered_at ?? null;
+    if (!tornatoIl) {
+      conto.tornatiSenzaData++;
+      continue;
+    }
+    // L'ordine dei due istanti conta: un carrello marcato PRIMA dell'invio non
+    // è merito dell'email (succede quando la riga viene riusata).
+    if (new Date(tornatoIl).getTime() >= new Date(inviata).getTime()) conto.tornatiDopoLEmail++;
+    else conto.tornatiDaSoli++;
+  }
+  return conto;
+}
+
+/** Lo stesso conto, leggendo le righe vere. Solo le tre colonne che servono. */
+export async function rendimentoRecuperoCarrelli(admin: SupabaseClient): Promise<RendimentoRecupero> {
+  const { data, error } = await admin
+    .from('abandoned_carts')
+    .select('recovered, recovered_at, recovery_email_sent_at');
+  if (error) {
+    logger.warn('[carrelli] rendimento del recupero non letto', { message: error.message });
+    return contaRendimentoRecupero([]);
+  }
+  return contaRendimentoRecupero((data ?? []) as RigaDiRecupero[]);
+}
+
+/**
  * Le righe già recuperate da più di `GIORNI_DI_MEMORIA_CARRELLI` si potano.
  *
  * Servono a misurare, e una misura vecchia di tre mesi l'ha già letta chi

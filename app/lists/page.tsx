@@ -67,7 +67,7 @@ export default function ListsPage() {
     },
   });
 
-  const { data: publicLists = [] } = useQuery({
+  const { data: publicLists = [], isLoading: caricoPubbliche } = useQuery({
     queryKey: queryKeys.lists.public,
     queryFn: async (): Promise<List[]> => {
       const { data } = await supabase
@@ -84,7 +84,7 @@ export default function ListsPage() {
     },
   });
 
-  const { data: myLists = [] } = useQuery({
+  const { data: myLists = [], isLoading: caricoMie } = useQuery({
     queryKey: queryKeys.lists.mine,
     queryFn: async (): Promise<List[]> => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -129,6 +129,19 @@ export default function ListsPage() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  // 6/9/2026 — Finché la risposta non arriva `myLists` è `[]`, e `[] .length
+  // === 0` è vero: comparivano «Non hai ancora liste» e «Nessuna lista
+  // pubblica» a chi le liste ce le aveva, per poi sparire. Ora il vuoto si
+  // annuncia solo quando è stato davvero verificato; prima ci sono i
+  // riquadri-scheletro.
+  const Scheletri = ({ quanti }: { quanti: number }) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" aria-hidden>
+      {Array.from({ length: quanti }, (_, i) => (
+        <div key={i} className="h-[104px] rounded-xl skeleton" />
+      ))}
+    </div>
+  );
+
   const ListCard = ({ list }: { list: List }) => {
     const count = list.items_count?.[0]?.count ?? 0;
     return (
@@ -165,7 +178,14 @@ export default function ListsPage() {
       />
 
       {/* Le tue liste */}
-      {myLists.length > 0 && (
+      {caricoMie && (
+        <section aria-busy="true">
+          <div className="h-5 w-32 rounded skeleton mb-3" />
+          <Scheletri quanti={2} />
+        </section>
+      )}
+
+      {!caricoMie && myLists.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-bold text-ink-900">Le tue liste</h2>
@@ -182,7 +202,7 @@ export default function ListsPage() {
         </section>
       )}
 
-      {myLists.length === 0 && (
+      {!caricoMie && myLists.length === 0 && (
         <section className="bg-cream-50 border border-cream-300 rounded-2xl p-8 text-center">
           <ListChecks size={32} className="mx-auto text-ink-300 mb-3" strokeWidth={1.5} />
           <p className="text-ink-700 mb-3">Non hai ancora liste. Inizia a crearne una.</p>
@@ -206,7 +226,9 @@ export default function ListsPage() {
       {/* Tutte le liste pubbliche */}
       <section>
         <h2 className="font-bold text-ink-900 mb-3">Liste della community</h2>
-        {publicLists.length === 0 ? (
+        {caricoPubbliche ? (
+          <Scheletri quanti={4} />
+        ) : publicLists.length === 0 ? (
           <p className="text-sm text-ink-500">Nessuna lista pubblica per ora.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

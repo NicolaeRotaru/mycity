@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useId, useState, useEffect } from 'react';
 import { Globe, Lock, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -34,6 +34,8 @@ function validateHandle(h: string): string | null {
 export default function PublicProfileToggle() {
   const tActions = useTranslations('actions');
   const tToasts = useTranslations('toasts');
+  const idHandle = useId();
+  const idBio = useId();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [enabled, setEnabled] = useState(false);
@@ -126,10 +128,11 @@ export default function PublicProfileToggle() {
       {enabled && (
         <div className="space-y-3 pl-6">
           <div>
-            <label className="block text-xs font-semibold text-ink-700 mb-1">Handle pubblico</label>
+            <label htmlFor={idHandle} className="block text-xs font-semibold text-ink-700 mb-1">Handle pubblico</label>
             <div className="flex items-center gap-2">
               <span className="text-sm text-ink-500">@</span>
               <input
+                id={idHandle}
                 type="text"
                 value={handle}
                 onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
@@ -149,8 +152,9 @@ export default function PublicProfileToggle() {
             )}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-ink-700 mb-1">Bio (opzionale, max 200 char)</label>
+            <label htmlFor={idBio} className="block text-xs font-semibold text-ink-700 mb-1">Bio (opzionale, max 200 char)</label>
             <textarea
+              id={idBio}
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               maxLength={200}

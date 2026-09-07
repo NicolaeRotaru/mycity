@@ -286,9 +286,28 @@ describe('gli invarianti sul checkout vero', () => {
     // errore senza guardarlo: a rileggere sembra a posto, e non ferma niente.
     // I pulsanti sono due — la barra del telefono e il riepilogo del desktop —
     // e uno solo dei due lascia la porta aperta sull'altro schermo.
-    const bloccati = [...checkout.matchAll(/disabled=\{[^}]*\}/g)]
-      .filter((m) => m[0].includes('consegnaConfermabile'));
-    expect(bloccati.length, 'un pulsante di conferma non guarda la fascia').toBe(2);
+    //
+    // 6/9/2026 — Questa prova contava due `disabled={…}` con dentro scritto
+    // `consegnaConfermabile`, cioè pretendeva che la condizione fosse
+    // RICOPIATA nei due punti. Era proprio quella copia a far separare i due
+    // pulsanti: sul telefono si spegneva senza dire perché, sul computer no.
+    // Adesso il motivo del blocco si chiama `ordineBloccato` ed è scritto una
+    // volta sola; la prova segue il freno fino ai due pulsanti invece di
+    // contare le copie. Chiede di più, non di meno.
+    const freno = checkout.match(/const ordineBloccato\s*=\s*[^;]+;/);
+    expect(freno?.[0], 'il freno non esiste più, o non guarda la fascia di consegna')
+      .toContain('!consegnaConfermabile');
+
+    // ① il riepilogo di fianco (computer)
+    expect(checkout, 'il pulsante del computer non legge il freno')
+      .toContain('disabled={ordineBloccato}');
+    // ② la barra incollata in fondo (telefono): resta premibile e DICHIARA il
+    //    blocco, invece di spegnersi muta.
+    // Ancora su codice vero e non su un commento: qui i commenti sono gia' via.
+    // `fondoDellaBarra` la usa solo la barra incollata in fondo, quella del telefono.
+    const barraDelTelefono = checkout.slice(checkout.indexOf('fondoDellaBarra('));
+    expect(barraDelTelefono, 'il pulsante del telefono non legge il freno')
+      .toContain('aria-disabled={ordineBloccato || isCheckingOut}');
   });
 
   it('la riga sotto le mattonelle non è più un testo fisso', () => {

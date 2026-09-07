@@ -68,8 +68,29 @@ for f in $(ls "$MIG"/*.sql | sort -V); do
   fi
 
   echo "▶ applico $name"
-  # Una transazione sola: se la migrazione si rompe a meta', non lascia il
-  # database in uno stato intermedio e non si registra come applicata.
+  # QUANTO VALE DAVVERO "UNA TRANSAZIONE SOLA" (misurato il 6/9/2026).
+  #
+  # Qui c'era scritto: «se la migrazione si rompe a meta', non lascia il database
+  # in uno stato intermedio e non si registra come applicata». Vero solo a meta',
+  # e conviene sapere quale meta'.
+  #
+  # 1) --single-transaction avvolge il file in una transazione, ma se il file ne
+  #    apre una sua con BEGIN e la chiude con COMMIT, quel COMMIT chiude la
+  #    transazione del wrapper: tutto quello che segue viene eseguito e
+  #    confermato per conto suo. Oggi succede in 23 migrazioni sulle 149 in cartella (fra cui
+  #    153 e 154) e il danno e' nullo, perche' dopo il loro COMMIT resta solo
+  #    NOTIFY. La prima che mettera' del lavoro vero dopo il proprio COMMIT si
+  #    applichera' a meta', in silenzio. Per questo sotto c'e' un avviso: dice
+  #    quali file non godono della garanzia, prima di applicarli.
+  # 2) L'applicazione e la registrazione sono due comandi psql, cioe' due
+  #    connessioni. Un intoppo di rete fra le due lascia la migrazione applicata
+  #    ma non registrata, e al rilascio dopo viene riapplicata. Unirle in un
+  #    comando solo cambierebbe cosa questo script esegue sul database di
+  #    produzione: e' una modifica che va decisa e firmata a parte, non
+  #    infilata in una riparazione minore.
+  if grep -qE '^[[:space:]]*COMMIT[[:space:]]*;' "$f"; then
+    echo "  ⚠ $name contiene un COMMIT suo: da quel punto in giu' la garanzia della transazione unica non vale." >&2
+  fi
   psql "$DB" -q -v ON_ERROR_STOP=1 --single-transaction -f "$f"
   psql "$DB" -q -v ON_ERROR_STOP=1 \
     -c "INSERT INTO supabase_migrations.schema_migrations (version, name)

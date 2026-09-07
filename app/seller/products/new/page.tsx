@@ -14,6 +14,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { useConsegnaVeloceDelNegozio } from '@/lib/queries/consegna-veloce-del-negozio';
 import { trackProductPublished } from '@/lib/analytics/events';
 import { loadAutosave, clearAutosave } from '@/lib/hooks/useFormAutosave';
 import type { ProductUnit, ProductCondition } from '@/lib/products/schema';
@@ -79,18 +80,22 @@ function NewProductInner() {
     },
   });
 
-  const { data: offersExpress = false } = useQuery({
-    queryKey: [...queryKeys.seller.profile, 'offers-express'],
-    queryFn: async (): Promise<boolean> => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return false;
-      const { data, error } = await supabase.from('profiles').select('offers_express').eq('id', user.id).single();
-      // «Non ho letto il profilo» non è «non offre la consegna espressa»: senza questa riga il
-      // negoziante che l'ha attivata non vede il campo per impostarla, e non capisce perché.
-      if (error) throw error;
-      return Boolean((data as { offers_express?: boolean } | null)?.offers_express);
-    },
-  });
+  /**
+   * 6/9/2026 — QUESTA PAGINA E «MODIFICA PRODOTTO» ERANO DUE STRADE PER LA
+   * STESSA DOMANDA.
+   *
+   * Stessa riga di cache, due funzioni scritte a mano: qui la sessione non
+   * ancora pronta valeva «il negozio non offre la consegna veloce», e quel «no»
+   * finiva in cache buono per tutti. Poi il negoziante apriva la modifica di un
+   * prodotto e si ritrovava il consiglio di attivare una cosa che ha già
+   * attiva. Adesso la funzione è una sola, in
+   * `lib/queries/consegna-veloce-del-negozio`.
+   */
+  const {
+    offre: offersExpress,
+    inLettura: consegnaInLettura,
+    nonLetta: consegnaNonLetta,
+  } = useConsegnaVeloceDelNegozio();
 
   // Duplica: precarica da un prodotto esistente (?from=ID).
   const { data: source, isLoading: loadingSource } = useQuery({
@@ -221,7 +226,7 @@ function NewProductInner() {
         </>
       )}
 
-      {fromId && loadingSource ? (
+      {(fromId && loadingSource) || consegnaInLettura ? (
         <LoadingState />
       ) : (
         <ProductForm
@@ -231,6 +236,7 @@ function NewProductInner() {
           initialValues={initialValues}
           submitting={create.isPending}
           sellerOffersExpress={offersExpress}
+          consegnaDelNegozioNonLetta={consegnaNonLetta}
           autosaveKey={fromId ? undefined : AUTOSAVE_KEY}
           onSubmit={(payload, ctx) => create.mutate({ payload, variants: ctx.variants })}
           onDiscard={async () => {

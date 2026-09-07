@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   Store, Percent, Sparkles, Gift, MapPin, Flame, PiggyBank,
-  LayoutGrid, ChevronDown, Search,
+  LayoutGrid, ChevronDown, Search, X,
   Shirt, Apple, Home as HomeIcon, Smartphone, Leaf, Gamepad2, BookOpen, Trophy, Tag,
   type LucideIcon,
 } from 'lucide-react';
@@ -91,6 +91,24 @@ const CategoryBar = () => {
   // 27/8/2026 (R106) — con Esc il pannello si chiudeva e il fuoco cadeva sul
   // corpo della pagina: chi naviga da tastiera ripartiva dall'inizio del sito.
   const pulsanteRef = useRef<HTMLButtonElement>(null);
+  const pannelloRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * 6/9/2026 — SI APRIVA, MA DA TASTIERA NON CI SI ENTRAVA.
+   * Il pannello è un fratello della riga scorrevole, quindi nell'ordine della
+   * pagina viene DOPO le sette destinazioni: chi premeva Tab dopo aver aperto
+   * «Tutte le categorie» finiva su «Tutti i negozi» della barra, non dentro al
+   * pannello appena aperto. Qui il fuoco entra sul primo link del pannello;
+   * con Esc torna sul pulsante (poco sopra). Non è una finestra modale — si
+   * chiude anche cliccando fuori — quindi niente trappola del fuoco e niente
+   * blocco dello scorrimento: si sposta il fuoco, e basta.
+   * Con preventScroll, perché il pannello si apre già sotto il pulsante: chi tocca
+   * lo schermo non deve vedersi saltare la pagina.
+   */
+  useEffect(() => {
+    if (!open) return;
+    pannelloRef.current?.querySelector<HTMLElement>('a[href]')?.focus({ preventScroll: true });
+  }, [open]);
 
   const { data: cats = [] } = useQuery({
     queryKey: ['categories', 'tree'],
@@ -107,7 +125,16 @@ const CategoryBar = () => {
 
   useEffect(() => {
     if (!open) return;
-    const onClick = (e: MouseEvent) => {
+    /**
+     * 6/9/2026 — SUL TELEFONO IL PANNELLO POTEVA RESTARE APERTO.
+     * Si ascoltava solo `mousedown`, che è un evento del mouse: su Safari iOS
+     * il tocco lo fa nascere solo sopra gli elementi che il browser considera
+     * cliccabili, quindi un dito appoggiato su un pezzo qualunque di pagina
+     * poteva non chiudere niente. `pointerdown` è lo stesso gesto per dito,
+     * penna e mouse insieme: un solo ascoltatore, tutti e tre i modi di
+     * indicare. (Il dito su un vero iPhone non l'ho potuto provare da qui.)
+     */
+    const onClick = (e: PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     };
     const onEsc = (e: KeyboardEvent) => {
@@ -115,10 +142,10 @@ const CategoryBar = () => {
       setOpen(false);
       pulsanteRef.current?.focus();
     };
-    document.addEventListener('mousedown', onClick);
+    document.addEventListener('pointerdown', onClick);
     document.addEventListener('keydown', onEsc);
     return () => {
-      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('pointerdown', onClick);
       document.removeEventListener('keydown', onEsc);
     };
   }, [open]);
@@ -202,10 +229,43 @@ const CategoryBar = () => {
       {open && (
         <div className="pointer-events-none absolute left-0 right-0 top-full z-50">
           <div className="container mx-auto px-3 sm:px-4">
+            {/* 6/9/2026 — il pannello elenca tutte le categorie principali con
+                fino a sei sottocategorie ciascuna, su telefono in due colonne:
+                diventava molto più alto dello schermo e copriva la pagina sotto.
+                Ora si ferma a 70vh e scorre dentro di sé; overscroll-contain
+                perché arrivato in fondo non trascini via la pagina. */}
             <div
+              ref={pannelloRef}
               id={PANNELLO_ID}
-              className="pointer-events-auto mt-1 w-full max-w-[900px] rounded-2xl bg-white p-5 text-ink-800 shadow-warm-lg ring-1 ring-cream-300"
+              className="pointer-events-auto mt-1 max-h-[70vh] w-full max-w-[900px] overflow-y-auto overscroll-contain rounded-2xl bg-white p-5 text-ink-800 shadow-warm-lg ring-1 ring-cream-300"
             >
+              {/*
+                6/9/2026 — DAL TELEFONO NON SI SAPEVA COME USCIRE.
+                Il pannello copre quasi tutto lo schermo e le uniche due uscite
+                erano toccare una categoria — cioè andarsene dalla pagina — o
+                ritrovare il pulsante «Tutte le categorie», che a pannello aperto
+                sta sopra il bordo e non sembra più un interruttore. Nessuna X,
+                nessun velo da toccare dietro. Qui c'è la X, come nel pannello dei
+                filtri e in quello dell'account: 44 punti di lato, il minimo per
+                un pollice, e chiudendo il fuoco torna sul pulsante che ha aperto,
+                come già fa Esc. Su schermo grande non serve e non si vede: lì il
+                mega-menu si chiude allontanando il puntatore o cliccando fuori.
+              */}
+              <div className="mb-3 flex items-center justify-between sm:hidden">
+                <span className="text-sm font-bold text-ink-900">Categorie</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    pulsanteRef.current?.focus();
+                  }}
+                  aria-label="Chiudi le categorie"
+                  className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-600 transition-colors hover:bg-cream-100 hover:text-ink-900"
+                >
+                  <X size={20} strokeWidth={2.4} aria-hidden />
+                </button>
+              </div>
+
               <div className="mb-4 flex flex-wrap gap-2 border-b border-cream-200 pb-4">
                 <Link href="/stores" onClick={() => setOpen(false)} className="inline-flex items-center gap-2 rounded-full bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-700 hover:bg-primary-100">
                   <Store size={15} strokeWidth={2.2} /> Tutti i negozi

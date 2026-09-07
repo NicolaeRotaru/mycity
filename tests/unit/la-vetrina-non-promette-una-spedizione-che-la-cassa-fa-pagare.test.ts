@@ -29,6 +29,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, sep } from 'node:path';
 import { promessaSpedizione, rispostaCostoSpedizione } from '@/lib/promesse-pubbliche';
 import { prezziDelCarrello } from '@/lib/ordini/prezzi';
+import { formatPrice } from '@/lib/format';
 import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS, VALUE_PROPS } from '@/lib/constants';
 
 const RADICE = process.cwd();
@@ -67,10 +68,10 @@ describe('la frase della vetrina nasce dalla cifra che si paga', () => {
 
     for (const frase of [sopra.titolo, sopra.breve, sotto.titolo, sotto.breve]) {
       if (PROMETTE_GRATIS.test(frase)) {
-        expect(frase, `«${frase}» promette la gratuità e tace i 3 € di consegna`).toMatch(/€3\.00/);
+        expect(frase, `«${frase}» promette la gratuità e tace i 3 € di consegna`).toContain(formatPrice(3));
       }
     }
-    expect(sopra.dettaglioConsegna).toMatch(/€3\.00/);
+    expect(sopra.dettaglioConsegna).toContain(formatPrice(3));
   });
 
   it('a consegna gratis il claim pulito torna da sé, senza riscrivere niente', () => {
@@ -81,13 +82,13 @@ describe('la frase della vetrina nasce dalla cifra che si paga', () => {
   });
 
   it('la cifra non è riscritta qui: cambiarla cambia la frase', () => {
-    expect(promessaSpedizione(35, 30, 500).titolo).toContain('€5.00');
-    expect(promessaSpedizione(35, 30, 500).dettaglioConsegna).toContain('€5.00');
+    expect(promessaSpedizione(35, 30, 500).titolo).toContain(formatPrice(5));
+    expect(promessaSpedizione(35, 30, 500).dettaglioConsegna).toContain(formatPrice(5));
   });
 
   it('sotto soglia dice quanto manca, e quanto manca viene dalla soglia', () => {
     expect(promessaSpedizione(12, 30, 300).mancano).toBe(18);
-    expect(promessaSpedizione(12, 30, 300).titolo).toContain('€18.00');
+    expect(promessaSpedizione(12, 30, 300).titolo).toContain(formatPrice(18));
   });
 });
 
@@ -113,7 +114,7 @@ describe('e la cifra è quella che la cassa addebita davvero', () => {
     expect(gruppo.deliveryFeeCents, 'se questo va a zero, la gratuità piena è vera').toBeGreaterThan(0);
     const vetrina = promessaSpedizione(35);
     expect(Math.round(vetrina.costoConsegna * 100)).toBe(gruppo.deliveryFeeCents);
-    expect(vetrina.titolo).toContain((gruppo.deliveryFeeCents / 100).toFixed(2));
+    expect(vetrina.titolo).toContain(formatPrice(gruppo.deliveryFeeCents / 100));
   });
 
   it('il totale che si paga contiene quella riga: non è un costo teorico', () => {
@@ -150,7 +151,7 @@ describe('le vetrine prendono le parole da lì, invece di riscriverle', () => {
     // E la forma corta, con la consegna a pagamento, i soldi li nomina davvero.
     if (PLATFORM_DELIVERY_FEE_CENTS > 0) {
       expect(promessaSpedizione(FREE_SHIPPING_THRESHOLD).breve).toContain(
-        (PLATFORM_DELIVERY_FEE_CENTS / 100).toFixed(2),
+        formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100),
       );
     }
   });
@@ -166,7 +167,7 @@ describe('le vetrine prendono le parole da lì, invece di riscriverle', () => {
     expect(spedizione?.subtitle).toMatch(/per negozio/);
     if (PLATFORM_DELIVERY_FEE_CENTS > 0) {
       expect(spedizione?.subtitle, 'il titolo dice «gratuita» e il sottotitolo tace i 3 €').toContain(
-        (PLATFORM_DELIVERY_FEE_CENTS / 100).toFixed(2),
+        formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100),
       );
     }
   });
@@ -174,7 +175,7 @@ describe('le vetrine prendono le parole da lì, invece di riscriverle', () => {
   it('e la risposta della FAQ dice lo stesso numero', () => {
     // Sta nello stesso file della funzione: se la fee cambia, cambia anche questa.
     if (PLATFORM_DELIVERY_FEE_CENTS > 0) {
-      expect(rispostaCostoSpedizione().a).toContain((PLATFORM_DELIVERY_FEE_CENTS / 100).toFixed(2));
+      expect(rispostaCostoSpedizione().a).toContain(formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100));
     }
   });
 });

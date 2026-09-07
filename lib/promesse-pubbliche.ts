@@ -274,9 +274,14 @@ export function promessaSpedizione(
     titolo: sopraSoglia
       ? `Spedizione gratis${coda}`
       : `Ti mancano ${formatPrice(mancano)} alla spedizione gratis${coda}`,
+    // 6/9/2026 — L'ETICHETTA CORTA DICEVA «Sped. gratis + 3,00 €», E QUEI TRE EURO NON AVEVANO UN
+    // NOME. Sulla pillola verde del catalogo — che nel sistema dei colori vuol dire «bel
+    // vantaggio» — si leggeva «gratis» e subito dopo una cifra senza sostantivo: chi guarda non sa
+    // se sono in più, in meno, o un supplemento del negozio. La cifra non si toglie (è il costo
+    // vero, ed è per dirlo prima della scelta che questa funzione esiste): si dice di che cosa è.
     breve: sopraSoglia
-      ? `Sped. gratis${costoConsegna > 0 ? ` + ${formatPrice(costoConsegna)}` : ''}`
-      : `−${formatPrice(mancano)} alla sped. gratis${costoConsegna > 0 ? ` (+${formatPrice(costoConsegna)})` : ''}`,
+      ? `Sped. gratis${costoConsegna > 0 ? ` · consegna ${formatPrice(costoConsegna)}` : ''}`
+      : `−${formatPrice(mancano)} alla sped. gratis${costoConsegna > 0 ? ` (consegna ${formatPrice(costoConsegna)})` : ''}`,
     dettaglioConsegna:
       costoConsegna > 0
         ? `Consegna MyCity ${formatPrice(costoConsegna)} per negozio, su ogni ordine a domicilio`

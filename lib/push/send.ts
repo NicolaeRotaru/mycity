@@ -23,7 +23,46 @@ export function isPushConfigured(): boolean {
   return vapidConfigured;
 }
 
-export type PushPayload = { title: string; body?: string; url?: string; tag?: string };
+export type PushPayload = {
+  title: string; body?: string; url?: string; tag?: string;
+  /** Se true il telefono avvisa di nuovo anche quando sostituisce una notifica con lo stesso `tag`. */
+  renotify?: boolean;
+};
+
+/**
+ * 6/9/2026 — QUANTO VALE UNA PUSH, E QUANTO SI ASPETTA A MANDARLA.
+ *
+ * Passo indietro: fra noi e il telefono c'e' il servizio push di Apple, Google
+ * o Mozilla. Se il telefono e' spento, quel servizio tiene il messaggio in coda
+ * e lo consegna quando si riaccende: per quanto tempo lo decide il `TTL`, e
+ * senza dirglielo web-push mette quattro settimane. Esempio vero: ordine
+ * consegnato sabato alle 19, telefono scarico, lunedi' mattina arriva «il tuo
+ * ordine e' in consegna». Un avviso d'ordine scaduto e' peggio di nessun
+ * avviso: e' il motivo per cui la gente spegne le notifiche.
+ *
+ * `urgency` dice al servizio push quanto svegliare il telefono: alta per gli
+ * ordini, normale per le promozioni (che possono aspettare la prossima volta
+ * che lo schermo si accende).
+ */
+export type PushDeliveryOptions = {
+  /** Secondi di validita': dopo, il servizio push butta il messaggio invece di consegnarlo tardi. */
+  TTL?: number;
+  urgency?: 'very-low' | 'low' | 'normal' | 'high';
+};
+
+/**
+ * 6/9/2026 — OGNI CHIAMATA FUORI CASA HA UN TETTO DI TEMPO.
+ *
+ * La chiamata al servizio push partiva senza scadenza, dentro un ciclo che va
+ * in fila: un endpoint che non risponde teneva appeso tutto il giro, Vercel
+ * spegneva la funzione dopo cinque minuti e le notifiche dietro non partivano.
+ * Cinque secondi sono il tetto che vale altrove nel progetto per le chiamate a
+ * servizi esterni. Attenzione: e' il tetto sul silenzio della connessione, non
+ * sul tempo totale della risposta.
+ */
+const TIMEOUT_INVIO_MS = 5_000;
+/** Un'ora: il tempo oltre il quale un avviso d'ordine non serve piu' a niente. */
+const TTL_PREDEFINITO_S = 3_600;
 
 type SubRow = { id: string; endpoint: string; p256dh: string; auth: string };
 
@@ -81,6 +120,7 @@ export async function sendPushToUser(
   userId: string,
   payload: PushPayload,
   iscrizioniGiaLette?: SubRow[],
+  consegna?: PushDeliveryOptions,
 ): Promise<PushSendResult> {
   if (!isPushConfigured()) return { delivered: 0, total: 0 };
   const subs = iscrizioniGiaLette ?? (await supa
@@ -96,6 +136,11 @@ export async function sendPushToUser(
       await webpush.sendNotification(
         { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
         body,
+        {
+          timeout: TIMEOUT_INVIO_MS,
+          TTL: consegna?.TTL ?? TTL_PREDEFINITO_S,
+          urgency: consegna?.urgency ?? 'high',
+        },
       );
       delivered++;
     } catch (err) {
@@ -104,9 +149,18 @@ export async function sendPushToUser(
       if (status === 404 || status === 410) {
         await supa.from('push_subscriptions').delete().eq('id', s.id);
       } else {
-        // Fallimento transitorio (es. 429/5xx): non silenziare, così il
-        // chiamante può ritentare e l'errore è visibile in Sentry.
-        logger.warn('[push] invio fallito (transitorio)', { status: status ?? 'unknown' });
+        // Fallimento transitorio (es. 429/5xx) o scadenza del tetto di tempo:
+        // non silenziare, così il chiamante può ritentare e l'errore è
+        // visibile in Sentry. Del destinatario si registra solo il servizio
+        // push (host), mai l'indirizzo completo: quello identifica la persona.
+        const messaggio = err instanceof Error ? err.message : String(err);
+        const scaduto = /timeout/i.test(messaggio);
+        let servizio = 'sconosciuto';
+        try { servizio = new URL(s.endpoint).host; } catch { /* endpoint storto: resta 'sconosciuto' */ }
+        logger.warn(
+          scaduto ? '[push] invio scaduto: il servizio push non ha risposto' : '[push] invio fallito (transitorio)',
+          { status: status ?? 'unknown', servizio, timeoutMs: scaduto ? TIMEOUT_INVIO_MS : undefined },
+        );
       }
     }
   }

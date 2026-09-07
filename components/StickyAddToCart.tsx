@@ -119,6 +119,10 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
             </div>
 
             {hasStepper && (
+              /* 6/9/2026 — I DUE TASTI DELLA QUANTITA' ERANO 36 PIXEL, NEL CARRELLO 40.
+                 Quarantaquattro e' il minimo che Apple e Google indicano per il dito, ed e' la
+                 misura che questa barra usa adesso: la stessa del carrello, cosi' lo stesso gesto
+                 ha una misura sola su tutto il percorso d'acquisto. */
               <div
                 className="flex items-center rounded-full border border-cream-300 overflow-hidden shrink-0"
                 // Stesso motivo: `aria-label` senza ruolo non veniva esposta.
@@ -130,7 +134,7 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
                   onClick={onDec}
                   disabled={canDec === false}
                   aria-label="Diminuisci quantità"
-                  className="w-9 h-9 inline-flex items-center justify-center text-ink-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-11 h-11 inline-flex items-center justify-center text-ink-700 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Minus size={16} aria-hidden />
                 </button>
@@ -152,7 +156,7 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
                   onClick={onInc}
                   disabled={canInc === false}
                   aria-label="Aumenta quantità"
-                  className="w-9 h-9 inline-flex items-center justify-center text-ink-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-11 h-11 inline-flex items-center justify-center text-ink-700 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Plus size={16} aria-hidden />
                 </button>

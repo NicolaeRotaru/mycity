@@ -709,6 +709,65 @@ async function addebitaQuotaVenditoreSeNonPagato(
   return nuovoAddebito - giaAddebitato;
 }
 
+/**
+ * 6/9/2026 — UN RIMBORSO CHE NON PUO' RIUSCIRE NON SI RITENTA.
+ *
+ * Il giro delle mezz'ore che annulla gli ordini mai accettati chiede il
+ * rimborso e, se il rimborso lancia, rimette l'ordine in «nuovo» per riprovare
+ * al giro dopo. Ma non tutti gli errori sono uguali: se Stripe non risponde
+ * riprovare e' giusto, mentre se sull'ordine non c'e' piu' niente da
+ * rimborsare — perche' un reso lo aveva gia' chiuso — riprovare non servira'
+ * mai. Quell'ordine rimbalzava fra annullato e nuovo ogni mezz'ora, per
+ * sempre, e il negozio continuava a vederselo in lista come da accettare.
+ *
+ * Da qui in avanti chi sa PERCHE' il rimborso e' fallito lo dice: gli errori
+ * senza ritorno portano il marchio `ritentabile = false`. Chi ritenta lo legge
+ * e si ferma, invece di indovinare dal testo del messaggio.
+ */
+export class RimborsoNonRitentabile extends Error {
+  /** Marchio letto da chi ritenta: il messaggio si puo' riscrivere, questo no. */
+  readonly ritentabile = false;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'RimborsoNonRitentabile';
+  }
+}
+
+/**
+ * 6/9/2026 (stesso giorno, riparazione) — «L'ORDINE NON C'E'» E «NON SONO
+ * RIUSCITO A LEGGERLO» NON SONO LA STESSA COSA.
+ *
+ * La lettura dell'ordine puo' fallire per due motivi opposti. Il primo: la
+ * riga non esiste piu', e nessun tentativo futuro la trovera'. Il secondo: il
+ * database non ha risposto — timeout, connessione caduta, PostgREST che
+ * risponde 503 — e allora fra mezz'ora lo stesso ordine si legge benissimo.
+ *
+ * Metterli nella stessa condizione (`if (error || !order)`) lo pagava il
+ * cliente: aveva pagato con la carta, l'ordine restava annullato, il rimborso
+ * portava il marchio «non ritentare mai piu'», e i soldi restavano a noi
+ * finche' una persona non leggeva l'avviso nel pannello. Prima lo stesso
+ * intoppo rimetteva l'ordine in coda e mezz'ora dopo il rimborso partiva da
+ * solo.
+ *
+ * Qui si riconosce SOLO il primo caso: PostgREST risponde `PGRST116` quando la
+ * `single()` non trova nessuna riga. Qualunque altro codice, e qualunque
+ * guasto di rete, resta ritentabile. Sui soldi di chi ha pagato l'incertezza
+ * si risolve riprovando, non tenendoli.
+ */
+function eOrdineInesistente(errore: unknown): boolean {
+  if (!errore || typeof errore !== 'object') return false;
+  const e = errore as { code?: unknown; details?: unknown; message?: unknown };
+  if (e.code === 'PGRST116') return true;
+  // Un codice diverso da PGRST116 e' un guasto (57014 timeout, 08006
+  // connessione persa, 503): si ritenta, non si giudica.
+  if (typeof e.code === 'string' && e.code !== '') return false;
+  const testo = `${typeof e.message === 'string' ? e.message : ''} ${
+    typeof e.details === 'string' ? e.details : ''
+  }`.toLowerCase();
+  return /no rows|0 rows|not found|nessuna riga/.test(testo);
+}
+
 export async function refundOrder(
   opts: RefundOrderOpts,
 ): Promise<{ refundId: string; reversedCents: number }> {
@@ -720,7 +779,18 @@ export async function refundOrder(
     () => admin.from('orders').select(senzaColonne(COLONNE_RIMBORSO, COLONNE_124)).eq('id', opts.orderId).single(),
   );
 
-  if (error || !order) throw new Error('refundOrder: ordine non trovato');
+  // Un guasto di lettura NON e' un ordine che non esiste: si riprova (vedi
+  // `eOrdineInesistente` qui sopra). Solo la riga davvero assente e' senza
+  // ritorno, e il messaggio resta quello che il giro dei rimborsi gia' scrive.
+  if (error && !eOrdineInesistente(error)) {
+    logger.error('[refundOrder] lettura ordine caduta, il rimborso si ritenta', {
+      orderId: opts.orderId,
+      code: (error as { code?: string }).code,
+      message: (error as { message?: string }).message,
+    });
+    throw new Error('refundOrder: lettura ordine non riuscita, riprovare');
+  }
+  if (!order) throw new RimborsoNonRitentabile('refundOrder: ordine non trovato');
 
   // 055 — DUE BASI DIVERSE, E IL CONTO NON TORNAVA.
   //
@@ -741,7 +811,7 @@ export async function refundOrder(
   const grossCents = order.gross_total_cents ?? Math.round(Number(order.total_price) * 100);
   const alreadyRefunded = order.refunded_amount_cents ?? 0;
   const safeAmountCents = Math.max(0, Math.min(opts.amountCents, grossCents - alreadyRefunded));
-  if (safeAmountCents <= 0) throw new Error('refundOrder: importo rimborso non valido');
+  if (safeAmountCents <= 0) throw new RimborsoNonRitentabile('refundOrder: importo rimborso non valido');
 
   // 051 — LA RIVENDICAZIONE VIENE PRIMA DEI SOLDI.
   // Prima il totale rimborsato veniva letto qui, sommato in memoria e riscritto
@@ -759,7 +829,7 @@ export async function refundOrder(
   }
   const rivendicato = Array.isArray(claimRimborso) ? claimRimborso[0] : claimRimborso;
   if (!rivendicato) {
-    throw new Error('refundOrder: rimborso già registrato o oltre il totale dell ordine');
+    throw new RimborsoNonRitentabile('refundOrder: rimborso già registrato o oltre il totale dell ordine');
   }
 
   // payment_status distingue REFUNDED (pieno) da PARTIALLY_REFUNDED (parziale).
@@ -778,7 +848,7 @@ export async function refundOrder(
   // ristorato in credito spendibile, non in contanti.
   if (!order.stripe_payment_intent) {
     if (order.payment_method !== 'cod') {
-      throw new Error('refundOrder: ordine senza payment_intent e non COD (non rimborsabile)');
+      throw new RimborsoNonRitentabile('refundOrder: ordine senza payment_intent e non COD (non rimborsabile)');
     }
     const ref = opts.idempotencyKey ?? `cod_refund_${order.id}_${safeAmountCents}`;
 

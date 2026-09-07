@@ -7,14 +7,14 @@ import { AlertTriangle, ArrowLeft, MapPin, Store, Truck, Wallet } from 'lucide-r
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { CartItem, getCart, clearCart, removeFromCart, rimuoviRigaSenzaVariante } from '@/lib/cart';
+import { CartItem, getCart, clearCart, removeFromCart, rimuoviRigaSenzaVariante, cartCount } from '@/lib/cart';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { chiaveTentativo, chiudiTentativo } from '@/lib/ordini/tentativo';
 import { chiaveDelCheckout, chiudiChiaveDelCheckout } from '@/lib/analytics/chiave-checkout';
 import { laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
 import { checkoutChiuso } from '@/lib/ordini/partenza';
 import { leggiOrdiniCod } from '@/lib/ordini/risposta-ordini-cod';
-import { formatPrice } from '@/lib/format';
+import { formatPrice, pluralize } from '@/lib/format';
 import { PICKUP_DISCOUNT_PERCENT, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingForEuro } from '@/lib/shipping';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
@@ -29,7 +29,7 @@ import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicat
 import { StepCard } from '@/components/checkout/StepCard';
 import { ScheletroCassa } from '@/components/checkout/ScheletroCassa';
 import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
-import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
+import { PaymentMethodSelector, raccogliMetodoScelto } from '@/components/checkout/PaymentMethodSelector';
 import { DeliverySlotPicker } from '@/components/checkout/DeliverySlotPicker';
 import {
   FASCE_DI_DOMANI,
@@ -47,7 +47,7 @@ import {
   giornoDaRimettere,
   metodoDaRimettere,
 } from '@/lib/bozza-checkout';
-import { OrderSummary } from '@/components/checkout/OrderSummary';
+import { OrderSummary, vaiAlPrimoBlocco } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
@@ -381,7 +381,7 @@ export default function CheckoutPage() {
     g.items.reduce((s, it) => s + it.price * it.quantity, 0);
 
   // Check stato auth all'avvio
-  const { data: authUser } = useQuery({
+  const { data: authUser, isPending: controlloAccessoInCorso } = useQuery({
     queryKey: queryKeys.checkout.authUser,
     queryFn: async () => (await supabase.auth.getUser()).data.user,
     staleTime: 60_000,
@@ -389,7 +389,7 @@ export default function CheckoutPage() {
 
   // Indirizzi salvati
   type SavedAddress = { id: string; full_name: string; address: string; city: string; zip: string; phone: string; notes: string | null; lat: number | null; lng: number | null; is_default: boolean };
-  const { data: savedAddresses = [] } = useQuery({
+  const { data: savedAddresses = [], isLoading: indirizziInArrivo } = useQuery({
     queryKey: queryKeys.checkout.userAddresses(authUser?.id ?? ''),
     enabled: !!authUser?.id,
     queryFn: async (): Promise<SavedAddress[]> => {
@@ -401,6 +401,11 @@ export default function CheckoutPage() {
       return (data ?? []) as SavedAddress[];
     },
   });
+
+  // Vero finche' non si sa se questo cliente ha indirizzi salvati: o perche' il
+  // controllo dell'accesso non e' ancora tornato, o perche' la lista e' per
+  // strada. Da ospite entrambe si spengono subito e il modulo si apre normale.
+  const nonSoAncoraGliIndirizzi = controlloAccessoInCorso || indirizziInArrivo;
 
   // Credito MyCity (gift card / punti convertiti) — spendibile sugli ordini COD.
   const { data: walletCents = 0 } = useQuery({
@@ -536,6 +541,23 @@ export default function CheckoutPage() {
   const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
   const stripeAvailable = !!STRIPE_PUBLISHABLE_KEY;
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card'>(stripeAvailable ? 'card' : 'cod');
+
+  /*
+   * Chi e' arrivato qui da «Compra ora · paghi alla consegna» trova gia'
+   * scelto quello che il pulsante gli aveva promesso.
+   *
+   * Si legge dopo il primo disegno della pagina, non dentro `useState`: la
+   * memoria della scheda del browser sul server non esiste, e leggerla mentre
+   * si costruisce la pagina farebbe partire il sito con due versioni diverse
+   * della stessa schermata. `raccogliMetodoScelto` legge e cancella: vale una
+   * volta sola, per quel viaggio.
+   */
+  useEffect(() => {
+    const scelto = raccogliMetodoScelto();
+    if (!scelto) return;
+    if (scelto === 'card' && !stripeAvailable) return;
+    setPaymentMethod(scelto);
+  }, [stripeAvailable]);
 
   // #NNN — L'ORDINE PARTITO NON TORNA INDIETRO: si puo' ordinare due volte.
   //
@@ -979,6 +1001,46 @@ export default function CheckoutPage() {
   // fotogramma, cioe' esattamente il genere di cosa che rileggendo non si vede.
   const isCheckingOut = checkoutChiuso(inPartenza, placeOrders, payWithStripe);
 
+  /*
+   * 6/9/2026 — PERCHE' L'ORDINE NON PUO' PARTIRE, IN UN POSTO SOLO.
+   *
+   * La stessa condizione era scritta due volte a mano: una nel riepilogo di
+   * fianco (desktop) e una nella barra in fondo (telefono). Due copie della
+   * stessa frase si separano al primo motivo di blocco che se ne aggiunge uno,
+   * e a separarsi sarebbe stato il pulsante del telefono — l'unico che si vede
+   * davvero quando si compra.
+   */
+  const ordineBloccato =
+    groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile;
+
+  /*
+   * 6/9/2026 — E LA FRASE CHE SPIEGA IL BLOCCO, MOTIVO PER MOTIVO.
+   *
+   * Il pulsante bloccato mandava «al primo riquadro con role=alert». I riquadri
+   * pero' li avevano solo tre motivi su quattro: quando a fermare l'ordine era
+   * la fascia di consegna — bozza salvata con «Adesso», cassa riaperta dopo le
+   * 21 — di riquadri non ce n'era nessuno, e il pulsante si premeva senza che
+   * succedesse niente.
+   *
+   * La regola adesso e' una: OGNI motivo che spegne il pulsante porta la sua
+   * frase, e la frase finisce a schermo attaccata al pulsante (`motivoBlocco`
+   * in OrderSummary). L'ordine dei rami e' quello in cui conviene sistemarli.
+   * Le due liste devono restare la stessa lista: se qui manca un motivo che
+   * sta in `ordineBloccato`, la prova
+   * `tests/unit/alla-cassa-nessun-blocco-resta-senza-il-suo-avviso.test.ts`
+   * diventa rossa.
+   */
+  const motivoDelBlocco =
+    groups.length === 0
+      ? 'Non riusciamo a leggere i prodotti del carrello. Ricarica la pagina e riprova.'
+      : stockIssues.length > 0
+        ? 'Alcuni articoli superano la disponibilità: riduci le quantità o toglili dal carrello.'
+        : variantIssues.length > 0
+          ? 'Scegli le opzioni (taglia/colore) degli articoli segnalati qui sopra.'
+          : !consegnaConfermabile
+            ? rigaQuandoArriva(consegna)
+            : null;
+
   const validateAddress = (): Partial<Record<keyof AddressForm, string>> => {
     const e: Partial<Record<keyof AddressForm, string>> = {};
     if (!form.fullName.trim()) e.fullName = 'Inserisci nome e cognome';
@@ -1119,7 +1181,13 @@ export default function CheckoutPage() {
       </Link>
       <h1 className="font-serif text-2xl sm:text-3xl font-bold text-ink-900 mb-5">Conferma il tuo ordine</h1>
 
-      <StepIndicator steps={CHECKOUT_STEPS} currentStep={2} />
+      {/* 6/9/2026 — IL TERZO PASSO NON SI ACCENDEVA MAI.
+          `currentStep` era fisso a 2: nessuna pagina passava 3, quindi «Conferma» restava grigio
+          per tutto il percorso e la barra diceva «2 di 3» anche mentre l'ordine partiva — come se
+          dopo il pagamento ci fosse ancora un passaggio. `inPartenza` diventa vero quando l'ordine
+          e' stato accettato e la pagina sta solo aspettando di sparire: e' quello il momento in cui
+          il percorso e' completo, e la barra ora lo dice. */}
+      <StepIndicator steps={CHECKOUT_STEPS} currentStep={inPartenza ? 3 : 2} />
 
       {!authUser && (
         <div className="bg-olive-50 border border-olive-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
@@ -1139,6 +1207,7 @@ export default function CheckoutPage() {
             <ShippingAddressForm
               form={form}
               savedAddresses={savedAddresses}
+              caricamento={nonSoAncoraGliIndirizzi}
               errors={errors}
               onChange={handleChange}
               onSubmit={handleSubmit}
@@ -1153,7 +1222,7 @@ export default function CheckoutPage() {
                 Qui lo si rilegge invece di fidarsi: la frase sul ritiro non deve
                 poter comparire quando il ritiro non si può fare. */}
             {RITIRO_IN_NEGOZIO_ATTIVO && pickupInStore ? (
-              <div className="flex items-center gap-2 rounded-xl border border-olive-200 bg-olive-50 px-4 py-3 text-sm text-olive-800">
+              <div className="flex items-center gap-2 rounded-lg border border-olive-200 bg-olive-50 px-4 py-3 text-sm text-olive-800">
                 <Store size={16} className="text-olive-700 shrink-0" aria-hidden /> Ritiro in negozio selezionato — nessun costo di consegna. Vai tu quando l&apos;ordine è pronto.
               </div>
             ) : (
@@ -1170,7 +1239,7 @@ export default function CheckoutPage() {
                 />
 
                 {/* Metodo + costo di consegna (invariato). */}
-                <div className="flex items-center justify-between rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 mt-3">
+                <div className="flex items-center justify-between rounded-lg border border-cream-300 bg-cream-50 px-4 py-3 mt-3">
                   <div>
                     <p className="font-bold text-ink-900">Consegna a domicilio</p>
                     <p className="text-sm text-ink-600">{rigaQuandoArriva(consegna)}{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
@@ -1206,7 +1275,7 @@ export default function CheckoutPage() {
 
             {/* Credito MyCity — solo COD in questo flusso */}
             {paymentMethod === 'cod' && walletEuro > 0 && (
-              <label className="mt-3 flex items-start gap-3 p-4 rounded-xl border-2 border-cream-300 bg-white cursor-pointer hover:border-primary-200">
+              <label className="mt-3 flex items-start gap-3 p-4 rounded-lg border-2 border-cream-300 bg-white cursor-pointer hover:border-primary-200">
                 <input
                   type="checkbox"
                   checked={useCredit}
@@ -1223,6 +1292,40 @@ export default function CheckoutPage() {
                   </p>
                 </div>
               </label>
+            )}
+
+            {/*
+                6/9/2026 — IL CREDITO SPARIVA DALLO SCHERMO SENZA UNA PAROLA.
+                La casella «Usa il mio credito MyCity» compare solo col
+                pagamento alla consegna. Scegliendo la carta spariva e il totale
+                risaliva, senza che niente dicesse perche'. Il caso tipico e'
+                proprio quello di chi ha ricevuto un buono regalo: fa la spesa,
+                sceglie la carta perche' non vuole contanti in casa, e paga
+                tutto pieno con il buono fermo nel conto.
+                Finche' il credito non passa anche da Stripe, almeno lo si
+                dice — e si offre il modo di usarlo in un tocco. */}
+            {paymentMethod === 'card' && walletEuro > 0 && (
+              <div className="mt-3 flex items-start gap-3 rounded-lg border border-cream-300 bg-cream-50 p-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700">
+                  <Wallet size={20} aria-hidden />
+                </span>
+                <div className="flex-1">
+                  <p className="font-bold text-ink-900">Hai {formatPrice(walletEuro)} di credito MyCity</p>
+                  <p className="mt-0.5 text-sm text-ink-600">
+                    Per ora il credito si usa solo pagando alla consegna. Con la carta questo ordine lo paghi per intero e il credito resta tuo, da spendere su un altro ordine.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod('cod');
+                      trackCheckoutStep('payment_method', { method: 'cod' });
+                    }}
+                    className="mt-2 rounded-lg bg-primary-700 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
+                  >
+                    Paga alla consegna e usa il credito
+                  </button>
+                </div>
+              </div>
             )}
 
             {/* NOTE PER IL RIDER — spostate qui (step conferma) come da mockup.
@@ -1373,7 +1476,12 @@ export default function CheckoutPage() {
           <Card variant="funnel" padding="none" className="overflow-hidden">
             <div className="bg-surface-50 border-b border-surface-200 px-5 py-3 flex justify-between items-center">
               <h2 className="font-serif text-lg font-bold text-ink-900">Riepilogo</h2>
-              <span className="text-xs text-ink-400">{cart.length} articoli</span>
+              {/* 6/9/2026 — QUI SI CONTAVANO LE RIGHE, NEL CARRELLO I PEZZI.
+                  Con due filoni e tre focacce il carrello scriveva «5 articoli» e questo riquadro,
+                  un tocco dopo, «2 articoli». Un numero che cala fra un passo e l'altro proprio
+                  prima di pagare fa tornare indietro a controllare se e' arrivato tutto.
+                  `cartCount` e' la stessa funzione che usa il carrello: un contatore solo. */}
+              <span className="text-xs text-ink-400">{pluralize(cartCount(cart), 'articolo', 'articoli')}</span>
             </div>
 
             <CartGroupsList groups={groups} />
@@ -1408,7 +1516,8 @@ export default function CheckoutPage() {
               total={finalTotal}
               isCheckingOut={isCheckingOut}
               paymentMethod={paymentMethod}
-              disabled={groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile}
+              disabled={ordineBloccato}
+              motivoBlocco={motivoDelBlocco}
             />
           </Card>
         </div>
@@ -1435,16 +1544,39 @@ export default function CheckoutPage() {
           <div className="text-2xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
           <div className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(finalTotal)}</div>
         </div>
+        {/*
+            6/9/2026 — SUL TELEFONO IL PULSANTE SI SPEGNEVA SENZA DIRE PERCHE'.
+            Il gemello sul computer (OrderSummary) era gia' stato sistemato:
+            resta premibile, dichiara di essere bloccato e porta sul riquadro
+            che spiega il motivo. Questo no: era spento davvero, e un pulsante
+            spento esce dal giro del tasto Tab, non risponde al tocco e non dice
+            niente. Sul telefono questo e' l'UNICO pulsante che si vede: chi
+            aveva un articolo finito nel carrello premeva nel vuoto.
+            Ora vale lo stesso schema di la'. Spento davvero solo mentre
+            l'ordine sta partendo, che e' l'unico caso in cui premere di nuovo
+            farebbe danno. */}
         <button
-          type="submit"
+          type={ordineBloccato && !isCheckingOut ? 'button' : 'submit'}
           form="checkout-form"
-          disabled={isCheckingOut || groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile}
+          disabled={isCheckingOut}
+          aria-disabled={ordineBloccato || isCheckingOut}
+          onClick={
+            ordineBloccato && !isCheckingOut
+              ? (e) => {
+                  e.preventDefault();
+                  // Rete di sicurezza: se a schermo non c'e' nessun riquadro da
+                  // raggiungere, il motivo si dice comunque. Un tocco che non
+                  // produce niente e' peggio di un pulsante spento.
+                  if (!vaiAlPrimoBlocco() && motivoDelBlocco) toast.error(motivoDelBlocco);
+                }
+              : undefined
+          }
           aria-label={
             paymentMethod === 'card'
               ? 'Paga con carta e conferma ordine'
               : 'Ordina e paga alla consegna'
           }
-          className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 text-white disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-lg font-extrabold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
+          className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 text-white disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed py-3 rounded-lg font-extrabold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
         >
           {isCheckingOut
             ? (paymentMethod === 'card' ? 'Apertura…' : 'Elaborazione…')

@@ -37,7 +37,7 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
     .maybeSingle();
   if (error) {
     logger.error('[cancel] lettura ordine fallita', { orderId: params.id, message: error.message });
-    return ApiErrors.internal('Impossibile leggere l ordine');
+    return ApiErrors.internal("Impossibile leggere l'ordine");
   }
   if (!data) return ApiErrors.notFound('Ordine non trovato');
 
@@ -47,7 +47,7 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
   if (order.user_id !== user.id) return ApiErrors.notFound('Ordine non trovato');
   if (order.delivery_status === 'CANCELED') return ApiErrors.conflict('Ordine già annullato');
   if (order.delivery_status !== 'NEW') {
-    return ApiErrors.conflict('Il negozio ha già accettato l ordine, non puoi più annullarlo.');
+    return ApiErrors.conflict("Il negozio ha già accettato l'ordine, non puoi più annullarlo.");
   }
 
   const esito = await annullaERimborsa(admin, order, {
@@ -58,13 +58,13 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
 
   if (!esito.ok) {
     if (esito.motivo === 'CONTANTI_INCASSATI') {
-      return ApiErrors.conflict('Ordine già incassato in contanti: scrivi all assistenza per la restituzione.');
+      return ApiErrors.conflict("Ordine già incassato in contanti: scrivi all'assistenza per la restituzione.");
     }
     // 27/8/2026 (R131) — Chi arriva secondo (doppio invio, ritentativo di rete)
     // trova il turno gia' preso: si dice che e' fatto, non si accredita di nuovo.
     if (esito.motivo === 'GIA_ANNULLATO') return ApiErrors.conflict('Ordine già annullato');
     if (esito.motivo === 'STRIPE_NON_CONFIGURATO') return ApiErrors.unavailable('Rimborsi non disponibili, riprova più tardi');
-    if (esito.motivo === 'RIMBORSO_FALLITO') return ApiErrors.badGateway('Rimborso fallito: ' + (esito.dettaglio ?? 'riprova'));
+    if (esito.motivo === 'RIMBORSO_FALLITO') return ApiErrors.badGateway("Il rimborso non è partito: riprova o scrivi all'assistenza.");
     return ApiErrors.internal('Annullamento fallito');
   }
 

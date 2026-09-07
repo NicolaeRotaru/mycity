@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import { sendEmail } from '@/lib/email/client';
-import { env } from '@/lib/env';
+import { preparaEmailCicloDiVita } from '@/lib/email/templates';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
-import { escapeHtml } from '@/lib/html-escape';
 import { logger } from '@/lib/logger';
 import { potaCarrelliRecuperati } from '@/lib/carrelli-abbandonati';
 
@@ -86,19 +85,35 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
       errors++;
       continue;
     }
-    const itemsList = Array.isArray(c.cart_data)
-      ? (c.cart_data as Array<{ quantity?: number; name?: string }>).slice(0, 5).map((i) => `<li>${i.quantity ?? 1}× ${escapeHtml(i.name ?? 'Prodotto')}</li>`).join('')
-      : '';
-    const first = c.full_name?.split(' ')[0] ?? '';
+    // 6/9/2026 — QUESTA EMAIL PARTIVA NUDA, MENTRE IL TEMPLATE ESISTEVA GIA'.
+    //
+    // Qui si costruivano a mano quattro paragrafi: niente <html>, niente testata
+    // col nome MyCity, niente piede coi link legali, e un pulsante terracotta
+    // scritto a mano. Intanto `lib/email/templates.ts` aveva gia'
+    // `abandoned_cart_4h` dentro il guscio comune, con lo stesso tag. Due case
+    // per lo stesso messaggio: quella che parte davvero era la nuda, cioe' la
+    // meno riconoscibile proprio nell'email che deve riportare a pagare.
+    //
+    // Il totale continua a NON comparire, ed e' voluto (vedi il template):
+    // `cart_total` e' la fotografia di quando il carrello e' stato lasciato e
+    // puo' non esistere piu'. La lista di cosa c'e' dentro basta a far tornare;
+    // il totale vero lo dice il carrello, che lo rilegge dal database.
+    const messaggio = preparaEmailCicloDiVita('abandoned_cart_4h', {
+      name: c.full_name,
+      cartItems: Array.isArray(c.cart_data)
+        ? (c.cart_data as Array<{ quantity?: number; name?: string }>)
+        : null,
+    });
+    if (!messaggio) {
+      logger.error('[abandoned-carts] template abandoned_cart_4h introvabile, non spedisco');
+      errors++;
+      continue;
+    }
     const res = await sendEmail({
       to: c.email,
-      subject: 'Hai dimenticato qualcosa nel carrello',
-      html: `<p>Ciao ${escapeHtml(first)},</p>
-             <p>Il tuo carrello (€${Number(c.cart_total).toFixed(2)}) ti aspetta.</p>
-             ${itemsList ? `<ul>${itemsList}</ul>` : ''}
-             <p><a href="${env.appUrl()}/cart" style="background:#C0492C;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">Completa l&apos;acquisto →</a></p>
-             <p style="font-size:12px;color:#888">Se hai cambiato idea, ignora questa email. Non ti scriveremo più per questo carrello.</p>`,
-      text: `Il tuo carrello ti aspetta. Totale €${Number(c.cart_total).toFixed(2)}. Vai su ${env.appUrl()}/cart.`,
+      subject: messaggio.subject,
+      html: messaggio.html,
+      text: messaggio.text,
       tags: [{ name: 'template', value: 'abandoned_cart_4h' }],
     });
     if ('ok' in res && res.ok) {

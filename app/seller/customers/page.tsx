@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Star, Moon, Lightbulb } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -154,6 +155,7 @@ export default function SellerCustomersPage() {
         <input
           type="search"
           placeholder="Cerca nome…"
+          aria-label="Cerca un cliente per nome"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="ml-auto border border-cream-300 rounded-lg px-3 py-1.5 text-sm flex-1 sm:flex-none sm:w-56"
@@ -210,6 +212,18 @@ export default function SellerCustomersPage() {
         <Lightbulb size={16} className="text-primary-600 shrink-0 mt-0.5" aria-hidden />
         <span><strong>Suggerimento</strong>: i clienti VIP valgono in media 4× di più. Considera di mandare loro un'offerta esclusiva.</span>
       </div>
+
+      {/* 6/9/2026 — Il promemoria va dove nasce la tentazione. Questa e' la
+          schermata in cui il negoziante vede nome e storico dei suoi clienti,
+          e il riquadro qui sopra lo invita a mandare offerte: l'impegno che ha
+          accettato sta al punto 9 delle condizioni, e finora non era scritto
+          da nessuna parte che lui potesse leggere. */}
+      <p className="text-xs text-ink-500">
+        Questi nomi ti arrivano per gestire gli ordini: puoi usarli per preparare,
+        consegnare e assistere chi ha comprato da te. Per mandare pubblicità serve il
+        consenso di quella persona, raccolto da te.{' '}
+        <Link href="/terms#venditori" className="underline">Punto 9 delle condizioni</Link>.
+      </p>
     </div>
   );
 }

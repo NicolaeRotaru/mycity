@@ -119,7 +119,27 @@
   /* ---- Spacing / layout ------------------------------------------------- */
   --space-0:0; --space-1:0.25rem; --space-2:0.5rem; --space-3:0.75rem; --space-4:1rem; --space-5:1.25rem;
   --space-6:1.5rem; --space-8:2rem; --space-10:2.5rem; --space-12:3rem; --space-16:4rem; --space-20:5rem;
-  --container-max: 1280px; --container-pad: 1rem; --tabbar-height: 72px;
+  --container-max: 1280px; --container-pad: 1rem;
+  /* 6/9/2026 — QUESTO NUMERO E' PIU' ALTO DELLA BARRA VERA DI 14 PIXEL, E PER
+     ORA NON SI PUO' ABBASSARE. Lascio qui la misura e il motivo, perche' il
+     prossimo non rifaccia il giro da capo.
+     L'altezza vera si conta da components/MobileTabBar.tsx: bordo di sopra (1)
+     + py-2 (8+8) + icona da 22 + gap-0.5 (2) + etichetta text-[11px] con
+     l'interlinea 1,5 che Tailwind mette su <html> (16,5) = 57,5 pixel. I 14 di
+     troppo si vedono come una striscia vuota in fondo a ogni pagina del
+     telefono (il padding del body, piu' sotto).
+     PERCHE' NON BASTA CAMBIARE IL NUMERO. --fondo-minimo qui sotto vale 96
+     pixel, ed e' 72+24: il pavimento e questa misura sono stati tarati insieme.
+     `fondoDiChiGalleggia` in lib/ui/barra-in-fondo.ts applica quel pavimento a
+     OGNI elemento per conto suo, con un `max(...)`: se questa misura scende
+     sotto 72, il banner «Metti MyCity in schermata Home» viene alzato dal
+     pavimento e il pulsante tondo dell'assistenza no — e gli finisce sopra. Lo
+     dimostra tests/unit/i-pulsanti-che-galleggiano-non-coprono-chi-compra.test.ts,
+     che diventa rosso con qualunque valore sotto 72.
+     Si sblocca facendo applicare il pavimento UNA volta in fondo alla pila
+     invece che a ogni elemento — cioe' in lib/ui/barra-in-fondo.ts, che non e'
+     di questo pacchetto. */
+  --tabbar-height: 72px;
   /* ---- Le corsie in fondo allo schermo -----------------------------------
      In fondo allo schermo si accatastano quattro cose scritte in file diversi.
      Ognuna dichiara qui quanto e' alta mentre e' a video; chi le sta sopra
@@ -247,7 +267,14 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
  * monta le regole vere in un browser finto e rifa' il conto del contrasto. */
 :where([class*="text-white"]) :is(h1, h2, h3) { color: inherit; }
 
-/* Default focus ring più visibile e on-brand */
+/* Default focus ring più visibile e on-brand.
+   6/9/2026 — QUESTO COLORE E' LA COPIA A MANO DI --focus-outline (riga 105), E
+   PER ORA RESTA COSI'. tests/unit/la-barra-in-alto-si-vede-anche-navigando-col-tasto-tab.test.ts
+   apre questo blocco e ci cerca un colore scritto per esteso, per rifare il
+   conto dello stacco sui fondi della barra in alto: una var() non la sa
+   risolvere e la prova si spegne invece di diventare piu' severa. Si sblocca
+   insegnando a quella prova a seguire il token — che sta in un file non di
+   questo pacchetto. */
 :focus-visible {
   outline: 2px solid #C0492C;
   outline-offset: 2px;
@@ -272,11 +299,13 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
 
 /* Skeleton loader shimmer */
 .skeleton {
+  /* 6/9/2026 — erano #F5EDD9 e #FBF7F0 scritti a mano: sono cream-200 e
+     cream-100, dichiarati in cima al file. */
   background: linear-gradient(
     90deg,
-    #F5EDD9 0px,
-    #FBF7F0 200px,
-    #F5EDD9 400px
+    var(--cream-200) 0px,
+    var(--cream-100) 200px,
+    var(--cream-200) 400px
   );
   background-size: 1000px 100%;
   animation: shimmer 2s linear infinite;
@@ -330,6 +359,39 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
   :root { --fondo-minimo: 1.5rem; }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ * QUANTO E' ALTO, ALMENO, IL CONTENUTO DELLA PAGINA.
+ *
+ * 6/9/2026 — OGNI PAGINA CORTA SCORREVA A VUOTO.
+ *
+ * Il <main> di app/layout.tsx aveva `min-h-screen`, cioe' «alto almeno una
+ * schermata intera». Ma sopra di lui, nello stesso flusso, c'e' la barra in
+ * alto (striscia annunci + riga logo e ricerca + barra categorie, circa 144px:
+ * --header-height) e sotto di lui c'e' il pie' di pagina piu' lo spazio
+ * riservato alla barra a schede del telefono (--tabbar-height). Somma: il
+ * documento superava SEMPRE l'altezza dello schermo, anche su una pagina con
+ * due righe dentro — il carrello vuoto, la pagina non trovata, la conferma
+ * d'ordine. Si scorreva attraverso una fascia di fondo vuoto per arrivare al
+ * pie' di pagina.
+ *
+ * Togliendo dalle 100 unita' di schermo quello che sta sopra e sotto, una
+ * pagina corta finisce esattamente in una schermata e il pie' di pagina si
+ * appoggia dove deve.
+ *
+ * PERCHE' UNA CLASSE QUI E NON UN VALORE FRA PARENTESI IN layout.tsx. La
+ * misura e' fatta di due variabili che vivono in questo file e cambiano con la
+ * larghezza (--tabbar-height vale 0 da 768px in su): scritta qui sta accanto
+ * a loro, si legge, e non dipende da come lo strumento delle classi interpreta
+ * un `calc` fra parentesi quadre.
+ *
+ * Resta un minimo: se la barra in alto e' piu' bassa di 144px — nelle aree
+ * professionali la barra categorie non c'e' — la fascia vuota si accorcia
+ * invece di sparire. Meglio piu' corta che com'era.
+ * ───────────────────────────────────────────────────────────────────────────── */
+.contenuto-almeno-una-schermata {
+  min-height: calc(100vh - var(--header-height) - var(--tabbar-height));
+}
+
 /* A11y: reduced motion override per utenti con vestibolare disorders */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -337,6 +399,20 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* 6/9/2026 — CHI CHIEDE MENO ANIMAZIONI RESTAVA SENZA IL SEGNALE DI ATTESA.
+     La regola qui sopra ferma tutto, rotelline comprese: `animate-spin` e' la
+     Loader2 di ogni pulsante che sta lavorando (Button.tsx) e di LoadingState,
+     `.skeleton` e' il grigio che scorre mentre arriva la lista. Fermarli non
+     toglie il movimento fastidioso: toglie l'unica cosa che dice «sto
+     lavorando», e il pulsante diventa un rettangolo grigio con un cerchietto
+     immobile. Chi ha quell'impostazione chiede movimento MENO invadente, non
+     zero informazione: qui girano lenti, senza scatti ne' rimbalzi. */
+  .animate-spin,
+  .skeleton {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
   }
 }
 
@@ -346,7 +422,8 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
 }
 .card-hover:hover {
   transform: translateY(-3px);
-  box-shadow: 0 12px 32px -8px rgba(192, 73, 44, 0.18);
+  /* 6/9/2026 — era la copia esatta di --shadow-hover, scritta a mano. */
+  box-shadow: var(--shadow-hover);
 }
 
 /* Pulsing dot per status live (es. "negozio aperto") */
@@ -412,8 +489,16 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
 /* ============================================================================
  * Temi del sito vetrina — attivati da [data-theme] sul contenitore /store/[id]
  * e /store/[id]/[slug]. 'classico' = default (nessun override). Regole plain
- * (fuori da @layer) per vincere sulle utility per specificità. L'accent del
- * negozio resta inline (--store-accent), quindi i temi non toccano il contrasto.
+ * (fuori da @layer) per vincere sulle utility per specificità.
+ *
+ * 6/9/2026 — QUI C'ERA SCRITTO CHE L'ACCENTO DEL NEGOZIO VIAGGIA IN UNA
+ * VARIABILE CHIAMATA --store-accent. Non era vero: le due pagine negozio la
+ * scrivevano sul contenitore e nessuno la leggeva: le sezioni il colore lo
+ * ricevono dalla prop `ctx.accent`. Chi avesse scritto una sezione nuova
+ * fidandosi di questa riga avrebbe usato var(--store-accent) e ottenuto un
+ * colore vuoto. La variabile morta e' stata tolta dalle due pagine e la riga
+ * dice come stanno le cose: i temi qui sotto toccano angoli, ombre, fondo e
+ * spaziatura — mai il colore del negozio, che arriva per prop.
  * ========================================================================== */
 
 /* Moderno: angoli netti, ombre minime */
@@ -423,12 +508,21 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
 [data-theme='moderno'] .shadow-warm-sm { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); }
 
 /* Caldo: superfici color crema al posto del bianco */
-[data-theme='caldo'] .bg-white { background-color: #FBF7F0; }
+/* 6/9/2026 — era #FBF7F0 a mano: e' cream-100. */
+[data-theme='caldo'] .bg-white { background-color: var(--cream-100); }
 
 /* Editoriale: titoli più serrati e testo più arioso, da rivista */
 [data-theme='editoriale'] h1,
 [data-theme='editoriale'] h2 { letter-spacing: -0.015em; }
-[data-theme='editoriale'] .store-richtext { font-size: 0.95rem; line-height: 1.75; }
+/* 6/9/2026 — QUI C'ERA 0.95rem, CIOE' 15,2 PIXEL.
+   .store-richtext e' il testo libero che il negoziante scrive nella sua
+   vetrina: presentazione, storia, avvisi — il testo lungo, quello che si legge
+   davvero. Il sistema fissa il testo di lettura a 16px (--text-base) e questo
+   tema lo portava sotto: chi sceglie un tema chiamato «editoriale» si aspetta
+   di leggere meglio, e otteneva lettere piu' piccole del resto del sito.
+   L'aria da rivista la fa l'interlinea (1.75, che resta) e la larghezza della
+   colonna, non il carattere rimpicciolito. */
+[data-theme='editoriale'] .store-richtext { font-size: var(--text-base); line-height: 1.75; }
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * IL PAVIMENTO DEI CAMPI SUL TELEFONO — 16px, o Safari ingrandisce la pagina.

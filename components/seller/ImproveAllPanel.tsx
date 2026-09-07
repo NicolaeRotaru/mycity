@@ -60,16 +60,24 @@ function fieldLabel(field: string): string {
   return FIELD_LABELS[field] ?? field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, ' ');
 }
 
-/** Colore del punteggio: rosso < 50, ambra < 75, verde ≥ 75. */
+/**
+ * Colore del punteggio: bordeaux sotto 50, senape sotto 75, verde oliva da 75 in su.
+ *
+ * 6/9/2026 — Qui il semaforo era verde-smeraldo, ambra e rosa: i colori che
+ * Tailwind porta di serie, non quelli di MyCity. Il negoziante vedeva dentro la
+ * sua area un codice-colore diverso da quello che impara ovunque altro sul sito
+ * (badge, stati dell'ordine, cruscotto). Ora «bene» e' olive, «attenzione» e'
+ * accent, «male» e' secondary — gli stessi tre della tabella delle coorti.
+ */
 function scoreColor(score: number): string {
-  if (score >= 75) return 'text-emerald-600';
-  if (score >= 50) return 'text-amber-600';
-  return 'text-rose-600';
+  if (score >= 75) return 'text-olive-600';
+  if (score >= 50) return 'text-accent-700';
+  return 'text-secondary-600';
 }
 function scoreBar(score: number): string {
-  if (score >= 75) return 'bg-emerald-500';
-  if (score >= 50) return 'bg-amber-500';
-  return 'bg-rose-500';
+  if (score >= 75) return 'bg-olive-600';
+  if (score >= 50) return 'bg-accent-500';
+  return 'bg-secondary-600';
 }
 
 export default function ImproveAllPanel({
@@ -176,13 +184,13 @@ export default function ImproveAllPanel({
                 </span>
                 <span className="inline-flex items-center gap-1 text-sm">
                   <span className="text-ink-400">{result.quality.before}</span>
-                  <TrendingUp size={14} className="text-emerald-600" aria-hidden />
+                  <TrendingUp size={14} className="text-olive-600" aria-hidden />
                   <span className={`font-bold ${scoreColor(result.quality.after)}`}>
                     {result.quality.after}
                   </span>
                   <span className="text-xs text-ink-400">/100</span>
                   {delta > 0 && (
-                    <span className="ml-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold text-emerald-700">
+                    <span className="ml-1 rounded-full bg-olive-100 px-1.5 py-0.5 text-xs font-semibold text-olive-700">
                       +{delta}
                     </span>
                   )}
@@ -206,13 +214,13 @@ export default function ImproveAllPanel({
 
             {/* Prezzo consigliato + netto venditore */}
             {result.pricing && result.pricing.suggested != null && (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-emerald-800">
+              <div className="rounded-lg border border-olive-200 bg-olive-50 p-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-olive-800">
                   <Tag size={15} strokeWidth={2.4} aria-hidden /> Prezzo consigliato:{' '}
                   {formatPrice(result.pricing.suggested)}
                 </div>
                 {result.pricing.netToSeller != null && (
-                  <p className="mt-1 text-xs text-emerald-700">
+                  <p className="mt-1 text-xs text-olive-700">
                     Incassi netti stimati dopo la commissione:{' '}
                     <strong>{formatPrice(result.pricing.netToSeller)}</strong>
                   </p>
@@ -232,7 +240,7 @@ export default function ImproveAllPanel({
                 <ul className="space-y-1">
                   {result.fieldNotes.map((n, i) => (
                     <li key={i} className="flex gap-2 text-sm text-ink-700">
-                      <Check size={15} className="mt-0.5 shrink-0 text-emerald-600" strokeWidth={2.6} aria-hidden />
+                      <Check size={15} className="mt-0.5 shrink-0 text-olive-600" strokeWidth={2.6} aria-hidden />
                       <span>
                         <strong className="font-semibold">{fieldLabel(n.field)}:</strong> {n.note}
                       </span>
@@ -244,14 +252,14 @@ export default function ImproveAllPanel({
 
             {/* Cosa puoi fare tu (missing) */}
             {result.quality.missing.length > 0 && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-700">
+              <div className="rounded-lg border border-accent-200 bg-accent-50 p-3">
+                <p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-accent-700">
                   <Camera size={13} strokeWidth={2.6} aria-hidden /> Cosa puoi fare tu
                 </p>
                 <ul className="space-y-1">
                   {result.quality.missing.map((m, i) => (
                     <li key={i} className="flex gap-2 text-sm text-ink-700">
-                      <AlertCircle size={14} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
+                      <AlertCircle size={14} className="mt-0.5 shrink-0 text-accent-700" aria-hidden />
                       {m}
                     </li>
                   ))}
@@ -265,7 +273,7 @@ export default function ImproveAllPanel({
       {result && !loading && (
         <div className="flex items-center justify-end gap-2 border-t border-cream-200 p-3">
           {applied ? (
-            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
+            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-olive-600">
               <Check size={16} strokeWidth={2.6} aria-hidden /> Applicato al form — controlla e salva
             </span>
           ) : (

@@ -1,7 +1,7 @@
 'use client';
 import { VendutoDa } from '@/components/products/VendutoDa';
 import { Segnala } from '@/components/Segnala';
-import { use, type CSSProperties } from 'react';
+import { use } from 'react';
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -105,7 +105,6 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
   return (
     <div
       data-theme={site.theme}
-      style={{ ['--store-accent']: accent } as CSSProperties}
       className={CONTENITORE_PAGINA_NEGOZIO}
     >
       <script

@@ -113,10 +113,18 @@ export default function AdminOrdersPage() {
       o.seller?.store_name ?? '',
       o.rider?.full_name ?? '',
       o.delivery_status,
-      String(Number(o.total_price).toFixed(2)),
+      // 6/9/2026 — L'IMPORTO USCIVA COL PUNTO E ARRIVAVA A EXCEL COME TESTO.
+      // Il file lo apre il commercialista con Excel in italiano, dove il
+      // decimale e' la virgola: «1234.50» finiva in cella come parola, non come
+      // numero, e la colonna dei totali non si sommava. Adesso e' «1234,50».
+      String(Number(o.total_price).toFixed(2)).replace('.', ','),
     ]);
+    // Il separatore e' il punto e virgola, non la virgola: e' quello che Excel
+    // in italiano si aspetta, ed e' anche l'unico che convive con la virgola
+    // dei decimali. I campi restano fra virgolette, quindi nessun testo che
+    // contenga un «;» puo' spezzare la riga.
     const csv = [headers, ...rows]
-      .map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';'))
       .join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }); // BOM per Excel IT
     const url = URL.createObjectURL(blob);

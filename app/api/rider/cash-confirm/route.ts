@@ -5,7 +5,7 @@ import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { compensoDalContante, contanteDaRimettereCents } from '@/lib/shipping';
-import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
 import { aggiornaQuadratura } from '@/lib/cassa/quadratura';
 
@@ -60,6 +60,17 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   try {
     body = Body.parse(await jsonRichiesta(req, TETTO_JSON));
   } catch (e) {
+  /**
+   * 6/9/2026 — «TROPPO GRANDE» E «DATI NON VALIDI» NON SONO LA STESSA COSA.
+   *
+   * Il tetto sul corpo lancia un errore che porta con sé lo stato giusto (413).
+   * Questo `catch` lo raccoglieva insieme a un JSON rotto e rispondeva 400
+   * «Dati non validi»: chi manda troppa roba non capisce che deve solo mandarne
+   * meno, e nei registri un limite superato non si distingue da un errore del
+   * browser. Le rotte AI questa distinzione ce l'hanno da fine agosto (R153),
+   * queste tre no.
+   */
+    if (e instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge('La richiesta è troppo grande: manda una foto più leggera.');
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 

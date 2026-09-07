@@ -1,7 +1,7 @@
 'use client';
 
 import 'leaflet/dist/leaflet.css';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Search, RadioTower, Target, MapPin, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
@@ -36,6 +36,9 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
     (defaultValue?.lat !== undefined || defaultValue?.lng !== undefined) &&
     !isValidLatLng(defaultValue?.lat, defaultValue?.lng);
 
+  // Generato, non scritto a mano: il modulo compare in piu' schermate e due campi con lo stesso
+  // identificativo farebbero leggere al lettore di schermo sempre il primo.
+  const idIndirizzo = useId();
   const [address, setAddress] = useState(defaultValue?.address ?? '');
   const [coords, setCoords] = useState(initialCoords);
   const [searching, setSearching] = useState(false);
@@ -185,11 +188,15 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
   return (
     <div className="space-y-3">
       <div>
-        <label className="block text-sm font-medium text-ink-700 mb-1">
+        {/* L'etichetta si vedeva ma il browser non la associava al campo: senza `htmlFor` e senza
+            `id` il nome del campo veniva solo dal segnaposto, che sparisce appena si scrive. E qui
+            si scrive l'indirizzo da cui dipende la zona di consegna. */}
+        <label htmlFor={idIndirizzo} className="block text-sm font-medium text-ink-700 mb-1">
           Indirizzo del negozio
         </label>
         <div className="flex flex-col sm:flex-row gap-2">
           <input
+            id={idIndirizzo}
             type="text"
             value={address}
             onChange={(e) => {
@@ -231,7 +238,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
           ) : (
             <Target size={16} aria-hidden />
           )}
-          {locating ? 'Ricerca posizione...' : 'Usa la mia posizione attuale'}
+          {locating ? 'Ricerca posizione…' : 'Usa la mia posizione attuale'}
         </button>
         <span className="text-xs text-ink-400 font-mono inline-flex items-center gap-1">
           <MapPin size={16} aria-hidden />
@@ -240,7 +247,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
       </div>
 
       {error && (
-        <p className="text-red-500 text-sm bg-red-50 border border-red-200 rounded p-2">
+        <p role="alert" className="text-sm font-medium text-secondary-600 bg-secondary-50 border border-secondary-200 rounded p-2">
           {error}
         </p>
       )}

@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pause, Play, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
-import { formatPrice } from '@/lib/format';
+import { formatPrice, formatDate } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
@@ -176,7 +176,7 @@ export default function AdminSponsoredPage() {
                   </td>
                   <td className="px-4 py-3 text-ink-700">{l.placement}{l.category_slug ? ` · ${l.category_slug}` : ''}</td>
                   <td className="px-4 py-3 text-ink-600 text-xs">
-                    {l.start_date} → {l.end_date}
+                    {formatDate(l.start_date)} → {formatDate(l.end_date)}
                   </td>
                   <td className="px-4 py-3 text-right">{formatPrice(l.daily_budget_cents / 100)}</td>
                   <td className="px-4 py-3 text-right">{formatPrice(l.spent_cents / 100)}</td>

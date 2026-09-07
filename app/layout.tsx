@@ -99,7 +99,12 @@ export const metadata: Metadata = {
     'Compra online dai negozi di Piacenza: alimentari, abbigliamento, casa, elettronica, libri. Consegna in 30-60 minuti, pagamento alla consegna.',
   manifest: '/manifest.json',
   icons: {
+    // Prima il favicon classico: e' l'indirizzo che i lettori piu' vecchi e
+    // parecchi aggregatori chiedono da soli (/favicon.ico), e fino a oggi
+    // rispondeva 404 perche' il file non esisteva. Poi l'SVG, che i browser
+    // moderni preferiscono perche' resta nitido a qualsiasi misura.
     icon: [
+      { url: '/favicon.ico', sizes: '16x16 32x32 48x48', type: 'image/x-icon' },
       { url: '/icon-192.svg', type: 'image/svg+xml' },
       { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
     ],
@@ -126,6 +131,30 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   themeColor: '#C0492C',
+  /*
+   * 6/9/2026 — LA «ZONA SICURA» DELL'IPHONE ERA SCRITTA DAPPERTUTTO E NON
+   * VALEVA DA NESSUNA PARTE.
+   *
+   * In fondo agli iPhone senza tasto casa c'è la barra grigia con cui si torna
+   * alla schermata Home. Il telefono sa quanto è alta e lo dice al sito con
+   * `env(safe-area-inset-bottom)`. Le due barre che chiudono un acquisto — la
+   * «Conferma ordine» in cassa e la «Aggiungi al carrello» sulla scheda
+   * prodotto — quella misura la chiedevano già, e così la barra a schede, i
+   * pannelli che salgono dal basso e la scheda del fattorino.
+   *
+   * Solo che il telefono quella misura la dà a zero finché la pagina non
+   * dichiara di volersi prendere tutto lo schermo, bordi arrotondati inclusi.
+   * La dichiarazione è questa riga, e non c'era in nessun punto del progetto.
+   * Risultato: tutti quei conti valevano zero e i due pulsanti che chiudono
+   * l'acquisto finivano sotto la barra grigia, dove il dito preme e non
+   * succede niente.
+   *
+   * Si può accendere adesso perché la misura ha una casa sola: la conta
+   * `bottom` una volta (lib/ui/barra-in-fondo.ts) e il padding non la conta
+   * più. Prima di quel lavoro, accendere questa riga l'avrebbe contata due
+   * volte e la barra sarebbe rimasta staccata dal fondo.
+   */
+  viewportFit: 'cover',
 };
 
 // Schema markup Organization a livello di sito
@@ -166,7 +195,30 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="dns-prefetch" href="https://api.stripe.com" />
         <link rel="dns-prefetch" href="https://challenges.cloudflare.com" />
       </head>
-      <body className={`${inter.className} bg-cream-100 text-ink-800`}>
+      {/*
+        6/9/2026, secondo giro — DELLA «ZONA SICURA» LEGGEVAMO SOLO IL BORDO DI SOTTO.
+        Accendendo `viewportFit: 'cover'` qui sopra, `env(safe-area-inset-*)` smette di
+        valere zero su un iPhone senza tasto casa. Il commento della viewport elenca chi
+        consuma il bordo DI SOTTO, e va bene. Il problema e' quello che non elencava:
+        `safe-area-inset-left` e `safe-area-inset-right` non comparivano in nessun file
+        del progetto. Col telefono ruotato, il notch e l'angolo arrotondato si mangiano
+        44 punti per lato, e il padding piu' largo che abbiamo e' 24 (`sm:px-6`): il
+        marchio in alto a sinistra e i comandi account/carrello in alto a destra
+        finivano sotto il bordo. E chi ruota il telefono spesso lo ruota apposta — e'
+        uno dei modi con cui chi vede poco si ingrandisce le cose.
+        Sta sul <body> e non su un contenitore: la barra in alto e' `relative` sul
+        telefono e `md:sticky` sul computer, cioe' resta nel flusso del documento e il
+        padding del body la protegge. Il bordo di sotto NON si tocca qui: quello ha gia'
+        la sua casa in app/globals.css e in lib/ui/barra-in-fondo.ts, e contarlo due
+        volte era il difetto di agosto.
+      */}
+      <body
+        className={`${inter.className} bg-cream-100 text-ink-800`}
+        style={{
+          paddingLeft: 'env(safe-area-inset-left, 0px)',
+          paddingRight: 'env(safe-area-inset-right, 0px)',
+        }}
+      >
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-primary-700 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold"
@@ -182,7 +234,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Navbar />
             <SellerShoppingBanner />
             <WelcomeCreditBanner />
-            <main id="main-content" className="min-h-screen">{children}</main>
+            <main id="main-content" className="contenuto-almeno-una-schermata">{children}</main>
             <Footer />
             <MobileTabBar />
             <SupportChatButton />

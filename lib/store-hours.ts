@@ -18,7 +18,18 @@ function toMinutes(hhmm: string): number {
   return h * 60 + m;
 }
 
-export function isOpenNow(intervals?: HoursInterval[], now: Date = new Date()): boolean {
+/**
+ * APERTO ADESSO? — l'orologio è quello italiano, non quello di chi esegue.
+ *
+ * Gli orari del negozio sono scritti in ora locale italiana. Chi chiama questa
+ * funzione senza passare un istante (i filtri «aperti ora» e le etichette della
+ * vetrina) prima leggeva l'orologio della macchina: nel browser di Piacenza
+ * andava bene, ma la prima resa la fa il server, che gira in UTC. Alle 13:30
+ * italiane il server leggeva 11:30 e diceva «aperto» su un negozio che chiude
+ * alle 13:00 — e la cassa, che usa già romeNow, rifiutava l'ordine. Un valore
+ * di partenza solo, per tutte e due le domande.
+ */
+export function isOpenNow(intervals?: HoursInterval[], now: Date = romeNow()): boolean {
   if (!intervals || intervals.length === 0) return false;
   const minutes = now.getHours() * 60 + now.getMinutes();
   return intervals.some(([open, close]) => {
@@ -153,7 +164,8 @@ export function motivoNegozioChiuso(nomeNegozio: string, fascia?: string | null)
   return `${nomeNegozio} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`;
 }
 
-export function formatToday(intervals?: HoursInterval[], now: Date = new Date()): string {
+/** Stessa regola di isOpenNow: l'ora è quella italiana anche qui. */
+export function formatToday(intervals?: HoursInterval[], now: Date = romeNow()): string {
   if (!intervals || intervals.length === 0) return 'Chiuso oggi';
 
   if (isOpenNow(intervals, now)) {

@@ -73,7 +73,21 @@ const DeliveryMap = ({ points, className = 'w-full h-72 rounded-lg border z-0', 
       });
 
       const center = points[0] ?? { lat: 45.0532, lng: 9.6914 }; // Piacenza centro
-      const map = L.map(divRef.current).setView([center.lat, center.lng], zoom);
+      // LA MAPPA NON SI MANGIA LO SCORRIMENTO DEL DITO.
+      // Questa mappa sta DENTRO la pagina di stato ordine, alta poche righe, con del contenuto
+      // sopra e sotto. Con le impostazioni predefinite di Leaflet il trascinamento e' acceso:
+      // chi scorre partendo da qui muove la mappa e la pagina resta ferma. Sul telefono
+      // (puntatore grossolano, cioe' un dito) il trascinamento si spegne e il dito scorre la
+      // pagina; col mouse resta acceso, perche' li' il trascinamento e' voluto e non toglie
+      // niente. La rotellina non zooma mai: fa scorrere la pagina, come ovunque.
+      const conIlDito =
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(pointer: coarse)').matches;
+      const map = L.map(divRef.current, {
+        scrollWheelZoom: false,
+        dragging: !conIlDito,
+      }).setView([center.lat, center.lng], zoom);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap',
         maxZoom: 19,

@@ -185,7 +185,11 @@ export default function SellerStoriesPage() {
                 {s.caption && <p className="text-xs p-2 text-ink-700 truncate">{s.caption}</p>}
                 <button
                   onClick={async () => {
-                    const ok = await confirmDialog({ title: 'Rimuovere storia?', danger: true });
+                    const ok = await confirmDialog({
+                      title: 'Rimuovere storia?',
+                      message: 'La storia sparirà subito dalla tua vetrina.',
+                      danger: true,
+                    });
                     if (ok) del.mutate(s.id);
                   }}
                   className="absolute bottom-2 right-2 bg-white/80 hover:bg-white text-rose-600 p-1.5 rounded-full"
@@ -207,15 +211,16 @@ export default function SellerStoriesPage() {
           <>
             <Button variant="secondary" onClick={() => setOpen(false)}>Annulla</Button>
             <Button onClick={() => create.mutate()} disabled={uploading || !image} icon={Upload}>
-              {uploading ? 'Upload…' : 'Pubblica (24h)'}
+              {uploading ? 'Carico…' : 'Pubblica (24h)'}
             </Button>
           </>
         }
       >
           <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold mb-1">Foto (verticale 3:4 consigliata)</label>
+                <label htmlFor="foto-storia" className="block text-sm font-semibold mb-1">Foto (verticale 3:4 consigliata)</label>
                 <input
+                  id="foto-storia"
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   onChange={(e) => setImage(e.target.files?.[0] ?? null)}
@@ -237,7 +242,7 @@ export default function SellerStoriesPage() {
                 className="bg-cream-50 resize-none"
               />
               <Input
-                label="Link prodotto/categoria (opz.)"
+                label="Link prodotto/categoria (facoltativo)"
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
                 placeholder="/category/alimentari"

@@ -100,6 +100,12 @@ const ENV_IMPORTANTI = [
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
   'RESEND_API_KEY',
+  // 6/9/2026 — Senza questa, in produzione non parte NESSUNA email: lib/env.ts non
+  // ripiega piu' su un mittente che nessuno ha configurato e lib/email/client.ts si
+  // ferma prima di chiamare Resend. La chiave da sola non basta — una busta senza
+  // mittente verificato Resend la rifiuta — quindi le due variabili si guardano
+  // insieme, come la coppia Upstash qui sotto.
+  'RESEND_FROM',
   'CRON_SECRET',
   'UPSTASH_REDIS_REST_URL',
   // L'altra meta' della coppia: senza, il freno anti-abuso ripiega in silenzio.

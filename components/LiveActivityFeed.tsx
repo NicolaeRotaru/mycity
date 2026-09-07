@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, Truck, Package, ShoppingCart } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
+import { statoDellaVista } from '@/lib/stato-vista';
 
 type Activity = {
   created_at: string;
@@ -33,6 +34,33 @@ function timeAgo(date: string, now: number): string {
   return `${d}g fa`;
 }
 
+/**
+ * Lo scheletro tiene lo spazio che terra' il riquadro vero: stessa scatola, stessa
+ * intestazione, righe della stessa altezza (py-2 + una riga di testo piccolo). Cinque e non
+ * otto: bastano a riempire la colonna, e ognuna in piu' e' un'animazione da far girare.
+ */
+const ScheletroAttivita = () => (
+  <section className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm" aria-busy="true">
+    <div className="flex items-center justify-between mb-4">
+      <h2 className="font-serif font-bold text-ink-900 text-lg flex items-center gap-2.5">
+        <span className="inline-block w-2.5 h-2.5 rounded-full bg-olive-500 animate-pulse-soft" />
+        Cosa sta succedendo a Piacenza
+      </h2>
+      <span className="text-xs text-ink-400 uppercase tracking-wider font-semibold">Live</span>
+    </div>
+    <ul className="space-y-1">
+      {[0, 1, 2, 3, 4].map((i) => (
+        <li key={i} className="flex items-center gap-3 py-2 border-b border-cream-200 last:border-0">
+          <span className="skeleton shrink-0 w-[18px] h-[18px] rounded-full" />
+          <span className="skeleton h-4 flex-1 rounded" />
+          <span className="skeleton h-3 w-12 shrink-0 rounded" />
+        </li>
+      ))}
+    </ul>
+    <span className="sr-only">Carico le ultime attività…</span>
+  </section>
+);
+
 const LiveActivityFeed = () => {
   const [pulse, setPulse] = useState(false);
   // null durante SSR per evitare hydration mismatch: Date.now() differisce
@@ -45,7 +73,7 @@ const LiveActivityFeed = () => {
     return () => clearInterval(id);
   }, []);
 
-  const { data: activities = [] } = useQuery({
+  const { data: activities = [], isLoading, isError } = useQuery({
     queryKey: queryKeys.home.liveFeed,
     queryFn: async () => {
       const { data } = await supabase
@@ -84,7 +112,27 @@ const LiveActivityFeed = () => {
     return () => clearTimeout(id);
   }, [activities]);
 
-  if (activities.length === 0) return null;
+  /**
+   * «NON LO SO ANCORA» NON E' «NON C'E'», E QUI DIVENTAVA UN SALTO DELLA PAGINA.
+   *
+   * `activities` parte da un elenco vuoto perche' da qualcosa deve pur partire, e `isLoading`
+   * non lo leggeva nessuno: finche' la risposta era per strada il riquadro non esisteva, poi
+   * nasceva tutto insieme — intestazione piu' otto righe — e spingeva giu' quello che c'era
+   * sotto. Da telefono, dove le due colonne diventano una sopra l'altra, si sposta la pagina
+   * mentre la persona sta gia' leggendo.
+   *
+   * Gli stati sono tre: carico · vuoto · rotto. Mentre carico disegno la scheda con la sua
+   * altezza vera; sparisco solo quando ho guardato e non c'e' niente.
+   */
+  const vista = statoDellaVista({
+    letto: !isLoading,
+    caricando: isLoading,
+    errore: isError || undefined,
+    quanti: activities.length,
+  });
+
+  if (vista.mostraScheletro) return <ScheletroAttivita />;
+  if (vista.mostraErrore || vista.mostraVuoto) return null;
 
   return (
     <section className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm">

@@ -25,6 +25,20 @@ import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 import { esitoRientroDaStripe, type EsitoRientro, type StatoConnect } from './esito-stripe';
 
+/**
+ * Quante righe d'ordine il browser accetta di leggere in una volta.
+ *
+ * 6/9/2026 — NON E' UNA SCELTA NOSTRA: e' il tetto che il server applica
+ * comunque (`supabase/config.toml`, max_rows = 1000), e lo applicava IN
+ * SILENZIO. La query qui sotto non aveva ne' limite ne' finestra: chiedeva ogni
+ * riga che il negozio avesse mai venduto, ne riceveva mille scelte dal server e
+ * il cruscotto le contava come se fossero tutte. Un panificio con 1.200 righe
+ * da gennaio leggeva un numero fermo, piu' basso del vero, proprio mentre
+ * vendeva di piu'. Adesso il tetto e' scritto qui: quando lo si tocca il
+ * cruscotto lo dice («137+»), invece di dare per buono un numero mozzato.
+ */
+const TETTO_RIGHE = 1000;
+
 export default function SellerDashboard() {
   const { profile, isSeller } = useProfile();
   const queryClient = useQueryClient();
@@ -90,14 +104,29 @@ export default function SellerDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      const [{ count: productCount }, { count: availableCount }, { data: items }, { data: storeReviews }, ordiniRes, numeriRes] = await Promise.all([
+      // Una finestra sola per tutta la lettura: gli ordini e le righe d'ordine
+      // guardano gli stessi trenta giorni. Prima ognuno se la calcolava per
+      // conto suo, in due punti diversi del file.
+      const inizio30 = new Date(Date.now() - 30 * 86400000);
+
+      const [{ count: productCount }, { count: availableCount }, righeRes, recensioniRes, ordiniRes, numeriRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }).eq('seller_id', user.id),
         supabase.from('products').select('id', { count: 'exact', head: true })
           .eq('seller_id', user.id).eq('status', 'available'),
+        // 6/9/2026 — QUI SI SCARICAVANO OGNI RIGA D'ORDINE MAI VENDUTA, senza
+        // finestra e senza limite, per contare gli articoli venduti. Il fix del
+        // 22/8 aveva messo il confine solo alla query gemella (`orders`, qui
+        // sotto): questa e' rimasta com'era. `orders!inner` serve a far valere
+        // la data sulle righe, non sull'ordine annidato.
         supabase.from('order_items')
-          .select('quantity, unit_price, orders(created_at, delivery_status, payment_status), products!inner(seller_id)')
-          .eq('products.seller_id', user.id),
-        supabase.from('store_reviews').select('rating').eq('store_id', user.id),
+          .select('id, orders!inner(created_at, delivery_status, payment_status), products!inner(seller_id)')
+          .eq('products.seller_id', user.id)
+          .gte('orders.created_at', inizio30.toISOString())
+          .limit(TETTO_RIGHE),
+        // Il voto medio lo fa il database da anni (migrazione 052, la stessa
+        // funzione che usano le vetrine): torna una riga invece di tutte le
+        // recensioni del negozio, che si fermavano a mille senza dirlo.
+        supabase.rpc('store_review_stats', { p_store_ids: [user.id] }),
         // #218 — Gli stessi ordini che leggono le altre due pagine del
         // venditore, con le stesse colonne: cosi' i tre «fatturato» diventano
         // uno solo. Qui sotto si mostrano due grandezze dette per nome —
@@ -115,7 +144,7 @@ export default function SellerDashboard() {
         supabase.from('orders')
           .select('total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, refunded_amount_cents, created_at')
           .eq('seller_id', user.id)
-          .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+          .gte('created_at', inizio30.toISOString()),
         supabase.rpc('numeri_del_negozio', { p_seller: user.id, p_giorni: 30 }),
       ]);
       if (ordiniRes.error) throw ordiniRes.error;
@@ -133,12 +162,10 @@ export default function SellerDashboard() {
       const totali = totaliDiSempre(numeri, metriche());
       const oggi = metriche(daInizioOggi);
       const sette = metriche(new Date(Date.now() - 7 * 86400000));
-      const trenta = metriche(new Date(Date.now() - 30 * 86400000));
+      const trenta = metriche(inizio30);
 
       type OrderItem = {
-        unit_price: number | string;
-        quantity: number;
-        orders?: { created_at: string | null; delivery_status?: string | null; payment_status?: string | null } | null;
+        orders?: { delivery_status?: string | null; payment_status?: string | null } | null;
       };
       // Solo gli articoli di ordini pagati e non annullati.
       //
@@ -146,38 +173,36 @@ export default function SellerDashboard() {
       // annullati e ordini mai pagati, quindi questo riquadro mostrava il numero
       // piu' alto delle tre pagine del venditore — e nessuno dei tre coincideva
       // con gli altri. La definizione unica sta in lib/metriche-venditore.
-      const itemsArr = ((items ?? []) as unknown as OrderItem[]).filter((it) =>
+      const righe = righeRes.data ?? [];
+      const itemsArr = (righe as unknown as OrderItem[]).filter((it) =>
         ordineContaNelFatturato({
           total_price: 0,
           delivery_status: it.orders?.delivery_status ?? null,
           payment_status: it.orders?.payment_status ?? null,
         }),
       );
-      const revenue = itemsArr.reduce((s, it) => s + Number(it.unit_price) * it.quantity, 0);
+      // Le righe arrivate sono quante il tetto ne concede: allora il conto qui
+      // sotto e' un «almeno», e a schermo si scrive come tale.
+      const articoliTroncati = righe.length >= TETTO_RIGHE;
 
-      const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
-      const startOf7d = new Date(Date.now() - 7 * 86400000);
-      const startOf30d = new Date(Date.now() - 30 * 86400000);
-
-      const inRange = (it: OrderItem, from: Date) => new Date(it.orders?.created_at ?? 0) >= from;
-
-      const today = itemsArr.filter((it) => inRange(it, startOfToday));
-      const last7 = itemsArr.filter((it) => inRange(it, startOf7d));
-      const last30 = itemsArr.filter((it) => inRange(it, startOf30d));
-
-      type Review = { rating: number };
-      const reviews = (storeReviews ?? []) as Review[];
-      const avgRating = reviews.length > 0
-        ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length
-        : 0;
+      // Qui si contavano anche gli articoli di oggi, di sette e di trenta
+      // giorni, e il loro venduto: quattro somme che nessun riquadro mostrava
+      // — i tre riquadri in cima leggono gli ordini, non le righe. Erano il
+      // motivo per cui serviva la storia intera del negozio.
+      type Recensioni = { avg: number | string | null; count: number | null };
+      const recensioni = ((recensioniRes.data ?? []) as Recensioni[])[0] ?? null;
+      // `numeric` e `bigint` arrivano da Postgres come testo: senza conversione
+      // «4.50» non e' un numero e la targhetta mostra un trattino.
+      const avgRating = Number(recensioni?.avg ?? 0) || 0;
+      const reviewCount = Number(recensioni?.count ?? 0) || 0;
 
       return {
         productCount: productCount ?? 0,
         availableCount: availableCount ?? 0,
+        // Articoli venduti negli ultimi trenta giorni, e se il tetto e' stato
+        // toccato. #218 — il denaro mostrato resta quello della definizione unica.
         orderCount: itemsArr.length,
-        // #218 — Il venduto per articolo resta (serve per «quanti pezzi»), ma
-        // il denaro mostrato e' quello della definizione unica.
-        vendutoArticoli: revenue,
+        articoliTroncati,
         incassato: totali.incassatoCents / 100,
         netto: totali.tuoNettoCents / 100,
         revenueToday: oggi.tuoNettoCents / 100,
@@ -186,11 +211,8 @@ export default function SellerDashboard() {
         ordiniOggi: oggi.ordini,
         ordini7: sette.ordini,
         ordini30: trenta.ordini,
-        ordersToday: today.length,
-        orders7: last7.length,
-        last30Count: last30.length,
         avgRating,
-        reviewCount: reviews.length,
+        reviewCount,
       };
     },
     enabled: isSeller,
@@ -284,9 +306,17 @@ export default function SellerDashboard() {
             </div>
           </div>
 
-          {/* Il tuo netto per periodo — stessa definizione delle altre pagine. */}
-          <div className="grid grid-cols-3 gap-2.5 sm:gap-3 mt-6">
-            <HeroStat label="Oggi" value={formatPrice(stats.revenueToday)} sub={`${stats.ordiniOggi} ordini · al netto`} />
+          {/* Il tuo netto per periodo — stessa definizione delle altre pagine.
+
+              6/9/2026 — ERANO TRE IN FILA ANCHE SUL TELEFONO. Su uno schermo da
+              360 punti a ogni riquadro restavano una sessantina di punti di
+              spazio scritto, e «€234.56» ne occupa una settantina: la cifra
+              usciva dal suo riquadro e finiva sopra quello accanto. Adesso sul
+              telefono «Oggi» — il numero che il negoziante guarda la mattina —
+              prende tutta la riga, e gli altri due stanno appaiati sotto; da
+              tablet in su tornano tutti e tre in fila. */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3 mt-6">
+            <HeroStat label="Oggi" value={formatPrice(stats.revenueToday)} sub={`${stats.ordiniOggi} ordini · al netto`} className="col-span-2 sm:col-span-1" />
             <HeroStat label="7 giorni" value={formatPrice(stats.revenue7)} sub={`${stats.ordini7} ordini · al netto`} />
             <HeroStat label="30 giorni" value={formatPrice(stats.revenue30)} sub={`${stats.ordini30} ordini · al netto`} />
           </div>
@@ -331,8 +361,17 @@ export default function SellerDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard icon={TrendingUp} tint={TINT.olive} label="Il tuo netto" value={formatPrice(stats.netto)} hint={`su ${formatPrice(stats.incassato)} incassati`} />
         <KpiCard icon={Package} tint={TINT.primary} label="Prodotti in vendita" value={stats.availableCount} hint={`su ${stats.productCount} totali`} />
-        <KpiCard icon={Star} tint={TINT.accent} label="Valutazione media" value={stats.avgRating > 0 ? `${stats.avgRating.toFixed(1)} ★` : '—'} hint={stats.reviewCount > 0 ? `${stats.reviewCount} recensioni` : 'Nessuna recensione'} />
-        <KpiCard icon={Receipt} tint={TINT.secondary} label="Articoli venduti" value={stats.orderCount} hint="Dall'inizio" />
+        <KpiCard icon={Star} tint={TINT.accent} label="Valutazione media" value={stats.avgRating > 0 ? `${stats.avgRating.toFixed(1).replace('.', ',')} ★` : '—'} hint={stats.reviewCount > 0 ? `${stats.reviewCount} recensioni` : 'Nessuna recensione'} />
+        {/* Diceva «Dall'inizio» contando mille righe scelte dal server: da qui
+            in avanti dice la finestra che ha davvero letto, e se il tetto e'
+            stato toccato mette il piu'. */}
+        <KpiCard
+          icon={Receipt}
+          tint={TINT.secondary}
+          label="Articoli venduti"
+          value={stats.articoliTroncati ? `${stats.orderCount}+` : stats.orderCount}
+          hint={stats.articoliTroncati ? 'Ultimi 30 giorni · almeno' : 'Ultimi 30 giorni'}
+        />
       </div>
 
       {/* ===== HUB: ogni funzione, ogni pagina ===== */}
@@ -411,11 +450,13 @@ const TINT: Record<'primary' | 'olive' | 'accent' | 'secondary', Tint> = {
  * A tenerlo vero è tests/unit/i-numeri-del-negozio-si-leggono, che il conto lo
  * rifà sui colori veri invece di cercare una classe.
  */
-function HeroStat({ label, value, sub }: { label: string; value: string; sub: string }) {
+function HeroStat({ label, value, sub, className = '' }: { label: string; value: string; sub: string; className?: string }) {
   return (
-    <div className="rounded-2xl bg-black/10 backdrop-blur-sm border border-white/15 px-3 py-2.5 sm:px-4 sm:py-3">
+    <div className={`min-w-0 rounded-2xl bg-black/10 backdrop-blur-sm border border-white/15 px-3 py-2.5 sm:px-4 sm:py-3 ${className}`}>
       <p className="text-xs uppercase tracking-wide text-cream-200 font-semibold">{label}</p>
-      <p className="text-lg sm:text-2xl font-bold leading-tight mt-0.5">{value}</p>
+      {/* `break-words` e' la rete: se un giorno arriva un incasso a sei cifre,
+          va a capo dentro il riquadro invece di sbordare sul vicino. */}
+      <p className="text-lg sm:text-2xl font-bold leading-tight mt-0.5 break-words">{value}</p>
       <p className="text-xs text-cream-200">{sub}</p>
     </div>
   );

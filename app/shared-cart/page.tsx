@@ -109,7 +109,7 @@ function SharedCartInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartParam, tentativo]);
 
-  if (loading) return <LoadingState message="Carico la lista..." />;
+  if (loading) return <LoadingState message="Carico la lista…" />;
 
   if (nonLetta) {
     return (

@@ -64,10 +64,10 @@ export default function OrderTimeline(p: Props) {
               <span
                 className={`relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
                   done
-                    ? 'bg-olive-500 text-white'
+                    ? 'bg-olive-600 text-white'
                     : active
                       ? 'bg-primary-600 text-white ring-4 ring-primary-100'
-                      : 'bg-cream-200 text-ink-400'
+                      : 'bg-cream-200 text-ink-600'
                 }`}
               >
                 {done ? <Check size={14} strokeWidth={3} /> : i + 1}

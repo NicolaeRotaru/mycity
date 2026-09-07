@@ -83,14 +83,18 @@ export default function HowItWorks({ className }: { className?: string }) {
         ))}
       </ol>
 
+      {/* Era un secondo pulsante pieno con lo stesso testo dell'hero — «Inizia a esplorare» —
+          e lo stesso indirizzo: due chiamate principali identiche sulla stessa pagina, che si
+          rubano l'attenzione a vicenda. La principale sta nell'hero e porta ai prodotti; qui
+          resta un link, che è quello che serve dopo aver letto i tre passi. */}
       <div className="flex justify-center mt-6">
         <HomeCtaLink
           href="/categorie"
           ctaId="howitworks_cta"
           location="how_it_works"
-          className="inline-flex items-center gap-2 bg-primary-700 hover:bg-primary-800 text-white px-6 py-3 rounded-full font-semibold transition-colors shadow-warm"
+          className="inline-flex items-center gap-1.5 min-h-[44px] px-3 text-primary-700 hover:text-primary-800 font-semibold underline underline-offset-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2 rounded-full"
         >
-          Inizia a esplorare
+          Sfoglia le categorie
           <ArrowRight size={18} strokeWidth={2.2} />
         </HomeCtaLink>
       </div>

@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { sanitizeRichText } from '@/lib/sanitize-html';
 import { homeCtaHref } from '@/lib/home-site';
 import { CLASSI_FASCIA_BANNER, CLASSI_TESTO_FASCIA_BANNER } from '@/lib/banner-vetrina';
@@ -39,7 +40,7 @@ function Block({ section }: { section: CmsSection }) {
       // aveva la sua copia dell'altezza fissa, e con essa la stessa malattia.
       return (
         <section className={CLASSI_FASCIA_BANNER}>
-          <Image src={sizedImage(c.imageUrl, 'hero')} alt={c.heading ?? ''} fill sizes="(max-width: 768px) 100vw, 1024px" className="object-cover" />
+          <Image src={sizedImage(c.imageUrl, 'hero')} alt={c.heading ?? ''} fill sizes="(max-width: 768px) 100vw, 1024px" loader={caricatoreFotoRemote} className="object-cover" />
           {overlayClass && <div className={`absolute inset-0 ${overlayClass}`} aria-hidden />}
           <div className={`${CLASSI_TESTO_FASCIA_BANNER} ${textClass}`}>
             {c.heading && <h2 className="text-2xl sm:text-3xl font-bold font-serif drop-shadow">{c.heading}</h2>}
@@ -63,7 +64,7 @@ function Block({ section }: { section: CmsSection }) {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {items.map((it, i) => (
               <div key={i} className="relative aspect-square rounded-xl overflow-hidden bg-cream-100 border border-cream-200">
-                <Image src={sizedImage(it.url, 'card')} alt={it.alt ?? ''} fill sizes="(max-width: 640px) 50vw, 33vw" className="object-cover" loading="lazy" />
+                <Image src={sizedImage(it.url, 'card')} alt={it.alt ?? ''} fill sizes="(max-width: 640px) 50vw, 33vw" loader={caricatoreFotoRemote} className="object-cover" loading="lazy" />
               </div>
             ))}
           </div>

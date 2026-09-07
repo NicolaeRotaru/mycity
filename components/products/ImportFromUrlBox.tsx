@@ -146,6 +146,7 @@ export default function ImportFromUrlBox({
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void run(); } }}
             placeholder="https://www.amazon.it/… oppure nome prodotto"
+            aria-label="Link del prodotto da importare, oppure il suo nome"
             className="flex-1 py-2.5 text-sm focus:outline-none bg-transparent focus-visible:ring-2 focus-visible:ring-primary-700 rounded"
           />
         </div>
