@@ -76,6 +76,19 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends "postgresql-client-${VERSIONE_ATTESA}"
+          # 7/9/2026 — INSTALLARE NON BASTA, E QUESTA COPIA NON E' MAI RIUSCITA.
+          #
+          # Ventuno corse dal 19 agosto, ventuno fallite, sempre sulla riga qui sotto:
+          # «pg_dump non e' la versione 17». Il pacchetto si installava benissimo. Il punto
+          # e' che il computer di turno porta gia' PostgreSQL 16, e la cartella dei suoi
+          # binari viene PRIMA di /usr/bin nel percorso di ricerca. Quindi `pg_dump`
+          # chiamato per nome restava la 16, per quanti pacchetti si installassero.
+          #
+          # Le due righe qui sotto mettono davanti la cartella della versione giusta:
+          # `export` per il controllo di questo stesso passo, $GITHUB_PATH per i passi dopo,
+          # che sono processi nuovi e altrimenti ritroverebbero la 16.
+          echo "/usr/lib/postgresql/${VERSIONE_ATTESA}/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/postgresql/${VERSIONE_ATTESA}/bin:$PATH"
           pg_dump --version
           pg_dump --version | grep -q " ${VERSIONE_ATTESA}\." || {
             echo "::error::pg_dump non e' la versione ${VERSIONE_ATTESA}: la copia userebbe un client sbagliato."
@@ -183,6 +196,19 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends "postgresql-client-${VERSIONE_ATTESA}"
+          # 7/9/2026 — INSTALLARE NON BASTA, E QUESTA COPIA NON E' MAI RIUSCITA.
+          #
+          # Ventuno corse dal 19 agosto, ventuno fallite, sempre sulla riga qui sotto:
+          # «pg_dump non e' la versione 17». Il pacchetto si installava benissimo. Il punto
+          # e' che il computer di turno porta gia' PostgreSQL 16, e la cartella dei suoi
+          # binari viene PRIMA di /usr/bin nel percorso di ricerca. Quindi `pg_dump`
+          # chiamato per nome restava la 16, per quanti pacchetti si installassero.
+          #
+          # Le due righe qui sotto mettono davanti la cartella della versione giusta:
+          # `export` per il controllo di questo stesso passo, $GITHUB_PATH per i passi dopo,
+          # che sono processi nuovi e altrimenti ritroverebbero la 16.
+          echo "/usr/lib/postgresql/${VERSIONE_ATTESA}/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/postgresql/${VERSIONE_ATTESA}/bin:$PATH"
           pg_dump --version
           pg_dump --version | grep -q " ${VERSIONE_ATTESA}\." || {
             echo "::error::pg_dump non e' la versione ${VERSIONE_ATTESA}: la copia userebbe un client sbagliato."

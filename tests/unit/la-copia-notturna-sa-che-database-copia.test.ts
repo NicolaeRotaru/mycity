@@ -36,6 +36,23 @@ describe('il lavoro che copia il database ogni notte', () => {
     expect(versioni[0]).toBe('17');
   });
 
+  it('mette la versione giusta davanti nel percorso, prima di controllarla', () => {
+    // 7/9/2026 — IL DIFETTO VERO, TROVATO GUARDANDO LE CORSE: il pacchetto si installava
+    // benissimo, ma `pg_dump` chiamato per nome restava la 16. Il computer di turno porta
+    // gia' PostgreSQL 16 e la cartella dei suoi binari viene prima nel percorso di ricerca.
+    // Ventuno corse dal 19 agosto, ventuno fallite sulla riga del controllo di versione.
+    const passi = workflow.split('- name: Installa il client Postgres').slice(1);
+    expect(passi.length, 'i passi che installano il client sono due: copia e prova di ripristino').toBe(2);
+    for (const passo of passi) {
+      const iPercorso = passo.indexOf('/usr/lib/postgresql/${VERSIONE_ATTESA}/bin');
+      const iControllo = passo.indexOf('pg_dump --version');
+      expect(iPercorso, 'la cartella della versione attesa non finisce nel percorso').toBeGreaterThan(-1);
+      expect(iPercorso, 'il percorso va sistemato PRIMA di controllare la versione').toBeLessThan(iControllo);
+      // I passi successivi sono processi nuovi: senza questa riga ritrovano la 16.
+      expect(passo.slice(0, iControllo)).toContain('>> "$GITHUB_PATH"');
+    }
+  });
+
   it('se il client installato non è quello atteso, il lavoro si ferma', () => {
     // Senza questo controllo un cambio di pacchetti passerebbe inosservato
     // fino alla prima volta che serve davvero una copia.
