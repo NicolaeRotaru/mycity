@@ -45,6 +45,10 @@ import {
   targhettaProdotti,
   targhettaValutazione,
 } from '@/lib/letture-cruscotto';
+import {
+  apriIlCruscotto, chiudiIlCruscotto, statisticheDelCruscotto,
+  type ScostamentiDelCruscotto,
+} from './aiuti/cruscotto-del-negozio';
 
 /** Com'è fatta davvero una risposta di Supabase andata male. */
 const ROTTA = { error: { message: 'function public.store_review_stats does not exist', code: '42883' } };
@@ -205,41 +209,25 @@ describe('e la pagina continua a delegare la decisione', () => {
  * `letta:` siano calcolati dalle risposte di Supabase lo tiene la rete di
  * sicurezza sul sorgente, non questa.
  */
-function cruscottoCon(stats: Record<string, unknown>) {
-  (globalThis as Record<string, unknown>).__PROFILO__ = {
-    isSeller: true,
-    profile: { id: 'negozio-1', store_name: 'Pane Quotidiano' },
-  };
-  (globalThis as Record<string, unknown>).__DATI_QUERY__ = (o: { queryKey?: readonly unknown[] }) =>
-    Array.isArray(o?.queryKey) && o.queryKey[0] === 'seller' && o.queryKey[1] === 'stats' ? stats : undefined;
-}
-
-/** Le targhette di un negozio che va bene e che abbiamo letto tutto. */
-const TUTTO_LETTO = {
-  availableCount: 9,
-  reviewCount: 8,
-  netto: targhettaNetto({ netto: '€435,00', incassato: '€600,00', finestra: 'ultimi-30-giorni' }),
-  prodotti: targhettaProdotti({ letta: true, disponibili: 9, totali: 12 }),
-  valutazione: targhettaValutazione({ letta: true, media: 4.6, quante: 8 }),
-  articoli: targhettaArticoli({ letta: true, quanti: 34, troncato: false }),
-  avviso: null,
-  revenueToday: 43.5, revenue7: 187.2, revenue30: 435,
-  ordiniOggi: 3, ordini7: 11, ordini30: 34,
-};
+/** Un negozio che va bene e di cui abbiamo letto tutto: il punto di partenza. */
+const cruscottoCon = (scostamenti: ScostamentiDelCruscotto = {}) =>
+  apriIlCruscotto(statisticheDelCruscotto({
+    netto: { netto: '\u20ac435,00', incassato: '\u20ac600,00' },
+    prodotti: { disponibili: 9, totali: 12 },
+    valutazione: { media: 4.6, quante: 8 },
+    articoli: { quanti: 34 },
+    revenueToday: 43.5, revenue7: 187.2, revenue30: 435,
+    ordiniOggi: 3, ordini7: 11, ordini30: 34,
+    ...scostamenti,
+  }));
 
 describe('e sullo schermo vero le due risposte non si somigliano', () => {
-  afterEach(() => {
-    document.body.innerHTML = '';
-    delete (globalThis as Record<string, unknown>).__DATI_QUERY__;
-    delete (globalThis as Record<string, unknown>).__PROFILO__;
-  });
+  afterEach(chiudiIlCruscotto);
 
   it('col negozio nuovo la pagina dice che recensioni non ce ne sono', async () => {
     cruscottoCon({
-      ...TUTTO_LETTO,
-      reviewCount: 0,
-      valutazione: targhettaValutazione({ letta: true, media: 0, quante: 0 }),
-      articoli: targhettaArticoli({ letta: true, quanti: 0, troncato: false }),
+      valutazione: { media: 0, quante: 0 },
+      articoli: { quanti: 0 },
     });
     const mod = await monta('app/seller/dashboard/page.tsx');
     const s = accendi(mod.default as ComponentType);
@@ -252,9 +240,7 @@ describe('e sullo schermo vero le due risposte non si somigliano', () => {
 
   it('con le recensioni non lette la pagina lo AMMETTE, e offre di riprovare', async () => {
     cruscottoCon({
-      ...TUTTO_LETTO,
-      reviewCount: null,
-      valutazione: targhettaValutazione({ letta: false, media: 0, quante: 0 }),
+      valutazione: { letta: false, media: 0, quante: 0 },
       avviso: avvisoLettureFallite(['recensioni']),
     });
     const mod = await monta('app/seller/dashboard/page.tsx');
@@ -281,7 +267,7 @@ describe('e sullo schermo vero le due risposte non si somigliano', () => {
   }, 120000);
 
   it('e l\'avviso è annunciato a chi non guarda lo schermo', async () => {
-    cruscottoCon({ ...TUTTO_LETTO, avviso: avvisoLettureFallite(['righe', 'recensioni']) });
+    cruscottoCon({ avviso: avvisoLettureFallite(['righe', 'recensioni']) });
     const mod = await monta('app/seller/dashboard/page.tsx');
     const s = accendi(mod.default as ComponentType);
     const avviso = s.radice.querySelector('[role="status"]');

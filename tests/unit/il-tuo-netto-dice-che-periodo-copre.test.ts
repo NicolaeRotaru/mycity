@@ -38,11 +38,13 @@ import {
   etichettaFinestra,
   finestraDeiTotali,
   totaliDiSempre,
+  type FinestraTotali,
   type NumeriDalDatabase,
 } from '@/lib/metriche-venditore';
+import { targhettaArticoli, targhettaNetto } from '@/lib/letture-cruscotto';
 import {
-  targhettaArticoli, targhettaNetto, targhettaProdotti, targhettaValutazione,
-} from '@/lib/letture-cruscotto';
+  apriIlCruscotto, chiudiIlCruscotto, statisticheDelCruscotto,
+} from './aiuti/cruscotto-del-negozio';
 
 /** Il conto che il browser sa fare da solo: trenta giorni, e li sa tutti. */
 const RIPIEGO = { incassatoCents: 6_000, tuoNettoCents: 4_350 };
@@ -155,30 +157,17 @@ describe('e la finestra dichiarata è quella vera, oggi', () => {
  * negoziante, non fermarsi dentro una funzione.
  */
 describe('sul cruscotto montato la finestra si legge davvero', () => {
-  afterEach(() => {
-    document.body.innerHTML = '';
-    delete (globalThis as Record<string, unknown>).__DATI_QUERY__;
-    delete (globalThis as Record<string, unknown>).__PROFILO__;
-  });
+  afterEach(chiudiIlCruscotto);
 
-  async function schermoCon(finestra: 'dall-inizio' | 'ultimi-30-giorni') {
-    (globalThis as Record<string, unknown>).__PROFILO__ = {
-      isSeller: true,
-      profile: { id: 'negozio-1', store_name: 'Pane Quotidiano' },
-    };
-    const stats = {
-      availableCount: 9,
-      reviewCount: 8,
-      netto: targhettaNetto({ netto: '€435,00', incassato: '€600,00', finestra }),
-      prodotti: targhettaProdotti({ letta: true, disponibili: 9, totali: 12 }),
-      valutazione: targhettaValutazione({ letta: true, media: 4.6, quante: 8 }),
-      articoli: targhettaArticoli({ letta: true, quanti: 34, troncato: false }),
-      avviso: null,
+  async function schermoCon(finestra: FinestraTotali) {
+    apriIlCruscotto(statisticheDelCruscotto({
+      netto: { netto: '\u20ac435,00', incassato: '\u20ac600,00', finestra },
+      prodotti: { disponibili: 9, totali: 12 },
+      valutazione: { media: 4.6, quante: 8 },
+      articoli: { quanti: 34 },
       revenueToday: 43.5, revenue7: 187.2, revenue30: 435,
       ordiniOggi: 3, ordini7: 11, ordini30: 34,
-    };
-    (globalThis as Record<string, unknown>).__DATI_QUERY__ = (o: { queryKey?: readonly unknown[] }) =>
-      Array.isArray(o?.queryKey) && o.queryKey[0] === 'seller' && o.queryKey[1] === 'stats' ? stats : undefined;
+    }));
     const mod = await monta('app/seller/dashboard/page.tsx');
     return accendi(mod.default as ComponentType);
   }

@@ -7,8 +7,8 @@ import { monta } from './aiuti/monta-componente';
 import { accendi } from './aiuti/schermo';
 import { contrasto, daEsadecimale } from './aiuti/contrasto';
 import {
-  targhettaArticoli, targhettaNetto, targhettaProdotti, targhettaValutazione,
-} from '@/lib/letture-cruscotto';
+  apriIlCruscotto, chiudiIlCruscotto, statisticheDelCruscotto,
+} from './aiuti/cruscotto-del-negozio';
 
 /**
  * 3/9/2026 — NEL CRUSCOTTO DEL NEGOZIO LE RIGHE SOTTO I NUMERI NON SI
@@ -140,43 +140,23 @@ function righeDiTesto(fascia: Element): Element[] {
 /**
  * 8/9/2026 — le quattro targhette in mezzo alla pagina non arrivano piu' come
  * numeri sciolti: arrivano gia' decise da `lib/letture-cruscotto`, che sa
- * distinguere «zero» da «non l'ho potuto leggere». Qui si costruiscono con le
- * funzioni vere, non a mano: cosi' la finta non puo' allontanarsi dal vero.
+ * distinguere «zero» da «non l'ho potuto leggere». La finta le costruisce
+ * chiamando le funzioni vere — `tests/unit/aiuti/cruscotto-del-negozio.ts` —
+ * cosi' non puo' allontanarsi dal vero.
  */
-const STATISTICHE = {
-  availableCount: 9,
-  reviewCount: 8,
-  netto: targhettaNetto({ netto: '€435,00', incassato: '€600,00', finestra: 'ultimi-30-giorni' }),
-  prodotti: targhettaProdotti({ letta: true, disponibili: 9, totali: 12 }),
-  valutazione: targhettaValutazione({ letta: true, media: 4.6, quante: 8 }),
-  articoli: targhettaArticoli({ letta: true, quanti: 34, troncato: false }),
-  avviso: null,
-  revenueToday: 43.5,
-  revenue7: 187.2,
-  revenue30: 435,
-  ordiniOggi: 3,
-  ordini7: 11,
-  ordini30: 34,
-};
-
-function apriIlCruscotto() {
-  (globalThis as Record<string, unknown>).__PROFILO__ = {
-    isSeller: true,
-    profile: { id: 'negozio-1', store_name: 'Pane Quotidiano' },
-  };
-  (globalThis as Record<string, unknown>).__DATI_QUERY__ = (o: { queryKey?: readonly unknown[] }) =>
-    Array.isArray(o?.queryKey) && o.queryKey[0] === 'seller' && o.queryKey[1] === 'stats'
-      ? STATISTICHE
-      : undefined;
-}
+const apriIlCruscottoDelNegozio = () =>
+  apriIlCruscotto(statisticheDelCruscotto({
+    netto: { netto: '\u20ac435,00', incassato: '\u20ac600,00' },
+    prodotti: { disponibili: 9, totali: 12 },
+    valutazione: { media: 4.6, quante: 8 },
+    articoli: { quanti: 34 },
+    revenueToday: 43.5, revenue7: 187.2, revenue30: 435,
+    ordiniOggi: 3, ordini7: 11, ordini30: 34,
+  }));
 
 describe('la fascia in cima al cruscotto del negozio', () => {
-  beforeEach(apriIlCruscotto);
-  afterEach(() => {
-    document.body.innerHTML = '';
-    delete (globalThis as Record<string, unknown>).__DATI_QUERY__;
-    delete (globalThis as Record<string, unknown>).__PROFILO__;
-  });
+  beforeEach(apriIlCruscottoDelNegozio);
+  afterEach(chiudiIlCruscotto);
 
   it('ogni riga stacca dal suo sfondo almeno quanto serve per leggerla', async () => {
     const colori = await tavolozza();

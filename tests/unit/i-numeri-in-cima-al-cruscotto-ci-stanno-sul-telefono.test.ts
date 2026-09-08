@@ -5,6 +5,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { ComponentType } from 'react';
 import { monta } from './aiuti/monta-componente';
 import { accendi } from './aiuti/schermo';
+import {
+  apriIlCruscotto, chiudiIlCruscotto, statisticheDelCruscotto,
+} from './aiuti/cruscotto-del-negozio';
 
 /**
  * 6/9/2026 — SUL TELEFONO L'INCASSO USCIVA DAL SUO RIQUADRO.
@@ -73,34 +76,16 @@ function numeroDellaClasse(el: Element, prefisso: string): number | null {
   return null;
 }
 
-const STATISTICHE = {
-  productCount: 24, availableCount: 21,
-  orderCount: 137, articoliTroncati: false,
-  incassato: 4210.5, netto: 3180.25,
-  // Un negozio che sta andando bene: quattro cifre prima della virgola.
-  revenueToday: 234.56, revenue7: 1234.56, revenue30: 4321.99,
-  ordiniOggi: 4, ordini7: 21, ordini30: 88,
-  avgRating: 4.6, reviewCount: 12,
-};
-
-function apriIlCruscotto() {
-  (globalThis as Record<string, unknown>).__PROFILO__ = {
-    isSeller: true,
-    profile: { id: 'negozio-1', store_name: 'Pane Quotidiano' },
-  };
-  (globalThis as Record<string, unknown>).__DATI_QUERY__ = (o: { queryKey?: readonly unknown[] }) =>
-    Array.isArray(o?.queryKey) && o.queryKey[0] === 'seller' && o.queryKey[1] === 'stats'
-      ? STATISTICHE
-      : undefined;
-}
+/** Un negozio che sta andando bene: quattro cifre prima della virgola. */
+const apriIlCruscottoDelNegozio = () =>
+  apriIlCruscotto(statisticheDelCruscotto({
+    revenueToday: 234.56, revenue7: 1234.56, revenue30: 4321.99,
+    ordiniOggi: 4, ordini7: 21, ordini30: 88,
+  }));
 
 describe('i tre riquadri dei guadagni, in cima al cruscotto del negozio', () => {
-  beforeEach(apriIlCruscotto);
-  afterEach(() => {
-    document.body.innerHTML = '';
-    delete (globalThis as Record<string, unknown>).__DATI_QUERY__;
-    delete (globalThis as Record<string, unknown>).__PROFILO__;
-  });
+  beforeEach(apriIlCruscottoDelNegozio);
+  afterEach(chiudiIlCruscotto);
 
   it('su uno schermo da 360 punti ogni cifra ci sta dentro il suo riquadro', async () => {
     const mod = await monta('app/seller/dashboard/page.tsx');
