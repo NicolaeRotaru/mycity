@@ -50,6 +50,29 @@
 -- La tabella non contiene dati di nessuna persona: solo una data e un numero.
 -- Nessuno la legge dal browser — RLS accesa e nessuna policy, cosi' passa solo
 -- il service role.
+--
+-- TUTTO DENTRO UNA TRANSAZIONE, E NON E' UN VEZZO.
+-- Fra la riga che CREA `registra_spesa_ai` e la riga che le toglie il permesso
+-- a `anon` c'erano ventotto righe di file — la 69 e la 97, nella versione con
+-- cui questo file e' nato. Senza BEGIN ogni istruzione si salva da sola: se
+-- il collegamento cade li' in mezzo — rete, ctrl-C, timeout del pooler —
+-- resta committata una funzione SECURITY DEFINER (gira coi
+-- permessi del proprietario) che chiunque, dal browser e senza account, puo'
+-- chiamare. E la prima cosa che scrive e' il freno di spesa dell'AI.
+--
+-- Non e' teorico: provato l'8/9/2026 su Postgres 16, su un database senza la
+-- 131 (cioe' com'e' la produzione). Interrotto il file dopo la creazione della
+-- funzione, `anon` ha scritto 99.999.999 centesimi nel conto di oggi e ha
+-- spento il modello per tutti. Rieseguendo poi il file INTERO il permesso si
+-- chiude, ma quei centesimi restano dentro: il danno non torna indietro da
+-- solo, va tolto a mano.
+--
+-- Con BEGIN/COMMIT le due cose diventano una sola: o esiste la funzione GIA'
+-- chiusa, o non esiste niente. Nessuna finestra, nemmeno di un millisecondo.
+-- Vale anche se chi la lancia dimentica `ON_ERROR_STOP`: a transazione
+-- abortita, il COMMIT finale si comporta da ROLLBACK.
+
+BEGIN;
 
 CREATE TABLE IF NOT EXISTS public.ai_spend_daily (
   giorno      date PRIMARY KEY,
@@ -98,3 +121,35 @@ REVOKE ALL ON FUNCTION public.registra_spesa_ai(date, bigint) FROM PUBLIC, anon,
 REVOKE ALL ON FUNCTION public.spesa_ai_di_oggi(date) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.registra_spesa_ai(date, bigint) TO service_role;
 GRANT EXECUTE ON FUNCTION public.spesa_ai_di_oggi(date) TO service_role;
+
+COMMIT;
+
+-- =========================================================
+-- RITORNO INDIETRO (rollback)
+-- =========================================================
+-- SE SI E' FERMATA A META': non c'e' niente da fare. La transazione cade
+-- tutta e il database e' rimasto identico a prima. Si rilancia e basta.
+--
+-- SE E' PASSATA e si vuole tornare indietro davvero, prima si guarda se la
+-- casa c'era gia' (cioe' se la 131 era stata applicata in passato):
+--
+--   SELECT count(*) FROM public.ai_spend_daily;
+--
+--   · Righe > 0, oppure non si sa → NON si droppa niente. La tabella e' il
+--     conto della spesa vera: buttarla vuol dire perdere il freno e ripartire
+--     da zero, cioe' spendere due volte il tetto di oggi. Il ritorno indietro
+--     onesto qui e' NON tornare indietro.
+--   · Tabella vuota e certezza che prima non esisteva (produzione, dove
+--     `SELECT 1 FROM pg_proc WHERE proname='spesa_ai_di_oggi'` dava 0 righe):
+--     allora si toglie tutto, in questo ordine e in transazione:
+--
+--       BEGIN;
+--       DROP FUNCTION IF EXISTS public.registra_spesa_ai(date, bigint);
+--       DROP FUNCTION IF EXISTS public.spesa_ai_di_oggi(date);
+--       DROP TABLE IF EXISTS public.ai_spend_daily;
+--       COMMIT;
+--
+--     Il codice regge il ritorno indietro: `lib/ai/decisioneTettoSpesa.ts` si
+--     accorge che il conto in comune non c'e' e divide il tetto per le copie
+--     attese — piu' stretto del dovuto, ma non rotto.
+-- =========================================================

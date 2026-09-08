@@ -65,10 +65,33 @@ COMMENT ON COLUMN public.orders.stock_restored_at IS
   'Quando la merce di questo ordine e'' tornata a scaffale. Lo scrive restore_stock_for_order come rivendicazione: se c''e'' gia'', la merce non si somma una seconda volta.';
 
 -- ② Il riempimento prudente: ordine gia' annullato = merce gia' tornata.
-UPDATE public.orders
-   SET stock_restored_at = COALESCE(canceled_at, now())
- WHERE delivery_status = 'CANCELED'
-   AND stock_restored_at IS NULL;
+--
+-- LA CHIAVE DI SESSIONE NON E' UN AGGIRAMENTO, E' L'UNICO MODO.
+-- `stock_restored_at` non sta nell'elenco dei campi che un client puo' toccare,
+-- e `enforce_order_update_rules` (114, riscritta dalla 127) e' un grilletto PER
+-- RIGA: senza la chiave, questa riga si ferma con
+--     ERROR: orders: modifica di un campo protetto non consentita   (42501)
+-- e fa cadere TUTTA la migrazione, colonna compresa. Su una tabella `orders`
+-- vuota non si vede — zero righe, zero grilletti — ed e' esattamente cosi' che
+-- e' passata la prima volta. Con un solo ordine annullato in tabella, no.
+--
+-- Si usa la stessa chiave delle RPC del progetto (061/063) e del riempimento
+-- della 094: dura quanto la transazione. Qui la si rimette giu' appena finito
+-- il riempimento, cosi' il resto della migrazione gira con la guardia accesa —
+-- e' la lezione ⑩ della 127: la porta si apre un attimo prima di passare, non
+-- all'inizio del giro.
+DO $riempimento$
+BEGIN
+  PERFORM set_config('mycity.allow_order_write', '1', true);
+
+  UPDATE public.orders
+     SET stock_restored_at = COALESCE(canceled_at, now())
+   WHERE delivery_status = 'CANCELED'
+     AND stock_restored_at IS NULL;
+
+  PERFORM set_config('mycity.allow_order_write', '', true);
+END
+$riempimento$;
 
 -- ③ La somma diventa una rivendicazione.
 CREATE OR REPLACE FUNCTION public.restore_stock_for_order(p_order_id uuid)

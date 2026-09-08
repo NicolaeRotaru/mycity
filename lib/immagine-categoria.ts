@@ -28,6 +28,8 @@
  * (`motivoDaSegnalare`). Un guasto che nessuno vede è un guasto che resta.
  */
 
+import { indirizzoTravestito, percorsoDelSito } from '@/lib/indirizzo-immagine-ammesso';
+
 /**
  * GLI HOST DA CUI IL BROWSER PUÒ DAVVERO SCARICARE UNA FOTO.
  *
@@ -63,7 +65,11 @@ export const SUFFISSO_HOST_STORAGE = '.supabase.co';
  * c'è ancora — e NON è un guasto: non va segnalata. Gli altri tre sono errori di
  * chi ha compilato il campo, e vanno detti.
  */
-export type MotivoSenzaFoto = 'nessuna' | 'schema-non-ammesso' | 'host-non-ammesso';
+export type MotivoSenzaFoto =
+  | 'nessuna'
+  | 'schema-non-ammesso'
+  | 'host-non-ammesso'
+  | 'indirizzo-travestito';
 
 export type FotoDiCategoria = {
   /** L'indirizzo da mettere nel tag `img`, oppure `null`: allora si vede il gradiente. */
@@ -96,12 +102,28 @@ export function fotoDiCategoria(categoria: CategoriaConFoto | null | undefined):
   // è un errore da segnalare, è un campo vuoto scritto male.
   if (indirizzo === '') return { src: null, motivo: 'nessuna' };
 
+  // ⚠️ QUI IL CONTROLLO DI PRIMA NON BASTAVA (riparato l'8/9/2026).
+  // Diceva: comincia per barra ma non per due barre. Chiudeva `//altro-sito/x.jpg`, ed è vero;
+  // ma il browser, PRIMA di leggere un indirizzo, toglie tabulazioni, a capo e ritorni carrello,
+  // e legge la barra rovescia come una barra. Quindi passavano di qui e finivano dentro il `src`
+  // di una pagina pubblica quattro travestimenti — provati eseguendo questa funzione, e riletti
+  // con il lettore di indirizzi vero (`new URL`), che per tutti e quattro risponde `evil.com`:
+  //
+  //     /<TAB>//evil.com/x.jpg       /<A CAPO>//evil.com/x.jpg
+  //     /<RITORNO>//evil.com/x.jpg   /\evil.com/x.jpg
+  //
+  // La regola giusta non si riscrive qui: è la stessa del vincolo del database (migrazione 159)
+  // e vive in `lib/indirizzo-immagine-ammesso.ts`. Una casa sola: il giorno che si stringe
+  // ancora, si stringe in un posto e vale su tutti e due i campi immagine del sito.
+  if (indirizzoTravestito(indirizzo)) {
+    return { src: null, motivo: 'indirizzo-travestito', scartato: indirizzo };
+  }
+
   // Un percorso del sito («/immagini/categorie/alimentari.jpg»): `'self'` è il
-  // primo permesso della CSP, quindi si carica sempre. Ma `//altro-sito/x.jpg`
-  // NON è un percorso del sito: è un indirizzo esterno travestito, e comincia
-  // per barra uguale. Va escluso a mano, o passerebbe di qui senza controlli.
-  if (indirizzo.startsWith('/') && !indirizzo.startsWith('//')) {
-    return { src: indirizzo, motivo: null };
+  // primo permesso della CSP, quindi si carica sempre.
+  if (indirizzo.startsWith('/')) {
+    if (percorsoDelSito(indirizzo)) return { src: indirizzo, motivo: null };
+    return { src: null, motivo: 'indirizzo-travestito', scartato: indirizzo };
   }
 
   let url: URL;
@@ -117,6 +139,16 @@ export function fotoDiCategoria(categoria: CategoriaConFoto | null | undefined):
   // bloccato comunque dal browser su un sito in https).
   if (url.protocol !== 'https:') {
     return { src: null, motivo: 'schema-non-ammesso', scartato: indirizzo };
+  }
+
+  // Un nome utente prima della chiocciola sposta il dominio senza che si veda.
+  // `https://images.pexels.com@evil.com/x.jpg` è già fermato qui sotto dall'elenco degli host
+  // (il dominio vero, quello che legge il browser, è `evil.com`), ma
+  // `https://evil.com@images.pexels.com/x.jpg` passerebbe: l'host è ammesso davvero. Nessuna
+  // foto ha bisogno di un nome utente, quindi si scarta. Il vincolo del database questo non lo
+  // vede — guarda la forma, e questa forma è regolare.
+  if (url.username !== '' || url.password !== '') {
+    return { src: null, motivo: 'indirizzo-travestito', scartato: indirizzo };
   }
 
   const host = url.hostname.toLowerCase();
@@ -137,6 +169,10 @@ export function fotoDiCategoria(categoria: CategoriaConFoto | null | undefined):
  */
 export function motivoDaSegnalare(esito: FotoDiCategoria): string | null {
   switch (esito.motivo) {
+    case 'indirizzo-travestito':
+      // Questo non è un errore di battitura: è un indirizzo che sembra una foto di casa nostra e
+      // porta altrove. Va scritto nei log con parole sue, o si perde in mezzo ai refusi.
+      return `l'indirizzo della foto sembra un percorso di questo sito ma porta su un altro sito: il browser lo leggerebbe in modo diverso da come è scritto (scartato: ${esito.scartato ?? ''})`;
     case 'schema-non-ammesso':
       return `l'indirizzo della foto non è utilizzabile: serve un indirizzo che comincia per https:// oppure un percorso del sito che comincia per / (scartato: ${esito.scartato ?? ''})`;
     case 'host-non-ammesso':

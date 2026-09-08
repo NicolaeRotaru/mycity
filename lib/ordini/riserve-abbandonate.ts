@@ -1,6 +1,17 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import type { RiserveLiberate } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
+import {
+  SESSIONE_NON_GUARDATA,
+  TETTO_TENTATIVI_APERTI,
+  tentativiApertiDaLiberare,
+  type RigaTentativo,
+} from '@/lib/ordini/tentativi-aperti-da-liberare';
+import {
+  destinoDellaPagina,
+  dopoIlRifiutoDiStripe,
+  type EsitoChiusura,
+} from '@/lib/ordini/che-fine-ha-fatto-la-pagina-di-pagamento';
 
 /**
  * LA MERCE CHE RESTA IMPEGNATA DA CHI HA GIÀ CAMBIATO IDEA.
@@ -66,15 +77,26 @@ import type { RiserveLiberate } from '@/lib/ordini/ordine-in-contanti-puo-nascer
  *   ② lo stato resta coerente: la riga rimane `PENDING` con la sua merce
  *      impegnata, quindi al tentativo successivo si riprova da capo. Il freno
  *      non è di un solo giro, è scritto nei dati.
+ *
+ * ── 8/9/2026 (secondo giro): UN CANCELLO CIECO NON È UN CANCELLO ────────────
+ * Tre cose, tutte nello stesso verso — quello che non fa incassare due volte.
+ *
+ * ① **Si guardano tutti i tentativi aperti, non i primi dieci che capitano.**
+ *    La lettura chiedeva `.limit(10)` senza nemmeno dire in che ordine, e il
+ *    filtro sui prodotti girava DOPO, qui in JavaScript: all'undicesimo
+ *    tentativo aperto il cancello smetteva di vedere, in silenzio, e la pagina
+ *    vecchia restava viva. Adesso la scelta di chi guardare vive in
+ *    `tentativiApertiDaLiberare`, che è pura e si può eseguire in una prova.
+ * ② **«Non ho potuto guardare» non si dice più «non c'è niente di pagabile».**
+ *    Se la lettura dei tentativi fallisce, o se il controllo sugli ordini già
+ *    creati fallisce, esce un `ancoraPagabili` che contiene almeno
+ *    `SESSIONE_NON_GUARDATA`: i cancelli a valle si fermano, come si fermano
+ *    davanti a una pagina viva. Prima la stessa situazione lasciava passare.
+ * ③ **La pagina già scaduta da sé non blocca più i contanti.** Stripe rifiuta
+ *    `expire` sia sulla pagina viva sia su quella già scaduta: adesso, dopo il
+ *    rifiuto, si va a guardare com'è messa (`destinoDellaPagina`) invece di
+ *    dare per scontato il peggio. Solo `expired` apre la strada.
  */
-
-type Riga = {
-  id: string;
-  groups?: Array<{ items?: Array<{ productId: string; quantity: number; variantId?: string | null }> }> | null;
-  coupon_code?: string | null;
-  stripe_session_id?: string | null;
-  delivery?: { impronta_carrello?: string | null } | null;
-};
 
 /** Il poco che serve del client di servizio: così la prova può eseguirla davvero. */
 export type ClientRiserve = Pick<SupabaseClient, 'from' | 'rpc'>;
@@ -84,10 +106,35 @@ export type ClientRiserve = Pick<SupabaseClient, 'from' | 'rpc'>;
  *
  * Si carica solo quando c'è davvero una pagina da chiudere: così questo modulo
  * resta leggero per chi lo importa e per le prove che non hanno Stripe.
+ *
+ * Il caso normale è una chiamata sola (`expire` riesce). La seconda chiamata —
+ * la riletta — si paga solo quando Stripe ha detto no, ed è quella che
+ * distingue «ancora viva» da «già scaduta da sé»: senza, un ordine in contanti
+ * restava bloccato per mezz'ora da una pagina che non incassava più niente.
  */
-async function chiudiSuStripe(sessionId: string): Promise<void> {
+async function chiudiSuStripe(sessionId: string): Promise<EsitoChiusura> {
   const { getStripe } = await import('@/lib/stripe/client');
-  await getStripe().checkout.sessions.expire(sessionId);
+  const stripe = getStripe();
+  try {
+    await stripe.checkout.sessions.expire(sessionId);
+    return 'chiusa';
+  } catch (rifiuto) {
+    let sessione: { status?: string | null; payment_status?: string | null } | null = null;
+    try {
+      sessione = await stripe.checkout.sessions.retrieve(sessionId);
+    } catch (illeggibile) {
+      logger.warn('[riserve] pagina di pagamento non rileggibile dopo il rifiuto', {
+        sessione: sessionId, illeggibile,
+      });
+    }
+    const destino = destinoDellaPagina(sessione);
+    if (destino !== 'gia_morta') {
+      logger.error('[riserve] pagina di pagamento NON chiusa', { sessione: sessionId, destino, rifiuto });
+    } else {
+      logger.info('[riserve] pagina di pagamento gia scaduta da se: niente da chiudere', { sessione: sessionId });
+    }
+    return dopoIlRifiutoDiStripe(destino);
+  }
 }
 
 export async function liberaRiserveAbbandonate(
@@ -106,32 +153,39 @@ export async function liberaRiserveAbbandonate(
      * NON serve passarla: la pagina di pagamento la chiude questa funzione, da
      * sola, su Stripe. Esiste solo perché le prove possano guardare che venga
      * chiusa davvero, senza parlare con Stripe.
+     *
+     * Chi la passa può rispondere con un `EsitoChiusura`; chi non risponde
+     * niente (`void`) viene inteso come «chiusa», ed è il caso normale.
      */
-    chiudiSessione?: (sessionId: string) => Promise<void>;
+    chiudiSessione?: (sessionId: string) => Promise<void | EsitoChiusura>;
   },
 ): Promise<RiserveLiberate> {
+  // Si chiede una riga IN PIÙ del tetto apposta: è così che ci si accorge di
+  // averlo superato invece di tagliare in silenzio.
   const { data, error } = await admin
     .from('pending_checkouts')
-    .select('id, groups, coupon_code, stripe_session_id, delivery')
+    .select('id, created_at, groups, coupon_code, stripe_session_id, delivery')
     .eq('buyer_id', opzioni.buyerId)
     .eq('status', 'PENDING')
-    .limit(10);
+    .limit(TETTO_TENTATIVI_APERTI + 1);
 
-  if (error) {
-    // Non si ferma l'acquisto per questo: si va avanti come prima e resta scritto.
-    logger.warn('[riserve] tentativi aperti non letti', { message: error.message });
-    return { liberati: [], ancoraPagabili: [] };
+  const selezione = tentativiApertiDaLiberare(
+    { righe: (data ?? null) as RigaTentativo[] | null, errore: error, tetto: TETTO_TENTATIVI_APERTI },
+    { improntaDaTenere: opzioni.improntaDaTenere, soloConProdotti: opzioni.soloConProdotti ?? null },
+  );
+
+  if (!selezione.guardati) {
+    // Qui non si sa se una pagina di pagamento vecchia sia ancora viva. Andare
+    // avanti vorrebbe dire aprirne una seconda sugli stessi articoli: si dice
+    // «non ho potuto guardare», e i cancelli a valle si fermano.
+    logger.error('[riserve] tentativi aperti NON guardati: non si incassa', {
+      perche: selezione.perche,
+      dettaglio: selezione.dettaglio,
+    });
+    return { liberati: [], ancoraPagabili: [SESSIONE_NON_GUARDATA] };
   }
 
-  const daLiberare = opzioni.soloConProdotti ? new Set(opzioni.soloConProdotti) : null;
-  const prodottiDi = (r: Riga) =>
-    (r.groups ?? []).flatMap((g) => (g.items ?? []).map((it) => it.productId));
-
-  const candidati = ((data ?? []) as Riga[]).filter(
-    (r) =>
-      (r.delivery?.impronta_carrello ?? null) !== (opzioni.improntaDaTenere ?? null) &&
-      (!daLiberare || prodottiDi(r).some((id) => daLiberare.has(id))),
-  );
+  const candidati = selezione.candidati;
   if (candidati.length === 0) return { liberati: [], ancoraPagabili: [] };
 
   // ① Chi ha già degli ordini non si tocca: la merce è stata venduta davvero.
@@ -143,8 +197,12 @@ export async function liberaRiserveAbbandonate(
       .select('stripe_session_id')
       .in('stripe_session_id', sessioni);
     if (errOrdini) {
-      logger.warn('[riserve] controllo ordini fallito: non libero niente', { message: errOrdini.message });
-      return { liberati: [], ancoraPagabili: [] };
+      // Non si libera niente, come prima. Ma adesso lo si DICE anche a chi ha
+      // chiamato: quelle pagine potrebbero essere vive, e nessuno le ha chiuse.
+      logger.error('[riserve] controllo ordini fallito: non libero niente e non si incassa', {
+        message: errOrdini.message,
+      });
+      return { liberati: [], ancoraPagabili: [SESSIONE_NON_GUARDATA] };
     }
     for (const o of (ordini ?? []) as Array<{ stripe_session_id?: string | null }>) {
       if (o.stripe_session_id) conOrdini.add(o.stripe_session_id);
@@ -166,13 +224,22 @@ export async function liberaRiserveAbbandonate(
     // è esattamente la coppia che fa pagare due volte. E se il motivo del
     // fallimento è che la pagina è appena stata PAGATA, fermarsi qui salva un
     // pagamento buono dal rimborso automatico.
+    //
+    // Unica eccezione, ed è il motivo per cui qui non basta un sì/no: la pagina
+    // già SCADUTA da sé. Stripe rifiuta `expire` anche su quella, ma quella non
+    // incassa più niente — trattarla come viva bloccava un ordine in contanti
+    // per mezz'ora, con un «riprova» che non poteva funzionare.
     if (riga.stripe_session_id) {
+      let esito: EsitoChiusura;
       try {
-        await (opzioni.chiudiSessione ?? chiudiSuStripe)(riga.stripe_session_id);
+        esito = (await (opzioni.chiudiSessione ?? chiudiSuStripe)(riga.stripe_session_id)) ?? 'chiusa';
       } catch (e) {
         logger.error('[riserve] pagamento vecchio non chiuso: non libero niente di questo tentativo', {
           id: riga.id, sessione: riga.stripe_session_id, e,
         });
+        esito = 'ancora_pagabile';
+      }
+      if (esito === 'ancora_pagabile') {
         ancoraPagabili.push(riga.stripe_session_id);
         continue;
       }
