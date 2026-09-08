@@ -6,6 +6,9 @@ import type { ComponentType } from 'react';
 import { monta } from './aiuti/monta-componente';
 import { accendi } from './aiuti/schermo';
 import { contrasto, daEsadecimale } from './aiuti/contrasto';
+import {
+  targhettaArticoli, targhettaNetto, targhettaProdotti, targhettaValutazione,
+} from '@/lib/letture-cruscotto';
 
 /**
  * 3/9/2026 — NEL CRUSCOTTO DEL NEGOZIO LE RIGHE SOTTO I NUMERI NON SI
@@ -134,24 +137,26 @@ function righeDiTesto(fascia: Element): Element[] {
   });
 }
 
+/**
+ * 8/9/2026 — le quattro targhette in mezzo alla pagina non arrivano piu' come
+ * numeri sciolti: arrivano gia' decise da `lib/letture-cruscotto`, che sa
+ * distinguere «zero» da «non l'ho potuto leggere». Qui si costruiscono con le
+ * funzioni vere, non a mano: cosi' la finta non puo' allontanarsi dal vero.
+ */
 const STATISTICHE = {
-  productCount: 12,
   availableCount: 9,
-  orderCount: 34,
-  vendutoArticoli: 812,
-  incassato: 600,
-  netto: 435,
+  reviewCount: 8,
+  netto: targhettaNetto({ netto: '€435,00', incassato: '€600,00', finestra: 'ultimi-30-giorni' }),
+  prodotti: targhettaProdotti({ letta: true, disponibili: 9, totali: 12 }),
+  valutazione: targhettaValutazione({ letta: true, media: 4.6, quante: 8 }),
+  articoli: targhettaArticoli({ letta: true, quanti: 34, troncato: false }),
+  avviso: null,
   revenueToday: 43.5,
   revenue7: 187.2,
   revenue30: 435,
   ordiniOggi: 3,
   ordini7: 11,
   ordini30: 34,
-  ordersToday: 3,
-  orders7: 11,
-  last30Count: 34,
-  avgRating: 4.6,
-  reviewCount: 8,
 };
 
 function apriIlCruscotto() {

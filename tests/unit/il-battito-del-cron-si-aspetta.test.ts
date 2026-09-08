@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
 
-const { upsert, warn } = vi.hoisted(() => ({ upsert: vi.fn(), warn: vi.fn() }));
+const { upsert, warn, error } = vi.hoisted(() => ({ upsert: vi.fn(), warn: vi.fn(), error: vi.fn() }));
 
 vi.mock('@/lib/supabase/server', () => ({
   getCurrentUser: vi.fn(),
@@ -10,7 +10,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 vi.mock('@/lib/logger', () => ({
-  logger: { warn, error: vi.fn(), info: vi.fn(), debug: vi.fn() },
+  logger: { warn, error, info: vi.fn(), debug: vi.fn() },
 }));
 
 import { withCronAuth } from '@/lib/api/middleware';
@@ -98,10 +98,32 @@ describe('il battito del lavoro periodico si aspetta, non si spara', () => {
     expect(warn, 'il battito e caduto e nessuno l ha scritto da nessuna parte').toHaveBeenCalled();
   });
 
-  it('un lavoro fallito non lascia il battito: sarebbe un sensore che mente', async () => {
+  /**
+   * 8/9/2026 — QUI SI PRETENDEVA IL CONTRARIO, ED ERA LA DECISIONE SBAGLIATA.
+   *
+   * «Un lavoro fallito non lascia il battito» sembra prudente e invece disarma
+   * il sensore. I guasti veri non sono episodi: un permesso revocato, o un
+   * fattorino che se n'e' andato senza versare i contanti, fanno fallire il
+   * lavoro TUTTE le notti. Dopo 26 ore il sorvegliante annuncia «process-deletions
+   * fermo: scheduler o deploy down?» — e manda a guardare Vercel, che sta
+   * benissimo. Da quel momento il battito resta vecchio per sempre: il giorno in
+   * cui il lavoro non parte davvero, il segnale e' identico a quello di ieri.
+   *
+   * Il battito risponde a una domanda sola: «sei passato di qui?». Che il giro
+   * abbia trovato guai lo dicono il codice di stato, la riga di errore qui sotto
+   * e l'avviso agli amministratori che la rotta manda da se'.
+   */
+  it('un lavoro fallito lascia comunque il battito, e per di piu si lamenta', async () => {
     upsert.mockResolvedValue({ error: null });
     const res = await withCronAuth(async () => ({ status: 500 }) as never)(req());
     expect(res.status).toBe(500);
-    expect(upsert).not.toHaveBeenCalled();
+    expect(
+      upsert,
+      'il giro e passato e il battito manca: il sorvegliante dira che e fermo un lavoro che gira',
+    ).toHaveBeenCalled();
+    expect(
+      error,
+      'il lavoro ha risposto con un errore e nei log non resta niente: il 500 lo legge solo lo scheduler',
+    ).toHaveBeenCalled();
   });
 });

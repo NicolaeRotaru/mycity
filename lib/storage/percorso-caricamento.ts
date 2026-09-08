@@ -40,7 +40,23 @@ export const SECCHIO_PUBBLICO = 'products';
  */
 export function percorsoAmmesso(
   percorso: string,
-  { userId, staff = false }: { userId?: string | null; staff?: boolean },
+  {
+    userId,
+    staff = false,
+    /**
+     * 8/9/2026 — L'ECCEZIONE DELLO STAFF NON VALE SU TUTTI I MAGAZZINI.
+     *
+     * La cartella `home` la concede una policy sola, quella del secchio `products`
+     * (`migrations/114_hardening_radiografia.sql`). Su `reviews`, `stories` e `cod-proof` il
+     * database pretende l'identificativo di chi carica e basta: un caricamento dello staff li'
+     * dentro sarebbe partito dal codice e sarebbe stato respinto dal deposito.
+     *
+     * Il difetto resta `true` di serie perche' `products` e' il magazzino di serie e perche' i
+     * chiamanti che gia' c'erano non devono cambiare. Chi conosce il magazzino — cioe'
+     * `caricaImmagine` — passa il valore vero, che legge da `lib/storage/regole-secchi.ts`.
+     */
+    cartellaStaffAmmessa = true,
+  }: { userId?: string | null; staff?: boolean; cartellaStaffAmmessa?: boolean },
 ): { ammesso: boolean; motivo: string } {
   const pulito = String(percorso ?? '').replace(/^\/+/, '');
   if (!pulito) return { ammesso: false, motivo: 'percorso vuoto' };
@@ -55,6 +71,14 @@ export function percorsoAmmesso(
     return { ammesso: true, motivo: 'la prima cartella è chi carica' };
   }
   if (prima === CARTELLA_STAFF) {
+    if (!cartellaStaffAmmessa) {
+      return {
+        ammesso: false,
+        motivo:
+          `questo magazzino non concede la cartella «${CARTELLA_STAFF}»: la sua regola vuole` +
+          ` l'identificativo di chi carica come prima cartella, e il database rifiuterebbe`,
+      };
+    }
     return staff
       ? { ammesso: true, motivo: 'cartella dello staff, e chi carica è staff' }
       : { ammesso: false, motivo: `la cartella «${CARTELLA_STAFF}» la scrive solo lo staff` };

@@ -5,6 +5,8 @@ import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit, type AuditAction } from '@/lib/audit';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { risultaMinorenne, anniCompiuti, ETA_MINIMA_RIDER } from '@/lib/maggiore-eta';
+import { giornoPiacenza } from '@/lib/tempo-piacenza';
 
 export const runtime = 'nodejs';
 
@@ -105,10 +107,32 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const admin = getAdminSupabase();
   const { data: target } = await admin
     .from('profiles')
-    .select('id, role, store_name, full_name')
+    .select('id, role, store_name, full_name, legal_birth_date')
     .eq('id', params.id)
     .single();
   if (!target) return ApiErrors.notFound('Utente non trovato.');
+
+  /**
+   * 8/9/2026 — LA TERZA PORTA: SI APPROVAVA SENZA MAI GUARDARE L'ETÀ.
+   *
+   * La schermata di approvazione la data di nascita non la mostra nemmeno, e
+   * qui nessuno la leggeva: sul database ricostruito dalle migrazioni il giro
+   * completo passava — «fattorino di 15 anni, stato approved, approvato=true».
+   * L'unica barriera era l'occhio di chi apre la foto del documento.
+   *
+   * La regola è al contrario di quella del modulo: qui la data VUOTA non
+   * blocca. Da questa rotta passano anche i negozi e le persone iscritte prima
+   * che il campo esistesse, e non è questa la schermata dove si chiede una data
+   * di nascita. Ma se la data c'è ed è di un ragazzino, non si approva:
+   * `risultaMinorenne` dice esattamente questo.
+   */
+  const approva = body.action === 'approve' || body.action === 'reactivate';
+  if (approva && risultaMinorenne(target.legal_birth_date)) {
+    const anni = anniCompiuti(String(target.legal_birth_date), giornoPiacenza());
+    return ApiErrors.forbidden(
+      `Non si approva: la data di nascita dice ${anni} anni. Servono ${ETA_MINIMA_RIDER} anni compiuti (condizioni d'uso, punto 3). Se la data è sbagliata, falla correggere prima di approvare.`,
+    );
+  }
 
   const { patch, note, audit } = buildModeration(body.action, body.reason?.trim(), user.id, target.role ?? 'seller');
 

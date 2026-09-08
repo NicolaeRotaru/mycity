@@ -4,6 +4,7 @@ import { getKycProvider, viesVatLookup } from '@/lib/kyc/providers';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
+import { cancelloEtaServer } from '@/lib/maggiore-eta';
 
 export const runtime = 'nodejs';
 
@@ -47,6 +48,21 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
   }
   if (!profile.legal_first_name || !profile.legal_last_name) {
     return ApiErrors.invalidRequest('Compila nome e cognome anagrafici.');
+  }
+  /**
+   * 8/9/2026 — LA DATA DI NASCITA LA LEGGEVAMO SOLO PER PASSARLA AL FORNITORE.
+   *
+   * Venti righe più sotto `legal_birth_date` finiva dentro `startCheck` come
+   * dato da mandare avanti, e nessuno la confrontava con niente: il fornitore
+   * oggi è interno, quindi la verifica di un quindicenne partiva e poteva
+   * tornare «APPROVED». Il campo è nato per il KYC come «dato da spedire»; qui
+   * diventa una regola.
+   */
+  const cancelloEta = cancelloEtaServer(profile);
+  if (!cancelloEta.ok) {
+    return cancelloEta.stato === 403
+      ? ApiErrors.forbidden(cancelloEta.messaggio ?? '')
+      : ApiErrors.invalidRequest(cancelloEta.messaggio ?? '');
   }
   if (profile.role === 'rider') {
     if (!profile.rider_license_url) {

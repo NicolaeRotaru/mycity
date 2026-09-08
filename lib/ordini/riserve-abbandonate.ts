@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
+import type { RiserveLiberate } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
 
 /**
  * LA MERCE CHE RESTA IMPEGNATA DA CHI HA GIÀ CAMBIATO IDEA.
@@ -42,6 +43,29 @@ import { logger } from '@/lib/logger';
  *
  * Adesso le due cose non si possono più separare: la chiusura la fa QUESTA
  * funzione, sempre. Chi la chiama non deve ricordarsi niente.
+ *
+ * ── 8/9/2026: PRIMA SI CHIUDE, POI SI LIBERA ────────────────────────────────
+ * Chiudere la pagina restava comunque un'AZIONE, e un'azione può non riuscire:
+ * Stripe irraggiungibile, chiamata rifiutata, oppure — il caso peggiore — la
+ * pagina è appena stata PAGATA e non si può più chiudere. L'errore finiva in un
+ * avviso nel registro, la merce tornava a scaffale lo stesso e chi aveva
+ * chiamato non lo sapeva: restava in piedi la coppia che non deve esistere, un
+ * ordine in contanti e una pagina con la carta ancora viva.
+ *
+ * L'ordine delle operazioni è stato rovesciato. La chiusura viene PRIMA della
+ * rivendicazione della riga: se non riesce, di quel tentativo non si tocca
+ * niente — niente `EXPIRED`, niente merce rimessa in vendita, niente codice
+ * sconto restituito — e la sessione finisce in `ancoraPagabili`, che chi ha
+ * chiamato deve guardare (`ordineInContantiPuoNascere`).
+ *
+ * Due cose si aggiustano da sole con questo rovesciamento:
+ *   ① un pagamento appena riuscito, con l'avviso di Stripe ancora per strada,
+ *      non fa più liberare la merce che ha appena comprato — `expire` su una
+ *      sessione pagata fallisce, e il fallimento adesso ferma tutto invece di
+ *      essere ignorato. Prima quel pagamento buono finiva rimborsato;
+ *   ② lo stato resta coerente: la riga rimane `PENDING` con la sua merce
+ *      impegnata, quindi al tentativo successivo si riprova da capo. Il freno
+ *      non è di un solo giro, è scritto nei dati.
  */
 
 type Riga = {
@@ -85,7 +109,7 @@ export async function liberaRiserveAbbandonate(
      */
     chiudiSessione?: (sessionId: string) => Promise<void>;
   },
-): Promise<{ liberati: string[] }> {
+): Promise<RiserveLiberate> {
   const { data, error } = await admin
     .from('pending_checkouts')
     .select('id, groups, coupon_code, stripe_session_id, delivery')
@@ -96,7 +120,7 @@ export async function liberaRiserveAbbandonate(
   if (error) {
     // Non si ferma l'acquisto per questo: si va avanti come prima e resta scritto.
     logger.warn('[riserve] tentativi aperti non letti', { message: error.message });
-    return { liberati: [] };
+    return { liberati: [], ancoraPagabili: [] };
   }
 
   const daLiberare = opzioni.soloConProdotti ? new Set(opzioni.soloConProdotti) : null;
@@ -108,7 +132,7 @@ export async function liberaRiserveAbbandonate(
       (r.delivery?.impronta_carrello ?? null) !== (opzioni.improntaDaTenere ?? null) &&
       (!daLiberare || prodottiDi(r).some((id) => daLiberare.has(id))),
   );
-  if (candidati.length === 0) return { liberati: [] };
+  if (candidati.length === 0) return { liberati: [], ancoraPagabili: [] };
 
   // ① Chi ha già degli ordini non si tocca: la merce è stata venduta davvero.
   const sessioni = candidati.map((r) => r.stripe_session_id).filter((s): s is string => !!s);
@@ -120,7 +144,7 @@ export async function liberaRiserveAbbandonate(
       .in('stripe_session_id', sessioni);
     if (errOrdini) {
       logger.warn('[riserve] controllo ordini fallito: non libero niente', { message: errOrdini.message });
-      return { liberati: [] };
+      return { liberati: [], ancoraPagabili: [] };
     }
     for (const o of (ordini ?? []) as Array<{ stripe_session_id?: string | null }>) {
       if (o.stripe_session_id) conOrdini.add(o.stripe_session_id);
@@ -128,10 +152,30 @@ export async function liberaRiserveAbbandonate(
   }
 
   const liberati: string[] = [];
+  const ancoraPagabili: string[] = [];
   for (const riga of candidati) {
     if (riga.stripe_session_id && conOrdini.has(riga.stripe_session_id)) {
       logger.warn('[riserve] tentativo con ordini gia creati: non lo tocco', { id: riga.id });
       continue;
+    }
+
+    // ①bis PRIMA SI CHIUDE LA PAGINA DI PAGAMENTO, POI SI LIBERA LA MERCE.
+    //
+    // Se questa chiamata non riesce, la pagina resta pagabile: allora di questo
+    // tentativo non si tocca NIENTE. Liberare la merce lasciando viva la pagina
+    // è esattamente la coppia che fa pagare due volte. E se il motivo del
+    // fallimento è che la pagina è appena stata PAGATA, fermarsi qui salva un
+    // pagamento buono dal rimborso automatico.
+    if (riga.stripe_session_id) {
+      try {
+        await (opzioni.chiudiSessione ?? chiudiSuStripe)(riga.stripe_session_id);
+      } catch (e) {
+        logger.error('[riserve] pagamento vecchio non chiuso: non libero niente di questo tentativo', {
+          id: riga.id, sessione: riga.stripe_session_id, e,
+        });
+        ancoraPagabili.push(riga.stripe_session_id);
+        continue;
+      }
     }
 
     // ② La rivendicazione atomica: o la riga passa da PENDING a EXPIRED qui, o
@@ -161,22 +205,14 @@ export async function liberaRiserveAbbandonate(
       if (errCodice) logger.warn('[riserve] codice sconto non restituito', { id: riga.id, message: errCodice.message });
     }
 
-    if (riga.stripe_session_id) {
-      // La pagina di pagamento rimasta aperta va chiusa insieme alla riserva:
-      // altrimenti resta pagabile, e a merce già liberata quel pagamento
-      // finirebbe rimborsato.
-      try {
-        await (opzioni.chiudiSessione ?? chiudiSuStripe)(riga.stripe_session_id);
-      } catch (e) {
-        logger.warn('[riserve] pagamento vecchio non chiuso', { id: riga.id, e });
-      }
-    }
-
     liberati.push(riga.id);
   }
 
   if (liberati.length > 0) {
     logger.info('[riserve] merce liberata da tentativi abbandonati', { quanti: liberati.length });
   }
-  return { liberati };
+  if (ancoraPagabili.length > 0) {
+    logger.error('[riserve] pagine di pagamento rimaste pagabili', { quante: ancoraPagabili.length });
+  }
+  return { liberati, ancoraPagabili };
 }

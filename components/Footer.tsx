@@ -15,6 +15,7 @@ import { useBranding } from './hooks/useBranding';
 import NewsletterForm from './NewsletterForm';
 import { rigaIdentita, titolare } from '@/lib/legal/titolare';
 import { linkWhatsApp } from '@/lib/contatto-whatsapp';
+import { indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
 
 const SOCIALS = [
   {
@@ -327,8 +328,8 @@ const Footer = () => {
             </span>
           </div>
           <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-ink-500 justify-center">
-            <a href="mailto:info@mycity.it" className="inline-flex items-center gap-1.5 hover:text-primary-700 transition-colors">
-              <Mail size={13} strokeWidth={2} /> info@mycity.it
+            <a href={mailtoContatto('info')} className="inline-flex items-center gap-1.5 hover:text-primary-700 transition-colors">
+              <Mail size={13} strokeWidth={2} /> {indirizzoContatto('info')}
             </a>
             <span className="inline-flex items-center gap-1.5">
               <Phone size={13} strokeWidth={2} /> Lun-Ven 9-18

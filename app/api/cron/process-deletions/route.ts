@@ -9,6 +9,11 @@ import {
   type TentativoCancellazione,
   type VerdettoGiro,
 } from '@/lib/cron-cancellazioni';
+import {
+  eseguiPotature,
+  type ClientePotature,
+  type RapportoPotature,
+} from '@/lib/privacy/potature-ritenzione';
 
 export const runtime = 'nodejs';
 
@@ -38,300 +43,33 @@ export const runtime = 'nodejs';
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
-/**
- * Fa scadere i file di un secchio, con la regola scritta nel database.
- *
- * Il database non puo' parlare con lo storage: sono due mondi separati. Quindi
- * la funzione SQL azzera le colonne e restituisce i percorsi dei file, e qui si
- * tolgono i file veri. Se si facesse il contrario — prima i file, poi le
- * colonne — un guasto a meta' lascerebbe righe che puntano a fotografie che non
- * esistono piu'; cosi' invece il caso peggiore e' un file orfano nello storage,
- * che nessuna pagina sa piu' mostrare.
- *
- * Best-effort: un errore qui non deve far saltare il resto della notte.
- */
-async function potaFileScaduti(
-  admin: Admin,
-  funzione: 'documenti_da_cancellare_respinti' | 'foto_consegna_da_cancellare',
-  secchio: 'kyc-docs' | 'cod-proof',
-  giorni = 90,
-): Promise<void> {
-  const { data, error } = await admin.rpc(funzione, { p_giorni: giorni });
-  if (error) {
-    logger.warn('[cron-deletions] potatura file scaduti fallita', { funzione, err: error.message });
-    return;
-  }
-  let tolti = 0;
-  for (const riga of (data ?? []) as Array<{ percorsi: string[] | null }>) {
-    const percorsi = (riga.percorsi ?? []).filter(Boolean);
-    if (percorsi.length === 0) continue;
-    const { error: errRimozione } = await admin.storage.from(secchio).remove(percorsi);
-    if (errRimozione) {
-      // I percorsi finiscono nel registro apposta: la colonna che li teneva e'
-      // gia' stata azzerata, quindi senza questa riga il file resterebbe nello
-      // storage e nessuno saprebbe piu' dove cercarlo.
-      logger.warn('[cron-deletions] file scaduti non rimossi', {
-        secchio, err: errRimozione.message, percorsi,
-      });
-      continue;
-    }
-    tolti += percorsi.length;
-  }
-  logger.info('[cron-deletions] file scaduti rimossi', { funzione, secchio, tolti });
-}
-
-/**
- * 30/8/2026 (R169) — UNA PULIZIA RIFIUTATA NON PASSA PIU' PER FATTA.
- *
- * Nessuna delle sei pulizie di ritenzione guardava l'esito. PostgREST non
- * lancia: torna un oggetto con dentro l'errore, e il `try/catch` che sta
- * intorno non lo vede. Una pulizia negata dai permessi lasciava i dati dov'erano
- * e il lavoro rispondeva «fatto» lo stesso — quindi nessun allarme e nessun
- * sospetto, mentre la finestra dichiarata nella pagina pubblica smetteva di
- * essere vera.
- *
- * Qui l'errore si conta e si scrive. Il conto esce nella risposta del lavoro,
- * cosi' chi guarda i lavori periodici vede la differenza fra «pulito» e
- * «provato a pulire».
- */
-async function pota(
-  cosa: string,
-  scrittura: PromiseLike<{ error: { message: string } | null }>,
-  fallite: { n: number },
-): Promise<void> {
-  const { error } = await scrittura;
-  if (error) {
-    fallite.n++;
-    logger.error('[cron-deletions] pulizia non riuscita: i dati oltre la finestra restano dove sono', {
-      cosa, message: error.message,
-    });
-  }
-}
-
 export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse> => {
   const admin = getAdminSupabase();
-  /** Quante pulizie di ritenzione non sono riuscite: esce nella risposta. */
-  const fallite = { n: 0 };
 
-  // 🟡-15: enforcement della retention documentata (privacy §3) per i log che
-  // contengono PII (IP/user-agent). I periodi sono dichiarati nella privacy:
-  // log di sicurezza/accesso 12 mesi, analitica 14 mesi. Qui rimuoviamo l'IP/UA
-  // oltre quei periodi (l'azione/evento resta, la PII no). Best-effort, idempotente.
-  try {
-    const monthsAgo = (m: number) => new Date(Date.now() - m * 30 * 86_400_000).toISOString();
-    const giorniFa = (g: number) => new Date(Date.now() - g * 86_400_000).toISOString();
-    // 27/8/2026 (R059) — ERANO 14 MESI, E NE AVEVAMO DICHIARATI 12.
-    //
-    // Nella tabella della conservazione, sulla riga «Sicurezza, anti-frode»,
-    // c'e' scritto «12 mesi (log accessi)». Qui ne stavano quattordici. Un
-    // periodo piu' lungo di quello che abbiamo dichiarato noi stessi non e' una
-    // svista da poco: in un controllo e' una contestazione che ci siamo scritti
-    // da soli, sulla nostra pagina pubblica.
-    await pota('activity_events.ip', admin
-      .from('activity_events')
-      .update({ ip: null, user_agent: null })
-      .lt('created_at', monthsAgo(12))
-      .not('ip', 'is', null), fallite);
-    // 077 — `consent_log` era l'unica tabella con dati personali che nessuna
-    // pulizia toccava: l'indirizzo di rete restava li' per sempre. La PROVA del
-    // consenso va conservata (e' l'accountability dell'art. 7.1), l'indirizzo di
-    // rete no: dopo 24 mesi — il ciclo di rinnovo semestrale piu' un margine di
-    // contenzioso — non serve piu' a niente.
-    //
-    // 27/8/2026 (R066) — IL NUMERO DI MESI VIVEVA IN DUE POSTI.
-    // Qui c'era un aggiornamento scritto a mano a 24 mesi, e nel database una
-    // funzione `pota_consent_log` che diceva 12 e che non chiamava nessuno. Due
-    // regole per la stessa cosa: alla prima modifica una delle due sarebbe
-    // rimasta indietro, e l'informativa avrebbe smesso di dire il vero. Adesso
-    // il numero sta solo dentro la funzione (migrations/135) e si chiama senza
-    // argomenti, cosi' non c'e' un secondo posto da ricordarsi di cambiare.
-    const { data: consensiPotati, error: errConsensi } = await admin.rpc('pota_consent_log');
-    if (errConsensi) {
-      logger.warn('[cron-deletions] potatura registro consensi fallita', { err: errConsensi.message });
-    } else {
-      logger.info('[cron-deletions] registro consensi potato', { consensiPotati });
-    }
-
-    // Fix #33: la retention dichiarata (14 mesi) non annullava anon_id/path/city/referrer.
-    // Oltre 14 mesi azzeriamo anche il profilo comportamentale pseudonimo (art. 5.1.e GDPR).
-    //
-    // 27/8/2026 (R059) — QUI C'ERA UN FILTRO CHE SALTAVA DELLE RIGHE.
-    // C'era anche `.not('anon_id','is',null)`, cioe' «ripulisci solo le righe
-    // che hanno gia' un identificativo anonimo». Le righe scritte dai trigger
-    // del database non ce l'hanno: pagina, referente, citta' e paese restavano
-    // li' per sempre proprio sulle righe che nessuno andava a guardare.
-    // L'aggiornamento e' idempotente: rifarlo su una riga gia' pulita non costa
-    // niente, mentre saltarla costa un dato personale conservato a vita.
-    await pota('activity_events.profilo', admin
-      .from('activity_events')
-      .update({ anon_id: null, path: null, referrer: null, city: null, country: null })
-      .lt('created_at', monthsAgo(14)), fallite);
-    await pota('audit_logs.ip', admin
-      .from('audit_logs')
-      .update({ ip: null, user_agent: null })
-      .lt('created_at', monthsAgo(12))
-      .not('ip', 'is', null), fallite);
-
-    // `metadata` e `summary` restavano intatti: sono i campi che contengono i
-    // valori vecchi e nuovi delle colonne cambiate, quindi la parte piu'
-    // personale della riga. Azzerarli oltre la finestra dichiarata.
-    // 30/8/2026 (R169) — IL FILTRO GUARDAVA UNA COLONNA E LA PULIZIA NE TOCCAVA DUE.
-    //
-    // C'era `.not('metadata','is',null)`, cioe' «ripulisci solo le righe che
-    // hanno i dati grezzi». Ma `metadata` lo scrive solo la PRIMA vista di una
-    // sessione: quasi tutte le righe ce l'hanno vuoto, e quelle non venivano
-    // nemmeno guardate. Il loro `summary` — la frase che racconta cosa e'
-    // successo, indirizzi e ricerche comprese — restava li' per sempre, oltre i
-    // quattordici mesi che promettiamo nella pagina pubblica.
-    //
-    // Adesso il filtro guarda le stesse due colonne che la pulizia azzera.
-    await pota('activity_events.riassunto', admin
-      .from('activity_events')
-      .update({ metadata: null, summary: null })
-      .lt('created_at', monthsAgo(14))
-      .or('metadata.not.is.null,summary.not.is.null'), fallite);
-    await pota('audit_logs.metadata', admin
-      .from('audit_logs')
-      .update({ metadata: null })
-      .lt('created_at', monthsAgo(12))
-      .not('metadata', 'is', null), fallite);
-
-    // 098 — `product_views` cresceva senza fine: una riga per ogni visita a una
-    // scheda, per sempre, mentre la tabella accanto veniva potata da mesi. Ma il
-    // negoziante non deve perdere lo storico. La funzione prima SALVA il conto
-    // giornaliero, poi cancella le righe singole: la riga grezza dura 90 giorni,
-    // il numero resta per sempre.
-    const { data: consolidate, error: errVisite } = await admin
-      .rpc('consolida_visite_prodotto', { p_giorni: 90 });
-    if (errVisite) {
-      logger.warn('[cron-deletions] consolidamento visite prodotto fallito', { err: errVisite.message });
-    } else {
-      logger.info('[cron-deletions] visite prodotto consolidate', { consolidate });
-    }
-
-    // E le righe di semplice navigazione si cancellano, non si sbiancano: senza
-    // questo la tabella cresceva per sempre. Le altre categorie restano perche'
-    // servono da traccia di sicurezza e contabile.
-    await pota('activity_events.navigazione', admin
-      .from('activity_events')
-      .delete()
-      .eq('category', 'visitor')
-      .lt('created_at', monthsAgo(14)), fallite);
-
-    // 27/8/2026 (R059) — LE RIGHE DI ACCESSO NON SE NE ANDAVANO MAI.
-    //
-    // Qui si cancellava solo la categoria `visitor`, cioe' la navigazione. Gli
-    // eventi di accesso — entrata, uscita, registrazione, categoria `auth` —
-    // restavano per sempre: chi sei, da che apparecchio, con che programma, in
-    // che giorno e a che ora. Un archivio di accessi che cresce senza fine e'
-    // anche il bottino peggiore da lasciare in mano a un intruso.
-    //
-    // La finestra e' la stessa che dichiariamo per i log di accesso: 12 mesi.
-    await pota('activity_events.accessi', admin
-      .from('activity_events')
-      .delete()
-      .eq('category', 'auth')
-      .lt('created_at', monthsAgo(12)), fallite);
-
-    // I messaggi dal modulo contatti oltre due anni non servono piu' a nessuno.
-    await pota('contact_messages', admin
-      .from('contact_messages')
-      .delete()
-      .lt('created_at', monthsAgo(24)), fallite);
-
-    // 6/9/2026 — L'ISCRIZIONE CHE NESSUNO HA MAI CONFERMATO RESTAVA QUI PER
-    // SEMPRE.
-    //
-    // Il modulo della newsletter e' pubblico: chiunque puo' scriverci
-    // l'indirizzo di un altro e far partire l'email di conferma. Finche'
-    // quell'altro non clicca, la riga resta in piedi con dentro il suo
-    // indirizzo, l'indirizzo di rete di chi l'ha scritto e il gettone di
-    // conferma. Il doppio consenso c'era, la scadenza del tentativo no:
-    // l'unica cancellazione di questa tabella era per l'email di chi cancella
-    // il proprio account, cioe' quasi mai. Un tentativo di trenta giorni fa non
-    // e' un consenso in attesa: e' il dato di una persona che non ci ha mai
-    // detto di si'.
-    //
-    // I quattro filtri servono tutti, e i due di mezzo sono quelli facili da
-    // dimenticare:
-    //  · `active` falso — le iscrizioni piu' vecchie della migrazione 115 hanno
-    //    `confirmed_at` vuoto perche' quella colonna non esisteva ancora, e sono
-    //    iscritti veri (la 015 metteva `active` a vero). Senza questo filtro la
-    //    potatura buttava via meta' della lista, e in silenzio.
-    //  · `unsubscribed_at` vuoto — chi si e' cancellato dalla lista (la 118
-    //    spegne `active` e scrive la data) tiene la sua riga: e' la prova che
-    //    non lo vuole piu', e cancellarla vuol dire rischiare di riscrivergli.
-    //
-    // Trenta giorni: la conferma si clicca lo stesso giorno o mai piu'.
-    await pota('newsletter_subscribers', admin
-      .from('newsletter_subscribers')
-      .delete()
-      .is('confirmed_at', null)
-      .is('unsubscribed_at', null)
-      .eq('active', false)
-      .lt('created_at', giorniFa(30)), fallite);
-
-    // 27/8/2026 (R056) — I DOCUMENTI DI CHI VIENE RESPINTO.
-    //
-    // La funzione esisteva dalla migrazione 119 col commento «il cron cancella
-    // i file dallo storage», e nessun cron la chiamava. Adesso la chiama questo,
-    // e la funzione (riscritta in migrations/135) azzera davvero le colonne e
-    // restituisce i percorsi: il database non parla con lo storage, i file li
-    // toglie chi puo' farlo.
-    await potaFileScaduti(admin, 'documenti_da_cancellare_respinti', 'kyc-docs');
-
-    // 27/8/2026 (R058) — LE FOTO DELLA CONSEGNA IN CONTANTI.
-    // I contanti, la firma e «il pacco lasciato» — cioe' quasi sempre la porta
-    // di casa del cliente. Stanno nella cartella del FATTORINO, quindi quando
-    // il cliente cancellava l'account non venivano nemmeno cercate. Novanta
-    // giorni dalla consegna: il tempo della quadratura di cassa e di un
-    // reclamo. Dopo, e' la fotografia di una casa e basta.
-    await potaFileScaduti(admin, 'foto_consegna_da_cancellare', 'cod-proof');
-
-    // 3/9/2026 — IL BUONO REGALO TENEVA PER SEMPRE L'EMAIL DI CHI NON E' NOSTRO
-    // CLIENTE.
-    //
-    // I dati del destinatario di un buono regalo servono a recapitare il
-    // regalo. Finito quello — buono speso o scaduto da piu' di 12 mesi — non
-    // servono a niente, e appartengono a una persona che con noi non ha nessun
-    // rapporto: non ha un account, non ha comprato, spesso non sa nemmeno che
-    // esistiamo. Finche' questa potatura non c'era, il suo nome e la sua email
-    // se ne andavano solo se CHI HA COMPRATO il buono (o chi lo ha riscattato)
-    // chiedeva di cancellare il proprio account: cioe' quasi mai.
-    //
-    // Il credito e il codice restano: si tolgono solo nome, email e messaggio —
-    // il messaggio e' il testo privato che una persona ha scritto a un'altra.
-    // Il filtro `recipient_email is not null` rende la pulizia idempotente:
-    // ripassarci sopra ogni notte non riscrive righe gia' pulite.
-    await pota('gift_cards', admin
-      .from('gift_cards')
-      .update({ recipient_name: null, recipient_email: null, message: null })
-      .lt('expires_at', monthsAgo(12))
-      .not('recipient_email', 'is', null), fallite);
-    await pota('gift_cards_esauriti', admin
-      .from('gift_cards')
-      .update({ recipient_name: null, recipient_email: null, message: null })
-      .eq('balance_cents', 0)
-      .lt('redeemed_at', monthsAgo(12))
-      .not('recipient_email', 'is', null), fallite);
-  } catch (e) {
-    logger.warn('[cron-deletions] prune retention IP/UA parziale', { e });
-  }
+  // 8/9/2026 — LE POTATURE NON STANNO PIU' QUI DENTRO.
+  //
+  // Erano quindici scritture in fila dentro UN solo `try`, con UN solo `catch`
+  // in fondo. Bastava che una lanciasse — un client che rifiuta la promessa, la
+  // rete che cade a meta' giro — perche' le altre non partissero nemmeno, il
+  // conto delle fallite restasse a zero e la notte rispondesse «tutto a posto».
+  // Adesso ogni potatura gira per conto suo e chi fallisce si conta: la regola
+  // sta in `lib/privacy/potature-ritenzione.ts`, dove una prova la puo' ESEGUIRE
+  // senza tirarsi dietro `next/server` e mezzo Next.
+  const potature = await eseguiPotature(admin as unknown as ClientePotature, logger);
 
   // 6/9/2026 — ANCHE QUESTO NUMERO NON LO GUARDAVA NESSUNO.
   //
   // `retentionFallite` usciva solo nel corpo della risposta, ed e' parola per
   // parola il difetto chiuso tre giorni fa una riga piu' sotto, sulle
   // cancellazioni: il corpo lo riceve lo scheduler, che guarda il codice di
-  // stato e lo butta via. Intanto le potature diventavano otto e nessuna
-  // sapeva farsi sentire quando veniva rifiutata.
+  // stato e lo butta via.
   //
   // Una potatura che non passa non e' un dettaglio tecnico: sono indirizzi di
   // rete, foto della porta di casa e email di persone che con noi non hanno
   // nessun rapporto, tenute oltre il tempo che dichiariamo nella pagina
   // pubblica. E non si aggiusta da sola: se il database rifiuta stanotte,
   // rifiutera' anche domani.
-  if (fallite.n > 0) await svegliaPerLaRitenzione(admin, fallite.n);
+  if (potature.fallite > 0) await svegliaPerLaRitenzione(admin, potature);
 
   // Chiama la function SQL che ritorna gli userId scaduti
   const { data: expired, error: rpcErr } = await admin.rpc('process_expired_deletions');
@@ -346,8 +84,8 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     // Le notti senza cancellazioni da fare sono la maggioranza: se il conto
     // delle potature non riuscite non pesa QUI, non pesa quasi mai.
     return NextResponse.json(
-      { processed: 0, message: 'No accounts to process', retentionFallite: fallite.n },
-      { status: fallite.n > 0 ? 500 : 200 },
+      { processed: 0, message: 'No accounts to process', retentionFallite: potature.fallite },
+      { status: potature.fallite > 0 ? 500 : 200 },
     );
   }
 
@@ -398,7 +136,7 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       total: userIds.length,
       // R169 — Quante pulizie di ritenzione non sono riuscite: senza questo numero
       // il lavoro rispondeva «fatto» anche quando non aveva pulito niente.
-      retentionFallite: fallite.n,
+      retentionFallite: potature.fallite,
       // 3/9/2026 — Un rinvio deciso da noi non e' un fallimento, ma non e'
       // nemmeno un successo: se non ha un posto suo nella risposta, sparisce
       // dentro `failed` (e allora l'allarme suona ogni notte) oppure dentro
@@ -414,7 +152,7 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     // (`withCronAuth`). Un 500 fa due cose insieme: rende rossa l'esecuzione
     // nel pannello dei lavori periodici, e NON scrive il battito — cosi' se la
     // cosa va avanti anche il sorvegliante se ne accorge da solo.
-    { status: verdetto.daSvegliare || fallite.n > 0 ? 500 : 200 },
+    { status: verdetto.daSvegliare || potature.fallite > 0 ? 500 : 200 },
   );
 });
 
@@ -445,9 +183,14 @@ async function sveglia(admin: Admin, verdetto: VerdettoGiro): Promise<void> {
  * cosi' l'esecuzione diventa rossa nel pannello dei lavori periodici e il
  * battito non viene scritto, quindi se ne accorge anche il sorvegliante.
  */
-async function svegliaPerLaRitenzione(admin: Admin, quante: number): Promise<void> {
+async function svegliaPerLaRitenzione(admin: Admin, rapporto: RapportoPotature): Promise<void> {
+  const quante = rapporto.fallite;
   logger.error('[cron-deletions] pulizie di ritenzione non riuscite: i dati oltre la finestra restano dove sono', {
     quante,
+    // 8/9/2026 — QUALI, non solo quante. Prima usciva un numero e basta: chi si
+    // alzava di notte non sapeva se erano gli indirizzi di rete o le foto della
+    // porta di casa, e doveva rileggersi tutto il lavoro per scoprirlo.
+    quali: rapporto.esiti.filter((e) => !e.ok).map((e) => `${e.cosa}: ${e.errore}`),
   });
   const quali = quante === 1
     ? 'Stanotte una pulizia dei dati vecchi non è riuscita.'

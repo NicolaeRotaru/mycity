@@ -18,6 +18,11 @@ import { queryKeys } from '@/lib/queries/keys';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { vistaDaQuery } from '@/lib/vista-query';
+import { caricaImmagine } from '@/lib/storage/carica-immagine';
+import { attributoAccept } from '@/lib/storage/regole-secchi';
+
+/** Il magazzino delle storie. La sua regola sta in lib/storage/regole-secchi.ts, non qui. */
+const SECCHIO_STORIE = 'stories';
 
 /**
  * Seller: gestione Storie (instagram-like, 24h).
@@ -78,22 +83,44 @@ export default function SellerStoriesPage() {
       if (!user) throw new Error('Non autenticato');
 
       setUploading(true);
-      // Upload immagine
-      const ext = image.name.split('.').pop() ?? 'jpg';
-      const path = `${user.id}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('stories').upload(path, image, { upsert: false, contentType: image.type });
-      if (upErr) {
-        if (upErr.message.includes('not found') || upErr.message.includes('bucket')) {
+      /**
+       * 8/9/2026 — LA STORIA NON SI COSTRUISCE PIU' DA SOLA IL PERCORSO NE' LA REGOLA.
+       *
+       * Qui c'erano tre cose ricopiate a mano, e tutte e tre invecchiate:
+       *
+       *   · il percorso, `${user.id}/${Date.now()}.${ext}`, con dentro la prima cartella — l'unica
+       *     su cui il database decide chi puo' scrivere (`migrations/119_radiografia_18_agosto.sql`).
+       *     Era giusta, ma per caso: sul secchio `products` la stessa stringa scritta a mano era
+       *     sbagliata in tre punti su dieci, e nessun negoziante e' mai riuscito a mettere la
+       *     copertina alla vetrina.
+       *   · l'estensione, presa da quello che c'era dopo l'ultimo punto del nome scelto da chi
+       *     carica: il nome del file finiva a decidere come si chiama il file nel nostro archivio.
+       *   · nessun controllo di peso, mentre il deposito ne ha uno (10 MiB, dalla 070): la foto
+       *     grossa partiva, si aspettava tutto il caricamento, e alla fine arrivava un errore in
+       *     inglese.
+       *
+       * Adesso passa da `caricaImmagine`, che riceve una CARTELLA e non un percorso e legge tipi e
+       * tetto dalla regola del magazzino (`lib/storage/regole-secchi.ts`).
+       */
+      let publicUrl: string;
+      try {
+        ({ publicUrl } = await caricaImmagine(supabase, {
+          file: image,
+          userId: user.id,
+          secchio: SECCHIO_STORIE,
+        }));
+      } catch (e) {
+        const messaggio = e instanceof Error ? e.message : String(e);
+        if (messaggio.includes('not found') || messaggio.includes('bucket')) {
           throw new Error('Bucket "stories" non configurato. Applica la migration 035.');
         }
-        throw upErr;
+        throw e;
       }
-      const { data: pub } = supabase.storage.from('stories').getPublicUrl(path);
 
       // Insert record
       const { error } = await supabase.from('seller_stories').insert({
         seller_id: user.id,
-        image_url: pub.publicUrl,
+        image_url: publicUrl,
         caption: caption.trim() || null,
         link_url: linkUrl.trim() || null,
       });
@@ -222,7 +249,11 @@ export default function SellerStoriesPage() {
                 <input
                   id="foto-storia"
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  /* 8/9/2026 — erano tre tipi scritti a mano, il deposito ne accetta sette
+                     (070): la foto scattata con un iPhone (HEIC) non compariva nemmeno nella
+                     finestra «scegli un file». La lista arriva dalla stessa regola che poi
+                     rifiuta il file. */
+                  accept={attributoAccept(SECCHIO_STORIE)}
                   onChange={(e) => setImage(e.target.files?.[0] ?? null)}
                   className="w-full text-sm file:mr-3 file:bg-primary-100 file:text-primary-800 file:font-semibold file:rounded-lg file:px-3 file:py-2 file:border-0"
                 />

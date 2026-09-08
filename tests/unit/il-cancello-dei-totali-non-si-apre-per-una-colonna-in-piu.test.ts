@@ -114,7 +114,9 @@ describe('la funzione del database che somma i totali del negozio', () => {
     // storia: finche' la funzione non manda i rimborsi, i suoi totali non si mostrano.
     const dalDatabase = { incasso_totale_cents: 10_000, commissione_totale_cents: 850 };
     expect(espone).toBe(false);
-    expect(totaliDiSempre(dalDatabase, ripiego)).toEqual(ripiego);
+    // 8/9/2026 — i totali adesso escono con la loro finestra attaccata: sono le
+    // stesse due cifre di prima, piu' il periodo che coprono davvero.
+    expect(totaliDiSempre(dalDatabase, ripiego)).toEqual({ ...ripiego, finestra: 'ultimi-30-giorni' });
   });
 });
 
@@ -172,6 +174,6 @@ describe('il cancello in TypeScript e questa prova guardano la stessa colonna', 
         },
         ripiego,
       ),
-    ).toEqual({ incassatoCents: 10_000, tuoNettoCents: 8_350 });
+    ).toEqual({ incassatoCents: 10_000, tuoNettoCents: 8_350, finestra: 'dall-inizio' });
   });
 });

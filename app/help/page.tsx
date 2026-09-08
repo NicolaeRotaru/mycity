@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ShoppingCart, Truck, Undo2, Settings, Store, Bike, Search, Mail, MessageCircle, FileText } from 'lucide-react';
 import { linkWhatsApp } from '@/lib/contatto-whatsapp';
+import { indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
 import { temiDellaSpedizione } from '@/lib/promesse-pubbliche';
 
 export const metadata = {
@@ -101,11 +102,11 @@ export default function HelpPage() {
       <div className="bg-cream-50 border border-cream-300 rounded-2xl p-6">
         <h3 className="font-bold text-ink-900 mb-4 text-lg">Parla con noi direttamente</h3>
         <div className="grid sm:grid-cols-3 gap-3">
-          <a href="mailto:info@mycity.it" className="flex items-center gap-3 bg-white border rounded-lg p-3 hover:border-primary-300 transition-colors">
+          <a href={mailtoContatto('info')} className="flex items-center gap-3 bg-white border rounded-lg p-3 hover:border-primary-300 transition-colors">
             <Mail size={24} className="text-primary-600 shrink-0" aria-hidden />
             <div>
               <div className="font-semibold text-sm">Email</div>
-              <div className="text-xs text-ink-500">info@mycity.it</div>
+              <div className="text-xs text-ink-500">{indirizzoContatto('info')}</div>
             </div>
           </a>
           {whatsapp && (

@@ -8,31 +8,33 @@ import { formatPrice } from '@/lib/format';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { Button } from '@/components/ui/Button';
 import { Input, Select, Checkbox } from '@/components/ui/Field';
+import { scrivi } from '@/lib/esito-scrittura';
+import { vistaDeiCoupon, type Coupon, type CouponTipo } from '@/lib/admin/vista-dei-coupon';
 
-type Coupon = {
-  id: string;
-  code: string;
-  type: 'PERCENT' | 'FIXED' | 'FREE_SHIPPING';
-  value: number;
-  min_subtotal: number;
-  max_uses: number | null;
-  uses_count: number;
-  first_order_only: boolean;
-  active: boolean;
-  description: string | null;
-};
-
-type CouponType = 'PERCENT' | 'FIXED' | 'FREE_SHIPPING';
+/**
+ * 8/9/2026 — QUESTA PAGINA RACCONTAVA ESITI CHE NON ERANO SUCCESSI, IN DUE PUNTI.
+ *
+ * ① Le scritture. `await supabase.from('coupons').delete().eq('id', id)` senza guardare la
+ *    risposta: la funzione non poteva fallire, quindi partiva sempre il verde «Coupon eliminato»
+ *    mentre il codice restava spendibile dai clienti. Adesso ogni scrittura passa da `scrivi`, che
+ *    chiede indietro le righe toccate e LANCIA se non sono cambiate — vedi `lib/esito-scrittura.ts`.
+ * ② La lettura. `const { data: coupons = [], isLoading }` trasformava una lettura caduta in un
+ *    elenco vuoto, e il titolo scriveva «0 codici sconto». Adesso il ripiego non c'è più e lo
+ *    stato lo decide `vistaDeiCoupon` — vedi `lib/admin/vista-dei-coupon.ts`.
+ *
+ * La regola che tiene insieme le due: **il pannello non afferma niente che non abbia verificato.**
+ */
 
 const empty: {
   code: string;
-  type: CouponType;
+  type: CouponTipo;
   value: number;
   min_subtotal: number;
   max_uses: number | null;
@@ -51,7 +53,8 @@ export default function AdminCouponsPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(empty);
 
-  const { data: coupons = [], isLoading } = useQuery({
+  // Niente `= []`: un ripiego qui vuol dire spacciare «non ho letto» per «non c'è niente».
+  const { data, isPending, isError, error, refetch } = useQuery({
     queryKey: queryKeys.admin.coupons,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -62,6 +65,8 @@ export default function AdminCouponsPage() {
       return (data ?? []) as Coupon[];
     },
   });
+
+  const vista = vistaDeiCoupon({ data, isPending, isError, error });
 
   const create = useMutation({
     mutationFn: async () => {
@@ -75,47 +80,67 @@ export default function AdminCouponsPage() {
         description: form.description.trim() || null,
         active: form.active,
       };
-      const { error } = await supabase.from('coupons').insert(payload);
-      if (error) throw error;
+      return scrivi(
+        () => supabase.from('coupons').insert(payload).select('id'),
+        { cosa: 'Il coupon' },
+      );
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.admin.coupons });
       setShowForm(false);
       setForm(empty);
       toast.success('Coupon creato');
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
+    // L'elenco si ricarica comunque: dopo un tentativo andato male la verità sta nel database,
+    // non in quello che ha in mano il browser.
+    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.admin.coupons }),
   });
 
   const toggle = useMutation({
-    mutationFn: async (c: Coupon) => {
-      await supabase.from('coupons').update({ active: !c.active }).eq('id', c.id);
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.coupons }),
+    mutationFn: (c: Coupon) => scrivi(
+      () => supabase.from('coupons').update({ active: !c.active }).eq('id', c.id).select('id'),
+      { cosa: `Il coupon ${c.code}` },
+    ),
+    onSuccess: (_esito, c) => toast.success(c.active ? `${c.code} disattivato` : `${c.code} attivato`),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
+    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.admin.coupons }),
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => {
-      await supabase.from('coupons').delete().eq('id', id);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.admin.coupons });
-      toast.success('Coupon eliminato');
-    },
+    mutationFn: (c: Coupon) => scrivi(
+      () => supabase.from('coupons').delete().eq('id', c.id).select('id'),
+      { cosa: `Il coupon ${c.code}` },
+    ),
+    onSuccess: (_esito, c) => toast.success(`Coupon ${c.code} eliminato`),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
+    onSettled: () => qc.invalidateQueries({ queryKey: queryKeys.admin.coupons }),
   });
 
-  if (isLoading) return <LoadingState />;
+  if (vista.mostraScheletro) return <LoadingState />;
 
   return (
     <div className="space-y-6">
       <AdminPageTitle
         eyebrow="Marketing"
         title="Coupon"
-        sub={`${coupons.length} codici sconto`}
-        action={!showForm && (
+        sub={vista.sottotitolo}
+        action={vista.permettiCreazione && !showForm && (
           <Button onClick={() => setShowForm(true)} icon={Plus}>Nuovo coupon</Button>
         )}
       />
+
+      {/*
+        La lettura è caduta: si ammette, non si disegna una tabella vuota. E il pulsante «Nuovo
+        coupon» resta spento — chi crede che i codici siano spariti ne rifà uno uguale.
+      */}
+      {vista.avviso && (
+        <ErrorState
+          title={vista.avviso.titolo}
+          description={vista.avviso.dettaglio}
+          retry={() => { void refetch(); }}
+          supportHref={null}
+        />
+      )}
 
       {showForm && (
         <form
@@ -134,7 +159,7 @@ export default function AdminCouponsPage() {
             <Select
               label="Tipo"
               value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value as 'PERCENT' | 'FIXED' | 'FREE_SHIPPING' })}
+              onChange={(e) => setForm({ ...form, type: e.target.value as CouponTipo })}
             >
               <option value="PERCENT">Percentuale (%)</option>
               <option value="FIXED">Sconto fisso (€)</option>
@@ -187,6 +212,7 @@ export default function AdminCouponsPage() {
         </form>
       )}
 
+      {!vista.mostraErrore && (
       <div className="bg-white border rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-sm min-w-[700px]">
           <thead className="bg-cream-50 border-b text-xs uppercase tracking-wide text-ink-500">
@@ -201,7 +227,14 @@ export default function AdminCouponsPage() {
             </tr>
           </thead>
           <tbody>
-            {coupons.map((c) => (
+            {vista.mostraVuoto && (
+              <tr>
+                <td colSpan={7} className="p-6 text-center text-ink-500">
+                  Nessun codice sconto: ho guardato e non ce n’è ancora nessuno.
+                </td>
+              </tr>
+            )}
+            {vista.coupons.map((c) => (
               <tr key={c.id} className="border-t hover:bg-cream-50">
                 <td className="p-3 font-mono font-bold text-ink-900">{c.code}</td>
                 <td className="p-3 text-ink-700">
@@ -218,7 +251,9 @@ export default function AdminCouponsPage() {
                 <td className="p-3">
                   <button
                     onClick={() => toggle.mutate(c)}
-                    className={`text-xs px-2 py-1 rounded font-semibold ${
+                    disabled={toggle.isPending}
+                    aria-label={c.active ? `Disattiva il coupon ${c.code}` : `Attiva il coupon ${c.code}`}
+                    className={`text-xs px-2 py-1 rounded font-semibold disabled:opacity-60 ${
                       c.active ? 'bg-olive-100 text-olive-700' : 'bg-cream-100 text-ink-500'
                     }`}
                   >
@@ -235,9 +270,10 @@ export default function AdminCouponsPage() {
                         danger: true,
                         icon: Ticket,
                       });
-                      if (ok) remove.mutate(c.id);
+                      if (ok) remove.mutate(c);
                     }}
-                    className="text-xs text-secondary-600 hover:underline"
+                    disabled={remove.isPending}
+                    className="text-xs text-secondary-600 hover:underline disabled:opacity-60"
                   >
                     Elimina
                   </button>
@@ -247,6 +283,7 @@ export default function AdminCouponsPage() {
           </tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }

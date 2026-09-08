@@ -489,9 +489,15 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
         </div>
       )}
 
-      {/* CODICE CONSEGNA (visibile quando rider sta arrivando) */}
+      {/* CODICE CONSEGNA (visibile quando rider sta arrivando)
+
+          8/9/2026 — la sfumatura partiva da olive-500 (#7C8B5A): sotto il testo
+          bianco fa 3,69, contro i 4,5 che servono a un testo. Le dieci pastiglie
+          piene erano gia' state corrette, le sfumature no — nessuno guardava le
+          fermate `from-`/`to-`. Adesso la fermata piu' chiara e' olive-600
+          (4,78), e la prova il conto lo rifa' sui colori veri. */}
       {showDeliveryCode && deliveryCode?.code && (
-        <div className="mt-4 rounded-2xl bg-gradient-to-br from-olive-500 to-olive-600 p-6 text-white shadow-warm-lg">
+        <div className="mt-4 rounded-2xl bg-gradient-to-br from-olive-600 to-olive-700 p-6 text-white shadow-warm-lg">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold uppercase tracking-widest text-olive-100">Codice consegna</p>
