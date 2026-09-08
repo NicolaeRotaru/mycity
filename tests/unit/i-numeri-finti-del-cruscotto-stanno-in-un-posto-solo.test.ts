@@ -32,8 +32,16 @@ import { join } from 'node:path';
 const CARTELLA = join(process.cwd(), 'tests/unit');
 const AIUTO = 'tests/unit/aiuti/cruscotto-del-negozio.ts';
 
-/** Chi installa una risposta finta per la lettura `['seller','stats']`. */
-const INSTALLA_LA_FINTA = /queryKey\[1\]\s*===\s*'stats'|queryKey:\s*\[\s*'seller',\s*'stats'\s*\]/;
+/**
+ * Chi installa una risposta finta per la lettura `['seller','stats']` — e SOLO per quella.
+ *
+ * La prima stesura cercava `queryKey[1] === 'stats'` e basta. Ha bocciato una prova del cruscotto
+ * **dell'amministrazione**, che finge `['admin','stats']`: un'altra lettura, un'altra forma, niente
+ * a che vedere con le targhette del negoziante. Un guardiano che boccia lavoro legittimo si
+ * disattiva da solo dopo la seconda volta, quindi le due metà si pretendono insieme.
+ */
+const INSTALLA_LA_FINTA =
+  /queryKey\[0\]\s*===\s*'seller'[\s\S]{0,120}?queryKey\[1\]\s*===\s*'stats'|queryKey:\s*\[\s*'seller',\s*'stats'\s*\]/;
 
 describe('la risposta finta del cruscotto del negozio', () => {
   it('la costruisce un posto solo, e chiama le funzioni vere', () => {

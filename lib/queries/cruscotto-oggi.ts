@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import type { ColonneSalvo } from '@/lib/db-rows';
+import { GIORNI_DI_ORDINI_RECENTI, QUANTI_ORDINI_RECENTI } from '@/lib/ordini-recenti';
 
 /**
  * IL CRUSCOTTO «OGGI» DELL'AMMINISTRAZIONE — la pagina che si apre per prima
@@ -33,6 +34,18 @@ import type { ColonneSalvo } from '@/lib/db-rows';
  *   ordini rimasti impigliati mesi fa a quelli di stamattina. La riga rossa
  *   diceva un numero che non era il lavoro di oggi, e quindi non era il lavoro
  *   di nessuno.
+ *
+ * 8/9/2026 — IL QUARTO, ED È DELLA STESSA FAMIGLIA: UN ELENCO SOTTO UNA
+ *   FINESTRA CHE NON ERA LA SUA. Sette letture su otto partivano da mezzanotte.
+ *   La tabella «ultimi dieci ordini» no: nessun filtro sulla data, quindi
+ *   prendeva gli ultimi dieci ordini ESISTENTI, di qualunque giorno. A schermo
+ *   finivano sotto i numeri di oggi, con la sola ora stampata accanto: alle
+ *   nove di mattina «Ordini oggi: 0» e sotto dieci righe che sembravano di
+ *   stamattina. Adesso la lettura ha la sua finestra — una settimana — e la
+ *   finestra ESCE INSIEME AL DATO (`finestraOrdiniRecentiGiorni`), così il
+ *   titolo e la frase del vuoto nascono da quello che è stato letto davvero e
+ *   non da una prosa scritta a mano. Il giorno di ogni riga lo scrive
+ *   `lib/ordini-recenti`, che l'ora nuda la dà solo se la riga è di oggi.
  *
  * Sta in un file suo, e non dentro la pagina, perché così una prova la può
  * ESEGUIRE: in questa repo un `.tsx` non si monta facilmente, e una lettura che
@@ -76,6 +89,12 @@ export type CruscottoOggi = {
   signupsTodayCount: number;
   recentOrders: OrdineRecente[];
   /**
+   * Quanti giorni indietro ha guardato la tabella «ultimi ordini». Viaggia col
+   * dato apposta: la pagina non deve ricordarselo, e quindi non può sbagliarlo.
+   * Il titolo e la frase del vuoto li ricava da qui `intestazioneOrdiniRecenti`.
+   */
+  finestraOrdiniRecentiGiorni: number;
+  /**
    * `true` quando gli ordini della giornata hanno sfondato il tetto duro della
    * lettura a finestre: incasso e consegnati sono un campione, non il totale, e
    * la pagina deve scriverlo accanto al numero.
@@ -106,6 +125,9 @@ export async function leggiCruscottoOggi(
   const inizioOggi = todayStart.toISOString();
   const fermoDa = new Date(adesso.getTime() - ORE_PRIMA_DI_CHIAMARLO_FERMO * 60 * 60_000).toISOString();
   const nonPrimaDi = new Date(adesso.getTime() - GIORNI_DI_ORDINI_FERMI * 86_400_000).toISOString();
+  // La tabella in fondo guarda indietro quanto dice la sua costante, e non «da
+  // sempre»: un ordine di tre settimane fa non è «cosa sta succedendo adesso».
+  const daOrdiniRecenti = new Date(adesso.getTime() - GIORNI_DI_ORDINI_RECENTI * 86_400_000).toISOString();
 
   const [
     ordersToday,
@@ -140,8 +162,9 @@ export async function leggiCruscottoOggi(
     supabase.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', inizioOggi),
     supabase.from('orders')
       .select('id, total_price, delivery_status, created_at, delivery_full_name, seller:profiles!orders_seller_id_fkey ( store_name )')
+      .gte('created_at', daOrdiniRecenti)
       .order('created_at', { ascending: false })
-      .limit(10),
+      .limit(QUANTI_ORDINI_RECENTI),
   ]);
 
   seRotta(ordersToday, 'gli ordini di oggi');
@@ -170,6 +193,7 @@ export async function leggiCruscottoOggi(
     disputesOpenCount: disputesOpen.count ?? 0,
     signupsTodayCount: signupsToday.count ?? 0,
     recentOrders: (recentOrders.data ?? []) as unknown as OrdineRecente[],
+    finestraOrdiniRecentiGiorni: GIORNI_DI_ORDINI_RECENTI,
     campione: ordersToday.troncato,
   };
 }

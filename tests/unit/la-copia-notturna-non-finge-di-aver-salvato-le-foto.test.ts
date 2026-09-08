@@ -107,7 +107,18 @@ function eseguiLaCopia(
       [
         '#!/usr/bin/env bash',
         'echo "$@" >> "$REGISTRO_RCLONE"',
-        `exit ${opzioni.rclone === 'fallisce' ? '1' : '0'}`,
+        `[ "${opzioni.rclone === 'fallisce' ? '1' : '0'}" = "1" ] && exit 1`,
+        // 8/9/2026 — Il finto rispondeva zero a qualunque cosa, anche a
+        // «elencami i file della copia»: cioe' fingeva una copia vuota mentre
+        // il resto della prova si aspettava una copia riuscita. Da quando lo
+        // script va a RIPRENDERE una foto dalla copia prima di dirsi riuscito,
+        // un finto che risponde sempre zero non basta piu': deve rispondere
+        // quello che risponde rclone.
+        'case "${1:-}" in',
+        '  lsf) echo "foto-di-prova.jpg";;',
+        '  cat) printf "%s" "i byte veri di una foto";;',
+        'esac',
+        'exit 0',
       ].join('\n'),
     );
     chmodSync(join(finti, 'rclone'), 0o755);

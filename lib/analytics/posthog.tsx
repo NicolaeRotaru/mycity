@@ -9,6 +9,11 @@ import {
   VALORE_NASCOSTO,
 } from '@/lib/analytics/indirizzo-senza-dati-personali';
 import { chiaveDellaPaginaVista } from '@/lib/analytics/tracciamento';
+import {
+  filmatoSenzaDatiPersonali,
+  strutturaSenzaIndirizzi,
+  testoSenzaIndirizzi,
+} from '@/lib/analytics/filmato-senza-dati-personali';
 
 /**
  * PostHog client wrapper.
@@ -178,23 +183,74 @@ function indirizzoRipulito(valore: unknown): unknown {
   return indirizzoSenzaDatiPersonali(valore) ?? VALORE_NASCOSTO;
 }
 
+const NOMI_CHE_SONO_INDIRIZZI = new Set<string>(PROPRIETA_CHE_SONO_INDIRIZZI);
+
+/**
+ * Dove il filmato dello schermo tiene i suoi fotogrammi. Non e' una proprieta'
+ * come le altre: e' un pezzo di protocollo del registratore, e vuole una regola
+ * sua (il DOM non si tocca) scritta in `filmato-senza-dati-personali.ts`.
+ */
+const IL_FILMATO = '$snapshot_data';
+
+/**
+ * 8/9/2026 — SOTTO L'ELENCO DEI NOMI ORA C'E' UNA RETE CHE GUARDA IL CONTENUTO.
+ *
+ * IL DIFETTO CHE QUESTA FUNZIONE CHIUDE. Fino a ieri qui si riscrivevano nove
+ * proprieta' chiamate per nome, e basta. Chiudere per nome vuol dire che ogni
+ * canale con un nome nuovo passa: il filmato dello schermo portava fuori
+ * `/search?q=mario.rossi@gmail.com` intero — dentro `$snapshot_data`, che nome
+ * non ne ha nessuno di quei nove — e gli eventi presi al volo dai clic portano
+ * l'indirizzo del link in `$elements` e `$elements_chain`. Tre canali aperti
+ * mentre la prova era verde, perche' la prova guardava i nomi anche lei.
+ *
+ * ORA SI GUARDA IL CONTENUTO, IN TRE STRATI.
+ *   ① i nove nomi restano, con la regola severa: li' dentro tutto e' un
+ *      indirizzo per contratto, e cio' che non lo e' si nasconde intero;
+ *   ② il filmato passa dal suo cancello, che ripulisce i fotogrammi e lascia
+ *      stare il DOM (gia' mascherato, e riscriverlo romperebbe la riproduzione);
+ *   ③ tutto il resto — testi e strutture, a qualunque profondita' — viene
+ *      guardato per quello che contiene: se dentro c'e' un indirizzo, quello
+ *      esce ripulito dalla regola comune, e il resto del testo resta com'e'.
+ *
+ * Un canale che nessuno ha ancora scritto e' pulito il giorno in cui nasce.
+ */
+function contenutoSenzaIndirizzi(valore: unknown): unknown {
+  if (typeof valore === 'string') return testoSenzaIndirizzi(valore);
+  // Strutture (l'elenco degli elementi cliccati, i parametri annidati): stessa
+  // rete, applicata in fondo. Non e' il filmato, quindi NIENTE eccezione del
+  // DOM: una proprieta' qualunque che somigli a un fotogramma non deve poter
+  // ereditare quel salvacondotto e passare intera.
+  if (valore && typeof valore === 'object') return strutturaSenzaIndirizzi(valore);
+  return valore;
+}
+
+/** Il cancello su una borsa di proprieta': i nove nomi, poi la rete sul contenuto. */
+function borsaSenzaDatiPersonali(borsa: Record<string, unknown>): Record<string, unknown> {
+  const pulite: Record<string, unknown> = { ...borsa };
+  for (const nome of PROPRIETA_CHE_SONO_INDIRIZZI) {
+    if (nome in pulite) pulite[nome] = indirizzoRipulito(pulite[nome]);
+  }
+  if (IL_FILMATO in pulite) pulite[IL_FILMATO] = filmatoSenzaDatiPersonali(pulite[IL_FILMATO]);
+  for (const nome of Object.keys(pulite)) {
+    if (NOMI_CHE_SONO_INDIRIZZI.has(nome) || nome === IL_FILMATO) continue;
+    // Le proprieta' della persona hanno il loro giro qui sotto: la regola severa
+    // sui nove nomi vale anche dentro di loro.
+    if (nome === '$set' || nome === '$set_once') continue;
+    pulite[nome] = contenutoSenzaIndirizzi(pulite[nome]);
+  }
+  return pulite;
+}
+
 export function proprietaSenzaDatiPersonali(
   proprieta: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> {
   if (!proprieta || typeof proprieta !== 'object') return {};
-  const pulite: Record<string, unknown> = { ...proprieta };
-  for (const nome of PROPRIETA_CHE_SONO_INDIRIZZI) {
-    if (nome in pulite) pulite[nome] = indirizzoRipulito(pulite[nome]);
-  }
+  const pulite = borsaSenzaDatiPersonali(proprieta);
   // Le stesse chiavi viaggiano anche dentro le proprietà della persona.
   for (const contenitore of ['$set', '$set_once'] as const) {
     const dentro = pulite[contenitore];
     if (!dentro || typeof dentro !== 'object' || Array.isArray(dentro)) continue;
-    const copia: Record<string, unknown> = { ...(dentro as Record<string, unknown>) };
-    for (const nome of PROPRIETA_CHE_SONO_INDIRIZZI) {
-      if (nome in copia) copia[nome] = indirizzoRipulito(copia[nome]);
-    }
-    pulite[contenitore] = copia;
+    pulite[contenitore] = borsaSenzaDatiPersonali(dentro as Record<string, unknown>);
   }
   return pulite;
 }

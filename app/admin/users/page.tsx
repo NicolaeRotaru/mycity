@@ -20,6 +20,17 @@ import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
 import { useTranslations } from 'next-intl';
+import { useDebounce } from '@/lib/hooks';
+import { leggiInBlocchi } from '@/lib/supabase/blocchi';
+import {
+  TETTO_UTENTI, TETTO_RISULTATI_RICERCA,
+  etichetteElenco, filtroRicercaProfili, idsDaContattiAuth, unisciPerId,
+  risultatiRicerca, ambitoDellaRicerca,
+} from '@/lib/admin/elenco-utenti';
+import {
+  raccogliUtentiDaEsportare, raccoltaDallaRicerca, contenutoCsvUtenti, nomeFileUtenti,
+  type UtenteDaEsportare,
+} from '@/lib/admin/esporta-utenti';
 
 type Profile = {
   id: string;
@@ -75,6 +86,88 @@ const APPROVAL_LABELS: Record<string, { label: string; color: string }> = {
   suspended: { label: 'Sospeso',    color: 'bg-secondary-50 text-secondary-600' },
 };
 
+/** Le colonne dei profili con i campi della migrazione 021. */
+const COLONNE_COMPLETE = `
+  id, role, is_approved, approval_status, approval_requested_at, approved_at, rejection_reason,
+  store_name, full_name, phone, store_address,
+  legal_first_name, legal_last_name,
+  business_legal_name, business_form,
+  business_address, business_city, business_pec, created_at
+`;
+
+/** Il ripiego se quella migrazione non c'e' ancora: la pagina resta usabile. */
+const COLONNE_MINIME = 'id, role, is_approved, store_name, full_name, phone, store_address, created_at';
+
+/** I campi che arrivano da auth.users, finche' non sono arrivati. */
+const AUTH_VUOTO = {
+  email: null, auth_phone: null, last_sign_in_at: null, email_confirmed_at: null,
+};
+
+type RispostaProfili = {
+  data: Record<string, unknown>[] | null;
+  error: { code?: string; message?: string } | null;
+};
+
+/** Una riga di auth.users come la restituisce la RPC admin (migrazione 074). */
+type RigaAuth = {
+  id: string; email: string | null; phone: string | null;
+  last_sign_in_at: string | null; email_confirmed_at: string | null;
+};
+
+const conAuthVuoto = (p: Record<string, unknown>): Profile => ({ ...p, ...AUTH_VUOTO } as unknown as Profile);
+
+/** Il profilo letto col ripiego: i campi che mancano restano vuoti, non assenti. */
+const daColonneMinime = (p: Record<string, unknown>): Profile => ({
+  ...p,
+  approval_status: null,
+  approval_requested_at: null,
+  approved_at: null,
+  rejection_reason: null,
+  legal_first_name: null, legal_last_name: null, legal_fiscal_code: null,
+  business_legal_name: null, business_vat_number: null, business_form: null,
+  business_address: null, business_city: null, business_pec: null,
+  ...AUTH_VUOTO,
+} as unknown as Profile);
+
+/**
+ * Legge i profili con le colonne complete e, se la migrazione 021 non c'e',
+ * ripiega su quelle minime.
+ *
+ * Sta qui fuori — e prende la lettura come funzione — perche' adesso lo fanno
+ * in due: l'elenco all'apertura e la ricerca sul database. Due copie della
+ * stessa scala di ripiego si sarebbero scollate al primo cambio di colonne.
+ */
+async function leggiProfili(chiedi: (colonne: string) => PromiseLike<RispostaProfili>): Promise<Profile[]> {
+  const completa = await chiedi(COLONNE_COMPLETE);
+  if (!completa.error) return (completa.data ?? []).map(conAuthVuoto);
+  logger.warn('admin/users: full select failed, fallback to minimal', { code: completa.error.code });
+  const minima = await chiedi(COLONNE_MINIME);
+  if (minima.error) throw minima.error;
+  return (minima.data ?? []).map(daColonneMinime);
+}
+
+/**
+ * Email e ultimo accesso vivono in auth.users: arrivano dalla RPC admin-only
+ * (migrazione 074). Se la RPC non c'e', la pagina resta usabile senza email.
+ */
+async function leggiContattiAuth(): Promise<RigaAuth[]> {
+  const { data, error } = await supabase.rpc('admin_list_user_emails');
+  if (error || !Array.isArray(data)) return [];
+  return data as RigaAuth[];
+}
+
+/** Attacca a ogni profilo i contatti letti da auth.users. */
+function conContattiAuth(base: Profile[], righeAuth: readonly RigaAuth[]): Profile[] {
+  if (righeAuth.length === 0) return base;
+  const perId = new Map<string, RigaAuth>(righeAuth.map((a) => [a.id, a]));
+  return base.map((p) => {
+    const a = perId.get(p.id);
+    return a
+      ? { ...p, email: a.email, auth_phone: a.phone, last_sign_in_at: a.last_sign_in_at, email_confirmed_at: a.email_confirmed_at }
+      : p;
+  });
+}
+
 function AdminUsersPageInner() {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
@@ -86,79 +179,116 @@ function AdminUsersPageInner() {
   const [search, setSearch] = useState('');
   const [detailId, setDetailId] = useState<string | null>(null);
   const [editUser, setEditUser] = useState<Profile | null>(null);
+  const [esportando, setEsportando] = useState(false);
 
   const { data: profiles = [], isLoading, error } = useQuery({
     queryKey: queryKeys.admin.users(),
     queryFn: async () => {
-      // Prima provo la query completa con i campi della migration 021.
-      // Se fallisce (es. migration non ancora applicata) faccio fallback
-      // a una select minimale così la pagina resta usabile.
-      const fullSelect = `
-        id, role, is_approved, approval_status, approval_requested_at, approved_at, rejection_reason,
-        store_name, full_name, phone, store_address,
-        legal_first_name, legal_last_name,
-        business_legal_name, business_form,
-        business_address, business_city, business_pec, created_at
-      `;
-      const minimalSelect = `id, role, is_approved, store_name, full_name, phone, store_address, created_at`;
-
-      const emptyAuth = {
-        email: null, auth_phone: null, last_sign_in_at: null, email_confirmed_at: null,
-      };
-
-      let base: Profile[];
       // #90 — Un tetto esplicito: il pannello leggeva TUTTI i profili a ogni
       // apertura. Cinquecento e' molto piu' di quanti utenti ci siano oggi, e
       // molto meno del punto in cui la pagina smette di aprirsi.
-      const TETTO_UTENTI = 500;
-      const tryFull = await supabase
-        .from('profiles')
-        .select(fullSelect)
-        .order('created_at', { ascending: false })
-        .limit(TETTO_UTENTI);
-      if (!tryFull.error) {
-        base = (tryFull.data ?? []).map((p: Record<string, unknown>) => ({ ...p, ...emptyAuth })) as Profile[];
-      } else {
-        logger.warn('admin/users: full select failed, fallback to minimal', { code: tryFull.error.code });
-        const min = await supabase
+      const base = await leggiProfili((colonne) =>
+        supabase
           .from('profiles')
-          .select(minimalSelect)
+          .select(colonne)
           .order('created_at', { ascending: false })
-          .limit(TETTO_UTENTI);
-        if (min.error) throw min.error;
-        base = (min.data ?? []).map((p: Record<string, unknown>) => ({
-          ...p,
-          approval_status: null,
-          approval_requested_at: null,
-          approved_at: null,
-          rejection_reason: null,
-          legal_first_name: null, legal_last_name: null, legal_fiscal_code: null,
-          business_legal_name: null, business_vat_number: null, business_form: null,
-          business_address: null, business_city: null, business_pec: null,
-          ...emptyAuth,
-        })) as Profile[];
-      }
-
-      // Email + ultimo accesso vivono in auth.users: li recuperiamo via RPC
-      // admin-only (migration 074). Best-effort: se la RPC non c'è, la pagina
-      // resta usabile senza email.
-      type AuthRow = {
-        id: string; email: string | null; phone: string | null;
-        last_sign_in_at: string | null; email_confirmed_at: string | null;
-      };
-      const { data: authRows, error: authErr } = await supabase.rpc('admin_list_user_emails');
-      if (!authErr && Array.isArray(authRows)) {
-        const byId = new Map<string, AuthRow>((authRows as AuthRow[]).map((a) => [a.id, a]));
-        base = base.map((p) => {
-          const a = byId.get(p.id);
-          return a
-            ? { ...p, email: a.email, auth_phone: a.phone, last_sign_in_at: a.last_sign_in_at, email_confirmed_at: a.email_confirmed_at }
-            : p;
-        });
-      }
-      return base;
+          .limit(TETTO_UTENTI) as unknown as PromiseLike<RispostaProfili>,
+      );
+      return conContattiAuth(base, await leggiContattiAuth());
     },
   });
+
+  /**
+   * QUANTI UTENTI CI SONO DAVVERO.
+   *
+   * Non `profiles.length`: quello e' quanti ne ho in mano, e sopra c'e' un
+   * tetto. Il numero vero lo conta il database. Se non riesce a contarlo resta
+   * `null`, che a schermo diventa «non ho potuto contare» — non zero.
+   */
+  const { data: totaleLetto } = useQuery({
+    queryKey: queryKeys.admin.users({ conteggio: 'totale' }),
+    queryFn: async (): Promise<number | null> => {
+      const { count, error: erroreConteggio } = await supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true });
+      if (erroreConteggio) {
+        logger.warn('admin/users: conteggio totale fallito', { code: erroreConteggio.code });
+        return null;
+      }
+      return typeof count === 'number' ? count : null;
+    },
+  });
+  const totaleUtenti = typeof totaleLetto === 'number' ? totaleLetto : null;
+
+  /**
+   * LA RICERCA ESCE DAL TETTO.
+   *
+   * Filtrare in memoria vuol dire cercare dentro i cinquecento piu' recenti: un
+   * cliente iscritto sei mesi fa non usciva, e non usciva in silenzio. Qui la
+   * domanda va al database, su tutti i profili, e l'email — che sta in
+   * auth.users, non in profiles — si cerca dalle righe della RPC admin.
+   */
+  const termineScritto = search.trim();
+  const termine = useDebounce(termineScritto, 300);
+  const filtro = filtroRicercaProfili(termine);
+  const {
+    data: rispostaRicerca,
+    isError: ricercaCaduta,
+  } = useQuery({
+    queryKey: queryKeys.admin.users({ cerca: termine }),
+    enabled: filtro !== null,
+    queryFn: async (): Promise<{ righe: Profile[]; troncato: boolean }> => {
+      if (!filtro) return { righe: [], troncato: false };
+
+      const contatti = await leggiContattiAuth();
+      const idsPerContatto = idsDaContattiAuth(contatti, termine);
+
+      const perTesto = await leggiProfili((colonne) =>
+        supabase
+          .from('profiles')
+          .select(colonne)
+          .or(filtro)
+          .order('created_at', { ascending: false })
+          .limit(TETTO_RISULTATI_RICERCA) as unknown as PromiseLike<RispostaProfili>,
+      );
+
+      // Chi combacia solo per email o telefono: si prende per identificativo, a
+      // blocchi, perche' un elenco lungo di id non ci sta in un indirizzo (#93).
+      // Se questa lettura non riesce l'errore risale, e la pagina lo dice: e'
+      // meglio di un elenco che ha guardato meno di quanto dichiara.
+      const mancanti = idsPerContatto
+        .filter((id) => !perTesto.some((p) => p.id === id))
+        .slice(0, TETTO_RISULTATI_RICERCA);
+      const perContatto = mancanti.length === 0 ? [] : await leggiProfili((colonne) =>
+        leggiInBlocchi<Record<string, unknown>>(
+          mancanti,
+          (blocco) =>
+            supabase
+              .from('profiles')
+              .select(colonne)
+              .in('id', blocco) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message?: string } | null }>,
+        ),
+      );
+
+      const righe = conContattiAuth(unisciPerId(perTesto, perContatto), contatti);
+      return { righe, troncato: righe.length >= TETTO_RISULTATI_RICERCA };
+    },
+  });
+
+  /**
+   * Una lettura senza la forma attesa non e' un risultato: se qui passasse
+   * l'elenco nudo dei profili, la pagina direbbe «cercato su tutti gli utenti»
+   * senza averlo fatto.
+   */
+  const risultato = filtro !== null ? risultatiRicerca<Profile>(rispostaRicerca) : null;
+  const { ambito: ambitoRicerca, mostrato: termineMostrato } = ambitoDellaRicerca({
+    termineScritto,
+    termineCercato: termine,
+    haRisposta: risultato !== null,
+    caduta: ricercaCaduta,
+  });
+  /** Le righe del database valgono solo quando la ricerca e' davvero arrivata. */
+  const ricerca = ambitoRicerca === 'server' ? risultato : null;
 
   // Moderazione via route server-side (audit log + niente update client-side
   // diretti su profiles). La notifica all'utente è inviata dal server.
@@ -271,13 +401,22 @@ function AdminUsersPageInner() {
 
   const pendingCount = profiles.filter((p) => p.approval_status === 'pending' && siPuoModerare(p.role)).length;
 
-  const filtered = profiles.filter((p) => {
+  /**
+   * Le righe da cui si parte: quelle trovate dal database quando si sta
+   * cercando, altrimenti i piu' recenti che la pagina ha in casa.
+   */
+  const inMano = ricerca ? ricerca.righe : profiles;
+
+  const filtered = inMano.filter((p) => {
     if (filter === 'pending') {
       if (!(siPuoModerare(p.role) && p.approval_status === 'pending')) return false;
     } else if (filter !== 'all' && p.role !== filter) {
       return false;
     }
-    if (search) {
+    // Col risultato del database il testo l'ha gia' confrontato lui, su tutti
+    // gli utenti: rifarlo qui butterebbe via proprio le righe che il tetto
+    // nascondeva. Il filtro in memoria resta per il ripiego.
+    if (search && !ricerca) {
       const s = search.toLowerCase();
       return (
         p.full_name?.toLowerCase().includes(s) ||
@@ -291,7 +430,23 @@ function AdminUsersPageInner() {
     return true;
   });
 
-  const detail = detailId ? profiles.find((p) => p.id === detailId) : null;
+  /**
+   * Le tre scritte che devono restare d'accordo — sottotitolo, avviso e elenco
+   * vuoto — escono tutte da qui: e' la funzione che sa dove si e' guardato
+   * davvero (`lib/admin/elenco-utenti.ts`).
+   */
+  const etichette = etichetteElenco({
+    mostrati: filtered.length,
+    caricati: profiles.length,
+    totale: totaleUtenti,
+    tetto: TETTO_UTENTI,
+    ricerca: termineMostrato,
+    ambito: ambitoRicerca,
+    ricercaTroncata: ricerca?.troncato ?? false,
+    filtro: filter,
+  });
+
+  const detail = detailId ? inMano.find((p) => p.id === detailId) : null;
 
   /**
    * #81 — Codice fiscale e partita IVA si chiedono per UN utente, quando si apre
@@ -329,26 +484,73 @@ function AdminUsersPageInner() {
     );
   }
 
-  const exportCSV = () => {
-    const headers = ['ID', 'Email', 'Nome', 'Ruolo', 'Approvato', 'Creato il'];
-    const rows = filtered.map((u) => [
-      u.id,
-      (u as Profile & { email?: string }).email ?? '',
-      u.full_name ?? u.store_name ?? '',
-      u.role ?? '',
-      u.is_approved ? 'sì' : 'no',
-      u.created_at ?? '',
-    ]);
-    const csv = [headers, ...rows]
-      .map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `mycity-utenti-${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  /**
+   * IL FILE NON E' PIU' «QUELLO CHE STA A SCHERMO».
+   *
+   * Prima scriveva `filtered`, cioe' al massimo i cinquecento profili che la
+   * pagina si porta in casa: un elenco degli iscritti monco, senza una riga che
+   * lo dicesse. Ora l'esportazione fa la sua lettura, a finestre, finche' il
+   * database non dice che sono finiti; se non ci arriva, l'avviso e' in prima
+   * riga e nel nome del file. Quando invece si sta guardando il risultato di
+   * una ricerca, il file e' quel risultato — ed e' completo solo se la ricerca
+   * non ha toccato il suo tetto. Come si compone sta in
+   * `lib/admin/esporta-utenti.ts`, dove le prove lo possono eseguire.
+   */
+  const exportCSV = async () => {
+    if (esportando) return; // due clic non fanno due file
+    setEsportando(true);
+    try {
+      const contatti = await leggiContattiAuth();
+      const perId = new Map(contatti.map((c) => [c.id, c]));
+      const raccolta = ricerca
+        ? raccoltaDallaRicerca(filtered, ricerca.troncato)
+        : await raccogliUtentiDaEsportare(async (da, a) => {
+          let q = supabase
+            .from('profiles')
+            // Solo colonne che esistono anche senza la migrazione 021.
+            .select('id, role, is_approved, full_name, store_name, created_at')
+            .order('created_at', { ascending: false })
+            // Secondo criterio d'ordine: senza, fra una finestra e l'altra una
+            // riga puo' saltare o ripetersi mentre entrano iscritti nuovi.
+            .order('id', { ascending: false });
+          if (filter === 'pending') q = q.eq('approval_status', 'pending');
+          else if (filter !== 'all') q = q.eq('role', filter);
+          const { data, error: erroreLettura } = await q.range(da, a);
+          if (erroreLettura) throw erroreLettura;
+          return ((data ?? []) as unknown as UtenteDaEsportare[]).map((u) => ({
+            ...u,
+            email: perId.get(u.id)?.email ?? null,
+          }));
+        });
+
+      if (raccolta.righe.length === 0) {
+        toast.error('Nessun utente da esportare');
+        return;
+      }
+
+      const blob = new Blob([contenutoCsvUtenti(raccolta)], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nomeFileUtenti({
+        oggi: new Date().toISOString().slice(0, 10),
+        completo: raccolta.completo,
+        filtro: filter,
+        ricerca: ricerca ? termineMostrato : '',
+      });
+      a.click();
+      URL.revokeObjectURL(url);
+
+      if (raccolta.completo) {
+        toast.success(`Esportati ${raccolta.righe.length} utenti`);
+      } else {
+        toast.warning(`Il file è PARZIALE: ${raccolta.righe.length} utenti, ce ne sono altri. Non usarlo come elenco degli iscritti.`);
+      }
+    } catch (e: unknown) {
+      toast.error(friendlyError(e));
+    } finally {
+      setEsportando(false);
+    }
   };
 
   return (
@@ -356,15 +558,16 @@ function AdminUsersPageInner() {
       <AdminPageTitle
         eyebrow="Operatività"
         title="Utenti"
-        sub={`${filtered.length} risultati`}
+        sub={etichette.sottotitolo}
         action={
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={exportCSV}
-              disabled={filtered.length === 0}
+              disabled={esportando}
+              aria-busy={esportando}
               className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:bg-cream-50 disabled:opacity-50 text-ink-700 px-4 py-2 rounded-lg font-semibold text-sm"
             >
-              Esporta CSV
+              {esportando ? 'Esporto…' : 'Esporta CSV'}
             </button>
             {pendingCount > 0 && filter !== 'pending' && (
               <button
@@ -400,12 +603,28 @@ function AdminUsersPageInner() {
         ))}
         <input
           type="search"
-          placeholder="Cerca nome, negozio, P.IVA, telefono…"
+          placeholder="Cerca nome, negozio, email, telefono…"
+          aria-label="Cerca fra tutti gli utenti per nome, negozio, email o telefono"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="ml-auto border rounded-lg px-3 py-1.5 text-sm flex-1 sm:flex-none sm:w-64"
         />
       </div>
+
+      {/*
+        La striscia c'è SOLO quando c'è qualcosa da confessare: l'elenco si
+        ferma ai più recenti, oppure la ricerca sul database non ha risposto.
+        Il testo lo decide `etichetteElenco`, insieme al sottotitolo.
+      */}
+      {etichette.avviso && (
+        <p
+          role="status"
+          className="flex items-start gap-2 bg-accent-50 border border-accent-200 text-accent-900 rounded-xl px-4 py-3 text-sm"
+        >
+          <AlertTriangle size={16} strokeWidth={2.2} className="text-accent-600 shrink-0 mt-0.5" aria-hidden />
+          <span>{etichette.avviso}</span>
+        </p>
+      )}
 
       {/* DESKTOP: tabella */}
       <div className="hidden md:block bg-white border rounded-xl overflow-hidden overflow-x-auto">
@@ -423,13 +642,7 @@ function AdminUsersPageInner() {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={5} className="p-8 text-center text-ink-400">
-                  {profiles.length === 0
-                    ? 'Nessun utente registrato sulla piattaforma.'
-                    : search
-                      ? `Nessun risultato per "${search}"`
-                      : filter === 'pending'
-                        ? 'Nessuna richiesta in attesa di approvazione'
-                        : `Nessun utente con ruolo "${filter}"`}
+                  {etichette.vuoto}
                 </td>
               </tr>
             ) : filtered.map((p) => {
@@ -541,7 +754,7 @@ function AdminUsersPageInner() {
       <div className="md:hidden space-y-3">
         {filtered.length === 0 ? (
           <div className="bg-white border border-cream-300 rounded-xl p-8 text-center text-ink-400 text-sm">
-            Nessun utente da mostrare.
+            {etichette.vuoto}
           </div>
         ) : filtered.map((p) => {
           const r = ROLE_LABELS[p.role] ?? ROLE_LABELS.buyer;

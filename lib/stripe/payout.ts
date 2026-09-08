@@ -6,6 +6,9 @@ import { sendEmail } from '@/lib/email/client';
 import { refundIssuedTemplate } from '@/lib/email/templates';
 import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 import { compensoDalContante } from '@/lib/shipping';
+// La merce che torna a scaffale ha una casa sola: la decisione è pura e
+// verificabile, qui si usa e basta (lib/ordini/rimessa-a-scaffale.ts).
+import { rimettiLaMerceAScaffale } from '@/lib/ordini/rimessa-a-scaffale';
 // R043 — l'avviso agli amministratori e' lo stesso che usa il webhook dei
 // rimborsi: una casa sola, cosi' i due percorsi non divergono.
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
@@ -628,6 +631,19 @@ export interface RefundOrderOpts {
    * si è già ripresa la quota proporzionale al rimborso, e se al netto gli
    * resta qualcosa quella resta una decisione di chi governa il caso, non di
    * questa funzione.
+   *
+   * ⚠️ 8/9/2026 — PRIMA DI COLLEGARE QUESTA BANDIERA A UNA ROTTA VERA, LA
+   * MIGRAZIONE 160 DEVE ESSERE APPLICATA.
+   * Chiudere l'ordine rimette la merce a scaffale, e `restore_stock_for_order`
+   * è una somma senza segno di «già fatto». Finché a chiudere era solo il
+   * rimborso pieno la seconda somma era impossibile per costruzione; con
+   * l'annullo dichiarato no: 25,00 su 30,00 chiudono l'ordine, e i 5,00 che
+   * restano possono uscire dopo. La difesa nel codice
+   * (`lib/ordini/rimessa-a-scaffale.ts`) copre gli ordini che l'annullo segna
+   * `CANCELED` — cioè il caso per cui la bandiera è nata, il fattorino per
+   * strada. NON copre un ordine già `DELIVERED` né uno in contanti: lì la
+   * traccia non viene scritta apposta (difetto 054 e riconciliazione del
+   * contante), e il segno lo mette solo il database con la 160.
    */
   annullaLOrdine?: boolean;
 }
@@ -904,8 +920,13 @@ export async function refundOrder(
       .eq('id', order.id);
 
     // La merce torna a scaffale quando l'ordine si chiude, non quando i soldi
-    // tornano tutti: sono due fatti diversi (vedi `annullaLOrdine`).
-    if (ordineDaChiudere) await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
+    // tornano tutti: sono due fatti diversi (vedi `annullaLOrdine`). E torna UNA
+    // VOLTA SOLA: `restore_stock_for_order` e' una somma senza segno di «gia'
+    // fatto», e la decisione sta in lib/ordini/rimessa-a-scaffale.ts.
+    await rimettiLaMerceAScaffale(admin, order, {
+      ordineDaChiudere,
+      giaRimborsatoPrimaCents: alreadyRefunded,
+    });
     await notifyRefundBuyer(admin, order.user_id, order.id, safeAmountCents, opts);
 
     return { refundId: `wallet:${ref}`, reversedCents };
@@ -1054,9 +1075,17 @@ export async function refundOrder(
   // Ordine chiuso → la merce torna a scaffale (P0-4). Il rimborso pieno è il
   // caso normale; «cliente assente» è un ordine chiuso con un rimborso che non
   // è pieno per scelta, e la merce torna lo stesso (vedi `annullaLOrdine`).
-  if (ordineDaChiudere) {
-    await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
-  }
+  //
+  // 8/9/2026 — E torna UNA VOLTA SOLA. Finché a chiudere l'ordine era solo il
+  // rimborso pieno, la seconda chiamata era impossibile per costruzione: dopo
+  // un rimborso pieno non resta niente da rimborsare. Con l'annullo dichiarato
+  // no — 25,00 su 30,00 chiudono l'ordine e i 5,00 restanti possono uscire
+  // dopo — e la somma sarebbe girata due volte. La regola sta in
+  // lib/ordini/rimessa-a-scaffale.ts, dove una prova può eseguirla.
+  await rimettiLaMerceAScaffale(admin, order, {
+    ordineDaChiudere,
+    giaRimborsatoPrimaCents: alreadyRefunded,
+  });
 
   await notifyRefundBuyer(admin, order.user_id, order.id, safeAmountCents, opts);
 

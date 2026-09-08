@@ -10,11 +10,28 @@ import { sizedImage } from '@/lib/image-url';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { friendlyError } from '@/lib/errors';
 import { MAX_GALLERY_ITEMS, type SiteSection } from '@/lib/store-site';
+import {
+  avvisoPerGliScartati,
+  decidiCosaFareDelDrop,
+  mappaAccept,
+  pesoMassimo,
+} from '@/lib/storage/casella-di-caricamento';
 import { uploadSiteImage } from './ImageUpload';
 
 type GallerySec = Extract<SiteSection, { type: 'gallery' }>;
 type Cfg = GallerySec['config'];
 type Item = Cfg['items'][number];
+
+/**
+ * QUELLO CHE LA CASELLA ACCETTA LO DECIDE IL MAGAZZINO, NON QUESTO FILE.
+ *
+ * Fino all'8/9/2026 qui c'erano tre tipi scritti a mano — JPG, PNG, WEBP — mentre il deposito ne
+ * accetta sette. I quattro che mancavano comprendono HEIC e HEIF, cioe' le foto dell'iPhone: il
+ * negoziante le trascinava e non succedeva niente. Calcolati una volta sola fuori dal componente
+ * perche' l'oggetto non cambi identita' a ogni ridisegno.
+ */
+const ACCETTA = mappaAccept();
+const PESO_MASSIMO = pesoMassimo();
 
 /** Config del blocco "galleria": upload multiplo di immagini con testo alternativo. */
 export default function GalleryFields({ section, onChange }: { section: GallerySec; onChange: (s: SiteSection) => void }) {
@@ -24,14 +41,28 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
   const [busy, setBusy] = useState(false);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: {
-      'image/jpeg': ['.jpg', '.jpeg'],
-      'image/png': ['.png'],
-      'image/webp': ['.webp'],
-    },
+    accept: ACCETTA,
+    maxSize: PESO_MASSIMO,
     disabled: busy || items.length >= MAX_GALLERY_ITEMS,
+    /** Il file che la casella butta fuori — formato, peso, quantità — adesso ha una voce. */
+    onDropRejected: (scartati) => {
+      const avviso = avvisoPerGliScartati(scartati, { postiLiberi: MAX_GALLERY_ITEMS - items.length });
+      if (avviso) toast.error(avviso);
+    },
+    /**
+     * E ANCHE I FILE BUONI TAGLIATI HANNO UNA VOCE, che è la metà che nessuno vedeva.
+     *
+     * `react-dropzone` non li scarta: sono a posto. Li tagliava questo `slice`, in silenzio, non
+     * appena si superavano i dodici. Chi ne trascinava venti ne vedeva comparire dodici e non
+     * sapeva se le altre otto stessero ancora caricando. Adesso decide una funzione pura
+     * (`decidiCosaFareDelDrop`), che una prova può eseguire: cosa parte, e cosa si dice.
+     */
     onDrop: async (files) => {
-      const toUpload = files.slice(0, MAX_GALLERY_ITEMS - items.length);
+      const { daCaricare, avviso } = decidiCosaFareDelDrop(files, [], {
+        postiLiberi: MAX_GALLERY_ITEMS - items.length,
+      });
+      if (avviso) toast.error(avviso);
+      const toUpload = daCaricare;
       if (toUpload.length === 0) return;
       setBusy(true);
       try {
