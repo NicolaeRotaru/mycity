@@ -74,6 +74,14 @@ describe('il controllo sulla forma dell\'indirizzo del database', () => {
 
   // Se il controllo sparisce dal lavoro, `blocco` resta null e ogni prova qui sotto fallisce
   // dicendo perché — invece di far saltare la lettura dell'intero file.
+  const bloccoDa = (dopo: number): string | null => {
+    const i = workflow.indexOf('case "$SUPABASE_DB_URL" in', dopo);
+    if (i < 0) return null;
+    const j = workflow.indexOf('esac', i);
+    if (j < 0) return null;
+    return workflow.slice(i, j + 4).split('\n').map((r) => r.replace(/^ {10}/, '')).join('\n');
+  };
+
   const blocco: string | null = (() => {
     const i = workflow.indexOf('case "$SUPABASE_DB_URL" in');
     if (i < 0) return null;
@@ -117,6 +125,49 @@ describe('il controllo sulla forma dell\'indirizzo del database', () => {
   it('non stampa mai il valore del segreto', () => {
     const r = provaCon('valore-segretissimo-da-non-stampare');
     expect(r.stdout + r.stderr).not.toContain('valore-segretissimo-da-non-stampare');
+  });
+});
+
+describe('il guardiano della connessione diretta (IPv6)', () => {
+  // 8/9/2026 — Passato il controllo sulla forma, la copia è morta cosi':
+  //   pg_dump: error: connection to server at "db.<progetto>.supabase.co" (2a05:d012:...),
+  //   port 5432 failed: Network is unreachable
+  // L'indirizzo era giusto: la connessione diretta di Supabase risponde solo in IPv6, e i
+  // computer di GitHub Actions hanno solo IPv4. Serve il Session pooler.
+  const workflow = leggi('.github/workflows/backup-db.yml');
+
+  const secondo: string | null = (() => {
+    const primo = workflow.indexOf('case "$SUPABASE_DB_URL" in');
+    if (primo < 0) return null;
+    const i = workflow.indexOf('case "$SUPABASE_DB_URL" in', primo + 1);
+    if (i < 0) return null;
+    const j = workflow.indexOf('esac', i);
+    if (j < 0) return null;
+    return workflow.slice(i, j + 4).split('\n').map((r) => r.replace(/^ {10}/, '')).join('\n');
+  })();
+
+  const provaCon = (valore: string) => {
+    expect(secondo, 'il guardiano della connessione diretta non c\'è più: nessuno ferma un indirizzo irraggiungibile').not.toBeNull();
+    return spawnSync('bash', ['-c', secondo as string], {
+      encoding: 'utf8',
+      env: { ...process.env, SUPABASE_DB_URL: valore },
+    });
+  };
+
+  it('ferma la connessione diretta, che da qui non si raggiunge', () => {
+    const r = provaCon('postgresql://postgres:segreta@db.clmpyfvpvfjgeviworth.supabase.co:5432/postgres');
+    expect(r.status, 'lasciata passare la connessione diretta: la copia morirebbe su «Network is unreachable»').not.toBe(0);
+    expect(r.stdout + r.stderr).toContain('Session pooler');
+  });
+
+  it('lascia passare il Session pooler, che è la strada giusta', () => {
+    const r = provaCon('postgresql://postgres.clmpyfvpvfjgeviworth:segreta@aws-0-eu-central-1.pooler.supabase.com:5432/postgres');
+    expect(r.status, 'bocciato il Session pooler, che è proprio quello che serve').toBe(0);
+  });
+
+  it('non stampa mai il valore del segreto', () => {
+    const r = provaCon('postgresql://postgres:parolachiave-segretissima@db.abc.supabase.co:5432/postgres');
+    expect(r.stdout + r.stderr).not.toContain('parolachiave-segretissima');
   });
 });
 
