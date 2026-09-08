@@ -4,7 +4,8 @@ import type { NextResponse } from 'next/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { getAnthropic, estimateCostEur, type ModelId } from '@/lib/ai/client';
-import { aggiungiSpesaCents, euroInCents, spesaDiOggiCents } from '@/lib/ai/tettoSpesa';
+import { aggiungiSpesaCents, spesaDiOggiCents, statoContoCondiviso } from '@/lib/ai/tettoSpesa';
+import { decidiSpesaAi, euroInCents, leggiCopieAttese } from '@/lib/ai/decisioneTettoSpesa';
 
 /**
  * Esecuzione centralizzata di `messages.create`.
@@ -154,8 +155,33 @@ export async function controllaTettoSpesaAi(feature: string): Promise<void> {
   const limitEur = Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0);
   if (!(limitEur > 0)) return; // nessun tetto configurato: niente giro di rete
   const spesiCents = await spesaDiOggiCents();
-  if (spesiCents >= euroInCents(limitEur)) {
-    logger.warn('ai_budget_exceeded', { feature, spentEur: spesiCents / 100, limitEur });
+  /**
+   * 8/9/2026 (lotto gravi, corsia 11) — QUI C'ERA UN CONFRONTO SOLO, E VALEVA
+   * DUE COSE OPPOSTE.
+   *
+   * `spesiCents >= euroInCents(limitEur)` si comportava allo stesso modo che il
+   * conto fosse quello del SITO o quello di UNA COPIA. In produzione era il
+   * secondo — la tabella condivisa non e' mai stata applicata la' — quindi il
+   * tetto valeva per copia: tre copie in aria, tre volte il tetto, e la prima
+   * notizia sarebbe stata la fattura. Adesso decide
+   * `lib/ai/decisioneTettoSpesa.ts`, che sa distinguerli e stringe la quota di
+   * questa copia quando il conto in comune non c'e' piu'.
+   */
+  const decisione = decidiSpesaAi({
+    tettoEur: limitEur,
+    spesaCents: spesiCents,
+    conto: statoContoCondiviso(),
+    copieAttese: leggiCopieAttese(process.env.AI_COPIE_ATTESE),
+  });
+  if (!decisione.consentito) {
+    logger.warn('ai_budget_exceeded', {
+      feature,
+      spentEur: spesiCents / 100,
+      limitEur,
+      tettoEffettivoEur: decisione.tettoEffettivoCents / 100,
+      motivo: decisione.motivo,
+      contoCondiviso: !decisione.ripiegoDurevole,
+    });
     throw AiCallError.perTettoSpesa(feature);
   }
 }

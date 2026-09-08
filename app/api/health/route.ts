@@ -9,6 +9,7 @@ import {
   type CronHeartbeat,
   type EsitoBattiti,
 } from '@/lib/cron-health';
+import { misuraVariabili, esitoVariabili, valorePresente } from '@/lib/health-env';
 
 export const runtime = 'nodejs';
 // Sempre fresh: i monitor esterni devono sapere lo stato reale, no cache.
@@ -97,7 +98,22 @@ const ENV_IMPORTANTI = [
   // newsletter. Il sito pero' risponde, quindi non e' un 503: e' un pezzo che manca, e il
   // semaforo lo deve dire forte invece di lasciarlo scoprire al primo cliente che non entra.
   'TURNSTILE_SECRET_KEY',
+  // 8/9/2026 — L'ALTRA META', QUELLA CHE STA NEL BROWSER.
+  //
+  // Qui si guardavano solo i segreti del server, e la chiave pubblica del
+  // controllo anti-robot non c'era mai entrata. Se c'e' la segreta ma manca
+  // questa, le pagine di accesso e registrazione non disegnano il riquadro,
+  // mandano il modulo senza gettone, e il server risponde «CAPTCHA mancante» a
+  // tutti: nessuno entra, nessuno si registra — e il semaforo restava verde.
+  // Succede da solo il giorno che si ruotano le chiavi su Cloudflare e su
+  // Vercel si aggiorna solo la segreta.
+  'NEXT_PUBLIC_TURNSTILE_SITE_KEY',
   'STRIPE_SECRET_KEY',
+  // 8/9/2026 — Senza questa il checkout passa in silenzio a «solo contanti»
+  // (app/checkout/page.tsx: `stripeAvailable = !!STRIPE_PUBLISHABLE_KEY`) anche
+  // con STRIPE_SECRET_KEY al suo posto. Il sito risponde, le pagine si aprono,
+  // e il negozio semplicemente non incassa piu' con la carta.
+  'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
   'STRIPE_WEBHOOK_SECRET',
   'RESEND_API_KEY',
   // 6/9/2026 — Senza questa, in produzione non parte NESSUNA email: lib/env.ts non
@@ -129,7 +145,14 @@ const ENV_IMPORTANTI = [
 
 export async function GET(request: Request) {
   const startedAt = Date.now();
-  const checks: Record<string, { ok: boolean; latencyMs?: number; error?: string }> = {};
+  // `stato`/`esaminate`/`attese` li aggiunge il verdetto sulle variabili: dicono
+  // COME sta messa una spunta rossa (manca / coppia a meta' / non l'ho potuta
+  // guardare) e su quante misure si regge una spunta verde. Escono solo a chi ha
+  // il segreto, come tutto il resto di `checks`.
+  const checks: Record<
+    string,
+    { ok: boolean; latencyMs?: number; error?: string; stato?: string; esaminate?: number; attese?: number }
+  > = {};
 
   // 22/8/2026 — UN 429 SU QUESTA ROTTA VALE COME «ISTANZA MORTA».
   //
@@ -250,10 +273,53 @@ export async function GET(request: Request) {
     dettaglioBattiti = e instanceof Error ? e.message : 'unknown';
   }
 
-  const mancantiVitali = ENV_VITALI.filter((k) => !process.env[k]);
-  const mancantiImportanti = ENV_IMPORTANTI.filter((k) => !process.env[k]);
+  /**
+   * 8/9/2026 — QUELLO CHE HA IL BROWSER NON SI LEGGE DA `process.env[nome]`.
+   *
+   * Le `NEXT_PUBLIC_*` non le legge il server: Next le stampa DENTRO il
+   * pacchetto costruito, a tempo di costruzione, e il browser legge quelle. Ma
+   * `process.env[nome]`, con il nome dentro una variabile, Next non lo
+   * sostituisce: legge l'ambiente del server adesso, che e' un'altra domanda e
+   * puo' rispondere il contrario — per esempio dopo una rotazione di chiavi
+   * senza nuovo rilascio.
+   *
+   * L'unica forma che Next sostituisce e' il nome scritto per esteso. Quindi le
+   * variabili del browser si elencano qui a mano, una per una: e' brutto, ed e'
+   * l'unico modo di misurare davvero cosa vede il cliente invece di misurare
+   * un'altra cosa e chiamarla con lo stesso nome.
+   *
+   * Chi aggiunge una `NEXT_PUBLIC_*` a ENV_IMPORTANTI e si dimentica questa
+   * riga non ottiene un verde: `misuraVariabili` risponde `non_misurabile` e il
+   * semaforo passa a «degradato» dicendo quale non ha potuto guardare.
+   */
+  const nelPacchettoDelBrowser: Record<string, string | undefined> = {
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+    NEXT_PUBLIC_VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+  };
+
+  /**
+   * Le vitali restano una lettura secca dell'ambiente del server, e non passano
+   * dal verdetto con le tre risposte. E' voluto: qui `ok:false` vale 503, cioe'
+   * «ammazza il processo». Un 503 perche' non si e' RIUSCITI A MISURARE sarebbe
+   * lo stesso errore gia' riparato col database lento — un dubbio nostro che
+   * diventa un blackout per mano nostra. Il dubbio si dice, non si esegue.
+   * Le tre `NEXT_PUBLIC_*` vitali, se mancano davvero, il sito non lo serve
+   * comunque: se ne accorge la prima pagina, non serve che se ne accorga il
+   * semaforo per primo.
+   */
+  const mancantiVitali = ENV_VITALI.filter((k) => !valorePresente(process.env[k]));
   checks.env = { ok: mancantiVitali.length === 0, error: mancantiVitali.join(',') || undefined };
-  checks.envOpzionali = { ok: mancantiImportanti.length === 0, error: mancantiImportanti.join(',') || undefined };
+
+  // Le importanti invece passano dal verdetto puro: conosce le coppie (mezza
+  // coppia e' peggio di zero, perche' zero non mente) e sa dire «non l'ho
+  // potuto guardare» invece di tacere. Il verdetto vive in lib/health-env.ts,
+  // dove una prova lo puo' eseguire senza montare mezzo mondo.
+  const variabili = esitoVariabili(
+    misuraVariabili(ENV_IMPORTANTI, (nome) => process.env[nome], nelPacchettoDelBrowser),
+    ENV_IMPORTANTI,
+  );
+  checks.envOpzionali = variabili;
 
   /**
    * 22/8/2026 — UN DATABASE LENTO FACEVA RIAVVIARE UN'ISTANZA SANA.

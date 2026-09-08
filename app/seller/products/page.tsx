@@ -20,6 +20,7 @@ import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { nascondiProdotto } from '@/lib/products/nascondi';
+import { salvaProdottoDalBrowser } from '@/lib/products/salva-dal-browser';
 import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
 
 type SellerProductRow = {
@@ -130,11 +131,21 @@ export default function SellerProductsPage() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  /**
+   * 8/9/2026 — ANCHE DA QUI SI PASSA DALLA PORTA CHE REGISTRA.
+   *
+   * Segnare un prodotto esaurito e' una modifica come le altre: prima scriveva
+   * diritto sul catalogo e non ne restava traccia. Stessa porta del modulo del
+   * prodotto, stesso registro.
+   */
   const toggleStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const newStatus = status === 'available' ? 'sold' : 'available';
-      const { error } = await supabase.from('products').update({ status: newStatus }).eq('id', id);
-      if (error) throw error;
+      await salvaProdottoDalBrowser({
+        prodottoId: id,
+        payload: { status: newStatus },
+        origine: 'venditore-elenco',
+      });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.seller.products }),
     onError: (err: unknown) => toast.error(friendlyError(err)),
@@ -156,8 +167,18 @@ export default function SellerProductsPage() {
           if (Number.isFinite(n)) patch.stock = n;
         }
         if (Object.keys(patch).length === 0) continue;
-        const { error } = await supabase.from('products').update(patch).eq('id', id);
-        if (error) throw error;
+        // 8/9/2026 — QUI SI CAMBIA UN PREZZO: DEVE RESTARE SCRITTO.
+        //
+        // Era la seconda porta senza registro, e la piu' pericolosa delle due:
+        // prezzo e scorta di venti prodotti cambiati in un colpo, e nessun modo
+        // di sapere dopo cosa c'era prima. La banda del 30% qui non c'entra —
+        // il numero lo batte il negoziante — ma la traccia si', per lo stesso
+        // motivo per cui serve sul modulo del prodotto.
+        await salvaProdottoDalBrowser({
+          prodottoId: id,
+          payload: patch,
+          origine: 'venditore-elenco-blocco',
+        });
       }
       return ids.length;
     },
