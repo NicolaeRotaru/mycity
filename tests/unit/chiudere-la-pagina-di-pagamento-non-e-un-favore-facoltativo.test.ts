@@ -85,6 +85,19 @@ function fintoDatabase() {
 
 beforeEach(() => {
   chiuseSuStripe.length = 0;
+  /**
+   * 9/9/2026 — L'ARRAY TORNA UN ARRAY NORMALE, NON SOLO VUOTO.
+   *
+   * La prova sull'ORDINE qui sotto sostituisce `push` per segnare quando Stripe
+   * viene chiamato. Quella sostituzione resta addosso all'array per tutto il
+   * file, e diventa una proprieta' SUA: `toEqual` le proprieta' proprie le
+   * confronta. Girando in un altro ordine, l'altra prova trovava gli stessi
+   * identici elementi e falliva lo stesso, con un messaggio che sembra un
+   * enigma — «Compared values have no visual difference».
+   *
+   * Svuotarlo non bastava: va tolta anche la sostituzione.
+   */
+  delete (chiuseSuStripe as Partial<Pick<string[], 'push'>>).push;
 });
 
 describe('la pagina di pagamento si chiude anche se nessuno lo chiede', () => {
