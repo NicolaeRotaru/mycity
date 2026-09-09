@@ -52,6 +52,15 @@ const SCADUTO: unique symbol = Symbol('scaduto');
  * tetto protegge la persona davanti allo schermo, non il fornitore. È
  * volutamente così, perché la libreria di accesso riprova da sola più volte e
  * un tetto sul singolo tentativo non limiterebbe l'attesa vera.
+ *
+ * ⚠️ 8/9/2026 — QUESTA VA BENE SOLO PER LE LETTURE. Buttare via la risposta di
+ * una lettura non costa niente. Buttare via la risposta di una chiamata che
+ * CAMBIA lo stato dell'accesso costa la sessione di un cliente: quando la
+ * tessera è scaduta, `auth.getUser()` ne stampa una nuova e brucia la vecchia,
+ * e se noi abbiamo già smesso di aspettare quella nuova non arriva al browser.
+ * Per quelle chiamate c'è `chiediConTettoSuScritturaDiSessione` in
+ * `lib/auth/cookie-di-sessione.ts`, che chiude la scatola dei cookie insieme
+ * alla risposta e conta quello che arriva tardi.
  */
 export async function chiediConTetto<T>(
   fai: () => PromiseLike<T>,

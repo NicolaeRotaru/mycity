@@ -155,21 +155,63 @@ export type NumeriDalDatabase = {
   rimborsi_totali_cents?: number | null;
 } | null | undefined;
 
-export type TotaliVenditore = Pick<MetricheVenditore, 'incassatoCents' | 'tuoNettoCents'>;
+/**
+ * CHE PERIODO COPRE IL NUMERO CHE STAI GUARDANDO.
+ *
+ * 8/9/2026 — non era una domanda che si potesse fare. `totaliDiSempre` tornava
+ * due cifre e basta, e il cruscotto le mostrava sotto la scritta «Il tuo netto»
+ * senza nessuna finestra — di fianco a «Articoli venduti», che la sua la
+ * dichiara. Ma quelle due cifre valgono *dall'inizio* quando il database
+ * risponde e sa dei rimborsi, e *ultimi 30 giorni* quando si ripiega sul conto
+ * del browser: due grandezze diverse dietro la stessa scritta. Il negoziante
+ * confronta il numero di lunedi' con quello di martedi' senza sapere che nel
+ * frattempo e' cambiato il metro.
+ *
+ * La finestra adesso esce insieme al numero, dalla stessa funzione: chi mostra
+ * il numero ha in mano anche il suo periodo e non deve indovinarlo.
+ */
+export type FinestraTotali = 'dall-inizio' | 'ultimi-30-giorni';
+
+export type TotaliVenditore = Pick<MetricheVenditore, 'incassatoCents' | 'tuoNettoCents'> & {
+  /** Il periodo che questi due numeri coprono davvero. */
+  finestra: FinestraTotali;
+};
+
+/** Come si dice a un negoziante, in italiano. */
+export function etichettaFinestra(finestra: FinestraTotali): string {
+  return finestra === 'dall-inizio' ? 'dall’inizio' : 'ultimi 30 giorni';
+}
+
+/**
+ * Il cancello, e la finestra che ne consegue: sono la stessa decisione, presa
+ * una volta sola. Scriverla due volte e' il modo in cui l'etichetta e il numero
+ * tornerebbero a divergere.
+ */
+export function finestraDeiTotali(numeri: NumeriDalDatabase): FinestraTotali {
+  return !numeri || numeri.rimborsi_totali_cents == null ? 'ultimi-30-giorni' : 'dall-inizio';
+}
 
 export function totaliDiSempre(
   numeri: NumeriDalDatabase,
-  ripiego: TotaliVenditore,
+  ripiego: Pick<MetricheVenditore, 'incassatoCents' | 'tuoNettoCents'>,
 ): TotaliVenditore {
-  if (!numeri || numeri.rimborsi_totali_cents == null) return ripiego;
-  const incassatoCents = numeri.incasso_totale_cents ?? 0;
+  const finestra = finestraDeiTotali(numeri);
+  if (finestra === 'ultimi-30-giorni') {
+    return {
+      incassatoCents: ripiego.incassatoCents,
+      tuoNettoCents: ripiego.tuoNettoCents,
+      finestra,
+    };
+  }
+  const incassatoCents = numeri!.incasso_totale_cents ?? 0;
   return {
     incassatoCents,
     tuoNettoCents: Math.max(
       0,
       incassatoCents
-        - (numeri.commissione_totale_cents ?? 0)
-        - (numeri.non_del_negozio_cents ?? 0),
+        - (numeri!.commissione_totale_cents ?? 0)
+        - (numeri!.non_del_negozio_cents ?? 0),
     ),
+    finestra,
   };
 }

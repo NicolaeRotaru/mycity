@@ -17,6 +17,8 @@
  * Tutto il resto passa da qui.
  */
 
+import { DOMINIO_MYCITY, indirizzoContatto } from './contatti-pubblici';
+
 function readEnv(name: string): string | undefined {
   const v = process.env[name];
   if (typeof v !== 'string') return undefined;
@@ -91,7 +93,10 @@ export const env = {
   // Web Push (VAPID keys per notifiche push browser-native)
   vapidPublicKey: () => readEnv('NEXT_PUBLIC_VAPID_PUBLIC_KEY'),
   vapidPrivateKey: () => readEnv('VAPID_PRIVATE_KEY'),
-  vapidSubject: () => readEnv('VAPID_SUBJECT') ?? 'mailto:no-reply@mycity.it',
+  // Il soggetto VAPID è l'indirizzo a cui Google e Mozilla scrivono quando le
+  // nostre notifiche push danno problemi. Ripiegava su `mycity.it`, cioè su una
+  // casella che non è del sito: una segnalazione di abuso finiva fuori casa.
+  vapidSubject: () => readEnv('VAPID_SUBJECT') ?? `mailto:${indirizzoContatto('info')}`,
 
   // App URL pubblico (per link in email, redirect Stripe, ecc.)
   appUrl: () => indirizzoPubblico().url,
@@ -100,13 +105,18 @@ export const env = {
 /**
  * Il dominio con cui MyCity si presenta al mondo, scritto una volta sola.
  *
+ * 8/9/2026 — La stringa non sta più qui: nasce da `DOMINIO_MYCITY`
+ * (`lib/contatti-pubblici.ts`), lo stesso da cui nascono gli indirizzi email che
+ * le pagine pubblicano. Erano due copie della stessa cosa in due file, ed è così
+ * che il sito ha finito per vivere su un dominio e mandare a scrivere su un altro.
+ *
  * È l'ultima rete di sicurezza, non la configurazione: il dominio vero lo
  * decide NEXT_PUBLIC_APP_URL. Ma se in rete quella variabile manca e Vercel
  * non ci dice niente, è meglio dichiarare un indirizzo NOSTRO — anche se il
  * dominio non è ancora agganciato — che dichiarare «localhost», che per Google
  * vale «questa pagina non esiste» e per WhatsApp «anteprima rotta».
  */
-export const DOMINIO_PUBBLICO = 'https://mycity-marketplace.com';
+export const DOMINIO_PUBBLICO = `https://${DOMINIO_MYCITY}`;
 
 /**
  * Il mittente usato SOLO sul computer di chi sviluppa, quando RESEND_FROM non è impostata.

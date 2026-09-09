@@ -2,8 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
-import { sizedImage } from '@/lib/image-url';
-import caricatoreFotoRemote from '@/lib/image-loader';
+import {
+  caricatoreDelRiquadroLargo,
+  fotoDelNegozio,
+  type PostoDellaFoto,
+} from '@/lib/media/foto-del-negozio';
 
 export type StoreMediaItem = {
   type: 'image' | 'video';
@@ -12,6 +15,20 @@ export type StoreMediaItem = {
 
 interface Props {
   media: StoreMediaItem[];
+  /**
+   * Dove vive questo carosello. Non ha un valore di fabbrica APPOSTA: è la
+   * misura del riquadro, e il riquadro lo conosce la pagina, non il componente.
+   * Finché era scritta qui dentro, la scheda della vetrina — alta 112 punti —
+   * scaricava la copertina da pagina intera (8/9/2026).
+   */
+  posto: PostoDellaFoto;
+  /**
+   * Solo per la PRIMA foto, e solo se questo carosello si vede senza scorrere.
+   * Spento di fabbrica: `priority` mette la foto fra i precaricamenti urgenti
+   * dell'intestazione, e sei schede urgenti in vetrina rubano la banda a quello
+   * che l'utente sta guardando davvero.
+   */
+  priority?: boolean;
   /** Altezza del carousel in classi Tailwind. Default h-48 sm:h-56 */
   heightClass?: string;
   /** Fallback gradient se nessun media */
@@ -24,6 +41,8 @@ interface Props {
 
 const StoreMediaCarousel = ({
   media,
+  posto,
+  priority = false,
   heightClass = 'h-44 sm:h-56',
   fallbackClass = 'bg-gradient-to-br from-primary-500 via-primary-600 to-secondary-600',
   rounded = '',
@@ -66,13 +85,11 @@ const StoreMediaCarousel = ({
           <div key={i} className="snap-center shrink-0 w-full h-full relative">
             {m.type === 'image' ? (
               <Image
-                src={sizedImage(m.url, 'hero')}
+                {...fotoDelNegozio(m.url, posto, { indice: i, priority })}
                 alt=""
                 fill
-                sizes="(max-width: 768px) 100vw, 1024px"
-                loader={caricatoreFotoRemote}
+                loader={caricatoreDelRiquadroLargo}
                 className="object-cover"
-                priority={i === 0}
               />
             ) : (
               <video

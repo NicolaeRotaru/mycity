@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -27,6 +27,7 @@ import { friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { uploadProductImages } from '@/lib/products/uploadImages';
 import { patchAiPerIlForm } from '@/lib/products/aiPatch';
+import { colonneDelPatchAi } from '@/lib/products/salvataggio-tracciato';
 import { useFormAutosave } from '@/lib/hooks/useFormAutosave';
 import {
   createProductSchema,
@@ -76,7 +77,17 @@ interface ProductFormProps {
   submitting?: boolean;
   onSubmit: (
     payload: ProductPayload,
-    ctx: { intent: 'publish' | 'draft' | 'save'; variants: ProductVariant[] },
+    ctx: {
+      intent: 'publish' | 'draft' | 'save';
+      variants: ProductVariant[];
+      /**
+       * Le colonne che ha proposto l'assistente AI e che il negoziante non ha
+       * riscritto a mano. Vanno nel registro insieme alla modifica: e' la
+       * risposta alla domanda «quel prezzo l'ha messo lui o glielo ha suggerito
+       * la macchina?».
+       */
+      campiDallAi: string[];
+    },
   ) => void;
   onDelete?: () => void;
   /** 27/8/2026 (R029) — nel pannello venditore il tasto NASCONDE, non cancella;
@@ -273,6 +284,21 @@ export default function ProductForm({
     }
   };
 
+  /**
+   * 8/9/2026 — CHI HA SCRITTO QUESTO CAMPO: IL NEGOZIANTE O LA MACCHINA?
+   *
+   * Ogni volta che un suggerimento entra nei campi ne segniamo le colonne. Al
+   * salvataggio l'elenco parte insieme al prodotto e finisce nel registro:
+   * senza, un prezzo sbagliato in vetrina resta senza padre — non si sa se
+   * l'aveva battuto lui o proposto il modello, e non si sa a quanto tornare.
+   *
+   * Un `ref` e non uno stato: non deve ridisegnare niente, deve solo ricordare.
+   */
+  const campiDallAi = useRef<Set<string>>(new Set());
+  const segnaCampiDallAi = (colonne: string[]) => {
+    for (const c of colonne) campiDallAi.current.add(c);
+  };
+
   const handleExtracted = (data: ExtractedProduct) => {
     if (data.name) setValue('name', data.name, { shouldValidate: true });
     if (data.description) setValue('description', data.description, { shouldValidate: true });
@@ -296,6 +322,16 @@ export default function ProductForm({
       setValue('price', dallaFoto.price as unknown as number, { shouldValidate: true });
     }
     for (const motivo of prezzoScartato) toast.warning(motivo);
+    segnaCampiDallAi(
+      colonneDelPatchAi({
+        name: data.name,
+        description: data.description,
+        price: dallaFoto.price,
+        category_id: data.subcategory_id ?? data.category_id,
+        tags: Array.isArray(data.tags) && data.tags.length > 0 ? data.tags : undefined,
+        attributes: data.attributes,
+      }),
+    );
     // Se l'AI ha riconosciuto una sottocategoria figlia, selezionala: resolveTop
     // ricava da sola la categoria di primo livello. Altrimenti resta sul top.
     const resolvedCategory = data.subcategory_id ?? data.category_id;
@@ -399,6 +435,9 @@ export default function ProductForm({
      */
     const { patch, rifiutati } = patchAiPerIlForm(proposta, { prezzoAttuale: getValues('price') });
     const changed: string[] = [...rifiutati];
+    // Il prezzo fuori banda `patchAiPerIlForm` l'ha gia' tolto: quello che
+    // segniamo qui e' solo cio' che entra davvero nei campi.
+    segnaCampiDallAi(colonneDelPatchAi(patch as unknown as Record<string, unknown>));
 
     if (typeof patch.name === 'string' && patch.name.trim()) {
       setValue('name', patch.name.trim(), { shouldValidate: true });
@@ -670,7 +709,7 @@ export default function ProductForm({
       if (consegnaDelNegozioNonLetta && !consegnaSceltaDalNegoziante) {
         delete (payload as Partial<ProductPayload>).express_enabled;
       }
-      onSubmit(payload, { intent, variants });
+      onSubmit(payload, { intent, variants, campiDallAi: [...campiDallAi.current] });
     });
 
   // ---- Anteprima prezzo -----------------------------------------------------

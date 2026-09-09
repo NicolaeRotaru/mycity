@@ -80,6 +80,7 @@ const StoreShowcase = () => {
         <StorePreviewCard
           key={s.id}
           store={s}
+          posto="scheda-in-vetrina"
           products={productsByStore[s.id] ?? []}
           reviews={reviewsByStore[s.id]}
         />

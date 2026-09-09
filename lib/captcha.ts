@@ -39,7 +39,49 @@ export async function verifyTurnstileToken(token: string | null | undefined, rem
     }
     return { ok: true, skipped: true };
   }
-  if (!token) return { ok: false, reason: 'CAPTCHA mancante' };
+  if (!token) {
+    /**
+     * 8/9/2026 — «CAPTCHA MANCANTE» AVEVA DUE CAUSE OPPOSTE E UN MESSAGGIO SOLO.
+     *
+     * Quasi sempre e' quello che sembra: un robot che manda il modulo senza
+     * passare dalla pagina, o una rete che blocca challenges.cloudflare.com.
+     * Roba di tutti i giorni, che non deve svegliare nessuno.
+     *
+     * Ma c'e' un secondo caso, che sembra identico da qui e non lo e' per
+     * niente: la meta' PUBBLICA della coppia non e' finita nel pacchetto del
+     * browser. Allora la pagina non disegna proprio il riquadro, il gettone non
+     * puo' esistere, e questa riga scatta per OGNI persona che prova ad
+     * accedere, registrarsi, scrivere dai contatti o iscriversi alla
+     * newsletter. Non e' un bot: e' la porta d'ingresso del marketplace chiusa.
+     * Succede da solo il giorno che si ruotano le chiavi su Cloudflare e su
+     * Vercel si aggiorna solo la segreta.
+     *
+     * `/api/health` adesso lo vede prima, ed e' li' che va visto. Questa riga
+     * copre il pezzo che il semaforo NON puo' misurare — una chiave pubblica
+     * presente ma sbagliata o vecchia — e serve a chi apre i registri con il
+     * sito gia' in fiamme: gli dice dove guardare invece di lasciarlo cercare
+     * un bot che non c'e'.
+     *
+     * Si registra SOLO in questo secondo caso. Un avviso a ogni gettone
+     * mancante sarebbe rumore su un fatto normale, e un registro che urla
+     * sempre e' un registro che non legge piu' nessuno.
+     *
+     * Il nome va scritto per esteso: e' l'unica forma che Next sostituisce col
+     * valore finito nel pacchetto del browser. `process.env[nome]`, col nome
+     * dentro una variabile, risponderebbe a un'altra domanda.
+     */
+    if (!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) {
+      logger.error(
+        new Error(
+          'NEXT_PUBLIC_TURNSTILE_SITE_KEY assente nel pacchetto del browser: la pagina non disegna ' +
+            'il riquadro anti-robot, quindi nessun gettone puo arrivare. Accesso, registrazione, ' +
+            'contatti e newsletter sono chiusi per TUTTI, non per un bot.',
+        ),
+        { context: 'captcha' },
+      );
+    }
+    return { ok: false, reason: 'CAPTCHA mancante' };
+  }
 
   const body = new URLSearchParams();
   body.append('secret', secret);

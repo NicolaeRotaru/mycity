@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { Check, ArrowLeft } from 'lucide-react';
-import { controlloEta } from './maggiore-eta';
+import { controlloEta } from '@/lib/maggiore-eta';
 
 type DocKind = 'id_front' | 'id_back' | 'selfie' | 'rider_license' | 'rider_insurance' | 'rider_haccp';
 
@@ -28,6 +28,7 @@ export default function RiderOnboardingPage() {
   const tForms = useTranslations('forms');
   const [uploading, setUploading] = useState<DocKind | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [salvandoAnagrafica, setSalvandoAnagrafica] = useState(false);
   const [erroreEta, setErroreEta] = useState<string | null>(null);
   type RiderProfile = {
     rider_license_url?: string | null;
@@ -48,6 +49,14 @@ export default function RiderOnboardingPage() {
     rider_license_expires_on: '',
     rider_insurance_expires_on: '',
   });
+
+  /**
+   * La data che conta è quella già SALVATA nel profilo, non quella scritta nel
+   * modulo: è quella che leggerà il server quando arriverà il documento.
+   */
+  const etaConfermata = controlloEta(
+    typeof profile?.legal_birth_date === 'string' ? profile.legal_birth_date : '',
+  ).ok;
 
   useEffect(() => {
     (async () => {
@@ -79,6 +88,12 @@ export default function RiderOnboardingPage() {
   }, [router]);
 
   async function uploadDoc(kind: DocKind, file: File) {
+    // Il cancello vero sta nella rotta (`/api/kyc/upload-document`): questo è
+    // solo per non far partire una richiesta che sappiamo già rifiutata.
+    if (!etaConfermata) {
+      toast.error('Prima salva i tuoi dati nel passo 1: senza data di nascita non possiamo accettare documenti.');
+      return;
+    }
     setUploading(kind);
     try {
       const fd = new FormData();
@@ -98,6 +113,40 @@ export default function RiderOnboardingPage() {
       toast.error(e instanceof Error ? e.message : 'Errore upload');
     } finally {
       setUploading(null);
+    }
+  }
+
+  /**
+   * 8/9/2026 — PRIMA LA DATA DI NASCITA, POI I DOCUMENTI.
+   *
+   * I documenti partivano appena si sceglieva il file, e il conto degli anni
+   * arrivava alla fine, sul pulsante «salva e avvia». Un quindicenne caricava
+   * carta d'identità e selfie — che restavano nel nostro archivio — e solo dopo
+   * leggeva che non poteva fare il fattorino. Adesso il passo 1 si salva da
+   * solo, e finché non è salvato il passo 3 è chiuso: chi non ha l'età lo
+   * scopre prima di darci un documento, non dopo.
+   */
+  async function salvaAnagrafica() {
+    const eta = controlloEta(form.legal_birth_date);
+    if (!eta.ok) {
+      setErroreEta(eta.messaggio);
+      toast.error(eta.messaggio ?? 'Controlla la data di nascita');
+      return;
+    }
+    setErroreEta(null);
+    setSalvandoAnagrafica(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
+      if (!userId) throw new Error('Sessione scaduta');
+      const { error } = await supabase.from('profiles').update(form).eq('id', userId);
+      if (error) throw error;
+      setProfile((p) => ({ ...(p ?? {}), ...form }));
+      toast.success('Dati salvati. Ora puoi caricare i documenti.');
+    } catch (e) {
+      toast.error(friendlyError(e));
+    } finally {
+      setSalvandoAnagrafica(false);
     }
   }
 
@@ -189,6 +238,25 @@ export default function RiderOnboardingPage() {
             error={erroreEta}
           />
         </div>
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={salvaAnagrafica}
+            disabled={salvandoAnagrafica}
+            className="rounded-lg bg-primary-700 px-4 py-2 text-sm font-bold text-white hover:bg-primary-800 disabled:opacity-50"
+          >
+            {salvandoAnagrafica ? tForms('submitting') : 'Salva i dati'}
+          </button>
+          {etaConfermata ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-olive-700">
+              <Check size={14} strokeWidth={2.2} aria-hidden /> Dati salvati
+            </span>
+          ) : (
+            <span className="text-xs text-ink-500">
+              Salva questo passo prima di caricare i documenti.
+            </span>
+          )}
+        </div>
       </section>
 
       <section className="mx-4 mt-4 rounded-xl border border-cream-300 bg-surface-0 p-4">
@@ -215,6 +283,16 @@ export default function RiderOnboardingPage() {
 
       <section className="mx-4 mt-4 rounded-xl border border-cream-300 bg-surface-0 p-4">
         <h2 className="font-serif text-[17px] font-bold text-ink-900">3. Documenti</h2>
+        {!etaConfermata && (
+          // Il passo 3 resta chiuso finché il passo 1 non è salvato. Prima
+          // arrivavano prima i documenti e poi il «servono 18 anni compiuti»:
+          // il documento di chi non poteva iscriversi era già da noi.
+          <p className="mt-3 rounded-lg border border-cream-300 bg-cream-100 px-3 py-2.5 text-[13px] text-ink-700">
+            Prima salva i tuoi dati (passo 1). Per consegnare servono 18 anni compiuti:
+            lo controlliamo <strong>prima</strong> di chiederti un documento, così non
+            teniamo la carta d&apos;identità di chi non può iscriversi.
+          </p>
+        )}
         <div className="mt-4 space-y-3">
           {DOCS.map((d) => {
             const uploaded = !!profile?.[columnForKind(d.kind)];
@@ -228,12 +306,16 @@ export default function RiderOnboardingPage() {
                     <div className="text-xs text-ink-500 mt-0.5">{d.hint}</div>
                     {uploaded && <div className="mt-1 text-xs text-olive-700 flex items-center gap-1.5"><Check size={14} strokeWidth={2.2} aria-hidden /> Caricato</div>}
                   </div>
-                  <label className="inline-flex cursor-pointer items-center rounded-lg bg-cream-100 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-cream-200">
+                  <label
+                    className={`inline-flex items-center rounded-lg bg-cream-100 px-3 py-2 text-sm font-medium text-ink-700 ${etaConfermata ? 'cursor-pointer hover:bg-cream-200' : 'cursor-not-allowed opacity-50'}`}
+                    title={etaConfermata ? undefined : 'Salva prima i dati del passo 1'}
+                  >
                     {uploading === d.kind ? tForms('uploading') : (uploaded ? tForms('replacePhoto') : tForms('uploadPhoto'))}
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp,application/pdf"
                       className="sr-only"
+                      disabled={!etaConfermata}
                       onChange={(e) => {
                         const f = e.target.files?.[0];
                         if (f) uploadDoc(d.kind, f);

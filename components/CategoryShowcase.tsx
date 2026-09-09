@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -11,6 +12,8 @@ import { supabase } from '@/lib/supabase/client';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { sizedImage } from '@/lib/image-url';
 import { domandaCategoriePubbliche } from '@/lib/queries/categorie-pubbliche';
+import { fotoDiCategoria, motivoDaSegnalare } from '@/lib/immagine-categoria';
+import { logger } from '@/lib/logger';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   abbigliamento:  Shirt,
@@ -26,7 +29,9 @@ const ICON_MAP: Record<string, LucideIcon> = {
   sport:          Trophy,
 };
 
-// Gradiente di base per categoria (fallback se la foto non carica).
+// Il colore della tessera. È del marchio, ed è quello che si vede finché una
+// foto vera non c'è (o se la foto non carica). Questo elenco può restare nel
+// codice: è la nostra tavolozza, non un contenuto da cambiare dal pannello.
 const GRAD_MAP: Record<string, string> = {
   alimentari:     'from-olive-500 to-olive-700',
   abbigliamento:  'from-primary-400 to-primary-700',
@@ -41,33 +46,20 @@ const GRAD_MAP: Record<string, string> = {
   sport:          'from-olive-500 to-olive-700',
 };
 
-// Foto per categoria (Pexels, host ammesso dalla CSP). Scelte "a stima" e NON
-// verificabili dalla sandbox: se un URL non carica resta il gradiente sotto.
-// Sostituibili in un attimo con foto proprie (URL Pexels o upload Supabase).
-const IMG_MAP: Record<string, string> = {
-  abbigliamento: 'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg',
-  alimentari:    'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg',
-  bellezza:      'https://images.pexels.com/photos/2587370/pexels-photo-2587370.jpeg',
-  'casa-cucina': 'https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg',
-  casa:          'https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg',
-  cucina:        'https://images.pexels.com/photos/2724748/pexels-photo-2724748.jpeg',
-  elettronica:   'https://images.pexels.com/photos/356056/pexels-photo-356056.jpeg',
-  giardino:      'https://images.pexels.com/photos/1005058/pexels-photo-1005058.jpeg',
-  giocattoli:    'https://images.pexels.com/photos/168866/pexels-photo-168866.jpeg',
-  libri:         'https://images.pexels.com/photos/159711/pexels-photo-159711.jpeg',
-  sport:         'https://images.pexels.com/photos/163403/pexels-photo-163403.jpeg',
-};
-
+// 8/9/2026 (lotto gravi, corsia 17) — QUI C'ERANO UNDICI FOTO SCRITTE A MANO.
+//
+// Erano foto d'archivio Pexels scelte "a stima", le stesse che può avere in home
+// qualunque sito del mondo, su un mercato che dice di essere i negozi di
+// Piacenza. E per cambiarne una bisognava ripubblicare il sito, perché la
+// tabella `categories` non aveva nessuna colonna per l'immagine.
+//
+// Adesso la foto è un dato: sta in `categories.image_url` (migrazione 159) e la
+// decide `lib/immagine-categoria.ts`. Questo componente non sceglie più nessuna
+// immagine — la chiede. Finché la colonna è vuota si vede il gradiente qui
+// sopra, che almeno è nostro.
 const iconFor = (slug: string): LucideIcon => ICON_MAP[slug] ?? Tag;
 const gradFor = (slug: string): string => GRAD_MAP[slug] ?? 'from-primary-500 to-primary-700';
-const imgFor = (slug: string): string | null => IMG_MAP[slug] ?? null;
 
-
-/**
- * Tessere illustrate con foto reale per categoria (overlay scuro per la
- * leggibilità del nome). Se la foto manca o non carica, resta il gradiente
- * di categoria come base.
- */
 /**
  * Quante tessere stanno in home. Il resto si raggiunge dal link «Vedi tutte le categorie»:
  * prima il taglio era muto — sei su otto, e nessun modo di arrivare alle altre due, mentre
@@ -93,6 +85,11 @@ const TESSERE_SUBITO = 4;
  */
 type Props = { titolo?: string; sottotitolo?: string };
 
+/**
+ * Tessere di categoria: gradiente del marchio, icona e nome. La foto compare
+ * sopra il gradiente solo quando c'è davvero, cioè quando qualcuno l'ha messa
+ * in `categories.image_url`. Se manca o non carica, resta il gradiente.
+ */
 const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
   // 30/8/2026 (R068) — La domanda sta in `lib/queries/catalogo.ts`, e da li' la
   // fa anche il server prima di mandare la pagina. Perche' il precarico serva a
@@ -106,6 +103,26 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
   // `domandaCategorie`, altrimenti il precarico del server non verrebbe
   // riconosciuto. Se la rotta non risponde si legge dal database come prima.
   const { data: categories = [], isLoading, isError } = useQuery(domandaCategoriePubbliche(supabase));
+
+  // Le tessere che finiscono in home, ognuna con la sua foto già decisa dal
+  // dato. Si calcola qui, prima delle uscite anticipate qui sotto: un hook non
+  // può stare dopo un `return`, o cambia di numero tra un giro e l'altro.
+  const tessere = useMemo(
+    () => categories.slice(0, TESSERE_IN_HOME).map((c) => ({ c, foto: fotoDiCategoria(c) })),
+    [categories],
+  );
+
+  // UN INDIRIZZO SCRITTO MALE NON SPARISCE IN SILENZIO. Se qualcuno salva nel
+  // pannello una foto che il browser non potrà caricare, prima non se ne
+  // accorgeva nessuno: si vedeva un gradiente, come quando la foto non c'è.
+  // Adesso resta scritto nei log del browser, con dentro l'indirizzo da
+  // correggere. Il campo vuoto — lo stato normale di oggi — non si segnala.
+  useEffect(() => {
+    for (const { c, foto } of tessere) {
+      const daDire = motivoDaSegnalare(foto);
+      if (daDire) logger.warn('[categorie] foto di categoria scartata', { slug: c.slug, dettaglio: daDire });
+    }
+  }, [tessere]);
 
   // Tre esiti. Prima il componente leggeva solo `data` e disegnava comunque la griglia: finché la
   // risposta non arrivava restava un vuoto sotto il titolo «Cosa cerchi oggi?», e se la lettura
@@ -157,30 +174,36 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
     <>
     {intestazione}
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-      {categories.slice(0, TESSERE_IN_HOME).map((c, i) => {
+      {tessere.map(({ c, foto }, i) => {
         const Icon = iconFor(c.slug);
         const grad = gradFor(c.slug);
-        const img = imgFor(c.slug);
         return (
           <Link
             key={c.id}
             href={`/category/${c.slug}`}
             className="group relative flex aspect-[4/3] items-end overflow-hidden rounded-2xl shadow-card transition-transform hover:-translate-y-0.5"
           >
-            {/* Base: gradiente di categoria (fallback) */}
+            {/* Base: gradiente di categoria (è anche il fallback) */}
             <div className={`absolute inset-0 bg-gradient-to-br ${grad}`} />
-            {/* Foto reale (se presente) */}
-            {img && (
+            {/* La foto vera, solo se c'è nel dato */}
+            {foto.src && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={sizedImage(img, 'card')}
+                src={sizedImage(foto.src, 'card')}
                 alt=""
                 aria-hidden
                 loading={i < TESSERE_SUBITO ? 'eager' : 'lazy'}
                 fetchPriority={i < TESSERE_SUBITO ? 'high' : 'auto'}
                 decoding="async"
                 className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                onError={(e) => {
+                  // La tessera torna al gradiente — ma non di nascosto. Prima
+                  // qui c'era solo il `display:none`: una foto sparita restava
+                  // invisibile anche a noi, e la home perdeva un'immagine senza
+                  // che nessuno lo sapesse.
+                  e.currentTarget.style.display = 'none';
+                  logger.warn('[categorie] la foto della tessera non si è caricata', { slug: c.slug, src: foto.src });
+                }}
               />
             )}
             {/* Scrim per leggibilità */}

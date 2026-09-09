@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Lightbulb, Mail, MessageCircle, BookOpen } from 'lucide-react';
 import { linkWhatsApp } from '@/lib/contatto-whatsapp';
+import { indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
 import { TOPICS } from './domande';
 
 export const metadata = {
@@ -22,10 +23,10 @@ export default function SellerHelpPage() {
           <p className="font-bold">Contatta il team</p>
           <p className="text-xs text-primary-100 mt-1">Risposta entro 24 ore lavorative</p>
         </Link>
-        <a href="mailto:venditori@mycity.it" className="bg-white border rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
+        <a href={mailtoContatto('venditori')} className="bg-white border rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
           <div className="mb-2"><Mail size={24} className="text-primary-600" aria-hidden /></div>
           <p className="font-bold text-ink-900">Email dedicata</p>
-          <p className="text-xs text-ink-500 mt-1">venditori@mycity.it</p>
+          <p className="text-xs text-ink-500 mt-1">{indirizzoContatto('venditori')}</p>
         </a>
         {whatsapp && (
           <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="bg-white border rounded-xl p-5 hover:shadow-md hover:border-green-300 transition-all">

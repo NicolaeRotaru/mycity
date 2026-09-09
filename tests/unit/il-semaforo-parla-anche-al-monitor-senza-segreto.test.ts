@@ -101,6 +101,7 @@ describe('quello che il monitor esterno vede quando i lavori periodici si ferman
       'UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN', 'INTERNAL_API_SECRET',
       'UNSUBSCRIBE_SECRET', 'MIDDLEWARE_CACHE_SECRET', 'SUPPORT_EMAIL', 'TURNSTILE_SECRET_KEY',
       'VAPID_PRIVATE_KEY', 'NEXT_PUBLIC_VAPID_PUBLIC_KEY', 'AI_GLOBAL_DAILY_BUDGET_EUR',
+      'NEXT_PUBLIC_TURNSTILE_SITE_KEY', 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
     ]) completo[k] = 'x';
     // Il monitor vero chiama il sito in produzione: e' l'unico ramo che conta.
     // L'ambiente si sostituisce tutto insieme perche' NODE_ENV, sull'oggetto

@@ -17,6 +17,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle, AdminSectionLabel } from '@/components/admin/AdminUI';
 import { vistaDaQuery } from '@/lib/vista-query';
 import { leggiCruscottoOggi, GIORNI_DI_ORDINI_FERMI, ORE_PRIMA_DI_CHIAMARLO_FERMO, type OrdineRecente } from '@/lib/queries/cruscotto-oggi';
+import { etichettaQuando, intestazioneOrdiniRecenti } from '@/lib/ordini-recenti';
 
 /**
  * Admin "Today" dashboard — 1 colpo d'occhio per tutte le metriche vitali.
@@ -63,6 +64,18 @@ export default function AdminTodayPage() {
   }
 
   const stats = vista.dati;
+
+  /**
+   * 8/9/2026 — LA TABELLA IN FONDO DICE DA CHE GIORNO PARTE.
+   *
+   * Prima il titolo («Ultimi 10 ordini») e la frase del vuoto («Nessun ordine
+   * ancora oggi») erano scritti qui a mano, sopra una lettura che gli ordini di
+   * oggi non li filtrava affatto. Adesso li ricava la finestra che la lettura
+   * ha DAVVERO guardato, e arriva insieme al dato: se cambia la finestra
+   * cambiano le parole, senza che nessuno se lo debba ricordare.
+   */
+  const intestazione = intestazioneOrdiniRecenti(stats.finestraOrdiniRecentiGiorni);
+  const adesso = new Date();
 
   type KpiCardProps = {
     icon: LucideIcon;
@@ -155,12 +168,12 @@ export default function AdminTodayPage() {
       {/* Ultimi ordini */}
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <AdminSectionLabel icon={Receipt}>Ultimi 10 ordini</AdminSectionLabel>
+          <AdminSectionLabel icon={Receipt}>{intestazione.titolo}</AdminSectionLabel>
           <Link href="/admin/orders" className="text-xs text-primary-700 hover:underline">vedi tutti →</Link>
         </div>
         <div className="overflow-hidden rounded-xl border-2 border-cream-300 bg-white">
           {stats.recentOrders.length === 0 ? (
-            <p className="p-6 text-center text-sm text-ink-500">Nessun ordine ancora oggi.</p>
+            <p className="p-6 text-center text-sm text-ink-500">{intestazione.vuoto}</p>
           ) : (
             /* 6/9/2026 — La tabella ha sei colonne: su un telefono non ci stanno.
                Senza questo contenitore le ultime venivano tagliate dal bordo
@@ -192,8 +205,11 @@ export default function AdminTodayPage() {
                         <OrderStatusBadge status={o.delivery_status as OrderStatus} size="sm" />
                       </td>
                       <td className="px-4 py-3 text-right font-semibold">{formatPrice(Number(o.total_price ?? 0))}</td>
-                      <td className="px-4 py-3 text-right text-xs text-ink-500">
-                        {new Date(o.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                      {/* L'ora nuda solo se la riga e' di oggi: un ordine di
+                          giovedi' scorso scriveva «18:42» e sembrava di
+                          stamattina. Lo decide `lib/ordini-recenti`. */}
+                      <td className="whitespace-nowrap px-4 py-3 text-right text-xs text-ink-500">
+                        {etichettaQuando(o.created_at, adesso)}
                       </td>
                     </tr>
                   ))}

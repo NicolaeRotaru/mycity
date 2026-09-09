@@ -8,8 +8,8 @@ import StoreStoryRing from '@/components/StoreStoryRing';
 import StoreMediaCarousel, { type StoreMediaItem } from '@/components/StoreMediaCarousel';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
-import { sizedImage } from '@/lib/image-url';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import { fotoDelNegozio } from '@/lib/media/foto-del-negozio';
 import { coverClassName, socialLinks, badgeLabel } from '@/lib/store-customization';
 import { isOpenNow, streetFromAddress, DAY_KEYS, type StoreHours } from '@/lib/store-hours';
 import type { SectionConfig, SectionContext } from './SectionContext';
@@ -91,17 +91,20 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
       <div className={`relative ${ALTEZZA_COPERTINA} overflow-hidden`}>
         {cover ? (
           <Image
-            src={sizedImage(cover.url, 'hero')}
+            {...fotoDelNegozio(cover.url, 'copertina', { priority: true })}
             alt={`Copertina di ${store.store_name ?? 'questo negozio'}`}
             fill
-            sizes="(max-width: 768px) 100vw, 1024px"
             loader={caricatoreFotoRemote}
             className="object-cover"
-            priority
           />
         ) : media.length > 0 ? (
           // Solo video in copertina: riusa il carousel (gestisce i propri controlli).
-          <StoreMediaCarousel media={media} heightClass={ALTEZZA_COPERTINA} fallbackClass={coverClassName(custom)} />
+          <StoreMediaCarousel
+            media={media}
+            posto="copertina"
+            heightClass={ALTEZZA_COPERTINA}
+            fallbackClass={coverClassName(custom)}
+          />
         ) : (
           // Nessun media: gradiente on-brand scelto dal venditore (fallback grazioso).
           <div className={`h-full w-full ${coverClassName(custom)}`} aria-hidden />

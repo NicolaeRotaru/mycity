@@ -8,6 +8,7 @@ import { VerifiedBadge } from './ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { sizedImage } from '@/lib/image-url';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
+import type { PostoDellaFoto } from '@/lib/media/foto-del-negozio';
 
 export type StoreCardData = {
   id: string;
@@ -36,6 +37,13 @@ interface Props {
   distanceKm?: number | null;
   /** se true rende il cover un filo più basso */
   compact?: boolean;
+  /**
+   * In quale griglia sta questa scheda: due colonne da telefono in vetrina,
+   * una sola nell'elenco negozi. Decide quanto grande viene chiesta la
+   * copertina, e non ha un valore di fabbrica perché la griglia la conosce
+   * solo la pagina che la disegna.
+   */
+  posto: PostoDellaFoto;
 }
 
 /**
@@ -44,7 +52,7 @@ interface Props {
  * rating con stella, 3 anteprime ordinate, un solo CTA. Usata nelle rail
  * orizzontali (home). Per le pagine-lista lunghe c'è invece StoreListRow.
  */
-const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact = false }: Props) => {
+const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact = false, posto }: Props) => {
   const hours = (store.store_hours ?? {}) as StoreHours;
   const todayKey = DAY_KEYS[new Date().getDay()];
   const open = isOpenNow(hours[todayKey]);
@@ -58,6 +66,7 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
       <Link href={storeHref} aria-label={`Apri ${store.store_name}`} className="relative block">
         <StoreMediaCarousel
           media={media}
+          posto={posto}
           heightClass={compact ? 'h-24' : 'h-28'}
           fallbackClass="bg-gradient-to-br from-primary-500 via-primary-600 to-secondary-600"
         />

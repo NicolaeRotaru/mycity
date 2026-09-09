@@ -10,6 +10,7 @@ import EmptyState from '@/components/EmptyState';
 import { Textarea } from '@/components/ui/Field';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
+import { attributoAccept } from '@/lib/storage/regole-secchi';
 import { useTranslations } from 'next-intl';
 import { Package, RefreshCw, AlertTriangle, MessageSquare, Clock, Pencil, type LucideIcon } from 'lucide-react';
 
@@ -245,7 +246,12 @@ export default function NewReturnPage() {
               {uploading ? '…' : '+'}
               <input
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                /* 8/9/2026 — erano tre tipi scritti a mano qui accanto, mentre la porta e il
+                   deposito ne accettano sette (070). Il cliente che allega la foto del prodotto
+                   rotto scattata con l'iPhone non la vedeva nemmeno comparire nella finestra di
+                   scelta: il file c'era, il campo lo nascondeva. La lista arriva dalla stessa
+                   regola che poi rifiuta il file. */
+                accept={attributoAccept()}
                 className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

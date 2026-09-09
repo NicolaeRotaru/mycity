@@ -492,9 +492,17 @@ export function withAdminAuthRateLimit(opts: AuthRateLimitOpts, handler: Generic
  * girare (dead-man's switch). Trasparente per tutti i cron (passano da qui).
  * Tutto in try/catch fire-and-forget: non deve MAI far fallire il cron.
  */
+function nomeDelLavoro(req: NextRequest): string | null {
+  try {
+    return new URL(req.url).pathname.split('/').filter(Boolean).pop() ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function recordCronHeartbeat(req: NextRequest): Promise<void> {
   try {
-    const name = new URL(req.url).pathname.split('/').filter(Boolean).pop();
+    const name = nomeDelLavoro(req);
     if (!name) return;
     const { getAdminSupabase } = await import('@/lib/supabase/server');
     await getAdminSupabase()
@@ -525,28 +533,57 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
       : null;
     if (!secretsMatch(bearer, expected)) return ApiErrors.unauthorized();
 
-    // Il battito si registra DOPO, e solo se il lavoro e' andato a buon fine.
-    //
-    // Prima veniva scritto subito dopo il controllo del segreto: l'allarme
-    // «questo lavoro non gira piu'» restava zitto anche quando il lavoro girava
-    // e falliva ogni volta. Cioe' il sensore che doveva accorgersi dei guasti
-    // era l'unico che non li vedeva.
     const risposta = await handler(req);
-    if (risposta.status < 400) {
-      // 27/8/2026 (R181) — IL BATTITO SI ASPETTA, NON SI SPARA.
-      //
-      // Qui c'era `void recordCronHeartbeat(req)`: lanciato e non atteso. Su
-      // Vercel la funzione puo' essere spenta appena ha risposto, quindi quella
-      // scrittura poteva morire a meta' o non partire affatto. E il modo in cui
-      // falliva era il peggiore per un sensore: il lavoro girava benissimo, il
-      // battito non arrivava, e il sorvegliante annunciava che il lavoro era
-      // fermo. Allarmi falsi, finche' nessuno li guarda piu'.
-      //
-      // Aspettarlo costa pochi millisecondi, su un lavoro periodico dove il
-      // tempo di risposta non lo guarda nessuno. Gli errori restano innocui:
-      // `recordCronHeartbeat` non rilancia, si limita a lamentarsi.
-      await recordCronHeartbeat(req); // dead-man's switch (🟠-25)
+
+    // 8/9/2026 — IL BATTITO DICE «SONO PASSATO DI QUI», NON «È ANDATO TUTTO BENE».
+    //
+    // Qui il battito si scriveva solo `if (risposta.status < 400)`. Sembra
+    // prudente e invece disarma l'unico sensore che questa tabella sa dare.
+    //
+    // Il caso vero, misurato su `process-deletions`: un fattorino se ne va
+    // senza versare i contanti, dal 31esimo giorno la notte finisce 500 SEMPRE.
+    // Passate 26 ore il battito e' vecchio e il sorvegliante annuncia «Cron
+    // process-deletions fermo (soglia 1560): scheduler o deploy down?» — mentre
+    // il lavoro parte puntuale ogni notte. Chi viene svegliato guarda Vercel
+    // per mezz'ora prima di aprire i log. E da quel momento il battito resta
+    // pinnato su «fermo» PER SEMPRE: il giorno in cui il lavoro si ferma
+    // DAVVERO, il segnale e' identico a quello di ieri. Il dead-man's switch
+    // non puo' piu' scattare.
+    //
+    // Un canale solo — il codice di stato HTTP — portava due messaggi diversi:
+    // «questo giro non e' avvenuto» e «questo giro ha trovato un problema».
+    // Adesso ognuno ha il suo:
+    //  · «non e' avvenuto»          -> il battito manca (questa riga).
+    //  · «ha trovato un problema»   -> il 500 nel pannello dei lavori, la
+    //    notifica agli amministratori che la rotta scrive da se' (`sveglia()`),
+    //    la riga di errore qui sotto che arriva a Sentry, e il controllo sullo
+    //    STATO in operational-alerts — l'unica forma che regge anche quando il
+    //    lavoro non parte affatto.
+    //
+    // Cosa NON e' coperto, detto chiaro: un cron che gira e fallisce ogni notte
+    // senza svegliare nessuno resta visibile solo nei log. Il segnale suo —
+    // `cron_heartbeats.last_success_at` piu' un controllo dedicato — vuole una
+    // migrazione e una modifica al sorvegliante, ed e' registrato come difetto
+    // a parte.
+    if (risposta.status >= 400) {
+      logger.error('[cron] il lavoro e passato ma ha risposto con un errore', {
+        lavoro: nomeDelLavoro(req), status: risposta.status,
+      });
     }
+
+    // 27/8/2026 (R181) — IL BATTITO SI ASPETTA, NON SI SPARA.
+    //
+    // Qui c'era `void recordCronHeartbeat(req)`: lanciato e non atteso. Su
+    // Vercel la funzione puo' essere spenta appena ha risposto, quindi quella
+    // scrittura poteva morire a meta' o non partire affatto. E il modo in cui
+    // falliva era il peggiore per un sensore: il lavoro girava benissimo, il
+    // battito non arrivava, e il sorvegliante annunciava che il lavoro era
+    // fermo. Allarmi falsi, finche' nessuno li guarda piu'.
+    //
+    // Aspettarlo costa pochi millisecondi, su un lavoro periodico dove il
+    // tempo di risposta non lo guarda nessuno. Gli errori restano innocui:
+    // `recordCronHeartbeat` non rilancia, si limita a lamentarsi.
+    await recordCronHeartbeat(req); // dead-man's switch (🟠-25)
     return risposta;
   };
 }

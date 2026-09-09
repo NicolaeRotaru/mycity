@@ -11,6 +11,7 @@ import { Input, Textarea, Select } from '@/components/ui/Field';
 import { Mail, MessageCircle, Phone, MapPin, Clock, Lightbulb } from 'lucide-react';
 import { rigaIdentita, titolare } from '@/lib/legal/titolare';
 import { linkWhatsApp } from '@/lib/contatto-whatsapp';
+import { indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
@@ -86,10 +87,10 @@ export default function ContactPage() {
       </div>
 
       <div className="grid md:grid-cols-3 gap-4 mb-10">
-        <a href="mailto:info@mycity.it" className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
+        <a href={mailtoContatto('info')} className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
           <div className="mb-2"><Mail size={28} className="text-primary-600" aria-hidden /></div>
           <div className="font-bold">Email</div>
-          <div className="text-sm text-ink-600">info@mycity.it</div>
+          <div className="text-sm text-ink-600">{indirizzoContatto('info')}</div>
           <div className="text-xs text-ink-500 mt-1">Risposta entro 24 ore lavorative</div>
         </a>
         {/*
@@ -173,7 +174,7 @@ export default function ContactPage() {
             {captchaRotto && (
               <p className="text-center text-sm text-ink-600">
                 {captchaRotto} Puoi provare lo stesso a inviare: se non funziona,
-                ricarica la pagina o scrivici a info@mycity-marketplace.com.
+                ricarica la pagina o scrivici a {indirizzoContatto('info')}.
               </p>
             )}
             <Button type="submit" loading={sending} fullWidth size="lg">

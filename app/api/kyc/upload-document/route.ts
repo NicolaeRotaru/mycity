@@ -5,6 +5,7 @@ import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { richiestaConTetto } from '@/lib/api/corpo';
 import { tipoDaiPrimiByte, ESTENSIONE_PER_TIPO } from '@/lib/upload/firma-del-file';
+import { cancelloEtaServer } from '@/lib/maggiore-eta';
 
 export const runtime = 'nodejs';
 
@@ -30,6 +31,42 @@ const ALLOWED_KINDS = new Set([
  */
 // Rate limit: 20 upload / 10 min per utente (anti-abuse + protezione storage)
 export const POST = withAuthRateLimit({ name: 'kyc-upload', max: 20, windowMs: 10 * 60_000 }, async ({ user, req }): Promise<NextResponse> => {
+  const admin = getAdminSupabase();
+
+  /**
+   * 8/9/2026 — IL DOCUMENTO DEL MINORENNE ERA GIÀ NEL NOSTRO ARCHIVIO QUANDO IL
+   * CANCELLO DEI DICIOTTO ANNI SI ACCORGEVA DI LUI.
+   *
+   * Il controllo dell'età girava sul pulsante finale del modulo. I documenti,
+   * invece, partono appena si sceglie il file: carta d'identità, retro e selfie
+   * arrivavano qui, finivano nel secchio `kyc-docs`, e solo dopo il ragazzo
+   * leggeva «servono 18 anni compiuti».
+   *
+   * Il caso vero non è chi aggira il controllo: è chi lo subisce. Da quel
+   * momento conserviamo il documento d'identità di un quindicenne senza una
+   * base giuridica utile — il contratto che la giustificherebbe non può
+   * esistere — senza informativa dedicata ai minori e senza nessuno che lo
+   * cancelli: la pulizia dell'archivio passa solo dalla chiusura dell'account,
+   * che quel ragazzo non chiederà mai.
+   *
+   * Quindi l'ordine dei passi si rovescia: prima la data di nascita nel
+   * profilo, poi i documenti. Il controllo sta **prima** della lettura del
+   * corpo: di un minorenne non entra in memoria nemmeno il file.
+   */
+  const { data: profiloEta } = await admin
+    .from('profiles')
+    .select('legal_birth_date')
+    .eq('id', user.id)
+    .single();
+  const cancello = cancelloEtaServer(profiloEta);
+  if (!cancello.ok) {
+    // Nel registro il motivo e chi, mai la data di nascita: è un dato di una persona.
+    logger.warn('[kyc] upload rifiutato dal cancello dei 18 anni', { userId: user.id, motivo: cancello.motivo });
+    return cancello.stato === 403
+      ? ApiErrors.forbidden(cancello.messaggio ?? '')
+      : ApiErrors.invalidRequest(cancello.messaggio ?? '');
+  }
+
   // Tetto PRIMA di leggere il corpo. `req.formData()` legge e analizza l'intero
 
   // corpo in memoria: il controllo su file.size arrivava quando il file era già
@@ -53,8 +90,6 @@ export const POST = withAuthRateLimit({ name: 'kyc-upload', max: 20, windowMs: 1
   if (!(file instanceof File)) return ApiErrors.invalidRequest('File mancante');
   if (file.size > MAX_BYTES) return ApiErrors.invalidRequest('File troppo grande (max 8 MB)');
   if (!ALLOWED_MIME.has(file.type)) return ApiErrors.invalidRequest('Formato non supportato (JPG/PNG/WEBP/PDF)');
-
-  const admin = getAdminSupabase();
 
   const bytes = new Uint8Array(await file.arrayBuffer());
 

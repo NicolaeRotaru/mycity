@@ -131,16 +131,95 @@ jobs:
             exit 1
           fi
 
+      # 8/9/2026 — IL FILO CHE MANCAVA, E CHE AVREBBE FATTO CREDERE A NICOLA DI
+      # AVERE UNA COPIA DELLE FOTO CHE NON C'ERA.
+      #
+      # Il pezzo che copia le immagini e' scritto in fondo a scripts/backup-db.sh
+      # dal 31 agosto, e si accende «da solo appena ci sono le variabili». Solo
+      # che le variabili nessuno gliele passava: questo lavoro gli dava tre cose
+      # (indirizzo del database, passphrase, cartella) e basta. Quindi il giorno
+      # in cui Nicola avesse comprato il secchio e messo le chiavi nei segreti,
+      # la copia delle foto NON sarebbe partita lo stesso — e lui avrebbe visto
+      # una spunta verde e concluso che le foto erano al sicuro.
+      #
+      # E' il difetto peggiore dei tre: non «manca una copia» (lo sai), ma
+      # «credi di averla» (non lo sai). Qui il filo si attacca.
+      #
+      # Servono tre cose insieme, e o ci sono tutte o non c'e' niente:
+      #   vars.STORAGE_SYNC_SOURCE     il remote rclone del fornitore  ("supabase:")
+      #   vars.STORAGE_SYNC_DEST       il remote di destinazione       ("b2:mycity-foto")
+      #   secrets.RCLONE_CONFIG_BASE64 la configurazione di rclone con le chiavi
+      # Mezza configurazione e' la trappola: sembra accesa e non copia niente.
+      # Per questo qui diventa rossa invece di restare verde in silenzio.
+      - name: Le foto vanno in copia?
+        id: foto
+        env:
+          SORGENTE: ${{ vars.STORAGE_SYNC_SOURCE }}
+          DESTINAZIONE: ${{ vars.STORAGE_SYNC_DEST }}
+          CONFIGURAZIONE: ${{ secrets.RCLONE_CONFIG_BASE64 }}
+        run: |
+          set -euo pipefail
+          mancanti=""
+          presenti=0
+          if [ -n "${SORGENTE:-}" ]; then presenti=$((presenti + 1)); else mancanti="$mancanti STORAGE_SYNC_SOURCE(variabile)"; fi
+          if [ -n "${DESTINAZIONE:-}" ]; then presenti=$((presenti + 1)); else mancanti="$mancanti STORAGE_SYNC_DEST(variabile)"; fi
+          if [ -n "${CONFIGURAZIONE:-}" ]; then presenti=$((presenti + 1)); else mancanti="$mancanti RCLONE_CONFIG_BASE64(segreto)"; fi
+
+          if [ "$presenti" -eq 0 ]; then
+            echo "accesa=no" >> "$GITHUB_OUTPUT"
+            echo "::warning::La copia delle foto e' spenta: mancano il secchio di destinazione e le sue chiavi. Il database viene copiato lo stesso."
+            exit 0
+          fi
+          if [ "$presenti" -lt 3 ]; then
+            echo "::error::La copia delle foto e' configurata a meta': manca$mancanti. Cosi' non copierebbe niente e il lavoro sarebbe verde lo stesso. Mettile tutte e tre, oppure toglile tutte."
+            exit 1
+          fi
+          echo "accesa=si" >> "$GITHUB_OUTPUT"
+          echo "La copia delle foto e' accesa."
+
+      - name: Prepara rclone
+        if: steps.foto.outputs.accesa == 'si'
+        env:
+          CONFIGURAZIONE: ${{ secrets.RCLONE_CONFIG_BASE64 }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends rclone
+          # La configurazione contiene le chiavi del secchio: si scrive su un
+          # file leggibile solo dall'utente e non si stampa mai.
+          install -d -m 700 "$HOME/.config/rclone"
+          printf '%s' "$CONFIGURAZIONE" | base64 -d > "$HOME/.config/rclone/rclone.conf"
+          chmod 600 "$HOME/.config/rclone/rclone.conf"
+          # `listremotes` stampa solo i NOMI dei remote, mai le chiavi: serve a
+          # vedere subito se la configurazione si e' letta.
+          rclone listremotes
+
       - name: Esegui il backup
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
           BACKUP_DIR: ${{ github.workspace }}/backup
+          STORAGE_SYNC_SOURCE: ${{ vars.STORAGE_SYNC_SOURCE }}
+          STORAGE_SYNC_DEST: ${{ vars.STORAGE_SYNC_DEST }}
+          STORAGE_SYNC_BUCKETS: ${{ vars.STORAGE_SYNC_BUCKETS }}
+          STORAGE_SYNC_STORICO: ${{ vars.STORAGE_SYNC_STORICO }}
         run: |
           mkdir -p "$BACKUP_DIR"
           bash scripts/backup-db.sh
 
+      # 8/9/2026 — LA COPIA DEL DATABASE NON DEVE MORIRE INSIEME ALLE FOTO.
+      #
+      # Di norma un passo fallito salta tutti quelli dopo. Quindi la notte in cui
+      # la copia delle foto fallisce — e da oggi puo' fallire per motivi nuovi,
+      # per esempio una chiave che non sa rileggere — il dump del database
+      # veniva scritto e cifrato dentro il contenitore, e poi buttato via con il
+      # contenitore stesso: nessun artefatto, nessuna copia di quella notte.
+      #
+      # Si sarebbe perso il pezzo piu' importante per colpa del meno importante.
+      # `!cancelled()` conserva la copia comunque: il lavoro resta rosso (giusto,
+      # va visto), ma il database di stanotte c'e'.
       - name: Conserva la copia fuori dal contenitore
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: backup-database-${{ github.run_id }}
@@ -242,11 +321,60 @@ jobs:
             exit 1
           fi
 
+      # 8/9/2026 — La prova mensile deve provare anche le FOTO, non solo le
+      # tabelle. La scheda che ha chiesto questa copia finiva cosi': «la prova
+      # mensile deve verificare che almeno un file si riapra». Lo script adesso
+      # riapre davvero una foto dalla copia prima di dirsi riuscito — ma solo se
+      # qui gli si passano le stesse variabili della copia notturna. Senza, la
+      # prova mensile proverebbe meta' della rete di sicurezza.
+      - name: Le foto vanno provate?
+        id: foto
+        env:
+          SORGENTE: ${{ vars.STORAGE_SYNC_SOURCE }}
+          DESTINAZIONE: ${{ vars.STORAGE_SYNC_DEST }}
+          CONFIGURAZIONE: ${{ secrets.RCLONE_CONFIG_BASE64 }}
+        run: |
+          set -euo pipefail
+          mancanti=""
+          presenti=0
+          if [ -n "${SORGENTE:-}" ]; then presenti=$((presenti + 1)); else mancanti="$mancanti STORAGE_SYNC_SOURCE(variabile)"; fi
+          if [ -n "${DESTINAZIONE:-}" ]; then presenti=$((presenti + 1)); else mancanti="$mancanti STORAGE_SYNC_DEST(variabile)"; fi
+          if [ -n "${CONFIGURAZIONE:-}" ]; then presenti=$((presenti + 1)); else mancanti="$mancanti RCLONE_CONFIG_BASE64(segreto)"; fi
+
+          if [ "$presenti" -eq 0 ]; then
+            echo "accesa=no" >> "$GITHUB_OUTPUT"
+            echo "::warning::La prova mensile non prova le foto: la loro copia e' spenta."
+            exit 0
+          fi
+          if [ "$presenti" -lt 3 ]; then
+            echo "::error::La copia delle foto e' configurata a meta': manca$mancanti. Cosi' non copierebbe niente e il lavoro sarebbe verde lo stesso. Mettile tutte e tre, oppure toglile tutte."
+            exit 1
+          fi
+          echo "accesa=si" >> "$GITHUB_OUTPUT"
+          echo "La copia delle foto e' accesa: la prova la comprende."
+
+      - name: Prepara rclone
+        if: steps.foto.outputs.accesa == 'si'
+        env:
+          CONFIGURAZIONE: ${{ secrets.RCLONE_CONFIG_BASE64 }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends rclone
+          install -d -m 700 "$HOME/.config/rclone"
+          printf '%s' "$CONFIGURAZIONE" | base64 -d > "$HOME/.config/rclone/rclone.conf"
+          chmod 600 "$HOME/.config/rclone/rclone.conf"
+          rclone listremotes
+
       - name: Fai una copia fresca
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
           BACKUP_DIR: ${{ github.workspace }}/backup
+          STORAGE_SYNC_SOURCE: ${{ vars.STORAGE_SYNC_SOURCE }}
+          STORAGE_SYNC_DEST: ${{ vars.STORAGE_SYNC_DEST }}
+          STORAGE_SYNC_BUCKETS: ${{ vars.STORAGE_SYNC_BUCKETS }}
+          STORAGE_SYNC_STORICO: ${{ vars.STORAGE_SYNC_STORICO }}
         run: |
           mkdir -p "$BACKUP_DIR"
           bash scripts/backup-db.sh

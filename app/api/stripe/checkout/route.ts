@@ -9,7 +9,6 @@ import { logger } from '@/lib/logger';
 import { clientIdGaDalCookie } from '@/lib/analytics/ga-client-id';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
-import { validateCoupon } from '@/lib/coupons';
 import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
@@ -17,6 +16,8 @@ import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { motivoNegozioChiuso, negozioPuoServire } from '@/lib/store-hours';
 import { fetchActiveDiscounts } from '@/lib/promotions';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
+import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
+import { riusoDellaCassaAperta, type SessioneRiletta } from '@/lib/ordini/riuso-della-cassa-aperta';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
 import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -192,6 +193,33 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     )
     .digest('hex');
 
+  /**
+   * 8/9/2026 — PRIMA DI CHIEDERE QUALUNQUE COSA, SI RESTITUISCE QUELLO CHE
+   * QUESTA STESSA PERSONA TENEVA GIÀ IN OSTAGGIO.
+   *
+   * Un tentativo abbandonato blocca DUE cose del cliente: la merce e il codice
+   * sconto. La pulizia che le ridà entrambe stava più in basso, subito prima di
+   * `reserve_stock` — cioè dopo il punto in cui la merce viene contata e dopo
+   * quello in cui il codice viene richiesto di nuovo. Chi tornava indietro dalla
+   * pagina di Stripe per cambiare la fascia si sentiva rispondere «Stock
+   * insufficiente per Torta (0 disponibili)» oppure «Coupon non valido: Codice
+   * esaurito»: la sua torta, il suo codice, un ordine che non esiste.
+   *
+   * Adesso la pulizia è il primo movimento della rotta, come già nella cassa in
+   * contanti. Il tentativo IDENTICO non si tocca (`improntaDaTenere`): quello lo
+   * gestisce il riuso della sessione, poche righe più sotto. Si toccano solo i
+   * tentativi che impegnano i prodotti di QUESTO carrello.
+   *
+   * Costa un viaggio in più prima delle letture in parallelo. Vale il prezzo:
+   * liberare dopo aver letto le disponibilità non serve a niente, il numero in
+   * mano sarebbe già quello vecchio.
+   */
+  const riserveLiberate = await liberaRiserveAbbandonate(admin, {
+    buyerId: user.id,
+    improntaDaTenere: improntaCarrello,
+    soloConProdotti: uniqueProductIds,
+  });
+
   const [prodottiLetti, discountMap, variantiLette, venditoriLetti, tentativoGiaAperto] = await Promise.all([
     supa
       .from('products')
@@ -246,61 +274,90 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       delivery: Record<string, unknown> | null;
     } | null) ?? null;
   if (sessioneGiaAperta?.stripe_session_id) {
+    /**
+     * 8/9/2026 — RESTITUIRE LA CASSA GIÀ APERTA È UN INCASSO: PASSA ANCHE LEI
+     * DAL CANCELLO DEL PAGAMENTO VECCHIO.
+     *
+     * Questo ramo esce con un `return` suo, duecento righe prima del cancello
+     * che ferma tutto quando una pagina di pagamento vecchia è rimasta pagabile
+     * (quello dentro `rivendicaIlCodiceSconto`). Finché quel cancello qui non
+     * lo guardava nessuno, di qui usciva una SECONDA cassa pagabile sugli
+     * stessi articoli: la vecchia che non si era riusciti a chiudere, e questa.
+     * È esattamente il doppio addebito che la pulizia in cima serve a impedire.
+     *
+     * La decisione adesso vive in `riusoDellaCassaAperta`: è pura, la si può
+     * eseguire in una prova, e vuole in ingresso il resoconto della pulizia —
+     * chi scrive questa rotta non può più restituire una cassa senza averlo
+     * guardato, perché senza quel resoconto non gli si compila.
+     */
+    let sessioneRiletta: SessioneRiletta = null;
     try {
-      const sessione = await getStripe().checkout.sessions.retrieve(sessioneGiaAperta.stripe_session_id);
-      if (sessione.status === 'open' && sessione.url) {
-        /**
-         * 3/9/2026 — CORREGGERE IL TELEFONO IN CASSA DEVE SERVIRE A QUALCOSA.
-         *
-         * L'impronta del carrello dice «stesso carrello» guardando solo quello
-         * che cambia il prezzo: prodotti, sconto, ritiro, via, fascia. Nome,
-         * telefono e note della consegna non entrano nel prezzo e restavano
-         * fuori. Ma l'ordine, poi, il webhook lo scrive leggendo QUESTA riga:
-         * chi scriveva 333 111 1111, tornava indietro dalla pagina del
-         * pagamento, correggeva in 333 999 9999 e ripagava, si ritrovava
-         * l'ordine col numero vecchio — e il fattorino chiamava un numero che
-         * non risponde. Stessa storia per il nome e per «lasciare al portiere».
-         *
-         * Non si mette il contatto nell'impronta: farebbe aprire un secondo
-         * pagamento, che e' quello che l'impronta serve a evitare (riserva
-         * doppia della merce e codice sconto bruciato). Si riscrivono i tre
-         * campi sulla riga gia' aperta, tenendo tutto il resto com'e'.
-         */
-        const vecchio = sessioneGiaAperta.delivery ?? {};
-        const contattoNuovo = {
-          full_name: body.delivery.fullName,
-          phone: body.delivery.phone,
-          notes: body.delivery.notes ?? null,
-        };
-        const cambiato = (Object.keys(contattoNuovo) as Array<keyof typeof contattoNuovo>).some(
-          (campo) => (vecchio[campo] ?? null) !== contattoNuovo[campo],
-        );
-        if (cambiato) {
-          const { error: errContatto } = await admin
-            .from('pending_checkouts')
-            .update({ delivery: { ...vecchio, ...contattoNuovo } })
-            .eq('id', sessioneGiaAperta.id);
-          if (errContatto) {
-            // La sessione si restituisce lo stesso: e' l'unica strada che non
-            // riserva la merce una seconda volta, e la vecchia resta comunque
-            // pagabile. Ma resta scritto forte, perche' l'ordine nascera' con
-            // il contatto di prima e la consegna puo' fallire.
-            logger.error('[stripe] contatto corretto NON salvato sul pagamento gia aperto', {
-              pendingCheckoutId: sessioneGiaAperta.id,
-              message: errContatto.message,
-            });
-          }
-        }
-        logger.info('[stripe] stesso carrello, stessa sessione: non ne apro una seconda', {
-          pendingCheckoutId: sessioneGiaAperta.id,
-          contattoAggiornato: cambiato,
-        });
-        return apiSuccess({ id: sessione.id, url: sessione.url });
-      }
+      sessioneRiletta = await getStripe().checkout.sessions.retrieve(sessioneGiaAperta.stripe_session_id);
     } catch (e) {
       // Se Stripe non risponde si tira dritto e se ne apre una nuova: meglio un
-      // doppione che una persona che non riesce a pagare.
+      // doppione che una persona che non riesce a pagare. Il cancello qui sotto
+      // vale lo stesso: «non ho potuto rileggere» non apre nessuna porta.
       logger.warn('[stripe] sessione precedente non rileggibile, ne apro una nuova', { e });
+    }
+
+    const riuso = riusoDellaCassaAperta(riserveLiberate, sessioneRiletta);
+    if (riuso.esito === 'ferma_tutto') {
+      logger.error('[stripe] cassa gia aperta NON restituita: un pagamento vecchio e ancora pagabile', {
+        userId: user.id,
+        pendingCheckoutId: sessioneGiaAperta.id,
+        sessioni: riuso.sessioni.length,
+      });
+      return ApiErrors.conflict(riuso.messaggio);
+    }
+
+    if (riuso.esito === 'riusa') {
+      /**
+       * 3/9/2026 — CORREGGERE IL TELEFONO IN CASSA DEVE SERVIRE A QUALCOSA.
+       *
+       * L'impronta del carrello dice «stesso carrello» guardando solo quello
+       * che cambia il prezzo: prodotti, sconto, ritiro, via, fascia. Nome,
+       * telefono e note della consegna non entrano nel prezzo e restavano
+       * fuori. Ma l'ordine, poi, il webhook lo scrive leggendo QUESTA riga:
+       * chi scriveva 333 111 1111, tornava indietro dalla pagina del
+       * pagamento, correggeva in 333 999 9999 e ripagava, si ritrovava
+       * l'ordine col numero vecchio — e il fattorino chiamava un numero che
+       * non risponde. Stessa storia per il nome e per «lasciare al portiere».
+       *
+       * Non si mette il contatto nell'impronta: farebbe aprire un secondo
+       * pagamento, che e' quello che l'impronta serve a evitare (riserva
+       * doppia della merce e codice sconto bruciato). Si riscrivono i tre
+       * campi sulla riga gia' aperta, tenendo tutto il resto com'e'.
+       */
+      const vecchio = sessioneGiaAperta.delivery ?? {};
+      const contattoNuovo = {
+        full_name: body.delivery.fullName,
+        phone: body.delivery.phone,
+        notes: body.delivery.notes ?? null,
+      };
+      const cambiato = (Object.keys(contattoNuovo) as Array<keyof typeof contattoNuovo>).some(
+        (campo) => (vecchio[campo] ?? null) !== contattoNuovo[campo],
+      );
+      if (cambiato) {
+        const { error: errContatto } = await admin
+          .from('pending_checkouts')
+          .update({ delivery: { ...vecchio, ...contattoNuovo } })
+          .eq('id', sessioneGiaAperta.id);
+        if (errContatto) {
+          // La sessione si restituisce lo stesso: e' l'unica strada che non
+          // riserva la merce una seconda volta, e la vecchia resta comunque
+          // pagabile. Ma resta scritto forte, perche' l'ordine nascera' con
+          // il contatto di prima e la consegna puo' fallire.
+          logger.error('[stripe] contatto corretto NON salvato sul pagamento gia aperto', {
+            pendingCheckoutId: sessioneGiaAperta.id,
+            message: errContatto.message,
+          });
+        }
+      }
+      logger.info('[stripe] stesso carrello, stessa sessione: non ne apro una seconda', {
+        pendingCheckoutId: sessioneGiaAperta.id,
+        contattoAggiornato: cambiato,
+      });
+      return apiSuccess({ id: riuso.id, url: riuso.url });
     }
   }
 
@@ -469,24 +526,38 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     }
   }
 
-  // 4b. Coupon: ri-validato e ri-calcolato dal coupon reale (mai dal client).
-  let couponDiscountCents = 0;
-  let couponFreeShipping = false;
-  let validatedCouponCode: string | null = null;
-  if (body.couponCode && body.couponCode.trim()) {
-    const couponRes = await validateCoupon(body.couponCode, grandSubtotalCents / 100, user.id, supa);
-    if (!couponRes.ok) {
-      return ApiErrors.invalidRequest(`Coupon non valido: ${couponRes.reason}`);
+  /**
+   * 4b. Coupon: ri-validato e ri-calcolato dal coupon reale (mai dal client),
+   * e rivendicato in modo atomico.
+   *
+   * 8/9/2026 — LA RIVENDICAZIONE PRETENDE LA PULIZIA, NON LA SPERA.
+   *
+   * Prima queste righe stavano qui da sole e la pulizia dei tentativi
+   * abbandonati girava 130 righe più in basso: su un codice a uso unico il
+   * secondo tentativo dello stesso cliente moriva qui, con «Codice esaurito»,
+   * e non arrivava mai alla riga che glielo avrebbe restituito. Adesso la
+   * decisione vive in `lib/ordini/rivendica-il-codice-sconto.ts` e vuole in
+   * ingresso il resoconto della pulizia: chiedere il codice prima di aver
+   * liberato non si compila più.
+   */
+  const codiceSconto = await rivendicaIlCodiceSconto(
+    riserveLiberate,
+    { admin, lettura: supa },
+    { codice: body.couponCode, subtotaleCents: grandSubtotalCents, userId: user.id },
+  );
+  if (!codiceSconto.ok) {
+    if (codiceSconto.motivo === 'pagamento_ancora_aperto') {
+      logger.error('[stripe] seconda cassa non aperta: il pagamento vecchio e ancora pagabile', {
+        userId: user.id,
+        sessioni: codiceSconto.sessioni.length,
+      });
+      return ApiErrors.conflict(codiceSconto.messaggio);
     }
-    couponDiscountCents = Math.max(0, Math.round(couponRes.discount * 100));
-    couponFreeShipping = couponRes.freeShipping;
-    validatedCouponCode = couponRes.coupon.code;
-    // Claim atomico prima di procedere con Stripe (fix #36 — race condition coupon).
-    const { data: claimed, error: claimErr } = await admin.rpc('claim_coupon', { p_code: validatedCouponCode });
-    if (claimErr || !claimed) {
-      return ApiErrors.invalidRequest('Coupon non disponibile: potrebbe essere esaurito nel frattempo.');
-    }
+    return ApiErrors.invalidRequest(codiceSconto.messaggio);
   }
+  const couponDiscountCents = codiceSconto.scontoCents;
+  const couponFreeShipping = codiceSconto.spedizioneGratis;
+  const validatedCouponCode = codiceSconto.codice;
 
   /**
    * 22/8/2026 — IL CONTO LO FA UNA FUNZIONE SOLA, LA STESSA DEI CONTANTI.
@@ -610,26 +681,17 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
 
   /**
    * 3/9/2026 — PRIMA DI RISERVARE, SI LIBERA QUELLO CHE QUESTA STESSA PERSONA
-   * AVEVA GIÀ IMPEGNATO.
+   * AVEVA GIÀ IMPEGNATO. La chiamata a `liberaRiserveAbbandonate` NON è più
+   * qui: è salita in cima alla rotta, prima delle letture del catalogo e prima
+   * della rivendicazione del codice sconto.
    *
-   * Chi torna indietro dalla pagina di Stripe e cambia la fascia (o l'indirizzo)
-   * arriva qui con un'impronta diversa: la sessione di prima non si riusa, e la
-   * merce veniva riservata una seconda volta. Sull'ultimo pezzo il secondo
-   * tentativo trovava zero — «Stock insufficiente per Torta (0 disponibili)» —
-   * e il pezzo restava invisibile a tutti fino allo scadere delle due ore.
-   * Un secondo tentativo chiude il primo.
-   *
-   * La pagina di pagamento vecchia la chiude `liberaRiserveAbbandonate`: la
-   * riga qui non c'è più perché non deve stare in due posti. Era proprio
-   * quella dimenticanza, sull'altra rotta, a lasciare pagabile una scheda di
-   * Stripe a merce già rimessa in vendita.
+   * Perché è salita: qui liberava la merce troppo tardi per due passi che erano
+   * già andati male. Le disponibilità erano già state lette (quindi il cliente
+   * leggeva «0 disponibili» sul pezzo che aveva riservato lui) e il codice
+   * sconto era già stato richiesto di nuovo (quindi su un codice a uso unico la
+   * richiesta moriva prima di arrivare fin qui). Chi la rimette in questo punto
+   * riapre tutti e due i buchi.
    */
-  await liberaRiserveAbbandonate(admin, {
-    buyerId: user.id,
-    improntaDaTenere: improntaCarrello,
-    soloConProdotti: uniqueProductIds,
-  });
-
   const { error: reserveErr } = await admin.rpc('reserve_stock', { p_items: stockItems });
   if (reserveErr) {
     logger.warn('[stripe] reserve_stock fallita', { message: reserveErr.message });

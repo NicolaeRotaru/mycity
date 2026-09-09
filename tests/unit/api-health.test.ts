@@ -86,6 +86,10 @@ describe('GET /api/health', () => {
     // Senza, il controllo anti-robot rifiuta accesso, registrazione, contatti e newsletter: il
     // semaforo lo dichiara «degradato» (entrata il 3/9/2026 in ENV_IMPORTANTI).
     process.env.TURNSTILE_SECRET_KEY = 'turnstile_test';
+    // 8/9/2026 — le due meta' che stanno nel browser: senza, accesso e
+    // registrazione si spengono, oppure sparisce il pagamento con carta.
+    process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY = 'sitekey_test';
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test';
     process.env.VAPID_PRIVATE_KEY = 'vapid_priv';
     process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = 'vapid_pub';
     // 30/8/2026 (R142) — anche il tetto di spesa AI: senza, vale zero, e zero

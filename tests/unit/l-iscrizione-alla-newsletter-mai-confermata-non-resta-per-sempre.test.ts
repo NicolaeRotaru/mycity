@@ -187,16 +187,25 @@ describe('la notte in cui una pulizia dei dati vecchi viene rifiutata', () => {
     expect(avvisi[0].category, 'un allarme di sistema non si spegne con gli interruttori del marketing').toBe('system');
   });
 
-  it('e la notte finisce rossa, senza battito: se continua se ne accorge il sorvegliante', async () => {
+  it('e la notte finisce rossa — ma il battito si scrive lo stesso: dice «sono passato», non «e andato bene»', async () => {
     const { res, mondo } = await conUnRifiuto();
     expect(
       res.status,
       'la notte con niente da cancellare rispondeva sempre «riuscita», ed è la notte più frequente',
     ).toBe(500);
+    // 8/9/2026 — QUI PRIMA SI PRETENDEVA IL CONTRARIO, ED ERA LA DECISIONE
+    // SBAGLIATA. Un permesso negato non si aggiusta da solo: la notte dopo
+    // fallisce di nuovo, e dopo 26 ore senza battito il sorvegliante annuncia
+    // «process-deletions fermo: scheduler o deploy down?» mentre il lavoro
+    // parte puntuale ogni notte. Peggio: da quel momento il battito resta
+    // vecchio PER SEMPRE, quindi il giorno in cui il lavoro si ferma davvero il
+    // segnale è identico a quello di ieri. Che il giro abbia trovato un
+    // problema lo dicono il 500 e l'avviso agli amministratori (provati qui
+    // sopra); che il giro sia AVVENUTO lo può dire solo il battito.
     expect(
       mondo.battitoScritto(),
-      'il lavoro non pulisce più niente e continua a dichiararsi vivo',
-    ).toBe(false);
+      'il giro è passato e il battito manca: il sorvegliante dirà che è fermo un lavoro che gira',
+    ).toBe(true);
   });
 
   it('la notte in cui tutto va bene resta verde e non sveglia nessuno', async () => {

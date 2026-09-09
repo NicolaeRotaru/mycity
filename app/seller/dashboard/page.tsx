@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { ordineContaNelFatturato, metricheVenditore, totaliDiSempre, type NumeriDalDatabase } from '@/lib/metriche-venditore';
+import {
+  avvisoLettureFallite, lettureFallite, letturaRiuscita, targhettaArticoli, targhettaNetto,
+  targhettaProdotti, targhettaValutazione, type Targhetta,
+} from '@/lib/letture-cruscotto';
 import { giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -9,7 +13,7 @@ import { toast } from 'sonner';
 import {
   Plus, ExternalLink, Share2, ArrowRight, TrendingUp, Package, Star, Receipt,
   Tag, Camera, BarChart3, Users, Wallet, LayoutTemplate, Store, Upload, LifeBuoy,
-  Megaphone, Landmark, type LucideIcon,
+  Megaphone, Landmark, AlertTriangle, type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
@@ -109,7 +113,11 @@ export default function SellerDashboard() {
       // conto suo, in due punti diversi del file.
       const inizio30 = new Date(Date.now() - 30 * 86400000);
 
-      const [{ count: productCount }, { count: availableCount }, righeRes, recensioniRes, ordiniRes, numeriRes] = await Promise.all([
+      // 8/9/2026 — QUI I DUE CONTEGGI ERANO DESTRUTTURATI (`{ count: productCount }`),
+      // e la destrutturazione buttava via il campo `error` della risposta: da quel
+      // punto in poi un conteggio fallito era indistinguibile da un conteggio a
+      // zero. Adesso arriva la risposta intera e a decidere e' `letturaRiuscita`.
+      const [prodottiRes, disponibiliRes, righeRes, recensioniRes, ordiniRes, numeriRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }).eq('seller_id', user.id),
         supabase.from('products').select('id', { count: 'exact', head: true })
           .eq('seller_id', user.id).eq('status', 'available'),
@@ -147,7 +155,18 @@ export default function SellerDashboard() {
           .gte('created_at', inizio30.toISOString()),
         supabase.rpc('numeri_del_negozio', { p_seller: user.id, p_giorni: 30 }),
       ]);
+      // Gli ordini sono l'unica lettura vitale: senza, la pagina non ha niente da
+      // dire e va a schermata d'errore, con il suo «riprova». Le altre cinque
+      // valgono una targhetta ciascuna: se salta una, il resto della pagina e'
+      // ancora vero, e sarebbe stupido nasconderlo. Ma la targhetta che manca
+      // deve DIRLO — prima mostrava zero, cioe' una risposta.
       if (ordiniRes.error) throw ordiniRes.error;
+      const guasti = lettureFallite({
+        prodotti: prodottiRes,
+        disponibili: disponibiliRes,
+        righe: righeRes,
+        recensioni: recensioniRes,
+      });
       const ordini = ordiniRes.data ?? [];
       const daInizioOggi = inizioGiornoPiacenza(giornoPiacenza());
       const metriche = (da?: Date) => metricheVenditore(ordini as never[], da);
@@ -196,23 +215,45 @@ export default function SellerDashboard() {
       const avgRating = Number(recensioni?.avg ?? 0) || 0;
       const reviewCount = Number(recensioni?.count ?? 0) || 0;
 
+      // Le quattro targhette escono di qui gia' decise — numero e riga piccola —
+      // perche' la decisione «questo l'ho letto?» dentro il disegno non la
+      // potrebbe eseguire nessuna prova. Il componente non ha piu' un ramo suo.
+      const disponibili = letturaRiuscita(disponibiliRes) ? (disponibiliRes.count ?? 0) : null;
       return {
-        productCount: productCount ?? 0,
-        availableCount: availableCount ?? 0,
+        // I valori grezzi che servono alla navigazione. `null` vuol dire «non
+        // l'ho letto»: chi lo usa deve guardarlo, e non puo' scambiarlo per zero.
+        availableCount: disponibili,
+        reviewCount: letturaRiuscita(recensioniRes) ? reviewCount : null,
+        // Le targhette in cima, gia' scritte.
+        netto: targhettaNetto({
+          netto: formatPrice(totali.tuoNettoCents / 100),
+          incassato: formatPrice(totali.incassatoCents / 100),
+          finestra: totali.finestra,
+        }),
+        prodotti: targhettaProdotti({
+          letta: letturaRiuscita(prodottiRes) && letturaRiuscita(disponibiliRes),
+          disponibili: disponibili ?? 0,
+          totali: prodottiRes.count ?? 0,
+        }),
+        valutazione: targhettaValutazione({
+          letta: letturaRiuscita(recensioniRes),
+          media: avgRating,
+          quante: reviewCount,
+        }),
         // Articoli venduti negli ultimi trenta giorni, e se il tetto e' stato
         // toccato. #218 — il denaro mostrato resta quello della definizione unica.
-        orderCount: itemsArr.length,
-        articoliTroncati,
-        incassato: totali.incassatoCents / 100,
-        netto: totali.tuoNettoCents / 100,
+        articoli: targhettaArticoli({
+          letta: letturaRiuscita(righeRes),
+          quanti: itemsArr.length,
+          troncato: articoliTroncati,
+        }),
+        avviso: avvisoLettureFallite(guasti),
         revenueToday: oggi.tuoNettoCents / 100,
         revenue7: sette.tuoNettoCents / 100,
         revenue30: trenta.tuoNettoCents / 100,
         ordiniOggi: oggi.ordini,
         ordini7: sette.ordini,
         ordini30: trenta.ordini,
-        avgRating,
-        reviewCount,
       };
     },
     enabled: isSeller,
@@ -357,26 +398,45 @@ export default function SellerDashboard() {
       {/* ===== Onboarding (si nasconde da solo al 100%) ===== */}
       <SellerOnboardingChecklist />
 
+      {/* ===== Quello che non sono riuscito a leggere =====
+          Il trattino su una targhetta dice «questo numero no», ma solo a chi la
+          sta guardando. Qui la pagina dice di che cosa non fidarsi, e — cosa che
+          prima non esisteva da nessuna parte — che si puo' riprovare. */}
+      {stats.avviso && (
+        <section role="status" className="rounded-2xl border border-accent-300 bg-accent-50 p-4 sm:p-5">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={20} className="text-ink-700 shrink-0 mt-0.5" aria-hidden />
+            <div className="min-w-0">
+              <p className="font-semibold text-ink-900">{stats.avviso.titolo}</p>
+              <p className="text-sm text-ink-700 mt-1">{stats.avviso.dettaglio}</p>
+              {/* Si spegne mentre rilegge: due tocchi non fanno due letture. */}
+              <button
+                type="button"
+                onClick={() => queryStats.refetch()}
+                disabled={queryStats.isFetching}
+                className="mt-3 inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-ink-400 px-4 py-2.5 font-semibold text-ink-900 transition-colors hover:bg-cream-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {queryStats.isFetching ? 'Rileggo…' : 'Riprova'}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* ===== KPI complessivi ===== */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <KpiCard icon={TrendingUp} tint={TINT.olive} label="Il tuo netto" value={formatPrice(stats.netto)} hint={`su ${formatPrice(stats.incassato)} incassati`} />
-        <KpiCard icon={Package} tint={TINT.primary} label="Prodotti in vendita" value={stats.availableCount} hint={`su ${stats.productCount} totali`} />
-        <KpiCard icon={Star} tint={TINT.accent} label="Valutazione media" value={stats.avgRating > 0 ? `${stats.avgRating.toFixed(1).replace('.', ',')} ★` : '—'} hint={stats.reviewCount > 0 ? `${stats.reviewCount} recensioni` : 'Nessuna recensione'} />
-        {/* Diceva «Dall'inizio» contando mille righe scelte dal server: da qui
-            in avanti dice la finestra che ha davvero letto, e se il tetto e'
-            stato toccato mette il piu'. */}
-        <KpiCard
-          icon={Receipt}
-          tint={TINT.secondary}
-          label="Articoli venduti"
-          value={stats.articoliTroncati ? `${stats.orderCount}+` : stats.orderCount}
-          hint={stats.articoliTroncati ? 'Ultimi 30 giorni · almeno' : 'Ultimi 30 giorni'}
-        />
+        {/* Ogni targhetta arriva gia' decisa da lib/letture-cruscotto: qui non
+            si sceglie piu' niente, e quindi non si puo' piu' sbagliare a
+            scegliere. «Il tuo netto» adesso dice anche che periodo copre. */}
+        <KpiCard icon={TrendingUp} tint={TINT.olive} label="Il tuo netto" targhetta={stats.netto} />
+        <KpiCard icon={Package} tint={TINT.primary} label="Prodotti in vendita" targhetta={stats.prodotti} />
+        <KpiCard icon={Star} tint={TINT.accent} label="Valutazione media" targhetta={stats.valutazione} />
+        <KpiCard icon={Receipt} tint={TINT.secondary} label="Articoli venduti" targhetta={stats.articoli} />
       </div>
 
       {/* ===== HUB: ogni funzione, ogni pagina ===== */}
       <NavGroup title="Vendite" hint="Catalogo, ordini, marketing" tint={TINT.primary}>
-        <NavTile href="/seller/products"   icon={Package}       title="Prodotti"   desc="Catalogo e disponibilità" meta={`${stats.availableCount} in vendita`} tint={TINT.primary} />
+        <NavTile href="/seller/products"   icon={Package}       title="Prodotti"   desc="Catalogo e disponibilità" meta={stats.availableCount !== null ? `${stats.availableCount} in vendita` : undefined} tint={TINT.primary} />
         <NavTile href="/seller/orders"     icon={Receipt}       title="Ordini"     desc="Prepara e gestisci" tint={TINT.primary} />
         <NavTile href="/seller/promotions" icon={Tag}           title="Promozioni" desc="Sconti e offerte" tint={TINT.primary} />
         <NavTile href="/seller/stories"    icon={Camera}        title="Storie"     desc="Contenuti 24h" tint={TINT.primary} />
@@ -385,7 +445,7 @@ export default function SellerDashboard() {
       <NavGroup title="Crescita" hint="Capisci i numeri e fai di più" tint={TINT.olive}>
         <NavTile href="/seller/analytics" icon={BarChart3} title="Analisi"    desc="Andamento e insight" tint={TINT.olive} />
         <NavTile href="/seller/customers" icon={Users}     title="Clienti"    desc="Chi compra da te" tint={TINT.olive} />
-        <NavTile href="/seller/reviews"   icon={Star}      title="Recensioni" desc="Reputazione e feedback" meta={stats.reviewCount > 0 ? `${stats.reviewCount} totali` : undefined} tint={TINT.olive} />
+        <NavTile href="/seller/reviews"   icon={Star}      title="Recensioni" desc="Reputazione e feedback" meta={stats.reviewCount ? `${stats.reviewCount} totali` : undefined} tint={TINT.olive} />
         <NavTile href="/seller/earnings"  icon={Wallet}    title="Guadagni"   desc="Incassi e pagamenti" tint={TINT.olive} />
       </NavGroup>
 
@@ -405,7 +465,10 @@ export default function SellerDashboard() {
           </h2>
           <p className="text-sm text-ink-500 mt-1 mb-4">Tre mosse semplici per portare più clienti.</p>
           <ul className="space-y-2.5">
-            {stats.availableCount < 8 && (
+            {/* Il consiglio «aggiungi prodotti» vale solo se so quanti ne ha:
+                con la lettura fallita `availableCount` e' null, e un consiglio
+                dato su un numero mai letto e' un consiglio inventato. */}
+            {stats.availableCount !== null && stats.availableCount < 8 && (
               <TipRow href="/seller/products/new" icon={Plus} title="Aggiungi prodotti" desc="I negozi con +10 articoli vendono il 70% in più." />
             )}
             <TipRow href="/seller/promotions" icon={Tag} title="Lancia una promo" desc="Uno sconto a tempo crea urgenza e fa salire le vendite." />
@@ -462,17 +525,33 @@ function HeroStat({ label, value, sub, className = '' }: { label: string; value:
   );
 }
 
-function KpiCard({ icon: Icon, tint, label, value, hint }: {
-  icon: LucideIcon; tint: Tint; label: string; value: string | number; hint?: string;
+/**
+ * 8/9/2026 — QUESTA TARGHETTA NON DECIDE PIU' NIENTE.
+ *
+ * Prima riceveva `value` e `hint` gia' cucinati da chi la chiamava, e chi la
+ * chiamava sceglieva la frase con un ternario dentro la riga JSX: con la
+ * lettura delle recensioni fallita `reviewCount` valeva zero, e la targhetta
+ * annunciava che il negozio non ne ha nessuna — a un negozio che magari ne ha
+ * trenta. Adesso riceve una `Targhetta` decisa da una funzione pura, che una
+ * prova puo' eseguire. Le frasi vivono tutte in lib/letture-cruscotto.
+ */
+function KpiCard({ icon: Icon, tint, label, targhetta }: {
+  icon: LucideIcon; tint: Tint; label: string; targhetta: Targhetta;
 }) {
   return (
     <div className="bg-white border border-cream-300 rounded-2xl p-4 sm:p-5 shadow-warm-sm">
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tint.bg} ${tint.fg}`}>
         <Icon size={20} strokeWidth={2.2} />
       </div>
-      <p className="text-2xl font-bold text-ink-900 mt-3 leading-none">{value}</p>
+      {/* Un trattino non dice niente a chi non vede lo schermo: quando e' un
+          guasto lo nascondiamo al lettore, e a parlare resta la riga sotto. */}
+      <p className="text-2xl font-bold text-ink-900 mt-3 leading-none" aria-hidden={targhetta.guasto || undefined}>
+        {targhetta.valore}
+      </p>
       <p className="text-sm text-ink-600 mt-1.5">{label}</p>
-      {hint && <p className="text-xs text-ink-400 mt-1">{hint}</p>}
+      <p className={`text-xs mt-1 ${targhetta.guasto ? 'font-semibold text-secondary-700' : 'text-ink-400'}`}>
+        {targhetta.nota}
+      </p>
     </div>
   );
 }

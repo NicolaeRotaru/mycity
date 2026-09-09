@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { mailtoContatto } from '@/lib/contatti-pubblici';
 import {
   Briefcase, Store, Bike, Laptop, ArrowRight, MapPin, CalendarClock,
   TrendingUp, HeartHandshake, Clock, Mail,
@@ -71,28 +72,28 @@ const JOBS = [
     location: 'Piacenza',
     type: 'Full-time',
     tag: 'Commerciale',
-    mailto: 'mailto:lavora@mycity.it?subject=Candidatura%20Account%20negozi',
+    mailto: mailtoContatto('lavoro', 'Candidatura Account negozi'),
   },
   {
     title: 'Coordinatore flotta rider',
     location: 'Piacenza',
     type: 'Full-time',
     tag: 'Operazioni',
-    mailto: 'mailto:lavora@mycity.it?subject=Candidatura%20Coordinatore%20flotta',
+    mailto: mailtoContatto('lavoro', 'Candidatura Coordinatore flotta'),
   },
   {
     title: 'Product Designer',
     location: 'Ibrido',
     type: 'Full-time',
     tag: 'Prodotto',
-    mailto: 'mailto:lavora@mycity.it?subject=Candidatura%20Product%20Designer',
+    mailto: mailtoContatto('lavoro', 'Candidatura Product Designer'),
   },
   {
     title: 'Operatore supporto clienti',
     location: 'Piacenza',
     type: 'Part-time',
     tag: 'Supporto',
-    mailto: 'mailto:lavora@mycity.it?subject=Candidatura%20Supporto%20clienti',
+    mailto: mailtoContatto('lavoro', 'Candidatura Supporto clienti'),
   },
 ];
 
@@ -217,7 +218,7 @@ export default function LavoraConNoiPage() {
               insieme.
             </p>
             <a
-              href="mailto:lavora@mycity.it?subject=Candidatura%20spontanea"
+              href={mailtoContatto('lavoro', 'Candidatura spontanea')}
               className="inline-flex items-center gap-2 rounded-full px-6 py-3.5 font-bold text-[15px] bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors"
             >
               <Mail size={18} strokeWidth={2.2} aria-hidden /> Invia una candidatura spontanea

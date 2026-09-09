@@ -6,7 +6,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  */
 
 type ErrResult = { error: null | { message: string } };
-const rpcMock = vi.fn<() => Promise<{ data: unknown; error: null | { message: string } }>>();
+type RispostaRpc = { data: unknown; error: null | { message: string } };
+const rpcMock = vi.fn<(nome: string, argomenti?: Record<string, unknown>) => Promise<RispostaRpc>>();
 const updateEqMock = vi.fn<() => Promise<ErrResult>>(() => Promise.resolve({ error: null }));
 const deleteUserMock = vi.fn<(id: string) => Promise<ErrResult>>(() => Promise.resolve({ error: null }));
 // 3/9/2026 — La cancellazione, prima di toccare qualunque cosa, legge la cassa
@@ -16,15 +17,48 @@ const selectEqMock = vi.fn<() => Promise<{ data: unknown[]; error: null | { mess
   () => Promise.resolve({ data: [], error: null }),
 );
 
+/** Cosa risponde `process_expired_deletions`: lo decide ogni prova. */
+let scaduti: RispostaRpc = { data: [], error: null };
+
+/**
+ * 8/9/2026 — IL FINTO DATABASE NON SAPEVA POTARE, E PASSAVA LO STESSO.
+ *
+ * Questo finto client conosceva `update().eq()` e basta. Le potature dei dati
+ * vecchi usano `update().lt().not()`: qui esplodevano tutte, e il lavoro
+ * rispondeva 200 lo stesso perché il difetto vero era proprio quello — un
+ * `try/catch` solo intorno a tutte, che ingoiava la prima caduta e saltava le
+ * altre. Riparato quel difetto, la prova non poteva più restare in piedi su un
+ * finto database che non somiglia a quello vero.
+ *
+ * Adesso la catena dei filtri c'è. Il discrimine è `.lt()`: le potature
+ * guardano SEMPRE una finestra di tempo, la cancellazione di un singolo account
+ * non lo fa mai. Così `updateEqMock` continua a rispondere per le scritture
+ * della cancellazione — quelle su cui questa prova asserisce — e le potature
+ * riescono senza rubargli i `mockResolvedValueOnce`.
+ */
+function catena(scriviConMock: boolean) {
+  let finestraDiTempo = false;
+  const c: Record<string, unknown> = {
+    then: (risolvi: (v: ErrResult) => unknown) =>
+      (finestraDiTempo || !scriviConMock
+        ? Promise.resolve({ error: null } as ErrResult)
+        : updateEqMock()).then(risolvi),
+  };
+  c.lt = () => { finestraDiTempo = true; return c; };
+  for (const filtro of ['eq', 'is', 'not', 'or']) c[filtro] = () => c;
+  return c;
+}
+
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: vi.fn(() => ({
     rpc: rpcMock,
     from: vi.fn(() => ({
-      update: vi.fn(() => ({ eq: updateEqMock })),
+      update: vi.fn(() => catena(true)),
       select: vi.fn(() => ({ eq: selectEqMock })),
-      delete: vi.fn(() => ({ ilike: vi.fn(() => Promise.resolve({ error: null })) })),
+      delete: vi.fn(() => ({ ...catena(false), ilike: vi.fn(() => Promise.resolve({ error: null })) })),
     })),
     auth: { admin: { deleteUser: deleteUserMock } },
+    storage: { from: vi.fn(() => ({ remove: vi.fn(() => Promise.resolve({ error: null })) })) },
   })),
 }));
 
@@ -46,7 +80,12 @@ describe('POST /api/cron/process-deletions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.CRON_SECRET = 'secret123';
-    rpcMock.mockResolvedValue({ data: [], error: null });
+    // Le funzioni del database chiamate in una notte sono cinque, e
+    // `process_expired_deletions` non è più la prima: si risponde per nome, non
+    // per turno, se no il primo `once` se lo prende la potatura dei consensi.
+    scaduti = { data: [], error: null };
+    rpcMock.mockImplementation(async (nome: string) =>
+      (nome === 'process_expired_deletions' ? scaduti : { data: [], error: null }));
     updateEqMock.mockResolvedValue({ error: null });
     deleteUserMock.mockResolvedValue({ error: null });
     selectEqMock.mockResolvedValue({ data: [], error: null });
@@ -76,13 +115,13 @@ describe('POST /api/cron/process-deletions', () => {
   });
 
   it('500 se RPC fallisce', async () => {
-    rpcMock.mockResolvedValueOnce({ data: null, error: { message: 'RPC error' } });
+    scaduti = { data: null, error: { message: 'RPC error' } };
     const res = await POST(makeReq('Bearer secret123') as never);
     expect(res.status).toBe(500);
   });
 
   it('anonimizza + hard-delete ogni utente scaduto', async () => {
-    rpcMock.mockResolvedValueOnce({ data: [{ user_id: 'u1' }, { user_id: 'u2' }], error: null });
+    scaduti = { data: [{ user_id: 'u1' }, { user_id: 'u2' }], error: null };
     const res = await POST(makeReq('Bearer secret123') as never);
     expect(res.status).toBe(200);
     const json = await res.json();
@@ -95,7 +134,7 @@ describe('POST /api/cron/process-deletions', () => {
   });
 
   it('conta failed se auth deleteUser fallisce', async () => {
-    rpcMock.mockResolvedValueOnce({ data: [{ user_id: 'u1' }], error: null });
+    scaduti = { data: [{ user_id: 'u1' }], error: null };
     deleteUserMock.mockResolvedValueOnce({ error: { message: 'auth fail' } });
     const res = await POST(makeReq('Bearer secret123') as never);
     const json = await res.json();
@@ -111,7 +150,7 @@ describe('POST /api/cron/process-deletions', () => {
     // cancellazione, quelli di vetrina dopo — quindi non c'è più un ripiego da
     // provare: se uno dei due non passa, viene scritto nel diario e la
     // cancellazione va avanti lo stesso. L'account deve sparire comunque.
-    rpcMock.mockResolvedValueOnce({ data: [{ user_id: 'u1' }], error: null });
+    scaduti = { data: [{ user_id: 'u1' }], error: null };
     updateEqMock.mockResolvedValueOnce({ error: { message: 'colonna assente' } });
     const res = await POST(makeReq('Bearer secret123') as never);
     const json = await res.json();

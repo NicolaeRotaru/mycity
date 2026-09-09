@@ -9,6 +9,11 @@ import { sizedImage } from '@/lib/image-url';
 import { formatPriceFromCents } from '@/lib/format';
 import { useTranslations } from 'next-intl';
 import { Banknote, Camera } from 'lucide-react';
+import { caricaImmagine } from '@/lib/storage/carica-immagine';
+import { attributoAccept } from '@/lib/storage/regole-secchi';
+
+/** Il magazzino privato delle prove d'incasso. La sua regola sta in lib/storage/regole-secchi.ts. */
+const SECCHIO_PROVE_INCASSO = 'cod-proof';
 
 type Props = {
   orderId: string;
@@ -53,17 +58,39 @@ export default function CashConfirmDialog({ orderId, expectedCents, compensoTenu
   // contanti e quella della porta di casa del cliente. Qui si salva il PERCORSO,
   // non un indirizzo pubblico: chi ha diritto di vederla ottiene un link a
   // scadenza.
+  //
+  // 8/9/2026 — E IL PERCORSO NON SE LO SCRIVE PIU' QUESTA SCHERMATA.
+  //
+  // C'erano due cose sbagliate nella riga che se n'e' andata. La prima: il percorso era una
+  // stringa scritta a mano, con dentro la prima cartella — l'unica su cui il database decide chi
+  // puo' scrivere. Oggi era giusta, ma per caso, com'era giusta in sette punti su dieci sul
+  // secchio `products`, dove i tre sbagliati hanno impedito a ogni negoziante di mettere la
+  // copertina alla vetrina. La seconda, piu' grave: qui non si guardava ne' il tipo ne' il peso
+  // del file, e `cod-proof` e' l'UNICO dei quattro magazzini che nemmeno nel deposito ha un tetto
+  // (la 114 lo crea nudo). Fra il telefono del fattorino e il nostro archivio non c'era niente:
+  // un file qualunque, di qualunque peso, con l'estensione `.jpg` messa d'ufficio anche se dentro
+  // c'era altro.
+  //
+  // Adesso si passa da `caricaImmagine`, che legge la regola del magazzino da
+  // `lib/storage/regole-secchi.ts`: sette tipi immagine, 10 MB, prima cartella = chi carica.
   async function upload(file: File, kind: 'cash' | 'delivery'): Promise<string | null> {
     setUploading(kind);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Sessione scaduta');
-      const path = `${user.id}/${orderId}/${kind}-${Date.now()}.jpg`;
-      const { error } = await supabase.storage.from('cod-proof').upload(path, file, { upsert: false });
-      if (error) throw error;
-      return path;
+      const { percorso } = await caricaImmagine(supabase, {
+        file,
+        userId: user.id,
+        cartella: orderId,
+        secchio: SECCHIO_PROVE_INCASSO,
+        etichetta: kind,
+      });
+      return percorso;
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Upload fallito');
+      // `friendlyError` tiene la frase in italiano che arriva dalla porta («La foto è troppo
+      // pesante: il limite è 10 MB…») e mette la frase di casa su tutto il resto, invece del
+      // «Upload fallito» di prima, che non e' nemmeno italiano.
+      toast.error(friendlyError(e));
       return null;
     } finally {
       setUploading(null);
@@ -225,7 +252,11 @@ function PhotoSlot({
       </div>
       <input
         type="file"
-        accept="image/*"
+        /* 8/9/2026 — era `image/*`, cioe' «qualunque immagine», e il deposito di questo magazzino
+           non ha nessuna lista: il fattorino poteva mandare un TIFF da 80 MB e non se ne accorgeva
+           nessuno. La lista arriva dalla stessa regola che poi rifiuta il file, quindi il campo e
+           la porta non possono dire due cose diverse. */
+        accept={attributoAccept(SECCHIO_PROVE_INCASSO)}
         capture="environment"
         className="sr-only"
         onChange={(e) => {

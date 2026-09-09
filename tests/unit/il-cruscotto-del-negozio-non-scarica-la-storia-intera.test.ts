@@ -6,6 +6,9 @@ import { readFileSync } from 'node:fs';
 import type { ComponentType } from 'react';
 import { monta } from './aiuti/monta-componente';
 import { accendi } from './aiuti/schermo';
+import {
+  apriIlCruscotto, chiudiIlCruscotto, statisticheDelCruscotto,
+} from './aiuti/cruscotto-del-negozio';
 
 /**
  * 6/9/2026 — IL CRUSCOTTO SCARICAVA OGNI RIGA MAI VENDUTA, E SOPRA LE MILLE
@@ -35,25 +38,6 @@ import { accendi } from './aiuti/schermo';
  * senza confini.
  */
 
-const BASE = {
-  productCount: 24, availableCount: 21,
-  orderCount: 137,
-  incassato: 4210.5, netto: 3180.25,
-  revenueToday: 234.56, revenue7: 1234.56, revenue30: 4321.99,
-  ordiniOggi: 4, ordini7: 21, ordini30: 88,
-  avgRating: 4.6, reviewCount: 12,
-};
-
-function apriIlCruscotto(statistiche: Record<string, unknown>) {
-  (globalThis as Record<string, unknown>).__PROFILO__ = {
-    isSeller: true,
-    profile: { id: 'negozio-1', store_name: 'Pane Quotidiano' },
-  };
-  (globalThis as Record<string, unknown>).__DATI_QUERY__ = (o: { queryKey?: readonly unknown[] }) =>
-    Array.isArray(o?.queryKey) && o.queryKey[0] === 'seller' && o.queryKey[1] === 'stats'
-      ? statistiche
-      : undefined;
-}
 
 /** La targhetta che porta questa scritta, letta com'è a video. */
 function targhetta(radice: HTMLElement, etichetta: string) {
@@ -69,14 +53,10 @@ function targhetta(radice: HTMLElement, etichetta: string) {
 }
 
 describe('la targhetta «Articoli venduti» del cruscotto', () => {
-  afterEach(() => {
-    document.body.innerHTML = '';
-    delete (globalThis as Record<string, unknown>).__DATI_QUERY__;
-    delete (globalThis as Record<string, unknown>).__PROFILO__;
-  });
+  afterEach(chiudiIlCruscotto);
 
   it('dice la finestra che ha davvero letto, non «dall\'inizio»', async () => {
-    apriIlCruscotto({ ...BASE, articoliTroncati: false });
+    apriIlCruscotto(statisticheDelCruscotto({ articoli: { quanti: 137, troncato: false } }));
     const mod = await monta('app/seller/dashboard/page.tsx');
     const s = accendi(mod.default as ComponentType);
 
@@ -91,7 +71,7 @@ describe('la targhetta «Articoli venduti» del cruscotto', () => {
   }, 120000);
 
   it('quando la lettura tocca il tetto lo dice, invece di dare per buono un numero mozzato', async () => {
-    apriIlCruscotto({ ...BASE, articoliTroncati: true });
+    apriIlCruscotto(statisticheDelCruscotto({ articoli: { quanti: 137, troncato: true } }));
     const mod = await monta('app/seller/dashboard/page.tsx');
     const s = accendi(mod.default as ComponentType);
 

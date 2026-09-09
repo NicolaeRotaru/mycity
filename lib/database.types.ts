@@ -324,6 +324,7 @@ export interface Database {
           created_at: string | null;
           sort_order: number;
           featured: boolean;
+          image_url: string | null;
         };
         Insert: {
           id?: string;
@@ -334,6 +335,7 @@ export interface Database {
           created_at?: string | null;
           sort_order?: number;
           featured?: boolean;
+          image_url?: string | null;
         };
         Update: {
           id?: string;
@@ -344,6 +346,7 @@ export interface Database {
           created_at?: string | null;
           sort_order?: number;
           featured?: boolean;
+          image_url?: string | null;
         };
         Relationships: [];
       };
@@ -1344,6 +1347,7 @@ export interface Database {
           dispute_rider_reversed_cents: number;
           payout_claimed_at: string | null;
           rider_payout_claimed_at: string | null;
+          stock_restored_at: string | null;
         };
         Insert: {
           id?: string;
@@ -1414,6 +1418,7 @@ export interface Database {
           dispute_rider_reversed_cents?: number;
           payout_claimed_at?: string | null;
           rider_payout_claimed_at?: string | null;
+          stock_restored_at?: string | null;
         };
         Update: {
           id?: string;
@@ -1484,6 +1489,7 @@ export interface Database {
           dispute_rider_reversed_cents?: number;
           payout_claimed_at?: string | null;
           rider_payout_claimed_at?: string | null;
+          stock_restored_at?: string | null;
         };
         Relationships: [];
       };

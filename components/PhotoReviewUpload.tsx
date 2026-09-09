@@ -7,6 +7,7 @@ import { Camera, X, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
+import { attributoAccept, regolaDelSecchio, tettoInMB } from '@/lib/storage/regole-secchi';
 
 type Props = {
   userId: string;
@@ -15,14 +16,31 @@ type Props = {
   max?: number;
 };
 
-const MAX_SIZE_MB = 5;
-const ACCEPT = 'image/jpeg,image/png,image/webp';
-
 /**
  * Il magazzino delle foto delle recensioni. La sua regola di scrittura e' la stessa del secchio
  * pubblico — la prima cartella dev'essere chi carica — e sta scritta in SQL, non nel codice.
  */
 const SECCHIO_RECENSIONI = 'reviews';
+
+/**
+ * 8/9/2026 — QUESTE DUE RIGHE ERANO DUE NUMERI SCRITTI A MANO, E DICEVANO IL FALSO.
+ *
+ * C'era scritto `MAX_SIZE_MB = 5` e `ACCEPT = 'image/jpeg,image/png,image/webp'`. Il deposito
+ * delle recensioni, in SQL, ne accetta 10 MiB e sette tipi
+ * (`migrations/070_storage_and_rls_hardening.sql`). Due conseguenze vere, in negozio:
+ *
+ *   · una foto da 7 MB veniva rifiutata QUI con la frase «supera 5MB», mentre il deposito
+ *     l'avrebbe presa senza fiatare;
+ *   · una foto scattata con un iPhone (HEIC) non compariva nemmeno nella finestra «scegli un
+ *     file», perche' il campo la nascondeva.
+ *
+ * Non e' che il numero fosse sbagliato: e' che era una COPIA, e le copie invecchiano. Adesso la
+ * lista e il tetto arrivano dalla regola del magazzino, che e' anche quella che poi rifiuta il
+ * file: il campo e la porta non possono piu' dire due cose diverse.
+ */
+const ACCEPT = attributoAccept(SECCHIO_RECENSIONI);
+const MAX_SIZE_MB = tettoInMB(SECCHIO_RECENSIONI);
+const MAX_BYTE = regolaDelSecchio(SECCHIO_RECENSIONI).maxByte;
 
 /** Quello che c'e' scritto dentro un errore, da qualunque parte arrivi. */
 function messaggioDi(err: unknown): string {
@@ -78,7 +96,8 @@ function frasePerChiCarica(err: unknown): string {
 }
 
 /**
- * Upload foto recensione: max N foto (default 4), max 5MB ciascuna.
+ * Upload foto recensione: max N foto (default 4). Il peso e i tipi ammessi li dice la regola
+ * del magazzino `reviews` (lib/storage/regole-secchi.ts), non questa schermata.
  * Salva su Supabase Storage bucket "reviews" (pubblico read).
  * Notifica al parent gli URL pubblici.
  */
@@ -97,7 +116,11 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
     const newUrls: { url: string; path: string }[] = [];
     try {
       for (const file of toUpload) {
-        if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+        // Il tetto lo conosce la regola del magazzino, non questa schermata: qui si guarda solo
+        // PRIMA, per saltare il file troppo pesante e caricare comunque gli altri. Se lo lasciassimo
+        // arrivare alla porta, il primo file grosso farebbe cadere tutto il giro e chi carica
+        // perderebbe anche le foto buone che aveva scelto insieme.
+        if (file.size > MAX_BYTE) {
           toast.error(`${file.name} supera ${MAX_SIZE_MB}MB`);
           continue;
         }
@@ -182,7 +205,7 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
         )}
       </div>
       <p className="text-xs text-ink-400">
-        Aggiungi foto della tua esperienza ({max} max, 5MB ciascuna). Le recensioni con foto guadagnano +20 punti loyalty.
+        Aggiungi foto della tua esperienza ({max} max, {MAX_SIZE_MB}MB ciascuna). Le recensioni con foto guadagnano +20 punti loyalty.
       </p>
     </div>
   );

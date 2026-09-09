@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { anniCompiuti, controlloEta, ETA_MINIMA_RIDER } from '@/app/rider/onboarding/maggiore-eta';
+import { anniCompiuti, controlloEta, ETA_MINIMA_RIDER } from '@/lib/maggiore-eta';
 
 /**
  * 3/9/2026 — UN QUINDICENNE POTEVA ISCRIVERSI COME FATTORINO.
@@ -15,10 +15,14 @@ import { anniCompiuti, controlloEta, ETA_MINIMA_RIDER } from '@/app/rider/onboar
  * Sotto i 16 anni è lavoro minorile, fra i 16 e i 18 ci sono vincoli, la
  * polizza RC può non coprire, e le nostre condizioni al punto 3 dicono 18.
  *
- * ⚪ QUESTA PROVA COPRE LA PORTA DEL MODULO, NON TUTTE E TRE. Il vincolo sul
- * database e la schermata di approvazione stanno fuori dal territorio di questa
- * squadra: finché non ci sono, chi sa usare gli strumenti del browser scrive la
- * data lo stesso. Il referto porta l'SQL pronto.
+ * ⚪ QUESTA PROVA COPRE LA PORTA DEL MODULO. Le porte del server (il documento
+ * che si carica, la verifica che parte, l'approvazione dello staff) le difende
+ * `tests/unit/nessun-documento-di-minorenne-entra-nell-archivio.test.ts`. La
+ * quinta porta è il vincolo sul database, migrazione 156: finché non è firmata
+ * e applicata, chi sa usare gli strumenti del browser scrive la data lo stesso.
+ *
+ * 8/9/2026 — il conto degli anni ha traslocato in `lib/maggiore-eta.ts`, perché
+ * adesso lo chiamano anche tre rotte del server, non solo questa pagina.
  */
 
 describe('quanti anni ha compiuto, il giorno che si iscrive', () => {
