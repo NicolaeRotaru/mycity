@@ -8,7 +8,17 @@ import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { friendlyError } from '@/lib/errors';
-import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
+import { caricaImmagine } from '@/lib/storage/carica-immagine';
+import { avvisoPerGliScartati, mappaAccept, pesoMassimo } from '@/lib/storage/casella-di-caricamento';
+import { richiestaPerIlSito } from '@/lib/storage/foto-del-sito';
+
+/**
+ * Vedi `lib/storage/casella-di-caricamento.ts`: l'elenco dei file che questa casella accetta lo
+ * detta il magazzino. Prima erano tre tipi scritti qui a mano contro i sette del deposito, e una
+ * foto scattata con l'iPhone spariva senza una parola.
+ */
+const ACCETTA = mappaAccept();
+const PESO_MASSIMO = pesoMassimo();
 
 /**
  * Carica un'immagine nel bucket pubblico 'products' e ritorna l'URL pubblico https.
@@ -23,12 +33,9 @@ import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 export async function uploadSiteImage(file: File): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Non autenticato');
-  const { publicUrl } = await caricaImmagine(supabase, {
-    file,
-    userId: user.id,
-    cartella: 'site',
-    cacheControl: ANNO_IN_SECONDI,
-  });
+  // Cosa chiediamo al deposito lo decide `lib/storage/foto-del-sito.ts`, dove una prova può
+  // ESEGUIRLO: qui dentro — 'use client', React, sonner, il client Supabase — non si poteva.
+  const { publicUrl } = await caricaImmagine(supabase, richiestaPerIlSito(file, user.id));
   return publicUrl;
 }
 
@@ -36,12 +43,14 @@ export async function uploadSiteImage(file: File): Promise<string> {
 export function SingleImageUpload({ value, onChange }: { value: string; onChange: (url: string) => void }) {
   const [busy, setBusy] = useState(false);
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: {
-      'image/jpeg': ['.jpg', '.jpeg'],
-      'image/png': ['.png'],
-      'image/webp': ['.webp'],
-    },
+    accept: ACCETTA,
+    maxSize: PESO_MASSIMO,
     maxFiles: 1,
+    /** Il file buttato fuori adesso ha una voce: prima spariva e basta. */
+    onDropRejected: (scartati) => {
+      const avviso = avvisoPerGliScartati(scartati, { postiLiberi: 1 });
+      if (avviso) toast.error(avviso);
+    },
     onDrop: async (files) => {
       const f = files[0];
       if (!f) return;

@@ -149,11 +149,11 @@ describe('i totali «dall inizio», che li somma il database', () => {
     expect(
       totali,
       'Un totale cieco sui rimborsi è più alto del vero: meglio trenta giorni veri che «sempre» gonfiato',
-    ).toEqual(ripiego);
+    ).toEqual({ ...ripiego, finestra: 'ultimi-30-giorni' });
   });
 
   it('se non risponde affatto, si ripiega su quello che il browser sa calcolare', () => {
-    expect(totaliDiSempre(null, ripiego)).toEqual(ripiego);
+    expect(totaliDiSempre(null, ripiego)).toEqual({ ...ripiego, finestra: 'ultimi-30-giorni' });
   });
 
   it('quando invece i rimborsi li sa, i suoi totali valgono', () => {

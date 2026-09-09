@@ -4,6 +4,14 @@ import { sendEmail } from '@/lib/email/client';
 import { withCronAuth } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { lavoriFermi, type CronHeartbeat } from '@/lib/cron-health';
+import { env } from '@/lib/env';
+import { dominioDeiContatti, mittenteFuoriDominio } from '@/lib/contatti-pubblici';
+import {
+  sorvegliaCancellazioni,
+  type GiornataDiCassa,
+  type LetturaCassa,
+  type RichiestaInSospeso,
+} from '@/lib/privacy/cancellazioni-in-sospeso';
 
 export const runtime = 'nodejs';
 
@@ -435,28 +443,102 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
    * Nove giorni = i sette del ripensamento piu' due notti di tentativi. Prima
    * non c'e' niente da guardare: la richiesta sta solo aspettando il suo turno.
    */
+  /**
+   * 8/9/2026 — E QUI SUONAVA ANCHE PER I RINVII CHE ABBIAMO DECISO NOI.
+   *
+   * Questo controllo guardava solo `deletion_requested_at` e non escludeva
+   * niente. Il giro notturno, nello stesso lotto, dichiara invece che il
+   * fattorino con la cassa contanti aperta e' un rinvio VOLUTO e non deve
+   * svegliare nessuno (`lib/cron-cancellazioni.ts`). Per lo stesso fattorino,
+   * ogni giorno, arrivava un avviso che diceva «o fallisce, o non gira»: le due
+   * cose che NON stavano succedendo. E per chi non versa mai non si spegneva
+   * mai. La definizione condivisa di «non eseguita» sta adesso in
+   * `lib/privacy/cancellazioni-in-sospeso.ts`, dove una prova la puo' eseguire.
+   */
   const noveGiorniFa = new Date(Date.now() - 9 * 86_400_000).toISOString();
   const { data: cancellazioniInSospeso, error: errCancellazioni } = await admin
     .from('profiles')
-    .select('deletion_requested_at')
+    // `id` serve per accoppiare la persona alla sua cassa contanti: senza, il
+    // sorvegliante non sa distinguere un guasto da un rinvio deciso da noi.
+    .select('id, deletion_requested_at')
     .not('deletion_requested_at', 'is', null)
     .lt('deletion_requested_at', noveGiorniFa)
     .order('deletion_requested_at', { ascending: true })
     .limit(50);
   if (errCancellazioni) controlliSaltati.push('richieste di cancellazione account rimaste in sospeso');
-  const inSospeso = (cancellazioniInSospeso ?? []) as { deletion_requested_at: string }[];
-  if (inSospeso.length > 0) {
-    const giorni = Math.floor(
-      (Date.now() - new Date(inSospeso[0].deletion_requested_at).getTime()) / 86_400_000,
-    );
+  const righeInSospeso = (cancellazioniInSospeso ?? []) as {
+    id?: string | null;
+    deletion_requested_at: string;
+  }[];
+  const inSospeso: RichiestaInSospeso[] = righeInSospeso.map((r) => ({
+    userId: typeof r.id === 'string' ? r.id : null,
+    chiestaIl: r.deletion_requested_at,
+  }));
+
+  // La cassa si legge SOLO se c'e' qualcuno da valutare: nel caso normale —
+  // nessuna richiesta in sospeso — questa query non parte nemmeno.
+  let cassa: LetturaCassa = { letta: true, giornate: [] };
+  const idsInSospeso = inSospeso.map((r) => r.userId).filter((id): id is string => id !== null);
+  if (idsInSospeso.length > 0) {
+    const { data: giornateCassa, error: errCassa } = await admin
+      .from('cod_reconciliations')
+      .select('rider_id, remitted_at, collected_cents, status')
+      .in('rider_id', idsInSospeso)
+      .is('remitted_at', null);
+    if (errCassa) {
+      // Una cassa che non si legge NON e' un rinvio deciso da noi: non esclude
+      // nessuno, e il giro non si dichiara sano.
+      controlliSaltati.push('cassa contanti di chi aspetta la cancellazione');
+      cassa = { letta: false, perche: errCassa.message };
+    } else {
+      cassa = {
+        letta: true,
+        giornate: ((giornateCassa ?? []) as Array<Record<string, unknown>>).map(
+          (g): GiornataDiCassa => ({
+            riderId: String(g.rider_id),
+            remittedAt: (g.remitted_at as string | null) ?? null,
+            collectedCents: (g.collected_cents as number | null) ?? null,
+            status: (g.status as string | null) ?? null,
+          }),
+        ),
+      };
+    }
+  }
+
+  const sorveglianza = sorvegliaCancellazioni(inSospeso, cassa, Date.now());
+  if (sorveglianza.riga) {
     alerts.push({
       // La chiave porta il giorno e non il conto: cosi' l'avviso torna una volta
       // al giorno finche' non e' risolto, invece di ogni quarto d'ora (e invece
       // di ripartire da capo ogni volta che il numero cambia di uno).
       key: `CANCELLAZIONE_NON_ESEGUITA|${new Date().toISOString().slice(0, 10)}`,
       type: 'CANCELLAZIONE_NON_ESEGUITA',
-      detail: `${inSospeso.length} ${inSospeso.length === 1 ? 'persona ha' : 'persone hanno'} chiesto di cancellare l account e ${inSospeso.length === 1 ? 'e' : 'sono'} ancora qui: la piu vecchia aspetta da ${giorni} giorni (il ripensamento dura 7). Il giro notturno non le ha cancellate: o fallisce, o non gira.`,
+      detail: sorveglianza.riga,
       url: '/admin/users',
+    });
+  }
+
+  /**
+   * 12) IL MITTENTE DELLE EMAIL SU UN DOMINIO CHE NON E' QUELLO DEL SITO.
+   *
+   * Il sito pubblicava quattordici indirizzi su `@mycity.it` e viveva su
+   * `mycity-marketplace.com`: due caselle di posta diverse, su due fornitori
+   * diversi (mycity.it ha gli MX su Zoho). Adesso gli indirizzi nascono tutti da
+   * `lib/contatti-pubblici.ts`, ma il dominio da cui la posta PARTE lo decide
+   * `RESEND_FROM`, che sta su Vercel e il codice non controlla.
+   *
+   * Se i due si separano, non si rompe niente in modo visibile: la email parte,
+   * Resend la consegna, e il filtro antispam del destinatario la mette da parte
+   * perche' il mittente non c'entra con il sito da cui ha comprato. Non lo dice
+   * nessun log. Questo e' l'unico posto da cui si puo' vedere.
+   */
+  const scollamentoMittente = mittenteFuoriDominio(env.resendFrom(), dominioDeiContatti());
+  if (scollamentoMittente) {
+    alerts.push({
+      key: `MITTENTE_FUORI_DOMINIO|${scollamentoMittente.mittente}|${new Date().toISOString().slice(0, 10)}`,
+      type: 'MITTENTE_FUORI_DOMINIO',
+      detail: scollamentoMittente.riga,
+      url: '/admin/today',
     });
   }
 
@@ -471,7 +553,16 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   }
 
   if (alerts.length === 0) {
-    return NextResponse.json({ ok: true, alerts: 0, controlliSaltati, message: 'No anomalies detected' });
+    return NextResponse.json({
+      ok: true,
+      alerts: 0,
+      controlliSaltati,
+      // Un rinvio deciso da noi non e' un'anomalia e non suona; ma chi apre
+      // questa rotta a mano deve poter vedere che c'e', invece di dedurre dal
+      // silenzio che non ci sia nessuno in attesa.
+      cancellazioniRinviate: sorveglianza.rinviate.length,
+      message: 'No anomalies detected',
+    });
   }
 
   // Dedup: scarta gli alert la cui (tipo+entità) è già stata notificata entro
@@ -595,6 +686,7 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     ok: true,
     alerts: alerts.length,
     fresh: fresh.length,
+    cancellazioniRinviate: sorveglianza.rinviate.length,
     details: fresh,
   });
 });

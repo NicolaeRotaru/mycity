@@ -40,8 +40,10 @@ const LIMITI = ['accept', 'maxSize', 'minSize', 'maxFiles', 'validator'];
  */
 const MUTI_NOTI = new Map<string, string>([
   ['components/admin/home/HomeSectionConfigForm.tsx', 'caricamento video della home, solo staff — fuori territorio il 6/9/2026'],
-  ['components/seller/site/GalleryFields.tsx', 'galleria del sito del negozio — fuori territorio il 6/9/2026'],
-  ['components/seller/site/ImageUpload.tsx', 'banner del sito del negozio — fuori territorio il 6/9/2026'],
+  // 8/9/2026 — accorciata di due righe, come previsto. `GalleryFields.tsx` e `ImageUpload.tsx`
+  // adesso hanno l'avviso: vedi
+  // `tests/unit/la-foto-dell-iphone-entra-nella-vetrina-e-chi-resta-fuori-lo-sa.test.ts`.
+  // Lasciarle qui avrebbe coperto un buco che non c'e' piu' — e nascosto il prossimo.
 ]);
 
 function tuttiIFile(dir: string, out: string[] = []): string[] {

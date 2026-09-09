@@ -67,6 +67,14 @@ const TUTTE_LE_IMPORTANTI: Record<string, string> = {
   // e newsletter. Il sito risponde, quindi non e' un 503 — e' un pezzo che manca, e il
   // semaforo lo deve dire prima che lo scopra il primo cliente che non riesce a entrare.
   TURNSTILE_SECRET_KEY: 'turnstile_test',
+  // 8/9/2026 — le due chiavi del BROWSER, che qui non erano mai entrate perche'
+  // l'elenco era nato guardando i segreti del server. Sono la meta' che vede il
+  // cliente: senza la prima le pagine di accesso e registrazione non disegnano
+  // il riquadro anti-robot e il server risponde «CAPTCHA mancante» a tutti;
+  // senza la seconda dal checkout sparisce il pagamento con carta. Il ciclo qui
+  // sotto genera da solo la prova che il semaforo se ne accorge.
+  NEXT_PUBLIC_TURNSTILE_SITE_KEY: 'sitekey_test',
+  NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test',
 };
 
 let contatore = 0;

@@ -550,9 +550,34 @@ export async function anonimizzaProfilo(admin: Admin, userId: string): Promise<{
  * un giorno è piccolo, quello di cancellare per sbaglio la prova di un debito
  * non si ripara.
  */
+/**
+ * 8/9/2026 — UN BOOLEANO SOLO PER DUE DOMANDE DIVERSE.
+ *
+ * `bloccante` diceva «fermati» e basta. Ma i motivi per fermarsi sono due, e
+ * non si assomigliano per niente:
+ *
+ *  · `da_versare`      — ho guardato il registro e i contanti ci sono davvero.
+ *                        È la regola che funziona: si rinvia, e si ripete ogni
+ *                        notte finché il fattorino non versa.
+ *  · `non_verificabile` — il registro non l'ho potuto leggere (permesso
+ *                        revocato, vista cambiata, rete caduta). Ci si ferma
+ *                        lo stesso — su una cassa «non lo so» vale quanto
+ *                        «sì» — ma questo è un GUASTO, e un guasto non ha il
+ *                        permesso di tacere.
+ *
+ * Il difetto vero stava a valle: chi riceveva `bloccante: true` doveva
+ * indovinare il perché, sceglieva «contanti da versare», e il giro notturno
+ * contava un rinvio legittimo. Bastava un permesso negato su
+ * `cod_reconciliations` perché NESSUNA cancellazione venisse più onorata,
+ * mentre la notte rispondeva «tutto a posto».
+ */
+export type EsitoCassa = 'libera' | 'da_versare' | 'non_verificabile';
+
 export type CassaContanti = {
   /** La cancellazione va fermata? */
   bloccante: boolean;
+  /** PERCHÉ ci si ferma: la domanda che `bloccante` da solo non sapeva più dire. */
+  esito: EsitoCassa;
   /** Quanto risulta ancora da versare, in centesimi. */
   centesimi: number;
   /** Quante giornate di cassa sono ancora aperte. */
@@ -564,6 +589,7 @@ export type CassaContanti = {
 export async function contantiAncoraDaVersare(admin: Admin, userId: string): Promise<CassaContanti> {
   const nonVerificabile = (perche: string): CassaContanti => ({
     bloccante: true,
+    esito: 'non_verificabile',
     centesimi: 0,
     giornate: 0,
     motivo: `Non siamo riusciti a controllare la cassa contanti, quindi la cancellazione è rinviata: ${perche}`,
@@ -593,13 +619,14 @@ export async function contantiAncoraDaVersare(admin: Admin, userId: string): Pro
   const aperte = righe.filter(
     (r) => r.remitted_at == null && ((r.collected_cents ?? 0) > 0 || r.status === 'MISMATCH'),
   );
-  if (aperte.length === 0) return { bloccante: false, centesimi: 0, giornate: 0, motivo: '' };
+  if (aperte.length === 0) return { bloccante: false, esito: 'libera', centesimi: 0, giornate: 0, motivo: '' };
 
   const centesimi = aperte.reduce((somma, r) => somma + (r.collected_cents ?? 0), 0);
   const euro = (centesimi / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const giornate = aperte.length;
   return {
     bloccante: true,
+    esito: 'da_versare',
     centesimi,
     giornate,
     motivo:
@@ -702,14 +729,47 @@ export type EsitoCancellazione = {
  * ③ La cancellazione dell'account: il passo che può fallire.
  * ④ Il profilo (nome, indirizzo, nome del negozio) solo se il ③ è riuscito.
  */
+/**
+ * Quale motivo di rinvio corrisponde a ogni esito della cassa.
+ *
+ * `null` vuol dire «questo non è un rinvio deciso da noi: è un guasto». Il giro
+ * notturno (`lib/cron-cancellazioni.ts`) conta fra i rinvii SOLO ciò che porta
+ * un motivo che conosce; senza motivo finisce fra i guasti, sveglia un
+ * amministratore e rende rossa la notte. È il verso giusto in cui sbagliare.
+ *
+ * È scritto come `Record<EsitoCassa, …>` apposta: il giorno in cui qualcuno
+ * aggiunge un quarto esito, TypeScript non lo lascia passare finché non ha
+ * detto in che categoria cade. La categoria non si indovina più a valle — che
+ * è esattamente il modo in cui questo difetto era nato.
+ */
+const MOTIVO_PER_ESITO_CASSA: Record<EsitoCassa, 'cassa_da_versare' | null> = {
+  libera: null,
+  da_versare: 'cassa_da_versare',
+  non_verificabile: null,
+};
+
 export async function cancellaAccount(admin: Admin, userId: string): Promise<EsitoCancellazione> {
   // ① Prima di toccare qualsiasi cosa: i soldi degli altri.
   const cassa = await contantiAncoraDaVersare(admin, userId);
   if (cassa.bloccante) {
-    logger.error('[cancellazione] rinviata: cassa contanti ancora aperta', {
-      userId, centesimi: cassa.centesimi, giornate: cassa.giornate,
-    });
-    return { ok: false, motivo: 'cassa_da_versare', errore: cassa.motivo, fileRimossi: 0, erroriFile: [] };
+    const motivo = MOTIVO_PER_ESITO_CASSA[cassa.esito] ?? undefined;
+    if (motivo) {
+      logger.error('[cancellazione] rinviata: cassa contanti ancora aperta', {
+        userId, centesimi: cassa.centesimi, giornate: cassa.giornate,
+      });
+    } else {
+      // 8/9/2026 — IL GUASTO CHE ARRIVAVA TRAVESTITO DA REGOLA.
+      //
+      // Qui si usciva con `motivo: 'cassa_da_versare'` anche quando il registro
+      // della cassa non si era potuto LEGGERE. Il giro notturno lo contava fra
+      // i rinvii legittimi, non svegliava nessuno e scriveva il battito: un
+      // permesso revocato su `cod_reconciliations` fermava TUTTE le
+      // cancellazioni, e la notte rispondeva «tutto a posto».
+      logger.error('[cancellazione] fermata: la cassa contanti non si e potuta controllare', {
+        userId, esito: cassa.esito,
+      });
+    }
+    return { ok: false, motivo, errore: cassa.motivo, fileRimossi: 0, erroriFile: [] };
   }
 
   // ② I documenti d'identità e l'IBAN non aspettano: non si vedono a video,

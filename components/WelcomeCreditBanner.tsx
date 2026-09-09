@@ -74,8 +74,12 @@ export default function WelcomeCreditBanner() {
 
   if (!show) return null;
 
+  // 8/9/2026 — stessa storia del codice di consegna: la prima fermata della
+  // sfumatura era olive-500 (#7C8B5A), 3,69 volte di stacco col bianco sopra,
+  // contro i 4,5 che servono a un testo. Adesso la piu' chiara delle tre e'
+  // olive-600 (4,78).
   return (
-    <div className="relative bg-gradient-to-r from-olive-500 via-olive-600 to-primary-600 text-white animate-slide-down">
+    <div className="relative bg-gradient-to-r from-olive-600 via-olive-700 to-primary-600 text-white animate-slide-down">
       <div className="container mx-auto px-4 sm:px-6 py-3 flex items-center gap-3 justify-center text-sm sm:text-base">
         <Gift size={20} strokeWidth={2.4} className="shrink-0 text-accent-300" />
         <p className="text-center">

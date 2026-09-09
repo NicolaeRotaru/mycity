@@ -278,6 +278,23 @@ jobs:
           grep -q "applicate 0 " /tmp/giro2.txt \
             || { echo "::error::il secondo giro ha riapplicato delle migrazioni: il rilascio non e' ripetibile"; exit 1; }
 
+      # 7/9/2026 — LA PRODUZIONE NON E' UN DATABASE RICOSTRUITO DA ZERO.
+      #
+      # Il passo qui sopra prova l'idempotenza su un database che la CI ha
+      # appena costruito applicando i file in ordine e registrandoli tutti: li'
+      # ogni migrazione risulta gia' nota, quindi si salta. La produzione e'
+      # nata PRIMA del registro, e le sue righe hanno un'altra forma: la regola
+      # di salto non riconosce i file, lo script prova a rieseguire la 001 e
+      # muore sul primo comando. Cioe' il difetto vive esattamente nella forma
+      # di database che questo lavoro non costruisce mai.
+      #
+      # Il controllo sotto quella forma la ricostruisce apposta e pretende un
+      # rifiuto pulito. Era stato scritto il 7/9 (PR #252) e lasciato fuori
+      # dalla CI: un controllo che nessuno lancia non e' una rete, e in un mese
+      # nessuno si accorge se smette di funzionare.
+      - name: Lo script del rilascio non si schianta sul database di produzione
+        run: bash tests/sql/harness/lo-script-non-si-schianta-sul-database-nato-prima-del-registro.sh mycity_nato_prima_ci
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:

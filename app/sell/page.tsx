@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { useProfile } from '@/components/hooks/useProfile';
 import SellerApplicationForm, { type SellerApplicationData } from '@/components/SellerApplicationForm';
 import { friendlyError } from '@/lib/errors';
+import { controlloEta } from '@/lib/maggiore-eta';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
@@ -61,6 +62,21 @@ export default function SellPage() {
     mutationFn: async (form: SellerApplicationData) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
+
+      /**
+       * 8/9/2026 — LA SECONDA PORTA CHE SCRIVE LA DATA DI NASCITA.
+       *
+       * Il difetto era stato visto sul modulo del fattorino, ma `legal_birth_date`
+       * ce l'hanno due strade, e sono tutte e due `update` fatti dal browser: se
+       * si chiude il cancello solo di là, un quindicenne si iscrive come negozio.
+       * Le condizioni d'uso, al punto 3, dicono diciotto anni — non «diciotto
+       * anni se consegni».
+       *
+       * Questo è il freno del browser. Quello che non si scavalca è il vincolo
+       * sul database (migrazione 156).
+       */
+      const eta = controlloEta(form.legalBirthDate);
+      if (!eta.ok) throw new Error(eta.messaggio ?? 'Controlla la data di nascita.');
 
       const now = new Date().toISOString();
       const { error } = await supabase.from('profiles').update({

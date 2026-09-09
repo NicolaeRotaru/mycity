@@ -3,6 +3,25 @@ import { logger } from '@/lib/logger';
 import { getAdminSupabase } from '@/lib/supabase/server';
 
 /**
+ * 8/9/2026 (lotto gravi, corsia 11) — QUI STA DOVE IL NUMERO E' CONSERVATO.
+ * La decisione «posso ancora spendere?» sta invece in
+ * `lib/ai/decisioneTettoSpesa.ts`, che non importa niente e si puo' ESEGUIRE in
+ * una prova. Erano la stessa cosa, e la parte che decide non si poteva provare
+ * senza un database finto.
+ */
+export {
+  euroInCents,
+  decidiSpesaAi,
+  allarmiTettoSpesaAi,
+  leggiCopieAttese,
+  ripiegoDurevole,
+  COPIE_ATTESE_PREDEFINITE,
+  RIPIEGO_TOLLERATO_MINUTI,
+  TIPO_ALLARME_TETTO_AI,
+} from '@/lib/ai/decisioneTettoSpesa';
+export type { ContoCondivisoStato, DecisioneSpesa, AllarmeTetto } from '@/lib/ai/decisioneTettoSpesa';
+
+/**
  * Il conto di quanto abbiamo speso oggi verso Anthropic — UNO SOLO per tutto
  * il sito.
  *
@@ -229,8 +248,8 @@ function segnaEsito(riuscito: boolean): void {
   if (fallimentiDiFila >= FALLIMENTI_PRIMA_DI_SOSPENDERE) riprovaDopo = Date.now() + PAUSA_MS;
 }
 
-async function chiamaRpc(nome: string, args: Record<string, unknown>): Promise<number | null> {
-  if (contoCondivisoSospeso()) return null;
+/** Il giro di rete vero, senza il cancello della pausa. Lo usa anche la sonda. */
+async function eseguiRpc(nome: string, args: Record<string, unknown>): Promise<number | null> {
   try {
     const admin = getAdminSupabase();
     const { data, error } = (await admin.rpc(nome, args)) as unknown as RispostaRpc;
@@ -256,6 +275,12 @@ async function chiamaRpc(nome: string, args: Record<string, unknown>): Promise<n
     segnaEsito(false);
     return null;
   }
+}
+
+/** Come sopra, ma rispetta la pausa: e' la strada di chi sta per spendere. */
+async function chiamaRpc(nome: string, args: Record<string, unknown>): Promise<number | null> {
+  if (contoCondivisoSospeso()) return null;
+  return eseguiRpc(nome, args);
 }
 
 /** Quanti centesimi sono usciti oggi, contando TUTTE le copie del sito. */
@@ -288,8 +313,27 @@ export async function aggiungiSpesaCents(cents: number, quando?: Date): Promise<
   _ripiego.cents = Math.max(_ripiego.cents, totale);
 }
 
-/** Da euro a centesimi, senza perdere le chiamate che costano pochissimo. */
-export function euroInCents(eur: number): number {
-  if (!Number.isFinite(eur) || eur <= 0) return 0;
-  return Math.max(1, Math.round(eur * 100));
+/**
+ * LA SONDA: il conto condiviso c'e' o no, chiesto adesso al database.
+ *
+ * Serve a chi sorveglia da un'altra copia. `statoContoCondiviso()` racconta
+ * quello che ha visto QUESTA copia servendo le richieste AI; ma il lavoro
+ * periodico degli avvisi gira su una copia diversa, che di quelle richieste non
+ * sa niente e nasce col contatore pulito. Chiedendolo al database la risposta
+ * vale da qualunque copia: se la funzione non esiste, non esiste per nessuno.
+ *
+ * Non passa dalla pausa del circuito (`contoCondivisoSospeso`): quella serve a
+ * non buttare un giro di rete su OGNI chiamata al modello, mentre qui il giro
+ * di rete e' esattamente il lavoro — una volta ogni passata del cron.
+ */
+export async function sondaContoCondiviso(quando?: Date): Promise<{
+  condiviso: boolean;
+  permanente: boolean;
+  motivo: string;
+  daMinuti: number;
+}> {
+  const giorno = giornoDiSpesa(quando);
+  const letto = await eseguiRpc('spesa_ai_di_oggi', { p_giorno: giorno });
+  if (letto === null) segnalaRipiego('sonda del conto condiviso non riuscita', giorno);
+  return statoContoCondiviso();
 }

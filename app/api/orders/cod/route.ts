@@ -25,6 +25,7 @@ import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { decisioneSuChiaveOccupata } from '@/lib/ordini/tentativo';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
+import { ordineInContantiPuoNascere } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
 import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -320,10 +321,36 @@ export const POST = withAuthRateLimit(
      * funzione, perché una senza l'altra vuol dire farsi pagare e poi
      * rimborsare chi ha scelto i contanti.
      */
-    await liberaRiserveAbbandonate(admin, {
+    const riserveLiberate = await liberaRiserveAbbandonate(admin, {
       buyerId: user.id,
       soloConProdotti: uniqueProductIds,
     });
+
+    /**
+     * 8/9/2026 — SE LA PAGINA CON LA CARTA È RIMASTA VIVA, L'ORDINE IN CONTANTI
+     * NON NASCE.
+     *
+     * Chiudere la scheda di Stripe è un'azione, e un'azione può fallire: rete,
+     * chiamata rifiutata, oppure la pagina è appena stata PAGATA e non si può
+     * più chiudere. Finché quel fallimento restava un avviso nel registro,
+     * l'ordine in contanti nasceva lo stesso e la persona si ritrovava con due
+     * porte aperte sullo stesso acquisto: paga alla consegna E può ancora
+     * pagare con la carta.
+     *
+     * La regola sta in una funzione a parte, che una prova può eseguire:
+     * `lib/ordini/ordine-in-contanti-puo-nascere.ts`. Rifiutare qui non perde
+     * l'ordine — la riserva vecchia è ancora in piedi, quindi il secondo
+     * tentativo riprova da capo — mentre un addebito seguito da un rimborso che
+     * si vede dopo giorni è una telefonata all'assistenza.
+     */
+    const cancelloContanti = ordineInContantiPuoNascere(riserveLiberate);
+    if (!cancelloContanti.puoNascere) {
+      logger.error('[cod] ordine in contanti rifiutato: pagamento con la carta ancora pagabile', {
+        userId: user.id,
+        sessioni: cancelloContanti.sessioni.length,
+      });
+      return esciERilascia(ApiErrors.conflict(cancelloContanti.motivo));
+    }
 
     type RigaVariante = { id: string; product_id: string; label: string; stock: number };
 

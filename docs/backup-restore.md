@@ -46,9 +46,12 @@
   esistevano, con che nome e in che secchio — la mappa per sapere cosa manca
 - **File delle foto** (immagini prodotti, stories, reviews): ⚠️ **ANCORA
   NESSUNA COPIA NOSTRA.** Il pezzo che le copia è scritto e pronto dentro
-  `scripts/backup-db.sh`, ma è **spento**: si accende da solo appena ci sono un
-  secchio di destinazione e le sue chiavi (vedi §3). Finché è spento, ogni
-  notte scrive `esito-foto: non-configurato` e non finge di aver copiato
+  `scripts/backup-db.sh`, ed è **spento** solo perché mancano il secchio di
+  destinazione e le sue chiavi. Dall'8/9/2026 non c'è più niente da modificare
+  nel codice: si accende mettendo tre valori nelle impostazioni di GitHub
+  (§3), e da lì in poi ogni notte copia **e rilegge** almeno una foto. Finché è
+  spento, ogni notte scrive `esito-foto: non-configurato` e non finge di aver
+  copiato
 - **Codice**: GitHub origin/main + tutti i branch
 - **Env vars**: Vercel → progetto → Settings → Environment Variables (NON in repo)
 - **Restore drill**: ogni 3 mesi, documenta tempi
@@ -191,10 +194,36 @@ una quarta:
 - `esito-foto: non-configurato` → mancano le variabili. **Nessun file è stato
   copiato**, e il lavoro lo dice invece di tacere. Il resto della copia
   (database, utenti, elenco) è comunque riuscito.
-- `esito-foto: copiate (...)` → i secchi sono stati sincronizzati davvero.
+- `esito-foto: copiate e riaperte (...)` → i secchi sono stati sincronizzati
+  davvero **e almeno una foto è stata riletta dalla copia**.
 - `esito-foto: fallita ...` → ci ha provato e non ce l'ha fatta (o manca
   `rclone`): **il lavoro diventa rosso**, così si scopre in un giorno
   qualunque invece che la mattina dell'incidente.
+
+#### 8/9/2026 — «copiate» non voleva dire «si riaprono»
+
+Fino a oggi bastava che `rclone sync` uscisse con zero. Non è la stessa cosa, e
+la differenza si scopre il giorno peggiore:
+
+- la chiave del secchio di destinazione può avere il permesso di **scrivere** e
+  non quello di **leggere**. Su Backblaze B2 e su S3 è una casella spuntata a
+  parte, ed è l'errore più facile da fare perché sembra più prudente. Ogni notte
+  la copia riesce, ogni notte esce verde, e il giorno del ripristino non si
+  riapre niente: mesi di copie inutili;
+- una destinazione che resta vuota (origine sbagliata, secchio rinominato,
+  permesso di lettura tolto all'origine) fa uscire `sync` con zero lo stesso;
+- un trasferimento troncato lascia file da zero byte, che si elencano benissimo
+  e non contengono niente.
+
+Da oggi, prima di dirsi riuscita, la copia va a **riprendere una foto dal
+secchio di destinazione e la legge davvero**. Se non ci riesce — o se in tutta
+la copia non c'è nemmeno un file — la notte diventa rossa. Un singolo secchio
+vuoto resta legittimo (`reviews` può non avere ancora nessuna foto): quello che
+non è più ammesso è che siano vuoti tutti.
+
+Lo tiene fermo `tests/unit/la-copia-delle-foto-si-riapre-davvero.test.ts`, che
+fa girare notti vere con una chiave di sola scrittura, con un file da zero byte
+e con una copia vuota, e pretende il rosso su tutte e tre.
 
 Il comportamento è tenuto fermo da
 `tests/unit/la-copia-notturna-non-finge-di-aver-salvato-le-foto.test.ts`, che
@@ -219,9 +248,40 @@ STORAGE_SYNC_SOURCE="supabase:" STORAGE_SYNC_DEST="b2:mycity-foto" \
   bash scripts/backup-db.sh
 ```
 
-Su GitHub Actions le due variabili vanno aggiunte al passo che esegue il
-backup, e `rclone` installato nel lavoro: finché non ci sono, il lavoro resta
-verde e scrive `esito-foto: non-configurato`.
+#### Su GitHub Actions: cosa serve davvero (aggiornato 8/9/2026)
+
+**Qui c'era scritto una cosa che avrebbe fatto perdere un pomeriggio, o
+peggio.** Diceva: «le due variabili vanno aggiunte al passo che esegue il
+backup, e `rclone` installato nel lavoro». Cioè: dopo aver comprato il secchio
+e messo le chiavi, bisognava ancora modificare il file del lavoro a mano —
+e nessuno lo avrebbe fatto, perché il lavoro sarebbe stato **verde lo stesso**.
+Il rischio non era «manca una copia» (lo sai), era «credi di averla» (non lo
+sai).
+
+Dall'8/9/2026 il filo c'è: `.github/workflows/backup-db.yml` passa le variabili
+allo script e installa `rclone` da solo. **Non si tocca più nessun file.**
+Bastano tre cose in *Settings → Secrets and variables → Actions*:
+
+| Dove | Nome | Cos'è | Esempio |
+|---|---|---|---|
+| Variables | `STORAGE_SYNC_SOURCE` | il remote rclone del fornitore | `supabase:` |
+| Variables | `STORAGE_SYNC_DEST` | il remote di destinazione | `b2:mycity-foto` |
+| Secrets | `RCLONE_CONFIG_BASE64` | il file `rclone.conf` con le chiavi, in base64 | `base64 -w0 ~/.config/rclone/rclone.conf` |
+
+Facoltative, sempre fra le *Variables*: `STORAGE_SYNC_BUCKETS` e
+`STORAGE_SYNC_STORICO`.
+
+> ⚠️ **O tutte e tre, o nessuna.** Mezza configurazione è la trappola: sembra
+> accesa e non copia niente. Il lavoro se ne accorge e **diventa rosso**
+> dicendo quale manca, invece di restare verde in silenzio.
+
+Finché non c'è niente, il lavoro resta verde, scrive `esito-foto:
+non-configurato`, mette un avviso in cima alla pagina dell'esecuzione e una
+riga nel riepilogo: **lo stato di una rete di sicurezza deve stare dove si
+guarda, non in fondo a un registro delle 02:17.**
+
+Anche la prova mensile di ripristino riceve le stesse variabili: quando la
+copia delle foto è accesa, il primo del mese si prova anche quella.
 
 ---
 

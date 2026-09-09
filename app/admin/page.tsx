@@ -16,6 +16,8 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { getAccountMenuItems } from '@/lib/account-menu';
 import { tassoAutorizzazione, tassoDaGuardare, type TentativoPagamento } from '@/lib/pagamenti/tasso-autorizzazione';
+import { NON_LETTO } from '@/lib/letture-cruscotto';
+import { euroATesto, percentualeATesto, rapporto, verdettoConsegne } from '@/lib/salute-marketplace';
 import { AdminPageTitle, AdminSectionLabel, AdminStatCard } from '@/components/admin/AdminUI';
 
 // Qui c'era `const TAKE_RATE = 0.14` scritto a mano, mentre la commissione
@@ -44,7 +46,12 @@ function HealthTile({
           <Icon size={17} strokeWidth={2.2} aria-hidden />
         </span>
       </div>
-      <p className="text-[24px] font-extrabold leading-none text-ink-900">{value}</p>
+      {/*
+        Il trattino non lo deve leggere ad alta voce nessuno: da solo non dice
+        niente. Chi non vede lo schermo sente l'etichetta e la riga sotto, che
+        il perche' lo scrivono per esteso.
+      */}
+      <p className="text-[24px] font-extrabold leading-none text-ink-900" aria-hidden={value === NON_LETTO || undefined}>{value}</p>
       <p className="mt-1.5 text-xs text-ink-500">{label}</p>
       {hint && <p className="mt-0.5 text-[11px] text-ink-400">{hint}</p>}
     </div>
@@ -147,11 +154,17 @@ export default function AdminDashboard() {
   // soggette a commissione. Due errori nello stesso numero, entrambi verso
   // l'alto.
   const commissions = stats.commissioniReali;
-  const aov = delivered > 0 ? gmv / delivered : 0;
+  // I tre rapporti della fascia passano tutti da `rapporto`: senza denominatore
+  // rispondono «non lo so» (`null` → «—»), mai zero. Prima scrivevano «0,0%» e
+  // «0,00 €» anche quando non c'era niente da contare, e da li' in poi nessuno
+  // poteva piu' distinguere «non ho dati» da «e' andato tutto male».
+  const aov = rapporto(gmv, delivered);
   const closedOrders = stats.orders.total - (stats.orders.byStatus.NEW ?? 0) - (stats.orders.byStatus.ACCEPTED ?? 0);
-  const fulfillmentRate = closedOrders > 0 ? (delivered / closedOrders) * 100 : 0;
-  const cancelRate = stats.orders.total > 0 ? (canceled / stats.orders.total) * 100 : 0;
-  const fulfillmentLow = fulfillmentRate > 0 && fulfillmentRate < 95;
+  const cancelRate = rapporto(canceled, stats.orders.total);
+  // Il riquadro del tasso di consegna e il suo avviso li decide una funzione
+  // sola, che una prova puo' eseguire. Qui la lettura e' gia' arrivata: sopra
+  // c'e' il rientro anticipato che mostra lo scheletro finche' `stats` non c'e'.
+  const consegne = verdettoConsegne({ letto: true, consegnati: delivered, chiusi: closedOrders });
 
   // Pagamenti riusciti sul totale di chi ci ha provato davvero. Chi abbandona
   // sulla schermata della banca non compare ne' fra i riusciti ne' fra i
@@ -173,10 +186,10 @@ export default function AdminDashboard() {
       <section>
         <AdminSectionLabel icon={Activity}>Salute del marketplace</AdminSectionLabel>
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
-          <HealthTile icon={Euro} tone="olive" label="GMV (ordini consegnati)" value={formatPrice(gmv)} hint={`AOV ${formatPrice(aov)}`} />
+          <HealthTile icon={Euro} tone="olive" label="GMV (ordini consegnati)" value={formatPrice(gmv)} hint={`AOV ${euroATesto(aov)}`} />
           <HealthTile icon={Percent} tone="primary" label={`Commissioni (${MARKETPLACE_FEE_BPS / 100}% del subtotale)`} value={formatPrice(commissions)} hint="trattenuta reale sugli ordini consegnati" />
-          <HealthTile icon={Timer} tone="accent" label="Tasso di consegna" value={`${fulfillmentRate.toFixed(1).replace('.', ',')}%`} hint="obiettivo ≥ 95%" />
-          <HealthTile icon={Store} tone="secondary" label="Tasso di annullamento" value={`${cancelRate.toFixed(1).replace('.', ',')}%`} hint={`${canceled} ordini annullati`} />
+          <HealthTile icon={Timer} tone="accent" label="Tasso di consegna" value={consegne.valore} hint={consegne.nota} />
+          <HealthTile icon={Store} tone="secondary" label="Tasso di annullamento" value={percentualeATesto(cancelRate)} hint={`${canceled} ordini annullati`} />
           <HealthTile
             icon={CreditCard}
             tone={pagamentiDaGuardare ? 'accent' : 'primary'}
@@ -199,11 +212,11 @@ export default function AdminDashboard() {
             </span>
           </div>
         )}
-        {fulfillmentLow && (
-          <div className="mt-2.5 flex items-center gap-2 rounded-md border border-accent-200 bg-accent-50 px-3.5 py-2.5 text-[13px] text-accent-900">
+        {consegne.avviso && (
+          <div role="status" className="mt-2.5 flex items-center gap-2 rounded-md border border-accent-200 bg-accent-50 px-3.5 py-2.5 text-[13px] text-accent-900">
             <Info size={15} className="shrink-0 text-accent-700" aria-hidden />
             <span>
-              Il tasso di consegna è sotto l&apos;obiettivo:{' '}
+              {consegne.avviso}:{' '}
               <strong>verifica gli ordini bloccati</strong> in{' '}
               <Link href="/admin/orders" className="font-semibold underline">Ordini</Link>.
             </span>

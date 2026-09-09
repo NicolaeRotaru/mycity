@@ -6,6 +6,9 @@ import type { ComponentType } from 'react';
 import { monta } from './aiuti/monta-componente';
 import { accendi, attendi } from './aiuti/schermo';
 import { esitoRientroDaStripe, cosaMancaAStripe } from '@/app/seller/dashboard/esito-stripe';
+import {
+  apriIlCruscotto, chiudiIlCruscotto, statisticheDelCruscotto,
+} from './aiuti/cruscotto-del-negozio';
 
 /**
  * 3/9/2026 — «CONFIGURAZIONE PAGAMENTI AGGIORNATA!» ANCHE QUANDO STRIPE NON
@@ -93,27 +96,21 @@ describe('il cruscotto, tornando da Stripe', () => {
   const fetchVero = globalThis.fetch;
 
   beforeEach(() => {
-    (globalThis as Record<string, unknown>).__PROFILO__ = {
-      isSeller: true,
-      profile: { id: 'negozio-1', store_name: 'Pane Quotidiano' },
-    };
-    (globalThis as Record<string, unknown>).__DATI_QUERY__ = (o: { queryKey?: readonly unknown[] }) =>
-      Array.isArray(o?.queryKey) && o.queryKey[0] === 'seller' && o.queryKey[1] === 'stats'
-        ? {
-            productCount: 1, availableCount: 1, orderCount: 0, vendutoArticoli: 0,
-            incassato: 0, netto: 0, revenueToday: 0, revenue7: 0, revenue30: 0,
-            ordiniOggi: 0, ordini7: 0, ordini30: 0, ordersToday: 0, orders7: 0,
-            last30Count: 0, avgRating: 0, reviewCount: 0,
-          }
-        : undefined;
+    // Un negozio appena aperto: qui conta solo cosa dice il riquadro di Stripe.
+    apriIlCruscotto(statisticheDelCruscotto({
+      netto: { netto: '€0,00', incassato: '€0,00' },
+      prodotti: { disponibili: 1, totali: 1 },
+      valutazione: { media: 0, quante: 0 },
+      articoli: { quanti: 0 },
+      revenueToday: 0, revenue7: 0, revenue30: 0,
+      ordiniOggi: 0, ordini7: 0, ordini30: 0,
+    }));
     window.history.replaceState({}, '', '/seller/dashboard?stripe=connected');
   });
 
   afterEach(() => {
     globalThis.fetch = fetchVero;
-    document.body.innerHTML = '';
-    delete (globalThis as Record<string, unknown>).__DATI_QUERY__;
-    delete (globalThis as Record<string, unknown>).__PROFILO__;
+    chiudiIlCruscotto();
     window.history.replaceState({}, '', '/');
   });
 

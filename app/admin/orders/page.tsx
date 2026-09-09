@@ -16,6 +16,12 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { queryKeys } from '@/lib/queries/keys';
 import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
+import {
+  raccogliOrdiniDaEsportare,
+  contenutoCsvOrdini,
+  nomeFileOrdini,
+  type OrdineDaEsportare,
+} from '@/lib/ordini/esporta-ordini';
 
 /**
  * 30/8/2026 (R004) — LA FORMA DELLA RIGA NON SE LA INVENTA PIU' QUESTA PAGINA.
@@ -41,8 +47,21 @@ type Row = ColonneSalvo<
 
 const FILTERS = ['all', 'NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELED'] as const;
 
+/**
+ * Le colonne stanno scritte una volta sola: la tabella a schermo e il file per
+ * il commercialista leggono le stesse. Erano due elenchi gemelli, e due elenchi
+ * gemelli prima o poi smettono di esserlo.
+ */
+const COLONNE_ORDINE = `
+  id, total_price, delivery_status, created_at,
+  delivery_full_name, delivery_city,
+  seller:profiles!orders_seller_id_fkey ( store_name ),
+  rider:profiles!orders_rider_id_fkey   ( full_name )
+`;
+
 export default function AdminOrdersPage() {
   const [filter, setFilter] = useState<typeof FILTERS[number]>('all');
+  const [esportando, setEsportando] = useState(false);
   // #90 — Cinquanta ordini per volta, con «carica altri»: un pannello che
   // scarica tutto smette di aprirsi il giorno in cui gli ordini sono tanti,
   // cioe' il giorno in cui serve di piu'.
@@ -60,12 +79,7 @@ export default function AdminOrdersPage() {
       // minuti invece di ogni trenta secondi.
       let q = supabase
         .from('orders')
-        .select(`
-          id, total_price, delivery_status, created_at,
-          delivery_full_name, delivery_city,
-          seller:profiles!orders_seller_id_fkey ( store_name ),
-          rider:profiles!orders_rider_id_fkey   ( full_name )
-        `)
+        .select(COLONNE_ORDINE)
         .order('created_at', { ascending: false });
       if (filter !== 'all') q = q.eq('delivery_status', filter);
       const { data, error } = await q.range(0, PER_PAGINA * pagina - 1);
@@ -103,36 +117,61 @@ export default function AdminOrdersPage() {
   if (isLoading) return <LoadingState />;
 
   // Export CSV — Operations Manager: "indispensabile per commercialista"
-  const exportCSV = () => {
-    const headers = ['ID', 'Data', 'Cliente', 'Città', 'Negozio', 'Rider', 'Stato', 'Totale €'];
-    const rows = filtered.map((o) => [
-      o.id,
-      o.created_at,
-      o.delivery_full_name ?? '',
-      o.delivery_city ?? '',
-      o.seller?.store_name ?? '',
-      o.rider?.full_name ?? '',
-      o.delivery_status,
-      // 6/9/2026 — L'IMPORTO USCIVA COL PUNTO E ARRIVAVA A EXCEL COME TESTO.
-      // Il file lo apre il commercialista con Excel in italiano, dove il
-      // decimale e' la virgola: «1234.50» finiva in cella come parola, non come
-      // numero, e la colonna dei totali non si sommava. Adesso e' «1234,50».
-      String(Number(o.total_price).toFixed(2)).replace('.', ','),
-    ]);
-    // Il separatore e' il punto e virgola, non la virgola: e' quello che Excel
-    // in italiano si aspetta, ed e' anche l'unico che convive con la virgola
-    // dei decimali. I campi restano fra virgolette, quindi nessun testo che
-    // contenga un «;» puo' spezzare la riga.
-    const csv = [headers, ...rows]
-      .map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(';'))
-      .join('\n');
-    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }); // BOM per Excel IT
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `mycity-ordini-${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  //
+  // 8/9/2026 — IL FILE NON E' PIU' «QUELLO CHE STA A SCHERMO».
+  // Prima scriveva `filtered`, cioe' la pagina caricata: senza premere «Carica
+  // altri 50» uscivano cinquanta righe, e niente nel file lo diceva. Ora
+  // l'esportazione fa la sua lettura, a finestre, finche' il database non dice
+  // che sono finiti; se non ci arriva, il file lo scrive in prima riga e nel
+  // nome. Come si compone il file (e come si neutralizza ogni cella perche' un
+  // nome scelto da un negoziante non diventi una formula eseguita da Excel)
+  // sta in `lib/ordini/esporta-ordini.ts` + `lib/csv-sicuro.ts`, dove le prove
+  // lo possono eseguire.
+  const exportCSV = async () => {
+    if (esportando) return; // due click non fanno due file
+    setEsportando(true);
+    try {
+      const raccolta = await raccogliOrdiniDaEsportare(async (da, a) => {
+        let q = supabase
+          .from('orders')
+          .select(COLONNE_ORDINE)
+          .order('created_at', { ascending: false })
+          // Secondo criterio d'ordine: senza, fra una finestra e l'altra una
+          // riga puo' saltare o ripetersi mentre entrano ordini nuovi.
+          .order('id', { ascending: false });
+        if (filter !== 'all') q = q.eq('delivery_status', filter);
+        const { data, error } = await q.range(da, a);
+        if (error) throw error;
+        return (data ?? []) as unknown as OrdineDaEsportare[];
+      });
+
+      if (raccolta.righe.length === 0) {
+        toast.error('Nessun ordine da esportare');
+        return;
+      }
+
+      const blob = new Blob([contenutoCsvOrdini(raccolta)], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = nomeFileOrdini({
+        oggi: new Date().toISOString().slice(0, 10),
+        completo: raccolta.completo,
+        filtro: filter,
+      });
+      a.click();
+      URL.revokeObjectURL(url);
+
+      if (raccolta.completo) {
+        toast.success(`Esportati ${raccolta.righe.length} ordini`);
+      } else {
+        toast.warning(`Il file e' PARZIALE: ${raccolta.righe.length} ordini, ce ne sono altri. Non usarlo per la contabilita'.`);
+      }
+    } catch (e: unknown) {
+      toast.error(friendlyError(e));
+    } finally {
+      setEsportando(false);
+    }
   };
 
   return (
@@ -140,14 +179,20 @@ export default function AdminOrdersPage() {
       <AdminPageTitle
         eyebrow="Operatività"
         title="Ordini"
-        sub={`${filtered.length} ordini`}
+        // «50 ordini» quando ce ne sono migliaia e' una bugia: a schermo c'e'
+        // una finestra, e il titolo lo deve dire.
+        sub={forseAltri ? `${filtered.length} ordini caricati (ce ne sono altri)` : `${filtered.length} ordini`}
         action={
           <button
+            type="button"
             onClick={exportCSV}
-            disabled={filtered.length === 0}
+            disabled={filtered.length === 0 || esportando}
+            aria-busy={esportando}
             className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:bg-cream-50 disabled:opacity-50 text-ink-700 px-4 py-2 rounded-lg font-semibold text-sm"
           >
-            Esporta CSV
+            {/* L'esportazione ora legge TUTTI gli ordini: puo' metterci qualche
+                secondo, e chi guarda deve vedere che sta lavorando. */}
+            {esportando ? 'Esporto tutti gli ordini…' : 'Esporta CSV (tutti)'}
           </button>
         }
       />

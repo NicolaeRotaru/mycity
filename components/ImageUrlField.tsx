@@ -1,14 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import Image from 'next/image';
 import caricatoreFotoRemote from '@/lib/image-loader';
-import { Upload, X, Link as LinkIcon } from 'lucide-react';
+import { Upload, X, Link as LinkIcon, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
+import {
+  controllaIndirizzoImmagine,
+  MESSAGGIO_IMMAGINE_NON_ARRIVATA,
+} from '@/lib/indirizzo-immagine-ammesso';
 
 /**
  * Campo immagine riutilizzabile: accetta SIA un URL incollato a mano SIA il
@@ -31,6 +35,25 @@ type Props = {
 
 export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix, label, hint }: Props) {
   const [uploading, setUploading] = useState(false);
+  const idAvviso = useId();
+
+  // Il campo invita a incollare un indirizzo qualsiasi, ma il sito le immagini le sa mostrare solo
+  // da quattro domini (`lib/indirizzo-immagine-ammesso.ts`, che tiene la lista insieme a
+  // `next.config.js` e alla politica di sicurezza). Prima si accettava tutto in silenzio: si
+  // salvava, e la copertina restava un buco bianco sulla home e sulla pagina eventi, senza che
+  // nessuno dicesse il perche'. Adesso il giudizio si legge a ogni carattere, e l'avviso compare
+  // PRIMA di salvare — non dopo, guardando un riquadro vuoto.
+  const esito = controllaIndirizzoImmagine(value);
+
+  // Il controllo sul dominio non puo' sapere se il file esiste davvero: quello lo scopre solo il
+  // browser, provando. Teniamo da parte l'INDIRIZZO che ha fallito, non un si'/no: cosi' appena
+  // l'admin ne scrive un altro l'avviso sparisce da solo, senza nessun effetto che lo riazzeri.
+  const [urlFallita, setUrlFallita] = useState<string | null>(null);
+  const nonArriva = value !== '' && urlFallita === value;
+
+  const messaggio = esito.messaggio ?? (nonArriva ? MESSAGGIO_IMMAGINE_NON_ARRIVATA : null);
+  const nonMostrabile = messaggio !== null;
+  const mostraAnteprima = esito.stato === 'ammesso' && !nonArriva;
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: {
@@ -85,8 +108,25 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
       {value ? (
         <div className="mb-2 flex items-center gap-3">
           <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-cream-100 border border-cream-300 shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <Image src={value} alt="Anteprima" fill sizes="80px" loader={caricatoreFotoRemote} className="object-cover" />
+            {mostraAnteprima ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <Image
+                src={value}
+                alt="Anteprima"
+                fill
+                sizes="80px"
+                loader={caricatoreFotoRemote}
+                onError={() => setUrlFallita(value)}
+                className="object-cover"
+              />
+            ) : (
+              // Disegnare qui l'immagine di un indirizzo che il browser blocchera' non mostra
+              // niente: mostra il buco che il difetto produceva. Meglio un riquadro che ammette
+              // di non avere un'anteprima — il perche' sta scritto sotto il campo.
+              <span className="absolute inset-0 flex items-center justify-center text-[10px] leading-tight text-center text-ink-400 px-1">
+                Nessuna anteprima
+              </span>
+            )}
           </div>
           <button
             type="button"
@@ -123,9 +163,29 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
           onChange={(e) => onChange(e.target.value)}
           placeholder="oppure incolla un URL https://…"
           aria-label={label ? `${label}: indirizzo web dell'immagine` : "Indirizzo web dell'immagine"}
-          className="w-full bg-cream-50 border border-cream-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
+          aria-invalid={nonMostrabile || undefined}
+          aria-describedby={nonMostrabile ? idAvviso : undefined}
+          className={`w-full bg-cream-50 border rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+            nonMostrabile
+              ? 'border-rose-400 focus:ring-rose-600'
+              : 'border-cream-300 focus:ring-primary-700'
+          }`}
         />
       </div>
+
+      {/* L'avviso che prima non c'era: l'admin salvava e scopriva il buco solo guardando la home.
+          `aria-live` gentile e non `role="alert"`: il giudizio cambia a ogni carattere, e un
+          annuncio che interrompe a ogni lettera si impara a ignorare. */}
+      {messaggio ? (
+        <p
+          id={idAvviso}
+          aria-live="polite"
+          className="mt-1 flex items-start gap-1.5 text-xs font-semibold text-rose-700"
+        >
+          <AlertTriangle size={14} strokeWidth={2.4} className="shrink-0 mt-px" aria-hidden />
+          <span>{messaggio}</span>
+        </p>
+      ) : null}
 
       {hint ? <p className="mt-1 text-xs text-ink-400">{hint}</p> : null}
     </div>

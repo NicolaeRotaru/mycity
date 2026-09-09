@@ -131,12 +131,17 @@ describe('la notte che non riesce a cancellare un account', () => {
     expect(avvisi[0].category, 'un allarme di sistema non si spegne con gli interruttori del marketing').toBe('system');
   });
 
-  it('la notte fallita non scrive il battito: se continua, se ne accorge anche il sorvegliante', async () => {
+  it('la notte fallita scrive il battito lo stesso: dice «sono passato di qui», non «e andato bene»', async () => {
+    // 8/9/2026 — LA DECISIONE RIAPERTA. Qui si pretendeva `false`, cioè che una
+    // notte fallita spegnesse il battito. La prova completa sta in
+    // `tests/unit/il-battito-dice-che-sono-passato-non-che-e-andato-bene.test.ts`:
+    // il guasto tipico non è un episodio, dura — e un battito spento per sempre
+    // disarma l'unico sensore capace di dire «questo lavoro non parte più».
     const { mondo } = await laNotte([{ userId: 'u1', chiestaIl: giorniFa(8), esito: GUASTO }]);
     expect(
       mondo.battitoScritto(),
-      'il lavoro fallisce e continua a dichiararsi vivo: il freno anti-silenzio non scatta mai',
-    ).toBe(false);
+      'il giro è passato e il battito manca: il sorvegliante manderà a guardare lo scheduler, che è sano',
+    ).toBe(true);
   });
 
   it('la notte andata bene resta verde, scrive il battito e non sveglia nessuno', async () => {

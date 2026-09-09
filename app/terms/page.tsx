@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
 import { rigaIdentita, titolare } from '@/lib/legal/titolare';
+import { paragrafiConsegne } from '@/lib/legal/promessa-cliente-assente';
 
 export const metadata = {
   title: 'Termini di servizio · MyCity',
@@ -159,14 +160,18 @@ export default function TermsPage() {
         </p>
       </LegalSection>
 
+      {/* 8/9/2026 — Il §6 non si scrive più a mano. Qui c'era una promessa che il
+          sito non sapeva mantenere: tre telefonate e un rimborso al netto della
+          consegna, mentre nel codice l'esito «cliente assente» non esiste, i
+          tentativi non li registra nessuno e l'annullamento restituisce tutto.
+          Adesso il testo lo genera `paragrafiConsegne()` da quello che il codice
+          sa fare: la clausola della trattenuta ricompare da sé il giorno in cui
+          l'esito, la prova dei tentativi e il rimborso al netto esistono tutti e
+          tre. Vedi lib/legal/promessa-cliente-assente.ts. */}
       <LegalSection id="consegne" heading="6. Consegne">
-        <p>
-          Le consegne sono affidate a Rider partner. I tempi indicati sono stimati e non
-          vincolanti, salvo diversa garanzia espressa. È responsabilità dell&apos;Acquirente
-          essere reperibile all&apos;indirizzo indicato; in caso di assenza il Rider tenterà
-          il contatto telefonico e, in caso di esito negativo dopo tre tentativi, l&apos;ordine
-          potrà essere annullato con rimborso al netto delle spese di consegna sostenute.
-        </p>
+        {paragrafiConsegne().map((testo) => (
+          <p key={testo.slice(0, 48)}>{testo}</p>
+        ))}
       </LegalSection>
 
       <LegalSection id="recesso" heading="7. Diritto di recesso (consumatori)">

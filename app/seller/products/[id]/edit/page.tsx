@@ -17,6 +17,7 @@ import { type ProductVariant } from '@/lib/products/variants';
 import { saveProductVariants, loadProductVariants } from '@/lib/products/persistVariants';
 import { AlertTriangle, EyeOff } from 'lucide-react';
 import { nascondiProdotto } from '@/lib/products/nascondi';
+import { salvaProdottoDalBrowser } from '@/lib/products/salva-dal-browser';
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
 
@@ -81,12 +82,31 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     nonLetta: consegnaNonLetta,
   } = useConsegnaVeloceDelNegozio();
 
+  /**
+   * 8/9/2026 — IL SALVATAGGIO LASCIA SCRITTO CHI HA CAMBIATO COSA.
+   *
+   * Qui c'era `supabase.from('products').update(payload)`: la modifica andava
+   * a segno e non ne restava traccia da nessuna parte. Le stesse modifiche
+   * fatte dall'assistente passando dal server finivano invece nel registro con
+   * il valore di prima. Due strade, una protetta e una no — e questa e' quella
+   * che usano tutti.
+   *
+   * Adesso si passa dalla porta unica (`PATCH /api/seller/products/:id`), che
+   * rilegge com'era, scrive e registra la differenza. Le varianti restano
+   * dov'erano: le riallinea il trigger del database.
+   */
   const update = useMutation({
-    mutationFn: async ({ payload, variants: nextVariants }: { payload: ProductPayload; variants: ProductVariant[] }) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Non autenticato');
-      const { error } = await supabase.from('products').update(payload).eq('id', id).eq('seller_id', user.id);
-      if (error) throw error;
+    mutationFn: async ({
+      payload,
+      variants: nextVariants,
+      campiDallAi,
+    }: { payload: ProductPayload; variants: ProductVariant[]; campiDallAi: string[] }) => {
+      await salvaProdottoDalBrowser({
+        prodottoId: id,
+        payload: payload as unknown as Record<string, unknown>,
+        origine: 'venditore-modulo',
+        campiDallAi,
+      });
       // Sincronizza le varianti (insert/update/delete); il trigger DB riallinea
       // products.stock e has_variants.
       await saveProductVariants(id, nextVariants);
@@ -184,7 +204,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
         productId={id}
         sellerOffersExpress={offersExpress}
         consegnaDelNegozioNonLetta={consegnaNonLetta}
-        onSubmit={(payload, ctx) => update.mutate({ payload, variants: ctx.variants })}
+        onSubmit={(payload, ctx) => update.mutate({ payload, variants: ctx.variants, campiDallAi: ctx.campiDallAi })}
         onDelete={async () => {
           const ok = await confirmDialog({
             title: 'Nascondere il prodotto?',

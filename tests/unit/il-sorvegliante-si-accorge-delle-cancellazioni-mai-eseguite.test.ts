@@ -26,6 +26,10 @@ const stato = {
   notifiche: [] as Riga[],
   /** Da quanti giorni il sorvegliante considera «in sospeso» una richiesta. */
   finestraGiorni: null as number | null,
+  /** Le giornate di cassa contanti aperte, per fattorino. */
+  cassa: [] as Riga[],
+  /** La lettura della cassa fallisce (permesso revocato sulla tabella). */
+  erroreCassa: null as { message: string } | null,
 };
 
 /**
@@ -69,6 +73,16 @@ function fintaTabella(tabella: string): Record<string, unknown> {
           // database farebbe suonare un ALTRO allarme e la prova diventerebbe
           // verde per il motivo sbagliato.
           risposta = { data: [{ id: 'admin-1' }], error: null };
+        } else if (tabella === 'cod_reconciliations' && cerca('in', 'rider_id')) {
+          // 8/9/2026 — LA DOMANDA CHE MANCAVA: «questa persona ha ancora dei
+          // nostri contanti in mano?». Il ramo risponde SOLO alla query del
+          // controllo sulle cancellazioni (quella con `in('rider_id', …)`), non
+          // a quella degli ammanchi del giorno prima, che filtra per stato.
+          const chiesti = (chiamate.find((c) => c.metodo === 'in' && c.argomenti[0] === 'rider_id')
+            ?.argomenti[1] ?? []) as string[];
+          risposta = stato.erroreCassa
+            ? { data: null, error: stato.erroreCassa }
+            : { data: stato.cassa.filter((r) => chiesti.includes(String(r.rider_id))), error: null };
         } else if (tabella === 'notifications' && scritte.length > 0) {
           stato.notifiche.push(...scritte);
           risposta = { data: scritte, error: null };
@@ -132,6 +146,8 @@ describe('il sorvegliante e le richieste di cancellazione rimaste in sospeso', (
     stato.erroreLettura = null;
     stato.notifiche = [];
     stato.finestraGiorni = null;
+    stato.cassa = [];
+    stato.erroreCassa = null;
     process.env.SUPPORT_EMAIL = 'aiuto@mycity.test';
     process.env.NEXT_PUBLIC_APP_URL = 'https://mycity.test';
   });
@@ -185,5 +201,83 @@ describe('il sorvegliante e le richieste di cancellazione rimaste in sospeso', (
     const { http, corpo } = await faiUnGiro();
     expect(http, 'un controllo che non ha potuto guardare passava per «tutto a posto»').toBe(500);
     expect(String(corpo.controlliSaltati)).toContain('cancellazione');
+  });
+
+  /**
+   * 8/9/2026 — I DUE ALLARMI NATI LO STESSO GIORNO SI CONTRADDICEVANO.
+   *
+   * Il giro notturno dichiara che il fattorino con la cassa contanti aperta è un
+   * RINVIO DECISO DA NOI e non deve svegliare nessuno. Questo sorvegliante,
+   * intanto, suonava per lui ogni giorno con la frase «o fallisce, o non gira».
+   * Per un fattorino che non versa mai, l'avviso non si spegneva mai.
+   */
+  it('IL CASO CHE ROMPEVA — il fattorino con la cassa aperta non fa suonare l allarme', async () => {
+    stato.inSospeso = [{ id: 'rider-1', deletion_requested_at: giorniFa(20) }];
+    stato.cassa = [{ rider_id: 'rider-1', remitted_at: null, collected_cents: 12_000, status: 'PENDING' }];
+
+    const { http, corpo } = await faiUnGiro();
+
+    expect(http, 'il controllo sulla cassa ha fatto uscire la rotta in errore').toBe(200);
+    expect(
+      cancellazioni(corpo).length,
+      'un rinvio deciso da noi fa arrivare un avviso al giorno agli amministratori, per settimane',
+    ).toBe(0);
+    expect(corpo.cancellazioniRinviate, 'il rinvio sparisce del tutto: non suona e non si vede').toBe(1);
+  });
+
+  it('ma se il fattorino ha gia versato, l allarme torna a suonare', async () => {
+    stato.inSospeso = [{ id: 'rider-1', deletion_requested_at: giorniFa(20) }];
+    stato.cassa = [
+      { rider_id: 'rider-1', remitted_at: giorniFa(2), collected_cents: 12_000, status: 'OK' },
+    ];
+
+    const { corpo } = await faiUnGiro();
+
+    expect(
+      cancellazioni(corpo).length,
+      'la cassa e chiusa: qui non c e nessuna regola nostra che trattenga la cancellazione',
+    ).toBe(1);
+  });
+
+  it('e la frase non dice piu «o fallisce, o non gira»', async () => {
+    stato.inSospeso = [{ id: 'cliente-1', deletion_requested_at: giorniFa(20) }];
+    const { corpo } = await faiUnGiro();
+    const avviso = cancellazioni(corpo)[0];
+    expect(avviso.detail, 'due ipotesi spacciate per le uniche due cause possibili').not.toContain('o non gira');
+  });
+
+  it('se la cassa non si legge, non si esclude nessuno e il giro NON si dichiara sano', async () => {
+    stato.inSospeso = [{ id: 'rider-1', deletion_requested_at: giorniFa(20) }];
+    stato.cassa = [{ rider_id: 'rider-1', remitted_at: null, collected_cents: 12_000, status: 'PENDING' }];
+    stato.erroreCassa = { message: 'permission denied for table cod_reconciliations' };
+
+    const { http, corpo } = await faiUnGiro();
+
+    expect(http, 'una cassa illeggibile passava per «rinvio deciso da noi»: silenzio su tutti').toBe(500);
+    expect(String(corpo.controlliSaltati)).toContain('cassa contanti');
+  });
+
+  /**
+   * 8/9/2026 — IL MITTENTE FUORI DOMINIO.
+   *
+   * Il sito pubblicava quattordici indirizzi su @mycity.it e viveva su
+   * mycity-marketplace.com. Se anche la posta parte da un terzo dominio, nessun
+   * log lo dice: la email viene consegnata e il filtro antispam la mette da parte.
+   */
+  it('se le email partono da un dominio che non e quello del sito, il sorvegliante lo dice', async () => {
+    process.env.RESEND_FROM = 'MyCity <no-reply@mycity.it>';
+    const { corpo } = await faiUnGiro();
+    const avvisi = (corpo.details ?? []).filter((a: Avviso) => a.type === 'MITTENTE_FUORI_DOMINIO');
+    expect(avvisi.length, 'nessuno si accorge che la posta parte da un dominio estraneo').toBe(1);
+    expect(avvisi[0].detail).toContain('mycity.it');
+    expect(avvisi[0].detail).toContain('RESEND_FROM');
+  });
+
+  it('e tace quando il mittente sta sul dominio giusto', async () => {
+    process.env.RESEND_FROM = 'MyCity <no-reply@mycity-marketplace.com>';
+    stato.inSospeso = [{ id: 'cliente-1', deletion_requested_at: giorniFa(20) }];
+    const { corpo } = await faiUnGiro();
+    const avvisi = (corpo.details ?? []).filter((a: Avviso) => a.type === 'MITTENTE_FUORI_DOMINIO');
+    expect(avvisi.length, 'un allarme che suona anche quando va tutto bene e rumore').toBe(0);
   });
 });

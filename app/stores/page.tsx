@@ -366,6 +366,7 @@ export default function StoresPage() {
             <StorePreviewCard
               key={s.id}
               store={s}
+              posto="scheda-in-elenco"
               products={productsByStore[s.id] ?? []}
               reviews={reviewsByStore[s.id]}
             />

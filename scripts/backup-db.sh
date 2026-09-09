@@ -29,6 +29,11 @@
 #                           specchio e ripete la cancellazione invece di
 #                           proteggerla.
 #
+# Quando la copia delle foto e' accesa, prima di dirsi riuscita lo script va a
+# RIPRENDERE una foto dal secchio di destinazione e la legge davvero: "sync e'
+# uscito con zero" e "la copia si riapre" sono due cose diverse, e la seconda e'
+# quella che serve il giorno del ripristino. Vedi in fondo, 8/9/2026.
+#
 # Retention: 4 settimane di backup, ruotati FIFO.
 
 set -euo pipefail
@@ -36,6 +41,22 @@ set -euo pipefail
 DB_URL="${SUPABASE_DB_URL:-}"
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-28}"
+
+# 8/9/2026 — LO STATO DELLE FOTO STAVA SOLO IN UNA RIGA DI REGISTRO DELLE 02:17.
+#
+# «esito-foto: non-configurato» si scriveva su stderr e il lavoro usciva verde.
+# Un registro notturno non lo apre nessuno: chi guarda la pagina del lavoro vede
+# una spunta verde e conclude che le foto sono al sicuro. Lo stato di una rete di
+# sicurezza deve stare dove si guarda, non dove si scava.
+#
+# Qui la stessa riga finisce anche nel riepilogo del lavoro (la pagina che si
+# apre cliccando l'esecuzione). Fuori da GitHub la variabile non esiste e questa
+# funzione non fa niente: lo script resta avviabile a mano come prima.
+riepilogo_lavoro() {
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    printf '%s\n' "$1" >> "$GITHUB_STEP_SUMMARY"
+  fi
+}
 
 if [[ -z "$DB_URL" ]]; then
   echo "[backup] ERROR: SUPABASE_DB_URL not set" >&2
@@ -236,11 +257,77 @@ while [[ "$DEST_PULITA" == */ && ${#DEST_PULITA} -gt 1 ]]; do
 done
 STORICO_FOTO="${STORAGE_SYNC_STORICO:-${DEST_PULITA}-storico}"
 
+# 8/9/2026 — DICEVA «COPIATE» SENZA AVER MAI RIAPERTO UN FILE.
+#
+# Fino a oggi bastava che `rclone sync` uscisse con zero. Non e' la stessa cosa
+# di «le foto sono al sicuro», e la differenza si scopre il giorno peggiore:
+#
+#  - la chiave del secchio di destinazione puo' avere il permesso di SCRIVERE e
+#    non quello di LEGGERE. Su Backblaze B2 e su S3 e' una casella spuntata a
+#    parte, ed e' l'errore piu' facile da fare perche' sembra piu' prudente.
+#    Ogni notte la copia riesce, ogni notte esce verde, e il giorno del
+#    ripristino non si riapre niente: mesi di copie inutili;
+#  - un secchio d'origine che risponde con un elenco vuoto (permesso di lettura
+#    tolto, secchio rinominato) fa uscire `sync` con zero avendo svuotato la
+#    destinazione;
+#  - un trasferimento troncato lascia file da zero byte, che si elencano
+#    benissimo e non contengono niente.
+#
+# La scheda che ha chiesto questa copia lo diceva gia' nell'ultima riga — «la
+# prova mensile deve verificare che almeno un file si riapra» — ed era la
+# clausola rimasta fuori. Qui si fa ogni notte invece che ogni mese: dopo la
+# sincronia si va a RIPRENDERE una foto dalla copia e la si legge davvero.
+#
+# Un singolo secchio vuoto e' legittimo (`reviews` puo' non avere ancora
+# nessuna foto). Tutta la copia vuota no: su un marketplace vivo vuol dire che
+# la copia non contiene niente, e quella notte deve essere rossa.
+FOTO_RIAPERTE=0
+
+riapri_una_foto() {
+  local secchio="$1"
+  local dest="${DESTINAZIONE_FOTO}/${secchio}"
+  local elenco primo temporaneo byte
+
+  # Niente pipe verso `head`: un elenco illeggibile deve restare distinguibile
+  # da un elenco vuoto. Con la pipe l'errore di rclone si perderebbe e un
+  # secchio irraggiungibile passerebbe per «vuoto», cioe' per buono.
+  if ! elenco="$(rclone lsf --files-only --recursive "$dest" 2>&1)"; then
+    echo "[backup] esito-foto: fallita — la copia del secchio ${secchio} non si riesce a LEGGERE (${dest}). Di solito e' una chiave che sa scrivere e non leggere: la copia si scrive tutte le notti e non si riaprirebbe mai. Dettaglio: ${elenco}" >&2
+    return 1
+  fi
+
+  primo="${elenco%%$'\n'*}"
+  if [[ -z "$primo" ]]; then
+    echo "[backup] Il secchio ${secchio} non ha nessun file nella copia: niente da riaprire."
+    return 0
+  fi
+
+  temporaneo="$(mktemp)"
+  if ! rclone cat --count 4096 "${dest}/${primo}" > "$temporaneo" 2>/dev/null; then
+    rm -f "$temporaneo"
+    echo "[backup] esito-foto: fallita — la foto ${secchio}/${primo} e' nell'elenco della copia ma non si riapre." >&2
+    return 1
+  fi
+  byte=$(wc -c < "$temporaneo")
+  rm -f "$temporaneo"
+  if [[ "$byte" -eq 0 ]]; then
+    echo "[backup] esito-foto: fallita — la foto ${secchio}/${primo} si apre ma e' vuota (zero byte): il negoziante dovrebbe rifotografare lo stesso." >&2
+    return 1
+  fi
+
+  echo "[backup] Riaperta dalla copia: ${secchio}/${primo} (${byte} byte letti)."
+  FOTO_RIAPERTE=$((FOTO_RIAPERTE + 1))
+  return 0
+}
+
 if [[ -z "$SORGENTE_FOTO" || -z "$DESTINAZIONE_FOTO" ]]; then
   echo "[backup] esito-foto: non-configurato — l'elenco delle immagini e' nella copia, i FILE no." >&2
   echo "[backup] Per accenderla: STORAGE_SYNC_SOURCE (es. \"supabase:\"), STORAGE_SYNC_DEST (es. \"b2:mycity-foto\") e rclone installato. Vedi docs/backup-restore.md §3." >&2
+  echo "::warning::Le foto dei negozi non hanno nessuna copia nostra: se il fornitore le perde, si rifanno una per una." >&2
+  riepilogo_lavoro "⚠️ **Le foto dei negozi non sono in copia** — la copia delle immagini e' scritta ma spenta: mancano il secchio di destinazione e le sue chiavi. Database, utenti ed elenco delle foto sono copiati regolarmente. Vedi \`docs/backup-restore.md\` §3."
 elif ! command -v rclone >/dev/null 2>&1; then
   echo "[backup] esito-foto: fallita — la copia delle foto e' configurata ma rclone non e' installato: nessun file e' stato copiato." >&2
+  riepilogo_lavoro "❌ **Le foto non sono state copiate** — la copia e' configurata ma \`rclone\` non e' installato sulla macchina che fa il lavoro."
   exit 4
 else
   # 6/9/2026 — LO STORICO E' UN SECCHIO A PARTE, E NESSUNO L'AVEVA MAI CREATO.
@@ -270,10 +357,30 @@ else
     if ! rclone sync "${SORGENTE_FOTO}${secchio}" "${DESTINAZIONE_FOTO}/${secchio}" \
          --backup-dir "${STORICO_FOTO}/${TS}/${secchio}"; then
       echo "[backup] esito-foto: fallita — il secchio ${secchio} non e' stato copiato. Le foto NON sono al sicuro." >&2
+      riepilogo_lavoro "❌ **Le foto non sono state copiate** — il secchio \`${secchio}\` non e' stato sincronizzato."
+      exit 5
+    fi
+    # La sincronia e' andata: adesso si va a riprendere una foto dalla copia e
+    # la si legge. Vedi il commento lungo qui sopra — «uscita zero» e «si
+    # riapre» sono due cose diverse.
+    if ! riapri_una_foto "$secchio"; then
+      riepilogo_lavoro "❌ **La copia delle foto non si riapre** — il secchio \`${secchio}\` e' stato scritto ma non si rilegge. Guarda il registro del lavoro: quasi sempre e' la chiave che sa scrivere e non leggere."
       exit 5
     fi
   done
-  echo "[backup] esito-foto: copiate (${SECCHI_FOTO} → ${DESTINAZIONE_FOTO}, storico in ${STORICO_FOTO})"
+
+  # Nessun secchio ha restituito un solo file: la copia delle foto e' vuota.
+  # Puo' essere un'origine sbagliata, una chiave senza lettura, un secchio
+  # rinominato. Comunque sia, dichiararla riuscita sarebbe la bugia peggiore
+  # che questo script possa dire.
+  if [[ "$FOTO_RIAPERTE" -eq 0 ]]; then
+    echo "[backup] esito-foto: fallita — la sincronia e' riuscita ma nella copia non c'e' nemmeno una foto da riaprire (secchi: ${SECCHI_FOTO}). Controlla STORAGE_SYNC_SOURCE e i permessi della chiave." >&2
+    riepilogo_lavoro "❌ **La copia delle foto e' vuota** — la sincronia e' uscita bene ma non c'e' un solo file da riaprire. Controlla \`STORAGE_SYNC_SOURCE\` e i permessi della chiave."
+    exit 5
+  fi
+
+  echo "[backup] esito-foto: copiate e riaperte (${SECCHI_FOTO} → ${DESTINAZIONE_FOTO}, storico in ${STORICO_FOTO}; ${FOTO_RIAPERTE} secchi riaperti dalla copia)"
+  riepilogo_lavoro "✅ **Le foto sono in copia e si riaprono** — ${DESTINAZIONE_FOTO} (${FOTO_RIAPERTE} secchi riletti dalla copia, storico in ${STORICO_FOTO})."
 fi
 
 if [ "$ESITO_ELENCO" != "ok" ]; then

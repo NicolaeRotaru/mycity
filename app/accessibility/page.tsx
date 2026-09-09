@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
+import { DOMINIO_MYCITY, indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
 
 /**
  * Statement of Accessibility — obbligatorio EAA (European Accessibility Act,
@@ -60,7 +61,7 @@ export default function AccessibilityStatementPage() {
 
       <LegalSection id="conformita" heading="Stato di conformità">
         <p>
-          Il sito <strong>mycity-marketplace.com</strong> è{' '}
+          Il sito <strong>{DOMINIO_MYCITY}</strong> è{' '}
           <strong>parzialmente conforme</strong> alle WCAG 2.1 livello AA per le
           non conformità elencate nella sezione &quot;Contenuti non accessibili&quot;.
         </p>
@@ -151,7 +152,7 @@ export default function AccessibilityStatementPage() {
         </p>
         <ul className="list-disc list-inside space-y-1">
           <li>
-            Email: <a href="mailto:accessibilita@mycity-marketplace.com" className="text-primary-700 hover:underline">accessibilita@mycity-marketplace.com</a>
+            Email: <a href={mailtoContatto('accessibilita')} className="text-primary-700 hover:underline">{indirizzoContatto('accessibilita')}</a>
           </li>
           <li>
             Modulo di contatto: <Link href="/contact" className="text-primary-700 hover:underline">/contact</Link>
