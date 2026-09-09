@@ -36,13 +36,14 @@ let inVolo = 0;
 let massimoInVolo = 0;
 type ArgFiltro = { name?: string; description?: string; categorySlug?: string };
 type EsitoFiltro = { allowed: boolean; reason?: string };
-const policyMock = vi.fn(async (_arg: ArgFiltro): Promise<EsitoFiltro> => {
+const contaQuantiInVolo = async (_arg: ArgFiltro): Promise<EsitoFiltro> => {
   inVolo += 1;
   massimoInVolo = Math.max(massimoInVolo, inVolo);
   await new Promise((r) => setTimeout(r, 5));
   inVolo -= 1;
   return { allowed: true } as { allowed: boolean; reason?: string };
-});
+};
+const policyMock = vi.fn(contaQuantiInVolo);
 vi.mock('@/lib/ai/moderation', () => ({
   classifyProductPolicy: (...a: unknown[]) => policyMock(...(a as [ArgFiltro])),
 }));
@@ -73,6 +74,11 @@ describe('POST /api/ai/catalog-create-bulk', () => {
     __resetRateLimitBuckets();
     inVolo = 0;
     massimoInVolo = 0;
+    // 8/9/2026 — Le altre due prove mettono una finta loro al posto di questa,
+    // e la sostituzione resta. Girando in un altro ordine, la prova che conta
+    // quanti controlli sono in volo trovava una finta che non conta nulla e
+    // leggeva zero. Qui la contatrice viene rimessa prima di ogni prova.
+    policyMock.mockImplementation(contaQuantiInVolo);
     insertMock.mockReturnValue({ select: insertSelectMock });
     insertSelectMock.mockResolvedValue({
       data: Array.from({ length: 12 }, (_, i) => ({ id: `p${i}` })),

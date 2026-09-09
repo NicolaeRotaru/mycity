@@ -22,25 +22,49 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
  * importa davvero. Senza DSN quel conto deve restare a zero.
  */
 
-const spie = vi.hoisted(() => ({
-  caricamenti: 0,
-  init: 0,
-  navigazioni: [] as unknown[][],
-}));
-
-vi.mock('@sentry/nextjs', () => {
+const { spie, fintaSentry } = vi.hoisted(() => {
+  const spie = { caricamenti: 0, init: 0, navigazioni: [] as unknown[][] };
   // Questa fabbrica gira SOLO quando qualcuno importa davvero il modulo:
   // e' proprio la domanda del difetto.
-  spie.caricamenti++;
-  return {
-    init: () => {
-      spie.init++;
-    },
-    captureRouterTransitionStart: (...a: unknown[]) => {
-      spie.navigazioni.push(a);
-    },
+  const fintaSentry = () => {
+    spie.caricamenti++;
+    return {
+      init: () => {
+        spie.init++;
+      },
+      captureRouterTransitionStart: (...a: unknown[]) => {
+        spie.navigazioni.push(a);
+      },
+    };
   };
+  return { spie, fintaSentry };
 });
+
+vi.mock('@sentry/nextjs', fintaSentry);
+
+/**
+ * 8/9/2026 — LA FABBRICA VA RIARMATA, SENNO' IL CONTO E' SEMPRE ZERO.
+ *
+ * Vitest tiene da parte il modulo finto dopo il primo import del file: la
+ * fabbrica gira UNA volta sola, e `vi.resetModules()` non la rimette in piedi.
+ * Il conto dei caricamenti — che e' la domanda di tutto questo file — restava
+ * quindi a zero in ogni prova tranne la prima che caricava davvero Sentry.
+ *
+ * Due danni, non uno. Il primo si vedeva: mescolando l'ordine, «la libreria si
+ * carica e si accende» leggeva zero e diventava rossa. Il secondo era peggio
+ * perche' non si vedeva: le due prove che pretendono ZERO caricamenti
+ * leggevano zero comunque, anche se qualcuno avesse rimesso l'import in cima.
+ * Cioe' il guardiano del difetto non poteva piu' fallire.
+ *
+ * Rimettendo la fabbrica prima di ogni prova, ogni prova ha il suo conto.
+ */
+function riarmaLaFintaSentry(): void {
+  spie.caricamenti = 0;
+  spie.init = 0;
+  spie.navigazioni = [];
+  vi.resetModules();
+  vi.doMock('@sentry/nextjs', fintaSentry);
+}
 
 vi.mock('@/lib/analytics/sentry-config', () => ({
   get SENTRY_DSN() {
@@ -53,12 +77,7 @@ vi.mock('@/lib/analytics/sentry-config', () => ({
 const respiro = () => new Promise((r) => setTimeout(r, 0));
 
 describe('senza indirizzo configurato, il registratore degli errori non si scarica', () => {
-  beforeEach(() => {
-    spie.caricamenti = 0;
-    spie.init = 0;
-    spie.navigazioni = [];
-    vi.resetModules();
-  });
+  beforeEach(riarmaLaFintaSentry);
 
   it('nessuno chiede la libreria di Sentry quando il DSN non c e', async () => {
     vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', '');
@@ -86,12 +105,7 @@ describe('senza indirizzo configurato, il registratore degli errori non si scari
 });
 
 describe('con l indirizzo configurato il registratore fa il suo mestiere', () => {
-  beforeEach(() => {
-    spie.caricamenti = 0;
-    spie.init = 0;
-    spie.navigazioni = [];
-    vi.resetModules();
-  });
+  beforeEach(riarmaLaFintaSentry);
 
   it('la libreria si carica e si accende', async () => {
     vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', 'https://chiave@o1.ingest.sentry.io/2');

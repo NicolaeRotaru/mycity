@@ -177,10 +177,29 @@ describe('GET /api/health', () => {
     expect(json.checks.envOpzionali.error).toContain('UPSTASH_REDIS_REST_URL');
   });
 
+  /**
+   * 8/9/2026 — «FINGERSI IN PRODUZIONE» SI FA CON vi.stubEnv, NON CON
+   * defineProperty.
+   *
+   * Qui c'era `Object.defineProperty(process.env, 'NODE_ENV', { value:
+   * 'production', configurable: true })`. Senza dire `writable` ed
+   * `enumerable`, quei due valgono `false`, e il vero `process.env` di Node
+   * rifiuta un descrittore cosi': «only accepts a configurable, writable, and
+   * enumerable data descriptor».
+   *
+   * Passava per un caso. L'`afterEach` qui sopra fa `process.env = {
+   * ...savedEnv }`, cioe' rimpiazza il `process.env` vero con un oggetto
+   * normale — e un oggetto normale quel descrittore lo accetta. Quindi bastava
+   * che almeno una prova del file fosse gia' girata. Nell'ordine scritto queste
+   * due sono l'ottava e la nona: c'era sempre. Mescolando l'ordine, la prima a
+   * partire trovava il `process.env` vero e moriva li', prima ancora di
+   * guardare la rotta.
+   *
+   * `vi.stubEnv` fa la stessa cosa nel modo giusto e si disfa da solo.
+   */
   // 021 + 238 — La risposta pubblica non è una mappa di dove il sito è scoperto.
   it('in produzione non dice a un anonimo quali segreti mancano', async () => {
-    const prima = process.env.NODE_ENV;
-    Object.defineProperty(process.env, 'NODE_ENV', { value: 'production', configurable: true });
+    vi.stubEnv('NODE_ENV', 'production');
     delete process.env.STRIPE_SECRET_KEY;
     try {
       const res = await GET(req());
@@ -188,19 +207,18 @@ describe('GET /api/health', () => {
       expect(testo).not.toContain('STRIPE_SECRET_KEY');
       expect(testo).not.toContain('checks');
     } finally {
-      Object.defineProperty(process.env, 'NODE_ENV', { value: prima, configurable: true });
+      vi.unstubAllEnvs();
     }
   });
 
   it('in produzione il dettaglio lo vede chi ha il segreto dei cron', async () => {
-    const prima = process.env.NODE_ENV;
-    Object.defineProperty(process.env, 'NODE_ENV', { value: 'production', configurable: true });
+    vi.stubEnv('NODE_ENV', 'production');
     try {
       const res = await GET(req({ authorization: 'Bearer cron_test' }));
       const json = await res.json();
       expect(json.checks).toBeTruthy();
     } finally {
-      Object.defineProperty(process.env, 'NODE_ENV', { value: prima, configurable: true });
+      vi.unstubAllEnvs();
     }
   });
 

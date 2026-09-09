@@ -71,7 +71,23 @@ OUT="$BACKUP_DIR/mycity_${TS}.dump"
 echo "[backup] Starting pg_dump → $OUT"
 START=$(date +%s)
 
-pg_dump \
+# 9/9/2026 — UN DUMP MORTO A META' NON DEVE USCIRE COME SE FOSSE UNA COPIA.
+#
+# `pg_dump --file` il file lo CREA prima di riuscire. Se poi muore — stamattina
+# non e' nemmeno arrivato a bussare al database — quel file resta li', di poche
+# decine di byte. E il passo che conserva la copia gira con `!cancelled()`,
+# cioe' anche quando qualcosa e' fallito: e' voluto, serve a non perdere un dump
+# BUONO se e' la copia delle foto a cadere dopo.
+#
+# Le due cose insieme fanno un guscio. Misurato sulla corsa 34323532351 del 9/9:
+# artefatto `backup-database-34323532351`, 170 byte, appeso a un lavoro rosso e
+# tenuto trenta giorni. Chi apre la pagina dei lavori vede un backup che non e'
+# un backup — ed e' peggio di non vedere niente, perche' smette di cercarlo.
+#
+# Qui il file mezzo scritto si toglie di mezzo. Cosi' `if-no-files-found: error`
+# fa il suo mestiere e il passo di conservazione fallisce, invece di consegnare
+# un guscio con un nome rassicurante.
+if ! pg_dump \
   --format=custom \
   --no-owner \
   --no-acl \
@@ -81,7 +97,11 @@ pg_dump \
   --exclude-schema=supabase_functions \
   --exclude-schema=extensions \
   --file="$OUT" \
-  "$DB_URL"
+  "$DB_URL"; then
+  rm -f "$OUT"
+  echo "[backup] pg_dump e' fallito: tolto il file incompleto, cosi' non esce un artefatto che sembra una copia." >&2
+  exit 1
+fi
 
 # #234 — Gli utenti. Lo schema `auth` era escluso per intero, e li' dentro c'e'
 # `auth.users`: la tabella a cui punta `profiles.id` e quindici altri file di

@@ -16,6 +16,9 @@ export default defineConfig({
     environment: 'node',
     globals: false,
     testTimeout: 5000,
+    // Vale per OGNI prova unitaria: niente rete, e le variabili d'ambiente tornano
+    // come le ha trovate. Il perché sta in testa al file.
+    setupFiles: ['tests/unit/_setup.ts'],
   },
   resolve: {
     alias: {
