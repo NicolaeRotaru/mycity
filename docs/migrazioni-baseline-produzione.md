@@ -25,8 +25,9 @@ due cose che oggi funzionano (il compenso del fattorino in attesa, `HELD`, e la 
 fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha già. La migrazione
 **161** viene dopo tutte e chiude quello che resta. Lo script la applica da solo, in coda.
 
-**Cosa devi fare.** Lanciare i due comandi del passo 2 e del passo 3, nello stesso giro, a bassa
-attività. Il passo 1 è già fatto: le tredici righe sono nel registro dal 9 settembre.
+**Cosa devi fare.** Fare la copia del passo 0, poi lanciare i comandi del passo 2 e del passo 3,
+nello stesso giro, a bassa attività, con l'indirizzo del Session pooler. Il passo 1 è già fatto:
+le tredici righe sono nel registro dal 9 settembre.
 
 **Cosa non ho verificato.** La prova generale è girata su PostgreSQL 16, la produzione è la 17.
 E non ho potuto provare il comando contro la produzione vera: da qui il database si legge
@@ -60,6 +61,38 @@ rimette la definizione finale, come la 161.
 
 ## La procedura (aggiornata)
 
+### Prima di tutto: l'indirizzo giusto del database
+
+**In parole semplici.** Il database si raggiunge da due porte. Quella «diretta»
+(`db.clmpyfvpvfjgeviworth.supabase.co`) funziona solo su IPv6. Quella del «Session pooler»
+funziona ovunque. Si usa la seconda.
+
+**Un esempio concreto.** L'11 ottobre la copia notturna è fallita come tutte le sere, e il
+motivo è scritto nel diario del lavoro: `connection to server at "db.clmpyfvpvfjgeviworth.supabase.co"
+(2a05:…), port 5432 failed: Network is unreachable`. Il segreto `SUPABASE_DB_URL` su GitHub c'è,
+ma punta alla porta diretta, e i server di GitHub non hanno IPv6. Lo stesso succede da molte
+connessioni di casa.
+
+**Cosa devi fare.** In Supabase apri il progetto, premi «Connect» e copia la stringa del
+**Session pooler**. Ha la forma `postgresql://postgres.clmpyfvpvfjgeviworth:<password>@aws-…pooler.supabase.com:5432/postgres`.
+Usala nei comandi qui sotto. Mettila anche al posto del segreto `SUPABASE_DB_URL` su GitHub:
+così ripartono da sole la copia notturna e il controllo della deriva.
+
+### Passo 0 — una copia del database, prima di scriverci
+
+Nessuna copia notturna è mai riuscita, quindi oggi non esiste una copia da cui ripartire. Prima
+del passo 2:
+
+```bash
+pg_dump "<stringa del Session pooler>" -Fc -f mycity-prima-della-161.dump
+```
+
+Atteso: uscita 0 e un file non vuoto. Tienilo finché il passo 3 non è tutto `true`.
+
+Serve `pg_dump` alla versione 17 o più nuova: la produzione è PostgreSQL 17, e un `pg_dump`
+più vecchio si rifiuta («server version mismatch»). Se non ce l'hai, va bene anche la copia dal
+pannello di Supabase (Database, Backups), se il piano la prevede.
+
 ### Passo 1 — registrare il baseline
 
 Già fatto il 9 settembre. L'istruzione resta qui sotto, nella storia: è innocua da rilanciare
@@ -68,7 +101,7 @@ Già fatto il 9 settembre. L'istruzione resta qui sotto, nella storia: è innocu
 ### Passo 2 — applicare quello che manca, 161 compresa
 
 ```bash
-SUPABASE_DB_URL="postgresql://postgres:<password>@db.clmpyfvpvfjgeviworth.supabase.co:5432/postgres" \
+SUPABASE_DB_URL="<stringa del Session pooler>" \
   bash scripts/applica-migrazioni-mancanti.sh
 ```
 
