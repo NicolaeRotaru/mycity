@@ -10,7 +10,7 @@
 
 **In parole semplici.** Il 9 settembre il «passo 2» qui sotto è stato lanciato a mano in
 produzione, a pezzi, ed è stato interrotto dopo la migrazione 079. Rieseguire migrazioni vecchie
-riscrive sopra le versioni nuove: dodici funzioni e ventisette regole di accesso sono tornate a
+riscrive sopra le versioni nuove: undici funzioni e ventisette regole di accesso sono tornate a
 com'erano fra maggio e luglio. La conseguenza più visibile: **nessuno riesce più a iscriversi
 come negozio o come fattorino** (il database rifiuta la riga del profilo).
 

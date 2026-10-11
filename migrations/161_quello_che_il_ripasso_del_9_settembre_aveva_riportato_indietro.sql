@@ -15,7 +15,7 @@
 -- rimette una porta che una migrazione successiva aveva chiuso. Le versioni
 -- nuove stavano nelle migrazioni dalla 080 in poi, che quel giorno non sono
 -- state ripassate. Risultato misurato sul database vero, oggetto per oggetto:
--- 12 funzioni e 27 regole di accesso tornate a com'erano a maggio-luglio.
+-- 11 funzioni e 27 regole di accesso tornate a com'erano a maggio-luglio.
 --
 -- La procedura del 7 settembre, se la si lancia adesso, ne ripara una parte e
 -- ne rompe altre due (provato su una copia fedele della produzione, vedi sotto):
@@ -40,10 +40,15 @@
 --   ③ Due regole scritte male: chiunque abbia un account (non solo un
 --      fattorino approvato) puo' prendersi un ordine pronto; una recensione al
 --      negozio non controlla che l'ordine fosse proprio di quel negozio.
---   ④ Cinque funzioni alla versione vecchia: la prenotazione e la restituzione
---      della merce ignorano le varianti (080), il registro attivita' non
---      oscura i campi sensibili nuovi (115), il conteggio dei rimborsi perde la
---      correzione della 124, l'acquisto di gruppo perde la protezione della 059.
+--   ④ Quattro funzioni che la procedura non ripara: la prenotazione e la
+--      restituzione della merce ignorano le varianti (080), il registro
+--      attivita' non oscura i campi sensibili nuovi (115), l'acquisto di
+--      gruppo perde la protezione della 059. Una quinta la rompe la procedura
+--      stessa: riapplicando la 119 toglie al conteggio dei rimborsi la
+--      correzione della 124.
+--   Le altre funzioni tornate indietro (le guardie su profilo e ordine, il
+--   codice di consegna e di ritiro) le ripara gia' la procedura, perche'
+--   riapplica la 119, la 122, la 127 e la 160 che le ridefiniscono.
 --
 -- COSA FA QUESTA MIGRAZIONE
 -- Rimette ogni oggetto nella sua definizione FINALE, quella che il resto del
