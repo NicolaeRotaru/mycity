@@ -25,16 +25,28 @@ due cose che oggi funzionano (il compenso del fattorino in attesa, `HELD`, e la 
 fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha già. La migrazione
 **161** viene dopo tutte e chiude quello che resta. Lo script la applica da solo, in coda.
 
-> ⚠️ **Non ancora il passo 2 (aggiornato il 14/10/2026).** La 161 chiude la lettura dei profili
-> dei negozi. Ma la scheda prodotto, le vetrine e la ricerca prendono il negozio proprio da lì.
-> Applicata prima di cambiare il codice del sito, ogni prodotto mostrerebbe «Prodotto non
-> disponibile». Il cliente non potrebbe più comprare niente. Lo ha trovato la radiografia dell'11
-> ottobre. Prima va pubblicato il codice che legge il negozio da `seller_public_profiles`, poi si
-> applica la 161.
+> ⚠️ **Non ancora il passo 2 (aggiornato il 14/10/2026).** Il passo 2 chiude la lettura dei
+> profili degli altri utenti. Non lo fa solo la 161: lo fanno già la 110 e la 112, che sono fra le
+> 48, e la 161 lo ripete. Quindi saltare la 161 non basta.
+>
+> Oggi il sito prende il negozio proprio da lì, e non solo nel catalogo. Lo fanno la scheda
+> prodotto, le vetrine, la ricerca, il carrello e la cassa (nome e posizione del negozio), la
+> pagina dell'ordine del cliente e quella del fattorino (indirizzo e telefono del negozio), i
+> messaggi e le pagine del venditore. Con il passo 2 fatto prima di cambiare il codice, ogni
+> prodotto mostrerebbe «Prodotto non disponibile» e il fattorino non vedrebbe dove ritirare.
+>
+> Prima va pubblicato il codice che legge i negozi da `seller_public_profiles` in tutti quei punti,
+> poi il passo 2. Il controllo che lo dice: fuori dall'area admin, nessuna lettura
+> `profiles!…` o `.from('profiles')` deve restare sul profilo di un altro utente.
+>
+> Lo ha trovato la radiografia dell'11 ottobre; misurato il 14/10 sulla copia fedele, entrando
+> come visitatore senza account. Oggi il negozio si legge per 9 prodotti su 9. Dopo il passo 2,
+> per 0 su 9 da `profiles`, e per 9 su 9 da `seller_public_profiles`.
 
 **Cosa devi fare.** Adesso puoi già mettere la stringa del Session pooler nel segreto
 `SUPABASE_DB_URL` (sezione qui sotto). I passi 0, 2 e 3 vanno fatti insieme, nello stesso giro e a
-bassa attività, solo dopo che la riparazione del catalogo è online. Il passo 1 è già fatto: le
+bassa attività, solo dopo che è online il codice che legge i negozi da `seller_public_profiles`
+in tutti i punti dell'avviso qui sopra, non solo nel catalogo. Il passo 1 è già fatto: le
 tredici righe sono nel registro dal 9 settembre.
 
 **Cosa non ho verificato.** La prova generale è girata su PostgreSQL 16, la produzione è la 17.
@@ -88,9 +100,9 @@ così ripartono da sole la copia notturna e il controllo della deriva.
 
 **Attenzione alle chiavi di Vercel.** Lo stesso segreto lo usa anche il rilascio automatico
 (`.github/workflows/deploy-dopo-ci.yml`): prima di pubblicare, applica le migrazioni che mancano.
-Oggi quel passo si salta, perché su GitHub mancano le tre chiavi di Vercel. Se le metti mentre la
-161 aspetta, il primo rilascio la applicherebbe da solo, con le schede prodotto ancora da
-riparare. Quindi: le chiavi di Vercel solo dopo che la riparazione del catalogo è online.
+Oggi quel passo si salta, perché su GitHub mancano le tre chiavi di Vercel. Se le metti mentre il
+passo 2 aspetta, il primo rilascio applicherebbe da solo le 48 migrazioni, con il codice ancora da
+riparare. Quindi: le chiavi di Vercel solo dopo che è online il codice dell'avviso in cima.
 
 ### Passo 0 — una copia del database, prima di scriverci
 
@@ -114,8 +126,8 @@ Già fatto il 9 settembre. L'istruzione resta qui sotto, nella storia: è innocu
 
 ### Passo 2 — applicare quello che manca, 161 compresa
 
-⚠️ Solo dopo che è online il codice che legge il negozio da `seller_public_profiles` (vedi
-l'avviso in cima). Subito prima, la copia del passo 0.
+⚠️ Solo dopo che è online il codice che legge i negozi da `seller_public_profiles` in tutti i
+punti dell'avviso in cima, non solo nel catalogo. Subito prima, la copia del passo 0.
 
 ```bash
 SUPABASE_DB_URL="<stringa del Session pooler>" \
