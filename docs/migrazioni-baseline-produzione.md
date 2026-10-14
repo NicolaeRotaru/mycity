@@ -1,36 +1,111 @@
 # Allineare il database di produzione: la procedura misurata
 
-> **In due righe.** Al database di produzione mancano pezzi che il sito pubblicato già usa.
-> Si rimettono con tre passi: prima si registrano 13 migrazioni vecchie, poi se ne applicano 136, poi si controlla.
+> **In due righe.** Al database di produzione mancano pezzi che il sito pubblicato già usa, e altri
+> sono tornati indietro il 9 settembre. Si sistema con un comando solo, che applica 48 migrazioni
+> (l'ultima è la 161, la riparazione), più un controllo.
 
 > 🔴 **Questa procedura scrive sul database di produzione. La firma è di Nicola.**
-> Quello che sta qui sotto è stato provato per intero su una copia locale, il 7 settembre 2026.
-> Non è un piano: è una prova generale riuscita.
 
-**In parole semplici.** Il database di produzione è nato prima del registro delle migrazioni.
-Il registro quindi non riconosce i file della cartella `migrations/`. Lo script che dovrebbe
-allinearlo prova allora a rieseguire la prima migrazione di tutte. Quella crea le tabelle da
-zero, le tabelle ci sono già, e lo script muore subito.
+## Aggiornamento dell'11 ottobre 2026 — leggere prima di tutto
 
-**Un esempio concreto.** Il file `140_nome_prodotto_sulla_riga_ordine.sql` aggiunge la colonna
-`product_name` alla riga d'ordine. In produzione quella colonna non c'è. La pagina del venditore
-che mostra cosa ha venduto chiede quella colonna, e va in errore. Sul computer di chi sviluppa
-invece funziona benissimo: lì la migrazione è stata applicata.
+**In parole semplici.** Il 9 settembre il «passo 2» qui sotto è stato lanciato a mano in
+produzione, a pezzi, ed è stato interrotto dopo la migrazione 079. Rieseguire migrazioni vecchie
+riscrive sopra le versioni nuove: undici funzioni e ventisette regole di accesso sono tornate a
+com'erano fra maggio e luglio. La conseguenza più visibile: **nessuno riesce più a iscriversi
+come negozio o come fattorino** (il database rifiuta la riga del profilo).
 
-**Cosa cambia per te.** Oggi il codice pubblicato chiama tabelle, colonne e funzioni che
-in produzione non esistono. Le pagine che le usano falliscono o restano mute: i conti del
-venditore, la colonna «Venduti», il tetto di spesa AI, le email «ordine pronto» e «ordine
-consegnato», il carrello segnato come recuperato. Finita questa procedura, esistono.
+**Un esempio concreto.** La funzione che crea il profilo alla registrazione è tornata alla
+versione della 015: scrive «approvato» a chi sceglie negozio, mentre lo stato resta «in attesa».
+Il vincolo `chk_approvazione_coerente` della 119 rifiuta la riga, e Supabase risponde
+all'iscrizione con un errore del database. I clienti, invece, si iscrivono.
 
-**Cosa devi fare.** I tre passi qui sotto, in quest'ordine, una volta sola. Servono la
-stringa di connessione di produzione e cinque minuti.
+**Cosa cambia per te.** La procedura del 7 settembre, lanciata così com'era, non bastava più:
+avrebbe lasciato rotta l'iscrizione e aperte dieci regole, e in più avrebbe riportato indietro
+due cose che oggi funzionano (il compenso del fattorino in attesa, `HELD`, e la bacheca dei
+fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha già. La migrazione
+**161** viene dopo tutte e chiude quello che resta. Lo script la applica da solo, in coda.
 
-**Cosa non ho verificato.** La prova generale è girata su PostgreSQL 16 in locale, mentre la
-produzione è PostgreSQL 17: una versione di scarto. E l'ho costruita applicando le migrazioni a un database vuoto,
-poi svuotando il registro: imita la forma della produzione, non i suoi dati. Un ordine vero
-non è mai passato di qui.
+**Cosa devi fare.** Lanciare i due comandi del passo 2 e del passo 3, nello stesso giro, a bassa
+attività. Il passo 1 è già fatto: le tredici righe sono nel registro dal 9 settembre.
+
+**Cosa non ho verificato.** La prova generale è girata su PostgreSQL 16, la produzione è la 17.
+E non ho potuto provare il comando contro la produzione vera: da qui il database si legge
+soltanto.
+
+### Come è stata provata (11/10/2026)
+
+Su una **copia fedele della produzione**, ricostruita dal catalogo vero: 2.198 oggetti (funzioni,
+regole di accesso, vincoli, indici, colonne, permessi) identici a quelli di produzione, con lo
+stesso registro delle migrazioni (191 righe) e i dati veri con nomi e recapiti mascherati.
+
+| passo | risultato misurato |
+|---|---|
+| prove `tests/sql/rls/` sulla copia, così com'è oggi | 33 file rossi su 33 (si fermano all'iscrizione) |
+| `applica-migrazioni-mancanti.sh` | `applicate 48 · gia' presenti 108`, uscita 0 |
+| confronto con un database costruito dal repository | zero differenze sugli oggetti del sito |
+| prove `tests/sql/rls/` dopo | 33 verdi su 33 |
+| script rilanciato | `applicate 0` |
+
+Restano diverse, apposta, solo cose che col sito non c'entrano: le tabelle della macchina AD
+(`kpi_snapshots`, `merchants_leads`, `outreach_events`, `telegram_chats`, `uptime_checks`), le
+cartelle foto `avatars` e `stores`, e i permessi per colonna su `profiles` per i visitatori
+anonimi, che in produzione sono più stretti del repository.
+
+### La regola nuova
+
+**Mai rieseguire a mano una migrazione vecchia.** Né dal pannello di Supabase né dallo
+strumento: si passa solo da `scripts/applica-migrazioni-mancanti.sh`, che salta quelle già
+registrate. Se una migrazione vecchia sembra «mancare», si scrive una migrazione nuova che
+rimette la definizione finale, come la 161.
+
+## La procedura (aggiornata)
+
+### Passo 1 — registrare il baseline
+
+Già fatto il 9 settembre. L'istruzione resta qui sotto, nella storia: è innocua da rilanciare
+(`ON CONFLICT DO NOTHING`), ma non serve.
+
+### Passo 2 — applicare quello che manca, 161 compresa
+
+```bash
+SUPABASE_DB_URL="postgresql://postgres:<password>@db.clmpyfvpvfjgeviworth.supabase.co:5432/postgres" \
+  bash scripts/applica-migrazioni-mancanti.sh
+```
+
+Atteso: `▶ applicate 48 · gia' presenti 108`, uscita 0. Gli avvisi «contiene un COMMIT suo»
+sono attesi e innocui (vedi la testa dello script).
+
+### Passo 3 — verificare
+
+```bash
+SUPABASE_DB_URL="..." bash scripts/applica-migrazioni-mancanti.sh   # atteso: applicate 0
+```
+
+E in sola lettura:
+
+```sql
+select
+  (select prosrc like '%''pending''%' from pg_proc
+    where oid = 'public.handle_new_user()'::regprocedure)                      as iscrizione_in_attesa,
+  pg_get_constraintdef((select oid from pg_constraint
+    where conname = 'orders_rider_payout_status_check')) like '%HELD%'          as compenso_held,
+  not exists (select 1 from pg_policies where schemaname = 'public'
+    and policyname in ('Anyone can read active coupons','Public profile read',
+                       'Anyone can view approved seller profiles',
+                       'Riders can view buyer of assigned orders',
+                       'sponsored_listings_owner_rw','messages_update_read'))  as porte_chiuse,
+  exists(select 1 from information_schema.columns
+    where table_name = 'order_items' and column_name = 'product_name')          as nome_prodotto,
+  exists(select 1 from pg_proc where proname = 'enqueue_order_status_email')    as email_ordine;
+```
+
+Tutti `true`. La 161 fa da sola gli stessi controlli alla fine: se uno fallisce, si ferma e non
+si registra.
 
 ---
+
+# Storia: la procedura del 7 settembre (superata)
+
 
 ## Cosa ho misurato in produzione (7/9/2026, in sola lettura)
 
