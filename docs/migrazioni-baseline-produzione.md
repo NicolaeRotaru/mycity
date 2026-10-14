@@ -43,8 +43,8 @@ fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha gi�
 > come visitatore senza account. Oggi il negozio si legge per 9 prodotti su 9. Dopo il passo 2,
 > per 0 su 9 da `profiles`, e per 9 su 9 da `seller_public_profiles`.
 
-**Cosa devi fare.** Adesso puoi già mettere la stringa del Session pooler nel segreto
-`SUPABASE_DB_URL` (sezione qui sotto). I passi 0, 2 e 3 vanno fatti insieme, nello stesso giro e a
+**Cosa devi fare.** La stringa del Session pooler va nel segreto `SUPABASE_DB_URL` appena è unita
+la richiesta #255 del sito, non prima (il perché è nella sezione qui sotto). I passi 0, 2 e 3 vanno fatti insieme, nello stesso giro e a
 bassa attività, solo dopo che è online il codice che legge i negozi da `seller_public_profiles`
 in tutti i punti dell'avviso qui sopra, non solo nel catalogo. Il passo 1 è già fatto: le
 tredici righe sono nel registro dal 9 settembre.
@@ -98,6 +98,13 @@ connessioni di casa.
 Usala nei comandi qui sotto. Mettila anche al posto del segreto `SUPABASE_DB_URL` su GitHub:
 così ripartono da sole la copia notturna e il controllo della deriva.
 
+**Il segreto, solo dopo la #255 (aggiornato il 14/10/2026).** Oggi la copia notturna non arriva
+mai al database, quindi non scrive niente. Con la stringa giusta ci arriva. Senza la #255, una
+copia caduta a metà lascerebbe il database in chiaro fra i file scaricabili del lavoro. Il
+repository è pubblico: quei file li scarica chiunque abbia un account GitHub. La #255 chiude questa
+strada. Insegna anche al controllo delle prove automatiche a riconoscere la produzione dalla
+stringa nuova.
+
 **Attenzione alle chiavi di Vercel.** Lo stesso segreto lo usa anche il rilascio automatico
 (`.github/workflows/deploy-dopo-ci.yml`): prima di pubblicare, applica le migrazioni che mancano.
 Oggi quel passo si salta, perché su GitHub mancano le tre chiavi di Vercel. Se le metti mentre il
@@ -110,14 +117,31 @@ Nessuna copia notturna è mai riuscita, quindi oggi non esiste una copia da cui 
 del passo 2:
 
 ```bash
-pg_dump "<stringa del Session pooler>" -Fc -f mycity-prima-della-161.dump
+mkdir -p ~/copie-mycity && chmod 700 ~/copie-mycity
+pg_dump --version   # deve dire 17
+pg_dump "<stringa del Session pooler>" -Fc -f ~/copie-mycity/mycity-prima-della-161.dump
 ```
 
-Atteso: uscita 0 e un file non vuoto. Tienilo finché il passo 3 non è tutto `true`.
+⚠️ **La copia sta fuori dalla cartella del sito, sempre.** Dentro c'è tutto: nomi, telefoni,
+indirizzi e ordini dei clienti. Ci sono anche gli accessi degli utenti, cioè le sessioni aperte e
+i secondi fattori. Il repository è pubblico: un file lasciato nella cartella del sito finisce
+online col primo `git add`. Non va mai committato, caricato da qualche parte o incollato in una
+chat. Per sicurezza, `.gitignore` ignora comunque i file `.dump`.
 
-Serve `pg_dump` alla versione 17 o più nuova: la produzione è PostgreSQL 17, e un `pg_dump`
-più vecchio si rifiuta («server version mismatch»). Se non ce l'hai, va bene anche la copia dal
-pannello di Supabase (Database, Backups), se il piano la prevede.
+Atteso: uscita 0 e un file non vuoto. **Senza una copia riuscita non si passa al passo 2.**
+Tienila qualche giorno dopo il passo 2, poi cancellala. Il passo 2 riscrive anche righe vive: per
+esempio la 094 ricalcola `seller_payout_cents` sugli ordini. Se un errore si vede dopo, la copia
+serve ancora.
+
+Serve `pg_dump` alla versione 17 o più nuova: la produzione è PostgreSQL 17, e un `pg_dump` più
+vecchio si rifiuta («server version mismatch»). Il pannello di Supabase non aiuta: il progetto è
+sul piano gratuito, e lì le copie non si scaricano. Se il tuo `pg_dump` è più vecchio, due strade:
+
+- con Docker, senza installare niente:
+  `docker run --rm -v ~/copie-mycity:/out postgres:17 pg_dump "<stringa del Session pooler>" -Fc -f /out/mycity-prima-della-161.dump`
+- su Ubuntu, il pacchetto `postgresql-client-17` da apt.postgresql.org, chiamato col percorso
+  intero `/usr/lib/postgresql/17/bin/pg_dump`. Altrimenti può partire ancora il 16: è il tranello
+  che ha fatto fallire ventuno copie notturne.
 
 ### Passo 1 — registrare il baseline
 
