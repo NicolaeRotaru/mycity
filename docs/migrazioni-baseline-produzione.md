@@ -25,9 +25,17 @@ due cose che oggi funzionano (il compenso del fattorino in attesa, `HELD`, e la 
 fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha già. La migrazione
 **161** viene dopo tutte e chiude quello che resta. Lo script la applica da solo, in coda.
 
-**Cosa devi fare.** Fare la copia del passo 0, poi lanciare i comandi del passo 2 e del passo 3,
-nello stesso giro, a bassa attività, con l'indirizzo del Session pooler. Il passo 1 è già fatto:
-le tredici righe sono nel registro dal 9 settembre.
+> ⚠️ **Non ancora il passo 2 (aggiornato il 14/10/2026).** La 161 chiude la lettura dei profili
+> dei negozi. Ma la scheda prodotto, le vetrine e la ricerca prendono il negozio proprio da lì.
+> Applicata prima di cambiare il codice del sito, ogni prodotto mostrerebbe «Prodotto non
+> disponibile». Il cliente non potrebbe più comprare niente. Lo ha trovato la radiografia dell'11
+> ottobre. Prima va pubblicato il codice che legge il negozio da `seller_public_profiles`, poi si
+> applica la 161.
+
+**Cosa devi fare.** Adesso puoi già mettere la stringa del Session pooler nel segreto
+`SUPABASE_DB_URL` (sezione qui sotto). I passi 0, 2 e 3 vanno fatti insieme, nello stesso giro e a
+bassa attività, solo dopo che la riparazione del catalogo è online. Il passo 1 è già fatto: le
+tredici righe sono nel registro dal 9 settembre.
 
 **Cosa non ho verificato.** La prova generale è girata su PostgreSQL 16, la produzione è la 17.
 E non ho potuto provare il comando contro la produzione vera: da qui il database si legge
@@ -78,6 +86,12 @@ connessioni di casa.
 Usala nei comandi qui sotto. Mettila anche al posto del segreto `SUPABASE_DB_URL` su GitHub:
 così ripartono da sole la copia notturna e il controllo della deriva.
 
+**Attenzione alle chiavi di Vercel.** Lo stesso segreto lo usa anche il rilascio automatico
+(`.github/workflows/deploy-dopo-ci.yml`): prima di pubblicare, applica le migrazioni che mancano.
+Oggi quel passo si salta, perché su GitHub mancano le tre chiavi di Vercel. Se le metti mentre la
+161 aspetta, il primo rilascio la applicherebbe da solo, con le schede prodotto ancora da
+riparare. Quindi: le chiavi di Vercel solo dopo che la riparazione del catalogo è online.
+
 ### Passo 0 — una copia del database, prima di scriverci
 
 Nessuna copia notturna è mai riuscita, quindi oggi non esiste una copia da cui ripartire. Prima
@@ -99,6 +113,9 @@ Già fatto il 9 settembre. L'istruzione resta qui sotto, nella storia: è innocu
 (`ON CONFLICT DO NOTHING`), ma non serve.
 
 ### Passo 2 — applicare quello che manca, 161 compresa
+
+⚠️ Solo dopo che è online il codice che legge il negozio da `seller_public_profiles` (vedi
+l'avviso in cima). Subito prima, la copia del passo 0.
 
 ```bash
 SUPABASE_DB_URL="<stringa del Session pooler>" \
