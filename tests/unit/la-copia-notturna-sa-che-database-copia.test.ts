@@ -168,6 +168,12 @@ describe('il guardiano della connessione diretta (IPv6)', () => {
     expect(r.status, 'bocciato il Session pooler, che è proprio quello che serve').toBe(0);
   });
 
+  it('ferma anche il Transaction pooler, che non regge una copia', () => {
+    const r = provaCon('postgresql://postgres.clmpyfvpvfjgeviworth:segreta@aws-0-eu-west-3.pooler.supabase.com:6543/postgres');
+    expect(r.status, 'lasciato passare il Transaction pooler (6543): il messaggio lo esclude, il guardiano no').not.toBe(0);
+    expect(r.stdout + r.stderr).toContain('Session pooler');
+  });
+
   it('non stampa mai il valore del segreto', () => {
     const r = provaCon('postgresql://postgres:parolachiave-segretissima@db.abc.supabase.co:5432/postgres');
     expect(r.stdout + r.stderr).not.toContain('parolachiave-segretissima');
@@ -254,4 +260,84 @@ describe('quando la copia fallisce non lascia in giro un file che sembra una cop
     // e' un'altra prova che cambia verdetto a seconda di quanto e' occupato il
     // computer. E' esattamente il difetto che questo ramo sta chiudendo.
   }, 30_000);
+});
+
+/**
+ * 14/10/2026 — LA RIPULITURA COPRIVA SOLO IL PRIMO pg_dump.
+ *
+ * Se cadeva il secondo (gli utenti), il primo era gia' scritto, completo e
+ * ancora in chiaro: la cifratura viene dopo. `set -e` usciva e lo lasciava li',
+ * e il passo che conserva la copia — che gira anche dopo un errore — lo
+ * caricava fra gli artefatti di un repository pubblico.
+ *
+ * Due difese, due prove: lo script non lascia file in chiaro, e il passo di
+ * conservazione prende solo i file cifrati anche se un giorno lo script
+ * dovesse lasciarne.
+ */
+describe('una copia caduta a meta non lascia in giro il database in chiaro', () => {
+  it('se cade il dump degli utenti, non resta nessun .dump: nemmeno quello completo', () => {
+    const cartella = mkdtempSync(join(tmpdir(), 'utenti-falliti-'));
+    const finti = join(cartella, 'finti');
+    mkdirSync(finti);
+
+    // pg_dump finto: scrive sempre il suo --file; muore solo sul dump degli utenti.
+    const fintoPgDump = join(finti, 'pg_dump');
+    writeFileSync(
+      fintoPgDump,
+      '#!/usr/bin/env bash\n' +
+        'utenti=no\n' +
+        'for a in "$@"; do case "$a" in --table=auth.users) utenti=si;; esac; done\n' +
+        'for a in "$@"; do case "$a" in --file=*) echo "dati veri in chiaro" > "${a#--file=}";; esac; done\n' +
+        'if [ "$utenti" = si ]; then echo "pg_dump: error: server closed the connection unexpectedly" >&2; exit 1; fi\n' +
+        'exit 0\n',
+    );
+    chmodSync(fintoPgDump, 0o755);
+
+    const destinazione = join(cartella, 'backup');
+    const esito = spawnSync('bash', [join(process.cwd(), 'scripts/backup-db.sh')], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${finti}:${process.env.PATH ?? ''}`,
+        SUPABASE_DB_URL: 'postgresql://postgres.abc:segreto@aws-0-eu-west-3.pooler.supabase.com:5432/postgres',
+        BACKUP_DIR: destinazione,
+        BACKUP_PASSPHRASE: 'una-frase-lunga-per-la-prova',
+      },
+    });
+
+    expect(esito.status, 'lo script deve fallire quando cade il dump degli utenti').not.toBe(0);
+    const rimasti = existsSync(destinazione) ? readdirSync(destinazione) : [];
+    expect(
+      rimasti.filter((f) => f.endsWith('.dump')),
+      'e rimasto un .dump in chiaro: il passo di conservazione lo caricherebbe fra gli artefatti di un repository pubblico',
+    ).toEqual([]);
+  }, 30_000);
+
+  it('il passo che conserva la copia prende solo i file cifrati', () => {
+    const workflow = leggi('.github/workflows/backup-db.yml');
+    const i = workflow.indexOf('- name: Conserva la copia fuori dal contenitore');
+    expect(i, 'il passo che conserva la copia non c\'e\' piu\'').toBeGreaterThan(-1);
+    const passo = workflow.slice(i, workflow.indexOf('\n\n', i) > -1 ? workflow.indexOf('\n\n', i) : undefined);
+    const percorso = /^\s+path:\s*(\S+)\s*$/m.exec(passo)?.[1];
+    expect(percorso, 'il passo non dice quali file conserva').toBeTruthy();
+
+    // Si prova il modello vero su una cartella vera: un file cifrato e i tre in
+    // chiaro che una copia caduta a meta' puo' lasciare.
+    const radice = mkdtempSync(join(tmpdir(), 'cosa-esce-'));
+    mkdirSync(join(radice, 'backup'));
+    for (const f of [
+      'mycity_20261014_021700.dump.gpg',
+      'mycity_20261014_021700.dump',
+      'mycity_20261014_021700_utenti.dump',
+      'mycity-elenco-foto_20261014_021700.dump',
+    ]) writeFileSync(join(radice, 'backup', f), 'x');
+
+    const r = spawnSync('bash', ['-c', `shopt -s globstar nullglob; cd "$1"; for f in ${percorso}; do if [ -d "$f" ]; then find "$f" -type f; else echo "$f"; fi; done`, '_', radice], { encoding: 'utf8' });
+    const escono = r.stdout.split('\n').filter(Boolean);
+    expect(escono, 'con questo percorso non esce nemmeno la copia cifrata').toContain('backup/mycity_20261014_021700.dump.gpg');
+    expect(
+      escono.filter((f) => !f.endsWith('.gpg')),
+      `il percorso «${percorso}» fa uscire file in chiaro`,
+    ).toEqual([]);
+  });
 });

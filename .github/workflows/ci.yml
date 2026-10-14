@@ -368,8 +368,24 @@ jobs:
             exit 0
           fi
           host_prova="$(printf '%s' "$URL" | sed -E 's#^https?://##' | cut -d/ -f1)"
-          if [ -n "$URL_PRODUZIONE" ] && printf '%s' "$URL_PRODUZIONE" | grep -qF "$host_prova"; then
-            echo "::error::Il Supabase di prova punta allo stesso host della produzione ($host_prova). Gli smoke NON partono: scriverebbero sui dati veri."
+          # 14/10/2026 — Il confronto cercava il nome della macchina
+          # (<progetto>.supabase.co) dentro SUPABASE_DB_URL. Funzionava solo con
+          # la connessione diretta, db.<progetto>.supabase.co. Il backup chiede di
+          # passare al Session pooler, dove il progetto sta nell'utente
+          # (postgres.<progetto>@aws-…pooler.supabase.com) e quel nome non c'e'
+          # piu': il controllo si sarebbe spento senza dirlo. Ora si cerca anche
+          # il codice del progetto, che c'e' in tutte e due le forme.
+          progetto_prova=""
+          case "$host_prova" in
+            *.supabase.co) progetto_prova="${host_prova%.supabase.co}" ;;
+          esac
+          stessa_produzione=no
+          if [ -n "$URL_PRODUZIONE" ]; then
+            if printf '%s' "$URL_PRODUZIONE" | grep -qF "$host_prova"; then stessa_produzione=si; fi
+            if [ -n "$progetto_prova" ] && printf '%s' "$URL_PRODUZIONE" | grep -qF "$progetto_prova"; then stessa_produzione=si; fi
+          fi
+          if [ "$stessa_produzione" = si ]; then
+            echo "::error::Il Supabase di prova punta allo stesso progetto della produzione ($host_prova). Gli smoke NON partono: scriverebbero sui dati veri."
             exit 1
           fi
           echo "enabled=true" >> "$GITHUB_OUTPUT" 

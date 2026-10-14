@@ -143,6 +143,13 @@ jobs:
               echo "::error::SUPABASE_DB_URL punta alla connessione diretta di Supabase (db.<progetto>.supabase.co), che risponde solo in IPv6: da GitHub Actions, che ha solo IPv4, non ci si arriva. Serve la riga del «Session pooler» — pannello Connect di Supabase, riquadro Session pooler, porta 5432 (NON il Transaction pooler sulla 6543, che non regge la copia)."
               exit 1
               ;;
+            # 14/10/2026 — Il messaggio qui sopra dice «NON la 6543», ma nessuno la
+            # fermava: incollata la riga del Transaction pooler, la copia partiva lo
+            # stesso. Stesso guardiano, stessa regola: si guarda solo macchina e porta.
+            *pooler.supabase.com:6543*)
+              echo "::error::SUPABASE_DB_URL punta al Transaction pooler di Supabase (porta 6543), che non tiene le sessioni che servono a una copia. Serve la riga del «Session pooler» — pannello Connect di Supabase, riquadro Session pooler, porta 5432."
+              exit 1
+              ;;
           esac
           # #234 — Il file contiene nomi, indirizzi, telefoni e ordini di tutti.
           # Senza passphrase resterebbe in chiaro per trenta giorni fra gli
@@ -241,12 +248,22 @@ jobs:
       # Si sarebbe perso il pezzo piu' importante per colpa del meno importante.
       # `!cancelled()` conserva la copia comunque: il lavoro resta rosso (giusto,
       # va visto), ma il database di stanotte c'e'.
+      #
+      # 14/10/2026 — ESCONO SOLO I FILE CIFRATI.
+      #
+      # Proprio perche' questo passo gira anche dopo un errore, prendeva tutta la
+      # cartella: se la copia cadeva prima della cifratura (il secondo pg_dump,
+      # o gpg stesso), il dump in chiaro finiva fra gli artefatti per trenta
+      # giorni. Il repository e' pubblico: un artefatto lo scarica chiunque
+      # abbia un account GitHub. Il lavoro rifiuta gia' di partire senza
+      # BACKUP_PASSPHRASE, quindi una copia buona e' sempre `.gpg`: qualunque
+      # altra cosa resta nel contenitore e muore con lui.
       - name: Conserva la copia fuori dal contenitore
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: backup-database-${{ github.run_id }}
-          path: backup/
+          path: backup/*.gpg
           retention-days: 30
           if-no-files-found: error
 
