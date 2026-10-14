@@ -66,6 +66,19 @@ describe('POST /api/ai/voice-product', () => {
 });
 
 describe('il filtro anti-contenuti sul dettato', () => {
+  // 8/9/2026 — Questo gruppo non preparava niente: la chiave del modello gli
+  // arrivava dal gruppo qui sopra, che l'aveva lasciata accesa. Senza chiave
+  // la rotta risponde 503 e il filtro non lo tocca nessuno: la prova passava
+  // per l'ordine in cui girava, non per quello che controlla.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetRateLimitBuckets();
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    runMessageMock.mockResolvedValue({
+      toolInput: { reply: 'Ok', patch: { name: 'Pane di segale', price: 3.5 } },
+    });
+  });
+
   it('il testo dettato ci passa', async () => {
     filtroChiamato.mockClear();
     await POST(makeReq({ transcript: 'Pane di segale, tre euro e cinquanta' }));
