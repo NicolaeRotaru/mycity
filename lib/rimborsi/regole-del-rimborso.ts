@@ -251,6 +251,28 @@ export function ripartoDelRimborso(
 }
 
 /**
+ * Collaudo del 15/10, terzo giro — CHI DECIDE UN RECLAMO VEDE LA DIVISIONE PRIMA.
+ *
+ * Su un ordine da 50 € (20 di credito MyCity, 30 in contanti) chi amministra
+ * scrive 30 € pensando ai contanti. `ripartoDelRimborso` li divide in
+ * proporzione: 12 € tornano come credito e 18 € col bonifico. Il pannello lo
+ * diceva solo dopo, nell'avviso del bonifico da fare. Qui si calcola con la
+ * stessa regola e la stessa scelta della rotta dei reclami (bonifico), sulla
+ * cifra che `refundOrder` usera' davvero (al massimo il rimborsabile).
+ * Restituisce la frase, o `null` quando non c'e' niente da dividere.
+ */
+export function comeSiDivideIlReclamo(ordine: OrdineDaRimborsare, importoCents: number): string | null {
+  const importo = Math.min(Math.round(importoCents), quantoSiPuoRestituire(ordine).massimoCents);
+  if (!(importo > 0)) return null;
+  const riparto = ripartoDelRimborso(ordine, importo, 'BONIFICO');
+  if (!riparto || riparto.modo !== 'misto') return null;
+  return (
+    `Di ${formatPriceFromCents(importo)}, ${formatPriceFromCents(riparto.creditoCents)} tornano come credito MyCity ` +
+    `(la parte pagata col credito) e ${formatPriceFromCents(riparto.bonificoCents)} col bonifico.`
+  );
+}
+
+/**
  * ③ COSA SCRIVERE SULL'ORDINE QUANDO SI CHIUDE UN RECLAMO (R76).
  *
  * 'LOST' toglie l'ordine dal giro dei bonifici al negozio PER SEMPRE: nessuna

@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
-import { pagamentoPerChiDecide, type OrdineDaRimborsare } from '@/lib/rimborsi/regole-del-rimborso';
+import { comeSiDivideIlReclamo, pagamentoPerChiDecide, type OrdineDaRimborsare } from '@/lib/rimborsi/regole-del-rimborso';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 
 type Dispute = {
@@ -130,6 +130,10 @@ export default function AdminDisputesPage() {
   const detail = disputes.find((d) => d.id === openId);
   const ordineDelDettaglio = detail ? ordiniDeiReclami[detail.order_id] : undefined;
   const pagamento = ordineDelDettaglio ? pagamentoPerChiDecide(ordineDelDettaglio) : null;
+  // Collaudo del 15/10, terzo giro: su un ordine misto la cifra si divide fra
+  // credito e bonifico, e chi decide lo legge PRIMA di premere.
+  const divisione =
+    ordineDelDettaglio && refundEur ? comeSiDivideIlReclamo(ordineDelDettaglio, Math.round(Number(refundEur) * 100)) : null;
 
   // "Segnali di rischio" — derivati dai reclami caricati (nessuna API nuova):
   // venditori con più reclami e clienti che aprono reclami ripetuti.
@@ -344,6 +348,7 @@ export default function AdminDisputesPage() {
                 placeholder="0.00"
                 className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
               />
+              {divisione && <p className="mt-1 text-xs text-ink-600">{divisione}</p>}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">

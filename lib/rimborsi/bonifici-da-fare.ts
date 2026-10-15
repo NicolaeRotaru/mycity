@@ -3,7 +3,7 @@
  *
  * Quando un reso di un ordine in contanti si rimborsa col bonifico, i soldi non
  * escono da soli: li manda a mano chi amministra MyCity. Il rimborso e'
- * registrato (`returns.refund_id = 'bonifico:<chiave>'`), e qui si costruisce
+ * registrato (`returns.refund_id = 'bonifico:<centesimi>:<chiave>'`), e qui si costruisce
  * la lista che quella persona guarda: quanto, per quale ordine, su quale IBAN,
  * e se l'ha gia' fatto. L'IBAN intero lo vede solo questa lista — servita dal
  * server, a chi amministra — perche' e' chi paga.

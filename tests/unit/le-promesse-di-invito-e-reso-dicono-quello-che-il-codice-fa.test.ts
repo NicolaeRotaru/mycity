@@ -94,9 +94,10 @@ describe('il reso in contanti: il credito solo se lo sceglie il cliente, e il te
     expect(righe).toMatch(/refund_iban/);
   });
 
-  it('quando il cliente sceglie il credito, l’accredito ha la sua causale', () => {
-    expect(leggi('lib/stripe/payout.ts')).toMatch(/p_reason:\s*'cod_refund'/);
-  });
+  // La causale `cod_refund` dell'accredito qui si cercava come parola nel file
+  // (collaudo del 15/10, terzo giro: una ricerca di parole non sa diventare
+  // rossa come la realta'). La prova vera fa girare `refundOrder` e guarda la
+  // chiamata a `wallet_credit`: refund-order-cod.test.ts, «rimborso pieno».
 
   it('e nessuna pagina dice più che il credito arriva d’ufficio', () => {
     for (const pagina of ['app/returns/page.tsx', 'app/faq/page.tsx']) {

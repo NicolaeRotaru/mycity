@@ -903,15 +903,45 @@ async function accreditoADiario(
   return Math.round(Number((data as { delta_cents?: unknown }).delta_cents ?? 0));
 }
 
-async function controllaLAccreditoGiaFatto(
-  admin: ReturnType<typeof getAdminSupabase>,
-  chiave: string,
-  richiestoCents: number,
-): Promise<void> {
-  const giaAccreditato = await accreditoADiario(admin, chiave);
+/** Ferma il rimborso se a diario c'e' gia' un accredito di questa chiave con un'altra cifra. */
+function controllaLaCifraGiaAccreditata(giaAccreditato: number | null, richiestoCents: number): void {
   if (giaAccreditato == null) return;
   if (giaAccreditato !== richiestoCents) {
     throw new AccreditoGiaUscitoConAltroImporto(giaAccreditato, richiestoCents);
+  }
+}
+
+/**
+ * Collaudo del 15/10, terzo giro (R82) — QUANDO IL CREDITO E' USCITO, UN
+ * DIARIO CHE NON SI LEGGE NON RIMETTE TUTTO INDIETRO.
+ *
+ * Il caso: `wallet_credit` risponde di si' (o 23505, «questa chiave c'e'
+ * gia'»), e subito dopo la lettura del diario, che serve solo a controllare
+ * la cifra, va in timeout. Prima quell'errore finiva nel `catch` dei soldi:
+ * la prenotazione tornava indietro, il negozio leggeva «Il rimborso non e'
+ * partito» e poteva rifiutare il reso. La cliente teneva 40 € di credito,
+ * l'ordine risultava rimborsato per 0, e i 40 € li perdeva MyCity, senza
+ * nessun avviso. Bastava un guasto solo.
+ *
+ * Adesso, a credito uscito, si va avanti: il rimborso si registra, e chi
+ * amministra riceve l'avviso di controllare la cifra a mano. Si ferma solo una
+ * cifra letta e diversa (`AccreditoGiaUscitoConAltroImporto`).
+ *
+ * Restituisce la cifra a diario, `null` se non c'e' riga, e `'illeggibile'`
+ * se il diario non ha risposto.
+ */
+async function laCifraDelCreditoUscito(
+  admin: ReturnType<typeof getAdminSupabase>,
+  chiave: string,
+  orderId: string,
+): Promise<number | null | 'illeggibile'> {
+  try {
+    return await accreditoADiario(admin, chiave);
+  } catch (err) {
+    logger.error('[refundOrder] credito uscito ma diario illeggibile: il rimborso si registra, la cifra va controllata a mano', {
+      orderId, chiave, err,
+    });
+    return 'illeggibile';
   }
 }
 
@@ -929,16 +959,20 @@ async function controllaLAccreditoGiaFatto(
  * Adesso, prima di tornare indietro, si guarda il diario: se la riga di questa
  * chiave c'e', l'accredito e' avvenuto, e il rimborso va in fondo. Se il diario
  * non si legge, si torna indietro come prima: il ritentativo ritrovera' la riga.
+ * (Qui l'accredito ha risposto con un errore: senza diario non si sa se il
+ * credito e' uscito. E' il guasto doppio, il residuo dichiarato.)
+ *
+ * Restituisce la cifra a diario, o `null` se non c'e' riga o il diario non si legge.
  */
 async function accreditoAvvenutoNonostanteLErrore(
   admin: ReturnType<typeof getAdminSupabase>,
   chiave: string,
-): Promise<boolean> {
+): Promise<number | null> {
   try {
-    return (await accreditoADiario(admin, chiave)) != null;
+    return await accreditoADiario(admin, chiave);
   } catch (err) {
     logger.error('[refundOrder] diario del credito non leggibile dopo un accredito in errore', { chiave, err });
-    return false;
+    return null;
   }
 }
 
@@ -1073,6 +1107,9 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // negozio. La classe di difetto «riparato in un ramo solo» non ha piu' due rami.
   let refundId: string;
   let stripeRefundId: string | null = null;
+  // Il credito e' uscito ma il diario non ha detto quanto: si registra, e lo
+  // si dice a chi amministra (piu' sotto, a rimborso scritto).
+  let cifraDelCreditoNonVerificata = false;
   try {
     if (tipo === 'carta') {
       // getStripe sta dentro la protezione: senza chiavi lancia, e prima la
@@ -1112,17 +1149,21 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
         // registrato — va a termine qui. Prima su 23505 la funzione usciva
         // subito: il cliente aveva il credito, l'ordine restava «pagato» e il
         // negozio teneva la sua quota.
-        if (
-          wErr &&
-          (wErr as { code?: string }).code !== '23505' &&
-          !(await accreditoAvvenutoNonostanteLErrore(admin, chiave))
-        ) {
-          throw new Error(`refundOrder COD: accredito wallet fallito: ${wErr.message}`);
+        if (wErr && (wErr as { code?: string }).code !== '23505') {
+          const aDiario = await accreditoAvvenutoNonostanteLErrore(admin, chiave);
+          if (aDiario == null) throw new Error(`refundOrder COD: accredito wallet fallito: ${wErr.message}`);
+          controllaLaCifraGiaAccreditata(aDiario, riparto.creditoCents);
+        } else {
+          // Il credito di questa chiave c'e': l'ha appena scritto `wallet_credit`,
+          // o c'era gia' (23505). Dopo la 143 un doppione non si distingue da un
+          // accredito nuovo dalla risposta: si guarda la riga a diario di quella
+          // chiave, che c'e' una volta sola (indice unico), e deve dire lo stesso
+          // importo. Ma se il diario non si legge NON si torna indietro: il
+          // credito e' gia' uscito (vedi `laCifraDelCreditoUscito`).
+          const aDiario = await laCifraDelCreditoUscito(admin, chiave, order.id);
+          if (aDiario === 'illeggibile') cifraDelCreditoNonVerificata = true;
+          else controllaLaCifraGiaAccreditata(aDiario, riparto.creditoCents);
         }
-        // Dopo la 143 un doppione non si distingue da un accredito nuovo dalla
-        // risposta: si guarda la riga a diario di quella chiave, che c'e' una
-        // volta sola (indice unico), e deve dire lo stesso importo.
-        await controllaLAccreditoGiaFatto(admin, chiave, riparto.creditoCents);
       }
       // La parte del bonifico (R71) la paga a mano chi amministra: qui non si
       // muove e non puo' cadere niente. Il rimborso si registra, e piu' sotto
@@ -1245,6 +1286,23 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
       );
     } catch (e) {
       logger.error('[refundOrder] avviso agli admin non inviato', { orderId: order.id, e });
+    }
+  }
+
+  // R82 (terzo giro) — Il credito e' uscito e il rimborso e' registrato, ma il
+  // diario non ha confermato la cifra: se un tentativo precedente avesse dato
+  // una cifra diversa, lo vede solo una persona. L'avviso dice cosa guardare.
+  if (cifraDelCreditoNonVerificata) {
+    try {
+      await notifyAdmins(
+        '⚠️ Rimborso col credito da controllare',
+        `Il rimborso sull'ordine #${order.id.slice(0, 8)} è registrato: ${formatPriceFromCents(riparto.creditoCents)} di credito MyCity al cliente. ` +
+          'Il diario del credito in quel momento non ha risposto, quindi la cifra uscita non è stata verificata. ' +
+          `Controlla che la riga «cod_refund» con riferimento ${chiave} dica ${formatPriceFromCents(riparto.creditoCents)}.`,
+        '/admin/orders',
+      );
+    } catch (e) {
+      logger.error('[refundOrder] avviso del credito da controllare non inviato', { orderId: order.id, e });
     }
   }
 

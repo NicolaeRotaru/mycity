@@ -96,3 +96,37 @@ describe('come vuoi il rimborso? — chi ha pagato in contanti', () => {
     s.smonta();
   });
 });
+
+/**
+ * Collaudo del 15/10, terzo giro — L'ORDINE PAGATO IN PARTE COL CREDITO. Chi sceglie il bonifico su
+ * un ordine da 50 € (20 di credito MyCity, 30 in contanti) riceve 30 col bonifico e 20 come credito:
+ * la regola e' ripartoDelRimborso. Il modulo prometteva «ti mandiamo i soldi sul conto» e basta;
+ * la divisione la scopriva dall'email, a rimborso fatto.
+ */
+describe('come vuoi il rimborso? — ordine pagato in parte col credito', () => {
+  /** Come PostgREST: tornano solo le colonne chieste. Una colonna che la pagina non legge, non la vede. */
+  function rispondeCon(ordine: Record<string, unknown>) {
+    (globalThis as Record<string, unknown>).__RISPOSTA_SUPABASE__ = ({ tavola, colonne }: { tavola: string; colonne: string }) => {
+      if (tavola !== 'orders') return { data: [], error: null };
+      const chieste = colonne.split(',').map((c) => c.trim()).filter(Boolean);
+      return { data: Object.fromEntries(chieste.map((c) => [c, ordine[c]])), error: null };
+    };
+  }
+
+  it('sotto il bonifico dice che la parte del credito torna come credito', async () => {
+    rispondeCon({ ...ORDINE, total_price: 30, wallet_applied_cents: 2000 });
+    const { s, radio } = await apriIlModulo();
+    expect(radio('BONIFICO')).not.toBeNull();
+    expect(s.radice.textContent ?? '', 'il modulo promette tutto sul conto anche la parte pagata col credito').toMatch(
+      /La parte che avevi pagato col credito MyCity torna come credito/,
+    );
+    s.smonta();
+  });
+
+  it('su un ordine tutto in contanti la frase non c e', async () => {
+    rispondeCon({ ...ORDINE, wallet_applied_cents: 0 });
+    const { s } = await apriIlModulo();
+    expect(s.radice.textContent ?? '').not.toMatch(/pagato col credito MyCity/);
+    s.smonta();
+  });
+});

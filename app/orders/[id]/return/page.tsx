@@ -46,7 +46,7 @@ export default function NewReturnPage() {
     (async () => {
       const { data } = await supabase
         .from('orders')
-        .select('id, total_price, delivered_at, delivery_status, payment_method, stripe_payment_intent')
+        .select('id, total_price, delivered_at, delivery_status, payment_method, stripe_payment_intent, wallet_applied_cents')
         .eq('id', params.id)
         .single();
       setOrder(data);
@@ -306,6 +306,14 @@ export default function NewReturnPage() {
                 <span className="text-sm font-medium text-ink-900">
                   Con un bonifico sul mio conto
                   <span className="block font-normal text-ink-600">Ti mandiamo i soldi sul conto che indichi qui sotto.</span>
+                  {/* Collaudo del 15/10, terzo giro (R71): su un ordine pagato in parte col credito,
+                      quella parte torna credito anche col bonifico (lib/rimborsi/regole-del-rimborso.ts,
+                      ripartoDelRimborso). Prima lo diceva solo l'email, dopo il rimborso. */}
+                  {Number(order.wallet_applied_cents ?? 0) > 0 && (
+                    <span className="block font-normal text-ink-600">
+                      Col bonifico tornano i soldi dati in contanti. La parte che avevi pagato col credito MyCity torna come credito.
+                    </span>
+                  )}
                 </span>
               </label>
               <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-cream-300 p-3 hover:bg-cream-50">

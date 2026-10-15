@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   serveLaSceltaDelRimborso,
+  comeSiDivideIlReclamo,
   pagamentoPerChiDecide,
   quantoSiPuoRestituire,
   ripartoDelRimborso,
@@ -293,5 +294,32 @@ describe('R71 — la lista dei bonifici da fare', () => {
     expect(centesimiDelBonificoDalSegno(segno)).toBe(3000);
     expect(centesimiDelBonificoDalSegno('wallet:return_r1')).toBeNull();
     expect(centesimiDelBonificoDalSegno('bonifico:return_r1')).toBeNull();
+  });
+});
+
+/**
+ * Collaudo del 15/10, terzo giro — sul reclamo di un ordine misto chi decide legge la divisione
+ * PRIMA di premere. Scrive 30 € pensando ai contanti: la regola ne fa 12 di credito e 18 di bonifico.
+ */
+describe('il pannello dei reclami dice come si divide la cifra', () => {
+  it('ordine misto, 30 €: 12 tornano come credito e 18 col bonifico', () => {
+    const frase = comeSiDivideIlReclamo(misto, 3000);
+    expect(frase, 'chi decide non sa che 30 € non sono «i contanti»').not.toBeNull();
+    expect(frase).toContain(`Di ${formatPriceFromCents(3000)}, ${formatPriceFromCents(1200)} tornano come credito MyCity`);
+    expect(frase).toContain(`e ${formatPriceFromCents(1800)} col bonifico`);
+  });
+  it('dice le stesse cifre che il rimborso usera davvero (bonifico, come la rotta dei reclami)', () => {
+    const r = ripartoDelRimborso(misto, 3000, 'BONIFICO')!;
+    expect(comeSiDivideIlReclamo(misto, 3000)).toContain(formatPriceFromCents(r.creditoCents));
+    expect(comeSiDivideIlReclamo(misto, 3000)).toContain(formatPriceFromCents(r.bonificoCents));
+  });
+  it('oltre il massimo, divide il massimo: 80 € su 50 rimborsabili sono 20 di credito e 30 di bonifico', () => {
+    expect(comeSiDivideIlReclamo(misto, 8000)).toContain(`Di ${formatPriceFromCents(5000)}, ${formatPriceFromCents(2000)}`);
+  });
+  it('niente da dividere: tutto in contanti, carta, cifra vuota, ordine mai incassato', () => {
+    expect(comeSiDivideIlReclamo(maglione, 3000)).toBeNull();
+    expect(comeSiDivideIlReclamo({ ...maglione, stripe_payment_intent: 'pi_1', payment_method: 'card' }, 3000)).toBeNull();
+    expect(comeSiDivideIlReclamo(misto, 0)).toBeNull();
+    expect(comeSiDivideIlReclamo({ ...misto, cash_confirmed_at: null, payment_status: 'PENDING', delivery_status: 'ACCEPTED' }, 3000)).toBeNull();
   });
 });
