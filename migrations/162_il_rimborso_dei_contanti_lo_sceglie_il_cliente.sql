@@ -46,6 +46,13 @@
 --    da fare» su quella riga la poteva riempire lui, e la lista l'avrebbe mostrata a chi paga. Qui
 --    scrive e legge solo il server: regole di riga accese, nessuna regola, nessun permesso ai
 --    ruoli del browser.
+--    La riga NON e' legata al reclamo con una chiave esterna. (Secondo giro di collaudo del
+--    15/10.) Con `REFERENCES disputes ON DELETE CASCADE` bastava che il cliente cancellasse
+--    l'account: `disputes.opener_id` va a `profiles` con ON DELETE CASCADE, il reclamo spariva e con
+--    lui il bonifico che gli dovevamo — dalla lista di chi paga, in silenzio. Un debito non si
+--    cancella perche' il creditore se ne va: i resi restano (buyer_id va a SET NULL, 122), e cosi'
+--    resta questa riga. Il controllo in fondo ferma la migrazione se una chiave che cancella a
+--    cascata ricompare.
 --
 -- COSA NON TOCCA. Le regole di riga: il cliente vede i suoi resi, il negozio i suoi,
 -- l'amministratore tutti — solo, senza l'IBAN. Le scritture: restano del solo server (153).
@@ -140,7 +147,7 @@ END $$;
 
 -- ④ i bonifici dei reclami: li scrive e li legge solo il server
 CREATE TABLE IF NOT EXISTS public.bonifici_dei_reclami (
-  dispute_id     uuid PRIMARY KEY REFERENCES public.disputes(id) ON DELETE CASCADE,
+  dispute_id     uuid PRIMARY KEY,
   order_id       uuid NOT NULL,
   importo_cents  integer NOT NULL CHECK (importo_cents > 0),
   registrato_at  timestamptz NOT NULL DEFAULT now(),
@@ -149,6 +156,10 @@ CREATE TABLE IF NOT EXISTS public.bonifici_dei_reclami (
 
 COMMENT ON TABLE public.bonifici_dei_reclami IS
   'Rimborsi di reclami su ordini in contanti da pagare col bonifico, a mano, da chi amministra. fatto_at NULL = bonifico ancora da fare. Solo server.';
+
+-- Un database dove questa migrazione e' gia' passata nella prima versione (con la chiave verso
+-- `disputes`) converge qui: la chiave che cancellava a cascata se ne va.
+ALTER TABLE public.bonifici_dei_reclami DROP CONSTRAINT IF EXISTS bonifici_dei_reclami_dispute_id_fkey;
 
 ALTER TABLE public.bonifici_dei_reclami ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.bonifici_dei_reclami FROM anon, authenticated;
@@ -170,6 +181,11 @@ BEGIN
   IF has_table_privilege('authenticated', 'public.bonifici_dei_reclami', 'INSERT')
      OR has_table_privilege('authenticated', 'public.bonifici_dei_reclami', 'SELECT') THEN
     RAISE EXCEPTION '162: il browser tocca ancora i bonifici dei reclami';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_constraint
+              WHERE conrelid = 'public.bonifici_dei_reclami'::regclass
+                AND contype = 'f' AND confdeltype = 'c') THEN
+    RAISE EXCEPTION '162: un bonifico da fare sparirebbe insieme al reclamo o al cliente';
   END IF;
 END $$;
 

@@ -16,6 +16,16 @@
  * la loro riga (`bonifici_dei_reclami`, migrazione 162) e stanno nella stessa
  * lista, con lo stesso pulsante «fatto».
  *
+ * Collaudo del 15/10, secondo giro — LA CIFRA DEL BONIFICO NON SI INDOVINA.
+ * Senza la migrazione 162 la colonna con la cifra del bonifico non c'e', e la
+ * lista ripiegava sull'intero rimborso. Su un ordine da 50 € pagato 20 di
+ * credito e 30 in contanti, il credito tornava da solo e la lista diceva
+ * «50,00 €» da bonificare: chi la seguiva pagava 50 invece di 30, e il cliente
+ * riceveva 70 € su 50 spesi. Adesso la cifra la scrive `refundOrder` nel segno
+ * stesso del rimborso (`bonifico:<centesimi>:<chiave>`), che sta in una colonna
+ * che c'e' da sempre. Se nemmeno il segno la porta, la lista NON mette una
+ * cifra: dice di prenderla dall'avviso del bonifico.
+ *
  * Funzioni pure: la rotta legge le righe, qui si decide cosa mostrare.
  */
 
@@ -46,7 +56,12 @@ export interface VoceDaBonificare {
   /** L'id del reso o del reclamo. */
   id: string;
   ordineId: string;
-  importoCents: number;
+  /**
+   * Quanto va col bonifico. `null` vuol dire «non lo so con certezza»: la
+   * pagina non mostra una cifra, e manda a leggerla nell'avviso del bonifico.
+   * Mai l'intero rimborso al posto della sola parte del bonifico.
+   */
+  importoCents: number | null;
   /** Quando il rimborso e' stato registrato. */
   registratoIl: string | null;
   /**
@@ -63,6 +78,31 @@ export interface VoceDaBonificare {
 /** Il segno che `refundOrder` lascia sui rimborsi da pagare col bonifico. */
 export function eUnBonificoDiRimborso(refundId: string | null | undefined): boolean {
   return typeof refundId === 'string' && refundId.startsWith('bonifico:');
+}
+
+/**
+ * Il segno di un rimborso da pagare col bonifico, con dentro QUANTO: la cifra
+ * resta scritta dove la lista la ritrova anche senza la migrazione 162.
+ */
+export function segnoDelBonifico(chiave: string, bonificoCents: number): string {
+  return `bonifico:${Math.max(0, Math.round(bonificoCents))}:${chiave}`;
+}
+
+/** La cifra del bonifico scritta nel segno, oppure `null` se il segno non la porta. */
+export function centesimiDelBonificoDalSegno(refundId: string | null | undefined): number | null {
+  if (typeof refundId !== 'string') return null;
+  const trovato = /^bonifico:(\d+):/.exec(refundId);
+  return trovato ? Number(trovato[1]) : null;
+}
+
+/**
+ * Quanto va col bonifico per un reso: la colonna della 162, poi il segno del
+ * rimborso. MAI `refund_amount_cents`: e' l'intero rimborso, e su un ordine
+ * pagato in parte col credito comprende la parte gia' tornata come credito.
+ */
+export function cifraDelBonificoDelReso(r: Pick<RigaDelReso, 'refund_bonifico_cents' | 'refund_id'>): number | null {
+  if (r.refund_bonifico_cents != null) return Math.max(0, Math.round(Number(r.refund_bonifico_cents)));
+  return centesimiDelBonificoDalSegno(r.refund_id);
 }
 
 /** L'IBAN come si legge e si ricopia: a gruppi di quattro. */
@@ -94,9 +134,8 @@ export function vociDeiBonificiDaFare(
       id: r.id,
       ordineId: r.order_id,
       // Quanto va col bonifico: su un ordine pagato in parte col credito, la
-      // parte del credito e' gia' tornata da sola. Senza la 162 la colonna non
-      // c'e' e si mostra l'intero rimborso (l'avviso del bonifico ha la cifra giusta).
-      importoCents: Math.max(0, Math.round(Number(r.refund_bonifico_cents ?? r.refund_amount_cents ?? 0))),
+      // parte del credito e' gia' tornata da sola (vedi in testa al file).
+      importoCents: cifraDelBonificoDelReso(r),
       registratoIl: r.refunded_at ?? null,
       iban: ibanLeggibile(r.refund_iban),
       fattoIl: r.refund_bonifico_fatto_at ?? null,

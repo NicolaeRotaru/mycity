@@ -88,7 +88,7 @@ describe('R71 — senza scelta, i contanti tornano col bonifico', () => {
 
     expect(creditoDi(finto.db, 'giulia'), 'Giulia ha ricevuto credito MyCity che non ha mai chiesto').toBe(0);
     expect(esito).toMatchObject({ modo: 'bonifico', bonificoCents: 4000, creditoCents: 0, pieno: true });
-    expect(esito.refundId).toBe('bonifico:return_r1');
+    expect(esito.refundId).toBe('bonifico:4000:return_r1');
   });
 
   it('il rimborso resta registrato: l ordine e rimborsato e chi paga riceve l avviso del bonifico', async () => {
@@ -176,6 +176,51 @@ describe('R25 — l email di rimborso dice come tornano davvero i soldi', () => 
     expect(text).not.toContain('Buoni regalo');
     expect(html).not.toContain('Buoni regalo');
     expect(html).toMatch(/href="[^"]*\/profile\/gift-cards"[^>]*>«Gift card»</);
+  });
+
+  /**
+   * Collaudo del 15/10, secondo giro — la frase che documenta il consenso.
+   * L'email dice PERCHE' i soldi tornano come credito: perche' il cliente l'ha
+   * scelto, oppure perche' aveva pagato col credito. Scambiarle (nel codice che
+   * passa la scelta all'email) non faceva diventare rossa nessuna prova.
+   */
+  it('il credito scelto dal cliente lo dice: «come hai scelto tu»', async () => {
+    await refundOrder({
+      orderId: 'o1', amountCents: 4000, idempotencyKey: 'return_r1', notifyBuyer: true, contanti: { modo: 'CREDITO' },
+    });
+
+    const { text, html } = finto.posta[0];
+    expect(text, 'l email non documenta che il credito l ha scelto il cliente').toContain('come hai scelto tu');
+    expect(text).not.toContain('perché avevi pagato con il credito');
+    expect(html).toContain('come hai scelto tu');
+  });
+
+  it('il credito che torna perché era credito lo dice: «perché avevi pagato con il credito MyCity»', async () => {
+    // Ordine pagato tutto col credito: nessuno ha scelto niente, il credito torna credito.
+    apri(maglione({ total_price: 0, wallet_applied_cents: 4000 }));
+
+    await refundOrder({ orderId: 'o1', amountCents: 4000, idempotencyKey: 'return_r1', notifyBuyer: true });
+
+    const { text } = finto.posta[0];
+    expect(text, 'l email dice al cliente che ha scelto una cosa che non ha mai scelto').not.toContain('come hai scelto tu');
+    expect(text).toContain('perché avevi pagato con il credito MyCity');
+  });
+
+  it('ordine misto: l email dice quanto torna come credito, quanto col bonifico, e dove trovare il credito', async () => {
+    // 50 € lordi: 20 di credito MyCity, 30 in contanti incassati; il cliente ha scelto il bonifico.
+    apri(maglione({ total_price: 30, gross_total_cents: 5000, wallet_applied_cents: 2000, seller_payout_cents: 4500 }));
+
+    await refundOrder({
+      orderId: 'o1', amountCents: 5000, idempotencyKey: 'return_r1', notifyBuyer: true,
+      contanti: { modo: 'BONIFICO', ibanFinale: '3456' },
+    });
+
+    const { text, html } = finto.posta[0];
+    expect(text).toContain(`${formatPriceFromCents(2000)} come credito MyCity`);
+    expect(text).toContain(`${formatPriceFromCents(3000)} con un bonifico`);
+    expect(text, 'il cliente ha 20 € di credito e l email non gli dice dove sono').toContain('«Gift card»');
+    expect(html).toMatch(/href="[^"]*\/profile\/gift-cards"[^>]*>«Gift card»</);
+    expect(text).toContain('finisce con 3456');
   });
 
   it('il motivo arriva in italiano, non come codice tecnico', async () => {

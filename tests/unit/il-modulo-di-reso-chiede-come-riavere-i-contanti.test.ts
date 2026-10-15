@@ -38,11 +38,16 @@ vi.mock('@/lib/api/middleware', () => ({
     (_o: unknown, handler: (ctx: { user: { id: string }; params: Record<string, string>; req: Request }) => unknown) =>
     async (req: Request, ctx?: { params: Promise<Record<string, string>> }) =>
       handler({ user: { id: finto.utente }, req, params: (await ctx?.params) ?? {} }),
+  withAdminAuth:
+    (handler: (ctx: { user: { id: string }; params: Record<string, string>; req: Request }) => unknown) =>
+    async (req: Request) => handler({ user: { id: 'admin-1' }, req, params: {} }),
 }));
+vi.mock('@/lib/audit', () => ({ writeAudit: vi.fn(async () => {}) }));
 
 import { POST as apriReso } from '@/app/api/returns/create/route';
 import { POST as decidi } from '@/app/api/returns/[id]/decide/route';
 import { POST as avanza } from '@/app/api/returns/[id]/avanza/route';
+import { GET as listaDeiBonifici } from '@/app/api/admin/rimborsi-da-bonificare/route';
 
 const ORDINE = '11111111-1111-4111-8111-111111111111';
 const IBAN = 'IT60X0542811101000000123456';
@@ -90,13 +95,13 @@ async function chiediReso(rimborso?: unknown) {
   return { status: res.status, corpo: await res.json() };
 }
 
-async function ilNegozioApprova(resoId: string) {
+async function ilNegozioApprova(resoId: string, refundAmountCents = 4000) {
   finto.utente = 'negozio';
   const res = await decidi(
     new Request(`http://localhost/api/returns/${resoId}/decide`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ decision: 'APPROVED', refundAmountCents: 4000 }),
+      body: JSON.stringify({ decision: 'APPROVED', refundAmountCents }),
     }) as never,
     { params: Promise.resolve({ id: resoId }) } as never,
   );
@@ -107,7 +112,7 @@ async function ilNegozioApprova(resoId: string) {
  * La strada piu' comune di un reso: il negozio approva SENZA rimborsare subito,
  * aspetta la merce, la riceve, e solo allora segna «rimborsato» (rotta avanza).
  */
-async function ilNegozioApprovaERiceveLaMerce(resoId: string) {
+async function ilNegozioApprovaERiceveLaMerce(resoId: string, refundAmountCents = 4000) {
   finto.utente = 'negozio';
   const chiama = async (rotta: typeof decidi, url: string, corpo: Record<string, unknown>) => {
     const res = await rotta(
@@ -120,7 +125,7 @@ async function ilNegozioApprovaERiceveLaMerce(resoId: string) {
   expect(approvato.status, JSON.stringify(approvato.corpo)).toBe(200);
   const ricevuto = await chiama(avanza, `http://localhost/api/returns/${resoId}/avanza`, { stato: 'RECEIVED' });
   expect(ricevuto.status, JSON.stringify(ricevuto.corpo)).toBe(200);
-  return chiama(avanza, `http://localhost/api/returns/${resoId}/avanza`, { stato: 'REFUNDED', refundAmountCents: 4000 });
+  return chiama(avanza, `http://localhost/api/returns/${resoId}/avanza`, { stato: 'REFUNDED', refundAmountCents });
 }
 
 const reso = () => finto.db.tabelle.returns[0];
@@ -164,7 +169,7 @@ describe('la scelta arriva fino ai soldi', () => {
 
     expect(esito.status).toBe(200);
     expect(creditoDi(finto.db, 'giulia')).toBe(0);
-    expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: `bonifico:return_${corpo.id}`, refund_bonifico_cents: 4000 });
+    expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: `bonifico:4000:return_${corpo.id}`, refund_bonifico_cents: 4000 });
     const [avviso] = notificheConTitolo(finto.db, 'Bonifico di rimborso da fare');
     expect(String(avviso.body)).toContain("L'IBAN che ha indicato");
   });
@@ -191,7 +196,7 @@ describe('la scelta arriva fino ai soldi anche dalla strada piu comune (approva,
 
     expect(esito.status, JSON.stringify(esito.corpo)).toBe(200);
     expect(creditoDi(finto.db, 'giulia'), 'Giulia ha scelto il bonifico e ha ricevuto credito MyCity').toBe(0);
-    expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: `bonifico:return_${corpo.id}`, refund_bonifico_cents: 4000 });
+    expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: `bonifico:4000:return_${corpo.id}`, refund_bonifico_cents: 4000 });
     expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare')).toHaveLength(1);
   });
 
@@ -202,7 +207,7 @@ describe('la scelta arriva fino ai soldi anche dalla strada piu comune (approva,
 
     expect(esito.status, JSON.stringify(esito.corpo)).toBe(200);
     expect(creditoDi(finto.db, 'giulia')).toBe(0);
-    expect(reso().refund_id).toBe(`bonifico:return_${corpo.id}`);
+    expect(reso().refund_id).toBe(`bonifico:4000:return_${corpo.id}`);
   });
 
   it('ha scelto il credito: rimborsato, il credito arriva subito e niente bonifico', async () => {
@@ -224,7 +229,7 @@ describe('la scelta arriva fino ai soldi anche dalla strada piu comune (approva,
 
     expect(esito.status, JSON.stringify(esito.corpo)).toBe(200);
     expect(creditoDi(finto.db, 'giulia')).toBe(0);
-    expect(reso().refund_id).toBe(`bonifico:return_${corpo.id}`);
+    expect(reso().refund_id).toBe(`bonifico:4000:return_${corpo.id}`);
   });
 });
 
@@ -247,7 +252,50 @@ describe('la migrazione 162 non e ancora applicata (la variante scomoda)', () =>
 
     expect(esito.status, JSON.stringify(esito.corpo)).toBe(200);
     expect(creditoDi(finto.db, 'giulia')).toBe(0);
-    expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: `bonifico:return_${corpo.id}` });
+    expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: `bonifico:4000:return_${corpo.id}` });
     expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare')).toHaveLength(1);
   });
+});
+
+/**
+ * Collaudo del 15/10, secondo giro — IL BLOCCANTE. La migrazione 162 in
+ * produzione non c'e' ancora. Ordine in contanti da 50 €: 20 pagati col credito
+ * MyCity, 30 in contanti incassati. Il cliente restituisce, il negozio approva
+ * 50 €. Il credito torna da solo (20 €); col bonifico ne vanno 30. Senza la 162
+ * la lista dei bonifici mostrava «50,00 €»: chi la seguiva pagava 50, e il
+ * cliente riceveva 70 € su 50 spesi.
+ *
+ * Tutto dalle rotte vere: apertura del reso, decisione (o approva → ricevi →
+ * rimborsa), lista dei bonifici di chi paga.
+ */
+describe('la lista dei bonifici dice quanto bonificare, con e senza la migrazione 162', () => {
+  const misto = () => maglione({ total_price: 30, gross_total_cents: 5000, wallet_applied_cents: 2000, seller_payout_cents: 4500 });
+  const strade = [
+    ['approva e rimborsa subito', (id: string) => ilNegozioApprova(id, 5000)],
+    ['approva, ricevi, rimborsa', (id: string) => ilNegozioApprovaERiceveLaMerce(id, 5000)],
+  ] as const;
+
+  for (const conLa162 of [true, false]) {
+    for (const [strada, rimborsa] of strade) {
+      it(`${conLa162 ? 'con' : 'SENZA'} la 162, ${strada}: 30 € da bonificare, non 50`, async () => {
+        apri(misto(), conLa162 ? [] : CON_162);
+        const { corpo } = await chiediReso(conLa162 ? { modo: 'BONIFICO', iban: IBAN } : undefined);
+        const esito = await rimborsa(corpo.id);
+        expect(esito.status, JSON.stringify(esito.corpo)).toBe(200);
+        expect(creditoDi(finto.db, 'giulia'), 'la parte pagata col credito torna credito').toBe(2000);
+
+        const lista = await listaDeiBonifici(
+          new Request('http://localhost/api/admin/rimborsi-da-bonificare') as never,
+          undefined as never,
+        );
+        const { voci, migrazione162 } = await lista.json();
+        expect(migrazione162).toBe(conLa162);
+        expect(voci).toHaveLength(1);
+        expect(
+          voci[0].importoCents,
+          'la lista fa bonificare anche i 20 € gia tornati come credito: il cliente riceve 70 € su 50',
+        ).toBe(3000);
+      });
+    }
+  }
 });

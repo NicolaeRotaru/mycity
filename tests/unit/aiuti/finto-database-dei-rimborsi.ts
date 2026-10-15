@@ -23,6 +23,11 @@ export interface Guasti {
   walletCredit?: { code?: string; message: string } | null;
   /** `wallet_credit` accredita davvero, ma la risposta si perde: arriva un errore di rete. */
   walletCreditaPoiCade?: boolean;
+  /**
+   * Le prossime N letture del diario del credito (`wallet_ledger`) cadono con un timeout. Serve
+   * al guasto doppio: l'accredito perde la risposta E il diario non si legge.
+   */
+  diarioIlleggibile?: number;
   /** `storna_rimborso` risponde con questo errore. */
   stornaRimborso?: { code?: string; message: string } | null;
   /** Colonne che il database non ha (una migrazione non ancora applicata). */
@@ -138,6 +143,10 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
       };
     }
     const righe = (this.db.tabelle[this.tabella] ??= []);
+    if (this.modo === 'select' && this.tabella === 'wallet_ledger' && (this.db.guasti.diarioIlleggibile ?? 0) > 0) {
+      this.db.guasti.diarioIlleggibile = (this.db.guasti.diarioIlleggibile ?? 0) - 1;
+      return { data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } };
+    }
     if (this.modo === 'select') {
       const chiesta = this.mancante(this.colonne === '*' ? [] : colonneDi(this.colonne));
       if (chiesta) return { data: null, error: { code: '42703', message: `column ${this.tabella}.${chiesta} does not exist` } };

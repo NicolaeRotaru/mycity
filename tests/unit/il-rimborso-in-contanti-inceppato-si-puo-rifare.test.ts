@@ -124,11 +124,40 @@ describe('l accredito sul portafoglio cade', () => {
   });
 });
 
+/**
+ * Collaudo del 15/10, secondo giro — LA RISPOSTA PERSA ARRIVA COME UN ERRORE.
+ * Il database scrive l'accredito e a noi arriva «socket hang up». Prima ci si
+ * fidava dell'errore: la prenotazione tornava indietro e il reso tornava «da
+ * decidere» con la cliente gia' accreditata — il negozio poteva perfino
+ * rifiutarlo, e lei teneva il credito su un ordine rimborsato per 0. Adesso il
+ * primo tentativo guarda il diario, vede l'accredito e va in fondo.
+ */
 describe('l accredito riesce ma la risposta si perde (la variante scomoda)', () => {
   for (const comeLa143 of [false, true]) {
-    it(`il secondo tentativo non accredita di nuovo e chiude il rimborso (${comeLa143 ? 'dopo' : 'prima della'} 143)`, async () => {
+    it(`il primo tentativo se ne accorge dal diario e chiude il rimborso, una volta sola (${comeLa143 ? 'dopo' : 'prima della'} 143)`, async () => {
       finto.db.comeLa143 = comeLa143;
       finto.db.guasti.walletCreditaPoiCade = true;
+
+      const esito = await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1', contanti: CREDITO });
+
+      expect(esito.refundId).toBe('wallet:return_r1');
+      expect(creditoDi(finto.db, 'cliente')).toBe(2000);
+      expect(ordine(), 'la cliente ha il credito e l ordine dice «non rimborsato»').toMatchObject({
+        refunded_amount_cents: 2000, payment_status: 'REFUNDED',
+      });
+      expect(createReversal, 'la quota del negozio deve rientrare, una volta').toHaveBeenCalledTimes(1);
+
+      // Un ritentativo non accredita di nuovo e non registra niente in piu'.
+      await expect(refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1', contanti: CREDITO }))
+        .rejects.toThrow();
+      expect(creditoDi(finto.db, 'cliente'), 'credito accreditato due volte').toBe(2000);
+      expect(ordine().refunded_amount_cents).toBe(2000);
+    });
+
+    it(`se anche il diario non si legge si torna indietro, e il secondo tentativo chiude una volta sola (${comeLa143 ? 'dopo' : 'prima della'} 143)`, async () => {
+      finto.db.comeLa143 = comeLa143;
+      finto.db.guasti.walletCreditaPoiCade = true;
+      finto.db.guasti.diarioIlleggibile = 1;
       await expect(refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1', contanti: CREDITO }))
         .rejects.toThrow();
       expect(creditoDi(finto.db, 'cliente')).toBe(2000);
@@ -147,15 +176,17 @@ describe('l accredito riesce ma la risposta si perde (la variante scomoda)', () 
 /**
  * Collaudo del 15/10 — LA VARIANTE CON L'IMPORTO CAMBIATO. La chiave dei resi
  * (`return_<id>`) non porta l'importo. Il primo tentativo accredita 20 € e
- * perde la risposta; la prenotazione torna indietro e il negozio riprova con
- * 15 €. Il portafoglio riconosce la chiave e non accredita di nuovo, ma la
- * funzione registrava 15 € di rimborso mentre la cliente ne aveva avuti 20.
+ * perde la risposta, e il diario in quel momento non si legge: la prenotazione
+ * torna indietro e il negozio riprova con 15 €. Il portafoglio riconosce la
+ * chiave e non accredita di nuovo, ma la funzione registrava 15 € di rimborso
+ * mentre la cliente ne aveva avuti 20.
  */
 describe('risposta persa, e il negozio riprova con un importo diverso', () => {
   for (const comeLa143 of [false, true]) {
     it(`si ferma e dice quanto e gia uscito, invece di registrare un'altra cifra (${comeLa143 ? 'dopo' : 'prima della'} 143)`, async () => {
       finto.db.comeLa143 = comeLa143;
       finto.db.guasti.walletCreditaPoiCade = true;
+      finto.db.guasti.diarioIlleggibile = 1;
       await expect(refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1', contanti: CREDITO }))
         .rejects.toThrow();
       expect(creditoDi(finto.db, 'cliente')).toBe(2000);
@@ -199,6 +230,52 @@ describe('dalla parte del negozio: la decisione sul reso si puo rifare', () => {
     });
     return decidi(req as never, { params: Promise.resolve({ id: 'r1' }) });
   }
+
+  function decisioneCon(corpo: Record<string, unknown>) {
+    const req = new Request('http://localhost/api/returns/r1/decide', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(corpo),
+    });
+    return decidi(req as never, { params: Promise.resolve({ id: 'r1' }) });
+  }
+
+  it('IL CASO DEL COLLAUDO — risposta persa: il reso si chiude rimborsato, e il negozio non lo puo piu rifiutare', async () => {
+    finto.db.guasti.walletCreditaPoiCade = true;
+
+    const primo = await decisioneCon({ decision: 'APPROVED', refundAmountCents: 2000 });
+    const corpo = await primo.json();
+
+    expect(primo.status, `il negozio legge: ${JSON.stringify(corpo)}`).toBe(200);
+    expect(creditoDi(finto.db, 'cliente')).toBe(2000);
+    expect(finto.db.tabelle.returns[0]).toMatchObject({ status: 'REFUNDED', refund_id: 'wallet:return_r1' });
+    expect(ordine().refunded_amount_cents, 'la cliente ha 20 € e l ordine risulta rimborsato per 0').toBe(2000);
+
+    const rifiuto = await decisioneCon({ decision: 'REJECTED' });
+    expect(rifiuto.status, 'un reso gia rimborsato si rifiuta: la cliente tiene il credito e il negozio la quota').toBe(409);
+    expect(finto.db.tabelle.returns[0].status).toBe('REFUNDED');
+  });
+
+  it('guasto doppio e cifra cambiata: il negozio legge quanto e gia uscito, non «riprova»', async () => {
+    finto.db.guasti.walletCreditaPoiCade = true;
+    finto.db.guasti.diarioIlleggibile = 1;
+    const primo = await decisioneCon({ decision: 'APPROVED', refundAmountCents: 2000 });
+    expect(primo.status).toBe(502);
+    expect(finto.db.tabelle.returns[0].status).toBe('REQUESTED');
+
+    const secondo = await decisioneCon({ decision: 'APPROVED', refundAmountCents: 1500 });
+    const corpo = await secondo.json();
+
+    expect(secondo.status).toBe(409);
+    expect(corpo.error.message, 'il negozio non sa quale cifra rimettere').toContain('già accreditato');
+    expect(corpo.error.message).toContain('20,00');
+    expect(finto.db.tabelle.returns[0].status).toBe('REQUESTED');
+
+    const terzo = await decisioneCon({ decision: 'APPROVED', refundAmountCents: 2000 });
+    expect(terzo.status).toBe(200);
+    expect(creditoDi(finto.db, 'cliente')).toBe(2000);
+    expect(ordine().refunded_amount_cents).toBe(2000);
+  });
 
   it('IL CASO DELLA SCHEDA — primo tentativo fallito, il secondo rimborsa invece di dire «gia rimborsato»', async () => {
     finto.db.guasti.walletCredit = { code: '57014', message: 'timeout' };

@@ -25,6 +25,7 @@ import {
   type RipartoDelRimborso,
 } from '@/lib/rimborsi/regole-del-rimborso';
 import { PAGINA_DEI_BONIFICI_DA_FARE, type ComeTornanoIContanti } from '@/lib/rimborsi/scelta-del-reso';
+import { segnoDelBonifico } from '@/lib/rimborsi/bonifici-da-fare';
 
 /**
  * Logica condivisa di payout / reversal / refund per il modello SCT
@@ -672,7 +673,7 @@ export interface RefundOrderOpts {
 
 /** Quello che `refundOrder` restituisce a chi lo chiama. */
 export interface EsitoRimborso {
-  /** Id del rimborso Stripe, oppure `wallet:<chiave>` / `bonifico:<chiave>` per i contanti. */
+  /** Id del rimborso Stripe, oppure `wallet:<chiave>` / `bonifico:<centesimi>:<chiave>` per i contanti. */
   refundId: string;
   /** Quota ripresa al negozio da questa chiamata, in centesimi. */
   reversedCents: number;
@@ -811,6 +812,28 @@ export class RimborsoNonRitentabile extends Error {
 }
 
 /**
+ * Collaudo del 15/10 (R82) — UN TENTATIVO PRECEDENTE HA GIA' DATO AL CLIENTE
+ * UNA CIFRA DIVERSA DA QUELLA CHIESTA ADESSO.
+ *
+ * Non si ritenta con la stessa cifra sbagliata: chi decide deve leggere quanto
+ * e' gia' uscito, e il messaggio e' scritto per lui. Le rotte lo mostrano
+ * com'e' (la decisione sul reso lo nascondeva dietro «riprova»).
+ */
+export class AccreditoGiaUscitoConAltroImporto extends RimborsoNonRitentabile {
+  constructor(
+    readonly giaAccreditatoCents: number,
+    readonly richiestoCents: number,
+  ) {
+    super(
+      `Un tentativo precedente di questo rimborso ha già accreditato al cliente ${formatPriceFromCents(giaAccreditatoCents)} ` +
+        `di credito MyCity, con un importo diverso da quello di adesso (${formatPriceFromCents(richiestoCents)}). ` +
+        "Riprova con l'importo del primo tentativo.",
+    );
+    this.name = 'AccreditoGiaUscitoConAltroImporto';
+  }
+}
+
+/**
  * 6/9/2026 (stesso giorno, riparazione) — «L'ORDINE NON C'E'» E «NON SONO
  * RIUSCITO A LEGGERLO» NON SONO LA STESSA COSA.
  *
@@ -861,11 +884,11 @@ function eOrdineInesistente(errore: unknown): boolean {
  * decide legge quanto e' gia' uscito. Stripe fa lo stesso con la sua chiave:
  * una richiesta diversa con una chiave gia' usata e' un errore, non un si'.
  */
-async function controllaLAccreditoGiaFatto(
+/** Quanto credito c'e' a diario per questa chiave: `null` se nessuno. Lancia se non si legge. */
+async function accreditoADiario(
   admin: ReturnType<typeof getAdminSupabase>,
   chiave: string,
-  richiestoCents: number,
-): Promise<void> {
+): Promise<number | null> {
   const { data, error } = await admin
     .from('wallet_ledger')
     .select('delta_cents')
@@ -876,14 +899,46 @@ async function controllaLAccreditoGiaFatto(
     // Non si sa quanto e' uscito: si ferma e si riprova, non si registra a occhio.
     throw new Error(`refundOrder COD: accredito gia' fatto non verificabile: ${error.message}`);
   }
-  if (!data) return;
-  const giaAccreditato = Math.round(Number((data as { delta_cents?: unknown }).delta_cents ?? 0));
+  if (!data) return null;
+  return Math.round(Number((data as { delta_cents?: unknown }).delta_cents ?? 0));
+}
+
+async function controllaLAccreditoGiaFatto(
+  admin: ReturnType<typeof getAdminSupabase>,
+  chiave: string,
+  richiestoCents: number,
+): Promise<void> {
+  const giaAccreditato = await accreditoADiario(admin, chiave);
+  if (giaAccreditato == null) return;
   if (giaAccreditato !== richiestoCents) {
-    throw new RimborsoNonRitentabile(
-      `Un tentativo precedente di questo rimborso ha già accreditato al cliente ${formatPriceFromCents(giaAccreditato)} ` +
-        `di credito MyCity, con un importo diverso da quello di adesso (${formatPriceFromCents(richiestoCents)}). ` +
-        "Riprova con l'importo del primo tentativo.",
-    );
+    throw new AccreditoGiaUscitoConAltroImporto(giaAccreditato, richiestoCents);
+  }
+}
+
+/**
+ * Collaudo del 15/10, secondo giro (R82) — LA RISPOSTA PERSA ARRIVA ANCHE COME
+ * ERRORE.
+ *
+ * Il caso: il database scrive l'accredito, e a noi arriva un errore di rete
+ * («socket hang up»). Prima ci si fidava dell'errore: la prenotazione tornava
+ * indietro, il reso tornava «da decidere», e la cliente aveva gia' il credito
+ * in tasca. Il negozio, a quel punto, poteva perfino rifiutare il reso: lei
+ * teneva 20 € di credito, l'ordine risultava rimborsato per 0 e il negozio
+ * teneva la sua quota.
+ *
+ * Adesso, prima di tornare indietro, si guarda il diario: se la riga di questa
+ * chiave c'e', l'accredito e' avvenuto, e il rimborso va in fondo. Se il diario
+ * non si legge, si torna indietro come prima: il ritentativo ritrovera' la riga.
+ */
+async function accreditoAvvenutoNonostanteLErrore(
+  admin: ReturnType<typeof getAdminSupabase>,
+  chiave: string,
+): Promise<boolean> {
+  try {
+    return (await accreditoADiario(admin, chiave)) != null;
+  } catch (err) {
+    logger.error('[refundOrder] diario del credito non leggibile dopo un accredito in errore', { chiave, err });
+    return false;
   }
 }
 
@@ -1057,7 +1112,11 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
         // registrato — va a termine qui. Prima su 23505 la funzione usciva
         // subito: il cliente aveva il credito, l'ordine restava «pagato» e il
         // negozio teneva la sua quota.
-        if (wErr && (wErr as { code?: string }).code !== '23505') {
+        if (
+          wErr &&
+          (wErr as { code?: string }).code !== '23505' &&
+          !(await accreditoAvvenutoNonostanteLErrore(admin, chiave))
+        ) {
           throw new Error(`refundOrder COD: accredito wallet fallito: ${wErr.message}`);
         }
         // Dopo la 143 un doppione non si distingue da un accredito nuovo dalla
@@ -1068,8 +1127,11 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
       // La parte del bonifico (R71) la paga a mano chi amministra: qui non si
       // muove e non puo' cadere niente. Il rimborso si registra, e piu' sotto
       // parte l'avviso a chi deve pagare. Il segno `bonifico:` sul reso e' quello
-      // che la lista dei bonifici da fare cerca.
-      refundId = riparto.bonificoCents > 0 ? `bonifico:${chiave}` : `wallet:${chiave}`;
+      // che la lista dei bonifici da fare cerca, e porta la cifra del bonifico:
+      // senza la migrazione 162 e' l'unico posto dove la lista la ritrova
+      // (lib/rimborsi/bonifici-da-fare.ts).
+      refundId =
+        riparto.bonificoCents > 0 ? segnoDelBonifico(chiave, riparto.bonificoCents) : `wallet:${chiave}`;
     }
   } catch (err) {
     // Si toglie esattamente quello che la prenotazione aveva messo, cosi'

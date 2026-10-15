@@ -9,7 +9,12 @@ import {
 } from '@/lib/rimborsi/regole-del-rimborso';
 import { ibanValido, leggiSceltaDelRimborso, normalizzaIban } from '@/lib/rimborsi/scelta-del-cliente';
 import { comeTornanoIContanti } from '@/lib/rimborsi/scelta-del-reso';
-import { vociDeiBonificiDaFare } from '@/lib/rimborsi/bonifici-da-fare';
+import {
+  centesimiDelBonificoDalSegno,
+  eUnBonificoDiRimborso,
+  segnoDelBonifico,
+  vociDeiBonificiDaFare,
+} from '@/lib/rimborsi/bonifici-da-fare';
 import { formatPriceFromCents } from '@/lib/format';
 
 /**
@@ -75,6 +80,20 @@ describe('R84 — si restituisce solo quello che il cliente ha dato davvero', ()
   it('annullato e mai incassato: il credito l ha gia restituito l annullo, qui niente', () => {
     const annullato = { ...misto, cash_confirmed_at: null, payment_status: 'FAILED', delivery_status: 'CANCELED' };
     expect(quantoSiPuoRestituire(annullato).perche).toBe('nessun-incasso');
+  });
+
+  /**
+   * Collaudo del 15/10, secondo giro — la guardia «e non annullato» non aveva
+   * una prova: toglierla lasciava tutto verde. Un ordine incassato (contanti
+   * confermati) e poi annullato: l'annullo ha gia' restituito il credito, quindi
+   * qui si restituiscono solo i contanti.
+   */
+  it('incassato e poi annullato: i contanti si restituiscono, il credito no (l ha gia ridato l annullo)', () => {
+    const incassatoEAnnullato = { ...misto, delivery_status: 'CANCELED' };
+    expect(quantoSiPuoRestituire(incassatoEAnnullato), 'il credito tornerebbe due volte').toEqual({
+      massimoCents: 3000, perche: 'ok',
+    });
+    expect(ripartoDelRimborso(incassatoEAnnullato, 3000)).toMatchObject({ creditoCents: 0, bonificoCents: 3000 });
   });
 
   it('consegnato col codice ma incasso non confermato nell app: il cliente ha pagato alla consegna', () => {
@@ -226,7 +245,7 @@ describe('R71 — la lista dei bonifici da fare', () => {
       { id: 'r1', order_id: 'o1', refund_amount_cents: 5000, refunded_at: '2026-10-10', refund_id: 'bonifico:return_r1',
         refund_iban: 'IT60X0542811101000000123456', refund_bonifico_cents: 3000, refund_bonifico_fatto_at: null },
       { id: 'r2', order_id: 'o2', refund_amount_cents: 1000, refunded_at: '2026-10-12', refund_id: 'wallet:return_r2' },
-      { id: 'r3', order_id: 'o3', refund_amount_cents: 800, refunded_at: '2026-10-13', refund_id: 'bonifico:return_r3',
+      { id: 'r3', order_id: 'o3', refund_amount_cents: 800, refunded_at: '2026-10-13', refund_id: 'bonifico:800:return_r3',
         refund_bonifico_fatto_at: '2026-10-14' },
     ]);
     expect(voci.map((v) => v.id)).toEqual(['r1', 'r3']);
@@ -237,7 +256,7 @@ describe('R71 — la lista dei bonifici da fare', () => {
 
   it('i bonifici dei reclami stanno nella stessa lista, con la loro cifra e senza IBAN', () => {
     const voci = vociDeiBonificiDaFare(
-      [{ id: 'r1', order_id: 'o1', refund_amount_cents: 800, refunded_at: '2026-10-13', refund_id: 'bonifico:return_r1',
+      [{ id: 'r1', order_id: 'o1', refund_amount_cents: 800, refunded_at: '2026-10-13', refund_id: 'bonifico:800:return_r1',
         refund_bonifico_fatto_at: '2026-10-14' }],
       [
         { dispute_id: 'd1', order_id: 'o2', importo_cents: 1800, registrato_at: '2026-10-12', fatto_at: null },
@@ -246,5 +265,33 @@ describe('R71 — la lista dei bonifici da fare', () => {
     );
     expect(voci.map((v) => `${v.tipo}:${v.id}`)).toEqual(['reclamo:d1', 'reso:r1']);
     expect(voci[0]).toMatchObject({ ordineId: 'o2', importoCents: 1800, iban: null, daFare: true });
+  });
+
+  /**
+   * Collaudo del 15/10, secondo giro (bloccante) — senza la migrazione 162 la
+   * colonna della cifra del bonifico non c'e', e la lista mostrava l'intero
+   * rimborso: 50 € da bonificare su un ordine dove 20 erano gia' tornati come
+   * credito. Chi seguiva la lista pagava 30 € di troppo.
+   */
+  it('senza la colonna della 162 la cifra viene dal segno del rimborso, non dall intero rimborso', () => {
+    const [voce] = vociDeiBonificiDaFare([
+      { id: 'r1', order_id: 'o1', refund_amount_cents: 5000, refunded_at: '2026-10-13', refund_id: 'bonifico:3000:return_r1' },
+    ]);
+    expect(voce.importoCents, 'la lista fa bonificare anche la parte gia tornata come credito').toBe(3000);
+  });
+
+  it('se nessuno dice la cifra del bonifico, la lista non ne inventa una', () => {
+    const [voce] = vociDeiBonificiDaFare([
+      { id: 'r1', order_id: 'o1', refund_amount_cents: 5000, refunded_at: '2026-10-13', refund_id: 'bonifico:return_r1' },
+    ]);
+    expect(voce.importoCents).toBeNull();
+  });
+
+  it('il segno del bonifico porta la cifra e la restituisce uguale', () => {
+    const segno = segnoDelBonifico('return_r1', 3000);
+    expect(eUnBonificoDiRimborso(segno)).toBe(true);
+    expect(centesimiDelBonificoDalSegno(segno)).toBe(3000);
+    expect(centesimiDelBonificoDalSegno('wallet:return_r1')).toBeNull();
+    expect(centesimiDelBonificoDalSegno('bonifico:return_r1')).toBeNull();
   });
 });

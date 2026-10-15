@@ -20,7 +20,9 @@
 --
 -- COSA CONTROLLA. Il cliente prova a scriversi un bonifico e a leggere la
 -- tabella; il negozio prova a leggerla; il server scrive e legge; una cifra
--- zero o negativa non entra; il reclamo del cliente si apre come prima.
+-- zero o negativa non entra; il reclamo del cliente si apre come prima; e il
+-- bonifico che dobbiamo al cliente resta in lista anche se lui cancella
+-- l'account (secondo giro di collaudo: con la chiave a cascata spariva).
 --
 -- Tutto in transazione con ROLLBACK: non lascia dati.
 -- =============================================================================
@@ -190,6 +192,47 @@ BEGIN
 END $$;
 RESET request.jwt.claims;
 RESET ROLE;
+
+-- =============================================================================
+-- ⑥ IL DEBITO RESTA ANCHE SE IL CLIENTE SE NE VA.
+--
+-- Il caso del collaudo: Marco ha un bonifico da 24 € ancora da ricevere e
+-- cancella l'account. `disputes.opener_id` cancella a cascata, quindi il suo
+-- reclamo sparisce. Con la prima versione della 162 spariva anche la riga del
+-- bonifico, e chi paga non lo vedeva piu'.
+-- =============================================================================
+SET LOCAL ROLE service_role;
+INSERT INTO public.disputes (id, order_id, opener_id, against_id, reason, description, status, refund_cents)
+VALUES ('ee000000-2222-0000-0000-00000000000e',
+        'ee000000-1111-0000-0000-00000000000c',
+        'ee000000-0000-0000-0000-00000000000b',
+        'ee000000-0000-0000-0000-00000000000a',
+        'NOT_AS_DESCRIBED', 'Il vaso era diverso da quello della foto.', 'resolved_buyer', 2400);
+INSERT INTO public.bonifici_dei_reclami (dispute_id, order_id, importo_cents)
+VALUES ('ee000000-2222-0000-0000-00000000000e', 'ee000000-1111-0000-0000-00000000000c', 2400);
+RESET ROLE;
+
+SET LOCAL mycity.allow_profile_write = '1';
+SET LOCAL mycity.allow_order_write   = '1';
+DO $$
+DECLARE cancellato text; reclami int; da_fare int; utenti int;
+BEGIN
+  cancellato := pg_temp.esito($q$
+    DELETE FROM auth.users WHERE id = 'ee000000-0000-0000-0000-00000000000b'
+  $q$);
+  SELECT count(*) INTO utenti FROM auth.users WHERE id = 'ee000000-0000-0000-0000-00000000000b';
+  SELECT count(*) INTO reclami FROM public.disputes WHERE id = 'ee000000-2222-0000-0000-00000000000e';
+  SELECT count(*) INTO da_fare FROM public.bonifici_dei_reclami
+   WHERE dispute_id = 'ee000000-2222-0000-0000-00000000000e' AND fatto_at IS NULL AND importo_cents = 2400;
+  INSERT INTO esiti VALUES (
+    'il bonifico dovuto resta in lista anche se il cliente cancella l account',
+    cancellato = 'PASSATO' AND utenti = 0 AND da_fare = 1,
+    format('cancellazione %s, utente rimasto %s, reclamo rimasto %s, bonifici da fare rimasti %s',
+           cancellato, utenti, reclami, da_fare)
+  );
+END $$;
+RESET mycity.allow_profile_write;
+RESET mycity.allow_order_write;
 
 -- ── Verdetto ──────────────────────────────────────────────────────────────
 SELECT nome, CASE WHEN verde THEN 'ok' ELSE 'ROTTO' END AS esito, dettaglio

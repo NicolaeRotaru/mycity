@@ -104,7 +104,15 @@ export default function RimborsiDaBonificarePage() {
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-lg font-bold text-ink-900">{formatPriceFromCents(v.importoCents)}</p>
+                    {v.importoCents != null ? (
+                      <p className="text-lg font-bold text-ink-900">{formatPriceFromCents(v.importoCents)}</p>
+                    ) : (
+                      // Senza una cifra certa non se ne mostra una: su un ordine pagato in parte col
+                      // credito, l'intero rimborso comprende la parte già tornata come credito.
+                      <p className="text-sm font-semibold text-secondary-700">
+                        Cifra da controllare: leggila nell&apos;avviso «Bonifico di rimborso da fare» di questo ordine.
+                      </p>
+                    )}
                     <p className="text-sm text-ink-600">
                       {v.tipo === 'reclamo' ? 'Reclamo' : 'Reso'} · ordine{' '}
                       <Link href={`/orders/${v.ordineId}`} className="font-semibold text-primary-700 hover:underline">

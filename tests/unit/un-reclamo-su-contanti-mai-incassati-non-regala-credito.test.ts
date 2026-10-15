@@ -166,6 +166,28 @@ describe('contanti incassati: il rimborso esce, e col bonifico', () => {
     ]);
   });
 
+  /**
+   * Collaudo del 15/10, secondo giro — la riga del bonifico del reclamo diceva
+   * l'importo giusto solo perche' l'ordine della prova non aveva credito: con
+   * l'intero rimborso al posto della parte del bonifico, nessuna prova
+   * diventava rossa. Ordine da 50 €: 20 di credito, 30 in contanti incassati.
+   */
+  it('ordine pagato in parte col credito: in lista va solo la parte del bonifico, non l intero rimborso', async () => {
+    apri(maiArrivato({
+      total_price: 30, gross_total_cents: 5000, wallet_applied_cents: 2000, seller_payout_cents: 4500,
+      delivery_status: 'DELIVERED', payment_status: 'PAID', cash_confirmed_at: '2026-10-10T18:00:00Z',
+    }));
+
+    const res = await chiudiAFavoreDelCliente(5000);
+
+    expect(res.status).toBe(200);
+    expect(creditoDi(finto.db, 'cliente'), 'la parte pagata col credito torna credito').toBe(2000);
+    expect(
+      finto.db.tabelle.bonifici_dei_reclami,
+      'chi paga bonificherebbe anche i 20 € gia tornati come credito',
+    ).toEqual([expect.objectContaining({ dispute_id: 'd1', order_id: 'o1', importo_cents: 3000 })]);
+  });
+
   it('senza la migrazione 162 il reclamo si chiude lo stesso, e resta l avviso', async () => {
     apri(maiArrivato({ delivery_status: 'DELIVERED', payment_status: 'PAID', cash_confirmed_at: '2026-10-10T18:00:00Z' }));
     finto.db.guasti.tabelleMancanti = ['bonifici_dei_reclami'];

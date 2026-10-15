@@ -37,7 +37,7 @@ function apri(colonneMancanti: string[] = [], tabelleMancanti: string[] = []) {
       ],
       returns: [
         { id: R1, order_id: 'o1', status: 'REFUNDED', refund_amount_cents: 5000, refunded_at: '2026-10-12T10:00:00Z',
-          refund_id: `bonifico:return_${R1}`, refund_iban: 'IT60X0542811101000000123456', refund_bonifico_cents: 3000,
+          refund_id: `bonifico:3000:return_${R1}`, refund_iban: 'IT60X0542811101000000123456', refund_bonifico_cents: 3000,
           refund_bonifico_fatto_at: null },
         { id: 'r2', order_id: 'o2', status: 'REFUNDED', refund_amount_cents: 1000, refunded_at: '2026-10-12T11:00:00Z',
           refund_id: 'wallet:return_r2', refund_iban: null, refund_bonifico_cents: null, refund_bonifico_fatto_at: null },
@@ -112,7 +112,10 @@ describe('la lista dei bonifici da fare', () => {
     expect(status).toBe(200);
     expect(corpo.migrazione162).toBe(false);
     expect(corpo.voci).toHaveLength(1);
-    expect(corpo.voci[0]).toMatchObject({ tipo: 'reso', id: R1, iban: null, importoCents: 5000 });
+    // Collaudo del 15/10, secondo giro: qui la prova fissava 5000, cioe' l'intero
+    // rimborso su una riga il cui bonifico era 3000 (20 € erano tornati come
+    // credito). La cifra giusta c'e' anche senza la 162: sta nel segno del rimborso.
+    expect(corpo.voci[0]).toMatchObject({ tipo: 'reso', id: R1, iban: null, importoCents: 3000 });
 
     const fatto = await segna(R1);
     expect(fatto.status).toBe(409);
