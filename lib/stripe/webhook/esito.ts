@@ -13,15 +13,22 @@
  * aperta e il giro dei bonifici paga il negozio su soldi che la banca si è già
  * ripresa.
  *
- * Qui stanno le due sole forme ammesse per una scrittura dentro i gestori di
+ * Qui stanno le sole forme ammesse per una scrittura dentro i gestori di
  * Stripe, e il controllo di stile (`.eslintrc.json`, cartella
- * `lib/stripe/webhook`) rifiuta una scrittura lasciata senza nessuna delle due:
+ * `lib/stripe/webhook`) rifiuta una scrittura lasciata senza nessuna:
  *
  *   ① `scritturaObbligatoria` — la scrittura conta: se fallisce il gestore
  *      fallisce, la rotta libera il turno e risponde 500, Stripe riprova.
+ *      Si usa solo dove ripetere il gestore da capo è sicuro.
  *   ② `scritturaFacoltativa` — un avviso di contorno (una campanella): se non
  *      parte si scrive nei log e si va avanti, perché far ritentare a Stripe un
  *      evento che i soldi li ha già mossi rifarebbe tutto il resto.
+ *   ③ `scritturaSenzaRipetere` — la scrittura che chiude un lavoro GIÀ FATTO
+ *      (il segno «lavorato» sull'avviso). Se fallisce è un errore che si deve
+ *      vedere, ma far ripetere l'avviso rifarebbe il lavoro: non tutti i
+ *      gestori reggono un secondo passaggio (il collaudo del 15/10 ne ha
+ *      misurati due: una contestazione parziale stornata due volte al negozio,
+ *      un rimborso respinto dalla banca tolto due volte dall'ordine).
  */
 import { logger } from '@/lib/logger';
 
@@ -61,5 +68,21 @@ export function scritturaFacoltativa(esito: EsitoDb, cosa: string): void {
   const errore = esito?.error;
   if (errore) {
     logger.warn('[stripe] scrittura di contorno non riuscita', { cosa, message: messaggioDi(errore) });
+  }
+}
+
+/**
+ * Una scrittura che chiude un lavoro già fatto: se fallisce si grida nei log
+ * (livello errore, come un guasto vero), ma NON si fa ripetere l'avviso a
+ * Stripe, perché ripeterlo rifarebbe il lavoro.
+ */
+export function scritturaSenzaRipetere(esito: EsitoDb, cosa: string): void {
+  const errore = esito?.error;
+  if (errore) {
+    logger.error('[stripe] lavoro fatto ma non segnato: non lo faccio ripetere', {
+      cosa,
+      codice: (errore as { code?: unknown }).code ?? null,
+      message: messaggioDi(errore),
+    });
   }
 }

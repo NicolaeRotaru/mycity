@@ -24,15 +24,27 @@
  * sbagliato: lì si fermano i bonifici del carrello e si avvisano gli
  * amministratori.
  *
- * COME SI RICONOSCE UN RIMBORSO GIÀ REGISTRATO. Non dall'etichetta del
- * rimborso, ma dai numeri: `refundOrder` scrive l'importo sull'ordine
- * (`accumula_rimborso`) PRIMA di chiedere il rimborso a Stripe. Quindi, quando
- * Stripe ci avvisa, il rimborsato su Stripe meno il rimborsato scritto da noi
- * è esattamente la parte che nessuno ha ancora registrato. L'eco di un nostro
- * rimborso dà zero e non tocca niente; lo stesso evento consegnato due volte
- * dà zero la seconda volta.
+ * COME SI RICONOSCE UN RIMBORSO GIÀ REGISTRATO. Dai numeri: `refundOrder`
+ * scrive l'importo sull'ordine (`accumula_rimborso`) PRIMA di chiedere il
+ * rimborso a Stripe. Quindi, quando Stripe ci avvisa, il rimborsato su Stripe
+ * meno il rimborsato scritto da noi è la parte che nessuno ha ancora
+ * registrato. L'eco di un nostro rimborso dà zero e non tocca niente; lo
+ * stesso evento consegnato due volte dà zero la seconda volta.
+ *
+ * E DALL'ETICHETTA, COME TETTO (collaudo del 15/10). Un caso in cui i numeri
+ * da soli sbagliano: `refundOrder` chiede il rimborso, Stripe lo fa ma la
+ * risposta si perde per strada, e `refundOrder` toglie dall'ordine l'importo
+ * che aveva segnato (`storna_rimborso`), per poter riprovare. Quando arriva
+ * l'avviso, la differenza c'è, ma il rimborso è NOSTRO: registrarlo qui come
+ * «da fuori», e poi riregistrarlo quando `refundOrder` riprova, scriveva 6 € di
+ * rimborso su 3 usciti e toglieva al negozio due volte la sua quota. Ogni
+ * rimborso di `refundOrder` porta l'etichetta `metadata.order_id`: quello che
+ * si registra qui non supera mai la somma dei rimborsi SENZA etichetta. Il
+ * rimborso nostro rimasto senza registrazione lo ritrova `refundOrder` al
+ * nuovo tentativo, con la stessa chiave anti-doppione.
  */
 import type Stripe from 'stripe';
+import { getStripe } from '@/lib/stripe/client';
 import { reverseOrderTransfer } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
@@ -55,7 +67,10 @@ export type OrdineDelRimborso = {
 /**
  * Valore di `internal_dispute_status` che ferma il giro dei bonifici: il giro
  * paga solo gli ordini con quel campo vuoto o 'RESOLVED'. Si toglie scrivendo
- * 'RESOLVED' quando il rimborso è stato diviso a mano fra i negozi.
+ * 'RESOLVED' DOPO aver diviso a mano il rimborso fra i negozi, cioè dopo aver
+ * aggiunto a `refunded_amount_cents` di ciascun ordine la sua parte. Se si
+ * scrive solo 'RESOLVED', il rimborso resta non registrato: al primo avviso
+ * successivo dello stesso pagamento i bonifici si fermano di nuovo.
  */
 export const PAUSA_RIMBORSO_DA_DIVIDERE = 'RIMBORSO_DA_RIPARTIRE';
 
@@ -83,11 +98,13 @@ export type ContoRimborsoDaFuori = {
 export function contoDelRimborsoDaFuori(
   ordine: Pick<OrdineDelRimborso, 'total_price' | 'refunded_amount_cents' | 'seller_payout_cents'>,
   rimborsatoSuStripeCents: number,
+  /** La somma dei rimborsi senza etichetta d'ordine: più di così non è «da fuori». */
+  daFuoriSuStripeCents: number = Number.POSITIVE_INFINITY,
 ): ContoRimborsoDaFuori {
   const lordoCents = Math.round(Number(ordine.total_price ?? 0) * 100);
   const giaRegistratoCents = ordine.refunded_amount_cents ?? 0;
   const tetto = Math.min(Math.max(0, rimborsatoSuStripeCents), Math.max(0, lordoCents));
-  const nuovoCents = Math.max(0, tetto - giaRegistratoCents);
+  const nuovoCents = Math.max(0, Math.min(tetto - giaRegistratoCents, daFuoriSuStripeCents));
   const netto = ordine.seller_payout_cents ?? 0;
   const quotaNegozioCents =
     lordoCents > 0 ? Math.min(Math.round((nuovoCents * netto) / lordoCents), netto) : 0;
@@ -98,6 +115,57 @@ export function contoDelRimborsoDaFuori(
     totaleCents: giaRegistratoCents + nuovoCents,
     quotaNegozioCents,
   };
+}
+
+/** Un rimborso Stripe, per il poco che serve qui. */
+type RimborsoStripe = { amount?: number | null; status?: string | null; metadata?: Record<string, string> | null };
+
+/**
+ * La somma dei rimborsi partiti da fuori: quelli senza l'etichetta `order_id`
+ * che `refundOrder` mette su ogni rimborso suo. Un rimborso fallito o annullato
+ * non conta: i soldi sono tornati indietro.
+ */
+export function sommaDeiRimborsiDaFuori(rimborsi: ReadonlyArray<RimborsoStripe>): number {
+  return rimborsi
+    .filter((r) => r.status !== 'failed' && r.status !== 'canceled')
+    .filter((r) => !(r.metadata?.order_id ?? '').trim())
+    .reduce((somma, r) => somma + Math.max(0, r.amount ?? 0), 0);
+}
+
+/**
+ * Tutti i rimborsi del pagamento. Nell'avviso di solito non ci sono (dalla
+ * versione 2022-11-15 delle API Stripe non li manda più dentro la carica):
+ * si chiedono a Stripe. Se Stripe non risponde si lancia, e Stripe riprova.
+ */
+async function rimborsiDelPagamento(charge: Stripe.Charge): Promise<RimborsoStripe[]> {
+  const inLinea = charge.refunds;
+  if (inLinea && Array.isArray(inLinea.data) && inLinea.has_more === false) return inLinea.data;
+  const tutti: RimborsoStripe[] = [];
+  let dopo: string | undefined;
+  for (let pagina = 0; pagina < 20; pagina++) {
+    const elenco = await getStripe().refunds.list({ charge: charge.id, limit: 100, ...(dopo ? { starting_after: dopo } : {}) });
+    tutti.push(...elenco.data);
+    if (!elenco.has_more || elenco.data.length === 0) return tutti;
+    dopo = elenco.data[elenco.data.length - 1].id;
+  }
+  throw new Error(`[stripe] rimborsi del pagamento ${charge.id}: elenco troppo lungo, non lo indovino`);
+}
+
+/**
+ * La parte del rimborso che è davvero «da fuori», dati i numeri: si chiede a
+ * Stripe solo quando i numeri dicono che manca qualcosa, così l'eco dei
+ * nostri rimborsi (il caso di tutti i giorni) non costa una chiamata.
+ */
+async function rimborsatoDaFuori(charge: Stripe.Charge, mancaSulDatabase: number): Promise<number> {
+  const daFuori = sommaDeiRimborsiDaFuori(await rimborsiDelPagamento(charge));
+  if (daFuori < mancaSulDatabase) {
+    // La differenza viene da rimborsi NOSTRI non scritti sull'ordine (di solito
+    // una risposta di Stripe persa): li ritrova `refundOrder` al nuovo tentativo.
+    logger.warn('[stripe] rimborso col nome di un ordine non registrato: non lo conto come «da fuori»', {
+      chargeId: charge.id, mancaSulDatabase, daFuori,
+    });
+  }
+  return daFuori;
 }
 
 /**
@@ -118,8 +186,12 @@ export async function registraRimborsoParzialeDaFuori(
   }
 
   const ordine = ordini[0];
-  const conto = contoDelRimborsoDaFuori(ordine, rimborsatoSuStripe);
+  const aNumeri = contoDelRimborsoDaFuori(ordine, rimborsatoSuStripe);
   // Zero: è l'eco di un rimborso nostro, o lo stesso avviso arrivato di nuovo.
+  if (aNumeri.nuovoCents <= 0) return;
+  const conto = contoDelRimborsoDaFuori(
+    ordine, rimborsatoSuStripe, await rimborsatoDaFuori(charge, aNumeri.nuovoCents),
+  );
   if (conto.nuovoCents <= 0) return;
 
   // Il giro dei bonifici ha preso in mano questo ordine e sta pagando: il conto
@@ -210,8 +282,10 @@ async function fermaIBonificiDelCarrello(
   rimborsatoSuStripe: number,
 ): Promise<void> {
   const registrato = ordini.reduce((somma, o) => somma + (o.refunded_amount_cents ?? 0), 0);
-  const daDividere = rimborsatoSuStripe - registrato;
+  const mancante = rimborsatoSuStripe - registrato;
   // Zero o meno: è l'eco dei nostri rimborsi, ognuno già scritto sul suo ordine.
+  if (mancante <= 0) return;
+  const daDividere = Math.min(mancante, await rimborsatoDaFuori(charge, mancante));
   if (daDividere <= 0) return;
 
   const ids = ordini.map((o) => o.id);
@@ -233,7 +307,7 @@ async function fermaIBonificiDelCarrello(
     '⚠️ Rimborso dal cruscotto da dividere fra i negozi',
     `Dal cruscotto Stripe è uscito un rimborso di €${(daDividere / 100).toFixed(2)} su un pagamento che copre ${ordini.length} ordini ` +
       `(${ids.map((i) => i.slice(0, 8)).join(', ')}). Stripe non dice a quale negozio appartiene: i bonifici di questi ordini sono fermi ` +
-      'finché il rimborso non viene diviso a mano.' +
+      'finché il rimborso non viene diviso a mano, scrivendo su ciascun ordine la sua parte del rimborso e poi togliendo la pausa.' +
       (giaPagati.length > 0
         ? ` ${giaPagati.length} ordine/i erano già stati pagati al negozio: la quota va ripresa a mano.`
         : ''),

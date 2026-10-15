@@ -61,6 +61,20 @@ describe('una scrittura nei gestori di Stripe col risultato non letto non passa'
     expect(trovate).toHaveLength(1);
   }, 30000);
 
+  it('secondo giro di collaudo: nemmeno una rpc, delle scritture in parallelo o una richiesta in due tempi', async () => {
+    expect(await bocciature(gestore(`  await admin.rpc('restore_stock_for_order', { p_order_id: id });`))).toHaveLength(1);
+    expect(await bocciature(gestore(`  const { data: d } = await admin.rpc('accumula', { p: id });\n  return d;`))).toHaveLength(1);
+    expect(
+      await bocciature(gestore(`  await Promise.all([id].map((x) => admin.from('orders').update({ a: 1 }).eq('id', x)));`)),
+    ).toHaveLength(1);
+    expect(
+      await bocciature(gestore(`  const q = admin.from('orders').update({ a: 1 });\n  await q.eq('id', id);`)),
+    ).toHaveLength(1);
+    // Un aiutante che restituisce l'esito e viene ignorato il controllo di stile
+    // non lo vede: lo prende il controllo per tipi
+    // (`nei-gestori-di-stripe-nessun-esito-del-database-si-butta.test.ts`).
+  }, 30000);
+
   it('le due forme ammesse, e chi legge l errore da sé, passano', async () => {
     const trovate = await bocciature(
       gestore(
@@ -68,6 +82,8 @@ describe('una scrittura nei gestori di Stripe col risultato non letto non passa'
           `  scritturaFacoltativa(await admin.from('notifications').insert({ user_id: id }), 'y');\n` +
           `  const { error } = await admin.from('orders').update({ a: 2 }).eq('id', id);\n` +
           `  if (error) throw new Error(error.message);\n` +
+          `  const { error: e2 } = await admin.rpc('restore_stock_for_order', { p_order_id: id });\n` +
+          `  if (e2) throw new Error(e2.message);\n` +
           `  const { data: righe } = await admin.from('orders').select('id').eq('id', id);\n` +
           `  return righe;`,
       ),

@@ -4,7 +4,7 @@ import { getStripe } from '@/lib/stripe/client';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { sessionePagata } from '@/lib/stripe/webhook/comune';
-import { scritturaObbligatoria } from '@/lib/stripe/webhook/esito';
+import { scritturaObbligatoria, scritturaSenzaRipetere } from '@/lib/stripe/webhook/esito';
 import { segretiDelWebhook, verificaFirma } from '@/lib/stripe/webhook/firma';
 import { liberaIlTurno } from '@/lib/stripe/webhook/registro-eventi';
 import { handleCheckoutCompleted, handleCheckoutExpired } from '@/lib/stripe/webhook/ordini';
@@ -228,8 +228,8 @@ export async function POST(req: NextRequest) {
         logger.info('Unhandled Stripe event', { type: event.type });
     }
     // Marca l'evento come processato SOLO dopo il successo dell'handler. R81:
-    // se non passa, il catch libera il turno e Stripe riprova (gestori idempotenti).
-    scritturaObbligatoria(await admin
+    // se non passa si vede (errore), ma Stripe NON riprova: rifarebbe un lavoro fatto.
+    scritturaSenzaRipetere(await admin
       .from('stripe_event_log')
       .update({ processed: true, processed_at: new Date().toISOString() })
       .eq('event_id', event.id), 'evento segnato come lavorato');

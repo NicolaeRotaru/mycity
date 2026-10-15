@@ -91,6 +91,26 @@
           {
             "selector": "ExpressionStatement > AwaitExpression > CallExpression[callee.name='conRipiegoSchema']",
             "message": "15/10/2026 (R81) — conRipiegoSchema restituisce l'esito della scrittura, errore compreso, e qui non lo legge nessuno. Avvolgilo in scritturaObbligatoria(...) (lib/stripe/webhook/esito.ts) oppure leggi { error }."
+          },
+          {
+            "selector": "ExpressionStatement > AwaitExpression > CallExpression[callee.property.name='rpc']",
+            "message": "15/10/2026 (R81) — Una funzione del database (rpc) dentro un avviso di Stripe col risultato non letto. Anche qui Supabase non lancia: mette l'errore in { error }. Leggilo: scritturaObbligatoria(...) se ripetere l'avviso è sicuro, altrimenti leggi { error } e avvisa gli amministratori (esempio: la merce rimessa a scaffale in rimborsi.ts)."
+          },
+          {
+            "selector": "ExpressionStatement > CallExpression[callee.property.name='rpc']",
+            "message": "15/10/2026 (R81) — Una funzione del database (rpc) dentro un avviso di Stripe col risultato non letto. Anche qui Supabase non lancia: mette l'errore in { error }. Leggilo: scritturaObbligatoria(...) se ripetere l'avviso è sicuro, altrimenti leggi { error } e avvisa gli amministratori (esempio: la merce rimessa a scaffale in rimborsi.ts)."
+          },
+          {
+            "selector": "VariableDeclarator[id.type='ObjectPattern']:not(:has(Property[key.name='error'])) > AwaitExpression > CallExpression[callee.property.name='rpc']",
+            "message": "15/10/2026 (R81) — Una funzione del database (rpc) dentro un avviso di Stripe col risultato non letto. Anche qui Supabase non lancia: mette l'errore in { error }. Leggilo: scritturaObbligatoria(...) se ripetere l'avviso è sicuro, altrimenti leggi { error } e avvisa gli amministratori (esempio: la merce rimessa a scaffale in rimborsi.ts)."
+          },
+          {
+            "selector": "CallExpression[callee.object.name='Promise'][callee.property.name=/^(all|allSettled|race|any)$/]:has(CallExpression[callee.property.name=/^(insert|update|upsert|delete|rpc)$/])",
+            "message": "15/10/2026 (R81) — Scritture sul database in parallelo (Promise.all) dentro un avviso di Stripe: l'esito di ciascuna si perde facilmente e una sola caduta passa per buona. Usa un ciclo e leggi l'esito di ognuna con scritturaObbligatoria(...) (lib/stripe/webhook/esito.ts)."
+          },
+          {
+            "selector": "ExpressionStatement > AwaitExpression > CallExpression[callee.property.name=/^(eq|neq|gt|gte|lt|lte|like|ilike|is|in|or|not|match|filter|contains|containedBy|select|single|maybeSingle|limit|order|range)$/]:not(:has(CallExpression[callee.property.name='from']))",
+            "message": "15/10/2026 (R81) — Una richiesta al database costruita in due tempi (const q = admin.from(...).update(...); await q.eq(...)) col risultato non letto. Avvolgila in scritturaObbligatoria(...) oppure leggi { error }: la forma in due tempi non cambia niente, il database può dire di no lo stesso."
           }
         ]
       }

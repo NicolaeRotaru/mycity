@@ -23,13 +23,20 @@ import { fintoDatabase, type FintoDatabase, type Riga } from './aiuti/finto-data
  */
 
 type Carica = { amount: number; refunded: number };
+/** Un rimborso come lo tiene Stripe: quelli di `refundOrder` portano `metadata.order_id`. */
+type RimborsoSuStripe = { id: string; amount: number; status: string; metadata: Record<string, string>; chiave: string | null };
 const stato: {
   db: FintoDatabase;
   carica: Carica;
   rimborsi: Array<{ amount: number; chiave: string }>;
+  suStripe: RimborsoSuStripe[];
+  /** Quante risposte di Stripe si perdono per strada dopo aver fatto il rimborso. */
+  rispostePerse: number;
   storni: Array<{ transferId: string; amount: number; chiave: string }>;
   bonifici: Array<{ amount: number; destination: string }>;
-} = { db: fintoDatabase(), carica: { amount: 2790, refunded: 0 }, rimborsi: [], storni: [], bonifici: [] };
+} = {
+  db: fintoDatabase(), carica: { amount: 2790, refunded: 0 }, rimborsi: [], suStripe: [], rispostePerse: 0, storni: [], bonifici: [],
+};
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
@@ -39,16 +46,27 @@ vi.mock('@/lib/stripe/client', () => ({
   getStripe: () => ({
     refunds: {
       // Stripe vero: un rimborso più grande di quanto resta sul pagamento si rifiuta.
-      create: async (p: { amount: number }, o: { idempotencyKey: string }) => {
+      create: async (p: { amount: number; metadata?: Record<string, string> }, o: { idempotencyKey: string }) => {
+        // Stripe vero: la stessa chiave anti-doppione restituisce lo STESSO rimborso.
+        const gia = stato.suStripe.find((r) => r.chiave === o.idempotencyKey);
+        if (gia) return { id: gia.id, status: gia.status };
         const resta = stato.carica.amount - stato.carica.refunded;
         if (p.amount > resta) {
           throw new Error(`Refund amount (${p.amount}) is greater than unrefunded amount on charge (${resta})`);
         }
         stato.carica.refunded += p.amount;
         stato.rimborsi.push({ amount: p.amount, chiave: o.idempotencyKey });
-        return { id: `re_${stato.rimborsi.length}`, status: 'succeeded' };
+        const nuovo = { id: `re_${stato.suStripe.length + 1}`, amount: p.amount, status: 'succeeded', metadata: p.metadata ?? {}, chiave: o.idempotencyKey };
+        stato.suStripe.push(nuovo);
+        // Il rimborso c'è, ma la risposta non arriva: la rete è caduta dopo.
+        if (stato.rispostePerse > 0) {
+          stato.rispostePerse -= 1;
+          throw new Error('socket hang up');
+        }
+        return { id: nuovo.id, status: nuovo.status };
       },
-      list: async () => ({ data: [] }),
+      // Dalla versione 2022-11-15 delle API i rimborsi non arrivano dentro l'avviso: si chiedono.
+      list: async () => ({ data: stato.suStripe.map((r) => ({ ...r })), has_more: false }),
     },
     transfers: {
       createReversal: async (transferId: string, p: { amount: number }, o: { idempotencyKey: string }) => {
@@ -67,7 +85,7 @@ vi.mock('@/lib/stripe/client', () => ({
 }));
 
 import { handleChargeRefunded } from '@/lib/stripe/webhook/rimborsi';
-import { contoDelRimborsoDaFuori, PAUSA_RIMBORSO_DA_DIVIDERE } from '@/lib/stripe/webhook/rimborsi-da-fuori';
+import { contoDelRimborsoDaFuori, PAUSA_RIMBORSO_DA_DIVIDERE, sommaDeiRimborsiDaFuori } from '@/lib/stripe/webhook/rimborsi-da-fuori';
 import { releaseOrderPayout, refundOrder } from '@/lib/stripe/payout';
 import { annullaERimborsa, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
 
@@ -114,13 +132,18 @@ function avvisoDiRimborso(rimborsatoInTutto: number, totale = 2790) {
     refunded: false,
     amount: totale,
     amount_refunded: rimborsatoInTutto,
-    refunds: { data: [{ id: 're_cruscotto', metadata: {} }] },
   } as unknown as Parameters<typeof handleChargeRefunded>[0];
+}
+
+/** Un rimborso fatto a mano dal cruscotto: nessuna etichetta d'ordine. */
+function ilCruscottoRimborsa(centesimi: number): void {
+  stato.carica.refunded += centesimi;
+  stato.suStripe.push({ id: `re_cruscotto_${stato.suStripe.length + 1}`, amount: centesimi, status: 'succeeded', metadata: {}, chiave: null });
 }
 
 /** Il rimborso dal cruscotto: i soldi escono da Stripe, poi arriva l'avviso. */
 async function rimborsoDalCruscotto(centesimi: number): Promise<void> {
-  stato.carica.refunded += centesimi;
+  ilCruscottoRimborsa(centesimi);
   await handleChargeRefunded(avvisoDiRimborso(stato.carica.refunded, stato.carica.amount));
 }
 
@@ -129,6 +152,8 @@ const ordine = (id = 'o1') => stato.db.tabelle.orders!.find((r) => r.id === id)!
 beforeEach(() => {
   stato.carica = { amount: 2790, refunded: 0 };
   stato.rimborsi = [];
+  stato.suStripe = [];
+  stato.rispostePerse = 0;
   stato.storni = [];
   stato.bonifici = [];
   stato.db = fintoDatabase({
@@ -209,7 +234,7 @@ describe('rimborso parziale dal cruscotto su un ordine solo', () => {
 
   it('lo stesso avviso consegnato due volte si registra una volta sola', async () => {
     stato.db.tabelle.orders = [ordineDiPaneQuotidiano()];
-    stato.carica.refunded = 300;
+    ilCruscottoRimborsa(300);
 
     await handleChargeRefunded(avvisoDiRimborso(300));
     await handleChargeRefunded(avvisoDiRimborso(300));
@@ -231,7 +256,7 @@ describe('rimborso parziale dal cruscotto su un ordine solo', () => {
 
   it('se nel frattempo un altro rimborso ha cambiato l ordine, non somma alla cieca: Stripe riprova', async () => {
     stato.db.tabelle.orders = [ordineDiPaneQuotidiano()];
-    stato.carica.refunded = 300;
+    ilCruscottoRimborsa(300);
     // Fra la lettura e la scrittura, un reso interno da 200 € registra il suo importo.
     let unaVolta = true;
     stato.db.guasto = (s) => {
@@ -248,6 +273,7 @@ describe('rimborso parziale dal cruscotto su un ordine solo', () => {
 
   it('se il giro dei bonifici sta pagando proprio ora, si aspetta che finisca', async () => {
     stato.db.tabelle.orders = [ordineDiPaneQuotidiano({ payout_status: 'PROCESSING' })];
+    ilCruscottoRimborsa(300);
     await expect(handleChargeRefunded(avvisoDiRimborso(300))).rejects.toThrow();
     expect(ordine().refunded_amount_cents).toBe(0);
   });
@@ -300,7 +326,82 @@ describe('rimborso parziale dal cruscotto su un pagamento di più negozi', () =>
   });
 });
 
+describe('un rimborso NOSTRO la cui risposta si è persa non diventa «da fuori» (collaudo del 15/10)', () => {
+  it('IL CASO DEL COLLAUDO — refundOrder perde la risposta, poi riprova: 3 € rimborsati e 1,94 € al negozio, non il doppio', async () => {
+    stato.db.tabelle.orders = [ordineDiPaneQuotidiano()];
+    // Il rimborso nasce su Stripe, ma la risposta cade: refundOrder toglie il
+    // suo segno dall'ordine per poter riprovare (`storna_rimborso`).
+    stato.rispostePerse = 1;
+    await expect(refundOrder({ orderId: 'o1', amountCents: 300, reason: 'reso', idempotencyKey: 'return_r1' })).rejects.toThrow();
+    expect(ordine().refunded_amount_cents).toBe(0);
+
+    // Arriva l'avviso di Stripe: il rimborso porta l'etichetta dell'ordine.
+    await handleChargeRefunded(avvisoDiRimborso(stato.carica.refunded));
+    expect(ordine().refunded_amount_cents, 'il rimborso nostro registrato come se venisse dal cruscotto').toBe(0);
+
+    // Il reso si ridecide: stessa chiave, Stripe restituisce lo stesso rimborso.
+    await refundOrder({ orderId: 'o1', amountCents: 300, reason: 'reso', idempotencyKey: 'return_r1' });
+
+    expect(stato.rimborsi.map((r) => r.amount), 'un secondo rimborso su Stripe').toEqual([300]);
+    expect(ordine(), 'rimborsato e quota del negozio contati due volte').toMatchObject({
+      refunded_amount_cents: 300, seller_payout_reversed_cents: 194, payment_status: 'PARTIALLY_REFUNDED',
+    });
+  });
+
+  it('un rimborso dal cruscotto accanto a uno nostro già scritto: si registra solo quello del cruscotto', async () => {
+    stato.db.tabelle.orders = [ordineDiPaneQuotidiano()];
+    await refundOrder({ orderId: 'o1', amountCents: 500, reason: 'reso' });
+    await rimborsoDalCruscotto(300);
+
+    expect(ordine()).toMatchObject({ refunded_amount_cents: 800 });
+  });
+});
+
+describe('il carrello di più negozi, dopo la divisione fatta a mano', () => {
+  it('scritta la parte su ciascun ordine e tolta la pausa, l eco di un reso successivo non ferma di nuovo i bonifici', async () => {
+    stato.db.tabelle.orders = [
+      ordineDiPaneQuotidiano({ id: 'o1', total_price: 15, gross_total_cents: 1500, seller_payout_cents: 1000 }),
+      ordineDiPaneQuotidiano({ id: 'o2', seller_id: 'altro', total_price: 12.9, gross_total_cents: 1290, seller_payout_cents: 900 }),
+    ];
+    await rimborsoDalCruscotto(300);
+    expect(ordine('o2').internal_dispute_status).toBe(PAUSA_RIMBORSO_DA_DIVIDERE);
+    const avvisiPrima = stato.db.tabelle.notifications!.length;
+
+    // La divisione a mano, come nelle istruzioni: i 3 € erano dell'ordine o2.
+    Object.assign(ordine('o2'), {
+      refunded_amount_cents: 300, payment_status: 'PARTIALLY_REFUNDED',
+      seller_payout_reversed_cents: Math.round((300 * 900) / 1290), internal_dispute_status: 'RESOLVED',
+    });
+    Object.assign(ordine('o1'), { internal_dispute_status: 'RESOLVED' });
+
+    // Poi un reso fatto dal sito sull'ordine o1, e la sua eco.
+    await refundOrder({ orderId: 'o1', amountCents: 500, reason: 'reso' });
+    await handleChargeRefunded(avvisoDiRimborso(stato.carica.refunded));
+
+    expect(ordine('o1').internal_dispute_status, 'bonifici fermati di nuovo').toBe('RESOLVED');
+    expect(ordine('o2').internal_dispute_status).toBe('RESOLVED');
+    expect(stato.db.tabelle.notifications!.slice(avvisiPrima).filter((n) => String(n.title).includes('da dividere'))).toEqual([]);
+  });
+});
+
 describe('il conto, da solo', () => {
+  it('non conta come «da fuori» più dei rimborsi senza etichetta d ordine', () => {
+    const c = contoDelRimborsoDaFuori({ total_price: 27.9, refunded_amount_cents: 0, seller_payout_cents: 1800 }, 300, 0);
+    expect(c.nuovoCents).toBe(0);
+    expect(contoDelRimborsoDaFuori({ total_price: 27.9, refunded_amount_cents: 0, seller_payout_cents: 1800 }, 800, 300).nuovoCents).toBe(300);
+  });
+
+  it('somma solo i rimborsi senza etichetta e non falliti', () => {
+    expect(
+      sommaDeiRimborsiDaFuori([
+        { amount: 300, status: 'succeeded', metadata: {} },
+        { amount: 500, status: 'succeeded', metadata: { order_id: 'o1' } },
+        { amount: 200, status: 'failed', metadata: {} },
+        { amount: 100, status: 'pending', metadata: null },
+      ]),
+    ).toBe(400);
+  });
+
   it('toglie al negozio la sua parte del netto, in proporzione al rimborso', () => {
     expect(
       contoDelRimborsoDaFuori({ total_price: 27.9, refunded_amount_cents: 0, seller_payout_cents: 1800 }, 300),

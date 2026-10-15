@@ -16,12 +16,39 @@
  * webhook sono la dimostrazione che non si è rotto niente.
  */
 import type Stripe from 'stripe';
+import { getStripe } from '@/lib/stripe/client';
 import { reverseOrderTransfer, reverseRiderTransfer } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { findOrdersForDispute, notifyAdmins } from './comune';
 import { scritturaObbligatoria } from './esito';
+
+/**
+ * 15/10/2026 (R81) — Su Stripe c'è già uno storno di questo bonifico fatto da
+ * quando la contestazione è nata? Si chiede a Stripe e non al database, perché
+ * il database può non averlo registrato (un processo morto fra la risposta di
+ * Stripe e la scrittura). Un pagamento contestato Stripe non lo lascia più
+ * rimborsare (errore `charge_disputed`), quindi uno storno nato dopo la
+ * contestazione è il suo. Se Stripe non risponde si lancia: la rotta risponde
+ * 500 e Stripe riprova (prima di questo punto è stata scritta solo la riga OPEN).
+ */
+async function stornoGiaFattoPerLaContestazione(
+  o: { id: string; stripe_transfer_id: string | null; stripe_reversal_id: string | null },
+  dispute: Stripe.Dispute,
+): Promise<boolean> {
+  if (!o.stripe_transfer_id) return false;
+  const dal = dispute.created ?? 0;
+  const storni = await getStripe().transfers.listReversals(o.stripe_transfer_id, { limit: 100 });
+  const suo = storni.data.find((r) => r.created >= dal && (r.metadata?.order_id ?? o.id) === o.id);
+  if (suo && suo.id !== o.stripe_reversal_id) {
+    // Fatto su Stripe, non scritto da noi: non si rifà, ma va visto.
+    logger.error('[stripe] storno della contestazione fatto su Stripe ma non registrato sull ordine', {
+      orderId: o.id, reversalId: suo.id, centesimi: suo.amount,
+    });
+  }
+  return !!suo;
+}
 
 /**
  * charge.dispute.created → chargeback aperto. Stripe ha GIÀ prelevato i fondi
@@ -34,7 +61,8 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     dispute,
     // R052 — serve anche il lordo dell'ordine: la quota da riprendere al
     // negozio si calcola in proporzione a quanto la banca ha contestato.
-    'id, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, gross_total_cents, total_price, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost',
+    // R81 — serve `dispute_status`: dice se questo avviso è già passato di qui.
+    'id, dispute_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, gross_total_cents, total_price, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost',
   );
   if (orders.length === 0) {
     logger.warn('[stripe] dispute.created: nessun ordine trovato', { disputeId: dispute.id });
@@ -66,6 +94,32 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
   const quotaDaRiprendere = (o: { seller_payout_cents: number | null }): number | undefined =>
     fettaContestata >= 1 ? undefined : Math.round(fettaContestata * (o.seller_payout_cents ?? 0));
 
+  /**
+   * 15/10/2026 (R81) — PRIMA SI FERMA IL GIRO DEI BONIFICI, POI SI STORNA.
+   *
+   * Il giro paga solo gli ordini con `dispute_status` vuoto o 'WON'. Se questa
+   * scrittura fallisce (un timeout del database) e nessuno lo legge, la rotta
+   * risponde 200, Stripe non riprova, e al giro dopo il negozio viene pagato su
+   * soldi che la banca si è già ripresa. Adesso il gestore fallisce e Stripe
+   * ripete l'evento.
+   *
+   * E sta PRIMA degli storni, non dopo. Il collaudo del 15/10 l'ha misurato:
+   * con questa riga in fondo, su una contestazione PARZIALE (20 € su un ordine
+   * da 40 €) lo storno registrato al primo passaggio lascia l'ordine
+   * 'TRANSFERRED', la chiave anti-doppione dello storno porta il totale
+   * stornato, e al secondo passaggio la chiave è nuova: al negozio si toglievano
+   * 32,40 € invece di 16,20. Scritta per prima, se fallisce non è ancora
+   * successo niente, e ripetere è davvero sicuro.
+   */
+  const giaPassati = new Set(orders.filter((o) => o.dispute_status === 'OPEN').map((o) => o.id));
+  scritturaObbligatoria(
+    await admin
+      .from('orders')
+      .update({ dispute_status: 'OPEN', disputed_at: new Date().toISOString() })
+      .in('id', orders.map((o) => o.id)),
+    'contestazione aperta sugli ordini',
+  );
+
   for (const o of orders) {
     // 22/8/2026 — SI TIENE DA PARTE QUANTO TORNA INDIETRO PER **QUESTA**
     // CONTESTAZIONE. Alla chiusura vinta il totale stornato veniva azzerato, e
@@ -73,9 +127,23 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     // prima: il negozio si faceva ripagare una cosa che aveva gia' reso. Con
     // questo numero da parte, alla chiusura si sottrae invece di azzerare.
     let stornatoVenditore = 0;
-    if (o.payout_status === 'TRANSFERRED') {
+    const quota = quotaDaRiprendere(o);
+    if (
+      o.payout_status === 'TRANSFERRED' && quota !== undefined && giaPassati.has(o.id) &&
+      (await stornoGiaFattoPerLaContestazione(o, dispute))
+    ) {
+      // R81 — Lo stesso avviso consegnato di nuovo, e su Stripe lo storno per
+      // questa contestazione c'è già. Uno storno PARZIALE non si rifà: dopo il
+      // primo l'ordine resta 'TRANSFERRED' e la chiave anti-doppione cambia,
+      // quindi Stripe ne farebbe un secondo. Lo storno pieno invece si rifà
+      // senza rischio: se è registrato l'ordine è 'REVERSED' e qui non entra;
+      // se non lo è, la chiave è la stessa e Stripe restituisce quello.
+      logger.warn('[stripe] contestazione parziale già lavorata: lo storno al negozio non si ripete', {
+        orderId: o.id, disputeId: dispute.id,
+      });
+    } else if (o.payout_status === 'TRANSFERRED') {
       try {
-        const esito = await reverseOrderTransfer(o, quotaDaRiprendere(o));
+        const esito = await reverseOrderTransfer(o, quota);
         stornatoVenditore = esito.reversedCents;
       } catch (e) {
         logger.error('[stripe] reversal on dispute.created failed', { orderId: o.id, e });
@@ -91,11 +159,13 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
       logger.error('[stripe] recupero compenso rider su contestazione fallito', { orderId: o.id, e });
     }
 
-    if (stornatoVenditore > 0 || stornatoFattorino > 0) {
-      const valori = {
-        dispute_seller_reversed_cents: stornatoVenditore,
-        dispute_rider_reversed_cents: stornatoFattorino,
-      };
+    // Si scrive solo quello che QUESTO passaggio ha stornato: su un avviso
+    // ripetuto, uno zero non deve cancellare il promemoria del primo, che alla
+    // chiusura vinta dice quanto restituire al negozio.
+    const valori: Record<string, number> = {};
+    if (stornatoVenditore > 0) valori.dispute_seller_reversed_cents = stornatoVenditore;
+    if (stornatoFattorino > 0) valori.dispute_rider_reversed_cents = stornatoFattorino;
+    if (Object.keys(valori).length > 0) {
       // Prima che la migrazione 126 sia applicata le colonne non ci sono e
       // l'aggiornamento fallisce: si annota e si tira dritto. Perdere il
       // promemoria e' il comportamento di ieri; perdere la registrazione della
@@ -108,26 +178,6 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
       }
     }
   }
-
-  /**
-   * 15/10/2026 (R81) — È LA RIGA CHE FERMA IL GIRO DEI BONIFICI.
-   *
-   * Il giro paga solo gli ordini con `dispute_status` vuoto o 'WON'. Se questa
-   * scrittura fallisce (un timeout del database) e nessuno lo legge, la rotta
-   * risponde 200, Stripe non riprova, e al giro dopo il negozio viene pagato
-   * su soldi che la banca si è già ripresa. Adesso il gestore fallisce e
-   * Stripe ripete l'evento. Ripeterlo è sicuro: gli storni qui sopra ripartono
-   * dallo stato scritto nel database, quindi uno storno già registrato non si
-   * rifà, e uno non registrato si richiede con la stessa chiave anti-doppione,
-   * cioè Stripe restituisce lo stesso storno invece di farne un altro.
-   */
-  scritturaObbligatoria(
-    await admin
-      .from('orders')
-      .update({ dispute_status: 'OPEN', disputed_at: new Date().toISOString() })
-      .in('id', orders.map((o) => o.id)),
-    'contestazione aperta sugli ordini',
-  );
 
   await notifyAdmins(
     '⚠️ Chargeback aperto',

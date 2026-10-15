@@ -20,6 +20,10 @@ import { fintoDatabase, TIMEOUT, type FintoDatabase, type Riga } from './aiuti/f
  *   ② l'evento NON segnato come lavorato, e il turno restituito;
  *   ③ che il secondo passaggio di Stripe porti al risultato giusto senza fare
  *      due volte quello che era già stato fatto (stesso storno, stessa merce).
+ *
+ * Il caso opposto — il lavoro è fatto e cade solo il segno «lavorato» — NON
+ * deve far ripetere niente: sta nell'ultima sezione qui sotto e nella prova
+ * `un-avviso-ripetuto-non-rifa-il-lavoro.test.ts` (secondo giro di collaudo).
  */
 
 process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
@@ -170,17 +174,20 @@ describe('contestazione carta aperta mentre il database va in timeout', () => {
     expect(riga('orders')?.dispute_status).toBe('OPEN');
   });
 
-  it('storno già registrato e solo la contestazione caduta: il secondo passaggio non storna di nuovo', async () => {
+  it('solo la contestazione caduta: la riga OPEN viene PRIMA dello storno, quindi alla fine lo storno è uno', async () => {
+    // Secondo giro di collaudo: la riga che ferma il giro dei bonifici si
+    // scrive prima di stornare. Se cade, al primo passaggio non è stornato
+    // niente; al secondo si storna una volta sola.
     stato.db.tabelle.orders = [ordine({ payout_status: 'TRANSFERRED', stripe_transfer_id: 'tr_1' })];
     stato.db.guasto = (s) =>
       s.tabella === 'orders' && (s.valori as Riga | null)?.dispute_status === 'OPEN' ? TIMEOUT : null;
     expect((await consegna()).status).toBeGreaterThanOrEqual(500);
-    const chiamatePrima = stato.storni.length;
+    expect(stato.storni, 'stornato prima di aver fermato il giro dei bonifici').toHaveLength(0);
 
     stato.db.guasto = () => null;
     expect((await consegna()).status).toBe(200);
 
-    expect(stato.storni.length, 'storno rifatto su un bonifico già stornato').toBe(chiamatePrima);
+    expect(stato.storni.length, 'storno rifatto su un bonifico già stornato').toBe(1);
     expect(riga('orders')?.seller_payout_reversed_cents).toBe(3240);
   });
 
@@ -234,19 +241,21 @@ describe('contestazione chiusa', () => {
   });
 
   it('persa: se Stripe ripete l evento, la merce torna a scaffale una volta sola', async () => {
-    // La variante scomoda del rimedio: adesso un errore fa ripetere l'evento,
-    // e `restore_stock_for_order` non ha un segno di «già fatto».
+    // La variante scomoda del rimedio: `restore_stock_for_order` non ha un
+    // segno di «già fatto». Tutto riesce tranne la marcatura finale: la rotta
+    // risponde 200 (secondo giro di collaudo), ma il turno resta preso e, se
+    // Stripe manda un doppione dopo cinque minuti, il gestore riparte.
     stato.evento = {
       id: 'evt_dispute_lost',
       type: 'charge.dispute.closed',
       data: { object: { id: 'dp_1', status: 'lost', payment_intent: 'pi_1', charge: 'ch_1' } },
     };
     stato.db.tabelle.orders = [ordine({ delivery_status: 'OUT_FOR_DELIVERY', dispute_status: 'OPEN' })];
-    // Tutto riesce tranne la marcatura finale dell'evento: Stripe riprova.
     stato.db.guasto = (s) => (s.tabella === 'stripe_event_log' && (s.valori as Riga | null)?.processed === true ? TIMEOUT : null);
-    expect((await consegna()).status).toBeGreaterThanOrEqual(500);
+    expect((await consegna()).status).toBe(200);
 
     stato.db.guasto = () => null;
+    registro()!.claimed_at = '2000-01-01T00:00:00.000Z';
     expect((await consegna()).status).toBe(200);
 
     const scaffale = stato.db.rpc.filter((r) => r.nome === 'restore_stock_for_order');
@@ -392,7 +401,10 @@ describe('il carrello pagato', () => {
 });
 
 describe('la rotta stessa', () => {
-  it('se non riesce a segnare l evento come lavorato, risponde 5xx e restituisce il turno', async () => {
+  it('se non riesce a segnare l evento come lavorato NON fa ripetere il gestore: il lavoro è fatto (secondo giro di collaudo)', async () => {
+    // Col 500 Stripe rifaceva da capo un gestore già riuscito, e non tutti ne
+    // reggono un secondo: il collaudo ha misurato una contestazione parziale
+    // stornata due volte e un rimborso respinto tolto due volte dall'ordine.
     stato.evento = {
       id: 'evt_tr_2',
       type: 'transfer.reversed',
@@ -403,8 +415,11 @@ describe('la rotta stessa', () => {
 
     const risposta = await consegna();
 
-    expect(risposta.status).toBeGreaterThanOrEqual(500);
-    expect(registro()?.claimed_at).toBeNull();
+    expect(risposta.status).toBe(200);
+    expect(riga('orders')?.payout_status).toBe('REVERSED');
+    // Il turno resta preso: un doppione subito dopo riceve «già visto».
+    expect(registro()?.processed).toBe(false);
+    expect(registro()?.claimed_at).not.toBeNull();
   });
 
   it('se la rivendicazione del turno va in errore, non risponde «già visto»', async () => {

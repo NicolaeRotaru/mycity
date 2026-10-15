@@ -200,9 +200,26 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   }
 
   // Ripristina lo stock solo se refundOrder non l'ha già fatto (evita doppio restore).
+  //
+  // 15/10/2026 (R81) — L'esito non lo leggeva nessuno. Far riprovare Stripe non
+  // servirebbe: l'ordine qui sopra è già 'REFUNDED', e al secondo passaggio
+  // questo giro lo salta. Quindi la merce non tornata in vendita si dice agli
+  // amministratori, come fa la contestazione persa (dispute.ts).
+  const scaffaleNonRiuscito: string[] = [];
   for (const o of orders) {
     if (o.payment_status === 'REFUNDED') continue;
-    await admin.rpc('restore_stock_for_order', { p_order_id: o.id });
+    const { error: errScaffale } = await admin.rpc('restore_stock_for_order', { p_order_id: o.id });
+    if (errScaffale) {
+      logger.error('[stripe] merce non rimessa a scaffale dopo il rimborso dal cruscotto', { orderId: o.id, message: errScaffale.message });
+      scaffaleNonRiuscito.push(o.id);
+    }
+  }
+  if (scaffaleNonRiuscito.length > 0) {
+    await notifyAdmins(
+      '⚠️ Merce non rimessa in vendita',
+      `Rimborso pieno registrato, ma la merce di ${scaffaleNonRiuscito.length} ordine/i (${scaffaleNonRiuscito.map((i) => i.slice(0, 8)).join(', ')}) non è tornata in vendita: la giacenza va sistemata a mano.`,
+      '/admin/orders',
+    );
   }
 
   /**
