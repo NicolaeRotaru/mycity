@@ -5,7 +5,7 @@ import { verifyTurnstileToken } from '@/lib/captcha';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { CODICE_EMAIL_DA_CONFERMARE, eEmailNonConfermata } from '@/lib/auth/conferma-email';
-import { verbalizzaAccettazione, versioneAccettata } from '@/lib/auth/accettazione-testi';
+import { verbalizzaSenzaTrattenere, versioneAccettata } from '@/lib/auth/accettazione-testi';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 
@@ -98,19 +98,19 @@ export async function POST(request: Request) {
      * ritorno, l'unico punto che metteva a verbale Termini e Informativa: poi
      * entrava da qui, e la riga non si scriveva mai. Adesso il primo accesso
      * la scrive anche da qui, con la versione che la persona aveva davanti
-     * quando si e' registrata. Non blocca mai l'accesso.
+     * quando si e' registrata. Non blocca mai l'accesso: se il database non
+     * risponde entro `TETTO_VERBALE_MS`, si entra lo stesso.
      */
     const versione = versioneAccettata(data?.user, null);
     if (data?.user?.id && versione) {
-      try {
-        await verbalizzaAccettazione(getAdminSupabase(), {
-          utenteId: data.user.id,
-          versione,
-          ip,
-          userAgent: request.headers.get('user-agent'),
-        });
-      } catch (e) {
-        logger.warn('[signin] accettazione dei testi non registrata', { e });
+      const verbale = await verbalizzaSenzaTrattenere(getAdminSupabase, {
+        utenteId: data.user.id,
+        versione,
+        ip,
+        userAgent: request.headers.get('user-agent'),
+      });
+      if (verbale === 'scaduto' || verbale === 'rotto' || verbale === 'non-scritta') {
+        logger.warn('[signin] accettazione dei testi non registrata', { esito: verbale });
       }
     }
 

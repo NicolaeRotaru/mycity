@@ -6,7 +6,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { rimandoDelRitornoSenzaSessione } from '@/lib/auth/link-email';
-import { vaChiestaLAccettazione, verbalizzaAccettazione, versioneAccettata } from '@/lib/auth/accettazione-testi';
+import { vaChiestaLAccettazione, verbalizzaSenzaTrattenere, versioneAccettata } from '@/lib/auth/accettazione-testi';
 
 export const runtime = 'nodejs';
 
@@ -105,12 +105,16 @@ export async function GET(req: NextRequest) {
       if (versione) {
         // 27/8/2026 (R024 · R062) — `getClientIp` legge da destra scartando i
         // proxy fidati: l'indirizzo nel verbale non se lo detta l'utente.
-        await verbalizzaAccettazione(admin, {
+        // Mai oltre `TETTO_VERBALE_MS`: un database muto non trattiene l'ingresso.
+        const verbale = await verbalizzaSenzaTrattenere(() => admin, {
           utenteId: utente.id,
           versione,
           ip: getClientIp(req),
           userAgent: req.headers.get('user-agent'),
         });
+        if (verbale === 'scaduto' || verbale === 'rotto' || verbale === 'non-scritta') {
+          logger.warn('[callback] accettazione dei testi non registrata', { esito: verbale });
+        }
       } else if (await vaChiestaLAccettazione(admin, utente.id)) {
         /**
          * 22/8/2026 — SENZA VERSIONE NON SI TIRA DRITTO IN SILENZIO.

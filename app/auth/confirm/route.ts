@@ -9,7 +9,7 @@ import {
   leggiLinkDiConferma,
   rimandoLinkNonRiuscito,
 } from '@/lib/auth/link-email';
-import { vaChiestaLAccettazione, verbalizzaAccettazione, versioneAccettata } from '@/lib/auth/accettazione-testi';
+import { vaChiestaLAccettazione, verbalizzaSenzaTrattenere, versioneAccettata } from '@/lib/auth/accettazione-testi';
 
 export const runtime = 'nodejs';
 
@@ -73,12 +73,16 @@ export async function GET(req: NextRequest) {
     try {
       const admin = getAdminSupabase();
       if (versione) {
-        await verbalizzaAccettazione(admin, {
+        // Mai oltre `TETTO_VERBALE_MS`: un database muto non trattiene l'ingresso.
+        const verbale = await verbalizzaSenzaTrattenere(() => admin, {
           utenteId: utente.id,
           versione,
           ip: getClientIp(req),
           userAgent: req.headers.get('user-agent'),
         });
+        if (verbale === 'scaduto' || verbale === 'rotto' || verbale === 'non-scritta') {
+          logger.warn('[auth/confirm] accettazione dei testi non registrata', { esito: verbale });
+        }
       } else if (await vaChiestaLAccettazione(admin, utente.id)) {
         const chiedi = new URL('/accetta-condizioni', env.appUrl());
         chiedi.searchParams.set('next', link.next);

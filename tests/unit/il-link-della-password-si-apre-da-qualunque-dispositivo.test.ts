@@ -139,6 +139,8 @@ import {
   motivoLinkPasswordSenzaSessione,
   percorsoDiRitorno,
 } from '@/lib/auth/link-email';
+import { TETTO_VERBALE_MS, verbalizzaAccettazione } from '@/lib/auth/accettazione-testi';
+import { ritornoDopoLaConferma } from '@/lib/analytics/porta-di-ingresso';
 
 function richiesta(percorso: string, cookie?: Record<string, string>): NextRequest {
   const headers = new Headers({ 'user-agent': 'telefono-di-lucia', 'x-forwarded-for': '5.6.7.8' });
@@ -236,6 +238,28 @@ describe('③ la conferma dell’iscrizione da un altro dispositivo', () => {
     expect(profili.get('maria')!.tos_accepted_at).toBeTruthy();
   });
 
+  it('il ritorno con una domanda dentro (/checkout?passo=2) arriva intero, comunque il modello scriva RedirectTo', async () => {
+    // Collaudo del 15/10: se Supabase mette `{{ .RedirectTo }}` nel link senza codificarlo,
+    // la `&` del `next` di dentro lo spezzava e il segnale dell'iscrizione si perdeva.
+    const redirectTo = ritornoDopoLaConferma(APP, '/checkout?passo=2', 'email');
+    const forme = {
+      grezza: `/auth/confirm?token_hash=pkce_grezzagrezza1&type=signup&next=${redirectTo}`,
+      codificata: `/auth/confirm?token_hash=pkce_codificata12&type=signup&next=${encodeURIComponent(redirectTo)}`,
+    };
+    linkValidi.set('pkce_grezzagrezza1', utente('gina'));
+    linkValidi.set('pkce_codificata12', utente('gino'));
+    profili.set('gina', { tos_accepted_at: '2026-10-01T10:00:00Z' });
+    profili.set('gino', { tos_accepted_at: '2026-10-01T10:00:00Z' });
+    for (const [forma, link] of Object.entries(forme)) {
+      const arrivo = dove(await conferma(richiesta(link)));
+      expect(arrivo.pathname, `forma ${forma}`).toBe('/checkout');
+      expect(arrivo.searchParams.get('passo'), `forma ${forma}: la domanda del checkout si è persa`).toBe('2');
+      expect(arrivo.searchParams.get('registrazione'), `forma ${forma}: il segnale dell’iscrizione si è perso`).toBe('email');
+    }
+    // Il pezzo in chiaro passa comunque dal filtro dei percorsi interni.
+    expect(percorsoDiRitorno(`${APP}/auth/callback?next=//sito-truffa.it/x&y=1`)).toBe('/');
+  });
+
   it('senza versione dei testi e senza accettazione → chiede l’accettazione, CON la sessione addosso', async () => {
     linkValidi.set('pkce_senzaversione1', utente('pino'));
     profili.set('pino', { tos_accepted_at: null });
@@ -281,6 +305,22 @@ describe('④ i link di oggi (/auth/callback?code=) restano in servizio', () => 
     const avviso = avvisoAlRitornoSullAccesso(dove(res).searchParams.get('error'), '');
     expect(avviso).not.toBeNull();
     expect(avviso!.testo).not.toMatch(/confermata/i);
+  });
+
+  it('chi annulla su Google non legge «il link è scaduto»: non ha aperto nessun link', async () => {
+    // Collaudo del 15/10: Supabase torna con `versione` (la mette il pulsante Google) e
+    // `error=access_denied`. Prima del lotto la pagina restava muta; con il primo giro
+    // diceva una cosa falsa, «il link che hai aperto è scaduto o è già stato usato».
+    const res = await ritorno(
+      richiesta('/auth/callback?versione=2026-08-22&error=access_denied&error_code=access_denied&error_description=The+user+denied+access'),
+    );
+    const avviso = avvisoAlRitornoSullAccesso(dove(res).searchParams.get('error'), '');
+    expect(avviso, 'a chi torna da Google la pagina non dice niente').not.toBeNull();
+    expect(avviso!.testo).not.toMatch(/link/i);
+    expect(avviso!.testo).toMatch(/non è andato a buon fine/);
+    // E senza codice né errore (un ritorno da Google monco) non si parla di link incompleti.
+    const monco = await ritorno(richiesta('/auth/callback?versione=2026-08-22'));
+    expect(avvisoAlRitornoSullAccesso(dove(monco).searchParams.get('error'), '')!.testo).not.toMatch(/link/i);
   });
 
   it('chi entra dal ritorno senza aver mai accettato va a /accetta-condizioni CON la sessione', async () => {
@@ -370,4 +410,43 @@ describe('⑥ chi entra poi con la password lascia il verbale che il ritorno fal
     guasto.mockRestore();
     expect(res.status).toBe(200);
   });
+
+  it('se la riga del verbale non entra, il profilo NON viene segnato «accettato»', async () => {
+    // Collaudo del 15/10: una spunta senza la riga che la prova è una prova legale falsa.
+    profili.set('rosa', { tos_accepted_at: null });
+    const veroFrom = adminFinto.from.bind(adminFinto);
+    const guasto = vi.spyOn(adminFinto, 'from').mockImplementation((tabella: string) => {
+      if (tabella === 'consent_log') return { insert: async () => ({ error: { message: 'permission denied for table consent_log' } }) } as never;
+      return veroFrom(tabella);
+    });
+    const esito = await verbalizzaAccettazione(adminFinto, { utenteId: 'rosa', versione: '2026-09-01', ip: null, userAgent: null });
+
+    const rosa = { ...utente('rosa', { versione_testi_accettati: '2026-09-01' }), email_confirmed_at: '2026-10-01T10:05:00Z' };
+    accessoConPassword.mockResolvedValue({ data: { user: rosa, session: { access_token: 'a', refresh_token: 'r' } }, error: null });
+    const res = await accedi(accesso('7.7.7.4') as never);
+    guasto.mockRestore();
+
+    expect(esito).toBe('non-scritta');
+    expect(res.status, 'l’accesso non si blocca per il verbale').toBe(200);
+    expect(profili.get('rosa')!.tos_accepted_at, 'profilo segnato «accettato» senza la riga che lo prova').toBeNull();
+  });
+
+  it('se il database non risponde, chi ha la password giusta entra lo stesso dopo il tetto di attesa', async () => {
+    // Collaudo del 15/10: il database tace mentre il servizio di accesso risponde.
+    // Prima la richiesta restava appesa finché la piattaforma non la chiudeva.
+    const anna = { ...utente('anna', { versione_testi_accettati: '2026-09-01' }), email_confirmed_at: '2026-10-01T10:05:00Z' };
+    accessoConPassword.mockResolvedValue({ data: { user: anna, session: { access_token: 'a', refresh_token: 'r' } }, error: null });
+    const muto = vi.spyOn(adminFinto, 'from').mockImplementation(() => ({
+      select: () => ({ eq: () => ({ maybeSingle: () => new Promise(() => {}) }) }),
+    }) as never);
+    const partenza = Date.now();
+    const esito = await Promise.race([
+      accedi(accesso('7.7.7.5') as never),
+      new Promise<'appesa'>((r) => setTimeout(() => r('appesa'), TETTO_VERBALE_MS + 2500)),
+    ]);
+    muto.mockRestore();
+    expect(esito, 'l’accesso resta appeso dietro al verbale').not.toBe('appesa');
+    expect((esito as Response).status).toBe(200);
+    expect(Date.now() - partenza).toBeLessThan(TETTO_VERBALE_MS + 2000);
+  }, 15000);
 });

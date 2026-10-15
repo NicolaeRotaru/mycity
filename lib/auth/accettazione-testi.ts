@@ -16,6 +16,8 @@
  * una copia sola, che quando si corregge si corregge ovunque.
  */
 
+import { chiediConTetto } from '@/lib/auth/decisione-portiere';
+
 /** Il minimo del client amministrativo che serve qui: le tabelle. */
 type TabellaMinima = {
   select(colonne: string): {
@@ -83,6 +85,34 @@ export async function verbalizzaAccettazione(
     .update({ tos_accepted_at: new Date().toISOString() })
     .eq('id', dati.utenteId);
   return 'registrata';
+}
+
+/**
+ * Quanto aspetta l'accesso il verbale, prima di lasciar entrare comunque.
+ *
+ * 15/10/2026 — Il collaudo ha fatto tacere il database mentre il servizio di
+ * accesso rispondeva: la persona con la password giusta restava sulla rotellina
+ * finche' la piattaforma non chiudeva la richiesta. Il verbale e' importante, ma
+ * non e' una ragione per tenere fuori qualcuno: dopo questo tempo si smette di
+ * aspettarlo (la scrittura puo' finire lo stesso, dietro le quinte) e si entra.
+ * Al prossimo accesso, se la riga non c'e', si riprova.
+ */
+export const TETTO_VERBALE_MS = 2000;
+
+export type EsitoVerbaleSenzaAttesa = EsitoVerbale | 'scaduto' | 'rotto';
+
+/**
+ * Il verbale per le porte d'ingresso: non lancia mai e non trattiene mai oltre
+ * `ms`. Il client si chiede dentro, cosi' anche una chiave mancante diventa
+ * «rotto» invece di un errore che rompe l'accesso.
+ */
+export async function verbalizzaSenzaTrattenere(
+  admin: () => ClientPerVerbale,
+  dati: { utenteId: string; versione: string; ip: string | null; userAgent: string | null },
+  ms: number = TETTO_VERBALE_MS,
+): Promise<EsitoVerbaleSenzaAttesa> {
+  const r = await chiediConTetto(() => verbalizzaAccettazione(admin(), dati), ms);
+  return r.stato === 'ok' ? r.valore : r.stato;
 }
 
 /**

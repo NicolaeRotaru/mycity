@@ -65,9 +65,33 @@ export function percorsoDiRitorno(grezzo: string | null | undefined, ripiego = '
   const pezzi = new URL(sicuro, CASA);
   if (pezzi.pathname === '/auth/callback' || pezzi.pathname === '/auth/confirm') {
     if (profondita >= 2) return ripiego;
-    return percorsoDiRitorno(pezzi.searchParams.get('next'), ripiego, profondita + 1);
+    return percorsoDiRitorno(nextDiDentro(pezzi), ripiego, profondita + 1);
   }
   return sicuro;
+}
+
+/**
+ * Il `next` di una porta d'ingresso, anche quando il modello dell'email l'ha
+ * spezzato.
+ *
+ * Il caso: il modello scrive `…&next={{ .RedirectTo }}`, e `RedirectTo` e'
+ * `https://…/auth/callback?next=%2Fcheckout%3Fpasso%3D2%26registrazione%3Demail`.
+ * Se Supabase lo inserisce cosi' com'e', la lettura dell'indirizzo lo decodifica
+ * una volta e il `next` di dentro diventa `/checkout?passo=2&registrazione=email`
+ * scritto in chiaro: la `&` lo spezza in due e il segnale dell'iscrizione si
+ * perde. Le nostre porte hanno un parametro solo, `next`, quindi quando dopo
+ * `next=` c'e' un percorso in chiaro con altre `&`, tutto il resto e' suo.
+ * Se invece arriva codificato (`%2F…`), la lettura normale basta.
+ */
+function nextDiDentro(pezzi: URL): string | null {
+  const query = pezzi.search.slice(1);
+  let resto: string | null = null;
+  if (query.startsWith('next=')) resto = query.slice('next='.length);
+  else if (query.includes('&next=')) resto = query.slice(query.indexOf('&next=') + '&next='.length);
+  // In chiaro e spezzato: si tiene tutto. Il risultato ripassa comunque dal
+  // filtro dei percorsi interni, nella chiamata che segue.
+  if (resto !== null && resto.startsWith('/') && resto.includes('&')) return resto;
+  return pezzi.searchParams.get('next');
 }
 
 export type LinkDiConferma =
@@ -135,6 +159,10 @@ function haErroreDiSupabase(params: Parametri): boolean {
 /**
  * Il ritorno su /auth/callback non ha aperto una sessione: dove va la persona.
  *
+ *  - Si torna dal pulsante Google (c'e' la `versione`, che mette solo lui):
+ *    nessun link e' stato aperto, quindi niente «link scaduto» ne' «email
+ *    confermata» — l'accesso non e' riuscito, si riprova. Prima di tutto il
+ *    resto: chi annulla su Google torna con `error=access_denied`.
  *  - Supabase ha gia' detto «link scaduto o gia' usato» → lo diciamo.
  *  - Manca il codice → link incompleto (o con la sessione nel frammento, che il
  *    server non vede: la pagina di accesso lo riconosce da sola).
@@ -148,9 +176,13 @@ export function rimandoDelRitornoSenzaSessione(
   next: string,
   motivo: 'senza-codice' | 'scambio-fallito',
 ): string {
+  // Chi torna dal pulsante Google (la `versione` la mette solo lui) non ha
+  // aperto nessun link: se ha annullato su Google, o Google non l'ha fatto
+  // entrare, «il link è scaduto» sarebbe una cosa falsa. Gli si dice che
+  // l'accesso non e' riuscito, e puo' riprovare.
+  if (params.get('versione')) return paginaDiAccesso('accesso_non_riuscito', next);
   if (haErroreDiSupabase(params)) return paginaDiAccesso('link_scaduto', next);
   if (motivo === 'senza-codice') return paginaDiAccesso('missing_code', next);
-  if (params.get('versione')) return paginaDiAccesso('accesso_non_riuscito', next);
   return paginaDiAccesso('email_confermata', next);
 }
 
