@@ -23,6 +23,8 @@ export type AuditAction =
   | 'product.show'
   | 'order.refund'
   | 'order.force_cancel'
+  // R33 — l'amministratore registra i contanti dichiarati dal fattorino.
+  | 'order.cash_declared'
   | 'dispute.resolve_buyer'
   | 'dispute.resolve_seller'
   | 'dispute.reject'
