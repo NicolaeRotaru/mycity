@@ -19,6 +19,7 @@ import type Stripe from 'stripe';
 import { getStripe } from '@/lib/stripe/client';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { scritturaFacoltativa, scritturaObbligatoria } from './esito';
 
 /** Mappa lo stato Stripe della subscription sul nostro enum profili. */
 export function mapSubscriptionStatus(status: Stripe.Subscription.Status): 'active' | 'past_due' | 'canceled' {
@@ -62,25 +63,36 @@ export async function handleSellerSubscription(session: Stripe.Checkout.Session)
     logger.warn('[stripe] retrieve subscription per renews_at fallita', e);
   }
 
-  await admin
-    .from('profiles')
-    .update({
-      stripe_customer_id: customerId,
-      stripe_subscription_id: subscriptionId,
-      subscription_status: 'active',
-      subscription_renews_at: renewsAt,
-    })
-    .eq('id', sellerId);
+  // R81 — Il negozio ha pagato 50 €: se l'attivazione non si scrive, Stripe
+  // deve riprovare. Prima il gestore finiva «bene» e l'abbonamento pagato
+  // restava spento. Riscrivere gli stessi valori a ogni tentativo è innocuo.
+  scritturaObbligatoria(
+    await admin
+      .from('profiles')
+      .update({
+        stripe_customer_id: customerId,
+        stripe_subscription_id: subscriptionId,
+        subscription_status: 'active',
+        subscription_renews_at: renewsAt,
+      })
+      .eq('id', sellerId),
+    'attivazione abbonamento venditore',
+  );
 
-  await admin.from('notifications').insert({
-        // #33 — la categoria decide se la persona vuole ancora ricevere
-        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
-        category: 'order',
-    user_id: sellerId,
-    title: '✅ Abbonamento attivo',
-    body: 'Il tuo abbonamento venditore (€50/mese) è attivo. Grazie!',
-    link: '/seller/dashboard',
-  });
+  // Avviso di contorno: l'abbonamento è già attivo, una campanella mancata non
+  // vale un nuovo giro di Stripe.
+  scritturaFacoltativa(
+    await admin.from('notifications').insert({
+      // #33 — la categoria decide se la persona vuole ancora ricevere
+      // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+      category: 'order',
+      user_id: sellerId,
+      title: '✅ Abbonamento attivo',
+      body: 'Il tuo abbonamento venditore (€50/mese) è attivo. Grazie!',
+      link: '/seller/dashboard',
+    }),
+    'avviso abbonamento attivo',
+  );
 }
 
 /**
@@ -91,10 +103,13 @@ export async function handleSubscriptionChanged(sub: Stripe.Subscription) {
   const admin = getAdminSupabase();
   const status = mapSubscriptionStatus(sub.status);
   const renewsAt = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
-  await admin
-    .from('profiles')
-    .update({ subscription_status: status, subscription_renews_at: renewsAt })
-    .eq('stripe_subscription_id', sub.id);
+  scritturaObbligatoria(
+    await admin
+      .from('profiles')
+      .update({ subscription_status: status, subscription_renews_at: renewsAt })
+      .eq('stripe_subscription_id', sub.id),
+    'stato abbonamento venditore',
+  );
 }
 
 /**
@@ -105,20 +120,29 @@ export async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
   const customerId = typeof invoice.customer === 'string' ? invoice.customer : (invoice.customer?.id ?? null);
   if (!customerId) return;
   const admin = getAdminSupabase();
-  const { data: rows } = await admin
-    .from('profiles')
-    .update({ subscription_status: 'past_due' })
-    .eq('stripe_customer_id', customerId)
-    .select('id');
+  // R81 — Se la scrittura falliva, `rows` restava vuoto e il gestore lo
+  // leggeva come «nessun negozio da avvisare»: abbonamento ancora «attivo» su
+  // una carta rifiutata, e Stripe non riprovava.
+  const { data: rows } = scritturaObbligatoria(
+    await admin
+      .from('profiles')
+      .update({ subscription_status: 'past_due' })
+      .eq('stripe_customer_id', customerId)
+      .select('id'),
+    'abbonamento in ritardo di pagamento',
+  );
   for (const r of rows ?? []) {
-    await admin.from('notifications').insert({
+    scritturaFacoltativa(
+      await admin.from('notifications').insert({
         // #33 — la categoria decide se la persona vuole ancora ricevere
         // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
         category: 'order',
-      user_id: r.id,
-      title: '⚠️ Pagamento abbonamento non riuscito',
-      body: 'Non siamo riusciti ad addebitare l’abbonamento mensile. Aggiorna il metodo di pagamento.',
-      link: '/seller/dashboard',
-    });
+        user_id: r.id,
+        title: '⚠️ Pagamento abbonamento non riuscito',
+        body: 'Non siamo riusciti ad addebitare l’abbonamento mensile. Aggiorna il metodo di pagamento.',
+        link: '/seller/dashboard',
+      }),
+      'avviso pagamento abbonamento non riuscito',
+    );
   }
 }

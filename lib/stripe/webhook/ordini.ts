@@ -26,6 +26,7 @@ import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
 import { clientIdGaValido } from '@/lib/analytics/ga-client-id';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { notifyAdmins, provaAMandare, sessionePagata, suonaLaCampanellaAiNegozi } from './comune';
+import { scritturaObbligatoria } from './esito';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 
@@ -228,11 +229,11 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     // Prima che la migrazione 126 sia applicata lo stato 'MISMATCH' non e'
     // ammesso dal vincolo e la scrittura fallirebbe: in quel caso si segna
     // 'CANCELED', che il carrello lo chiude comunque.
-    await conRipiegoSchema(
+    scritturaObbligatoria(await conRipiegoSchema(
       'pending_checkouts.update (quadratura fallita)',
       () => admin.from('pending_checkouts').update({ status: 'MISMATCH' }).eq('id', pendingCheckoutId),
       () => admin.from('pending_checkouts').update({ status: 'CANCELED' }).eq('id', pendingCheckoutId),
-    );
+    ), 'carrello chiuso per quadratura fallita');
     return;
   }
 
@@ -439,16 +440,6 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
   // NB: il coupon è già stato claimato atomicamente in /api/stripe/checkout (claim_coupon, fix #36).
   // Non richiamiamo increment_coupon_usage qui per evitare doppio conteggio.
 
-  // Marca pending_checkout come COMPLETED solo a checkout interamente riuscito.
-  await admin
-    .from('pending_checkouts')
-    .update({
-      status: 'COMPLETED',
-      stripe_payment_intent: paymentIntent,
-      processed_at: new Date().toISOString(),
-    })
-    .eq('id', pendingCheckoutId);
-
   /**
    * #176 — Le email non tengono piu' in ostaggio la risposta a Stripe.
    *
@@ -550,6 +541,16 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
       });
     }
   }, 'avvisi post-ordine');
+
+  // COMPLETED per ultima (R81): se non passa Stripe riprova, gli ordini ci sono (23505) e nessun avviso riparte.
+  scritturaObbligatoria(await admin
+    .from('pending_checkouts')
+    .update({
+      status: 'COMPLETED',
+      stripe_payment_intent: paymentIntent,
+      processed_at: new Date().toISOString(),
+    })
+    .eq('id', pendingCheckoutId), 'carrello segnato come completato');
 }
 
 /**
@@ -574,12 +575,12 @@ export async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
   // rimettere in magazzino la stessa merce due volte, e restituire due volte il
   // codice sconto. La rivendicazione condizionata è la stessa forma già usata
   // nel cron: o la riga passa da PENDING a EXPIRED qui, o non si fa niente.
-  const { data: rivendicati } = await admin
+  const { data: rivendicati } = scritturaObbligatoria(await admin
     .from('pending_checkouts')
     .update({ status: 'EXPIRED' })
     .eq('id', pid)
     .eq('status', 'PENDING')
-    .select('id, groups, coupon_code');
+    .select('id, groups, coupon_code'), 'carrello scaduto');
   const pending = rivendicati?.[0];
   if (!pending) return;
   const groups = (pending.groups as PendingGroup[]) ?? [];

@@ -21,6 +21,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { findOrdersForDispute, notifyAdmins } from './comune';
+import { scritturaObbligatoria } from './esito';
 
 /**
  * charge.dispute.created → chargeback aperto. Stripe ha GIÀ prelevato i fondi
@@ -108,10 +109,25 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     }
   }
 
-  await admin
-    .from('orders')
-    .update({ dispute_status: 'OPEN', disputed_at: new Date().toISOString() })
-    .in('id', orders.map((o) => o.id));
+  /**
+   * 15/10/2026 (R81) — È LA RIGA CHE FERMA IL GIRO DEI BONIFICI.
+   *
+   * Il giro paga solo gli ordini con `dispute_status` vuoto o 'WON'. Se questa
+   * scrittura fallisce (un timeout del database) e nessuno lo legge, la rotta
+   * risponde 200, Stripe non riprova, e al giro dopo il negozio viene pagato
+   * su soldi che la banca si è già ripresa. Adesso il gestore fallisce e
+   * Stripe ripete l'evento. Ripeterlo è sicuro: gli storni qui sopra ripartono
+   * dallo stato scritto nel database, quindi uno storno già registrato non si
+   * rifà, e uno non registrato si richiede con la stessa chiave anti-doppione,
+   * cioè Stripe restituisce lo stesso storno invece di farne un altro.
+   */
+  scritturaObbligatoria(
+    await admin
+      .from('orders')
+      .update({ dispute_status: 'OPEN', disputed_at: new Date().toISOString() })
+      .in('id', orders.map((o) => o.id)),
+    'contestazione aperta sugli ordini',
+  );
 
   await notifyAdmins(
     '⚠️ Chargeback aperto',
@@ -126,7 +142,9 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
  * fatto all'apertura) → annulla l'ordine (semantica rimborso).
  */
 export async function handleDisputeClosed(dispute: Stripe.Dispute) {
-  const orders = await findOrdersForDispute(dispute, 'id, delivery_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
+  // `dispute_status` serve a non rimettere a scaffale due volte la merce se
+  // Stripe ripete l'evento di una contestazione già chiusa come persa (R81).
+  const orders = await findOrdersForDispute(dispute, 'id, dispute_status, delivery_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
   if (orders.length === 0) return;
   const admin = getAdminSupabase();
   const ids = orders.map((o) => o.id);
@@ -137,7 +155,12 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
     // (payout_status='REVERSED'): se qui ci si limitasse a scrivere 'WON', il
     // venditore avrebbe consegnato la merce, vinto la causa e non essere mai
     // stato pagato — il cron dei payout non guarda gli ordini 'REVERSED'.
-    await admin.from('orders').update({ dispute_status: 'WON' }).in('id', ids);
+    // R81 — Una contestazione vinta non registrata lascia il bonifico al
+    // negozio bloccato per sempre: se la scrittura fallisce, Stripe riprova.
+    scritturaObbligatoria(
+      await admin.from('orders').update({ dispute_status: 'WON' }).in('id', ids),
+      'contestazione vinta sugli ordini',
+    );
 
     const daRipagare = orders.filter((o) => o.payout_status === 'REVERSED');
     if (daRipagare.length > 0) {
@@ -180,10 +203,17 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
         // l'aggiornamento fallirebbe intero: il venditore vincerebbe la
         // contestazione e resterebbe comunque a mani vuote. Rimetterlo in
         // coda senza quel numero e' meglio che non rimetterlo affatto.
-        await conRipiegoSchema(
-          'orders.update (contestazione vinta, venditore)',
-          () => admin.from('orders').update(valori).eq('id', o.id),
-          () => admin.from('orders').update(senzaCampi(valori, ['payout_tentativo', 'dispute_seller_reversed_cents'])).eq('id', o.id),
+        //
+        // R81 — Se questa scrittura fallisce Stripe riprova, ed è sicuro: chi è
+        // già tornato 'HELD' al primo passaggio non è più 'REVERSED' e qui non
+        // rientra, quindi il tentativo non sale due volte.
+        scritturaObbligatoria(
+          await conRipiegoSchema(
+            'orders.update (contestazione vinta, venditore)',
+            () => admin.from('orders').update(valori).eq('id', o.id),
+            () => admin.from('orders').update(senzaCampi(valori, ['payout_tentativo', 'dispute_seller_reversed_cents'])).eq('id', o.id),
+          ),
+          'bonifico al negozio rimesso in coda dopo la contestazione vinta',
         );
       }
       logger.info('[stripe] contestazione vinta: payout rimessi in coda', {
@@ -216,10 +246,13 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
           rider_payout_at: null,
           rider_payout_tentativo: ((o as { rider_payout_tentativo?: number }).rider_payout_tentativo ?? 0) + 1,
         };
-        await conRipiegoSchema(
-          'orders.update (contestazione vinta, fattorino)',
-          () => admin.from('orders').update(valori).eq('id', o.id),
-          () => admin.from('orders').update(senzaCampi(valori, ['rider_payout_tentativo', 'dispute_rider_reversed_cents'])).eq('id', o.id),
+        scritturaObbligatoria(
+          await conRipiegoSchema(
+            'orders.update (contestazione vinta, fattorino)',
+            () => admin.from('orders').update(valori).eq('id', o.id),
+            () => admin.from('orders').update(senzaCampi(valori, ['rider_payout_tentativo', 'dispute_rider_reversed_cents'])).eq('id', o.id),
+          ),
+          'compenso del fattorino rimesso in coda dopo la contestazione vinta',
         );
       }
       logger.info('[stripe] contestazione vinta: compensi fattorino rimessi in coda', {
@@ -247,29 +280,62 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
     const consegnati = orders.filter((o) => o.delivery_status === 'DELIVERED').map((o) => o.id);
     const nonConsegnati = ids.filter((id) => !consegnati.includes(id));
 
+    /**
+     * 15/10/2026 (R81) — LE SCRITTURE ORA FANNO RIPROVARE STRIPE, QUINDI LA
+     * MERCE DEVE TORNARE A SCAFFALE UNA VOLTA SOLA.
+     *
+     * `restore_stock_for_order` è una somma senza segno di «già fatto». Finché
+     * un errore del database veniva ingoiato l'evento non si ripeteva mai; ora
+     * si ripete, e al secondo passaggio la giacenza sarebbe salita due volte:
+     * prodotti fantasma in vendita. Il segno è lo stato letto PRIMA di
+     * scrivere: un ordine che risultava già 'LOST' la sua merce l'ha già avuta.
+     */
+    const giaChiusiPersi = new Set(
+      orders.filter((o) => o.dispute_status === 'LOST').map((o) => o.id),
+    );
+
     if (consegnati.length > 0) {
-      await admin
-        .from('orders')
-        .update({ dispute_status: 'LOST', payment_status: 'REFUNDED' })
-        .in('id', consegnati);
+      scritturaObbligatoria(
+        await admin
+          .from('orders')
+          .update({ dispute_status: 'LOST', payment_status: 'REFUNDED' })
+          .in('id', consegnati),
+        'contestazione persa sugli ordini consegnati',
+      );
     }
+    const scaffaleNonRiuscito: string[] = [];
     if (nonConsegnati.length > 0) {
-      await admin
-        .from('orders')
-        .update({
-          dispute_status: 'LOST',
-          delivery_status: 'CANCELED',
-          payment_status: 'REFUNDED',
-          canceled_at: new Date().toISOString(),
-        })
-        .in('id', nonConsegnati);
+      scritturaObbligatoria(
+        await admin
+          .from('orders')
+          .update({
+            dispute_status: 'LOST',
+            delivery_status: 'CANCELED',
+            payment_status: 'REFUNDED',
+            canceled_at: new Date().toISOString(),
+          })
+          .in('id', nonConsegnati),
+        'contestazione persa sugli ordini non consegnati',
+      );
       for (const id of nonConsegnati) {
-        await admin.rpc('restore_stock_for_order', { p_order_id: id });
+        if (giaChiusiPersi.has(id)) continue;
+        // Qui non si lancia: l'ordine è già 'LOST', e un nuovo passaggio la
+        // salterebbe. Il guasto va detto agli amministratori, qui sotto.
+        const { error: errScaffale } = await admin.rpc('restore_stock_for_order', { p_order_id: id });
+        if (errScaffale) {
+          logger.error('[stripe] merce non rimessa a scaffale dopo la contestazione persa', {
+            orderId: id, message: errScaffale.message,
+          });
+          scaffaleNonRiuscito.push(id);
+        }
       }
     }
     await notifyAdmins(
       '✕ Chargeback perso',
-      `Contestazione persa su ordine ${ids[0]}. ${consegnati.length > 0 ? 'La merce era gia stata consegnata: la giacenza non e stata toccata.' : 'Ordine annullato.'}`,
+      `Contestazione persa su ordine ${ids[0]}. ${consegnati.length > 0 ? 'La merce era gia stata consegnata: la giacenza non e stata toccata.' : 'Ordine annullato.'}` +
+        (scaffaleNonRiuscito.length > 0
+          ? ` La merce di ${scaffaleNonRiuscito.length} ordine/i non e tornata a scaffale: la giacenza va sistemata a mano.`
+          : ''),
       '/admin/disputes',
     );
   } else {

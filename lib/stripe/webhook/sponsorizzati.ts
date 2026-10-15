@@ -19,6 +19,7 @@ import type Stripe from 'stripe';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
 import { logger } from '@/lib/logger';
+import { scritturaFacoltativa } from './esito';
 
 /**
  * Pagamento sponsorizzazione riuscito → crea la `sponsored_listing` attiva
@@ -96,13 +97,17 @@ export async function handleSponsoredPurchase(session: Stripe.Checkout.Session) 
     throw new Error(`sponsorizzazione non creata (sessione ${session.id}): ${error.message}`);
   }
 
-  await admin.from('notifications').insert({
-        // #33 — la categoria decide se la persona vuole ancora ricevere
-        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
-        category: 'order',
-    user_id: sellerId,
-    title: '✨ Sponsorizzazione attiva',
-    body: `Il tuo prodotto è "In primo piano" nella ricerca fino al ${endStr}.`,
-    link: '/seller/promote',
-  });
+  // Avviso di contorno (R81): la sponsorizzazione è già attiva.
+  scritturaFacoltativa(
+    await admin.from('notifications').insert({
+      // #33 — la categoria decide se la persona vuole ancora ricevere
+      // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+      category: 'order',
+      user_id: sellerId,
+      title: '✨ Sponsorizzazione attiva',
+      body: `Il tuo prodotto è "In primo piano" nella ricerca fino al ${endStr}.`,
+      link: '/seller/promote',
+    }),
+    'avviso sponsorizzazione attiva',
+  );
 }

@@ -21,6 +21,7 @@ import { applyConnectAccountStatus } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { notifyAdmins, provaAMandare } from './comune';
+import { scritturaObbligatoria } from './esito';
 
 /**
  * transfer.reversed → un transfer al seller/rider è stato revertito (claw-back o
@@ -45,14 +46,26 @@ export async function handleTransferReversed(transfer: Stripe.Transfer) {
     return;
   }
 
-  await admin.from('orders').update({ payout_status: 'REVERSED' }).eq('stripe_transfer_id', transfer.id);
-  await admin.from('orders').update({ rider_payout_status: 'REVERSED' }).eq('rider_transfer_id', transfer.id);
+  // R81 — Uno storno non registrato lascia i conti sbagliati per sempre: se il
+  // database dice di no, Stripe deve riprovare. Le due scritture riscrivono lo
+  // stesso valore, quindi un secondo passaggio è innocuo.
+  scritturaObbligatoria(
+    await admin.from('orders').update({ payout_status: 'REVERSED' }).eq('stripe_transfer_id', transfer.id),
+    'storno del bonifico al negozio',
+  );
+  scritturaObbligatoria(
+    await admin.from('orders').update({ rider_payout_status: 'REVERSED' }).eq('rider_transfer_id', transfer.id),
+    'storno del compenso al fattorino',
+  );
   logger.info('[stripe] transfer.reversed sincronizzato', { transferId: transfer.id });
 }
 
 export async function handleAccountUpdated(acct: Stripe.Account) {
   // Logica condivisa con POST /api/stripe/connect/refresh-status.
-  await applyConnectAccountStatus(acct);
+  // R81 — Se Stripe blocca i versamenti di un negozio e il database non lo
+  // registra, il giro dei bonifici continua a mandargli soldi che restano fermi
+  // sul suo saldo: l'esito si legge, e su un errore Stripe riprova.
+  scritturaObbligatoria(await applyConnectAccountStatus(acct), 'stato del conto Stripe del negozio');
 }
 
 /**

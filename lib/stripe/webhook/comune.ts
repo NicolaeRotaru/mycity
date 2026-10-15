@@ -21,6 +21,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 import { formatPriceFromCents } from '@/lib/format';
+import { scritturaFacoltativa } from './esito';
 
 export type DisputeOrderRow = {
   id: string;
@@ -30,6 +31,8 @@ export type DisputeOrderRow = {
   seller_payout_reversed_cents?: number | null;
   rider_payout_reversed_cents?: number | null;
   delivery_status?: string | null;
+  /** Stato della contestazione bancaria: serve a non ripetere la chiusura (R81). */
+  dispute_status?: string | null;
   stripe_reversal_id: string | null;
   // Servono per recuperare anche il compenso versato al fattorino.
   rider_id?: string | null;
@@ -57,12 +60,19 @@ export async function findOrdersForDispute(dispute: Stripe.Dispute, columns: str
       () => admin.from('orders').select(ridotte).eq(campo, valore),
     );
 
+  // 15/10/2026 (R81) — UNA LETTURA CADUTA NON È «NESSUN ORDINE».
+  // L'errore qui non si guardava: un timeout del database diventava zero
+  // ordini, il gestore scriveva «nessun ordine trovato» e usciva bene, la rotta
+  // rispondeva 200 e Stripe non riprovava. Una contestazione aperta in quel
+  // momento non bloccava nessun bonifico. Adesso si lancia, e Stripe ripete.
   if (pi) {
-    const { data } = await cerca('stripe_payment_intent', pi);
+    const { data, error } = await cerca('stripe_payment_intent', pi);
+    if (error) throw new Error(`[stripe] ordini della contestazione non letti: ${error.message}`);
     if (data && data.length > 0) return data as unknown as DisputeOrderRow[];
   }
   if (chargeId) {
-    const { data } = await cerca('stripe_charge_id', chargeId);
+    const { data, error } = await cerca('stripe_charge_id', chargeId);
+    if (error) throw new Error(`[stripe] ordini della contestazione non letti: ${error.message}`);
     if (data && data.length > 0) return data as unknown as DisputeOrderRow[];
   }
   return [];
@@ -78,12 +88,18 @@ export function sessionePagata(session: Stripe.Checkout.Session): boolean {
   return session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
 }
 
-/** Inserisce una notifica per tutti gli admin. */
+/**
+ * Inserisce una notifica per tutti gli admin. È un avviso: se non parte resta
+ * scritto nei log, ma non fa ritentare a Stripe un evento già lavorato (R81).
+ */
 export async function notifyAdmins(title: string, body: string, link: string) {
   const admin = getAdminSupabase();
   const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
   if (!admins || admins.length === 0) return;
-  await admin.from('notifications').insert(admins.map((a) => ({ user_id: a.id, title, body, link })));
+  scritturaFacoltativa(
+    await admin.from('notifications').insert(admins.map((a) => ({ user_id: a.id, title, body, link }))),
+    `avviso agli amministratori: ${title}`,
+  );
 }
 
 /**

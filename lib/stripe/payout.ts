@@ -36,9 +36,11 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
  * `account.updated` sia dalla route di refresh manuale, così lo stato resta
  * corretto anche se il webhook non viene consegnato.
  */
-export async function applyConnectAccountStatus(acct: Stripe.Account): Promise<void> {
+export async function applyConnectAccountStatus(acct: Stripe.Account): Promise<{ error: unknown }> {
   const admin = getAdminSupabase();
-  await admin
+  // R81 — l'esito torna a chi chiama: il webhook `account.updated` deve poter
+  // far riprovare Stripe se la scrittura non passa.
+  return admin
     .from('profiles')
     .update({
       stripe_charges_enabled: !!acct.charges_enabled,
