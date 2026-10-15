@@ -18,8 +18,11 @@
  * come lo lancia la CI: cosi' si prova anche che il messaggio arriva davvero a
  * chi legge il log, e non resta in una funzione che nessuno chiama.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { spiegaIlCollegamentoFallito } from '@/scripts/check-migration-drift.mjs';
 
 const PASSWORD = 'Segretissima-123';
@@ -90,6 +93,49 @@ describe('quando il controllo della deriva non riesce a collegarsi', () => {
     }
   });
 
+  it('non stampa la password nemmeno nella forma codificata, e nemmeno da sola fuori dalla riga', () => {
+    // 15/10/2026 (collaudo) — La prova di sopra mette nell'errore solo la forma
+    // decodificata: togliendo l'oscuramento di quella codificata restava verde.
+    // Qui l'errore ripete la password com'e' scritta nella riga (p%40ss%2Fword)
+    // e, a parte, da sola: tutte e due le forme devono sparire.
+    const scritta = encodeURIComponent('p@ss/word');
+    const url = `postgresql://postgres:${scritta}@aws-0-eu-west-3.pooler.supabase.com:5432/postgres`;
+    const errore = Object.assign(new Error(`autenticazione fallita con «${scritta}» (decodificata: «p@ss/word»)`), { code: '28P01' });
+    const t = testo(spiegaIlCollegamentoFallito(errore, url));
+    expect(t).not.toContain(scritta);
+    expect(t).not.toContain('p@ss/word');
+    expect(t).toContain('***');
+  });
+
+  it('una riga illeggibile non porta la password nel testo, e spiega come si scrive', () => {
+    const illeggibile = 'postgresql://postgres.ref:Pa#Segreto9@aws-0-eu-west-3.pooler.supabase.com:5432/postgres';
+    const chiacchierone = new Error(`Invalid URL: ${illeggibile}`);
+    const t = testo(spiegaIlCollegamentoFallito(chiacchierone, illeggibile));
+    expect(t).not.toContain('Segreto9');
+    expect(t).toContain('%23');
+    expect(t).toContain('«Session pooler»');
+  });
+
+  it('il database di questa stessa macchina che non risponde non manda al Session pooler', () => {
+    const rifiuto = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:5432'), { code: 'ECONNREFUSED', address: '127.0.0.1' });
+    for (const url of [
+      'postgresql://postgres:postgres@localhost:5432/mycity_ci',
+      'postgresql://postgres:postgres@127.0.0.1:5432/mycity_ci',
+      'postgresql://postgres:postgres@[::1]:5432/mycity_ci',
+    ]) {
+      const t = testo(spiegaIlCollegamentoFallito(rifiuto, url));
+      expect(t, url).not.toContain('Session pooler');
+      expect(t, url).toContain('questa stessa macchina');
+    }
+  });
+
+  it('una password sbagliata su un database qualsiasi dice «password», non «Session pooler»', () => {
+    const accesso = Object.assign(new Error('password authentication failed for user "app"'), { code: '28P01' });
+    const t = testo(spiegaIlCollegamentoFallito(accesso, 'postgresql://app:x@db.esempio.it:5432/app'));
+    expect(t).toContain('password');
+    expect(t).not.toContain('Session pooler');
+  });
+
   it('una stringa che non si legge non fa esplodere la spiegazione', () => {
     const t = testo(spiegaIlCollegamentoFallito(new Error('boh'), 'non e un indirizzo'));
     expect(t).toContain('non riesco a collegarmi');
@@ -97,9 +143,14 @@ describe('quando il controllo della deriva non riesce a collegarsi', () => {
   });
 });
 
+const cartelle: string[] = [];
+afterAll(() => {
+  for (const c of cartelle) rmSync(c, { recursive: true, force: true });
+});
+
 /** Lo script vero, avviato come lo avvia la CI (`npm run db:check-drift`). */
-function lancia(env: Record<string, string>) {
-  const esito = spawnSync(process.execPath, ['scripts/check-migration-drift.mjs'], {
+function lancia(env: Record<string, string>, script = 'scripts/check-migration-drift.mjs') {
+  const esito = spawnSync(process.execPath, [script], {
     cwd: process.cwd(),
     encoding: 'utf8',
     timeout: 20_000,
@@ -121,12 +172,44 @@ describe('lo script vero, lanciato come nella CI', () => {
 
   it('quando il database non risponde esce rosso con la spiegazione, senza password e senza traccia nuda', () => {
     // 127.0.0.1 porta 1: nessuno ascolta, il rifiuto e' immediato e non esce
-    // dalla macchina — niente rete vera.
+    // dalla macchina — niente rete vera. E' il caso del passo «Coerenza
+    // interna» della CI col Postgres locale non ancora pronto: li' il Session
+    // pooler non c'entra, e il messaggio non deve mandarci (collaudo del 15/10).
     const { uscita, uscitaTesto } = lancia({ SUPABASE_DB_URL: `postgresql://postgres:${PASSWORD}@127.0.0.1:1/postgres` });
     expect(uscita).toBe(1);
     expect(uscitaTesto).toContain('non riesco a collegarmi al database (127.0.0.1:1)');
-    expect(uscitaTesto).toContain('«Session pooler»');
+    expect(uscitaTesto).toContain('questa stessa macchina');
+    expect(uscitaTesto).not.toContain('Session pooler');
     expect(uscitaTesto).not.toContain(PASSWORD);
     expect(uscitaTesto).not.toContain('check-migration-drift: errore');
+  });
+
+  it('con una password incollata a mano con # o / esce rosso spiegando come scriverla, senza traccia nuda', () => {
+    // 15/10/2026 (collaudo) — Prima `new pg.Client(...)` stava fuori dal try:
+    // usciva «check-migration-drift: errore TypeError: Invalid URL» e basta.
+    // Il nome della macchina finisce in .invalid: anche se la riga si leggesse,
+    // nessuna rete vera verrebbe toccata.
+    for (const segreto of ['Pa#Segreto9', 'Pa/Segreto9']) {
+      const { uscita, uscitaTesto } = lancia({
+        SUPABASE_DB_URL: `postgresql://postgres.ref:${segreto}@aws-0-eu-west-3.pooler.invalid:5432/postgres`,
+      });
+      expect(uscita, uscitaTesto).toBe(1);
+      expect(uscitaTesto).toContain('non si legge');
+      expect(uscitaTesto).toContain('%23');
+      expect(uscitaTesto).not.toContain('Segreto9');
+      expect(uscitaTesto).not.toContain('check-migration-drift: errore');
+    }
+  });
+
+  it('lanciato da un percorso che passa per un collegamento simbolico controlla lo stesso, e non esce verde muto', () => {
+    // 15/10/2026 (collaudo) — La guardia d'avvio confrontava il percorso
+    // scritto con quello vero: da un collegamento usciva 0 senza dire niente.
+    const cartella = mkdtempSync(join(tmpdir(), 'deriva-collegamento-'));
+    cartelle.push(cartella);
+    const collegamento = join(cartella, 'deposito');
+    symlinkSync(process.cwd(), collegamento);
+    const { uscita, uscitaTesto } = lancia({ SALTO_E_ERRORE: '1' }, join(collegamento, 'scripts/check-migration-drift.mjs'));
+    expect(uscita, uscitaTesto).toBe(1);
+    expect(uscitaTesto).toContain('manca SUPABASE_DB_URL');
   });
 });

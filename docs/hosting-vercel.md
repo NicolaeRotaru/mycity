@@ -160,10 +160,15 @@ Prima il rilascio costruiva su Node 20 e la produzione eseguiva su 24.
   Il gancio che aspetta la CI verde è in `.github/workflows/deploy-dopo-ci.yml`,
   e non è ancora l'unica strada: legge il file per i due passi che mancano.
 - **Il codice rosso non entra in `main`** solo se la regola «Main» su GitHub
-  (Settings → Rules → Rulesets) è accesa e guarda `main`. Oggi è spenta e senza
-  bersaglio. Il controllo che pretende, «Main», è l'ultimo lavoro della CI dal
-  15/10/2026: aspetta tutti gli altri e diventa rosso se uno fallisce. I passi
-  per accenderla sono in testa a `.github/workflows/deploy-dopo-ci.yml`.
+  (Settings → Rules → Rulesets) è accesa, guarda `main`, pretende il controllo
+  «Main» verde **e** la richiesta aggiornata con `main` («Require branches to
+  be up to date before merging»). Senza l'ultima spunta non basta: il 1/9 la
+  #245, verde da sola, si è unita dopo la #246 ed è andata in produzione rossa.
+  Oggi la regola è spenta, senza bersaglio e senza quella spunta. Il controllo
+  «Main» è l'ultimo lavoro della CI dal 15/10/2026: aspetta tutti gli altri e
+  diventa rosso se uno fallisce. I passi sono in testa a
+  `.github/workflows/deploy-dopo-ci.yml`; la verifica è
+  `gh api repos/NicolaeRotaru/mycity/rulesets/16879481 | node scripts/controlla-regola-main.mjs`.
 - **Tornare indietro:** Vercel → Deployments → **Instant Rollback**. Procedura
   distesa nel runbook, §4-bis.
 

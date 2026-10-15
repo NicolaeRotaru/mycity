@@ -46,7 +46,11 @@ MIG="$ROOT/migrations"
 # guardare: dalla CI il segreto SUPABASE_DB_URL e' rimasto per due mesi sulla
 # connessione diretta di Supabase (solo IPv6), che da GitHub Actions non si
 # raggiunge — e psql risponde solo «Network is unreachable».
-if ! psql "$DB" -q -v ON_ERROR_STOP=1 <<'SQL'
+#
+# Il consiglio dipende da quello che psql ha detto davvero (collaudo del
+# 15/10): mandare al Session pooler chi ha solo sbagliato la password lo fa
+# girare a vuoto. L'errore di psql si stampa sempre, intero, sopra il consiglio.
+if ! ERRORE_COLLEGAMENTO="$(psql "$DB" -q -v ON_ERROR_STOP=1 2>&1 >/dev/null <<'SQL'
 CREATE SCHEMA IF NOT EXISTS supabase_migrations;
 CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
   version text PRIMARY KEY,
@@ -54,9 +58,29 @@ CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
   statements text[]
 );
 SQL
-then
+)"; then
+  [ -n "$ERRORE_COLLEGAMENTO" ] && printf '%s\n' "$ERRORE_COLLEGAMENTO" >&2
   echo "✗ non riesco a collegarmi al database: nessuna migrazione applicata." >&2
-  echo "  Da GitHub Actions SUPABASE_DB_URL deve essere la riga del «Session pooler» (IPv4): Supabase → pannello Connect → riquadro «Session pooler», porta 5432. La connessione diretta db.<progetto>.supabase.co risponde solo in IPv6 e da li' non si raggiunge." >&2
+  case "$ERRORE_COLLEGAMENTO" in
+    *"Network is unreachable"*|*"Cannot assign requested address"*|*"Address family not supported"*)
+      RETE_IPV6=1 ;;
+    *) RETE_IPV6=0 ;;
+  esac
+  case "$DB" in
+    *@db.*.supabase.co*) RETE_IPV6=1 ;;
+  esac
+  if [ "$RETE_IPV6" = "1" ]; then
+    echo "  Da GitHub Actions SUPABASE_DB_URL deve essere la riga del «Session pooler» (IPv4): Supabase → pannello Connect → riquadro «Session pooler», porta 5432. La connessione diretta db.<progetto>.supabase.co risponde solo in IPv6 e da li' non si raggiunge." >&2
+  else
+    case "$ERRORE_COLLEGAMENTO" in
+      *"password authentication failed"*|*"no password supplied"*|*"Tenant or user not found"*)
+        echo "  Il database risponde, ma rifiuta utente o password: controlla la password in SUPABASE_DB_URL. Nella riga del pooler l'utente e' postgres.<progetto>, non solo postgres." >&2 ;;
+      *"could not translate host name"*)
+        echo "  Il nome della macchina in SUPABASE_DB_URL non si trova: controlla l'indirizzo." >&2 ;;
+      *)
+        echo "  Il motivo e' nell'errore di psql qui sopra." >&2 ;;
+    esac
+  fi
   exit 1
 fi
 

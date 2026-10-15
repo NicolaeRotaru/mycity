@@ -23,8 +23,8 @@
  *     riepilogo;
  *   ⑤ se il database non si raggiunge, lo script dice di usare il Session pooler.
  */
-import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync, chmodSync, readFileSync, readdirSync } from 'node:fs';
+import { describe, it, expect, afterAll } from 'vitest';
+import { mkdtempSync, writeFileSync, chmodSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -52,8 +52,16 @@ function ultime(quante: number): string[] {
  * versioni tranne quelle in FINTE_MANCANTI), e annota in REGISTRO_PSQL ogni file
  * che gli si chiede di applicare. Non apre nessuna connessione.
  */
+// Le cartelle dei finti si buttano alla fine: prima ne restavano dieci in /tmp
+// a ogni esecuzione (collaudo del 15/10).
+const cartelleDeiFinti: string[] = [];
+afterAll(() => {
+  for (const c of cartelleDeiFinti) rmSync(c, { recursive: true, force: true });
+});
+
 function preparaFinti(): { cartella: string; registro: string } {
   const cartella = mkdtempSync(join(tmpdir(), 'psql-finto-'));
+  cartelleDeiFinti.push(cartella);
   const registro = join(cartella, 'registro.txt');
   writeFileSync(registro, '');
   writeFileSync(
@@ -69,6 +77,10 @@ while [ $# -gt 0 ]; do
 done
 if [ "\${FINTO_PSQL_IRRAGGIUNGIBILE:-}" = "1" ]; then
   echo 'psql: error: connection to server at "db.x.supabase.co" (2a05:d012::1), port 5432 failed: Network is unreachable' >&2
+  exit 2
+fi
+if [ "\${FINTO_PSQL_PASSWORD_SBAGLIATA:-}" = "1" ]; then
+  echo 'psql: error: connection to server at "aws-0-eu-west-3.pooler.supabase.com" (13.38.0.1), port 5432 failed: FATAL:  password authentication failed for user "postgres"' >&2
   exit 2
 fi
 if [ -n "$file" ]; then echo "APPLICATO $(basename "$file")" >> "$REGISTRO_PSQL"; exit 0; fi
@@ -183,6 +195,21 @@ describe('lo script delle migrazioni, con il tetto del rilascio automatico', LEN
     expect(r.applicate).toEqual([]);
     expect(r.stderr).toContain('«Session pooler»');
     expect(r.stderr).toContain('IPv6');
+    // L'errore vero di psql resta visibile, sopra il consiglio.
+    expect(r.stderr).toContain('Network is unreachable');
+  });
+
+  it('se la password e\' sbagliata dice «password», non manda a cambiare riga per la rete', () => {
+    // 15/10/2026 (collaudo) — Prima qualunque fallimento del primo contatto
+    // stampava «deve essere la riga del Session pooler», anche con la riga
+    // del pooler gia' giusta e solo la password sbagliata.
+    const r = lanciaLoScript(ultime(3), { FINTO_PSQL_PASSWORD_SBAGLIATA: '1' });
+    expect(r.uscita).not.toBe(0);
+    expect(r.applicate).toEqual([]);
+    expect(r.stderr).toContain('password authentication failed');
+    expect(r.stderr).toContain('rifiuta utente o password');
+    expect(r.stderr).not.toContain('IPv6');
+    expect(r.stderr).not.toContain('deve essere la riga');
   });
 });
 
@@ -215,6 +242,51 @@ describe('il passo vero del rilascio dopo la CI', LENTA, () => {
     expect(r.applicate).toEqual([]);
     expect(r.riepilogo).toContain('troppo indietro');
     expect(r.riepilogo).toContain('docs/migrazioni-baseline-produzione.md');
+    expect(r.output.fermo).toBe('database-indietro');
+  });
+
+  it('il verdetto in fondo, dopo il tetto, non manda a guardare una pubblicazione mai partita', () => {
+    // 15/10/2026 (collaudo) — Il riepilogo diceva «non ho pubblicato niente»
+    // e subito sotto «non so a quale indirizzo e' finito il rilascio, guarda il
+    // passo Rilascia in produzione»: un passo saltato. Qui si fa quello che fa
+    // GitHub: il passo delle migrazioni si ferma, la pubblicazione risulta
+    // «skipped», e il verdetto riceve i due valori dalle sue variabili.
+    const migrazioni = eseguiIlPasso(ultime(48));
+    const verdetto = passo('Il verdetto — cosa ho provato davvero');
+    expect(verdetto.ambiente.PASSO_RILASCIO).toBe('${{ steps.rilascio.outcome }}');
+    expect(verdetto.ambiente.FERMO).toBe('${{ steps.migrazioni.outputs.fermo }}');
+
+    const r = esegui(verdetto, {
+      env: {
+        PRONTO: 'true',
+        INDIRIZZO: '',
+        CODICE_FUMO: '',
+        TORNATO: '',
+        PASSO_RILASCIO: 'skipped',
+        FERMO: migrazioni.output.fermo ?? '',
+      },
+    });
+    expect(r.uscita).not.toBe(0);
+    expect(r.riepilogo).toContain('database di produzione e rimasto indietro');
+    expect(r.riepilogo).toContain('Non ho pubblicato niente');
+    expect(r.riepilogo).not.toContain('Rilascia in produzione');
+  });
+
+  it('il verdetto, se la pubblicazione e\' saltata per un altro passo, dice di guardare il primo rosso', () => {
+    const r = esegui(passo('Il verdetto — cosa ho provato davvero'), {
+      env: { PRONTO: 'true', INDIRIZZO: '', CODICE_FUMO: '', TORNATO: '', PASSO_RILASCIO: 'skipped', FERMO: '' },
+    });
+    expect(r.uscita).not.toBe(0);
+    expect(r.riepilogo).toContain('si e fermato prima di pubblicare');
+    expect(r.riepilogo).not.toContain('Rilascia in produzione');
+  });
+
+  it('il verdetto, se la pubblicazione e\' partita ma non ha dato un indirizzo, manda ancora a guardare quel passo', () => {
+    const r = esegui(passo('Il verdetto — cosa ho provato davvero'), {
+      env: { PRONTO: 'true', INDIRIZZO: '', CODICE_FUMO: '', TORNATO: '', PASSO_RILASCIO: 'failure', FERMO: '' },
+    });
+    expect(r.uscita).not.toBe(0);
+    expect(r.riepilogo).toContain('Rilascia in produzione');
   });
 
   it('con le poche migrazioni di un rilascio normale applica, esce verde e le conta', () => {

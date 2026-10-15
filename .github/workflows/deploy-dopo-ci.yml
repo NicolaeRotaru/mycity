@@ -57,12 +57,16 @@ name: Rilascio dopo CI verde
 # Quindi il cancello e' tornato fuori dal build. Il difetto resta aperto, e si
 # chiude in uno di questi due modi — nessuno dei due e' codice:
 #
-#   A. la regola su GitHub che pretende i controlli verdi PRIMA di poter unire.
-#      Chiude il rischio alla radice (il codice rosso non entra proprio) e non
-#      serve nessun segreto.
+#   A. la regola su GitHub che, PRIMA di poter unire, pretende il controllo
+#      «Main» verde E la richiesta aggiornata con main. Non serve nessun
+#      segreto. Tutte e due le clausole contano: con la sola prima, il 1/9 la
+#      #245 sarebbe passata lo stesso (vedi sotto).
 #   B. i tre segreti qui sopra, che accendono questo lavoro.
 #
-# A e' il primo passo perche' e' piu' economico e non dipende da Vercel.
+# A e' il primo passo perche' e' piu' economico e non dipende da Vercel. Non
+# chiude TUTTO: chi e' nella lista di chi puo' scavalcare la regola unisce
+# anche col rosso, e un lavoro della CI che si salta (per esempio gli e2e
+# senza segreti) non ferma niente perche' non ha guardato niente.
 #
 # ⚠️ 15/10/2026 (R57) — A NON SI CREA: SI CORREGGE. Qui c'era scritto che si
 # accende «in mezzo minuto», e chi ci andava trovava una trappola. La regola
@@ -73,16 +77,40 @@ name: Rilascio dopo CI verde
 # blocca ogni unione per sempre, in attesa di un controllo che non arriva.
 #
 # Il controllo «Main» adesso esiste: e' l'ultimo lavoro di ci.yml, che aspetta
-# tutti gli altri e diventa rosso se uno fallisce. Quindi, una volta unito in
-# main il commit che lo aggiunge:
-#   1. apri il ruleset «Main»;
+# tutti gli altri e diventa rosso se uno fallisce.
+#
+# ⚠️ 15/10/2026 (collaudo) — «CONTROLLO VERDE» NON BASTA: SERVE ANCHE «AGGIORNATA».
+# Il 1/9 la #245 aveva la CI verde alle 14:33. Alle 15:05 e' entrata in main
+# la #246. Alle 18:10 si e' unita la #245, ferma al main di prima: l'unione
+# delle due e' finita rossa (corsa 33542096803) ed e' andata in produzione.
+# La regola, oggi, ha la spunta «Require branches to be up to date before
+# merging» TOLTA: con «Main» acceso e basta, il pulsante di unione della #245
+# sarebbe stato libero, esattamente come quel giorno. Con la spunta, GitHub
+# avrebbe chiesto di aggiornare la #245 con main, la CI sarebbe rigirata sul
+# codice vero dell'unione, e il rosso l'avrebbe fermata.
+#
+# Quindi, una volta unito in main il commit che aggiunge «Main»:
+#   1. apri il ruleset «Main» (Settings → Rules → Rulesets);
 #   2. Target branches → Add target → «Include default branch» (cioe' main);
 #   3. lascia «Require status checks to pass» con il controllo «Main»;
-#   4. Enforcement status → «Active», e salva;
-#   5. prova: una richiesta di unione con una prova rossa deve avere il
+#   4. sotto, spunta «Require branches to be up to date before merging»;
+#   5. Enforcement status → «Active», e salva;
+#   6. controlla la regola com'e' davvero, senza fidarti degli occhi:
+#        gh api repos/NicolaeRotaru/mycity/rulesets/16879481 | node scripts/controlla-regola-main.mjs
+#      deve dire ✅. Se dice ❌, elenca cosa manca e dove si sistema;
+#   7. prova: una richiesta di unione con una prova rossa deve avere il
 #      pulsante di unione bloccato.
-# Le richieste di unione aperte prima di quel commit non hanno mai prodotto
-# «Main»: vanno aggiornate con main, o la loro CI rilanciata.
+#
+# IL COSTO DELLA SPUNTA DEL PUNTO 4. Ogni volta che si unisce qualcosa in main,
+# le altre richieste aperte diventano «non aggiornate»: prima di unirle si
+# preme «Update branch» e si aspetta che la CI rigiri (oggi circa 4-5 minuti).
+# Con una richiesta alla volta non costa niente; con tante richieste in
+# parallelo e' un giro di attesa per ognuna.
+#
+# Le richieste aperte prima del commit che aggiunge «Main» non lo hanno mai
+# prodotto: vanno AGGIORNATE con main («Update branch»). Rilanciare la loro CI
+# non basta: un rilancio riusa lo stesso commit, cioe' il vecchio ci.yml senza
+# il lavoro «Main», e la richiesta resta in «Expected — Waiting».
 #
 # ⚠️ 3/9/2026 — E C'E' UNA TERZA COSA, SCOPERTA GUARDANDO IL PROGETTO VERO.
 #
@@ -354,6 +382,9 @@ jobs:
           USCITA=0
           bash scripts/applica-migrazioni-mancanti.sh | tee "$DIARIO" || USCITA=$?
           if [ "$USCITA" = "4" ]; then
+            # Il verdetto in fondo lo legge, per non mandare a guardare un
+            # passo di pubblicazione che non e' mai partito.
+            echo "fermo=database-indietro" >> "$GITHUB_OUTPUT"
             {
               echo "## ⛔ Non ho rilasciato: il database di produzione e' rimasto troppo indietro"
               echo ""
@@ -585,6 +616,11 @@ jobs:
           INDIRIZZO: ${{ steps.rilascio.outputs.indirizzo }}
           CODICE_FUMO: ${{ steps.fumo.outputs.codice }}
           TORNATO: ${{ steps.ritorno.outputs.tornato }}
+          # 15/10/2026 — Se la pubblicazione non e' mai partita («skipped»), il
+          # verdetto lo dice invece di mandare a guardare quel passo; e se si e'
+          # fermata per il database rimasto indietro, dice anche questo.
+          PASSO_RILASCIO: ${{ steps.rilascio.outcome }}
+          FERMO: ${{ steps.migrazioni.outputs.fermo }}
         run: |
           set -uo pipefail
           VERDETTO="$(mktemp)"

@@ -27,6 +27,10 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+// Il nome che la regola pretende sta in un posto solo: lo script che controlla
+// la regola vera. Se qualcuno rinomina il lavoro qui, o il nome la', questa
+// prova diventa rossa.
+import { CONTROLLO_RICHIESTO } from '@/scripts/controlla-regola-main.mjs';
 
 // Il lettore YAML e' quello che il progetto ha gia' fra le dipendenze di
 // sviluppo (lo porta eslint). Se un giorno sparisce, questo `require` fallisce
@@ -56,7 +60,7 @@ function lavoriDellaCi(): Record<string, Lavoro> {
 /** Il lavoro che produce il controllo «Main», con il suo identificativo. */
 function cancello(): { id: string; lavoro: Lavoro } {
   const lavori = lavoriDellaCi();
-  const trovati = Object.entries(lavori).filter(([, l]) => l.name === 'Main');
+  const trovati = Object.entries(lavori).filter(([, l]) => l.name === CONTROLLO_RICHIESTO);
   if (trovati.length !== 1) {
     throw new Error(`Mi aspetto UN lavoro di nome «Main», ne ho trovati ${trovati.length}`);
   }
@@ -109,6 +113,7 @@ function tuttiA(esito: string): Record<string, string> {
 describe('il controllo «Main» che la regola di GitHub pretende', () => {
   it('esiste un lavoro, uno solo, che si chiama esattamente «Main»', () => {
     const { lavoro } = cancello();
+    expect(CONTROLLO_RICHIESTO).toBe('Main');
     expect(lavoro.name).toBe('Main');
   });
 

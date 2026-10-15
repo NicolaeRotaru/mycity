@@ -78,11 +78,12 @@ export const ESEMPIO_SESSION_POOLER =
 /** Codici con cui il sistema dice «da qui quella rete non si raggiunge». */
 const RETE_IRRAGGIUNGIBILE = new Set(['ENETUNREACH', 'EHOSTUNREACH', 'EADDRNOTAVAIL', 'EAFNOSUPPORT']);
 
-/** Macchina, porta e password di una stringa di connessione; vuoti se non si legge. */
+/** Macchina, porta e password di una stringa di connessione; `letta: false` se non si legge. */
 function partiDellIndirizzo(url) {
   try {
     const u = new URL(String(url ?? ''));
     return {
+      letta: true,
       macchina: u.hostname.replace(/^\[|\]$/g, ''),
       porta: u.port || '5432',
       // Tutte e due le forme: l'errore potrebbe ripetere la stringa com'e'
@@ -91,8 +92,39 @@ function partiDellIndirizzo(url) {
       passwordScritta: u.password,
     };
   } catch {
-    return { macchina: '', porta: '', password: '', passwordScritta: '' };
+    return { letta: false, macchina: '', porta: '', password: '', passwordScritta: '' };
   }
+}
+
+/**
+ * 15/10/2026 (collaudo di R53) — Il database di questa stessa macchina: il
+ * passo «Coerenza interna» della CI si collega a localhost. Se quello non
+ * risponde, il consiglio del Session pooler porta fuori strada: li' Supabase
+ * non c'entra, e' il Postgres del lavoro che non e' pronto.
+ */
+function eLocale(macchina) {
+  const m = macchina.toLowerCase();
+  return m === '' || m === 'localhost' || m === '::1' || /^127\./.test(m) || m.startsWith('/');
+}
+
+/** Un indirizzo di Supabase (diretto o pooler): solo li' il Session pooler e' la strada. */
+function eSupabase(macchina) {
+  return /\.supabase\.(co|com)$/i.test(macchina);
+}
+
+/** Codici con cui Postgres dice «ti sento, ma utente o password non vanno». */
+const ACCESSO_RIFIUTATO = new Set(['28P01', '28000']);
+
+/**
+ * Toglie dal testo tutto quello che potrebbe essere una password: le due forme
+ * della password, se la riga si legge, e comunque qualunque «://utente:segreto@»
+ * — che e' l'unica difesa quando la riga NON si legge e la password non si sa
+ * isolare.
+ */
+function senzaSegreti(testo, segreti) {
+  let pulito = String(testo);
+  for (const segreto of segreti) if (segreto) pulito = pulito.split(segreto).join('***');
+  return pulito.replace(/:\/\/[^@\s]*@/g, '://***@');
 }
 
 /** L'errore stesso e, se e' un gruppo (piu' indirizzi provati), quelli dentro. */
@@ -107,25 +139,41 @@ function erroriDentro(errore) {
  * Funzione pura: riceve l'errore e la stringa di connessione, non tocca niente.
  */
 export function spiegaIlCollegamentoFallito(errore, url) {
-  const { macchina, porta, password, passwordScritta } = partiDellIndirizzo(url);
+  const { letta, macchina, porta, password, passwordScritta } = partiDellIndirizzo(url);
   const errori = erroriDentro(errore);
   const codici = errori.map((e) => String(e.code ?? '')).filter(Boolean);
   const irraggiungibile = codici.some((c) => RETE_IRRAGGIUNGIBILE.has(c));
+  const accessoRifiutato = codici.some((c) => ACCESSO_RIFIUTATO.has(c));
   const indirizzoIPv6 =
     macchina.includes(':') || errori.some((e) => typeof e.address === 'string' && e.address.includes(':'));
   const connessioneDiretta = /^db\.[^.]+\.supabase\.co$/i.test(macchina);
   const sessionPooler = /\.pooler\.supabase\.com$/i.test(macchina);
+  const rigaDelPooler = `   Da GitHub Actions serve la riga del «Session pooler» (IPv4) di Supabase: ${ESEMPIO_SESSION_POOLER}`;
 
-  let dettaglio = String(errore?.message ?? errore ?? '').trim() || codici.join(', ') || 'errore sconosciuto';
-  for (const segreto of [password, passwordScritta]) if (segreto) dettaglio = dettaglio.split(segreto).join('***');
+  const grezzo = String(errore?.message ?? errore ?? '').trim() || codici.join(', ') || 'errore sconosciuto';
+  const dettaglio = senzaSegreti(grezzo, [password, passwordScritta]);
 
-  const dove = macchina ? `${macchina}:${porta}` : 'l\'indirizzo in SUPABASE_DB_URL (non si legge come stringa di connessione)';
+  const dove = letta ? `${macchina || 'database locale'}:${porta}` : 'l\'indirizzo in SUPABASE_DB_URL';
   const righe = [
     `❌ check-migration-drift: non riesco a collegarmi al database (${dove}).`,
     `   Errore: ${dettaglio}`,
   ];
 
-  if (connessioneDiretta || (irraggiungibile && indirizzoIPv6)) {
+  if (!letta) {
+    // 15/10/2026 (collaudo di R53) — Una password con # o / incollata a mano
+    // al posto di [YOUR-PASSWORD] rende la riga illeggibile, e prima usciva la
+    // traccia nuda di Node («TypeError: Invalid URL») senza dire perche'.
+    righe.push(
+      '   Perche\': la riga in SUPABASE_DB_URL non si legge come indirizzo postgresql://… .',
+      '   Di solito e\' la password: se contiene # / ? @ : vanno scritti codificati (# → %23, / → %2F, ? → %3F, @ → %40, : → %3A).',
+      `   La riga del «Session pooler» ha questa forma: ${ESEMPIO_SESSION_POOLER}`,
+    );
+  } else if (eLocale(macchina)) {
+    righe.push(
+      '   E\' un database su questa stessa macchina e non risponde: controlla che sia acceso (nella CI: il servizio',
+      '   Postgres del lavoro) e che porta, utente e nome del database siano giusti.',
+    );
+  } else if (connessioneDiretta || (irraggiungibile && indirizzoIPv6)) {
     righe.push(
       '   Perche\': la rete non arriva a quell\'indirizzo. La connessione diretta di Supabase (db.<progetto>.supabase.co)',
       '   risponde solo in IPv6, e i computer di GitHub Actions hanno solo IPv4.',
@@ -138,11 +186,14 @@ export function spiegaIlCollegamentoFallito(errore, url) {
       '   L\'indirizzo e\' gia\' quello del pooler: controlla la password, e che l\'utente sia postgres.<progetto>',
       '   (nel pooler l\'utente porta dietro il codice del progetto, non e\' solo «postgres»).',
     );
+  } else if (accessoRifiutato) {
+    righe.push('   Il database risponde, ma rifiuta utente o password: controlla quelli scritti in SUPABASE_DB_URL.');
   } else if (irraggiungibile) {
     righe.push('   Perche\': da qui la rete non arriva a quell\'indirizzo.');
-    righe.push(`   Da GitHub Actions serve la riga del «Session pooler» (IPv4) di Supabase: ${ESEMPIO_SESSION_POOLER}`);
+    if (eSupabase(macchina)) righe.push(rigaDelPooler);
   } else {
-    righe.push(`   Da GitHub Actions serve la riga del «Session pooler» (IPv4) di Supabase: ${ESEMPIO_SESSION_POOLER}`);
+    righe.push('   Controlla l\'indirizzo scritto in SUPABASE_DB_URL.');
+    if (eSupabase(macchina)) righe.push(rigaDelPooler);
   }
   return righe;
 }
@@ -188,8 +239,12 @@ async function main() {
     process.exit(saltoEErrore ? 1 : 0);
   }
 
-  const client = new pg.default.Client({ connectionString: DB_URL });
+  // 15/10/2026 (collaudo di R53) — Anche la costruzione del client sta dentro
+  // il try: con una riga illeggibile (una password con # o /) e' gia' qui che
+  // pg si lamenta, e fuori dal try usciva la traccia nuda.
+  let client;
   try {
+    client = new pg.default.Client({ connectionString: DB_URL });
     await client.connect();
   } catch (err) {
     // R53 — Prima qui usciva la traccia nuda di Node («connect ENETUNREACH
@@ -241,7 +296,21 @@ async function main() {
 // Si parte solo quando il file e' lanciato da riga di comando: le prove lo
 // importano per leggere `spiegaIlCollegamentoFallito`, e importarlo non deve
 // aprire connessioni ne' chiudere il processo.
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+//
+// 15/10/2026 (collaudo di R53) — Si confrontano i percorsi VERI, risolti i
+// collegamenti simbolici da tutte e due le parti. Prima il confronto era fra
+// il percorso scritto e quello vero: lanciato da un percorso che passa per un
+// collegamento (su macOS anche /tmp lo e'), lo script usciva 0 senza stampare
+// niente e senza controllare niente — un verde muto.
+function lanciatoDaRigaDiComando() {
+  try {
+    return Boolean(process.argv[1]) && fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (lanciatoDaRigaDiComando()) {
   main().catch((err) => {
     console.error('check-migration-drift: errore', err);
     process.exit(1);

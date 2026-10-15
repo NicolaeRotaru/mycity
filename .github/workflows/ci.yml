@@ -719,6 +719,12 @@ jobs:
   # Un lavoro SALTATO invece non blocca: e' il caso di un lavoro con una sua
   # condizione che non si avvera. Ma se fossero saltati tutti, non avrebbe
   # controllato niente nessuno, e quello non e' un via libera.
+  #
+  # Questo lavoro da solo NON ferma il 1/9: li' la richiesta era verde da sola
+  # e si e' unita sopra un main cambiato. Serve anche la spunta della regola
+  # «Require branches to be up to date before merging». Il nome «Main» e la
+  # regola si controllano con scripts/controlla-regola-main.mjs, che legge la
+  # regola com'e' su GitHub.
   cancello-main:
     name: Main
     needs:
