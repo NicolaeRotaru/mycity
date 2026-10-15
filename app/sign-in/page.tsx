@@ -14,6 +14,13 @@ import { Button } from '@/components/ui/Button';
 import { Input, PasswordInput } from '@/components/ui/Field';
 import { AuthShell, AuthAlternatives, SellerRiderRecruit } from '@/components/ui/AuthShell';
 import { trackSignedIn } from '@/lib/analytics/events';
+import { avvisoAlRitornoSullAccesso, frammentoConSessione, type AvvisoDiAccesso } from '@/lib/auth/link-email';
+import {
+  esitoDellaRispostaDiAccesso,
+  memoriaDellaScheda,
+  percorsoVerificaEmail,
+  ricordaEmailDaConfermare,
+} from '@/lib/auth/conferma-email';
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
@@ -70,6 +77,16 @@ const SignInForm = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = safeInternalPath(searchParams.get('returnTo'), '/');
+  /**
+   * 15/10/2026 (R13) — L'ERRORE NELL'INDIRIZZO ADESSO SI LEGGE.
+   *
+   * Chi apriva il link di conferma su un altro dispositivo finiva qui con
+   * `?error=callback_failed`, e la pagina leggeva solo `returnTo`: nessuna
+   * parola, e la persona pensava di aver sbagliato qualcosa. Il frammento (#…)
+   * il server non lo vede, quindi lo si legge qui, dopo il montaggio.
+   */
+  const [avviso, setAvviso] = useState<AvvisoDiAccesso | null>(null);
+  const erroreDelRitorno = searchParams.get('error');
 
   // Difesa lato client: se Supabase ha mandato l'utente qui invece che
   // su /reset-password (Site URL configurata male), intercetta il flusso
@@ -81,11 +98,23 @@ const SignInForm = () => {
       router.replace('/reset-password' + window.location.hash);
       return;
     }
+    setAvviso(avvisoAlRitornoSullAccesso(erroreDelRitorno, window.location.hash));
+    // Una sessione lasciata nel frammento non deve restare nella barra degli
+    // indirizzi (e nella cronologia): l'avviso e' gia' stato letto.
+    if (frammentoConSessione(window.location.hash)) {
+      window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+    }
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') router.replace('/reset-password');
     });
     return () => sub.subscription.unsubscribe();
-  }, [router]);
+  }, [router, erroreDelRitorno]);
+
+  /** Chi ha l'email da confermare va dove puo' farsi rimandare il link, con l'email gia' scritta. */
+  const vaiAllaVerifica = () => {
+    ricordaEmailDaConfermare(memoriaDellaScheda(), email);
+    router.push(percorsoVerificaEmail(returnTo));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,13 +151,16 @@ const SignInForm = () => {
         body: JSON.stringify({ email, password, captchaToken: captchaToken || undefined }),
       });
       const corpo = await risposta.json().catch(() => null);
-      if (!risposta.ok) {
-        throw new Error(
-          (corpo?.error?.message as string | undefined)
-          ?? (typeof corpo?.error === 'string' ? corpo.error : undefined)
-          ?? 'Accesso non riuscito',
-        );
+      const esito = esitoDellaRispostaDiAccesso(risposta.ok, corpo);
+      // 15/10/2026 (R43) — Prima questo caso finiva nel ripiego e usciva
+      // «Email non valida» (il messaggio contiene la parola «email»): la
+      // persona aveva la password giusta e veniva rimandata indietro.
+      if (esito.tipo === 'email-da-confermare') {
+        toast.info('La tua email non è ancora confermata: qui puoi farti rimandare il link.');
+        vaiAllaVerifica();
+        return;
       }
+      if (esito.tipo === 'errore') throw new Error(esito.messaggio);
       const data = corpo as { user?: { id: string; email_confirmed_at?: string | null }; session?: { access_token: string; refresh_token: string } } | null;
       // La sessione arriva dal server: qui si installa nel browser, cosi' tutto
       // il resto del sito la vede come prima.
@@ -143,7 +175,7 @@ const SignInForm = () => {
       // Gate verifica email anche client-side (difesa in profondità)
       if (data?.user && !data.user.email_confirmed_at) {
         toast.error('Devi confermare la tua email prima di accedere');
-        router.push('/auth/verify-email');
+        vaiAllaVerifica();
         return;
       }
 
@@ -209,6 +241,19 @@ const SignInForm = () => {
       <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
         Accedi per seguire i tuoi ordini e i negozi preferiti.
       </p>
+
+      {avviso && (
+        <p
+          role={avviso.tono === 'errore' ? 'alert' : 'status'}
+          className={`mb-5 rounded-lg border p-3 text-sm ${
+            avviso.tono === 'errore'
+              ? 'border-rose-200 bg-rose-50 text-rose-800'
+              : 'border-olive-200 bg-olive-50 text-olive-900'
+          }`}
+        >
+          {avviso.testo}
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input

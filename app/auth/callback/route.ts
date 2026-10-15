@@ -5,6 +5,8 @@ import { safeInternalPath } from '@/lib/safe-redirect';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { rimandoDelRitornoSenzaSessione } from '@/lib/auth/link-email';
+import { vaChiestaLAccettazione, verbalizzaAccettazione, versioneAccettata } from '@/lib/auth/accettazione-testi';
 
 export const runtime = 'nodejs';
 
@@ -28,8 +30,15 @@ export async function GET(req: NextRequest) {
   // corregge ovunque.
   const next = safeInternalPath(nextParam, '/');
 
+  /**
+   * 15/10/2026 (R13) — CHI ARRIVA SENZA SESSIONE NON ATTERRA PIU' SU UNA PAGINA MUTA.
+   *
+   * Prima: `/sign-in?error=…` e basta, e la pagina di accesso quell'errore non
+   * lo leggeva. Adesso il motivo e' uno che la pagina sa spiegare, e la strada
+   * da cui si veniva (`next`) resta, cosi' dopo l'accesso si torna li'.
+   */
   if (!code) {
-    return NextResponse.redirect(new URL('/sign-in?error=missing_code', env.appUrl()));
+    return NextResponse.redirect(new URL(rimandoDelRitornoSenzaSessione(url.searchParams, next, 'senza-codice'), env.appUrl()));
   }
 
   const { url: supaUrl, key: supaKey } = requireSupabasePublic();
@@ -51,7 +60,11 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
-    return NextResponse.redirect(new URL('/sign-in?error=callback_failed', env.appUrl()));
+    // Il caso piu' comune: il link della conferma aperto su un altro
+    // dispositivo, senza il cookie del browser di partenza. L'email a quel
+    // punto e' gia' confermata: lo si dice, e si accede con la password.
+    logger.warn('[callback] scambio del codice non riuscito', { codice: error.code ?? null });
+    return NextResponse.redirect(new URL(rimandoDelRitornoSenzaSessione(url.searchParams, next, 'scambio-fallito'), env.appUrl()));
   }
 
   // Chi entra con Google finiva nel funnel come se non fosse mai entrato.
@@ -83,62 +96,43 @@ export async function GET(req: NextRequest) {
      * niente. Adesso il pulsante Google mette la versione nell'indirizzo di
      * ritorno, e questa e' la riga che la raccoglie.
      */
-    const versione =
-      (utente.user_metadata?.versione_testi_accettati as string | undefined) ??
-      req.nextUrl.searchParams.get('versione') ??
-      null;
-    if (versione) {
-      try {
-        const admin = getAdminSupabase();
-        const { data: profilo } = await admin
-          .from('profiles')
-          .select('tos_accepted_at')
-          .eq('id', utente.id)
-          .maybeSingle();
-        if (profilo && !profilo.tos_accepted_at) {
-          const adesso = new Date().toISOString();
-          await admin.from('consent_log').insert({
-            user_id: utente.id,
-            categoria: 'privacy_terms',
-            valore: true,
-            versione_testo: versione.slice(0, 60),
-            // 27/8/2026 (R024 · R062) — Era `x-forwarded-for` letto dal primo
-            // pezzo, cioe' quello scritto dal chiamante: l'indirizzo nel
-            // verbale di accettazione se lo dettava l'utente. `getClientIp`
-            // legge da destra scartando i proxy fidati.
-            ip: getClientIp(req),
-            user_agent: req.headers.get('user-agent')?.slice(0, 300) ?? null,
-          });
-          await admin.from('profiles').update({ tos_accepted_at: adesso }).eq('id', utente.id);
-        }
-      } catch (e) {
-        logger.warn('[callback] accettazione dei testi non registrata', { e });
+    //
+    // 15/10/2026 (R13) — Il verbale ora lo scrive `lib/auth/accettazione-testi.ts`,
+    // la stessa copia usata da /auth/confirm e dall'accesso con la password.
+    const versione = versioneAccettata(utente, req.nextUrl.searchParams.get('versione'));
+    try {
+      const admin = getAdminSupabase();
+      if (versione) {
+        // 27/8/2026 (R024 · R062) — `getClientIp` legge da destra scartando i
+        // proxy fidati: l'indirizzo nel verbale non se lo detta l'utente.
+        await verbalizzaAccettazione(admin, {
+          utenteId: utente.id,
+          versione,
+          ip: getClientIp(req),
+          userAgent: req.headers.get('user-agent'),
+        });
+      } else if (await vaChiestaLAccettazione(admin, utente.id)) {
+        /**
+         * 22/8/2026 — SENZA VERSIONE NON SI TIRA DRITTO IN SILENZIO.
+         *
+         * Qui, quando la versione mancava, non succedeva niente: l'utente
+         * arrivava operativo senza aver accettato Termini e Informativa e senza
+         * una riga che lo dicesse. Adesso, se non risulta nemmeno un'accettazione
+         * precedente, si passa da una pagina che la chiede. Chi l'aveva gia'
+         * accettata non se ne accorge.
+         *
+         * 15/10/2026 — Con i cookie della sessione appena aperta: senza, la
+         * pagina che chiede l'accettazione trovava una persona non entrata e il
+         * suo «accetto» rispondeva «autenticazione richiesta».
+         */
+        const chiedi = new URL('/accetta-condizioni', env.appUrl());
+        chiedi.searchParams.set('next', next);
+        const r = NextResponse.redirect(chiedi);
+        for (const c of res.cookies.getAll()) r.cookies.set(c);
+        return r;
       }
-    } else {
-      /**
-       * 22/8/2026 — SENZA VERSIONE NON SI TIRA DRITTO IN SILENZIO.
-       *
-       * Qui, quando la versione mancava, non succedeva niente: l'utente
-       * arrivava operativo senza aver accettato Termini e Informativa e senza
-       * una riga che lo dicesse. Adesso, se non risulta nemmeno un'accettazione
-       * precedente, si passa da una pagina che la chiede. Chi l'aveva gia'
-       * accettata non se ne accorge.
-       */
-      try {
-        const admin = getAdminSupabase();
-        const { data: profilo } = await admin
-          .from('profiles')
-          .select('tos_accepted_at')
-          .eq('id', utente.id)
-          .maybeSingle();
-        if (profilo && !profilo.tos_accepted_at) {
-          const chiedi = new URL('/accetta-condizioni', env.appUrl());
-          chiedi.searchParams.set('next', next);
-          return NextResponse.redirect(chiedi);
-        }
-      } catch (e) {
-        logger.warn('[callback] accettazione dei testi non verificabile', { e });
-      }
+    } catch (e) {
+      logger.warn('[callback] accettazione dei testi non registrata', { e });
     }
   }
 
