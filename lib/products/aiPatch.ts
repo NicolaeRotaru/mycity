@@ -181,6 +181,27 @@ export function separaCampiDichiarativi<T extends object>(
   return { patch: (fuori ?? sorgente) as T, scartati };
 }
 
+/**
+ * Il messaggio quando la modifica dell'assistente chiedeva SOLO di cambiare
+ * dichiarazioni. Resta sotto i 200 caratteri anche con tutti e nove i campi:
+ * sopra, la chat lo passa da `friendlyError`, che lo sostituisce con «Qualcosa
+ * non ha funzionato. Riprova» — proprio il «Riprova» inutile da togliere
+ * (collaudo del 15/10: con nove campi erano 213 caratteri).
+ */
+export function messaggioDichiarazioniProtette(etichette: string[]): string {
+  // «Valori nutrizionali (per 100g)»: `friendlyError` toglie cio' che sta fra
+  // parentesi, quindi qui il nome si accorcia prima.
+  const nomi = etichette.map((e) => e.replace(/\s*\(.*?\)/g, '').trim()).filter(Boolean);
+  const coda = ": non li cambia l'assistente. Li scrivi tu nella scheda del prodotto, col pulsante «Apri».";
+  const MAX = 190;
+  for (let n = nomi.length; n >= 1; n--) {
+    const resto = nomi.length - n;
+    const elenco = nomi.slice(0, n).join(', ') + (resto > 0 ? ` e altri ${resto} campi` : '');
+    if (elenco.length + coda.length <= MAX) return elenco + coda;
+  }
+  return `${nomi.length} campi${coda}`;
+}
+
 /** Il motivo, scritto come lo legge il negoziante. */
 export function motivoDichiarazioneRifiutata(s: DichiarazioneScartata): string {
   return s.azione === 'togli'
@@ -273,10 +294,15 @@ export function motivoPrezzoRifiutato(proposto: number, attuale: number | string
 export function patchAiPerIlForm<T extends { price?: number }>(
   patch: T,
   opts: { prezzoAttuale?: number | string | null },
-): { patch: T; rifiutati: string[] } {
+): { patch: T; rifiutati: string[]; proposte: PropostaDichiarativa[] } {
   const rifiutati: string[] = [];
   const { patch: senzaDichiarazioni, scartati } = separaCampiDichiarativi(patch);
-  for (const s of scartati) rifiutati.push(motivoDichiarazioneRifiutata(s));
+  const proposte: PropostaDichiarativa[] = [];
+  for (const s of scartati) {
+    const motivo = motivoDichiarazioneRifiutata(s);
+    rifiutati.push(motivo);
+    if (s.azione === 'scrivi' && s.valore) proposte.push({ chiave: s.chiave, valore: s.valore, motivo });
+  }
   if (
     typeof senzaDichiarazioni.price === 'number' &&
     senzaDichiarazioni.price > 0 &&
@@ -284,9 +310,34 @@ export function patchAiPerIlForm<T extends { price?: number }>(
   ) {
     rifiutati.unshift(motivoPrezzoRifiutato(senzaDichiarazioni.price, opts.prezzoAttuale));
     const { price: _scartato, ...resto } = senzaDichiarazioni;
-    return { patch: resto as T, rifiutati };
+    return { patch: resto as T, rifiutati, proposte };
   }
-  return { patch: senzaDichiarazioni, rifiutati };
+  return { patch: senzaDichiarazioni, rifiutati, proposte };
+}
+
+/** Una dichiarazione che l'assistente proponeva e che nel modulo NON e' entrata. */
+export type PropostaDichiarativa = { chiave: string; valore: string; motivo: string };
+
+/**
+ * R41 — Nel modulo, la dichiarazione proposta dall'assistente diventa una
+ * PROPOSTA da confermare a mano: un avviso col valore e un pulsante «Usa questo
+ * valore». Il campo si riempie solo se il negoziante lo preme, e anche allora
+ * resta davanti ai suoi occhi fino al salvataggio.
+ *
+ * Qui si decide se il pulsante c'e' e cosa scrive: c'e' solo se il campo esiste
+ * nella categoria del prodotto (un'«Allergeni» proposta per un tagliere non ha
+ * dove andare), e una casella diventa vero o falso come quando la compila la
+ * lettura della foto.
+ */
+export function propostaPerIlModulo(
+  proposta: PropostaDichiarativa,
+  campi: { key: string; type: string }[],
+): { motivo: string; valore?: string | boolean } {
+  const campo = campi.find((f) => f.key === proposta.chiave);
+  if (!campo) return { motivo: proposta.motivo };
+  const valore =
+    campo.type === 'checkbox' ? /^(true|1|s[iì]|yes|vero)$/i.test(proposta.valore.trim()) : proposta.valore.trim();
+  return { motivo: proposta.motivo, valore };
 }
 
 export function resolveAiPatch(opts: {

@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { resolveAiPatch, patchAiPerIlForm, type CategoryRow } from '@/lib/products/aiPatch';
+import {
+  resolveAiPatch,
+  patchAiPerIlForm,
+  propostaPerIlModulo,
+  type AiProductPatch,
+  type CategoryRow,
+} from '@/lib/products/aiPatch';
+import { CATEGORY_ATTRIBUTES } from '@/lib/category-attributes';
 import { buildCatalogBatchRequests, parseCatalogBatchEntry, senzaCampiEconomici } from '@/lib/ai/catalogBatch';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 
@@ -312,6 +319,39 @@ describe('il lotto e i campi obbligatori (R36)', () => {
     expect(res.status).toBe(200);
     expect(db.scritture.filter((s) => s.tabella === 'products')).toEqual([]);
   });
+
+  it('dentro gli alimentari (da «Alimentari» a «Pane e forno») il lotto scrive le migliorie', async () => {
+    // Collaudo del 15/10: un alimento vecchio, in vendita senza allergeni. Il
+    // modello ne migliora la descrizione e ne cambia la sottocategoria: prima il
+    // lotto lo saltava in silenzio, e la descrizione nuova andava persa.
+    db.prodotti = [{ ...structuredClone(FOCACCIA), category_id: 'alim', attributes: {} }];
+    db.lavoro = {
+      id: 'job-3',
+      seller_id: 'forno-1',
+      operation: 'improve',
+      status: 'ready',
+      results: [
+        {
+          product_id: 'focaccia',
+          patch: {
+            description: 'Focaccia genovese alta e morbida, del forno',
+            category_slug: 'alimentari',
+            subcategory_name: 'Pane e forno',
+          },
+        },
+      ],
+    };
+    const res = await chiama('@/app/api/ai/catalog-batch/apply/route', '/api/ai/catalog-batch/apply', {
+      jobId: 'job-3',
+    });
+    expect(res.status).toBe(200);
+    const scritte = db.scritture.filter((s) => s.tabella === 'products');
+    expect(scritte).toHaveLength(1);
+    expect(scritte[0].valori).toMatchObject({
+      description: 'Focaccia genovese alta e morbida, del forno',
+      category_id: 'pane',
+    });
+  });
 });
 
 describe('le altre strade che scrivono nel database', () => {
@@ -350,6 +390,25 @@ describe('le altre strade che scrivono nel database', () => {
     expect(patch).toEqual({ price: 3.6, attributes: { marca: 'Forno' } });
     expect(rifiutati.join(' | ')).toContain('Glutine'); // il valore proposto resta leggibile
     expect(rifiutati).toHaveLength(2);
+  });
+
+  it('il modulo: la dichiarazione proposta diventa una proposta da usare a mano, col suo valore', () => {
+    const { proposte } = patchAiPerIlForm<AiProductPatch>(
+      { attributes: { allergeni: 'Glutine', senza_lattosio: 'true', marca: 'Forno' }, attributes_remove: ['ingredienti'] },
+      { prezzoAttuale: 3.5 },
+    );
+    // Solo le proposte con un valore: «togli gli ingredienti» non si offre con un pulsante.
+    expect(proposte.map((p) => [p.chiave, p.valore])).toEqual([
+      ['allergeni', 'Glutine'],
+      ['senza_lattosio', 'true'],
+    ]);
+    const campi = CATEGORY_ATTRIBUTES.alimentari;
+    // Il pulsante «Usa questo valore» scrive il testo, e per una casella vero/falso.
+    expect(propostaPerIlModulo(proposte[0], campi).valore).toBe('Glutine');
+    expect(propostaPerIlModulo(proposte[1], campi).valore).toBe(true);
+    // Su un prodotto che non e un alimento il campo non c'e': niente pulsante, solo l'avviso.
+    expect(propostaPerIlModulo(proposte[0], CATEGORY_ATTRIBUTES.casa).valore).toBeUndefined();
+    expect(propostaPerIlModulo(proposte[0], CATEGORY_ATTRIBUTES.casa).motivo).toContain('Glutine');
   });
 
   it('il modulo: la banda sul prezzo continua a valere insieme al nuovo filtro', () => {

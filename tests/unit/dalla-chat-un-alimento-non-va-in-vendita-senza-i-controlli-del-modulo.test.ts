@@ -2,12 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { buildDraftProductInsert } from '@/lib/products/draftFromVision';
 import { productSnapshot } from '@/lib/products/aiSnapshot';
 import {
+  avvisoDopoLeBozze,
+  avvisoSullaPubblicazione,
   bozzaDaCreare,
   dichiarazioniDellaBozza,
   erroreDiSalvataggio,
   messaggioDopoLaBozza,
+  riquadroDichiarazioni,
 } from '@/lib/products/prontoPerLaVendita';
-import type { CategoryRow } from '@/lib/products/aiPatch';
+import { CAMPI_DICHIARATIVI, messaggioDichiarazioniProtette, type CategoryRow } from '@/lib/products/aiPatch';
+import { findLabelForKey } from '@/lib/category-attributes';
+import { avvisoDopoLApplicazione } from '@/lib/ai/esitoCopilot';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 
 /**
@@ -36,7 +41,11 @@ const CATEGORIE: CategoryRow[] = [
 
 const FOTO = ['https://example.supabase.co/storage/v1/object/public/products/focaccia.jpg'];
 
-/** La bozza che la chat crea dalla foto di una focaccia, come nella scheda R36. */
+/**
+ * La bozza che la chat crea dalla foto di una focaccia, come nella scheda R36.
+ * Qui le dichiarazioni sono passate dalla spunta del negoziante: queste prove
+ * guardano cosa succede DOPO, quando la bozza va messa in vendita.
+ */
 function bozzaDellaFocaccia(attributi: Record<string, string>) {
   const insert = buildDraftProductInsert({
     draft: {
@@ -46,6 +55,7 @@ function bozzaDellaFocaccia(attributi: Record<string, string>) {
       suggested_price: 3.5,
       attributes: attributi,
       tags: ['focaccia', 'pane'],
+      dichiarazioni_confermate: true,
     },
     imageUrls: FOTO,
     categories: CATEGORIE,
@@ -58,6 +68,7 @@ function bozzaDellaFocaccia(attributi: Record<string, string>) {
 
 const db = vi.hoisted(() => ({
   scritture: [] as { id: unknown; valori: Record<string, unknown> }[],
+  inserite: [] as Record<string, unknown>[],
   prodotti: [] as Record<string, unknown>[],
   categorie: [] as Record<string, unknown>[],
   /** L'errore che il database restituisce alla scrittura (null = scrive). */
@@ -80,14 +91,32 @@ vi.mock('@/lib/ai/moderation', () => ({
   classifyProductPolicy: async () => ({ allowed: true }),
 }));
 vi.mock('@/lib/supabase/server', () => {
-  type Stato = { op: 'select' | 'update'; valori: Record<string, unknown> | null; filtri: Record<string, unknown> };
+  type Stato = {
+    op: 'select' | 'update' | 'insert';
+    valori: Record<string, unknown> | Record<string, unknown>[] | null;
+    filtri: Record<string, unknown>;
+  };
   const risolvi = (tabella: string, s: Stato, una: boolean) => {
     if (tabella === 'categories') return Promise.resolve({ data: db.categorie, error: null });
+    if (s.op === 'insert') {
+      // Le bozze nascono nel finto database come ci nascerebbero davvero.
+      const righe = (Array.isArray(s.valori) ? s.valori : [s.valori ?? {}]).map((v) => ({
+        id: `nuovo-${db.prodotti.length}`,
+        has_variants: false,
+        ...v,
+      }));
+      for (const r of righe) {
+        db.prodotti.push(r);
+        db.inserite.push(r);
+      }
+      return Promise.resolve({ data: una ? righe[0] : righe, error: null });
+    }
     if (s.op === 'update') {
       if (db.errore) return Promise.resolve({ data: null, error: db.errore });
-      db.scritture.push({ id: s.filtri.id, valori: s.valori ?? {} });
+      const valori = (s.valori ?? {}) as Record<string, unknown>;
+      db.scritture.push({ id: s.filtri.id, valori });
       const riga = db.prodotti.find((p) => p.id === s.filtri.id);
-      return Promise.resolve({ data: { ...riga, ...s.valori }, error: null });
+      return Promise.resolve({ data: { ...riga, ...valori }, error: null });
     }
     if (una) return Promise.resolve({ data: db.prodotti.find((p) => p.id === s.filtri.id) ?? null, error: null });
     const ids = s.filtri.id as string[] | undefined;
@@ -104,6 +133,11 @@ vi.mock('@/lib/supabase/server', () => {
       order: () => q,
       update: (v: Record<string, unknown>) => {
         s.op = 'update';
+        s.valori = v;
+        return q;
+      },
+      insert: (v: Record<string, unknown> | Record<string, unknown>[]) => {
+        s.op = 'insert';
         s.valori = v;
         return q;
       },
@@ -147,6 +181,7 @@ const SCHEDA_COMPLETA = {
 
 beforeEach(() => {
   db.scritture.length = 0;
+  db.inserite.length = 0;
   db.prodotti = [];
   db.categorie = structuredClone(CATEGORIE);
   db.errore = null;
@@ -341,7 +376,7 @@ describe('la bozza dalle foto: allergeni e ingredienti si vedono e si confermano
     const riga = {
       id: 'b',
       ...buildDraftProductInsert({
-        draft: { ...dallaFoto, attributes: SCHEDA_COMPLETA },
+        draft: { ...dallaFoto, attributes: SCHEDA_COMPLETA, dichiarazioni_confermate: true },
         imageUrls: FOTO,
         categories: CATEGORIE,
         sellerId: 'forno-1',
@@ -349,5 +384,242 @@ describe('la bozza dalle foto: allergeni e ingredienti si vedono e si confermano
       has_variants: false,
     };
     expect(messaggioDopoLaBozza(productSnapshot(riga, CATEGORIE))).toContain('"pubblica"');
+  });
+});
+
+/* ------------------------------------------------------------------------- */
+/*  Collaudo del 15/10: il percorso intero, partendo da «Crea più prodotti»   */
+/* ------------------------------------------------------------------------- */
+
+type Rotta = { POST: (r: Request) => Promise<Response> };
+
+async function chiama(rotta: string, url: string, corpo: unknown) {
+  const { POST } = (await import(rotta)) as unknown as Rotta;
+  const res = await POST(
+    new Request(`http://localhost${url}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(corpo),
+    }),
+  );
+  return { status: res.status, json: (await res.json()) as Record<string, unknown> & { error?: { message: string } } };
+}
+
+/** Quello che il modello legge sulla foto della focaccia, senza nessuna etichetta. */
+const FOCACCIA_LETTA = {
+  name: 'Focaccia genovese',
+  description: "Focaccia genovese all'olio, alta e morbida",
+  category_slug: 'alimentari',
+  suggested_price: 3.5,
+  attributes: { allergeni: 'Glutine', ingredienti: 'farina, acqua, olio, sale, lievito', peso: '300 g' },
+  tags: ['focaccia'],
+};
+const FOTO_NOSTRA = 'https://abcdefgh.supabase.co/storage/v1/object/public/products/forno-1/focaccia.jpg';
+
+describe('«Crea più prodotti dalle foto», poi «pubblica»: il percorso intero', () => {
+  it('senza la spunta la bozza nasce SENZA allergeni e ingredienti, e «pubblica» si ferma', async () => {
+    // Il corpo che la schermata mandava prima: le dichiarazioni del modello, nessuna conferma.
+    const creata = await chiama('@/app/api/ai/catalog-create-bulk/route', '/api/ai/catalog-create-bulk', {
+      items: [{ imageUrls: [FOTO_NOSTRA], draft: FOCACCIA_LETTA }],
+    });
+    expect(creata.status).toBe(200);
+    expect(db.inserite).toHaveLength(1);
+    const attributi = db.inserite[0].attributes as Record<string, string>;
+    expect(attributi, 'la bozza e nata con allergeni che nessuno ha visto').not.toHaveProperty('allergeni');
+    expect(attributi).not.toHaveProperty('ingredienti');
+    expect(attributi).toHaveProperty('peso', '300 g');
+
+    // Dalla chat: «pubblica».
+    const dallaChat = await applica('nuovo-0', { status: 'available' });
+    expect(dallaChat.status).toBe(400);
+    expect(comeLoLeggeLaChat(dallaChat.json)).toContain('Allergeni');
+    expect(comeLoLeggeLaChat(dallaChat.json)).toContain('Ingredienti');
+
+    // Dal Copilot: «pubblica tutte le bozze».
+    const dalCopilot = await chiama('@/app/api/ai/catalog-apply-bulk/route', '/api/ai/catalog-apply-bulk', {
+      changes: [{ productId: 'nuovo-0', patch: { status: 'available' } }],
+    });
+    expect(dalCopilot.json.applied).toBe(0);
+    expect(db.scritture, 'la focaccia e andata in vendita').toEqual([]);
+  });
+
+  it('con la spunta le dichiarazioni entrano: il negoziante le ha viste e confermate', async () => {
+    const creata = await chiama('@/app/api/ai/catalog-create-bulk/route', '/api/ai/catalog-create-bulk', {
+      items: [{ imageUrls: [FOTO_NOSTRA], draft: { ...FOCACCIA_LETTA, dichiarazioni_confermate: true } }],
+    });
+    expect(creata.status).toBe(200);
+    expect(db.inserite[0].attributes).toMatchObject({ allergeni: 'Glutine', ingredienti: 'farina, acqua, olio, sale, lievito' });
+    const pubblicata = await applica('nuovo-0', { status: 'available' });
+    expect(pubblicata.status).toBe(200);
+  });
+
+  it('la rotta della chat (un prodotto) ha la stessa porta: senza spunta, niente dichiarazioni', async () => {
+    const senza = await chiama('@/app/api/ai/catalog-create/route', '/api/ai/catalog-create', {
+      imageUrls: [FOTO_NOSTRA],
+      draft: FOCACCIA_LETTA,
+    });
+    expect(senza.status).toBe(200);
+    expect(db.inserite[0].attributes).not.toHaveProperty('allergeni');
+    expect(db.inserite[0].attributes).not.toHaveProperty('ingredienti');
+
+    const con = await chiama('@/app/api/ai/catalog-create/route', '/api/ai/catalog-create', {
+      imageUrls: [FOTO_NOSTRA],
+      draft: { ...FOCACCIA_LETTA, dichiarazioni_confermate: true },
+    });
+    expect(con.status).toBe(200);
+    expect(db.inserite[1].attributes).toHaveProperty('allergeni', 'Glutine');
+  });
+
+  it('la spunta deve essere un sì vero: un testo «true» non vale', async () => {
+    const r = await chiama('@/app/api/ai/catalog-create-bulk/route', '/api/ai/catalog-create-bulk', {
+      items: [{ imageUrls: [FOTO_NOSTRA], draft: { ...FOCACCIA_LETTA, dichiarazioni_confermate: 'true' } }],
+    });
+    // O la rotta rifiuta la richiesta, o la bozza nasce senza: mai con le dichiarazioni.
+    const conDichiarazioni = db.inserite.some((p) => 'allergeni' in (p.attributes as Record<string, string>));
+    expect(conDichiarazioni, `stato ${r.status}`).toBe(false);
+  });
+
+  it('il Copilot dice al negoziante QUALE prodotto e fermo e PERCHE', async () => {
+    db.prodotti = [bozzaDellaFocaccia({ allergeni: 'Glutine' })];
+    const { json } = await chiama('@/app/api/ai/catalog-apply-bulk/route', '/api/ai/catalog-apply-bulk', {
+      changes: [{ productId: 'bozza-focaccia', patch: { status: 'available' } }],
+    });
+    const avviso = avvisoDopoLApplicazione({ applied: json.applied, results: json.results }, [
+      { product_id: 'bozza-focaccia', name: 'Focaccia genovese' },
+    ]);
+    expect(avviso.tipo).toBe('avviso');
+    expect(avviso.testo).toContain('Focaccia genovese');
+    expect(avviso.testo).toContain('Ingredienti');
+  });
+});
+
+describe('collaudo del 15/10: i casi che nessuna prova teneva', () => {
+  it('un alimento esaurito rimesso in vendita senza ingredienti si ferma', async () => {
+    db.prodotti = [{ ...bozzaDellaFocaccia({ allergeni: 'Glutine' }), status: 'sold' }];
+    const { status, json } = await applica('bozza-focaccia', { status: 'available' });
+    expect(status).toBe(400);
+    expect(json.error?.message).toContain('Ingredienti');
+    expect(db.scritture).toEqual([]);
+  });
+
+  it('spostare dentro gli alimentari un alimento gia in vendita non butta via le migliorie', async () => {
+    db.prodotti = [{ ...bozzaDellaFocaccia({}), status: 'available', category_id: 'alim' }];
+    const { status } = await applica('bozza-focaccia', {
+      description: 'Focaccia genovese alta e morbida, del forno',
+      category_slug: 'alimentari',
+      subcategory_name: 'Pane e forno',
+    });
+    expect(status).toBe(200);
+    expect(db.scritture[0].valori).toMatchObject({
+      description: 'Focaccia genovese alta e morbida, del forno',
+      category_id: 'pane',
+    });
+  });
+
+  it('se l assistente propone tutti e nove i campi protetti, il motivo arriva intero, non «Riprova»', async () => {
+    db.prodotti = [bozzaDellaFocaccia(SCHEDA_COMPLETA)];
+    const tutti = Object.fromEntries(CAMPI_DICHIARATIVI.map((k) => [k, 'x']));
+    const { status, json } = await applica('bozza-focaccia', { attributes: tutti });
+    expect(status).toBe(400);
+    const letto = comeLoLeggeLaChat(json);
+    expect(letto).not.toContain('Riprova');
+    expect(letto).toContain('Allergeni');
+    expect(letto).toContain("non li cambia l'assistente");
+  });
+
+  it('con qualunque numero di campi protetti il messaggio passa intero dalla chat', () => {
+    const etichette = CAMPI_DICHIARATIVI.map((k) => findLabelForKey(k));
+    for (let n = 1; n <= etichette.length; n++) {
+      const messaggio = messaggioDichiarazioniProtette(etichette.slice(0, n));
+      expect(friendlyError(new Error(messaggio)), `con ${n} campi`).toBe(messaggio);
+    }
+  });
+});
+
+describe('la scheda della chat dice quello che dira il server', () => {
+  const SCHEDA_LIBRO = {
+    name: 'Il nome della rosa',
+    description: 'Romanzo',
+    price: 12,
+    categorySlug: 'libri',
+    attributes: {},
+    image: 'https://abcdefgh.supabase.co/x.jpg',
+    status: 'draft',
+  };
+
+  it('una descrizione corretta nella stessa proposta non e piu «mancante»', () => {
+    const avviso = avvisoSullaPubblicazione(SCHEDA_LIBRO, {
+      description: 'Romanzo di Umberto Eco, edizione tascabile Bompiani',
+      status: 'available',
+    });
+    expect(avviso?.mancanti).toEqual([]);
+  });
+
+  it('allergeni proposti dall assistente non riempiono la scheda: l avviso resta', () => {
+    const avviso = avvisoSullaPubblicazione(
+      { ...SCHEDA_LIBRO, name: 'Focaccia', description: "Focaccia genovese all'olio", categorySlug: 'alimentari' },
+      { attributes: { allergeni: 'Glutine', ingredienti: 'farina' }, status: 'available' },
+    );
+    expect(avviso?.mancanti).toEqual(['Allergeni', 'Ingredienti']);
+  });
+
+  it('un alimento completo mostra le dichiarazioni con cui andrebbe in vetrina', () => {
+    const avviso = avvisoSullaPubblicazione(
+      {
+        ...SCHEDA_LIBRO,
+        name: 'Focaccia',
+        description: "Focaccia genovese all'olio",
+        categorySlug: 'alimentari',
+        attributes: { ...SCHEDA_COMPLETA, senza_glutine: 'false', vegano: 'true' },
+      },
+      { status: 'available' },
+    );
+    expect(avviso?.mancanti).toEqual([]);
+    expect(avviso?.dichiarazioni).toEqual([
+      { etichetta: 'Vegano', valore: 'Sì' },
+      { etichetta: 'Allergeni', valore: 'Glutine, sesamo' },
+      { etichetta: 'Ingredienti', valore: SCHEDA_COMPLETA.ingredienti },
+    ]);
+  });
+
+  it('una proposta che non mette in vendita non mostra niente', () => {
+    expect(avvisoSullaPubblicazione(SCHEDA_LIBRO, { price: 13 })).toBeNull();
+  });
+});
+
+describe('il riquadro della bozza dice il vero prima e dopo la creazione', () => {
+  const draft = {
+    category_slug: 'alimentari',
+    attributes: { allergeni: 'Glutine', senza_glutine: 'false', peso: '300 g' },
+  };
+
+  it('prima: mostra cosa ha letto il modello e chiede la spunta', () => {
+    const r = riquadroDichiarazioni(draft, { creata: false, confermate: false });
+    expect(r?.righe).toEqual([{ etichetta: 'Allergeni', valore: 'Glutine' }]);
+    expect(r?.chiediSpunta).toBe(true);
+    expect(r?.daScrivere).toContain('Ingredienti');
+  });
+
+  it('dopo, senza spunta: dice che NON sono entrate e che manca anche l allergene', () => {
+    const r = riquadroDichiarazioni(draft, { creata: true, confermate: false });
+    expect(r?.titolo).toContain('NON entrate');
+    expect(r?.daScrivere).toContain('Allergeni, Ingredienti');
+    expect(r?.chiediSpunta).toBe(false);
+  });
+
+  it('dopo, con la spunta: dice che sono entrate', () => {
+    const r = riquadroDichiarazioni(draft, { creata: true, confermate: true });
+    expect(r?.titolo).toContain('Entrate');
+    expect(r?.daScrivere).toContain('Ingredienti');
+    expect(r?.daScrivere).not.toContain('Allergeni');
+  });
+
+  it('dopo «Crea più prodotti» si dice subito quali bozze vanno completate', () => {
+    const testo = avvisoDopoLeBozze([
+      { name: 'Focaccia', description: '', price: 3.5, categorySlug: 'alimentari', attributes: {}, image: null },
+      { name: 'Tagliere', description: '', price: 20, categorySlug: 'casa', attributes: {}, image: null },
+    ]);
+    expect(testo).toContain('«Focaccia» (Allergeni, Ingredienti)');
+    expect(testo).not.toContain('Tagliere');
   });
 });

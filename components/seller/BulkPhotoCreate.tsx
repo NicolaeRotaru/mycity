@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { resizeImageToBase64 } from '@/lib/image-resize';
 import { uploadProductImages } from '@/lib/products/uploadImages';
+import { avvisoDopoLeBozze, bozzaDaCreare, riquadroDichiarazioni } from '@/lib/products/prontoPerLaVendita';
+import type { ProductSnapshot } from '@/lib/products/aiSnapshot';
 
 /**
  * Creazione MULTI-prodotto da foto.
@@ -48,7 +50,15 @@ type DetectedProduct = {
  * `chiave` nasce col prodotto e non cambia mai: è quella che identifica la
  * riga, non il suo posto in fila.
  */
-type RigaProdotto = DetectedProduct & { chiave: string };
+type RigaProdotto = DetectedProduct & {
+  chiave: string;
+  /**
+   * R36 — Il negoziante ha spuntato «le ho controllate» sotto allergeni e
+   * ingredienti letti dalle foto. Senza la spunta la bozza nasce senza: lo
+   * decide il server, non questa schermata.
+   */
+  dichiarazioniConfermate?: boolean;
+};
 
 type Phase = 'idle' | 'analyzing' | 'review' | 'creating';
 
@@ -129,7 +139,7 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
     });
   };
 
-  const updateProduct = (chiave: string, patch: Partial<DetectedProduct>) =>
+  const updateProduct = (chiave: string, patch: Partial<Omit<RigaProdotto, 'chiave'>>) =>
     setProducts((prev) => prev.map((p) => (p.chiave === chiave ? { ...p, ...patch } : p)));
   const removeProduct = (chiave: string) =>
     setProducts((prev) => prev.filter((p) => p.chiave !== chiave));
@@ -148,17 +158,22 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
       const items = creatable
         .map((p) => ({
           imageUrls: p.image_indexes.map((i) => urls[i]).filter((u): u is string => !!u),
-          draft: {
-            name: p.name,
-            description: p.description,
-            category_id: p.category_id,
-            subcategory_id: p.subcategory_id,
-            category_slug: p.category_slug ?? undefined,
-            suggested_price: p.suggested_price,
-            attributes: p.attributes,
-            tags: p.tags,
-            alt_text: p.alt_text,
-          },
+          // R36 — Allergeni e ingredienti letti dalle foto partono solo se il
+          // negoziante li ha visti qui sotto e ha spuntato «le ho controllate».
+          draft: bozzaDaCreare(
+            {
+              name: p.name,
+              description: p.description,
+              category_id: p.category_id,
+              subcategory_id: p.subcategory_id,
+              category_slug: p.category_slug ?? undefined,
+              suggested_price: p.suggested_price,
+              attributes: p.attributes,
+              tags: p.tags,
+              alt_text: p.alt_text,
+            },
+            !!p.dichiarazioniConfermate,
+          ),
         }))
         .filter((it) => it.imageUrls.length > 0);
 
@@ -181,6 +196,9 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
       if (!res.ok) throw new Error(apiErrorMessage(data, 'Creazione fallita'));
       const count = Number(data.count ?? items.length);
       toast.success(`${count} ${count === 1 ? 'bozza creata' : 'bozze create'}! Le trovi tra i tuoi prodotti.`);
+      // R36 — Quali bozze non si possono ancora pubblicare, e perche'.
+      const daCompletare = avvisoDopoLeBozze(Array.isArray(data.products) ? (data.products as ProductSnapshot[]) : []);
+      if (daCompletare) toast.warning(daCompletare, { duration: 20_000 });
       reset();
       onCreated?.(count);
     } catch (err) {
@@ -297,6 +315,51 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
                 {blocked && p.policy_reason && (
                   <p className="mt-1 text-xs text-rose-600">{p.policy_reason}</p>
                 )}
+                {!blocked &&
+                  (() => {
+                    // R36 — Allergeni e ingredienti letti dalle foto: si vedono qui,
+                    // e entrano nella bozza solo con la spunta del negoziante.
+                    const riquadro = riquadroDichiarazioni(p, {
+                      creata: false,
+                      confermate: !!p.dichiarazioniConfermate,
+                    });
+                    if (!riquadro) return null;
+                    return (
+                      <div
+                        data-riquadro="dichiarazioni"
+                        className="mt-1.5 rounded border border-accent-200 bg-accent-50 p-1.5 text-xs text-ink-800"
+                      >
+                        <p className="font-semibold text-accent-800">{riquadro.titolo}</p>
+                        {riquadro.righe.length > 0 && (
+                          <ul className="mt-0.5 space-y-0.5">
+                            {riquadro.righe.map((d) => (
+                              <li key={d.etichetta}>
+                                <span className="font-semibold">{d.etichetta}:</span> {d.valore}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {riquadro.daScrivere && <p className="mt-0.5">{riquadro.daScrivere}</p>}
+                        {riquadro.chiediSpunta && (
+                          <label className="mt-1 flex items-start gap-1.5">
+                            <input
+                              type="checkbox"
+                              checked={!!p.dichiarazioniConfermate}
+                              onChange={() =>
+                                updateProduct(p.chiave, { dichiarazioniConfermate: !p.dichiarazioniConfermate })
+                              }
+                              disabled={creating}
+                              className="mt-0.5"
+                            />
+                            <span>
+                              Le ho controllate sull&apos;etichetta: sono giuste. Senza questa spunta la bozza nasce
+                              senza, e le scrivi tu nella scheda.
+                            </span>
+                          </label>
+                        )}
+                      </div>
+                    );
+                  })()}
               </div>
 
               <div className="flex shrink-0 flex-col items-end gap-1">

@@ -3,11 +3,14 @@ import {
   AI_ATTR_TO_FIELD,
   CATEGORY_ATTRIBUTES,
   findLabelForKey,
+  formatAttributeValue,
   getAttributesForCategory,
 } from '@/lib/category-attributes';
 import {
   eCampoDichiarativo,
+  prezzoAiFuoriBanda,
   separaCampiDichiarativi,
+  type AiProductPatch,
   type CategoryRow,
   type DichiarazioneScartata,
 } from '@/lib/products/aiPatch';
@@ -109,11 +112,9 @@ export function cosaMancaDopoLaModifica(opts: {
   const cambiaCategoria = 'category_id' in update && update.category_id !== prima.category_id;
   if (!diventaInVendita && !cambiaCategoria) return [];
 
+  const albero = categories.map((c) => ({ id: c.id, slug: c.slug, parent_id: c.parent_id }));
   const categoryId = (cambiaCategoria ? update.category_id : prima.category_id) as string | null;
-  const { topSlug } = getAttributesForCategory(
-    categories.map((c) => ({ id: c.id, slug: c.slug, parent_id: c.parent_id })),
-    categoryId,
-  );
+  const { topSlug } = getAttributesForCategory(albero, categoryId);
   const attributes = ('attributes' in update ? update.attributes : prima.attributes) as
     | Record<string, unknown>
     | null;
@@ -121,7 +122,17 @@ export function cosaMancaDopoLaModifica(opts: {
   // Sullo spostamento di categoria di un prodotto gia' in vendita si guardano
   // solo i campi che la categoria nuova rende obbligatori: il resto della
   // scheda era gia' in vetrina e non e' questa modifica a cambiarlo.
-  if (!diventaInVendita) return campiObbligatoriVuoti(topSlug, attributes);
+  //
+  // E se la categoria di primo livello resta la stessa — una focaccia che passa
+  // da «Alimentari» ad «Alimentari / Pane» — i campi obbligatori sono gli
+  // stessi di prima: la modifica non rende la scheda ne' migliore ne' peggiore.
+  // Fermarla buttava via, nel lavoro massivo, anche il nome e la descrizione
+  // migliorati di un alimento vecchio, salvato prima che gli allergeni fossero
+  // obbligatori (collaudo del 15/10).
+  if (!diventaInVendita) {
+    if (topSlug === getAttributesForCategory(albero, prima.category_id).topSlug) return [];
+    return campiObbligatoriVuoti(topSlug, attributes);
+  }
 
   const valore = <K extends keyof ProdottoAttuale>(k: K) =>
     (k in update ? update[k] : prima[k]) as ProdottoAttuale[K];
@@ -181,6 +192,25 @@ export function erroreDiSalvataggio(
 export type DichiarazioneDaFoto = { chiave: string; etichetta: string; valore: string };
 
 /**
+ * Il valore come lo legge una persona. Le caselle arrivano dal modello come
+ * testo, «true» e «false»: nella scheda si leggeva «Senza glutine: false».
+ */
+/**
+ * Vero se il valore dice qualcosa al cliente. Una casella non spuntata
+ * («Senza glutine: false») non e' una dichiarazione: non si mostra.
+ */
+function diceQualcosa(v: unknown): boolean {
+  if (v === false) return false;
+  const t = String(v ?? '').trim();
+  return t !== '' && !/^false$/i.test(t);
+}
+
+export function valoreLeggibile(v: unknown): string {
+  if (typeof v === 'string' && /^(true|false)$/i.test(v.trim())) return /^true$/i.test(v.trim()) ? 'Sì' : 'No';
+  return formatAttributeValue(typeof v === 'string' ? v.trim() : v);
+}
+
+/**
  * R36/R41 — La lettura dell'etichetta in foto e' l'unica strada da cui l'AI
  * porta allergeni e ingredienti in una scheda. Anche li' il negoziante li deve
  * VEDERE: questo dice quali dichiarazioni il modello ha letto e quali campi
@@ -192,8 +222,11 @@ export function dichiarazioniDellaBozza(draft: {
 }): { lette: DichiarazioneDaFoto[]; obbligatoriVuoti: string[] } {
   const { scartati } = separaCampiDichiarativi({ attributes: draft.attributes ?? {} });
   const lette = scartati
-    .filter((s): s is DichiarazioneScartata & { valore: string } => s.azione === 'scrivi' && !!s.valore)
-    .map((s) => ({ chiave: s.chiave, etichetta: s.etichetta, valore: s.valore }));
+    .filter(
+      (s): s is DichiarazioneScartata & { valore: string } =>
+        s.azione === 'scrivi' && !!s.valore && diceQualcosa(s.valore),
+    )
+    .map((s) => ({ chiave: s.chiave, etichetta: s.etichetta, valore: valoreLeggibile(s.valore) }));
   const presenti: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(draft.attributes ?? {})) presenti[AI_ATTR_TO_FIELD[k] ?? k] = v;
   return { lette, obbligatoriVuoti: campiObbligatoriVuoti(draft.category_slug, presenti) };
@@ -204,23 +237,76 @@ export function attributiNonDichiarativi(
   attributes: Record<string, unknown> | null | undefined,
 ): { etichetta: string; valore: string }[] {
   return Object.entries(attributes ?? {})
-    .filter(([k, v]) => !eCampoDichiarativo(k) && k !== 'condizione' && String(v ?? '').trim())
-    .map(([k, v]) => ({ etichetta: findLabelForKey(k), valore: String(v).trim() }));
+    .filter(([k, v]) => !eCampoDichiarativo(k) && k !== 'condizione' && diceQualcosa(v))
+    .map(([k, v]) => ({ etichetta: findLabelForKey(k), valore: valoreLeggibile(v) }));
+}
+
+/** Il riquadro delle dichiarazioni sotto la bozza dalle foto. */
+export type RiquadroDichiarazioni = {
+  titolo: string;
+  righe: { etichetta: string; valore: string }[];
+  /** Cosa resta da scrivere nella scheda prima di pubblicare (null = niente). */
+  daScrivere: string | null;
+  /** Vero finche' la bozza non e' creata e c'e' qualcosa da confermare. */
+  chiediSpunta: boolean;
+};
+
+/**
+ * R36 — Cosa dice il riquadro «Da controllare tu», prima e dopo la creazione.
+ *
+ * Prima: le dichiarazioni lette dalle foto e la spunta per confermarle. Dopo,
+ * il riquadro deve dire il vero su cosa e' entrato: senza spunta la bozza nasce
+ * senza, e una scheda che continua a mostrare «Allergeni: Glutine» fa credere
+ * il contrario (collaudo del 15/10).
+ */
+export function riquadroDichiarazioni(
+  draft: { category_slug?: string | null; attributes?: Record<string, string> | null },
+  stato: { creata: boolean; confermate: boolean },
+): RiquadroDichiarazioni | null {
+  const { lette, obbligatoriVuoti } = dichiarazioniDellaBozza(draft);
+  if (lette.length === 0 && obbligatoriVuoti.length === 0) return null;
+  const righe = lette.map(({ etichetta, valore }) => ({ etichetta, valore }));
+  const entrate = !stato.creata || stato.confermate;
+  // Dopo una creazione senza spunta, manca anche quello che il modello aveva letto.
+  const mancano = entrate
+    ? obbligatoriVuoti
+    : dichiarazioniDellaBozza(bozzaDaCreare(draft, false)).obbligatoriVuoti;
+  return {
+    titolo: !stato.creata
+      ? 'Da controllare tu: è la tua dichiarazione ai clienti'
+      : stato.confermate
+        ? 'Entrate nella bozza: le hai confermate tu'
+        : 'Lette dalle foto ma NON entrate nella bozza: le scrivi tu nella scheda',
+    righe,
+    daScrivere:
+      mancano.length > 0 ? `Manca e lo scrivi tu nella scheda prima di pubblicare: ${mancano.join(', ')}.` : null,
+    chiediSpunta: !stato.creata && lette.length > 0,
+  };
 }
 
 /**
- * La bozza che parte davvero verso il database. Se il negoziante NON ha
- * spuntato «le ho controllate», le dichiarazioni lette dal modello restano
- * fuori: la bozza nasce senza, e i campi obbligatori vuoti impediranno di
- * metterla in vendita finche' non li scrive lui.
+ * La bozza che parte davvero verso il database, dalla chat Assistenza o da
+ * «Crea più prodotti dalle foto». Se il negoziante NON ha spuntato «le ho
+ * controllate», le dichiarazioni lette dal modello restano fuori: la bozza
+ * nasce senza, e i campi obbligatori vuoti impediranno di metterla in vendita
+ * finche' non li scrive lui.
+ *
+ * La spunta viaggia anche come `dichiarazioni_confermate`: il server
+ * (`buildDraftProductInsert`) senza quella le toglie comunque. Qui si tolgono
+ * prima per non spedire quello che non deve entrare; la' perche' la regola
+ * valga anche per chi un giorno chiamera' la rotta senza passare di qui.
  */
 export function bozzaDaCreare<T extends { attributes?: Record<string, string> | null }>(
   draft: T,
   dichiarazioniConfermate: boolean,
-): T {
-  if (dichiarazioniConfermate) return draft;
+): T & { dichiarazioni_confermate: boolean } {
+  if (dichiarazioniConfermate) return { ...draft, dichiarazioni_confermate: true };
   const { patch } = separaCampiDichiarativi({ attributes: draft.attributes ?? {} });
-  return { ...draft, attributes: (patch as { attributes?: Record<string, string> }).attributes ?? {} };
+  return {
+    ...draft,
+    attributes: (patch as { attributes?: Record<string, string> }).attributes ?? {},
+    dichiarazioni_confermate: false,
+  };
 }
 
 /** La scheda come la vede la chat (lo snapshot che torna dal server). */
@@ -244,6 +330,89 @@ export function cosaMancaNellaScheda(prodotto: SchedaDellaChat): string[] {
     numeroFoto: prodotto.image ? 1 : 0,
     attributes: prodotto.attributes,
   });
+}
+
+/**
+ * Cosa manca per vendere DOPO la proposta dell'assistente, letto dalla chat.
+ *
+ * La scheda di una proposta «Stato → In vendita» guardava il prodotto com'e'
+ * adesso e ignorava il resto della stessa proposta: «Descrizione aggiornata ·
+ * Stato → In vendita» stava sopra «Non si può ancora mettere in vendita: manca
+ * la descrizione», e premendo Applica il server accettava (collaudo del 15/10).
+ * Qui la scheda si legge come la leggera' il server: con i campi della
+ * proposta sopra quelli attuali, senza le dichiarazioni (che l'assistente non
+ * scrive) e senza un prezzo fuori banda (che il server scarta).
+ */
+export function cosaMancaDopoLaProposta(prodotto: SchedaDellaChat, proposta: AiProductPatch): string[] {
+  const { patch } = separaCampiDichiarativi(proposta);
+  const attributes: Record<string, unknown> = { ...prodotto.attributes };
+  for (const [k, v] of Object.entries(patch.attributes ?? {})) {
+    if (String(v ?? '').trim()) attributes[AI_ATTR_TO_FIELD[k] ?? k] = v;
+  }
+  for (const k of patch.attributes_remove ?? []) delete attributes[AI_ATTR_TO_FIELD[k] ?? k];
+  const prezzoValido =
+    typeof patch.price === 'number' && patch.price > 0 && !prezzoAiFuoriBanda(patch.price, prodotto.price);
+  return cosaMancaNellaScheda({
+    ...prodotto,
+    name: typeof patch.name === 'string' && patch.name.trim() ? patch.name : prodotto.name,
+    description:
+      typeof patch.description === 'string' && patch.description.trim() ? patch.description : prodotto.description,
+    price: prezzoValido ? patch.price! : prodotto.price,
+    categorySlug: patch.category_slug || prodotto.categorySlug,
+    attributes,
+  });
+}
+
+/**
+ * R36 — Le dichiarazioni con cui il prodotto andrebbe in vetrina (allergeni,
+ * ingredienti, caselle «senza…»), per mostrarle sulla scheda di una proposta
+ * «Stato → In vendita»: il negoziante le rilegge prima di premere Applica.
+ */
+export function dichiarazioniInVetrina(prodotto: SchedaDellaChat): { etichetta: string; valore: string }[] {
+  const campi = prodotto.categorySlug ? CATEGORY_ATTRIBUTES[prodotto.categorySlug] ?? [] : [];
+  return campi
+    .filter((f) => eCampoDichiarativo(f.key) && diceQualcosa(prodotto.attributes[f.key]))
+    .map((f) => ({ etichetta: f.label, valore: valoreLeggibile(prodotto.attributes[f.key]) }));
+}
+
+/**
+ * R36 — Cosa mostra la scheda di una proposta che mette il prodotto in vendita.
+ * `null` se la proposta non lo mette in vendita. Altrimenti: cosa manca ancora
+ * (letto come lo leggera' il server) e le dichiarazioni con cui andrebbe in
+ * vetrina, da rileggere prima di premere Applica.
+ */
+export function avvisoSullaPubblicazione(
+  prodotto: SchedaDellaChat & { status: string },
+  proposta: AiProductPatch,
+): { mancanti: string[]; dichiarazioni: { etichetta: string; valore: string }[] } | null {
+  if (proposta.status !== 'available' || prodotto.status === 'available') return null;
+  return {
+    mancanti: cosaMancaDopoLaProposta(prodotto, proposta),
+    dichiarazioni: dichiarazioniInVetrina({
+      ...prodotto,
+      categorySlug: proposta.category_slug || prodotto.categorySlug,
+    }),
+  };
+}
+
+/**
+ * R36 — Dopo «Crea più prodotti dalle foto»: quali bozze non si possono ancora
+ * pubblicare perche' mancano le dichiarazioni obbligatorie (per un alimento
+ * Allergeni e Ingredienti). `null` se nessuna. Il negoziante lo legge subito,
+ * invece di scoprirlo quando prova a pubblicare.
+ */
+export function avvisoDopoLeBozze(prodotti: SchedaDellaChat[]): string | null {
+  const daCompletare = prodotti
+    .map((p) => ({ nome: p.name, manca: campiObbligatoriVuoti(p.categorySlug, p.attributes) }))
+    .filter((p) => p.manca.length > 0);
+  if (daCompletare.length === 0) return null;
+  const n = daCompletare.length;
+  const righe = daCompletare.slice(0, 3).map((p) => `«${p.nome}» (${p.manca.join(', ')})`);
+  const altre = n - righe.length;
+  return (
+    `${n === 1 ? 'Una bozza va completata' : `${n} bozze vanno completate`} prima di pubblicarle: ` +
+    `${righe.join(', ')}${altre > 0 ? ` e altre ${altre}` : ''}. Aprile e scrivi tu questi campi nella scheda.`
+  );
 }
 
 /**

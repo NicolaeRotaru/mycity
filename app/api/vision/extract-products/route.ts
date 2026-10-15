@@ -11,7 +11,7 @@ import { verificaImmagineBase64 } from '@/lib/immagini-base64';
 import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, mapAiError } from '@/lib/ai/run';
-import type { CategoryRow } from '@/lib/products/aiPatch';
+import { CAMPI_DICHIARATIVI, type CategoryRow } from '@/lib/products/aiPatch';
 import {
   CATEGORY_SLUGS,
   ATTR_REFERENCE,
@@ -164,6 +164,7 @@ Per ogni prodotto (stesse regole dell'inserimento singolo):
 - Integra fronte + retro/etichetta: leggi dal retro ingredienti, valori nutrizionali, allergeni, peso/volume, scadenza, composizione/materiale, specifiche e il codice a barre EAN, e compila i campi mancanti.
 - Prezzo realistico per il mercato italiano al dettaglio. Descrizione in italiano, tono neutro e informativo.
 - Compila attributes nel modo PIÙ COMPLETO possibile: dopo la categoria, riempi TUTTE le chiavi deducibili (anche le tendine, scegliendo esattamente uno dei valori ammessi). Ometti solo ciò che non è ricavabile: non inventare.
+- DICHIARAZIONI DI UN ALIMENTO (${CAMPI_DICHIARATIVI.join(', ')}): fanno eccezione alla regola qui sopra. Compilale SOLO se le LEGGI scritte sull'etichetta o sulla confezione in foto, copiando quello che c'è scritto. Non dedurle mai dall'aspetto, dal nome o dal tipo di prodotto (una focaccia senza etichetta non ha «Glutine» finché non lo leggi): se non c'è un'etichetta leggibile, omettile. Il venditore le controlla prima di creare le bozze.
 - Proponi sempre 3-8 tag e, quando puoi, la sottocategoria.
 - policy_ok: false e policy_reason se il prodotto non è ammesso.
 

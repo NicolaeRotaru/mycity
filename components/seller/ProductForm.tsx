@@ -26,7 +26,7 @@ import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { uploadProductImages } from '@/lib/products/uploadImages';
-import { patchAiPerIlForm } from '@/lib/products/aiPatch';
+import { patchAiPerIlForm, propostaPerIlModulo } from '@/lib/products/aiPatch';
 import { colonneDelPatchAi } from '@/lib/products/salvataggio-tracciato';
 import { useFormAutosave } from '@/lib/hooks/useFormAutosave';
 import {
@@ -433,12 +433,14 @@ export default function ProductForm({
      * salvataggio. Adesso la banda e' la stessa funzione per tutti e due, e il
      * prezzo scartato si dice invece di sparire.
      */
-    const { patch, rifiutati } = patchAiPerIlForm(proposta, { prezzoAttuale: getValues('price') });
+    const { patch, rifiutati, proposte } = patchAiPerIlForm(proposta, { prezzoAttuale: getValues('price') });
     const changed: string[] = [...rifiutati];
     // R41 — Quello che l'assistente proponeva e non entra nei campi (prezzo
     // fuori banda, allergeni, ingredienti...) si dice, col valore proposto: chi
-    // chiama questa funzione mostra solo «modifiche applicate».
-    for (const motivo of rifiutati) toast.warning(motivo);
+    // chiama questa funzione mostra solo «modifiche applicate». Le
+    // dichiarazioni hanno il loro avviso piu' sotto, col pulsante per usarle.
+    const conProposta = new Set(proposte.map((p) => p.motivo));
+    for (const motivo of rifiutati) if (!conProposta.has(motivo)) toast.warning(motivo, { duration: 15_000 });
     // Il prezzo fuori banda `patchAiPerIlForm` l'ha gia' tolto: quello che
     // segniamo qui e' solo cio' che entra davvero nei campi.
     segnaCampiDallAi(colonneDelPatchAi(patch as unknown as Record<string, unknown>));
@@ -527,6 +529,20 @@ export default function ProductForm({
     if (mode === 'edit' && patch.status && ['available', 'draft', 'sold'].includes(patch.status)) {
       setStatus(patch.status);
       changed.push('stato');
+    }
+
+    // R41 — Allergeni, ingredienti e le altre dichiarazioni proposte restano
+    // una PROPOSTA: un avviso che non sparisce in quattro secondi, col valore
+    // e un pulsante. Il campo si riempie solo se il negoziante lo preme.
+    const campiDellaCategoria = getAttributesForCategory(categories, effectiveCategoryId).fields;
+    for (const p of proposte) {
+      const { motivo, valore } = propostaPerIlModulo(p, campiDellaCategoria);
+      toast.warning(motivo, {
+        duration: 60_000,
+        ...(valore === undefined
+          ? {}
+          : { action: { label: 'Usa questo valore', onClick: () => setAttribute(p.chiave, valore) } }),
+      });
     }
 
     return changed;

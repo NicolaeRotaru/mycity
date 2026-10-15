@@ -7,7 +7,12 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { writeAudit } from '@/lib/audit';
-import { resolveAiPatch, type AiProductPatch, type CategoryRow } from '@/lib/products/aiPatch';
+import {
+  messaggioDichiarazioniProtette,
+  resolveAiPatch,
+  type AiProductPatch,
+  type CategoryRow,
+} from '@/lib/products/aiPatch';
 import {
   productSnapshot,
   PRODUCT_SNAPSHOT_COLS,
@@ -95,9 +100,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     // R41 — Se la modifica chiedeva solo di cambiare allergeni o ingredienti,
     // il negoziante deve sapere perche' non succede niente, e dove si fa.
     if (protetti.length > 0) {
-      return ApiErrors.invalidRequest(
-        `${protetti.join(', ')}: non li cambia l'assistente. Li scrivi tu nella scheda del prodotto, col pulsante «Apri».`,
-      );
+      return ApiErrors.invalidRequest(messaggioDichiarazioniProtette(protetti));
     }
     return ApiErrors.invalidRequest('Nessuna modifica valida da applicare.');
   }

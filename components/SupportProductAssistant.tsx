@@ -24,10 +24,10 @@ import type { ProductSnapshot } from '@/lib/products/aiSnapshot';
 import { findLabelForKey } from '@/lib/category-attributes';
 import {
   attributiNonDichiarativi,
+  avvisoSullaPubblicazione,
   bozzaDaCreare,
-  cosaMancaNellaScheda,
-  dichiarazioniDellaBozza,
   messaggioDopoLaBozza,
+  riquadroDichiarazioni,
 } from '@/lib/products/prontoPerLaVendita';
 
 /**
@@ -461,20 +461,40 @@ export default function SupportProductAssistant() {
                       </li>
                     ))}
                   </ul>
-                  {m.proposal.patch.status === 'available' &&
-                    m.proposal.product.status !== 'available' &&
-                    !m.applied &&
+                  {!m.applied &&
                     (() => {
-                      const mancanti = cosaMancaNellaScheda(m.proposal.product);
-                      return mancanti.length > 0 ? (
-                        <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-accent-50 px-2 py-1.5 text-xs text-accent-800">
-                          <AlertTriangle size={13} strokeWidth={2.4} className="mt-0.5 shrink-0" aria-hidden />
-                          <span>
-                            Non si può ancora mettere in vendita: manca {mancanti.join(', ')}. Aprilo con «Apri» e
-                            compila tu questi campi.
-                          </span>
-                        </p>
-                      ) : null;
+                      // R36 — La scheda si legge come la leggera' il server (con il
+                      // resto della proposta), e mostra le dichiarazioni con cui il
+                      // prodotto va in vetrina, da rileggere prima di Applica.
+                      const avviso = avvisoSullaPubblicazione(m.proposal.product, m.proposal.patch);
+                      if (!avviso) return null;
+                      if (avviso.mancanti.length > 0) {
+                        return (
+                          <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-accent-50 px-2 py-1.5 text-xs text-accent-800">
+                            <AlertTriangle size={13} strokeWidth={2.4} className="mt-0.5 shrink-0" aria-hidden />
+                            <span>
+                              Non si può ancora mettere in vendita: manca {avviso.mancanti.join(', ')}. Aprilo con
+                              «Apri» e compila tu questi campi.
+                            </span>
+                          </p>
+                        );
+                      }
+                      if (avviso.dichiarazioni.length === 0) return null;
+                      return (
+                        <div className="mb-3 rounded-lg border border-accent-200 bg-accent-50 p-2 text-xs text-ink-800">
+                          <p className="mb-1 flex items-center gap-1.5 font-semibold text-accent-800">
+                            <AlertTriangle size={13} strokeWidth={2.4} aria-hidden /> Va in vendita con queste
+                            dichiarazioni: rileggile, ai clienti le dai tu
+                          </p>
+                          <ul className="space-y-0.5">
+                            {avviso.dichiarazioni.map((d) => (
+                              <li key={d.etichetta}>
+                                <span className="font-semibold">{d.etichetta}:</span> {d.valore}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
                     })()}
                   {m.applied ? (
                     <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
@@ -542,30 +562,32 @@ export default function SupportProductAssistant() {
                     ) : null;
                   })()}
                   {(() => {
-                    // R36 — Allergeni e ingredienti in evidenza, da confermare.
-                    const { lette, obbligatoriVuoti } = dichiarazioniDellaBozza(m.newDraft.draft);
-                    if (lette.length === 0 && obbligatoriVuoti.length === 0) return null;
+                    // R36 — Allergeni e ingredienti in evidenza, da confermare; e
+                    // dopo la creazione il riquadro dice il vero su cosa e' entrato.
+                    const riquadro = riquadroDichiarazioni(m.newDraft.draft, {
+                      creata: !!m.created,
+                      confermate: !!m.dichiarazioniConfermate,
+                    });
+                    if (!riquadro) return null;
                     return (
-                      <div className="mb-2 rounded-lg border border-accent-200 bg-accent-50 p-2 text-xs text-ink-800">
+                      <div
+                        data-riquadro="dichiarazioni"
+                        className="mb-2 rounded-lg border border-accent-200 bg-accent-50 p-2 text-xs text-ink-800"
+                      >
                         <p className="mb-1 flex items-center gap-1.5 font-semibold text-accent-800">
-                          <AlertTriangle size={13} strokeWidth={2.4} aria-hidden /> Da controllare tu: è la tua
-                          dichiarazione ai clienti
+                          <AlertTriangle size={13} strokeWidth={2.4} aria-hidden /> {riquadro.titolo}
                         </p>
-                        {lette.length > 0 && (
+                        {riquadro.righe.length > 0 && (
                           <ul className="mb-1 space-y-0.5">
-                            {lette.map((d) => (
-                              <li key={d.chiave}>
+                            {riquadro.righe.map((d) => (
+                              <li key={d.etichetta}>
                                 <span className="font-semibold">{d.etichetta}:</span> {d.valore}
                               </li>
                             ))}
                           </ul>
                         )}
-                        {obbligatoriVuoti.length > 0 && (
-                          <p className="mb-1">
-                            Manca e lo scrivi tu nella scheda prima di pubblicare: {obbligatoriVuoti.join(', ')}.
-                          </p>
-                        )}
-                        {lette.length > 0 && !m.created && (
+                        {riquadro.daScrivere && <p className="mb-1">{riquadro.daScrivere}</p>}
+                        {riquadro.chiediSpunta && (
                           <label className="mt-1 flex items-start gap-1.5">
                             <input
                               type="checkbox"
