@@ -450,3 +450,30 @@ describe('la rotta stessa', () => {
     expect(registro()?.claimed_at).toBeNull();
   });
 });
+
+describe('carrello abbandonato sulla pagina di pagamento (collaudo del 15/10, giro 2)', () => {
+  it('la scrittura EXPIRED rifiutata: Stripe riprova, e la merce torna in vendita una volta sola', async () => {
+    // Prima la teneva solo il controllo per tipi: nessuna prova guardava cosa
+    // succede al carrello quando il database rifiuta proprio quella scrittura.
+    stato.evento = {
+      id: 'evt_exp',
+      type: 'checkout.session.expired',
+      data: { object: { id: 'cs_exp', client_reference_id: 'pc_1', metadata: {} } },
+    };
+    stato.db.tabelle.pending_checkouts = [
+      { id: 'pc_1', status: 'PENDING', groups: [{ items: [{ productId: 'p1', quantity: 2 }] }], coupon_code: null },
+    ];
+    let cadute = 0;
+    stato.db.guasto = (s) =>
+      s.tabella === 'pending_checkouts' && (s.valori as Riga | null)?.status === 'EXPIRED' && cadute++ === 0 ? TIMEOUT : null;
+    const scaffale = () => stato.db.rpc.filter((r) => r.nome === 'restore_stock');
+
+    expect((await consegna()).status, 'col 200 il carrello resta PENDING e la merce resta riservata').toBeGreaterThanOrEqual(500);
+    expect(scaffale()).toEqual([]);
+    expect(registro()?.claimed_at).toBeNull();
+
+    expect((await consegna()).status).toBe(200);
+    expect(riga('pending_checkouts', 'pc_1')?.status).toBe('EXPIRED');
+    expect(scaffale()).toHaveLength(1);
+  });
+});

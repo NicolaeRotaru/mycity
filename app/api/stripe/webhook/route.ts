@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { sessionePagata } from '@/lib/stripe/webhook/comune';
 import { scritturaObbligatoria, scritturaSenzaRipetere } from '@/lib/stripe/webhook/esito';
 import { segretiDelWebhook, verificaFirma } from '@/lib/stripe/webhook/firma';
-import { liberaIlTurno } from '@/lib/stripe/webhook/registro-eventi';
+import { liberaIlTurno, prendiIlTurno } from '@/lib/stripe/webhook/registro-eventi';
 import { handleCheckoutCompleted, handleCheckoutExpired } from '@/lib/stripe/webhook/ordini';
 import { handleGiftCardPurchase } from '@/lib/stripe/webhook/giftcard';
 import { handleSponsoredPurchase } from '@/lib/stripe/webhook/sponsorizzati';
@@ -83,19 +83,11 @@ export async function POST(req: NextRequest) {
       // ordini. Ora si rivendica: passa una sola, l'altra risponde 200 e se ne
       // va. Un claim più vecchio di cinque minuti si può riprendere, altrimenti
       // un processo morto a metà bloccherebbe l'evento per sempre.
-      const cinqueMinutiFa = new Date(Date.now() - 5 * 60_000).toISOString();
-      const { data: rivendicato, error: errTurno } = await admin
-        .from('stripe_event_log')
-        .update({ claimed_at: new Date().toISOString() })
-        .eq('event_id', event.id)
-        .eq('processed', false)
-        .or(`claimed_at.is.null,claimed_at.lt.${cinqueMinutiFa}`)
-        .select('event_id');
-      // R81 — un errore non è «turno già preso»: col 200 l'evento si perdeva.
-      if (errTurno) return NextResponse.json({ error: 'idempotenza non disponibile' }, { status: 503 });
-      if (!rivendicato || rivendicato.length === 0) {
-        return NextResponse.json({ received: true, duplicated: true }, { status: 200 });
-      }
+      // R81 — come si prende, e perché non con un «oppure»: registro-eventi.ts.
+      const turno = await prendiIlTurno(admin, event.id);
+      // Un guasto non è «turno già preso»: col 200 l'evento si perdeva.
+      if (turno === 'guasto') return NextResponse.json({ error: 'idempotenza non disponibile' }, { status: 503 });
+      if (turno === 'occupato') return NextResponse.json({ received: true, duplicated: true }, { status: 200 });
     } else {
       // 27/8/2026 (R031 · R137) — IL GUARDIANO SI APRIVA DA SOLO QUANDO SI
       // ROMPEVA: su un errore diverso dal doppione (colonna non ancora

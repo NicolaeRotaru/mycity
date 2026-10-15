@@ -48,6 +48,9 @@ function updateChain(patch: Record<string, unknown>) {
   const chain: Record<string, unknown> = {
     eq: () => chain,
     or: () => chain,
+    // R81 — il turno ora si prende con filtri semplici (registro-eventi.ts).
+    is: () => chain,
+    lt: () => chain,
     select: () => Promise.resolve({ data: state.rivendicate, error: null }),
     then: (resolve: (v: unknown) => unknown) => resolve({ error: null }),
   };

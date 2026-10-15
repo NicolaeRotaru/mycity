@@ -97,6 +97,9 @@ function catenaUpdate(patch: Record<string, unknown>) {
   const catena: Record<string, unknown> = {
     eq: () => catena,
     or: () => catena,
+    // R81 — il turno ora si prende con filtri semplici (registro-eventi.ts).
+    is: () => catena,
+    lt: () => catena,
     select: () => Promise.resolve({ data: stato.rivendicate, error: null }),
     then: (risolvi: (v: unknown) => unknown) => risolvi({ error: null }),
   };

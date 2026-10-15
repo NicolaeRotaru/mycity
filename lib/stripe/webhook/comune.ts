@@ -30,6 +30,9 @@ export type DisputeOrderRow = {
   seller_payout_cents: number | null;
   seller_payout_reversed_cents?: number | null;
   rider_payout_reversed_cents?: number | null;
+  /** Promemoria della contestazione (migrazione 126): quanto ha stornato lei. */
+  dispute_seller_reversed_cents?: number | null;
+  dispute_rider_reversed_cents?: number | null;
   delivery_status?: string | null;
   /** Stato della contestazione bancaria: serve a non ripetere la chiusura (R81). */
   dispute_status?: string | null;
@@ -42,6 +45,12 @@ export type DisputeOrderRow = {
   shipping_cost?: number | string | null;
 };
 
+/**
+ * Le colonne della migrazione 126 che le contestazioni leggono. In produzione
+ * la 126 non c'è ancora: senza toglierle, la select intera fallirebbe (42703).
+ */
+export const COLONNE_126_CONTESTAZIONE = ['dispute_seller_reversed_cents', 'dispute_rider_reversed_cents'] as const;
+
 /** Trova gli ordini legati alla charge/PI di una dispute (multi-seller). */
 export async function findOrdersForDispute(dispute: Stripe.Dispute, columns: string): Promise<DisputeOrderRow[]> {
   const admin = getAdminSupabase();
@@ -52,7 +61,7 @@ export async function findOrdersForDispute(dispute: Stripe.Dispute, columns: str
   // che la colonna esista fallisce INTERA: qui l'errore non veniva nemmeno
   // guardato, quindi la contestazione vinta trovava zero ordini e il venditore
   // restava senza soldi in silenzio (lib/db/migrazione-124.ts).
-  const ridotte = senzaColonne(columns, COLONNE_124);
+  const ridotte = senzaColonne(columns, [...COLONNE_124, ...COLONNE_126_CONTESTAZIONE]);
   const cerca = async (campo: 'stripe_payment_intent' | 'stripe_charge_id', valore: string) =>
     conRipiegoSchema(
       `orders.select (contestazione per ${campo})`,

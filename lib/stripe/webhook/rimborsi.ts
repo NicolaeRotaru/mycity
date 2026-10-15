@@ -194,7 +194,8 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   if (stornoFallito.length > 0) {
     await notifyAdmins(
       '⚠️ Storno al venditore non riuscito',
-      `Rimborso eseguito ma i soldi non sono rientrati dal venditore su ${stornoFallito.length} ordine/i: ${idFalliti.map((i) => i.slice(0, 8)).join(', ')}. Vanno recuperati a mano.`,
+      `Rimborso eseguito ma i soldi non risultano rientrati dal venditore su ${stornoFallito.length} ordine/i: ${idFalliti.map((i) => i.slice(0, 8)).join(', ')}. ` +
+        "Prima di recuperarli a mano, guarda su Stripe (Connect → il bonifico dell'ordine → Storni): la risposta di Stripe può essersi persa e lo storno può esserci già. Se c'è, non va rifatto.",
       '/admin/orders',
     );
   }
@@ -411,6 +412,21 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
     const bonificoChiusoDalRimborso =
       ordine.payout_status === 'REVERSED' || ordine.payout_status === 'REFUNDED';
     const bonificoEraGiaUscito = ordine.payout_status === 'REVERSED';
+    /**
+     * 15/10/2026 (R85, collaudo) — E SE IL BONIFICO NON ERA ANCORA PARTITO?
+     *
+     * Un rimborso PARZIALE su un ordine col bonifico ancora trattenuto toglie la
+     * quota del negozio solo sulla carta: `seller_payout_reversed_cents` sale,
+     * il bonifico resta 'HELD' e il giro verserà il resto. Se poi la banca del
+     * cliente respinge il rimborso, qui si rimetteva a posto il cliente e non il
+     * negozio. Un caso misurato: 3 € rimborsati dal cruscotto su un ordine col
+     * netto del negozio di 18,00 €, rimborso respinto, e il giro versava 16,06 €
+     * per un rimborso che il cliente non ha mai ricevuto. Adesso la quota torna
+     * nel bonifico che deve ancora partire. Solo negli stati che il giro paga:
+     * se il bonifico è in corso ('PROCESSING') l'importo è già deciso.
+     */
+    const bonificoAncoraDaFare =
+      ordine.payout_status === 'HELD' || ordine.payout_status === 'PENDING_SELLER_ONBOARDING';
 
     const valori: Record<string, unknown> = {
       refunded_amount_cents: restante,
@@ -435,7 +451,14 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
                 }
               : {}),
           }
-        : {}),
+        : bonificoAncoraDaFare
+          ? {
+              seller_payout_reversed_cents: Math.max(
+                0,
+                (ordine.seller_payout_reversed_cents ?? 0) - quotaNegozio,
+              ),
+            }
+          : {}),
     };
 
     // Prima della migrazione 124 la colonna del tentativo non esiste: meglio

@@ -20,9 +20,52 @@ import { getStripe } from '@/lib/stripe/client';
 import { reverseOrderTransfer, reverseRiderTransfer } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
+import { senzaCampi } from '@/lib/db/migrazione-124';
+import { colonnaNonTrovata, type ErroreDatabase } from '@/lib/db/migrazione-148';
+import { formatPriceFromCents } from '@/lib/format';
 import { findOrdersForDispute, notifyAdmins } from './comune';
 import { scritturaObbligatoria } from './esito';
+
+/**
+ * 15/10/2026 (collaudo, giro 2) — IL RIPIEGO NON SCATTAVA SULLE SCRITTURE.
+ *
+ * La contestazione vinta scrive `dispute_seller_reversed_cents`, una colonna
+ * della migrazione 126 che in produzione non c'è ancora. Il ripiego di sempre
+ * (`conRipiegoSchema`) riconosce i codici di PostgreSQL, ma su una scrittura
+ * risponde prima PostgREST, con `PGRST204 — Could not find the '…' column`:
+ * il ripiego non scattava, la scrittura obbligatoria lanciava, Stripe riprovava
+ * per tre giorni e agli amministratori non arrivava più nessun avviso. Qui si
+ * usa il riconoscimento che conosce anche quel codice (`colonnaNonTrovata`).
+ *
+ * E si toglie una migrazione alla volta, dalla più nuova. Il ripiego di prima
+ * toglieva insieme la colonna della 126 e `payout_tentativo` (della 124, che in
+ * produzione c'è): il bonifico tornava in coda col numero di tentativo vecchio,
+ * cioè con la stessa chiave anti-doppione del bonifico già stornato, e Stripe
+ * avrebbe restituito quello invece di farne uno nuovo. Il negozio vinceva la
+ * contestazione e non veniva pagato.
+ */
+async function scriviConRipiego<T extends { error: unknown }>(
+  dove: string,
+  valori: Record<string, unknown>,
+  /** Le colonne recenti a gruppi, dalla migrazione più nuova alla più vecchia. */
+  colonneRecenti: ReadonlyArray<readonly string[]>,
+  esegui: (valori: Record<string, unknown>) => PromiseLike<T>,
+): Promise<T> {
+  let campi = valori;
+  let esito = await esegui(campi);
+  for (const gruppo of colonneRecenti) {
+    if (!esito.error || !colonnaNonTrovata(esito.error as ErroreDatabase)) return esito;
+    logger.warn('[stripe] colonna nuova non ancora nel database: riscrivo senza', {
+      dove, senza: gruppo, codice: (esito.error as { code?: string }).code ?? null,
+    });
+    campi = senzaCampi(campi, gruppo);
+    esito = await esegui(campi);
+  }
+  return esito;
+}
+
+/** Uno storno al negozio che va guardato a mano, per l'avviso agli amministratori. */
+type StornoDaControllare = { orderId: string; testo: string };
 
 /**
  * 15/10/2026 (R81) — Su Stripe c'è già uno storno di questo bonifico fatto da
@@ -36,15 +79,22 @@ import { scritturaObbligatoria } from './esito';
 async function stornoGiaFattoPerLaContestazione(
   o: { id: string; stripe_transfer_id: string | null; stripe_reversal_id: string | null },
   dispute: Stripe.Dispute,
+  daControllare: StornoDaControllare[],
 ): Promise<boolean> {
   if (!o.stripe_transfer_id) return false;
   const dal = dispute.created ?? 0;
   const storni = await getStripe().transfers.listReversals(o.stripe_transfer_id, { limit: 100 });
   const suo = storni.data.find((r) => r.created >= dal && (r.metadata?.order_id ?? o.id) === o.id);
   if (suo && suo.id !== o.stripe_reversal_id) {
-    // Fatto su Stripe, non scritto da noi: non si rifà, ma va visto.
+    // Fatto su Stripe, non scritto da noi: non si rifà, ma va visto. Non solo
+    // nei log: senza registrazione, a contestazione vinta il negozio non
+    // verrebbe ripagato (per il database il bonifico non è mai stato toccato).
     logger.error('[stripe] storno della contestazione fatto su Stripe ma non registrato sull ordine', {
       orderId: o.id, reversalId: suo.id, centesimi: suo.amount,
+    });
+    daControllare.push({
+      orderId: o.id,
+      testo: `ordine ${o.id.slice(0, 8)}: lo storno di ${formatPriceFromCents(suo.amount)} (${suo.id}) è su Stripe ma non sull'ordine. Non va rifatto: va solo registrato sull'ordine.`,
     });
   }
   return !!suo;
@@ -61,7 +111,8 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     dispute,
     // R052 — serve anche il lordo dell'ordine: la quota da riprendere al
     // negozio si calcola in proporzione a quanto la banca ha contestato.
-    // R81 — serve `dispute_status`: dice se questo avviso è già passato di qui.
+    // R81 — serve `dispute_status`: 'OPEN' dice che questo avviso PUÒ essere
+    // già passato di qui (sotto, perché solo «può»).
     'id, dispute_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, gross_total_cents, total_price, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost',
   );
   if (orders.length === 0) {
@@ -111,7 +162,16 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
    * 32,40 € invece di 16,20. Scritta per prima, se fallisce non è ancora
    * successo niente, e ripetere è davvero sicuro.
    */
+  //
+  // 'OPEN' letto PRIMA di scrivere non vuol dire con certezza «questo avviso è
+  // già passato di qui». Lo scrive anche il reclamo che il cliente apre
+  // dall'app: il trigger `trg_dispute_block_payout` (migrazione 063, mai tolto)
+  // mette 'OPEN' sull'ordine a ogni riga nuova in `disputes`. Per questo 'OPEN'
+  // fa solo da primo filtro, e la prova vera la dà Stripe
+  // (`stornoGiaFattoPerLaContestazione`): uno storno nato dopo la contestazione.
+  // Se c'era solo il reclamo, Stripe non ne ha nessuno e lo storno si fa.
   const giaPassati = new Set(orders.filter((o) => o.dispute_status === 'OPEN').map((o) => o.id));
+  const daControllare: StornoDaControllare[] = [];
   scritturaObbligatoria(
     await admin
       .from('orders')
@@ -130,7 +190,7 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     const quota = quotaDaRiprendere(o);
     if (
       o.payout_status === 'TRANSFERRED' && quota !== undefined && giaPassati.has(o.id) &&
-      (await stornoGiaFattoPerLaContestazione(o, dispute))
+      (await stornoGiaFattoPerLaContestazione(o, dispute, daControllare))
     ) {
       // R81 — Lo stesso avviso consegnato di nuovo, e su Stripe lo storno per
       // questa contestazione c'è già. Uno storno PARZIALE non si rifà: dopo il
@@ -146,7 +206,15 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
         const esito = await reverseOrderTransfer(o, quota);
         stornatoVenditore = esito.reversedCents;
       } catch (e) {
+        // Non si rilancia: un rifiuto di Stripe che si ripete (saldo del negozio
+        // insufficiente) bloccherebbe per tre giorni anche il resto, compreso
+        // l'avviso qui sotto. Ma l'errore non resta solo nei log: può essere una
+        // risposta persa per strada, con lo storno fatto davvero su Stripe.
         logger.error('[stripe] reversal on dispute.created failed', { orderId: o.id, e });
+        daControllare.push({
+          orderId: o.id,
+          testo: `ordine ${o.id.slice(0, 8)}: lo storno della quota del negozio non risulta riuscito (${e instanceof Error ? e.message : 'errore sconosciuto'}). Prima di rifarlo a mano, guarda su Stripe (Connect → il bonifico dell'ordine → Storni): la risposta di Stripe può essersi persa e lo storno può esserci già. Se c'è, va solo registrato sull'ordine.`,
+        });
       }
     }
     // Anche il compenso del fattorino torna indietro: senza questo la
@@ -179,11 +247,27 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     }
   }
 
+  if (daControllare.length > 0) {
+    await notifyAdmins(
+      '⚠️ Storno al negozio da controllare',
+      `Contestazione bancaria ${dispute.id}: ${daControllare.map((d) => d.testo).join(' ')}`,
+      '/admin/disputes',
+    );
+  }
+
   await notifyAdmins(
     '⚠️ Chargeback aperto',
     `Contestazione bancaria su ordine ${orders[0].id}${orders.length > 1 ? ` (+${orders.length - 1})` : ''} — ${((dispute.amount ?? 0) / 100).toFixed(2)}€.`,
     '/admin/disputes',
   );
+}
+
+/**
+ * Quanto restituire alla vittoria: il promemoria messo da parte all'apertura
+ * se c'è (più di zero), altrimenti il totale stornato come prima della 126.
+ */
+export function promemoriaOTotale(promemoria: number | null | undefined, totale: number | null | undefined): number {
+  return (promemoria ?? 0) > 0 ? (promemoria as number) : (totale ?? 0);
 }
 
 /**
@@ -194,7 +278,16 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
 export async function handleDisputeClosed(dispute: Stripe.Dispute) {
   // `dispute_status` serve a non rimettere a scaffale due volte la merce se
   // Stripe ripete l'evento di una contestazione già chiusa come persa (R81).
-  const orders = await findOrdersForDispute(dispute, 'id, dispute_status, delivery_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
+  //
+  // 15/10/2026 (collaudo, giro 2) — E IL PROMEMORIA VA CHIESTO, NON SOLO USATO.
+  // `dispute_seller_reversed_cents` e `dispute_rider_reversed_cents` mancavano
+  // da questa select: PostgREST restituisce solo le colonne chieste, quindi alla
+  // vittoria il promemoria era sempre vuoto e si ricadeva sull'azzeramento del
+  // totale. Un reso da 5 € stornato prima, poi una contestazione piena, poi
+  // vinta: il negozio si faceva ripagare 32,40 € invece di 27,40. Il database
+  // finto delle prove restituiva la riga intera, e il difetto non si vedeva.
+  // Sono colonne della 126: dove non c'è, `findOrdersForDispute` le toglie.
+  const orders = await findOrdersForDispute(dispute, 'id, dispute_status, delivery_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, dispute_seller_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, dispute_rider_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
   if (orders.length === 0) return;
   const admin = getAdminSupabase();
   const ids = orders.map((o) => o.id);
@@ -231,12 +324,14 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
         //
         // Adesso si toglie solo quello che era stato richiamato indietro PER la
         // contestazione, che e' il numero messo da parte all'apertura. Se quel
-        // numero non c'e' (contestazione aperta prima della migrazione 126) si
-        // ricade sul comportamento di prima: e' il caso peggiore di ieri, non
-        // un peggioramento.
-        const stornatoPerLaContestazione =
-          (o as { dispute_seller_reversed_cents?: number }).dispute_seller_reversed_cents ??
-          (o.seller_payout_reversed_cents ?? 0);
+        // numero non c'e' si ricade sul comportamento di prima: e' il caso
+        // peggiore di ieri, non un peggioramento. «Non c'è» vuol dire anche
+        // zero: la 126 crea la colonna con DEFAULT 0, quindi una contestazione
+        // aperta prima della 126 la trova a zero e non a vuoto. Usare quello
+        // zero vorrebbe dire non ripagare niente.
+        const stornatoPerLaContestazione = promemoriaOTotale(
+          o.dispute_seller_reversed_cents, o.seller_payout_reversed_cents,
+        );
         const valori = {
           payout_status: 'HELD',       // torna fra i candidati del prossimo giro
           stripe_transfer_id: null,    // il transfer precedente e' stato stornato
@@ -258,10 +353,11 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
         // già tornato 'HELD' al primo passaggio non è più 'REVERSED' e qui non
         // rientra, quindi il tentativo non sale due volte.
         scritturaObbligatoria(
-          await conRipiegoSchema(
+          await scriviConRipiego(
             'orders.update (contestazione vinta, venditore)',
-            () => admin.from('orders').update(valori).eq('id', o.id),
-            () => admin.from('orders').update(senzaCampi(valori, ['payout_tentativo', 'dispute_seller_reversed_cents'])).eq('id', o.id),
+            valori,
+            [['dispute_seller_reversed_cents'], ['payout_tentativo']],
+            (campi) => admin.from('orders').update(campi).eq('id', o.id),
           ),
           'bonifico al negozio rimesso in coda dopo la contestazione vinta',
         );
@@ -282,9 +378,9 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
     const riderDaRipagare = orders.filter((o) => o.rider_payout_status === 'REVERSED' && o.rider_id);
     if (riderDaRipagare.length > 0) {
       for (const o of riderDaRipagare) {
-        const stornatoPerLaContestazione =
-          (o as { dispute_rider_reversed_cents?: number }).dispute_rider_reversed_cents ??
-          (o.rider_payout_reversed_cents ?? 0);
+        const stornatoPerLaContestazione = promemoriaOTotale(
+          o.dispute_rider_reversed_cents, o.rider_payout_reversed_cents,
+        );
         const valori = {
           rider_payout_status: 'HELD',
           rider_transfer_id: null,
@@ -297,10 +393,11 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
           rider_payout_tentativo: ((o as { rider_payout_tentativo?: number }).rider_payout_tentativo ?? 0) + 1,
         };
         scritturaObbligatoria(
-          await conRipiegoSchema(
+          await scriviConRipiego(
             'orders.update (contestazione vinta, fattorino)',
-            () => admin.from('orders').update(valori).eq('id', o.id),
-            () => admin.from('orders').update(senzaCampi(valori, ['rider_payout_tentativo', 'dispute_rider_reversed_cents'])).eq('id', o.id),
+            valori,
+            [['dispute_rider_reversed_cents'], ['rider_payout_tentativo']],
+            (campi) => admin.from('orders').update(campi).eq('id', o.id),
           ),
           'compenso del fattorino rimesso in coda dopo la contestazione vinta',
         );

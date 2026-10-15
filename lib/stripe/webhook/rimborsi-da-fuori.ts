@@ -48,6 +48,7 @@ import { getStripe } from '@/lib/stripe/client';
 import { reverseOrderTransfer } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { formatPriceFromCents } from '@/lib/format';
 import { notifyAdmins } from './comune';
 import { scritturaObbligatoria } from './esito';
 
@@ -68,9 +69,11 @@ export type OrdineDelRimborso = {
  * Valore di `internal_dispute_status` che ferma il giro dei bonifici: il giro
  * paga solo gli ordini con quel campo vuoto o 'RESOLVED'. Si toglie scrivendo
  * 'RESOLVED' DOPO aver diviso a mano il rimborso fra i negozi, cioè dopo aver
- * aggiunto a `refunded_amount_cents` di ciascun ordine la sua parte. Se si
- * scrive solo 'RESOLVED', il rimborso resta non registrato: al primo avviso
- * successivo dello stesso pagamento i bonifici si fermano di nuovo.
+ * aggiunto a `refunded_amount_cents` di OGNI ordine la sua parte — anche di
+ * quelli col bonifico già partito, perché il conto qui sotto somma il
+ * rimborsato di tutti gli ordini del pagamento. Se si scrive solo 'RESOLVED',
+ * o si salta un ordine già pagato, al primo avviso successivo dello stesso
+ * pagamento i bonifici si fermano di nuovo.
  */
 export const PAUSA_RIMBORSO_DA_DIVIDERE = 'RIMBORSO_DA_RIPARTIRE';
 
@@ -262,10 +265,15 @@ export async function registraRimborsoParzialeDaFuori(
     if (errSegno) {
       logger.error('[stripe] storno mancato non segnato sull ordine', { orderId: ordine.id, message: errSegno.message });
     }
+    // Collaudo del 15/10: «vanno recuperati a mano» e basta faceva rischiare
+    // uno storno doppio, perché l'errore può essere una risposta di Stripe
+    // persa per strada, con lo storno fatto davvero.
     await notifyAdmins(
       '⚠️ Storno al venditore non riuscito',
-      `Dal cruscotto Stripe è uscito un rimborso di €${(conto.nuovoCents / 100).toFixed(2)} sull'ordine ${ordine.id}, ` +
-        `ma i €${(conto.quotaNegozioCents / 100).toFixed(2)} di quota del negozio non sono rientrati (${motivo}). Vanno recuperati a mano.`,
+      `Dal cruscotto Stripe è uscito un rimborso di ${formatPriceFromCents(conto.nuovoCents)} sull'ordine ${ordine.id}, ` +
+        `ma i ${formatPriceFromCents(conto.quotaNegozioCents)} di quota del negozio non risultano rientrati (${motivo}). ` +
+        "Prima di recuperarli a mano, guarda su Stripe (Connect → il bonifico dell'ordine → Storni): la risposta di Stripe " +
+        "può essersi persa e lo storno può esserci già. Se c'è, non va rifatto: va solo registrato sull'ordine.",
       '/admin/orders',
     );
   }
@@ -305,11 +313,13 @@ async function fermaIBonificiDelCarrello(
   });
   await notifyAdmins(
     '⚠️ Rimborso dal cruscotto da dividere fra i negozi',
-    `Dal cruscotto Stripe è uscito un rimborso di €${(daDividere / 100).toFixed(2)} su un pagamento che copre ${ordini.length} ordini ` +
+    `Dal cruscotto Stripe è uscito un rimborso di ${formatPriceFromCents(daDividere)} su un pagamento che copre ${ordini.length} ordini ` +
       `(${ids.map((i) => i.slice(0, 8)).join(', ')}). Stripe non dice a quale negozio appartiene: i bonifici di questi ordini sono fermi ` +
-      'finché il rimborso non viene diviso a mano, scrivendo su ciascun ordine la sua parte del rimborso e poi togliendo la pausa.' +
+      'finché il rimborso non viene diviso a mano. Su OGNI ordine che ha avuto una parte del rimborso, anche se il suo bonifico ' +
+      'è già partito, va aggiunta quella parte al rimborsato e va tolta la quota del negozio; poi si toglie la pausa. ' +
+      'Se si salta un ordine già pagato, al rimborso successivo dello stesso pagamento i bonifici si fermano di nuovo.' +
       (giaPagati.length > 0
-        ? ` ${giaPagati.length} ordine/i erano già stati pagati al negozio: la quota va ripresa a mano.`
+        ? ` ${giaPagati.length} ordine/i erano già stati pagati al negozio: lì la quota del negozio va anche stornata su Stripe.`
         : ''),
     '/admin/orders',
   );

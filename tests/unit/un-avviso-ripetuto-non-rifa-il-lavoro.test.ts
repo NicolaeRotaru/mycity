@@ -40,11 +40,14 @@ const stato: {
   evento: { id: string; type: string; data: { object: Record<string, unknown> } };
   storni: Storno[];
   rimborsi: Array<{ amount: number | undefined; chiave: string }>;
+  /** Quante risposte di Stripe a uno storno si perdono per strada, dopo averlo fatto. */
+  stornoSenzaRisposta: number;
 } = {
   db: fintoDatabase(),
   evento: { id: 'evt_x', type: 'noop', data: { object: {} } },
   storni: [],
   rimborsi: [],
+  stornoSenzaRisposta: 0,
 };
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
@@ -68,6 +71,10 @@ vi.mock('@/lib/stripe/client', () => ({
             chiave: opzioni.idempotencyKey, created: ADESSO, metadata: params.metadata ?? {},
           };
           stato.storni.push(gia);
+        }
+        if (stato.stornoSenzaRisposta > 0) {
+          stato.stornoSenzaRisposta -= 1;
+          throw new Error('socket hang up');
         }
         return { id: gia.id, amount: gia.amount, created: gia.created };
       },
@@ -147,6 +154,7 @@ beforeEach(() => {
   vi.mocked(logger.error).mockClear();
   stato.storni = [];
   stato.rimborsi = [];
+  stato.stornoSenzaRisposta = 0;
   stato.db = fintoDatabase({
     orders: [],
     profiles: [{ id: 'admin1', role: 'admin' }],
@@ -234,6 +242,24 @@ describe('① contestazione PARZIALE ripetuta: al negozio si toglie una volta so
     expect(vi.mocked(logger.error).mock.calls.map((c) => String(c[0]))).toContain(
       '[stripe] storno della contestazione fatto su Stripe ma non registrato sull ordine',
     );
+    // Collaudo giro 2: non solo nei log. Senza registrazione, a contestazione
+    // vinta il negozio non verrebbe ripagato: l'amministratore deve saperlo.
+    const avviso = avvisi('⚠️ Storno al negozio da controllare');
+    expect(avviso).toHaveLength(1);
+    expect(String(avviso[0].body)).toMatch(/16,20\s€.*trr_perso.*Non va rifatto/);
+  });
+
+  it('la risposta di Stripe allo storno si perde per strada: gli amministratori sanno di guardare PRIMA di rifarlo', async () => {
+    // Lo storno su Stripe c'è, ma per noi è un errore: nel database l'ordine
+    // resta com'era. Un «recuperalo a mano» secco farebbe stornare due volte.
+    stato.stornoSenzaRisposta = 1;
+    expect((await consegna()).status).toBe(200);
+
+    expect(stato.storni.map((s) => s.amount)).toEqual([1620]);
+    const avviso = avvisi('⚠️ Storno al negozio da controllare');
+    expect(avviso, 'l errore restava solo nei log').toHaveLength(1);
+    expect(String(avviso[0].body)).toMatch(/guarda su Stripe.*può esserci già/);
+    expect(avvisi('⚠️ Chargeback aperto')).toHaveLength(1);
   });
 
   it('un doppione non cancella il promemoria del primo passaggio, che alla vittoria serve a ripagare il negozio', async () => {
