@@ -15,6 +15,9 @@ import {
   statoDelReclamoSullOrdine,
   type OrdineDaRimborsare,
 } from '@/lib/rimborsi/regole-del-rimborso';
+import { PAGINA_DEI_BONIFICI_DA_FARE } from '@/lib/rimborsi/scelta-del-reso';
+import { tabellaDeiBonificiMancante } from '@/lib/rimborsi/bonifici-da-fare';
+import { formatPriceFromCents } from '@/lib/format';
 
 export const runtime = 'nodejs';
 
@@ -90,7 +93,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     }
     if (body.refundCents > rimborsabile.massimoCents) {
       return ApiErrors.invalidRequest(
-        `Il rimborso non può superare quello che il cliente ha pagato e non ha ancora riavuto: al massimo ${(rimborsabile.massimoCents / 100).toFixed(2)} €.`,
+        `Il rimborso non può superare quello che il cliente ha pagato e non ha ancora riavuto: al massimo ${formatPriceFromCents(rimborsabile.massimoCents)}.`,
       );
     }
   }
@@ -139,6 +142,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   let rimborsoEmesso = false;
   /** R76 — il verdetto di `refundOrder`: il cliente ha riavuto l'intero lordo. */
   let rimborsoPieno = false;
+  /** R71 — quanto del rimborso va pagato col bonifico, a mano. */
+  let bonificoCents = 0;
 
   // Rimborso reale solo se risolto a favore del buyer con un importo.
   if (body.status === 'resolved_buyer' && body.refundCents) {
@@ -160,17 +165,50 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         notifyBuyer: true,
         // R71 — Un reclamo su un ordine in contanti si rimborsa col bonifico: il
         // credito MyCity arriva solo se il cliente l'ha scelto, e qui non l'ha
-        // scelto nessuno. L'avviso del bonifico da fare porta ai reclami, dove
-        // chi l'ha deciso ritrova il caso.
-        contanti: { modo: 'BONIFICO', doveSiPaga: '/admin/disputes' },
+        // scelto nessuno. L'avviso del bonifico da fare porta alla lista dei
+        // bonifici, dove il reclamo ha la sua riga (qui sotto).
+        contanti: { modo: 'BONIFICO', doveSiPaga: PAGINA_DEI_BONIFICI_DA_FARE },
       });
       refundId = res.refundId;
       rimborsoEmesso = true;
       rimborsoPieno = res.pieno;
+      bonificoCents = res.bonificoCents ?? 0;
     } catch (err) {
       logger.error('[disputes] refund failed', err);
       await riapri();
       return ApiErrors.badGateway('Rimborso fallito: ' + (err instanceof Error ? err.message : 'unknown'));
+    }
+  }
+
+  /**
+   * Collaudo del 15/10 — IL BONIFICO DEL RECLAMO RESTA SCRITTO.
+   *
+   * Il rimborso e' registrato sull'ordine (che da qui dice «rimborsato»), ma i
+   * soldi del bonifico li manda a mano chi amministra. Prima l'unica traccia era
+   * l'avviso nella campanella: perso quello, il cliente aspettava per sempre.
+   * La riga sta in una tabella che scrive solo il server (162): sulla riga del
+   * reclamo il cliente puo' scrivere quello che vuole, e la lista dei bonifici
+   * da fare non deve leggere cifre che ha messo lui.
+   *
+   * Non ferma la risoluzione: i soldi sono gia' registrati come rimborsati, e
+   * l'avviso a chi paga e' gia' partito. Senza la 162 resta solo l'avviso.
+   */
+  if (bonificoCents > 0 && dispute.order_id) {
+    const { error: errBonifico } = await admin.from('bonifici_dei_reclami').insert({
+      dispute_id: dispute.id,
+      order_id: dispute.order_id,
+      importo_cents: bonificoCents,
+    });
+    if (errBonifico) {
+      if (tabellaDeiBonificiMancante(errBonifico)) {
+        logger.warn('[dispute] migrazione 162 non applicata: il bonifico del reclamo resta solo nell avviso', {
+          disputeId: dispute.id, centesimi: bonificoCents,
+        });
+      } else {
+        logger.error('[dispute] bonifico da fare non registrato: resta solo nell avviso', {
+          disputeId: dispute.id, centesimi: bonificoCents, message: errBonifico.message,
+        });
+      }
     }
   }
 

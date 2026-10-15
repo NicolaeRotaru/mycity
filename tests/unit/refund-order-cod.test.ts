@@ -37,11 +37,14 @@ const state: {
   walletErr: null | { code?: string; message: string };
   updates: Record<string, unknown>[];
   rpcCalls: Array<{ name: string; args: Record<string, unknown> }>;
+  /** Il diario del credito (`wallet_ledger`): una riga per chiave, come con l'indice unico vero. */
+  ledger: Array<{ reason: string; ref: string; delta_cents: number }>;
 } = {
   order: baseOrder(),
   walletErr: null,
   updates: [],
   rpcCalls: [],
+  ledger: [],
 };
 
 function baseOrder(): Order {
@@ -89,10 +92,28 @@ vi.mock('@/lib/supabase/server', () => ({
           }),
         };
       }
+      if (table === 'wallet_ledger') {
+        // Collaudo del 15/10 (R82) — dopo l'accredito `refundOrder` rilegge la riga a diario della
+        // sua chiave, per accorgersi di un ritentativo con un importo diverso.
+        const filtri: Record<string, unknown> = {};
+        const q = {
+          select: () => q,
+          eq: (c: string, v: unknown) => ((filtri[c] = v), q),
+          maybeSingle: () =>
+            Promise.resolve({
+              data: state.ledger.find((r) => r.reason === filtri.reason && r.ref === filtri.ref) ?? null,
+              error: null,
+            }),
+        };
+        return q;
+      }
       return {};
     },
     rpc: (name: string, args: Record<string, unknown>) => {
       state.rpcCalls.push({ name, args });
+      if (name === 'wallet_credit' && !state.walletErr) {
+        state.ledger.push({ reason: String(args.p_reason), ref: String(args.p_ref), delta_cents: Number(args.p_cents) });
+      }
       // 051 — L'accumulo del rimborso ora lo fa il database, in una riga sola e
       // col tetto dentro. Qui lo si imita: se la somma sfonda il totale
       // dell'ordine la funzione non restituisce righe, e chi chiama NON deve
@@ -117,6 +138,7 @@ beforeEach(() => {
   state.walletErr = null;
   state.updates = [];
   state.rpcCalls = [];
+  state.ledger = [];
   refundsCreate.mockClear();
   createReversal.mockClear();
 });
@@ -156,6 +178,8 @@ describe('refundOrder COD → wallet', () => {
   // Adesso il credito non si ripete, e il resto del rimborso va a termine.
   it('idempotente: con 23505 il credito non si ripete e il rimborso si registra', async () => {
     state.walletErr = { code: '23505', message: 'duplicate' };
+    // Il tentativo di prima aveva accreditato gli stessi 20 €, poi si era persa la risposta.
+    state.ledger.push({ reason: 'cod_refund', ref: 'return_r1', delta_cents: 2000 });
     const res = await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1', contanti: SCELTO_IL_CREDITO });
 
     expect(res.refundId).toBe('wallet:return_r1');

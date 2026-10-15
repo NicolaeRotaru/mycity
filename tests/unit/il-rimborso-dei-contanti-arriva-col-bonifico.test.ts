@@ -45,6 +45,7 @@ vi.mock('@/lib/email/client', () => ({
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 
 import { refundOrder } from '@/lib/stripe/payout';
+import { formatPriceFromCents } from '@/lib/format';
 
 /** Il maglione di Giulia: 40 € pagati al fattorino, consegnato e incassato ieri. */
 function maglione(extra: Riga = {}): Riga {
@@ -96,7 +97,9 @@ describe('R71 — senza scelta, i contanti tornano col bonifico', () => {
     expect(ordine()).toMatchObject({ payment_status: 'REFUNDED', refunded_amount_cents: 4000 });
     const avvisi = notificheConTitolo(finto.db, 'Bonifico di rimborso da fare');
     expect(avvisi, 'nessuno sa che c e un bonifico da fare: Giulia aspetta per sempre').toHaveLength(1);
-    expect(String(avvisi[0].body)).toContain('40.00€');
+    // La cifra scritta come la legge chi paga: «40,00 €», non «40.00€».
+    expect(String(avvisi[0].body)).toContain(formatPriceFromCents(4000));
+    expect(String(avvisi[0].body)).not.toContain('40.00');
     expect(String(avvisi[0].body)).toContain('chiediglielo');
   });
 
@@ -130,7 +133,7 @@ describe('R71 — senza scelta, i contanti tornano col bonifico', () => {
 
     expect(creditoDi(finto.db, 'giulia')).toBe(2000);
     expect(esito).toMatchObject({ modo: 'misto', creditoCents: 2000, bonificoCents: 3000 });
-    expect(String(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare')[0].body)).toContain('30.00€');
+    expect(String(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare')[0].body)).toContain(formatPriceFromCents(3000));
   });
 
   it('un credito regalato non diventa soldi sul conto, nemmeno se il cliente chiede il bonifico', async () => {
@@ -159,6 +162,20 @@ describe('R25 — l email di rimborso dice come tornano davvero i soldi', () => 
     expect(text).toContain('già disponibile');
     expect(text, 'promette soldi sulla carta a chi ha avuto credito').not.toMatch(/5-10 giorni|metodo di pagamento/);
     expect(html).not.toMatch(/5-10 giorni|metodo di pagamento/);
+  });
+
+  it('dice dove trovare il credito col nome che il cliente vede nel menu: «Gift card», non «Buoni regalo»', async () => {
+    // Collaudo del 15/10: nel menu del profilo la voce si chiama «Gift card»
+    // (components/account/AccountSidebar.tsx), e porta a /profile/gift-cards.
+    await refundOrder({
+      orderId: 'o1', amountCents: 1250, idempotencyKey: 'return_r1', notifyBuyer: true, contanti: { modo: 'CREDITO' },
+    });
+
+    const { text, html } = finto.posta[0];
+    expect(text).toContain('«Gift card»');
+    expect(text).not.toContain('Buoni regalo');
+    expect(html).not.toContain('Buoni regalo');
+    expect(html).toMatch(/href="[^"]*\/profile\/gift-cards"[^>]*>«Gift card»</);
   });
 
   it('il motivo arriva in italiano, non come codice tecnico', async () => {

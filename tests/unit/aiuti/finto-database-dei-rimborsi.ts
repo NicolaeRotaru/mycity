@@ -5,7 +5,7 @@
  *  ① le funzioni del database fanno quello che fanno le migrazioni: `accumula_rimborso` somma
  *    con il tetto del lordo dentro (124), `storna_rimborso` toglie (125), `wallet_credit` non
  *    accredita due volte la stessa chiave (098: risponde 23505; con `comeLa143` risponde senza
- *    errore, come dopo la 143);
+ *    errore e col saldo, come dopo la 143) e scrive la riga a diario in `wallet_ledger`;
  *  ② i filtri delle scritture si applicano DAVVERO (`eq`, `in`, `is`, `like`): una scrittura che
  *    non trova righe non scrive niente, e chi la fa lo vede da `select('id')`;
  *  ③ i guasti si accendono a comando: l'accredito che cade, l'accredito che riesce ma perde la
@@ -27,6 +27,8 @@ export interface Guasti {
   stornaRimborso?: { code?: string; message: string } | null;
   /** Colonne che il database non ha (una migrazione non ancora applicata). */
   colonneMancanti?: string[];
+  /** Tabelle che il database non ha: ogni lettura o scrittura risponde PGRST205, come PostgREST. */
+  tabelleMancanti?: string[];
 }
 
 export interface FintoDatabase {
@@ -94,6 +96,10 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
     this.filtri.push((r) => valori.includes(r[colonna]));
     return this;
   }
+  gt(colonna: string, valore: number) {
+    this.filtri.push((r) => typeof r[colonna] === 'number' && (r[colonna] as number) > valore);
+    return this;
+  }
   is(colonna: string, valore: unknown) {
     this.filtri.push((r) => (r[colonna] ?? null) === valore);
     return this;
@@ -125,6 +131,12 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
   }
 
   private esegui(): { data: unknown; error: unknown } {
+    if ((this.db.guasti.tabelleMancanti ?? []).includes(this.tabella)) {
+      return {
+        data: null,
+        error: { code: 'PGRST205', message: `Could not find the table 'public.${this.tabella}' in the schema cache` },
+      };
+    }
     const righe = (this.db.tabelle[this.tabella] ??= []);
     if (this.modo === 'select') {
       const chiesta = this.mancante(this.colonne === '*' ? [] : colonneDi(this.colonne));
@@ -212,17 +224,21 @@ export function creaFintoDatabase(tabelle: Record<string, Riga[]>, guasti: Guast
         if (db.guasti.walletCredit) return { data: null, error: db.guasti.walletCredit };
         const reason = String(args.p_reason);
         const ref = String(args.p_ref);
+        const saldo = () => creditoDi(db, String(args.p_user));
         if (db.diarioCredito.some((m) => m.reason === reason && m.ref === ref)) {
           return db.comeLa143
-            ? { data: 0, error: null }
+            ? { data: saldo(), error: null }
             : { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint' } };
         }
         db.diarioCredito.push({ user: String(args.p_user), cents: Number(args.p_cents), reason, ref });
+        (db.tabelle.wallet_ledger ??= []).push({
+          id: `wl-${db.diarioCredito.length}`, user_id: String(args.p_user), delta_cents: Number(args.p_cents), reason, ref,
+        });
         if (db.guasti.walletCreditaPoiCade) {
           db.guasti.walletCreditaPoiCade = false;
           return { data: null, error: { message: 'FetchError: socket hang up' } };
         }
-        return { data: 0, error: null };
+        return { data: saldo(), error: null };
       }
       return { data: null, error: null };
     },

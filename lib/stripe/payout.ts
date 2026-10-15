@@ -6,6 +6,7 @@ import { sendEmail } from '@/lib/email/client';
 import { refundIssuedTemplate } from '@/lib/email/templates';
 import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 import { compensoDalContante } from '@/lib/shipping';
+import { formatPriceFromCents } from '@/lib/format';
 // La merce che torna a scaffale ha una casa sola: la decisione è pura e
 // verificabile, qui si usa e basta (lib/ordini/rimessa-a-scaffale.ts).
 import { rimettiLaMerceAScaffale } from '@/lib/ordini/rimessa-a-scaffale';
@@ -843,6 +844,49 @@ function eOrdineInesistente(errore: unknown): boolean {
   return /no rows|0 rows|not found|nessuna riga/.test(testo);
 }
 
+/**
+ * Collaudo del 15/10 (R82, la variante con l'importo cambiato) — L'ACCREDITO
+ * GIA' FATTO DEVE ESSERE LO STESSO CHE SI STA CHIEDENDO.
+ *
+ * La chiave dei resi e dei reclami (`return_<id>`, `dispute_<id>`) non porta
+ * l'importo. Il primo tentativo accredita 20 € e perde la risposta; la
+ * prenotazione torna indietro e il negozio riprova con 15 €. Il portafoglio
+ * riconosce la chiave e non accredita di nuovo — giusto — ma la funzione
+ * andava avanti e registrava 15 € di rimborso, mentre il cliente ne aveva
+ * ricevuti 20: conti dell'ordine e soldi veri divergevano, in silenzio.
+ *
+ * Qui si guarda la riga a diario di quella chiave. Stesso importo: e' il
+ * ritentativo di prima, il rimborso va a termine. Importo diverso: ci si ferma,
+ * la prenotazione torna indietro (lo fa chi chiama, nel suo `catch`) e chi
+ * decide legge quanto e' gia' uscito. Stripe fa lo stesso con la sua chiave:
+ * una richiesta diversa con una chiave gia' usata e' un errore, non un si'.
+ */
+async function controllaLAccreditoGiaFatto(
+  admin: ReturnType<typeof getAdminSupabase>,
+  chiave: string,
+  richiestoCents: number,
+): Promise<void> {
+  const { data, error } = await admin
+    .from('wallet_ledger')
+    .select('delta_cents')
+    .eq('reason', 'cod_refund')
+    .eq('ref', chiave)
+    .maybeSingle();
+  if (error) {
+    // Non si sa quanto e' uscito: si ferma e si riprova, non si registra a occhio.
+    throw new Error(`refundOrder COD: accredito gia' fatto non verificabile: ${error.message}`);
+  }
+  if (!data) return;
+  const giaAccreditato = Math.round(Number((data as { delta_cents?: unknown }).delta_cents ?? 0));
+  if (giaAccreditato !== richiestoCents) {
+    throw new RimborsoNonRitentabile(
+      `Un tentativo precedente di questo rimborso ha già accreditato al cliente ${formatPriceFromCents(giaAccreditato)} ` +
+        `di credito MyCity, con un importo diverso da quello di adesso (${formatPriceFromCents(richiestoCents)}). ` +
+        "Riprova con l'importo del primo tentativo.",
+    );
+  }
+}
+
 export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso> {
   const admin = getAdminSupabase();
   // R84 — `cash_confirmed_at`, `payment_status` e `wallet_applied_cents` non si
@@ -1008,13 +1052,18 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
         });
         // 23505 = questo accredito c'e' gia': un tentativo precedente era
         // arrivato fin qui e si era persa solo la risposta. Il credito non si
-        // ripete (lo stesso fa la 143, che risponde senza errore), e il resto
-        // del rimborso — che quel tentativo non aveva registrato — va a termine
-        // qui. Prima su 23505 la funzione usciva subito: il cliente aveva il
-        // credito, l'ordine restava «pagato» e il negozio teneva la sua quota.
+        // ripete (lo stesso fa la 143, che risponde senza errore, col saldo di
+        // prima), e il resto del rimborso — che quel tentativo non aveva
+        // registrato — va a termine qui. Prima su 23505 la funzione usciva
+        // subito: il cliente aveva il credito, l'ordine restava «pagato» e il
+        // negozio teneva la sua quota.
         if (wErr && (wErr as { code?: string }).code !== '23505') {
           throw new Error(`refundOrder COD: accredito wallet fallito: ${wErr.message}`);
         }
+        // Dopo la 143 un doppione non si distingue da un accredito nuovo dalla
+        // risposta: si guarda la riga a diario di quella chiave, che c'e' una
+        // volta sola (indice unico), e deve dire lo stesso importo.
+        await controllaLAccreditoGiaFatto(admin, chiave, riparto.creditoCents);
       }
       // La parte del bonifico (R71) la paga a mano chi amministra: qui non si
       // muove e non puo' cadere niente. Il rimborso si registra, e piu' sotto
@@ -1145,9 +1194,9 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     try {
       await notifyAdmins(
         '💶 Bonifico di rimborso da fare',
-        `Bonifico di ${(riparto.bonificoCents / 100).toFixed(2)}€ da fare al cliente dell'ordine #${order.id.slice(0, 8)}, pagato in contanti` +
+        `Bonifico di ${formatPriceFromCents(riparto.bonificoCents)} da fare al cliente dell'ordine #${order.id.slice(0, 8)}, pagato in contanti` +
           (riparto.creditoCents > 0
-            ? ` (altri ${(riparto.creditoCents / 100).toFixed(2)}€ gli sono già tornati come credito MyCity). `
+            ? ` (altri ${formatPriceFromCents(riparto.creditoCents)} gli sono già tornati come credito MyCity). `
             : '. ') +
           (conIban
             ? "L'IBAN che ha indicato è nella pagina dei rimborsi da bonificare."

@@ -9,7 +9,7 @@
 -- maglione da 40 € pagato al fattorino si trovava 40 € di credito, spendibili solo con un altro
 -- ordine in contanti.
 --
--- COSA FA QUESTA MIGRAZIONE, in tre mosse.
+-- COSA FA QUESTA MIGRAZIONE, in quattro mosse.
 --
 -- ① IL RESO RICORDA LA SCELTA. Due colonne: `refund_method` («BONIFICO» o «CREDITO») e
 --    `refund_iban`, il conto su cui fare il bonifico. Vuote vuol dire «nessuna scelta», e nessuna
@@ -35,6 +35,18 @@
 --    negozio o del cliente la deve leggere, va concessa con un `GRANT SELECT (colonna)` esplicito.
 --    E' il verso giusto in cui sbagliare: una colonna che manca si vede subito, una che avanza no.
 --
+-- ④ I BONIFICI DEI RECLAMI HANNO UNA LISTA. (Aggiunto dopo il collaudo del 15/10.) Anche un
+--    reclamo chiuso a favore del cliente su un ordine in contanti si rimborsa col bonifico. Il
+--    reso ricorda il suo bonifico nelle colonne qui sopra; il reclamo non aveva dove scriverlo, e
+--    l'unica traccia era l'avviso nella campanella di chi amministra: perso l'avviso, il cliente
+--    aspettava un bonifico che nessuno vedeva. Nasce `bonifici_dei_reclami`, una riga per reclamo
+--    rimborsato col bonifico, che la stessa lista dei bonifici da fare legge.
+--    Perche' una tabella a parte e non due colonne su `disputes`: la regola di inserimento dei
+--    reclami (063) lascia al cliente scrivere la riga intera, stato compreso. Una colonna «bonifico
+--    da fare» su quella riga la poteva riempire lui, e la lista l'avrebbe mostrata a chi paga. Qui
+--    scrive e legge solo il server: regole di riga accese, nessuna regola, nessun permesso ai
+--    ruoli del browser.
+--
 -- COSA NON TOCCA. Le regole di riga: il cliente vede i suoi resi, il negozio i suoi,
 -- l'amministratore tutti — solo, senza l'IBAN. Le scritture: restano del solo server (153).
 --
@@ -47,6 +59,7 @@
 -- IDEMPOTENTE: si puo' applicare due volte di fila.
 --
 -- REVERSIBILE:
+--   DROP TABLE IF EXISTS public.bonifici_dei_reclami;   (prima si fanno i bonifici in sospeso)
 --   GRANT SELECT ON public.returns TO authenticated;
 --   ALTER TABLE public.returns DROP CONSTRAINT IF EXISTS returns_refund_bonifico_cents_check;
 --   ALTER TABLE public.returns DROP CONSTRAINT IF EXISTS returns_refund_iban_check;
@@ -57,7 +70,8 @@
 --   ALTER TABLE public.returns DROP COLUMN IF EXISTS refund_method;
 -- (togliere le colonne cancella gli IBAN gia' raccolti: prima si fanno i bonifici in sospeso.)
 --
--- LA PROVA: tests/sql/rls/40-l-iban-del-reso-lo-legge-solo-chi-paga.test.sql
+-- LE PROVE: tests/sql/rls/40-l-iban-del-reso-lo-legge-solo-chi-paga.test.sql
+--            tests/sql/rls/41-i-bonifici-dei-reclami-li-tocca-solo-il-server.test.sql
 
 BEGIN;
 
@@ -124,6 +138,22 @@ BEGIN
   EXECUTE format('GRANT SELECT (%s) ON public.returns TO authenticated', v_colonne);
 END $$;
 
+-- ④ i bonifici dei reclami: li scrive e li legge solo il server
+CREATE TABLE IF NOT EXISTS public.bonifici_dei_reclami (
+  dispute_id     uuid PRIMARY KEY REFERENCES public.disputes(id) ON DELETE CASCADE,
+  order_id       uuid NOT NULL,
+  importo_cents  integer NOT NULL CHECK (importo_cents > 0),
+  registrato_at  timestamptz NOT NULL DEFAULT now(),
+  fatto_at       timestamptz
+);
+
+COMMENT ON TABLE public.bonifici_dei_reclami IS
+  'Rimborsi di reclami su ordini in contanti da pagare col bonifico, a mano, da chi amministra. fatto_at NULL = bonifico ancora da fare. Solo server.';
+
+ALTER TABLE public.bonifici_dei_reclami ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.bonifici_dei_reclami FROM anon, authenticated;
+GRANT SELECT, INSERT, UPDATE ON public.bonifici_dei_reclami TO service_role;
+
 -- Il controllo in fondo: se una mossa non e' andata a segno, la migrazione si ferma invece di
 -- lasciare un IBAN leggibile dal negozio.
 DO $$
@@ -136,6 +166,10 @@ BEGIN
   END IF;
   IF has_column_privilege('anon', 'public.returns', 'id', 'SELECT') THEN
     RAISE EXCEPTION '162: chi non ha fatto l''accesso legge ancora i resi';
+  END IF;
+  IF has_table_privilege('authenticated', 'public.bonifici_dei_reclami', 'INSERT')
+     OR has_table_privilege('authenticated', 'public.bonifici_dei_reclami', 'SELECT') THEN
+    RAISE EXCEPTION '162: il browser tocca ancora i bonifici dei reclami';
   END IF;
 END $$;
 

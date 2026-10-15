@@ -40,6 +40,10 @@ vi.mock('@/lib/api/middleware', () => ({
 
 import { refundOrder, RimborsoNonRitentabile } from '@/lib/stripe/payout';
 import { POST as risolvi } from '@/app/api/admin/disputes/[id]/resolve/route';
+import { POST as annullaDaAmministratore } from '@/app/api/admin/orders/[id]/cancel/route';
+import { PAGINA_DEI_BONIFICI_DA_FARE } from '@/lib/rimborsi/scelta-del-reso';
+import { pagamentoPerChiDecide } from '@/lib/rimborsi/regole-del-rimborso';
+import { formatPriceFromCents } from '@/lib/format';
 
 /** 24 € in contanti, il fattorino non e' mai arrivato: nessuno ha incassato niente. */
 function maiArrivato(extra: Riga = {}): Riga {
@@ -56,10 +60,10 @@ function maiArrivato(extra: Riga = {}): Riga {
   };
 }
 
-function apri(ordine: Riga) {
+function apri(ordine: Riga, altriReclami: Riga[] = []) {
   finto.db = creaFintoDatabase({
     orders: [ordine],
-    disputes: [{ id: 'd1', status: 'open', order_id: 'o1', opener_id: 'cliente', against_id: 'negozio' }],
+    disputes: [{ id: 'd1', status: 'open', order_id: 'o1', opener_id: 'cliente', against_id: 'negozio' }, ...altriReclami],
     profiles: [{ id: 'nicola', role: 'admin' }],
     notifications: [],
   });
@@ -67,13 +71,23 @@ function apri(ordine: Riga) {
 
 const NOTE = 'Il fattorino non è mai arrivato: chiudiamo a favore del cliente.';
 
-function chiudiAFavoreDelCliente(refundCents: number) {
-  const req = new Request('http://localhost/api/admin/disputes/d1/resolve', {
+function chiudiAFavoreDelCliente(refundCents: number, reclamo = 'd1') {
+  const req = new Request(`http://localhost/api/admin/disputes/${reclamo}/resolve`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ status: 'resolved_buyer', notes: NOTE, refundCents }),
   });
-  return risolvi(req as never, { params: Promise.resolve({ id: 'd1' }) });
+  return risolvi(req as never, { params: Promise.resolve({ id: reclamo }) });
+}
+
+/** L'amministratore annulla l'ordine fermo, dalla rotta vera (che usa annullaERimborsa vera). */
+function annullaLOrdine() {
+  const req = new Request('http://localhost/api/admin/orders/o1/cancel', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ reason: 'Ordine fermo: il fattorino non è mai arrivato' }),
+  });
+  return annullaDaAmministratore(req as never, { params: Promise.resolve({ id: 'o1' }) });
 }
 
 const ordine = () => finto.db.tabelle.orders[0];
@@ -107,17 +121,15 @@ describe('contanti mai incassati: niente da restituire', () => {
     expect(finto.db.rpc.map((c) => c.nome)).not.toContain('wallet_credit');
   });
 
-  it('se il cliente aveva speso credito MyCity, si restituisce solo quello', async () => {
+  it('se il cliente aveva speso credito MyCity, il reclamo non lo restituisce: manda ad annullare', async () => {
     apri(maiArrivato({ total_price: 19, wallet_applied_cents: 500 }));
 
-    const troppo = await chiudiAFavoreDelCliente(2400);
-    expect(troppo.status).toBe(400);
-    expect((await troppo.json()).error.message).toContain('5.00 €');
+    const res = await chiudiAFavoreDelCliente(500);
 
-    const giusto = await chiudiAFavoreDelCliente(500);
-    expect(giusto.status).toBe(200);
-    expect(creditoDi(finto.db, 'cliente')).toBe(500);
-    expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare'), 'il credito speso non va mai col bonifico').toHaveLength(0);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.message).toContain('annullalo');
+    expect(creditoDi(finto.db, 'cliente')).toBe(0);
+    expect(reclamo().status).toBe('open');
   });
 
   it('su un ordine annullato il credito l ha gia restituito l annullo: niente seconda volta', async () => {
@@ -141,6 +153,94 @@ describe('contanti incassati: il rimborso esce, e col bonifico', () => {
     expect(ordine()).toMatchObject({ payment_status: 'REFUNDED', refunded_amount_cents: 2400 });
     expect(creditoDi(finto.db, 'cliente'), 'R71: nessuno ha scelto il credito').toBe(0);
     const [avviso] = notificheConTitolo(finto.db, 'Bonifico di rimborso da fare');
-    expect(avviso.link).toBe('/admin/disputes');
+    expect(avviso.link).toBe(PAGINA_DEI_BONIFICI_DA_FARE);
+  });
+
+  it('il bonifico del reclamo resta scritto nella lista dei bonifici, non solo nell avviso', async () => {
+    apri(maiArrivato({ delivery_status: 'DELIVERED', payment_status: 'PAID', cash_confirmed_at: '2026-10-10T18:00:00Z' }));
+
+    await chiudiAFavoreDelCliente(2400);
+
+    expect(finto.db.tabelle.bonifici_dei_reclami, 'il bonifico promesso vive solo nella campanella').toEqual([
+      expect.objectContaining({ dispute_id: 'd1', order_id: 'o1', importo_cents: 2400 }),
+    ]);
+  });
+
+  it('senza la migrazione 162 il reclamo si chiude lo stesso, e resta l avviso', async () => {
+    apri(maiArrivato({ delivery_status: 'DELIVERED', payment_status: 'PAID', cash_confirmed_at: '2026-10-10T18:00:00Z' }));
+    finto.db.guasti.tabelleMancanti = ['bonifici_dei_reclami'];
+
+    const res = await chiudiAFavoreDelCliente(2400);
+
+    expect(res.status).toBe(200);
+    expect(reclamo().status).toBe('resolved_buyer');
+    expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare')).toHaveLength(1);
+  });
+});
+
+/**
+ * Collaudo del 15/10 — IL CREDITO TORNAVA DUE VOLTE.
+ *
+ * Il caso del collaudatore: un ordine in contanti da 24 €, pagato 10 col credito
+ * MyCity, accettato dal negozio e mai consegnato. Due mosse normali di un
+ * amministratore onesto: chiude il reclamo con l'importo massimo che il
+ * pannello gli mostra (i 10 € di credito), poi annulla l'ordine fermo. L'annullo
+ * restituisce `wallet_applied_cents` senza sapere del reclamo: 20 € di credito
+ * per 10 spesi. Gira la rotta vera dei reclami, la `refundOrder` vera e la
+ * rotta vera dell'annullo (con `annullaERimborsa` vera).
+ */
+describe('il credito di un ordine fermo torna una volta sola', () => {
+  const fermo = () => maiArrivato({ total_price: 14, wallet_applied_cents: 1000, delivery_status: 'ACCEPTED' });
+
+  it('IL CASO DEL COLLAUDO — reclamo e poi annullo: 10 € spesi, 10 € tornati', async () => {
+    apri(fermo());
+
+    const pannello = pagamentoPerChiDecide(ordine());
+    expect(pannello.massimoCents, 'il pannello indica come rimborsabile un credito che l annullo ridara').toBe(0);
+
+    const reclamoChiuso = await chiudiAFavoreDelCliente(1000);
+    expect(reclamoChiuso.status).toBe(409);
+    expect((await reclamoChiuso.json()).error.message).toContain('annullalo');
+
+    const annullo = await annullaLOrdine();
+    expect(annullo.status).toBe(200);
+
+    expect(creditoDi(finto.db, 'cliente'), `diario del credito: ${JSON.stringify(finto.db.diarioCredito)}`).toBe(1000);
+    expect(ordine().seller_payout_reversed_cents, 'al negozio e stata tolta una quota mai incassata').toBe(0);
+  });
+
+  it('annullo e poi reclamo: il reclamo non ridà niente', async () => {
+    apri(fermo());
+
+    expect((await annullaLOrdine()).status).toBe(200);
+    expect(creditoDi(finto.db, 'cliente')).toBe(1000);
+
+    const res = await chiudiAFavoreDelCliente(1000);
+    expect(res.status).toBe(409);
+    expect(creditoDi(finto.db, 'cliente')).toBe(1000);
+  });
+
+  it('un ordine rimborsato in parte prima di questo lotto non diventa «incassato»: il secondo reclamo si ferma', async () => {
+    // Un reclamo di prima del lotto aveva gia' restituito i 10 € di credito su
+    // quest'ordine fermo, lasciandolo PARTIALLY_REFUNDED. Il collaudatore: il
+    // pannello lo diceva «incassati», rimborsabile 14 €, e un secondo reclamo
+    // restituiva 14 € di contanti mai versati.
+    apri(
+      maiArrivato({
+        total_price: 14, wallet_applied_cents: 1000, delivery_status: 'ACCEPTED',
+        payment_status: 'PARTIALLY_REFUNDED', refunded_amount_cents: 1000,
+      }),
+      [{ id: 'd2', status: 'open', order_id: 'o1', opener_id: 'cliente', against_id: 'negozio' }],
+    );
+    finto.db.tabelle.disputes[0].status = 'resolved_buyer';
+
+    const pannello = pagamentoPerChiDecide(ordine());
+    expect(pannello.comeHaPagato).toContain('NON incassati');
+    expect(pannello.comeHaPagato).toContain(formatPriceFromCents(1000));
+
+    const res = await chiudiAFavoreDelCliente(1400, 'd2');
+    expect(res.status).toBe(409);
+    expect(creditoDi(finto.db, 'cliente')).toBe(0);
+    expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare')).toHaveLength(0);
   });
 });

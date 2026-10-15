@@ -203,6 +203,30 @@ export interface Database {
         };
         Relationships: [];
       };
+      bonifici_dei_reclami: {
+        Row: {
+          dispute_id: string;
+          order_id: string;
+          importo_cents: number;
+          registrato_at: string;
+          fatto_at: string | null;
+        };
+        Insert: {
+          dispute_id: string;
+          order_id: string;
+          importo_cents: number;
+          registrato_at?: string;
+          fatto_at?: string | null;
+        };
+        Update: {
+          dispute_id?: string;
+          order_id?: string;
+          importo_cents?: number;
+          registrato_at?: string;
+          fatto_at?: string | null;
+        };
+        Relationships: [];
+      };
       cashback_campaigns: {
         Row: {
           id: string;

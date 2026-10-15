@@ -144,6 +144,38 @@ describe('l accredito riesce ma la risposta si perde (la variante scomoda)', () 
   }
 });
 
+/**
+ * Collaudo del 15/10 — LA VARIANTE CON L'IMPORTO CAMBIATO. La chiave dei resi
+ * (`return_<id>`) non porta l'importo. Il primo tentativo accredita 20 € e
+ * perde la risposta; la prenotazione torna indietro e il negozio riprova con
+ * 15 €. Il portafoglio riconosce la chiave e non accredita di nuovo, ma la
+ * funzione registrava 15 € di rimborso mentre la cliente ne aveva avuti 20.
+ */
+describe('risposta persa, e il negozio riprova con un importo diverso', () => {
+  for (const comeLa143 of [false, true]) {
+    it(`si ferma e dice quanto e gia uscito, invece di registrare un'altra cifra (${comeLa143 ? 'dopo' : 'prima della'} 143)`, async () => {
+      finto.db.comeLa143 = comeLa143;
+      finto.db.guasti.walletCreditaPoiCade = true;
+      await expect(refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1', contanti: CREDITO }))
+        .rejects.toThrow();
+      expect(creditoDi(finto.db, 'cliente')).toBe(2000);
+
+      const diverso = refundOrder({ orderId: 'o1', amountCents: 1500, idempotencyKey: 'return_r1', contanti: CREDITO });
+      await expect(diverso).rejects.toThrow(/già accreditato/);
+
+      expect(ordine().refunded_amount_cents, 'registrato 15 € mentre la cliente ne ha avuti 20').toBe(0);
+      expect(creditoDi(finto.db, 'cliente'), 'accreditato una seconda volta').toBe(2000);
+      expect(createReversal, 'al negozio e stata ripresa una quota su una cifra sbagliata').not.toHaveBeenCalled();
+
+      // Con l'importo del primo tentativo il rimborso va in fondo, una volta sola.
+      const esito = await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1', contanti: CREDITO });
+      expect(esito.importoCents).toBe(2000);
+      expect(ordine()).toMatchObject({ refunded_amount_cents: 2000, payment_status: 'REFUNDED' });
+      expect(creditoDi(finto.db, 'cliente')).toBe(2000);
+    });
+  }
+});
+
 describe('lo storno della quota al negozio cade, a cliente gia accreditato', () => {
   it('il rimborso arriva in fondo, e il recupero diventa un lavoro dichiarato', async () => {
     stornoAlNegozio.cade = true;

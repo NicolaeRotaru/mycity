@@ -42,6 +42,7 @@ vi.mock('@/lib/api/middleware', () => ({
 
 import { POST as apriReso } from '@/app/api/returns/create/route';
 import { POST as decidi } from '@/app/api/returns/[id]/decide/route';
+import { POST as avanza } from '@/app/api/returns/[id]/avanza/route';
 
 const ORDINE = '11111111-1111-4111-8111-111111111111';
 const IBAN = 'IT60X0542811101000000123456';
@@ -102,6 +103,26 @@ async function ilNegozioApprova(resoId: string) {
   return { status: res.status, corpo: await res.json() };
 }
 
+/**
+ * La strada piu' comune di un reso: il negozio approva SENZA rimborsare subito,
+ * aspetta la merce, la riceve, e solo allora segna «rimborsato» (rotta avanza).
+ */
+async function ilNegozioApprovaERiceveLaMerce(resoId: string) {
+  finto.utente = 'negozio';
+  const chiama = async (rotta: typeof decidi, url: string, corpo: Record<string, unknown>) => {
+    const res = await rotta(
+      new Request(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo) }) as never,
+      { params: Promise.resolve({ id: resoId }) } as never,
+    );
+    return { status: res.status, corpo: await res.json() };
+  };
+  const approvato = await chiama(decidi, `http://localhost/api/returns/${resoId}/decide`, { decision: 'APPROVED' });
+  expect(approvato.status, JSON.stringify(approvato.corpo)).toBe(200);
+  const ricevuto = await chiama(avanza, `http://localhost/api/returns/${resoId}/avanza`, { stato: 'RECEIVED' });
+  expect(ricevuto.status, JSON.stringify(ricevuto.corpo)).toBe(200);
+  return chiama(avanza, `http://localhost/api/returns/${resoId}/avanza`, { stato: 'REFUNDED', refundAmountCents: 4000 });
+}
+
 const reso = () => finto.db.tabelle.returns[0];
 const CON_162 = ['refund_method', 'refund_iban', 'refund_bonifico_cents', 'refund_bonifico_fatto_at'];
 
@@ -154,6 +175,56 @@ describe('la scelta arriva fino ai soldi', () => {
 
     expect(creditoDi(finto.db, 'giulia')).toBe(4000);
     expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: `wallet:return_${corpo.id}` });
+  });
+});
+
+/**
+ * Collaudo del 15/10 — la prova non copriva la rotta `avanza`: rimesso il
+ * credito d'ufficio in quella rotta, la suite intera restava verde. Qui la
+ * strada «approvato → merce ricevuta → rimborsato», con la rotta vera.
+ */
+describe('la scelta arriva fino ai soldi anche dalla strada piu comune (approva, ricevi, rimborsa)', () => {
+  it('ha scelto il bonifico: rimborsato, nessun credito, bonifico da fare con la cifra sul reso', async () => {
+    const { corpo } = await chiediReso({ modo: 'BONIFICO', iban: IBAN });
+
+    const esito = await ilNegozioApprovaERiceveLaMerce(corpo.id);
+
+    expect(esito.status, JSON.stringify(esito.corpo)).toBe(200);
+    expect(creditoDi(finto.db, 'giulia'), 'Giulia ha scelto il bonifico e ha ricevuto credito MyCity').toBe(0);
+    expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: `bonifico:return_${corpo.id}`, refund_bonifico_cents: 4000 });
+    expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare')).toHaveLength(1);
+  });
+
+  it('nessuna scelta (modulo vecchio): rimborsato col bonifico, mai credito', async () => {
+    const { corpo } = await chiediReso();
+
+    const esito = await ilNegozioApprovaERiceveLaMerce(corpo.id);
+
+    expect(esito.status, JSON.stringify(esito.corpo)).toBe(200);
+    expect(creditoDi(finto.db, 'giulia')).toBe(0);
+    expect(reso().refund_id).toBe(`bonifico:return_${corpo.id}`);
+  });
+
+  it('ha scelto il credito: rimborsato, il credito arriva subito e niente bonifico', async () => {
+    const { corpo } = await chiediReso({ modo: 'CREDITO' });
+
+    const esito = await ilNegozioApprovaERiceveLaMerce(corpo.id);
+
+    expect(esito.status, JSON.stringify(esito.corpo)).toBe(200);
+    expect(creditoDi(finto.db, 'giulia')).toBe(4000);
+    expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: `wallet:return_${corpo.id}` });
+    expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare')).toHaveLength(0);
+  });
+
+  it('senza la migrazione 162: dalla stessa strada il rimborso va col bonifico', async () => {
+    apri(maglione(), CON_162);
+    const { corpo } = await chiediReso({ modo: 'CREDITO' });
+
+    const esito = await ilNegozioApprovaERiceveLaMerce(corpo.id);
+
+    expect(esito.status, JSON.stringify(esito.corpo)).toBe(200);
+    expect(creditoDi(finto.db, 'giulia')).toBe(0);
+    expect(reso().refund_id).toBe(`bonifico:return_${corpo.id}`);
   });
 });
 

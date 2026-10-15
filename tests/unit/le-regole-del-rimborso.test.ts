@@ -10,6 +10,7 @@ import {
 import { ibanValido, leggiSceltaDelRimborso, normalizzaIban } from '@/lib/rimborsi/scelta-del-cliente';
 import { comeTornanoIContanti } from '@/lib/rimborsi/scelta-del-reso';
 import { vociDeiBonificiDaFare } from '@/lib/rimborsi/bonifici-da-fare';
+import { formatPriceFromCents } from '@/lib/format';
 
 /**
  * LE REGOLE DEL RIMBORSO, ESEGUITE (R71 · R76 · R84).
@@ -49,9 +50,26 @@ describe('R84 — si restituisce solo quello che il cliente ha dato davvero', ()
     expect(quantoSiPuoRestituire(maiArrivato)).toEqual({ massimoCents: 0, perche: 'nessun-incasso' });
   });
 
-  it('mai incassato ma pagato in parte col credito: si restituisce solo il credito speso', () => {
+  it('mai incassato ma pagato in parte col credito: qui niente, il credito lo restituisce l annullo (una volta sola)', () => {
+    // Collaudo del 15/10: contare qui il credito di un ordine fermo voleva dire restituirlo due
+    // volte — col reclamo, e poi con l'annullo dell'ordine, che lo restituisce da solo.
     const conCredito = { ...misto, cash_confirmed_at: null, payment_status: 'PENDING', delivery_status: 'ASSIGNED' };
-    expect(quantoSiPuoRestituire(conCredito)).toEqual({ massimoCents: 2000, perche: 'ok' });
+    expect(quantoSiPuoRestituire(conCredito)).toEqual({ massimoCents: 0, perche: 'nessun-incasso' });
+  });
+
+  it('un rimborso fatto prima di questo lotto non rende «incassato» un ordine mai pagato', () => {
+    // Prima di R84 un reclamo poteva rimborsare un ordine fermo, che restava PARTIALLY_REFUNDED.
+    // Lo stato del pagamento dopo un rimborso dice cosa e' TORNATO, non cosa era ARRIVATO.
+    const giaRimborsatoInParte = {
+      ...misto, cash_confirmed_at: null, delivery_status: 'ACCEPTED',
+      payment_status: 'PARTIALLY_REFUNDED', refunded_amount_cents: 1000,
+    };
+    expect(quantoSiPuoRestituire(giaRimborsatoInParte)).toEqual({ massimoCents: 0, perche: 'nessun-incasso' });
+    expect(quantoSiPuoRestituire({ ...giaRimborsatoInParte, payment_status: 'REFUNDED' }).perche).toBe('nessun-incasso');
+    // Lo stesso ordine incassato davvero (consegnato) e rimborsato in parte resta rimborsabile del resto.
+    expect(quantoSiPuoRestituire({ ...giaRimborsatoInParte, delivery_status: 'DELIVERED' })).toEqual({
+      massimoCents: 4000, perche: 'ok',
+    });
   });
 
   it('annullato e mai incassato: il credito l ha gia restituito l annullo, qui niente', () => {
@@ -88,10 +106,24 @@ describe('R84 — il pannello dei reclami mostra come ha pagato il cliente e qua
     expect(r.massimoCents).toBe(0);
     expect(r.avviso).toContain('non è stato incassato niente');
   });
+  it('ordine fermo pagato in parte col credito: massimo zero, e manda ad annullare (il credito torna una volta)', () => {
+    const r = pagamentoPerChiDecide({ ...misto, cash_confirmed_at: null, payment_status: 'PENDING', delivery_status: 'ACCEPTED' });
+    expect(r.comeHaPagato).toContain('NON incassati');
+    expect(r.comeHaPagato).toContain(`${formatPriceFromCents(2000)} di credito MyCity`);
+    expect(r.massimoCents, 'il pannello indica una cifra che, sommata all annullo, restituisce il credito due volte').toBe(0);
+    expect(r.avviso).toContain('annullalo');
+  });
+  it('dopo un rimborso vecchio su un ordine mai pagato, il pannello non lo dice «incassato»', () => {
+    const r = pagamentoPerChiDecide({
+      ...misto, cash_confirmed_at: null, delivery_status: 'ACCEPTED', payment_status: 'PARTIALLY_REFUNDED', refunded_amount_cents: 1000,
+    });
+    expect(r.comeHaPagato).toContain('NON incassati');
+    expect(r.massimoCents).toBe(0);
+  });
   it('contanti incassati con credito: tutto quello che il cliente ha dato', () => {
     const r = pagamentoPerChiDecide(misto);
     expect(r.comeHaPagato).toContain('incassati');
-    expect(r.comeHaPagato).toContain('20.00 € di credito MyCity');
+    expect(r.comeHaPagato).toContain(`${formatPriceFromCents(2000)} di credito MyCity`);
     expect(r).toMatchObject({ massimoCents: 5000, avviso: null });
   });
 });
@@ -112,6 +144,16 @@ describe('R71 — i contanti tornano col bonifico, il credito solo se scelto', (
     expect(ripartoDelRimborso(misto, 5000, 'BONIFICO')).toMatchObject({ modo: 'misto', creditoCents: 2000, bonificoCents: 3000 });
     // Rimborso di 10 € → in proporzione: 4 di credito, 6 col bonifico.
     expect(ripartoDelRimborso(misto, 1000, null)).toMatchObject({ creditoCents: 400, bonificoCents: 600 });
+  });
+
+  it('senza la colonna del lordo (124) il riparto e lo stesso: i contanti non diventano credito', () => {
+    // 30 € in contanti e 20 di credito, ordine nato senza gross_total_cents. Con la 124 un rimborso
+    // di 30 € fa 12 di credito e 18 col bonifico; senza, faceva 20 di credito e 10 col bonifico.
+    const senzaLordo = { ...misto, gross_total_cents: null };
+    expect(ripartoDelRimborso(senzaLordo, 3000, 'BONIFICO')).toMatchObject({ creditoCents: 1200, bonificoCents: 1800 });
+    expect(ripartoDelRimborso(misto, 3000, 'BONIFICO')).toMatchObject({ creditoCents: 1200, bonificoCents: 1800 });
+    // E il tetto resta quello del database (accumula_rimborso, sullo stesso ripiego): la cassa.
+    expect(quantoSiPuoRestituire(senzaLordo)).toEqual({ massimoCents: 3000, perche: 'ok' });
   });
 
   it('un credito regalato non diventa soldi sul conto', () => {
@@ -187,8 +229,22 @@ describe('R71 — la lista dei bonifici da fare', () => {
       { id: 'r3', order_id: 'o3', refund_amount_cents: 800, refunded_at: '2026-10-13', refund_id: 'bonifico:return_r3',
         refund_bonifico_fatto_at: '2026-10-14' },
     ]);
-    expect(voci.map((v) => v.resoId)).toEqual(['r1', 'r3']);
+    expect(voci.map((v) => v.id)).toEqual(['r1', 'r3']);
+    expect(voci.every((v) => v.tipo === 'reso')).toBe(true);
     expect(voci[0]).toMatchObject({ importoCents: 3000, iban: 'IT60 X054 2811 1010 0000 0123 456', daFare: true });
     expect(voci[1]).toMatchObject({ importoCents: 800, iban: null, daFare: false });
+  });
+
+  it('i bonifici dei reclami stanno nella stessa lista, con la loro cifra e senza IBAN', () => {
+    const voci = vociDeiBonificiDaFare(
+      [{ id: 'r1', order_id: 'o1', refund_amount_cents: 800, refunded_at: '2026-10-13', refund_id: 'bonifico:return_r1',
+        refund_bonifico_fatto_at: '2026-10-14' }],
+      [
+        { dispute_id: 'd1', order_id: 'o2', importo_cents: 1800, registrato_at: '2026-10-12', fatto_at: null },
+        { dispute_id: 'd2', order_id: 'o3', importo_cents: 0, registrato_at: '2026-10-12', fatto_at: null },
+      ],
+    );
+    expect(voci.map((v) => `${v.tipo}:${v.id}`)).toEqual(['reclamo:d1', 'reso:r1']);
+    expect(voci[0]).toMatchObject({ ordineId: 'o2', importoCents: 1800, iban: null, daFare: true });
   });
 });

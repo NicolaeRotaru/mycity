@@ -18,6 +18,9 @@ import type { VoceDaBonificare } from '@/lib/rimborsi/bonifici-da-fare';
  * chi amministra: questa pagina e' la sua lista, con l'IBAN che il cliente ha
  * scritto nel modulo di reso. L'IBAN arriva dal server (la colonna e' chiusa al
  * browser, migrazione 162) e lo vede solo chi amministra: il negozio no.
+ *
+ * Collaudo del 15/10 — nella lista ci sono anche i bonifici dei reclami chiusi
+ * a favore del cliente: prima vivevano solo nell'avviso della campanella.
  */
 
 type Risposta = { voci: VoceDaBonificare[]; migrazione162: boolean };
@@ -43,11 +46,11 @@ export default function RimborsiDaBonificarePage() {
   });
 
   const fatto = useMutation({
-    mutationFn: async (resoId: string) => {
+    mutationFn: async (voce: Pick<VoceDaBonificare, 'tipo' | 'id'>) => {
       const res = await fetch('/api/admin/rimborsi-da-bonificare', {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...(await conToken()) },
-        body: JSON.stringify({ resoId }),
+        body: JSON.stringify(voce.tipo === 'reclamo' ? { reclamoId: voce.id } : { resoId: voce.id }),
       });
       const corpo = await res.json();
       if (!res.ok) throw new Error(corpo?.error?.message ?? 'Bonifico non segnato');
@@ -67,13 +70,14 @@ export default function RimborsiDaBonificarePage() {
       <AdminPageTitle
         eyebrow="Soldi"
         title="Rimborsi da bonificare"
-        sub="Resi pagati in contanti, da rimborsare con un bonifico che fai tu. Il credito MyCity arriva da solo: qui c'è solo il bonifico."
+        sub="Resi e reclami di ordini pagati in contanti, da rimborsare con un bonifico che fai tu. Il credito MyCity arriva da solo: qui c'è solo il bonifico."
       />
 
       {data && !data.migrazione162 && (
         <p className="mb-4 rounded-xl border border-accent-300 bg-accent-50 p-4 text-sm text-ink-800">
-          Sul database manca la migrazione 162: la lista c&apos;è, ma senza IBAN e senza il pulsante «Fatto». Finché
-          non è applicata, chiedi l&apos;IBAN al cliente e tieni il conto dei bonifici a parte.
+          Sul database manca la migrazione 162: la lista dei resi c&apos;è, ma senza IBAN e senza il pulsante «Fatto»,
+          e i bonifici dei reclami non compaiono (li trovi solo negli avvisi). Finché non è applicata, chiedi
+          l&apos;IBAN al cliente e tieni il conto dei bonifici a parte.
         </p>
       )}
 
@@ -95,14 +99,14 @@ export default function RimborsiDaBonificarePage() {
           <ul className="space-y-3">
             {voci.map((v) => (
               <li
-                key={v.resoId}
+                key={`${v.tipo}-${v.id}`}
                 className={`rounded-xl border bg-white p-4 ${v.daFare ? 'border-primary-300' : 'border-cream-300 opacity-70'}`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-lg font-bold text-ink-900">{formatPriceFromCents(v.importoCents)}</p>
                     <p className="text-sm text-ink-600">
-                      Ordine{' '}
+                      {v.tipo === 'reclamo' ? 'Reclamo' : 'Reso'} · ordine{' '}
                       <Link href={`/orders/${v.ordineId}`} className="font-semibold text-primary-700 hover:underline">
                         #{v.ordineId.slice(0, 8)}
                       </Link>
@@ -118,7 +122,7 @@ export default function RimborsiDaBonificarePage() {
                   </div>
                   {v.daFare ? (
                     <button
-                      onClick={() => fatto.mutate(v.resoId)}
+                      onClick={() => fatto.mutate({ tipo: v.tipo, id: v.id })}
                       disabled={fatto.isPending || !data?.migrazione162}
                       className="rounded-lg bg-primary-700 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-800 disabled:opacity-50"
                     >

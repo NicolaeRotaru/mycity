@@ -45,7 +45,8 @@ const state: {
   order: Order;
   updates: Record<string, unknown>[];
   rpcCalls: Array<{ name: string; args: Record<string, unknown> }>;
-} = { order: ordineBase(), updates: [], rpcCalls: [] };
+  ledger: Array<{ reason: string; ref: string; delta_cents: number }>;
+} = { order: ordineBase(), updates: [], rpcCalls: [], ledger: [] };
 
 /** Ordine da 50 euro pagato con 20 euro di credito: cassa attesa 30. */
 function ordineBase(): Order {
@@ -96,10 +97,27 @@ vi.mock('@/lib/supabase/server', () => ({
           }),
         };
       }
+      if (table === 'wallet_ledger') {
+        // Dopo l'accredito `refundOrder` rilegge la riga a diario della sua chiave (R82).
+        const filtri: Record<string, unknown> = {};
+        const q = {
+          select: () => q,
+          eq: (c: string, v: unknown) => ((filtri[c] = v), q),
+          maybeSingle: () =>
+            Promise.resolve({
+              data: state.ledger.find((r) => r.reason === filtri.reason && r.ref === filtri.ref) ?? null,
+              error: null,
+            }),
+        };
+        return q;
+      }
       return {};
     },
     rpc: (name: string, args: Record<string, unknown>) => {
       state.rpcCalls.push({ name, args });
+      if (name === 'wallet_credit') {
+        state.ledger.push({ reason: String(args.p_reason), ref: String(args.p_ref), delta_cents: Number(args.p_cents) });
+      }
       if (name === 'accumula_rimborso') {
         // Come la funzione vera dopo la migrazione 124: il tetto è il LORDO.
         const tetto = state.order.gross_total_cents ?? Math.round(state.order.total_price * 100);
@@ -120,6 +138,7 @@ describe('il rimborso divide per il lordo, non per quello che resta dopo il cred
     state.order = ordineBase();
     state.updates = [];
     state.rpcCalls = [];
+    state.ledger = [];
   });
 
   it('recupera dal negozio la quota calcolata sul lordo di vendita', async () => {

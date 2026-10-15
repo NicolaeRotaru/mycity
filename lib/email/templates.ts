@@ -339,8 +339,12 @@ export function refundIssuedTemplate(args: {
     testi.push(`Ti restituiamo ${importo}: ${credito} come credito MyCity, la parte che avevi pagato con il credito, e ${bonifico} con un bonifico.`);
   }
   if (modo !== 'bonifico') {
-    righe.push(p('Il credito è già disponibile: lo vedi nel tuo profilo, alla voce «Buoni regalo», e lo usi sui prossimi ordini pagati alla consegna.'));
-    testi.push(`Il credito è già disponibile nel tuo profilo, alla voce Buoni regalo (${creditoUrl}), e si usa sui prossimi ordini pagati alla consegna.`);
+    // Collaudo del 15/10 — qui c'era «alla voce Buoni regalo», ma nel menu del
+    // profilo quella voce si chiama «Gift card» (components/account/AccountSidebar.tsx):
+    // il cliente cercava una parola che non trovava. Ora il nome e' quello vero, e
+    // nell'email in HTML e' anche il collegamento.
+    righe.push(p(`Il credito è già disponibile: lo vedi nel tuo profilo, alla voce <a href="${creditoUrl}" style="color:${COLORI.marchio};font-weight:600">«Gift card»</a>, e lo usi sui prossimi ordini pagati alla consegna.`));
+    testi.push(`Il credito è già disponibile nel tuo profilo, alla voce «Gift card» (${creditoUrl}), e si usa sui prossimi ordini pagati alla consegna.`);
   }
   if (modo !== 'credito') {
     if (args.ibanFinale) {
