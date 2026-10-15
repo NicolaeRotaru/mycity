@@ -435,6 +435,10 @@ export default function ProductForm({
      */
     const { patch, rifiutati } = patchAiPerIlForm(proposta, { prezzoAttuale: getValues('price') });
     const changed: string[] = [...rifiutati];
+    // R41 — Quello che l'assistente proponeva e non entra nei campi (prezzo
+    // fuori banda, allergeni, ingredienti...) si dice, col valore proposto: chi
+    // chiama questa funzione mostra solo «modifiche applicate».
+    for (const motivo of rifiutati) toast.warning(motivo);
     // Il prezzo fuori banda `patchAiPerIlForm` l'ha gia' tolto: quello che
     // segniamo qui e' solo cio' che entra davvero nei campi.
     segnaCampiDallAi(colonneDelPatchAi(patch as unknown as Record<string, unknown>));
