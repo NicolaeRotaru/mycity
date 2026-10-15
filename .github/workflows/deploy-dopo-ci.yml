@@ -29,7 +29,7 @@ name: Rilascio dopo CI verde
 #      "main": true   diventa   "main": false
 #
 #   ⚠️ 15/10/2026 — E prima ancora il database. Se alla produzione mancano piu'
-#      di 20 migrazioni (oggi 48, fino alla 161), questo lavoro si ferma al
+#      di 20 migrazioni (il 15/10 erano 48, fino alla 161), questo lavoro si ferma al
 #      passo delle migrazioni senza toccarle e non pubblica: quel
 #      riallineamento si fa a mano, una volta, con
 #      docs/migrazioni-baseline-produzione.md. E serve SUPABASE_DB_URL con la
@@ -55,18 +55,28 @@ name: Rilascio dopo CI verde
 # variabile aggiunta domani spegnerebbe TUTTI i rilasci.
 #
 # Quindi il cancello e' tornato fuori dal build. Il difetto resta aperto, e si
-# chiude in uno di questi due modi — nessuno dei due e' codice:
+# chiude con due pezzi — nessuno dei due e' codice — che fermano due cose
+# DIVERSE:
 #
 #   A. la regola su GitHub che, PRIMA di poter unire, pretende il controllo
-#      «Main» verde E la richiesta aggiornata con main. Non serve nessun
-#      segreto. Tutte e due le clausole contano: con la sola prima, il 1/9 la
-#      #245 sarebbe passata lo stesso (vedi sotto).
-#   B. i tre segreti qui sopra, che accendono questo lavoro.
+#      «Main» verde. Non serve nessun segreto. Ferma le RICHIESTE rosse: una
+#      richiesta la cui CI e' rossa non si unisce.
+#   B. i tre segreti qui sopra, che accendono questo lavoro, e poi "main":
+#      false in vercel.json. Ferma un rosso che compare su main DOPO l'unione:
+#      si pubblica solo cio' che la CI di main ha promosso.
 #
-# A e' il primo passo perche' e' piu' economico e non dipende da Vercel. Non
-# chiude TUTTO: chi e' nella lista di chi puo' scavalcare la regola unisce
-# anche col rosso, e un lavoro della CI che si salta (per esempio gli e2e
-# senza segreti) non ferma niente perche' non ha guardato niente.
+# A e' il primo passo perche' e' piu' economico e non dipende da Vercel. Da
+# sola NON chiude il difetto, e il 1/9 lo mostra (rigiocato dal collaudo del
+# 15/10, dopo che il giro precedente l'aveva raccontato sbagliato): la #245
+# toccava solo due componenti e il file dei pacchetti, ed era verde. Unita
+# alle 18:10, la CI di main e' finita rossa alle 18:11:32 su una prova che si
+# rompeva da sola nei minuti :10-:11 di ogni ora (riparata in 94e56c6 alle
+# 20:19), e Vercel ha pubblicato nello stesso secondo. Nessuna regola sulle
+# richieste l'avrebbe fermato; B si', perche' questo lavoro parte solo con la
+# CI di main verde. A non chiude nemmeno questi due buchi: chi e' nella lista
+# di chi puo' scavalcare la regola unisce anche col rosso, e un lavoro della CI
+# che si salta (per esempio gli e2e senza segreti) non ferma niente perche' non
+# ha guardato niente.
 #
 # ⚠️ 15/10/2026 (R57) — A NON SI CREA: SI CORREGGE. Qui c'era scritto che si
 # accende «in mezzo minuto», e chi ci andava trovava una trappola. La regola
@@ -79,33 +89,29 @@ name: Rilascio dopo CI verde
 # Il controllo «Main» adesso esiste: e' l'ultimo lavoro di ci.yml, che aspetta
 # tutti gli altri e diventa rosso se uno fallisce.
 #
-# ⚠️ 15/10/2026 (collaudo) — «CONTROLLO VERDE» NON BASTA: SERVE ANCHE «AGGIORNATA».
-# Il 1/9 la #245 aveva la CI verde alle 14:33. Alle 15:05 e' entrata in main
-# la #246. Alle 18:10 si e' unita la #245, ferma al main di prima: l'unione
-# delle due e' finita rossa (corsa 33542096803) ed e' andata in produzione.
-# La regola, oggi, ha la spunta «Require branches to be up to date before
-# merging» TOLTA: con «Main» acceso e basta, il pulsante di unione della #245
-# sarebbe stato libero, esattamente come quel giorno. Con la spunta, GitHub
-# avrebbe chiesto di aggiornare la #245 con main, la CI sarebbe rigirata sul
-# codice vero dell'unione, e il rosso l'avrebbe fermata.
-#
 # Quindi, una volta unito in main il commit che aggiunge «Main»:
 #   1. apri il ruleset «Main» (Settings → Rules → Rulesets);
 #   2. Target branches → Add target → «Include default branch» (cioe' main);
 #   3. lascia «Require status checks to pass» con il controllo «Main»;
-#   4. sotto, spunta «Require branches to be up to date before merging»;
-#   5. Enforcement status → «Active», e salva;
-#   6. controlla la regola com'e' davvero, senza fidarti degli occhi:
+#   4. Enforcement status → «Active», e salva;
+#   5. controlla la regola com'e' davvero, senza fidarti degli occhi:
 #        gh api repos/NicolaeRotaru/mycity/rulesets/16879481 | node scripts/controlla-regola-main.mjs
-#      deve dire ✅. Se dice ❌, elenca cosa manca e dove si sistema;
-#   7. prova: una richiesta di unione con una prova rossa deve avere il
+#      deve dire ✅ e uscire 0. Se dice ❌, elenca cosa manca e dove si
+#      sistema; se dice ⚪, non ha letto la regola (di solito gh non e'
+#      collegato: l'errore di gh e' scritto sopra);
+#   6. prova: una richiesta di unione con una prova rossa deve avere il
 #      pulsante di unione bloccato.
 #
-# IL COSTO DELLA SPUNTA DEL PUNTO 4. Ogni volta che si unisce qualcosa in main,
-# le altre richieste aperte diventano «non aggiornate»: prima di unirle si
-# preme «Update branch» e si aspetta che la CI rigiri (oggi circa 4-5 minuti).
-# Con una richiesta alla volta non costa niente; con tante richieste in
-# parallelo e' un giro di attesa per ognuna.
+# UNA SCELTA TUA, FACOLTATIVA: la spunta «Require branches to be up to date
+# before merging», sotto «Require status checks to pass». Chiude il caso di due
+# richieste verdi ciascuna da sola che si rompono a vicenda una volta unite
+# (una rinomina una funzione che l'altra usa). Il costo: dopo ogni unione le
+# altre richieste aperte diventano «non aggiornate», e prima di unirle si preme
+# «Update branch» e si aspetta che la CI rigiri (oggi circa 4-5 minuti). Con
+# una richiesta alla volta non costa niente; con tante in parallelo e' un giro
+# di attesa per ognuna. Il 1/9 non e' un caso di questo tipo, e uno vero in
+# questo repository non e' stato cercato. Lo script del punto 5 la segnala, non
+# la pretende.
 #
 # Le richieste aperte prima del commit che aggiunge «Main» non lo hanno mai
 # prodotto: vanno AGGIORNATE con main («Update branch»). Rilanciare la loro CI
@@ -347,7 +353,7 @@ jobs:
           # 15/10/2026 — Il tetto: se al database mancano piu' migrazioni di
           # cosi', non e' un rilascio normale ma un database rimasto indietro, e
           # lo script si ferma prima di toccarlo (uscita 4). Finora un'unione
-          # non ne ha mai portate piu' di 15; la produzione oggi ne aspetta 48,
+          # non ne ha mai portate piu' di 15; il 15/10 la produzione ne aspettava 48,
           # fra cui la 161. Il perche' sta in testa a
           # scripts/applica-migrazioni-mancanti.sh.
           MASSIMO_MIGRAZIONI: "20"

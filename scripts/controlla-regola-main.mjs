@@ -1,42 +1,58 @@
 #!/usr/bin/env node
 /**
- * controlla-regola-main — dice se la regola «Main» di GitHub ferma davvero il
- * codice rosso prima che entri in `main` (e quindi in produzione).
+ * controlla-regola-main — dice se la regola «Main» di GitHub ferma le richieste
+ * di unione con la CI rossa, prima che entrino in `main`.
  *
- * PERCHE' ESISTE (15/10/2026, collaudo di R57 e K45).
+ * PERCHE' ESISTE (15/10/2026, R57 e K45).
  *
  * Su GitHub c'e' una regola chiamata «Main» (Settings → Rules → Rulesets, id
- * 16879481) che pretende il controllo «Main» verde prima di unire. Il primo
- * giro di riparazione diceva a Nicola di accenderla, puntarla su main e
- * lasciare «Require status checks to pass». Il collaudo ha ricostruito
- * l'incidente vero del 1/9 e ha mostrato che cosi' NON lo ferma:
+ * 16879481), creata il 26/5. E' spenta, non guarda nessun ramo e pretende un
+ * controllo di nome «Main» che fino al 15/10 nessun lavoro della CI produceva.
+ * Adesso il controllo esiste (l'ultimo lavoro di ci.yml). Questo script legge
+ * la regola COM'E' su GitHub e dice, una per una, le cose che le mancano e
+ * dove si sistemano. E' il passo finale delle istruzioni in testa a
+ * .github/workflows/deploy-dopo-ci.yml.
  *
- *   · la richiesta #245 aveva la CI verde alle 14:33 (corsa 33520192457);
- *   · alle 15:05 e' entrata in main la #246 (31 commit);
- *   · alle 18:10 si e' unita la #245, ferma al main di prima: il risultato
- *     dell'unione (2185736) e' finito ROSSO — «Controlli database», corsa
- *     33542096803 — e Vercel l'ha pubblicato in produzione.
+ * COSA FERMA LA REGOLA, E COSA NO. Il giro precedente qui raccontava il 1/9
+ * come una richiesta verde unita sopra un main cambiato. Era falso (collaudo
+ * del 15/10, che ha rigiocato quel giorno):
  *
- * Due richieste verdi da sole, un'unione rossa. Una regola che guarda solo «il
- * controllo e' verde?» la lascia passare, perche' il controllo verde c'era. Per
- * fermarla serve anche la spunta «Require branches to be up to date before
- * merging»: la richiesta deve contenere il main di adesso, e quindi la CI
- * rigira proprio sul codice che entrera'.
+ *   · la #245 toccava solo Button.tsx, Modal.tsx e package-lock.json;
+ *   · alle 18:10 si e' unita; la CI di main (corsa 33542096803) e' finita
+ *     rossa alle 18:11:32 sulla prova 23-l-attivita-dal-vivo-non-conta-gli-
+ *     ordini, che si rompeva da sola nei minuti :10 e :11 di ogni ora
+ *     (riparata nel commit 94e56c6 alle 20:19 dello stesso giorno);
+ *   · Vercel ha pubblicato quell'unione in produzione nello stesso secondo.
  *
- * Questo script legge la regola COM'E' su GitHub e dice, una per una, le cose
- * che le mancano per fermare quel giorno, e come si sistemano. E' il passo
- * finale delle istruzioni in testa a .github/workflows/deploy-dopo-ci.yml.
+ * Il codice era sano, il rosso veniva dalla prova. Nessuna regola sulle
+ * richieste l'avrebbe fermato: la #245 era verde, e anche aggiornata con main
+ * avrebbe rifatto la CI a un altro minuto, verde. Un rosso che compare su
+ * main DOPO l'unione lo ferma solo il rilascio che aspetta la CI verde di main
+ * (deploy-dopo-ci.yml), con "main": false in vercel.json.
+ *
+ * La regola accesa ferma un'altra cosa, e la ferma tutta: ogni richiesta la
+ * cui CI e' rossa resta col pulsante di unione bloccato.
+ *
+ * LA SPUNTA «Require branches to be up to date before merging» E' UNA SCELTA,
+ * non un pezzo che manca. Chiude il caso di due richieste verdi ciascuna da
+ * sola che si rompono a vicenda una volta unite (una rinomina una funzione che
+ * l'altra usa). Costa, dopo ogni unione, un «Update branch» e una CI in piu'
+ * (4-5 minuti) per ogni richiesta ancora aperta. Lo script la segnala come
+ * scelta, non la pretende. Un caso vero di quel tipo in questo repository non
+ * l'ho cercato: il 1/9 non lo e'.
  *
  * Uso:
  *   gh api repos/NicolaeRotaru/mycity/rulesets/16879481 | node scripts/controlla-regola-main.mjs
  *   (oppure con il JSON salvato in un file: node scripts/controlla-regola-main.mjs regola.json)
  *
  * Uscita:
- *   0  la regola ferma il codice rosso (puo' stampare avvisi, che non bloccano)
- *   1  non lo ferma: stampa cosa manca e dove si sistema
+ *   0  la regola ferma le richieste con la CI rossa (stampa anche cosa NON
+ *      ferma e le scelte rimaste: sono avvisi, non bloccano)
+ *   1  non le ferma: stampa cosa manca e dove si sistema
  *   2  non ho potuto leggere la regola: non e' un verde, e' un «non lo so»
  */
 import fs from 'node:fs';
+import tty from 'node:tty';
 import { fileURLToPath } from 'node:url';
 
 /** Il nome del controllo che la regola pretende: e' il lavoro finale di ci.yml. */
@@ -55,7 +71,7 @@ const BERSAGLI_CHE_COPRONO_MAIN = new Set(['~DEFAULT_BRANCH', '~ALL', 'refs/head
  * La valutazione. Funzione pura: riceve la regola come la restituisce l'API di
  * GitHub, non tocca niente.
  *
- * @returns {{ letta: boolean, protegge: boolean, mancano: {cosa: string, come: string}[], avvisi: string[], motivo?: string }}
+ * @returns {{ letta: boolean, protegge: boolean, ramoAggiornato: boolean | null, mancano: {cosa: string, come: string}[], avvisi: string[], motivo?: string }}
  */
 export function valutaLaRegolaMain(regola) {
   if (!regola || typeof regola !== 'object' || Array.isArray(regola) || !Array.isArray(regola.rules)) {
@@ -63,6 +79,7 @@ export function valutaLaRegolaMain(regola) {
     return {
       letta: false,
       protegge: false,
+      ramoAggiornato: null,
       mancano: [],
       avvisi: [],
       motivo: messaggio
@@ -119,23 +136,38 @@ export function valutaLaRegolaMain(regola) {
     });
   }
 
-  // ④ Il ramo aggiornato con main: e' la clausola che ferma il 1/9.
-  if (conMain.length > 0) {
-    const aggiornato = conMain.some((r) => r.parameters?.strict_required_status_checks_policy === true);
-    if (!aggiornato) {
-      const coda = regola.rules.some((r) => r && r.type === 'merge_queue');
-      mancano.push({
-        cosa:
-          'non pretende che la richiesta sia aggiornata con main: una richiesta verde da sola puo\' unirsi sopra un main cambiato nel frattempo. ' +
-          'E\' cosi\' che il 1/9 la #245 (CI verde alle 14:33) si e\' unita dopo la #246 ed e\' andata in produzione rossa',
-        come:
-          'Sotto «Require status checks to pass» spunta «Require branches to be up to date before merging».' +
-          (coda
-            ? ' La coda di unione da sola non basta: vorrebbe il controllo anche sull\'evento merge_group, e ci.yml oggi non gira su merge_group, quindi «Main» non arriverebbe mai.'
-            : ''),
-      });
-    }
+  // ④ La coda di unione («Require merge queue»). Con la coda, GitHub aspetta i
+  // controlli anche sull'evento merge_group, e ci.yml non gira su merge_group:
+  // «Main» non arriverebbe mai e ogni unione resterebbe ferma in coda.
+  if (regola.rules.some((r) => r && r.type === 'merge_queue')) {
+    mancano.push({
+      cosa:
+        'chiede la coda di unione, ma la CI non gira sull\'evento merge_group: in coda il controllo «Main» non arriverebbe mai e nessuna unione passerebbe',
+      come: 'Togli «Require merge queue» dalla regola (oppure, prima, aggiungi merge_group fra gli eventi di .github/workflows/ci.yml).',
+    });
   }
+
+  // La spunta del ramo aggiornato: una SCELTA con un costo, non un pezzo che
+  // manca. Senza, la regola ferma lo stesso ogni richiesta rossa.
+  const ramoAggiornato =
+    conMain.length > 0 ? conMain.some((r) => r.parameters?.strict_required_status_checks_policy === true) : null;
+  if (ramoAggiornato === false) {
+    avvisi.push(
+      'la spunta «Require branches to be up to date before merging» e\' tolta, ed e\' una scelta tua. Senza, due richieste verdi ciascuna da sola possono rompersi a vicenda una volta unite, e se ne accorge solo la CI di main, dopo. ' +
+        'Con la spunta non succede, ma dopo ogni unione ogni altra richiesta aperta va aggiornata («Update branch») e la CI rigira, 4-5 minuti ciascuna.',
+    );
+  } else if (ramoAggiornato === true) {
+    avvisi.push(
+      'la spunta «Require branches to be up to date before merging» e\' messa: dopo ogni unione le altre richieste aperte vanno aggiornate («Update branch») e la CI rigira, 4-5 minuti ciascuna.',
+    );
+  }
+
+  // Quello che nessuna regola sulle richieste ferma, scritto ogni volta perche'
+  // un ✅ qui non venga letto come «il codice rosso non arriva piu' ai clienti».
+  avvisi.push(
+    'non ferma un rosso che compare su main DOPO l\'unione: una prova che si rompe da sola (il 1/9 la CI di main e\' finita rossa alle 18:11 per una prova legata all\'ora, e Vercel ha pubblicato lo stesso), ' +
+      'o due richieste che si pestano i piedi. Quello lo ferma il rilascio dopo CI verde: i segreti di Vercel su GitHub, poi "main": false in vercel.json.',
+  );
 
   // Altri controlli richiesti: non sbagliati di per se', ma un nome che nessun
   // lavoro produce blocca ogni unione per sempre («Expected — Waiting»).
@@ -162,7 +194,7 @@ export function valutaLaRegolaMain(regola) {
     );
   }
 
-  return { letta: true, protegge: mancano.length === 0, mancano, avvisi };
+  return { letta: true, protegge: mancano.length === 0, ramoAggiornato, mancano, avvisi };
 }
 
 /** Le righe da stampare per un esito. */
@@ -172,11 +204,12 @@ export function righeDelVerdetto(esito) {
       '⚪ Non ho potuto leggere la regola «Main», quindi non so se protegge main.',
       `   ${esito.motivo}`,
       `   Leggila cosi': gh api repos/NicolaeRotaru/mycity/rulesets/${ID_DELLA_REGOLA} | node scripts/controlla-regola-main.mjs`,
+      `   oppure salvala e passami il file: gh api repos/NicolaeRotaru/mycity/rulesets/${ID_DELLA_REGOLA} > regola.json && node scripts/controlla-regola-main.mjs regola.json`,
     ];
   }
   const righe = esito.protegge
-    ? ['✅ La regola «Main» ferma il codice rosso: e\' accesa, guarda main, pretende «Main» verde e la richiesta aggiornata con main.']
-    : [`❌ La regola «Main» NON ferma il codice rosso. Le mancano ${esito.mancano.length} cose:`];
+    ? ['✅ La regola «Main» ferma le richieste con la CI rossa: e\' accesa, guarda main e pretende il controllo «Main» verde.']
+    : [`❌ La regola «Main» NON ferma le richieste con la CI rossa. Le mancano ${esito.mancano.length} cose:`];
   esito.mancano.forEach((m, i) => {
     righe.push(`   ${i + 1}. ${m.cosa}.`);
     righe.push(`      Dove si sistema: ${m.come}`);
@@ -185,21 +218,56 @@ export function righeDelVerdetto(esito) {
   return righe;
 }
 
-function leggiIngresso() {
-  const file = process.argv[2];
-  if (file) return fs.readFileSync(file, 'utf8');
-  if (process.stdin.isTTY) return '';
-  return fs.readFileSync(0, 'utf8');
+/**
+ * Dal testo arrivato (dal file o da `gh api`) all'esito. Funzione pura: un
+ * ingresso vuoto o che non e' JSON e' un «non lo so», mai un verde, e dice
+ * perche' — vuoto di solito vuol dire che `gh` ha fallito e ha scritto il suo
+ * errore sopra, non su di me.
+ */
+export function esitoDalTesto(testo) {
+  const vuoti = { letta: false, protegge: false, ramoAggiornato: null, mancano: [], avvisi: [] };
+  if (String(testo ?? '').trim() === '') {
+    return {
+      ...vuoti,
+      motivo:
+        'Non mi e\' arrivato niente. Se qui sopra il comando gh ha scritto un errore, il motivo e\' quello (per esempio «gh auth login» se non sei collegato).',
+    };
+  }
+  let regola;
+  try {
+    regola = JSON.parse(testo);
+  } catch {
+    return { ...vuoti, motivo: 'Quello che mi e\' arrivato non e\' JSON: non e\' la risposta di gh api.' };
+  }
+  return valutaLaRegolaMain(regola);
 }
 
-function main() {
-  let regola = null;
-  try {
-    regola = JSON.parse(leggiIngresso());
-  } catch {
-    regola = null;
-  }
-  const esito = valutaLaRegolaMain(regola);
+/**
+ * 15/10/2026 (collaudo di R57) — L'INGRESSO SI LEGGE COME UN FLUSSO, FINO ALLA FINE.
+ *
+ * Qui c'era `if (process.stdin.isTTY) return ''; return fs.readFileSync(0)`.
+ * Toccare `process.stdin` mette la pipe in modalita' non bloccante, e allora
+ * `readFileSync(0)` lancia EAGAIN se chi scrive non ha ancora scritto. `gh api`
+ * aspetta la rete prima di scrivere: il comando delle istruzioni,
+ * `gh api … | node scripts/controlla-regola-main.mjs`, usciva SEMPRE 2 («non ho
+ * potuto leggere la regola»), anche con la regola giusta. Le prove passavano
+ * perche' consegnavano tutto l'ingresso prima che node leggesse.
+ *
+ * Adesso: se l'ingresso e' un terminale (nessuno ha passato niente) lo si
+ * chiede a `tty.isatty`, che non tocca `process.stdin`; altrimenti si legge il
+ * flusso pezzo per pezzo, aspettando chi scrive, fino a che lo chiude.
+ */
+async function leggiIngresso() {
+  const file = process.argv[2];
+  if (file) return fs.readFileSync(file, 'utf8');
+  if (tty.isatty(0)) return '';
+  const pezzi = [];
+  for await (const pezzo of process.stdin) pezzi.push(Buffer.isBuffer(pezzo) ? pezzo : Buffer.from(pezzo));
+  return Buffer.concat(pezzi).toString('utf8');
+}
+
+async function main() {
+  const esito = esitoDalTesto(await leggiIngresso());
   for (const riga of righeDelVerdetto(esito)) console.log(riga);
   process.exit(!esito.letta ? 2 : esito.protegge ? 0 : 1);
 }
@@ -216,4 +284,10 @@ function lanciatoDaRigaDiComando() {
   }
 }
 
-if (lanciatoDaRigaDiComando()) main();
+if (lanciatoDaRigaDiComando()) {
+  main().catch((errore) => {
+    console.log('⚪ Non ho potuto leggere la regola «Main», quindi non so se protegge main.');
+    console.log(`   ${errore instanceof Error ? errore.message : String(errore)}`);
+    process.exit(2);
+  });
+}

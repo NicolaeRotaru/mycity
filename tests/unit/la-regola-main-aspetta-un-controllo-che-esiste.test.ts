@@ -5,8 +5,8 @@
  * Su GitHub c'e' una regola chiamata «Main» (ruleset 16879481, creata il 26/5)
  * che pretende un controllo verde di nome «Main» prima di poter unire. Nessun
  * lavoro della CI si chiamava cosi'. Accesa sul ramo main, la regola avrebbe
- * bloccato ogni unione per sempre; spenta, non fermava niente — e il 1/9 un
- * commit con la CI rossa e' andato in produzione.
+ * bloccato ogni unione per sempre; spenta, non fermava niente: nessuna
+ * richiesta con la CI rossa trovava il pulsante di unione chiuso.
  *
  * Adesso la CI ha un lavoro finale che si chiama «Main» e aspetta tutti gli
  * altri. Queste prove leggono il file della CI con un vero lettore YAML, come

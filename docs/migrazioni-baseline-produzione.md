@@ -1,8 +1,9 @@
 # Allineare il database di produzione: la procedura misurata
 
 > **In due righe.** Al database di produzione mancano pezzi che il sito pubblicato già usa, e altri
-> sono tornati indietro il 9 settembre. Si sistema con un comando solo, che applica 48 migrazioni
-> (l'ultima è la 161, la riparazione), più un controllo.
+> sono tornati indietro il 9 settembre. Si sistema con un comando solo, che applica le migrazioni
+> mancanti (48 il 15 ottobre, fino alla 161, la riparazione; di più se nel frattempo ne sono state
+> unite altre), più un controllo.
 
 > 🔴 **Questa procedura scrive sul database di produzione. La firma è di Nicola.**
 
@@ -74,33 +75,50 @@ Quindi: prima si unisce e si pubblica la riparazione della vetrina, si apre una 
 da una finestra anonima e si controlla che il pulsante per comprare ci sia; **solo dopo** il
 passo 2.
 
-**② La riga di collegamento.** L'esempio qui sotto usa la connessione diretta
-(`db.<progetto>.supabase.co`), che risponde solo in IPv6. Da un computer o da una rete senza
-IPv6 — e da GitHub Actions sempre — non ci si arriva: si usa la riga del «Session pooler»
+**② La riga di collegamento.** Gli esempi qui sotto usano la riga del «Session pooler»
 (Supabase → pannello Connect → riquadro «Session pooler», porta 5432), la stessa che serve alla
-copia notturna. La forma è
-`postgresql://postgres.<progetto>:<password>@aws-0-<regione>.pooler.supabase.com:5432/postgres`.
+copia notturna. La connessione diretta (`db.<progetto>.supabase.co`) risponde solo in IPv6: da un
+computer o da una rete senza IPv6 — e da GitHub Actions sempre — non ci si arriva. Copia la riga
+intera dal pannello: la regione e il prefisso (`aws-0` o `aws-1`) cambiano da progetto a progetto.
+Se la password contiene `# / ? @ : %`, va scritta codificata (`#` → `%23`, `@` → `%40`, …).
 
 **Il rilascio automatico non lo fa al posto tuo.** Da oggi il lavoro «Rilascio dopo CI verde»
 applica da solo al massimo 20 migrazioni: se ne mancano di più si ferma prima di toccare il
 database e rimanda qui. Senza questo tetto, il giorno in cui si mettono su GitHub i segreti di
-Vercel la prima unione su `main` avrebbe applicato tutte le 48 — 161 compresa — senza nessuno
-davanti e senza guardare la condizione ①.
+Vercel la prima unione su `main` le avrebbe applicate tutte — 48 il 15 ottobre, 161 compresa —
+senza nessuno davanti e senza guardare la condizione ①.
 
 ### Passo 1 — registrare il baseline
 
 Già fatto il 9 settembre. L'istruzione resta qui sotto, nella storia: è innocua da rilanciare
 (`ON CONFLICT DO NOTHING`), ma non serve.
 
-### Passo 2 — applicare quello che manca, 161 compresa
+### Passo 2 — contare quello che manca, poi applicarlo, 161 compresa
+
+Prima si conta, in sola lettura:
 
 ```bash
-SUPABASE_DB_URL="postgresql://postgres:<password>@db.clmpyfvpvfjgeviworth.supabase.co:5432/postgres" \
+SUPABASE_DB_URL="postgresql://postgres.clmpyfvpvfjgeviworth:<password>@aws-0-<regione>.pooler.supabase.com:5432/postgres" \
+  node scripts/check-migration-drift.mjs
+```
+
+Elenca le migrazioni che mancano: chiamiamo **N** quante sono. Il 15 ottobre erano 48, dalla
+lista della prova generale (fino alla 161). Ogni migrazione unita dopo si aggiunge: con le
+riparazioni di ottobre arrivano anche la 162 e la 163, quindi N sarà almeno 50. **Le migrazioni
+oltre la 161 non facevano parte della prova generale dell'11 ottobre sulla copia fedele della
+produzione**: se l'elenco ne contiene, guardale prima di andare avanti.
+
+Poi si applica, con la stessa riga:
+
+```bash
+SUPABASE_DB_URL="postgresql://postgres.clmpyfvpvfjgeviworth:<password>@aws-0-<regione>.pooler.supabase.com:5432/postgres" \
   bash scripts/applica-migrazioni-mancanti.sh
 ```
 
-Atteso: `▶ applicate 48 · gia' presenti 108`, uscita 0. Gli avvisi «contiene un COMMIT suo»
-sono attesi e innocui (vedi la testa dello script).
+Atteso: `▶ applicate N · gia' presenti …`, uscita 0, con lo stesso N di prima (alla prova
+generale: `applicate 48 · gia' presenti 108`). Un numero diverso da N vuol dire che qualcosa è
+cambiato fra i due comandi: fermati e chiedi. Gli avvisi «contiene un COMMIT suo» sono attesi e
+innocui (vedi la testa dello script).
 
 ### Passo 3 — verificare
 

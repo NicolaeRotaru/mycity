@@ -79,6 +79,10 @@ if [ "\${FINTO_PSQL_IRRAGGIUNGIBILE:-}" = "1" ]; then
   echo 'psql: error: connection to server at "db.x.supabase.co" (2a05:d012::1), port 5432 failed: Network is unreachable' >&2
   exit 2
 fi
+if [ -n "\${FINTO_PSQL_ERRORE:-}" ]; then
+  printf '%s\\n' "$FINTO_PSQL_ERRORE" >&2
+  exit 2
+fi
 if [ "\${FINTO_PSQL_PASSWORD_SBAGLIATA:-}" = "1" ]; then
   echo 'psql: error: connection to server at "aws-0-eu-west-3.pooler.supabase.com" (13.38.0.1), port 5432 failed: FATAL:  password authentication failed for user "postgres"' >&2
   exit 2
@@ -210,6 +214,57 @@ describe('lo script delle migrazioni, con il tetto del rilascio automatico', LEN
     expect(r.stderr).toContain('rifiuta utente o password');
     expect(r.stderr).not.toContain('IPv6');
     expect(r.stderr).not.toContain('deve essere la riga');
+  });
+});
+
+describe('lo script delle migrazioni non ripete la password nell\'errore di psql', LENTA, () => {
+  // 15/10/2026 (secondo collaudo di R53) — Con una riga scritta male psql
+  // ripete la password, intera o a pezzi, e lo script stampava il suo errore
+  // cosi' com'era. GitHub nei log nasconde solo il segreto intero. Il `psql`
+  // finto qui dice le stesse frasi del psql vero (provate a mano sul client 16:
+  // «invalid percent-encoded token», «could not translate host name»).
+  it('una password con @ non scritta codificata: il pezzo dopo la @ non esce', () => {
+    const r = lanciaLoScript(ultime(3), {
+      SUPABASE_DB_URL: 'postgresql://postgres.ref:Pa@Segreto9@127.0.0.1:1/postgres',
+      FINTO_PSQL_ERRORE:
+        'psql: error: could not translate host name "Segreto9@127.0.0.1" to address: Name or service not known',
+    });
+    expect(r.uscita).not.toBe(0);
+    expect(r.applicate).toEqual([]);
+    expect(r.stderr).not.toContain('Segreto9');
+    expect(r.stderr).toContain('could not translate host name');
+    expect(r.stderr).toContain('non si trova');
+  });
+
+  it('una password con un % sbagliato: non esce, e si spiega come scriverla', () => {
+    const r = lanciaLoScript(ultime(3), {
+      SUPABASE_DB_URL: 'postgresql://postgres.ref:Pa%ZZSegreto9@127.0.0.1:1/postgres',
+      FINTO_PSQL_ERRORE: 'psql: error: invalid percent-encoded token: "Pa%ZZSegreto9"',
+    });
+    expect(r.uscita).not.toBe(0);
+    expect(r.stderr).not.toContain('Segreto9');
+    expect(r.stderr).toContain('invalid percent-encoded token');
+    expect(r.stderr).toContain('%40');
+  });
+
+  it('la forma decodificata della password e ogni «://utente:segreto@» spariscono anche loro', () => {
+    const r = lanciaLoScript(ultime(3), {
+      SUPABASE_DB_URL: 'postgresql://postgres.ref:Lunga%40Password77@127.0.0.1:1/postgres',
+      FINTO_PSQL_ERRORE:
+        'psql: error: qualcosa con Lunga@Password77 e con Lunga%40Password77 e postgresql://altro:segretissimo@x/y',
+    });
+    expect(r.stderr).not.toContain('Password77');
+    expect(r.stderr).not.toContain('segretissimo');
+  });
+
+  it('la connessione diretta con la password rifiutata dice «password», non «IPv6»', () => {
+    const r = lanciaLoScript(ultime(3), {
+      SUPABASE_DB_URL: 'postgresql://postgres:Lunga-Password-77@db.abcdefghijkl.supabase.co:5432/postgres',
+      FINTO_PSQL_ERRORE:
+        'psql: error: connection to server at "db.abcdefghijkl.supabase.co" (2a05:d012::1), port 5432 failed: FATAL:  password authentication failed for user "postgres"',
+    });
+    expect(r.stderr).toContain('rifiuta utente o password');
+    expect(r.stderr).not.toContain('IPv6');
   });
 });
 

@@ -69,9 +69,66 @@ describe('quando il controllo della deriva non riesce a collegarsi', () => {
     expect(testo(spiegaIlCollegamentoFallito(e, 'postgresql://u:p@[2a05:d012::1]:5432/postgres'))).toContain('«Session pooler»');
   });
 
-  it('con la connessione diretta indica il Session pooler qualunque sia l\'errore', () => {
+  it('con la connessione diretta spiega l\'IPv6 e indica il Session pooler qualunque sia l\'errore di rete', () => {
+    // 15/10/2026 (secondo collaudo) — Qui si guardava solo «Session pooler»,
+    // che stampa anche il ramo generico per ogni indirizzo Supabase: col
+    // riconoscimento della connessione diretta rotto la prova restava verde.
+    // Adesso pretende la spiegazione vera, quella sull'IPv6.
     const scaduto = Object.assign(new Error('timeout expired'), { code: 'ETIMEDOUT' });
-    expect(testo(spiegaIlCollegamentoFallito(scaduto, DIRETTA))).toContain('«Session pooler»');
+    const senzaCodice = new Error('Connection terminated due to connection timeout');
+    for (const errore of [scaduto, senzaCodice]) {
+      const t = testo(spiegaIlCollegamentoFallito(errore, DIRETTA));
+      expect(t).toContain('«Session pooler»');
+      expect(t).toContain('risponde solo in IPv6');
+    }
+  });
+
+  it('con la connessione diretta e la password rifiutata dice «password», non «IPv6»', () => {
+    // 15/10/2026 (secondo collaudo) — Il ramo della connessione diretta veniva
+    // prima di quello della password: dal computer di Nicola, che l'IPv6 ce
+    // l'ha, una password sbagliata riceveva il consiglio di cambiare rete.
+    const accesso = Object.assign(new Error('password authentication failed for user "postgres"'), { code: '28P01' });
+    const t = testo(spiegaIlCollegamentoFallito(accesso, DIRETTA));
+    expect(t).toContain('rifiuta utente o password');
+    expect(t).not.toContain('IPv6');
+    expect(t).not.toContain('la rete non arriva');
+  });
+
+  it('un nome del pooler che non si trova dice «controlla l\'indirizzo», non «controlla la password»', () => {
+    // 15/10/2026 (secondo collaudo) — Regione scritta male, o aws-0 al posto di
+    // aws-1: il controllo mandava a controllare la password, lo script delle
+    // migrazioni (giustamente) l'indirizzo.
+    const nome = Object.assign(new Error('getaddrinfo ENOTFOUND aws-0-eu-wst-3.pooler.supabase.com'), {
+      code: 'ENOTFOUND',
+      hostname: 'aws-0-eu-wst-3.pooler.supabase.com',
+    });
+    const url = `postgresql://postgres.abc:${PASSWORD}@aws-0-eu-wst-3.pooler.supabase.com:5432/postgres`;
+    const t = testo(spiegaIlCollegamentoFallito(nome, url));
+    expect(t).toContain('non si trova');
+    expect(t).toContain('aws-0 o aws-1');
+    expect(t).not.toContain('gia\' quello del pooler');
+    expect(t).not.toContain('rifiuta');
+    expect(t).not.toContain(PASSWORD);
+  });
+
+  it('il database locale che rifiuta la password non viene detto «spento»', () => {
+    const accesso = Object.assign(new Error('password authentication failed for user "postgres"'), { code: '28P01' });
+    const t = testo(spiegaIlCollegamentoFallito(accesso, 'postgresql://postgres:sbagliata@127.0.0.1:5432/mycity_ci'));
+    expect(t).toContain('rifiuta utente o password');
+    expect(t).not.toContain('non risponde');
+  });
+
+  it('una password di poche lettere non storpia il messaggio d\'errore', () => {
+    // 15/10/2026 (secondo collaudo) — Con la password «x» l'errore «timeout
+    // expired» diventava «timeout e***pired».
+    const scaduto = new Error('timeout expired');
+    const t = testo(spiegaIlCollegamentoFallito(scaduto, 'postgresql://postgres.abc:x@aws-0-eu-west-3.pooler.supabase.com:6543/postgres'));
+    expect(t).toContain('Errore: timeout expired');
+    // Da quattro lettere in su si oscura come prima.
+    const lunga = new Error('autenticazione fallita per Pa55');
+    expect(testo(spiegaIlCollegamentoFallito(lunga, 'postgresql://u:Pa55@aws-0-eu-west-3.pooler.supabase.com:5432/postgres'))).not.toContain(
+      'Pa55',
+    );
   });
 
   it('se la riga e\' gia\' quella del pooler non manda a rimetterla: indica password e utente', () => {

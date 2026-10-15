@@ -115,15 +115,28 @@ function eSupabase(macchina) {
 /** Codici con cui Postgres dice «ti sento, ma utente o password non vanno». */
 const ACCESSO_RIFIUTATO = new Set(['28P01', '28000']);
 
+/** Codici con cui il sistema dice «quel nome di macchina non esiste». */
+const NOME_NON_TROVATO = new Set(['ENOTFOUND', 'EAI_AGAIN', 'EAI_NONAME']);
+
 /**
  * Toglie dal testo tutto quello che potrebbe essere una password: le due forme
  * della password, se la riga si legge, e comunque qualunque «://utente:segreto@»
  * — che e' l'unica difesa quando la riga NON si legge e la password non si sa
  * isolare.
+ *
+ * 15/10/2026 (secondo collaudo di R53) — Una password di una o due lettere
+ * veniva cercata e sostituita in tutto il messaggio: con «x» l'errore
+ * «timeout expired» diventava «timeout e***pired». Sotto le quattro lettere
+ * una password non e' un segreto che un log possa tradire (si indovina in un
+ * attimo), e oscurarla rende illeggibile proprio la riga che spiega il guasto.
  */
+const LUNGHEZZA_MINIMA_DA_OSCURARE = 4;
+
 function senzaSegreti(testo, segreti) {
   let pulito = String(testo);
-  for (const segreto of segreti) if (segreto) pulito = pulito.split(segreto).join('***');
+  for (const segreto of segreti) {
+    if (segreto && segreto.length >= LUNGHEZZA_MINIMA_DA_OSCURARE) pulito = pulito.split(segreto).join('***');
+  }
   return pulito.replace(/:\/\/[^@\s]*@/g, '://***@');
 }
 
@@ -144,6 +157,7 @@ export function spiegaIlCollegamentoFallito(errore, url) {
   const codici = errori.map((e) => String(e.code ?? '')).filter(Boolean);
   const irraggiungibile = codici.some((c) => RETE_IRRAGGIUNGIBILE.has(c));
   const accessoRifiutato = codici.some((c) => ACCESSO_RIFIUTATO.has(c));
+  const nomeNonTrovato = codici.some((c) => NOME_NON_TROVATO.has(c));
   const indirizzoIPv6 =
     macchina.includes(':') || errori.some((e) => typeof e.address === 'string' && e.address.includes(':'));
   const connessioneDiretta = /^db\.[^.]+\.supabase\.co$/i.test(macchina);
@@ -168,6 +182,17 @@ export function spiegaIlCollegamentoFallito(errore, url) {
       '   Di solito e\' la password: se contiene # / ? @ : vanno scritti codificati (# → %23, / → %2F, ? → %3F, @ → %40, : → %3A).',
       `   La riga del «Session pooler» ha questa forma: ${ESEMPIO_SESSION_POOLER}`,
     );
+  } else if (accessoRifiutato) {
+    // 15/10/2026 (secondo collaudo di R53) — Prima dei rami della rete e del
+    // database locale: se il server ha rifiutato la password, la rete ci e'
+    // arrivata e il database risponde.
+    // Dire «la rete non arriva, e' IPv6» a chi ha solo la password sbagliata
+    // (dal computer di Nicola, che l'IPv6 ce l'ha) lo manda a cambiare la riga
+    // giusta.
+    righe.push('   Perche\': il database risponde, ma rifiuta utente o password: controlla quelli scritti in SUPABASE_DB_URL.');
+    if (sessionPooler) {
+      righe.push('   Nella riga del pooler l\'utente e\' postgres.<progetto>, non solo «postgres».');
+    }
   } else if (eLocale(macchina)) {
     righe.push(
       '   E\' un database su questa stessa macchina e non risponde: controlla che sia acceso (nella CI: il servizio',
@@ -181,13 +206,23 @@ export function spiegaIlCollegamentoFallito(errore, url) {
       `   riquadro «Session pooler», porta 5432. Ha questa forma: ${ESEMPIO_SESSION_POOLER}`,
       '   E\' la stessa riga che serve alla copia notturna del database.',
     );
+  } else if (nomeNonTrovato) {
+    // 15/10/2026 (secondo collaudo di R53) — Un nome del pooler scritto male
+    // (la regione, o aws-0 al posto di aws-1) finiva nel ramo del pooler, che
+    // mandava a controllare la password. Lo script delle migrazioni, sullo
+    // stesso errore, diceva gia' la cosa giusta: adesso lo dicono tutti e due.
+    righe.push('   Perche\': il nome della macchina in SUPABASE_DB_URL non si trova: controlla l\'indirizzo.');
+    if (eSupabase(macchina)) {
+      righe.push(
+        '   Copialo intero da Supabase → pannello Connect → riquadro «Session pooler»: la regione e il prefisso',
+        '   (aws-0 o aws-1) cambiano da progetto a progetto.',
+      );
+    }
   } else if (sessionPooler) {
     righe.push(
-      '   L\'indirizzo e\' gia\' quello del pooler: controlla la password, e che l\'utente sia postgres.<progetto>',
-      '   (nel pooler l\'utente porta dietro il codice del progetto, non e\' solo «postgres»).',
+      '   L\'indirizzo e\' gia\' quello del pooler. Se l\'errore parla di utente o «tenant»: l\'utente e\' postgres.<progetto>',
+      '   (nel pooler porta dietro il codice del progetto, non e\' solo «postgres»). Altrimenti controlla porta (5432) e password.',
     );
-  } else if (accessoRifiutato) {
-    righe.push('   Il database risponde, ma rifiuta utente o password: controlla quelli scritti in SUPABASE_DB_URL.');
   } else if (irraggiungibile) {
     righe.push('   Perche\': da qui la rete non arriva a quell\'indirizzo.');
     if (eSupabase(macchina)) righe.push(rigaDelPooler);

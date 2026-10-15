@@ -701,8 +701,8 @@ jobs:
   # Typecheck + Build», «Unit tests» e gli altri qui sopra. Accesa cosi' com'era
   # sul ramo main, la regola avrebbe bloccato OGNI unione, per sempre, in
   # «Expected — Waiting for status to be reported». E intanto, spenta, non
-  # fermava niente: il 1/9 la CI su main e' finita rossa (PR #245) e Vercel ha
-  # pubblicato quel commit in produzione nello stesso secondo.
+  # fermava niente: nessuna richiesta con la CI rossa trovava il pulsante di
+  # unione chiuso.
   #
   # Questo lavoro e' il controllo «Main». Aspetta TUTTI i lavori qui sopra e
   # da' il via libera solo se nessuno e' fallito o e' stato annullato. Cosi' la
@@ -720,11 +720,14 @@ jobs:
   # condizione che non si avvera. Ma se fossero saltati tutti, non avrebbe
   # controllato niente nessuno, e quello non e' un via libera.
   #
-  # Questo lavoro da solo NON ferma il 1/9: li' la richiesta era verde da sola
-  # e si e' unita sopra un main cambiato. Serve anche la spunta della regola
-  # «Require branches to be up to date before merging». Il nome «Main» e la
-  # regola si controllano con scripts/controlla-regola-main.mjs, che legge la
-  # regola com'e' su GitHub.
+  # COSA NON FERMA. Questo lavoro, con la regola accesa, ferma le RICHIESTE
+  # rosse. Non ferma un rosso che compare su main dopo l'unione: il 1/9 la CI
+  # di main e' finita rossa alle 18:11 per una prova che si rompeva da sola nei
+  # minuti :10-:11 di ogni ora (riparata nel commit 94e56c6), con la richiesta
+  # #245 verde e sana, e Vercel ha pubblicato lo stesso. Quello lo ferma solo
+  # il rilascio che aspetta la CI verde di main (deploy-dopo-ci.yml) con
+  # "main": false in vercel.json. Il nome «Main» e la regola si controllano con
+  # scripts/controlla-regola-main.mjs, che legge la regola com'e' su GitHub.
   cancello-main:
     name: Main
     needs:

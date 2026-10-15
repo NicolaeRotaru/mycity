@@ -49,7 +49,40 @@ MIG="$ROOT/migrations"
 #
 # Il consiglio dipende da quello che psql ha detto davvero (collaudo del
 # 15/10): mandare al Session pooler chi ha solo sbagliato la password lo fa
-# girare a vuoto. L'errore di psql si stampa sempre, intero, sopra il consiglio.
+# girare a vuoto. L'errore di psql si stampa sempre sopra il consiglio, ma
+# SENZA la password (secondo collaudo del 15/10): con una riga scritta male
+# psql la ripete, intera o a pezzi — «invalid percent-encoded token:
+# "Pa%ZZSegreto9"», «could not translate host name "Segreto9@…"» — e GitHub
+# nei log nasconde solo il segreto intero, non i suoi pezzi. Era cosi' anche
+# prima; il controllo della deriva la oscurava gia', questo script no.
+#
+# senza_password: toglie dal testo la password della riga (tutto quello che
+# sta fra il primo «:» dopo «://» e l'ultima «@») e ogni suo pezzo di almeno
+# quattro caratteri, spezzandola dove la riga si spezza (@ : / ? #), e
+# qualunque «://utente:segreto@» rimasto.
+senza_password() {
+  local testo="$1" resto credenziali segreto decodificato pezzo
+  local -a pezzi=() altri=()
+  resto="${DB#*://}"
+  if [ "$resto" != "$DB" ] && [[ "$resto" == *@* ]]; then
+    credenziali="${resto%@*}"
+    if [[ "$credenziali" == *:* ]]; then
+      segreto="${credenziali#*:}"
+      # Anche la forma decodificata (p%40ss → p@ss), se psql la ripetesse cosi'.
+      decodificato="$(printf '%b' "${segreto//%/\\x}" 2>/dev/null || true)"
+      # `read -a` spezza senza espandere * e ? come nomi di file.
+      IFS='@:/?#' read -r -a pezzi <<< "$segreto" || true
+      IFS='@:/?#' read -r -a altri <<< "$decodificato" || true
+      for pezzo in "$segreto" "$decodificato" ${pezzi[@]+"${pezzi[@]}"} ${altri[@]+"${altri[@]}"}; do
+        if [ "${#pezzo}" -ge 4 ]; then
+          testo="${testo//"$pezzo"/***}"
+        fi
+      done
+    fi
+  fi
+  printf '%s' "$testo" | sed -E 's#://[^@[:space:]]*@#://***@#g'
+}
+
 if ! ERRORE_COLLEGAMENTO="$(psql "$DB" -q -v ON_ERROR_STOP=1 2>&1 >/dev/null <<'SQL'
 CREATE SCHEMA IF NOT EXISTS supabase_migrations;
 CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
@@ -59,8 +92,16 @@ CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
 );
 SQL
 )"; then
-  [ -n "$ERRORE_COLLEGAMENTO" ] && printf '%s\n' "$ERRORE_COLLEGAMENTO" >&2
+  [ -n "$ERRORE_COLLEGAMENTO" ] && printf '%s\n' "$(senza_password "$ERRORE_COLLEGAMENTO")" >&2
   echo "✗ non riesco a collegarmi al database: nessuna migrazione applicata." >&2
+  # Prima la password: se il server l'ha rifiutata, la rete ci e' arrivata —
+  # anche sulla connessione diretta, da un computer che l'IPv6 ce l'ha.
+  case "$ERRORE_COLLEGAMENTO" in
+    *"password authentication failed"*|*"no password supplied"*|*"Tenant or user not found"*)
+      echo "  Il database risponde, ma rifiuta utente o password: controlla la password in SUPABASE_DB_URL. Nella riga del pooler l'utente e' postgres.<progetto>, non solo postgres." >&2
+      exit 1
+      ;;
+  esac
   case "$ERRORE_COLLEGAMENTO" in
     *"Network is unreachable"*|*"Cannot assign requested address"*|*"Address family not supported"*)
       RETE_IPV6=1 ;;
@@ -73,10 +114,10 @@ SQL
     echo "  Da GitHub Actions SUPABASE_DB_URL deve essere la riga del «Session pooler» (IPv4): Supabase → pannello Connect → riquadro «Session pooler», porta 5432. La connessione diretta db.<progetto>.supabase.co risponde solo in IPv6 e da li' non si raggiunge." >&2
   else
     case "$ERRORE_COLLEGAMENTO" in
-      *"password authentication failed"*|*"no password supplied"*|*"Tenant or user not found"*)
-        echo "  Il database risponde, ma rifiuta utente o password: controlla la password in SUPABASE_DB_URL. Nella riga del pooler l'utente e' postgres.<progetto>, non solo postgres." >&2 ;;
       *"could not translate host name"*)
         echo "  Il nome della macchina in SUPABASE_DB_URL non si trova: controlla l'indirizzo." >&2 ;;
+      *"invalid percent-encoded token"*|*"invalid URI query parameter"*|*"invalid integer value"*|*"missing \"=\" after"*)
+        echo "  La riga in SUPABASE_DB_URL non si legge. Di solito e' la password: se contiene # / ? @ : % vanno scritti codificati (# → %23, / → %2F, ? → %3F, @ → %40, : → %3A, % → %25)." >&2 ;;
       *)
         echo "  Il motivo e' nell'errore di psql qui sopra." >&2 ;;
     esac
@@ -180,7 +221,7 @@ done
 # =============================================================================
 # IL TETTO DEL RILASCIO AUTOMATICO (15/10/2026)
 # =============================================================================
-# COSA SAREBBE SUCCESSO. La produzione e' indietro di 48 migrazioni (vedi
+# COSA SAREBBE SUCCESSO. Il 15/10 la produzione era indietro di 48 migrazioni (vedi
 # docs/migrazioni-baseline-produzione.md). Il rilascio dopo la CI
 # (.github/workflows/deploy-dopo-ci.yml) lancia questo script prima di
 # pubblicare. Il giorno in cui si mettono su GitHub i segreti di Vercel e la
