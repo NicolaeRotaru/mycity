@@ -1,25 +1,22 @@
 import { ImageResponse } from 'next/og';
-import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
+import { leggiNegozioPerAnteprima } from '@/lib/queries/metadati-vetrina';
 
 export const runtime = 'edge';
 export const alt = 'Negozio su MyCity';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-type StoreOGData = { store_name: string | null; store_description: string | null; store_logo: string | null; city: string | null };
-
 // 27/8/2026 (R010) — una sola fabbrica del collegamento, e nessun silenzio sulle variabili.
-const fetchStore = (id: string) =>
-  leggiPerMetadati<StoreOGData>(
-    'profiles',
-    'store_name, store_description, store_logo, city',
-    { id, role: 'seller' },
-  );
+// 15/10/2026 (R3) — dalla vista pubblica dei negozi, non da `profiles`: il robot di
+// WhatsApp e' un estraneo, e dopo la migrazione 161 `profiles` per lui e' chiusa. Senza,
+// l'anteprima di ogni negozio avrebbe detto «Negozio su MyCity», senza nome e senza logo.
+// La citta' nella vista non c'e': l'anteprima dice Piacenza, dove MyCity vende.
+const fetchStore = (id: string) => leggiNegozioPerAnteprima(id);
 
 export default async function StoreOG({ params }: { params: { id: string } }) {
   const s = await fetchStore(params.id);
   const name = s?.store_name ?? 'Negozio su MyCity';
-  const city = s?.city ?? 'Piacenza';
+  const city = 'Piacenza';
   const desc = s?.store_description ?? 'Acquista direttamente dal negozio della tua città.';
   const logo = s?.store_logo ?? null;
 

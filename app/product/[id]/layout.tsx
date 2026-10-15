@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
+import { leggiProdottoPerMetadati, prodottoDaIndicizzare } from '@/lib/queries/metadati-vetrina';
 import { sizedImage } from '@/lib/image-url';
 import { precaricoFoto } from '@/lib/preload-foto';
 import { HydrationBoundary } from '@tanstack/react-query';
@@ -7,25 +7,12 @@ import { precaricaProdotto } from '@/lib/queries/precarico';
 
 export const revalidate = 300; // 5 min ISR sui metadata
 
-type ProductMeta = {
-  id: string;
-  name: string;
-  description: string | null;
-  price: number;
-  images: string[] | null;
-  status: string;
-  stock: number | null;
-  profiles: { store_name: string | null; is_approved: boolean } | null;
-};
-
 // 27/8/2026 (R010) — vedi `lib/supabase/lettura-per-metadati.ts`: prima, con le variabili
 // mancanti, questa pagina rispondeva «prodotto non trovato» senza dire niente a nessuno.
-const fetchProduct = (id: string) =>
-  leggiPerMetadati<ProductMeta>(
-    'products',
-    'id, name, description, price, images, status, stock, profiles!products_seller_id_fkey ( store_name, is_approved )',
-    { id },
-  );
+// 15/10/2026 (R3) — il negozio arriva dalla vista pubblica, non da `profiles`: chi legge
+// questi metadati e' sempre un estraneo (Google, WhatsApp), e dopo la migrazione 161
+// `profiles` per lui e' chiusa. Ogni scheda avrebbe preso «noindex».
+const fetchProduct = (id: string) => leggiProdottoPerMetadati(id);
 
 export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const params = await props.params;
@@ -55,7 +42,7 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
       images: img,
     },
     // Niente indicizzazione se il negozio non è approvato o il prodotto non è disponibile
-    robots: product.status === 'available' && product.profiles?.is_approved
+    robots: prodottoDaIndicizzare(product)
       ? undefined
       : { index: false },
     alternates: { canonical: `/product/${params.id}` },

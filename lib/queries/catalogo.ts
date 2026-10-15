@@ -24,6 +24,7 @@
  */
 import { queryKeys } from '@/lib/queries/keys';
 import { conRipiegoSchema, senzaColonne, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
+import { fetchSellerPublicMap, negozioApprovato } from '@/lib/queries/seller-public-profiles';
 
 /** Il minimo che serve per fare una lettura: vale per il client del browser e per quello del server. */
 export type ClientDiLettura = {
@@ -61,13 +62,37 @@ export type SchedaProdotto = {
   profiles: { id: string; store_name: string | null; is_approved: boolean | null; offers_express: boolean | null; store_hours: unknown } | null;
 };
 
-/** Le colonne della scheda prodotto: elencate per nome, mai `*` (#97). */
+/**
+ * Le colonne della scheda prodotto: elencate per nome, mai `*` (#97).
+ *
+ * 15/10/2026 (R3) — Qui dentro c'era anche il negozio, agganciato a `profiles`.
+ * Con la migrazione 161 quella tabella si chiude a chi non e' il proprietario, e
+ * l'aggancio torna vuoto per ogni cliente: la scheda diceva «il negozio non e'
+ * operativo» e non vendeva piu'. Il negozio adesso arriva da una seconda domanda
+ * alla vista pubblica dei negozi, che regge con `profiles` aperta e chiusa.
+ */
 export const COLONNE_SCHEDA_PRODOTTO = `
         id, name, description, price, images, seller_id, status, created_at, category_id,
         stock, attributes, unit, compare_at_price, condition, express_enabled, has_variants,
         external_source_url,
-        categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name, is_approved, offers_express, store_hours )
+        categories ( slug, name )
       `;
+
+/**
+ * Le colonne del negozio che servono alla scheda, chieste alla vista pubblica.
+ * Esistono tutte anche nella vista di produzione, che non ha la migrazione 126:
+ * una colonna che li' manca farebbe fallire la scheda intera.
+ */
+export const COLONNE_NEGOZIO_DELLA_SCHEDA = 'id, store_name, is_approved, offers_express, store_hours';
+
+/**
+ * Il prodotto si puo' comprare solo se il suo negozio e' operativo: approvato e
+ * presente nella vetrina pubblica. Un negozio sospeso o mai approvato non vende,
+ * anche se la riga del prodotto si legge (il negoziante la propria la legge sempre).
+ */
+export function negozioDellaSchedaOperativo(scheda: Pick<SchedaProdotto, 'profiles'>): boolean {
+  return negozioApprovato(scheda.profiles);
+}
 
 /**
  * Le categorie principali: la prima cosa che si vede scorrendo la home.
@@ -110,10 +135,28 @@ export function domandaProdotto(supa: ClientDiLettura, id: string) {
         .maybeSingle();
       if (error) throw error;
       if (!data) return null;
-      // Il collegamento a categoria e negozio e' uno a uno: PostgREST lo
-      // restituisce come oggetto, ma con le colonne elencate per nome i tipi
-      // generati lo descrivono come elenco. Si dichiara la forma vera.
-      return data as unknown as SchedaProdotto;
+      // Il collegamento alla categoria e' uno a uno: PostgREST lo restituisce
+      // come oggetto, ma con le colonne elencate per nome i tipi generati lo
+      // descrivono come elenco. Si dichiara la forma vera.
+      const prodotto = data as unknown as Omit<SchedaProdotto, 'profiles'>;
+
+      // Il negozio dalla vista pubblica, non da `profiles` (R3). Se la vista non
+      // risponde la scheda fallisce e la pagina offre «Riprova»: dire «il negozio
+      // non e' operativo» a un negozio che lo e' sarebbe una bugia.
+      const negozi = await fetchSellerPublicMap(supa, [prodotto.seller_id], COLONNE_NEGOZIO_DELLA_SCHEDA);
+      const negozio = negozi.get(prodotto.seller_id) ?? null;
+      return {
+        ...prodotto,
+        profiles: negozio
+          ? {
+              id: negozio.id,
+              store_name: negozio.store_name ?? null,
+              is_approved: negozio.is_approved ?? null,
+              offers_express: negozio.offers_express ?? null,
+              store_hours: negozio.store_hours ?? null,
+            }
+          : null,
+      };
     },
   };
 }

@@ -8,19 +8,10 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
+import { leggiTendenze, type Tendenza } from '@/lib/queries/fasce-prodotti';
 import caricatoreFotoRemote from '@/lib/image-loader';
 
-type Trending = {
-  product_id: string;
-  view_count: number;
-  product: {
-    id: string;
-    name: string;
-    price: number;
-    images: string[] | null;
-    profiles: { store_name: string | null; is_approved: boolean } | null;
-  };
-};
+type Trending = Tendenza;
 
 /**
  * "Trending ora": top 8 prodotti più visualizzati nelle ultime 24h.
@@ -30,62 +21,10 @@ type Trending = {
 export default function TrendingNow() {
   const { data: items = [], isLoading } = useQuery({
     queryKey: queryKeys.home.trendingNow,
-    queryFn: async (): Promise<Trending[]> => {
-      // Top prodotti per views nelle ultime 24h: aggregazione lato DB (RPC 052)
-      // invece di scaricare fino a 500 righe di product_views e contare nel browser.
-      const { data: trending } = await supabase.rpc('trending_product_ids_24h', { p_limit: 8 });
-      const rows = (trending ?? []) as { product_id: string; view_count: number | string }[];
-
-      if (rows.length === 0) {
-        // Fallback: ultimi 8 prodotti disponibili
-        const { data } = await supabase
-          .from('products')
-          .select(`
-            id, name, price, images,
-            profiles!products_seller_id_fkey ( store_name, is_approved )
-          `)
-          .eq('status', 'available')
-          .order('created_at', { ascending: false })
-          .limit(8);
-        type ProdRow = {
-          id: string; name: string; price: string | number; images: string[] | null;
-          profiles: { store_name: string | null; is_approved: boolean } | null;
-        };
-        return ((data ?? []) as unknown as ProdRow[])
-          .filter((p) => p.profiles?.is_approved)
-          .map((p) => ({
-            product_id: p.id,
-            view_count: 0,
-            product: { id: p.id, name: p.name, price: Number(p.price), images: p.images, profiles: p.profiles },
-          }));
-      }
-
-      const counts = new Map<string, number>();
-      for (const r of rows) counts.set(r.product_id, Number(r.view_count));
-      const topIds = rows.map((r) => r.product_id);
-
-      const { data: products } = await supabase
-        .from('products')
-        .select(`
-          id, name, price, images,
-          profiles!products_seller_id_fkey ( store_name, is_approved )
-        `)
-        .in('id', topIds)
-        .eq('status', 'available');
-
-      type ProdRow2 = {
-        id: string; name: string; price: string | number; images: string[] | null;
-        profiles: { store_name: string | null; is_approved: boolean } | null;
-      };
-      return ((products ?? []) as unknown as ProdRow2[])
-        .filter((p) => p.profiles?.is_approved)
-        .map((p) => ({
-          product_id: p.id,
-          view_count: counts.get(p.id) ?? 0,
-          product: { id: p.id, name: p.name, price: Number(p.price), images: p.images, profiles: p.profiles },
-        }))
-        .sort((a, b) => b.view_count - a.view_count);
-    },
+    // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il
+    // negozio a `profiles`, che dopo la migrazione 161 un cliente non legge piu', e la
+    // fascia restava vuota per tutti tranne il negoziante e l'amministratore.
+    queryFn: (): Promise<Trending[]> => leggiTendenze(supabase),
     refetchInterval: 5 * 60_000, // ogni 5 minuti
   });
 

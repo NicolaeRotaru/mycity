@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
+import { leggiVendutoDa } from '@/lib/queries/venduto-da';
 
 /**
  * «Venduto da»: chi sta vendendo davvero, con nome, sede e partita IVA.
@@ -19,24 +20,10 @@ import { supabase } from '@/lib/supabase/client';
 export function VendutoDa({ sellerId, storeName }: { sellerId: string; storeName?: string | null }) {
   const { data } = useQuery({
     queryKey: ['venduto-da', sellerId],
-    queryFn: async () => {
-      const { data: riga } = await supabase
-        .from('seller_public_profiles')
-        .select('store_name, business_legal_name, business_form, business_vat_number, business_address, business_city, business_zip, store_address, store_phone')
-        .eq('id', sellerId)
-        .maybeSingle();
-      return riga as {
-        store_name: string | null;
-        business_legal_name: string | null;
-        business_form: string | null;
-        business_vat_number: string | null;
-        business_address: string | null;
-        business_city: string | null;
-        business_zip: string | null;
-        store_address: string | null;
-        store_phone: string | null;
-      } | null;
-    },
+    // 15/10/2026 (R55) — La lettura vive in lib/queries/venduto-da.ts. Qui l'errore
+    // spariva: in produzione la vista non ha ancora le colonne d'impresa (migrazione
+    // 126), la domanda falliva e il riquadro non si disegnava senza una riga nei log.
+    queryFn: () => leggiVendutoDa(supabase, sellerId),
     staleTime: 10 * 60_000,
   });
 
