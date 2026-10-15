@@ -52,3 +52,9 @@ storybook-static/
 # girare piu' collaudatori in parallelo. Sono usa-e-getta: ne nasce una per
 # ogni giro, e non e' roba del progetto. (`.claude/skills/` invece e' tracciato.)
 /.claude/worktrees/
+
+# Copie del database (docs/migrazioni-baseline-produzione.md, scripts/backup-db.sh).
+# Dentro ci sono i dati e gli accessi di tutti gli utenti, e il repository e' pubblico.
+*.dump
+*.dump.gpg
+/backups/
