@@ -23,6 +23,25 @@ import type { LettoreVista } from '@/lib/queries/seller-public-profiles';
  *  · se la lettura fallisce per un altro motivo, si scrive l'errore e la domanda
  *    fallisce: non torna «riuscita e vuota».
  *
+ * 15/10/2026, secondo giro (R55) — L'AVVISO FINIVA SUL TELEFONO DEL CLIENTE.
+ *
+ * Il riquadro e' un componente del browser: la lettura la faceva il telefono di
+ * chi apriva la scheda, e l'avviso restava nella sua console. Non arrivava ai
+ * registri del server e non arrivava a Sentry (il logger manda a Sentry solo gli
+ * errori, e in produzione Sentry non e' acceso). Chi cercava nei registri non lo
+ * trovava ne' prima ne' dopo la 126.
+ *
+ * Adesso la domanda la fa PRIMA il server, nel guscio della scheda prodotto e
+ * della pagina del negozio (`lib/queries/precarico.ts`): l'avviso e l'errore
+ * escono dal processo del server, cioe' nei registri che Vercel conserva. Il
+ * browser trova la risposta gia' in mano sotto la STESSA chiave
+ * (`domandaVendutoDa`) e non rifa' la lettura. Se il precarico non riesce, il
+ * browser legge come prima.
+ *
+ * Il segnale che la 126 e' arrivata NON e' «l'avviso non c'e' piu'»: un avviso
+ * che manca non distingue «e' arrivata» da «nessuno l'ha scritto». La 126 si
+ * verifica chiedendo al database le colonne della vista (information_schema).
+ *
  * Quello che il codice non puo' fare da solo resta a Nicola: applicare la 126 e
  * far compilare al negozio ragione sociale, sede e partita IVA.
  */
@@ -106,4 +125,25 @@ export async function leggiVendutoDa(supa: LettoreVista, sellerId: string): Prom
   }
   if (!ridotta.data) return null;
   return { ...IMPRESA_VUOTA, ...(ridotta.data as Pick<DatiVendutoDa, 'store_name' | 'store_address' | 'store_phone'>) };
+}
+
+/** La chiave della lettura: la stessa per il server che precarica e per il browser che mostra. */
+export function chiaveVendutoDa(sellerId: string) {
+  return ['venduto-da', sellerId] as const;
+}
+
+/**
+ * La domanda di «Venduto da», scritta una volta sola.
+ *
+ * La usano il precarico del server (scheda prodotto e pagina del negozio) e il
+ * componente del browser. Se la chiave fosse anche solo un poco diversa, il
+ * browser non riconoscerebbe la risposta del server, rifarebbe la lettura e
+ * l'avviso tornerebbe a finire solo sul telefono del cliente.
+ */
+export function domandaVendutoDa(supa: LettoreVista, sellerId: string) {
+  return {
+    queryKey: chiaveVendutoDa(sellerId),
+    queryFn: () => leggiVendutoDa(supa, sellerId),
+    staleTime: 10 * 60_000,
+  };
 }

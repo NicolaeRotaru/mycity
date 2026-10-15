@@ -18,7 +18,10 @@ import {
   leggiSponsorizzati,
   leggiSuggerimentiCarrello,
   leggiVistiDiRecente,
+  leggiSpessoCompratiInsieme,
 } from '@/lib/queries/fasce-prodotti';
+import { leggiPreferiti } from '@/lib/queries/preferiti';
+import { leggiNegozioDelMese } from '@/lib/queries/negozio-del-mese';
 import { leggiSuggerimentiRicerca } from '@/lib/queries/suggerimenti-ricerca';
 import { leggiProdottoPerMetadati, leggiNegozioPerAnteprima, prodottoDaIndicizzare } from '@/lib/queries/metadati-vetrina';
 import { dimenticaLettureDeiMetadati } from '@/lib/supabase/lettura-per-metadati';
@@ -87,7 +90,38 @@ function dati(): Dati {
       { user_id: MARIA, product_id: 'p-panettone', viewed_at: '2026-10-15T09:00:00Z' },
       { user_id: MARIA, product_id: 'p-grissini', viewed_at: '2026-10-15T08:00:00Z' },
     ],
+    favorites: [
+      { user_id: MARIA, product_id: 'p-torta', created_at: '2026-10-14' },
+      { user_id: MARIA, product_id: 'p-panettone', created_at: '2026-10-13' },
+      { user_id: MARIA, product_id: 'p-focaccia', created_at: '2026-10-12' },
+    ],
+    shop_of_month: [
+      { id: 'm-ott', cover_image_url: null, headline: 'Il forno del mese', story: null, discount_code: null, discount_percent: null, month: '2026-10-01', seller_id: PANE },
+      { id: 'm-nov', cover_image_url: null, headline: 'Una bottega', story: null, discount_code: null, discount_percent: null, month: '2026-11-01', seller_id: SEGRETA },
+    ],
   };
+}
+
+/**
+ * Il secondo negozio approvato. In produzione ce ne sono due: una fascia che ne tiene solo uno
+ * — per esempio una mappa dei negozi che si ferma alla prima riga — con un negozio solo in scena
+ * resterebbe verde (lo ha misurato il primo collaudo).
+ */
+const SALUMI = 'n-salumi';
+function datiConDueNegozi(): Dati {
+  const d = dati();
+  d.profiles.push({
+    id: SALUMI, role: 'seller', is_approved: true, store_name: 'Salumeria Due', store_address: 'Via Po 2, Piacenza',
+    store_phone: '0523 111111', offers_express: false,
+  });
+  d.products.push(
+    { id: 'p-coppa', name: 'Coppa piacentina', description: null, price: 9, images: null, seller_id: SALUMI, status: 'available', created_at: '2026-10-12', category_id: 'c-forno', stock: 4, has_variants: false },
+    { id: 'p-focaccia-salumi', name: 'Focaccia di salumeria', description: null, price: 5, images: null, seller_id: SALUMI, status: 'available', created_at: '2026-10-05', category_id: 'c-forno', stock: 3, has_variants: false },
+  );
+  d.sponsored_active_public.push({ id: 's-3', product_id: 'p-coppa', placement: 'home_top', start_date: '2026-10-01', end_date: '2026-10-31', category_slug: 'forno' });
+  d.recently_viewed.push({ user_id: MARIA, product_id: 'p-coppa', viewed_at: '2026-10-15T07:00:00Z' });
+  d.favorites.push({ user_id: MARIA, product_id: 'p-coppa', created_at: '2026-10-11' });
+  return d;
 }
 
 const MONDI: Array<[string, Mondo]> = [
@@ -338,10 +372,142 @@ describe('«Venduto da» (R55)', () => {
   });
 
   it('se la lettura fallisce per un altro motivo, lo scrive nei log e non torna «vuoto»', async () => {
+    // Variante scomoda (il secondo collaudo): la PRIMA lettura cade per la rete, la seconda —
+    // quella ridotta — riuscirebbe. Se il codice scambiasse ogni errore per «manca la 126»,
+    // ripiegherebbe, mostrerebbe il riquadro e scriverebbe nei registri un falso «migrazione 126
+    // non applicata». Qui deve fallire, scrivere l'errore vero e nessun avviso sulla 126.
+    const vero = db(OGGI, null).client;
+    let letture = 0;
     const rotto = {
-      from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { code: '08006', message: 'connessione persa' } }) }) }) }),
+      from: (t: string) => {
+        letture += 1;
+        if (letture === 1) {
+          return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { code: '08006', message: 'connessione persa' } }) }) }) };
+        }
+        return vero.from(t);
+      },
     };
     await expect(leggiVendutoDa(rotto, PANE)).rejects.toMatchObject({ code: '08006' });
     expect(logger.error).toHaveBeenCalledTimes(1);
+    expect(logger.warn, 'un errore di rete scambiato per «manca la 126»').not.toHaveBeenCalled();
+    expect(letture, 'dopo un errore di rete non si ripiega sulla lettura ridotta').toBe(1);
+  });
+
+  it('se anche la lettura ridotta cade, lo scrive e non torna «vuoto»', async () => {
+    let letture = 0;
+    const rotto = {
+      from: () => {
+        letture += 1;
+        const errore = letture === 1
+          ? { code: '42703', message: 'column seller_public_profiles.business_legal_name does not exist' }
+          : { code: '08006', message: 'connessione persa' };
+        return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: errore }) }) }) };
+      },
+    };
+    await expect(leggiVendutoDa(rotto, PANE)).rejects.toMatchObject({ code: '08006' });
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('i gemelli rimasti indietro al primo giro', () => {
+  const conFuga = (mondo: Mondo): Mondo => ({ ...mondo, prodottiDeiNonApprovatiVisibili: true });
+
+  it('la controprova: dopo la 161 la vecchia lettura di «Spesso comprati insieme» non trova niente', async () => {
+    const { data } = await db(DOPO_LA_161, MARIA).client
+      .from('products')
+      .select('id, name, profiles!products_seller_id_fkey!inner ( is_approved )')
+      .eq('seller_id', PANE)
+      .eq('profiles.is_approved', true);
+    expect(data).toEqual([]);
+  });
+
+  it.each(CASI)('«Spesso comprati insieme» propone gli altri prodotti del forno — %s', async (_n, mondo, chi) => {
+    const insieme = await leggiSpessoCompratiInsieme(db(conFuga(mondo), chi).client, { productId: 'p-focaccia', sellerId: PANE });
+    // i piu' recenti per primi, al massimo quattro, senza il prodotto della scheda
+    expect(insieme.map((p) => p.id)).toEqual(['p-grissini', 'p-torta', 'p-taglie', 'p-finito']);
+  });
+
+  it.each(MONDI)('«Spesso comprati insieme» di un negozio non approvato resta vuoto, anche se le righe trapelano — %s', async (_n, mondo) => {
+    expect(await leggiSpessoCompratiInsieme(db(conFuga(mondo), null).client, { productId: 'p-x', sellerId: SEGRETA })).toEqual([]);
+  });
+
+  it('la controprova: dopo la 161 la vecchia lettura dei preferiti perde il negozio', async () => {
+    const { data } = await db(DOPO_LA_161, MARIA).client
+      .from('favorites')
+      .select('product_id, products ( id, profiles!products_seller_id_fkey ( store_name, is_approved ) )')
+      .eq('user_id', MARIA);
+    const prodotti = (data as Array<{ products: { profiles: unknown } | null }>).map((f) => f.products);
+    expect(prodotti.filter(Boolean).every((p) => p!.profiles === null)).toBe(true);
+  });
+
+  it.each(MONDI)('i preferiti della cliente restano, in ordine, senza la bottega non approvata — %s', async (_n, mondo) => {
+    const preferiti = await leggiPreferiti(db(conFuga(mondo), MARIA).client, MARIA);
+    expect(preferiti.map((p) => p.id)).toEqual(['p-torta', 'p-focaccia']);
+    expect(preferiti.every((p) => p.profiles?.store_name === 'Pane Quotidiano')).toBe(true);
+  });
+
+  it('i preferiti non ingoiano un errore di lettura', async () => {
+    const rotto = { from: () => ({ select: () => ({ eq: () => ({ order: async () => ({ data: null, error: { code: '57014', message: 'tempo scaduto' } }) }) }) }) };
+    await expect(leggiPreferiti(rotto, MARIA)).rejects.toMatchObject({ code: '57014' });
+  });
+
+  it('la controprova: dopo la 161 il vecchio «Negozio del mese» perde il negozio, e il riquadro spariva', async () => {
+    const { data } = await db(DOPO_LA_161, null).client
+      .from('shop_of_month')
+      .select('id, seller:profiles!shop_of_month_seller_id_fkey ( id, store_name, store_logo )')
+      .eq('month', '2026-10-01')
+      .maybeSingle();
+    expect((data as { seller: unknown }).seller).toBeNull();
+  });
+
+  it.each(CASI)('il «Negozio del mese» arriva col suo negozio — %s', async (_n, mondo, chi) => {
+    const scelta = await leggiNegozioDelMese(db(mondo, chi).client, '2026-10-01');
+    expect(scelta?.headline).toBe('Il forno del mese');
+    expect(scelta?.seller).toEqual({ id: PANE, store_name: 'Pane Quotidiano', store_logo: 'logo-pane.png' });
+  });
+
+  it.each(MONDI)('un negozio non approvato non si mette in evidenza come negozio del mese — %s', async (_n, mondo) => {
+    const scelta = await leggiNegozioDelMese(db(mondo, null).client, '2026-11-01');
+    expect(scelta?.seller).toBeNull();
+  });
+
+  it('un mese senza scelta non ha riquadro', async () => {
+    expect(await leggiNegozioDelMese(db(DOPO_LA_161, null).client, '2026-12-01')).toBeNull();
+  });
+});
+
+describe('con due negozi approvati, come in produzione', () => {
+  const dueNegozi = (mondo: Mondo, chi: string | null, rpcs?: Parameters<typeof databaseCoiPermessi>[3]) =>
+    databaseCoiPermessi(datiConDueNegozi(), { ...mondo, prodottiDeiNonApprovatiVisibili: true }, chi, rpcs).client;
+
+  it.each(CASI)('ogni fascia porta i prodotti di tutti e due i negozi — %s', async (_n, mondo, chi) => {
+    const supa = dueNegozi(mondo, chi);
+    const tendenze = (await leggiTendenze(supa)).map((t) => t.product.id);
+    expect(tendenze).toEqual(expect.arrayContaining(['p-focaccia', 'p-coppa']));
+
+    const simili = (await leggiSimili(supa, { productId: 'p-grissini', categoryId: 'c-forno' })).map((p) => p.id);
+    expect(simili).toEqual(expect.arrayContaining(['p-focaccia', 'p-coppa']));
+
+    const annunci = (await leggiSponsorizzati(supa, { placement: 'home_top', oggi: '2026-10-15' })).map((a) => a.product?.id);
+    expect(annunci).toEqual(['p-focaccia', 'p-coppa']);
+
+    const carrello = (await leggiSuggerimentiCarrello(supa, { sellerIds: [PANE, SALUMI], excludeIds: [] })).map((p) => p.id);
+    expect(carrello).toEqual(expect.arrayContaining(['p-grissini', 'p-coppa']));
+
+    const ricerca = (await leggiSuggerimentiRicerca(supa, 'foc')).filter((x) => x.kind === 'product');
+    expect([...new Set(ricerca.map((x) => x.kind === 'product' && x.store))].sort()).toEqual(['Pane Quotidiano', 'Salumeria Due']);
+  });
+
+  it.each(MONDI)('la cliente ritrova visti e preferiti di tutti e due i negozi — %s', async (_n, mondo) => {
+    const supa = dueNegozi(mondo, MARIA);
+    const visti = (await leggiVistiDiRecente(supa, { userId: MARIA })).map((v) => v.product.id);
+    expect(visti).toEqual(['p-focaccia', 'p-grissini', 'p-coppa']);
+    const preferiti = (await leggiPreferiti(supa, MARIA)).map((p) => [p.id, p.profiles?.store_name]);
+    expect(preferiti).toEqual([
+      ['p-torta', 'Pane Quotidiano'],
+      ['p-focaccia', 'Pane Quotidiano'],
+      ['p-coppa', 'Salumeria Due'],
+    ]);
   });
 });

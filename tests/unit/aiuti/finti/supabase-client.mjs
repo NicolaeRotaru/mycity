@@ -29,9 +29,21 @@ const catena = (tavola) => {
   return c;
 };
 
+/**
+ * 15/10/2026 (R3) — e la risposta la può dare anche un database finto intero.
+ *
+ * `__RISPOSTA_SUPABASE__` vede solo la tavola e le colonne, non i filtri né chi guarda: con lui
+ * non si poteva mettere in scena «la tabella dei profili si è chiusa e la fascia si svuota». Con
+ * `globalThis.__CLIENT_SUPABASE__` la prova consegna un client che applica regole e agganci (per
+ * esempio `aiuti/database-coi-permessi.ts`), e la lettura scritta nel componente gira contro di
+ * lui. Chi non lo imposta non si accorge di niente.
+ */
+const clientDellaProva = () => globalThis.__CLIENT_SUPABASE__;
+
 export const supabase = {
-  from: (tavola) => catena(tavola),
-  rpc: async () => ({ data: null, error: null }),
+  from: (tavola) => (clientDellaProva() ? clientDellaProva().from(tavola) : catena(tavola)),
+  rpc: async (nome, argomenti) =>
+    clientDellaProva()?.rpc ? clientDellaProva().rpc(nome, argomenti) : { data: null, error: null },
   auth: {
     // Chi è collegato lo decide la prova, con `globalThis.__UTENTE__`.
     getUser: async () => ({ data: { user: globalThis.__UTENTE__ ?? null }, error: null }),

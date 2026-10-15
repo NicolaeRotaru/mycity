@@ -26,6 +26,10 @@
 --     ('id, store_name, is_approved', lib/queries/seller-public-profiles.ts);
 --   · il negozio dei metadati e dell'anteprima (lib/queries/metadati-vetrina.ts);
 --   · il riquadro «Venduto da» (lib/queries/venduto-da.ts).
+-- E, dal secondo giro di collaudo, per la cliente con account anche la riga del
+-- prodotto, i preferiti (lib/queries/preferiti.ts), «Spesso comprati insieme»
+-- (lib/queries/fasce-prodotti.ts) e il negozio del mese
+-- (lib/queries/negozio-del-mese.ts): i gemelli rimasti indietro al primo giro.
 -- E nello stesso file si ricontrolla che `profiles` resti chiusa: la riparazione
 -- non deve passare dal riaprirla.
 --
@@ -70,7 +74,17 @@ VALUES ('c0000000-0000-0000-0000-0000000000a1', 'Focaccia al rosmarino', 'Lievit
         'cccccccc-0000-0000-0000-0000000000f1'),
        ('d0000000-0000-0000-0000-0000000000a9', 'Panettone di prova', 'Ancora in prova',
         19.90, '55555555-5555-5555-5555-555555555555', 'available', 7,
+        'cccccccc-0000-0000-0000-0000000000f1'),
+       ('c0000000-0000-0000-0000-0000000000a2', 'Grissini stirati', null,
+        3.00, '11111111-1111-1111-1111-111111111111', 'available', 5,
         'cccccccc-0000-0000-0000-0000000000f1');
+
+INSERT INTO public.favorites (user_id, product_id)
+VALUES ('33333333-3333-3333-3333-333333333333', 'c0000000-0000-0000-0000-0000000000a1'),
+       ('33333333-3333-3333-3333-333333333333', 'd0000000-0000-0000-0000-0000000000a9');
+
+INSERT INTO public.shop_of_month (seller_id, month, headline)
+VALUES ('11111111-1111-1111-1111-111111111111', DATE '2099-01-01', 'Il forno del mese (prova 34)');
 
 RESET mycity.allow_profile_write;
 
@@ -159,6 +173,49 @@ RESET ROLE;
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claims = '{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated"}';
 
+-- ⑨ La riga del prodotto, con le colonne esatte della scheda, anche per lei.
+INSERT INTO esiti
+SELECT 'cliente: la riga della scheda prodotto arriva con la categoria',
+       count(*) = 1 AND bool_and(c.slug = 'forno-prova-34'),
+       'righe: ' || count(*)
+  FROM (SELECT id, name, description, price, images, seller_id, status, created_at, category_id,
+               stock, attributes, unit, compare_at_price, condition, express_enabled, has_variants,
+               external_source_url
+          FROM public.products WHERE id = 'c0000000-0000-0000-0000-0000000000a1') p
+  LEFT JOIN public.categories c ON c.id = p.category_id;
+
+-- ⑩ I suoi preferiti, letti come li legge il sito: il prodotto, poi il negozio
+--    dalla vista. Il panettone della bottega non approvata resta fuori.
+INSERT INTO esiti
+SELECT 'cliente: i preferiti trovano il negozio nella vista, senza la bottega non approvata',
+       count(*) = 1 AND bool_and(v.store_name = 'Pane Quotidiano'),
+       'preferiti con negozio: ' || count(*)
+  FROM public.favorites f
+  JOIN (SELECT id, name, description, price, images, stock, has_variants, created_at, seller_id, status
+          FROM public.products) p ON p.id = f.product_id AND p.status = 'available'
+  JOIN (SELECT id, store_name, is_approved FROM public.seller_public_profiles) v
+    ON v.id = p.seller_id AND v.is_approved
+ WHERE f.user_id = '33333333-3333-3333-3333-333333333333';
+
+-- ⑪ «Spesso comprati insieme»: gli altri prodotti disponibili del forno.
+INSERT INTO esiti
+SELECT 'cliente: «Spesso comprati insieme» trova gli altri prodotti del forno',
+       count(*) = 1, 'righe: ' || count(*)
+  FROM (SELECT id, name, price, images, stock, has_variants, seller_id FROM public.products
+         WHERE seller_id = '11111111-1111-1111-1111-111111111111' AND status = 'available'
+           AND id <> 'c0000000-0000-0000-0000-0000000000a1') p
+  JOIN (SELECT id, store_name, is_approved FROM public.seller_public_profiles) v
+    ON v.id = p.seller_id AND v.is_approved;
+
+-- ⑫ Il negozio del mese: la scelta e il suo negozio dalla vista.
+INSERT INTO esiti
+SELECT 'cliente: il negozio del mese arriva col nome e il logo del negozio',
+       count(*) = 1 AND bool_and(v.store_name = 'Pane Quotidiano' AND v.store_logo = 'logo.png'),
+       'righe: ' || count(*)
+  FROM (SELECT id, cover_image_url, headline, story, discount_code, discount_percent, month, seller_id
+          FROM public.shop_of_month WHERE month = DATE '2099-01-01') m
+  JOIN (SELECT id, store_name, store_logo FROM public.seller_public_profiles) v ON v.id = m.seller_id;
+
 INSERT INTO esiti
 SELECT 'cliente: la scheda trova il negozio approvato nella vista',
        count(*) = 1 AND bool_and(store_name = 'Pane Quotidiano' AND is_approved
@@ -226,8 +283,8 @@ BEGIN
     RAISE EXCEPTION '% controlli falliti: con profiles chiusa la scheda prodotto non trova il negozio', n;
   END IF;
   SELECT count(*) INTO n FROM esiti;
-  IF n < 15 THEN
-    RAISE EXCEPTION 'solo % controlli eseguiti su 15: la prova non misura quello che dice', n;
+  IF n < 19 THEN
+    RAISE EXCEPTION 'solo % controlli eseguiti su 19: la prova non misura quello che dice', n;
   END IF;
 END $$;
 

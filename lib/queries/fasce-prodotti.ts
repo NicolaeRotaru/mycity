@@ -8,7 +8,7 @@ import {
 
 /**
  * LE FASCE DI PRODOTTI: tendenze, simili, sponsorizzati, suggerimenti nel
- * carrello, visti di recente.
+ * carrello, «spesso comprati insieme», visti di recente.
  *
  * 15/10/2026 (R3) — Ognuna di queste letture viveva dentro il suo componente e
  * agganciava il negozio alla tabella `profiles`, poi teneva solo i prodotti con
@@ -247,6 +247,55 @@ export async function leggiSuggerimentiCarrello(
     .filter((p) => p.stock === null || p.stock === undefined || p.stock > 0);
   const approvati = await conNegozioApprovato(supa, candidati, COLONNE_NEGOZIO_IN_VETRINA);
   return approvati.slice(0, 8).map((p) => ({ ...p, price: Number(p.price), profiles: negozioInFascia(p.profiles) }));
+}
+
+// ──────────────────────── «Spesso comprati insieme» ────────────────────────
+
+export type CompratoInsieme = {
+  id: string;
+  name: string;
+  price: number;
+  images: string[] | null;
+  stock: number | null;
+  has_variants: boolean | null;
+  seller_id: string | null;
+};
+
+/**
+ * Gli altri prodotti disponibili dello stesso negozio, i piu' recenti, massimo 4.
+ *
+ * 15/10/2026 (R3, secondo giro) — Il gemello rimasto sulla scheda prodotto. La
+ * fascia agganciava il negozio a `profiles` con `!inner` e teneva solo
+ * `profiles.is_approved`: dopo la migrazione 161, per ogni cliente l'aggancio
+ * torna vuoto e `!inner` butta via tutte le righe. La fascia spariva, senza un
+ * errore. Adesso il negozio lo dice la vista pubblica, come per le altre fasce.
+ */
+export async function leggiSpessoCompratiInsieme(
+  supa: LettoreVista,
+  { productId, sellerId }: { productId: string; sellerId: string },
+): Promise<CompratoInsieme[]> {
+  const { data } = await supa
+    .from('products')
+    .select('id, name, price, images, stock, has_variants, seller_id')
+    .eq('seller_id', sellerId)
+    .eq('status', 'available')
+    .neq('id', productId)
+    .order('created_at', { ascending: false })
+    .limit(4);
+  const approvati = await conNegozioApprovato(
+    supa,
+    (data ?? []) as Array<Omit<CompratoInsieme, 'price'> & { price: number | string }>,
+    COLONNE_NEGOZIO_IN_VETRINA,
+  );
+  return approvati.map((p) => ({
+    id: p.id,
+    name: p.name,
+    price: Number(p.price),
+    images: p.images,
+    stock: p.stock,
+    has_variants: p.has_variants,
+    seller_id: p.seller_id,
+  }));
 }
 
 // ─────────────────────────────── «Ultimi visti» ────────────────────────────

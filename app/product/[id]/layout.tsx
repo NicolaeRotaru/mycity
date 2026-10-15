@@ -69,7 +69,15 @@ export default async function ProductLayout(
   props: { children: React.ReactNode; params: Promise<{ id: string }> },
 ) {
   const params = await props.params;
-  const product = await fetchProduct(params.id);
+  // 15/10/2026 (R3, R55) — Le due letture partono insieme. Prima del 15/10 erano due
+  // viaggi in tutto; adesso il negozio arriva dalla vista pubblica con una seconda
+  // domanda (R3) e il precarico porta anche «Venduto da» (R55). In fila sarebbero
+  // stati cinque viaggi; cosi' il guscio aspetta la catena piu' lunga, quella del
+  // precarico: prodotto → negozio → «Venduto da» (tre viaggi, quattro finche' in
+  // produzione manca la migrazione 126). Non e' misurato in rete. La pagina e' in
+  // cache per cinque minuti (`revalidate`), quindi l'attesa la paga chi rigenera la
+  // pagina, non ogni visita.
+  const [product, precarico] = await Promise.all([fetchProduct(params.id), precaricaProdotto(params.id)]);
 
   const schema = product && {
     '@context': 'https://schema.org',
@@ -114,8 +122,6 @@ export default async function ProductLayout(
    * arrivava due volte. Adesso l'indirizzo lo costruisce `precaricoFoto`, con
    * lo stesso caricatore e lo stesso `sizes` dell'immagine in pagina.
    */
-  const precarico = await precaricaProdotto(params.id);
-
   const primaFoto =
     Array.isArray(product?.images) && product.images[0]
       ? precaricoFoto(sizedImage(product.images[0], 'detail'))
@@ -148,8 +154,11 @@ export default async function ProductLayout(
         `lib/queries/catalogo.ts` — altrimenti il browser non la riconoscerebbe e
         rileggerebbe tutto lo stesso.
 
-        La lettura non e' un viaggio in piu': `leggiPerMetadati` qui sopra e
-        questa passano dallo stesso client, e la pagina la chiedeva comunque.
+        15/10/2026 — Qui c'era scritto «la lettura non e' un viaggio in piu'».
+        Non e' piu' vero: i viaggi li conta il commento in cima al componente.
+        Il precarico porta anche «Venduto da» (R55): letto qui, sul server, il suo
+        avviso sulla migrazione 126 finisce nei registri invece che sul telefono
+        del cliente.
       */}
       <HydrationBoundary state={precarico}>{props.children}</HydrationBoundary>
     </>

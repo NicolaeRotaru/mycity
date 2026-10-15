@@ -11,6 +11,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
+import { leggiSpessoCompratiInsieme, type CompratoInsieme } from '@/lib/queries/fasce-prodotti';
 import caricatoreFotoRemote from '@/lib/image-loader';
 
 /**
@@ -26,15 +27,7 @@ import caricatoreFotoRemote from '@/lib/image-loader';
  * stesso-venditore + stessa-categoria di altri negozi.
  */
 
-type Item = {
-  id: string;
-  name: string;
-  price: number;
-  images: string[] | null;
-  stock: number | null;
-  has_variants: boolean | null;
-  seller_id: string | null;
-};
+type Item = CompratoInsieme;
 
 export function FrequentlyBoughtTogether({
   productId,
@@ -48,18 +41,10 @@ export function FrequentlyBoughtTogether({
   const { data: items = [] } = useQuery({
     queryKey: queryKeys.products.boughtTogether(productId, sellerId),
     enabled: !!sellerId,
-    queryFn: async (): Promise<Item[]> => {
-      const { data } = await supabase
-        .from('products')
-        .select('id, name, price, images, stock, has_variants, seller_id, profiles!products_seller_id_fkey!inner ( is_approved )')
-        .eq('seller_id', sellerId)
-        .eq('status', 'available')
-        .eq('profiles.is_approved', true)
-        .neq('id', productId)
-        .order('created_at', { ascending: false })
-        .limit(4);
-      return ((data ?? []) as unknown as Item[]);
-    },
+    // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il
+    // negozio a `profiles` con `!inner`, e dopo la migrazione 161 la fascia spariva per
+    // ogni cliente.
+    queryFn: (): Promise<Item[]> => leggiSpessoCompratiInsieme(supabase, { productId, sellerId }),
     staleTime: 60_000,
   });
 

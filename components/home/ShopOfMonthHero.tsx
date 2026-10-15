@@ -9,6 +9,7 @@ import { sizedImage } from '@/lib/image-url';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { queryKeys } from '@/lib/queries/keys';
 import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
+import { leggiNegozioDelMese, type NegozioDelMese } from '@/lib/queries/negozio-del-mese';
 
 /**
  * Hero "Negozio del mese" in home.
@@ -25,32 +26,13 @@ import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
  * Pattern: non renderizziamo nulla se non c'è un pick attivo (zero rumore visivo).
  */
 export default function ShopOfMonthHero() {
-  type Pick = {
-    id: string;
-    cover_image_url: string | null;
-    headline: string | null;
-    story: string | null;
-    discount_code: string | null;
-    discount_percent: number | null;
-    month: string;
-    seller: { id: string; store_name: string | null; store_logo: string | null } | null;
-  };
+  type Pick = NegozioDelMese;
   const { data: pick, isLoading } = useQuery<Pick | null>({
     queryKey: queryKeys.shopOfMonth.current,
-    queryFn: async (): Promise<Pick | null> => {
-      // #211 — Il mese e' quello di Piacenza, non di Greenwich.
-      const monthIso = primoDelMesePiacenza();
-
-      const { data } = await supabase
-        .from('shop_of_month')
-        .select(`
-          id, cover_image_url, headline, story, discount_code, discount_percent, month,
-          seller:profiles!shop_of_month_seller_id_fkey ( id, store_name, store_logo )
-        `)
-        .eq('month', monthIso)
-        .maybeSingle();
-      return (data as unknown as Pick) ?? null;
-    },
+    // #211 — Il mese e' quello di Piacenza, non di Greenwich.
+    // 15/10/2026 (R3) — La lettura vive in lib/queries/negozio-del-mese.ts: agganciava il
+    // negozio a `profiles`, e dopo la migrazione 161 questo riquadro spariva per ogni cliente.
+    queryFn: (): Promise<Pick | null> => leggiNegozioDelMese(supabase, primoDelMesePiacenza()),
     staleTime: 60 * 60 * 1000, // 1h, il pick non cambia spesso
   });
 

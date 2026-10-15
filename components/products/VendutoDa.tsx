@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
-import { leggiVendutoDa } from '@/lib/queries/venduto-da';
+import { domandaVendutoDa } from '@/lib/queries/venduto-da';
 
 /**
  * «Venduto da»: chi sta vendendo davvero, con nome, sede e partita IVA.
@@ -18,14 +18,12 @@ import { leggiVendutoDa } from '@/lib/queries/venduto-da';
  * pagine legali — meglio una riga in meno che una riga finta.
  */
 export function VendutoDa({ sellerId, storeName }: { sellerId: string; storeName?: string | null }) {
-  const { data } = useQuery({
-    queryKey: ['venduto-da', sellerId],
-    // 15/10/2026 (R55) — La lettura vive in lib/queries/venduto-da.ts. Qui l'errore
-    // spariva: in produzione la vista non ha ancora le colonne d'impresa (migrazione
-    // 126), la domanda falliva e il riquadro non si disegnava senza una riga nei log.
-    queryFn: () => leggiVendutoDa(supabase, sellerId),
-    staleTime: 10 * 60_000,
-  });
+  // 15/10/2026 (R55) — La lettura vive in lib/queries/venduto-da.ts. Qui l'errore
+  // spariva: in produzione la vista non ha ancora le colonne d'impresa (migrazione
+  // 126), la domanda falliva e il riquadro non si disegnava senza una riga nei log.
+  // La domanda e' la stessa che il server fa nel guscio della pagina: il browser
+  // trova gia' la risposta, e l'avviso resta nei registri del server.
+  const { data } = useQuery(domandaVendutoDa(supabase, sellerId));
 
   if (!data) return null;
 

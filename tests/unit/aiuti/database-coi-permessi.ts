@@ -66,6 +66,8 @@ const COLONNE: Record<string, string[]> = {
   categories: ['id', 'slug', 'name', 'parent_id', 'icon'],
   sponsored_active_public: ['id', 'product_id', 'placement', 'start_date', 'end_date', 'category_slug'],
   recently_viewed: ['user_id', 'product_id', 'viewed_at'],
+  favorites: ['user_id', 'product_id', 'created_at'],
+  shop_of_month: ['id', 'cover_image_url', 'headline', 'story', 'discount_code', 'discount_percent', 'month', 'seller_id'],
 };
 
 /** Gli agganci che il database conosce: da quale tabella, con quale colonna, verso dove. */
@@ -76,6 +78,8 @@ const AGGANCI: Record<string, Record<string, { colonna: string; verso: string }>
   },
   sponsored_active_public: { products: { colonna: 'product_id', verso: 'products' } },
   recently_viewed: { products: { colonna: 'product_id', verso: 'products' } },
+  favorites: { products: { colonna: 'product_id', verso: 'products' } },
+  shop_of_month: { profiles: { colonna: 'seller_id', verso: 'profiles' } },
 };
 
 export type Dati = Record<string, Riga[]>;
@@ -165,6 +169,7 @@ export function databaseCoiPermessi(dati: Dati, mondo: Mondo, chi: string | null
       );
     }
     if (tabella === 'recently_viewed') return (dati.recently_viewed ?? []).filter((r) => chi !== null && r.user_id === chi);
+    if (tabella === 'favorites') return (dati.favorites ?? []).filter((r) => chi !== null && r.user_id === chi);
     return dati[tabella] ?? [];
   };
 
