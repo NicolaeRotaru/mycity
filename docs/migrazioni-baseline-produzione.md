@@ -29,8 +29,9 @@ fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha gi�
 **Cosa devi fare.** Lanciare i due comandi del passo 2 e del passo 3, nello stesso giro, a bassa
 attività. Il passo 1 è già fatto: le tredici righe sono nel registro dal 9 settembre. **Ma prima
 guarda le due condizioni in «Prima di cominciare»** (15/10/2026): la 161 va applicata solo dopo
-che è online il codice che legge i negozi dalla vista, altrimenti nessun prodotto si può più
-comprare dal sito.
+che è online il codice che legge i negozi dalla vista, **in tutte le pagine**. La prima ondata
+ripara la vetrina; carrello, cassa, ordini e pagine del fattorino non sono ancora riparati. Finché
+non lo sono, la 161 resta ferma.
 
 **Cosa non ho verificato.** La prova generale è girata su PostgreSQL 16, la produzione è la 17.
 E non ho potuto provare il comando contro la produzione vera: da qui il database si legge
@@ -72,8 +73,22 @@ suggerita e le fasce della home leggono il negozio proprio da lì: se la 161 arr
 codice che lo legge dalla vista `seller_public_profiles`, ogni scheda prodotto mostra «Prodotto
 non disponibile» a chi compra, mentre il negoziante e l'amministratore la vedono perfetta.
 Quindi: prima si unisce e si pubblica la riparazione della vetrina, si apre una scheda prodotto
-da una finestra anonima e si controlla che il pulsante per comprare ci sia; **solo dopo** il
-passo 2.
+da una finestra anonima e si controlla che il pulsante per comprare ci sia.
+
+⚠️ **La vetrina non basta (15/10/2026, sera).** Dopo la 161 su `profiles` restano solo due regole
+di lettura: la propria riga e l'amministratore (controllato sul database ricostruito dalle
+migrazioni). Altre pagine leggono il negozio da lì, e la prima ondata non le ha ancora riparate:
+
+- **carrello e cassa** (`app/cart/page.tsx`, `app/checkout/page.tsx`): perdono posizione, nome e
+  consegna veloce del negozio. La spedizione per distanza ricade sulla tariffa fissa, cioè il
+  cliente paga una cifra diversa da quella giusta;
+- **pagine degli ordini** (`app/orders/page.tsx`, `app/orders/[id]/page.tsx`, recensione e reclamo):
+  il cliente non vede più chi gli ha venduto né come contattarlo;
+- **pagine del fattorino** (`app/rider/page.tsx`, `app/rider/orders/[id]/page.tsx`): il fattorino
+  perde l'indirizzo del negozio dove ritirare;
+- nomi e loghi dei negozi in home, storie, eventi e messaggi.
+
+**Solo quando anche queste leggono il negozio dalla vista** si passa al passo 2.
 
 **② La riga di collegamento.** Gli esempi qui sotto usano la riga del «Session pooler»
 (Supabase → pannello Connect → riquadro «Session pooler», porta 5432), la stessa che serve alla
