@@ -139,6 +139,7 @@ import {
   incassoDaDichiarare,
   passoDellaConsegna,
 } from '@/lib/rider/incasso-alla-consegna';
+import { motivoPerNonRegistrare, statiAmmessi, type OrdineDaIncassare } from '@/lib/cassa/registra-incasso';
 
 const ID = '33333333-3333-4333-8333-333333333333';
 
@@ -218,6 +219,32 @@ describe('le regole: prima i contanti, poi il codice', () => {
       { id: 'd', payment_method: 'cod', delivery_status: 'OUT_FOR_DELIVERY', cash_confirmed_at: null, delivered_at: null },
     ];
     expect(incassiRimastiIndietro(righe).map((r) => r.id)).toEqual(['a', 'b']);
+  });
+});
+
+describe('chi puo registrare quale incasso', () => {
+  const base = consegnatoSenzaIncasso() as unknown as OrdineDaIncassare;
+  const fattorino = { chi: 'fattorino', userId: 'fattorino-1' } as const;
+  const amministratore = { chi: 'amministratore', userId: 'amministratore-1' } as const;
+
+  it('il fattorino: i suoi ordini, dalla merce in mano fino a dopo la consegna', () => {
+    expect(motivoPerNonRegistrare(base, fattorino)).toBeNull();
+    expect(motivoPerNonRegistrare({ ...base, delivery_status: 'OUT_FOR_DELIVERY' }, fattorino)).toBeNull();
+    expect(motivoPerNonRegistrare(base, { chi: 'fattorino', userId: 'fattorino-2' })).toBe('DI_UN_ALTRO_FATTORINO');
+    expect(statiAmmessi(fattorino)).toEqual(['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']);
+  });
+
+  it('l amministratore: solo a consegna chiusa, perche in strada i contanti li ha il fattorino', () => {
+    expect(motivoPerNonRegistrare(base, amministratore)).toBeNull();
+    expect(motivoPerNonRegistrare({ ...base, delivery_status: 'OUT_FOR_DELIVERY' }, amministratore)).toBe('NON_ANCORA_CONSEGNATO');
+    expect(motivoPerNonRegistrare({ ...base, rider_id: null }, amministratore)).toBe('SENZA_FATTORINO');
+    expect(statiAmmessi(amministratore)).toEqual(['DELIVERED']);
+  });
+
+  it('per nessuno: un ordine con la carta, o gia incassato', () => {
+    expect(motivoPerNonRegistrare({ ...base, payment_method: 'card' }, amministratore)).toBe('NON_IN_CONTANTI');
+    expect(motivoPerNonRegistrare({ ...base, cash_confirmed_at: '2026-10-06T19:31:00Z' }, fattorino)).toBe('GIA_CONFERMATO');
+    expect(motivoPerNonRegistrare(null, fattorino)).toBe('NON_TROVATO');
   });
 });
 
