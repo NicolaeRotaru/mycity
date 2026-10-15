@@ -36,6 +36,7 @@ const DICHIARAZIONI = [
 const CATEGORIE: CategoryRow[] = [
   { id: 'alim', name: 'Alimentari', slug: 'alimentari', parent_id: null },
   { id: 'pane', name: 'Pane e forno', slug: 'pane-e-forno', parent_id: 'alim' },
+  { id: 'casa', name: 'Casa', slug: 'casa', parent_id: null },
 ];
 
 const DICHIARATO_DAL_NEGOZIANTE: Record<string, string> = {
@@ -282,6 +283,33 @@ describe('il lavoro massivo «Migliora tutto»', () => {
     const attributi = prodotti[0].valori.attributes as Record<string, unknown> | undefined;
     expect(attributi?.allergeni ?? FOCACCIA.attributes.allergeni).toBe('Glutine, sesamo, latte');
     expect(attributi?.senza_lattosio ?? FOCACCIA.attributes.senza_lattosio).toBe('false');
+  });
+});
+
+describe('il lotto e i campi obbligatori (R36)', () => {
+  it('«Migliora tutto» non sposta fra gli alimentari un prodotto in vendita che non ha allergeni', async () => {
+    db.prodotti = [
+      {
+        ...structuredClone(FOCACCIA),
+        id: 'tagliere',
+        name: 'Tagliere',
+        description: 'Tagliere in legno di ulivo, fatto a mano.',
+        category_id: 'casa',
+        attributes: {},
+      },
+    ];
+    db.lavoro = {
+      id: 'job-2',
+      seller_id: 'forno-1',
+      operation: 'improve',
+      status: 'ready',
+      results: [{ product_id: 'tagliere', patch: { category_slug: 'alimentari' } }],
+    };
+    const res = await chiama('@/app/api/ai/catalog-batch/apply/route', '/api/ai/catalog-batch/apply', {
+      jobId: 'job-2',
+    });
+    expect(res.status).toBe(200);
+    expect(db.scritture.filter((s) => s.tabella === 'products')).toEqual([]);
   });
 });
 
