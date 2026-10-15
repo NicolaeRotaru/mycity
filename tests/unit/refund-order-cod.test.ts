@@ -2,13 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * refundOrder — percorso COD (🟠-18): nessuna charge Stripe → accredito sul
- * wallet del buyer. Garanzie:
+ * wallet del buyer QUANDO IL CLIENTE HA SCELTO IL CREDITO (R71: senza scelta il
+ * rimborso dei contanti va col bonifico, vedi
+ * il-rimborso-dei-contanti-arriva-col-bonifico.test.ts). Garanzie:
  *  - claw-back del transfer al venditore se il COD era già stato pagato
  *    (TRANSFERRED) — altrimenti doppia uscita;
  *  - NON marca delivery_status='CANCELED' (la consegna è avvenuta, il contante
  *    resta nella riconciliazione del rider);
- *  - idempotente sul ref (unique violation 23505 → no-op).
+ *  - idempotente sul ref: con 23505 il credito non si ripete, e il resto del
+ *    rimborso va a termine (R82).
  */
+
+/** R71 — il credito arriva solo a chi l'ha scelto nel modulo di reso. */
+const SCELTO_IL_CREDITO = { modo: 'CREDITO' } as const;
 
 type Order = {
   id: string;
@@ -21,6 +27,9 @@ type Order = {
   stripe_reversal_id: string | null;
   refunded_amount_cents: number;
   payment_method: string;
+  payment_status: string;
+  cash_confirmed_at: string | null;
+  delivery_status: string;
 };
 
 const state: {
@@ -47,6 +56,11 @@ function baseOrder(): Order {
     stripe_reversal_id: null,
     refunded_amount_cents: 0,
     payment_method: 'cod',
+    // R84 — un ordine in contanti consegnato e' un ordine incassato: il
+    // fattorino ha confermato i contanti. Senza, non c'e' niente da restituire.
+    payment_status: 'PAID',
+    cash_confirmed_at: '2026-10-01T10:00:00Z',
+    delivery_status: 'DELIVERED',
   };
 }
 
@@ -109,7 +123,9 @@ beforeEach(() => {
 
 describe('refundOrder COD → wallet', () => {
   it('rimborso pieno (non ancora pagato al venditore): wallet, REFUNDED, restore stock, niente CANCEL, niente Stripe', async () => {
-    const res = await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1', notifyBuyer: true });
+    const res = await refundOrder({
+      orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1', notifyBuyer: true, contanti: SCELTO_IL_CREDITO,
+    });
 
     expect(res.refundId).toBe('wallet:return_r1');
     const wc = state.rpcCalls.find((c) => c.name === 'wallet_credit');
@@ -124,7 +140,7 @@ describe('refundOrder COD → wallet', () => {
 
   it('claw-back: se il venditore era già pagato (TRANSFERRED) storna il transfer e marca REVERSED', async () => {
     state.order = { ...baseOrder(), payout_status: 'TRANSFERRED', stripe_transfer_id: 'tr_1' };
-    await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1' });
+    await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1', contanti: SCELTO_IL_CREDITO });
 
     expect(createReversal).toHaveBeenCalledTimes(1);
     expect(state.updates.some((u) => u.payout_status === 'REVERSED')).toBe(true);
@@ -132,17 +148,25 @@ describe('refundOrder COD → wallet', () => {
     expect(refundsCreate).not.toHaveBeenCalled();
   });
 
-  it('idempotente: unique violation (23505) → no-op, nessun update di payment_status', async () => {
+  // R82 — Prima su 23505 la funzione usciva subito: «gia' accreditato, non
+  // faccio niente». Ma il 23505 arriva quando un tentativo precedente ha
+  // accreditato e si e' perso la risposta — e quel tentativo, cadendo, ha
+  // restituito la prenotazione. Uscire subito lasciava il cliente col credito e
+  // l'ordine «pagato», il negozio con la sua quota, la merce fuori scaffale.
+  // Adesso il credito non si ripete, e il resto del rimborso va a termine.
+  it('idempotente: con 23505 il credito non si ripete e il rimborso si registra', async () => {
     state.walletErr = { code: '23505', message: 'duplicate' };
-    const res = await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1' });
+    const res = await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1', contanti: SCELTO_IL_CREDITO });
 
     expect(res.refundId).toBe('wallet:return_r1');
-    expect(state.updates.some((u) => u.payment_status)).toBe(false);
-    expect(state.rpcCalls.some((c) => c.name === 'restore_stock_for_order')).toBe(false);
+    expect(state.rpcCalls.filter((c) => c.name === 'wallet_credit')).toHaveLength(1);
+    expect(state.rpcCalls.some((c) => c.name === 'storna_rimborso')).toBe(false);
+    expect(state.updates.find((u) => u.payment_status)).toMatchObject({ payment_status: 'REFUNDED' });
+    expect(state.rpcCalls.some((c) => c.name === 'restore_stock_for_order')).toBe(true);
   });
 
   it('parziale: PARTIALLY_REFUNDED, niente restore stock, niente CANCEL', async () => {
-    await refundOrder({ orderId: 'o1', amountCents: 500, idempotencyKey: 'return_r2' });
+    await refundOrder({ orderId: 'o1', amountCents: 500, idempotencyKey: 'return_r2', contanti: SCELTO_IL_CREDITO });
     const upd = state.updates.find((u) => u.payment_status);
     expect(upd).toMatchObject({ payment_status: 'PARTIALLY_REFUNDED' });
     expect(upd?.delivery_status).toBeUndefined();
@@ -155,11 +179,11 @@ describe('refundOrder COD → wallet', () => {
   // entrambi «zero» e rimborsavano entrambi l'intero. Ora chi non rivendica la
   // riga non arriva mai a toccare i soldi.
   it('un secondo rimborso pieno sullo stesso ordine non passa: la riga non si rivendica due volte', async () => {
-    await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1' });
+    await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1', contanti: SCELTO_IL_CREDITO });
     const accreditiPrima = state.rpcCalls.filter((c) => c.name === 'wallet_credit').length;
 
     await expect(
-      refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r2' }),
+      refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r2', contanti: SCELTO_IL_CREDITO }),
     ).rejects.toThrow();
 
     const accreditiDopo = state.rpcCalls.filter((c) => c.name === 'wallet_credit').length;

@@ -78,6 +78,11 @@ export default function PrivacyPage() {
           <li><strong>Dati fiscali (Venditori):</strong> codice fiscale, partita IVA, ragione sociale, sede legale, PEC, codice SDI, IBAN.</li>
           <li><strong>Documenti d&apos;identità (KYC per Venditori/Rider):</strong> documento di riconoscimento, patente, certificato HACCP, polizza RC — trattati e conservati con misure di sicurezza rafforzate.</li>
           <li><strong>Dati di transazione:</strong> ordini, importi, metodi di pagamento, ultime 4 cifre della carta (mai il numero completo né il CVV).</li>
+          {/* 11/10/2026 (R71) — Chi paga in contanti e restituisce un prodotto
+              adesso può chiedere il rimborso con un bonifico, e per farlo ci
+              lascia l'IBAN. È un dato nuovo: un trattamento che non compare
+              nell'informativa è un trattamento senza informativa. */}
+          <li><strong>Dati per il rimborso con bonifico (Acquirenti, solo pagamento alla consegna):</strong> l&apos;IBAN del conto su cui vuoi ricevere il rimborso — raccolto solo se scegli il bonifico nella richiesta di reso, conservato sulla richiesta e usato solo per quel bonifico. Lo vede MyCity, che fa il bonifico; il Venditore no.</li>
           <li><strong>Dati di geolocalizzazione:</strong> posizione del Rider durante la consegna; indirizzo di consegna; posizione approssimativa dell&apos;Acquirente per la funzione &quot;Vicino a te&quot; (solo previo consenso esplicito).</li>
           <li><strong>Contenuti generati dall&apos;utente:</strong> recensioni, foto, messaggi nelle chat ordine.</li>
           {/* 27/8/2026 (R058) — Mancavano, ed è il dato più intrusivo che

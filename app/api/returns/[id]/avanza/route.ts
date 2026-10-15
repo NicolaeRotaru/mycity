@@ -9,6 +9,15 @@ import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 import { chiComandaIlReso } from '../../chi-comanda-il-reso';
+import {
+  motivoNienteDaRestituire,
+  pagatoInContanti,
+  quantoSiPuoRestituire,
+  type OrdineDaRimborsare,
+} from '@/lib/rimborsi/regole-del-rimborso';
+import { comeTornanoIContanti, leggiLaSceltaDelReso } from '@/lib/rimborsi/scelta-del-reso';
+import { COLONNE_162 } from '@/lib/rimborsi/scelta-del-cliente';
+import { scriviAncheSeMancaUnaColonnaNuova } from '@/lib/db/migrazione-148';
 
 export const runtime = 'nodejs';
 
@@ -108,15 +117,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // Il rimborso si controlla PRIMA di prendere il turno, come su `decide`: un
   // importo impossibile non deve lasciare traccia sul reso, e il venditore deve
   // leggere il motivo invece di un guasto tecnico.
-  const COLONNE_ORDINE = 'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents';
-  type OrdineDelReso = {
-    stripe_payment_intent: string | null;
-    payment_method: string | null;
-    gross_total_cents?: number | null;
-    total_price: number | string | null;
-    refunded_amount_cents: number | null;
-  };
-  let ordine: OrdineDelReso | null = null;
+  // R84 — Il tetto lo decide la stessa regola che usa chi muove i soldi: sui
+  // contanti conta solo quello che e' stato incassato davvero.
+  const COLONNE_ORDINE =
+    'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, cash_confirmed_at, payment_status, delivery_status';
+  let ordine: OrdineDaRimborsare | null = null;
   let importoRimborso = 0;
 
   if (body.stato === 'REFUNDED') {
@@ -125,19 +130,19 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       () => admin.from('orders').select(COLONNE_ORDINE).eq('id', ret.order_id).single(),
       () => admin.from('orders').select(senzaColonne(COLONNE_ORDINE, COLONNE_124)).eq('id', ret.order_id).single(),
     );
-    ordine = (data ?? null) as OrdineDelReso | null;
+    ordine = (data ?? null) as OrdineDaRimborsare | null;
     if (!ordine) return ApiErrors.notFound('Ordine del reso non trovato');
 
-    const lordoCent = ordine.gross_total_cents ?? Math.round(Number(ordine.total_price ?? 0) * 100);
-    const residuoCent = Math.max(0, lordoCent - (ordine.refunded_amount_cents ?? 0));
+    const rimborsabile = quantoSiPuoRestituire(ordine);
+    const residuoCent = rimborsabile.massimoCents;
     // Se non è indicato niente si rimborsa quello che il venditore aveva già
     // promesso quando ha approvato il reso.
     importoRimborso = body.refundAmountCents ?? Number(ret.refund_amount_cents ?? 0) ?? 0;
     if (importoRimborso <= 0) {
       return ApiErrors.invalidRequest('Indica quanto rimborsare al cliente.');
     }
-    if (residuoCent <= 0) {
-      return ApiErrors.conflict('Questo ordine è già stato rimborsato per intero: non resta niente da restituire.');
+    if (rimborsabile.perche !== 'ok') {
+      return ApiErrors.conflict(motivoNienteDaRestituire(rimborsabile.perche));
     }
     if (importoRimborso > residuoCent) {
       return ApiErrors.invalidRequest(
@@ -169,7 +174,14 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   }
 
   let refundId: string | null = null;
+  /** R71 — quanto del rimborso va pagato col bonifico, a mano. */
+  let bonificoCents = 0;
   if (body.stato === 'REFUNDED') {
+    // R71 — Sui contanti il modo lo ha scelto il cliente nel modulo di reso:
+    // credito MyCity solo se l'ha chiesto lui, altrimenti bonifico. Se la
+    // scelta non si legge, vale bonifico (lib/rimborsi/scelta-del-reso.ts).
+    const contanti =
+      ordine && pagatoInContanti(ordine) ? comeTornanoIContanti(await leggiLaSceltaDelReso(admin, ret.id)) : undefined;
     try {
       const res = await refundOrder({
         orderId: ret.order_id,
@@ -178,8 +190,10 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         metadata: { return_id: ret.id },
         idempotencyKey: `return_${ret.id}`,
         notifyBuyer: true,
+        ...(contanti ? { contanti } : {}),
       });
       refundId = res.refundId;
+      bonificoCents = res.bonificoCents ?? 0;
     } catch (err) {
       logger.error('[returns/avanza] rimborso fallito', err);
       // I soldi non sono usciti: il reso torna dov'era, così resta lavorabile
@@ -191,10 +205,19 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         .eq('status', 'REFUNDED');
       return ApiErrors.badGateway('Rimborso fallito: ' + (err instanceof Error ? err.message : 'unknown'));
     }
-    await admin
-      .from('returns')
-      .update({ refund_id: refundId, refunded_at: new Date().toISOString() })
-      .eq('id', params.id);
+    // R71 — Se una parte va col bonifico, il reso ricorda quanto: e' la cifra
+    // che la lista dei bonifici da fare mostra a chi paga.
+    const scrittura = await scriviAncheSeMancaUnaColonnaNuova(
+      'returns.update (esito del rimborso)',
+      {
+        refund_id: refundId,
+        refunded_at: new Date().toISOString(),
+        ...(bonificoCents > 0 ? { refund_bonifico_cents: bonificoCents } : {}),
+      },
+      COLONNE_162,
+      (campi) => admin.from('returns').update(campi).eq('id', params.id),
+    );
+    if (scrittura.avviso) logger.warn(`[returns/avanza] ${scrittura.avviso}`);
   }
 
   const TITOLO: Record<string, string> = {

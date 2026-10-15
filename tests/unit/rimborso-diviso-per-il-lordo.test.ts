@@ -36,6 +36,9 @@ type Order = {
   rider_payout_status: string | null;
   rider_transfer_id: string | null;
   delivery_status: string;
+  wallet_applied_cents: number;
+  payment_status: string;
+  cash_confirmed_at: string | null;
 };
 
 const state: {
@@ -62,6 +65,11 @@ function ordineBase(): Order {
     rider_payout_status: null,
     rider_transfer_id: null,
     delivery_status: 'DELIVERED',
+    // R84 — i 20 euro di credito sono scritti sull'ordine, e i 30 di contanti
+    // risultano incassati: e' quello che si puo' restituire.
+    wallet_applied_cents: 2000,
+    payment_status: 'PAID',
+    cash_confirmed_at: '2026-10-01T10:00:00Z',
   };
 }
 
@@ -127,6 +135,7 @@ describe('il rimborso divide per il lordo, non per quello che resta dopo il cred
     // Gift card da 50 euro su un ordine da 50: il fattorino non incassa nulla.
     state.order.total_price = 0;
     state.order.gross_total_cents = 5000;
+    state.order.wallet_applied_cents = 5000;
 
     const esito = await refundOrder({ orderId: 'o1', amountCents: 5000, idempotencyKey: 'reso_2' });
     expect(esito.refundId).toContain('wallet:');

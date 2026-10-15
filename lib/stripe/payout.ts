@@ -12,6 +12,18 @@ import { rimettiLaMerceAScaffale } from '@/lib/ordini/rimessa-a-scaffale';
 // R043 — l'avviso agli amministratori e' lo stesso che usa il webhook dei
 // rimborsi: una casa sola, cosi' i due percorsi non divergono.
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+// R71 · R76 · R84 — quanto si restituisce, in che modo, e cosa e' «pieno»:
+// una regola sola, pura, che le prove eseguono (lib/rimborsi/).
+import {
+  lordoDellOrdine,
+  motivoNienteDaRestituire,
+  quantoSiPuoRestituire,
+  ripartoDelRimborso,
+  tipoDiPagamento,
+  type ModoDelRimborso,
+  type RipartoDelRimborso,
+} from '@/lib/rimborsi/regole-del-rimborso';
+import { PAGINA_DEI_BONIFICI_DA_FARE, type ComeTornanoIContanti } from '@/lib/rimborsi/scelta-del-reso';
 
 /**
  * Logica condivisa di payout / reversal / refund per il modello SCT
@@ -646,6 +658,37 @@ export interface RefundOrderOpts {
    * contante), e il segno lo mette solo il database con la 160.
    */
   annullaLOrdine?: boolean;
+  /**
+   * R71 — ORDINI IN CONTANTI: COME TORNANO I SOLDI.
+   *
+   * Il credito MyCity arriva solo se il cliente l'ha scelto (`{ modo:
+   * 'CREDITO' }`). Senza questo campo, o con `BONIFICO`, il rimborso si registra
+   * come bonifico da fare a mano, e chi paga riceve l'avviso. Sugli ordini con
+   * carta non conta: i soldi tornano sulla carta.
+   */
+  contanti?: ComeTornanoIContanti;
+}
+
+/** Quello che `refundOrder` restituisce a chi lo chiama. */
+export interface EsitoRimborso {
+  /** Id del rimborso Stripe, oppure `wallet:<chiave>` / `bonifico:<chiave>` per i contanti. */
+  refundId: string;
+  /** Quota ripresa al negozio da questa chiamata, in centesimi. */
+  reversedCents: number;
+  /**
+   * R76 — IL VERDETTO DI CHI HA MOSSO I SOLDI: il cliente ha riavuto l'intero
+   * lordo dell'ordine. Chi deve decidere «integrale o no» usa questo, non un
+   * secondo conto fatto su un'altra base.
+   */
+  pieno: boolean;
+  /** R71 · R25 — come sono tornati i soldi. */
+  modo: ModoDelRimborso;
+  /** Quanto e' tornato davvero, in centesimi: puo' essere meno di quanto chiesto. */
+  importoCents: number;
+  /** Di cui accreditato come credito MyCity (ordini in contanti). */
+  creditoCents: number;
+  /** Di cui da pagare col bonifico, a mano (ordini in contanti). */
+  bonificoCents: number;
 }
 
 /**
@@ -659,20 +702,36 @@ export interface RefundOrderOpts {
  * NON usata dal webhook charge.refunded (lì il refund è già Stripe-initiated:
  * basta reverseOrderTransfer + sync DB).
  */
-/** Email best-effort di rimborso al buyer (riusata dal path carta e da quello COD). */
+/**
+ * Email best-effort di rimborso al buyer (riusata dal path carta e da quello COD).
+ *
+ * R25 — L'email dice il modo vero: carta, credito o bonifico. Prima diceva a
+ * tutti «arriverà sul tuo metodo di pagamento entro 5-10 giorni», anche a chi
+ * aveva gia' il credito in tasca.
+ */
 async function notifyRefundBuyer(
   admin: ReturnType<typeof getAdminSupabase>,
   userId: string,
   orderId: string,
   amountCents: number,
   opts: RefundOrderOpts,
+  riparto: RipartoDelRimborso,
 ): Promise<void> {
   if (!opts.notifyBuyer) return;
   try {
     const { data: ua } = await admin.auth.admin.getUserById(userId);
     const buyerEmail = ua?.user?.email;
     if (buyerEmail) {
-      const t = refundIssuedTemplate({ orderId, amount: amountCents / 100, reason: opts.reason ?? null });
+      const t = refundIssuedTemplate({
+        orderId,
+        amount: amountCents / 100,
+        reason: opts.reason ?? null,
+        modo: riparto.modo,
+        creditoEuro: riparto.creditoCents / 100,
+        bonificoEuro: riparto.bonificoCents / 100,
+        creditoScelto: riparto.creditoScelto,
+        ibanFinale: opts.contanti?.modo === 'BONIFICO' ? opts.contanti.ibanFinale ?? null : null,
+      });
       await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
     }
   } catch (e) {
@@ -784,11 +843,12 @@ function eOrdineInesistente(errore: unknown): boolean {
   return /no rows|0 rows|not found|nessuna riga/.test(testo);
 }
 
-export async function refundOrder(
-  opts: RefundOrderOpts,
-): Promise<{ refundId: string; reversedCents: number }> {
+export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso> {
   const admin = getAdminSupabase();
-  const COLONNE_RIMBORSO = 'id, user_id, total_price, gross_total_cents, seller_payout_cents, seller_payout_reversed_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, refunded_amount_cents, payment_method, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost, delivery_status';
+  // R84 — `cash_confirmed_at`, `payment_status` e `wallet_applied_cents` non si
+  // leggevano: il ramo dei contanti non poteva sapere se i soldi erano mai
+  // arrivati. Esistono tutte e tre da prima della 124.
+  const COLONNE_RIMBORSO = 'id, user_id, total_price, gross_total_cents, seller_payout_cents, seller_payout_reversed_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, refunded_amount_cents, payment_method, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost, delivery_status, payment_status, cash_confirmed_at, wallet_applied_cents';
   const { data: order, error } = await conRipiegoSchema(
     'orders.select (rimborso)',
     () => admin.from('orders').select(COLONNE_RIMBORSO).eq('id', opts.orderId).single(),
@@ -808,6 +868,14 @@ export async function refundOrder(
   }
   if (!order) throw new RimborsoNonRitentabile('refundOrder: ordine non trovato');
 
+  // Carta o contanti, deciso PRIMA di toccare qualunque cosa. Prima il
+  // controllo stava dopo la prenotazione del rimborso: un ordine che non si
+  // poteva rimborsare la lasciava li', e l'importo risultava restituito.
+  const tipo = tipoDiPagamento(order);
+  if (!tipo) {
+    throw new RimborsoNonRitentabile('refundOrder: ordine senza payment_intent e non COD (non rimborsabile)');
+  }
+
   // 055 — DUE BASI DIVERSE, E IL CONTO NON TORNAVA.
   //
   // `total_price` e' la cassa attesa: il totale DOPO lo scomputo del credito
@@ -824,9 +892,22 @@ export async function refundOrder(
   //
   // Ora il lordo e' una colonna sua (migrazione 124). Il ripiego su
   // total_price serve solo agli ordini nati prima.
-  const grossCents = order.gross_total_cents ?? Math.round(Number(order.total_price) * 100);
+  const grossCents = lordoDellOrdine(order);
   const alreadyRefunded = order.refunded_amount_cents ?? 0;
-  const safeAmountCents = Math.max(0, Math.min(opts.amountCents, grossCents - alreadyRefunded));
+
+  // R84 — SI RESTITUISCE SOLO QUELLO CHE IL CLIENTE HA DATO DAVVERO.
+  //
+  // Sui contanti il tetto era il lordo dell'ordine, incassato o no. Un ordine
+  // in contanti mai consegnato, un reclamo chiuso a favore del cliente con 24
+  // scritto nel campo rimborso, e partivano 24 € di credito MyCity per una cosa
+  // che nessuno aveva pagato. La regola (lib/rimborsi/regole-del-rimborso.ts)
+  // conta i contanti solo se incassati, e il credito speso solo se l'annullo
+  // non l'ha gia' restituito.
+  const rimborsabile = quantoSiPuoRestituire(order);
+  if (rimborsabile.perche === 'nessun-incasso') {
+    throw new RimborsoNonRitentabile(motivoNienteDaRestituire('nessun-incasso'));
+  }
+  const safeAmountCents = Math.max(0, Math.min(opts.amountCents, rimborsabile.massimoCents));
   if (safeAmountCents <= 0) throw new RimborsoNonRitentabile('refundOrder: importo rimborso non valido');
 
   // 051 — LA RIVENDICAZIONE VIENE PRIMA DEI SOLDI.
@@ -856,118 +937,98 @@ export async function refundOrder(
   // un ordine finito con un rimborso che non è pieno per scelta.
   const ordineDaChiudere = isFull || opts.annullaLOrdine === true;
 
-  // --- COD (🟠-18): nessuna charge Stripe → accredito sul wallet del buyer.
-  // Idempotente: ref stabile (idempotencyKey del chiamante, es. return_<id>) +
-  // unique index parziale su wallet_ledger(ref) WHERE reason='cod_refund'. Un
-  // secondo tentativo (doppio-click su reso/dispute) è un no-op: niente doppio
-  // accredito. Il contante è già stato incassato dal rider → il buyer viene
-  // ristorato in credito spendibile, non in contanti.
-  if (!order.stripe_payment_intent) {
-    if (order.payment_method !== 'cod') {
-      throw new RimborsoNonRitentabile('refundOrder: ordine senza payment_intent e non COD (non rimborsabile)');
-    }
-    const ref = opts.idempotencyKey ?? `cod_refund_${order.id}_${safeAmountCents}`;
+  // R71 — IN CHE MODO TORNANO I SOLDI. Carta → sulla carta. Contanti → la
+  // parte pagata col credito torna credito; quella dei contanti torna credito
+  // SOLO se il cliente l'ha scelto, altrimenti va col bonifico. Una regola
+  // sola, pura (lib/rimborsi/regole-del-rimborso.ts). Prima: credito d'ufficio.
+  const riparto = ripartoDelRimborso(order, safeAmountCents, opts.contanti?.modo ?? null) as RipartoDelRimborso;
+  const modo = riparto.modo;
 
-    // Claw-back del transfer al venditore se il COD era GIÀ stato pagato (il payout
-    // COD — slice 3 — fa un transfer dal saldo piattaforma). DEVE avvenire anche
-    // per i COD: senza, un rimborso dopo il payout sarebbe una doppia uscita
-    // (venditore pagato + buyer accreditato). Idempotente: reverseOrderTransfer è
-    // no-op se l'ordine non è TRANSFERRED o è già stato stornato.
-    const sellerNet = order.seller_payout_cents ?? 0;
-    const sellerShare =
-      grossCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / grossCents), sellerNet) : 0;
-    let { reversedCents } = await reverseOrderTransfer(order, sellerShare);
+  // La chiave di idempotenza. 051 — porta il totale cumulato, non l'importo di
+  // QUESTO rimborso: due rimborsi parziali uguali sullo stesso ordine (due
+  // volte 10 €) avevano la stessa chiave, e il secondo non avveniva. Il totale
+  // e' diverso a ogni passo e uguale a se stesso su un ritentativo. R82 — la
+  // stessa regola adesso vale anche per i contanti, che usavano l'importo.
+  const chiave =
+    opts.idempotencyKey ??
+    (tipo === 'carta' ? `refund_${order.id}_tot_${newRefundedTotal}` : `cod_refund_${order.id}_tot_${newRefundedTotal}`);
 
-  reversedCents = await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, reversedCents);
-
-  // Rimborso totale: si recupera anche il compenso del fattorino, altrimenti la
-  // piattaforma restituisce tutto al cliente e paga la consegna di tasca sua.
-  if (isFull) {
-    try {
-      await reverseRiderTransfer(order as unknown as RiderReversibleOrder);
-    } catch (err) {
-      logger.error('[stripe] recupero compenso rider fallito', { orderId: order.id, err });
-    }
-  }
-    const wasTransferred = order.payout_status === 'TRANSFERRED';
-
-    // Accredito wallet del buyer (idempotente via unique index su ref).
-    const { error: wErr } = await admin.rpc('wallet_credit', {
-      p_user: order.user_id,
-      p_cents: safeAmountCents,
-      p_reason: 'cod_refund',
-      p_ref: ref,
-    });
-    if (wErr) {
-      // 23505 = unique_violation → già accreditato per questo ref: idempotente.
-      if ((wErr as { code?: string }).code === '23505') {
-        return { refundId: `wallet:${ref}`, reversedCents };
-      }
-      throw new Error(`refundOrder COD: accredito wallet fallito: ${wErr.message}`);
-    }
-
-    // NB: NON marchiamo delivery_status='CANCELED' per i COD: la consegna è
-    // avvenuta e il contante incassato dal rider resta dovuto/riconciliato (lo
-    // marcheremmo fuori dall'expected della riconciliazione). Il rimborso è
-    // riflesso da payment_status + dal claw-back del payout.
-    await admin
-      .from('orders')
-      .update({
-        refunded_amount_cents: newRefundedTotal,
-        payment_status: isFull ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
-        ...(isFull ? { payout_status: wasTransferred ? 'REVERSED' : 'REFUNDED' } : {}),
-      })
-      .eq('id', order.id);
-
-    // La merce torna a scaffale quando l'ordine si chiude, non quando i soldi
-    // tornano tutti: sono due fatti diversi (vedi `annullaLOrdine`). E torna UNA
-    // VOLTA SOLA: `restore_stock_for_order` e' una somma senza segno di «gia'
-    // fatto», e la decisione sta in lib/ordini/rimessa-a-scaffale.ts.
-    await rimettiLaMerceAScaffale(admin, order, {
-      ordineDaChiudere,
-      giaRimborsatoPrimaCents: alreadyRefunded,
-    });
-    await notifyRefundBuyer(admin, order.user_id, order.id, safeAmountCents, opts);
-
-    return { refundId: `wallet:${ref}`, reversedCents };
-  }
-
-  // --- Carta: refund reale Stripe + claw-back del transfer se già pagato.
-  const stripe = getStripe();
-  let refund: Stripe.Refund;
+  // ① I SOLDI TORNANO AL CLIENTE. Fin qui non e' uscito niente: se questo passo
+  // cade, la prenotazione fatta sopra torna indietro e il rimborso si puo' rifare.
+  //
+  // 21/8/2026 — SE STRIPE DICE DI NO, IL DATABASE NON PUÒ DIRE DI SÌ. La riga
+  // sopra registra il rimborso PRIMA di muovere i soldi, per chiudere la corsa
+  // in cui due percorsi partiti insieme li fanno uscire due volte. Ma se il
+  // pagamento poi cade — carta scaduta, rete, database in timeout — restava
+  // scritto «rimborsato» su un cliente che non aveva ricevuto niente, e il
+  // tetto dentro `accumula_rimborso` impediva pure di riprovare.
+  //
+  // R82 (11/10/2026) — QUELLA RIPARAZIONE STAVA SOLO NEL RAMO DELLA CARTA. Il
+  // ramo dei contanti era scritto a parte, e le due riparazioni (21/8 e R043)
+  // non ci erano mai arrivate: se l'accredito sul portafoglio cadeva, la
+  // prenotazione restava, la cliente non riceveva niente e il negozio, al
+  // secondo tentativo, leggeva «gia' rimborsato per intero». E lo storno della
+  // quota al negozio, fuori da ogni protezione, avveniva PRIMA dell'accredito:
+  // se l'accredito cadeva, il negozio aveva gia' pagato. Adesso il blocco e'
+  // uno solo per tutti i modi: prima il cliente, poi — a soldi usciti — il
+  // negozio. La classe di difetto «riparato in un ramo solo» non ha piu' due rami.
+  let refundId: string;
+  let stripeRefundId: string | null = null;
   try {
-    refund = await stripe.refunds.create(
-      {
-        payment_intent: order.stripe_payment_intent,
-        amount: safeAmountCents,
-        metadata: {
-          order_id: order.id,
-          ...(opts.reason ? { reason: opts.reason } : {}),
-          ...(opts.metadata ?? {}),
+    if (tipo === 'carta') {
+      // getStripe sta dentro la protezione: senza chiavi lancia, e prima la
+      // prenotazione restava in piedi anche in quel caso.
+      const stripe = getStripe();
+      const refund: Stripe.Refund = await stripe.refunds.create(
+        {
+          payment_intent: order.stripe_payment_intent as string,
+          amount: safeAmountCents,
+          metadata: {
+            order_id: order.id,
+            ...(opts.reason ? { reason: opts.reason } : {}),
+            ...(opts.metadata ?? {}),
+          },
         },
-      },
-      // Idempotency-Key: doppio-click su risoluzione dispute/reso NON genera doppio rimborso.
-      // 051 — La chiave portava solo l'importo di QUESTO rimborso: due rimborsi
-      // parziali uguali sullo stesso ordine (due volte 10 €) avevano la stessa
-      // chiave, e il secondo non avveniva. Ora porta il totale cumulato, che è
-      // diverso a ogni passo e uguale a se stesso su un ritentativo.
-      { idempotencyKey: opts.idempotencyKey ?? `refund_${order.id}_tot_${newRefundedTotal}` },
-    );
+        // Idempotency-Key: doppio-click su risoluzione dispute/reso NON genera doppio rimborso.
+        { idempotencyKey: chiave },
+      );
+      refundId = refund.id;
+      stripeRefundId = refund.id;
+    } else {
+      // Contanti. La parte che torna come credito MyCity — quella pagata col
+      // credito, piu' i contanti se il cliente ha scelto il credito — si
+      // accredita qui. Idempotente sulla chiave: unique index su
+      // wallet_ledger(reason, ref), migrazioni 098 e 143.
+      if (riparto.creditoCents > 0) {
+        const { error: wErr } = await admin.rpc('wallet_credit', {
+          p_user: order.user_id,
+          p_cents: riparto.creditoCents,
+          p_reason: 'cod_refund',
+          p_ref: chiave,
+        });
+        // 23505 = questo accredito c'e' gia': un tentativo precedente era
+        // arrivato fin qui e si era persa solo la risposta. Il credito non si
+        // ripete (lo stesso fa la 143, che risponde senza errore), e il resto
+        // del rimborso — che quel tentativo non aveva registrato — va a termine
+        // qui. Prima su 23505 la funzione usciva subito: il cliente aveva il
+        // credito, l'ordine restava «pagato» e il negozio teneva la sua quota.
+        if (wErr && (wErr as { code?: string }).code !== '23505') {
+          throw new Error(`refundOrder COD: accredito wallet fallito: ${wErr.message}`);
+        }
+      }
+      // La parte del bonifico (R71) la paga a mano chi amministra: qui non si
+      // muove e non puo' cadere niente. Il rimborso si registra, e piu' sotto
+      // parte l'avviso a chi deve pagare. Il segno `bonifico:` sul reso e' quello
+      // che la lista dei bonifici da fare cerca.
+      refundId = riparto.bonificoCents > 0 ? `bonifico:${chiave}` : `wallet:${chiave}`;
+    }
   } catch (err) {
-    // 21/8/2026 — SE STRIPE DICE DI NO, IL DATABASE NON PUÒ DIRE DI SÌ.
-    //
-    // La riga sopra registra il rimborso PRIMA di chiamare Stripe, e lo fa per
-    // una ragione giusta: chiude la corsa in cui due percorsi partiti insieme
-    // fanno uscire il denaro due volte. Ma se Stripe rifiuta — carta scaduta,
-    // rete che cade — restava scritto «rimborsato» su un cliente che non aveva
-    // ricevuto niente. E il tetto dentro `accumula_rimborso` impediva pure di
-    // riprovare: quell'ordine diventava non rimborsabile da nessuna strada.
-    //
-    // Qui si toglie esattamente quello che quella chiamata aveva messo, così
-    // riprovare è possibile. Riprovare è anche sicuro: la chiave di
-    // idempotenza dipende dal totale cumulato, che dopo lo storno torna quello
-    // di prima — se il rimborso a Stripe era passato davvero e a cadere è stata
-    // solo la risposta, il secondo tentativo ritrova quello, non ne crea un altro.
+    // Si toglie esattamente quello che la prenotazione aveva messo, cosi'
+    // riprovare e' possibile. Riprovare e' anche sicuro: la chiave dipende dal
+    // totale cumulato, che dopo lo storno torna quello di prima — se il
+    // rimborso era passato davvero e a cadere e' stata solo la risposta, il
+    // secondo tentativo ritrova quello (Stripe con la chiave, il portafoglio
+    // con l'indice unico), non ne crea un altro.
     const { error: errStorno } = await admin
       .rpc('storna_rimborso', { p_order_id: order.id, p_delta: safeAmountCents });
     if (errStorno) {
@@ -977,40 +1038,35 @@ export async function refundOrder(
     }
     throw err;
   }
+
+  // ② DOPO CHE I SOLDI SONO USCITI NON SI TORNA INDIETRO.
+  //
+  // 27/8/2026 (R043) — Il recupero della quota dal negozio e' un'ALTRA chiamata
+  // di rete, e stava fuori da qualsiasi protezione: se Stripe rispondeva male,
+  // la funzione moriva lasciando un ordine ancora «pagato», la merce non
+  // rimessa a scaffale, il reso aperto e l'importo gia' segnato come
+  // rimborsato. Adesso e' best-effort, come il compenso del fattorino: il
+  // rimborso va a termine, e i soldi rimasti al negozio diventano un lavoro
+  // dichiarato — sull'ordine e sulla scrivania degli amministratori. R82 —
+  // vale anche per i contanti, dove lo storno stava senza nessuna protezione.
   const sellerNet = order.seller_payout_cents ?? 0;
   const sellerShare =
     grossCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / grossCents), sellerNet) : 0;
 
-  // 27/8/2026 (R043) — DOPO CHE I SOLDI SONO USCITI NON SI TORNA INDIETRO.
-  //
-  // Il rimborso al cliente e' gia' partito qui sopra. Il recupero della quota
-  // dal negozio e' un'ALTRA chiamata di rete, e stava fuori da qualsiasi
-  // protezione: se Stripe rispondeva male, la funzione moriva lasciando un
-  // ordine ancora «pagato», la merce non rimessa a scaffale, il reso aperto e
-  // l'importo gia' segnato come rimborsato — che al secondo tentativo fa
-  // scattare «importo rimborso non valido». Quel reso non si poteva piu'
-  // chiudere in nessun modo.
-  //
-  // Adesso e' trattato come il recupero del compenso del fattorino poche righe
-  // sotto: best-effort dopo il punto di non ritorno. Il rimborso va a termine,
-  // e i soldi rimasti al negozio diventano un lavoro dichiarato — sull'ordine e
-  // sulla scrivania degli amministratori — invece di una riga di log.
-  let stornatoCarta = 0;
+  let stornatoAlNegozio = 0;
   let recuperoNonRiuscito: string | null = null;
   try {
-    ({ reversedCents: stornatoCarta } = await reverseOrderTransfer(order, sellerShare));
+    ({ reversedCents: stornatoAlNegozio } = await reverseOrderTransfer(order, sellerShare));
   } catch (err) {
     recuperoNonRiuscito = err instanceof Error ? err.message : 'errore sconosciuto';
     logger.error('[refundOrder] recupero della quota del negozio fallito dopo il rimborso', {
       orderId: order.id, centesimi: sellerShare, err,
     });
   }
-  // 21/8/2026 — QUESTA RIGA NON C'ERA, E LA DIFFERENZA LA METTEVA MYCITY.
-  // Il ramo dei contanti addebitava la quota del negozio anche quando il
-  // bonifico non era ancora partito; il ramo della carta no. E non e' il caso
-  // raro: il bonifico parte un'ora dopo la consegna, mentre resi e reclami
-  // arrivano dopo. Ogni reso pagato con carta era una perdita nostra.
-  const reversedCents = await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, stornatoCarta);
+  // 21/8/2026 — Se il bonifico al negozio non e' ancora partito, la sua quota
+  // si scala da quello che gli verra' versato (vedi la funzione): una sola
+  // copia per tutti i modi di pagare.
+  const reversedCents = await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, stornatoAlNegozio);
 
   // Rimborso totale: si recupera anche il compenso del fattorino, altrimenti la
   // piattaforma restituisce tutto al cliente e paga la consegna di tasca sua.
@@ -1023,12 +1079,13 @@ export async function refundOrder(
   }
 
   const wasTransferred = order.payout_status === 'TRANSFERRED';
-  await admin
+  const { error: errStato } = await admin
     .from('orders')
     .update({
-      stripe_refund_id: refund.id,
+      ...(stripeRefundId ? { stripe_refund_id: stripeRefundId } : {}),
       // `refunded_amount_cents` l'ha già scritto `accumula_rimborso`: riscriverlo
-      // qui riaprirebbe la corsa che quella funzione serve a chiudere.
+      // qui riaprirebbe la corsa che quella funzione serve a chiudere. (Il ramo
+      // dei contanti lo riscriveva: era la stessa corsa, rimasta aperta li'.)
       payment_status: isFull ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
       // Lo stato del bonifico segue i SOLDI: solo un rimborso pieno chiude la
       // partita col negozio. Su un rimborso parziale la quota proporzionale è
@@ -1041,12 +1098,20 @@ export async function refundOrder(
       // rimborsato: la consegna è avvenuta, il fattorino l'ha fatta, e
       // riscrivere quello stato cancellava dai numeri consegne vere e faceva
       // sparire l'ordine dalle liste operative.
-      // Si tocca il pagamento, non la storia della consegna.
-      ...(ordineDaChiudere && order.delivery_status !== 'DELIVERED'
+      //
+      // NB contanti: la consegna NON si annulla mai qui. Il contante incassato
+      // dal fattorino resta dovuto e va riconciliato: annullare l'ordine lo
+      // toglierebbe dall'atteso della riconciliazione.
+      ...(tipo === 'carta' && ordineDaChiudere && order.delivery_status !== 'DELIVERED'
         ? { delivery_status: 'CANCELED', canceled_at: new Date().toISOString() }
         : {}),
     })
     .eq('id', order.id);
+  if (errStato) {
+    logger.error('[refundOrder] stato del rimborso non scritto sull ordine', {
+      orderId: order.id, message: errStato.message,
+    });
+  }
 
   // R043 — Il recupero mancato si scrive DOPO l'aggiornamento buono, e in una
   // riga sua: se il vincolo del database non conoscesse ancora questo stato
@@ -1072,6 +1137,28 @@ export async function refundOrder(
     }
   }
 
+  // R71 — IL BONIFICO DA FARE ARRIVA A CHI LO DEVE FARE. Il rimborso e'
+  // registrato (sull'ordine e, per i resi, sul reso); questo e' l'avviso.
+  if (riparto.bonificoCents > 0) {
+    const daContanti = opts.contanti?.modo === 'BONIFICO' ? opts.contanti : undefined;
+    const conIban = !!daContanti?.ibanFinale;
+    try {
+      await notifyAdmins(
+        '💶 Bonifico di rimborso da fare',
+        `Bonifico di ${(riparto.bonificoCents / 100).toFixed(2)}€ da fare al cliente dell'ordine #${order.id.slice(0, 8)}, pagato in contanti` +
+          (riparto.creditoCents > 0
+            ? ` (altri ${(riparto.creditoCents / 100).toFixed(2)}€ gli sono già tornati come credito MyCity). `
+            : '. ') +
+          (conIban
+            ? "L'IBAN che ha indicato è nella pagina dei rimborsi da bonificare."
+            : 'Il cliente non ha indicato un IBAN: chiediglielo prima di pagare.'),
+        daContanti?.doveSiPaga ?? PAGINA_DEI_BONIFICI_DA_FARE,
+      );
+    } catch (e) {
+      logger.error('[refundOrder] avviso del bonifico da fare non inviato', { orderId: order.id, e });
+    }
+  }
+
   // Ordine chiuso → la merce torna a scaffale (P0-4). Il rimborso pieno è il
   // caso normale; «cliente assente» è un ordine chiuso con un rimborso che non
   // è pieno per scelta, e la merce torna lo stesso (vedi `annullaLOrdine`).
@@ -1087,7 +1174,15 @@ export async function refundOrder(
     giaRimborsatoPrimaCents: alreadyRefunded,
   });
 
-  await notifyRefundBuyer(admin, order.user_id, order.id, safeAmountCents, opts);
+  await notifyRefundBuyer(admin, order.user_id, order.id, safeAmountCents, opts, riparto);
 
-  return { refundId: refund.id, reversedCents };
+  return {
+    refundId,
+    reversedCents,
+    pieno: isFull,
+    modo,
+    importoCents: safeAmountCents,
+    creditoCents: riparto.creditoCents,
+    bonificoCents: riparto.bonificoCents,
+  };
 }

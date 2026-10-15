@@ -2215,6 +2215,10 @@ export interface Database {
           decided_by: string | null;
           refunded_at: string | null;
           decision_notes: string | null;
+          refund_method: string | null;
+          refund_iban: string | null;
+          refund_bonifico_cents: number | null;
+          refund_bonifico_fatto_at: string | null;
         };
         Insert: {
           id?: string;
@@ -2235,6 +2239,10 @@ export interface Database {
           decided_by?: string | null;
           refunded_at?: string | null;
           decision_notes?: string | null;
+          refund_method?: string | null;
+          refund_iban?: string | null;
+          refund_bonifico_cents?: number | null;
+          refund_bonifico_fatto_at?: string | null;
         };
         Update: {
           id?: string;
@@ -2255,6 +2263,10 @@ export interface Database {
           decided_by?: string | null;
           refunded_at?: string | null;
           decision_notes?: string | null;
+          refund_method?: string | null;
+          refund_iban?: string | null;
+          refund_bonifico_cents?: number | null;
+          refund_bonifico_fatto_at?: string | null;
         };
         Relationships: [];
       };

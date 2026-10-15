@@ -8,6 +8,13 @@ import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
+import {
+  motivoNienteDaRestituire,
+  quantoSiPuoRestituire,
+  statoDelReclamoSullOrdine,
+  type OrdineDaRimborsare,
+} from '@/lib/rimborsi/regole-del-rimborso';
 
 export const runtime = 'nodejs';
 
@@ -20,9 +27,12 @@ const Body = z.object({
 /**
  * Admin risolve una dispute interna (reclamo buyer↔seller).
  *
- * Su 'resolved_buyer' + refundCents → emette un rimborso Stripe REALE
- * (refundOrder: refund + claw-back del transfer se il venditore era già stato
- * pagato). 'resolved_buyer' senza importo = risoluzione DB-only valida.
+ * Su 'resolved_buyer' + refundCents → emette un rimborso REALE (refundOrder:
+ * refund Stripe + claw-back del transfer se il venditore era già stato pagato;
+ * sugli ordini in contanti un bonifico da fare a mano, e credito MyCity solo
+ * per la parte pagata col credito — R71). L'importo non può superare quello
+ * che il cliente ha davvero pagato (R84). 'resolved_buyer' senza importo =
+ * risoluzione DB-only valida.
  * 'resolved_seller'/'rejected' = solo aggiornamento DB.
  *
  * NB: usa getAdminSupabase() (service role). La tabella disputes non ha policy
@@ -50,6 +60,40 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   }
 
   let refundId: string | null = null;
+
+  // L'ordine si legge una volta sola, PRIMA di prendere il turno: serve a
+  // sapere se e' una carta, quanto si puo' davvero restituire, e — dopo — se il
+  // rimborso ha coperto tutto.
+  //
+  // R84 — Il pannello dei reclami non mostra se un ordine in contanti e' stato
+  // incassato: c'e' solo un campo libero «Rimborso (€)». Un ordine mai pagato,
+  // chiuso a favore del cliente con 24 € scritti li', diventava 24 € di credito
+  // dal nulla. Il controllo sta qui, prima del turno, con la stessa regola che
+  // usa chi muove i soldi (lib/rimborsi/regole-del-rimborso.ts): un importo
+  // impossibile non lascia traccia sul reclamo, e chi decide legge il perche'.
+  const COLONNE_ORDINE =
+    'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status';
+  let ord: OrdineDaRimborsare | null = null;
+  if (dispute.order_id) {
+    const { data } = await conRipiegoSchema(
+      'orders.select (risoluzione del reclamo)',
+      () => admin.from('orders').select(COLONNE_ORDINE).eq('id', dispute.order_id).single(),
+      () => admin.from('orders').select(senzaColonne(COLONNE_ORDINE, COLONNE_124)).eq('id', dispute.order_id).single(),
+    );
+    ord = (data ?? null) as OrdineDaRimborsare | null;
+  }
+
+  if (body.status === 'resolved_buyer' && body.refundCents && ord) {
+    const rimborsabile = quantoSiPuoRestituire(ord);
+    if (rimborsabile.perche !== 'ok') {
+      return ApiErrors.conflict(motivoNienteDaRestituire(rimborsabile.perche));
+    }
+    if (body.refundCents > rimborsabile.massimoCents) {
+      return ApiErrors.invalidRequest(
+        `Il rimborso non può superare quello che il cliente ha pagato e non ha ancora riavuto: al massimo ${(rimborsabile.massimoCents / 100).toFixed(2)} €.`,
+      );
+    }
+  }
 
   /**
    * 21/8/2026 — PRIMA SI PRENDE IL TURNO, POI ESCONO I SOLDI.
@@ -91,21 +135,10 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       .eq('status', body.status);
   };
 
-  // L'ordine si legge una volta sola: serve al ramo del rimborso (per sapere se
-  // e' una carta) e, sotto, per decidere se il rimborso copre tutto l'ordine.
-  type OrdineDelReclamo = { stripe_payment_intent: string | null; total_price: number | string | null };
-  let ord: OrdineDelReclamo | null = null;
-  if (dispute.order_id) {
-    const { data } = await admin
-      .from('orders')
-      .select('stripe_payment_intent, payment_method, total_price')
-      .eq('id', dispute.order_id)
-      .single();
-    ord = (data ?? null) as OrdineDelReclamo | null;
-  }
-
   /** Vero solo se i soldi sono davvero usciti verso il cliente. */
   let rimborsoEmesso = false;
+  /** R76 — il verdetto di `refundOrder`: il cliente ha riavuto l'intero lordo. */
+  let rimborsoPieno = false;
 
   // Rimborso reale solo se risolto a favore del buyer con un importo.
   if (body.status === 'resolved_buyer' && body.refundCents) {
@@ -125,9 +158,15 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         metadata: { dispute_id: dispute.id },
         idempotencyKey: `dispute_${dispute.id}`,
         notifyBuyer: true,
+        // R71 — Un reclamo su un ordine in contanti si rimborsa col bonifico: il
+        // credito MyCity arriva solo se il cliente l'ha scelto, e qui non l'ha
+        // scelto nessuno. L'avviso del bonifico da fare porta ai reclami, dove
+        // chi l'ha deciso ritrova il caso.
+        contanti: { modo: 'BONIFICO', doveSiPaga: '/admin/disputes' },
       });
       refundId = res.refundId;
       rimborsoEmesso = true;
+      rimborsoPieno = res.pieno;
     } catch (err) {
       logger.error('[disputes] refund failed', err);
       await riapri();
@@ -167,11 +206,17 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     // rimborsato dell'INTERO ordine, quindi al negozio non spetta piu' niente.
     // Su un rimborso parziale il residuo (gia' ridotto da
     // `seller_payout_reversed_cents`) riparte al giro successivo.
-    const totaleCent = Math.round(Number(ord?.total_price ?? 0) * 100);
-    const rimborsoIntegrale = rimborsoEmesso && totaleCent > 0 && (body.refundCents ?? 0) >= totaleCent;
+    //
+    // R76 (11/10/2026) — «INTERO» LO DICE CHI HA MOSSO I SOLDI. Qui si
+    // ricalcolava su `total_price`, che e' la cassa DOPO il credito MyCity,
+    // mentre `refundOrder` misura sul lordo. Ordine da 50 €: 20 di credito e 30
+    // in contanti. Rimborso dei 30 € di contanti: per i soldi era parziale (al
+    // negozio restavano 18 €), per questa riga integrale — e 'LOST' toglieva
+    // l'ordine dai bonifici per sempre. Ora si usa il verdetto di `refundOrder`.
+    const statoSullOrdine = statoDelReclamoSullOrdine({ rimborsoEmesso, rimborsoPieno });
     const { error: errOrdine } = await admin
       .from('orders')
-      .update({ internal_dispute_status: rimborsoIntegrale ? 'LOST' : 'RESOLVED' })
+      .update({ internal_dispute_status: statoSullOrdine })
       .eq('id', dispute.order_id);
     if (errOrdine) {
       // Non blocca la risoluzione, ma deve essere visibile: il venditore resta
