@@ -219,9 +219,11 @@ describe('① contestazione PARZIALE ripetuta: al negozio si toglie una volta so
     expect(ordine().seller_payout_reversed_cents).toBe(2120);
   });
 
-  it('storno fatto su Stripe ma non scritto da noi: non si rifà, e si grida nei log', async () => {
+  it('storno fatto su Stripe ma non scritto da noi, e chiave anti-doppione già scaduta: non si rifà, e si grida nei log', async () => {
+    // Stripe ricorda una chiave anti-doppione per 24 ore, e ripete un avviso
+    // per tre giorni: dopo un giorno la stessa chiave fa uno storno NUOVO.
     stato.storni.push({
-      id: 'trr_perso', transferId: 'tr_1', amount: 1620, chiave: 'reversal_o1_tot_1620',
+      id: 'trr_perso', transferId: 'tr_1', amount: 1620, chiave: 'chiave dimenticata da Stripe dopo 24 ore',
       created: NATA_LA_CONTESTAZIONE + 5, metadata: { order_id: 'o1' },
     });
     stato.db.tabelle.orders = [ordinePagatoAlNegozio({ dispute_status: 'OPEN' })];
