@@ -28,6 +28,14 @@ name: Rilascio dopo CI verde
 #   2. SOLO DOPO, una parola in `vercel.json`:
 #      "main": true   diventa   "main": false
 #
+#   ⚠️ 15/10/2026 — E prima ancora il database. Se alla produzione mancano piu'
+#      di 20 migrazioni (il 15/10 erano 48, fino alla 161), questo lavoro si ferma al
+#      passo delle migrazioni senza toccarle e non pubblica: quel
+#      riallineamento si fa a mano, una volta, con
+#      docs/migrazioni-baseline-produzione.md. E serve SUPABASE_DB_URL con la
+#      riga del «Session pooler» (IPv4): la connessione diretta da qui non si
+#      raggiunge.
+#
 # 🧪 7/9/2026 — UNA STRADA PROVATA E BOCCIATA, scritta qui perche' nessuno la
 # ripercorra pensando che sia nuova.
 #
@@ -47,15 +55,70 @@ name: Rilascio dopo CI verde
 # variabile aggiunta domani spegnerebbe TUTTI i rilasci.
 #
 # Quindi il cancello e' tornato fuori dal build. Il difetto resta aperto, e si
-# chiude in uno di questi due modi — nessuno dei due e' codice:
+# chiude con due pezzi — nessuno dei due e' codice — che fermano due cose
+# DIVERSE:
 #
-#   A. la protezione del ramo `main` su GitHub, che pretende i controlli verdi
-#      PRIMA di poter unire. Chiude il rischio alla radice (il codice rosso non
-#      entra proprio), non serve nessun segreto, e si accende dalle impostazioni
-#      del repository in mezzo minuto.
-#   B. i tre segreti qui sopra, che accendono questo lavoro.
+#   A. la regola su GitHub che, PRIMA di poter unire, pretende il controllo
+#      «Main» verde. Non serve nessun segreto. Ferma le RICHIESTE rosse: una
+#      richiesta la cui CI e' rossa non si unisce.
+#   B. i tre segreti qui sopra, che accendono questo lavoro, e poi "main":
+#      false in vercel.json. Ferma un rosso che compare su main DOPO l'unione:
+#      si pubblica solo cio' che la CI di main ha promosso.
 #
-# A e' il primo passo perche' e' piu' economico e non dipende da Vercel.
+# A e' il primo passo perche' e' piu' economico e non dipende da Vercel. Da
+# sola NON chiude il difetto, e il 1/9 lo mostra (rigiocato dal collaudo del
+# 15/10, dopo che il giro precedente l'aveva raccontato sbagliato): la #245
+# toccava solo due componenti e il file dei pacchetti, ed era verde. Unita
+# alle 18:10, la CI di main e' finita rossa alle 18:11:32 su una prova che si
+# rompeva da sola nei minuti :10-:11 di ogni ora (riparata in 94e56c6 alle
+# 20:19), e Vercel ha pubblicato nello stesso secondo. Nessuna regola sulle
+# richieste l'avrebbe fermato; B si', perche' questo lavoro parte solo con la
+# CI di main verde. A non chiude nemmeno questi due buchi: chi e' nella lista
+# di chi puo' scavalcare la regola unisce anche col rosso, e un lavoro della CI
+# che si salta (per esempio gli e2e senza segreti) non ferma niente perche' non
+# ha guardato niente.
+#
+# ⚠️ 15/10/2026 (R57) — A NON SI CREA: SI CORREGGE. Qui c'era scritto che si
+# accende «in mezzo minuto», e chi ci andava trovava una trappola. La regola
+# esiste gia': GitHub → Settings → Rules → Rulesets → «Main» (creata il 26/5).
+# Ma e' SPENTA (enforcement «Disabled»), NON GUARDA NESSUN RAMO (bersagli
+# vuoti), e pretendeva un controllo di nome «Main» che nessun lavoro della CI
+# produceva. Accesa cosi' com'e' non protegge niente; con main come bersaglio
+# blocca ogni unione per sempre, in attesa di un controllo che non arriva.
+#
+# Il controllo «Main» adesso esiste: e' l'ultimo lavoro di ci.yml, che aspetta
+# tutti gli altri e diventa rosso se uno fallisce.
+#
+# Quindi, una volta unito in main il commit che aggiunge «Main»:
+#   1. apri il ruleset «Main» (Settings → Rules → Rulesets);
+#   2. Target branches → Add target → «Include default branch» (cioe' main);
+#   3. lascia «Require status checks to pass» con il controllo «Main»;
+#   4. Enforcement status → «Active», e salva;
+#   5. controlla la regola com'e' davvero, senza fidarti degli occhi:
+#        gh api repos/NicolaeRotaru/mycity/rulesets/16879481 | node scripts/controlla-regola-main.mjs
+#      deve dire ✅ e uscire 0. Se dice ❌, elenca cosa manca e dove si
+#      sistema; se dice ⚪, non ha letto la regola (di solito gh non e'
+#      collegato: l'errore di gh e' scritto sopra);
+#   6. prova: una richiesta di unione con una prova rossa deve avere il
+#      pulsante di unione bloccato.
+#
+# UNA SCELTA TUA, FACOLTATIVA: la spunta «Require branches to be up to date
+# before merging», sotto «Require status checks to pass». Chiude il caso di due
+# richieste verdi ciascuna da sola che si rompono a vicenda una volta unite
+# (una rinomina una funzione che l'altra usa). Il costo: dopo ogni unione le
+# altre richieste aperte diventano «non aggiornate», e prima di unirle si preme
+# «Update branch» e si aspetta che la CI rigiri (oggi circa 4-5 minuti). Con
+# una richiesta alla volta non costa niente; con tante in parallelo e' un giro
+# di attesa per ognuna. Il 1/9 non e' un caso di questo tipo, e uno vero in
+# questo repository non e' stato cercato. Lo script del punto 5 la segnala, non
+# la pretende.
+#
+# Le richieste aperte prima del commit che aggiunge «Main» non lo hanno mai
+# prodotto: vanno AGGIORNATE con main — col pulsante «Update branch» se
+# GitHub lo mostra, altrimenti unendo main nel loro ramo (si puo' chiedere a
+# Claude). Rilanciare la loro CI non basta: un rilancio riusa lo stesso
+# commit, cioe' il vecchio ci.yml senza il lavoro «Main», e la richiesta resta
+# in «Expected — Waiting».
 #
 # ⚠️ 3/9/2026 — E C'E' UNA TERZA COSA, SCOPERTA GUARDANDO IL PROGETTO VERO.
 #
@@ -289,6 +352,13 @@ jobs:
         if: steps.chiavi.outputs.pronto == 'true'
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          # 15/10/2026 — Il tetto: se al database mancano piu' migrazioni di
+          # cosi', non e' un rilascio normale ma un database rimasto indietro, e
+          # lo script si ferma prima di toccarlo (uscita 4). Finora un'unione
+          # non ne ha mai portate piu' di 15; il 15/10 la produzione ne aspettava 48,
+          # fra cui la 161. Il perche' sta in testa a
+          # scripts/applica-migrazioni-mancanti.sh.
+          MASSIMO_MIGRAZIONI: "20"
         run: |
           if [ -z "$SUPABASE_DB_URL" ]; then
             echo "::warning::SUPABASE_DB_URL non configurato: le migrazioni NON vengono applicate da qui. Il codice puo' arrivare su un database piu' vecchio di lui."
@@ -317,7 +387,21 @@ jobs:
           # e le migrazioni sembrerebbero riuscite.
           set -o pipefail
           DIARIO="$(mktemp)"
-          bash scripts/applica-migrazioni-mancanti.sh | tee "$DIARIO"
+          USCITA=0
+          bash scripts/applica-migrazioni-mancanti.sh | tee "$DIARIO" || USCITA=$?
+          if [ "$USCITA" = "4" ]; then
+            # Il verdetto in fondo lo legge, per non mandare a guardare un
+            # passo di pubblicazione che non e' mai partito.
+            echo "fermo=database-indietro" >> "$GITHUB_OUTPUT"
+            {
+              echo "## ⛔ Non ho rilasciato: il database di produzione e' rimasto troppo indietro"
+              echo ""
+              echo "Mancano piu' di $MASSIMO_MIGRAZIONI migrazioni, e un rilascio automatico non le applica da solo: non ho toccato il database e non ho pubblicato niente. L'elenco e' nel passo «Applica le migrazioni» qui sopra."
+              echo ""
+              echo "**Cosa fare:** il riallineamento si fa a mano, una volta, seguendo \`docs/migrazioni-baseline-produzione.md\` (con la firma di Nicola). Dopo, questo lavoro riparte da solo alla prossima unione su \`main\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$USCITA" != "0" ]; then exit "$USCITA"; fi
           QUANTE="$(grep -c '^▶ applico ' "$DIARIO" || true)"
           ELENCO="$(grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico //' | tr '\n' ' ' || true)"
           echo "quante=$QUANTE" >> "$GITHUB_OUTPUT"
@@ -540,6 +624,11 @@ jobs:
           INDIRIZZO: ${{ steps.rilascio.outputs.indirizzo }}
           CODICE_FUMO: ${{ steps.fumo.outputs.codice }}
           TORNATO: ${{ steps.ritorno.outputs.tornato }}
+          # 15/10/2026 — Se la pubblicazione non e' mai partita («skipped»), il
+          # verdetto lo dice invece di mandare a guardare quel passo; e se si e'
+          # fermata per il database rimasto indietro, dice anche questo.
+          PASSO_RILASCIO: ${{ steps.rilascio.outcome }}
+          FERMO: ${{ steps.migrazioni.outputs.fermo }}
         run: |
           set -uo pipefail
           VERDETTO="$(mktemp)"

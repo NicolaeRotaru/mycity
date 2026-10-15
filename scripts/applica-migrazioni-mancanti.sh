@@ -42,7 +42,48 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 MIG="$ROOT/migrations"
 
-psql "$DB" -q -v ON_ERROR_STOP=1 <<'SQL'
+# 15/10/2026 (R53) — Il primo contatto col database. Se non va, si dice dove
+# guardare: dalla CI il segreto SUPABASE_DB_URL e' rimasto per due mesi sulla
+# connessione diretta di Supabase (solo IPv6), che da GitHub Actions non si
+# raggiunge — e psql risponde solo «Network is unreachable».
+#
+# Il consiglio dipende da quello che psql ha detto davvero (collaudo del
+# 15/10): mandare al Session pooler chi ha solo sbagliato la password lo fa
+# girare a vuoto. L'errore di psql si stampa sempre sopra il consiglio, ma
+# SENZA la password (secondo collaudo del 15/10): con una riga scritta male
+# psql la ripete, intera o a pezzi — «invalid percent-encoded token:
+# "Pa%ZZSegreto9"», «could not translate host name "Segreto9@…"» — e GitHub
+# nei log nasconde solo il segreto intero, non i suoi pezzi. Era cosi' anche
+# prima; il controllo della deriva la oscurava gia', questo script no.
+#
+# senza_password: toglie dal testo la password della riga (tutto quello che
+# sta fra il primo «:» dopo «://» e l'ultima «@») e ogni suo pezzo di almeno
+# quattro caratteri, spezzandola dove la riga si spezza (@ : / ? #), e
+# qualunque «://utente:segreto@» rimasto.
+senza_password() {
+  local testo="$1" resto credenziali segreto decodificato pezzo
+  local -a pezzi=() altri=()
+  resto="${DB#*://}"
+  if [ "$resto" != "$DB" ] && [[ "$resto" == *@* ]]; then
+    credenziali="${resto%@*}"
+    if [[ "$credenziali" == *:* ]]; then
+      segreto="${credenziali#*:}"
+      # Anche la forma decodificata (p%40ss → p@ss), se psql la ripetesse cosi'.
+      decodificato="$(printf '%b' "${segreto//%/\\x}" 2>/dev/null || true)"
+      # `read -a` spezza senza espandere * e ? come nomi di file.
+      IFS='@:/?#' read -r -a pezzi <<< "$segreto" || true
+      IFS='@:/?#' read -r -a altri <<< "$decodificato" || true
+      for pezzo in "$segreto" "$decodificato" ${pezzi[@]+"${pezzi[@]}"} ${altri[@]+"${altri[@]}"}; do
+        if [ "${#pezzo}" -ge 4 ]; then
+          testo="${testo//"$pezzo"/***}"
+        fi
+      done
+    fi
+  fi
+  printf '%s' "$testo" | sed -E 's#://[^@[:space:]]*@#://***@#g'
+}
+
+if ! ERRORE_COLLEGAMENTO="$(psql "$DB" -q -v ON_ERROR_STOP=1 2>&1 >/dev/null <<'SQL'
 CREATE SCHEMA IF NOT EXISTS supabase_migrations;
 CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
   version text PRIMARY KEY,
@@ -50,6 +91,39 @@ CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
   statements text[]
 );
 SQL
+)"; then
+  [ -n "$ERRORE_COLLEGAMENTO" ] && printf '%s\n' "$(senza_password "$ERRORE_COLLEGAMENTO")" >&2
+  echo "✗ non riesco a collegarmi al database: nessuna migrazione applicata." >&2
+  # Prima la password: se il server l'ha rifiutata, la rete ci e' arrivata —
+  # anche sulla connessione diretta, da un computer che l'IPv6 ce l'ha.
+  case "$ERRORE_COLLEGAMENTO" in
+    *"password authentication failed"*|*"no password supplied"*|*"Tenant or user not found"*)
+      echo "  Il database risponde, ma rifiuta utente o password: controlla la password in SUPABASE_DB_URL. Nella riga del pooler l'utente e' postgres.<progetto>, non solo postgres." >&2
+      exit 1
+      ;;
+  esac
+  case "$ERRORE_COLLEGAMENTO" in
+    *"Network is unreachable"*|*"Cannot assign requested address"*|*"Address family not supported"*)
+      RETE_IPV6=1 ;;
+    *) RETE_IPV6=0 ;;
+  esac
+  case "$DB" in
+    *@db.*.supabase.co*) RETE_IPV6=1 ;;
+  esac
+  if [ "$RETE_IPV6" = "1" ]; then
+    echo "  Da GitHub Actions SUPABASE_DB_URL deve essere la riga del «Session pooler» (IPv4): Supabase → pannello Connect → riquadro «Session pooler», porta 5432. La connessione diretta db.<progetto>.supabase.co risponde solo in IPv6 e da li' non si raggiunge." >&2
+  else
+    case "$ERRORE_COLLEGAMENTO" in
+      *"could not translate host name"*)
+        echo "  Il nome della macchina in SUPABASE_DB_URL non si trova: controlla l'indirizzo." >&2 ;;
+      *"invalid percent-encoded token"*|*"invalid URI query parameter"*|*"invalid integer value"*|*"missing \"=\" after"*)
+        echo "  La riga in SUPABASE_DB_URL non si legge. Di solito e' la password: se contiene # / ? @ : % vanno scritti codificati (# → %23, / → %2F, ? → %3F, @ → %40, : → %3A, % → %25)." >&2 ;;
+      *)
+        echo "  Il motivo e' nell'errore di psql qui sopra." >&2 ;;
+    esac
+  fi
+  exit 1
+fi
 
 # =============================================================================
 # CONTROLLO PREVENTIVO: il database che ha una storia PRIMA del registro
@@ -121,14 +195,91 @@ FINE
   exit 2
 fi
 
-applicate=0
+# =============================================================================
+# PRIMA SI CONTA, POI SI TOCCA
+# =============================================================================
+# Il primo giro guarda soltanto: quali file il registro non conosce. Il secondo
+# applica. In mezzo c'e' il tetto qui sotto, che decide prima di qualsiasi
+# scrittura.
 saltate=0
-
+DA_APPLICARE=()
 for f in $(ls "$MIG"/*.sql | sort -V); do
   name="$(basename "$f")"
   versione="${name%%_*}"
   descrizione="${name#*_}"; descrizione="${descrizione%.sql}"
 
+  gia="$(psql "$DB" -X -A -t -v ON_ERROR_STOP=1 \
+    -c "SELECT 1 FROM supabase_migrations.schema_migrations
+         WHERE version = '$versione' OR name = '$descrizione' LIMIT 1")"
+  if [ -n "$gia" ]; then
+    saltate=$((saltate + 1))
+    continue
+  fi
+  DA_APPLICARE+=("$f")
+done
+
+# =============================================================================
+# IL TETTO DEL RILASCIO AUTOMATICO (15/10/2026)
+# =============================================================================
+# COSA SAREBBE SUCCESSO. Il 15/10 la produzione era indietro di 48 migrazioni (vedi
+# docs/migrazioni-baseline-produzione.md). Il rilascio dopo la CI
+# (.github/workflows/deploy-dopo-ci.yml) lancia questo script prima di
+# pubblicare. Il giorno in cui si mettono su GitHub i segreti di Vercel e la
+# riga giusta del database, la prima unione su main — anche «un cambio
+# innocuo» per provare il rilascio — le avrebbe applicate tutte e 48 da sola,
+# senza nessuno davanti.
+#
+# Fra quelle c'e' la 161, che chiude ai clienti la lettura dei negozi dalla
+# tabella `profiles`. Il codice pubblicato oggi legge il negozio proprio da li'
+# (lib/queries/catalogo.ts, la scheda prodotto): applicata prima che sia online
+# il codice che legge la vista `seller_public_profiles`, ogni scheda prodotto
+# direbbe «Prodotto non disponibile» a chiunque compri. E il riallineamento
+# grande va fatto a bassa attivita', nello stesso giro, con la firma di Nicola:
+# lo dice la procedura.
+#
+# COSA FA. Con MASSIMO_MIGRAZIONI impostato (lo imposta il rilascio
+# automatico), se ne mancano di piu' si ferma PRIMA di applicare qualsiasi cosa,
+# con uscita 4 e l'elenco. Un rilascio normale porta le sue migrazioni — finora
+# mai piu' di 15 in una volta sola — quindi il tetto non lo tocca. Senza la
+# variabile (la CI che ricostruisce da zero, o chi lancia a mano la procedura)
+# non cambia niente.
+MASSIMO="${MASSIMO_MIGRAZIONI:-}"
+if [ -n "$MASSIMO" ]; then
+  case "$MASSIMO" in
+    *[!0-9]*)
+      echo "✗ MASSIMO_MIGRAZIONI deve essere un numero intero, non «$MASSIMO». Non ho applicato niente." >&2
+      exit 1
+      ;;
+  esac
+  if [ "${#DA_APPLICARE[@]}" -gt "$MASSIMO" ]; then
+    cat >&2 <<FINE
+✗ MI FERMO: al database mancano ${#DA_APPLICARE[@]} migrazioni, e da qui ne applico al massimo $MASSIMO.
+
+  Un rilascio normale porta poche migrazioni. Cosi' tante vogliono dire che il
+  database e' rimasto indietro: e' il riallineamento descritto in
+  docs/migrazioni-baseline-produzione.md, che si fa a mano, una volta, a bassa
+  attivita' e con la firma di Nicola. Alcune di queste migrazioni chiudono
+  porte che il codice gia' online potrebbe ancora usare: la procedura dice in
+  che ordine farlo.
+
+  Nessuna migrazione e' stata applicata. Il database non e' stato toccato.
+  Quelle che mancano:
+FINE
+    for f in "${DA_APPLICARE[@]}"; do echo "    - $(basename "$f")" >&2; done
+    exit 4
+  fi
+fi
+
+applicate=0
+
+for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
+  name="$(basename "$f")"
+  versione="${name%%_*}"
+  descrizione="${name#*_}"; descrizione="${descrizione%.sql}"
+
+  # Si richiede al registro anche qui, file per file come prima: se un file
+  # appena applicato avesse registrato anche questo (stesso nome, numero
+  # diverso), lo si salta invece di riapplicarlo.
   gia="$(psql "$DB" -X -A -t -v ON_ERROR_STOP=1 \
     -c "SELECT 1 FROM supabase_migrations.schema_migrations
          WHERE version = '$versione' OR name = '$descrizione' LIMIT 1")"

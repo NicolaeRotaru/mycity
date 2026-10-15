@@ -354,6 +354,10 @@ export function verdettoDelLavoro(stato = {}) {
   const codice = String(stato.codiceFumo ?? '').trim();
   const tornato = String(stato.tornato ?? '').trim().toLowerCase() === 'si';
   const automatico = stato.rilascioAutomatico === true;
+  // 15/10/2026 — Com'e' finito il passo che pubblica («skipped» se un passo
+  // prima si e' fermato) e, se lo sa, perche' il rilascio si e' fermato.
+  const passoRilascio = String(stato.passoRilascio ?? '').trim();
+  const fermo = String(stato.fermo ?? '').trim();
 
   let verdetto;
   if (!pronto) {
@@ -364,6 +368,28 @@ export function verdettoDelLavoro(stato = {}) {
         'Mancano le chiavi di Vercel, quindi da qui non e uscito nessun rilascio: niente pubblicazione, niente prova di fumo, niente ritorno indietro.',
         'Una spunta verde avrebbe voluto dire «il sito risponde». Io non lo so: e una cosa diversa, e chiamarla verde sarebbe una bugia.',
         'Si accende cosi: i tre segreti VERCEL_TOKEN, VERCEL_ORG_ID e VERCEL_PROJECT_ID in Settings → Secrets and variables → Actions.',
+      ],
+    };
+  } else if (!indirizzo && passoRilascio === 'skipped' && fermo === 'database-indietro') {
+    // 15/10/2026 (collaudo del tetto delle migrazioni) — Qui prima si finiva
+    // nel ramo sotto, che manda a guardare il passo «Rilascia in produzione»:
+    // un passo che non e' mai partito. Il riepilogo diceva due cose opposte
+    // una sotto l'altra, proprio nel caso che oggi capita a ogni rilancio.
+    verdetto = {
+      verde: false,
+      titolo: '## ⛔ Non ho rilasciato: il database di produzione e rimasto indietro',
+      righe: [
+        'Il passo delle migrazioni si e fermato prima di toccare il database: ne mancano troppe per un rilascio automatico. Non ho pubblicato niente, quindi non c era nessun sito nuovo da provare.',
+        'Il riallineamento si fa a mano, una volta, con docs/migrazioni-baseline-produzione.md. Finche non e fatto, ogni rilascio si fermera qui.',
+      ],
+    };
+  } else if (!indirizzo && passoRilascio === 'skipped') {
+    verdetto = {
+      verde: false,
+      titolo: '## ⛔ Non ho rilasciato: il lavoro si e fermato prima di pubblicare',
+      righe: [
+        'Un passo prima della pubblicazione e finito rosso (la scelta del ramo, le migrazioni o il controllo che il database sia allineato al codice), quindi non ho pubblicato niente e non c era niente da provare.',
+        'Guarda il primo passo rosso qui sopra: li c e il motivo.',
       ],
     };
   } else if (!indirizzo) {
@@ -525,6 +551,8 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
       indirizzo: process.env.INDIRIZZO,
       codiceFumo: process.env.CODICE_FUMO,
       tornato: process.env.TORNATO,
+      passoRilascio: process.env.PASSO_RILASCIO,
+      fermo: process.env.FERMO,
       rilascioAutomatico: rilascioAutomaticoAcceso(),
     });
     console.log([verdetto.titolo, '', ...verdetto.righe].join('\n'));
