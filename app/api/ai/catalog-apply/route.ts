@@ -96,7 +96,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     // il negoziante deve sapere perche' non succede niente, e dove si fa.
     if (protetti.length > 0) {
       return ApiErrors.invalidRequest(
-        `${protetti.join(', ')}: non li cambia l'assistente. Li scrivi tu nella scheda del prodotto («Apri»).`,
+        `${protetti.join(', ')}: non li cambia l'assistente. Li scrivi tu nella scheda del prodotto, col pulsante «Apri».`,
       );
     }
     return ApiErrors.invalidRequest('Nessuna modifica valida da applicare.');

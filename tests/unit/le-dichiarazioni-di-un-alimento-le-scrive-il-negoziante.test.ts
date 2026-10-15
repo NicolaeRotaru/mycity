@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { resolveAiPatch, patchAiPerIlForm, type CategoryRow } from '@/lib/products/aiPatch';
 import { buildCatalogBatchRequests, parseCatalogBatchEntry, senzaCampiEconomici } from '@/lib/ai/catalogBatch';
+import { apiErrorMessage, friendlyError } from '@/lib/errors';
 
 /**
  * 15/10/2026 (R41) — «MIGLIORA TUTTO IL CATALOGO» SCRIVEVA ALLERGENI INDOVINATI
@@ -322,6 +323,8 @@ describe('le altre strade che scrivono nel database', () => {
     expect(res.status).toBe(400);
     const json = (await res.json()) as { error: { message: string } };
     expect(json.error.message).toContain('Allergeni');
+    // ...e lo legge cosi' anche nella chat, dopo il filtro dei messaggi d'errore.
+    expect(friendlyError(new Error(apiErrorMessage(json, 'Errore')))).toContain('scheda del prodotto');
     expect(allergeniScritti()).toEqual([]);
   });
 

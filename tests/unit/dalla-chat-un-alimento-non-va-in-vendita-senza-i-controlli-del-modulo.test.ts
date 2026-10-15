@@ -8,6 +8,7 @@ import {
   messaggioDopoLaBozza,
 } from '@/lib/products/prontoPerLaVendita';
 import type { CategoryRow } from '@/lib/products/aiPatch';
+import { apiErrorMessage, friendlyError } from '@/lib/errors';
 
 /**
  * 15/10/2026 (R36) — DALLA CHAT ASSISTENZA UN ALIMENTO CREATO DALLE FOTO ANDAVA
@@ -122,6 +123,9 @@ vi.mock('@/lib/supabase/server', () => {
   return { getAdminSupabase: () => ({ from: costruttore }) };
 });
 
+/** Quello che il negoziante legge nella chat: lo stesso giro che fa SupportProductAssistant. */
+const comeLoLeggeLaChat = (json: unknown) => friendlyError(new Error(apiErrorMessage(json, 'Errore')));
+
 async function applica(productId: string, patch: Record<string, unknown>) {
   const { POST } = (await import('@/app/api/ai/catalog-apply/route')) as unknown as {
     POST: (r: Request) => Promise<Response>;
@@ -181,6 +185,17 @@ describe('«pubblica» dalla chat passa dagli stessi controlli del modulo', () =
     expect(db.scritture).toEqual([]);
   });
 
+  it('nel caso peggiore il negoziante legge ancora l elenco intero, non un messaggio generico', async () => {
+    db.prodotti = [
+      { ...bozzaDellaFocaccia({}), images: [], price: 0, description: '', name: 'F', category_id: 'alim' },
+    ];
+    const { json } = await applica('bozza-focaccia', { status: 'available' });
+    const letto = comeLoLeggeLaChat(json);
+    for (const campo of ['una foto', 'Nome', 'Descrizione', 'Prezzo', 'Allergeni', 'Ingredienti']) {
+      expect(letto, `nella chat si legge: ${letto}`).toContain(campo);
+    }
+  });
+
   it('una scheda completa va in vendita: il controllo non blocca il lavoro buono', async () => {
     db.prodotti = [bozzaDellaFocaccia(SCHEDA_COMPLETA)];
     const { status } = await applica('bozza-focaccia', { status: 'available' });
@@ -223,6 +238,7 @@ describe('il motivo del database arriva al negoziante', () => {
     const { status, json } = await applica('bozza-focaccia', { status: 'available' });
     expect(status).toBe(400);
     expect(json.error?.message).toBe(MOTIVO);
+    expect(comeLoLeggeLaChat(json)).toBe(MOTIVO);
   });
 
   it('un guasto vero resta un guasto: li «Riprova» e onesto', async () => {

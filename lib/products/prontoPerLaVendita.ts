@@ -68,7 +68,7 @@ export function cosaMancaPerVendere(s: SchedaDaVendere): string[] {
   if (!(s.numeroFoto > 0)) mancanti.push('una foto');
   if (String(s.name ?? '').trim().length < MIN_NOME_PER_VENDERE) mancanti.push('Nome');
   if (String(s.description ?? '').trim().length < MIN_DESCRIZIONE_PER_VENDERE) {
-    mancanti.push(`Descrizione (almeno ${MIN_DESCRIZIONE_PER_VENDERE} caratteri)`);
+    mancanti.push(`Descrizione di almeno ${MIN_DESCRIZIONE_PER_VENDERE} caratteri`);
   }
   if (!(Number(s.price ?? 0) > 0)) mancanti.push('Prezzo');
   if (!s.haCategoria) mancanti.push('Categoria');
@@ -136,9 +136,13 @@ export function cosaMancaDopoLaModifica(opts: {
   });
 }
 
-/** Il messaggio per il negoziante, quando qualcosa manca. */
+/**
+ * Il messaggio per il negoziante, quando qualcosa manca. Corto apposta: la
+ * chat lo fa passare da `friendlyError`, che sopra i 200 caratteri lo
+ * sostituisce con un messaggio generico e l'elenco andrebbe perso.
+ */
 export function messaggioDaCompletare(mancanti: string[]): string {
-  return `Prima di metterlo in vendita va completato: ${mancanti.join(', ')}. Apri la scheda del prodotto e compilalo tu.`;
+  return `Per metterlo in vendita manca: ${mancanti.join(', ')}. Compilalo nella scheda del prodotto.`;
 }
 
 /**
@@ -163,7 +167,7 @@ export function erroreDiSalvataggio(
     return {
       tipo: 'regola',
       messaggio: tecnico
-        ? 'Questa modifica non rispetta le regole del catalogo (un valore troppo lungo o non valido). Apri la scheda del prodotto e controllala.'
+        ? 'Questa modifica non rispetta le regole del catalogo: un valore è troppo lungo o non valido. Apri la scheda del prodotto e controllala.'
         : testo.slice(0, 300),
     };
   }
