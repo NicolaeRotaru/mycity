@@ -1,13 +1,21 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
+import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
-import { conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
-import { compensoDalContante, contanteDaRimettereCents } from '@/lib/shipping';
+import { contanteDaRimettereCents } from '@/lib/shipping';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
 import { aggiornaQuadratura } from '@/lib/cassa/quadratura';
+import {
+  COLONNE_ORDINE_DA_INCASSARE,
+  campiDellIncasso,
+  importoFuoriMisura,
+  motivoPerNonRegistrare,
+  scriviIncasso,
+  type ChiRegistra,
+  type OrdineDaIncassare,
+} from '@/lib/cassa/registra-incasso';
 
 export const runtime = 'nodejs';
 
@@ -74,23 +82,34 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 
-  const supa = await getServerSupabase();
-  const { data: order, error } = await supa
+  // 15/10/2026 (R33) — L'ORDINE SI LEGGE COL CLIENT DI SERVIZIO, NON CON LA
+  // SESSIONE DEL FATTORINO.
+  //
+  // Con la sessione la lettura passava dalla regola sugli ordini, che ai
+  // fattorini nasconde i consegnati da piu' di sette giorni (127, ⑯: e' giusto,
+  // li' dentro ci sono nome, telefono e indirizzo del cliente). Ma qui non si
+  // legge nessun recapito, e il risultato era che chi aveva chiuso la consegna
+  // senza dichiarare i contanti, passata una settimana, riceveva «Ordine non
+  // trovato»: la rimessa saltava l'ordine per sempre e il negozio non veniva
+  // pagato. Chi puo' toccare quale ordine lo decide `motivoPerNonRegistrare`,
+  // e la stessa UPDATE lo ricontrolla (`.eq('rider_id', ...)`).
+  const admin = getAdminSupabase();
+  const { data: letto, error } = await admin
     .from('orders')
-    .select('id, rider_id, total_price, rider_fee_cents, shipping_cost, pickup_in_store, payment_method, delivery_status, cash_confirmed_at')
+    .select(COLONNE_ORDINE_DA_INCASSARE)
     .eq('id', body.orderId)
-    .single();
+    .maybeSingle();
 
-  if (error || !order) return ApiErrors.notFound('Ordine non trovato');
-  if (order.rider_id !== user.id) {
-    return ApiErrors.forbidden('Non autorizzato (ordine di altro rider)');
+  const order = (error ? null : letto) as OrdineDaIncassare | null;
+  const chi: ChiRegistra = { chi: 'fattorino', userId: user.id };
+  switch (motivoPerNonRegistrare(order, chi)) {
+    case 'NON_TROVATO': return ApiErrors.notFound('Ordine non trovato');
+    case 'DI_UN_ALTRO_FATTORINO': return ApiErrors.forbidden('Non autorizzato (ordine di altro rider)');
+    case 'NON_IN_CONTANTI': return ApiErrors.conflict('Ordine non in cash on delivery');
+    case 'GIA_CONFERMATO': return ApiErrors.conflict("Incasso gia' confermato");
+    default: break;
   }
-  if (order.payment_method !== 'cod') {
-    return ApiErrors.conflict('Ordine non in cash on delivery');
-  }
-  if (order.cash_confirmed_at) {
-    return ApiErrors.conflict("Incasso gia' confermato");
-  }
+  if (!order || !order.rider_id) return ApiErrors.notFound('Ordine non trovato');
 
   // 155 — IL FATTORINO NON LAVORAVA GRATIS PER SBAGLIO: PER COSTRUZIONE.
   //
@@ -113,17 +132,12 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   // la spunta «usa il credito» e' accesa di default. Con 50 € di credito e un
   // ordine da 22 € in contrassegno l'ordine nasce a zero: il fattorino
   // consegna, non gli mette in mano niente nessuno, e non ha da cosa
-  // trattenersi i suoi 3 €. Qui si scriveva comunque 'CASH_WITHHELD' — cioe'
-  // «pagato» — perche' la condizione guardava il compenso DOVUTO e non quello
-  // davvero trattenibile, e da li' il giro dei bonifici usciva subito: quei
-  // soldi non sarebbero partiti mai. Vale anche a meta': residuo 2 €, compenso
-  // 3 € → ne perdeva 1 e risultava pagato per intero.
-  const { trattenutoCents, residuoDovutoCents } = compensoDalContante(order);
-  const compensoTenutoCents = trattenutoCents;
+  // trattenersi i suoi 3 €. I campi che lo dicono li scrive `campiDellIncasso`,
+  // la stessa funzione che usa l'amministratore quando registra al suo posto.
   const expectedCents = contanteDaRimettereCents(order);
 
   // Cap difensivo: rifiuta importi palesemente fuori range (errore di battitura/abuso).
-  if (body.cashCollectedCents > expectedCents * 2 + 1000) {
+  if (importoFuoriMisura(order, body.cashCollectedCents)) {
     return ApiErrors.invalidRequest('Importo incassato fuori range rispetto al totale ordine.');
   }
   // Prova obbligatoria sopra soglia (anti-frode + dispute "non ho pagato/ricevuto").
@@ -131,72 +145,42 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     return ApiErrors.invalidRequest('Per ordini sopra €50 allega una prova: foto dei contanti o firma del cliente.');
   }
 
-  const admin = getAdminSupabase();
   const now = new Date();
   // 189 — La giornata di cassa del fattorino è quella di Piacenza. Con
   // `toISOString()` era quella di Greenwich: d'estate le consegne fra le 22 e
   // mezzanotte finivano nel giorno dopo, e la quadratura risultava sbagliata
   // proprio nelle sere più cariche.
-  const today = giornoLocale(now);
+  //
+  // R33 — E la giornata e' quella della CONSEGNA, quando la consegna c'e' gia'.
+  // Un incasso dichiarato tre giorni dopo appartiene alla sera in cui il
+  // fattorino ha avuto i contanti in mano: e' quella la riga che la rimessa
+  // guarda (`confirm_cod_remittance` cerca per giorno di consegna).
+  const giornoDiCassa = giornoLocale(order.delivered_at ? new Date(order.delivered_at) : now);
 
   // Guard atomico contro la "doppia cassa": solo il PRIMO writer (con
-  // cash_confirmed_at ancora NULL) vince. Il check a riga ~63 è solo un fast-path
-  // UX: NON è atomico (TOCTOU tra la lettura e la scrittura). La condizione
-  // .is('cash_confirmed_at', null) sposta la guardia nel DB — il row-lock di
-  // Postgres serializza due conferme concorrenti e la seconda non matcha più
-  // (0 righe), così non può sovrascrivere cash_collected_cents/le prove.
-  // Stesso pattern del claim payout in lib/stripe/payout.ts.
-  // Lo stato 'CASH_WITHHELD' nasce con la migrazione 124: prima di quella il
-  // vincolo del database lo rifiuta, e con lui l'intero aggiornamento. Il
-  // ripiego conferma comunque l'incasso, senza scrivere quel campo
-  // (lib/db/migrazione-124.ts).
-  const CAMPI_COMPENSO = ['rider_payout_status', 'rider_payout_at'] as const;
-  const aggiornamento = {
-    cash_collected_cents: body.cashCollectedCents,
-    cash_photo_url: body.photoUrl ?? null,
-    cash_signature_url: body.signatureUrl ?? null,
-    delivery_photo_url: body.deliveryPhotoUrl ?? null,
-    cash_confirmed_at: now.toISOString(),
-    cash_collected_by: user.id,
-    // L'ordine in contanti diventa PAGATO qui, che è il momento in cui i soldi
-    // sono davvero passati di mano. Prima restava 'PENDING' per sempre: in
-    // tutto il codice l'unico punto che scriveva 'PAID' era il webhook della
-    // carta. Conseguenza: l'annullamento da pannello trattava un contante già
-    // incassato come un ordine mai pagato, e non restituiva niente al cliente.
-    payment_status: 'PAID',
-    // 155 — Il compenso e' stato pagato, in contanti, adesso. Prima questo
-    // campo restava NULL per sempre e non c'era modo di distinguere «pagato
-    // in contanti» da «mai pagato».
-    //
-    // R120 — «Pagato» solo se il contante bastava davvero. Se ne resta un pezzo
-    // scoperto l'ordine va in 'HELD', che e' lo stato da cui il giro dei
-    // bonifici ripesca i compensi da versare (FILTRO_RIDER_RITENTABILI): la
-    // differenza gli arriva per bonifico, invece di sparire.
-    rider_payout_status: residuoDovutoCents > 0 ? 'HELD' : compensoTenutoCents > 0 ? 'CASH_WITHHELD' : null,
-    rider_payout_at: residuoDovutoCents === 0 && compensoTenutoCents > 0 ? now.toISOString() : null,
-  };
-
-  const conferma = (valori: Record<string, unknown>) =>
-    admin
-      .from('orders')
-      .update(valori)
-      .eq('id', body.orderId)
-      .eq('rider_id', user.id)
-      .is('cash_confirmed_at', null)
-      // 056/172 — il commento in cima al file dichiarava questa guardia
-      // («il rider puo' aggiornare solo i propri ordini con delivery_status
-      // PICKED_UP/OUT_FOR_DELIVERY/DELIVERED, controllo server-side») e nel codice
-      // non c'era: un fattorino poteva marcare PAGATO un ordine appena assegnato,
-      // mai ritirato e mai consegnato — e da lì l'ordine risultava incassato.
-      // Ora la condizione sta dentro la stessa UPDATE, quindi la decide il
-      // database e non un `if` che qualcuno può spostare.
-      .in('delivery_status', ['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'])
-      .select('id');
-
-  const { data: claimed, error: updErr } = await conRipiegoSchema(
-    'orders.update (conferma incasso)',
-    () => conferma(aggiornamento),
-    () => conferma(senzaCampi(aggiornamento, CAMPI_COMPENSO)),
+  // cash_confirmed_at ancora NULL) vince. Il controllo qui sopra è solo un
+  // fast-path: NON è atomico (TOCTOU tra la lettura e la scrittura). La
+  // condizione `.is('cash_confirmed_at', null)` dentro `scriviIncasso` sposta la
+  // guardia nel DB — il row-lock di Postgres serializza due conferme
+  // concorrenti e la seconda non matcha più (0 righe), così non può
+  // sovrascrivere cash_collected_cents/le prove. Stesso pattern del claim
+  // payout in lib/stripe/payout.ts.
+  //
+  // 056/172 — e nella stessa UPDATE sta la guardia sullo stato di consegna
+  // (PICKED_UP/OUT_FOR_DELIVERY/DELIVERED): un fattorino non puo' marcare
+  // PAGATO un ordine appena assegnato, mai ritirato e mai consegnato.
+  const { data: claimed, error: updErr } = await scriviIncasso(
+    admin,
+    { id: order.id, rider_id: order.rider_id },
+    campiDellIncasso(order, {
+      incassatoCents: body.cashCollectedCents,
+      fotoContanti: body.photoUrl,
+      firma: body.signatureUrl,
+      fotoConsegna: body.deliveryPhotoUrl,
+      registratoDa: user.id,
+      adesso: now,
+    }),
+    chi,
   );
 
   if (updErr) return ApiErrors.internal('Update fallito');
@@ -206,7 +190,7 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   }
 
   // Aggiorna riconciliazione giornaliera (include i COD consegnati ma NON confermati).
-  await aggiornaQuadratura(admin, user.id, today);
+  await aggiornaQuadratura(admin, user.id, giornoDiCassa);
 
   // Mismatch → alert agli ADMIN (NON al rider, che è la parte da controllare).
   const delta = body.cashCollectedCents - expectedCents;

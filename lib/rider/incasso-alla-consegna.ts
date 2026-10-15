@@ -1,0 +1,95 @@
+/**
+ * 15/10/2026 (R33) — NELLE CONSEGNE IN CONTANTI PRIMA SI DICHIARA L'INCASSO,
+ * POI SI CHIUDE LA CONSEGNA.
+ *
+ * Su un ordine pagato alla consegna le conferme sono due: il codice che il
+ * cliente detta alla porta e l'incasso che il fattorino dichiara. Senza
+ * l'incasso la rimessa della sera salta l'ordine (`confirm_cod_remittance`) e
+ * il negozio non viene pagato.
+ *
+ * Prima la pagina della consegna metteva in fondo allo schermo il grande
+ * pulsante verde «Conferma consegna» e il riquadro dell'incasso piu' in alto,
+ * sotto la mappa: su un telefono da 360 pixel fuori schermo. Il fattorino
+ * dettava il codice, leggeva «Consegna confermata!» e dopo un secondo era di
+ * nuovo in bacheca, dove nessuno gli ricordava i contanti. Dopo sette giorni
+ * l'ordine spariva dalla sua vista e non poteva piu' rimediare.
+ *
+ * Qui stanno le regole, in un posto solo e senza React: quale passo viene
+ * prima, dove si va dopo il codice giusto, quali ordini chiedono ancora
+ * l'incasso. Le pagine del fattorino le chiamano; le prove le eseguono.
+ */
+
+/** Il minimo che serve per decidere: come si paga, dov'e' l'ordine, se l'incasso c'e'. */
+export type OrdinePerIncasso = {
+  payment_method: string | null;
+  delivery_status: string;
+  cash_confirmed_at: string | null;
+  pickup_in_store?: boolean | null;
+};
+
+/**
+ * Gli stati in cui il fattorino ha in mano la merce o l'ha appena lasciata: e'
+ * li' che l'incasso si dichiara. La stessa lista guarda la rotta che lo
+ * registra (`app/api/rider/cash-confirm`), dentro la sua UPDATE.
+ */
+export const STATI_IN_CUI_SI_INCASSA = ['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'] as const;
+
+/** Vero quando su questo ordine il fattorino deve ancora dichiarare i contanti. */
+export function incassoDaDichiarare(o: OrdinePerIncasso): boolean {
+  if (o.payment_method !== 'cod') return false;
+  if (o.pickup_in_store) return false; // al banco incassa il negozio, non il fattorino
+  if (o.cash_confirmed_at) return false;
+  return (STATI_IN_CUI_SI_INCASSA as readonly string[]).includes(o.delivery_status);
+}
+
+/**
+ * Cosa offre la barra in fondo alla pagina della consegna, ordine in strada:
+ *  - `incasso`  → prima i contanti: il codice del cliente non si chiede ancora;
+ *  - `codice`   → l'incasso c'e' (o si e' pagato con la carta): si chiude col codice.
+ */
+export function passoDellaConsegna(o: OrdinePerIncasso): 'incasso' | 'codice' {
+  return incassoDaDichiarare(o) ? 'incasso' : 'codice';
+}
+
+/**
+ * Dopo il codice giusto la pagina tornava da sola alla bacheca dopo un
+ * secondo. Si torna solo se non resta niente da dichiarare: altrimenti si resta
+ * sull'ordine, dove il pulsante dell'incasso e' in vista.
+ *
+ * Si guarda l'ordine COME DIVENTA (consegnato), non com'era: e' lo stato in
+ * cui il fattorino lo lascia.
+ */
+export function dopoIlCodiceGiusto(o: OrdinePerIncasso): 'bacheca' | 'resta-sull-ordine' {
+  return incassoDaDichiarare({ ...o, delivery_status: 'DELIVERED' }) ? 'resta-sull-ordine' : 'bacheca';
+}
+
+/**
+ * Il motivo con cui il database rifiuta il codice quando l'incasso manca
+ * (migrazione 163). Se la migrazione non e' ancora applicata non arriva mai, e
+ * la pagina fa lo stesso ordine dei passi da sola.
+ */
+export const RIFIUTO_INCASSO_MANCANTE = 'CASH_NOT_CONFIRMED';
+
+export const AVVISO_INCASSO_MANCANTE =
+  'Prima conferma i contanti che hai ricevuto, poi chiedi il codice al cliente.';
+
+/** Quando la consegna e' gia' chiusa e i contanti no. */
+export const AVVISO_INCASSO_DOPO_LA_CONSEGNA =
+  'Consegna chiusa. Ora conferma i contanti che hai ricevuto: senza, il negozio non viene pagato.';
+
+/**
+ * Gli ordini che il fattorino ha gia' consegnato e su cui manca ancora la
+ * dichiarazione dei contanti: sono quelli che la bacheca gli rimette davanti.
+ * Dal piu' vecchio: e' quello che il negozio aspetta da piu' tempo.
+ */
+export function incassiRimastiIndietro<T extends OrdinePerIncasso & { delivered_at?: string | null }>(
+  righe: readonly T[],
+): T[] {
+  return righe
+    .filter((r) => r.delivery_status === 'DELIVERED' && incassoDaDichiarare(r))
+    .sort((a, b) => String(a.delivered_at ?? '').localeCompare(String(b.delivered_at ?? '')));
+}
+
+/** La chiave della cache e l'indirizzo della lettura che alimenta la bacheca. */
+export const CHIAVE_INCASSI_DA_DICHIARARE = ['rider', 'incassi-da-dichiarare'] as const;
+export const INDIRIZZO_INCASSI_DA_DICHIARARE = '/api/rider/incassi-da-dichiarare';

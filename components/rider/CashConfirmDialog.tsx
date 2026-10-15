@@ -1,7 +1,7 @@
 'use client';
 
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
@@ -22,6 +22,15 @@ type Props = {
   /** Quanto il fattorino si e' gia' tenuto: serve a spiegare perche il numero e piu basso. */
   compensoTenutoCents?: number;
   onConfirmed?: () => void;
+  /**
+   * 15/10/2026 (R33) — Aperto da fuori. Sulla pagina della consegna il
+   * pulsante sta nella barra fissa in fondo, che e' spostata con una
+   * trasformazione CSS: un pannello `fixed` disegnato li' dentro resterebbe
+   * chiuso nella barra invece di coprire lo schermo. Con `aperto` il pannello
+   * si disegna dove lo mette la pagina, e qui non compare nessun pulsante.
+   */
+  aperto?: boolean;
+  onChiudi?: () => void;
 };
 
 /**
@@ -33,10 +42,16 @@ type Props = {
  * Alla conferma chiama /api/rider/cash-confirm che valida lato server
  * (rider proprietario, stato ordine, payment_method=cod, non duplicato).
  */
-export default function CashConfirmDialog({ orderId, expectedCents, compensoTenutoCents = 0, onConfirmed }: Props) {
+export default function CashConfirmDialog({ orderId, expectedCents, compensoTenutoCents = 0, onConfirmed, aperto, onChiudi }: Props) {
   const tStates = useTranslations('states');
   const tActions = useTranslations('actions');
-  const [open, setOpen] = useState(false);
+  const controllato = aperto !== undefined;
+  const [apertoQui, setApertoQui] = useState(false);
+  const open = controllato ? aperto : apertoQui;
+  const setOpen = (valore: boolean) => {
+    if (!controllato) setApertoQui(valore);
+    else if (!valore) onChiudi?.();
+  };
   // 6/9/2026 — QUESTO `toFixed(2)` RESTA, ED E' VOLUTO.
   // Non e' una cifra da leggere: e' il valore dentro `<input type="number">`,
   // che il browser accetta solo col punto decimale e che qui sotto rileggiamo
@@ -49,7 +64,14 @@ export default function CashConfirmDialog({ orderId, expectedCents, compensoTenu
   const [uploading, setUploading] = useState<'cash' | 'delivery' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const pannelloRef = useRef<HTMLDivElement>(null);
-  const bottoneApri = useRef<HTMLButtonElement>(null);
+  const bottoneApri = useRef<HTMLButtonElement | null>(null);
+  // Aperto da fuori: il fuoco, alla chiusura, torna al pulsante che l'ha aperto.
+  // Sta PRIMA del gancio qui sotto, cosi' lui lo trova gia' al suo posto.
+  useEffect(() => {
+    if (controllato && open && document.activeElement instanceof HTMLButtonElement) {
+      bottoneApri.current = document.activeElement;
+    }
+  }, [controllato, open]);
   useBottomSheetA11y(open, pannelloRef, bottoneApri, () => setOpen(false));
 
   // Le prove d'incasso vanno nel secchio privato `cod-proof`, nella cartella del
@@ -136,6 +158,7 @@ export default function CashConfirmDialog({ orderId, expectedCents, compensoTenu
   }
 
   if (!open) {
+    if (controllato) return null;
     return (
       <button
         type="button"
