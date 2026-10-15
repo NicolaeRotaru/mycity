@@ -25,6 +25,7 @@ import { logger } from '@/lib/logger';
 import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 import { refundIssuedTemplate } from '@/lib/email/templates';
 import { notifyAdmins } from './comune';
+import { registraRimborsoParzialeDaFuori } from './rimborsi-da-fuori';
 
 export async function handleChargeRefunded(charge: Stripe.Charge) {
   const admin = getAdminSupabase();
@@ -32,34 +33,30 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   if (!pi) return;
 
   // Multi-seller: una charge può avere N ordini (uno per seller).
-  const { data: orders } = await admin
+  const { data: orders, error: errOrdini } = await admin
     .from('orders')
     // 054 — serve `delivery_status`: un ordine già consegnato non torna «annullato».
     // 061 — serve `rider_payout_reversed_cents` per il residuo dello storno rider.
     // 6/9/2026 — serve `coupon_code`: il rimborso fatto a mano su Stripe bruciava il buono del cliente.
-    .select('id, user_id, total_price, seller_id, payout_status, payment_status, delivery_status, coupon_code, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost')
+    // R85 — serve `refunded_amount_cents`: dice quanto del rimborso è già scritto da noi.
+    .select('id, user_id, total_price, refunded_amount_cents, seller_id, payout_status, payment_status, delivery_status, coupon_code, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost')
     .eq('stripe_payment_intent', pi);
 
+  // R81 — Una lettura caduta non è «nessun ordine»: prima il gestore usciva
+  // bene, la rotta rispondeva 200, e un rimborso pieno non veniva mai scritto.
+  if (errOrdini) throw new Error(`[stripe] ordini del rimborso non letti: ${errOrdini.message}`);
   if (!orders || orders.length === 0) return;
 
-  // Solo i refund PIENI annullano gli ordini a tappeto. I refund parziali
-  // (reso/dispute di un singolo ordine) sono già gestiti per-ordine da
-  // refundOrder: qui li ignoriamo per non cancellare l'intera charge
-  // multi-seller.
+  // Solo i refund PIENI annullano gli ordini a tappeto.
   const fullyRefunded = charge.refunded === true || (charge.amount_refunded ?? 0) >= (charge.amount ?? 0);
   if (!fullyRefunded) {
-    // 🟡-6: un refund PARZIALE su una charge multi-seller non è auto-riconciliabile
-    // qui (Stripe non dice a quale dei N ordini si riferisce). I refund parziali
-    // DEVONO passare dal flusso interno (returns/decide, disputes/resolve), che
-    // chiama refundOrder con reversal proporzionale per-ordine. Se arriva un
-    // parziale "out-of-band" (es. dal Dashboard), lo segnaliamo come warning
-    // (→ Sentry) per la riconciliazione manuale, invece di ignorarlo in silenzio.
-    logger.warn('[stripe] charge.refunded PARZIALE fuori dal flusso interno: riconciliare a mano', {
-      pi,
-      chargeId: charge.id,
-      amountRefunded: charge.amount_refunded,
-      amount: charge.amount,
-    });
+    // 15/10/2026 (R85) — Un rimborso parziale fatto dal cruscotto Stripe si
+    // ignorava con un avviso nei log: il negozio prendeva il bonifico intero e
+    // l'annullo dopo chiedeva a Stripe più di quanto restava. Ora si registra
+    // sull'ordine (se è uno solo) o ferma i bonifici del carrello (se sono di
+    // più). L'eco dei nostri rimborsi (`refundOrder`) non tocca niente: lì
+    // l'importo è già scritto. Il perché sta in `rimborsi-da-fuori.ts`.
+    await registraRimborsoParzialeDaFuori(charge, orders);
     return;
   }
 
@@ -197,15 +194,33 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   if (stornoFallito.length > 0) {
     await notifyAdmins(
       '⚠️ Storno al venditore non riuscito',
-      `Rimborso eseguito ma i soldi non sono rientrati dal venditore su ${stornoFallito.length} ordine/i: ${idFalliti.map((i) => i.slice(0, 8)).join(', ')}. Vanno recuperati a mano.`,
+      `Rimborso eseguito ma i soldi non risultano rientrati dal venditore su ${stornoFallito.length} ordine/i: ${idFalliti.map((i) => i.slice(0, 8)).join(', ')}. ` +
+        "Prima di recuperarli a mano, guarda su Stripe (Connect → il bonifico dell'ordine → Storni): la risposta di Stripe può essersi persa e lo storno può esserci già. Se c'è, non va rifatto.",
       '/admin/orders',
     );
   }
 
   // Ripristina lo stock solo se refundOrder non l'ha già fatto (evita doppio restore).
+  //
+  // 15/10/2026 (R81) — L'esito non lo leggeva nessuno. Far riprovare Stripe non
+  // servirebbe: l'ordine qui sopra è già 'REFUNDED', e al secondo passaggio
+  // questo giro lo salta. Quindi la merce non tornata in vendita si dice agli
+  // amministratori, come fa la contestazione persa (dispute.ts).
+  const scaffaleNonRiuscito: string[] = [];
   for (const o of orders) {
     if (o.payment_status === 'REFUNDED') continue;
-    await admin.rpc('restore_stock_for_order', { p_order_id: o.id });
+    const { error: errScaffale } = await admin.rpc('restore_stock_for_order', { p_order_id: o.id });
+    if (errScaffale) {
+      logger.error('[stripe] merce non rimessa a scaffale dopo il rimborso dal cruscotto', { orderId: o.id, message: errScaffale.message });
+      scaffaleNonRiuscito.push(o.id);
+    }
+  }
+  if (scaffaleNonRiuscito.length > 0) {
+    await notifyAdmins(
+      '⚠️ Merce non rimessa in vendita',
+      `Rimborso pieno registrato, ma la merce di ${scaffaleNonRiuscito.length} ordine/i (${scaffaleNonRiuscito.map((i) => i.slice(0, 8)).join(', ')}) non è tornata in vendita: la giacenza va sistemata a mano.`,
+      '/admin/orders',
+    );
   }
 
   /**
@@ -338,11 +353,13 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
     seller_payout_reversed_cents?: number | null;
     payout_tentativo?: number | null;
   };
-  const { data: ordiniLetti } = await conRipiegoSchema(
+  const { data: ordiniLetti, error: errLettura } = await conRipiegoSchema(
     'orders.select (rimborso rifiutato)',
     () => leggi(COLONNE_RIMBORSO_FALLITO),
     () => leggi(senzaColonne(COLONNE_RIMBORSO_FALLITO, COLONNE_124)),
   );
+  // R81 — una lettura caduta non è «nessun ordine trovato»: Stripe deve riprovare.
+  if (errLettura) throw new Error(`[stripe] ordini del rimborso rifiutato non letti: ${(errLettura as { message?: string }).message ?? 'errore'}`);
   const ordini = (ordiniLetti ?? []) as unknown as OrdineRimborsoFallito[];
   if (ordini.length === 0) {
     logger.warn('[stripe] rimborso fallito: nessun ordine trovato', { refundId: refund.id, paymentIntent });
@@ -395,6 +412,21 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
     const bonificoChiusoDalRimborso =
       ordine.payout_status === 'REVERSED' || ordine.payout_status === 'REFUNDED';
     const bonificoEraGiaUscito = ordine.payout_status === 'REVERSED';
+    /**
+     * 15/10/2026 (R85, collaudo) — E SE IL BONIFICO NON ERA ANCORA PARTITO?
+     *
+     * Un rimborso PARZIALE su un ordine col bonifico ancora trattenuto toglie la
+     * quota del negozio solo sulla carta: `seller_payout_reversed_cents` sale,
+     * il bonifico resta 'HELD' e il giro verserà il resto. Se poi la banca del
+     * cliente respinge il rimborso, qui si rimetteva a posto il cliente e non il
+     * negozio. Un caso misurato: 3 € rimborsati dal cruscotto su un ordine col
+     * netto del negozio di 18,00 €, rimborso respinto, e il giro versava 16,06 €
+     * per un rimborso che il cliente non ha mai ricevuto. Adesso la quota torna
+     * nel bonifico che deve ancora partire. Solo negli stati che il giro paga:
+     * se il bonifico è in corso ('PROCESSING') l'importo è già deciso.
+     */
+    const bonificoAncoraDaFare =
+      ordine.payout_status === 'HELD' || ordine.payout_status === 'PENDING_SELLER_ONBOARDING';
 
     const valori: Record<string, unknown> = {
       refunded_amount_cents: restante,
@@ -419,7 +451,14 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
                 }
               : {}),
           }
-        : {}),
+        : bonificoAncoraDaFare
+          ? {
+              seller_payout_reversed_cents: Math.max(
+                0,
+                (ordine.seller_payout_reversed_cents ?? 0) - quotaNegozio,
+              ),
+            }
+          : {}),
     };
 
     // Prima della migrazione 124 la colonna del tentativo non esiste: meglio
