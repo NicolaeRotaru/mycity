@@ -47,8 +47,15 @@ export const supabase = {
   auth: {
     // Chi è collegato lo decide la prova, con `globalThis.__UTENTE__`.
     getUser: async () => ({ data: { user: globalThis.__UTENTE__ ?? null }, error: null }),
+    // Il gettone della sessione lo decide la prova con `globalThis.__GETTONE__`
+    // (15/10/2026): chi non lo imposta ha la sessione di prima, senza gettone, e
+    // i componenti che lo pretendono si fermano su «Sessione scaduta» come prima.
     getSession: async () => ({
-      data: { session: globalThis.__UTENTE__ ? { user: globalThis.__UTENTE__ } : null },
+      data: {
+        session: globalThis.__UTENTE__
+          ? { user: globalThis.__UTENTE__, access_token: globalThis.__GETTONE__ }
+          : null,
+      },
       error: null,
     }),
     /**
@@ -68,7 +75,17 @@ export const supabase = {
   channel: () => ({ on: () => ({ subscribe: () => ({}) }), subscribe: () => ({}), unsubscribe: () => {} }),
   removeChannel: () => {},
   storage: {
-    from: () => ({ getPublicUrl: () => ({ data: { publicUrl: '' } }), upload: async () => ({ data: null, error: null }) }),
+    // L'indirizzo pubblico di una foto caricata lo decide la prova con
+    // `globalThis.__URL_PUBBLICO__` (una funzione del percorso). Senza, resta
+    // vuoto come prima (15/10/2026).
+    from: () => ({
+      getPublicUrl: (percorso) => ({
+        data: {
+          publicUrl: typeof globalThis.__URL_PUBBLICO__ === 'function' ? globalThis.__URL_PUBBLICO__(percorso) : '',
+        },
+      }),
+      upload: async () => ({ data: null, error: null }),
+    }),
   },
 };
 

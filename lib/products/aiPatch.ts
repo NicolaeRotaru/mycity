@@ -1,6 +1,7 @@
 // lib/products/aiPatch.ts
 import {
   getAttributesForCategory,
+  findLabelForKey,
   AI_ATTR_TO_FIELD,
 } from '@/lib/category-attributes';
 import { PRODUCT_UNITS, SELLER_STATUSES, normalizeCondition } from '@/lib/products/schema';
@@ -60,7 +61,160 @@ export type ResolvedPatch = {
   update: Record<string, unknown>;
   /** Etichette in italiano dei campi modificati (feedback in chat). */
   changed: string[];
+  /**
+   * R41 — Le etichette dei campi dichiarativi che l'assistente voleva scrivere
+   * o togliere e che NON sono stati toccati (es. «Allergeni»). Vuoto se il
+   * patch non ne conteneva.
+   */
+  protetti: string[];
 };
+
+/**
+ * 15/10/2026 (R41) — LE DICHIARAZIONI DI UN ALIMENTO LE FA IL NEGOZIANTE, MAI L'AI.
+ *
+ * Allergeni, ingredienti, valori nutrizionali e le caselle «senza glutine»,
+ * «senza lattosio», «vegano», «bio», piu' origine e scadenza non sono testo da
+ * migliorare: sono la dichiarazione che il regolamento europeo 1169/2011 chiede
+ * a chi vende un alimento, PRIMA dell'acquisto, anche a distanza. Chi e'
+ * allergico al latte legge quella riga e decide se mangiare.
+ *
+ * Il lavoro massivo «Migliora tutto» manda al modello solo il testo della
+ * scheda — niente foto, niente etichetta — e gli chiedeva di compilare «gli
+ * attributi mancanti». Questo risolutore scriveva qualunque attributo valido
+ * per la categoria, anche sopra quello che il negoziante aveva dichiarato a
+ * mano. Una focaccia con «Glutine, sesamo, latte» poteva tornare in vetrina con
+ * «Glutine» e la casella «Senza lattosio» spuntata, indovinati dal nome.
+ *
+ * La lista e' UNA, e la leggono tutte le strade da cui l'AI scrive un prodotto:
+ * il risolutore del server (chat Assistenza, Catalog Copilot, lavoro massivo) e
+ * il filtro del modulo (migliora, diagnosi, chat del prodotto, voce, codice a
+ * barre). Vale sia per SCRIVERE sia per TOGLIERE: un allergene cancellato e'
+ * una dichiarazione sbagliata quanto uno inventato.
+ *
+ * L'unica strada che resta aperta e' la lettura dell'etichetta in foto
+ * (`/api/vision/extract-product`), e anche li' il valore arriva davanti agli
+ * occhi del negoziante prima di diventare una scheda: nel modulo come campo da
+ * salvare, nella chat Assistenza come riquadro da confermare.
+ */
+export const CAMPI_DICHIARATIVI = [
+  'allergeni',
+  'ingredienti',
+  'valori_nutrizionali',
+  'senza_glutine',
+  'senza_lattosio',
+  'vegano',
+  'bio',
+  'origine',
+  'scadenza',
+] as const;
+
+/** La chiave del campo di categoria a cui punta una chiave proposta dall'AI. */
+function chiaveCampo(chiaveAi: string): string {
+  const norm = String(chiaveAi).trim().toLowerCase().replace(/[\s-]+/g, '_');
+  return AI_ATTR_TO_FIELD[norm] ?? norm;
+}
+
+/** Vero se la chiave (anche scritta come la scrive il modello) e' una dichiarazione. */
+export function eCampoDichiarativo(chiaveAi: string): boolean {
+  return (CAMPI_DICHIARATIVI as readonly string[]).includes(chiaveCampo(chiaveAi));
+}
+
+export type DichiarazioneScartata = {
+  chiave: string;
+  etichetta: string;
+  azione: 'scrivi' | 'togli';
+  /** Il valore che l'AI proponeva (solo per «scrivi»). */
+  valore?: string;
+};
+
+/**
+ * Toglie dal patch ogni campo dichiarativo, in scrittura (`attributes`) e in
+ * rimozione (`attributes_remove`), e dice quali ha tolto. Un `attributes` o un
+ * `attributes_remove` rimasti vuoti spariscono del tutto: un patch che
+ * conteneva solo allergeni diventa un patch vuoto, non «una modifica».
+ */
+export function separaCampiDichiarativi<T extends object>(
+  patch: T,
+): { patch: T; scartati: DichiarazioneScartata[] } {
+  const scartati: DichiarazioneScartata[] = [];
+  const sorgente = patch as Record<string, unknown>;
+  let fuori: Record<string, unknown> | null = null;
+
+  const attrs = sorgente.attributes;
+  if (attrs && typeof attrs === 'object' && !Array.isArray(attrs)) {
+    const tenuti: Record<string, unknown> = {};
+    let tolto = false;
+    for (const [k, v] of Object.entries(attrs as Record<string, unknown>)) {
+      if (!eCampoDichiarativo(k)) {
+        tenuti[k] = v;
+        continue;
+      }
+      tolto = true;
+      const valore = typeof v === 'string' ? v.trim() : v == null ? '' : String(v);
+      if (valore) {
+        const chiave = chiaveCampo(k);
+        scartati.push({ chiave, etichetta: findLabelForKey(chiave), azione: 'scrivi', valore });
+      }
+    }
+    if (tolto) {
+      fuori = { ...sorgente };
+      if (Object.keys(tenuti).length > 0) fuori.attributes = tenuti;
+      else delete fuori.attributes;
+    }
+  }
+
+  const via = sorgente.attributes_remove;
+  if (Array.isArray(via)) {
+    const tenute = via.filter((k) => !eCampoDichiarativo(String(k)));
+    if (tenute.length !== via.length) {
+      for (const k of via) {
+        if (!eCampoDichiarativo(String(k))) continue;
+        const chiave = chiaveCampo(String(k));
+        scartati.push({ chiave, etichetta: findLabelForKey(chiave), azione: 'togli' });
+      }
+      fuori = fuori ?? { ...sorgente };
+      if (tenute.length > 0) fuori.attributes_remove = tenute;
+      else delete fuori.attributes_remove;
+    }
+  }
+
+  return { patch: (fuori ?? sorgente) as T, scartati };
+}
+
+/**
+ * Il messaggio quando la modifica dell'assistente chiedeva SOLO di cambiare
+ * dichiarazioni. Resta sotto i 200 caratteri anche con tutti e nove i campi:
+ * sopra, la chat lo passa da `friendlyError`, che lo sostituisce con «Qualcosa
+ * non ha funzionato. Riprova» — proprio il «Riprova» inutile da togliere
+ * (collaudo del 15/10: con nove campi erano 213 caratteri).
+ */
+export function messaggioDichiarazioniProtette(etichette: string[]): string {
+  // «Valori nutrizionali (per 100g)»: `friendlyError` toglie cio' che sta fra
+  // parentesi, quindi qui il nome si accorcia prima.
+  const nomi = etichette.map((e) => e.replace(/\s*\(.*?\)/g, '').trim()).filter(Boolean);
+  const coda = ": non li cambia l'assistente. Li scrivi tu nella scheda del prodotto, col pulsante «Apri».";
+  const MAX = 190;
+  for (let n = nomi.length; n >= 1; n--) {
+    const resto = nomi.length - n;
+    const elenco = nomi.slice(0, n).join(', ') + (resto > 0 ? ` e altri ${resto} campi` : '');
+    if (elenco.length + coda.length <= MAX) return elenco + coda;
+  }
+  return `${nomi.length} campi${coda}`;
+}
+
+/** Il motivo, scritto come lo legge il negoziante. */
+export function motivoDichiarazioneRifiutata(s: DichiarazioneScartata): string {
+  return s.azione === 'togli'
+    ? `${s.etichetta} NON tolto: lo decidi tu nella scheda del prodotto`
+    : `${s.etichetta} NON compilato dall'assistente: lo scrivi tu nella scheda (proposta: «${s.valore ?? ''}»)`;
+}
+
+/**
+ * La riga da dare al modello, la stessa per tutti i prompt che propongono
+ * modifiche a un prodotto. Il freno vero sta in `separaCampiDichiarativi`:
+ * questa riga serve solo a non far proporre quello che poi verrebbe scartato.
+ */
+export const REGOLA_CAMPI_DICHIARATIVI = `CAMPI CHE NON TOCCHI MAI: ${CAMPI_DICHIARATIVI.join(', ')}. Sono la dichiarazione del venditore su un alimento (allergeni, ingredienti e simili): non compilarli, non cambiarli e non toglierli, nemmeno se ti sembrano ovvi dal nome o dalla foto. Se mancano, dillo al venditore e lascia che li scriva lui nella scheda del prodotto.`;
 
 /** Risolve slug categoria (+ nome sottocategoria) → category_id a due livelli. */
 function resolveCategoryId(
@@ -132,21 +286,58 @@ export function motivoPrezzoRifiutato(proposto: number, attuale: number | string
 
 /**
  * Il filtro che il MODULO del prodotto passa sopra ogni suggerimento prima di
- * scriverlo nei campi. Toglie quello che non deve entrare (oggi: il prezzo
- * fuori banda) e restituisce i motivi da mostrare, con le stesse parole del
- * server.
+ * scriverlo nei campi. Toglie quello che non deve entrare — il prezzo fuori
+ * banda e (R41) i campi dichiarativi di un alimento — e restituisce i motivi da
+ * mostrare, con le stesse parole del server. Il valore dichiarativo proposto
+ * resta scritto nel motivo: il negoziante lo vede e, se e' giusto, lo copia lui.
  */
 export function patchAiPerIlForm<T extends { price?: number }>(
   patch: T,
   opts: { prezzoAttuale?: number | string | null },
-): { patch: T; rifiutati: string[] } {
+): { patch: T; rifiutati: string[]; proposte: PropostaDichiarativa[] } {
   const rifiutati: string[] = [];
-  if (typeof patch.price === 'number' && patch.price > 0 && prezzoAiFuoriBanda(patch.price, opts.prezzoAttuale)) {
-    rifiutati.push(motivoPrezzoRifiutato(patch.price, opts.prezzoAttuale));
-    const { price: _scartato, ...resto } = patch;
-    return { patch: resto as T, rifiutati };
+  const { patch: senzaDichiarazioni, scartati } = separaCampiDichiarativi(patch);
+  const proposte: PropostaDichiarativa[] = [];
+  for (const s of scartati) {
+    const motivo = motivoDichiarazioneRifiutata(s);
+    rifiutati.push(motivo);
+    if (s.azione === 'scrivi' && s.valore) proposte.push({ chiave: s.chiave, valore: s.valore, motivo });
   }
-  return { patch, rifiutati };
+  if (
+    typeof senzaDichiarazioni.price === 'number' &&
+    senzaDichiarazioni.price > 0 &&
+    prezzoAiFuoriBanda(senzaDichiarazioni.price, opts.prezzoAttuale)
+  ) {
+    rifiutati.unshift(motivoPrezzoRifiutato(senzaDichiarazioni.price, opts.prezzoAttuale));
+    const { price: _scartato, ...resto } = senzaDichiarazioni;
+    return { patch: resto as T, rifiutati, proposte };
+  }
+  return { patch: senzaDichiarazioni, rifiutati, proposte };
+}
+
+/** Una dichiarazione che l'assistente proponeva e che nel modulo NON e' entrata. */
+export type PropostaDichiarativa = { chiave: string; valore: string; motivo: string };
+
+/**
+ * R41 — Nel modulo, la dichiarazione proposta dall'assistente diventa una
+ * PROPOSTA da confermare a mano: un avviso col valore e un pulsante «Usa questo
+ * valore». Il campo si riempie solo se il negoziante lo preme, e anche allora
+ * resta davanti ai suoi occhi fino al salvataggio.
+ *
+ * Qui si decide se il pulsante c'e' e cosa scrive: c'e' solo se il campo esiste
+ * nella categoria del prodotto (un'«Allergeni» proposta per un tagliere non ha
+ * dove andare), e una casella diventa vero o falso come quando la compila la
+ * lettura della foto.
+ */
+export function propostaPerIlModulo(
+  proposta: PropostaDichiarativa,
+  campi: { key: string; type: string }[],
+): { motivo: string; valore?: string | boolean } {
+  const campo = campi.find((f) => f.key === proposta.chiave);
+  if (!campo) return { motivo: proposta.motivo };
+  const valore =
+    campo.type === 'checkbox' ? /^(true|1|s[iì]|yes|vero)$/i.test(proposta.valore.trim()) : proposta.valore.trim();
+  return { motivo: proposta.motivo, valore };
 }
 
 export function resolveAiPatch(opts: {
@@ -154,9 +345,15 @@ export function resolveAiPatch(opts: {
   current: CurrentProduct;
   categories: CategoryRow[];
 }): ResolvedPatch {
-  const { patch, current, categories } = opts;
+  const { current, categories } = opts;
   const update: Record<string, unknown> = {};
   const changed: string[] = [];
+
+  // R41 — Prima di tutto si tolgono le dichiarazioni: da qui in giu' il patch
+  // non le contiene piu', ne' in scrittura ne' in rimozione.
+  const { patch, scartati } = separaCampiDichiarativi(opts.patch);
+  const protetti = Array.from(new Set(scartati.map((s) => s.etichetta)));
+  for (const s of scartati) changed.push(motivoDichiarazioneRifiutata(s));
 
   if (typeof patch.name === 'string' && patch.name.trim()) {
     // R158 — Il taglio e' lo stesso che fa chi crea il prodotto dalle foto.
@@ -276,5 +473,5 @@ export function resolveAiPatch(opts: {
     changed.push('stato');
   }
 
-  return { update, changed };
+  return { update, changed, protetti };
 }

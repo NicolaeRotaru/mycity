@@ -70,12 +70,15 @@ describe('resolveAiPatch', () => {
   });
 
   it('merge attributi validi e rimozione, scartando i non validi per la categoria', () => {
+    // 15/10/2026 (R41) — prima l'esempio era «origine»: oggi e' una
+    // dichiarazione dell'alimento e l'AI non la scrive (vedi
+    // le-dichiarazioni-di-un-alimento-le-scrive-il-negoziante.test.ts).
     const { update } = resolveAiPatch({
-      patch: { attributes: { origine: 'Italia', sconosciuto: 'x' }, attributes_remove: ['marca'] },
+      patch: { attributes: { peso: '500g', sconosciuto: 'x' }, attributes_remove: ['marca'] },
       current: base,
       categories,
     });
-    expect(update.attributes).toEqual({ origine: 'Italia' });
+    expect(update.attributes).toEqual({ peso: '500g' });
   });
 
   it('scarta le opzioni non ammesse per i campi select', () => {

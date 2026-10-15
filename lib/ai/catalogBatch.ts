@@ -5,7 +5,13 @@ import type { BatchRequest, BatchResultEntry } from '@/lib/ai/batch';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import { productSnapshot, type ProductRow } from '@/lib/products/aiSnapshot';
 import { getAttributesForCategory } from '@/lib/category-attributes';
-import type { AiProductPatch, CategoryRow } from '@/lib/products/aiPatch';
+import {
+  eCampoDichiarativo,
+  separaCampiDichiarativi,
+  REGOLA_CAMPI_DICHIARATIVI,
+  type AiProductPatch,
+  type CategoryRow,
+} from '@/lib/products/aiPatch';
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
 
 /**
@@ -55,7 +61,11 @@ export function senzaCampiEconomici<T extends Record<string, unknown>>(patch: T)
   for (const [k, v] of Object.entries(patch)) {
     if (!(CAMPI_ECONOMICI as readonly string[]).includes(k)) pulito[k] = v;
   }
-  return pulito as T;
+  // 15/10/2026 (R41) — Dal lotto non escono nemmeno le dichiarazioni di un
+  // alimento (allergeni, ingredienti, «senza lattosio»...): il lotto lavora sul
+  // testo, senza foto ne' etichetta, e quello che scriverebbe sarebbe un'ipotesi
+  // presa dal nome. La lista e' quella unica di `CAMPI_DICHIARATIVI`.
+  return separaCampiDichiarativi(pulito).patch as T;
 }
 
 const PROPRIETA_SOLO_TESTO: Record<string, unknown> = Object.fromEntries(
@@ -125,7 +135,7 @@ function opSpec(operation: CatalogOperation, langName?: string): {
       return {
         withSchema: true,
         maxTokens: 1024,
-        system: conRegola(`Sei un esperto di e-commerce per "MyCity Piacenza". Migliora la scheda di UN prodotto (nome, descrizione, tag, attributi mancanti, categoria se sbagliata) in modo onesto, senza inventare. In "patch" metti SOLO i campi da cambiare; ometti gli invariati. "tags" è la lista completa. Niente emoji. Rispondi solo con lo strumento "improve_one".`),
+        system: conRegola(`Sei un esperto di e-commerce per "MyCity Piacenza". Migliora la scheda di UN prodotto (nome, descrizione, tag, attributi mancanti, categoria se sbagliata) in modo onesto, senza inventare. In "patch" metti SOLO i campi da cambiare; ometti gli invariati. "tags" è la lista completa. Niente emoji. Rispondi solo con lo strumento "improve_one".\n\n${REGOLA_CAMPI_DICHIARATIVI}`),
         tool: PATCH_TOOL('improve_one', 'Migliora la scheda prodotto.', {
           summary: { type: 'string', description: 'Cosa hai migliorato, 1 frase.' },
           patch: { type: 'object', properties: PROPRIETA_SOLO_TESTO },
@@ -191,10 +201,13 @@ function productText(row: ProductRow, categories: CategoryRow[], withSchema: boo
     parts.push(
       `Categorie di primo livello (slug):\n${top.map((c) => `- ${c.slug} (${c.name})`).join('\n')}`,
     );
-    const { fields } = getAttributesForCategory(
+    // R41 — Al modello si elencano solo gli attributi che puo' proporre: le
+    // dichiarazioni di un alimento non sono un suo campo, e un elenco che le
+    // nomina e' un invito a compilarle.
+    const fields = getAttributesForCategory(
       categories.map((c) => ({ id: c.id, slug: c.slug, parent_id: c.parent_id })),
       row.category_id,
-    );
+    ).fields.filter((f) => !eCampoDichiarativo(f.key));
     if (fields.length) {
       parts.push(
         `Attributi validi per la categoria:\n${fields

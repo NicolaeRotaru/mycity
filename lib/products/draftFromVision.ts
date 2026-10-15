@@ -4,6 +4,7 @@ import { normalizeCondition } from '@/lib/products/schema';
 import {
   MAX_NOME_PRODOTTO,
   MAX_DESCRIZIONE_PRODOTTO,
+  eCampoDichiarativo,
   type CategoryRow,
 } from '@/lib/products/aiPatch';
 
@@ -49,6 +50,11 @@ export type VisionDraft = {
   attributes?: Record<string, string>;
   tags?: string[];
   alt_text?: string | null;
+  /**
+   * R36 — Il negoziante ha visto allergeni, ingredienti e le altre
+   * dichiarazioni lette dalle foto, e ha spuntato «le ho controllate».
+   */
+  dichiarazioni_confermate?: boolean;
 };
 
 export type DraftProductInsert = {
@@ -78,6 +84,25 @@ function resolveCategoryId(draft: VisionDraft, categories: CategoryRow[]): strin
   return resolved?.id ?? null;
 }
 
+/**
+ * 15/10/2026 (R36) — LE DICHIARAZIONI LETTE DAL MODELLO ENTRAVANO NELLA BOZZA
+ * SENZA CHE NESSUNO LE AVESSE VISTE.
+ *
+ * Il fornaio crea la focaccia con «Crea più prodotti dalle foto». Il modello
+ * compila da solo `allergeni: Glutine` e gli ingredienti; il riepilogo mostra
+ * nome e prezzo, non quelli. La bozza nasce con i campi obbligatori pieni, e
+ * dalla chat o dal Copilot un «pubblica» la mette in vendita: il controllo dei
+ * campi obbligatori vede valori non vuoti e passa. Una dichiarazione che il
+ * negoziante non ha mai letto finisce davanti a un cliente allergico.
+ *
+ * La porta e' questa, l'unica da cui nasce una bozza dalle foto: allergeni,
+ * ingredienti e le altre dichiarazioni (`CAMPI_DICHIARATIVI`) entrano SOLO se
+ * chi chiama dice che il negoziante le ha confermate. Nel dubbio restano fuori:
+ * la bozza nasce senza, i campi obbligatori vuoti fermano la pubblicazione da
+ * ogni strada, e il negoziante li scrive nella scheda. Una schermata nuova che
+ * dimentica la spunta crea bozze senza dichiarazioni, non bozze con
+ * dichiarazioni mai viste.
+ */
 export function buildDraftProductInsert(opts: {
   draft: VisionDraft;
   imageUrls: string[];
@@ -85,6 +110,7 @@ export function buildDraftProductInsert(opts: {
   sellerId: string;
 }): DraftProductInsert {
   const { draft, imageUrls, categories, sellerId } = opts;
+  const dichiarazioniConfermate = draft.dichiarazioni_confermate === true;
   const categoryId = resolveCategoryId(draft, categories);
 
   // Attributi: valida contro i campi della categoria; "condizione" → condition.
@@ -103,6 +129,7 @@ export function buildDraftProductInsert(opts: {
         continue;
       }
       const targetKey = AI_ATTR_TO_FIELD[aiKey] ?? aiKey;
+      if (!dichiarazioniConfermate && (eCampoDichiarativo(aiKey) || eCampoDichiarativo(targetKey))) continue;
       const field = fields.find((f) => f.key === targetKey);
       if (!field) continue;
       if (field.type === 'select') {

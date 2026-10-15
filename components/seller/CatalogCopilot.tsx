@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Sparkles, Loader2, Send, Check, PackagePlus } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
+import { avvisoDopoLApplicazione } from '@/lib/ai/esitoCopilot';
 
 /**
  * Catalog Copilot — chat: il venditore scrive un'istruzione in linguaggio naturale
@@ -125,19 +126,13 @@ export default function CatalogCopilot() {
       const json = await authedFetch('/api/ai/catalog-apply-bulk', {
         changes: changes.map((c) => ({ productId: c.product_id, patch: c.patch })),
       });
-      const applicate = typeof json.applied === 'number' ? json.applied : 0;
-      if (applicate >= changes.length) {
-        toast.success(`Applicato a ${applicate} prodotti su ${changes.length}.`);
-      } else {
-        // Quello che non e' passato non passera' nemmeno riprovando: o non e'
-        // un prodotto tuo, o la modifica non era valida, o il controllo sui
-        // contenuti l'ha fermata. Dirlo, invece di far ritentare a vuoto.
-        toast.warning(
-          `Applicate ${applicate} modifiche su ${changes.length}. Le altre ${changes.length - applicate} `
-          + 'non sono passate: apri quei prodotti e guarda cosa non torna.',
-          { duration: 12_000 },
-        );
-      }
+      // Quello che non e' passato non passera' nemmeno riprovando: o non e'
+      // un prodotto tuo, o la modifica non era valida, o il controllo sui
+      // contenuti l'ha fermata, o (R36) manca qualcosa per metterlo in vendita.
+      // Dirlo col nome del prodotto e il motivo, invece di far ritentare a vuoto.
+      const avviso = avvisoDopoLApplicazione(json, changes);
+      if (avviso.tipo === 'successo') toast.success(avviso.testo);
+      else toast.warning(avviso.testo, { duration: 20_000 });
       setMessages((m) =>
         m.map((x) => (x.id === msgId && x.role === 'assistant' ? { ...x, applied: true } : x)),
       );

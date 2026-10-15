@@ -19,8 +19,16 @@ import { uploadProductImages, ALLOWED_IMAGE_TYPES } from '@/lib/products/uploadI
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
-import type { AiProductPatch } from '@/lib/products/aiPatch';
+import { eCampoDichiarativo, type AiProductPatch } from '@/lib/products/aiPatch';
 import type { ProductSnapshot } from '@/lib/products/aiSnapshot';
+import { findLabelForKey } from '@/lib/category-attributes';
+import {
+  attributiNonDichiarativi,
+  avvisoSullaPubblicazione,
+  bozzaDaCreare,
+  messaggioDopoLaBozza,
+  riquadroDichiarazioni,
+} from '@/lib/products/prontoPerLaVendita';
 
 /**
  * Assistente AI prodotto dentro la chat Assistenza.
@@ -64,6 +72,11 @@ type Msg = {
   newDraft?: NewDraft;
   /** true quando la bozza è stata creata. */
   created?: boolean;
+  /**
+   * R36 — il negoziante ha spuntato «le ho controllate» sotto allergeni e
+   * ingredienti letti dalle foto. Senza la spunta la bozza nasce senza.
+   */
+  dichiarazioniConfermate?: boolean;
 };
 
 const MAX_IMAGES = 4;
@@ -97,11 +110,25 @@ function describePatch(patch: AiProductPatch, product: ProductSnapshot): string[
     out.push(`Categoria → ${patch.category_slug}${patch.subcategory_name ? ` / ${patch.subcategory_name}` : ''}`);
   }
   if (Array.isArray(patch.tags)) out.push(`Tag → ${patch.tags.join(', ') || '(nessuno)'}`);
+  // R41 — Allergeni, ingredienti e le altre dichiarazioni di un alimento non
+  // si cambiano da qui: la card lo dice invece di prometterlo.
   if (patch.attributes) {
-    for (const [k, v] of Object.entries(patch.attributes)) out.push(`${k} → ${v}`);
+    for (const [k, v] of Object.entries(patch.attributes)) {
+      out.push(
+        eCampoDichiarativo(k)
+          ? `${findLabelForKey(k)} → «${v}»: NON si applica, lo scrivi tu nella scheda del prodotto`
+          : `${k} → ${v}`,
+      );
+    }
   }
   if (Array.isArray(patch.attributes_remove)) {
-    for (const k of patch.attributes_remove) out.push(`Rimuovi ${k}`);
+    for (const k of patch.attributes_remove) {
+      out.push(
+        eCampoDichiarativo(k)
+          ? `Rimuovi ${findLabelForKey(k)}: NON si applica, lo decidi tu nella scheda del prodotto`
+          : `Rimuovi ${k}`,
+      );
+    }
   }
   if (patch.status) out.push(`Stato → ${STATUS_LABELS[patch.status] ?? patch.status}`);
   return out;
@@ -231,6 +258,11 @@ export default function SupportProductAssistant() {
       if (json.product) setFocused(json.product as ProductSnapshot);
       setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, applied: true } : m)));
       toast.success('Modifiche salvate sul prodotto');
+      // Quello che il server NON ha applicato (prezzo fuori banda, allergeni)
+      // si dice, invece di sparire dietro «salvate».
+      for (const riga of Array.isArray(json.changed) ? (json.changed as string[]) : []) {
+        if (riga.includes('NON ')) toast.warning(riga);
+      }
     } catch (err) {
       toast.error(friendlyError(err));
     } finally {
@@ -294,7 +326,7 @@ export default function SupportProductAssistant() {
     }
   };
 
-  const confirmCreate = async (index: number, nd: NewDraft) => {
+  const confirmCreate = async (index: number, nd: NewDraft, dichiarazioniConfermate: boolean) => {
     if (creatingIndex !== null) return;
     setCreatingIndex(index);
     try {
@@ -309,7 +341,12 @@ export default function SupportProductAssistant() {
           'content-type': 'application/json',
           authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ imageUrls: nd.imageUrls, draft: nd.draft }),
+        // R36 — Allergeni e ingredienti letti dalle foto entrano nella bozza solo
+        // se il negoziante li ha visti e confermati qui sotto.
+        body: JSON.stringify({
+          imageUrls: nd.imageUrls,
+          draft: bozzaDaCreare(nd.draft, dichiarazioniConfermate),
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(apiErrorMessage(json, 'Errore'));
@@ -319,11 +356,9 @@ export default function SupportProductAssistant() {
       setSessionImages([]); // le foto erano del nuovo prodotto, non del contesto chat
       setMessages((prev) => [
         ...prev.map((m, i) => (i === index ? { ...m, created: true } : m)),
-        {
-          role: 'assistant',
-          content:
-            'Bozza creata: è nascosta ai clienti finché non la pubblichi. Vuoi pubblicarla ("pubblica") o cambiare qualcosa?',
-        },
+        // R36 — «pubblica» si propone solo se la scheda ha già tutto: per un
+        // alimento senza allergeni e ingredienti si dice cosa manca e dove.
+        { role: 'assistant', content: messaggioDopoLaBozza(product) },
       ]);
       toast.success('Bozza prodotto creata');
     } catch (err) {
@@ -331,6 +366,12 @@ export default function SupportProductAssistant() {
     } finally {
       setCreatingIndex(null);
     }
+  };
+
+  const toggleConfermaDichiarazioni = (index: number) => {
+    setMessages((prev) =>
+      prev.map((m, i) => (i === index ? { ...m, dichiarazioniConfermate: !m.dichiarazioniConfermate } : m)),
+    );
   };
 
   const dismissDraft = (index: number) => {
@@ -420,6 +461,41 @@ export default function SupportProductAssistant() {
                       </li>
                     ))}
                   </ul>
+                  {!m.applied &&
+                    (() => {
+                      // R36 — La scheda si legge come la leggera' il server (con il
+                      // resto della proposta), e mostra le dichiarazioni con cui il
+                      // prodotto va in vetrina, da rileggere prima di Applica.
+                      const avviso = avvisoSullaPubblicazione(m.proposal.product, m.proposal.patch);
+                      if (!avviso) return null;
+                      if (avviso.mancanti.length > 0) {
+                        return (
+                          <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-accent-50 px-2 py-1.5 text-xs text-accent-800">
+                            <AlertTriangle size={13} strokeWidth={2.4} className="mt-0.5 shrink-0" aria-hidden />
+                            <span>
+                              Non si può ancora mettere in vendita: manca {avviso.mancanti.join(', ')}. Aprilo con
+                              «Apri» e compila tu questi campi.
+                            </span>
+                          </p>
+                        );
+                      }
+                      if (avviso.dichiarazioni.length === 0) return null;
+                      return (
+                        <div className="mb-3 rounded-lg border border-accent-200 bg-accent-50 p-2 text-xs text-ink-800">
+                          <p className="mb-1 flex items-center gap-1.5 font-semibold text-accent-800">
+                            <AlertTriangle size={13} strokeWidth={2.4} aria-hidden /> Va in vendita con queste
+                            dichiarazioni: rileggile, ai clienti le dai tu
+                          </p>
+                          <ul className="space-y-0.5">
+                            {avviso.dichiarazioni.map((d) => (
+                              <li key={d.etichetta}>
+                                <span className="font-semibold">{d.etichetta}:</span> {d.valore}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })()}
                   {m.applied ? (
                     <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
                       <Check size={15} strokeWidth={2.6} aria-hidden /> Modifiche salvate
@@ -473,6 +549,62 @@ export default function SupportProductAssistant() {
                   {m.newDraft.draft.description && (
                     <p className="mb-2 line-clamp-3 text-sm text-ink-600">{m.newDraft.draft.description}</p>
                   )}
+                  {(() => {
+                    const altri = attributiNonDichiarativi(m.newDraft.draft.attributes);
+                    return altri.length > 0 ? (
+                      <ul className="mb-2 space-y-0.5 text-xs text-ink-600">
+                        {altri.map((a) => (
+                          <li key={a.etichetta}>
+                            <span className="font-semibold">{a.etichetta}:</span> {a.valore}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null;
+                  })()}
+                  {(() => {
+                    // R36 — Allergeni e ingredienti in evidenza, da confermare; e
+                    // dopo la creazione il riquadro dice il vero su cosa e' entrato.
+                    const riquadro = riquadroDichiarazioni(m.newDraft.draft, {
+                      creata: !!m.created,
+                      confermate: !!m.dichiarazioniConfermate,
+                    });
+                    if (!riquadro) return null;
+                    return (
+                      <div
+                        data-riquadro="dichiarazioni"
+                        className="mb-2 rounded-lg border border-accent-200 bg-accent-50 p-2 text-xs text-ink-800"
+                      >
+                        <p className="mb-1 flex items-center gap-1.5 font-semibold text-accent-800">
+                          <AlertTriangle size={13} strokeWidth={2.4} aria-hidden /> {riquadro.titolo}
+                        </p>
+                        {riquadro.righe.length > 0 && (
+                          <ul className="mb-1 space-y-0.5">
+                            {riquadro.righe.map((d) => (
+                              <li key={d.etichetta}>
+                                <span className="font-semibold">{d.etichetta}:</span> {d.valore}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {riquadro.daScrivere && <p className="mb-1">{riquadro.daScrivere}</p>}
+                        {riquadro.chiediSpunta && (
+                          <label className="mt-1 flex items-start gap-1.5">
+                            <input
+                              type="checkbox"
+                              checked={!!m.dichiarazioniConfermate}
+                              onChange={() => toggleConfermaDichiarazioni(i)}
+                              disabled={creatingIndex !== null}
+                              className="mt-0.5"
+                            />
+                            <span>
+                              Le ho controllate sull&apos;etichetta: sono giuste. Senza questa spunta la bozza nasce
+                              senza, e le scrivi tu nella scheda.
+                            </span>
+                          </label>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {m.newDraft.draft.tags.length > 0 && (
                     <div className="mb-2 flex flex-wrap gap-1">
                       {m.newDraft.draft.tags.slice(0, 8).map((t) => (
@@ -495,7 +627,7 @@ export default function SupportProductAssistant() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => confirmCreate(i, m.newDraft!)}
+                        onClick={() => confirmCreate(i, m.newDraft!, !!m.dichiarazioniConfermate)}
                         disabled={creatingIndex !== null}
                         className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
                       >

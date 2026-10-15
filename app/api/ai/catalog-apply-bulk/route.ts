@@ -11,6 +11,7 @@ import { resolveAiPatch, type AiProductPatch, type CategoryRow } from '@/lib/pro
 import { PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import { classifyProductPolicy } from '@/lib/ai/moderation';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { cosaMancaDopoLaModifica, erroreDiSalvataggio } from '@/lib/products/prontoPerLaVendita';
 
 /**
  * Applica in un colpo solo le modifiche che il Catalog Copilot ha proposto.
@@ -97,7 +98,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       esiti.push({ productId: c.productId, ok: false, motivo: 'non e un tuo prodotto' });
       continue;
     }
-    const { update } = resolveAiPatch({
+    const { update, protetti } = resolveAiPatch({
       patch: c.patch,
       current: {
         attributes: row.attributes ?? null,
@@ -110,7 +111,24 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       categories,
     });
     if (Object.keys(update).length === 0) {
-      esiti.push({ productId: c.productId, ok: false, motivo: 'nessuna modifica valida' });
+      esiti.push({
+        productId: c.productId,
+        ok: false,
+        // R41 — allergeni e ingredienti li scrive il negoziante, non il copilot.
+        motivo: protetti.length > 0
+          ? `${protetti.join(', ')}: li scrivi tu nella scheda del prodotto`
+          : 'nessuna modifica valida',
+      });
+      continue;
+    }
+    // R36 — Messo in vendita dal copilot = stessi controlli del modulo.
+    const mancanti = cosaMancaDopoLaModifica({ prima: row, update, categories });
+    if (mancanti.length > 0) {
+      esiti.push({
+        productId: c.productId,
+        ok: false,
+        motivo: `prima di metterlo in vendita va completato: ${mancanti.join(', ')}`,
+      });
       continue;
     }
     risolte.push({ id: c.productId, row, update });
@@ -170,7 +188,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       .eq('seller_id', user.id);
     if (error) {
       logger.error('catalog-apply-bulk update failed', { productId: r.id, status: error.code });
-      esiti.push({ productId: r.id, ok: false, motivo: 'non sono riuscito a salvare' });
+      const esito = erroreDiSalvataggio(error);
+      esiti.push({
+        productId: r.id,
+        ok: false,
+        motivo: esito.tipo === 'regola' ? esito.messaggio : 'non sono riuscito a salvare',
+      });
       continue;
     }
     applied += 1;
