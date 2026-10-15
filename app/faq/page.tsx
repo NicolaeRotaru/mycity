@@ -57,7 +57,10 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'Il pagamento è sicuro?',
-        a: 'Sì. Tutti i dati transitano cifrati (HTTPS/TLS). Non memorizziamo dati bancari sui nostri server.',
+        // R71 (11/10/2026) — «Non memorizziamo dati bancari» smette di essere
+        // vero il giorno in cui il modulo di reso chiede l'IBAN per il bonifico
+        // di rimborso: si dice cosa teniamo, e per cosa.
+        a: "Sì. Tutti i dati transitano cifrati (HTTPS/TLS) e non conserviamo i dati delle carte. L'unico dato bancario che ti chiediamo è l'IBAN, e solo se vuoi un rimborso con bonifico: resta sulla richiesta di reso e lo usiamo solo per quel bonifico.",
       },
       {
         q: 'Posso usare un codice sconto?',
@@ -75,11 +78,11 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'In quanto tempo ricevo il rimborso?',
-        // 3/9/2026 — «il rimborso avviene su IBAN» era falso: nessun modulo
-        // chiede l'IBAN e per gli ordini in contanti il rimborso arriva come
-        // credito MyCity (`cod_refund`). Il bonifico resta possibile, ma su
-        // richiesta e a mano: è quello che si può promettere.
-        a: 'Entro 14 giorni dalla ricezione del prodotto da parte del venditore. Per gli ordini pagati alla consegna il rimborso arriva come credito MyCity, spendibile sul prossimo ordine pagato alla consegna; se preferisci il bonifico scrivici e lo facciamo noi.',
+        // R71 (11/10/2026) — Il credito era la scelta di partenza e il bonifico
+        // si otteneva solo chiedendolo: niente consenso espresso (art. 56 del
+        // Codice del Consumo). Adesso il modulo di reso chiede come riavere i
+        // contanti, col bonifico come prima scelta.
+        a: 'Entro 14 giorni dalla ricezione del prodotto da parte del venditore. Per gli ordini pagati alla consegna scegli tu, nella richiesta di reso, se riavere i soldi con un bonifico sul tuo conto o come credito MyCity, che si usa sui prossimi ordini pagati alla consegna.',
       },
       {
         q: 'Chi paga la spedizione del reso?',

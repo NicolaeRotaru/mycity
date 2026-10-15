@@ -6,6 +6,10 @@ import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
+import { colonnaNonTrovata } from '@/lib/db/migrazione-148';
+import { serveLaSceltaDelRimborso } from '@/lib/rimborsi/regole-del-rimborso';
+import { COLONNE_162, colonneDellaScelta, leggiSceltaDelRimborso } from '@/lib/rimborsi/scelta-del-cliente';
+import { senzaCampi } from '@/lib/db/migrazione-124';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +28,19 @@ const Body = z.object({
   photoUrls: z
     .array(z.string().refine(fotoDiCasa, 'Le foto del reso devono stare nell archivio di MyCity'))
     .max(8)
+    .optional(),
+  /**
+   * R71 — «Come vuoi il rimborso?», solo per chi ha pagato in contanti: col
+   * bonifico (e l'IBAN) oppure come credito MyCity. Facoltativo perche' una
+   * pagina aperta da prima non lo manda: il reso si apre lo stesso e il
+   * rimborso va col bonifico. La forma dell'IBAN la controlla
+   * `leggiSceltaDelRimborso`, che una prova esegue.
+   */
+  rimborso: z
+    .object({
+      modo: z.enum(['BONIFICO', 'CREDITO']),
+      iban: z.string().max(64).nullable().optional(),
+    })
     .optional(),
 });
 
@@ -59,7 +76,7 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
   const supa = await getServerSupabase();
   const { data: order, error: oErr } = await supa
     .from('orders')
-    .select('id, user_id, seller_id, delivery_status, delivered_at, total_price, created_at')
+    .select('id, user_id, seller_id, delivery_status, delivered_at, total_price, created_at, payment_method, stripe_payment_intent')
     .eq('id', body.orderId)
     .single();
 
@@ -113,21 +130,41 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
     .maybeSingle();
   if (existing) return ApiErrors.invalidRequest("Esiste già una richiesta di reso aperta per questo ordine");
 
+  // R71 — La scelta su come riavere i contanti si controlla prima di scrivere:
+  // un IBAN sbagliato si corregge adesso, non quando c'e' da pagare.
+  const esitoScelta = leggiSceltaDelRimborso(body.rimborso, { pagatoInContanti: serveLaSceltaDelRimborso(order) });
+  if (!esitoScelta.ok) return ApiErrors.invalidRequest(esitoScelta.errore);
+  const scelta = esitoScelta.scelta;
+
   const admin = getAdminSupabase();
-  const { data: ret, error: insErr } = await admin
-    .from('returns')
-    .insert({
-      order_id: body.orderId,
-      order_item_id: body.orderItemId ?? null,
-      buyer_id: user.id,
-      seller_id: order.seller_id,
-      reason: body.reason,
-      notes: body.notes ?? null,
-      photo_urls: body.photoUrls ?? [],
-      status: 'REQUESTED',
-    })
-    .select('id')
-    .single();
+  const riga: Record<string, unknown> = {
+    order_id: body.orderId,
+    order_item_id: body.orderItemId ?? null,
+    buyer_id: user.id,
+    seller_id: order.seller_id,
+    reason: body.reason,
+    notes: body.notes ?? null,
+    photo_urls: body.photoUrls ?? [],
+    status: 'REQUESTED',
+    // L'IBAN sta solo qui, sul reso: lo legge il server, mai il negozio
+    // (migrazione 162 — la colonna e' chiusa al browser).
+    ...colonneDellaScelta(scelta),
+  };
+  const inserisci = (valori: Record<string, unknown>) =>
+    admin.from('returns').insert(valori).select('id').single();
+
+  let { data: ret, error: insErr } = await inserisci(riga);
+  let sceltaSalvata = !!scelta;
+  if (insErr && scelta && colonnaNonTrovata(insErr)) {
+    // La migrazione 162 non c'e' ancora: il reso si apre lo stesso — il
+    // recesso non si ferma per una colonna — e senza scelta il rimborso andra'
+    // col bonifico. Lo si dice al cliente, invece di fingere di aver salvato.
+    logger.warn('[resi] migrazione 162 non ancora applicata: reso aperto senza la scelta del rimborso', {
+      orderId: body.orderId,
+    });
+    ({ data: ret, error: insErr } = await inserisci(senzaCampi(riga, COLONNE_162)));
+    sceltaSalvata = false;
+  }
 
   if (insErr || !ret) {
     // 186 — Il controllo qui sopra non è atomico: due invii ravvicinati lo
@@ -160,5 +197,13 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
     link: `/seller/orders/${order.id}`,
   });
 
-  return NextResponse.json({ id: ret.id, status: 'REQUESTED' }, { status: 201 });
+  return NextResponse.json(
+    {
+      id: ret.id,
+      status: 'REQUESTED',
+      // R71 — Dice alla pagina se la scelta sul rimborso e' rimasta scritta.
+      sceltaDelRimborso: scelta ? (sceltaSalvata ? 'salvata' : 'non_salvata') : null,
+    },
+    { status: 201 },
+  );
 });

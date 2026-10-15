@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
+import { comeSiDivideIlReclamo, pagamentoPerChiDecide, type OrdineDaRimborsare } from '@/lib/rimborsi/regole-del-rimborso';
+import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 
 type Dispute = {
   id: string;
@@ -70,6 +72,30 @@ export default function AdminDisputesPage() {
     },
   });
 
+  // R84 — Chi decide un reclamo vede come ha pagato il cliente, se i contanti
+  // sono arrivati e quanto si puo' restituire: prima c'era solo un campo libero,
+  // e un ordine mai pagato chiuso con «24» diventava credito dal nulla. La
+  // tabella dei reclami non ha un legame con gli ordini, quindi si leggono a parte.
+  const idOrdini = [...new Set(disputes.map((d) => d.order_id))].sort();
+  const { data: ordiniDeiReclami = {} } = useQuery({
+    queryKey: ['admin', 'disputes-ordini', idOrdini.join(',')],
+    enabled: idOrdini.length > 0,
+    queryFn: async (): Promise<Record<string, OrdineDaRimborsare>> => {
+      const COLONNE =
+        'id, stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status';
+      const leggi = (colonne: string) => supabase.from('orders').select(colonne).in('id', idOrdini);
+      const { data, error } = await conRipiegoSchema(
+        'orders.select (pannello reclami)',
+        () => leggi(COLONNE),
+        () => leggi(senzaColonne(COLONNE, COLONNE_124)),
+      );
+      // Senza questi dati il pannello resta com'era: il controllo vero lo fa il server.
+      if (error) return {};
+      const righe = (data ?? []) as unknown as Array<OrdineDaRimborsare & { id: string }>;
+      return Object.fromEntries(righe.map((o) => [o.id, o]));
+    },
+  });
+
   const decide = useMutation({
     mutationFn: async ({ id, status, notes, refund }: {
       id: string; status: Dispute['status']; notes: string; refund?: number;
@@ -102,6 +128,12 @@ export default function AdminDisputesPage() {
   });
 
   const detail = disputes.find((d) => d.id === openId);
+  const ordineDelDettaglio = detail ? ordiniDeiReclami[detail.order_id] : undefined;
+  const pagamento = ordineDelDettaglio ? pagamentoPerChiDecide(ordineDelDettaglio) : null;
+  // Collaudo del 15/10, terzo giro: su un ordine misto la cifra si divide fra
+  // credito e bonifico, e chi decide lo legge PRIMA di premere.
+  const divisione =
+    ordineDelDettaglio && refundEur ? comeSiDivideIlReclamo(ordineDelDettaglio, Math.round(Number(refundEur) * 100)) : null;
 
   // "Segnali di rischio" — derivati dai reclami caricati (nessuna API nuova):
   // venditori con più reclami e clienti che aprono reclami ripetuti.
@@ -296,6 +328,16 @@ export default function AdminDisputesPage() {
               className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
             />
 
+            {pagamento && (
+              <div className="rounded-lg border border-cream-300 bg-cream-50 p-3 text-sm text-ink-800">
+                <p><strong>Pagamento:</strong> {pagamento.comeHaPagato}</p>
+                <p className="mt-1">
+                  <strong>Rimborsabile al massimo:</strong> {formatPrice(pagamento.massimoCents / 100)}
+                </p>
+                {pagamento.avviso && <p className="mt-1 text-secondary-700">{pagamento.avviso}</p>}
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-semibold text-ink-700 mb-1">Rimborso (€) - opzionale</label>
               <input
@@ -306,6 +348,7 @@ export default function AdminDisputesPage() {
                 placeholder="0.00"
                 className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
               />
+              {divisione && <p className="mt-1 text-xs text-ink-600">{divisione}</p>}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
