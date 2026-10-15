@@ -114,9 +114,11 @@ name: Rilascio dopo CI verde
 # la pretende.
 #
 # Le richieste aperte prima del commit che aggiunge «Main» non lo hanno mai
-# prodotto: vanno AGGIORNATE con main («Update branch»). Rilanciare la loro CI
-# non basta: un rilancio riusa lo stesso commit, cioe' il vecchio ci.yml senza
-# il lavoro «Main», e la richiesta resta in «Expected — Waiting».
+# prodotto: vanno AGGIORNATE con main — col pulsante «Update branch» se
+# GitHub lo mostra, altrimenti unendo main nel loro ramo (si puo' chiedere a
+# Claude). Rilanciare la loro CI non basta: un rilancio riusa lo stesso
+# commit, cioe' il vecchio ci.yml senza il lavoro «Main», e la richiesta resta
+# in «Expected — Waiting».
 #
 # ⚠️ 3/9/2026 — E C'E' UNA TERZA COSA, SCOPERTA GUARDANDO IL PROGETTO VERO.
 #
