@@ -9,18 +9,10 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
+import { leggiVistiDiRecente, type VistoDiRecente } from '@/lib/queries/fasce-prodotti';
 import { useUtente } from '@/components/hooks/useUtente';
 
-type Item = {
-  viewed_at: string;
-  product: {
-    id: string;
-    name: string;
-    price: number;
-    images: string[] | null;
-    profiles: { store_name: string | null; is_approved: boolean } | null;
-  };
-};
+type Item = VistoDiRecente;
 
 type Props = {
   /** Esclude un prodotto dal carosello (utile su scheda prodotto stesso) */
@@ -40,22 +32,9 @@ export default function RecentlyViewed({ excludeId, className = '' }: Props) {
   const { data: items = [] } = useQuery({
     queryKey: queryKeys.home.recentlyViewed(userId ?? ''),
     enabled: !!userId,
-    queryFn: async (): Promise<Item[]> => {
-      const { data } = await supabase
-        .from('recently_viewed')
-        .select(`
-          viewed_at,
-          product:products!recently_viewed_product_id_fkey (
-            id, name, price, images,
-            profiles!products_seller_id_fkey ( store_name, is_approved )
-          )
-        `)
-        .eq('user_id', userId!)
-        .order('viewed_at', { ascending: false })
-        .limit(12);
-      return ((data ?? []) as unknown as Item[])
-        .filter((it) => it.product?.profiles?.is_approved && it.product.id !== excludeId);
-    },
+    // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il
+    // negozio a `profiles`, che dopo la migrazione 161 un cliente non legge piu'.
+    queryFn: (): Promise<Item[]> => leggiVistiDiRecente(supabase, { userId: userId!, excludeId }),
   });
 
   if (!userId || items.length < 2) return null;

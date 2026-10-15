@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
+import { leggiNegozioDelMese, type NegozioDelMese } from '@/lib/queries/negozio-del-mese';
 
 /**
  * Pagina "Negozio del mese" — hero del pick attuale + voto democratico.
@@ -28,20 +29,7 @@ import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
  * - Accessibility: "Bottone con etichetta esplicita, conferma toast."
  */
 
-type Pick = {
-  id: string;
-  cover_image_url: string | null;
-  headline: string | null;
-  story: string | null;
-  discount_code: string | null;
-  discount_percent: number | null;
-  month: string;
-  seller: {
-    id: string;
-    store_name: string | null;
-    store_logo: string | null;
-  } | null;
-};
+type Pick = NegozioDelMese;
 
 type LeaderboardRow = {
   seller_id: string;
@@ -79,17 +67,9 @@ export default function ShopOfMonthPage() {
 
   const { data: pick } = useQuery({
     queryKey: queryKeys.shopOfMonth.page,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('shop_of_month')
-        .select(`
-          id, cover_image_url, headline, story, discount_code, discount_percent, month,
-          seller:profiles!shop_of_month_seller_id_fkey ( id, store_name, store_logo )
-        `)
-        .eq('month', firstOfMonth)
-        .maybeSingle();
-      return data as unknown as Pick | null;
-    },
+    // 15/10/2026 (R3) — La lettura vive in lib/queries/negozio-del-mese.ts: agganciava il
+    // negozio a `profiles`, e dopo la migrazione 161 la scelta del mese spariva per ogni cliente.
+    queryFn: (): Promise<Pick | null> => leggiNegozioDelMese(supabase, firstOfMonth),
   });
 
   const { data: leaderboard = [] } = useQuery({

@@ -31,17 +31,25 @@ const CASSETTO = path.join(RADICE, 'tests', 'unit', '.montati', String(process.p
 
 const montati = new Map<string, Promise<Record<string, unknown>>>();
 
-/** Compila e carica un componente della repo. Il risultato è il modulo vero. */
-export function monta(fileRelativo: string): Promise<Record<string, unknown>> {
-  const gia = montati.get(fileRelativo);
+/**
+ * Compila e carica un componente della repo. Il risultato è il modulo vero.
+ *
+ * `veri`: i pacchetti da lasciare veri invece di sostituirli col finto (per
+ * esempio `@tanstack/react-query` per eseguire il precarico di un guscio del
+ * server). Senza, è il comportamento di sempre.
+ */
+export function monta(fileRelativo: string, opzioni: { veri?: string[] } = {}): Promise<Record<string, unknown>> {
+  const veri = [...(opzioni.veri ?? [])].sort().join(',');
+  const chiave = veri ? `${fileRelativo}#${veri}` : fileRelativo;
+  const gia = montati.get(chiave);
   if (gia) return gia;
   const promessa = (async () => {
     if (!existsSync(CASSETTO)) mkdirSync(CASSETTO, { recursive: true });
-    const nome = fileRelativo.replace(/[^a-zA-Z0-9]+/g, '-') + '.mjs';
+    const nome = chiave.replace(/[^a-zA-Z0-9]+/g, '-') + '.mjs';
     const uscita = path.join(CASSETTO, nome);
     execFileSync(
       process.execPath,
-      [path.join(__dirname, 'compila.mjs'), fileRelativo, uscita],
+      [path.join(__dirname, 'compila.mjs'), fileRelativo, uscita, ...(veri ? [veri] : [])],
       { cwd: RADICE, stdio: ['ignore', 'ignore', 'pipe'] },
     );
     const modulo = (await import(/* @vite-ignore */ uscita)) as Record<string, unknown>;
@@ -54,7 +62,7 @@ export function monta(fileRelativo: string): Promise<Record<string, unknown>> {
     }
     return modulo;
   })();
-  montati.set(fileRelativo, promessa);
+  montati.set(chiave, promessa);
   return promessa;
 }
 

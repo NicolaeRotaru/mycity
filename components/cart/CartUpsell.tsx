@@ -10,6 +10,7 @@ import { addToCart, type CartItem } from '@/lib/cart';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { toast } from 'sonner';
+import { leggiSuggerimentiCarrello, type SuggerimentoCarrello } from '@/lib/queries/fasce-prodotti';
 
 /**
  * "Completa con" — carosello upsell del carrello.
@@ -23,16 +24,7 @@ import { toast } from 'sonner';
  * identica al ProductCard: nessuna logica di stato nuova.
  */
 
-type SuggestItem = {
-  id: string;
-  name: string;
-  price: number;
-  images: string[] | null;
-  seller_id: string | null;
-  has_variants: boolean | null;
-  stock: number | null;
-  profiles: { store_name: string | null; is_approved: boolean } | null;
-};
+type SuggestItem = SuggerimentoCarrello;
 
 type Props = {
   /** Articoli attualmente nel carrello (per seller + esclusione). */
@@ -49,35 +41,10 @@ export function CartUpsell({ items }: Props) {
   const { data: suggestions = [] } = useQuery({
     queryKey: ['cart-upsell', sellerIds.join(','), excludeIds.join(',')],
     enabled: sellerIds.length > 0,
-    queryFn: async (): Promise<SuggestItem[]> => {
-      const { data, error } = await supabase
-        .from('products')
-        .select(`
-          id, name, price, images, seller_id, has_variants, stock,
-          profiles!products_seller_id_fkey ( store_name, is_approved )
-        `)
-        .in('seller_id', sellerIds)
-        .eq('status', 'available')
-        .limit(24);
-      // L'errore non si ingoia: senza questa riga la lettura non FALLISCE mai — torna «riuscita»
-      // con la lista vuota, la striscia sparisce in silenzio e nessuno sa perché.
-      if (error) throw error;
-      const rows = (data ?? []) as unknown as SuggestItem[];
-      const inCart = new Set(excludeIds);
-      // Qui si propone solo ciò che si può davvero comprare col «+».
-      //
-      // · con varianti → fuori: l'upsell aggiunge l'articolo SENZA scegliere l'opzione, e la riga
-      //   arriva rotta al checkout. Per quelli serve passare dalla scheda prodotto.
-      // · finiti → fuori, ed è il difetto che questa riga chiude. `status = 'available'` NON vuol
-      //   dire «ce n'è»: la giacenza è una colonna a parte, e nessun automatismo porta lo status a
-      //   'out_of_stock' quando arriva a zero. Un prodotto disponibile-ma-finito compariva senza
-      //   badge, col pulsante acceso, si aggiungeva al carrello, e il muro arrivava al checkout.
-      //   `stock === null` vuol dire «non tenuta»: quello resta, perché non è un prodotto finito.
-      return rows
-        .filter((p) => p.profiles?.is_approved && !inCart.has(p.id) && !p.has_variants)
-        .filter((p) => p.stock === null || p.stock === undefined || p.stock > 0)
-        .slice(0, 8);
-    },
+    // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il
+    // negozio a `profiles`, che dopo la migrazione 161 un cliente non legge piu'. Le regole
+    // su varianti, giacenza ed errori sono rimaste le stesse, e la' si mettono alla prova.
+    queryFn: (): Promise<SuggestItem[]> => leggiSuggerimentiCarrello(supabase, { sellerIds, excludeIds }),
   });
 
   if (suggestions.length === 0) return null;
