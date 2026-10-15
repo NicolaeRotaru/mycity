@@ -13,9 +13,12 @@
 #   0 3 * * 0 /path/to/scripts/backup-db.sh
 #
 # Prerequisiti:
-#   - pg_dump (postgresql-client 15+)
-#   - SUPABASE_DB_URL in env: postgresql://postgres:[PWD]@db.[PROJECT].supabase.co:5432/postgres
-#     (Dashboard → Settings → Database → Connection string → URI)
+#   - pg_dump alla versione del server (la produzione e' PostgreSQL 17)
+#   - SUPABASE_DB_URL in env, la riga del Session pooler:
+#     postgresql://postgres.[PROJECT]:[PWD]@aws-…pooler.supabase.com:5432/postgres
+#     (pannello Connect di Supabase → Session pooler). Non la connessione
+#     diretta db.[PROJECT].supabase.co, che risponde solo in IPv6, e non il
+#     Transaction pooler sulla 6543, che non regge un pg_dump.
 #   - BACKUP_DIR (default: ./backups)
 #
 # Facoltative — la copia dei FILE delle foto (vedi in fondo, R180). Finche' non
@@ -71,7 +74,23 @@ OUT="$BACKUP_DIR/mycity_${TS}.dump"
 echo "[backup] Starting pg_dump → $OUT"
 START=$(date +%s)
 
-pg_dump \
+# 9/9/2026 — UN DUMP MORTO A META' NON DEVE USCIRE COME SE FOSSE UNA COPIA.
+#
+# `pg_dump --file` il file lo CREA prima di riuscire. Se poi muore — stamattina
+# non e' nemmeno arrivato a bussare al database — quel file resta li', di poche
+# decine di byte. E il passo che conserva la copia gira con `!cancelled()`,
+# cioe' anche quando qualcosa e' fallito: e' voluto, serve a non perdere un dump
+# BUONO se e' la copia delle foto a cadere dopo.
+#
+# Le due cose insieme fanno un guscio. Misurato sulla corsa 34323532351 del 9/9:
+# artefatto `backup-database-34323532351`, 170 byte, appeso a un lavoro rosso e
+# tenuto trenta giorni. Chi apre la pagina dei lavori vede un backup che non e'
+# un backup — ed e' peggio di non vedere niente, perche' smette di cercarlo.
+#
+# Qui il file mezzo scritto si toglie di mezzo. Cosi' `if-no-files-found: error`
+# fa il suo mestiere e il passo di conservazione fallisce, invece di consegnare
+# un guscio con un nome rassicurante.
+if ! pg_dump \
   --format=custom \
   --no-owner \
   --no-acl \
@@ -81,7 +100,11 @@ pg_dump \
   --exclude-schema=supabase_functions \
   --exclude-schema=extensions \
   --file="$OUT" \
-  "$DB_URL"
+  "$DB_URL"; then
+  rm -f "$OUT"
+  echo "[backup] pg_dump e' fallito: tolto il file incompleto, cosi' non esce un artefatto che sembra una copia." >&2
+  exit 1
+fi
 
 # #234 — Gli utenti. Lo schema `auth` era escluso per intero, e li' dentro c'e'
 # `auth.users`: la tabella a cui punta `profiles.id` e quindici altri file di
@@ -104,9 +127,21 @@ pg_dump \
 #
 # `auth.mfa_challenges` no: sono le richieste in corso, durano minuti e non
 # servono a nessun ripristino.
+#
+# 14/10/2026 — SE CADE QUESTA, LA PRIMA COPIA RESTAVA IN CHIARO.
+#
+# La ripulitura qui sopra copriva solo il primo pg_dump. Se cadeva questo, il
+# dump principale era gia' scritto e completo, ma non ancora cifrato (la
+# cifratura viene dopo): `set -e` usciva e lo lasciava li' in chiaro, accanto a
+# un guscio degli utenti. Finche' il primo dump non arrivava al database non
+# poteva succedere; con l'indirizzo del Session pooler puo' bastare una
+# connessione caduta fra il primo e il secondo.
+#
+# Senza gli utenti la copia non si ripristina (vedi sopra): si tolgono tutti e
+# due e si esce rossi, come per il primo.
 UTENTI="$BACKUP_DIR/mycity_${TS}_utenti.dump"
 echo "[backup] Dump degli utenti (auth.users, auth.identities, auth.mfa_factors) → $UTENTI"
-pg_dump \
+if ! pg_dump \
   --format=custom \
   --no-owner \
   --no-acl \
@@ -114,7 +149,11 @@ pg_dump \
   --table=auth.identities \
   --table=auth.mfa_factors \
   --file="$UTENTI" \
-  "$DB_URL"
+  "$DB_URL"; then
+  rm -f "$OUT" "$UTENTI"
+  echo "[backup] pg_dump degli utenti e' fallito: tolti tutti e due i file, cosi' non resta in giro una copia in chiaro e senza utenti." >&2
+  exit 1
+fi
 
 # 31/8/2026 (R180) — L'elenco delle foto. Lo schema `storage` e' escluso qui
 # sopra (e va escluso: dentro ci sono funzioni e trigger del fornitore che un

@@ -16,9 +16,32 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const createClient = vi.fn(() => ({ auth: {} }));
 
+/**
+ * 8/9/2026 — LE VARIABILI MANCANTI SI ACCENDONO CON UN INTERRUTTORE, NON
+ * SOSTITUENDO IL MODULO A META' FILE.
+ *
+ * L'ultima prova qui sotto sostituiva «@/lib/env» con una versione che lancia,
+ * e quella sostituzione restava per tutto il resto del file: girando in un
+ * altro ordine, le altre tre morivano sull'errore invece che sulla cosa che
+ * controllano. Rimettere la versione buona prima di ogni prova non e' la cura:
+ * due sostituzioni dello stesso modulo nello stesso giro fanno a gara, e una
+ * volta su quattro vinceva quella sbagliata.
+ *
+ * Qui la finta e' UNA sola per tutto il file, e cosa risponde lo decide questo
+ * interruttore. Nessuna gara, e l'ordine non conta.
+ */
+const stato = vi.hoisted(() => ({ variabiliMancanti: false }));
+
 vi.mock('@supabase/supabase-js', () => ({ createClient }));
 vi.mock('@/lib/env', () => ({
-  requireSupabasePublic: () => ({ url: 'https://x.supabase.co', key: 'anon-key' }),
+  requireSupabasePublic: () => {
+    if (stato.variabiliMancanti) {
+      throw new Error(
+        'Variabili Supabase mancanti: NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY',
+      );
+    }
+    return { url: 'https://x.supabase.co', key: 'anon-key' };
+  },
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() },
@@ -28,6 +51,7 @@ describe('una sola fabbrica di client anonimi', () => {
   beforeEach(() => {
     vi.resetModules();
     createClient.mockClear();
+    stato.variabiliMancanti = false;
   });
 
   it('la fabbrica spegne sessione, rinnovo automatico e lettura della sessione dall’indirizzo', async () => {
@@ -70,12 +94,7 @@ describe('una sola fabbrica di client anonimi', () => {
   });
 
   it('quando le variabili mancano, LANCIA con scritto cosa manca', async () => {
-    vi.resetModules();
-    vi.doMock('@/lib/env', () => ({
-      requireSupabasePublic: () => {
-        throw new Error('Variabili Supabase mancanti: NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY');
-      },
-    }));
+    stato.variabiliMancanti = true;
     const { creaClientAnonimo } = await import('@/lib/supabase/anonimo');
     expect(() => creaClientAnonimo()).toThrow(/NEXT_PUBLIC_SUPABASE_URL/);
   });

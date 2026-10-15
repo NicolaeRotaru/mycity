@@ -15,9 +15,12 @@
  * se il documento del ripristino torna a contraddirsi.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import {
+  readFileSync, mkdtempSync, mkdirSync, writeFileSync, chmodSync, existsSync, readdirSync,
+} from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const leggi = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
 
@@ -74,6 +77,14 @@ describe('il controllo sulla forma dell\'indirizzo del database', () => {
 
   // Se il controllo sparisce dal lavoro, `blocco` resta null e ogni prova qui sotto fallisce
   // dicendo perché — invece di far saltare la lettura dell'intero file.
+  const bloccoDa = (dopo: number): string | null => {
+    const i = workflow.indexOf('case "$SUPABASE_DB_URL" in', dopo);
+    if (i < 0) return null;
+    const j = workflow.indexOf('esac', i);
+    if (j < 0) return null;
+    return workflow.slice(i, j + 4).split('\n').map((r) => r.replace(/^ {10}/, '')).join('\n');
+  };
+
   const blocco: string | null = (() => {
     const i = workflow.indexOf('case "$SUPABASE_DB_URL" in');
     if (i < 0) return null;
@@ -120,6 +131,55 @@ describe('il controllo sulla forma dell\'indirizzo del database', () => {
   });
 });
 
+describe('il guardiano della connessione diretta (IPv6)', () => {
+  // 8/9/2026 — Passato il controllo sulla forma, la copia è morta cosi':
+  //   pg_dump: error: connection to server at "db.<progetto>.supabase.co" (2a05:d012:...),
+  //   port 5432 failed: Network is unreachable
+  // L'indirizzo era giusto: la connessione diretta di Supabase risponde solo in IPv6, e i
+  // computer di GitHub Actions hanno solo IPv4. Serve il Session pooler.
+  const workflow = leggi('.github/workflows/backup-db.yml');
+
+  const secondo: string | null = (() => {
+    const primo = workflow.indexOf('case "$SUPABASE_DB_URL" in');
+    if (primo < 0) return null;
+    const i = workflow.indexOf('case "$SUPABASE_DB_URL" in', primo + 1);
+    if (i < 0) return null;
+    const j = workflow.indexOf('esac', i);
+    if (j < 0) return null;
+    return workflow.slice(i, j + 4).split('\n').map((r) => r.replace(/^ {10}/, '')).join('\n');
+  })();
+
+  const provaCon = (valore: string) => {
+    expect(secondo, 'il guardiano della connessione diretta non c\'è più: nessuno ferma un indirizzo irraggiungibile').not.toBeNull();
+    return spawnSync('bash', ['-c', secondo as string], {
+      encoding: 'utf8',
+      env: { ...process.env, SUPABASE_DB_URL: valore },
+    });
+  };
+
+  it('ferma la connessione diretta, che da qui non si raggiunge', () => {
+    const r = provaCon('postgresql://postgres:segreta@db.clmpyfvpvfjgeviworth.supabase.co:5432/postgres');
+    expect(r.status, 'lasciata passare la connessione diretta: la copia morirebbe su «Network is unreachable»').not.toBe(0);
+    expect(r.stdout + r.stderr).toContain('Session pooler');
+  });
+
+  it('lascia passare il Session pooler, che è la strada giusta', () => {
+    const r = provaCon('postgresql://postgres.clmpyfvpvfjgeviworth:segreta@aws-0-eu-central-1.pooler.supabase.com:5432/postgres');
+    expect(r.status, 'bocciato il Session pooler, che è proprio quello che serve').toBe(0);
+  });
+
+  it('ferma anche il Transaction pooler, che non regge una copia', () => {
+    const r = provaCon('postgresql://postgres.clmpyfvpvfjgeviworth:segreta@aws-0-eu-west-3.pooler.supabase.com:6543/postgres');
+    expect(r.status, 'lasciato passare il Transaction pooler (6543): il messaggio lo esclude, il guardiano no').not.toBe(0);
+    expect(r.stdout + r.stderr).toContain('Session pooler');
+  });
+
+  it('non stampa mai il valore del segreto', () => {
+    const r = provaCon('postgresql://postgres:parolachiave-segretissima@db.abc.supabase.co:5432/postgres');
+    expect(r.stdout + r.stderr).not.toContain('parolachiave-segretissima');
+  });
+});
+
 describe('il documento su come si ripristinano i dati', () => {
   const doc = leggi('docs/backup-restore.md');
 
@@ -136,5 +196,148 @@ describe('il documento su come si ripristinano i dati', () => {
     expect(avviso).toContain('il ripristino al minuto non c\'è');
     const sezione = doc.slice(doc.indexOf('### Free tier'), doc.indexOf('### Pro tier'));
     expect(sezione).toContain('Nessun ripristino al minuto');
+  });
+});
+
+/**
+ * 9/9/2026 — UN GUSCIO DA 170 BYTE CHIAMATO «backup-database».
+ *
+ * La corsa 34323532351 del 9/9 e' morta su `pg_dump` senza nemmeno raggiungere
+ * il database. Eppure ha caricato un artefatto: `backup-database-34323532351`,
+ * 170 byte, conservato trenta giorni. Il motivo sono due scelte giuste che
+ * insieme sbagliano: `pg_dump --file` crea il file PRIMA di riuscire, e il
+ * passo che conserva la copia gira con `!cancelled()` — voluto, serve a non
+ * perdere un dump buono quando e' la copia delle FOTO a cadere dopo.
+ *
+ * Il risultato e' peggio di un fallimento pulito: chi apre la pagina dei lavori
+ * vede un backup, e smette di cercarlo.
+ *
+ * Qui si esegue lo script vero con un `pg_dump` finto che fallisce dopo aver
+ * creato il file, e si pretende che il file non resti. Rimetti `pg_dump` senza
+ * la ripulitura e questa diventa rossa.
+ */
+describe('quando la copia fallisce non lascia in giro un file che sembra una copia', () => {
+  it('il file mezzo scritto viene tolto, cosi non finisce fra gli artefatti', () => {
+    const cartella = mkdtempSync(join(tmpdir(), 'copia-fallita-'));
+    const finti = join(cartella, 'finti');
+    mkdirSync(finti);
+
+    // pg_dump finto: crea il file (come fa quello vero con --file) e poi muore.
+    const fintoPgDump = join(finti, 'pg_dump');
+    writeFileSync(
+      fintoPgDump,
+      '#!/usr/bin/env bash\n' +
+        'for a in "$@"; do case "$a" in --file=*) echo "mezzo scritto" > "${a#--file=}";; esac; done\n' +
+        'echo "pg_dump: error: connection to server failed: Network is unreachable" >&2\n' +
+        'exit 1\n',
+    );
+    chmodSync(fintoPgDump, 0o755);
+
+    const destinazione = join(cartella, 'backup');
+    const esito = spawnSync('bash', [join(process.cwd(), 'scripts/backup-db.sh')], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${finti}:${process.env.PATH ?? ''}`,
+        SUPABASE_DB_URL: 'postgresql://tizio:segreto@aws-0-eu-west-3.pooler.supabase.com:5432/postgres',
+        BACKUP_DIR: destinazione,
+        BACKUP_PASSPHRASE: 'una-frase-lunga-per-la-prova',
+      },
+    });
+
+    expect(esito.status, 'lo script deve fallire quando pg_dump fallisce').not.toBe(0);
+
+    const rimasti = existsSync(destinazione) ? readdirSync(destinazione) : [];
+    expect(
+      rimasti.filter((f) => f.endsWith('.dump')),
+      'e rimasto un file .dump di una copia fallita: finisce fra gli artefatti col nome «backup-database», e chi lo vede smette di cercare il backup vero',
+    ).toEqual([]);
+
+    expect(esito.stderr, 'lo script non dice perche non esce nessun file').toContain('tolto il file incompleto');
+    // Tetto piu' alto del solito: questa prova crea una cartella vera e fa
+    // partire bash. Con la macchina carica — `npm run verify` fa girare prima
+    // typecheck e lint — cinque secondi possono non bastare, e un tetto stretto
+    // e' un'altra prova che cambia verdetto a seconda di quanto e' occupato il
+    // computer. E' esattamente il difetto che questo ramo sta chiudendo.
+  }, 30_000);
+});
+
+/**
+ * 14/10/2026 — LA RIPULITURA COPRIVA SOLO IL PRIMO pg_dump.
+ *
+ * Se cadeva il secondo (gli utenti), il primo era gia' scritto, completo e
+ * ancora in chiaro: la cifratura viene dopo. `set -e` usciva e lo lasciava li',
+ * e il passo che conserva la copia — che gira anche dopo un errore — lo
+ * caricava fra gli artefatti di un repository pubblico.
+ *
+ * Due difese, due prove: lo script non lascia file in chiaro, e il passo di
+ * conservazione prende solo i file cifrati anche se un giorno lo script
+ * dovesse lasciarne.
+ */
+describe('una copia caduta a meta non lascia in giro il database in chiaro', () => {
+  it('se cade il dump degli utenti, non resta nessun .dump: nemmeno quello completo', () => {
+    const cartella = mkdtempSync(join(tmpdir(), 'utenti-falliti-'));
+    const finti = join(cartella, 'finti');
+    mkdirSync(finti);
+
+    // pg_dump finto: scrive sempre il suo --file; muore solo sul dump degli utenti.
+    const fintoPgDump = join(finti, 'pg_dump');
+    writeFileSync(
+      fintoPgDump,
+      '#!/usr/bin/env bash\n' +
+        'utenti=no\n' +
+        'for a in "$@"; do case "$a" in --table=auth.users) utenti=si;; esac; done\n' +
+        'for a in "$@"; do case "$a" in --file=*) echo "dati veri in chiaro" > "${a#--file=}";; esac; done\n' +
+        'if [ "$utenti" = si ]; then echo "pg_dump: error: server closed the connection unexpectedly" >&2; exit 1; fi\n' +
+        'exit 0\n',
+    );
+    chmodSync(fintoPgDump, 0o755);
+
+    const destinazione = join(cartella, 'backup');
+    const esito = spawnSync('bash', [join(process.cwd(), 'scripts/backup-db.sh')], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${finti}:${process.env.PATH ?? ''}`,
+        SUPABASE_DB_URL: 'postgresql://postgres.abc:segreto@aws-0-eu-west-3.pooler.supabase.com:5432/postgres',
+        BACKUP_DIR: destinazione,
+        BACKUP_PASSPHRASE: 'una-frase-lunga-per-la-prova',
+      },
+    });
+
+    expect(esito.status, 'lo script deve fallire quando cade il dump degli utenti').not.toBe(0);
+    const rimasti = existsSync(destinazione) ? readdirSync(destinazione) : [];
+    expect(
+      rimasti.filter((f) => f.endsWith('.dump')),
+      'e rimasto un .dump in chiaro: il passo di conservazione lo caricherebbe fra gli artefatti di un repository pubblico',
+    ).toEqual([]);
+  }, 30_000);
+
+  it('il passo che conserva la copia prende solo i file cifrati', () => {
+    const workflow = leggi('.github/workflows/backup-db.yml');
+    const i = workflow.indexOf('- name: Conserva la copia fuori dal contenitore');
+    expect(i, 'il passo che conserva la copia non c\'e\' piu\'').toBeGreaterThan(-1);
+    const passo = workflow.slice(i, workflow.indexOf('\n\n', i) > -1 ? workflow.indexOf('\n\n', i) : undefined);
+    const percorso = /^\s+path:\s*(\S+)\s*$/m.exec(passo)?.[1];
+    expect(percorso, 'il passo non dice quali file conserva').toBeTruthy();
+
+    // Si prova il modello vero su una cartella vera: un file cifrato e i tre in
+    // chiaro che una copia caduta a meta' puo' lasciare.
+    const radice = mkdtempSync(join(tmpdir(), 'cosa-esce-'));
+    mkdirSync(join(radice, 'backup'));
+    for (const f of [
+      'mycity_20261014_021700.dump.gpg',
+      'mycity_20261014_021700.dump',
+      'mycity_20261014_021700_utenti.dump',
+      'mycity-elenco-foto_20261014_021700.dump',
+    ]) writeFileSync(join(radice, 'backup', f), 'x');
+
+    const r = spawnSync('bash', ['-c', `shopt -s globstar nullglob; cd "$1"; for f in ${percorso}; do if [ -d "$f" ]; then find "$f" -type f; else echo "$f"; fi; done`, '_', radice], { encoding: 'utf8' });
+    const escono = r.stdout.split('\n').filter(Boolean);
+    expect(escono, 'con questo percorso non esce nemmeno la copia cifrata').toContain('backup/mycity_20261014_021700.dump.gpg');
+    expect(
+      escono.filter((f) => !f.endsWith('.gpg')),
+      `il percorso «${percorso}» fa uscire file in chiaro`,
+    ).toEqual([]);
   });
 });

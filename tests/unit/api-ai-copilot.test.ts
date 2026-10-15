@@ -122,8 +122,13 @@ describe('POST /api/ai/copilot', () => {
 describe('il filtro anti-contenuti sul copilot', () => {
   // Questo gruppo ha una preparazione sua: le chiamate registrate vanno
   // azzerate prima di ogni prova, altrimenti si guarda quella di prima.
+  // 8/9/2026 — Mancavano due cose che gli arrivavano dal gruppo qui sopra:
+  // la chiave del modello (senza, la rotta risponde 503 e il filtro non lo
+  // tocca nessuno) e l'azzeramento del freno alle troppe richieste.
   beforeEach(() => {
     runMessageMock.mockClear();
+    __resetRateLimitBuckets();
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
     runMessageMock.mockResolvedValue({ toolInput: { reply: 'ok', changes: [] } });
   });
 
