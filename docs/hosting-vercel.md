@@ -159,6 +159,11 @@ Prima il rilascio costruiva su Node 20 e la produzione eseguiva su 24.
 - **Rilascio:** ogni unione su `main` fa partire una pubblicazione di produzione.
   Il gancio che aspetta la CI verde è in `.github/workflows/deploy-dopo-ci.yml`,
   e non è ancora l'unica strada: legge il file per i due passi che mancano.
+- **Il codice rosso non entra in `main`** solo se la regola «Main» su GitHub
+  (Settings → Rules → Rulesets) è accesa e guarda `main`. Oggi è spenta e senza
+  bersaglio. Il controllo che pretende, «Main», è l'ultimo lavoro della CI dal
+  15/10/2026: aspetta tutti gli altri e diventa rosso se uno fallisce. I passi
+  per accenderla sono in testa a `.github/workflows/deploy-dopo-ci.yml`.
 - **Tornare indietro:** Vercel → Deployments → **Instant Rollback**. Procedura
   distesa nel runbook, §4-bis.
 

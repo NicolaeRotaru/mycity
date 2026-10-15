@@ -42,7 +42,11 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 MIG="$ROOT/migrations"
 
-psql "$DB" -q -v ON_ERROR_STOP=1 <<'SQL'
+# 15/10/2026 (R53) — Il primo contatto col database. Se non va, si dice dove
+# guardare: dalla CI il segreto SUPABASE_DB_URL e' rimasto per due mesi sulla
+# connessione diretta di Supabase (solo IPv6), che da GitHub Actions non si
+# raggiunge — e psql risponde solo «Network is unreachable».
+if ! psql "$DB" -q -v ON_ERROR_STOP=1 <<'SQL'
 CREATE SCHEMA IF NOT EXISTS supabase_migrations;
 CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
   version text PRIMARY KEY,
@@ -50,6 +54,11 @@ CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
   statements text[]
 );
 SQL
+then
+  echo "✗ non riesco a collegarmi al database: nessuna migrazione applicata." >&2
+  echo "  Da GitHub Actions SUPABASE_DB_URL deve essere la riga del «Session pooler» (IPv4): Supabase → pannello Connect → riquadro «Session pooler», porta 5432. La connessione diretta db.<progetto>.supabase.co risponde solo in IPv6 e da li' non si raggiunge." >&2
+  exit 1
+fi
 
 # =============================================================================
 # CONTROLLO PREVENTIVO: il database che ha una storia PRIMA del registro
@@ -121,14 +130,91 @@ FINE
   exit 2
 fi
 
-applicate=0
+# =============================================================================
+# PRIMA SI CONTA, POI SI TOCCA
+# =============================================================================
+# Il primo giro guarda soltanto: quali file il registro non conosce. Il secondo
+# applica. In mezzo c'e' il tetto qui sotto, che decide prima di qualsiasi
+# scrittura.
 saltate=0
-
+DA_APPLICARE=()
 for f in $(ls "$MIG"/*.sql | sort -V); do
   name="$(basename "$f")"
   versione="${name%%_*}"
   descrizione="${name#*_}"; descrizione="${descrizione%.sql}"
 
+  gia="$(psql "$DB" -X -A -t -v ON_ERROR_STOP=1 \
+    -c "SELECT 1 FROM supabase_migrations.schema_migrations
+         WHERE version = '$versione' OR name = '$descrizione' LIMIT 1")"
+  if [ -n "$gia" ]; then
+    saltate=$((saltate + 1))
+    continue
+  fi
+  DA_APPLICARE+=("$f")
+done
+
+# =============================================================================
+# IL TETTO DEL RILASCIO AUTOMATICO (15/10/2026)
+# =============================================================================
+# COSA SAREBBE SUCCESSO. La produzione e' indietro di 48 migrazioni (vedi
+# docs/migrazioni-baseline-produzione.md). Il rilascio dopo la CI
+# (.github/workflows/deploy-dopo-ci.yml) lancia questo script prima di
+# pubblicare. Il giorno in cui si mettono su GitHub i segreti di Vercel e la
+# riga giusta del database, la prima unione su main — anche «un cambio
+# innocuo» per provare il rilascio — le avrebbe applicate tutte e 48 da sola,
+# senza nessuno davanti.
+#
+# Fra quelle c'e' la 161, che chiude ai clienti la lettura dei negozi dalla
+# tabella `profiles`. Il codice pubblicato oggi legge il negozio proprio da li'
+# (lib/queries/catalogo.ts, la scheda prodotto): applicata prima che sia online
+# il codice che legge la vista `seller_public_profiles`, ogni scheda prodotto
+# direbbe «Prodotto non disponibile» a chiunque compri. E il riallineamento
+# grande va fatto a bassa attivita', nello stesso giro, con la firma di Nicola:
+# lo dice la procedura.
+#
+# COSA FA. Con MASSIMO_MIGRAZIONI impostato (lo imposta il rilascio
+# automatico), se ne mancano di piu' si ferma PRIMA di applicare qualsiasi cosa,
+# con uscita 4 e l'elenco. Un rilascio normale porta le sue migrazioni — finora
+# mai piu' di 15 in una volta sola — quindi il tetto non lo tocca. Senza la
+# variabile (la CI che ricostruisce da zero, o chi lancia a mano la procedura)
+# non cambia niente.
+MASSIMO="${MASSIMO_MIGRAZIONI:-}"
+if [ -n "$MASSIMO" ]; then
+  case "$MASSIMO" in
+    *[!0-9]*)
+      echo "✗ MASSIMO_MIGRAZIONI deve essere un numero intero, non «$MASSIMO». Non ho applicato niente." >&2
+      exit 1
+      ;;
+  esac
+  if [ "${#DA_APPLICARE[@]}" -gt "$MASSIMO" ]; then
+    cat >&2 <<FINE
+✗ MI FERMO: al database mancano ${#DA_APPLICARE[@]} migrazioni, e da qui ne applico al massimo $MASSIMO.
+
+  Un rilascio normale porta poche migrazioni. Cosi' tante vogliono dire che il
+  database e' rimasto indietro: e' il riallineamento descritto in
+  docs/migrazioni-baseline-produzione.md, che si fa a mano, una volta, a bassa
+  attivita' e con la firma di Nicola. Alcune di queste migrazioni chiudono
+  porte che il codice gia' online potrebbe ancora usare: la procedura dice in
+  che ordine farlo.
+
+  Nessuna migrazione e' stata applicata. Il database non e' stato toccato.
+  Quelle che mancano:
+FINE
+    for f in "${DA_APPLICARE[@]}"; do echo "    - $(basename "$f")" >&2; done
+    exit 4
+  fi
+fi
+
+applicate=0
+
+for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
+  name="$(basename "$f")"
+  versione="${name%%_*}"
+  descrizione="${name#*_}"; descrizione="${descrizione%.sql}"
+
+  # Si richiede al registro anche qui, file per file come prima: se un file
+  # appena applicato avesse registrato anche questo (stesso nome, numero
+  # diverso), lo si salta invece di riapplicarlo.
   gia="$(psql "$DB" -X -A -t -v ON_ERROR_STOP=1 \
     -c "SELECT 1 FROM supabase_migrations.schema_migrations
          WHERE version = '$versione' OR name = '$descrizione' LIMIT 1")"

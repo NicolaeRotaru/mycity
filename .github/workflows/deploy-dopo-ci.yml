@@ -28,6 +28,14 @@ name: Rilascio dopo CI verde
 #   2. SOLO DOPO, una parola in `vercel.json`:
 #      "main": true   diventa   "main": false
 #
+#   ⚠️ 15/10/2026 — E prima ancora il database. Se alla produzione mancano piu'
+#      di 20 migrazioni (oggi 48, fino alla 161), questo lavoro si ferma al
+#      passo delle migrazioni senza toccarle e non pubblica: quel
+#      riallineamento si fa a mano, una volta, con
+#      docs/migrazioni-baseline-produzione.md. E serve SUPABASE_DB_URL con la
+#      riga del «Session pooler» (IPv4): la connessione diretta da qui non si
+#      raggiunge.
+#
 # 🧪 7/9/2026 — UNA STRADA PROVATA E BOCCIATA, scritta qui perche' nessuno la
 # ripercorra pensando che sia nuova.
 #
@@ -49,13 +57,32 @@ name: Rilascio dopo CI verde
 # Quindi il cancello e' tornato fuori dal build. Il difetto resta aperto, e si
 # chiude in uno di questi due modi — nessuno dei due e' codice:
 #
-#   A. la protezione del ramo `main` su GitHub, che pretende i controlli verdi
-#      PRIMA di poter unire. Chiude il rischio alla radice (il codice rosso non
-#      entra proprio), non serve nessun segreto, e si accende dalle impostazioni
-#      del repository in mezzo minuto.
+#   A. la regola su GitHub che pretende i controlli verdi PRIMA di poter unire.
+#      Chiude il rischio alla radice (il codice rosso non entra proprio) e non
+#      serve nessun segreto.
 #   B. i tre segreti qui sopra, che accendono questo lavoro.
 #
 # A e' il primo passo perche' e' piu' economico e non dipende da Vercel.
+#
+# ⚠️ 15/10/2026 (R57) — A NON SI CREA: SI CORREGGE. Qui c'era scritto che si
+# accende «in mezzo minuto», e chi ci andava trovava una trappola. La regola
+# esiste gia': GitHub → Settings → Rules → Rulesets → «Main» (creata il 26/5).
+# Ma e' SPENTA (enforcement «Disabled»), NON GUARDA NESSUN RAMO (bersagli
+# vuoti), e pretendeva un controllo di nome «Main» che nessun lavoro della CI
+# produceva. Accesa cosi' com'e' non protegge niente; con main come bersaglio
+# blocca ogni unione per sempre, in attesa di un controllo che non arriva.
+#
+# Il controllo «Main» adesso esiste: e' l'ultimo lavoro di ci.yml, che aspetta
+# tutti gli altri e diventa rosso se uno fallisce. Quindi, una volta unito in
+# main il commit che lo aggiunge:
+#   1. apri il ruleset «Main»;
+#   2. Target branches → Add target → «Include default branch» (cioe' main);
+#   3. lascia «Require status checks to pass» con il controllo «Main»;
+#   4. Enforcement status → «Active», e salva;
+#   5. prova: una richiesta di unione con una prova rossa deve avere il
+#      pulsante di unione bloccato.
+# Le richieste di unione aperte prima di quel commit non hanno mai prodotto
+# «Main»: vanno aggiornate con main, o la loro CI rilanciata.
 #
 # ⚠️ 3/9/2026 — E C'E' UNA TERZA COSA, SCOPERTA GUARDANDO IL PROGETTO VERO.
 #
@@ -289,6 +316,13 @@ jobs:
         if: steps.chiavi.outputs.pronto == 'true'
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          # 15/10/2026 — Il tetto: se al database mancano piu' migrazioni di
+          # cosi', non e' un rilascio normale ma un database rimasto indietro, e
+          # lo script si ferma prima di toccarlo (uscita 4). Finora un'unione
+          # non ne ha mai portate piu' di 15; la produzione oggi ne aspetta 48,
+          # fra cui la 161. Il perche' sta in testa a
+          # scripts/applica-migrazioni-mancanti.sh.
+          MASSIMO_MIGRAZIONI: "20"
         run: |
           if [ -z "$SUPABASE_DB_URL" ]; then
             echo "::warning::SUPABASE_DB_URL non configurato: le migrazioni NON vengono applicate da qui. Il codice puo' arrivare su un database piu' vecchio di lui."
@@ -317,7 +351,18 @@ jobs:
           # e le migrazioni sembrerebbero riuscite.
           set -o pipefail
           DIARIO="$(mktemp)"
-          bash scripts/applica-migrazioni-mancanti.sh | tee "$DIARIO"
+          USCITA=0
+          bash scripts/applica-migrazioni-mancanti.sh | tee "$DIARIO" || USCITA=$?
+          if [ "$USCITA" = "4" ]; then
+            {
+              echo "## ⛔ Non ho rilasciato: il database di produzione e' rimasto troppo indietro"
+              echo ""
+              echo "Mancano piu' di $MASSIMO_MIGRAZIONI migrazioni, e un rilascio automatico non le applica da solo: non ho toccato il database e non ho pubblicato niente. L'elenco e' nel passo «Applica le migrazioni» qui sopra."
+              echo ""
+              echo "**Cosa fare:** il riallineamento si fa a mano, una volta, seguendo \`docs/migrazioni-baseline-produzione.md\` (con la firma di Nicola). Dopo, questo lavoro riparte da solo alla prossima unione su \`main\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ "$USCITA" != "0" ]; then exit "$USCITA"; fi
           QUANTE="$(grep -c '^▶ applico ' "$DIARIO" || true)"
           ELENCO="$(grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico //' | tr '\n' ' ' || true)"
           echo "quante=$QUANTE" >> "$GITHUB_OUTPUT"

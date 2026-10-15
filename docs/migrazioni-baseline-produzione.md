@@ -26,7 +26,10 @@ fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha gi�
 **161** viene dopo tutte e chiude quello che resta. Lo script la applica da solo, in coda.
 
 **Cosa devi fare.** Lanciare i due comandi del passo 2 e del passo 3, nello stesso giro, a bassa
-attività. Il passo 1 è già fatto: le tredici righe sono nel registro dal 9 settembre.
+attività. Il passo 1 è già fatto: le tredici righe sono nel registro dal 9 settembre. **Ma prima
+guarda le due condizioni in «Prima di cominciare»** (15/10/2026): la 161 va applicata solo dopo
+che è online il codice che legge i negozi dalla vista, altrimenti nessun prodotto si può più
+comprare dal sito.
 
 **Cosa non ho verificato.** La prova generale è girata su PostgreSQL 16, la produzione è la 17.
 E non ho potuto provare il comando contro la produzione vera: da qui il database si legge
@@ -59,6 +62,30 @@ registrate. Se una migrazione vecchia sembra «mancare», si scrive una migrazio
 rimette la definizione finale, come la 161.
 
 ## La procedura (aggiornata)
+
+### Prima di cominciare — due condizioni (15/10/2026)
+
+**① Il codice che legge i negozi dalla vista deve essere già online.** La 161 toglie ai clienti
+la lettura dei negozi dalla tabella `profiles`. Fino a oggi la scheda prodotto, la ricerca
+suggerita e le fasce della home leggono il negozio proprio da lì: se la 161 arriva prima del
+codice che lo legge dalla vista `seller_public_profiles`, ogni scheda prodotto mostra «Prodotto
+non disponibile» a chi compra, mentre il negoziante e l'amministratore la vedono perfetta.
+Quindi: prima si unisce e si pubblica la riparazione della vetrina, si apre una scheda prodotto
+da una finestra anonima e si controlla che il pulsante per comprare ci sia; **solo dopo** il
+passo 2.
+
+**② La riga di collegamento.** L'esempio qui sotto usa la connessione diretta
+(`db.<progetto>.supabase.co`), che risponde solo in IPv6. Da un computer o da una rete senza
+IPv6 — e da GitHub Actions sempre — non ci si arriva: si usa la riga del «Session pooler»
+(Supabase → pannello Connect → riquadro «Session pooler», porta 5432), la stessa che serve alla
+copia notturna. La forma è
+`postgresql://postgres.<progetto>:<password>@aws-0-<regione>.pooler.supabase.com:5432/postgres`.
+
+**Il rilascio automatico non lo fa al posto tuo.** Da oggi il lavoro «Rilascio dopo CI verde»
+applica da solo al massimo 20 migrazioni: se ne mancano di più si ferma prima di toccare il
+database e rimanda qui. Senza questo tetto, il giorno in cui si mettono su GitHub i segreti di
+Vercel la prima unione su `main` avrebbe applicato tutte le 48 — 161 compresa — senza nessuno
+davanti e senza guardare la condizione ①.
 
 ### Passo 1 — registrare il baseline
 

@@ -16,6 +16,8 @@
  * Comportamento:
  *   - manca SUPABASE_DB_URL  -> SKIP (exit 0), stampa come configurarlo
  *   - manca il pacchetto pg  -> SKIP (exit 0), suggerisce `npm i -D pg`
+ *   - non si collega         -> exit 1, con il perche' e cosa cambiare
+ *                               (da GitHub Actions: la riga del «Session pooler»)
  *   - drift rilevato         -> exit 1 con l'elenco dei file non applicati
  *   - tutto applicato        -> exit 0
  *
@@ -25,6 +27,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 const DB_URL = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
 const MIGRATIONS_DIR = path.resolve(process.cwd(), 'migrations');
@@ -51,6 +54,99 @@ const NAME_RE = /^(\d{3}[a-z]?)_([a-z0-9_]+)\.sql$/;
  * «il database conosce queste migrazioni», non «il database e' allineato al
  * codice».
  */
+/**
+ * 15/10/2026 (R53) — PERCHE' IL CONTROLLO NON SI COLLEGAVA, DETTO A CHI LO LEGGE.
+ *
+ * Il lavoro «Deriva migrazioni (produzione)» e' finito rosso 52 mattine su 52,
+ * dal 21/8 all'11/10, sempre cosi':
+ *
+ *   check-migration-drift: errore Error: connect ENETUNREACH 2a05:d012:…:5432
+ *
+ * Il segreto SUPABASE_DB_URL conteneva la connessione DIRETTA di Supabase
+ * (db.<progetto>.supabase.co), che risponde solo in IPv6. I computer di GitHub
+ * Actions hanno solo IPv4: la rete non ci arriva. Non era la password e non era
+ * il database spento — e il messaggio non lo diceva, quindi il rosso e'
+ * diventato rumore di fondo. La strada che funziona e' il «Session pooler»,
+ * che risponde in IPv4: la stessa riga che serve alla copia notturna.
+ *
+ * Qui si traduce l'errore in quello che c'e' da fare. Mai la password nel
+ * testo: si nominano solo macchina e porta.
+ */
+export const ESEMPIO_SESSION_POOLER =
+  'postgresql://postgres.<progetto>:<password>@aws-0-<regione>.pooler.supabase.com:5432/postgres';
+
+/** Codici con cui il sistema dice «da qui quella rete non si raggiunge». */
+const RETE_IRRAGGIUNGIBILE = new Set(['ENETUNREACH', 'EHOSTUNREACH', 'EADDRNOTAVAIL', 'EAFNOSUPPORT']);
+
+/** Macchina, porta e password di una stringa di connessione; vuoti se non si legge. */
+function partiDellIndirizzo(url) {
+  try {
+    const u = new URL(String(url ?? ''));
+    return {
+      macchina: u.hostname.replace(/^\[|\]$/g, ''),
+      porta: u.port || '5432',
+      // Tutte e due le forme: l'errore potrebbe ripetere la stringa com'e'
+      // scritta (p%40ss) o gia' decodificata (p@ss).
+      password: u.password ? decodeURIComponent(u.password) : '',
+      passwordScritta: u.password,
+    };
+  } catch {
+    return { macchina: '', porta: '', password: '', passwordScritta: '' };
+  }
+}
+
+/** L'errore stesso e, se e' un gruppo (piu' indirizzi provati), quelli dentro. */
+function erroriDentro(errore) {
+  const tutti = [errore];
+  if (errore && Array.isArray(errore.errors)) tutti.push(...errore.errors);
+  return tutti.filter(Boolean);
+}
+
+/**
+ * Le righe da stampare quando il collegamento al database fallisce.
+ * Funzione pura: riceve l'errore e la stringa di connessione, non tocca niente.
+ */
+export function spiegaIlCollegamentoFallito(errore, url) {
+  const { macchina, porta, password, passwordScritta } = partiDellIndirizzo(url);
+  const errori = erroriDentro(errore);
+  const codici = errori.map((e) => String(e.code ?? '')).filter(Boolean);
+  const irraggiungibile = codici.some((c) => RETE_IRRAGGIUNGIBILE.has(c));
+  const indirizzoIPv6 =
+    macchina.includes(':') || errori.some((e) => typeof e.address === 'string' && e.address.includes(':'));
+  const connessioneDiretta = /^db\.[^.]+\.supabase\.co$/i.test(macchina);
+  const sessionPooler = /\.pooler\.supabase\.com$/i.test(macchina);
+
+  let dettaglio = String(errore?.message ?? errore ?? '').trim() || codici.join(', ') || 'errore sconosciuto';
+  for (const segreto of [password, passwordScritta]) if (segreto) dettaglio = dettaglio.split(segreto).join('***');
+
+  const dove = macchina ? `${macchina}:${porta}` : 'l\'indirizzo in SUPABASE_DB_URL (non si legge come stringa di connessione)';
+  const righe = [
+    `❌ check-migration-drift: non riesco a collegarmi al database (${dove}).`,
+    `   Errore: ${dettaglio}`,
+  ];
+
+  if (connessioneDiretta || (irraggiungibile && indirizzoIPv6)) {
+    righe.push(
+      '   Perche\': la rete non arriva a quell\'indirizzo. La connessione diretta di Supabase (db.<progetto>.supabase.co)',
+      '   risponde solo in IPv6, e i computer di GitHub Actions hanno solo IPv4.',
+      '   Cosa fare: in SUPABASE_DB_URL metti la riga del «Session pooler» (IPv4) — Supabase → pannello Connect →',
+      `   riquadro «Session pooler», porta 5432. Ha questa forma: ${ESEMPIO_SESSION_POOLER}`,
+      '   E\' la stessa riga che serve alla copia notturna del database.',
+    );
+  } else if (sessionPooler) {
+    righe.push(
+      '   L\'indirizzo e\' gia\' quello del pooler: controlla la password, e che l\'utente sia postgres.<progetto>',
+      '   (nel pooler l\'utente porta dietro il codice del progetto, non e\' solo «postgres»).',
+    );
+  } else if (irraggiungibile) {
+    righe.push('   Perche\': da qui la rete non arriva a quell\'indirizzo.');
+    righe.push(`   Da GitHub Actions serve la riga del «Session pooler» (IPv4) di Supabase: ${ESEMPIO_SESSION_POOLER}`);
+  } else {
+    righe.push(`   Da GitHub Actions serve la riga del «Session pooler» (IPv4) di Supabase: ${ESEMPIO_SESSION_POOLER}`);
+  }
+  return righe;
+}
+
 function repoMigrationNames() {
   return fs
     .readdirSync(MIGRATIONS_DIR)
@@ -75,8 +171,12 @@ async function main() {
   const saltoEErrore = process.env.SALTO_E_ERRORE === '1';
   if (!DB_URL) {
     console.log(`${saltoEErrore ? '❌' : '⏭️ '} check-migration-drift: ${saltoEErrore ? 'ERRORE' : 'SALTATO'} — manca SUPABASE_DB_URL.`);
-    console.log('    Imposta la connection string Postgres (Supabase > Project Settings > Database):');
-    console.log('    SUPABASE_DB_URL="postgresql://postgres:<pwd>@db.<ref>.supabase.co:5432/postgres"');
+    // 15/10/2026 (R53) — Qui l'esempio era la connessione DIRETTA
+    // (db.<ref>.supabase.co), cioe' proprio l'indirizzo che da GitHub Actions
+    // non si raggiunge: chi lo seguiva si ritrovava col controllo rosso ogni
+    // mattina per un motivo di rete. L'esempio adesso e' quello che funziona.
+    console.log('    Imposta la riga del «Session pooler» (IPv4): Supabase → pannello Connect → riquadro «Session pooler», porta 5432:');
+    console.log(`    SUPABASE_DB_URL="${ESEMPIO_SESSION_POOLER}"`);
     process.exit(saltoEErrore ? 1 : 0);
   }
 
@@ -89,7 +189,16 @@ async function main() {
   }
 
   const client = new pg.default.Client({ connectionString: DB_URL });
-  await client.connect();
+  try {
+    await client.connect();
+  } catch (err) {
+    // R53 — Prima qui usciva la traccia nuda di Node («connect ENETUNREACH
+    // 2a05:…:5432») e nient'altro: 52 mattine rosse su 52 senza che il
+    // messaggio dicesse cosa cambiare. Adesso si dice dove non si arriva e
+    // perche', senza mai stampare la password.
+    for (const riga of spiegaIlCollegamentoFallito(err, DB_URL)) console.error(riga);
+    process.exit(1);
+  }
   let applicate;
   try {
     // `version` e' il prefisso numerico, `name` la parte descrittiva: servono
@@ -129,7 +238,12 @@ async function main() {
   process.exit(1);
 }
 
-main().catch((err) => {
-  console.error('check-migration-drift: errore', err);
-  process.exit(1);
-});
+// Si parte solo quando il file e' lanciato da riga di comando: le prove lo
+// importano per leggere `spiegaIlCollegamentoFallito`, e importarlo non deve
+// aprire connessioni ne' chiudere il processo.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error('check-migration-drift: errore', err);
+    process.exit(1);
+  });
+}
