@@ -40,6 +40,24 @@ const catena = (tavola) => {
  */
 const clientDellaProva = () => globalThis.__CLIENT_SUPABASE__;
 
+/**
+ * 15/10/2026 (R13 · R43) — LE PORTE DELL'ACCESSO, DECISE DALLA PROVA.
+ *
+ * Le pagine di accesso, registrazione, verifica dell'email e nuova password
+ * chiamano `signUp`, `resend`, `setSession`, `resetPasswordForEmail`,
+ * `updateUser`: qui non c'erano, e una prova che montava una di quelle pagine la
+ * vedeva scoppiare al primo clic — per questo nessuna le montava, e i loro
+ * difetti si potevano rimettere a suite verde. Con `globalThis.__AUTH_FINTA__`
+ * (un oggetto di funzioni) la prova dice cosa risponde ognuna e conta le
+ * chiamate. Chi non lo imposta riceve una risposta vuota e senza errore.
+ */
+const portaAuth = (nome, ripiego) => async (...argomenti) => {
+  const finta = globalThis.__AUTH_FINTA__?.[nome];
+  if (typeof finta === 'function') return finta(...argomenti);
+  return ripiego;
+};
+const NESSUNO = { data: { user: null, session: null }, error: null };
+
 export const supabase = {
   from: (tavola) => (clientDellaProva() ? clientDellaProva().from(tavola) : catena(tavola)),
   rpc: async (nome, argomenti) =>
@@ -70,7 +88,14 @@ export const supabase = {
       }
       return { data: { subscription: { unsubscribe() {} } } };
     },
-    signOut: async () => ({ error: null }),
+    signOut: portaAuth('signOut', { error: null }),
+    signUp: portaAuth('signUp', NESSUNO),
+    signInWithPassword: portaAuth('signInWithPassword', NESSUNO),
+    resend: portaAuth('resend', NESSUNO),
+    setSession: portaAuth('setSession', NESSUNO),
+    resetPasswordForEmail: portaAuth('resetPasswordForEmail', { data: {}, error: null }),
+    updateUser: portaAuth('updateUser', NESSUNO),
+    exchangeCodeForSession: portaAuth('exchangeCodeForSession', NESSUNO),
   },
   channel: () => ({ on: () => ({ subscribe: () => ({}) }), subscribe: () => ({}), unsubscribe: () => {} }),
   removeChannel: () => {},
@@ -87,6 +112,13 @@ export const supabase = {
       upload: async () => ({ data: null, error: null }),
     }),
   },
+};
+
+/** Le scorciatoie di `lib/supabase/client.ts`, che passano dalle stesse porte qui sopra. */
+export const auth = {
+  signUp: (email, password, options) => supabase.auth.signUp({ email, password, options }),
+  signIn: (email, password, options) => supabase.auth.signInWithPassword({ email, password, options }),
+  signOut: () => supabase.auth.signOut(),
 };
 
 export default supabase;
