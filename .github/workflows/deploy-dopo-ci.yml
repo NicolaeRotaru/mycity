@@ -6,9 +6,21 @@ name: Rilascio dopo CI verde
 # dopo il funerale.
 #
 # Questo lavoro rilascia SOLO quando i controlli di `main` sono passati, e
-# rilascia il commit che i controlli hanno promosso — non la punta di adesso,
-# perche' fra la fine dei controlli e questo passo qualcuno puo' aver spinto
-# altro, e quello non l'ha provato nessuno.
+# rilascia il commit che i controlli hanno promosso — mai una punta che non ha
+# provato nessuno.
+#
+# 16/10/2026 — E SOLO SE QUEL COMMIT E' ANCORA L'ULTIMO DI `main`, E ARRIVA DA
+# QUESTO DEPOSITO. Due buchi chiusi insieme, tutti e due nel passo «Il commit
+# scaricato e' l'ultimo di main» e nella condizione del lavoro:
+#   · la CI gira anche su codice non ancora unito, comprese le richieste che
+#     arrivano da copie del deposito, e il nome del ramo da solo non dice da
+#     dove arriva il codice. Un commit che non e' nella storia di `main` non
+#     arriva mai ai passi che hanno i segreti di produzione;
+#   · rilanciare la CI di un commit vecchio di `main` faceva ripartire il suo
+#     rilascio, e il codice vecchio tornava online sopra quello nuovo. Adesso
+#     quel giro si ferma rosso e lo dice. Lo stesso succede se fra la fine dei
+#     controlli e questo lavoro su `main` e' arrivato altro: si pubblica il piu'
+#     nuovo, al giro della sua CI.
 #
 # IL SITO VIVE SU VERCEL. Fino al 21/8/2026 questo file parlava anche di Render,
 # e la carta #141 mandava Nicola a spegnere il rilascio automatico li'. Era il
@@ -194,9 +206,19 @@ jobs:
   vercel:
     name: Chiama Vercel (e' qui che vive il sito)
     runs-on: ubuntu-latest
+    # 16/10/2026 — «CI verde su un ramo chiamato main» non basta. Il filtro
+    # `branches` qui sopra guarda solo il NOME del ramo che ha fatto partire la
+    # CI, e la CI gira anche per le richieste di unione, comprese quelle che
+    # arrivano da copie del deposito. Qui si pretendono tre cose insieme: la CI
+    # e' partita da un invio diretto (`push`), da QUESTO deposito, sul ramo
+    # `main`. Il passo «Il commit scaricato e' l'ultimo di main» lo ricontrolla
+    # con git, prima di qualunque passo che usi i segreti.
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_branch == 'main')
     timeout-minutes: 15
     steps:
       - name: Verifica di avere le chiavi
@@ -257,7 +279,9 @@ jobs:
         with:
           # Il commit che la CI ha appena promosso, non la punta di adesso: fra
           # la fine della CI e questo passo qualcuno puo' aver spinto altro, e
-          # quello non l'ha provato nessuno.
+          # quello non l'ha provato nessuno. Che sia davvero l'ultimo di `main`
+          # lo controlla il passo «Il commit scaricato e' l'ultimo di main»:
+          # fino a li', niente di quello che si scarica qui viene eseguito.
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       # 6/9/2026 — IL PULSANTE A MANO PUBBLICAVA QUALUNQUE RAMO.
@@ -323,6 +347,85 @@ jobs:
 
           echo "Controlli verdi sul commit $COMMIT: vado avanti."
 
+      # 16/10/2026 — PRIMA DI ESEGUIRE QUALSIASI COSA SCARICATA, DI CHI E' IL CODICE.
+      #
+      # Da qui in giu' i passi eseguono file presi dal commit scaricato: script,
+      # pacchetti npm, la CLI di Vercel lanciata nella sua cartella. Alcuni lo
+      # fanno con i segreti di produzione nell'ambiente, e perfino il verdetto in
+      # fondo lancia uno script di quel commit. Quindi qui, con soli comandi git
+      # scritti in QUESTO file — niente preso dal commit scaricato — si guarda
+      # da dove arriva quel commit. Tre esiti:
+      #   · e' l'ultimo di `main` → si va avanti;
+      #   · e' un commit di `main`, ma dopo ne e' arrivato uno piu' nuovo → rosso,
+      #     non si pubblica. Succede rilanciando la CI di un commit vecchio: il
+      #     codice vecchio tornerebbe online sopra quello nuovo, su un database
+      #     gia' piu' avanti, e la prova di fumo direbbe comunque «risponde».
+      #     Il commit piu' nuovo ha il suo rilascio quando la sua CI finisce verde;
+      #   · non fa parte della storia di `main` → rosso, e nessun passo dopo,
+      #     nemmeno il verdetto, esegue niente di quel commit.
+      #
+      # Il controllo si chiede a git e non al nome del ramo, perche' il nome lo
+      # sceglie chi apre la richiesta. `fidato` dice se il codice su disco viene
+      # dalla storia di `main` (cioe' e' gia' stato unito): solo allora il
+      # verdetto puo' lanciare il suo script.
+      - name: Il commit scaricato e' l'ultimo di main
+        id: provenienza
+        env:
+          COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+
+          rifiuta() {
+            echo "::error::$1"
+            {
+              echo "## ⛔ $1"
+              echo ""
+              echo "$2"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          }
+
+          SCARICATO="$(git rev-parse HEAD)"
+          if [ "$SCARICATO" != "$COMMIT" ]; then
+            echo "fidato=false" >> "$GITHUB_OUTPUT"
+            rifiuta "Non ho rilasciato: su disco non c'e' il commit promosso dalla CI" \
+              "Mi aspettavo \`$COMMIT\` e ho trovato \`$SCARICATO\`. Non eseguo niente di un commit di cui non so la provenienza."
+          fi
+
+          # Il checkout scarica un commit solo, senza storia. Per la punta di
+          # main ne basta uno; la storia serve solo se non coincidono.
+          if ! git fetch --no-tags --depth=1 origin "+refs/heads/main:refs/remotes/origin/main"; then
+            echo "fidato=false" >> "$GITHUB_OUTPUT"
+            rifiuta "Non ho rilasciato: non sono riuscita a leggere main" \
+              "Senza sapere qual e' l'ultimo commit di \`main\` non posso dire se questo e' quello giusto, e nel dubbio non pubblico. Rilancia questo lavoro: se si ripete, il problema e' l'accesso al deposito."
+          fi
+          PUNTA="$(git rev-parse --verify 'refs/remotes/origin/main^{commit}')"
+
+          if [ "$SCARICATO" = "$PUNTA" ]; then
+            echo "fidato=true" >> "$GITHUB_OUTPUT"
+            echo "Il commit $SCARICATO e' l'ultimo di main: vado avanti."
+            exit 0
+          fi
+
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            if ! git fetch --no-tags --unshallow origin "+refs/heads/main:refs/remotes/origin/main"; then
+              echo "fidato=false" >> "$GITHUB_OUTPUT"
+              rifiuta "Non ho rilasciato: non sono riuscita a leggere la storia di main" \
+                "Il commit \`$SCARICATO\` non e' l'ultimo di \`main\` (\`$PUNTA\`), e senza la storia non so dire da dove arriva: nel dubbio non pubblico."
+            fi
+            PUNTA="$(git rev-parse --verify 'refs/remotes/origin/main^{commit}')"
+          fi
+
+          if git merge-base --is-ancestor "$SCARICATO" "$PUNTA"; then
+            echo "fidato=true" >> "$GITHUB_OUTPUT"
+            rifiuta "Non ho rilasciato: su main c'e' gia' un commit piu' nuovo" \
+              "Questo giro doveva pubblicare \`$SCARICATO\`, ma l'ultimo di \`main\` adesso e' \`$PUNTA\`. Pubblicarlo rimetterebbe online codice vecchio sopra quello nuovo, su un database gia' piu' avanti. Non ho toccato niente: il commit piu' nuovo si pubblica da solo quando la sua CI finisce verde."
+          fi
+
+          echo "fidato=false" >> "$GITHUB_OUTPUT"
+          rifiuta "Non ho rilasciato: questo commit non fa parte di main" \
+            "Il commit \`$SCARICATO\` non e' nella storia di \`main\` di questo deposito, quindi non e' mai stato unito. Non ho eseguito niente di quel commit e non ho toccato ne' il database ne' la produzione."
+
       # La stessa versione su cui gira la produzione (progetto Vercel: 24.x,
       # `engines.node` in package.json: 24.x). Qui c'era 20: `vercel build`
       # costruisce con il Node del runner, quindi il pacchetto che finiva online
@@ -345,8 +448,16 @@ jobs:
       #
       # Adesso le migrazioni si applicano PRIMA della pubblicazione, e se non si
       # applicano il rilascio non parte. Serve il segreto SUPABASE_DB_URL (la
-      # stringa di connessione del database di produzione): senza, questo passo
-      # si limita a dirlo, come tutti gli altri di questo file.
+      # stringa di connessione del database di produzione).
+      #
+      # 16/10/2026 — SENZA QUELLA RIGA SI PUBBLICAVA LO STESSO. Qui c'era un
+      # avviso e un'uscita verde: il cancello «Il database e' allineato al
+      # codice» gira solo se le migrazioni sono girate, quindi saltava proprio
+      # quando mancava la riga, e «Rilascia in produzione» guardava solo le
+      # chiavi di Vercel. Codice nuovo su un database vecchio, con un verde in
+      # fondo: il guasto del 21 agosto. Adesso, con le chiavi di Vercel accese e
+      # la riga del database assente, questo passo finisce rosso e non si
+      # pubblica.
       - name: Applica le migrazioni al database, prima di pubblicare
         id: migrazioni
         if: steps.chiavi.outputs.pronto == 'true'
@@ -361,9 +472,16 @@ jobs:
           MASSIMO_MIGRAZIONI: "20"
         run: |
           if [ -z "$SUPABASE_DB_URL" ]; then
-            echo "::warning::SUPABASE_DB_URL non configurato: le migrazioni NON vengono applicate da qui. Il codice puo' arrivare su un database piu' vecchio di lui."
             echo "applicate=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::SUPABASE_DB_URL non configurato: le migrazioni non si possono applicare, quindi non pubblico. Il codice arriverebbe su un database piu' vecchio di lui."
+            {
+              echo "## ⛔ Non ho rilasciato: manca la riga del database"
+              echo ""
+              echo "Le chiavi di Vercel ci sono, ma fra i segreti del repository manca \`SUPABASE_DB_URL\`. Senza, le migrazioni non si applicano, e pubblicare vorrebbe dire mettere codice nuovo su un database che non ha le sue colonne. Non ho toccato ne' il database ne' la produzione."
+              echo ""
+              echo "**Cosa fare:** in Settings → Secrets and variables → Actions rimetti \`SUPABASE_DB_URL\` con la riga del «Session pooler» (IPv4). Dopo, questo lavoro riparte da solo alla prossima unione su \`main\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
           echo "applicate=true" >> "$GITHUB_OUTPUT"
           sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
@@ -617,8 +735,13 @@ jobs:
       # Questo passo gira SEMPRE, e' l'unico, e dice cosa e' stato verificato
       # davvero. Zero controlli fatti non e' un successo: e' un «non lo so», e
       # un «non lo so» non puo' portare la stessa spunta di un «ho guardato».
+      #
+      # 16/10/2026 — «Sempre», ma solo su codice che viene da `main`: il verdetto
+      # lancia uno script del commit scaricato. Se il passo «Il commit scaricato
+      # e' l'ultimo di main» non ha confermato che quel commit e' gia' stato
+      # unito, qui non si esegue niente; il rosso e il perche' li scrive lui.
       - name: Il verdetto — cosa ho provato davvero
-        if: always()
+        if: always() && steps.provenienza.outputs.fidato == 'true'
         env:
           PRONTO: ${{ steps.chiavi.outputs.pronto }}
           INDIRIZZO: ${{ steps.rilascio.outputs.indirizzo }}
