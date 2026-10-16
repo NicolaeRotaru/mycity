@@ -60,7 +60,21 @@ const SECTIONS: Section[] = [
         // R71 (11/10/2026) — «Non memorizziamo dati bancari» smette di essere
         // vero il giorno in cui il modulo di reso chiede l'IBAN per il bonifico
         // di rimborso: si dice cosa teniamo, e per cosa.
-        a: "Sì. Tutti i dati transitano cifrati (HTTPS/TLS) e non conserviamo i dati delle carte. L'unico dato bancario che ti chiediamo è l'IBAN, e solo se vuoi un rimborso con bonifico: resta sulla richiesta di reso e lo usiamo solo per quel bonifico.",
+        // Riesame del 16/10, quinto giro — diceva «solo se vuoi» e «resta sulla
+        // richiesta di reso»: per un reclamo l'IBAN lo chiediamo noi e arriva dai
+        // Contatti, dove resta di piu'. Dove e quanto lo dice l'informativa, una
+        // volta sola (lib/rimborsi/iban-del-rimborso.ts): qui si rimanda li'.
+        a: (
+          <>
+            Sì. Tutti i dati transitano cifrati (HTTPS/TLS) e non conserviamo i dati delle carte. Se compri,
+            l&apos;unico dato bancario che ti chiediamo è l&apos;IBAN, e solo per restituirti dei soldi con un
+            bonifico: dove te lo chiediamo e quanto lo teniamo è scritto nell&apos;
+            <Link href="/privacy" className="font-semibold underline">
+              informativa privacy
+            </Link>
+            .
+          </>
+        ),
       },
       {
         q: 'Posso usare un codice sconto?',

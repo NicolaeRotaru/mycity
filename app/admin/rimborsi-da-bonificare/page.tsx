@@ -10,7 +10,12 @@ import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { confirmDialog } from '@/components/ConfirmDialog';
-import { cosaDiceLaVoce, domandaPrimaDelBonificoFatto, type VoceDaBonificare } from '@/lib/rimborsi/bonifici-da-fare';
+import {
+  cosaDiceLaVoce,
+  domandaPrimaDelBonificoFatto,
+  DOVE_SONO_GLI_AVVISI,
+  type VoceDaBonificare,
+} from '@/lib/rimborsi/bonifici-da-fare';
 
 /**
  * R71 — I BONIFICI DI RIMBORSO DA FARE.
@@ -128,12 +133,18 @@ export default function RimborsiDaBonificarePage() {
             {v.intestatario && (
               <p className="mt-2 text-sm text-ink-800">
                 Intestatario: <strong>{v.intestatario}</strong>{' '}
-                <span className="text-ink-600">(il cliente ha chiuso l&apos;account: il nome resta qui fino al bonifico)</span>
+                {/* Quinto giro del riesame: «il cliente ha chiuso l'account» non era vero quando la
+                    cancellazione si fermava dopo aver scritto il nome. Si dice quando il nome è
+                    arrivato qui, che è vero in ogni caso. */}
+                <span className="text-ink-600">(scritto qui quando è partita la cancellazione dell&apos;account: resta fino al bonifico)</span>
               </p>
             )}
             {dice.daControllare && (
               <p className="mt-2 rounded-lg border border-secondary-300 bg-secondary-50 p-2 text-sm font-semibold text-secondary-800">
-                {dice.daControllare}
+                {dice.daControllare}{' '}
+                <Link href={DOVE_SONO_GLI_AVVISI} className="underline hover:no-underline">
+                  Apri le Notifiche
+                </Link>
               </p>
             )}
             {dice.sulReso && <p className="mt-2 text-sm text-ink-700">{dice.sulReso}</p>}

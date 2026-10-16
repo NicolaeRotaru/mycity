@@ -5,6 +5,7 @@ import { cancellaAccount } from '@/lib/account/cancellazione';
 import { withAdminAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
+import { MOTIVO_BONIFICO_SENZA_IBAN, RINVIO_PER_CHI_AMMINISTRA } from '@/lib/rimborsi/iban-del-rimborso';
 
 export const runtime = 'nodejs';
 
@@ -61,10 +62,11 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
       return ApiErrors.conflict(esito.errore ?? 'Cancellazione rinviata: cassa contanti ancora aperta.');
     }
     // Riesame del 16/10, quarto giro — un bonifico di rimborso da fare senza IBAN: anche questa è
-    // una regola, non un guasto. La risposta dice cosa manca.
-    if (esito.motivo === 'bonifico_senza_iban') {
+    // una regola, non un guasto. La risposta dice cosa manca — a chi amministra, non al cliente
+    // (quinto giro: qui tornava la frase scritta per il cliente).
+    if (esito.motivo === MOTIVO_BONIFICO_SENZA_IBAN) {
       logger.warn('admin delete: cancellazione rinviata, bonifico di rimborso senza IBAN', { targetId });
-      return ApiErrors.conflict(esito.errore ?? 'Cancellazione rinviata: bonifico di rimborso da fare senza IBAN.');
+      return ApiErrors.conflict(RINVIO_PER_CHI_AMMINISTRA);
     }
     logger.error('admin delete: cancellazione fallita', { targetId, errore: esito.errore });
     // 27/8/2026 (R016) — Era `{ error: 'stringa' }`, l'altra forma: il pannello
