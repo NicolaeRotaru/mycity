@@ -1,6 +1,11 @@
 import Link from 'next/link';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
 import { recapitoPrivacy, titolare } from '@/lib/legal/titolare';
+import {
+  DOVE_CHIEDIAMO_L_IBAN,
+  PERCHE_TENIAMO_L_IBAN,
+  QUANTO_TENIAMO_L_IBAN,
+} from '@/lib/rimborsi/iban-del-rimborso';
 
 export const metadata = {
   title: 'Informativa sulla privacy · MyCity',
@@ -82,7 +87,13 @@ export default function PrivacyPage() {
               adesso può chiedere il rimborso con un bonifico, e per farlo ci
               lascia l'IBAN. È un dato nuovo: un trattamento che non compare
               nell'informativa è un trattamento senza informativa. */}
-          <li><strong>Dati per il rimborso con bonifico (Acquirenti, solo pagamento alla consegna):</strong> l&apos;IBAN del conto su cui vuoi ricevere il rimborso — raccolto solo se scegli il bonifico nella richiesta di reso, conservato sulla richiesta e usato solo per quel bonifico. Lo vede MyCity, che fa il bonifico; il Venditore no.</li>
+          {/* 16/10/2026 — La riga diceva «raccolto solo nella richiesta di reso,
+              conservato sulla richiesta»: per i reclami l'IBAN lo chiediamo per
+              email e arriva con un messaggio dai Contatti, e non diceva quanto lo
+              teniamo. Adesso dove lo chiediamo e quanto lo teniamo stanno in
+              lib/rimborsi/iban-del-rimborso.ts, accanto al codice che lo cancella:
+              questa pagina li legge da lì. */}
+          <li><strong>Dati per il rimborso con bonifico (Acquirenti, solo pagamento alla consegna):</strong> l&apos;IBAN del conto su cui vuoi ricevere il rimborso, usato solo per quel bonifico. Dove lo chiediamo: {DOVE_CHIEDIAMO_L_IBAN} Lo vede MyCity, che fa il bonifico; il Venditore no. Quanto lo teniamo è scritto nella tabella qui sotto.</li>
           <li><strong>Dati di geolocalizzazione:</strong> posizione del Rider durante la consegna; indirizzo di consegna; posizione approssimativa dell&apos;Acquirente per la funzione &quot;Vicino a te&quot; (solo previo consenso esplicito).</li>
           <li><strong>Contenuti generati dall&apos;utente:</strong> recensioni, foto, messaggi nelle chat ordine.</li>
           {/* 27/8/2026 (R058) — Mancavano, ed è il dato più intrusivo che
@@ -158,6 +169,11 @@ export default function PrivacyPage() {
                   il consenso che l'interruttore in Impostazioni revoca. */}
               <tr><td className="border px-3 py-2">Notifiche push (stato dell&apos;ordine e avvisi di servizio)</td><td className="border px-3 py-2">Esecuzione del contratto (art. 6.1.b)</td><td className="border px-3 py-2">L&apos;iscrizione del dispositivo resta fino alla disattivazione delle notifiche, alla cancellazione dell&apos;account o al primo rifiuto del servizio push</td></tr>
               <tr><td className="border px-3 py-2">Notifiche push promozionali (offerte, gruppi d&apos;acquisto, newsletter)</td><td className="border px-3 py-2">Consenso (art. 6.1.a), revocabile in Impostazioni &gt; Notifiche</td><td className="border px-3 py-2">Fino a revoca del consenso o disiscrizione del dispositivo</td></tr>
+              {/* 16/10/2026 — L'IBAN del rimborso non aveva una riga: nessuna base
+                  giuridica e nessun tempo di conservazione, e il codice non lo
+                  cancellava mai. Adesso la regola è una sola, e la scrivono qui le
+                  stesse parole che stanno accanto al codice. */}
+              <tr><td className="border px-3 py-2">Rimborso con bonifico (IBAN e, solo se cancelli l&apos;account prima del bonifico, il nome dell&apos;intestatario)</td><td className="border px-3 py-2">{PERCHE_TENIAMO_L_IBAN}</td><td className="border px-3 py-2">{QUANTO_TENIAMO_L_IBAN}</td></tr>
               <tr><td className="border px-3 py-2">Gestione reclami e contenzioso</td><td className="border px-3 py-2">Legittimo interesse</td><td className="border px-3 py-2">Fino a prescrizione (10 anni)</td></tr>
             </tbody>
           </table>

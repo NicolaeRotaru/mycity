@@ -26,8 +26,28 @@
  * che c'e' da sempre. Se nemmeno il segno la porta, la lista NON mette una
  * cifra: dice di prenderla dall'avviso del bonifico.
  *
+ * Riesame del 16/10 — UN BONIFICO VECCHIO NON ESCE DALLA FINESTRA. La lista
+ * leggeva gli ultimi 200 rimborsi col bonifico, fatti compresi, e solo dopo il
+ * taglio metteva in cima quelli da fare: con 200 bonifici gia' pagati dopo di
+ * lui, il bonifico da 18 € del 1° marzo non lo vedeva piu' nessuno. Adesso le
+ * letture sono due: i bonifici da fare (tutti, fino a un tetto alto, e se il
+ * tetto si tocca la pagina lo dice) e solo gli ultimi fatti, come storico.
+ *
  * Funzioni pure: la rotta legge le righe, qui si decide cosa mostrare.
  */
+
+import { formatPriceFromCents } from '@/lib/format';
+
+/** Quanti bonifici da fare si leggono al massimo: oltre, la pagina dice che la lista e' tagliata. */
+export const TETTO_DEI_BONIFICI_DA_FARE = 1000;
+
+/** Quanti bonifici gia' fatti si mostrano, come storico. */
+export const TETTO_DEI_BONIFICI_FATTI = 50;
+
+/** La lettura dei bonifici da fare ha toccato il tetto: forse ce n'e' qualcuno in piu'. */
+export function letturaDeiDaFareTagliata(righeLette: number, tetto: number = TETTO_DEI_BONIFICI_DA_FARE): boolean {
+  return righeLette >= tetto;
+}
 
 /** Una riga di `returns` come la legge la rotta (le colonne della 162 possono mancare). */
 export interface RigaDelReso {
@@ -37,6 +57,8 @@ export interface RigaDelReso {
   refunded_at: string | null;
   refund_id: string | null;
   refund_iban?: string | null;
+  /** Il nome a cui intestare il bonifico: c'e' solo se il cliente ha cancellato l'account prima del pagamento. */
+  refund_intestatario?: string | null;
   refund_bonifico_cents?: number | null;
   refund_bonifico_fatto_at?: string | null;
 }
@@ -48,6 +70,10 @@ export interface RigaDelBonificoDelReclamo {
   importo_cents: number | null;
   registrato_at: string | null;
   fatto_at: string | null;
+  /** L'IBAN che il cliente ha mandato dai Contatti, copiato qui da chi paga (riesame del 16/10). */
+  iban?: string | null;
+  /** Il nome a cui intestare il bonifico, se il cliente ha cancellato l'account prima del pagamento. */
+  intestatario?: string | null;
 }
 
 export interface VoceDaBonificare {
@@ -65,11 +91,17 @@ export interface VoceDaBonificare {
   /** Quando il rimborso e' stato registrato. */
   registratoIl: string | null;
   /**
-   * L'IBAN a gruppi di quattro, oppure null se il cliente non l'ha dato. Sui
-   * reclami e' sempre null: il modulo del reclamo non lo chiede, e chi paga lo
-   * chiede al cliente.
+   * L'IBAN a gruppi di quattro, oppure null se non c'e' ancora. Sui reclami il
+   * modulo non lo chiede: lo chiediamo per email, il cliente lo manda dai
+   * Contatti e chi paga lo copia qui (riesame del 16/10).
    */
   iban: string | null;
+  /**
+   * A chi intestare il bonifico, quando il cliente ha cancellato l'account
+   * prima del pagamento: la riga ordine non porta piu' il nome, e questo e'
+   * l'unico posto dove resta. Null finche' l'account c'e'.
+   */
+  intestatario: string | null;
   /** Quando il bonifico e' stato segnato come fatto. */
   fattoIl: string | null;
   daFare: boolean;
@@ -138,6 +170,7 @@ export function vociDeiBonificiDaFare(
       importoCents: cifraDelBonificoDelReso(r),
       registratoIl: r.refunded_at ?? null,
       iban: ibanLeggibile(r.refund_iban),
+      intestatario: r.refund_intestatario ?? null,
       fattoIl: r.refund_bonifico_fatto_at ?? null,
       daFare: !r.refund_bonifico_fatto_at,
     }));
@@ -149,12 +182,86 @@ export function vociDeiBonificiDaFare(
       ordineId: r.order_id,
       importoCents: Math.round(Number(r.importo_cents)),
       registratoIl: r.registrato_at ?? null,
-      iban: null,
+      iban: ibanLeggibile(r.iban),
+      intestatario: r.intestatario ?? null,
       fattoIl: r.fatto_at ?? null,
       daFare: !r.fatto_at,
     }));
-  return [...daiResi, ...daiReclami].sort((a, b) => {
+  // Le due letture (da fare e fatti) non si sovrappongono; se una riga arriva due volte, conta una.
+  const viste = new Set<string>();
+  const uniche = [...daiResi, ...daiReclami].filter((v) => {
+    const chiave = `${v.tipo}:${v.id}`;
+    if (viste.has(chiave)) return false;
+    viste.add(chiave);
+    return true;
+  });
+  return uniche.sort((a, b) => {
     if (a.daFare !== b.daFare) return a.daFare ? -1 : 1;
     return String(b.registratoIl ?? '').localeCompare(String(a.registratoIl ?? ''));
   });
+}
+
+/** Le ultime quattro cifre di un IBAN, per riconoscerlo a colpo d'occhio. */
+function finale(iban: string | null): string | null {
+  const pulito = (iban ?? '').replace(/\s+/g, '');
+  return pulito.length >= 4 ? pulito.slice(-4) : null;
+}
+
+/**
+ * LA DOMANDA PRIMA DI «BONIFICO FATTO» (riesame del 16/10).
+ *
+ * Il pulsante partiva al primo tocco: un dito sbagliato dal telefono toglieva
+ * un cliente dai bonifici da fare senza che avesse ricevuto un euro, e non si
+ * tornava indietro. Adesso si chiede, con la cifra e il conto davanti: chi ha
+ * appena fatto il bonifico li riconosce, chi ha sbagliato riga se ne accorge.
+ */
+export function domandaPrimaDelBonificoFatto(
+  voce: Pick<VoceDaBonificare, 'tipo' | 'ordineId' | 'importoCents' | 'iban' | 'intestatario'>,
+): { title: string; message: string; confirmLabel: string; cancelLabel: string } {
+  const cifra = voce.importoCents != null ? formatPriceFromCents(voce.importoCents) : null;
+  const conto = finale(voce.iban);
+  const verso = [
+    conto ? `sul conto che finisce con ${conto}` : null,
+    voce.intestatario ? `intestato a ${voce.intestatario}` : null,
+  ].filter(Boolean).join(', ');
+  const pratica = `${voce.tipo === 'reclamo' ? 'il reclamo' : 'il reso'} dell'ordine #${voce.ordineId.slice(0, 8)}`;
+  return {
+    title: cifra ? `Hai fatto il bonifico di ${cifra}?` : 'Hai fatto il bonifico?',
+    message:
+      `Per ${pratica}${verso ? `, ${verso}` : ''}. ` +
+      "Se confermi, il rimborso esce dai bonifici da fare e l'IBAN si cancella: non si torna indietro.",
+    confirmLabel: "Sì, l'ho fatto",
+    cancelLabel: 'Non ancora',
+  };
+}
+
+/**
+ * IL RIMBORSO E' PARTITO MA IL RESO NON LO SA (riesame del 16/10).
+ *
+ * In `avanza` i soldi escono prima, poi si scrive sul reso il segno del
+ * rimborso: e' quel segno che fa comparire un bonifico nella lista di chi
+ * paga. Se la scrittura cadeva, la rotta rispondeva «ok» lo stesso: il reso
+ * restava «rimborsato» senza segno, la lista non lo mostrava e il negozio
+ * leggeva «fatto». Adesso chi amministra riceve questo avviso, con tutto quello
+ * che serve per ritrovare il rimborso, e il negozio legge che non e' andata.
+ */
+export function avvisoDelRimborsoNonRegistrato(r: {
+  resoId: string;
+  ordineId: string;
+  refundId: string | null;
+  bonificoCents: number;
+}): { titolo: string; testo: string; link: string } {
+  const ordine = `#${r.ordineId.slice(0, 8)}`;
+  const bonifico = r.bonificoCents > 0;
+  return {
+    titolo: '⚠️ Rimborso partito ma non registrato sul reso',
+    testo:
+      `Il rimborso del reso ${r.resoId} (ordine ${ordine}) è partito, ma il database non ha registrato l'esito sul reso` +
+      (r.refundId ? ` (riferimento ${r.refundId})` : '') +
+      '. ' +
+      (bonifico
+        ? `Dentro c'è un bonifico di ${formatPriceFromCents(r.bonificoCents)} da fare al cliente: NON compare nella lista dei bonifici da fare finché il reso non è registrato. Fallo da qui e scrivi sul reso il riferimento.`
+        : 'Scrivi sul reso il riferimento del rimborso, così i conti tornano.'),
+    link: bonifico ? '/admin/rimborsi-da-bonificare' : '/admin/orders',
+  };
 }

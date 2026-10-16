@@ -210,6 +210,8 @@ export interface Database {
           importo_cents: number;
           registrato_at: string;
           fatto_at: string | null;
+          iban: string | null;
+          intestatario: string | null;
         };
         Insert: {
           dispute_id: string;
@@ -217,6 +219,8 @@ export interface Database {
           importo_cents: number;
           registrato_at?: string;
           fatto_at?: string | null;
+          iban?: string | null;
+          intestatario?: string | null;
         };
         Update: {
           dispute_id?: string;
@@ -224,6 +228,8 @@ export interface Database {
           importo_cents?: number;
           registrato_at?: string;
           fatto_at?: string | null;
+          iban?: string | null;
+          intestatario?: string | null;
         };
         Relationships: [];
       };
@@ -2243,6 +2249,7 @@ export interface Database {
           refund_iban: string | null;
           refund_bonifico_cents: number | null;
           refund_bonifico_fatto_at: string | null;
+          refund_intestatario: string | null;
         };
         Insert: {
           id?: string;
@@ -2267,6 +2274,7 @@ export interface Database {
           refund_iban?: string | null;
           refund_bonifico_cents?: number | null;
           refund_bonifico_fatto_at?: string | null;
+          refund_intestatario?: string | null;
         };
         Update: {
           id?: string;
@@ -2291,6 +2299,7 @@ export interface Database {
           refund_iban?: string | null;
           refund_bonifico_cents?: number | null;
           refund_bonifico_fatto_at?: string | null;
+          refund_intestatario?: string | null;
         };
         Relationships: [];
       };

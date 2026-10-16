@@ -8,7 +8,7 @@ import {
   Sun, LayoutDashboard, Receipt, Users, Gavel, Banknote, Siren, Wallet, MapPin,
   TrendingUp, Ticket, Megaphone, Zap, Crown, CalendarDays,
   LayoutTemplate, FileText, FolderTree, Palette, Rss, ScrollText, LifeBuoy,
-  Home, LogOut, Menu, X, MessageCircle,
+  Home, LogOut, Menu, X, MessageCircle, Landmark,
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -38,6 +38,11 @@ const NAV: NavGroup[] = [
     { href: '/admin/disputes', icon: Gavel, label: 'Reclami', badge: 'disputes' },
     { href: '/admin/cod-remittance', icon: Banknote, label: 'Rimesse COD' },
     { href: '/admin/payouts', icon: Wallet, label: 'Payout venditori' },
+    // Riesame del 16/10 — la lista dei bonifici di rimborso da fare non aveva
+    // una porta: ci si arrivava solo dall'avviso della campanella, e un avviso
+    // letto o scivolato oltre i 50 lasciava un cliente ad aspettare soldi che
+    // nessuno vedeva (14 giorni per legge, art. 56 Codice del Consumo).
+    { href: '/admin/rimborsi-da-bonificare', icon: Landmark, label: 'Rimborsi da bonificare' },
     { href: '/admin/sos', icon: Siren, label: 'SOS rider', badge: 'sos' },
   ] },
   { group: 'Crescita', items: [

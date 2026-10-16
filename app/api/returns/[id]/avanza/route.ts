@@ -18,6 +18,9 @@ import {
 import { comeTornanoIContanti, leggiLaSceltaDelReso } from '@/lib/rimborsi/scelta-del-reso';
 import { COLONNE_162 } from '@/lib/rimborsi/scelta-del-cliente';
 import { scriviAncheSeMancaUnaColonnaNuova } from '@/lib/db/migrazione-148';
+import { avvisoDelRimborsoNonRegistrato } from '@/lib/rimborsi/bonifici-da-fare';
+import { dimenticaLIbanSeNonServe } from '@/lib/rimborsi/iban-del-rimborso';
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 export const runtime = 'nodejs';
 
@@ -218,6 +221,35 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       (campi) => admin.from('returns').update(campi).eq('id', params.id),
     );
     if (scrittura.avviso) logger.warn(`[returns/avanza] ${scrittura.avviso}`);
+    /**
+     * Riesame del 16/10 — UNA SCRITTURA CADUTA NON E' UN «OK».
+     *
+     * I soldi sono gia' partiti (o il bonifico e' gia' registrato sull'ordine).
+     * Senza il segno sul reso, il bonifico non compare nella lista di chi paga e
+     * il negozio leggeva «rimborsato» come se fosse tutto a posto. Qui si ferma
+     * come fa gia' `decide`: chi amministra riceve un avviso con reso, ordine e
+     * cifra, e chi ha premuto legge che la registrazione non e' riuscita.
+     */
+    if (!scrittura.riuscita) {
+      const avviso = avvisoDelRimborsoNonRegistrato({
+        resoId: params.id, ordineId: ret.order_id, refundId, bonificoCents,
+      });
+      try {
+        await notifyAdmins(avviso.titolo, avviso.testo, avviso.link);
+      } catch (e) {
+        logger.error('[returns/avanza] avviso del rimborso non registrato non inviato', { returnId: params.id, e });
+      }
+      return ApiErrors.internal(
+        "Il rimborso è partito ma non si è potuto registrare sul reso: abbiamo avvisato l'amministrazione. Non ripetere il rimborso.",
+      );
+    }
+  }
+
+  // Riesame del 16/10 — chiuso il reso senza un bonifico da fare (annullato, o
+  // rimborsato col credito o sulla carta), l'IBAN del cliente non serve piu' e
+  // se ne va. Se il bonifico e' ancora da fare resta, fino al «fatto».
+  if (body.stato === 'REFUNDED' || body.stato === 'CANCELED') {
+    await dimenticaLIbanSeNonServe(admin, params.id);
   }
 
   const TITOLO: Record<string, string> = {
