@@ -7,12 +7,15 @@ import { contanteDaRimettereCents } from '@/lib/shipping';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
 import { aggiornaQuadratura } from '@/lib/cassa/quadratura';
+import { formatPriceFromCents } from '@/lib/format';
+import { NOTA_SENZA_FOTO_MAX, valutaProvaIncasso } from '@/lib/cassa/prova-incasso';
 import {
   COLONNE_ORDINE_DA_INCASSARE,
   campiDellIncasso,
   importoFuoriMisura,
   motivoPerNonRegistrare,
   scriviIncasso,
+  tracciaIncassoSenzaFoto,
   type ChiRegistra,
   type OrdineDaIncassare,
 } from '@/lib/cassa/registra-incasso';
@@ -31,16 +34,28 @@ const PercorsoProva = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9/_.-]*$/, 'Percorso non valido')
   .refine((v) => !v.includes('..'), 'Percorso non valido');
 
+/**
+ * 16/10/2026 — `null` VUOL DIRE «NIENTE FOTO», NON «DATI NON VALIDI».
+ *
+ * Il pannello dei contanti mandava `"photoUrl": null` quando il fattorino non
+ * scattava la foto (facoltativa), e qui i campi accettavano solo «testo oppure
+ * assente»: 400 «Dati non validi» su qualunque importo. Dal lotto R33 l'incasso
+ * viene prima del codice del cliente, quindi quel 400 era una consegna che non
+ * si chiudeva piu'. Il pannello adesso non manda piu' `null`, ma le versioni
+ * gia' nei telefoni si': per questo qui `null` vale come assente.
+ *
+ * `nota`: da 50 euro in su, chi non riesce a fare la foto scrive il perche'.
+ * La regola sta in `lib/cassa/prova-incasso.ts`, la stessa che usa il pannello.
+ */
 const Body = z.object({
   orderId: z.string().uuid(),
   cashCollectedCents: z.number().int().nonnegative(),
-  photoUrl: PercorsoProva.optional(),
-  signatureUrl: PercorsoProva.optional(),
-  deliveryPhotoUrl: PercorsoProva.optional(),
+  photoUrl: PercorsoProva.nullish(),
+  signatureUrl: PercorsoProva.nullish(),
+  deliveryPhotoUrl: PercorsoProva.nullish(),
+  nota: z.string().max(NOTA_SENZA_FOTO_MAX).nullish(),
 });
 
-/** Sopra questa soglia la prova (foto contanti o firma) è obbligatoria. */
-const HIGH_VALUE_THRESHOLD_CENTS = 5000; // €50
 /** Tolleranza per arrotondamenti prima di considerarlo un mismatch. */
 const MISMATCH_TOLERANCE_CENTS = 50; // €0,50
 
@@ -140,10 +155,16 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   if (importoFuoriMisura(order, body.cashCollectedCents)) {
     return ApiErrors.invalidRequest('Importo incassato fuori range rispetto al totale ordine.');
   }
-  // Prova obbligatoria sopra soglia (anti-frode + dispute "non ho pagato/ricevuto").
-  if (expectedCents >= HIGH_VALUE_THRESHOLD_CENTS && !body.photoUrl && !body.signatureUrl) {
-    return ApiErrors.invalidRequest('Per ordini sopra €50 allega una prova: foto dei contanti o firma del cliente.');
-  }
+  // Prova sopra soglia (anti-frode + dispute "non ho pagato/ricevuto"): la foto
+  // dei contanti o la firma — oppure, se la foto non si puo' fare, una nota sul
+  // perche', che arriva agli amministratori qui sotto. Mai un vicolo cieco: dal
+  // lotto R33 un incasso rifiutato e' una consegna che non si chiude.
+  const prova = valutaProvaIncasso(expectedCents, {
+    foto: body.photoUrl,
+    firma: body.signatureUrl,
+    nota: body.nota,
+  });
+  if (!prova.ok) return ApiErrors.invalidRequest(prova.messaggio);
 
   const now = new Date();
   // 189 — La giornata di cassa del fattorino è quella di Piacenza. Con
@@ -171,7 +192,7 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   // PAGATO un ordine appena assegnato, mai ritirato e mai consegnato.
   const { data: claimed, error: updErr } = await scriviIncasso(
     admin,
-    { id: order.id, rider_id: order.rider_id },
+    { id: order.id, rider_id: order.rider_id, payment_status: order.payment_status },
     campiDellIncasso(order, {
       incassatoCents: body.cashCollectedCents,
       fotoContanti: body.photoUrl,
@@ -191,6 +212,28 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
 
   // Aggiorna riconciliazione giornaliera (include i COD consegnati ma NON confermati).
   await aggiornaQuadratura(admin, user.id, giornoDiCassa);
+
+  // 16/10/2026 — Sopra soglia senza foto: l'incasso passa, ma non in silenzio.
+  // La nota resta nel registro delle attivita' (legato all'ordine) e arriva agli
+  // amministratori fra gli avvisi di servizio, quelli che non si spengono.
+  if (prova.senzaFoto) {
+    await tracciaIncassoSenzaFoto({
+      fattorinoId: user.id,
+      ordineId: order.id,
+      nota: prova.nota,
+      incassatoCents: body.cashCollectedCents,
+      attesoCents: expectedCents,
+    });
+    const { data: amministratori } = await admin.from('profiles').select('id').eq('role', 'admin');
+    const avvisi = (amministratori ?? []).map((a) => ({
+      user_id: a.id,
+      category: 'system',
+      title: '📷 Incasso senza foto',
+      body: `Rider ${user.id.slice(0, 8)} · ordine ${body.orderId.slice(0, 8)}: dichiarati ${formatPriceFromCents(body.cashCollectedCents)} senza foto dei contanti. Motivo: «${prova.nota}»`,
+      link: '/admin/orders',
+    }));
+    if (avvisi.length > 0) await admin.from('notifications').insert(avvisi);
+  }
 
   // Mismatch → alert agli ADMIN (NON al rider, che è la parte da controllare).
   const delta = body.cashCollectedCents - expectedCents;

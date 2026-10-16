@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { compensoTrattenutoCents, contanteDaRimettereCents } from '@/lib/shipping';
-import { incassiRimastiIndietro } from '@/lib/rider/incasso-alla-consegna';
+import { cifreDellIncasso, incassiRimastiIndietro } from '@/lib/rider/incasso-alla-consegna';
 
 /**
  * 15/10/2026 (R33) — LE CONSEGNE CHIUSE CON I CONTANTI ANCORA DA DICHIARARE.
@@ -22,7 +21,10 @@ export type IncassoDaDichiarare = {
   storeName: string | null;
   /** Il contante da rimettere: totale meno il compenso trattenuto. */
   expectedCents: number;
+  /** Il compenso tenuto DAVVERO dal contante (non quello pieno): `cifreDellIncasso`. */
   compensoTenutoCents: number;
+  /** Il pezzo di compenso che il contante non copriva: gli arriva sull'IBAN. */
+  residuoDovutoCents: number;
 };
 
 type Riga = {
@@ -67,8 +69,10 @@ export async function leggiIncassiDaDichiarare(
       id: r.id,
       deliveredAt: r.delivered_at,
       storeName: r.seller?.store_name ?? null,
-      expectedCents: contanteDaRimettereCents(r),
-      compensoTenutoCents: compensoTrattenutoCents(r),
+      // 16/10/2026 — Le tre cifre dalla stessa regola che scrive l'incasso: col
+      // compenso pieno, su un ordine quasi tutto a credito, la bacheca diceva
+      // «hai già trattenuto 3,00 €» a chi ne aveva tenuti 2.
+      ...cifreDellIncasso(r),
     })),
   };
 }

@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { sizedImage } from '@/lib/image-url';
-import { formatPriceFromCents } from '@/lib/format';
+import { NOTA_SENZA_FOTO_MAX, corpoDellaConferma, serveUnaProva } from '@/lib/cassa/prova-incasso';
+import { fraseDelCompenso } from '@/lib/rider/incasso-alla-consegna';
 import { useTranslations } from 'next-intl';
 import { Banknote, Camera } from 'lucide-react';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
@@ -21,6 +22,8 @@ type Props = {
   expectedCents: number;
   /** Quanto il fattorino si e' gia' tenuto: serve a spiegare perche il numero e piu basso. */
   compensoTenutoCents?: number;
+  /** Il pezzo di compenso che il contante non copriva: gli arriva sull'IBAN (`cifreDellIncasso`). */
+  residuoDovutoCents?: number;
   onConfirmed?: () => void;
   /**
    * 15/10/2026 (R33) — Aperto da fuori. Sulla pagina della consegna il
@@ -35,14 +38,17 @@ type Props = {
 
 /**
  * Dialog conferma cash on delivery:
- *  - Importo incassato (pre-popolato col totale)
- *  - Foto contanti/scontrino (opzionale)
+ *  - Importo incassato (pre-popolato col contante da rimettere)
+ *  - Foto contanti/scontrino: facoltativa sotto i 50 €; da 50 € in su serve,
+ *    oppure una nota sul perche' non si e' potuta fare (lib/cassa/prova-incasso.ts)
  *  - Foto consegna pacco (opzionale)
  *
  * Alla conferma chiama /api/rider/cash-confirm che valida lato server
  * (rider proprietario, stato ordine, payment_method=cod, non duplicato).
  */
-export default function CashConfirmDialog({ orderId, expectedCents, compensoTenutoCents = 0, onConfirmed, aperto, onChiudi }: Props) {
+export default function CashConfirmDialog({
+  orderId, expectedCents, compensoTenutoCents = 0, residuoDovutoCents = 0, onConfirmed, aperto, onChiudi,
+}: Props) {
   const tStates = useTranslations('states');
   const tActions = useTranslations('actions');
   const controllato = aperto !== undefined;
@@ -57,10 +63,13 @@ export default function CashConfirmDialog({ orderId, expectedCents, compensoTenu
   // che il browser accetta solo col punto decimale e che qui sotto rileggiamo
   // con `parseFloat`. Scriverlo «35,00 €» svuoterebbe il campo e il fattorino
   // si troverebbe la casella vuota al momento di dichiarare i contanti.
-  // Le cifre da LEGGERE, qui sotto, passano invece da `formatPriceFromCents`.
+  // Le cifre da LEGGERE, qui sotto, passano invece da `fraseDelCompenso` (`formatPriceFromCents`).
   const [amount, setAmount] = useState((expectedCents / 100).toFixed(2));
   const [cashPhoto, setCashPhoto] = useState<string | null>(null);
   const [deliveryPhoto, setDeliveryPhoto] = useState<string | null>(null);
+  // Da 50 € in su, per chi non riesce a fare la foto: il perche', che arriva agli amministratori.
+  const [nota, setNota] = useState('');
+  const serveLaFoto = serveUnaProva(expectedCents);
   const [uploading, setUploading] = useState<'cash' | 'delivery' | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const pannelloRef = useRef<HTMLDivElement>(null);
@@ -120,9 +129,19 @@ export default function CashConfirmDialog({ orderId, expectedCents, compensoTenu
   }
 
   async function submit() {
-    const cents = Math.round(parseFloat(amount) * 100);
-    if (Number.isNaN(cents) || cents < 0) {
-      toast.error('Importo non valido');
+    // 16/10/2026 — Il corpo lo scrive `corpoDellaConferma`: senza foto qui partiva
+    // `"photoUrl": null`, la rotta rispondeva «Dati non validi» e — con l'incasso
+    // prima del codice — la consegna non si chiudeva piu'.
+    const pronto = corpoDellaConferma({
+      orderId,
+      importo: amount,
+      contanteDaRimettereCents: expectedCents,
+      fotoContanti: cashPhoto,
+      fotoConsegna: deliveryPhoto,
+      nota,
+    });
+    if (!pronto.ok) {
+      toast.error(pronto.messaggio);
       return;
     }
     setSubmitting(true);
@@ -130,12 +149,7 @@ export default function CashConfirmDialog({ orderId, expectedCents, compensoTenu
       const r = await fetch('/api/rider/cash-confirm', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          orderId,
-          cashCollectedCents: cents,
-          photoUrl: cashPhoto,
-          deliveryPhotoUrl: deliveryPhoto ?? undefined,
-        }),
+        body: JSON.stringify(pronto.corpo),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(apiErrorMessage(data));
@@ -190,8 +204,9 @@ export default function CashConfirmDialog({ orderId, expectedCents, compensoTenu
       >
         <h2 id="titolo-conferma-contanti" className="text-lg font-semibold text-ink-900">Conferma incasso contanti</h2>
         <p className="mt-1 text-xs text-ink-500">
-          Inserisci l&apos;importo ricevuto. Le foto (contanti/scontrino e consegna) sono
-          facoltative.
+          {serveLaFoto
+            ? 'Inserisci l’importo ricevuto. Da 50 € in su serve la foto dei contanti: se non riesci a farla, scrivi il perché nella nota.'
+            : 'Inserisci l’importo ricevuto. Le foto (contanti/scontrino e consegna) sono facoltative.'}
         </p>
 
         <label className="mt-4 block text-sm font-medium text-ink-700" htmlFor="contante-da-rimettere">
@@ -206,16 +221,13 @@ export default function CashConfirmDialog({ orderId, expectedCents, compensoTenu
           className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2 text-lg font-mono"
         />
         <p className="mt-1 text-xs text-ink-500">
-          Previsto: {formatPriceFromCents(expectedCents)}
-          {compensoTenutoCents > 0 && (
-            <> — hai già trattenuto {formatPriceFromCents(compensoTenutoCents)} di compenso.</>
-          )}
+          {fraseDelCompenso({ expectedCents, compensoTenutoCents, residuoDovutoCents })}
         </p>
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <PhotoSlot
             label="Foto contanti / scontrino"
-            required={false}
+            required={serveLaFoto}
             url={cashPhoto}
             uploading={uploading === 'cash'}
             onChange={async (f) => setCashPhoto(await upload(f, 'cash'))}
@@ -228,6 +240,24 @@ export default function CashConfirmDialog({ orderId, expectedCents, compensoTenu
             onChange={async (f) => setDeliveryPhoto(await upload(f, 'delivery'))}
           />
         </div>
+
+        {serveLaFoto && !cashPhoto && (
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-ink-700" htmlFor="nota-senza-foto">
+              Non riesci a fare la foto? Scrivi il perché
+            </label>
+            <textarea
+              id="nota-senza-foto"
+              value={nota}
+              onChange={(e) => setNota(e.target.value)}
+              maxLength={NOTA_SENZA_FOTO_MAX}
+              rows={2}
+              placeholder="Es. fotocamera rotta, pagato con tre banconote da 20"
+              className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-ink-500">La nota arriva agli amministratori insieme all&apos;incasso.</p>
+          </div>
+        )}
 
         <div className="mt-6 flex gap-2">
           <button

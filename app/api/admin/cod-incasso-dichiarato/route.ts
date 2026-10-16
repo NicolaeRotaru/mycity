@@ -86,7 +86,7 @@ export const POST = withAdminAuthRateLimit(
     const adesso = new Date();
     const { data: scritte, error: errScrittura } = await scriviIncasso(
       admin,
-      { id: ordine.id, rider_id: ordine.rider_id },
+      { id: ordine.id, rider_id: ordine.rider_id, payment_status: ordine.payment_status },
       campiDellIncasso(ordine, { incassatoCents: body.cashCollectedCents, registratoDa: user.id, adesso }),
       chi,
     );
