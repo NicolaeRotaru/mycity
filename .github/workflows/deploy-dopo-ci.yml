@@ -20,7 +20,9 @@ name: Rilascio dopo CI verde
 #     rilascio, e il codice vecchio tornava online sopra quello nuovo. Adesso
 #     quel giro si ferma rosso e lo dice. Lo stesso succede se fra la fine dei
 #     controlli e questo lavoro su `main` e' arrivato altro: si pubblica il piu'
-#     nuovo, al giro della sua CI.
+#     nuovo, al giro della sua CI. Se quella CI finisce rossa, da qui non si
+#     pubblica niente finche' l'ultimo commit di `main` non ha la CI verde
+#     (rilanciandola, o unendo la correzione): il riepilogo lo dice.
 #
 # IL SITO VIVE SU VERCEL. Fino al 21/8/2026 questo file parlava anche di Render,
 # e la carta #141 mandava Nicola a spegnere il rilascio automatico li'. Era il
@@ -114,8 +116,9 @@ name: Rilascio dopo CI verde
 #      deve dire ✅ e uscire 0. Se dice ❌, elenca cosa manca e dove si
 #      sistema; se dice ⚪ e esce 2, non ha letto la regola (di solito gh non
 #      e' collegato: l'errore di gh e' scritto sopra); se dice ⚪ e esce 3,
-#      l'ha letta ma un modello dei rami non lo sa giudicare (per esempio uno
-#      con le parentesi quadre): scrive quale, e la regola va guardata a mano;
+#      la regola e' diversa da quella di questi passi (altri rami, rami
+#      esclusi, altri controlli o altre voci): scrive in cosa, e la regola va
+#      guardata a mano;
 #   6. prova: una richiesta di unione con una prova rossa deve avere il
 #      pulsante di unione bloccato.
 #
@@ -362,10 +365,12 @@ jobs:
       # da dove arriva quel commit. Tre esiti:
       #   · e' l'ultimo di `main` → si va avanti;
       #   · e' un commit di `main`, ma dopo ne e' arrivato uno piu' nuovo → rosso,
-      #     non si pubblica. Succede rilanciando la CI di un commit vecchio: il
-      #     codice vecchio tornerebbe online sopra quello nuovo, su un database
-      #     gia' piu' avanti, e la prova di fumo direbbe comunque «risponde».
-      #     Il commit piu' nuovo ha il suo rilascio quando la sua CI finisce verde;
+      #     non si pubblica. Succede rilanciando la CI di un commit vecchio, o
+      #     quando dopo questo commit ne e' stato unito un altro. Questo passo non
+      #     guarda cosa c'e' online: se ci fosse gia' il piu' nuovo, il codice
+      #     vecchio gli tornerebbe sopra, e la prova di fumo direbbe comunque
+      #     «risponde». Il commit piu' nuovo contiene anche questo, e ha il suo
+      #     rilascio quando la sua CI finisce verde;
       #   · non fa parte della storia di `main` → rosso, e nessun passo dopo,
       #     nemmeno il verdetto, esegue niente di quel commit.
       #
@@ -424,7 +429,7 @@ jobs:
           if git merge-base --is-ancestor "$SCARICATO" "$PUNTA"; then
             echo "fidato=true" >> "$GITHUB_OUTPUT"
             rifiuta "Non ho rilasciato: su main c'e' gia' un commit piu' nuovo" \
-              "Questo giro doveva pubblicare \`$SCARICATO\`, ma l'ultimo di \`main\` adesso e' \`$PUNTA\`. Pubblicarlo rimetterebbe online codice vecchio sopra quello nuovo, su un database gia' piu' avanti. Non ho toccato niente: il commit piu' nuovo si pubblica da solo quando la sua CI finisce verde."
+              "Questo giro doveva pubblicare \`$SCARICATO\`, ma adesso l'ultimo commit di \`main\` e' \`$PUNTA\`. Da qui si pubblica solo l'ultimo, perche' non guardo cosa c'e' online: un commit piu' vecchio potrebbe prendere il posto di uno piu' nuovo. Non ho toccato niente. \`$SCARICATO\` e' gia' dentro \`$PUNTA\`, quindi va online con il rilascio di \`$PUNTA\` o di un commit che arriva dopo. Se la CI di \`$PUNTA\` finisce rossa, da qui non parte nessun rilascio finche' l'ultimo commit di \`main\` non ha la CI verde: rilancia quella CI se il rosso viene da una prova che si rompe da sola, altrimenti unisci la correzione."
           fi
 
           echo "fidato=false" >> "$GITHUB_OUTPUT"

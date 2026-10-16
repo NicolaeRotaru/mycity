@@ -31,6 +31,7 @@ import { join } from 'node:path';
 import {
   valutaLaRegolaMain,
   righeDelVerdetto,
+  uscitaDelVerdetto,
   esitoDalTesto,
   CONTROLLO_RICHIESTO,
 } from '@/scripts/controlla-regola-main.mjs';
@@ -132,7 +133,29 @@ describe('la regola «Main»: cosa le manca per fermare le richieste rosse', () 
     expect(cose).toContain('spenta');
     expect(cose).toContain('non guarda nessun ramo');
     expect(esito.mancano).toHaveLength(2);
+    expect(esito.diverse).toEqual([]);
     expect(esito.ramoAggiornato).toBe(false);
+  });
+
+  /*
+   * 16/10/2026 (sesto giro) — Con la regola di oggi, spenta, lo script
+   * stampava anche «nessuno puo' scavalcarla, nemmeno tu: con la CI rossa non
+   * si unisce e non si spinge su main». Oggi con la CI rossa si unisce: la
+   * regola e' spenta. Gli avvisi descrivono una regola che funziona, quindi
+   * escono solo col ✅.
+   */
+  it('accanto a una regola spenta o diversa non scrive cosa farebbe la regola accesa', () => {
+    const diversa = sistemata();
+    diversa.conditions.ref_name.include = ['~ALL'] as never[];
+    const senzaMain = sistemata();
+    controlli(senzaMain).required_status_checks = [{ context: 'Unit tests' }];
+    for (const regola of [REGOLA_DI_OGGI, diversa, senzaMain]) {
+      const esito = valutaLaRegolaMain(regola);
+      expect(esito.protegge).toBe(false);
+      expect(esito.avvisi).toEqual([]);
+    }
+    // Con la regola dei passi, accesa e senza nessuno che la scavalca, invece si'.
+    expect(valutaLaRegolaMain(sistemata()).avvisi.join('\n')).toContain('nessuno puo\' scavalcarla');
   });
 
   it('accesa, su main, con «Main»: ferma le richieste rosse anche SENZA la spunta del ramo aggiornato', () => {
@@ -191,39 +214,38 @@ describe('la regola «Main»: cosa le manca per fermare le richieste rosse', () 
     altroRamo.conditions.ref_name.include = ['refs/heads/sviluppo'] as never[];
     expect(valutaLaRegolaMain(altroRamo).protegge).toBe(false);
 
-    for (const bersaglio of ['~DEFAULT_BRANCH', 'refs/heads/main']) {
-      const r = sistemata();
-      r.conditions.ref_name.include = [bersaglio] as never[];
-      expect(valutaLaRegolaMain(r).protegge, bersaglio).toBe(true);
-    }
+    // Il verde e' solo per «Include default branch», come nei passi: anche
+    // main scritto per nome e' un'altra regola, da guardare a mano.
+    expect(valutaLaRegolaMain(sistemata()).protegge).toBe(true);
+    const perNome = sistemata();
+    perNome.conditions.ref_name.include = ['refs/heads/main'] as never[];
+    expect(valutaLaRegolaMain(perNome).protegge).toBe(false);
+    expect(uscitaDelVerdetto(valutaLaRegolaMain(perNome))).toBe(3);
   });
 
   /*
-   * 16/10/2026 (correzione del lotto) — «INCLUDE ALL BRANCHES» NON E' UN VERDE.
-   * Nel menu di GitHub, accanto a «Include default branch», c'e' «Include all
-   * branches». Il controllo obbligatorio di una regola vale anche per le
-   * spinte: un commit nuovo entra in un ramo coperto solo se ha gia' passato la
-   * CI su un altro ramo. Con tutti i rami coperti, un altro ramo non c'e' e
-   * nessuno spinge piu' niente. Lo script contava '~ALL' come «guarda main» e
-   * diceva ✅ con uscita 0: il passo che doveva accorgersi dell'errore lo
-   * approvava.
+   * 16/10/2026 — «INCLUDE ALL BRANCHES» NON E' UN VERDE. Nel menu di GitHub,
+   * accanto a «Include default branch», c'e' «Include all branches». Lo
+   * script contava '~ALL' come «guarda main» e diceva ✅ con uscita 0.
+   *
+   * Sesto giro: lo script non prova piu' a dire cosa succede sugli altri rami
+   * (ogni frase su quello e' nata sbagliata in qualche caso). Una regola che
+   * guarda altri rami e' diversa da quella dei passi: ⚪, uscita 3, e dice
+   * come tornare ai passi.
    */
-  it('«All branches» non protegge: dice che blocca le spinte su ogni ramo e come si sistema', () => {
+  it('«All branches» non protegge: e\' diversa dalla procedura, si guarda a mano e dice come tornare ai passi', () => {
     const r = sistemata();
     r.conditions.ref_name.include = ['~ALL'] as never[];
     const esito = valutaLaRegolaMain(r);
     expect(esito.protegge).toBe(false);
-    expect(esito.mancano).toHaveLength(1);
-    expect(esito.mancano[0].cosa).toContain('tutti i rami');
-    expect(esito.mancano[0].cosa).toContain('nessuno puo\' piu\' spingere');
-    expect(esito.mancano[0].come).toContain('togli «All branches»');
-    expect(esito.mancano[0].come).toContain('lascia solo «Include default branch»');
-
-    // Le richieste rosse le ferma davvero: il titolo non dice «NON ferma», dice che ferma troppo.
+    expect(esito.mancano).toEqual([]);
+    expect(uscitaDelVerdetto(esito)).toBe(3);
+    expect(esito.diverse).toHaveLength(1);
+    expect(esito.diverse[0].cosa).toContain('«Include all branches»');
+    expect(esito.diverse[0].come).toContain('lascia solo «Include default branch»');
     const testo = righeDelVerdetto(esito).join('\n');
     expect(testo).not.toContain('✅');
-    expect(testo).not.toContain('NON ferma');
-    expect(testo).toContain('blocca anche le spinte sugli altri rami');
+    expect(righeDelVerdetto(esito)[0]).toContain('questa regola e\' diversa da quella della procedura: guardala a mano');
   });
 
   it('anche un modello che prende i rami di lavoro, accanto a main, non protegge', () => {
@@ -239,30 +261,39 @@ describe('la regola «Main»: cosa le manca per fermare le richieste rosse', () 
       r.conditions.ref_name.include = include as never[];
       const esito = valutaLaRegolaMain(r);
       expect(esito.protegge, include.join(',')).toBe(false);
-      const voce = esito.mancano.find((m) => m.come.includes('lascia solo «Include default branch»'));
+      expect(uscitaDelVerdetto(esito), include.join(',')).toBe(3);
+      const voce = esito.diverse.find((m) => m.come.includes('lascia solo «Include default branch»'));
       expect(voce, include.join(',')).toBeDefined();
-      for (const altro of include.filter((b) => b !== '~DEFAULT_BRANCH' && b !== 'refs/heads/main')) {
-        expect(voce?.come, include.join(',')).toContain(altro === '~ALL' ? '«All branches»' : `«${altro}»`);
+      for (const altro of include.filter((b) => b !== '~DEFAULT_BRANCH')) {
+        expect(voce?.cosa, include.join(',')).toContain(altro === '~ALL' ? '«Include all branches»' : `«${altro}»`);
       }
     }
   });
 
-  it('«All branches» con qualche ramo escluso blocca lo stesso gli altri rami', () => {
+  it('«All branches» con qualche ramo escluso: due differenze dalla procedura, i rami e le esclusioni', () => {
     const r = sistemata();
     r.conditions.ref_name.include = ['~ALL'] as never[];
     r.conditions.ref_name.exclude = ['refs/heads/claude/**'] as never[];
     const esito = valutaLaRegolaMain(r);
     expect(esito.protegge).toBe(false);
-    expect(esito.mancano.map((m) => m.cosa).join('\n')).toContain('tutti i rami');
+    expect(uscitaDelVerdetto(esito)).toBe(3);
+    expect(esito.diverse.map((d) => d.cosa)).toEqual([
+      expect.stringContaining('«Include all branches»'),
+      expect.stringContaining('esclude dei rami («refs/heads/claude/**»)'),
+    ]);
   });
 
-  it('«All branches» con la regola spenta: il titolo resta «NON ferma», e le cose da sistemare sono due', () => {
+  it('«All branches» con la regola spenta: ❌ con una cosa da sistemare, e la differenza dei rami da guardare a mano', () => {
     const r = sistemata();
     r.enforcement = 'disabled';
     r.conditions.ref_name.include = ['~ALL'] as never[];
     const esito = valutaLaRegolaMain(r);
-    expect(esito.mancano).toHaveLength(2);
-    expect(righeDelVerdetto(esito)[0]).toContain('NON ferma le richieste con la CI rossa');
+    expect(esito.mancano).toHaveLength(1);
+    expect(esito.diverse).toHaveLength(1);
+    expect(uscitaDelVerdetto(esito)).toBe(1);
+    const righe = righeDelVerdetto(esito);
+    expect(righe[0]).toBe('❌ La regola «Main» non e\' quella della procedura. C\'e\' una cosa da sistemare:');
+    expect(righe.join('\n')).toContain('In piu\', questa regola e\' diversa da quella della procedura: guardala a mano');
   });
 
   it('una regola sulle etichette (tag), anche con «tutti», non guarda il ramo main', () => {
@@ -307,12 +338,13 @@ describe('la regola «Main»: cosa le manca per fermare le richieste rosse', () 
     expect(valutaLaRegolaMain(actions).protegge).toBe(true);
   });
 
-  it('la coda di unione blocca tutto: ci.yml non gira su merge_group, «Main» non arriverebbe mai', () => {
+  it('una voce che i passi non chiedono, come la coda di unione, non e\' mai un verde: la nomina e la regola si guarda a mano', () => {
     for (const r of [sistemata(), sistemataConLaSpunta()]) {
       r.rules.push({ type: 'merge_queue' } as never);
       const esito = valutaLaRegolaMain(r);
       expect(esito.protegge).toBe(false);
-      expect(esito.mancano.map((m) => m.come).join('\n')).toContain('merge_group');
+      expect(uscitaDelVerdetto(esito)).toBe(3);
+      expect(esito.diverse.map((d) => d.cosa).join('\n')).toContain('ha anche «merge_queue»');
     }
   });
 
@@ -355,7 +387,7 @@ describe('lo script vero, col comando delle istruzioni: `gh api … | node scrip
     const file = fileDellaRegola(REGOLA_DI_OGGI);
     const { uscita, testo } = inPipe('(sleep 1; cat "$FILE")', { FILE: file });
     expect(uscita, testo).toBe(1);
-    expect(testo).toContain('NON ferma le richieste con la CI rossa');
+    expect(testo).toContain('non e\' quella della procedura. Ci sono 2 cose da sistemare');
     expect(testo).not.toContain('Non ho potuto leggere');
   });
 
@@ -374,7 +406,7 @@ describe('lo script vero, col comando delle istruzioni: `gh api … | node scrip
     expect(testo).toContain('scelta tua');
   });
 
-  it('su una regola con «All branches», nella forma della prova del revisore, esce 1 e non dice ✅', () => {
+  it('su una regola con «All branches», nella forma della prova del revisore, esce 3 e non dice ✅', () => {
     const file = fileDellaRegola({
       target: 'branch',
       enforcement: 'active',
@@ -388,9 +420,9 @@ describe('lo script vero, col comando delle istruzioni: `gh api … | node scrip
       bypass_actors: [],
     });
     const { uscita, testo } = inPipe('(sleep 1; cat "$FILE")', { FILE: file });
-    expect(uscita, testo).toBe(1);
+    expect(uscita, testo).toBe(3);
     expect(testo).not.toContain('✅');
-    expect(testo).toContain('nessuno puo\' piu\' spingere commit nuovi');
+    expect(testo).toContain('questa regola e\' diversa da quella della procedura: guardala a mano');
     expect(testo).toContain('lascia solo «Include default branch»');
   });
 
@@ -452,6 +484,6 @@ describe('lo script vero, col comando delle istruzioni: `gh api … | node scrip
       env: { NODE_ENV: 'test', PATH: process.env.PATH ?? '' },
     });
     expect(esito.status, `${esito.stdout}${esito.stderr}`).toBe(1);
-    expect(esito.stdout).toContain('NON ferma le richieste con la CI rossa');
+    expect(esito.stdout).toContain('non e\' quella della procedura');
   });
 });
