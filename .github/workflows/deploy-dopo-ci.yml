@@ -112,8 +112,10 @@ name: Rilascio dopo CI verde
 #   5. controlla la regola com'e' davvero, senza fidarti degli occhi:
 #        gh api repos/NicolaeRotaru/mycity/rulesets/16879481 | node scripts/controlla-regola-main.mjs
 #      deve dire ✅ e uscire 0. Se dice ❌, elenca cosa manca e dove si
-#      sistema; se dice ⚪, non ha letto la regola (di solito gh non e'
-#      collegato: l'errore di gh e' scritto sopra);
+#      sistema; se dice ⚪ e esce 2, non ha letto la regola (di solito gh non
+#      e' collegato: l'errore di gh e' scritto sopra); se dice ⚪ e esce 3,
+#      l'ha letta ma un modello dei rami non lo sa giudicare (per esempio uno
+#      con le parentesi quadre): scrive quale, e la regola va guardata a mano;
 #   6. prova: una richiesta di unione con una prova rossa deve avere il
 #      pulsante di unione bloccato.
 #
