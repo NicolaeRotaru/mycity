@@ -7,17 +7,21 @@ import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
-import { colonnaNonTrovata } from '@/lib/db/migrazione-148';
+import { colonnaNonTrovata, scriviAncheSeMancaUnaColonnaNuova } from '@/lib/db/migrazione-148';
 import { COLONNE_162 } from '@/lib/rimborsi/scelta-del-cliente';
 import { ibanValido, normalizzaIban } from '@/lib/rimborsi/scelta-del-cliente';
 import {
+  bonificiRimastiSoloSullOrdine,
   letturaDeiDaFareTagliata,
+  registrazioneMancanteDelBonifico,
   smistaLeVoci,
+  STATI_DEL_RESO_COL_RIMBORSO_FORSE_PARTITO,
   tabellaDeiBonificiMancante,
   TETTO_DEI_BONIFICI_DA_FARE,
   TETTO_DEI_BONIFICI_FATTI,
   vociDeiBonificiDaFare,
   type OrdineDelBonifico,
+  type ResoSenzaSegno,
   type RigaDelBonificoDelReclamo,
   type RigaDelReso,
 } from '@/lib/rimborsi/bonifici-da-fare';
@@ -43,6 +47,8 @@ export const runtime = 'nodejs';
 const COLONNE =
   'id, order_id, refund_amount_cents, refunded_at, refund_id, refund_iban, refund_intestatario, refund_bonifico_cents, refund_bonifico_fatto_at';
 const COLONNE_DEI_RECLAMI = 'dispute_id, order_id, importo_cents, registrato_at, fatto_at, iban, intestatario';
+/** I resi senza il segno del rimborso: servono anche lo stato e l'id del rimborso (vuoto). */
+const COLONNE_SENZA_SEGNO = `${COLONNE}, status`;
 
 /** Quanti ordini si chiedono per volta: l'elenco degli id viaggia nell'indirizzo della richiesta. */
 const ORDINI_PER_LETTURA = 100;
@@ -157,12 +163,40 @@ async function elenco(): Promise<NextResponse> {
     }
   }
 
-  const righe = [...righeDaFare, ...righeFatte];
-  const { ordini, errore: erroreOrdini } = await ordiniDeiResi(admin, righe.map((r) => r.order_id));
+  // Riesame del 16/10, quarto giro — i resi SENZA segno, dove il rimborso puo' essere partito: se
+  // la scrittura dell'esito sul reso era caduta, il bonifico sta solo sull'ordine. Si leggono qui e
+  // si confrontano con l'elenco dei rimborsi dell'ordine (`bonificiRimastiSoloSullOrdine`).
+  const resiSenzaSegno = (colonne: string) =>
+    admin
+      .from('returns')
+      .select(colonne)
+      .is('refund_id', null)
+      .in('status', [...STATI_DEL_RESO_COL_RIMBORSO_FORSE_PARTITO])
+      .limit(TETTO_DEI_BONIFICI_DA_FARE);
+  const senzaSegno = await conRipiegoSchema(
+    'returns.select (bonifici rimasti sull ordine)',
+    () => resiSenzaSegno(COLONNE_SENZA_SEGNO),
+    () => resiSenzaSegno(senzaColonne(COLONNE_SENZA_SEGNO, COLONNE_162)),
+  );
+  if (senzaSegno.error) {
+    logger.error('[bonifici da fare] resi senza segno non letti', {
+      message: (senzaSegno.error as { message?: string }).message,
+    });
+    return ApiErrors.internal('Non riesco a leggere i bonifici da fare');
+  }
+  const righeSenzaSegno = (senzaSegno.data ?? []) as unknown as ResoSenzaSegno[];
+  tagliata = tagliata || letturaDeiDaFareTagliata(righeSenzaSegno.length);
+
+  const conSegno = [...righeDaFare, ...righeFatte];
+  const { ordini, errore: erroreOrdini } = await ordiniDeiResi(
+    admin,
+    [...conSegno, ...righeSenzaSegno].map((r) => r.order_id),
+  );
   if (erroreOrdini) {
     logger.error('[bonifici da fare] ordini dei resi non letti', { message: erroreOrdini });
     return ApiErrors.internal('Non riesco a controllare i bonifici sugli ordini');
   }
+  const righe = [...conSegno, ...bonificiRimastiSoloSullOrdine(righeSenzaSegno, ordini)];
 
   // Fra i bonifici da pagare solo quelli che l'ordine conferma; gli altri a parte, da controllare.
   const { daPagare, daControllare } = smistaLeVoci(vociDeiBonificiDaFare(righe, reclami, ordini));
@@ -241,6 +275,44 @@ async function registraIban(body: Comando, iban: string) {
         .select('id');
 }
 
+/**
+ * Riesame del 16/10, quarto giro — IL RIMBORSO RIMASTO SOLO SULL'ORDINE SI REGISTRA SUL RESO.
+ *
+ * La voce di un bonifico la cui scrittura sul reso era caduta viene dall'ordine (vedi `elenco`).
+ * Prima di segnarla «fatto», o di scriverci l'IBAN, si scrive sul reso quello che `decide` o
+ * `avanza` non erano riusciti a scrivere: rimborsato, col segno e la cifra del bonifico — presi
+ * dall'ordine, che scrive solo il server. Su un reso che il segno ce l'ha gia' non fa niente.
+ * Restituisce il messaggio del guasto, o `null`.
+ */
+async function registraIlRimborsoRimastoSullOrdine(resoId: string): Promise<string | null> {
+  const admin = getAdminSupabase();
+  const { data: reso, error } = await admin
+    .from('returns')
+    .select('id, order_id, status, refund_id')
+    .eq('id', resoId)
+    .maybeSingle();
+  if (error) return error.message;
+  const r = reso as { id: string; order_id: string; status: string | null; refund_id: string | null } | null;
+  if (!r || r.refund_id) return null;
+  const { data: ordine, error: errOrdine } = await admin
+    .from('orders')
+    .select('id, stripe_refund_id')
+    .eq('id', r.order_id)
+    .maybeSingle();
+  if (errOrdine) return errOrdine.message;
+  const mancante = registrazioneMancanteDelBonifico(r, ordine as OrdineDelBonifico | null);
+  if (!mancante) return null;
+  const scrittura = await scriviAncheSeMancaUnaColonnaNuova(
+    'returns.update (rimborso rimasto sull ordine)',
+    { ...mancante, refunded_at: new Date().toISOString() },
+    COLONNE_162,
+    (campi) =>
+      admin.from('returns').update(campi).eq('id', resoId).is('refund_id', null).eq('status', String(r.status)),
+  );
+  if (scrittura.avviso) logger.warn(`[bonifici da fare] ${scrittura.avviso}`);
+  return scrittura.riuscita ? null : (scrittura.avviso ?? 'scrittura non riuscita');
+}
+
 async function comando(req: NextRequest, user: { id: string }): Promise<NextResponse> {
   let body: Comando;
   try {
@@ -256,6 +328,16 @@ async function comando(req: NextRequest, user: { id: string }): Promise<NextResp
       return ApiErrors.invalidRequest(
         "Questo IBAN non torna: controlla lettere e cifre. Un IBAN italiano comincia con IT e ha 27 caratteri.",
       );
+    }
+  }
+
+  if (body.resoId) {
+    const mancata = await registraIlRimborsoRimastoSullOrdine(body.resoId);
+    if (mancata) {
+      logger.error('[bonifici da fare] rimborso rimasto sull ordine non registrato sul reso', {
+        resoId: body.resoId, message: mancata,
+      });
+      return ApiErrors.internal('Non riesco a registrare il rimborso sul reso: riprova tra poco.');
     }
   }
 

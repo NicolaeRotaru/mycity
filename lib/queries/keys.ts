@@ -30,6 +30,8 @@ export const queryKeys = {
     detail:  (id: string)    => [...queryKeys.orders.details(), id] as const,
     deliveryCode: (id: string) => ['delivery-code', id] as const,
     forReview: (id: string)  => ['order-for-review', id] as const,
+    // Riesame del 16/10, quarto giro: il bonifico di rimborso di un ordine in contanti.
+    bonificoDiRimborso: (id: string, stato: string) => ['order-refund-transfer', id, stato] as const,
   },
 
   products: {

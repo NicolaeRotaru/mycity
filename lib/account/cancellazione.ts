@@ -1,7 +1,11 @@
 import type { getAdminSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
-import { custodisciIBonificiDaFare } from '@/lib/rimborsi/iban-del-rimborso';
+import {
+  custodisciIBonificiDaFare,
+  MOTIVO_BONIFICO_SENZA_IBAN,
+  rinvioPerIBonificiSenzaIban,
+} from '@/lib/rimborsi/iban-del-rimborso';
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
@@ -705,7 +709,7 @@ export type EsitoCancellazione = {
   ok: boolean;
   errore?: string;
   /** Perché non si è fatto, quando la ragione non è un guasto ma una regola. */
-  motivo?: 'cassa_da_versare';
+  motivo?: 'cassa_da_versare' | typeof MOTIVO_BONIFICO_SENZA_IBAN;
   fileRimossi: number;
   erroriFile: string[];
 };
@@ -795,6 +799,19 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
       fileRimossi: 0,
       erroriFile: [],
     };
+  }
+
+  // ①ter Riesame del 16/10, quarto giro — un bonifico da fare senza IBAN ferma la cancellazione.
+  // Il nome resta al sicuro (qui sopra), ma tolto l'account se ne va l'email, che era l'unico modo
+  // di chiedere il conto: il debito resterebbe con un nome e nessuno a cui pagarlo. È un rinvio
+  // deciso da noi, come la cassa: la persona legge perché (lib/cron-cancellazioni.ts), e la
+  // cancellazione riparte da sola quando l'IBAN è sulla voce del bonifico o non c'è più niente da fare.
+  const attesaDellIban = rinvioPerIBonificiSenzaIban(bonifici.senzaIban);
+  if (attesaDellIban) {
+    logger.warn('[cancellazione] rinviata: bonifico di rimborso da fare senza IBAN', {
+      userId, ...bonifici.senzaIban,
+    });
+    return { ok: false, motivo: MOTIVO_BONIFICO_SENZA_IBAN, errore: attesaDellIban, fileRimossi: 0, erroriFile: [] };
   }
 
   // ② I documenti d'identità e l'IBAN non aspettano: non si vedono a video,

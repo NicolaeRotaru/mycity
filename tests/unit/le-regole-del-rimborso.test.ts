@@ -313,8 +313,29 @@ describe('il pannello dei reclami dice come si divide la cifra', () => {
     expect(comeSiDivideIlReclamo(misto, 3000)).toContain(formatPriceFromCents(r.creditoCents));
     expect(comeSiDivideIlReclamo(misto, 3000)).toContain(formatPriceFromCents(r.bonificoCents));
   });
-  it('oltre il massimo, divide il massimo: 80 € su 50 rimborsabili sono 20 di credito e 30 di bonifico', () => {
-    expect(comeSiDivideIlReclamo(misto, 8000)).toContain(`Di ${formatPriceFromCents(5000)}, ${formatPriceFromCents(2000)}`);
+  /**
+   * Riesame del 16/10, quarto giro — la frase descriveva la divisione della cifra TAGLIATA al
+   * massimo, mentre la rotta dei reclami rifiuta qualunque cifra sopra il massimo. Il caso della
+   * scheda: ordine da 50 € (20 di credito, 30 in contanti), 40 € gia rimborsati, chi decide scrive 30.
+   */
+  it('oltre il massimo non descrive una divisione: dice che la cifra supera il rimborsabile', () => {
+    const giaRimborsatoQuasiTutto: OrdineDaRimborsare = { ...misto, refunded_amount_cents: 4000 };
+    expect(quantoSiPuoRestituire(giaRimborsatoQuasiTutto).massimoCents).toBe(1000);
+    const frase = comeSiDivideIlReclamo(giaRimborsatoQuasiTutto, 3000);
+    expect(frase, 'la frase descrive un rimborso che la rotta rifiuta').not.toMatch(/^Di /u);
+    expect(frase).toContain('Supera il rimborsabile');
+    expect(frase).toContain(`al massimo ${formatPriceFromCents(1000)}`);
+    expect(frase).not.toContain('tornano come credito');
+  });
+  it('oltre il massimo vale per ogni ordine, anche quello tutto in contanti che non si divide', () => {
+    expect(comeSiDivideIlReclamo(misto, 8000)).toContain(`Supera il rimborsabile: al massimo ${formatPriceFromCents(5000)}`);
+    expect(comeSiDivideIlReclamo(maglione, 4001)).toContain(`al massimo ${formatPriceFromCents(4000)}`);
+  });
+  it('proprio il massimo si divide ancora: 50 € su 50 sono 20 di credito e 30 di bonifico', () => {
+    expect(comeSiDivideIlReclamo(misto, 5000)).toContain(
+      `Di ${formatPriceFromCents(5000)}, ${formatPriceFromCents(2000)} tornano come credito MyCity`,
+    );
+    expect(comeSiDivideIlReclamo(maglione, 4000)).toBeNull();
   });
   it('niente da dividere: tutto in contanti, carta, cifra vuota, ordine mai incassato', () => {
     expect(comeSiDivideIlReclamo(maglione, 3000)).toBeNull();

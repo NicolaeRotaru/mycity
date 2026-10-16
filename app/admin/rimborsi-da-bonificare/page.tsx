@@ -136,6 +136,7 @@ export default function RimborsiDaBonificarePage() {
                 {dice.daControllare}
               </p>
             )}
+            {dice.sulReso && <p className="mt-2 text-sm text-ink-700">{dice.sulReso}</p>}
             <p className="mt-2 font-mono text-sm text-ink-900 break-all">
               {v.iban ?? <span className="font-sans text-secondary-700">{dice.alPostoDellIban}</span>}
             </p>

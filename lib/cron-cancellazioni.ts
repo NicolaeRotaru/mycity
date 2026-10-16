@@ -46,7 +46,7 @@ export type TentativoCancellazione = {
   userId: string;
   ok: boolean;
   /** Presente quando NON si è fatto per una regola nostra, non per un guasto. */
-  motivo?: 'cassa_da_versare';
+  motivo?: 'cassa_da_versare' | 'bonifico_senza_iban';
   errore?: string;
   /**
    * Quando la persona ha chiesto di essere cancellata: la RPC
@@ -63,7 +63,9 @@ export type TentativoCancellazione = {
  * cui sbagliare — un rinvio sconosciuto trattato come normale sarebbe un
  * silenzio, e il silenzio è il difetto che stiamo chiudendo.
  */
-const MOTIVI_DI_RINVIO: readonly string[] = ['cassa_da_versare'];
+// Riesame del 16/10, quarto giro — `bonifico_senza_iban`: gli dobbiamo un bonifico di rimborso e
+// non abbiamo l'IBAN (lib/rimborsi/iban-del-rimborso.ts, `rinvioPerIBonificiSenzaIban`).
+const MOTIVI_DI_RINVIO: readonly string[] = ['cassa_da_versare', 'bonifico_senza_iban'];
 
 /**
  * Oltre questo, un rinvio smette di essere una regola che funziona e diventa

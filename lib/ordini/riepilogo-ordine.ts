@@ -82,7 +82,33 @@ export type StatoPagamento =
   | { tipo: 'contanti-da-pagare'; centesimi: number }
   | { tipo: 'gia-pagato-con-carta'; centesimi: number }
   | { tipo: 'rimborsato' }
+  | { tipo: 'bonifico-in-arrivo'; centesimi: number; serveIban: boolean; certo: boolean }
   | { tipo: 'non-lo-so' };
+
+/**
+ * Quello che si sa del bonifico di rimborso di un ordine in contanti (lo calcola il server:
+ * lib/rimborsi/bonifico-del-cliente.ts). `'non-lo-so'` finche' non e' arrivato, o se la lettura
+ * e' caduta.
+ */
+export type BonificoPerLaPagina =
+  | { daFareCents: number; serveIban: boolean; certo: boolean }
+  | 'non-lo-so';
+
+/** Le frasi del riquadro «bonifico in arrivo»: la pagina le mostra, una prova le legge. */
+export function fraseDelBonificoInArrivo(
+  s: Extract<StatoPagamento, { tipo: 'bonifico-in-arrivo' }>,
+  euro: (centesimi: number) => string,
+): string {
+  if (!s.certo) {
+    return `Ti restituiamo ${euro(s.centesimi)} con un bonifico, che facciamo a mano. Se non ti è ancora arrivato, scrivici dalla pagina Contatti.`;
+  }
+  return (
+    `Rimborso di ${euro(s.centesimi)} in arrivo con un bonifico, che facciamo a mano.` +
+    (s.serveIban
+      ? " Per farlo ci serve il tuo IBAN: scrivici dalla pagina Contatti e indica il numero dell'ordine."
+      : '')
+  );
+}
 
 /**
  * Cosa dire a chi guarda l'ordine, sul pagamento.
@@ -95,13 +121,29 @@ export type StatoPagamento =
  * Il quarto caso — «non lo so» — non è pedanteria: un ordine vecchio può non avere il metodo scritto,
  * e su un ordine di cui non so come è stato pagato non devo dire NIENTE. Meglio un riquadro in meno
  * di un riquadro che sbaglia sui soldi.
+ *
+ * Riesame del 16/10, quarto giro — SUI CONTANTI «RIMBORSATO» ARRIVAVA PRIMA DEI SOLDI.
+ * Un ordine in contanti si rimborsa col bonifico, che una persona fa a mano dopo la decisione:
+ * lo stato del pagamento diventa «rimborsato» subito, i soldi arrivano dopo — o mai, se manca
+ * l'IBAN. La pagina diceva «Ordine rimborsato.» dal primo minuto, mentre l'email chiedeva l'IBAN.
+ * Adesso, su un ordine in contanti rimborsato, la pagina guarda il bonifico: se e' ancora da fare
+ * dice «in arrivo» (e chiede l'IBAN se manca); «rimborsato» solo quando nessun bonifico e' in
+ * sospeso. Finche' non si sa niente del bonifico, non dice niente.
  */
 export function statoPagamento(
   ordine: { payment_method?: string | null; payment_status?: string | null },
   totaleCentesimi: number,
+  bonifico: BonificoPerLaPagina = 'non-lo-so',
 ): StatoPagamento {
   const metodo = (ordine.payment_method ?? '').toLowerCase();
   const stato = (ordine.payment_status ?? '').toUpperCase();
+  const rimborsatoAlmenoInParte = stato === 'REFUNDED' || stato === 'PARTIALLY_REFUNDED';
+  if (metodo === 'cod' && rimborsatoAlmenoInParte) {
+    if (bonifico === 'non-lo-so') return { tipo: 'non-lo-so' };
+    if (bonifico.daFareCents > 0) {
+      return { tipo: 'bonifico-in-arrivo', centesimi: bonifico.daFareCents, serveIban: bonifico.serveIban, certo: bonifico.certo };
+    }
+  }
   if (stato === 'REFUNDED') return { tipo: 'rimborsato' };
   if (metodo === 'card' && stato === 'PAID') return { tipo: 'gia-pagato-con-carta', centesimi: totaleCentesimi };
   if (metodo === 'cod' && stato !== 'PAID') return { tipo: 'contanti-da-pagare', centesimi: totaleCentesimi };
