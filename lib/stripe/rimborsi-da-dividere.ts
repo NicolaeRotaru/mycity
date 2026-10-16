@@ -202,14 +202,40 @@ export function rimborsiDaEtichettare(
   ordini: ReadonlyArray<Pick<OrdineDelRimborso, 'stripe_refund_id'>>,
   conto: Pick<ContoDaDividere, 'daFuoriCents' | 'mancanteCents'>,
 ): string[] {
-  const daFuori = rimborsi.filter(daFuoriDaRegistrare);
+  if (unRimborsoDelSitoStaPartendo(rimborsi, ordini, conto)) return [];
+  return rimborsi
+    .filter(daFuoriDaRegistrare)
+    .map((r) => r.id)
+    .filter((id): id is string => !!id);
+}
+
+/**
+ * I numeri dicono che un rimborso del sito ha già prenotato il suo importo su
+ * un ordine del carrello, ma su Stripe non c'è ancora: i rimborsi da fuori sono
+ * più di quello che manca sul database (contando anche quelli che una divisione
+ * precedente ha già scritto sugli ordini).
+ *
+ * 16/10/2026 (terzo riesame del lotto) — LA DIVISIONE A METÀ NON SI FA PIÙ.
+ * Un caso: carrello Pane + fioraio, 3 € dal cruscotto, e un reso del sito da 2 €
+ * sul pane che ha prenotato l'importo ma aspetta ancora Stripe. Il pannello
+ * mostrava 1 € da dividere; la divisione scriveva sugli ordini l'id del
+ * rimborso da 3 €, e quando il reso arrivava su Stripe il webhook lo dava per
+ * diviso tutto: 2 € usciti al cliente e mai scritti su nessun ordine, senza
+ * avvisi. Adesso in questo stato la divisione si rifiuta e non scrive niente:
+ * appena il reso è su Stripe i numeri tornano, e si divide tutto in una volta.
+ */
+export function unRimborsoDelSitoStaPartendo(
+  rimborsi: ReadonlyArray<RimborsoStripe>,
+  ordini: ReadonlyArray<Pick<OrdineDelRimborso, 'stripe_refund_id'>>,
+  conto: Pick<ContoDaDividere, 'daFuoriCents' | 'mancanteCents'>,
+): boolean {
   const scritti = new Set<string>();
   for (const o of ordini) for (const id of rimborsiGiaScritti(o)) scritti.add(id);
-  const giaDivisiCents = daFuori
+  const giaDivisiCents = rimborsi
+    .filter(daFuoriDaRegistrare)
     .filter((r) => !!r.id && scritti.has(r.id))
     .reduce((somma, r) => somma + Math.max(0, r.amount ?? 0), 0);
-  if (conto.daFuoriCents > conto.mancanteCents + giaDivisiCents) return [];
-  return daFuori.map((r) => r.id).filter((id): id is string => !!id);
+  return conto.daFuoriCents > conto.mancanteCents + giaDivisiCents;
 }
 
 /** Un carrello fermo, letto per il pannello. `null` se non c'è più niente di fermo. */
@@ -304,6 +330,18 @@ export async function dividiIlRimborso(
 
   const rimborsi = await elencoDeiRimborsi({ payment_intent: pagamento });
   const conto = contoDaDividere(ordini, rimborsi);
+  // Prima di guardare le parti: con un rimborso del sito a metà strada la cifra da dividere
+  // non è quella vera (vedi `unRimborsoDelSitoStaPartendo`).
+  if (unRimborsoDelSitoStaPartendo(rimborsi, ordini, conto)) {
+    return {
+      ok: false,
+      stato: 409,
+      errore:
+        'Su questo pagamento un rimborso del sito sta ancora partendo: non ho registrato niente. ' +
+        'Aspetta qualche minuto e ricarica la pagina; se non cambia, controlla quel rimborso su Stripe.',
+      registrati: [],
+    };
+  }
   const candidati = ordiniDaDividere(ordini);
   const controllo = controllaLaDivisione(
     candidati.map((o) => ({ id: o.id, lordoCents: lordoCents(o), giaRimborsatoCents: o.refunded_amount_cents ?? 0, fermo: fermo(o) })),
@@ -312,7 +350,8 @@ export async function dividiIlRimborso(
   );
   if (!controllo.ok) return { ok: false, stato: 400, errore: controllo.errore, registrati: [] };
 
-  // I rimborsi dal cruscotto che questa divisione copre: si scrivono sugli
+  // I rimborsi dal cruscotto che questa divisione copre — tutti: una divisione a
+  // metà qui non arriva (`unRimborsoDelSitoStaPartendo`). Si scrivono sugli
   // ordini a cui dà una parte, così il prossimo avviso dello stesso pagamento
   // non li ritrova «da fuori» anche se l'etichetta su Stripe non arriva.
   const daFuoriIds = rimborsi
@@ -336,9 +375,13 @@ export async function dividiIlRimborso(
         ok: false,
         stato: 409,
         errore:
-          `L'ordine #${ordine.id.slice(0, 6).toUpperCase()} è cambiato mentre lo registravo, oppure il suo bonifico sta partendo proprio adesso. ` +
+          // 16/10 (terzo riesame) — Sotto i 200 caratteri: più lungo, il riquadro lo
+          // sostituiva con «Qualcosa non ha funzionato» (friendlyError, lib/errors.ts) e
+          // chi amministra non sapeva che una parte era già registrata.
+          `L'ordine #${ordine.id.slice(0, 6).toUpperCase()} è cambiato mentre lo registravo, oppure il suo bonifico sta partendo adesso. ` +
           (registrati.length > 0
-            ? `${registrati.length} ordine/i sono già registrati. Ricarica la pagina: il rimborso da dividere riparte da quello che manca.`
+            ? `${registrati.length === 1 ? '1 ordine è già registrato' : `${registrati.length} ordini sono già registrati`}: ` +
+              'ricarica la pagina e dividi quello che manca.'
             : 'Non ho registrato niente: ricarica la pagina e riprova.'),
         registrati,
       };

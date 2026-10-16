@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { formatPriceFromCents } from '@/lib/format';
 import { queryKeys } from '@/lib/queries/keys';
-import { centesimiDaEuro } from '@/lib/rimborsi/divisione-del-rimborso';
+import { centesimiDaEuro, vistaDelRiquadro } from '@/lib/rimborsi/divisione-del-rimborso';
 import type { CarrelloDaDividere, ElencoDaDividere } from '@/lib/stripe/rimborsi-da-dividere';
 
 /**
@@ -128,7 +128,11 @@ export function RimborsiDaDividere() {
   const titolo = (
     <h2 id="rimborsi-da-dividere" className="text-base font-bold text-ink-800">Rimborsi dal cruscotto da dividere</h2>
   );
-  if (error) {
+  // 16/10 (terzo riesame) — Con un elenco già letto, una ricarica fallita non lo
+  // toglie: i carrelli (e le cifre scritte dentro) restano, l'errore va sopra.
+  const vista = vistaDelRiquadro(!!error, data);
+  if (vista === 'niente') return null;
+  if (vista === 'solo-errore') {
     // 16/10/2026 — Il messaggio è quello del server, da solo: prima gli si
     // metteva davanti la stessa frase, e si leggeva due volte «Non riesco a
     // leggere i rimborsi da dividere».
@@ -141,10 +145,14 @@ export function RimborsiDaDividere() {
   }
   const carrelli = data?.carrelli ?? [];
   const nonLetti = data?.nonLetti ?? [];
-  if (carrelli.length === 0 && nonLetti.length === 0) return null;
   return (
     <section className="space-y-3" aria-labelledby="rimborsi-da-dividere">
       {titolo}
+      {error && (
+        <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          {friendlyError(error)} Qui sotto c&apos;è l&apos;elenco letto l&apos;ultima volta: le cifre che hai scritto restano.
+        </p>
+      )}
       <p className="text-sm text-ink-600">
         Stripe non dice di quale negozio è un rimborso fatto dal cruscotto su un carrello di più negozi: i bonifici del
         carrello restano fermi finché non lo dividi. Scrivi la parte di ciascun ordine (0 se non è sua).

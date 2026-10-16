@@ -2,8 +2,11 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, afterEach } from 'vitest';
+import { act, createElement, type ComponentType } from 'react';
+import { createRoot } from 'react-dom/client';
 import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi } from './aiuti/schermo';
+import { vistaDelRiquadro } from '@/lib/rimborsi/divisione-del-rimborso';
 
 /**
  * 16/10/2026 (riesame del lotto) — IL RIQUADRO «RIMBORSI DAL CRUSCOTTO DA
@@ -86,5 +89,69 @@ describe('il riquadro dei rimborsi dal cruscotto da dividere', () => {
     const s = await schermo();
     expect(testoVisibile(s.radice)).toBe('');
     s.smonta();
+  });
+});
+
+/**
+ * 16/10/2026 (terzo riesame del lotto) — UNA RICARICA FALLITA CANCELLAVA LE CIFRE SCRITTE.
+ *
+ * Il riquadro si ricarica da solo ogni due minuti. Chi amministra sta scrivendo
+ * le parti di un carrello; la ricarica fallisce (la rete, un 500): React Query
+ * tiene l'elenco di prima ma segna la lettura in errore, e il riquadro mostrava
+ * solo il messaggio. I carrelli sparivano, e con loro le cifre scritte.
+ */
+describe('una ricarica fallita non cancella le cifre scritte', () => {
+  const CARRELLO = {
+    carrelli: [
+      {
+        pagamento: 'pi_1',
+        daDividereCents: 300,
+        ordini: [
+          { id: 'pane01', negozio: 'Pane Quotidiano', lordoCents: 1500, giaRimborsatoCents: 0, restaCents: 1500, bonificoPartito: false, fermo: true },
+          { id: 'fiori1', negozio: 'Il fioraio', lordoCents: 1290, giaRimborsatoCents: 0, restaCents: 1290, bonificoPartito: true, fermo: true },
+        ],
+      },
+    ],
+    nonLetti: [],
+  };
+
+  it('IL CASO DEL RIESAME — scrivo 3,50, la ricarica fallisce: il carrello resta, la cifra pure, e l errore si legge sopra', async () => {
+    (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+    const mod = await monta('components/admin/RimborsiDaDividere.tsx');
+    const Riquadro = mod.RimborsiDaDividere as ComponentType;
+    globali.__DATI_QUERY__ = CARRELLO;
+    const radice = document.createElement('div');
+    document.body.appendChild(radice);
+    const root = createRoot(radice);
+    await act(async () => root.render(createElement(Riquadro)));
+
+    const campo = radice.querySelector('input') as HTMLInputElement;
+    const scrivi = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      scrivi.call(campo, '3,50');
+      campo.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+    expect((radice.querySelector('input') as HTMLInputElement).value, 'la prova non riesce a scrivere nel campo').toBe('3,50');
+
+    // La ricarica fallisce: l'elenco di prima resta in mano a React Query, la lettura è in errore.
+    globali.__ESITO_QUERY__ = { isError: true, isSuccess: false, status: 'error', error: new TypeError('Failed to fetch') };
+    await act(async () => root.render(createElement(Riquadro)));
+
+    const campi = Array.from(radice.querySelectorAll('input')) as HTMLInputElement[];
+    expect(campi.length, `il carrello è sparito; a schermo: «${testoVisibile(radice)}»`).toBe(2);
+    expect(campi[0].value, 'la cifra scritta è andata persa').toBe('3,50');
+    expect(testoVisibile(radice)).toContain('Problema di connessione');
+
+    await act(async () => root.unmount());
+    radice.remove();
+  });
+
+  it('senza un elenco già letto, l errore resta da solo; senza niente da dividere, il riquadro non c è', () => {
+    expect(vistaDelRiquadro(true, undefined)).toBe('solo-errore');
+    expect(vistaDelRiquadro(true, { carrelli: [], nonLetti: [] })).toBe('solo-errore');
+    expect(vistaDelRiquadro(true, CARRELLO)).toBe('carrelli');
+    expect(vistaDelRiquadro(true, { carrelli: [], nonLetti: [{ pagamento: 'pi_2' }] })).toBe('carrelli');
+    expect(vistaDelRiquadro(false, { carrelli: [], nonLetti: [] })).toBe('niente');
+    expect(vistaDelRiquadro(false, CARRELLO)).toBe('carrelli');
   });
 });
