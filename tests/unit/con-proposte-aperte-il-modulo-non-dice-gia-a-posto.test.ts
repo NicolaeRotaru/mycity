@@ -40,8 +40,10 @@ vi.mock('sonner', () => ({ toast: avvisi.toast, Toaster: () => null }));
  * sparito l'avviso dopo un minuto, gli allergeni proposti non si ritrovavano.
  *
  * Queste prove guardano la frase che segue l'applicazione e cosa resta da
- * rivedere: con avvisi aperti la frase «niente da fare» non esce mai, e le
+ * rivedere: con proposte aperte la frase «niente da fare» non esce mai, e le
  * proposte si possono riaprire senza riscrivere quello che è già entrato.
+ * (Dal 16/10 le proposte stanno nel riquadro «Da controllare» del modulo, non
+ * in avvisi a tempo: vedi le-proposte-dell-assistente-restano-finche-decidi-tu.test.ts.)
  */
 
 const CATEGORIE: CategoryRow[] = [
@@ -69,7 +71,7 @@ describe('la frase dopo un suggerimento applicato', () => {
     expect(esito.inSospeso).toBe(1);
     const avviso = avvisoDopoIlPatch(esito, MIGLIORA);
     expect(avviso.testo, '«già a posto» accanto all avviso «Allergeni NON compilato»').not.toBe(MIGLIORA.niente);
-    expect(avviso).toEqual({ tono: 'da-controllare', testo: "C'è una proposta da controllare: guarda l'avviso" });
+    expect(avviso).toEqual({ tono: 'da-controllare', testo: "C'è una proposta da controllare: la trovi nel riquadro «Da controllare»" });
   });
 
   it('solo un prezzo di 50 € su 5 €: scartato, e la frase non dice «già a posto»', () => {
@@ -88,7 +90,10 @@ describe('la frase dopo un suggerimento applicato', () => {
     );
     expect(esito.cambiati).toEqual([]);
     expect(esito.inSospeso).toBe(3);
-    expect(avvisoDopoIlPatch(esito, MIGLIORA).testo).toBe('Ci sono 3 proposte da controllare: guarda gli avvisi');
+    expect(avvisoDopoIlPatch(esito, MIGLIORA).testo).toBe('Ci sono 3 proposte da controllare: le trovi nel riquadro «Da controllare»');
+    // Dove la frase resta fissa (in fondo a «Migliora tutto»), rimanda all'elenco scritto subito sotto.
+    expect(avvisoDopoIlPatch(esito, MIGLIORA, 'qui-sotto').testo).toBe('Ci sono 3 proposte da controllare: sono scritte qui sotto');
+    expect(esito.daControllare).toHaveLength(3);
   });
 
   it('nome scritto e allergeni proposti: verde, ma dice anche che resta una proposta', () => {
@@ -98,7 +103,7 @@ describe('la frase dopo un suggerimento applicato', () => {
     expect(esito.cambiati).toEqual(['nome']);
     expect(avvisoDopoIlPatch(esito, MIGLIORA)).toEqual({
       tono: 'successo',
-      testo: "Modifiche applicate al form — controlla e salva. C'è anche una proposta da controllare: guarda l'avviso",
+      testo: "Modifiche applicate al form — controlla e salva. C'è anche una proposta da controllare: la trovi nel riquadro «Da controllare»",
     });
   });
 
@@ -225,6 +230,10 @@ describe('«Migliora tutto» e la diagnosi, nel modulo vero', () => {
   const testo = (s: Schermo) => (s.radice.textContent ?? '').replace(/\s+/g, ' ');
   const tutteLeFrasi = () =>
     [avvisi.toast, avvisi.toast.success, avvisi.toast.warning].flatMap((f) => f.mock.calls.map((c) => String(c[0])));
+  const righeDaControllare = (s: Schermo) => {
+    const box = Array.from(s.radice.querySelectorAll('section')).find((x) => nomeAccessibile(x) === 'Da controllare');
+    return box ? Array.from(box.querySelectorAll('li')).map((li) => (li.textContent ?? '').replace(/\s+/g, ' ')) : [];
+  };
   const campoAllergeni = (s: Schermo) =>
     Array.from(s.radice.querySelectorAll<HTMLInputElement>('input, textarea')).find((el) =>
       nomeAccessibile(el).startsWith('Allergeni'),
@@ -251,21 +260,23 @@ describe('«Migliora tutto» e la diagnosi, nel modulo vero', () => {
     );
     expect(avvisi.toast.success).not.toHaveBeenCalled();
     expect(testo(s), 'a piè di pannello resta la spunta «Applicato al form»').not.toContain('Applicato al form');
-    expect(testo(s)).toContain("C'è una proposta da controllare: guarda l'avviso");
-    const gialli = avvisi.toast.warning.mock.calls;
-    expect(gialli.map((c) => String(c[0]))).toEqual([
-      expect.stringContaining('Allergeni NON compilato'),
-      "C'è una proposta da controllare: guarda l'avviso",
+    expect(testo(s)).toContain("C'è una proposta da controllare: è scritta qui sotto");
+    // L'unico avviso a comparsa e' il riassunto: la proposta sta nel riquadro «Da controllare».
+    expect(avvisi.toast.warning.mock.calls.map((c) => String(c[0]))).toEqual([
+      "C'è una proposta da controllare: la trovi nel riquadro «Da controllare»",
     ]);
+    expect(righeDaControllare(s)).toEqual([expect.stringContaining('Allergeni NON compilato')]);
 
-    // L'avviso col pulsante sparisce dopo un minuto: la proposta si riapre da qui.
-    avvisi.toast.warning.mockClear();
+    // Il negoziante la toglie dal riquadro senza usarla: la proposta si rimette da qui.
+    await premi(s, 'Non usarlo');
+    expect(righeDaControllare(s)).toEqual([]);
     await premi(s, 'Rivedi le proposte');
-    const riaperti = avvisi.toast.warning.mock.calls.filter((c) => String(c[0]).includes('Allergeni NON compilato'));
-    expect(riaperti, '«Rivedi le proposte» non riapre l avviso degli allergeni').toHaveLength(1);
+    expect(righeDaControllare(s), '«Rivedi le proposte» non rimette la proposta degli allergeni').toEqual([
+      expect.stringContaining('Allergeni NON compilato'),
+    ]);
     expect(campoAllergeni(s), 'il campo Allergeni non e a video: la prova girerebbe a vuoto').toBeTruthy();
     expect(campoAllergeni(s)!.value).toBe('');
-    s.agisci(() => riaperti[0][1].action.onClick());
+    await premi(s, 'Usa questo valore');
     expect(campoAllergeni(s)!.value).toBe('Glutine');
     s.smonta();
   });
@@ -279,9 +290,10 @@ describe('«Migliora tutto» e la diagnosi, nel modulo vero', () => {
     expect(tutteLeFrasi()).not.toContain(MIGLIORA.niente);
     expect(avvisi.toast.success).not.toHaveBeenCalled();
     expect(testo(s)).not.toContain('Applicato al form');
-    const gialli = avvisi.toast.warning.mock.calls.map((c) => String(c[0]));
-    expect(gialli[0]).toContain('prezzo NON applicato');
-    expect(gialli).toContain("C'è una proposta da controllare: guarda l'avviso");
+    expect(righeDaControllare(s)).toEqual([expect.stringContaining('prezzo NON applicato')]);
+    expect(avvisi.toast.warning.mock.calls.map((c) => String(c[0]))).toContain(
+      "C'è una proposta da controllare: la trovi nel riquadro «Da controllare»",
+    );
     const prezzo = s.radice.querySelector('input[name="price"]') as HTMLInputElement;
     expect(Number(prezzo.value), 'il prezzo fuori banda e entrato nel campo').toBe(5);
     // Il prezzo non si «rivede» da qui: ripassarlo potrebbe scriverlo.
@@ -316,15 +328,17 @@ describe('«Migliora tutto» e la diagnosi, nel modulo vero', () => {
     );
     expect(avvisi.toast.success).not.toHaveBeenCalled();
     expect(avvisi.toast.warning.mock.calls.map((c) => String(c[0]))).toContain(
-      "C'è una proposta da controllare: guarda l'avviso",
+      "C'è una proposta da controllare: la trovi nel riquadro «Da controllare»",
     );
     expect(pulsante(s, 'Applica le correzioni')).toBeUndefined();
 
-    avvisi.toast.warning.mockClear();
+    await premi(s, 'Non usarlo');
+    expect(righeDaControllare(s)).toEqual([]);
     await premi(s, 'Rivedi le proposte');
-    const riaperti = avvisi.toast.warning.mock.calls.filter((c) => String(c[0]).includes('Allergeni NON compilato'));
-    expect(riaperti, 'la diagnosi ha buttato via la proposta degli allergeni').toHaveLength(1);
-    expect(riaperti[0][1]?.action?.label).toBe('Usa questo valore');
+    expect(righeDaControllare(s), 'la diagnosi ha buttato via la proposta degli allergeni').toEqual([
+      expect.stringContaining('Allergeni NON compilato'),
+    ]);
+    expect(pulsante(s, 'Usa questo valore')).toBeTruthy();
     // E si puo' riaprire ancora: finche' la diagnosi resta aperta, la proposta c'e'.
     expect(pulsante(s, 'Rivedi le proposte')).toBeTruthy();
     s.smonta();

@@ -10,6 +10,7 @@ import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
+import { REGOLA_CAMPI_DICHIARATIVI, rigaAttributoPerIlModello } from '@/lib/products/aiPatch';
 
 /**
  * Voce → prodotto: il venditore detta a parole un prodotto ("ho tre magliette
@@ -26,6 +27,7 @@ const SYSTEM = `Sei l'assistente del marketplace "MyCity Piacenza". Il venditore
 - Ricava dai suoi dati: name (chiaro e specifico), description (1-3 frasi, onesta, basata su ciò che ha detto), price (in euro, se indicato — "15 euro l'una" → 15), stock (quantità se indicata — "tre magliette" → 3), category_slug (uno tra quelli forniti, in base al tipo di oggetto), subcategory_name se sensata, condition (nuovo/usato/ricondizionato se indicato), unit, attributes (SOLO chiavi valide per la categoria; per i campi a scelta usa esattamente uno dei valori ammessi — es. colore, taglia, materiale), tags (3-8 parole chiave minuscole).
 - NON inventare ciò che non è stato detto né chiaramente deducibile. Ometti i campi incerti.
 - Niente emoji. Prezzi in euro come numero.
+- ${REGOLA_CAMPI_DICHIARATIVI}
 Rispondi sempre e solo chiamando lo strumento "voice_fill".
 
 ${REGOLA_TESTO_DI_TERZI}`;
@@ -113,12 +115,8 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // taglia da agosto.
   const attributeSchema = (Array.isArray(body.attributeSchema) ? body.attributeSchema : []).slice(0, 40);
   const topCategories = (Array.isArray(body.topCategories) ? body.topCategories : []).slice(0, 30);
-  const attrLines = attributeSchema
-    .map((f) => {
-      const opts = f.options && f.options.length ? ` [opzioni: ${f.options.join(', ')}]` : '';
-      return `- ${f.key} (${f.type ?? 'text'})${opts}`;
-    })
-    .join('\n');
+  // (16/10/2026) Le dichiarazioni restano nell'elenco ma segnate in sola lettura.
+  const attrLines = attributeSchema.map(rigaAttributoPerIlModello).join('\n');
 
   const userText = `Il venditore ha detto:
 ${recinta('dettato', transcript, 2000)}

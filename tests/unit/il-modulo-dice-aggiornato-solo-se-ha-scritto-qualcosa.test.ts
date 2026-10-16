@@ -170,7 +170,11 @@ describe('la chat del prodotto, nel modulo vero', () => {
     vi.unstubAllGlobals();
   });
 
-  async function chiediAllaChat(richiesta: string) {
+  // `atteso`: una frase della bolla dell'assistente. Dal 16/10 la bolla mostra
+  // le parole del modello solo se il modulo ha scritto tutto quello che lui
+  // proponeva; altrimenti dice cosa e' cambiato davvero (vedi
+  // la-chat-del-prodotto-dice-quello-che-il-modulo-ha-scritto.test.ts).
+  async function chiediAllaChat(richiesta: string, atteso = rispostaDellAssistente.reply) {
     const mod = await monta('components/seller/ProductForm.tsx');
     const s = accendi(mod.default, {
       mode: 'edit',
@@ -207,25 +211,25 @@ describe('la chat del prodotto, nel modulo vero', () => {
     for (let i = 0; i < 8; i++) await attendi();
 
     const testo = (s.radice.textContent ?? '').replace(/\s+/g, ' ');
-    expect(testo, 'la risposta dell assistente non e arrivata: la prova girerebbe a vuoto').toContain(
-      rispostaDellAssistente.reply,
-    );
+    expect(testo, 'la risposta dell assistente non e arrivata: la prova girerebbe a vuoto').toContain(atteso);
     return { s, testo };
   }
 
-  it('«aggiungi gli allergeni: glutine»: nessuna spunta verde, nessun «Campi aggiornati», resta l avviso con il pulsante', async () => {
+  it('«aggiungi gli allergeni: glutine»: nessuna spunta verde, nessun «Campi aggiornati», resta la proposta con il pulsante', async () => {
     rispostaDellAssistente = { reply: 'Ecco la proposta.', patch: { attributes: { allergeni: 'glutine' } } };
-    const { s, testo } = await chiediAllaChat('aggiungi gli allergeni: glutine');
+    const { s, testo } = await chiediAllaChat('aggiungi gli allergeni: glutine', 'Nella scheda non è cambiato niente');
 
     expect(testo, 'la chat dice di aver aggiornato il modulo, e non ha scritto niente').not.toContain(
       'Campi aggiornati nel form',
     );
     expect(avvisi.toast.success, 'l avviso verde «aggiornato» compare accanto a «Allergeni NON compilato»').not
       .toHaveBeenCalled();
-    const gialli = avvisi.toast.warning.mock.calls;
-    expect(gialli).toHaveLength(1);
-    expect(String(gialli[0][0])).toContain('Allergeni NON compilato');
-    expect(gialli[0][1]?.action?.label).toBe('Usa questo valore');
+    // La proposta sta nel riquadro «Da controllare», non in un avviso a tempo.
+    expect(avvisi.toast.warning).not.toHaveBeenCalled();
+    const riquadro = Array.from(s.radice.querySelectorAll('section')).find((x) => nomeAccessibile(x) === 'Da controllare');
+    expect(riquadro?.textContent).toContain('Allergeni NON compilato');
+    const usa = Array.from(riquadro!.querySelectorAll('button')).find((b) => b.textContent === 'Usa questo valore');
+    expect(usa, 'la proposta non ha il pulsante «Usa questo valore»').toBeTruthy();
 
     // Nella scheda gli allergeni non ci sono finche' il negoziante non preme il pulsante.
     const campoAllergeni = () =>
@@ -234,20 +238,18 @@ describe('la chat del prodotto, nel modulo vero', () => {
       );
     expect(campoAllergeni(), 'il campo Allergeni non e a video: la prova girerebbe a vuoto').toBeTruthy();
     expect(campoAllergeni()!.value).toBe('');
-    s.agisci(() => gialli[0][1].action.onClick());
+    s.agisci(() => clicca(usa!));
     expect(campoAllergeni()!.value, 'il pulsante «Usa questo valore» non scrive piu la proposta').toBe('glutine');
     s.smonta();
   });
 
   it('«metti il prezzo a 0,35» su una focaccia da 3,50: niente «aggiornato», e il motivo dello scarto si legge', async () => {
     rispostaDellAssistente = { reply: 'Prezzo proposto.', patch: { price: 0.35 } };
-    const { s, testo } = await chiediAllaChat('metti il prezzo a 0,35');
+    const { s, testo } = await chiediAllaChat('metti il prezzo a 0,35', 'Nella scheda non è cambiato niente');
 
     expect(testo).not.toContain('Campi aggiornati nel form');
     expect(avvisi.toast.success).not.toHaveBeenCalled();
-    const gialli = avvisi.toast.warning.mock.calls.map((c) => String(c[0]));
-    expect(gialli).toHaveLength(1);
-    expect(gialli[0]).toContain('prezzo NON applicato');
+    expect(testo).toContain('prezzo NON applicato (3.50 → 0.35 €');
     const prezzo = s.radice.querySelector('input[name="price"]') as HTMLInputElement;
     expect(Number(prezzo.value), 'il prezzo fuori banda e entrato nel campo').toBe(3.5);
     s.smonta();
