@@ -17,6 +17,7 @@ import {
 import { comeTornanoIContanti, leggiLaSceltaDelReso } from '@/lib/rimborsi/scelta-del-reso';
 import { COLONNE_162 } from '@/lib/rimborsi/scelta-del-cliente';
 import { scriviAncheSeMancaUnaColonnaNuova } from '@/lib/db/migrazione-148';
+import { dimenticaLIbanSeNonServe } from '@/lib/rimborsi/iban-del-rimborso';
 
 export const runtime = 'nodejs';
 
@@ -247,6 +248,13 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     );
     if (scrittura.avviso) logger.warn(`[returns] ${scrittura.avviso}`);
     if (!scrittura.riuscita) return ApiErrors.internal('Update fallito');
+  }
+
+  // Riesame del 16/10 — un reso respinto, o rimborsato senza un bonifico da
+  // fare, non ha piu' bisogno dell'IBAN del cliente: se ne va. Se il bonifico
+  // e' ancora da fare (o lo sara' a reso concluso) resta, fino al «fatto».
+  if (newStatus === 'REJECTED' || newStatus === 'REFUNDED') {
+    await dimenticaLIbanSeNonServe(admin, params.id);
   }
 
   // Notifica buyer

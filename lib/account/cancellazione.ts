@@ -1,6 +1,7 @@
 import type { getAdminSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
+import { custodisciIBonificiDaFare } from '@/lib/rimborsi/iban-del-rimborso';
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
@@ -172,6 +173,12 @@ export const TABELLE_CON_DATI_PERSONALI: readonly TabellaConDatiPersonali[] = [
     // ON DELETE SET NULL: «un reso e' una pratica con dei soldi dentro, la
     // riga resta, anonima». Qui era rimasto scritto il contrario. Verificato
     // sullo schema ricostruito dalle migrazioni: returns.buyer_id -> SET NULL.
+    //
+    // L'IBAN del rimborso (162) NON sta qui, e non per dimenticanza: non si
+    // azzera sempre. Se gli dobbiamo ancora un bonifico, IBAN e nome restano
+    // fino al pagamento; se no se ne va. Lo decide `custodisciIBonificiDaFare`
+    // (lib/rimborsi/iban-del-rimborso.ts), che `cancellaAccount` chiama prima
+    // di questa pulizia.
     sopravvive: true,
     perche: 'le note scritte a mano dentro una richiesta di reso',
   },
@@ -770,6 +777,24 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
       });
     }
     return { ok: false, motivo, errore: cassa.motivo, fileRimossi: 0, erroriFile: [] };
+  }
+
+  // ①bis I bonifici di rimborso che gli dobbiamo ancora (riesame del 16/10). Va
+  // fatto PRIMA del ②: la pulizia degli ordini toglie il nome, e il nome è quello
+  // a cui si intesta il bonifico. Sul reso e sul bonifico del reclamo restano
+  // solo l'IBAN e il nome, fino al pagamento; dove il bonifico non c'è, l'IBAN
+  // se ne va adesso (lib/rimborsi/iban-del-rimborso.ts). Se non riesce ci si
+  // ferma: è un guasto, e domani si riprova — un debito non resta senza nome.
+  const bonifici = await custodisciIBonificiDaFare(admin, userId);
+  if (!bonifici.ok) {
+    return {
+      ok: false,
+      errore:
+        `L'account non è stato cancellato: prima non siamo riusciti a mettere al sicuro i bonifici di ` +
+        `rimborso ancora da fare (${bonifici.errore}). Si riprova.`,
+      fileRimossi: 0,
+      erroriFile: [],
+    };
   }
 
   // ② I documenti d'identità e l'IBAN non aspettano: non si vedono a video,

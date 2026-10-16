@@ -49,10 +49,26 @@ export function useInfiniteQuery(opzioni) {
   };
 }
 
+// Finto: ogni domanda risponde col dato della prova, non c'e' nessuno stato da tenere fra un giro e l'altro.
+// eslint-disable-next-line react-hooks/rules-of-hooks
 export const useQueries = (o) => (o?.queries ?? []).map((q) => useQuery(q));
-export const useMutation = () => ({
-  mutate: () => {}, mutateAsync: async () => {}, isPending: false, isError: false, error: null,
-});
+/**
+ * 16/10/2026 — QUELLO CHE LA PAGINA HA CHIESTO DI SCRIVERE.
+ *
+ * `mutate` non faceva niente, quindi nessuna prova poteva dire «senza la conferma, il bonifico
+ * non si segna». Se la prova mette un array in `globalThis.__MUTAZIONI__`, ogni `mutate` ci
+ * finisce dentro con le sue variabili; chi non lo mette non si accorge di niente.
+ */
+export const useMutation = () => {
+  const annota = (variabili) => {
+    if (Array.isArray(globalThis.__MUTAZIONI__)) globalThis.__MUTAZIONI__.push(variabili);
+  };
+  return {
+    mutate: (variabili) => annota(variabili),
+    mutateAsync: async (variabili) => annota(variabili),
+    isPending: false, isError: false, error: null,
+  };
+};
 export const useQueryClient = () => ({
   invalidateQueries: () => {}, setQueryData: () => {}, getQueryData: () => undefined,
 });

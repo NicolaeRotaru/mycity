@@ -9,12 +9,17 @@ import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 import { colonnaNonTrovata } from '@/lib/db/migrazione-148';
 import { COLONNE_162 } from '@/lib/rimborsi/scelta-del-cliente';
+import { ibanValido, normalizzaIban } from '@/lib/rimborsi/scelta-del-cliente';
 import {
+  letturaDeiDaFareTagliata,
   tabellaDeiBonificiMancante,
+  TETTO_DEI_BONIFICI_DA_FARE,
+  TETTO_DEI_BONIFICI_FATTI,
   vociDeiBonificiDaFare,
   type RigaDelBonificoDelReclamo,
   type RigaDelReso,
 } from '@/lib/rimborsi/bonifici-da-fare';
+import { IBAN_DEL_RECLAMO_CANCELLATO, IBAN_DEL_RESO_CANCELLATO } from '@/lib/rimborsi/iban-del-rimborso';
 
 export const runtime = 'nodejs';
 
@@ -34,113 +39,220 @@ export const runtime = 'nodejs';
  * Solo amministratori. L'IBAN esce solo da qui.
  */
 const COLONNE =
-  'id, order_id, refund_amount_cents, refunded_at, refund_id, refund_iban, refund_bonifico_cents, refund_bonifico_fatto_at';
+  'id, order_id, refund_amount_cents, refunded_at, refund_id, refund_iban, refund_intestatario, refund_bonifico_cents, refund_bonifico_fatto_at';
+const COLONNE_DEI_RECLAMI = 'dispute_id, order_id, importo_cents, registrato_at, fatto_at, iban, intestatario';
 
+/**
+ * Riesame del 16/10 — DUE LETTURE, NON UNA FINESTRA SOLA.
+ *
+ * Prima si leggevano gli ultimi 200 rimborsi col bonifico, fatti compresi:
+ * con 200 bonifici gia' pagati registrati dopo, un bonifico ancora da fare
+ * usciva dalla finestra e non lo vedeva piu' nessuno, mentre l'ordine diceva
+ * gia' «rimborsato». Adesso i bonifici DA FARE si leggono a parte, fino a un
+ * tetto alto (e se lo si tocca la pagina lo dice); di quelli fatti si mostrano
+ * solo gli ultimi, come storico.
+ */
 async function elenco(): Promise<NextResponse> {
   const admin = getAdminSupabase();
   let con162 = true;
-  const leggi = (colonne: string) =>
-    admin
-      .from('returns')
-      .select(colonne)
-      .eq('status', 'REFUNDED')
-      .like('refund_id', 'bonifico:%')
-      .order('refunded_at', { ascending: false })
-      .limit(200);
-  const { data, error } = await conRipiegoSchema(
+  const resiColBonifico = (colonne: string) =>
+    admin.from('returns').select(colonne).eq('status', 'REFUNDED').like('refund_id', 'bonifico:%');
+
+  const daFare = await conRipiegoSchema(
     'returns.select (bonifici da fare)',
-    () => leggi(COLONNE),
+    () =>
+      resiColBonifico(COLONNE)
+        .is('refund_bonifico_fatto_at', null)
+        .order('refunded_at', { ascending: false })
+        .limit(TETTO_DEI_BONIFICI_DA_FARE),
     () => {
-      // Senza la 162 la lista c'e' lo stesso, senza IBAN e senza «fatto».
+      // Senza la 162 la lista c'e' lo stesso, senza IBAN e senza «fatto»: e
+      // senza la colonna del «fatto», ogni bonifico conta come da fare.
       con162 = false;
-      return leggi(senzaColonne(COLONNE, COLONNE_162));
+      return resiColBonifico(senzaColonne(COLONNE, COLONNE_162))
+        .order('refunded_at', { ascending: false })
+        .limit(TETTO_DEI_BONIFICI_DA_FARE);
     },
   );
-  if (error) {
-    logger.error('[bonifici da fare] lettura fallita', { message: (error as { message?: string }).message });
+  if (daFare.error) {
+    logger.error('[bonifici da fare] lettura fallita', { message: (daFare.error as { message?: string }).message });
     return ApiErrors.internal('Non riesco a leggere i bonifici da fare');
+  }
+  const righeDaFare = (daFare.data ?? []) as unknown as RigaDelReso[];
+  let tagliata = letturaDeiDaFareTagliata(righeDaFare.length);
+
+  let righeFatte: RigaDelReso[] = [];
+  if (con162) {
+    const fatti = await resiColBonifico(COLONNE)
+      .not('refund_bonifico_fatto_at', 'is', null)
+      .order('refund_bonifico_fatto_at', { ascending: false })
+      .limit(TETTO_DEI_BONIFICI_FATTI);
+    // Lo storico e' un di piu': se non si legge, la lista dei da fare resta intera.
+    if (fatti.error) {
+      logger.warn('[bonifici da fare] storico dei bonifici fatti non letto', { message: fatti.error.message });
+    } else {
+      righeFatte = (fatti.data ?? []) as unknown as RigaDelReso[];
+    }
   }
 
   // I bonifici dei reclami: senza la 162 la tabella non c'e', e quei bonifici
   // restano solo negli avvisi (la pagina lo dice).
   let reclami: RigaDelBonificoDelReclamo[] = [];
-  const letturaReclami = await admin
+  const reclamiDaFare = await admin
     .from('bonifici_dei_reclami')
-    .select('dispute_id, order_id, importo_cents, registrato_at, fatto_at')
+    .select(COLONNE_DEI_RECLAMI)
+    .is('fatto_at', null)
     .order('registrato_at', { ascending: false })
-    .limit(200);
-  if (letturaReclami.error) {
-    if (tabellaDeiBonificiMancante(letturaReclami.error)) {
+    .limit(TETTO_DEI_BONIFICI_DA_FARE);
+  if (reclamiDaFare.error) {
+    if (tabellaDeiBonificiMancante(reclamiDaFare.error)) {
       con162 = false;
     } else {
-      logger.error('[bonifici da fare] lettura dei reclami fallita', { message: letturaReclami.error.message });
+      logger.error('[bonifici da fare] lettura dei reclami fallita', { message: reclamiDaFare.error.message });
       return ApiErrors.internal('Non riesco a leggere i bonifici dei reclami');
     }
   } else {
-    reclami = (letturaReclami.data ?? []) as unknown as RigaDelBonificoDelReclamo[];
+    reclami = (reclamiDaFare.data ?? []) as unknown as RigaDelBonificoDelReclamo[];
+    tagliata = tagliata || letturaDeiDaFareTagliata(reclami.length);
+    const reclamiFatti = await admin
+      .from('bonifici_dei_reclami')
+      .select(COLONNE_DEI_RECLAMI)
+      .not('fatto_at', 'is', null)
+      .order('fatto_at', { ascending: false })
+      .limit(TETTO_DEI_BONIFICI_FATTI);
+    if (reclamiFatti.error) {
+      logger.warn('[bonifici da fare] storico dei reclami pagati non letto', { message: reclamiFatti.error.message });
+    } else {
+      reclami = [...reclami, ...((reclamiFatti.data ?? []) as unknown as RigaDelBonificoDelReclamo[])];
+    }
   }
 
-  const voci = vociDeiBonificiDaFare((data ?? []) as unknown as RigaDelReso[], reclami);
-  return NextResponse.json({ voci, migrazione162: con162 }, { status: 200 });
+  const voci = vociDeiBonificiDaFare([...righeDaFare, ...righeFatte], reclami);
+  return NextResponse.json({ voci, migrazione162: con162, tagliata }, { status: 200 });
 }
 
-/** Un bonifico si segna per il reso o per il reclamo da cui viene: uno dei due. */
+/**
+ * Due comandi, sulla stessa voce: «fatto» (il bonifico e' partito) e «iban»
+ * (chi paga copia l'IBAN che il cliente ha mandato dai Contatti). Una voce e'
+ * il reso o il reclamo da cui viene: uno dei due.
+ */
 const Body = z
-  .object({ resoId: z.string().uuid().optional(), reclamoId: z.string().uuid().optional() })
+  .object({
+    resoId: z.string().uuid().optional(),
+    reclamoId: z.string().uuid().optional(),
+    azione: z.enum(['fatto', 'iban']).default('fatto'),
+    iban: z.string().max(64).optional(),
+  })
   .refine((b) => !!b.resoId !== !!b.reclamoId, { message: 'Indica il reso oppure il reclamo' });
 
-async function segnaFatto(req: NextRequest, user: { id: string }): Promise<NextResponse> {
-  let body;
+type Comando = z.infer<typeof Body>;
+
+/**
+ * Riesame del 16/10 — FATTO IL BONIFICO, L'IBAN SE NE VA.
+ *
+ * L'IBAN serve solo a pagare: scritto il «fatto», si cancella insieme al nome
+ * dell'intestatario (se il cliente aveva gia' chiuso l'account). La 162 non
+ * accetta un «fatto» con l'IBAN ancora scritto: le due cose vanno insieme o
+ * non va nessuna (lib/rimborsi/iban-del-rimborso.ts).
+ */
+async function segnaFatto(body: Comando) {
+  const admin = getAdminSupabase();
+  const adesso = new Date().toISOString();
+  return body.reclamoId
+    ? admin
+        .from('bonifici_dei_reclami')
+        .update({ fatto_at: adesso, ...IBAN_DEL_RECLAMO_CANCELLATO })
+        .eq('dispute_id', body.reclamoId)
+        .is('fatto_at', null)
+        .select('dispute_id')
+    : admin
+        .from('returns')
+        .update({ refund_bonifico_fatto_at: adesso, ...IBAN_DEL_RESO_CANCELLATO })
+        .eq('id', body.resoId as string)
+        .eq('status', 'REFUNDED')
+        .like('refund_id', 'bonifico:%')
+        .is('refund_bonifico_fatto_at', null)
+        .select('id');
+}
+
+/**
+ * Riesame del 16/10 — L'IBAN DI UN RECLAMO HA UN POSTO.
+ *
+ * Il modulo del reclamo non chiede l'IBAN, e un reso puo' arrivare senza: in
+ * tutti e due i casi l'email al cliente gli chiede di mandarlo dai Contatti.
+ * Chi paga lo copia qui, sulla voce: cosi' vale anche per lui la regola di
+ * sempre — resta finche' il bonifico e' da fare, se ne va col «fatto», e se il
+ * cliente chiude l'account prima del pagamento resta con il suo nome.
+ */
+async function registraIban(body: Comando, iban: string) {
+  const admin = getAdminSupabase();
+  return body.reclamoId
+    ? admin
+        .from('bonifici_dei_reclami')
+        .update({ iban })
+        .eq('dispute_id', body.reclamoId)
+        .is('fatto_at', null)
+        .select('dispute_id')
+    : admin
+        .from('returns')
+        .update({ refund_method: 'BONIFICO', refund_iban: iban })
+        .eq('id', body.resoId as string)
+        .eq('status', 'REFUNDED')
+        .like('refund_id', 'bonifico:%')
+        .is('refund_bonifico_fatto_at', null)
+        .select('id');
+}
+
+async function comando(req: NextRequest, user: { id: string }): Promise<NextResponse> {
+  let body: Comando;
   try {
     body = Body.parse(await jsonRichiesta(req, TETTO_JSON));
   } catch (e) {
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 
-  const admin = getAdminSupabase();
-  const adesso = new Date().toISOString();
-  const { data, error } = body.reclamoId
-    ? await admin
-        .from('bonifici_dei_reclami')
-        .update({ fatto_at: adesso })
-        .eq('dispute_id', body.reclamoId)
-        .is('fatto_at', null)
-        .select('dispute_id')
-    : await admin
-        .from('returns')
-        .update({ refund_bonifico_fatto_at: adesso })
-        .eq('id', body.resoId as string)
-        .eq('status', 'REFUNDED')
-        .like('refund_id', 'bonifico:%')
-        .is('refund_bonifico_fatto_at', null)
-        .select('id');
+  let iban = '';
+  if (body.azione === 'iban') {
+    iban = normalizzaIban(body.iban ?? '');
+    if (!ibanValido(iban)) {
+      return ApiErrors.invalidRequest(
+        "Questo IBAN non torna: controlla lettere e cifre. Un IBAN italiano comincia con IT e ha 27 caratteri.",
+      );
+    }
+  }
+
+  const { data, error } = body.azione === 'iban' ? await registraIban(body, iban) : await segnaFatto(body);
 
   if (error) {
     if (colonnaNonTrovata(error) || tabellaDeiBonificiMancante(error)) {
       return ApiErrors.conflict(
-        'Per segnare i bonifici fatti serve la migrazione 162 sul database: finché non c’è, tieni il conto a parte.',
+        body.azione === 'iban'
+          ? 'Per salvare l’IBAN serve la migrazione 162 sul database: finché non c’è, tienilo a parte.'
+          : 'Per segnare i bonifici fatti serve la migrazione 162 sul database: finché non c’è, tieni il conto a parte.',
       );
     }
-    logger.error('[bonifici da fare] segno non scritto', {
-      resoId: body.resoId, reclamoId: body.reclamoId, message: error.message,
+    logger.error('[bonifici da fare] voce non aggiornata', {
+      resoId: body.resoId, reclamoId: body.reclamoId, azione: body.azione, message: error.message,
     });
-    return ApiErrors.internal('Non riesco a segnare il bonifico come fatto');
+    return ApiErrors.internal(
+      body.azione === 'iban' ? "Non riesco a salvare l'IBAN" : 'Non riesco a segnare il bonifico come fatto',
+    );
   }
   if (!data || data.length === 0) {
     return ApiErrors.conflict('Questo bonifico è già segnato come fatto, oppure non è un rimborso da bonificare.');
   }
 
-  // Chi ha segnato il bonifico come fatto resta scritto: sono soldi usciti a mano.
+  // Chi ha segnato il bonifico, o copiato l'IBAN, resta scritto: sono soldi che escono a mano.
   await writeAudit({
     actorId: user.id,
     action: 'order.refund',
     targetTable: body.reclamoId ? 'disputes' : 'returns',
     targetId: (body.reclamoId ?? body.resoId) as string,
-    metadata: { passo: 'bonifico_di_rimborso_fatto' },
+    metadata: { passo: body.azione === 'iban' ? 'iban_del_bonifico_registrato' : 'bonifico_di_rimborso_fatto' },
   });
 
   return NextResponse.json({ ok: true }, { status: 200 });
 }
 
 export const GET = withAdminAuth(() => elenco());
-export const POST = withAdminAuth(({ req, user }) => segnaFatto(req, user));
+export const POST = withAdminAuth(({ req, user }) => comando(req, user));

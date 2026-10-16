@@ -115,4 +115,10 @@ export function colonneDellaScelta(scelta: SceltaDelRimborso | null): {
 }
 
 /** Le colonne che nascono con la migrazione 162: prima della firma il database non le ha. */
-export const COLONNE_162 = ['refund_method', 'refund_iban', 'refund_bonifico_cents', 'refund_bonifico_fatto_at'] as const;
+export const COLONNE_162 = [
+  'refund_method',
+  'refund_iban',
+  'refund_bonifico_cents',
+  'refund_bonifico_fatto_at',
+  'refund_intestatario',
+] as const;

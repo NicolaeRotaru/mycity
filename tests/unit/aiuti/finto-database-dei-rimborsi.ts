@@ -109,6 +109,12 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
     this.filtri.push((r) => (r[colonna] ?? null) === valore);
     return this;
   }
+  /** 16/10/2026 — `not(colonna, 'is', null)`: la lettura dei bonifici gia' fatti, come PostgREST. */
+  not(colonna: string, operatore: string, valore: unknown) {
+    if (operatore !== 'is') throw new Error(`finto database: not(${operatore}) non lo so fare`);
+    this.filtri.push((r) => (r[colonna] ?? null) !== valore);
+    return this;
+  }
   like(colonna: string, schema: string) {
     const re = new RegExp(`^${schema.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*')}$`);
     this.filtri.push((r) => typeof r[colonna] === 'string' && re.test(r[colonna] as string));
