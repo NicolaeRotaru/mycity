@@ -306,6 +306,49 @@ describe('⑤ i due avvisi di R13 sulle pagine vere', () => {
     expect(window.location.hash, 'il gettone resta nella barra e nella cronologia').toBe('');
   }, 30000);
 
+  /**
+   * 16/10/2026 — GIULIA RICARICA E LA CONFERMA DIVENTA UN ERRORE.
+   *
+   * Il link rimandato da «Reinvia» torna con la sessione nel frammento e senza
+   * codice: la rotta di ritorno la porta su `/sign-in?error=missing_code`, e il
+   * frammento viaggia con lei. La pagina legge il frammento e dice giusto
+   * «email confermata»; poi toglie il frammento. Se nell'indirizzo restava
+   * `error=missing_code`, alla ricarica (Chrome sul telefono che riapre la
+   * scheda, il tasto ricarica, il ritorno da un'altra pagina) la stessa pagina
+   * diceva in rosso «il link non è completo». Qui si rimonta la pagina
+   * sull'indirizzo che resta, come fa il browser.
+   */
+  it('IL CASO CHE ROMPEVA — dopo la conferma, ricaricando la pagina resta «email confermata» e non diventa un errore', async () => {
+    const primo = apri(Accesso, '/sign-in?error=missing_code&returnTo=%2Fcheckout');
+    window.history.replaceState(
+      null,
+      '',
+      '/sign-in?error=missing_code&returnTo=%2Fcheckout#access_token=x&refresh_token=y&type=signup',
+    );
+    primo.smonta();
+    montate.length = 0;
+    const r = accendi(Accesso);
+    montate.push(r);
+    await aspettaChe(() => !!r.radice.querySelector('[role="status"]'));
+    expect(testoVisibile(r.radice.querySelector('[role="status"]'))).toMatch(/email è confermata/);
+    expect(window.location.hash).toBe('');
+
+    // La ricarica: stessa pagina, montata da capo sull'indirizzo rimasto nella barra.
+    const rimasto = window.location.pathname + window.location.search;
+    r.smonta();
+    montate.length = 0;
+    const ricaricata = apri(Accesso, rimasto);
+    await aspettaChe(() => !!ricaricata.radice.querySelector('[role="status"], [role="alert"]'));
+    await aspettaChe(() => false, 100);
+    expect(
+      ricaricata.radice.querySelector('[role="alert"]'),
+      `ricaricando ${rimasto} la pagina dice in rosso che il link è rotto, un attimo dopo aver detto «confermata»`,
+    ).toBeNull();
+    expect(testoVisibile(ricaricata.radice.querySelector('[role="status"]'))).toMatch(/La tua email è confermata\. Ora accedi/);
+    // Il ritorno al checkout non si perde nella riscrittura.
+    expect(new URLSearchParams(window.location.search).get('returnTo')).toBe('/checkout');
+  }, 30000);
+
   it('IL CASO CHE ROMPEVA — /reset-password con un `?code=` e senza sessione spiega di aprirlo dove l’ha chiesto', async () => {
     const s = apri(NuovaPassword, '/reset-password?code=1b2c3d4e');
     // La pagina aspetta 800 millisecondi la sessione prima di decidere.

@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, PasswordInput } from '@/components/ui/Field';
 import { AuthShell, AuthAlternatives, SellerRiderRecruit } from '@/components/ui/AuthShell';
 import { trackSignedIn } from '@/lib/analytics/events';
-import { avvisoAlRitornoSullAccesso, frammentoConSessione, type AvvisoDiAccesso } from '@/lib/auth/link-email';
+import { avvisoAlRitornoSullAccesso, indirizzoSenzaLaSessione, type AvvisoDiAccesso } from '@/lib/auth/link-email';
 import {
   esitoDellaRispostaDiAccesso,
   memoriaDellaScheda,
@@ -100,10 +100,16 @@ const SignInForm = () => {
     }
     setAvviso(avvisoAlRitornoSullAccesso(erroreDelRitorno, window.location.hash));
     // Una sessione lasciata nel frammento non deve restare nella barra degli
-    // indirizzi (e nella cronologia): l'avviso e' gia' stato letto.
-    if (frammentoConSessione(window.location.hash)) {
-      window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
-    }
+    // indirizzi (e nella cronologia): l'avviso e' gia' stato letto. Nello
+    // stesso colpo `error` diventa il codice che, senza frammento, dice la
+    // stessa cosa: alla ricarica «email confermata» non diventa un errore.
+    const pulito = indirizzoSenzaLaSessione(
+      erroreDelRitorno,
+      window.location.hash,
+      window.location.pathname,
+      window.location.search,
+    );
+    if (pulito !== null) window.history.replaceState(window.history.state, '', pulito);
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') router.replace('/reset-password');
     });
