@@ -7,7 +7,9 @@ import {
   bozzaDaCreare,
   dichiarazioniDellaBozza,
   erroreDiSalvataggio,
+  messaggioDaCompletare,
   messaggioDopoLaBozza,
+  motivoDaCompletare,
   riquadroDichiarazioni,
 } from '@/lib/products/prontoPerLaVendita';
 import { CAMPI_DICHIARATIVI, messaggioDichiarazioniProtette, type CategoryRow } from '@/lib/products/aiPatch';
@@ -253,6 +255,63 @@ describe('«pubblica» dalla chat passa dagli stessi controlli del modulo', () =
     expect(status).toBe(400);
     expect(json.error?.message).toContain('Allergeni');
     expect(db.scritture).toEqual([]);
+
+    // 16/10/2026 — La scheda della proposta lo dice PRIMA di Applica, con la
+    // regola e la frase del server: prima taceva, e il rifiuto diceva «Per
+    // metterlo in vendita manca» a chi l'aveva gia' in vendita.
+    const scheda = productSnapshot(db.prodotti[0] as never, CATEGORIE);
+    const avviso = avvisoSullaPubblicazione(scheda, { category_slug: 'alimentari' });
+    expect(avviso?.mancanti, 'la scheda della proposta non avvisa').toEqual(['Allergeni', 'Ingredienti']);
+    expect(comeLoLeggeLaChat(json)).toBe(messaggioDaCompletare(avviso!.mancanti));
+    expect(comeLoLeggeLaChat(json)).not.toContain('metterlo in vendita');
+    // Il Copilot, che applica in blocco, dice lo stesso perche'.
+    const blocco = await chiama('@/app/api/ai/catalog-apply-bulk/route', '/api/ai/catalog-apply-bulk', {
+      changes: [{ productId: 'tagliere', patch: { category_slug: 'alimentari' } }],
+    });
+    const esiti = blocco.json.results as { ok: boolean; motivo?: string }[];
+    expect(esiti[0]).toEqual({ productId: 'tagliere', ok: false, motivo: motivoDaCompletare(['Allergeni', 'Ingredienti']) });
+    expect(esiti[0].motivo).not.toContain('metterlo in vendita');
+    expect(db.scritture).toEqual([]);
+  });
+
+  it('la stessa regola, sulla scheda e sul server: ogni caso dice la stessa cosa', async () => {
+    const tagliere = {
+      ...bozzaDellaFocaccia({}),
+      id: 'tagliere',
+      name: 'Tagliere in legno',
+      description: 'Tagliere in legno di ulivo, fatto a mano.',
+      category_id: 'casa',
+      status: 'available',
+    };
+    const casi: { prodotto: Record<string, unknown>; patch: Record<string, unknown> }[] = [
+      // In vendita, spostato fra gli alimentari: si ferma, sulla scheda e sul server.
+      { prodotto: tagliere, patch: { category_slug: 'alimentari' } },
+      // In vendita, stessa categoria di primo livello: passa, e la scheda tace.
+      { prodotto: { ...bozzaDellaFocaccia({}), status: 'available' }, patch: { category_slug: 'alimentari', subcategory_name: 'Pane e forno' } },
+      // In vendita, un ritocco di prezzo: passa, e la scheda tace.
+      { prodotto: tagliere, patch: { price: 3.8 } },
+      // Una bozza da mettere in vendita senza allergeni: si ferma.
+      { prodotto: bozzaDellaFocaccia({}), patch: { status: 'available' } },
+      // Una bozza completa da mettere in vendita: passa.
+      { prodotto: bozzaDellaFocaccia(SCHEDA_COMPLETA), patch: { status: 'available' } },
+    ];
+    const stati: number[] = [];
+    for (const { prodotto, patch } of casi) {
+      db.prodotti = [prodotto];
+      db.scritture = [];
+      const avviso = avvisoSullaPubblicazione(productSnapshot(prodotto as never, CATEGORIE), patch);
+      const { status, json } = await applica(String(prodotto.id), patch);
+      stati.push(status);
+      const mancanti = avviso?.mancanti ?? [];
+      if (mancanti.length > 0) {
+        expect(status, JSON.stringify(patch)).toBe(400);
+        expect(comeLoLeggeLaChat(json), JSON.stringify(patch)).toBe(messaggioDaCompletare(mancanti));
+      } else {
+        expect(status, `${JSON.stringify(patch)}: ${json.error?.message}`).toBe(200);
+      }
+    }
+    // Le due strade ci sono tutte e due: la prova non gira a vuoto.
+    expect(stati).toEqual([400, 200, 200, 400, 200]);
   });
 
   it('un ritocco di prezzo su un alimento gia in vendita non viene bloccato', async () => {

@@ -321,7 +321,7 @@ describe('la chat Assistenza: la scheda di «pubblica» dice quello che dira il 
       { status: 'available' },
     );
     const scheda = testo(s.radice);
-    expect(scheda).toContain('Va in vendita con queste dichiarazioni');
+    expect(scheda).toContain('In vendita con queste dichiarazioni');
     expect(scheda).toContain('Allergeni: Glutine, sesamo');
     expect(scheda).not.toContain('Senza glutine');
     s.smonta();
@@ -343,7 +343,7 @@ describe('la chat Assistenza: la scheda di «pubblica» dice quello che dira il 
     );
     const scheda = testo(s.radice);
     expect(scheda).toContain('Stato → In vendita');
-    expect(scheda).toContain('Va in vendita con queste dichiarazioni');
+    expect(scheda).toContain('In vendita con queste dichiarazioni');
     expect(scheda).toContain('Allergeni: Glutine, sesamo');
     s.smonta();
   });
@@ -360,7 +360,31 @@ describe('la chat Assistenza: la scheda di «pubblica» dice quello che dira il 
       { description: 'Romanzo di Umberto Eco, edizione tascabile Bompiani', status: 'available' },
     );
     expect(testo(s.radice)).toContain('Stato → In vendita');
-    expect(testo(s.radice)).not.toContain('Non si può ancora mettere in vendita');
+    // La frase di cosa manca e' quella del server (`messaggioDaCompletare`).
+    expect(testo(s.radice)).not.toContain('non può stare in vendita');
+    s.smonta();
+  });
+
+  it('una focaccia gia in vendita, finita in Casa, spostata fra gli alimentari: la scheda avvisa prima di Applica, con la frase del server', async () => {
+    // 16/10/2026 — La scheda taceva; premuto Applica il server la fermava con
+    // «Per metterlo in vendita manca», a chi l'aveva gia' in vendita.
+    const s = await proposta(
+      {
+        ...BASE,
+        status: 'available',
+        name: 'Focaccia genovese',
+        description: "Focaccia genovese all'olio, alta e morbida",
+        categorySlug: 'casa',
+        attributes: {},
+      },
+      { category_slug: 'alimentari' },
+    );
+    const scheda = testo(s.radice);
+    expect(scheda).toContain('Categoria → alimentari');
+    expect(scheda, 'la scheda non avvisa: il negoziante lo scopre dopo Applica').toContain(
+      'Con questa modifica non può stare in vendita, manca: Allergeni, Ingredienti. Prima completa la scheda del prodotto.',
+    );
+    expect(scheda).not.toContain('metterlo in vendita');
     s.smonta();
   });
 });

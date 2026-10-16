@@ -11,7 +11,11 @@ import { resolveAiPatch, type AiProductPatch, type CategoryRow } from '@/lib/pro
 import { PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import { classifyProductPolicy } from '@/lib/ai/moderation';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
-import { cosaMancaDopoLaModifica, erroreDiSalvataggio } from '@/lib/products/prontoPerLaVendita';
+import {
+  cosaMancaDopoLaModifica,
+  erroreDiSalvataggio,
+  motivoDaCompletare,
+} from '@/lib/products/prontoPerLaVendita';
 
 /**
  * Applica in un colpo solo le modifiche che il Catalog Copilot ha proposto.
@@ -121,13 +125,14 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       });
       continue;
     }
-    // R36 — Messo in vendita dal copilot = stessi controlli del modulo.
+    // R36 — Messo in vendita (o spostato di categoria) dal copilot = stessi
+    // controlli del modulo, con la stessa frase della chat.
     const mancanti = cosaMancaDopoLaModifica({ prima: row, update, categories });
     if (mancanti.length > 0) {
       esiti.push({
         productId: c.productId,
         ok: false,
-        motivo: `prima di metterlo in vendita va completato: ${mancanti.join(', ')}`,
+        motivo: motivoDaCompletare(mancanti),
       });
       continue;
     }

@@ -3,6 +3,7 @@ import {
   getAttributesForCategory,
   findLabelForKey,
   AI_ATTR_TO_FIELD,
+  type AttributeField,
 } from '@/lib/category-attributes';
 import {
   PRODUCT_UNITS,
@@ -149,6 +150,20 @@ export type DichiarazioneScartata = {
 export function separaCampiDichiarativi<T extends object>(
   patch: T,
 ): { patch: T; scartati: DichiarazioneScartata[] } {
+  return separaCampi(patch, eCampoDichiarativo);
+}
+
+/**
+ * Toglie dal patch i campi per cui `daSeparare` dice si', in scrittura e in
+ * rimozione, e dice quali ha tolto. Ogni voce si legge con `voceComeTesto`: una
+ * voce che non si sa scrivere come testo (`{"toString": null}` in un JSON) non
+ * nomina niente e non fa cadere chi la legge — prima `String` lanciava un
+ * errore, e con lui il lavoro massivo e la rotta che applica in blocco.
+ */
+function separaCampi<T extends object>(
+  patch: T,
+  daSeparare: (chiaveAi: string) => boolean,
+): { patch: T; scartati: DichiarazioneScartata[] } {
   const scartati: DichiarazioneScartata[] = [];
   const sorgente = patch as Record<string, unknown>;
   let fuori: Record<string, unknown> | null = null;
@@ -158,12 +173,12 @@ export function separaCampiDichiarativi<T extends object>(
     const tenuti: Record<string, unknown> = {};
     let tolto = false;
     for (const [k, v] of Object.entries(attrs as Record<string, unknown>)) {
-      if (!eCampoDichiarativo(k)) {
+      if (!daSeparare(k)) {
         tenuti[k] = v;
         continue;
       }
       tolto = true;
-      const valore = typeof v === 'string' ? v.trim() : v == null ? '' : String(v);
+      const valore = voceComeTesto(v ?? '').trim();
       if (valore) {
         const chiave = chiaveCampo(k);
         scartati.push({ chiave, etichetta: findLabelForKey(chiave), azione: 'scrivi', valore });
@@ -178,11 +193,12 @@ export function separaCampiDichiarativi<T extends object>(
 
   const via = sorgente.attributes_remove;
   if (Array.isArray(via)) {
-    const tenute = via.filter((k) => !eCampoDichiarativo(String(k)));
+    const tenute = via.filter((k) => !daSeparare(voceComeTesto(k)));
     if (tenute.length !== via.length) {
       for (const k of via) {
-        if (!eCampoDichiarativo(String(k))) continue;
-        const chiave = chiaveCampo(String(k));
+        const testo = voceComeTesto(k);
+        if (!daSeparare(testo)) continue;
+        const chiave = chiaveCampo(testo);
         scartati.push({ chiave, etichetta: findLabelForKey(chiave), azione: 'togli' });
       }
       fuori = fuori ?? { ...sorgente };
@@ -192,6 +208,25 @@ export function separaCampiDichiarativi<T extends object>(
   }
 
   return { patch: (fuori ?? sorgente) as T, scartati };
+}
+
+/**
+ * 16/10/2026 — UNA DICHIARAZIONE CHE LA SCHEDA NON HA NON SI CHIEDE A NESSUNO.
+ *
+ * Il modello propone un'«Origine» per un vaso della categoria Casa. La scheda
+ * della proposta, nella chat, diceva giusto: «la scheda di questo prodotto non
+ * ha il campo Origine». Poi, premuto Applica, il server rispondeva «Origine NON
+ * compilato dall'assistente: lo scrivi tu nella scheda», e il modulo metteva la
+ * stessa riga nel riquadro «Da controllare»: il negoziante cercava un campo che
+ * non c'e'.
+ *
+ * Qui escono dalla proposta, senza dire niente, le dichiarazioni per un campo
+ * che la scheda non ha: non c'e' dove scriverle, come ogni altro attributo che
+ * la categoria non ha. Restano quelle della scheda, che si dicono come prima.
+ * `campi` sono quelli della scheda DOPO la proposta (`campiDopoLaProposta`).
+ */
+function senzaDichiarazioniFuoriScheda<T extends object>(patch: T, campi: readonly { key: string }[]): T {
+  return separaCampi(patch, (k) => eCampoDichiarativo(k) && !campi.some((f) => f.key === chiaveCampo(k))).patch;
 }
 
 /**
@@ -295,10 +330,7 @@ const TIPI_DEI_CAMPI: Record<string, (v: unknown) => boolean> = {
  */
 export function propostaPerLaChat(proposta: unknown, categorie: CategoryRow[]): AiProductPatch {
   if (!proposta || typeof proposta !== 'object' || Array.isArray(proposta)) return {};
-  const fuori: Record<string, unknown> = { ...(proposta as Record<string, unknown>) };
-  for (const [campo, buono] of Object.entries(TIPI_DEI_CAMPI)) {
-    if (campo in fuori && !buono(fuori[campo])) delete fuori[campo];
-  }
+  const fuori: Record<string, unknown> = { ...propostaLeggibile(proposta as AiProductPatch) };
   if ('category_slug' in fuori) {
     const slug = fuori.category_slug;
     if (!(typeof slug === 'string' && slug && resolveCategoryId(categorie, slug) !== null)) {
@@ -315,18 +347,58 @@ export function propostaPerLaChat(proposta: unknown, categorie: CategoryRow[]): 
     if (Object.keys(testi).length > 0) fuori.attributes = testi;
     else delete fuori.attributes;
   }
+  return fuori as AiProductPatch;
+}
+
+/**
+ * 16/10/2026 — LA PROPOSTA SI LEGGE IN UN MODO SOLO, DA TUTTE LE STRADE.
+ *
+ * La chat Assistenza la leggeva cosi' da un giro: ogni campo singolo col suo
+ * tipo, gli elenchi come testo. Il server (`resolveAiPatch`) e il modulo
+ * (`pianoPatchPerIlModulo`) no: con un tag `{"toString": null}` — JSON valido —
+ * `String` lanciava un errore, e la rotta che applica in blocco rispondeva 500;
+ * il lavoro massivo cadeva a meta', dopo aver scritto i prodotti prima, e a
+ * ogni nuovo tentativo cadeva sullo stesso.
+ *
+ * Adesso la leggono tutti con questa: quello che non ha la forma giusta
+ * sparisce — non si scrive e non fa cadere niente.
+ */
+function propostaLeggibile(proposta: AiProductPatch): AiProductPatch {
+  const fuori: Record<string, unknown> = { ...proposta };
+  for (const [campo, buono] of Object.entries(TIPI_DEI_CAMPI)) {
+    if (campo in fuori && !buono(fuori[campo])) delete fuori[campo];
+  }
   for (const elenco of ['attributes_remove', 'tags'] as const) {
     if (!(elenco in fuori)) continue;
-    const voci = fuori[elenco];
-    if (!Array.isArray(voci)) {
-      delete fuori[elenco];
-      continue;
-    }
-    const lette = voci.map(voceComeTesto).filter((v) => v !== '');
-    if (voci.length > 0 && lette.length === 0) delete fuori[elenco];
+    const lette = vociComeTesto(fuori[elenco]);
+    if (lette === null) delete fuori[elenco];
     else fuori[elenco] = lette;
   }
   return fuori as AiProductPatch;
+}
+
+/**
+ * Le voci di un elenco della proposta (`tags`, `attributes_remove`) come testo.
+ * Una voce che non si sa scrivere come testo si toglie; `null` se non e' un
+ * elenco, o se e' fatto solo di voci cosi': un elenco illeggibile non diventa
+ * «togli tutti i tag».
+ */
+function vociComeTesto(voci: unknown): string[] | null {
+  if (!Array.isArray(voci)) return null;
+  const lette = voci.map(voceComeTesto).filter((v) => v !== '');
+  return voci.length > 0 && lette.length === 0 ? null : lette;
+}
+
+/** I campi della scheda DOPO la proposta: della categoria proposta se esiste, se no di quella di adesso. */
+function campiDopoLaProposta(
+  categorie: CategoryRow[],
+  proposta: AiProductPatch,
+  categoriaAttuale: string | null | undefined,
+): AttributeField[] {
+  const nuova = proposta.category_slug
+    ? resolveCategoryId(categorie, proposta.category_slug, proposta.subcategory_name)
+    : null;
+  return getAttributesForCategory(categorie, nuova ?? categoriaAttuale ?? null).fields;
 }
 
 /** Risolve slug categoria (+ nome sottocategoria) → category_id a due livelli. */
@@ -587,7 +659,7 @@ function dichiarazioniDaRivedere(proposta: AiProductPatch): AiProductPatch {
  * campi sono quelle che il modulo applicava gia'.
  */
 export function pianoPatchPerIlModulo(
-  proposta: AiProductPatch,
+  suggerimento: AiProductPatch,
   ctx: {
     prezzoAttuale?: number | string | null;
     categorie: CategoryRow[];
@@ -595,6 +667,12 @@ export function pianoPatchPerIlModulo(
     modo: 'create' | 'edit';
   },
 ): PianoPatchModulo {
+  // Come il server: la proposta si legge con `propostaLeggibile`, e le
+  // dichiarazioni che la scheda non ha escono senza dire niente. Gli attributi
+  // si validano contro i campi della categoria EFFETTIVA (quella dopo il cambio).
+  const letta = propostaLeggibile(suggerimento);
+  const fields = campiDopoLaProposta(ctx.categorie, letta, ctx.categoriaAttuale);
+  const proposta = senzaDichiarazioniFuoriScheda(letta, fields);
   const { patch, rifiutati, proposte } = patchAiPerIlForm(proposta, { prezzoAttuale: ctx.prezzoAttuale });
   const motiviConProposta = new Set(proposte.map((p) => p.motivo));
   const avvisi = rifiutati.filter((m) => !motiviConProposta.has(m));
@@ -629,15 +707,10 @@ export function pianoPatchPerIlModulo(
     scritture.push({ campo: 'stock', valore: Math.trunc(patch.stock), etichetta: 'disponibilità' });
   }
 
-  // Categoria → slug/sottocategoria su category_id. Gli attributi si validano
-  // contro la categoria EFFETTIVA (quella dopo il cambio).
-  let categoriaEffettiva = ctx.categoriaAttuale ?? null;
+  // Categoria → slug/sottocategoria su category_id.
   if (patch.category_slug) {
     const risolta = resolveCategoryId(ctx.categorie, patch.category_slug, patch.subcategory_name);
-    if (risolta) {
-      scritture.push({ campo: 'category_id', valore: risolta, etichetta: 'categoria' });
-      categoriaEffettiva = risolta;
-    }
+    if (risolta) scritture.push({ campo: 'category_id', valore: risolta, etichetta: 'categoria' });
   }
 
   if (Array.isArray(patch.tags)) {
@@ -649,7 +722,6 @@ export function pianoPatchPerIlModulo(
     scritture.push({ campo: 'tags', valore: next, etichetta: 'tag' });
   }
 
-  const { fields } = getAttributesForCategory(ctx.categorie, categoriaEffettiva);
   if (patch.attributes && typeof patch.attributes === 'object') {
     for (const [aiKey, rawValue] of Object.entries(patch.attributes)) {
       const value = typeof rawValue === 'string' ? rawValue.trim() : '';
@@ -868,9 +940,15 @@ export function resolveAiPatch(opts: {
   const update: Record<string, unknown> = {};
   const changed: string[] = [];
 
+  // La proposta si legge con `propostaLeggibile`, come la leggono la chat e il
+  // modulo: una voce scritta male sparisce invece di far cadere la rotta. Le
+  // dichiarazioni per un campo che la scheda non ha escono senza dire niente
+  // (`senzaDichiarazioniFuoriScheda`).
+  const letta = propostaLeggibile(opts.patch);
+  const fields = campiDopoLaProposta(categories, letta, current.category_id);
   // R41 — Prima di tutto si tolgono le dichiarazioni: da qui in giu' il patch
   // non le contiene piu', ne' in scrittura ne' in rimozione.
-  const { patch, scartati } = separaCampiDichiarativi(opts.patch);
+  const { patch, scartati } = separaCampiDichiarativi(senzaDichiarazioniFuoriScheda(letta, fields));
   const protetti = Array.from(new Set(scartati.map((s) => s.etichetta)));
   for (const s of scartati) changed.push(motivoDichiarazioneRifiutata(s));
 
@@ -931,14 +1009,12 @@ export function resolveAiPatch(opts: {
     }
   }
 
-  // Categoria → risolvi slug/sottocategoria su category_id. L'attributo
-  // validation usa la categoria EFFETTIVA (post-cambio).
-  let effectiveCategoryId = current.category_id ?? null;
+  // Categoria → risolvi slug/sottocategoria su category_id. Gli attributi si
+  // validano contro la categoria EFFETTIVA (post-cambio): sono i `fields` qui sopra.
   if (patch.category_slug) {
     const resolved = resolveCategoryId(categories, patch.category_slug, patch.subcategory_name);
     if (resolved) {
       update.category_id = resolved;
-      effectiveCategoryId = resolved;
       changed.push('categoria');
     }
   }
@@ -959,10 +1035,6 @@ export function resolveAiPatch(opts: {
   const hasAttrRemove = Array.isArray(patch.attributes_remove) && patch.attributes_remove.length > 0;
   if (hasAttrSet || hasAttrRemove) {
     const merged: Record<string, unknown> = { ...(current.attributes ?? {}) };
-    const { fields } = getAttributesForCategory(
-      categories.map((c) => ({ id: c.id, slug: c.slug, parent_id: c.parent_id })),
-      effectiveCategoryId,
-    );
     if (hasAttrSet) {
       for (const [aiKey, rawValue] of Object.entries(patch.attributes!)) {
         const value = typeof rawValue === 'string' ? rawValue.trim() : '';

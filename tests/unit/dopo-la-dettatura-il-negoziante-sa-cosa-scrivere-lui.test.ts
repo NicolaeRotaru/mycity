@@ -129,10 +129,23 @@ describe('la frase fissa nomina i campi che la scheda ha davvero', () => {
       esito: 'Compilato dalla tua descrizione — controlla e salva',
       dichiarazioni: FRASE_ALIMENTI,
       dettato: `Hai detto: «${DETTATO}»`,
-      risposta: `Risposta dell'assistente: «${RISPOSTA}»`,
+      risposta: `L'assistente dice: «${RISPOSTA}»`,
     });
     expect(avvisoDopoLaDettatura({ esito, dettato: DETTATO, risposta: '   ' }).risposta).toBeNull();
     expect(avvisoDopoLaDettatura({ esito, dettato: DETTATO, risposta: { testo: 'x' } }).risposta).toBeNull();
+  });
+
+  it('una proposta vuota su un alimento: dice cosa e successo nella scheda, senza «riprova»', () => {
+    // Chi detta solo gli allergeni riceve sempre una proposta vuota: riprovare
+    // non cambia niente, e ogni tentativo e' una chiamata al modello pagata.
+    const esito = esitoDelPiano(
+      pianoPatchPerIlModulo({}, { prezzoAttuale: 3.5, categorie: CATEGORIE, categoriaAttuale: 'pane', modo: 'edit' }),
+    );
+    const a = avvisoDopoLaDettatura({ esito, dettato: 'aggiungi la frutta secca agli allergeni', risposta: '' });
+    expect(a.tono).toBe('neutro');
+    expect(a.esito).toBe('Nella scheda non ho scritto niente');
+    expect(a.dichiarazioni).toBe(FRASE_ALIMENTI);
+    expect(JSON.stringify(a)).not.toMatch(/riprova/i);
   });
 });
 
@@ -158,6 +171,7 @@ describe('nel modulo vero, con la rotta vera della dettatura', () => {
   });
 
   afterEach(() => {
+    delete (window as unknown as Record<string, unknown>).webkitSpeechRecognition;
     const g = globalThis as Record<string, unknown>;
     delete g.__UTENTE__;
     delete g.__GETTONE__;
@@ -170,9 +184,9 @@ describe('nel modulo vero, con la rotta vera della dettatura', () => {
   const FOCACCIA: Prodotto = { categoria: 'pane', nome: 'Focaccia', prezzo: 3.5, attributi: { allergeni: 'glutine' } };
   const VASO: Prodotto = { categoria: 'casa', nome: 'Vaso', prezzo: 20, attributi: { materiale: 'Ceramica' } };
 
-  async function detta(testo: string, prodotto: Prodotto | null) {
+  async function apriIlModulo(prodotto: Prodotto | null) {
     const mod = await monta('components/seller/ProductForm.tsx');
-    const s = accendi(mod.default, {
+    return accendi(mod.default, {
       mode: prodotto ? 'edit' : 'create',
       categories: CATEGORIE,
       initialValues: prodotto
@@ -193,6 +207,10 @@ describe('nel modulo vero, con la rotta vera della dettatura', () => {
       onSubmit: () => {},
       sellerOffersExpress: true,
     });
+  }
+
+  async function detta(testo: string, prodotto: Prodotto | null) {
+    const s = await apriIlModulo(prodotto);
     // In jsdom il riconoscimento vocale non c'e': il pulsante ripiega sulla casella di testo, stessa rotta.
     const casella = s.radice.querySelector('textarea[placeholder^="Es. tre magliette"]') as HTMLTextAreaElement;
     expect(casella, 'la casella della dettatura non e a video: la prova girerebbe a vuoto').not.toBeNull();
@@ -201,6 +219,41 @@ describe('nel modulo vero, con la rotta vera della dettatura', () => {
       casella.dispatchEvent(new window.Event('input', { bubbles: true }));
     });
     s.agisci(() => clicca(s.radice.querySelector('button[aria-label="Crea dalla descrizione"]')!));
+    for (let i = 0; i < 12; i++) await attendi();
+    expect(runMessageMock, 'la rotta non ha chiamato il modello: la prova girerebbe a vuoto').toHaveBeenCalledTimes(1);
+    return s;
+  }
+
+  /**
+   * La strada vera su Chrome e Android: il microfono. Il riconoscimento vocale e'
+   * finto (in jsdom non c'e'); la frase arriva come la passa il browser.
+   */
+  async function dettaAlMicrofono(testo: string, prodotto: Prodotto) {
+    type Risultato = { results: { transcript: string }[][] };
+    let ascolto: { onresult: ((e: Risultato) => void) | null } | null = null;
+    class FintoRiconoscimento {
+      lang = '';
+      interimResults = false;
+      continuous = false;
+      maxAlternatives = 1;
+      onresult: ((e: Risultato) => void) | null = null;
+      onerror: (() => void) | null = null;
+      onend: (() => void) | null = null;
+      start() {
+        ascolto = this;
+      }
+      stop() {}
+    }
+    (window as unknown as Record<string, unknown>).webkitSpeechRecognition = FintoRiconoscimento;
+    const s = await apriIlModulo(prodotto);
+    expect(s.radice.querySelector('textarea[placeholder^="Es. tre magliette"]'), 'e la casella, non il microfono').toBeNull();
+    const microfono = Array.from(s.radice.querySelectorAll('button')).find((b) =>
+      (b.textContent ?? '').includes('Detta il prodotto a voce'),
+    );
+    expect(microfono, 'il pulsante del microfono non e a video').toBeTruthy();
+    s.agisci(() => clicca(microfono!));
+    expect(ascolto, 'il microfono non e partito').not.toBeNull();
+    s.agisci(() => ascolto!.onresult!({ results: [[{ transcript: testo }]] }));
     for (let i = 0; i < 12; i++) await attendi();
     expect(runMessageMock, 'la rotta non ha chiamato il modello: la prova girerebbe a vuoto').toHaveBeenCalledTimes(1);
     return s;
@@ -234,7 +287,10 @@ describe('nel modulo vero, con la rotta vera della dettatura', () => {
       FRASE_ALIMENTI,
     );
     expect(testo, 'il negoziante non ritrova quello che ha detto').toContain(`Hai detto: «${DETTATO}»`);
-    expect(testo, 'la risposta dell assistente e stata buttata via').toContain(`Risposta dell'assistente: «${RISPOSTA}»`);
+    expect(testo, 'la risposta dell assistente e stata buttata via').toContain(`L'assistente dice: «${RISPOSTA}»`);
+    // La frase fissa viene prima di tutto, anche delle parole dell'assistente.
+    expect(testo.indexOf(FRASE_ALIMENTI)).toBeLessThan(testo.indexOf('Compilato dalla tua descrizione'));
+    expect(testo.indexOf(FRASE_ALIMENTI)).toBeLessThan(testo.indexOf("L'assistente dice"));
 
     // La macchina non scrive mai la dichiarazione: il campo resta com'era.
     expect(campo(s, 'Allergeni')?.value).toBe('glutine');
@@ -259,7 +315,7 @@ describe('nel modulo vero, con la rotta vera della dettatura', () => {
     expect(testo).toContain('Compilato dalla tua descrizione — controlla e salva');
     expect(testo).not.toContain("non li scrive l'assistente");
     expect(testo).toContain('Hai detto: «vaso in ceramica bianca ventidue euro»');
-    expect(testo).toContain("Risposta dell'assistente: «Ho preso nome e prezzo.»");
+    expect(testo).toContain("L'assistente dice: «Ho preso nome e prezzo.»");
     s.smonta();
   });
 
@@ -278,6 +334,52 @@ describe('nel modulo vero, con la rotta vera della dettatura', () => {
     const testo = avviso(s);
     expect(testo).toContain("C'è anche una proposta da controllare: la trovi nel riquadro «Da controllare»");
     expect(testo).toContain(FRASE_ALIMENTI);
+    s.smonta();
+  });
+
+  it('il modello dice «ho aggiunto gli allergeni» e non sono entrati: la frase fissa viene prima, e le sue parole sono riportate come sue', async () => {
+    const FALSA = 'Fatto! Ho aggiunto gli allergeni: glutine e sesamo.';
+    ilModelloRisponde(UBBIDIENTE, FALSA);
+    const s = await detta(DETTATO, FOCACCIA);
+    const testo = avviso(s);
+    expect(campo(s, 'Allergeni')?.value).toBe('glutine');
+    expect(testo, 'le parole del modello sono presentate come una conferma').not.toContain(
+      `Risposta dell'assistente: «${FALSA}»`,
+    );
+    expect(testo).toContain(`L'assistente dice: «${FALSA}»`);
+    expect(testo.indexOf(FRASE_ALIMENTI), 'la frase fissa non viene prima').toBe(0);
+    expect(testo.indexOf(FRASE_ALIMENTI)).toBeLessThan(testo.indexOf(FALSA));
+    s.smonta();
+  });
+
+  it('chi detta solo gli allergeni: la proposta e vuota, e l avviso non dice di riprovare', async () => {
+    ilModelloRisponde({}, 'Gli allergeni non li compilo io: aggiungi tu la frutta secca nella scheda.');
+    const s = await detta('aggiungi la frutta secca agli allergeni', FOCACCIA);
+    const testo = avviso(s);
+    expect(testo).toContain(FRASE_ALIMENTI);
+    expect(testo).toContain('Nella scheda non ho scritto niente');
+    expect(testo, 'l avviso chiede di riprovare, e riprovare da sempre lo stesso risultato').not.toMatch(/riprova/i);
+    expect(campo(s, 'Allergeni')?.value).toBe('glutine');
+    s.smonta();
+  });
+
+  it('al microfono (Chrome, Android): lo stesso avviso, con la frase fissa', async () => {
+    ilModelloRisponde(UBBIDIENTE);
+    const s = await dettaAlMicrofono(DETTATO, FOCACCIA);
+    const testo = avviso(s);
+    expect(campo(s, 'Nome prodotto')?.value, 'la dettatura non e arrivata al modulo').toBe('Focaccia genovese');
+    expect(testo, 'dal microfono gli allergeni detti spariscono senza una parola').toContain(FRASE_ALIMENTI);
+    expect(testo).toContain(`Hai detto: «${DETTATO}»`);
+    expect(campo(s, 'Allergeni')?.value).toBe('glutine');
+    s.smonta();
+  });
+
+  it('al microfono, con la proposta vuota: la frase fissa c e lo stesso', async () => {
+    ilModelloRisponde({}, '');
+    const s = await dettaAlMicrofono('aggiungi la frutta secca agli allergeni', FOCACCIA);
+    const testo = avviso(s);
+    expect(testo).toContain(FRASE_ALIMENTI);
+    expect(testo).toContain('Nella scheda non ho scritto niente');
     s.smonta();
   });
 });

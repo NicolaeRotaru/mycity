@@ -17,6 +17,7 @@ import {
   type DichiarazioneScartata,
 } from '@/lib/products/aiPatch';
 import { attributoCheEntra } from '@/lib/products/draftFromVision';
+import { SELLER_STATUSES } from '@/lib/products/schema';
 import { formatPrice } from '@/lib/format';
 
 /**
@@ -95,69 +96,90 @@ export type ProdottoAttuale = {
 };
 
 /**
- * Il controllo da fare PRIMA di scrivere una modifica dell'assistente.
+ * Quando una modifica dell'assistente va controllata PRIMA di scriverla, e come.
+ * La leggono il server (`cosaMancaDopoLaModifica`) e la scheda della proposta
+ * nella chat (`avvisoSullaPubblicazione`): finche' erano due regole, la scheda
+ * taceva sullo spostamento di un prodotto gia' in vendita e il server lo
+ * fermava dopo Applica (16/10/2026).
  *
- * Scatta quando la modifica porta il prodotto in vendita (da bozza o da
- * esaurito), e quando sposta di categoria un prodotto che e' gia' in vendita:
- * una forchetta spostata fra gli alimentari diventerebbe un alimento in vetrina
- * senza allergeni. Negli altri casi — un prezzo, un tag su un prodotto gia' in
- * vendita — non blocca niente: e' lavoro normale.
+ *  - `vendita`: la modifica mette in vendita un prodotto che non lo era (da
+ *    bozza o da esaurito) → tutti i controlli del modulo;
+ *  - `categoria`: sposta un prodotto gia' in vendita in un'altra categoria di
+ *    primo livello → solo i campi che la categoria nuova rende obbligatori. Una
+ *    forchetta spostata fra gli alimentari diventerebbe un alimento in vetrina
+ *    senza allergeni; il resto della scheda era gia' in vetrina e non e' questa
+ *    modifica a cambiarlo. Con la stessa categoria di primo livello — una
+ *    focaccia che passa da «Alimentari» ad «Alimentari / Pane» — i campi
+ *    obbligatori sono gli stessi: fermarla buttava via, nel lavoro massivo,
+ *    anche il nome e la descrizione migliorati di un alimento vecchio, salvato
+ *    prima che gli allergeni fossero obbligatori (collaudo del 15/10);
+ *  - `null`: nessun controllo — un prezzo, un tag su un prodotto gia' in
+ *    vendita: e' lavoro normale.
  */
+export function controlloDellaModifica(m: {
+  statoPrima: unknown;
+  statoDopo: unknown;
+  /** Lo slug della categoria di PRIMO livello, prima e dopo la modifica. */
+  categoriaPrima: string | null;
+  categoriaDopo: string | null;
+}): 'vendita' | 'categoria' | null {
+  if (m.statoDopo !== 'available') return null;
+  if (m.statoPrima !== 'available') return 'vendita';
+  return m.categoriaDopo !== m.categoriaPrima ? 'categoria' : null;
+}
+
+/** Cosa manca per passare il controllo, con le parole del modulo. Vuoto = si puo'. */
+function cosaMancaPerIlControllo(controllo: 'vendita' | 'categoria' | null, s: SchedaDaVendere): string[] {
+  if (controllo === null) return [];
+  return controllo === 'vendita' ? cosaMancaPerVendere(s) : campiObbligatoriVuoti(s.categoriaTop, s.attributes);
+}
+
+/** Il controllo da fare PRIMA di scrivere una modifica dell'assistente (vedi `controlloDellaModifica`). */
 export function cosaMancaDopoLaModifica(opts: {
   prima: ProdottoAttuale;
   update: Record<string, unknown>;
   categories: CategoryRow[];
 }): string[] {
   const { prima, update, categories } = opts;
-  const statoFinale = 'status' in update ? update.status : prima.status;
-  if (statoFinale !== 'available') return [];
-
-  const diventaInVendita = update.status === 'available' && prima.status !== 'available';
-  const cambiaCategoria = 'category_id' in update && update.category_id !== prima.category_id;
-  if (!diventaInVendita && !cambiaCategoria) return [];
-
   const albero = categories.map((c) => ({ id: c.id, slug: c.slug, parent_id: c.parent_id }));
-  const categoryId = (cambiaCategoria ? update.category_id : prima.category_id) as string | null;
-  const { topSlug } = getAttributesForCategory(albero, categoryId);
-  const attributes = ('attributes' in update ? update.attributes : prima.attributes) as
-    | Record<string, unknown>
-    | null;
-
-  // Sullo spostamento di categoria di un prodotto gia' in vendita si guardano
-  // solo i campi che la categoria nuova rende obbligatori: il resto della
-  // scheda era gia' in vetrina e non e' questa modifica a cambiarlo.
-  //
-  // E se la categoria di primo livello resta la stessa — una focaccia che passa
-  // da «Alimentari» ad «Alimentari / Pane» — i campi obbligatori sono gli
-  // stessi di prima: la modifica non rende la scheda ne' migliore ne' peggiore.
-  // Fermarla buttava via, nel lavoro massivo, anche il nome e la descrizione
-  // migliorati di un alimento vecchio, salvato prima che gli allergeni fossero
-  // obbligatori (collaudo del 15/10).
-  if (!diventaInVendita) {
-    if (topSlug === getAttributesForCategory(albero, prima.category_id).topSlug) return [];
-    return campiObbligatoriVuoti(topSlug, attributes);
-  }
-
   const valore = <K extends keyof ProdottoAttuale>(k: K) =>
     (k in update ? update[k] : prima[k]) as ProdottoAttuale[K];
-  return cosaMancaPerVendere({
+  const categoryId = valore('category_id');
+  const { topSlug } = getAttributesForCategory(albero, categoryId);
+  const controllo = controlloDellaModifica({
+    statoPrima: prima.status,
+    statoDopo: valore('status'),
+    categoriaPrima: getAttributesForCategory(albero, prima.category_id).topSlug,
+    categoriaDopo: topSlug,
+  });
+  return cosaMancaPerIlControllo(controllo, {
     name: valore('name'),
     description: valore('description'),
     price: valore('price'),
     haCategoria: Boolean(categoryId),
     categoriaTop: topSlug,
     numeroFoto: Array.isArray(prima.images) ? prima.images.filter(Boolean).length : 0,
-    attributes,
+    attributes: valore('attributes'),
   });
 }
 
 /**
- * Il messaggio per il negoziante, quando qualcosa manca. Corto apposta: la
- * chat lo fa passare da `friendlyError`, che sopra i 200 caratteri lo
- * sostituisce con un messaggio generico e l'elenco andrebbe perso.
+ * Il messaggio per il negoziante, quando qualcosa manca: lo stesso sulla scheda
+ * della proposta (prima di Applica) e nel rifiuto del server (dopo). Vale per
+ * un prodotto da mettere in vendita e per uno gia' in vendita spostato di
+ * categoria: prima diceva «Per metterlo in vendita manca» anche a chi lo aveva
+ * gia' in vendita. Corto apposta: la chat lo fa passare da `friendlyError`,
+ * che sopra i 200 caratteri lo sostituisce con un messaggio generico e
+ * l'elenco andrebbe perso.
  */
 export function messaggioDaCompletare(mancanti: string[]): string {
-  return `Per metterlo in vendita manca: ${mancanti.join(', ')}. Compilalo nella scheda del prodotto.`;
+  const motivo = motivoDaCompletare(mancanti);
+  return `${motivo.charAt(0).toUpperCase()}${motivo.slice(1)}. Prima completa la scheda del prodotto.`;
+}
+
+/** Lo stesso perche', da mettere dentro un elenco (la rotta che applica in blocco). */
+export function motivoDaCompletare(mancanti: string[]): string {
+  return `con questa modifica non può stare in vendita, manca: ${mancanti.join(', ')}`;
 }
 
 /**
@@ -468,9 +490,9 @@ export type SchedaDellaChat = {
   image: string | null;
 };
 
-/** Cosa manca per vendere, letto dallo snapshot che ha in mano la chat. */
-export function cosaMancaNellaScheda(prodotto: SchedaDellaChat): string[] {
-  return cosaMancaPerVendere({
+/** Lo snapshot che ha in mano la chat, nei campi del controllo. */
+function schedaDaVendere(prodotto: SchedaDellaChat): SchedaDaVendere {
+  return {
     name: prodotto.name,
     description: prodotto.description,
     price: prodotto.price,
@@ -478,11 +500,16 @@ export function cosaMancaNellaScheda(prodotto: SchedaDellaChat): string[] {
     categoriaTop: prodotto.categorySlug,
     numeroFoto: prodotto.image ? 1 : 0,
     attributes: prodotto.attributes,
-  });
+  };
+}
+
+/** Cosa manca per vendere, letto dallo snapshot che ha in mano la chat. */
+export function cosaMancaNellaScheda(prodotto: SchedaDellaChat): string[] {
+  return cosaMancaPerVendere(schedaDaVendere(prodotto));
 }
 
 /**
- * Cosa manca per vendere DOPO la proposta dell'assistente, letto dalla chat.
+ * La scheda come sara' DOPO la proposta dell'assistente, letta dalla chat.
  *
  * La scheda di una proposta «Stato → In vendita» guardava il prodotto com'e'
  * adesso e ignorava il resto della stessa proposta: «Descrizione aggiornata ·
@@ -492,7 +519,7 @@ export function cosaMancaNellaScheda(prodotto: SchedaDellaChat): string[] {
  * proposta sopra quelli attuali, senza le dichiarazioni (che l'assistente non
  * scrive) e senza un prezzo fuori banda (che il server scarta).
  */
-export function cosaMancaDopoLaProposta(prodotto: SchedaDellaChat, proposta: AiProductPatch): string[] {
+function schedaDopoLaProposta(prodotto: SchedaDellaChat, proposta: AiProductPatch): SchedaDellaChat {
   const { patch } = separaCampiDichiarativi(proposta);
   const attributes: Record<string, unknown> = { ...prodotto.attributes };
   // 16/10/2026 — La proposta arriva dal modello cosi' com'e': lo schema dello
@@ -506,10 +533,13 @@ export function cosaMancaDopoLaProposta(prodotto: SchedaDellaChat, proposta: AiP
     if (typeof v === 'string' && v.trim()) attributes[AI_ATTR_TO_FIELD[k] ?? k] = v;
   }
   const daTogliere: unknown[] = Array.isArray(patch.attributes_remove) ? patch.attributes_remove : [];
-  for (const k of daTogliere) delete attributes[AI_ATTR_TO_FIELD[String(k)] ?? String(k)];
+  for (const voce of daTogliere) {
+    const k = voceComeTesto(voce);
+    if (k) delete attributes[AI_ATTR_TO_FIELD[k] ?? k];
+  }
   const prezzoValido =
     typeof patch.price === 'number' && patch.price > 0 && !prezzoAiFuoriBanda(patch.price, prodotto.price);
-  return cosaMancaNellaScheda({
+  return {
     ...prodotto,
     name: typeof patch.name === 'string' && patch.name.trim() ? patch.name : prodotto.name,
     description:
@@ -517,7 +547,7 @@ export function cosaMancaDopoLaProposta(prodotto: SchedaDellaChat, proposta: AiP
     price: prezzoValido ? patch.price! : prodotto.price,
     categorySlug: patch.category_slug || prodotto.categorySlug,
     attributes,
-  });
+  };
 }
 
 /**
@@ -533,22 +563,32 @@ export function dichiarazioniInVetrina(prodotto: SchedaDellaChat): { etichetta: 
 }
 
 /**
- * R36 — Cosa mostra la scheda di una proposta che mette il prodotto in vendita.
- * `null` se la proposta non lo mette in vendita. Altrimenti: cosa manca ancora
- * (letto come lo leggera' il server) e le dichiarazioni con cui andrebbe in
- * vetrina, da rileggere prima di premere Applica.
+ * R36 — Cosa mostra la scheda di una proposta prima di Applica, con la regola
+ * del server (`controlloDellaModifica`): `null` se il server non controllera'
+ * niente. Altrimenti: cosa manca (letto come lo leggera' il server) e le
+ * dichiarazioni con cui il prodotto stara' in vetrina, da rileggere.
+ *
+ * 16/10/2026 — Prima rispondeva solo a una proposta che mette il prodotto in
+ * vendita. «Spostala negli alimentari», per una focaccia in vendita finita per
+ * errore in Casa, non mostrava niente; premuto Applica, il server la fermava
+ * perche' mancavano allergeni e ingredienti.
  */
 export function avvisoSullaPubblicazione(
   prodotto: SchedaDellaChat & { status: string },
   proposta: AiProductPatch,
 ): { mancanti: string[]; dichiarazioni: { etichetta: string; valore: string }[] } | null {
-  if (proposta.status !== 'available' || prodotto.status === 'available') return null;
+  const dopo = schedaDopoLaProposta(prodotto, proposta);
+  const controllo = controlloDellaModifica({
+    statoPrima: prodotto.status,
+    // Lo stato si scrive solo se e' uno di quelli del venditore, come sul server.
+    statoDopo: (SELLER_STATUSES as readonly unknown[]).includes(proposta.status) ? proposta.status : prodotto.status,
+    categoriaPrima: prodotto.categorySlug,
+    categoriaDopo: dopo.categorySlug,
+  });
+  if (controllo === null) return null;
   return {
-    mancanti: cosaMancaDopoLaProposta(prodotto, proposta),
-    dichiarazioni: dichiarazioniInVetrina({
-      ...prodotto,
-      categorySlug: proposta.category_slug || prodotto.categorySlug,
-    }),
+    mancanti: cosaMancaPerIlControllo(controllo, schedaDaVendere(dopo)),
+    dichiarazioni: dichiarazioniInVetrina(dopo),
   };
 }
 

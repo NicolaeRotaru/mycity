@@ -26,6 +26,7 @@ import {
   avvisoSullaPubblicazione,
   bozzaDaCreare,
   caratteristicheDellaBozza,
+  messaggioDaCompletare,
   messaggioDopoLaBozza,
   riquadroDichiarazioni,
   righeDellaProposta,
@@ -435,10 +436,7 @@ export default function SupportProductAssistant() {
                         return (
                           <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-accent-50 px-2 py-1.5 text-xs text-accent-800">
                             <AlertTriangle size={13} strokeWidth={2.4} className="mt-0.5 shrink-0" aria-hidden />
-                            <span>
-                              Non si può ancora mettere in vendita: manca {avviso.mancanti.join(', ')}. Aprilo con
-                              «Apri» e compila tu questi campi.
-                            </span>
+                            <span>{messaggioDaCompletare(avviso.mancanti)}</span>
                           </p>
                         );
                       }
@@ -446,7 +444,7 @@ export default function SupportProductAssistant() {
                       return (
                         <div className="mb-3 rounded-lg border border-accent-200 bg-accent-50 p-2 text-xs text-ink-800">
                           <p className="mb-1 flex items-center gap-1.5 font-semibold text-accent-800">
-                            <AlertTriangle size={13} strokeWidth={2.4} aria-hidden /> Va in vendita con queste
+                            <AlertTriangle size={13} strokeWidth={2.4} aria-hidden /> In vendita con queste
                             dichiarazioni: rileggile, ai clienti le dai tu
                           </p>
                           <ul className="space-y-0.5">
