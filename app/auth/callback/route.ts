@@ -6,7 +6,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { rimandoDelRitornoSenzaSessione } from '@/lib/auth/link-email';
-import { vaChiestaLAccettazione, verbalizzaSenzaTrattenere, versioneAccettata } from '@/lib/auth/accettazione-testi';
+import { vaChiestaSenzaTrattenere, verbalizzaSenzaTrattenere, versioneAccettata } from '@/lib/auth/accettazione-testi';
 
 export const runtime = 'nodejs';
 
@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
         if (verbale === 'scaduto' || verbale === 'rotto' || verbale === 'non-scritta') {
           logger.warn('[callback] accettazione dei testi non registrata', { esito: verbale });
         }
-      } else if (await vaChiestaLAccettazione(admin, utente.id)) {
+      } else {
         /**
          * 22/8/2026 — SENZA VERSIONE NON SI TIRA DRITTO IN SILENZIO.
          *
@@ -128,12 +128,22 @@ export async function GET(req: NextRequest) {
          * 15/10/2026 — Con i cookie della sessione appena aperta: senza, la
          * pagina che chiede l'accettazione trovava una persona non entrata e il
          * suo «accetto» rispondeva «autenticazione richiesta».
+         *
+         * 16/10/2026 — Anche questa domanda si ferma a `TETTO_VERBALE_MS`: prima
+         * leggeva il profilo senza limite, e un database muto teneva la pagina
+         * appesa con il codice del link gia' consumato.
          */
-        const chiedi = new URL('/accetta-condizioni', env.appUrl());
-        chiedi.searchParams.set('next', next);
-        const r = NextResponse.redirect(chiedi);
-        for (const c of res.cookies.getAll()) r.cookies.set(c);
-        return r;
+        const domanda = await vaChiestaSenzaTrattenere(() => admin, utente.id);
+        if (domanda === 'chiedi') {
+          const chiedi = new URL('/accetta-condizioni', env.appUrl());
+          chiedi.searchParams.set('next', next);
+          const r = NextResponse.redirect(chiedi);
+          for (const c of res.cookies.getAll()) r.cookies.set(c);
+          return r;
+        }
+        if (domanda === 'scaduto' || domanda === 'rotto') {
+          logger.warn('[callback] accettazione dei testi non controllata', { esito: domanda });
+        }
       }
     } catch (e) {
       logger.warn('[callback] accettazione dei testi non registrata', { e });

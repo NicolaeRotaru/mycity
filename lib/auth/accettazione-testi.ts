@@ -118,11 +118,44 @@ export async function verbalizzaSenzaTrattenere(
 /**
  * Questa persona non ha mai accettato i testi, e non sappiamo quale versione
  * abbia davanti: va chiesto. `false` anche quando il profilo non c'e'.
+ *
+ * Non e' esportata: senza tetto, un database muto la lascia appesa. Le porte
+ * d'ingresso passano da `vaChiestaSenzaTrattenere`.
  */
-export async function vaChiestaLAccettazione(admin: ClientPerVerbale, utenteId: string): Promise<boolean> {
+async function vaChiestaLAccettazione(admin: ClientPerVerbale, utenteId: string): Promise<boolean> {
   const { data: profilo } = await tabella(admin, 'profiles')
     .select('tos_accepted_at')
     .eq('id', utenteId)
     .maybeSingle();
   return !!profilo && !profilo.tos_accepted_at;
+}
+
+/**
+ * `chiedi` = mandala alla pagina che chiede Termini e Informativa.
+ * `lascia-entrare` = ha gia' accettato, oppure il profilo non c'e'.
+ * `scaduto` / `rotto` = non lo sappiamo: si entra, e si richiede al prossimo
+ * ritorno da un link.
+ */
+export type EsitoDomandaAccettazione = 'chiedi' | 'lascia-entrare' | 'scaduto' | 'rotto';
+
+/**
+ * 16/10/2026 — LA DOMANDA «HA GIA' ACCETTATO?» HA LO STESSO TETTO DEL VERBALE.
+ *
+ * Il tetto c'era solo sul ramo di chi porta la versione dei testi. L'altro
+ * ramo — chi non la porta: inviti, account vecchi, registrazioni dalla rotta
+ * senza dati — leggeva il profilo senza limite. Con il database muto il link
+ * di conferma, gia' consumato, restava su una pagina che non finiva mai di
+ * caricare; la persona lo riapriva e leggeva «link scaduto o gia' usato».
+ *
+ * Quando il tempo scade si entra, come per il verbale: tenere fuori chi ha
+ * appena confermato l'email costa di piu' di una domanda rimandata.
+ */
+export async function vaChiestaSenzaTrattenere(
+  admin: () => ClientPerVerbale,
+  utenteId: string,
+  ms: number = TETTO_VERBALE_MS,
+): Promise<EsitoDomandaAccettazione> {
+  const r = await chiediConTetto(() => vaChiestaLAccettazione(admin(), utenteId), ms);
+  if (r.stato !== 'ok') return r.stato;
+  return r.valore ? 'chiedi' : 'lascia-entrare';
 }

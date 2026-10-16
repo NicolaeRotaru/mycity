@@ -9,7 +9,7 @@ import {
   leggiLinkDiConferma,
   rimandoLinkNonRiuscito,
 } from '@/lib/auth/link-email';
-import { vaChiestaLAccettazione, verbalizzaSenzaTrattenere, versioneAccettata } from '@/lib/auth/accettazione-testi';
+import { vaChiestaSenzaTrattenere, verbalizzaSenzaTrattenere, versioneAccettata } from '@/lib/auth/accettazione-testi';
 
 export const runtime = 'nodejs';
 
@@ -83,10 +83,18 @@ export async function GET(req: NextRequest) {
         if (verbale === 'scaduto' || verbale === 'rotto' || verbale === 'non-scritta') {
           logger.warn('[auth/confirm] accettazione dei testi non registrata', { esito: verbale });
         }
-      } else if (await vaChiestaLAccettazione(admin, utente.id)) {
-        const chiedi = new URL('/accetta-condizioni', env.appUrl());
-        chiedi.searchParams.set('next', link.next);
-        return conICookie(chiedi);
+      } else {
+        // Anche la domanda «ha gia' accettato?» si ferma a `TETTO_VERBALE_MS`:
+        // il link e' gia' consumato, e una pagina appesa lo brucerebbe.
+        const domanda = await vaChiestaSenzaTrattenere(() => admin, utente.id);
+        if (domanda === 'chiedi') {
+          const chiedi = new URL('/accetta-condizioni', env.appUrl());
+          chiedi.searchParams.set('next', link.next);
+          return conICookie(chiedi);
+        }
+        if (domanda === 'scaduto' || domanda === 'rotto') {
+          logger.warn('[auth/confirm] accettazione dei testi non controllata', { esito: domanda });
+        }
       }
     } catch (e) {
       logger.warn('[auth/confirm] accettazione dei testi non registrata', { e });

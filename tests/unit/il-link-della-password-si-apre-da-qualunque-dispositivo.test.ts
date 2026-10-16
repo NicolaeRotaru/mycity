@@ -21,6 +21,9 @@
  *  ⑤ /reset-password con un `?code=` che qui non puo' funzionare spiega perche'.
  *  ⑥ Chi entra poi con la password lascia il verbale che il ritorno fallito
  *    non aveva scritto.
+ *  ⑦ Chi non porta la versione dei testi e trova il database muto entra lo
+ *    stesso entro il tetto, invece di restare su una pagina appesa con il
+ *    link gia' consumato.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -139,7 +142,7 @@ import {
   motivoLinkPasswordSenzaSessione,
   percorsoDiRitorno,
 } from '@/lib/auth/link-email';
-import { TETTO_VERBALE_MS, verbalizzaAccettazione } from '@/lib/auth/accettazione-testi';
+import { TETTO_VERBALE_MS, vaChiestaSenzaTrattenere, verbalizzaAccettazione } from '@/lib/auth/accettazione-testi';
 import { ritornoDopoLaConferma } from '@/lib/analytics/porta-di-ingresso';
 
 function richiesta(percorso: string, cookie?: Record<string, string>): NextRequest {
@@ -448,5 +451,77 @@ describe('⑥ chi entra poi con la password lascia il verbale che il ritorno fal
     expect(esito, 'l’accesso resta appeso dietro al verbale').not.toBe('appesa');
     expect((esito as Response).status).toBe(200);
     expect(Date.now() - partenza).toBeLessThan(TETTO_VERBALE_MS + 2000);
+  }, 15000);
+});
+
+describe('⑦ la domanda «ha già accettato?» non trattiene chi ha appena confermato l’email', () => {
+  /** Il database che accetta la domanda e non risponde mai. */
+  function databaseMuto() {
+    return vi.spyOn(adminFinto, 'from').mockImplementation(() => ({
+      select: () => ({ eq: () => ({ maybeSingle: () => new Promise(() => {}) }) }),
+    }) as never);
+  }
+
+  /** La risposta, oppure «appesa» se non arriva entro il tetto più un margine. */
+  async function entroIlTetto(risposta: Promise<Response>) {
+    const partenza = Date.now();
+    const esito = await Promise.race([
+      risposta,
+      new Promise<'appesa'>((r) => setTimeout(() => r('appesa'), TETTO_VERBALE_MS + 2500)),
+    ]);
+    return { esito, durata: Date.now() - partenza };
+  }
+
+  it('la decisione: chi non ha mai accettato va chiesto, chi ha accettato o non ha profilo entra', async () => {
+    profili.set('nuova', { tos_accepted_at: null });
+    profili.set('vecchia', { tos_accepted_at: '2026-01-01T00:00:00Z' });
+    expect(await vaChiestaSenzaTrattenere(() => adminFinto, 'nuova', 50)).toBe('chiedi');
+    expect(await vaChiestaSenzaTrattenere(() => adminFinto, 'vecchia', 50)).toBe('lascia-entrare');
+    expect(await vaChiestaSenzaTrattenere(() => adminFinto, 'sconosciuta', 50)).toBe('lascia-entrare');
+  });
+
+  it('la decisione: database muto → «scaduto» entro il tetto, chiave mancante → «rotto», mai un errore', async () => {
+    const muto = databaseMuto();
+    const partenza = Date.now();
+    const esito = await Promise.race([
+      vaChiestaSenzaTrattenere(() => adminFinto, 'nuova', 50),
+      new Promise<'appesa'>((r) => setTimeout(() => r('appesa'), 1000)),
+    ]);
+    muto.mockRestore();
+    expect(esito, 'la lettura del profilo resta appesa senza tetto').toBe('scaduto');
+    expect(Date.now() - partenza).toBeLessThan(1000);
+
+    const senzaChiave = () => {
+      throw new Error('SUPABASE_SERVICE_ROLE_KEY mancante');
+    };
+    expect(await vaChiestaSenzaTrattenere(senzaChiave, 'nuova', 50)).toBe('rotto');
+  });
+
+  it('IL CASO CHE ROMPEVA — /auth/confirm: invito senza versione, database muto → entra entro il tetto, con la sessione', async () => {
+    linkValidi.set('pkce_invitomuto01', utente('ospite'));
+    const muto = databaseMuto();
+    const { esito, durata } = await entroIlTetto(
+      conferma(richiesta('/auth/confirm?token_hash=pkce_invitomuto01&type=invite&next=%2Fcheckout')),
+    );
+    muto.mockRestore();
+    expect(esito, 'la pagina resta appesa e il link, già consumato, si brucia').not.toBe('appesa');
+    const res = esito as Response;
+    expect(dove(res).pathname).toBe('/checkout');
+    expect(sessioneScritta(res), 'senza cookie la persona non è entrata').toBeTruthy();
+    expect(durata).toBeLessThan(TETTO_VERBALE_MS + 2000);
+  }, 15000);
+
+  it('IL CASO CHE ROMPEVA — /auth/callback: account senza versione, database muto → entra entro il tetto, con la sessione', async () => {
+    codiciValidi.set('codice-muto', utente('vecchio'));
+    const muto = databaseMuto();
+    const { esito, durata } = await entroIlTetto(
+      ritorno(richiesta('/auth/callback?code=codice-muto&next=%2Fcheckout', { [COOKIE_VERIFICATORE]: 'meta-segreta' })),
+    );
+    muto.mockRestore();
+    expect(esito, 'la pagina resta appesa e il codice, già consumato, si brucia').not.toBe('appesa');
+    const res = esito as Response;
+    expect(dove(res).pathname).toBe('/checkout');
+    expect(sessioneScritta(res), 'senza cookie la persona non è entrata').toBeTruthy();
+    expect(durata).toBeLessThan(TETTO_VERBALE_MS + 2000);
   }, 15000);
 });
