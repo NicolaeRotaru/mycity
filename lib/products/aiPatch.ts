@@ -114,8 +114,15 @@ export const CAMPI_DICHIARATIVI = [
   'scadenza',
 ] as const;
 
-/** La chiave del campo di categoria a cui punta una chiave proposta dall'AI. */
-function chiaveCampo(chiaveAi: string): string {
+/**
+ * La chiave del campo di categoria a cui punta una chiave proposta dall'AI:
+ * «Allergeni», «Valori nutrizionali» e «valori-nutrizionali» puntano tutte al
+ * campo della scheda. La usano tutte le strade che leggono una chiave del
+ * modello — il riquadro della bozza e la porta che crea la bozza — perche' due
+ * letture diverse facevano dire al riquadro «entrate» per allergeni che la
+ * porta aveva scartato (16/10/2026).
+ */
+export function chiaveCampo(chiaveAi: string): string {
   const norm = String(chiaveAi).trim().toLowerCase().replace(/[\s-]+/g, '_');
   return AI_ATTR_TO_FIELD[norm] ?? norm;
 }

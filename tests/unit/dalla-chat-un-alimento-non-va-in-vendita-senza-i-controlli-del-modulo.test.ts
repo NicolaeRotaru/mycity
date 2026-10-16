@@ -600,15 +600,31 @@ describe('il riquadro della bozza dice il vero prima e dopo la creazione', () =>
     expect(r?.daScrivere).toContain('Ingredienti');
   });
 
+  /** La bozza come la salva il server, passando dalla porta vera. */
+  function salvata(confermate: boolean) {
+    const riga = {
+      id: 'b',
+      ...buildDraftProductInsert({
+        draft: bozzaDaCreare(draft, confermate),
+        imageUrls: FOTO,
+        categories: CATEGORIE,
+        sellerId: 'forno-1',
+      }),
+      has_variants: false,
+    };
+    const { categorySlug, attributes } = productSnapshot(riga, CATEGORIE);
+    return { categorySlug, attributes };
+  }
+
   it('dopo, senza spunta: dice che NON sono entrate e che manca anche l allergene', () => {
-    const r = riquadroDichiarazioni(draft, { creata: true, confermate: false });
+    const r = riquadroDichiarazioni(draft, { creata: true, confermate: false, salvata: salvata(false) });
     expect(r?.titolo).toContain('NON entrate');
     expect(r?.daScrivere).toContain('Allergeni, Ingredienti');
     expect(r?.chiediSpunta).toBe(false);
   });
 
   it('dopo, con la spunta: dice che sono entrate', () => {
-    const r = riquadroDichiarazioni(draft, { creata: true, confermate: true });
+    const r = riquadroDichiarazioni(draft, { creata: true, confermate: true, salvata: salvata(true) });
     expect(r?.titolo).toContain('Entrate');
     expect(r?.daScrivere).toContain('Ingredienti');
     expect(r?.daScrivere).not.toContain('Allergeni');
