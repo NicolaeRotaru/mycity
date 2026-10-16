@@ -40,7 +40,12 @@ import {
 import { queryKeys } from '@/lib/queries/keys';
 // #92 — le miniature si chiedono gia' piccole al server
 import { sizedImage, logoNegozio } from '@/lib/image-url';
-import { riepilogoOrdine, statoPagamento } from '@/lib/ordini/riepilogo-ordine';
+import {
+  fraseDelBonificoInArrivo,
+  riepilogoOrdine,
+  statoPagamento,
+  type BonificoPerLaPagina,
+} from '@/lib/ordini/riepilogo-ordine';
 
 type OrderRow = {
   id: string;
@@ -195,6 +200,26 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
     },
   });
 
+  // Riesame del 16/10, quarto giro — su un ordine in contanti rimborsato i soldi arrivano con un
+  // bonifico fatto a mano, dopo. «Rimborsato» lo dice il server solo quando nessun bonifico è in
+  // sospeso; se manca l'IBAN, lo chiede (lib/rimborsi/bonifico-del-cliente.ts).
+  const statoDelPagamento = (order?.payment_status ?? '').toUpperCase();
+  const chiedeIlBonifico =
+    (order?.payment_method ?? '').toLowerCase() === 'cod' &&
+    (statoDelPagamento === 'REFUNDED' || statoDelPagamento === 'PARTIALLY_REFUNDED');
+  const { data: bonificoDiRimborso } = useQuery({
+    queryKey: queryKeys.orders.bonificoDiRimborso(id, statoDelPagamento),
+    enabled: chiedeIlBonifico,
+    queryFn: async (): Promise<BonificoPerLaPagina> => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/orders/${id}/bonifico-di-rimborso`, {
+        headers: session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {},
+      });
+      if (!res.ok) return 'non-lo-so';
+      return (await res.json()) as BonificoPerLaPagina;
+    },
+  });
+
   const cancel = useMutation({
     mutationFn: async () => {
       // 21/8/2026 — Qui si chiamava `cancel_order` del database, che annulla e
@@ -280,7 +305,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   // consegna MyCity, lo sconto del codice e il credito usato. Adesso ci sono, e la funzione dice
   // anche se tornano — perché delle righe che non fanno il totale sono peggio di poche righe.
   const riepilogo = riepilogoOrdine(order, Math.round(subtotal * 100));
-  const pagamento = statoPagamento(order, riepilogo.totaleCentesimi);
+  const pagamento = statoPagamento(order, riepilogo.totaleCentesimi, bonificoDiRimborso ?? 'non-lo-so');
   const isDelivered = status === 'DELIVERED';
   const isCancelled = status === 'CANCELED';
   const isCancellable = status === 'NEW';
@@ -707,6 +732,22 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
               <div className="mt-3 flex items-center gap-2 rounded-lg bg-cream-100 px-3 py-2.5 text-[13px] font-medium text-ink-700">
                 <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-ink-500" aria-hidden />
                 Ordine rimborsato.
+              </div>
+            )}
+            {pagamento.tipo === 'bonifico-in-arrivo' && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-cream-100 px-3 py-2.5 text-[13px] font-medium text-ink-700">
+                <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-ink-500" aria-hidden />
+                <span>
+                  {fraseDelBonificoInArrivo(pagamento, (c) => formatPrice(c / 100))}
+                  {(pagamento.serveIban || !pagamento.certo) && (
+                    <>
+                      {' '}
+                      <Link href="/contact" className="font-semibold text-primary-700 underline">
+                        Vai ai Contatti
+                      </Link>
+                    </>
+                  )}
+                </span>
               </div>
             )}
           </Card>

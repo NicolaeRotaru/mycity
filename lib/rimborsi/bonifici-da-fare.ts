@@ -73,6 +73,11 @@ export interface RigaDelReso {
   refund_intestatario?: string | null;
   refund_bonifico_cents?: number | null;
   refund_bonifico_fatto_at?: string | null;
+  /**
+   * Il segno del bonifico c'e' solo sull'ordine: la scrittura dell'esito sul reso era caduta
+   * (vedi `bonificiRimastiSoloSullOrdine`). La riga e' ricostruita dall'ordine.
+   */
+  soloSullOrdine?: boolean;
 }
 
 /** Una riga di `bonifici_dei_reclami` (migrazione 162). */
@@ -123,6 +128,12 @@ export interface VoceDaBonificare {
    * Per un reclamo sempre: la sua riga la scrive solo il server (162).
    */
   confermataDallOrdine: boolean;
+  /**
+   * Il rimborso e' partito ma il reso non lo porta ancora scritto (riesame del 16/10, quarto
+   * giro): la voce viene dall'ordine. Segnando il bonifico — o scrivendo l'IBAN — il rimborso si
+   * registra anche sul reso.
+   */
+  daRegistrareSulReso?: boolean;
 }
 
 /** Quello che serve dell'ordine per riconoscere un bonifico registrato dal server. */
@@ -221,6 +232,73 @@ export function bonificoDelResoGiaSullOrdine(
   return null;
 }
 
+/**
+ * Gli stati di un reso su cui il rimborso puo' essere gia' partito: approvato (in `decide` il
+ * rimborso esce subito), in viaggio, ricevuto, rimborsato (in `avanza` lo stato si scrive prima).
+ */
+export const STATI_DEL_RESO_COL_RIMBORSO_FORSE_PARTITO = ['APPROVED', 'SHIPPED_BACK', 'RECEIVED', 'REFUNDED'] as const;
+
+/** Un reso senza il segno del rimborso, come lo legge la lista dei bonifici. */
+export interface ResoSenzaSegno extends Omit<RigaDelReso, 'soloSullOrdine'> {
+  status: string | null;
+}
+
+/**
+ * LA SCRITTURA CHE ERA CADUTA (riesame del 16/10, quarto giro).
+ *
+ * In `decide` e in `avanza` il rimborso si registra sull'ordine dentro `refundOrder` — nello
+ * stesso aggiornamento che scrive «rimborsato» — e solo dopo, con una scrittura a parte, sul reso.
+ * Se quella cade, l'ordine porta `bonifico:<centesimi>:return_<id del reso>` e il reso niente.
+ * Qui c'e' la scrittura mancante, la stessa che la rotta avrebbe fatto: reso rimborsato, col segno
+ * e la cifra del bonifico. `null` se il reso il segno ce l'ha, o se l'ordine non porta nessun
+ * bonifico di questo reso (allora non c'e' niente da registrare: il rimborso non e' partito).
+ */
+export function registrazioneMancanteDelBonifico(
+  reso: { id: string; status: string | null; refund_id: string | null },
+  ordine: Pick<OrdineDelBonifico, 'stripe_refund_id'> | null | undefined,
+): { status: 'REFUNDED'; refund_id: string; refund_bonifico_cents: number } | null {
+  if (reso.refund_id) return null;
+  if (!(STATI_DEL_RESO_COL_RIMBORSO_FORSE_PARTITO as readonly string[]).includes(String(reso.status))) return null;
+  const sullOrdine = bonificoDelResoGiaSullOrdine(reso.id, ordine);
+  if (!sullOrdine) return null;
+  return { status: 'REFUNDED', refund_id: sullOrdine.segno, refund_bonifico_cents: sullOrdine.centesimi };
+}
+
+/**
+ * I BONIFICI CHE STANNO SOLO SULL'ORDINE (riesame del 16/10, quarto giro).
+ *
+ * La lista dei bonifici cercava il segno sul reso, e basta: se la scrittura sul reso era caduta,
+ * il bonifico non c'era. L'ordine diceva «rimborsato», al negozio la quota era gia' stata ripresa,
+ * e a chi paga restava solo un avviso nella campanella — che per giunta mandava a questa lista.
+ * Adesso la lista legge anche i resi senza segno e li confronta con l'elenco dei rimborsi
+ * dell'ordine (lo scrive solo il server, nello stesso passo dei conti): dove l'ordine porta il
+ * bonifico di quel reso, la voce c'e', con la cifra dell'ordine e l'IBAN del reso.
+ */
+export function bonificiRimastiSoloSullOrdine(
+  resi: readonly ResoSenzaSegno[],
+  ordini: readonly OrdineDelBonifico[],
+): RigaDelReso[] {
+  const ordinePer = new Map(ordini.map((o) => [o.id, o]));
+  const righe: RigaDelReso[] = [];
+  for (const r of resi) {
+    const mancante = registrazioneMancanteDelBonifico(r, ordinePer.get(r.order_id));
+    if (!mancante) continue;
+    righe.push({
+      id: r.id,
+      order_id: r.order_id,
+      refund_amount_cents: r.refund_amount_cents,
+      refunded_at: r.refunded_at,
+      refund_iban: r.refund_iban,
+      refund_intestatario: r.refund_intestatario,
+      refund_bonifico_fatto_at: r.refund_bonifico_fatto_at,
+      refund_id: mancante.refund_id,
+      refund_bonifico_cents: mancante.refund_bonifico_cents,
+      soloSullOrdine: true,
+    });
+  }
+  return righe;
+}
+
 /** Dai resi e dai reclami alla lista: prima quelli da fare, poi i piu' recenti. */
 export function vociDeiBonificiDaFare(
   righe: readonly RigaDelReso[],
@@ -243,6 +321,7 @@ export function vociDeiBonificiDaFare(
       fattoIl: r.refund_bonifico_fatto_at ?? null,
       daFare: !r.refund_bonifico_fatto_at,
       confermataDallOrdine: bonificoRegistratoSullOrdine(r, ordinePer.get(r.order_id)),
+      ...(r.soloSullOrdine ? { daRegistrareSulReso: true } : {}),
     }));
   const daiReclami: VoceDaBonificare[] = reclami
     .filter((r) => Number(r.importo_cents ?? 0) > 0)
@@ -284,9 +363,15 @@ export function vociDeiBonificiDaFare(
  *    si tiene a parte. «Scrivilo qui» solo dove il campo c'e'.
  */
 export function cosaDiceLaVoce(
-  voce: Pick<VoceDaBonificare, 'daFare' | 'iban' | 'confermataDallOrdine'>,
+  voce: Pick<VoceDaBonificare, 'daFare' | 'iban' | 'confermataDallOrdine' | 'daRegistrareSulReso'>,
   migrazione162: boolean,
-): { daControllare: string | null; alPostoDellIban: string | null; campoPerLIban: boolean } {
+): {
+  daControllare: string | null;
+  alPostoDellIban: string | null;
+  campoPerLIban: boolean;
+  /** Riesame del 16/10, quarto giro: il rimborso non e' ancora scritto sul reso. */
+  sulReso: string | null;
+} {
   const campoPerLIban = voce.daFare && !voce.iban && migrazione162;
   let alPostoDellIban: string | null = null;
   if (!voce.iban) {
@@ -306,6 +391,10 @@ export function cosaDiceLaVoce(
         : null,
     alPostoDellIban,
     campoPerLIban,
+    sulReso:
+      voce.daFare && voce.daRegistrareSulReso
+        ? "Il rimborso è partito ma sul reso non si era registrato: la cifra viene dall'ordine. Quando segni il bonifico fatto, lo registriamo anche sul reso."
+        : null,
   };
 }
 
@@ -388,8 +477,11 @@ export function avvisoDelRimborsoNonRegistrato(r: {
       `Il rimborso del reso ${r.resoId} (ordine ${ordine}) è partito, ma il database non ha registrato l'esito sul reso` +
       (r.refundId ? ` (riferimento ${r.refundId})` : '') +
       '. ' +
+      // Riesame del 16/10, quarto giro — la lista legge il bonifico anche dall'ordine, che lo porta
+      // gia' scritto: la voce c'e', e «Bonifico fatto» registra il rimborso anche sul reso. Prima
+      // questo avviso mandava alla lista dicendo che li' il bonifico non c'era.
       (bonifico
-        ? `Dentro c'è un bonifico di ${formatPriceFromCents(r.bonificoCents)} da fare al cliente: NON compare nella lista dei bonifici da fare finché il reso non è registrato. Fallo da qui e scrivi sul reso il riferimento.`
+        ? `Dentro c'è un bonifico di ${formatPriceFromCents(r.bonificoCents)} da fare al cliente: lo trovi nella lista dei bonifici da fare, presa dall'ordine. Quando lo segni fatto, il rimborso si registra anche sul reso.`
         : 'Scrivi sul reso il riferimento del rimborso, così i conti tornano.'),
     link: bonifico ? '/admin/rimborsi-da-bonificare' : '/admin/orders',
   };

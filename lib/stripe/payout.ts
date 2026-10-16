@@ -27,6 +27,7 @@ import {
 } from '@/lib/rimborsi/regole-del-rimborso';
 import { PAGINA_DEI_BONIFICI_DA_FARE, type ComeTornanoIContanti } from '@/lib/rimborsi/scelta-del-reso';
 import { eUnBonificoDiRimborso, segnoDelBonifico } from '@/lib/rimborsi/bonifici-da-fare';
+import { linkAlControlloDelCredito } from '@/lib/rimborsi/credito-da-controllare';
 // 16/10 (terzo riesame) — la stessa domanda dell'annullo e del giro degli ordini scaduti: una casa sola.
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
 
@@ -1367,8 +1368,11 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
         '⚠️ Rimborso col credito da controllare',
         `Il rimborso sull'ordine #${order.id.slice(0, 8)} è registrato: ${formatPriceFromCents(riparto.creditoCents)} di credito MyCity al cliente. ` +
           'Il diario del credito in quel momento non ha risposto, quindi la cifra uscita non è stata verificata. ' +
-          `Controlla che la riga «cod_refund» con riferimento ${chiave} dica ${formatPriceFromCents(riparto.creditoCents)}.`,
-        '/admin/orders',
+          `Apri il controllo: legge la riga del diario con riferimento ${chiave} e ti dice se dice ${formatPriceFromCents(riparto.creditoCents)}.`,
+        // Riesame del 16/10, quarto giro — portava a /admin/orders, dove il diario del credito non
+        // si vede: il controllo chiesto si poteva fare solo dal database. Adesso porta alla pagina
+        // che lo fa (lib/rimborsi/credito-da-controllare.ts).
+        linkAlControlloDelCredito(chiave, riparto.creditoCents),
       );
     } catch (e) {
       logger.error('[refundOrder] avviso del credito da controllare non inviato', { orderId: order.id, e });

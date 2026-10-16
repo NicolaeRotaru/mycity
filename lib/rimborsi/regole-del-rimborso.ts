@@ -257,13 +257,30 @@ export function ripartoDelRimborso(
  * scrive 30 € pensando ai contanti. `ripartoDelRimborso` li divide in
  * proporzione: 12 € tornano come credito e 18 € col bonifico. Il pannello lo
  * diceva solo dopo, nell'avviso del bonifico da fare. Qui si calcola con la
- * stessa regola e la stessa scelta della rotta dei reclami (bonifico), sulla
- * cifra che `refundOrder` usera' davvero (al massimo il rimborsabile).
+ * stessa regola e la stessa scelta della rotta dei reclami (bonifico).
  * Restituisce la frase, o `null` quando non c'e' niente da dividere.
+ *
+ * Riesame del 16/10, quarto giro — OLTRE IL MASSIMO NON SI DIVIDE NIENTE.
+ * Qui la cifra si tagliava al rimborsabile e si descriveva la divisione del
+ * taglio: con 10 € rimborsabili e 30 scritti, la frase diceva «Di 10,00 €, 4,00
+ * tornano come credito…», mentre la rotta dei reclami (resolve) rifiuta con un
+ * errore qualunque cifra sopra il massimo. Chi decide leggeva la descrizione di
+ * un rimborso che non sarebbe partito. Adesso, sopra il massimo, la frase dice
+ * questo e basta — per qualunque ordine, come la rotta. Sotto il massimo, la
+ * divisione resta quella che `refundOrder` usera'.
  */
 export function comeSiDivideIlReclamo(ordine: OrdineDaRimborsare, importoCents: number): string | null {
-  const importo = Math.min(Math.round(importoCents), quantoSiPuoRestituire(ordine).massimoCents);
+  const importo = Math.round(importoCents);
   if (!(importo > 0)) return null;
+  const rimborsabile = quantoSiPuoRestituire(ordine);
+  // Niente da restituire: il riquadro sopra il campo lo dice gia' (`pagamentoPerChiDecide`).
+  if (rimborsabile.perche !== 'ok') return null;
+  if (importo > rimborsabile.massimoCents) {
+    return (
+      `Supera il rimborsabile: al massimo ${formatPriceFromCents(rimborsabile.massimoCents)}. ` +
+      'Con questa cifra il reclamo non si chiude.'
+    );
+  }
   const riparto = ripartoDelRimborso(ordine, importo, 'BONIFICO');
   if (!riparto || riparto.modo !== 'misto') return null;
   return (

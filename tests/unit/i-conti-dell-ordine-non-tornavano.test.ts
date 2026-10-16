@@ -84,7 +84,11 @@ describe('cosa dire sul pagamento', () => {
 
   it('rimborsato: né l uno né l altro', () => {
     expect(statoPagamento({ payment_method: 'card', payment_status: 'REFUNDED' }, 2790)).toEqual({ tipo: 'rimborsato' });
-    expect(statoPagamento({ payment_method: 'cod', payment_status: 'REFUNDED' }, 2790)).toEqual({ tipo: 'rimborsato' });
+    // Riesame del 16/10, quarto giro: sui contanti «rimborsato» solo se nessun bonifico e in
+    // sospeso; finche non si sa, niente (tests/unit/la-pagina-dell-ordine-aspetta-il-bonifico.test.ts).
+    expect(statoPagamento({ payment_method: 'cod', payment_status: 'REFUNDED' }, 2790, { daFareCents: 0, serveIban: false, certo: true }))
+      .toEqual({ tipo: 'rimborsato' });
+    expect(statoPagamento({ payment_method: 'cod', payment_status: 'REFUNDED' }, 2790)).toEqual({ tipo: 'non-lo-so' });
   });
 
   it('se non so come è stato pagato, non dico niente', () => {
