@@ -25,7 +25,7 @@ import { leggiNegozioDelMese } from '@/lib/queries/negozio-del-mese';
 import { leggiSuggerimentiRicerca } from '@/lib/queries/suggerimenti-ricerca';
 import { leggiProdottoPerMetadati, leggiNegozioPerAnteprima, prodottoDaIndicizzare } from '@/lib/queries/metadati-vetrina';
 import { dimenticaLettureDeiMetadati } from '@/lib/supabase/lettura-per-metadati';
-import { leggiVendutoDa } from '@/lib/queries/venduto-da';
+import { leggiVendutoDa, dimenticaLaVistaSenza126 } from '@/lib/queries/venduto-da';
 
 /**
  * 15/10/2026 (R3) — QUANDO SI CHIUDE LA LETTURA DEI PROFILI, LA VETRINA DEVE RESTARE IN PIEDI.
@@ -141,6 +141,9 @@ function db(mondo: Mondo, chi: string | null, rpcs?: Parameters<typeof databaseC
 
 beforeEach(() => {
   dimenticaLettureDeiMetadati();
+  // 16/10/2026 — il «no» della vista senza la 126 si ricorda per dieci minuti: ogni prova parte
+  // da un processo che non ha ancora chiesto niente, come le prove di un mondo diverso pretendono.
+  dimenticaLaVistaSenza126();
   logger.warn.mockClear();
   logger.error.mockClear();
 });

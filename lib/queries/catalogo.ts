@@ -117,46 +117,70 @@ export function domandaCategorie(supa: ClientDiLettura) {
   };
 }
 
+/** La riga del prodotto, senza il negozio. `null` se il prodotto non c'e' (o chi guarda non lo vede). */
+export type RigaDelProdotto = Omit<SchedaProdotto, 'profiles'>;
+
 /**
- * La scheda di un prodotto.
+ * La riga del prodotto, letta da sola.
  *
  * `maybeSingle()` e non `single()`: «non c'e'» e «non riesco a leggerlo» sono
  * due cose diverse, e con `single()` un prodotto cancellato diventava un errore
  * di rete con un pulsante «Riprova» che non poteva funzionare.
  */
+export async function leggiRigaDelProdotto(supa: ClientDiLettura, id: string): Promise<RigaDelProdotto | null> {
+  const { data, error } = await supa
+    .from('products')
+    .select(COLONNE_SCHEDA_PRODOTTO)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  // Il collegamento alla categoria e' uno a uno: PostgREST lo restituisce
+  // come oggetto, ma con le colonne elencate per nome i tipi generati lo
+  // descrivono come elenco. Si dichiara la forma vera.
+  return (data as unknown as RigaDelProdotto | null) ?? null;
+}
+
+/**
+ * La scheda come la vuole la pagina: il prodotto con il suo negozio.
+ *
+ * Scritta una volta sola perche' la usano due strade — il browser
+ * (`domandaProdotto`) e il guscio del server, che il negozio lo legge insieme a
+ * «Venduto da» — e la risposta deve avere la STESSA forma: dal negozio si prendono
+ * solo i cinque campi della scheda, qualunque altra colonna abbia la riga.
+ */
+export function schedaColNegozio(
+  prodotto: RigaDelProdotto,
+  negozio: { id?: unknown; store_name?: unknown; is_approved?: unknown; offers_express?: unknown; store_hours?: unknown } | null,
+): SchedaProdotto {
+  return {
+    ...prodotto,
+    profiles: negozio
+      ? {
+          id: (negozio.id ?? prodotto.seller_id) as string,
+          store_name: (negozio.store_name ?? null) as string | null,
+          is_approved: (negozio.is_approved ?? null) as boolean | null,
+          offers_express: (negozio.offers_express ?? null) as boolean | null,
+          store_hours: negozio.store_hours ?? null,
+        }
+      : null,
+  };
+}
+
+/**
+ * La scheda di un prodotto, come la chiede il browser.
+ *
+ * Il negozio arriva dalla vista pubblica, non da `profiles` (R3). Se la vista
+ * non risponde la scheda fallisce e la pagina offre «Riprova»: dire «il negozio
+ * non e' operativo» a un negozio che lo e' sarebbe una bugia.
+ */
 export function domandaProdotto(supa: ClientDiLettura, id: string) {
   return {
     queryKey: queryKeys.products.detail(id),
     queryFn: async (): Promise<SchedaProdotto | null> => {
-      const { data, error } = await supa
-        .from('products')
-        .select(COLONNE_SCHEDA_PRODOTTO)
-        .eq('id', id)
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) return null;
-      // Il collegamento alla categoria e' uno a uno: PostgREST lo restituisce
-      // come oggetto, ma con le colonne elencate per nome i tipi generati lo
-      // descrivono come elenco. Si dichiara la forma vera.
-      const prodotto = data as unknown as Omit<SchedaProdotto, 'profiles'>;
-
-      // Il negozio dalla vista pubblica, non da `profiles` (R3). Se la vista non
-      // risponde la scheda fallisce e la pagina offre «Riprova»: dire «il negozio
-      // non e' operativo» a un negozio che lo e' sarebbe una bugia.
+      const prodotto = await leggiRigaDelProdotto(supa, id);
+      if (!prodotto) return null;
       const negozi = await fetchSellerPublicMap(supa, [prodotto.seller_id], COLONNE_NEGOZIO_DELLA_SCHEDA);
-      const negozio = negozi.get(prodotto.seller_id) ?? null;
-      return {
-        ...prodotto,
-        profiles: negozio
-          ? {
-              id: negozio.id,
-              store_name: negozio.store_name ?? null,
-              is_approved: negozio.is_approved ?? null,
-              offers_express: negozio.offers_express ?? null,
-              store_hours: negozio.store_hours ?? null,
-            }
-          : null,
-      };
+      return schedaColNegozio(prodotto, negozi.get(prodotto.seller_id) ?? null);
     },
   };
 }

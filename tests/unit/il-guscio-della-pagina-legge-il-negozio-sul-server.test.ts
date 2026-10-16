@@ -119,8 +119,11 @@ let orologio = Date.UTC(2026, 9, 15, 10, 0, 0);
 beforeEach(() => {
   // La lettura dei metadati tiene la risposta in memoria due secondi: fra un mondo e l'altro
   // l'orologio va avanti, cosi' ogni prova legge il suo database e non quello della prova prima.
+  // 16/10/2026 — anche il «no» della vista senza la 126 si ricorda, per dieci minuti
+  // (`leggiNegozioDallaVista`), e il guscio compilato ha la sua copia di quella memoria: il passo
+  // e' di un'ora, cosi' ogni prova parte da un processo che non ha ancora chiesto niente.
   vi.useFakeTimers({ toFake: ['Date'] });
-  orologio += 60_000;
+  orologio += 60 * 60_000;
   vi.setSystemTime(orologio);
   avvisi = [];
   vi.spyOn(console, 'warn').mockImplementation((riga: unknown) => {

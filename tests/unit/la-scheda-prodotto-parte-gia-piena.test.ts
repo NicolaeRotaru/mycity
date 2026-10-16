@@ -77,12 +77,15 @@ vi.mock('@/lib/supabase/anonimo', () => ({
           : tabella === 'seller_public_profiles'
             ? { data: [NEGOZIO], error: null }
             : { data: CATEGORIE, error: null };
+        // 16/10/2026 — `maybeSingle` risponde con UNA riga, come PostgREST: il guscio adesso chiede il
+        // negozio cosi' (insieme a «Venduto da»), e un elenco al posto della riga non e' una risposta vera.
+        const una = tabella === 'seller_public_profiles' ? { data: NEGOZIO, error: null } : risposta;
         const catena: Record<string, unknown> = {
           select: () => catena,
           eq: () => catena,
           is: async () => risposta,
           in: async () => risposta,
-          maybeSingle: async () => risposta,
+          maybeSingle: async () => una,
         };
         return catena;
       },
