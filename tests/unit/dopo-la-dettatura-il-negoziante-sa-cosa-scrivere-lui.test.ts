@@ -216,6 +216,9 @@ describe('nel modulo vero, con la rotta vera della dettatura', () => {
     runMessageMock.mockResolvedValue({ toolInput: { reply, patch } });
 
   it('la focaccia: il modello ubbidisce e lascia fuori il sesamo, e il negoziante vede la frase fissa, il dettato e la risposta', async () => {
+    // L'orologio e' finto da prima della dettatura: un avviso a tempo partito
+    // dopo la risposta scadrebbe quando qui sotto si mandano avanti i minuti.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     ilModelloRisponde(UBBIDIENTE);
     const s = await detta(DETTATO, FOCACCIA);
 
@@ -237,7 +240,6 @@ describe('nel modulo vero, con la rotta vera della dettatura', () => {
     expect(campo(s, 'Allergeni')?.value).toBe('glutine');
 
     // Non e' un avviso a tempo: passano cinque minuti ed e' ancora li'.
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'] });
     s.agisci(() => vi.advanceTimersByTime(5 * 60_000));
     expect(avviso(s), 'l avviso e sparito prima che il negoziante lo chiudesse').toContain(FRASE_ALIMENTI);
     expect(avvisi.toast.success, 'la dettatura e tornata a un avviso a tempo').not.toHaveBeenCalled();
