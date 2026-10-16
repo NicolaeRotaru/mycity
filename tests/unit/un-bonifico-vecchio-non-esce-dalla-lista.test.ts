@@ -13,7 +13,9 @@ import { TETTO_DEI_BONIFICI_DA_FARE, TETTO_DEI_BONIFICI_FATTI } from '@/lib/rimb
  * l'ordine diceva gia' «rimborsato». Lo stesso per i bonifici dei reclami.
  *
  * Il finto database qui applica davvero i filtri e il tetto; le righe stanno nell'ordine in cui il
- * database le darebbe (dalla piu' recente), cosi' il tetto taglia proprio quella vecchia.
+ * database le darebbe (dalla piu' recente), cosi' il tetto taglia proprio quella vecchia. I
+ * bonifici gia' pagati sono uno in piu' del tetto della lista: se la lettura dei «da fare» torna a
+ * prendere anche quelli fatti, il debito vecchio esce dalla finestra qualunque sia il tetto.
  */
 
 const finto = vi.hoisted(() => ({ db: null as unknown as FintoDatabase }));
@@ -57,6 +59,9 @@ const reclamoDimenticato: Riga = {
   registrato_at: giorno(0), fatto_at: null, iban: null, intestatario: null,
 };
 
+/** Piu' bonifici pagati dopo quello dimenticato di quanti la lista ne legga in una volta. */
+const PAGATI_DOPO = TETTO_DEI_BONIFICI_DA_FARE + 1;
+
 const leggi = async () => {
   const res = await GET(new Request('http://localhost/api/admin/rimborsi-da-bonificare') as never, undefined as never);
   return { status: res.status, corpo: await res.json() };
@@ -64,13 +69,13 @@ const leggi = async () => {
 
 beforeEach(() => {
   finto.db = creaFintoDatabase({
-    returns: [...resiPagati(200), dimenticato],
-    bonifici_dei_reclami: [...reclamiPagati(200), reclamoDimenticato],
+    returns: [...resiPagati(PAGATI_DOPO), dimenticato],
+    bonifici_dei_reclami: [...reclamiPagati(PAGATI_DOPO), reclamoDimenticato],
   });
 });
 
 describe('i bonifici da fare non escono dalla lista', () => {
-  it('dopo 200 bonifici pagati, il reso da 18 € e il reclamo da 25 € ci sono ancora', async () => {
+  it('dopo piu bonifici pagati del tetto della lista, il reso da 18 € e il reclamo da 25 € ci sono ancora', async () => {
     const { status, corpo } = await leggi();
     expect(status).toBe(200);
     const daFare = (corpo.voci as Array<{ id: string; daFare: boolean }>).filter((v) => v.daFare).map((v) => v.id);
