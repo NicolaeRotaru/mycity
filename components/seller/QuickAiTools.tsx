@@ -48,7 +48,7 @@ const LANGS: { code: string; label: string }[] = [
 ];
 
 /** Nessun suggerimento arrivato: niente scritto e niente in sospeso. */
-const NIENTE: EsitoPatchModulo = { cambiati: [], inSospeso: 0, daRivedere: {} };
+const NIENTE: EsitoPatchModulo = { cambiati: [], inSospeso: 0, daControllare: [], daRivedere: {} };
 
 const SEV_COLOR: Record<string, string> = {
   alta: 'bg-rose-100 text-rose-700',
@@ -134,7 +134,8 @@ export default function QuickAiTools({
     const esito = onApplyPatch(diag.patch);
     dilloDopoIlPatch(esito, { applicato: 'Correzioni applicate al form — controlla e salva', niente: 'Niente da applicare' });
     // Quello che e' entrato nel modulo non si riapplica; le proposte (allergeni,
-    // ingredienti…) restano, cosi' si ritrovano quando l'avviso e' sparito.
+    // ingredienti…) restano, cosi' si rimettono nel riquadro «Da controllare»
+    // se il negoziante le ha tolte.
     setDiag((d) => (d ? { ...d, patch: esito.daRivedere } : d));
     setDiagApplicata(true);
   };

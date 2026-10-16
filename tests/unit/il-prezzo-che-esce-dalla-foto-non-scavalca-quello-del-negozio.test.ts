@@ -143,10 +143,18 @@ describe('nel modulo del prodotto il campo prezzo ha una porta sola', () => {
     const piani = nomiDeiPiani(sorgente);
     expect(rifiuti.length + piani.length).toBeGreaterThanOrEqual(2);
 
-    // Nel piano il prezzo scartato sta in `avvisi`: quel campo va mostrato.
+    // Nel piano il prezzo scartato sta in `avvisi`, e da li' nelle righe del
+    // riquadro «Da controllare» (`daControllare`, 16/10/2026): uno dei due
+    // campi va mostrato. Che il motivo arrivi davvero a video lo guarda, col
+    // modulo montato, le-proposte-dell-assistente-restano-finche-decidi-tu.test.ts.
+    const scartato = pianoPatchPerIlModulo(
+      { price: 2 },
+      { prezzoAttuale: 20, categorie: [], categoriaAttuale: null, modo: 'edit' },
+    );
+    expect(scartato.daControllare.map((v) => v.motivo)).toEqual(scartato.avvisi);
     for (const piano of piani) {
       expect(
-        new RegExp(`\\b${piano}\\.avvisi\\b`).test(sorgente),
+        new RegExp(`\\b${piano}\\.(avvisi|daControllare)\\b`).test(sorgente),
         `«${piano}.avvisi» non viene mai letto: il negoziante non sa che il prezzo proposto è stato scartato`,
       ).toBe(true);
     }

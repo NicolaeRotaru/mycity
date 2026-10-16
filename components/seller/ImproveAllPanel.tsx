@@ -142,14 +142,19 @@ export default function ImproveAllPanel({
     dilloDopoIlPatch(fatto, TESTI_APPLICA);
   };
 
-  // Riapre gli avvisi delle proposte (allergeni, ingredienti…) dopo che sono
-  // spariti. `daRivedere` contiene solo dichiarazioni: il modulo non scrive niente.
+  // Rimette nel riquadro «Da controllare» le proposte (allergeni, ingredienti…)
+  // che il negoziante ha tolto. `daRivedere` contiene solo dichiarazioni: il
+  // modulo non scrive niente.
   const rivedi = () => {
     if (!esito || !restaDaRivedere(esito.daRivedere)) return;
     dilloDopoIlPatch(onApplyPatch(esito.daRivedere), TESTI_APPLICA);
   };
 
-  const dopoApplica = esito ? avvisoDopoIlPatch(esito, { ...TESTI_APPLICA, applicato: 'Applicato al form — controlla e salva' }) : null;
+  // La frase in fondo al pannello resta li' finche' il pannello e' aperto: non
+  // rimanda a un avviso a tempo, scrive subito sotto cosa NON e' entrato.
+  const dopoApplica = esito
+    ? avvisoDopoIlPatch(esito, { ...TESTI_APPLICA, applicato: 'Applicato al form — controlla e salva' }, 'qui-sotto')
+    : null;
 
   const hasPatch = !!result && Object.keys(result.patch ?? {}).length > 0;
   const delta = result ? result.quality.after - result.quality.before : 0;
@@ -317,6 +322,16 @@ export default function ImproveAllPanel({
                 >
                   Rivedi le proposte
                 </button>
+              )}
+              {esito.daControllare.length > 0 && (
+                <ul className="basis-full space-y-1">
+                  {esito.daControllare.map((v) => (
+                    <li key={v.id} className="flex gap-1.5 text-xs text-ink-700">
+                      <AlertCircle size={13} className="mt-0.5 shrink-0 text-accent-700" aria-hidden />
+                      {v.motivo}
+                    </li>
+                  ))}
+                </ul>
               )}
             </>
           ) : (

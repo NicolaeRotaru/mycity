@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Sparkles, Loader2, Send, X, Check } from 'lucide-react';
+import { Sparkles, Loader2, Send, X, Check, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import type { AttributeField } from '@/lib/category-attributes';
-import type { EsitoPatchModulo } from '@/lib/products/aiPatch';
+import { messaggioDellaChatDopoIlPatch, type EsitoPatchModulo } from '@/lib/products/aiPatch';
 
 /**
  * Assistente AI in chat per modificare la scheda prodotto.
@@ -61,7 +61,12 @@ type ChatMessage = {
   content: string;
   /** true quando il turno assistant ha applicato modifiche al form. */
   applied?: boolean;
+  /** Le righe fisse sotto la bolla: cosa della proposta NON e' entrato nella scheda. */
+  nonScritto?: string[];
 };
+
+/** Nessun patch arrivato: niente scritto e niente da controllare. */
+const NIENTE: Pick<EsitoPatchModulo, 'cambiati' | 'daControllare'> = { cambiati: [], daControllare: [] };
 
 type Props = {
   product: ProductChatSnapshot;
@@ -122,12 +127,15 @@ export default function ProductChatAssistant({
       if (!res.ok) throw new Error(apiErrorMessage(json, 'Errore'));
 
       const patch: ProductEditPatch = json.patch ?? {};
-      const changed = Object.keys(patch).length > 0 ? onApplyPatch(patch).cambiati : [];
+      const esito = Object.keys(patch).length > 0 ? onApplyPatch(patch) : NIENTE;
+      // Cosa dire lo decide quello che il modulo ha fatto, non il modello: se
+      // una parte della proposta non e' entrata, le sue parole non si mostrano.
+      const msg = messaggioDellaChatDopoIlPatch(json.reply ?? 'Fatto.', esito);
       setMessages((prev) => [
         ...prev,
-        { role: 'assistant', content: json.reply ?? 'Fatto.', applied: changed.length > 0 },
+        { role: 'assistant', content: msg.testo, applied: msg.aggiornato, nonScritto: msg.nonScritto },
       ]);
-      if (changed.length > 0) toast.success('Campi aggiornati nel form');
+      if (msg.aggiornato) toast.success('Campi aggiornati nel form');
     } catch (err) {
       toast.error(friendlyError(err));
       setMessages((prev) => [
@@ -189,6 +197,16 @@ export default function ProductChatAssistant({
                 <span className="mt-1 flex items-center gap-1 text-xs font-semibold text-emerald-600">
                   <Check size={12} strokeWidth={2.6} aria-hidden /> Campi aggiornati nel form
                 </span>
+              )}
+              {m.nonScritto && m.nonScritto.length > 0 && (
+                <ul className="mt-1.5 space-y-1 border-t border-accent-200 pt-1.5">
+                  {m.nonScritto.map((riga, j) => (
+                    <li key={j} className="flex gap-1 text-xs font-semibold text-accent-800">
+                      <AlertCircle size={12} strokeWidth={2.6} className="mt-0.5 shrink-0" aria-hidden />
+                      <span>{riga}</span>
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           </div>

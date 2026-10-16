@@ -222,6 +222,19 @@ export function motivoDichiarazioneRifiutata(s: DichiarazioneScartata): string {
  */
 export const REGOLA_CAMPI_DICHIARATIVI = `CAMPI CHE NON TOCCHI MAI: ${CAMPI_DICHIARATIVI.join(', ')}. Sono la dichiarazione del venditore su un alimento (allergeni, ingredienti e simili): non compilarli, non cambiarli e non toglierli, nemmeno se ti sembrano ovvi dal nome o dalla foto. Se mancano, dillo al venditore e lascia che li scriva lui nella scheda del prodotto.`;
 
+/**
+ * 16/10/2026 — La riga di un attributo nell'elenco «attributi validi» che va al
+ * modello. Le dichiarazioni restano nell'elenco (il modello deve sapere che il
+ * campo esiste, per dire al venditore che manca) ma segnate in sola lettura,
+ * come fa gia' la chat Assistenza: senza il segno, l'elenco diceva al modello
+ * «queste sono le chiavi da usare», allergeni compresi.
+ */
+export function rigaAttributoPerIlModello(f: { key: string; type?: string; options?: string[] }): string {
+  const opts = f.options && f.options.length ? ` [opzioni: ${f.options.join(', ')}]` : '';
+  const sola = eCampoDichiarativo(f.key) ? ' [SOLO LETTURA: lo dichiara il venditore]' : '';
+  return `- ${f.key} (${f.type ?? 'text'})${opts}${sola}`;
+}
+
 /** Risolve slug categoria (+ nome sottocategoria) → category_id a due livelli. */
 function resolveCategoryId(
   categories: CategoryRow[],
@@ -380,6 +393,12 @@ export type PianoPatchModulo = {
   /** Le dichiarazioni proposte: avviso lungo, col valore da usare se il campo esiste. */
   proposte: { chiave: string; motivo: string; valore?: string | boolean }[];
   /**
+   * Tutto quello che il modulo NON ha scritto — `avvisi` e `proposte` insieme —
+   * nella forma in cui resta a video nel riquadro «Da controllare» finche' il
+   * negoziante non decide. Vedi `VoceDaControllare`.
+   */
+  daControllare: VoceDaControllare[];
+  /**
    * Il pezzo del suggerimento che il modulo non scrive MAI — le dichiarazioni
    * (allergeni, ingredienti…) da scrivere o da togliere — rimesso in forma di
    * patch. Ripassato al modulo riapre gli stessi avvisi, col pulsante «Usa
@@ -388,6 +407,47 @@ export type PianoPatchModulo = {
    */
   daRivedere: AiProductPatch;
 };
+
+/**
+ * 16/10/2026 — UNA COSA CHE L'ASSISTENTE PROPONEVA E CHE NELLA SCHEDA NON E'
+ * ENTRATA, finche' il negoziante non decide.
+ *
+ * Prima ognuna era un avviso a comparsa con il suo orologio (15 secondi il
+ * prezzo, 60 le dichiarazioni). La libreria degli avvisi ne mostra tre alla
+ * volta: un codice a barre che portava allergeni, ingredienti, valori
+ * nutrizionali e origine apriva cinque avvisi, e quelli in coda scadevano senza
+ * essere mai comparsi, col loro «Usa questo valore». E le frasi fisse dei
+ * pannelli («guarda l'avviso») rimandavano a un avviso che dopo un minuto non
+ * c'era piu'.
+ *
+ * Adesso ogni cosa non scritta e' una riga del riquadro «Da controllare» nel
+ * modulo: resta finche' il negoziante non preme «Usa questo valore» o la toglie
+ * lui. `id` e' stabile: la stessa proposta ripassata (per esempio con «Rivedi
+ * le proposte») prende il posto della vecchia invece di raddoppiare, e un nuovo
+ * prezzo scartato prende il posto del vecchio.
+ */
+export type VoceDaControllare = {
+  id: string;
+  /** Cosa non e' stato scritto e perche', come lo legge il negoziante. */
+  motivo: string;
+  /** Solo se il campo esiste nella categoria: c'e' il pulsante «Usa questo valore». */
+  chiave?: string;
+  valore?: string | boolean;
+};
+
+/** Le righe vecchie restano, quelle con lo stesso `id` lasciano il posto alle nuove. */
+export function unisciVociDaControllare(
+  prima: VoceDaControllare[],
+  nuove: VoceDaControllare[],
+): VoceDaControllare[] {
+  // Anche dentro le nuove vince l'ultima: un id compare una volta sola.
+  const ultime = new Map<string, VoceDaControllare>();
+  for (const v of nuove) {
+    ultime.delete(v.id);
+    ultime.set(v.id, v);
+  }
+  return [...prima.filter((v) => !ultime.has(v.id)), ...ultime.values()];
+}
 
 /**
  * Le dichiarazioni del suggerimento, rimesse in forma di patch con la chiave del
@@ -511,12 +571,32 @@ export function pianoPatchPerIlModulo(
     scritture.push({ campo: 'status', valore: patch.status, etichetta: 'stato' });
   }
 
+  const proposteDelModulo = proposte.map((p) => ({ chiave: p.chiave, ...propostaPerIlModulo(p, fields) }));
+  // Il prezzo scartato ha un posto solo nel riquadro: un altro prezzo scartato
+  // dopo prende il suo posto.
+  const motivoPrezzo =
+    typeof proposta.price === 'number' && proposta.price > 0 && patch.price === undefined
+      ? motivoPrezzoRifiutato(proposta.price, ctx.prezzoAttuale)
+      : null;
+  const daControllare = unisciVociDaControllare(
+    [],
+    [
+      ...avvisi.map((motivo) => ({ id: motivo === motivoPrezzo ? 'prezzo' : `avviso:${motivo}`, motivo })),
+      ...proposteDelModulo.map(({ chiave, motivo, valore }) =>
+        valore === undefined
+          ? { id: `proposta:${chiave}`, motivo }
+          : { id: `proposta:${chiave}`, motivo, chiave, valore },
+      ),
+    ],
+  );
+
   return {
     patch,
     scritture,
     cambiati: scritture.map((s) => s.etichetta),
     avvisi,
-    proposte: proposte.map((p) => ({ chiave: p.chiave, ...propostaPerIlModulo(p, fields) })),
+    proposte: proposteDelModulo,
+    daControllare,
     daRivedere: dichiarazioniDaRivedere(proposta),
   };
 }
@@ -530,11 +610,13 @@ export type EsitoPatchModulo = {
   /** Le etichette dei campi scritti davvero. Vuoto = nella scheda non e' cambiato niente. */
   cambiati: string[];
   /**
-   * Quanti avvisi il modulo ha appena aperto per cose rimaste da decidere a
-   * mano: una dichiarazione proposta, un prezzo fuori banda, una dichiarazione
-   * che l'assistente voleva togliere. Uno per avviso.
+   * Quante cose il modulo ha lasciato da decidere a mano: una dichiarazione
+   * proposta, un prezzo fuori banda, una dichiarazione che l'assistente voleva
+   * togliere. E' il numero delle righe di `daControllare`.
    */
   inSospeso: number;
+  /** Le righe che il modulo ha appena messo nel riquadro «Da controllare». */
+  daControllare: VoceDaControllare[];
   /** Vedi `PianoPatchModulo.daRivedere`. */
   daRivedere: AiProductPatch;
 };
@@ -543,7 +625,8 @@ export type EsitoPatchModulo = {
 export function esitoDelPiano(piano: PianoPatchModulo): EsitoPatchModulo {
   return {
     cambiati: piano.cambiati,
-    inSospeso: piano.avvisi.length + piano.proposte.length,
+    inSospeso: piano.daControllare.length,
+    daControllare: piano.daControllare,
     daRivedere: piano.daRivedere,
   };
 }
@@ -563,30 +646,46 @@ export type AvvisoDopoIlPatch = {
  * 16/10/2026 — «LA SCHEDA E' GIA' A POSTO» ACCANTO A «ALLERGENI NON COMPILATO».
  *
  * Il fornaio apre la focaccia (5 €) e preme «Migliora tutto». L'assistente
- * propone gli allergeni «Glutine»: nel modulo non entrano (R41), diventano un
- * avviso col pulsante «Usa questo valore». Il modulo non ha scritto niente, e
+ * propone gli allergeni «Glutine»: nel modulo non entrano (R41), diventano una
+ * proposta col pulsante «Usa questo valore». Il modulo non ha scritto niente, e
  * il pannello leggeva «niente scritto» come «niente da fare»: diceva «Niente da
- * cambiare: la scheda e' gia' a posto» proprio mentre l'avviso chiedeva di
+ * cambiare: la scheda e' gia' a posto» proprio mentre la proposta chiedeva di
  * compilare gli allergeni. Lo stesso con un prezzo di 50 € scartato, e con la
  * diagnosi («Niente da applicare»).
  *
  * Qui si decide la frase che segue l'applicazione di un suggerimento, la stessa
  * per tutti i pulsanti dell'assistente. Ognuno porta le sue due frasi — quella
  * per «ho scritto» e quella per «non c'era niente» — e la terza, «ci sono
- * proposte da controllare», e' comune: quando restano avvisi aperti, la frase
+ * proposte da controllare», e' comune: quando restano proposte aperte, la frase
  * «niente da fare» non esce mai.
+ *
+ * Dove rimanda (16/10/2026, giro di correzione): la frase diceva «guarda
+ * l'avviso», e l'avviso spariva dopo 15 secondi mentre la frase restava fissa
+ * in fondo a «Migliora tutto». Adesso le proposte stanno nel riquadro «Da
+ * controllare», che resta finche' il negoziante non decide; e chi mostra la
+ * frase in un posto che resta (il pannello) scrive l'elenco subito sotto e
+ * chiede `dove: 'qui-sotto'`.
  */
 export function avvisoDopoIlPatch(
   esito: Pick<EsitoPatchModulo, 'cambiati' | 'inSospeso'>,
   testi: { applicato: string; niente: string },
+  dove: 'riquadro' | 'qui-sotto' = 'riquadro',
 ): AvvisoDopoIlPatch {
   const n = esito.inSospeso;
+  const rimando =
+    dove === 'qui-sotto'
+      ? n === 1
+        ? 'è scritta qui sotto'
+        : 'sono scritte qui sotto'
+      : n === 1
+        ? 'la trovi nel riquadro «Da controllare»'
+        : 'le trovi nel riquadro «Da controllare»';
   if (esito.cambiati.length > 0) {
     if (n <= 0) return { tono: 'successo', testo: testi.applicato };
     const coda =
       n === 1
-        ? "C'è anche una proposta da controllare: guarda l'avviso"
-        : `Ci sono anche ${n} proposte da controllare: guarda gli avvisi`;
+        ? `C'è anche una proposta da controllare: ${rimando}`
+        : `Ci sono anche ${n} proposte da controllare: ${rimando}`;
     return { tono: 'successo', testo: `${testi.applicato}. ${coda}` };
   }
   if (n > 0) {
@@ -594,11 +693,60 @@ export function avvisoDopoIlPatch(
       tono: 'da-controllare',
       testo:
         n === 1
-          ? "C'è una proposta da controllare: guarda l'avviso"
-          : `Ci sono ${n} proposte da controllare: guarda gli avvisi`,
+          ? `C'è una proposta da controllare: ${rimando}`
+          : `Ci sono ${n} proposte da controllare: ${rimando}`,
     };
   }
   return { tono: 'neutro', testo: testi.niente };
+}
+
+export type MessaggioDellaChat = {
+  /** Il testo della bolla dell'assistente. */
+  testo: string;
+  /** Le righe fisse sotto la bolla: cosa NON e' stato scritto nella scheda. */
+  nonScritto: string[];
+  /** Vero = la spunta «Campi aggiornati nel form»: il modulo ha scritto qualcosa. */
+  aggiornato: boolean;
+};
+
+/**
+ * 16/10/2026 — LA CHAT DICEVA «HO AGGIUNTO GLI ALLERGENI», E NEL MODULO NON
+ * C'ERANO.
+ *
+ * Il fornaio apre la Focaccia, che ha gia' gli allergeni «glutine», e scrive
+ * nella chat del prodotto «gli allergeni sono glutine e sesamo». L'assistente
+ * propone `allergeni: "glutine, sesamo"` e risponde «Fatto! Ho aggiunto gli
+ * allergeni: glutine e sesamo». Nel modulo gli allergeni non entrano (R41): il
+ * campo resta «glutine». Ma la bolla mostrava la risposta del modello cosi'
+ * com'era, e la frase restava li' anche dopo che l'avviso col valore era
+ * sparito. Lui la leggeva e salvava; il controllo prima della pubblicazione
+ * guarda solo che il campo non sia vuoto, e «glutine» basta. Un allergico al
+ * sesamo si fidava della scheda.
+ *
+ * Il modello scrive quello che vuole; quello che e' successo lo sa il modulo.
+ * Quando il modulo ha lasciato fuori qualcosa che l'assistente proponeva, le
+ * parole del modello non si mostrano: la bolla dice quali campi sono cambiati
+ * davvero, e sotto c'e' una riga fissa per ogni cosa NON scritta, con il modo
+ * di confermarla. Quando il modulo ha scritto tutto, la risposta resta quella
+ * del modello.
+ */
+export function messaggioDellaChatDopoIlPatch(
+  risposta: string,
+  esito: Pick<EsitoPatchModulo, 'cambiati' | 'daControllare'>,
+): MessaggioDellaChat {
+  const aggiornato = esito.cambiati.length > 0;
+  if (esito.daControllare.length === 0) return { testo: risposta, nonScritto: [], aggiornato };
+  return {
+    testo: aggiornato
+      ? `Campi cambiati nella scheda: ${esito.cambiati.join(', ')}. Il resto della proposta NON è stato scritto.`
+      : 'Nella scheda non è cambiato niente: la proposta NON è stata scritta.',
+    nonScritto: esito.daControllare.map((v) =>
+      v.valore === undefined
+        ? v.motivo
+        : `${v.motivo}. Se è giusto, lo confermi tu con «Usa questo valore», nel riquadro «Da controllare»`,
+    ),
+    aggiornato,
+  };
 }
 
 export function resolveAiPatch(opts: {

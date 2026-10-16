@@ -30,7 +30,9 @@ import {
   esitoDelPiano,
   patchAiPerIlForm,
   pianoPatchPerIlModulo,
+  unisciVociDaControllare,
   type EsitoPatchModulo,
+  type VoceDaControllare,
 } from '@/lib/products/aiPatch';
 import { dilloDopoIlPatch } from '@/components/seller/dilloDopoIlPatch';
 import { colonneDelPatchAi } from '@/lib/products/salvataggio-tracciato';
@@ -200,6 +202,10 @@ export default function ProductForm({
   const [scanOpen, setScanOpen] = useState(false);
   const [aiVariantsBusy, setAiVariantsBusy] = useState(false);
   const [aiPhotosBusy, setAiPhotosBusy] = useState(false);
+  // Le proposte dell'assistente rimaste fuori dalla scheda: il riquadro «Da
+  // controllare». Restano finche' il negoziante non decide (vedi applyPatch).
+  const [daControllare, setDaControllare] = useState<VoceDaControllare[]>([]);
+  const idDaControllare = useId();
   const hasVariants = variants.length > 0;
 
   // ---- Categoria a due livelli (il DB ha già parent_id) ---------------------
@@ -440,9 +446,11 @@ export default function ProductForm({
       modo: mode,
     });
     // R41 — Quello che l'assistente proponeva e non entra nei campi si dice, col
-    // valore proposto. Il prezzo fuori banda con un avviso semplice; le
-    // dichiarazioni hanno il loro avviso piu' sotto, col pulsante per usarle.
-    for (const motivo of piano.avvisi) toast.warning(motivo, { duration: 15_000 });
+    // valore proposto: una riga nel riquadro «Da controllare» per ogni cosa (il
+    // prezzo fuori banda, le dichiarazioni col pulsante per usarle). Prima era
+    // un avviso a comparsa per ognuna, a tempo: se ne vedevano tre, e le altre
+    // scadevano senza essere mai comparse.
+    setDaControllare((prima) => unisciVociDaControllare(prima, piano.daControllare));
     // Quello che segniamo qui e' solo cio' che e' passato dai filtri.
     segnaCampiDallAi(colonneDelPatchAi(piano.patch as unknown as Record<string, unknown>));
 
@@ -487,20 +495,18 @@ export default function ProductForm({
       }
     }
 
-    // R41 — Allergeni, ingredienti e le altre dichiarazioni proposte restano
-    // una PROPOSTA: un avviso che non sparisce in quattro secondi, col valore
-    // e un pulsante. Il campo si riempie solo se il negoziante lo preme.
-    for (const p of piano.proposte) {
-      const { chiave, motivo, valore } = p;
-      toast.warning(motivo, {
-        duration: 60_000,
-        ...(valore === undefined
-          ? {}
-          : { action: { label: 'Usa questo valore', onClick: () => setAttribute(chiave, valore) } }),
-      });
-    }
-
     return esitoDelPiano(piano);
+  };
+
+  // R41 — Allergeni, ingredienti e le altre dichiarazioni proposte restano una
+  // PROPOSTA: il campo si riempie solo se il negoziante preme «Usa questo
+  // valore» sulla riga, e anche allora resta davanti ai suoi occhi fino al
+  // salvataggio.
+  const togliDaControllare = (id: string) => setDaControllare((prima) => prima.filter((v) => v.id !== id));
+  const usaProposta = (voce: VoceDaControllare) => {
+    if (voce.chiave === undefined || voce.valore === undefined) return;
+    setAttribute(voce.chiave, voce.valore);
+    togliDaControllare(voce.id);
   };
 
   // ---- Codice a barre → lookup AI -------------------------------------------
@@ -735,6 +741,47 @@ export default function ProductForm({
         imageUrls={imageUrls}
         onApplyPatch={applyPatch}
       />
+
+      {daControllare.length > 0 && (
+        <section
+          aria-labelledby={`${idDaControllare}-titolo`}
+          className="rounded-lg border border-accent-200 bg-accent-50 p-3"
+        >
+          <h2 id={`${idDaControllare}-titolo`} className="text-sm font-semibold text-accent-700">
+            Da controllare
+          </h2>
+          <p className="mt-0.5 text-xs text-ink-600">
+            L&apos;assistente proponeva queste cose, ma nella scheda NON sono state scritte. Decidi tu.
+          </p>
+          <ul className="mt-2 space-y-2">
+            {daControllare.map((v, i) => (
+              <li key={v.id} className="flex flex-wrap items-center gap-2 text-sm text-ink-800">
+                <span id={`${idDaControllare}-${i}`} className="min-w-0 flex-1">
+                  {v.motivo}
+                </span>
+                {v.valore !== undefined && (
+                  <button
+                    type="button"
+                    onClick={() => usaProposta(v)}
+                    aria-describedby={`${idDaControllare}-${i}`}
+                    className="shrink-0 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-700"
+                  >
+                    Usa questo valore
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => togliDaControllare(v.id)}
+                  aria-describedby={`${idDaControllare}-${i}`}
+                  className="shrink-0 rounded-lg border border-accent-200 px-3 py-1.5 text-xs font-semibold text-accent-700 transition-colors hover:bg-accent-100"
+                >
+                  {v.valore !== undefined ? 'Non usarlo' : 'Ho capito'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <form onSubmit={makeSubmit(primaryIntent)} className="bg-white border rounded-lg p-6 space-y-4">
         <Input
