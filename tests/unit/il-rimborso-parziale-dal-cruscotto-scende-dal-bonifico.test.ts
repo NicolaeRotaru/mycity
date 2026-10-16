@@ -570,6 +570,33 @@ describe('un rimborso dal cruscotto già registrato non si conta una seconda vol
     expect(stato.suStripe[0].metadata).toMatchObject({ registrato_da_fuori: '1', order_id: 'o1' });
   });
 
+  it('IL CASO DEL RIESAME CON STRIPE CHE NON ETICHETTA — i 3 € li ricorda l ordine, e non si contano due volte', async () => {
+    stato.db.tabelle.orders = [ordineDiPaneQuotidiano()];
+    // Stripe registra i rimborsi ma non risponde quando gli si chiede l'etichetta.
+    stato.etichetteRiescono = false;
+    await rimborsoDalCruscotto(300);
+    expect(stato.suStripe[0].metadata, 'qui l etichetta non c è: la prova è che basta l ordine').toEqual({});
+
+    stato.rispostePerse = 1;
+    await expect(refundOrder({ orderId: 'o1', amountCents: 500, reason: 'reso', idempotencyKey: 'return_r1' })).rejects.toThrow();
+    await handleChargeRefunded(avvisoDiRimborso(stato.carica.refunded));
+    expect(ordine(), 'i 3 € del cruscotto registrati una seconda volta').toMatchObject({
+      refunded_amount_cents: 300, seller_payout_reversed_cents: 194,
+    });
+
+    await refundOrder({ orderId: 'o1', amountCents: 500, reason: 'reso', idempotencyKey: 'return_r1' });
+    expect(ordine().refunded_amount_cents).toBe(stato.carica.refunded);
+  });
+
+  it('l etichetta mancata si rimette al rimborso successivo dello stesso pagamento', async () => {
+    stato.db.tabelle.orders = [ordineDiPaneQuotidiano()];
+    stato.etichetteRiescono = false;
+    await rimborsoDalCruscotto(300);
+    stato.etichetteRiescono = true;
+    await rimborsoDalCruscotto(500);
+    expect(stato.suStripe.map((r) => r.metadata.registrato_da_fuori)).toEqual(['1', '1']);
+  });
+
   it('se Stripe non risponde quando si mette l etichetta, il rimborso dopo si conta lo stesso giusto', async () => {
     stato.db.tabelle.orders = [ordineDiPaneQuotidiano()];
     stato.etichetteRiescono = false;
@@ -624,6 +651,10 @@ describe('quali rimborsi da fuori si registrano, da soli', () => {
     expect(rimborsiDaRegistrare([r('vecchio', 300, 1), r('nuovo', 500, 2)], 500)).toEqual({ ids: ['nuovo'], cents: 500 });
     expect(rimborsiDaRegistrare([r('vecchio', 300, 1), r('nuovo', 500, 2)], 800)).toEqual({ ids: ['nuovo', 'vecchio'], cents: 800 });
     expect(rimborsiDaRegistrare([r('vecchio', 300, 1), r('nuovo', 500, 2)], 400)).toEqual({ ids: [], cents: 0 });
+  });
+
+  it('non quelli che l ordine dice di aver già scritto, anche senza etichetta', () => {
+    expect(rimborsiDaRegistrare([r('scritto', 300, 1), r('nuovo', 500, 2)], 800, new Set(['scritto']))).toEqual({ ids: ['nuovo'], cents: 500 });
   });
 
   it('non quelli già registrati, né quelli di refundOrder, né quelli falliti', () => {

@@ -51,8 +51,9 @@
  * `refundOrder` toglie il suo segno; arriva l'avviso dei 5 €: mancano 500, i
  * rimborsi senza etichetta fanno 300, e i 3 € si registravano una seconda volta
  * (al negozio 1,94 € tolti due volte, all'annullo 3 € in meno al cliente).
- * Adesso si registrano rimborsi interi, e appena scritti sull'ordine ricevono
- * su Stripe l'etichetta `registrato_da_fuori`: un rimborso etichettato non è
+ * Adesso si registrano rimborsi interi: la stessa scrittura che li registra
+ * ne scrive l'id sull'ordine, e subito dopo ricevono su Stripe l'etichetta
+ * `registrato_da_fuori`. Un rimborso scritto sull'ordine, o etichettato, non è
  * più «da fuori», qualunque cosa dicano i numeri dopo.
  */
 import type Stripe from 'stripe';
@@ -75,6 +76,11 @@ export type OrdineDelRimborso = {
   stripe_reversal_id?: string | null;
   seller_payout_cents: number | null;
   seller_payout_reversed_cents?: number | null;
+  /**
+   * I rimborsi già scritti su questo ordine, separati da virgola (vedi
+   * `rimborsiGiaScritti`). Lo scrive anche `refundOrder`, col suo rimborso.
+   */
+  stripe_refund_id?: string | null;
 };
 
 /**
@@ -185,9 +191,34 @@ export function sommaDeiRimborsiDaFuori(rimborsi: ReadonlyArray<RimborsoStripe>)
   return rimborsi.filter(daFuoriDaRegistrare).reduce((somma, r) => somma + Math.max(0, r.amount ?? 0), 0);
 }
 
+/** Quanti rimborsi tiene a mente l'ordine: bastano e avanzano, e la riga non cresce per sempre. */
+const RIMBORSI_A_MENTE = 15;
+
+/**
+ * I rimborsi che il nostro database dice di aver già scritto su questo ordine.
+ *
+ * L'etichetta su Stripe arriva DOPO la scrittura sull'ordine, con una chiamata
+ * sua: se Stripe in quel momento non risponde, il rimborso resta registrato ma
+ * senza etichetta, e un avviso successivo lo ritroverebbe «da fuori». Per
+ * questo la stessa scrittura che registra il rimborso ne scrive anche l'id
+ * sull'ordine (`stripe_refund_id`, la colonna della tracciabilità dei
+ * rimborsi): o passano tutte e due, o nessuna. Un rimborso in questo elenco
+ * non si registra più, qualunque cosa dica Stripe.
+ */
+export function rimborsiGiaScritti(ordine: Pick<OrdineDelRimborso, 'stripe_refund_id'>): Set<string> {
+  return new Set((ordine.stripe_refund_id ?? '').split(',').map((x) => x.trim()).filter(Boolean));
+}
+
+/** L'elenco da scrivere sull'ordine: quelli di prima più i nuovi, gli ultimi RIMBORSI_A_MENTE. */
+function elencoDaScrivere(prima: ReadonlySet<string>, nuovi: ReadonlyArray<string>): string {
+  const tutti = [...prima, ...nuovi.filter((id) => !prima.has(id))];
+  return tutti.slice(-RIMBORSI_A_MENTE).join(',');
+}
+
 /**
  * Quali rimborsi da fuori registrare adesso: INTERI, dal più recente, finché la
- * somma non supera `tettoCents` (quanto i numeri dicono che manca sull'ordine).
+ * somma non supera `tettoCents` (quanto i numeri dicono che manca sull'ordine),
+ * saltando quelli che l'ordine dice di aver già scritto (`giaScritti`).
  *
  * Interi, perché ognuno, una volta scritto, riceve la sua etichetta: un
  * rimborso registrato a metà non si saprebbe come etichettarlo. Quello che
@@ -202,10 +233,11 @@ export function sommaDeiRimborsiDaFuori(rimborsi: ReadonlyArray<RimborsoStripe>)
 export function rimborsiDaRegistrare(
   rimborsi: ReadonlyArray<RimborsoStripe>,
   tettoCents: number,
+  giaScritti: ReadonlySet<string> = new Set(),
 ): { ids: string[]; cents: number } {
   const candidati = rimborsi
     .map((r, posto) => ({ r, posto }))
-    .filter(({ r }) => daFuoriDaRegistrare(r))
+    .filter(({ r }) => daFuoriDaRegistrare(r) && !(r.id && giaScritti.has(r.id)))
     .sort((a, b) => (b.r.created ?? 0) - (a.r.created ?? 0) || a.posto - b.posto);
   const ids: string[] = [];
   let cents = 0;
@@ -241,9 +273,10 @@ export async function elencoDeiRimborsi(
 
 /**
  * Mette su Stripe l'etichetta «registrato» ai rimborsi appena scritti
- * sull'ordine. Non lancia: il rimborso è già registrato, e far ripetere
- * l'avviso non servirebbe (al secondo passaggio i numeri dicono zero e non si
- * arriva qui). Un'etichetta mancata resta scritta nei log, col suo rimborso.
+ * sull'ordine. Non lancia: il rimborso è già registrato, e il suo id è scritto
+ * sull'ordine (`rimborsiGiaScritti`), quindi nessun avviso lo conta di nuovo;
+ * l'etichetta mancata si rimette al prossimo avviso dello stesso pagamento, e
+ * intanto resta scritta nei log.
  */
 export async function etichettaComeRegistrati(ids: ReadonlyArray<string>, orderId: string | null): Promise<void> {
   for (const id of ids) {
@@ -298,7 +331,15 @@ export async function registraRimborsoParzialeDaFuori(
   const aNumeri = contoDelRimborsoDaFuori(ordine, rimborsatoSuStripe);
   // Zero: è l'eco di un rimborso nostro, o lo stesso avviso arrivato di nuovo.
   if (aNumeri.nuovoCents <= 0) return;
-  const scelti = rimborsiDaRegistrare(await elencoDeiRimborsi({ charge: charge.id }, charge.refunds), aNumeri.nuovoCents);
+  const rimborsi = await elencoDeiRimborsi({ charge: charge.id }, charge.refunds);
+  const giaScritti = rimborsiGiaScritti(ordine);
+  // Registrati da un avviso precedente ma rimasti senza etichetta (Stripe non
+  // aveva risposto): l'etichetta si rimette adesso, e non si contano di nuovo.
+  const daRietichettare = rimborsi
+    .filter((r) => !!r.id && giaScritti.has(r.id) && daFuoriDaRegistrare(r))
+    .map((r) => r.id as string);
+  if (daRietichettare.length > 0) await etichettaComeRegistrati(daRietichettare, ordine.id);
+  const scelti = rimborsiDaRegistrare(rimborsi, aNumeri.nuovoCents, giaScritti);
   if (scelti.cents < aNumeri.nuovoCents) {
     // La differenza viene da rimborsi NOSTRI non scritti sull'ordine (di solito
     // una risposta di Stripe persa): li ritrova `refundOrder` al nuovo tentativo.
@@ -308,7 +349,7 @@ export async function registraRimborsoParzialeDaFuori(
   }
   if (scelti.cents <= 0) return;
 
-  await registraSullOrdine(ordine, scelti.cents, { chargeId: charge.id });
+  await registraSullOrdine(ordine, scelti.cents, { chargeId: charge.id, rimborsi: scelti.ids });
   await etichettaComeRegistrati(scelti.ids, ordine.id);
 }
 
@@ -328,7 +369,12 @@ export async function registraRimborsoParzialeDaFuori(
 export async function registraSullOrdine(
   ordine: OrdineDelRimborso,
   parteCents: number,
-  opzioni: { chargeId: string | null; togliLaPausa?: boolean },
+  opzioni: {
+    chargeId: string | null;
+    togliLaPausa?: boolean;
+    /** I rimborsi Stripe che questa registrazione copre: si scrivono sull'ordine (`rimborsiGiaScritti`). */
+    rimborsi?: ReadonlyArray<string>;
+  },
 ): Promise<ContoRimborsoDaFuori> {
   const giaRegistrato = ordine.refunded_amount_cents ?? 0;
   const conto = contoDelRimborsoDaFuori(ordine, giaRegistrato + Math.max(0, parteCents), Math.max(0, parteCents));
@@ -345,6 +391,9 @@ export async function registraSullOrdine(
   if (conto.nuovoCents > 0) {
     valori.refunded_amount_cents = conto.totaleCents;
     valori.payment_status = conto.totaleCents >= conto.lordoCents ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
+    if (opzioni.rimborsi && opzioni.rimborsi.length > 0) {
+      valori.stripe_refund_id = elencoDaScrivere(rimborsiGiaScritti(ordine), opzioni.rimborsi);
+    }
     if (dove === 'dal-bonifico-da-fare') {
       // Bonifico non ancora partito: la quota del negozio si toglie da quello che
       // gli verrà versato (stesso campo e stesso tetto di `refundOrder`).
