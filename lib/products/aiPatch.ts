@@ -4,7 +4,13 @@ import {
   findLabelForKey,
   AI_ATTR_TO_FIELD,
 } from '@/lib/category-attributes';
-import { PRODUCT_UNITS, SELLER_STATUSES, normalizeCondition } from '@/lib/products/schema';
+import {
+  PRODUCT_UNITS,
+  SELLER_STATUSES,
+  normalizeCondition,
+  type ProductCondition,
+  type ProductUnit,
+} from '@/lib/products/schema';
 
 /**
  * Risoluzione server-side del patch proposto dall'assistente AI in un payload
@@ -338,6 +344,153 @@ export function propostaPerIlModulo(
   const valore =
     campo.type === 'checkbox' ? /^(true|1|s[iì]|yes|vero)$/i.test(proposta.valore.trim()) : proposta.valore.trim();
   return { motivo: proposta.motivo, valore };
+}
+
+/**
+ * Una scrittura che il modulo del prodotto fa nel suo stato. `etichetta` e' il
+ * nome del campo come lo legge il negoziante.
+ */
+export type ScritturaModulo =
+  | { campo: 'name' | 'description'; valore: string; etichetta: string }
+  | { campo: 'price'; valore: number; etichetta: string }
+  /** `valore: null` svuota il prezzo pieno barrato. */
+  | { campo: 'compareAtPrice'; valore: number | null; etichetta: string }
+  | { campo: 'unit'; valore: ProductUnit; etichetta: string }
+  | { campo: 'condition'; valore: ProductCondition | ''; etichetta: string }
+  /** `valore: null` = disponibilita' illimitata. */
+  | { campo: 'stock'; valore: number | null; etichetta: string }
+  | { campo: 'category_id'; valore: string; etichetta: string }
+  | { campo: 'tags'; valore: string[]; etichetta: string }
+  /** `valore: ''` toglie l'attributo. */
+  | { campo: 'attributo'; chiave: string; valore: string; etichetta: string }
+  | { campo: 'status'; valore: string; etichetta: string };
+
+export type PianoPatchModulo = {
+  /** Il patch dopo i filtri: e' cio' che puo' entrare nei campi. */
+  patch: AiProductPatch;
+  /** Cosa il modulo scrive, nell'ordine. */
+  scritture: ScritturaModulo[];
+  /**
+   * Le etichette dei campi che il modulo scrive DAVVERO, una per scrittura.
+   * Vuoto = nel modulo non e' cambiato niente, e nessuno deve dire «aggiornato».
+   */
+  cambiati: string[];
+  /** Cio' che non entra e si dice con un avviso semplice (es. prezzo fuori banda). */
+  avvisi: string[];
+  /** Le dichiarazioni proposte: avviso lungo, col valore da usare se il campo esiste. */
+  proposte: { chiave: string; motivo: string; valore?: string | boolean }[];
+};
+
+/**
+ * 16/10/2026 — IL MODULO DICE «AGGIORNATO» SOLO SE HA SCRITTO QUALCOSA.
+ *
+ * Il negoziante scrive nella chat del prodotto «aggiungi gli allergeni:
+ * glutine». Il patch e' fatto solo di allergeni, che nel modulo non entrano
+ * (R41): diventano una proposta col pulsante «Usa questo valore». Ma il modulo
+ * contava come «campo aggiornato» anche ogni proposta scartata, e la chat
+ * mostrava insieme la spunta verde «Campi aggiornati nel form» e l'avviso
+ * «Allergeni NON compilato». Chi si fidava del verde salvava un prodotto senza
+ * allergeni. Lo stesso con la diagnosi, «migliora», la voce e il codice a barre,
+ * e — da prima — con un patch fatto solo di un prezzo fuori banda.
+ *
+ * Qui si decide, senza toccare lo stato del modulo, cosa il modulo scrive e cosa
+ * dice. `cambiati` nasce dalle scritture e da nient'altro; quello che non entra
+ * va in `avvisi` o in `proposte`, che il modulo mostra a parte. Le regole sui
+ * campi sono quelle che il modulo applicava gia'.
+ */
+export function pianoPatchPerIlModulo(
+  proposta: AiProductPatch,
+  ctx: {
+    prezzoAttuale?: number | string | null;
+    categorie: CategoryRow[];
+    categoriaAttuale: string | null | undefined;
+    modo: 'create' | 'edit';
+  },
+): PianoPatchModulo {
+  const { patch, rifiutati, proposte } = patchAiPerIlForm(proposta, { prezzoAttuale: ctx.prezzoAttuale });
+  const motiviConProposta = new Set(proposte.map((p) => p.motivo));
+  const avvisi = rifiutati.filter((m) => !motiviConProposta.has(m));
+  const scritture: ScritturaModulo[] = [];
+
+  if (typeof patch.name === 'string' && patch.name.trim()) {
+    scritture.push({ campo: 'name', valore: patch.name.trim(), etichetta: 'nome' });
+  }
+  if (typeof patch.description === 'string' && patch.description.trim()) {
+    scritture.push({ campo: 'description', valore: patch.description.trim(), etichetta: 'descrizione' });
+  }
+  if (typeof patch.price === 'number' && patch.price > 0) {
+    scritture.push({ campo: 'price', valore: patch.price, etichetta: 'prezzo' });
+  }
+  if ('compare_at_price' in patch) {
+    if (patch.compare_at_price == null) {
+      scritture.push({ campo: 'compareAtPrice', valore: null, etichetta: 'prezzo pieno' });
+    } else if (typeof patch.compare_at_price === 'number' && patch.compare_at_price > 0) {
+      scritture.push({ campo: 'compareAtPrice', valore: patch.compare_at_price, etichetta: 'prezzo pieno' });
+    }
+  }
+  if (patch.unit && (PRODUCT_UNITS as readonly string[]).includes(patch.unit)) {
+    scritture.push({ campo: 'unit', valore: patch.unit as ProductUnit, etichetta: 'unità' });
+  }
+  if ('condition' in patch) {
+    const valore = patch.condition == null ? '' : normalizeCondition(String(patch.condition));
+    scritture.push({ campo: 'condition', valore, etichetta: 'condizione' });
+  }
+  if (patch.unlimited_stock === true) {
+    scritture.push({ campo: 'stock', valore: null, etichetta: 'disponibilità' });
+  } else if (typeof patch.stock === 'number' && patch.stock >= 0) {
+    scritture.push({ campo: 'stock', valore: Math.trunc(patch.stock), etichetta: 'disponibilità' });
+  }
+
+  // Categoria → slug/sottocategoria su category_id. Gli attributi si validano
+  // contro la categoria EFFETTIVA (quella dopo il cambio).
+  let categoriaEffettiva = ctx.categoriaAttuale ?? null;
+  if (patch.category_slug) {
+    const risolta = resolveCategoryId(ctx.categorie, patch.category_slug, patch.subcategory_name);
+    if (risolta) {
+      scritture.push({ campo: 'category_id', valore: risolta, etichetta: 'categoria' });
+      categoriaEffettiva = risolta;
+    }
+  }
+
+  if (Array.isArray(patch.tags)) {
+    const next: string[] = [];
+    for (const raw of patch.tags) {
+      const t = String(raw).trim().toLowerCase().replace(/,+$/, '');
+      if (t && !next.includes(t) && next.length < 15) next.push(t);
+    }
+    scritture.push({ campo: 'tags', valore: next, etichetta: 'tag' });
+  }
+
+  const { fields } = getAttributesForCategory(ctx.categorie, categoriaEffettiva);
+  if (patch.attributes && typeof patch.attributes === 'object') {
+    for (const [aiKey, rawValue] of Object.entries(patch.attributes)) {
+      const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+      if (!value) continue;
+      const targetKey = AI_ATTR_TO_FIELD[aiKey] ?? aiKey;
+      const field = fields.find((f) => f.key === targetKey);
+      if (!field) continue;
+      if (field.type === 'select' && !(field.options ?? []).includes(value)) continue;
+      scritture.push({ campo: 'attributo', chiave: targetKey, valore: value, etichetta: field.label });
+    }
+  }
+  if (Array.isArray(patch.attributes_remove)) {
+    for (const key of patch.attributes_remove) {
+      const targetKey = AI_ATTR_TO_FIELD[key] ?? key;
+      scritture.push({ campo: 'attributo', chiave: targetKey, valore: '', etichetta: `rimosso ${targetKey}` });
+    }
+  }
+
+  if (ctx.modo === 'edit' && patch.status && (SELLER_STATUSES as readonly string[]).includes(patch.status)) {
+    scritture.push({ campo: 'status', valore: patch.status, etichetta: 'stato' });
+  }
+
+  return {
+    patch,
+    scritture,
+    cambiati: scritture.map((s) => s.etichetta),
+    avvisi,
+    proposte: proposte.map((p) => ({ chiave: p.chiave, ...propostaPerIlModulo(p, fields) })),
+  };
 }
 
 export function resolveAiPatch(opts: {
