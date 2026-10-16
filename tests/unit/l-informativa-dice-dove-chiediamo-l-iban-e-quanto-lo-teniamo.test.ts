@@ -69,7 +69,7 @@ describe('le parole dicono la regola che il codice applica', () => {
     expect(QUANTO_TENIAMO_L_IBAN).toMatch(/bonifico è fatto/);
     expect(QUANTO_TENIAMO_L_IBAN).toMatch(/si chiude senza bonifico/);
     expect(QUANTO_TENIAMO_L_IBAN).toMatch(/non ti dobbiamo nessun bonifico, l'IBAN se ne va con l'account/);
-    expect(QUANTO_TENIAMO_L_IBAN).toMatch(/restano solo l'IBAN e il tuo nome come intestatario, fino al pagamento/);
+    expect(QUANTO_TENIAMO_L_IBAN).toMatch(/mentre ti dobbiamo ancora un bonifico, la cancellazione aspetta che il bonifico risulti fatto/);
   });
 
   it('dice anche il percorso dei reclami: email, poi messaggio dalla pagina Contatti', () => {

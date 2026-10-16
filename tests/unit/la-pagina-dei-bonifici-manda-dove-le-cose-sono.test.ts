@@ -127,12 +127,14 @@ afterEach(() => {
 describe('① la pagina non dice che il cliente se n e andato quando l account c e ancora', () => {
   it('IL CASO CHE ROMPEVA — reclamo da 24 € senza IBAN: la cancellazione aspetta, e la voce non ha il nome', async () => {
     mondoDiMarco();
+    // Il segno che `refundOrder` lascia sull'ordine quando il reclamo si chiude col bonifico.
+    finto.db.tabelle.orders[0].stripe_refund_id = 'bonifico:2400:dispute_d1';
     finto.db.tabelle.bonifici_dei_reclami.push({
       dispute_id: 'd1', order_id: ORDINE, importo_cents: 2400, registrato_at: '2026-10-15T10:00:00Z', fatto_at: null, iban: null, intestatario: null,
     });
 
     const esito = await cancellaAccount(finto.db.client as never, MARCO);
-    expect(esito.motivo, 'la cancellazione non si e fermata: la prova non misura il caso').toBe('bonifico_senza_iban');
+    expect(esito.motivo, 'la cancellazione non si e fermata: la prova non misura il caso').toBe('bonifico_da_fare');
     expect(accountCancellato).toBe(false);
 
     const voci = vociDeiBonificiDaFare([], finto.db.tabelle.bonifici_dei_reclami as unknown as RigaDelBonificoDelReclamo[]);
@@ -143,20 +145,24 @@ describe('① la pagina non dice che il cliente se n e andato quando l account c
     s.smonta();
   }, 60000);
 
-  it('la cancellazione cade a meta per un guasto: il nome c e, e la frase accanto e vera lo stesso', async () => {
+  // Riesame del 16/10, sesto giro: anche con l'IBAN la cancellazione aspetta il bonifico, e non
+  // scrive nessun nome sulla voce — il nome non arriva piu' li' da nessuna strada.
+  it('con l IBAN la cancellazione aspetta lo stesso, e la voce non porta nessun nome', async () => {
     mondoDiMarco(true);
+    finto.db.tabelle.orders[0].stripe_refund_id = 'bonifico:2400:dispute_d1';
     finto.db.tabelle.bonifici_dei_reclami.push({
       dispute_id: 'd1', order_id: ORDINE, importo_cents: 2400, registrato_at: '2026-10-15T10:00:00Z', fatto_at: null, iban: IBAN, intestatario: null,
     });
 
     const esito = await cancellaAccount(finto.db.client as never, MARCO);
-    expect(esito.ok).toBe(false);
+    expect(esito.motivo).toBe('bonifico_da_fare');
     expect(accountCancellato).toBe(false);
     expect(finto.db.tabelle.profiles, 'l account non c e piu: la prova non misura il caso').toHaveLength(1);
 
     const voci = vociDeiBonificiDaFare([], finto.db.tabelle.bonifici_dei_reclami as unknown as RigaDelBonificoDelReclamo[]);
     const { s, testo } = laPaginaDice({ voci, migrazione162: true });
-    expect(testo).toContain('Intestatario: Marco Bianchi');
+    expect(testo, 'la voce non e comparsa').toMatch(/24,00/u);
+    expect(testo).not.toContain('Intestatario');
     expect(testo, 'la pagina dice che il cliente ha chiuso l account, ma l account c e').not.toMatch(/chiuso l.account/u);
     s.smonta();
   }, 60000);

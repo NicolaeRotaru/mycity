@@ -2,9 +2,10 @@ import type { getAdminSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
 import {
-  custodisciIBonificiDaFare,
-  MOTIVO_BONIFICO_SENZA_IBAN,
-  rinvioPerIBonificiSenzaIban,
+  attesaPerIBonifici,
+  bonificiPrimaDiCancellare,
+  MOTIVO_BONIFICO_DA_FARE,
+  type BonificiDaFare,
 } from '@/lib/rimborsi/iban-del-rimborso';
 
 type Admin = ReturnType<typeof getAdminSupabase>;
@@ -178,11 +179,11 @@ export const TABELLE_CON_DATI_PERSONALI: readonly TabellaConDatiPersonali[] = [
     // riga resta, anonima». Qui era rimasto scritto il contrario. Verificato
     // sullo schema ricostruito dalle migrazioni: returns.buyer_id -> SET NULL.
     //
-    // L'IBAN del rimborso (162) NON sta qui, e non per dimenticanza: non si
-    // azzera sempre. Se gli dobbiamo ancora un bonifico, IBAN e nome restano
-    // fino al pagamento; se no se ne va. Lo decide `custodisciIBonificiDaFare`
-    // (lib/rimborsi/iban-del-rimborso.ts), che `cancellaAccount` chiama prima
-    // di questa pulizia.
+    // L'IBAN del rimborso (162) NON sta qui, e non per dimenticanza: senza la
+    // 162 la colonna non c'e', e questa pulizia cadrebbe. Lo toglie
+    // `bonificiPrimaDiCancellare` (lib/rimborsi/iban-del-rimborso.ts), che
+    // `cancellaAccount` chiama prima di questa pulizia, e che fa aspettare la
+    // cancellazione finche' un bonifico e' da fare.
     sopravvive: true,
     perche: 'le note scritte a mano dentro una richiesta di reso',
   },
@@ -709,7 +710,9 @@ export type EsitoCancellazione = {
   ok: boolean;
   errore?: string;
   /** Perché non si è fatto, quando la ragione non è un guasto ma una regola. */
-  motivo?: 'cassa_da_versare' | typeof MOTIVO_BONIFICO_SENZA_IBAN;
+  motivo?: 'cassa_da_versare' | typeof MOTIVO_BONIFICO_DA_FARE;
+  /** I bonifici di rimborso che l'hanno fermata: chi amministra legge cosa manca (`rinvioPerChiAmministra`). */
+  bonifici?: BonificiDaFare;
   fileRimossi: number;
   erroriFile: string[];
 };
@@ -783,36 +786,29 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
     return { ok: false, motivo, errore: cassa.motivo, fileRimossi: 0, erroriFile: [] };
   }
 
-  // ①bis I bonifici di rimborso che gli dobbiamo ancora (riesame del 16/10). Va
-  // fatto PRIMA del ②: la pulizia degli ordini toglie il nome, e il nome è quello
-  // a cui si intesta il bonifico. Sul reso e sul bonifico del reclamo restano
-  // solo l'IBAN e il nome, fino al pagamento; dove il bonifico non c'è, l'IBAN
-  // se ne va adesso (lib/rimborsi/iban-del-rimborso.ts). Se non riesce ci si
-  // ferma: è un guasto, e domani si riprova — un debito non resta senza nome.
-  const bonifici = await custodisciIBonificiDaFare(admin, userId);
+  // ①bis I bonifici di rimborso che gli dobbiamo ancora. Riesame del 16/10, sesto giro — UNA
+  // REGOLA: finche' su un suo ordine c'e' un bonifico non segnato fatto, o un reso aperto in
+  // contanti che puo' finire con un bonifico, la cancellazione aspetta. Se non si puo' sapere
+  // (manca la 162, o un pezzo del bonifico) si ferma come per un guasto: niente motivo, e il giro
+  // notturno sveglia chi amministra. Va fatto PRIMA del ②, finche' il legame con la persona c'e'.
+  // Una lettura che cade ferma tutto: domani si riprova.
+  const bonifici = await bonificiPrimaDiCancellare(admin, userId);
   if (!bonifici.ok) {
     return {
       ok: false,
       errore:
-        `L'account non è stato cancellato: prima non siamo riusciti a mettere al sicuro i bonifici di ` +
+        `L'account non è stato cancellato: prima non siamo riusciti a controllare i bonifici di ` +
         `rimborso ancora da fare (${bonifici.errore}). Si riprova.`,
       fileRimossi: 0,
       erroriFile: [],
     };
   }
-
-  // ①ter Riesame del 16/10, quarto giro — un bonifico da fare senza IBAN ferma la cancellazione.
-  // Tolto l'account se ne va l'email, che era l'unico modo di chiedere il conto: il debito
-  // resterebbe con un nome e nessuno a cui pagarlo. (Quinto giro: in questo caso la custodia qui
-  // sopra non scrive niente — finché l'account c'è, il nome sta sull'ordine.) È un rinvio
-  // deciso da noi, come la cassa: la persona legge perché (lib/cron-cancellazioni.ts), e la
-  // cancellazione riparte da sola quando l'IBAN è sulla voce del bonifico o non c'è più niente da fare.
-  const attesaDellIban = rinvioPerIBonificiSenzaIban(bonifici.senzaIban);
-  if (attesaDellIban) {
-    logger.warn('[cancellazione] rinviata: bonifico di rimborso da fare senza IBAN', {
-      userId, ...bonifici.senzaIban,
+  const attesa = attesaPerIBonifici(bonifici.bonifici);
+  if (attesa) {
+    logger[attesa.motivo ? 'warn' : 'error']('[cancellazione] ferma: bonifici di rimborso da fare', {
+      userId, ...bonifici.bonifici,
     });
-    return { ok: false, motivo: MOTIVO_BONIFICO_SENZA_IBAN, errore: attesaDellIban, fileRimossi: 0, erroriFile: [] };
+    return { ok: false, ...attesa, bonifici: bonifici.bonifici, fileRimossi: 0, erroriFile: [] };
   }
 
   // ② I documenti d'identità e l'IBAN non aspettano: non si vedono a video,

@@ -10,6 +10,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/audit', () => ({ writeAudit: vi.fn(async () => {}) }));
+vi.mock('@/lib/analytics/events', () => ({ trackErrorShown: vi.fn() }));
 vi.mock('@/lib/api/middleware', () => {
   type Gestore = (ctx: { user: { id: string }; req: Request; params: Record<string, string> }) => unknown;
   const passa = (h: Gestore) => async (req: Request, ctx?: { params?: Promise<Record<string, string>> }) =>
@@ -18,10 +19,10 @@ vi.mock('@/lib/api/middleware', () => {
 });
 
 import { cancellaAccount } from '@/lib/account/cancellazione';
+import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import {
-  RINVIO_PER_CHI_AMMINISTRA,
   SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE,
-  rinvioPerIBonificiSenzaIban,
+  rinvioPerLaPersona,
 } from '@/lib/rimborsi/iban-del-rimborso';
 import { POST as comandoDellaLista } from '@/app/api/admin/rimborsi-da-bonificare/route';
 import { DELETE as cancellaDalPannello } from '@/app/api/admin/users/[id]/delete/route';
@@ -38,9 +39,10 @@ import { DELETE as cancellaDalPannello } from '@/app/api/admin/users/[id]/delete
  * bonificare». Giulia mandava l'IBAN e non ripartiva niente. E se a cancellare era chi amministra, la
  * risposta era la stessa frase scritta per Giulia.
  *
- * Adesso la frase dice la condizione vera — il reso deve chiudersi, e per un bonifico serve l'IBAN —
- * e la prova la mantiene: chiuso il reso senza rimborso la cancellazione riparte; rimborsato col
- * bonifico, riparte quando chi paga scrive l'IBAN sulla voce della lista.
+ * Adesso la frase dice la condizione vera — riparte quando non ci sono piu' bonifici da farle — e la
+ * prova la mantiene: chiuso il reso senza rimborso la cancellazione riparte; rimborsato col
+ * bonifico, riparte quando chi paga lo segna fatto (riesame del 16/10, sesto giro: l'IBAN da solo
+ * non basta piu', la cancellazione aspetta il bonifico).
  */
 
 const GIULIA = 'giulia-0000-4000-8000-000000000001';
@@ -69,6 +71,16 @@ function mondo(reso: Riga, ordine: Riga = {}) {
   auth.deleteUser = async () => ({ error: null });
 }
 
+async function segnaFatto() {
+  const res = await (comandoDellaLista as unknown as (r: Request, c: unknown) => Promise<Response>)(
+    new Request('http://localhost/api/admin/rimborsi-da-bonificare', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ resoId: RESO }),
+    }),
+    undefined,
+  );
+  return res.status;
+}
+
 async function salvaLIban() {
   const res = await (comandoDellaLista as unknown as (r: Request, c: unknown) => Promise<Response>)(
     new Request('http://localhost/api/admin/rimborsi-da-bonificare', {
@@ -85,40 +97,43 @@ beforeEach(() => mondo({}));
 describe('la cancellazione che aspetta un reso aperto dice la condizione vera, e la mantiene', () => {
   it('IL CASO CHE ROMPEVA — la frase non promette che basti l IBAN: dice che il reso deve chiudersi', async () => {
     const esito = await cancellaAccount(finto.db.client as never, GIULIA);
-    expect(esito.motivo, 'la cancellazione non aspetta: la prova non misura il caso').toBe('bonifico_senza_iban');
+    expect(esito.motivo, 'la cancellazione non aspetta: la prova non misura il caso').toBe('bonifico_da_fare');
     expect(esito.errore).toContain('reso ancora aperto');
     expect(esito.errore, 'promette di ripartire con l IBAN, che su un reso aperto non si puo salvare').not.toMatch(/riparte da sola quando avremo l.IBAN/u);
-    expect(esito.errore).toMatch(/riparte da sola quando il reso sarà chiuso/u);
+    expect(esito.errore).toMatch(/riparte da sola quando non ci saranno più bonifici da farti/u);
 
     // Ed e' vero che l'IBAN, adesso, non si salva: e' il motivo per cui la frase non lo promette.
     expect(await salvaLIban()).toBe(409);
   });
 
   it('la promessa si mantiene: chiuso il reso senza rimborso, la cancellazione riparte', async () => {
-    expect((await cancellaAccount(finto.db.client as never, GIULIA)).motivo).toBe('bonifico_senza_iban');
+    expect((await cancellaAccount(finto.db.client as never, GIULIA)).motivo).toBe('bonifico_da_fare');
     finto.db.tabelle.returns[0].status = 'REJECTED';
     const esito = await cancellaAccount(finto.db.client as never, GIULIA);
     expect(esito.ok, esito.errore).toBe(true);
   });
 
-  it('la promessa si mantiene: rimborsato col bonifico, aspetta l IBAN, e riparte quando chi paga lo scrive nella lista', async () => {
+  it('la promessa si mantiene: rimborsato col bonifico, aspetta, e riparte quando chi paga lo segna fatto', async () => {
     const segno = `bonifico:4000:return_${RESO}`;
     mondo(
       { status: 'REFUNDED', refund_id: segno, refund_bonifico_cents: 4000, refunded_at: '2026-10-15T10:00:00Z' },
       { stripe_refund_id: segno, payment_status: 'REFUNDED' },
     );
     const prima = await cancellaAccount(finto.db.client as never, GIULIA);
-    expect(prima.motivo).toBe('bonifico_senza_iban');
-    expect(prima.errore).toMatch(/riparte da sola quando avremo l.IBAN/u);
+    expect(prima.motivo).toBe('bonifico_da_fare');
 
+    // L'IBAN da solo non la fa ripartire: il bonifico e' ancora da fare.
     expect(await salvaLIban()).toBe(200);
+    expect((await cancellaAccount(finto.db.client as never, GIULIA)).motivo).toBe('bonifico_da_fare');
+
+    expect(await segnaFatto()).toBe(200);
     const dopo = await cancellaAccount(finto.db.client as never, GIULIA);
     expect(dopo.ok, dopo.errore).toBe(true);
   });
 });
 
 describe('cancellata dal pannello, la risposta e scritta per chi amministra', () => {
-  it('IL CASO CHE ROMPEVA — la rotta rispondeva con la frase scritta per la cliente', async () => {
+  it('IL CASO CHE ROMPEVA — la rotta rispondeva con la frase scritta per la cliente, e troppo lunga per la pagina', async () => {
     const res = await (cancellaDalPannello as unknown as (r: Request, c: unknown) => Promise<Response>)(
       new Request(`http://localhost/api/admin/users/${GIULIA}/delete`, { method: 'DELETE' }),
       { params: Promise.resolve({ id: GIULIA }) },
@@ -128,21 +143,25 @@ describe('cancellata dal pannello, la risposta e scritta per chi amministra', ()
 
     expect(res.status).toBe(409);
     expect(corpo.error?.message, 'a chi amministra arriva la frase scritta per la cliente').not.toBe(perLaCliente);
-    expect(corpo.error?.message).toBe(RINVIO_PER_CHI_AMMINISTRA);
+    // Quello che la pagina mostra (app/admin/users/page.tsx): sopra i 200 caratteri, il testo generico.
+    const aVideo = friendlyError(new Error(apiErrorMessage(corpo, 'Eliminazione fallita')));
+    expect(aVideo, 'la pagina mostra «Qualcosa non ha funzionato» al posto del motivo').toBe(corpo.error?.message);
+    expect(aVideo).toContain('reso aperto');
   });
 });
 
 describe('le parole, in ogni combinazione', () => {
-  it('solo bonifici dovuti: riparte con l IBAN; con un reso aperto: quando il reso si chiude', () => {
-    const dovuti = rinvioPerIBonificiSenzaIban({ dovuti: 1, centesimiDovuti: 2400, cifreCerte: true, resiInCorso: 0 })!;
-    const aperto = rinvioPerIBonificiSenzaIban({ dovuti: 0, centesimiDovuti: 0, cifreCerte: true, resiInCorso: 1 })!;
-    const tutti = rinvioPerIBonificiSenzaIban({ dovuti: 1, centesimiDovuti: 2400, cifreCerte: true, resiInCorso: 2 })!;
-    expect(dovuti).toMatch(/riparte da sola quando avremo l.IBAN/u);
-    expect(aperto).not.toMatch(/quando avremo l.IBAN/u);
-    expect(aperto).toMatch(/il reso sarà chiuso/u);
+  it('bonifici dovuti, reso aperto, o tutti e due: nessuna promessa che basti l IBAN', () => {
+    const dovuti = rinvioPerLaPersona({ centesimi: 2400, incerti: 0, resiAperti: 0, con162: true });
+    const aperto = rinvioPerLaPersona({ centesimi: 0, incerti: 0, resiAperti: 1, con162: true });
+    const tutti = rinvioPerLaPersona({ centesimi: 2400, incerti: 0, resiAperti: 2, con162: true });
+    for (const frase of [dovuti, aperto, tutti]) {
+      expect(frase).not.toMatch(/quando avremo l.IBAN/u);
+      expect(frase).toMatch(/riparte da sola quando non ci saranno più bonifici da farti/u);
+    }
+    expect(aperto).toMatch(/un reso ancora aperto/u);
     expect(tutti).toMatch(/24,00\s€/u);
-    expect(tutti).toMatch(/i resi saranno chiusi/u);
-    expect(tutti).not.toMatch(/quando avremo l.IBAN, o/u);
-    expect(SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE).toMatch(/che il reso si chiuda, se è ancora aperto/u);
+    expect(tutti).toMatch(/dei resi ancora aperti/u);
+    expect(SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE).toMatch(/un tuo reso ancora aperto può finire con un bonifico/u);
   });
 });
