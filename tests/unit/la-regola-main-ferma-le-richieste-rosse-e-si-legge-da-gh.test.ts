@@ -275,6 +275,9 @@ describe('la regola «Main»: cosa le manca per fermare le richieste rosse', () 
       const esito = valutaLaRegolaMain(r);
       expect(esito.protegge, target).toBe(false);
       expect(esito.mancano.map((m) => m.cosa).join('\n')).toContain('non guarda il ramo main');
+      // Le etichette non sono rami: «All branches» qui non c'e', e non si dice di toglierlo.
+      expect(esito.mancano, target).toHaveLength(1);
+      expect(esito.mancano.map((m) => m.come).join('\n'), target).not.toContain('All branches');
     }
   });
 
