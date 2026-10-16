@@ -19,11 +19,16 @@ vi.mock('@/lib/supabase/server', () => {
         const q = c.from(tabella) as unknown as Record<string, (...a: unknown[]) => unknown>;
         if (tabella !== 'orders' || !finto.ordineCheCade) return q;
         const update = q.update.bind(q);
-        // Il guasto: l'aggiornamento dell'ordine con l'esito del rimborso va in timeout.
+        // Il guasto: la scrittura del rimborso nell'elenco dell'ordine (stripe_refund_id) va in
+        // timeout. Dal quinto giro quell'elenco si scrive da solo, con una scrittura condizionata
+        // (aggiungiAllElencoDeiRimborsi in lib/stripe/payout.ts), prima dello stato del pagamento:
+        // il guasto va messo li', o la prova non misura piu' il caso.
         q.update = (valori: unknown) => {
-          if (valori && typeof valori === 'object' && 'payment_status' in valori) {
+          if (valori && typeof valori === 'object' && 'stripe_refund_id' in valori) {
             const caduta: Record<string, unknown> = {};
             caduta.eq = () => caduta;
+            caduta.is = () => caduta;
+            caduta.select = () => caduta;
             caduta.then = (ok: (v: unknown) => unknown) =>
               Promise.resolve({ data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } }).then(ok);
             return caduta;
