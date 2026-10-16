@@ -545,7 +545,9 @@ function schedaDopoLaProposta(prodotto: SchedaDellaChat, proposta: AiProductPatc
     description:
       typeof patch.description === 'string' && patch.description.trim() ? patch.description : prodotto.description,
     price: prezzoValido ? patch.price! : prodotto.price,
-    categorySlug: patch.category_slug || prodotto.categorySlug,
+    // Solo un testo e' una categoria: la scheda la legge per ogni proposta, non
+    // solo per quelle che mettono in vendita.
+    categorySlug: (typeof patch.category_slug === 'string' && patch.category_slug) || prodotto.categorySlug,
     attributes,
   };
 }

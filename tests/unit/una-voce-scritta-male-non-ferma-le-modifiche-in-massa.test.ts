@@ -51,6 +51,7 @@ vi.mock('@/lib/supabase/server', async () => {
 
 import { pianoPatchPerIlModulo, resolveAiPatch, type AiProductPatch, type CategoryRow } from '@/lib/products/aiPatch';
 import { parseCatalogBatchEntry, senzaCampiEconomici } from '@/lib/ai/catalogBatch';
+import { avvisoSullaPubblicazione } from '@/lib/products/prontoPerLaVendita';
 
 const CATEGORIE = db.categorie as unknown as CategoryRow[];
 
@@ -126,6 +127,21 @@ describe('le funzioni che leggono la proposta non cadono', () => {
       categories: CATEGORIE,
     });
     expect(r.update.category_id).toBe('alim');
+  });
+
+  it.each(PROPOSTE_ROTTE)('$dove: la scheda della proposta nella chat non cade', ({ patch }) => {
+    const prodotto = {
+      name: 'Focaccia',
+      description: RIGA.description,
+      price: 3.5,
+      categorySlug: 'alimentari',
+      attributes: RIGA.attributes,
+      image: 'https://mycity.test/foto.jpg',
+      status: 'available',
+    };
+    expect(() => avvisoSullaPubblicazione(prodotto, patch())).not.toThrow();
+    // Una categoria scritta male non sposta niente: la scheda tace, come il server.
+    expect(avvisoSullaPubblicazione(prodotto, { category_slug: rotta() } as unknown as AiProductPatch)).toBeNull();
   });
 
   it.each(PROPOSTE_ROTTE)('$dove: la lettura dei risultati del lavoro massivo non cade', ({ patch }) => {
