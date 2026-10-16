@@ -229,7 +229,8 @@ describe('le frasi usano solo parole vere nella pagina di GitHub', () => {
     expect(testo).not.toContain(tipo);
   });
 
-  it.each([null, 5, 'x', {}, { parameters: {} }, []])('una voce rovinata (%j): ⚪, senza «undefined» ne\' altre sigle', (voce) => {
+  // Ogni voce dentro il suo elenco: it.each aprirebbe un elenco vuoto come argomenti.
+  it.each([[null], [undefined], [5], ['x'], [{}], [{ parameters: {} }], [[]]])('una voce rovinata (%j): ⚪, senza «undefined» ne\' altre sigle', (voce: unknown) => {
     const { esito, testo, uscita } = verdetto(deiPassi({ rules: [{ type: 'deletion' }, { type: 'non_fast_forward' }, controlloMain(), voce] }));
     expect(uscita).toBe(3);
     expect(esito.protegge).toBe(false);
