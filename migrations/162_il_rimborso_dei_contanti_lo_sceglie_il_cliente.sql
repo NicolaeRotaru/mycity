@@ -48,12 +48,12 @@
 --    obbligo di legge, e per farlo serve il conto: e' l'unica ragione per tenerlo. Fatto il
 --    bonifico, l'IBAN si cancella (lo fa chi segna «fatto»: `app/api/admin/rimborsi-da-bonificare`),
 --    e qui c'e' il paletto che non dipende da nessun codice — un bonifico segnato fatto con
---    l'IBAN ancora scritto non entra. Se il cliente cancella l'account mentre gli dobbiamo ancora
---    un bonifico, sul reso (e sul bonifico del reclamo) restano solo l'IBAN e il nome
---    dell'intestatario, `refund_intestatario` / `intestatario`, fino al pagamento: la riga ordine
---    a quel punto non porta piu' il nome, e senza un nome il bonifico non si fa. Chi decide cosa
---    resta e' `lib/rimborsi/iban-del-rimborso.ts`; l'intestatario lo legge solo il server, come
---    l'IBAN.
+--    l'IBAN ancora scritto non entra. Se il cliente chiede di cancellare l'account mentre gli
+--    dobbiamo ancora un bonifico, la cancellazione ASPETTA che il bonifico sia fatto (16/10, sesto
+--    giro: una regola sola, `lib/rimborsi/iban-del-rimborso.ts`). Le colonne dell'intestatario,
+--    `refund_intestatario` / `intestatario`, restano solo per le righe scritte prima di quella
+--    regola: oggi nessun percorso le riempie, e si cancellano col «fatto» come l'IBAN. Le legge
+--    solo il server.
 --
 -- ④ I BONIFICI DEI RECLAMI HANNO UNA LISTA. (Aggiunto dopo il collaudo del 15/10.) Anche un
 --    reclamo chiuso a favore del cliente su un ordine in contanti si rimborsa col bonifico. Il
@@ -77,8 +77,9 @@
 --    cliente se ne andavano reclamo, profilo e nome sull'ordine, e restava «24 € da fare» senza
 --    nessun dato che portasse a lui. Il modulo del reclamo non chiede l'IBAN: lo chiediamo per
 --    email e il cliente ce lo manda con un messaggio dalla pagina Contatti; chi paga lo copia qui,
---    in `iban`. Se il cliente cancella l'account prima del pagamento, la cancellazione scrive qui
---    il suo nome, in `intestatario`. Tutti e due si cancellano quando il bonifico e' fatto.
+--    in `iban`. Se il cliente chiede di cancellare l'account prima del pagamento, la cancellazione
+--    aspetta il bonifico (vedi ③bis): `intestatario` resta per le righe scritte prima di quella
+--    regola. Tutti e due si cancellano quando il bonifico e' fatto.
 --
 -- COSA NON TOCCA. Le regole di riga: il cliente vede i suoi resi, il negozio i suoi,
 -- l'amministratore tutti — solo, senza l'IBAN. Le scritture: restano del solo server (153).

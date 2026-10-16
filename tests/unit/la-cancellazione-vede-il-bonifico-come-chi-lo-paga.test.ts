@@ -5,14 +5,14 @@ import { creaFintoDatabase } from './aiuti/finto-database-dei-rimborsi';
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 
 import { cancellaAccount } from '@/lib/account/cancellazione';
-import { custodisciIBonificiDaFare } from '@/lib/rimborsi/iban-del-rimborso';
+import { bonificiPrimaDiCancellare } from '@/lib/rimborsi/iban-del-rimborso';
 import { bonificiDeiResiDagliOrdini, vociDeiBonificiDaFare, type RigaDelResoLetta } from '@/lib/rimborsi/bonifici-da-fare';
 import { quantoSiPuoRestituire, ripartoDelRimborso } from '@/lib/rimborsi/regole-del-rimborso';
 
 /**
  * Riesame del 16/10, quinto giro — LA CANCELLAZIONE DELL'ACCOUNT VEDE IL BONIFICO COME LO VEDE CHI PAGA.
  *
- * Prima di cancellare un account, `custodisciIBonificiDaFare` decide quali bonifici di rimborso sono
+ * Prima di cancellare un account, la custodia dei bonifici (oggi `bonificiPrimaDiCancellare`) decideva quali bonifici di rimborso erano
  * ancora da fare: li tiene (IBAN e nome) o, se manca l'IBAN, fa aspettare la cancellazione. Rispondeva
  * alla domanda «c'e' un bonifico da fare?» con regole sue, diverse da quelle di chi muove i soldi e
  * della lista di chi paga:
@@ -26,6 +26,9 @@ import { quantoSiPuoRestituire, ripartoDelRimborso } from '@/lib/rimborsi/regole
  *    credito, la custodia aspettava un IBAN per un bonifico che non ci sara' mai;
  *  ④ col rinvio scriveva comunque il nome dell'intestatario, e la lista lo mostrava come quello di
  *    un cliente che se n'era andato, mentre l'account c'era ancora.
+ *
+ * Riesame del 16/10, sesto giro — la regola e' una sola: finche' un bonifico e' da fare la
+ * cancellazione aspetta, con l'IBAN o senza, e qui non si scrive niente (niente nome sulla voce).
  *
  * Gira la cancellazione vera su un finto database che applica i filtri di letture e scritture.
  */
@@ -78,44 +81,44 @@ function laLista() {
 
 beforeEach(() => mondo(ordine(), [reso()]));
 
-describe('① il bonifico rimasto solo sull ordine: la cancellazione lo tiene, come la lista', () => {
-  it('IL CASO CHE ROMPEVA — con l IBAN: l IBAN resta, il nome va sulla voce, e la lista sa a chi pagare', async () => {
+describe('① il bonifico rimasto solo sull ordine: la cancellazione lo vede, come la lista', () => {
+  it('IL CASO CHE ROMPEVA — con l IBAN: la cancellazione aspetta il bonifico, e l IBAN resta dov e', async () => {
     expect(laLista(), 'la lista non vede il bonifico: la prova non misura niente').toHaveLength(1);
 
     const esito = await cancellaAccount(db.client as never, MARIA);
 
-    expect(esito.ok, esito.errore).toBe(true);
-    expect(accountCancellato).toBe(true);
+    expect(esito).toMatchObject({ ok: false, motivo: 'bonifico_da_fare' });
+    expect(accountCancellato, 'l account e sparito con 40 € da pagare').toBe(false);
     expect(db.tabelle.returns[0].refund_iban, 'IBAN cancellato mentre il bonifico e ancora da fare').toBe(IBAN);
-    expect(db.tabelle.returns[0].refund_intestatario).toBe('Maria Rossi');
     const [voce] = laLista();
-    expect(voce).toMatchObject({ importoCents: 4000, daFare: true, intestatario: 'Maria Rossi' });
+    expect(voce).toMatchObject({ importoCents: 4000, daFare: true });
     expect(voce.iban?.replace(/\s/g, '')).toBe(IBAN);
   });
 
   it('senza IBAN: la cancellazione aspetta, con la cifra, e l account resta', async () => {
     mondo(ordine(), [reso({ refund_iban: null })]);
     const esito = await cancellaAccount(db.client as never, MARIA);
-    expect(esito).toMatchObject({ ok: false, motivo: 'bonifico_senza_iban' });
+    expect(esito).toMatchObject({ ok: false, motivo: 'bonifico_da_fare' });
     expect(esito.errore).toMatch(/40,00\s€/u);
     expect(accountCancellato, 'l account e sparito con 40 € da pagare e nessun conto').toBe(false);
   });
 
-  it('controllo: col segno anche sul reso la risposta e la stessa', async () => {
+  it('controllo: col segno anche sul reso la risposta e la stessa; fatto il bonifico, va avanti', async () => {
     mondo(ordine(), [reso({ refund_id: SEGNO, refund_bonifico_cents: 4000 })]);
+    expect(await cancellaAccount(db.client as never, MARIA)).toMatchObject({ ok: false, motivo: 'bonifico_da_fare' });
+    Object.assign(db.tabelle.returns[0], { refund_bonifico_fatto_at: '2026-10-16T09:00:00Z', refund_iban: null });
     const esito = await cancellaAccount(db.client as never, MARIA);
     expect(esito.ok, esito.errore).toBe(true);
-    expect(db.tabelle.returns[0].refund_iban).toBe(IBAN);
-    expect(db.tabelle.returns[0].refund_intestatario).toBe('Maria Rossi');
+    expect(accountCancellato).toBe(true);
   });
 });
 
 describe('② un reso APPROVED col rimborso gia partito e registrato sull ordine', () => {
   it('conta fra i bonifici dovuti, con la sua cifra: non fra i resi aperti', async () => {
     mondo(ordine(), [reso({ status: 'APPROVED', refund_iban: null })]);
-    const custodia = await custodisciIBonificiDaFare(db.client, MARIA);
-    if (!custodia.ok) throw new Error(custodia.errore);
-    expect(custodia.senzaIban).toMatchObject({ dovuti: 1, centesimiDovuti: 4000, resiInCorso: 0 });
+    const letti = await bonificiPrimaDiCancellare(db.client, MARIA);
+    if (!letti.ok) throw new Error(letti.errore);
+    expect(letti.bonifici).toMatchObject({ centesimi: 4000, incerti: 0, resiAperti: 0 });
   });
 });
 
@@ -140,7 +143,7 @@ describe('③ un ordine «in contanti» pagato tutto col credito MyCity non aspe
   it('controllo: con una parte in contanti lo stesso reso aspetta', async () => {
     mondo(ordine({ stripe_refund_id: null, payment_status: 'PAID' }), [reso({ status: 'APPROVED', refund_method: null, refund_iban: null })]);
     const esito = await cancellaAccount(db.client as never, MARIA);
-    expect(esito).toMatchObject({ ok: false, motivo: 'bonifico_senza_iban' });
+    expect(esito).toMatchObject({ ok: false, motivo: 'bonifico_da_fare' });
   });
 });
 
@@ -152,19 +155,19 @@ describe('④ se la cancellazione aspetta, sui bonifici non si scrive niente', (
 
     const esito = await cancellaAccount(db.client as never, MARIA);
 
-    expect(esito).toMatchObject({ ok: false, motivo: 'bonifico_senza_iban' });
+    expect(esito).toMatchObject({ ok: false, motivo: 'bonifico_da_fare' });
     expect(db.tabelle.profiles, 'l account non c e piu: la prova non misura il caso').toHaveLength(1);
     expect(db.tabelle.bonifici_dei_reclami[0].intestatario, 'nome scritto come se il cliente se ne fosse andato').toBeNull();
   });
 
   it('anche il bonifico che l IBAN ce l ha, se un altro lo fa aspettare', async () => {
-    mondo(ordine(), [reso({ refund_id: SEGNO, refund_bonifico_cents: 4000 })]);
+    mondo(ordine({ stripe_refund_id: `${SEGNO},bonifico:2400:dispute_d1` }), [reso({ refund_id: SEGNO, refund_bonifico_cents: 4000 })]);
     db.tabelle.disputes.push({ id: 'd1', order_id: 'o1', opener_id: MARIA });
     db.tabelle.bonifici_dei_reclami.push({ dispute_id: 'd1', order_id: 'o1', importo_cents: 2400, fatto_at: null, iban: null, intestatario: null });
 
     const esito = await cancellaAccount(db.client as never, MARIA);
 
-    expect(esito.motivo).toBe('bonifico_senza_iban');
+    expect(esito.motivo).toBe('bonifico_da_fare');
     expect(db.tabelle.returns[0].refund_intestatario ?? null).toBeNull();
     expect(db.tabelle.returns[0].refund_iban, 'l IBAN di chi aspetta un bonifico non si tocca').toBe(IBAN);
   });

@@ -5,7 +5,7 @@ import { cancellaAccount } from '@/lib/account/cancellazione';
 import { withAdminAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
-import { MOTIVO_BONIFICO_SENZA_IBAN, RINVIO_PER_CHI_AMMINISTRA } from '@/lib/rimborsi/iban-del-rimborso';
+import { rinvioPerChiAmministra } from '@/lib/rimborsi/iban-del-rimborso';
 
 export const runtime = 'nodejs';
 
@@ -61,12 +61,12 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
       logger.warn('admin delete: cancellazione rinviata, cassa contanti aperta', { targetId });
       return ApiErrors.conflict(esito.errore ?? 'Cancellazione rinviata: cassa contanti ancora aperta.');
     }
-    // Riesame del 16/10, quarto giro — un bonifico di rimborso da fare senza IBAN: anche questa è
-    // una regola, non un guasto. La risposta dice cosa manca — a chi amministra, non al cliente
-    // (quinto giro: qui tornava la frase scritta per il cliente).
-    if (esito.motivo === MOTIVO_BONIFICO_SENZA_IBAN) {
-      logger.warn('admin delete: cancellazione rinviata, bonifico di rimborso senza IBAN', { targetId });
-      return ApiErrors.conflict(RINVIO_PER_CHI_AMMINISTRA);
+    // Riesame del 16/10, sesto giro — fermata dai bonifici di rimborso: la risposta dice cosa manca
+    // davvero, a chi amministra, in una riga che la pagina mostra intera (meno di 200 caratteri):
+    // un bonifico da fare, un reso aperto, o un bonifico di cui non si sa se è fatto.
+    if (esito.bonifici) {
+      logger.warn('admin delete: cancellazione ferma, bonifici di rimborso', { targetId, ...esito.bonifici });
+      return ApiErrors.conflict(rinvioPerChiAmministra(esito.bonifici));
     }
     logger.error('admin delete: cancellazione fallita', { targetId, errore: esito.errore });
     // 27/8/2026 (R016) — Era `{ error: 'stringa' }`, l'altra forma: il pannello

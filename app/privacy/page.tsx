@@ -173,7 +173,7 @@ export default function PrivacyPage() {
                   giuridica e nessun tempo di conservazione, e il codice non lo
                   cancellava mai. Adesso la regola è una sola, e la scrivono qui le
                   stesse parole che stanno accanto al codice. */}
-              <tr><td className="border px-3 py-2">Rimborso con bonifico (IBAN e, solo se cancelli l&apos;account prima del bonifico, il nome dell&apos;intestatario)</td><td className="border px-3 py-2">{PERCHE_TENIAMO_L_IBAN}</td><td className="border px-3 py-2">{QUANTO_TENIAMO_L_IBAN}</td></tr>
+              <tr><td className="border px-3 py-2">Rimborso con bonifico (IBAN)</td><td className="border px-3 py-2">{PERCHE_TENIAMO_L_IBAN}</td><td className="border px-3 py-2">{QUANTO_TENIAMO_L_IBAN}</td></tr>
               <tr><td className="border px-3 py-2">Gestione reclami e contenzioso</td><td className="border px-3 py-2">Legittimo interesse</td><td className="border px-3 py-2">Fino a prescrizione (10 anni)</td></tr>
             </tbody>
           </table>

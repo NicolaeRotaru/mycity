@@ -18,9 +18,10 @@ import { creaFintoDatabase } from './aiuti/finto-database-dei-rimborsi';
  * restava, ma nel database non c'era piu' niente che dicesse a chi pagarli.
  *
  * LA REGOLA (decisa dall'AD, che Nicola e il legale possono cambiare): l'IBAN si tiene SOLO
- * finche' il bonifico e' da fare. Fatto il bonifico, si cancella. Se il cliente cancella l'account
- * con un bonifico ancora da fare, sul reso o sul reclamo restano solo IBAN e nome
- * dell'intestatario fino al pagamento; senza bonifici da fare, l'IBAN se ne va con l'account.
+ * finche' il bonifico e' da fare. Fatto il bonifico, si cancella. Se il cliente chiede di
+ * cancellare l'account con un bonifico ancora da fare, la cancellazione aspetta che il bonifico
+ * risulti fatto (riesame del 16/10, sesto giro); senza bonifici da fare, l'IBAN se ne va con
+ * l'account.
  *
  * Girano le rotte VERE (apertura del reso, decisione, avanzamento, lista dei bonifici) e la
  * cancellazione dell'account VERA; finti solo il database, Stripe e la posta. Si guarda la riga
@@ -265,28 +266,25 @@ describe('un reso chiuso senza bonifico non tiene l IBAN', () => {
 });
 
 describe('la cliente cancella l account', () => {
-  it('con un bonifico ancora da fare: restano solo l IBAN e il nome, fino al pagamento', async () => {
+  it('con un bonifico ancora da fare: la cancellazione aspetta il bonifico; fatto, va avanti e l IBAN non c e piu', async () => {
     const id = await resoRimborsato();
     reso(id).notes = 'il maglione era della taglia sbagliata';
 
-    const esito = await cancellaAccount(getAdminSupabase(), 'giulia');
-    expect(esito.ok, esito.errore).toBe(true);
+    const prima = await cancellaAccount(getAdminSupabase(), 'giulia');
+    expect(prima).toMatchObject({ ok: false, motivo: 'bonifico_da_fare' });
+    expect(finto.cancellati, 'account cancellato con 40 € ancora da restituire').toEqual([]);
+    expect(reso(id).refund_iban, 'le dobbiamo ancora 40 € e il suo conto e sparito: il bonifico non si fa piu').toBe(IBAN);
+    expect((await voci()).find((v) => v.id === id)).toMatchObject({ daFare: true });
+
+    // Chi paga fa il bonifico e lo segna: l'IBAN se ne va, e la cancellazione riparte.
+    expect((await suLaLista({ resoId: id })).status).toBe(200);
+    const dopo = await cancellaAccount(getAdminSupabase(), 'giulia');
+    expect(dopo.ok, dopo.errore).toBe(true);
 
     const r = reso(id);
     expect(r.buyer_id).toBeNull();
-    expect(r.refund_iban, 'le dobbiamo ancora 40 € e il suo conto e sparito: il bonifico non si fa piu').toBe(IBAN);
-    expect(r.refund_intestatario, 'resta un debito senza nessun nome a cui intestarlo').toBe('Giulia Bianchi');
-    expect(r.notes, 'sul reso doveva restare SOLO il conto e il nome').toBeNull();
-    // Il nome e' stato preso prima che la pulizia lo togliesse dall'ordine.
-    expect(finto.db.tabelle.orders[0].delivery_full_name).toBeNull();
-
-    // Chi paga vede a chi intestare il bonifico.
-    expect((await voci()).find((v) => v.id === id)).toMatchObject({ daFare: true, intestatario: 'Giulia Bianchi' });
-
-    // Fatto il bonifico, se ne vanno anche quelli.
-    expect((await suLaLista({ resoId: id })).status).toBe(200);
-    expect(reso(id).refund_iban).toBeNull();
-    expect(reso(id).refund_intestatario, 'pagato il bonifico, il nome resta lo stesso').toBeNull();
+    expect(r.refund_iban).toBeNull();
+    expect(r.notes).toBeNull();
   });
 
   it('senza bonifici da fare: l IBAN se ne va insieme all account', async () => {
@@ -342,19 +340,23 @@ describe('il bonifico di un reclamo dice a chi pagare', () => {
     expect((await voci()).find((v) => v.id === RECLAMO)).toMatchObject({ iban: 'IT42 L123 4512 3451 2345 6789 012' });
   });
 
-  it('se la cliente cancella l account prima del bonifico, sulla riga restano IBAN e nome; pagato, se ne vanno', async () => {
+  it('se la cliente chiede di cancellare l account prima del bonifico, aspetta; pagato, va avanti e l IBAN non c e piu', async () => {
+    // Il segno che `refundOrder` scrive sull'ordine quando il reclamo si chiude col bonifico.
+    finto.db.tabelle.orders[1].stripe_refund_id = `bonifico:2400:dispute_${RECLAMO}`;
     await suLaLista({ reclamoId: RECLAMO, azione: 'iban', iban: IBAN_DI_MARCO });
 
-    const esito = await cancellaAccount(getAdminSupabase(), 'giulia');
-    expect(esito.ok, esito.errore).toBe(true);
-    expect(finto.db.tabelle.disputes, 'il reclamo se ne va con la cliente').toHaveLength(0);
-
-    expect(bonifico()).toMatchObject({ fatto_at: null, iban: IBAN_DI_MARCO, intestatario: 'Giulia Bianchi' });
-    expect((await voci()).find((v) => v.id === RECLAMO)).toMatchObject({ daFare: true, intestatario: 'Giulia Bianchi' });
+    const prima = await cancellaAccount(getAdminSupabase(), 'giulia');
+    expect(prima).toMatchObject({ ok: false, motivo: 'bonifico_da_fare' });
+    expect(finto.cancellati).toEqual([]);
+    expect(bonifico()).toMatchObject({ fatto_at: null, iban: IBAN_DI_MARCO, intestatario: null });
 
     expect((await suLaLista({ reclamoId: RECLAMO })).status).toBe(200);
     expect(bonifico().fatto_at).toBeTruthy();
     expect(bonifico().iban).toBeNull();
-    expect(bonifico().intestatario).toBeNull();
+
+    const dopo = await cancellaAccount(getAdminSupabase(), 'giulia');
+    expect(dopo.ok, dopo.errore).toBe(true);
+    expect(finto.db.tabelle.disputes, 'il reclamo se ne va con la cliente').toHaveLength(0);
+    expect(bonifico(), 'la riga del bonifico fatto resta, senza conto').toMatchObject({ iban: null, intestatario: null });
   });
 });
