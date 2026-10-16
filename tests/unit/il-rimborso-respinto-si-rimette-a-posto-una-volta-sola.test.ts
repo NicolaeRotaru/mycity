@@ -167,26 +167,64 @@ describe('lo stesso rimborso respinto, passato due volte dalla rotta', () => {
     expect(avvisiAgliAmministratori()).toHaveLength(1);
   });
 
-  it('un altro rimborso scritto fra la lettura e la scrittura non si perde: si riprova sui numeri nuovi', async () => {
-    stato.db.tabelle.orders = [ordineConDueRimborsi()];
-    avvisoRespinto('evt_respinto', 're_2', 500);
-    // Mentre il gestore lavora, `refundOrder` registra un terzo reso da 3 €
-    // (`accumula_rimborso`): il rimborsato passa da 15 € a 18 €.
+  /** Fra la lettura del gestore e la sua scrittura, qualcun altro cambia l'ordine (una volta). */
+  function cambiaFraLetturaEScrittura(cambio: Riga) {
     let giaCambiato = false;
     stato.db.guasto = (s) => {
       if (!giaCambiato && s.tabella === 'orders' && s.operazione === 'update') {
         giaCambiato = true;
-        Object.assign(ordine(), { refunded_amount_cents: 1800, seller_payout_reversed_cents: 1458, stripe_refund_id: 're_1,re_2,re_3' });
+        Object.assign(ordine(), cambio);
       }
       return null;
     };
+  }
+
+  it('un altro rimborso registrato fra la lettura e la scrittura non si perde: si riprova sui numeri nuovi', async () => {
+    stato.db.tabelle.orders = [ordineConDueRimborsi()];
+    avvisoRespinto('evt_respinto', 're_2', 500);
+    // `refundOrder` segna un terzo reso da 3 € (`accumula_rimborso`) PRIMA di
+    // chiederlo a Stripe: per un momento cambia solo il rimborsato, 15 → 18 €.
+    cambiaFraLetturaEScrittura({ refunded_amount_cents: 1800 });
 
     expect(await consegna(), 'scrivere sui numeri vecchi cancellerebbe il reso da 3 €').toBe(500);
     expect(await consegna(), 'Stripe riprova e la seconda volta passa').toBe(200);
 
     expect(ordine().refunded_amount_cents, 'scritto sui numeri letti prima: 10 €, e i 3 € spariti').toBe(1300);
-    expect(ordine().seller_payout_reversed_cents).toBe(1053);
+    expect(ordine().seller_payout_reversed_cents).toBe(810);
     expect(avvisiAgliAmministratori()).toHaveLength(1);
+  });
+
+  it('l elenco dei rimborsi allungato nel frattempo non si accorcia', async () => {
+    stato.db.tabelle.orders = [ordineConDueRimborsi()];
+    avvisoRespinto('evt_respinto', 're_2', 500);
+    // `refundOrder` chiude il suo reso scrivendone l'id nell'elenco: è la
+    // memoria che impedisce di contarlo di nuovo come rimborso «da fuori».
+    cambiaFraLetturaEScrittura({ stripe_refund_id: 're_1,re_2,re_3' });
+
+    expect(await consegna()).toBe(500);
+    expect(await consegna()).toBe(200);
+
+    expect(String(ordine().stripe_refund_id).split(','), 'scritto sull elenco letto prima: re_3 sparito').toEqual(
+      ['re_1', 're_2', 're_3', 'respinto:500:re_2'],
+    );
+    expect(ordine().refunded_amount_cents).toBe(1000);
+  });
+
+  it('il giro dei bonifici che prende l ordine nel frattempo: la quota del negozio non si tocca più', async () => {
+    stato.db.tabelle.orders = [ordineConDueRimborsi()];
+    avvisoRespinto('evt_respinto', 're_2', 500);
+    // Il giro passa l'ordine da HELD a PROCESSING: l'importo del bonifico è
+    // deciso con la quota tolta di 12,15 €.
+    cambiaFraLetturaEScrittura({ payout_status: 'PROCESSING' });
+
+    expect(await consegna()).toBe(500);
+    expect(await consegna()).toBe(200);
+
+    expect(ordine()).toMatchObject({ refunded_amount_cents: 1000, payout_status: 'PROCESSING' });
+    expect(
+      ordine().seller_payout_reversed_cents,
+      'il bonifico in corso è già deciso: scrivere 8,10 € direbbe ridati al negozio 4,05 € che non riceve',
+    ).toBe(1215);
   });
 
   it('carrello di due negozi, rimborso dal cruscotto: se si ferma a metà, il secondo passaggio divide solo il resto', async () => {
