@@ -19,7 +19,8 @@
 import type Stripe from 'stripe';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
+import { COLONNE_124 } from '@/lib/db/migrazione-124';
+import { leggiAGradini } from '@/lib/db/ripiego-a-gradini';
 import { formatPriceFromCents } from '@/lib/format';
 import { scritturaFacoltativa } from './esito';
 
@@ -61,12 +62,18 @@ export async function findOrdersForDispute(dispute: Stripe.Dispute, columns: str
   // che la colonna esista fallisce INTERA: qui l'errore non veniva nemmeno
   // guardato, quindi la contestazione vinta trovava zero ordini e il venditore
   // restava senza soldi in silenzio (lib/db/migrazione-124.ts).
-  const ridotte = senzaColonne(columns, [...COLONNE_124, ...COLONNE_126_CONTESTAZIONE]);
+  //
+  // 16/10/2026 (riesame del lotto) — Una migrazione alla volta, dalla più
+  // nuova. Il ripiego toglieva insieme le colonne della 126 e quelle della 124:
+  // in produzione (la 124 c'è, la 126 no) si perdeva `payout_tentativo`, e la
+  // contestazione vinta rimetteva in coda il bonifico sempre col tentativo 1
+  // (lib/db/ripiego-a-gradini.ts).
   const cerca = async (campo: 'stripe_payment_intent' | 'stripe_charge_id', valore: string) =>
-    conRipiegoSchema(
+    leggiAGradini(
       `orders.select (contestazione per ${campo})`,
-      () => admin.from('orders').select(columns).eq(campo, valore),
-      () => admin.from('orders').select(ridotte).eq(campo, valore),
+      columns,
+      [COLONNE_126_CONTESTAZIONE, COLONNE_124],
+      (colonne) => admin.from('orders').select(colonne).eq(campo, valore),
     );
 
   // 15/10/2026 (R81) — UNA LETTURA CADUTA NON È «NESSUN ORDINE».
