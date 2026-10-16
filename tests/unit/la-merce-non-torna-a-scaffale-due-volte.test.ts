@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { scritturaSuUnaRiga } from './aiuti/scrittura-su-una-riga';
 import { decidiRimessaAScaffale } from '@/lib/ordini/rimessa-a-scaffale';
 
 /**
@@ -89,13 +90,11 @@ vi.mock('@/lib/supabase/server', () => ({
           // fotografia, e le scritture di questa chiamata non la cambiano sotto
           // i piedi. Con l'oggetto vivo la prova sarebbe piu' facile del vero.
           select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { ...state.order }, error: null }) }) }),
-          update: (u: Record<string, unknown>) => ({
-            eq: () => {
+          update: (u: Record<string, unknown>) =>
+            scritturaSuUnaRiga(() => state.order as unknown as Record<string, unknown>, () => {
               state.updates.push(u);
               Object.assign(state.order, u);
-              return Promise.resolve({ error: null });
-            },
-          }),
+            }),
         };
       }
       return {};

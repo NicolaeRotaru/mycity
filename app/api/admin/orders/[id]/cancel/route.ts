@@ -64,11 +64,13 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       return ApiErrors.badGateway('Rimborso Stripe fallito: ' + (esito.dettaglio ?? 'unknown'));
     }
     // 16/10/2026 — Quanto rendere si sa solo dopo aver diviso il rimborso dal cruscotto.
+    // Sotto i 200 caratteri, una riga, senza parentesi: più lunga, la pagina Ordini la
+    // sostituiva con «Qualcosa non ha funzionato» (friendlyError, lib/errors.ts) e chi
+    // annullava riprovava a vuoto senza sapere perché.
     if (esito.motivo === 'RIMBORSO_DA_DIVIDERE') {
       return ApiErrors.conflict(
-        "Su questo pagamento c'è un rimborso fatto dal cruscotto Stripe che non è ancora diviso fra i negozi del carrello. " +
-          'Dividilo prima dal riquadro «Rimborsi dal cruscotto da dividere» qui in Ordini, poi annulla di nuovo: ' +
-          "solo allora si sa quanto rendere su quest'ordine.",
+        "Su questo pagamento c'è un rimborso dal cruscotto non ancora diviso fra i negozi. " +
+          'Dividilo nel riquadro «Rimborsi dal cruscotto da dividere» qui in Ordini, poi annulla di nuovo.',
       );
     }
     return ApiErrors.internal('Annullamento fallito');

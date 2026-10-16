@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { scritturaSuUnaRiga } from './aiuti/scrittura-su-una-riga';
 
 /**
  * DUE DIFETTI SUI RIMBORSI CON CARTA, TROVATI DALLA RADIOGRAFIA DEL 21/8/2026.
@@ -81,13 +82,11 @@ vi.mock('@/lib/supabase/server', () => ({
       if (table === 'orders') {
         return {
           select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: state.order, error: null }) }) }),
-          update: (u: Record<string, unknown>) => ({
-            eq: () => {
+          update: (u: Record<string, unknown>) =>
+            scritturaSuUnaRiga(() => state.order as unknown as Record<string, unknown>, () => {
               state.updates.push(u);
               Object.assign(state.order, u);
-              return Promise.resolve({ error: null });
-            },
-          }),
+            }),
         };
       }
       return {};

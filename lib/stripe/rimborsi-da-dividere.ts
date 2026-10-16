@@ -301,22 +301,75 @@ export async function carrelliDaDividere(): Promise<ElencoDaDividere> {
   return { carrelli, nonLetti };
 }
 
+/** Il turno torna fermo: il carrello riappare nel pannello col resto da dividere. */
+async function rimettiLaPausa(pagamento: string, turno: string): Promise<void> {
+  const { error } = await getAdminSupabase()
+    .from('orders')
+    .update({ internal_dispute_status: PAUSA_RIMBORSO_DA_DIVIDERE })
+    .eq('id', turno)
+    .is('internal_dispute_status', null);
+  if (error) {
+    logger.error('[rimborso da dividere] pausa non rimessa: il resto da dividere non si vede nel pannello', {
+      pagamento, orderId: turno, message: error.message,
+    });
+  }
+}
+
 export type EsitoDellaDivisioneFatta =
   | { ok: true; registrati: string[] }
   | { ok: false; stato: 400 | 409; errore: string; registrati: string[] };
+
+/**
+ * In che ordine si scrivono gli ordini di una divisione.
+ *
+ * 16/10/2026 (quinto riesame del lotto) — DUE SCHEDE, DUE DIVISIONI DIVERSE, TUTTE E DUE REGISTRATE.
+ *
+ * Si scrivevano prima gli ordini non fermi, poi quelli fermi. Ma ogni
+ * scrittura controlla solo il suo ordine, e un ordine non fermo con parte zero
+ * si salta. Un caso: pane con un reclamo aperto (non fermo) e fiori fermi, 3 €
+ * dal cruscotto. Una scheda manda «3 € al pane, 0 ai fiori», un'altra «0 al
+ * pane, 3 € ai fiori», insieme. La prima registra il pane; la seconda salta il
+ * pane e registra i fiori; la prima trova i fiori cambiati e si ferma. 6 €
+ * registrati per 3 usciti, e la quota tolta a tutti e due i negozi.
+ *
+ * Adesso il PRIMO ordine fermo (in ordine di id, uguale per tutte le schede)
+ * si scrive per primo: è il turno del carrello. Ogni divisione lo scrive, e la
+ * sua scrittura toglie la pausa solo se c'è ancora: la seconda scheda trova il
+ * turno già preso e non registra niente. Poi i non fermi, poi gli altri fermi:
+ * se una scrittura dopo il turno non passa, quello che resta fermo tiene il
+ * carrello nel pannello (e se non resta niente, `rimettiLaPausaAlTurno`).
+ */
+export function inOrdineDiScrittura<T extends { id: string } & Pick<OrdineDelCarrello, 'internal_dispute_status'>>(
+  candidati: ReadonlyArray<T>,
+): T[] {
+  const fermi = candidati.filter(fermo).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const nonFermi = candidati.filter((o) => !fermo(o));
+  return [...fermi.slice(0, 1), ...nonFermi, ...fermi.slice(1)];
+}
+
+/**
+ * Una scrittura si è fermata alla posizione `fermataA` di `inOrdine`, dopo il
+ * turno: il carrello resta nel pannello solo se fra gli ordini non ancora
+ * scritti (compreso quello che si è fermato) ce n'è uno fermo. Se no, la pausa
+ * va rimessa sul turno, altrimenti il resto da dividere sparisce dal pannello
+ * con i bonifici sbloccati.
+ */
+export function rimettiLaPausaAlTurno(
+  inOrdine: ReadonlyArray<Pick<OrdineDelCarrello, 'internal_dispute_status'>>,
+  fermataA: number,
+): boolean {
+  return fermataA > 0 && !inOrdine.slice(fermataA).some(fermo);
+}
 
 /**
  * Registra la divisione decisa da chi amministra e riapre i bonifici.
  *
  * Ogni ordine si scrive in una volta sola — la sua parte, la quota del suo
  * negozio e, se era fermo, la pausa tolta — e solo se non è cambiato da quando
- * l'ho letto (e, se era fermo, se lo è ancora). Così una divisione ripetuta
- * (doppio clic, una seconda scheda) non registra niente due volte: dopo la
- * prima non c'è più niente di fermo.
- *
- * Prima gli ordini NON fermi, poi quelli fermi: se una scrittura non passa,
- * quello che è già registrato è sempre accompagnato da almeno un ordine ancora
- * fermo, e il pannello continua a mostrare il carrello col resto da dividere.
+ * l'ho letto (e, se era fermo, se lo è ancora). L'ordine delle scritture e il
+ * turno del carrello stanno in `inOrdineDiScrittura`: così una divisione
+ * ripetuta (doppio clic, una seconda scheda, anche con parti diverse) non
+ * registra niente due volte.
  */
 export async function dividiIlRimborso(
   pagamento: string,
@@ -359,18 +412,20 @@ export async function dividiIlRimborso(
     .map((r) => r.id)
     .filter((id): id is string => !!id);
 
-  const inOrdine = [...candidati.filter((o) => !fermo(o)), ...candidati.filter(fermo)];
+  const inOrdine = inOrdineDiScrittura(candidati);
   const registrati: string[] = [];
-  for (const ordine of inOrdine) {
+  for (const [posizione, ordine] of inOrdine.entries()) {
     const parte = controllo.parti.get(ordine.id) ?? 0;
     const eraFermo = fermo(ordine);
-    // Un ordine non fermo senza parte non ha niente da scrivere.
+    // Un ordine non fermo senza parte non ha niente da scrivere: il turno,
+    // preso sul primo ordine fermo, basta a tenere lontana un'altra divisione.
     if (!eraFermo && parte <= 0) continue;
     try {
       await registraSullOrdine(ordine, parte, { chargeId: null, togliLaPausa: eraFermo, rimborsi: daFuoriIds });
     } catch (err) {
       const motivo = err instanceof Error ? err.message : String(err);
       logger.error('[rimborso da dividere] ordine non registrato', { pagamento, orderId: ordine.id, motivo });
+      if (rimettiLaPausaAlTurno(inOrdine, posizione)) await rimettiLaPausa(pagamento, inOrdine[0].id);
       return {
         ok: false,
         stato: 409,

@@ -65,6 +65,13 @@ export type ScritturaDelRimborsoRespinto = {
     refunded_amount_cents: number | null;
     payout_status: string | null;
     stripe_refund_id: string | null;
+    /**
+     * 16/10/2026 (quinto riesame del lotto) — anche la quota tolta al negozio:
+     * la scrittura la riporta indietro da quella letta, e `refundOrder` può
+     * averla appena alzata per un altro reso (vedi `addebitaQuotaVenditoreSeNonPagato`).
+     * Senza, il negozio riaveva anche la quota del reso nuovo.
+     */
+    seller_payout_reversed_cents: number | null;
   };
 };
 
@@ -218,6 +225,7 @@ export function pianoDelRimborsoRespinto(
         refunded_amount_cents: o.refunded_amount_cents ?? null,
         payout_status: o.payout_status ?? null,
         stripe_refund_id: o.stripe_refund_id ?? null,
+        seller_payout_reversed_cents: o.seller_payout_reversed_cents ?? null,
       },
     };
   });

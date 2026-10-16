@@ -257,6 +257,81 @@ describe('lo stesso rimborso respinto, passato due volte dalla rotta', () => {
   });
 });
 
+/** La scrittura arriva nel database, ma la risposta si perde (una volta): la connessione cade dopo il commit. */
+function rispostaPersaDopo(quale: (s: { tabella: string; operazione: string; valori: unknown }) => boolean) {
+  let caduta = false;
+  stato.db.guasto = (s) => {
+    if (caduta || !quale(s)) return null;
+    caduta = true;
+    const righe = stato.db.tabelle[s.tabella]!;
+    if (s.operazione === 'insert') {
+      righe.push(...(Array.isArray(s.valori) ? (s.valori as Riga[]) : [s.valori as Riga]).map((v) => ({ ...v })));
+    } else {
+      Object.assign(ordine(), s.valori as Riga);
+    }
+    return { code: '08006', message: 'connection reset by peer' };
+  };
+}
+
+describe('l avviso agli amministratori arriva anche se il primo passaggio si ferma dopo la scrittura (quinto riesame)', () => {
+  it('IL CASO DEL RIESAME — la scrittura sull ordine passa ma la risposta si perde: al nuovo tentativo l avviso parte, una volta', async () => {
+    stato.db.tabelle.orders = [ordineConDueRimborsi()];
+    avvisoRespinto('evt_respinto', 're_2', 500);
+    rispostaPersaDopo((s) => s.tabella === 'orders' && s.operazione === 'update');
+
+    expect(await consegna(), 'il database ha risposto con un errore: Stripe deve riprovare').toBe(500);
+    expect(ordine().stripe_refund_id, 'la scrittura è arrivata davvero').toContain('respinto:500:re_2');
+    expect(await consegna()).toBe(200);
+
+    expect(avvisiAgliAmministratori(), 'il cliente senza rimborso e nessuno che lo sa').toHaveLength(1);
+    expect(ordine()).toMatchObject({ refunded_amount_cents: 1000, seller_payout_reversed_cents: 810 });
+
+    // Un secondo avviso di Stripe (altro id) per lo stesso rimborso: niente di nuovo.
+    avvisoRespinto('evt_respinto_bis', 're_2', 500);
+    expect(await consegna()).toBe(200);
+    expect(avvisiAgliAmministratori()).toHaveLength(1);
+  });
+
+  it('il processo muore fra la scrittura e l avviso: al nuovo tentativo l avviso parte', async () => {
+    stato.db.tabelle.orders = [ordineConDueRimborsi()];
+    avvisoRespinto('evt_respinto', 're_2', 500);
+    // L'avviso non si scrive (il processo è morto lì): l'ordine è già a posto.
+    let morto = false;
+    stato.db.guasto = (s) => {
+      if (morto || s.tabella !== 'notifications') return null;
+      morto = true;
+      return TIMEOUT;
+    };
+
+    expect(await consegna()).toBe(500);
+    expect(avvisiAgliAmministratori()).toHaveLength(0);
+    expect(await consegna()).toBe(200);
+    expect(avvisiAgliAmministratori()).toHaveLength(1);
+    expect(ordine().refunded_amount_cents, 'il nuovo tentativo non toglie di nuovo').toBe(1000);
+  });
+
+  it('l avviso scritto ma con la risposta persa: al nuovo tentativo non ne arriva un secondo', async () => {
+    stato.db.tabelle.orders = [ordineConDueRimborsi()];
+    stato.db.tabelle.profiles!.push({ id: 'admin2', role: 'admin' });
+    avvisoRespinto('evt_respinto', 're_2', 500);
+    rispostaPersaDopo((s) => s.tabella === 'notifications');
+
+    expect(await consegna()).toBe(500);
+    expect(await consegna()).toBe(200);
+    expect(avvisiAgliAmministratori().map((n) => n.user_id).sort(), 'due avvisi = il cliente rimborsato due volte a mano').toEqual(['admin1', 'admin2']);
+  });
+
+  it('due rimborsi respinti diversi sullo stesso ordine sono due avvisi', async () => {
+    stato.db.tabelle.orders = [ordineConDueRimborsi()];
+    avvisoRespinto('evt_a', 're_2', 500);
+    expect(await consegna()).toBe(200);
+    avvisoRespinto('evt_b', 're_1', 500);
+    expect(await consegna()).toBe(200);
+    expect(avvisiAgliAmministratori()).toHaveLength(2);
+    expect(ordine().refunded_amount_cents).toBe(500);
+  });
+});
+
 describe('il segno del rimborso respinto', () => {
   it('dice quale rimborso e quanto, e non si confonde con un id che comincia uguale', () => {
     const segno = segnoDelRimborsoRespinto('re_2', 500);
@@ -275,7 +350,9 @@ describe('il segno del rimborso respinto', () => {
       500,
     );
     expect(scritture[0].valori.stripe_refund_id).toBe('re_1,bonifico:300:return_x,respinto:500:re_2');
-    expect(scritture[0].seAncora).toEqual({ refunded_amount_cents: 1500, payout_status: null, stripe_refund_id: 're_1,bonifico:300:return_x' });
+    expect(scritture[0].seAncora).toEqual({
+      refunded_amount_cents: 1500, payout_status: null, stripe_refund_id: 're_1,bonifico:300:return_x', seller_payout_reversed_cents: null,
+    });
   });
 
   it('un ordine che porta già il segno resta fuori dal piano', () => {

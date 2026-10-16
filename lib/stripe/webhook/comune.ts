@@ -16,6 +16,7 @@
  * Nessuna logica è cambiata in questo spostamento: le prove esistenti sul
  * webhook sono la dimostrazione che non si è rotto niente.
  */
+import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
@@ -107,15 +108,61 @@ export function sessionePagata(session: Stripe.Checkout.Session): boolean {
 /**
  * Inserisce una notifica per tutti gli admin. È un avviso: se non parte resta
  * scritto nei log, ma non fa ritentare a Stripe un evento già lavorato (R81).
+ *
+ * 16/10/2026 (quinto riesame del lotto) — CON `unaVoltaPer`, UN AVVISO CHE SI PUÒ
+ * RIPETERE SENZA ARRIVARE DUE VOLTE.
+ *
+ * Un caso: la banca respinge un rimborso, il gestore toglie l'importo
+ * dall'ordine e ci lascia il segno «già fatto», ma la risposta del database si
+ * perde (o il processo muore) prima dell'avviso. Stripe riprova, il gestore
+ * trova il segno e usciva senza avvisare: il cliente senza rimborso, e nessuno
+ * che lo sapesse. Saltare l'avviso era il modo di non mandarlo due volte.
+ * Adesso ogni riga ha un identificativo che dipende dalla chiave, e il database
+ * ne rifiuta una seconda (23505): il gestore lo chiede a ogni passaggio, arriva
+ * la prima volta e poi non più. E se non si scrive, si lancia: chi passa la
+ * chiave ha già il suo segno sull'ordine, quindi Stripe che riprova rifà solo
+ * l'avviso.
  */
-export async function notifyAdmins(title: string, body: string, link: string) {
+export async function notifyAdmins(title: string, body: string, link: string, opzioni: { unaVoltaPer?: string } = {}) {
   const admin = getAdminSupabase();
-  const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
+  const chiave = opzioni.unaVoltaPer?.trim() || null;
+  const { data: admins, error: errLettura } = await admin.from('profiles').select('id').eq('role', 'admin');
+  if (errLettura && chiave) throw new Error(`[stripe] amministratori non letti per l avviso «${title}»: ${errLettura.message}`);
   if (!admins || admins.length === 0) return;
-  scritturaFacoltativa(
-    await admin.from('notifications').insert(admins.map((a) => ({ user_id: a.id, title, body, link }))),
-    `avviso agli amministratori: ${title}`,
+  if (!chiave) {
+    scritturaFacoltativa(
+      await admin.from('notifications').insert(admins.map((a) => ({ user_id: a.id, title, body, link }))),
+      `avviso agli amministratori: ${title}`,
+    );
+    return;
+  }
+  const { error } = await admin.from('notifications').insert(
+    admins.map((a) => ({ id: idDellAvvisoAgliAmministratori(chiave, a.id), user_id: a.id, title, body, link })),
   );
+  if (!error) return;
+  if ((error as { code?: string }).code === '23505') {
+    logger.info('[stripe] avviso agli amministratori già mandato: non si ripete', { chiave, title });
+    return;
+  }
+  throw new Error(`[stripe] avviso agli amministratori non scritto («${title}»): ${error.message}`);
+}
+
+/**
+ * L'identificativo della riga di un avviso agli amministratori che deve arrivare
+ * UNA volta sola: sempre lo stesso per la stessa chiave e lo stesso destinatario.
+ *
+ * È un UUID valido perché la colonna è di tipo uuid: sedici byte dell'impronta,
+ * con i bit di «versione» e «variante» sistemati come vuole la RFC 4122 (lo
+ * stesso schema di `identificativoAvviso` in lib/privacy/avvisi-a-chi-aspetta.ts).
+ * Non serve che sia imprevedibile: serve che non cambi.
+ */
+export function idDellAvvisoAgliAmministratori(chiave: string, adminId: string): string {
+  const b = createHash('sha256').update(`mycity:avviso-amministratori:${chiave}:${adminId}`).digest();
+  const byte = Buffer.from(b.subarray(0, 16));
+  byte[6] = (byte[6] & 0x0f) | 0x50;
+  byte[8] = (byte[8] & 0x3f) | 0x80;
+  const h = byte.toString('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
 /**

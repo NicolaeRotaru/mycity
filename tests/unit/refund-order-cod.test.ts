@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { scritturaSuUnaRiga } from './aiuti/scrittura-su-una-riga';
 
 /**
  * refundOrder — percorso COD (🟠-18): nessuna charge Stripe → accredito sul
@@ -84,12 +85,10 @@ vi.mock('@/lib/supabase/server', () => ({
       if (table === 'orders') {
         return {
           select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: state.order, error: null }) }) }),
-          update: (u: Record<string, unknown>) => ({
-            eq: () => {
+          update: (u: Record<string, unknown>) =>
+            scritturaSuUnaRiga(() => state.order as unknown as Record<string, unknown>, () => {
               state.updates.push(u);
-              return Promise.resolve({ error: null });
-            },
-          }),
+            }),
         };
       }
       if (table === 'wallet_ledger') {

@@ -243,6 +243,15 @@ class FintaQuery {
         const doppione = nuove.some((n) => righe.some((r) => chiave.every((c) => r[c] === n[c])));
         if (doppione) return { data: null, error: { code: '23505', message: 'duplicate key value violates unique constraint' } };
       }
+      // La chiave primaria: chi porta un id suo che c'è già riceve 23505, come
+      // dal database vero (gli avvisi «una volta sola» contano su questo).
+      // Gli id inventati qui sopra non si guardano: sono del finto, non di chi scrive.
+      const idPortati = (Array.isArray(this.valori) ? this.valori : [this.valori ?? {}])
+        .map((v) => v.id)
+        .filter((id) => id !== undefined && id !== null);
+      if (idPortati.some((id, i) => idPortati.indexOf(id) !== i || righe.some((r) => r.id === id))) {
+        return { data: null, error: { code: '23505', message: `duplicate key value violates unique constraint "${this.tabella}_pkey"` } };
+      }
       righe.push(...nuove);
       toccate = nuove;
     } else if (this.operazione === 'update') {
