@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Store, MapPin, Navigation, ArrowRight, Layers, Power, Package, ChefHat, Star, Banknote,
+  AlertTriangle, RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDate, formatPrice, formatPriceFromCents } from '@/lib/format';
@@ -25,6 +26,7 @@ import CashConfirmDialog from '@/components/rider/CashConfirmDialog';
 import {
   CHIAVE_INCASSI_DA_DICHIARARE,
   INDIRIZZO_INCASSI_DA_DICHIARARE,
+  riquadroDegliIncassi,
 } from '@/lib/rider/incasso-alla-consegna';
 import type { IncassoDaDichiarare } from '@/lib/rider/leggi-incassi-da-dichiarare';
 
@@ -192,7 +194,7 @@ export default function RiderDashboardPage() {
    * lettura passa dal server: dopo sette giorni la regola sugli ordini glieli
    * nasconderebbe, e con loro l'unico modo di rimediare.
    */
-  const { data: incassiLetti } = useQuery({
+  const letturaIncassi = useQuery({
     queryKey: CHIAVE_INCASSI_DA_DICHIARARE,
     queryFn: async (): Promise<IncassoDaDichiarare[]> => {
       const risposta = await fetch(INDIRIZZO_INCASSI_DA_DICHIARARE, { cache: 'no-store' });
@@ -204,7 +206,11 @@ export default function RiderDashboardPage() {
     refetchOnWindowFocus: true,
     staleTime: 15_000,
   });
-  const incassiDaDichiarare = Array.isArray(incassiLetti) ? incassiLetti : [];
+  // 16/10/2026 — Prima qui si prendeva solo il dato: con la lettura fallita il
+  // riquadro spariva e la bacheca sembrava pulita. «Nessun incasso» e «non lo
+  // so» adesso sono due stati diversi, decisi da `riquadroDegliIncassi`.
+  const riquadroIncassi = riquadroDegliIncassi<IncassoDaDichiarare>(letturaIncassi);
+  const incassiDaDichiarare = riquadroIncassi.incassi;
 
   // Statistiche di oggi: consegne completate + incasso del giorno.
   const { data: today } = useQuery({
@@ -410,6 +416,29 @@ export default function RiderDashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* Lettura degli incassi fallita: si dice, invece di far sparire il riquadro. */}
+      {riquadroIncassi.stato === 'non-so' && (
+        <div className="mb-[18px] px-4">
+          <div role="alert" className="rounded-xl border border-secondary-200 bg-secondary-50 p-3.5">
+            <p className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+              <AlertTriangle size={16} className="shrink-0 text-secondary-600" aria-hidden />
+              Non riesco a controllare gli incassi da confermare
+            </p>
+            <p className="mb-2.5 mt-1 text-[12.5px] leading-relaxed text-ink-600">
+              Non so se hai consegne in contanti ancora da confermare. Riprova fra un momento.
+            </p>
+            <Button
+              variant="secondary"
+              icon={RotateCcw}
+              loading={letturaIncassi.isFetching}
+              onClick={() => { void letturaIncassi.refetch(); }}
+            >
+              Riprova
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* R33 — Consegne chiuse con i contanti ancora da confermare. */}
       {incassiDaDichiarare.length > 0 && (
