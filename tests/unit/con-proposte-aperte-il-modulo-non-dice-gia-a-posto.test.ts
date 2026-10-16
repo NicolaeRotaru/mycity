@@ -154,7 +154,8 @@ describe('quello che resta da rivedere dopo l applicazione', () => {
         const ancora = pianoPatchPerIlModulo(primo.daRivedere, ctx);
         expect(ancora.scritture, `rivedere ${JSON.stringify(s)} riscrive dei campi`).toEqual([]);
         expect(ancora.proposte).toEqual(primo.proposte);
-        expect(esitoDelPiano(ancora).inSospeso).toBe(primo.proposte.length + (s.attributes_remove?.length ? 1 : 0));
+        // Le stesse righe «Da controllare», tranne il prezzo, che non si rivede.
+        expect(ancora.daControllare).toEqual(primo.daControllare.filter((v) => v.id !== 'prezzo'));
         expect(ancora.daRivedere).toEqual(primo.daRivedere);
       }
     }

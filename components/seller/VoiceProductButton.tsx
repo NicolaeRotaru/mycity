@@ -146,8 +146,9 @@ export default function VoiceProductButton({
     <div role="status" aria-live="polite" data-avviso="dettatura">
       {avviso && (
         <div className={`mt-2 space-y-1 rounded-lg border p-3 text-sm text-ink-800 ${coloreAvviso}`}>
-          <p className="font-semibold">{avviso.esito}</p>
+          {/* La frase fissa prima di tutto: viene prima anche delle parole dell'assistente. */}
           {avviso.dichiarazioni && <p className="font-semibold text-accent-800">{avviso.dichiarazioni}</p>}
+          <p className="font-semibold">{avviso.esito}</p>
           <p className="break-words text-ink-700">{avviso.dettato}</p>
           {avviso.risposta && <p className="break-words text-ink-700">{avviso.risposta}</p>}
           <button

@@ -16,13 +16,27 @@ import { avvisoDopoIlPatch, type AvvisoDopoIlPatch, type EsitoPatchModulo } from
  * sempre cosa e' successo nella scheda, quello che ha detto e la risposta
  * dell'assistente; e se la categoria del prodotto ha dichiarazioni (allergeni,
  * ingredienti...), una frase fissa gli ricorda che quelle le scrive lui. Chi
- * mostra l'avviso lo tiene a video finche' il negoziante non lo chiude.
+ * mostra l'avviso lo tiene a video finche' il negoziante non lo chiude, e mette
+ * la frase fissa PRIMA di tutto il resto.
+ *
+ * Le parole del modello si riportano come sue («L'assistente dice: …»), mai
+ * come una conferma: un modello che scrive «Fatto! Ho aggiunto gli allergeni»
+ * mentre nella scheda non sono entrati chiudeva l'avviso con quella frase,
+ * presentata come «Risposta dell'assistente» sotto un riquadro verde.
  */
 
-/** Le due frasi della dettatura per «ho scritto» e «non c'era niente». */
+/**
+ * Le due frasi della dettatura per «ho scritto» e «non c'era niente».
+ *
+ * «Non c'era niente» diceva «riprova con più dettagli». Ma chi detta solo gli
+ * allergeni della focaccia riceve sempre una proposta vuota — le dichiarazioni
+ * l'assistente non le scrive mai — e riprovare non serve: ogni tentativo e' una
+ * chiamata al modello pagata, e il negoziante lo rifaceva due o tre volte
+ * prima di capire. Adesso la frase dice solo cosa e' successo nella scheda.
+ */
 export const TESTI_DELLA_DETTATURA = {
   applicato: 'Compilato dalla tua descrizione — controlla e salva',
-  niente: 'Non ho ricavato campi: riprova con più dettagli',
+  niente: 'Nella scheda non ho scritto niente',
 } as const;
 
 /** Quanto testo si mostra al massimo: il dettato lo taglia gia' cosi' la rotta. */
@@ -37,7 +51,7 @@ export type AvvisoDellaDettatura = {
   dichiarazioni: string | null;
   /** «Hai detto: «…»». */
   dettato: string;
-  /** La risposta dell'assistente; null se non ha scritto niente. */
+  /** «L'assistente dice: «…»» — le sue parole, riportate come sue; null se non ha scritto niente. */
   risposta: string | null;
 };
 
@@ -72,6 +86,6 @@ export function avvisoDopoLaDettatura(opts: {
     esito: testo,
     dichiarazioni: fraseSulleDichiarazioni(opts.esito.dichiarazioniDellaCategoria),
     dettato: `Hai detto: «${opts.dettato.trim().slice(0, MAX_DETTATO)}»`,
-    risposta: risposta ? `Risposta dell'assistente: «${risposta}»` : null,
+    risposta: risposta ? `L'assistente dice: «${risposta}»` : null,
   };
 }

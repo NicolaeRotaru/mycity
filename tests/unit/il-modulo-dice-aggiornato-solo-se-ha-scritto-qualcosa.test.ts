@@ -101,14 +101,14 @@ describe('il modulo del prodotto dice «aggiornato» solo se ha scritto qualcosa
     expect(piano.proposte.map((p) => p.chiave)).toEqual(['allergeni']);
   });
 
-  it('su un prodotto che non e un alimento la proposta non ha pulsante e non conta come modifica', () => {
+  it('su un prodotto che non e un alimento la proposta non conta come modifica, e non si chiede: la scheda quel campo non lo ha', () => {
     const piano = pianoPatchPerIlModulo(
       { attributes: { allergeni: 'Glutine' } },
       { ...FOCACCIA, categoriaAttuale: 'casa' },
     );
     expect(piano.cambiati).toEqual([]);
-    expect(piano.proposte).toHaveLength(1);
-    expect(piano.proposte[0].valore).toBeUndefined();
+    expect(piano.proposte).toEqual([]);
+    expect(piano.daControllare).toEqual([]);
   });
 
   it('ogni etichetta restituita corrisponde a una scrittura, anche quando il valore proposto non e valido', () => {
