@@ -381,16 +381,38 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
   // avviso lavorato due volte toglieva di nuovo l'importo e ridava al negozio
   // la sua quota una seconda volta).
   const piano = pianoDelRimborsoRespinto(ordini, refund.id ?? '', tornatoIndietro);
+
+  // 16/10/2026 (quinto riesame del lotto) — L'avviso porta la chiave del
+  // rimborso: arriva una volta sola anche se lo si chiede a ogni passaggio
+  // (vedi `notifyAdmins`). Prima, al passaggio che trovava tutti i segni già
+  // scritti, l'avviso si saltava: se il primo si era fermato fra la scrittura e
+  // l'avviso (una risposta del database persa, il processo morto), il cliente
+  // restava senza rimborso e nessuno lo sapeva.
+  const avvisaGliAmministratori = () =>
+    notifyAdmins(
+      '⚠️ Rimborso rifiutato dalla banca',
+      `Il rimborso di €${(tornatoIndietro / 100).toFixed(2)} su ${ordini.length === 1 ? `l'ordine ${ordini[0].id}` : `${ordini.length} ordini dello stesso pagamento`} non e' arrivato al cliente (${refund.status}). I soldi sono rientrati: va rimborsato in un altro modo. Il bonifico al negozio e' stato rimesso in coda; se il rimborso era pieno, la merce era stata rimessa a scaffale e la giacenza va ricontrollata a mano.`,
+      '/admin/orders',
+      refund.id ? { unaVoltaPer: `rimborso-respinto:${refund.id}` } : {},
+    );
+
   if (piano.scritture.length === 0) {
     // Lo stesso rimborso respinto è già stato rimesso a posto su tutti gli
-    // ordini: niente da rifare, e niente secondo avviso agli amministratori
-    // (leggerlo due volte vorrebbe dire rimborsare il cliente due volte a mano).
+    // ordini: niente da rifare. L'avviso si chiede lo stesso, e se c'è già
+    // non parte una seconda volta (leggerlo due volte vorrebbe dire
+    // rimborsare il cliente due volte a mano).
     logger.info('[stripe] rimborso respinto già registrato: niente da rifare', { refundId: refund.id, ordini: piano.giaFatti });
+    if (refund.id) await avvisaGliAmministratori();
     return;
   }
 
   for (const passo of piano.scritture) {
-    const { refunded_amount_cents: rimborsato, payout_status: statoBonifico, stripe_refund_id: elenco } = passo.seAncora;
+    const {
+      refunded_amount_cents: rimborsato,
+      payout_status: statoBonifico,
+      stripe_refund_id: elenco,
+      seller_payout_reversed_cents: quotaTolta,
+    } = passo.seAncora;
     // La scrittura passa solo se l'ordine è ancora quello letto. Se non prende
     // la riga, qualcuno l'ha cambiato nel frattempo (anche un secondo passaggio
     // dello stesso avviso): si lancia, Stripe riprova, e la rilettura decide
@@ -400,6 +422,7 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
       q = rimborsato === null ? q.is('refunded_amount_cents', null) : q.eq('refunded_amount_cents', rimborsato);
       q = statoBonifico === null ? q.is('payout_status', null) : q.eq('payout_status', statoBonifico);
       q = elenco === null ? q.is('stripe_refund_id', null) : q.eq('stripe_refund_id', elenco);
+      q = quotaTolta === null ? q.is('seller_payout_reversed_cents', null) : q.eq('seller_payout_reversed_cents', quotaTolta);
       return q.select('id');
     };
     // Prima della migrazione 124 la colonna del tentativo non esiste: meglio
@@ -421,9 +444,5 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
     }
   }
 
-  await notifyAdmins(
-    '⚠️ Rimborso rifiutato dalla banca',
-    `Il rimborso di €${(tornatoIndietro / 100).toFixed(2)} su ${ordini.length === 1 ? `l'ordine ${ordini[0].id}` : `${ordini.length} ordini dello stesso pagamento`} non e' arrivato al cliente (${refund.status}). I soldi sono rientrati: va rimborsato in un altro modo. Il bonifico al negozio e' stato rimesso in coda; se il rimborso era pieno, la merce era stata rimessa a scaffale e la giacenza va ricontrollata a mano.`,
-    '/admin/orders',
-  );
+  await avvisaGliAmministratori();
 }

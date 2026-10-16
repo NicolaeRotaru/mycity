@@ -46,7 +46,8 @@ vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => stato.db.clien
 vi.mock('@/lib/stripe/client', () => ({
   getStripe: () => ({
     webhooks: { constructEvent: () => stato.evento },
-    subscriptions: { retrieve: async () => ({ current_period_end: 1_900_000_000 }) },
+    // Lo stato dell'abbonamento si rilegge da Stripe (abbonamenti.ts, `statoDaStripe`): qui è attivo.
+    subscriptions: { retrieve: async () => ({ id: 'sub_1', status: 'active', current_period_end: 1_900_000_000 }) },
     // Il conto del negozio si rilegge da Stripe (trasferimenti.ts): qui Stripe
     // dice lo stesso stato che porta l'avviso.
     accounts: { retrieve: async () => stato.evento.data.object },

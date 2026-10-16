@@ -759,6 +759,9 @@ async function notifyRefundBuyer(
   }
 }
 
+/** Quante volte si rilegge un ordine che un altro percorso sta cambiando nello stesso momento. */
+const TENTATIVI_SU_UN_ORDINE_CHE_CAMBIA = 5;
+
 /**
  * LA QUOTA DEL NEGOZIO SU UN RIMBORSO ANTICIPATO, PER TUTTI E DUE I MODI DI PAGARE.
  *
@@ -788,20 +791,84 @@ async function addebitaQuotaVenditoreSeNonPagato(
 ): Promise<number> {
   if (giaStornato !== 0 || sellerShare <= 0 || order.payout_status === 'TRANSFERRED') return giaStornato;
 
-  const giaAddebitato = order.seller_payout_reversed_cents ?? 0;
+  /**
+   * 16/10/2026 (quinto riesame del lotto) — LA QUOTA SI SOMMA A QUELLA DI ADESSO.
+   *
+   * Si riscriveva «quota letta all'inizio + questa», senza condizioni. Ma fra la
+   * lettura e qui c'è la chiamata a Stripe, e in quel secondo il rimborso
+   * respinto dalla banca può ridare al negozio la sua parte. Un caso: ordine da
+   * 40 €, quota tolta 12,15 €, la banca respinge un rimborso da 5 € (−4,05)
+   * mentre ne parte uno nuovo da 5 € (+4,05): il giusto è 12,15, si scriveva
+   * 16,20 e il negozio perdeva 4,05 €. Adesso la scrittura passa solo se la
+   * quota è ancora quella letta; se no si rilegge e si somma a quella nuova.
+   */
   const nettoVenditore = order.seller_payout_cents ?? 0;
-  const nuovoAddebito = Math.min(giaAddebitato + sellerShare, nettoVenditore);
-  const { error: errQuota } = await admin
-    .from('orders')
-    .update({ seller_payout_reversed_cents: nuovoAddebito })
-    .eq('id', order.id);
-  if (errQuota) {
-    logger.error('[refundOrder] quota venditore non addebitata', {
-      orderId: order.id, message: errQuota.message,
-    });
-    return giaStornato;
+  let letto: number | null = order.seller_payout_reversed_cents ?? null;
+  for (let tentativo = 0; tentativo < TENTATIVI_SU_UN_ORDINE_CHE_CAMBIA; tentativo++) {
+    const giaAddebitato = letto ?? 0;
+    const nuovoAddebito = Math.min(giaAddebitato + sellerShare, nettoVenditore);
+    let scrittura = admin.from('orders').update({ seller_payout_reversed_cents: nuovoAddebito }).eq('id', order.id);
+    scrittura = letto === null
+      ? scrittura.is('seller_payout_reversed_cents', null)
+      : scrittura.eq('seller_payout_reversed_cents', letto);
+    const { data: scritti, error: errQuota } = await scrittura.select('id');
+    if (errQuota) {
+      logger.error('[refundOrder] quota venditore non addebitata', {
+        orderId: order.id, message: errQuota.message,
+      });
+      return giaStornato;
+    }
+    if (scritti && scritti.length > 0) return nuovoAddebito - giaAddebitato;
+
+    const { data: ora, error: errLettura } = await admin
+      .from('orders')
+      .select('seller_payout_reversed_cents')
+      .eq('id', order.id)
+      .single();
+    if (errLettura || !ora) {
+      logger.error('[refundOrder] quota venditore non addebitata: ordine cambiato e non riletto', {
+        orderId: order.id, message: errLettura?.message,
+      });
+      return giaStornato;
+    }
+    letto = (ora as { seller_payout_reversed_cents?: number | null }).seller_payout_reversed_cents ?? null;
   }
-  return nuovoAddebito - giaAddebitato;
+  logger.error('[refundOrder] quota venditore non addebitata: l ordine cambia a ogni tentativo', { orderId: order.id });
+  return giaStornato;
+}
+
+/**
+ * 16/10/2026 (quinto riesame del lotto) — IL RIMBORSO SI AGGIUNGE ALL'ELENCO DI ADESSO.
+ *
+ * L'elenco si rimetteva insieme da quello letto all'inizio di `refundOrder`.
+ * Se nel frattempo il rimborso respinto dalla banca ci aveva scritto il suo
+ * segno «respinto:…» (o il webhook l'id di un rimborso dal cruscotto), la
+ * riscrittura lo cancellava: al passaggio successivo dello stesso avviso il
+ * rimborsato scendeva una seconda volta, e agli amministratori arrivavano due
+ * avvisi «va rimborsato in un altro modo». Adesso si scrive solo se l'elenco è
+ * ancora quello letto; se no si rilegge e si aggiunge a quello nuovo.
+ */
+async function aggiungiAllElencoDeiRimborsi(
+  admin: ReturnType<typeof getAdminSupabase>,
+  orderId: string,
+  elencoLetto: string | null,
+  nuovo: string,
+): Promise<{ message: string } | null> {
+  let letto = elencoLetto;
+  for (let tentativo = 0; tentativo < TENTATIVI_SU_UN_ORDINE_CHE_CAMBIA; tentativo++) {
+    const elenco = elencoDaScrivere(rimborsiGiaScritti({ stripe_refund_id: letto }), [nuovo]);
+    if (elenco === (letto ?? '')) return null;
+    let scrittura = admin.from('orders').update({ stripe_refund_id: elenco }).eq('id', orderId);
+    scrittura = letto === null ? scrittura.is('stripe_refund_id', null) : scrittura.eq('stripe_refund_id', letto);
+    const { data: scritti, error } = await scrittura.select('id');
+    if (error) return error;
+    if (scritti && scritti.length > 0) return null;
+
+    const { data: ora, error: errLettura } = await admin.from('orders').select('stripe_refund_id').eq('id', orderId).single();
+    if (errLettura || !ora) return errLettura ?? { message: 'ordine non riletto' };
+    letto = (ora as { stripe_refund_id?: string | null }).stripe_refund_id ?? null;
+  }
+  return { message: 'l elenco dei rimborsi cambia a ogni tentativo' };
 }
 
 /**
@@ -1296,15 +1363,27 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // scrivono, che la lista dei bonifici usa per non fidarsi della riga del
   // reso (che in produzione, senza la 153, il cliente puo' scrivere da solo).
   const daMettereInElenco = stripeRefundId ?? (eUnBonificoDiRimborso(refundId) ? refundId : null);
+  // 16/10 (riesame) — AGGIUNTO all'elenco, non al suo posto: l'elenco è la
+  // memoria dei rimborsi dal cruscotto già registrati quando Stripe non ha
+  // messo l'etichetta, e sostituirlo li faceva registrare una seconda volta.
+  // 16/10 (quinto riesame) — e aggiunto all'elenco di ADESSO, non a quello letto
+  // all'inizio: vedi `aggiungiAllElencoDeiRimborsi`.
+  const errElenco = daMettereInElenco
+    ? await aggiungiAllElencoDeiRimborsi(
+        admin,
+        order.id,
+        (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null,
+        daMettereInElenco,
+      )
+    : null;
+  if (errElenco) {
+    logger.error('[refundOrder] rimborso non aggiunto all elenco dei rimborsi dell ordine', {
+      orderId: order.id, rimborso: daMettereInElenco, message: errElenco.message,
+    });
+  }
   const { error: errStato } = await admin
     .from('orders')
     .update({
-      // 16/10 (riesame) — AGGIUNTO all'elenco, non al suo posto: l'elenco è la
-      // memoria dei rimborsi dal cruscotto già registrati quando Stripe non ha
-      // messo l'etichetta, e sostituirlo li faceva registrare una seconda volta.
-      ...(daMettereInElenco
-        ? { stripe_refund_id: elencoDaScrivere(rimborsiGiaScritti(order as { stripe_refund_id?: string | null }), [daMettereInElenco]) }
-        : {}),
       // `refunded_amount_cents` l'ha già scritto `accumula_rimborso`: riscriverlo
       // qui riaprirebbe la corsa che quella funzione serve a chiudere. (Il ramo
       // dei contanti lo riscriveva: era la stessa corsa, rimasta aperta li'.)

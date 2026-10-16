@@ -28,9 +28,11 @@ const stato: {
   etichetteRiescono: boolean;
   /** I pagamenti di cui Stripe, adesso, non lascia leggere i rimborsi. */
   pagamentiIlleggibili: Set<string>;
+  /** Se c'è, Stripe risponde all'elenco dei rimborsi solo quando questa promessa si chiude. */
+  primaDellaLista: (() => Promise<void>) | null;
 } = {
   db: fintoDatabase(), carica: { amount: 2790, refunded: 0 }, suStripe: [], storni: [],
-  rispostePerse: 0, etichetteRiescono: true, pagamentiIlleggibili: new Set(),
+  rispostePerse: 0, etichetteRiescono: true, pagamentiIlleggibili: new Set(), primaDellaLista: null,
 };
 let orologio = 1_800_000_000;
 
@@ -60,6 +62,7 @@ vi.mock('@/lib/stripe/client', () => ({
       },
       list: async (p: { payment_intent?: string; charge?: string }) => {
         if (p.payment_intent && stato.pagamentiIlleggibili.has(p.payment_intent)) throw new Error('Too many requests');
+        if (stato.primaDellaLista) await stato.primaDellaLista();
         return { data: [...stato.suStripe].reverse().map((r) => ({ ...r, metadata: { ...r.metadata } })), has_more: false };
       },
       update: async (id: string, p: { metadata?: Record<string, string> }) => {
@@ -85,6 +88,7 @@ import { refundOrder } from '@/lib/stripe/payout';
 import { GET, POST } from '@/app/api/admin/orders/rimborsi-da-dividere/route';
 import { centesimiDaEuro, controllaLaDivisione } from '@/lib/rimborsi/divisione-del-rimborso';
 import { friendlyError } from '@/lib/errors';
+import { inOrdineDiScrittura, rimettiLaPausaAlTurno } from '@/lib/stripe/rimborsi-da-dividere';
 
 function ordine(extra: Riga): Riga {
   return {
@@ -141,13 +145,14 @@ async function pagabili(): Promise<string[]> {
   return data.map((r) => String(r.id)).sort();
 }
 
-beforeEach(() => {
+function daCapo(): void {
   stato.carica = { amount: 2790, refunded: 0 };
   stato.suStripe = [];
   stato.storni = [];
   stato.rispostePerse = 0;
   stato.etichetteRiescono = true;
   stato.pagamentiIlleggibili = new Set();
+  stato.primaDellaLista = null;
   stato.db = fintoDatabase({
     orders: [
       ordine({ id: 'o1', seller_id: 'pane-quotidiano', total_price: 15, gross_total_cents: 1500, seller_payout_cents: 1000 }),
@@ -177,7 +182,9 @@ beforeEach(() => {
     if (nome === 'storna_rimborso' && r) r.refunded_amount_cents = Number(r.refunded_amount_cents ?? 0) - Number(a.p_delta);
     return { data: null, error: null };
   };
-});
+}
+
+beforeEach(daCapo);
 
 describe('il rimborso dal cruscotto su un carrello di più negozi si divide dal pannello', () => {
   it('IL CASO DELLA SCHEDA — i 3 € erano dei fiori: il fioraio perde la sua quota con uno storno, e i due bonifici ripartono', async () => {
@@ -421,6 +428,108 @@ describe('un pagamento che Stripe non lascia leggere non spegne il riquadro (rie
     expect(corpo.data.carrelli.map((c) => c.pagamento), 'un pagamento illeggibile ha spento tutto il riquadro').toEqual(['pi_1']);
     expect(corpo.data.nonLetti.map((n) => n.pagamento)).toEqual(['pi_2']);
     expect((await dividi([{ ordine: 'o1', centesimi: 0 }, { ordine: 'o2', centesimi: 300 }])).status).toBe(200);
+  });
+});
+
+describe('due divisioni diverse partite insieme registrano il rimborso una volta sola (quinto riesame del 16/10)', () => {
+  /**
+   * Il caso del riesame: sul pane c'è un reclamo aperto, quindi il webhook ferma
+   * solo i fiori; il pane resta fra gli ordini a cui si può dare una parte.
+   * Una scheda manda «3 € al pane», l'altra «3 € ai fiori», insieme.
+   */
+  const alPane = [{ ordine: 'o1', centesimi: 300 }, { ordine: 'o2', centesimi: 0 }];
+  const aiFiori = [{ ordine: 'o1', centesimi: 0 }, { ordine: 'o2', centesimi: 300 }];
+
+  async function carrelloColPaneInReclamo(): Promise<void> {
+    riga('o1').internal_dispute_status = 'OPEN';
+    await rimborsoDalCruscotto(300);
+    expect(riga('o1').internal_dispute_status, 'il pane col reclamo non si ferma').toBe('OPEN');
+  }
+
+  const dopo = async <T,>(passi: number, f: () => Promise<T>): Promise<T> => {
+    for (let i = 0; i < passi; i++) await Promise.resolve();
+    return f();
+  };
+
+  /** Il conto giusto dopo due divisioni insieme: una passa, l'altra no, e i 3 € sono scritti una volta. */
+  async function unaSolaVolta(quando: string, esiti: Array<{ status: number; corpo: Record<string, unknown> }>): Promise<void> {
+    expect(registratoInTutto(), `${quando}: registrati più soldi di quelli usciti da Stripe`).toBe(300);
+    expect(esiti.filter((e) => e.status === 200), `${quando}: ${esiti.map((e) => e.status).join('/')}`).toHaveLength(1);
+    const quoteTolte = [riga('o1').seller_payout_reversed_cents, riga('o2').seller_payout_reversed_cents].filter((q) => Number(q) > 0);
+    expect(quoteTolte, `${quando}: la quota tolta a tutti e due i negozi`).toHaveLength(1);
+    expect(stato.storni.length, `${quando}: uno storno al fioraio solo se i 3 € sono suoi`).toBe(riga('o2').refunded_amount_cents === 300 ? 1 : 0);
+    expect(await carrelliNelPannello(), `${quando}: a divisione fatta non resta niente di fermo`).toEqual([]);
+  }
+
+  it('IL CASO DEL RIESAME — le due schede leggono il carrello prima che una delle due scriva: si registra una sola divisione', async () => {
+    await carrelloColPaneInReclamo();
+    // Stripe risponde all'elenco dei rimborsi solo quando tutte e due le schede l'hanno chiesto.
+    let arrivate = 0;
+    let apri: () => void = () => {};
+    const tutteE2 = new Promise<void>((r) => { apri = r; });
+    stato.primaDellaLista = async () => {
+      if (++arrivate === 2) apri();
+      await tutteE2;
+    };
+
+    const [uno, due] = await Promise.all([dividi(alPane), dividi(aiFiori)]);
+
+    expect(arrivate, 'le due schede non si sono incrociate').toBe(2);
+    await unaSolaVolta('insieme', [uno, due]);
+    const perdente = uno.status === 200 ? due : uno;
+    expect(friendlyError(new Error((perdente.corpo.error as { message: string }).message))).toContain('Non ho registrato niente');
+  });
+
+  it('in ogni momento in cui una delle due schede può partire rispetto all altra, si registrano 3 € e non 6', async () => {
+    const vincitori = new Set<string>();
+    let incroci = 0;
+    for (let scarto = -30; scarto <= 30; scarto++) {
+      daCapo();
+      await carrelloColPaneInReclamo();
+      const esiti = await Promise.all([
+        dopo(Math.max(0, -scarto), () => dividi(alPane)),
+        dopo(Math.max(0, scarto), () => dividi(aiFiori)),
+      ]);
+      await unaSolaVolta(`scarto ${scarto}`, esiti);
+      vincitori.add(esiti[0].status === 200 ? 'pane' : 'fiori');
+      const perdente = esiti[0].status === 200 ? esiti[1] : esiti[0];
+      // Chi perde dopo aver letto il carrello ancora fermo si è incrociato davvero con l'altra.
+      if (JSON.stringify(perdente.corpo).includes('Non ho registrato niente')) incroci++;
+    }
+    expect([...vincitori].sort(), 'ha vinto sempre la stessa scheda: la prova non ha girato le due parti').toEqual(['fiori', 'pane']);
+    expect(incroci, 'nessun incrocio vero: le due schede non hanno mai letto lo stesso carrello').toBeGreaterThan(0);
+  });
+
+  it('se dopo il turno la scrittura del pane non passa, il carrello torna nel pannello col resto da dividere', async () => {
+    await carrelloColPaneInReclamo();
+    // Il pane cambia sotto le mani proprio mentre si scrive la sua parte: la scrittura non prende la riga.
+    stato.db.guasto = (s) => {
+      const valori = s.valori as Riga | null;
+      if (s.tabella === 'orders' && s.operazione === 'update' && valori?.refunded_amount_cents === 200) riga('o1').payout_status = 'PROCESSING';
+      return null;
+    };
+
+    const esito = await dividi([{ ordine: 'o1', centesimi: 200 }, { ordine: 'o2', centesimi: 100 }]);
+
+    expect(esito.status).toBe(409);
+    expect(riga('o2')).toMatchObject({ refunded_amount_cents: 100, internal_dispute_status: 'RIMBORSO_DA_RIPARTIRE' });
+    expect((await carrelliNelPannello()).map((c) => c.daDividereCents), 'i 2 € del pane spariti dal pannello coi bonifici sbloccati').toEqual([200]);
+  });
+
+  it('l ordine delle scritture: il primo ordine fermo per id, poi i non fermi, poi gli altri fermi', () => {
+    const fermo = 'RIMBORSO_DA_RIPARTIRE';
+    const ordinati = inOrdineDiScrittura([
+      { id: 'c', internal_dispute_status: fermo },
+      { id: 'x', internal_dispute_status: 'OPEN' },
+      { id: 'a', internal_dispute_status: fermo },
+      { id: 'y', internal_dispute_status: null },
+    ]);
+    expect(ordinati.map((o) => o.id)).toEqual(['a', 'x', 'y', 'c']);
+    expect(rimettiLaPausaAlTurno(ordinati, 0), 'chi non ha preso il turno non tocca niente').toBe(false);
+    expect(rimettiLaPausaAlTurno(ordinati, 1), 'resta fermo «c»: il carrello si vede').toBe(false);
+    const unSoloFermo = inOrdineDiScrittura([{ id: 'p', internal_dispute_status: 'OPEN' }, { id: 'f', internal_dispute_status: fermo }]);
+    expect(unSoloFermo.map((o) => o.id)).toEqual(['f', 'p']);
+    expect(rimettiLaPausaAlTurno(unSoloFermo, 1)).toBe(true);
   });
 });
 
