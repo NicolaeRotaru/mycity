@@ -249,6 +249,54 @@ export function avvisoAlRitornoSullAccesso(
   }
 }
 
+/** I codici di `error` che la pagina di accesso sa spiegare, nell'ordine in cui si cercano. */
+const CODICI_DEL_RITORNO = [
+  'email_confermata',
+  'link_scaduto',
+  'link_non_valido',
+  'callback_failed',
+  'accesso_non_riuscito',
+  'missing_code',
+] as const;
+
+function stessoAvviso(a: AvvisoDiAccesso | null, b: AvvisoDiAccesso | null): boolean {
+  if (!a || !b) return a === b;
+  return a.tono === b.tono && a.testo === b.testo;
+}
+
+/**
+ * 16/10/2026 — L'INDIRIZZO CHE RESTA DOPO AVER TOLTO LA SESSIONE DAL FRAMMENTO.
+ *
+ * La pagina di accesso toglie dalla barra il frammento con la sessione, perche'
+ * il gettone non resti nella cronologia. Ma l'avviso l'ha deciso guardando ANCHE
+ * il frammento: con `?error=missing_code` e una sessione nel frammento dice
+ * «email confermata»; senza frammento, lo stesso `missing_code` dice in rosso
+ * «il link non è completo». Lasciare `error=missing_code` voleva dire che alla
+ * prima ricarica la conferma diventava un errore.
+ *
+ * Qui si calcola l'indirizzo pulito: senza frammento, con `error` riscritto nel
+ * codice che, da solo, fa dire alla pagina la stessa cosa che ha appena detto.
+ * Tutto il resto della query (per esempio `returnTo`) resta com'e'.
+ * `null` = il frammento non porta una sessione, non c'e' niente da togliere.
+ */
+export function indirizzoSenzaLaSessione(
+  errore: string | null | undefined,
+  frammento: string | null | undefined,
+  percorso: string,
+  query: string,
+): string | null {
+  if (!frammentoConSessione(frammento)) return null;
+  const params = new URLSearchParams(query.replace(/^\?/, ''));
+  const detto = avvisoAlRitornoSullAccesso(errore, frammento);
+  if (!stessoAvviso(detto, avvisoAlRitornoSullAccesso(errore, ''))) {
+    const codice = CODICI_DEL_RITORNO.find((c) => stessoAvviso(avvisoAlRitornoSullAccesso(c, ''), detto));
+    if (codice) params.set('error', codice);
+    else params.delete('error');
+  }
+  const resto = params.toString();
+  return percorso + (resto ? `?${resto}` : '');
+}
+
 /** Perche' la pagina della nuova password non ha una sessione da usare. */
 export type MotivoResetSenzaSessione = 'altro-browser' | 'link-scaduto' | 'link-non-valido';
 
