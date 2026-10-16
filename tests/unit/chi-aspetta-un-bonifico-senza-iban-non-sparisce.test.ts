@@ -34,7 +34,9 @@ let accountCancellato: boolean;
 function mondo(extra: Record<string, Riga[]> = {}) {
   db = creaFintoDatabase({
     cod_reconciliations: [],
-    orders: [{ id: 'o1', user_id: MARCO, delivery_full_name: 'Marco Bianchi', payment_method: 'cod', stripe_payment_intent: null }],
+    // Quinto giro del riesame: l'ordine porta la sua cassa (24 € in contanti). Senza, era un ordine
+    // coperto tutto dal credito, che torna credito e non aspetta nessun IBAN.
+    orders: [{ id: 'o1', user_id: MARCO, delivery_full_name: 'Marco Bianchi', payment_method: 'cod', stripe_payment_intent: null, total_price: 24 }],
     returns: [],
     disputes: [],
     bonifici_dei_reclami: [],

@@ -802,8 +802,9 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
   }
 
   // ①ter Riesame del 16/10, quarto giro — un bonifico da fare senza IBAN ferma la cancellazione.
-  // Il nome resta al sicuro (qui sopra), ma tolto l'account se ne va l'email, che era l'unico modo
-  // di chiedere il conto: il debito resterebbe con un nome e nessuno a cui pagarlo. È un rinvio
+  // Tolto l'account se ne va l'email, che era l'unico modo di chiedere il conto: il debito
+  // resterebbe con un nome e nessuno a cui pagarlo. (Quinto giro: in questo caso la custodia qui
+  // sopra non scrive niente — finché l'account c'è, il nome sta sull'ordine.) È un rinvio
   // deciso da noi, come la cassa: la persona legge perché (lib/cron-cancellazioni.ts), e la
   // cancellazione riparte da sola quando l'IBAN è sulla voce del bonifico o non c'è più niente da fare.
   const attesaDellIban = rinvioPerIBonificiSenzaIban(bonifici.senzaIban);

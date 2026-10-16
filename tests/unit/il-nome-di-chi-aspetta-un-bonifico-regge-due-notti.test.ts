@@ -29,7 +29,8 @@ const MARIA = 'maria';
 const IBAN = 'IT60X0542811101000000123456';
 
 function ordine(id: string, extra: Riga = {}): Riga {
-  return { id, user_id: MARIA, delivery_full_name: 'Maria Rossi', payment_method: 'cod', stripe_payment_intent: null, ...extra };
+  // Quinto giro del riesame: con la sua cassa in contanti (senza, era coperto tutto dal credito).
+  return { id, user_id: MARIA, delivery_full_name: 'Maria Rossi', payment_method: 'cod', stripe_payment_intent: null, total_price: 30, ...extra };
 }
 
 let db: FintoDatabase;
@@ -85,8 +86,10 @@ describe('① la cancellazione ripresa la notte dopo non cancella il nome gia me
 
   it('lo stesso per il bonifico di un reclamo', async () => {
     db.tabelle.disputes.push({ id: 'd1', order_id: 'o1', opener_id: MARIA });
+    // Con l'IBAN gia' copiato sulla voce: senza, la cancellazione aspetta e non scrive niente
+    // (chi-aspetta-un-bonifico-senza-iban-non-sparisce.test.ts).
     db.tabelle.bonifici_dei_reclami.push({
-      dispute_id: 'd1', order_id: 'o1', importo_cents: 2400, fatto_at: null, iban: null, intestatario: null,
+      dispute_id: 'd1', order_id: 'o1', importo_cents: 2400, fatto_at: null, iban: IBAN, intestatario: null,
     });
 
     await custodisciIBonificiDaFare(db.client, MARIA);
@@ -99,11 +102,27 @@ describe('① la cancellazione ripresa la notte dopo non cancella il nome gia me
 });
 
 describe('② un reso aperto senza scelta, su un ordine in contanti, conta come bonifico da fare', () => {
-  it('IL CASO CHE ROMPEVA — Giulia apre il reso prima della 162 e cancella l account: il nome resta', async () => {
+  it('IL CASO CHE ROMPEVA — Giulia apre il reso prima della 162 e cancella l account: il nome non si perde', async () => {
     db.tabelle.orders[0].delivery_full_name = 'Giulia Rossi';
     db.tabelle.returns.push({
       id: 'r1', order_id: 'o1', buyer_id: MARIA, status: 'REQUESTED', refund_id: null,
       refund_method: null, refund_iban: null, refund_bonifico_fatto_at: null, refund_intestatario: null,
+    });
+
+    const custodia = await custodisciIBonificiDaFare(db.client, MARIA);
+    if (!custodia.ok) throw new Error(custodia.errore);
+    // Quinto giro del riesame: senza IBAN la cancellazione aspetta (il reso conta come bonifico da
+    // fare), e finche' aspetta l'account resta e il nome sta sull'ordine: qui non si scrive niente.
+    expect(custodia.senzaIban.resiInCorso, 'il reso senza scelta non conta come bonifico da fare').toBe(1);
+    expect(db.tabelle.orders[0].delivery_full_name).toBe('Giulia Rossi');
+    expect(reso().refund_intestatario ?? null).toBeNull();
+  });
+
+  it('con l IBAN la cancellazione va avanti, e il nome va sul reso', async () => {
+    db.tabelle.orders[0].delivery_full_name = 'Giulia Rossi';
+    db.tabelle.returns.push({
+      id: 'r1', order_id: 'o1', buyer_id: MARIA, status: 'REQUESTED', refund_id: null,
+      refund_method: null, refund_iban: IBAN, refund_bonifico_fatto_at: null, refund_intestatario: null,
     });
 
     expect((await custodisciIBonificiDaFare(db.client, MARIA)).ok).toBe(true);

@@ -22,7 +22,9 @@ export interface BonificoDelCliente {
   serveIban: boolean;
   /**
    * Sappiamo davvero se i bonifici sono stati fatti? Senza la migrazione 162 il «fatto» non si
-   * scrive da nessuna parte: la pagina non promette, rimanda all'assistenza.
+   * scrive da nessuna parte: la pagina non promette, rimanda all'assistenza. Lo stesso quando un
+   * bonifico registrato sull'ordine non ha la riga dove il «fatto» si segna (riesame del 16/10,
+   * quinto giro): per esempio il reclamo la cui riga in `bonifici_dei_reclami` non si e' scritta.
    */
   certo: boolean;
 }
@@ -54,6 +56,11 @@ export function ilBonificoCheIlClienteAspetta(dati: {
   const reclamoPer = new Map(dati.reclami.map((r) => [r.dispute_id, r]));
   let daFareCents = 0;
   let serveIban = false;
+  // Riesame del 16/10, quinto giro — UN BONIFICO SENZA LA SUA RIGA NON SI PUO' DIRE «IN ARRIVO». Se
+  // la riga del reclamo non si e' scritta (un guasto dopo il rimborso), nessuno potra' mai segnarla
+  // fatta: la pagina diceva «in arrivo, ci serve il tuo IBAN» anche dopo il bonifico, per sempre.
+  // Senza una riga, come senza la 162, la pagina non promette: rimanda all'assistenza.
+  let senzaRiga = false;
 
   for (const segno of rimborsiGiaScritti(dati.ordine)) {
     if (!eUnBonificoDiRimborso(segno)) continue;
@@ -65,7 +72,8 @@ export function ilBonificoCheIlClienteAspetta(dati: {
       const reso = resoPer.get(chiave.slice('return_'.length));
       if (dati.con162 && reso?.refund_bonifico_fatto_at) continue;
       daFareCents += centesimi;
-      if (dati.con162 && reso && !reso.refund_iban) serveIban = true;
+      if (!reso) senzaRiga = true;
+      else if (dati.con162 && !reso.refund_iban) serveIban = true;
       continue;
     }
     if (chiave.startsWith('dispute_')) {
@@ -73,12 +81,14 @@ export function ilBonificoCheIlClienteAspetta(dati: {
       if (dati.con162 && riga?.fatto_at) continue;
       daFareCents += centesimi;
       // Il modulo del reclamo non chiede l'IBAN: finche' chi paga non lo copia sulla riga, manca.
-      if (dati.con162 && !riga?.iban) serveIban = true;
+      if (!riga) senzaRiga = true;
+      else if (dati.con162 && !riga.iban) serveIban = true;
       continue;
     }
     // Un bonifico registrato da un'altra strada: nessuna riga dice se e' stato fatto.
     daFareCents += centesimi;
+    senzaRiga = true;
   }
 
-  return { daFareCents, serveIban, certo: dati.con162 };
+  return { daFareCents, serveIban, certo: dati.con162 && !senzaRiga };
 }

@@ -116,7 +116,8 @@ export interface VoceDaBonificare {
   /**
    * A chi intestare il bonifico, quando il cliente ha cancellato l'account
    * prima del pagamento: la riga ordine non porta piu' il nome, e questo e'
-   * l'unico posto dove resta. Null finche' l'account c'e'.
+   * l'unico posto dove resta. Lo scrive la cancellazione, solo quando va avanti
+   * (riesame del 16/10, quinto giro: se aspetta l'IBAN non scrive niente).
    */
   intestatario: string | null;
   /** Quando il bonifico e' stato segnato come fatto. */
@@ -387,7 +388,10 @@ export function cosaDiceLaVoce(
   return {
     daControllare:
       voce.daFare && !voce.confermataDallOrdine
-        ? "Da controllare prima di pagare: questo rimborso non risulta registrato sull'ordine, e una riga così può averla scritta qualcun altro. Apri l'ordine e cerca l'avviso «Bonifico di rimborso da fare»: se non c'è, non pagare."
+        ? // Quinto giro del riesame: diceva «apri l'ordine e cerca l'avviso», ma l'avviso non sta
+          // nell'ordine: sta fra le notifiche di chi amministra (`notifyAdmins`). La pagina mette il
+          // collegamento accanto (`DOVE_SONO_GLI_AVVISI`).
+          "Da controllare prima di pagare: questo rimborso non risulta registrato sull'ordine, e una riga così può averla scritta qualcun altro. Apri le Notifiche e cerca l'avviso «Bonifico di rimborso da fare» con il numero di questo ordine: se non c'è, non pagare."
         : null,
     alPostoDellIban,
     campoPerLIban,
@@ -397,6 +401,9 @@ export function cosaDiceLaVoce(
         : null,
   };
 }
+
+/** Dove stanno gli avvisi dei bonifici da fare: le notifiche di chi amministra, non l'ordine. */
+export const DOVE_SONO_GLI_AVVISI = '/notifications';
 
 /**
  * I BONIFICI DA PAGARE E QUELLI DA CONTROLLARE (riesame del 16/10, terzo giro).
@@ -482,7 +489,10 @@ export function avvisoDelRimborsoNonRegistrato(r: {
       // questo avviso mandava alla lista dicendo che li' il bonifico non c'era.
       (bonifico
         ? `Dentro c'è un bonifico di ${formatPriceFromCents(r.bonificoCents)} da fare al cliente: lo trovi nella lista dei bonifici da fare, presa dall'ordine. Quando lo segni fatto, il rimborso si registra anche sul reso.`
-        : 'Scrivi sul reso il riferimento del rimborso, così i conti tornano.'),
+        : // Quinto giro del riesame: qui si chiedeva di scrivere sul reso il riferimento del
+          // rimborso, ma nessuna pagina del pannello scrive sui resi. Si dice cosa serve davvero.
+          'Non va rifatto: è già partito. Dal pannello il riferimento sul reso non si scrive; se il negozio prova a ' +
+          'rimborsare di nuovo o a chiudere il reso senza rimborso, fermalo.'),
     link: bonifico ? '/admin/rimborsi-da-bonificare' : '/admin/orders',
   };
 }

@@ -363,9 +363,10 @@ async function comando(req: NextRequest, user: { id: string }): Promise<NextResp
   }
 
   // Chi ha segnato il bonifico, o copiato l'IBAN, resta scritto: sono soldi che escono a mano.
+  // Quinto giro del riesame: copiare un IBAN non rimborsa niente, e ha la sua voce nel registro.
   await writeAudit({
     actorId: user.id,
-    action: 'order.refund',
+    action: body.azione === 'iban' ? 'refund.iban_registrato' : 'order.refund',
     targetTable: body.reclamoId ? 'disputes' : 'returns',
     targetId: (body.reclamoId ?? body.resoId) as string,
     metadata: { passo: body.azione === 'iban' ? 'iban_del_bonifico_registrato' : 'bonifico_di_rimborso_fatto' },
