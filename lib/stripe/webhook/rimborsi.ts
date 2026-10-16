@@ -25,7 +25,7 @@ import { logger } from '@/lib/logger';
 import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 import { refundIssuedTemplate } from '@/lib/email/templates';
 import { notifyAdmins } from './comune';
-import { registraRimborsoParzialeDaFuori } from './rimborsi-da-fuori';
+import { PAUSA_RIMBORSO_DA_DIVIDERE, registraRimborsoParzialeDaFuori } from './rimborsi-da-fuori';
 import { elencoDaScrivere, rimborsiGiaScritti } from '@/lib/stripe/elenco-dei-rimborsi';
 
 export async function handleChargeRefunded(charge: Stripe.Charge) {
@@ -148,6 +148,13 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
       // Il rimborso pieno vale il totale dell'ordine.
       refunded_amount_cents: Math.round(Number(o.total_price) * 100),
     };
+
+    // 16/10 (terzo riesame) — Rimborsato tutto, non c'è più niente da dividere:
+    // la pausa messa da un rimborso parziale dal cruscotto (rimborsi-da-fuori.ts)
+    // se ne va con la stessa scrittura. Prima restava, e il pannello mostrava un
+    // carrello con «Rimborso da dividere: 0,00 €». Solo la pausa: l'esito di un
+    // reclamo sulla stessa colonna resta com'è.
+    if (o.internal_dispute_status === PAUSA_RIMBORSO_DA_DIVIDERE) patch.internal_dispute_status = null;
 
     // 054 — Un ordine già CONSEGNATO non diventa «annullato» perché è stato
     // rimborsato: la consegna c'è stata. Prima si riscriveva lo stato di tutti,

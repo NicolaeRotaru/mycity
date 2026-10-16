@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { isStripeConfigured } from '@/lib/stripe/client';
-import { AccreditoGiaUscitoConAltroImporto, refundOrder } from '@/lib/stripe/payout';
+import { AccreditoGiaUscitoConAltroImporto, RimborsoInAttesaDellaDivisione, refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -224,6 +224,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         // negozio non sapeva quale cifra rimettere. Gli altri errori restano
         // nascosti dietro la frase generica (R138: niente messaggi interni).
         if (err instanceof AccreditoGiaUscitoConAltroImporto) return ApiErrors.conflict(err.message);
+        // 16/10 (terzo riesame) — e un rimborso che aspetta la divisione di un rimborso dal cruscotto
+        // sullo stesso carrello: «riprova» da solo non cambia niente finché la divisione non è fatta.
+        if (err instanceof RimborsoInAttesaDellaDivisione) return ApiErrors.conflict(err.message);
         return ApiErrors.badGateway("Il rimborso non è partito: riprova o scrivi all'assistenza.");
       }
     }

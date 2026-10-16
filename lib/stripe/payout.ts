@@ -27,6 +27,8 @@ import {
 } from '@/lib/rimborsi/regole-del-rimborso';
 import { PAGINA_DEI_BONIFICI_DA_FARE, type ComeTornanoIContanti } from '@/lib/rimborsi/scelta-del-reso';
 import { eUnBonificoDiRimborso, segnoDelBonifico } from '@/lib/rimborsi/bonifici-da-fare';
+// 16/10 (terzo riesame) — la stessa domanda dell'annullo e del giro degli ordini scaduti: una casa sola.
+import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
 
 /**
  * Logica condivisa di payout / reversal / refund per il modello SCT
@@ -849,6 +851,37 @@ export class AccreditoGiaUscitoConAltroImporto extends RimborsoNonRitentabile {
 }
 
 /**
+ * 16/10/2026 (terzo riesame del lotto) — PRIMA SI DIVIDE, POI SI RIMBORSA. DA
+ * QUALUNQUE PORTA.
+ *
+ * Su un carrello di più negozi pagato con la carta, un rimborso fatto dal
+ * cruscotto Stripe non è scritto su nessun ordine finché qualcuno non lo divide
+ * (lib/stripe/rimborsi-da-dividere.ts). Fino ad allora il tetto qui sotto —
+ * lordo meno già rimborsato — non lo vede. Il caso: carrello da Pane (15,00 €)
+ * e da un fioraio; 3 € di focaccia resi dal cruscotto; un reclamo sul pane
+ * chiuso con 15,00 € prima della divisione. Il cliente riceveva 18 € su un
+ * ordine da 15, e i 3 € da dividere si potevano mettere solo sul fioraio, che
+ * perdeva 2,09 € di quota con uno storno.
+ *
+ * La regola «prima si divide» stava solo nell'annullo e nel giro degli ordini
+ * scaduti. Adesso sta qui, dove passano anche i resi e i reclami: niente si
+ * prenota e niente esce finché la divisione non è fatta.
+ *
+ * NON porta il marchio `ritentabile = false`, apposta: il giro degli ordini
+ * scaduti, su un errore ritentabile, rimette l'ordine in coda e lo riprende
+ * dopo la divisione. Le rotte dei resi e dei reclami mostrano il messaggio.
+ */
+export class RimborsoInAttesaDellaDivisione extends Error {
+  constructor(readonly orderId: string) {
+    super(
+      "Il rimborso deve aspettare: sullo stesso pagamento c'è un rimborso dell'amministrazione ancora da dividere " +
+        'fra i negozi del carrello. Riprova dopo la divisione.',
+    );
+    this.name = 'RimborsoInAttesaDellaDivisione';
+  }
+}
+
+/**
  * 6/9/2026 (stesso giorno, riparazione) — «L'ORDINE NON C'E'» E «NON SONO
  * RIUSCITO A LEGGERLO» NON SONO LA STESSA COSA.
  *
@@ -998,7 +1031,9 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // arrivati. Esistono tutte e tre da prima della 124.
   // 16/10 (riesame) — `stripe_refund_id`: il rimborso di qui si AGGIUNGE all'elenco dei rimborsi
   // già scritti, non lo sostituisce (lib/stripe/elenco-dei-rimborsi.ts).
-  const COLONNE_RIMBORSO = 'id, user_id, total_price, gross_total_cents, seller_payout_cents, seller_payout_reversed_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, stripe_refund_id, refunded_amount_cents, payment_method, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost, delivery_status, payment_status, cash_confirmed_at, wallet_applied_cents';
+  // 16/10 (terzo riesame) — `internal_dispute_status`: la pausa del carrello che
+  // aspetta la divisione di un rimborso dal cruscotto (`RimborsoInAttesaDellaDivisione`).
+  const COLONNE_RIMBORSO = 'id, user_id, total_price, gross_total_cents, seller_payout_cents, seller_payout_reversed_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, stripe_refund_id, refunded_amount_cents, payment_method, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost, delivery_status, payment_status, cash_confirmed_at, wallet_applied_cents, internal_dispute_status';
   const { data: order, error } = await conRipiegoSchema(
     'orders.select (rimborso)',
     () => admin.from('orders').select(COLONNE_RIMBORSO).eq('id', opts.orderId).single(),
@@ -1024,6 +1059,13 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   const tipo = tipoDiPagamento(order);
   if (!tipo) {
     throw new RimborsoNonRitentabile('refundOrder: ordine senza payment_intent e non COD (non rimborsabile)');
+  }
+
+  // Prima si divide, poi si rimborsa: il perché sta su `RimborsoInAttesaDellaDivisione`.
+  // Prima di prenotare l'importo, così non resta niente da togliere.
+  if (tipo === 'carta' && (await ilCarrelloAspettaLaDivisione(admin, order))) {
+    logger.warn('[refundOrder] rimborso fermo: sul pagamento c e un rimborso dal cruscotto da dividere', { orderId: order.id });
+    throw new RimborsoInAttesaDellaDivisione(order.id);
   }
 
   // 055 — DUE BASI DIVERSE, E IL CONTO NON TORNAVA.

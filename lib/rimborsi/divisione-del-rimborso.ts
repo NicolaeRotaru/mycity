@@ -105,3 +105,27 @@ export function centesimiDaEuro(testo: string): number | null {
   const [interi, decimali = ''] = pulito.split(/[.,]/);
   return Number(interi) * 100 + Number(decimali.padEnd(2, '0'));
 }
+
+/** Cosa mostra il riquadro del pannello: niente, solo l'errore, o i carrelli (con l'errore sopra, se c'è). */
+export type VistaDelRiquadro = 'niente' | 'solo-errore' | 'carrelli';
+
+/**
+ * 16/10/2026 (terzo riesame del lotto) — UNA RICARICA FALLITA NON CANCELLA LE CIFRE SCRITTE.
+ *
+ * Il riquadro si ricarica da solo ogni due minuti. Se una ricarica falliva, al
+ * posto dei carrelli compariva solo il messaggio d'errore: i carrelli
+ * sparivano e con loro le cifre che chi amministra stava scrivendo (stanno
+ * dentro ogni carrello). Alla ricarica riuscita i campi tornavano vuoti.
+ *
+ * Adesso il solo errore compare quando non c'è un elenco da mostrare. Se
+ * l'elenco letto prima c'è, i carrelli restano dove sono e l'errore si legge
+ * sopra di loro: il server ricontrolla comunque la divisione sui numeri nuovi.
+ */
+export function vistaDelRiquadro(
+  conErrore: boolean,
+  elenco: { carrelli?: ReadonlyArray<unknown>; nonLetti?: ReadonlyArray<unknown> } | null | undefined,
+): VistaDelRiquadro {
+  const qualcosaDaMostrare = (elenco?.carrelli?.length ?? 0) > 0 || (elenco?.nonLetti?.length ?? 0) > 0;
+  if (qualcosaDaMostrare) return 'carrelli';
+  return conErrore ? 'solo-errore' : 'niente';
+}

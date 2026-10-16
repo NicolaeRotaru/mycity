@@ -84,6 +84,7 @@ import { handleChargeRefunded } from '@/lib/stripe/webhook/rimborsi';
 import { refundOrder } from '@/lib/stripe/payout';
 import { GET, POST } from '@/app/api/admin/orders/rimborsi-da-dividere/route';
 import { centesimiDaEuro, controllaLaDivisione } from '@/lib/rimborsi/divisione-del-rimborso';
+import { friendlyError } from '@/lib/errors';
 
 function ordine(extra: Riga): Riga {
   return {
@@ -281,6 +282,11 @@ describe('una divisione che si inceppa a metà non lascia i soldi divisi «da fu
     const primo = await dividi([{ ordine: 'o1', centesimi: 100 }, { ordine: 'o2', centesimi: 200 }]);
     expect(primo.status).toBe(409);
     expect(riga('o1').refunded_amount_cents).toBe(100);
+    // 16/10 (terzo riesame) — quello che legge chi amministra: il riquadro passa il messaggio
+    // del server da `friendlyError` (components/admin/RimborsiDaDividere.tsx), che sopra i 200
+    // caratteri lo sostituiva con «Qualcosa non ha funzionato».
+    const aVideo = friendlyError(new Error((primo.corpo.error as { message: string }).message));
+    expect(aVideo, 'chi amministra non sa che una parte del rimborso è già registrata').toContain('1 ordine è già registrato');
     // Al secondo tentativo restano 2 € da dividere: tutti ai fiori.
     const secondo = await dividi([{ ordine: 'o2', centesimi: 200 }]);
     expect(secondo.status, JSON.stringify(secondo.corpo)).toBe(200);
@@ -323,6 +329,79 @@ describe('una divisione che si inceppa a metà non lascia i soldi divisi «da fu
     expect(corpo.data.carrelli.map((c) => c.daDividereCents)).toEqual([200]);
     expect((await dividi([{ ordine: 'o1', centesimi: 200 }, { ordine: 'o2', centesimi: 0 }])).status).toBe(200);
     expect(stato.suStripe.map((r) => r.metadata.registrato_da_fuori)).toEqual(['1', '1']);
+  });
+});
+
+const registratoInTutto = () => stato.db.tabelle.orders!.reduce((s, r) => s + Number(r.refunded_amount_cents ?? 0), 0);
+const uscitoDaStripe = () => stato.suStripe.filter((r) => r.status !== 'failed').reduce((s, r) => s + r.amount, 0);
+const carrelliNelPannello = async () => {
+  const res = await (GET as unknown as (req: Request) => Promise<Response>)(new Request('http://x'));
+  return ((await res.json()) as { data: { carrelli: Array<{ pagamento: string; daDividereCents: number }> } }).data.carrelli;
+};
+
+describe('la divisione non si fa a metà mentre un reso del sito sta partendo (terzo riesame del 16/10)', () => {
+  it('IL CASO DEL RIESAME — reso del sito da 2 € prenotato ma non ancora su Stripe: la divisione aspetta, e poi si divide tutto', async () => {
+    await rimborsoDalCruscotto(300);
+    // Un reso del sito sul pane, partito prima della pausa: l'importo è prenotato, Stripe non l'ha ancora fatto.
+    await stato.db.client.rpc('accumula_rimborso', { p_order_id: 'o1', p_delta: 200 });
+    expect((await carrelliNelPannello())[0].daDividereCents).toBe(100);
+
+    const aMeta = await dividi([{ ordine: 'o1', centesimi: 100 }, { ordine: 'o2', centesimi: 0 }]);
+    expect(aMeta.status, 'la divisione di 1 € su 3 è passata: i 2 € restanti non si dividono più').toBe(409);
+    expect(JSON.stringify(aMeta.corpo)).toContain('rimborso del sito sta ancora partendo');
+    expect(riga('o1')).toMatchObject({ refunded_amount_cents: 200, internal_dispute_status: 'RIMBORSO_DA_RIPARTIRE' });
+    expect(riga('o1').stripe_refund_id ?? null, 'l id del rimborso da 3 € scritto su un ordine che ne ha avuto 1').toBeNull();
+
+    // Il reso arriva su Stripe, e il suo avviso.
+    stato.carica.refunded += 200;
+    stato.suStripe.push({ id: 're_sito', amount: 200, status: 'succeeded', metadata: { order_id: 'o1' }, created: ++orologio });
+    await handleChargeRefunded({
+      id: 'ch_1', payment_intent: 'pi_1', refunded: false, amount: 2790, amount_refunded: stato.carica.refunded,
+    } as unknown as Parameters<typeof handleChargeRefunded>[0]);
+
+    expect((await carrelliNelPannello()).map((c) => c.daDividereCents)).toEqual([300]);
+    expect((await dividi([{ ordine: 'o1', centesimi: 100 }, { ordine: 'o2', centesimi: 200 }])).status).toBe(200);
+    expect(registratoInTutto(), 'soldi usciti al cliente e mai scritti su nessun ordine').toBe(uscitoDaStripe());
+    expect(stato.suStripe[0].metadata.registrato_da_fuori).toBe('1');
+    expect(await carrelliNelPannello()).toEqual([]);
+  });
+});
+
+describe('dopo un rimborso pieno il carrello non resta fermo (terzo riesame del 16/10)', () => {
+  beforeEach(() => {
+    // Il rimborso pieno scrive al cliente: qui l'indirizzo non serve.
+    (stato.db.client as unknown as Record<string, unknown>).auth = { admin: { getUserById: async () => ({ data: { user: { email: null } } }) } };
+  });
+
+  async function ilRestoDalCruscotto(): Promise<void> {
+    const resto = stato.carica.amount - stato.carica.refunded;
+    stato.carica.refunded = stato.carica.amount;
+    stato.suStripe.push({ id: 're_resto', amount: resto, status: 'succeeded', metadata: {}, created: ++orologio });
+    await handleChargeRefunded({
+      id: 'ch_1', payment_intent: 'pi_1', refunded: true, amount: 2790, amount_refunded: stato.carica.refunded,
+    } as unknown as Parameters<typeof handleChargeRefunded>[0]);
+  }
+
+  it('IL CASO DEL RIESAME — 3 € dal cruscotto, poi il resto: niente pausa, e il pannello non chiede di dividere 0,00 €', async () => {
+    await rimborsoDalCruscotto(300);
+    expect(riga('o1').internal_dispute_status).toBe('RIMBORSO_DA_RIPARTIRE');
+
+    await ilRestoDalCruscotto();
+
+    expect(riga('o1')).toMatchObject({ payment_status: 'REFUNDED', internal_dispute_status: null });
+    expect(riga('o2')).toMatchObject({ payment_status: 'REFUNDED', internal_dispute_status: null });
+    expect(await carrelliNelPannello(), 'carrello fantasma nel pannello').toEqual([]);
+  });
+
+  it('il rimborso pieno toglie solo la pausa: l esito di un reclamo sulla stessa colonna resta', async () => {
+    riga('o1').internal_dispute_status = 'OPEN';
+    await rimborsoDalCruscotto(300);
+    expect(riga('o2').internal_dispute_status).toBe('RIMBORSO_DA_RIPARTIRE');
+
+    await ilRestoDalCruscotto();
+
+    expect(riga('o1').internal_dispute_status).toBe('OPEN');
+    expect(riga('o2').internal_dispute_status).toBeNull();
   });
 });
 
