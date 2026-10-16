@@ -18,7 +18,11 @@ import {
 import { comeTornanoIContanti, leggiLaSceltaDelReso } from '@/lib/rimborsi/scelta-del-reso';
 import { COLONNE_162 } from '@/lib/rimborsi/scelta-del-cliente';
 import { scriviAncheSeMancaUnaColonnaNuova } from '@/lib/db/migrazione-148';
-import { avvisoDelRimborsoNonRegistrato, RIMBORSO_PARTITO_MA_NON_REGISTRATO } from '@/lib/rimborsi/bonifici-da-fare';
+import {
+  avvisoDelRimborsoNonRegistrato,
+  bonificoDelResoGiaSullOrdine,
+  RIMBORSO_PARTITO_MA_NON_REGISTRATO,
+} from '@/lib/rimborsi/bonifici-da-fare';
 import { dimenticaLIbanSeNonServe } from '@/lib/rimborsi/iban-del-rimborso';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
@@ -123,19 +127,47 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // R84 — Il tetto lo decide la stessa regola che usa chi muove i soldi: sui
   // contanti conta solo quello che e' stato incassato davvero.
   const COLONNE_ORDINE =
-    'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, cash_confirmed_at, payment_status, delivery_status';
+    'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, cash_confirmed_at, payment_status, delivery_status, stripe_refund_id';
   let ordine: OrdineDaRimborsare | null = null;
   let importoRimborso = 0;
+  /**
+   * Riesame del 16/10, terzo giro — IL RIMBORSO E' GIA' PARTITO, MA IL RESO NON LO SA.
+   *
+   * Succede quando la scrittura dell'esito cade dopo il rimborso (in `decide`
+   * o qui). Prima il reso restava li': «rimborsato» rispondeva «gia' rimborsato
+   * per intero», e l'unica strada era «chiudi senza rimborso», che cancellava
+   * l'IBAN e scriveva al cliente «chiuso senza rimborso» mentre gli dovevamo il
+   * bonifico. Adesso, se l'ordine porta gia' il rimborso di questo reso,
+   * «rimborsato» lo registra sul reso senza rifarlo, e «chiudi» non passa.
+   */
+  let giaSullOrdine: { segno: string; centesimi: number } | null = null;
 
-  if (body.stato === 'REFUNDED') {
-    const { data } = await conRipiegoSchema(
+  if (body.stato === 'REFUNDED' || body.stato === 'CANCELED') {
+    const { data, error: errOrdine } = await conRipiegoSchema(
       'orders.select (avanzamento del reso)',
       () => admin.from('orders').select(COLONNE_ORDINE).eq('id', ret.order_id).single(),
       () => admin.from('orders').select(senzaColonne(COLONNE_ORDINE, COLONNE_124)).eq('id', ret.order_id).single(),
     );
     ordine = (data ?? null) as OrdineDaRimborsare | null;
-    if (!ordine) return ApiErrors.notFound('Ordine del reso non trovato');
+    if (!ordine) {
+      return body.stato === 'CANCELED' && errOrdine
+        ? ApiErrors.unavailable("Non riesco a controllare l'ordine del reso: riprova tra poco.")
+        : ApiErrors.notFound('Ordine del reso non trovato');
+    }
+    giaSullOrdine = bonificoDelResoGiaSullOrdine(ret.id, ordine as { stripe_refund_id?: string | null });
+  }
 
+  if (body.stato === 'CANCELED' && giaSullOrdine) {
+    return ApiErrors.conflict(
+      'Il rimborso di questo reso è già partito: non si può chiudere «senza rimborso». ' +
+        'Segna la merce come ricevuta e poi il reso come rimborsato: il rimborso non si ripete, si registra.',
+    );
+  }
+
+  if (body.stato === 'REFUNDED' && giaSullOrdine) {
+    // Il rimborso c'e' gia': si registra quello, con la cifra promessa all'approvazione.
+    importoRimborso = Number(ret.refund_amount_cents ?? 0) > 0 ? Number(ret.refund_amount_cents) : giaSullOrdine.centesimi;
+  } else if (body.stato === 'REFUNDED' && ordine) {
     const rimborsabile = quantoSiPuoRestituire(ordine);
     const residuoCent = rimborsabile.massimoCents;
     // Se non è indicato niente si rimborsa quello che il venditore aveva già
@@ -180,33 +212,39 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   /** R71 — quanto del rimborso va pagato col bonifico, a mano. */
   let bonificoCents = 0;
   if (body.stato === 'REFUNDED') {
-    // R71 — Sui contanti il modo lo ha scelto il cliente nel modulo di reso:
-    // credito MyCity solo se l'ha chiesto lui, altrimenti bonifico. Se la
-    // scelta non si legge, vale bonifico (lib/rimborsi/scelta-del-reso.ts).
-    const contanti =
-      ordine && pagatoInContanti(ordine) ? comeTornanoIContanti(await leggiLaSceltaDelReso(admin, ret.id)) : undefined;
-    try {
-      const res = await refundOrder({
-        orderId: ret.order_id,
-        amountCents: importoRimborso,
-        reason: body.note ?? 'requested_by_customer',
-        metadata: { return_id: ret.id },
-        idempotencyKey: `return_${ret.id}`,
-        notifyBuyer: true,
-        ...(contanti ? { contanti } : {}),
-      });
-      refundId = res.refundId;
-      bonificoCents = res.bonificoCents ?? 0;
-    } catch (err) {
-      logger.error('[returns/avanza] rimborso fallito', err);
-      // I soldi non sono usciti: il reso torna dov'era, così resta lavorabile
-      // invece di restare fermo su «rimborsato» senza rimborso.
-      await admin
-        .from('returns')
-        .update({ status: statoPrecedente })
-        .eq('id', params.id)
-        .eq('status', 'REFUNDED');
-      return ApiErrors.badGateway('Rimborso fallito: ' + (err instanceof Error ? err.message : 'unknown'));
+    if (giaSullOrdine) {
+      // Il rimborso e' gia' partito (vedi sopra): si registra, non si rifa'.
+      refundId = giaSullOrdine.segno;
+      bonificoCents = giaSullOrdine.centesimi;
+    } else {
+      // R71 — Sui contanti il modo lo ha scelto il cliente nel modulo di reso:
+      // credito MyCity solo se l'ha chiesto lui, altrimenti bonifico. Se la
+      // scelta non si legge, vale bonifico (lib/rimborsi/scelta-del-reso.ts).
+      const contanti =
+        ordine && pagatoInContanti(ordine) ? comeTornanoIContanti(await leggiLaSceltaDelReso(admin, ret.id)) : undefined;
+      try {
+        const res = await refundOrder({
+          orderId: ret.order_id,
+          amountCents: importoRimborso,
+          reason: body.note ?? 'requested_by_customer',
+          metadata: { return_id: ret.id },
+          idempotencyKey: `return_${ret.id}`,
+          notifyBuyer: true,
+          ...(contanti ? { contanti } : {}),
+        });
+        refundId = res.refundId;
+        bonificoCents = res.bonificoCents ?? 0;
+      } catch (err) {
+        logger.error('[returns/avanza] rimborso fallito', err);
+        // I soldi non sono usciti: il reso torna dov'era, così resta lavorabile
+        // invece di restare fermo su «rimborsato» senza rimborso.
+        await admin
+          .from('returns')
+          .update({ status: statoPrecedente })
+          .eq('id', params.id)
+          .eq('status', 'REFUNDED');
+        return ApiErrors.badGateway('Rimborso fallito: ' + (err instanceof Error ? err.message : 'unknown'));
+      }
     }
     // R71 — Se una parte va col bonifico, il reso ricorda quanto: e' la cifra
     // che la lista dei bonifici da fare mostra a chi paga.

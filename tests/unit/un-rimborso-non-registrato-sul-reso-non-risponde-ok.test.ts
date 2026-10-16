@@ -186,6 +186,31 @@ describe('decide: se l esito del rimborso non si registra sul reso, non si rispo
     expect(avvisi[0].link).toBe('/admin/rimborsi-da-bonificare');
   });
 
+  it('dopo la caduta il negozio non puo chiudere il reso «senza rimborso», e «rimborsato» registra il rimborso senza rifarlo', async () => {
+    const id = await resoAperto();
+    finto.utente = 'negozio';
+    finto.guasto = true;
+    expect((await chiama(decidi, { decision: 'APPROVED', refundAmountCents: 4000 }, id)).status).not.toBe(200);
+    finto.guasto = false;
+    const reso = () => finto.db.tabelle.returns[0];
+    expect(reso().status).toBe('APPROVED');
+
+    // L'unica uscita di prima: chiudere senza rimborso, che cancellava l'IBAN e scriveva al cliente il falso.
+    const chiudi = await chiama(avanza, { stato: 'CANCELED' }, id);
+    expect(chiudi.status, 'il reso col rimborso gia partito si chiude «senza rimborso»').toBe(409);
+    expect(reso().refund_iban, 'l IBAN di chi aspetta 40 € e stato cancellato').toBe('IT60X0542811101000000123456');
+    expect(notificheConTitolo(finto.db, 'chiuso senza rimborso')).toHaveLength(0);
+
+    // La strada giusta: merce ricevuta, poi rimborsato — il rimborso si registra, non si ripete.
+    expect((await chiama(avanza, { stato: 'RECEIVED' }, id)).status).toBe(200);
+    const rimborsato = await chiama(avanza, { stato: 'REFUNDED' }, id);
+    expect(rimborsato.status, `il negozio non riesce a registrare il rimborso: ${JSON.stringify(rimborsato.corpo)}`).toBe(200);
+    expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: `bonifico:4000:return_${id}`, refund_bonifico_cents: 4000 });
+    expect(finto.db.tabelle.orders[0].refunded_amount_cents, 'il rimborso e stato rifatto').toBe(4000);
+    expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare'), 'il bonifico e stato chiesto due volte').toHaveLength(1);
+    expect(reso().refund_iban).toBe('IT60X0542811101000000123456');
+  });
+
   it('senza guasto resta tutto come prima: 200, il reso rimborsato col segno del bonifico, nessun avviso di guasto', async () => {
     const id = await resoAperto();
     finto.utente = 'negozio';

@@ -199,6 +199,28 @@ export function bonificoRegistratoSullOrdine(
   return rimborsiGiaScritti(ordine).has(segno);
 }
 
+/**
+ * IL RIMBORSO DI QUESTO RESO E' GIA' SULL'ORDINE? (riesame del 16/10, terzo giro)
+ *
+ * Se la scrittura dell'esito sul reso cade dopo che il rimborso e' partito, il
+ * reso resta senza segno ma l'ordine no: nel suo elenco dei rimborsi c'e' gia'
+ * `bonifico:<centesimi>:return_<id del reso>`. Da qui `avanza` riconosce il
+ * caso: «rimborsato» registra il rimborso che c'e' invece di rifarlo, e «chiudi
+ * senza rimborso» non passa — cancellerebbe l'IBAN di chi aspetta il bonifico.
+ */
+export function bonificoDelResoGiaSullOrdine(
+  resoId: string,
+  ordine: Pick<OrdineDelBonifico, 'stripe_refund_id'> | null | undefined,
+): { segno: string; centesimi: number } | null {
+  if (!ordine) return null;
+  for (const segno of rimborsiGiaScritti(ordine)) {
+    if (!eUnBonificoDiRimborso(segno) || !segno.endsWith(`:return_${resoId}`)) continue;
+    const centesimi = centesimiDelBonificoDalSegno(segno);
+    if (centesimi != null) return { segno, centesimi };
+  }
+  return null;
+}
+
 /** Dai resi e dai reclami alla lista: prima quelli da fare, poi i piu' recenti. */
 export function vociDeiBonificiDaFare(
   righe: readonly RigaDelReso[],
