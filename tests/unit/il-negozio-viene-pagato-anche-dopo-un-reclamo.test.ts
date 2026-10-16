@@ -87,9 +87,16 @@ vi.mock('@/lib/supabase/server', () => ({
       if (tabella === 'orders') {
         return {
           select: () => ({ eq: () => ({ single: async () => ({ data: stato.ordine, error: null }) }) }),
+          // 16/10/2026 — la scrittura porta anche il filtro che lascia stare la
+          // pausa del carrello (`.or(...)`): qui la catena lo accetta e basta.
           update: (patch: Record<string, unknown>) => {
             stato.scrittureOrdine.push(patch);
-            return { eq: async () => ({ error: null }) };
+            const catena: Record<string, unknown> = {
+              eq: () => catena,
+              or: () => catena,
+              then: (r: (v: unknown) => unknown) => r({ error: null }),
+            };
+            return catena;
           },
         };
       }

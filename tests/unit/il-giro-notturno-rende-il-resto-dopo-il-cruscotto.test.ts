@@ -61,6 +61,7 @@ vi.mock('@/lib/stripe/client', () => ({
 
 import { handleChargeRefunded } from '@/lib/stripe/webhook/rimborsi';
 import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
+import { decidiRimessaAScaffale } from '@/lib/ordini/rimessa-a-scaffale';
 
 function ordineNuovoDiPaneQuotidiano(extra: Riga = {}): Riga {
   return {
@@ -168,6 +169,37 @@ describe('il giro degli ordini mai accettati, dopo un rimborso parziale dal crus
     expect(giro).toMatchObject({ canceled: 1, refunded: 0 });
     expect(stato.carica.refunded).toBe(0);
     expect(ordine()).toMatchObject({ delivery_status: 'CANCELED', payment_status: 'FAILED' });
+  });
+});
+
+/** Quante volte il database ha rimesso a scaffale la merce di quell'ordine. */
+const rimesseAScaffale = (id = 'o1') =>
+  stato.db.rpc.filter((c) => c.nome === 'restore_stock_for_order' && c.argomenti.p_order_id === id).length;
+
+describe('la merce dell ordine annullato dal giro torna a scaffale (riesame del 16/10)', () => {
+  it('IL CASO DEL RIESAME — 3 € dal cruscotto, il negozio non accetta: il giro rende il resto E rimette la merce', async () => {
+    stato.db.tabelle.orders = [ordineNuovoDiPaneQuotidiano()];
+    await rimborsoDalCruscotto(300);
+
+    const giro = await giroNotturno();
+
+    expect(giro).toMatchObject({ canceled: 1, refunded: 1 });
+    expect(rimesseAScaffale(), 'il magazzino del negozio perde per sempre le quantità di un ordine che nessuno ha comprato').toBe(1);
+  });
+
+  it('un ordine pagato e mai rimborsato rimette la merce una volta, come prima', async () => {
+    stato.db.tabelle.orders = [ordineNuovoDiPaneQuotidiano()];
+    await giroNotturno();
+    expect(rimesseAScaffale()).toBe(1);
+  });
+
+  it('la regola: un annullo fatto adesso da chi chiama rimette la merce, anche dopo un rimborso parziale', () => {
+    const annullatoDalGiro = { delivery_status: 'CANCELED' };
+    expect(decidiRimessaAScaffale({ ordineDaChiudere: true, ordine: annullatoDalGiro, giaRimborsatoPrimaCents: 300, annullatoDaChiChiama: true }))
+      .toEqual({ rimetti: true });
+    // Senza la bandiera resta la regola di prima: un ordine già annullato con un rimborso precedente.
+    expect(decidiRimessaAScaffale({ ordineDaChiudere: true, ordine: annullatoDalGiro, giaRimborsatoPrimaCents: 300 }))
+      .toEqual({ rimetti: false, perche: 'gia-chiuso-da-un-rimborso' });
   });
 });
 

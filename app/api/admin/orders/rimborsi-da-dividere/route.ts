@@ -15,7 +15,8 @@ export const dynamic = 'force-dynamic';
  * 16/10/2026 — Un rimborso fatto dal cruscotto Stripe su un carrello di più
  * negozi ferma i bonifici di tutto il carrello, perché Stripe non dice di quale
  * negozio è. Prima si sbloccavano solo scrivendo nel database. Adesso:
- *  · GET  — i carrelli fermi, con quanto c'è da dividere e gli ordini;
+ *  · GET  — i carrelli fermi, con quanto c'è da dividere e gli ordini (più
+ *           quelli che Stripe in quel momento non ha lasciato leggere);
  *  · POST — la divisione decisa da chi amministra: registra la parte di ogni
  *           ordine (quota del negozio compresa) e riapre i bonifici.
  * La logica sta in lib/stripe/rimborsi-da-dividere.ts; le regole su quello che
@@ -24,7 +25,9 @@ export const dynamic = 'force-dynamic';
 export const GET = withAdminAuth(async () => {
   if (!isStripeConfigured()) return ApiErrors.unavailable('Stripe non configurato');
   try {
-    return apiSuccess({ carrelli: await carrelliDaDividere() });
+    // `nonLetti`: i pagamenti che Stripe adesso non lascia leggere. Restano a
+    // parte, e gli altri carrelli si dividono lo stesso.
+    return apiSuccess(await carrelliDaDividere());
   } catch (err) {
     logger.error('[rimborso da dividere] elenco non letto', { message: err instanceof Error ? err.message : String(err) });
     return ApiErrors.internal('Non riesco a leggere i rimborsi da dividere: riprova fra poco.');

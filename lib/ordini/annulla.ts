@@ -3,6 +3,8 @@ import { refundOrder } from '@/lib/stripe/payout';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
 import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
+import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 /**
  * ANNULLARE UN ORDINE VUOL DIRE ANCHE RESTITUIRE I SOLDI.
@@ -32,7 +34,10 @@ export type EsitoAnnullo =
         | 'STRIPE_NON_CONFIGURATO'
         | 'RIMBORSO_FALLITO'
         | 'ANNULLAMENTO_FALLITO'
-        | 'GIA_ANNULLATO';
+        | 'GIA_ANNULLATO'
+        // 16/10/2026 — sul pagamento c'è un rimborso dal cruscotto ancora da
+        // dividere fra i negozi: quanto rendere si sa solo dopo la divisione.
+        | 'RIMBORSO_DA_DIVIDERE';
       dettaglio?: string;
     };
 
@@ -48,7 +53,10 @@ export const COLONNE_ANNULLO =
   // 6/9/2026 — La targa del CARRELLO. Un carrello con due negozi diventa due
   // ordini che portano lo stesso codice sconto, rivendicato una volta sola: per
   // sapere se restituirlo bisogna sapere se l'altro ordine lo tiene ancora.
-  'stripe_session_id';
+  'stripe_session_id, ' +
+  // 16/10/2026 — La pausa del carrello: un rimborso dal cruscotto ancora da
+  // dividere fra i negozi (lib/stripe/rimborsi-da-dividere.ts).
+  'internal_dispute_status';
 
 export type OrdineDaAnnullare = {
   id: string;
@@ -65,6 +73,8 @@ export type OrdineDaAnnullare = {
   coupon_code?: string | null;
   /** Sugli ordini con carta: la sessione di pagamento, cioè il carrello di origine. */
   stripe_session_id?: string | null;
+  /** 'RIMBORSO_DA_RIPARTIRE' = sul pagamento c'è un rimborso dal cruscotto da dividere. */
+  internal_dispute_status?: string | null;
 };
 
 /**
@@ -225,6 +235,29 @@ export async function annullaERimborsa(
 
   if (isPaidCard) {
     if (!isStripeConfigured()) return { ok: false, motivo: 'STRIPE_NON_CONFIGURATO' };
+
+    // 16/10/2026 (riesame del lotto) — PRIMA SI DIVIDE, POI SI ANNULLA.
+    // Su un carrello di più negozi un rimborso fatto dal cruscotto Stripe non
+    // è scritto su nessun ordine finché non viene diviso: il residuo qui sotto
+    // (lordo meno già rimborsato) lo ignorava, e si rendeva di nuovo tutto. Il
+    // perché e il caso stanno in lib/stripe/rimborsi-da-dividere.ts.
+    if (await ilCarrelloAspettaLaDivisione(admin, order)) {
+      logger.warn('[annullaERimborsa] annullo fermo: c e un rimborso dal cruscotto da dividere', { orderId: order.id });
+      try {
+        await notifyAdmins(
+          '⚠️ Annullo in attesa: prima va diviso il rimborso dal cruscotto',
+          `Qualcuno ha chiesto di annullare l'ordine #${order.id.slice(0, 6).toUpperCase()}, pagato con la carta insieme ad altri negozi. ` +
+            "Sullo stesso pagamento c'è un rimborso fatto dal cruscotto Stripe che non è ancora diviso fra i negozi: " +
+            "finché non lo è, non si sa quanto rendere e l'ordine non si annulla. Dividilo dalla pagina Ordini, " +
+            'riquadro «Rimborsi dal cruscotto da dividere», poi annulla di nuovo.',
+          '/admin/orders',
+        );
+      } catch (err) {
+        logger.error('[annullaERimborsa] avviso agli amministratori non partito', { orderId: order.id, err });
+      }
+      return { ok: false, motivo: 'RIMBORSO_DA_DIVIDERE' };
+    }
+
     try {
       const totaleCent = Math.round(Number(order.total_price) * 100);
       const giaRimborsato = Number(order.refunded_amount_cents ?? 0);

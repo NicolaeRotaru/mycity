@@ -16,20 +16,23 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { writeAudit } from '@/lib/audit';
 import {
+  daFuoriDaRegistrare,
   elencoDeiRimborsi,
   etichettaComeRegistrati,
   PAUSA_RIMBORSO_DA_DIVIDERE,
   registraSullOrdine,
-  rimborsiDaRegistrare,
+  rimborsiGiaScritti,
   sommaDeiRimborsiDaFuori,
   type OrdineDelRimborso,
   type RimborsoStripe,
 } from '@/lib/stripe/webhook/rimborsi-da-fuori';
 import { controllaLaDivisione, type ParteDelRimborso } from '@/lib/rimborsi/divisione-del-rimborso';
 
+// 16/10 (riesame) — `stripe_refund_id`: dice quali rimborsi dal cruscotto una divisione
+// precedente ha già scritto sugli ordini (vedi `rimborsiDaEtichettare`).
 const COLONNE =
   'id, seller_id, total_price, refunded_amount_cents, payout_status, stripe_payment_intent, stripe_transfer_id, ' +
-  'stripe_reversal_id, seller_payout_cents, seller_payout_reversed_cents, internal_dispute_status';
+  'stripe_reversal_id, stripe_refund_id, seller_payout_cents, seller_payout_reversed_cents, internal_dispute_status';
 
 type OrdineDelCarrello = OrdineDelRimborso & {
   seller_id: string | null;
@@ -67,6 +70,61 @@ export function contoDaDividere(
 
 const lordoCents = (o: Pick<OrdineDelRimborso, 'total_price'>) => Math.round(Number(o.total_price ?? 0) * 100);
 
+/**
+ * Il pagamento ha un rimborso dal cruscotto che aspetta ancora di essere
+ * diviso fra i negozi? Lo dice la pausa su uno qualunque dei suoi ordini.
+ */
+export function aspettaLaDivisione(ordini: ReadonlyArray<{ internal_dispute_status?: string | null }>): boolean {
+  return ordini.some((o) => o.internal_dispute_status === PAUSA_RIMBORSO_DA_DIVIDERE);
+}
+
+/** Il minimo che serve per leggere gli ordini: così una prova può passarne uno finto. */
+type LettoreDegliOrdini = Pick<ReturnType<typeof getAdminSupabase>, 'from'>;
+
+/**
+ * 16/10/2026 (riesame del lotto) — PRIMA SI DIVIDE, POI SI ANNULLA.
+ *
+ * Su un carrello di più negozi il rimborso fatto dal cruscotto non è scritto su
+ * nessun ordine finché qualcuno non lo divide: per l'annullo l'ordine risultava
+ * «pagato e mai rimborsato», e si chiedeva a Stripe il lordo intero. Un caso:
+ * Pane Quotidiano 27,90 € e un fioraio 30,00 € sullo stesso pagamento, 3 € di
+ * focaccia resi dal cruscotto, poi Pane Quotidiano non accetta. Il giro lo
+ * annullava chiedendo 27,90 €, Stripe li dava (sul pagamento ne restavano
+ * 54,90), e il cliente riceveva 30,90 € per un ordine da 27,90. Poi i 3 € da
+ * dividere si potevano mettere solo sul fioraio, che non c'entrava.
+ *
+ * Quanto rendere all'annullo si sa solo a divisione fatta: fino ad allora chi
+ * annulla con la carta su quel pagamento aspetta.
+ *
+ * Si guarda prima la pausa dell'ordine stesso (letta con l'ordine), poi quella
+ * degli altri ordini dello stesso pagamento: un ordine con un altro stato (un
+ * reclamo) non riceve la pausa, ma i soldi da dividere possono essere suoi. Se
+ * il database non risponde alla seconda domanda, vale la prima: la pausa la
+ * mette il webhook su tutti gli ordini pagabili del carrello insieme.
+ */
+export async function ilCarrelloAspettaLaDivisione(
+  admin: LettoreDegliOrdini,
+  ordine: { id: string; stripe_payment_intent?: string | null; internal_dispute_status?: string | null },
+): Promise<boolean> {
+  if (aspettaLaDivisione([ordine])) return true;
+  if (!ordine.stripe_payment_intent) return false;
+  try {
+    const { data, error } = await admin
+      .from('orders')
+      .select('id, internal_dispute_status')
+      .eq('stripe_payment_intent', ordine.stripe_payment_intent)
+      .eq('internal_dispute_status', PAUSA_RIMBORSO_DA_DIVIDERE)
+      .limit(1);
+    if (error) throw new Error(error.message);
+    return aspettaLaDivisione((data ?? []) as Array<{ internal_dispute_status?: string | null }>);
+  } catch (err) {
+    logger.warn('[rimborso da dividere] pausa degli altri ordini del carrello non letta: vale quella dell ordine', {
+      orderId: ordine.id, message: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
+}
+
 async function ordiniDelPagamento(pagamento: string): Promise<OrdineDelCarrello[]> {
   const { data, error } = await getAdminSupabase().from('orders').select(COLONNE).eq('stripe_payment_intent', pagamento);
   if (error) throw new Error(`ordini del pagamento non letti: ${error.message}`);
@@ -83,13 +141,116 @@ export type CarrelloDaDividere = {
     giaRimborsatoCents: number;
     restaCents: number;
     bonificoPartito: boolean;
+    /** Il suo bonifico è fermo per questo rimborso (la sua parte va scritta, anche zero). */
+    fermo: boolean;
   }>;
 };
 
+/** Un pagamento fermo che Stripe, adesso, non ha lasciato leggere. */
+export type CarrelloNonLetto = { pagamento: string; motivo: string };
+
+export type ElencoDaDividere = {
+  carrelli: CarrelloDaDividere[];
+  /**
+   * 16/10/2026 (riesame del lotto) — UN PAGAMENTO CHE NON SI LEGGE NON SPEGNE GLI ALTRI.
+   * Prima un errore di Stripe su un solo pagamento faceva fallire tutto
+   * l'elenco: il pannello mostrava solo l'errore, e nessun carrello si poteva
+   * dividere — nemmeno quelli che si leggevano benissimo. Adesso quel
+   * pagamento finisce qui, e gli altri restano dividibili.
+   */
+  nonLetti: CarrelloNonLetto[];
+};
+
+const fermo = (o: Pick<OrdineDelCarrello, 'internal_dispute_status'>) =>
+  o.internal_dispute_status === PAUSA_RIMBORSO_DA_DIVIDERE;
+
+/**
+ * Gli ordini del pagamento a cui si può dare una parte del rimborso: quelli
+ * fermi (la divisione li riapre) e quelli a cui resta qualcosa da rimborsare.
+ *
+ * 16/10/2026 (riesame del lotto) — Prima erano solo quelli fermi. Il webhook
+ * ferma solo gli ordini pagabili, e la chiusura di un reclamo poteva togliere
+ * la pausa a uno di loro: quell'ordine spariva dalla divisione, e il rimborso
+ * finiva per forza addosso all'altro negozio.
+ */
+export function ordiniDaDividere<T extends Pick<OrdineDelCarrello, 'internal_dispute_status' | 'total_price' | 'refunded_amount_cents'>>(
+  ordini: ReadonlyArray<T>,
+): T[] {
+  return ordini.filter((o) => fermo(o) || lordoCents(o) - (o.refunded_amount_cents ?? 0) > 0);
+}
+
+/**
+ * Quali rimborsi dal cruscotto etichettare come «registrati», a divisione
+ * finita (tutti gli ordini fermi riaperti).
+ *
+ * Tutti quelli da fuori letti all'inizio, se i numeri dicono che erano tutti
+ * da dividere: da fuori ≤ mancante sul database. Se invece da fuori è di più,
+ * c'è un rimborso del sito ancora in corso che nasconde una parte dei soldi:
+ * quella parte la dividerà un avviso successivo, e intanto non si etichetta
+ * niente.
+ *
+ * 16/10/2026 (riesame del lotto) — LA DIVISIONE RIPRESA A METÀ. Una divisione
+ * interrotta (un ordine cambiato sotto le mani, risposta 409) registra una
+ * parte degli ordini; al secondo tentativo il mancante è più piccolo dei
+ * rimborsi da fuori, e con la regola di sopra l'etichetta non si metteva più:
+ * i 3 € già divisi restavano «da fuori» per sempre. Adesso conta anche quello
+ * che una divisione precedente ha già scritto sugli ordini del carrello (gli id
+ * nel loro elenco dei rimborsi).
+ */
+export function rimborsiDaEtichettare(
+  rimborsi: ReadonlyArray<RimborsoStripe>,
+  ordini: ReadonlyArray<Pick<OrdineDelRimborso, 'stripe_refund_id'>>,
+  conto: Pick<ContoDaDividere, 'daFuoriCents' | 'mancanteCents'>,
+): string[] {
+  const daFuori = rimborsi.filter(daFuoriDaRegistrare);
+  const scritti = new Set<string>();
+  for (const o of ordini) for (const id of rimborsiGiaScritti(o)) scritti.add(id);
+  const giaDivisiCents = daFuori
+    .filter((r) => !!r.id && scritti.has(r.id))
+    .reduce((somma, r) => somma + Math.max(0, r.amount ?? 0), 0);
+  if (conto.daFuoriCents > conto.mancanteCents + giaDivisiCents) return [];
+  return daFuori.map((r) => r.id).filter((id): id is string => !!id);
+}
+
+/** Un carrello fermo, letto per il pannello. `null` se non c'è più niente di fermo. */
+async function carrelloDaDividere(pagamento: string): Promise<CarrelloDaDividere | null> {
+  const ordini = await ordiniDelPagamento(pagamento);
+  if (!ordini.some(fermo)) return null;
+  const conto = contoDaDividere(ordini, await elencoDeiRimborsi({ payment_intent: pagamento }));
+  const candidati = ordiniDaDividere(ordini);
+
+  const idNegozi = [...new Set(candidati.map((o) => o.seller_id).filter((s): s is string => !!s))];
+  const nomi = new Map<string, string>();
+  if (idNegozi.length > 0) {
+    const { data: negozi } = await getAdminSupabase().from('profiles').select('id, store_name').in('id', idNegozi);
+    for (const n of (negozi ?? []) as Array<{ id: string; store_name: string | null }>) {
+      if (n.store_name?.trim()) nomi.set(n.id, n.store_name.trim());
+    }
+  }
+
+  return {
+    pagamento,
+    daDividereCents: conto.daDividereCents,
+    ordini: candidati.map((o) => {
+      const lordo = lordoCents(o);
+      const gia = o.refunded_amount_cents ?? 0;
+      return {
+        id: o.id,
+        negozio: (o.seller_id && nomi.get(o.seller_id)) || 'Negozio senza nome',
+        lordoCents: lordo,
+        giaRimborsatoCents: gia,
+        restaCents: Math.max(0, lordo - gia),
+        // Lì la quota del negozio si riprende con uno storno (registraSullOrdine).
+        bonificoPartito: o.payout_status === 'TRANSFERRED' && !!o.stripe_transfer_id,
+        fermo: fermo(o),
+      };
+    }),
+  };
+}
+
 /** I carrelli coi bonifici fermi per un rimborso dal cruscotto da dividere. */
-export async function carrelliDaDividere(): Promise<CarrelloDaDividere[]> {
-  const admin = getAdminSupabase();
-  const { data: fermi, error } = await admin
+export async function carrelliDaDividere(): Promise<ElencoDaDividere> {
+  const { data: fermi, error } = await getAdminSupabase()
     .from('orders')
     .select('stripe_payment_intent')
     .eq('internal_dispute_status', PAUSA_RIMBORSO_DA_DIVIDERE)
@@ -98,40 +259,20 @@ export async function carrelliDaDividere(): Promise<CarrelloDaDividere[]> {
   const pagamenti = [...new Set((fermi ?? []).map((r) => r.stripe_payment_intent as string | null).filter((p): p is string => !!p))];
 
   const carrelli: CarrelloDaDividere[] = [];
+  const nonLetti: CarrelloNonLetto[] = [];
   for (const pagamento of pagamenti) {
-    const ordini = await ordiniDelPagamento(pagamento);
-    const fermiQui = ordini.filter((o) => o.internal_dispute_status === PAUSA_RIMBORSO_DA_DIVIDERE);
-    if (fermiQui.length === 0) continue;
-    const conto = contoDaDividere(ordini, await elencoDeiRimborsi({ payment_intent: pagamento }));
-
-    const idNegozi = [...new Set(fermiQui.map((o) => o.seller_id).filter((s): s is string => !!s))];
-    const nomi = new Map<string, string>();
-    if (idNegozi.length > 0) {
-      const { data: negozi } = await admin.from('profiles').select('id, store_name').in('id', idNegozi);
-      for (const n of (negozi ?? []) as Array<{ id: string; store_name: string | null }>) {
-        if (n.store_name?.trim()) nomi.set(n.id, n.store_name.trim());
-      }
+    // Ogni pagamento nel suo riparo: uno che Stripe non lascia leggere non
+    // toglie dal pannello gli altri, che restano dividibili.
+    try {
+      const carrello = await carrelloDaDividere(pagamento);
+      if (carrello) carrelli.push(carrello);
+    } catch (err) {
+      const motivo = err instanceof Error ? err.message : String(err);
+      logger.error('[rimborso da dividere] pagamento non letto', { pagamento, motivo });
+      nonLetti.push({ pagamento, motivo });
     }
-
-    carrelli.push({
-      pagamento,
-      daDividereCents: conto.daDividereCents,
-      ordini: fermiQui.map((o) => {
-        const lordo = lordoCents(o);
-        const gia = o.refunded_amount_cents ?? 0;
-        return {
-          id: o.id,
-          negozio: (o.seller_id && nomi.get(o.seller_id)) || 'Negozio senza nome',
-          lordoCents: lordo,
-          giaRimborsatoCents: gia,
-          restaCents: Math.max(0, lordo - gia),
-          // Lì la quota del negozio si riprende con uno storno (registraSullOrdine).
-          bonificoPartito: o.payout_status === 'TRANSFERRED' && !!o.stripe_transfer_id,
-        };
-      }),
-    });
   }
-  return carrelli;
+  return { carrelli, nonLetti };
 }
 
 export type EsitoDellaDivisioneFatta =
@@ -142,9 +283,14 @@ export type EsitoDellaDivisioneFatta =
  * Registra la divisione decisa da chi amministra e riapre i bonifici.
  *
  * Ogni ordine si scrive in una volta sola — la sua parte, la quota del suo
- * negozio e la pausa tolta — e solo se è ancora fermo e non è cambiato da
- * quando l'ho letto. Così una divisione ripetuta (doppio clic, una seconda
- * scheda) non registra niente due volte: l'ordine già diviso non è più fermo.
+ * negozio e, se era fermo, la pausa tolta — e solo se non è cambiato da quando
+ * l'ho letto (e, se era fermo, se lo è ancora). Così una divisione ripetuta
+ * (doppio clic, una seconda scheda) non registra niente due volte: dopo la
+ * prima non c'è più niente di fermo.
+ *
+ * Prima gli ordini NON fermi, poi quelli fermi: se una scrittura non passa,
+ * quello che è già registrato è sempre accompagnato da almeno un ordine ancora
+ * fermo, e il pannello continua a mostrare il carrello col resto da dividere.
  */
 export async function dividiIlRimborso(
   pagamento: string,
@@ -152,25 +298,37 @@ export async function dividiIlRimborso(
   chi: string,
 ): Promise<EsitoDellaDivisioneFatta> {
   const ordini = await ordiniDelPagamento(pagamento);
-  const fermi = ordini.filter((o) => o.internal_dispute_status === PAUSA_RIMBORSO_DA_DIVIDERE);
-  if (fermi.length === 0) {
+  if (!ordini.some(fermo)) {
     return { ok: false, stato: 409, errore: 'Su questo pagamento non ci sono bonifici fermi da sbloccare.', registrati: [] };
   }
 
   const rimborsi = await elencoDeiRimborsi({ payment_intent: pagamento });
   const conto = contoDaDividere(ordini, rimborsi);
+  const candidati = ordiniDaDividere(ordini);
   const controllo = controllaLaDivisione(
-    fermi.map((o) => ({ id: o.id, lordoCents: lordoCents(o), giaRimborsatoCents: o.refunded_amount_cents ?? 0 })),
+    candidati.map((o) => ({ id: o.id, lordoCents: lordoCents(o), giaRimborsatoCents: o.refunded_amount_cents ?? 0, fermo: fermo(o) })),
     parti,
     conto.daDividereCents,
   );
   if (!controllo.ok) return { ok: false, stato: 400, errore: controllo.errore, registrati: [] };
 
+  // I rimborsi dal cruscotto che questa divisione copre: si scrivono sugli
+  // ordini a cui dà una parte, così il prossimo avviso dello stesso pagamento
+  // non li ritrova «da fuori» anche se l'etichetta su Stripe non arriva.
+  const daFuoriIds = rimborsi
+    .filter(daFuoriDaRegistrare)
+    .map((r) => r.id)
+    .filter((id): id is string => !!id);
+
+  const inOrdine = [...candidati.filter((o) => !fermo(o)), ...candidati.filter(fermo)];
   const registrati: string[] = [];
-  for (const ordine of fermi) {
+  for (const ordine of inOrdine) {
     const parte = controllo.parti.get(ordine.id) ?? 0;
+    const eraFermo = fermo(ordine);
+    // Un ordine non fermo senza parte non ha niente da scrivere.
+    if (!eraFermo && parte <= 0) continue;
     try {
-      await registraSullOrdine(ordine, parte, { chargeId: null, togliLaPausa: true });
+      await registraSullOrdine(ordine, parte, { chargeId: null, togliLaPausa: eraFermo, rimborsi: daFuoriIds });
     } catch (err) {
       const motivo = err instanceof Error ? err.message : String(err);
       logger.error('[rimborso da dividere] ordine non registrato', { pagamento, orderId: ordine.id, motivo });
@@ -180,7 +338,7 @@ export async function dividiIlRimborso(
         errore:
           `L'ordine #${ordine.id.slice(0, 6).toUpperCase()} è cambiato mentre lo registravo, oppure il suo bonifico sta partendo proprio adesso. ` +
           (registrati.length > 0
-            ? `${registrati.length} ordine/i sono già registrati e sbloccati. Ricarica la pagina: il rimborso da dividere riparte da quello che manca.`
+            ? `${registrati.length} ordine/i sono già registrati. Ricarica la pagina: il rimborso da dividere riparte da quello che manca.`
             : 'Non ho registrato niente: ricarica la pagina e riprova.'),
         registrati,
       };
@@ -197,12 +355,8 @@ export async function dividiIlRimborso(
 
   // Tutto il rimborso da fuori ora è scritto sugli ordini: i suoi rimborsi su
   // Stripe ricevono l'etichetta «registrato», così il prossimo avviso dello
-  // stesso pagamento non li ritrova come da dividere. Se i numeri dicono che
-  // non era tutto da fuori (un rimborso del sito ancora in corso), non si
-  // etichetta niente: al peggio i bonifici si fermano di nuovo, non si toglie
-  // niente due volte.
-  if (conto.daFuoriCents <= conto.mancanteCents) {
-    await etichettaComeRegistrati(rimborsiDaRegistrare(rimborsi, Number.POSITIVE_INFINITY).ids, null);
-  }
+  // stesso pagamento non li ritrova come da dividere (vedi `rimborsiDaEtichettare`).
+  const daEtichettare = rimborsiDaEtichettare(rimborsi, ordini, conto);
+  if (daEtichettare.length > 0) await etichettaComeRegistrati(daEtichettare, null);
   return { ok: true, registrati };
 }

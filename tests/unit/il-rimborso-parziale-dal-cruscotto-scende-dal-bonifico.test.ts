@@ -610,6 +610,36 @@ describe('un rimborso dal cruscotto già registrato non si conta una seconda vol
   });
 });
 
+describe('il reso del sito non cancella la memoria dei rimborsi dal cruscotto (secondo riesame del 16/10)', () => {
+  it('IL CASO DEL RIESAME — 3 € dal cruscotto senza etichetta, un reso dal sito, poi un secondo reso perde la risposta: i 3 € non si registrano due volte', async () => {
+    stato.db.tabelle.orders = [ordineDiPaneQuotidiano()];
+    // Stripe registra i rimborsi ma non risponde quando gli si chiede l'etichetta.
+    stato.etichetteRiescono = false;
+    await rimborsoDalCruscotto(300);
+    expect(ordine()).toMatchObject({ refunded_amount_cents: 300, seller_payout_reversed_cents: 194 });
+
+    // Un reso da 5 € deciso dal sito: va a buon fine.
+    await refundOrder({ orderId: 'o1', amountCents: 500, reason: 'reso', idempotencyKey: 'return_r1' });
+    const scritti = String(ordine().stripe_refund_id).split(',');
+    expect(scritti, 'il reso del sito ha cancellato dall ordine il rimborso dal cruscotto').toContain('re_cruscotto_1');
+    expect(scritti).toHaveLength(2);
+
+    // Un secondo reso da 5 €: Stripe lo fa, la risposta si perde, refundOrder toglie il suo segno.
+    stato.rispostePerse = 1;
+    await expect(refundOrder({ orderId: 'o1', amountCents: 500, reason: 'reso', idempotencyKey: 'return_r2' })).rejects.toThrow();
+    await handleChargeRefunded(avvisoDiRimborso(stato.carica.refunded));
+
+    expect(ordine(), 'i 3 € del cruscotto registrati una seconda volta').toMatchObject({
+      refunded_amount_cents: 800, seller_payout_reversed_cents: 194 + 323,
+    });
+
+    // Il secondo reso si ridecide con la stessa chiave: Stripe restituisce lo stesso rimborso.
+    await refundOrder({ orderId: 'o1', amountCents: 500, reason: 'reso', idempotencyKey: 'return_r2' });
+    expect(ordine().refunded_amount_cents, 'il database deve dire quanto è uscito davvero da Stripe').toBe(stato.carica.refunded);
+    expect(ordine().seller_payout_reversed_cents).toBe(194 + 323 + 323);
+  });
+});
+
 describe('bonifico partito con uno storno precedente non riuscito (riesame del 16/10)', () => {
   it('IL CASO DEL RIESAME — la quota del secondo rimborso non si toglie solo sulla carta: gli amministratori sanno quanto recuperare', async () => {
     stato.db.tabelle.orders = [ordineDiPaneQuotidiano({ payout_status: 'TRANSFERRED', stripe_transfer_id: 'tr_pq' })];
