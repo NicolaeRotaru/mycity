@@ -37,6 +37,7 @@ function voce(parziale: Partial<VoceDaBonificare>): VoceDaBonificare {
     intestatario: null,
     fattoIl: null,
     daFare: true,
+    confermataDallOrdine: true,
     ...parziale,
   };
 }

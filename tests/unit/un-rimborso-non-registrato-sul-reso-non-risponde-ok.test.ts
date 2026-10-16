@@ -91,6 +91,15 @@ async function chiama(rotta: unknown, corpo: unknown, id: string) {
 
 /** Il reso del maglione, aperto col bonifico e arrivato fino a «merce ricevuta». */
 async function resoRicevuto(): Promise<string> {
+  const id = await resoAperto();
+  finto.utente = 'negozio';
+  expect((await chiama(decidi, { decision: 'APPROVED' }, id)).status).toBe(200);
+  expect((await chiama(avanza, { stato: 'RECEIVED' }, id)).status).toBe(200);
+  return id;
+}
+
+/** Il reso del maglione, appena aperto dalla cliente col bonifico e l'IBAN. */
+async function resoAperto(): Promise<string> {
   finto.utente = 'giulia';
   const res = await (apriReso as unknown as (r: Request, c: unknown) => Promise<Response>)(
     new Request('http://localhost/api/returns/create', json({
@@ -99,11 +108,7 @@ async function resoRicevuto(): Promise<string> {
     undefined,
   );
   expect(res.status).toBe(201);
-  const id = (await res.json()).id as string;
-  finto.utente = 'negozio';
-  expect((await chiama(decidi, { decision: 'APPROVED' }, id)).status).toBe(200);
-  expect((await chiama(avanza, { stato: 'RECEIVED' }, id)).status).toBe(200);
-  return id;
+  return (await res.json()).id as string;
 }
 
 beforeEach(() => {
@@ -143,6 +148,50 @@ describe('avanza: se l esito del rimborso non si registra sul reso, non si rispo
     const id = await resoRicevuto();
     const esito = await chiama(avanza, { stato: 'REFUNDED', refundAmountCents: 4000 }, id);
     expect(esito.status).toBe(200);
+    expect(finto.db.tabelle.returns[0].refund_id).toBe(`bonifico:4000:return_${id}`);
+    expect(notificheConTitolo(finto.db, 'non registrato sul reso')).toHaveLength(0);
+  });
+});
+
+/**
+ * Riesame del 16/10, terzo giro — LA STESSA CADUTA, SULLA DECISIONE.
+ *
+ * Il negozio approva il reso col rimborso subito (`decide` con l'importo): `refundOrder` registra
+ * i 40 € sull'ordine e il bonifico diventa dovuto, poi cade la scrittura dell'esito sul reso. La
+ * rotta rispondeva solo «Update fallito», senza nessun avviso: il reso restava «approvato» senza
+ * segno, il bonifico fuori dalla lista di chi paga, e il negozio non sapeva che i soldi risultavano
+ * gia' restituiti.
+ */
+describe('decide: se l esito del rimborso non si registra sul reso, non si risponde «ok» e chi paga lo sa', () => {
+  it('il negozio legge di non ripetere il rimborso, e chi paga riceve l avviso con reso, ordine e cifra', async () => {
+    const id = await resoAperto();
+    finto.utente = 'negozio';
+
+    finto.guasto = true;
+    const esito = await chiama(decidi, { decision: 'APPROVED', refundAmountCents: 4000 }, id);
+    finto.guasto = false;
+
+    const reso = finto.db.tabelle.returns[0];
+    expect(reso.refund_id ?? null, 'il guasto non e avvenuto: la prova non misura niente').toBeNull();
+    expect(finto.db.tabelle.orders[0].refunded_amount_cents, 'il rimborso non e partito: la prova non misura niente').toBe(4000);
+    expect(esito.status, 'il rimborso non e registrato sul reso e la rotta risponde come se fosse tutto a posto').not.toBe(200);
+    expect(String(esito.corpo.error?.message)).toContain('Non ripetere il rimborso');
+
+    const avvisi = notificheConTitolo(finto.db, 'non registrato sul reso');
+    expect(avvisi, 'chi paga non sa che c e un bonifico fuori dalla lista').toHaveLength(1);
+    const testo = String(avvisi[0].body);
+    expect(testo).toContain(id);
+    expect(testo).toContain('#11111111');
+    expect(testo).toMatch(/40,00\s€/u);
+    expect(avvisi[0].link).toBe('/admin/rimborsi-da-bonificare');
+  });
+
+  it('senza guasto resta tutto come prima: 200, il reso rimborsato col segno del bonifico, nessun avviso di guasto', async () => {
+    const id = await resoAperto();
+    finto.utente = 'negozio';
+    const esito = await chiama(decidi, { decision: 'APPROVED', refundAmountCents: 4000 }, id);
+    expect(esito.status).toBe(200);
+    expect(finto.db.tabelle.returns[0].status).toBe('REFUNDED');
     expect(finto.db.tabelle.returns[0].refund_id).toBe(`bonifico:4000:return_${id}`);
     expect(notificheConTitolo(finto.db, 'non registrato sul reso')).toHaveLength(0);
   });

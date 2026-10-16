@@ -10,7 +10,7 @@ import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { confirmDialog } from '@/components/ConfirmDialog';
-import { domandaPrimaDelBonificoFatto, type VoceDaBonificare } from '@/lib/rimborsi/bonifici-da-fare';
+import { cosaDiceLaVoce, domandaPrimaDelBonificoFatto, type VoceDaBonificare } from '@/lib/rimborsi/bonifici-da-fare';
 
 /**
  * R71 — I BONIFICI DI RIMBORSO DA FARE.
@@ -32,9 +32,20 @@ import { domandaPrimaDelBonificoFatto, type VoceDaBonificare } from '@/lib/rimbo
  *    (reclami, o resi arrivati senza IBAN).
  *  · Se il cliente ha cancellato l'account prima del pagamento, la voce mostra
  *    il nome a cui intestare il bonifico: e' l'unico posto dove resta.
+ *
+ * Terzo giro — un bonifico che l'ordine non conferma non sta fra quelli da
+ * pagare: va in un riquadro a parte, con l'avviso di non pagarlo prima di aver
+ * controllato. E «scrivilo qui» compare solo dove il campo per l'IBAN c'e'
+ * (lib/rimborsi/bonifici-da-fare.ts, `smistaLeVoci` e `cosaDiceLaVoce`).
  */
 
-type Risposta = { voci: VoceDaBonificare[]; migrazione162: boolean; tagliata?: boolean };
+type Risposta = {
+  voci: VoceDaBonificare[];
+  /** I bonifici da fare che l'ordine non conferma: a parte, da controllare prima di pagare. */
+  daControllare?: VoceDaBonificare[];
+  migrazione162: boolean;
+  tagliata?: boolean;
+};
 
 type Comando =
   | { azione: 'fatto'; voce: Pick<VoceDaBonificare, 'tipo' | 'id'> }
@@ -85,7 +96,75 @@ export default function RimborsiDaBonificarePage() {
   };
 
   const voci = data?.voci ?? [];
+  const daControllare = data?.daControllare ?? [];
   const daFare = voci.filter((v) => v.daFare);
+
+  // Una riga della lista: la stessa per i bonifici da pagare e per quelli da controllare.
+  const riga = (v: VoceDaBonificare) => {
+    const dice = cosaDiceLaVoce(v, !!data?.migrazione162);
+    return (
+      <li
+        key={`${v.tipo}-${v.id}`}
+        className={`rounded-xl border bg-white p-4 ${v.daFare ? 'border-primary-300' : 'border-cream-300 opacity-70'}`}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            {v.importoCents != null ? (
+              <p className="text-lg font-bold text-ink-900">{formatPriceFromCents(v.importoCents)}</p>
+            ) : (
+              // Senza una cifra certa non se ne mostra una: su un ordine pagato in parte col
+              // credito, l'intero rimborso comprende la parte già tornata come credito.
+              <p className="text-sm font-semibold text-secondary-700">
+                Cifra da controllare: leggila nell&apos;avviso «Bonifico di rimborso da fare» di questo ordine.
+              </p>
+            )}
+            <p className="text-sm text-ink-600">
+              {v.tipo === 'reclamo' ? 'Reclamo' : 'Reso'} · ordine{' '}
+              <Link href={`/orders/${v.ordineId}`} className="font-semibold text-primary-700 hover:underline">
+                #{v.ordineId.slice(0, 8)}
+              </Link>
+              {v.registratoIl ? ` · rimborso registrato il ${formatDate(v.registratoIl)}` : ''}
+            </p>
+            {v.intestatario && (
+              <p className="mt-2 text-sm text-ink-800">
+                Intestatario: <strong>{v.intestatario}</strong>{' '}
+                <span className="text-ink-600">(il cliente ha chiuso l&apos;account: il nome resta qui fino al bonifico)</span>
+              </p>
+            )}
+            {dice.daControllare && (
+              <p className="mt-2 rounded-lg border border-secondary-300 bg-secondary-50 p-2 text-sm font-semibold text-secondary-800">
+                {dice.daControllare}
+              </p>
+            )}
+            <p className="mt-2 font-mono text-sm text-ink-900 break-all">
+              {v.iban ?? <span className="font-sans text-secondary-700">{dice.alPostoDellIban}</span>}
+            </p>
+            {dice.campoPerLIban && (
+              <IbanRicevuto
+                voce={v}
+                inCorso={comando.isPending}
+                salva={(iban) => comando.mutate({ azione: 'iban', voce: { tipo: v.tipo, id: v.id }, iban })}
+              />
+            )}
+          </div>
+          {v.daFare ? (
+            <button
+              type="button"
+              onClick={() => void segnaFatto(v)}
+              disabled={comando.isPending || !data?.migrazione162}
+              className="rounded-lg bg-primary-700 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-800 disabled:opacity-50"
+            >
+              Bonifico fatto
+            </button>
+          ) : (
+            <span className="text-sm font-semibold text-olive-700">
+              Fatto{v.fattoIl ? ` il ${formatDate(v.fattoIl)}` : ''}
+            </span>
+          )}
+        </div>
+      </li>
+    );
+  };
 
   return (
     <div>
@@ -116,7 +195,7 @@ export default function RimborsiDaBonificarePage() {
         <p className="rounded-xl border border-secondary-300 bg-white p-4 text-sm text-secondary-700">
           {friendlyError(error)}
         </p>
-      ) : voci.length === 0 ? (
+      ) : voci.length === 0 && daControllare.length === 0 ? (
         <p className="rounded-xl border border-cream-300 bg-white p-6 text-sm text-ink-600">
           Nessun bonifico di rimborso da fare.
         </p>
@@ -125,70 +204,19 @@ export default function RimborsiDaBonificarePage() {
           <p className="mb-3 text-sm text-ink-600">
             Da fare: <strong>{daFare.length}</strong> su {voci.length}.
           </p>
-          <ul className="space-y-3">
-            {voci.map((v) => (
-              <li
-                key={`${v.tipo}-${v.id}`}
-                className={`rounded-xl border bg-white p-4 ${v.daFare ? 'border-primary-300' : 'border-cream-300 opacity-70'}`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    {v.importoCents != null ? (
-                      <p className="text-lg font-bold text-ink-900">{formatPriceFromCents(v.importoCents)}</p>
-                    ) : (
-                      // Senza una cifra certa non se ne mostra una: su un ordine pagato in parte col
-                      // credito, l'intero rimborso comprende la parte già tornata come credito.
-                      <p className="text-sm font-semibold text-secondary-700">
-                        Cifra da controllare: leggila nell&apos;avviso «Bonifico di rimborso da fare» di questo ordine.
-                      </p>
-                    )}
-                    <p className="text-sm text-ink-600">
-                      {v.tipo === 'reclamo' ? 'Reclamo' : 'Reso'} · ordine{' '}
-                      <Link href={`/orders/${v.ordineId}`} className="font-semibold text-primary-700 hover:underline">
-                        #{v.ordineId.slice(0, 8)}
-                      </Link>
-                      {v.registratoIl ? ` · rimborso registrato il ${formatDate(v.registratoIl)}` : ''}
-                    </p>
-                    {v.intestatario && (
-                      <p className="mt-2 text-sm text-ink-800">
-                        Intestatario: <strong>{v.intestatario}</strong>{' '}
-                        <span className="text-ink-600">(il cliente ha chiuso l&apos;account: il nome resta qui fino al bonifico)</span>
-                      </p>
-                    )}
-                    <p className="mt-2 font-mono text-sm text-ink-900 break-all">
-                      {v.iban ?? (
-                        <span className="font-sans text-secondary-700">
-                          IBAN non indicato: l&apos;email di rimborso chiede al cliente di mandarlo dalla pagina Contatti.
-                          Quando arriva, scrivilo qui.
-                        </span>
-                      )}
-                    </p>
-                    {v.daFare && !v.iban && data?.migrazione162 && (
-                      <IbanRicevuto
-                        voce={v}
-                        inCorso={comando.isPending}
-                        salva={(iban) => comando.mutate({ azione: 'iban', voce: { tipo: v.tipo, id: v.id }, iban })}
-                      />
-                    )}
-                  </div>
-                  {v.daFare ? (
-                    <button
-                      type="button"
-                      onClick={() => void segnaFatto(v)}
-                      disabled={comando.isPending || !data?.migrazione162}
-                      className="rounded-lg bg-primary-700 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-800 disabled:opacity-50"
-                    >
-                      Bonifico fatto
-                    </button>
-                  ) : (
-                    <span className="text-sm font-semibold text-olive-700">
-                      Fatto{v.fattoIl ? ` il ${formatDate(v.fattoIl)}` : ''}
-                    </span>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+          <ul className="space-y-3">{voci.map(riga)}</ul>
+          {daControllare.length > 0 && (
+            <section className="mt-8">
+              <h2 className="mb-1 text-base font-bold text-secondary-800">
+                Da controllare prima di pagare: {daControllare.length}
+              </h2>
+              <p className="mb-3 text-sm text-ink-600">
+                Questi rimborsi non risultano registrati sull&apos;ordine. Possono essere righe scritte da qualcun altro:
+                non pagarli finché non hai controllato l&apos;ordine.
+              </p>
+              <ul className="space-y-3">{daControllare.map(riga)}</ul>
+            </section>
+          )}
         </>
       )}
     </div>

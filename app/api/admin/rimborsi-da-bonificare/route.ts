@@ -12,10 +12,12 @@ import { COLONNE_162 } from '@/lib/rimborsi/scelta-del-cliente';
 import { ibanValido, normalizzaIban } from '@/lib/rimborsi/scelta-del-cliente';
 import {
   letturaDeiDaFareTagliata,
+  smistaLeVoci,
   tabellaDeiBonificiMancante,
   TETTO_DEI_BONIFICI_DA_FARE,
   TETTO_DEI_BONIFICI_FATTI,
   vociDeiBonificiDaFare,
+  type OrdineDelBonifico,
   type RigaDelBonificoDelReclamo,
   type RigaDelReso,
 } from '@/lib/rimborsi/bonifici-da-fare';
@@ -41,6 +43,34 @@ export const runtime = 'nodejs';
 const COLONNE =
   'id, order_id, refund_amount_cents, refunded_at, refund_id, refund_iban, refund_intestatario, refund_bonifico_cents, refund_bonifico_fatto_at';
 const COLONNE_DEI_RECLAMI = 'dispute_id, order_id, importo_cents, registrato_at, fatto_at, iban, intestatario';
+
+/** Quanti ordini si chiedono per volta: l'elenco degli id viaggia nell'indirizzo della richiesta. */
+const ORDINI_PER_LETTURA = 100;
+
+/**
+ * Riesame del 16/10, terzo giro — GLI ORDINI DEI RESI, PER CONFERMARE I BONIFICI.
+ *
+ * La riga del reso, in produzione senza la 153, la puo' scrivere anche il
+ * cliente: un bonifico e' confermato solo se il suo segno sta nell'elenco dei
+ * rimborsi dell'ordine, che scrive solo il server
+ * (`bonificoRegistratoSullOrdine` in lib/rimborsi/bonifici-da-fare.ts).
+ */
+async function ordiniDeiResi(
+  admin: ReturnType<typeof getAdminSupabase>,
+  idOrdini: readonly string[],
+): Promise<{ ordini: OrdineDelBonifico[]; errore: string | null }> {
+  const unici = [...new Set(idOrdini.filter(Boolean))];
+  const ordini: OrdineDelBonifico[] = [];
+  for (let i = 0; i < unici.length; i += ORDINI_PER_LETTURA) {
+    const { data, error } = await admin
+      .from('orders')
+      .select('id, stripe_refund_id')
+      .in('id', unici.slice(i, i + ORDINI_PER_LETTURA));
+    if (error) return { ordini: [], errore: error.message };
+    ordini.push(...((data ?? []) as unknown as OrdineDelBonifico[]));
+  }
+  return { ordini, errore: null };
+}
 
 /**
  * Riesame del 16/10 — DUE LETTURE, NON UNA FINESTRA SOLA.
@@ -127,8 +157,16 @@ async function elenco(): Promise<NextResponse> {
     }
   }
 
-  const voci = vociDeiBonificiDaFare([...righeDaFare, ...righeFatte], reclami);
-  return NextResponse.json({ voci, migrazione162: con162, tagliata }, { status: 200 });
+  const righe = [...righeDaFare, ...righeFatte];
+  const { ordini, errore: erroreOrdini } = await ordiniDeiResi(admin, righe.map((r) => r.order_id));
+  if (erroreOrdini) {
+    logger.error('[bonifici da fare] ordini dei resi non letti', { message: erroreOrdini });
+    return ApiErrors.internal('Non riesco a controllare i bonifici sugli ordini');
+  }
+
+  // Fra i bonifici da pagare solo quelli che l'ordine conferma; gli altri a parte, da controllare.
+  const { daPagare, daControllare } = smistaLeVoci(vociDeiBonificiDaFare(righe, reclami, ordini));
+  return NextResponse.json({ voci: daPagare, daControllare, migrazione162: con162, tagliata }, { status: 200 });
 }
 
 /**

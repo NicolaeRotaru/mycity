@@ -59,6 +59,14 @@ const reclamoDimenticato: Riga = {
   registrato_at: giorno(0), fatto_at: null, iban: null, intestatario: null,
 };
 
+/**
+ * Gli ordini di quei resi, con la conferma che scrive `refundOrder`: il segno del bonifico nel loro
+ * elenco dei rimborsi (riesame del 16/10, terzo giro — senza, il bonifico va fra quelli da controllare).
+ */
+function ordiniCheConfermano(resi: Riga[]): Riga[] {
+  return resi.map((r) => ({ id: r.order_id, stripe_refund_id: r.refund_id }));
+}
+
 /** Piu' bonifici pagati dopo quello dimenticato di quanti la lista ne legga in una volta. */
 const PAGATI_DOPO = TETTO_DEI_BONIFICI_DA_FARE + 1;
 
@@ -70,6 +78,7 @@ const leggi = async () => {
 beforeEach(() => {
   finto.db = creaFintoDatabase({
     returns: [...resiPagati(PAGATI_DOPO), dimenticato],
+    orders: ordiniCheConfermano([...resiPagati(PAGATI_DOPO), dimenticato]),
     bonifici_dei_reclami: [...reclamiPagati(PAGATI_DOPO), reclamoDimenticato],
   });
 });
@@ -106,7 +115,7 @@ describe('i bonifici da fare non escono dalla lista', () => {
 
   it('senza la migrazione 162 i bonifici si leggono lo stesso, tutti come da fare', async () => {
     finto.db = creaFintoDatabase(
-      { returns: [...resiPagati(3), dimenticato] },
+      { returns: [...resiPagati(3), dimenticato], orders: ordiniCheConfermano([...resiPagati(3), dimenticato]) },
       {
         colonneMancanti: ['refund_method', 'refund_iban', 'refund_bonifico_cents', 'refund_bonifico_fatto_at', 'refund_intestatario'],
         tabelleMancanti: ['bonifici_dei_reclami'],

@@ -26,7 +26,7 @@ import {
   type RipartoDelRimborso,
 } from '@/lib/rimborsi/regole-del-rimborso';
 import { PAGINA_DEI_BONIFICI_DA_FARE, type ComeTornanoIContanti } from '@/lib/rimborsi/scelta-del-reso';
-import { segnoDelBonifico } from '@/lib/rimborsi/bonifici-da-fare';
+import { eUnBonificoDiRimborso, segnoDelBonifico } from '@/lib/rimborsi/bonifici-da-fare';
 
 /**
  * Logica condivisa di payout / reversal / refund per il modello SCT
@@ -1248,14 +1248,19 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   }
 
   const wasTransferred = order.payout_status === 'TRANSFERRED';
+  // 16/10 (riesame, terzo giro) — Nell'elenco va anche il segno di un bonifico
+  // da fare a mano: e' la conferma, scritta dove ne' il cliente ne' il negozio
+  // scrivono, che la lista dei bonifici usa per non fidarsi della riga del
+  // reso (che in produzione, senza la 153, il cliente puo' scrivere da solo).
+  const daMettereInElenco = stripeRefundId ?? (eUnBonificoDiRimborso(refundId) ? refundId : null);
   const { error: errStato } = await admin
     .from('orders')
     .update({
       // 16/10 (riesame) — AGGIUNTO all'elenco, non al suo posto: l'elenco è la
       // memoria dei rimborsi dal cruscotto già registrati quando Stripe non ha
       // messo l'etichetta, e sostituirlo li faceva registrare una seconda volta.
-      ...(stripeRefundId
-        ? { stripe_refund_id: elencoDaScrivere(rimborsiGiaScritti(order as { stripe_refund_id?: string | null }), [stripeRefundId]) }
+      ...(daMettereInElenco
+        ? { stripe_refund_id: elencoDaScrivere(rimborsiGiaScritti(order as { stripe_refund_id?: string | null }), [daMettereInElenco]) }
         : {}),
       // `refunded_amount_cents` l'ha già scritto `accumula_rimborso`: riscriverlo
       // qui riaprirebbe la corsa che quella funzione serve a chiudere. (Il ramo

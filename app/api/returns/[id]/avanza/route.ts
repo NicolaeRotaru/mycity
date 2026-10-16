@@ -18,7 +18,7 @@ import {
 import { comeTornanoIContanti, leggiLaSceltaDelReso } from '@/lib/rimborsi/scelta-del-reso';
 import { COLONNE_162 } from '@/lib/rimborsi/scelta-del-cliente';
 import { scriviAncheSeMancaUnaColonnaNuova } from '@/lib/db/migrazione-148';
-import { avvisoDelRimborsoNonRegistrato } from '@/lib/rimborsi/bonifici-da-fare';
+import { avvisoDelRimborsoNonRegistrato, RIMBORSO_PARTITO_MA_NON_REGISTRATO } from '@/lib/rimborsi/bonifici-da-fare';
 import { dimenticaLIbanSeNonServe } from '@/lib/rimborsi/iban-del-rimborso';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
@@ -226,9 +226,10 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
      *
      * I soldi sono gia' partiti (o il bonifico e' gia' registrato sull'ordine).
      * Senza il segno sul reso, il bonifico non compare nella lista di chi paga e
-     * il negozio leggeva «rimborsato» come se fosse tutto a posto. Qui si ferma
-     * come fa gia' `decide`: chi amministra riceve un avviso con reso, ordine e
-     * cifra, e chi ha premuto legge che la registrazione non e' riuscita.
+     * il negozio leggeva «rimborsato» come se fosse tutto a posto. Qui si ferma,
+     * e `decide` fa lo stesso (terzo giro del riesame): chi amministra riceve un
+     * avviso con reso, ordine e cifra, e chi ha premuto legge che la
+     * registrazione non e' riuscita.
      */
     if (!scrittura.riuscita) {
       const avviso = avvisoDelRimborsoNonRegistrato({
@@ -239,9 +240,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       } catch (e) {
         logger.error('[returns/avanza] avviso del rimborso non registrato non inviato', { returnId: params.id, e });
       }
-      return ApiErrors.internal(
-        "Il rimborso è partito ma non si è potuto registrare sul reso: abbiamo avvisato l'amministrazione. Non ripetere il rimborso.",
-      );
+      return ApiErrors.internal(RIMBORSO_PARTITO_MA_NON_REGISTRATO);
     }
   }
 

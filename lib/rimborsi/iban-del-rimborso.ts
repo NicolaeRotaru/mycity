@@ -1,6 +1,8 @@
 import { logger } from '@/lib/logger';
 import { colonnaNonTrovata } from '@/lib/db/migrazione-148';
 import { eUnBonificoDiRimborso, tabellaDeiBonificiMancante } from './bonifici-da-fare';
+import { pagatoInContanti, type OrdineDaRimborsare } from './regole-del-rimborso';
+import { MESI_DEI_MESSAGGI_DEI_CONTATTI } from '@/lib/privacy/potature-ritenzione';
 
 /**
  * QUANTO TENIAMO L'IBAN DI UN RIMBORSO (R71, riesame del 16/10).
@@ -48,13 +50,18 @@ export interface RigaDelResoPerLIban {
  *  · rimborsato col segno del bonifico e non ancora segnato fatto → si';
  *  · ancora in corso, e il cliente ha scelto il bonifico → si': quando il
  *    negozio rimborsa, il bonifico sara' dovuto;
+ *  · ancora in corso SENZA una scelta, su un ordine pagato in contanti → si'
+ *    (riesame del 16/10, terzo giro): nessuna scelta vuol dire bonifico, lo
+ *    dicono la 162 e `comeTornanoIContanti`. Prima contava solo «BONIFICO»
+ *    scritto: un reso aperto prima della 162, o da un modulo che non manda la
+ *    scelta, alla cancellazione dell'account restava senza il nome di chi pagare;
  *  · tutto il resto (fatto, respinto, annullato, credito, carta) → no.
  */
-export function ilBonificoDelResoEAncoraDaFare(r: RigaDelResoPerLIban): boolean {
+export function ilBonificoDelResoEAncoraDaFare(r: RigaDelResoPerLIban, ordineInContanti = false): boolean {
   if (r.refund_bonifico_fatto_at) return false;
   if (r.status === 'REFUNDED') return eUnBonificoDiRimborso(r.refund_id);
   if ((STATI_APERTI_DEL_RESO as readonly string[]).includes(String(r.status))) {
-    return r.refund_method === 'BONIFICO';
+    return r.refund_method === 'BONIFICO' || (r.refund_method == null && ordineInContanti);
   }
   return false;
 }
@@ -82,23 +89,42 @@ export function nomeDellIntestatario(
 
 // ── Le parole per chi legge: l'informativa e le impostazioni le prendono da qui ──
 
+/** Un numero di mesi detto come lo direbbe una persona: 24 → «2 anni», 18 → «18 mesi». */
+export function durataDetta(mesi: number): string {
+  if (mesi % 12 === 0) return mesi === 12 ? '1 anno' : `${mesi / 12} anni`;
+  return `${mesi} mesi`;
+}
+
+/** Quanto resta un messaggio dai Contatti: lo stesso numero che usa la potatura notturna. */
+const QUANTO_RESTA_UN_MESSAGGIO = durataDetta(MESI_DEI_MESSAGGI_DEI_CONTATTI);
+
 /** Dove chiediamo l'IBAN, davvero. */
 export const DOVE_CHIEDIAMO_L_IBAN =
   "Nel modulo di reso, se scegli il bonifico. Per un reclamo — o se nel reso non l'hai scritto — " +
   "te lo chiediamo per email e ce lo mandi con un messaggio dalla pagina Contatti: quel messaggio " +
-  "arriva anche nella casella email dell'assistenza e resta fra i messaggi dell'assistenza al massimo 2 anni. " +
+  `arriva anche nella casella email dell'assistenza e resta fra i messaggi dell'assistenza al massimo ${QUANTO_RESTA_UN_MESSAGGIO}. ` +
   "Chi fa il bonifico copia l'IBAN sulla richiesta di rimborso.";
 
 /** Perché lo teniamo. */
 export const PERCHE_TENIAMO_L_IBAN =
   'Obbligo di rimborsare il consumatore (Codice del Consumo, art. 56; art. 6.1.c GDPR) ed esecuzione del contratto (art. 6.1.b)';
 
-/** Quanto lo teniamo: è la regola qui sopra, detta a chi legge. */
+/**
+ * Quanto lo teniamo: è la regola qui sopra, detta a chi legge.
+ *
+ * Riesame del 16/10, terzo giro — la tabella diceva «fatto il bonifico, l'IBAN
+ * si cancella» anche per l'IBAN mandato dai Contatti, che e' la strada di ogni
+ * reclamo: quel messaggio invece resta fra i messaggi dell'assistenza fino alla
+ * potatura notturna. Adesso la riga lo dice, con lo stesso numero della potatura.
+ */
 export const QUANTO_TENIAMO_L_IBAN =
   'Solo finché il bonifico è da fare. Quando il bonifico è fatto, o la richiesta si chiude senza bonifico, ' +
   "l'IBAN si cancella. Se cancelli l'account e non ti dobbiamo nessun bonifico, l'IBAN se ne va con l'account. " +
   "Se cancelli l'account mentre ti dobbiamo ancora un bonifico, sulla richiesta di rimborso restano solo " +
-  "l'IBAN e il tuo nome come intestatario, fino al pagamento; poi si cancellano anche quelli.";
+  "l'IBAN e il tuo nome come intestatario, fino al pagamento; poi si cancellano anche quelli. " +
+  "Se l'IBAN ce lo hai mandato con un messaggio dalla pagina Contatti, quel messaggio resta fra i messaggi " +
+  `dell'assistenza al massimo ${QUANTO_RESTA_UN_MESSAGGIO}, come tutti i messaggi dei Contatti, e una copia ` +
+  "arriva nella casella email dell'assistenza.";
 
 /** La frase per chi sta cancellando l'account. */
 export const SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE =
@@ -137,8 +163,10 @@ export type EsitoDellIban = 'tenuto' | 'cancellato' | 'niente-da-togliere' | 'se
  *
  * Lo chiamano le rotte che chiudono un reso (`decide`, `avanza`). Non lancia
  * mai: un guasto qui finisce nei log e non disfa una decisione gia' presa — al
- * peggio l'IBAN resta fino al prossimo giro, ma i soldi del cliente non si
- * toccano. Senza la migrazione 162 non c'e' nessun IBAN da togliere.
+ * peggio l'IBAN resta fino al giro notturno delle potature, che lo riprende
+ * (`potaLIbanDeiResiChiusi` in lib/privacy/potature-ritenzione.ts, terzo giro
+ * del riesame), ma i soldi del cliente non si toccano. Senza la migrazione 162
+ * non c'e' nessun IBAN da togliere.
  */
 export async function dimenticaLIbanSeNonServe(
   admin: ClientLargo,
@@ -228,48 +256,72 @@ export async function custodisciIBonificiDaFare(admin: ClientLargo, userId: stri
       righeReclami = (bonifici.error ? [] : (bonifici.data ?? [])) as typeof righeReclami;
     }
 
-    const daFare = righeResi.filter((r) => ilBonificoDelResoEAncoraDaFare(r));
-    const daDimenticare = righeResi.filter((r) => !ilBonificoDelResoEAncoraDaFare(r) && r.refund_iban);
-
-    // ③ Il nome, solo se c'e' qualcosa da pagare: letto prima che la pulizia degli ordini lo tolga.
+    // ③ Gli ordini della persona: il nome (letto prima che la pulizia degli ordini lo tolga) e il
+    // modo di pagare — un reso aperto senza scelta su un ordine in contanti va col bonifico.
     const nomi = new Map<string, string | null>();
+    const inContanti = new Set<string>();
     let nomeDelProfilo: string | null = null;
-    if (daFare.length > 0 || righeReclami.length > 0) {
-      const ordini = await tabella(admin, 'orders').select('id, delivery_full_name').eq('user_id', userId);
+    if (righeResi.length > 0 || righeReclami.length > 0) {
+      const ordini = await tabella(admin, 'orders')
+        .select('id, delivery_full_name, payment_method, stripe_payment_intent')
+        .eq('user_id', userId);
       if (ordini.error) return fermati(`ordini: ${ordini.error.message}`);
-      for (const o of (ordini.data ?? []) as Array<{ id: string; delivery_full_name: string | null }>) {
+      for (const o of (ordini.data ?? []) as Array<{ id: string; delivery_full_name: string | null } & OrdineDaRimborsare>) {
         nomi.set(o.id, o.delivery_full_name);
+        if (pagatoInContanti(o)) inContanti.add(o.id);
       }
+    }
+
+    const daFare = righeResi.filter((r) => ilBonificoDelResoEAncoraDaFare(r, inContanti.has(r.order_id)));
+    const daDimenticare = righeResi.filter(
+      (r) => !ilBonificoDelResoEAncoraDaFare(r, inContanti.has(r.order_id)) && r.refund_iban,
+    );
+
+    if (daFare.length > 0 || righeReclami.length > 0) {
       const profilo = await tabella(admin, 'profiles').select('full_name').eq('id', userId);
       if (profilo.error) return fermati(`profilo: ${profilo.error.message}`);
       nomeDelProfilo = ((profilo.data ?? []) as Array<{ full_name: string | null }>)[0]?.full_name ?? null;
     }
     const nomePer = (ordineId: string) => nomeDellIntestatario(nomi.get(ordineId), nomeDelProfilo);
 
+    // Riesame del 16/10, terzo giro — IL NOME GIA' MESSO AL SICURO NON SI RISCRIVE. La
+    // cancellazione puo' fermarsi dopo aver tolto il nome dagli ordini e ripartire la notte dopo:
+    // a quel punto il nome dell'ordine e' vuoto, e riscrivere copriva «Maria Rossi» con niente.
+    // Si scrive solo un nome che c'e', e solo dove un nome non c'e' ancora.
+    let resiConIlNome = 0;
     for (const r of daFare) {
+      const nome = nomePer(r.order_id);
+      if (!nome) continue;
       const { error } = await tabella(admin, 'returns')
-        .update({ refund_intestatario: nomePer(r.order_id) })
+        .update({ refund_intestatario: nome })
         .eq('id', r.id)
-        .is('refund_bonifico_fatto_at', null);
+        .is('refund_bonifico_fatto_at', null)
+        .is('refund_intestatario', null);
       if (error) return fermati(`reso ${r.id}: ${error.message}`);
+      resiConIlNome += 1;
     }
     for (const r of daDimenticare) {
       const { error } = await tabella(admin, 'returns').update({ ...IBAN_DEL_RESO_CANCELLATO }).eq('id', r.id);
       if (error) return fermati(`reso ${r.id}: ${error.message}`);
     }
+    let reclamiConIlNome = 0;
     for (const b of righeReclami) {
+      const nome = nomePer(b.order_id);
+      if (!nome) continue;
       const { error } = await tabella(admin, 'bonifici_dei_reclami')
-        .update({ intestatario: nomePer(b.order_id) })
+        .update({ intestatario: nome })
         .eq('dispute_id', b.dispute_id)
-        .is('fatto_at', null);
+        .is('fatto_at', null)
+        .is('intestatario', null);
       if (error) return fermati(`bonifico del reclamo ${b.dispute_id}: ${error.message}`);
+      reclamiConIlNome += 1;
     }
 
     return {
       ok: true,
-      resiConIlNome: daFare.length,
+      resiConIlNome,
       ibanCancellati: daDimenticare.length,
-      reclamiConIlNome: righeReclami.length,
+      reclamiConIlNome,
     };
   } catch (e) {
     return fermati(e instanceof Error ? e.message : 'errore');

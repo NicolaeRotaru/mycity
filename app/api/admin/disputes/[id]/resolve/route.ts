@@ -16,7 +16,7 @@ import {
   type OrdineDaRimborsare,
 } from '@/lib/rimborsi/regole-del-rimborso';
 import { PAGINA_DEI_BONIFICI_DA_FARE } from '@/lib/rimborsi/scelta-del-reso';
-import { tabellaDeiBonificiMancante } from '@/lib/rimborsi/bonifici-da-fare';
+import { avvisoDelBonificoDelReclamoNonRegistrato, tabellaDeiBonificiMancante } from '@/lib/rimborsi/bonifici-da-fare';
 import { formatPriceFromCents } from '@/lib/format';
 import { PAUSA_RIMBORSO_DA_DIVIDERE, SENZA_LA_PAUSA_DEL_CARRELLO } from '@/lib/stripe/webhook/rimborsi-da-fuori';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
@@ -212,6 +212,16 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         logger.error('[dispute] bonifico da fare non registrato: resta solo nell avviso', {
           disputeId: dispute.id, centesimi: bonificoCents, message: errBonifico.message,
         });
+        // Terzo giro del riesame — non solo nel registro: chi paga deve sapere
+        // che la lista non e' completa.
+        const avviso = avvisoDelBonificoDelReclamoNonRegistrato({
+          reclamoId: dispute.id, ordineId: dispute.order_id, importoCents: bonificoCents,
+        });
+        try {
+          await notifyAdmins(avviso.titolo, avviso.testo, avviso.link);
+        } catch (e) {
+          logger.error('[dispute] avviso del bonifico fuori dalla lista non inviato', { disputeId: dispute.id, e });
+        }
       }
     }
   }
