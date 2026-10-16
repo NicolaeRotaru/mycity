@@ -62,8 +62,11 @@ import { reverseOrderTransfer } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { formatPriceFromCents } from '@/lib/format';
+import { elencoDaScrivere, rimborsiGiaScritti } from '@/lib/stripe/elenco-dei-rimborsi';
 import { notifyAdmins } from './comune';
 import { scritturaObbligatoria } from './esito';
+
+export { rimborsiGiaScritti } from '@/lib/stripe/elenco-dei-rimborsi';
 
 /** I campi dell'ordine che servono a registrare il rimborso. */
 export type OrdineDelRimborso = {
@@ -78,9 +81,12 @@ export type OrdineDelRimborso = {
   seller_payout_reversed_cents?: number | null;
   /**
    * I rimborsi già scritti su questo ordine, separati da virgola (vedi
-   * `rimborsiGiaScritti`). Lo scrive anche `refundOrder`, col suo rimborso.
+   * `rimborsiGiaScritti`). Ci aggiunge il suo anche `refundOrder`, e la
+   * divisione dal pannello quelli dal cruscotto che ha diviso.
    */
   stripe_refund_id?: string | null;
+  /** C'è la pausa del carrello (`PAUSA_RIMBORSO_DA_DIVIDERE`)? Serve sui pagamenti di più negozi. */
+  internal_dispute_status?: string | null;
 };
 
 /**
@@ -92,6 +98,20 @@ export type OrdineDelRimborso = {
  * scrittura.
  */
 export const PAUSA_RIMBORSO_DA_DIVIDERE = 'RIMBORSO_DA_RIPARTIRE';
+
+/**
+ * Il filtro «oppure» per chi scrive `internal_dispute_status` e NON deve
+ * togliere la pausa: passa sugli ordini senza stato o con uno stato diverso
+ * dalla pausa (in PostgREST `neq` da solo scarta anche i vuoti).
+ *
+ * 16/10/2026 (riesame del lotto) — La pausa e l'esito di un reclamo interno
+ * stanno nella stessa colonna, e la chiusura del reclamo la riscriveva senza
+ * guardare: il negozio del reclamo tornava pagabile col netto intero, e il
+ * pannello offriva il rimborso da dividere solo all'altro negozio. Chi chiude
+ * un reclamo passa da questo filtro: la pausa la toglie solo la divisione.
+ */
+export const SENZA_LA_PAUSA_DEL_CARRELLO =
+  `internal_dispute_status.is.null,internal_dispute_status.neq.${PAUSA_RIMBORSO_DA_DIVIDERE}`;
 
 /** L'etichetta che, su Stripe, dice «questo rimborso è già scritto sul nostro database». */
 export const ETICHETTA_REGISTRATO = 'registrato_da_fuori';
@@ -179,7 +199,7 @@ export type RimborsoStripe = {
  * mettiamo noi dopo averlo registrato. Uno fallito o annullato non conta: i
  * soldi sono tornati indietro.
  */
-function daFuoriDaRegistrare(r: RimborsoStripe): boolean {
+export function daFuoriDaRegistrare(r: RimborsoStripe): boolean {
   if (r.status === 'failed' || r.status === 'canceled') return false;
   if ((r.metadata?.order_id ?? '').trim()) return false;
   if ((r.metadata?.[ETICHETTA_REGISTRATO] ?? '').trim()) return false;
@@ -191,11 +211,9 @@ export function sommaDeiRimborsiDaFuori(rimborsi: ReadonlyArray<RimborsoStripe>)
   return rimborsi.filter(daFuoriDaRegistrare).reduce((somma, r) => somma + Math.max(0, r.amount ?? 0), 0);
 }
 
-/** Quanti rimborsi tiene a mente l'ordine: bastano e avanzano, e la riga non cresce per sempre. */
-const RIMBORSI_A_MENTE = 15;
-
-/**
- * I rimborsi che il nostro database dice di aver già scritto su questo ordine.
+/*
+ * I rimborsi che il nostro database dice di aver già scritto su un ordine
+ * (`rimborsiGiaScritti`, in lib/stripe/elenco-dei-rimborsi.ts).
  *
  * L'etichetta su Stripe arriva DOPO la scrittura sull'ordine, con una chiamata
  * sua: se Stripe in quel momento non risponde, il rimborso resta registrato ma
@@ -205,15 +223,6 @@ const RIMBORSI_A_MENTE = 15;
  * rimborsi): o passano tutte e due, o nessuna. Un rimborso in questo elenco
  * non si registra più, qualunque cosa dica Stripe.
  */
-export function rimborsiGiaScritti(ordine: Pick<OrdineDelRimborso, 'stripe_refund_id'>): Set<string> {
-  return new Set((ordine.stripe_refund_id ?? '').split(',').map((x) => x.trim()).filter(Boolean));
-}
-
-/** L'elenco da scrivere sull'ordine: quelli di prima più i nuovi, gli ultimi RIMBORSI_A_MENTE. */
-function elencoDaScrivere(prima: ReadonlySet<string>, nuovi: ReadonlyArray<string>): string {
-  const tutti = [...prima, ...nuovi.filter((id) => !prima.has(id))];
-  return tutti.slice(-RIMBORSI_A_MENTE).join(',');
-}
 
 /**
  * Quali rimborsi da fuori registrare adesso: INTERI, dal più recente, finché la
@@ -294,12 +303,47 @@ export async function etichettaComeRegistrati(ids: ReadonlyArray<string>, orderI
 }
 
 /**
+ * I rimborsi dal cruscotto che una divisione dal pannello ha già scritto sugli
+ * ordini di questo carrello, e che non vanno più contati «da fuori».
+ *
+ * 16/10/2026 (riesame del lotto) — Sul carrello di più negozi l'unica memoria
+ * di un rimborso diviso era l'etichetta su Stripe, messa a divisione finita con
+ * una chiamata che non lancia. Se quella chiamata non riusciva (o la divisione
+ * si era interrotta a metà e il ritentativo non etichettava più), il rimborso
+ * restava «da fuori» per sempre: al primo reso del sito con la risposta di
+ * Stripe persa, i bonifici si fermavano di nuovo e il pannello chiedeva di
+ * dividere soldi già divisi. Adesso la divisione scrive l'id del rimborso sugli
+ * ordini a cui ne dà una parte, come fa il ramo di un ordine solo.
+ *
+ * Vale solo quando nessun ordine del carrello è fermo: con una divisione in
+ * corso un rimborso scritto su un ordine può essere diviso solo in parte, e il
+ * resto deve ancora contare.
+ */
+function rimborsiGiaDivisi(ordini: ReadonlyArray<OrdineDelRimborso>): Set<string> {
+  if (ordini.some((o) => o.internal_dispute_status === PAUSA_RIMBORSO_DA_DIVIDERE)) return new Set();
+  const scritti = new Set<string>();
+  for (const o of ordini) for (const id of rimborsiGiaScritti(o)) scritti.add(id);
+  return scritti;
+}
+
+/**
  * La parte del rimborso che è davvero «da fuori», dati i numeri: si chiede a
  * Stripe solo quando i numeri dicono che manca qualcosa, così l'eco dei
  * nostri rimborsi (il caso di tutti i giorni) non costa una chiamata.
  */
-async function rimborsatoDaFuori(charge: Stripe.Charge, mancaSulDatabase: number): Promise<number> {
-  const daFuori = sommaDeiRimborsiDaFuori(await elencoDeiRimborsi({ charge: charge.id }, charge.refunds));
+async function rimborsatoDaFuori(
+  charge: Stripe.Charge,
+  mancaSulDatabase: number,
+  ordini: ReadonlyArray<OrdineDelRimborso>,
+): Promise<number> {
+  const rimborsi = await elencoDeiRimborsi({ charge: charge.id }, charge.refunds);
+  const giaDivisi = rimborsiGiaDivisi(ordini);
+  // Divisi ma rimasti senza etichetta: l'etichetta si rimette adesso, e non si contano di nuovo.
+  const daRietichettare = rimborsi
+    .filter((r) => !!r.id && giaDivisi.has(r.id) && daFuoriDaRegistrare(r))
+    .map((r) => r.id as string);
+  if (daRietichettare.length > 0) await etichettaComeRegistrati(daRietichettare, null);
+  const daFuori = sommaDeiRimborsiDaFuori(rimborsi.filter((r) => !(r.id && giaDivisi.has(r.id))));
   if (daFuori < mancaSulDatabase) {
     // La differenza viene da rimborsi NOSTRI non scritti sull'ordine (di solito
     // una risposta di Stripe persa): li ritrova `refundOrder` al nuovo tentativo.
@@ -502,7 +546,7 @@ async function fermaIBonificiDelCarrello(
   const mancante = rimborsatoSuStripe - registrato;
   // Zero o meno: è l'eco dei nostri rimborsi, ognuno già scritto sul suo ordine.
   if (mancante <= 0) return;
-  const daDividere = Math.min(mancante, await rimborsatoDaFuori(charge, mancante));
+  const daDividere = Math.min(mancante, await rimborsatoDaFuori(charge, mancante, ordini));
   if (daDividere <= 0) return;
 
   const ids = ordini.map((o) => o.id);

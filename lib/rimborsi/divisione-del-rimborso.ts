@@ -17,16 +17,31 @@
  * ogni ordine fermo ha la sua parte (anche zero), nessuna parte supera quello
  * che resta da rimborsare su quell'ordine, e la somma è esattamente il
  * rimborso da dividere — né un centesimo in più, né uno in meno.
+ *
+ * 16/10/2026 (riesame del lotto) — LA PARTE SI PUÒ DARE ANCHE A UN ORDINE NON
+ * FERMO. Il webhook ferma solo gli ordini pagabili: uno con un reclamo aperto,
+ * o uno a cui la chiusura di un reclamo aveva tolto la pausa, restava fuori, e
+ * i soldi da dividere si potevano dare solo agli altri. Un caso: carrello da
+ * Pane Quotidiano e da un fioraio, 3 € di fiori resi dal cruscotto mentre sui
+ * fiori c'è un reclamo; l'unica divisione accettata era «3 € al pane», e a
+ * Pane Quotidiano si toglievano 2 € di quota per fiori che non aveva venduto.
+ * Adesso fra gli ordini del pagamento c'è anche chi non è fermo ma ha ancora
+ * qualcosa da rimborsare: la sua parte si può scrivere, e se non si scrive vale zero.
  */
 import { formatPriceFromCents } from '@/lib/format';
 
-/** Un ordine fermo del carrello, per il poco che serve al controllo. */
+/** Un ordine del carrello a cui si può dare una parte, per il poco che serve al controllo. */
 export type OrdineDaDividere = {
   id: string;
   /** Il lordo pagato per questo ordine. */
   lordoCents: number;
   /** Quanto risulta già rimborsato su questo ordine. */
   giaRimborsatoCents: number;
+  /**
+   * Il suo bonifico è fermo per questo rimborso: la sua parte va scritta,
+   * anche zero, perché è la divisione a riaprirlo. Senza il campo vale «fermo».
+   */
+  fermo?: boolean;
 };
 
 /** La parte del rimborso che chi amministra assegna a un ordine. */
@@ -50,7 +65,7 @@ export function controllaLaDivisione(
   const scelte = new Map<string, number>();
   for (const parte of parti) {
     const ordine = perOrdine.get(parte.ordine);
-    if (!ordine) return { ok: false, errore: `L'ordine ${breve(parte.ordine)} non è fra quelli fermi di questo pagamento.` };
+    if (!ordine) return { ok: false, errore: `L'ordine ${breve(parte.ordine)} non è fra gli ordini di questo pagamento a cui si può dare una parte.` };
     if (scelte.has(parte.ordine)) return { ok: false, errore: `L'ordine ${breve(parte.ordine)} ha due parti: ne serve una sola.` };
     if (!Number.isInteger(parte.centesimi) || parte.centesimi < 0) {
       return { ok: false, errore: `La parte dell'ordine ${breve(parte.ordine)} non è una cifra valida.` };
@@ -64,7 +79,8 @@ export function controllaLaDivisione(
     }
     scelte.set(parte.ordine, parte.centesimi);
   }
-  const senzaParte = ordini.filter((o) => !scelte.has(o.id));
+  // Solo chi è fermo deve avere la sua parte scritta: per gli altri vale zero.
+  const senzaParte = ordini.filter((o) => o.fermo !== false && !scelte.has(o.id));
   if (senzaParte.length > 0) {
     return {
       ok: false,

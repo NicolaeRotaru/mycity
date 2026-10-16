@@ -63,6 +63,14 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     if (esito.motivo === 'RIMBORSO_FALLITO') {
       return ApiErrors.badGateway('Rimborso Stripe fallito: ' + (esito.dettaglio ?? 'unknown'));
     }
+    // 16/10/2026 — Quanto rendere si sa solo dopo aver diviso il rimborso dal cruscotto.
+    if (esito.motivo === 'RIMBORSO_DA_DIVIDERE') {
+      return ApiErrors.conflict(
+        "Su questo pagamento c'è un rimborso fatto dal cruscotto Stripe che non è ancora diviso fra i negozi del carrello. " +
+          'Dividilo prima dal riquadro «Rimborsi dal cruscotto da dividere» qui in Ordini, poi annulla di nuovo: ' +
+          "solo allora si sa quanto rendere su quest'ordine.",
+      );
+    }
     return ApiErrors.internal('Annullamento fallito');
   }
   const refundId = esito.refundId;

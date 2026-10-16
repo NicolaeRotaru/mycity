@@ -115,6 +115,19 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
     this.filtri.push((r) => (r[colonna] ?? null) !== valore);
     return this;
   }
+  /** «oppure» alla PostgREST: «col.is.null», «col.eq.X», «col.neq.X» (neq scarta i vuoti, come SQL). */
+  or(espressione: string) {
+    const parti = espressione.split(',').map((parte) => {
+      const [colonna, op, ...resto] = parte.split('.');
+      const valore = resto.join('.');
+      if (op === 'is' && valore === 'null') return (r: Riga) => (r[colonna] ?? null) === null;
+      if (op === 'eq') return (r: Riga) => String(r[colonna]) === valore;
+      if (op === 'neq') return (r: Riga) => r[colonna] != null && String(r[colonna]) !== valore;
+      throw new Error(`finto database: condizione .or() non capita: ${parte}`);
+    });
+    this.filtri.push((r) => parti.some((f) => f(r)));
+    return this;
+  }
   like(colonna: string, schema: string) {
     const re = new RegExp(`^${schema.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*')}$`);
     this.filtri.push((r) => typeof r[colonna] === 'string' && re.test(r[colonna] as string));

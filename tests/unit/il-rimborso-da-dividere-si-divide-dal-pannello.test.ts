@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fintoDatabase, type FintoDatabase, type Riga } from './aiuti/finto-database-dei-pagamenti';
+import { fintoDatabase, TIMEOUT, type FintoDatabase, type Riga } from './aiuti/finto-database-dei-pagamenti';
 
 /**
  * 16/10/2026 — I BONIFICI FERMATI DA UN RIMBORSO DAL CRUSCOTTO NON SI POTEVANO
@@ -22,7 +22,16 @@ const stato: {
   carica: { amount: number; refunded: number };
   suStripe: RimborsoSuStripe[];
   storni: Array<{ transferId: string; amount: number; chiave: string }>;
-} = { db: fintoDatabase(), carica: { amount: 2790, refunded: 0 }, suStripe: [], storni: [] };
+  /** Quante risposte di Stripe si perdono per strada dopo aver fatto il rimborso. */
+  rispostePerse: number;
+  /** Se falso, Stripe non risponde quando gli si chiede di etichettare un rimborso. */
+  etichetteRiescono: boolean;
+  /** I pagamenti di cui Stripe, adesso, non lascia leggere i rimborsi. */
+  pagamentiIlleggibili: Set<string>;
+} = {
+  db: fintoDatabase(), carica: { amount: 2790, refunded: 0 }, suStripe: [], storni: [],
+  rispostePerse: 0, etichetteRiescono: true, pagamentiIlleggibili: new Set(),
+};
 let orologio = 1_800_000_000;
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
@@ -42,10 +51,19 @@ vi.mock('@/lib/stripe/client', () => ({
         stato.carica.refunded += p.amount;
         const nuovo = { id: `re_${stato.suStripe.length + 1}`, amount: p.amount, status: 'succeeded', metadata: { ...(p.metadata ?? {}), chiave: o.idempotencyKey }, created: ++orologio };
         stato.suStripe.push(nuovo);
+        // Il rimborso c'è, ma la risposta non arriva: la rete è caduta dopo.
+        if (stato.rispostePerse > 0) {
+          stato.rispostePerse -= 1;
+          throw new Error('socket hang up');
+        }
         return { id: nuovo.id, status: nuovo.status };
       },
-      list: async () => ({ data: [...stato.suStripe].reverse().map((r) => ({ ...r, metadata: { ...r.metadata } })), has_more: false }),
+      list: async (p: { payment_intent?: string; charge?: string }) => {
+        if (p.payment_intent && stato.pagamentiIlleggibili.has(p.payment_intent)) throw new Error('Too many requests');
+        return { data: [...stato.suStripe].reverse().map((r) => ({ ...r, metadata: { ...r.metadata } })), has_more: false };
+      },
       update: async (id: string, p: { metadata?: Record<string, string> }) => {
+        if (!stato.etichetteRiescono) throw new Error('Stripe non risponde');
         const r = stato.suStripe.find((x) => x.id === id);
         if (!r) throw new Error(`No such refund: ${id}`);
         r.metadata = { ...r.metadata, ...(p.metadata ?? {}) };
@@ -126,6 +144,9 @@ beforeEach(() => {
   stato.carica = { amount: 2790, refunded: 0 };
   stato.suStripe = [];
   stato.storni = [];
+  stato.rispostePerse = 0;
+  stato.etichetteRiescono = true;
+  stato.pagamentiIlleggibili = new Set();
   stato.db = fintoDatabase({
     orders: [
       ordine({ id: 'o1', seller_id: 'pane-quotidiano', total_price: 15, gross_total_cents: 1500, seller_payout_cents: 1000 }),
@@ -152,6 +173,7 @@ beforeEach(() => {
       r.refunded_amount_cents = nuovo;
       return { data: [{ totale_rimborsato: nuovo, totale_ordine: tot }], error: null };
     }
+    if (nome === 'storna_rimborso' && r) r.refunded_amount_cents = Number(r.refunded_amount_cents ?? 0) - Number(a.p_delta);
     return { data: null, error: null };
   };
 });
@@ -228,6 +250,98 @@ describe('il rimborso dal cruscotto su un carrello di più negozi si divide dal 
         ],
       }),
     ]);
+  });
+});
+
+/** Un reso deciso dal sito sul pane, la cui risposta di Stripe si perde: il rimborso c'è, il segno sull'ordine no. */
+async function resoDelSitoConLaRispostaPersa(): Promise<void> {
+  stato.rispostePerse = 1;
+  await expect(refundOrder({ orderId: 'o1', amountCents: 500, reason: 'reso', idempotencyKey: 'return_r1' })).rejects.toThrow();
+  await handleChargeRefunded({
+    id: 'ch_1', payment_intent: 'pi_1', refunded: false, amount: 2790, amount_refunded: stato.carica.refunded,
+  } as unknown as Parameters<typeof handleChargeRefunded>[0]);
+}
+
+const avvisiDaDividere = () => stato.db.tabelle.notifications!.filter((n) => String(n.title).includes('da dividere'));
+
+describe('una divisione che si inceppa a metà non lascia i soldi divisi «da fuori» (riesame del 16/10)', () => {
+  it('IL CASO DEL RIESAME — la scrittura dei fiori va in timeout, al secondo tentativo il rimborso riceve lo stesso l etichetta', async () => {
+    await rimborsoDalCruscotto(300);
+    // La scrittura dei fiori (la loro parte: 200) va in timeout una volta.
+    let guasti = 1;
+    stato.db.guasto = (s) => {
+      const valori = s.valori as Riga | null;
+      if (guasti > 0 && s.tabella === 'orders' && s.operazione === 'update' && valori?.refunded_amount_cents === 200) {
+        guasti -= 1;
+        return TIMEOUT;
+      }
+      return null;
+    };
+
+    const primo = await dividi([{ ordine: 'o1', centesimi: 100 }, { ordine: 'o2', centesimi: 200 }]);
+    expect(primo.status).toBe(409);
+    expect(riga('o1').refunded_amount_cents).toBe(100);
+    // Al secondo tentativo restano 2 € da dividere: tutti ai fiori.
+    const secondo = await dividi([{ ordine: 'o2', centesimi: 200 }]);
+    expect(secondo.status, JSON.stringify(secondo.corpo)).toBe(200);
+    expect(riga('o2').refunded_amount_cents).toBe(200);
+
+    expect(stato.suStripe[0].metadata.registrato_da_fuori, 'i 3 € divisi restano «da fuori» per sempre').toBe('1');
+
+    // Poi un reso del sito perde la risposta di Stripe: i 3 € non tornano da dividere.
+    const avvisiPrima = avvisiDaDividere().length;
+    await resoDelSitoConLaRispostaPersa();
+    expect(await pagabili(), 'i bonifici si fermano di nuovo per soldi già divisi').toEqual(['o1', 'o2']);
+    expect(avvisiDaDividere().length).toBe(avvisiPrima);
+  });
+
+  it('se Stripe non mette l etichetta a divisione finita, il rimborso diviso non si chiede di nuovo', async () => {
+    await rimborsoDalCruscotto(300);
+    stato.etichetteRiescono = false;
+    expect((await dividi([{ ordine: 'o1', centesimi: 0 }, { ordine: 'o2', centesimi: 300 }])).status).toBe(200);
+    expect(stato.suStripe[0].metadata.registrato_da_fuori, 'qui l etichetta non c è: la prova è che basta l ordine').toBeUndefined();
+    expect(riga('o2').stripe_refund_id, 'la divisione non ha scritto quale rimborso ha diviso').toContain('re_cruscotto_1');
+
+    const avvisiPrima = avvisiDaDividere().length;
+    await resoDelSitoConLaRispostaPersa();
+
+    expect(await pagabili(), 'i bonifici si fermano di nuovo per soldi già divisi').toEqual(['o1', 'o2']);
+    expect(avvisiDaDividere().length).toBe(avvisiPrima);
+    expect(riga('o2').refunded_amount_cents).toBe(300);
+  });
+
+  it('un secondo rimborso dal cruscotto sullo stesso carrello si divide da solo, senza ricontare il primo', async () => {
+    await rimborsoDalCruscotto(300);
+    stato.etichetteRiescono = false;
+    await dividi([{ ordine: 'o1', centesimi: 0 }, { ordine: 'o2', centesimi: 300 }]);
+    stato.etichetteRiescono = true;
+
+    await rimborsoDalCruscotto(200);
+
+    const res = await (GET as unknown as (req: Request) => Promise<Response>)(new Request('http://x'));
+    const corpo = (await res.json()) as { data: { carrelli: Array<{ daDividereCents: number }> } };
+    expect(corpo.data.carrelli.map((c) => c.daDividereCents)).toEqual([200]);
+    expect((await dividi([{ ordine: 'o1', centesimi: 200 }, { ordine: 'o2', centesimi: 0 }])).status).toBe(200);
+    expect(stato.suStripe.map((r) => r.metadata.registrato_da_fuori)).toEqual(['1', '1']);
+  });
+});
+
+describe('un pagamento che Stripe non lascia leggere non spegne il riquadro (riesame del 16/10)', () => {
+  it('IL CASO DEL RIESAME — due carrelli fermi, Stripe non risponde su uno: l altro si divide lo stesso', async () => {
+    await rimborsoDalCruscotto(300);
+    // Un secondo carrello fermo, su un altro pagamento, che Stripe adesso non lascia leggere.
+    stato.db.tabelle.orders!.push(
+      ordine({ id: 'o3', seller_id: 'pane-quotidiano', total_price: 10, gross_total_cents: 1000, seller_payout_cents: 700, stripe_payment_intent: 'pi_2', internal_dispute_status: 'RIMBORSO_DA_RIPARTIRE' }),
+    );
+    stato.pagamentiIlleggibili.add('pi_2');
+
+    const res = await (GET as unknown as (req: Request) => Promise<Response>)(new Request('http://x'));
+
+    expect(res.status).toBe(200);
+    const corpo = (await res.json()) as { data: { carrelli: Array<{ pagamento: string }>; nonLetti: Array<{ pagamento: string }> } };
+    expect(corpo.data.carrelli.map((c) => c.pagamento), 'un pagamento illeggibile ha spento tutto il riquadro').toEqual(['pi_1']);
+    expect(corpo.data.nonLetti.map((n) => n.pagamento)).toEqual(['pi_2']);
+    expect((await dividi([{ ordine: 'o1', centesimi: 0 }, { ordine: 'o2', centesimi: 300 }])).status).toBe(200);
   });
 });
 

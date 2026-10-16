@@ -18,6 +18,8 @@ import {
 import { PAGINA_DEI_BONIFICI_DA_FARE } from '@/lib/rimborsi/scelta-del-reso';
 import { tabellaDeiBonificiMancante } from '@/lib/rimborsi/bonifici-da-fare';
 import { formatPriceFromCents } from '@/lib/format';
+import { PAUSA_RIMBORSO_DA_DIVIDERE, SENZA_LA_PAUSA_DEL_CARRELLO } from '@/lib/stripe/webhook/rimborsi-da-fuori';
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 export const runtime = 'nodejs';
 
@@ -74,8 +76,10 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // dal nulla. Il controllo sta qui, prima del turno, con la stessa regola che
   // usa chi muove i soldi (lib/rimborsi/regole-del-rimborso.ts): un importo
   // impossibile non lascia traccia sul reclamo, e chi decide legge il perche'.
+  // 16/10 (riesame) — `internal_dispute_status`: se l'ordine è fermo per un rimborso dal cruscotto
+  // da dividere, chiudere il reclamo non toglie la pausa (più sotto).
   const COLONNE_ORDINE =
-    'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status';
+    'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status, internal_dispute_status';
   let ord: OrdineDaRimborsare | null = null;
   if (dispute.order_id) {
     const { data } = await conRipiegoSchema(
@@ -251,17 +255,45 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     // in contanti. Rimborso dei 30 € di contanti: per i soldi era parziale (al
     // negozio restavano 18 €), per questa riga integrale — e 'LOST' toglieva
     // l'ordine dai bonifici per sempre. Ora si usa il verdetto di `refundOrder`.
+    //
+    // 16/10/2026 (riesame del lotto) — LA PAUSA DEL CARRELLO NON SI TOCCA.
+    // Sulla stessa colonna sta la pausa messa dal webhook quando un rimborso
+    // fatto dal cruscotto Stripe cade su un carrello di più negozi
+    // ('RIMBORSO_DA_RIPARTIRE'). Scriverci sopra l'esito del reclamo la
+    // toglieva: il negozio del reclamo tornava pagabile col netto intero, e il
+    // pannello offriva i soldi da dividere solo all'altro negozio, che pagava
+    // un rimborso non suo. La pausa la toglie solo la divisione; fino ad allora
+    // l'esito del reclamo resta scritto sul reclamo.
     const statoSullOrdine = statoDelReclamoSullOrdine({ rimborsoEmesso, rimborsoPieno });
     const { error: errOrdine } = await admin
       .from('orders')
       .update({ internal_dispute_status: statoSullOrdine })
-      .eq('id', dispute.order_id);
+      .eq('id', dispute.order_id)
+      .or(SENZA_LA_PAUSA_DEL_CARRELLO);
     if (errOrdine) {
       // Non blocca la risoluzione, ma deve essere visibile: il venditore resta
       // in attesa di essere pagato.
       logger.error('[dispute] stato dell ordine non sbloccato', {
         orderId: dispute.order_id, message: errOrdine.message,
       });
+    }
+    const fermoPerLaDivisione =
+      (ord as { internal_dispute_status?: string | null } | null)?.internal_dispute_status === PAUSA_RIMBORSO_DA_DIVIDERE;
+    if (fermoPerLaDivisione) {
+      logger.warn('[dispute] reclamo chiuso su un ordine fermo per un rimborso dal cruscotto: la pausa resta', {
+        orderId: dispute.order_id,
+      });
+      try {
+        await notifyAdmins(
+          'Reclamo chiuso, bonifico ancora fermo',
+          `Il reclamo sull'ordine #${String(dispute.order_id).slice(0, 6).toUpperCase()} è chiuso, ma il bonifico al negozio resta fermo: ` +
+            "sul suo pagamento c'è un rimborso fatto dal cruscotto Stripe che non è ancora diviso fra i negozi del carrello. " +
+            'Dividilo dalla pagina Ordini, riquadro «Rimborsi dal cruscotto da dividere»: lì si sceglie anche quanto ne spetta a questo ordine.',
+          '/admin/orders',
+        );
+      } catch (err) {
+        logger.error('[dispute] avviso della pausa che resta non partito', { orderId: dispute.order_id, err });
+      }
     }
   }
 

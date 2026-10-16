@@ -10,6 +10,7 @@ import { formatPriceFromCents } from '@/lib/format';
 // La merce che torna a scaffale ha una casa sola: la decisione è pura e
 // verificabile, qui si usa e basta (lib/ordini/rimessa-a-scaffale.ts).
 import { rimettiLaMerceAScaffale } from '@/lib/ordini/rimessa-a-scaffale';
+import { elencoDaScrivere, rimborsiGiaScritti } from '@/lib/stripe/elenco-dei-rimborsi';
 // R043 — l'avviso agli amministratori e' lo stesso che usa il webhook dei
 // rimborsi: una casa sola, cosi' i due percorsi non divergono.
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
@@ -663,6 +664,18 @@ export interface RefundOrderOpts {
    */
   annullaLOrdine?: boolean;
   /**
+   * 16/10/2026 (riesame del lotto) — L'ORDINE L'HA ANNULLATO CHI CHIAMA, ADESSO.
+   *
+   * Il giro degli ordini mai accettati scrive `CANCELED` PRIMA di chiedere il
+   * rimborso. La regola della merce (`lib/ordini/rimessa-a-scaffale.ts`) legge
+   * «già annullato e già rimborsato in parte» come «chiuso da un rimborso
+   * precedente, la merce è già tornata». Ma un rimborso parziale dal cruscotto
+   * Stripe su un ordine ancora nuovo la merce non la rimette: la quantità
+   * dell'ordine restava fuori dal magazzino per sempre. Con questa bandiera chi
+   * chiama dice «l'annullo è mio, di adesso, e nessuno ha rimesso la merce».
+   */
+  annullatoDaChiChiama?: boolean;
+  /**
    * R71 — ORDINI IN CONTANTI: COME TORNANO I SOLDI.
    *
    * Il credito MyCity arriva solo se il cliente l'ha scelto (`{ modo:
@@ -983,7 +996,9 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // R84 — `cash_confirmed_at`, `payment_status` e `wallet_applied_cents` non si
   // leggevano: il ramo dei contanti non poteva sapere se i soldi erano mai
   // arrivati. Esistono tutte e tre da prima della 124.
-  const COLONNE_RIMBORSO = 'id, user_id, total_price, gross_total_cents, seller_payout_cents, seller_payout_reversed_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, refunded_amount_cents, payment_method, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost, delivery_status, payment_status, cash_confirmed_at, wallet_applied_cents';
+  // 16/10 (riesame) — `stripe_refund_id`: il rimborso di qui si AGGIUNGE all'elenco dei rimborsi
+  // già scritti, non lo sostituisce (lib/stripe/elenco-dei-rimborsi.ts).
+  const COLONNE_RIMBORSO = 'id, user_id, total_price, gross_total_cents, seller_payout_cents, seller_payout_reversed_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, stripe_refund_id, refunded_amount_cents, payment_method, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost, delivery_status, payment_status, cash_confirmed_at, wallet_applied_cents';
   const { data: order, error } = await conRipiegoSchema(
     'orders.select (rimborso)',
     () => admin.from('orders').select(COLONNE_RIMBORSO).eq('id', opts.orderId).single(),
@@ -1236,7 +1251,12 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   const { error: errStato } = await admin
     .from('orders')
     .update({
-      ...(stripeRefundId ? { stripe_refund_id: stripeRefundId } : {}),
+      // 16/10 (riesame) — AGGIUNTO all'elenco, non al suo posto: l'elenco è la
+      // memoria dei rimborsi dal cruscotto già registrati quando Stripe non ha
+      // messo l'etichetta, e sostituirlo li faceva registrare una seconda volta.
+      ...(stripeRefundId
+        ? { stripe_refund_id: elencoDaScrivere(rimborsiGiaScritti(order as { stripe_refund_id?: string | null }), [stripeRefundId]) }
+        : {}),
       // `refunded_amount_cents` l'ha già scritto `accumula_rimborso`: riscriverlo
       // qui riaprirebbe la corsa che quella funzione serve a chiudere. (Il ramo
       // dei contanti lo riscriveva: era la stessa corsa, rimasta aperta li'.)
@@ -1343,6 +1363,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   await rimettiLaMerceAScaffale(admin, order, {
     ordineDaChiudere,
     giaRimborsatoPrimaCents: alreadyRefunded,
+    annullatoDaChiChiama: opts.annullatoDaChiChiama === true,
   });
 
   await notifyRefundBuyer(admin, order.user_id, order.id, safeAmountCents, opts, riparto);

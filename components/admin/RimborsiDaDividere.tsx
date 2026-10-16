@@ -8,7 +8,7 @@ import { friendlyError } from '@/lib/errors';
 import { formatPriceFromCents } from '@/lib/format';
 import { queryKeys } from '@/lib/queries/keys';
 import { centesimiDaEuro } from '@/lib/rimborsi/divisione-del-rimborso';
-import type { CarrelloDaDividere } from '@/lib/stripe/rimborsi-da-dividere';
+import type { CarrelloDaDividere, ElencoDaDividere } from '@/lib/stripe/rimborsi-da-dividere';
 
 /**
  * 16/10/2026 — I BONIFICI FERMATI DA UN RIMBORSO DAL CRUSCOTTO SI SBLOCCANO DA QUI.
@@ -79,6 +79,9 @@ function Carrello({ carrello }: { carrello: CarrelloDaDividere }) {
                 <td className="p-2 text-ink-700">
                   {o.negozio}
                   {o.bonificoPartito && <span className="block text-xs text-ink-500">bonifico già partito: la quota si riprende con uno storno</span>}
+                  {!o.fermo && (
+                    <span className="block text-xs text-ink-500">bonifico non fermo: scrivi una parte solo se il rimborso è suo</span>
+                  )}
                 </td>
                 <td className="p-2 text-right">{formatPriceFromCents(o.lordoCents)}</td>
                 <td className="p-2 text-right">{formatPriceFromCents(o.giaRimborsatoCents)}</td>
@@ -119,25 +122,42 @@ function Carrello({ carrello }: { carrello: CarrelloDaDividere }) {
 export function RimborsiDaDividere() {
   const { data, error } = useQuery({
     queryKey: queryKeys.admin.rimborsiDaDividere,
-    queryFn: async () => ((await chiamata('GET')) as { carrelli: CarrelloDaDividere[] }).carrelli,
+    queryFn: async () => (await chiamata('GET')) as ElencoDaDividere,
     refetchInterval: 120_000,
   });
+  const titolo = (
+    <h2 id="rimborsi-da-dividere" className="text-base font-bold text-ink-800">Rimborsi dal cruscotto da dividere</h2>
+  );
   if (error) {
+    // 16/10/2026 — Il messaggio è quello del server, da solo: prima gli si
+    // metteva davanti la stessa frase, e si leggeva due volte «Non riesco a
+    // leggere i rimborsi da dividere».
     return (
-      <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
-        Non riesco a leggere i rimborsi dal cruscotto da dividere: {friendlyError(error)}
-      </p>
+      <section className="space-y-2" aria-labelledby="rimborsi-da-dividere">
+        {titolo}
+        <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{friendlyError(error)}</p>
+      </section>
     );
   }
-  if (!data || data.length === 0) return null;
+  const carrelli = data?.carrelli ?? [];
+  const nonLetti = data?.nonLetti ?? [];
+  if (carrelli.length === 0 && nonLetti.length === 0) return null;
   return (
     <section className="space-y-3" aria-labelledby="rimborsi-da-dividere">
-      <h2 id="rimborsi-da-dividere" className="text-base font-bold text-ink-800">Rimborsi dal cruscotto da dividere</h2>
+      {titolo}
       <p className="text-sm text-ink-600">
-        Stripe non dice di quale negozio è un rimborso fatto dal cruscotto su un carrello di più negozi: i bonifici di questi
-        ordini sono fermi. Scrivi la parte di ciascun ordine (0 se non è sua).
+        Stripe non dice di quale negozio è un rimborso fatto dal cruscotto su un carrello di più negozi: i bonifici del
+        carrello restano fermi finché non lo dividi. Scrivi la parte di ciascun ordine (0 se non è sua).
       </p>
-      {data.map((c) => <Carrello key={c.pagamento} carrello={c} />)}
+      {nonLetti.length > 0 && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+          <p>Stripe adesso non mi lascia leggere questi pagamenti: il riquadro riprova da solo fra due minuti.</p>
+          <ul className="mt-1 list-disc pl-5 font-mono text-xs">
+            {nonLetti.map((n) => <li key={n.pagamento}>{n.pagamento}</li>)}
+          </ul>
+        </div>
+      )}
+      {carrelli.map((c) => <Carrello key={c.pagamento} carrello={c} />)}
     </section>
   );
 }
