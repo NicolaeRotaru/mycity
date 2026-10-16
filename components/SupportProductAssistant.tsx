@@ -28,6 +28,7 @@ import {
   bozzaDaCreare,
   messaggioDopoLaBozza,
   riquadroDichiarazioni,
+  type BozzaSalvata,
 } from '@/lib/products/prontoPerLaVendita';
 
 /**
@@ -72,6 +73,11 @@ type Msg = {
   newDraft?: NewDraft;
   /** true quando la bozza è stata creata. */
   created?: boolean;
+  /**
+   * La bozza come l'ha salvata il server: il riquadro delle dichiarazioni,
+   * dopo la creazione, dice «entrate» solo per quello che c'è qui.
+   */
+  bozzaSalvata?: BozzaSalvata;
   /**
    * R36 — il negoziante ha spuntato «le ho controllate» sotto allergeni e
    * ingredienti letti dalle foto. Senza la spunta la bozza nasce senza.
@@ -355,7 +361,11 @@ export default function SupportProductAssistant() {
       setFocused(product);
       setSessionImages([]); // le foto erano del nuovo prodotto, non del contesto chat
       setMessages((prev) => [
-        ...prev.map((m, i) => (i === index ? { ...m, created: true } : m)),
+        ...prev.map((m, i) =>
+          i === index
+            ? { ...m, created: true, bozzaSalvata: { categorySlug: product.categorySlug, attributes: product.attributes } }
+            : m,
+        ),
         // R36 — «pubblica» si propone solo se la scheda ha già tutto: per un
         // alimento senza allergeni e ingredienti si dice cosa manca e dove.
         { role: 'assistant', content: messaggioDopoLaBozza(product) },
@@ -564,10 +574,13 @@ export default function SupportProductAssistant() {
                   {(() => {
                     // R36 — Allergeni e ingredienti in evidenza, da confermare; e
                     // dopo la creazione il riquadro dice il vero su cosa e' entrato.
-                    const riquadro = riquadroDichiarazioni(m.newDraft.draft, {
-                      creata: !!m.created,
-                      confermate: !!m.dichiarazioniConfermate,
-                    });
+                    const confermate = !!m.dichiarazioniConfermate;
+                    const riquadro = riquadroDichiarazioni(
+                      m.newDraft.draft,
+                      m.created && m.bozzaSalvata
+                        ? { creata: true, confermate, salvata: m.bozzaSalvata }
+                        : { creata: false, confermate },
+                    );
                     if (!riquadro) return null;
                     return (
                       <div

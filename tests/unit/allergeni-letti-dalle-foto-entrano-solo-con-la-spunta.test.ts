@@ -5,6 +5,8 @@ import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { act, type ComponentType } from 'react';
 import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi, clicca } from './aiuti/schermo';
+import { buildDraftProductInsert, type VisionDraft } from '@/lib/products/draftFromVision';
+import { productSnapshot } from '@/lib/products/aiSnapshot';
 
 /**
  * 15/10/2026 (R36, collaudo) — ALLERGENI E INGREDIENTI LETTI DALLE FOTO
@@ -200,6 +202,78 @@ describe('la chat Assistenza: la bozza dalle foto porta le dichiarazioni solo co
   });
 });
 
+describe('la chat Assistenza: dopo la creazione il riquadro dice quello che il server ha salvato', () => {
+  let Chat: ComponentType<Record<string, unknown>>;
+  beforeAll(async () => {
+    Chat = (await monta('components/SupportProductAssistant.tsx')).default as ComponentType<Record<string, unknown>>;
+  }, 60000);
+
+  const CATEGORIE = [{ id: 'alim', name: 'Alimentari', slug: 'alimentari', parent_id: null }];
+
+  /**
+   * 16/10/2026 — Il modello scrive le chiavi con la maiuscola. Il server qui
+   * e' quello vero: la bozza che arriva passa da `buildDraftProductInsert` e
+   * torna come la restituisce la rotta.
+   */
+  async function creaConChiaviMaiuscole(spunta: boolean) {
+    rete({
+      '/api/vision/extract-product': () => ({
+        ...LETTURA_DELLA_FOCACCIA,
+        attributes: {
+          Allergeni: 'Glutine, sesamo',
+          Ingredienti: 'farina, acqua, olio, sale, lievito, sesamo',
+          Peso: '300 g',
+        },
+      }),
+      '/api/ai/catalog-create': (corpo) => {
+        const riga = {
+          id: 'nuovo-0',
+          ...buildDraftProductInsert({
+            draft: corpo.draft as VisionDraft,
+            imageUrls: corpo.imageUrls as string[],
+            categories: CATEGORIE,
+            sellerId: 'forno-1',
+          }),
+          has_variants: false,
+        };
+        return { ok: true, product: productSnapshot(riga, CATEGORIE) };
+      },
+    });
+    const s = accendi(Chat);
+    const input = s.radice.querySelector<HTMLInputElement>('input[type="file"]')!;
+    await act(async () => scegliFoto(input, 1));
+    await aspettaChe(
+      () => testoVisibile(s.radice).includes('Crea nuovo prodotto da queste foto'),
+      'la foto caricata e il pulsante per creare la bozza',
+    );
+    clicca(pulsante(s.radice, 'Crea nuovo prodotto da queste foto'));
+    await aspettaChe(() => !!s.radice.querySelector('[data-riquadro="dichiarazioni"]'), 'il riquadro delle dichiarazioni');
+    if (spunta) clicca(s.radice.querySelector<HTMLInputElement>('[data-riquadro="dichiarazioni"] input[type="checkbox"]')!);
+    clicca(pulsante(s.radice, 'Crea bozza'));
+    await aspettaChe(() => testoVisibile(s.radice).includes('Bozza creata'), 'la conferma');
+    return s;
+  }
+
+  it('con la spunta: «Entrate nella bozza», e non dice che mancano', async () => {
+    const s = await creaConChiaviMaiuscole(true);
+    const riquadro = testo(s.radice.querySelector('[data-riquadro="dichiarazioni"]'));
+    expect(riquadro).toContain('Entrate nella bozza');
+    expect(riquadro).toContain('Allergeni: Glutine, sesamo');
+    expect(riquadro, 'il riquadro dice entrate e insieme che mancano').not.toContain('Manca');
+    // E il messaggio del server dopo la creazione dice la stessa cosa.
+    expect(testoVisibile(s.radice)).toContain('Vuoi pubblicarla');
+    s.smonta();
+  });
+
+  it('senza la spunta: «NON entrate», e dice che mancano', async () => {
+    const s = await creaConChiaviMaiuscole(false);
+    const riquadro = testo(s.radice.querySelector('[data-riquadro="dichiarazioni"]'));
+    expect(riquadro).toContain('NON entrate nella bozza');
+    expect(riquadro).toContain('Allergeni, Ingredienti');
+    s.smonta();
+  });
+});
+
 describe('la chat Assistenza: la scheda di «pubblica» dice quello che dira il server', () => {
   let Chat: ComponentType<Record<string, unknown>>;
   beforeAll(async () => {
@@ -250,6 +324,27 @@ describe('la chat Assistenza: la scheda di «pubblica» dice quello che dira il 
     expect(scheda).toContain('Va in vendita con queste dichiarazioni');
     expect(scheda).toContain('Allergeni: Glutine, sesamo');
     expect(scheda).not.toContain('Senza glutine');
+    s.smonta();
+  });
+
+  it('una proposta che toglie un campo scritto fuori schema non fa cadere la chat', async () => {
+    // 16/10/2026 — Il modello scrive `attributes_remove` come oggetto invece
+    // che come elenco: la scheda andava in errore mentre si disegnava, e la
+    // chat spariva dietro la pagina d'errore del sito.
+    const s = await proposta(
+      {
+        ...BASE,
+        name: 'Focaccia genovese',
+        description: "Focaccia genovese all'olio, alta e morbida",
+        categorySlug: 'alimentari',
+        attributes: { allergeni: 'Glutine, sesamo', ingredienti: 'farina, acqua, olio, sale, lievito, sesamo' },
+      },
+      { status: 'available', attributes_remove: { colore: true } },
+    );
+    const scheda = testo(s.radice);
+    expect(scheda).toContain('Stato → In vendita');
+    expect(scheda).toContain('Va in vendita con queste dichiarazioni');
+    expect(scheda).toContain('Allergeni: Glutine, sesamo');
     s.smonta();
   });
 

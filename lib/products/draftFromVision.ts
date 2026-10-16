@@ -1,9 +1,10 @@
 // lib/products/draftFromVision.ts
-import { getAttributesForCategory, AI_ATTR_TO_FIELD } from '@/lib/category-attributes';
+import { getAttributesForCategory } from '@/lib/category-attributes';
 import { normalizeCondition } from '@/lib/products/schema';
 import {
   MAX_NOME_PRODOTTO,
   MAX_DESCRIZIONE_PRODOTTO,
+  chiaveCampo,
   eCampoDichiarativo,
   type CategoryRow,
 } from '@/lib/products/aiPatch';
@@ -124,12 +125,17 @@ export function buildDraftProductInsert(opts: {
     for (const [aiKey, rawValue] of Object.entries(draft.attributes)) {
       const value = typeof rawValue === 'string' ? rawValue.trim() : '';
       if (!value) continue;
-      if (aiKey === 'condizione') {
+      // 16/10/2026 — La chiave si legge come la legge il riquadro della bozza
+      // (`chiaveCampo`): «Allergeni» con la maiuscola o «valori nutrizionali»
+      // con lo spazio venivano scartate qui, mentre il riquadro le dava per
+      // entrate. Il negoziante leggeva «Entrate nella bozza» e, sotto,
+      // «Manca: Allergeni».
+      const targetKey = chiaveCampo(aiKey);
+      if (targetKey === 'condizione') {
         condition = normalizeCondition(value) || null;
         continue;
       }
-      const targetKey = AI_ATTR_TO_FIELD[aiKey] ?? aiKey;
-      if (!dichiarazioniConfermate && (eCampoDichiarativo(aiKey) || eCampoDichiarativo(targetKey))) continue;
+      if (!dichiarazioniConfermate && eCampoDichiarativo(targetKey)) continue;
       const field = fields.find((f) => f.key === targetKey);
       if (!field) continue;
       if (field.type === 'select') {

@@ -7,6 +7,7 @@ import {
   getAttributesForCategory,
 } from '@/lib/category-attributes';
 import {
+  chiaveCampo,
   eCampoDichiarativo,
   prezzoAiFuoriBanda,
   separaCampiDichiarativi,
@@ -227,8 +228,11 @@ export function dichiarazioniDellaBozza(draft: {
         s.azione === 'scrivi' && !!s.valore && diceQualcosa(s.valore),
     )
     .map((s) => ({ chiave: s.chiave, etichetta: s.etichetta, valore: valoreLeggibile(s.valore) }));
+  // Le chiavi dei campi presenti si leggono come quelle delle dichiarazioni
+  // (`chiaveCampo`), e come le legge la porta che crea la bozza: «Allergeni»
+  // con la maiuscola contava come dichiarazione letta ma non come campo pieno.
   const presenti: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(draft.attributes ?? {})) presenti[AI_ATTR_TO_FIELD[k] ?? k] = v;
+  for (const [k, v] of Object.entries(draft.attributes ?? {})) presenti[chiaveCampo(k)] = v;
   return { lette, obbligatoriVuoti: campiObbligatoriVuoti(draft.category_slug, presenti) };
 }
 
@@ -252,35 +256,81 @@ export type RiquadroDichiarazioni = {
 };
 
 /**
+ * La bozza come l'ha salvata il server: lo snapshot che torna da
+ * `/api/ai/catalog-create` (categoria di primo livello e attributi veri).
+ */
+export type BozzaSalvata = {
+  categorySlug: string | null;
+  attributes: Record<string, unknown> | null;
+};
+
+/** La frase di cosa resta da scrivere nella scheda (null = niente). */
+function fraseDaScrivere(mancano: string[]): string | null {
+  return mancano.length > 0 ? `Manca e lo scrivi tu nella scheda prima di pubblicare: ${mancano.join(', ')}.` : null;
+}
+
+/**
  * R36 — Cosa dice il riquadro «Da controllare tu», prima e dopo la creazione.
  *
  * Prima: le dichiarazioni lette dalle foto e la spunta per confermarle. Dopo,
  * il riquadro deve dire il vero su cosa e' entrato: senza spunta la bozza nasce
  * senza, e una scheda che continua a mostrare «Allergeni: Glutine» fa credere
  * il contrario (collaudo del 15/10).
+ *
+ * 16/10/2026 — Dopo la creazione il riquadro si legge dalla bozza SALVATA, non
+ * da quella proposta. Prima si ricostruiva cosa era entrato dalla proposta e
+ * dalla spunta: se il server scartava un campo (una chiave scritta «Allergeni»
+ * con la maiuscola), il riquadro titolava «Entrate nella bozza» con gli
+ * allergeni elencati e, sotto, «Manca: Allergeni». Adesso «entrata» e' solo una
+ * dichiarazione che c'e' nella bozza salvata, col valore che ha li'.
  */
 export function riquadroDichiarazioni(
   draft: { category_slug?: string | null; attributes?: Record<string, string> | null },
-  stato: { creata: boolean; confermate: boolean },
+  stato: { creata: false; confermate: boolean } | { creata: true; confermate: boolean; salvata: BozzaSalvata },
 ): RiquadroDichiarazioni | null {
   const { lette, obbligatoriVuoti } = dichiarazioniDellaBozza(draft);
-  if (lette.length === 0 && obbligatoriVuoti.length === 0) return null;
-  const righe = lette.map(({ etichetta, valore }) => ({ etichetta, valore }));
-  const entrate = !stato.creata || stato.confermate;
-  // Dopo una creazione senza spunta, manca anche quello che il modello aveva letto.
-  const mancano = entrate
-    ? obbligatoriVuoti
-    : dichiarazioniDellaBozza(bozzaDaCreare(draft, false)).obbligatoriVuoti;
+  const righeLette = lette.map(({ etichetta, valore }) => ({ etichetta, valore }));
+  const DA_CONTROLLARE = 'Da controllare tu: è la tua dichiarazione ai clienti';
+
+  if (!stato.creata) {
+    if (lette.length === 0 && obbligatoriVuoti.length === 0) return null;
+    return {
+      titolo: DA_CONTROLLARE,
+      righe: righeLette,
+      daScrivere: fraseDaScrivere(obbligatoriVuoti),
+      chiediSpunta: lette.length > 0,
+    };
+  }
+
+  const salvati = stato.salvata.attributes ?? {};
+  const mancano = campiObbligatoriVuoti(stato.salvata.categorySlug, salvati);
+  if (lette.length === 0 && mancano.length === 0) return null;
+  const entrate = lette.filter((l) => diceQualcosa(salvati[l.chiave]));
+
+  if (entrate.length === 0) {
+    return {
+      titolo:
+        lette.length === 0 ? DA_CONTROLLARE : 'Lette dalle foto ma NON entrate nella bozza: le scrivi tu nella scheda',
+      righe: righeLette,
+      daScrivere: fraseDaScrivere(mancano),
+      chiediSpunta: false,
+    };
+  }
+
+  // Entrate, magari non tutte: quelle rimaste fuori si dicono, una volta sola
+  // (se sono anche obbligatorie le dice gia' la frase di cosa manca).
+  const fuori = lette
+    .filter((l) => !entrate.includes(l) && !mancano.includes(l.etichetta))
+    .map((l) => l.etichetta);
+  const frasi = [
+    fuori.length > 0 ? `Non sono entrate nella bozza: ${fuori.join(', ')}.` : null,
+    fraseDaScrivere(mancano),
+  ].filter((f): f is string => f !== null);
   return {
-    titolo: !stato.creata
-      ? 'Da controllare tu: è la tua dichiarazione ai clienti'
-      : stato.confermate
-        ? 'Entrate nella bozza: le hai confermate tu'
-        : 'Lette dalle foto ma NON entrate nella bozza: le scrivi tu nella scheda',
-    righe,
-    daScrivere:
-      mancano.length > 0 ? `Manca e lo scrivi tu nella scheda prima di pubblicare: ${mancano.join(', ')}.` : null,
-    chiediSpunta: !stato.creata && lette.length > 0,
+    titolo: stato.confermate ? 'Entrate nella bozza: le hai confermate tu' : 'Entrate nella bozza',
+    righe: entrate.map((l) => ({ etichetta: l.etichetta, valore: valoreLeggibile(salvati[l.chiave]) })),
+    daScrivere: frasi.length > 0 ? frasi.join(' ') : null,
+    chiediSpunta: false,
   };
 }
 
@@ -346,10 +396,18 @@ export function cosaMancaNellaScheda(prodotto: SchedaDellaChat): string[] {
 export function cosaMancaDopoLaProposta(prodotto: SchedaDellaChat, proposta: AiProductPatch): string[] {
   const { patch } = separaCampiDichiarativi(proposta);
   const attributes: Record<string, unknown> = { ...prodotto.attributes };
-  for (const [k, v] of Object.entries(patch.attributes ?? {})) {
-    if (String(v ?? '').trim()) attributes[AI_ATTR_TO_FIELD[k] ?? k] = v;
+  // 16/10/2026 — La proposta arriva dal modello cosi' com'e': lo schema dello
+  // strumento dice «elenco di chiavi», ma nessuno lo garantisce. Un
+  // `attributes_remove` scritto come oggetto faceva cadere la chat intera
+  // («object is not iterable») mentre si disegnava la scheda. Qui un campo
+  // senza la forma giusta si ignora, come fa il server (`resolveAiPatch`).
+  const daScrivere =
+    patch.attributes && typeof patch.attributes === 'object' ? (patch.attributes as Record<string, unknown>) : {};
+  for (const [k, v] of Object.entries(daScrivere)) {
+    if (typeof v === 'string' && v.trim()) attributes[AI_ATTR_TO_FIELD[k] ?? k] = v;
   }
-  for (const k of patch.attributes_remove ?? []) delete attributes[AI_ATTR_TO_FIELD[k] ?? k];
+  const daTogliere: unknown[] = Array.isArray(patch.attributes_remove) ? patch.attributes_remove : [];
+  for (const k of daTogliere) delete attributes[AI_ATTR_TO_FIELD[String(k)] ?? String(k)];
   const prezzoValido =
     typeof patch.price === 'number' && patch.price > 0 && !prezzoAiFuoriBanda(patch.price, prodotto.price);
   return cosaMancaNellaScheda({
