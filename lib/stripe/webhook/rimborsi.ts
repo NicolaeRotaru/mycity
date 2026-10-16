@@ -46,7 +46,8 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
     // 16/10 — serve `stripe_refund_id`: dice QUALI rimborsi dal cruscotto sono già scritti (rimborsi-da-fuori.ts).
     // 16/10 (riesame) — serve `internal_dispute_status`: con una divisione in corso un rimborso già
     // scritto su un ordine del carrello conta ancora, a divisione finita no (rimborsi-da-fuori.ts).
-    .select('id, user_id, total_price, refunded_amount_cents, stripe_refund_id, internal_dispute_status, seller_id, payout_status, payment_status, delivery_status, coupon_code, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost')
+    // 16/10 (settimo riesame) — serve `reversal_error`: dice se uno storno chiesto non è mai stato confermato.
+    .select('id, user_id, total_price, refunded_amount_cents, stripe_refund_id, internal_dispute_status, seller_id, payout_status, payment_status, delivery_status, coupon_code, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, reversal_error, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost')
     .eq('stripe_payment_intent', pi);
 
   // R81 — Una lettura caduta non è «nessun ordine»: prima il gestore usciva
