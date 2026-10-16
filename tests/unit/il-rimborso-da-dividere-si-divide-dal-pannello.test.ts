@@ -30,6 +30,8 @@ const stato: {
   pagamentiIlleggibili: Set<string>;
   /** Se c'è, Stripe risponde all'elenco dei rimborsi solo quando questa promessa si chiude. */
   primaDellaLista: (() => Promise<void>) | null;
+  /** Se c'è, gira DOPO che Stripe ha fotografato l'elenco e prima che la risposta arrivi: quello che fa qui, l'elenco non lo vede. */
+  dopoLaLista: (() => Promise<void>) | null;
   /** Se c'è, Stripe fa lo storno solo quando questa promessa si chiude (una che non si chiude mai è il processo morto). */
   primaDelloStorno: ((transferId: string) => Promise<void>) | null;
   /** Se c'è, la riga del registro delle azioni si scrive solo quando questa promessa si chiude. */
@@ -37,7 +39,7 @@ const stato: {
 } = {
   db: fintoDatabase(), carica: { amount: 2790, refunded: 0 }, suStripe: [], storni: [],
   rispostePerse: 0, etichetteRiescono: true, pagamentiIlleggibili: new Set(), primaDellaLista: null, primaDelloStorno: null,
-  primaDelRegistro: null,
+  primaDelRegistro: null, dopoLaLista: null,
 };
 let orologio = 1_800_000_000;
 
@@ -78,7 +80,9 @@ vi.mock('@/lib/stripe/client', () => ({
       list: async (p: { payment_intent?: string; charge?: string }) => {
         if (p.payment_intent && stato.pagamentiIlleggibili.has(p.payment_intent)) throw new Error('Too many requests');
         if (stato.primaDellaLista) await stato.primaDellaLista();
-        return { data: [...stato.suStripe].reverse().map((r) => ({ ...r, metadata: { ...r.metadata } })), has_more: false };
+        const data = [...stato.suStripe].reverse().map((r) => ({ ...r, metadata: { ...r.metadata } }));
+        if (stato.dopoLaLista) await stato.dopoLaLista();
+        return { data, has_more: false };
       },
       update: async (id: string, p: { metadata?: Record<string, string> }) => {
         if (!stato.etichetteRiescono) throw new Error('Stripe non risponde');
@@ -179,6 +183,7 @@ function daCapo(): void {
   stato.primaDellaLista = null;
   stato.primaDelloStorno = null;
   stato.primaDelRegistro = null;
+  stato.dopoLaLista = null;
   stato.db = fintoDatabase({
     orders: [
       ordine({ id: 'o1', seller_id: 'pane-quotidiano', total_price: 15, gross_total_cents: 1500, seller_payout_cents: 1000 }),
@@ -783,6 +788,24 @@ describe('un rimborso che esce mentre si divide, uno storno senza esito, e la fr
     expect(await carrelliNelPannello()).toEqual([]);
     expect(await pagabili()).toEqual(['o1', 'o2']);
     expect(stato.suStripe.map((r) => r.metadata.registrato_da_fuori)).toEqual(['1', '1']);
+  });
+
+  it('LA VARIANTE SCOMODA — il secondo rimborso esce subito dopo che la divisione ha riletto Stripe: lo trova il suo avviso', async () => {
+    await rimborsoDalCruscotto(300);
+    // La seconda lettura di Stripe della divisione è la rilettura finale: il rimborso nasce
+    // appena dopo la sua fotografia, e il suo avviso fa tutto il giro prima che la divisione vada avanti.
+    let liste = 0;
+    stato.dopoLaLista = async () => {
+      if (++liste !== 2) return;
+      stato.dopoLaLista = null;
+      await rimborsoDalCruscotto(200);
+    };
+
+    await dividi([{ ordine: 'o1', centesimi: 0 }, { ordine: 'o2', centesimi: 300 }]);
+
+    expect(liste, 'la divisione non ha riletto Stripe').toBe(2);
+    await nienteSiPerde('rimborso uscito subito dopo la rilettura');
+    expect((await carrelliNelPannello()).map((c) => c.daDividereCents), 'il secondo rimborso sparito dal pannello').toEqual([200]);
   });
 
   it('in ogni momento in cui può uscire il secondo rimborso, niente resta fuori dal pannello', async () => {
