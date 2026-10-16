@@ -48,7 +48,8 @@
  * Uscita:
  *   0  la regola ferma le richieste con la CI rossa (stampa anche cosa NON
  *      ferma e le scelte rimaste: sono avvisi, non bloccano)
- *   1  non le ferma: stampa cosa manca e dove si sistema
+ *   1  non le ferma, oppure le ferma ma guarda anche altri rami oltre a main
+ *      (e li' blocca le spinte): stampa cosa manca e dove si sistema
  *   2  non ho potuto leggere la regola: non e' un verde, e' un «non lo so»
  */
 import fs from 'node:fs';
@@ -66,6 +67,9 @@ const APP_GITHUB_ACTIONS = 15368;
 
 /** I bersagli che, in una regola di GitHub, comprendono il ramo main. */
 const BERSAGLI_CHE_COPRONO_MAIN = new Set(['~DEFAULT_BRANCH', '~ALL', 'refs/heads/main']);
+
+/** I soli bersagli che comprendono main e NIENT'ALTRO: gli unici ammessi. */
+const BERSAGLI_SOLO_MAIN = new Set(['~DEFAULT_BRANCH', 'refs/heads/main']);
 
 /**
  * La valutazione. Funzione pura: riceve la regola come la restituisce l'API di
@@ -113,6 +117,28 @@ export function valutaLaRegolaMain(regola) {
     mancano.push({
       cosa: include.length === 0 ? 'non guarda nessun ramo (bersagli vuoti)' : 'non guarda il ramo main',
       come: 'Target branches → Add target → «Include default branch» (cioe\' main).',
+    });
+  }
+
+  // ②bis Guarda SOLO main (16/10/2026, correzione del lotto). Su GitHub il
+  // controllo obbligatorio di una regola vale anche per le spinte: un commit
+  // nuovo entra in un ramo coperto solo se ha gia' passato la CI su un altro
+  // ramo. Se la regola copre anche altri rami, li' non si spinge piu' niente di
+  // nuovo; con «All branches» un altro ramo non c'e' e il lavoro di tutti si
+  // ferma. Prima '~ALL' contava come «guarda main» e lo script diceva ✅.
+  // Si guarda l'elenco dei bersagli, non le esclusioni: con «All branches»
+  // nessuna esclusione ragionevole lascia fuori tutti i rami tranne main.
+  const oltreMain = regola.target === 'branch' ? include.filter((b) => !BERSAGLI_SOLO_MAIN.has(b)) : [];
+  if (oltreMain.length > 0) {
+    const tuttiIRami = oltreMain.includes('~ALL');
+    const elenco = oltreMain.map((b) => (b === '~ALL' ? '«All branches»' : `«${String(b)}»`)).join(', ');
+    mancano.push({
+      cosa: tuttiIRami
+        ? 'guarda tutti i rami («All branches»), non solo main. Il controllo obbligatorio vale anche per le spinte: un commit nuovo entra in un ramo solo se ha gia\' passato la CI su un altro ramo. ' +
+          'Se la regola copre ogni ramo, quell\'altro ramo non c\'e\': nessuno puo\' piu\' spingere commit nuovi, su nessun ramo, e la CI non parte'
+        : `guarda anche rami che non sono main (${elenco}). Il controllo obbligatorio vale anche per le spinte: su quei rami un commit nuovo entra solo se ha gia' passato la CI su un altro ramo, e chi lavora li' non riesce piu' a spingere`,
+      come: `Target branches → togli ${elenco} e lascia solo «Include default branch» (cioe' main).`,
+      bloccaAltriRami: true,
     });
   }
 
@@ -207,9 +233,14 @@ export function righeDelVerdetto(esito) {
       `   oppure salvala e passami il file: gh api repos/NicolaeRotaru/mycity/rulesets/${ID_DELLA_REGOLA} > regola.json && node scripts/controlla-regola-main.mjs regola.json`,
     ];
   }
+  // Se l'unico guaio e' che copre anche altri rami, le richieste rosse le
+  // ferma: dirle «NON ferma» sarebbe falso. Il guaio e' che ferma troppo.
+  const soloAltriRami = esito.mancano.length > 0 && esito.mancano.every((m) => m.bloccaAltriRami === true);
   const righe = esito.protegge
-    ? ['✅ La regola «Main» ferma le richieste con la CI rossa: e\' accesa, guarda main e pretende il controllo «Main» verde.']
-    : [`❌ La regola «Main» NON ferma le richieste con la CI rossa. Le mancano ${esito.mancano.length} cose:`];
+    ? ['✅ La regola «Main» ferma le richieste con la CI rossa: e\' accesa, guarda solo main e pretende il controllo «Main» verde.']
+    : soloAltriRami
+      ? ['❌ La regola «Main» ferma le richieste con la CI rossa, ma blocca anche le spinte sugli altri rami. Da sistemare:']
+      : [`❌ La regola «Main» NON ferma le richieste con la CI rossa. Le mancano ${esito.mancano.length} cose:`];
   esito.mancano.forEach((m, i) => {
     righe.push(`   ${i + 1}. ${m.cosa}.`);
     righe.push(`      Dove si sistema: ${m.come}`);
