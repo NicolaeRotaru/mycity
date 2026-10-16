@@ -26,7 +26,13 @@ import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { uploadProductImages } from '@/lib/products/uploadImages';
-import { patchAiPerIlForm, pianoPatchPerIlModulo } from '@/lib/products/aiPatch';
+import {
+  esitoDelPiano,
+  patchAiPerIlForm,
+  pianoPatchPerIlModulo,
+  type EsitoPatchModulo,
+} from '@/lib/products/aiPatch';
+import { dilloDopoIlPatch } from '@/components/seller/dilloDopoIlPatch';
 import { colonneDelPatchAi } from '@/lib/products/salvataggio-tracciato';
 import { useFormAutosave } from '@/lib/hooks/useFormAutosave';
 import {
@@ -403,10 +409,12 @@ export default function ProductForm({
     status,
   };
 
-  // Applica un patch dell'AI allo stato del form. Ritorna le etichette dei
-  // campi scritti DAVVERO: chi chiama legge «vuoto» come «non e' cambiato
-  // niente» e non dice «aggiornato».
-  const applyPatch = (proposta: ProductEditPatch): string[] => {
+  // Applica un patch dell'AI allo stato del form. Ritorna l'esito: le
+  // etichette dei campi scritti DAVVERO (chi chiama legge «vuoto» come «non e'
+  // cambiato niente» e non dice «aggiornato»), quanti avvisi restano aperti su
+  // cose da decidere a mano (allora non dice nemmeno «niente da fare») e il
+  // pezzo del suggerimento da poter rivedere.
+  const applyPatch = (proposta: ProductEditPatch): EsitoPatchModulo => {
     /**
      * 27/8/2026 (R145) — IL PREZZO PASSA DALLA BANDA ANCHE QUI.
      *
@@ -492,7 +500,7 @@ export default function ProductForm({
       });
     }
 
-    return piano.cambiati;
+    return esitoDelPiano(piano);
   };
 
   // ---- Codice a barre → lookup AI -------------------------------------------
@@ -516,8 +524,12 @@ export default function ProductForm({
       });
       const json = await res.json();
       if (res.ok && json.found && json.patch) {
-        const changed = applyPatch(json.patch as ProductEditPatch);
-        toast.success(changed.length ? 'Compilato dal codice EAN — controlla e salva' : 'Codice EAN salvato', { id: tid });
+        const esito = applyPatch(json.patch as ProductEditPatch);
+        dilloDopoIlPatch(
+          esito,
+          { applicato: 'Compilato dal codice EAN — controlla e salva', niente: 'Codice EAN salvato' },
+          { id: tid },
+        );
       } else {
         toast('Codice EAN salvato. Non ho trovato il prodotto online: compila a mano.', { id: tid });
       }
