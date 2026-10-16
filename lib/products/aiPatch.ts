@@ -242,6 +242,93 @@ export function rigaAttributoPerIlModello(f: { key: string; type?: string; optio
   return `- ${f.key} (${f.type ?? 'text'})${opts}${sola}`;
 }
 
+/** Una voce di un elenco come testo, come la legge `String`, ma senza mai cadere. */
+export function voceComeTesto(v: unknown): string {
+  try {
+    return String(v);
+  } catch {
+    // Un oggetto col suo `toString` rotto (`{"toString": null}` in un JSON):
+    // `String` lancia un errore. Una voce cosi' non nomina niente.
+    return '';
+  }
+}
+
+const eTesto = (v: unknown) => typeof v === 'string';
+const eNumero = (v: unknown) => typeof v === 'number';
+/** Il tipo con cui il server legge ogni campo singolo della proposta (`resolveAiPatch`). */
+const TIPI_DEI_CAMPI: Record<string, (v: unknown) => boolean> = {
+  name: eTesto,
+  description: eTesto,
+  unit: eTesto,
+  status: eTesto,
+  subcategory_name: eTesto,
+  condition: (v) => v === null || eTesto(v),
+  compare_at_price: (v) => v === null || eNumero(v),
+  price: eNumero,
+  stock: eNumero,
+  unlimited_stock: (v) => typeof v === 'boolean',
+};
+
+/**
+ * 16/10/2026 — LA PROPOSTA CHE TORNA ALLA CHAT ASSISTENZA E' QUELLA CHE IL
+ * SERVER SAPREBBE APPLICARE.
+ *
+ * Il fornaio scrive «togli gli allergeni dalla focaccia». Lo strumento chiede
+ * al modello un elenco di chiavi in `attributes_remove`, ma niente lo
+ * garantisce: con `[["allergeni"]]` (un elenco dentro l'elenco) la scheda della
+ * proposta passava l'elenco a `findLabelForKey`, che su un elenco cade, e la
+ * chat spariva intera. La rotta passava la proposta al browser cosi' com'era.
+ *
+ * Qui la proposta prende la forma con cui il server la leggerebbe premendo
+ * Applica:
+ *  - ogni campo singolo col suo tipo (un testo resta testo, un prezzo un
+ *    numero); quello che il server ignorerebbe sparisce;
+ *  - le voci di `attributes_remove` e `tags` diventano testo, come le legge il
+ *    server (`String`); una voce che non si sa scrivere come testo si toglie, e
+ *    un elenco fatto solo di voci cosi' non diventa «togli tutti i tag»;
+ *  - gli `attributes` restano solo se sono un oggetto, e solo con valori di
+ *    testo: gli altri il server non li scrive;
+ *  - una categoria che non e' una categoria di primo livello (una
+ *    sottocategoria, uno slug che non esiste) sparisce, con la sottocategoria:
+ *    il server lascerebbe il prodotto dov'e', e la scheda della proposta
+ *    leggerebbe i campi di una categoria sbagliata.
+ */
+export function propostaPerLaChat(proposta: unknown, categorie: CategoryRow[]): AiProductPatch {
+  if (!proposta || typeof proposta !== 'object' || Array.isArray(proposta)) return {};
+  const fuori: Record<string, unknown> = { ...(proposta as Record<string, unknown>) };
+  for (const [campo, buono] of Object.entries(TIPI_DEI_CAMPI)) {
+    if (campo in fuori && !buono(fuori[campo])) delete fuori[campo];
+  }
+  if ('category_slug' in fuori) {
+    const slug = fuori.category_slug;
+    if (!(typeof slug === 'string' && slug && resolveCategoryId(categorie, slug) !== null)) {
+      delete fuori.category_slug;
+      delete fuori.subcategory_name;
+    }
+  }
+  if ('attributes' in fuori) {
+    const grezzi = fuori.attributes;
+    const testi: Record<string, string> = {};
+    if (grezzi && typeof grezzi === 'object' && !Array.isArray(grezzi)) {
+      for (const [k, v] of Object.entries(grezzi as Record<string, unknown>)) if (typeof v === 'string') testi[k] = v;
+    }
+    if (Object.keys(testi).length > 0) fuori.attributes = testi;
+    else delete fuori.attributes;
+  }
+  for (const elenco of ['attributes_remove', 'tags'] as const) {
+    if (!(elenco in fuori)) continue;
+    const voci = fuori[elenco];
+    if (!Array.isArray(voci)) {
+      delete fuori[elenco];
+      continue;
+    }
+    const lette = voci.map(voceComeTesto).filter((v) => v !== '');
+    if (voci.length > 0 && lette.length === 0) delete fuori[elenco];
+    else fuori[elenco] = lette;
+  }
+  return fuori as AiProductPatch;
+}
+
 /** Risolve slug categoria (+ nome sottocategoria) → category_id a due livelli. */
 function resolveCategoryId(
   categories: CategoryRow[],
@@ -413,6 +500,13 @@ export type PianoPatchModulo = {
    * l'avviso a tempo e' sparito. Vuoto = non c'e' niente da rivedere.
    */
   daRivedere: AiProductPatch;
+  /**
+   * Le etichette dei campi dichiarativi (allergeni, ingredienti...) che la
+   * scheda ha, nella categoria che il prodotto ha DOPO il suggerimento: quella
+   * scelta dal suggerimento, se il modulo l'ha presa, altrimenti quella di
+   * prima. Vuoto = la scheda non ha dichiarazioni (un vaso, un libro).
+   */
+  dichiarazioniDellaCategoria: string[];
 };
 
 /**
@@ -579,6 +673,11 @@ export function pianoPatchPerIlModulo(
   }
 
   const proposteDelModulo = proposte.map((p) => ({ chiave: p.chiave, ...propostaPerIlModulo(p, fields) }));
+  // Nell'ordine di `CAMPI_DICHIARATIVI`: per un alimento gli allergeni prima.
+  const dichiarazioniDellaCategoria = CAMPI_DICHIARATIVI.flatMap((chiave) => {
+    const campo = fields.find((f) => f.key === chiave);
+    return campo ? [campo.label] : [];
+  });
   // Il prezzo scartato ha un posto solo nel riquadro: un altro prezzo scartato
   // dopo prende il suo posto.
   const motivoPrezzo =
@@ -605,6 +704,7 @@ export function pianoPatchPerIlModulo(
     proposte: proposteDelModulo,
     daControllare,
     daRivedere: dichiarazioniDaRivedere(proposta),
+    dichiarazioniDellaCategoria,
   };
 }
 
@@ -626,6 +726,8 @@ export type EsitoPatchModulo = {
   daControllare: VoceDaControllare[];
   /** Vedi `PianoPatchModulo.daRivedere`. */
   daRivedere: AiProductPatch;
+  /** Vedi `PianoPatchModulo.dichiarazioniDellaCategoria`. */
+  dichiarazioniDellaCategoria: string[];
 };
 
 /** L'esito di un piano, per chi chiama il modulo. */
@@ -635,6 +737,7 @@ export function esitoDelPiano(piano: PianoPatchModulo): EsitoPatchModulo {
     inSospeso: piano.daControllare.length,
     daControllare: piano.daControllare,
     daRivedere: piano.daRivedere,
+    dichiarazioniDellaCategoria: piano.dichiarazioniDellaCategoria,
   };
 }
 

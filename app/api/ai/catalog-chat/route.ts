@@ -14,6 +14,7 @@ import { getAttributesForCategory } from '@/lib/category-attributes';
 import {
   eCampoDichiarativo,
   REGOLA_CAMPI_DICHIARATIVI,
+  propostaPerLaChat,
   type AiProductPatch,
   type CategoryRow,
 } from '@/lib/products/aiPatch';
@@ -389,8 +390,10 @@ Identifica di quale prodotto parla il venditore e imposta "product_id". Se non s
     // product_id valido solo se è davvero un prodotto del venditore.
     const candidateId = toolInput?.product_id ?? focused?.id ?? null;
     const matched = candidateId ? products.find((p) => p.id === candidateId) ?? null : null;
-    const patch =
-      matched && toolInput?.patch && typeof toolInput.patch === 'object' ? toolInput.patch : {};
+    // (16/10/2026) La proposta torna alla chat nella forma in cui il server la
+    // applicherebbe: una voce scritta fuori schema (`[["allergeni"]]`) faceva
+    // cadere la chat mentre disegnava la scheda. Vedi `propostaPerLaChat`.
+    const patch = matched ? propostaPerLaChat(toolInput?.patch, categories) : {};
 
     return NextResponse.json({
       reply,
