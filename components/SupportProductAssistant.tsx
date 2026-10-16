@@ -19,15 +19,16 @@ import { uploadProductImages, ALLOWED_IMAGE_TYPES } from '@/lib/products/uploadI
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
-import { eCampoDichiarativo, type AiProductPatch } from '@/lib/products/aiPatch';
+import type { AiProductPatch } from '@/lib/products/aiPatch';
 import type { ProductSnapshot } from '@/lib/products/aiSnapshot';
-import { findLabelForKey } from '@/lib/category-attributes';
 import {
-  attributiNonDichiarativi,
+  ETICHETTE_STATO,
   avvisoSullaPubblicazione,
   bozzaDaCreare,
+  caratteristicheDellaBozza,
   messaggioDopoLaBozza,
   riquadroDichiarazioni,
+  righeDellaProposta,
   type BozzaSalvata,
 } from '@/lib/products/prontoPerLaVendita';
 
@@ -87,58 +88,10 @@ type Msg = {
 
 const MAX_IMAGES = 4;
 
-const STATUS_LABELS: Record<string, string> = {
-  available: 'In vendita',
-  draft: 'Bozza',
-  sold: 'Esaurito',
-};
+const STATUS_LABELS = ETICHETTE_STATO;
 
 const WELCOME =
   "Ciao! Dimmi quale prodotto vuoi sistemare — scrivi il nome o mandami una foto e lo trovo io nel tuo catalogo. Oppure mandami le foto di un prodotto NUOVO e lo inserisco io: compilo nome, prezzo, categoria, descrizione e tag.";
-
-/** Riepilogo umano delle modifiche proposte, prima→dopo dove possibile. */
-function describePatch(patch: AiProductPatch, product: ProductSnapshot): string[] {
-  const out: string[] = [];
-  const eur = (n: number) => formatPrice(n);
-  if (typeof patch.name === 'string') out.push(`Nome → "${patch.name}"`);
-  if (typeof patch.description === 'string') out.push('Descrizione aggiornata');
-  if (typeof patch.price === 'number') {
-    out.push(`Prezzo: ${product.price != null ? eur(product.price) : '—'} → ${eur(patch.price)}`);
-  }
-  if ('compare_at_price' in patch) {
-    out.push(patch.compare_at_price == null ? 'Rimuovi prezzo pieno' : `Prezzo pieno → ${eur(patch.compare_at_price)}`);
-  }
-  if (patch.unit) out.push(`Unità → ${patch.unit}`);
-  if ('condition' in patch) out.push(`Condizione → ${patch.condition ?? 'non specificata'}`);
-  if (patch.unlimited_stock === true) out.push('Disponibilità → illimitata');
-  else if (typeof patch.stock === 'number') out.push(`Disponibilità → ${patch.stock} pz`);
-  if (patch.category_slug) {
-    out.push(`Categoria → ${patch.category_slug}${patch.subcategory_name ? ` / ${patch.subcategory_name}` : ''}`);
-  }
-  if (Array.isArray(patch.tags)) out.push(`Tag → ${patch.tags.join(', ') || '(nessuno)'}`);
-  // R41 — Allergeni, ingredienti e le altre dichiarazioni di un alimento non
-  // si cambiano da qui: la card lo dice invece di prometterlo.
-  if (patch.attributes) {
-    for (const [k, v] of Object.entries(patch.attributes)) {
-      out.push(
-        eCampoDichiarativo(k)
-          ? `${findLabelForKey(k)} → «${v}»: NON si applica, lo scrivi tu nella scheda del prodotto`
-          : `${k} → ${v}`,
-      );
-    }
-  }
-  if (Array.isArray(patch.attributes_remove)) {
-    for (const k of patch.attributes_remove) {
-      out.push(
-        eCampoDichiarativo(k)
-          ? `Rimuovi ${findLabelForKey(k)}: NON si applica, lo decidi tu nella scheda del prodotto`
-          : `Rimuovi ${k}`,
-      );
-    }
-  }
-  if (patch.status) out.push(`Stato → ${STATUS_LABELS[patch.status] ?? patch.status}`);
-  return out;
-}
 
 export default function SupportProductAssistant() {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -464,7 +417,7 @@ export default function SupportProductAssistant() {
                     </p>
                   </div>
                   <ul className="mb-3 space-y-1 text-sm text-ink-700">
-                    {describePatch(m.proposal.patch, m.proposal.product).map((line, k) => (
+                    {righeDellaProposta(m.proposal.patch, m.proposal.product).map((line, k) => (
                       <li key={k} className="flex gap-1.5">
                         <span className="text-secondary-500">•</span>
                         <span>{line}</span>
@@ -560,7 +513,12 @@ export default function SupportProductAssistant() {
                     <p className="mb-2 line-clamp-3 text-sm text-ink-600">{m.newDraft.draft.description}</p>
                   )}
                   {(() => {
-                    const altri = attributiNonDichiarativi(m.newDraft.draft.attributes);
+                    // Solo le caratteristiche che entrano; dopo la creazione,
+                    // quelle che la bozza salvata ha davvero.
+                    const altri = caratteristicheDellaBozza(
+                      m.newDraft.draft,
+                      m.created && m.bozzaSalvata ? { creata: true, salvata: m.bozzaSalvata } : { creata: false },
+                    );
                     return altri.length > 0 ? (
                       <ul className="mb-2 space-y-0.5 text-xs text-ink-600">
                         {altri.map((a) => (

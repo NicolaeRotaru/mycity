@@ -11,10 +11,13 @@ import {
   eCampoDichiarativo,
   prezzoAiFuoriBanda,
   separaCampiDichiarativi,
+  voceComeTesto,
   type AiProductPatch,
   type CategoryRow,
   type DichiarazioneScartata,
 } from '@/lib/products/aiPatch';
+import { attributoCheEntra } from '@/lib/products/draftFromVision';
+import { formatPrice } from '@/lib/format';
 
 /**
  * 15/10/2026 (R36) — DALLA CHAT SI PUBBLICAVA SENZA I CONTROLLI DEL MODULO.
@@ -220,29 +223,109 @@ export function valoreLeggibile(v: unknown): string {
 export function dichiarazioniDellaBozza(draft: {
   category_slug?: string | null;
   attributes?: Record<string, unknown> | null;
-}): { lette: DichiarazioneDaFoto[]; obbligatoriVuoti: string[] } {
-  const { scartati } = separaCampiDichiarativi({ attributes: draft.attributes ?? {} });
-  const lette = scartati
-    .filter(
-      (s): s is DichiarazioneScartata & { valore: string } =>
-        s.azione === 'scrivi' && !!s.valore && diceQualcosa(s.valore),
-    )
-    .map((s) => ({ chiave: s.chiave, etichetta: s.etichetta, valore: valoreLeggibile(s.valore) }));
+}): { lette: DichiarazioneDaFoto[]; senzaCampo: string[]; obbligatoriVuoti: string[] } {
+  const { conCampo, senzaCampo } = perCategoria(tutteLeDichiarazioniLette(draft.attributes), draft.category_slug);
   // Le chiavi dei campi presenti si leggono come quelle delle dichiarazioni
   // (`chiaveCampo`), e come le legge la porta che crea la bozza: «Allergeni»
   // con la maiuscola contava come dichiarazione letta ma non come campo pieno.
   const presenti: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(draft.attributes ?? {})) presenti[chiaveCampo(k)] = v;
-  return { lette, obbligatoriVuoti: campiObbligatoriVuoti(draft.category_slug, presenti) };
+  return { lette: conCampo, senzaCampo, obbligatoriVuoti: campiObbligatoriVuoti(draft.category_slug, presenti) };
 }
 
-/** Gli altri attributi letti dalle foto (marca, peso, ...), per mostrarli. */
+/** Tutte le dichiarazioni che il modello ha letto, qualunque sia la categoria. */
+function tutteLeDichiarazioniLette(attributes: Record<string, unknown> | null | undefined): DichiarazioneDaFoto[] {
+  const { scartati } = separaCampiDichiarativi({ attributes: attributes ?? {} });
+  return scartati
+    .filter(
+      (s): s is DichiarazioneScartata & { valore: string } =>
+        s.azione === 'scrivi' && !!s.valore && diceQualcosa(s.valore),
+    )
+    .map((s) => ({ chiave: s.chiave, etichetta: s.etichetta, valore: valoreLeggibile(s.valore) }));
+}
+
+/**
+ * 16/10/2026 — Una dichiarazione letta per un campo che la categoria NON ha
+ * (un'«Origine» su un vaso della categoria Casa) non entra nella bozza: la
+ * porta la scarta anche con la spunta. Il riquadro la chiedeva da confermare
+ * e poi diceva «le scrivi tu nella scheda», ma la scheda di Casa quel campo non
+ * lo ha. Qui si separano: le prime si confermano, le altre si dicono e basta.
+ */
+function perCategoria(
+  lette: DichiarazioneDaFoto[],
+  categoriaTop: string | null | undefined,
+): { conCampo: DichiarazioneDaFoto[]; senzaCampo: string[] } {
+  const campi = categoriaTop ? CATEGORY_ATTRIBUTES[categoriaTop] ?? [] : [];
+  const conCampo = lette.filter((l) => campi.some((f) => f.key === l.chiave));
+  const senzaCampo = lette.filter((l) => !conCampo.includes(l)).map((l) => l.etichetta);
+  return { conCampo, senzaCampo };
+}
+
+/** La frase delle dichiarazioni lette che la categoria della bozza non ha (null = nessuna). */
+function fraseSenzaCampo(
+  senzaCampo: string[],
+  categoriaTop: string | null | undefined,
+  quando: 'prima' | 'dopo',
+  /** Il titolo dice gia' «NON entrano»: qui resta solo il perche'. */
+  giaNelTitolo: boolean,
+): string | null {
+  if (senzaCampo.length === 0) return null;
+  const elenco = senzaCampo.join(', ');
+  const perche = categoriaTop
+    ? 'la categoria della bozza non ha questi campi'
+    : 'la bozza non ha una categoria con questi campi';
+  if (giaNelTitolo) return `${perche.charAt(0).toUpperCase()}${perche.slice(1)}: ${elenco}.`;
+  const verbo = quando === 'prima' ? 'non entrano' : 'non sono entrate';
+  return `Lette dalle foto ma ${verbo} nella bozza, perché ${perche}: ${elenco}.`;
+}
+
+/**
+ * Gli altri attributi della bozza (marca, peso, ...), per mostrarli: SOLO
+ * quelli che entrano, con la regola della porta (`attributoCheEntra`) e la
+ * categoria della bozza. Prima si mostrava tutto quello che il modello aveva
+ * scritto: «Tipo di confezione: Vaschetta» e «Colore: Verde» su un barattolo di
+ * olive, mentre nella bozza entrava solo il peso; e «Condizione» con la
+ * maiuscola compariva fra le caratteristiche mentre la porta la salvava come
+ * stato del prodotto (16/10/2026). Le chiavi si leggono come le legge la porta
+ * (`chiaveCampo`: maiuscole, spazi e trattini non contano).
+ */
 export function attributiNonDichiarativi(
   attributes: Record<string, unknown> | null | undefined,
+  categoriaTop: string | null | undefined,
 ): { etichetta: string; valore: string }[] {
-  return Object.entries(attributes ?? {})
-    .filter(([k, v]) => !eCampoDichiarativo(k) && k !== 'condizione' && diceQualcosa(v))
-    .map(([k, v]) => ({ etichetta: findLabelForKey(k), valore: valoreLeggibile(v) }));
+  const campi = categoriaTop ? CATEGORY_ATTRIBUTES[categoriaTop] ?? [] : [];
+  // Due chiavi che puntano allo stesso campo («Peso» e «peso»): vince
+  // l'ultima, come nella porta.
+  const entrano = new Map<string, string>();
+  for (const [k, v] of Object.entries(attributes ?? {})) {
+    const chiave = chiaveCampo(k);
+    if (chiave === 'condizione' || eCampoDichiarativo(chiave)) continue;
+    const entra = attributoCheEntra(campi, k, v);
+    if (!entra || !diceQualcosa(entra.valore)) continue;
+    entrano.delete(entra.chiave);
+    entrano.set(entra.chiave, entra.valore);
+  }
+  return [...entrano].map(([chiave, valore]) => ({
+    etichetta: campi.find((f) => f.key === chiave)?.label ?? findLabelForKey(chiave),
+    valore: valoreLeggibile(valore),
+  }));
+}
+
+/**
+ * Le caratteristiche da mostrare sulla scheda della bozza: prima della
+ * creazione quelle che entreranno, dopo quelle che sono ENTRATE (la bozza
+ * salvata), come fa gia' il riquadro delle dichiarazioni.
+ */
+export function caratteristicheDellaBozza(
+  draft: { category_slug?: string | null; attributes?: Record<string, unknown> | null },
+  stato: { creata: false } | { creata: true; salvata: BozzaSalvata },
+): { etichetta: string; valore: string }[] {
+  if (!stato.creata) return attributiNonDichiarativi(draft.attributes, draft.category_slug);
+  const campi = stato.salvata.categorySlug ? CATEGORY_ATTRIBUTES[stato.salvata.categorySlug] ?? [] : [];
+  const salvati = stato.salvata.attributes ?? {};
+  return campi
+    .filter((f) => !eCampoDichiarativo(f.key) && diceQualcosa(salvati[f.key]))
+    .map((f) => ({ etichetta: f.label, valore: valoreLeggibile(salvati[f.key]) }));
 }
 
 /** Il riquadro delle dichiarazioni sotto la bozza dalle foto. */
@@ -288,31 +371,47 @@ export function riquadroDichiarazioni(
   draft: { category_slug?: string | null; attributes?: Record<string, string> | null },
   stato: { creata: false; confermate: boolean } | { creata: true; confermate: boolean; salvata: BozzaSalvata },
 ): RiquadroDichiarazioni | null {
-  const { lette, obbligatoriVuoti } = dichiarazioniDellaBozza(draft);
-  const righeLette = lette.map(({ etichetta, valore }) => ({ etichetta, valore }));
   const DA_CONTROLLARE = 'Da controllare tu: è la tua dichiarazione ai clienti';
+  /** Le frasi sotto le righe, nell'ordine; null = nessuna. */
+  const unite = (...frasi: (string | null)[]) => frasi.filter((f): f is string => f !== null).join(' ') || null;
 
   if (!stato.creata) {
-    if (lette.length === 0 && obbligatoriVuoti.length === 0) return null;
+    const { lette, senzaCampo, obbligatoriVuoti } = dichiarazioniDellaBozza(draft);
+    if (lette.length === 0 && obbligatoriVuoti.length === 0 && senzaCampo.length === 0) return null;
+    // Solo dichiarazioni che la categoria non ha: niente da confermare.
+    const soloFuori = lette.length === 0 && obbligatoriVuoti.length === 0;
     return {
-      titolo: DA_CONTROLLARE,
-      righe: righeLette,
-      daScrivere: fraseDaScrivere(obbligatoriVuoti),
+      titolo: soloFuori ? 'Lette dalle foto ma NON entrano nella bozza' : DA_CONTROLLARE,
+      righe: lette.map(({ etichetta, valore }) => ({ etichetta, valore })),
+      daScrivere: unite(
+        fraseSenzaCampo(senzaCampo, draft.category_slug, 'prima', soloFuori),
+        fraseDaScrivere(obbligatoriVuoti),
+      ),
       chiediSpunta: lette.length > 0,
     };
   }
 
+  // 16/10/2026 — Dopo la creazione la categoria che conta e' quella della bozza
+  // SALVATA: «le scrivi tu nella scheda» solo per i campi che quella scheda ha.
+  const categoria = stato.salvata.categorySlug;
+  const { conCampo: lette, senzaCampo } = perCategoria(tutteLeDichiarazioniLette(draft.attributes), categoria);
+  const righeLette = lette.map(({ etichetta, valore }) => ({ etichetta, valore }));
   const salvati = stato.salvata.attributes ?? {};
-  const mancano = campiObbligatoriVuoti(stato.salvata.categorySlug, salvati);
-  if (lette.length === 0 && mancano.length === 0) return null;
+  const mancano = campiObbligatoriVuoti(categoria, salvati);
+  if (lette.length === 0 && mancano.length === 0 && senzaCampo.length === 0) return null;
   const entrate = lette.filter((l) => diceQualcosa(salvati[l.chiave]));
 
   if (entrate.length === 0) {
+    const soloFuori = lette.length === 0 && mancano.length === 0;
     return {
       titolo:
-        lette.length === 0 ? DA_CONTROLLARE : 'Lette dalle foto ma NON entrate nella bozza: le scrivi tu nella scheda',
+        lette.length > 0
+          ? 'Lette dalle foto ma NON entrate nella bozza: le scrivi tu nella scheda'
+          : soloFuori
+            ? 'Lette dalle foto ma NON entrate nella bozza'
+            : DA_CONTROLLARE,
       righe: righeLette,
-      daScrivere: fraseDaScrivere(mancano),
+      daScrivere: unite(fraseSenzaCampo(senzaCampo, categoria, 'dopo', soloFuori), fraseDaScrivere(mancano)),
       chiediSpunta: false,
     };
   }
@@ -322,14 +421,14 @@ export function riquadroDichiarazioni(
   const fuori = lette
     .filter((l) => !entrate.includes(l) && !mancano.includes(l.etichetta))
     .map((l) => l.etichetta);
-  const frasi = [
-    fuori.length > 0 ? `Non sono entrate nella bozza: ${fuori.join(', ')}.` : null,
-    fraseDaScrivere(mancano),
-  ].filter((f): f is string => f !== null);
   return {
     titolo: stato.confermate ? 'Entrate nella bozza: le hai confermate tu' : 'Entrate nella bozza',
     righe: entrate.map((l) => ({ etichetta: l.etichetta, valore: valoreLeggibile(salvati[l.chiave]) })),
-    daScrivere: frasi.length > 0 ? frasi.join(' ') : null,
+    daScrivere: unite(
+      fuori.length > 0 ? `Non sono entrate nella bozza: ${fuori.join(', ')}.` : null,
+      fraseSenzaCampo(senzaCampo, categoria, 'dopo', false),
+      fraseDaScrivere(mancano),
+    ),
     chiediSpunta: false,
   };
 }
@@ -484,4 +583,104 @@ export function messaggioDopoLaBozza(prodotto: SchedaDellaChat): string {
     return 'Bozza creata: è nascosta ai clienti finché non la pubblichi. Vuoi pubblicarla ("pubblica") o cambiare qualcosa?';
   }
   return `Bozza creata: è nascosta ai clienti. Prima di pubblicarla va completato: ${mancanti.join(', ')}. Aprila con «Apri» qui sopra e compila tu questi campi.`;
+}
+
+/** Come si chiama uno stato del prodotto nella chat. */
+export const ETICHETTE_STATO: Record<string, string> = {
+  available: 'In vendita',
+  draft: 'Bozza',
+  sold: 'Esaurito',
+};
+
+/**
+ * La scheda di una proposta nella chat Assistenza: cosa cambierebbe, prima→dopo
+ * dove si puo'. Stava dentro il componente; e' qui perche' due difetti dello
+ * stesso giro (16/10/2026) erano nel modo di leggere la proposta.
+ *
+ *  1. Con un elenco dentro l'elenco (`attributes_remove: [["allergeni"]]`) la
+ *     riga delle dichiarazioni passava l'elenco a `findLabelForKey`, che su un
+ *     elenco cade: la chat spariva intera. La rotta adesso manda la proposta
+ *     gia' nella forma giusta (`propostaPerLaChat`); qui, in piu', ogni voce si
+ *     legge come testo e un campo senza la forma giusta si salta, come fa il
+ *     server.
+ *  2. «Origine → «Italia»: lo scrivi tu nella scheda del prodotto» anche su un
+ *     vaso della categoria Casa, la cui scheda il campo Origine non lo ha.
+ *     Adesso la riga guarda la categoria con cui il prodotto restera' dopo la
+ *     proposta.
+ */
+export function righeDellaProposta(
+  patch: AiProductPatch,
+  prodotto: { price: number | null; categorySlug: string | null },
+): string[] {
+  const out: string[] = [];
+  const eur = (n: number) => formatPrice(n);
+  const testo = (v: unknown): v is string => typeof v === 'string';
+  if (testo(patch.name)) out.push(`Nome → "${patch.name}"`);
+  if (testo(patch.description)) out.push('Descrizione aggiornata');
+  if (typeof patch.price === 'number') {
+    out.push(`Prezzo: ${prodotto.price != null ? eur(prodotto.price) : '—'} → ${eur(patch.price)}`);
+  }
+  if ('compare_at_price' in patch) {
+    if (patch.compare_at_price == null) out.push('Rimuovi prezzo pieno');
+    else if (typeof patch.compare_at_price === 'number') out.push(`Prezzo pieno → ${eur(patch.compare_at_price)}`);
+  }
+  if (testo(patch.unit) && patch.unit) out.push(`Unità → ${patch.unit}`);
+  if ('condition' in patch && (patch.condition == null || testo(patch.condition))) {
+    out.push(`Condizione → ${patch.condition ?? 'non specificata'}`);
+  }
+  if (patch.unlimited_stock === true) out.push('Disponibilità → illimitata');
+  else if (typeof patch.stock === 'number') out.push(`Disponibilità → ${patch.stock} pz`);
+  if (testo(patch.category_slug) && patch.category_slug) {
+    const sotto = testo(patch.subcategory_name) && patch.subcategory_name ? ` / ${patch.subcategory_name}` : '';
+    out.push(`Categoria → ${patch.category_slug}${sotto}`);
+  }
+  if (Array.isArray(patch.tags)) out.push(`Tag → ${patch.tags.map(voceComeTesto).join(', ') || '(nessuno)'}`);
+
+  // R41 — Allergeni, ingredienti e le altre dichiarazioni di un alimento non
+  // si cambiano da qui: la card lo dice invece di prometterlo, e rimanda alla
+  // scheda solo se la scheda quel campo ce l'ha.
+  const categoria = (testo(patch.category_slug) && patch.category_slug) || prodotto.categorySlug;
+  const campi = categoria ? CATEGORY_ATTRIBUTES[categoria] ?? [] : [];
+  const dichiarazione = (chiaveAi: string) => {
+    const chiave = chiaveCampo(chiaveAi);
+    const campo = campi.find((f) => f.key === chiave);
+    return { etichetta: campo?.label ?? findLabelForKey(chiave), nellaScheda: campo !== undefined };
+  };
+  const attributi =
+    patch.attributes && typeof patch.attributes === 'object' && !Array.isArray(patch.attributes)
+      ? (patch.attributes as Record<string, unknown>)
+      : {};
+  for (const [k, grezzo] of Object.entries(attributi)) {
+    const v = typeof grezzo === 'string' ? grezzo.trim() : '';
+    if (!v) continue;
+    if (!eCampoDichiarativo(k)) {
+      out.push(`${k} → ${v}`);
+      continue;
+    }
+    const d = dichiarazione(k);
+    out.push(
+      d.nellaScheda
+        ? `${d.etichetta} → «${v}»: NON si applica, lo scrivi tu nella scheda del prodotto`
+        : `${d.etichetta} → «${v}»: NON si applica, e la scheda di questo prodotto non ha il campo ${d.etichetta}`,
+    );
+  }
+  const daTogliere: unknown[] = Array.isArray(patch.attributes_remove) ? patch.attributes_remove : [];
+  for (const voce of daTogliere) {
+    // Come la legge il server (`String`), ma una voce illeggibile non fa
+    // cadere la chat: non nomina niente, e si salta.
+    const k = voceComeTesto(voce);
+    if (!k) continue;
+    if (!eCampoDichiarativo(k)) {
+      out.push(`Rimuovi ${k}`);
+      continue;
+    }
+    const d = dichiarazione(k);
+    out.push(
+      d.nellaScheda
+        ? `Rimuovi ${d.etichetta}: NON si applica, lo decidi tu nella scheda del prodotto`
+        : `Rimuovi ${d.etichetta}: NON si applica`,
+    );
+  }
+  if (testo(patch.status) && patch.status) out.push(`Stato → ${ETICHETTE_STATO[patch.status] ?? patch.status}`);
+  return out;
 }

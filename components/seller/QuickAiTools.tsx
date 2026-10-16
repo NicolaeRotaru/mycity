@@ -48,7 +48,7 @@ const LANGS: { code: string; label: string }[] = [
 ];
 
 /** Nessun suggerimento arrivato: niente scritto e niente in sospeso. */
-const NIENTE: EsitoPatchModulo = { cambiati: [], inSospeso: 0, daControllare: [], daRivedere: {} };
+const NIENTE: EsitoPatchModulo = { cambiati: [], inSospeso: 0, daControllare: [], daRivedere: {}, dichiarazioniDellaCategoria: [] };
 
 const SEV_COLOR: Record<string, string> = {
   alta: 'bg-rose-100 text-rose-700',

@@ -1,5 +1,5 @@
 // lib/products/draftFromVision.ts
-import { getAttributesForCategory } from '@/lib/category-attributes';
+import { getAttributesForCategory, type AttributeField } from '@/lib/category-attributes';
 import { normalizeCondition } from '@/lib/products/schema';
 import {
   MAX_NOME_PRODOTTO,
@@ -86,6 +86,32 @@ function resolveCategoryId(draft: VisionDraft, categories: CategoryRow[]): strin
 }
 
 /**
+ * La regola della porta su UN attributo letto dalle foto: la chiave del campo
+ * della categoria e il valore che entra nella bozza, oppure `null` se resta
+ * fuori (valore vuoto, campo che la categoria non ha, scelta non fra quelle
+ * ammesse). La legge anche la scheda della bozza nella chat, per mostrare solo
+ * le caratteristiche che entreranno davvero (16/10/2026): prima mostrava
+ * «Tipo di confezione: Vaschetta» e «Colore: Verde» su un barattolo di olive,
+ * e nella bozza entrava solo il peso.
+ */
+export function attributoCheEntra(
+  fields: AttributeField[],
+  aiKey: string,
+  rawValue: unknown,
+): { chiave: string; valore: string } | null {
+  const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+  if (!value) return null;
+  const chiave = chiaveCampo(aiKey);
+  const field = fields.find((f) => f.key === chiave);
+  if (!field) return null;
+  if (field.type === 'select') {
+    const opt = (field.options ?? []).find((o) => o.toLowerCase() === value.toLowerCase());
+    return opt ? { chiave, valore: opt } : null;
+  }
+  return { chiave, valore: value.slice(0, MAX_VALORE_ATTRIBUTO) };
+}
+
+/**
  * 15/10/2026 (R36) — LE DICHIARAZIONI LETTE DAL MODELLO ENTRAVANO NELLA BOZZA
  * SENZA CHE NESSUNO LE AVESSE VISTE.
  *
@@ -136,15 +162,8 @@ export function buildDraftProductInsert(opts: {
         continue;
       }
       if (!dichiarazioniConfermate && eCampoDichiarativo(targetKey)) continue;
-      const field = fields.find((f) => f.key === targetKey);
-      if (!field) continue;
-      if (field.type === 'select') {
-        const opt = (field.options ?? []).find((o) => o.toLowerCase() === value.toLowerCase());
-        if (!opt) continue;
-        attributes[targetKey] = opt;
-      } else {
-        attributes[targetKey] = value.slice(0, MAX_VALORE_ATTRIBUTO);
-      }
+      const entra = attributoCheEntra(fields, aiKey, value);
+      if (entra) attributes[entra.chiave] = entra.valore;
     }
   }
   if (draft.alt_text && draft.alt_text.trim()) {

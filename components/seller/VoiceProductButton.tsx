@@ -8,7 +8,7 @@ import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import type { AttributeField } from '@/lib/category-attributes';
 import type { ProductEditPatch } from '@/components/seller/ProductChatAssistant';
 import type { EsitoPatchModulo } from '@/lib/products/aiPatch';
-import { dilloDopoIlPatch } from '@/components/seller/dilloDopoIlPatch';
+import { avvisoDopoLaDettatura, type AvvisoDellaDettatura } from '@/lib/products/avvisoDellaDettatura';
 
 /**
  * Voce → prodotto. Il venditore detta il prodotto a parole; la Web Speech API
@@ -55,6 +55,12 @@ export default function VoiceProductButton({
 }: Props) {
   const [state, setState] = useState<'idle' | 'listening' | 'processing'>('idle');
   const [manual, setManual] = useState('');
+  // 16/10/2026 — Dopo la dettatura il negoziante vede cosa e' successo, quello
+  // che ha detto e la risposta dell'assistente, e (se la scheda ha allergeni,
+  // ingredienti...) che quelle dichiarazioni le scrive lui. Resta a video
+  // finche' non lo chiude o non detta di nuovo: un avviso a tempo spariva
+  // prima di essere letto. Cosa dire lo decide `avvisoDopoLaDettatura`.
+  const [avviso, setAvviso] = useState<AvvisoDellaDettatura | null>(null);
   const recRef = useRef<SpeechRecognitionLike | null>(null);
   const supported = getRecognitionCtor() !== null;
 
@@ -65,6 +71,7 @@ export default function VoiceProductButton({
       return;
     }
     setState('processing');
+    setAvviso(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) { toast.error('Sessione scaduta'); return; }
@@ -79,13 +86,12 @@ export default function VoiceProductButton({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(apiErrorMessage(json, 'Errore'));
-      const esito: Pick<EsitoPatchModulo, 'cambiati' | 'inSospeso'> = json.patch
-        ? onApplyPatch(json.patch as ProductEditPatch)
-        : { cambiati: [], inSospeso: 0 };
-      dilloDopoIlPatch(esito, {
-        applicato: 'Compilato dalla tua descrizione — controlla e salva',
-        niente: 'Non ho ricavato campi: riprova con più dettagli',
-      });
+      // Anche un suggerimento vuoto passa dal modulo: e' il modulo a sapere che
+      // categoria ha la scheda, e quindi se ha dichiarazioni da scrivere a mano.
+      const patch =
+        json.patch && typeof json.patch === 'object' && !Array.isArray(json.patch) ? json.patch : {};
+      const esito = onApplyPatch(patch as ProductEditPatch);
+      setAvviso(avvisoDopoLaDettatura({ esito, dettato: text, risposta: json.reply }));
       setManual('');
     } catch (err) {
       toast.error(friendlyError(err));
@@ -128,6 +134,34 @@ export default function VoiceProductButton({
     setState('idle');
   };
 
+  const coloreAvviso =
+    avviso?.tono === 'successo'
+      ? 'border-emerald-200 bg-emerald-50'
+      : avviso?.tono === 'da-controllare'
+        ? 'border-accent-200 bg-accent-50'
+        : 'border-cream-300 bg-cream-50';
+  // La regione resta sempre montata: un lettore di schermo annuncia quello che
+  // ci entra dentro, non una regione che nasce insieme al testo.
+  const riquadroAvviso = (
+    <div role="status" aria-live="polite" data-avviso="dettatura">
+      {avviso && (
+        <div className={`mt-2 space-y-1 rounded-lg border p-3 text-sm text-ink-800 ${coloreAvviso}`}>
+          <p className="font-semibold">{avviso.esito}</p>
+          {avviso.dichiarazioni && <p className="font-semibold text-accent-800">{avviso.dichiarazioni}</p>}
+          <p className="break-words text-ink-700">{avviso.dettato}</p>
+          {avviso.risposta && <p className="break-words text-ink-700">{avviso.risposta}</p>}
+          <button
+            type="button"
+            onClick={() => setAvviso(null)}
+            className="mt-1 rounded-lg border border-cream-300 bg-white px-3 py-1.5 text-xs font-semibold text-ink-700 hover:bg-cream-100"
+          >
+            Ho letto
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   // Fallback: niente riconoscimento vocale → campo di testo, stessa route.
   if (!supported) {
     return (
@@ -154,6 +188,7 @@ export default function VoiceProductButton({
             {state === 'processing' ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
           </button>
         </div>
+        {riquadroAvviso}
       </div>
     );
   }
@@ -161,23 +196,26 @@ export default function VoiceProductButton({
   const listening = state === 'listening';
   const processing = state === 'processing';
   return (
-    <button
-      type="button"
-      onClick={listening ? stopListening : startListening}
-      disabled={disabled || processing}
-      className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
-        listening
-          ? 'border-rose-300 bg-rose-50 text-rose-700'
-          : 'border-secondary-200 bg-secondary-50 text-secondary-800 hover:bg-secondary-100'
-      }`}
-    >
-      {processing ? (
-        <><Loader2 size={16} className="animate-spin" aria-hidden /> Compilo…</>
-      ) : listening ? (
-        <><Square size={15} strokeWidth={2.4} aria-hidden /> Sto ascoltando… tocca per fermare</>
-      ) : (
-        <><Mic size={16} strokeWidth={2.2} aria-hidden /> Detta il prodotto a voce</>
-      )}
-    </button>
+    <div>
+      <button
+        type="button"
+        onClick={listening ? stopListening : startListening}
+        disabled={disabled || processing}
+        className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
+          listening
+            ? 'border-rose-300 bg-rose-50 text-rose-700'
+            : 'border-secondary-200 bg-secondary-50 text-secondary-800 hover:bg-secondary-100'
+        }`}
+      >
+        {processing ? (
+          <><Loader2 size={16} className="animate-spin" aria-hidden /> Compilo…</>
+        ) : listening ? (
+          <><Square size={15} strokeWidth={2.4} aria-hidden /> Sto ascoltando… tocca per fermare</>
+        ) : (
+          <><Mic size={16} strokeWidth={2.2} aria-hidden /> Detta il prodotto a voce</>
+        )}
+      </button>
+      {riquadroAvviso}
+    </div>
   );
 }

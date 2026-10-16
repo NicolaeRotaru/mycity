@@ -154,7 +154,11 @@ describe('dopo la creazione, «entrata» e solo quello che il server ha salvato'
     expect(salvata.attributes).not.toHaveProperty('allergeni');
     expect(riquadro?.titolo).toBe('Entrate nella bozza: le hai confermate tu');
     expect(riquadro?.righe).toEqual([{ etichetta: 'Vegano', valore: 'Sì' }]);
-    expect(riquadro?.daScrivere).toBe('Non sono entrate nella bozza: Allergeni.');
+    // 16/10/2026 — E dice perche': Bellezza quel campo non ce l'ha, quindi
+    // «le scrivi tu nella scheda» non si puo' dire.
+    expect(riquadro?.daScrivere).toBe(
+      'Lette dalle foto ma non sono entrate nella bozza, perché la categoria della bozza non ha questi campi: Allergeni.',
+    );
   });
 
   it('il valore mostrato e quello salvato, non quello proposto', () => {
