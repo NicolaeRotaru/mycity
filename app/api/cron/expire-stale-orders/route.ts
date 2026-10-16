@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 // webhook: una casa sola, cosi' i tre percorsi non divergono.
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ORE_PER_ACCETTARE, ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
+import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
 
 /**
  * 6/9/2026 — QUALI RIMBORSI FALLITI HA SENSO RITENTARE.
@@ -105,8 +106,12 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
       continue;
     }
 
-    const isCardPaid =
-      o.payment_method === 'card' && o.payment_status === 'PAID' && !!o.stripe_payment_intent;
+    // 16/10/2026 — Qui contava solo «PAID». Un rimborso parziale fatto dal
+    // cruscotto Stripe porta l'ordine a «PARTIALLY_REFUNDED»: il giro lo
+    // annullava come un contrassegno, senza rimborsare il resto. La regola è
+    // la stessa dell'annullo (lib/ordini/soldi-sulla-carta.ts); quanto rendere
+    // lo decide `refundOrder`, lordo meno già rimborsato.
+    const isCardPaid = restaDaRimborsareSullaCarta(o);
 
     // Il blocco atomico resta (solo una esecuzione prende l'ordine), ma se il
     // rimborso non riesce l'ordine TORNA in coda.

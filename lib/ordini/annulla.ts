@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { refundOrder } from '@/lib/stripe/payout';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
+import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
 
 /**
  * ANNULLARE UN ORDINE VUOL DIRE ANCHE RESTITUIRE I SOLDI.
@@ -78,11 +79,9 @@ export async function annullaERimborsa(
 ): Promise<EsitoAnnullo> {
   // 053 — Un ordine già rimborsato in parte ha stato 'PARTIALLY_REFUNDED':
   // trattarlo come «niente da rimborsare» lasciava indietro il residuo, cioè la
-  // parte di soldi che il cliente non aveva mai riavuto.
-  const isPaidCard =
-    order.payment_method === 'card' &&
-    !!order.stripe_payment_intent &&
-    (order.payment_status === 'PAID' || order.payment_status === 'PARTIALLY_REFUNDED');
+  // parte di soldi che il cliente non aveva mai riavuto. La regola sta in
+  // lib/ordini/soldi-sulla-carta.ts: il giro degli ordini mai accettati usa la stessa.
+  const isPaidCard = restaDaRimborsareSullaCarta(order);
 
   // Il credito MyCity speso sull'ordine torna al cliente: senza, l'annullamento
   // gli costa comunque quei soldi. Vale su entrambi i rami, carta compresa.

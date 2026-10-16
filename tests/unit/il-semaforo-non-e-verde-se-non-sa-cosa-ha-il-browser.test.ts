@@ -88,6 +88,7 @@ const TUTTO_A_POSTO: Record<string, string> = {
   STRIPE_SECRET_KEY: 'sk_test',
   NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test',
   STRIPE_WEBHOOK_SECRET: 'whsec_test',
+  STRIPE_CONNECT_WEBHOOK_SECRET: 'whsec_conti_test',
   RESEND_API_KEY: 're_test',
   RESEND_FROM: 'MyCity <ordini@mycity.test>',
   CRON_SECRET: 'cron_test',

@@ -47,6 +47,9 @@ vi.mock('@/lib/stripe/client', () => ({
   getStripe: () => ({
     webhooks: { constructEvent: () => stato.evento },
     subscriptions: { retrieve: async () => ({ current_period_end: 1_900_000_000 }) },
+    // Il conto del negozio si rilegge da Stripe (trasferimenti.ts): qui Stripe
+    // dice lo stesso stato che porta l'avviso.
+    accounts: { retrieve: async () => stato.evento.data.object },
     paymentIntents: { retrieve: async () => ({ id: 'pi_1', latest_charge: 'ch_1' }) },
     transfers: {
       // Stripe vero: la stessa chiave anti-doppione restituisce lo STESSO storno.

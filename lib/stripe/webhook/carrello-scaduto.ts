@@ -11,7 +11,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { notifyAdmins } from './comune';
 import { scritturaObbligatoria } from './esito';
-import type { PendingGroup } from './ordini';
+import { merceDelCarrello } from './quadratura';
 
 /**
  * checkout.session.expired → il buyer ha abbandonato il pagamento. Rilascia lo stock
@@ -43,10 +43,8 @@ export async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
     .select('id, groups, coupon_code'), 'carrello scaduto');
   const pending = rivendicati?.[0];
   if (!pending) return;
-  const groups = (pending.groups as PendingGroup[]) ?? [];
-  const items = groups.flatMap((g) =>
-    (g.items ?? []).map((it) => ({ product_id: it.productId, variant_id: it.variantId ?? null, qty: it.quantity })),
-  );
+  // La stessa lista del carrello chiuso per quadratura (quadratura.ts).
+  const items = merceDelCarrello(pending.groups);
   if (items.length > 0) {
     /**
      * 15/10/2026 (R81) — LA MERCE CHE NON TORNA IN VENDITA SI DEVE VEDERE.

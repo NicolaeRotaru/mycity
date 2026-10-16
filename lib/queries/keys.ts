@@ -143,6 +143,7 @@ export const queryKeys = {
     approvedSellers:         ['admin', 'approved-sellers'] as const,
     coupons:                 ['admin', 'coupons'] as const,
     orders:                  ['admin', 'orders'] as const,
+    rimborsiDaDividere:      ['admin', 'rimborsi-da-dividere'] as const,
     disputes: (filter?: string) => ['admin', 'disputes', filter ?? 'all'] as const,
     codRemittances:          ['admin', 'cod-remittances'] as const,
   },

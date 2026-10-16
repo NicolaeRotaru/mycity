@@ -39,7 +39,8 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
     // 061 — serve `rider_payout_reversed_cents` per il residuo dello storno rider.
     // 6/9/2026 — serve `coupon_code`: il rimborso fatto a mano su Stripe bruciava il buono del cliente.
     // R85 — serve `refunded_amount_cents`: dice quanto del rimborso è già scritto da noi.
-    .select('id, user_id, total_price, refunded_amount_cents, seller_id, payout_status, payment_status, delivery_status, coupon_code, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost')
+    // 16/10 — serve `stripe_refund_id`: dice QUALI rimborsi dal cruscotto sono già scritti (rimborsi-da-fuori.ts).
+    .select('id, user_id, total_price, refunded_amount_cents, stripe_refund_id, seller_id, payout_status, payment_status, delivery_status, coupon_code, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost')
     .eq('stripe_payment_intent', pi);
 
   // R81 — Una lettura caduta non è «nessun ordine»: prima il gestore usciva
