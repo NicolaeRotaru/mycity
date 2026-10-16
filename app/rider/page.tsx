@@ -434,6 +434,7 @@ export default function RiderDashboardPage() {
                   orderId={x.id}
                   expectedCents={x.expectedCents}
                   compensoTenutoCents={x.compensoTenutoCents}
+                  residuoDovutoCents={x.residuoDovutoCents}
                   onConfirmed={() => { qc.invalidateQueries({ queryKey: CHIAVE_INCASSI_DA_DICHIARARE }); }}
                 />
               </div>

@@ -19,6 +19,9 @@
  * l'incasso. Le pagine del fattorino le chiamano; le prove le eseguono.
  */
 
+import { compensoDalContante, contanteDaRimettereCents } from '@/lib/shipping';
+import { formatPriceFromCents } from '@/lib/format';
+
 /** Il minimo che serve per decidere: come si paga, dov'e' l'ordine, se l'incasso c'e'. */
 export type OrdinePerIncasso = {
   payment_method: string | null;
@@ -93,3 +96,47 @@ export function incassiRimastiIndietro<T extends OrdinePerIncasso & { delivered_
 /** La chiave della cache e l'indirizzo della lettura che alimenta la bacheca. */
 export const CHIAVE_INCASSI_DA_DICHIARARE = ['rider', 'incassi-da-dichiarare'] as const;
 export const INDIRIZZO_INCASSI_DA_DICHIARARE = '/api/rider/incassi-da-dichiarare';
+
+/**
+ * 16/10/2026 — LE CIFRE DEL PANNELLO DEI CONTANTI, DA UNA FUNZIONE SOLA.
+ *
+ * La bacheca e la pagina dell'ordine passavano al pannello il compenso PIENO
+ * (`compensoTrattenutoCents`), mentre il contante da rimettere toglieva solo
+ * quello che il contante riusciva a coprire. Con un ordine quasi tutto pagato
+ * col credito MyCity — 2 € in contanti, 3 € di compenso — il fattorino leggeva
+ * «Previsto: 0,00 € — hai già trattenuto 3,00 € di compenso»: ne aveva tenuti
+ * 2, e l'euro che manca gli arriva con i compensi sull'IBAN. Il conto a video
+ * non tornava (0 + 3 non fa 2) e il bonifico dell'euro restava un mistero.
+ *
+ * Qui le tre cifre escono dalla stessa regola che scrive l'incasso
+ * (`compensoDalContante`, usata da `campiDellIncasso`).
+ */
+export type CifreDellIncasso = {
+  /** Il contante da rimettere. */
+  expectedCents: number;
+  /** Il compenso che il fattorino si e' tenuto davvero dal contante. */
+  compensoTenutoCents: number;
+  /** Il pezzo di compenso che il contante non copriva: arriva con i compensi sull'IBAN. */
+  residuoDovutoCents: number;
+};
+
+export function cifreDellIncasso(o: Parameters<typeof compensoDalContante>[0]): CifreDellIncasso {
+  const { trattenutoCents, residuoDovutoCents } = compensoDalContante(o);
+  return { expectedCents: contanteDaRimettereCents(o), compensoTenutoCents: trattenutoCents, residuoDovutoCents };
+}
+
+/** La riga sotto l'importo, nel pannello dei contanti. */
+export function fraseDelCompenso(c: CifreDellIncasso): string {
+  let frase = `Previsto: ${formatPriceFromCents(c.expectedCents)}`;
+  if (c.compensoTenutoCents > 0) {
+    frase += ` — hai già trattenuto ${formatPriceFromCents(c.compensoTenutoCents)} di compenso.`;
+  } else {
+    frase += '.';
+  }
+  if (c.residuoDovutoCents > 0) {
+    frase += c.compensoTenutoCents > 0
+      ? ` Il resto del compenso, ${formatPriceFromCents(c.residuoDovutoCents)}, ti arriva sul tuo IBAN.`
+      : ` Il tuo compenso, ${formatPriceFromCents(c.residuoDovutoCents)}, ti arriva sul tuo IBAN.`;
+  }
+  return frase;
+}

@@ -26,13 +26,14 @@ import {
 import { haversineKm, deliveryEtaMinutes } from '@/lib/geo';
 import { trackRiderDeliveryCompleted } from '@/lib/analytics/events';
 import { queryKeys } from '@/lib/queries/keys';
-import { compensoConsegnaEuro, compensoTrattenutoCents, contanteDaRimettereCents } from '@/lib/shipping';
+import { compensoConsegnaEuro } from '@/lib/shipping';
 import { seguiAltezzaBarraAzioni, spazioSottoIlContenuto } from '@/lib/ui/altezza-barra-azioni';
 import {
   AVVISO_INCASSO_DOPO_LA_CONSEGNA,
   AVVISO_INCASSO_MANCANTE,
   CHIAVE_INCASSI_DA_DICHIARARE,
   RIFIUTO_INCASSO_MANCANTE,
+  cifreDellIncasso,
   dopoIlCodiceGiusto,
   incassoDaDichiarare,
   passoDellaConsegna,
@@ -658,8 +659,9 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
           aperto={incassoAperto}
           onChiudi={() => setIncassoAperto(false)}
           orderId={order.id}
-          expectedCents={contanteDaRimettereCents(order)}
-          compensoTenutoCents={compensoTrattenutoCents(order)}
+          /* 16/10/2026 — il compenso tenuto DAVVERO, non quello pieno: con un
+             ordine quasi tutto a credito il pannello diceva 3 € a chi ne aveva tenuti 2. */
+          {...cifreDellIncasso(order)}
           onConfirmed={async () => {
             setIncassoAperto(false);
             qc.invalidateQueries({ queryKey: queryKeys.rider.orders });

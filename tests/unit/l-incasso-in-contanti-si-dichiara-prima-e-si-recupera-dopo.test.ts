@@ -298,7 +298,7 @@ describe('la bacheca chiede al server le consegne senza incasso', () => {
     expect(stato.filtriLettura).toContainEqual(['is', 'cash_confirmed_at', null]);
     expect(corpo.incassi).toEqual([{
       id: ID, deliveredAt: '2026-10-06T19:30:00Z', storeName: 'Pane Quotidiano',
-      expectedCents: 2200, compensoTenutoCents: 300,
+      expectedCents: 2200, compensoTenutoCents: 300, residuoDovutoCents: 0,
     }]);
     expect(JSON.stringify(corpo)).not.toMatch(/Via Verdi|3331234567/);
   });
