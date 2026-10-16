@@ -135,8 +135,35 @@ describe('l avviso del rimborso partito ma non registrato chiede una cosa che si
     expect(finto.db.tabelle.returns[0].refund_id ?? null).toBeNull();
     expect(testo, 'l avviso chiede di scrivere sul reso, cosa che dal pannello non si fa').not.toMatch(/Scrivi sul reso/u);
 
-    // Quello che chiede adesso e' vero: i soldi sono usciti una volta, e va fermato un secondo rimborso.
+    // Quello che chiede adesso e' vero: i soldi sono usciti una volta, e il negozio va avvisato di
+    // non rimborsare di nuovo (sesto giro: «fermalo» chiedeva un blocco che dal pannello non c'e').
     expect(testo).toMatch(/già partito/u);
-    expect(testo).toMatch(/rimborsare di nuovo/u);
+    expect(testo).toMatch(/rimborsarlo di nuovo/u);
+  });
+
+  it('SESTO GIRO — in «decide» il reso resta approvato: l avviso non chiede di fermare il negozio, chiede di avvisarlo', async () => {
+    finto.utente = 'giulia';
+    const aperto = await (apriReso as unknown as Rotta)(
+      new Request('http://localhost/api/returns/create', json({ orderId: ORDINE, reason: 'CHANGED_MIND' })), undefined,
+    );
+    expect(aperto.status).toBe(201);
+    finto.db.tabelle.returns[0].id = RESO;
+    finto.utente = 'negozio';
+
+    finto.guasto = true;
+    const esito = await chiama(decidi, { decision: 'APPROVED', refundAmountCents: 4000 }, RESO);
+    finto.guasto = false;
+    expect(esito.status, 'il guasto non e avvenuto: la prova non misura niente').not.toBe(200);
+    expect(stripe.rimborsi).toBe(1);
+    // Il caso in cui la frase conta: il negozio vede ancora «Chiudi senza rimborso».
+    expect(finto.db.tabelle.returns[0].status).toBe('APPROVED');
+
+    const [avviso] = notificheConTitolo(finto.db, 'non registrato sul reso');
+    const testo = String(avviso.body);
+    expect(testo, 'chiede di fermare il negozio, ma dal pannello un reso non si blocca').not.toMatch(/fermal/u);
+    expect(testo).toMatch(/avvisa tu il negozio/u);
+    expect(testo).toMatch(/non chiuderlo senza rimborso/u);
+    expect(testo).toMatch(/recapiti in Utenti/u);
   });
 });
+

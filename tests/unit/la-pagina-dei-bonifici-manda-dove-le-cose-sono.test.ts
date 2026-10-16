@@ -50,14 +50,8 @@ vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: 
 
 import { cancellaAccount } from '@/lib/account/cancellazione';
 import { refundOrder } from '@/lib/stripe/payout';
-import {
-  DOVE_SONO_GLI_AVVISI,
-  cosaDiceLaVoce,
-  smistaLeVoci,
-  vociDeiBonificiDaFare,
-  type RigaDelBonificoDelReclamo,
-  type RigaDelReso,
-} from '@/lib/rimborsi/bonifici-da-fare';
+import { vociDeiBonificiDaFare, type RigaDelBonificoDelReclamo } from '@/lib/rimborsi/bonifici-da-fare';
+import { PAGINA_DEI_BONIFICI_DA_FARE } from '@/lib/rimborsi/scelta-del-reso';
 
 /**
  * Riesame del 16/10, quinto giro — DUE COSE CHE LA PAGINA DEI BONIFICI DICEVA SENZA CHE FOSSERO VERE.
@@ -67,9 +61,10 @@ import {
  *    cliente se n'era andato. Adesso col rinvio non si scrive niente, e la frase dice solo quando il
  *    nome e' arrivato li' — vero anche se la cancellazione cade a meta' per un guasto.
  *  ② Sui bonifici da controllare: «apri l'ordine e cerca l'avviso». L'avviso non sta nell'ordine:
- *    sta fra le notifiche di chi amministra, che dalle pagine del pannello non si vedono. Chi paga
- *    non lo trovava e non pagava un rimborso vero. Adesso la frase manda alle Notifiche, e accanto
- *    c'e' il collegamento.
+ *    sta fra le notifiche di chi amministra. Al quinto giro la frase mandava alle Notifiche; al
+ *    sesto il riesame ha mostrato che nemmeno li' basta (le Notifiche mostrano le ultime 50, e
+ *    l'avviso a volte non si scrive), e il riquadro «da controllare» non c'e' piu': quando il
+ *    segno sull'ordine non si scrive, e' il server a dirlo a chi amministra, con un avviso apposta.
  *
  * Girano la cancellazione vera e la `refundOrder` vera su un finto database; la pagina e' quella
  * vera, montata, letta come la legge chi paga.
@@ -81,12 +76,9 @@ const ORDINE = 'aaaabbbb-0000-4000-8000-000000000001';
 const IBAN = 'IT60X0542811101000000123456';
 
 let Banco: ComponentType<Record<string, unknown>>;
-let Notifiche: ComponentType<Record<string, unknown>>;
 
 beforeAll(async () => {
   Banco = (await monta('tests/unit/aiuti/banco-dei-bonifici-da-fare.tsx')).default as ComponentType<Record<string, unknown>>;
-  // La pagina a cui porta il collegamento accanto alla voce: la stessa strada, letta come la legge Next.
-  Notifiche = (await monta(`app${DOVE_SONO_GLI_AVVISI}/page.tsx`)).default as ComponentType<Record<string, unknown>>;
 }, 120000);
 
 let accountCancellato: boolean;
@@ -162,7 +154,7 @@ describe('① la pagina non dice che il cliente se n e andato quando l account c
   }, 60000);
 });
 
-describe('② un bonifico da controllare manda dove l avviso c e davvero', () => {
+describe('② il segno sull ordine non si scrive: lo dice il server, non la lista', () => {
   function ordineInContanti(): Riga {
     return {
       id: ORDINE, user_id: MARCO, seller_id: 'negozio', total_price: 40, gross_total_cents: 4000, wallet_applied_cents: 0,
@@ -173,48 +165,48 @@ describe('② un bonifico da controllare manda dove l avviso c e davvero', () =>
       payment_status: 'PAID', cash_confirmed_at: '2026-10-10T18:00:00Z',
     };
   }
-
-  it('IL CASO CHE ROMPEVA — rimborso vero, conferma sull ordine caduta: la pagina manda alle Notifiche, dove l avviso c e', async () => {
+  async function rimborsa(chiave: string) {
     finto.db = creaFintoDatabase({
       orders: [ordineInContanti()],
       profiles: [{ id: 'nicola', role: 'admin' }],
       notifications: [],
       wallet_ledger: [],
     });
-    finto.ordineCheCade = true;
-    const esito = await refundOrder({
-      orderId: ORDINE, amountCents: 4000, reason: 'reso', idempotencyKey: 'return_r1', notifyBuyer: false,
-      contanti: { modo: 'BONIFICO' },
+    return refundOrder({
+      orderId: ORDINE, amountCents: 4000, reason: 'reso', idempotencyKey: chiave, notifyBuyer: false,
+      contanti: { modo: 'BONIFICO', ibanFinale: '3456', doveSiPaga: PAGINA_DEI_BONIFICI_DA_FARE },
     });
+  }
+
+  it('IL CASO CHE ROMPEVA — rimborso vero da 40 €, segno sull ordine caduto: l avviso dice che in lista non c e', async () => {
+    finto.ordineCheCade = true;
+    const esito = await rimborsa('return_r1');
     expect(esito.refundId).toBe('bonifico:4000:return_r1');
     expect(finto.db.tabelle.orders[0].stripe_refund_id, 'il guasto non e avvenuto: la prova non misura il caso').toBeNull();
 
-    // La voce come la costruisce la lista: il reso col segno, l'ordine che non lo conferma.
-    const righe: RigaDelReso[] = [{
-      id: 'r1', order_id: ORDINE, refund_amount_cents: 4000, refunded_at: '2026-10-15T10:00:00Z', refund_id: esito.refundId,
-      refund_iban: null, refund_intestatario: null, refund_bonifico_cents: 4000, refund_bonifico_fatto_at: null,
-    }];
-    const { daControllare } = smistaLeVoci(vociDeiBonificiDaFare(righe, [], [{ id: ORDINE, stripe_refund_id: null }]));
-    expect(daControllare, 'la voce non e fra quelle da controllare').toHaveLength(1);
+    expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare'), 'l avviso di sempre manda a una lista dove il bonifico non c e').toHaveLength(0);
+    const [avviso] = notificheConTitolo(finto.db, 'fuori dalla lista');
+    expect(avviso, 'chi amministra non sa che c e un bonifico da fare').toBeTruthy();
+    const testo = String(avviso.body);
+    expect(testo).toMatch(/40,00\s€/u);
+    expect(testo).toContain('#aaaabbbb');
+    expect(testo).toContain('3456');
+    expect(testo, 'l avviso dice di non pagare un rimborso dovuto').not.toMatch(/non pagar/u);
+    expect(avviso.link, 'l avviso manda alla lista, dove il bonifico non c e').not.toBe(PAGINA_DEI_BONIFICI_DA_FARE);
+  }, 60000);
 
-    // L'avviso che la frase nomina esiste, ed e' fra le notifiche di chi amministra.
-    const istruzione = cosaDiceLaVoce(daControllare[0], true).daControllare ?? '';
-    const nomeDellAvviso = /«([^»]+)»/u.exec(istruzione)?.[1] ?? '';
-    const avvisi = notificheConTitolo(finto.db, nomeDellAvviso);
-    expect(nomeDellAvviso).not.toBe('');
-    expect(avvisi, `la frase manda a cercare «${nomeDellAvviso}», che non esiste`).toHaveLength(1);
+  it('controllo: col segno scritto parte l avviso di sempre, che manda alla lista', async () => {
+    const esito = await rimborsa('return_r1');
+    expect(String(finto.db.tabelle.orders[0].stripe_refund_id)).toContain(esito.refundId);
+    expect(notificheConTitolo(finto.db, 'fuori dalla lista')).toHaveLength(0);
+    const [avviso] = notificheConTitolo(finto.db, 'Bonifico di rimborso da fare');
+    expect(avviso.link).toBe(PAGINA_DEI_BONIFICI_DA_FARE);
+  }, 60000);
 
-    // Accanto alla voce c'e' il collegamento, e porta alla pagina che quell'avviso lo mostra.
-    const pagina = laPaginaDice({ voci: [], daControllare, migrazione162: true });
-    const riga = pagina.s.radice.querySelectorAll('ul')[1]?.querySelector('li');
-    const collegamenti = Array.from(riga?.querySelectorAll('a') ?? []).map((a) => a.getAttribute('href'));
-    expect(collegamenti, 'accanto alla voce non c e il collegamento agli avvisi').toContain(DOVE_SONO_GLI_AVVISI);
-    expect(testoVisibile(riga ?? null)).toContain('Apri le Notifiche');
-    pagina.s.smonta();
-
-    globale.__DATI_QUERY__ = avvisi.map((a, i) => ({ id: `n${i}`, created_at: '2026-10-15T10:00:00Z', read: false, ...a }));
-    const notifiche = accendi(Notifiche);
-    expect(testoVisibile(notifiche.radice), 'la pagina delle notifiche non mostra l avviso').toContain(nomeDellAvviso);
-    notifiche.smonta();
+  it('un reclamo col segno caduto ha la sua riga a parte: l avviso resta quello di sempre', async () => {
+    finto.ordineCheCade = true;
+    await rimborsa('dispute_d1');
+    expect(notificheConTitolo(finto.db, 'fuori dalla lista')).toHaveLength(0);
+    expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare')).toHaveLength(1);
   }, 60000);
 });

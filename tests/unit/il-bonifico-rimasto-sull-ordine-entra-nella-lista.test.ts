@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { FintoDatabase, Riga } from './aiuti/finto-database-dei-rimborsi';
 import { creaFintoDatabase, notificheConTitolo } from './aiuti/finto-database-dei-rimborsi';
 import {
-  bonificiRimastiSoloSullOrdine,
+  bonificiDeiResiDagliOrdini,
   cosaDiceLaVoce,
   registrazioneMancanteDelBonifico,
   type VoceDaBonificare,
@@ -119,7 +119,7 @@ async function resoAperto(): Promise<string> {
   return RESO;
 }
 
-type Lista = { voci: VoceDaBonificare[]; daControllare: VoceDaBonificare[] };
+type Lista = { voci: VoceDaBonificare[]; daControllare?: unknown };
 async function leggiLaLista(): Promise<Lista> {
   const res = await (lista as unknown as (r: Request, c: unknown) => Promise<Response>)(
     new Request('http://localhost/api/admin/rimborsi-da-bonificare'), undefined,
@@ -162,10 +162,11 @@ describe('la scrittura sul reso cade in «decide»: il bonifico dovuto resta nel
     const { voci, daControllare } = await leggiLaLista();
     expect(voci, 'il bonifico dovuto e sparito dalla lista').toHaveLength(1);
     expect(voci[0]).toMatchObject({
-      tipo: 'reso', id, ordineId: ORDINE, importoCents: 4000, daFare: true, confermataDallOrdine: true, daRegistrareSulReso: true,
+      tipo: 'reso', id, ordineId: ORDINE, importoCents: 4000, daFare: true, daRegistrareSulReso: true,
     });
     expect(String(voci[0].iban).replace(/\s/g, '')).toBe(IBAN);
-    expect(daControllare).toHaveLength(0);
+    // Sesto giro: la lista ha un elenco solo, niente «da controllare».
+    expect(daControllare).toBeUndefined();
     expect(cosaDiceLaVoce(voci[0], true).sulReso).toMatch(/registriamo anche sul reso/u);
 
     // L'avviso manda alla lista dicendo che la voce c'e', non che non c'e'.
@@ -231,10 +232,11 @@ describe('quello che la lista NON deve prendere dall ordine', () => {
     const ordine = { id: ORDINE, stripe_refund_id: 'bonifico:4000:return_altro' };
     const r = { id: 'questo', order_id: ORDINE, status: 'APPROVED', refund_id: null, refund_amount_cents: 4000, refunded_at: null };
     expect(registrazioneMancanteDelBonifico(r, ordine)).toBeNull();
-    expect(bonificiRimastiSoloSullOrdine([r], [ordine])).toHaveLength(0);
-    // Un reso che il segno ce l'ha gia' sta nella lettura normale: non si conta due volte.
+    // Sesto giro: la lista nasce dai segni sull'ordine. Questo reso non ha segno: non c'e'.
+    expect(bonificiDeiResiDagliOrdini([ordine], [r]).map((x) => x.id)).toEqual(['altro']);
+    // Un reso che il segno ce l'ha anche sulla riga conta una volta sola.
     const conSegno = { ...r, id: 'altro', refund_id: 'bonifico:4000:return_altro', status: 'REFUNDED' };
-    expect(bonificiRimastiSoloSullOrdine([conSegno], [ordine])).toHaveLength(0);
+    expect(bonificiDeiResiDagliOrdini([ordine, ordine], [conSegno])).toHaveLength(1);
     // Un reso chiuso senza rimborso non si resuscita.
     expect(registrazioneMancanteDelBonifico({ ...r, id: 'altro', status: 'CANCELED' }, ordine)).toBeNull();
   });

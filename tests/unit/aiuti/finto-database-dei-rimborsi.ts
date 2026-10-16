@@ -70,6 +70,7 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
   private valori: Riga | Riga[] = {};
   private filtri: Filtro[] = [];
   private tetto: number | null = null;
+  private salto = 0;
   private unaSola: 'single' | 'maybe' | null = null;
 
   constructor(private readonly tabella: string, private readonly db: FintoDatabase) {}
@@ -140,6 +141,12 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
     this.tetto = n;
     return this;
   }
+  /** `range(da, a)` come PostgREST: dalla riga `da` alla riga `a` comprese (le pagine della lista dei bonifici). */
+  range(da: number, a: number) {
+    this.salto = da;
+    this.tetto = a - da + 1;
+    return this;
+  }
   single() {
     this.unaSola = 'single';
     return this;
@@ -174,6 +181,7 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
       const chieste = this.colonne === '*' ? null : colonneDi(this.colonne);
       const proietta = (r: Riga): Riga => (chieste ? Object.fromEntries(chieste.map((c) => [c, r[c]])) : { ...r });
       let trovate = righe.filter((r) => this.filtri.every((f) => f(r))).map(proietta);
+      if (this.salto > 0) trovate = trovate.slice(this.salto);
       if (this.tetto != null) trovate = trovate.slice(0, this.tetto);
       if (this.unaSola === 'single') {
         return trovate.length === 1

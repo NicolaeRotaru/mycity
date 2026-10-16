@@ -42,7 +42,19 @@
  * dell'ORDINE, che scrive soltanto il server (`refundOrder`): sull'ordine il
  * cliente e il negozio non scrivono quella colonna, con o senza la 153. Un
  * bonifico da fare non confermato esce dai bonifici da pagare e va in un
- * elenco a parte, «da controllare prima di pagare» (`smistaLeVoci`).
+ * elenco a parte, «da controllare prima di pagare» (tolto al sesto giro, qui sotto).
+ *
+ * Riesame del 16/10, sesto giro — LA LISTA LEGGE UNA FONTE SOLA: IL SEGNO SULL'ORDINE.
+ * L'elenco «da controllare» chiedeva un controllo che chi paga non poteva fare
+ * (cercare un avviso fra le ultime 50 notifiche, che a volte non viene scritto),
+ * una riga finta non si poteva togliere se non segnandola «fatta», e mille righe
+ * finte riempivano il tetto della lettura prima del bonifico vero. Adesso le voci
+ * dei resi nascono SOLO dai segni `bonifico:<centesimi>:return_<id>` nell'elenco
+ * dei rimborsi degli ordini, che scrive solo il server: la riga del reso serve
+ * per l'IBAN, il nome e il «fatto». Una riga scritta dal cliente non entra, e
+ * non consuma nessun tetto. Se il server non riesce a scrivere il segno
+ * sull'ordine, chi amministra riceve un avviso apposta
+ * (`avvisoDelBonificoFuoriDallaLista`).
  *
  * Funzioni pure: la rotta legge le righe, qui si decide cosa mostrare.
  */
@@ -50,7 +62,10 @@
 import { formatPriceFromCents } from '@/lib/format';
 import { rimborsiGiaScritti } from '@/lib/stripe/elenco-dei-rimborsi';
 
-/** Quanti bonifici da fare si leggono al massimo: oltre, la pagina dice che la lista e' tagliata. */
+/**
+ * Quanti bonifici da fare dei reclami si leggono al massimo: oltre, la pagina dice che la lista e'
+ * tagliata. I resi non hanno tetto: si leggono tutti, dai segni sugli ordini.
+ */
 export const TETTO_DEI_BONIFICI_DA_FARE = 1000;
 
 /** Quanti bonifici gia' fatti si mostrano, come storico. */
@@ -124,12 +139,6 @@ export interface VoceDaBonificare {
   fattoIl: string | null;
   daFare: boolean;
   /**
-   * Il bonifico l'ha registrato il server? Per un reso: il suo segno sta
-   * nell'elenco dei rimborsi dell'ordine (vedi `bonificoRegistratoSullOrdine`).
-   * Per un reclamo sempre: la sua riga la scrive solo il server (162).
-   */
-  confermataDallOrdine: boolean;
-  /**
    * Il rimborso e' partito ma il reso non lo porta ancora scritto (riesame del 16/10, quarto
    * giro): la voce viene dall'ordine. Segnando il bonifico — o scrivendo l'IBAN — il rimborso si
    * registra anche sul reso.
@@ -192,23 +201,14 @@ export function tabellaDeiBonificiMancante(errore: { code?: string; message?: st
 }
 
 /**
- * IL BONIFICO DI QUESTO RESO L'HA REGISTRATO IL SERVER? (riesame del 16/10, terzo giro)
- *
- * `refundOrder` scrive il segno del bonifico in due posti: sul reso (e' quello
- * che la lista cerca) e nell'elenco dei rimborsi dell'ordine. Il reso, senza la
- * 153, lo puo' scrivere anche il cliente; l'elenco dell'ordine no. Il segno
- * porta la chiave del rimborso, che per un reso e' `return_<id del reso>`:
- * cosi' una riga finta che copia il segno di un rimborso vero non passa,
- * perche' il suo id e' un altro.
+ * IL RESO DI UN SEGNO (riesame del 16/10, sesto giro). Il segno di un bonifico di un reso finisce
+ * con la chiave del rimborso, `return_<id del reso>`: `bonifico:4000:return_<id>` → `<id>`. `null`
+ * per ogni altro segno (un rimborso con la carta, il bonifico di un reclamo, `dispute_<id>`).
  */
-export function bonificoRegistratoSullOrdine(
-  r: Pick<RigaDelReso, 'id' | 'refund_id'>,
-  ordine: OrdineDelBonifico | null | undefined,
-): boolean {
-  if (!ordine || !eUnBonificoDiRimborso(r.refund_id)) return false;
-  const segno = String(r.refund_id);
-  if (!segno.endsWith(`:return_${r.id}`)) return false;
-  return rimborsiGiaScritti(ordine).has(segno);
+export function resoDelSegno(segno: string | null | undefined): string | null {
+  if (!eUnBonificoDiRimborso(segno)) return null;
+  const trovato = /^bonifico:(?:\d+:)?return_([^:,\s]+)$/.exec(String(segno));
+  return trovato ? trovato[1] : null;
 }
 
 /**
@@ -239,11 +239,6 @@ export function bonificoDelResoGiaSullOrdine(
  */
 export const STATI_DEL_RESO_COL_RIMBORSO_FORSE_PARTITO = ['APPROVED', 'SHIPPED_BACK', 'RECEIVED', 'REFUNDED'] as const;
 
-/** Un reso senza il segno del rimborso, come lo legge la lista dei bonifici. */
-export interface ResoSenzaSegno extends Omit<RigaDelReso, 'soloSullOrdine'> {
-  status: string | null;
-}
-
 /**
  * LA SCRITTURA CHE ERA CADUTA (riesame del 16/10, quarto giro).
  *
@@ -265,48 +260,76 @@ export function registrazioneMancanteDelBonifico(
   return { status: 'REFUNDED', refund_id: sullOrdine.segno, refund_bonifico_cents: sullOrdine.centesimi };
 }
 
+/** La riga di un reso come la legge la lista, per l'IBAN, il nome e il «fatto» (le colonne della 162 possono mancare). */
+export interface RigaDelResoLetta {
+  id: string;
+  order_id?: string | null;
+  refund_id?: string | null;
+  refund_amount_cents?: number | null;
+  refunded_at?: string | null;
+  refund_iban?: string | null;
+  refund_intestatario?: string | null;
+  refund_bonifico_cents?: number | null;
+  refund_bonifico_fatto_at?: string | null;
+}
+
 /**
- * I BONIFICI CHE STANNO SOLO SULL'ORDINE (riesame del 16/10, quarto giro).
+ * I BONIFICI DEI RESI, DAI SEGNI SUGLI ORDINI (riesame del 16/10, sesto giro).
  *
- * La lista dei bonifici cercava il segno sul reso, e basta: se la scrittura sul reso era caduta,
- * il bonifico non c'era. L'ordine diceva «rimborsato», al negozio la quota era gia' stata ripresa,
- * e a chi paga restava solo un avviso nella campanella — che per giunta mandava a questa lista.
- * Adesso la lista legge anche i resi senza segno e li confronta con l'elenco dei rimborsi
- * dell'ordine (lo scrive solo il server, nello stesso passo dei conti): dove l'ordine porta il
- * bonifico di quel reso, la voce c'e', con la cifra dell'ordine e l'IBAN del reso.
+ * Un bonifico di un reso c'e' se, e solo se, l'elenco dei rimborsi di un ordine porta il suo segno
+ * `bonifico:<centesimi>:return_<id del reso>`: quell'elenco lo scrive solo il server, nello stesso
+ * passo dei conti (`refundOrder`), e ne' il cliente ne' il negozio lo possono scrivere, con o senza
+ * la 153 (tests/sql/rls/43). La cifra viene dal segno. La riga del reso, se c'e', da' solo l'IBAN,
+ * il nome dell'intestatario, la data e il «fatto»: una riga di reso che nessun segno nomina non
+ * entra, chiunque l'abbia scritta.
+ *
+ * I bonifici da fare ci sono tutti, senza tetto: li conta solo il server. Di quelli fatti restano
+ * gli ultimi `tettoFatti`, come storico.
  */
-export function bonificiRimastiSoloSullOrdine(
-  resi: readonly ResoSenzaSegno[],
+export function bonificiDeiResiDagliOrdini(
   ordini: readonly OrdineDelBonifico[],
+  resiLetti: readonly RigaDelResoLetta[],
+  tettoFatti: number = TETTO_DEI_BONIFICI_FATTI,
 ): RigaDelReso[] {
-  const ordinePer = new Map(ordini.map((o) => [o.id, o]));
+  const resoPer = new Map(resiLetti.map((r) => [r.id, r]));
+  const viste = new Set<string>();
   const righe: RigaDelReso[] = [];
-  for (const r of resi) {
-    const mancante = registrazioneMancanteDelBonifico(r, ordinePer.get(r.order_id));
-    if (!mancante) continue;
-    righe.push({
-      id: r.id,
-      order_id: r.order_id,
-      refund_amount_cents: r.refund_amount_cents,
-      refunded_at: r.refunded_at,
-      refund_iban: r.refund_iban,
-      refund_intestatario: r.refund_intestatario,
-      refund_bonifico_fatto_at: r.refund_bonifico_fatto_at,
-      refund_id: mancante.refund_id,
-      refund_bonifico_cents: mancante.refund_bonifico_cents,
-      soloSullOrdine: true,
-    });
+  for (const ordine of ordini) {
+    for (const segno of rimborsiGiaScritti(ordine)) {
+      const resoId = resoDelSegno(segno);
+      if (!resoId || viste.has(resoId)) continue;
+      viste.add(resoId);
+      const r = resoPer.get(resoId);
+      const centesimi = centesimiDelBonificoDalSegno(segno);
+      righe.push({
+        id: resoId,
+        order_id: ordine.id,
+        refund_amount_cents: r?.refund_amount_cents ?? null,
+        refunded_at: r?.refunded_at ?? null,
+        refund_id: segno,
+        refund_iban: r?.refund_iban ?? null,
+        refund_intestatario: r?.refund_intestatario ?? null,
+        // La cifra del segno, scritto dal server; se il segno non la porta, quella della 162.
+        refund_bonifico_cents: centesimi ?? r?.refund_bonifico_cents ?? null,
+        refund_bonifico_fatto_at: r?.refund_bonifico_fatto_at ?? null,
+        // Il reso non porta ancora il segno: «fatto» lo registra anche li' (`registrazioneMancanteDelBonifico`).
+        ...(r?.refund_id === segno ? {} : { soloSullOrdine: true }),
+      });
+    }
   }
-  return righe;
+  const daFare = righe.filter((r) => !r.refund_bonifico_fatto_at);
+  const fatti = righe
+    .filter((r) => !!r.refund_bonifico_fatto_at)
+    .sort((a, b) => String(b.refund_bonifico_fatto_at).localeCompare(String(a.refund_bonifico_fatto_at)))
+    .slice(0, Math.max(0, tettoFatti));
+  return [...daFare, ...fatti];
 }
 
 /** Dai resi e dai reclami alla lista: prima quelli da fare, poi i piu' recenti. */
 export function vociDeiBonificiDaFare(
   righe: readonly RigaDelReso[],
   reclami: readonly RigaDelBonificoDelReclamo[] = [],
-  ordini: readonly OrdineDelBonifico[] = [],
 ): VoceDaBonificare[] {
-  const ordinePer = new Map(ordini.map((o) => [o.id, o]));
   const daiResi: VoceDaBonificare[] = righe
     .filter((r) => eUnBonificoDiRimborso(r.refund_id))
     .map((r) => ({
@@ -321,7 +344,6 @@ export function vociDeiBonificiDaFare(
       intestatario: r.refund_intestatario ?? null,
       fattoIl: r.refund_bonifico_fatto_at ?? null,
       daFare: !r.refund_bonifico_fatto_at,
-      confermataDallOrdine: bonificoRegistratoSullOrdine(r, ordinePer.get(r.order_id)),
       ...(r.soloSullOrdine ? { daRegistrareSulReso: true } : {}),
     }));
   const daiReclami: VoceDaBonificare[] = reclami
@@ -336,8 +358,6 @@ export function vociDeiBonificiDaFare(
       intestatario: r.intestatario ?? null,
       fattoIl: r.fatto_at ?? null,
       daFare: !r.fatto_at,
-      // La riga di un reclamo la scrive e la legge solo il server (162).
-      confermataDallOrdine: true,
     }));
   // Le due letture (da fare e fatti) non si sovrappongono; se una riga arriva due volte, conta una.
   const viste = new Set<string>();
@@ -356,43 +376,37 @@ export function vociDeiBonificiDaFare(
 /**
  * COSA DICE LA PAGINA ACCANTO A UNA VOCE (riesame del 16/10, terzo giro).
  *
- *  · Un bonifico da fare non confermato dall'ordine porta l'avviso di non
- *    pagarlo prima di aver controllato: la riga puo' averla scritta il cliente.
  *  · Al posto dell'IBAN che manca: su un bonifico gia' fatto l'IBAN e' stato
  *    cancellato apposta (prima diceva «quando arriva, scrivilo qui» anche li',
  *    dove un campo non c'e'); senza la migrazione 162 non si puo' salvare, e
  *    si tiene a parte. «Scrivilo qui» solo dove il campo c'e'.
+ *  · Sesto giro: l'avviso «da controllare prima di pagare» non c'e' piu'. Nella
+ *    lista entrano solo i bonifici che il server ha segnato sull'ordine
+ *    (`bonificiDeiResiDagliOrdini`): non resta niente da controllare.
+ *  · Sesto giro: dove arriva l'IBAN. Il cliente lo manda dalla pagina Contatti,
+ *    e quei messaggi chi amministra li legge in Supporto — anche quello mandato
+ *    quando il reso era ancora aperto e l'IBAN non aveva ancora un posto qui.
  */
 export function cosaDiceLaVoce(
-  voce: Pick<VoceDaBonificare, 'daFare' | 'iban' | 'confermataDallOrdine' | 'daRegistrareSulReso'>,
+  voce: Pick<VoceDaBonificare, 'daFare' | 'iban' | 'daRegistrareSulReso'>,
   migrazione162: boolean,
 ): {
-  daControllare: string | null;
   alPostoDellIban: string | null;
   campoPerLIban: boolean;
   /** Riesame del 16/10, quarto giro: il rimborso non e' ancora scritto sul reso. */
   sulReso: string | null;
 } {
   const campoPerLIban = voce.daFare && !voce.iban && migrazione162;
+  const doveArriva =
+    "IBAN non indicato. Il cliente lo manda dalla pagina Contatti, e i messaggi arrivano in Supporto: " +
+    "guarda anche quelli di prima del rimborso. L'email di rimborso glielo chiede.";
   let alPostoDellIban: string | null = null;
   if (!voce.iban) {
     if (!voce.daFare) alPostoDellIban = 'IBAN cancellato dopo il bonifico.';
-    else if (campoPerLIban) {
-      alPostoDellIban =
-        "IBAN non indicato: l'email di rimborso chiede al cliente di mandarlo dalla pagina Contatti. Quando arriva, scrivilo qui.";
-    } else {
-      alPostoDellIban =
-        "IBAN non indicato: l'email di rimborso chiede al cliente di mandarlo dalla pagina Contatti. Finché sul database manca la migrazione 162 non si può salvare qui: tienilo a parte.";
-    }
+    else if (campoPerLIban) alPostoDellIban = `${doveArriva} Quando lo trovi, scrivilo qui.`;
+    else alPostoDellIban = `${doveArriva} Finché sul database manca la migrazione 162 non si può salvare qui: tienilo a parte.`;
   }
   return {
-    daControllare:
-      voce.daFare && !voce.confermataDallOrdine
-        ? // Quinto giro del riesame: diceva «apri l'ordine e cerca l'avviso», ma l'avviso non sta
-          // nell'ordine: sta fra le notifiche di chi amministra (`notifyAdmins`). La pagina mette il
-          // collegamento accanto (`DOVE_SONO_GLI_AVVISI`).
-          "Da controllare prima di pagare: questo rimborso non risulta registrato sull'ordine, e una riga così può averla scritta qualcun altro. Apri le Notifiche e cerca l'avviso «Bonifico di rimborso da fare» con il numero di questo ordine: se non c'è, non pagare."
-        : null,
     alPostoDellIban,
     campoPerLIban,
     sulReso:
@@ -400,26 +414,6 @@ export function cosaDiceLaVoce(
         ? "Il rimborso è partito ma sul reso non si era registrato: la cifra viene dall'ordine. Quando segni il bonifico fatto, lo registriamo anche sul reso."
         : null,
   };
-}
-
-/** Dove stanno gli avvisi dei bonifici da fare: le notifiche di chi amministra, non l'ordine. */
-export const DOVE_SONO_GLI_AVVISI = '/notifications';
-
-/**
- * I BONIFICI DA PAGARE E QUELLI DA CONTROLLARE (riesame del 16/10, terzo giro).
- *
- * Fra i bonifici da pagare restano solo quelli che il server ha registrato, e
- * lo storico dei fatti. Un bonifico da fare che l'ordine non conferma va a
- * parte: puo' essere una riga scritta dal cliente, oppure un rimborso vero la
- * cui conferma sull'ordine non si e' scritta — per questo non sparisce, ma
- * chi paga lo trova sotto l'avviso di controllarlo prima.
- */
-export function smistaLeVoci(voci: readonly VoceDaBonificare[]): {
-  daPagare: VoceDaBonificare[];
-  daControllare: VoceDaBonificare[];
-} {
-  const daControllare = voci.filter((v) => v.daFare && !v.confermataDallOrdine);
-  return { daPagare: voci.filter((v) => !daControllare.includes(v)), daControllare };
 }
 
 /** Le ultime quattro cifre di un IBAN, per riconoscerlo a colpo d'occhio. */
@@ -490,9 +484,13 @@ export function avvisoDelRimborsoNonRegistrato(r: {
       (bonifico
         ? `Dentro c'è un bonifico di ${formatPriceFromCents(r.bonificoCents)} da fare al cliente: lo trovi nella lista dei bonifici da fare, presa dall'ordine. Quando lo segni fatto, il rimborso si registra anche sul reso.`
         : // Quinto giro del riesame: qui si chiedeva di scrivere sul reso il riferimento del
-          // rimborso, ma nessuna pagina del pannello scrive sui resi. Si dice cosa serve davvero.
-          'Non va rifatto: è già partito. Dal pannello il riferimento sul reso non si scrive; se il negozio prova a ' +
-          'rimborsare di nuovo o a chiudere il reso senza rimborso, fermalo.'),
+          // rimborso, ma nessuna pagina del pannello scrive sui resi. Sesto giro: diceva anche
+          // «se il negozio prova a rimborsare di nuovo, fermalo», ma chi amministra non lo vede
+          // succedere e dal pannello un reso non si blocca. Si chiede la cosa che si puo' fare:
+          // avvisare il negozio, che si trova dall'ordine e si contatta da Utenti.
+          'Non va rifatto: è già partito. Dal pannello il reso non si blocca e il riferimento non si scrive: ' +
+          'avvisa tu il negozio di non rimborsarlo di nuovo e di non chiuderlo senza rimborso. ' +
+          "Il negozio è scritto nell'ordine, i suoi recapiti in Utenti."),
     link: bonifico ? '/admin/rimborsi-da-bonificare' : '/admin/orders',
   };
 }
@@ -520,4 +518,56 @@ export function avvisoDelBonificoDelReclamoNonRegistrato(r: {
       'Fallo partendo da questo avviso e tieni il conto a parte.',
     link: '/admin/disputes',
   };
+}
+
+/**
+ * IL BONIFICO DI UN RESO CHE LA LISTA NON PUO' MOSTRARE (riesame del 16/10, sesto giro).
+ *
+ * La lista prende i bonifici dei resi solo dai segni sull'ordine (`bonificiDeiResiDagliOrdini`).
+ * Se `refundOrder` non riesce a scrivere il segno nell'elenco dei rimborsi dell'ordine, il bonifico
+ * e' dovuto ma in lista non c'e'. Prima finiva fra quelli «da controllare», con l'istruzione di non
+ * pagarlo se un avviso non si trovava: adesso chi amministra riceve QUESTO avviso, al posto di
+ * «Bonifico di rimborso da fare», che diceva di trovarlo nella lista. `null` per un reclamo: il suo
+ * bonifico sta in `bonifici_dei_reclami`, e la lista lo legge da li'.
+ */
+export function avvisoDelBonificoFuoriDallaLista(r: {
+  chiave: string;
+  ordineId: string;
+  bonificoCents: number;
+  /** Le ultime quattro cifre dell'IBAN che il cliente ha scritto nel modulo, se l'ha scritto. */
+  ibanFinale?: string | null;
+}): { titolo: string; testo: string; link: string } | null {
+  const resoId = resoDelSegno(segnoDelBonifico(r.chiave, r.bonificoCents));
+  if (!resoId || r.bonificoCents <= 0) return null;
+  return {
+    titolo: '⚠️ Bonifico di rimborso fuori dalla lista',
+    testo:
+      `Bonifico di ${formatPriceFromCents(r.bonificoCents)} da fare al cliente dell'ordine #${r.ordineId.slice(0, 8)} ` +
+      `(reso ${resoId}), pagato in contanti. Il database non ha registrato il rimborso sull'ordine. ` +
+      'La lista dei bonifici da fare li prende solo da lì: questo non c\'è, e non ha il pulsante «fatto». ' +
+      'Il rimborso è dovuto: fallo partendo da questo avviso e tieni il conto a parte. ' +
+      (r.ibanFinale
+        ? `Il cliente ha indicato un IBAN che finisce con ${r.ibanFinale}, ma dal pannello non si legge: ` +
+          'chiedigli di rimandarlo dalla pagina Contatti e controlla che finisca così.'
+        : 'Il cliente non ha indicato un IBAN: chiediglielo dalla pagina Contatti prima di pagare.'),
+    // I messaggi dei Contatti, dove arriva l'IBAN, chi amministra li legge in Supporto.
+    link: '/admin/support',
+  };
+}
+
+/**
+ * COSA RESTA NEL REGISTRO DELLE AZIONI (riesame del 16/10, sesto giro).
+ *
+ * Il registro diceva solo «IBAN salvato» e «bonifico fatto»: col «fatto» l'IBAN si cancella, e su
+ * quale conto erano andati i soldi non lo diceva piu' niente. Adesso restano le ultime quattro
+ * cifre del conto — il minimo per riconoscerlo, non l'IBAN — e, col «fatto», la cifra pagata.
+ */
+export function notaPerIlRegistro(
+  azione: 'fatto' | 'iban',
+  bonifico: { iban: string | null | undefined; cifraCents?: number | null },
+): { passo: string; conto: string | null; cifra_cents?: number | null } {
+  const conto = finale(bonifico.iban ?? null);
+  return azione === 'iban'
+    ? { passo: 'iban_del_bonifico_registrato', conto }
+    : { passo: 'bonifico_di_rimborso_fatto', conto, cifra_cents: bonifico.cifraCents ?? null };
 }

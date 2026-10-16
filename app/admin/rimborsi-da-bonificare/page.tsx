@@ -13,7 +13,6 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import {
   cosaDiceLaVoce,
   domandaPrimaDelBonificoFatto,
-  DOVE_SONO_GLI_AVVISI,
   type VoceDaBonificare,
 } from '@/lib/rimborsi/bonifici-da-fare';
 
@@ -38,16 +37,17 @@ import {
  *  · Se il cliente ha cancellato l'account prima del pagamento, la voce mostra
  *    il nome a cui intestare il bonifico: e' l'unico posto dove resta.
  *
- * Terzo giro — un bonifico che l'ordine non conferma non sta fra quelli da
- * pagare: va in un riquadro a parte, con l'avviso di non pagarlo prima di aver
- * controllato. E «scrivilo qui» compare solo dove il campo per l'IBAN c'e'
- * (lib/rimborsi/bonifici-da-fare.ts, `smistaLeVoci` e `cosaDiceLaVoce`).
+ * Terzo giro — «scrivilo qui» compare solo dove il campo per l'IBAN c'e'
+ * (lib/rimborsi/bonifici-da-fare.ts, `cosaDiceLaVoce`).
+ *
+ * Sesto giro — il riquadro «da controllare prima di pagare» non c'e' piu'. Chiedeva
+ * un controllo che da qui non si poteva fare, e una riga finta non si toglieva se
+ * non segnandola «fatta». Adesso nella lista entrano solo i bonifici che il server
+ * ha segnato sull'ordine (`bonificiDeiResiDagliOrdini`): ogni voce e' da pagare.
  */
 
 type Risposta = {
   voci: VoceDaBonificare[];
-  /** I bonifici da fare che l'ordine non conferma: a parte, da controllare prima di pagare. */
-  daControllare?: VoceDaBonificare[];
   migrazione162: boolean;
   tagliata?: boolean;
 };
@@ -101,10 +101,9 @@ export default function RimborsiDaBonificarePage() {
   };
 
   const voci = data?.voci ?? [];
-  const daControllare = data?.daControllare ?? [];
   const daFare = voci.filter((v) => v.daFare);
 
-  // Una riga della lista: la stessa per i bonifici da pagare e per quelli da controllare.
+  // Una riga della lista.
   const riga = (v: VoceDaBonificare) => {
     const dice = cosaDiceLaVoce(v, !!data?.migrazione162);
     return (
@@ -137,14 +136,6 @@ export default function RimborsiDaBonificarePage() {
                     cancellazione si fermava dopo aver scritto il nome. Si dice quando il nome è
                     arrivato qui, che è vero in ogni caso. */}
                 <span className="text-ink-600">(scritto qui quando è partita la cancellazione dell&apos;account: resta fino al bonifico)</span>
-              </p>
-            )}
-            {dice.daControllare && (
-              <p className="mt-2 rounded-lg border border-secondary-300 bg-secondary-50 p-2 text-sm font-semibold text-secondary-800">
-                {dice.daControllare}{' '}
-                <Link href={DOVE_SONO_GLI_AVVISI} className="underline hover:no-underline">
-                  Apri le Notifiche
-                </Link>
               </p>
             )}
             {dice.sulReso && <p className="mt-2 text-sm text-ink-700">{dice.sulReso}</p>}
@@ -207,7 +198,7 @@ export default function RimborsiDaBonificarePage() {
         <p className="rounded-xl border border-secondary-300 bg-white p-4 text-sm text-secondary-700">
           {friendlyError(error)}
         </p>
-      ) : voci.length === 0 && daControllare.length === 0 ? (
+      ) : voci.length === 0 ? (
         <p className="rounded-xl border border-cream-300 bg-white p-6 text-sm text-ink-600">
           Nessun bonifico di rimborso da fare.
         </p>
@@ -217,18 +208,6 @@ export default function RimborsiDaBonificarePage() {
             Da fare: <strong>{daFare.length}</strong> su {voci.length}.
           </p>
           <ul className="space-y-3">{voci.map(riga)}</ul>
-          {daControllare.length > 0 && (
-            <section className="mt-8">
-              <h2 className="mb-1 text-base font-bold text-secondary-800">
-                Da controllare prima di pagare: {daControllare.length}
-              </h2>
-              <p className="mb-3 text-sm text-ink-600">
-                Questi rimborsi non risultano registrati sull&apos;ordine. Possono essere righe scritte da qualcun altro:
-                non pagarli finché non hai controllato l&apos;ordine.
-              </p>
-              <ul className="space-y-3">{daControllare.map(riga)}</ul>
-            </section>
-          )}
         </>
       )}
     </div>

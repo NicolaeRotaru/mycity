@@ -26,7 +26,7 @@ import {
   type RipartoDelRimborso,
 } from '@/lib/rimborsi/regole-del-rimborso';
 import { PAGINA_DEI_BONIFICI_DA_FARE, type ComeTornanoIContanti } from '@/lib/rimborsi/scelta-del-reso';
-import { eUnBonificoDiRimborso, segnoDelBonifico } from '@/lib/rimborsi/bonifici-da-fare';
+import { avvisoDelBonificoFuoriDallaLista, eUnBonificoDiRimborso, segnoDelBonifico } from '@/lib/rimborsi/bonifici-da-fare';
 import { linkAlControlloDelCredito } from '@/lib/rimborsi/credito-da-controllare';
 // 16/10 (terzo riesame) — la stessa domanda dell'annullo e del giro degli ordini scaduti: una casa sola.
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
@@ -1463,17 +1463,27 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   if (riparto.bonificoCents > 0) {
     const daContanti = opts.contanti?.modo === 'BONIFICO' ? opts.contanti : undefined;
     const conIban = !!daContanti?.ibanFinale;
+    // Riesame del 16/10, sesto giro — la lista dei bonifici dei resi nasce SOLO dal segno
+    // sull'ordine: se il segno non si e' scritto, il bonifico in lista non c'e', e l'avviso di
+    // sempre («l'IBAN e' nella pagina dei rimborsi da bonificare») direbbe il falso. Allora parte
+    // l'avviso che lo dice, con quello che serve per pagarlo da qui.
+    const fuoriDallaLista = errElenco
+      ? avvisoDelBonificoFuoriDallaLista({
+          chiave, ordineId: order.id, bonificoCents: riparto.bonificoCents, ibanFinale: daContanti?.ibanFinale ?? null,
+        })
+      : null;
     try {
       await notifyAdmins(
-        '💶 Bonifico di rimborso da fare',
-        `Bonifico di ${formatPriceFromCents(riparto.bonificoCents)} da fare al cliente dell'ordine #${order.id.slice(0, 8)}, pagato in contanti` +
-          (riparto.creditoCents > 0
-            ? ` (altri ${formatPriceFromCents(riparto.creditoCents)} gli sono già tornati come credito MyCity). `
-            : '. ') +
-          (conIban
-            ? "L'IBAN che ha indicato è nella pagina dei rimborsi da bonificare."
-            : 'Il cliente non ha indicato un IBAN: chiediglielo prima di pagare.'),
-        daContanti?.doveSiPaga ?? PAGINA_DEI_BONIFICI_DA_FARE,
+        fuoriDallaLista?.titolo ?? '💶 Bonifico di rimborso da fare',
+        fuoriDallaLista?.testo ??
+          `Bonifico di ${formatPriceFromCents(riparto.bonificoCents)} da fare al cliente dell'ordine #${order.id.slice(0, 8)}, pagato in contanti` +
+            (riparto.creditoCents > 0
+              ? ` (altri ${formatPriceFromCents(riparto.creditoCents)} gli sono già tornati come credito MyCity). `
+              : '. ') +
+            (conIban
+              ? "L'IBAN che ha indicato è nella pagina dei rimborsi da bonificare."
+              : 'Il cliente non ha indicato un IBAN: chiediglielo prima di pagare.'),
+        fuoriDallaLista?.link ?? daContanti?.doveSiPaga ?? PAGINA_DEI_BONIFICI_DA_FARE,
       );
     } catch (e) {
       logger.error('[refundOrder] avviso del bonifico da fare non inviato', { orderId: order.id, e });
