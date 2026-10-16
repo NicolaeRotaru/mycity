@@ -86,8 +86,8 @@ export function nomeDellIntestatario(
 export const DOVE_CHIEDIAMO_L_IBAN =
   "Nel modulo di reso, se scegli il bonifico. Per un reclamo — o se nel reso non l'hai scritto — " +
   "te lo chiediamo per email e ce lo mandi con un messaggio dalla pagina Contatti: quel messaggio " +
-  "arriva anche nella casella email dell'assistenza e resta fra i messaggi dell'assistenza per 2 anni, " +
-  "o finché cancelli l'account. Chi fa il bonifico copia l'IBAN sulla richiesta di rimborso.";
+  "arriva anche nella casella email dell'assistenza e resta fra i messaggi dell'assistenza al massimo 2 anni. " +
+  "Chi fa il bonifico copia l'IBAN sulla richiesta di rimborso.";
 
 /** Perché lo teniamo. */
 export const PERCHE_TENIAMO_L_IBAN =
