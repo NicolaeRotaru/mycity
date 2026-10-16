@@ -154,6 +154,32 @@ describe('contestazione piena su un ordine con un reso già stornato, poi vinta'
     expect(avvisi()).toContain('✓ Chargeback vinto');
   });
 
+  it('senza la 126, su un ordine già rimesso in coda una volta: il tentativo sale a 2, non torna a 1 (riesame del 16/10)', async () => {
+    // La variante scomoda: partendo da zero, «letto 0, più 1» e «non letto,
+    // più 1» danno lo stesso numero. Qui il bonifico al negozio e il compenso
+    // del fattorino erano già stati rimessi in coda una volta (tentativo 1).
+    // Il ripiego della lettura toglieva insieme le colonne della 126 e quelle
+    // della 124: il tentativo non si leggeva e tornava 1, cioè la chiave
+    // anti-doppione del bonifico già stornato.
+    stato.db.colonneMancanti.orders = ['dispute_seller_reversed_cents', 'dispute_rider_reversed_cents'];
+    const giaRimessoInCoda = ordineConReso({
+      payout_tentativo: 1,
+      rider_id: 'r1', rider_transfer_id: 'tr_rider', rider_payout_status: 'TRANSFERRED', rider_fee_cents: 300,
+      rider_payout_tentativo: 1,
+    });
+    delete giaRimessoInCoda.dispute_seller_reversed_cents;
+    delete giaRimessoInCoda.dispute_rider_reversed_cents;
+    stato.db.tabelle.orders = [giaRimessoInCoda];
+
+    expect(await consegna('evt_aperta', 'charge.dispute.created', contestazione)).toBe(200);
+    expect(ordine()).toMatchObject({ payout_status: 'REVERSED', rider_payout_status: 'REVERSED' });
+
+    expect(await consegna('evt_vinta', 'charge.dispute.closed', { ...contestazione, status: 'won' })).toBe(200);
+    expect(ordine()).toMatchObject({ payout_status: 'HELD', rider_payout_status: 'HELD', dispute_status: 'WON' });
+    expect(ordine().payout_tentativo, 'col tentativo 1 il negozio riceve la chiave del bonifico già stornato').toBe(2);
+    expect(ordine().rider_payout_tentativo, 'lo stesso per il compenso del fattorino').toBe(2);
+  });
+
   it('contestazione aperta PRIMA della 126 e vinta dopo: il promemoria è zero, non si ripaga zero', async () => {
     // La 126 crea la colonna con DEFAULT 0: chi era già stornato prima la trova
     // a zero. Usarlo alla lettera lascerebbe il negozio senza niente.
