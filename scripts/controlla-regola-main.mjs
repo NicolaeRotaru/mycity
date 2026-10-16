@@ -50,13 +50,13 @@
  *      sul solo «Include default branch», senza rami esclusi, con il solo
  *      controllo «Main». Ferma le richieste con la CI rossa (stampa anche
  *      cosa NON ferma e le scelte rimaste: sono avvisi, non bloccano)
- *   1  di sicuro le manca un pezzo di quella regola (e' spenta, non guarda
- *      nessun ramo, non pretende il controllo «Main» della CI): stampa cosa e
- *      dove si sistema
+ *   1  di sicuro le manca un pezzo di quella regola (e' spenta, main resta
+ *      fuori dai rami che guarda, non pretende il controllo «Main» della CI):
+ *      stampa cosa e dove si sistema
  *   2  non ho potuto leggere la regola: non e' un verde, e' un «non lo so»
  *   3  l'ho letta e non le manca niente di sicuro, ma e' diversa da quella
- *      dei passi (altri rami, rami esclusi, altri controlli, altre voci):
- *      stampa in cosa, e va guardata a mano
+ *      dei passi (altri rami o modelli, rami esclusi per modello, altri
+ *      controlli, altre regole): stampa in cosa, e va guardata a mano
  *
  * 16/10/2026 (sesto giro di correzione) — UNA REGOLA SOLA.
  *
@@ -66,6 +66,10 @@
  * sbagliata: otto difetti in due giri. Adesso lo script confronta la regola
  * con quella dei passi, e basta: ✅ solo se e' quella; ❌ solo per un pezzo
  * che manca di sicuro; per tutto il resto ⚪, con in cosa e' diversa.
+ *
+ * Settimo giro: un ramo incluso o escluso che di sicuro lascia fuori main e'
+ * ❌, non ⚪ (l'uscita 3 promette «niente di sicuro»). Le regole in piu' non
+ * si nominano: la sigla dell'API, nella pagina di GitHub, non c'e'.
  */
 import fs from 'node:fs';
 import tty from 'node:tty';
@@ -89,7 +93,7 @@ const VOCI_DEI_PASSI = new Set(['deletion', 'non_fast_forward', 'required_status
 /** La frase del ⚪: la regola si guarda a mano, lo script non la interpreta. */
 const DIVERSA = 'questa regola e\' diversa da quella della procedura: guardala a mano';
 
-/** Come si chiama un ramo della regola nel menu «Add target» di GitHub. */
+/** Come si chiama un ramo INCLUSO nel menu «Add target» di GitHub. */
 function nomeDelRamo(ramo) {
   if (ramo === '~ALL') return '«Include all branches»';
   if (ramo === RAMO_PREDEFINITO) return '«Include default branch»';
@@ -98,6 +102,22 @@ function nomeDelRamo(ramo) {
 
 function elenco(rami) {
   return rami.map(nomeDelRamo).join(', ');
+}
+
+/** Le esclusioni che di sicuro tolgono main, con il loro nome a parole. */
+const ESCLUSIONI_DI_MAIN = new Map([
+  ['~ALL', 'tutti i rami'],
+  [RAMO_PREDEFINITO, 'il ramo predefinito (main)'],
+  ['refs/heads/main', '«refs/heads/main»'],
+]);
+
+/**
+ * Un ramo incluso che di sicuro non e' main: un nome scritto per intero, senza
+ * i caratteri dei modelli, che non contiene nemmeno «main». Nel dubbio no: chi
+ * non e' sicuro resta una differenza da guardare a mano.
+ */
+function diSicuroNonEMain(ramo) {
+  return typeof ramo === 'string' && !ramo.startsWith('~') && !/[*?[\]{}\\!]/.test(ramo) && !ramo.toLowerCase().includes('main');
 }
 
 /** I controlli pretesi da una voce «required_status_checks», sempre come elenco. */
@@ -148,8 +168,8 @@ export function valutaLaRegolaMain(regola) {
     });
   }
 
-  // ② I rami: solo «Include default branch», nessuno escluso. I nomi dei rami
-  // non si interpretano: o sono quelli dei passi, o la regola e' diversa.
+  // ② I rami: solo «Include default branch», nessuno escluso. I modelli non si
+  // interpretano: ❌ solo quando main di sicuro resta fuori, se no ⚪.
   const include = Array.isArray(regola.conditions?.ref_name?.include) ? regola.conditions.ref_name.include : [];
   const exclude = Array.isArray(regola.conditions?.ref_name?.exclude) ? regola.conditions.ref_name.exclude : [];
   if (regola.target !== 'branch') {
@@ -163,15 +183,28 @@ export function valutaLaRegolaMain(regola) {
         cosa: 'non guarda nessun ramo (bersagli vuoti)',
         come: 'Target branches → Add target → «Include default branch» (cioe\' main).',
       });
+    } else if (include.every(diSicuroNonEMain)) {
+      mancano.push({
+        cosa: `i rami inclusi sono ${elenco(include)}, e nessuno e' main: non guarda il ramo main`,
+        come: 'Target branches → Add target → «Include default branch» (cioe\' main), e togli gli altri.',
+      });
     } else if (include.length !== 1 || include[0] !== RAMO_PREDEFINITO) {
       diverse.push({
         cosa: `i rami inclusi sono ${elenco(include)}, e la procedura chiede solo «Include default branch»`,
         come: 'Target branches → lascia solo «Include default branch» (cioe\' main) e togli gli altri.',
       });
     }
-    if (exclude.length > 0) {
+    const tolgonoMain = exclude.filter((ramo) => ESCLUSIONI_DI_MAIN.has(ramo));
+    const altreEsclusioni = exclude.filter((ramo) => !ESCLUSIONI_DI_MAIN.has(ramo));
+    if (tolgonoMain.length > 0) {
+      mancano.push({
+        cosa: `esclude ${tolgonoMain.map((ramo) => ESCLUSIONI_DI_MAIN.get(ramo)).join(', ')}: non guarda il ramo main`,
+        come: 'Target branches → togli i rami esclusi.',
+      });
+    }
+    if (altreEsclusioni.length > 0) {
       diverse.push({
-        cosa: `esclude dei rami (${elenco(exclude)}), e la procedura non ne esclude nessuno`,
+        cosa: `esclude dei rami (${altreEsclusioni.map((ramo) => `«${String(ramo)}»`).join(', ')}), e la procedura non ne esclude nessuno`,
         come: 'Target branches → togli i rami esclusi («Exclude by pattern»).',
       });
     }
@@ -200,17 +233,13 @@ export function valutaLaRegolaMain(regola) {
     });
   }
 
-  // ④ Nessuna voce che i passi non chiedono (per esempio la coda di unione):
-  // lo script non prova a dire cosa fa, la nomina e basta.
-  const vociInPiu = [
-    ...new Set(
-      regola.rules.map((r) => (r && typeof r === 'object' ? r.type : undefined)).filter((tipo) => !VOCI_DEI_PASSI.has(tipo)),
-    ),
-  ].map((tipo) => `«${String(tipo)}»`);
-  if (vociInPiu.length > 0) {
+  // ④ Nessuna voce che i passi non chiedono (per esempio la coda di unione).
+  // Non si nomina: l'API la chiama con una sigla che la pagina di GitHub non
+  // mostra, e una voce rovinata non ha nemmeno quella.
+  if (regola.rules.some((r) => !(r && typeof r === 'object' && VOCI_DEI_PASSI.has(r.type)))) {
     diverse.push({
-      cosa: `ha anche ${vociInPiu.join(', ')}, che la procedura non chiede`,
-      come: `togli ${vociInPiu.join(', ')} dalla regola, se non ti serve; altrimenti guarda a mano cosa ferma.`,
+      cosa: 'ha anche altre regole, che la procedura non chiede',
+      come: 'togli le regole che non ti servono. Oltre a «Require status checks to pass», la procedura tiene solo quelle che vietano di cancellare il ramo e le spinte forzate.',
     });
   }
 

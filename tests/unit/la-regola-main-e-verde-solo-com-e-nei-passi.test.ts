@@ -109,7 +109,7 @@ describe('i quattro casi del riesame, con la regola esatta del revisore', () => 
     expect(titolo).toContain(DIVERSA);
     expect(esito.diverse.map((d) => d.cosa)).toEqual([
       'i rami inclusi sono «Include all branches», e la procedura chiede solo «Include default branch»',
-      'ha anche «creation», che la procedura non chiede',
+      'ha anche altre regole, che la procedura non chiede',
     ]);
     expect(testo).not.toContain('creare');
   });
@@ -158,11 +158,10 @@ describe('una regola sola: verde solo la regola dei passi', () => {
     ['tutti i rami per modello', rami(['refs/heads/**'])],
     ['un modello che prende main', rami(['refs/heads/*'])],
     ['un modello in piu\'', rami(['~DEFAULT_BRANCH', 'refs/heads/claude/**'])],
-    ['un altro ramo al posto di main', rami(['refs/heads/sviluppo'])],
     ['un modello con le parentesi', rami(['refs/heads/[m]ain'])],
     ['un\'esclusione che toglie main', rami(['~DEFAULT_BRANCH'], ['refs/heads/*'])],
     ['un\'esclusione che non toglie main', rami(['~DEFAULT_BRANCH'], ['refs/heads/claude/**'])],
-    ['un\'esclusione di tutto', rami(['~DEFAULT_BRANCH'], ['~ALL'])],
+    ['main scritto con la maiuscola', rami(['refs/heads/Main'])],
     ['la coda di unione', { rules: [controlloMain(), { type: 'merge_queue' }] }],
     ['le revisioni obbligatorie', { rules: [controlloMain(), { type: 'pull_request' }] }],
     ['un altro controllo obbligatorio', { rules: [controlloMain({ required_status_checks: [{ context: 'Main' }, { context: 'Unit tests' }] })] }],
@@ -184,6 +183,11 @@ describe('una regola sola: verde solo la regola dei passi', () => {
     ['spenta', { enforcement: 'disabled' }, 'e\' spenta'],
     ['in prova', { enforcement: 'evaluate' }, 'e\' in prova («Evaluate»)'],
     ['senza rami', rami([]), 'non guarda nessun ramo'],
+    ['un altro ramo al posto di main', rami(['refs/heads/sviluppo']), 'e nessuno e\' main: non guarda il ramo main'],
+    ['due rami, nessuno main', rami(['refs/heads/sviluppo', 'refs/heads/claude/lavoro']), 'e nessuno e\' main'],
+    ['un\'esclusione di tutto', rami(['~DEFAULT_BRANCH'], ['~ALL']), 'esclude tutti i rami: non guarda il ramo main'],
+    ['un\'esclusione del ramo predefinito', rami(['~DEFAULT_BRANCH'], ['~DEFAULT_BRANCH']), 'esclude il ramo predefinito (main)'],
+    ['main escluso per nome', rami(['~DEFAULT_BRANCH'], ['refs/heads/main']), 'esclude «refs/heads/main»'],
     ['sulle etichette', { target: 'tag' }, 'non e\' una regola sui rami'],
     ['senza «Main»', { rules: [{ type: 'deletion' }] }, 'non pretende il controllo «Main»'],
     ['«Main» da un\'altra app', { rules: [controlloMain({ required_status_checks: [{ context: 'Main', integration_id: 999 }] })] }, 'da un\'app che non e\' GitHub Actions'],
@@ -204,6 +208,53 @@ describe('una regola sola: verde solo la regola dei passi', () => {
     expect(esito.mancano).toHaveLength(1);
     expect(esito.diverse).toHaveLength(1);
     expect(testo).toContain(`⚪ In piu', ${DIVERSA}. Ecco in cosa:`);
+  });
+});
+
+/*
+ * Settimo giro di correzione — TRE FRASI CHE LA PAGINA DI GITHUB NON CONFERMA.
+ *   · le regole in piu' si nominavano con la sigla dell'API («pull_request»,
+ *     «merge_queue»), che nella pagina non c'e';
+ *   · una voce rovinata nell'elenco diventava «togli «undefined» dalla regola»;
+ *   · un ramo escluso si chiamava col nome del menu che lo include
+ *     («esclude dei rami («Include default branch»)»).
+ */
+describe('le frasi usano solo parole vere nella pagina di GitHub', () => {
+  const sigle = ['pull_request', 'merge_queue', 'required_linear_history', 'required_signatures', 'required_deployments', 'creation', 'update', 'code_scanning', 'workflows'];
+
+  it.each(sigle)('una regola in piu\' («%s» per l\'API): ⚪, e la sigla non compare', (tipo) => {
+    const { esito, testo, uscita } = verdetto(deiPassi({ rules: [{ type: 'deletion' }, { type: 'non_fast_forward' }, controlloMain(), { type: tipo }] }));
+    expect(uscita).toBe(3);
+    expect(esito.diverse.map((d) => d.cosa)).toEqual(['ha anche altre regole, che la procedura non chiede']);
+    expect(testo).not.toContain(tipo);
+  });
+
+  it.each([null, 5, 'x', {}, { parameters: {} }, []])('una voce rovinata (%j): ⚪, senza «undefined» ne\' altre sigle', (voce) => {
+    const { esito, testo, uscita } = verdetto(deiPassi({ rules: [{ type: 'deletion' }, { type: 'non_fast_forward' }, controlloMain(), voce] }));
+    expect(uscita).toBe(3);
+    expect(esito.protegge).toBe(false);
+    expect(esito.diverse.map((d) => d.cosa)).toEqual(['ha anche altre regole, che la procedura non chiede']);
+    expect(testo).not.toMatch(/undefined|«null»|«5»|«x»/);
+  });
+
+  it('un ramo escluso non si chiama mai col nome del menu che lo include', () => {
+    for (const exclude of [['~DEFAULT_BRANCH'], ['~ALL'], ['~ALL', '~DEFAULT_BRANCH']]) {
+      for (const include of [['~DEFAULT_BRANCH'], ['~ALL']]) {
+        const { esito, righe } = verdetto(deiPassi(rami(include, exclude)));
+        const riga = righe.find((r) => r.includes('esclude'));
+        expect(riga, `${include} / ${exclude}`).toBeDefined();
+        expect(riga, `${include} / ${exclude}`).not.toContain('Include');
+        expect(esito.mancano.map((m) => m.cosa).join('\n'), `${include} / ${exclude}`).toContain('non guarda il ramo main');
+      }
+    }
+  });
+
+  it('con «Include all branches» e il ramo predefinito escluso: ❌, il menu si nomina solo per l\'inclusione', () => {
+    const { esito, testo, uscita } = verdetto(deiPassi(rami(['~ALL'], ['~DEFAULT_BRANCH'])));
+    expect(uscita).toBe(1);
+    expect(esito.mancano.map((m) => m.cosa)).toEqual(['esclude il ramo predefinito (main): non guarda il ramo main']);
+    expect(esito.diverse.map((d) => d.cosa)).toEqual(['i rami inclusi sono «Include all branches», e la procedura chiede solo «Include default branch»']);
+    expect(testo).not.toContain('«Include default branch»)');
   });
 });
 
