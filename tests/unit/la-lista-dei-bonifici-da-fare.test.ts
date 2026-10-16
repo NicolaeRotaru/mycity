@@ -35,6 +35,9 @@ function apri(colonneMancanti: string[] = [], tabelleMancanti: string[] = []) {
       bonifici_dei_reclami: [
         { dispute_id: D1, order_id: 'o3', importo_cents: 1800, registrato_at: '2026-10-11T09:00:00Z', fatto_at: null },
       ],
+      // Terzo giro del riesame — la conferma che scrive `refundOrder`: il segno del bonifico
+      // nell'elenco dei rimborsi dell'ordine. Senza, il bonifico va fra quelli da controllare.
+      orders: [{ id: 'o1', stripe_refund_id: `bonifico:3000:return_${R1}` }],
       returns: [
         { id: R1, order_id: 'o1', status: 'REFUNDED', refund_amount_cents: 5000, refunded_at: '2026-10-12T10:00:00Z',
           refund_id: `bonifico:3000:return_${R1}`, refund_iban: 'IT60X0542811101000000123456', refund_bonifico_cents: 3000,

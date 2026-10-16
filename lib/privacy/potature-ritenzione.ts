@@ -33,8 +33,17 @@
  * mezzo a `next/server`, questa decisione una prova non la puo' ESEGUIRE.
  */
 
+import { colonnaNonTrovata } from '@/lib/db/migrazione-148';
+
 /** Cosa risponde una scrittura del database: PostgREST non lancia, restituisce. */
-type Risposta = { error: { message: string } | null };
+type Risposta = { error: { message: string; code?: string } | null };
+
+/**
+ * Quanti mesi restano i messaggi del modulo Contatti. Sta qui, una volta sola:
+ * la potatura qui sotto e l'informativa sull'IBAN del rimborso — che arriva
+ * proprio con un messaggio dai Contatti — leggono lo stesso numero.
+ */
+export const MESI_DEI_MESSAGGI_DEI_CONTATTI = 24;
 
 /** La catena di filtri che le potature usano davvero, e nient'altro. */
 type Filtrabile = PromiseLike<Risposta> & {
@@ -303,7 +312,16 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
       fai: (admin) => esigi(admin
         .from('contact_messages')
         .delete()
-        .lt('created_at', mesi(24))),
+        .lt('created_at', mesi(MESI_DEI_MESSAGGI_DEI_CONTATTI))),
+    },
+    // Riesame del 16/10, terzo giro — L'IBAN DI UN RESO CHIUSO SENZA BONIFICO.
+    // Lo toglie la rotta che chiude il reso, una volta sola: se quella
+    // scrittura cadeva, l'IBAN restava sul reso respinto finche' il cliente non
+    // cancellava l'account, e l'informativa dice che si cancella. Qui c'e' il
+    // giro che la riprende ogni notte (`potaLIbanDeiResiChiusi`, qui sotto).
+    {
+      cosa: 'returns.iban-senza-bonifico',
+      fai: (admin, registro) => potaLIbanDeiResiChiusi(admin, registro),
     },
     // 6/9/2026 — L'ISCRIZIONE CHE NESSUNO HA MAI CONFERMATO RESTAVA QUI PER
     // SEMPRE. Il modulo della newsletter e' pubblico: chiunque puo' scriverci
@@ -377,6 +395,49 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
         .not('recipient_email', 'is', null)),
     },
   ];
+}
+
+/**
+ * L'IBAN DEI RESI CHIUSI SENZA UN BONIFICO DA FARE (riesame del 16/10, terzo giro).
+ *
+ * E' la stessa regola di `ilBonificoDelResoEAncoraDaFare`
+ * (lib/rimborsi/iban-del-rimborso.ts), scritta come filtro: l'IBAN — e il nome
+ * dell'intestatario, se c'era — se ne va dai resi respinti, annullati, o
+ * rimborsati con un modo che non e' il bonifico (credito, carta). Restano dove
+ * sono:
+ *  · i resi ancora aperti: il bonifico puo' ancora servire;
+ *  · i resi rimborsati col segno del bonifico: il bonifico e' da fare (fatto,
+ *    l'IBAN l'ha gia' tolto chi l'ha segnato, e la 162 lo impone);
+ *  · i resi «rimborsati» senza nessun segno: e' il rimborso partito che il
+ *    reso non ha registrato, e chi amministra ha l'avviso — l'IBAN serve.
+ *
+ * Senza la migrazione 162 le colonne non ci sono, e non c'e' niente da togliere:
+ * la potatura riesce senza fare niente, invece di colorare di rosso ogni notte.
+ */
+export async function potaLIbanDeiResiChiusi(admin: ClientePotature, registro: Registro): Promise<void> {
+  const senzaConto = { refund_iban: null, refund_intestatario: null };
+  const conUnConto = 'refund_iban.not.is.null,refund_intestatario.not.is.null';
+  const passi: Array<() => PromiseLike<Risposta>> = [
+    () => admin.from('returns').update(senzaConto).eq('status', 'REJECTED').or(conUnConto),
+    () => admin.from('returns').update(senzaConto).eq('status', 'CANCELED').or(conUnConto),
+    () =>
+      admin
+        .from('returns')
+        .update(senzaConto)
+        .eq('status', 'REFUNDED')
+        .not('refund_id', 'is', null)
+        .not('refund_id', 'like', 'bonifico:%')
+        .or(conUnConto),
+  ];
+  for (const passo of passi) {
+    const { error } = await passo();
+    if (!error) continue;
+    if (colonnaNonTrovata(error)) {
+      registro.info('[cron-deletions] senza la migrazione 162 i resi non hanno IBAN da togliere');
+      return;
+    }
+    throw new Error(error.message);
+  }
 }
 
 /**

@@ -18,6 +18,8 @@ import { comeTornanoIContanti, leggiLaSceltaDelReso } from '@/lib/rimborsi/scelt
 import { COLONNE_162 } from '@/lib/rimborsi/scelta-del-cliente';
 import { scriviAncheSeMancaUnaColonnaNuova } from '@/lib/db/migrazione-148';
 import { dimenticaLIbanSeNonServe } from '@/lib/rimborsi/iban-del-rimborso';
+import { avvisoDelRimborsoNonRegistrato, RIMBORSO_PARTITO_MA_NON_REGISTRATO } from '@/lib/rimborsi/bonifici-da-fare';
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 export const runtime = 'nodejs';
 
@@ -247,7 +249,29 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       (campi) => admin.from('returns').update(campi).eq('id', params.id).eq('status', statoRivendicato),
     );
     if (scrittura.avviso) logger.warn(`[returns] ${scrittura.avviso}`);
-    if (!scrittura.riuscita) return ApiErrors.internal('Update fallito');
+    /**
+     * Riesame del 16/10, terzo giro — QUI I SOLDI SONO GIA' PARTITI.
+     *
+     * Si arriva a questa scrittura solo dopo `refundOrder`: sull'ordine il
+     * rimborso e' gia' registrato (sui contanti, il bonifico e' gia' dovuto).
+     * Se cadeva, la rotta diceva solo «Update fallito»: il reso restava
+     * «approvato» senza il segno del rimborso, il bonifico non entrava nella
+     * lista di chi paga, e al negozio restava una sola strada — chiudere il
+     * reso «senza rimborso», che cancella l'IBAN del cliente. Adesso fa come
+     * `avanza`: chi amministra riceve l'avviso con reso, ordine e cifra del
+     * bonifico, e il negozio legge che non deve ripetere il rimborso.
+     */
+    if (!scrittura.riuscita) {
+      const avviso = avvisoDelRimborsoNonRegistrato({
+        resoId: params.id, ordineId: ret.order_id, refundId, bonificoCents,
+      });
+      try {
+        await notifyAdmins(avviso.titolo, avviso.testo, avviso.link);
+      } catch (e) {
+        logger.error('[returns] avviso del rimborso non registrato non inviato', { returnId: params.id, e });
+      }
+      return ApiErrors.internal(RIMBORSO_PARTITO_MA_NON_REGISTRATO);
+    }
   }
 
   // Riesame del 16/10 — un reso respinto, o rimborsato senza un bonifico da
