@@ -1,14 +1,8 @@
 import { QueryClient, dehydrate, type DehydratedState } from '@tanstack/react-query';
 import { logger } from '@/lib/logger';
-import {
-  domandaCategorie,
-  domandaNegozio,
-  domandaProdotto,
-  negozioDellaSchedaOperativo,
-  type ClientDiLettura,
-  type SchedaProdotto,
-} from '@/lib/queries/catalogo';
+import { domandaCategorie, domandaNegozio, type ClientDiLettura } from '@/lib/queries/catalogo';
 import { domandaVendutoDa } from '@/lib/queries/venduto-da';
+import { leggiSchedaPerIlGuscio } from '@/lib/queries/scheda-con-venduto-da';
 
 /**
  * IL PRECARICO: i dati che partono DENTRO la pagina, invece di essere chiesti
@@ -84,15 +78,17 @@ export function precaricaHome(): Promise<DehydratedState> {
  * esce dal server e finisce nei registri. Si chiede solo per un negozio che la
  * vetrina mostra: per gli altri la pagina dice «non disponibile» e il riquadro
  * non c'e'.
+ *
+ * 16/10/2026 — Il negozio della scheda e «Venduto da» arrivano dalla STESSA
+ * domanda alla vista (`leggiSchedaPerIlGuscio`): due viaggi in fila invece di
+ * quattro. Una lettura che va storta qui non scrive niente, come faceva
+ * `prefetchQuery`: il browser rifara' la domanda. Il guasto vero della vista lo
+ * scrive gia' chi legge la vista.
  */
 export function precaricaProdotto(id: string): Promise<DehydratedState> {
   return precarica(async (supa, qc) => {
-    const domanda = domandaProdotto(supa, id);
-    await qc.prefetchQuery(domanda);
-    const scheda = qc.getQueryData<SchedaProdotto | null>(domanda.queryKey);
-    if (scheda && negozioDellaSchedaOperativo(scheda)) {
-      await qc.prefetchQuery(domandaVendutoDa(supa, scheda.seller_id));
-    }
+    const voci = await leggiSchedaPerIlGuscio(supa, id).catch(() => []);
+    for (const voce of voci) qc.setQueryData(voce.queryKey, voce.data);
   });
 }
 

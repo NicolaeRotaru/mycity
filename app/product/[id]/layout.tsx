@@ -69,14 +69,19 @@ export default async function ProductLayout(
   props: { children: React.ReactNode; params: Promise<{ id: string }> },
 ) {
   const params = await props.params;
-  // 15/10/2026 (R3, R55) — Le due letture partono insieme. Prima del 15/10 erano due
-  // viaggi in tutto; adesso il negozio arriva dalla vista pubblica con una seconda
-  // domanda (R3) e il precarico porta anche «Venduto da» (R55). In fila sarebbero
-  // stati cinque viaggi; cosi' il guscio aspetta la catena piu' lunga, quella del
-  // precarico: prodotto → negozio → «Venduto da» (tre viaggi, quattro finche' in
-  // produzione manca la migrazione 126). Non e' misurato in rete. La pagina e' in
-  // cache per cinque minuti (`revalidate`), quindi l'attesa la paga chi rigenera la
-  // pagina, non ogni visita.
+  // 15/10/2026 (R3, R55) — Le due letture partono insieme: i metadati (prodotto, poi
+  // il suo negozio) e il precarico. Il precarico chiede il prodotto e poi, in UNA
+  // domanda alla vista pubblica, il negozio della scheda e «Venduto da»
+  // (`lib/queries/scheda-con-venduto-da.ts`). Il guscio aspetta quindi due viaggi in
+  // fila, come prima del 15/10. Finche' in produzione manca la migrazione 126, la
+  // prima scheda aperta da un processo ne aspetta tre; le altre, per dieci minuti,
+  // due. Non e' misurato in rete.
+  //
+  // 16/10/2026 — Qui c'era scritto che la pagina resta in cache cinque minuti e che
+  // l'attesa la paga solo chi la rigenera. Non e' vero: `app/layout.tsx` dichiara
+  // `dynamic = 'force-dynamic'` per tutto il sito, e con quello il `revalidate` qui
+  // sopra non conta. Il guscio gira a OGNI visita: ogni viaggio in piu' lo paga chi
+  // apre la scheda.
   const [product, precarico] = await Promise.all([fetchProduct(params.id), precaricaProdotto(params.id)]);
 
   const schema = product && {
