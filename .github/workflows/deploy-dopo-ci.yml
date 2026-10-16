@@ -104,6 +104,9 @@ name: Rilascio dopo CI verde
 # Quindi, una volta unito in main il commit che aggiunge «Main»:
 #   1. apri il ruleset «Main» (Settings → Rules → Rulesets);
 #   2. Target branches → Add target → «Include default branch» (cioe' main);
+#      NON «Include all branches», che sta accanto nel menu: il controllo
+#      obbligatorio vale anche per le spinte, e con tutti i rami coperti
+#      nessuno spinge piu' commit nuovi su nessun ramo;
 #   3. lascia «Require status checks to pass» con il controllo «Main»;
 #   4. Enforcement status → «Active», e salva;
 #   5. controlla la regola com'e' davvero, senza fidarti degli occhi:
