@@ -417,3 +417,38 @@ describe('rilanciare la CI di un commit vecchio di main non lo rimette in produz
     expect(dopo).toEqual([VERDETTO]);
   });
 });
+
+/*
+ * 16/10/2026 (sesto giro di correzione) — LA CORSA FRA DUE UNIONI, E IL MOTIVO VERO.
+ *
+ * Alle 10:00 si unisce H, alle 10:02 si unisce F. Su main la CI non si annulla,
+ * quindi quella di F aspetta in fila. Alle 10:05 la CI di H finisce verde e
+ * parte il suo rilascio: la punta adesso e' F, e il passo si ferma. Il
+ * riepilogo diceva «pubblicarlo rimetterebbe online codice vecchio sopra
+ * quello nuovo, su un database gia' piu' avanti»: falso, F non era online e le
+ * sue migrazioni non le aveva applicate nessuno. E non diceva cosa fare se poi
+ * la CI di F finisce rossa. Per git la scena e' la stessa del rilancio: H e'
+ * un antenato della punta. Cambia solo cosa e' vero dire.
+ */
+describe('la corsa: un commit verde superato da uno unito dopo, con la CI ancora in fila', () => {
+  const deposito = preparaDeposito();
+  const H = deposito.vecchio;
+  const F = deposito.punta;
+  const github = eventoDopoLaCi({ headSha: H });
+
+  it('si ferma, e il riepilogo non dice che online c\'e\' gia\' il codice piu\' nuovo: dice che non l\'ha guardato', () => {
+    const r = controlla(scarica(deposito, H), github);
+    expect(r.uscita, r.log).not.toBe(0);
+    expect(r.output.fidato).toBe('true');
+    expect(r.riepilogo).toContain(`ma adesso l'ultimo commit di \`main\` e' \`${F}\``);
+    expect(r.riepilogo).toContain('non guardo cosa c\'e\' online');
+    expect(r.riepilogo).not.toContain('rimetterebbe online codice vecchio sopra quello nuovo');
+  });
+
+  it('dice che H va online con F, e cosa fare se la CI di F finisce rossa', () => {
+    const r = controlla(scarica(deposito, H), github);
+    expect(r.riepilogo).toContain(`\`${H}\` e' gia' dentro \`${F}\`, quindi va online con il rilascio di \`${F}\``);
+    expect(r.riepilogo).toContain(`Se la CI di \`${F}\` finisce rossa, da qui non parte nessun rilascio`);
+    expect(r.riepilogo).toContain('rilancia quella CI se il rosso viene da una prova che si rompe da sola, altrimenti unisci la correzione');
+  });
+});

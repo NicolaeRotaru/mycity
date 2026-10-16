@@ -9,9 +9,9 @@
  * 16879481), creata il 26/5. E' spenta, non guarda nessun ramo e pretende un
  * controllo di nome «Main» che fino al 15/10 nessun lavoro della CI produceva.
  * Adesso il controllo esiste (l'ultimo lavoro di ci.yml). Questo script legge
- * la regola COM'E' su GitHub e dice, una per una, le cose che le mancano e
- * dove si sistemano. E' il passo finale delle istruzioni in testa a
- * .github/workflows/deploy-dopo-ci.yml.
+ * la regola COM'E' su GitHub e la confronta con quella dei passi in testa a
+ * .github/workflows/deploy-dopo-ci.yml, di cui e' l'ultimo passo: se non e'
+ * quella, dice in cosa e' diversa e dove si sistema.
  *
  * COSA FERMA LA REGOLA, E COSA NO. Il giro precedente qui raccontava il 1/9
  * come una richiesta verde unita sopra un main cambiato. Era falso (collaudo
@@ -46,14 +46,26 @@
  *   (oppure con il JSON salvato in un file: node scripts/controlla-regola-main.mjs regola.json)
  *
  * Uscita:
- *   0  la regola ferma le richieste con la CI rossa (stampa anche cosa NON
- *      ferma e le scelte rimaste: sono avvisi, non bloccano)
- *   1  non le ferma, oppure le ferma ma guarda anche altri rami oltre a main
- *      (e li' blocca le spinte): stampa cosa manca e dove si sistema
+ *   0  la regola e' quella dei passi in testa a deploy-dopo-ci.yml: accesa,
+ *      sul solo «Include default branch», senza rami esclusi, con il solo
+ *      controllo «Main». Ferma le richieste con la CI rossa (stampa anche
+ *      cosa NON ferma e le scelte rimaste: sono avvisi, non bloccano)
+ *   1  di sicuro le manca un pezzo di quella regola (e' spenta, non guarda
+ *      nessun ramo, non pretende il controllo «Main» della CI): stampa cosa e
+ *      dove si sistema
  *   2  non ho potuto leggere la regola: non e' un verde, e' un «non lo so»
- *   3  ho letto la regola, ma un modello dei rami (per esempio con [ ] o
- *      «refs/heads/**\/main») non so come GitHub lo legge: non e' un verde,
- *      va controllata a mano
+ *   3  l'ho letta e non le manca niente di sicuro, ma e' diversa da quella
+ *      dei passi (altri rami, rami esclusi, altri controlli, altre voci):
+ *      stampa in cosa, e va guardata a mano
+ *
+ * 16/10/2026 (sesto giro di correzione) — UNA REGOLA SOLA.
+ *
+ * Qui lo script provava a leggere i rami della regola come li legge GitHub
+ * (modelli con * e **, esclusioni, la creazione di rami nuovi) e a dire cosa
+ * succedeva sugli altri rami. Ogni lettura in piu' ha fatto nascere una frase
+ * sbagliata: otto difetti in due giri. Adesso lo script confronta la regola
+ * con quella dei passi, e basta: ✅ solo se e' quella; ❌ solo per un pezzo
+ * che manca di sicuro; per tutto il resto ⚪, con in cosa e' diversa.
  */
 import fs from 'node:fs';
 import tty from 'node:tty';
@@ -68,169 +80,43 @@ export const ID_DELLA_REGOLA = 16879481;
 /** L'app «GitHub Actions»: e' lei a pubblicare i controlli dei lavori della CI. */
 const APP_GITHUB_ACTIONS = 15368;
 
-/** Il ramo main come lo scrive GitHub. In questo repository «Include default branch» e' lui. */
-const RAMO_MAIN = 'refs/heads/main';
+/** «Include default branch», come lo scrive GitHub. In questo repository e' main. */
+const RAMO_PREDEFINITO = '~DEFAULT_BRANCH';
 
-/** Ogni ramo, per GitHub, comincia cosi'. */
-const PREFISSO_DEI_RAMI = 'refs/heads/';
+/** Le voci che la regola «Main» ha dal 26/5: i passi le lasciano come sono. */
+const VOCI_DEI_PASSI = new Set(['deletion', 'non_fast_forward', 'required_status_checks']);
 
-/*
- * 16/10/2026 (correzione del lotto) — I RAMI DI UNA REGOLA SONO MODELLI, NON NOMI.
- *
- * Prima lo script confrontava i rami inclusi ed esclusi per nome esatto. Su
- * GitHub invece sono modelli: «refs/heads/*», «refs/heads/**» e «refs/heads/m*»
- * comprendono anche main. Un'esclusione «refs/heads/*» scritta per sbaglio
- * lasciava fuori main, e lo script diceva ✅ con uscita 0.
- *
- * La documentazione di GitHub dice fnmatch di Ruby con FNM_PATHNAME: `*` e `?`
- * non attraversano «/», e `**` seguito da «/» vale «zero o piu' cartelle». Non
- * dice se le maiuscole contano, e molti leggono `**` come «qualunque cosa,
- * anche le «/»». Allora ogni modello si prova con tutte queste letture: se
- * danno la stessa risposta, quella e' la risposta; se non la danno, lo script
- * dice «non so giudicare» e non da' un verdetto. Le parentesi [ ] { } e la
- * barra \ non le leggo affatto: sono sempre un «non so».
- */
-const LETTURE_DEI_MODELLI = [
-  { doppiaStellaAttraversa: false, contanoLeMaiuscole: true },
-  { doppiaStellaAttraversa: false, contanoLeMaiuscole: false },
-  { doppiaStellaAttraversa: true, contanoLeMaiuscole: true },
-  { doppiaStellaAttraversa: true, contanoLeMaiuscole: false },
-];
+/** La frase del ⚪: la regola si guarda a mano, lo script non la interpreta. */
+const DIVERSA = 'questa regola e\' diversa da quella della procedura: guardala a mano';
 
-/** Un modello che so leggere: comincia con refs/heads/ e usa solo `*`, `**` e `?`. */
-function modelloLeggibile(modello) {
-  return typeof modello === 'string' && modello.startsWith(PREFISSO_DEI_RAMI) && !/[[\]{}\\]/.test(modello);
+/** Come si chiama un ramo della regola nel menu «Add target» di GitHub. */
+function nomeDelRamo(ramo) {
+  if (ramo === '~ALL') return '«Include all branches»';
+  if (ramo === RAMO_PREDEFINITO) return '«Include default branch»';
+  return `«${String(ramo)}»`;
 }
 
-/** Il modello come espressione regolare. Con `doppiaStellaAttraversa`, `**` prende anche le «/». */
-function espressioneDelModello(modello, doppiaStellaAttraversa) {
-  let espressione = '';
-  for (let i = 0; i < modello.length; ) {
-    if (modello[i] === '*') {
-      let stelle = 0;
-      while (modello[i] === '*') {
-        stelle += 1;
-        i += 1;
-      }
-      espressione += stelle >= 2 && doppiaStellaAttraversa ? '.*' : '[^/]*';
-    } else if (modello[i] === '?') {
-      espressione += '[^/]';
-      i += 1;
-    } else {
-      espressione += modello[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      i += 1;
-    }
-  }
-  return espressione;
+function elenco(rami) {
+  return rami.map(nomeDelRamo).join(', ');
 }
 
-/** Un pezzo fra due «/», alla Ruby: un nome che comincia col punto lo prende solo un punto scritto. */
-function pezzoCorrisponde(pezzoDelModello, pezzoDelNome, lettura) {
-  if (pezzoDelNome.startsWith('.') && !pezzoDelModello.startsWith('.')) return false;
-  return new RegExp(`^${espressioneDelModello(pezzoDelModello, false)}$`, lettura.contanoLeMaiuscole ? '' : 'i').test(
-    pezzoDelNome,
-  );
-}
-
-/** fnmatch di Ruby con FNM_PATHNAME: un pezzo «**» seguito da «/» prende zero o piu' cartelle. */
-function corrispondeAllaRuby(modello, nome, lettura, i = 0, j = 0) {
-  if (i === modello.length) return j === nome.length;
-  if (modello[i] === '**' && i < modello.length - 1) {
-    for (let k = j; k < nome.length; k += 1) {
-      if (corrispondeAllaRuby(modello, nome, lettura, i + 1, k)) return true;
-      if (nome[k].startsWith('.')) return false;
-    }
-    return false;
-  }
-  if (j === nome.length) return false;
-  return pezzoCorrisponde(modello[i], nome[j], lettura) && corrispondeAllaRuby(modello, nome, lettura, i + 1, j + 1);
-}
-
-function corrisponde(modello, ramo, lettura) {
-  if (!lettura.doppiaStellaAttraversa) return corrispondeAllaRuby(modello.split('/'), ramo.split('/'), lettura);
-  return new RegExp(`^${espressioneDelModello(modello, true)}$`, lettura.contanoLeMaiuscole ? '' : 'i').test(ramo);
-}
-
-/**
- * Il modello comprende il ramo? `true`, `false`, oppure `null` = non lo so
- * (modello che non so leggere, o letture che non vanno d'accordo).
- *
- * @param {unknown} modello  una voce di include o exclude, come la scrive GitHub
- * @param {string} ramo      un ramo intero, per esempio «refs/heads/main»
- * @returns {boolean | null}
- */
-export function modelloComprende(modello, ramo) {
-  if (modello === '~ALL') return ramo.startsWith(PREFISSO_DEI_RAMI);
-  if (modello === '~DEFAULT_BRANCH') return ramo === RAMO_MAIN;
-  if (!modelloLeggibile(modello)) return null;
-  const risposte = LETTURE_DEI_MODELLI.map((lettura) => corrisponde(modello, ramo, lettura));
-  if (risposte.every(Boolean)) return true;
-  if (risposte.some(Boolean)) return null;
-  return false;
-}
-
-/** «Almeno uno lo comprende», con il «non lo so»: un si' certo vince, altrimenti un dubbio resta dubbio. */
-function qualcunoComprende(modelli, ramo) {
-  const risposte = modelli.map((m) => modelloComprende(m, ramo));
-  if (risposte.some((r) => r === true)) return true;
-  if (risposte.every((r) => r === false)) return false;
-  return null;
-}
-
-/** Dei rami di prova che un modello comprende, tutti diversi da main: servono a dire «prende anche altri rami». */
-const RAMI_DI_PROVA_DI_TUTTI = ['refs/heads/un-altro-ramo', 'refs/heads/lavoro/un-altro-ramo', 'refs/heads/x'];
-const RIEMPITIVI_DELLA_STELLA = ['x', 'un-altro-ramo', ''];
-const RIEMPITIVI_DELLA_DOPPIA_STELLA = ['x', 'un-altro-ramo', 'lavoro/un-altro-ramo', ''];
-
-function ramiDiProva(modello) {
-  if (modello === '~ALL') return RAMI_DI_PROVA_DI_TUTTI;
-  if (!modelloLeggibile(modello)) return [];
-  const rami = new Set();
-  for (const stella of RIEMPITIVI_DELLA_STELLA) {
-    for (const doppia of RIEMPITIVI_DELLA_DOPPIA_STELLA) {
-      const ramo = modello.replace(/\*{2,}|\*|\?/g, (t) => (t === '?' ? 'x' : t.length >= 2 ? doppia : stella));
-      const pezzi = ramo.slice(PREFISSO_DEI_RAMI.length).split('/');
-      const plausibile = ramo.toLowerCase() !== RAMO_MAIN && pezzi.every((p) => p !== '' && !p.startsWith('.'));
-      if (plausibile) rami.add(ramo);
-    }
-  }
-  return [...rami];
-}
-
-/**
- * Un bersaglio prende anche rami che non sono main, tolte le esclusioni?
- * `true` solo se c'e' un ramo vero che lo dimostra; `false` se le esclusioni
- * lo cancellano di sicuro; `null` quando non lo so dire.
- */
-function prendeAltriRami(bersaglio, exclude) {
-  if (bersaglio === '~DEFAULT_BRANCH' || bersaglio === RAMO_MAIN) return false;
-  if (exclude.includes('~ALL') || exclude.includes(bersaglio)) return false;
-  for (const ramo of ramiDiProva(bersaglio)) {
-    if (modelloComprende(bersaglio, ramo) === true && qualcunoComprende(exclude, ramo) === false) return true;
-  }
-  return null;
-}
-
-/** Come si chiama un bersaglio nella pagina di GitHub. */
-function nomeDelBersaglio(bersaglio) {
-  if (bersaglio === '~ALL') return '«All branches»';
-  if (bersaglio === '~DEFAULT_BRANCH') return '«Default branch»';
-  return `«${String(bersaglio)}»`;
-}
-
-function elencoDeiBersagli(bersagli) {
-  return bersagli.map(nomeDelBersaglio).join(', ');
+/** I controlli pretesi da una voce «required_status_checks», sempre come elenco. */
+function controlliDi(voce) {
+  const controlli = voce?.parameters?.required_status_checks;
+  return Array.isArray(controlli) ? controlli : [];
 }
 
 /**
  * La valutazione. Funzione pura: riceve la regola come la restituisce l'API di
  * GitHub, non tocca niente.
  *
- * `nonSoGiudicare` elenca quello che lo script non sa dire (un modello dei rami
- * che non sa leggere, o che GitHub potrebbe leggere in due modi): con una voce
- * li', `protegge` e' falso, ma non e' un «non protegge» certo.
+ * `mancano` sono i pezzi della regola dei passi che di sicuro non ci sono;
+ * `diverse` sono le differenze dalla regola dei passi che lo script non
+ * giudica: con una voce li', `protegge` e' falso, ma non e' un «non protegge»
+ * certo. Gli avvisi descrivono una regola che funziona, quindi ci sono solo
+ * col ✅.
  *
- * @returns {{ letta: boolean, protegge: boolean, ramoAggiornato: boolean | null, mancano: {cosa: string, come: string, bloccaAltriRami?: boolean}[], nonSoGiudicare: {cosa: string, come: string, suMain?: boolean}[], avvisi: string[], motivo?: string }}
+ * @returns {{ letta: boolean, protegge: boolean, ramoAggiornato: boolean | null, mancano: {cosa: string, come: string}[], diverse: {cosa: string, come: string}[], avvisi: string[], motivo?: string }}
  */
 export function valutaLaRegolaMain(regola) {
   if (!regola || typeof regola !== 'object' || Array.isArray(regola) || !Array.isArray(regola.rules)) {
@@ -240,7 +126,7 @@ export function valutaLaRegolaMain(regola) {
       protegge: false,
       ramoAggiornato: null,
       mancano: [],
-      nonSoGiudicare: [],
+      diverse: [],
       avvisi: [],
       motivo: messaggio
         ? `GitHub ha risposto «${messaggio}» invece della regola.`
@@ -249,7 +135,7 @@ export function valutaLaRegolaMain(regola) {
   }
 
   const mancano = [];
-  const avvisi = [];
+  const diverse = [];
 
   // ① Accesa davvero. «Evaluate» registra cosa avrebbe bloccato, ma non blocca.
   if (regola.enforcement !== 'active') {
@@ -262,115 +148,40 @@ export function valutaLaRegolaMain(regola) {
     });
   }
 
-  // Quello che lo script non sa giudicare: mai un verde, mai un ❌ inventato.
-  const nonSoGiudicare = [];
-
-  // ② Guarda il ramo main: e' fra i rami inclusi e non e' fra gli esclusi,
-  // letti come modelli (vedi LETTURE_DEI_MODELLI).
+  // ② I rami: solo «Include default branch», nessuno escluso. I nomi dei rami
+  // non si interpretano: o sono quelli dei passi, o la regola e' diversa.
   const include = Array.isArray(regola.conditions?.ref_name?.include) ? regola.conditions.ref_name.include : [];
   const exclude = Array.isArray(regola.conditions?.ref_name?.exclude) ? regola.conditions.ref_name.exclude : [];
-  const suiRami = regola.target === 'branch';
-  const mainIncluso = suiRami ? qualcunoComprende(include, RAMO_MAIN) : false;
-  const mainEscluso = suiRami ? qualcunoComprende(exclude, RAMO_MAIN) : false;
-  if (mainIncluso === false) {
+  if (regola.target !== 'branch') {
     mancano.push({
-      cosa: include.length === 0 ? 'non guarda nessun ramo (bersagli vuoti)' : 'non guarda il ramo main',
-      come: 'Target branches → Add target → «Include default branch» (cioe\' main).',
+      cosa: `non e' una regola sui rami (bersaglio «${regola.target ?? 'non indicato'}»), quindi non guarda il ramo main`,
+      come: `la regola da sistemare e' quella sui rami: il ruleset «Main» (id ${ID_DELLA_REGOLA}).`,
     });
-  }
-  if (mainEscluso === true) {
-    const esclusioni = exclude.filter((b) => modelloComprende(b, RAMO_MAIN) === true);
-    const elenco = elencoDeiBersagli(esclusioni);
-    mancano.push({
-      cosa:
-        esclusioni.length === 1
-          ? `non guarda il ramo main: fra i rami esclusi c'e' ${elenco}, che comprende anche main`
-          : `non guarda il ramo main: fra i rami esclusi ci sono ${elenco}, che comprendono anche main`,
-      come: `Target branches → togli ${elenco} dai rami esclusi («Exclude by pattern»).`,
-    });
-  }
-  const mainDubbio = mainIncluso !== false && mainEscluso !== true && (mainIncluso === null || mainEscluso === null);
-  if (mainDubbio) {
-    const dubbi = [
-      ...(mainIncluso === null ? include : []),
-      ...(mainEscluso === null ? exclude : []),
-    ].filter((b) => modelloComprende(b, RAMO_MAIN) === null);
-    nonSoGiudicare.push({
-      cosa: `non so dire se la regola guarda il ramo main: non so come GitHub legge ${elencoDeiBersagli(dubbi)}`,
-      come:
-        'controlla a mano che main sia fra i rami coperti, oppure scrivi i rami in una forma che so leggere: «Include default branch» per main, e per gli altri modelli come refs/heads/claude/** (senza [ ], { } e \\).',
-      suMain: true,
-    });
-  }
-
-  // ②bis Guarda SOLO main (16/10/2026, correzione del lotto). Su GitHub il
-  // controllo obbligatorio di una regola vale anche per le spinte: un commit
-  // nuovo entra in un ramo coperto solo se ha gia' passato la CI su un altro
-  // ramo. Se la regola copre anche altri rami, li' non si spinge piu' niente di
-  // nuovo; con «All branches» un altro ramo non c'e' e il lavoro di tutti si
-  // ferma. Prima '~ALL' contava come «guarda main» e lo script diceva ✅.
-  // Un bersaglio «prende altri rami» solo se c'e' un ramo vero, diverso da
-  // main, che lui comprende e nessuna esclusione toglie: le esclusioni contano.
-  const regoleDeiControlli = regola.rules.filter((r) => r && r.type === 'required_status_checks');
-  // «Do not require status checks on creation»: creare un ramo nuovo resta libero.
-  const creazioneLibera =
-    regoleDeiControlli.length > 0 && regoleDeiControlli.every((r) => r.parameters?.do_not_enforce_on_create === true);
-  const conAltriRami = suiRami ? include.map((b) => ({ bersaglio: b, prende: prendeAltriRami(b, exclude) })) : [];
-  const oltreMain = conAltriRami.filter((c) => c.prende === true).map((c) => c.bersaglio);
-  const forseOltreMain = conAltriRami.filter((c) => c.prende === null).map((c) => c.bersaglio);
-  const esclusiDetti = exclude.length > 0 ? `tolti i rami esclusi ${elencoDeiBersagli(exclude)}` : '';
-  if (oltreMain.length > 0) {
-    const elenco = elencoDeiBersagli(oltreMain);
-    const spunta = '«Do not require status checks on creation»';
-    let cosa;
-    if (oltreMain.includes('~ALL')) {
-      // Con «All branches» quello che resta libero sono solo i rami esclusi
-      // e, con la spunta, la creazione di rami nuovi: la frase dice quali.
-      const tranne = exclude.length > 0 ? ` tranne quelli esclusi (${elencoDeiBersagli(exclude)})` : '';
-      let effetto;
-      if (exclude.length > 0 && creazioneLibera) {
-        effetto = `Sui rami esclusi si spinge come prima, e con la spunta ${spunta} si possono ancora creare rami nuovi; su tutti gli altri rami che esistono gia' un commit nuovo entra solo se ha gia' passato la CI altrove`;
-      } else if (exclude.length > 0) {
-        effetto =
-          'Sui rami esclusi si spinge come prima; su tutti gli altri un commit nuovo entra solo se ha gia\' passato la CI partendo da uno dei rami esclusi';
-      } else if (creazioneLibera) {
-        effetto = `Con la spunta ${spunta} si possono ancora creare rami nuovi; sui rami che esistono gia', invece, non si spinge piu' un commit che non abbia gia' passato la CI su un altro ramo`;
-      } else {
-        effetto =
-          'Se la regola copre ogni ramo, quell\'altro ramo non c\'e\': nessuno puo\' piu\' spingere commit nuovi, su nessun ramo, e la CI non parte';
-      }
-      cosa =
-        `guarda tutti i rami («All branches»)${tranne}, non solo main. Il controllo obbligatorio vale anche per le spinte: ` +
-        `un commit nuovo entra in un ramo coperto solo se ha gia' passato la CI su un altro ramo. ${effetto}`;
-    } else {
-      cosa =
-        `guarda anche rami che non sono main (${elenco}${esclusiDetti ? `, ${esclusiDetti}` : ''}). ` +
-        (creazioneLibera
-          ? `Il controllo obbligatorio vale anche per le spinte. Con la spunta ${spunta} quei rami si possono ancora creare, ma su quelli che esistono gia' un commit nuovo entra solo se ha gia' passato la CI su un altro ramo`
-          : 'Il controllo obbligatorio vale anche per le spinte: su quei rami un commit nuovo entra solo se ha gia\' passato la CI su un altro ramo, e chi lavora li\' non riesce piu\' a spingere');
+  } else {
+    if (include.length === 0) {
+      mancano.push({
+        cosa: 'non guarda nessun ramo (bersagli vuoti)',
+        come: 'Target branches → Add target → «Include default branch» (cioe\' main).',
+      });
+    } else if (include.length !== 1 || include[0] !== RAMO_PREDEFINITO) {
+      diverse.push({
+        cosa: `i rami inclusi sono ${elenco(include)}, e la procedura chiede solo «Include default branch»`,
+        come: 'Target branches → lascia solo «Include default branch» (cioe\' main) e togli gli altri.',
+      });
     }
-    mancano.push({
-      cosa,
-      come: `Target branches → togli ${elenco} e lascia solo «Include default branch» (cioe' main).`,
-      bloccaAltriRami: true,
-    });
-  }
-  if (forseOltreMain.length > 0) {
-    const elenco = elencoDeiBersagli(forseOltreMain);
-    nonSoGiudicare.push({
-      cosa: `non so dire se ${elenco} prende anche rami che non sono main${esclusiDetti ? `, ${esclusiDetti}` : ''}. Se li prende, su quei rami il controllo obbligatorio blocca le spinte`,
-      come: `se vuoi solo main, togli ${elenco} e lascia solo «Include default branch»; altrimenti controlla a mano quali rami prende.`,
-    });
+    if (exclude.length > 0) {
+      diverse.push({
+        cosa: `esclude dei rami (${elenco(exclude)}), e la procedura non ne esclude nessuno`,
+        come: 'Target branches → togli i rami esclusi («Exclude by pattern»).',
+      });
+    }
   }
 
-  // ③ Pretende il controllo «Main», pubblicato da GitHub Actions.
-  const conMain = regoleDeiControlli.filter((r) =>
-    (r.parameters?.required_status_checks ?? []).some((c) => c && c.context === CONTROLLO_RICHIESTO),
-  );
-  const righeMain = conMain.flatMap((r) =>
-    (r.parameters?.required_status_checks ?? []).filter((c) => c && c.context === CONTROLLO_RICHIESTO),
-  );
-  if (conMain.length === 0) {
+  // ③ Il controllo «Main» della CI, e nessun altro.
+  const vociDeiControlli = regola.rules.filter((r) => r && r.type === 'required_status_checks');
+  const controlli = vociDeiControlli.flatMap(controlliDi);
+  const righeMain = controlli.filter((c) => c && c.context === CONTROLLO_RICHIESTO);
+  if (righeMain.length === 0) {
     mancano.push({
       cosa: `non pretende il controllo «${CONTROLLO_RICHIESTO}»`,
       come: `Spunta «Require status checks to pass» → Add checks → scrivi «${CONTROLLO_RICHIESTO}» (e' il lavoro finale della CI, aspetta tutti gli altri).`,
@@ -381,22 +192,50 @@ export function valutaLaRegolaMain(regola) {
       come: `Nella riga del controllo «${CONTROLLO_RICHIESTO}», come fonte scegli «GitHub Actions» oppure «Any source».`,
     });
   }
+  const altriControlli = controlli.filter((c) => !(c && c.context === CONTROLLO_RICHIESTO));
+  if (altriControlli.length > 0) {
+    diverse.push({
+      cosa: `pretende anche ${altriControlli.map((c) => `«${String(c?.context)}»`).join(', ')}, e la procedura chiede solo «${CONTROLLO_RICHIESTO}», che aspetta gia' tutti gli altri lavori della CI`,
+      come: `In «Require status checks to pass» lascia solo «${CONTROLLO_RICHIESTO}».`,
+    });
+  }
 
-  // ④ La coda di unione («Require merge queue»). Con la coda, GitHub aspetta i
-  // controlli anche sull'evento merge_group, e ci.yml non gira su merge_group:
-  // «Main» non arriverebbe mai e ogni unione resterebbe ferma in coda.
-  if (regola.rules.some((r) => r && r.type === 'merge_queue')) {
-    mancano.push({
-      cosa:
-        'chiede la coda di unione, ma la CI non gira sull\'evento merge_group: in coda il controllo «Main» non arriverebbe mai e nessuna unione passerebbe',
-      come: 'Togli «Require merge queue» dalla regola (oppure, prima, aggiungi merge_group fra gli eventi di .github/workflows/ci.yml).',
+  // ④ Nessuna voce che i passi non chiedono (per esempio la coda di unione):
+  // lo script non prova a dire cosa fa, la nomina e basta.
+  const vociInPiu = [
+    ...new Set(
+      regola.rules.map((r) => (r && typeof r === 'object' ? r.type : undefined)).filter((tipo) => !VOCI_DEI_PASSI.has(tipo)),
+    ),
+  ].map((tipo) => `«${String(tipo)}»`);
+  if (vociInPiu.length > 0) {
+    diverse.push({
+      cosa: `ha anche ${vociInPiu.join(', ')}, che la procedura non chiede`,
+      come: `togli ${vociInPiu.join(', ')} dalla regola, se non ti serve; altrimenti guarda a mano cosa ferma.`,
     });
   }
 
   // La spunta del ramo aggiornato: una SCELTA con un costo, non un pezzo che
   // manca. Senza, la regola ferma lo stesso ogni richiesta rossa.
+  const conMain = vociDeiControlli.filter((r) => controlliDi(r).some((c) => c && c.context === CONTROLLO_RICHIESTO));
   const ramoAggiornato =
     conMain.length > 0 ? conMain.some((r) => r.parameters?.strict_required_status_checks_policy === true) : null;
+
+  const protegge = mancano.length === 0 && diverse.length === 0;
+  return {
+    letta: true,
+    protegge,
+    ramoAggiornato,
+    mancano,
+    diverse,
+    // Gli avvisi dicono cosa fa una regola accesa sul solo main: scritti accanto
+    // a una regola spenta o diversa, sarebbero falsi.
+    avvisi: protegge ? avvisiDellaRegola(regola, ramoAggiornato) : [],
+  };
+}
+
+/** Quello che la regola dei passi, accesa, fa e non fa. */
+function avvisiDellaRegola(regola, ramoAggiornato) {
+  const avvisi = [];
   if (ramoAggiornato === false) {
     avvisi.push(
       'la spunta «Require branches to be up to date before merging» e\' tolta, ed e\' una scelta tua. Senza, due richieste verdi ciascuna da sola possono rompersi a vicenda una volta unite, e se ne accorge solo la CI di main, dopo. ' +
@@ -415,18 +254,6 @@ export function valutaLaRegolaMain(regola) {
       'o due richieste che si pestano i piedi. Quello lo ferma il rilascio dopo CI verde: i segreti di Vercel su GitHub, poi "main": false in vercel.json.',
   );
 
-  // Altri controlli richiesti: non sbagliati di per se', ma un nome che nessun
-  // lavoro produce blocca ogni unione per sempre («Expected — Waiting»).
-  const altri = regoleDeiControlli
-    .flatMap((r) => r.parameters?.required_status_checks ?? [])
-    .map((c) => c?.context)
-    .filter((nome) => typeof nome === 'string' && nome !== CONTROLLO_RICHIESTO);
-  if (altri.length > 0) {
-    avvisi.push(
-      `pretende anche ${altri.map((n) => `«${n}»`).join(', ')}: ogni nome deve essere identico a quello di un lavoro della CI, altrimenti nessuna unione passera' mai. «${CONTROLLO_RICHIESTO}» da solo li copre gia' tutti.`,
-    );
-  }
-
   // Chi puo' scavalcarla. GitHub mostra l'elenco solo a chi puo' modificare la regola.
   if (!Array.isArray(regola.bypass_actors)) {
     avvisi.push('non vedo chi puo\' scavalcarla: GitHub mostra quell\'elenco solo a chi puo\' modificare la regola.');
@@ -439,15 +266,7 @@ export function valutaLaRegolaMain(regola) {
       `${regola.bypass_actors.length} fra persone, squadre o app possono scavalcarla: quando lo fanno, il codice rosso entra lo stesso.`,
     );
   }
-
-  return {
-    letta: true,
-    protegge: mancano.length === 0 && nonSoGiudicare.length === 0,
-    ramoAggiornato,
-    mancano,
-    nonSoGiudicare,
-    avvisi,
-  };
+  return avvisi;
 }
 
 /** Le righe da stampare per un esito. */
@@ -460,43 +279,35 @@ export function righeDelVerdetto(esito) {
       `   oppure salvala e passami il file: gh api repos/NicolaeRotaru/mycity/rulesets/${ID_DELLA_REGOLA} > regola.json && node scripts/controlla-regola-main.mjs regola.json`,
     ];
   }
-  const dubbi = esito.nonSoGiudicare ?? [];
-  const dubbioSuMain = dubbi.some((d) => d.suMain === true);
-  // Se l'unico guaio e' che copre anche altri rami, le richieste rosse le
-  // ferma: dirle «NON ferma» sarebbe falso. Il guaio e' che ferma troppo.
-  // Ma se non so dire se guarda main, non lo dico nemmeno al contrario.
-  const soloAltriRami = esito.mancano.length > 0 && esito.mancano.every((m) => m.bloccaAltriRami === true);
-  let titolo;
+  const diverse = esito.diverse ?? [];
+  const righe = [];
   if (esito.protegge) {
-    titolo = '✅ La regola «Main» ferma le richieste con la CI rossa: e\' accesa, guarda solo main e pretende il controllo «Main» verde.';
-  } else if (esito.mancano.length === 0) {
-    titolo =
-      '⚪ Ho letto la regola «Main», ma non so giudicare se ferma le richieste con la CI rossa e guarda solo main. Controllala a mano:';
-  } else if (soloAltriRami && !dubbioSuMain) {
-    titolo = '❌ La regola «Main» ferma le richieste con la CI rossa, ma blocca anche le spinte sugli altri rami. Da sistemare:';
-  } else if (soloAltriRami) {
-    titolo = '❌ La regola «Main» blocca le spinte anche su rami che non sono main, e non so dire se ferma le richieste con la CI rossa. Da sistemare:';
+    righe.push(
+      '✅ La regola «Main» e\' quella della procedura e ferma le richieste con la CI rossa: e\' accesa, guarda solo main e pretende il controllo «Main» verde.',
+    );
+  } else if (esito.mancano.length > 0) {
+    const quante = esito.mancano.length === 1 ? 'C\'e\' una cosa da sistemare' : `Ci sono ${esito.mancano.length} cose da sistemare`;
+    righe.push(`❌ La regola «Main» non e' quella della procedura. ${quante}:`);
+    esito.mancano.forEach((m, i) => {
+      righe.push(`   ${i + 1}. ${m.cosa}.`);
+      righe.push(`      Dove si sistema: ${m.come}`);
+    });
+    if (diverse.length > 0) righe.push(`   ⚪ In piu', ${DIVERSA}. Ecco in cosa:`);
   } else {
-    const quante = esito.mancano.length === 1 ? 'Le manca una cosa' : `Le mancano ${esito.mancano.length} cose`;
-    titolo = `❌ La regola «Main» NON ferma le richieste con la CI rossa. ${quante}:`;
+    righe.push(`⚪ Ho letto la regola «Main», ma ${DIVERSA}. Ecco in cosa:`);
   }
-  const righe = [titolo];
-  esito.mancano.forEach((m, i) => {
-    righe.push(`   ${i + 1}. ${m.cosa}.`);
-    righe.push(`      Dove si sistema: ${m.come}`);
-  });
-  for (const dubbio of dubbi) {
-    righe.push(`   ⚪ Da controllare a mano: ${dubbio.cosa}.`);
-    righe.push(`      Come uscirne: ${dubbio.come}`);
+  for (const d of diverse) {
+    righe.push(`   · ${d.cosa}.`);
+    righe.push(`      Dove si sistema: ${d.come}`);
   }
   for (const avviso of esito.avvisi) righe.push(`   ⚠️  Da sapere: ${avviso}`);
   return righe;
 }
 
 /**
- * L'uscita del comando: 0 protegge; 1 di sicuro non protegge (o blocca altri
- * rami); 2 non ho letto la regola; 3 l'ho letta ma un modello dei rami non lo
- * so giudicare, e nient'altro e' sicuramente sbagliato.
+ * L'uscita del comando: 0 e' la regola dei passi; 1 di sicuro le manca un
+ * pezzo; 2 non ho letto la regola; 3 l'ho letta, e' diversa dalla regola dei
+ * passi e non le manca niente di sicuro: va guardata a mano.
  */
 export function uscitaDelVerdetto(esito) {
   if (!esito.letta) return 2;
@@ -511,7 +322,7 @@ export function uscitaDelVerdetto(esito) {
  * errore sopra, non su di me.
  */
 export function esitoDalTesto(testo) {
-  const vuoti = { letta: false, protegge: false, ramoAggiornato: null, mancano: [], nonSoGiudicare: [], avvisi: [] };
+  const vuoti = { letta: false, protegge: false, ramoAggiornato: null, mancano: [], diverse: [], avvisi: [] };
   if (String(testo ?? '').trim() === '') {
     return {
       ...vuoti,
