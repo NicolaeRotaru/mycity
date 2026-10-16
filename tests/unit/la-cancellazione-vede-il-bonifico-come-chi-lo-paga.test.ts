@@ -6,7 +6,7 @@ vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: 
 
 import { cancellaAccount } from '@/lib/account/cancellazione';
 import { custodisciIBonificiDaFare } from '@/lib/rimborsi/iban-del-rimborso';
-import { bonificiRimastiSoloSullOrdine, vociDeiBonificiDaFare, type ResoSenzaSegno } from '@/lib/rimborsi/bonifici-da-fare';
+import { bonificiDeiResiDagliOrdini, vociDeiBonificiDaFare, type RigaDelResoLetta } from '@/lib/rimborsi/bonifici-da-fare';
 import { quantoSiPuoRestituire, ripartoDelRimborso } from '@/lib/rimborsi/regole-del-rimborso';
 
 /**
@@ -73,8 +73,7 @@ function mondo(o: Riga, resi: Riga[]) {
 /** La lista di chi paga, costruita come la costruisce la rotta (lib/rimborsi/bonifici-da-fare.ts). */
 function laLista() {
   const ordini = db.tabelle.orders.map((o) => ({ id: String(o.id), stripe_refund_id: o.stripe_refund_id as string | null }));
-  const senzaSegno = db.tabelle.returns.filter((r) => r.refund_id == null) as unknown as ResoSenzaSegno[];
-  return vociDeiBonificiDaFare(bonificiRimastiSoloSullOrdine(senzaSegno, ordini), [], ordini);
+  return vociDeiBonificiDaFare(bonificiDeiResiDagliOrdini(ordini, db.tabelle.returns as unknown as RigaDelResoLetta[]));
 }
 
 beforeEach(() => mondo(ordine(), [reso()]));

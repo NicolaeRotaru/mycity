@@ -11,20 +11,21 @@ import { colonnaNonTrovata, scriviAncheSeMancaUnaColonnaNuova } from '@/lib/db/m
 import { COLONNE_162 } from '@/lib/rimborsi/scelta-del-cliente';
 import { ibanValido, normalizzaIban } from '@/lib/rimborsi/scelta-del-cliente';
 import {
-  bonificiRimastiSoloSullOrdine,
+  bonificiDeiResiDagliOrdini,
+  cifraDelBonificoDelReso,
   letturaDeiDaFareTagliata,
+  notaPerIlRegistro,
   registrazioneMancanteDelBonifico,
-  smistaLeVoci,
-  STATI_DEL_RESO_COL_RIMBORSO_FORSE_PARTITO,
+  resoDelSegno,
   tabellaDeiBonificiMancante,
   TETTO_DEI_BONIFICI_DA_FARE,
   TETTO_DEI_BONIFICI_FATTI,
   vociDeiBonificiDaFare,
   type OrdineDelBonifico,
-  type ResoSenzaSegno,
   type RigaDelBonificoDelReclamo,
-  type RigaDelReso,
+  type RigaDelResoLetta,
 } from '@/lib/rimborsi/bonifici-da-fare';
+import { rimborsiGiaScritti } from '@/lib/stripe/elenco-dei-rimborsi';
 import { IBAN_DEL_RECLAMO_CANCELLATO, IBAN_DEL_RESO_CANCELLATO } from '@/lib/rimborsi/iban-del-rimborso';
 
 export const runtime = 'nodejs';
@@ -47,89 +48,82 @@ export const runtime = 'nodejs';
 const COLONNE =
   'id, order_id, refund_amount_cents, refunded_at, refund_id, refund_iban, refund_intestatario, refund_bonifico_cents, refund_bonifico_fatto_at';
 const COLONNE_DEI_RECLAMI = 'dispute_id, order_id, importo_cents, registrato_at, fatto_at, iban, intestatario';
-/** I resi senza il segno del rimborso: servono anche lo stato e l'id del rimborso (vuoto). */
-const COLONNE_SENZA_SEGNO = `${COLONNE}, status`;
 
-/** Quanti ordini si chiedono per volta: l'elenco degli id viaggia nell'indirizzo della richiesta. */
-const ORDINI_PER_LETTURA = 100;
+/** Quanti resi si chiedono per volta: l'elenco degli id viaggia nell'indirizzo della richiesta. */
+const RESI_PER_LETTURA = 100;
+/** Quanti ordini per pagina: lo stesso numero di righe che il database da' al massimo per volta. */
+const ORDINI_PER_PAGINA = 1000;
 
 /**
- * Riesame del 16/10, terzo giro — GLI ORDINI DEI RESI, PER CONFERMARE I BONIFICI.
+ * Riesame del 16/10, sesto giro — GLI ORDINI COL SEGNO DI UN BONIFICO, TUTTI.
  *
- * La riga del reso, in produzione senza la 153, la puo' scrivere anche il
- * cliente: un bonifico e' confermato solo se il suo segno sta nell'elenco dei
- * rimborsi dell'ordine, che scrive solo il server
- * (`bonificoRegistratoSullOrdine` in lib/rimborsi/bonifici-da-fare.ts).
+ * Il segno `bonifico:<centesimi>:<chiave>` nell'elenco dei rimborsi dell'ordine lo scrive solo il
+ * server (`refundOrder`): e' da li' che nascono le voci dei resi. Si leggono tutti, a pagine, senza
+ * tetto: nessuno da fuori puo' aggiungerne, quindi una pagina in piu' e' un bonifico vero in piu'.
  */
-async function ordiniDeiResi(
+async function ordiniColBonifico(
   admin: ReturnType<typeof getAdminSupabase>,
-  idOrdini: readonly string[],
 ): Promise<{ ordini: OrdineDelBonifico[]; errore: string | null }> {
-  const unici = [...new Set(idOrdini.filter(Boolean))];
   const ordini: OrdineDelBonifico[] = [];
-  for (let i = 0; i < unici.length; i += ORDINI_PER_LETTURA) {
+  for (let da = 0; ; da += ORDINI_PER_PAGINA) {
     const { data, error } = await admin
       .from('orders')
       .select('id, stripe_refund_id')
-      .in('id', unici.slice(i, i + ORDINI_PER_LETTURA));
+      .like('stripe_refund_id', '%bonifico:%')
+      .order('id', { ascending: true })
+      .range(da, da + ORDINI_PER_PAGINA - 1);
     if (error) return { ordini: [], errore: error.message };
-    ordini.push(...((data ?? []) as unknown as OrdineDelBonifico[]));
+    const pagina = (data ?? []) as unknown as OrdineDelBonifico[];
+    ordini.push(...pagina);
+    if (pagina.length < ORDINI_PER_PAGINA) return { ordini, errore: null };
   }
-  return { ordini, errore: null };
 }
 
-/**
- * Riesame del 16/10 — DUE LETTURE, NON UNA FINESTRA SOLA.
- *
- * Prima si leggevano gli ultimi 200 rimborsi col bonifico, fatti compresi:
- * con 200 bonifici gia' pagati registrati dopo, un bonifico ancora da fare
- * usciva dalla finestra e non lo vedeva piu' nessuno, mentre l'ordine diceva
- * gia' «rimborsato». Adesso i bonifici DA FARE si leggono a parte, fino a un
- * tetto alto (e se lo si tocca la pagina lo dice); di quelli fatti si mostrano
- * solo gli ultimi, come storico.
- */
+/** I resi nominati dai segni: per l'IBAN, il nome e il «fatto». Senza la 162 quelle colonne non ci sono. */
+async function resiDeiSegni(
+  admin: ReturnType<typeof getAdminSupabase>,
+  ids: readonly string[],
+): Promise<{ resi: RigaDelResoLetta[]; con162: boolean; errore: string | null }> {
+  const resi: RigaDelResoLetta[] = [];
+  let con162 = true;
+  for (let i = 0; i < ids.length; i += RESI_PER_LETTURA) {
+    const gruppo = ids.slice(i, i + RESI_PER_LETTURA);
+    const leggi = (colonne: string) => admin.from('returns').select(colonne).in('id', gruppo);
+    const lettura = await conRipiegoSchema(
+      'returns.select (bonifici da fare)',
+      () => leggi(COLONNE),
+      () => {
+        con162 = false;
+        return leggi(senzaColonne(COLONNE, COLONNE_162));
+      },
+    );
+    if (lettura.error) return { resi: [], con162, errore: (lettura.error as { message?: string }).message ?? 'lettura caduta' };
+    resi.push(...((lettura.data ?? []) as unknown as RigaDelResoLetta[]));
+  }
+  return { resi, con162, errore: null };
+}
+
 async function elenco(): Promise<NextResponse> {
   const admin = getAdminSupabase();
-  let con162 = true;
-  const resiColBonifico = (colonne: string) =>
-    admin.from('returns').select(colonne).eq('status', 'REFUNDED').like('refund_id', 'bonifico:%');
 
-  const daFare = await conRipiegoSchema(
-    'returns.select (bonifici da fare)',
-    () =>
-      resiColBonifico(COLONNE)
-        .is('refund_bonifico_fatto_at', null)
-        .order('refunded_at', { ascending: false })
-        .limit(TETTO_DEI_BONIFICI_DA_FARE),
-    () => {
-      // Senza la 162 la lista c'e' lo stesso, senza IBAN e senza «fatto»: e
-      // senza la colonna del «fatto», ogni bonifico conta come da fare.
-      con162 = false;
-      return resiColBonifico(senzaColonne(COLONNE, COLONNE_162))
-        .order('refunded_at', { ascending: false })
-        .limit(TETTO_DEI_BONIFICI_DA_FARE);
-    },
-  );
-  if (daFare.error) {
-    logger.error('[bonifici da fare] lettura fallita', { message: (daFare.error as { message?: string }).message });
+  // ① I bonifici dei resi: dai segni sugli ordini, poi le righe dei resi che nominano.
+  const { ordini, errore: erroreOrdini } = await ordiniColBonifico(admin);
+  if (erroreOrdini) {
+    logger.error('[bonifici da fare] ordini col bonifico non letti', { message: erroreOrdini });
     return ApiErrors.internal('Non riesco a leggere i bonifici da fare');
   }
-  const righeDaFare = (daFare.data ?? []) as unknown as RigaDelReso[];
-  let tagliata = letturaDeiDaFareTagliata(righeDaFare.length);
-
-  let righeFatte: RigaDelReso[] = [];
-  if (con162) {
-    const fatti = await resiColBonifico(COLONNE)
-      .not('refund_bonifico_fatto_at', 'is', null)
-      .order('refund_bonifico_fatto_at', { ascending: false })
-      .limit(TETTO_DEI_BONIFICI_FATTI);
-    // Lo storico e' un di piu': se non si legge, la lista dei da fare resta intera.
-    if (fatti.error) {
-      logger.warn('[bonifici da fare] storico dei bonifici fatti non letto', { message: fatti.error.message });
-    } else {
-      righeFatte = (fatti.data ?? []) as unknown as RigaDelReso[];
-    }
+  const idResi = [
+    ...new Set(ordini.flatMap((o) => [...rimborsiGiaScritti(o)].map(resoDelSegno)).filter((id): id is string => !!id)),
+  ];
+  const letti = await resiDeiSegni(admin, idResi);
+  if (letti.errore) {
+    logger.error('[bonifici da fare] resi dei bonifici non letti', { message: letti.errore });
+    return ApiErrors.internal('Non riesco a leggere i bonifici da fare');
   }
+  let con162 = letti.con162;
+  // Senza la 162 non c'e' la colonna del «fatto»: ogni bonifico conta come da fare.
+  const righe = bonificiDeiResiDagliOrdini(ordini, letti.resi, TETTO_DEI_BONIFICI_FATTI);
+  let tagliata = false;
 
   // I bonifici dei reclami: senza la 162 la tabella non c'e', e quei bonifici
   // restano solo negli avvisi (la pagina lo dice).
@@ -163,44 +157,7 @@ async function elenco(): Promise<NextResponse> {
     }
   }
 
-  // Riesame del 16/10, quarto giro — i resi SENZA segno, dove il rimborso puo' essere partito: se
-  // la scrittura dell'esito sul reso era caduta, il bonifico sta solo sull'ordine. Si leggono qui e
-  // si confrontano con l'elenco dei rimborsi dell'ordine (`bonificiRimastiSoloSullOrdine`).
-  const resiSenzaSegno = (colonne: string) =>
-    admin
-      .from('returns')
-      .select(colonne)
-      .is('refund_id', null)
-      .in('status', [...STATI_DEL_RESO_COL_RIMBORSO_FORSE_PARTITO])
-      .limit(TETTO_DEI_BONIFICI_DA_FARE);
-  const senzaSegno = await conRipiegoSchema(
-    'returns.select (bonifici rimasti sull ordine)',
-    () => resiSenzaSegno(COLONNE_SENZA_SEGNO),
-    () => resiSenzaSegno(senzaColonne(COLONNE_SENZA_SEGNO, COLONNE_162)),
-  );
-  if (senzaSegno.error) {
-    logger.error('[bonifici da fare] resi senza segno non letti', {
-      message: (senzaSegno.error as { message?: string }).message,
-    });
-    return ApiErrors.internal('Non riesco a leggere i bonifici da fare');
-  }
-  const righeSenzaSegno = (senzaSegno.data ?? []) as unknown as ResoSenzaSegno[];
-  tagliata = tagliata || letturaDeiDaFareTagliata(righeSenzaSegno.length);
-
-  const conSegno = [...righeDaFare, ...righeFatte];
-  const { ordini, errore: erroreOrdini } = await ordiniDeiResi(
-    admin,
-    [...conSegno, ...righeSenzaSegno].map((r) => r.order_id),
-  );
-  if (erroreOrdini) {
-    logger.error('[bonifici da fare] ordini dei resi non letti', { message: erroreOrdini });
-    return ApiErrors.internal('Non riesco a controllare i bonifici sugli ordini');
-  }
-  const righe = [...conSegno, ...bonificiRimastiSoloSullOrdine(righeSenzaSegno, ordini)];
-
-  // Fra i bonifici da pagare solo quelli che l'ordine conferma; gli altri a parte, da controllare.
-  const { daPagare, daControllare } = smistaLeVoci(vociDeiBonificiDaFare(righe, reclami, ordini));
-  return NextResponse.json({ voci: daPagare, daControllare, migrazione162: con162, tagliata }, { status: 200 });
+  return NextResponse.json({ voci: vociDeiBonificiDaFare(righe, reclami), migrazione162: con162, tagliata }, { status: 200 });
 }
 
 /**
@@ -258,12 +215,16 @@ async function segnaFatto(body: Comando) {
  */
 async function registraIban(body: Comando, iban: string) {
   const admin = getAdminSupabase();
+  // Riesame del 16/10, sesto giro — SOLO DOVE L'IBAN MANCA. La pagina mostra il campo solo li', ma
+  // la rotta accettava anche sopra l'IBAN scritto dal cliente: un conto si sostituiva senza che il
+  // registro dicesse quale c'era prima. Adesso un IBAN scritto non si sovrascrive da qui.
   return body.reclamoId
     ? admin
         .from('bonifici_dei_reclami')
         .update({ iban })
         .eq('dispute_id', body.reclamoId)
         .is('fatto_at', null)
+        .is('iban', null)
         .select('dispute_id')
     : admin
         .from('returns')
@@ -272,7 +233,40 @@ async function registraIban(body: Comando, iban: string) {
         .eq('status', 'REFUNDED')
         .like('refund_id', 'bonifico:%')
         .is('refund_bonifico_fatto_at', null)
+        .is('refund_iban', null)
         .select('id');
+}
+
+/**
+ * Riesame del 16/10, sesto giro — SU QUALE CONTO, E QUANTO. Col «fatto» l'IBAN si cancella: si
+ * legge prima, per lasciare nel registro le sue ultime quattro cifre e la cifra pagata.
+ */
+async function quelloCheSiPaga(
+  body: Comando,
+): Promise<{ pagato: { iban: string | null; cifraCents: number | null }; error: { code?: string; message: string } | null }> {
+  const admin = getAdminSupabase();
+  if (body.reclamoId) {
+    const { data, error } = await admin
+      .from('bonifici_dei_reclami')
+      .select('iban, importo_cents')
+      .eq('dispute_id', body.reclamoId)
+      .maybeSingle();
+    const riga = data as { iban?: string | null; importo_cents?: number | null } | null;
+    return { pagato: { iban: riga?.iban ?? null, cifraCents: riga?.importo_cents ?? null }, error };
+  }
+  const { data, error } = await admin
+    .from('returns')
+    .select('refund_iban, refund_bonifico_cents, refund_id')
+    .eq('id', body.resoId as string)
+    .maybeSingle();
+  const riga = data as { refund_iban?: string | null; refund_bonifico_cents?: number | null; refund_id?: string | null } | null;
+  return {
+    pagato: {
+      iban: riga?.refund_iban ?? null,
+      cifraCents: riga ? cifraDelBonificoDelReso({ refund_bonifico_cents: riga.refund_bonifico_cents, refund_id: riga.refund_id ?? null }) : null,
+    },
+    error,
+  };
 }
 
 /**
@@ -341,7 +335,12 @@ async function comando(req: NextRequest, user: { id: string }): Promise<NextResp
     }
   }
 
-  const { data, error } = body.azione === 'iban' ? await registraIban(body, iban) : await segnaFatto(body);
+  const prima = body.azione === 'fatto' ? await quelloCheSiPaga(body) : null;
+  const { data, error } = prima?.error
+    ? { data: null, error: prima.error }
+    : body.azione === 'iban'
+      ? await registraIban(body, iban)
+      : await segnaFatto(body);
 
   if (error) {
     if (colonnaNonTrovata(error) || tabellaDeiBonificiMancante(error)) {
@@ -359,17 +358,22 @@ async function comando(req: NextRequest, user: { id: string }): Promise<NextResp
     );
   }
   if (!data || data.length === 0) {
-    return ApiErrors.conflict('Questo bonifico è già segnato come fatto, oppure non è un rimborso da bonificare.');
+    return ApiErrors.conflict(
+      body.azione === 'iban'
+        ? 'Qui l’IBAN si scrive solo su un bonifico da fare che non ce l’ha ancora: ricarica la pagina.'
+        : 'Questo bonifico è già segnato come fatto, oppure non è un rimborso da bonificare.',
+    );
   }
 
   // Chi ha segnato il bonifico, o copiato l'IBAN, resta scritto: sono soldi che escono a mano.
   // Quinto giro del riesame: copiare un IBAN non rimborsa niente, e ha la sua voce nel registro.
+  // Sesto giro: con le ultime quattro cifre del conto e, col «fatto», la cifra pagata.
   await writeAudit({
     actorId: user.id,
     action: body.azione === 'iban' ? 'refund.iban_registrato' : 'order.refund',
     targetTable: body.reclamoId ? 'disputes' : 'returns',
     targetId: (body.reclamoId ?? body.resoId) as string,
-    metadata: { passo: body.azione === 'iban' ? 'iban_del_bonifico_registrato' : 'bonifico_di_rimborso_fatto' },
+    metadata: notaPerIlRegistro(body.azione, body.azione === 'iban' ? { iban } : (prima?.pagato ?? { iban: null })),
   });
 
   return NextResponse.json({ ok: true }, { status: 200 });

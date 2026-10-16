@@ -17,9 +17,10 @@
 --
 -- La cura sta nel codice: un bonifico e' confermato solo se il suo segno sta
 -- anche nell'elenco dei rimborsi dell'ORDINE (`orders.stripe_refund_id`), che
--- scrive `refundOrder` (lib/rimborsi/bonifici-da-fare.ts,
--- `bonificoRegistratoSullOrdine`). Questo file prova la gamba del database su
--- cui quella cura si regge, NEL MONDO DI OGGI: senza la 153.
+-- scrive `refundOrder`. Dal sesto giro la lista dei bonifici dei resi nasce SOLO
+-- da quei segni (lib/rimborsi/bonifici-da-fare.ts, `bonificiDeiResiDagliOrdini`).
+-- Questo file prova la gamba del database su cui quella cura si regge, NEL
+-- MONDO DI OGGI: senza la 153.
 --
 -- COSA CONTROLLA. Dentro la transazione si toglie la 153 (le tre righe del suo
 -- «REVERSIBILE»), cosi' il database e' quello della produzione. Poi:

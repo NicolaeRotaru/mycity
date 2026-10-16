@@ -15,8 +15,9 @@ import { cosaDiceLaVoce, type VoceDaBonificare } from '@/lib/rimborsi/bonifici-d
  *    c'e'. Il bonifico da 18 € del 1° ottobre, segnato fatto il 2, diceva in grigio «Fatto il 2/10»
  *    e accanto «scrivilo qui»: chi paga si metteva a cercare un IBAN per un bonifico gia' fatto.
  *  ② Una riga di reso che il cliente si e' scritto da solo (in produzione, senza la 153, puo')
- *    stava fra i bonifici da pagare come le altre. Adesso un bonifico che l'ordine non conferma sta
- *    in un riquadro a parte, con l'avviso di non pagarlo prima di aver controllato.
+ *    stava fra i bonifici da pagare come le altre. Al terzo giro andava in un riquadro a parte «da
+ *    controllare»; dal sesto giro non entra proprio nella lista (lo prova
+ *    la-lista-dei-bonifici-nasce-dal-segno-sull-ordine.test.ts), e la pagina ha un elenco solo.
  *
  * La prova MONTA la pagina vera e legge quello che legge chi paga.
  */
@@ -34,7 +35,6 @@ function voce(parziale: Partial<VoceDaBonificare>): VoceDaBonificare {
     intestatario: null,
     fattoIl: null,
     daFare: true,
-    confermataDallOrdine: true,
     ...parziale,
   };
 }
@@ -89,27 +89,23 @@ describe('① accanto a un IBAN che manca, la pagina dice la cosa giusta', () =>
   }, 60000);
 });
 
-describe('② un bonifico che l ordine non conferma sta a parte, con l avviso di non pagarlo', () => {
-  it('la riga finta non e fra i bonifici da pagare: e nel riquadro da controllare', () => {
-    const finta = voce({ id: '99999999-9999-4999-8999-999999999999', importoCents: 95000, iban: 'IT60 X054 2811 1010 0000 0123 456', confermataDallOrdine: false });
+describe('② la pagina ha un elenco solo: niente riquadro «da controllare»', () => {
+  it('anche se una risposta vecchia portasse ancora «daControllare», la pagina non lo mostra', () => {
+    const finta = voce({ id: '99999999-9999-4999-8999-999999999999', importoCents: 95000 });
     const { s, elenchi, righe } = leggiLaPagina({ voci: [voce({ iban: 'IT12 A000 0000 0000 0000 0000 001' })], daControllare: [finta], migrazione162: true });
 
-    expect(elenchi, 'manca il riquadro dei bonifici da controllare').toHaveLength(2);
-    expect(righe(elenchi[0]).join(' '), 'la riga finta sta fra i bonifici da pagare').not.toMatch(/950,00/u);
-    const aParte = righe(elenchi[1])[0];
-    expect(aParte).toMatch(/950,00/u);
-    expect(aParte, 'accanto alla riga finta nessuno dice di non pagare').toContain('non pagare');
-    expect(testoVisibile(s.radice)).toContain('Da controllare prima di pagare: 1');
+    expect(elenchi, 'la pagina mostra ancora un secondo elenco').toHaveLength(1);
+    expect(righe(elenchi[0]).join(' ')).not.toMatch(/950,00/u);
+    expect(testoVisibile(s.radice), 'la pagina chiede ancora un controllo che da qui non si fa').not.toMatch(/controllare prima di pagare|non pagar/u);
     s.smonta();
   }, 60000);
 });
 
 describe('la regola, come funzione', () => {
-  it('fatto senza IBAN: niente campo; da fare senza 162: niente campo; non confermato: avviso', () => {
-    expect(cosaDiceLaVoce(voce({ daFare: false }), true)).toMatchObject({ campoPerLIban: false, daControllare: null });
+  it('fatto senza IBAN: niente campo; da fare senza 162: niente campo', () => {
+    expect(cosaDiceLaVoce(voce({ daFare: false }), true)).toMatchObject({ campoPerLIban: false });
     expect(cosaDiceLaVoce(voce({}), false).campoPerLIban).toBe(false);
     expect(cosaDiceLaVoce(voce({}), true).campoPerLIban).toBe(true);
-    expect(cosaDiceLaVoce(voce({ confermataDallOrdine: false }), true).daControllare).toMatch(/non pagare/u);
     expect(cosaDiceLaVoce(voce({ iban: 'IT60 X054' }), true).alPostoDellIban).toBeNull();
   });
 });

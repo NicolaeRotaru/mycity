@@ -103,14 +103,24 @@ describe('i bonifici da fare non escono dalla lista', () => {
     expect((corpo.voci as Array<{ daFare: boolean }>).slice(0, 2).every((v) => v.daFare)).toBe(true);
   });
 
-  it('se i bonifici da fare sono piu del tetto, la pagina lo sa', async () => {
-    finto.db.tabelle.returns.push(
-      ...Array.from({ length: TETTO_DEI_BONIFICI_DA_FARE }, (_, i) => ({
-        ...dimenticato, id: `da-fare-${i}`, refund_id: `bonifico:1800:return_da-fare-${i}`,
-      })),
+  // Sesto giro: i bonifici dei resi nascono dai segni sugli ordini, che scrive solo il server, e si
+  // leggono tutti, a pagine. Il tetto resta sui reclami: se lo si tocca, la pagina lo sa.
+  it('oltre mille resi da fare ci sono tutti; sui reclami, se si tocca il tetto, la pagina lo sa', async () => {
+    const altri = Array.from({ length: TETTO_DEI_BONIFICI_DA_FARE }, (_, i) => ({
+      ...dimenticato, id: `da-fare-${i}`, order_id: `o-da-fare-${i}`, refund_id: `bonifico:1800:return_da-fare-${i}`,
+    }));
+    finto.db.tabelle.returns.push(...altri);
+    finto.db.tabelle.orders.push(...ordiniCheConfermano(altri));
+    let { corpo } = await leggi();
+    const resiDaFare = (corpo.voci as Array<{ tipo: string; daFare: boolean }>).filter((v) => v.tipo === 'reso' && v.daFare);
+    expect(resiDaFare, 'un bonifico vero e rimasto fuori dalla lista').toHaveLength(TETTO_DEI_BONIFICI_DA_FARE + 1);
+    expect(corpo.tagliata).toBe(false);
+
+    finto.db.tabelle.bonifici_dei_reclami.push(
+      ...Array.from({ length: TETTO_DEI_BONIFICI_DA_FARE }, (_, i) => ({ ...reclamoDimenticato, dispute_id: `rec-da-fare-${i}` })),
     );
-    const { corpo } = await leggi();
-    expect(corpo.tagliata, 'la lista e tagliata e nessuno lo dice').toBe(true);
+    ({ corpo } = await leggi());
+    expect(corpo.tagliata, 'la lista dei reclami e tagliata e nessuno lo dice').toBe(true);
   });
 
   it('senza la migrazione 162 i bonifici si leggono lo stesso, tutti come da fare', async () => {
