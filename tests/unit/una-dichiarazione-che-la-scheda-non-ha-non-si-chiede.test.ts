@@ -209,7 +209,12 @@ describe('le rotte vere', () => {
     });
     expect(json.results).toEqual([
       { productId: 'vaso', ok: false, motivo: 'nessuna modifica valida' },
-      { productId: 'focaccia', ok: false, motivo: 'Allergeni: li scrivi tu nella scheda del prodotto' },
+      {
+        productId: 'focaccia',
+        ok: false,
+        // La frase fissa della dettatura (giro di correzione del 16/10).
+        motivo: "Allergeni non li scrive l'assistente: se li hai detti, scrivili tu nella scheda prima di salvare.",
+      },
     ]);
     expect(db.scritture).toEqual([]);
   });

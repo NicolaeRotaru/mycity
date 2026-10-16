@@ -124,8 +124,9 @@ describe('la frase fissa nomina i campi che la scheda ha davvero', () => {
     const esito = esitoDelPiano(
       pianoPatchPerIlModulo(UBBIDIENTE, { prezzoAttuale: 3.5, categorie: CATEGORIE, categoriaAttuale: 'pane', modo: 'edit' }),
     );
+    // Giro di correzione: sotto la frase fissa il riquadro non e' verde.
     expect(avvisoDopoLaDettatura({ esito, dettato: `  ${DETTATO} `, risposta: RISPOSTA })).toEqual({
-      tono: 'successo',
+      tono: 'da-controllare',
       esito: 'Compilato dalla tua descrizione — controlla e salva',
       dichiarazioni: FRASE_ALIMENTI,
       dettato: `Hai detto: «${DETTATO}»`,

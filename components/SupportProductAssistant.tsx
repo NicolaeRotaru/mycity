@@ -436,7 +436,7 @@ export default function SupportProductAssistant() {
                         return (
                           <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-accent-50 px-2 py-1.5 text-xs text-accent-800">
                             <AlertTriangle size={13} strokeWidth={2.4} className="mt-0.5 shrink-0" aria-hidden />
-                            <span>{messaggioDaCompletare(avviso.mancanti)}</span>
+                            <span>{messaggioDaCompletare(avviso.mancanti, avviso.categoriaNuova)}</span>
                           </p>
                         );
                       }
@@ -466,7 +466,12 @@ export default function SupportProductAssistant() {
                       <button
                         type="button"
                         onClick={() => applyProposal(i, m.proposal!)}
-                        disabled={applyingIndex !== null}
+                        // Finche' manca qualcosa il server la rifiuta sempre, con la
+                        // stessa frase scritta qui sopra: il pulsante non la manda.
+                        disabled={
+                          applyingIndex !== null ||
+                          (avvisoSullaPubblicazione(m.proposal.product, m.proposal.patch)?.mancanti.length ?? 0) > 0
+                        }
                         className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
                       >
                         {applyingIndex === i ? (

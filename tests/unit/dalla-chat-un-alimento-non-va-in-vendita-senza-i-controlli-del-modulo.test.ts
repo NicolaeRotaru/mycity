@@ -262,7 +262,8 @@ describe('«pubblica» dalla chat passa dagli stessi controlli del modulo', () =
     const scheda = productSnapshot(db.prodotti[0] as never, CATEGORIE);
     const avviso = avvisoSullaPubblicazione(scheda, { category_slug: 'alimentari' });
     expect(avviso?.mancanti, 'la scheda della proposta non avvisa').toEqual(['Allergeni', 'Ingredienti']);
-    expect(comeLoLeggeLaChat(json)).toBe(messaggioDaCompletare(avviso!.mancanti));
+    expect(avviso?.categoriaNuova).toBe('alimentari');
+    expect(comeLoLeggeLaChat(json)).toBe(messaggioDaCompletare(avviso!.mancanti, avviso!.categoriaNuova));
     expect(comeLoLeggeLaChat(json)).not.toContain('metterlo in vendita');
     // Il Copilot, che applica in blocco, dice lo stesso perche'.
     const blocco = await chiama('@/app/api/ai/catalog-apply-bulk/route', '/api/ai/catalog-apply-bulk', {
@@ -305,7 +306,9 @@ describe('«pubblica» dalla chat passa dagli stessi controlli del modulo', () =
       const mancanti = avviso?.mancanti ?? [];
       if (mancanti.length > 0) {
         expect(status, JSON.stringify(patch)).toBe(400);
-        expect(comeLoLeggeLaChat(json), JSON.stringify(patch)).toBe(messaggioDaCompletare(mancanti));
+        expect(comeLoLeggeLaChat(json), JSON.stringify(patch)).toBe(
+          messaggioDaCompletare(mancanti, avviso?.categoriaNuova ?? null),
+        );
       } else {
         expect(status, `${JSON.stringify(patch)}: ${json.error?.message}`).toBe(200);
       }

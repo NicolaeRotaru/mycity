@@ -21,7 +21,7 @@ import {
 import { classifyProductPolicy } from '@/lib/ai/moderation';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import {
-  cosaMancaDopoLaModifica,
+  daCompletareDopoLaModifica,
   erroreDiSalvataggio,
   messaggioDaCompletare,
 } from '@/lib/products/prontoPerLaVendita';
@@ -108,9 +108,9 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // R36 — Prima di metterlo in vendita, gli stessi controlli del modulo: foto,
   // nome, descrizione, prezzo, categoria e i campi obbligatori della categoria
   // (per un alimento: Allergeni e Ingredienti). Il modulo li faceva, la chat no.
-  const mancanti = cosaMancaDopoLaModifica({ prima: current, update, categories });
+  const { mancanti, categoriaNuova } = daCompletareDopoLaModifica({ prima: current, update, categories });
   if (mancanti.length > 0) {
-    return ApiErrors.invalidRequest(messaggioDaCompletare(mancanti), { mancanti });
+    return ApiErrors.invalidRequest(messaggioDaCompletare(mancanti, categoriaNuova), { mancanti });
   }
 
   // #5 — Il cancello sui prodotti vietati c'era sulla rotta che li crea, e

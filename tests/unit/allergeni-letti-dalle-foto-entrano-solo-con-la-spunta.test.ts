@@ -381,10 +381,50 @@ describe('la chat Assistenza: la scheda di «pubblica» dice quello che dira il 
     );
     const scheda = testo(s.radice);
     expect(scheda).toContain('Categoria → alimentari');
+    // Giro di correzione: la frase dice di scegliere la categoria nella scheda,
+    // perche' Allergeni e Ingredienti compaiono solo con quella categoria.
     expect(scheda, 'la scheda non avvisa: il negoziante lo scopre dopo Applica').toContain(
-      'Con questa modifica non può stare in vendita, manca: Allergeni, Ingredienti. Prima completa la scheda del prodotto.',
+      'Per stare in vendita in «alimentari» manca: Allergeni, Ingredienti. Apri la scheda, scegli lì quella categoria e completa questi campi.',
     );
     expect(scheda).not.toContain('metterlo in vendita');
+    // Finche' mancano, il server la rifiuta sempre con la stessa frase: Applica
+    // non si preme a vuoto.
+    expect(pulsante(s.radice, 'Applica').disabled, 'Applica si preme e il server la rifiuta ogni volta').toBe(true);
+    s.smonta();
+  });
+
+  it('una bozza fra gli alimentari, senza ingredienti, da mettere in vendita: la frase di sempre, e Applica fermo', async () => {
+    const s = await proposta(
+      {
+        ...BASE,
+        name: 'Focaccia genovese',
+        description: "Focaccia genovese all'olio, alta e morbida",
+        categorySlug: 'alimentari',
+        attributes: { allergeni: 'Glutine' },
+      },
+      { status: 'available' },
+    );
+    expect(testo(s.radice)).toContain(
+      'Con questa modifica non può stare in vendita, manca: Ingredienti. Prima completa la scheda del prodotto.',
+    );
+    expect(pulsante(s.radice, 'Applica').disabled).toBe(true);
+    s.smonta();
+  });
+
+  it('controprova: un ritocco di prezzo sulla stessa focaccia non avvisa, e Applica si preme', async () => {
+    const s = await proposta(
+      {
+        ...BASE,
+        status: 'available',
+        name: 'Focaccia genovese',
+        description: "Focaccia genovese all'olio, alta e morbida",
+        categorySlug: 'casa',
+        attributes: {},
+      },
+      { price: 3.8 },
+    );
+    expect(testo(s.radice)).not.toContain('manca:');
+    expect(pulsante(s.radice, 'Applica').disabled).toBe(false);
     s.smonta();
   });
 });

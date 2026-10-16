@@ -16,6 +16,7 @@ import {
   erroreDiSalvataggio,
   motivoDaCompletare,
 } from '@/lib/products/prontoPerLaVendita';
+import { fraseSulleDichiarazioni } from '@/lib/products/avvisoDellaDettatura';
 
 /**
  * Applica in un colpo solo le modifiche che il Catalog Copilot ha proposto.
@@ -49,7 +50,11 @@ const MAX_CHANGES = 200;
 
 type Change = { productId?: string; patch?: AiProductPatch };
 type BulkBody = { changes?: Change[] };
-type Esito = { productId: string; ok: boolean; motivo?: string };
+/**
+ * `nonApplicato`: su una modifica scritta solo in parte, cosa non e' entrato e
+ * perche' (le dichiarazioni di un alimento, che il Copilot non scrive mai).
+ */
+type Esito = { productId: string; ok: boolean; motivo?: string; nonApplicato?: string };
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
   // Una chiamata porta fino a duecento modifiche: dieci all'ora sono duemila
@@ -94,7 +99,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
 
   // Primo giro: risolvi i patch. Niente rete, solo validazione.
-  const risolte: { id: string; row: ProductRow; update: Record<string, unknown> }[] = [];
+  const risolte: { id: string; row: ProductRow; update: Record<string, unknown>; nonApplicato: string | null }[] = [];
   const esiti: Esito[] = [];
   for (const c of changes) {
     const row = miei.get(c.productId);
@@ -114,15 +119,14 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       },
       categories,
     });
+    // R41 — allergeni e ingredienti li scrive il negoziante, non il copilot.
+    // Si dice con la frase fissa della dettatura, sia quando la modifica era
+    // fatta solo di dichiarazioni (prodotto fermo) sia quando insieme c'era
+    // altro: prima, in quel caso, il resto si scriveva e l'esito era «ok» senza
+    // una parola, e il Copilot rispondeva «Applicato a 1 prodotti su 1».
+    const nonApplicato = fraseSulleDichiarazioni(protetti);
     if (Object.keys(update).length === 0) {
-      esiti.push({
-        productId: c.productId,
-        ok: false,
-        // R41 — allergeni e ingredienti li scrive il negoziante, non il copilot.
-        motivo: protetti.length > 0
-          ? `${protetti.join(', ')}: li scrivi tu nella scheda del prodotto`
-          : 'nessuna modifica valida',
-      });
+      esiti.push({ productId: c.productId, ok: false, motivo: nonApplicato ?? 'nessuna modifica valida' });
       continue;
     }
     // R36 — Messo in vendita (o spostato di categoria) dal copilot = stessi
@@ -136,7 +140,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       });
       continue;
     }
-    risolte.push({ id: c.productId, row, update });
+    risolte.push({ id: c.productId, row, update, nonApplicato });
   }
 
   // Secondo giro: il filtro di conformita', solo su chi tocca nome o
@@ -202,7 +206,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       continue;
     }
     applied += 1;
-    esiti.push({ productId: r.id, ok: true });
+    esiti.push(r.nonApplicato ? { productId: r.id, ok: true, nonApplicato: r.nonApplicato } : { productId: r.id, ok: true });
     const prima: Record<string, unknown> = {};
     for (const campo of Object.keys(r.update)) prima[campo] = (r.row as unknown as Record<string, unknown>)[campo];
     void writeAudit({

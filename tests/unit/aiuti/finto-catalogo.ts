@@ -14,6 +14,11 @@ export type StatoCatalogo = {
   /** Quante volte il lavoro e' stato segnato come applicato. */
   lavoroApplicato: number;
   scritture: { id: unknown; valori: Record<string, unknown> }[];
+  /**
+   * Facoltativo: il rifiuto del database a ogni scrittura su `products` (per
+   * esempio il guardiano degli allergeni, codice 23514). Assente = si scrive.
+   */
+  erroreDiScrittura?: { code: string; message: string } | null;
 };
 
 type Domanda = { op: 'select' | 'update'; valori: Record<string, unknown> | null; filtri: Record<string, unknown> };
@@ -30,6 +35,7 @@ export function fintoCatalogo(stato: StatoCatalogo) {
     }
     const riga = stato.prodotti.find((p) => p.id === d.filtri.id) ?? null;
     if (d.op === 'update') {
+      if (stato.erroreDiScrittura) return { data: null, error: stato.erroreDiScrittura };
       stato.scritture.push({ id: d.filtri.id, valori: d.valori ?? {} });
       return { data: una && riga ? { ...riga, ...d.valori } : null, error: null };
     }
@@ -41,6 +47,7 @@ export function fintoCatalogo(stato: StatoCatalogo) {
       select: () => q,
       order: () => q,
       in: () => q,
+      limit: () => q,
       eq: (colonna: string, valore: unknown) => {
         d.filtri[colonna] = valore;
         return q;

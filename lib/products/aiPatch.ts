@@ -224,8 +224,17 @@ function separaCampi<T extends object>(
  * che la scheda non ha: non c'e' dove scriverle, come ogni altro attributo che
  * la categoria non ha. Restano quelle della scheda, che si dicono come prima.
  * `campi` sono quelli della scheda DOPO la proposta (`campiDopoLaProposta`).
+ *
+ * 16/10/2026 (giro di correzione) — UNA SCHEDA SENZA CATEGORIA NON E' UNA
+ * SCHEDA SENZA ALLERGENI. Su un prodotto nuovo, ancora senza categoria, o con
+ * una categoria proposta che non esiste («panetteria»), i campi erano zero e
+ * ogni dichiarazione spariva in silenzio: la chat rimetteva in bolla «Fatto! Ho
+ * aggiunto gli allergeni» con la spunta verde. Con `campi === null` (categoria
+ * che non si conosce) non si toglie niente: le dichiarazioni restano righe
+ * «NON compilato», senza il pulsante, come quelle di una scheda che le ha.
  */
-function senzaDichiarazioniFuoriScheda<T extends object>(patch: T, campi: readonly { key: string }[]): T {
+function senzaDichiarazioniFuoriScheda<T extends object>(patch: T, campi: readonly { key: string }[] | null): T {
+  if (campi === null) return patch;
   return separaCampi(patch, (k) => eCampoDichiarativo(k) && !campi.some((f) => f.key === chiaveCampo(k))).patch;
 }
 
@@ -389,16 +398,22 @@ function vociComeTesto(voci: unknown): string[] | null {
   return voci.length > 0 && lette.length === 0 ? null : lette;
 }
 
-/** I campi della scheda DOPO la proposta: della categoria proposta se esiste, se no di quella di adesso. */
+/**
+ * I campi della scheda DOPO la proposta: della categoria proposta se esiste, se
+ * no di quella di adesso. `null` se la scheda non ha una categoria che si
+ * conosce (nessuna, o una che non c'e' fra le categorie): non si sa che campi
+ * avra'.
+ */
 function campiDopoLaProposta(
   categorie: CategoryRow[],
   proposta: AiProductPatch,
   categoriaAttuale: string | null | undefined,
-): AttributeField[] {
+): AttributeField[] | null {
   const nuova = proposta.category_slug
     ? resolveCategoryId(categorie, proposta.category_slug, proposta.subcategory_name)
     : null;
-  return getAttributesForCategory(categorie, nuova ?? categoriaAttuale ?? null).fields;
+  const { fields, topSlug } = getAttributesForCategory(categorie, nuova ?? categoriaAttuale ?? null);
+  return topSlug === null ? null : fields;
 }
 
 /** Risolve slug categoria (+ nome sottocategoria) → category_id a due livelli. */
@@ -671,8 +686,9 @@ export function pianoPatchPerIlModulo(
   // dichiarazioni che la scheda non ha escono senza dire niente. Gli attributi
   // si validano contro i campi della categoria EFFETTIVA (quella dopo il cambio).
   const letta = propostaLeggibile(suggerimento);
-  const fields = campiDopoLaProposta(ctx.categorie, letta, ctx.categoriaAttuale);
-  const proposta = senzaDichiarazioniFuoriScheda(letta, fields);
+  const campi = campiDopoLaProposta(ctx.categorie, letta, ctx.categoriaAttuale);
+  const fields = campi ?? [];
+  const proposta = senzaDichiarazioniFuoriScheda(letta, campi);
   const { patch, rifiutati, proposte } = patchAiPerIlForm(proposta, { prezzoAttuale: ctx.prezzoAttuale });
   const motiviConProposta = new Set(proposte.map((p) => p.motivo));
   const avvisi = rifiutati.filter((m) => !motiviConProposta.has(m));
@@ -945,10 +961,11 @@ export function resolveAiPatch(opts: {
   // dichiarazioni per un campo che la scheda non ha escono senza dire niente
   // (`senzaDichiarazioniFuoriScheda`).
   const letta = propostaLeggibile(opts.patch);
-  const fields = campiDopoLaProposta(categories, letta, current.category_id);
+  const campi = campiDopoLaProposta(categories, letta, current.category_id);
+  const fields = campi ?? [];
   // R41 — Prima di tutto si tolgono le dichiarazioni: da qui in giu' il patch
   // non le contiene piu', ne' in scrittura ne' in rimozione.
-  const { patch, scartati } = separaCampiDichiarativi(senzaDichiarazioniFuoriScheda(letta, fields));
+  const { patch, scartati } = separaCampiDichiarativi(senzaDichiarazioniFuoriScheda(letta, campi));
   const protetti = Array.from(new Set(scartati.map((s) => s.etichetta)));
   for (const s of scartati) changed.push(motivoDichiarazioneRifiutata(s));
 
