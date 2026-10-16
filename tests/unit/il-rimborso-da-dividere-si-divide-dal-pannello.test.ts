@@ -32,15 +32,28 @@ const stato: {
   primaDellaLista: (() => Promise<void>) | null;
   /** Se c'è, Stripe fa lo storno solo quando questa promessa si chiude (una che non si chiude mai è il processo morto). */
   primaDelloStorno: ((transferId: string) => Promise<void>) | null;
+  /** Se c'è, la riga del registro delle azioni si scrive solo quando questa promessa si chiude. */
+  primaDelRegistro: (() => Promise<void>) | null;
 } = {
   db: fintoDatabase(), carica: { amount: 2790, refunded: 0 }, suStripe: [], storni: [],
   rispostePerse: 0, etichetteRiescono: true, pagamentiIlleggibili: new Set(), primaDellaLista: null, primaDelloStorno: null,
+  primaDelRegistro: null,
 };
 let orologio = 1_800_000_000;
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
 vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => stato.db.client }));
+vi.mock('@/lib/audit', async (originale) => {
+  const vero = await originale<typeof import('@/lib/audit')>();
+  return {
+    ...vero,
+    writeAudit: async (voce: Parameters<typeof vero.writeAudit>[0]) => {
+      if (stato.primaDelRegistro) await stato.primaDelRegistro();
+      return vero.writeAudit(voce);
+    },
+  };
+});
 vi.mock('@/lib/api/middleware', () => ({
   withAdminAuth: (h: (ctx: unknown) => unknown) => (req: unknown) =>
     h({ req, user: { id: 'admin1' }, profile: { role: 'admin' }, params: {} }),
@@ -162,6 +175,7 @@ function daCapo(): void {
   stato.pagamentiIlleggibili = new Set();
   stato.primaDellaLista = null;
   stato.primaDelloStorno = null;
+  stato.primaDelRegistro = null;
   stato.db = fintoDatabase({
     orders: [
       ordine({ id: 'o1', seller_id: 'pane-quotidiano', total_price: 15, gross_total_cents: 1500, seller_payout_cents: 1000 }),
@@ -572,6 +586,23 @@ describe('due divisioni che si incrociano, e una che si ferma a metà, registran
     expect(await carrelliNelPannello()).toEqual([]);
     expect(await pagabili()).toEqual(['o1']);
     expect(stato.suStripe[0].metadata.registrato_da_fuori).toBe('1');
+  });
+
+  it('il processo muore dopo che la parte del pane è scritta per intero, prima dei fiori: il carrello resta nel pannello', async () => {
+    // Pane fermo col bonifico da fare (niente storno); fiori con un reclamo aperto.
+    Object.assign(riga('o2'), { payout_status: 'HELD', stripe_transfer_id: null, internal_dispute_status: 'OPEN' });
+    await rimborsoDalCruscotto(300);
+    // La riga del registro dopo il pane non si scrive mai: la funzione scade lì.
+    stato.primaDelRegistro = () => new Promise<void>(() => {});
+    void dividi([{ ordine: 'o1', centesimi: 200 }, { ordine: 'o2', centesimi: 100 }]);
+    await new Promise((r) => setTimeout(r, 20));
+    stato.primaDelRegistro = null;
+
+    expect(riga('o1')).toMatchObject({ refunded_amount_cents: 200, internal_dispute_status: 'RIMBORSO_DA_RIPARTIRE' });
+    expect((await carrelliNelPannello()).map((c) => c.daDividereCents), 'il resto sparito dal pannello').toEqual([100]);
+    expect(await pagabili()).toEqual([]);
+    expect((await dividi([{ ordine: 'o1', centesimi: 0 }, { ordine: 'o2', centesimi: 100 }])).status).toBe(200);
+    expect(registratoInTutto()).toBe(300);
   });
 
   it('dopo il guasto, chi rimanda le parti che mancano della stessa divisione la finisce senza errori', async () => {
