@@ -26,12 +26,36 @@ due cose che oggi funzionano (il compenso del fattorino in attesa, `HELD`, e la 
 fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha già. La migrazione
 **161** viene dopo tutte e chiude quello che resta. Lo script la applica da solo, in coda.
 
-**Cosa devi fare.** Lanciare i due comandi del passo 2 e del passo 3, nello stesso giro, a bassa
-attività. Il passo 1 è già fatto: le tredici righe sono nel registro dal 9 settembre. **Ma prima
-guarda le due condizioni in «Prima di cominciare»** (15/10/2026): la 161 va applicata solo dopo
-che è online il codice che legge i negozi dalla vista, **in tutte le pagine**. La prima ondata
-ripara la vetrina; carrello, cassa, ordini e pagine del fattorino non sono ancora riparati. Finché
-non lo sono, la 161 resta ferma.
+> ⚠️ **Non ancora il passo 2 (aggiornato il 14/10/2026).** Il passo 2 chiude la lettura dei
+> profili degli altri utenti. Non lo fa solo la 161: lo fanno già la 110 e la 112, che sono fra le
+> 48, e la 161 lo ripete. Quindi saltare la 161 non basta.
+>
+> Oggi il sito prende il negozio proprio da lì, e non solo nel catalogo. Lo fanno la scheda
+> prodotto, le vetrine, la ricerca, il carrello e la cassa (nome e posizione del negozio), la
+> pagina dell'ordine del cliente e quella del fattorino (indirizzo e telefono del negozio), i
+> messaggi e le pagine del venditore. Con il passo 2 fatto prima di cambiare il codice, ogni
+> prodotto mostrerebbe «Prodotto non disponibile» e il fattorino non vedrebbe dove ritirare.
+>
+> Prima va pubblicato il codice che legge i negozi da `seller_public_profiles` in tutti quei punti,
+> poi il passo 2. Il controllo che lo dice: fuori dall'area admin, nessuna lettura
+> `profiles!…` o `.from('profiles')` deve restare sul profilo di un altro utente.
+>
+> Lo ha trovato la radiografia dell'11 ottobre; misurato il 14/10 sulla copia fedele, entrando
+> come visitatore senza account. Oggi il negozio si legge per 9 prodotti su 9. Dopo il passo 2,
+> per 0 su 9 da `profiles`, e per 9 su 9 da `seller_public_profiles`.
+>
+> **Stato al 16/10/2026.** La prima ondata del sito (richiesta #258) sposta su
+> `seller_public_profiles` la scheda prodotto, le vetrine, la ricerca, le fasce della home, i
+> preferiti e le anteprime. Carrello, cassa, pagine degli ordini, pagine del fattorino, messaggi e
+> pagine del venditore leggono ancora da `profiles`: verificato il 15/10 sul database ricostruito
+> con tutte le migrazioni, dove dopo la 161 restano solo «la propria riga» e «amministratore». Il
+> passo 2 resta fermo finché non è riparata anche questa seconda parte.
+
+**Cosa devi fare.** La stringa del Session pooler va nel segreto `SUPABASE_DB_URL` appena è unita
+la richiesta #255 del sito, non prima (il perché è nella sezione qui sotto). I passi 0, 2 e 3 vanno fatti insieme, nello stesso giro e a
+bassa attività, solo dopo che è online il codice che legge i negozi da `seller_public_profiles`
+in tutti i punti dell'avviso qui sopra, non solo nel catalogo. Il passo 1 è già fatto: le
+tredici righe sono nel registro dal 9 settembre.
 
 **Cosa non ho verificato.** La prova generale è girata su PostgreSQL 16, la produzione è la 17.
 E non ho potuto provare il comando contro la produzione vera: da qui il database si legge
@@ -65,43 +89,72 @@ rimette la definizione finale, come la 161.
 
 ## La procedura (aggiornata)
 
-### Prima di cominciare — due condizioni (15/10/2026)
+### Prima di tutto: l'indirizzo giusto del database
 
-**① Il codice che legge i negozi dalla vista deve essere già online.** La 161 toglie ai clienti
-la lettura dei negozi dalla tabella `profiles`. Fino a oggi la scheda prodotto, la ricerca
-suggerita e le fasce della home leggono il negozio proprio da lì: se la 161 arriva prima del
-codice che lo legge dalla vista `seller_public_profiles`, ogni scheda prodotto mostra «Prodotto
-non disponibile» a chi compra, mentre il negoziante e l'amministratore la vedono perfetta.
-Quindi: prima si unisce e si pubblica la riparazione della vetrina, si apre una scheda prodotto
-da una finestra anonima e si controlla che il pulsante per comprare ci sia.
+**In parole semplici.** Il database si raggiunge da due porte. Quella «diretta»
+(`db.clmpyfvpvfjgeviworth.supabase.co`) funziona solo su IPv6. Quella del «Session pooler»
+funziona ovunque. Si usa la seconda.
 
-⚠️ **La vetrina non basta (15/10/2026, sera).** Dopo la 161 su `profiles` restano solo due regole
-di lettura: la propria riga e l'amministratore (controllato sul database ricostruito dalle
-migrazioni). Altre pagine leggono il negozio da lì, e la prima ondata non le ha ancora riparate:
+**Un esempio concreto.** L'11 ottobre la copia notturna è fallita come tutte le sere, e il
+motivo è scritto nel diario del lavoro: `connection to server at "db.clmpyfvpvfjgeviworth.supabase.co"
+(2a05:…), port 5432 failed: Network is unreachable`. Il segreto `SUPABASE_DB_URL` su GitHub c'è,
+ma punta alla porta diretta, e i server di GitHub non hanno IPv6. Lo stesso succede da molte
+connessioni di casa.
 
-- **carrello e cassa** (`app/cart/page.tsx`, `app/checkout/page.tsx`): perdono posizione, nome e
-  consegna veloce del negozio. La spedizione per distanza ricade sulla tariffa fissa, cioè il
-  cliente paga una cifra diversa da quella giusta;
-- **pagine degli ordini** (`app/orders/page.tsx`, `app/orders/[id]/page.tsx`, recensione e reclamo):
-  il cliente non vede più chi gli ha venduto né come contattarlo;
-- **pagine del fattorino** (`app/rider/page.tsx`, `app/rider/orders/[id]/page.tsx`): il fattorino
-  perde l'indirizzo del negozio dove ritirare;
-- nomi e loghi dei negozi in home, storie, eventi e messaggi.
+**Cosa devi fare.** In Supabase apri il progetto, premi «Connect» e copia la stringa del
+**Session pooler**. Ha la forma `postgresql://postgres.clmpyfvpvfjgeviworth:<password>@aws-…pooler.supabase.com:5432/postgres`.
+Usala nei comandi qui sotto. Mettila anche al posto del segreto `SUPABASE_DB_URL` su GitHub:
+così ripartono da sole la copia notturna e il controllo della deriva.
 
-**Solo quando anche queste leggono il negozio dalla vista** si passa al passo 2.
+**Il segreto, solo dopo la #255 (aggiornato il 14/10/2026).** Oggi la copia notturna non arriva
+mai al database, quindi non scrive niente. Con la stringa giusta ci arriva. Senza la #255, una
+copia caduta a metà lascerebbe il database in chiaro fra i file scaricabili del lavoro. Il
+repository è pubblico: quei file li scarica chiunque abbia un account GitHub. La #255 chiude questa
+strada. Insegna anche al controllo delle prove automatiche a riconoscere la produzione dalla
+stringa nuova.
 
-**② La riga di collegamento.** Gli esempi qui sotto usano la riga del «Session pooler»
-(Supabase → pannello Connect → riquadro «Session pooler», porta 5432), la stessa che serve alla
-copia notturna. La connessione diretta (`db.<progetto>.supabase.co`) risponde solo in IPv6: da un
-computer o da una rete senza IPv6 — e da GitHub Actions sempre — non ci si arriva. Copia la riga
-intera dal pannello: la regione e il prefisso (`aws-0` o `aws-1`) cambiano da progetto a progetto.
-Se la password contiene `# / ? @ : %`, va scritta codificata (`#` → `%23`, `@` → `%40`, …).
+**Attenzione alle chiavi di Vercel.** Lo stesso segreto lo usa anche il rilascio automatico
+(`.github/workflows/deploy-dopo-ci.yml`): prima di pubblicare, applica le migrazioni che mancano.
+Oggi quel passo si salta, perché su GitHub mancano le tre chiavi di Vercel. Se le metti mentre il
+passo 2 aspetta, il primo rilascio applicherebbe da solo le 48 migrazioni, con il codice ancora da
+riparare. Quindi: le chiavi di Vercel solo dopo che è online il codice dell'avviso in cima.
 
-**Il rilascio automatico non lo fa al posto tuo.** Da oggi il lavoro «Rilascio dopo CI verde»
-applica da solo al massimo 20 migrazioni: se ne mancano di più si ferma prima di toccare il
-database e rimanda qui. Senza questo tetto, il giorno in cui si mettono su GitHub i segreti di
-Vercel la prima unione su `main` le avrebbe applicate tutte — 48 il 15 ottobre, 161 compresa —
-senza nessuno davanti e senza guardare la condizione ①.
+### Passo 0 — una copia del database, prima di scriverci
+
+Nessuna copia notturna è mai riuscita, quindi oggi non esiste una copia da cui ripartire. Prima
+del passo 2:
+
+```bash
+mkdir -p ~/copie-mycity && chmod 700 ~/copie-mycity
+pg_dump --version   # deve dire 17
+pg_dump "<stringa del Session pooler>" -Fc -f ~/copie-mycity/mycity-prima-della-161.dump
+```
+
+⚠️ **La copia sta fuori dalla cartella del sito, sempre.** Dentro c'è tutto: nomi, telefoni,
+indirizzi e ordini dei clienti. Ci sono anche gli accessi degli utenti, cioè le sessioni aperte e
+i secondi fattori. Il repository è pubblico: un file lasciato nella cartella del sito finisce
+online col primo `git add`. Non va mai committato, caricato da qualche parte o incollato in una
+chat. Per sicurezza, `.gitignore` ignora comunque i file `.dump`.
+
+Atteso: uscita 0 e un file non vuoto. **Senza una copia riuscita non si passa al passo 2.**
+Tienila qualche giorno dopo il passo 2, poi cancellala. Il passo 2 riscrive anche righe vive: per
+esempio la 094 ricalcola `seller_payout_cents` sugli ordini. Se un errore si vede dopo, la copia
+serve ancora.
+
+Serve `pg_dump` alla versione 17 o più nuova: la produzione è PostgreSQL 17, e un `pg_dump` più
+vecchio si rifiuta («server version mismatch»). Il pannello di Supabase non aiuta: il progetto è
+sul piano gratuito, e lì le copie non si scaricano. Se il tuo `pg_dump` è più vecchio, due strade:
+
+- con Docker, senza installare niente:
+  `docker run --rm -v ~/copie-mycity:/out postgres:17 pg_dump "<stringa del Session pooler>" -Fc -f /out/mycity-prima-della-161.dump`
+- su Ubuntu, il pacchetto `postgresql-client-17` da apt.postgresql.org, chiamato col percorso
+  intero `/usr/lib/postgresql/17/bin/pg_dump`. Altrimenti può partire ancora il 16: è il tranello
+  che ha fatto fallire ventuno copie notturne.
+
+**Il tetto delle 20 migrazioni (dalla richiesta #258).** Il lavoro «Rilascio dopo CI verde» applica
+da solo al massimo 20 migrazioni: se ne mancano di più si ferma prima di toccare il database e
+rimanda qui. È una rete in più, non un permesso: le chiavi di Vercel restano dopo il codice
+dell'avviso in cima.
 
 ### Passo 1 — registrare il baseline
 
@@ -110,10 +163,13 @@ Già fatto il 9 settembre. L'istruzione resta qui sotto, nella storia: è innocu
 
 ### Passo 2 — contare quello che manca, poi applicarlo, 161 compresa
 
+⚠️ Solo dopo che è online il codice che legge i negozi da `seller_public_profiles` in tutti i
+punti dell'avviso in cima, non solo nel catalogo. Subito prima, la copia del passo 0.
+
 Prima si conta, in sola lettura:
 
 ```bash
-SUPABASE_DB_URL="postgresql://postgres.clmpyfvpvfjgeviworth:<password>@aws-0-<regione>.pooler.supabase.com:5432/postgres" \
+SUPABASE_DB_URL="<stringa del Session pooler>" \
   node scripts/check-migration-drift.mjs
 ```
 
@@ -126,7 +182,7 @@ produzione**: se l'elenco ne contiene, guardale prima di andare avanti.
 Poi si applica, con la stessa riga:
 
 ```bash
-SUPABASE_DB_URL="postgresql://postgres.clmpyfvpvfjgeviworth:<password>@aws-0-<regione>.pooler.supabase.com:5432/postgres" \
+SUPABASE_DB_URL="<stringa del Session pooler>" \
   bash scripts/applica-migrazioni-mancanti.sh
 ```
 
