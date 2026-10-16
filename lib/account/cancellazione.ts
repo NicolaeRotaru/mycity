@@ -3,10 +3,12 @@ import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
 import {
   attesaPerIBonifici,
+  avvisoDelBonificoDelReclamoRimesso,
   bonificiPrimaDiCancellare,
   MOTIVO_BONIFICO_DA_FARE,
   type BonificiDaFare,
 } from '@/lib/rimborsi/iban-del-rimborso';
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
@@ -787,11 +789,11 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
   }
 
   // ①bis I bonifici di rimborso che gli dobbiamo ancora. Riesame del 16/10, sesto giro — UNA
-  // REGOLA: finche' su un suo ordine c'e' un bonifico non segnato fatto, o un reso aperto in
-  // contanti che puo' finire con un bonifico, la cancellazione aspetta. Se non si puo' sapere
-  // (manca la 162, o un pezzo del bonifico) si ferma come per un guasto: niente motivo, e il giro
-  // notturno sveglia chi amministra. Va fatto PRIMA del ②, finche' il legame con la persona c'e'.
-  // Una lettura che cade ferma tutto: domani si riprova.
+  // REGOLA: finche' su un suo ordine c'e' un bonifico non segnato fatto, o un reso o un reclamo
+  // aperto in contanti che puo' finire con un bonifico (settimo giro: anche il reclamo), la
+  // cancellazione aspetta. Se non si puo' sapere (manca la 162, o un pezzo del bonifico) si ferma
+  // come per un guasto: niente motivo, e il giro notturno sveglia chi amministra. Va fatto PRIMA
+  // del ②, finche' il legame con la persona c'e'. Una lettura che cade ferma tutto: domani si riprova.
   const bonifici = await bonificiPrimaDiCancellare(admin, userId);
   if (!bonifici.ok) {
     return {
@@ -802,6 +804,21 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
       fileRimossi: 0,
       erroriFile: [],
     };
+  }
+  // Settimo giro — un bonifico di un reclamo rimasto solo sull'ordine e' tornato nella lista. Chi
+  // amministra lo sa una volta sola (la chiave), perche' forse l'aveva gia' pagato da un avviso. Un
+  // avviso che non parte non ferma niente: il bonifico e' comunque nella lista, col pulsante «fatto».
+  for (const rimesso of bonifici.rimessi) {
+    const avviso = avvisoDelBonificoDelReclamoRimesso(rimesso);
+    try {
+      await notifyAdmins(avviso.titolo, avviso.testo, avviso.link, {
+        unaVoltaPer: `bonifico-del-reclamo-rimesso:${rimesso.dispute_id}`,
+      });
+    } catch (e) {
+      logger.error('[cancellazione] avviso del bonifico rimesso nella lista non partito', {
+        userId, disputeId: rimesso.dispute_id, errore: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
   const attesa = attesaPerIBonifici(bonifici.bonifici);
   if (attesa) {

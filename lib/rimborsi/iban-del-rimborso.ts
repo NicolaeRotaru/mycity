@@ -1,11 +1,12 @@
 import { logger } from '@/lib/logger';
 import { colonnaNonTrovata } from '@/lib/db/migrazione-148';
-import { eUnBonificoDiRimborso, tabellaDeiBonificiMancante } from './bonifici-da-fare';
+import { centesimiDelBonificoDalSegno, eUnBonificoDiRimborso, tabellaDeiBonificiMancante } from './bonifici-da-fare';
 import { ilBonificoCheIlClienteAspetta } from './bonifico-del-cliente';
 import { formatPriceFromCents } from '@/lib/format';
 import { rimborsiGiaScritti } from '@/lib/stripe/elenco-dei-rimborsi';
 import { pagatoInContanti, serveLaSceltaDelRimborso, type OrdineDaRimborsare } from './regole-del-rimborso';
 import { MESI_DEI_MESSAGGI_DEI_CONTATTI } from '@/lib/privacy/potature-ritenzione';
+import { PAGINA_DEI_BONIFICI_DA_FARE } from './scelta-del-reso';
 
 /**
  * QUANTO TENIAMO L'IBAN DI UN RIMBORSO (R71, riesame del 16/10).
@@ -122,10 +123,10 @@ export const QUANTO_TENIAMO_L_IBAN =
  * (`attesaPerIBonifici`), detta prima di premere.
  */
 export const SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE =
-  'Se ti dobbiamo ancora un rimborso con un bonifico, o un tuo reso ancora aperto può finire con un bonifico, ' +
-  'la cancellazione aspetta che ogni bonifico che ti dobbiamo risulti fatto: così, se ti dobbiamo dei soldi, ti ' +
-  "arrivano prima che l'account si chiuda. Se non ci hai ancora dato il tuo IBAN, mandacelo con un messaggio dalla " +
-  'pagina Contatti.';
+  'Se ti dobbiamo ancora un rimborso con un bonifico, o un reso o un reclamo ancora aperto su un tuo ordine ' +
+  'pagato in contanti può finire con un bonifico, la cancellazione aspetta che ogni bonifico che ti dobbiamo ' +
+  "risulti fatto: così, se ti dobbiamo dei soldi, ti arrivano prima che l'account si chiuda. Se ti dobbiamo un " +
+  'bonifico e non ci hai ancora dato il tuo IBAN, mandacelo con un messaggio dalla pagina Contatti.';
 
 // ── Prima di cancellare un account: i bonifici che gli dobbiamo ─────────────────
 
@@ -147,8 +148,22 @@ export const SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE =
  * Prima qui c'erano tre regole: i reclami cercati per chi li aveva aperti, i resi per chi li aveva
  * chiesti, e senza la 162 nessun bonifico. Un account con 40 € da restituire si cancellava, e il
  * nome di un negozio finiva sul bonifico di un suo cliente.
+ *
+ * Settimo giro (collaudo del 16/10):
+ *  · anche un RECLAMO ancora aperto su un suo ordine in contanti fa aspettare, come un reso aperto:
+ *    chiuso a favore della persona, finisce con un bonifico. Prima la cancellazione andava avanti, e
+ *    il bonifico nasceva dopo, senza nome e senza telefono; se il reclamo l'aveva aperto lei,
+ *    spariva insieme al suo profilo (`disputes.opener_id` → ON DELETE CASCADE);
+ *  · il bonifico di un reclamo scritto sull'ordine ma senza la sua riga in `bonifici_dei_reclami`
+ *    (chiuso prima della 162, o la scrittura della riga era caduta) non resta fermo per sempre: con
+ *    la 162 la riga si rimette dal segno sull'ordine (`bonificiDeiReclamiDaRimettere`), e il
+ *    bonifico entra nella lista dove si segna «fatto». Prima nessuna pagina lo mostrava, il «fatto»
+ *    rispondeva 409, e la notte restava rossa ogni notte.
  */
 export const MOTIVO_BONIFICO_DA_FARE = 'bonifico_da_fare' as const;
+
+/** Gli stati di un reclamo ancora da decidere (migrations/027): puo' finire con un rimborso. */
+export const STATI_APERTI_DEL_RECLAMO = ['open', 'under_review'] as const;
 
 /** Un ordine della persona, con quello che serve per sapere se ha bonifici. */
 export interface OrdineDellaPersona extends OrdineDaRimborsare {
@@ -174,6 +189,13 @@ export interface BonificoDelReclamoDellaPersona {
   fatto_at?: string | null;
 }
 
+/** Un reclamo su un suo ordine, chiunque l'abbia aperto: lo stato dice se e' ancora da decidere. */
+export interface ReclamoSullOrdineDellaPersona {
+  id: string;
+  order_id: string;
+  status: string | null;
+}
+
 /** Quello che fa aspettare la cancellazione. */
 export interface BonificiDaFare {
   /** Quanto gli dobbiamo ancora col bonifico, dall'elenco dei rimborsi dei suoi ordini. */
@@ -182,6 +204,8 @@ export interface BonificiDaFare {
   incerti: number;
   /** Resi ancora aperti su ordini pagati in contanti che possono finire con un bonifico. */
   resiAperti: number;
+  /** Reclami ancora aperti su ordini pagati in contanti: decisi a suo favore, finiscono col bonifico. */
+  reclamiAperti: number;
   /** La 162 c'e'? Senza, nessun «fatto» si puo' leggere. */
   con162: boolean;
 }
@@ -191,18 +215,57 @@ function chiaveDelBonifico(segno: string): string {
   return segno.replace(/^bonifico:\d+:/, '');
 }
 
+/** Una riga di `bonifici_dei_reclami` da rimettere: quella che la rotta dei reclami scrive (resolve). */
+export interface BonificoDelReclamoDaRimettere {
+  dispute_id: string;
+  order_id: string;
+  importo_cents: number;
+}
+
+/**
+ * I bonifici dei reclami scritti sui suoi ordini che non hanno la loro riga in `bonifici_dei_reclami`.
+ *
+ * Succede quando il reclamo si e' chiuso col bonifico prima della 162 (la tabella non c'era: resta
+ * solo il segno sull'ordine), o quando la scrittura della riga e' caduta. Senza la riga il bonifico
+ * non compare nella lista e nessuno lo puo' segnare fatto. La riga si rimette dal segno, che porta la
+ * cifra e che scrive solo il server (`refundOrder`): la stessa riga che avrebbe scritto la chiusura
+ * del reclamo. Funzione pura: la scrittura sta in `bonificiPrimaDiCancellare`.
+ */
+export function bonificiDeiReclamiDaRimettere(
+  ordini: readonly OrdineDellaPersona[],
+  reclami: readonly BonificoDelReclamoDellaPersona[],
+): BonificoDelReclamoDaRimettere[] {
+  const presenti = new Set(reclami.map((r) => r.dispute_id));
+  const daRimettere = new Map<string, BonificoDelReclamoDaRimettere>();
+  for (const o of ordini) {
+    for (const segno of rimborsiGiaScritti(o)) {
+      if (!eUnBonificoDiRimborso(segno)) continue;
+      const chiave = chiaveDelBonifico(segno);
+      if (!chiave.startsWith('dispute_')) continue;
+      const disputeId = chiave.slice('dispute_'.length);
+      const centesimi = centesimiDelBonificoDalSegno(segno);
+      if (!disputeId || centesimi == null || centesimi <= 0) continue;
+      if (presenti.has(disputeId) || daRimettere.has(disputeId)) continue;
+      daRimettere.set(disputeId, { dispute_id: disputeId, order_id: o.id, importo_cents: centesimi });
+    }
+  }
+  return [...daRimettere.values()];
+}
+
 /** LA REGOLA, su quello che la persona ha. Funzione pura: la lettura sta in `bonificiPrimaDiCancellare`. */
 export function iBonificiCheFannoAspettare(dati: {
   ordini: readonly OrdineDellaPersona[];
   resi: readonly ResoDellaPersona[];
   reclami: readonly BonificoDelReclamoDellaPersona[];
+  /** I reclami sui suoi ordini (`disputes`), per sapere quali sono ancora aperti. */
+  reclamiSugliOrdini?: readonly ReclamoSullOrdineDellaPersona[];
   con162: boolean;
 }): BonificiDaFare {
   const ordinePer = new Map(dati.ordini.map((o) => [o.id, o]));
   // Solo i suoi ordini: un reso o un reclamo su un ordine di un altro non e' un debito verso di lei.
   const resi = dati.resi.filter((r) => ordinePer.has(r.order_id));
   const reclami = dati.reclami.filter((b) => ordinePer.has(b.order_id));
-  const b: BonificiDaFare = { centesimi: 0, incerti: 0, resiAperti: 0, con162: dati.con162 };
+  const b: BonificiDaFare = { centesimi: 0, incerti: 0, resiAperti: 0, reclamiAperti: 0, con162: dati.con162 };
 
   // ① I bonifici scritti sui suoi ordini, contati come li conta la pagina dell'ordine.
   const sullOrdine = new Set<string>();
@@ -234,7 +297,23 @@ export function iBonificiCheFannoAspettare(dati: {
     if (sullOrdine.has(`return_${r.id}`) || eUnBonificoDiRimborso(r.refund_id)) continue;
     if (ilBonificoDelResoEAncoraDaFare(r, serveLaSceltaDelRimborso(ordinePer.get(r.order_id)!))) b.resiAperti += 1;
   }
+
+  // ④ I reclami ancora aperti sui suoi ordini in contanti: decisi a suo favore, finiscono col bonifico.
+  for (const d of dati.reclamiSugliOrdini ?? []) {
+    const o = ordinePer.get(d.order_id);
+    if (!o || !serveLaSceltaDelRimborso(o)) continue;
+    if ((STATI_APERTI_DEL_RECLAMO as readonly string[]).includes(String(d.status))) b.reclamiAperti += 1;
+  }
   return b;
+}
+
+/** «un reso», «2 resi e un reclamo»: le cose ancora aperte, contate. */
+function cosaEAncoraAperto(b: BonificiDaFare, un: (n: number, uno: string, tanti: string) => string): string | null {
+  const pezzi = [
+    b.resiAperti > 0 ? un(b.resiAperti, 'un reso', 'resi') : null,
+    b.reclamiAperti > 0 ? un(b.reclamiAperti, 'un reclamo', 'reclami') : null,
+  ].filter((p): p is string => !!p);
+  return pezzi.length > 0 ? pezzi.join(' e ') : null;
 }
 
 /** Quello che resta da fare a chi amministra, in una riga corta: la pagina la mostra intera. */
@@ -242,15 +321,19 @@ export function rinvioPerChiAmministra(b: BonificiDaFare): string {
   if (b.incerti > 0) {
     return b.con162
       ? 'Cancellazione ferma: un bonifico di rimborso di questa persona è registrato solo in parte, fra ordine e reso o reclamo, e non si sa se è stato fatto. Va controllato a mano.'
-      : 'Cancellazione ferma: questa persona ha avuto un rimborso col bonifico, e finché sul database manca la migrazione 162 non si può sapere se è stato fatto.';
+      : // Settimo giro: applicata la 162, il prossimo tentativo sa leggere il «fatto» e rimette nella
+        // lista i bonifici dei reclami rimasti solo sull'ordine. Prima la frase lo lasciava intendere
+        // anche quando, per i reclami, la 162 da sola non bastava.
+        'Cancellazione ferma: questa persona ha avuto un rimborso col bonifico e, finché sul database manca la migrazione 162, non si sa se è stato fatto. Applicata la 162, riprova.';
   }
   const frasi = ['Cancellazione rinviata:'];
   if (b.centesimi > 0) {
-    frasi.push(`le dobbiamo ${formatPriceFromCents(b.centesimi)} con un bonifico, da fare e segnare fatto in «Rimborsi da bonificare».`);
+    frasi.push(`le dobbiamo ${formatPriceFromCents(b.centesimi)} col bonifico: fallo e segnalo fatto in «Rimborsi da bonificare».`);
   }
-  if (b.resiAperti > 0) {
-    const resi = b.resiAperti > 1 ? `${b.resiAperti} resi aperti su ordini` : 'un reso aperto su un ordine';
-    frasi.push(`${b.centesimi > 0 ? 'Ha anche' : 'ha'} ${resi} in contanti, da chiudere.`);
+  const aperti = cosaEAncoraAperto(b, (n, uno, tanti) => (n > 1 ? `${n} ${tanti}` : uno));
+  if (aperti) {
+    const dove = b.resiAperti + b.reclamiAperti > 1 ? 'aperti su ordini' : 'aperto su un ordine';
+    frasi.push(`${b.centesimi > 0 ? 'Ha anche' : 'ha'} ${aperti} ${dove} in contanti, da chiudere.`);
   }
   frasi.push('Poi riprova.');
   return frasi.join(' ');
@@ -260,14 +343,10 @@ export function rinvioPerChiAmministra(b: BonificiDaFare): string {
 export function rinvioPerLaPersona(b: BonificiDaFare): string {
   const frasi = ['Cancellazione rinviata:'];
   if (b.centesimi > 0) frasi.push(`ti dobbiamo ancora ${formatPriceFromCents(b.centesimi)} di rimborso con un bonifico.`);
-  if (b.resiAperti > 0) {
-    frasi.push(
-      `${b.centesimi > 0 ? 'Hai anche' : 'hai'} ` +
-        (b.resiAperti > 1
-          ? 'dei resi ancora aperti su ordini pagati in contanti'
-          : 'un reso ancora aperto su un ordine pagato in contanti') +
-        ': se ti rimborsiamo, sarà con un bonifico.',
-    );
+  const aperti = cosaEAncoraAperto(b, (n, uno, tanti) => (n > 1 ? `dei ${tanti}` : uno));
+  if (aperti) {
+    const dove = b.resiAperti + b.reclamiAperti > 1 ? 'ancora aperti su ordini pagati' : 'ancora aperto su un ordine pagato';
+    frasi.push(`${b.centesimi > 0 ? 'Hai anche' : 'hai'} ${aperti} ${dove} in contanti: se ti rimborsiamo, sarà con un bonifico.`);
   }
   frasi.push(
     'La cancellazione riparte da sola quando non ci saranno più bonifici da farti: così, se ti dobbiamo dei soldi, ' +
@@ -286,8 +365,32 @@ export function attesaPerIBonifici(
   b: BonificiDaFare,
 ): { motivo?: typeof MOTIVO_BONIFICO_DA_FARE; errore: string } | null {
   if (b.incerti > 0) return { errore: rinvioPerChiAmministra(b) };
-  if (b.centesimi > 0 || b.resiAperti > 0) return { motivo: MOTIVO_BONIFICO_DA_FARE, errore: rinvioPerLaPersona(b) };
+  if (b.centesimi > 0 || b.resiAperti > 0 || b.reclamiAperti > 0) {
+    return { motivo: MOTIVO_BONIFICO_DA_FARE, errore: rinvioPerLaPersona(b) };
+  }
   return null;
+}
+
+/**
+ * L'avviso a chi amministra quando la cancellazione rimette nella lista il bonifico di un reclamo
+ * rimasto solo sull'ordine. Quel bonifico, prima, si pagava partendo da un avviso nella campanella
+ * (senza la 162, o col «tienine il conto a parte» quando la riga non si scriveva): adesso compare
+ * fra i bonifici da fare, e chi l'ha gia' pagato non lo deve pagare due volte.
+ */
+export function avvisoDelBonificoDelReclamoRimesso(r: BonificoDelReclamoDaRimettere): {
+  titolo: string;
+  testo: string;
+  link: string;
+} {
+  return {
+    titolo: '💶 Un bonifico di un reclamo è tornato nella lista',
+    testo:
+      `Il bonifico di ${formatPriceFromCents(r.importo_cents)} del reclamo sull'ordine #${r.order_id.slice(0, 8)} ` +
+      "era scritto solo sull'ordine, fuori dalla lista dei bonifici da fare. Il cliente ha chiesto di cancellare " +
+      "l'account, e la cancellazione aspetta questo bonifico: adesso è nella lista. Se l'avevi già fatto " +
+      'partendo da un avviso, non pagarlo di nuovo: segnalo fatto.',
+    link: PAGINA_DEI_BONIFICI_DA_FARE,
+  };
 }
 
 // ── Le scritture ─────────────────────────────────────────────────────────────
@@ -311,6 +414,7 @@ interface Catena extends Risposta {
 interface Tabella {
   select(colonne: string): Catena;
   update(valori: Record<string, unknown>): Catena;
+  insert(valori: readonly Record<string, unknown>[]): Risposta;
 }
 const tabella = (admin: ClientLargo, nome: string) => admin.from(nome) as Tabella;
 
@@ -364,10 +468,16 @@ export async function dimenticaLIbanSeNonServe(
 }
 
 /**
- * PRIMA DI CANCELLARE UN ACCOUNT: legge i suoi ordini, i suoi resi e i bonifici dei reclami sui suoi
- * ordini, e applica la regola (`iBonificiCheFannoAspettare`). Se non c'e' niente da aspettare,
- * l'IBAN dei suoi resi se ne va adesso: dopo, senza piu' il legame con la persona, non lo
- * ritroverebbe nessuno. Se c'e' da aspettare, qui non si scrive niente.
+ * PRIMA DI CANCELLARE UN ACCOUNT: legge i suoi ordini, i suoi resi, i bonifici dei reclami sui suoi
+ * ordini e i reclami ancora aperti, e applica la regola (`iBonificiCheFannoAspettare`). Se non c'e'
+ * niente da aspettare, l'IBAN dei suoi resi se ne va adesso: dopo, senza piu' il legame con la
+ * persona, non lo ritroverebbe nessuno.
+ *
+ * L'unica scrittura quando c'e' da aspettare (settimo giro): con la 162, il bonifico di un reclamo
+ * scritto sull'ordine senza la sua riga in `bonifici_dei_reclami` riceve la riga
+ * (`bonificiDeiReclamiDaRimettere`). Senza, nessuno lo potrebbe segnare fatto e la cancellazione
+ * resterebbe ferma per sempre. Le righe rimesse tornano in `rimessi`: chi chiama avvisa chi
+ * amministra (lib/account/cancellazione.ts), perche' quel bonifico forse l'ha gia' pagato da un avviso.
  *
  * Se una lettura o una scrittura cade, la risposta e' «fermati»: la cancellazione si rinvia e
  * domani si riprova.
@@ -375,7 +485,10 @@ export async function dimenticaLIbanSeNonServe(
 export async function bonificiPrimaDiCancellare(
   admin: ClientLargo,
   userId: string,
-): Promise<{ ok: true; bonifici: BonificiDaFare; ibanCancellati: number } | { ok: false; errore: string }> {
+): Promise<
+  | { ok: true; bonifici: BonificiDaFare; ibanCancellati: number; rimessi: BonificoDelReclamoDaRimettere[] }
+  | { ok: false; errore: string }
+> {
   const fermati = (perche: string) => {
     logger.error('[cancellazione] bonifici di rimborso non controllati', { userId, perche });
     return { ok: false as const, errore: perche };
@@ -400,22 +513,57 @@ export async function bonificiPrimaDiCancellare(
     if (resi.error) return fermati(`resi: ${resi.error.message}`);
     const righeResi = (resi.data ?? []) as ResoDellaPersona[];
 
-    // I bonifici dei reclami nascono solo sugli ordini in contanti.
+    // I bonifici dei reclami nascono sugli ordini in contanti; si guardano anche gli ordini che ne
+    // portano il segno, perche' un segno senza la sua riga non resti invisibile.
     let righeReclami: BonificoDelReclamoDellaPersona[] = [];
-    const inContanti = righeOrdini.filter((o) => pagatoInContanti(o)).map((o) => o.id);
-    if (inContanti.length > 0) {
-      const reclami = await tabella(admin, 'bonifici_dei_reclami')
-        .select('dispute_id, order_id, fatto_at')
-        .in('order_id', inContanti);
+    let rimessi: BonificoDelReclamoDaRimettere[] = [];
+    const daGuardare = righeOrdini
+      .filter((o) => pagatoInContanti(o) || [...rimborsiGiaScritti(o)].some((s) => eUnBonificoDiRimborso(s)))
+      .map((o) => o.id);
+    if (daGuardare.length > 0) {
+      const leggiReclami = () =>
+        tabella(admin, 'bonifici_dei_reclami').select('dispute_id, order_id, fatto_at').in('order_id', daGuardare);
+      const reclami = await leggiReclami();
       if (reclami.error && !tabellaDeiBonificiMancante(reclami.error)) {
         return fermati(`bonifici dei reclami: ${reclami.error.message}`);
       }
       if (reclami.error) con162 = false;
       else righeReclami = (reclami.data ?? []) as BonificoDelReclamoDellaPersona[];
+
+      const daRimettere = con162 ? bonificiDeiReclamiDaRimettere(righeOrdini, righeReclami) : [];
+      if (daRimettere.length > 0) {
+        const scritte = await tabella(admin, 'bonifici_dei_reclami').insert(daRimettere.map((r) => ({ ...r })));
+        // 23505: un altro giro l'ha appena scritta. Non e' un guasto: si rilegge.
+        if (scritte.error && scritte.error.code !== '23505') {
+          return fermati(`bonifici dei reclami da rimettere nella lista: ${scritte.error.message}`);
+        }
+        if (!scritte.error) rimessi = daRimettere;
+        const riletti = await leggiReclami();
+        if (riletti.error) return fermati(`bonifici dei reclami: ${riletti.error.message}`);
+        righeReclami = (riletti.data ?? []) as BonificoDelReclamoDellaPersona[];
+      }
     }
 
-    const bonifici = iBonificiCheFannoAspettare({ ordini: righeOrdini, resi: righeResi, reclami: righeReclami, con162 });
-    if (attesaPerIBonifici(bonifici)) return { ok: true, bonifici, ibanCancellati: 0 };
+    // I reclami ancora aperti sui suoi ordini in contanti: possono finire con un bonifico.
+    let reclamiSugliOrdini: ReclamoSullOrdineDellaPersona[] = [];
+    const conContanti = righeOrdini.filter((o) => serveLaSceltaDelRimborso(o)).map((o) => o.id);
+    if (conContanti.length > 0) {
+      const aperti = await tabella(admin, 'disputes')
+        .select('id, order_id, status')
+        .in('order_id', conContanti)
+        .in('status', STATI_APERTI_DEL_RECLAMO);
+      if (aperti.error) return fermati(`reclami aperti: ${aperti.error.message}`);
+      reclamiSugliOrdini = (aperti.data ?? []) as ReclamoSullOrdineDellaPersona[];
+    }
+
+    const bonifici = iBonificiCheFannoAspettare({
+      ordini: righeOrdini,
+      resi: righeResi,
+      reclami: righeReclami,
+      reclamiSugliOrdini,
+      con162,
+    });
+    if (attesaPerIBonifici(bonifici)) return { ok: true, bonifici, ibanCancellati: 0, rimessi };
 
     const conIban = righeResi.filter((r) => r.refund_iban).map((r) => r.id);
     if (conIban.length > 0) {
@@ -425,7 +573,7 @@ export async function bonificiPrimaDiCancellare(
         .in('id', conIban);
       if (error) return fermati(`IBAN dei resi: ${error.message}`);
     }
-    return { ok: true, bonifici, ibanCancellati: conIban.length };
+    return { ok: true, bonifici, ibanCancellati: conIban.length, rimessi };
   } catch (e) {
     return fermati(e instanceof Error ? e.message : 'errore');
   }

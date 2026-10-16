@@ -152,9 +152,9 @@ describe('cancellata dal pannello, la risposta e scritta per chi amministra', ()
 
 describe('le parole, in ogni combinazione', () => {
   it('bonifici dovuti, reso aperto, o tutti e due: nessuna promessa che basti l IBAN', () => {
-    const dovuti = rinvioPerLaPersona({ centesimi: 2400, incerti: 0, resiAperti: 0, con162: true });
-    const aperto = rinvioPerLaPersona({ centesimi: 0, incerti: 0, resiAperti: 1, con162: true });
-    const tutti = rinvioPerLaPersona({ centesimi: 2400, incerti: 0, resiAperti: 2, con162: true });
+    const dovuti = rinvioPerLaPersona({ centesimi: 2400, incerti: 0, resiAperti: 0, reclamiAperti: 0, con162: true });
+    const aperto = rinvioPerLaPersona({ centesimi: 0, incerti: 0, resiAperti: 1, reclamiAperti: 0, con162: true });
+    const tutti = rinvioPerLaPersona({ centesimi: 2400, incerti: 0, resiAperti: 2, reclamiAperti: 0, con162: true });
     for (const frase of [dovuti, aperto, tutti]) {
       expect(frase).not.toMatch(/quando avremo l.IBAN/u);
       expect(frase).toMatch(/riparte da sola quando non ci saranno più bonifici da farti/u);
@@ -162,6 +162,6 @@ describe('le parole, in ogni combinazione', () => {
     expect(aperto).toMatch(/un reso ancora aperto/u);
     expect(tutti).toMatch(/24,00\s€/u);
     expect(tutti).toMatch(/dei resi ancora aperti/u);
-    expect(SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE).toMatch(/un tuo reso ancora aperto può finire con un bonifico/u);
+    expect(SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE).toMatch(/un reso o un reclamo ancora aperto su un tuo ordine pagato in contanti può finire con un bonifico/u);
   });
 });

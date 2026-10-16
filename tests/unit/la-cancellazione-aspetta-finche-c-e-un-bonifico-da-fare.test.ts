@@ -2,12 +2,31 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { FintoDatabase, Riga } from './aiuti/finto-database-dei-rimborsi';
 import { creaFintoDatabase } from './aiuti/finto-database-dei-rimborsi';
 
-const finto = vi.hoisted(() => ({ db: null as unknown as FintoDatabase, cancellati: [] as string[] }));
-
-vi.mock('@/lib/supabase/server', () => ({
-  getAdminSupabase: () => finto.db.client,
-  getServerSupabase: async () => finto.db.client,
+const finto = vi.hoisted(() => ({
+  db: null as unknown as FintoDatabase,
+  cancellati: [] as string[],
+  /** La scrittura in `bonifici_dei_reclami` cade come un timeout del database (57014). */
+  rigaDelReclamoCade: false,
 }));
+
+vi.mock('@/lib/supabase/server', () => {
+  const client = () => {
+    const c = finto.db.client;
+    return {
+      ...c,
+      from: (tabella: string) => {
+        const q = c.from(tabella) as unknown as { insert: (...a: unknown[]) => unknown };
+        if (tabella === 'bonifici_dei_reclami' && finto.rigaDelReclamoCade) {
+          q.insert = () =>
+            Promise.resolve({ data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } });
+        }
+        return q;
+      },
+    };
+  };
+  return { getAdminSupabase: () => client(), getServerSupabase: async () => client() };
+});
+vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/audit', () => ({ writeAudit: vi.fn(async () => {}) }));
 vi.mock('@/lib/analytics/events', () => ({ trackErrorShown: vi.fn() }));
@@ -18,12 +37,15 @@ vi.mock('@/lib/api/middleware', () => {
   return { withAdminAuth: passa, withAdminAuthRateLimit: (_o: unknown, h: Gestore) => passa(h) };
 });
 
+import { getAdminSupabase } from '@/lib/supabase/server';
 import { cancellaAccount } from '@/lib/account/cancellazione';
+import { notificheConTitolo } from './aiuti/finto-database-dei-rimborsi';
 import { verdettoDelGiro } from '@/lib/cron-cancellazioni';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { COLONNE_162 } from '@/lib/rimborsi/scelta-del-cliente';
 import {
   attesaPerIBonifici,
+  bonificiDeiReclamiDaRimettere,
   iBonificiCheFannoAspettare,
   ilBonificoDelResoEAncoraDaFare,
   rinvioPerChiAmministra,
@@ -34,6 +56,8 @@ import {
   type OrdineDellaPersona,
 } from '@/lib/rimborsi/iban-del-rimborso';
 import { DELETE as cancellaDalPannello } from '@/app/api/admin/users/[id]/delete/route';
+import { POST as risolviIlReclamo } from '@/app/api/admin/disputes/[id]/resolve/route';
+import { GET as leggiLaLista, POST as comandoDellaLista } from '@/app/api/admin/rimborsi-da-bonificare/route';
 
 /**
  * Riesame del 16/10, sesto giro — LA CANCELLAZIONE DI UN ACCOUNT ASPETTA FINCHE' C'E' UN BONIFICO DA FARE.
@@ -52,8 +76,16 @@ import { DELETE as cancellaDalPannello } from '@/app/api/admin/users/[id]/delete
  *  ④ i bonifici dei reclami si cercavano per chi li aveva aperti: un negozio che apre un reclamo
  *    sull'ordine di un cliente si trovava il debito del cliente, e il cliente no.
  *
- * Girano la cancellazione vera, la rotta vera del pannello, il giro notturno vero e la stessa
- * catena che la pagina usa per mostrare l'errore (`apiErrorMessage` + `friendlyError`).
+ * Settimo giro, dal collaudo:
+ *  ⑤ un reclamo chiuso col bonifico senza la sua riga (prima della 162, o la scrittura caduta)
+ *    fermava la cancellazione per sempre: nessuna pagina lo mostrava e il «fatto» rispondeva 409.
+ *    Adesso la cancellazione rimette la riga dal segno sull'ordine, e chi amministra lo sa;
+ *  ⑥ un reclamo ancora aperto su un ordine in contanti non fermava niente: deciso a favore della
+ *    cliente dopo la cancellazione, il bonifico nasceva senza nome e senza telefono.
+ *
+ * Girano la cancellazione vera, la rotta vera del pannello, il giro notturno vero, la rotta vera
+ * che chiude un reclamo, la lista vera dei bonifici col suo «fatto», e la stessa catena che la
+ * pagina usa per mostrare l'errore (`apiErrorMessage` + `friendlyError`).
  */
 
 const GIULIA = 'giulia-0000-4000-8000-000000000001';
@@ -87,6 +119,7 @@ function senzaLe162(riga: Riga): Riga {
 
 function mondo(tabelle: { orders?: Riga[]; returns?: Riga[]; disputes?: Riga[]; bonifici_dei_reclami?: Riga[] }, senza162 = false) {
   finto.cancellati = [];
+  finto.rigaDelReclamoCade = false;
   finto.db = creaFintoDatabase(
     {
       cod_reconciliations: [],
@@ -95,10 +128,12 @@ function mondo(tabelle: { orders?: Riga[]; returns?: Riga[]; disputes?: Riga[]; 
       disputes: tabelle.disputes ?? [],
       bonifici_dei_reclami: tabelle.bonifici_dei_reclami ?? [],
       profiles: [
+        { id: 'nicola', role: 'admin' },
         { id: GIULIA, full_name: 'Giulia Verdi', role: 'buyer' },
         { id: NEGOZIO, full_name: 'Sergio Negoziante', role: 'seller' },
       ],
       contact_messages: [],
+      notifications: [],
     },
     senza162 ? { colonneMancanti: [...COLONNE_162], tabelleMancanti: ['bonifici_dei_reclami'] } : {},
   );
@@ -129,6 +164,56 @@ function laNotte(esito: { ok: boolean; motivo?: string; errore?: string }) {
   );
 }
 
+/** Un ordine in contanti, incassato, con quello che serve alla rotta vera che chiude un reclamo. */
+function ordineDaRisolvere(extra: Riga = {}): Riga {
+  return {
+    ...ordine({ stripe_refund_id: null, payment_status: 'PAID', total_price: 24, gross_total_cents: 2400 }),
+    seller_payout_cents: 2160, seller_payout_reversed_cents: 0, payout_status: 'AWAITING_REMITTANCE',
+    stripe_transfer_id: null, stripe_reversal_id: null, refunded_amount_cents: 0, rider_id: null, rider_transfer_id: null,
+    rider_payout_status: null, rider_payout_reversed_cents: 0, rider_fee_cents: 0, shipping_cost: 0,
+    cash_confirmed_at: '2026-10-10T18:00:00Z', internal_dispute_status: 'OPEN',
+    ...extra,
+  };
+}
+
+/** Chi amministra chiude il reclamo dal pannello: la rotta vera. */
+async function chiudiIlReclamo(status: 'resolved_buyer' | 'resolved_seller', refundCents?: number): Promise<number> {
+  const res = await (risolviIlReclamo as unknown as (r: Request, c: unknown) => Promise<Response>)(
+    new Request(`http://localhost/api/admin/disputes/${RECLAMO}/resolve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status, notes: 'Merce rovinata: rimborsiamo i contanti.', ...(refundCents ? { refundCents } : {}) }),
+    }),
+    { params: Promise.resolve({ id: RECLAMO }) },
+  );
+  return res.status;
+}
+
+/** Le voci di «Rimborsi da bonificare», da pagare e da controllare: la rotta vera. */
+async function laLista(): Promise<string[]> {
+  const res = await (leggiLaLista as unknown as (r: Request, c: unknown) => Promise<Response>)(
+    new Request('http://localhost/api/admin/rimborsi-da-bonificare'),
+    { params: Promise.resolve({}) },
+  );
+  const corpo = (await res.json()) as { voci?: Array<{ id: string }>; daControllare?: Array<{ id: string }> };
+  return [...(corpo.voci ?? []), ...(corpo.daControllare ?? [])].map((v) => v.id);
+}
+
+/** «Bonifico fatto» sul reclamo, dalla lista: la rotta vera. */
+async function segnaFattoIlReclamo(): Promise<number> {
+  const res = await (comandoDellaLista as unknown as (r: Request, c: unknown) => Promise<Response>)(
+    new Request('http://localhost/api/admin/rimborsi-da-bonificare', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reclamoId: RECLAMO, azione: 'fatto' }),
+    }),
+    { params: Promise.resolve({}) },
+  );
+  return res.status;
+}
+
+const AVVISO_DEL_RECLAMO_RIMESSO = 'Un bonifico di un reclamo è tornato nella lista';
+
 beforeEach(() => mondo({}));
 
 describe('la regola, da sola', () => {
@@ -136,7 +221,8 @@ describe('la regola, da sola', () => {
     id: ORDINE, payment_method: 'cod', stripe_payment_intent: null, total_price: 40, stripe_refund_id: null, ...extra,
   });
   const reso = (extra: Record<string, unknown> = {}) => ({ id: RESO, order_id: ORDINE, status: 'REFUNDED', refund_id: null, ...extra });
-  const nulla = { centesimi: 0, incerti: 0, resiAperti: 0 };
+  const nulla = { centesimi: 0, incerti: 0, resiAperti: 0, reclamiAperti: 0 };
+  const reclamo = (status: string, order_id = ORDINE) => ({ id: RECLAMO, order_id, status });
 
   it.each<[string, Parameters<typeof iBonificiCheFannoAspettare>[0], Partial<BonificiDaFare>]>([
     ['bonifico del reso sull ordine, non fatto', { ordini: [o({ stripe_refund_id: SEGNO_DEL_RESO })], resi: [reso({ refund_id: SEGNO_DEL_RESO, refund_bonifico_fatto_at: null })], reclami: [], con162: true }, { centesimi: 4000, incerti: 0 }],
@@ -153,8 +239,22 @@ describe('la regola, da sola', () => {
     ['reso aperto su un ordine pagato tutto col credito', { ordini: [o({ total_price: 0 })], resi: [reso({ status: 'APPROVED', refund_method: null })], reclami: [], con162: true }, nulla],
     ['reso aperto su un ordine con la carta', { ordini: [o({ payment_method: 'card', stripe_payment_intent: 'pi_1' })], resi: [reso({ status: 'APPROVED', refund_method: null })], reclami: [], con162: true }, nulla],
     ['reso e reclamo sull ordine di un altro', { ordini: [], resi: [reso({ refund_id: SEGNO_DEL_RESO })], reclami: [{ dispute_id: RECLAMO, order_id: ORDINE, fatto_at: null }], con162: true }, nulla],
+    ['reclamo aperto su un ordine in contanti', { ordini: [o()], resi: [], reclami: [], reclamiSugliOrdini: [reclamo('open')], con162: true }, { reclamiAperti: 1, incerti: 0 }],
+    ['reclamo in esame su un ordine in contanti, senza la 162', { ordini: [o()], resi: [], reclami: [], reclamiSugliOrdini: [reclamo('under_review')], con162: false }, { reclamiAperti: 1, incerti: 0 }],
+    ['reclamo gia deciso', { ordini: [o()], resi: [], reclami: [], reclamiSugliOrdini: [reclamo('resolved_seller'), { ...reclamo('rejected'), id: 'altro' }], con162: true }, nulla],
+    ['reclamo aperto su un ordine con la carta', { ordini: [o({ payment_method: 'card', stripe_payment_intent: 'pi_1' })], resi: [], reclami: [], reclamiSugliOrdini: [reclamo('open')], con162: true }, nulla],
+    ['reclamo aperto sull ordine di un altro', { ordini: [o()], resi: [], reclami: [], reclamiSugliOrdini: [reclamo('open', 'un-altro-ordine')], con162: true }, nulla],
   ])('%s', (_nome, dati, atteso) => {
     expect(iBonificiCheFannoAspettare(dati)).toMatchObject(atteso);
+  });
+
+  it('le righe dei reclami da rimettere: solo i segni dei reclami senza riga, con la cifra del segno', () => {
+    const conDue = o({ stripe_refund_id: `${SEGNO_DEL_RESO},${SEGNO_DEL_RECLAMO},bonifico:900:dispute_altro,wallet:dispute_terzo` });
+    expect(bonificiDeiReclamiDaRimettere([conDue], [{ dispute_id: 'altro', order_id: ORDINE, fatto_at: null }])).toEqual([
+      { dispute_id: RECLAMO, order_id: ORDINE, importo_cents: 2400 },
+    ]);
+    expect(bonificiDeiReclamiDaRimettere([o({ stripe_refund_id: 'bonifico:0:dispute_x' })], [])).toEqual([]);
+    expect(bonificiDeiReclamiDaRimettere([o({ stripe_refund_id: SEGNO_DEL_RECLAMO }), { ...o({ stripe_refund_id: SEGNO_DEL_RECLAMO }), id: 'copia' }], [])).toHaveLength(1);
   });
 
   it('nessuna scelta vuol dire bonifico solo se l ordine e in contanti', () => {
@@ -166,10 +266,11 @@ describe('la regola, da sola', () => {
   });
 
   it('quello che non si sa non ha un motivo: per la notte e un guasto', () => {
-    expect(attesaPerIBonifici({ centesimi: 4000, incerti: 1, resiAperti: 0, con162: false })?.motivo).toBeUndefined();
-    expect(attesaPerIBonifici({ centesimi: 4000, incerti: 0, resiAperti: 0, con162: true })?.motivo).toBe('bonifico_da_fare');
-    expect(attesaPerIBonifici({ centesimi: 0, incerti: 0, resiAperti: 1, con162: true })?.motivo).toBe('bonifico_da_fare');
-    expect(attesaPerIBonifici({ centesimi: 0, incerti: 0, resiAperti: 0, con162: true })).toBeNull();
+    expect(attesaPerIBonifici({ centesimi: 4000, incerti: 1, resiAperti: 0, reclamiAperti: 0, con162: false })?.motivo).toBeUndefined();
+    expect(attesaPerIBonifici({ centesimi: 4000, incerti: 0, resiAperti: 0, reclamiAperti: 0, con162: true })?.motivo).toBe('bonifico_da_fare');
+    expect(attesaPerIBonifici({ centesimi: 0, incerti: 0, resiAperti: 1, reclamiAperti: 0, con162: true })?.motivo).toBe('bonifico_da_fare');
+    expect(attesaPerIBonifici({ centesimi: 0, incerti: 0, resiAperti: 0, reclamiAperti: 1, con162: false })?.motivo).toBe('bonifico_da_fare');
+    expect(attesaPerIBonifici({ centesimi: 0, incerti: 0, resiAperti: 0, reclamiAperti: 0, con162: true })).toBeNull();
   });
 });
 
@@ -263,26 +364,163 @@ describe('senza la 162 (colonne del reso e tabella dei reclami assenti)', () => 
 });
 
 describe('il bonifico di un reclamo la cui riga non si e scritta', () => {
-  beforeEach(() => mondo({ orders: [ordine({ stripe_refund_id: SEGNO_DEL_RECLAMO })], returns: [], disputes: [{ id: RECLAMO, order_id: ORDINE, opener_id: GIULIA }] }));
+  beforeEach(() => mondo({ orders: [ordine({ stripe_refund_id: SEGNO_DEL_RECLAMO })], returns: [], disputes: [{ id: RECLAMO, order_id: ORDINE, opener_id: GIULIA, status: 'resolved_buyer' }] }));
 
-  it('IL CASO DELLA SCHEDA — il segno sta sull ordine, la riga no: la cancellazione si ferma e chi amministra lo legge', async () => {
+  it('la riga si rimette dal segno sull ordine: la cancellazione aspetta col suo motivo, e la notte non e rossa', async () => {
     const esito = await cancellaAccount(finto.db.client as never, GIULIA);
+    expect(esito).toMatchObject({ ok: false, motivo: 'bonifico_da_fare' });
+    expect(esito.errore).toMatch(/24,00\s€/u);
+    expect(finto.cancellati).toEqual([]);
+    expect(finto.db.tabelle.bonifici_dei_reclami).toEqual([
+      expect.objectContaining({ dispute_id: RECLAMO, order_id: ORDINE, importo_cents: 2400 }),
+    ]);
+    expect(finto.db.tabelle.bonifici_dei_reclami[0].fatto_at ?? null).toBeNull();
+    expect(laNotte(esito)).toMatchObject({ rinviate: 1, fallite: 0, daSvegliare: false });
+  });
+
+  it('chi amministra lo trova nella lista, lo segna fatto, e la cancellazione va avanti', async () => {
+    expect(await laLista(), 'prima: nessuna voce da segnare fatta').not.toContain(RECLAMO);
+    const r = await eliminaDalPannello(GIULIA);
+    expect(r.status).toBe(409);
+    expect(r.aVideo).toBe(r.messaggio);
+    expect(r.aVideo).toMatch(/24,00\s€/u);
+    expect(r.aVideo).toContain('Rimborsi da bonificare');
+
+    expect(await laLista()).toContain(RECLAMO);
+    expect(await segnaFattoIlReclamo()).toBe(200);
+    const dopo = await eliminaDalPannello(GIULIA);
+    expect(dopo.status, dopo.messaggio).toBe(200);
+    expect(finto.cancellati).toEqual([GIULIA]);
+  });
+
+  it('chi amministra viene avvisato una volta sola: quel bonifico forse l ha gia pagato da un avviso', async () => {
+    await cancellaAccount(finto.db.client as never, GIULIA);
+    await cancellaAccount(finto.db.client as never, GIULIA);
+    const avvisi = notificheConTitolo(finto.db, AVVISO_DEL_RECLAMO_RIMESSO);
+    expect(avvisi).toHaveLength(1);
+    expect(String(avvisi[0].body)).toMatch(/24,00\s€/u);
+    expect(String(avvisi[0].body)).toContain('non pagarlo di nuovo');
+    expect(finto.db.tabelle.bonifici_dei_reclami, 'la riga rimessa due volte').toHaveLength(1);
+  });
+
+  it('se la riga non si riesce a scrivere: guasto, l account resta, si riprova', async () => {
+    finto.rigaDelReclamoCade = true;
+    const esito = await cancellaAccount(getAdminSupabase() as never, GIULIA);
     expect(esito.ok).toBe(false);
     expect(esito.motivo).toBeUndefined();
     expect(finto.cancellati).toEqual([]);
+    expect(laNotte(esito)).toMatchObject({ fallite: 1, daSvegliare: true });
+  });
+
+  it('controllo: con la riga, aspetta col suo motivo senza riscriverla; segnata fatta, va avanti', async () => {
+    finto.db.tabelle.bonifici_dei_reclami.push({ dispute_id: RECLAMO, order_id: ORDINE, importo_cents: 2400, fatto_at: null, iban: null, intestatario: null });
+    expect(await cancellaAccount(finto.db.client as never, GIULIA)).toMatchObject({ ok: false, motivo: 'bonifico_da_fare' });
+    expect(finto.db.scritture.filter((x) => x.tabella === 'bonifici_dei_reclami')).toEqual([]);
+
+    finto.db.tabelle.bonifici_dei_reclami[0].fatto_at = '2026-10-16T09:00:00Z';
+    const esito = await cancellaAccount(finto.db.client as never, GIULIA);
+    expect(esito.ok, esito.errore).toBe(true);
+  });
+
+  it('IL CASO DEL COLLAUDO — la riga cade quando si chiude il reclamo (la rotta vera): la cancellazione la rimette', async () => {
+    mondo({ orders: [ordineDaRisolvere()], returns: [], disputes: [{ id: RECLAMO, status: 'open', order_id: ORDINE, opener_id: GIULIA, against_id: NEGOZIO }] });
+    finto.rigaDelReclamoCade = true;
+    expect(await chiudiIlReclamo('resolved_buyer', 2400)).toBe(200);
+    finto.rigaDelReclamoCade = false;
+    expect(finto.db.tabelle.orders[0].stripe_refund_id).toBe(SEGNO_DEL_RECLAMO);
+    expect(finto.db.tabelle.bonifici_dei_reclami, 'il guasto non e avvenuto').toEqual([]);
+
+    expect(await cancellaAccount(finto.db.client as never, GIULIA)).toMatchObject({ ok: false, motivo: 'bonifico_da_fare' });
+    expect(await laLista()).toContain(RECLAMO);
+    expect(await segnaFattoIlReclamo()).toBe(200);
+    expect((await cancellaAccount(finto.db.client as never, GIULIA)).ok).toBe(true);
+  });
+});
+
+describe('un reclamo chiuso col bonifico prima della 162, poi la 162 applicata', () => {
+  it('IL CASO DEL COLLAUDO — non resta fermo per sempre: dopo la 162 il bonifico entra nella lista e si segna fatto', async () => {
+    mondo({ orders: [ordineDaRisolvere()], returns: [], disputes: [{ id: RECLAMO, status: 'open', order_id: ORDINE, opener_id: GIULIA, against_id: NEGOZIO }] }, true);
+    expect(await chiudiIlReclamo('resolved_buyer', 2400)).toBe(200);
+    expect(finto.db.tabelle.orders[0].stripe_refund_id).toBe(SEGNO_DEL_RECLAMO);
+
+    // Senza la 162 non si sa: si ferma, e la frase dice che dopo la 162 basta riprovare.
+    const prima = await eliminaDalPannello(GIULIA);
+    expect(prima.status).toBe(409);
+    expect(prima.aVideo).toBe(prima.messaggio);
+    expect(prima.aVideo).toContain('Applicata la 162, riprova');
+
+    // Si applica la 162: colonne e tabella arrivano, vuote.
+    finto.db.guasti.tabelleMancanti = [];
+    finto.db.guasti.colonneMancanti = [];
+
+    const dopo = await eliminaDalPannello(GIULIA);
+    expect(dopo.status).toBe(409);
+    expect(dopo.aVideo).toMatch(/24,00\s€/u);
+    const esito = await cancellaAccount(finto.db.client as never, GIULIA);
+    expect(esito).toMatchObject({ ok: false, motivo: 'bonifico_da_fare' });
+    expect(laNotte(esito)).toMatchObject({ fallite: 0, daSvegliare: false });
+
+    expect(await laLista()).toContain(RECLAMO);
+    expect(await segnaFattoIlReclamo()).toBe(200);
+    const fine = await eliminaDalPannello(GIULIA);
+    expect(fine.status, fine.messaggio).toBe(200);
+    expect(finto.cancellati).toEqual([GIULIA]);
+  });
+});
+
+describe('un reclamo ancora aperto su un ordine in contanti', () => {
+  const conIlReclamo = (opener: string, extra: Riga = {}) =>
+    mondo({
+      orders: [ordineDaRisolvere(extra)],
+      returns: [],
+      disputes: [{ id: RECLAMO, status: 'open', order_id: ORDINE, opener_id: opener, against_id: opener === GIULIA ? NEGOZIO : GIULIA }],
+    });
+
+  it.each([
+    ['aperto da Giulia', GIULIA],
+    ['aperto dal negozio sull ordine di Giulia', NEGOZIO],
+  ])('IL CASO DEL COLLAUDO — %s: la cancellazione aspetta, e Giulia legge perche', async (_nome, opener) => {
+    conIlReclamo(opener);
+    const esito = await cancellaAccount(finto.db.client as never, GIULIA);
+    expect(esito).toMatchObject({ ok: false, motivo: 'bonifico_da_fare' });
+    expect(finto.cancellati).toEqual([]);
+    expect(finto.db.tabelle.orders[0].delivery_full_name).toBe('Giulia Verdi');
+    expect(esito.errore).toContain('reclamo ancora aperto');
+    expect(laNotte(esito)).toMatchObject({ rinviate: 1, fallite: 0, daSvegliare: false });
 
     const r = await eliminaDalPannello(GIULIA);
     expect(r.status).toBe(409);
     expect(r.aVideo).toBe(r.messaggio);
-    expect(r.aVideo).toMatch(/non si sa se è stato fatto/u);
+    expect(r.aVideo).toContain('reclamo aperto');
   });
 
-  it('controllo: con la riga, aspetta col suo motivo; segnata fatta, va avanti', async () => {
-    finto.db.tabelle.bonifici_dei_reclami.push({ dispute_id: RECLAMO, order_id: ORDINE, importo_cents: 2400, fatto_at: null, iban: null, intestatario: null });
-    expect(await cancellaAccount(finto.db.client as never, GIULIA)).toMatchObject({ ok: false, motivo: 'bonifico_da_fare' });
-
-    finto.db.tabelle.bonifici_dei_reclami[0].fatto_at = '2026-10-16T09:00:00Z';
+  it('chiuso a favore di Giulia col bonifico: aspetta il bonifico; segnato fatto, va avanti', async () => {
+    conIlReclamo(NEGOZIO);
+    expect(await chiudiIlReclamo('resolved_buyer', 2400)).toBe(200);
     const esito = await cancellaAccount(finto.db.client as never, GIULIA);
+    expect(esito).toMatchObject({ ok: false, motivo: 'bonifico_da_fare' });
+    expect(esito.errore).toMatch(/24,00\s€/u);
+    expect(await segnaFattoIlReclamo()).toBe(200);
+    expect((await cancellaAccount(finto.db.client as never, GIULIA)).ok).toBe(true);
+  });
+
+  it('chiuso a favore del negozio, senza rimborso: la cancellazione va avanti', async () => {
+    conIlReclamo(GIULIA);
+    expect(await chiudiIlReclamo('resolved_seller')).toBe(200);
+    const esito = await cancellaAccount(finto.db.client as never, GIULIA);
+    expect(esito.ok, esito.errore).toBe(true);
+  });
+
+  it('controllo: un reclamo aperto su un ordine pagato con la carta non fa aspettare (la carta torna da sola)', async () => {
+    conIlReclamo(GIULIA, { payment_method: 'card', stripe_payment_intent: 'pi_1' });
+    const esito = await cancellaAccount(finto.db.client as never, GIULIA);
+    expect(esito.ok, esito.errore).toBe(true);
+  });
+
+  it('controllo: il negozio che ha aperto il reclamo sull ordine di Giulia non aspetta il debito di lei', async () => {
+    conIlReclamo(NEGOZIO);
+    const esito = await cancellaAccount(finto.db.client as never, NEGOZIO);
+    expect(esito.motivo).toBeUndefined();
     expect(esito.ok, esito.errore).toBe(true);
   });
 });
@@ -315,17 +553,26 @@ describe('il bonifico e di chi ha comprato, non di chi ha aperto il reclamo', ()
 
 describe('le parole', () => {
   const casi: Array<[string, BonificiDaFare]> = [
-    ['bonifico dovuto', { centesimi: 4000, incerti: 0, resiAperti: 0, con162: true }],
-    ['bonifico grosso e reso aperto', { centesimi: 123456, incerti: 0, resiAperti: 2, con162: true }],
-    ['solo reso aperto', { centesimi: 0, incerti: 0, resiAperti: 1, con162: false }],
-    ['non si sa, con la 162', { centesimi: 123456, incerti: 3, resiAperti: 1, con162: true }],
-    ['non si sa, senza la 162', { centesimi: 123456, incerti: 3, resiAperti: 1, con162: false }],
+    ['bonifico dovuto', { centesimi: 4000, incerti: 0, resiAperti: 0, reclamiAperti: 0, con162: true }],
+    ['bonifico grosso e reso aperto', { centesimi: 123456, incerti: 0, resiAperti: 2, reclamiAperti: 0, con162: true }],
+    ['solo reso aperto', { centesimi: 0, incerti: 0, resiAperti: 1, reclamiAperti: 0, con162: false }],
+    ['non si sa, con la 162', { centesimi: 123456, incerti: 3, resiAperti: 1, reclamiAperti: 0, con162: true }],
+    ['non si sa, senza la 162', { centesimi: 123456, incerti: 3, resiAperti: 1, reclamiAperti: 0, con162: false }],
+    ['solo un reclamo aperto', { centesimi: 0, incerti: 0, resiAperti: 0, reclamiAperti: 1, con162: true }],
+    ['bonifico grosso, un reso e un reclamo aperti', { centesimi: 123456, incerti: 0, resiAperti: 1, reclamiAperti: 1, con162: true }],
+    ['bonifico grossissimo, tanti resi e tanti reclami', { centesimi: 9999999, incerti: 0, resiAperti: 12, reclamiAperti: 12, con162: true }],
   ];
 
   it.each(casi)('a chi amministra arriva intera: %s', (_nome, b) => {
     const frase = rinvioPerChiAmministra(b);
     expect(frase.length).toBeLessThan(200);
     expect(friendlyError(new Error(frase)), 'la pagina la sostituisce col testo generico').toBe(frase);
+  });
+
+  it('alla persona: reso e reclamo aperti detti tutti e due', () => {
+    expect(rinvioPerLaPersona(casi[5][1])).toMatch(/hai un reclamo ancora aperto su un ordine pagato in contanti/u);
+    expect(rinvioPerLaPersona(casi[6][1])).toMatch(/Hai anche un reso e un reclamo ancora aperti su ordini pagati in contanti/u);
+    expect(rinvioPerChiAmministra(casi[6][1])).toMatch(/Ha anche un reso e un reclamo aperti su ordini in contanti/u);
   });
 
   it('alla persona non si promette che basti l IBAN: si riparte quando non ci sono piu bonifici da fare', () => {
@@ -336,6 +583,11 @@ describe('le parole', () => {
     }
     expect(SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE).toMatch(/la cancellazione aspetta che ogni bonifico che ti dobbiamo risulti fatto/u);
     expect(SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE).not.toMatch(/restano solo il tuo IBAN e il tuo nome/u);
+    // Il riquadro «Elimina il tuo account» lo legge chiunque, anche chi ha pagato solo con la carta:
+    // l'IBAN si chiede solo a chi deve ricevere un bonifico.
+    expect(SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE).toMatch(/Se ti dobbiamo un bonifico e non ci hai ancora dato il tuo IBAN/u);
+    expect(SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE).not.toMatch(/\. Se non ci hai ancora dato il tuo IBAN/u);
+    expect(SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE).toMatch(/un reso o un reclamo ancora aperto/u);
     expect(QUANTO_TENIAMO_L_IBAN).not.toMatch(/intestatario/u);
   });
 });
