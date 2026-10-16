@@ -148,21 +148,32 @@ export async function notifyAdmins(title: string, body: string, link: string, op
 }
 
 /**
- * L'identificativo della riga di un avviso agli amministratori che deve arrivare
- * UNA volta sola: sempre lo stesso per la stessa chiave e lo stesso destinatario.
+ * Un identificativo che dipende solo dalla chiave: sempre lo stesso per la
+ * stessa chiave. Serve alle righe che il database deve rifiutare la seconda
+ * volta (23505): un avviso che arriva una volta sola, una divisione del
+ * rimborso decisa una volta sola (lib/stripe/rimborsi-da-dividere.ts).
  *
- * È un UUID valido perché la colonna è di tipo uuid: sedici byte dell'impronta,
- * con i bit di «versione» e «variante» sistemati come vuole la RFC 4122 (lo
- * stesso schema di `identificativoAvviso` in lib/privacy/avvisi-a-chi-aspetta.ts).
- * Non serve che sia imprevedibile: serve che non cambi.
+ * È un UUID valido perché le colonne sono di tipo uuid: sedici byte
+ * dell'impronta, con i bit di «versione» e «variante» sistemati come vuole la
+ * RFC 4122 (lo stesso schema di `identificativoAvviso` in
+ * lib/privacy/avvisi-a-chi-aspetta.ts). Non serve che sia imprevedibile:
+ * serve che non cambi.
  */
-export function idDellAvvisoAgliAmministratori(chiave: string, adminId: string): string {
-  const b = createHash('sha256').update(`mycity:avviso-amministratori:${chiave}:${adminId}`).digest();
+export function idDaChiave(chiave: string): string {
+  const b = createHash('sha256').update(`mycity:${chiave}`).digest();
   const byte = Buffer.from(b.subarray(0, 16));
   byte[6] = (byte[6] & 0x0f) | 0x50;
   byte[8] = (byte[8] & 0x3f) | 0x80;
   const h = byte.toString('hex');
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/**
+ * L'identificativo della riga di un avviso agli amministratori che deve arrivare
+ * UNA volta sola: sempre lo stesso per la stessa chiave e lo stesso destinatario.
+ */
+export function idDellAvvisoAgliAmministratori(chiave: string, adminId: string): string {
+  return idDaChiave(`avviso-amministratori:${chiave}:${adminId}`);
 }
 
 /**

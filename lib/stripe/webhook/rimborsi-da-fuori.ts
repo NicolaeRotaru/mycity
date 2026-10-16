@@ -93,9 +93,9 @@ export type OrdineDelRimborso = {
  * Valore di `internal_dispute_status` che ferma il giro dei bonifici: il giro
  * paga solo gli ordini con quel campo vuoto o 'RESOLVED'. Si toglie dal
  * pannello (Ordini → «Rimborsi dal cruscotto da dividere»): chi amministra
- * scrive la parte di ciascun ordine, e `registraSullOrdine` la registra con la
- * stessa contabilità di un ordine solo e toglie la pausa nella stessa
- * scrittura.
+ * scrive la parte di ciascun ordine, `registraSullOrdine` la registra con la
+ * stessa contabilità di un ordine solo, e quando tutte le parti sono scritte la
+ * divisione toglie la pausa a tutto il carrello con una scrittura sola.
  */
 export const PAUSA_RIMBORSO_DA_DIVIDERE = 'RIMBORSO_DA_RIPARTIRE';
 
@@ -403,9 +403,9 @@ export async function registraRimborsoParzialeDaFuori(
  * stato del pagamento — senza chiedere a Stripe un secondo rimborso.
  *
  * La usano il webhook (pagamento di un ordine solo) e il pannello, quando chi
- * amministra divide un rimborso fatto su un carrello di più negozi: lì
- * `togliLaPausa` toglie la pausa dei bonifici nella STESSA scrittura, così un
- * ordine o è registrato e libero, o è com'era — mai a metà, e mai due volte.
+ * amministra divide un rimborso fatto su un carrello di più negozi. La pausa
+ * del carrello qui non si tocca: la toglie la divisione, con una scrittura sola
+ * dopo l'ultima parte (lib/stripe/rimborsi-da-dividere.ts).
  *
  * Lancia se l'ordine è cambiato da quando è stato letto, o se il giro dei
  * bonifici lo sta pagando proprio adesso: chi chiama riprova sui numeri nuovi.
@@ -415,7 +415,6 @@ export async function registraSullOrdine(
   parteCents: number,
   opzioni: {
     chargeId: string | null;
-    togliLaPausa?: boolean;
     /** I rimborsi Stripe che questa registrazione copre: si scrivono sull'ordine (`rimborsiGiaScritti`). */
     rimborsi?: ReadonlyArray<string>;
   },
@@ -448,14 +447,12 @@ export async function registraSullOrdine(
       );
     }
   }
-  if (opzioni.togliLaPausa) valori.internal_dispute_status = null;
   if (Object.keys(valori).length === 0) return conto;
 
   // La scrittura passa solo se nessuno ha cambiato l'ordine da quando l'ho
   // letto: né un altro rimborso (stesso importo rimborsato), né il giro dei
-  // bonifici (stesso stato del bonifico), né un'altra divisione (la pausa c'è
-  // ancora). Se qualcuno l'ha cambiato, si riprova sui numeri nuovi invece di
-  // sommare due volte.
+  // bonifici (stesso stato del bonifico). Se qualcuno l'ha cambiato, si
+  // riprova sui numeri nuovi invece di sommare due volte.
   let scrittura = getAdminSupabase()
     .from('orders')
     .update(valori)
@@ -464,7 +461,6 @@ export async function registraSullOrdine(
   scrittura = ordine.payout_status === null
     ? scrittura.is('payout_status', null)
     : scrittura.eq('payout_status', ordine.payout_status);
-  if (opzioni.togliLaPausa) scrittura = scrittura.eq('internal_dispute_status', PAUSA_RIMBORSO_DA_DIVIDERE);
   const { data: registrati } = scritturaObbligatoria(
     await scrittura.select('id'),
     'rimborso parziale dal cruscotto registrato sull ordine',

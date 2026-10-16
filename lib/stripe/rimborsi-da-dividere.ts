@@ -8,13 +8,15 @@
  * bonifici si sbloccavano solo scrivendo nel database. Qui la divisione usa la
  * stessa contabilità del rimborso su un ordine solo (`registraSullOrdine`):
  * importo rimborsato, quota del negozio tolta dal bonifico che deve ancora
- * partire — o ripresa con uno storno se è già partito — e la pausa tolta nella
- * stessa scrittura. Le regole su quello che chi amministra scrive stanno in
+ * partire — o ripresa con uno storno se è già partito. La pausa si toglie a
+ * tutto il carrello quando tutte le parti sono scritte (`dividiIlRimborso`).
+ * Le regole su quello che chi amministra scrive stanno in
  * `lib/rimborsi/divisione-del-rimborso.ts`.
  */
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { writeAudit } from '@/lib/audit';
+import { writeAudit, type AuditAction } from '@/lib/audit';
+import { idDaChiave } from '@/lib/stripe/webhook/comune';
 import {
   daFuoriDaRegistrare,
   elencoDeiRimborsi,
@@ -301,75 +303,135 @@ export async function carrelliDaDividere(): Promise<ElencoDaDividere> {
   return { carrelli, nonLetti };
 }
 
-/** Il turno torna fermo: il carrello riappare nel pannello col resto da dividere. */
-async function rimettiLaPausa(pagamento: string, turno: string): Promise<void> {
-  const { error } = await getAdminSupabase()
-    .from('orders')
-    .update({ internal_dispute_status: PAUSA_RIMBORSO_DA_DIVIDERE })
-    .eq('id', turno)
-    .is('internal_dispute_status', null);
-  if (error) {
-    logger.error('[rimborso da dividere] pausa non rimessa: il resto da dividere non si vede nel pannello', {
-      pagamento, orderId: turno, message: error.message,
-    });
-  }
-}
-
 export type EsitoDellaDivisioneFatta =
   | { ok: true; registrati: string[] }
   | { ok: false; stato: 400 | 409; errore: string; registrati: string[] };
 
-/**
- * In che ordine si scrivono gli ordini di una divisione.
+/*
+ * 16/10/2026 (sesto riesame del lotto) — LA DIVISIONE SI DECIDE UNA VOLTA SOLA,
+ * E LA PAUSA SI TOGLIE PER ULTIMA.
  *
- * 16/10/2026 (quinto riesame del lotto) — DUE SCHEDE, DUE DIVISIONI DIVERSE, TUTTE E DUE REGISTRATE.
+ * Ogni ordine si scrive con una scrittura sua: fra una e l'altra una seconda
+ * scheda può leggere il carrello a metà, e il processo può morire. Il «turno»
+ * del quinto riesame (il primo ordine fermo scritto per primo, e la sua pausa
+ * tolta subito) lasciava tre buchi, tutti misurati:
+ *  ① una scheda che leggeva DOPO il turno ne vedeva un altro, e registrava la
+ *    sua divisione sopra quella della prima: 6 € scritti per 3 usciti;
+ *  ② se il processo moriva dopo il turno, la pausa non c'era più e la parte del
+ *    pane non era scritta: il carrello spariva dal pannello coi bonifici
+ *    sbloccati, e il pane riceveva il netto pieno;
+ *  ③ dopo un guasto la pausa tornava sul turno identica a prima, e una scheda
+ *    letta prima la trovava come l'aveva lasciata: 4 € scritti per 3 usciti.
  *
- * Si scrivevano prima gli ordini non fermi, poi quelli fermi. Ma ogni
- * scrittura controlla solo il suo ordine, e un ordine non fermo con parte zero
- * si salta. Un caso: pane con un reclamo aperto (non fermo) e fiori fermi, 3 €
- * dal cruscotto. Una scheda manda «3 € al pane, 0 ai fiori», un'altra «0 al
- * pane, 3 € ai fiori», insieme. La prima registra il pane; la seconda salta il
- * pane e registra i fiori; la prima trova i fiori cambiati e si ferma. 6 €
- * registrati per 3 usciti, e la quota tolta a tutti e due i negozi.
+ * Adesso le regole sono due, e il turno non c'è più.
  *
- * Adesso il PRIMO ordine fermo (in ordine di id, uguale per tutte le schede)
- * si scrive per primo: è il turno del carrello. Ogni divisione lo scrive, e la
- * sua scrittura toglie la pausa solo se c'è ancora: la seconda scheda trova il
- * turno già preso e non registra niente. Poi i non fermi, poi gli altri fermi:
- * se una scrittura dopo il turno non passa, quello che resta fermo tiene il
- * carrello nel pannello (e se non resta niente, `rimettiLaPausaAlTurno`).
+ * LA DIVISIONE SI DECIDE UNA VOLTA. Le parti scelte si scrivono nel registro
+ * delle azioni, in una riga con un identificativo che dipende dal pagamento e
+ * dai rimborsi che divide (`idDellaDivisione`). Il database rifiuta la seconda
+ * (23505): chi arriva dopo — un doppio clic, un'altra scheda, un altro
+ * amministratore, chi riprova dopo un guasto — esegue la divisione già decisa,
+ * mai la sua. Se le sue cifre erano altre, lo legge (`stessaDivisione`).
+ *
+ * LA PAUSA SI TOGLIE PER ULTIMA. Ogni parte si scrive sul suo ordine una volta
+ * sola: l'id del rimborso resta scritto sull'ordine, e chi lo trova lo salta
+ * (`partiDaScrivere`). La pausa resta su tutto il carrello finché non sono
+ * scritte tutte, e si toglie con una scrittura sola alla fine. Se qualcosa si
+ * ferma prima, il carrello resta nel pannello col resto, e la prossima
+ * richiesta finisce la divisione decisa.
  */
-export function inOrdineDiScrittura<T extends { id: string } & Pick<OrdineDelCarrello, 'internal_dispute_status'>>(
-  candidati: ReadonlyArray<T>,
-): T[] {
-  const fermi = candidati.filter(fermo).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  const nonFermi = candidati.filter((o) => !fermo(o));
-  return [...fermi.slice(0, 1), ...nonFermi, ...fermi.slice(1)];
+
+/** L'identificativo della decisione: lo stesso per lo stesso pagamento e gli stessi rimborsi, in qualunque ordine. */
+export function idDellaDivisione(pagamento: string, rimborsi: ReadonlyArray<string>): string {
+  return idDaChiave(`divisione-del-rimborso:${pagamento}:${[...rimborsi].sort().join(',')}`);
+}
+
+/** Le parti decise, per ordine: chi non c'è vale zero. */
+export type DivisioneDecisa = Readonly<Record<string, number>>;
+
+/** Gli ordini su cui questa divisione è già scritta: hanno nel loro elenco l'id di tutti i rimborsi che divide. */
+export function ordiniGiaScritti(
+  ordini: ReadonlyArray<Pick<OrdineDelCarrello, 'id' | 'stripe_refund_id'>>,
+  rimborsi: ReadonlyArray<string>,
+): Set<string> {
+  if (rimborsi.length === 0) return new Set();
+  return new Set(
+    ordini.filter((o) => {
+      const scritti = rimborsiGiaScritti(o);
+      return rimborsi.every((id) => scritti.has(id));
+    }).map((o) => o.id),
+  );
+}
+
+/** Quello che resta da scrivere di una divisione decisa: le parti sopra zero, sugli ordini non ancora scritti. */
+export function partiDaScrivere(decisa: DivisioneDecisa, giaScritti: ReadonlySet<string>): ParteDelRimborso[] {
+  return Object.entries(decisa)
+    .filter(([ordine, centesimi]) => centesimi > 0 && !giaScritti.has(ordine))
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([ordine, centesimi]) => ({ ordine, centesimi }));
 }
 
 /**
- * Una scrittura si è fermata alla posizione `fermataA` di `inOrdine`, dopo il
- * turno: il carrello resta nel pannello solo se fra gli ordini non ancora
- * scritti (compreso quello che si è fermato) ce n'è uno fermo. Se no, la pausa
- * va rimessa sul turno, altrimenti il resto da dividere sparisce dal pannello
- * con i bonifici sbloccati.
+ * Le cifre mandate adesso sono quelle già decise? Ordine per ordine, la stessa
+ * parte; su un ordine già scritto vale anche zero, perché dopo un guasto il
+ * pannello chiede di dividere solo quello che manca.
  */
-export function rimettiLaPausaAlTurno(
-  inOrdine: ReadonlyArray<Pick<OrdineDelCarrello, 'internal_dispute_status'>>,
-  fermataA: number,
+export function stessaDivisione(
+  decisa: DivisioneDecisa,
+  parti: ReadonlyArray<ParteDelRimborso>,
+  giaScritti: ReadonlySet<string>,
 ): boolean {
-  return fermataA > 0 && !inOrdine.slice(fermataA).some(fermo);
+  const mandate = new Map(parti.map((p) => [p.ordine, p.centesimi]));
+  const ordini = new Set([...Object.keys(decisa), ...mandate.keys()]);
+  return [...ordini].every((ordine) => {
+    const mandata = mandate.get(ordine) ?? 0;
+    return mandata === (decisa[ordine] ?? 0) || (giaScritti.has(ordine) && mandata === 0);
+  });
 }
 
+const AZIONE_DELLA_DIVISIONE: AuditAction = 'order.refund';
+
+/** La divisione già decisa per questo identificativo, o `null` se non ce n'è. Lancia se non si legge. */
+async function divisioneGiaDecisa(id: string): Promise<DivisioneDecisa | null> {
+  const { data, error } = await getAdminSupabase().from('audit_logs').select('metadata').eq('id', id).maybeSingle();
+  if (error) throw new Error(`divisione già decisa non letta: ${error.message}`);
+  if (!data) return null;
+  const parti = (data as { metadata?: { parti?: unknown } | null }).metadata?.parti;
+  const leggibile =
+    !!parti && typeof parti === 'object' &&
+    Object.values(parti).every((c) => typeof c === 'number' && Number.isInteger(c) && c >= 0);
+  if (!leggibile) throw new Error(`la divisione già decisa (${id}) non si legge: guarda il registro delle azioni`);
+  return parti as DivisioneDecisa;
+}
+
+/** Scrive la decisione. `false` se un'altra richiesta l'ha scritta prima (23505). */
+async function decidiLaDivisione(
+  id: string,
+  pagamento: string,
+  rimborsi: ReadonlyArray<string>,
+  parti: DivisioneDecisa,
+  chi: string,
+): Promise<boolean> {
+  const { error } = await getAdminSupabase().from('audit_logs').insert({
+    id,
+    actor_id: chi,
+    action: AZIONE_DELLA_DIVISIONE,
+    target_table: 'orders',
+    target_id: null,
+    metadata: { origine: 'divisione_del_rimborso_dal_cruscotto', pagamento, rimborsi: [...rimborsi], parti },
+  });
+  if (!error) return true;
+  if ((error as { code?: string }).code === '23505') return false;
+  throw new Error(`divisione non scritta nel registro: ${error.message}`);
+}
+
+const GIA_DECISA_CON_ALTRE_CIFRE =
+  "La divisione di questo rimborso era già stata decisa con altre cifre, da questa o da un'altra scheda: " +
+  'vale quella, e le cifre mandate adesso non le ho usate. Ricarica la pagina.';
+
 /**
- * Registra la divisione decisa da chi amministra e riapre i bonifici.
- *
- * Ogni ordine si scrive in una volta sola — la sua parte, la quota del suo
- * negozio e, se era fermo, la pausa tolta — e solo se non è cambiato da quando
- * l'ho letto (e, se era fermo, se lo è ancora). L'ordine delle scritture e il
- * turno del carrello stanno in `inOrdineDiScrittura`: così una divisione
- * ripetuta (doppio clic, una seconda scheda, anche con parti diverse) non
- * registra niente due volte.
+ * Registra la divisione decisa da chi amministra e riapre i bonifici, con le
+ * due regole scritte qui sopra: la divisione si decide una volta sola, e la
+ * pausa si toglie per ultima.
  */
 export async function dividiIlRimborso(
   pagamento: string,
@@ -395,13 +457,6 @@ export async function dividiIlRimborso(
       registrati: [],
     };
   }
-  const candidati = ordiniDaDividere(ordini);
-  const controllo = controllaLaDivisione(
-    candidati.map((o) => ({ id: o.id, lordoCents: lordoCents(o), giaRimborsatoCents: o.refunded_amount_cents ?? 0, fermo: fermo(o) })),
-    parti,
-    conto.daDividereCents,
-  );
-  if (!controllo.ok) return { ok: false, stato: 400, errore: controllo.errore, registrati: [] };
 
   // I rimborsi dal cruscotto che questa divisione copre — tutti: una divisione a
   // metà qui non arriva (`unRimborsoDelSitoStaPartendo`). Si scrivono sugli
@@ -411,44 +466,76 @@ export async function dividiIlRimborso(
     .filter(daFuoriDaRegistrare)
     .map((r) => r.id)
     .filter((id): id is string => !!id);
+  const giaScritti = ordiniGiaScritti(ordini, daFuoriIds);
 
-  const inOrdine = inOrdineDiScrittura(candidati);
+  const id = idDellaDivisione(pagamento, daFuoriIds);
+  let decisa = await divisioneGiaDecisa(id);
+  if (!decisa) {
+    const controllo = controllaLaDivisione(
+      ordiniDaDividere(ordini).map((o) => ({
+        id: o.id, lordoCents: lordoCents(o), giaRimborsatoCents: o.refunded_amount_cents ?? 0, fermo: fermo(o),
+      })),
+      parti,
+      conto.daDividereCents,
+    );
+    if (!controllo.ok) return { ok: false, stato: 400, errore: controllo.errore, registrati: [] };
+    const mia = Object.fromEntries(controllo.parti);
+    decisa = (await decidiLaDivisione(id, pagamento, daFuoriIds, mia, chi)) ? mia : await divisioneGiaDecisa(id);
+    if (!decisa) throw new Error(`la divisione ${id} risulta già decisa ma non si trova`);
+  }
+  const conAltreCifre = !stessaDivisione(decisa, parti, giaScritti);
+
   const registrati: string[] = [];
-  for (const [posizione, ordine] of inOrdine.entries()) {
-    const parte = controllo.parti.get(ordine.id) ?? 0;
-    const eraFermo = fermo(ordine);
-    // Un ordine non fermo senza parte non ha niente da scrivere: il turno,
-    // preso sul primo ordine fermo, basta a tenere lontana un'altra divisione.
-    if (!eraFermo && parte <= 0) continue;
+  for (const { ordine: idOrdine, centesimi } of partiDaScrivere(decisa, giaScritti)) {
     try {
-      await registraSullOrdine(ordine, parte, { chargeId: null, togliLaPausa: eraFermo, rimborsi: daFuoriIds });
+      const ordine = ordini.find((o) => o.id === idOrdine);
+      if (!ordine) throw new Error('non è fra gli ordini di questo pagamento');
+      await registraSullOrdine(ordine, centesimi, { chargeId: null, rimborsi: daFuoriIds });
     } catch (err) {
       const motivo = err instanceof Error ? err.message : String(err);
-      logger.error('[rimborso da dividere] ordine non registrato', { pagamento, orderId: ordine.id, motivo });
-      if (rimettiLaPausaAlTurno(inOrdine, posizione)) await rimettiLaPausa(pagamento, inOrdine[0].id);
+      logger.error('[rimborso da dividere] ordine non registrato: il carrello resta fermo', { pagamento, orderId: idOrdine, motivo });
       return {
         ok: false,
         stato: 409,
-        errore:
-          // 16/10 (terzo riesame) — Sotto i 200 caratteri: più lungo, il riquadro lo
-          // sostituiva con «Qualcosa non ha funzionato» (friendlyError, lib/errors.ts) e
-          // chi amministra non sapeva che una parte era già registrata.
-          `L'ordine #${ordine.id.slice(0, 6).toUpperCase()} è cambiato mentre lo registravo, oppure il suo bonifico sta partendo adesso. ` +
-          (registrati.length > 0
-            ? `${registrati.length === 1 ? '1 ordine è già registrato' : `${registrati.length} ordini sono già registrati`}: ` +
-              'ricarica la pagina e dividi quello che manca.'
-            : 'Non ho registrato niente: ricarica la pagina e riprova.'),
+        errore: conAltreCifre
+          ? GIA_DECISA_CON_ALTRE_CIFRE
+          : // 16/10 (terzo riesame) — Sotto i 200 caratteri: più lungo, il riquadro lo
+            // sostituiva con «Qualcosa non ha funzionato» (friendlyError, lib/errors.ts) e
+            // chi amministra non sapeva che una parte era già registrata.
+            `L'ordine #${idOrdine.slice(0, 6).toUpperCase()} è cambiato mentre lo registravo, oppure il suo bonifico sta partendo adesso. ` +
+            (registrati.length > 0
+              ? `${registrati.length === 1 ? '1 ordine è già registrato' : `${registrati.length} ordini sono già registrati`}: ` +
+                'ricarica la pagina e dividi quello che manca.'
+              : 'Non ho registrato niente: ricarica la pagina e riprova.'),
         registrati,
       };
     }
-    registrati.push(ordine.id);
+    registrati.push(idOrdine);
     await writeAudit({
       actorId: chi,
       action: 'order.refund',
       targetTable: 'orders',
-      targetId: ordine.id,
-      metadata: { origine: 'rimborso_dal_cruscotto_diviso', pagamento, centesimi: parte },
+      targetId: idOrdine,
+      metadata: { origine: 'rimborso_dal_cruscotto_diviso', pagamento, centesimi },
     });
+  }
+
+  // Tutte le parti sono scritte: la pausa si toglie adesso, a tutto il carrello insieme.
+  const { error: errPausa } = await getAdminSupabase()
+    .from('orders')
+    .update({ internal_dispute_status: null })
+    .eq('stripe_payment_intent', pagamento)
+    .eq('internal_dispute_status', PAUSA_RIMBORSO_DA_DIVIDERE);
+  if (errPausa) {
+    logger.error('[rimborso da dividere] parti registrate ma pausa non tolta', { pagamento, message: errPausa.message });
+    return {
+      ok: false,
+      stato: 409,
+      errore: conAltreCifre
+        ? GIA_DECISA_CON_ALTRE_CIFRE
+        : 'Ho registrato tutte le parti, ma i bonifici sono ancora fermi: ricarica la pagina e premi di nuovo «Registra».',
+      registrati,
+    };
   }
 
   // Tutto il rimborso da fuori ora è scritto sugli ordini: i suoi rimborsi su
@@ -456,5 +543,6 @@ export async function dividiIlRimborso(
   // stesso pagamento non li ritrova come da dividere (vedi `rimborsiDaEtichettare`).
   const daEtichettare = rimborsiDaEtichettare(rimborsi, ordini, conto);
   if (daEtichettare.length > 0) await etichettaComeRegistrati(daEtichettare, null);
+  if (conAltreCifre) return { ok: false, stato: 409, errore: GIA_DECISA_CON_ALTRE_CIFRE, registrati };
   return { ok: true, registrati };
 }
