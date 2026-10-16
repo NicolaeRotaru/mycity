@@ -388,7 +388,7 @@ export function verdettoDelLavoro(stato = {}) {
       verde: false,
       titolo: '## ⛔ Non ho rilasciato: il lavoro si e fermato prima di pubblicare',
       righe: [
-        'Un passo prima della pubblicazione e finito rosso (la scelta del ramo, le migrazioni o il controllo che il database sia allineato al codice), quindi non ho pubblicato niente e non c era niente da provare.',
+        'Un passo prima della pubblicazione e finito rosso (la scelta del ramo, il controllo che il commit sia l ultimo di main, le migrazioni o il controllo che il database sia allineato al codice), quindi non ho pubblicato niente e non c era niente da provare.',
         'Guarda il primo passo rosso qui sopra: li c e il motivo.',
       ],
     };
