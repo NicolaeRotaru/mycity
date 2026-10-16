@@ -153,6 +153,7 @@ describe('la barra in fondo alla consegna in contanti', () => {
 describe('la bacheca del fattorino ricorda i contanti', () => {
   afterEach(() => {
     globali.__DATI_QUERY__ = undefined;
+    globali.__ESITO_QUERY__ = undefined;
     globali.__PROFILO__ = undefined;
     document.body.innerHTML = '';
   });
@@ -198,6 +199,80 @@ describe('la bacheca del fattorino ricorda i contanti', () => {
     const s = accendi(mod.default, {});
     await attendi();
     expect(s.radice.textContent ?? '').not.toContain('Incassi da confermare');
+    expect(s.radice.textContent ?? '').not.toContain('Non riesco a controllare');
+    s.smonta();
+  }, 60000);
+
+  /**
+   * 16/10/2026 — «NESSUN INCASSO» E «NON LO SO» ERANO LA STESSA SCHERMATA.
+   *
+   * La lettura degli incassi da confermare ignorava l'errore: con la rotta che
+   * rispondeva 500, il riquadro semplicemente non compariva. Il fattorino con
+   * due consegne in contanti mai dichiarate leggeva una bacheca pulita e
+   * chiudeva la giornata.
+   */
+  function bachecaCon(incassi: unknown, guasto: Record<string, unknown> | undefined) {
+    globali.__PROFILO__ = { isAuthenticated: true, isRider: true, profile: { full_name: 'Luca Verdi' } };
+    globali.__DATI_QUERY__ = (o: { queryKey: unknown[] }) => {
+      const chiave = JSON.stringify(o.queryKey);
+      if (chiave.includes('incassi-da-dichiarare')) return incassi;
+      if (chiave.includes('pref')) return { online: true, zones: [] as string[] };
+      if (chiave.includes('rating')) return { avg: 0, count: 0 };
+      if (chiave.includes('today') || chiave.includes('Stats')) return { count: 0, earned: 0 };
+      return { liberi: [], miei: [] };
+    };
+    globali.__ESITO_QUERY__ = (o: { queryKey: unknown[] }) =>
+      JSON.stringify(o.queryKey).includes('incassi-da-dichiarare') ? guasto : undefined;
+  }
+
+  it('se la lettura degli incassi fallisce lo dice, con «Riprova», invece di tacere', async () => {
+    let riprove = 0;
+    bachecaCon(undefined, {
+      isError: true,
+      isSuccess: false,
+      error: new Error('Non riesco a leggere gli incassi da confermare'),
+      refetch: () => { riprove += 1; return Promise.resolve({ data: undefined }); },
+    });
+    const mod = await monta('app/rider/page.tsx');
+    const s = accendi(mod.default, {});
+    await attendi();
+
+    const testo = s.radice.textContent ?? '';
+    expect(
+      testo,
+      'la lettura degli incassi e fallita e la bacheca tace: il fattorino crede di non avere contanti da confermare',
+    ).toContain('Non riesco a controllare gli incassi da confermare');
+    // Il resto della bacheca resta: e solo questo riquadro a non sapere.
+    expect(testo).toContain('Sei online');
+
+    const avviso = s.radice.querySelector('[role="alert"]');
+    expect(avviso, 'l avviso non e annunciato a chi usa il lettore di schermo').toBeTruthy();
+    const riprova = Array.from(avviso!.querySelectorAll('button')).find(
+      (b) => (b.textContent ?? '').trim() === 'Riprova',
+    );
+    expect(riprova, 'senza «Riprova» il fattorino deve ricaricare tutta la pagina').toBeTruthy();
+    s.agisci(() => clicca(riprova!));
+    await attendi();
+    expect(riprove, '«Riprova» non rilegge gli incassi').toBe(1);
+    s.smonta();
+  }, 60000);
+
+  it('se la rilettura fallisce ma l ultimo elenco c era, l elenco resta sotto l avviso', async () => {
+    bachecaCon(
+      [{
+        id: ORDINE, deliveredAt: '2026-10-06T19:30:00Z', storeName: 'Pane Quotidiano',
+        expectedCents: 2200, compensoTenutoCents: 300, residuoDovutoCents: 0,
+      }],
+      { isError: true, isSuccess: false, error: new Error('500') },
+    );
+    const mod = await monta('app/rider/page.tsx');
+    const s = accendi(mod.default, {});
+    await attendi();
+
+    const testo = s.radice.textContent ?? '';
+    expect(testo).toContain('Non riesco a controllare gli incassi da confermare');
+    expect(testo, 'una rilettura fallita fa sparire consegne che il fattorino deve ancora confermare').toContain('Pane Quotidiano');
+    expect(pulsanti(s.radice)).toContain('Conferma incasso contanti');
     s.smonta();
   }, 60000);
 });

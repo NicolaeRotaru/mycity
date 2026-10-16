@@ -21,6 +21,7 @@
 
 import { compensoDalContante, contanteDaRimettereCents } from '@/lib/shipping';
 import { formatPriceFromCents } from '@/lib/format';
+import { vistaDaQuery, type LetturaQuery } from '@/lib/vista-query';
 
 /** Il minimo che serve per decidere: come si paga, dov'e' l'ordine, se l'incasso c'e'. */
 export type OrdinePerIncasso = {
@@ -139,4 +140,43 @@ export function fraseDelCompenso(c: CifreDellIncasso): string {
       : ` Il tuo compenso, ${formatPriceFromCents(c.residuoDovutoCents)}, ti arriva sul tuo IBAN.`;
   }
   return frase;
+}
+
+/**
+ * 16/10/2026 — «NESSUN INCASSO» E «NON LO SO» NON SONO LA STESSA COSA.
+ *
+ * La bacheca leggeva gli incassi da confermare prendendo solo il dato: se la
+ * lettura falliva (la rotta risponde 500, la rete cade) il dato restava vuoto e
+ * il riquadro non compariva. Il fattorino con due consegne in contanti mai
+ * dichiarate leggeva una bacheca pulita e chiudeva la giornata: la rimessa
+ * della sera saltava quegli ordini.
+ *
+ * Qui la lettura diventa uno di quattro stati, cosi' la pagina non puo'
+ * confonderli:
+ *  - `in-lettura` → nessun dato ancora: non si dice niente (il riquadro arriva
+ *    appena la lettura risponde);
+ *  - `nessuno`    → ho guardato e non c'e' niente da confermare;
+ *  - `elenco`     → ci sono consegne da confermare;
+ *  - `non-so`     → la lettura e' fallita: si dice, con «Riprova». Se c'era
+ *    un elenco dall'ultima lettura riuscita resta sotto l'avviso, perche'
+ *    quelle consegne con ogni probabilita' sono ancora da confermare.
+ *
+ * Un dato che non e' un elenco non e' un elenco vuoto: e' un «non so».
+ */
+export type RiquadroDegliIncassi<T> = {
+  stato: 'in-lettura' | 'nessuno' | 'elenco' | 'non-so';
+  /** Le consegne da mostrare: vuoto in lettura e quando non ce ne sono. */
+  incassi: T[];
+};
+
+export function riquadroDegliIncassi<T>(lettura: LetturaQuery<unknown>): RiquadroDegliIncassi<T> {
+  const dato = lettura.data;
+  const eUnElenco = Array.isArray(dato);
+  const ultimi = eUnElenco ? ([...dato] as T[]) : [];
+  const datoStrano = dato !== undefined && dato !== null && !eUnElenco;
+  const vista = vistaDaQuery(lettura, { quanti: ultimi.length });
+  if (vista.mostraErrore || datoStrano) return { stato: 'non-so', incassi: ultimi };
+  if (vista.mostraScheletro) return { stato: 'in-lettura', incassi: [] };
+  if (vista.mostraVuoto) return { stato: 'nessuno', incassi: [] };
+  return { stato: 'elenco', incassi: ultimi };
 }
