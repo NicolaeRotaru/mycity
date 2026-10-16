@@ -26,6 +26,8 @@
  *     qui è giusto, perché nessun ordine è nato.
  */
 import type { getAdminSupabase } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
+import { notifyAdmins } from './comune';
 import { scritturaFacoltativa } from './esito';
 
 /** Il vincolo sugli stati del carrello che, prima della 126, non conosce 'MISMATCH'. */
@@ -39,14 +41,79 @@ export function mancaLoStatoMismatch(errore: unknown): boolean {
   return testo.includes(VINCOLO_STATI_DEL_CARRELLO);
 }
 
-/** Segna il carrello come chiuso per quadratura fallita: 'MISMATCH', o 'CANCELED' prima della 126. */
+/** Una riga del carrello come la salva il checkout (`PendingGroup` in ordini.ts), per il poco che serve qui. */
+type GruppoDelCarrello = {
+  items?: Array<{ productId: string; variantId?: string | null; quantity: number }> | null;
+};
+
+/** Un pezzo da rimettere in vendita, nella forma che vuole `restore_stock`. */
+export type MerceDaRimettere = { product_id: string; variant_id: string | null; qty: number };
+
+/**
+ * La merce che il checkout ha tolto dalla vendita (`reserve_stock`) per questo
+ * carrello: la stessa lista per il carrello scaduto e per quello chiuso per
+ * quadratura, così le due strade non rimettono a scaffale cose diverse.
+ */
+export function merceDelCarrello(groups: unknown): MerceDaRimettere[] {
+  if (!Array.isArray(groups)) return [];
+  return (groups as GruppoDelCarrello[]).flatMap((g) =>
+    (g?.items ?? []).map((it) => ({ product_id: it.productId, variant_id: it.variantId ?? null, qty: it.quantity })),
+  );
+}
+
+/**
+ * Segna il carrello come chiuso per quadratura fallita: 'MISMATCH', o 'CANCELED'
+ * prima della 126. E rimette a posto quello che il checkout aveva preso.
+ *
+ * 16/10/2026 — LA MERCE TENUTA DA PARTE NON TORNAVA PIÙ IN VENDITA.
+ *
+ * Al checkout con carta la merce si toglie dalla vendita e il codice sconto si
+ * consuma subito. Qui il carrello si chiudeva e basta: il cliente veniva
+ * rimborsato, ma la merce restava fuori vendita e il codice consumato. Nessun
+ * giro li riprende, perché il giro dei carrelli scaduti lavora solo quelli
+ * ancora «in attesa». Un caso: il fornaio ha un pezzo solo, il carrello finisce
+ * qui, e quel pezzo risulta esaurito per sempre.
+ *
+ * Adesso il carrello si prende solo se è ancora «in attesa» (come fa il
+ * carrello scaduto): chi lo prende rimette la merce in vendita e restituisce il
+ * codice, una volta sola. Se l'avviso arriva di nuovo, o il giro dei carrelli
+ * scaduti è passato prima, non lo prende e non rifà niente.
+ */
 export async function chiudiIlCarrelloPerQuadratura(
   admin: ReturnType<typeof getAdminSupabase>,
   pendingCheckoutId: string,
 ): Promise<void> {
-  const primo = await admin.from('pending_checkouts').update({ status: 'MISMATCH' }).eq('id', pendingCheckoutId);
-  const esito = primo.error && mancaLoStatoMismatch(primo.error)
-    ? await admin.from('pending_checkouts').update({ status: 'CANCELED' }).eq('id', pendingCheckoutId)
-    : primo;
+  const chiudi = (status: 'MISMATCH' | 'CANCELED') =>
+    admin
+      .from('pending_checkouts')
+      .update({ status })
+      .eq('id', pendingCheckoutId)
+      .eq('status', 'PENDING')
+      .select('id, groups, coupon_code');
+  const primo = await chiudi('MISMATCH');
+  const esito = primo.error && mancaLoStatoMismatch(primo.error) ? await chiudi('CANCELED') : primo;
   scritturaFacoltativa(esito, 'carrello chiuso per quadratura fallita');
+  if (esito.error) return;
+  const carrello = (esito.data as Array<{ groups?: unknown; coupon_code?: string | null }> | null)?.[0];
+  if (!carrello) return;
+
+  const merce = merceDelCarrello(carrello.groups);
+  if (merce.length > 0) {
+    const { error: errScaffale } = await admin.rpc('restore_stock', { p_items: merce });
+    if (errScaffale) {
+      // Il carrello è già chiuso: né l'avviso ripetuto né il giro lo riprendono.
+      logger.error('[stripe] quadratura fallita: merce non rimessa in vendita', { pendingCheckoutId, message: errScaffale.message });
+      await notifyAdmins(
+        '⚠️ Merce non rimessa in vendita',
+        `Il carrello ${pendingCheckoutId} è stato rimborsato perché l'incasso non tornava col preventivo, ma la sua merce (${merce.length} articolo/i) non è tornata in vendita: la giacenza va sistemata a mano.`,
+        '/admin/orders',
+      );
+    }
+  }
+
+  const codice = carrello.coupon_code?.trim();
+  if (codice) {
+    const { error: errCodice } = await admin.rpc('release_coupon', { p_code: codice });
+    if (errCodice) logger.warn('[stripe] quadratura fallita: codice sconto non restituito', { pendingCheckoutId, message: errCodice.message });
+  }
 }

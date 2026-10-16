@@ -14,6 +14,7 @@ import {
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
+import { RimborsiDaDividere } from '@/components/admin/RimborsiDaDividere';
 import { queryKeys } from '@/lib/queries/keys';
 import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
 import {
@@ -196,6 +197,10 @@ export default function AdminOrdersPage() {
           </button>
         }
       />
+
+      {/* 16/10/2026 — I bonifici fermati da un rimborso dal cruscotto su un
+          carrello di più negozi si sbloccano qui; se non ce ne sono, niente. */}
+      <RimborsiDaDividere />
 
       <div className="flex gap-2 flex-wrap text-sm">
         {FILTERS.map((f) => (

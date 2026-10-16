@@ -17,6 +17,7 @@
  * webhook sono la dimostrazione che non si è rotto niente.
  */
 import type Stripe from 'stripe';
+import { getStripe } from '@/lib/stripe/client';
 import { applyConnectAccountStatus } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
@@ -60,12 +61,28 @@ export async function handleTransferReversed(transfer: Stripe.Transfer) {
   logger.info('[stripe] transfer.reversed sincronizzato', { transferId: transfer.id });
 }
 
+/**
+ * account.updated → Stripe ha cambiato qualcosa sul conto di un negozio.
+ *
+ * 16/10/2026 — UN AVVISO VECCHIO RIMETTEVA UNO STATO SUPERATO.
+ *
+ * Qui si scriveva la fotografia del conto contenuta nell'avviso. Ma Stripe non
+ * garantisce l'ordine di consegna, e un avviso la cui scrittura è fallita torna
+ * anche ore dopo. Un caso: alle 10:00 un avviso dice «versamenti abilitati» e
+ * la scrittura cade; alle 10:05 Stripe blocca i versamenti per un documento
+ * mancante e il database scrive «bloccati»; alle 11:00 torna il primo avviso e
+ * il database torna ad «abilitati». Il giro dei bonifici pagava un conto
+ * bloccato. Adesso l'avviso dice solo QUALE conto è cambiato: lo stato si
+ * rilegge da Stripe in quel momento, come fa già il tasto «Aggiorna stato»
+ * (POST /api/stripe/connect/refresh-status). Se Stripe non risponde si lancia,
+ * e Stripe riprova.
+ */
 export async function handleAccountUpdated(acct: Stripe.Account) {
-  // Logica condivisa con POST /api/stripe/connect/refresh-status.
+  const contoAdesso = await getStripe().accounts.retrieve(acct.id);
   // R81 — Se Stripe blocca i versamenti di un negozio e il database non lo
   // registra, il giro dei bonifici continua a mandargli soldi che restano fermi
   // sul suo saldo: l'esito si legge, e su un errore Stripe riprova.
-  scritturaObbligatoria(await applyConnectAccountStatus(acct), 'stato del conto Stripe del negozio');
+  scritturaObbligatoria(await applyConnectAccountStatus(contoAdesso), 'stato del conto Stripe del negozio');
 }
 
 /**
