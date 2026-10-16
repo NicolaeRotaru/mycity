@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import type { AttributeField } from '@/lib/category-attributes';
 import type { ProductEditPatch } from '@/components/seller/ProductChatAssistant';
+import type { EsitoPatchModulo } from '@/lib/products/aiPatch';
+import { dilloDopoIlPatch } from '@/components/seller/dilloDopoIlPatch';
 
 /**
  * Voce → prodotto. Il venditore detta il prodotto a parole; la Web Speech API
@@ -32,7 +34,7 @@ type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
 type Props = {
   attributeSchema: AttributeField[];
   topCategories: { name: string; slug: string }[];
-  onApplyPatch: (patch: ProductEditPatch) => string[];
+  onApplyPatch: (patch: ProductEditPatch) => EsitoPatchModulo;
   disabled?: boolean;
 };
 
@@ -77,8 +79,13 @@ export default function VoiceProductButton({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(apiErrorMessage(json, 'Errore'));
-      const changed = json.patch ? onApplyPatch(json.patch as ProductEditPatch) : [];
-      toast.success(changed.length ? 'Compilato dalla tua descrizione — controlla e salva' : 'Non ho ricavato campi: riprova con più dettagli');
+      const esito: Pick<EsitoPatchModulo, 'cambiati' | 'inSospeso'> = json.patch
+        ? onApplyPatch(json.patch as ProductEditPatch)
+        : { cambiati: [], inSospeso: 0 };
+      dilloDopoIlPatch(esito, {
+        applicato: 'Compilato dalla tua descrizione — controlla e salva',
+        niente: 'Non ho ricavato campi: riprova con più dettagli',
+      });
       setManual('');
     } catch (err) {
       toast.error(friendlyError(err));

@@ -379,7 +379,34 @@ export type PianoPatchModulo = {
   avvisi: string[];
   /** Le dichiarazioni proposte: avviso lungo, col valore da usare se il campo esiste. */
   proposte: { chiave: string; motivo: string; valore?: string | boolean }[];
+  /**
+   * Il pezzo del suggerimento che il modulo non scrive MAI — le dichiarazioni
+   * (allergeni, ingredienti…) da scrivere o da togliere — rimesso in forma di
+   * patch. Ripassato al modulo riapre gli stessi avvisi, col pulsante «Usa
+   * questo valore», e non scrive niente: serve a ritrovare la proposta quando
+   * l'avviso a tempo e' sparito. Vuoto = non c'e' niente da rivedere.
+   */
+  daRivedere: AiProductPatch;
 };
+
+/**
+ * Le dichiarazioni del suggerimento, rimesse in forma di patch con la chiave del
+ * campo. Escono dallo stesso `separaCampiDichiarativi` che le toglie dal modulo:
+ * quello che c'e' qui, il modulo non lo scrive per costruzione.
+ */
+function dichiarazioniDaRivedere(proposta: AiProductPatch): AiProductPatch {
+  const { scartati } = separaCampiDichiarativi(proposta);
+  const attributi: Record<string, string> = {};
+  const daTogliere: string[] = [];
+  for (const s of scartati) {
+    if (s.azione === 'scrivi' && s.valore) attributi[s.chiave] = s.valore;
+    else if (s.azione === 'togli' && !daTogliere.includes(s.chiave)) daTogliere.push(s.chiave);
+  }
+  const fuori: AiProductPatch = {};
+  if (Object.keys(attributi).length > 0) fuori.attributes = attributi;
+  if (daTogliere.length > 0) fuori.attributes_remove = daTogliere;
+  return fuori;
+}
 
 /**
  * 16/10/2026 — IL MODULO DICE «AGGIORNATO» SOLO SE HA SCRITTO QUALCOSA.
@@ -490,7 +517,88 @@ export function pianoPatchPerIlModulo(
     cambiati: scritture.map((s) => s.etichetta),
     avvisi,
     proposte: proposte.map((p) => ({ chiave: p.chiave, ...propostaPerIlModulo(p, fields) })),
+    daRivedere: dichiarazioniDaRivedere(proposta),
   };
+}
+
+/**
+ * Quello che il modulo del prodotto restituisce a chi gli ha passato un
+ * suggerimento («Migliora tutto», la diagnosi, la voce, la chat, il codice a
+ * barre).
+ */
+export type EsitoPatchModulo = {
+  /** Le etichette dei campi scritti davvero. Vuoto = nella scheda non e' cambiato niente. */
+  cambiati: string[];
+  /**
+   * Quanti avvisi il modulo ha appena aperto per cose rimaste da decidere a
+   * mano: una dichiarazione proposta, un prezzo fuori banda, una dichiarazione
+   * che l'assistente voleva togliere. Uno per avviso.
+   */
+  inSospeso: number;
+  /** Vedi `PianoPatchModulo.daRivedere`. */
+  daRivedere: AiProductPatch;
+};
+
+/** L'esito di un piano, per chi chiama il modulo. */
+export function esitoDelPiano(piano: PianoPatchModulo): EsitoPatchModulo {
+  return {
+    cambiati: piano.cambiati,
+    inSospeso: piano.avvisi.length + piano.proposte.length,
+    daRivedere: piano.daRivedere,
+  };
+}
+
+/** Vero se nel suggerimento resta qualcosa da rivedere (vedi `daRivedere`). */
+export function restaDaRivedere(patch: AiProductPatch | null | undefined): boolean {
+  return !!patch && Object.keys(patch).length > 0;
+}
+
+export type AvvisoDopoIlPatch = {
+  /** `successo` = avviso verde · `da-controllare` = avviso giallo · `neutro` = avviso semplice. */
+  tono: 'successo' | 'da-controllare' | 'neutro';
+  testo: string;
+};
+
+/**
+ * 16/10/2026 — «LA SCHEDA E' GIA' A POSTO» ACCANTO A «ALLERGENI NON COMPILATO».
+ *
+ * Il fornaio apre la focaccia (5 €) e preme «Migliora tutto». L'assistente
+ * propone gli allergeni «Glutine»: nel modulo non entrano (R41), diventano un
+ * avviso col pulsante «Usa questo valore». Il modulo non ha scritto niente, e
+ * il pannello leggeva «niente scritto» come «niente da fare»: diceva «Niente da
+ * cambiare: la scheda e' gia' a posto» proprio mentre l'avviso chiedeva di
+ * compilare gli allergeni. Lo stesso con un prezzo di 50 € scartato, e con la
+ * diagnosi («Niente da applicare»).
+ *
+ * Qui si decide la frase che segue l'applicazione di un suggerimento, la stessa
+ * per tutti i pulsanti dell'assistente. Ognuno porta le sue due frasi — quella
+ * per «ho scritto» e quella per «non c'era niente» — e la terza, «ci sono
+ * proposte da controllare», e' comune: quando restano avvisi aperti, la frase
+ * «niente da fare» non esce mai.
+ */
+export function avvisoDopoIlPatch(
+  esito: Pick<EsitoPatchModulo, 'cambiati' | 'inSospeso'>,
+  testi: { applicato: string; niente: string },
+): AvvisoDopoIlPatch {
+  const n = esito.inSospeso;
+  if (esito.cambiati.length > 0) {
+    if (n <= 0) return { tono: 'successo', testo: testi.applicato };
+    const coda =
+      n === 1
+        ? "C'è anche una proposta da controllare: guarda l'avviso"
+        : `Ci sono anche ${n} proposte da controllare: guarda gli avvisi`;
+    return { tono: 'successo', testo: `${testi.applicato}. ${coda}` };
+  }
+  if (n > 0) {
+    return {
+      tono: 'da-controllare',
+      testo:
+        n === 1
+          ? "C'è una proposta da controllare: guarda l'avviso"
+          : `Ci sono ${n} proposte da controllare: guarda gli avvisi`,
+    };
+  }
+  return { tono: 'neutro', testo: testi.niente };
 }
 
 export function resolveAiPatch(opts: {

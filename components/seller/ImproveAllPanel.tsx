@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase/client';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import type { AttributeField } from '@/lib/category-attributes';
+import { avvisoDopoIlPatch, restaDaRivedere, type EsitoPatchModulo } from '@/lib/products/aiPatch';
+import { dilloDopoIlPatch } from '@/components/seller/dilloDopoIlPatch';
 import type {
   ProductChatSnapshot,
   ProductEditPatch,
@@ -38,8 +40,14 @@ type Props = {
   attributeSchema: AttributeField[];
   topCategories: { name: string; slug: string }[];
   imageUrls: string[];
-  onApplyPatch: (patch: ProductEditPatch) => string[];
+  onApplyPatch: (patch: ProductEditPatch) => EsitoPatchModulo;
   disabled?: boolean;
+};
+
+/** Le due frasi di questo pannello dopo «Applica tutto». */
+const TESTI_APPLICA = {
+  applicato: 'Modifiche applicate al form — controlla e salva',
+  niente: 'Niente da cambiare: la scheda è già a posto',
 };
 
 /** Etichette italiane per i campi del patch (per le note). */
@@ -91,13 +99,14 @@ export default function ImproveAllPanel({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImproveResult | null>(null);
-  const [applied, setApplied] = useState(false);
+  /** L'esito di «Applica tutto»; null finche' non e' stato premuto. */
+  const [esito, setEsito] = useState<EsitoPatchModulo | null>(null);
 
   const run = async () => {
     setOpen(true);
     setLoading(true);
     setResult(null);
-    setApplied(false);
+    setEsito(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
@@ -126,11 +135,21 @@ export default function ImproveAllPanel({
 
   const apply = () => {
     if (!result) return;
-    const changed = onApplyPatch(result.patch);
-    setApplied(true);
-    if (changed.length > 0) toast.success('Modifiche applicate al form — controlla e salva');
-    else toast('Niente da cambiare: la scheda è già a posto');
+    const fatto = onApplyPatch(result.patch);
+    setEsito(fatto);
+    // Con avvisi aperti (allergeni proposti, prezzo scartato) la frase non e'
+    // mai «gia' a posto»: e' «ci sono proposte da controllare».
+    dilloDopoIlPatch(fatto, TESTI_APPLICA);
   };
+
+  // Riapre gli avvisi delle proposte (allergeni, ingredienti…) dopo che sono
+  // spariti. `daRivedere` contiene solo dichiarazioni: il modulo non scrive niente.
+  const rivedi = () => {
+    if (!esito || !restaDaRivedere(esito.daRivedere)) return;
+    dilloDopoIlPatch(onApplyPatch(esito.daRivedere), TESTI_APPLICA);
+  };
+
+  const dopoApplica = esito ? avvisoDopoIlPatch(esito, { ...TESTI_APPLICA, applicato: 'Applicato al form — controlla e salva' }) : null;
 
   const hasPatch = !!result && Object.keys(result.patch ?? {}).length > 0;
   const delta = result ? result.quality.after - result.quality.before : 0;
@@ -271,11 +290,35 @@ export default function ImproveAllPanel({
       </div>
 
       {result && !loading && (
-        <div className="flex items-center justify-end gap-2 border-t border-cream-200 p-3">
-          {applied ? (
-            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-olive-600">
-              <Check size={16} strokeWidth={2.6} aria-hidden /> Applicato al form — controlla e salva
-            </span>
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-cream-200 p-3">
+          {esito && dopoApplica ? (
+            <>
+              <span
+                className={`inline-flex items-center gap-1.5 text-sm font-semibold ${
+                  dopoApplica.tono === 'da-controllare'
+                    ? 'text-accent-700'
+                    : dopoApplica.tono === 'successo'
+                      ? 'text-olive-600'
+                      : 'text-ink-500'
+                }`}
+              >
+                {dopoApplica.tono === 'da-controllare' ? (
+                  <AlertCircle size={16} strokeWidth={2.6} className="shrink-0" aria-hidden />
+                ) : (
+                  <Check size={16} strokeWidth={2.6} className="shrink-0" aria-hidden />
+                )}
+                {dopoApplica.testo}
+              </span>
+              {restaDaRivedere(esito.daRivedere) && (
+                <button
+                  type="button"
+                  onClick={rivedi}
+                  className="shrink-0 rounded-lg border border-accent-200 px-3 py-2 text-sm font-semibold text-accent-700 transition-colors hover:bg-accent-50"
+                >
+                  Rivedi le proposte
+                </button>
+              )}
+            </>
           ) : (
             <>
               <button

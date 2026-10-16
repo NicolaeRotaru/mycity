@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import type { AttributeField } from '@/lib/category-attributes';
+import type { EsitoPatchModulo } from '@/lib/products/aiPatch';
 
 /**
  * Assistente AI in chat per modificare la scheda prodotto.
@@ -68,7 +69,7 @@ type Props = {
   topCategories: { name: string; slug: string }[];
   /** URL pubblici delle foto del prodotto: l'AI le guarda per identificarlo. */
   imageUrls: string[];
-  onApplyPatch: (patch: ProductEditPatch) => string[];
+  onApplyPatch: (patch: ProductEditPatch) => EsitoPatchModulo;
   disabled?: boolean;
 };
 
@@ -121,7 +122,7 @@ export default function ProductChatAssistant({
       if (!res.ok) throw new Error(apiErrorMessage(json, 'Errore'));
 
       const patch: ProductEditPatch = json.patch ?? {};
-      const changed = Object.keys(patch).length > 0 ? onApplyPatch(patch) : [];
+      const changed = Object.keys(patch).length > 0 ? onApplyPatch(patch).cambiati : [];
       setMessages((prev) => [
         ...prev,
         { role: 'assistant', content: json.reply ?? 'Fatto.', applied: changed.length > 0 },
