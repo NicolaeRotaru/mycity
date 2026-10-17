@@ -692,7 +692,9 @@ describe('la funzione muore fra il segno e l avviso: il passaggio dopo finisce i
 
     // Il primo nuovo tentativo cade anch'esso: il reclamo resta com'era, con la sua cifra.
     finto.db.guasti.notificheCadono = CADUTA;
-    expect((await chiudiIlReclamo(corpo)).status).toBe(502);
+    const caduto = await chiudiIlReclamo(corpo);
+    expect(caduto.status).toBe(502);
+    expect(caduto.corpo.error.message).toBe("Il rimborso è registrato, ma l'avviso a chi paga non è partito: riprova.");
     expect(finto.db.tabelle.disputes[0]).toMatchObject({ status: 'resolved_buyer', refund_cents: 4000 });
 
     finto.db.guasti.notificheCadono = null;
