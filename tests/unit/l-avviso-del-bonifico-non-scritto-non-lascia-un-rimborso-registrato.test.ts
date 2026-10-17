@@ -307,6 +307,25 @@ describe('il segno arriva sull ordine ma la risposta si perde: si toglie lo stes
   });
 });
 
+describe('un tentativo che cade non toglie quello che non ha scritto lui', () => {
+  it('il segno di un rimborso registrato prima, con la stessa chiave, resta col suo avviso', async () => {
+    apri(misto());
+    await refundOrder({ orderId: ORDINE, amountCents: 1000, idempotencyKey: 'return_r1' });
+    expect(ordine().stripe_refund_id).toBe('bonifico:600:return_r1');
+
+    // Lo stesso rimborso chiesto di nuovo cade sul credito, e il diario non risponde.
+    finto.db.guasti.walletCredit = { message: 'FetchError: socket hang up' };
+    finto.db.guasti.diarioIlleggibile = 1;
+    await expect(refundOrder({ orderId: ORDINE, amountCents: 1000, idempotencyKey: 'return_r1' })).rejects.toThrow();
+
+    expect(ordine()).toMatchObject({
+      stripe_refund_id: 'bonifico:600:return_r1', refunded_amount_cents: 1000, payment_status: 'PARTIALLY_REFUNDED',
+    });
+    expect(avvisi(), 'il bonifico registrato prima non lo ricorda piu nessuno').toHaveLength(1);
+    expect(creditoDi(finto.db, 'giulia')).toBe(400);
+  });
+});
+
 /**
  * Collaudo del 17/10 — DUE RIMBORSI SULLO STESSO ORDINE, IL PRIMO CADE.
  *
