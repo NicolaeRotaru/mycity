@@ -13,8 +13,9 @@ import { avvisoDopoIlPatch, type AvvisoDopoIlPatch, type EsitoPatchModulo } from
  * «glutine», e il sesamo detto a voce non compariva da nessuna parte.
  *
  * Qui non si legge il dettato: si decide cosa mostrare dopo. Il negoziante vede
- * sempre cosa e' successo nella scheda, quello che ha detto e la risposta
- * dell'assistente; e se la categoria del prodotto ha dichiarazioni (allergeni,
+ * sempre cosa e' successo nella scheda e quello che ha detto; la risposta
+ * dell'assistente solo se il modulo non ha lasciato fuori niente di quello che
+ * proponeva; e se la categoria del prodotto ha dichiarazioni (allergeni,
  * ingredienti...), una frase fissa gli ricorda che quelle le scrive lui. Chi
  * mostra l'avviso lo tiene a video finche' il negoziante non lo chiude, e mette
  * la frase fissa PRIMA di tutto il resto.
@@ -51,7 +52,10 @@ export type AvvisoDellaDettatura = {
   dichiarazioni: string | null;
   /** «Hai detto: «…»». */
   dettato: string;
-  /** «L'assistente dice: «…»» — le sue parole, riportate come sue; null se non ha scritto niente. */
+  /**
+   * «L'assistente dice: «…»» — le sue parole, riportate come sue; null se non ha
+   * scritto niente, o se il modulo ha lasciato fuori qualcosa che proponeva.
+   */
   risposta: string | null;
 };
 
@@ -74,17 +78,36 @@ export function fraseSulleDichiarazioni(etichette: readonly string[]): string | 
   return `${elenco} non li scrive l'assistente: se li hai detti, scrivili tu nella scheda prima di salvare.`;
 }
 
+/**
+ * 16/10/2026 (giro di correzione) — LA REGOLA DELLA CHAT, ANCHE QUI, E SENZA IL
+ * VERDE.
+ *
+ * Il modello disubbidisce, propone «allergeni: glutine, sesamo» e risponde
+ * «Fatto! Ho aggiunto gli allergeni». Il modulo li lascia fuori (una riga in
+ * «Da controllare»), ma il riquadro restava verde e si chiudeva proprio con
+ * quella frase, mentre la chat del prodotto nello stesso caso la nasconde.
+ *
+ * Le parole del modello non si leggono: si decide da quello che ha fatto il
+ * modulo. Se ha lasciato fuori qualcosa che l'assistente proponeva, le sue
+ * parole non si mostrano, come nella chat. Se si mostrano, vengono dopo la
+ * frase fissa, riportate come sue. E il riquadro e' verde solo quando non c'e'
+ * niente da scrivere a mano: non sotto la frase fissa, non accanto a una
+ * proposta lasciata fuori.
+ */
 export function avvisoDopoLaDettatura(opts: {
   esito: Pick<EsitoPatchModulo, 'cambiati' | 'inSospeso' | 'dichiarazioniDellaCategoria'>;
   dettato: string;
   risposta: unknown;
 }): AvvisoDellaDettatura {
   const { tono, testo } = avvisoDopoIlPatch(opts.esito, TESTI_DELLA_DETTATURA);
-  const risposta = typeof opts.risposta === 'string' ? opts.risposta.trim().slice(0, MAX_RISPOSTA) : '';
+  const dichiarazioni = fraseSulleDichiarazioni(opts.esito.dichiarazioniDellaCategoria);
+  const lasciatoFuori = opts.esito.inSospeso > 0;
+  const risposta =
+    !lasciatoFuori && typeof opts.risposta === 'string' ? opts.risposta.trim().slice(0, MAX_RISPOSTA) : '';
   return {
-    tono,
+    tono: tono === 'successo' && (dichiarazioni !== null || lasciatoFuori) ? 'da-controllare' : tono,
     esito: testo,
-    dichiarazioni: fraseSulleDichiarazioni(opts.esito.dichiarazioniDellaCategoria),
+    dichiarazioni,
     dettato: `Hai detto: «${opts.dettato.trim().slice(0, MAX_DETTATO)}»`,
     risposta: risposta ? `L'assistente dice: «${risposta}»` : null,
   };

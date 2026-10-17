@@ -140,19 +140,32 @@ export function cosaMancaDopoLaModifica(opts: {
   update: Record<string, unknown>;
   categories: CategoryRow[];
 }): string[] {
+  return daCompletareDopoLaModifica(opts).mancanti;
+}
+
+/**
+ * Lo stesso controllo, con la categoria di primo livello in cui la modifica
+ * sposta il prodotto (`null` se resta dov'e'): serve a `messaggioDaCompletare`.
+ */
+export function daCompletareDopoLaModifica(opts: {
+  prima: ProdottoAttuale;
+  update: Record<string, unknown>;
+  categories: CategoryRow[];
+}): { mancanti: string[]; categoriaNuova: string | null } {
   const { prima, update, categories } = opts;
   const albero = categories.map((c) => ({ id: c.id, slug: c.slug, parent_id: c.parent_id }));
   const valore = <K extends keyof ProdottoAttuale>(k: K) =>
     (k in update ? update[k] : prima[k]) as ProdottoAttuale[K];
   const categoryId = valore('category_id');
   const { topSlug } = getAttributesForCategory(albero, categoryId);
+  const categoriaPrima = getAttributesForCategory(albero, prima.category_id).topSlug;
   const controllo = controlloDellaModifica({
     statoPrima: prima.status,
     statoDopo: valore('status'),
-    categoriaPrima: getAttributesForCategory(albero, prima.category_id).topSlug,
+    categoriaPrima,
     categoriaDopo: topSlug,
   });
-  return cosaMancaPerIlControllo(controllo, {
+  const mancanti = cosaMancaPerIlControllo(controllo, {
     name: valore('name'),
     description: valore('description'),
     price: valore('price'),
@@ -161,6 +174,7 @@ export function cosaMancaDopoLaModifica(opts: {
     numeroFoto: Array.isArray(prima.images) ? prima.images.filter(Boolean).length : 0,
     attributes: valore('attributes'),
   });
+  return { mancanti, categoriaNuova: topSlug !== categoriaPrima ? topSlug : null };
 }
 
 /**
@@ -172,7 +186,15 @@ export function cosaMancaDopoLaModifica(opts: {
  * che sopra i 200 caratteri lo sostituisce con un messaggio generico e
  * l'elenco andrebbe perso.
  */
-export function messaggioDaCompletare(mancanti: string[]): string {
+export function messaggioDaCompletare(mancanti: string[], categoriaNuova: string | null = null): string {
+  // 16/10/2026 (giro di correzione) — «Spostala negli alimentari», per una
+  // focaccia in vendita finita in Casa: la frase diceva «Prima completa la
+  // scheda del prodotto», ma la scheda aperta e' ancora quella di Casa, senza
+  // Allergeni ne' Ingredienti. Quei campi compaiono solo scegliendo la
+  // categoria nel modulo: quando la modifica sposta il prodotto, lo dice.
+  if (categoriaNuova) {
+    return `Per stare in vendita in «${categoriaNuova}» manca: ${mancanti.join(', ')}. Apri la scheda, scegli lì quella categoria e completa questi campi.`;
+  }
   const motivo = motivoDaCompletare(mancanti);
   return `${motivo.charAt(0).toUpperCase()}${motivo.slice(1)}. Prima completa la scheda del prodotto.`;
 }
@@ -578,7 +600,12 @@ export function dichiarazioniInVetrina(prodotto: SchedaDellaChat): { etichetta: 
 export function avvisoSullaPubblicazione(
   prodotto: SchedaDellaChat & { status: string },
   proposta: AiProductPatch,
-): { mancanti: string[]; dichiarazioni: { etichetta: string; valore: string }[] } | null {
+): {
+  mancanti: string[];
+  dichiarazioni: { etichetta: string; valore: string }[];
+  /** La categoria in cui la proposta sposta il prodotto (null se resta dov'e'): per `messaggioDaCompletare`. */
+  categoriaNuova: string | null;
+} | null {
   const dopo = schedaDopoLaProposta(prodotto, proposta);
   const controllo = controlloDellaModifica({
     statoPrima: prodotto.status,
@@ -591,6 +618,7 @@ export function avvisoSullaPubblicazione(
   return {
     mancanti: cosaMancaPerIlControllo(controllo, schedaDaVendere(dopo)),
     dichiarazioni: dichiarazioniInVetrina(dopo),
+    categoriaNuova: dopo.categorySlug !== prodotto.categorySlug ? dopo.categorySlug : null,
   };
 }
 
@@ -680,13 +708,15 @@ export function righeDellaProposta(
 
   // R41 — Allergeni, ingredienti e le altre dichiarazioni di un alimento non
   // si cambiano da qui: la card lo dice invece di prometterlo, e rimanda alla
-  // scheda solo se la scheda quel campo ce l'ha.
+  // scheda solo se la scheda quel campo ce l'ha. Un prodotto senza categoria
+  // non e' una scheda senza quel campo: come sul server (`resolveAiPatch`), si
+  // rimanda alla scheda.
   const categoria = (testo(patch.category_slug) && patch.category_slug) || prodotto.categorySlug;
   const campi = categoria ? CATEGORY_ATTRIBUTES[categoria] ?? [] : [];
   const dichiarazione = (chiaveAi: string) => {
     const chiave = chiaveCampo(chiaveAi);
     const campo = campi.find((f) => f.key === chiave);
-    return { etichetta: campo?.label ?? findLabelForKey(chiave), nellaScheda: campo !== undefined };
+    return { etichetta: campo?.label ?? findLabelForKey(chiave), nellaScheda: campo !== undefined || !categoria };
   };
   const attributi =
     patch.attributes && typeof patch.attributes === 'object' && !Array.isArray(patch.attributes)

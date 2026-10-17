@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { Sparkles, Loader2, Send, Check, PackagePlus } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
-import { avvisoDopoLApplicazione } from '@/lib/ai/esitoCopilot';
+import { avvisoDopoLApplicazione, type AvvisoCopilot } from '@/lib/ai/esitoCopilot';
 
 /**
  * Catalog Copilot — chat: il venditore scrive un'istruzione in linguaggio naturale
@@ -24,7 +24,8 @@ type Change = { product_id: string; name: string; patch: Record<string, unknown>
 
 type Message =
   | { id: string; role: 'user'; text: string }
-  | { id: string; role: 'assistant'; text: string; changes: Change[]; applied?: boolean }
+  /** `esito`: com'e' andata l'applicazione; c'e' solo dopo «Applica tutte». */
+  | { id: string; role: 'assistant'; text: string; changes: Change[]; esito?: AvvisoCopilot }
   | { id: string; role: 'typing' };
 
 const SUGGESTIONS = [
@@ -134,7 +135,7 @@ export default function CatalogCopilot() {
       if (avviso.tipo === 'successo') toast.success(avviso.testo);
       else toast.warning(avviso.testo, { duration: 20_000 });
       setMessages((m) =>
-        m.map((x) => (x.id === msgId && x.role === 'assistant' ? { ...x, applied: true } : x)),
+        m.map((x) => (x.id === msgId && x.role === 'assistant' ? { ...x, esito: avviso } : x)),
       );
     } catch (err) {
       if (err instanceof TroppeRichieste) {
@@ -199,7 +200,7 @@ export default function CatalogCopilot() {
               {m.role === 'assistant' && m.changes.length > 0 && (
                 <ChangesPreview
                   changes={m.changes}
-                  applied={!!m.applied}
+                  esito={m.esito}
                   applying={applyingId === m.id}
                   onApply={() => void applyChanges(m.id, m.changes)}
                 />
@@ -260,10 +261,10 @@ function Dot({ delay }: { delay: string }) {
 
 /** Anteprima ricca delle modifiche proposte, dentro la bolla dell'assistente. */
 function ChangesPreview({
-  changes, applied, applying, onApply,
+  changes, esito, applying, onApply,
 }: {
   changes: Change[];
-  applied: boolean;
+  esito?: AvvisoCopilot;
   applying: boolean;
   onApply: () => void;
 }) {
@@ -287,10 +288,14 @@ function ChangesPreview({
         ))}
       </ul>
       <div className="border-t border-cream-200 px-3.5 py-2.5">
-        {applied ? (
+        {/* «Applicato.» col segno verde solo se e' entrato tutto: altrimenti
+            resta scritto quello che l'avviso diceva, che a tempo sparisce. */}
+        {esito?.tipo === 'successo' ? (
           <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-olive-600">
             <Check size={16} strokeWidth={2.6} aria-hidden /> Applicato.
           </p>
+        ) : esito ? (
+          <p className="text-sm text-ink-800">{esito.testo}</p>
         ) : (
           <button
             type="button"
