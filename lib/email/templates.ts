@@ -344,15 +344,17 @@ export function refundIssuedTemplate(args: {
   if (modo !== 'credito') {
     // Il sito non chiede l'IBAN: lo chiede questa email, e la risposta arriva a chi fa il bonifico.
     const comeRiceverlo =
-      "Per farlo ci servono l'IBAN e il nome dell'intestatario del conto: rispondi a questa email con questi due dati. " +
+      "Per il bonifico ci servono l'IBAN e il nome dell'intestatario del conto: rispondi a questa email con questi due dati. " +
       'Il bonifico lo facciamo a mano, appena riceviamo la tua risposta. ' +
       'Se nel frattempo cancelli il tuo account, il rimborso resta valido: rispondi comunque a questa email.';
     righe.push(p(comeRiceverlo));
     testi.push(comeRiceverlo);
   }
 
+  // Collaudo finale del 17/10 — sul misto il titolo diceva «Rimborso in arrivo»,
+  // ma la parte di credito e' gia' arrivata: il titolo dice i due modi veri.
   const titolo =
-    modo === 'credito' ? 'Rimborso in credito MyCity' : modo === 'bonifico' ? 'Rimborso con bonifico' : 'Rimborso in arrivo';
+    modo === 'credito' ? 'Rimborso in credito MyCity' : modo === 'bonifico' ? 'Rimborso con bonifico' : 'Rimborso in credito MyCity e con bonifico';
   const [bottoneUrl, bottone] = modo === 'credito' ? [creditoUrl, 'Vedi il tuo credito'] : [orderUrl, 'Vedi dettaglio'];
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">💶 ${titolo}</h1>

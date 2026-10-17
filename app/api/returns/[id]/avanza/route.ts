@@ -19,7 +19,12 @@ import {
   quantoSiPuoRestituire,
   type OrdineDaRimborsare,
 } from '@/lib/rimborsi/regole-del-rimborso';
-import { avvisoDelRimborsoNonRegistrato, bonificoDaFinire, RIMBORSO_PARTITO_MA_NON_REGISTRATO } from '@/lib/rimborsi/bonifici-da-fare';
+import {
+  avvisoDelRimborsoNonRegistrato,
+  bonificoDaFinire,
+  RIMBORSO_PARTITO_MA_NON_REGISTRATO,
+  titoloDelResoRimborsato,
+} from '@/lib/rimborsi/bonifici-da-fare';
 import { bonificoDellaChiave } from '@/lib/stripe/elenco-dei-rimborsi';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
@@ -306,11 +311,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     }
   }
 
-  const TITOLO_DEL_BONIFICO_IN_ARRIVO = "✓ Reso chiuso: il rimborso arriva con un bonifico, ti chiediamo l'IBAN per email";
   const TITOLO: Record<string, string> = {
     SHIPPED_BACK: '📦 Reso: merce in viaggio',
     RECEIVED: '📥 Reso: merce ricevuta dal negozio',
-    REFUNDED: '✓ Reso rimborsato',
     CANCELED: '✕ Reso chiuso senza rimborso',
   };
   await admin.from('notifications').insert({
@@ -320,7 +323,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     user_id: ret.buyer_id,
     // 17/10 (semplificazione) — Sui contanti il bonifico a questo punto e' solo
     // da fare: il titolo non dice «rimborsato», come non lo dice la pagina dell'ordine.
-    title: body.stato === 'REFUNDED' && bonificoCents > 0 ? TITOLO_DEL_BONIFICO_IN_ARRIVO : TITOLO[body.stato],
+    // Sul misto dice anche il credito gia' tornato (titoloDelResoRimborsato).
+    title:
+      body.stato === 'REFUNDED'
+        ? titoloDelResoRimborsato({ importoCents: importoRimborso, bonificoCents })
+        : TITOLO[body.stato],
     body: body.note ?? null,
     link: `/orders/${ret.order_id}`,
   });

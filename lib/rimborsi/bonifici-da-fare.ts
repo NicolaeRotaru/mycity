@@ -164,7 +164,9 @@ export function avvisoDelRimborsoNonRegistrato(r: {
   resoGiaRimborsato?: boolean;
 }): { titolo: string; testo: string; link: string } {
   const inizio =
-    `Il rimborso del reso ${r.resoId.slice(0, 8)} sull'ordine ${numeroDellOrdine(r.ordineId)} è partito, ` +
+    // Collaudo finale del 17/10 — il reso si chiama come nella causale qui sotto
+    // (6 caratteri maiuscoli): prima la stessa frase lo chiamava in due modi.
+    `Il rimborso del reso ${r.resoId.slice(0, 6).toUpperCase()} sull'ordine ${numeroDellOrdine(r.ordineId)} è partito, ` +
     "ma il reso non l'ha registrato.";
   return {
     titolo: '⚠️ Rimborso partito ma non registrato sul reso',
@@ -180,4 +182,22 @@ export function avvisoDelRimborsoNonRegistrato(r: {
           "Il negozio è scritto nell'ordine, i suoi recapiti in Utenti.",
     link: '/admin/orders',
   };
+}
+
+/**
+ * Il titolo della notifica al cliente quando il reso si chiude come rimborsato.
+ *
+ * Collaudo finale del 17/10 — sui contanti il bonifico e' ancora da fare, quindi
+ * il titolo non dice «rimborsato». Ma su un ordine pagato in parte col credito
+ * MyCity quella parte e' gia' tornata: il titolo diceva solo «arriva con un
+ * bonifico» e taceva il credito gia' disponibile.
+ */
+export function titoloDelResoRimborsato(r: { importoCents: number; bonificoCents: number }): string {
+  if (r.bonificoCents <= 0) return '✓ Reso rimborsato';
+  const credito = r.importoCents - r.bonificoCents;
+  if (credito > 0) {
+    return `✓ Reso chiuso: ${formatPriceFromCents(credito)} sono già tornati come credito MyCity, ` +
+      "il resto arriva con un bonifico, ti chiediamo l'IBAN per email";
+  }
+  return "✓ Reso chiuso: il rimborso arriva con un bonifico, ti chiediamo l'IBAN per email";
 }
