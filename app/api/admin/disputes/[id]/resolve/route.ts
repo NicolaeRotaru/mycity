@@ -2,7 +2,13 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { isStripeConfigured } from '@/lib/stripe/client';
-import { AccreditoGiaUscitoConAltroImporto, RimborsoInAttesaDellaDivisione, refundOrder } from '@/lib/stripe/payout';
+import {
+  AccreditoGiaUscitoConAltroImporto,
+  cosaMancaAlBonifico,
+  RimborsoInAttesaDellaDivisione,
+  refundOrder,
+} from '@/lib/stripe/payout';
+import { bonificoDaFinire } from '@/lib/rimborsi/bonifici-da-fare';
 import { logger } from '@/lib/logger';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -97,15 +103,34 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * cliente non riceveva mai i soldi. Adesso lo stesso esito, ripremuto, finisce
    * quel rimborso (`refundOrder`, con la cifra scritta sul reclamo) e il resto
    * della chiusura: nessuna seconda prenotazione, nessun secondo bonifico.
+   *
+   * Collaudo del 17/10, quarto giro — ripreso solo con la stessa cifra. Una pagina caricata
+   * prima della chiusura mostra ancora i pulsanti: chi chiude con un'altra cifra legge che il
+   * reclamo e' gia' chiuso, e con quanto. E se il bonifico e' finito (l'avviso c'e'), non si
+   * riscrive niente: ne' le note, ne' la notifica al cliente, ne' il registro delle azioni.
    */
-  const ripresa =
-    dispute.status === 'resolved_buyer' &&
-    body.status === 'resolved_buyer' &&
-    !!bonificoDellaChiave(ord as { stripe_refund_id?: string | null } | null, `dispute_${dispute.id}`);
+  const bonificoDelReclamo = bonificoDellaChiave(ord as { stripe_refund_id?: string | null } | null, `dispute_${dispute.id}`);
+  const ripresa = dispute.status === 'resolved_buyer' && body.status === 'resolved_buyer' && !!bonificoDelReclamo;
   if (!ripresa && dispute.status !== 'open' && dispute.status !== 'under_review') {
     return ApiErrors.conflict(`Reclamo già in stato ${dispute.status}`);
   }
-  const importo = ripresa ? Number(dispute.refund_cents ?? 0) : body.refundCents;
+  const chiusoCon = Number(dispute.refund_cents ?? 0);
+  if (ripresa && body.refundCents != null && body.refundCents !== chiusoCon) {
+    return ApiErrors.conflict(`Questo reclamo è già stato chiuso con ${formatPriceFromCents(chiusoCon)}: ricarica la pagina.`);
+  }
+  const importo = ripresa ? chiusoCon : body.refundCents;
+  let manca: 'avviso' | 'credito' | 'niente' | null = null;
+  if (ripresa && bonificoDelReclamo) {
+    try {
+      manca = await cosaMancaAlBonifico(`dispute_${dispute.id}`, chiusoCon - bonificoDelReclamo.centesimi);
+    } catch (err) {
+      logger.error('[disputes] bonifico gia sull ordine, non si riesce a vedere se e finito', { disputeId: dispute.id, err });
+      return ApiErrors.unavailable('Non riesco a controllare il rimborso di questo reclamo: riprova tra poco.');
+    }
+    if (manca === 'niente') {
+      return NextResponse.json({ ok: true, status: body.status, refundId: bonificoDelReclamo.segno }, { status: 200 });
+    }
+  }
 
   if (!ripresa && body.status === 'resolved_buyer' && body.refundCents && ord) {
     const rimborsabile = quantoSiPuoRestituire(ord);
@@ -202,6 +227,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       // conoscere, e per tutto il resto una frase sola. Mai il testo grezzo dell'errore.
       if (err instanceof AccreditoGiaUscitoConAltroImporto) return ApiErrors.conflict(err.message);
       if (err instanceof RimborsoInAttesaDellaDivisione) return ApiErrors.conflict(err.message);
+      // Il bonifico era gia' registrato sull'ordine: quello resta, manca un pezzo.
+      if (manca === 'avviso' || manca === 'credito') return ApiErrors.badGateway(bonificoDaFinire(manca));
       return ApiErrors.badGateway("Il rimborso non è partito: riprova o scrivi all'assistenza.");
     }
   }

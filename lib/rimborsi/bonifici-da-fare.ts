@@ -128,6 +128,16 @@ export function avvisoDelBonificoDaFare(a: {
   return { titolo: TITOLO_DEL_BONIFICO_DA_FARE, testo: frasi.join(' '), link: '/admin/orders' };
 }
 
+/**
+ * Collaudo del 17/10, quarto giro — cosa legge chi ha premuto quando il bonifico e' gia' registrato
+ * sull'ordine e finirlo non e' riuscito. Mai «non è partito»: il rimborso c'e', manca un pezzo.
+ */
+export function bonificoDaFinire(manca: 'avviso' | 'credito'): string {
+  return manca === 'credito'
+    ? 'Il rimborso è registrato, ma il credito MyCity al cliente non è partito: riprova.'
+    : "Il rimborso è registrato, ma l'avviso a chi paga non è partito: riprova.";
+}
+
 /** Cosa legge chi ha premuto, quando il rimborso e' partito ma il reso non lo sa. */
 export const RIMBORSO_PARTITO_MA_NON_REGISTRATO =
   "Il rimborso è partito ma non si è potuto registrare sul reso: abbiamo avvisato l'amministrazione. Non ripetere il rimborso.";

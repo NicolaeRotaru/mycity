@@ -168,6 +168,21 @@ export async function notifyAdmins(
 }
 
 /**
+ * C'e' gia' l'avviso scritto con `unaVoltaPer: chiave`? Basta la riga di un amministratore.
+ * Lancia se non si riesce a leggere: «non lo so» non e' «non c'e'».
+ */
+export async function avvisoGiaScritto(chiave: string): Promise<boolean> {
+  const admin = getAdminSupabase();
+  const { data: admins, error: errLettura } = await admin.from('profiles').select('id').eq('role', 'admin');
+  if (errLettura) throw new Error(`[stripe] amministratori non letti: ${errLettura.message}`);
+  const ids = (admins ?? []).map((a) => idDellAvvisoAgliAmministratori(chiave, a.id));
+  if (ids.length === 0) return false;
+  const { data: righe, error } = await admin.from('notifications').select('id').in('id', ids).limit(1);
+  if (error) throw new Error(`[stripe] avvisi agli amministratori non letti: ${error.message}`);
+  return (righe ?? []).length > 0;
+}
+
+/**
  * Toglie l'avviso scritto con `unaVoltaPer: chiave`, a tutti gli amministratori.
  * Serve a chi deve tornare indietro dopo averlo scritto (`refundOrder`, quando un
  * passo successivo cade): un avviso «paga» per un rimborso che non c'è non deve
