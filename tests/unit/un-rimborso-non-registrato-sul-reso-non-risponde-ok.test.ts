@@ -134,7 +134,8 @@ describe('avanza: se l esito del rimborso non si registra sul reso, non si rispo
     const avvisi = notificheConTitolo(finto.db, 'non registrato sul reso');
     expect(avvisi, 'chi paga non sa che il reso non porta il rimborso').toHaveLength(1);
     const testo = String(avvisi[0].body);
-    expect(testo).toContain(id.slice(0, 8));
+    // Il reso si chiama come nella causale del bonifico (collaudo finale del 17/10).
+    expect(testo).toContain(`reso ${id.slice(0, 6).toUpperCase()}`);
     expect(testo).toContain('#111111');
     expect(testo).toMatch(/40,00\s€/u);
     expect(testo, 'chi paga paga due volte: non sa che e lo stesso bonifico dell altro avviso').toContain('pagalo una volta sola');
@@ -177,7 +178,8 @@ describe('decide: se l esito del rimborso non si registra sul reso, non si rispo
     const avvisi = notificheConTitolo(finto.db, 'non registrato sul reso');
     expect(avvisi, 'chi paga non sa che il reso non porta il rimborso').toHaveLength(1);
     const testo = String(avvisi[0].body);
-    expect(testo).toContain(id.slice(0, 8));
+    // Il reso si chiama come nella causale del bonifico (collaudo finale del 17/10).
+    expect(testo).toContain(`reso ${id.slice(0, 6).toUpperCase()}`);
     expect(testo).toContain('#111111');
     expect(testo).toMatch(/40,00\s€/u);
     expect(testo, 'chi paga paga due volte: non sa che e lo stesso bonifico dell altro avviso').toContain('pagalo una volta sola');
