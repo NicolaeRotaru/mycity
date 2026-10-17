@@ -46,6 +46,8 @@ export interface Guasti {
   notificheScrivonoPoiCadono?: boolean;
   /** La scrittura del segno del bonifico sull'ordine (`stripe_refund_id` che comincia con «bonifico:») cade. */
   segnoDelBonificoCade?: { code?: string; message: string } | null;
+  /** La scrittura del segno del bonifico sull'ordine arriva, ma la risposta si perde. Vale una volta. */
+  segnoDelBonificoScrittoPoiCade?: boolean;
   /** Le cancellazioni (`delete`) cadono con questo errore e non tolgono niente. */
   cancellazioniCadono?: { code?: string; message: string } | null;
   /** La lettura dell'utente (`auth.admin.getUserById`) risponde con questo errore. */
@@ -262,6 +264,15 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
       toccate = righe.filter((r) => this.filtri.every((f) => f(r)));
       for (const r of toccate) Object.assign(r, this.valori);
       if (toccate.length > 0) this.db.scritture.push({ tabella: this.tabella, tipo: 'update', valori: { ...(this.valori as Riga) } });
+      if (
+        this.tabella === 'orders' &&
+        toccate.length > 0 &&
+        this.db.guasti.segnoDelBonificoScrittoPoiCade &&
+        String((this.valori as Riga).stripe_refund_id ?? '').includes('bonifico:')
+      ) {
+        this.db.guasti.segnoDelBonificoScrittoPoiCade = false;
+        return { data: null, error: { message: 'FetchError: socket hang up' } };
+      }
     } else {
       toccate = nuove.map((v) => ({ id: v.id ?? `${this.tabella}-${righe.length + 1}`, ...v }));
       righe.push(...toccate);

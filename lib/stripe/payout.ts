@@ -890,59 +890,82 @@ async function aggiungiAllElencoDeiRimborsi(
    * segno del bonifico non puo' esistere.
    */
   insieme: Record<string, unknown> = {},
-): Promise<{ errore: { message: string } | null; elenco: string | null; aggiunto: boolean }> {
+): Promise<{ message: string } | null> {
   let letto = elencoLetto;
   for (let tentativo = 0; tentativo < TENTATIVI_SU_UN_ORDINE_CHE_CAMBIA; tentativo++) {
     const elenco = elencoDaScrivere(rimborsiGiaScritti({ stripe_refund_id: letto }), [nuovo]);
-    const aggiunto = elenco !== (letto ?? '');
-    if (!aggiunto && Object.keys(insieme).length === 0) return { errore: null, elenco: letto, aggiunto: false };
+    if (elenco === (letto ?? '') && Object.keys(insieme).length === 0) return null;
     let scrittura = admin.from('orders').update({ stripe_refund_id: elenco, ...insieme }).eq('id', orderId);
     scrittura = letto === null ? scrittura.is('stripe_refund_id', null) : scrittura.eq('stripe_refund_id', letto);
     const { data: scritti, error } = await scrittura.select('id');
-    if (error) return { errore: error, elenco: null, aggiunto: false };
-    if (scritti && scritti.length > 0) return { errore: null, elenco, aggiunto };
+    if (error) return error;
+    if (scritti && scritti.length > 0) return null;
 
     const { data: ora, error: errLettura } = await admin.from('orders').select('stripe_refund_id').eq('id', orderId).single();
-    if (errLettura || !ora) return { errore: errLettura ?? { message: 'ordine non riletto' }, elenco: null, aggiunto: false };
+    if (errLettura || !ora) return errLettura ?? { message: 'ordine non riletto' };
     letto = (ora as { stripe_refund_id?: string | null }).stripe_refund_id ?? null;
   }
-  return { errore: { message: 'l elenco dei rimborsi cambia a ogni tentativo' }, elenco: null, aggiunto: false };
+  return { message: 'l elenco dei rimborsi cambia a ogni tentativo' };
 }
 
 /**
  * LA GEMELLA: rimette l'ordine com'era prima del bonifico (17/10/2026).
  *
  * Se dopo il segno del bonifico un passo cade (l'avviso, il credito), il rimborso
- * non e' registrato e si torna indietro: via il segno — solo se l'ha messo questo
- * tentativo — e lo stato del pagamento di prima. Stesso confronto-e-scrivi
- * dell'aggiunta. Non lancia: se non riesce lo scrive nei log.
+ * non e' registrato e si torna indietro: via il segno e lo stato del pagamento di
+ * prima. Non lancia: se non riesce lo scrive nei log.
+ *
+ * Collaudo del 17/10 — SI GUARDA L'ORDINE DI ADESSO, NON QUELLO CHE SI CREDE DI
+ * AVER SCRITTO.
+ *  · Il segno: la scrittura puo' arrivare al database e la risposta perdersi. Chi
+ *    tornava indietro solo con la risposta arrivata lasciava sull'ordine un segno
+ *    senza avviso e senza prenotazione, e `avanza` lo registrava come un rimborso
+ *    fatto che nessuno avrebbe pagato. Si rilegge l'elenco: se il segno c'e', via.
+ *  · Lo stato: un altro rimborso sullo stesso ordine puo' essere passato nel
+ *    frattempo (un reclamo mentre il reso cadeva), e rimettere «pagato» lasciava
+ *    il suo bonifico su un ordine non rimborsato. Lo stato si ricalcola da quello
+ *    che resta prenotato senza di noi: se resta qualcosa e' un rimborso parziale
+ *    (il tetto della prenotazione e' il lordo, e una parte era nostra), e la
+ *    partita del negozio chiusa da un rimborso «pieno» si riapre; se non resta
+ *    niente, torna lo stato di prima.
  */
 async function rimettiLOrdineComEra(
   admin: ReturnType<typeof getAdminSupabase>,
   orderId: string,
-  elencoScritto: string | null,
-  segnoDaTogliere: string | null,
-  ripristino: Record<string, unknown>,
+  segno: string,
+  nostraPrenotazioneCents: number,
+  diPrima: { payment_status: string | null; payout_status: string | null },
 ): Promise<void> {
-  let letto = elencoScritto;
   for (let tentativo = 0; tentativo < TENTATIVI_SU_UN_ORDINE_CHE_CAMBIA; tentativo++) {
-    const restano = [...rimborsiGiaScritti({ stripe_refund_id: letto })].filter((id) => id !== segnoDaTogliere);
-    let scrittura = admin
+    const { data: ora, error: errLettura } = await admin
       .from('orders')
-      .update({ stripe_refund_id: restano.length > 0 ? restano.join(',') : null, ...ripristino })
-      .eq('id', orderId);
-    scrittura = letto === null ? scrittura.is('stripe_refund_id', null) : scrittura.eq('stripe_refund_id', letto);
-    const { data: scritti, error } = await scrittura.select('id');
-    if (!error && scritti && scritti.length > 0) return;
-    if (error) {
-      logger.error('[refundOrder] ordine non rimesso com era dopo il rimborso tornato indietro', { orderId, message: error.message });
-      return;
-    }
-    const { data: ora, error: errLettura } = await admin.from('orders').select('stripe_refund_id').eq('id', orderId).single();
+      .select('stripe_refund_id, refunded_amount_cents, payout_status')
+      .eq('id', orderId)
+      .single();
     if (errLettura || !ora) break;
-    letto = (ora as { stripe_refund_id?: string | null }).stripe_refund_id ?? null;
+    const adesso = ora as { stripe_refund_id?: string | null; refunded_amount_cents?: number | null; payout_status?: string | null };
+    const letto = adesso.stripe_refund_id ?? null;
+    const elenco = rimborsiGiaScritti({ stripe_refund_id: letto });
+    // La scrittura del segno non era arrivata: non c'e' niente da togliere.
+    if (!letto || !elenco.has(segno)) return;
+    const restano = [...elenco].filter((id) => id !== segno);
+    const prenotatiDaAltri = Number(adesso.refunded_amount_cents ?? 0) - nostraPrenotazioneCents;
+    const { data: scritti, error } = await admin
+      .from('orders')
+      .update({
+        stripe_refund_id: restano.length > 0 ? restano.join(',') : null,
+        payment_status: prenotatiDaAltri > 0 ? 'PARTIALLY_REFUNDED' : diPrima.payment_status,
+        ...(adesso.payout_status === 'REFUNDED' || adesso.payout_status === 'REVERSED'
+          ? { payout_status: diPrima.payout_status }
+          : {}),
+      })
+      .eq('id', orderId)
+      .eq('stripe_refund_id', letto)
+      .select('id');
+    if (error) break;
+    if (scritti && scritti.length > 0) return;
   }
-  logger.error('[refundOrder] ordine non rimesso com era dopo il rimborso tornato indietro', { orderId, segno: segnoDaTogliere });
+  logger.error('[refundOrder] ordine non rimesso com era dopo il rimborso tornato indietro', { orderId, segno });
 }
 
 /**
@@ -1357,8 +1380,10 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // Il credito e' uscito ma il diario non ha detto quanto: si registra, e lo
   // si dice a chi amministra (piu' sotto, a rimborso scritto).
   let cifraDelCreditoNonVerificata = false;
-  // Quello che questo tentativo ha scritto, e che il `catch` toglie se un passo cade.
-  let segnoScritto: { elenco: string | null; segno: string | null } | null = null;
+  // Quello che questo tentativo ha scritto, o forse scritto, e che il `catch`
+  // toglie se un passo cade. Si annota PRIMA di scrivere: una scrittura arrivata
+  // con la risposta persa ha scritto lo stesso.
+  let segnoDaTogliere: string | null = null;
   let avvisoDaTogliere = false;
   try {
     if (tipo === 'carta') {
@@ -1397,15 +1422,11 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
       //    teneva il credito di un rimborso che non c'era.
       if (avvisoDelBonifico) {
         const segno = segnoDelBonifico(chiave, ripartoVero.bonificoCents);
-        const scritto = await aggiungiAllElencoDeiRimborsi(
-          admin,
-          order.id,
-          (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null,
-          segno,
-          statoDelRimborso,
-        );
-        if (scritto.errore) throw new Error(`refundOrder COD: bonifico non scritto sull ordine: ${scritto.errore.message}`);
-        segnoScritto = { elenco: scritto.elenco, segno: scritto.aggiunto ? segno : null };
+        const elencoLetto = (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null;
+        // Un segno che c'era gia' prima di questo tentativo non e' suo, e non lo toglie.
+        if (!rimborsiGiaScritti({ stripe_refund_id: elencoLetto }).has(segno)) segnoDaTogliere = segno;
+        const errSegno = await aggiungiAllElencoDeiRimborsi(admin, order.id, elencoLetto, segno, statoDelRimborso);
+        if (errSegno) throw new Error(`refundOrder COD: bonifico non scritto sull ordine: ${errSegno.message}`);
         avvisoDaTogliere = true;
         const avviso = await notifyAdmins(avvisoDelBonifico.titolo, avvisoDelBonifico.testo, avvisoDelBonifico.link, {
           unaVoltaPer: chiaveDellAvviso,
@@ -1458,10 +1479,10 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     // cadere e' stata solo la risposta, il secondo tentativo ritrova quello
     // (Stripe con la chiave, il portafoglio con l'indice unico), non ne crea un altro.
     if (avvisoDaTogliere) await togliLAvvisoAgliAmministratori(chiaveDellAvviso);
-    if (segnoScritto) {
-      await rimettiLOrdineComEra(admin, order.id, segnoScritto.elenco, segnoScritto.segno, {
+    if (segnoDaTogliere) {
+      await rimettiLOrdineComEra(admin, order.id, segnoDaTogliere, safeAmountCents, {
         payment_status: order.payment_status ?? null,
-        ...(isFull ? { payout_status: order.payout_status ?? null } : {}),
+        payout_status: order.payout_status ?? null,
       });
     }
     const { error: errStorno } = await admin
@@ -1520,7 +1541,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // all'inizio: vedi `aggiungiAllElencoDeiRimborsi`. (Il segno del bonifico dei
   // contanti e' gia' scritto sopra, insieme allo stato del pagamento.)
   if (stripeRefundId) {
-    const { errore: errElenco } = await aggiungiAllElencoDeiRimborsi(
+    const errElenco = await aggiungiAllElencoDeiRimborsi(
       admin,
       order.id,
       (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null,
@@ -1532,7 +1553,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
       });
     }
   }
-  const { error: errStato } = segnoScritto
+  const { error: errStato } = avvisoDelBonifico
     ? { error: null }
     : await admin
         .from('orders')

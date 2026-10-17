@@ -55,6 +55,19 @@ function data(giorno: Date): string {
   return giorno.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Rome' });
 }
 
+/**
+ * Il giorno di calendario a Piacenza, piu' qualche giorno, a mezzogiorno.
+ * Collaudo del 17/10 — si sommavano 14 volte 24 ore: vicino al cambio dell'ora
+ * il termine usciva un giorno avanti (marzo) o indietro (ottobre). I giorni si
+ * sommano alla data, non ai millisecondi.
+ */
+function giornoPiu(istante: Date, giorni: number): Date {
+  const parti = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Rome', year: 'numeric', month: 'numeric', day: 'numeric' })
+    .formatToParts(istante);
+  const n = (tipo: string) => Number(parti.find((p) => p.type === tipo)?.value);
+  return new Date(Date.UTC(n('year'), n('month') - 1, n('day') + giorni, 12));
+}
+
 /** I giorni che la legge dà per restituire i soldi dopo il recesso (Codice del Consumo, art. 56). */
 const GIORNI_PER_RIMBORSARE = 14;
 
@@ -111,7 +124,7 @@ export function avvisoDelBonificoDaFare(a: {
   }
   const chiesto = a.resoChiestoIl ? new Date(a.resoChiestoIl) : null;
   if (chiesto && !Number.isNaN(chiesto.getTime())) {
-    const termine = new Date(chiesto.getTime() + GIORNI_PER_RIMBORSARE * 86_400_000);
+    const termine = giornoPiu(chiesto, GIORNI_PER_RIMBORSARE);
     frasi.push(
       `Il reso è stato chiesto il ${data(chiesto)}: la legge dà ${GIORNI_PER_RIMBORSARE} giorni da lì, quindi il termine è il ${data(termine)}.`,
     );

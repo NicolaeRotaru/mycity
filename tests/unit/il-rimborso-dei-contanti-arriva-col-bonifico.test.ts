@@ -134,6 +134,21 @@ describe('R71 — i contanti tornano col bonifico, mai come credito', () => {
     expect(testo, 'nell avviso non deve esserci un IBAN').not.toMatch(/IT\d{2}[A-Z0-9]{10,}/u);
   });
 
+  it('il termine dei 14 giorni si conta a calendario, anche a cavallo del cambio dell ora', async () => {
+    // 20 marzo 2027 alle 23:30 a Piacenza; l'ora legale comincia il 28 marzo.
+    await rimborso({ resoChiestoIl: '2027-03-20T22:30:00Z' });
+    expect(String(avvisi()[0].body)).toContain(
+      'Il reso è stato chiesto il 20 marzo 2027: la legge dà 14 giorni da lì, quindi il termine è il 3 aprile 2027.',
+    );
+
+    // 21 ottobre 2026 alle 00:30 a Piacenza; l'ora solare torna il 25 ottobre.
+    apri(maglione());
+    await rimborso({ resoChiestoIl: '2026-10-20T22:30:00Z' });
+    expect(String(avvisi()[0].body)).toContain(
+      'Il reso è stato chiesto il 21 ottobre 2026: la legge dà 14 giorni da lì, quindi il termine è il 4 novembre 2026.',
+    );
+  });
+
   it('lo stesso avviso arriva per email alla casella dove arrivano gli IBAN', async () => {
     await rimborso();
 
