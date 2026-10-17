@@ -198,6 +198,13 @@ export default function TermsPage() {
         <p>
           Il rimborso è effettuato entro 14 giorni dalla ricezione della merce restituita, con lo
           stesso mezzo di pagamento usato per l&apos;acquisto.
+          {/* 17/10/2026 — Decisione di Nicola («Semplifica»): i contanti tornano con un
+              bonifico fatto a mano, l'IBAN lo chiede l'email del rimborso. Senza costi per
+              il consumatore: è la condizione dell'art. 56, comma 1, per un mezzo diverso.
+              Testo legale: lo rilegge il legale prima dell'unione. */}{' '}
+          Per gli ordini pagati in contanti alla consegna, il rimborso avviene con bonifico bancario,
+          senza costi a tuo carico, sul conto che ci indichi rispondendo alla nostra email. La parte
+          pagata con il credito MyCity torna come credito MyCity.
         </p>
 
         {/* 22/8/2026 — Il modulo di recesso tipo mancava. L'allegato I, parte B

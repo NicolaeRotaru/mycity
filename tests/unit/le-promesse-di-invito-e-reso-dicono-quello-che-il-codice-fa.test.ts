@@ -12,10 +12,10 @@ import { join } from 'node:path';
  *    e ne paga 30, non 25: si sente preso in giro al primo contatto, e Maria fa
  *    la figura di chi ha promesso una cosa falsa.
  *
- * ② «Per pagamento alla consegna il rimborso viene effettuato con bonifico
- *    sull'IBAN che ci fornisci». L'IBAN non lo chiede nessuno — la tabella dei
- *    resi non ha nessuna colonna bancaria — e `refundOrder` accredita l'importo
- *    sul credito MyCity con causale `cod_refund`.
+ * ② Il reso pagato in contanti: dopo la decisione di Nicola del 17/10/2026
+ *    («Semplifica») i contanti tornano sempre col bonifico e l'IBAN lo chiede
+ *    l'email del rimborso. Le pagine pubbliche che lo dicono le monta
+ *    le-pagine-pubbliche-dicono-come-tornano-i-contanti.test.ts; qui resta l'invito.
  *
  * ── Cosa prova questo file ─────────────────────────────────────────────────
  * Non che il testo contenga la parola giusta: che la PROMESSA e il MECCANISMO
@@ -68,36 +68,5 @@ describe('l’invito: il premio va a chi invita, e il testo lo dice', () => {
     // (app/checkout/page.tsx: `usaCredito: paymentMethod === 'cod' && useCredit`).
     expect(leggi('app/checkout/page.tsx')).toMatch(/usaCredito:\s*paymentMethod === 'cod'/);
     expect(leggi('app/profile/referral/page.tsx')).toMatch(/pagati alla consegna/i);
-  });
-});
-
-/*
- * R71 — IL MECCANISMO E' CAMBIATO, E LA PROMESSA CON LUI.
- *
- * L'11/10 il credito d'ufficio era il difetto R71: il Codice del Consumo
- * (art. 56) vuole il rimborso con lo stesso mezzo. Il 17/10 Nicola ha deciso
- * («Semplifica»): i contanti tornano sempre col bonifico, senza scelta, e
- * l'IBAN lo chiede l'email del rimborso. Nessuna colonna lo tiene: lo prova
- * tests/sql/rls/40-nessuna-colonna-tiene-l-iban-del-rimborso.test.sql sullo
- * schema vero, e il comportamento lo prova
- * i-contanti-tornano-sempre-col-bonifico-da-ogni-strada.test.ts. Qui resta
- * solo che i testi non promettano il credito come regola.
- */
-describe('il reso in contanti: torna col bonifico, e il testo non promette il credito', () => {
-  // La causale `cod_refund` dell'accredito qui si cercava come parola nel file
-  // (collaudo del 15/10, terzo giro: una ricerca di parole non sa diventare
-  // rossa come la realta'). La prova vera fa girare `refundOrder` e guarda la
-  // chiamata a `wallet_credit`: refund-order-cod.test.ts, «rimborso pieno».
-
-  it('e nessuna pagina dice più che il credito arriva d’ufficio', () => {
-    for (const pagina of ['app/returns/page.tsx', 'app/faq/page.tsx']) {
-      const testo = leggi(pagina)
-        .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
-        .replace(/^\s*\/\/.*$/gm, '');
-      expect(testo, pagina).not.toMatch(/il rimborso arriva come credito MyCity/i);
-      expect(testo, pagina).not.toMatch(/se preferisci il bonifico/i);
-      expect(testo, pagina).toMatch(/bonifico/);
-      expect(testo, pagina).toMatch(/credito MyCity/);
-    }
   });
 });

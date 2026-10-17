@@ -1,0 +1,199 @@
+/**
+ * @vitest-environment jsdom
+ */
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import type { ComponentType } from 'react';
+import { monta, testoVisibile } from './aiuti/monta-componente';
+import { accendi, attendi, clicca } from './aiuti/schermo';
+
+/**
+ * R71 — LE PAGINE PUBBLICHE DICONO COME TORNANO DAVVERO I CONTANTI, CON LE STESSE PAROLE.
+ *
+ * Decisione di Nicola del 17/10/2026 («Semplifica»): chi ha pagato in contanti riavrà sempre i
+ * soldi con un bonifico fatto a mano; l'IBAN lo chiede l'email del rimborso e il cliente lo manda
+ * rispondendo. Non c'è più una scelta del credito, un campo IBAN nel modulo di reso, una lista dei
+ * bonifici o una cancellazione dell'account che aspetta il bonifico.
+ *
+ * Prima i testi dicevano tre cose diverse: «il rimborso arriva come credito MyCity… se preferisci il
+ * bonifico, scrivici» (il credito d'ufficio, cioè R71), poi «scegli tu, nella richiesta di reso… indichi
+ * l'IBAN». La FAQ prometteva «entro 14 giorni dalla ricezione del prodotto», mentre per il Codice del
+ * Consumo (art. 56) i 14 giorni partono dal recesso; e diceva che cancellare l'account «rimuove tutti i
+ * tuoi dati», mentre la riga dei conti degli ordini resta 10 anni.
+ *
+ * La prova MONTA le pagine vere — Resi, FAQ (aprendo le domande come farebbe una persona), Termini,
+ * informativa e impostazioni — e legge quello che legge il cliente.
+ *
+ * ⚪ Che le parole dei Termini e dell'informativa vadano bene per la legge non lo dice una prova: lo
+ * dice il legale, prima dell'unione.
+ */
+
+let Resi: ComponentType<Record<string, unknown>>;
+let Faq: ComponentType<Record<string, unknown>>;
+let Termini: ComponentType<Record<string, unknown>>;
+let Informativa: ComponentType<Record<string, unknown>>;
+let Impostazioni: ComponentType<Record<string, unknown>>;
+
+beforeAll(async () => {
+  const [r, f, t, i, s] = await Promise.all([
+    monta('app/returns/page.tsx'),
+    monta('app/faq/page.tsx'),
+    monta('app/terms/page.tsx'),
+    monta('app/privacy/page.tsx'),
+    monta('app/profile/settings/page.tsx'),
+  ]);
+  Resi = r.default as ComponentType<Record<string, unknown>>;
+  Faq = f.default as ComponentType<Record<string, unknown>>;
+  Termini = t.default as ComponentType<Record<string, unknown>>;
+  Informativa = i.default as ComponentType<Record<string, unknown>>;
+  Impostazioni = s.default as ComponentType<Record<string, unknown>>;
+}, 120000);
+
+beforeEach(() => {
+  const g = globalThis as Record<string, unknown>;
+  g.__UTENTE__ = { id: 'u1', email: 'giulia@esempio.it' };
+  g.__RISPOSTA_SUPABASE__ = { data: [{ notif_order_updates: true, email_marketing: false }], error: null };
+  // Le impostazioni chiedono se c'è una cancellazione in corso: qui no.
+  g.fetch = async () =>
+    new Response(JSON.stringify({ pending: false }), { status: 200, headers: { 'content-type': 'application/json' } });
+});
+
+afterEach(() => {
+  const g = globalThis as Record<string, unknown>;
+  delete g.__UTENTE__;
+  delete g.__RISPOSTA_SUPABASE__;
+  document.body.innerHTML = '';
+});
+
+/** Il testo intero di una pagina montata. */
+function testoDi(Pagina: ComponentType<Record<string, unknown>>): string {
+  const s = accendi(Pagina);
+  const testo = testoVisibile(s.radice);
+  s.smonta();
+  expect(testo.length, 'la pagina non è comparsa: la prova non sta guardando niente').toBeGreaterThan(200);
+  return testo;
+}
+
+/** La risposta della FAQ come la legge chi apre la domanda, con i collegamenti che porta. */
+function rispostaDellaFaq(domanda: string): { testo: string; collegamenti: string[] } {
+  const s = accendi(Faq);
+  const pulsante = Array.from(s.radice.querySelectorAll('button')).find((b) => testoVisibile(b).includes(domanda));
+  expect(pulsante, `la domanda «${domanda}» non c'è: la prova non sta guardando niente`).toBeTruthy();
+  s.agisci(() => clicca(pulsante!));
+  const risposta = pulsante!.parentElement!.querySelector('div');
+  const testo = testoVisibile(risposta);
+  const collegamenti = Array.from(risposta?.querySelectorAll('a') ?? []).map((a) => a.getAttribute('href') ?? '');
+  s.smonta();
+  expect(testo, `la risposta a «${domanda}» non si è aperta`).not.toBe('');
+  return { testo, collegamenti };
+}
+
+/** Quello che dicevano i testi del credito d'ufficio e della scelta: nessuna pagina lo dice più. */
+const PROMESSE_TOLTE = [
+  /il rimborso arriva come credito MyCity/iu,
+  /se preferisci il bonifico/iu,
+  /scegli tu/iu,
+  /Come vuoi il rimborso/iu,
+  /nel modulo di reso/iu,
+  /indichi l'IBAN/iu,
+  /cancellazione aspetta/iu,
+  /bonifico (è|risulti) fatto/iu,
+];
+
+function nonDiceLePromesseTolte(pagina: string, testo: string) {
+  for (const promessa of PROMESSE_TOLTE) expect(testo, `${pagina} dice ancora ${promessa}`).not.toMatch(promessa);
+}
+
+describe('la pagina dei Resi', () => {
+  it('IL CASO CHE ROMPEVA — i contanti tornano col bonifico, l IBAN si chiede per email, nessuna scelta', () => {
+    const testo = testoDi(Resi);
+    expect(testo).toContain(
+      "Per gli ordini pagati alla consegna ti restituiamo i soldi con un bonifico sul tuo conto: l'IBAN te lo chiediamo per email quando parte il rimborso.",
+    );
+    expect(testo).toContain('La parte che avevi pagato con il credito MyCity torna come credito');
+    nonDiceLePromesseTolte('/returns', testo);
+  });
+
+  it('i 14 giorni partono dal recesso, con le stesse parole della FAQ', () => {
+    const testo = testoDi(Resi);
+    expect(testo).toContain('entro 14 giorni da quando ci comunichi il recesso');
+    expect(testo).not.toMatch(/dalla ricezione del prodotto/u);
+    expect(rispostaDellaFaq('In quanto tempo ricevo il rimborso?').testo).toContain('Entro 14 giorni da quando ci comunichi il recesso');
+  });
+});
+
+describe('le domande frequenti', () => {
+  it('«In quanto tempo ricevo il rimborso?»: dal recesso, la carta sulla carta, i contanti col bonifico per email', () => {
+    const { testo } = rispostaDellaFaq('In quanto tempo ricevo il rimborso?');
+    expect(testo).toContain(
+      "Entro 14 giorni da quando ci comunichi il recesso. Possiamo aspettare di avere indietro la merce, o la prova che l'hai spedita.",
+    );
+    expect(testo).toContain('Se hai pagato con la carta, il rimborso torna sulla carta.');
+    expect(testo).toContain("ti restituiamo i soldi con un bonifico: ti scriviamo per email per chiederti l'IBAN");
+    expect(testo).toContain('La parte pagata con il credito MyCity torna come credito.');
+    expect(testo).not.toMatch(/dalla ricezione del prodotto/u);
+    nonDiceLePromesseTolte('la FAQ sui tempi', testo);
+  });
+
+  it('«Il pagamento è sicuro?»: nessun modulo e nessun campo per l IBAN, si manda rispondendo all email', () => {
+    const { testo, collegamenti } = rispostaDellaFaq('Il pagamento è sicuro?');
+    expect(testo).toContain("Non ti chiediamo l'IBAN in nessun modulo del sito e nel nostro database non c'è un campo per l'IBAN");
+    expect(testo).toContain('te lo chiediamo per email e ce lo mandi rispondendo');
+    // Il «non lo salviamo sul sito» era falso: chi lo scrive nei Contatti lascia un messaggio nel database.
+    expect(testo).not.toMatch(/non lo salviamo/iu);
+    expect(collegamenti, 'per il dove e il quanto la risposta non porta all informativa').toContain('/privacy');
+  });
+
+  it('IL CASO CHE ROMPEVA — «Come elimino il mio account?» non promette di togliere tutti i dati', () => {
+    const { testo, collegamenti } = rispostaDellaFaq('Come elimino il mio account?');
+    expect(testo, 'la riga dei conti resta 10 anni, e la FAQ prometteva il contrario').not.toMatch(/rimuove tutti i tuoi dati/iu);
+    expect(testo).toContain('Togliamo il profilo, gli indirizzi e le preferenze.');
+    expect(testo).toContain('Resta la riga dei conti dei tuoi ordini, senza il tuo nome, per i 10 anni che chiede la legge.');
+    expect(collegamenti).toEqual(expect.arrayContaining(['/profile/settings', '/privacy']));
+  });
+});
+
+describe('i Termini, §7', () => {
+  it('dopo lo stesso mezzo di pagamento: i contanti col bonifico, senza costi, sul conto indicato rispondendo all email', () => {
+    const s = accendi(Termini);
+    const recesso = testoVisibile(s.radice.querySelector('#recesso'));
+    s.smonta();
+    expect(recesso, 'il §7 non è comparso').toContain('Diritto di recesso');
+    expect(recesso).toContain(
+      'Per gli ordini pagati in contanti alla consegna, il rimborso avviene con bonifico bancario, senza costi a tuo carico, sul conto che ci indichi rispondendo alla nostra email.',
+    );
+    expect(recesso).toContain('La parte pagata con il credito MyCity torna come credito MyCity.');
+    nonDiceLePromesseTolte('i Termini §7', recesso);
+  });
+});
+
+describe('l informativa', () => {
+  it('nessun modulo e nessun campo per l IBAN; il «non lo salviamo» non sta senza l eccezione dei Contatti', () => {
+    const testo = testoDi(Informativa);
+    expect(testo).toMatch(/Non ti chiediamo l'IBAN in nessun modulo del sito e nel nostro database non c'è un campo per l'IBAN/u);
+    expect(testo).toContain('rispondendo all\'email che ti scriviamo quando parte il rimborso');
+    expect(testo).toContain("Non scrivere l'IBAN nel modulo Contatti: ti rispondiamo per email.");
+    expect(testo, 'l informativa promette che l IBAN non sta mai nel database: un messaggio dai Contatti ci resta').not.toMatch(
+      /non lo salviamo nel nostro database/iu,
+    );
+    nonDiceLePromesseTolte('l informativa', testo);
+  });
+});
+
+describe('le impostazioni, prima di cancellare l account', () => {
+  it('due frasi distinte: il reclamo aperto su qualunque ordine, e il reso aperto in contanti; nessuna attesa', async () => {
+    const s = accendi(Impostazioni);
+    await attendi();
+    await attendi();
+    const scheda = Array.from(s.radice.querySelectorAll('button')).find((b) => testoVisibile(b).trim() === 'Zona pericolosa');
+    expect(scheda, 'la scheda «Zona pericolosa» non si trova: la pagina non è arrivata in fondo al caricamento').toBeTruthy();
+    s.agisci(() => clicca(scheda!));
+    const testo = testoVisibile(s.radice);
+    s.smonta();
+
+    expect(testo).toContain("Un reclamo ancora aperto, su qualunque ordine, si cancella insieme all'account: aspetta che si chiuda.");
+    expect(testo).toContain(
+      "Se hai un reso aperto su un ordine pagato alla consegna, dopo la cancellazione non abbiamo più il tuo indirizzo per chiederti l'IBAN.",
+    );
+    nonDiceLePromesseTolte('le impostazioni', testo);
+  }, 60000);
+});
