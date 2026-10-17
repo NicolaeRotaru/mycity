@@ -196,8 +196,15 @@ export default function TermsPage() {
           errore del Venditore.
         </p>
         <p>
-          Il rimborso è effettuato entro 14 giorni dalla ricezione della merce restituita, con lo
-          stesso mezzo di pagamento usato per l&apos;acquisto.
+          {/* 17/10/2026 — Diceva «entro 14 giorni dalla ricezione della merce restituita»,
+              mentre FAQ e pagina Resi dicono «da quando ci comunichi il recesso»: il contratto
+              e la FAQ davano due scadenze diverse per lo stesso rimborso. Per il Codice del
+              Consumo (art. 56) i 14 giorni partono dal recesso; la merce indietro, o la prova
+              della spedizione, è solo la ragione per cui possiamo aspettare (comma 3). Le
+              stesse parole della FAQ, che rilegge il legale. */}
+          Il rimborso è effettuato entro 14 giorni da quando ci comunichi il recesso, con lo
+          stesso mezzo di pagamento usato per l&apos;acquisto. Possiamo aspettare di avere indietro
+          la merce, o la prova che l&apos;hai spedita.
           {/* 17/10/2026 — Decisione di Nicola («Semplifica»): i contanti tornano con un
               bonifico fatto a mano, l'IBAN lo chiede l'email del rimborso. Senza costi per
               il consumatore: è la condizione dell'art. 56, comma 1, per un mezzo diverso.

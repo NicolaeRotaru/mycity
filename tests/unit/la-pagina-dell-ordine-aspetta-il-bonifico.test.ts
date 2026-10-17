@@ -214,7 +214,11 @@ describe('dopo le rotte vere: la pagina dice il bonifico, con la cifra dei conta
     const testo = await cosaLeggeIlCliente(ordine());
 
     expect(testo).toContain('Rimborso di 40,00 € con un bonifico, che facciamo a mano.');
-    expect(testo).toContain("L'IBAN e il nome dell'intestatario del conto te li chiediamo per email");
+    expect(testo).toContain("Per farlo ti chiediamo per email l'IBAN e il nome dell'intestatario del conto");
+    // Sul sito non c'è un «fatto»: la frase resta anche dopo il bonifico. L'invito a scriverci vale
+    // solo finché il bonifico non è stato ricevuto, altrimenti chiede una cosa che non serve più.
+    expect(testo).toContain('Se non hai ancora ricevuto il bonifico e non trovi la nostra email, scrivici dalla pagina Contatti');
+    expect(testo, 'l invito a scriverci non ha condizione: vale anche a bonifico arrivato').not.toMatch(/\.\s*Se non trovi la nostra email/u);
     expect(testo, 'la pagina dice «rimborsato» prima che parta il bonifico').not.toMatch(/Ordine rimborsato/u);
     expect(testo).not.toMatch(/arrivat/u);
     expect(testo).not.toMatch(/Paghi/u);

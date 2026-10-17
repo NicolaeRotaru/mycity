@@ -23,6 +23,14 @@ import { accendi, attendi, clicca } from './aiuti/schermo';
  * La prova MONTA le pagine vere — Resi, FAQ (aprendo le domande come farebbe una persona), Termini,
  * informativa e impostazioni — e legge quello che legge il cliente.
  *
+ * Collaudo del 17/10 — due frasi nuove erano false o si contraddicevano. La FAQ diceva «non ti
+ * chiediamo l'IBAN in nessun modulo del sito e nel nostro database non c'è un campo per l'IBAN»,
+ * ma il modulo per diventare venditore l'IBAN degli incassi lo chiede e lo salva: la frase vale per
+ * chi compra e per l'IBAN del rimborso, come la dice l'informativa. E FAQ e Resi contavano i 14
+ * giorni dal recesso mentre i Termini §7, il contratto, li contavano ancora dalla ricezione della
+ * merce: due scadenze per lo stesso rimborso. Adesso le tre pagine dicono la stessa, e la prova le
+ * mette una accanto all'altra.
+ *
  * ⚪ Che le parole dei Termini e dell'informativa vadano bene per la legge non lo dice una prova: lo
  * dice il legale, prima dell'unione.
  */
@@ -32,20 +40,23 @@ let Faq: ComponentType<Record<string, unknown>>;
 let Termini: ComponentType<Record<string, unknown>>;
 let Informativa: ComponentType<Record<string, unknown>>;
 let Impostazioni: ComponentType<Record<string, unknown>>;
+let ModuloVenditore: ComponentType<Record<string, unknown>>;
 
 beforeAll(async () => {
-  const [r, f, t, i, s] = await Promise.all([
+  const [r, f, t, i, s, v] = await Promise.all([
     monta('app/returns/page.tsx'),
     monta('app/faq/page.tsx'),
     monta('app/terms/page.tsx'),
     monta('app/privacy/page.tsx'),
     monta('app/profile/settings/page.tsx'),
+    monta('components/SellerApplicationForm.tsx'),
   ]);
   Resi = r.default as ComponentType<Record<string, unknown>>;
   Faq = f.default as ComponentType<Record<string, unknown>>;
   Termini = t.default as ComponentType<Record<string, unknown>>;
   Informativa = i.default as ComponentType<Record<string, unknown>>;
   Impostazioni = s.default as ComponentType<Record<string, unknown>>;
+  ModuloVenditore = v.default as ComponentType<Record<string, unknown>>;
 }, 120000);
 
 beforeEach(() => {
@@ -134,9 +145,25 @@ describe('le domande frequenti', () => {
     nonDiceLePromesseTolte('la FAQ sui tempi', testo);
   });
 
-  it('«Il pagamento è sicuro?»: nessun modulo e nessun campo per l IBAN, si manda rispondendo all email', () => {
+  it('IL CASO CHE ROMPEVA — «Il pagamento è sicuro?»: nessun modulo e nessun campo per l IBAN del rimborso, per chi compra', () => {
+    // Controprova: un modulo del sito l'IBAN lo chiede davvero, quello per diventare venditore. Una
+    // frase su «nessun modulo» che non dice per chi vale è falsa per chi vende.
+    const v = accendi(ModuloVenditore, { onSubmit: () => {} });
+    const etichette = Array.from(v.radice.querySelectorAll('label')).map((l) => testoVisibile(l));
+    v.smonta();
+    expect(etichette.length, 'il modulo del venditore non è comparso: la controprova non sta guardando niente').toBeGreaterThan(5);
+    expect(etichette.some((e) => /IBAN/u.test(e)), 'il modulo del venditore non chiede l IBAN: la controprova non vale').toBe(true);
+
     const { testo, collegamenti } = rispostaDellaFaq('Il pagamento è sicuro?');
-    expect(testo).toContain("Non ti chiediamo l'IBAN in nessun modulo del sito e nel nostro database non c'è un campo per l'IBAN");
+    expect(testo).toContain(
+      "Se compri, non ti chiediamo l'IBAN in nessun modulo del sito e nel nostro database non c'è un campo per l'IBAN del rimborso",
+    );
+    expect(testo, 'la risposta dice «nessun modulo» per tutti, chi vende compreso').not.toMatch(
+      /(?<!Se compri, non ti chiediamo l'IBAN )in nessun modulo/iu,
+    );
+    expect(testo, 'la risposta dice «nessun campo per l IBAN», mentre l IBAN di chi vende ha il suo').not.toMatch(
+      /campo per l'IBAN(?! del rimborso)/iu,
+    );
     expect(testo).toContain('te lo chiediamo per email e ce lo mandi rispondendo');
     // Il «non lo salviamo sul sito» era falso: chi lo scrive nei Contatti lascia un messaggio nel database.
     expect(testo).not.toMatch(/non lo salviamo/iu);
@@ -148,8 +175,43 @@ describe('le domande frequenti', () => {
     expect(testo, 'la riga dei conti resta 10 anni, e la FAQ prometteva il contrario').not.toMatch(/rimuove tutti i tuoi dati/iu);
     expect(testo).toContain('Togliamo il profilo, gli indirizzi e le preferenze.');
     expect(testo).toContain('Resta la riga dei conti dei tuoi ordini, senza il tuo nome, per i 10 anni che chiede la legge.');
+    // L'avviso del bonifico porta l'email del cliente e la cancellazione non lo tocca, apposta: la
+    // FAQ lo dice, come l'informativa (la prova l-avviso-del-bonifico-resta-utile-dopo-la-cancellazione
+    // cancella l'account e lo ritrova).
+    expect(testo).toContain(
+      "Se ti dobbiamo un rimborso con bonifico già approvato, resta anche l'avviso interno con la tua email: serve a chi fa il bonifico per scriverti e pagarti.",
+    );
     expect(collegamenti).toEqual(expect.arrayContaining(['/profile/settings', '/privacy']));
   });
+});
+
+describe('la scadenza del rimborso', () => {
+  it('IL CASO CHE ROMPEVA — Termini §7, FAQ e Resi contano i 14 giorni del rimborso dallo stesso giorno', () => {
+    const s = accendi(Termini);
+    const termini = testoVisibile(s.radice.querySelector('#recesso'));
+    s.smonta();
+    expect(termini, 'il §7 non è comparso').toContain('Diritto di recesso');
+    const testi: Record<string, string> = {
+      'i Termini §7': termini,
+      'la FAQ': rispostaDellaFaq('In quanto tempo ricevo il rimborso?').testo,
+      'la pagina Resi': testoDi(Resi),
+    };
+
+    const DA_QUANDO = /(?:rimborso (?:è effettuato|avviene) entro|\bEntro) 14 giorni (da[^,.]*)/gu;
+    const daQuando: Record<string, string[]> = {};
+    for (const [dove, testo] of Object.entries(testi)) {
+      daQuando[dove] = Array.from(testo.matchAll(DA_QUANDO), (m) => m[1].trim());
+      expect(daQuando[dove].length, `${dove}: non trovo da quando partono i 14 giorni del rimborso`).toBeGreaterThan(0);
+      expect(testo, `${dove} conta i 14 giorni dalla ricezione`).not.toMatch(/14 giorni dalla ricezione/u);
+      expect(testo, `${dove} non dice che possiamo aspettare la merce o la prova della spedizione`).toContain(
+        "Possiamo aspettare di avere indietro la merce, o la prova che l'hai spedita.",
+      );
+    }
+    expect(
+      new Set(Object.values(daQuando).flat()),
+      `due testi pubblici danno due scadenze diverse per lo stesso rimborso: ${JSON.stringify(daQuando)}`,
+    ).toEqual(new Set(['da quando ci comunichi il recesso']));
+  }, 60000);
 });
 
 describe('i Termini, §7', () => {
@@ -167,9 +229,14 @@ describe('i Termini, §7', () => {
 });
 
 describe('l informativa', () => {
-  it('nessun modulo e nessun campo per l IBAN; il «non lo salviamo» non sta senza l eccezione dei Contatti', () => {
+  it('nessun modulo e nessun campo per l IBAN del rimborso, nella voce di chi compra; il «non lo salviamo» non sta senza l eccezione dei Contatti', () => {
     const testo = testoDi(Informativa);
-    expect(testo).toMatch(/Non ti chiediamo l'IBAN in nessun modulo del sito e nel nostro database non c'è un campo per l'IBAN/u);
+    // La frase sta nella voce dei dati per il rimborso di chi compra: è quella che le dà il confine.
+    const voce = testo.slice(testo.indexOf('Dati per il rimborso con bonifico (Acquirenti'));
+    expect(voce, 'la voce dei dati per il rimborso non c è più').not.toBe(testo.slice(-1));
+    expect(voce).toMatch(
+      /^Dati per il rimborso con bonifico \(Acquirenti[^:]*: [^]*?Non ti chiediamo l'IBAN in nessun modulo del sito e nel nostro database non c'è un campo per l'IBAN del rimborso/u,
+    );
     expect(testo).toContain('rispondendo all\'email che ti scriviamo quando parte il rimborso');
     expect(testo).toContain("Non scrivere l'IBAN nel modulo Contatti: ti rispondiamo per email.");
     expect(testo, 'l informativa promette che l IBAN non sta mai nel database: un messaggio dai Contatti ci resta').not.toMatch(

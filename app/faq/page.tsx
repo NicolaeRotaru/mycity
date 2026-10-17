@@ -60,14 +60,18 @@ const SECTIONS: Section[] = [
         // Riesame del 16/10, quinto giro — la risposta prometteva sull'IBAN piu'
         // dell'informativa. Dove e quanto lo dice l'informativa, una volta sola
         // (lib/privacy/iban-per-email.ts): qui si rimanda li'.
-        // 17/10/2026 («Semplifica») — l'IBAN non sta in nessun modulo del sito e
-        // in nessuna colonna del database: lo chiede l'email del rimborso.
+        // 17/10/2026 («Semplifica») — l'IBAN DEL RIMBORSO non sta in nessun modulo
+        // del sito e in nessuna colonna del database: lo chiede l'email del rimborso.
+        // Collaudo del 17/10 — la frase senza «Se compri» e senza «del rimborso» era
+        // falsa: il modulo per diventare venditore (/sell) chiede l'IBAN degli incassi
+        // e lo salva (profiles.billing_iban), e l'informativa lo dice. Vale per chi
+        // compra, con le stesse parole dell'informativa.
         a: (
           <>
-            Sì. Tutti i dati transitano cifrati (HTTPS/TLS) e non conserviamo i dati delle carte. Non ti
-            chiediamo l&apos;IBAN in nessun modulo del sito e nel nostro database non c&apos;è un campo per
-            l&apos;IBAN: se ti dobbiamo un rimborso con bonifico, te lo chiediamo per email e ce lo mandi
-            rispondendo. Dove resta e per quanto lo trovi nell&apos;
+            Sì. Tutti i dati transitano cifrati (HTTPS/TLS) e non conserviamo i dati delle carte. Se compri,
+            non ti chiediamo l&apos;IBAN in nessun modulo del sito e nel nostro database non c&apos;è un campo
+            per l&apos;IBAN del rimborso: se ti dobbiamo un rimborso con bonifico, te lo chiediamo per email e ce
+            lo mandi rispondendo. Dove resta e per quanto lo trovi nell&apos;
             <Link href="/privacy" className="font-semibold underline">
               informativa privacy
             </Link>
@@ -116,7 +120,10 @@ const SECTIONS: Section[] = [
         // La risposta diceva «rimuove tutti i tuoi dati»: la riga dei conti degli
         // ordini resta 10 anni, senza il nome (lib/account/cancellazione.ts). Si dice
         // cosa va via e cosa resta, e per il resto si rimanda all'informativa.
-        a: <>Vai su <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni → Elimina account</Link>. Togliamo il profilo, gli indirizzi e le preferenze. Resta la riga dei conti dei tuoi ordini, senza il tuo nome, per i 10 anni che chiede la legge. I dettagli sono nell&apos;<Link href="/privacy" className="text-primary-700 underline">informativa privacy</Link>.</>,
+        // Collaudo del 17/10 — resta anche l'avviso del bonifico con l'email del
+        // cliente: la cancellazione non tocca le notifiche degli amministratori, ed è
+        // apposta (lib/privacy/iban-per-email.ts, L_AVVISO_A_CHI_PAGA).
+        a: <>Vai su <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni → Elimina account</Link>. Togliamo il profilo, gli indirizzi e le preferenze. Resta la riga dei conti dei tuoi ordini, senza il tuo nome, per i 10 anni che chiede la legge. Se ti dobbiamo un rimborso con bonifico già approvato, resta anche l&apos;avviso interno con la tua email: serve a chi fa il bonifico per scriverti e pagarti. I dettagli sono nell&apos;<Link href="/privacy" className="text-primary-700 underline">informativa privacy</Link>.</>,
       },
       {
         q: 'Ho dimenticato la password',

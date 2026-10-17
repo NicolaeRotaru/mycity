@@ -120,12 +120,18 @@ function centesimiDeiBonifici(ordine: OrdinePerIlPagamento): number {
  * prima e dopo il pagamento. Mai «rimborsato», mai «arrivato». Al tempo presente, perché l'email
  * parte dopo che il rimborso è registrato e un invio che cade finisce solo nel registro: «ti
  * abbiamo scritto» sarebbe falso proprio a chi non l'ha ricevuta.
+ *
+ * Collaudo del 17/10 — la frase diceva «se non trovi la nostra email, scrivici» senza condizione:
+ * a bonifico già ricevuto il cliente veniva invitato a fare una cosa che non serve più. L'invito
+ * vale solo finché il bonifico non l'ha ricevuto; il resto dice come si fa, vero prima e dopo. Senza
+ * la parola «arrivato», che la pagina non dice mai sui contanti (D13).
  */
 export function fraseDelBonificoAMano(centesimi: number, euro: (centesimi: number) => string): string {
   return (
     `Rimborso di ${euro(centesimi)} con un bonifico, che facciamo a mano. ` +
-    "L'IBAN e il nome dell'intestatario del conto te li chiediamo per email: ce li mandi rispondendo. " +
-    "Se non trovi la nostra email, scrivici dalla pagina Contatti senza mettere l'IBAN nel messaggio: ti rispondiamo per email."
+    "Per farlo ti chiediamo per email l'IBAN e il nome dell'intestatario del conto, che ci mandi rispondendo. " +
+    'Se non hai ancora ricevuto il bonifico e non trovi la nostra email, scrivici dalla pagina Contatti senza mettere ' +
+    "l'IBAN nel messaggio: ti rispondiamo per email."
   );
 }
 
