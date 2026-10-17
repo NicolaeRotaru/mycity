@@ -5,7 +5,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import type { ComponentType } from 'react';
 import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi, clicca } from './aiuti/schermo';
-import { DOVE_CHIEDIAMO_L_IBAN, QUANTO_TENIAMO_L_IBAN } from '@/lib/rimborsi/iban-del-rimborso';
+import { DOVE_CHIEDIAMO_L_IBAN, QUANTO_TENIAMO_L_IBAN } from '@/lib/privacy/iban-per-email';
 
 /**
  * Riesame del 16/10, quinto giro — LE DOMANDE FREQUENTI PROMETTEVANO SULL'IBAN PIU' DELL'INFORMATIVA.

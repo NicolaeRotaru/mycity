@@ -1,14 +1,6 @@
 import type { getAdminSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
-import {
-  attesaPerIBonifici,
-  avvisoDelBonificoDelReclamoRimesso,
-  bonificiPrimaDiCancellare,
-  MOTIVO_BONIFICO_DA_FARE,
-  type BonificiDaFare,
-} from '@/lib/rimborsi/iban-del-rimborso';
-import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
@@ -180,12 +172,6 @@ export const TABELLE_CON_DATI_PERSONALI: readonly TabellaConDatiPersonali[] = [
     // ON DELETE SET NULL: «un reso e' una pratica con dei soldi dentro, la
     // riga resta, anonima». Qui era rimasto scritto il contrario. Verificato
     // sullo schema ricostruito dalle migrazioni: returns.buyer_id -> SET NULL.
-    //
-    // L'IBAN del rimborso (162) NON sta qui, e non per dimenticanza: senza la
-    // 162 la colonna non c'e', e questa pulizia cadrebbe. Lo toglie
-    // `bonificiPrimaDiCancellare` (lib/rimborsi/iban-del-rimborso.ts), che
-    // `cancellaAccount` chiama prima di questa pulizia, e che fa aspettare la
-    // cancellazione finche' un bonifico e' da fare.
     sopravvive: true,
     perche: 'le note scritte a mano dentro una richiesta di reso',
   },
@@ -712,9 +698,7 @@ export type EsitoCancellazione = {
   ok: boolean;
   errore?: string;
   /** Perché non si è fatto, quando la ragione non è un guasto ma una regola. */
-  motivo?: 'cassa_da_versare' | typeof MOTIVO_BONIFICO_DA_FARE;
-  /** I bonifici di rimborso che l'hanno fermata: chi amministra legge cosa manca (`rinvioPerChiAmministra`). */
-  bonifici?: BonificiDaFare;
+  motivo?: 'cassa_da_versare';
   fileRimossi: number;
   erroriFile: string[];
 };
@@ -786,46 +770,6 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
       });
     }
     return { ok: false, motivo, errore: cassa.motivo, fileRimossi: 0, erroriFile: [] };
-  }
-
-  // ①bis I bonifici di rimborso che gli dobbiamo ancora. Riesame del 16/10, sesto giro — UNA
-  // REGOLA: finche' su un suo ordine c'e' un bonifico non segnato fatto, o un reso o un reclamo
-  // aperto in contanti che puo' finire con un bonifico (settimo giro: anche il reclamo), la
-  // cancellazione aspetta. Se non si puo' sapere (manca la 162, o un pezzo del bonifico) si ferma
-  // come per un guasto: niente motivo, e il giro notturno sveglia chi amministra. Va fatto PRIMA
-  // del ②, finche' il legame con la persona c'e'. Una lettura che cade ferma tutto: domani si riprova.
-  const bonifici = await bonificiPrimaDiCancellare(admin, userId);
-  if (!bonifici.ok) {
-    return {
-      ok: false,
-      errore:
-        `L'account non è stato cancellato: prima non siamo riusciti a controllare i bonifici di ` +
-        `rimborso ancora da fare (${bonifici.errore}). Si riprova.`,
-      fileRimossi: 0,
-      erroriFile: [],
-    };
-  }
-  // Settimo giro — un bonifico di un reclamo rimasto solo sull'ordine e' tornato nella lista. Chi
-  // amministra lo sa una volta sola (la chiave), perche' forse l'aveva gia' pagato da un avviso. Un
-  // avviso che non parte non ferma niente: il bonifico e' comunque nella lista, col pulsante «fatto».
-  for (const rimesso of bonifici.rimessi) {
-    const avviso = avvisoDelBonificoDelReclamoRimesso(rimesso);
-    try {
-      await notifyAdmins(avviso.titolo, avviso.testo, avviso.link, {
-        unaVoltaPer: `bonifico-del-reclamo-rimesso:${rimesso.dispute_id}`,
-      });
-    } catch (e) {
-      logger.error('[cancellazione] avviso del bonifico rimesso nella lista non partito', {
-        userId, disputeId: rimesso.dispute_id, errore: e instanceof Error ? e.message : String(e),
-      });
-    }
-  }
-  const attesa = attesaPerIBonifici(bonifici.bonifici);
-  if (attesa) {
-    logger[attesa.motivo ? 'warn' : 'error']('[cancellazione] ferma: bonifici di rimborso da fare', {
-      userId, ...bonifici.bonifici,
-    });
-    return { ok: false, ...attesa, bonifici: bonifici.bonifici, fileRimossi: 0, erroriFile: [] };
   }
 
   // ② I documenti d'identità e l'IBAN non aspettano: non si vedono a video,

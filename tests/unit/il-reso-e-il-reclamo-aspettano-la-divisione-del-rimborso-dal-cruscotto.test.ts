@@ -167,7 +167,6 @@ beforeEach(() => {
     ],
     notifications: [],
     audit_logs: [],
-    bonifici_dei_reclami: [],
     activity_events: [],
   });
   stato.db.rispostaRpc = (nome, a) => {

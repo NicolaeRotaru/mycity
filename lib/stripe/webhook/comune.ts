@@ -123,28 +123,87 @@ export function sessionePagata(session: Stripe.Checkout.Session): boolean {
  * chiave ha già il suo segno sull'ordine, quindi Stripe che riprova rifà solo
  * l'avviso.
  */
-export async function notifyAdmins(title: string, body: string, link: string, opzioni: { unaVoltaPer?: string } = {}) {
+export async function notifyAdmins(
+  title: string,
+  body: string,
+  link: string,
+  opzioni: {
+    unaVoltaPer?: string;
+    /**
+     * 17/10/2026 (semplificazione del rimborso dei contanti) — L'AVVISO CHE NON PUÒ
+     * ANDARE A NESSUNO. Per il bonifico di rimborso da fare l'avviso è l'unico
+     * promemoria: senza amministratori non lo leggerebbe nessuno, e il cliente
+     * aspetterebbe soldi che nessuno sa di dovergli. Con questa opzione zero
+     * destinatari è un errore, e chi chiama (`refundOrder`) torna indietro.
+     */
+    almenoUnDestinatario?: boolean;
+  } = {},
+): Promise<'scritto' | 'gia-mandato' | 'nessuno'> {
   const admin = getAdminSupabase();
   const chiave = opzioni.unaVoltaPer?.trim() || null;
   const { data: admins, error: errLettura } = await admin.from('profiles').select('id').eq('role', 'admin');
-  if (errLettura && chiave) throw new Error(`[stripe] amministratori non letti per l avviso «${title}»: ${errLettura.message}`);
-  if (!admins || admins.length === 0) return;
+  if (errLettura && (chiave || opzioni.almenoUnDestinatario)) {
+    throw new Error(`[stripe] amministratori non letti per l avviso «${title}»: ${errLettura.message}`);
+  }
+  if (!admins || admins.length === 0) {
+    if (opzioni.almenoUnDestinatario) throw new Error(`[stripe] nessun amministratore a cui mandare l avviso «${title}»`);
+    return 'nessuno';
+  }
   if (!chiave) {
     scritturaFacoltativa(
       await admin.from('notifications').insert(admins.map((a) => ({ user_id: a.id, title, body, link }))),
       `avviso agli amministratori: ${title}`,
     );
-    return;
+    return 'scritto';
   }
   const { error } = await admin.from('notifications').insert(
     admins.map((a) => ({ id: idDellAvvisoAgliAmministratori(chiave, a.id), user_id: a.id, title, body, link })),
   );
-  if (!error) return;
+  if (!error) return 'scritto';
   if ((error as { code?: string }).code === '23505') {
     logger.info('[stripe] avviso agli amministratori già mandato: non si ripete', { chiave, title });
-    return;
+    return 'gia-mandato';
   }
   throw new Error(`[stripe] avviso agli amministratori non scritto («${title}»): ${error.message}`);
+}
+
+/**
+ * C'e' gia' l'avviso scritto con `unaVoltaPer: chiave`? Basta la riga di un amministratore.
+ * Lancia se non si riesce a leggere: «non lo so» non e' «non c'e'».
+ */
+export async function avvisoGiaScritto(chiave: string): Promise<boolean> {
+  const admin = getAdminSupabase();
+  const { data: admins, error: errLettura } = await admin.from('profiles').select('id').eq('role', 'admin');
+  if (errLettura) throw new Error(`[stripe] amministratori non letti: ${errLettura.message}`);
+  const ids = (admins ?? []).map((a) => idDellAvvisoAgliAmministratori(chiave, a.id));
+  if (ids.length === 0) return false;
+  const { data: righe, error } = await admin.from('notifications').select('id').in('id', ids).limit(1);
+  if (error) throw new Error(`[stripe] avvisi agli amministratori non letti: ${error.message}`);
+  return (righe ?? []).length > 0;
+}
+
+/**
+ * Toglie l'avviso scritto con `unaVoltaPer: chiave`, a tutti gli amministratori.
+ * Serve a chi deve tornare indietro dopo averlo scritto (`refundOrder`, quando un
+ * passo successivo cade): un avviso «paga» per un rimborso che non c'è non deve
+ * restare. Non lancia mai: risponde se la cancellazione è riuscita.
+ */
+export async function togliLAvvisoAgliAmministratori(chiave: string): Promise<boolean> {
+  try {
+    const admin = getAdminSupabase();
+    const { data: admins, error: errLettura } = await admin.from('profiles').select('id').eq('role', 'admin');
+    if (errLettura) throw new Error(errLettura.message);
+    const ids = (admins ?? []).map((a) => idDellAvvisoAgliAmministratori(chiave, a.id));
+    if (ids.length === 0) return true;
+    const { error } = await admin.from('notifications').delete().in('id', ids);
+    if (error) throw new Error(error.message);
+    return true;
+  } catch (err) {
+    logger.error('[stripe] avviso agli amministratori non tolto', {
+      chiave, message: err instanceof Error ? err.message : 'errore',
+    });
+    return false;
+  }
 }
 
 /**

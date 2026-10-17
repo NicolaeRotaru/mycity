@@ -71,7 +71,7 @@ describe('il riepilogo mostra tutto quello che fa il totale', () => {
 
 describe('cosa dire sul pagamento', () => {
   it('contanti non ancora pagati: si dice quanto contare al rider', () => {
-    expect(statoPagamento({ payment_method: 'cod', payment_status: 'PENDING' }, 2790))
+    expect(statoPagamento({ payment_method: 'cod', payment_status: 'PENDING', delivery_status: 'OUT_FOR_DELIVERY' }, 2790))
       .toEqual({ tipo: 'contanti-da-pagare', centesimi: 2790 });
   });
 
@@ -84,10 +84,8 @@ describe('cosa dire sul pagamento', () => {
 
   it('rimborsato: né l uno né l altro', () => {
     expect(statoPagamento({ payment_method: 'card', payment_status: 'REFUNDED' }, 2790)).toEqual({ tipo: 'rimborsato' });
-    // Riesame del 16/10, quarto giro: sui contanti «rimborsato» solo se nessun bonifico e in
-    // sospeso; finche non si sa, niente (tests/unit/la-pagina-dell-ordine-aspetta-il-bonifico.test.ts).
-    expect(statoPagamento({ payment_method: 'cod', payment_status: 'REFUNDED' }, 2790, { daFareCents: 0, serveIban: false, certo: true }))
-      .toEqual({ tipo: 'rimborsato' });
+    // 17/10/2026: sui contanti «rimborsato» non si dice mai. Col segno del bonifico la pagina dice
+    // «bonifico a mano»; senza segno non dice niente (la-pagina-dell-ordine-aspetta-il-bonifico).
     expect(statoPagamento({ payment_method: 'cod', payment_status: 'REFUNDED' }, 2790)).toEqual({ tipo: 'non-lo-so' });
   });
 

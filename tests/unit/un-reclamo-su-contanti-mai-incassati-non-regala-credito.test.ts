@@ -41,7 +41,6 @@ vi.mock('@/lib/api/middleware', () => ({
 import { refundOrder, RimborsoNonRitentabile } from '@/lib/stripe/payout';
 import { POST as risolvi } from '@/app/api/admin/disputes/[id]/resolve/route';
 import { POST as annullaDaAmministratore } from '@/app/api/admin/orders/[id]/cancel/route';
-import { PAGINA_DEI_BONIFICI_DA_FARE } from '@/lib/rimborsi/scelta-del-reso';
 import { pagamentoPerChiDecide } from '@/lib/rimborsi/regole-del-rimborso';
 import { formatPriceFromCents } from '@/lib/format';
 
@@ -143,36 +142,29 @@ describe('contanti mai incassati: niente da restituire', () => {
 });
 
 describe('contanti incassati: il rimborso esce, e col bonifico', () => {
-  it('il reclamo chiuso a favore del cliente rimborsa e avvisa chi deve fare il bonifico', async () => {
+  it('il reclamo chiuso a favore del cliente rimborsa, scrive il bonifico sull ordine e avvisa chi lo paga', async () => {
     apri(maiArrivato({ delivery_status: 'DELIVERED', payment_status: 'PAID', cash_confirmed_at: '2026-10-10T18:00:00Z' }));
 
     const res = await chiudiAFavoreDelCliente(2400);
 
     expect(res.status).toBe(200);
     expect(reclamo().status).toBe('resolved_buyer');
-    expect(ordine()).toMatchObject({ payment_status: 'REFUNDED', refunded_amount_cents: 2400 });
-    expect(creditoDi(finto.db, 'cliente'), 'R71: nessuno ha scelto il credito').toBe(0);
-    const [avviso] = notificheConTitolo(finto.db, 'Bonifico di rimborso da fare');
-    expect(avviso.link).toBe(PAGINA_DEI_BONIFICI_DA_FARE);
-  });
-
-  it('il bonifico del reclamo resta scritto nella lista dei bonifici, non solo nell avviso', async () => {
-    apri(maiArrivato({ delivery_status: 'DELIVERED', payment_status: 'PAID', cash_confirmed_at: '2026-10-10T18:00:00Z' }));
-
-    await chiudiAFavoreDelCliente(2400);
-
-    expect(finto.db.tabelle.bonifici_dei_reclami, 'il bonifico promesso vive solo nella campanella').toEqual([
-      expect.objectContaining({ dispute_id: 'd1', order_id: 'o1', importo_cents: 2400 }),
-    ]);
+    expect(ordine()).toMatchObject({
+      payment_status: 'REFUNDED', refunded_amount_cents: 2400, stripe_refund_id: 'bonifico:2400:dispute_d1',
+    });
+    expect(creditoDi(finto.db, 'cliente'), 'R71: i contanti non tornano come credito').toBe(0);
+    const avvisi = notificheConTitolo(finto.db, 'Bonifico di rimborso da fare');
+    expect(avvisi).toHaveLength(1);
+    expect(avvisi[0].link).toBe('/admin/orders');
+    expect(String(avvisi[0].body)).toContain(`Bonifico di ${formatPriceFromCents(2400)}`);
+    expect(String(avvisi[0].body)).toContain('«Rimborso MyCity ordine #O1 reclamo D1»');
   });
 
   /**
-   * Collaudo del 15/10, secondo giro — la riga del bonifico del reclamo diceva
-   * l'importo giusto solo perche' l'ordine della prova non aveva credito: con
-   * l'intero rimborso al posto della parte del bonifico, nessuna prova
-   * diventava rossa. Ordine da 50 €: 20 di credito, 30 in contanti incassati.
+   * Collaudo del 15/10, secondo giro — il bonifico del reclamo diceva l'importo giusto solo perche'
+   * l'ordine della prova non aveva credito. Ordine da 50 €: 20 di credito, 30 in contanti incassati.
    */
-  it('ordine pagato in parte col credito: in lista va solo la parte del bonifico, non l intero rimborso', async () => {
+  it('ordine pagato in parte col credito: il bonifico e solo la parte dei contanti, non l intero rimborso', async () => {
     apri(maiArrivato({
       total_price: 30, gross_total_cents: 5000, wallet_applied_cents: 2000, seller_payout_cents: 4500,
       delivery_status: 'DELIVERED', payment_status: 'PAID', cash_confirmed_at: '2026-10-10T18:00:00Z',
@@ -182,21 +174,17 @@ describe('contanti incassati: il rimborso esce, e col bonifico', () => {
 
     expect(res.status).toBe(200);
     expect(creditoDi(finto.db, 'cliente'), 'la parte pagata col credito torna credito').toBe(2000);
-    expect(
-      finto.db.tabelle.bonifici_dei_reclami,
-      'chi paga bonificherebbe anche i 20 € gia tornati come credito',
-    ).toEqual([expect.objectContaining({ dispute_id: 'd1', order_id: 'o1', importo_cents: 3000 })]);
+    expect(ordine().stripe_refund_id).toBe('bonifico:3000:dispute_d1');
+    const testo = String(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare')[0].body);
+    expect(testo, 'chi paga bonificherebbe anche i 20 € gia tornati come credito').toContain(`Bonifico di ${formatPriceFromCents(3000)}`);
   });
 
-  it('senza la migrazione 162 il reclamo si chiude lo stesso, e resta l avviso', async () => {
+  it('nessuna tabella dei bonifici: la rotta non scrive niente fuori dall ordine', async () => {
     apri(maiArrivato({ delivery_status: 'DELIVERED', payment_status: 'PAID', cash_confirmed_at: '2026-10-10T18:00:00Z' }));
-    finto.db.guasti.tabelleMancanti = ['bonifici_dei_reclami'];
 
-    const res = await chiudiAFavoreDelCliente(2400);
+    await chiudiAFavoreDelCliente(2400);
 
-    expect(res.status).toBe(200);
-    expect(reclamo().status).toBe('resolved_buyer');
-    expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare')).toHaveLength(1);
+    expect(finto.db.scritture.filter((w) => w.tabella === 'bonifici_dei_reclami')).toHaveLength(0);
   });
 });
 

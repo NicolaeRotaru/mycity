@@ -57,18 +57,21 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'Il pagamento è sicuro?',
-        // R71 (11/10/2026) — «Non memorizziamo dati bancari» smette di essere
-        // vero il giorno in cui il modulo di reso chiede l'IBAN per il bonifico
-        // di rimborso: si dice cosa teniamo, e per cosa.
-        // Riesame del 16/10, quinto giro — diceva «solo se vuoi» e «resta sulla
-        // richiesta di reso»: per un reclamo l'IBAN lo chiediamo noi e arriva dai
-        // Contatti, dove resta di piu'. Dove e quanto lo dice l'informativa, una
-        // volta sola (lib/rimborsi/iban-del-rimborso.ts): qui si rimanda li'.
+        // Riesame del 16/10, quinto giro — la risposta prometteva sull'IBAN piu'
+        // dell'informativa. Dove e quanto lo dice l'informativa, una volta sola
+        // (lib/privacy/iban-per-email.ts): qui si rimanda li'.
+        // 17/10/2026 («Semplifica») — l'IBAN DEL RIMBORSO non sta in nessun modulo
+        // del sito e in nessuna colonna del database: lo chiede l'email del rimborso.
+        // Collaudo del 17/10 — la frase senza «Se compri» e senza «del rimborso» era
+        // falsa: il modulo per diventare venditore (/sell) chiede l'IBAN degli incassi
+        // e lo salva (profiles.billing_iban), e l'informativa lo dice. Vale per chi
+        // compra, con le stesse parole dell'informativa.
         a: (
           <>
             Sì. Tutti i dati transitano cifrati (HTTPS/TLS) e non conserviamo i dati delle carte. Se compri,
-            l&apos;unico dato bancario che ti chiediamo è l&apos;IBAN, e solo per restituirti dei soldi con un
-            bonifico: dove te lo chiediamo e quanto lo teniamo è scritto nell&apos;
+            non ti chiediamo l&apos;IBAN in nessun modulo del sito e nel nostro database non c&apos;è un campo
+            per l&apos;IBAN del rimborso: se ti dobbiamo un rimborso con bonifico, te lo chiediamo per email e ce
+            lo mandi rispondendo. Dove resta e per quanto lo trovi nell&apos;
             <Link href="/privacy" className="font-semibold underline">
               informativa privacy
             </Link>
@@ -92,11 +95,11 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'In quanto tempo ricevo il rimborso?',
-        // R71 (11/10/2026) — Il credito era la scelta di partenza e il bonifico
-        // si otteneva solo chiedendolo: niente consenso espresso (art. 56 del
-        // Codice del Consumo). Adesso il modulo di reso chiede come riavere i
-        // contanti, col bonifico come prima scelta.
-        a: 'Entro 14 giorni dalla ricezione del prodotto da parte del venditore. Per gli ordini pagati alla consegna scegli tu, nella richiesta di reso, se riavere i soldi con un bonifico sul tuo conto o come credito MyCity, che si usa sui prossimi ordini pagati alla consegna.',
+        // R71 — Decisione di Nicola del 17/10/2026 («Semplifica»): i contanti tornano
+        // sempre col bonifico, nessuna scelta del credito. I 14 giorni partono dal
+        // recesso (Codice del Consumo, art. 56): la merce indietro, o la prova della
+        // spedizione, e' solo la ragione per cui possiamo aspettare (comma 3).
+        a: "Entro 14 giorni da quando ci comunichi il recesso. Possiamo aspettare di avere indietro la merce, o la prova che l'hai spedita. Se hai pagato con la carta, il rimborso torna sulla carta. Se hai pagato alla consegna, ti restituiamo i soldi con un bonifico: ti scriviamo per email per chiederti l'IBAN, e il bonifico lo facciamo appena ce lo mandi. La parte pagata con il credito MyCity torna come credito.",
       },
       {
         q: 'Chi paga la spedizione del reso?',
@@ -114,7 +117,16 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'Come elimino il mio account?',
-        a: <>Vai su <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni → Elimina account</Link>. La cancellazione è permanente e rimuove tutti i tuoi dati.</>,
+        // La risposta diceva «rimuove tutti i tuoi dati»: la riga dei conti degli
+        // ordini resta 10 anni, senza il nome (lib/account/cancellazione.ts). Si dice
+        // cosa va via e cosa resta, e per il resto si rimanda all'informativa.
+        // Collaudo del 17/10 — resta anche l'avviso del bonifico con l'email del
+        // cliente: la cancellazione non tocca le notifiche degli amministratori, ed è
+        // apposta (lib/privacy/iban-per-email.ts, L_AVVISO_A_CHI_PAGA). Secondo giro: la
+        // frase diceva «Se ti dobbiamo un rimborso», ma sul sito non esiste un «pagato»
+        // e nessuna potatura toglie l'avviso: resta anche a bonifico fatto. Le stesse
+        // parole stanno nelle impostazioni, dove si cancella.
+        a: <>Vai su <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni → Elimina account</Link>. Togliamo il profilo, gli indirizzi e le preferenze. Resta la riga dei conti dei tuoi ordini, senza il tuo nome, per i 10 anni che chiede la legge. Se ti è stato approvato un rimborso con bonifico, già pagato o ancora da pagare, resta anche l&apos;avviso interno con la tua email, finché non lo cancelliamo noi: serve a chi fa il bonifico per scriverti e pagarti. I dettagli sono nell&apos;<Link href="/privacy" className="text-primary-700 underline">informativa privacy</Link>.</>,
       },
       {
         q: 'Ho dimenticato la password',

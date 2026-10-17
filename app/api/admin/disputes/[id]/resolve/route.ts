@@ -2,7 +2,13 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { isStripeConfigured } from '@/lib/stripe/client';
-import { refundOrder } from '@/lib/stripe/payout';
+import {
+  AccreditoGiaUscitoConAltroImporto,
+  cosaMancaAlBonifico,
+  RimborsoInAttesaDellaDivisione,
+  refundOrder,
+} from '@/lib/stripe/payout';
+import { bonificoDaFinire } from '@/lib/rimborsi/bonifici-da-fare';
 import { logger } from '@/lib/logger';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -10,16 +16,16 @@ import { writeAudit } from '@/lib/audit';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 import {
+  lordoDellOrdine,
   motivoNienteDaRestituire,
   quantoSiPuoRestituire,
   statoDelReclamoSullOrdine,
   type OrdineDaRimborsare,
 } from '@/lib/rimborsi/regole-del-rimborso';
-import { PAGINA_DEI_BONIFICI_DA_FARE } from '@/lib/rimborsi/scelta-del-reso';
-import { avvisoDelBonificoDelReclamoNonRegistrato, tabellaDeiBonificiMancante } from '@/lib/rimborsi/bonifici-da-fare';
 import { formatPriceFromCents } from '@/lib/format';
 import { PAUSA_RIMBORSO_DA_DIVIDERE, SENZA_LA_PAUSA_DEL_CARRELLO } from '@/lib/stripe/webhook/rimborsi-da-fuori';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+import { bonificoDellaChiave } from '@/lib/stripe/elenco-dei-rimborsi';
 
 export const runtime = 'nodejs';
 
@@ -34,9 +40,10 @@ const Body = z.object({
  *
  * Su 'resolved_buyer' + refundCents → emette un rimborso REALE (refundOrder:
  * refund Stripe + claw-back del transfer se il venditore era già stato pagato;
- * sugli ordini in contanti un bonifico da fare a mano, e credito MyCity solo
- * per la parte pagata col credito — R71). L'importo non può superare quello
- * che il cliente ha davvero pagato (R84). 'resolved_buyer' senza importo =
+ * sugli ordini in contanti un bonifico da fare a mano, che refundOrder registra
+ * sull'ordine e annuncia agli amministratori, e credito MyCity solo per la
+ * parte pagata col credito — R71). L'importo non può superare quello che il
+ * cliente ha davvero pagato (R84). 'resolved_buyer' senza importo =
  * risoluzione DB-only valida.
  * 'resolved_seller'/'rejected' = solo aggiornamento DB.
  *
@@ -55,14 +62,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const admin = getAdminSupabase();
   const { data: dispute, error } = await admin
     .from('disputes')
-    .select('id, status, order_id, opener_id, against_id')
+    .select('id, status, order_id, opener_id, against_id, refund_cents')
     .eq('id', params.id)
     .single();
 
   if (error || !dispute) return ApiErrors.notFound('Reclamo non trovato');
-  if (dispute.status !== 'open' && dispute.status !== 'under_review') {
-    return ApiErrors.conflict(`Reclamo già in stato ${dispute.status}`);
-  }
 
   let refundId: string | null = null;
 
@@ -79,7 +83,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // 16/10 (riesame) — `internal_dispute_status`: se l'ordine è fermo per un rimborso dal cruscotto
   // da dividere, chiudere il reclamo non toglie la pausa (più sotto).
   const COLONNE_ORDINE =
-    'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status, internal_dispute_status';
+    'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status, internal_dispute_status, stripe_refund_id';
   let ord: OrdineDaRimborsare | null = null;
   if (dispute.order_id) {
     const { data } = await conRipiegoSchema(
@@ -90,7 +94,64 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     ord = (data ?? null) as OrdineDaRimborsare | null;
   }
 
-  if (body.status === 'resolved_buyer' && body.refundCents && ord) {
+  /** L'esito del reclamo sull'ordine, che sblocca (o chiude) il bonifico al negozio: vedi piu' sotto. */
+  const scriviIlReclamoSullOrdine = async (esito: { rimborsoEmesso: boolean; rimborsoPieno: boolean }) => {
+    const { error: errOrdine } = await admin
+      .from('orders')
+      .update({ internal_dispute_status: statoDelReclamoSullOrdine(esito) })
+      .eq('id', dispute.order_id)
+      .or(SENZA_LA_PAUSA_DEL_CARRELLO);
+    // Non blocca la risoluzione, ma deve essere visibile: il venditore resta in attesa di essere pagato.
+    if (errOrdine) logger.error('[dispute] stato dell ordine non sbloccato', { orderId: dispute.order_id, message: errOrdine.message });
+  };
+
+  /**
+   * Collaudo del 17/10, terzo giro — IL RECLAMO CHIUSO A META' SI RIPRENDE.
+   *
+   * Il turno si prende prima dei soldi: se la funzione muore dentro il rimborso
+   * (una chiamata appesa, Vercel che la chiude), il reclamo resta «a favore del
+   * cliente» e l'ordine porta il segno del suo bonifico, ma forse senza l'avviso a
+   * chi paga. Il «riprova» rispondeva «Reclamo già in stato resolved_buyer» e il
+   * cliente non riceveva mai i soldi. Adesso lo stesso esito, ripremuto, finisce
+   * quel rimborso se gli manca un pezzo (`refundOrder`, con la cifra scritta sul
+   * reclamo): nessuna seconda prenotazione, nessun secondo bonifico.
+   *
+   * Collaudo del 17/10, quarto giro — ripreso solo con la stessa cifra. Una pagina caricata
+   * prima della chiusura mostra ancora i pulsanti: chi chiude con un'altra cifra legge che il
+   * reclamo e' gia' chiuso, e con quanto. E se il bonifico e' finito (l'avviso c'e'), non si
+   * riscrive niente: ne' le note, ne' la notifica al cliente, ne' il registro delle azioni.
+   * Solo lo stato del reclamo sull'ordine (`scriviIlReclamoSullOrdine`): se la funzione e' morta
+   * prima di scriverlo, resta «OPEN» e il negozio non viene piu' pagato. Riscriverlo non fa danni.
+   */
+  const bonificoDelReclamo = bonificoDellaChiave(ord as { stripe_refund_id?: string | null } | null, `dispute_${dispute.id}`);
+  const ripresa = dispute.status === 'resolved_buyer' && body.status === 'resolved_buyer' && !!bonificoDelReclamo;
+  if (!ripresa && dispute.status !== 'open' && dispute.status !== 'under_review') {
+    return ApiErrors.conflict(`Reclamo già in stato ${dispute.status}`);
+  }
+  const chiusoCon = Number(dispute.refund_cents ?? 0);
+  if (ripresa && body.refundCents != null && body.refundCents !== chiusoCon) {
+    return ApiErrors.conflict(`Questo reclamo è già stato chiuso con ${formatPriceFromCents(chiusoCon)}: ricarica la pagina.`);
+  }
+  const importo = ripresa ? chiusoCon : body.refundCents;
+  let manca: 'avviso' | 'credito' | 'niente' | null = null;
+  if (ripresa && bonificoDelReclamo) {
+    try {
+      manca = await cosaMancaAlBonifico(`dispute_${dispute.id}`, chiusoCon - bonificoDelReclamo.centesimi);
+    } catch (err) {
+      logger.error('[disputes] bonifico gia sull ordine, non si riesce a vedere se e finito', { disputeId: dispute.id, err });
+      return ApiErrors.unavailable('Non riesco a controllare il rimborso di questo reclamo: riprova tra poco.');
+    }
+    if (manca === 'niente') {
+      // «Pieno» sul totale rimborsato, come lo misura `refundOrder` (R76).
+      await scriviIlReclamoSullOrdine({
+        rimborsoEmesso: true,
+        rimborsoPieno: Number(ord?.refunded_amount_cents ?? 0) >= lordoDellOrdine(ord as OrdineDaRimborsare),
+      });
+      return NextResponse.json({ ok: true, status: body.status, refundId: bonificoDelReclamo.segno }, { status: 200 });
+    }
+  }
+
+  if (!ripresa && body.status === 'resolved_buyer' && body.refundCents && ord) {
     const rimborsabile = quantoSiPuoRestituire(ord);
     if (rimborsabile.perche !== 'ok') {
       return ApiErrors.conflict(motivoNienteDaRestituire(rimborsabile.perche));
@@ -115,26 +176,33 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * aperto: e' l'unico modo perche' resti risolvibile.
    */
   const statiRisolvibili = ['open', 'under_review'];
-  const { data: rivendicato, error: errRivendica } = await admin
-    .from('disputes')
-    .update({
-      status: body.status,
-      resolution_notes: body.notes,
-      resolved_by: user.id,
-      resolved_at: new Date().toISOString(),
-      refund_cents: body.refundCents ?? null,
-    })
-    .eq('id', params.id)
-    .in('status', statiRisolvibili)
-    .select('id');
+  const { data: rivendicato, error: errRivendica } = ripresa
+    ? { data: [{ id: dispute.id }], error: null }
+    : await admin
+        .from('disputes')
+        .update({
+          status: body.status,
+          resolution_notes: body.notes,
+          resolved_by: user.id,
+          resolved_at: new Date().toISOString(),
+          refund_cents: body.refundCents ?? null,
+        })
+        .eq('id', params.id)
+        .in('status', statiRisolvibili)
+        .select('id');
 
   if (errRivendica) return ApiErrors.internal('Update fallito');
   if (!rivendicato || rivendicato.length === 0) {
     return ApiErrors.conflict("Reclamo già risolto da un'altra sessione");
   }
 
-  /** Riapre il reclamo: si usa solo quando i soldi NON sono usciti. */
+  /**
+   * Riapre il reclamo: si usa solo quando i soldi NON sono usciti. Non sulla
+   * ripresa: li' il segno del bonifico resta sull'ordine, e il reclamo resta chiuso
+   * finche' non si finisce.
+   */
   const riapri = async () => {
+    if (ripresa) return;
     await admin
       .from('disputes')
       .update({ status: dispute.status, resolved_by: null, resolved_at: null, refund_cents: null })
@@ -146,11 +214,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   let rimborsoEmesso = false;
   /** R76 — il verdetto di `refundOrder`: il cliente ha riavuto l'intero lordo. */
   let rimborsoPieno = false;
-  /** R71 — quanto del rimborso va pagato col bonifico, a mano. */
-  let bonificoCents = 0;
 
   // Rimborso reale solo se risolto a favore del buyer con un importo.
-  if (body.status === 'resolved_buyer' && body.refundCents) {
+  if (body.status === 'resolved_buyer' && importo) {
     // refundOrder gestisce sia il refund Stripe (carta + claw-back) sia
     // l'accredito sul wallet (COD, 🟠-18). Il blocco su Stripe-non-configurato
     // vale SOLO per gli ordini carta: un rimborso COD non usa Stripe.
@@ -162,67 +228,27 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     try {
       const res = await refundOrder({
         orderId: dispute.order_id,
-        amountCents: body.refundCents,
+        amountCents: importo,
         reason: body.notes,
         metadata: { dispute_id: dispute.id },
         idempotencyKey: `dispute_${dispute.id}`,
         notifyBuyer: true,
-        // R71 — Un reclamo su un ordine in contanti si rimborsa col bonifico: il
-        // credito MyCity arriva solo se il cliente l'ha scelto, e qui non l'ha
-        // scelto nessuno. L'avviso del bonifico da fare porta alla lista dei
-        // bonifici, dove il reclamo ha la sua riga (qui sotto).
-        contanti: { modo: 'BONIFICO', doveSiPaga: PAGINA_DEI_BONIFICI_DA_FARE },
+        // R71 — Su un ordine in contanti refundOrder registra il bonifico da fare
+        // sull'ordine e lo annuncia agli amministratori: qui non c'e' altro da scrivere.
       });
       refundId = res.refundId;
       rimborsoEmesso = true;
       rimborsoPieno = res.pieno;
-      bonificoCents = res.bonificoCents ?? 0;
     } catch (err) {
       logger.error('[disputes] refund failed', err);
       await riapri();
-      return ApiErrors.badGateway('Rimborso fallito: ' + (err instanceof Error ? err.message : 'unknown'));
-    }
-  }
-
-  /**
-   * Collaudo del 15/10 — IL BONIFICO DEL RECLAMO RESTA SCRITTO.
-   *
-   * Il rimborso e' registrato sull'ordine (che da qui dice «rimborsato»), ma i
-   * soldi del bonifico li manda a mano chi amministra. Prima l'unica traccia era
-   * l'avviso nella campanella: perso quello, il cliente aspettava per sempre.
-   * La riga sta in una tabella che scrive solo il server (162): sulla riga del
-   * reclamo il cliente puo' scrivere quello che vuole, e la lista dei bonifici
-   * da fare non deve leggere cifre che ha messo lui.
-   *
-   * Non ferma la risoluzione: i soldi sono gia' registrati come rimborsati, e
-   * l'avviso a chi paga e' gia' partito. Senza la 162 resta solo l'avviso.
-   */
-  if (bonificoCents > 0 && dispute.order_id) {
-    const { error: errBonifico } = await admin.from('bonifici_dei_reclami').insert({
-      dispute_id: dispute.id,
-      order_id: dispute.order_id,
-      importo_cents: bonificoCents,
-    });
-    if (errBonifico) {
-      if (tabellaDeiBonificiMancante(errBonifico)) {
-        logger.warn('[dispute] migrazione 162 non applicata: il bonifico del reclamo resta solo nell avviso', {
-          disputeId: dispute.id, centesimi: bonificoCents,
-        });
-      } else {
-        logger.error('[dispute] bonifico da fare non registrato: resta solo nell avviso', {
-          disputeId: dispute.id, centesimi: bonificoCents, message: errBonifico.message,
-        });
-        // Terzo giro del riesame — non solo nel registro: chi paga deve sapere
-        // che la lista non e' completa.
-        const avviso = avvisoDelBonificoDelReclamoNonRegistrato({
-          reclamoId: dispute.id, ordineId: dispute.order_id, importoCents: bonificoCents,
-        });
-        try {
-          await notifyAdmins(avviso.titolo, avviso.testo, avviso.link);
-        } catch (e) {
-          logger.error('[dispute] avviso del bonifico fuori dalla lista non inviato', { disputeId: dispute.id, e });
-        }
-      }
+      // 17/10/2026 — Come la decisione sul reso: i due casi che chi decide deve
+      // conoscere, e per tutto il resto una frase sola. Mai il testo grezzo dell'errore.
+      if (err instanceof AccreditoGiaUscitoConAltroImporto) return ApiErrors.conflict(err.message);
+      if (err instanceof RimborsoInAttesaDellaDivisione) return ApiErrors.conflict(err.message);
+      // Il bonifico era gia' registrato sull'ordine: quello resta, manca un pezzo.
+      if (manca === 'avviso' || manca === 'credito') return ApiErrors.badGateway(bonificoDaFinire(manca));
+      return ApiErrors.badGateway("Il rimborso non è partito: riprova o scrivi all'assistenza.");
     }
   }
 
@@ -274,19 +300,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     // pannello offriva i soldi da dividere solo all'altro negozio, che pagava
     // un rimborso non suo. La pausa la toglie solo la divisione; fino ad allora
     // l'esito del reclamo resta scritto sul reclamo.
-    const statoSullOrdine = statoDelReclamoSullOrdine({ rimborsoEmesso, rimborsoPieno });
-    const { error: errOrdine } = await admin
-      .from('orders')
-      .update({ internal_dispute_status: statoSullOrdine })
-      .eq('id', dispute.order_id)
-      .or(SENZA_LA_PAUSA_DEL_CARRELLO);
-    if (errOrdine) {
-      // Non blocca la risoluzione, ma deve essere visibile: il venditore resta
-      // in attesa di essere pagato.
-      logger.error('[dispute] stato dell ordine non sbloccato', {
-        orderId: dispute.order_id, message: errOrdine.message,
-      });
-    }
+    await scriviIlReclamoSullOrdine({ rimborsoEmesso, rimborsoPieno });
     const fermoPerLaDivisione =
       (ord as { internal_dispute_status?: string | null } | null)?.internal_dispute_status === PAUSA_RIMBORSO_DA_DIVIDERE;
     if (fermoPerLaDivisione) {
@@ -333,7 +347,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
           : 'dispute.reject',
     targetTable: 'disputes',
     targetId: dispute.id,
-    metadata: { orderId: dispute.order_id, refundCents: body.refundCents ?? null, refundId, notes: body.notes },
+    metadata: { orderId: dispute.order_id, refundCents: importo ?? null, refundId, notes: body.notes, ...(ripresa ? { ripresa: true } : {}) },
   });
 
   return NextResponse.json({ ok: true, status: body.status, refundId }, { status: 200 });

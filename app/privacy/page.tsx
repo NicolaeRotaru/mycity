@@ -3,9 +3,10 @@ import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
 import { recapitoPrivacy, titolare } from '@/lib/legal/titolare';
 import {
   DOVE_CHIEDIAMO_L_IBAN,
+  L_AVVISO_A_CHI_PAGA,
   PERCHE_TENIAMO_L_IBAN,
   QUANTO_TENIAMO_L_IBAN,
-} from '@/lib/rimborsi/iban-del-rimborso';
+} from '@/lib/privacy/iban-per-email';
 
 export const metadata = {
   title: 'Informativa sulla privacy · MyCity',
@@ -91,9 +92,12 @@ export default function PrivacyPage() {
               conservato sulla richiesta»: per i reclami l'IBAN lo chiediamo per
               email e arriva con un messaggio dai Contatti, e non diceva quanto lo
               teniamo. Adesso dove lo chiediamo e quanto lo teniamo stanno in
-              lib/rimborsi/iban-del-rimborso.ts, accanto al codice che lo cancella:
-              questa pagina li legge da lì. */}
-          <li><strong>Dati per il rimborso con bonifico (Acquirenti, solo pagamento alla consegna):</strong> l&apos;IBAN del conto su cui vuoi ricevere il rimborso, usato solo per quel bonifico. Dove lo chiediamo: {DOVE_CHIEDIAMO_L_IBAN} Lo vede MyCity, che fa il bonifico; il Venditore no. Quanto lo teniamo è scritto nella tabella qui sotto.</li>
+              un posto solo, e questa pagina li legge da lì. */}
+          {/* 17/10/2026 — Decisione di Nicola («Semplifica»): sul sito non c'è più
+              un campo per l'IBAN, lo chiede l'email del rimborso. Le parole stanno
+              in lib/privacy/iban-per-email.ts, con quelle dell'avviso a chi paga,
+              che porta l'email del cliente. */}
+          <li><strong>Dati per il rimborso con bonifico (Acquirenti, solo pagamento alla consegna):</strong> l&apos;IBAN del conto su cui vuoi ricevere il rimborso, usato solo per quel bonifico. Dove lo chiediamo: {DOVE_CHIEDIAMO_L_IBAN} Lo vede MyCity, che fa il bonifico; il Venditore no. Quanto lo teniamo è scritto nella tabella qui sotto. {L_AVVISO_A_CHI_PAGA}</li>
           <li><strong>Dati di geolocalizzazione:</strong> posizione del Rider durante la consegna; indirizzo di consegna; posizione approssimativa dell&apos;Acquirente per la funzione &quot;Vicino a te&quot; (solo previo consenso esplicito).</li>
           <li><strong>Contenuti generati dall&apos;utente:</strong> recensioni, foto, messaggi nelle chat ordine.</li>
           {/* 27/8/2026 (R058) — Mancavano, ed è il dato più intrusivo che
