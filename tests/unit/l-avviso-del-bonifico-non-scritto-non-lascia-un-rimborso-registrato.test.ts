@@ -49,6 +49,7 @@ vi.mock('@/lib/api/middleware', () => {
 
 import { refundOrder } from '@/lib/stripe/payout';
 import { sendEmail } from '@/lib/email/client';
+import { indirizzoContatto } from '@/lib/contatti-pubblici';
 import { POST as apriReso } from '@/app/api/returns/create/route';
 import { POST as decidi } from '@/app/api/returns/[id]/decide/route';
 import { POST as avanza } from '@/app/api/returns/[id]/avanza/route';
@@ -436,5 +437,333 @@ describe('avanza e resolve: chi ha premuto legge una frase, mai l errore grezzo'
     expect(JSON.stringify(corpo)).not.toContain('[stripe]');
     expect(finto.db.tabelle.disputes[0].status).toBe('open');
     nienteRegistrato();
+  });
+});
+
+/**
+ * Collaudo del 17/10, terzo giro (B) — LA FUNZIONE MUORE FRA IL SEGNO E L'AVVISO.
+ *
+ * Una chiamata al database resta appesa e Vercel chiude la funzione. Sull'ordine resta il rimborso
+ * registrato (segno, stato, prenotazione) ma non l'avviso, l'unico promemoria del bonifico: senza la
+ * lista dei bonifici nessuno lo ritrovava, e il cliente non riceveva mai i soldi. Il reso andava
+ * avanti fino a «rimborsato» registrandolo cosi', il reclamo rispondeva 409 a ogni nuovo tentativo.
+ * Adesso il passaggio dopo con la stessa chiave lo FINISCE: avviso e credito se mancano, una volta.
+ *
+ * «Appesa» qui vuol dire una promessa che non si risolve mai: la funzione si ferma li', e quello
+ * che aveva gia' scritto resta scritto, come quando Vercel la chiude.
+ */
+
+/** La prossima lettura degli amministratori (quella dell'avviso) non risponde mai. */
+function laLetturaDegliAmministratoriRestaAppesa() {
+  const from0 = finto.db.client.from;
+  let colpo = true;
+  finto.db.client.from = ((tabella: string) => {
+    const q = from0(tabella) as unknown as Record<string, (...a: unknown[]) => unknown>;
+    if (tabella !== 'profiles') return q;
+    const eq0 = q.eq.bind(q);
+    q.eq = (colonna: unknown, valore: unknown) => {
+      if (colpo && colonna === 'role' && valore === 'admin') {
+        colpo = false;
+        return new Promise(() => {});
+      }
+      return eq0(colonna, valore);
+    };
+    return q;
+  }) as unknown as typeof from0;
+}
+
+/** Il prossimo accredito di credito MyCity non risponde mai (e non accredita). */
+function ilCreditoRestaAppeso() {
+  const rpc0 = finto.db.client.rpc;
+  let colpo = true;
+  finto.db.client.rpc = (nome: string, args: Record<string, unknown> = {}) => {
+    if (colpo && nome === 'wallet_credit') {
+      colpo = false;
+      finto.db.rpc.push({ nome, args });
+      return new Promise(() => {});
+    }
+    return rpc0(nome, args);
+  };
+}
+
+/** La prossima scrittura del rimborso sul reso (`refund_id`) cade, e non scrive niente. */
+function laScritturaDelRimborsoSulResoCade() {
+  const from0 = finto.db.client.from;
+  let colpo = true;
+  finto.db.client.from = ((tabella: string) => {
+    const q = from0(tabella) as unknown as Record<string, (...a: unknown[]) => unknown>;
+    if (tabella !== 'returns') return q;
+    const update0 = q.update.bind(q);
+    q.update = (valori: unknown) => {
+      const query = update0(valori) as { then: unknown };
+      if (colpo && typeof valori === 'object' && valori !== null && 'refund_id' in valori) {
+        colpo = false;
+        query.then = (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) =>
+          Promise.resolve({ data: null, error: CADUTA }).then(ok, ko);
+      }
+      return query;
+    };
+    return q;
+  }) as unknown as typeof from0;
+}
+
+async function chiudiIlReclamo(corpo: Record<string, unknown>) {
+  const res = await (risolvi as unknown as Rotta)(
+    new Request('http://localhost/api/admin/disputes/d1/resolve', json({
+      notes: 'Merce arrivata rotta: rimborso al cliente.', ...corpo,
+    })),
+    { params: Promise.resolve({ id: 'd1' }) },
+  );
+  return { status: res.status, corpo: await res.json() };
+}
+
+describe('la funzione muore fra il segno e l avviso: il passaggio dopo finisce il rimborso', () => {
+  const alCliente = () => vi.mocked(sendEmail).mock.calls.filter(([m]) => m.to === 'giulia@esempio.it');
+  const allaCasella = () => vi.mocked(sendEmail).mock.calls.filter(([m]) => m.to === indirizzoContatto('info'));
+  const prenotazioni = () => finto.db.rpc.filter((c) => c.nome === 'accumula_rimborso');
+  beforeEach(() => vi.mocked(sendEmail).mockClear());
+
+  it('reso in contanti: decide resta appeso dopo il segno, e «rimborsato» chiede il bonifico una volta', async () => {
+    const id = await apriIlReso();
+    const segno = `bonifico:4000:return_${id}`;
+    laLetturaDegliAmministratoriRestaAppesa();
+    void negozio(decidi, id, { decision: 'APPROVED', refundAmountCents: 4000 });
+    await vi.waitFor(() => expect(ordine().stripe_refund_id).toBe(segno));
+
+    // Quello che la funzione morta lascia: rimborsato sull'ordine, nessuno che lo sa.
+    expect(ordine()).toMatchObject({ payment_status: 'REFUNDED', refunded_amount_cents: 4000 });
+    expect(avvisi()).toHaveLength(0);
+    expect(reso().status).toBe('APPROVED');
+    expect((await negozio(decidi, id, { decision: 'APPROVED', refundAmountCents: 4000 })).status).toBe(409);
+    expect((await negozio(avanza, id, { stato: 'RECEIVED' })).status).toBe(200);
+
+    // Il primo «rimborsato» cade anch'esso sull'avviso: il segno resta, la prenotazione pure.
+    finto.db.guasti.notificheCadono = CADUTA;
+    const caduto = await negozio(avanza, id, { stato: 'REFUNDED' });
+    expect(caduto.status).toBe(502);
+    expect(reso().status).toBe('RECEIVED');
+    expect(ordine(), 'il tentativo che finisce ha tolto quello che non era suo').toMatchObject({
+      stripe_refund_id: segno, refunded_amount_cents: 4000, payment_status: 'REFUNDED',
+    });
+
+    finto.db.guasti.notificheCadono = null;
+    const rimborsato = await negozio(avanza, id, { stato: 'REFUNDED' });
+
+    expect(rimborsato.status, JSON.stringify(rimborsato.corpo)).toBe(200);
+    expect(avvisi(), 'reso rimborsato e nessun amministratore sa del bonifico da fare').toHaveLength(1);
+    expect(String(avvisi()[0].body)).toMatch(/^Bonifico di 40,00\s€/u);
+    expect(prenotazioni(), 'la prenotazione si e fatta due volte').toHaveLength(1);
+    expect(ordine()).toMatchObject({ stripe_refund_id: segno, refunded_amount_cents: 4000, payment_status: 'REFUNDED' });
+    expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: segno });
+    expect(alCliente(), 'al cliente non e partita l email che chiede l IBAN').toHaveLength(1);
+    expect(allaCasella()).toHaveLength(1);
+  });
+
+  it('ordine misto: decide resta appeso sul credito, e «rimborsato» lo da una volta e scrive al cliente', async () => {
+    apri(misto());
+    const id = await apriIlReso();
+    ilCreditoRestaAppeso();
+    void negozio(decidi, id, { decision: 'APPROVED', refundAmountCents: 5000 });
+    await vi.waitFor(() => expect(finto.db.rpc.some((c) => c.nome === 'wallet_credit')).toBe(true));
+
+    // L'avviso dice «20 € gli sono già tornati come credito», e il credito non c'e'.
+    expect(avvisi()).toHaveLength(1);
+    expect(String(avvisi()[0].body)).toMatch(/20,00\s€ gli sono già tornati come credito MyCity/u);
+    expect(creditoDi(finto.db, 'giulia')).toBe(0);
+
+    expect((await negozio(avanza, id, { stato: 'RECEIVED' })).status).toBe(200);
+    const rimborsato = await negozio(avanza, id, { stato: 'REFUNDED' });
+
+    expect(rimborsato.status, JSON.stringify(rimborsato.corpo)).toBe(200);
+    expect(creditoDi(finto.db, 'giulia'), 'l avviso dice che il credito e tornato, e non e tornato').toBe(2000);
+    expect(avvisi()).toHaveLength(1);
+    expect(prenotazioni()).toHaveLength(1);
+    expect(ordine()).toMatchObject({ stripe_refund_id: `bonifico:3000:return_${id}`, refunded_amount_cents: 5000 });
+    expect(alCliente(), 'il tentativo di prima era morto prima delle email: non le aveva mandate').toHaveLength(1);
+  });
+
+  it('ordine misto pagato «PAID» senza altri segni dell incasso: il bonifico rimasto a meta si finisce lo stesso', async () => {
+    apri({ ...misto(), cash_confirmed_at: null, delivery_status: 'OUT_FOR_DELIVERY' });
+    ilCreditoRestaAppeso();
+    void refundOrder({ orderId: ORDINE, amountCents: 5000, idempotencyKey: 'return_r1' });
+    await vi.waitFor(() => expect(finto.db.rpc.some((c) => c.nome === 'wallet_credit')).toBe(true));
+    expect(ordine().payment_status).toBe('REFUNDED');
+
+    const esito = await refundOrder({ orderId: ORDINE, amountCents: 5000, idempotencyKey: 'return_r1' });
+
+    expect(esito).toMatchObject({ creditoCents: 2000, bonificoCents: 3000 });
+    expect(creditoDi(finto.db, 'giulia')).toBe(2000);
+    expect(prenotazioni()).toHaveLength(1);
+  });
+
+  it('finire con un altra cifra non e lo stesso rimborso: si ferma e non tocca niente', async () => {
+    laLetturaDegliAmministratoriRestaAppesa();
+    void refundOrder({ orderId: ORDINE, amountCents: 4000, idempotencyKey: 'return_r1' });
+    await vi.waitFor(() => expect(ordine().stripe_refund_id).toBe('bonifico:4000:return_r1'));
+
+    await expect(refundOrder({ orderId: ORDINE, amountCents: 3000, idempotencyKey: 'return_r1' })).rejects.toThrow();
+
+    expect(avvisi()).toHaveLength(0);
+    expect(ordine()).toMatchObject({ stripe_refund_id: 'bonifico:4000:return_r1', refunded_amount_cents: 4000 });
+  });
+
+  it('reclamo: resolve resta appeso dopo il segno; ripremuto, chiede il bonifico una volta e chiude l ordine', async () => {
+    const corpo = { status: 'resolved_buyer', refundCents: 4000 };
+    laLetturaDegliAmministratoriRestaAppesa();
+    void chiudiIlReclamo(corpo);
+    await vi.waitFor(() => expect(ordine().stripe_refund_id).toBe('bonifico:4000:dispute_d1'));
+    expect(finto.db.tabelle.disputes[0].status).toBe('resolved_buyer');
+    expect(avvisi()).toHaveLength(0);
+
+    // Il primo nuovo tentativo cade anch'esso: il reclamo resta com'era, con la sua cifra.
+    finto.db.guasti.notificheCadono = CADUTA;
+    expect((await chiudiIlReclamo(corpo)).status).toBe(502);
+    expect(finto.db.tabelle.disputes[0]).toMatchObject({ status: 'resolved_buyer', refund_cents: 4000 });
+
+    finto.db.guasti.notificheCadono = null;
+    const ripreso = await chiudiIlReclamo(corpo);
+
+    expect(ripreso.status, JSON.stringify(ripreso.corpo)).toBe(200);
+    expect(avvisi(), 'il reclamo e chiuso e nessuno sa del bonifico da fare').toHaveLength(1);
+    expect(prenotazioni()).toHaveLength(1);
+    expect(ordine()).toMatchObject({ refunded_amount_cents: 4000, internal_dispute_status: 'LOST' });
+    expect(alCliente()).toHaveLength(1);
+  });
+
+  it('il rimborso era finito e cade solo la scrittura sul reso: «rimborsato» non rifa email ne quota del negozio', async () => {
+    const id = await apriIlReso();
+    laScritturaDelRimborsoSulResoCade();
+    const deciso = await negozio(decidi, id, { decision: 'APPROVED', refundAmountCents: 2000 });
+    expect(deciso.status).toBe(500);
+    expect(ordine().seller_payout_reversed_cents).toBe(1800);
+    expect(alCliente()).toHaveLength(1);
+    const [nonRegistrato] = notificheConTitolo(finto.db, 'Rimborso partito ma non registrato');
+    expect(String(nonRegistrato.body)).toContain('quando il negozio segna il reso come rimborsato, si registra senza ripartire');
+
+    expect((await negozio(avanza, id, { stato: 'RECEIVED' })).status).toBe(200);
+    const rimborsato = await negozio(avanza, id, { stato: 'REFUNDED' });
+
+    expect(rimborsato.status, JSON.stringify(rimborsato.corpo)).toBe(200);
+    expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: `bonifico:2000:return_${id}` });
+    expect(ordine().seller_payout_reversed_cents, 'la quota del negozio e tolta due volte').toBe(1800);
+    expect(alCliente(), 'al cliente arriva due volte la stessa email').toHaveLength(1);
+    expect(allaCasella()).toHaveLength(1);
+    expect(avvisi()).toHaveLength(1);
+    expect(prenotazioni()).toHaveLength(1);
+  });
+
+  it('reso in contanti: avanza resta appeso dopo il segno; il «rimborsato» ripremuto lo finisce, una volta', async () => {
+    const id = await apriIlReso();
+    const segno = `bonifico:4000:return_${id}`;
+    expect((await negozio(decidi, id, { decision: 'APPROVED' })).status).toBe(200);
+    expect((await negozio(avanza, id, { stato: 'RECEIVED' })).status).toBe(200);
+    laLetturaDegliAmministratoriRestaAppesa();
+    void negozio(avanza, id, { stato: 'REFUNDED', refundAmountCents: 4000 });
+    await vi.waitFor(() => expect(ordine().stripe_refund_id).toBe(segno));
+    expect(reso().status).toBe('REFUNDED');
+    expect(reso().refund_id ?? null).toBeNull();
+    expect(avvisi()).toHaveLength(0);
+
+    const ripreso = await negozio(avanza, id, { stato: 'REFUNDED' });
+
+    expect(ripreso.status, JSON.stringify(ripreso.corpo)).toBe(200);
+    expect(avvisi(), 'reso rimborsato e nessun amministratore sa del bonifico da fare').toHaveLength(1);
+    expect(prenotazioni()).toHaveLength(1);
+    expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: segno });
+    expect(alCliente()).toHaveLength(1);
+    // Registrato per intero, un altro «rimborsato» non riprende niente.
+    expect((await negozio(avanza, id, { stato: 'REFUNDED' })).status).toBe(409);
+    expect(avvisi()).toHaveLength(1);
+  });
+
+  it('da avanza cade la scrittura sul reso: l avviso non promette un passo che non c e, e ripremere registra', async () => {
+    const id = await apriIlReso();
+    const segno = `bonifico:4000:return_${id}`;
+    expect((await negozio(decidi, id, { decision: 'APPROVED' })).status).toBe(200);
+    expect((await negozio(avanza, id, { stato: 'RECEIVED' })).status).toBe(200);
+    laScritturaDelRimborsoSulResoCade();
+
+    expect((await negozio(avanza, id, { stato: 'REFUNDED', refundAmountCents: 4000 })).status).toBe(500);
+
+    const [nonRegistrato] = notificheConTitolo(finto.db, 'Rimborso partito ma non registrato');
+    expect(String(nonRegistrato.body)).toContain('risulta già rimborsato');
+    expect(String(nonRegistrato.body)).not.toContain('quando il negozio segna');
+    expect(reso().status).toBe('REFUNDED');
+    expect(reso().refund_id ?? null).toBeNull();
+
+    const ripreso = await negozio(avanza, id, { stato: 'REFUNDED' });
+    expect(ripreso.status, JSON.stringify(ripreso.corpo)).toBe(200);
+    expect(reso().refund_id).toBe(segno);
+    expect(avvisi()).toHaveLength(1);
+    expect(alCliente()).toHaveLength(1);
+  });
+});
+
+/**
+ * Collaudo del 17/10, terzo giro (A) — IL PASSO CHE TORNA INDIETRO, CON UN ALTRO RIMBORSO IN MEZZO.
+ * Il codice era gia' giusto, ma nessuna prova proteggeva questi due punti.
+ */
+describe('tornare indietro mentre un altro rimborso va a termine', () => {
+  it('fra la rilettura e la scrittura arriva il segno di un altro rimborso: resta', async () => {
+    finto.db.guasti.segnoDelBonificoScrittoPoiCade = true;
+    const from0 = finto.db.client.from;
+    let colpo = true;
+    finto.db.client.from = ((tabella: string) => {
+      const q = from0(tabella) as unknown as Record<string, (...a: unknown[]) => unknown>;
+      if (tabella !== 'orders') return q;
+      const select0 = q.select.bind(q);
+      q.select = (colonne?: unknown) => {
+        type Risposta = (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) => unknown;
+        const query = select0(colonne) as { then: Risposta };
+        if (!(colpo && colonne === 'stripe_refund_id, refunded_amount_cents, payout_status')) return query;
+        colpo = false;
+        const then0 = query.then.bind(query);
+        query.then = (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) =>
+          then0((letto: unknown) => {
+            // Subito dopo la rilettura un reclamo registra il suo bonifico e la sua prenotazione.
+            const o = finto.db.tabelle.orders[0];
+            o.stripe_refund_id = `${o.stripe_refund_id},bonifico:500:dispute_d9`;
+            o.refunded_amount_cents = Number(o.refunded_amount_cents) + 500;
+            return ok(letto);
+          }, ko);
+        return query;
+      };
+      return q;
+    }) as unknown as typeof from0;
+
+    await expect(refundOrder({ orderId: ORDINE, amountCents: 3000, idempotencyKey: 'return_r1' })).rejects.toThrow();
+
+    expect(ordine(), 'il bonifico del reclamo e sparito dall ordine').toMatchObject({
+      stripe_refund_id: 'bonifico:500:dispute_d9', refunded_amount_cents: 500, payment_status: 'PARTIALLY_REFUNDED',
+    });
+  });
+
+  it('reso da 30 € che cade sull avviso, reclamo da 10 € che va a termine in mezzo: resta rimborsato in parte', async () => {
+    const from0 = finto.db.client.from;
+    let colpo = true;
+    finto.db.client.from = ((tabella: string) => {
+      const q = from0(tabella) as unknown as Record<string, (v: unknown) => unknown>;
+      if (tabella !== 'notifications') return q;
+      const inserisci = q.insert.bind(q);
+      q.insert = (v: unknown) => {
+        const righe = (Array.isArray(v) ? v : [v]) as Riga[];
+        if (colpo && righe.some((r) => String(r.body ?? '').includes('reso R1'))) {
+          colpo = false;
+          return refundOrder({ orderId: ORDINE, amountCents: 1000, idempotencyKey: 'dispute_d1' })
+            .then(() => ({ data: null, error: CADUTA }));
+        }
+        return inserisci(v);
+      };
+      return q;
+    }) as unknown as typeof from0;
+
+    await expect(refundOrder({ orderId: ORDINE, amountCents: 3000, idempotencyKey: 'return_r1' })).rejects.toThrow();
+
+    // Il reclamo, contando i 30 € del reso, aveva chiuso l'ordine come rimborsato per intero.
+    expect(ordine(), 'un bonifico registrato su un ordine che dice «pagato»').toMatchObject({
+      stripe_refund_id: 'bonifico:1000:dispute_d1', refunded_amount_cents: 1000,
+      payment_status: 'PARTIALLY_REFUNDED', payout_status: 'AWAITING_REMITTANCE',
+    });
+    expect(avvisi()).toHaveLength(1);
   });
 });

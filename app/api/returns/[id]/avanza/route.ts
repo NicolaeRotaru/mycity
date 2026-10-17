@@ -14,11 +14,8 @@ import {
   quantoSiPuoRestituire,
   type OrdineDaRimborsare,
 } from '@/lib/rimborsi/regole-del-rimborso';
-import {
-  avvisoDelRimborsoNonRegistrato,
-  bonificoDelResoGiaSullOrdine,
-  RIMBORSO_PARTITO_MA_NON_REGISTRATO,
-} from '@/lib/rimborsi/bonifici-da-fare';
+import { avvisoDelRimborsoNonRegistrato, RIMBORSO_PARTITO_MA_NON_REGISTRATO } from '@/lib/rimborsi/bonifici-da-fare';
+import { bonificoDellaChiave } from '@/lib/stripe/elenco-dei-rimborsi';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 export const runtime = 'nodejs';
@@ -87,7 +84,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const supa = await getServerSupabase();
   const { data: ret, error } = await supa
     .from('returns')
-    .select('id, status, seller_id, buyer_id, order_id, refund_amount_cents, created_at')
+    .select('id, status, seller_id, buyer_id, order_id, refund_amount_cents, created_at, refund_id')
     .eq('id', params.id)
     .single();
 
@@ -109,8 +106,10 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       : ApiErrors.forbidden();
   }
 
+  // Un «rimborsato» rimasto a meta' si riprende (vedi `ripresa`, piu' sotto).
+  const forseRipresa = body.stato === 'REFUNDED' && ret.status === 'REFUNDED' && !ret.refund_id;
   const partenze = PARTENZE_AMMESSE[body.stato];
-  if (!partenze.includes(ret.status)) {
+  if (!forseRipresa && !partenze.includes(ret.status)) {
     return ApiErrors.conflict(`Un reso in ${ret.status} non può passare a ${body.stato}.`);
   }
 
@@ -134,6 +133,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * cliente «chiuso senza rimborso» mentre gli dovevamo il bonifico. Adesso, se
    * l'ordine porta gia' il rimborso di questo reso, «rimborsato» lo registra sul
    * reso senza rifarlo (nessun secondo bonifico), e «chiudi» non passa.
+   *
+   * Collaudo del 17/10, terzo giro — «rimborsato» lo registra passando da
+   * `refundOrder`, che lo FINISCE: se il tentativo di prima e' morto dopo il segno,
+   * l'avviso a chi paga e il credito non c'erano, e registrarlo e basta lasciava il
+   * cliente senza soldi. Nessuna seconda prenotazione e nessun secondo bonifico.
    */
   let giaSullOrdine: { segno: string; centesimi: number } | null = null;
 
@@ -149,7 +153,19 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         ? ApiErrors.unavailable("Non riesco a controllare l'ordine del reso: riprova tra poco.")
         : ApiErrors.notFound('Ordine del reso non trovato');
     }
-    giaSullOrdine = bonificoDelResoGiaSullOrdine(ret.id, ordine as { stripe_refund_id?: string | null });
+    giaSullOrdine = bonificoDellaChiave(ordine as { stripe_refund_id?: string | null }, `return_${ret.id}`);
+  }
+
+  /**
+   * Collaudo del 17/10, terzo giro — «RIMBORSATO» RIMASTO A META' SI RIPRENDE.
+   * Il turno scrive «rimborsato» prima dei soldi: se la funzione muore dentro il
+   * rimborso, il reso resta «rimborsato» senza riferimento, e un secondo
+   * «rimborsato» rispondeva 409 mentre il bonifico non l'aveva chiesto nessuno.
+   * Se l'ordine porta il bonifico di questo reso, lo si finisce, senza un nuovo turno.
+   */
+  const ripresa = forseRipresa && !!giaSullOrdine;
+  if (forseRipresa && !ripresa) {
+    return ApiErrors.conflict(`Un reso in ${ret.status} non può passare a ${body.stato}.`);
   }
 
   if (body.stato === 'CANCELED' && giaSullOrdine) {
@@ -187,16 +203,18 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // Il turno si prende con la scrittura: due schede aperte sullo stesso reso
   // non possono farlo avanzare due volte.
   const statoPrecedente = ret.status;
-  const { data: preso, error: errPresa } = await admin
-    .from('returns')
-    .update({
-      status: body.stato,
-      decision_notes: body.note ?? null,
-      ...(body.stato === 'REFUNDED' ? { refund_amount_cents: importoRimborso } : {}),
-    })
-    .eq('id', params.id)
-    .eq('status', statoPrecedente)
-    .select('id');
+  const { data: preso, error: errPresa } = ripresa
+    ? { data: [{ id: ret.id }], error: null }
+    : await admin
+        .from('returns')
+        .update({
+          status: body.stato,
+          decision_notes: body.note ?? null,
+          ...(body.stato === 'REFUNDED' ? { refund_amount_cents: importoRimborso } : {}),
+        })
+        .eq('id', params.id)
+        .eq('status', statoPrecedente)
+        .select('id');
 
   if (errPresa) return ApiErrors.internal('Aggiornamento del reso fallito');
   if (!preso || preso.length === 0) {
@@ -207,40 +225,35 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   /** R71 — quanto del rimborso va pagato col bonifico, a mano. */
   let bonificoCents = 0;
   if (body.stato === 'REFUNDED') {
-    if (giaSullOrdine) {
-      // Il rimborso e' gia' partito (vedi sopra): si registra, non si rifa'.
-      refundId = giaSullOrdine.segno;
-      bonificoCents = giaSullOrdine.centesimi;
-    } else {
-      // R71 — Sui contanti il rimborso va col bonifico, sempre (refundOrder).
-      try {
-        const res = await refundOrder({
-          orderId: ret.order_id,
-          amountCents: importoRimborso,
-          reason: body.note ?? 'requested_by_customer',
-          metadata: { return_id: ret.id },
-          idempotencyKey: `return_${ret.id}`,
-          notifyBuyer: true,
-          resoChiestoIl: (ret as { created_at?: string | null }).created_at ?? null,
-        });
-        refundId = res.refundId;
-        bonificoCents = res.bonificoCents ?? 0;
-      } catch (err) {
-        logger.error('[returns/avanza] rimborso fallito', err);
-        // I soldi non sono usciti: il reso torna dov'era, così resta lavorabile
-        // invece di restare fermo su «rimborsato» senza rimborso.
-        await admin
-          .from('returns')
-          .update({ status: statoPrecedente })
-          .eq('id', params.id)
-          .eq('status', 'REFUNDED');
-        // 17/10/2026 — Come `decide`: il negozio legge i due casi che deve
-        // conoscere, e per tutto il resto una frase sola. Mai il testo grezzo
-        // dell'errore (R138: niente messaggi interni).
-        if (err instanceof AccreditoGiaUscitoConAltroImporto) return ApiErrors.conflict(err.message);
-        if (err instanceof RimborsoInAttesaDellaDivisione) return ApiErrors.conflict(err.message);
-        return ApiErrors.badGateway("Il rimborso non è partito: riprova o scrivi all'assistenza.");
-      }
+    // R71 — Sui contanti il rimborso va col bonifico, sempre (refundOrder). Se e'
+    // gia' sull'ordine (vedi sopra) refundOrder non lo rifa': lo finisce.
+    try {
+      const res = await refundOrder({
+        orderId: ret.order_id,
+        amountCents: importoRimborso,
+        reason: body.note ?? 'requested_by_customer',
+        metadata: { return_id: ret.id },
+        idempotencyKey: `return_${ret.id}`,
+        notifyBuyer: true,
+        resoChiestoIl: (ret as { created_at?: string | null }).created_at ?? null,
+      });
+      refundId = res.refundId;
+      bonificoCents = res.bonificoCents ?? 0;
+    } catch (err) {
+      logger.error('[returns/avanza] rimborso fallito', err);
+      // I soldi non sono usciti: il reso torna dov'era, così resta lavorabile
+      // invece di restare fermo su «rimborsato» senza rimborso.
+      await admin
+        .from('returns')
+        .update({ status: statoPrecedente })
+        .eq('id', params.id)
+        .eq('status', 'REFUNDED');
+      // 17/10/2026 — Come `decide`: il negozio legge i due casi che deve
+      // conoscere, e per tutto il resto una frase sola. Mai il testo grezzo
+      // dell'errore (R138: niente messaggi interni).
+      if (err instanceof AccreditoGiaUscitoConAltroImporto) return ApiErrors.conflict(err.message);
+      if (err instanceof RimborsoInAttesaDellaDivisione) return ApiErrors.conflict(err.message);
+      return ApiErrors.badGateway("Il rimborso non è partito: riprova o scrivi all'assistenza.");
     }
     const { error: updErr } = await admin
       .from('returns')
@@ -257,7 +270,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
      */
     if (updErr) {
       const avviso = avvisoDelRimborsoNonRegistrato({
-        resoId: params.id, ordineId: ret.order_id, refundId, bonificoCents,
+        resoId: params.id, ordineId: ret.order_id, refundId, bonificoCents, resoGiaRimborsato: true,
       });
       try {
         await notifyAdmins(avviso.titolo, avviso.testo, avviso.link);

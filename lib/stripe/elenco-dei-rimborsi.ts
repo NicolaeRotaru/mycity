@@ -66,3 +66,18 @@ export function centesimiDelBonificoDalSegno(refundId: string | null | undefined
   const trovato = /^bonifico:(\d+):/.exec(refundId);
   return trovato ? Number(trovato[1]) : null;
 }
+
+/**
+ * Il bonifico di questa chiave (`return_<id>`, `dispute_<id>`) gia' scritto sull'ordine, se c'e'.
+ * La chiave si confronta intera: `return_r1` non e' `return_r10`.
+ */
+export function bonificoDellaChiave(
+  ordine: { stripe_refund_id?: string | null } | null | undefined,
+  chiave: string,
+): { segno: string; centesimi: number } | null {
+  for (const segno of rimborsiGiaScritti(ordine ?? {})) {
+    const trovato = /^bonifico:(\d+):(.+)$/.exec(segno);
+    if (trovato && trovato[2] === chiave) return { segno, centesimi: Number(trovato[1]) };
+  }
+  return null;
+}

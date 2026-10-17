@@ -11,7 +11,7 @@ import { formatPriceFromCents } from '@/lib/format';
 // La merce che torna a scaffale ha una casa sola: la decisione è pura e
 // verificabile, qui si usa e basta (lib/ordini/rimessa-a-scaffale.ts).
 import { rimettiLaMerceAScaffale } from '@/lib/ordini/rimessa-a-scaffale';
-import { elencoDaScrivere, rimborsiGiaScritti, segnoDelBonifico } from '@/lib/stripe/elenco-dei-rimborsi';
+import { bonificoDellaChiave, elencoDaScrivere, rimborsiGiaScritti, segnoDelBonifico } from '@/lib/stripe/elenco-dei-rimborsi';
 // R043 — l'avviso agli amministratori e' lo stesso che usa il webhook dei
 // rimborsi: una casa sola, cosi' i due percorsi non divergono.
 import { notifyAdmins, togliLAvvisoAgliAmministratori } from '@/lib/stripe/webhook/comune';
@@ -1226,6 +1226,17 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     throw new RimborsoNonRitentabile('refundOrder: ordine senza payment_intent e non COD (non rimborsabile)');
   }
 
+  // Collaudo del 17/10, terzo giro — UN BONIFICO RIMASTO A META' SI FINISCE, NON SI RIFA'.
+  // Il segno di questa chiave e' gia' sull'ordine: un tentativo di prima l'ha scritto ed e'
+  // morto prima della fine (una chiamata rimasta appesa, Vercel che chiude la funzione). Sull'ordine
+  // ci sono segno, stato e prenotazione, ma forse non l'avviso, l'unico promemoria del bonifico, e
+  // forse non il credito. Rifarlo da capo prenoterebbe due volte; lasciarlo cosi' e' un cliente che
+  // non riceve mai i soldi. Si rifanno i due passi che non escono due volte: l'avviso (`unaVoltaPer`)
+  // e il credito (indice unico). Se l'avviso mancava, il tentativo di prima non era arrivato in
+  // fondo, e si fa anche tutto quello che viene dopo; se c'era, il resto non si ripete.
+  const bonificoDiPrima =
+    tipo === 'contanti' && opts.idempotencyKey ? bonificoDellaChiave(order, opts.idempotencyKey) : null;
+
   // Prima si divide, poi si rimborsa: il perché sta su `RimborsoInAttesaDellaDivisione`.
   // Prima di prenotare l'importo, così non resta niente da togliere.
   if (tipo === 'carta' && (await ilCarrelloAspettaLaDivisione(admin, order))) {
@@ -1260,18 +1271,22 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // che nessuno aveva pagato. La regola (lib/rimborsi/regole-del-rimborso.ts)
   // conta i contanti solo se incassati, e il credito speso solo se l'annullo
   // non l'ha gia' restituito.
+  // Sul bonifico rimasto a meta' questi controlli li ha gia' fatti il tentativo di prima, e
+  // adesso l'ordine dice «rimborsato»: lo stato dice cosa e' TORNATO, non cosa era ARRIVATO.
+  // Si guarda l'ordine com'era quando quel tentativo e' partito, cioe' incassato.
+  const comeAllInizio = bonificoDiPrima ? { ...order, payment_status: 'PAID' } : order;
   const rimborsabile = quantoSiPuoRestituire(order);
-  if (rimborsabile.perche === 'nessun-incasso') {
+  if (!bonificoDiPrima && rimborsabile.perche === 'nessun-incasso') {
     throw new RimborsoNonRitentabile(motivoNienteDaRestituire('nessun-incasso'));
   }
-  const safeAmountCents = Math.max(0, Math.min(opts.amountCents, rimborsabile.massimoCents));
+  const safeAmountCents = Math.max(0, Math.min(opts.amountCents, bonificoDiPrima ? grossCents : rimborsabile.massimoCents));
   if (safeAmountCents <= 0) throw new RimborsoNonRitentabile('refundOrder: importo rimborso non valido');
 
   // R71 — IN CHE MODO TORNANO I SOLDI. Carta → sulla carta. Contanti → la parte
   // pagata col credito torna credito, quella dei contanti torna SEMPRE col
   // bonifico, fatto a mano da chi amministra: nessuna scelta, nessuna strada che
   // dia credito al posto dei soldi. Una regola sola, pura (lib/rimborsi/).
-  const riparto = ripartoDelRimborso(order, safeAmountCents) as RipartoDelRimborso;
+  const riparto = ripartoDelRimborso(comeAllInizio, safeAmountCents) as RipartoDelRimborso;
   // 17/10 — Un ordine misto di un account cancellato (`user_id` vuoto): il credito
   // non ha a chi tornare, il bonifico dei contanti va avanti e l'avviso dice
   // quanto credito resta fuori. Se pagarlo in soldi lo decide Nicola.
@@ -1279,6 +1294,10 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   const ripartoVero: RipartoDelRimborso =
     creditoSenzaAccount > 0 ? { ...riparto, modo: 'bonifico', creditoCents: 0 } : riparto;
   const modo = ripartoVero.modo;
+  // La cifra che si finisce e' quella scritta: un'altra cifra non e' lo stesso rimborso.
+  if (bonificoDiPrima && bonificoDiPrima.centesimi !== ripartoVero.bonificoCents) {
+    throw new RimborsoNonRitentabile('refundOrder: su questo ordine il bonifico di questa chiave e gia scritto con un altra cifra');
+  }
 
   // L'email del cliente, prima dei soldi (vedi `emailDelCliente`). Col bonifico
   // serve all'avviso, e una lettura caduta ferma il rimborso; senza bonifico
@@ -1301,19 +1320,23 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // e uscire è irreversibile.
   // Ora la somma la fa il database in una riga sola, con il tetto dentro la
   // stessa istruzione. Se non rivendica, non si chiama Stripe: si esce.
-  const { data: claimRimborso, error: errClaim } = await admin
-    .rpc('accumula_rimborso', { p_order_id: order.id, p_delta: safeAmountCents });
-  if (errClaim) {
-    logger.error('[refundOrder] accumulo rimborso fallito', { orderId: order.id, message: errClaim.message });
-    throw new Error('refundOrder: impossibile registrare il rimborso');
-  }
-  const rivendicato = Array.isArray(claimRimborso) ? claimRimborso[0] : claimRimborso;
-  if (!rivendicato) {
-    throw new RimborsoNonRitentabile('refundOrder: rimborso già registrato o oltre il totale dell ordine');
+  // Il bonifico rimasto a meta' ha gia' la sua prenotazione: non se ne fa un'altra.
+  let newRefundedTotal = Number(order.refunded_amount_cents ?? 0);
+  if (!bonificoDiPrima) {
+    const { data: claimRimborso, error: errClaim } = await admin
+      .rpc('accumula_rimborso', { p_order_id: order.id, p_delta: safeAmountCents });
+    if (errClaim) {
+      logger.error('[refundOrder] accumulo rimborso fallito', { orderId: order.id, message: errClaim.message });
+      throw new Error('refundOrder: impossibile registrare il rimborso');
+    }
+    const rivendicato = Array.isArray(claimRimborso) ? claimRimborso[0] : claimRimborso;
+    if (!rivendicato) {
+      throw new RimborsoNonRitentabile('refundOrder: rimborso già registrato o oltre il totale dell ordine');
+    }
+    newRefundedTotal = Number(rivendicato.totale_rimborsato ?? 0);
   }
 
   // payment_status distingue REFUNDED (pieno) da PARTIALLY_REFUNDED (parziale).
-  const newRefundedTotal = Number(rivendicato.totale_rimborsato ?? 0);
   const isFull = newRefundedTotal >= grossCents;
   // L'ordine si chiude quando i soldi tornano tutti, OPPURE quando chi decide
   // dice che è chiuso lo stesso (vedi `annullaLOrdine`): «cliente assente» è
@@ -1385,6 +1408,8 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // con la risposta persa ha scritto lo stesso.
   let segnoDaTogliere: string | null = null;
   let avvisoDaTogliere = false;
+  // Sul bonifico rimasto a meta': il credito lo da' questo tentativo, perche' a diario non c'era.
+  let creditoDatoQui = false;
   try {
     if (tipo === 'carta') {
       // getStripe sta dentro la protezione: senza chiavi lancia, e prima la
@@ -1422,11 +1447,13 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
       //    teneva il credito di un rimborso che non c'era.
       if (avvisoDelBonifico) {
         const segno = segnoDelBonifico(chiave, ripartoVero.bonificoCents);
-        const elencoLetto = (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null;
-        // Un segno che c'era gia' prima di questo tentativo non e' suo, e non lo toglie.
-        if (!rimborsiGiaScritti({ stripe_refund_id: elencoLetto }).has(segno)) segnoDaTogliere = segno;
-        const errSegno = await aggiungiAllElencoDeiRimborsi(admin, order.id, elencoLetto, segno, statoDelRimborso);
-        if (errSegno) throw new Error(`refundOrder COD: bonifico non scritto sull ordine: ${errSegno.message}`);
+        // Un segno che c'era gia' prima di questo tentativo non e' suo: non lo riscrive e non lo toglie.
+        if (!bonificoDiPrima) {
+          segnoDaTogliere = segno;
+          const elencoLetto = (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null;
+          const errSegno = await aggiungiAllElencoDeiRimborsi(admin, order.id, elencoLetto, segno, statoDelRimborso);
+          if (errSegno) throw new Error(`refundOrder COD: bonifico non scritto sull ordine: ${errSegno.message}`);
+        }
         avvisoDaTogliere = true;
         const avviso = await notifyAdmins(avvisoDelBonifico.titolo, avvisoDelBonifico.testo, avvisoDelBonifico.link, {
           unaVoltaPer: chiaveDellAvviso,
@@ -1441,6 +1468,9 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
       // Idempotente sulla chiave: unique index su wallet_ledger(reason, ref),
       // migrazioni 098 e 143.
       if (ripartoVero.creditoCents > 0) {
+        // Un credito che non c'e' vuol dire che il tentativo di prima e' morto prima di finire il
+        // blocco: quello che viene dopo non l'ha fatto nessuno. Diario muto: si ferma e si riprova.
+        if (bonificoDiPrima && (await accreditoADiario(admin, chiave)) === null) creditoDatoQui = true;
         const { error: wErr } = await admin.rpc('wallet_credit', {
           p_user: order.user_id,
           p_cents: ripartoVero.creditoCents,
@@ -1485,14 +1515,51 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
         payout_status: order.payout_status ?? null,
       });
     }
-    const { error: errStorno } = await admin
-      .rpc('storna_rimborso', { p_order_id: order.id, p_delta: safeAmountCents });
+    // Il bonifico rimasto a meta' non ha prenotato niente: la prenotazione resta del tentativo di prima.
+    const { error: errStorno } = bonificoDiPrima
+      ? { error: null }
+      : await admin.rpc('storna_rimborso', { p_order_id: order.id, p_delta: safeAmountCents });
     if (errStorno) {
       logger.error('[refundOrder] STORNO FALLITO: l ordine resta segnato come rimborsato senza esserlo', {
         orderId: order.id, centesimi: safeAmountCents, message: errStorno.message,
       });
     }
     throw err;
+  }
+
+  // R82 (terzo giro) — Il credito e' uscito e il rimborso e' registrato, ma il
+  // diario non ha confermato la cifra: se un tentativo precedente avesse dato
+  // una cifra diversa, lo vede solo una persona. L'avviso dice cosa guardare.
+  if (cifraDelCreditoNonVerificata) {
+    try {
+      await notifyAdmins(
+        '⚠️ Rimborso col credito da controllare',
+        `Il rimborso sull'ordine #${order.id.slice(0, 8)} è registrato: ${formatPriceFromCents(ripartoVero.creditoCents)} di credito MyCity al cliente. ` +
+          'Il diario del credito in quel momento non ha risposto, quindi la cifra uscita non è stata verificata. ' +
+          `Apri il controllo: legge la riga del diario con riferimento ${chiave} e ti dice se dice ${formatPriceFromCents(ripartoVero.creditoCents)}.`,
+        // Riesame del 16/10, quarto giro — portava a /admin/orders, dove il diario del credito non
+        // si vede: il controllo chiesto si poteva fare solo dal database. Adesso porta alla pagina
+        // che lo fa (lib/rimborsi/credito-da-controllare.ts).
+        linkAlControlloDelCredito(chiave, ripartoVero.creditoCents),
+      );
+    } catch (e) {
+      logger.error('[refundOrder] avviso del credito da controllare non inviato', { orderId: order.id, e });
+    }
+  }
+
+  // Il bonifico rimasto a meta' che aveva gia' il suo avviso (e il suo credito): il tentativo di
+  // prima aveva finito il blocco, e quello che viene dopo (la quota del negozio, le email) puo'
+  // averlo gia' fatto. Rifarlo toglierebbe al negozio la sua quota due volte.
+  if (bonificoDiPrima && !avvisoDaTogliere && !creditoDatoQui) {
+    return {
+      refundId,
+      reversedCents: 0,
+      pieno: isFull,
+      modo,
+      importoCents: safeAmountCents,
+      creditoCents: ripartoVero.creditoCents,
+      bonificoCents: ripartoVero.bonificoCents,
+    };
   }
 
   // ② DOPO CHE I SOLDI SONO USCITI NON SI TORNA INDIETRO.
@@ -1608,26 +1675,6 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     }
   }
 
-  // R82 (terzo giro) — Il credito e' uscito e il rimborso e' registrato, ma il
-  // diario non ha confermato la cifra: se un tentativo precedente avesse dato
-  // una cifra diversa, lo vede solo una persona. L'avviso dice cosa guardare.
-  if (cifraDelCreditoNonVerificata) {
-    try {
-      await notifyAdmins(
-        '⚠️ Rimborso col credito da controllare',
-        `Il rimborso sull'ordine #${order.id.slice(0, 8)} è registrato: ${formatPriceFromCents(ripartoVero.creditoCents)} di credito MyCity al cliente. ` +
-          'Il diario del credito in quel momento non ha risposto, quindi la cifra uscita non è stata verificata. ' +
-          `Apri il controllo: legge la riga del diario con riferimento ${chiave} e ti dice se dice ${formatPriceFromCents(ripartoVero.creditoCents)}.`,
-        // Riesame del 16/10, quarto giro — portava a /admin/orders, dove il diario del credito non
-        // si vede: il controllo chiesto si poteva fare solo dal database. Adesso porta alla pagina
-        // che lo fa (lib/rimborsi/credito-da-controllare.ts).
-        linkAlControlloDelCredito(chiave, ripartoVero.creditoCents),
-      );
-    } catch (e) {
-      logger.error('[refundOrder] avviso del credito da controllare non inviato', { orderId: order.id, e });
-    }
-  }
-
   // 17/10/2026 — L'avviso del bonifico va anche per email alla casella dei
   // contatti pubblici, dove arrivano le risposte dei clienti con l'IBAN: la
   // campanella mostra le ultime 50 notifiche, la casella no. Non fa parte del
@@ -1660,7 +1707,8 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // lib/ordini/rimessa-a-scaffale.ts, dove una prova può eseguirla.
   await rimettiLaMerceAScaffale(admin, order, {
     ordineDaChiudere,
-    giaRimborsatoPrimaCents: alreadyRefunded,
+    // Il bonifico rimasto a meta' e' gia' dentro il totale letto: prima di lui c'era il resto.
+    giaRimborsatoPrimaCents: bonificoDiPrima ? alreadyRefunded - safeAmountCents : alreadyRefunded,
     annullatoDaChiChiama: opts.annullatoDaChiChiama === true,
   });
 

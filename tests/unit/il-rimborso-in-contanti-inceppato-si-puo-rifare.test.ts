@@ -160,12 +160,15 @@ describe('l accredito riesce ma la risposta si perde (la variante scomoda)', () 
       });
       expect(createReversal, 'la quota del negozio deve rientrare, una volta').toHaveBeenCalledTimes(1);
 
-      // Un ritentativo non accredita di nuovo e non registra niente in piu'.
+      // Un ritentativo non accredita di nuovo e non registra niente in piu'. Collaudo del 17/10,
+      // terzo giro: trova il segno della sua chiave, e risponde col rimborso che c'e' (prima
+      // lanciava perche' la seconda prenotazione superava il totale).
       await expect(refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1' }))
-        .rejects.toThrow();
+        .resolves.toMatchObject({ refundId: SEGNO });
       expect(creditoDi(finto.db, 'cliente'), 'credito accreditato due volte').toBe(1000);
       expect(ordine().refunded_amount_cents).toBe(2000);
       expect(avvisiDelBonifico(), 'il bonifico chiesto due volte').toHaveLength(1);
+      expect(createReversal, 'la quota del negozio ripresa due volte').toHaveBeenCalledTimes(1);
     });
 
     it(`se anche il diario non si legge si torna indietro, e il secondo tentativo chiude una volta sola (${comeLa143 ? 'dopo' : 'prima della'} 143)`, async () => {

@@ -18,6 +18,7 @@ import {
 import { formatPriceFromCents } from '@/lib/format';
 import { PAUSA_RIMBORSO_DA_DIVIDERE, SENZA_LA_PAUSA_DEL_CARRELLO } from '@/lib/stripe/webhook/rimborsi-da-fuori';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+import { bonificoDellaChiave } from '@/lib/stripe/elenco-dei-rimborsi';
 
 export const runtime = 'nodejs';
 
@@ -54,14 +55,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const admin = getAdminSupabase();
   const { data: dispute, error } = await admin
     .from('disputes')
-    .select('id, status, order_id, opener_id, against_id')
+    .select('id, status, order_id, opener_id, against_id, refund_cents')
     .eq('id', params.id)
     .single();
 
   if (error || !dispute) return ApiErrors.notFound('Reclamo non trovato');
-  if (dispute.status !== 'open' && dispute.status !== 'under_review') {
-    return ApiErrors.conflict(`Reclamo già in stato ${dispute.status}`);
-  }
 
   let refundId: string | null = null;
 
@@ -78,7 +76,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // 16/10 (riesame) — `internal_dispute_status`: se l'ordine è fermo per un rimborso dal cruscotto
   // da dividere, chiudere il reclamo non toglie la pausa (più sotto).
   const COLONNE_ORDINE =
-    'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status, internal_dispute_status';
+    'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status, internal_dispute_status, stripe_refund_id';
   let ord: OrdineDaRimborsare | null = null;
   if (dispute.order_id) {
     const { data } = await conRipiegoSchema(
@@ -89,7 +87,27 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     ord = (data ?? null) as OrdineDaRimborsare | null;
   }
 
-  if (body.status === 'resolved_buyer' && body.refundCents && ord) {
+  /**
+   * Collaudo del 17/10, terzo giro — IL RECLAMO CHIUSO A META' SI RIPRENDE.
+   *
+   * Il turno si prende prima dei soldi: se la funzione muore dentro il rimborso
+   * (una chiamata appesa, Vercel che la chiude), il reclamo resta «a favore del
+   * cliente» e l'ordine porta il segno del suo bonifico, ma forse senza l'avviso a
+   * chi paga. Il «riprova» rispondeva «Reclamo già in stato resolved_buyer» e il
+   * cliente non riceveva mai i soldi. Adesso lo stesso esito, ripremuto, finisce
+   * quel rimborso (`refundOrder`, con la cifra scritta sul reclamo) e il resto
+   * della chiusura: nessuna seconda prenotazione, nessun secondo bonifico.
+   */
+  const ripresa =
+    dispute.status === 'resolved_buyer' &&
+    body.status === 'resolved_buyer' &&
+    !!bonificoDellaChiave(ord as { stripe_refund_id?: string | null } | null, `dispute_${dispute.id}`);
+  if (!ripresa && dispute.status !== 'open' && dispute.status !== 'under_review') {
+    return ApiErrors.conflict(`Reclamo già in stato ${dispute.status}`);
+  }
+  const importo = ripresa ? Number(dispute.refund_cents ?? 0) : body.refundCents;
+
+  if (!ripresa && body.status === 'resolved_buyer' && body.refundCents && ord) {
     const rimborsabile = quantoSiPuoRestituire(ord);
     if (rimborsabile.perche !== 'ok') {
       return ApiErrors.conflict(motivoNienteDaRestituire(rimborsabile.perche));
@@ -114,26 +132,33 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * aperto: e' l'unico modo perche' resti risolvibile.
    */
   const statiRisolvibili = ['open', 'under_review'];
-  const { data: rivendicato, error: errRivendica } = await admin
-    .from('disputes')
-    .update({
-      status: body.status,
-      resolution_notes: body.notes,
-      resolved_by: user.id,
-      resolved_at: new Date().toISOString(),
-      refund_cents: body.refundCents ?? null,
-    })
-    .eq('id', params.id)
-    .in('status', statiRisolvibili)
-    .select('id');
+  const { data: rivendicato, error: errRivendica } = ripresa
+    ? { data: [{ id: dispute.id }], error: null }
+    : await admin
+        .from('disputes')
+        .update({
+          status: body.status,
+          resolution_notes: body.notes,
+          resolved_by: user.id,
+          resolved_at: new Date().toISOString(),
+          refund_cents: body.refundCents ?? null,
+        })
+        .eq('id', params.id)
+        .in('status', statiRisolvibili)
+        .select('id');
 
   if (errRivendica) return ApiErrors.internal('Update fallito');
   if (!rivendicato || rivendicato.length === 0) {
     return ApiErrors.conflict("Reclamo già risolto da un'altra sessione");
   }
 
-  /** Riapre il reclamo: si usa solo quando i soldi NON sono usciti. */
+  /**
+   * Riapre il reclamo: si usa solo quando i soldi NON sono usciti. Non sulla
+   * ripresa: li' il segno del bonifico resta sull'ordine, e il reclamo resta chiuso
+   * finche' non si finisce.
+   */
   const riapri = async () => {
+    if (ripresa) return;
     await admin
       .from('disputes')
       .update({ status: dispute.status, resolved_by: null, resolved_at: null, refund_cents: null })
@@ -147,7 +172,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   let rimborsoPieno = false;
 
   // Rimborso reale solo se risolto a favore del buyer con un importo.
-  if (body.status === 'resolved_buyer' && body.refundCents) {
+  if (body.status === 'resolved_buyer' && importo) {
     // refundOrder gestisce sia il refund Stripe (carta + claw-back) sia
     // l'accredito sul wallet (COD, 🟠-18). Il blocco su Stripe-non-configurato
     // vale SOLO per gli ordini carta: un rimborso COD non usa Stripe.
@@ -159,7 +184,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     try {
       const res = await refundOrder({
         orderId: dispute.order_id,
-        amountCents: body.refundCents,
+        amountCents: importo,
         reason: body.notes,
         metadata: { dispute_id: dispute.id },
         idempotencyKey: `dispute_${dispute.id}`,
@@ -288,7 +313,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
           : 'dispute.reject',
     targetTable: 'disputes',
     targetId: dispute.id,
-    metadata: { orderId: dispute.order_id, refundCents: body.refundCents ?? null, refundId, notes: body.notes },
+    metadata: { orderId: dispute.order_id, refundCents: importo ?? null, refundId, notes: body.notes, ...(ripresa ? { ripresa: true } : {}) },
   });
 
   return NextResponse.json({ ok: true, status: body.status, refundId }, { status: 200 });

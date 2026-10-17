@@ -13,22 +13,10 @@
 
 import { formatPriceFromCents } from '@/lib/format';
 import { indirizzoContatto } from '@/lib/contatti-pubblici';
-import {
-  centesimiDelBonificoDalSegno,
-  eUnBonificoDiRimborso,
-  rimborsiGiaScritti,
-  segnoDelBonifico,
-} from '@/lib/stripe/elenco-dei-rimborsi';
+import { centesimiDelBonificoDalSegno, eUnBonificoDiRimborso, segnoDelBonifico } from '@/lib/stripe/elenco-dei-rimborsi';
 
 // Le funzioni del segno vivono in lib/stripe/elenco-dei-rimborsi.ts, che non dipende da niente.
 export { centesimiDelBonificoDalSegno, eUnBonificoDiRimborso, segnoDelBonifico };
-
-/** Quello che serve dell'ordine per riconoscere un bonifico registrato dal server. */
-export interface OrdineDelBonifico {
-  id: string;
-  /** L'elenco dei rimborsi registrati sull'ordine (`lib/stripe/elenco-dei-rimborsi.ts`). */
-  stripe_refund_id?: string | null;
-}
 
 /** Il titolo dell'avviso agli amministratori: lo stesso dappertutto. */
 export const TITOLO_DEL_BONIFICO_DA_FARE = '💶 Bonifico di rimborso da fare';
@@ -140,28 +128,6 @@ export function avvisoDelBonificoDaFare(a: {
   return { titolo: TITOLO_DEL_BONIFICO_DA_FARE, testo: frasi.join(' '), link: '/admin/orders' };
 }
 
-/**
- * IL RIMBORSO DI QUESTO RESO E' GIA' SULL'ORDINE? (riesame del 16/10, terzo giro)
- *
- * Se la scrittura dell'esito sul reso cade dopo che il rimborso e' partito, il
- * reso resta senza segno ma l'ordine no: nel suo elenco dei rimborsi c'e' gia'
- * `bonifico:<centesimi>:return_<id del reso>`. Da qui `avanza` riconosce il
- * caso: «rimborsato» registra il rimborso che c'e' invece di rifarlo (nessun
- * secondo bonifico), e «chiudi senza rimborso» non passa.
- */
-export function bonificoDelResoGiaSullOrdine(
-  resoId: string,
-  ordine: Pick<OrdineDelBonifico, 'stripe_refund_id'> | null | undefined,
-): { segno: string; centesimi: number } | null {
-  if (!ordine) return null;
-  for (const segno of rimborsiGiaScritti(ordine)) {
-    if (!eUnBonificoDiRimborso(segno) || !segno.endsWith(`:return_${resoId}`)) continue;
-    const centesimi = centesimiDelBonificoDalSegno(segno);
-    if (centesimi != null) return { segno, centesimi };
-  }
-  return null;
-}
-
 /** Cosa legge chi ha premuto, quando il rimborso e' partito ma il reso non lo sa. */
 export const RIMBORSO_PARTITO_MA_NON_REGISTRATO =
   "Il rimborso è partito ma non si è potuto registrare sul reso: abbiamo avvisato l'amministrazione. Non ripetere il rimborso.";
@@ -172,12 +138,20 @@ export const RIMBORSO_PARTITO_MA_NON_REGISTRATO =
  * In `avanza` e in `decide` i soldi escono prima, poi si scrive l'esito sul
  * reso. Se la scrittura cade, la rotta non risponde «ok»: chi amministra riceve
  * questo avviso, e il negozio legge che non deve ripetere il rimborso.
+ *
+ * Collaudo del 17/10, terzo giro — DA `avanza` IL RESO E' GIA' «RIMBORSATO».
+ * L'avviso diceva a tutti e due «quando il negozio segna il reso come
+ * rimborsato, si registra»: vero dopo `decide` (il reso resta «approvato»),
+ * falso dopo `avanza`, dove il turno ha gia' scritto «rimborsato» e un secondo
+ * «rimborsato» risponde 409. Li' sul reso manca solo il riferimento del rimborso.
  */
 export function avvisoDelRimborsoNonRegistrato(r: {
   resoId: string;
   ordineId: string;
   refundId: string | null;
   bonificoCents: number;
+  /** Da `avanza`: il reso risulta gia' rimborsato, non c'e' un passo del negozio che lo registri. */
+  resoGiaRimborsato?: boolean;
 }): { titolo: string; testo: string; link: string } {
   const inizio =
     `Il rimborso del reso ${r.resoId.slice(0, 8)} sull'ordine ${numeroDellOrdine(r.ordineId)} è partito, ` +
@@ -188,8 +162,10 @@ export function avvisoDelRimborsoNonRegistrato(r: {
       r.bonificoCents > 0
         ? `${inizio} Dentro c'è un bonifico di ${formatPriceFromCents(r.bonificoCents)}: è lo stesso dell'avviso ` +
           `«Bonifico di rimborso da fare» di quell'ordine, con la causale «${causaleDelBonifico(r.ordineId, `return_${r.resoId}`)}», ` +
-          'quindi pagalo una volta sola. Il rimborso non va rifatto: quando il negozio segna il reso come rimborsato, ' +
-          'si registra senza ripartire.'
+          'quindi pagalo una volta sola. ' +
+          (r.resoGiaRimborsato
+            ? "Il rimborso non va rifatto e sul reso non serve fare altro: risulta già rimborsato, gli manca solo il riferimento del rimborso, che resta scritto sull'ordine."
+            : 'Il rimborso non va rifatto: quando il negozio segna il reso come rimborsato, si registra senza ripartire.')
         : `${inizio} Non va rifatto: avvisa tu il negozio di non rimborsarlo di nuovo e di non chiuderlo senza rimborso. ` +
           "Il negozio è scritto nell'ordine, i suoi recapiti in Utenti.",
     link: '/admin/orders',
