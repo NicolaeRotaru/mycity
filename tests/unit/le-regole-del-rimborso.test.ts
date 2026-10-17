@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  serveLaSceltaDelRimborso,
+  haUnaParteInContanti,
   comeSiDivideIlReclamo,
   pagamentoPerChiDecide,
   quantoSiPuoRestituire,
@@ -8,13 +8,10 @@ import {
   statoDelReclamoSullOrdine,
   type OrdineDaRimborsare,
 } from '@/lib/rimborsi/regole-del-rimborso';
-import { ibanValido, leggiSceltaDelRimborso, normalizzaIban } from '@/lib/rimborsi/scelta-del-cliente';
-import { comeTornanoIContanti } from '@/lib/rimborsi/scelta-del-reso';
 import {
   centesimiDelBonificoDalSegno,
   eUnBonificoDiRimborso,
   segnoDelBonifico,
-  vociDeiBonificiDaFare,
 } from '@/lib/rimborsi/bonifici-da-fare';
 import { formatPriceFromCents } from '@/lib/format';
 
@@ -148,30 +145,26 @@ describe('R84 — il pannello dei reclami mostra come ha pagato il cliente e qua
   });
 });
 
-describe('R71 — i contanti tornano col bonifico, il credito solo se scelto', () => {
-  it('nessuna scelta: tutto col bonifico', () => {
-    expect(ripartoDelRimborso(maglione, 4000, null)).toMatchObject({ modo: 'bonifico', creditoCents: 0, bonificoCents: 4000 });
+describe('R71 — i contanti tornano sempre col bonifico, il credito speso torna credito', () => {
+  it('tutto in contanti: tutto col bonifico, e il riparto non prende una scelta', () => {
+    expect(ripartoDelRimborso(maglione, 4000)).toEqual({ modo: 'bonifico', cartaCents: 0, creditoCents: 0, bonificoCents: 4000 });
+    // La firma ha due argomenti: una scelta del cliente non ha piu' un posto dove entrare.
+    expect(ripartoDelRimborso.length).toBe(2);
   });
 
-  it('scelto il credito: tutto credito, e lo dice', () => {
-    expect(ripartoDelRimborso(maglione, 4000, 'CREDITO')).toMatchObject({
-      modo: 'credito', creditoCents: 4000, bonificoCents: 0, creditoScelto: true,
-    });
-  });
-
-  it('la parte pagata col credito torna credito anche se il cliente vuole il bonifico', () => {
+  it('la parte pagata col credito torna credito, i contanti col bonifico, in proporzione', () => {
     // 50 €: 20 di credito e 30 in contanti. Rimborso pieno → 20 credito, 30 bonifico.
-    expect(ripartoDelRimborso(misto, 5000, 'BONIFICO')).toMatchObject({ modo: 'misto', creditoCents: 2000, bonificoCents: 3000 });
-    // Rimborso di 10 € → in proporzione: 4 di credito, 6 col bonifico.
-    expect(ripartoDelRimborso(misto, 1000, null)).toMatchObject({ creditoCents: 400, bonificoCents: 600 });
+    expect(ripartoDelRimborso(misto, 5000)).toMatchObject({ modo: 'misto', creditoCents: 2000, bonificoCents: 3000 });
+    // Rimborso di 10 € → 4 di credito, 6 col bonifico; di 30 € → 12 e 18.
+    expect(ripartoDelRimborso(misto, 1000)).toMatchObject({ creditoCents: 400, bonificoCents: 600 });
+    expect(ripartoDelRimborso(misto, 3000)).toMatchObject({ creditoCents: 1200, bonificoCents: 1800 });
   });
 
   it('senza la colonna del lordo (124) il riparto e lo stesso: i contanti non diventano credito', () => {
     // 30 € in contanti e 20 di credito, ordine nato senza gross_total_cents. Con la 124 un rimborso
     // di 30 € fa 12 di credito e 18 col bonifico; senza, faceva 20 di credito e 10 col bonifico.
     const senzaLordo = { ...misto, gross_total_cents: null };
-    expect(ripartoDelRimborso(senzaLordo, 3000, 'BONIFICO')).toMatchObject({ creditoCents: 1200, bonificoCents: 1800 });
-    expect(ripartoDelRimborso(misto, 3000, 'BONIFICO')).toMatchObject({ creditoCents: 1200, bonificoCents: 1800 });
+    expect(ripartoDelRimborso(senzaLordo, 3000)).toMatchObject({ creditoCents: 1200, bonificoCents: 1800 });
     // E il tetto resta quello del database (accumula_rimborso, sullo stesso ripiego): la cassa.
     expect(quantoSiPuoRestituire(senzaLordo)).toEqual({ massimoCents: 3000, perche: 'ok' });
   });
@@ -179,54 +172,19 @@ describe('R71 — i contanti tornano col bonifico, il credito solo se scelto', (
   it('un credito regalato non diventa soldi sul conto', () => {
     // Ordine pagato tutto col credito (premio fedelta'): niente bonifico, mai.
     const tuttoCredito = { ...maglione, total_price: 0, wallet_applied_cents: 4000 };
-    expect(ripartoDelRimborso(tuttoCredito, 4000, 'BONIFICO')).toMatchObject({
-      modo: 'credito', creditoCents: 4000, bonificoCents: 0, creditoScelto: false,
-    });
+    expect(ripartoDelRimborso(tuttoCredito, 4000)).toMatchObject({ modo: 'credito', creditoCents: 4000, bonificoCents: 0 });
   });
 
-  it('la carta torna sulla carta, qualunque cosa arrivi', () => {
+  it('la carta torna sulla carta', () => {
     const carta = { ...maglione, stripe_payment_intent: 'pi_1', payment_method: 'card' };
-    expect(ripartoDelRimborso(carta, 4000, 'CREDITO')).toMatchObject({ modo: 'carta', cartaCents: 4000, creditoCents: 0 });
+    expect(ripartoDelRimborso(carta, 4000)).toMatchObject({ modo: 'carta', cartaCents: 4000, creditoCents: 0, bonificoCents: 0 });
   });
 
-  it('una scelta che non si e potuta leggere vale bonifico, mai credito', () => {
-    expect(comeTornanoIContanti({ modo: null, iban: null, letta: false })).toMatchObject({ modo: 'BONIFICO' });
-    expect(comeTornanoIContanti({ modo: 'CREDITO', iban: null, letta: true })).toEqual({ modo: 'CREDITO' });
-    expect(comeTornanoIContanti({ modo: 'BONIFICO', iban: 'IT60X0542811101000000123456', letta: true })).toMatchObject({
-      modo: 'BONIFICO', ibanFinale: '3456',
-    });
-  });
-});
-
-describe('R71 — il modulo di reso: IBAN scritto giusto, scelta espressa', () => {
-  it('riconosce un IBAN vero e scarta quello con una cifra sbagliata', () => {
-    expect(ibanValido('IT60 X054 2811 1010 0000 0123 456')).toBe(true);
-    expect(ibanValido('IT60X0542811101000000123457')).toBe(false); // una cifra cambiata
-    expect(ibanValido('IT60X05428111010000001234')).toBe(false); // troppo corto per l'Italia
-    expect(ibanValido('DE89370400440532013000')).toBe(true);
-    expect(ibanValido('US12345678901234567890')).toBe(false); // fuori dall'area SEPA
-    expect(normalizzaIban(' it60-x054.2811 ')).toBe('IT60X0542811');
-  });
-
-  it('contanti + bonifico senza IBAN o con IBAN storto: si corregge prima di inviare', () => {
-    expect(leggiSceltaDelRimborso({ modo: 'BONIFICO', iban: '' }, { pagatoInContanti: true }).ok).toBe(false);
-    expect(leggiSceltaDelRimborso({ modo: 'BONIFICO', iban: 'IT00X123' }, { pagatoInContanti: true }).ok).toBe(false);
-    expect(leggiSceltaDelRimborso({ modo: 'BONIFICO', iban: 'it60 x054 2811 1010 0000 0123 456' }, { pagatoInContanti: true })).toEqual({
-      ok: true, scelta: { modo: 'BONIFICO', iban: 'IT60X0542811101000000123456' },
-    });
-  });
-
-  it('la domanda si fa solo se c e una parte pagata in contanti', () => {
-    expect(serveLaSceltaDelRimborso(maglione)).toBe(true);
-    expect(serveLaSceltaDelRimborso({ ...maglione, total_price: 0, wallet_applied_cents: 4000 })).toBe(false);
-    expect(serveLaSceltaDelRimborso({ ...maglione, stripe_payment_intent: 'pi_1', payment_method: 'card' })).toBe(false);
-  });
-
-  it('il credito e una scelta espressa; senza scelta il reso si apre lo stesso', () => {
-    expect(leggiSceltaDelRimborso({ modo: 'CREDITO' }, { pagatoInContanti: true })).toEqual({ ok: true, scelta: { modo: 'CREDITO' } });
-    expect(leggiSceltaDelRimborso(undefined, { pagatoInContanti: true })).toEqual({ ok: true, scelta: null });
-    // Sulla carta non si sceglie niente.
-    expect(leggiSceltaDelRimborso({ modo: 'CREDITO' }, { pagatoInContanti: false })).toEqual({ ok: true, scelta: null });
+  it('il modulo di reso dice «bonifico» solo se c e una parte pagata in contanti', () => {
+    expect(haUnaParteInContanti(maglione)).toBe(true);
+    expect(haUnaParteInContanti(misto)).toBe(true);
+    expect(haUnaParteInContanti({ ...maglione, total_price: 0, wallet_applied_cents: 4000 })).toBe(false);
+    expect(haUnaParteInContanti({ ...maglione, stripe_payment_intent: 'pi_1', payment_method: 'card' })).toBe(false);
   });
 });
 
@@ -240,58 +198,13 @@ describe('R76 — LOST solo se chi ha mosso i soldi dice «tutto»', () => {
   });
 });
 
-describe('R71 — la lista dei bonifici da fare', () => {
-  it('mostra solo i bonifici, prima quelli da fare, con la cifra del bonifico e l IBAN leggibile', () => {
-    const voci = vociDeiBonificiDaFare([
-      { id: 'r1', order_id: 'o1', refund_amount_cents: 5000, refunded_at: '2026-10-10', refund_id: 'bonifico:return_r1',
-        refund_iban: 'IT60X0542811101000000123456', refund_bonifico_cents: 3000, refund_bonifico_fatto_at: null },
-      { id: 'r2', order_id: 'o2', refund_amount_cents: 1000, refunded_at: '2026-10-12', refund_id: 'wallet:return_r2' },
-      { id: 'r3', order_id: 'o3', refund_amount_cents: 800, refunded_at: '2026-10-13', refund_id: 'bonifico:800:return_r3',
-        refund_bonifico_fatto_at: '2026-10-14' },
-    ]);
-    expect(voci.map((v) => v.id)).toEqual(['r1', 'r3']);
-    expect(voci.every((v) => v.tipo === 'reso')).toBe(true);
-    expect(voci[0]).toMatchObject({ importoCents: 3000, iban: 'IT60 X054 2811 1010 0000 0123 456', daFare: true });
-    expect(voci[1]).toMatchObject({ importoCents: 800, iban: null, daFare: false });
-  });
-
-  it('i bonifici dei reclami stanno nella stessa lista, con la loro cifra e senza IBAN', () => {
-    const voci = vociDeiBonificiDaFare(
-      [{ id: 'r1', order_id: 'o1', refund_amount_cents: 800, refunded_at: '2026-10-13', refund_id: 'bonifico:800:return_r1',
-        refund_bonifico_fatto_at: '2026-10-14' }],
-      [
-        { dispute_id: 'd1', order_id: 'o2', importo_cents: 1800, registrato_at: '2026-10-12', fatto_at: null },
-        { dispute_id: 'd2', order_id: 'o3', importo_cents: 0, registrato_at: '2026-10-12', fatto_at: null },
-      ],
-    );
-    expect(voci.map((v) => `${v.tipo}:${v.id}`)).toEqual(['reclamo:d1', 'reso:r1']);
-    expect(voci[0]).toMatchObject({ ordineId: 'o2', importoCents: 1800, iban: null, daFare: true });
-  });
-
-  /**
-   * Collaudo del 15/10, secondo giro (bloccante) — senza la migrazione 162 la
-   * colonna della cifra del bonifico non c'e', e la lista mostrava l'intero
-   * rimborso: 50 € da bonificare su un ordine dove 20 erano gia' tornati come
-   * credito. Chi seguiva la lista pagava 30 € di troppo.
-   */
-  it('senza la colonna della 162 la cifra viene dal segno del rimborso, non dall intero rimborso', () => {
-    const [voce] = vociDeiBonificiDaFare([
-      { id: 'r1', order_id: 'o1', refund_amount_cents: 5000, refunded_at: '2026-10-13', refund_id: 'bonifico:3000:return_r1' },
-    ]);
-    expect(voce.importoCents, 'la lista fa bonificare anche la parte gia tornata come credito').toBe(3000);
-  });
-
-  it('se nessuno dice la cifra del bonifico, la lista non ne inventa una', () => {
-    const [voce] = vociDeiBonificiDaFare([
-      { id: 'r1', order_id: 'o1', refund_amount_cents: 5000, refunded_at: '2026-10-13', refund_id: 'bonifico:return_r1' },
-    ]);
-    expect(voce.importoCents).toBeNull();
-  });
-
-  it('il segno del bonifico porta la cifra e la restituisce uguale', () => {
+describe('R71 — il segno del bonifico sull ordine', () => {
+  it('porta la cifra e la restituisce uguale', () => {
     const segno = segnoDelBonifico('return_r1', 3000);
+    expect(segno).toBe('bonifico:3000:return_r1');
     expect(eUnBonificoDiRimborso(segno)).toBe(true);
     expect(centesimiDelBonificoDalSegno(segno)).toBe(3000);
+    expect(eUnBonificoDiRimborso('wallet:return_r1')).toBe(false);
     expect(centesimiDelBonificoDalSegno('wallet:return_r1')).toBeNull();
     expect(centesimiDelBonificoDalSegno('bonifico:return_r1')).toBeNull();
   });
@@ -308,8 +221,8 @@ describe('il pannello dei reclami dice come si divide la cifra', () => {
     expect(frase).toContain(`Di ${formatPriceFromCents(3000)}, ${formatPriceFromCents(1200)} tornano come credito MyCity`);
     expect(frase).toContain(`e ${formatPriceFromCents(1800)} col bonifico`);
   });
-  it('dice le stesse cifre che il rimborso usera davvero (bonifico, come la rotta dei reclami)', () => {
-    const r = ripartoDelRimborso(misto, 3000, 'BONIFICO')!;
+  it('dice le stesse cifre che il rimborso usera davvero', () => {
+    const r = ripartoDelRimborso(misto, 3000)!;
     expect(comeSiDivideIlReclamo(misto, 3000)).toContain(formatPriceFromCents(r.creditoCents));
     expect(comeSiDivideIlReclamo(misto, 3000)).toContain(formatPriceFromCents(r.bonificoCents));
   });

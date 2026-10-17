@@ -4,7 +4,6 @@ import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { colonnaNonTrovata } from '@/lib/db/migrazione-148';
-import { tabellaDeiBonificiMancante } from '@/lib/rimborsi/bonifici-da-fare';
 import {
   ilBonificoCheIlClienteAspetta,
   type RigaDelReclamoDelCliente,
@@ -12,6 +11,18 @@ import {
 } from '@/lib/rimborsi/bonifico-del-cliente';
 
 export const runtime = 'nodejs';
+
+/**
+ * La tabella dei bonifici dei reclami (162) non c'e'? PostgreSQL risponde 42P01,
+ * PostgREST PGRST205. Spostata qui dalla lista dei bonifici, tolta il 17/10/2026:
+ * va via insieme a questo file (semplificazione del rimborso dei contanti).
+ */
+function tabellaDeiBonificiMancante(errore: { code?: string; message?: string } | null | undefined): boolean {
+  if (!errore) return false;
+  if (errore.code === '42P01' || errore.code === 'PGRST205') return true;
+  const testo = (errore.message ?? '').toLowerCase();
+  return testo.includes('bonifici_dei_reclami') && (testo.includes('does not exist') || testo.includes('could not find'));
+}
 
 /**
  * IL BONIFICO DI RIMBORSO CHE IL CLIENTE ASPETTA (riesame del 16/10, quarto giro).

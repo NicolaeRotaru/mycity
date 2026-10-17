@@ -41,3 +41,28 @@ export function elencoDaScrivere(prima: ReadonlySet<string>, nuovi: ReadonlyArra
   }
   return tutti.slice(-RIMBORSI_A_MENTE).join(',');
 }
+
+/**
+ * IL SEGNO DI UN RIMBORSO DA PAGARE COL BONIFICO (R71).
+ *
+ * Chi ha pagato in contanti riavrà i soldi con un bonifico, che fa a mano chi
+ * amministra MyCity. `refundOrder` lo registra nell'elenco qui sopra, con la
+ * cifra dentro: `bonifico:3000:return_<id del reso>`. Quella colonna la scrive
+ * solo il server (migrazione 061), e la pagina dell'ordine la legge già.
+ * Stanno qui, senza dipendenze, perché le usano il server e la pagina.
+ */
+export function segnoDelBonifico(chiave: string, bonificoCents: number): string {
+  return `bonifico:${Math.max(0, Math.round(bonificoCents))}:${chiave}`;
+}
+
+/** Vero se un id dell'elenco è il segno di un bonifico da fare. */
+export function eUnBonificoDiRimborso(refundId: string | null | undefined): boolean {
+  return typeof refundId === 'string' && refundId.startsWith('bonifico:');
+}
+
+/** La cifra del bonifico scritta nel segno, oppure `null` se il segno non la porta. */
+export function centesimiDelBonificoDalSegno(refundId: string | null | undefined): number | null {
+  if (typeof refundId !== 'string') return null;
+  const trovato = /^bonifico:(\d+):/.exec(refundId);
+  return trovato ? Number(trovato[1]) : null;
+}

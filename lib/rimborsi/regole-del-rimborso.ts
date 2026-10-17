@@ -21,9 +21,6 @@ import { formatPriceFromCents } from '@/lib/format';
  */
 export type ModoDelRimborso = 'carta' | 'credito' | 'bonifico' | 'misto';
 
-/** La scelta che il cliente fa nel modulo di reso, per gli ordini in contanti. */
-export type SceltaContanti = 'BONIFICO' | 'CREDITO';
-
 /** Quello che serve sapere di un ordine per decidere un rimborso. */
 export interface OrdineDaRimborsare {
   stripe_payment_intent?: string | null;
@@ -57,11 +54,11 @@ export function pagatoInContanti(ordine: OrdineDaRimborsare): boolean {
 }
 
 /**
- * Il modulo di reso deve chiedere come riavere i soldi? Solo se c'e' una parte
- * pagata in contanti: un ordine pagato tutto col credito MyCity torna credito
- * comunque, e chiedere l'IBAN sarebbe una domanda finta.
+ * C'e' una parte pagata in contanti? Solo allora un rimborso diventa un bonifico:
+ * un ordine pagato tutto col credito MyCity torna credito, e il modulo di reso
+ * non deve dire che arriva un bonifico.
  */
-export function serveLaSceltaDelRimborso(ordine: OrdineDaRimborsare): boolean {
+export function haUnaParteInContanti(ordine: OrdineDaRimborsare): boolean {
   return pagatoInContanti(ordine) && Number(ordine.total_price ?? 0) > 0;
 }
 
@@ -191,19 +188,18 @@ export function motivoNienteDaRestituire(perche: 'gia-rimborsato' | 'nessun-inca
  * altrimenti».
  *
  *  · Carta → sulla carta.
- *  · Contanti → il mezzo che si puo' restituire a distanza e' il bonifico. Il
- *    credito MyCity arriva SOLO se il cliente l'ha scelto lui, nel modulo di
- *    reso: qualunque altra cosa — nessuna scelta, una scelta che non si e'
- *    potuta leggere, una migrazione non ancora applicata — vale bonifico.
- *  · La parte pagata col CREDITO MyCity torna credito, sempre: e' il suo stesso
- *    mezzo. Mandarla col bonifico trasformerebbe in soldi veri un credito che
- *    magari era un premio (punti, inviti): ordini con 20 € di credito regalato,
- *    restituisci, ricevi 20 € sul conto.
+ *  · I contanti tornano sempre col bonifico, fatto a mano da chi amministra
+ *    (decisione di Nicola del 17/10/2026): mai credito MyCity al posto dei soldi,
+ *    da nessuna strada, e nessuna scelta da chiedere al cliente.
+ *  · Il credito MyCity speso sull'ordine torna credito: e' il suo stesso mezzo.
+ *    Mandarlo col bonifico trasformerebbe in soldi veri un credito che magari
+ *    era un premio (punti, inviti): su 50 € pagati con 20 di credito regalato e
+ *    30 in contanti, il cliente riceverebbe 50 € in soldi avendone dati 30.
  *
  * Su un ordine pagato in parte col credito il rimborso si divide in proporzione
  * a quello che il cliente ha dato con ciascun mezzo. Ordine da 50 €: 20 di
  * credito e 30 in contanti incassati. Rimborso di 10 € → 4 di credito e 6 col
- * bonifico (o 10 di credito, se il cliente ha scelto il credito).
+ * bonifico; rimborso di 30 € → 12 di credito e 18 col bonifico.
  */
 export type TipoDiPagamento = 'carta' | 'contanti';
 
@@ -222,32 +218,22 @@ export interface RipartoDelRimborso {
   creditoCents: number;
   /** Va pagato col bonifico, a mano, da chi amministra. */
   bonificoCents: number;
-  /** Vero se una parte va a credito per scelta del cliente, non perche' era credito. */
-  creditoScelto: boolean;
 }
 
-export function ripartoDelRimborso(
-  ordine: OrdineDaRimborsare,
-  importoCents: number,
-  sceltaDelCliente?: SceltaContanti | null,
-): RipartoDelRimborso | null {
+export function ripartoDelRimborso(ordine: OrdineDaRimborsare, importoCents: number): RipartoDelRimborso | null {
   const tipo = tipoDiPagamento(ordine);
   if (!tipo) return null;
   const importo = Math.max(0, Math.round(importoCents));
   if (tipo === 'carta') {
-    return { modo: 'carta', cartaCents: importo, creditoCents: 0, bonificoCents: 0, creditoScelto: false };
+    return { modo: 'carta', cartaCents: importo, creditoCents: 0, bonificoCents: 0 };
   }
 
   const { creditoCents: creditoVersato, contantiCents } = versatoInContanti(ordine);
   const versato = creditoVersato + contantiCents;
-  const parteDelCredito = versato > 0 ? Math.round((importo * creditoVersato) / versato) : 0;
-  const parteDeiContanti = importo - parteDelCredito;
-  const creditoScelto = sceltaDelCliente === 'CREDITO' && parteDeiContanti > 0;
-
-  const creditoCents = parteDelCredito + (sceltaDelCliente === 'CREDITO' ? parteDeiContanti : 0);
+  const creditoCents = versato > 0 ? Math.round((importo * creditoVersato) / versato) : 0;
   const bonificoCents = importo - creditoCents;
   const modo: ModoDelRimborso = bonificoCents === 0 ? 'credito' : creditoCents === 0 ? 'bonifico' : 'misto';
-  return { modo, cartaCents: 0, creditoCents, bonificoCents, creditoScelto };
+  return { modo, cartaCents: 0, creditoCents, bonificoCents };
 }
 
 /**
@@ -257,7 +243,7 @@ export function ripartoDelRimborso(
  * scrive 30 € pensando ai contanti. `ripartoDelRimborso` li divide in
  * proporzione: 12 € tornano come credito e 18 € col bonifico. Il pannello lo
  * diceva solo dopo, nell'avviso del bonifico da fare. Qui si calcola con la
- * stessa regola e la stessa scelta della rotta dei reclami (bonifico).
+ * stessa regola della rotta dei reclami.
  * Restituisce la frase, o `null` quando non c'e' niente da dividere.
  *
  * Riesame del 16/10, quarto giro — OLTRE IL MASSIMO NON SI DIVIDE NIENTE.
@@ -281,7 +267,7 @@ export function comeSiDivideIlReclamo(ordine: OrdineDaRimborsare, importoCents: 
       'Con questa cifra il reclamo non si chiude.'
     );
   }
-  const riparto = ripartoDelRimborso(ordine, importo, 'BONIFICO');
+  const riparto = ripartoDelRimborso(ordine, importo);
   if (!riparto || riparto.modo !== 'misto') return null;
   return (
     `Di ${formatPriceFromCents(importo)}, ${formatPriceFromCents(riparto.creditoCents)} tornano come credito MyCity ` +

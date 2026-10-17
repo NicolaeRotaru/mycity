@@ -6,11 +6,9 @@ import { creaFintoDatabase, notificheConTitolo } from './aiuti/finto-database-de
  * 16/10/2026 — IL RIMBORSO PARTIVA, LA REGISTRAZIONE CADEVA, E LA ROTTA DICEVA «OK».
  *
  * Nella tappa «rimborsato» di `avanza` i soldi escono prima (per i contanti: il bonifico si
- * registra sull'ordine), poi si scrive sul reso il segno del rimborso — ed e' quel segno che fa
- * comparire il bonifico nella lista di chi paga. Se quella scrittura cadeva, la rotta guardava
- * solo l'avviso per i log e rispondeva 200: il reso restava «rimborsato» senza segno, la lista dei
- * bonifici non lo mostrava, e il negozio leggeva «fatto». `decide`, la stessa scrittura, la
- * controllava gia'.
+ * registra sull'ordine), poi si scrive sul reso il segno del rimborso. Se quella scrittura cadeva,
+ * la rotta guardava solo l'avviso per i log e rispondeva 200: il reso restava «rimborsato» senza
+ * segno, e il negozio leggeva «fatto». `decide`, la stessa scrittura, la controllava gia'.
  *
  * Girano le rotte vere (apertura, decisione, avanzamento) e la `refundOrder` vera; il guasto e'
  * uno solo: un timeout del database proprio sulla scrittura dell'esito sul reso.
@@ -89,7 +87,7 @@ async function chiama(rotta: unknown, corpo: unknown, id: string) {
   return { status: res.status, corpo: await res.json() };
 }
 
-/** Il reso del maglione, aperto col bonifico e arrivato fino a «merce ricevuta». */
+/** Il reso del maglione, arrivato fino a «merce ricevuta». */
 async function resoRicevuto(): Promise<string> {
   const id = await resoAperto();
   finto.utente = 'negozio';
@@ -98,13 +96,11 @@ async function resoRicevuto(): Promise<string> {
   return id;
 }
 
-/** Il reso del maglione, appena aperto dalla cliente col bonifico e l'IBAN. */
+/** Il reso del maglione, appena aperto dalla cliente. */
 async function resoAperto(): Promise<string> {
   finto.utente = 'giulia';
   const res = await (apriReso as unknown as (r: Request, c: unknown) => Promise<Response>)(
-    new Request('http://localhost/api/returns/create', json({
-      orderId: ORDINE, reason: 'CHANGED_MIND', rimborso: { modo: 'BONIFICO', iban: 'IT60X0542811101000000123456' },
-    })),
+    new Request('http://localhost/api/returns/create', json({ orderId: ORDINE, reason: 'CHANGED_MIND' })),
     undefined,
   );
   expect(res.status).toBe(201);
@@ -136,12 +132,13 @@ describe('avanza: se l esito del rimborso non si registra sul reso, non si rispo
     expect(String(esito.corpo.error?.message)).toContain('non si è potuto registrare');
 
     const avvisi = notificheConTitolo(finto.db, 'non registrato sul reso');
-    expect(avvisi, 'chi paga non sa che c e un bonifico fuori dalla lista').toHaveLength(1);
+    expect(avvisi, 'chi paga non sa che il reso non porta il rimborso').toHaveLength(1);
     const testo = String(avvisi[0].body);
-    expect(testo).toContain(id);
-    expect(testo).toContain('#11111111');
+    expect(testo).toContain(id.slice(0, 8));
+    expect(testo).toContain('#111111');
     expect(testo).toMatch(/40,00\s€/u);
-    expect(avvisi[0].link).toBe('/admin/rimborsi-da-bonificare');
+    expect(testo, 'chi paga paga due volte: non sa che e lo stesso bonifico dell altro avviso').toContain('pagalo una volta sola');
+    expect(avvisi[0].link).toBe('/admin/orders');
   });
 
   it('senza guasto resta tutto come prima: 200, e il segno del bonifico sul reso', async () => {
@@ -178,12 +175,13 @@ describe('decide: se l esito del rimborso non si registra sul reso, non si rispo
     expect(String(esito.corpo.error?.message)).toContain('Non ripetere il rimborso');
 
     const avvisi = notificheConTitolo(finto.db, 'non registrato sul reso');
-    expect(avvisi, 'chi paga non sa che c e un bonifico fuori dalla lista').toHaveLength(1);
+    expect(avvisi, 'chi paga non sa che il reso non porta il rimborso').toHaveLength(1);
     const testo = String(avvisi[0].body);
-    expect(testo).toContain(id);
-    expect(testo).toContain('#11111111');
+    expect(testo).toContain(id.slice(0, 8));
+    expect(testo).toContain('#111111');
     expect(testo).toMatch(/40,00\s€/u);
-    expect(avvisi[0].link).toBe('/admin/rimborsi-da-bonificare');
+    expect(testo, 'chi paga paga due volte: non sa che e lo stesso bonifico dell altro avviso').toContain('pagalo una volta sola');
+    expect(avvisi[0].link).toBe('/admin/orders');
   });
 
   it('dopo la caduta il negozio non puo chiudere il reso «senza rimborso», e «rimborsato» registra il rimborso senza rifarlo', async () => {
@@ -195,20 +193,19 @@ describe('decide: se l esito del rimborso non si registra sul reso, non si rispo
     const reso = () => finto.db.tabelle.returns[0];
     expect(reso().status).toBe('APPROVED');
 
-    // L'unica uscita di prima: chiudere senza rimborso, che cancellava l'IBAN e scriveva al cliente il falso.
+    // L'unica uscita di prima: chiudere senza rimborso, che scriveva al cliente il falso.
     const chiudi = await chiama(avanza, { stato: 'CANCELED' }, id);
     expect(chiudi.status, 'il reso col rimborso gia partito si chiude «senza rimborso»').toBe(409);
-    expect(reso().refund_iban, 'l IBAN di chi aspetta 40 € e stato cancellato').toBe('IT60X0542811101000000123456');
     expect(notificheConTitolo(finto.db, 'chiuso senza rimborso')).toHaveLength(0);
 
     // La strada giusta: merce ricevuta, poi rimborsato — il rimborso si registra, non si ripete.
     expect((await chiama(avanza, { stato: 'RECEIVED' }, id)).status).toBe(200);
     const rimborsato = await chiama(avanza, { stato: 'REFUNDED' }, id);
     expect(rimborsato.status, `il negozio non riesce a registrare il rimborso: ${JSON.stringify(rimborsato.corpo)}`).toBe(200);
-    expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: `bonifico:4000:return_${id}`, refund_bonifico_cents: 4000 });
+    expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: `bonifico:4000:return_${id}` });
     expect(finto.db.tabelle.orders[0].refunded_amount_cents, 'il rimborso e stato rifatto').toBe(4000);
     expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare'), 'il bonifico e stato chiesto due volte').toHaveLength(1);
-    expect(reso().refund_iban).toBe('IT60X0542811101000000123456');
+    expect(finto.db.rpc.filter((c) => c.nome === 'accumula_rimborso'), 'il rimborso e stato prenotato di nuovo').toHaveLength(1);
   });
 
   it('senza guasto resta tutto come prima: 200, il reso rimborsato col segno del bonifico, nessun avviso di guasto', async () => {

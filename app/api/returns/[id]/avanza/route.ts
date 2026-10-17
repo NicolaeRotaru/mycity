@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { isStripeConfigured } from '@/lib/stripe/client';
-import { refundOrder } from '@/lib/stripe/payout';
+import { AccreditoGiaUscitoConAltroImporto, RimborsoInAttesaDellaDivisione, refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -11,19 +11,14 @@ import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione
 import { chiComandaIlReso } from '../../chi-comanda-il-reso';
 import {
   motivoNienteDaRestituire,
-  pagatoInContanti,
   quantoSiPuoRestituire,
   type OrdineDaRimborsare,
 } from '@/lib/rimborsi/regole-del-rimborso';
-import { comeTornanoIContanti, leggiLaSceltaDelReso } from '@/lib/rimborsi/scelta-del-reso';
-import { COLONNE_162 } from '@/lib/rimborsi/scelta-del-cliente';
-import { scriviAncheSeMancaUnaColonnaNuova } from '@/lib/db/migrazione-148';
 import {
   avvisoDelRimborsoNonRegistrato,
   bonificoDelResoGiaSullOrdine,
   RIMBORSO_PARTITO_MA_NON_REGISTRATO,
 } from '@/lib/rimborsi/bonifici-da-fare';
-import { dimenticaLIbanSeNonServe } from '@/lib/rimborsi/iban-del-rimborso';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 export const runtime = 'nodejs';
@@ -92,7 +87,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const supa = await getServerSupabase();
   const { data: ret, error } = await supa
     .from('returns')
-    .select('id, status, seller_id, buyer_id, order_id, refund_amount_cents')
+    .select('id, status, seller_id, buyer_id, order_id, refund_amount_cents, created_at')
     .eq('id', params.id)
     .single();
 
@@ -135,10 +130,10 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    *
    * Succede quando la scrittura dell'esito cade dopo il rimborso (in `decide`
    * o qui). Prima il reso restava li': «rimborsato» rispondeva «gia' rimborsato
-   * per intero», e l'unica strada era «chiudi senza rimborso», che cancellava
-   * l'IBAN e scriveva al cliente «chiuso senza rimborso» mentre gli dovevamo il
-   * bonifico. Adesso, se l'ordine porta gia' il rimborso di questo reso,
-   * «rimborsato» lo registra sul reso senza rifarlo, e «chiudi» non passa.
+   * per intero», e l'unica strada era «chiudi senza rimborso», che scriveva al
+   * cliente «chiuso senza rimborso» mentre gli dovevamo il bonifico. Adesso, se
+   * l'ordine porta gia' il rimborso di questo reso, «rimborsato» lo registra sul
+   * reso senza rifarlo (nessun secondo bonifico), e «chiudi» non passa.
    */
   let giaSullOrdine: { segno: string; centesimi: number } | null = null;
 
@@ -217,11 +212,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       refundId = giaSullOrdine.segno;
       bonificoCents = giaSullOrdine.centesimi;
     } else {
-      // R71 — Sui contanti il modo lo ha scelto il cliente nel modulo di reso:
-      // credito MyCity solo se l'ha chiesto lui, altrimenti bonifico. Se la
-      // scelta non si legge, vale bonifico (lib/rimborsi/scelta-del-reso.ts).
-      const contanti =
-        ordine && pagatoInContanti(ordine) ? comeTornanoIContanti(await leggiLaSceltaDelReso(admin, ret.id)) : undefined;
+      // R71 — Sui contanti il rimborso va col bonifico, sempre (refundOrder).
       try {
         const res = await refundOrder({
           orderId: ret.order_id,
@@ -230,7 +221,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
           metadata: { return_id: ret.id },
           idempotencyKey: `return_${ret.id}`,
           notifyBuyer: true,
-          ...(contanti ? { contanti } : {}),
+          resoChiestoIl: (ret as { created_at?: string | null }).created_at ?? null,
         });
         refundId = res.refundId;
         bonificoCents = res.bonificoCents ?? 0;
@@ -243,33 +234,28 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
           .update({ status: statoPrecedente })
           .eq('id', params.id)
           .eq('status', 'REFUNDED');
-        return ApiErrors.badGateway('Rimborso fallito: ' + (err instanceof Error ? err.message : 'unknown'));
+        // 17/10/2026 — Come `decide`: il negozio legge i due casi che deve
+        // conoscere, e per tutto il resto una frase sola. Mai il testo grezzo
+        // dell'errore (R138: niente messaggi interni).
+        if (err instanceof AccreditoGiaUscitoConAltroImporto) return ApiErrors.conflict(err.message);
+        if (err instanceof RimborsoInAttesaDellaDivisione) return ApiErrors.conflict(err.message);
+        return ApiErrors.badGateway("Il rimborso non è partito: riprova o scrivi all'assistenza.");
       }
     }
-    // R71 — Se una parte va col bonifico, il reso ricorda quanto: e' la cifra
-    // che la lista dei bonifici da fare mostra a chi paga.
-    const scrittura = await scriviAncheSeMancaUnaColonnaNuova(
-      'returns.update (esito del rimborso)',
-      {
-        refund_id: refundId,
-        refunded_at: new Date().toISOString(),
-        ...(bonificoCents > 0 ? { refund_bonifico_cents: bonificoCents } : {}),
-      },
-      COLONNE_162,
-      (campi) => admin.from('returns').update(campi).eq('id', params.id),
-    );
-    if (scrittura.avviso) logger.warn(`[returns/avanza] ${scrittura.avviso}`);
+    const { error: updErr } = await admin
+      .from('returns')
+      .update({ refund_id: refundId, refunded_at: new Date().toISOString() })
+      .eq('id', params.id);
     /**
      * Riesame del 16/10 — UNA SCRITTURA CADUTA NON E' UN «OK».
      *
      * I soldi sono gia' partiti (o il bonifico e' gia' registrato sull'ordine).
-     * Senza il segno sul reso, il bonifico non compare nella lista di chi paga e
-     * il negozio leggeva «rimborsato» come se fosse tutto a posto. Qui si ferma,
+     * Il negozio leggeva «rimborsato» come se fosse tutto a posto. Qui si ferma,
      * e `decide` fa lo stesso (terzo giro del riesame): chi amministra riceve un
      * avviso con reso, ordine e cifra, e chi ha premuto legge che la
      * registrazione non e' riuscita.
      */
-    if (!scrittura.riuscita) {
+    if (updErr) {
       const avviso = avvisoDelRimborsoNonRegistrato({
         resoId: params.id, ordineId: ret.order_id, refundId, bonificoCents,
       });
@@ -280,13 +266,6 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       }
       return ApiErrors.internal(RIMBORSO_PARTITO_MA_NON_REGISTRATO);
     }
-  }
-
-  // Riesame del 16/10 — chiuso il reso senza un bonifico da fare (annullato, o
-  // rimborsato col credito o sulla carta), l'IBAN del cliente non serve piu' e
-  // se ne va. Se il bonifico e' ancora da fare resta, fino al «fatto».
-  if (body.stato === 'REFUNDED' || body.stato === 'CANCELED') {
-    await dimenticaLIbanSeNonServe(admin, params.id);
   }
 
   const TITOLO: Record<string, string> = {

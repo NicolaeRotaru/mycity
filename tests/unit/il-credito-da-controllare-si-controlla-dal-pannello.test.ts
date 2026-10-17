@@ -8,10 +8,11 @@ import { verdettoDelCredito } from '@/lib/rimborsi/credito-da-controllare';
 /**
  * Riesame del 16/10, quarto giro — L'AVVISO CHIEDEVA UN CONTROLLO CHE DAL PANNELLO NON SI POTEVA FARE.
  *
- * Giulia rende un maglione da 40 € pagato in contanti e sceglie il credito MyCity. Il credito esce,
- * ma subito dopo il diario del credito non risponde: la cifra non si verifica. Il rimborso si
- * registra lo stesso (il credito e' gia' uscito) e chi amministra riceve «Rimborso col credito da
- * controllare»: «controlla che la riga cod_refund con riferimento … dica 40,00 €», con un link a
+ * Giulia rende un maglione da 50 €, pagato con 20 € di credito MyCity e 30 in contanti: i 30 tornano
+ * col bonifico, i 20 come credito. Il credito esce, ma subito dopo il diario del credito non risponde:
+ * la cifra non si verifica. Il rimborso si registra lo stesso (il credito e' gia' uscito) e chi
+ * amministra riceve «Rimborso col credito da controllare»: «controlla che la riga cod_refund con
+ * riferimento … dica 20,00 €», con un link a
  * /admin/orders. Li' il diario del credito non c'era, e in nessun'altra pagina del pannello: il
  * controllo si poteva fare solo aprendo il database. Se la cifra fosse stata diversa, dal pannello
  * nessuno l'avrebbe vista.
@@ -56,8 +57,8 @@ type Rotta = (r: Request, c: unknown) => Promise<Response>;
 
 function maglione(): Riga {
   return {
-    id: ORDINE, user_id: 'giulia', seller_id: 'negozio', total_price: 40, gross_total_cents: 4000, wallet_applied_cents: 0,
-    seller_payout_cents: 3600, seller_payout_reversed_cents: 0, payout_status: 'AWAITING_REMITTANCE',
+    id: ORDINE, user_id: 'giulia', seller_id: 'negozio', total_price: 30, gross_total_cents: 5000, wallet_applied_cents: 2000,
+    seller_payout_cents: 4500, seller_payout_reversed_cents: 0, payout_status: 'AWAITING_REMITTANCE',
     stripe_payment_intent: null, stripe_transfer_id: null, stripe_reversal_id: null, refunded_amount_cents: 0,
     payment_method: 'cod', rider_id: null, rider_transfer_id: null, rider_payout_status: null,
     rider_payout_reversed_cents: 0, rider_fee_cents: 0, shipping_cost: 0,
@@ -71,11 +72,11 @@ const json = (corpo: unknown) => ({
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(corpo),
 });
 
-/** Il reso col credito, deciso mentre il diario del credito non risponde: l'avviso parte. */
+/** Il reso dell'ordine misto, deciso mentre il diario del credito non risponde: l'avviso parte. */
 async function rimborsoColDiarioMuto(): Promise<{ link: string; body: string }> {
   finto.utente = 'giulia';
   const aperto = await (apriReso as unknown as Rotta)(
-    new Request('http://localhost/api/returns/create', json({ orderId: ORDINE, reason: 'DAMAGED', rimborso: { modo: 'CREDITO' } })),
+    new Request('http://localhost/api/returns/create', json({ orderId: ORDINE, reason: 'DAMAGED' })),
     undefined,
   );
   expect(aperto.status).toBe(201);
@@ -83,7 +84,7 @@ async function rimborsoColDiarioMuto(): Promise<{ link: string; body: string }> 
   finto.utente = 'negozio';
   finto.db.guasti.diarioIlleggibile = 99;
   const deciso = await (decidi as unknown as Rotta)(
-    new Request('http://localhost/x', json({ decision: 'APPROVED', refundAmountCents: 4000 })),
+    new Request('http://localhost/x', json({ decision: 'APPROVED', refundAmountCents: 5000 })),
     { params: Promise.resolve({ id }) },
   );
   finto.db.guasti.diarioIlleggibile = 0;
@@ -104,7 +105,7 @@ beforeEach(() => {
     orders: [maglione()],
     returns: [],
     order_items: [],
-    profiles: [{ id: 'admin-1', role: 'admin' }, { id: 'negozio', role: 'seller' }, { id: 'giulia', wallet_balance_cents: 4000 }],
+    profiles: [{ id: 'admin-1', role: 'admin' }, { id: 'negozio', role: 'seller' }, { id: 'giulia', wallet_balance_cents: 2000 }],
     notifications: [],
   });
 });
@@ -118,21 +119,21 @@ describe('l avviso porta a un controllo che il pannello sa fare', () => {
 
     const { status, corpo } = await apriIlLink(link);
     expect(status).toBe(200);
-    expect(corpo.attesoCents).toBe(4000);
+    expect(corpo.attesoCents).toBe(2000);
     expect(corpo.righe).toHaveLength(1);
-    expect(corpo.saldoCents).toBe(4000);
-    expect(corpo.verdetto).toMatchObject({ esito: 'torna', scrittoCents: 4000 });
+    expect(corpo.saldoCents).toBe(2000);
+    expect(corpo.verdetto).toMatchObject({ esito: 'torna', scrittoCents: 2000 });
   });
 
   it('LA VARIANTE SCOMODA — un tentativo prima aveva dato un altra cifra: il controllo dice che non torna', async () => {
     const { link } = await rimborsoColDiarioMuto();
-    // La riga del diario con quella chiave dice 30 €, non 40: e' il caso per cui l'avviso esiste.
+    // La riga del diario con quella chiave dice 30 €, non 20: e' il caso per cui l'avviso esiste.
     finto.db.tabelle.wallet_ledger[0].delta_cents = 3000;
     const { corpo } = await apriIlLink(link);
     expect(corpo.verdetto.esito, 'una cifra diversa passa per buona').toBe('diverso');
     expect(corpo.verdetto.frase).toMatch(/Non torna/u);
     expect(corpo.verdetto.frase).toMatch(/30,00\s€/u);
-    expect(corpo.verdetto.frase).toMatch(/40,00\s€/u);
+    expect(corpo.verdetto.frase).toMatch(/20,00\s€/u);
   });
 
   it('nessuna riga col riferimento: il controllo lo dice, non fa finta di niente', async () => {

@@ -110,6 +110,14 @@ vi.mock('@/lib/supabase/server', () => ({
         };
         return q;
       }
+      // 17/10/2026 — sui contanti il bonifico da fare si annuncia agli amministratori dentro il
+      // rimborso (refundOrder): il finto risponde con un amministratore e scrive l'avviso.
+      if (table === 'profiles') {
+        return { select: () => ({ eq: () => Promise.resolve({ data: [{ id: 'admin-1' }], error: null }) }) };
+      }
+      if (table === 'notifications') {
+        return { insert: () => Promise.resolve({ data: null, error: null }) };
+      }
       return {};
     },
     rpc: (name: string, args: Record<string, unknown>) => {
@@ -127,6 +135,8 @@ vi.mock('@/lib/supabase/server', () => ({
       }
       return Promise.resolve({ data: null, error: null });
     },
+    // 17/10/2026 — l'email del cliente si legge prima dei soldi: dice all'avviso da chi prendere l'IBAN.
+    auth: { admin: { getUserById: async () => ({ data: { user: { email: 'u1@esempio.it' } }, error: null }) } },
   }),
 }));
 

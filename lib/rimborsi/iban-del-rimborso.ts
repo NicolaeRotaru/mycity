@@ -1,12 +1,26 @@
 import { logger } from '@/lib/logger';
 import { colonnaNonTrovata } from '@/lib/db/migrazione-148';
-import { centesimiDelBonificoDalSegno, eUnBonificoDiRimborso, tabellaDeiBonificiMancante } from './bonifici-da-fare';
+import { centesimiDelBonificoDalSegno, eUnBonificoDiRimborso } from './bonifici-da-fare';
 import { ilBonificoCheIlClienteAspetta } from './bonifico-del-cliente';
 import { formatPriceFromCents } from '@/lib/format';
 import { rimborsiGiaScritti } from '@/lib/stripe/elenco-dei-rimborsi';
-import { pagatoInContanti, serveLaSceltaDelRimborso, type OrdineDaRimborsare } from './regole-del-rimborso';
+import { haUnaParteInContanti, pagatoInContanti, type OrdineDaRimborsare } from './regole-del-rimborso';
 import { MESI_DEI_MESSAGGI_DEI_CONTATTI } from '@/lib/privacy/potature-ritenzione';
-import { PAGINA_DEI_BONIFICI_DA_FARE } from './scelta-del-reso';
+
+/** La pagina della lista dei bonifici (tolta il 17/10/2026: va via insieme a questo file). */
+const PAGINA_DEI_BONIFICI_DA_FARE = '/admin/rimborsi-da-bonificare';
+
+/**
+ * La tabella dei bonifici dei reclami (162) non c'e'? PostgreSQL risponde 42P01,
+ * PostgREST PGRST205. Spostata qui dalla lista dei bonifici, tolta il 17/10/2026:
+ * va via insieme a questo file (semplificazione del rimborso dei contanti).
+ */
+function tabellaDeiBonificiMancante(errore: { code?: string; message?: string } | null | undefined): boolean {
+  if (!errore) return false;
+  if (errore.code === '42P01' || errore.code === 'PGRST205') return true;
+  const testo = (errore.message ?? '').toLowerCase();
+  return testo.includes('bonifici_dei_reclami') && (testo.includes('does not exist') || testo.includes('could not find'));
+}
 
 /**
  * QUANTO TENIAMO L'IBAN DI UN RIMBORSO (R71, riesame del 16/10).
@@ -60,7 +74,7 @@ export interface RigaDelResoPerLIban {
  *    dicono la 162 e `comeTornanoIContanti`. Prima contava solo «BONIFICO»
  *    scritto: un reso aperto prima della 162, o da un modulo che non manda la
  *    scelta, alla cancellazione dell'account restava senza il nome di chi pagare.
- *    «In contanti» vuol dire con una parte pagata in contanti (`serveLaSceltaDelRimborso`): un
+ *    «In contanti» vuol dire con una parte pagata in contanti (`haUnaParteInContanti`): un
  *    ordine coperto tutto col credito MyCity torna credito (riesame del 16/10, quinto giro);
  *  · tutto il resto (fatto, respinto, annullato, credito, carta) → no.
  */
@@ -295,13 +309,13 @@ export function iBonificiCheFannoAspettare(dati: {
   for (const r of resi) {
     if (!(STATI_APERTI_DEL_RESO as readonly string[]).includes(String(r.status))) continue;
     if (sullOrdine.has(`return_${r.id}`) || eUnBonificoDiRimborso(r.refund_id)) continue;
-    if (ilBonificoDelResoEAncoraDaFare(r, serveLaSceltaDelRimborso(ordinePer.get(r.order_id)!))) b.resiAperti += 1;
+    if (ilBonificoDelResoEAncoraDaFare(r, haUnaParteInContanti(ordinePer.get(r.order_id)!))) b.resiAperti += 1;
   }
 
   // ④ I reclami ancora aperti sui suoi ordini in contanti: decisi a suo favore, finiscono col bonifico.
   for (const d of dati.reclamiSugliOrdini ?? []) {
     const o = ordinePer.get(d.order_id);
-    if (!o || !serveLaSceltaDelRimborso(o)) continue;
+    if (!o || !haUnaParteInContanti(o)) continue;
     if ((STATI_APERTI_DEL_RECLAMO as readonly string[]).includes(String(d.status))) b.reclamiAperti += 1;
   }
   return b;
@@ -546,7 +560,7 @@ export async function bonificiPrimaDiCancellare(
 
     // I reclami ancora aperti sui suoi ordini in contanti: possono finire con un bonifico.
     let reclamiSugliOrdini: ReclamoSullOrdineDellaPersona[] = [];
-    const conContanti = righeOrdini.filter((o) => serveLaSceltaDelRimborso(o)).map((o) => o.id);
+    const conContanti = righeOrdini.filter((o) => haUnaParteInContanti(o)).map((o) => o.id);
     if (conContanti.length > 0) {
       const aperti = await tabella(admin, 'disputes')
         .select('id, order_id, status')

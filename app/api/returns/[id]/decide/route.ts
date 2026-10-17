@@ -14,10 +14,6 @@ import {
   quantoSiPuoRestituire,
   type OrdineDaRimborsare,
 } from '@/lib/rimborsi/regole-del-rimborso';
-import { comeTornanoIContanti, leggiLaSceltaDelReso } from '@/lib/rimborsi/scelta-del-reso';
-import { COLONNE_162 } from '@/lib/rimborsi/scelta-del-cliente';
-import { scriviAncheSeMancaUnaColonnaNuova } from '@/lib/db/migrazione-148';
-import { dimenticaLIbanSeNonServe } from '@/lib/rimborsi/iban-del-rimborso';
 import { avvisoDelRimborsoNonRegistrato, RIMBORSO_PARTITO_MA_NON_REGISTRATO } from '@/lib/rimborsi/bonifici-da-fare';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
@@ -46,7 +42,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const supa = await getServerSupabase();
   const { data: ret, error } = await supa
     .from('returns')
-    .select('id, status, seller_id, buyer_id, order_id, reason, refund_amount_cents')
+    .select('id, status, seller_id, buyer_id, order_id, reason, refund_amount_cents, created_at')
     .eq('id', params.id)
     .single();
 
@@ -192,12 +188,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 
     if (isCard || isCod) {
       // refundOrder gestisce il refund reale Stripe (carta + claw-back) e il
-      // rimborso dei contanti. Idempotente via idempotencyKey return_<id>.
-      //
-      // R71 — Sui contanti il modo lo ha scelto il cliente nel modulo di reso:
-      // credito MyCity solo se l'ha chiesto lui, altrimenti bonifico. Se la
-      // scelta non si legge, vale bonifico (lib/rimborsi/scelta-del-reso.ts).
-      const contanti = isCod ? comeTornanoIContanti(await leggiLaSceltaDelReso(admin, ret.id)) : undefined;
+      // rimborso dei contanti (R71: col bonifico, sempre; il credito MyCity solo
+      // per la parte pagata col credito). Idempotente via idempotencyKey return_<id>.
       try {
         const res = await refundOrder({
           orderId: ret.order_id,
@@ -206,7 +198,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
           metadata: { return_id: ret.id },
           idempotencyKey: `return_${ret.id}`,
           notifyBuyer: true,
-          ...(contanti ? { contanti } : {}),
+          resoChiestoIl: (ret as { created_at?: string | null }).created_at ?? null,
         });
         refundId = res.refundId;
         refundedAt = new Date().toISOString();
@@ -235,36 +227,23 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // Il turno era gia' stato preso sopra: qui si scrive solo l'esito del
   // rimborso. Se lo stato non e' cambiato (rifiuto, o approvazione senza
   // rimborso immediato) questa scrittura non tocca niente di nuovo.
-  //
-  // R71 — Se una parte va col bonifico, il reso ricorda quanto: e' la cifra che
-  // la lista dei bonifici da fare mostra a chi paga. Senza la migrazione 162 la
-  // colonna non c'e' e si scrive il resto (lib/db/migrazione-148.ts).
   if (newStatus !== statoRivendicato || refundId) {
-    const scrittura = await scriviAncheSeMancaUnaColonnaNuova(
-      'returns.update (esito del rimborso)',
-      {
-        status: newStatus,
-        refund_id: refundId,
-        refunded_at: refundedAt,
-        ...(bonificoCents > 0 ? { refund_bonifico_cents: bonificoCents } : {}),
-      },
-      COLONNE_162,
-      (campi) => admin.from('returns').update(campi).eq('id', params.id).eq('status', statoRivendicato),
-    );
-    if (scrittura.avviso) logger.warn(`[returns] ${scrittura.avviso}`);
+    const { error: updErr } = await admin
+      .from('returns')
+      .update({ status: newStatus, refund_id: refundId, refunded_at: refundedAt })
+      .eq('id', params.id)
+      .eq('status', statoRivendicato);
     /**
      * Riesame del 16/10, terzo giro — QUI I SOLDI SONO GIA' PARTITI.
      *
      * Si arriva a questa scrittura solo dopo `refundOrder`: sull'ordine il
-     * rimborso e' gia' registrato (sui contanti, il bonifico e' gia' dovuto).
-     * Se cadeva, la rotta diceva solo «Update fallito»: il reso restava
-     * «approvato» senza il segno del rimborso, il bonifico non entrava nella
-     * lista di chi paga, e al negozio restava una sola strada — chiudere il
-     * reso «senza rimborso», che cancella l'IBAN del cliente. Adesso fa come
-     * `avanza`: chi amministra riceve l'avviso con reso, ordine e cifra del
-     * bonifico, e il negozio legge che non deve ripetere il rimborso.
+     * rimborso e' gia' registrato (sui contanti, col segno del bonifico). Se
+     * cadeva, la rotta diceva solo «Update fallito» e al negozio restava una sola
+     * strada: chiudere il reso «senza rimborso». Adesso chi amministra riceve
+     * l'avviso con reso, ordine e cifra del bonifico, e il negozio legge che non
+     * deve ripetere il rimborso.
      */
-    if (!scrittura.riuscita) {
+    if (updErr) {
       const avviso = avvisoDelRimborsoNonRegistrato({
         resoId: params.id, ordineId: ret.order_id, refundId, bonificoCents,
       });
@@ -275,13 +254,6 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       }
       return ApiErrors.internal(RIMBORSO_PARTITO_MA_NON_REGISTRATO);
     }
-  }
-
-  // Riesame del 16/10 — un reso respinto, o rimborsato senza un bonifico da
-  // fare, non ha piu' bisogno dell'IBAN del cliente: se ne va. Se il bonifico
-  // e' ancora da fare (o lo sara' a reso concluso) resta, fino al «fatto».
-  if (newStatus === 'REJECTED' || newStatus === 'REFUNDED') {
-    await dimenticaLIbanSeNonServe(admin, params.id);
   }
 
   // Notifica buyer

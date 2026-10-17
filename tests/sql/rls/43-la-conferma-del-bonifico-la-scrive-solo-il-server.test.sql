@@ -5,22 +5,23 @@
 --   tests/sql/harness/apply.sh mycity_test
 --   tests/sql/harness/run.sh   mycity_test
 --
--- PERCHE' ESISTE QUESTO FILE (riesame del 16/10/2026, terzo giro).
+-- PERCHE' ESISTE QUESTO FILE (riesame del 16/10/2026, terzo giro; riscritto
+-- il 17/10/2026 con la semplificazione del rimborso dei contanti).
 --
--- La lista dei bonifici di rimborso da fare (/admin/rimborsi-da-bonificare)
--- prendeva ogni reso «rimborsato» col segno `bonifico:<centesimi>:<chiave>` e
--- lo mostrava a chi paga, con la cifra e l'IBAN scritti sulla riga del reso.
+-- Chi ha pagato in contanti riavra' i soldi con un bonifico fatto a mano.
+-- `refundOrder` scrive il segno `bonifico:<centesimi>:<chiave>` nell'elenco dei
+-- rimborsi dell'ORDINE (`orders.stripe_refund_id`), insieme allo stato del
+-- pagamento. Su quel segno poggiano due cose: la guardia di `avanza` contro il
+-- secondo bonifico (un reso che l'ordine dice gia' rimborsato si registra senza
+-- rifare il rimborso, e non si chiude «senza rimborso») e la pagina
+-- dell'ordine, che dice al cliente «ti restituiamo X € con un bonifico».
+--
 -- In produzione la migrazione 153 non c'e': vale ancora la regola della 024, e
--- il cliente con il suo accesso inserisce da solo una riga di reso intera —
--- stato, segno e IBAN compresi. Mario si scriveva «950 € da bonificare» sul
--- suo conto.
---
--- La cura sta nel codice: un bonifico e' confermato solo se il suo segno sta
--- anche nell'elenco dei rimborsi dell'ORDINE (`orders.stripe_refund_id`), che
--- scrive `refundOrder`. Dal sesto giro la lista dei bonifici dei resi nasce SOLO
--- da quei segni (lib/rimborsi/bonifici-da-fare.ts, `bonificiDeiResiDagliOrdini`).
--- Questo file prova la gamba del database su cui quella cura si regge, NEL
--- MONDO DI OGGI: senza la 153.
+-- il cliente con il suo accesso inserisce da solo una riga di reso intera,
+-- stato «rimborsato» e segno `bonifico:95000:…` compresi. Quella riga non deve
+-- valere niente: conta solo il segno sull'ordine, e quello lo scrive solo il
+-- server (trigger della 061). Questo file prova la gamba del database su cui
+-- la guardia si regge, NEL MONDO DI OGGI: senza la 153.
 --
 -- COSA CONTROLLA. Dentro la transazione si toglie la 153 (le tre righe del suo
 -- «REVERSIBILE»), cosi' il database e' quello della produzione. Poi:
@@ -90,15 +91,13 @@ DO $$
 DECLARE come text;
 BEGIN
   come := pg_temp.esito($q$
-    INSERT INTO public.returns (id, order_id, buyer_id, seller_id, reason, status, refund_amount_cents,
-                                refund_id, refund_method, refund_iban, refund_bonifico_cents)
+    INSERT INTO public.returns (id, order_id, buyer_id, seller_id, reason, status, refund_amount_cents, refund_id)
     VALUES ('dd000000-2222-0000-0000-00000000000f',
             'dd000000-1111-0000-0000-00000000000d',
             'dd000000-0000-0000-0000-00000000000b',
             'dd000000-0000-0000-0000-00000000000b',
             'DAMAGED', 'REFUNDED', 95000,
-            'bonifico:95000:return_dd000000-2222-0000-0000-00000000000f',
-            'BONIFICO', 'IT60X0542811101000000123456', 95000)
+            'bonifico:95000:return_dd000000-2222-0000-0000-00000000000f')
   $q$);
   INSERT INTO esiti VALUES (
     'senza la 153 il cliente si scrive da solo il reso rimborsato col bonifico (il mondo della prova e quello vero)',

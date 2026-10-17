@@ -14,6 +14,10 @@ import { creaFintoDatabase, creditoDi, notificheConTitolo } from './aiuti/finto-
  * Qui il guasto e' quello solo: `diarioIlleggibile`, senza `walletCreditaPoiCade`. Girano le rotte
  * VERE (create → decide, create → decide → avanza) e la `refundOrder` VERA; finti il database,
  * Stripe, l'autenticazione e la posta.
+ *
+ * 17/10/2026 — Il credito torna solo per la parte pagata col credito: l'ordine e' misto (20 € di
+ * credito e 30 in contanti), e i 30 vanno col bonifico. L'accredito e' l'ultimo passo del rimborso:
+ * qui e' gia' tutto scritto (segno, stato, avviso del bonifico) quando il diario tace.
  */
 
 const finto = vi.hoisted(() => ({ db: null as unknown as FintoDatabase, utente: 'giulia' }));
@@ -46,18 +50,16 @@ vi.mock('@/lib/audit', () => ({ writeAudit: vi.fn(async () => {}) }));
 import { POST as apriReso } from '@/app/api/returns/create/route';
 import { POST as decidi } from '@/app/api/returns/[id]/decide/route';
 import { POST as avanza } from '@/app/api/returns/[id]/avanza/route';
-import { GET as listaDeiBonifici } from '@/app/api/admin/rimborsi-da-bonificare/route';
 
 const ORDINE = '11111111-1111-4111-8111-111111111111';
-const IBAN = 'IT60X0542811101000000123456';
 const AVVISO = 'Rimborso col credito da controllare';
 
-/** 40 € in contanti, incassati e consegnati ieri. */
-function ordineInContanti(extra: Riga = {}): Riga {
+/** 50 €: 20 pagati col credito MyCity e 30 in contanti, incassati e consegnati ieri. */
+function ordineMisto(extra: Riga = {}): Riga {
   return {
     id: ORDINE, user_id: 'giulia', seller_id: 'negozio',
-    total_price: 40, gross_total_cents: 4000, wallet_applied_cents: 0,
-    seller_payout_cents: 3600, seller_payout_reversed_cents: 0, payout_status: 'AWAITING_REMITTANCE',
+    total_price: 30, gross_total_cents: 5000, wallet_applied_cents: 2000,
+    seller_payout_cents: 4500, seller_payout_reversed_cents: 0, payout_status: 'AWAITING_REMITTANCE',
     stripe_payment_intent: null, stripe_transfer_id: null, stripe_reversal_id: null,
     refunded_amount_cents: 0, payment_method: 'cod',
     rider_id: null, rider_transfer_id: null, rider_payout_status: null, rider_payout_reversed_cents: 0,
@@ -70,26 +72,22 @@ function ordineInContanti(extra: Riga = {}): Riga {
   };
 }
 
-/** 50 €: 20 pagati col credito MyCity e 30 in contanti, incassati. */
-const ordineMisto = () => ordineInContanti({ total_price: 30, gross_total_cents: 5000, wallet_applied_cents: 2000, seller_payout_cents: 4500 });
-
 function apri(ordine: Riga) {
   finto.db = creaFintoDatabase({
     orders: [ordine],
     returns: [],
     order_items: [],
-    bonifici_dei_reclami: [],
     profiles: [{ id: 'admin-1', role: 'admin' }, { id: 'negozio', role: 'seller' }],
     notifications: [],
   });
 }
 
-async function chiediReso(rimborso: unknown): Promise<string> {
+async function chiediReso(): Promise<string> {
   finto.utente = 'giulia';
   const res = await apriReso(
     new Request('http://localhost/api/returns/create', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ orderId: ORDINE, reason: 'DAMAGED', rimborso }),
+      body: JSON.stringify({ orderId: ORDINE, reason: 'DAMAGED' }),
     }) as never,
     undefined as never,
   );
@@ -111,45 +109,46 @@ async function chiama(rotta: typeof decidi, cosa: 'decide' | 'avanza', resoId: s
 const ordine = () => finto.db.tabelle.orders[0];
 const reso = () => finto.db.tabelle.returns[0];
 
-beforeEach(() => apri(ordineInContanti()));
+beforeEach(() => apri(ordineMisto()));
 
 // 1 = il timeout passeggero della scheda; 99 = il diario resta muto per tutto il rimborso, cosi'
 // la prova non passa grazie a un secondo tentativo di lettura nascosto da qualche parte.
 for (const letture of [1, 99]) {
   describe(`il diario non risponde (${letture === 1 ? 'una volta' : 'mai'}), l'accredito invece e' riuscito`, () => {
     it('create → decide: il reso si chiude rimborsato e il negozio non lo puo piu rifiutare', async () => {
-      const id = await chiediReso({ modo: 'CREDITO' });
+      const id = await chiediReso();
       finto.db.guasti.diarioIlleggibile = letture;
 
-      const deciso = await chiama(decidi, 'decide', id, { decision: 'APPROVED', refundAmountCents: 4000 });
+      const deciso = await chiama(decidi, 'decide', id, { decision: 'APPROVED', refundAmountCents: 5000 });
       finto.db.guasti.diarioIlleggibile = 0;
 
       expect(deciso.status, `il negozio legge: ${JSON.stringify(deciso.corpo)}`).toBe(200);
-      expect(creditoDi(finto.db, 'giulia')).toBe(4000);
-      expect(reso(), 'credito uscito e reso ancora da decidere').toMatchObject({ status: 'REFUNDED', refund_id: 'wallet:return_' + id });
-      expect(ordine(), 'la cliente ha 40 € e l ordine risulta rimborsato per 0').toMatchObject({
-        refunded_amount_cents: 4000, payment_status: 'REFUNDED',
+      expect(creditoDi(finto.db, 'giulia')).toBe(2000);
+      expect(reso(), 'credito uscito e reso ancora da decidere').toMatchObject({ status: 'REFUNDED', refund_id: `bonifico:3000:return_${id}` });
+      expect(ordine(), 'la cliente ha 20 € di credito e l ordine risulta rimborsato per 0').toMatchObject({
+        refunded_amount_cents: 5000, payment_status: 'REFUNDED', stripe_refund_id: `bonifico:3000:return_${id}`,
       });
-      expect(Number(ordine().seller_payout_reversed_cents), 'la quota del negozio deve rientrare').toBe(3600);
+      expect(Number(ordine().seller_payout_reversed_cents), 'la quota del negozio deve rientrare').toBe(4500);
+      expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare'), 'i 30 € in contanti non li paga nessuno').toHaveLength(1);
 
       const rifiuto = await chiama(decidi, 'decide', id, { decision: 'REJECTED', notes: 'merce integra' });
-      expect(rifiuto.status, 'un reso gia rimborsato col credito si e rifiutato: la cliente tiene 40 € e li perde MyCity').toBe(409);
+      expect(rifiuto.status, 'un reso gia rimborsato si e rifiutato: la cliente tiene il credito e li perde MyCity').toBe(409);
       expect(reso().status).toBe('REFUNDED');
-      expect(creditoDi(finto.db, 'giulia'), 'accreditato due volte').toBe(4000);
+      expect(creditoDi(finto.db, 'giulia'), 'accreditato due volte').toBe(2000);
     });
 
     it('create → decide → avanza: il rimborso dopo la ricezione va in fondo, e il reso non si chiude piu «di persona»', async () => {
-      const id = await chiediReso({ modo: 'CREDITO' });
+      const id = await chiediReso();
       expect((await chiama(decidi, 'decide', id, { decision: 'APPROVED' })).status).toBe(200);
       expect((await chiama(avanza, 'avanza', id, { stato: 'RECEIVED' })).status).toBe(200);
       finto.db.guasti.diarioIlleggibile = letture;
 
-      const rimborso = await chiama(avanza, 'avanza', id, { stato: 'REFUNDED', refundAmountCents: 4000 });
+      const rimborso = await chiama(avanza, 'avanza', id, { stato: 'REFUNDED', refundAmountCents: 5000 });
       finto.db.guasti.diarioIlleggibile = 0;
 
       expect(rimborso.status, `il negozio legge: ${JSON.stringify(rimborso.corpo)}`).toBe(200);
-      expect(creditoDi(finto.db, 'giulia')).toBe(4000);
-      expect(ordine()).toMatchObject({ refunded_amount_cents: 4000, payment_status: 'REFUNDED' });
+      expect(creditoDi(finto.db, 'giulia')).toBe(2000);
+      expect(ordine()).toMatchObject({ refunded_amount_cents: 5000, payment_status: 'REFUNDED' });
       expect(reso().status).toBe('REFUNDED');
 
       const chiuso = await chiama(avanza, 'avanza', id, { stato: 'CANCELED', note: 'chiuso di persona' });
@@ -158,34 +157,16 @@ for (const letture of [1, 99]) {
     });
 
     it('chi amministra riceve l avviso di controllare la cifra, una volta sola', async () => {
-      const id = await chiediReso({ modo: 'CREDITO' });
+      const id = await chiediReso();
       finto.db.guasti.diarioIlleggibile = letture;
-      await chiama(decidi, 'decide', id, { decision: 'APPROVED', refundAmountCents: 4000 });
+      await chiama(decidi, 'decide', id, { decision: 'APPROVED', refundAmountCents: 5000 });
 
       const avvisi = notificheConTitolo(finto.db, AVVISO);
       expect(avvisi, 'il credito e uscito senza conferma della cifra e nessuno lo sa').toHaveLength(1);
-      expect(String(avvisi[0].body)).toMatch(/40,00\s€/u);
+      expect(String(avvisi[0].body)).toMatch(/20,00\s€/u);
       expect(String(avvisi[0].body)).toContain(`return_${id}`);
     });
 
-    it('ordine misto (20 € di credito, 30 in contanti, bonifico): la parte del credito esce, il bonifico resta in lista per 30 €', async () => {
-      apri(ordineMisto());
-      const id = await chiediReso({ modo: 'BONIFICO', iban: IBAN });
-      finto.db.guasti.diarioIlleggibile = letture;
-
-      const deciso = await chiama(decidi, 'decide', id, { decision: 'APPROVED', refundAmountCents: 5000 });
-      finto.db.guasti.diarioIlleggibile = 0;
-
-      expect(deciso.status, `il negozio legge: ${JSON.stringify(deciso.corpo)}`).toBe(200);
-      expect(creditoDi(finto.db, 'giulia')).toBe(2000);
-      expect(ordine()).toMatchObject({ refunded_amount_cents: 5000, payment_status: 'REFUNDED' });
-      expect(reso().status).toBe('REFUNDED');
-      const voci = (await (await listaDeiBonifici(new Request('http://localhost/api/admin/rimborsi-da-bonificare') as never, undefined as never)).json()).voci;
-      expect(voci).toHaveLength(1);
-      expect(voci[0]).toMatchObject({ importoCents: 3000 });
-
-      expect((await chiama(decidi, 'decide', id, { decision: 'REJECTED', notes: 'merce integra' })).status).toBe(409);
-    });
   });
 }
 
@@ -198,42 +179,45 @@ describe('secondo tentativo: la chiave c e gia, e il diario non risponde', () =>
   for (const comeLa143 of [false, true]) {
     it(`il rimborso si registra una volta sola (${comeLa143 ? 'dopo' : 'prima della'} 143)`, async () => {
       finto.db.comeLa143 = comeLa143;
-      const id = await chiediReso({ modo: 'CREDITO' });
+      const id = await chiediReso();
 
       // Primo tentativo: il residuo dichiarato (risposta persa E diario muto) torna indietro.
       finto.db.guasti.walletCreditaPoiCade = true;
       finto.db.guasti.diarioIlleggibile = 1;
-      const primo = await chiama(decidi, 'decide', id, { decision: 'APPROVED', refundAmountCents: 4000 });
+      const primo = await chiama(decidi, 'decide', id, { decision: 'APPROVED', refundAmountCents: 5000 });
       expect(primo.status).toBe(502);
       expect(reso().status).toBe('REQUESTED');
-      expect(creditoDi(finto.db, 'giulia')).toBe(4000);
+      expect(creditoDi(finto.db, 'giulia')).toBe(2000);
 
       // Secondo tentativo: un guasto solo, il diario.
       finto.db.guasti.diarioIlleggibile = 1;
-      const secondo = await chiama(decidi, 'decide', id, { decision: 'APPROVED', refundAmountCents: 4000 });
+      const secondo = await chiama(decidi, 'decide', id, { decision: 'APPROVED', refundAmountCents: 5000 });
 
       expect(secondo.status, `il negozio legge: ${JSON.stringify(secondo.corpo)}`).toBe(200);
       expect(reso().status).toBe('REFUNDED');
-      expect(ordine()).toMatchObject({ refunded_amount_cents: 4000, payment_status: 'REFUNDED' });
-      expect(creditoDi(finto.db, 'giulia'), 'accreditato due volte').toBe(4000);
+      expect(ordine()).toMatchObject({ refunded_amount_cents: 5000, payment_status: 'REFUNDED' });
+      expect(creditoDi(finto.db, 'giulia'), 'accreditato due volte').toBe(2000);
+      expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare'), 'due tentativi, un bonifico solo').toHaveLength(1);
     });
   }
 });
 
 describe('il freno sulla cifra resta', () => {
-  it('l accredito risponde con un errore, il diario dice 40 € e si chiedono 30: si ferma e dice quanto e gia uscito', async () => {
-    const id = await chiediReso({ modo: 'CREDITO' });
+  it('l accredito risponde con un errore, il diario dice 20 € e se ne chiedono 12: si ferma e dice quanto e gia uscito', async () => {
+    const id = await chiediReso();
     finto.db.guasti.walletCreditaPoiCade = true;
     finto.db.guasti.diarioIlleggibile = 1;
-    expect((await chiama(decidi, 'decide', id, { decision: 'APPROVED', refundAmountCents: 4000 })).status).toBe(502);
+    expect((await chiama(decidi, 'decide', id, { decision: 'APPROVED', refundAmountCents: 5000 })).status).toBe(502);
 
-    // Adesso l'accredito cade per davvero, ma il diario si legge e dice 40 €.
+    // Adesso l'accredito cade per davvero, ma il diario si legge e dice 20 €. Un rimborso di 30 €
+    // chiede 12 € di credito: non torna.
     finto.db.guasti.walletCredit = { message: 'FetchError: socket hang up' };
     const diverso = await chiama(decidi, 'decide', id, { decision: 'APPROVED', refundAmountCents: 3000 });
 
     expect(diverso.status).toBe(409);
-    expect(diverso.corpo.error.message).toContain('40,00');
-    expect(ordine().refunded_amount_cents, 'registrati 30 € mentre la cliente ne ha avuti 40').toBe(0);
+    expect(diverso.corpo.error.message).toContain('20,00');
+    expect(ordine().refunded_amount_cents, 'registrati 30 € mentre la cliente ha avuto il credito dei 50').toBe(0);
+    expect(notificheConTitolo(finto.db, 'Bonifico di rimborso da fare'), 'resta chiesto un bonifico per un rimborso fermato').toHaveLength(0);
     expect(reso().status).toBe('REQUESTED');
     expect(notificheConTitolo(finto.db, AVVISO)).toHaveLength(0);
   });

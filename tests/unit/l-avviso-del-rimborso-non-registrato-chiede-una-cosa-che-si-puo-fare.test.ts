@@ -54,7 +54,6 @@ vi.mock('@/lib/api/middleware', () => {
 import { POST as apriReso } from '@/app/api/returns/create/route';
 import { POST as decidi } from '@/app/api/returns/[id]/decide/route';
 import { POST as avanza } from '@/app/api/returns/[id]/avanza/route';
-import { POST as comandoDellaLista } from '@/app/api/admin/rimborsi-da-bonificare/route';
 
 /**
  * Riesame del 16/10, quinto giro — L'AVVISO CHIEDEVA A CHI AMMINISTRA UNA COSA IMPOSSIBILE.
@@ -65,9 +64,9 @@ import { POST as comandoDellaLista } from '@/app/api/admin/rimborsi-da-bonificar
  * nessuna pagina del pannello scrive sui resi: l'unica rotta di chi amministra che lo fa registra
  * solo i bonifici. Il compito restava aperto per sempre.
  *
- * Adesso l'avviso dice cosa serve davvero — i soldi sono gia' usciti, il riferimento dal pannello
- * non si scrive, e se il negozio prova a rimborsare di nuovo va fermato — e la prova controlla che
- * sia vero: dal pannello il riferimento non si scrive davvero, e i soldi sono usciti una volta.
+ * Adesso l'avviso dice cosa serve davvero — i soldi sono gia' usciti, il rimborso non va rifatto,
+ * e il negozio va avvisato — e la prova controlla che i soldi siano usciti una volta. Dal 17/10/2026
+ * il pannello non ha piu' nessuna rotta che scrive sui resi: l'avviso porta solo agli ordini.
  */
 
 const ORDINE = '11111111-1111-4111-8111-111111111111';
@@ -126,19 +125,16 @@ describe('l avviso del rimborso partito ma non registrato chiede una cosa che si
     expect(avviso, 'nessun avviso a chi amministra').toBeTruthy();
     const testo = String(avviso.body);
 
-    // Quello che l'avviso chiedeva di fare, dal pannello, non si fa: l'unica rotta di chi amministra
-    // che scrive sui resi rifiuta questo reso.
-    const dalPannello = await (comandoDellaLista as unknown as Rotta)(
-      new Request('http://localhost/api/admin/rimborsi-da-bonificare', json({ resoId: RESO, azione: 'fatto' })), undefined,
-    );
-    expect(dalPannello.status).toBe(409);
-    expect(finto.db.tabelle.returns[0].refund_id ?? null).toBeNull();
+    // Quello che l'avviso chiedeva di fare, dal pannello, non si fa: nessuna pagina scrive sui resi.
     expect(testo, 'l avviso chiede di scrivere sul reso, cosa che dal pannello non si fa').not.toMatch(/Scrivi sul reso/u);
+    expect(avviso.link).toBe('/admin/orders');
 
     // Quello che chiede adesso e' vero: i soldi sono usciti una volta, e il negozio va avvisato di
     // non rimborsare di nuovo (sesto giro: «fermalo» chiedeva un blocco che dal pannello non c'e').
-    expect(testo).toMatch(/già partito/u);
+    expect(testo).toMatch(/è partito/u);
+    expect(testo).toMatch(/Non va rifatto/u);
     expect(testo).toMatch(/rimborsarlo di nuovo/u);
+    expect(testo, 'su un rimborso con la carta l avviso parla di un bonifico').not.toMatch(/bonifico/u);
   });
 
   it('SESTO GIRO — in «decide» il reso resta approvato: l avviso non chiede di fermare il negozio, chiede di avvisarlo', async () => {

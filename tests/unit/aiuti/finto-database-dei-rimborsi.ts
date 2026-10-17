@@ -9,8 +9,11 @@
  *  ② i filtri delle scritture si applicano DAVVERO (`eq`, `in`, `is`, `like`): una scrittura che
  *    non trova righe non scrive niente, e chi la fa lo vede da `select('id')`;
  *  ③ i guasti si accendono a comando: l'accredito che cade, l'accredito che riesce ma perde la
- *    risposta, lo storno al negozio che cade, una colonna che il database non ha ancora (una
- *    migrazione non applicata: 42703 in lettura, PGRST204 in scrittura, come PostgREST).
+ *    risposta, lo storno al negozio che cade, l'avviso agli amministratori che non si scrive, il
+ *    segno del bonifico che non si scrive sull'ordine, l'email del cliente che non si legge, una
+ *    colonna che il database non ha ancora (42703 in lettura, PGRST204 in scrittura, come PostgREST);
+ *  ④ un id gia' usato si rifiuta con 23505, come la chiave primaria vera: e' cosi' che un avviso
+ *    scritto con `unaVoltaPer` non arriva due volte.
  *
  * Chi legge riceve una COPIA della riga: come il database vero, le scritture fatte dopo non
  * cambiano quello che il codice aveva gia' letto.
@@ -34,6 +37,19 @@ export interface Guasti {
   colonneMancanti?: string[];
   /** Tabelle che il database non ha: ogni lettura o scrittura risponde PGRST205, come PostgREST. */
   tabelleMancanti?: string[];
+  /** Le scritture in `notifications` cadono con questo errore, e non scrivono niente. */
+  notificheCadono?: { code?: string; message: string } | null;
+  /**
+   * L'insert in `notifications` scrive davvero, ma la risposta si perde: arriva un errore di rete.
+   * Vale una volta.
+   */
+  notificheScrivonoPoiCadono?: boolean;
+  /** La scrittura del segno del bonifico sull'ordine (`stripe_refund_id` che comincia con «bonifico:») cade. */
+  segnoDelBonificoCade?: { code?: string; message: string } | null;
+  /** Le cancellazioni (`delete`) cadono con questo errore e non tolgono niente. */
+  cancellazioniCadono?: { code?: string; message: string } | null;
+  /** La lettura dell'utente (`auth.admin.getUserById`) risponde con questo errore. */
+  utenteIlleggibile?: { status?: number; code?: string; message: string } | null;
 }
 
 export interface FintoDatabase {
@@ -47,10 +63,22 @@ export interface FintoDatabase {
   guasti: Guasti;
   /** Comportamento di `wallet_credit` dopo la migrazione 143: doppione = nessun errore. */
   comeLa143: boolean;
+  /**
+   * Le email degli utenti, per `auth.admin.getUserById`. Chi non e' scritto qui ha `<id>@esempio.it`;
+   * con `null` l'utente non esiste piu' (account cancellato) e la risposta e' «user not found», come Supabase.
+   */
+  email: Record<string, string | null>;
   client: {
     from: (tabella: string) => FintaQuery;
     rpc: (nome: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
-    auth: { admin: { getUserById: (id: string) => Promise<{ data: { user: { email: string } | null } }> } };
+    auth: {
+      admin: {
+        getUserById: (id: string) => Promise<{
+          data: { user: { email: string } | null };
+          error: { status?: number; code?: string; message: string } | null;
+        }>;
+      };
+    };
   };
 }
 
@@ -64,7 +92,7 @@ function colonneDi(select: string): string[] {
 }
 
 class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
-  private modo: 'select' | 'update' | 'insert' = 'select';
+  private modo: 'select' | 'update' | 'insert' | 'delete' = 'select';
   private colonne = '*';
   private restituisce: string | null = null;
   private valori: Riga | Riga[] = {};
@@ -88,6 +116,10 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
   insert(valori: Riga | Riga[]) {
     this.modo = 'insert';
     this.valori = valori;
+    return this;
+  }
+  delete() {
+    this.modo = 'delete';
     return this;
   }
   eq(colonna: string, valore: unknown) {
@@ -192,7 +224,34 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
       return { data: trovate, error: null };
     }
 
+    if (this.modo === 'delete') {
+      if (this.db.guasti.cancellazioniCadono) return { data: null, error: this.db.guasti.cancellazioniCadono };
+      const restano = righe.filter((r) => !this.filtri.every((f) => f(r)));
+      const tolte = righe.length - restano.length;
+      righe.splice(0, righe.length, ...restano);
+      return { data: null, error: null, count: tolte } as { data: unknown; error: unknown };
+    }
+
     const nuove = Array.isArray(this.valori) ? this.valori : [this.valori];
+    if (this.tabella === 'notifications' && this.db.guasti.notificheCadono) {
+      return { data: null, error: this.db.guasti.notificheCadono };
+    }
+    if (
+      this.tabella === 'orders' &&
+      this.modo === 'update' &&
+      this.db.guasti.segnoDelBonificoCade &&
+      String((this.valori as Riga).stripe_refund_id ?? '').includes('bonifico:')
+    ) {
+      return { data: null, error: this.db.guasti.segnoDelBonificoCade };
+    }
+    if (this.modo === 'insert') {
+      // Come la chiave primaria vera: un id gia' usato si rifiuta, e non si scrive niente.
+      const usati = new Set(righe.map((r) => r.id).filter((id) => id != null));
+      const doppione = nuove.some((v, i) => v.id != null && (usati.has(v.id) || nuove.findIndex((w) => w.id === v.id) !== i));
+      if (doppione) {
+        return { data: null, error: { code: '23505', message: `duplicate key value violates unique constraint "${this.tabella}_pkey"` } };
+      }
+    }
     const chiesta = this.mancante(nuove.flatMap((v) => Object.keys(v)));
     if (chiesta) {
       return { data: null, error: { code: 'PGRST204', message: `Could not find the '${chiesta}' column of '${this.tabella}' in the schema cache` } };
@@ -207,6 +266,10 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
       toccate = nuove.map((v) => ({ id: v.id ?? `${this.tabella}-${righe.length + 1}`, ...v }));
       righe.push(...toccate);
       for (const v of toccate) this.db.scritture.push({ tabella: this.tabella, tipo: 'insert', valori: { ...v } });
+      if (this.tabella === 'notifications' && this.db.guasti.notificheScrivonoPoiCadono) {
+        this.db.guasti.notificheScrivonoPoiCadono = false;
+        return { data: null, error: { message: 'FetchError: socket hang up' } };
+      }
     }
     if (this.restituisce == null) return { data: null, error: null };
     const restituite = this.restituisce === '*' ? null : colonneDi(this.restituisce);
@@ -231,6 +294,7 @@ export function creaFintoDatabase(tabelle: Record<string, Riga[]>, guasti: Guast
     diarioCredito: [],
     guasti,
     comeLa143: false,
+    email: {},
     client: undefined as unknown as FintoDatabase['client'],
   };
 
@@ -278,7 +342,17 @@ export function creaFintoDatabase(tabelle: Record<string, Riga[]>, guasti: Guast
       }
       return { data: null, error: null };
     },
-    auth: { admin: { getUserById: async () => ({ data: { user: { email: 'cliente@test.it' } } }) } },
+    auth: {
+      admin: {
+        getUserById: async (id: string) => {
+          if (db.guasti.utenteIlleggibile) return { data: { user: null }, error: db.guasti.utenteIlleggibile };
+          const email = id in db.email ? db.email[id] : `${id}@esempio.it`;
+          return email
+            ? { data: { user: { email } }, error: null }
+            : { data: { user: null }, error: { status: 404, code: 'user_not_found', message: 'User not found' } };
+        },
+      },
+    },
   };
   return db;
 }

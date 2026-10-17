@@ -7,9 +7,8 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import EmptyState from '@/components/EmptyState';
-import { Input, Textarea } from '@/components/ui/Field';
-import { serveLaSceltaDelRimborso } from '@/lib/rimborsi/regole-del-rimborso';
-import { leggiSceltaDelRimborso } from '@/lib/rimborsi/scelta-del-cliente';
+import { Textarea } from '@/components/ui/Field';
+import { haUnaParteInContanti } from '@/lib/rimborsi/regole-del-rimborso';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
@@ -36,11 +35,6 @@ export default function NewReturnPage() {
   const [submitting, setSubmitting] = useState(false);
   const [order, setOrder] = useState<any>(null);
   const [loaded, setLoaded] = useState(false);
-  // R71 — «Come vuoi il rimborso?»: il bonifico e' la prima scelta, il credito
-  // MyCity un'opzione che il cliente prende lui.
-  const [modoRimborso, setModoRimborso] = useState<'BONIFICO' | 'CREDITO'>('BONIFICO');
-  const [iban, setIban] = useState('');
-  const [erroreIban, setErroreIban] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -80,17 +74,6 @@ export default function NewReturnPage() {
   }
 
   async function submit() {
-    // R71 — La scelta si controlla con la stessa regola del server
-    // (lib/rimborsi/scelta-del-cliente.ts): un IBAN sbagliato si corregge qui.
-    const esitoScelta = leggiSceltaDelRimborso(
-      { modo: modoRimborso, iban },
-      { pagatoInContanti: !!order && serveLaSceltaDelRimborso(order) },
-    );
-    if (!esitoScelta.ok) {
-      setErroreIban(esitoScelta.errore);
-      return;
-    }
-    setErroreIban(null);
     setSubmitting(true);
     try {
       const r = await fetch('/api/returns/create', {
@@ -101,18 +84,11 @@ export default function NewReturnPage() {
           reason,
           notes: notes || undefined,
           photoUrls: photos,
-          ...(esitoScelta.scelta ? { rimborso: esitoScelta.scelta } : {}),
         }),
       });
       const data = await r.json();
       if (!r.ok) throw new Error(apiErrorMessage(data));
-      if (data?.sceltaDelRimborso === 'non_salvata') {
-        toast.warning(
-          "Richiesta di reso inviata. La tua scelta sul rimborso non si è potuta salvare: il rimborso arriverà con un bonifico e ti chiederemo l'IBAN.",
-        );
-      } else {
-        toast.success('Richiesta di reso inviata');
-      }
+      toast.success('Richiesta di reso inviata');
       router.push(`/orders/${params.id}`);
     } catch (e) {
       // 6/9/2026 — L'AVVISO DICEVA SOLTANTO «ERRORE».
@@ -287,71 +263,16 @@ export default function NewReturnPage() {
           )}
         </div>
 
-        {serveLaSceltaDelRimborso(order) && (
-          <fieldset className="mt-6">
-            <legend className="block text-sm font-medium text-ink-700">Come vuoi il rimborso?</legend>
-            <p className="mt-1 text-xs text-ink-500">
-              Hai pagato in contanti alla consegna: scegli tu come riavere i soldi.
-            </p>
-            <div className="mt-2 space-y-2">
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-cream-300 p-3 hover:bg-cream-50">
-                <input
-                  type="radio"
-                  name="modo-rimborso"
-                  value="BONIFICO"
-                  checked={modoRimborso === 'BONIFICO'}
-                  onChange={() => setModoRimborso('BONIFICO')}
-                  className="mt-0.5 h-4 w-4 text-primary-700"
-                />
-                <span className="text-sm font-medium text-ink-900">
-                  Con un bonifico sul mio conto
-                  <span className="block font-normal text-ink-600">Ti mandiamo i soldi sul conto che indichi qui sotto.</span>
-                  {/* Collaudo del 15/10, terzo giro (R71): su un ordine pagato in parte col credito,
-                      quella parte torna credito anche col bonifico (lib/rimborsi/regole-del-rimborso.ts,
-                      ripartoDelRimborso). Prima lo diceva solo l'email, dopo il rimborso. */}
-                  {Number(order.wallet_applied_cents ?? 0) > 0 && (
-                    <span className="block font-normal text-ink-600">
-                      Col bonifico tornano i soldi dati in contanti. La parte che avevi pagato col credito MyCity torna come credito.
-                    </span>
-                  )}
-                </span>
-              </label>
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-cream-300 p-3 hover:bg-cream-50">
-                <input
-                  type="radio"
-                  name="modo-rimborso"
-                  value="CREDITO"
-                  checked={modoRimborso === 'CREDITO'}
-                  onChange={() => setModoRimborso('CREDITO')}
-                  className="mt-0.5 h-4 w-4 text-primary-700"
-                />
-                <span className="text-sm font-medium text-ink-900">
-                  Come credito MyCity
-                  <span className="block font-normal text-ink-600">
-                    Arriva appena il negozio approva il rimborso e si usa sui prossimi ordini pagati alla consegna.
-                  </span>
-                </span>
-              </label>
-            </div>
-            {modoRimborso === 'BONIFICO' && (
-              <Input
-                label="IBAN del tuo conto"
-                containerClassName="mt-3"
-                value={iban}
-                onChange={(e) => {
-                  setIban(e.target.value);
-                  if (erroreIban) setErroreIban(null);
-                }}
-                autoComplete="off"
-                spellCheck={false}
-                maxLength={64}
-                placeholder="IT60 X054 2811 1010 0000 0123 456"
-                required
-                error={erroreIban ?? undefined}
-                hint="Lo usiamo solo per questo rimborso. Lo vede MyCity, che fa il bonifico: il negozio no."
-              />
+        {/* R71 — Chi ha pagato alla consegna riavrà i soldi con un bonifico: il modulo non
+            chiede niente, lo dice e basta. L'IBAN lo chiede l'email del rimborso. */}
+        {haUnaParteInContanti(order) && (
+          <p className="mt-6 rounded-lg bg-cream-100 p-3 text-sm text-ink-700">
+            Hai pagato alla consegna: se il reso viene rimborsato, ti restituiamo i soldi con un bonifico.
+            L&apos;IBAN te lo chiediamo per email, quando parte il rimborso.
+            {Number(order.wallet_applied_cents ?? 0) > 0 && (
+              <> La parte che avevi pagato con il credito MyCity torna come credito.</>
             )}
-          </fieldset>
+          </p>
         )}
 
         <button

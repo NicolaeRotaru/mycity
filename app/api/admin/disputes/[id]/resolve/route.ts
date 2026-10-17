@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { isStripeConfigured } from '@/lib/stripe/client';
-import { refundOrder } from '@/lib/stripe/payout';
+import { AccreditoGiaUscitoConAltroImporto, RimborsoInAttesaDellaDivisione, refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -15,8 +15,6 @@ import {
   statoDelReclamoSullOrdine,
   type OrdineDaRimborsare,
 } from '@/lib/rimborsi/regole-del-rimborso';
-import { PAGINA_DEI_BONIFICI_DA_FARE } from '@/lib/rimborsi/scelta-del-reso';
-import { avvisoDelBonificoDelReclamoNonRegistrato, tabellaDeiBonificiMancante } from '@/lib/rimborsi/bonifici-da-fare';
 import { formatPriceFromCents } from '@/lib/format';
 import { PAUSA_RIMBORSO_DA_DIVIDERE, SENZA_LA_PAUSA_DEL_CARRELLO } from '@/lib/stripe/webhook/rimborsi-da-fuori';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
@@ -34,9 +32,10 @@ const Body = z.object({
  *
  * Su 'resolved_buyer' + refundCents → emette un rimborso REALE (refundOrder:
  * refund Stripe + claw-back del transfer se il venditore era già stato pagato;
- * sugli ordini in contanti un bonifico da fare a mano, e credito MyCity solo
- * per la parte pagata col credito — R71). L'importo non può superare quello
- * che il cliente ha davvero pagato (R84). 'resolved_buyer' senza importo =
+ * sugli ordini in contanti un bonifico da fare a mano, che refundOrder registra
+ * sull'ordine e annuncia agli amministratori, e credito MyCity solo per la
+ * parte pagata col credito — R71). L'importo non può superare quello che il
+ * cliente ha davvero pagato (R84). 'resolved_buyer' senza importo =
  * risoluzione DB-only valida.
  * 'resolved_seller'/'rejected' = solo aggiornamento DB.
  *
@@ -146,8 +145,6 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   let rimborsoEmesso = false;
   /** R76 — il verdetto di `refundOrder`: il cliente ha riavuto l'intero lordo. */
   let rimborsoPieno = false;
-  /** R71 — quanto del rimborso va pagato col bonifico, a mano. */
-  let bonificoCents = 0;
 
   // Rimborso reale solo se risolto a favore del buyer con un importo.
   if (body.status === 'resolved_buyer' && body.refundCents) {
@@ -167,62 +164,20 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         metadata: { dispute_id: dispute.id },
         idempotencyKey: `dispute_${dispute.id}`,
         notifyBuyer: true,
-        // R71 — Un reclamo su un ordine in contanti si rimborsa col bonifico: il
-        // credito MyCity arriva solo se il cliente l'ha scelto, e qui non l'ha
-        // scelto nessuno. L'avviso del bonifico da fare porta alla lista dei
-        // bonifici, dove il reclamo ha la sua riga (qui sotto).
-        contanti: { modo: 'BONIFICO', doveSiPaga: PAGINA_DEI_BONIFICI_DA_FARE },
+        // R71 — Su un ordine in contanti refundOrder registra il bonifico da fare
+        // sull'ordine e lo annuncia agli amministratori: qui non c'e' altro da scrivere.
       });
       refundId = res.refundId;
       rimborsoEmesso = true;
       rimborsoPieno = res.pieno;
-      bonificoCents = res.bonificoCents ?? 0;
     } catch (err) {
       logger.error('[disputes] refund failed', err);
       await riapri();
-      return ApiErrors.badGateway('Rimborso fallito: ' + (err instanceof Error ? err.message : 'unknown'));
-    }
-  }
-
-  /**
-   * Collaudo del 15/10 — IL BONIFICO DEL RECLAMO RESTA SCRITTO.
-   *
-   * Il rimborso e' registrato sull'ordine (che da qui dice «rimborsato»), ma i
-   * soldi del bonifico li manda a mano chi amministra. Prima l'unica traccia era
-   * l'avviso nella campanella: perso quello, il cliente aspettava per sempre.
-   * La riga sta in una tabella che scrive solo il server (162): sulla riga del
-   * reclamo il cliente puo' scrivere quello che vuole, e la lista dei bonifici
-   * da fare non deve leggere cifre che ha messo lui.
-   *
-   * Non ferma la risoluzione: i soldi sono gia' registrati come rimborsati, e
-   * l'avviso a chi paga e' gia' partito. Senza la 162 resta solo l'avviso.
-   */
-  if (bonificoCents > 0 && dispute.order_id) {
-    const { error: errBonifico } = await admin.from('bonifici_dei_reclami').insert({
-      dispute_id: dispute.id,
-      order_id: dispute.order_id,
-      importo_cents: bonificoCents,
-    });
-    if (errBonifico) {
-      if (tabellaDeiBonificiMancante(errBonifico)) {
-        logger.warn('[dispute] migrazione 162 non applicata: il bonifico del reclamo resta solo nell avviso', {
-          disputeId: dispute.id, centesimi: bonificoCents,
-        });
-      } else {
-        logger.error('[dispute] bonifico da fare non registrato: resta solo nell avviso', {
-          disputeId: dispute.id, centesimi: bonificoCents, message: errBonifico.message,
-        });
-        // Terzo giro del riesame — non solo nel registro: chi paga deve sapere
-        // che la lista non e' completa.
-        const avviso = avvisoDelBonificoDelReclamoNonRegistrato({
-          reclamoId: dispute.id, ordineId: dispute.order_id, importoCents: bonificoCents,
-        });
-        try {
-          await notifyAdmins(avviso.titolo, avviso.testo, avviso.link);
-        } catch (e) {
-          logger.error('[dispute] avviso del bonifico fuori dalla lista non inviato', { disputeId: dispute.id, e });
-        }
-      }
+      // 17/10/2026 — Come la decisione sul reso: i due casi che chi decide deve
+      // conoscere, e per tutto il resto una frase sola. Mai il testo grezzo dell'errore.
+      if (err instanceof AccreditoGiaUscitoConAltroImporto) return ApiErrors.conflict(err.message);
+      if (err instanceof RimborsoInAttesaDellaDivisione) return ApiErrors.conflict(err.message);
+      return ApiErrors.badGateway("Il rimborso non è partito: riprova o scrivi all'assistenza.");
     }
   }
 
