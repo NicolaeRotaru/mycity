@@ -135,27 +135,38 @@ function passoDelFile(nome: string): PassoYaml {
 
 type Esito = { uscita: number; output: Record<string, string>; riepilogo: string; log: string };
 
-/** Esegue lo script vero del controllo nel workspace, con le variabili calcolate dal file. */
-function controlla(ws: string, github: Record<string, unknown>): Esito {
-  const p = passoDelFile(CONTROLLO);
-  if (!p.run) throw new Error(`Il passo «${CONTROLLO}» non ha uno script`);
+/**
+ * Esegue lo script vero di un passo, con le variabili calcolate dal file. Il
+ * riepilogo si puo' passare: cosi' piu' passi scrivono nello stesso, come su GitHub.
+ */
+function esegui(nome: string, cwd: string, contesto: Record<string, unknown>, riepilogo?: string): Esito {
+  const p = passoDelFile(nome);
+  if (!p.run) throw new Error(`Il passo «${nome}» non ha uno script`);
   const fuori = cartellaNuova('uscite-');
   const output = join(fuori, 'output.txt');
-  const riepilogo = join(fuori, 'riepilogo.md');
+  const sommario = riepilogo ?? join(fuori, 'riepilogo.md');
   writeFileSync(output, '');
-  writeFileSync(riepilogo, '');
+  if (!riepilogo) writeFileSync(sommario, '');
   const daFile: Record<string, string> = {};
-  for (const [k, v] of Object.entries(p.env ?? {})) daFile[k] = interpola(v, { github });
+  for (const [k, v] of Object.entries(p.env ?? {})) daFile[k] = interpola(v, contesto);
   const r = spawnSync('bash', ['-e', '-c', p.run], {
-    cwd: ws,
+    cwd,
     encoding: 'utf8',
-    env: { ...AMBIENTE_GIT, ...daFile, GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: riepilogo },
+    env: { ...AMBIENTE_GIT, ...daFile, GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: sommario },
   });
   const uscite: Record<string, string> = {};
   for (const riga of readFileSync(output, 'utf8').split('\n')) {
     if (riga.includes('=')) uscite[riga.slice(0, riga.indexOf('='))] = riga.slice(riga.indexOf('=') + 1);
   }
-  return { uscita: r.status ?? -1, output: uscite, riepilogo: readFileSync(riepilogo, 'utf8'), log: `${r.stdout}\n${r.stderr}` };
+  return { uscita: r.status ?? -1, output: uscite, riepilogo: readFileSync(sommario, 'utf8'), log: `${r.stdout}\n${r.stderr}` };
+}
+
+/**
+ * Il controllo, con le chiavi di Vercel accese se non si dice altro: e' il
+ * giorno in cui il rilascio parte davvero.
+ */
+function controlla(ws: string, github: Record<string, unknown>, pronto = 'true'): Esito {
+  return esegui(CONTROLLO, ws, { github, steps: { chiavi: { outputs: { pronto } } } });
 }
 
 /**
@@ -450,5 +461,54 @@ describe('la corsa: un commit verde superato da uno unito dopo, con la CI ancora
     expect(r.riepilogo).toContain(`\`${H}\` e' gia' dentro \`${F}\`, quindi va online con il rilascio di \`${F}\``);
     expect(r.riepilogo).toContain(`Se la CI di \`${F}\` finisce rossa, da qui non parte nessun rilascio`);
     expect(r.riepilogo).toContain('rilancia quella CI se il rosso viene da una prova che si rompe da sola, altrimenti unisci la correzione');
+  });
+
+  /*
+   * Settimo giro di correzione — OGGI LE CHIAVI DI VERCEL MANCANO, e Vercel
+   * pubblica da solo H e poi F appena si uniscono. La frase qui sopra («va
+   * online con il rilascio di F», «rilancia quella CI») in quello stato e'
+   * falsa: da qui non parte mai nessun rilascio. Si eseguono in fila i tre
+   * passi veri che scrivono nel riepilogo, con i segreti vuoti come oggi.
+   */
+  it('con le chiavi di Vercel spente, il riepilogo non parla di un rilascio che da qui non partira\' mai', () => {
+    const ws = scarica(deposito, H);
+    const riepilogo = join(cartellaNuova('riepilogo-'), 'riepilogo.md');
+    writeFileSync(riepilogo, '');
+    const secrets = { VERCEL_TOKEN: '', VERCEL_ORG_ID: '', VERCEL_PROJECT_ID: '' };
+
+    const chiavi = esegui('Verifica di avere le chiavi', ws, { github, secrets }, riepilogo);
+    expect(chiavi.uscita, chiavi.log).toBe(0);
+    expect(chiavi.output.pronto).toBe('false');
+
+    const saltato = { outcome: 'skipped', conclusion: 'skipped', outputs: {} };
+    const steps: Record<string, unknown> = { chiavi: { outputs: chiavi.output } };
+    const controllo = esegui(CONTROLLO, ws, { github, secrets, steps }, riepilogo);
+    // Rosso, come prima: il commit scaricato non e' l'ultimo di main.
+    expect(controllo.uscita, controllo.log).not.toBe(0);
+    expect(controllo.output.fidato).toBe('true');
+    expect(controllo.log).toContain(`l'ultimo commit di main e' ${F}`);
+
+    // Il verdetto gira (fidato) e chiude il riepilogo, dalla cartella del deposito vero.
+    Object.assign(steps, { provenienza: { outputs: controllo.output }, migrazioni: saltato, rilascio: saltato, fumo: saltato, ritorno: saltato });
+    const verdetto = esegui(VERDETTO, process.cwd(), { github, secrets, steps }, riepilogo);
+    expect(verdetto.uscita, verdetto.log).toBe(1);
+
+    const testo = readFileSync(riepilogo, 'utf8');
+    expect(testo).toContain('Il cancello del rilascio e\' SPENTO');
+    expect(testo).toContain('Non ho provato niente');
+    expect(testo).not.toContain('va online con il rilascio di');
+    expect(testo).not.toContain('rilancia quella CI');
+    expect(testo).not.toContain('Da qui si pubblica solo l\'ultimo');
+    expect(testo).not.toContain('Non ho rilasciato: su main c\'e\' gia\' un commit piu\' nuovo');
+  });
+
+  it('con le chiavi spente, dopo il controllo gira solo il verdetto', () => {
+    const controllo = controlla(scarica(deposito, H), github, 'false');
+    const passi = lavoroDiRilascio().steps ?? [];
+    const girati = percorso(passi, github, {
+      'Verifica di avere le chiavi': { esito: 'success', output: { pronto: 'false' } },
+      [CONTROLLO]: { esito: controllo.uscita === 0 ? 'success' : 'failure', output: controllo.output },
+    });
+    expect(girati.slice(girati.indexOf(CONTROLLO) + 1)).toEqual([VERDETTO]);
   });
 });

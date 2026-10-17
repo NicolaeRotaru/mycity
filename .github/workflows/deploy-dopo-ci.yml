@@ -378,10 +378,16 @@ jobs:
       # sceglie chi apre la richiesta. `fidato` dice se il codice su disco viene
       # dalla storia di `main` (cioe' e' gia' stato unito): solo allora il
       # verdetto puo' lanciare il suo script.
+      #
+      # Senza le chiavi di Vercel da qui non si pubblica niente, e Vercel ha
+      # gia' pubblicato da solo questo commit e quelli dopo: allora il rosso
+      # del commit superato non scrive niente sul rilascio che verra'. Lo
+      # stato vero lo dicono il cartello in cima al riepilogo e il verdetto.
       - name: Il commit scaricato e' l'ultimo di main
         id: provenienza
         env:
           COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+          PRONTO: ${{ steps.chiavi.outputs.pronto }}
         run: |
           set -euo pipefail
 
@@ -428,6 +434,10 @@ jobs:
 
           if git merge-base --is-ancestor "$SCARICATO" "$PUNTA"; then
             echo "fidato=true" >> "$GITHUB_OUTPUT"
+            if [ "${PRONTO:-}" != "true" ]; then
+              echo "Il commit $SCARICATO e' gia' in main, ma l'ultimo commit di main e' $PUNTA. Mancano le chiavi di Vercel: da qui non si pubblica niente."
+              exit 1
+            fi
             rifiuta "Non ho rilasciato: su main c'e' gia' un commit piu' nuovo" \
               "Questo giro doveva pubblicare \`$SCARICATO\`, ma adesso l'ultimo commit di \`main\` e' \`$PUNTA\`. Da qui si pubblica solo l'ultimo, perche' non guardo cosa c'e' online: un commit piu' vecchio potrebbe prendere il posto di uno piu' nuovo. Non ho toccato niente. \`$SCARICATO\` e' gia' dentro \`$PUNTA\`, quindi va online con il rilascio di \`$PUNTA\` o di un commit che arriva dopo. Se la CI di \`$PUNTA\` finisce rossa, da qui non parte nessun rilascio finche' l'ultimo commit di \`main\` non ha la CI verde: rilancia quella CI se il rosso viene da una prova che si rompe da sola, altrimenti unisci la correzione."
           fi

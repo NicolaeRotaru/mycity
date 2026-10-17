@@ -209,10 +209,13 @@ describe('la regola «Main»: cosa le manca per fermare le richieste rosse', () 
     const escluso = sistemata();
     escluso.conditions.ref_name.exclude = ['refs/heads/main'] as never[];
     expect(valutaLaRegolaMain(escluso).protegge).toBe(false);
+    // Di sicuro: ❌ con uscita 1, non un «guardala a mano».
+    expect(uscitaDelVerdetto(valutaLaRegolaMain(escluso))).toBe(1);
 
     const altroRamo = sistemata();
     altroRamo.conditions.ref_name.include = ['refs/heads/sviluppo'] as never[];
     expect(valutaLaRegolaMain(altroRamo).protegge).toBe(false);
+    expect(uscitaDelVerdetto(valutaLaRegolaMain(altroRamo))).toBe(1);
 
     // Il verde e' solo per «Include default branch», come nei passi: anche
     // main scritto per nome e' un'altra regola, da guardare a mano.
@@ -344,7 +347,7 @@ describe('la regola «Main»: cosa le manca per fermare le richieste rosse', () 
       const esito = valutaLaRegolaMain(r);
       expect(esito.protegge).toBe(false);
       expect(uscitaDelVerdetto(esito)).toBe(3);
-      expect(esito.diverse.map((d) => d.cosa).join('\n')).toContain('ha anche «merge_queue»');
+      expect(esito.diverse.map((d) => d.cosa).join('\n')).toContain('ha anche altre regole, che la procedura non chiede');
     }
   });
 
