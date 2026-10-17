@@ -293,6 +293,7 @@ describe('l avviso resta «finché non lo cancelliamo noi», come dice l informa
     expect(L_AVVISO_A_CHI_PAGA).toContain("L'avviso resta lì finché non lo cancelliamo noi.");
     await ilNegozioRimborsaIlReso();
     await cancellaAccount(clienteDellaCancellazione() as never, 'giulia');
+    expect(avvisi(), 'l avviso non c e gia prima delle potature').toHaveLength(1);
     const adesso = Date.now();
     avvisi()[0].created_at = new Date(adesso).toISOString(); // il default del database vero
     // La controprova che le potature lavorano DAVVERO su questo database: un messaggio dei Contatti
