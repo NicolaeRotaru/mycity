@@ -72,28 +72,18 @@ describe('l’invito: il premio va a chi invita, e il testo lo dice', () => {
 });
 
 /*
- * R71 (11/10/2026) — IL MECCANISMO E' CAMBIATO, E LA PROMESSA CON LUI.
+ * R71 — IL MECCANISMO E' CAMBIATO, E LA PROMESSA CON LUI.
  *
- * Qui c'era scritto: «se un giorno il meccanismo cambia — campo IBAN nel
- * modulo — la riga che lo dichiara qui cade, ed è il momento in cui la promessa
- * può tornare». E' quel giorno. Il credito d'ufficio era il difetto R71: il
- * Codice del Consumo (art. 56) vuole il rimborso con lo stesso mezzo, salvo
- * scelta espressa del cliente. Adesso il modulo di reso chiede «Come vuoi il
- * rimborso?», il reso ricorda la scelta e l'IBAN (migrazione 162), e
- * `refundOrder` accredita il portafoglio solo a chi l'ha scelto. Il
- * comportamento lo provano il-rimborso-dei-contanti-arriva-col-bonifico.test.ts
- * e il-modulo-di-reso-chiede-come-riavere-i-contanti.test.ts; qui resta solo
- * che i testi non promettano più il credito come scelta di partenza.
+ * L'11/10 il credito d'ufficio era il difetto R71: il Codice del Consumo
+ * (art. 56) vuole il rimborso con lo stesso mezzo. Il 17/10 Nicola ha deciso
+ * («Semplifica»): i contanti tornano sempre col bonifico, senza scelta, e
+ * l'IBAN lo chiede l'email del rimborso. Nessuna colonna lo tiene: lo prova
+ * tests/sql/rls/40-nessuna-colonna-tiene-l-iban-del-rimborso.test.sql sullo
+ * schema vero, e il comportamento lo prova
+ * i-contanti-tornano-sempre-col-bonifico-da-ogni-strada.test.ts. Qui resta
+ * solo che i testi non promettano il credito come regola.
  */
-describe('il reso in contanti: il credito solo se lo sceglie il cliente, e il testo lo dice', () => {
-  it('nella tabella dei resi ci sono la scelta del rimborso e l’IBAN', () => {
-    const tipi = leggi('lib/database.types.ts');
-    const blocco = tipi.slice(tipi.indexOf('      returns: {'));
-    const righe = blocco.slice(0, blocco.indexOf('Insert:'));
-    expect(righe).toMatch(/refund_method/);
-    expect(righe).toMatch(/refund_iban/);
-  });
-
+describe('il reso in contanti: torna col bonifico, e il testo non promette il credito', () => {
   // La causale `cod_refund` dell'accredito qui si cercava come parola nel file
   // (collaudo del 15/10, terzo giro: una ricerca di parole non sa diventare
   // rossa come la realta'). La prova vera fa girare `refundOrder` e guarda la

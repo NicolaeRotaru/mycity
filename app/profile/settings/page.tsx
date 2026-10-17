@@ -17,7 +17,6 @@ import {
 // identica a questa. Una copia non resta uguale: quella è sparita.
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { perchePasswordNonCambiabile, puoiProvareACambiare } from '@/lib/account/cambio-password';
-import { SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE } from '@/lib/rimborsi/iban-del-rimborso';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Field';
@@ -626,8 +625,10 @@ export default function SettingsPage() {
                     Verranno rimossi profilo, indirizzi e preferenze. Dei tuoi ordini togliamo nome, telefono,
                     indirizzo di casa e note per il fattorino. Resta la riga dei conti — data, importo, che cosa
                     hai comprato, da quale negozio e la città — perché la legge ci obbliga a tenerla per{' '}
-                    <strong>10 anni</strong>: quella riga non porta più il tuo nome.{' '}
-                    {SE_CANCELLI_L_ACCOUNT_CON_UN_BONIFICO_DA_FARE} C'è un periodo di ripensamento
+                    <strong>10 anni</strong>: quella riga non porta più il tuo nome. Un reclamo ancora aperto, su
+                    qualunque ordine, si cancella insieme all'account: aspetta che si chiuda. Se hai un reso aperto
+                    su un ordine pagato alla consegna, dopo la cancellazione non abbiamo più il tuo indirizzo per
+                    chiederti l'IBAN. C'è un periodo di ripensamento
                     di <strong>7 giorni</strong> durante il quale puoi annullare; dopo,{' '}
                     <strong>l'azione è permanente.</strong>
                   </p>

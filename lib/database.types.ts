@@ -203,36 +203,6 @@ export interface Database {
         };
         Relationships: [];
       };
-      bonifici_dei_reclami: {
-        Row: {
-          dispute_id: string;
-          order_id: string;
-          importo_cents: number;
-          registrato_at: string;
-          fatto_at: string | null;
-          iban: string | null;
-          intestatario: string | null;
-        };
-        Insert: {
-          dispute_id: string;
-          order_id: string;
-          importo_cents: number;
-          registrato_at?: string;
-          fatto_at?: string | null;
-          iban?: string | null;
-          intestatario?: string | null;
-        };
-        Update: {
-          dispute_id?: string;
-          order_id?: string;
-          importo_cents?: number;
-          registrato_at?: string;
-          fatto_at?: string | null;
-          iban?: string | null;
-          intestatario?: string | null;
-        };
-        Relationships: [];
-      };
       cashback_campaigns: {
         Row: {
           id: string;
@@ -2245,11 +2215,6 @@ export interface Database {
           decided_by: string | null;
           refunded_at: string | null;
           decision_notes: string | null;
-          refund_method: string | null;
-          refund_iban: string | null;
-          refund_bonifico_cents: number | null;
-          refund_bonifico_fatto_at: string | null;
-          refund_intestatario: string | null;
         };
         Insert: {
           id?: string;
@@ -2270,11 +2235,6 @@ export interface Database {
           decided_by?: string | null;
           refunded_at?: string | null;
           decision_notes?: string | null;
-          refund_method?: string | null;
-          refund_iban?: string | null;
-          refund_bonifico_cents?: number | null;
-          refund_bonifico_fatto_at?: string | null;
-          refund_intestatario?: string | null;
         };
         Update: {
           id?: string;
@@ -2295,11 +2255,6 @@ export interface Database {
           decided_by?: string | null;
           refunded_at?: string | null;
           decision_notes?: string | null;
-          refund_method?: string | null;
-          refund_iban?: string | null;
-          refund_bonifico_cents?: number | null;
-          refund_bonifico_fatto_at?: string | null;
-          refund_intestatario?: string | null;
         };
         Relationships: [];
       };

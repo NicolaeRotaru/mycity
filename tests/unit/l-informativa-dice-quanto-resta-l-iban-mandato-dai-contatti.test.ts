@@ -1,17 +1,19 @@
 import { describe, it, expect, vi } from 'vitest';
 import { eseguiPotature, type ClientePotature } from '@/lib/privacy/potature-ritenzione';
-import { DOVE_CHIEDIAMO_L_IBAN, QUANTO_TENIAMO_L_IBAN, durataDetta } from '@/lib/rimborsi/iban-del-rimborso';
+import { DOVE_CHIEDIAMO_L_IBAN, QUANTO_TENIAMO_L_IBAN, durataDetta } from '@/lib/privacy/iban-per-email';
 
 /**
  * Riesame del 16/10, terzo giro — LA TABELLA DICEVA CHE L'IBAN SI CANCELLA COL BONIFICO, ANCHE QUELLO
  * MANDATO DAI CONTATTI.
  *
- * Ogni reclamo su un ordine in contanti chiuso a favore del cliente passa dai Contatti: l'email del
- * rimborso chiede l'IBAN, il cliente lo manda con un messaggio. Chi paga lo copia sulla riga del
- * bonifico, e col «fatto» l'IBAN su quella riga si cancella — ma il messaggio resta fra i messaggi
- * dell'assistenza fino alla potatura notturna, cioe' due anni. La tabella delle conservazioni
- * (l'articolo 13.2.a del GDPR vuole il tempo proprio li') diceva solo «quando il bonifico e' fatto,
- * l'IBAN si cancella»: falso per il canale che usa ogni reclamo.
+ * Ogni reclamo su un ordine in contanti chiuso a favore del cliente passava dai Contatti: l'email del
+ * rimborso chiedeva l'IBAN, il cliente lo mandava con un messaggio, e il messaggio restava fra i
+ * messaggi dell'assistenza fino alla potatura notturna, cioe' due anni. La tabella delle
+ * conservazioni (l'articolo 13.2.a del GDPR vuole il tempo proprio li') non lo diceva.
+ *
+ * 17/10/2026 — Dalla semplificazione l'IBAN arriva rispondendo all'email del rimborso, e le parole
+ * dicono di non scriverlo nei Contatti. Ma chi lo scrive li' lo stesso lascia un messaggio che resta
+ * due anni: la frase deve continuare a dirlo, con il numero vero della potatura.
  *
  * La prova non cerca una parola nel file: esegue la potatura VERA dei messaggi dei Contatti, misura
  * la finestra che applica davvero, e pretende che la riga dell'IBAN la dica. Se domani la potatura

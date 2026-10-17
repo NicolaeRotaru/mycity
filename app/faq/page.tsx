@@ -63,7 +63,7 @@ const SECTIONS: Section[] = [
         // Riesame del 16/10, quinto giro — diceva «solo se vuoi» e «resta sulla
         // richiesta di reso»: per un reclamo l'IBAN lo chiediamo noi e arriva dai
         // Contatti, dove resta di piu'. Dove e quanto lo dice l'informativa, una
-        // volta sola (lib/rimborsi/iban-del-rimborso.ts): qui si rimanda li'.
+        // volta sola (lib/privacy/iban-per-email.ts): qui si rimanda li'.
         a: (
           <>
             Sì. Tutti i dati transitano cifrati (HTTPS/TLS) e non conserviamo i dati delle carte. Se compri,

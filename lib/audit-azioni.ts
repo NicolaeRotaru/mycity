@@ -25,9 +25,6 @@ export const AZIONI_AUDIT = [
   'product.hide',
   'product.show',
   'order.refund',
-  // Riesame del 16/10, quinto giro — chi paga copia l'IBAN su un bonifico di rimborso: nessun soldo
-  // si muove, e nel registro compariva come «Ordine rimborsato».
-  'refund.iban_registrato',
   'order.force_cancel',
   // R33 — l'amministratore registra i contanti dichiarati dal fattorino.
   'order.cash_declared',
@@ -53,7 +50,6 @@ export const ETICHETTE_AZIONI_AUDIT: Record<AuditAction, string> = {
   'product.hide': 'Prodotto nascosto',
   'product.show': 'Prodotto reso visibile',
   'order.refund': 'Ordine rimborsato',
-  'refund.iban_registrato': 'IBAN di un bonifico di rimborso salvato',
   'order.force_cancel': 'Ordine cancellato (forzato)',
   'order.cash_declared': 'Contanti registrati al posto del fattorino',
   'dispute.resolve_buyer': 'Reclamo risolto a favore del buyer',

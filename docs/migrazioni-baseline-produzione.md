@@ -175,7 +175,7 @@ SUPABASE_DB_URL="<stringa del Session pooler>" \
 
 Elenca le migrazioni che mancano: chiamiamo **N** quante sono. Il 15 ottobre erano 48, dalla
 lista della prova generale (fino alla 161). Ogni migrazione unita dopo si aggiunge: con le
-riparazioni di ottobre arrivano anche la 162 e la 163, quindi N sarà almeno 50. **Le migrazioni
+riparazioni di ottobre arriva anche la 163, quindi N sarà almeno 49. **Le migrazioni
 oltre la 161 non facevano parte della prova generale dell'11 ottobre sulla copia fedele della
 produzione**: se l'elenco ne contiene, guardale prima di andare avanti.
 

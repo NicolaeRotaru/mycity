@@ -7,9 +7,10 @@ import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi } from './aiuti/schermo';
 import {
   DOVE_CHIEDIAMO_L_IBAN,
+  L_AVVISO_A_CHI_PAGA,
   PERCHE_TENIAMO_L_IBAN,
   QUANTO_TENIAMO_L_IBAN,
-} from '@/lib/rimborsi/iban-del-rimborso';
+} from '@/lib/privacy/iban-per-email';
 
 /**
  * 16/10/2026 — L'INFORMATIVA DICEVA DOVE E QUANTO TENIAMO L'IBAN, E NON ERA VERO.
@@ -22,11 +23,15 @@ import {
  *  · la tabella delle conservazioni non aveva nessuna riga per questo dato, e il codice non lo
  *    cancellava mai.
  *
- * Adesso dove lo chiediamo e quanto lo teniamo sono scritti UNA volta, accanto al codice che lo
- * cancella (`lib/rimborsi/iban-del-rimborso.ts`, provato da
- * `l-iban-del-rimborso-si-tiene-solo-finche-il-bonifico-e-da-fare.test.ts`), e la pagina li legge
- * da li'. La prova MONTA la pagina vera e guarda cosa legge chi la apre: la riga nella tabella, con
- * base giuridica e conservazione, e la voce dei dati raccolti con il «dove».
+ * 17/10/2026 — Decisione di Nicola («Semplifica»): sul sito non c'e' piu' un campo per l'IBAN, e
+ * nessuna colonna del database lo tiene (tests/sql/rls/40-nessuna-colonna-tiene-l-iban-del-rimborso).
+ * L'IBAN arriva rispondendo all'email del rimborso; la cancellazione dell'account non aspetta piu'
+ * nessun bonifico (provato da `l-avviso-del-bonifico-resta-utile-dopo-la-cancellazione.test.ts`).
+ *
+ * Dove lo chiediamo e quanto lo teniamo sono scritti UNA volta (`lib/privacy/iban-per-email.ts`) e
+ * la pagina li legge da li'. La prova MONTA la pagina vera e guarda cosa legge chi la apre: la riga
+ * nella tabella, con base giuridica e conservazione, e la voce dei dati raccolti con il «dove» e
+ * l'avviso a chi paga, che porta l'email del cliente.
  *
  * ⚪ Che le parole siano giuste per la legge non lo dice una prova: lo dice il legale.
  */
@@ -51,30 +56,28 @@ describe('l informativa, come la legge chi la apre', () => {
     s.smonta();
   }, 60000);
 
-  it('fra i dati raccolti dice dove chiediamo l IBAN davvero: modulo di reso e, per i reclami, il messaggio', () => {
+  it('fra i dati raccolti dice dove chiediamo l IBAN davvero, e che chi paga riceve la tua email', () => {
     const s = accendi(Pagina);
     const voci = Array.from(s.radice.querySelectorAll('#dati li')).map((li) => testoVisibile(li));
     const voce = voci.find((t) => t.startsWith('Dati per il rimborso con bonifico'));
     expect(voce, 'la voce dell IBAN e sparita dai dati raccolti').toBeTruthy();
     expect(voce).toContain(DOVE_CHIEDIAMO_L_IBAN);
-    expect(voce, 'dice ancora che l IBAN si raccoglie solo nel reso').not.toMatch(/raccolto solo se scegli il bonifico/);
+    expect(voce, 'l avviso a chi paga porta l email del cliente e l informativa non lo dice').toContain(L_AVVISO_A_CHI_PAGA);
     s.smonta();
   }, 60000);
 });
 
-describe('le parole dicono la regola che il codice applica', () => {
-  // Non e' una ricerca nel file della pagina: sono le frasi che la pagina mostra, confrontate con
-  // i quattro casi della regola che l'altra prova esegue sul codice.
-  it('i quattro casi ci sono tutti: fatto, chiuso senza bonifico, account cancellato con e senza debito', () => {
-    expect(QUANTO_TENIAMO_L_IBAN).toMatch(/bonifico è fatto/);
-    expect(QUANTO_TENIAMO_L_IBAN).toMatch(/si chiude senza bonifico/);
-    expect(QUANTO_TENIAMO_L_IBAN).toMatch(/non ti dobbiamo nessun bonifico, l'IBAN se ne va con l'account/);
-    expect(QUANTO_TENIAMO_L_IBAN).toMatch(/mentre ti dobbiamo ancora un bonifico, la cancellazione aspetta che il bonifico risulti fatto/);
+describe('le parole dicono quello che il codice fa adesso', () => {
+  // Le regole tolte il 17/10 non si promettono piu': nessun IBAN nel modulo di reso, nessuna
+  // cancellazione dell'IBAN col bonifico «fatto» (il «fatto» non esiste), nessuna attesa della
+  // cancellazione dell'account.
+  it('non promette il modulo di reso, il «fatto» ne l attesa della cancellazione', () => {
+    const tutto = `${DOVE_CHIEDIAMO_L_IBAN} ${QUANTO_TENIAMO_L_IBAN} ${L_AVVISO_A_CHI_PAGA}`;
+    expect(tutto).not.toMatch(/modulo di reso|bonifico (è|risulti) fatto|cancellazione aspetta/);
   });
 
-  it('dice anche il percorso dei reclami: email, poi messaggio dalla pagina Contatti', () => {
-    expect(DOVE_CHIEDIAMO_L_IBAN).toMatch(/modulo di reso/);
-    expect(DOVE_CHIEDIAMO_L_IBAN).toMatch(/reclamo/);
-    expect(DOVE_CHIEDIAMO_L_IBAN).toMatch(/pagina Contatti/);
+  it('dice la strada vera: la risposta all email, e il messaggio dai Contatti come eccezione', () => {
+    expect(DOVE_CHIEDIAMO_L_IBAN).toMatch(/rispondendo all'email/);
+    expect(DOVE_CHIEDIAMO_L_IBAN).toMatch(/Non scrivere l'IBAN nel modulo Contatti/);
   });
 });
