@@ -122,8 +122,11 @@ const SECTIONS: Section[] = [
         // cosa va via e cosa resta, e per il resto si rimanda all'informativa.
         // Collaudo del 17/10 — resta anche l'avviso del bonifico con l'email del
         // cliente: la cancellazione non tocca le notifiche degli amministratori, ed è
-        // apposta (lib/privacy/iban-per-email.ts, L_AVVISO_A_CHI_PAGA).
-        a: <>Vai su <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni → Elimina account</Link>. Togliamo il profilo, gli indirizzi e le preferenze. Resta la riga dei conti dei tuoi ordini, senza il tuo nome, per i 10 anni che chiede la legge. Se ti dobbiamo un rimborso con bonifico già approvato, resta anche l&apos;avviso interno con la tua email: serve a chi fa il bonifico per scriverti e pagarti. I dettagli sono nell&apos;<Link href="/privacy" className="text-primary-700 underline">informativa privacy</Link>.</>,
+        // apposta (lib/privacy/iban-per-email.ts, L_AVVISO_A_CHI_PAGA). Secondo giro: la
+        // frase diceva «Se ti dobbiamo un rimborso», ma sul sito non esiste un «pagato»
+        // e nessuna potatura toglie l'avviso: resta anche a bonifico fatto. Le stesse
+        // parole stanno nelle impostazioni, dove si cancella.
+        a: <>Vai su <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni → Elimina account</Link>. Togliamo il profilo, gli indirizzi e le preferenze. Resta la riga dei conti dei tuoi ordini, senza il tuo nome, per i 10 anni che chiede la legge. Se ti è stato approvato un rimborso con bonifico, già pagato o ancora da pagare, resta anche l&apos;avviso interno con la tua email, finché non lo cancelliamo noi: serve a chi fa il bonifico per scriverti e pagarti. I dettagli sono nell&apos;<Link href="/privacy" className="text-primary-700 underline">informativa privacy</Link>.</>,
       },
       {
         q: 'Ho dimenticato la password',

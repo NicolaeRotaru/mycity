@@ -4,7 +4,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import type { ComponentType } from 'react';
 import type { FintoDatabase, Riga } from './aiuti/finto-database-dei-rimborsi';
-import { creaFintoDatabase } from './aiuti/finto-database-dei-rimborsi';
+import { creaFintoDatabase, creditoDi } from './aiuti/finto-database-dei-rimborsi';
 import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi, attendi } from './aiuti/schermo';
 
@@ -244,6 +244,59 @@ describe('dopo le rotte vere: la pagina dice il bonifico, con la cifra dei conta
     expect(testo).not.toContain('Rimborso di 50,00 €');
   }, 60000);
 
+  it('054 — incassato ma non ancora consegnato, rimborsato per intero: l ordine non diventa «annullato»', async () => {
+    // Collaudo del 17/10, secondo giro: il fattorino ha confermato i contanti prima del codice di
+    // consegna, poi un reclamo li restituisce tutti. Il contante resta da versare e va riconciliato:
+    // un ordine in contanti non diventa mai CANCELED per un rimborso (lib/stripe/payout.ts, 054). Se
+    // lo diventasse, la pagina direbbe «Questo ordine è stato annullato» e la riconciliazione del
+    // fattorino non lo aspetterebbe più.
+    apri(maglione({ delivery_status: 'OUT_FOR_DELIVERY', delivered_at: null }));
+    await reclamoChiuso(4000);
+    expect(ordine().payment_status).toBe('REFUNDED');
+    expect(ordine().delivery_status, 'il rimborso ha annullato un ordine in contanti').toBe('OUT_FOR_DELIVERY');
+    expect(ordine().canceled_at ?? null).toBeNull();
+
+    const testo = await cosaLeggeIlCliente(ordine());
+
+    expect(testo).toContain('Rimborso di 40,00 € con un bonifico');
+    expect(testo).not.toMatch(/annullat/u);
+    expect(testo).not.toMatch(/Paghi/u);
+  }, 60000);
+
+  it('R84 — reso su un ordine già rimborsato per intero dal reclamo: il negozio legge il motivo, nessun secondo bonifico', async () => {
+    // Collaudo del 17/10, secondo giro: il reclamo ha già restituito tutti i 40 €, poi la cliente
+    // apre anche un reso e il negozio lo approva. `decide` guarda il massimo restituibile PRIMA di
+    // prendere il turno: risponde 409 col motivo, invece di prendere il turno e far rifiutare il
+    // rimborso a `refundOrder` con un «riprova» che non riuscirà mai.
+    await reclamoChiuso(4000);
+    expect(ordine().payment_status).toBe('REFUNDED');
+    const avvisiPrima = finto.db.tabelle.notifications.filter((n) => n.title === '💶 Bonifico di rimborso da fare').length;
+    expect(avvisiPrima).toBe(1);
+
+    finto.utente = 'giulia';
+    const aperto = await (apriReso as unknown as Rotta)(
+      new Request('http://localhost/api/returns/create', json({ orderId: ORDINE, reason: 'CHANGED_MIND' })),
+      undefined,
+    );
+    expect(aperto.status).toBe(201);
+    const id = (await aperto.json()).id as string;
+    const rpcPrima = finto.db.rpc.length;
+    const resoPrima = JSON.stringify(finto.db.tabelle.returns.find((r) => r.id === id));
+    finto.utente = 'negozio';
+    const deciso = await (decidi as unknown as Rotta)(
+      new Request('http://localhost/x', json({ decision: 'APPROVED', refundAmountCents: 4000 })),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(deciso.status).toBe(409);
+    expect(JSON.stringify(await deciso.json())).toContain('già stato rimborsato per intero');
+    expect(JSON.stringify(finto.db.tabelle.returns.find((r) => r.id === id)), 'il reso è cambiato: il negozio ha preso il turno').toBe(resoPrima);
+    expect(finto.db.rpc.slice(rpcPrima).map((x) => x.nome)).not.toContain('accumula_rimborso');
+    expect(finto.db.tabelle.notifications.filter((n) => n.title === '💶 Bonifico di rimborso da fare')).toHaveLength(1);
+
+    const testo = await cosaLeggeIlCliente(ordine());
+    expect(testo).toContain('Rimborso di 40,00 € con un bonifico');
+  }, 60000);
+
   it('la carta non passa di qui: rimborso sulla carta, «Ordine rimborsato», nessun bonifico', async () => {
     apri(maglione({ payment_method: 'card', stripe_payment_intent: 'pi_1', cash_confirmed_at: null }));
     await resoRimborsato(4000);
@@ -291,6 +344,27 @@ describe('sui contanti, «Paghi al rider» solo se l ordine aspetta ancora i sol
       delivery_status: 'OUT_FOR_DELIVERY', delivered_at: null, payment_status: 'PENDING', cash_confirmed_at: null,
     }));
     expect(testo).toContain('Paghi 40,00 € in contanti al rider alla consegna.');
+  }, 60000);
+
+  it('ordine misto in consegna e non pagato (20 € di credito, 30 in contanti): «Paghi 30,00 €», mai il lordo di 50', async () => {
+    // Collaudo del 17/10, secondo giro (prova C3 del collaudatore A): la cifra di «Paghi» è quella
+    // che il fattorino deve incassare, cioè il totale meno il credito già speso. Prima un reclamo
+    // prova a rimborsare l'ordine mai incassato: viene respinto senza credito e senza avviso (R84),
+    // e la pagina chiede ancora i 30 € di contanti.
+    apri({ ...misto(), delivery_status: 'OUT_FOR_DELIVERY', delivered_at: null, payment_status: 'PENDING', cash_confirmed_at: null });
+    const respinto = await (risolvi as unknown as Rotta)(
+      new Request('http://localhost/x', json({ status: 'resolved_buyer', notes: 'Merce rovinata.', refundCents: 2000 })),
+      { params: Promise.resolve({ id: 'd1' }) },
+    );
+    expect(respinto.status).toBe(409);
+    expect(creditoDi(finto.db, 'giulia')).toBe(0);
+    expect(finto.db.tabelle.notifications).toHaveLength(0);
+    expect(finto.db.rpc.map((x) => x.nome)).not.toContain('accumula_rimborso');
+
+    const testo = await cosaLeggeIlCliente(ordine());
+
+    expect(testo).toContain('Paghi 30,00 € in contanti al rider alla consegna.');
+    expect(testo, 'la pagina chiede il lordo, credito compreso').not.toContain('Paghi 50,00');
   }, 60000);
 
   it('due resi in contanti sullo stesso ordine: la cifra è la somma dei due bonifici', async () => {

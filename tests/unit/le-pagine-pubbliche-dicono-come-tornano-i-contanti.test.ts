@@ -176,10 +176,11 @@ describe('le domande frequenti', () => {
     expect(testo).toContain('Togliamo il profilo, gli indirizzi e le preferenze.');
     expect(testo).toContain('Resta la riga dei conti dei tuoi ordini, senza il tuo nome, per i 10 anni che chiede la legge.');
     // L'avviso del bonifico porta l'email del cliente e la cancellazione non lo tocca, apposta: la
-    // FAQ lo dice, come l'informativa (la prova l-avviso-del-bonifico-resta-utile-dopo-la-cancellazione
-    // cancella l'account e lo ritrova).
+    // FAQ lo dice, come l'informativa, anche a bonifico già pagato (la prova
+    // chi-cancella-l-account-sa-che-l-avviso-del-bonifico-resta fa girare rotte, cancellazione e
+    // potature vere, poi legge FAQ e impostazioni).
     expect(testo).toContain(
-      "Se ti dobbiamo un rimborso con bonifico già approvato, resta anche l'avviso interno con la tua email: serve a chi fa il bonifico per scriverti e pagarti.",
+      "Se ti è stato approvato un rimborso con bonifico, già pagato o ancora da pagare, resta anche l'avviso interno con la tua email, finché non lo cancelliamo noi: serve a chi fa il bonifico per scriverti e pagarti.",
     );
     expect(collegamenti).toEqual(expect.arrayContaining(['/profile/settings', '/privacy']));
   });
@@ -211,8 +212,59 @@ describe('la scadenza del rimborso', () => {
       new Set(Object.values(daQuando).flat()),
       `due testi pubblici danno due scadenze diverse per lo stesso rimborso: ${JSON.stringify(daQuando)}`,
     ).toEqual(new Set(['da quando ci comunichi il recesso']));
+
+    // Collaudo del 17/10, secondo giro — la ricerca qui sopra riconosce due modi di scrivere la
+    // scadenza. «Ti rimborsiamo entro 14 giorni dal ricevimento della merce restituita.», aggiunta al
+    // §7, rimetteva due scadenze nel contratto e passava. Adesso si guarda ogni parola di tempo dei
+    // tre testi (un numero di giorni, settimane o mesi; entro, dopo, appena, subito, quando; ricevere,
+    // ricezione): ognuna deve stare dentro una frase che la prova conosce. Una frase di tempo nuova fa
+    // diventare rossa la prova finché qualcuno non la legge: se è una scadenza del rimborso, deve
+    // contare da quando ci comunichi il recesso, come le altre.
+    for (const [dove, testo] of Object.entries(testi)) {
+      const coperto = new Array<boolean>(testo.length).fill(false);
+      const minuscolo = testo.toLowerCase();
+      for (const frase of FRASI_DI_TEMPO_CONOSCIUTE) {
+        const f = frase.toLowerCase();
+        for (let i = minuscolo.indexOf(f); i >= 0; i = minuscolo.indexOf(f, i + 1)) coperto.fill(true, i, i + f.length);
+      }
+      const sconosciute = Array.from(testo.matchAll(PAROLE_DI_TEMPO))
+        .filter((m) => !coperto[m.index!])
+        .map((m) => `«${m[0]}» in «…${testo.slice(Math.max(0, m.index! - 60), m.index! + 60)}…»`);
+      expect(sconosciute, `${dove} dice un tempo che la prova non conosce: se è la scadenza del rimborso, contala da quando ci comunichi il recesso`).toEqual([]);
+    }
   }, 60000);
 });
+
+/** Le parole che dicono un tempo: una scadenza nuova del rimborso ne porta almeno una. */
+const PAROLE_DI_TEMPO =
+  /\b(?:\d+|due|tre|quattro|cinque|sei|sette|otto|nove|dieci|quindici|quattordici|trenta)\s+(?:giorn\w*|settiman\w*|mes[ei]|or[ae]|ann[oi])\b|\b(?:entro|dopo|appena|subito|quando|immediatamente|settimana)\b|\bricev\w*|\bricezion\w*/giu;
+
+/**
+ * Le frasi di tempo dei Termini §7, della FAQ sui tempi e della pagina Resi, una per una. Solo la
+ * prima è la scadenza del rimborso; le altre dicono il tempo per recedere, per spedire, la garanzia,
+ * o quando ti chiediamo l'IBAN, e nessuna dà un'altra scadenza per i soldi.
+ */
+const FRASI_DI_TEMPO_CONOSCIUTE = [
+  'entro 14 giorni da quando ci comunichi il recesso',
+  // Termini §7
+  'ha diritto di recedere dal contratto entro 14 giorni dalla consegna',
+  'prodotti sigillati (per igiene) aperti dopo la consegna, beni che dopo la consegna risultino mescolati',
+  "dopo l'avvio dell'esecuzione",
+  'Ordinato il ................ / Ricevuto il',
+  // FAQ
+  "e il bonifico lo facciamo appena ce lo mandi",
+  // Resi
+  'Hai 14 giorni di tempo per ripensarci',
+  '14 giorni di diritto di recesso',
+  'Il venditore riceve la richiesta',
+  'hai 14 giorni dalla consegna per restituire qualsiasi prodotto',
+  'Spedisci il pacco entro 14 giorni dalla richiesta',
+  'Al ricevimento, il venditore verifica il prodotto e procede al rimborso',
+  "l'IBAN te lo chiediamo per email quando parte il rimborso",
+  'richiesta inviata, ricevuta, approvata, rimborsata',
+  'garanzia legale di 24 mesi',
+  'la garanzia è di 12 mesi',
+];
 
 describe('i Termini, §7', () => {
   it('dopo lo stesso mezzo di pagamento: i contanti col bonifico, senza costi, sul conto indicato rispondendo all email', () => {
