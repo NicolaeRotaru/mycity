@@ -704,10 +704,12 @@ describe('la funzione muore fra il segno e l avviso: il passaggio dopo finisce i
     expect((await negozio(decidi, id, { decision: 'APPROVED' })).status).toBe(200);
     expect((await negozio(avanza, id, { stato: 'RECEIVED' })).status).toBe(200);
     laScritturaDelRimborsoSulResoCade();
-    expect((await negozio(avanza, id, { stato: 'REFUNDED', refundAmountCents: 4000 })).status).toBe(500);
+    // Un rimborso parziale: su quello pieno il «già rimborsato per intero» fermerebbe tutto prima.
+    expect((await negozio(avanza, id, { stato: 'REFUNDED', refundAmountCents: 2000 })).status).toBe(500);
 
     expect((await negozio(avanza, id, { stato: 'REFUNDED' })).status).toBe(409);
     expect(prenotazioni(), 'il rimborso con la carta e ripartito').toHaveLength(1);
+    expect(ordine().refunded_amount_cents).toBe(2000);
   });
 });
 
