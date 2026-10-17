@@ -11,6 +11,7 @@ import type { CatalogJobResult, CatalogOperation } from '@/lib/ai/catalogBatch';
 import { senzaCampiEconomici } from '@/lib/ai/catalogBatch';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { classifyProductPolicy } from '@/lib/ai/moderation';
+import { cosaMancaDopoLaModifica } from '@/lib/products/prontoPerLaVendita';
 
 /**
  * Applica i risultati di un job AI massivo, dopo che il venditore li ha rivisti.
@@ -186,6 +187,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
           categories,
         });
         if (Object.keys(update).length === 0) continue;
+        // R36 — Il lotto non tocca lo stato, ma puo' cambiare categoria: un
+        // prodotto in vendita spostato fra gli alimentari senza allergeni e
+        // ingredienti non si scrive.
+        if (cosaMancaDopoLaModifica({ prima: row, update, categories }).length > 0) continue;
         const { error } = await admin
           .from('products')
           .update(update)

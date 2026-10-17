@@ -23,9 +23,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  * gia' dichiarati esenti dal consenso marketing): mancava solo nel punto in cui
  * la email viene davvero impacchettata.
  *
- * Il valore di ripiego resta «marketing»: chi chiama e non dichiara niente
- * continua ad avere il link. Un'email commerciale a cui togliamo il modo di
- * smettere e' un problema piu' grave di un piede di troppo su una ricevuta.
+ * 15/10/2026 (R24) — Il valore di ripiego era «marketing», per prudenza: e
+ * proprio per questo il difetto e' tornato. Nessuna email d'ordine dichiarava
+ * il tipo, quindi uscivano tutte col link. Adesso chi non dichiara niente
+ * spedisce un messaggio di servizio; le email commerciali — poche, scritte
+ * apposta — dichiarano `tipo: 'marketing'`, e le loro prove guardano che il
+ * link ci sia (carrello dimenticato, giro della coda).
  */
 
 const inviate: Array<Record<string, unknown>> = [];
@@ -107,16 +110,18 @@ describe('il piede «annulla l\'iscrizione»', () => {
     expect(intestazioni['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
   });
 
-  it('chi non dichiara niente resta trattato come commerciale, e il link non sparisce', async () => {
-    // Il ripiego prudente: meglio un piede di troppo su una ricevuta che una
-    // promozione senza il modo di smettere di riceverla.
+  it('chi non dichiara niente spedisce un messaggio di servizio, senza il tasto per smettere', async () => {
+    // R24 — e' la forma delle email d'ordine: conferma, avviso al negozio,
+    // rimborso, buono regalo. Nessuna dichiara il tipo.
     const sendEmail = await posta();
     await sendEmail({
       to: 'maria@example.it',
-      subject: 'Cosa succede in citta questa settimana',
-      html: '<p>Eventi della settimana.</p>',
+      subject: 'Ordine #3f2a9c1e ricevuto — MyCity',
+      html: '<p>Abbiamo ricevuto il tuo ordine.</p>',
     });
 
-    expect(String(inviate[0]?.html ?? '')).toContain('/api/unsubscribe');
+    const intestazioni = (inviate[0]?.headers ?? {}) as Record<string, string>;
+    expect(String(inviate[0]?.html ?? ''), 'la conferma d ordine esce come pubblicita').not.toContain('/api/unsubscribe');
+    expect(intestazioni['List-Unsubscribe']).toBeUndefined();
   });
 });

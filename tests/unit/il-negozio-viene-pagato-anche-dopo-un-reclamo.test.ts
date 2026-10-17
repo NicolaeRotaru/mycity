@@ -50,7 +50,14 @@ vi.mock('@/lib/api/middleware', () => ({
 }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/stripe/client', () => ({ isStripeConfigured: () => true }));
-vi.mock('@/lib/stripe/payout', () => ({ refundOrder: vi.fn(async () => ({ refundId: 'rf_1' })) }));
+// R76 — «intero» lo dice chi muove i soldi: il finto `refundOrder` risponde col
+// suo verdetto, come quello vero (pieno quando copre i 30 € dell'ordine).
+vi.mock('@/lib/stripe/payout', () => ({
+  refundOrder: vi.fn(async (o: { amountCents: number }) => ({
+    refundId: 'rf_1', reversedCents: 0, pieno: o.amountCents >= 3000, modo: 'carta',
+    importoCents: o.amountCents, creditoCents: 0, bonificoCents: 0,
+  })),
+}));
 vi.mock('@/lib/audit', () => ({ writeAudit: vi.fn(async () => {}) }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -80,9 +87,16 @@ vi.mock('@/lib/supabase/server', () => ({
       if (tabella === 'orders') {
         return {
           select: () => ({ eq: () => ({ single: async () => ({ data: stato.ordine, error: null }) }) }),
+          // 16/10/2026 — la scrittura porta anche il filtro che lascia stare la
+          // pausa del carrello (`.or(...)`): qui la catena lo accetta e basta.
           update: (patch: Record<string, unknown>) => {
             stato.scrittureOrdine.push(patch);
-            return { eq: async () => ({ error: null }) };
+            const catena: Record<string, unknown> = {
+              eq: () => catena,
+              or: () => catena,
+              then: (r: (v: unknown) => unknown) => r({ error: null }),
+            };
+            return catena;
           },
         };
       }

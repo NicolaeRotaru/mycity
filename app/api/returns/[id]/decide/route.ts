@@ -2,13 +2,20 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { isStripeConfigured } from '@/lib/stripe/client';
-import { refundOrder } from '@/lib/stripe/payout';
+import { AccreditoGiaUscitoConAltroImporto, RimborsoInAttesaDellaDivisione, refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 import { chiComandaIlReso } from '../../chi-comanda-il-reso';
+import {
+  motivoNienteDaRestituire,
+  quantoSiPuoRestituire,
+  type OrdineDaRimborsare,
+} from '@/lib/rimborsi/regole-del-rimborso';
+import { avvisoDelRimborsoNonRegistrato, RIMBORSO_PARTITO_MA_NON_REGISTRATO } from '@/lib/rimborsi/bonifici-da-fare';
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 export const runtime = 'nodejs';
 
@@ -35,7 +42,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const supa = await getServerSupabase();
   const { data: ret, error } = await supa
     .from('returns')
-    .select('id, status, seller_id, buyer_id, order_id, reason, refund_amount_cents')
+    .select('id, status, seller_id, buyer_id, order_id, reason, refund_amount_cents, created_at')
     .eq('id', params.id)
     .single();
 
@@ -91,15 +98,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * quello che esce davvero (`refundOrder` non deve piu' tagliarlo).
    */
   const chiedeRimborso = body.decision === 'APPROVED' && !!body.refundAmountCents;
-  const COLONNE_ORDINE = 'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents';
-  type OrdineDelReso = {
-    stripe_payment_intent: string | null;
-    payment_method: string | null;
-    gross_total_cents?: number | null;
-    total_price: number | string | null;
-    refunded_amount_cents: number | null;
-  };
-  let ordine: OrdineDelReso | null = null;
+  // R84 — Il tetto lo decide la stessa regola che usa chi muove i soldi: sui
+  // contanti conta solo quello che e' stato incassato davvero.
+  const COLONNE_ORDINE =
+    'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, cash_confirmed_at, payment_status, delivery_status';
+  let ordine: OrdineDaRimborsare | null = null;
 
   if (chiedeRimborso) {
     const { data } = await conRipiegoSchema(
@@ -107,14 +110,14 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       () => admin.from('orders').select(COLONNE_ORDINE).eq('id', ret.order_id).single(),
       () => admin.from('orders').select(senzaColonne(COLONNE_ORDINE, COLONNE_124)).eq('id', ret.order_id).single(),
     );
-    ordine = (data ?? null) as OrdineDelReso | null;
+    ordine = (data ?? null) as OrdineDaRimborsare | null;
     if (!ordine) return ApiErrors.notFound('Ordine del reso non trovato');
 
-    const lordoCent = ordine.gross_total_cents ?? Math.round(Number(ordine.total_price ?? 0) * 100);
-    const residuoCent = Math.max(0, lordoCent - (ordine.refunded_amount_cents ?? 0));
-    if (residuoCent <= 0) {
-      return ApiErrors.conflict('Questo ordine è già stato rimborsato per intero: non resta niente da restituire.');
+    const rimborsabile = quantoSiPuoRestituire(ordine);
+    if (rimborsabile.perche !== 'ok') {
+      return ApiErrors.conflict(motivoNienteDaRestituire(rimborsabile.perche));
     }
+    const residuoCent = rimborsabile.massimoCents;
     if (body.refundAmountCents! > residuoCent) {
       return ApiErrors.invalidRequest(
         `Il rimborso non può superare quello che resta dell ordine: al massimo ${(residuoCent / 100).toFixed(2)} €.`,
@@ -125,6 +128,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   let refundId: string | null = null;
   let refundedAt: string | null = null;
   let newStatus: string = body.decision;
+  /** R71 — quanto del rimborso va pagato col bonifico, a mano. */
+  let bonificoCents = 0;
 
   /**
    * 21/8/2026 — PRIMA SI PRENDE IL TURNO, POI ESCONO I SOLDI.
@@ -182,9 +187,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     }
 
     if (isCard || isCod) {
-      // refundOrder gestisce sia il refund reale Stripe (carta + claw-back) sia
-      // l'accredito sul wallet del buyer (COD, 🟠-18: il contante è già stato
-      // incassato dal rider). Idempotente via idempotencyKey return_<id>.
+      // refundOrder gestisce il refund reale Stripe (carta + claw-back) e il
+      // rimborso dei contanti (R71: col bonifico, sempre; il credito MyCity solo
+      // per la parte pagata col credito). Idempotente via idempotencyKey return_<id>.
       try {
         const res = await refundOrder({
           orderId: ret.order_id,
@@ -193,15 +198,27 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
           metadata: { return_id: ret.id },
           idempotencyKey: `return_${ret.id}`,
           notifyBuyer: true,
+          resoChiestoIl: (ret as { created_at?: string | null }).created_at ?? null,
         });
         refundId = res.refundId;
         refundedAt = new Date().toISOString();
         newStatus = 'REFUNDED';
+        bonificoCents = res.bonificoCents ?? 0;
       } catch (err) {
         logger.error('[returns] refund failed', err);
         // I soldi non sono usciti: il reso torna decidibile invece di restare
         // fermo su «approvato» senza rimborso.
         await rimettiInAttesa();
+        // Collaudo del 15/10, secondo giro (R82) — tranne una cosa, che il
+        // negozio deve leggere com'e': un tentativo precedente ha GIA' dato al
+        // cliente del credito, con una cifra diversa da questa. «Riprova» era
+        // falso: riprovando con la cifra nuova si fermava di nuovo, e il
+        // negozio non sapeva quale cifra rimettere. Gli altri errori restano
+        // nascosti dietro la frase generica (R138: niente messaggi interni).
+        if (err instanceof AccreditoGiaUscitoConAltroImporto) return ApiErrors.conflict(err.message);
+        // 16/10 (terzo riesame) — e un rimborso che aspetta la divisione di un rimborso dal cruscotto
+        // sullo stesso carrello: «riprova» da solo non cambia niente finché la divisione non è fatta.
+        if (err instanceof RimborsoInAttesaDellaDivisione) return ApiErrors.conflict(err.message);
         return ApiErrors.badGateway("Il rimborso non è partito: riprova o scrivi all'assistenza.");
       }
     }
@@ -216,7 +233,27 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       .update({ status: newStatus, refund_id: refundId, refunded_at: refundedAt })
       .eq('id', params.id)
       .eq('status', statoRivendicato);
-    if (updErr) return ApiErrors.internal('Update fallito');
+    /**
+     * Riesame del 16/10, terzo giro — QUI I SOLDI SONO GIA' PARTITI.
+     *
+     * Si arriva a questa scrittura solo dopo `refundOrder`: sull'ordine il
+     * rimborso e' gia' registrato (sui contanti, col segno del bonifico). Se
+     * cadeva, la rotta diceva solo «Update fallito» e al negozio restava una sola
+     * strada: chiudere il reso «senza rimborso». Adesso chi amministra riceve
+     * l'avviso con reso, ordine e cifra del bonifico, e il negozio legge che non
+     * deve ripetere il rimborso.
+     */
+    if (updErr) {
+      const avviso = avvisoDelRimborsoNonRegistrato({
+        resoId: params.id, ordineId: ret.order_id, refundId, bonificoCents,
+      });
+      try {
+        await notifyAdmins(avviso.titolo, avviso.testo, avviso.link);
+      } catch (e) {
+        logger.error('[returns] avviso del rimborso non registrato non inviato', { returnId: params.id, e });
+      }
+      return ApiErrors.internal(RIMBORSO_PARTITO_MA_NON_REGISTRATO);
+    }
   }
 
   // Notifica buyer

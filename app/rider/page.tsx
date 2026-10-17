@@ -6,9 +6,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Store, MapPin, Navigation, ArrowRight, Layers, Power, Package, ChefHat, Star, Banknote,
+  AlertTriangle, RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatPrice } from '@/lib/format';
+import { formatDate, formatPrice, formatPriceFromCents } from '@/lib/format';
 import { type OrderStatus } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { Badge } from '@/components/ui/Badge';
@@ -21,6 +22,13 @@ import { queryKeys } from '@/lib/queries/keys';
 import { useProfile } from '@/components/hooks/useProfile';
 import { trackRiderOrderAccepted } from '@/lib/analytics/events';
 import { compensoConsegnaEuro } from '@/lib/shipping';
+import CashConfirmDialog from '@/components/rider/CashConfirmDialog';
+import {
+  CHIAVE_INCASSI_DA_DICHIARARE,
+  INDIRIZZO_INCASSI_DA_DICHIARARE,
+  riquadroDegliIncassi,
+} from '@/lib/rider/incasso-alla-consegna';
+import type { IncassoDaDichiarare } from '@/lib/rider/leggi-incassi-da-dichiarare';
 
 /**
  * Un ordine libero come lo vede il fattorino PRIMA di accettarlo: negozio,
@@ -174,6 +182,35 @@ export default function RiderDashboardPage() {
     },
     staleTime: 60_000,
   });
+
+  /**
+   * 15/10/2026 (R33) — I CONTANTI ANCORA DA DICHIARARE.
+   *
+   * Qui sotto la bacheca toglie i consegnati (`myActive`): giusto per le
+   * consegne in corso, ma un ordine in contanti chiuso col codice prima di
+   * dichiarare l'incasso spariva dalla vista, e la rimessa della sera lo
+   * saltava — il negozio non veniva pagato e nessuno lo ricordava al
+   * fattorino. Adesso restano qui, in cima, finche' non li conferma. La
+   * lettura passa dal server: dopo sette giorni la regola sugli ordini glieli
+   * nasconderebbe, e con loro l'unico modo di rimediare.
+   */
+  const letturaIncassi = useQuery({
+    queryKey: CHIAVE_INCASSI_DA_DICHIARARE,
+    queryFn: async (): Promise<IncassoDaDichiarare[]> => {
+      const risposta = await fetch(INDIRIZZO_INCASSI_DA_DICHIARARE, { cache: 'no-store' });
+      if (!risposta.ok) throw new Error('Non riesco a leggere gli incassi da confermare');
+      const corpo = (await risposta.json()) as { incassi?: IncassoDaDichiarare[] };
+      return Array.isArray(corpo.incassi) ? corpo.incassi : [];
+    },
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    staleTime: 15_000,
+  });
+  // 16/10/2026 — Prima qui si prendeva solo il dato: con la lettura fallita il
+  // riquadro spariva e la bacheca sembrava pulita. «Nessun incasso» e «non lo
+  // so» adesso sono due stati diversi, decisi da `riquadroDegliIncassi`.
+  const riquadroIncassi = riquadroDegliIncassi<IncassoDaDichiarare>(letturaIncassi);
+  const incassiDaDichiarare = riquadroIncassi.incassi;
 
   // Statistiche di oggi: consegne completate + incasso del giorno.
   const { data: today } = useQuery({
@@ -379,6 +416,61 @@ export default function RiderDashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* Lettura degli incassi fallita: si dice, invece di far sparire il riquadro. */}
+      {riquadroIncassi.stato === 'non-so' && (
+        <div className="mb-[18px] px-4">
+          <div role="alert" className="rounded-xl border border-secondary-200 bg-secondary-50 p-3.5">
+            <p className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+              <AlertTriangle size={16} className="shrink-0 text-secondary-600" aria-hidden />
+              Non riesco a controllare gli incassi da confermare
+            </p>
+            <p className="mb-2.5 mt-1 text-[12.5px] leading-relaxed text-ink-600">
+              Non so se hai consegne in contanti ancora da confermare. Riprova fra un momento.
+            </p>
+            <Button
+              variant="secondary"
+              icon={RotateCcw}
+              loading={letturaIncassi.isFetching}
+              onClick={() => { void letturaIncassi.refetch(); }}
+            >
+              Riprova
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* R33 — Consegne chiuse con i contanti ancora da confermare. */}
+      {incassiDaDichiarare.length > 0 && (
+        <div className="mb-[18px] px-4">
+          <SectionLabel>Incassi da confermare ({incassiDaDichiarare.length})</SectionLabel>
+          <p className="mb-2.5 text-[12.5px] leading-relaxed text-ink-600">
+            Consegne chiuse senza la conferma dei contanti. Finché non le confermi, il negozio non viene pagato.
+          </p>
+          <div className="flex flex-col gap-2.5">
+            {incassiDaDichiarare.map((x) => (
+              <div key={x.id} className="rounded-xl border-2 border-accent-300 bg-accent-50 p-3.5">
+                <div className="mb-2 flex items-center justify-between">
+                  <Badge variant="cod" icon={Banknote}>Contanti</Badge>
+                  <span className="font-mono text-[11px] text-ink-400">#{x.id.slice(0, 6).toUpperCase()}</span>
+                </div>
+                <p className="text-sm font-semibold text-ink-900">{x.storeName ?? 'Negozio'}</p>
+                <p className="mb-2.5 text-[12.5px] text-ink-600">
+                  {x.deliveredAt ? <>Consegnato il {formatDate(x.deliveredAt)} · </> : null}
+                  da rimettere <strong>{formatPriceFromCents(x.expectedCents)}</strong>
+                </p>
+                <CashConfirmDialog
+                  orderId={x.id}
+                  expectedCents={x.expectedCents}
+                  compensoTenutoCents={x.compensoTenutoCents}
+                  residuoDovutoCents={x.residuoDovutoCents}
+                  onConfirmed={() => { qc.invalidateQueries({ queryKey: CHIAVE_INCASSI_DA_DICHIARARE }); }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Consegna attiva (la tua) */}
       {activeOne && (

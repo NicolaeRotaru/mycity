@@ -19,7 +19,8 @@ function getResend(): Resend | null {
  * `transazionale` = qualcosa che la persona ha chiesto e sta aspettando:
  * conferma d'ordine, rimborso, gift card comprata, avviso al negozio, avviso
  * interno all'assistenza. Non porta il piede «annulla l'iscrizione».
- * `marketing` = comunicazione commerciale: porta sempre il modo di smettere.
+ * `marketing` = comunicazione commerciale: porta sempre il modo di smettere, e
+ * va DICHIARATA da chi la spedisce (vedi il ripiego qui sotto).
  */
 export type TipoEmail = 'transazionale' | 'marketing';
 
@@ -31,10 +32,20 @@ export type SendEmailInput = {
   replyTo?: string;
   tags?: { name: string; value: string }[];
   /**
-   * Ripiego prudente: `marketing`. Chi chiama e non dichiara niente continua ad
-   * avere il piede di disiscrizione, come e' sempre stato. Togliere il link a
-   * una email commerciale per una dimenticanza e' molto peggio che lasciarne
-   * uno di troppo in fondo a una ricevuta.
+   * Ripiego: `transazionale`. Una email commerciale si dichiara con
+   * `tipo: 'marketing'`; chi non dichiara niente spedisce un messaggio di
+   * servizio, senza il piede «annulla l'iscrizione» e senza le intestazioni
+   * che accendono il pulsante di Gmail.
+   *
+   * 15/10/2026 (R24) — Fino a ieri il ripiego era `marketing`, «per prudenza».
+   * In pratica nessuna delle email d'ordine lo dichiarava: conferma al cliente
+   * (carta e contanti), «nuovo ordine» al negozio, i due rimborsi, il buono
+   * regalo a chi lo riceve e a chi lo compra. Uscivano tutte col tasto per
+   * disiscriversi, e chi lo premeva sulla ricevuta spegneva le promozioni
+   * (`email_marketing` e `notif_promos`, migrazione 118) credendo di spegnere
+   * gli avvisi dell'ordine — poi gli avvisi arrivavano lo stesso, e ci segnava
+   * come spam. Le email commerciali invece si contano sulle dita, e sono tutte
+   * scritte apposta: chi ne scrive una sa di scriverla.
    */
   tipo?: TipoEmail;
 };
@@ -103,7 +114,10 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   // trappola: chi lo preme crede di spegnere gli avvisi dell'ordine, e invece
   // spegne le promozioni — poi gli avvisi arrivano lo stesso e ci segnala come
   // spam. Sulle transazionali resta il «Gestisci preferenze» del piede comune.
-  const tipo: TipoEmail = input.tipo ?? 'marketing';
+  //
+  // 15/10/2026 (R24) — e il ripiego e' di servizio: il link compare solo dove
+  // chi spedisce ha scritto `tipo: 'marketing'`.
+  const tipo: TipoEmail = input.tipo ?? 'transazionale';
   const destinatario = Array.isArray(input.to) ? input.to[0] : input.to;
 
   // 27/8/2026 (R054) — Questa riga stava FUORI dal try, e la firma del link

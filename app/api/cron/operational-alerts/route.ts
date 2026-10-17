@@ -129,7 +129,8 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       key: `COD_NOT_CONFIRMED|${id}`,
       type: 'COD_NOT_CONFIRMED',
       detail: `Ordine COD #${id.slice(0, 8)} consegnato ma cash non confermato (rider: ${rider?.full_name ?? 'unknown'})`,
-      url: `/admin/orders/${id}`,
+      // R33 — /admin/orders/<id> non esiste; l'incasso si registra dalla pagina delle rimesse.
+      url: '/admin/cod-remittance',
     });
   }
 

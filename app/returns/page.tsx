@@ -74,19 +74,22 @@ export default function ReturnsPage() {
         <section className="rounded-2xl border border-cream-300 bg-white p-6">
           <h2 className="mb-3 font-serif text-xl font-bold text-ink-900">Tempi e modalità di rimborso</h2>
           <ul className="list-disc space-y-1 pl-5 leading-relaxed">
-            <li>Il rimborso avviene <strong>entro 14 giorni</strong> dalla ricezione del prodotto da parte del venditore.</li>
-            {/* 3/9/2026 — QUI SI PROMETTEVA UN BONIFICO CHE NESSUNO PUÒ FARE.
-                Nel modulo di reso non c'è nessun campo per l'IBAN e la tabella
-                dei resi non ha nessuna colonna bancaria: quando il reso viene
-                approvato, per gli ordini in contanti `refundOrder` accredita
-                l'importo sul credito MyCity («cod_refund»). Chi restituisce una
-                giacca da 80 € aspettando il bonifico riceve 80 € di credito: un
-                reclamo fondato, e una recensione dura. Qui si scrive quello che
-                succede davvero, e resta la strada del bonifico su richiesta —
-                che è quella che facciamo a mano. */}
+            {/* 17/10/2026 — I 14 giorni partono da quando ci comunichi il recesso (Codice del
+                Consumo, art. 56), non da quando il negozio riceve la merce: quella è solo la
+                ragione per cui possiamo aspettare (comma 3). Le stesse parole della FAQ. */}
             <li>
-              Per pagamento alla consegna il rimborso arriva come <strong>credito MyCity</strong>, spendibile sul
-              prossimo ordine pagato alla consegna. Se preferisci il bonifico, <Link href="/contact" className="text-primary-700 underline">scrivici</Link>: te lo facciamo noi.
+              Il rimborso avviene <strong>entro 14 giorni</strong> da quando ci comunichi il recesso. Possiamo
+              aspettare di avere indietro la merce, o la prova che l&apos;hai spedita.
+            </li>
+            {/* R71 — Decisione di Nicola del 17/10/2026 («Semplifica»): chi ha pagato in
+                contanti riavrà sempre i soldi, con un bonifico fatto a mano; nessuna scelta
+                del credito, nessun IBAN nel modulo di reso. Mai tornare al testo di prima
+                («il rimborso arriva come credito MyCity… se preferisci il bonifico,
+                scrivici»): era il credito d'ufficio, cioè R71. */}
+            <li>
+              Per gli ordini pagati alla consegna ti restituiamo i soldi con un <strong>bonifico</strong> sul tuo
+              conto: l&apos;IBAN te lo chiediamo per email quando parte il rimborso. La parte che avevi pagato con il
+              credito MyCity torna come credito, che si usa sui prossimi ordini pagati alla consegna.
             </li>
             <li>Per pagamenti con carta il rimborso accredita sulla stessa carta usata per l&apos;acquisto.</li>
             <li>Verrai notificato a ogni stato (richiesta inviata, ricevuta, approvata, rimborsata).</li>

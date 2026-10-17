@@ -13,6 +13,7 @@ import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { sanitizeImageUrls } from '@/lib/ai/productContext';
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
 import { CATEGORY_ATTRIBUTES } from '@/lib/category-attributes';
+import { CAMPI_DICHIARATIVI } from '@/lib/products/aiPatch';
 import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 
 /**
@@ -183,6 +184,7 @@ Linee guida:
 - Se il prodotto e' un libro, usa come nome il titolo del libro e compila gli attributi del libro leggibili da copertina, costa e retro: autore, editore, anno (4 cifre), pagine (solo cifre), lingua, isbn (10 o 13 cifre dal codice a barre) e formato (esattamente: Brossura, Cartonato, Tascabile, Audiolibro o Ebook).
 - Proponi sempre la sottocategoria piu' adatta (campo subcategory) e da 3 a 8 tag/parole chiave di ricerca (campo tags), anche quando non sono scritti in foto ma sono chiaramente deducibili dal tipo di prodotto.
 - FOTO MULTIPLE: la prima foto è di solito il fronte (nome, marca, "faccia" del prodotto); le altre mostrano spesso il retro o l'etichetta. INTEGRA tutte le foto come un unico prodotto: leggi dal retro/etichetta ingredienti, valori nutrizionali, allergeni, peso/volume, scadenza, composizione/materiale, specifiche tecniche e il codice a barre EAN, e usali per compilare i campi mancanti.
+- DICHIARAZIONI DI UN ALIMENTO (${CAMPI_DICHIARATIVI.join(', ')}): compilale SOLO se le LEGGI scritte sull'etichetta o sulla confezione in foto, copiando quello che c'è scritto. Non dedurle mai dall'aspetto, dal nome o dal tipo di prodotto (una focaccia senza etichetta non ha «Glutine» finché non lo leggi): se non c'è un'etichetta leggibile, omettile. Il venditore le controlla prima di pubblicare.
 - Imposta il campo confidence in modo onesto: quanto sei sicuro dell'identità del prodotto. Abbassala sotto 0.7 se lo stesso nome potrebbe appartenere a prodotti di aziende diverse, se non leggi con certezza marca/modello, o se il prezzo di mercato non ti è chiaro: in quel caso il sistema farà una verifica online.
 
 Attributi per categoria (usa SOLO le chiavi della categoria scelta; per i campi "uno tra" scegli esattamente uno dei valori elencati):

@@ -49,8 +49,13 @@ const PRODOTTO = {
   has_variants: false,
   external_source_url: null,
   categories: { slug: 'alimentari', name: 'Alimentari' },
-  profiles: { id: 'negozio-1', store_name: 'Pane Quotidiano', is_approved: true, offers_express: true, store_hours: null },
 };
+
+/**
+ * 15/10/2026 (R3) — il negozio non arriva piu' agganciato al prodotto (da `profiles`, che dopo la
+ * migrazione 161 un cliente non legge), ma dalla vista pubblica dei negozi, con una seconda domanda.
+ */
+const NEGOZIO = { id: 'negozio-1', store_name: 'Pane Quotidiano', is_approved: true, offers_express: true, store_hours: null };
 
 const CATEGORIE = [
   { id: 'c2', slug: 'casa', name: 'Casa', icon: null, sort_order: 2, featured: false },
@@ -69,12 +74,18 @@ vi.mock('@/lib/supabase/anonimo', () => ({
         letture.push(tabella);
         const risposta = tabella === 'products'
           ? { data: PRODOTTO, error: null }
-          : { data: CATEGORIE, error: null };
+          : tabella === 'seller_public_profiles'
+            ? { data: [NEGOZIO], error: null }
+            : { data: CATEGORIE, error: null };
+        // 16/10/2026 — `maybeSingle` risponde con UNA riga, come PostgREST: il guscio adesso chiede il
+        // negozio cosi' (insieme a «Venduto da»), e un elenco al posto della riga non e' una risposta vera.
+        const una = tabella === 'seller_public_profiles' ? { data: NEGOZIO, error: null } : risposta;
         const catena: Record<string, unknown> = {
           select: () => catena,
           eq: () => catena,
           is: async () => risposta,
-          maybeSingle: async () => risposta,
+          in: async () => risposta,
+          maybeSingle: async () => una,
         };
         return catena;
       },

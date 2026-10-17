@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import EmptyState from '@/components/EmptyState';
 import { Textarea } from '@/components/ui/Field';
+import { haUnaParteInContanti } from '@/lib/rimborsi/regole-del-rimborso';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
@@ -39,7 +40,7 @@ export default function NewReturnPage() {
     (async () => {
       const { data } = await supabase
         .from('orders')
-        .select('id, total_price, delivered_at, delivery_status')
+        .select('id, total_price, delivered_at, delivery_status, payment_method, stripe_payment_intent, wallet_applied_cents')
         .eq('id', params.id)
         .single();
       setOrder(data);
@@ -261,6 +262,18 @@ export default function NewReturnPage() {
             </label>
           )}
         </div>
+
+        {/* R71 — Chi ha pagato alla consegna riavrà i soldi con un bonifico: il modulo non
+            chiede niente, lo dice e basta. L'IBAN lo chiede l'email del rimborso. */}
+        {haUnaParteInContanti(order) && (
+          <p className="mt-6 rounded-lg bg-cream-100 p-3 text-sm text-ink-700">
+            Hai pagato alla consegna: se il reso viene rimborsato, ti restituiamo i soldi con un bonifico.
+            L&apos;IBAN te lo chiediamo per email, quando parte il rimborso.
+            {Number(order.wallet_applied_cents ?? 0) > 0 && (
+              <> La parte che avevi pagato con il credito MyCity torna come credito.</>
+            )}
+          </p>
+        )}
 
         <button
           onClick={submit}

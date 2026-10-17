@@ -108,7 +108,10 @@ describe('il riquadro che blocca il checkout ha una via d uscita', () => {
 });
 
 describe('la striscia di suggerimenti nel carrello', () => {
-  const upsell = senzaCommenti(readFileSync(join(RADICE, 'components/cart/CartUpsell.tsx'), 'utf8'));
+  // 15/10/2026 (R3) — la lettura della striscia e' passata da components/cart/CartUpsell.tsx a
+  // lib/queries/fasce-prodotti.ts (il negozio non si aggancia piu' a `profiles`). Le stesse tre
+  // regole le esegue davvero tests/unit/il-catalogo-regge-con-i-profili-chiusi.test.ts.
+  const upsell = senzaCommenti(readFileSync(join(RADICE, 'lib/queries/fasce-prodotti.ts'), 'utf8'));
 
   it('chiede la giacenza al database, e non la deduce dallo stato', () => {
     // `status = 'available'` NON vuol dire «ce n'è»: nessun automatismo porta lo stato a

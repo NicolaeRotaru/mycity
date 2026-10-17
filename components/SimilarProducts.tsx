@@ -9,18 +9,13 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { PROPORZIONE_FOTO } from '@/lib/griglia-prodotti';
 import { queryKeys } from '@/lib/queries/keys';
+import { leggiSimili, type ProdottoSimile } from '@/lib/queries/fasce-prodotti';
 import caricatoreFotoRemote from '@/lib/image-loader';
 
 /** Le colonne di questa fila, in un posto solo: lo scheletro e le schede vere devono coincidere. */
 const GRIGLIA_SIMILI = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3';
 
-type Item = {
-  id: string;
-  name: string;
-  price: number;
-  images: string[] | null;
-  profiles: { store_name: string | null; is_approved: boolean } | null;
-};
+type Item = ProdottoSimile;
 
 type Props = {
   productId: string;
@@ -39,48 +34,9 @@ type Props = {
 export default function SimilarProducts({ productId, categoryId, sellerId }: Props) {
   const { data: items = [], isLoading } = useQuery({
     queryKey: queryKeys.products.similar(productId, categoryId, sellerId),
-    queryFn: async (): Promise<Item[]> => {
-      const collected = new Map<string, Item>();
-
-      // 1) Stesso seller (priorità più alta — cross-sell del negozio)
-      if (sellerId) {
-        const { data } = await supabase
-          .from('products')
-          .select(`
-            id, name, price, images,
-            profiles!products_seller_id_fkey ( store_name, is_approved )
-          `)
-          .eq('seller_id', sellerId)
-          .eq('status', 'available')
-          .neq('id', productId)
-          .limit(6);
-        for (const p of (data ?? []) as unknown as Item[]) {
-          if (p.profiles?.is_approved) collected.set(p.id, p as Item);
-        }
-      }
-
-      // 2) Stessa categoria (fill fino a 6)
-      if (categoryId && collected.size < 6) {
-        const { data } = await supabase
-          .from('products')
-          .select(`
-            id, name, price, images,
-            profiles!products_seller_id_fkey ( store_name, is_approved )
-          `)
-          .eq('category_id', categoryId)
-          .eq('status', 'available')
-          .neq('id', productId)
-          .limit(12);
-        for (const p of (data ?? []) as unknown as Item[]) {
-          if (collected.size >= 6) break;
-          if (collected.has(p.id)) continue;
-          if (!p.profiles?.is_approved) continue;
-          collected.set(p.id, p as Item);
-        }
-      }
-
-      return Array.from(collected.values()).slice(0, 6);
-    },
+    // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il
+    // negozio a `profiles`, che dopo la migrazione 161 un cliente non legge piu'.
+    queryFn: (): Promise<Item[]> => leggiSimili(supabase, { productId, categoryId, sellerId }),
     enabled: !!productId,
   });
 

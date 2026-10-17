@@ -117,6 +117,10 @@ export async function POST(request: Request) {
 
   await sendEmail({
     to: email,
+    // R24 — La richiesta di conferma l'ha chiesta la persona, e finche' non
+    // conferma non e' iscritta a niente: un «annulla l'iscrizione» qui non
+    // avrebbe senso. Le novita' vere, quando partiranno, si dichiarano 'marketing'.
+    tipo: 'transazionale',
     subject: 'Confermi l’iscrizione alle novità di MyCity?',
     html: `
       <p>Ciao,</p>

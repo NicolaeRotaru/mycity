@@ -11,6 +11,7 @@ import { sellerEconomics } from '@/lib/products/economics';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 import { filtroSullaScheda } from '@/lib/ai/schedaSicura';
 import { PROPRIETA_EDITORIALI } from '@/lib/ai/patchSchema';
+import { REGOLA_CAMPI_DICHIARATIVI } from '@/lib/products/aiPatch';
 
 /**
  * Motore "Migliora tutto" — una singola passata AI che ottimizza l'INTERA
@@ -54,7 +55,7 @@ Cosa ottimizzi (TUTTO insieme, solo dove migliora davvero):
 - "price": allineato al mercato locale italiano. Ragiona sul netto venditore dopo la commissione e tienilo sano; se proponi un prezzo, spiega il perché nel "pricing".
 - "compare_at_price": SOLO se esiste uno sconto reale (prezzo pieno > prezzo). Altrimenti null o ometti.
 - "tags": 3-8 parole chiave minuscole utili alla ricerca (sinonimi, occasioni d'uso). Lista COMPLETA desiderata.
-- "attributes": COMPILA gli attributi mancanti che riesci a dedurre da foto/ricerca, usando SOLO le chiavi valide e, per i campi a scelta, SOLO le opzioni elencate.
+- "attributes": COMPILA gli attributi mancanti che riesci a dedurre da foto/ricerca, usando SOLO le chiavi valide e, per i campi a scelta, SOLO le opzioni elencate. ${REGOLA_CAMPI_DICHIARATIVI}
 - "category_slug"/"subcategory_name": correggi solo se quella attuale è sbagliata.
 - "condition" e "unit": imposta se evidenti.
 

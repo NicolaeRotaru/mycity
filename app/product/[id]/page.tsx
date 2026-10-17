@@ -9,7 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Heart, Banknote, Bike, RotateCcw, Store, ShoppingCart, Ban, Check, Flame, Package, ShieldCheck, Star, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
-import { domandaProdotto } from '@/lib/queries/catalogo';
+import { domandaProdotto, negozioDellaSchedaOperativo } from '@/lib/queries/catalogo';
 import { addToCart, cartTotal, getCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
@@ -368,8 +368,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     );
   }
 
-  // Negozio sospeso o non approvato → prodotto non acquistabile
-  if (!product.profiles?.is_approved) {
+  // Negozio sospeso o non approvato → prodotto non acquistabile. Il negozio arriva
+  // dalla vista pubblica dei negozi (R3): regge anche quando `profiles` e' chiusa.
+  if (!negozioDellaSchedaOperativo(product)) {
     return (
       <div className="container mx-auto p-8 max-w-md text-center mt-8 bg-white rounded-2xl border">
         <Ban size={48} strokeWidth={1.5} className="mx-auto text-ink-300 mb-3" aria-hidden />

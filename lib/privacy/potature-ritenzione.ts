@@ -36,6 +36,14 @@
 /** Cosa risponde una scrittura del database: PostgREST non lancia, restituisce. */
 type Risposta = { error: { message: string } | null };
 
+/**
+ * Quanti mesi restano i messaggi del modulo Contatti. Sta qui, una volta sola:
+ * la potatura qui sotto e l'informativa sull'IBAN del rimborso — che il cliente
+ * ci manda rispondendo alla nostra email, ma a volte scrive lo stesso in un
+ * messaggio dai Contatti — leggono lo stesso numero.
+ */
+export const MESI_DEI_MESSAGGI_DEI_CONTATTI = 24;
+
 /** La catena di filtri che le potature usano davvero, e nient'altro. */
 type Filtrabile = PromiseLike<Risposta> & {
   eq(colonna: string, valore: unknown): Filtrabile;
@@ -303,7 +311,7 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
       fai: (admin) => esigi(admin
         .from('contact_messages')
         .delete()
-        .lt('created_at', mesi(24))),
+        .lt('created_at', mesi(MESI_DEI_MESSAGGI_DEI_CONTATTI))),
     },
     // 6/9/2026 — L'ISCRIZIONE CHE NESSUNO HA MAI CONFERMATO RESTAVA QUI PER
     // SEMPRE. Il modulo della newsletter e' pubblico: chiunque puo' scriverci

@@ -57,7 +57,27 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'Il pagamento è sicuro?',
-        a: 'Sì. Tutti i dati transitano cifrati (HTTPS/TLS). Non memorizziamo dati bancari sui nostri server.',
+        // Riesame del 16/10, quinto giro — la risposta prometteva sull'IBAN piu'
+        // dell'informativa. Dove e quanto lo dice l'informativa, una volta sola
+        // (lib/privacy/iban-per-email.ts): qui si rimanda li'.
+        // 17/10/2026 («Semplifica») — l'IBAN DEL RIMBORSO non sta in nessun modulo
+        // del sito e in nessuna colonna del database: lo chiede l'email del rimborso.
+        // Collaudo del 17/10 — la frase senza «Se compri» e senza «del rimborso» era
+        // falsa: il modulo per diventare venditore (/sell) chiede l'IBAN degli incassi
+        // e lo salva (profiles.billing_iban), e l'informativa lo dice. Vale per chi
+        // compra, con le stesse parole dell'informativa.
+        a: (
+          <>
+            Sì. Tutti i dati transitano cifrati (HTTPS/TLS) e non conserviamo i dati delle carte. Se compri,
+            non ti chiediamo l&apos;IBAN in nessun modulo del sito e nel nostro database non c&apos;è un campo
+            per l&apos;IBAN del rimborso: se ti dobbiamo un rimborso con bonifico, te lo chiediamo per email e ce
+            lo mandi rispondendo. Dove resta e per quanto lo trovi nell&apos;
+            <Link href="/privacy" className="font-semibold underline">
+              informativa privacy
+            </Link>
+            .
+          </>
+        ),
       },
       {
         q: 'Posso usare un codice sconto?',
@@ -75,11 +95,11 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'In quanto tempo ricevo il rimborso?',
-        // 3/9/2026 — «il rimborso avviene su IBAN» era falso: nessun modulo
-        // chiede l'IBAN e per gli ordini in contanti il rimborso arriva come
-        // credito MyCity (`cod_refund`). Il bonifico resta possibile, ma su
-        // richiesta e a mano: è quello che si può promettere.
-        a: 'Entro 14 giorni dalla ricezione del prodotto da parte del venditore. Per gli ordini pagati alla consegna il rimborso arriva come credito MyCity, spendibile sul prossimo ordine pagato alla consegna; se preferisci il bonifico scrivici e lo facciamo noi.',
+        // R71 — Decisione di Nicola del 17/10/2026 («Semplifica»): i contanti tornano
+        // sempre col bonifico, nessuna scelta del credito. I 14 giorni partono dal
+        // recesso (Codice del Consumo, art. 56): la merce indietro, o la prova della
+        // spedizione, e' solo la ragione per cui possiamo aspettare (comma 3).
+        a: "Entro 14 giorni da quando ci comunichi il recesso. Possiamo aspettare di avere indietro la merce, o la prova che l'hai spedita. Se hai pagato con la carta, il rimborso torna sulla carta. Se hai pagato alla consegna, ti restituiamo i soldi con un bonifico: ti scriviamo per email per chiederti l'IBAN, e il bonifico lo facciamo appena ce lo mandi. La parte pagata con il credito MyCity torna come credito.",
       },
       {
         q: 'Chi paga la spedizione del reso?',
@@ -97,7 +117,16 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'Come elimino il mio account?',
-        a: <>Vai su <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni → Elimina account</Link>. La cancellazione è permanente e rimuove tutti i tuoi dati.</>,
+        // La risposta diceva «rimuove tutti i tuoi dati»: la riga dei conti degli
+        // ordini resta 10 anni, senza il nome (lib/account/cancellazione.ts). Si dice
+        // cosa va via e cosa resta, e per il resto si rimanda all'informativa.
+        // Collaudo del 17/10 — resta anche l'avviso del bonifico con l'email del
+        // cliente: la cancellazione non tocca le notifiche degli amministratori, ed è
+        // apposta (lib/privacy/iban-per-email.ts, L_AVVISO_A_CHI_PAGA). Secondo giro: la
+        // frase diceva «Se ti dobbiamo un rimborso», ma sul sito non esiste un «pagato»
+        // e nessuna potatura toglie l'avviso: resta anche a bonifico fatto. Le stesse
+        // parole stanno nelle impostazioni, dove si cancella.
+        a: <>Vai su <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni → Elimina account</Link>. Togliamo il profilo, gli indirizzi e le preferenze. Resta la riga dei conti dei tuoi ordini, senza il tuo nome, per i 10 anni che chiede la legge. Se ti è stato approvato un rimborso con bonifico, già pagato o ancora da pagare, resta anche l&apos;avviso interno con la tua email, finché non lo cancelliamo noi: serve a chi fa il bonifico per scriverti e pagarti. I dettagli sono nell&apos;<Link href="/privacy" className="text-primary-700 underline">informativa privacy</Link>.</>,
       },
       {
         q: 'Ho dimenticato la password',

@@ -934,7 +934,7 @@ export const POST = withAuthRateLimit(
               total: c.totalCents / 100,
               itemsCount: c.itemsCount,
             });
-            await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
+            await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
           } catch (e) {
             logger.warn('[cod] email nuovo ordine al venditore fallita', { orderId: c.orderId, e });
           }
@@ -951,7 +951,8 @@ export const POST = withAuthRateLimit(
               total: c.totalCents / 100,
               storeName: nomiNegozio.get(c.sellerId) ?? 'il negozio',
             });
-            await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text });
+            // R24 — avviso di servizio: senza il tasto «annulla l'iscrizione».
+            await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
           } catch (e) {
             logger.warn('[cod] email conferma ordine al buyer fallita', { orderId: c.orderId, e });
           }

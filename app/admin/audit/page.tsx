@@ -6,6 +6,9 @@ import { Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
+// 16/10/2026 — le etichette e le scelte del filtro vengono dall'elenco delle
+// azioni: qui c'era una lista a mano senza 'order.cash_declared'.
+import { etichettaAzioneAudit, opzioniFiltroAudit } from '@/lib/audit-azioni';
 
 type AuditRow = {
   id: string;
@@ -17,25 +20,6 @@ type AuditRow = {
   ip: string | null;
   created_at: string;
   actor: { full_name: string | null; email: string | null } | null;
-};
-
-const ACTION_LABEL: Record<string, string> = {
-  'user.approve':       'Utente approvato',
-  'user.reject':        'Utente rifiutato',
-  'user.suspend':       'Utente sospeso',
-  'user.reactivate':    'Utente riattivato',
-  'user.delete':        'Utente eliminato',
-  'product.hide':       'Prodotto nascosto',
-  'product.show':       'Prodotto reso visibile',
-  'order.refund':       'Ordine rimborsato',
-  'order.force_cancel': 'Ordine cancellato (forzato)',
-  'dispute.resolve_buyer':  'Reclamo risolto a favore del buyer',
-  'dispute.resolve_seller': 'Reclamo risolto a favore del seller',
-  'dispute.reject':     'Reclamo rifiutato',
-  'coupon.create':      'Coupon creato',
-  'coupon.delete':      'Coupon eliminato',
-  'kyc.approve':        'KYC approvato',
-  'kyc.reject':         'KYC rifiutato',
 };
 
 function formatDateTime(iso: string): string {
@@ -87,8 +71,8 @@ export default function AuditLogPage() {
           className="bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
         >
           <option value="">Tutte le azioni</option>
-          {Object.entries(ACTION_LABEL).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
+          {opzioniFiltroAudit().map(({ valore, etichetta }) => (
+            <option key={valore} value={valore}>{etichetta}</option>
           ))}
         </select>
       </div>
@@ -110,7 +94,7 @@ export default function AuditLogPage() {
               <div className="flex items-baseline justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-ink-900">{ACTION_LABEL[r.action] ?? r.action}</p>
+                    <p className="font-semibold text-ink-900">{etichettaAzioneAudit(r.action)}</p>
                     <span className="rounded bg-cream-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ink-600">{r.action}</span>
                   </div>
                   <p className="mt-0.5 text-xs text-ink-500">

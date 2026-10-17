@@ -187,8 +187,11 @@ describe('quello che c’era prima non si è perso per strada', () => {
     hydrate(qc, await precaricaNegozio('negozio-1'));
     const negozio = await qc.fetchQuery(domandaNegozio(databaseCheEsplode, 'negozio-1'));
 
-    expect(letture.length, 'non ha riprovato senza le colonne nuove').toBe(2);
-    expect(letture[1]!.colonne, 'ha riprovato con le stesse colonne di prima').not.toContain('stripe_charges_enabled');
+    // 15/10/2026 (R55) — il precarico del negozio porta anche «Venduto da», con una lettura sua:
+    // qui si contano solo quelle del negozio (le uniche che chiedono la personalizzazione).
+    const delNegozio = letture.filter((l) => l.colonne.includes('store_customization'));
+    expect(delNegozio.length, 'non ha riprovato senza le colonne nuove').toBe(2);
+    expect(delNegozio[1]!.colonne, 'ha riprovato con le stesse colonne di prima').not.toContain('stripe_charges_enabled');
     expect(negozio?.store_name, 'su un database indietro la vetrina resta chiusa').toBe('Salumeria del Borgo');
   });
 

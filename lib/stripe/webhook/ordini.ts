@@ -26,6 +26,8 @@ import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
 import { clientIdGaValido } from '@/lib/analytics/ga-client-id';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { notifyAdmins, provaAMandare, sessionePagata, suonaLaCampanellaAiNegozi } from './comune';
+import { scritturaObbligatoria } from './esito';
+import { chiudiIlCarrelloPerQuadratura } from './quadratura';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 
@@ -133,10 +135,12 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     // record scade. Al tentativo successivo si finiva qui e si rimborsava
     // tutto — mentre il negozio stava preparando un ordine PAID e NEW che
     // nessuno annullava. Un cliente rimborsato a merce in lavorazione.
-    const { data: ordiniGiaNati } = await admin
+    const { data: ordiniGiaNati, error: errGiaNati } = await admin
       .from('orders')
       .select('id')
       .eq('stripe_session_id', session.id);
+    // R81 — una lettura caduta non è «nessun ordine»: si rimborserebbe merce in lavorazione.
+    if (errGiaNati) throw new Error(`[stripe] riserva scaduta: ordini non letti (${errGiaNati.message})`);
     if (ordiniGiaNati && ordiniGiaNati.length > 0) {
       logger.error('[stripe] riserva scaduta ma con ordini gia creati: nessun rimborso automatico', {
         pendingCheckoutId, ordini: ordiniGiaNati.length,
@@ -225,14 +229,9 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
         throw err;
       }
     }
-    // Prima che la migrazione 126 sia applicata lo stato 'MISMATCH' non e'
-    // ammesso dal vincolo e la scrittura fallirebbe: in quel caso si segna
-    // 'CANCELED', che il carrello lo chiude comunque.
-    await conRipiegoSchema(
-      'pending_checkouts.update (quadratura fallita)',
-      () => admin.from('pending_checkouts').update({ status: 'MISMATCH' }).eq('id', pendingCheckoutId),
-      () => admin.from('pending_checkouts').update({ status: 'CANCELED' }).eq('id', pendingCheckoutId),
-    );
+    // Prima della migrazione 126 'MISMATCH' non è ammesso: si segna 'CANCELED'.
+    // Se il segno non passa Stripe NON riprova: il perché in quadratura.ts (R81).
+    await chiudiIlCarrelloPerQuadratura(admin, pendingCheckoutId);
     return;
   }
 
@@ -439,16 +438,6 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
   // NB: il coupon è già stato claimato atomicamente in /api/stripe/checkout (claim_coupon, fix #36).
   // Non richiamiamo increment_coupon_usage qui per evitare doppio conteggio.
 
-  // Marca pending_checkout come COMPLETED solo a checkout interamente riuscito.
-  await admin
-    .from('pending_checkouts')
-    .update({
-      status: 'COMPLETED',
-      stripe_payment_intent: paymentIntent,
-      processed_at: new Date().toISOString(),
-    })
-    .eq('id', pendingCheckoutId);
-
   /**
    * #176 — Le email non tengono piu' in ostaggio la risposta a Stripe.
    *
@@ -550,48 +539,19 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
       });
     }
   }, 'avvisi post-ordine');
-}
 
-/**
- * checkout.session.expired → il buyer ha abbandonato il pagamento. Rilascia lo stock
- * riservato al checkout (immediato, senza attendere il cron expire-checkouts).
- */
-export async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
-  const admin = getAdminSupabase();
-  const pid = session.client_reference_id ?? session.metadata?.pending_checkout_id;
-  if (!pid) return;
-  // 162 — PRIMA DI RIMETTERE A SCAFFALE, GUARDA SE E' GIA' STATO VENDUTO: col pagamento riuscito e
-  // il webhook morto a meta' gli ordini esistono gia', e ripristinare qui vuol dire rivendere pezzi
-  // gia' usciti. Il giro periodico questa guardia ce l'ha — e avvisa gli amministratori; qui no.
-  const { data: giaNati, error: errOrdini } = await admin.from('orders').select('id').eq('stripe_session_id', session.id).limit(1);
-  if (errOrdini) throw new Error(`[stripe] carrello scaduto: controllo ordini fallito (${errOrdini.message})`);
-  if (giaNati?.length) {
-    logger.error('[stripe] carrello scaduto con ordini gia creati: merce NON rimessa in vendita', { pid });
-    return;
-  }
-  // 064 — Prima si leggeva, si rilasciava la merce e POI si scriveva EXPIRED:
-  // il cron `expire-checkouts` e questo evento potevano passare insieme e
-  // rimettere in magazzino la stessa merce due volte, e restituire due volte il
-  // codice sconto. La rivendicazione condizionata è la stessa forma già usata
-  // nel cron: o la riga passa da PENDING a EXPIRED qui, o non si fa niente.
-  const { data: rivendicati } = await admin
+  // COMPLETED per ultima (R81): se non passa Stripe riprova, gli ordini ci sono (23505) e nessun avviso riparte.
+  scritturaObbligatoria(await admin
     .from('pending_checkouts')
-    .update({ status: 'EXPIRED' })
-    .eq('id', pid)
-    .eq('status', 'PENDING')
-    .select('id, groups, coupon_code');
-  const pending = rivendicati?.[0];
-  if (!pending) return;
-  const groups = (pending.groups as PendingGroup[]) ?? [];
-  const items = groups.flatMap((g) =>
-    (g.items ?? []).map((it) => ({ product_id: it.productId, variant_id: it.variantId ?? null, qty: it.quantity })),
-  );
-  if (items.length > 0) await admin.rpc('restore_stock', { p_items: items });
-
-  // Il codice sconto torna disponibile: il cliente ha abbandonato il pagamento.
-  const codiceAbbandonato = (pending as { coupon_code?: string | null }).coupon_code ?? null;
-  if (codiceAbbandonato) {
-    const { error: cErr } = await admin.rpc('release_coupon', { p_code: codiceAbbandonato });
-    if (cErr) logger.warn('[stripe] codice sconto non restituito', { pid, message: cErr.message });
-  }
+    .update({
+      status: 'COMPLETED',
+      stripe_payment_intent: paymentIntent,
+      processed_at: new Date().toISOString(),
+    })
+    .eq('id', pendingCheckoutId), 'carrello segnato come completato');
 }
+
+// Il carrello scaduto ha il suo file (R81, 15/10/2026): questo era a una riga
+// dal tetto delle 600, e la riparazione di R81 ne aggiungeva. Si riesporta da
+// qui perché la rotta e le prove lo cercano qui.
+export { handleCheckoutExpired } from './carrello-scaduto';

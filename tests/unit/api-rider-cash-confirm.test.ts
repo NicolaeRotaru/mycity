@@ -87,8 +87,14 @@ vi.mock('@/lib/supabase/server', () => ({
             aggiornamenti.push(valori);
             return qb({ data: state.claimed, error: null });
           },
-          // SELECT della riconciliazione: risolve alle righe consegnate/incassate
-          select: () => qb({ data: state.reconRows, error: null }),
+          // 15/10/2026 (R33) — l'ordine adesso si legge col client di servizio
+          // (la sessione del fattorino non vede i consegnati da piu' di sette
+          // giorni). Le due letture si riconoscono dalle colonne chieste.
+          select: (colonne: string) =>
+            colonne.includes('cash_confirmed_at')
+              ? qb({ data: state.order, error: null })
+              // SELECT della riconciliazione: risolve alle righe consegnate/incassate
+              : qb({ data: state.reconRows, error: null }),
         };
       }
       if (table === 'cod_reconciliations') {

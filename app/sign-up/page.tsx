@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { AuthShell, AuthAlternatives } from '@/components/ui/AuthShell';
 import { friendlyError } from '@/lib/errors';
 import { ritornoDopoLaConferma } from '@/lib/analytics/porta-di-ingresso';
+import { memoriaDellaScheda, percorsoVerificaEmail, ricordaEmailDaConfermare } from '@/lib/auth/conferma-email';
 
 /**
  * #79 — Quale versione dei testi legali si sta accettando. Va tenuta allineata
@@ -174,8 +175,13 @@ function SignUpInner() {
       // confermava mai risultava iscritto lo stesso. La sorgente unica e' il
       // rientro da /auth/callback, dove l'iscrizione e' un fatto.
       toast.success('Registrazione completata! Controlla la tua email per confermare.');
+      // 15/10/2026 (R43) — Con la conferma accesa qui non c'e' ancora una
+      // sessione, e la pagina di verifica cercava l'email solo li': «Reinvia»
+      // restava spento. L'email le arriva dalla memoria della scheda, non
+      // dall'indirizzo (che finisce nei registri).
+      ricordaEmailDaConfermare(memoriaDellaScheda(), email);
       // #112 — La pagina di verifica sa dove si stava andando, e lo dice.
-      router.push(returnTo ? `/auth/verify-email?returnTo=${encodeURIComponent(returnTo)}` : '/auth/verify-email');
+      router.push(percorsoVerificaEmail(returnTo));
     } catch (error) {
       rigeneraGettone();
       toast.error(friendlyError(error));

@@ -40,7 +40,7 @@ import {
 import { queryKeys } from '@/lib/queries/keys';
 // #92 — le miniature si chiedono gia' piccole al server
 import { sizedImage, logoNegozio } from '@/lib/image-url';
-import { riepilogoOrdine, statoPagamento } from '@/lib/ordini/riepilogo-ordine';
+import { fraseDelBonificoAMano, riepilogoOrdine, statoPagamento } from '@/lib/ordini/riepilogo-ordine';
 
 type OrderRow = {
   id: string;
@@ -54,6 +54,9 @@ type OrderRow = {
   delivery_status: OrderStatus;
   payment_status: string;
   payment_method: string | null;
+  // L'elenco dei rimborsi scritti dal server: dentro ci sono i segni «bonifico:<cent>:<chiave>»
+  // dei rimborsi in contanti (lib/stripe/elenco-dei-rimborsi.ts). Il cliente lo legge, non lo scrive.
+  stripe_refund_id: string | null;
   created_at: string;
   accepted_at: string | null;
   ready_at: string | null;
@@ -99,7 +102,7 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
     .from('orders')
     .select(`
       id, total_price, shipping_cost, delivery_fee_cents, discount_amount, wallet_applied_cents,
-      pickup_in_store, delivery_status, payment_status, payment_method, created_at,
+      pickup_in_store, delivery_status, payment_status, payment_method, stripe_refund_id, created_at,
       accepted_at, ready_at, picked_up_at, delivered_at,
       delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
       delivery_lat, delivery_lng,
@@ -689,8 +692,9 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             </div>
             {/* Questo riquadro non aveva NESSUNA condizione: usciva anche su un ordine appena
                 pagato con la carta, e diceva a quella persona che avrebbe dovuto pagare di nuovo
-                in contanti. Adesso dipende da come è stato pagato davvero — e se non si sa, non
-                dice niente. */}
+                in contanti. Adesso dipende da come è stato pagato davvero e da come è finito
+                l'ordine (annullato o consegnato: niente «Paghi») — e se non si sa, non dice
+                niente. La regola sta in statoPagamento. */}
             {pagamento.tipo === 'contanti-da-pagare' && (
               <div className="mt-3 flex items-center gap-2 rounded-lg bg-olive-50 px-3 py-2.5 text-[13px] font-medium text-olive-800">
                 <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-olive-700" aria-hidden />
@@ -707,6 +711,20 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
               <div className="mt-3 flex items-center gap-2 rounded-lg bg-cream-100 px-3 py-2.5 text-[13px] font-medium text-ink-700">
                 <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-ink-500" aria-hidden />
                 Ordine rimborsato.
+              </div>
+            )}
+            {/* 17/10/2026 — I contanti tornano con un bonifico fatto a mano: niente «Ordine
+                rimborsato», niente «arrivato». La cifra è quella dei segni sull'ordine, cioè la
+                sola parte in contanti. */}
+            {pagamento.tipo === 'bonifico-a-mano' && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-cream-100 px-3 py-2.5 text-[13px] font-medium text-ink-700">
+                <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-ink-500" aria-hidden />
+                <span>
+                  {fraseDelBonificoAMano(pagamento.centesimi, (c) => formatPrice(c / 100))}{' '}
+                  <Link href="/contact" className="font-semibold text-primary-700 underline">
+                    Vai ai Contatti
+                  </Link>
+                </span>
               </div>
             )}
           </Card>

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { fintoDatabase, type Riga } from './aiuti/finto-database-dei-pagamenti';
 
 /**
  * 27/8/2026 (R039) — IL RIMBORSO CHE LA BANCA RIFIUTA LASCIAVA IL NEGOZIO
@@ -53,26 +54,11 @@ vi.mock('@/lib/stripe/webhook/comune', () => ({
     state.notifiche.push(titolo);
   },
 }));
+// 16/10/2026 (riesame del lotto) — Il database finto che applica i filtri:
+// la scrittura del rimborso respinto passa solo se l'ordine è ancora quello
+// letto, e un finto che ignora le condizioni non lo saprebbe provare.
 vi.mock('@/lib/supabase/server', () => ({
-  getAdminSupabase: () => ({
-    from: (tabella: string) => {
-      if (tabella === 'orders') {
-        return {
-          select: () => ({ eq: () => Promise.resolve({ data: state.ordini.map((o) => ({ ...o })), error: null }) }),
-          update: (valori: Record<string, unknown>) => ({
-            eq: (_c: string, id: string) => {
-              const riga = state.ordini.find((o) => o.id === id);
-              if (riga) Object.assign(riga, valori);
-              return Promise.resolve({ error: null });
-            },
-          }),
-        };
-      }
-      return {};
-    },
-    rpc: () => Promise.resolve({ data: null, error: null }),
-    auth: { admin: { getUserById: async () => ({ data: { user: { email: 'b@x.com' } } }) } },
-  }),
+  getAdminSupabase: () => fintoDatabase({ orders: state.ordini as unknown as Riga[] }).client,
 }));
 
 import { handleRefundUpdated } from '@/lib/stripe/webhook/rimborsi';

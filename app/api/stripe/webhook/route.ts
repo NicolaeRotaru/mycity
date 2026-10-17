@@ -2,9 +2,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 import type Stripe from 'stripe';
 import { getStripe } from '@/lib/stripe/client';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { sessionePagata } from '@/lib/stripe/webhook/comune';
+import { scritturaObbligatoria, scritturaSenzaRipetere } from '@/lib/stripe/webhook/esito';
+import { segretiDelWebhook, verificaFirma } from '@/lib/stripe/webhook/firma';
+import { liberaIlTurno, prendiIlTurno } from '@/lib/stripe/webhook/registro-eventi';
 import { handleCheckoutCompleted, handleCheckoutExpired } from '@/lib/stripe/webhook/ordini';
 import { handleGiftCardPurchase } from '@/lib/stripe/webhook/giftcard';
 import { handleSponsoredPurchase } from '@/lib/stripe/webhook/sponsorizzati';
@@ -40,20 +42,24 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(req: NextRequest) {
   const sig = req.headers.get('stripe-signature');
-  const secret = env.stripeWebhookSecret();
-
-  if (!sig || !secret) {
+  // R77 — due indirizzi Stripe, due segreti: quello di MyCity e quello dei conti
+  // dei negozi (bonifico rifiutato, versamenti bloccati). Vedi firma.ts.
+  const segreti = segretiDelWebhook();
+  if (!sig || segreti.length === 0) {
     return NextResponse.json({ error: 'Webhook non configurato' }, { status: 503 });
   }
 
   const raw = await req.text();
-  let event: Stripe.Event;
-  try {
-    event = getStripe().webhooks.constructEvent(raw, sig, secret);
-  } catch (err) {
-    logger.error(err, { context: 'stripe-webhook-signature' });
+  const firma = verificaFirma(raw, sig, segreti, (c, f, k) => getStripe().webhooks.constructEvent(c, f, k));
+  if (firma.esito === 'non-valida') {
+    logger.error(firma.errore, { context: 'stripe-webhook-signature' });
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
+  if (firma.esito === 'fuori-posto') {
+    logger.warn('[stripe] avviso da un conto di negozio non previsto: ignorato', { type: firma.evento.type, account: firma.evento.account });
+    return NextResponse.json({ received: true, ignorato: true }, { status: 200 });
+  }
+  const event = firma.evento;
 
   const admin = getAdminSupabase();
 
@@ -77,17 +83,11 @@ export async function POST(req: NextRequest) {
       // ordini. Ora si rivendica: passa una sola, l'altra risponde 200 e se ne
       // va. Un claim più vecchio di cinque minuti si può riprendere, altrimenti
       // un processo morto a metà bloccherebbe l'evento per sempre.
-      const cinqueMinutiFa = new Date(Date.now() - 5 * 60_000).toISOString();
-      const { data: rivendicato } = await admin
-        .from('stripe_event_log')
-        .update({ claimed_at: new Date().toISOString() })
-        .eq('event_id', event.id)
-        .eq('processed', false)
-        .or(`claimed_at.is.null,claimed_at.lt.${cinqueMinutiFa}`)
-        .select('event_id');
-      if (!rivendicato || rivendicato.length === 0) {
-        return NextResponse.json({ received: true, duplicated: true }, { status: 200 });
-      }
+      // R81 — come si prende, e perché non con un «oppure»: registro-eventi.ts.
+      const turno = await prendiIlTurno(admin, event.id);
+      // Un guasto non è «turno già preso»: col 200 l'evento si perdeva.
+      if (turno === 'guasto') return NextResponse.json({ error: 'idempotenza non disponibile' }, { status: 503 });
+      if (turno === 'occupato') return NextResponse.json({ received: true, duplicated: true }, { status: 200 });
     } else {
       // 27/8/2026 (R031 · R137) — IL GUARDIANO SI APRIVA DA SOLO QUANDO SI
       // ROMPEVA: su un errore diverso dal doppione (colonna non ancora
@@ -98,19 +98,6 @@ export async function POST(req: NextRequest) {
       logger.error(seen.error, { context: 'stripe-event-log-insert' });
       return NextResponse.json({ error: 'idempotenza non disponibile' }, { status: 503 });
     }
-  }
-
-  // 27/8/2026 (R134) — QUANDO IL GESTORE FALLIVA, IL TURNO RESTAVA PRESO: la
-  // riconsegna di Stripe entro cinque minuti riceveva `200 { duplicated: true }`,
-  // per Stripe la consegna era riuscita, e l'evento spariva. Su una sessione
-  // pagata vuol dire cliente addebitato e ordine mai nato.
-  async function liberaIlTurno(): Promise<void> {
-    const { error } = await admin
-      .from('stripe_event_log')
-      .update({ claimed_at: null })
-      .eq('event_id', event.id)
-      .eq('processed', false);
-    if (error) logger.error(error, { context: 'stripe-event-log-rilascio-turno' });
   }
 
   try {
@@ -147,10 +134,10 @@ export async function POST(req: NextRequest) {
           // 27/8/2026 (R134) — CHIUSURA, NON ABBANDONO: l'uscita lasciava la
           // riga rivendicata e non lavorata per sempre, cioe' un residuo che
           // falsa ogni conta degli eventi arretrati.
-          await admin
+          scritturaObbligatoria(await admin
             .from('stripe_event_log')
             .update({ processed: true, processed_at: new Date().toISOString() })
-            .eq('event_id', event.id);
+            .eq('event_id', event.id), 'evento chiuso come non pagato');
           return NextResponse.json({ received: true, nonPagata: true }, { status: 200 });
         }
 
@@ -232,17 +219,19 @@ export async function POST(req: NextRequest) {
         // Eventi non gestiti: log e basta
         logger.info('Unhandled Stripe event', { type: event.type });
     }
-    // Marca l'evento come processato SOLO dopo il successo dell'handler.
-    await admin
+    // Marca l'evento come processato SOLO dopo il successo dell'handler. R81:
+    // se non passa si vede (errore), ma Stripe NON riprova: rifarebbe un lavoro fatto.
+    scritturaSenzaRipetere(await admin
       .from('stripe_event_log')
       .update({ processed: true, processed_at: new Date().toISOString() })
-      .eq('event_id', event.id);
+      .eq('event_id', event.id), 'evento segnato come lavorato');
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (err) {
     logger.error(err, { context: 'stripe-webhook-handler' });
     // Il turno torna libero PRIMA di rispondere, cosi' la riconsegna di Stripe
     // trova la riga lavorabile invece di un turno fresco.
-    await liberaIlTurno();
+    // R134 — vedi lib/stripe/webhook/registro-eventi.ts.
+    await liberaIlTurno(admin, event.id);
     return NextResponse.json({ error: 'Handler error' }, { status: 500 });
   }
 }
