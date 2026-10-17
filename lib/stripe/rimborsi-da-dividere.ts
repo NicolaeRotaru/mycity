@@ -21,6 +21,7 @@ import {
   daFuoriDaRegistrare,
   elencoDeiRimborsi,
   etichettaComeRegistrati,
+  fermaIBonifici,
   PAUSA_RIMBORSO_DA_DIVIDERE,
   registraSullOrdine,
   rimborsiGiaScritti,
@@ -28,13 +29,15 @@ import {
   type OrdineDelRimborso,
   type RimborsoStripe,
 } from '@/lib/stripe/webhook/rimborsi-da-fuori';
+import { avvisaDegliStorniNonConfermati } from '@/lib/stripe/storno-senza-esito';
 import { controllaLaDivisione, type ParteDelRimborso } from '@/lib/rimborsi/divisione-del-rimborso';
 
 // 16/10 (riesame) — `stripe_refund_id`: dice quali rimborsi dal cruscotto una divisione
 // precedente ha già scritto sugli ordini (vedi `rimborsiDaEtichettare`).
+// 16/10 (settimo riesame) — `reversal_error`: dice se uno storno chiesto non è mai stato confermato.
 const COLONNE =
   'id, seller_id, total_price, refunded_amount_cents, payout_status, stripe_payment_intent, stripe_transfer_id, ' +
-  'stripe_reversal_id, stripe_refund_id, seller_payout_cents, seller_payout_reversed_cents, internal_dispute_status';
+  'stripe_reversal_id, stripe_refund_id, seller_payout_cents, seller_payout_reversed_cents, internal_dispute_status, reversal_error';
 
 type OrdineDelCarrello = OrdineDelRimborso & {
   seller_id: string | null;
@@ -68,6 +71,35 @@ export function contoDaDividere(
   const mancanteCents = suStripe - registrato;
   const daFuoriCents = sommaDeiRimborsiDaFuori(rimborsi);
   return { daDividereCents: Math.max(0, Math.min(mancanteCents, daFuoriCents)), mancanteCents, daFuoriCents };
+}
+
+/**
+ * Quanto resta da dividere su un carrello appena riaperto: lo stesso conto con
+ * cui il webhook ferma i bonifici quando nessun ordine è fermo — quello che
+ * manca sul database, ma mai più dei rimborsi da fuori che nessun ordine ha
+ * ancora scritto nel suo elenco.
+ *
+ * 16/10/2026 (settimo riesame del lotto) — UN RIMBORSO USCITO MENTRE SI DIVIDEVA
+ * SPARIVA. Carrello del pane (15,00 €) e dei fiori (12,90 €, bonifico già
+ * partito); dal cruscotto escono 3 €, chi amministra li dà ai fiori. Mentre la
+ * divisione chiede a Stripe lo storno dei fiori, dal cruscotto escono altri 2 €:
+ * il loro avviso trova il carrello già fermo e non cambia niente. Poi la
+ * divisione toglie la pausa a tutto il carrello: 5 € usciti, 3 € scritti, il
+ * pannello vuoto e i due bonifici ripartiti pieni. Adesso, tolta la pausa, la
+ * divisione rilegge ordini e rimborsi e rifà questo conto: se resta qualcosa,
+ * il carrello torna fermo e nel pannello. Rileggere DOPO aver tolto la pausa
+ * chiude la finestra: un rimborso che Stripe fa dopo la rilettura arriva con un
+ * avviso che trova il carrello senza pausa, e la rimette lui.
+ */
+export function restaDaDividere(
+  ordini: ReadonlyArray<Pick<OrdineDelRimborso, 'refunded_amount_cents' | 'stripe_refund_id'>>,
+  rimborsi: ReadonlyArray<RimborsoStripe>,
+): number {
+  const scritti = new Set<string>();
+  for (const o of ordini) for (const id of rimborsiGiaScritti(o)) scritti.add(id);
+  const { mancanteCents } = contoDaDividere(ordini, rimborsi);
+  const daFuori = sommaDeiRimborsiDaFuori(rimborsi.filter((r) => !(r.id && scritti.has(r.id))));
+  return Math.max(0, Math.min(mancanteCents, daFuori));
 }
 
 const lordoCents = (o: Pick<OrdineDelRimborso, 'total_price'>) => Math.round(Number(o.total_price ?? 0) * 100);
@@ -429,6 +461,40 @@ const GIA_DECISA_CON_ALTRE_CIFRE =
   'vale quella, e le cifre mandate adesso non le ho usate. Ricarica la pagina.';
 
 /**
+ * 16/10/2026 (settimo riesame del lotto) — Quello che legge chi amministra
+ * quando la parte di un ordine non si scrive. Prima, se non era scritto ancora
+ * nessun ordine, diceva «Non ho registrato niente: ricarica la pagina e
+ * riprova». Ma la divisione è già nel registro delle azioni prima di toccare
+ * gli ordini, e chi riprova esegue quella: chi correggeva le cifre si vedeva
+ * applicare quelle di prima. Adesso dice che la divisione è decisa e che va
+ * rimandata uguale. La prima frase vale per tutti e tre i motivi per cui la
+ * scrittura cade (`registraSullOrdine`). Sotto i 200 caratteri: più lunga, il
+ * riquadro la sostituisce con un testo generico (friendlyError, lib/errors.ts).
+ */
+export function messaggioDellaParteNonScritta(idOrdine: string, giaRegistrati: number): string {
+  const perche =
+    `L'ordine #${idOrdine.slice(0, 6).toUpperCase()} non si è registrato: il bonifico sta partendo, è cambiato ` +
+    'o il database non ha risposto. ';
+  if (giaRegistrati <= 0) return `${perche}La divisione però è già decisa: ricarica la pagina e rimanda le stesse cifre.`;
+  const quanti = giaRegistrati === 1 ? '1 ordine è già registrato' : `${giaRegistrati} ordini sono già registrati`;
+  return `${perche}${quanti}: ricarica la pagina e rimanda le stesse cifre per gli altri.`;
+}
+
+/** Tolta la pausa, Stripe o il database non si sono lasciati rileggere: il carrello è fermo di nuovo. */
+const PARTI_SCRITTE_BONIFICI_FERMI =
+  'Ho registrato tutte le parti, ma i bonifici sono ancora fermi: ricarica la pagina e premi di nuovo «Registra».';
+
+/** Tolta la pausa, la rilettura ha trovato un rimborso uscito mentre si divideva (`restaDaDividere`). */
+const UN_ALTRO_RIMBORSO =
+  'Ho registrato questa divisione, ma intanto dal cruscotto è uscito un altro rimborso su questo pagamento: ' +
+  'i bonifici restano fermi. Ricarica la pagina e dividi quello nuovo.';
+
+/** Il carrello andava fermato di nuovo, e il database non l'ha lasciato fare. */
+const BONIFICI_NON_FERMATI =
+  'Ho registrato la divisione, ma non sono riuscita a fermare di nuovo i bonifici: guarda su Stripe se su questo ' +
+  "pagamento c'è un rimborso dal cruscotto non ancora diviso.";
+
+/**
  * Registra la divisione decisa da chi amministra e riapre i bonifici, con le
  * due regole scritte qui sopra: la divisione si decide una volta sola, e la
  * pausa si toglie per ultima.
@@ -497,16 +563,7 @@ export async function dividiIlRimborso(
       return {
         ok: false,
         stato: 409,
-        errore: conAltreCifre
-          ? GIA_DECISA_CON_ALTRE_CIFRE
-          : // 16/10 (terzo riesame) — Sotto i 200 caratteri: più lungo, il riquadro lo
-            // sostituiva con «Qualcosa non ha funzionato» (friendlyError, lib/errors.ts) e
-            // chi amministra non sapeva che una parte era già registrata.
-            `L'ordine #${idOrdine.slice(0, 6).toUpperCase()} è cambiato mentre lo registravo, oppure il suo bonifico sta partendo adesso. ` +
-            (registrati.length > 0
-              ? `${registrati.length === 1 ? '1 ordine è già registrato' : `${registrati.length} ordini sono già registrati`}: ` +
-                'ricarica la pagina e dividi quello che manca.'
-              : 'Non ho registrato niente: ricarica la pagina e riprova.'),
+        errore: conAltreCifre ? GIA_DECISA_CON_ALTRE_CIFRE : messaggioDellaParteNonScritta(idOrdine, registrati.length),
         registrati,
       };
     }
@@ -531,11 +588,33 @@ export async function dividiIlRimborso(
     return {
       ok: false,
       stato: 409,
-      errore: conAltreCifre
-        ? GIA_DECISA_CON_ALTRE_CIFRE
-        : 'Ho registrato tutte le parti, ma i bonifici sono ancora fermi: ricarica la pagina e premi di nuovo «Registra».',
+      errore: conAltreCifre ? GIA_DECISA_CON_ALTRE_CIFRE : PARTI_SCRITTE_BONIFICI_FERMI,
       registrati,
     };
+  }
+
+  // Tolta la pausa, si rilegge il carrello: un rimborso uscito mentre si
+  // divideva lo rimette fermo (`restaDaDividere`), e uno storno rimasto senza
+  // esito si dice agli amministratori (`avvisaDegliStorniNonConfermati`). Se la
+  // rilettura non riesce, il carrello si ferma di nuovo: meglio un passaggio in
+  // più nel pannello che un rimborso perso.
+  let riletto: { ordini: OrdineDelCarrello[]; resta: number } | null = null;
+  try {
+    const ordiniDopo = await ordiniDelPagamento(pagamento);
+    riletto = { ordini: ordiniDopo, resta: restaDaDividere(ordiniDopo, await elencoDeiRimborsi({ payment_intent: pagamento })) };
+  } catch (err) {
+    logger.error('[rimborso da dividere] carrello non riletto dopo la divisione: lo fermo di nuovo', {
+      pagamento, message: err instanceof Error ? err.message : String(err),
+    });
+  }
+  if (riletto) {
+    try {
+      await avvisaDegliStorniNonConfermati(riletto.ordini);
+    } catch (err) {
+      logger.error('[rimborso da dividere] avviso dello storno senza esito non mandato', {
+        pagamento, message: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   // Tutto il rimborso da fuori ora è scritto sugli ordini: i suoi rimborsi su
@@ -543,6 +622,18 @@ export async function dividiIlRimborso(
   // stesso pagamento non li ritrova come da dividere (vedi `rimborsiDaEtichettare`).
   const daEtichettare = rimborsiDaEtichettare(rimborsi, ordini, conto);
   if (daEtichettare.length > 0) await etichettaComeRegistrati(daEtichettare, null);
+
+  if (!riletto || riletto.resta > 0) {
+    const { error: errFermo } = await fermaIBonifici(ordini.map((o) => o.id));
+    if (errFermo) {
+      logger.error('[rimborso da dividere] carrello da fermare di nuovo, ma la scrittura non è passata', {
+        pagamento, message: errFermo.message,
+      });
+      return { ok: false, stato: 409, errore: BONIFICI_NON_FERMATI, registrati };
+    }
+  }
   if (conAltreCifre) return { ok: false, stato: 409, errore: GIA_DECISA_CON_ALTRE_CIFRE, registrati };
+  if (!riletto) return { ok: false, stato: 409, errore: PARTI_SCRITTE_BONIFICI_FERMI, registrati };
+  if (riletto.resta > 0) return { ok: false, stato: 409, errore: UN_ALTRO_RIMBORSO, registrati };
   return { ok: true, registrati };
 }

@@ -63,6 +63,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { formatPriceFromCents } from '@/lib/format';
 import { elencoDaScrivere, rimborsiGiaScritti } from '@/lib/stripe/elenco-dei-rimborsi';
+import { avvisaDegliStorniNonConfermati, segnoDelloStornoDaFare, togliIlSegnoDelloStorno } from '@/lib/stripe/storno-senza-esito';
 import { notifyAdmins } from './comune';
 import { scritturaObbligatoria } from './esito';
 
@@ -87,6 +88,8 @@ export type OrdineDelRimborso = {
   stripe_refund_id?: string | null;
   /** C'è la pausa del carrello (`PAUSA_RIMBORSO_DA_DIVIDERE`)? Serve sui pagamenti di più negozi. */
   internal_dispute_status?: string | null;
+  /** Se c'è il segno di uno storno chiesto e mai confermato (`segnoDelloStornoDaFare`), va detto agli amministratori. */
+  reversal_error?: string | null;
 };
 
 /**
@@ -112,6 +115,18 @@ export const PAUSA_RIMBORSO_DA_DIVIDERE = 'RIMBORSO_DA_RIPARTIRE';
  */
 export const SENZA_LA_PAUSA_DEL_CARRELLO =
   `internal_dispute_status.is.null,internal_dispute_status.neq.${PAUSA_RIMBORSO_DA_DIVIDERE}`;
+
+/**
+ * Ferma i bonifici degli ordini dati che oggi sono pagabili (stato vuoto o 'RESOLVED'): un reclamo
+ * aperto resta com'è. La usano il webhook e la divisione (lib/stripe/rimborsi-da-dividere.ts).
+ */
+export async function fermaIBonifici(ids: ReadonlyArray<string>) {
+  return getAdminSupabase()
+    .from('orders')
+    .update({ internal_dispute_status: PAUSA_RIMBORSO_DA_DIVIDERE })
+    .in('id', [...ids])
+    .or('internal_dispute_status.is.null,internal_dispute_status.eq.RESOLVED');
+}
 
 /** L'etichetta che, su Stripe, dice «questo rimborso è già scritto sul nostro database». */
 export const ETICHETTA_REGISTRATO = 'registrato_da_fuori';
@@ -372,6 +387,9 @@ export async function registraRimborsoParzialeDaFuori(
   }
 
   const ordine = ordini[0];
+  // Uno storno chiesto da un lavoro che si è fermato prima di registrarne l'esito
+  // (di solito questo stesso avviso, consegnato di nuovo): lo si dice adesso.
+  await avvisaDegliStorniNonConfermati([ordine]);
   const aNumeri = contoDelRimborsoDaFuori(ordine, rimborsatoSuStripe);
   // Zero: è l'eco di un rimborso nostro, o lo stesso avviso arrivato di nuovo.
   if (aNumeri.nuovoCents <= 0) return;
@@ -422,6 +440,10 @@ export async function registraSullOrdine(
   const giaRegistrato = ordine.refunded_amount_cents ?? 0;
   const conto = contoDelRimborsoDaFuori(ordine, giaRegistrato + Math.max(0, parteCents), Math.max(0, parteCents));
   const dove = doveSiRiprendeLaQuota(ordine);
+  // Il segno «storno da fare» viaggia con il rimborso, e si toglie solo dopo la risposta di Stripe (vedi sopra).
+  const segno = conto.nuovoCents > 0 && conto.quotaNegozioCents > 0 && dove === 'con-uno-storno'
+    ? segnoDelloStornoDaFare(conto.quotaNegozioCents, opzioni.rimborsi ?? [])
+    : null;
 
   // Il giro dei bonifici ha preso in mano questo ordine e sta pagando: il conto
   // si fa quando ha finito, altrimenti il bonifico parte col netto intero e la
@@ -446,6 +468,7 @@ export async function registraSullOrdine(
         netto,
       );
     }
+    if (segno) valori.reversal_error = segno;
   }
   if (Object.keys(valori).length === 0) return conto;
 
@@ -499,6 +522,8 @@ export async function registraSullOrdine(
   // `refundOrder`.
   try {
     await reverseOrderTransfer(ordine, conto.quotaNegozioCents);
+    // Stripe ha risposto: il segno si toglie.
+    if (segno) await togliIlSegnoDelloStorno(ordine.id, segno);
   } catch (err) {
     const motivo = err instanceof Error ? err.message : 'errore sconosciuto';
     logger.error('[stripe] quota del negozio non ripresa dopo il rimborso dal cruscotto', {
@@ -547,14 +572,7 @@ async function fermaIBonificiDelCarrello(
 
   const ids = ordini.map((o) => o.id);
   // Solo chi oggi è pagabile: un reclamo interno già aperto resta com'è.
-  scritturaObbligatoria(
-    await getAdminSupabase()
-      .from('orders')
-      .update({ internal_dispute_status: PAUSA_RIMBORSO_DA_DIVIDERE })
-      .in('id', ids)
-      .or('internal_dispute_status.is.null,internal_dispute_status.eq.RESOLVED'),
-    'bonifici del carrello fermati per un rimborso da dividere',
-  );
+  scritturaObbligatoria(await fermaIBonifici(ids), 'bonifici del carrello fermati per un rimborso da dividere');
 
   logger.warn('[stripe] rimborso parziale dal cruscotto su un pagamento di più negozi: bonifici fermati', {
     chargeId: charge.id, daDividere, ordini: ids,
