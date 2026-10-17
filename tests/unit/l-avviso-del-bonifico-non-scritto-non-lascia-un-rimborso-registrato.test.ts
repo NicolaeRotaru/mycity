@@ -1085,3 +1085,224 @@ describe('la ripresa fa solo quello che manca', () => {
     expect(prenotazioni()).toHaveLength(0);
   });
 });
+
+/**
+ * Collaudo del 17/10, quinto giro — LE VARIANTI SCOMODE DELLA RIPRESA.
+ *
+ *  · Un reclamo finito a meta' (la funzione muore dopo l'avviso, prima di scrivere il suo esito
+ *    sull'ordine), ripremuto, scrive l'esito sull'ordine: senza, resta «OPEN» e il giro dei
+ *    bonifici non paga piu' il negozio.
+ *  · Lo stato del bonifico al negozio si scrive anche quando il negozio non era ancora stato pagato
+ *    (il caso normale dei contanti): non lo scrive nessun altro.
+ *  · «Pieno» si misura sul totale rimborsato, anche nella ripresa (R76).
+ *  · Il reclamo misto: la cifra della ripresa si confronta con quella del reclamo, non col bonifico,
+ *    e il credito che manca si da' anche da qui.
+ *  · «Non so se l'avviso c'e'» non e' «non c'e'», anche quando a non rispondere sono le notifiche.
+ */
+describe('la ripresa, nelle varianti scomode', () => {
+  const alCliente = () => vi.mocked(sendEmail).mock.calls.filter(([m]) => m.to === 'giulia@esempio.it');
+  const allaCasella = () => vi.mocked(sendEmail).mock.calls.filter(([m]) => m.to === indirizzoContatto('info'));
+  const prenotazioni = () => finto.db.rpc.filter((c) => c.nome === 'accumula_rimborso');
+  const accrediti = () => finto.db.rpc.filter((c) => c.nome === 'wallet_credit');
+  const risoltoATuoFavore = () => notificheConTitolo(finto.db, 'Reclamo risolto a tuo favore');
+  const reclamo = () => finto.db.tabelle.disputes[0];
+  beforeEach(() => {
+    vi.mocked(sendEmail).mockReset();
+    vi.mocked(sendEmail).mockImplementation(async () => ({ ok: true }) as never);
+    vi.mocked(writeAudit).mockClear();
+  });
+
+  /** La prossima scrittura dell'esito del reclamo sull'ordine non risponde mai: la funzione muore li'. */
+  function lEsitoDelReclamoSullOrdineRestaAppeso() {
+    const from0 = finto.db.client.from;
+    let colpo = true;
+    finto.db.client.from = ((tabella: string) => {
+      const q = from0(tabella) as unknown as Record<string, (...a: unknown[]) => unknown>;
+      if (tabella !== 'orders') return q;
+      const update0 = q.update.bind(q);
+      q.update = (valori: unknown) => {
+        if (colpo && typeof valori === 'object' && valori !== null && 'internal_dispute_status' in valori) {
+          colpo = false;
+          return { eq: () => ({ or: () => new Promise(() => {}) }) };
+        }
+        return update0(valori);
+      };
+      return q;
+    }) as unknown as typeof from0;
+  }
+
+  /** La prossima email alla casella non risponde mai: la funzione muore in fondo a `refundOrder`. */
+  function laPostaAllaCasellaRestaAppesa() {
+    let colpo = true;
+    vi.mocked(sendEmail).mockImplementation(async (m: { to: string | string[] }) => {
+      if (colpo && m.to === indirizzoContatto('info')) {
+        colpo = false;
+        return new Promise(() => {}) as never;
+      }
+      return { ok: true } as never;
+    });
+  }
+
+  /** La prossima LETTURA di `notifications` (non le scritture) cade. */
+  function laLetturaDelleNotificheCadeUnaVolta() {
+    const from0 = finto.db.client.from;
+    let colpo = true;
+    finto.db.client.from = ((tabella: string) => {
+      const q = from0(tabella) as unknown as Record<string, unknown>;
+      if (tabella !== 'notifications') return q;
+      const select0 = (q.select as (c?: unknown) => unknown).bind(q);
+      q.select = (c?: unknown) => {
+        const query = select0(c) as { then: unknown };
+        if (colpo && (q as { modo?: string }).modo === 'select') {
+          colpo = false;
+          query.then = (ok: (v: unknown) => unknown, ko: (e: unknown) => unknown) =>
+            Promise.resolve({ data: null, error: CADUTA }).then(ok, ko);
+        }
+        return query;
+      };
+      return q;
+    }) as unknown as typeof from0;
+  }
+
+  it('reclamo parziale: resolve muore prima dell esito sull ordine; ripremuto, il negozio torna pagabile', async () => {
+    apri(inContanti({ internal_dispute_status: 'OPEN' }));
+    lEsitoDelReclamoSullOrdineRestaAppeso();
+    void chiudiIlReclamo({ status: 'resolved_buyer', refundCents: 2000 });
+    await vi.waitFor(() => expect(ordine().seller_payout_reversed_cents).toBe(1800));
+    await vi.waitFor(() => expect(allaCasella()).toHaveLength(1));
+    expect(avvisi()).toHaveLength(1);
+    expect(ordine().internal_dispute_status).toBe('OPEN');
+
+    const r = await chiudiIlReclamo({ status: 'resolved_buyer', refundCents: 2000 });
+    expect(r.status, JSON.stringify(r.corpo)).toBe(200);
+    expect(ordine().internal_dispute_status, 'il giro dei bonifici paga solo con l esito vuoto o RESOLVED').toBe('RESOLVED');
+    expect(ordine().seller_payout_reversed_cents, 'la quota del negozio tolta due volte').toBe(1800);
+    expect(avvisi()).toHaveLength(1);
+    expect(prenotazioni()).toHaveLength(1);
+  });
+
+  it('reclamo parziale: refundOrder muore in fondo (posta alla casella); ripremuto, l esito arriva sull ordine', async () => {
+    apri(inContanti({ internal_dispute_status: 'OPEN', payout_status: 'HELD' }));
+    laPostaAllaCasellaRestaAppesa();
+    void chiudiIlReclamo({ status: 'resolved_buyer', refundCents: 2000 });
+    await vi.waitFor(() => expect(allaCasella()).toHaveLength(1));
+    expect(ordine().internal_dispute_status).toBe('OPEN');
+
+    const r = await chiudiIlReclamo({ status: 'resolved_buyer', refundCents: 2000 });
+    expect(r.status, JSON.stringify(r.corpo)).toBe(200);
+    expect(ordine()).toMatchObject({ internal_dispute_status: 'RESOLVED', payout_status: 'HELD', seller_payout_reversed_cents: 1800 });
+    expect(avvisi()).toHaveLength(1);
+  });
+
+  it('reso da 10 € finito, poi reclamo da 30 € finito ma senza esito sull ordine: ripremuto, LOST (pieno sul totale)', async () => {
+    const id = await apriIlReso();
+    expect((await negozio(decidi, id, { decision: 'APPROVED', refundAmountCents: 1000 })).status).toBe(200);
+    lEsitoDelReclamoSullOrdineRestaAppeso();
+    void chiudiIlReclamo({ status: 'resolved_buyer', refundCents: 3000 });
+    await vi.waitFor(() => expect(ordine().payout_status).toBe('REFUNDED'));
+    await new Promise((fatto) => setTimeout(fatto, 20));
+    expect(ordine().internal_dispute_status).toBeNull();
+
+    const r = await chiudiIlReclamo({ status: 'resolved_buyer' });
+    expect(r.status, JSON.stringify(r.corpo)).toBe(200);
+    expect(ordine()).toMatchObject({ refunded_amount_cents: 4000, internal_dispute_status: 'LOST' });
+  });
+
+  it('reso pieno, decide muore fra segno e avviso: dopo la ripresa il negozio non ancora pagato risulta da non pagare', async () => {
+    const id = await apriIlReso();
+    laLetturaDegliAmministratoriRestaAppesa();
+    void negozio(decidi, id, { decision: 'APPROVED', refundAmountCents: 4000 });
+    await vi.waitFor(() => expect(ordine().stripe_refund_id).toBe(`bonifico:4000:return_${id}`));
+    expect(ordine().payout_status).toBe('AWAITING_REMITTANCE');
+    expect((await negozio(avanza, id, { stato: 'RECEIVED' })).status).toBe(200);
+    const r = await negozio(avanza, id, { stato: 'REFUNDED' });
+    expect(r.status, JSON.stringify(r.corpo)).toBe(200);
+    expect(ordine(), 'rimborsato per intero e il negozio resta da pagare').toMatchObject({ payout_status: 'REFUNDED', payment_status: 'REFUNDED' });
+  });
+
+  it('reclamo pieno, resolve muore fra segno e avviso: ripremuto, il negozio non ancora pagato risulta da non pagare e LOST', async () => {
+    laLetturaDegliAmministratoriRestaAppesa();
+    void chiudiIlReclamo({ status: 'resolved_buyer', refundCents: 4000 });
+    await vi.waitFor(() => expect(ordine().stripe_refund_id).toBe('bonifico:4000:dispute_d1'));
+    const r = await chiudiIlReclamo({ status: 'resolved_buyer' });
+    expect(r.status, JSON.stringify(r.corpo)).toBe(200);
+    expect(ordine()).toMatchObject({ payout_status: 'REFUNDED', internal_dispute_status: 'LOST' });
+  });
+
+  it('reso da 10 € finito, poi reclamo da 30 € che muore fra segno e avviso: ripreso, LOST e negozio da non pagare', async () => {
+    const id = await apriIlReso();
+    expect((await negozio(decidi, id, { decision: 'APPROVED', refundAmountCents: 1000 })).status).toBe(200);
+    expect(ordine().payment_status).toBe('PARTIALLY_REFUNDED');
+    laLetturaDegliAmministratoriRestaAppesa();
+    void chiudiIlReclamo({ status: 'resolved_buyer', refundCents: 3000 });
+    await vi.waitFor(() => expect(String(ordine().stripe_refund_id)).toContain('bonifico:3000:dispute_d1'));
+    const r = await chiudiIlReclamo({ status: 'resolved_buyer' });
+    expect(r.status, JSON.stringify(r.corpo)).toBe(200);
+    expect(ordine()).toMatchObject({ refunded_amount_cents: 4000, internal_dispute_status: 'LOST', payout_status: 'REFUNDED' });
+  });
+
+  it('misto chiuso con 50 €: la pagina vecchia richiude con 50 → 200 senza riscrivere; con 30 → 409 con 50,00 €', async () => {
+    apri(misto());
+    expect((await chiudiIlReclamo({ status: 'resolved_buyer', refundCents: 5000 })).status).toBe(200);
+    expect(ordine().stripe_refund_id).toBe('bonifico:3000:dispute_d1');
+    const stessa = await chiudiIlReclamo({ status: 'resolved_buyer', refundCents: 5000, notes: 'Anche io, stessa cifra.' });
+    expect(stessa.status, JSON.stringify(stessa.corpo)).toBe(200);
+    expect(stessa.corpo.refundId).toBe('bonifico:3000:dispute_d1');
+    expect(risoltoATuoFavore()).toHaveLength(1);
+    expect(vi.mocked(writeAudit)).toHaveBeenCalledTimes(1);
+    expect(reclamo().resolution_notes).toBe('Merce arrivata rotta: rimborso al cliente.');
+
+    const altra = await chiudiIlReclamo({ status: 'resolved_buyer', refundCents: 3000, notes: 'Solo i contanti.' });
+    expect(altra.status).toBe(409);
+    expect(altra.corpo.error.message).toMatch(/^Questo reclamo è già stato chiuso con 50,00\s€: ricarica la pagina\.$/u);
+    expect(creditoDi(finto.db, 'giulia')).toBe(2000);
+    expect(prenotazioni()).toHaveLength(1);
+  });
+
+  it('misto: resolve muore sul credito; ripremuto con la stessa cifra da il credito una volta e chiude una volta', async () => {
+    apri(misto());
+    ilCreditoRestaAppeso();
+    void chiudiIlReclamo({ status: 'resolved_buyer', refundCents: 5000 });
+    await vi.waitFor(() => expect(accrediti()).toHaveLength(1));
+    expect(avvisi()).toHaveLength(1);
+    expect(reclamo().status).toBe('resolved_buyer');
+    expect(creditoDi(finto.db, 'giulia')).toBe(0);
+
+    const r = await chiudiIlReclamo({ status: 'resolved_buyer', refundCents: 5000 });
+    expect(r.status, JSON.stringify(r.corpo)).toBe(200);
+    expect(creditoDi(finto.db, 'giulia'), 'l avviso dice che il credito e tornato, e non e tornato').toBe(2000);
+    expect(avvisi()).toHaveLength(1);
+    expect(prenotazioni()).toHaveLength(1);
+    expect(risoltoATuoFavore()).toHaveLength(1);
+    expect(vi.mocked(writeAudit)).toHaveBeenCalledTimes(1);
+    expect(alCliente()).toHaveLength(1);
+    expect(ordine().internal_dispute_status).toBe('LOST');
+
+    const ancora = await chiudiIlReclamo({ status: 'resolved_buyer' });
+    expect(ancora.status).toBe(200);
+    expect(risoltoATuoFavore()).toHaveLength(1);
+    expect(vi.mocked(writeAudit)).toHaveBeenCalledTimes(1);
+    expect(creditoDi(finto.db, 'giulia')).toBe(2000);
+  });
+
+  it('reso finito: cade la lettura delle NOTIFICHE (non degli amministratori): 503, l avviso resta, poi tutto una volta', async () => {
+    const id = await apriIlReso();
+    laScritturaDelRimborsoSulResoCade();
+    expect((await negozio(decidi, id, { decision: 'APPROVED', refundAmountCents: 2000 })).status).toBe(500);
+    expect(avvisi()).toHaveLength(1);
+    expect((await negozio(avanza, id, { stato: 'RECEIVED' })).status).toBe(200);
+
+    laLetturaDelleNotificheCadeUnaVolta();
+    const caduto = await negozio(avanza, id, { stato: 'REFUNDED' });
+    expect(caduto.status, JSON.stringify(caduto.corpo)).toBe(503);
+    expect(avvisi()).toHaveLength(1);
+    expect(reso().status).toBe('RECEIVED');
+
+    const ok = await negozio(avanza, id, { stato: 'REFUNDED' });
+    expect(ok.status, JSON.stringify(ok.corpo)).toBe(200);
+    expect(ordine().seller_payout_reversed_cents).toBe(1800);
+    expect(alCliente()).toHaveLength(1);
+    expect(allaCasella()).toHaveLength(1);
+    expect(prenotazioni()).toHaveLength(1);
+  });
+});

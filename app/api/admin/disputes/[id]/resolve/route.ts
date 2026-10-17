@@ -16,6 +16,7 @@ import { writeAudit } from '@/lib/audit';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 import {
+  lordoDellOrdine,
   motivoNienteDaRestituire,
   quantoSiPuoRestituire,
   statoDelReclamoSullOrdine,
@@ -93,6 +94,17 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     ord = (data ?? null) as OrdineDaRimborsare | null;
   }
 
+  /** L'esito del reclamo sull'ordine, che sblocca (o chiude) il bonifico al negozio: vedi piu' sotto. */
+  const scriviIlReclamoSullOrdine = async (esito: { rimborsoEmesso: boolean; rimborsoPieno: boolean }) => {
+    const { error: errOrdine } = await admin
+      .from('orders')
+      .update({ internal_dispute_status: statoDelReclamoSullOrdine(esito) })
+      .eq('id', dispute.order_id)
+      .or(SENZA_LA_PAUSA_DEL_CARRELLO);
+    // Non blocca la risoluzione, ma deve essere visibile: il venditore resta in attesa di essere pagato.
+    if (errOrdine) logger.error('[dispute] stato dell ordine non sbloccato', { orderId: dispute.order_id, message: errOrdine.message });
+  };
+
   /**
    * Collaudo del 17/10, terzo giro — IL RECLAMO CHIUSO A META' SI RIPRENDE.
    *
@@ -101,13 +113,15 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * cliente» e l'ordine porta il segno del suo bonifico, ma forse senza l'avviso a
    * chi paga. Il «riprova» rispondeva «Reclamo già in stato resolved_buyer» e il
    * cliente non riceveva mai i soldi. Adesso lo stesso esito, ripremuto, finisce
-   * quel rimborso (`refundOrder`, con la cifra scritta sul reclamo) e il resto
-   * della chiusura: nessuna seconda prenotazione, nessun secondo bonifico.
+   * quel rimborso se gli manca un pezzo (`refundOrder`, con la cifra scritta sul
+   * reclamo): nessuna seconda prenotazione, nessun secondo bonifico.
    *
    * Collaudo del 17/10, quarto giro — ripreso solo con la stessa cifra. Una pagina caricata
    * prima della chiusura mostra ancora i pulsanti: chi chiude con un'altra cifra legge che il
    * reclamo e' gia' chiuso, e con quanto. E se il bonifico e' finito (l'avviso c'e'), non si
    * riscrive niente: ne' le note, ne' la notifica al cliente, ne' il registro delle azioni.
+   * Solo lo stato del reclamo sull'ordine (`scriviIlReclamoSullOrdine`): se la funzione e' morta
+   * prima di scriverlo, resta «OPEN» e il negozio non viene piu' pagato. Riscriverlo non fa danni.
    */
   const bonificoDelReclamo = bonificoDellaChiave(ord as { stripe_refund_id?: string | null } | null, `dispute_${dispute.id}`);
   const ripresa = dispute.status === 'resolved_buyer' && body.status === 'resolved_buyer' && !!bonificoDelReclamo;
@@ -128,6 +142,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       return ApiErrors.unavailable('Non riesco a controllare il rimborso di questo reclamo: riprova tra poco.');
     }
     if (manca === 'niente') {
+      // «Pieno» sul totale rimborsato, come lo misura `refundOrder` (R76).
+      await scriviIlReclamoSullOrdine({
+        rimborsoEmesso: true,
+        rimborsoPieno: Number(ord?.refunded_amount_cents ?? 0) >= lordoDellOrdine(ord as OrdineDaRimborsare),
+      });
       return NextResponse.json({ ok: true, status: body.status, refundId: bonificoDelReclamo.segno }, { status: 200 });
     }
   }
@@ -281,19 +300,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     // pannello offriva i soldi da dividere solo all'altro negozio, che pagava
     // un rimborso non suo. La pausa la toglie solo la divisione; fino ad allora
     // l'esito del reclamo resta scritto sul reclamo.
-    const statoSullOrdine = statoDelReclamoSullOrdine({ rimborsoEmesso, rimborsoPieno });
-    const { error: errOrdine } = await admin
-      .from('orders')
-      .update({ internal_dispute_status: statoSullOrdine })
-      .eq('id', dispute.order_id)
-      .or(SENZA_LA_PAUSA_DEL_CARRELLO);
-    if (errOrdine) {
-      // Non blocca la risoluzione, ma deve essere visibile: il venditore resta
-      // in attesa di essere pagato.
-      logger.error('[dispute] stato dell ordine non sbloccato', {
-        orderId: dispute.order_id, message: errOrdine.message,
-      });
-    }
+    await scriviIlReclamoSullOrdine({ rimborsoEmesso, rimborsoPieno });
     const fermoPerLaDivisione =
       (ord as { internal_dispute_status?: string | null } | null)?.internal_dispute_status === PAUSA_RIMBORSO_DA_DIVIDERE;
     if (fermoPerLaDivisione) {
