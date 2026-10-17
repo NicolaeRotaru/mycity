@@ -697,6 +697,18 @@ describe('la funzione muore fra il segno e l avviso: il passaggio dopo finisce i
     expect(avvisi()).toHaveLength(1);
     expect(alCliente()).toHaveLength(1);
   });
+
+  it('carta: la ripresa vale solo per il bonifico sull ordine, e un rimborso con la carta non riparte', async () => {
+    apri(inContanti({ stripe_payment_intent: 'pi_1', payment_method: 'card' }));
+    const id = await apriIlReso();
+    expect((await negozio(decidi, id, { decision: 'APPROVED' })).status).toBe(200);
+    expect((await negozio(avanza, id, { stato: 'RECEIVED' })).status).toBe(200);
+    laScritturaDelRimborsoSulResoCade();
+    expect((await negozio(avanza, id, { stato: 'REFUNDED', refundAmountCents: 4000 })).status).toBe(500);
+
+    expect((await negozio(avanza, id, { stato: 'REFUNDED' })).status).toBe(409);
+    expect(prenotazioni(), 'il rimborso con la carta e ripartito').toHaveLength(1);
+  });
 });
 
 /**

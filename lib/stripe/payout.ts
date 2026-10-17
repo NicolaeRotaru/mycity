@@ -1707,8 +1707,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // lib/ordini/rimessa-a-scaffale.ts, dove una prova può eseguirla.
   await rimettiLaMerceAScaffale(admin, order, {
     ordineDaChiudere,
-    // Il bonifico rimasto a meta' e' gia' dentro il totale letto: prima di lui c'era il resto.
-    giaRimborsatoPrimaCents: bonificoDiPrima ? alreadyRefunded - safeAmountCents : alreadyRefunded,
+    giaRimborsatoPrimaCents: alreadyRefunded,
     annullatoDaChiChiama: opts.annullatoDaChiChiama === true,
   });
 
