@@ -20,6 +20,15 @@ import { creaFintoDatabase, notificheConTitolo } from './aiuti/finto-database-de
  * alla chiusura dell'account fa le cascate di quello vero), Stripe, l'autenticazione e la posta.
  * Diventa rossa se la cancellazione torna ad aspettare un bonifico, se legge di nuovo l'IBAN o la
  * tabella dei bonifici dei reclami, o se l'avviso perde l'email del cliente.
+ *
+ * Collaudo del 17/10, primo giro — tre buchi della rete, chiusi:
+ *  · il finto `ilike` era un `eq`: una cancellazione «tutte le notifiche che contengono l'email del
+ *    cliente» non trovava niente qui e l'avviso nel database vero. Adesso `ilike` e' quello di
+ *    Postgres (finto-database-dei-rimborsi.ts);
+ *  · la strada che la decisione D11 apre davvero: la cliente cancella PRIMA, col reso ancora aperto,
+ *    e il negozio rimborsa DOPO, su un ordine e un reso rimasti senza nome;
+ *  · l'informativa dice che l'avviso resta «finché non lo cancelliamo noi»: le potature notturne
+ *    VERE girano su questo database dopo dieci anni, e l'avviso deve esserci ancora.
  */
 
 const finto = vi.hoisted(() => ({ db: null as unknown as FintoDatabase, utente: 'giulia' }));
@@ -51,9 +60,13 @@ vi.mock('@/lib/api/middleware', () => {
 
 import { POST as apriReso } from '@/app/api/returns/create/route';
 import { POST as decidi } from '@/app/api/returns/[id]/decide/route';
+import { POST as avanza } from '@/app/api/returns/[id]/avanza/route';
 import { cancellaAccount } from '@/lib/account/cancellazione';
 import { verdettoDelGiro } from '@/lib/cron-cancellazioni';
 import { formatPriceFromCents } from '@/lib/format';
+import { eseguiPotature, type ClientePotature } from '@/lib/privacy/potature-ritenzione';
+import { L_AVVISO_A_CHI_PAGA } from '@/lib/privacy/iban-per-email';
+import { sendEmail } from '@/lib/email/client';
 
 const ORDINE = 'a1b2c3d4-1111-4111-8111-111111111111';
 const ALTRO_ORDINE = 'e5f6a7b8-2222-4222-8222-222222222222';
@@ -97,7 +110,6 @@ function clienteDellaCancellazione() {
         guardate.push({ tabella, colonne: String(colonne) });
         return select(colonne);
       };
-      q.ilike = (colonna: unknown, valore: unknown) => q.eq(colonna, valore);
       return q;
     },
     rpc: finto.db.client.rpc,
@@ -142,21 +154,30 @@ beforeEach(() => {
   finto.db.email.giulia = EMAIL;
 });
 
-/** Giulia apre il reso sul primo ordine, il negozio lo approva col rimborso di 40 €. */
-async function ilNegozioRimborsaIlReso(): Promise<void> {
+/** Giulia apre il reso sull'ordine: torna l'id del reso. */
+async function giuliaApreIlReso(ordine = ORDINE): Promise<string> {
+  finto.utente = 'giulia';
   const aperto = await (apriReso as unknown as Rotta)(
-    new Request('http://localhost/api/returns/create', json({ orderId: ORDINE, reason: 'CHANGED_MIND' })),
+    new Request('http://localhost/api/returns/create', json({ orderId: ordine, reason: 'CHANGED_MIND' })),
     undefined,
   );
   expect(aperto.status, 'il reso non si e aperto').toBe(201);
-  const id = (await aperto.json()).id as string;
+  return (await aperto.json()).id as string;
+}
 
+/** Il negozio approva il reso col rimborso. */
+async function ilNegozioApprovaColRimborso(id: string, cents: number): Promise<void> {
   finto.utente = 'negozio';
   const deciso = await (decidi as unknown as Rotta)(
-    new Request('http://localhost/x', json({ decision: 'APPROVED', refundAmountCents: 4000 })),
+    new Request('http://localhost/x', json({ decision: 'APPROVED', refundAmountCents: cents })),
     { params: Promise.resolve({ id }) },
   );
   expect(deciso.status, JSON.stringify(await deciso.clone().json())).toBe(200);
+}
+
+/** Giulia apre il reso sul primo ordine, il negozio lo approva col rimborso di 40 €. */
+async function ilNegozioRimborsaIlReso(): Promise<void> {
+  await ilNegozioApprovaColRimborso(await giuliaApreIlReso(), 4000);
 }
 
 const avvisi = () => notificheConTitolo(finto.db, 'Bonifico di rimborso da fare');
@@ -205,5 +226,95 @@ describe('il giro notturno', () => {
     );
 
     expect(verdetto).toMatchObject({ rinviate: 0, fallite: 1, daSvegliare: true });
+  });
+});
+
+describe('la strada che D11 apre: la cliente cancella PRIMA, il negozio rimborsa DOPO', () => {
+  // Prima del 17/10 la cancellazione aspettava il reso aperto; adesso no. Ordine e reso restano
+  // senza nome (008: SET NULL) e l'utente non esiste piu'. Il rimborso dei contanti deve arrivare
+  // lo stesso fino in fondo: segno, avviso, nessun credito MyCity a nessuno.
+  const accreditiDiCredito = () => finto.db.rpc.filter((r) => r.nome === 'wallet_credit');
+  const aGiulia = () => vi.mocked(sendEmail).mock.calls.filter(([m]) => (m as { to?: string }).to === EMAIL);
+
+  it('IL CASO SCOMODO — tutto in contanti: decide rimborsa, l avviso dice «Nessun recapito», niente credito', async () => {
+    vi.mocked(sendEmail).mockClear();
+    const reso = await giuliaApreIlReso();
+    const esito = await cancellaAccount(clienteDellaCancellazione() as never, 'giulia');
+    expect(esito, 'il reso aperto ha fermato la cancellazione').toMatchObject({ ok: true });
+    expect(finto.db.tabelle.orders[0].user_id, 'la cascata della chiusura non e avvenuta').toBeNull();
+
+    await ilNegozioApprovaColRimborso(reso, 4000);
+
+    expect(String(finto.db.tabelle.orders[0].stripe_refund_id)).toMatch(/^bonifico:4000:return_/);
+    expect(finto.db.tabelle.orders[0].payment_status).toBe('REFUNDED');
+    expect(avvisi(), 'nessun avviso a chi paga: il bonifico non lo fa nessuno').toHaveLength(1);
+    const testo = String(avvisi()[0].body);
+    expect(testo).toContain(`Bonifico di ${formatPriceFromCents(4000)}`);
+    expect(testo).toContain("Nessun recapito: l'account è stato cancellato.");
+    expect(testo).not.toContain(EMAIL);
+    expect(accreditiDiCredito(), 'i contanti sono diventati credito MyCity (R71)').toEqual([]);
+    expect(aGiulia(), 'una email partita verso un account cancellato').toEqual([]);
+  });
+
+  it('ordine misto per la strada di avanza: 30 € col bonifico, e i 20 di credito detti e non accreditati', async () => {
+    finto.db.tabelle.orders[0] = {
+      ...finto.db.tabelle.orders[0],
+      total_price: 30, gross_total_cents: 5000, wallet_applied_cents: 2000, seller_payout_cents: 4500,
+    };
+    const reso = await giuliaApreIlReso();
+    expect(await cancellaAccount(clienteDellaCancellazione() as never, 'giulia')).toMatchObject({ ok: true });
+
+    finto.utente = 'negozio';
+    const approvato = await (decidi as unknown as Rotta)(
+      new Request('http://localhost/x', json({ decision: 'APPROVED' })),
+      { params: Promise.resolve({ id: reso }) },
+    );
+    expect(approvato.status).toBe(200);
+    for (const stato of ['RECEIVED', 'REFUNDED'] as const) {
+      const passo = await (avanza as unknown as Rotta)(
+        new Request('http://localhost/x', json(stato === 'REFUNDED' ? { stato, refundAmountCents: 5000 } : { stato })),
+        { params: Promise.resolve({ id: reso }) },
+      );
+      expect(passo.status, `${stato}: ${JSON.stringify(await passo.clone().json())}`).toBe(200);
+    }
+
+    expect(String(finto.db.tabelle.orders[0].stripe_refund_id)).toMatch(/^bonifico:3000:return_/);
+    expect(avvisi()).toHaveLength(1);
+    const testo = String(avvisi()[0].body);
+    expect(testo, 'l avviso chiede di pagare anche il credito').toContain(`Bonifico di ${formatPriceFromCents(3000)}`);
+    expect(testo).toContain(`Altri ${formatPriceFromCents(2000)} erano credito MyCity`);
+    expect(testo).toContain("Nessun recapito: l'account è stato cancellato.");
+    expect(accreditiDiCredito(), 'un credito accreditato a un account che non esiste piu').toEqual([]);
+  });
+});
+
+describe('l avviso resta «finché non lo cancelliamo noi», come dice l informativa', () => {
+  it('dieci anni di potature notturne VERE dopo, l avviso c e ancora; un messaggio dei Contatti no', async () => {
+    expect(L_AVVISO_A_CHI_PAGA).toContain("L'avviso resta lì finché non lo cancelliamo noi.");
+    await ilNegozioRimborsaIlReso();
+    await cancellaAccount(clienteDellaCancellazione() as never, 'giulia');
+    const adesso = Date.now();
+    avvisi()[0].created_at = new Date(adesso).toISOString(); // il default del database vero
+    // La controprova che le potature lavorano DAVVERO su questo database: un messaggio dei Contatti
+    // scritto lo stesso giorno, che fra dieci anni deve essere sparito.
+    (finto.db.tabelle.contact_messages ??= []).push({ id: 'msg', created_at: new Date(adesso).toISOString() });
+
+    const client = {
+      from: finto.db.client.from,
+      rpc: finto.db.client.rpc,
+      storage: { from: () => ({ remove: async () => ({ error: null }) }) },
+    } as unknown as ClientePotature;
+    const registro = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const dieciAnni = adesso + 10 * 365 * 86_400_000;
+    const rapporto = await eseguiPotature(client, registro, dieciAnni);
+
+    // Una potatura che il finto non sa eseguire cade invece di cancellare: la prova non saprebbe piu'
+    // dire se l'avviso resta. Allora e' rossa anche lei.
+    expect(rapporto.esiti.filter((e) => !e.ok), 'una potatura non e girata su questo database').toEqual([]);
+    expect(finto.db.tabelle.contact_messages, 'le potature non hanno cancellato niente: la prova non misura').toEqual([]);
+    expect(
+      avvisi(),
+      'una potatura notturna cancella l avviso: l informativa promette che resta finché non lo cancelliamo noi',
+    ).toHaveLength(1);
   });
 });

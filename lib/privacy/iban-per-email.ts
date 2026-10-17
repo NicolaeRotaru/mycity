@@ -9,6 +9,13 @@
  * Quanto restano l'email con l'IBAN nella casella dell'assistenza e l'avviso fra le notifiche degli
  * amministratori non lo decide il codice: nessuna potatura li cancella da sola, e le frasi dicono
  * proprio questo. Il numero lo sceglie Nicola col legale (🔴), come le parole.
+ *
+ * Collaudo del 17/10, primo giro — UN MESSAGGIO DAI CONTATTI ARRIVA ANCHE PER EMAIL.
+ * `app/api/contact/route.ts` manda il messaggio intero, IBAN compreso, alla casella del supporto
+ * (`SUPPORT_EMAIL`). La potatura dei due anni tocca solo la copia nel database: quella nella
+ * casella resta finché non la cancelliamo. Le frasi lo dicevano prima della semplificazione e
+ * l'avevano perso; la prova `l-informativa-dice-quanto-resta-l-iban-mandato-dai-contatti` manda un
+ * messaggio vero dalla rotta e pretende che le due frasi dicano della copia.
  */
 
 import { MESI_DEI_MESSAGGI_DEI_CONTATTI } from './potature-ritenzione';
@@ -22,12 +29,19 @@ export function durataDetta(mesi: number): string {
 /** Quanto resta un messaggio dai Contatti: lo stesso numero che usa la potatura notturna. */
 const QUANTO_RESTA_UN_MESSAGGIO = durataDetta(MESI_DEI_MESSAGGI_DEI_CONTATTI);
 
+/**
+ * Un messaggio dai Contatti arriva anche per email nella casella del supporto, intero: la potatura dei
+ * due anni non tocca quella copia.
+ */
+const LA_COPIA_NELLA_CASELLA =
+  "Una copia arriva anche per email nella casella dell'assistenza, e lì resta finché non la cancelliamo.";
+
 /** Dove chiediamo l'IBAN, davvero. */
 export const DOVE_CHIEDIAMO_L_IBAN =
   "Non ti chiediamo l'IBAN in nessun modulo del sito e nel nostro database non c'è un campo per l'IBAN del rimborso: " +
   "ce lo mandi rispondendo all'email che ti scriviamo quando parte il rimborso, e la risposta arriva nella casella " +
   "email dell'assistenza. Non scrivere l'IBAN nel modulo Contatti: ti rispondiamo per email. Se lo scrivi lo stesso, " +
-  `quel messaggio resta anche fra i messaggi dell'assistenza, al massimo ${QUANTO_RESTA_UN_MESSAGGIO}.`;
+  `quel messaggio resta anche fra i messaggi dell'assistenza, al massimo ${QUANTO_RESTA_UN_MESSAGGIO}. ${LA_COPIA_NELLA_CASELLA}`;
 
 /** Perché lo teniamo. */
 export const PERCHE_TENIAMO_L_IBAN =
@@ -38,7 +52,7 @@ export const QUANTO_TENIAMO_L_IBAN =
   "L'email con il tuo IBAN resta nella casella dell'assistenza finché non la cancelliamo. Il bonifico fatto resta nei " +
   "movimenti del conto di MyCity, con l'IBAN di destinazione, per i 10 anni che la legge chiede per i documenti " +
   "contabili. Se l'IBAN lo scrivi in un messaggio dalla pagina Contatti, quel messaggio resta fra i messaggi " +
-  `dell'assistenza al massimo ${QUANTO_RESTA_UN_MESSAGGIO}, come tutti i messaggi dei Contatti.`;
+  `dell'assistenza al massimo ${QUANTO_RESTA_UN_MESSAGGIO}, come tutti i messaggi dei Contatti. ${LA_COPIA_NELLA_CASELLA}`;
 
 /**
  * L'avviso a chi paga. `refundOrder` lo scrive fra le notifiche di ogni amministratore e lo manda

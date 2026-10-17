@@ -1,6 +1,22 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+
+// Per la copia nella casella: la rotta dei Contatti VERA, con il database e la posta finti.
+const posta = vi.hoisted(() => ({ mandate: [] as Array<{ to: string; html: string }> }));
+vi.mock('@/lib/supabase/server', () => ({
+  getAdminSupabase: () => ({ from: () => ({ insert: async () => ({ error: null }) }) }),
+  getCurrentUser: async () => null,
+}));
+vi.mock('@/lib/email/client', () => ({
+  sendEmail: async (m: { to: string; html: string }) => {
+    posta.mandate.push(m);
+    return { ok: true };
+  },
+}));
+
 import { eseguiPotature, type ClientePotature } from '@/lib/privacy/potature-ritenzione';
 import { DOVE_CHIEDIAMO_L_IBAN, QUANTO_TENIAMO_L_IBAN, durataDetta } from '@/lib/privacy/iban-per-email';
+import { POST as scriviAiContatti } from '@/app/api/contact/route';
+import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 
 /**
  * Riesame del 16/10, terzo giro — LA TABELLA DICEVA CHE L'IBAN SI CANCELLA COL BONIFICO, ANCHE QUELLO
@@ -18,6 +34,12 @@ import { DOVE_CHIEDIAMO_L_IBAN, QUANTO_TENIAMO_L_IBAN, durataDetta } from '@/lib
  * La prova non cerca una parola nel file: esegue la potatura VERA dei messaggi dei Contatti, misura
  * la finestra che applica davvero, e pretende che la riga dell'IBAN la dica. Se domani la potatura
  * cambia finestra e la frase no, diventa rossa.
+ *
+ * Collaudo del 17/10, primo giro — LA COPIA NELLA CASELLA. La rotta dei Contatti manda il messaggio
+ * intero, IBAN compreso, anche per email alla casella del supporto, e la potatura dei due anni non
+ * la tocca. Le frasi l'avevano persa: promettevano «al massimo 2 anni» per un IBAN che nella casella
+ * resta senza limite. La prova manda un messaggio vero dalla rotta, guarda dove arriva, e pretende
+ * che le due frasi dicano della copia e che non le diano un tempo che nessun codice applica.
  *
  * ⚪ Quanto tiene la casella email dell'assistenza non lo dice nessun codice: lo decide Nicola col legale.
  */
@@ -62,5 +84,52 @@ describe('la riga dell IBAN dice quanto resta la copia mandata dai Contatti', ()
     expect(durataDetta(24)).toBe('2 anni');
     expect(durataDetta(12)).toBe('1 anno');
     expect(durataDetta(18)).toBe('18 mesi');
+  });
+});
+
+describe('la copia del messaggio che arriva per email nella casella dell assistenza', () => {
+  const IBAN = 'IT60X0542811101000000123456';
+  const prima = process.env.SUPPORT_EMAIL;
+  afterEach(() => {
+    if (prima === undefined) delete process.env.SUPPORT_EMAIL;
+    else process.env.SUPPORT_EMAIL = prima;
+    posta.mandate = [];
+  });
+
+  it('IL CASO CHE ROMPEVA — la copia con l IBAN parte davvero, e le due frasi la dicono senza darle un tempo', async () => {
+    __resetRateLimitBuckets();
+    process.env.SUPPORT_EMAIL = 'assistenza@example.it';
+    const risposta = await scriviAiContatti(
+      new Request('http://localhost/api/contact', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-forwarded-for': '7.7.7.7' },
+        body: JSON.stringify({
+          name: 'Giulia Bianchi',
+          email: 'giulia.bianchi@example.it',
+          subject: 'Rimborso',
+          message: `Ecco il mio IBAN per il rimborso: ${IBAN}`,
+        }),
+      }),
+    );
+    expect(risposta.status).toBe(200);
+    await new Promise((fatto) => setTimeout(fatto, 0));
+
+    // Il comportamento: il messaggio intero, IBAN compreso, va per email alla casella del supporto.
+    const copie = posta.mandate.filter((m) => m.to === 'assistenza@example.it' && m.html.includes(IBAN));
+    expect(copie, 'la rotta non manda piu la copia nella casella: allora la frase sulla copia va tolta').toHaveLength(1);
+
+    // Le parole: la parte sui Contatti di ognuna delle due frasi dice della copia nella casella, e per
+    // quella copia non promette nessun tempo (nessuna potatura la tocca).
+    for (const [nome, frase] of [['dati raccolti', DOVE_CHIEDIAMO_L_IBAN], ['conservazione', QUANTO_TENIAMO_L_IBAN]] as const) {
+      const contatti = frase.slice(frase.search(/Contatti/));
+      const copia = contatti.slice(contatti.search(/copia/));
+      expect(contatti, `${nome}: la frase sui Contatti non dice che una copia arriva nella casella dell assistenza`).toMatch(
+        /copia arriva anche per email nella casella dell'assistenza/,
+      );
+      expect(copia, `${nome}: alla copia nella casella si promette un tempo che nessun codice applica`).not.toMatch(
+        /al massimo|\d+ (anni|anno|mesi)/,
+      );
+      expect(copia).toMatch(/finché non la cancelliamo/);
+    }
   });
 });

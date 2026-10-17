@@ -6,8 +6,8 @@
  *    con il tetto del lordo dentro (124), `storna_rimborso` toglie (125), `wallet_credit` non
  *    accredita due volte la stessa chiave (098: risponde 23505; con `comeLa143` risponde senza
  *    errore e col saldo, come dopo la 143) e scrive la riga a diario in `wallet_ledger`;
- *  ② i filtri delle scritture si applicano DAVVERO (`eq`, `in`, `is`, `like`): una scrittura che
- *    non trova righe non scrive niente, e chi la fa lo vede da `select('id')`;
+ *  ② i filtri delle scritture si applicano DAVVERO (`eq`, `in`, `is`, `lt`, `like`, `ilike`): una
+ *    scrittura che non trova righe non scrive niente, e chi la fa lo vede da `select('id')`;
  *  ③ i guasti si accendono a comando: l'accredito che cade, l'accredito che riesce ma perde la
  *    risposta, lo storno al negozio che cade, l'avviso agli amministratori che non si scrive, il
  *    segno del bonifico che non si scrive sull'ordine, l'email del cliente che non si legge, una
@@ -136,6 +136,11 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
     this.filtri.push((r) => valori.includes(r[colonna]));
     return this;
   }
+  /** `lt` come SQL: un valore vuoto non e' minore di niente. Date ISO e numeri si confrontano come nel database. */
+  lt(colonna: string, valore: string | number) {
+    this.filtri.push((r) => r[colonna] != null && (r[colonna] as string | number) < valore);
+    return this;
+  }
   gt(colonna: string, valore: number) {
     this.filtri.push((r) => typeof r[colonna] === 'number' && (r[colonna] as number) > valore);
     return this;
@@ -156,6 +161,7 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
       const [colonna, op, ...resto] = parte.split('.');
       const valore = resto.join('.');
       if (op === 'is' && valore === 'null') return (r: Riga) => (r[colonna] ?? null) === null;
+      if (op === 'not' && valore === 'is.null') return (r: Riga) => (r[colonna] ?? null) !== null;
       if (op === 'eq') return (r: Riga) => String(r[colonna]) === valore;
       if (op === 'neq') return (r: Riga) => r[colonna] != null && String(r[colonna]) !== valore;
       throw new Error(`finto database: condizione .or() non capita: ${parte}`);
@@ -165,6 +171,19 @@ class FintaQuery implements PromiseLike<{ data: unknown; error: unknown }> {
   }
   like(colonna: string, schema: string) {
     const re = new RegExp(`^${schema.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*')}$`);
+    this.filtri.push((r) => typeof r[colonna] === 'string' && re.test(r[colonna] as string));
+    return this;
+  }
+  /**
+   * Collaudo del 17/10, primo giro — `ilike` come Postgres: `%` e `_` sono jolly, le maiuscole non
+   * contano. Una prova lo sostituiva con `eq`, e cosi' una cancellazione «tutte le notifiche che
+   * contengono l'email del cliente» non trovava niente nel finto e tutto nel database vero.
+   */
+  ilike(colonna: string, schema: string) {
+    const re = new RegExp(
+      `^${schema.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*').replace(/_/g, '.')}$`,
+      'is',
+    );
     this.filtri.push((r) => typeof r[colonna] === 'string' && re.test(r[colonna] as string));
     return this;
   }
