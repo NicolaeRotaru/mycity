@@ -2,6 +2,8 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { ComponentType } from 'react';
 import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi, attendi, clicca } from './aiuti/schermo';
@@ -133,6 +135,17 @@ describe('la pagina dei Resi', () => {
 });
 
 describe('le domande frequenti', () => {
+  // 17/10 (collaudo finale della semplificazione) — La guardia contro R71 leggeva tutta la FAQ:
+  // la semplificazione l'aveva ristretta a una risposta sola, e il credito d'ufficio rimesso in
+  // un'altra risposta passava con la suite verde. Qui si rilegge il sorgente intero, senza commenti.
+  it('IL CASO CHE ROMPEVA — nessuna risposta della FAQ promette il credito o la scelta al posto dei contanti', () => {
+    const testo = readFileSync(join(process.cwd(), 'app/faq/page.tsx'), 'utf8')
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    nonDiceLePromesseTolte('la FAQ intera', testo);
+  });
+
   it('«In quanto tempo ricevo il rimborso?»: dal recesso, la carta sulla carta, i contanti col bonifico per email', () => {
     const { testo } = rispostaDellaFaq('In quanto tempo ricevo il rimborso?');
     expect(testo).toContain(

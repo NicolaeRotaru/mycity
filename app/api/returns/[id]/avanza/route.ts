@@ -306,6 +306,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     }
   }
 
+  const TITOLO_DEL_BONIFICO_IN_ARRIVO = "✓ Reso chiuso: il rimborso arriva con un bonifico, ti chiediamo l'IBAN per email";
   const TITOLO: Record<string, string> = {
     SHIPPED_BACK: '📦 Reso: merce in viaggio',
     RECEIVED: '📥 Reso: merce ricevuta dal negozio',
@@ -317,7 +318,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     // tipo di avviso: senza, gli interruttori non spegnevano niente.
     category: 'order',
     user_id: ret.buyer_id,
-    title: TITOLO[body.stato],
+    // 17/10 (semplificazione) — Sui contanti il bonifico a questo punto e' solo
+    // da fare: il titolo non dice «rimborsato», come non lo dice la pagina dell'ordine.
+    title: body.stato === 'REFUNDED' && bonificoCents > 0 ? TITOLO_DEL_BONIFICO_IN_ARRIVO : TITOLO[body.stato],
     body: body.note ?? null,
     link: `/orders/${ret.order_id}`,
   });

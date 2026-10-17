@@ -218,6 +218,8 @@ describe('dopo le rotte vere: la pagina dice il bonifico, con la cifra dei conta
     // Sul sito non c'è un «fatto»: la frase resta anche dopo il bonifico. L'invito a scriverci vale
     // solo finché il bonifico non è stato ricevuto, altrimenti chiede una cosa che non serve più.
     expect(testo).toContain('Se non hai ancora ricevuto il bonifico e non trovi la nostra email, scrivici dalla pagina Contatti');
+    // D14: quando si cita il modulo Contatti si dice di non scriverci l'IBAN (resterebbe fino a 24 mesi).
+    expect(testo).toContain("senza mettere l'IBAN nel messaggio");
     expect(testo, 'l invito a scriverci non ha condizione: vale anche a bonifico arrivato').not.toMatch(/\.\s*Se non trovi la nostra email/u);
     expect(testo, 'la pagina dice «rimborsato» prima che parta il bonifico').not.toMatch(/Ordine rimborsato/u);
     expect(testo).not.toMatch(/arrivat/u);
