@@ -932,13 +932,16 @@ describe('la ripresa fa solo quello che manca', () => {
     apri(misto());
     const id = await finitoMaNonSulReso(5000);
     expect(creditoDi(finto.db, 'giulia')).toBe(2000);
-    finto.db.guasti.diarioIlleggibile = 1;
+    const quota = ordine().seller_payout_reversed_cents;
+    // Muto due volte: anche un secondo controllo, se ci fosse, non saprebbe niente.
+    finto.db.guasti.diarioIlleggibile = 2;
     const r = await negozio(avanza, id, { stato: 'REFUNDED' });
     expect(r.status, JSON.stringify(r.corpo)).toBe(200);
     expect(reso()).toMatchObject({ status: 'REFUNDED', refund_id: `bonifico:3000:return_${id}` });
     expect(avvisi()).toHaveLength(1);
     expect(creditoDi(finto.db, 'giulia')).toBe(2000);
     expect(alCliente()).toHaveLength(1);
+    expect(ordine().seller_payout_reversed_cents, 'la quota del negozio tolta due volte').toBe(quota);
   });
 
   it('misto parziale finito: la ripresa non rifa quota, email e casella, e il credito resta uno', async () => {
@@ -1039,6 +1042,34 @@ describe('la ripresa fa solo quello che manca', () => {
     expect(finto.db.tabelle.disputes[0].resolution_notes).toBe('Merce arrivata rotta: rimborso al cliente.');
     expect(vi.mocked(writeAudit)).toHaveBeenCalledTimes(1);
     expect(avvisi()).toHaveLength(1);
+    expect(prenotazioni()).toHaveLength(1);
+  });
+
+  it('due riprese insieme: il resto lo fa solo chi scrive l avviso', async () => {
+    laLetturaDegliAmministratoriRestaAppesa();
+    void refundOrder({ orderId: ORDINE, amountCents: 2000, idempotencyKey: 'return_r1', notifyBuyer: true });
+    await vi.waitFor(() => expect(ordine().stripe_refund_id).toBe('bonifico:2000:return_r1'));
+    // La seconda ripresa parte e finisce mentre la prima sta scrivendo l'avviso.
+    const from0 = finto.db.client.from;
+    let colpo = true;
+    finto.db.client.from = ((tabella: string) => {
+      const q = from0(tabella) as unknown as Record<string, (v: unknown) => unknown>;
+      if (tabella !== 'notifications') return q;
+      const inserisci = q.insert.bind(q);
+      q.insert = (v: unknown) => {
+        if (!colpo) return inserisci(v);
+        colpo = false;
+        return refundOrder({ orderId: ORDINE, amountCents: 2000, idempotencyKey: 'return_r1', notifyBuyer: true }).then(() => inserisci(v));
+      };
+      return q;
+    }) as unknown as typeof from0;
+
+    await refundOrder({ orderId: ORDINE, amountCents: 2000, idempotencyKey: 'return_r1', notifyBuyer: true });
+
+    expect(avvisi()).toHaveLength(1);
+    expect(ordine().seller_payout_reversed_cents, 'la quota del negozio tolta due volte').toBe(1800);
+    expect(alCliente()).toHaveLength(1);
+    expect(allaCasella()).toHaveLength(1);
     expect(prenotazioni()).toHaveLength(1);
   });
 
