@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import CollectionHeader from '@/components/CollectionHeader';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { conAutoriPubblici, type AutorePubblico } from '@/lib/queries/profili-pubblici';
 
 /**
  * /lists — Liste curate (tastemakers).
@@ -31,7 +32,7 @@ type List = {
   is_public: boolean;
   is_featured: boolean;
   updated_at: string;
-  owner: { public_handle: string | null; full_name: string | null } | null;
+  owner: AutorePubblico | null;
   items_count: { count: number }[];
 };
 
@@ -56,14 +57,17 @@ export default function ListsPage() {
         .from('product_lists')
         .select(`
           id, owner_id, title, description, cover_emoji, is_public, is_featured, updated_at,
-          owner:profiles!product_lists_owner_id_fkey ( public_handle, full_name ),
           items_count:product_list_items(count)
         `)
         .eq('is_public', true)
         .eq('is_featured', true)
         .order('updated_at', { ascending: false })
         .limit(8);
-      return (data ?? []) as unknown as List[];
+      // 18/10/2026 — «@handle» di chi ha creato la lista non si aggancia più alla tabella dei
+      // profili: dopo le migrazioni 110 e 161 il browser ne legge solo la propria riga, e le liste
+      // avrebbero perso l'autore. Lo dà una rotta del server, solo per chi ha acceso il profilo
+      // pubblico (`lib/queries/profili-pubblici.ts`).
+      return conAutoriPubblici((data ?? []) as unknown as Omit<List, 'owner'>[]);
     },
   });
 
@@ -74,13 +78,12 @@ export default function ListsPage() {
         .from('product_lists')
         .select(`
           id, owner_id, title, description, cover_emoji, is_public, is_featured, updated_at,
-          owner:profiles!product_lists_owner_id_fkey ( public_handle, full_name ),
           items_count:product_list_items(count)
         `)
         .eq('is_public', true)
         .order('updated_at', { ascending: false })
         .limit(24);
-      return (data ?? []) as unknown as List[];
+      return conAutoriPubblici((data ?? []) as unknown as Omit<List, 'owner'>[]);
     },
   });
 

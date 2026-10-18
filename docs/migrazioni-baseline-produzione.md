@@ -50,6 +50,19 @@ fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha gi�
 > pagine del venditore leggono ancora da `profiles`: verificato il 15/10 sul database ricostruito
 > con tutte le migrazioni, dove dopo la 161 restano solo «la propria riga» e «amministratore». Il
 > passo 2 resta fermo finché non è riparata anche questa seconda parte.
+>
+> **Stato al 18/10/2026.** La seconda parte è nella richiesta che segue la #258, sullo stesso ramo
+> `ccr-60372c68-p3gpjz`. Carrello, cassa, lista condivisa, pagine degli ordini, pagine del
+> fattorino, messaggi, storie, drop, eventi e «Chi siamo» leggono il negozio da
+> `seller_public_profiles`. L'autore delle liste e il profilo pubblico si leggono dal server, solo
+> per chi ha acceso il profilo pubblico. Restano letture del profilo di un altro utente che oggi in
+> produzione tornano già vuote per quasi tutti, perché passano solo per chi ha acceso il profilo
+> pubblico: il nome del fattorino visto dal cliente e dal negozio, il nome del cliente visto dal
+> negozio (chat, Clienti), la firma di domande e recensioni. Non bloccano il passo 2: dopo,
+> mancano anche ai pochi col profilo pubblico. Gli incassi da dichiarare del fattorino
+> (`lib/rider/leggi-incassi-da-dichiarare.ts`) leggono ancora l'insegna da `profiles`, ma dal
+> server col client di servizio, che le regole non le guarda: dopo il passo 2 funzionano uguale. **Con quella richiesta online, il passo 2 si può
+> fare**, insieme al passo 0.
 
 **Cosa devi fare.** La stringa del Session pooler va nel segreto `SUPABASE_DB_URL` appena è unita
 la richiesta #255 del sito, non prima (il perché è nella sezione qui sotto). I passi 0, 2 e 3 vanno fatti insieme, nello stesso giro e a

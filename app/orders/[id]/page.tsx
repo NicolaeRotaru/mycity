@@ -38,6 +38,7 @@ import {
   LifeBuoy, MessageCircle, ArrowLeft, ShoppingBag,
 } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
+import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 // #92 — le miniature si chiedono gia' piccole al server
 import { sizedImage, logoNegozio } from '@/lib/image-url';
 import { fraseDelBonificoAMano, riepilogoOrdine, statoPagamento } from '@/lib/ordini/riepilogo-ordine';
@@ -107,7 +108,6 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
       delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
       delivery_lat, delivery_lng,
       rider_lat, rider_lng, rider_position_updated_at, rider_id,
-      seller:profiles!orders_seller_id_fkey ( store_name, store_logo, store_phone, store_address, store_lat, store_lng ),
       rider:profiles!orders_rider_id_fkey ( full_name ),
       seller_id,
       order_items (
@@ -126,7 +126,17 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
   // pagina finiva nel ramo del guasto di rete: «problema di collegamento» con
   // un «Riprova» che su un ordine inesistente non potra' mai funzionare.
   // Adesso «non trovato» torna `null` e va nel suo ramo, che c'e' gia'.
-  return (data ?? null) as unknown as OrderRow | null;
+  if (!data) return null;
+  // 18/10/2026 — Il negozio (nome, logo, telefono, indirizzo, punto sulla mappa)
+  // arriva dalla vetrina pubblica, non da `profiles`: regge anche quando `profiles`
+  // si chiude (lib/queries/negozio-dell-ordine.ts). Se la vetrina non risponde,
+  // l'errore sale e la pagina offre «Riprova».
+  const [conNegozio] = await conNegozioDellOrdine(
+    supabase,
+    [data as unknown as Omit<OrderRow, 'seller'>],
+    'id, store_name, store_logo, store_phone, store_address, store_lat, store_lng',
+  );
+  return conNegozio as OrderRow;
 };
 
 // Timestamp del singolo step della timeline (se registrato).

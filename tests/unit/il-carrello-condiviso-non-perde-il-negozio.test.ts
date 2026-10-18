@@ -105,10 +105,27 @@ function pulsanteAggiungi(radice: HTMLElement) {
   );
 }
 
+type ProdottoFinto = { seller_id: string; profiles: { store_name: string | null } } & Record<string, unknown>;
+
+/**
+ * 18/10/2026 — Il nome del negozio adesso arriva da una seconda lettura, sulla vista
+ * `seller_public_profiles`, e non più agganciato al prodotto: il finto risponde tavola per
+ * tavola. I negozi della vista sono quelli scritti dentro i prodotti di ogni prova.
+ */
+function rispondiCon(prodotti: ProdottoFinto[]) {
+  return ({ tavola }: { tavola: string }) =>
+    tavola === 'seller_public_profiles'
+      ? {
+          data: prodotti.map((p) => ({ id: p.seller_id, store_name: p.profiles.store_name, is_approved: true })),
+          error: null,
+        }
+      : { data: prodotti, error: null };
+}
+
 describe('la lista condivisa su WhatsApp', () => {
   beforeEach(() => {
     localStorage.clear();
-    globali.__RISPOSTA_SUPABASE__ = () => ({ data: PRODOTTI, error: null });
+    globali.__RISPOSTA_SUPABASE__ = rispondiCon(PRODOTTI);
   });
 
   afterEach(() => {
@@ -152,17 +169,14 @@ describe('la lista condivisa su WhatsApp', () => {
   }, 60000);
 
   it('un capo con le taglie non entra nel carrello senza taglia: manda alla sua scheda', async () => {
-    globali.__RISPOSTA_SUPABASE__ = () => ({
-      data: [
-        PRODOTTI[0],
-        {
-          id: MAGLIA, name: 'Maglia di lana', price: 40, images: null, status: 'available',
-          stock: null, seller_id: 'venditore-vestiti', has_variants: true,
-          profiles: { store_name: 'Filo e Trama' },
-        },
-      ],
-      error: null,
-    });
+    globali.__RISPOSTA_SUPABASE__ = rispondiCon([
+      PRODOTTI[0],
+      {
+        id: MAGLIA, name: 'Maglia di lana', price: 40, images: null, status: 'available',
+        stock: null, seller_id: 'venditore-vestiti', has_variants: true,
+        profiles: { store_name: 'Filo e Trama' },
+      },
+    ]);
 
     const s = await apriLaListaCondivisa(`${PANE}:1,${MAGLIA}:1`);
     s.agisci(() => clicca(pulsanteAggiungi(s.radice)!));
@@ -183,10 +197,7 @@ describe('la lista condivisa su WhatsApp', () => {
     // R088 ④ — restava un buco: un prodotto in vendita ma finito (`stock: 0`) passava il controllo
     // sul pulsante, poi il ciclo lo saltava. La persona leggeva «0 articoli aggiunti al carrello» e
     // un secondo e mezzo dopo si ritrovava sul carrello vuoto, senza sapere cos'era successo.
-    globali.__RISPOSTA_SUPABASE__ = () => ({
-      data: [{ ...PRODOTTI[0], stock: 0 }],
-      error: null,
-    });
+    globali.__RISPOSTA_SUPABASE__ = rispondiCon([{ ...PRODOTTI[0], stock: 0 }]);
 
     const s = await apriLaListaCondivisa(`${PANE}:2`);
     const aggiungi = pulsanteAggiungi(s.radice);

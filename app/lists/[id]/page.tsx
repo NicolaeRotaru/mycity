@@ -16,6 +16,7 @@ import { friendlyError } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
 import EmptyState from '@/components/EmptyState';
 import { queryKeys } from '@/lib/queries/keys';
+import { conAutoriPubblici, type AutorePubblico } from '@/lib/queries/profili-pubblici';
 
 /**
  * /lists/[id] — Detail di una lista.
@@ -36,7 +37,7 @@ type ListData = {
   cover_emoji: string | null;
   is_public: boolean;
   updated_at: string;
-  owner: { public_handle: string | null; full_name: string | null } | null;
+  owner: AutorePubblico | null;
 };
 
 type Item = {
@@ -73,13 +74,15 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
     queryFn: async (): Promise<ListData | null> => {
       const { data } = await supabase
         .from('product_lists')
-        .select(`
-          id, owner_id, title, description, cover_emoji, is_public, updated_at,
-          owner:profiles!product_lists_owner_id_fkey ( public_handle, full_name )
-        `)
+        .select('id, owner_id, title, description, cover_emoji, is_public, updated_at')
         .eq('id', params.id)
         .maybeSingle();
-      return data as unknown as ListData | null;
+      if (!data) return null;
+      // 18/10/2026 — «@handle» dell'autore non si aggancia più alla tabella dei profili: dopo le
+      // migrazioni 110 e 161 il browser ne legge solo la propria riga. Lo dà una rotta del
+      // server, solo per chi ha acceso il profilo pubblico (`lib/queries/profili-pubblici.ts`).
+      const [lista] = await conAutoriPubblici([data as unknown as Omit<ListData, 'owner'>]);
+      return lista;
     },
   });
 

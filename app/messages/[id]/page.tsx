@@ -11,6 +11,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
+import { conInsegnaDelNegozio, nomeDellaControparte } from '@/lib/queries/controparte-della-chat';
 
 type Message = {
   id: string;
@@ -32,6 +33,8 @@ type Conversation = {
   seller_id: string;
   buyer: CounterpartProfile | null;
   seller: CounterpartProfile | null;
+  /** L'insegna del negozio, dalla vetrina pubblica (lib/queries/controparte-della-chat.ts). */
+  insegna: string | null;
 };
 
 function formatTime(iso: string): string {
@@ -84,7 +87,11 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
         .eq('id', params.id)
         .maybeSingle();
       if (error) throw error;
-      return data as unknown as Conversation | null;
+      if (!data) return null;
+      // 18/10/2026 — L'insegna del negozio in testa alla chat la dice la vetrina
+      // pubblica, non `profiles`: regge anche quando `profiles` si chiude.
+      const [conInsegna] = await conInsegnaDelNegozio(supabase, [data as unknown as Omit<Conversation, 'insegna'>]);
+      return conInsegna;
     },
   });
 
@@ -232,10 +239,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
   }
 
   const iAmBuyer = conversation.buyer_id === userId;
-  const counterpart = iAmBuyer ? conversation.seller : conversation.buyer;
-  const counterpartName =
-    (iAmBuyer ? counterpart?.store_name : counterpart?.full_name) ??
-    counterpart?.full_name ?? 'Utente';
+  const counterpartName = nomeDellaControparte(conversation, userId);
 
   // Raggruppamento separatori di data
   const items: Array<{ type: 'date'; label: string; key: string } | { type: 'msg'; msg: Message }> = [];

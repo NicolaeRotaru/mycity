@@ -19,6 +19,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import {
   Package, Radio, MapPin, PackageCheck, Bike, CircleCheck, Navigation, Phone,
   StickyNote, Banknote, Check, ChevronLeft, Store, MessageSquare, Clock,
@@ -26,6 +27,7 @@ import {
 import { haversineKm, deliveryEtaMinutes } from '@/lib/geo';
 import { trackRiderDeliveryCompleted } from '@/lib/analytics/events';
 import { queryKeys } from '@/lib/queries/keys';
+import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 import { compensoConsegnaEuro } from '@/lib/shipping';
 import { seguiAltezzaBarraAzioni, spazioSottoIlContenuto } from '@/lib/ui/altezza-barra-azioni';
 import {
@@ -91,7 +93,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
   /** 15/10/2026 (R33) — Il pannello dei contanti, aperto dal pulsante nella barra in fondo. */
   const [incassoAperto, setIncassoAperto] = useState(false);
 
-  const { data: order, isLoading } = useQuery({
+  const { data: order, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.rider.order(id),
     queryFn: async () => {
       const { data, error } = await supabase
@@ -102,13 +104,27 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
           payment_method, cash_confirmed_at,
           delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
           delivery_lat, delivery_lng,
-          seller:profiles!orders_seller_id_fkey ( store_name, store_phone, store_address, store_lat, store_lng ),
           order_items ( id, quantity, unit_price, products ( name ) )
         `)
         .eq('id', id)
-        .single();
+        .maybeSingle();
       if (error) throw error;
-      return data as unknown as OrderRow;
+      // Zero righe non e' un guasto: l'ordine non esiste, o non e' (piu') di questo fattorino — per
+      // esempio riassegnato, o consegnato da piu' di 7 giorni. Allora «Ordine non trovato», non
+      // «Riprova»: con `.single()` le zero righe diventavano un errore, e la pagina diceva al
+      // fattorino che la consegna era ancora sua.
+      if (!data) return null;
+      // 18/10/2026 — Dove ritirare (nome, indirizzo, telefono, coordinate del
+      // negozio) arriva dalla vetrina pubblica, non da `profiles`: regge anche
+      // quando `profiles` si chiude (lib/queries/negozio-dell-ordine.ts). Un negozio
+      // che la vetrina non mostra (per esempio sospeso) torna `null`: lo dice il
+      // riquadro del ritiro qui sotto.
+      const [conNegozio] = await conNegozioDellOrdine(
+        supabase,
+        [data as unknown as Omit<OrderRow, 'seller'>],
+        'id, store_name, store_phone, store_address, store_lat, store_lng',
+      );
+      return conNegozio as OrderRow;
     },
   });
 
@@ -305,6 +321,20 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
   ]);
 
   if (isLoading) return <LoadingState />;
+  // 18/10/2026 — Una lettura caduta (l'ordine o la vista dei negozi) non e' un ordine che non esiste.
+  // Prima diceva «Ordine non trovato» e rimandava alla bacheca, che la consegna la mostra ancora: il
+  // fattorino girava in tondo, o pensava che l'ordine gli fosse stato tolto.
+  if (isError && !order) {
+    return (
+      <ErrorState
+        title="Non riesco a leggere la consegna"
+        description="Sembra un problema di collegamento. La consegna è ancora tua: riprova fra un momento."
+        retry={() => { void refetch(); }}
+        backHref="/rider"
+        backLabel="Tutte le consegne"
+      />
+    );
+  }
   if (!order) return <EmptyState icon={Package} title="Ordine non trovato" ctaLabel="Tutte le consegne" ctaHref="/rider" />;
 
   const points: MapPoint[] = [];
@@ -414,7 +444,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
             </p>
             <p className="flex items-center gap-1.5 font-serif text-xl font-bold text-ink-900">
               {targetIsStore
-                ? <><Store size={18} className="text-primary-600" aria-hidden /> {order.seller?.store_name}</>
+                ? <><Store size={18} className="text-primary-600" aria-hidden /> {order.seller?.store_name ?? 'Negozio'}</>
                 : order.delivery_full_name}
             </p>
             <p className="mb-3 mt-0.5 text-sm text-ink-600">
@@ -422,6 +452,23 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
                 ? order.seller?.store_address
                 : `${order.delivery_address}, ${order.delivery_zip ?? ''} ${order.delivery_city ?? ''}`}
             </p>
+            {/* 18/10/2026 — Il negozio che la vetrina pubblica non mostra piu' (per
+                esempio sospeso dopo che l'ordine e' partito) non ha indirizzo ne'
+                telefono da darti: niente «Naviga», niente «Chiama». Invece di lasciarti
+                un riquadro vuoto, si dice cosa fare. */}
+            {targetIsStore && !order.seller && (
+              <div role="alert" className="mb-3 rounded-md border border-secondary-200 bg-secondary-50 p-2.5 text-[13px] leading-relaxed text-ink-700">
+                <p className="font-semibold text-ink-900">Non so dove ritirare questo ordine</p>
+                <p className="mt-0.5">
+                  Il negozio non è più visibile sul sito, per esempio perché è stato sospeso, e da qui
+                  non vedo il suo indirizzo né il suo telefono. Prima di partire chiedi all&apos;assistenza
+                  dove ritirare.
+                </p>
+                <Link href="/rider/help" className="mt-1.5 inline-block font-semibold text-primary-700 underline">
+                  Contatta l&apos;assistenza
+                </Link>
+              </div>
+            )}
             <div className="flex gap-2">
               {navTarget.lat && navTarget.lng && (
                 <Button

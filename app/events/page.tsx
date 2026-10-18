@@ -14,6 +14,8 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import CollectionHeader from '@/components/CollectionHeader';
 import { Badge } from '@/components/ui/Badge';
 import { queryKeys } from '@/lib/queries/keys';
+import { fetchSellerPublicMap, type SellerPublicProfile } from '@/lib/queries/seller-public-profiles';
+import { logger } from '@/lib/logger';
 
 /**
  * Pagina Eventi MyCity — mercatino virtuale settimanale, flash sale, lancio prodotto.
@@ -81,12 +83,28 @@ export default function EventsPage() {
         .from('marketplace_events')
         .select(`
           id, title, description, cover_image_url, starts_at, ends_at,
-          discount_percent, cta_label, cta_url, status, sponsor_seller_id,
-          sponsor:profiles!marketplace_events_sponsor_seller_id_fkey ( store_name, store_logo )
+          discount_percent, cta_label, cta_url, status, sponsor_seller_id
         `)
         .in('status', ['scheduled', 'live'])
         .order('starts_at', { ascending: true });
-      return (data ?? []) as unknown as EventRow[];
+      const eventi = (data ?? []) as Omit<EventRow, 'sponsor'>[];
+      // 18/10/2026 — Il negozio sponsor arriva dalla vista pubblica dei negozi,
+      // non dalla tabella dei profili: dopo le migrazioni 110, 112 e 161 la
+      // tabella mostra a ognuno solo la propria riga, e gli eventi avrebbero
+      // perso il nome dello sponsor. Uno sponsor che la vista non restituisce
+      // (non approvato, sospeso, senza insegna) non si nomina, come già
+      // succedeva prima; l'evento resta. Se la vista non risponde, gli eventi
+      // si vedono lo stesso, senza la riga dello sponsor.
+      let sponsor = new Map<string, SellerPublicProfile>();
+      try {
+        sponsor = await fetchSellerPublicMap(supabase, eventi.map((e) => e.sponsor_seller_id), 'id, store_name, store_logo');
+      } catch (e) {
+        logger.warn('[eventi] negozi sponsor non letti dalla vista pubblica', e);
+      }
+      return eventi.map((e) => {
+        const negozio = e.sponsor_seller_id ? sponsor.get(e.sponsor_seller_id) : undefined;
+        return { ...e, sponsor: negozio ? { store_name: negozio.store_name, store_logo: negozio.store_logo ?? null } : null };
+      });
     },
     refetchInterval: 60_000,
   });

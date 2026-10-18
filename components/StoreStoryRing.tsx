@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import StoreAvatar from './StoreAvatar';
@@ -21,22 +21,35 @@ type Props = {
 export default function StoreStoryRing({ sellerId, logoUrl, storeName }: Props) {
   const [open, setOpen] = useState(false);
 
-  const { data: stories = [] } = useQuery({
+  const { data: storie = [] } = useQuery({
     queryKey: ['store-stories', sellerId],
-    queryFn: async (): Promise<StoryItem[]> => {
+    queryFn: async (): Promise<Omit<StoryItem, 'seller'>[]> => {
       const { data } = await supabase
         .from('seller_stories')
-        .select(`
-          id, image_url, caption, link_url,
-          seller:profiles!seller_stories_seller_id_fkey ( id, store_name, store_logo )
-        `)
+        .select('id, image_url, caption, link_url')
         .eq('seller_id', sellerId)
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false });
-      return (data ?? []) as unknown as StoryItem[];
+      return (data ?? []) as Omit<StoryItem, 'seller'>[];
     },
     staleTime: 60_000,
   });
+
+  // 18/10/2026 — Insegna, logo e link del visualizzatore arrivano dalla pagina
+  // del negozio, che li ha già letti dalla vista pubblica dei negozi. Prima si
+  // rileggevano dalla tabella dei profili: dopo le migrazioni 110, 112 e 161
+  // quella tabella mostra a ognuno solo la propria riga, e le storie si
+  // sarebbero aperte senza dire di chi sono.
+  // Sempre lo stesso elenco finché non cambiano i dati: il visualizzatore
+  // riparte il conto alla rovescia quando l'elenco cambia.
+  const stories: StoryItem[] = useMemo(
+    () =>
+      storie.map((s) => ({
+        ...s,
+        seller: { id: sellerId, store_name: storeName ?? null, store_logo: logoUrl ?? null },
+      })),
+    [storie, sellerId, storeName, logoUrl],
+  );
 
   // Nessuna storia: logo "normale" con bordino bianco (come prima).
   if (stories.length === 0) {

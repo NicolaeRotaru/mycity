@@ -36,15 +36,19 @@ const STATS = [
  * `store_address` free-text, nessuna colonna città/provincia) → non vengono
  * fabbricate. Se la query fallisce o ritorna 0, si tiene la copy statica come
  * fallback (nessuna regressione, nessun "0" finto in pagina).
+ *
+ * 18/10/2026 — Si contano le righe della vista pubblica dei negozi, che tiene
+ * già solo i venditori approvati con un'insegna. Prima si contavano sulla
+ * tabella dei profili: dopo le migrazioni 110, 112 e 161 quella tabella mostra
+ * a ognuno solo la propria riga, e la pagina avrebbe detto «1 negozio locale
+ * attivo» a un negoziante e la frase fissa a tutti gli altri.
  */
 async function buildStats(): Promise<typeof STATS> {
   try {
     const supa = await getServerSupabase();
     const { count: storeCount } = await supa
-      .from('profiles')
-      .select('id', { count: 'exact', head: true })
-      .eq('role', 'seller')
-      .eq('is_approved', true);
+      .from('seller_public_profiles')
+      .select('id', { count: 'exact', head: true });
 
     const stats = [...STATS];
     if (typeof storeCount === 'number' && storeCount > 0) {

@@ -12,6 +12,7 @@ import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { riordina } from '@/lib/riordino';
+import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 
 /**
  * "Ordina di nuovo" — rail di riordino rapido nella home, derivata dagli ordini
@@ -37,6 +38,7 @@ type RecentOrder = {
   id: string;
   created_at: string;
   total_price: number | string;
+  seller_id: string | null;
   seller: { store_name: string | null } | null;
   order_items: OrderLine[];
 };
@@ -65,8 +67,7 @@ export default function ReorderRail() {
         supabase
           .from('orders')
           .select(`
-            id, created_at, total_price,
-            seller:profiles!orders_seller_id_fkey ( store_name ),
+            id, created_at, total_price, seller_id,
             order_items ( product_id, quantity, unit_price, products ( name, images ) )
           `)
           .eq('user_id', user.id)
@@ -76,8 +77,11 @@ export default function ReorderRail() {
         supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle(),
       ]);
 
-      const orders = (ordersRes.data ?? []) as unknown as RecentOrder[];
-      if (orders.length === 0) return null; // zero ordini → self-hide
+      const righe = (ordersRes.data ?? []) as unknown as Array<Omit<RecentOrder, 'seller'>>;
+      if (righe.length === 0) return null; // zero ordini → self-hide
+      // 18/10/2026 — Il nome del negozio dalla vetrina pubblica, non da `profiles`
+      // (lib/queries/negozio-dell-ordine.ts): regge anche quando `profiles` si chiude.
+      const orders = (await conNegozioDellOrdine(supabase, righe, 'id, store_name')) as RecentOrder[];
 
       const firstName = firstNameOf((profileRes.data as { full_name: string | null } | null)?.full_name);
       return { firstName, orders };
