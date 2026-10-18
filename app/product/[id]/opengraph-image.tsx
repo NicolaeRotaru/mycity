@@ -1,5 +1,5 @@
 import { ImageResponse } from 'next/og';
-import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
+import { leggiProdottoPerMetadati } from '@/lib/queries/metadati-vetrina';
 import { sizedImage } from '@/lib/image-url';
 
 export const runtime = 'edge';
@@ -7,15 +7,10 @@ export const alt = 'Prodotto su MyCity';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-type ProductOGData = { name: string; price: number; images: string[] | null; profiles: { store_name: string | null } | null };
-
 // 27/8/2026 (R010) — una sola fabbrica del collegamento, e nessun silenzio sulle variabili.
-const fetchProduct = (id: string) =>
-  leggiPerMetadati<ProductOGData>(
-    'products',
-    'name, price, images, profiles!products_seller_id_fkey ( store_name )',
-    { id },
-  );
+// 15/10/2026 (R3) — il nome del negozio dalla vista pubblica: il robot di WhatsApp e' un
+// estraneo, e dopo la migrazione 161 `profiles` per lui e' chiusa.
+const fetchProduct = (id: string) => leggiProdottoPerMetadati(id);
 
 /**
  * Open Graph image generata on-demand per ogni prodotto.

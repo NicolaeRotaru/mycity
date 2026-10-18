@@ -238,19 +238,162 @@ export function orderDeliveredTemplate(args: { orderId: string; name?: string | 
  * che il recupero password passi di qui, e cerca il difetto dove non e'.
  */
 
-export function refundIssuedTemplate(args: { orderId: string; amount: number; reason?: string | null }) {
+/**
+ * R25 — I MOTIVI ARRIVANO COME CODICI, E AL CLIENTE VANNO DETTI A PAROLE.
+ *
+ * Quando il negozio approva un reso senza scrivere una nota, le rotte dei resi
+ * passano il codice di Stripe `requested_by_customer`, e il cliente leggeva
+ * «Motivo: requested_by_customer». Qui i codici noti diventano una frase, e un
+ * codice che non conosciamo non si stampa: al cliente non direbbe niente.
+ * Le note scritte da una persona (il negozio, l'amministratore) passano com'erano.
+ */
+const MOTIVI_IN_CHIARO: Record<string, string> = {
+  requested_by_customer: 'reso richiesto da te',
+  duplicate: 'pagamento addebitato due volte',
+  fraudulent: 'pagamento non autorizzato',
+  expired_uncaptured_charge: 'pagamento mai completato',
+};
+
+export function motivoDelRimborsoInChiaro(motivo?: string | null): string | null {
+  const testo = (motivo ?? '').trim();
+  if (!testo) return null;
+  if (Object.prototype.hasOwnProperty.call(MOTIVI_IN_CHIARO, testo)) return MOTIVI_IN_CHIARO[testo];
+  if (/^[a-z0-9]+(_[a-z0-9]+)+$/.test(testo)) return null;
+  return testo;
+}
+
+/**
+ * R25 — L'EMAIL DICE COME TORNANO DAVVERO I SOLDI.
+ *
+ * Il modello era uno solo, quello della carta: «il rimborso arriverà sul tuo
+ * metodo di pagamento entro 5-10 giorni lavorativi». Lo riceveva anche chi
+ * aveva pagato in contanti e aveva avuto credito MyCity: aspettava per giorni
+ * dei soldi che non sarebbero arrivati, e non sapeva di avere gia' il credito.
+ *
+ * Adesso il modo lo dice chi ha mosso i soldi (`refundOrder` lo sa):
+ *  · carta    → torna sulla carta, nei tempi della banca;
+ *  · credito  → e' gia' disponibile, e si dice dove si vede e dove si spende;
+ *  · bonifico → lo facciamo noi, a mano: il cliente risponde a questa email
+ *               con IBAN e intestatario (il sito non chiede l'IBAN);
+ *  · misto    → un ordine pagato in parte col credito: la parte del credito
+ *               torna credito, quella dei contanti col bonifico.
+ * Senza indicazione vale «carta», che e' l'unico caso del webhook di Stripe.
+ * Sui contanti l'oggetto e il corpo portano il numero dell'ordine come lo vede
+ * il cliente: chi risponde con l'IBAN lo attacca all'ordine giusto.
+ */
+export function refundIssuedTemplate(args: {
+  orderId: string;
+  amount: number;
+  reason?: string | null;
+  modo?: 'carta' | 'credito' | 'bonifico' | 'misto';
+  /** Per i contanti: quanto torna come credito MyCity e quanto col bonifico, in euro. */
+  creditoEuro?: number;
+  bonificoEuro?: number;
+}) {
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
+  const importo = formatPrice(args.amount);
+  const motivo = motivoDelRimborsoInChiaro(args.reason);
+  const rigaMotivo = motivo
+    ? `<p style="margin:0 0 12px;color:${COLORI.tenue}">Motivo: ${escapeHtml(motivo)}</p>`
+    : '';
+  const testoMotivo = motivo ? ` Motivo: ${motivo}.` : '';
+  const modo = args.modo ?? 'carta';
+  const p = (testo: string) => `<p style="margin:0 0 12px;line-height:1.6">${testo}</p>`;
+
+  if (modo === 'carta') {
+    const body = `
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">💶 Rimborso emesso</h1>
+      ${p(`Abbiamo emesso un rimborso di <strong>${importo}</strong> sul tuo ordine.`)}
+      ${rigaMotivo}
+      ${p('Il rimborso arriverà sulla carta che hai usato per pagare, di solito entro 5-10 giorni lavorativi: i tempi li decide la tua banca.')}
+      <p style="margin:24px 0">${btn(orderUrl, 'Vedi dettaglio')}</p>
+    `;
+    return {
+      subject: `💶 Rimborso emesso — ${importo}`,
+      html: shell('Rimborso emesso', body),
+      text: `Rimborso di ${importo} emesso sulla carta che hai usato per pagare.${testoMotivo} Dettaglio: ${orderUrl}`,
+    };
+  }
+
+  // Contanti: credito, bonifico, o tutti e due.
+  const ordine = `#${args.orderId.slice(0, 6).toUpperCase()}`;
+  const creditoUrl = `${appUrl()}/profile/gift-cards`;
+  const credito = formatPrice(args.creditoEuro ?? (modo === 'credito' ? args.amount : 0));
+  const bonifico = formatPrice(args.bonificoEuro ?? (modo === 'bonifico' ? args.amount : 0));
+
+  const righe: string[] = [];
+  const testi: string[] = [];
+  if (modo === 'credito') {
+    righe.push(p(`Per l'ordine ${ordine} ti abbiamo restituito <strong>${importo}</strong> come credito MyCity, perché avevi pagato con il credito MyCity.`));
+    testi.push(`Per l'ordine ${ordine} ti abbiamo restituito ${importo} come credito MyCity, perché avevi pagato con il credito MyCity.`);
+  } else if (modo === 'bonifico') {
+    righe.push(p(`Per l'ordine ${ordine} ti restituiamo <strong>${importo}</strong> con un bonifico, senza costi per te.`));
+    testi.push(`Per l'ordine ${ordine} ti restituiamo ${importo} con un bonifico, senza costi per te.`);
+  } else {
+    righe.push(p(`Per l'ordine ${ordine} ti restituiamo <strong>${importo}</strong>: <strong>${credito}</strong> come credito MyCity, perché li avevi pagati con il credito, e <strong>${bonifico}</strong> con un bonifico, senza costi per te.`));
+    testi.push(`Per l'ordine ${ordine} ti restituiamo ${importo}: ${credito} come credito MyCity, perché li avevi pagati con il credito, e ${bonifico} con un bonifico, senza costi per te.`);
+  }
+  if (modo !== 'bonifico') {
+    // Collaudo del 15/10 — qui c'era «alla voce Buoni regalo», ma nel menu del
+    // profilo quella voce si chiama «Gift card» (components/account/AccountSidebar.tsx):
+    // il cliente cercava una parola che non trovava. Ora il nome e' quello vero, e
+    // nell'email in HTML e' anche il collegamento.
+    righe.push(p(`Il credito è già disponibile: lo vedi nel tuo profilo, alla voce <a href="${creditoUrl}" style="color:${COLORI.marchio};font-weight:600">«Gift card»</a>, e lo usi sui prossimi ordini pagati alla consegna.`));
+    testi.push(`Il credito è già disponibile nel tuo profilo, alla voce «Gift card» (${creditoUrl}), e si usa sui prossimi ordini pagati alla consegna.`);
+  }
+  if (modo !== 'credito') {
+    // Il sito non chiede l'IBAN: lo chiede questa email, e la risposta arriva a chi fa il bonifico.
+    const comeRiceverlo =
+      "Per il bonifico ci servono l'IBAN e il nome dell'intestatario del conto: rispondi a questa email con questi due dati. " +
+      'Il bonifico lo facciamo a mano, appena riceviamo la tua risposta. ' +
+      'Se nel frattempo cancelli il tuo account, il rimborso resta valido: rispondi comunque a questa email.';
+    righe.push(p(comeRiceverlo));
+    testi.push(comeRiceverlo);
+  }
+
+  // Collaudo finale del 17/10 — sul misto il titolo diceva «Rimborso in arrivo»,
+  // ma la parte di credito e' gia' arrivata: il titolo dice i due modi veri.
+  const titolo =
+    modo === 'credito' ? 'Rimborso in credito MyCity' : modo === 'bonifico' ? 'Rimborso con bonifico' : 'Rimborso in credito MyCity e con bonifico';
+  const [bottoneUrl, bottone] = modo === 'credito' ? [creditoUrl, 'Vedi il tuo credito'] : [orderUrl, 'Vedi dettaglio'];
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">💶 Rimborso emesso</h1>
-    <p style="margin:0 0 12px;line-height:1.6">Abbiamo emesso un rimborso di <strong>${formatPrice(args.amount)}</strong> sul tuo ordine.</p>
-    ${args.reason ? `<p style="margin:0 0 12px;color:${COLORI.tenue}">Motivo: ${escapeHtml(args.reason)}</p>` : ''}
-    <p style="margin:0 0 12px;line-height:1.6">Il rimborso arriverà sul tuo metodo di pagamento entro 5-10 giorni lavorativi.</p>
-    <p style="margin:24px 0">${btn(orderUrl, 'Vedi dettaglio')}</p>
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">💶 ${titolo}</h1>
+    ${righe[0]}
+    ${rigaMotivo}
+    ${righe.slice(1).join('\n    ')}
+    <p style="margin:24px 0">${btn(bottoneUrl, bottone)}</p>
+  `;
+  const oggetto =
+    modo === 'credito'
+      ? `💶 Rimborso in credito MyCity per l'ordine ${ordine} — ${importo}`
+      : modo === 'bonifico'
+        ? `💶 Rimborso di ${importo} per l'ordine ${ordine}: rispondi con il tuo IBAN`
+        : `💶 Rimborso di ${importo} per l'ordine ${ordine}: credito MyCity e bonifico`;
+  return {
+    subject: oggetto,
+    html: shell(titolo, body),
+    text: `${testi[0]}${testoMotivo} ${testi.slice(1).join(' ')} Dettaglio: ${orderUrl}`,
+  };
+}
+
+/**
+ * L'AVVISO DEL BONIFICO DA FARE, PER EMAIL (semplificazione del 17/10/2026).
+ *
+ * Lo stesso testo che `refundOrder` scrive fra le notifiche degli amministratori
+ * va anche alla casella dei contatti pubblici, dove arrivano le risposte dei
+ * clienti con l'IBAN: la campanella mostra le ultime 50 notifiche, la casella no.
+ */
+export function bonificoDaFareTemplate(args: { ordineId: string; bonificoCents: number; testo: string }) {
+  const ordine = `#${args.ordineId.slice(0, 6).toUpperCase()}`;
+  const cifra = formatPrice(args.bonificoCents / 100);
+  const body = `
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">💶 Bonifico di rimborso da fare</h1>
+    <p style="margin:0 0 12px;line-height:1.6">${escapeHtml(args.testo)}</p>
   `;
   return {
-    subject: `💶 Rimborso emesso — ${formatPrice(args.amount)}`,
-    html: shell('Rimborso emesso', body),
-    text: `Rimborso di ${formatPrice(args.amount)} emesso. Dettaglio: ${orderUrl}`,
+    subject: `Bonifico di rimborso da fare — ordine ${ordine} — ${cifra}`,
+    html: shell('Bonifico di rimborso da fare', body, `Avviso interno di ${BRAND} per chi fa i rimborsi.`),
+    text: args.testo,
   };
 }
 

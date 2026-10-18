@@ -17,8 +17,9 @@ name: Deriva migrazioni (produzione)
 # manca il lavoro fallisce con un messaggio chiaro — ma non blocca il lavoro di
 # nessuno, perché non è un controllo obbligatorio sulle PR.
 #
-# Serve il segreto SUPABASE_DB_URL (la stessa stringa usata dal backup). La
-# lettura è sola lettura: una SELECT su una tabella di sistema.
+# Serve il segreto SUPABASE_DB_URL (la stessa stringa usata dal backup: la riga
+# del «Session pooler», IPv4). La lettura è sola lettura: una SELECT su una
+# tabella di sistema.
 
 on:
   schedule:
@@ -57,7 +58,11 @@ jobs:
           DB: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           if [ -z "$DB" ]; then
-            echo "::error::SUPABASE_DB_URL non configurato: il controllo della deriva NON può girare. Aggiungilo in GitHub → Settings → Secrets (Supabase → Project Settings → Database → Connection string)."
+            # 15/10/2026 (R53) — Il messaggio mandava a prendere la «Connection
+            # string» generica, cioe' la connessione diretta: solo IPv6, che da qui
+            # non si raggiunge. Con quella il lavoro e' finito rosso 52 mattine su
+            # 52 senza confrontare niente. Serve la riga del Session pooler.
+            echo "::error::SUPABASE_DB_URL non configurato: il controllo della deriva NON può girare. Aggiungilo in GitHub → Settings → Secrets and variables → Actions, con la riga del «Session pooler» (IPv4): Supabase → pannello Connect → riquadro «Session pooler», porta 5432. NON la connessione diretta db.<progetto>.supabase.co, che risponde solo in IPv6 e da GitHub Actions non si raggiunge."
             exit 1
           fi
 

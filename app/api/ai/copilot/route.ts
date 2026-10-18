@@ -10,7 +10,7 @@ import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import { productSnapshot, PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
-import type { AiProductPatch, CategoryRow } from '@/lib/products/aiPatch';
+import { REGOLA_CAMPI_DICHIARATIVI, type AiProductPatch, type CategoryRow } from '@/lib/products/aiPatch';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
 
@@ -40,6 +40,7 @@ Hai l'elenco dei suoi prodotti (id, nome, prezzo, stato, categoria, stock). In b
 - Usa "status" tra: available, draft, sold.
 - Se l'istruzione è ambigua o pericolosa (es. "cancella tutto"), NON proporre modifiche: spiega e chiedi conferma in "reply".
 - Non inventare prodotti non in elenco. Niente emoji.
+- ${REGOLA_CAMPI_DICHIARATIVI} Nel riepilogo non dire mai di averli scritti o cambiati.
 
 Metti nel campo "reply" un riepilogo conciso ("Ho preparato N modifiche: …"). Chiama sempre e solo lo strumento "bulk_edit".
 

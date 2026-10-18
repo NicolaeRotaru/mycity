@@ -159,6 +159,22 @@ Prima il rilascio costruiva su Node 20 e la produzione eseguiva su 24.
 - **Rilascio:** ogni unione su `main` fa partire una pubblicazione di produzione.
   Il gancio che aspetta la CI verde è in `.github/workflows/deploy-dopo-ci.yml`,
   e non è ancora l'unica strada: legge il file per i due passi che mancano.
+- **Una richiesta con la CI rossa non si unisce** solo se la regola «Main» su
+  GitHub (Settings → Rules → Rulesets) è accesa, guarda `main` e pretende il
+  controllo «Main» verde. Oggi è spenta e senza bersaglio. Il controllo «Main»
+  è l'ultimo lavoro della CI dal 15/10/2026: aspetta tutti gli altri e diventa
+  rosso se uno fallisce. I passi sono in testa a
+  `.github/workflows/deploy-dopo-ci.yml`; la verifica è
+  `gh api repos/NicolaeRotaru/mycity/rulesets/16879481 | node scripts/controlla-regola-main.mjs`.
+- **Un rosso che compare su `main` dopo l'unione la regola non lo ferma.** Il
+  1/9 la richiesta #245 era verde e sana; la CI di `main` è finita rossa alle
+  18:11 per una prova che si rompeva da sola in base all'ora (riparata nel
+  commit 94e56c6), e Vercel ha pubblicato nello stesso secondo. Quello lo
+  ferma solo il rilascio dopo CI verde, con `"main": false` in `vercel.json`.
+- La spunta «Require branches to be up to date before merging» è una scelta:
+  chiude il caso di due richieste verdi che si rompono a vicenda una volta
+  unite, al costo di un «Update branch» e di una CI in più per ogni richiesta
+  aperta dopo ogni unione.
 - **Tornare indietro:** Vercel → Deployments → **Instant Rollback**. Procedura
   distesa nel runbook, §4-bis.
 

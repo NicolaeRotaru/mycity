@@ -16,11 +16,14 @@
  * Nessuna logica è cambiata in questo spostamento: le prove esistenti sul
  * webhook sono la dimostrazione che non si è rotto niente.
  */
+import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
+import { COLONNE_124 } from '@/lib/db/migrazione-124';
+import { leggiAGradini } from '@/lib/db/ripiego-a-gradini';
 import { formatPriceFromCents } from '@/lib/format';
+import { scritturaFacoltativa } from './esito';
 
 export type DisputeOrderRow = {
   id: string;
@@ -29,7 +32,12 @@ export type DisputeOrderRow = {
   seller_payout_cents: number | null;
   seller_payout_reversed_cents?: number | null;
   rider_payout_reversed_cents?: number | null;
+  /** Promemoria della contestazione (migrazione 126): quanto ha stornato lei. */
+  dispute_seller_reversed_cents?: number | null;
+  dispute_rider_reversed_cents?: number | null;
   delivery_status?: string | null;
+  /** Stato della contestazione bancaria: serve a non ripetere la chiusura (R81). */
+  dispute_status?: string | null;
   stripe_reversal_id: string | null;
   // Servono per recuperare anche il compenso versato al fattorino.
   rider_id?: string | null;
@@ -38,6 +46,12 @@ export type DisputeOrderRow = {
   rider_fee_cents?: number | null;
   shipping_cost?: number | string | null;
 };
+
+/**
+ * Le colonne della migrazione 126 che le contestazioni leggono. In produzione
+ * la 126 non c'è ancora: senza toglierle, la select intera fallirebbe (42703).
+ */
+export const COLONNE_126_CONTESTAZIONE = ['dispute_seller_reversed_cents', 'dispute_rider_reversed_cents'] as const;
 
 /** Trova gli ordini legati alla charge/PI di una dispute (multi-seller). */
 export async function findOrdersForDispute(dispute: Stripe.Dispute, columns: string): Promise<DisputeOrderRow[]> {
@@ -49,20 +63,33 @@ export async function findOrdersForDispute(dispute: Stripe.Dispute, columns: str
   // che la colonna esista fallisce INTERA: qui l'errore non veniva nemmeno
   // guardato, quindi la contestazione vinta trovava zero ordini e il venditore
   // restava senza soldi in silenzio (lib/db/migrazione-124.ts).
-  const ridotte = senzaColonne(columns, COLONNE_124);
+  //
+  // 16/10/2026 (riesame del lotto) — Una migrazione alla volta, dalla più
+  // nuova. Il ripiego toglieva insieme le colonne della 126 e quelle della 124:
+  // in produzione (la 124 c'è, la 126 no) si perdeva `payout_tentativo`, e la
+  // contestazione vinta rimetteva in coda il bonifico sempre col tentativo 1
+  // (lib/db/ripiego-a-gradini.ts).
   const cerca = async (campo: 'stripe_payment_intent' | 'stripe_charge_id', valore: string) =>
-    conRipiegoSchema(
+    leggiAGradini(
       `orders.select (contestazione per ${campo})`,
-      () => admin.from('orders').select(columns).eq(campo, valore),
-      () => admin.from('orders').select(ridotte).eq(campo, valore),
+      columns,
+      [COLONNE_126_CONTESTAZIONE, COLONNE_124],
+      (colonne) => admin.from('orders').select(colonne).eq(campo, valore),
     );
 
+  // 15/10/2026 (R81) — UNA LETTURA CADUTA NON È «NESSUN ORDINE».
+  // L'errore qui non si guardava: un timeout del database diventava zero
+  // ordini, il gestore scriveva «nessun ordine trovato» e usciva bene, la rotta
+  // rispondeva 200 e Stripe non riprovava. Una contestazione aperta in quel
+  // momento non bloccava nessun bonifico. Adesso si lancia, e Stripe ripete.
   if (pi) {
-    const { data } = await cerca('stripe_payment_intent', pi);
+    const { data, error } = await cerca('stripe_payment_intent', pi);
+    if (error) throw new Error(`[stripe] ordini della contestazione non letti: ${error.message}`);
     if (data && data.length > 0) return data as unknown as DisputeOrderRow[];
   }
   if (chargeId) {
-    const { data } = await cerca('stripe_charge_id', chargeId);
+    const { data, error } = await cerca('stripe_charge_id', chargeId);
+    if (error) throw new Error(`[stripe] ordini della contestazione non letti: ${error.message}`);
     if (data && data.length > 0) return data as unknown as DisputeOrderRow[];
   }
   return [];
@@ -78,12 +105,134 @@ export function sessionePagata(session: Stripe.Checkout.Session): boolean {
   return session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
 }
 
-/** Inserisce una notifica per tutti gli admin. */
-export async function notifyAdmins(title: string, body: string, link: string) {
+/**
+ * Inserisce una notifica per tutti gli admin. È un avviso: se non parte resta
+ * scritto nei log, ma non fa ritentare a Stripe un evento già lavorato (R81).
+ *
+ * 16/10/2026 (quinto riesame del lotto) — CON `unaVoltaPer`, UN AVVISO CHE SI PUÒ
+ * RIPETERE SENZA ARRIVARE DUE VOLTE.
+ *
+ * Un caso: la banca respinge un rimborso, il gestore toglie l'importo
+ * dall'ordine e ci lascia il segno «già fatto», ma la risposta del database si
+ * perde (o il processo muore) prima dell'avviso. Stripe riprova, il gestore
+ * trova il segno e usciva senza avvisare: il cliente senza rimborso, e nessuno
+ * che lo sapesse. Saltare l'avviso era il modo di non mandarlo due volte.
+ * Adesso ogni riga ha un identificativo che dipende dalla chiave, e il database
+ * ne rifiuta una seconda (23505): il gestore lo chiede a ogni passaggio, arriva
+ * la prima volta e poi non più. E se non si scrive, si lancia: chi passa la
+ * chiave ha già il suo segno sull'ordine, quindi Stripe che riprova rifà solo
+ * l'avviso.
+ */
+export async function notifyAdmins(
+  title: string,
+  body: string,
+  link: string,
+  opzioni: {
+    unaVoltaPer?: string;
+    /**
+     * 17/10/2026 (semplificazione del rimborso dei contanti) — L'AVVISO CHE NON PUÒ
+     * ANDARE A NESSUNO. Per il bonifico di rimborso da fare l'avviso è l'unico
+     * promemoria: senza amministratori non lo leggerebbe nessuno, e il cliente
+     * aspetterebbe soldi che nessuno sa di dovergli. Con questa opzione zero
+     * destinatari è un errore, e chi chiama (`refundOrder`) torna indietro.
+     */
+    almenoUnDestinatario?: boolean;
+  } = {},
+): Promise<'scritto' | 'gia-mandato' | 'nessuno'> {
   const admin = getAdminSupabase();
-  const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
-  if (!admins || admins.length === 0) return;
-  await admin.from('notifications').insert(admins.map((a) => ({ user_id: a.id, title, body, link })));
+  const chiave = opzioni.unaVoltaPer?.trim() || null;
+  const { data: admins, error: errLettura } = await admin.from('profiles').select('id').eq('role', 'admin');
+  if (errLettura && (chiave || opzioni.almenoUnDestinatario)) {
+    throw new Error(`[stripe] amministratori non letti per l avviso «${title}»: ${errLettura.message}`);
+  }
+  if (!admins || admins.length === 0) {
+    if (opzioni.almenoUnDestinatario) throw new Error(`[stripe] nessun amministratore a cui mandare l avviso «${title}»`);
+    return 'nessuno';
+  }
+  if (!chiave) {
+    scritturaFacoltativa(
+      await admin.from('notifications').insert(admins.map((a) => ({ user_id: a.id, title, body, link }))),
+      `avviso agli amministratori: ${title}`,
+    );
+    return 'scritto';
+  }
+  const { error } = await admin.from('notifications').insert(
+    admins.map((a) => ({ id: idDellAvvisoAgliAmministratori(chiave, a.id), user_id: a.id, title, body, link })),
+  );
+  if (!error) return 'scritto';
+  if ((error as { code?: string }).code === '23505') {
+    logger.info('[stripe] avviso agli amministratori già mandato: non si ripete', { chiave, title });
+    return 'gia-mandato';
+  }
+  throw new Error(`[stripe] avviso agli amministratori non scritto («${title}»): ${error.message}`);
+}
+
+/**
+ * C'e' gia' l'avviso scritto con `unaVoltaPer: chiave`? Basta la riga di un amministratore.
+ * Lancia se non si riesce a leggere: «non lo so» non e' «non c'e'».
+ */
+export async function avvisoGiaScritto(chiave: string): Promise<boolean> {
+  const admin = getAdminSupabase();
+  const { data: admins, error: errLettura } = await admin.from('profiles').select('id').eq('role', 'admin');
+  if (errLettura) throw new Error(`[stripe] amministratori non letti: ${errLettura.message}`);
+  const ids = (admins ?? []).map((a) => idDellAvvisoAgliAmministratori(chiave, a.id));
+  if (ids.length === 0) return false;
+  const { data: righe, error } = await admin.from('notifications').select('id').in('id', ids).limit(1);
+  if (error) throw new Error(`[stripe] avvisi agli amministratori non letti: ${error.message}`);
+  return (righe ?? []).length > 0;
+}
+
+/**
+ * Toglie l'avviso scritto con `unaVoltaPer: chiave`, a tutti gli amministratori.
+ * Serve a chi deve tornare indietro dopo averlo scritto (`refundOrder`, quando un
+ * passo successivo cade): un avviso «paga» per un rimborso che non c'è non deve
+ * restare. Non lancia mai: risponde se la cancellazione è riuscita.
+ */
+export async function togliLAvvisoAgliAmministratori(chiave: string): Promise<boolean> {
+  try {
+    const admin = getAdminSupabase();
+    const { data: admins, error: errLettura } = await admin.from('profiles').select('id').eq('role', 'admin');
+    if (errLettura) throw new Error(errLettura.message);
+    const ids = (admins ?? []).map((a) => idDellAvvisoAgliAmministratori(chiave, a.id));
+    if (ids.length === 0) return true;
+    const { error } = await admin.from('notifications').delete().in('id', ids);
+    if (error) throw new Error(error.message);
+    return true;
+  } catch (err) {
+    logger.error('[stripe] avviso agli amministratori non tolto', {
+      chiave, message: err instanceof Error ? err.message : 'errore',
+    });
+    return false;
+  }
+}
+
+/**
+ * Un identificativo che dipende solo dalla chiave: sempre lo stesso per la
+ * stessa chiave. Serve alle righe che il database deve rifiutare la seconda
+ * volta (23505): un avviso che arriva una volta sola, una divisione del
+ * rimborso decisa una volta sola (lib/stripe/rimborsi-da-dividere.ts).
+ *
+ * È un UUID valido perché le colonne sono di tipo uuid: sedici byte
+ * dell'impronta, con i bit di «versione» e «variante» sistemati come vuole la
+ * RFC 4122 (lo stesso schema di `identificativoAvviso` in
+ * lib/privacy/avvisi-a-chi-aspetta.ts). Non serve che sia imprevedibile:
+ * serve che non cambi.
+ */
+export function idDaChiave(chiave: string): string {
+  const b = createHash('sha256').update(`mycity:${chiave}`).digest();
+  const byte = Buffer.from(b.subarray(0, 16));
+  byte[6] = (byte[6] & 0x0f) | 0x50;
+  byte[8] = (byte[8] & 0x3f) | 0x80;
+  const h = byte.toString('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/**
+ * L'identificativo della riga di un avviso agli amministratori che deve arrivare
+ * UNA volta sola: sempre lo stesso per la stessa chiave e lo stesso destinatario.
+ */
+export function idDellAvvisoAgliAmministratori(chiave: string, adminId: string): string {
+  return idDaChiave(`avviso-amministratori:${chiave}:${adminId}`);
 }
 
 /**

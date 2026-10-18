@@ -692,3 +692,85 @@ jobs:
           {
             echo "✅ **Accessibilita (axe)**: girata su $pagine pagine, senza nessun segreto e senza nessuna condizione."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # 15/10/2026 (R57) — LA REGOLA «MAIN» ASPETTAVA UN CONTROLLO CHE NON ARRIVAVA MAI.
+  #
+  # Su GitHub esiste dal 26/5 una regola chiamata «Main» (Settings → Rules →
+  # Rulesets) che pretende, prima di unire, un controllo verde di nome «Main».
+  # Nessun lavoro di questo file si chiamava cosi': i nomi erano «Lint +
+  # Typecheck + Build», «Unit tests» e gli altri qui sopra. Accesa cosi' com'era
+  # sul ramo main, la regola avrebbe bloccato OGNI unione, per sempre, in
+  # «Expected — Waiting for status to be reported». E intanto, spenta, non
+  # fermava niente: nessuna richiesta con la CI rossa trovava il pulsante di
+  # unione chiuso.
+  #
+  # Questo lavoro e' il controllo «Main». Aspetta TUTTI i lavori qui sopra e
+  # da' il via libera solo se nessuno e' fallito o e' stato annullato. Cosi' la
+  # regola pretende un nome solo, e un lavoro aggiunto domani entra nel cancello
+  # aggiungendolo a `needs` — la prova
+  # tests/unit/la-regola-main-aspetta-un-controllo-che-esiste.test.ts diventa
+  # rossa se qualcuno se ne dimentica.
+  #
+  # PERCHE' `if: always()`. Senza, quando un lavoro richiesto fallisce GitHub
+  # SALTA questo lavoro invece di eseguirlo — e un controllo obbligatorio
+  # saltato, per la regola, vale come passato. Il cancello si aprirebbe proprio
+  # quando deve restare chiuso. Con `always()` gira sempre e decide lui.
+  #
+  # Un lavoro SALTATO invece non blocca: e' il caso di un lavoro con una sua
+  # condizione che non si avvera. Ma se fossero saltati tutti, non avrebbe
+  # controllato niente nessuno, e quello non e' un via libera.
+  #
+  # COSA NON FERMA. Questo lavoro, con la regola accesa, ferma le RICHIESTE
+  # rosse. Non ferma un rosso che compare su main dopo l'unione: il 1/9 la CI
+  # di main e' finita rossa alle 18:11 per una prova che si rompeva da sola nei
+  # minuti :10-:11 di ogni ora (riparata nel commit 94e56c6), con la richiesta
+  # #245 verde e sana, e Vercel ha pubblicato lo stesso. Quello lo ferma solo
+  # il rilascio che aspetta la CI verde di main (deploy-dopo-ci.yml) con
+  # "main": false in vercel.json. Il nome «Main» e la regola si controllano con
+  # scripts/controlla-regola-main.mjs, che legge la regola com'e' su GitHub.
+  cancello-main:
+    name: Main
+    needs:
+      - lint-and-typecheck
+      - unit-tests
+      - integration-tests
+      - rls-locale
+      - e2e-tests
+      - e2e-senza-chiavi
+      - a11y
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Tutti i controlli obbligatori sono passati
+        env:
+          ESITI: ${{ toJSON(needs) }}
+        run: |
+          set -euo pipefail
+          # ESITI e' l'esito di ogni lavoro aspettato, scritto da GitHub:
+          #   {"unit-tests": {"result": "success", "outputs": {}}, ...}
+          # Se non si legge, o e' vuoto, il cancello resta chiuso: un via
+          # libera dato senza aver guardato e' la spunta bugiarda di sempre.
+          if ! RIGHE="$(printf '%s' "${ESITI:-}" | jq -er 'to_entries[] | "\(.key) \(.value.result // "sconosciuto")"' 2>/dev/null)"; then
+            echo "::error::Non riesco a leggere l'esito dei controlli: niente via libera per main."
+            exit 1
+          fi
+          PASSATI=0
+          FERMI=""
+          while read -r LAVORO ESITO; do
+            case "$ESITO" in
+              success) PASSATI=$((PASSATI + 1)); echo "✅ $LAVORO" ;;
+              skipped) echo "⏭️  $LAVORO: saltato, non blocca" ;;
+              *) echo "❌ $LAVORO: $ESITO"; FERMI="$FERMI $LAVORO ($ESITO)" ;;
+            esac
+          done <<< "$RIGHE"
+          if [ -n "$FERMI" ]; then
+            echo "::error::Controlli non passati:$FERMI. Niente via libera per main."
+            echo "## ⛔ Niente via libera: controlli non passati:$FERMI" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            exit 1
+          fi
+          if [ "$PASSATI" -eq 0 ]; then
+            echo "::error::Nessun controllo e' passato davvero: sono stati tutti saltati. Niente via libera per main."
+            exit 1
+          fi
+          echo "Via libera: $PASSATI controlli passati."

@@ -54,6 +54,9 @@ const DraftSchema = z.object({
   attributes: z.record(z.string().max(MAX_VALORE_ATTRIBUTO)).optional(),
   tags: z.array(z.string().max(60)).max(50).optional(),
   alt_text: z.string().max(MAX_ALT_TEXT).nullable().optional(),
+  // R36 — Solo con questa spunta allergeni e ingredienti letti dalle foto
+  // entrano nella bozza: la regola sta in `buildDraftProductInsert`.
+  dichiarazioni_confermate: z.boolean().optional(),
 });
 
 const BodySchema = z.object({

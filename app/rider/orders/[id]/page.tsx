@@ -26,8 +26,18 @@ import {
 import { haversineKm, deliveryEtaMinutes } from '@/lib/geo';
 import { trackRiderDeliveryCompleted } from '@/lib/analytics/events';
 import { queryKeys } from '@/lib/queries/keys';
-import { compensoConsegnaEuro, compensoTrattenutoCents, contanteDaRimettereCents } from '@/lib/shipping';
+import { compensoConsegnaEuro } from '@/lib/shipping';
 import { seguiAltezzaBarraAzioni, spazioSottoIlContenuto } from '@/lib/ui/altezza-barra-azioni';
+import {
+  AVVISO_INCASSO_DOPO_LA_CONSEGNA,
+  AVVISO_INCASSO_MANCANTE,
+  CHIAVE_INCASSI_DA_DICHIARARE,
+  RIFIUTO_INCASSO_MANCANTE,
+  cifreDellIncasso,
+  dopoIlCodiceGiusto,
+  incassoDaDichiarare,
+  passoDellaConsegna,
+} from '@/lib/rider/incasso-alla-consegna';
 
 type OrderRow = {
   id: string;
@@ -78,6 +88,8 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
   const [sharing, setSharing] = useState(false);
   const watchIdRef = useRef<number | null>(null);
   const [verifyOpen, setVerifyOpen] = useState<'pickup' | 'delivery' | null>(null);
+  /** 15/10/2026 (R33) — Il pannello dei contanti, aperto dal pulsante nella barra in fondo. */
+  const [incassoAperto, setIncassoAperto] = useState(false);
 
   const { data: order, isLoading } = useQuery({
     queryKey: queryKeys.rider.order(id),
@@ -196,6 +208,15 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
     // Rileggi SEMPRE lo stato (anche su fallimento) per coerenza UI.
     qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) });
     qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
+    // 15/10/2026 (R33) — Il database rifiuta di chiudere un ordine in contanti
+    // senza l'incasso dichiarato (migrazione 163): si chiude il codice e si
+    // apre il pannello dei contanti, invece di lasciare un «Verifica fallita».
+    if (!result.ok && result.reason === RIFIUTO_INCASSO_MANCANTE) {
+      setVerifyOpen(null);
+      toast.error(AVVISO_INCASSO_MANCANTE);
+      setIncassoAperto(true);
+      return result;
+    }
     if (result.ok) {
       toast.success('Consegna confermata!');
       stopSharing();
@@ -203,7 +224,16 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
       // Calcola durata dalla presa in carico (accepted_at) alla consegna.
       const durationMs = order?.accepted_at ? Date.now() - new Date(order.accepted_at).getTime() : 0;
       trackRiderDeliveryCompleted(id, Math.round(durationMs / 60_000));
-      setTimeout(() => router.push('/rider'), 1000);
+      // R33 — Prima si tornava SEMPRE in bacheca dopo un secondo, anche con i
+      // contanti ancora da dichiarare: l'ordine spariva dagli occhi del
+      // fattorino e la rimessa della sera lo saltava. Si torna solo se non
+      // resta niente da fare; altrimenti si resta qui col pannello aperto.
+      if (order && dopoIlCodiceGiusto(order) === 'resta-sull-ordine') {
+        toast.error(AVVISO_INCASSO_DOPO_LA_CONSEGNA);
+        setIncassoAperto(true);
+      } else {
+        setTimeout(() => router.push('/rider'), 1000);
+      }
     }
     return result;
   };
@@ -288,6 +318,22 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
   }
 
   const done = order.delivery_status === 'DELIVERED';
+  // 15/10/2026 (R33) — Sui contanti l'ordine dei passi lo decide
+  // lib/rider/incasso-alla-consegna.ts: prima l'incasso, poi il codice.
+  const passo = passoDellaConsegna(order);
+  const incassoMancante = incassoDaDichiarare(order);
+  const bottoneIncasso = (
+    <div className="flex flex-col gap-1">
+      <Button onClick={() => setIncassoAperto(true)} variant="accent" size="lg" icon={Banknote} fullWidth>
+        Conferma incasso contanti
+      </Button>
+      <p className="text-center text-[12px] text-ink-500">
+        {done
+          ? 'Senza questa conferma il negozio non viene pagato.'
+          : 'Poi chiedi il codice al cliente per chiudere la consegna.'}
+      </p>
+    </div>
+  );
   const stepIdx = FLOW.indexOf(order.delivery_status);
   // Step 0 (ASSIGNED) → target negozio; gli step successivi → target cliente.
   const targetIsStore = order.delivery_status === 'ASSIGNED';
@@ -481,31 +527,25 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
           )}
         </div>
 
-        {/* CASH ON DELIVERY: conferma incasso */}
-        {order.payment_method === 'cod'
-          && (order.delivery_status === 'PICKED_UP' || order.delivery_status === 'OUT_FOR_DELIVERY' || order.delivery_status === 'DELIVERED')
-          && !order.cash_confirmed_at && (
-            <div className="mb-3.5 space-y-3 rounded-xl border-2 border-accent-300 bg-accent-50 p-4">
-              <div>
-                <p className="flex items-center gap-1.5 font-bold text-accent-900"><Banknote size={16} strokeWidth={2.2} aria-hidden /> Conferma incasso</p>
-                <p className="text-sm text-accent-800">
-                  Conferma l&apos;importo ricevuto in contanti per chiudere l&apos;ordine. La foto è facoltativa.
-                </p>
-              </div>
-              {/* 22/8/2026 — IL CAMPO SI PRE-RIEMPIVA COL TOTALE DEL CLIENTE.
-                  Il server invece si aspetta il contante GIA' TOLTO il compenso
-                  che il fattorino si tiene: confermando il valore suggerito lo
-                  scarto era di 3 euro fissi, sopra la tolleranza, e su OGNI
-                  consegna a domicilio in contanti partiva l'allarme «l'incasso
-                  non quadra». Adesso i due numeri escono dalla stessa funzione. */}
-              <CashConfirmDialog
-                orderId={order.id}
-                expectedCents={contanteDaRimettereCents(order)}
-                compensoTenutoCents={compensoTrattenutoCents(order)}
-                onConfirmed={() => qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) })}
-              />
-            </div>
-          )}
+        {/* CASH ON DELIVERY: incasso da confermare.
+            15/10/2026 (R33) — Qui c'era il pulsante dell'incasso, in mezzo al
+            contenuto: sotto la mappa, la scheda del cliente e quella del GPS,
+            cioe' fuori schermo su un telefono da 360 pixel, mentre in fondo
+            restava in vista il verde «Conferma consegna». Il fattorino chiudeva
+            col codice, la pagina tornava alla bacheca e i contanti restavano
+            non dichiarati. Adesso il pulsante sta nella barra in fondo, AL POSTO
+            di «Conferma consegna» finche' l'incasso manca; qui resta la
+            spiegazione. */}
+        {incassoMancante && (
+          <div className="mb-3.5 rounded-xl border-2 border-accent-300 bg-accent-50 p-4">
+            <p className="flex items-center gap-1.5 font-bold text-accent-900"><Banknote size={16} strokeWidth={2.2} aria-hidden /> Incasso da confermare</p>
+            <p className="text-sm text-accent-800">
+              {done
+                ? 'La consegna è chiusa ma i contanti non sono ancora confermati: finché non li confermi, il negozio non viene pagato.'
+                : 'Prima di chiedere il codice al cliente, conferma i contanti ricevuti con il pulsante in basso. La foto è facoltativa.'}
+            </p>
+          </div>
+        )}
 
         {order.payment_method === 'cod' && order.cash_confirmed_at && (
           <div className="mb-3.5 flex items-center gap-1.5 rounded-xl border-2 border-olive-200 bg-olive-50 p-4 text-sm text-olive-900">
@@ -579,16 +619,18 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
               >
                 Sto andando dal cliente
               </Button>
-              <Button onClick={() => setVerifyOpen('delivery')} variant="success" size="lg" icon={CircleCheck} fullWidth>
-                Conferma consegna
-              </Button>
+              {passo === 'incasso' ? bottoneIncasso : (
+                <Button onClick={() => setVerifyOpen('delivery')} variant="success" size="lg" icon={CircleCheck} fullWidth>
+                  Conferma consegna
+                </Button>
+              )}
             </div>
           )}
-          {order.delivery_status === 'OUT_FOR_DELIVERY' && (
+          {order.delivery_status === 'OUT_FOR_DELIVERY' && (passo === 'incasso' ? bottoneIncasso : (
             <Button onClick={() => setVerifyOpen('delivery')} variant="success" size="lg" icon={CircleCheck} fullWidth>
               Conferma consegna al cliente
             </Button>
-          )}
+          ))}
         </div>
       )}
       {done && (
@@ -597,8 +639,38 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
           className="fixed bottom-0 left-1/2 z-sticky w-full max-w-[480px] -translate-x-1/2 border-t border-cream-200 bg-surface-0 px-4 py-3"
           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
         >
-          <Button href="/rider" variant="primary" size="lg" fullWidth>Torna alle consegne</Button>
+          {/* R33 — Consegnato ma contanti non dichiarati: il passo che resta
+              e' l'incasso, non «torna alle consegne». */}
+          {incassoMancante
+            ? bottoneIncasso
+            : <Button href="/rider" variant="primary" size="lg" fullWidth>Torna alle consegne</Button>}
         </div>
+      )}
+
+      {/* Il pannello dei contanti sta FUORI dalla barra: la barra e' spostata
+          con una trasformazione CSS, e un pannello a tutto schermo disegnato li'
+          dentro resterebbe chiuso nella barra.
+          22/8/2026 — L'importo atteso e il compenso escono dalla stessa
+          funzione che usa il server: prima il campo si pre-riempiva col totale
+          del cliente, e su ogni consegna in contanti partiva l'allarme «l'incasso
+          non quadra». */}
+      {incassoMancante && (
+        <CashConfirmDialog
+          aperto={incassoAperto}
+          onChiudi={() => setIncassoAperto(false)}
+          orderId={order.id}
+          /* 16/10/2026 — il compenso tenuto DAVVERO, non quello pieno: con un
+             ordine quasi tutto a credito il pannello diceva 3 € a chi ne aveva tenuti 2. */
+          {...cifreDellIncasso(order)}
+          onConfirmed={async () => {
+            setIncassoAperto(false);
+            qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
+            qc.invalidateQueries({ queryKey: CHIAVE_INCASSI_DA_DICHIARARE });
+            await qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) });
+            // Ancora in strada: il passo che resta e' il codice del cliente.
+            if (!done) setVerifyOpen('delivery');
+          }}
+        />
       )}
 
       {/* Dialog verifica */}

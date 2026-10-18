@@ -1,19 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { scritturaSuUnaRiga } from './aiuti/scrittura-su-una-riga';
 
 /**
  * refundOrder — percorso COD (🟠-18): nessuna charge Stripe → accredito sul
- * wallet del buyer. Garanzie:
+ * wallet del buyer per la parte pagata col CREDITO MyCity. Qui l'ordine e'
+ * pagato tutto col credito, quindi torna tutto credito (R71: i contanti
+ * tornano sempre col bonifico, vedi
+ * i-contanti-tornano-sempre-col-bonifico-da-ogni-strada.test.ts). Garanzie:
  *  - claw-back del transfer al venditore se il COD era già stato pagato
  *    (TRANSFERRED) — altrimenti doppia uscita;
  *  - NON marca delivery_status='CANCELED' (la consegna è avvenuta, il contante
  *    resta nella riconciliazione del rider);
- *  - idempotente sul ref (unique violation 23505 → no-op).
+ *  - idempotente sul ref: con 23505 il credito non si ripete, e il resto del
+ *    rimborso va a termine (R82).
  */
 
 type Order = {
   id: string;
   user_id: string;
   total_price: number;
+  gross_total_cents: number;
+  wallet_applied_cents: number;
   seller_payout_cents: number;
   payout_status: string;
   stripe_payment_intent: string | null;
@@ -21,6 +28,9 @@ type Order = {
   stripe_reversal_id: string | null;
   refunded_amount_cents: number;
   payment_method: string;
+  payment_status: string;
+  cash_confirmed_at: string | null;
+  delivery_status: string;
 };
 
 const state: {
@@ -28,18 +38,24 @@ const state: {
   walletErr: null | { code?: string; message: string };
   updates: Record<string, unknown>[];
   rpcCalls: Array<{ name: string; args: Record<string, unknown> }>;
+  /** Il diario del credito (`wallet_ledger`): una riga per chiave, come con l'indice unico vero. */
+  ledger: Array<{ reason: string; ref: string; delta_cents: number }>;
 } = {
   order: baseOrder(),
   walletErr: null,
   updates: [],
   rpcCalls: [],
+  ledger: [],
 };
 
 function baseOrder(): Order {
   return {
     id: 'o1',
     user_id: 'u1',
-    total_price: 20,
+    // 20 € pagati tutti col credito MyCity: il fattorino non incassa contanti.
+    total_price: 0,
+    gross_total_cents: 2000,
+    wallet_applied_cents: 2000,
     seller_payout_cents: 1800,
     payout_status: 'AWAITING_REMITTANCE',
     stripe_payment_intent: null,
@@ -47,6 +63,11 @@ function baseOrder(): Order {
     stripe_reversal_id: null,
     refunded_amount_cents: 0,
     payment_method: 'cod',
+    // R84 — un ordine in contanti consegnato e' un ordine incassato: il
+    // fattorino ha confermato i contanti. Senza, non c'e' niente da restituire.
+    payment_status: 'PAID',
+    cash_confirmed_at: '2026-10-01T10:00:00Z',
+    delivery_status: 'DELIVERED',
   };
 }
 
@@ -67,24 +88,40 @@ vi.mock('@/lib/supabase/server', () => ({
       if (table === 'orders') {
         return {
           select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: state.order, error: null }) }) }),
-          update: (u: Record<string, unknown>) => ({
-            eq: () => {
+          update: (u: Record<string, unknown>) =>
+            scritturaSuUnaRiga(() => state.order as unknown as Record<string, unknown>, () => {
               state.updates.push(u);
-              return Promise.resolve({ error: null });
-            },
-          }),
+            }),
         };
+      }
+      if (table === 'wallet_ledger') {
+        // Collaudo del 15/10 (R82) — dopo l'accredito `refundOrder` rilegge la riga a diario della
+        // sua chiave, per accorgersi di un ritentativo con un importo diverso.
+        const filtri: Record<string, unknown> = {};
+        const q = {
+          select: () => q,
+          eq: (c: string, v: unknown) => ((filtri[c] = v), q),
+          maybeSingle: () =>
+            Promise.resolve({
+              data: state.ledger.find((r) => r.reason === filtri.reason && r.ref === filtri.ref) ?? null,
+              error: null,
+            }),
+        };
+        return q;
       }
       return {};
     },
     rpc: (name: string, args: Record<string, unknown>) => {
       state.rpcCalls.push({ name, args });
+      if (name === 'wallet_credit' && !state.walletErr) {
+        state.ledger.push({ reason: String(args.p_reason), ref: String(args.p_ref), delta_cents: Number(args.p_cents) });
+      }
       // 051 — L'accumulo del rimborso ora lo fa il database, in una riga sola e
       // col tetto dentro. Qui lo si imita: se la somma sfonda il totale
       // dell'ordine la funzione non restituisce righe, e chi chiama NON deve
       // arrivare a Stripe. È il caso del doppio rimborso concorrente.
       if (name === 'accumula_rimborso') {
-        const totale = Math.round(state.order.total_price * 100);
+        const totale = state.order.gross_total_cents;
         const nuovo = (state.order.refunded_amount_cents ?? 0) + Number(args.p_delta ?? 0);
         if (nuovo > totale) return Promise.resolve({ data: [], error: null });
         state.order.refunded_amount_cents = nuovo;
@@ -103,13 +140,16 @@ beforeEach(() => {
   state.walletErr = null;
   state.updates = [];
   state.rpcCalls = [];
+  state.ledger = [];
   refundsCreate.mockClear();
   createReversal.mockClear();
 });
 
 describe('refundOrder COD → wallet', () => {
   it('rimborso pieno (non ancora pagato al venditore): wallet, REFUNDED, restore stock, niente CANCEL, niente Stripe', async () => {
-    const res = await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1', notifyBuyer: true });
+    const res = await refundOrder({
+      orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1', notifyBuyer: true,
+    });
 
     expect(res.refundId).toBe('wallet:return_r1');
     const wc = state.rpcCalls.find((c) => c.name === 'wallet_credit');
@@ -132,13 +172,23 @@ describe('refundOrder COD → wallet', () => {
     expect(refundsCreate).not.toHaveBeenCalled();
   });
 
-  it('idempotente: unique violation (23505) → no-op, nessun update di payment_status', async () => {
+  // R82 — Prima su 23505 la funzione usciva subito: «gia' accreditato, non
+  // faccio niente». Ma il 23505 arriva quando un tentativo precedente ha
+  // accreditato e si e' perso la risposta — e quel tentativo, cadendo, ha
+  // restituito la prenotazione. Uscire subito lasciava il cliente col credito e
+  // l'ordine «pagato», il negozio con la sua quota, la merce fuori scaffale.
+  // Adesso il credito non si ripete, e il resto del rimborso va a termine.
+  it('idempotente: con 23505 il credito non si ripete e il rimborso si registra', async () => {
     state.walletErr = { code: '23505', message: 'duplicate' };
+    // Il tentativo di prima aveva accreditato gli stessi 20 €, poi si era persa la risposta.
+    state.ledger.push({ reason: 'cod_refund', ref: 'return_r1', delta_cents: 2000 });
     const res = await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1' });
 
     expect(res.refundId).toBe('wallet:return_r1');
-    expect(state.updates.some((u) => u.payment_status)).toBe(false);
-    expect(state.rpcCalls.some((c) => c.name === 'restore_stock_for_order')).toBe(false);
+    expect(state.rpcCalls.filter((c) => c.name === 'wallet_credit')).toHaveLength(1);
+    expect(state.rpcCalls.some((c) => c.name === 'storna_rimborso')).toBe(false);
+    expect(state.updates.find((u) => u.payment_status)).toMatchObject({ payment_status: 'REFUNDED' });
+    expect(state.rpcCalls.some((c) => c.name === 'restore_stock_for_order')).toBe(true);
   });
 
   it('parziale: PARTIALLY_REFUNDED, niente restore stock, niente CANCEL', async () => {

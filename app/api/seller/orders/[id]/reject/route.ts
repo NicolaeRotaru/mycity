@@ -81,6 +81,13 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     }
     if (esito.motivo === 'STRIPE_NON_CONFIGURATO') return ApiErrors.unavailable('Rimborsi non disponibili, riprova più tardi');
     if (esito.motivo === 'RIMBORSO_FALLITO') return ApiErrors.badGateway('Rimborso fallito: ' + (esito.dettaglio ?? 'riprova'));
+    // 16/10/2026 — Sul pagamento c'è un rimborso dal cruscotto ancora da dividere fra i negozi.
+    if (esito.motivo === 'RIMBORSO_DA_DIVIDERE') {
+      return ApiErrors.conflict(
+        "Su questo pagamento c'è un rimborso ancora da sistemare, quindi per ora non puoi rifiutare l'ordine. " +
+          "L'amministrazione è già avvisata: riprova più tardi.",
+      );
+    }
     return ApiErrors.internal('Rifiuto fallito');
   }
 

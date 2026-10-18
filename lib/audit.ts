@@ -1,5 +1,6 @@
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import type { AuditAction } from '@/lib/audit-azioni';
 
 /**
  * Helper server-side per scrivere voci nell'audit log.
@@ -11,25 +12,10 @@ import { logger } from '@/lib/logger';
  * Best-effort: non blocca la richiesta se il log fallisce, ma il guasto si
  * vede — vedi `annotaGuasto` qui sotto.
  */
-export type AuditAction =
-  | 'user.approve'
-  | 'user.reject'
-  | 'user.suspend'
-  | 'user.reactivate'
-  | 'user.delete'
-  | 'product.create'
-  | 'product.update'
-  | 'product.hide'
-  | 'product.show'
-  | 'order.refund'
-  | 'order.force_cancel'
-  | 'dispute.resolve_buyer'
-  | 'dispute.resolve_seller'
-  | 'dispute.reject'
-  | 'coupon.create'
-  | 'coupon.delete'
-  | 'kyc.approve'
-  | 'kyc.reject';
+// L'elenco delle azioni e le loro etichette stanno in `lib/audit-azioni.ts`:
+// la pagina del registro (nel browser) le legge da li', senza tirarsi dietro
+// il client di servizio di questo file.
+export type { AuditAction } from '@/lib/audit-azioni';
 
 export type AuditEntry = {
   actorId: string;

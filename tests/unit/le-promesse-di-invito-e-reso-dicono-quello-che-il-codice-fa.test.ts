@@ -12,10 +12,10 @@ import { join } from 'node:path';
  *    e ne paga 30, non 25: si sente preso in giro al primo contatto, e Maria fa
  *    la figura di chi ha promesso una cosa falsa.
  *
- * ② «Per pagamento alla consegna il rimborso viene effettuato con bonifico
- *    sull'IBAN che ci fornisci». L'IBAN non lo chiede nessuno — la tabella dei
- *    resi non ha nessuna colonna bancaria — e `refundOrder` accredita l'importo
- *    sul credito MyCity con causale `cod_refund`.
+ * ② Il reso pagato in contanti: dopo la decisione di Nicola del 17/10/2026
+ *    («Semplifica») i contanti tornano sempre col bonifico e l'IBAN lo chiede
+ *    l'email del rimborso. Le pagine pubbliche che lo dicono le monta
+ *    le-pagine-pubbliche-dicono-come-tornano-i-contanti.test.ts; qui resta l'invito.
  *
  * ── Cosa prova questo file ─────────────────────────────────────────────────
  * Non che il testo contenga la parola giusta: che la PROMESSA e il MECCANISMO
@@ -68,29 +68,5 @@ describe('l’invito: il premio va a chi invita, e il testo lo dice', () => {
     // (app/checkout/page.tsx: `usaCredito: paymentMethod === 'cod' && useCredit`).
     expect(leggi('app/checkout/page.tsx')).toMatch(/usaCredito:\s*paymentMethod === 'cod'/);
     expect(leggi('app/profile/referral/page.tsx')).toMatch(/pagati alla consegna/i);
-  });
-});
-
-describe('il reso in contanti: torna credito, e il testo non promette un bonifico', () => {
-  it('nella tabella dei resi non esiste nessuna colonna bancaria', () => {
-    const tipi = leggi('lib/database.types.ts');
-    const blocco = tipi.slice(tipi.indexOf('      returns: {'));
-    const righe = blocco.slice(0, blocco.indexOf('Insert:'));
-    expect(righe).not.toMatch(/iban|bank|bonifico/i);
-  });
-
-  it('il rimborso di un ordine in contanti diventa credito MyCity', () => {
-    expect(leggi('lib/stripe/payout.ts')).toMatch(/p_reason:\s*'cod_refund'/);
-  });
-
-  it('e nessuna pagina promette più il bonifico sull’IBAN «che ci fornisci»', () => {
-    for (const pagina of ['app/returns/page.tsx', 'app/faq/page.tsx']) {
-      const testo = leggi(pagina)
-        .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
-        .replace(/^\s*\/\/.*$/gm, '');
-      expect(testo, pagina).not.toMatch(/bonifico sull.{0,3}IBAN che ci fornisci/i);
-      expect(testo, pagina).not.toMatch(/il rimborso avviene su IBAN/i);
-      expect(testo, pagina).toMatch(/credito MyCity/);
-    }
   });
 });

@@ -6,6 +6,8 @@ import { Search, Languages, Stethoscope, Loader2, Check, X, AlertTriangle } from
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import type { AttributeField } from '@/lib/category-attributes';
+import { restaDaRivedere, type EsitoPatchModulo } from '@/lib/products/aiPatch';
+import { dilloDopoIlPatch } from '@/components/seller/dilloDopoIlPatch';
 import type {
   ProductChatSnapshot,
   ProductEditPatch,
@@ -31,7 +33,7 @@ type Props = {
   attributeSchema: AttributeField[];
   topCategories: { name: string; slug: string }[];
   imageUrls: string[];
-  onApplyPatch: (patch: ProductEditPatch) => string[];
+  onApplyPatch: (patch: ProductEditPatch) => EsitoPatchModulo;
   disabled?: boolean;
 };
 
@@ -44,6 +46,9 @@ const LANGS: { code: string; label: string }[] = [
   { code: 'ar', label: 'Arabo' },
   { code: 'zh', label: 'Cinese' },
 ];
+
+/** Nessun suggerimento arrivato: niente scritto e niente in sospeso. */
+const NIENTE: EsitoPatchModulo = { cambiati: [], inSospeso: 0, daControllare: [], daRivedere: {}, dichiarazioniDellaCategoria: [] };
 
 const SEV_COLOR: Record<string, string> = {
   alta: 'bg-rose-100 text-rose-700',
@@ -62,6 +67,8 @@ export default function QuickAiTools({
   const [busy, setBusy] = useState<null | 'seo' | 'translate' | 'diagnose'>(null);
   const [lang, setLang] = useState('en');
   const [diag, setDiag] = useState<DiagnoseResult | null>(null);
+  /** Vero dopo «Applica le correzioni»: nel patch restano solo le proposte da rivedere. */
+  const [diagApplicata, setDiagApplicata] = useState(false);
 
   const callAi = async (path: string, extra: Record<string, unknown> = {}) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -84,8 +91,8 @@ export default function QuickAiTools({
     try {
       const json = await callAi('/api/ai/seo');
       if (!json) return;
-      const changed = json.patch ? onApplyPatch(json.patch) : [];
-      toast.success(changed.length ? 'Titolo e tag ottimizzati nel form' : 'Già ottimizzato');
+      const esito = json.patch ? onApplyPatch(json.patch) : NIENTE;
+      dilloDopoIlPatch(esito, { applicato: 'Titolo e tag ottimizzati nel form', niente: 'Già ottimizzato' });
     } catch (err) {
       toast.error(friendlyError(err));
     } finally {
@@ -98,8 +105,8 @@ export default function QuickAiTools({
     try {
       const json = await callAi('/api/ai/translate', { targetLang: lang });
       if (!json) return;
-      const changed = json.patch ? onApplyPatch(json.patch) : [];
-      toast.success(changed.length ? 'Annuncio tradotto nel form — controlla e salva' : 'Niente da tradurre');
+      const esito = json.patch ? onApplyPatch(json.patch) : NIENTE;
+      dilloDopoIlPatch(esito, { applicato: 'Annuncio tradotto nel form — controlla e salva', niente: 'Niente da tradurre' });
     } catch (err) {
       toast.error(friendlyError(err));
     } finally {
@@ -110,6 +117,7 @@ export default function QuickAiTools({
   const runDiagnose = async () => {
     setBusy('diagnose');
     setDiag(null);
+    setDiagApplicata(false);
     try {
       const json = await callAi('/api/ai/diagnose');
       if (!json) return;
@@ -123,12 +131,16 @@ export default function QuickAiTools({
 
   const applyDiagnosePatch = () => {
     if (!diag) return;
-    const changed = onApplyPatch(diag.patch);
-    toast.success(changed.length ? 'Correzioni applicate al form — controlla e salva' : 'Niente da applicare');
-    setDiag((d) => (d ? { ...d, patch: {} } : d));
+    const esito = onApplyPatch(diag.patch);
+    dilloDopoIlPatch(esito, { applicato: 'Correzioni applicate al form — controlla e salva', niente: 'Niente da applicare' });
+    // Quello che e' entrato nel modulo non si riapplica; le proposte (allergeni,
+    // ingredienti…) restano, cosi' si rimettono nel riquadro «Da controllare»
+    // se il negoziante le ha tolte.
+    setDiag((d) => (d ? { ...d, patch: esito.daRivedere } : d));
+    setDiagApplicata(true);
   };
 
-  const hasDiagPatch = !!diag && Object.keys(diag.patch ?? {}).length > 0;
+  const hasDiagPatch = !!diag && restaDaRivedere(diag.patch);
 
   return (
     <div className="rounded-lg border border-cream-200 bg-cream-50 p-3">
@@ -207,13 +219,22 @@ export default function QuickAiTools({
               ))}
             </ul>
           )}
-          {hasDiagPatch && (
+          {hasDiagPatch && !diagApplicata && (
             <button
               type="button"
               onClick={applyDiagnosePatch}
               className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-700"
             >
               <Check size={15} strokeWidth={2.4} aria-hidden /> Applica le correzioni
+            </button>
+          )}
+          {hasDiagPatch && diagApplicata && (
+            <button
+              type="button"
+              onClick={applyDiagnosePatch}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-accent-200 px-3 py-2 text-sm font-semibold text-accent-700 transition-colors hover:bg-accent-50"
+            >
+              <AlertTriangle size={15} strokeWidth={2.4} aria-hidden /> Rivedi le proposte
             </button>
           )}
         </div>

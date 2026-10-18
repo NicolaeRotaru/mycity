@@ -29,14 +29,51 @@ const catena = (tavola) => {
   return c;
 };
 
+/**
+ * 15/10/2026 (R3) — e la risposta la può dare anche un database finto intero.
+ *
+ * `__RISPOSTA_SUPABASE__` vede solo la tavola e le colonne, non i filtri né chi guarda: con lui
+ * non si poteva mettere in scena «la tabella dei profili si è chiusa e la fascia si svuota». Con
+ * `globalThis.__CLIENT_SUPABASE__` la prova consegna un client che applica regole e agganci (per
+ * esempio `aiuti/database-coi-permessi.ts`), e la lettura scritta nel componente gira contro di
+ * lui. Chi non lo imposta non si accorge di niente.
+ */
+const clientDellaProva = () => globalThis.__CLIENT_SUPABASE__;
+
+/**
+ * 15/10/2026 (R13 · R43) — LE PORTE DELL'ACCESSO, DECISE DALLA PROVA.
+ *
+ * Le pagine di accesso, registrazione, verifica dell'email e nuova password
+ * chiamano `signUp`, `resend`, `setSession`, `resetPasswordForEmail`,
+ * `updateUser`: qui non c'erano, e una prova che montava una di quelle pagine la
+ * vedeva scoppiare al primo clic — per questo nessuna le montava, e i loro
+ * difetti si potevano rimettere a suite verde. Con `globalThis.__AUTH_FINTA__`
+ * (un oggetto di funzioni) la prova dice cosa risponde ognuna e conta le
+ * chiamate. Chi non lo imposta riceve una risposta vuota e senza errore.
+ */
+const portaAuth = (nome, ripiego) => async (...argomenti) => {
+  const finta = globalThis.__AUTH_FINTA__?.[nome];
+  if (typeof finta === 'function') return finta(...argomenti);
+  return ripiego;
+};
+const NESSUNO = { data: { user: null, session: null }, error: null };
+
 export const supabase = {
-  from: (tavola) => catena(tavola),
-  rpc: async () => ({ data: null, error: null }),
+  from: (tavola) => (clientDellaProva() ? clientDellaProva().from(tavola) : catena(tavola)),
+  rpc: async (nome, argomenti) =>
+    clientDellaProva()?.rpc ? clientDellaProva().rpc(nome, argomenti) : { data: null, error: null },
   auth: {
     // Chi è collegato lo decide la prova, con `globalThis.__UTENTE__`.
     getUser: async () => ({ data: { user: globalThis.__UTENTE__ ?? null }, error: null }),
+    // Il gettone della sessione lo decide la prova con `globalThis.__GETTONE__`
+    // (15/10/2026): chi non lo imposta ha la sessione di prima, senza gettone, e
+    // i componenti che lo pretendono si fermano su «Sessione scaduta» come prima.
     getSession: async () => ({
-      data: { session: globalThis.__UTENTE__ ? { user: globalThis.__UTENTE__ } : null },
+      data: {
+        session: globalThis.__UTENTE__
+          ? { user: globalThis.__UTENTE__, access_token: globalThis.__GETTONE__ }
+          : null,
+      },
       error: null,
     }),
     /**
@@ -51,13 +88,37 @@ export const supabase = {
       }
       return { data: { subscription: { unsubscribe() {} } } };
     },
-    signOut: async () => ({ error: null }),
+    signOut: portaAuth('signOut', { error: null }),
+    signUp: portaAuth('signUp', NESSUNO),
+    signInWithPassword: portaAuth('signInWithPassword', NESSUNO),
+    resend: portaAuth('resend', NESSUNO),
+    setSession: portaAuth('setSession', NESSUNO),
+    resetPasswordForEmail: portaAuth('resetPasswordForEmail', { data: {}, error: null }),
+    updateUser: portaAuth('updateUser', NESSUNO),
+    exchangeCodeForSession: portaAuth('exchangeCodeForSession', NESSUNO),
   },
   channel: () => ({ on: () => ({ subscribe: () => ({}) }), subscribe: () => ({}), unsubscribe: () => {} }),
   removeChannel: () => {},
   storage: {
-    from: () => ({ getPublicUrl: () => ({ data: { publicUrl: '' } }), upload: async () => ({ data: null, error: null }) }),
+    // L'indirizzo pubblico di una foto caricata lo decide la prova con
+    // `globalThis.__URL_PUBBLICO__` (una funzione del percorso). Senza, resta
+    // vuoto come prima (15/10/2026).
+    from: () => ({
+      getPublicUrl: (percorso) => ({
+        data: {
+          publicUrl: typeof globalThis.__URL_PUBBLICO__ === 'function' ? globalThis.__URL_PUBBLICO__(percorso) : '',
+        },
+      }),
+      upload: async () => ({ data: null, error: null }),
+    }),
   },
+};
+
+/** Le scorciatoie di `lib/supabase/client.ts`, che passano dalle stesse porte qui sopra. */
+export const auth = {
+  signUp: (email, password, options) => supabase.auth.signUp({ email, password, options }),
+  signIn: (email, password, options) => supabase.auth.signInWithPassword({ email, password, options }),
+  signOut: () => supabase.auth.signOut(),
 };
 
 export default supabase;

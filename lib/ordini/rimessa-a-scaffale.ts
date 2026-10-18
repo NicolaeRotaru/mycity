@@ -68,6 +68,18 @@ export interface DomandaScaffale {
    * gia' annullato l'ha annullato qualcun altro, non un rimborso.
    */
   giaRimborsatoPrimaCents: number;
+  /**
+   * 16/10/2026 (riesame del lotto) — `CANCELED` l'ha scritto chi chiama, in
+   * questa stessa operazione, e la merce non l'ha rimessa nessuno: il giro
+   * degli ordini mai accettati, che annulla PRIMA di chiedere il rimborso.
+   *
+   * Senza, la regola qui sotto leggeva «annullato e già rimborsato in parte»
+   * come «chiuso da un rimborso precedente». Un caso: 3 € rimborsati dal
+   * cruscotto Stripe su un ordine ancora nuovo, il negozio non accetta, il giro
+   * lo annulla e rende il resto — e la merce non tornava più a scaffale. Il
+   * rimborso parziale dal cruscotto non chiude l'ordine e non tocca il magazzino.
+   */
+  annullatoDaChiChiama?: boolean;
 }
 
 export type DecisioneScaffale =
@@ -99,6 +111,10 @@ export type DecisioneScaffale =
  * un PREREQUISITO per collegare `annullaLOrdine` a una rotta vera.
  */
 export function decidiRimessaAScaffale(domanda: DomandaScaffale): DecisioneScaffale {
+  // L'ordine l'ha chiuso chi chiama, adesso: la merce torna, anche se il
+  // rimborso non è pieno (il credito MyCity, per esempio, torna per un'altra strada).
+  if (domanda.annullatoDaChiChiama) return { rimetti: true };
+
   if (!domanda.ordineDaChiudere) return { rimetti: false, perche: 'ordine-aperto' };
 
   if (domanda.giaRimborsatoPrimaCents > 0 && domanda.ordine.delivery_status === 'CANCELED') {

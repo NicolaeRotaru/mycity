@@ -65,6 +65,14 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
     if (esito.motivo === 'GIA_ANNULLATO') return ApiErrors.conflict('Ordine già annullato');
     if (esito.motivo === 'STRIPE_NON_CONFIGURATO') return ApiErrors.unavailable('Rimborsi non disponibili, riprova più tardi');
     if (esito.motivo === 'RIMBORSO_FALLITO') return ApiErrors.badGateway("Il rimborso non è partito: riprova o scrivi all'assistenza.");
+    // 16/10/2026 — Sul pagamento c'è un rimborso ancora da sistemare fra i
+    // negozi del carrello: l'annullo aspetta, e l'assistenza è già avvisata.
+    if (esito.motivo === 'RIMBORSO_DA_DIVIDERE') {
+      return ApiErrors.conflict(
+        "Su questo pagamento c'è un rimborso ancora da sistemare, quindi per ora non posso annullare l'ordine. " +
+          "Abbiamo avvisato l'assistenza: riprova più tardi o scrivile.",
+      );
+    }
     return ApiErrors.internal('Annullamento fallito');
   }
 

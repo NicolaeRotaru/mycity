@@ -10,6 +10,11 @@ import { Input, PasswordInput } from '@/components/ui/Field';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { AuthShell } from '@/components/ui/AuthShell';
 import { logger } from '@/lib/logger';
+import {
+  motivoLinkPasswordSenzaSessione,
+  SPIEGAZIONE_RESET,
+  type MotivoResetSenzaSessione,
+} from '@/lib/auth/link-email';
 
 /**
  * Pagina di reset password.
@@ -26,6 +31,18 @@ import { logger } from '@/lib/logger';
  *  5) updateUser({ password }) → success → redirect al sign-in.
  *
  * Se l'utente arriva qui senza token, mostriamo la vista "richiedi link".
+ *
+ * 15/10/2026 (R13) — CHI APRIVA IL LINK SUL TELEFONO TORNAVA AL PUNTO DI PARTENZA.
+ *
+ * Il client del browser usa il flusso PKCE: il link porta un `?code=` che si
+ * scambia solo nel browser che ha chiesto il cambio password. Aperto altrove
+ * (il telefono, l'app della posta) la libreria non tentava nemmeno, e dopo 800
+ * millisecondi questa pagina mostrava di nuovo «Inserisci la tua email», senza
+ * una parola. Due cambi:
+ *  - la strada che funziona ovunque e' /auth/confirm con il `token_hash`: il
+ *    server verifica il link e arriva qui con la sessione gia' nei cookie;
+ *  - quando invece si arriva con un link che qui non puo' funzionare, la
+ *    pagina dice perche' e cosa fare (`lib/auth/link-email.ts`).
  */
 
 function translateError(msg: string): string {
@@ -79,6 +96,8 @@ function ResetPasswordInner() {
   const [requestEmail, setRequestEmail] = useState('');
   const [sendingLink, setSendingLink] = useState(false);
   const [linkSent, setLinkSent] = useState(false);
+  // Perche' il link aperto non ha dato una sessione: si dice, non si tace.
+  const [motivo, setMotivo] = useState<MotivoResetSenzaSessione | null>(null);
 
   // Ascolta gli eventi di Supabase: PASSWORD_RECOVERY ci dice che il magic
   // link è stato consumato e la sessione di recovery è attiva.
@@ -96,6 +115,7 @@ function ResetPasswordInner() {
     const t = setTimeout(async () => {
       const { data } = await supabase.auth.getSession();
       if (data.session) setRecoveryReady(true);
+      else setMotivo(motivoLinkPasswordSenzaSessione(new URLSearchParams(window.location.search), window.location.hash));
       setCheckingSession(false);
     }, 800);
 
@@ -206,6 +226,12 @@ function ResetPasswordInner() {
         <h1 className="font-serif text-[34px] font-extrabold leading-tight text-ink-900">
           Reimposta la password
         </h1>
+        {motivo && (
+          <div role="alert" className="mt-4 rounded-xl border border-secondary-200 bg-secondary-50 p-4 text-sm text-ink-800">
+            <p className="font-bold text-ink-900">{SPIEGAZIONE_RESET[motivo].titolo}</p>
+            <p className="mt-1 leading-relaxed">{SPIEGAZIONE_RESET[motivo].testo}</p>
+          </div>
+        )}
         <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
           Inserisci la tua email: ti mandiamo un link per scegliere una nuova password.
         </p>

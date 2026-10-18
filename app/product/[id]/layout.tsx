@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
+import { leggiProdottoPerMetadati, prodottoDaIndicizzare } from '@/lib/queries/metadati-vetrina';
 import { sizedImage } from '@/lib/image-url';
 import { precaricoFoto } from '@/lib/preload-foto';
 import { HydrationBoundary } from '@tanstack/react-query';
@@ -7,25 +7,12 @@ import { precaricaProdotto } from '@/lib/queries/precarico';
 
 export const revalidate = 300; // 5 min ISR sui metadata
 
-type ProductMeta = {
-  id: string;
-  name: string;
-  description: string | null;
-  price: number;
-  images: string[] | null;
-  status: string;
-  stock: number | null;
-  profiles: { store_name: string | null; is_approved: boolean } | null;
-};
-
 // 27/8/2026 (R010) — vedi `lib/supabase/lettura-per-metadati.ts`: prima, con le variabili
 // mancanti, questa pagina rispondeva «prodotto non trovato» senza dire niente a nessuno.
-const fetchProduct = (id: string) =>
-  leggiPerMetadati<ProductMeta>(
-    'products',
-    'id, name, description, price, images, status, stock, profiles!products_seller_id_fkey ( store_name, is_approved )',
-    { id },
-  );
+// 15/10/2026 (R3) — il negozio arriva dalla vista pubblica, non da `profiles`: chi legge
+// questi metadati e' sempre un estraneo (Google, WhatsApp), e dopo la migrazione 161
+// `profiles` per lui e' chiusa. Ogni scheda avrebbe preso «noindex».
+const fetchProduct = (id: string) => leggiProdottoPerMetadati(id);
 
 export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const params = await props.params;
@@ -55,7 +42,7 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
       images: img,
     },
     // Niente indicizzazione se il negozio non è approvato o il prodotto non è disponibile
-    robots: product.status === 'available' && product.profiles?.is_approved
+    robots: prodottoDaIndicizzare(product)
       ? undefined
       : { index: false },
     alternates: { canonical: `/product/${params.id}` },
@@ -82,7 +69,20 @@ export default async function ProductLayout(
   props: { children: React.ReactNode; params: Promise<{ id: string }> },
 ) {
   const params = await props.params;
-  const product = await fetchProduct(params.id);
+  // 15/10/2026 (R3, R55) — Le due letture partono insieme: i metadati (prodotto, poi
+  // il suo negozio) e il precarico. Il precarico chiede il prodotto e poi, in UNA
+  // domanda alla vista pubblica, il negozio della scheda e «Venduto da»
+  // (`lib/queries/scheda-con-venduto-da.ts`). Il guscio aspetta quindi due viaggi in
+  // fila, come prima del 15/10. Finche' in produzione manca la migrazione 126, la
+  // prima scheda aperta da un processo ne aspetta tre; le altre, per dieci minuti,
+  // due. Non e' misurato in rete.
+  //
+  // 16/10/2026 — Qui c'era scritto che la pagina resta in cache cinque minuti e che
+  // l'attesa la paga solo chi la rigenera. Non e' vero: `app/layout.tsx` dichiara
+  // `dynamic = 'force-dynamic'` per tutto il sito, e con quello il `revalidate` qui
+  // sopra non conta. Il guscio gira a OGNI visita: ogni viaggio in piu' lo paga chi
+  // apre la scheda.
+  const [product, precarico] = await Promise.all([fetchProduct(params.id), precaricaProdotto(params.id)]);
 
   const schema = product && {
     '@context': 'https://schema.org',
@@ -127,8 +127,6 @@ export default async function ProductLayout(
    * arrivava due volte. Adesso l'indirizzo lo costruisce `precaricoFoto`, con
    * lo stesso caricatore e lo stesso `sizes` dell'immagine in pagina.
    */
-  const precarico = await precaricaProdotto(params.id);
-
   const primaFoto =
     Array.isArray(product?.images) && product.images[0]
       ? precaricoFoto(sizedImage(product.images[0], 'detail'))
@@ -161,8 +159,11 @@ export default async function ProductLayout(
         `lib/queries/catalogo.ts` — altrimenti il browser non la riconoscerebbe e
         rileggerebbe tutto lo stesso.
 
-        La lettura non e' un viaggio in piu': `leggiPerMetadati` qui sopra e
-        questa passano dallo stesso client, e la pagina la chiedeva comunque.
+        15/10/2026 — Qui c'era scritto «la lettura non e' un viaggio in piu'».
+        Non e' piu' vero: i viaggi li conta il commento in cima al componente.
+        Il precarico porta anche «Venduto da» (R55): letto qui, sul server, il suo
+        avviso sulla migrazione 126 finisce nei registri invece che sul telefono
+        del cliente.
       */}
       <HydrationBoundary state={precarico}>{props.children}</HydrationBoundary>
     </>

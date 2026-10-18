@@ -1,8 +1,9 @@
 # Allineare il database di produzione: la procedura misurata
 
 > **In due righe.** Al database di produzione mancano pezzi che il sito pubblicato già usa, e altri
-> sono tornati indietro il 9 settembre. Si sistema con un comando solo, che applica 48 migrazioni
-> (l'ultima è la 161, la riparazione), più un controllo.
+> sono tornati indietro il 9 settembre. Si sistema con un comando solo, che applica le migrazioni
+> mancanti (48 il 15 ottobre, fino alla 161, la riparazione; di più se nel frattempo ne sono state
+> unite altre), più un controllo.
 
 > 🔴 **Questa procedura scrive sul database di produzione. La firma è di Nicola.**
 
@@ -42,6 +43,13 @@ fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha gi�
 > Lo ha trovato la radiografia dell'11 ottobre; misurato il 14/10 sulla copia fedele, entrando
 > come visitatore senza account. Oggi il negozio si legge per 9 prodotti su 9. Dopo il passo 2,
 > per 0 su 9 da `profiles`, e per 9 su 9 da `seller_public_profiles`.
+>
+> **Stato al 16/10/2026.** La prima ondata del sito (richiesta #258) sposta su
+> `seller_public_profiles` la scheda prodotto, le vetrine, la ricerca, le fasce della home, i
+> preferiti e le anteprime. Carrello, cassa, pagine degli ordini, pagine del fattorino, messaggi e
+> pagine del venditore leggono ancora da `profiles`: verificato il 15/10 sul database ricostruito
+> con tutte le migrazioni, dove dopo la 161 restano solo «la propria riga» e «amministratore». Il
+> passo 2 resta fermo finché non è riparata anche questa seconda parte.
 
 **Cosa devi fare.** La stringa del Session pooler va nel segreto `SUPABASE_DB_URL` appena è unita
 la richiesta #255 del sito, non prima (il perché è nella sezione qui sotto). I passi 0, 2 e 3 vanno fatti insieme, nello stesso giro e a
@@ -143,23 +151,45 @@ sul piano gratuito, e lì le copie non si scaricano. Se il tuo `pg_dump` è più
   intero `/usr/lib/postgresql/17/bin/pg_dump`. Altrimenti può partire ancora il 16: è il tranello
   che ha fatto fallire ventuno copie notturne.
 
+**Il tetto delle 20 migrazioni (dalla richiesta #258).** Il lavoro «Rilascio dopo CI verde» applica
+da solo al massimo 20 migrazioni: se ne mancano di più si ferma prima di toccare il database e
+rimanda qui. È una rete in più, non un permesso: le chiavi di Vercel restano dopo il codice
+dell'avviso in cima.
+
 ### Passo 1 — registrare il baseline
 
 Già fatto il 9 settembre. L'istruzione resta qui sotto, nella storia: è innocua da rilanciare
 (`ON CONFLICT DO NOTHING`), ma non serve.
 
-### Passo 2 — applicare quello che manca, 161 compresa
+### Passo 2 — contare quello che manca, poi applicarlo, 161 compresa
 
 ⚠️ Solo dopo che è online il codice che legge i negozi da `seller_public_profiles` in tutti i
 punti dell'avviso in cima, non solo nel catalogo. Subito prima, la copia del passo 0.
+
+Prima si conta, in sola lettura:
+
+```bash
+SUPABASE_DB_URL="<stringa del Session pooler>" \
+  node scripts/check-migration-drift.mjs
+```
+
+Elenca le migrazioni che mancano: chiamiamo **N** quante sono. Il 15 ottobre erano 48, dalla
+lista della prova generale (fino alla 161). Ogni migrazione unita dopo si aggiunge: con le
+riparazioni di ottobre arriva anche la 163, quindi N sarà almeno 49. **Le migrazioni
+oltre la 161 non facevano parte della prova generale dell'11 ottobre sulla copia fedele della
+produzione**: se l'elenco ne contiene, guardale prima di andare avanti.
+
+Poi si applica, con la stessa riga:
 
 ```bash
 SUPABASE_DB_URL="<stringa del Session pooler>" \
   bash scripts/applica-migrazioni-mancanti.sh
 ```
 
-Atteso: `▶ applicate 48 · gia' presenti 108`, uscita 0. Gli avvisi «contiene un COMMIT suo»
-sono attesi e innocui (vedi la testa dello script).
+Atteso: `▶ applicate N · gia' presenti …`, uscita 0, con lo stesso N di prima (alla prova
+generale: `applicate 48 · gia' presenti 108`). Un numero diverso da N vuol dire che qualcosa è
+cambiato fra i due comandi: fermati e chiedi. Gli avvisi «contiene un COMMIT suo» sono attesi e
+innocui (vedi la testa dello script).
 
 ### Passo 3 — verificare
 

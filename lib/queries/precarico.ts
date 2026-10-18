@@ -1,6 +1,8 @@
 import { QueryClient, dehydrate, type DehydratedState } from '@tanstack/react-query';
 import { logger } from '@/lib/logger';
-import { domandaCategorie, domandaNegozio, domandaProdotto, type ClientDiLettura } from '@/lib/queries/catalogo';
+import { domandaCategorie, domandaNegozio, type ClientDiLettura } from '@/lib/queries/catalogo';
+import { domandaVendutoDa } from '@/lib/queries/venduto-da';
+import { leggiSchedaPerIlGuscio } from '@/lib/queries/scheda-con-venduto-da';
 
 /**
  * IL PRECARICO: i dati che partono DENTRO la pagina, invece di essere chiesti
@@ -34,8 +36,10 @@ async function clienteDiLettura(): Promise<ClientDiLettura | null> {
   }
 }
 
+type Domanda = { queryKey: readonly unknown[]; queryFn: () => Promise<unknown>; staleTime?: number };
+
 async function precarica(
-  domande: (supa: ClientDiLettura) => Array<{ queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }>,
+  lavoro: (supa: ClientDiLettura, qc: QueryClient) => Promise<unknown>,
 ): Promise<DehydratedState> {
   const vuoto = dehydrate(new QueryClient());
   const supa = await clienteDiLettura();
@@ -43,9 +47,7 @@ async function precarica(
 
   const qc = new QueryClient();
   try {
-    // `allSettled`: una domanda che va storta non porta giu' le altre, e il
-    // browser rifara' solo quella.
-    await Promise.allSettled(domande(supa).map((d) => qc.prefetchQuery(d)));
+    await lavoro(supa, qc);
     return dehydrate(qc);
   } catch (e) {
     logger.warn('[precarico] non riuscito: la pagina si riempie dal browser', e);
@@ -53,14 +55,41 @@ async function precarica(
   }
 }
 
-/** I dati sopra la piega della home: oggi le categorie. */
-export function precaricaHome(): Promise<DehydratedState> {
-  return precarica((supa) => [domandaCategorie(supa)]);
+/**
+ * Le domande partono insieme. `allSettled`: una domanda che va storta non porta
+ * giu' le altre, e il browser rifara' solo quella.
+ */
+function insieme(qc: QueryClient, domande: Domanda[]) {
+  return Promise.allSettled(domande.map((d) => qc.prefetchQuery(d)));
 }
 
-/** La scheda del prodotto: nome, prezzo, foto e negozio, dentro l'HTML. */
+/** I dati sopra la piega della home: oggi le categorie. */
+export function precaricaHome(): Promise<DehydratedState> {
+  return precarica((supa, qc) => insieme(qc, [domandaCategorie(supa)]));
+}
+
+/**
+ * La scheda del prodotto: nome, prezzo, foto e negozio, dentro l'HTML. E il
+ * riquadro «Venduto da» del suo negozio.
+ *
+ * 15/10/2026 (R55) — «Venduto da» si leggeva solo nel browser: quando la vista
+ * dei negozi non aveva le colonne della migrazione 126, l'avviso restava nella
+ * console del telefono del cliente, dove nessuno lo legge. Letto qui, l'avviso
+ * esce dal server e finisce nei registri. Si chiede solo per un negozio che la
+ * vetrina mostra: per gli altri la pagina dice «non disponibile» e il riquadro
+ * non c'e'.
+ *
+ * 16/10/2026 — Il negozio della scheda e «Venduto da» arrivano dalla STESSA
+ * domanda alla vista (`leggiSchedaPerIlGuscio`): due viaggi in fila invece di
+ * quattro. Una lettura che va storta qui non scrive niente, come faceva
+ * `prefetchQuery`: il browser rifara' la domanda. Il guasto vero della vista lo
+ * scrive gia' chi legge la vista.
+ */
 export function precaricaProdotto(id: string): Promise<DehydratedState> {
-  return precarica((supa) => [domandaProdotto(supa, id)]);
+  return precarica(async (supa, qc) => {
+    const voci = await leggiSchedaPerIlGuscio(supa, id).catch(() => []);
+    for (const voce of voci) qc.setQueryData(voce.queryKey, voce.data);
+  });
 }
 
 /**
@@ -74,5 +103,7 @@ export function precaricaProdotto(id: string): Promise<DehydratedState> {
  * mano.
  */
 export function precaricaNegozio(id: string): Promise<DehydratedState> {
-  return precarica((supa) => [domandaNegozio(supa, id)]);
+  // 15/10/2026 (R55) — anche «Venduto da», che la vetrina mostra in fondo: letto
+  // qui, l'avviso sulla migrazione 126 finisce nei registri del server.
+  return precarica((supa, qc) => insieme(qc, [domandaNegozio(supa, id), domandaVendutoDa(supa, id)]));
 }

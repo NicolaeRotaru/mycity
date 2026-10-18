@@ -115,6 +115,11 @@ const ENV_IMPORTANTI = [
   // e il negozio semplicemente non incassa piu' con la carta.
   'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
   'STRIPE_WEBHOOK_SECRET',
+  // 16/10/2026 — Il segreto del SECONDO indirizzo Stripe, quello degli avvisi
+  // sui conti dei negozi («bonifico rifiutato dalla banca del negozio»,
+  // «versamenti bloccati»): senza, quegli avvisi vengono respinti
+  // (lib/stripe/webhook/firma.ts) e un bonifico rimbalzato non lo vede nessuno.
+  'STRIPE_CONNECT_WEBHOOK_SECRET',
   'RESEND_API_KEY',
   // 6/9/2026 — Senza questa, in produzione non parte NESSUNA email: lib/env.ts non
   // ripiega piu' su un mittente che nessuno ha configurato e lib/email/client.ts si

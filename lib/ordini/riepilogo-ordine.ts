@@ -18,6 +18,12 @@
  * euro con la virgola porta i suoi errori: qui si converte una volta sola, all'ingresso.
  */
 
+import {
+  centesimiDelBonificoDalSegno,
+  eUnBonificoDiRimborso,
+  rimborsiGiaScritti,
+} from '@/lib/stripe/elenco-dei-rimborsi';
+
 export type SegnoVoce = 'piu' | 'meno';
 
 export type VoceRiepilogo = {
@@ -82,7 +88,52 @@ export type StatoPagamento =
   | { tipo: 'contanti-da-pagare'; centesimi: number }
   | { tipo: 'gia-pagato-con-carta'; centesimi: number }
   | { tipo: 'rimborsato' }
+  | { tipo: 'bonifico-a-mano'; centesimi: number }
   | { tipo: 'non-lo-so' };
+
+/** Le colonne dell'ordine che decidono cosa dire sul pagamento. */
+export type OrdinePerIlPagamento = {
+  payment_method?: string | null;
+  payment_status?: string | null;
+  delivery_status?: string | null;
+  /** L'elenco dei rimborsi scritti dal server (migrazione 061: il cliente lo legge, non lo scrive). */
+  stripe_refund_id?: string | null;
+};
+
+/**
+ * Quanto c'è da restituire col bonifico: la somma dei segni «bonifico:<cent>:<chiave>» che
+ * `refundOrder` aggiunge all'elenco dei rimborsi dell'ordine, uno per ogni reso o reclamo.
+ */
+function centesimiDeiBonifici(ordine: OrdinePerIlPagamento): number {
+  let somma = 0;
+  for (const id of rimborsiGiaScritti(ordine)) {
+    if (eUnBonificoDiRimborso(id)) somma += centesimiDelBonificoDalSegno(id) ?? 0;
+  }
+  return somma;
+}
+
+/**
+ * La frase del riquadro «bonifico a mano»: la pagina la mostra, una prova la legge.
+ *
+ * Il bonifico lo fa a mano chi amministra MyCity, quando il cliente risponde all'email del
+ * rimborso con l'IBAN. Sul sito non esiste un «fatto»: la frase dice come funziona, ed è vera
+ * prima e dopo il pagamento. Mai «rimborsato», mai «arrivato». Al tempo presente, perché l'email
+ * parte dopo che il rimborso è registrato e un invio che cade finisce solo nel registro: «ti
+ * abbiamo scritto» sarebbe falso proprio a chi non l'ha ricevuta.
+ *
+ * Collaudo del 17/10 — la frase diceva «se non trovi la nostra email, scrivici» senza condizione:
+ * a bonifico già ricevuto il cliente veniva invitato a fare una cosa che non serve più. L'invito
+ * vale solo finché il bonifico non l'ha ricevuto; il resto dice come si fa, vero prima e dopo. Senza
+ * la parola «arrivato», che la pagina non dice mai sui contanti (D13).
+ */
+export function fraseDelBonificoAMano(centesimi: number, euro: (centesimi: number) => string): string {
+  return (
+    `Rimborso di ${euro(centesimi)} con un bonifico, che facciamo a mano. ` +
+    "Per farlo ti chiediamo per email l'IBAN e il nome dell'intestatario del conto, che ci mandi rispondendo. " +
+    'Se non hai ancora ricevuto il bonifico e non trovi la nostra email, scrivici dalla pagina Contatti senza mettere ' +
+    "l'IBAN nel messaggio: ti rispondiamo per email."
+  );
+}
 
 /**
  * Cosa dire a chi guarda l'ordine, sul pagamento.
@@ -95,15 +146,33 @@ export type StatoPagamento =
  * Il quarto caso — «non lo so» — non è pedanteria: un ordine vecchio può non avere il metodo scritto,
  * e su un ordine di cui non so come è stato pagato non devo dire NIENTE. Meglio un riquadro in meno
  * di un riquadro che sbaglia sui soldi.
+ *
+ * 17/10/2026 — Decisione di Nicola («Semplifica»): i contanti tornano sempre con un bonifico fatto a
+ * mano, e la pagina non chiede più niente al server oltre all'ordine. Sui contanti ci sono due frasi
+ * sole, e ogni altra combinazione non ne dice nessuna:
+ *  · rimborsato (anche in parte) con almeno un segno di bonifico sull'ordine → «bonifico a mano»,
+ *    con la somma dei segni: solo la parte in contanti, mai il lordo;
+ *  · in attesa di pagamento (PENDING o vuoto) su un ordine né consegnato né annullato → «Paghi X in
+ *    contanti al rider». Prima bastava «non PAID»: un ordine annullato (FAILED), uno consegnato con
+ *    l'incasso non ancora registrato, uno rimborsato in parte senza bonifico dicevano tutti di
+ *    pagare di nuovo l'intero al rider.
+ * La carta resta com'era.
  */
-export function statoPagamento(
-  ordine: { payment_method?: string | null; payment_status?: string | null },
-  totaleCentesimi: number,
-): StatoPagamento {
+export function statoPagamento(ordine: OrdinePerIlPagamento, totaleCentesimi: number): StatoPagamento {
   const metodo = (ordine.payment_method ?? '').toLowerCase();
   const stato = (ordine.payment_status ?? '').toUpperCase();
+  if (metodo === 'cod') {
+    const consegna = (ordine.delivery_status ?? '').toUpperCase();
+    const bonifici = centesimiDeiBonifici(ordine);
+    if ((stato === 'REFUNDED' || stato === 'PARTIALLY_REFUNDED') && bonifici > 0) {
+      return { tipo: 'bonifico-a-mano', centesimi: bonifici };
+    }
+    if ((stato === 'PENDING' || stato === '') && consegna !== 'DELIVERED' && consegna !== 'CANCELED') {
+      return { tipo: 'contanti-da-pagare', centesimi: totaleCentesimi };
+    }
+    return { tipo: 'non-lo-so' };
+  }
   if (stato === 'REFUNDED') return { tipo: 'rimborsato' };
   if (metodo === 'card' && stato === 'PAID') return { tipo: 'gia-pagato-con-carta', centesimi: totaleCentesimi };
-  if (metodo === 'cod' && stato !== 'PAID') return { tipo: 'contanti-da-pagare', centesimi: totaleCentesimi };
   return { tipo: 'non-lo-so' };
 }

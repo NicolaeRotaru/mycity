@@ -7,7 +7,12 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { writeAudit } from '@/lib/audit';
-import { resolveAiPatch, type AiProductPatch, type CategoryRow } from '@/lib/products/aiPatch';
+import {
+  messaggioDichiarazioniProtette,
+  resolveAiPatch,
+  type AiProductPatch,
+  type CategoryRow,
+} from '@/lib/products/aiPatch';
 import {
   productSnapshot,
   PRODUCT_SNAPSHOT_COLS,
@@ -15,6 +20,11 @@ import {
 } from '@/lib/products/aiSnapshot';
 import { classifyProductPolicy } from '@/lib/ai/moderation';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import {
+  daCompletareDopoLaModifica,
+  erroreDiSalvataggio,
+  messaggioDaCompletare,
+} from '@/lib/products/prontoPerLaVendita';
 
 /**
  * Applica al prodotto un patch confermato dal venditore nella chat Assistenza.
@@ -64,7 +74,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const categories = (categoriesData ?? []) as CategoryRow[];
   const current = row as unknown as ProductRow;
 
-  const { update, changed } = resolveAiPatch({
+  const { update, changed, protetti } = resolveAiPatch({
     patch,
     current: {
       attributes: current.attributes ?? null,
@@ -87,7 +97,20 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   });
 
   if (Object.keys(update).length === 0) {
+    // R41 — Se la modifica chiedeva solo di cambiare allergeni o ingredienti,
+    // il negoziante deve sapere perche' non succede niente, e dove si fa.
+    if (protetti.length > 0) {
+      return ApiErrors.invalidRequest(messaggioDichiarazioniProtette(protetti));
+    }
     return ApiErrors.invalidRequest('Nessuna modifica valida da applicare.');
+  }
+
+  // R36 — Prima di metterlo in vendita, gli stessi controlli del modulo: foto,
+  // nome, descrizione, prezzo, categoria e i campi obbligatori della categoria
+  // (per un alimento: Allergeni e Ingredienti). Il modulo li faceva, la chat no.
+  const { mancanti, categoriaNuova } = daCompletareDopoLaModifica({ prima: current, update, categories });
+  if (mancanti.length > 0) {
+    return ApiErrors.invalidRequest(messaggioDaCompletare(mancanti, categoriaNuova), { mancanti });
   }
 
   // #5 — Il cancello sui prodotti vietati c'era sulla rotta che li crea, e
@@ -131,7 +154,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   if (error || !updated) {
     logger.error('catalog-apply update failed', { productId, status: error?.code });
-    return ApiErrors.badGateway('Non sono riuscito a salvare. Riprova.');
+    // R36 — Una regola del database (23514) non si supera riprovando: il suo
+    // motivo arriva al negoziante. Solo un guasto vero dice «Riprova».
+    const esito = erroreDiSalvataggio(error);
+    return esito.tipo === 'regola'
+      ? ApiErrors.invalidRequest(esito.messaggio)
+      : ApiErrors.badGateway(esito.messaggio);
   }
 
   // #196 — Chi ha scritto cosa. Le modifiche fatte dall'AI non lasciavano

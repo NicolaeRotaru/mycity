@@ -65,6 +65,7 @@ describe('GET /api/health', () => {
     process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
     process.env.STRIPE_SECRET_KEY = 'sk_test';
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
+    process.env.STRIPE_CONNECT_WEBHOOK_SECRET = 'whsec_conti_test';
     process.env.RESEND_API_KEY = 're_test';
     // 6/9/2026 — la chiave della posta senza il mittente non spedisce niente: da oggi,
     // in produzione, se RESEND_FROM manca lib/email/client.ts si ferma prima di chiamare

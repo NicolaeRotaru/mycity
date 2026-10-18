@@ -620,12 +620,21 @@ export default function SettingsPage() {
                     voce `orders`) e questa frase dice, una per una, le cose
                     che restano: sono le stesse che quel file elenca. Se un
                     giorno cambia l'elenco, cambia anche questa frase.
+                    17/10/2026 — resta anche l'avviso del bonifico con l'email: la
+                    cancellazione non tocca le notifiche degli amministratori, e
+                    nessuna potatura le toglie. Stesse parole della FAQ.
                   */}
                   <p className="text-sm text-red-800 mb-3 leading-relaxed">
                     Verranno rimossi profilo, indirizzi e preferenze. Dei tuoi ordini togliamo nome, telefono,
                     indirizzo di casa e note per il fattorino. Resta la riga dei conti — data, importo, che cosa
                     hai comprato, da quale negozio e la città — perché la legge ci obbliga a tenerla per{' '}
-                    <strong>10 anni</strong>: quella riga non porta più il tuo nome. C'è un periodo di ripensamento
+                    <strong>10 anni</strong>: quella riga non porta più il tuo nome. Se ti è stato approvato un
+                    rimborso con bonifico, già pagato o ancora da pagare, resta anche l'avviso interno con la tua
+                    email, finché non lo cancelliamo noi: serve a chi fa il bonifico per scriverti e pagarti. Un
+                    reclamo ancora aperto, su qualunque ordine, si cancella insieme all'account: aspetta che si
+                    chiuda. Se hai un reso aperto
+                    su un ordine pagato alla consegna, dopo la cancellazione non abbiamo più il tuo indirizzo per
+                    chiederti l'IBAN. C'è un periodo di ripensamento
                     di <strong>7 giorni</strong> durante il quale puoi annullare; dopo,{' '}
                     <strong>l'azione è permanente.</strong>
                   </p>

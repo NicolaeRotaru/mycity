@@ -11,6 +11,12 @@ import { resolveAiPatch, type AiProductPatch, type CategoryRow } from '@/lib/pro
 import { PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import { classifyProductPolicy } from '@/lib/ai/moderation';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import {
+  cosaMancaDopoLaModifica,
+  erroreDiSalvataggio,
+  motivoDaCompletare,
+} from '@/lib/products/prontoPerLaVendita';
+import { fraseSulleDichiarazioni } from '@/lib/products/avvisoDellaDettatura';
 
 /**
  * Applica in un colpo solo le modifiche che il Catalog Copilot ha proposto.
@@ -44,7 +50,11 @@ const MAX_CHANGES = 200;
 
 type Change = { productId?: string; patch?: AiProductPatch };
 type BulkBody = { changes?: Change[] };
-type Esito = { productId: string; ok: boolean; motivo?: string };
+/**
+ * `nonApplicato`: su una modifica scritta solo in parte, cosa non e' entrato e
+ * perche' (le dichiarazioni di un alimento, che il Copilot non scrive mai).
+ */
+type Esito = { productId: string; ok: boolean; motivo?: string; nonApplicato?: string };
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
   // Una chiamata porta fino a duecento modifiche: dieci all'ora sono duemila
@@ -89,7 +99,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
 
   // Primo giro: risolvi i patch. Niente rete, solo validazione.
-  const risolte: { id: string; row: ProductRow; update: Record<string, unknown> }[] = [];
+  const risolte: { id: string; row: ProductRow; update: Record<string, unknown>; nonApplicato: string | null }[] = [];
   const esiti: Esito[] = [];
   for (const c of changes) {
     const row = miei.get(c.productId);
@@ -97,7 +107,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       esiti.push({ productId: c.productId, ok: false, motivo: 'non e un tuo prodotto' });
       continue;
     }
-    const { update } = resolveAiPatch({
+    const { update, protetti } = resolveAiPatch({
       patch: c.patch,
       current: {
         attributes: row.attributes ?? null,
@@ -109,11 +119,28 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       },
       categories,
     });
+    // R41 — allergeni e ingredienti li scrive il negoziante, non il copilot.
+    // Si dice con la frase fissa della dettatura, sia quando la modifica era
+    // fatta solo di dichiarazioni (prodotto fermo) sia quando insieme c'era
+    // altro: prima, in quel caso, il resto si scriveva e l'esito era «ok» senza
+    // una parola, e il Copilot rispondeva «Applicato a 1 prodotti su 1».
+    const nonApplicato = fraseSulleDichiarazioni(protetti);
     if (Object.keys(update).length === 0) {
-      esiti.push({ productId: c.productId, ok: false, motivo: 'nessuna modifica valida' });
+      esiti.push({ productId: c.productId, ok: false, motivo: nonApplicato ?? 'nessuna modifica valida' });
       continue;
     }
-    risolte.push({ id: c.productId, row, update });
+    // R36 — Messo in vendita (o spostato di categoria) dal copilot = stessi
+    // controlli del modulo, con la stessa frase della chat.
+    const mancanti = cosaMancaDopoLaModifica({ prima: row, update, categories });
+    if (mancanti.length > 0) {
+      esiti.push({
+        productId: c.productId,
+        ok: false,
+        motivo: motivoDaCompletare(mancanti),
+      });
+      continue;
+    }
+    risolte.push({ id: c.productId, row, update, nonApplicato });
   }
 
   // Secondo giro: il filtro di conformita', solo su chi tocca nome o
@@ -170,11 +197,16 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       .eq('seller_id', user.id);
     if (error) {
       logger.error('catalog-apply-bulk update failed', { productId: r.id, status: error.code });
-      esiti.push({ productId: r.id, ok: false, motivo: 'non sono riuscito a salvare' });
+      const esito = erroreDiSalvataggio(error);
+      esiti.push({
+        productId: r.id,
+        ok: false,
+        motivo: esito.tipo === 'regola' ? esito.messaggio : 'non sono riuscito a salvare',
+      });
       continue;
     }
     applied += 1;
-    esiti.push({ productId: r.id, ok: true });
+    esiti.push(r.nonApplicato ? { productId: r.id, ok: true, nonApplicato: r.nonApplicato } : { productId: r.id, ok: true });
     const prima: Record<string, unknown> = {};
     for (const campo of Object.keys(r.update)) prima[campo] = (r.row as unknown as Record<string, unknown>)[campo];
     void writeAudit({

@@ -8,6 +8,7 @@ import EmptyState from '@/components/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { leggiPreferiti } from '@/lib/queries/preferiti';
 
 export default function FavoritesPage() {
   const { data: products = [], isLoading, isError, refetch } = useQuery({
@@ -15,33 +16,9 @@ export default function FavoritesPage() {
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
-      const { data, error } = await supabase
-        .from('favorites')
-        .select(`
-          product_id,
-          products (
-            id, name, description, price, images, stock, has_variants, created_at, seller_id, status,
-            profiles!products_seller_id_fkey ( store_name, is_approved )
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      type FavRow = {
-        product_id: string;
-        products: {
-          id: string; name: string; description: string | null;
-          price: string | number; images: string[] | null; stock: number | null; has_variants: boolean | null;
-          created_at: string; seller_id: string; status: string;
-          profiles: { store_name: string | null; is_approved: boolean } | null;
-        } | null;
-      };
-      // Filtra i preferiti il cui negozio è sospeso/non approvato o il
-      // prodotto è stato venduto/disabilitato.
-      return ((data ?? []) as unknown as FavRow[])
-        .map((f) => f.products)
-        .filter((p): p is NonNullable<FavRow['products']> =>
-          !!p && !!p.profiles?.is_approved && p.status === 'available');
+      // 15/10/2026 (R3) — La lettura vive in lib/queries/preferiti.ts: agganciava il
+      // negozio a `profiles`, e dopo la migrazione 161 la pagina si svuotava per ogni cliente.
+      return leggiPreferiti(supabase, user.id);
     },
   });
 

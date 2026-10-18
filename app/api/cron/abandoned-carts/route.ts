@@ -115,6 +115,10 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
       html: messaggio.html,
       text: messaggio.text,
       tags: [{ name: 'template', value: 'abandoned_cart_4h' }],
+      // 15/10/2026 (R24) — E' una email commerciale (parte solo a chi ha dato
+      // il consenso, qui sopra) e lo DICHIARA: da oggi chi non dichiara niente
+      // spedisce un messaggio di servizio, senza il modo di smettere.
+      tipo: 'marketing',
     });
     if ('ok' in res && res.ok) {
       sent++;

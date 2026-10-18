@@ -24,6 +24,7 @@
  */
 import { queryKeys } from '@/lib/queries/keys';
 import { conRipiegoSchema, senzaColonne, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
+import { fetchSellerPublicMap, negozioApprovato } from '@/lib/queries/seller-public-profiles';
 
 /** Il minimo che serve per fare una lettura: vale per il client del browser e per quello del server. */
 export type ClientDiLettura = {
@@ -61,13 +62,37 @@ export type SchedaProdotto = {
   profiles: { id: string; store_name: string | null; is_approved: boolean | null; offers_express: boolean | null; store_hours: unknown } | null;
 };
 
-/** Le colonne della scheda prodotto: elencate per nome, mai `*` (#97). */
+/**
+ * Le colonne della scheda prodotto: elencate per nome, mai `*` (#97).
+ *
+ * 15/10/2026 (R3) — Qui dentro c'era anche il negozio, agganciato a `profiles`.
+ * Con la migrazione 161 quella tabella si chiude a chi non e' il proprietario, e
+ * l'aggancio torna vuoto per ogni cliente: la scheda diceva «il negozio non e'
+ * operativo» e non vendeva piu'. Il negozio adesso arriva da una seconda domanda
+ * alla vista pubblica dei negozi, che regge con `profiles` aperta e chiusa.
+ */
 export const COLONNE_SCHEDA_PRODOTTO = `
         id, name, description, price, images, seller_id, status, created_at, category_id,
         stock, attributes, unit, compare_at_price, condition, express_enabled, has_variants,
         external_source_url,
-        categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name, is_approved, offers_express, store_hours )
+        categories ( slug, name )
       `;
+
+/**
+ * Le colonne del negozio che servono alla scheda, chieste alla vista pubblica.
+ * Esistono tutte anche nella vista di produzione, che non ha la migrazione 126:
+ * una colonna che li' manca farebbe fallire la scheda intera.
+ */
+export const COLONNE_NEGOZIO_DELLA_SCHEDA = 'id, store_name, is_approved, offers_express, store_hours';
+
+/**
+ * Il prodotto si puo' comprare solo se il suo negozio e' operativo: approvato e
+ * presente nella vetrina pubblica. Un negozio sospeso o mai approvato non vende,
+ * anche se la riga del prodotto si legge (il negoziante la propria la legge sempre).
+ */
+export function negozioDellaSchedaOperativo(scheda: Pick<SchedaProdotto, 'profiles'>): boolean {
+  return negozioApprovato(scheda.profiles);
+}
 
 /**
  * Le categorie principali: la prima cosa che si vede scorrendo la home.
@@ -92,28 +117,70 @@ export function domandaCategorie(supa: ClientDiLettura) {
   };
 }
 
+/** La riga del prodotto, senza il negozio. `null` se il prodotto non c'e' (o chi guarda non lo vede). */
+export type RigaDelProdotto = Omit<SchedaProdotto, 'profiles'>;
+
 /**
- * La scheda di un prodotto.
+ * La riga del prodotto, letta da sola.
  *
  * `maybeSingle()` e non `single()`: «non c'e'» e «non riesco a leggerlo» sono
  * due cose diverse, e con `single()` un prodotto cancellato diventava un errore
  * di rete con un pulsante «Riprova» che non poteva funzionare.
  */
+export async function leggiRigaDelProdotto(supa: ClientDiLettura, id: string): Promise<RigaDelProdotto | null> {
+  const { data, error } = await supa
+    .from('products')
+    .select(COLONNE_SCHEDA_PRODOTTO)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  // Il collegamento alla categoria e' uno a uno: PostgREST lo restituisce
+  // come oggetto, ma con le colonne elencate per nome i tipi generati lo
+  // descrivono come elenco. Si dichiara la forma vera.
+  return (data as unknown as RigaDelProdotto | null) ?? null;
+}
+
+/**
+ * La scheda come la vuole la pagina: il prodotto con il suo negozio.
+ *
+ * Scritta una volta sola perche' la usano due strade — il browser
+ * (`domandaProdotto`) e il guscio del server, che il negozio lo legge insieme a
+ * «Venduto da» — e la risposta deve avere la STESSA forma: dal negozio si prendono
+ * solo i cinque campi della scheda, qualunque altra colonna abbia la riga.
+ */
+export function schedaColNegozio(
+  prodotto: RigaDelProdotto,
+  negozio: { id?: unknown; store_name?: unknown; is_approved?: unknown; offers_express?: unknown; store_hours?: unknown } | null,
+): SchedaProdotto {
+  return {
+    ...prodotto,
+    profiles: negozio
+      ? {
+          id: (negozio.id ?? prodotto.seller_id) as string,
+          store_name: (negozio.store_name ?? null) as string | null,
+          is_approved: (negozio.is_approved ?? null) as boolean | null,
+          offers_express: (negozio.offers_express ?? null) as boolean | null,
+          store_hours: negozio.store_hours ?? null,
+        }
+      : null,
+  };
+}
+
+/**
+ * La scheda di un prodotto, come la chiede il browser.
+ *
+ * Il negozio arriva dalla vista pubblica, non da `profiles` (R3). Se la vista
+ * non risponde la scheda fallisce e la pagina offre «Riprova»: dire «il negozio
+ * non e' operativo» a un negozio che lo e' sarebbe una bugia.
+ */
 export function domandaProdotto(supa: ClientDiLettura, id: string) {
   return {
     queryKey: queryKeys.products.detail(id),
     queryFn: async (): Promise<SchedaProdotto | null> => {
-      const { data, error } = await supa
-        .from('products')
-        .select(COLONNE_SCHEDA_PRODOTTO)
-        .eq('id', id)
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) return null;
-      // Il collegamento a categoria e negozio e' uno a uno: PostgREST lo
-      // restituisce come oggetto, ma con le colonne elencate per nome i tipi
-      // generati lo descrivono come elenco. Si dichiara la forma vera.
-      return data as unknown as SchedaProdotto;
+      const prodotto = await leggiRigaDelProdotto(supa, id);
+      if (!prodotto) return null;
+      const negozi = await fetchSellerPublicMap(supa, [prodotto.seller_id], COLONNE_NEGOZIO_DELLA_SCHEDA);
+      return schedaColNegozio(prodotto, negozi.get(prodotto.seller_id) ?? null);
     },
   };
 }

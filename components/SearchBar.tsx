@@ -12,11 +12,9 @@ import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
 import { queryKeys } from '@/lib/queries/keys';
 import { riquadroSuggerimenti } from '@/lib/ricerca/riquadro-suggerimenti';
+import { leggiSuggerimentiRicerca, type Suggerimento } from '@/lib/queries/suggerimenti-ricerca';
 
-type Suggestion =
-  | { kind: 'product'; id: string; name: string; price: number; image: string | null; store: string | null }
-  | { kind: 'store'; id: string; name: string; logo: string | null }
-  | { kind: 'category'; slug: string; name: string };
+type Suggestion = Suggerimento;
 
 const POPULAR = ['Coppa Piacentina', 'Olio EVO', 'Pane fresco', 'Vino dei Colli', 'Salumi', 'Formaggi'];
 
@@ -50,69 +48,10 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
   const { data: suggestions = [], isFetching: suggerimentiInArrivo, isError: ricercaRotta, refetch: riprovaLaRicerca } = useQuery({
     queryKey: queryKeys.search.suggest(debounced),
     enabled: debounced.length >= 2,
-    queryFn: async (): Promise<Suggestion[]> => {
-      const term = debounced;
-      const pattern = `%${term}%`;
-      // 1) Prodotti via RPC smart (FTS italiano + trigram fallback). Più
-      //    rilevante di ILIKE: matcha morfologicamente (es. "salumeria"
-      //    matcha "salumerie") e ordina per ranking semantico.
-      const [productsRes, storesRes, categoriesRes] = await Promise.all([
-        supabase.rpc('search_products_smart', { q: term, lim: 6 }),
-        supabase
-          .from('seller_public_profiles')
-          .select('id, store_name, store_logo')
-          .ilike('store_name', pattern)
-          .limit(3),
-        supabase
-          .from('categories')
-          .select('slug, name')
-          .ilike('name', pattern)
-          .limit(3),
-      ]);
-
-      type ProdSuggest = { id: string; name: string; price: number | string; images: string[] | null; store_name: string | null };
-      type StoreSuggest = { id: string; store_name: string | null; store_logo: string | null };
-      type CatSuggest = { slug: string; name: string };
-
-      // La RPC usa FTS italiano: per termini PARZIALI (es. "pomo") può non
-      // matchare "Pomodori". Fallback ILIKE su name (stessa logica di /search)
-      // così il suggest resta coerente con la pagina dei risultati.
-      let prodRows = (productsRes.data ?? []) as ProdSuggest[];
-      if (prodRows.length === 0) {
-        const { data: ilikeData } = await supabase
-          .from('products')
-          .select('id, name, price, images, profiles!products_seller_id_fkey!inner ( store_name, is_approved )')
-          .eq('status', 'available')
-          .eq('profiles.is_approved', true)
-          .ilike('name', pattern)
-          .limit(6);
-        type IlikeRow = { id: string; name: string; price: number | string; images: string[] | null; profiles?: { store_name: string | null } | null };
-        prodRows = ((ilikeData ?? []) as unknown as IlikeRow[]).map((p) => ({
-          id: p.id, name: p.name, price: p.price, images: p.images, store_name: p.profiles?.store_name ?? null,
-        }));
-      }
-
-      const products: Suggestion[] = prodRows.map((p) => ({
-        kind: 'product' as const,
-        id: p.id,
-        name: p.name,
-        price: Number(p.price),
-        image: Array.isArray(p.images) && p.images[0] ? p.images[0] : null,
-        store: p.store_name ?? null,
-      }));
-      const stores: Suggestion[] = ((storesRes.data ?? []) as StoreSuggest[]).map((s) => ({
-        kind: 'store' as const,
-        id: s.id,
-        name: s.store_name ?? 'Negozio',
-        logo: s.store_logo ?? null,
-      }));
-      const cats: Suggestion[] = ((categoriesRes.data ?? []) as CatSuggest[]).map((c) => ({
-        kind: 'category' as const,
-        slug: c.slug,
-        name: c.name,
-      }));
-      return [...products, ...stores, ...cats];
-    },
+    // 15/10/2026 (R3) — La lettura vive in lib/queries/suggerimenti-ricerca.ts: il
+    // ripiego per le parole a meta' agganciava il negozio a `profiles`, che dopo la
+    // migrazione 161 un cliente non legge piu', e la tendina restava vuota.
+    queryFn: (): Promise<Suggestion[]> => leggiSuggerimentiRicerca(supabase, debounced),
   });
 
   // Stato-vuoto (zero-state): categorie principali per i suggerimenti rapidi

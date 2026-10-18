@@ -5,9 +5,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  *
  * Il 27/8 (R067) `sendEmail` ha imparato a tenere il piede «annulla
  * l'iscrizione» fuori dalle email di servizio: basta dichiarare
- * `tipo: 'transazionale'`. Il ripiego, di proposito, e' «marketing» — meglio un
+ * `tipo: 'transazionale'`. Il ripiego, allora, era «marketing» — meglio un
  * link di troppo in fondo a una ricevuta che una promozione senza il modo di
- * smettere di riceverla.
+ * smettere di riceverla (dal 15/10, R24, il ripiego e' di servizio).
  *
  * Il giro della coda (`app/api/cron/send-emails/route.ts`) non dichiarava
  * niente. Quindi «ordine pronto» e «ordine consegnato» — che sono avvisi

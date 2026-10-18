@@ -26,7 +26,15 @@ import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { uploadProductImages } from '@/lib/products/uploadImages';
-import { patchAiPerIlForm } from '@/lib/products/aiPatch';
+import {
+  esitoDelPiano,
+  patchAiPerIlForm,
+  pianoPatchPerIlModulo,
+  unisciVociDaControllare,
+  type EsitoPatchModulo,
+  type VoceDaControllare,
+} from '@/lib/products/aiPatch';
+import { dilloDopoIlPatch } from '@/components/seller/dilloDopoIlPatch';
 import { colonneDelPatchAi } from '@/lib/products/salvataggio-tracciato';
 import { useFormAutosave } from '@/lib/hooks/useFormAutosave';
 import {
@@ -37,7 +45,6 @@ import {
   UNIT_SUFFIX,
   CONDITION_LABELS,
   PRODUCT_CONDITIONS,
-  PRODUCT_UNITS,
   type ProductUnit,
   type ProductCondition,
   type ProductFormValues,
@@ -195,6 +202,10 @@ export default function ProductForm({
   const [scanOpen, setScanOpen] = useState(false);
   const [aiVariantsBusy, setAiVariantsBusy] = useState(false);
   const [aiPhotosBusy, setAiPhotosBusy] = useState(false);
+  // Le proposte dell'assistente rimaste fuori dalla scheda: il riquadro «Da
+  // controllare». Restano finche' il negoziante non decide (vedi applyPatch).
+  const [daControllare, setDaControllare] = useState<VoceDaControllare[]>([]);
+  const idDaControllare = useId();
   const hasVariants = variants.length > 0;
 
   // ---- Categoria a due livelli (il DB ha già parent_id) ---------------------
@@ -404,24 +415,12 @@ export default function ProductForm({
     status,
   };
 
-  // Risolve slug categoria (+ nome sottocategoria) → category_id, riusando la
-  // logica a due livelli del form. Ritorna '' se lo slug non esiste.
-  const resolveCategoryId = (slug: string, subName?: string): string => {
-    const top = categories.find((c) => !c.parent_id && c.slug === slug);
-    if (!top) return '';
-    if (subName) {
-      const norm = subName.trim().toLowerCase();
-      const sub = categories.find(
-        (c) => c.parent_id === top.id && c.name.toLowerCase() === norm,
-      );
-      if (sub) return sub.id;
-    }
-    return top.id;
-  };
-
-  // Applica un patch dell'AI allo stato del form. Ritorna le etichette dei
-  // campi modificati (per il feedback in chat). Stesse regole di handleExtracted.
-  const applyPatch = (proposta: ProductEditPatch): string[] => {
+  // Applica un patch dell'AI allo stato del form. Ritorna l'esito: le
+  // etichette dei campi scritti DAVVERO (chi chiama legge «vuoto» come «non e'
+  // cambiato niente» e non dice «aggiornato»), quanti avvisi restano aperti su
+  // cose da decidere a mano (allora non dice nemmeno «niente da fare») e il
+  // pezzo del suggerimento da poter rivedere.
+  const applyPatch = (proposta: ProductEditPatch): EsitoPatchModulo => {
     /**
      * 27/8/2026 (R145) — IL PREZZO PASSA DALLA BANDA ANCHE QUI.
      *
@@ -432,100 +431,82 @@ export default function ProductForm({
      * uno zero perso — 20 € che diventano 2 € — entrava in vetrina al primo
      * salvataggio. Adesso la banda e' la stessa funzione per tutti e due, e il
      * prezzo scartato si dice invece di sparire.
+     *
+     * 16/10/2026 — Cosa si scrive e cosa si dice lo decide
+     * `pianoPatchPerIlModulo`: qui si esegue soltanto. Un patch fatto solo di
+     * allergeni (o di un prezzo fuori banda) non scrive niente e restituisce
+     * una lista vuota: prima restituiva i motivi dello scarto, e la chat
+     * mostrava «Campi aggiornati nel form» accanto all'avviso «Allergeni NON
+     * compilato».
      */
-    const { patch, rifiutati } = patchAiPerIlForm(proposta, { prezzoAttuale: getValues('price') });
-    const changed: string[] = [...rifiutati];
-    // Il prezzo fuori banda `patchAiPerIlForm` l'ha gia' tolto: quello che
-    // segniamo qui e' solo cio' che entra davvero nei campi.
-    segnaCampiDallAi(colonneDelPatchAi(patch as unknown as Record<string, unknown>));
+    const piano = pianoPatchPerIlModulo(proposta, {
+      prezzoAttuale: getValues('price'),
+      categorie: categories,
+      categoriaAttuale: currentCategoryId,
+      modo: mode,
+    });
+    // R41 — Quello che l'assistente proponeva e non entra nei campi si dice, col
+    // valore proposto: una riga nel riquadro «Da controllare» per ogni cosa (il
+    // prezzo fuori banda, le dichiarazioni col pulsante per usarle). Prima era
+    // un avviso a comparsa per ognuna, a tempo: se ne vedevano tre, e le altre
+    // scadevano senza essere mai comparse.
+    setDaControllare((prima) => unisciVociDaControllare(prima, piano.daControllare));
+    // Quello che segniamo qui e' solo cio' che e' passato dai filtri.
+    segnaCampiDallAi(colonneDelPatchAi(piano.patch as unknown as Record<string, unknown>));
 
-    if (typeof patch.name === 'string' && patch.name.trim()) {
-      setValue('name', patch.name.trim(), { shouldValidate: true });
-      changed.push('nome');
-    }
-    if (typeof patch.description === 'string' && patch.description.trim()) {
-      setValue('description', patch.description.trim(), { shouldValidate: true });
-      changed.push('descrizione');
-    }
-    if (typeof patch.price === 'number' && patch.price > 0) {
-      setValue('price', patch.price as unknown as number, { shouldValidate: true });
-      changed.push('prezzo');
-    }
-    if ('compare_at_price' in patch) {
-      if (patch.compare_at_price == null) {
-        setValue('compareAtPrice', undefined as unknown as number, { shouldValidate: true });
-      } else if (typeof patch.compare_at_price === 'number' && patch.compare_at_price > 0) {
-        setValue('compareAtPrice', patch.compare_at_price as unknown as number, { shouldValidate: true });
-      }
-      changed.push('prezzo pieno');
-    }
-    if (patch.unit && (PRODUCT_UNITS as readonly string[]).includes(patch.unit)) {
-      setUnit(patch.unit as ProductUnit);
-      changed.push('unità');
-    }
-    if ('condition' in patch) {
-      if (patch.condition == null) setCondition('');
-      else setCondition(normalizeCondition(String(patch.condition)));
-      changed.push('condizione');
-    }
-    if (patch.unlimited_stock === true) {
-      setUnlimitedStock(true);
-      changed.push('disponibilità');
-    } else if (typeof patch.stock === 'number' && patch.stock >= 0) {
-      setUnlimitedStock(false);
-      setValue('stock', Math.trunc(patch.stock) as unknown as number, { shouldValidate: true });
-      changed.push('disponibilità');
-    }
-
-    // Categoria → risolvi slug/sottocategoria su category_id.
-    let effectiveCategoryId = currentCategoryId;
-    if (patch.category_slug) {
-      const resolved = resolveCategoryId(patch.category_slug, patch.subcategory_name);
-      if (resolved) {
-        setValue('category_id', resolved, { shouldValidate: true });
-        effectiveCategoryId = resolved;
-        changed.push('categoria');
-      }
-    }
-
-    if (Array.isArray(patch.tags)) {
-      const next: string[] = [];
-      for (const raw of patch.tags) {
-        const t = String(raw).trim().toLowerCase().replace(/,+$/, '');
-        if (t && !next.includes(t) && next.length < 15) next.push(t);
-      }
-      setTags(next);
-      changed.push('tag');
-    }
-
-    // Attributi: valida contro i campi della categoria EFFETTIVA (post-cambio).
-    if (patch.attributes && typeof patch.attributes === 'object') {
-      const { fields } = getAttributesForCategory(categories, effectiveCategoryId);
-      for (const [aiKey, rawValue] of Object.entries(patch.attributes)) {
-        const value = typeof rawValue === 'string' ? rawValue.trim() : '';
-        if (!value) continue;
-        const targetKey = AI_ATTR_TO_FIELD[aiKey] ?? aiKey;
-        const field = fields.find((f) => f.key === targetKey);
-        if (!field) continue;
-        if (field.type === 'select' && !(field.options ?? []).includes(value)) continue;
-        setAttribute(targetKey, value);
-        changed.push(field.label);
-      }
-    }
-    if (Array.isArray(patch.attributes_remove)) {
-      for (const key of patch.attributes_remove) {
-        const targetKey = AI_ATTR_TO_FIELD[key] ?? key;
-        setAttribute(targetKey, '');
-        changed.push(`rimosso ${targetKey}`);
+    for (const s of piano.scritture) {
+      switch (s.campo) {
+        case 'name':
+        case 'description':
+          setValue(s.campo, s.valore, { shouldValidate: true });
+          break;
+        case 'price':
+          setValue('price', s.valore as unknown as number, { shouldValidate: true });
+          break;
+        case 'compareAtPrice':
+          setValue('compareAtPrice', (s.valore ?? undefined) as unknown as number, { shouldValidate: true });
+          break;
+        case 'unit':
+          setUnit(s.valore);
+          break;
+        case 'condition':
+          setCondition(s.valore);
+          break;
+        case 'stock':
+          if (s.valore === null) {
+            setUnlimitedStock(true);
+          } else {
+            setUnlimitedStock(false);
+            setValue('stock', s.valore as unknown as number, { shouldValidate: true });
+          }
+          break;
+        case 'category_id':
+          setValue('category_id', s.valore, { shouldValidate: true });
+          break;
+        case 'tags':
+          setTags(s.valore);
+          break;
+        case 'attributo':
+          setAttribute(s.chiave, s.valore);
+          break;
+        case 'status':
+          setStatus(s.valore);
+          break;
       }
     }
 
-    if (mode === 'edit' && patch.status && ['available', 'draft', 'sold'].includes(patch.status)) {
-      setStatus(patch.status);
-      changed.push('stato');
-    }
+    return esitoDelPiano(piano);
+  };
 
-    return changed;
+  // R41 — Allergeni, ingredienti e le altre dichiarazioni proposte restano una
+  // PROPOSTA: il campo si riempie solo se il negoziante preme «Usa questo
+  // valore» sulla riga, e anche allora resta davanti ai suoi occhi fino al
+  // salvataggio.
+  const togliDaControllare = (id: string) => setDaControllare((prima) => prima.filter((v) => v.id !== id));
+  const usaProposta = (voce: VoceDaControllare) => {
+    if (voce.chiave === undefined || voce.valore === undefined) return;
+    setAttribute(voce.chiave, voce.valore);
+    togliDaControllare(voce.id);
   };
 
   // ---- Codice a barre → lookup AI -------------------------------------------
@@ -549,8 +530,12 @@ export default function ProductForm({
       });
       const json = await res.json();
       if (res.ok && json.found && json.patch) {
-        const changed = applyPatch(json.patch as ProductEditPatch);
-        toast.success(changed.length ? 'Compilato dal codice EAN — controlla e salva' : 'Codice EAN salvato', { id: tid });
+        const esito = applyPatch(json.patch as ProductEditPatch);
+        dilloDopoIlPatch(
+          esito,
+          { applicato: 'Compilato dal codice EAN — controlla e salva', niente: 'Codice EAN salvato' },
+          { id: tid },
+        );
       } else {
         toast('Codice EAN salvato. Non ho trovato il prodotto online: compila a mano.', { id: tid });
       }
@@ -756,6 +741,47 @@ export default function ProductForm({
         imageUrls={imageUrls}
         onApplyPatch={applyPatch}
       />
+
+      {daControllare.length > 0 && (
+        <section
+          aria-labelledby={`${idDaControllare}-titolo`}
+          className="rounded-lg border border-accent-200 bg-accent-50 p-3"
+        >
+          <h2 id={`${idDaControllare}-titolo`} className="text-sm font-semibold text-accent-700">
+            Da controllare
+          </h2>
+          <p className="mt-0.5 text-xs text-ink-600">
+            L&apos;assistente proponeva queste cose, ma nella scheda NON sono state scritte. Decidi tu.
+          </p>
+          <ul className="mt-2 space-y-2">
+            {daControllare.map((v, i) => (
+              <li key={v.id} className="flex flex-wrap items-center gap-2 text-sm text-ink-800">
+                <span id={`${idDaControllare}-${i}`} className="min-w-0 flex-1">
+                  {v.motivo}
+                </span>
+                {v.valore !== undefined && (
+                  <button
+                    type="button"
+                    onClick={() => usaProposta(v)}
+                    aria-describedby={`${idDaControllare}-${i}`}
+                    className="shrink-0 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-primary-700"
+                  >
+                    Usa questo valore
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => togliDaControllare(v.id)}
+                  aria-describedby={`${idDaControllare}-${i}`}
+                  className="shrink-0 rounded-lg border border-accent-200 px-3 py-1.5 text-xs font-semibold text-accent-700 transition-colors hover:bg-accent-100"
+                >
+                  {v.valore !== undefined ? 'Non usarlo' : 'Ho capito'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <form onSubmit={makeSubmit(primaryIntent)} className="bg-white border rounded-lg p-6 space-y-4">
         <Input

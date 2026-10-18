@@ -2,13 +2,31 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { isStripeConfigured } from '@/lib/stripe/client';
-import { refundOrder } from '@/lib/stripe/payout';
+import {
+  AccreditoGiaUscitoConAltroImporto,
+  cosaMancaAlBonifico,
+  RimborsoInAttesaDellaDivisione,
+  refundOrder,
+} from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 import { chiComandaIlReso } from '../../chi-comanda-il-reso';
+import {
+  motivoNienteDaRestituire,
+  quantoSiPuoRestituire,
+  type OrdineDaRimborsare,
+} from '@/lib/rimborsi/regole-del-rimborso';
+import {
+  avvisoDelRimborsoNonRegistrato,
+  bonificoDaFinire,
+  RIMBORSO_PARTITO_MA_NON_REGISTRATO,
+  titoloDelResoRimborsato,
+} from '@/lib/rimborsi/bonifici-da-fare';
+import { bonificoDellaChiave } from '@/lib/stripe/elenco-dei-rimborsi';
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 export const runtime = 'nodejs';
 
@@ -76,7 +94,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const supa = await getServerSupabase();
   const { data: ret, error } = await supa
     .from('returns')
-    .select('id, status, seller_id, buyer_id, order_id, refund_amount_cents')
+    .select('id, status, seller_id, buyer_id, order_id, refund_amount_cents, created_at, refund_id')
     .eq('id', params.id)
     .single();
 
@@ -98,8 +116,10 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       : ApiErrors.forbidden();
   }
 
+  // Un «rimborsato» rimasto a meta' si riprende (vedi `ripresa`, piu' sotto).
+  const forseRipresa = body.stato === 'REFUNDED' && ret.status === 'REFUNDED' && !ret.refund_id;
   const partenze = PARTENZE_AMMESSE[body.stato];
-  if (!partenze.includes(ret.status)) {
+  if (!forseRipresa && !partenze.includes(ret.status)) {
     return ApiErrors.conflict(`Un reso in ${ret.status} non può passare a ${body.stato}.`);
   }
 
@@ -108,36 +128,89 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // Il rimborso si controlla PRIMA di prendere il turno, come su `decide`: un
   // importo impossibile non deve lasciare traccia sul reso, e il venditore deve
   // leggere il motivo invece di un guasto tecnico.
-  const COLONNE_ORDINE = 'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents';
-  type OrdineDelReso = {
-    stripe_payment_intent: string | null;
-    payment_method: string | null;
-    gross_total_cents?: number | null;
-    total_price: number | string | null;
-    refunded_amount_cents: number | null;
-  };
-  let ordine: OrdineDelReso | null = null;
+  // R84 — Il tetto lo decide la stessa regola che usa chi muove i soldi: sui
+  // contanti conta solo quello che e' stato incassato davvero.
+  const COLONNE_ORDINE =
+    'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, cash_confirmed_at, payment_status, delivery_status, stripe_refund_id';
+  let ordine: OrdineDaRimborsare | null = null;
   let importoRimborso = 0;
+  /**
+   * Riesame del 16/10, terzo giro — IL RIMBORSO E' GIA' PARTITO, MA IL RESO NON LO SA.
+   *
+   * Succede quando la scrittura dell'esito cade dopo il rimborso (in `decide`
+   * o qui). Prima il reso restava li': «rimborsato» rispondeva «gia' rimborsato
+   * per intero», e l'unica strada era «chiudi senza rimborso», che scriveva al
+   * cliente «chiuso senza rimborso» mentre gli dovevamo il bonifico. Adesso, se
+   * l'ordine porta gia' il rimborso di questo reso, «rimborsato» lo registra sul
+   * reso senza rifarlo (nessun secondo bonifico), e «chiudi» non passa.
+   *
+   * Collaudo del 17/10, terzo giro — se il tentativo di prima e' morto dopo il segno,
+   * l'avviso a chi paga o il credito possono mancare, e registrarlo e basta lasciava il
+   * cliente senza soldi: allora «rimborsato» li finisce (vedi `manca`, piu' sotto).
+   */
+  let giaSullOrdine: { segno: string; centesimi: number } | null = null;
 
-  if (body.stato === 'REFUNDED') {
-    const { data } = await conRipiegoSchema(
+  if (body.stato === 'REFUNDED' || body.stato === 'CANCELED') {
+    const { data, error: errOrdine } = await conRipiegoSchema(
       'orders.select (avanzamento del reso)',
       () => admin.from('orders').select(COLONNE_ORDINE).eq('id', ret.order_id).single(),
       () => admin.from('orders').select(senzaColonne(COLONNE_ORDINE, COLONNE_124)).eq('id', ret.order_id).single(),
     );
-    ordine = (data ?? null) as OrdineDelReso | null;
-    if (!ordine) return ApiErrors.notFound('Ordine del reso non trovato');
+    ordine = (data ?? null) as OrdineDaRimborsare | null;
+    if (!ordine) {
+      return body.stato === 'CANCELED' && errOrdine
+        ? ApiErrors.unavailable("Non riesco a controllare l'ordine del reso: riprova tra poco.")
+        : ApiErrors.notFound('Ordine del reso non trovato');
+    }
+    giaSullOrdine = bonificoDellaChiave(ordine as { stripe_refund_id?: string | null }, `return_${ret.id}`);
+  }
 
-    const lordoCent = ordine.gross_total_cents ?? Math.round(Number(ordine.total_price ?? 0) * 100);
-    const residuoCent = Math.max(0, lordoCent - (ordine.refunded_amount_cents ?? 0));
+  /**
+   * Collaudo del 17/10, terzo giro — «RIMBORSATO» RIMASTO A META' SI RIPRENDE.
+   * Il turno scrive «rimborsato» prima dei soldi: se la funzione muore dentro il
+   * rimborso, il reso resta «rimborsato» senza riferimento, e un secondo
+   * «rimborsato» rispondeva 409 mentre il bonifico non l'aveva chiesto nessuno.
+   * Se l'ordine porta il bonifico di questo reso, lo si finisce, senza un nuovo turno.
+   */
+  const ripresa = forseRipresa && !!giaSullOrdine;
+  if (forseRipresa && !ripresa) {
+    return ApiErrors.conflict(`Un reso in ${ret.status} non può passare a ${body.stato}.`);
+  }
+
+  if (body.stato === 'CANCELED' && giaSullOrdine) {
+    return ApiErrors.conflict(
+      'Il rimborso di questo reso è già partito: non si può chiudere «senza rimborso». ' +
+        'Segna la merce come ricevuta e poi il reso come rimborsato: il rimborso non si ripete, si registra.',
+    );
+  }
+
+  /**
+   * Collaudo del 17/10, quarto giro — SE IL BONIFICO E' FINITO, SI REGISTRA E BASTA.
+   * Segno e avviso (e credito) ci sono: si registra sul reso senza ripassare dal rimborso, come
+   * prima. Si riprende (`refundOrder`) solo se manca un pezzo. Prima ci si ripassava sempre, e un
+   * guasto qualsiasi della ripresa faceva leggere «non è partito» su un rimborso finito.
+   */
+  let manca: 'avviso' | 'credito' | 'niente' | null = null;
+  if (body.stato === 'REFUNDED' && giaSullOrdine) {
+    // Il rimborso c'e' gia': si registra quello, con la cifra promessa all'approvazione.
+    importoRimborso = Number(ret.refund_amount_cents ?? 0) > 0 ? Number(ret.refund_amount_cents) : giaSullOrdine.centesimi;
+    try {
+      manca = await cosaMancaAlBonifico(`return_${ret.id}`, importoRimborso - giaSullOrdine.centesimi);
+    } catch (err) {
+      logger.error('[returns/avanza] bonifico gia sull ordine, non si riesce a vedere se e finito', { returnId: ret.id, err });
+      return ApiErrors.unavailable("Non riesco a controllare l'ordine del reso: riprova tra poco.");
+    }
+  } else if (body.stato === 'REFUNDED' && ordine) {
+    const rimborsabile = quantoSiPuoRestituire(ordine);
+    const residuoCent = rimborsabile.massimoCents;
     // Se non è indicato niente si rimborsa quello che il venditore aveva già
     // promesso quando ha approvato il reso.
     importoRimborso = body.refundAmountCents ?? Number(ret.refund_amount_cents ?? 0) ?? 0;
     if (importoRimborso <= 0) {
       return ApiErrors.invalidRequest('Indica quanto rimborsare al cliente.');
     }
-    if (residuoCent <= 0) {
-      return ApiErrors.conflict('Questo ordine è già stato rimborsato per intero: non resta niente da restituire.');
+    if (rimborsabile.perche !== 'ok') {
+      return ApiErrors.conflict(motivoNienteDaRestituire(rimborsabile.perche));
     }
     if (importoRimborso > residuoCent) {
       return ApiErrors.invalidRequest(
@@ -152,16 +225,18 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // Il turno si prende con la scrittura: due schede aperte sullo stesso reso
   // non possono farlo avanzare due volte.
   const statoPrecedente = ret.status;
-  const { data: preso, error: errPresa } = await admin
-    .from('returns')
-    .update({
-      status: body.stato,
-      decision_notes: body.note ?? null,
-      ...(body.stato === 'REFUNDED' ? { refund_amount_cents: importoRimborso } : {}),
-    })
-    .eq('id', params.id)
-    .eq('status', statoPrecedente)
-    .select('id');
+  const { data: preso, error: errPresa } = ripresa
+    ? { data: [{ id: ret.id }], error: null }
+    : await admin
+        .from('returns')
+        .update({
+          status: body.stato,
+          decision_notes: body.note ?? null,
+          ...(body.stato === 'REFUNDED' ? { refund_amount_cents: importoRimborso } : {}),
+        })
+        .eq('id', params.id)
+        .eq('status', statoPrecedente)
+        .select('id');
 
   if (errPresa) return ApiErrors.internal('Aggiornamento del reso fallito');
   if (!preso || preso.length === 0) {
@@ -169,7 +244,15 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   }
 
   let refundId: string | null = null;
-  if (body.stato === 'REFUNDED') {
+  /** R71 — quanto del rimborso va pagato col bonifico, a mano. */
+  let bonificoCents = 0;
+  if (body.stato === 'REFUNDED' && giaSullOrdine && manca === 'niente') {
+    // Il rimborso e' gia' partito e finito (vedi sopra): si registra, non si rifa'.
+    refundId = giaSullOrdine.segno;
+    bonificoCents = giaSullOrdine.centesimi;
+  } else if (body.stato === 'REFUNDED') {
+    // R71 — Sui contanti il rimborso va col bonifico, sempre (refundOrder). Se e'
+    // gia' sull'ordine (vedi sopra) refundOrder non lo rifa': finisce quello che manca.
     try {
       const res = await refundOrder({
         orderId: ret.order_id,
@@ -178,8 +261,10 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         metadata: { return_id: ret.id },
         idempotencyKey: `return_${ret.id}`,
         notifyBuyer: true,
+        resoChiestoIl: (ret as { created_at?: string | null }).created_at ?? null,
       });
       refundId = res.refundId;
+      bonificoCents = res.bonificoCents ?? 0;
     } catch (err) {
       logger.error('[returns/avanza] rimborso fallito', err);
       // I soldi non sono usciti: il reso torna dov'era, così resta lavorabile
@@ -189,18 +274,46 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         .update({ status: statoPrecedente })
         .eq('id', params.id)
         .eq('status', 'REFUNDED');
-      return ApiErrors.badGateway('Rimborso fallito: ' + (err instanceof Error ? err.message : 'unknown'));
+      // 17/10/2026 — Come `decide`: il negozio legge i due casi che deve
+      // conoscere, e per tutto il resto una frase sola. Mai il testo grezzo
+      // dell'errore (R138: niente messaggi interni).
+      if (err instanceof AccreditoGiaUscitoConAltroImporto) return ApiErrors.conflict(err.message);
+      if (err instanceof RimborsoInAttesaDellaDivisione) return ApiErrors.conflict(err.message);
+      // Il bonifico era gia' registrato sull'ordine: quello resta, manca un pezzo.
+      if (manca === 'avviso' || manca === 'credito') return ApiErrors.badGateway(bonificoDaFinire(manca));
+      return ApiErrors.badGateway("Il rimborso non è partito: riprova o scrivi all'assistenza.");
     }
-    await admin
+  }
+  if (body.stato === 'REFUNDED') {
+    const { error: updErr } = await admin
       .from('returns')
       .update({ refund_id: refundId, refunded_at: new Date().toISOString() })
       .eq('id', params.id);
+    /**
+     * Riesame del 16/10 — UNA SCRITTURA CADUTA NON E' UN «OK».
+     *
+     * I soldi sono gia' partiti (o il bonifico e' gia' registrato sull'ordine).
+     * Il negozio leggeva «rimborsato» come se fosse tutto a posto. Qui si ferma,
+     * e `decide` fa lo stesso (terzo giro del riesame): chi amministra riceve un
+     * avviso con reso, ordine e cifra, e chi ha premuto legge che la
+     * registrazione non e' riuscita.
+     */
+    if (updErr) {
+      const avviso = avvisoDelRimborsoNonRegistrato({
+        resoId: params.id, ordineId: ret.order_id, refundId, bonificoCents, resoGiaRimborsato: true,
+      });
+      try {
+        await notifyAdmins(avviso.titolo, avviso.testo, avviso.link);
+      } catch (e) {
+        logger.error('[returns/avanza] avviso del rimborso non registrato non inviato', { returnId: params.id, e });
+      }
+      return ApiErrors.internal(RIMBORSO_PARTITO_MA_NON_REGISTRATO);
+    }
   }
 
   const TITOLO: Record<string, string> = {
     SHIPPED_BACK: '📦 Reso: merce in viaggio',
     RECEIVED: '📥 Reso: merce ricevuta dal negozio',
-    REFUNDED: '✓ Reso rimborsato',
     CANCELED: '✕ Reso chiuso senza rimborso',
   };
   await admin.from('notifications').insert({
@@ -208,7 +321,13 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     // tipo di avviso: senza, gli interruttori non spegnevano niente.
     category: 'order',
     user_id: ret.buyer_id,
-    title: TITOLO[body.stato],
+    // 17/10 (semplificazione) — Sui contanti il bonifico a questo punto e' solo
+    // da fare: il titolo non dice «rimborsato», come non lo dice la pagina dell'ordine.
+    // Sul misto dice anche il credito gia' tornato (titoloDelResoRimborsato).
+    title:
+      body.stato === 'REFUNDED'
+        ? titoloDelResoRimborsato({ importoCents: importoRimborso, bonificoCents })
+        : TITOLO[body.stato],
     body: body.note ?? null,
     link: `/orders/${ret.order_id}`,
   });

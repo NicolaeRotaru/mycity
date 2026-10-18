@@ -1,4 +1,4 @@
-import { readFileSync, mkdtempSync, writeFileSync, chmodSync, mkdirSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, chmodSync, mkdirSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -174,35 +174,42 @@ printf '%s' "$FINTA_RISPOSTA_API"
 exit 0
 `);
 
-  const esito = spawnSync('bash', ['-c', p.run], {
-    cwd: RADICE,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      PATH: `${cestino}:${process.env.PATH}`,
-      REGISTRO: registro,
-      GITHUB_OUTPUT: uscite,
-      GITHUB_STEP_SUMMARY: riepilogo,
-      FINTA_USCITA_DEPLOY: opzioni.uscitaDeploy ?? '',
-      FINTA_RISPOSTA_API: opzioni.rispostaApi ?? '',
-      FINTO_ESITO_ROLLBACK: String(opzioni.esitoRollback ?? 0),
-      FINTO_ESITO_DEPLOY: String(opzioni.esitoDeploy ?? 0),
-      ...(opzioni.env ?? {}),
-    },
-  });
+  // 15/10/2026 (secondo collaudo) — La scena si butta alla fine: tutto quello
+  // che serve si legge prima di uscire, e prima ne restavano sei in /tmp a
+  // ogni esecuzione di ogni prova del rilascio (1.357 contate il 15/10).
+  try {
+    const esito = spawnSync('bash', ['-c', p.run], {
+      cwd: RADICE,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${cestino}:${process.env.PATH}`,
+        REGISTRO: registro,
+        GITHUB_OUTPUT: uscite,
+        GITHUB_STEP_SUMMARY: riepilogo,
+        FINTA_USCITA_DEPLOY: opzioni.uscitaDeploy ?? '',
+        FINTA_RISPOSTA_API: opzioni.rispostaApi ?? '',
+        FINTO_ESITO_ROLLBACK: String(opzioni.esitoRollback ?? 0),
+        FINTO_ESITO_DEPLOY: String(opzioni.esitoDeploy ?? 0),
+        ...(opzioni.env ?? {}),
+      },
+    });
 
-  const righeUscita = readFileSync(uscite, 'utf8').split('\n').filter((r) => r.includes('='));
-  const output: Record<string, string> = {};
-  for (const r of righeUscita) output[r.slice(0, r.indexOf('='))] = r.slice(r.indexOf('=') + 1);
+    const righeUscita = readFileSync(uscite, 'utf8').split('\n').filter((r) => r.includes('='));
+    const output: Record<string, string> = {};
+    for (const r of righeUscita) output[r.slice(0, r.indexOf('='))] = r.slice(r.indexOf('=') + 1);
 
-  return {
-    uscita: esito.status ?? -1,
-    stdout: esito.stdout ?? '',
-    stderr: esito.stderr ?? '',
-    output,
-    riepilogo: readFileSync(riepilogo, 'utf8'),
-    comandi: readFileSync(registro, 'utf8').split('\n').filter(Boolean),
-  };
+    return {
+      uscita: esito.status ?? -1,
+      stdout: esito.stdout ?? '',
+      stderr: esito.stderr ?? '',
+      output,
+      riepilogo: readFileSync(riepilogo, 'utf8'),
+      comandi: readFileSync(registro, 'utf8').split('\n').filter(Boolean),
+    };
+  } finally {
+    rmSync(scena, { recursive: true, force: true });
+  }
 }
 
 function finto(cestino: string, nome: string, corpo: string) {

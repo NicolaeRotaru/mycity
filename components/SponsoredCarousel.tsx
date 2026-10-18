@@ -10,23 +10,14 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
+import { leggiSponsorizzati, type Sponsorizzato } from '@/lib/queries/fasce-prodotti';
 
 type Props = {
   placement: 'home_top' | 'search_top' | 'category_top';
   categorySlug?: string;
 };
 
-type SponsoredItem = {
-  id: string;
-  product_id: string;
-  product: {
-    id: string;
-    name: string;
-    price: number;
-    images: string[] | null;
-    profiles: { store_name: string | null; is_approved: boolean } | null;
-  } | null;
-};
+type SponsoredItem = Sponsorizzato;
 
 /**
  * Carosello "Sponsored" — placement-aware. Mostra prodotti dei seller
@@ -38,33 +29,11 @@ type SponsoredItem = {
 export default function SponsoredCarousel({ placement, categorySlug }: Props) {
   const { data: items = [] } = useQuery({
     queryKey: queryKeys.sponsored.placement(placement, categorySlug),
-    queryFn: async (): Promise<SponsoredItem[]> => {
-      const today = new Date().toISOString().slice(0, 10);
-      // Legge la vista sponsored_active_public: l'annuncio senza i conti.
-      // La tabella sponsored_listings porta anche daily_budget_cents,
-      // spent_cents, impressions, clicks e stripe_session_id, ed era leggibile
-      // da chiunque: i concorrenti vedevano quanto spendeva ogni negozio.
-      let q = supabase
-        .from('sponsored_active_public')
-        .select(`
-          id, product_id,
-          product:products (
-            id, name, price, images,
-            profiles!products_seller_id_fkey ( store_name, is_approved )
-          )
-        `)
-        .eq('placement', placement)
-        .lte('start_date', today)
-        .gte('end_date', today)
-        .limit(8);
-      if (placement === 'category_top' && categorySlug) {
-        q = q.eq('category_slug', categorySlug);
-      }
-      const { data } = await q;
-      return ((data ?? []) as unknown as SponsoredItem[]).filter(
-        (it) => it.product && it.product.profiles?.is_approved,
-      );
-    },
+    // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il
+    // negozio a `profiles`, che dopo la migrazione 161 un cliente non legge piu', e gli
+    // annunci pagati sparivano dalla home.
+    queryFn: (): Promise<SponsoredItem[]> =>
+      leggiSponsorizzati(supabase, { placement, categorySlug, oggi: new Date().toISOString().slice(0, 10) }),
   });
 
   /**

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { scritturaSuUnaRiga } from './aiuti/scrittura-su-una-riga';
 
 /**
  * 27/8/2026 (R043) — DOPO CHE I SOLDI SONO USCITI, NON SI PUÒ PIÙ TORNARE INDIETRO.
@@ -88,13 +89,11 @@ vi.mock('@/lib/supabase/server', () => ({
           // scritture fatte dopo cambiavano anche quello che il codice aveva
           // letto prima, e la prova misurava il finto invece del vero.
           select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: { ...state.order }, error: null }) }) }),
-          update: (u: Record<string, unknown>) => ({
-            eq: () => {
+          update: (u: Record<string, unknown>) =>
+            scritturaSuUnaRiga(() => state.order as unknown as Record<string, unknown>, () => {
               state.updates.push(u);
               Object.assign(state.order, u);
-              return Promise.resolve({ error: null });
-            },
-          }),
+            }),
         };
       }
       if (table === 'profiles') {

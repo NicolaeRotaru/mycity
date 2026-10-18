@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { scritturaSuUnaRiga } from './aiuti/scrittura-su-una-riga';
 
 /**
  * #55 — DUE BASI DIVERSE NELLO STESSO CONTO.
@@ -36,13 +37,17 @@ type Order = {
   rider_payout_status: string | null;
   rider_transfer_id: string | null;
   delivery_status: string;
+  wallet_applied_cents: number;
+  payment_status: string;
+  cash_confirmed_at: string | null;
 };
 
 const state: {
   order: Order;
   updates: Record<string, unknown>[];
   rpcCalls: Array<{ name: string; args: Record<string, unknown> }>;
-} = { order: ordineBase(), updates: [], rpcCalls: [] };
+  ledger: Array<{ reason: string; ref: string; delta_cents: number }>;
+} = { order: ordineBase(), updates: [], rpcCalls: [], ledger: [] };
 
 /** Ordine da 50 euro pagato con 20 euro di credito: cassa attesa 30. */
 function ordineBase(): Order {
@@ -62,6 +67,11 @@ function ordineBase(): Order {
     rider_payout_status: null,
     rider_transfer_id: null,
     delivery_status: 'DELIVERED',
+    // R84 — i 20 euro di credito sono scritti sull'ordine, e i 30 di contanti
+    // risultano incassati: e' quello che si puo' restituire.
+    wallet_applied_cents: 2000,
+    payment_status: 'PAID',
+    cash_confirmed_at: '2026-10-01T10:00:00Z',
   };
 }
 
@@ -80,18 +90,41 @@ vi.mock('@/lib/supabase/server', () => ({
       if (table === 'orders') {
         return {
           select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: state.order, error: null }) }) }),
-          update: (u: Record<string, unknown>) => ({
-            eq: () => {
+          update: (u: Record<string, unknown>) =>
+            scritturaSuUnaRiga(() => state.order as unknown as Record<string, unknown>, () => {
               state.updates.push(u);
-              return Promise.resolve({ error: null });
-            },
-          }),
+            }),
         };
+      }
+      if (table === 'wallet_ledger') {
+        // Dopo l'accredito `refundOrder` rilegge la riga a diario della sua chiave (R82).
+        const filtri: Record<string, unknown> = {};
+        const q = {
+          select: () => q,
+          eq: (c: string, v: unknown) => ((filtri[c] = v), q),
+          maybeSingle: () =>
+            Promise.resolve({
+              data: state.ledger.find((r) => r.reason === filtri.reason && r.ref === filtri.ref) ?? null,
+              error: null,
+            }),
+        };
+        return q;
+      }
+      // 17/10/2026 — sui contanti il bonifico da fare si annuncia agli amministratori dentro il
+      // rimborso (refundOrder): il finto risponde con un amministratore e scrive l'avviso.
+      if (table === 'profiles') {
+        return { select: () => ({ eq: () => Promise.resolve({ data: [{ id: 'admin-1' }], error: null }) }) };
+      }
+      if (table === 'notifications') {
+        return { insert: () => Promise.resolve({ data: null, error: null }) };
       }
       return {};
     },
     rpc: (name: string, args: Record<string, unknown>) => {
       state.rpcCalls.push({ name, args });
+      if (name === 'wallet_credit') {
+        state.ledger.push({ reason: String(args.p_reason), ref: String(args.p_ref), delta_cents: Number(args.p_cents) });
+      }
       if (name === 'accumula_rimborso') {
         // Come la funzione vera dopo la migrazione 124: il tetto è il LORDO.
         const tetto = state.order.gross_total_cents ?? Math.round(state.order.total_price * 100);
@@ -102,6 +135,8 @@ vi.mock('@/lib/supabase/server', () => ({
       }
       return Promise.resolve({ data: null, error: null });
     },
+    // 17/10/2026 — l'email del cliente si legge prima dei soldi: dice all'avviso da chi prendere l'IBAN.
+    auth: { admin: { getUserById: async () => ({ data: { user: { email: 'u1@esempio.it' } }, error: null }) } },
   }),
 }));
 
@@ -112,6 +147,7 @@ describe('il rimborso divide per il lordo, non per quello che resta dopo il cred
     state.order = ordineBase();
     state.updates = [];
     state.rpcCalls = [];
+    state.ledger = [];
   });
 
   it('recupera dal negozio la quota calcolata sul lordo di vendita', async () => {
@@ -127,6 +163,7 @@ describe('il rimborso divide per il lordo, non per quello che resta dopo il cred
     // Gift card da 50 euro su un ordine da 50: il fattorino non incassa nulla.
     state.order.total_price = 0;
     state.order.gross_total_cents = 5000;
+    state.order.wallet_applied_cents = 5000;
 
     const esito = await refundOrder({ orderId: 'o1', amountCents: 5000, idempotencyKey: 'reso_2' });
     expect(esito.refundId).toContain('wallet:');

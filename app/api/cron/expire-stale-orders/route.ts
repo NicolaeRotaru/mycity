@@ -7,6 +7,8 @@ import { logger } from '@/lib/logger';
 // webhook: una casa sola, cosi' i tre percorsi non divergono.
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ORE_PER_ACCETTARE, ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
+import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
+import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
 
 /**
  * 6/9/2026 — QUALI RIMBORSI FALLITI HA SENSO RITENTARE.
@@ -75,7 +77,9 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     // 3/9/2026 — `created_at` e `delivery_slot` non venivano nemmeno letti, e
     // sono i due campi che dicono se l'attesa è finita davvero: senza,
     // l'ordine della sera per domani mattina moriva alle 00:15.
-    .select('id, user_id, payment_method, payment_status, stripe_payment_intent, total_price, wallet_applied_cents, coupon_code, created_at, delivery_slot')
+    // 16/10/2026 — `internal_dispute_status`: la pausa del carrello, se c'è un
+    // rimborso dal cruscotto ancora da dividere (più sotto).
+    .select('id, user_id, payment_method, payment_status, stripe_payment_intent, total_price, wallet_applied_cents, coupon_code, created_at, delivery_slot, internal_dispute_status')
     .eq('delivery_status', 'NEW')
     .lt('created_at', cutoff)
     .limit(100);
@@ -91,6 +95,8 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   let rinviati = 0;
   /** Annullati con un rimborso impossibile: restano fermi, li chiude una persona. */
   let daChiudereAMano = 0;
+  /** Lasciati in coda: sul loro pagamento c'è un rimborso dal cruscotto da dividere. */
+  let inAttesaDellaDivisione = 0;
 
   for (const o of candidates ?? []) {
     // 3/9/2026 — L'ORDINE DELLA SERA PER DOMANI MORIVA NELLA NOTTE.
@@ -105,8 +111,24 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
       continue;
     }
 
-    const isCardPaid =
-      o.payment_method === 'card' && o.payment_status === 'PAID' && !!o.stripe_payment_intent;
+    // 16/10/2026 — Qui contava solo «PAID». Un rimborso parziale fatto dal
+    // cruscotto Stripe porta l'ordine a «PARTIALLY_REFUNDED»: il giro lo
+    // annullava come un contrassegno, senza rimborsare il resto. La regola è
+    // la stessa dell'annullo (lib/ordini/soldi-sulla-carta.ts); quanto rendere
+    // lo decide `refundOrder`, lordo meno già rimborsato.
+    const isCardPaid = restaDaRimborsareSullaCarta(o);
+
+    // 16/10/2026 (riesame del lotto) — PRIMA SI DIVIDE, POI SI ANNULLA.
+    // Su un carrello di più negozi un rimborso dal cruscotto non è scritto su
+    // nessun ordine finché qualcuno non lo divide: annullare adesso vorrebbe
+    // dire rendere il lordo intero, compresa la parte già tornata al cliente.
+    // L'ordine resta «nuovo» e non si tocca: lo riprende il giro dopo la
+    // divisione, con i numeri giusti (lib/stripe/rimborsi-da-dividere.ts).
+    if (isCardPaid && (await ilCarrelloAspettaLaDivisione(admin, o))) {
+      inAttesaDellaDivisione++;
+      logger.warn('[cron] expire-stale-orders: ordine lasciato in coda, il rimborso dal cruscotto va diviso prima', { id: o.id });
+      continue;
+    }
 
     // Il blocco atomico resta (solo una esecuzione prende l'ordine), ma se il
     // rimborso non riesce l'ordine TORNA in coda.
@@ -147,6 +169,10 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
             amountCents: Math.round(Number(o.total_price) * 100),
             reason: 'Ordine annullato: il venditore non lo ha accettato in tempo',
             notifyBuyer: true,
+            // L'ordine l'ha annullato questo giro, qui sopra, e la merce non
+            // l'ha ancora rimessa nessuno: anche se un rimborso parziale dal
+            // cruscotto c'era già (lib/ordini/rimessa-a-scaffale.ts).
+            annullatoDaChiChiama: true,
           });
           refunded++;
         } catch (errRimborso) {
@@ -248,14 +274,15 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     }
   }
 
-  if (canceled > 0 || failed > 0 || daChiudereAMano > 0) {
+  if (canceled > 0 || failed > 0 || daChiudereAMano > 0 || inAttesaDellaDivisione > 0) {
     logger.spesa(
-      `[cron] expire-stale-orders: ${canceled} annullati (${refunded} rimborsati), ${failed} falliti, ${daChiudereAMano} da chiudere a mano`,
+      `[cron] expire-stale-orders: ${canceled} annullati (${refunded} rimborsati), ${failed} falliti, ${daChiudereAMano} da chiudere a mano, ` +
+        `${inAttesaDellaDivisione} in attesa della divisione di un rimborso dal cruscotto`,
     );
   }
 
   return NextResponse.json(
-    { ok: true, canceled, refunded, failed, rinviati, daChiudereAMano },
+    { ok: true, canceled, refunded, failed, rinviati, daChiudereAMano, inAttesaDellaDivisione },
     { status: 200 },
   );
 });

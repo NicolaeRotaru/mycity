@@ -39,6 +39,11 @@ export const env = {
   stripeSecretKey: () => readEnv('STRIPE_SECRET_KEY'),
   stripePublishableKey: () => readEnv('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'),
   stripeWebhookSecret: () => readEnv('STRIPE_WEBHOOK_SECRET'),
+  // R77 — Il segreto del SECONDO indirizzo webhook, quello registrato su Stripe
+  // per gli «eventi sui conti collegati» (bonifico rifiutato dalla banca del
+  // negozio, versamenti del negozio bloccati). Ha un segreto suo, diverso dal
+  // primo: senza, quegli avvisi venivano respinti (lib/stripe/webhook/firma.ts).
+  stripeConnectWebhookSecret: () => readEnv('STRIPE_CONNECT_WEBHOOK_SECRET'),
   stripeConnectClientId: () => readEnv('STRIPE_CONNECT_CLIENT_ID'),
 
   // Resend (email transazionale)

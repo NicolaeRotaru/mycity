@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { patchAiPerIlForm } from '@/lib/products/aiPatch';
+import { patchAiPerIlForm, pianoPatchPerIlModulo } from '@/lib/products/aiPatch';
 
 /**
  * 3/9/2026 — LA BANDA SUL PREZZO COPRIVA UNA PORTA SU DUE.
@@ -58,6 +58,26 @@ function nomiDeiRifiuti(src: string): string[] {
   return nomi;
 }
 
+/**
+ * 16/10/2026 — `applyPatch` non chiama piu' il filtro a mano: esegue il piano di
+ * `pianoPatchPerIlModulo`, che passa dallo stesso filtro dentro `lib/` (la banda
+ * eseguita sta nel primo describe qui sotto e in
+ * `il-modulo-dice-aggiornato-solo-se-ha-scritto-qualcosa.test.ts`). Da
+ * `const piano = pianoPatchPerIlModulo(` tira fuori `piano`.
+ */
+function nomiDeiPiani(src: string): string[] {
+  return [...src.matchAll(/const\s+(\w+)\s*=\s*pianoPatchPerIlModulo\s*\(/g)].map((m) => m[1]);
+}
+
+/** Chi scorre le scritture di un piano: `for (const s of piano.scritture)` → `s`. */
+function scorrePiano(src: string, piani: string[]): string[] {
+  return piani.flatMap((piano) =>
+    [...src.matchAll(new RegExp(`for\\s*\\(\\s*const\\s+(\\w+)\\s+of\\s+${piano}\\.scritture\\s*\\)`, 'g'))].map(
+      (m) => m[1],
+    ),
+  );
+}
+
 /** Cosa viene scritto nel campo prezzo: l'espressione dentro `setValue('price', …`. */
 function scrittureDelPrezzo(src: string): string[] {
   return [...src.matchAll(/setValue\(\s*'price'\s*,\s*([^,)]+)/g)].map((m) => m[1].trim());
@@ -91,12 +111,26 @@ describe('nel modulo del prodotto il campo prezzo ha una porta sola', () => {
   it('le porte che scrivono il prezzo sono due e passano tutte e due dal filtro', () => {
     const scritture = scrittureDelPrezzo(sorgente);
     const nomi = nomiDelPatchFiltrato(sorgente);
+    const piani = nomiDeiPiani(sorgente);
+    const dalPiano = scorrePiano(sorgente, piani);
 
     expect(scritture.length, 'nessuna scrittura del prezzo trovata: la prova va riscritta').toBeGreaterThanOrEqual(2);
-    expect(nomi.length, 'il modulo non passa più da patchAiPerIlForm: la banda del 30% non vale più').toBeGreaterThanOrEqual(2);
+    expect(
+      nomi.length + dalPiano.length,
+      'il modulo non passa più da patchAiPerIlForm: la banda del 30% non vale più',
+    ).toBeGreaterThanOrEqual(2);
+
+    // Il piano del modulo passa davvero dalla banda: 20 € → 2 € non diventa una scrittura.
+    const piano = pianoPatchPerIlModulo(
+      { price: 2 },
+      { prezzoAttuale: 20, categorie: [], categoriaAttuale: null, modo: 'edit' },
+    );
+    expect(piano.scritture, 'il piano del modulo scrive un prezzo fuori banda').toEqual([]);
 
     for (const espressione of scritture) {
-      const daFiltro = nomi.some((n) => espressione.startsWith(`${n}.price`));
+      const daFiltro =
+        nomi.some((n) => espressione.startsWith(`${n}.price`)) ||
+        dalPiano.some((v) => espressione.startsWith(`${v}.valore`));
       expect(
         daFiltro,
         `il campo prezzo riceve «${espressione}»: un numero che non è passato dalla banda del 30%`,
@@ -106,7 +140,24 @@ describe('nel modulo del prodotto il campo prezzo ha una porta sola', () => {
 
   it('il prezzo scartato non sparisce in silenzio: ogni motivo viene mostrato', () => {
     const rifiuti = nomiDeiRifiuti(sorgente);
-    expect(rifiuti.length).toBeGreaterThanOrEqual(2);
+    const piani = nomiDeiPiani(sorgente);
+    expect(rifiuti.length + piani.length).toBeGreaterThanOrEqual(2);
+
+    // Nel piano il prezzo scartato sta in `avvisi`, e da li' nelle righe del
+    // riquadro «Da controllare» (`daControllare`, 16/10/2026): uno dei due
+    // campi va mostrato. Che il motivo arrivi davvero a video lo guarda, col
+    // modulo montato, le-proposte-dell-assistente-restano-finche-decidi-tu.test.ts.
+    const scartato = pianoPatchPerIlModulo(
+      { price: 2 },
+      { prezzoAttuale: 20, categorie: [], categoriaAttuale: null, modo: 'edit' },
+    );
+    expect(scartato.daControllare.map((v) => v.motivo)).toEqual(scartato.avvisi);
+    for (const piano of piani) {
+      expect(
+        new RegExp(`\\b${piano}\\.(avvisi|daControllare)\\b`).test(sorgente),
+        `«${piano}.avvisi» non viene mai letto: il negoziante non sa che il prezzo proposto è stato scartato`,
+      ).toBe(true);
+    }
 
     for (const nome of rifiuti) {
       const usi = sorgente.split(new RegExp(`\\b${nome}\\b`)).length - 1;

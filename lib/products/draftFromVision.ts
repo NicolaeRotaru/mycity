@@ -1,9 +1,11 @@
 // lib/products/draftFromVision.ts
-import { getAttributesForCategory, AI_ATTR_TO_FIELD } from '@/lib/category-attributes';
+import { getAttributesForCategory, type AttributeField } from '@/lib/category-attributes';
 import { normalizeCondition } from '@/lib/products/schema';
 import {
   MAX_NOME_PRODOTTO,
   MAX_DESCRIZIONE_PRODOTTO,
+  chiaveCampo,
+  eCampoDichiarativo,
   type CategoryRow,
 } from '@/lib/products/aiPatch';
 
@@ -49,6 +51,11 @@ export type VisionDraft = {
   attributes?: Record<string, string>;
   tags?: string[];
   alt_text?: string | null;
+  /**
+   * R36 — Il negoziante ha visto allergeni, ingredienti e le altre
+   * dichiarazioni lette dalle foto, e ha spuntato «le ho controllate».
+   */
+  dichiarazioni_confermate?: boolean;
 };
 
 export type DraftProductInsert = {
@@ -78,6 +85,51 @@ function resolveCategoryId(draft: VisionDraft, categories: CategoryRow[]): strin
   return resolved?.id ?? null;
 }
 
+/**
+ * La regola della porta su UN attributo letto dalle foto: la chiave del campo
+ * della categoria e il valore che entra nella bozza, oppure `null` se resta
+ * fuori (valore vuoto, campo che la categoria non ha, scelta non fra quelle
+ * ammesse). La legge anche la scheda della bozza nella chat, per mostrare solo
+ * le caratteristiche che entreranno davvero (16/10/2026): prima mostrava
+ * «Tipo di confezione: Vaschetta» e «Colore: Verde» su un barattolo di olive,
+ * e nella bozza entrava solo il peso.
+ */
+export function attributoCheEntra(
+  fields: AttributeField[],
+  aiKey: string,
+  rawValue: unknown,
+): { chiave: string; valore: string } | null {
+  const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+  if (!value) return null;
+  const chiave = chiaveCampo(aiKey);
+  const field = fields.find((f) => f.key === chiave);
+  if (!field) return null;
+  if (field.type === 'select') {
+    const opt = (field.options ?? []).find((o) => o.toLowerCase() === value.toLowerCase());
+    return opt ? { chiave, valore: opt } : null;
+  }
+  return { chiave, valore: value.slice(0, MAX_VALORE_ATTRIBUTO) };
+}
+
+/**
+ * 15/10/2026 (R36) — LE DICHIARAZIONI LETTE DAL MODELLO ENTRAVANO NELLA BOZZA
+ * SENZA CHE NESSUNO LE AVESSE VISTE.
+ *
+ * Il fornaio crea la focaccia con «Crea più prodotti dalle foto». Il modello
+ * compila da solo `allergeni: Glutine` e gli ingredienti; il riepilogo mostra
+ * nome e prezzo, non quelli. La bozza nasce con i campi obbligatori pieni, e
+ * dalla chat o dal Copilot un «pubblica» la mette in vendita: il controllo dei
+ * campi obbligatori vede valori non vuoti e passa. Una dichiarazione che il
+ * negoziante non ha mai letto finisce davanti a un cliente allergico.
+ *
+ * La porta e' questa, l'unica da cui nasce una bozza dalle foto: allergeni,
+ * ingredienti e le altre dichiarazioni (`CAMPI_DICHIARATIVI`) entrano SOLO se
+ * chi chiama dice che il negoziante le ha confermate. Nel dubbio restano fuori:
+ * la bozza nasce senza, i campi obbligatori vuoti fermano la pubblicazione da
+ * ogni strada, e il negoziante li scrive nella scheda. Una schermata nuova che
+ * dimentica la spunta crea bozze senza dichiarazioni, non bozze con
+ * dichiarazioni mai viste.
+ */
 export function buildDraftProductInsert(opts: {
   draft: VisionDraft;
   imageUrls: string[];
@@ -85,6 +137,7 @@ export function buildDraftProductInsert(opts: {
   sellerId: string;
 }): DraftProductInsert {
   const { draft, imageUrls, categories, sellerId } = opts;
+  const dichiarazioniConfermate = draft.dichiarazioni_confermate === true;
   const categoryId = resolveCategoryId(draft, categories);
 
   // Attributi: valida contro i campi della categoria; "condizione" → condition.
@@ -98,20 +151,19 @@ export function buildDraftProductInsert(opts: {
     for (const [aiKey, rawValue] of Object.entries(draft.attributes)) {
       const value = typeof rawValue === 'string' ? rawValue.trim() : '';
       if (!value) continue;
-      if (aiKey === 'condizione') {
+      // 16/10/2026 — La chiave si legge come la legge il riquadro della bozza
+      // (`chiaveCampo`): «Allergeni» con la maiuscola o «valori nutrizionali»
+      // con lo spazio venivano scartate qui, mentre il riquadro le dava per
+      // entrate. Il negoziante leggeva «Entrate nella bozza» e, sotto,
+      // «Manca: Allergeni».
+      const targetKey = chiaveCampo(aiKey);
+      if (targetKey === 'condizione') {
         condition = normalizeCondition(value) || null;
         continue;
       }
-      const targetKey = AI_ATTR_TO_FIELD[aiKey] ?? aiKey;
-      const field = fields.find((f) => f.key === targetKey);
-      if (!field) continue;
-      if (field.type === 'select') {
-        const opt = (field.options ?? []).find((o) => o.toLowerCase() === value.toLowerCase());
-        if (!opt) continue;
-        attributes[targetKey] = opt;
-      } else {
-        attributes[targetKey] = value.slice(0, MAX_VALORE_ATTRIBUTO);
-      }
+      if (!dichiarazioniConfermate && eCampoDichiarativo(targetKey)) continue;
+      const entra = attributoCheEntra(fields, aiKey, value);
+      if (entra) attributes[entra.chiave] = entra.valore;
     }
   }
   if (draft.alt_text && draft.alt_text.trim()) {

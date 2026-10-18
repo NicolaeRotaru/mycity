@@ -41,6 +41,10 @@ import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 const TUTTE_LE_IMPORTANTI: Record<string, string> = {
   STRIPE_SECRET_KEY: 'sk_test',
   STRIPE_WEBHOOK_SECRET: 'whsec_test',
+  // 16/10/2026 — il segreto dell'indirizzo degli avvisi sui conti dei negozi.
+  // Senza, «bonifico rifiutato dalla banca del negozio» viene respinto e il
+  // semaforo restava verde: il ciclo qui sotto genera la prova che lo dice.
+  STRIPE_CONNECT_WEBHOOK_SECRET: 'whsec_conti_test',
   RESEND_API_KEY: 're_test',
   // 6/9/2026 — la quindicesima. La chiave della posta senza il mittente non spedisce
   // niente: da oggi, in produzione, se RESEND_FROM manca lib/email/client.ts si ferma

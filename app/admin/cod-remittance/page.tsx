@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Check, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -13,6 +13,7 @@ import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { contanteDaRimettereCents } from '@/lib/shipping';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
 import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
+import { incassoDaDichiarare } from '@/lib/rider/incasso-alla-consegna';
 
 /**
  * Rimesse contanti COD (🔴-1 slice 2/UI). Elenca i gruppi rider·giorno con ordini
@@ -35,12 +36,14 @@ import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
  */
 type Row = ColonneSalvo<
   'orders',
-  'id' | 'rider_id' | 'delivered_at' | 'total_price' | 'shipping_cost' | 'rider_fee_cents' | 'pickup_in_store',
+  | 'id' | 'rider_id' | 'delivered_at' | 'total_price' | 'shipping_cost' | 'rider_fee_cents' | 'pickup_in_store'
+  | 'payment_method' | 'delivery_status' | 'cash_confirmed_at',
   {
     rider_id: string;
     delivered_at: string;
     total_price: string | number;
     shipping_cost: string | number | null;
+    delivery_status: string;
   }
 > & {
   rider: Colonne<'profiles', 'full_name'> | null;
@@ -58,6 +61,11 @@ type Group = {
   // ne trovava meno di quelli scritti, e o accusava il fattorino o non
   // confermava — e senza conferma il negozio non viene pagato.
   toRemitCents: number;
+  /**
+   * 15/10/2026 (R33) — Gli ordini di quel giorno senza incasso registrato: la
+   * rimessa li salta, e il negozio non viene pagato finche' l'incasso non c'e'.
+   */
+  senzaIncasso: Row[];
 };
 
 export default function AdminCodRemittancePage() {
@@ -68,7 +76,7 @@ export default function AdminCodRemittancePage() {
     queryFn: async (): Promise<Row[]> => {
       const { data } = await supabase
         .from('orders')
-        .select('id, rider_id, delivered_at, total_price, shipping_cost, rider_fee_cents, pickup_in_store, rider:profiles!orders_rider_id_fkey(full_name)')
+        .select('id, rider_id, delivered_at, total_price, shipping_cost, rider_fee_cents, pickup_in_store, payment_method, delivery_status, cash_confirmed_at, rider:profiles!orders_rider_id_fkey(full_name)')
         .eq('payment_method', 'cod')
         .eq('delivery_status', 'DELIVERED')
         .eq('payout_status', 'AWAITING_REMITTANCE')
@@ -96,9 +104,11 @@ export default function AdminCodRemittancePage() {
         date,
         orders: 0,
         toRemitCents: 0,
+        senzaIncasso: [],
       };
       g.orders += 1;
       g.toRemitCents += Math.max(0, cents);
+      if (incassoDaDichiarare(o)) g.senzaIncasso.push(o);
       map.set(key, g);
     }
     return Array.from(map.values()).sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -182,11 +192,89 @@ export default function AdminCodRemittancePage() {
                 >
                   Conferma rimessa
                 </Button>
+                {g.senzaIncasso.length > 0 && (
+                  <div className="w-full border-t border-cream-200 pt-3">
+                    <p className="text-xs text-ink-600">
+                      <strong>{g.senzaIncasso.length}</strong> consegna/e senza incasso registrato: la rimessa le salta
+                      e il negozio non viene pagato. Chiedi al fattorino quanto ha incassato e registralo qui.
+                    </p>
+                    <div className="mt-2 space-y-2">
+                      {g.senzaIncasso.map((o) => (
+                        <IncassoDichiarato
+                          key={o.id}
+                          ordine={o}
+                          onRegistrato={() => qc.invalidateQueries({ queryKey: queryKeys.admin.codRemittances })}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * 15/10/2026 (R33) — REGISTRA L'INCASSO DICHIARATO DAL FATTORINO.
+ *
+ * Prima qui si leggeva solo «vanno chiesti al fattorino», senza un pulsante:
+ * se il fattorino non rimediava, l'unica strada era il database a mano. Adesso
+ * l'amministratore scrive quanto ha dichiarato e una nota su chi e quando; la
+ * rotta lo registra come farebbe il fattorino e lascia traccia nel registro
+ * delle azioni. Il pagamento al negozio parte poi con «Conferma rimessa».
+ */
+function IncassoDichiarato({ ordine, onRegistrato }: { ordine: Row; onRegistrato: () => void }) {
+  const [importo, setImporto] = useState((contanteDaRimettereCents(ordine) / 100).toFixed(2));
+  const [nota, setNota] = useState('');
+  const registra = useMutation({
+    mutationFn: async () => {
+      const cents = Math.round(parseFloat(importo) * 100);
+      if (Number.isNaN(cents) || cents < 0) throw new Error('Importo non valido');
+      const res = await fetch('/api/admin/cod-incasso-dichiarato', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: ordine.id, cashCollectedCents: cents, nota }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error?.message ?? data?.error ?? 'Registrazione non riuscita');
+    },
+    onSuccess: () => {
+      toast.success('Incasso registrato. Ora conferma la rimessa per pagare il negozio.');
+      onRegistrato();
+    },
+    onError: (err: unknown) => toast.error(friendlyError(err)),
+  });
+
+  return (
+    <div className="flex flex-wrap items-end gap-2 rounded-lg bg-cream-50 p-2.5">
+      <span className="font-mono text-[11px] text-ink-500">#{ordine.id.slice(0, 8)}</span>
+      <label className="text-xs text-ink-700">
+        Contanti (€)
+        <input
+          type="number"
+          step="0.01"
+          value={importo}
+          onChange={(e) => setImporto(e.target.value)}
+          className="ml-1 w-24 rounded border border-cream-300 px-2 py-1 font-mono"
+        />
+      </label>
+      <label className="min-w-[200px] flex-1 text-xs text-ink-700">
+        Chi li ha dichiarati, e quando
+        <input
+          type="text"
+          value={nota}
+          maxLength={300}
+          onChange={(e) => setNota(e.target.value)}
+          className="mt-0.5 block w-full rounded border border-cream-300 px-2 py-1"
+        />
+      </label>
+      <Button size="sm" loading={registra.isPending} disabled={nota.trim().length < 5} onClick={() => registra.mutate()}>
+        Registra incasso
+      </Button>
     </div>
   );
 }
