@@ -150,6 +150,11 @@ async function aSchermo(
     if (o.enabled !== false && o.queryFn && !risposte.has(k) && !errori.has(k)) chieste.set(k, o);
     return risposte.get(k);
   };
+  // Una lettura caduta arriva alla pagina come la darebbe react-query: isError vero, nessun dato.
+  globale.__ESITO_QUERY__ = (o: Opzioni) => {
+    const k = JSON.stringify(o.queryKey);
+    return errori.has(k) ? { isError: true, isSuccess: false, data: undefined, error: new Error(errori.get(k)) } : undefined;
+  };
 
   for (let giro = 0; giro < 5; giro += 1) {
     const s = accendi(pagina, props);
@@ -186,7 +191,7 @@ function collegamento(s: Schermo, testo: string): HTMLAnchorElement | undefined 
 }
 
 afterEach(() => {
-  for (const k of ['__CLIENT_SUPABASE__', '__UTENTE__', '__DATI_QUERY__', '__PROFILO__']) delete globale[k];
+  for (const k of ['__CLIENT_SUPABASE__', '__UTENTE__', '__DATI_QUERY__', '__ESITO_QUERY__', '__PROFILO__']) delete globale[k];
   document.body.innerHTML = '';
 });
 
@@ -385,19 +390,28 @@ describe('se la vetrina dei negozi non risponde', () => {
     s.smonta();
   }, 60000);
 
-  it.each(MONDI)('«Ordina di nuovo» resta in home — %s', async (_n, mondo) => {
-    const { s, errori } = await aSchermo('components/home-sections/ReorderRail.tsx', {}, mondo, MARIA, dati(), GIU);
-    expect(errori.size, [...errori.values()].join(' · ')).toBe(0);
-    expect(testoVisibile(s.radice), 'un guasto della sola vista ha tolto la fascia').toContain('Ordina di nuovo');
+  it.each(MONDI)('dalla bacheca alla consegna: la pagina dice di riprovare, non che l ordine non esiste — %s', async (_n, mondo) => {
+    // Qui il negozio e' il cuore della pagina: senza, il fattorino non sa dove andare. La pagina non
+    // si disegna senza negozio, e non dice «Ordine non trovato»: rimanderebbe alla bacheca, che la
+    // consegna la mostra ancora, in un giro senza uscita.
+    const { s, errori } = await aSchermo('app/rider/orders/[id]/page.tsx', { params: { id: O_PANE } }, mondo, LUCA, dati(), GIU);
+    expect(errori.size, 'la consegna senza negozio si e disegnata come se fosse tutto a posto').toBeGreaterThan(0);
+    const testo = testoVisibile(s.radice);
+    expect(testo).toContain('Non riesco a leggere la consegna');
+    expect(testo).not.toContain('Ordine non trovato');
+    const riprova = Array.from(s.radice.querySelectorAll('button')).find((b) => /riprova/i.test(b.textContent ?? ''));
+    expect(riprova, 'manca il pulsante per riprovare').toBeTruthy();
     s.smonta();
   }, 60000);
 
-  it.each(MONDI)('controprova: la consegna da ritirare invece fa salire l errore, per mostrare «Riprova» — %s', async (_n, mondo) => {
-    // Qui il negozio e' il cuore della pagina: senza, il fattorino non sa dove andare. Una pagina
-    // disegnata senza negozio come se fosse la verita' sarebbe peggio di un errore con «Riprova».
-    const { s, errori } = await aSchermo('app/rider/orders/[id]/page.tsx', { params: { id: O_PANE } }, mondo, LUCA, dati(), GIU);
-    expect(errori.size, 'la consegna senza negozio si e disegnata come se fosse tutto a posto').toBeGreaterThan(0);
-    s.smonta();
+  it.each(MONDI)('le pagine dell ordine del cliente dicono di riprovare — %s', async (_n, mondo) => {
+    // Anche qui il negozio e' il cuore: un ordine senza negozio a schermo sembrerebbe la verita'.
+    const elenco = await aSchermo('app/orders/page.tsx', {}, mondo, MARIA, dati(), GIU);
+    expect(testoVisibile(elenco.s.radice)).toContain('Impossibile caricare gli ordini');
+    elenco.s.smonta();
+    const dettaglio = await aSchermo('app/orders/[id]/page.tsx', { params: { id: O_PANE } }, mondo, MARIA, dati(), GIU);
+    expect(testoVisibile(dettaglio.s.radice)).toContain("Non riesco a caricare l'ordine");
+    dettaglio.s.smonta();
   }, 60000);
 });
 

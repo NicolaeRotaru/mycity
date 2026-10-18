@@ -244,10 +244,21 @@ describe('quando la rotta degli autori e lenta', () => {
     expect(liste).toEqual([{ ...LISTE[0], owner: null }]);
   });
 
-  it('il tetto di attesa e di pochi secondi', async () => {
-    const { ATTESA_MASSIMA_AUTORI_MS } = await import('@/lib/queries/profili-pubblici');
-    expect(ATTESA_MASSIMA_AUTORI_MS).toBeGreaterThan(0);
-    expect(ATTESA_MASSIMA_AUTORI_MS).toBeLessThanOrEqual(5000);
+  it('senza dire niente, come fanno le pagine, le liste aspettano al piu 3 secondi', async () => {
+    const { conAutoriPubblici } = await import('@/lib/queries/profili-pubblici');
+    vi.useFakeTimers();
+    try {
+      const sorda = (() => new Promise(() => {})) as unknown as typeof fetch;
+      let arrivate: unknown = null;
+      const attesa = conAutoriPubblici(LISTE, sorda).then((l) => { arrivate = l; });
+      await vi.advanceTimersByTimeAsync(2900);
+      expect(arrivate, 'le liste sono arrivate prima del tetto: la prova non misura il tetto').toBeNull();
+      await vi.advanceTimersByTimeAsync(200);
+      await attesa;
+      expect(arrivate, 'dopo 3 secondi le liste ancora aspettano l autore').toEqual([{ ...LISTE[0], owner: null }]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

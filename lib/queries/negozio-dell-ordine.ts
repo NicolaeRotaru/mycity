@@ -55,12 +55,13 @@ export async function conNegozioDellOrdine<T extends { seller_id?: string | null
 /**
  * Come `conNegozioDellOrdine`, ma se la vista non risponde le righe restano, col negozio `null`.
  *
- * 18/10/2026 (riesame del lotto) — Per la bacheca del fattorino e per «Ordina di nuovo» in home il
- * negozio e' un dettaglio: la bacheca porta anche l'interruttore online, gli incassi da confermare
- * e gli ordini liberi, che arrivano da altre letture. Se la sola vista cadeva, la pagina intera
- * passava allo stato d'errore. Qui si tiene tutto il resto e si scrive l'avviso nei registri.
- * Le pagine dove il negozio e' il cuore (la consegna da ritirare, il dettaglio dell'ordine)
- * restano su `conNegozioDellOrdine`, che fa salire l'errore e mostra «Riprova».
+ * 18/10/2026 (riesame del lotto) — Per la bacheca del fattorino il negozio e' un dettaglio: la
+ * bacheca porta anche l'interruttore online, gli incassi da confermare e gli ordini liberi, che
+ * arrivano da altre letture. Se la sola vista cadeva, la bacheca intera passava allo stato
+ * d'errore. Qui si tiene tutto il resto e si scrive l'avviso nei registri. Toccando la consegna,
+ * la sua pagina rilegge e, se la vista e' ancora giu', dice «Non riesco a leggere la consegna» con
+ * «Riprova». Le pagine dove il negozio e' il cuore (la consegna da ritirare, le pagine dell'ordine
+ * del cliente) restano su `conNegozioDellOrdine`, che fa salire l'errore.
  */
 export async function conNegozioSePossibile<T extends { seller_id?: string | null }>(
   supa: LettoreVista,

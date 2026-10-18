@@ -19,6 +19,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import {
   Package, Radio, MapPin, PackageCheck, Bike, CircleCheck, Navigation, Phone,
   StickyNote, Banknote, Check, ChevronLeft, Store, MessageSquare, Clock,
@@ -92,7 +93,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
   /** 15/10/2026 (R33) — Il pannello dei contanti, aperto dal pulsante nella barra in fondo. */
   const [incassoAperto, setIncassoAperto] = useState(false);
 
-  const { data: order, isLoading } = useQuery({
+  const { data: order, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.rider.order(id),
     queryFn: async () => {
       const { data, error } = await supabase
@@ -315,6 +316,20 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
   ]);
 
   if (isLoading) return <LoadingState />;
+  // 18/10/2026 — Una lettura caduta (l'ordine o la vista dei negozi) non e' un ordine che non esiste.
+  // Prima diceva «Ordine non trovato» e rimandava alla bacheca, che la consegna la mostra ancora: il
+  // fattorino girava in tondo, o pensava che l'ordine gli fosse stato tolto.
+  if (isError && !order) {
+    return (
+      <ErrorState
+        title="Non riesco a leggere la consegna"
+        description="Sembra un problema di collegamento. La consegna è ancora tua: riprova fra un momento."
+        retry={() => { void refetch(); }}
+        backHref="/rider"
+        backLabel="Tutte le consegne"
+      />
+    );
+  }
   if (!order) return <EmptyState icon={Package} title="Ordine non trovato" ctaLabel="Tutte le consegne" ctaHref="/rider" />;
 
   const points: MapPoint[] = [];
