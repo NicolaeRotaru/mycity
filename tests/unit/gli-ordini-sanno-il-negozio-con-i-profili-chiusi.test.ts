@@ -36,6 +36,7 @@ const O_PANE = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
 const O_SALUMI = 'bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb';
 const O_SOSPESO = 'cccccccc-3333-4333-8333-cccccccccccc';
 const CONV = 'dddddddd-4444-4444-8444-dddddddddddd';
+const CONV_SALUMI = 'eeeeeeee-5555-4555-8555-eeeeeeeeeeee';
 
 const LOGO_PANE = 'https://esempio.supabase.co/storage/v1/object/public/loghi/pane.png';
 
@@ -99,6 +100,10 @@ function dati(): DatiOrdini {
       {
         id: CONV, buyer_id: MARIA, seller_id: PANE, last_message_at: '2026-10-17T09:00:00Z',
         last_message_preview: 'A che ora chiudete?', buyer_unread_count: 1, seller_unread_count: 0,
+      },
+      {
+        id: CONV_SALUMI, buyer_id: MARIA, seller_id: SALUMI, last_message_at: '2026-10-16T18:00:00Z',
+        last_message_preview: 'Avete la coppa stagionata?', buyer_unread_count: 0, seller_unread_count: 0,
       },
     ],
     messages: [
@@ -203,6 +208,12 @@ describe('il cliente', () => {
     expect(testo, 'il nome della salumeria e sparito dall elenco degli ordini').toContain('Salumeria Due');
     // Il negozio sospeso non si mostra, come la vetrina non lo mostra (oggi come dopo).
     expect(testo).not.toContain('Bottega Sospesa');
+    expect(testo, 'gli ordini in elenco non sono tre').toContain('3 ordini');
+    // Ma il suo ordine resta: un elenco che scartasse le righe senza negozio lo farebbe sparire.
+    for (const id of [O_PANE, O_SALUMI, O_SOSPESO]) {
+      // testoVisibile separa «#» dal codice con uno spazio: si cerca il codice da solo.
+      expect(testo, `l ordine #${id.slice(0, 6).toUpperCase()} e sparito dall elenco`).toContain(id.slice(0, 6).toUpperCase());
+    }
     const loghi = Array.from(s.radice.querySelectorAll('img')).map((i) => i.getAttribute('src') ?? '');
     expect(loghi.some((src) => src.includes('pane.png')), 'il logo del forno e sparito').toBe(true);
     s.smonta();
@@ -255,8 +266,19 @@ describe('il cliente', () => {
     expect(errori.size, [...errori.values()].join(' · ')).toBe(0);
     const testo = await attendiFinche(s, () => (s.radice.textContent ?? '').includes('A che ora chiudete?'));
     expect(testo, 'l elenco delle conversazioni non si e disegnato').toContain('A che ora chiudete?');
-    expect(testo).toContain('Pane Quotidiano');
     expect(testo).not.toContain('Utente');
+    // Due conversazioni con due negozi: ogni riga porta l'insegna del SUO negozio. Con una
+    // conversazione sola, un'insegna attaccata alla conversazione sbagliata resterebbe verde.
+    const riga = (anteprima: string) => {
+      const nodi = Array.from(s.radice.querySelectorAll('a, li, button')).filter((n) => (n.textContent ?? '').includes(anteprima));
+      return nodi.sort((a, b) => (a.textContent ?? '').length - (b.textContent ?? '').length)[0]?.textContent ?? '';
+    };
+    const delForno = riga('A che ora chiudete?');
+    const dellaSalumeria = riga('Avete la coppa stagionata?');
+    expect(delForno, 'la conversazione col forno non porta il suo negozio').toContain('Pane Quotidiano');
+    expect(delForno).not.toContain('Salumeria Due');
+    expect(dellaSalumeria, 'la conversazione con la salumeria non porta il suo negozio').toContain('Salumeria Due');
+    expect(dellaSalumeria).not.toContain('Pane Quotidiano');
     s.smonta();
   }, 60000);
 

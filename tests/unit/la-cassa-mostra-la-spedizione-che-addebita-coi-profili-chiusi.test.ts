@@ -376,6 +376,17 @@ describe('la cassa mostra la spedizione che il server addebita', () => {
   }, 60000);
 });
 
+describe('la cassa scrive il nome del negozio letto dalla vista, anche se il carrello non lo porta', () => {
+  // Una riga salvata senza storeName (per esempio da un carrello di prima): il nome lo deve dare la
+  // vista. Con «Pane Quotidiano» gia' nella riga, una cassa che ignorasse la vista resterebbe verde.
+  const SENZA_NOME: RigaCarrello[] = [{ id: FOCACCIA, name: 'Focaccia al rosmarino', price: 8, quantity: 1, sellerId: PANE }];
+  it.each(MONDI)('la focaccia dice Pane Quotidiano, non «Negozio» — %s', async (_n, mondo) => {
+    const { testo, errori } = await spedizioneAllaCassa(mondo, SENZA_NOME);
+    expect(errori, 'una lettura della cassa è caduta').toEqual([]);
+    expect(testo, 'alla cassa manca il nome del negozio letto dalla vista').toContain('Pane Quotidiano');
+  }, 60000);
+});
+
 describe('un negozio che la vista non restituisce: la spedizione è quella fissa, come la fa il server', () => {
   /**
    * Il negozio del miele è approvato e i suoi prodotti si comprano, ma non ha l'insegna: la vista
