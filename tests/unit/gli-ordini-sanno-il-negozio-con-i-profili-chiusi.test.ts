@@ -129,9 +129,16 @@ type Schermo = ReturnType<typeof accendi>;
  * di lettura a mano. Le letture che cadono (per esempio quelle che vanno in rete) restano senza
  * risposta, e il loro errore si annota.
  */
-async function aSchermo(file: string, props: Record<string, unknown>, mondo: Mondo, chi: string | null, d = dati()) {
+async function aSchermo(
+  file: string,
+  props: Record<string, unknown>,
+  mondo: Mondo,
+  chi: string | null,
+  d = dati(),
+  opzioni: { vistaGiu?: boolean } = {},
+) {
   const pagina = (await monta(file)).default;
-  globale.__CLIENT_SUPABASE__ = databaseDegliOrdini(d, mondo, chi).client;
+  globale.__CLIENT_SUPABASE__ = databaseDegliOrdini(d, mondo, chi, opzioni).client;
   globale.__UTENTE__ = chi ? { id: chi } : null;
   globale.__PROFILO__ = { isAuthenticated: !!chi, isRider: chi === LUCA || chi === ANNA, profile: { full_name: 'Chi guarda' } };
 
@@ -341,3 +348,56 @@ describe('il fattorino', () => {
     s.smonta();
   }, 60000);
 });
+
+/**
+ * Riesame del lotto, 18/10/2026: la vista dei negozi e' una seconda domanda, dopo quella
+ * principale. Se cadeva lei sola, la bacheca del fattorino (interruttore online compreso), la chat
+ * e «Ordina di nuovo» passavano per intero allo stato d'errore. Qui la vista risponde con un errore
+ * e tutto il resto si legge: le pagine restano in piedi, senza il nome del negozio.
+ */
+describe('se la vetrina dei negozi non risponde', () => {
+  const GIU = { vistaGiu: true };
+
+  it.each(MONDI)('la bacheca del fattorino resta in piedi, con la sua consegna — %s', async (_n, mondo) => {
+    const { s, errori } = await aSchermo('app/rider/page.tsx', {}, mondo, LUCA, dati(), GIU);
+    expect(errori.get(JSON.stringify(['rider', 'orders'])), 'un guasto della sola vista ha spento la bacheca').toBeUndefined();
+    const testo = testoVisibile(s.radice);
+    expect(testo, 'la consegna in corso e sparita').toContain('La tua consegna');
+    expect(testo).not.toContain('Pane Quotidiano');
+    s.smonta();
+  }, 60000);
+
+  it.each(MONDI)('il cliente legge le sue conversazioni — elenco · %s', async (_n, mondo) => {
+    const { s, errori } = await aSchermo('app/messages/page.tsx', {}, mondo, MARIA, dati(), GIU);
+    expect(errori.size, [...errori.values()].join(' · ')).toBe(0);
+    const testo = await attendiFinche(s, () => (s.radice.textContent ?? '').includes('A che ora chiudete?'));
+    expect(testo, 'un guasto della sola vista ha spento l elenco dei messaggi').toContain('A che ora chiudete?');
+    expect(testo).toContain('Avete la coppa stagionata?');
+    s.smonta();
+  }, 60000);
+
+  it.each(MONDI)('il cliente legge la conversazione — %s', async (_n, mondo) => {
+    const { s, errori } = await aSchermo('app/messages/[id]/page.tsx', { params: { id: CONV } }, mondo, MARIA, dati(), GIU);
+    expect(errori.size, [...errori.values()].join(' · ')).toBe(0);
+    const testo = await attendiFinche(s, () => !!s.radice.querySelector('h2'));
+    expect(s.radice.querySelector('h2'), 'un guasto della sola vista ha spento la conversazione').toBeTruthy();
+    expect(testo).not.toContain('Non riusciamo a caricare');
+    s.smonta();
+  }, 60000);
+
+  it.each(MONDI)('«Ordina di nuovo» resta in home — %s', async (_n, mondo) => {
+    const { s, errori } = await aSchermo('components/home-sections/ReorderRail.tsx', {}, mondo, MARIA, dati(), GIU);
+    expect(errori.size, [...errori.values()].join(' · ')).toBe(0);
+    expect(testoVisibile(s.radice), 'un guasto della sola vista ha tolto la fascia').toContain('Ordina di nuovo');
+    s.smonta();
+  }, 60000);
+
+  it.each(MONDI)('controprova: la consegna da ritirare invece fa salire l errore, per mostrare «Riprova» — %s', async (_n, mondo) => {
+    // Qui il negozio e' il cuore della pagina: senza, il fattorino non sa dove andare. Una pagina
+    // disegnata senza negozio come se fosse la verita' sarebbe peggio di un errore con «Riprova».
+    const { s, errori } = await aSchermo('app/rider/orders/[id]/page.tsx', { params: { id: O_PANE } }, mondo, LUCA, dati(), GIU);
+    expect(errori.size, 'la consegna senza negozio si e disegnata come se fosse tutto a posto').toBeGreaterThan(0);
+    s.smonta();
+  }, 60000);
+});
+

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import {
   fetchSellerPublicMap,
   type LettoreVista,
@@ -49,4 +50,27 @@ export async function conNegozioDellOrdine<T extends { seller_id?: string | null
   if (righe.length === 0) return [];
   const negozi = await fetchSellerPublicMap(supa, righe.map((r) => r.seller_id), colonne);
   return righe.map((r) => ({ ...r, seller: (r.seller_id ? negozi.get(r.seller_id) : undefined) ?? null }));
+}
+
+/**
+ * Come `conNegozioDellOrdine`, ma se la vista non risponde le righe restano, col negozio `null`.
+ *
+ * 18/10/2026 (riesame del lotto) — Per la bacheca del fattorino e per «Ordina di nuovo» in home il
+ * negozio e' un dettaglio: la bacheca porta anche l'interruttore online, gli incassi da confermare
+ * e gli ordini liberi, che arrivano da altre letture. Se la sola vista cadeva, la pagina intera
+ * passava allo stato d'errore. Qui si tiene tutto il resto e si scrive l'avviso nei registri.
+ * Le pagine dove il negozio e' il cuore (la consegna da ritirare, il dettaglio dell'ordine)
+ * restano su `conNegozioDellOrdine`, che fa salire l'errore e mostra «Riprova».
+ */
+export async function conNegozioSePossibile<T extends { seller_id?: string | null }>(
+  supa: LettoreVista,
+  righe: T[],
+  colonne: string,
+): Promise<Array<T & { seller: NegozioDellOrdine | null }>> {
+  try {
+    return await conNegozioDellOrdine(supa, righe, colonne);
+  } catch (e) {
+    logger.warn('[ordini] negozi non letti dalla vetrina: righe mostrate senza negozio', e);
+    return righe.map((r) => ({ ...r, seller: null }));
+  }
 }

@@ -64,23 +64,41 @@ export async function leggiHandlePubblici(admin: LettoreProfili, ids: string[]):
 
 export type AutorePubblico = { public_handle: string };
 
+/** Quanto le liste aspettano al massimo l'autore, prima di mostrarsi senza «@handle». */
+export const ATTESA_MASSIMA_AUTORI_MS = 3000;
+
 /**
  * Nel browser: attacca a ogni lista l'handle pubblico di chi l'ha creata, chiedendolo alla rotta.
  *
- * Se la rotta non risponde, le liste si vedono lo stesso, senza «@handle»: l'autore e' un
- * dettaglio, la lista no.
+ * Se la rotta non risponde, o non risponde entro `ATTESA_MASSIMA_AUTORI_MS`, le liste si vedono lo
+ * stesso, senza «@handle»: l'autore e' un dettaglio, la lista no. Senza il tetto, una rotta lenta
+ * (per esempio alla prima chiamata dopo un po' di quiete) teneva le liste in caricamento.
  */
 export async function conAutoriPubblici<T extends { owner_id: string }>(
   liste: T[],
   chiedi: typeof fetch = fetch,
+  attesaMassimaMs: number = ATTESA_MASSIMA_AUTORI_MS,
 ): Promise<Array<T & { owner: AutorePubblico | null }>> {
   const ids = [...new Set(liste.map((l) => l.owner_id).filter(Boolean))];
   const handle = new Map<string, string>();
   if (ids.length > 0) {
+    const ferma = new AbortController();
+    let sveglia: ReturnType<typeof setTimeout> | undefined;
     try {
       const domanda = new URLSearchParams(ids.map((id) => ['id', id]));
-      const risposta = await chiedi(`/api/profili-pubblici?${domanda.toString()}`);
-      const corpo = (await risposta.json()) as { ok?: boolean; data?: unknown };
+      const lettura = (async () => {
+        const risposta = await chiedi(`/api/profili-pubblici?${domanda.toString()}`, { signal: ferma.signal });
+        return { risposta, corpo: (await risposta.json()) as { ok?: boolean; data?: unknown } };
+      })();
+      // Se vince il tempo, la lettura interrotta rifiuta piu' tardi: non deve restare un rifiuto orfano.
+      lettura.catch(() => {});
+      const tempo = new Promise<never>((_, rifiuta) => {
+        sveglia = setTimeout(() => {
+          ferma.abort();
+          rifiuta(new Error(`autori delle liste: nessuna risposta in ${attesaMassimaMs} ms`));
+        }, attesaMassimaMs);
+      });
+      const { risposta, corpo } = await Promise.race([lettura, tempo]);
       if (risposta.ok && corpo?.ok === true && Array.isArray(corpo.data)) {
         for (const p of corpo.data as HandlePubblico[]) handle.set(p.id, p.public_handle);
       } else {
@@ -88,6 +106,8 @@ export async function conAutoriPubblici<T extends { owner_id: string }>(
       }
     } catch (e) {
       logger.warn('[liste] autori delle liste non letti', e);
+    } finally {
+      clearTimeout(sveglia);
     }
   }
   return liste.map((l) => {

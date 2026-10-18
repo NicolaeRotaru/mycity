@@ -19,7 +19,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
-import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
+import { conNegozioSePossibile } from '@/lib/queries/negozio-dell-ordine';
 import { useProfile } from '@/components/hooks/useProfile';
 import { trackRiderOrderAccepted } from '@/lib/analytics/events';
 import { compensoConsegnaEuro } from '@/lib/shipping';
@@ -140,7 +140,7 @@ export default function RiderDashboardPage() {
       // 18/10/2026 — Il negozio delle consegne prese arriva dalla vetrina pubblica,
       // non da `profiles` (lib/queries/negozio-dell-ordine.ts): regge anche quando
       // `profiles` si chiude.
-      const mieiColNegozio = await conNegozioDellOrdine(
+      const mieiColNegozio = await conNegozioSePossibile(
         supabase,
         (miei.data ?? []) as unknown as Array<Omit<AvailableOrder, 'seller'> & { seller_id: string | null; rider_id: string | null }>,
         'id, store_name, store_logo, store_address',

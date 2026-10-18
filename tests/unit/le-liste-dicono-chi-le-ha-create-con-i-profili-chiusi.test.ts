@@ -212,3 +212,42 @@ describe('la rotta /api/profili-pubblici', () => {
     expect(ultimo).toBe(429);
   });
 });
+
+/**
+ * Riesame del lotto, 18/10/2026: le liste aspettavano l'autore senza un tetto di tempo. Una rotta
+ * lenta teneva le liste in caricamento. Adesso, passato il tetto, le liste arrivano senza «@handle».
+ */
+describe('quando la rotta degli autori e lenta', () => {
+  const LISTE = [{ id: 'l1', owner_id: MARIA, title: 'Colazione della domenica' }];
+
+  it('una rotta che non risponde mai, ma si lascia interrompere: le liste arrivano dopo il tetto, senza autore', async () => {
+    const { conAutoriPubblici } = await import('@/lib/queries/profili-pubblici');
+    let interrotta = false;
+    const lenta = ((_u: string, init?: RequestInit) =>
+      new Promise((_r, rifiuta) => {
+        init?.signal?.addEventListener('abort', () => {
+          interrotta = true;
+          rifiuta(new DOMException('interrotta', 'AbortError'));
+        });
+      })) as unknown as typeof fetch;
+    const inizio = performance.now();
+    const liste = await conAutoriPubblici(LISTE, lenta, 50);
+    expect(performance.now() - inizio, 'le liste hanno aspettato oltre il tetto').toBeLessThan(2000);
+    expect(liste).toEqual([{ ...LISTE[0], owner: null }]);
+    expect(interrotta, 'la domanda alla rotta non e stata interrotta').toBe(true);
+  });
+
+  it('una rotta che non risponde mai e ignora l interruzione: le liste arrivano lo stesso', async () => {
+    const { conAutoriPubblici } = await import('@/lib/queries/profili-pubblici');
+    const sorda = (() => new Promise(() => {})) as unknown as typeof fetch;
+    const liste = await conAutoriPubblici(LISTE, sorda, 50);
+    expect(liste).toEqual([{ ...LISTE[0], owner: null }]);
+  });
+
+  it('il tetto di attesa e di pochi secondi', async () => {
+    const { ATTESA_MASSIMA_AUTORI_MS } = await import('@/lib/queries/profili-pubblici');
+    expect(ATTESA_MASSIMA_AUTORI_MS).toBeGreaterThan(0);
+    expect(ATTESA_MASSIMA_AUTORI_MS).toBeLessThanOrEqual(5000);
+  });
+});
+

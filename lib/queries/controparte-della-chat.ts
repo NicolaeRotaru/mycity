@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { fetchSellerPublicMap, type LettoreVista } from '@/lib/queries/seller-public-profiles';
 
 /**
@@ -17,13 +18,25 @@ import { fetchSellerPublicMap, type LettoreVista } from '@/lib/queries/seller-pu
  * sua scheda, e non cambiano qui.
  */
 
-/** Attacca a ogni conversazione l'insegna del suo negozio, o `null` se la vetrina non lo mostra. */
+/**
+ * Attacca a ogni conversazione l'insegna del suo negozio, o `null` se la vetrina non lo mostra.
+ *
+ * Se la vetrina non risponde, le conversazioni restano e l'insegna e' `null` (poi vale il ripiego
+ * di `nomeDellaControparte`): l'insegna e' un dettaglio, i messaggi no. Prima un guasto della sola
+ * vista spegneva l'elenco e la conversazione, anche per il negoziante, a cui l'insegna non serve.
+ */
 export async function conInsegnaDelNegozio<T extends { seller_id: string }>(
   supa: LettoreVista,
   conversazioni: T[],
 ): Promise<Array<T & { insegna: string | null }>> {
   if (conversazioni.length === 0) return [];
-  const negozi = await fetchSellerPublicMap(supa, conversazioni.map((c) => c.seller_id), 'id, store_name');
+  let negozi: Map<string, { store_name?: string | null }>;
+  try {
+    negozi = await fetchSellerPublicMap(supa, conversazioni.map((c) => c.seller_id), 'id, store_name');
+  } catch (e) {
+    logger.warn('[chat] insegne non lette dalla vetrina: conversazioni mostrate senza insegna', e);
+    negozi = new Map();
+  }
   return conversazioni.map((c) => ({ ...c, insegna: negozi.get(c.seller_id)?.store_name ?? null }));
 }
 
