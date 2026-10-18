@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
+import { conNegozioApprovato } from '@/lib/queries/seller-public-profiles';
 import caricatoreFotoRemote from '@/lib/image-loader';
 
 type Drop = {
@@ -65,13 +66,23 @@ export default function DropOfDay() {
         .select(`
           id, drop_date, discount_percent, original_price, drop_price, headline,
           product:products!daily_drops_product_id_fkey (
-            id, name, description, images,
-            profiles!products_seller_id_fkey ( id, store_name )
+            id, name, description, images, seller_id
           )
         `)
         .eq('drop_date', today)
         .maybeSingle();
-      return (data as unknown as Drop) ?? null;
+      const letto = data as unknown as (Omit<Drop, 'product'> & {
+        product: (Omit<NonNullable<Drop['product']>, 'profiles'> & { seller_id: string | null }) | null;
+      }) | null;
+      if (!letto?.product) return null;
+      // 18/10/2026 — Il negozio del drop arriva dalla vista pubblica dei negozi,
+      // non dalla tabella dei profili: dopo le migrazioni 110, 112 e 161 la
+      // tabella mostra a ognuno solo la propria riga, e il drop avrebbe perso
+      // «da [negozio]». Un drop di un negozio che la vista non restituisce
+      // (non approvato, sospeso, senza insegna) non si mostra.
+      const [prodotto] = await conNegozioApprovato(supabase, [letto.product], 'id, store_name');
+      if (!prodotto) return null;
+      return { ...letto, product: prodotto };
     },
   });
 

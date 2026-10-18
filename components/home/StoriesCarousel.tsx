@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { logoNegozio } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
+import { conNegozioApprovato } from '@/lib/queries/seller-public-profiles';
 import StoryViewer from '@/components/StoryViewer';
 
 /**
@@ -41,16 +42,24 @@ export default function StoriesCarousel() {
   const { data: stories = [] } = useQuery({
     queryKey: queryKeys.seller.storiesActive,
     queryFn: async (): Promise<Story[]> => {
+      // 18/10/2026 — Il negozio della storia arriva dalla vista pubblica dei
+      // negozi, non dalla tabella dei profili: dopo le migrazioni 110, 112 e 161
+      // la tabella mostra a ognuno solo la propria riga, e ogni bolla sarebbe
+      // rimasta senza logo e senza nome. La storia di un negozio che la vista
+      // non restituisce (non approvato, sospeso, senza insegna) non si mostra:
+      // prima compariva con «?» e «—» al posto del nome.
       const { data } = await supabase
         .from('seller_stories')
-        .select(`
-          id, seller_id, image_url, caption, link_url, view_count, expires_at,
-          seller:profiles!seller_stories_seller_id_fkey ( id, store_name, store_logo )
-        `)
+        .select('id, seller_id, image_url, caption, link_url, view_count, expires_at')
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
         .limit(30);
-      return (data ?? []) as unknown as Story[];
+      const storie = (data ?? []) as Array<Omit<Story, 'seller'>>;
+      const conNegozio = await conNegozioApprovato(supabase, storie, 'id, store_name, store_logo');
+      return conNegozio.map(({ profiles, ...storia }) => ({
+        ...storia,
+        seller: { id: profiles.id, store_name: profiles.store_name, store_logo: profiles.store_logo ?? null },
+      }));
     },
     refetchInterval: 5 * 60_000,
   });

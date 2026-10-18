@@ -3,6 +3,7 @@ import Image from 'next/image';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { notFound } from 'next/navigation';
 import { creaClientAnonimo } from '@/lib/supabase/anonimo';
+import { getAdminSupabase } from '@/lib/supabase/server';
 import { Trophy, Sparkles, MapPin } from 'lucide-react';
 
 export const revalidate = 300;
@@ -19,10 +20,17 @@ type Profile = {
  * 27/8/2026 (R010) — le variabili di Supabase si leggevano qui a mano, e se mancavano si tornava
  * `null` senza dirlo: il profilo pubblico di una persona vera spariva come se non esistesse.
  * `creaClientAnonimo()` si ferma e dice quali variabili mancano.
+ *
+ * 18/10/2026 — Il profilo si legge col client di servizio, qui sul server. Prima lo leggeva il
+ * client pubblico, grazie alla regola «chi ha il profilo pubblico si legge da tutti» che le
+ * migrazioni 110 e 161 tolgono: dopo, ogni /u/… avrebbe risposto «pagina non trovata», anche per
+ * chi il profilo l'ha attivato. Il client di servizio non guarda le regole, quindi i due limiti
+ * stanno qui e non vanno mai tolti: SOLO le colonne che la pagina mostra, e SOLO se la persona ha
+ * acceso il profilo pubblico (`public_profile_enabled = true`).
  */
 async function fetchProfileByHandle(handle: string) {
   try {
-    const supabase = creaClientAnonimo();
+    const supabase = getAdminSupabase();
     const { data } = await supabase
       .from('profiles')
       .select('id, public_handle, public_bio, public_avatar_url, full_name')
