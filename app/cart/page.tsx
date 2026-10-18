@@ -13,6 +13,7 @@ import caricatoreFotoRemote from '@/lib/image-loader';
 import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
+import { fetchSellerPublicMap, type SellerPublicProfile } from '@/lib/queries/seller-public-profiles';
 import ShareCartButton from '@/components/ShareCartButton';
 import EmptyState from '@/components/EmptyState';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
@@ -243,9 +244,18 @@ export default function CartPage() {
         // Le promozioni attive: stessa funzione della cassa e delle due rotte che creano l'ordine.
         fetchActiveDiscounts(supabase, ids),
         // Dove sta ogni negozio: senza queste la spedizione non puo' che essere la tariffa fissa.
-        idNegozi.length > 0
-          ? supabase.from('profiles').select('id, store_lat, store_lng').in('id', idNegozi)
-          : Promise.resolve({ data: [] as Array<{ id: string; store_lat: number | null; store_lng: number | null }> }),
+        //
+        // 18/10/2026 — SI LEGGE DALLA VETRINA PUBBLICA, COME LE DUE ROTTE CHE CREANO L'ORDINE.
+        // Qui si chiedeva `profiles`, che dopo le migrazioni 110, 112 e 161 a un cliente
+        // restituisce solo la sua riga: le coordinate del negozio sparivano senza errore, il
+        // carrello mostrava la tariffa fissa e la cassa addebitava la distanza. La vista
+        // `seller_public_profiles` e' quella che leggono le rotte dei contanti e della carta, quindi
+        // le coordinate sono le stesse. Un negozio che la vista non restituisce resta senza
+        // coordinate qui come la': il server addebita la tariffa fissa, e qui si mostra quella. Se
+        // la lettura cade, il riepilogo resta sulla tariffa fissa e la chiama «stima»: la cifra
+        // finale la da' la cassa.
+        fetchSellerPublicMap(supabase, idNegozi, 'id, store_lat, store_lng')
+          .catch(() => new Map<string, SellerPublicProfile>()),
         // Dove consegniamo: l'indirizzo predefinito, letto con la stessa query della cassa.
         idCliente
           ? supabase
@@ -271,8 +281,7 @@ export default function CartPage() {
       setPrezzoDiOggi(prezzi);
       setDovEIlNegozio(
         Object.fromEntries(
-          ((negoziRes.data ?? []) as Array<{ id: string; store_lat: number | null; store_lng: number | null }>)
-            .map((n) => [n.id, { lat: n.store_lat, lng: n.store_lng }]),
+          [...negoziRes.values()].map((n) => [n.id, { lat: n.store_lat ?? null, lng: n.store_lng ?? null }]),
         ),
       );
       const casa = ((indirizzoRes.data ?? []) as Array<{ lat: number | null; lng: number | null }>)[0];

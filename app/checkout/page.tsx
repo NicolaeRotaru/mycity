@@ -20,6 +20,7 @@ import { shippingForEuro } from '@/lib/shipping';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
 import { fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
+import { fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
 import { validateCouponFromBrowser, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
 import { Button } from '@/components/ui/Button';
@@ -211,25 +212,27 @@ export default function CheckoutPage() {
           ...Array.from(lookupMap.values()),
         ]),
       );
-      if (allSellerIds.length > 0) {
-        let { data: sellers, error: sErr } = await supabase
-          .from('profiles')
-          .select('id, store_name, store_lat, store_lng, offers_express')
-          .in('id', allSellerIds);
-        if (sErr?.code === '42703') {
-          const ripiego = await supabase
-            .from('profiles')
-            .select('id, store_name, store_lat, store_lng')
-            .in('id', allSellerIds);
-          sellers = (ripiego.data ?? []).map((r) => ({ ...r, offers_express: false })) as typeof sellers;
-        }
-        for (const s of sellers ?? []) {
-          sellerInfo.set(s.id, {
-            name: s.store_name ?? 'Negozio',
-            lat: s.store_lat,
-            lng: s.store_lng,
-          });
-        }
+      /**
+       * 18/10/2026 — IL NEGOZIO SI LEGGE DALLA VETRINA PUBBLICA, COME LO LEGGE CHI ADDEBITA.
+       *
+       * Qui si chiedeva `profiles`, con un ripiego sullo stesso `profiles` se mancava una colonna.
+       * Dopo le migrazioni 110, 112 e 161 un cliente da `profiles` legge solo la propria riga: la
+       * risposta tornava vuota senza errore, la spedizione si mostrava a tariffa fissa e le due
+       * rotte che creano l'ordine — che leggono `seller_public_profiles` — la addebitavano sulla
+       * distanza. Il totale scritto sul pulsante non era quello pagato.
+       *
+       * Adesso la domanda e' la stessa delle rotte, sulla stessa vista: un negozio che la vista non
+       * restituisce resta senza coordinate qui come la', e vale la tariffa fissa per tutte e due.
+       * Se la lettura cade non si indovina una spedizione: la domanda fallisce come quella dei
+       * prodotti, e la cassa dice che non riesce a leggere il carrello.
+       */
+      const negozi = await fetchSellerPublicMap(supabase, allSellerIds, 'id, store_name, store_lat, store_lng');
+      for (const s of negozi.values()) {
+        sellerInfo.set(s.id, {
+          name: s.store_name ?? 'Negozio',
+          lat: s.store_lat ?? null,
+          lng: s.store_lng ?? null,
+        });
       }
 
       const sellerMap = new Map<string, {
@@ -342,11 +345,11 @@ export default function CheckoutPage() {
       // schermata, e il cliente non poteva sapere quale valesse per lui.
       // Il riquadro non c'e' piu' e il calcolo con lui.
       //
-      // `express_enabled` e `offers_express` restano nelle due letture qui
-      // sopra: non le usa piu' nessuno per il testo, ma toglierle vorrebbe dire
-      // mettere le mani nel ripiego che tiene in piedi il checkout se la
-      // migrazione 071 non e' applicata. Non si tocca quel ripiego per due
-      // colonne che non costano un viaggio in piu'.
+      // `express_enabled` resta nella lettura dei prodotti qui sopra: non la usa
+      // piu' nessuno per il testo, ma toglierla vorrebbe dire mettere le mani
+      // nel ripiego che tiene in piedi il checkout se la migrazione 071 non e'
+      // applicata. `offers_express` invece se n'e' andata il 18/10/2026 con la
+      // lettura del negozio da `profiles` e il suo ripiego.
       return { groups: groupsArr, orphans: orphanItems, stockIssues, variantIssues, prezziCambiati };
     },
   });

@@ -7,6 +7,7 @@ import Image from 'next/image';
 import { ShoppingCart, ArrowRight, Check, Package, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { addToCart } from '@/lib/cart';
+import { attachSellerProfiles, fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -96,13 +97,33 @@ function SharedCartInner() {
       const ids = parsed.map((p) => p.id);
       const { data, error } = await supabase
         .from('products')
-        .select(`
-          id, name, price, images, status, stock, seller_id, has_variants,
-          profiles!products_seller_id_fkey ( store_name )
-        `)
+        .select('id, name, price, images, status, stock, seller_id, has_variants')
         .in('id', ids);
-      setNonLetta(Boolean(error));
-      setProducts((error ? [] : (data ?? [])) as unknown as Product[]);
+      /**
+       * 18/10/2026 — IL NOME DEL NEGOZIO SI LEGGE DALLA VETRINA PUBBLICA.
+       *
+       * Il prodotto si agganciava a `profiles` dentro la stessa lettura. Dopo le migrazioni 110,
+       * 112 e 161 chi riceve la lista legge da `profiles` solo la propria riga: l'aggancio tornava
+       * vuoto, ogni prodotto diceva «Negozio» ed entrava nel carrello senza il nome del negozio.
+       * La vista `seller_public_profiles` e' quella che leggono la scheda prodotto e la cassa.
+       * Se cade questa seconda lettura, la lista si dichiara non letta, come se cadesse la prima.
+       */
+      let righe: Product[] = [];
+      let caduta = Boolean(error);
+      if (!error) {
+        try {
+          const negozi = await fetchSellerPublicMap(
+            supabase,
+            (data ?? []).map((p) => p.seller_id as string | null),
+            'id, store_name',
+          );
+          righe = attachSellerProfiles((data ?? []) as Array<Omit<Product, 'profiles'>>, negozi);
+        } catch {
+          caduta = true;
+        }
+      }
+      setNonLetta(caduta);
+      setProducts(caduta ? [] : righe);
       setLoading(false);
     })();
     // parsed e' derivato da cartParam — re-parsing in deps userebbe nuovo ref ogni render
