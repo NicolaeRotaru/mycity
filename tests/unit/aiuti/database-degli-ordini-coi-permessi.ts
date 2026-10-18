@@ -94,8 +94,15 @@ type Filtro = { tipo: string; colonna: string; valore: unknown };
 /**
  * `vistaGiu`: la vista dei negozi risponde con un errore (per esempio un tempo scaduto), mentre
  * tutto il resto si legge. Serve a provare che un guasto della sola vista non spegne pagine intere.
+ * `ordiniGiu`: lo stesso guasto sulla tabella degli ordini, per distinguere un guasto vero da un
+ * ordine che non c'e'.
  */
-export function databaseDegliOrdini(dati: DatiOrdini, mondo: Mondo, chi: string | null, opzioni: { vistaGiu?: boolean } = {}) {
+export function databaseDegliOrdini(
+  dati: DatiOrdini,
+  mondo: Mondo,
+  chi: string | null,
+  opzioni: { vistaGiu?: boolean; ordiniGiu?: boolean } = {},
+) {
   const righe = (t: string) => dati[t] ?? [];
 
   const colonneDellaVista = () =>
@@ -221,7 +228,7 @@ export function databaseDegliOrdini(dati: DatiOrdini, mondo: Mondo, chi: string 
     maybeSingle() { this.modo = 'unaForse'; return this; }
 
     private esegui(): { data: unknown; error: Errore | null } {
-      if (opzioni.vistaGiu && this.tabella === 'seller_public_profiles') {
+      if ((opzioni.vistaGiu && this.tabella === 'seller_public_profiles') || (opzioni.ordiniGiu && this.tabella === 'orders')) {
         return { data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } };
       }
       try {

@@ -135,7 +135,7 @@ async function aSchermo(
   mondo: Mondo,
   chi: string | null,
   d = dati(),
-  opzioni: { vistaGiu?: boolean } = {},
+  opzioni: { vistaGiu?: boolean; ordiniGiu?: boolean } = {},
 ) {
   const pagina = (await monta(file)).default;
   globale.__CLIENT_SUPABASE__ = databaseDegliOrdini(d, mondo, chi, opzioni).client;
@@ -414,6 +414,17 @@ describe('se la vetrina dei negozi non risponde', () => {
       expect(testo).not.toContain('Non riesco a leggere la consegna');
       s.smonta();
     }
+  }, 60000);
+
+  it.each(MONDI)('un guasto vero sulla lettura dell ordine dice di riprovare, non che l ordine non esiste — %s', async (_n, mondo) => {
+    // Il rovescio della prova qui sopra (collaudo del 18/10): zero righe e' «non trovato», un
+    // errore del database no. Un guasto trattato come «non c'e'» toglierebbe la consegna al fattorino.
+    const { s, errori } = await aSchermo('app/rider/orders/[id]/page.tsx', { params: { id: O_PANE } }, mondo, LUCA, dati(), { ordiniGiu: true });
+    expect(errori.size, 'la lettura dell ordine doveva cadere').toBeGreaterThan(0);
+    const testo = testoVisibile(s.radice);
+    expect(testo).toContain('Non riesco a leggere la consegna');
+    expect(testo).not.toContain('Ordine non trovato');
+    s.smonta();
   }, 60000);
 
   it.each(MONDI)('«Ordina di nuovo» con la vista giu non si disegna con «Negozio» al posto dei nomi — %s', async (_n, mondo) => {
