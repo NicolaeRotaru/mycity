@@ -10,6 +10,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
+import { conInsegnaDelNegozio, nomeDellaControparte } from '@/lib/queries/controparte-della-chat';
 
 type Counterpart = {
   id: string;
@@ -27,6 +28,8 @@ type ConversationRow = {
   seller_unread_count: number;
   buyer: Counterpart | null;
   seller: Counterpart | null;
+  /** L'insegna del negozio, dalla vetrina pubblica (lib/queries/controparte-della-chat.ts). */
+  insegna: string | null;
 };
 
 function formatRelative(iso: string): string {
@@ -77,7 +80,10 @@ export default function MessagesListPage() {
         .order('last_message_at', { ascending: false })
         .limit(50);
       if (error) throw error;
-      return (data ?? []) as unknown as ConversationRow[];
+      // 18/10/2026 — L'insegna del negozio la dice la vetrina pubblica, non
+      // `profiles`: il cliente continua a vedere a chi sta scrivendo anche quando
+      // `profiles` si chiude.
+      return conInsegnaDelNegozio(supabase, (data ?? []) as unknown as Array<Omit<ConversationRow, 'insegna'>>);
     },
   });
 
@@ -146,10 +152,7 @@ export default function MessagesListPage() {
         <div className="bg-white border border-cream-300 rounded-xl divide-y divide-cream-100 overflow-hidden">
           {conversations.map((c) => {
             const iAmBuyer = c.buyer_id === userId;
-            const counterpart = iAmBuyer ? c.seller : c.buyer;
-            const counterpartName =
-              (iAmBuyer ? counterpart?.store_name : counterpart?.full_name) ??
-              counterpart?.full_name ?? 'Utente';
+            const counterpartName = nomeDellaControparte(c, userId);
             const unread = iAmBuyer ? c.buyer_unread_count : c.seller_unread_count;
             return (
               <Link

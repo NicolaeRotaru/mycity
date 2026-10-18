@@ -19,6 +19,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 import { useProfile } from '@/components/hooks/useProfile';
 import { trackRiderOrderAccepted } from '@/lib/analytics/events';
 import { compensoConsegnaEuro } from '@/lib/shipping';
@@ -129,21 +130,28 @@ export default function RiderDashboardPage() {
           .from('orders')
           .select(`
             id, total_price, shipping_cost, rider_fee_cents, delivery_status,
-            delivery_city, delivery_address, payment_method, user_id, rider_id,
-            seller:profiles!orders_seller_id_fkey ( store_name, store_logo, store_address ),
+            delivery_city, delivery_address, payment_method, user_id, rider_id, seller_id,
             order_items ( id, quantity )
           `)
           .eq('rider_id', user.id)
           .order('created_at', { ascending: true }),
       ]);
       if (miei.error) throw miei.error;
+      // 18/10/2026 — Il negozio delle consegne prese arriva dalla vetrina pubblica,
+      // non da `profiles` (lib/queries/negozio-dell-ordine.ts): regge anche quando
+      // `profiles` si chiude.
+      const mieiColNegozio = await conNegozioDellOrdine(
+        supabase,
+        (miei.data ?? []) as unknown as Array<Omit<AvailableOrder, 'seller'> & { seller_id: string | null; rider_id: string | null }>,
+        'id, store_name, store_logo, store_address',
+      );
 
       return {
         // La vista puo' non esistere ancora (migrazione 122 da applicare): in
         // quel caso la bacheca resta vuota e il fattorino vede solo i suoi
         // ordini, invece di vedere un errore.
         liberi: (bacheca.data ?? []) as unknown as OrdineLibero[],
-        miei: (miei.data ?? []) as unknown as (AvailableOrder & { rider_id: string | null })[],
+        miei: mieiColNegozio as (AvailableOrder & { rider_id: string | null })[],
       };
     },
     refetchInterval: 60_000,   // dashboard rider: 1 min è sufficiente

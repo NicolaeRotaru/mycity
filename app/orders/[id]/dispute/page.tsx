@@ -10,6 +10,7 @@ import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Textarea } from '@/components/ui/Field';
 import { useTranslations } from 'next-intl';
+import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 
 const REASONS: Array<{ value: string; label: string; hint: string }> = [
   { value: 'not_received',      label: 'Non l\'ho ricevuto',          hint: 'L\'ordine risulta consegnato ma non l\'hai ricevuto.' },
@@ -25,7 +26,7 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
   const router = useRouter();
   const tStates = useTranslations('states');
   const tForms = useTranslations('forms');
-  const [order, setOrder] = useState<{ id: string; total_price: number; delivery_status: string; seller_id: string; created_at: string; profiles?: { store_name?: string | null } | null } | null>(null);
+  const [order, setOrder] = useState<{ id: string; total_price: number; delivery_status: string; seller_id: string; created_at: string; seller?: { store_name?: string | null } | null } | null>(null);
   const [reason, setReason] = useState<string>('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -39,7 +40,7 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
       }
       const { data } = await supabase
         .from('orders')
-        .select('id, total_price, delivery_status, seller_id, created_at, profiles!orders_seller_id_fkey ( store_name )')
+        .select('id, total_price, delivery_status, seller_id, created_at')
         .eq('id', params.id)
         .single();
       if (!data) {
@@ -47,7 +48,14 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
         router.push('/orders');
         return;
       }
-      setOrder(data as unknown as typeof order);
+      // 18/10/2026 — Il nome del negozio contro cui si reclama viene dalla vetrina
+      // pubblica, non da `profiles` (lib/queries/negozio-dell-ordine.ts). Qui e'
+      // solo un'etichetta: se quella lettura cade resta «Negozio», e il reclamo si
+      // apre lo stesso.
+      const riga = data as { seller_id: string };
+      const [conNegozio] = await conNegozioDellOrdine(supabase, [riga], 'id, store_name')
+        .catch(() => [{ ...riga, seller: null }]);
+      setOrder(conNegozio as unknown as typeof order);
     })();
   }, [params.id, router]);
 
@@ -93,7 +101,7 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
         Apri un reclamo
       </h1>
       <p className="text-sm text-ink-500 mt-1">
-        Ordine #{params.id.slice(0, 8)} · {order.profiles?.store_name ?? 'Negozio'}
+        Ordine #{params.id.slice(0, 8)} · {order.seller?.store_name ?? 'Negozio'}
       </p>
 
       <div className="bg-accent-50 border border-accent-200 rounded-2xl p-4 mt-5 text-sm text-ink-700">
