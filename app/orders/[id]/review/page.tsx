@@ -13,6 +13,7 @@ import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import { Package, Store, Bike } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
+import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 
 /**
  * 3/9/2026 — LE STELLE NON DICEVANO QUAL È IL VOTO SCELTO.
@@ -72,13 +73,19 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
         .from('orders')
         .select(`
           id, delivery_status, seller_id, rider_id,
-          seller:profiles!orders_seller_id_fkey ( store_name ),
           rider:profiles!orders_rider_id_fkey   ( full_name )
         `)
         .eq('id', id)
         .single();
       if (error) throw error;
-      return data as unknown as OrderForReview;
+      // 18/10/2026 — Il nome del negozio da valutare viene dalla vetrina pubblica,
+      // non da `profiles` (lib/queries/negozio-dell-ordine.ts).
+      const [conNegozio] = await conNegozioDellOrdine(
+        supabase,
+        [data as unknown as Omit<OrderForReview, 'seller'>],
+        'id, store_name',
+      );
+      return conNegozio as OrderForReview;
     },
   });
 

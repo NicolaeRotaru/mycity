@@ -22,6 +22,7 @@ import {
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 import { trackOrderPlaced } from '@/lib/analytics/events';
 // #92 — le miniature si chiedono gia' piccole al server
 import { sizedImage, logoNegozio } from '@/lib/image-url';
@@ -53,7 +54,6 @@ const fetchOrders = async (): Promise<Order[]> => {
     .from('orders')
     .select(`
       id, total_price, payment_status, delivery_status, created_at, seller_id,
-      seller:profiles!orders_seller_id_fkey ( store_name, store_logo ),
       order_items (
         id, quantity, unit_price, product_id,
         products ( name, images )
@@ -70,7 +70,10 @@ const fetchOrders = async (): Promise<Order[]> => {
       .limit(100);
 
   if (error) throw error;
-  return (data ?? []) as unknown as Order[];
+  // 18/10/2026 — Nome e logo del negozio dalla vetrina pubblica, non da `profiles`
+  // (lib/queries/negozio-dell-ordine.ts): reggono anche quando `profiles` si chiude.
+  const righe = (data ?? []) as unknown as Array<Omit<Order, 'seller'>>;
+  return (await conNegozioDellOrdine(supabase, righe, 'id, store_name, store_logo')) as Order[];
 };
 
 /**
