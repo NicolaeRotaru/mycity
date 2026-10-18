@@ -59,7 +59,9 @@ fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha gi�
 > produzione tornano già vuote per quasi tutti, perché passano solo per chi ha acceso il profilo
 > pubblico: il nome del fattorino visto dal cliente e dal negozio, il nome del cliente visto dal
 > negozio (chat, Clienti), la firma di domande e recensioni. Non bloccano il passo 2: dopo,
-> mancano anche ai pochi col profilo pubblico. **Con quella richiesta online, il passo 2 si può
+> mancano anche ai pochi col profilo pubblico. Gli incassi da dichiarare del fattorino
+> (`lib/rider/leggi-incassi-da-dichiarare.ts`) leggono ancora l'insegna da `profiles`, ma dal
+> server col client di servizio, che le regole non le guarda: dopo il passo 2 funzionano uguale. **Con quella richiesta online, il passo 2 si può
 > fare**, insieme al passo 0.
 
 **Cosa devi fare.** La stringa del Session pooler va nel segreto `SUPABASE_DB_URL` appena è unita

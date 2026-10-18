@@ -404,6 +404,28 @@ describe('se la vetrina dei negozi non risponde', () => {
     s.smonta();
   }, 60000);
 
+  it.each(MONDI)('una consegna che non e del fattorino dice «Ordine non trovato», non «Riprova» — %s', async (_n, mondo) => {
+    // Zero righe non e' un guasto. La consegna del negozio sospeso e' di Anna: Luca non la vede
+    // (riassegnata, vecchia, link sbagliato). Con la vista giu' o su, la risposta e' la stessa.
+    for (const [id, opzioni] of [[O_SOSPESO, {}], [O_SOSPESO, GIU], ['ffffffff-9999-4999-8999-ffffffffffff', {}]] as const) {
+      const { s } = await aSchermo('app/rider/orders/[id]/page.tsx', { params: { id } }, mondo, LUCA, dati(), opzioni);
+      const testo = testoVisibile(s.radice);
+      expect(testo, `consegna ${id.slice(0, 8)}: doveva dire che non c'e`).toContain('Ordine non trovato');
+      expect(testo).not.toContain('Non riesco a leggere la consegna');
+      s.smonta();
+    }
+  }, 60000);
+
+  it.each(MONDI)('«Ordina di nuovo» con la vista giu non si disegna con «Negozio» al posto dei nomi — %s', async (_n, mondo) => {
+    // La fascia legge il negozio in modo severo: se la vista cade, la fascia non compare, come
+    // prima del lotto. Mostrarla con «Negozio» su ogni scheda per cinque minuti sarebbe peggio.
+    const { s } = await aSchermo('components/home-sections/ReorderRail.tsx', {}, mondo, MARIA, dati(), GIU);
+    const testo = testoVisibile(s.radice);
+    expect(testo).not.toContain('Ordina di nuovo');
+    expect(testo).not.toContain('Negozio');
+    s.smonta();
+  }, 60000);
+
   it.each(MONDI)('le pagine dell ordine del cliente dicono di riprovare — %s', async (_n, mondo) => {
     // Anche qui il negozio e' il cuore: un ordine senza negozio a schermo sembrerebbe la verita'.
     const elenco = await aSchermo('app/orders/page.tsx', {}, mondo, MARIA, dati(), GIU);

@@ -107,8 +107,13 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
           order_items ( id, quantity, unit_price, products ( name ) )
         `)
         .eq('id', id)
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      // Zero righe non e' un guasto: l'ordine non esiste, o non e' (piu') di questo fattorino — per
+      // esempio riassegnato, o consegnato da piu' di 7 giorni. Allora «Ordine non trovato», non
+      // «Riprova»: con `.single()` le zero righe diventavano un errore, e la pagina diceva al
+      // fattorino che la consegna era ancora sua.
+      if (!data) return null;
       // 18/10/2026 — Dove ritirare (nome, indirizzo, telefono, coordinate del
       // negozio) arriva dalla vetrina pubblica, non da `profiles`: regge anche
       // quando `profiles` si chiude (lib/queries/negozio-dell-ordine.ts). Un negozio
