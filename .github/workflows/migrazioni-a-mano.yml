@@ -5,7 +5,8 @@ name: Migrazioni a mano (produzione)
 # In produzione mancano 48 migrazioni (docs/migrazioni-baseline-produzione.md,
 # passo 2). Il rilascio automatico non le applica da solo, apposta: sopra le 20
 # si ferma (MASSIMO_MIGRAZIONI in deploy-dopo-ci.yml). La procedura dice di
-# farlo a mano, una volta, con la firma di Nicola.
+# contarle, guardare quelle oltre la 161, e poi applicarle a mano, una volta,
+# con la firma di Nicola.
 #
 # «A mano» non ha funzionato da nessuna delle strade provate il 19/10:
 #   · dallo strumento Supabase della sessione è entrata solo la 091. Ogni comando
@@ -18,10 +19,12 @@ name: Migrazioni a mano (produzione)
 # l'11/10 su una copia fedele della produzione: «applicate 48», uscita 0, zero
 # differenze con un database costruito dal repository.
 #
-# Parte solo da chi lo avvia a mano dalla pagina Actions, solo da `main`, solo
-# se nella casella scrive APPLICA e solo se il numero di migrazioni che si
-# aspetta coincide con quelle che mancano davvero. Il conto si fa prima di
-# scrivere: se non torna, il database resta com'è.
+# DUE LAVORI, APPOSTA. Il primo conta senza scrivere e mette l'elenco nel
+# riepilogo. Il secondo scrive, e parte solo se il primo è verde. Il secondo
+# sta nell'ambiente `database-produzione`: se Nicola ci mette la spunta
+# «Required reviewers» (Settings → Environments), il secondo aspetta il suo
+# «Approve», e lui approva DOPO aver visto l'elenco del primo. Senza la spunta
+# il freno sono le tre caselle: APPLICA, quante ne mancano e quale è l'ultima.
 
 on:
   workflow_dispatch:
@@ -31,63 +34,45 @@ on:
         required: true
         type: string
       quante:
-        description: "Quante migrazioni ti aspetti che manchino (il 19/10 erano 48). Se il conto è diverso, il lavoro si ferma prima di scrivere"
+        description: "Quante migrazioni ti aspetti che manchino (il 19/10: 48). Se il conto è diverso, non scrive niente"
         required: true
         type: string
-
-# Lo stesso gruppo del rilascio automatico (deploy-dopo-ci.yml): i due lavori
-# applicano gli stessi file con lo stesso script, quindi si aspettano a vicenda.
-# Con due gruppi diversi, un'unione su main durante questo lavoro farebbe
-# partire il rilascio sulle stesse migrazioni, e alcune entrerebbero due volte.
-# Effetto collaterale voluto: un rilascio in attesa viene sostituito da questo
-# lavoro (GitHub tiene un solo lavoro in attesa per gruppo) e ripartirà alla
-# prossima unione.
-concurrency:
-  group: rilascio-produzione
-  cancel-in-progress: false
+      ultima:
+        description: "Il numero dell'ultima migrazione che ti aspetti nell'elenco (il 19/10: 163). Se è un'altra, non scrive niente"
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  applica:
-    name: Applica le migrazioni che mancano
+  conta:
+    name: Conta quelle che mancano, senza scrivere
     # La versione fissa: con `ubuntu-latest` il computer di turno può cambiare
     # sotto i piedi, e il deposito dei pacchetti di PostgreSQL deve conoscerla.
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 15
     # Solo dal ramo principale: da un altro ramo arriverebbero file non uniti.
     if: github.ref == 'refs/heads/main'
-    # L'ambiente esiste per dare a Nicola un freno in più: in Settings →
-    # Environments → database-produzione può chiedere che ogni avvio aspetti il
-    # suo «Approve». Senza quella spunta il lavoro parte come prima.
-    environment: database-produzione
     steps:
       - name: La conferma scritta
         env:
           CONFERMA: ${{ inputs.conferma }}
-          QUANTE: ${{ inputs.quante }}
         run: |
           if [ "$CONFERMA" != "APPLICA" ]; then
             echo "::error::Nella casella della conferma c'e' scritto altro da APPLICA: non tocco il database."
             exit 1
           fi
-          case "$QUANTE" in
-            ''|*[!0-9]*)
-              echo "::error::Nella casella «quante» va un numero intero (il 19/10: 48). Non tocco il database."
-              exit 1
-              ;;
-          esac
 
-      # La copia notturna parte alle 02:17 UTC (backup-db.yml) e il primo del
-      # mese alle 03:41 c'e' la prova di ripristino. Se le migrazioni partissero
-      # insieme, le modifiche allo schema resterebbero in coda dietro la copia e
-      # bloccherebbero anche le letture del sito.
+      # La copia notturna parte alle 02:17 UTC (backup-db.yml), il primo del mese
+      # alle 03:41 c'e' la prova di ripristino, e GitHub puo' farle partire in
+      # ritardo. Con le migrazioni in corso, le modifiche allo schema
+      # resterebbero in coda dietro la copia e bloccherebbero anche il sito.
       - name: Non durante la copia notturna
         run: |
-          ORA="$(date -u +%H)"
-          if [ "$ORA" = "02" ] || [ "$ORA" = "03" ]; then
-            echo "::error::Fra le 02:00 e le 04:00 UTC gira la copia notturna del database: riavvia dopo le 04:00 UTC."
+          ORA="$((10#$(date -u +%H%M)))"
+          if [ "$ORA" -ge 130 ] && [ "$ORA" -lt 500 ]; then
+            echo "::error::Fra le 01:30 e le 05:00 UTC gira la copia notturna del database: riavvia dopo le 05:00 UTC."
             exit 1
           fi
 
@@ -145,38 +130,76 @@ jobs:
             exit 1
           }
 
-      # Il conto, senza scrivere: con tetto 0 lo script si ferma prima di
-      # toccare il database (uscita 4) ed elenca quelle che mancano.
-      - name: Conta quelle che mancano, senza toccare niente
+      - name: Conta quelle che mancano
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           QUANTE: ${{ inputs.quante }}
+          ULTIMA: ${{ inputs.ultima }}
+        run: bash scripts/conta-migrazioni-mancanti.sh
+
+  applica:
+    name: Applica le migrazioni che mancano
+    needs: conta
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    if: github.ref == 'refs/heads/main'
+    environment: database-produzione
+    # Lo stesso gruppo del rilascio automatico (deploy-dopo-ci.yml): i due
+    # applicano gli stessi file con lo stesso script, quindi si aspettano. Con
+    # due gruppi diversi, un'unione su main durante questo lavoro farebbe
+    # entrare due volte alcune migrazioni (collaudo del 19/10). GitHub tiene un
+    # solo lavoro in attesa per gruppo: un rilascio in attesa viene sostituito
+    # da questo, e riparte alla prossima unione.
+    concurrency:
+      group: rilascio-produzione
+      cancel-in-progress: false
+    steps:
+      # Di nuovo: l'«Approve» di Nicola puo' arrivare ore dopo il conto.
+      - name: Non durante la copia notturna
         run: |
-          set -uo pipefail
-          ELENCO="$(mktemp)"
-          USCITA=0
-          MASSIMO_MIGRAZIONI=0 bash scripts/applica-migrazioni-mancanti.sh > /dev/null 2> "$ELENCO" || USCITA=$?
-          if [ "$USCITA" != "0" ] && [ "$USCITA" != "4" ]; then
-            cat "$ELENCO" >&2
-            echo "::error::Lo script si e' fermato prima del conto (uscita $USCITA): non ho applicato niente."
+          ORA="$((10#$(date -u +%H%M)))"
+          if [ "$ORA" -ge 130 ] && [ "$ORA" -lt 500 ]; then
+            echo "::error::Fra le 01:30 e le 05:00 UTC gira la copia notturna del database: riavvia dopo le 05:00 UTC."
             exit 1
           fi
-          N="$(grep -cE '^    - .+\.sql$' "$ELENCO" || true)"
-          {
-            echo "## Migrazioni che mancano: $N (attese: $QUANTE)"
-            echo ""
-            grep -E '^    - .+\.sql$' "$ELENCO" | sed 's/^    //' || true
-          } >> "$GITHUB_STEP_SUMMARY"
-          grep -E '^    - .+\.sql$' "$ELENCO" || true
-          if [ "$N" != "$QUANTE" ]; then
-            echo "::error::Ne mancano $N, ma ne aspettavi $QUANTE: non tocco il database. L'elenco e' qui sopra."
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installa il client Postgres
+        env:
+          VERSIONE_ATTESA: "17"
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends "postgresql-client-${VERSIONE_ATTESA}"
+          echo "/usr/lib/postgresql/${VERSIONE_ATTESA}/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/postgresql/${VERSIONE_ATTESA}/bin:$PATH"
+          psql --version
+          psql --version | grep -q " ${VERSIONE_ATTESA}\." || {
+            echo "::error::psql non e' la versione ${VERSIONE_ATTESA}."
             exit 1
-          fi
+          }
+
+      # Fra il conto e questo momento puo' essere passato del tempo (l'attesa
+      # dell'«Approve»), e intanto puo' essere entrato un rilascio. Si riconta.
+      - name: Riconta subito prima di scrivere
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          QUANTE: ${{ inputs.quante }}
+          ULTIMA: ${{ inputs.ultima }}
+        run: bash scripts/conta-migrazioni-mancanti.sh
 
       - name: Applica le migrazioni che mancano
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          # Il tetto e' il numero contato e confermato qui sopra, non uno di piu'.
+          # Il tetto e' il numero contato e confermato, non uno di piu'.
           MASSIMO_MIGRAZIONI: ${{ inputs.quante }}
         run: |
           set -uo pipefail
@@ -190,8 +213,14 @@ jobs:
             echo ""
             grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico /- /' || echo "- nessuna"
             if [ "$USCITA" != "0" ]; then
+              ULTIMO="$(grep '^▶ applico ' "$DIARIO" | tail -1 | sed 's/^▶ applico //' || true)"
               echo ""
-              echo "**Lo script si e' fermato (uscita $USCITA).** L'ultima della lista e' quella che non e' entrata: il suo file gira in una transazione, quindi non ha lasciato mezzo lavoro. Le altre sono entrate. Il motivo e' nel registro di questo passo."
+              echo "**Lo script si e' fermato (uscita $USCITA), su ${ULTIMO:-nessun file}.** Le migrazioni prima di quella sono entrate e registrate. Il motivo e' nel registro di questo passo."
+              if [ -n "$ULTIMO" ] && grep -qE '^[[:space:]]*COMMIT[[:space:]]*;' "migrations/$ULTIMO"; then
+                echo "Attenzione: $ULTIMO ha un COMMIT suo, quindi una parte puo' essere entrata. Va guardato il database prima di riavviare."
+              elif [ -n "$ULTIMO" ]; then
+                echo "$ULTIMO gira in una transazione sola: se si e' rotto il file, non ha lasciato niente. Se invece si e' rotta solo la registrazione, il file e' entrato ma non risulta: lo dice il registro di questo passo."
+              fi
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$USCITA"

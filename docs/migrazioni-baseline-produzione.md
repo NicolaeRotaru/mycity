@@ -69,12 +69,15 @@ fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha gi�
 > strumento Supabase della sessione è entrata solo la 091: i comandi che cancellano o sostituiscono
 > qualcosa chiedono una conferma che sul telefono non compare, e la chiamata scade. Il passo 2 adesso
 > passa dal lavoro `.github/workflows/migrazioni-a-mano.yml`: si avvia dalla pagina Actions, solo da
-> `main`, scrivendo APPLICA e il numero di migrazioni che ci si aspetta (48). Prima conta senza
-> scrivere, e se il conto non torna si ferma. Poi gira questo stesso script col tetto uguale al
-> conto, lo rilancia col tetto 0, fa i cinque controlli del passo 3 e il controllo della deriva. Si
-> mette in fila col rilascio automatico e non parte fra le 02:00 e le 04:00 UTC (copia notturna).
-> Serve il segreto `SUPABASE_DB_URL` con la riga del Session pooler (la #255 è unita: si può
-> cambiare). L'ambiente `database-produzione` può chiedere l'«Approve» di Nicola a ogni avvio.
+> `main`, con tre caselle: APPLICA, quante migrazioni ci si aspetta (48) e il numero dell'ultima
+> (163). Sono due lavori. Il primo conta senza scrivere (`scripts/conta-migrazioni-mancanti.sh`) e
+> mette l'elenco nel riepilogo: se il numero o l'ultima non tornano, si ferma. Il secondo parte solo
+> dopo il primo, nell'ambiente `database-produzione`: con la spunta «Required reviewers» aspetta
+> l'«Approve» di Nicola, che arriva dopo aver visto l'elenco. Il secondo riconta, gira questo stesso
+> script col tetto uguale al conto, lo rilancia col tetto 0, fa i cinque controlli del passo 3 e il
+> controllo della deriva. Si mette in fila col rilascio automatico, e tutti e due i lavori si
+> rifiutano di partire fra le 01:30 e le 05:00 UTC (copia notturna e prova di ripristino). Serve il
+> segreto `SUPABASE_DB_URL` con la riga del Session pooler (la #255 è unita: si può cambiare).
 
 **Cosa devi fare.** La stringa del Session pooler va nel segreto `SUPABASE_DB_URL` appena è unita
 la richiesta #255 del sito, non prima (il perché è nella sezione qui sotto). I passi 0, 2 e 3 vanno fatti insieme, nello stesso giro e a
