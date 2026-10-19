@@ -75,8 +75,12 @@ fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha gi�
 > dopo il primo, nell'ambiente `database-produzione`: con la spunta «Required reviewers» aspetta
 > l'«Approve» di Nicola, che arriva dopo aver visto l'elenco. Il secondo riconta, gira questo stesso
 > script col tetto uguale al conto, lo rilancia col tetto 0, fa i cinque controlli del passo 3 e il
-> controllo della deriva. Si mette in fila col rilascio automatico, e tutti e due i lavori si
-> rifiutano di partire fra le 01:30 e le 05:00 UTC (copia notturna e prova di ripristino). Serve il
+> controllo della deriva. Si mette in fila col rilascio automatico. Tutti e due i lavori si
+> fermano se sta girando la copia del database (`backup-db.yml`): l'orario scritto è le 02:17 UTC,
+> ma GitHub la fa partire fra le 07 e le 10 UTC, quindi si guarda se gira davvero. E si fermano se,
+> dopo l'avvio, su `main` sono cambiate le migrazioni o gli script che le applicano. Se il secondo
+> lavoro si ferma a metà, il database resta a metà: per esempio la 125, la 126 e la 127 tolgono la
+> guardia sui contanti, che solo la 163 rimette. Va riavviato appena si è capito il motivo. Serve il
 > segreto `SUPABASE_DB_URL` con la riga del Session pooler (la #255 è unita: si può cambiare).
 
 **Cosa devi fare.** La stringa del Session pooler va nel segreto `SUPABASE_DB_URL` appena è unita

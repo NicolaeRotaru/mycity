@@ -23,8 +23,9 @@ name: Migrazioni a mano (produzione)
 # riepilogo. Il secondo scrive, e parte solo se il primo è verde. Il secondo
 # sta nell'ambiente `database-produzione`: se Nicola ci mette la spunta
 # «Required reviewers» (Settings → Environments), il secondo aspetta il suo
-# «Approve», e lui approva DOPO aver visto l'elenco del primo. Senza la spunta
-# il freno sono le tre caselle: APPLICA, quante ne mancano e quale è l'ultima.
+# «Approve», e lui approva DOPO aver visto l'elenco del primo. Il primo scrive
+# nel riepilogo se la spunta c'è. Senza la spunta il freno sono le tre
+# caselle: APPLICA, quante ne mancano e quale è l'ultima.
 
 on:
   workflow_dispatch:
@@ -42,8 +43,11 @@ on:
         required: true
         type: string
 
+# `actions: read` serve a vedere se sta girando la copia del database e se
+# l'ambiente chiede l'«Approve». Nient'altro: il lavoro non scrive su GitHub.
 permissions:
   contents: read
+  actions: read
 
 jobs:
   conta:
@@ -64,20 +68,48 @@ jobs:
             exit 1
           fi
 
-      # La copia notturna parte alle 02:17 UTC (backup-db.yml), il primo del mese
-      # alle 03:41 c'e' la prova di ripristino, e GitHub puo' farle partire in
-      # ritardo. Con le migrazioni in corso, le modifiche allo schema
-      # resterebbero in coda dietro la copia e bloccherebbero anche il sito.
-      - name: Non durante la copia notturna
+      # La copia del database (backup-db.yml) legge tutte le tabelle e le tiene
+      # occupate finché non ha finito. Una modifica allo schema che arriva in
+      # quel momento resta in fila dietro la copia, e dietro la modifica resta
+      # in fila anche il sito. L'orario scritto nella copia (02:17 UTC) non
+      # serve: GitHub la fa partire fra le 06:57 e le 09:25 UTC (15 avvii su 15,
+      # dal 5 al 19/10, letti il 19/10). Si guarda se sta girando davvero.
+      - name: Non mentre gira la copia del database
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          ORA="$((10#$(date -u +%H%M)))"
-          if [ "$ORA" -ge 130 ] && [ "$ORA" -lt 500 ]; then
-            echo "::error::Fra le 01:30 e le 05:00 UTC gira la copia notturna del database: riavvia dopo le 05:00 UTC."
+          IN_CORSO="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow backup-db.yml --limit 20 \
+            --json status --jq '[.[] | select(.status != "completed")] | length')" || {
+            echo "::error::Non riesco a vedere se sta girando la copia del database: non tocco niente. Riavvia fra qualche minuto."
+            exit 1
+          }
+          if [ "$IN_CORSO" != "0" ]; then
+            echo "::error::Sta girando, o e' in coda, la copia del database (backup-db.yml): le modifiche allo schema resterebbero in fila dietro la copia e bloccherebbero anche il sito. Riavvia quando la copia e' finita."
             exit 1
           fi
 
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Questo avvio usa i file del commit da cui è partito. Se nel frattempo su
+      # main una migrazione non ancora applicata è stata corretta o cancellata
+      # (è successo: la 162 è nata il 15/10, cambiata tre volte, tolta il 17/10),
+      # si applicherebbe la versione vecchia, registrata col numero: la
+      # correzione non entrerebbe più. Vale anche per «Re-run», che riusa il
+      # commit di partenza (collaudo del 19/10).
+      - name: Migrazioni e script sono ancora quelli di main
+        run: |
+          git fetch --no-tags --depth=1 origin main || {
+            echo "::error::Non riesco a leggere main: non tocco il database."
+            exit 1
+          }
+          FILE=(migrations/ scripts/applica-migrazioni-mancanti.sh scripts/conta-migrazioni-mancanti.sh
+                scripts/check-migration-drift.mjs .github/workflows/migrazioni-a-mano.yml)
+          if ! git diff --quiet HEAD FETCH_HEAD -- "${FILE[@]}"; then
+            git diff --stat HEAD FETCH_HEAD -- "${FILE[@]}" || true
+            echo "::error::Da quando e' partito questo avvio, su main sono cambiati le migrazioni o gli script che le applicano (elenco qui sopra): userei la versione vecchia. Avvia di nuovo da «Run workflow», non da «Re-run»."
+            exit 1
+          fi
 
       # Si guarda solo la FORMA della riga, mai il valore: il segreto non
       # finisce nel registro del lavoro.
@@ -130,6 +162,25 @@ jobs:
             exit 1
           }
 
+      # Solo un avviso, non un freno: chi avvia deve sapere, prima di guardare
+      # l'elenco, se il secondo lavoro lo aspetterà o partirà da solo.
+      - name: Il secondo lavoro aspetta il tuo «Approve»?
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REGOLE="$(gh api "repos/$GITHUB_REPOSITORY/environments/database-produzione" \
+            --jq '[.protection_rules[]?.type] | join(",")' 2>/dev/null)" || REGOLE="?"
+          case "$REGOLE" in
+            *required_reviewers*)
+              FRASE="Il secondo lavoro aspetta il tuo «Approve»: approva solo se l'elenco qui sotto e' quello che ti aspetti." ;;
+            "?")
+              FRASE="Non sono riuscito a leggere se l'ambiente database-produzione chiede l'«Approve». Se non lo chiede, il secondo lavoro scrive appena finisce il conto." ;;
+            *)
+              FRASE="L'ambiente database-produzione non chiede l'«Approve»: il secondo lavoro scrive appena finisce il conto, senza aspettarti." ;;
+          esac
+          echo "$FRASE"
+          echo "> $FRASE" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Conta quelle che mancano
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -154,17 +205,23 @@ jobs:
       group: rilascio-produzione
       cancel-in-progress: false
     steps:
-      # Di nuovo: l'«Approve» di Nicola puo' arrivare ore dopo il conto.
-      - name: Non durante la copia notturna
-        run: |
-          ORA="$((10#$(date -u +%H%M)))"
-          if [ "$ORA" -ge 130 ] && [ "$ORA" -lt 500 ]; then
-            echo "::error::Fra le 01:30 e le 05:00 UTC gira la copia notturna del database: riavvia dopo le 05:00 UTC."
-            exit 1
-          fi
-
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Di nuovo: l'«Approve» di Nicola puo' arrivare ore dopo il conto.
+      - name: Migrazioni e script sono ancora quelli di main
+        run: |
+          git fetch --no-tags --depth=1 origin main || {
+            echo "::error::Non riesco a leggere main: non tocco il database."
+            exit 1
+          }
+          FILE=(migrations/ scripts/applica-migrazioni-mancanti.sh scripts/conta-migrazioni-mancanti.sh
+                scripts/check-migration-drift.mjs .github/workflows/migrazioni-a-mano.yml)
+          if ! git diff --quiet HEAD FETCH_HEAD -- "${FILE[@]}"; then
+            git diff --stat HEAD FETCH_HEAD -- "${FILE[@]}" || true
+            echo "::error::Da quando e' partito questo avvio, su main sono cambiati le migrazioni o gli script che le applicano (elenco qui sopra): userei la versione vecchia. Avvia di nuovo da «Run workflow», non da «Re-run»."
+            exit 1
+          fi
 
       - name: Installa il client Postgres
         env:
@@ -196,6 +253,22 @@ jobs:
           ULTIMA: ${{ inputs.ultima }}
         run: bash scripts/conta-migrazioni-mancanti.sh
 
+      # Il piu' vicino possibile alla scrittura. Resta scoperta solo una copia
+      # che parte durante l'applicazione, che dura pochi minuti.
+      - name: Non mentre gira la copia del database
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          IN_CORSO="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow backup-db.yml --limit 20 \
+            --json status --jq '[.[] | select(.status != "completed")] | length')" || {
+            echo "::error::Non riesco a vedere se sta girando la copia del database: non tocco niente. Riavvia fra qualche minuto."
+            exit 1
+          }
+          if [ "$IN_CORSO" != "0" ]; then
+            echo "::error::Sta girando, o e' in coda, la copia del database (backup-db.yml): le modifiche allo schema resterebbero in fila dietro la copia e bloccherebbero anche il sito. Riavvia quando la copia e' finita."
+            exit 1
+          fi
+
       - name: Applica le migrazioni che mancano
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -209,18 +282,34 @@ jobs:
           # Il riepilogo si scrive anche se lo script si e' fermato a meta': chi
           # guarda deve sapere quali sono entrate prima del guasto.
           {
-            echo "## Migrazioni applicate in produzione"
+            echo "## Migrazioni avviate in produzione, in ordine"
             echo ""
             grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico /- /' || echo "- nessuna"
             if [ "$USCITA" != "0" ]; then
               ULTIMO="$(grep '^▶ applico ' "$DIARIO" | tail -1 | sed 's/^▶ applico //' || true)"
               echo ""
-              echo "**Lo script si e' fermato (uscita $USCITA), su ${ULTIMO:-nessun file}.** Le migrazioni prima di quella sono entrate e registrate. Il motivo e' nel registro di questo passo."
-              if [ -n "$ULTIMO" ] && grep -qE '^[[:space:]]*COMMIT[[:space:]]*;' "migrations/$ULTIMO"; then
-                echo "Attenzione: $ULTIMO ha un COMMIT suo, quindi una parte puo' essere entrata. Va guardato il database prima di riavviare."
-              elif [ -n "$ULTIMO" ]; then
-                echo "$ULTIMO gira in una transazione sola: se si e' rotto il file, non ha lasciato niente. Se invece si e' rotta solo la registrazione, il file e' entrato ma non risulta: lo dice il registro di questo passo."
+              echo "**Lo script si e' fermato (uscita $USCITA). L'ultimo file iniziato: ${ULTIMO:-nessuno}.** Il motivo e' nel registro di questo passo."
+              if [ -n "$ULTIMO" ]; then
+                # Lo «▶ applico» si stampa PRIMA del file: se lo script si e'
+                # fermato fra due file, l'ultimo iniziato e' gia' entrato. Lo
+                # dice il registro delle migrazioni, non il diario.
+                VERSIONE="${ULTIMO%%_*}"
+                NOME="${ULTIMO#*_}"; NOME="${NOME%.sql}"
+                REGISTRATO="$(psql "$SUPABASE_DB_URL" -X -A -t -v ON_ERROR_STOP=1 \
+                  -c "SELECT 1 FROM supabase_migrations.schema_migrations
+                       WHERE version = '$VERSIONE' OR name = '$NOME' LIMIT 1" 2>/dev/null || echo "?")"
+                if [ "$REGISTRATO" = "1" ]; then
+                  echo "$ULTIMO e' entrato ed e' registrato: lo script si e' fermato dopo, prima del file seguente."
+                elif [ "$REGISTRATO" = "?" ]; then
+                  echo "Non sono riuscito a leggere il registro: non so dire se $ULTIMO e' entrato. Va guardato il database prima di riavviare."
+                elif grep -qE '^[[:space:]]*COMMIT[[:space:]]*;' "migrations/$ULTIMO"; then
+                  echo "$ULTIMO non risulta registrato e ha un COMMIT suo, quindi una parte puo' essere entrata. Va guardato il database prima di riavviare."
+                else
+                  echo "$ULTIMO non risulta registrato e gira in una transazione sola: se si e' rotto il file, non ha lasciato niente. Se invece si e' rotta solo la registrazione, il file e' entrato ma non risulta: lo dice il registro di questo passo."
+                fi
               fi
+              echo ""
+              echo "Le migrazioni dopo questo punto non sono entrate, e alcune rimettono a posto quello che le prime cambiano: la 125, la 126 e la 127 riscrivono la consegna e tolgono la guardia sui contanti, che solo la 163 rimette. Finche' non si riavvia, il database resta a meta'."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$USCITA"
@@ -275,12 +364,16 @@ jobs:
           node-version: "24"
           cache: "npm"
 
-      # Senza il segreto nell'ambiente: gli script d'installazione dei pacchetti
-      # (nove ne hanno uno) non devono poter leggere la riga del database.
+      # Senza eseguire gli script d'installazione dei pacchetti (nove ne hanno
+      # uno): il passo dopo carica `pg` con la riga del database nell'ambiente,
+      # e nessun pacchetto deve aver potuto riscriverlo durante l'installazione.
+      # Al controllo serve solo `pg`, che e' tutto JavaScript.
       - name: Installa le dipendenze
-        run: npm ci --legacy-peer-deps
+        run: npm ci --legacy-peer-deps --ignore-scripts
 
-      - name: Il database e' allineato al codice
+      # Il controllo della deriva confronta il registro con i file per nome:
+      # dice se ogni file risulta applicato, non che lo schema sia identico.
+      - name: Il registro delle migrazioni torna col codice
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SALTO_E_ERRORE: "1"

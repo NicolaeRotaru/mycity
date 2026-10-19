@@ -17,7 +17,8 @@
 # database che il registro ce l'ha non tocca niente.
 #
 # Lo usa .github/workflows/migrazioni-a-mano.yml due volte: nel lavoro che
-# conta e, subito prima di scrivere, nel lavoro che applica.
+# conta e, subito prima di scrivere, nel lavoro che applica. Esce 1 in ogni
+# caso in cui non va avanti.
 # =============================================================================
 set -uo pipefail
 
@@ -43,6 +44,14 @@ USCITA=0
 MASSIMO_MIGRAZIONI=0 bash scripts/applica-migrazioni-mancanti.sh > /dev/null 2> "$ELENCO" || USCITA=$?
 if [ "$USCITA" != "0" ] && [ "$USCITA" != "4" ]; then
   cat "$ELENCO" >&2
+  # Il motivo anche nel riepilogo, dove guarda chi ha avviato. Lo script
+  # ripulisce gia' la password dall'errore di collegamento; per prudenza qui
+  # non passa nessuna riga con un indirizzo dentro.
+  {
+    echo "## Il conto non e' partito (uscita $USCITA)"
+    echo ""
+    grep -v -e '://' -e '@' "$ELENCO" | tail -n 8 | sed 's/^/    /'
+  } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
   echo "::error::Lo script delle migrazioni si e' fermato prima del conto (uscita $USCITA): non ho applicato niente."
   exit 1
 fi
@@ -52,6 +61,14 @@ while IFS= read -r riga; do
   FILE+=("${riga#    - }")
 done < <(grep -E '^    - .+\.sql$' "$ELENCO" || true)
 N="${#FILE[@]}"
+
+# L'uscita 4 vuol dire «ne mancano piu' del tetto 0», cioe' almeno una: se
+# l'elenco letto e' vuoto, e' cambiato il modo in cui lo script lo scrive.
+if [ "$USCITA" = "4" ] && [ "$N" = "0" ]; then
+  cat "$ELENCO" >&2
+  echo "::error::Lo script dice che manca qualcosa, ma non sono riuscito a leggere l'elenco: non tocco il database."
+  exit 1
+fi
 
 {
   echo "## Migrazioni che mancano: $N (attese: $QUANTE, l'ultima: $ULTIMA)"
