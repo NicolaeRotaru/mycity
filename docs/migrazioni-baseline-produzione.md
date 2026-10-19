@@ -64,6 +64,15 @@ fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha gi�
 > server col client di servizio, che le regole non le guarda: dopo il passo 2 funzionano uguale. **Con quella richiesta online, il passo 2 si può
 > fare**, insieme al passo 0.
 
+> **Stato al 19/10/2026.** La #259 è online. Il passo 0 c'è: Supabase è sul piano Pro e tiene una
+> copia al giorno per sette giorni (l'ultima prima del passo 2: 19/10 alle 04:53 UTC). Dallo
+> strumento Supabase della sessione è entrata solo la 091: i comandi che cancellano o sostituiscono
+> qualcosa chiedono una conferma che sul telefono non compare, e la chiamata scade. Il passo 2 adesso
+> passa dal lavoro `.github/workflows/migrazioni-a-mano.yml`: si avvia dalla pagina Actions, solo da
+> `main`, scrivendo APPLICA. Gira questo stesso script, poi lo rilancia e pretende zero, poi fa i
+> cinque controlli del passo 3 e il controllo della deriva. Serve il segreto `SUPABASE_DB_URL` con la
+> riga del Session pooler (la #255 è unita: si può cambiare).
+
 **Cosa devi fare.** La stringa del Session pooler va nel segreto `SUPABASE_DB_URL` appena è unita
 la richiesta #255 del sito, non prima (il perché è nella sezione qui sotto). I passi 0, 2 e 3 vanno fatti insieme, nello stesso giro e a
 bassa attività, solo dopo che è online il codice che legge i negozi da `seller_public_profiles`
