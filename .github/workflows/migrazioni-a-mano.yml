@@ -14,13 +14,14 @@ name: Migrazioni a mano (produzione)
 #   · dal computer di Nicola servono psql, la versione 17 e la password a mano.
 #
 # Qui gira lo stesso script del rilascio, sui file del repository così come
-# sono, con la riga del Session pooler che sta già nei segreti. È lo script
-# provato l'11/10 su una copia fedele della produzione: «applicate 48», uscita
-# 0, zero differenze con un database costruito dal repository.
+# sono, con la riga del Session pooler che sta nei segreti. È lo script provato
+# l'11/10 su una copia fedele della produzione: «applicate 48», uscita 0, zero
+# differenze con un database costruito dal repository.
 #
-# Parte solo da chi lo avvia a mano dalla pagina Actions, solo da `main`, e solo
-# se nella casella scrive APPLICA: un clic distratto su «Run workflow» non
-# tocca il database.
+# Parte solo da chi lo avvia a mano dalla pagina Actions, solo da `main`, solo
+# se nella casella scrive APPLICA e solo se il numero di migrazioni che si
+# aspetta coincide con quelle che mancano davvero. Il conto si fa prima di
+# scrivere: se non torna, il database resta com'è.
 
 on:
   workflow_dispatch:
@@ -29,11 +30,20 @@ on:
         description: "Scrivi APPLICA per applicare al database di produzione le migrazioni che mancano"
         required: true
         type: string
+      quante:
+        description: "Quante migrazioni ti aspetti che manchino (il 19/10 erano 48). Se il conto è diverso, il lavoro si ferma prima di scrivere"
+        required: true
+        type: string
 
-# Lo stesso gruppo per due avvii ravvicinati: il secondo aspetta il primo.
-# Due copie dello script in parallelo applicherebbero due volte lo stesso file.
+# Lo stesso gruppo del rilascio automatico (deploy-dopo-ci.yml): i due lavori
+# applicano gli stessi file con lo stesso script, quindi si aspettano a vicenda.
+# Con due gruppi diversi, un'unione su main durante questo lavoro farebbe
+# partire il rilascio sulle stesse migrazioni, e alcune entrerebbero due volte.
+# Effetto collaterale voluto: un rilascio in attesa viene sostituito da questo
+# lavoro (GitHub tiene un solo lavoro in attesa per gruppo) e ripartirà alla
+# prossima unione.
 concurrency:
-  group: migrazioni-produzione
+  group: rilascio-produzione
   cancel-in-progress: false
 
 permissions:
@@ -42,17 +52,42 @@ permissions:
 jobs:
   applica:
     name: Applica le migrazioni che mancano
-    runs-on: ubuntu-latest
+    # La versione fissa: con `ubuntu-latest` il computer di turno può cambiare
+    # sotto i piedi, e il deposito dei pacchetti di PostgreSQL deve conoscerla.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     # Solo dal ramo principale: da un altro ramo arriverebbero file non uniti.
     if: github.ref == 'refs/heads/main'
+    # L'ambiente esiste per dare a Nicola un freno in più: in Settings →
+    # Environments → database-produzione può chiedere che ogni avvio aspetti il
+    # suo «Approve». Senza quella spunta il lavoro parte come prima.
+    environment: database-produzione
     steps:
       - name: La conferma scritta
         env:
           CONFERMA: ${{ inputs.conferma }}
+          QUANTE: ${{ inputs.quante }}
         run: |
           if [ "$CONFERMA" != "APPLICA" ]; then
-            echo "::error::Nella casella c'e' scritto altro da APPLICA: non tocco il database."
+            echo "::error::Nella casella della conferma c'e' scritto altro da APPLICA: non tocco il database."
+            exit 1
+          fi
+          case "$QUANTE" in
+            ''|*[!0-9]*)
+              echo "::error::Nella casella «quante» va un numero intero (il 19/10: 48). Non tocco il database."
+              exit 1
+              ;;
+          esac
+
+      # La copia notturna parte alle 02:17 UTC (backup-db.yml) e il primo del
+      # mese alle 03:41 c'e' la prova di ripristino. Se le migrazioni partissero
+      # insieme, le modifiche allo schema resterebbero in coda dietro la copia e
+      # bloccherebbero anche le letture del sito.
+      - name: Non durante la copia notturna
+        run: |
+          ORA="$(date -u +%H)"
+          if [ "$ORA" = "02" ] || [ "$ORA" = "03" ]; then
+            echo "::error::Fra le 02:00 e le 04:00 UTC gira la copia notturna del database: riavvia dopo le 04:00 UTC."
             exit 1
           fi
 
@@ -78,7 +113,11 @@ jobs:
           esac
           case "$SUPABASE_DB_URL" in
             *@db.*.supabase.co*)
-              echo "::error::SUPABASE_DB_URL punta alla connessione diretta (db.<progetto>.supabase.co), che risponde solo in IPv6: da GitHub non si raggiunge. Serve la riga del «Session pooler»: Supabase → Connect → Session pooler."
+              echo "::error::SUPABASE_DB_URL punta alla connessione diretta (db.<progetto>.supabase.co), che risponde solo in IPv6: da GitHub non si raggiunge. Serve la riga del «Session pooler»: Supabase → Connect → Session pooler, porta 5432."
+              exit 1
+              ;;
+            *pooler.supabase.com:6543*)
+              echo "::error::SUPABASE_DB_URL punta al Transaction pooler (porta 6543), che non tiene la sessione di una migrazione. Serve la riga del «Session pooler»: Supabase → Connect → Session pooler, porta 5432."
               exit 1
               ;;
           esac
@@ -106,35 +145,70 @@ jobs:
             exit 1
           }
 
+      # Il conto, senza scrivere: con tetto 0 lo script si ferma prima di
+      # toccare il database (uscita 4) ed elenca quelle che mancano.
+      - name: Conta quelle che mancano, senza toccare niente
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          QUANTE: ${{ inputs.quante }}
+        run: |
+          set -uo pipefail
+          ELENCO="$(mktemp)"
+          USCITA=0
+          MASSIMO_MIGRAZIONI=0 bash scripts/applica-migrazioni-mancanti.sh > /dev/null 2> "$ELENCO" || USCITA=$?
+          if [ "$USCITA" != "0" ] && [ "$USCITA" != "4" ]; then
+            cat "$ELENCO" >&2
+            echo "::error::Lo script si e' fermato prima del conto (uscita $USCITA): non ho applicato niente."
+            exit 1
+          fi
+          N="$(grep -cE '^    - .+\.sql$' "$ELENCO" || true)"
+          {
+            echo "## Migrazioni che mancano: $N (attese: $QUANTE)"
+            echo ""
+            grep -E '^    - .+\.sql$' "$ELENCO" | sed 's/^    //' || true
+          } >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^    - .+\.sql$' "$ELENCO" || true
+          if [ "$N" != "$QUANTE" ]; then
+            echo "::error::Ne mancano $N, ma ne aspettavi $QUANTE: non tocco il database. L'elenco e' qui sopra."
+            exit 1
+          fi
+
       - name: Applica le migrazioni che mancano
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          # Il tetto del rilascio automatico e' 20. Qui il riallineamento e'
-          # voluto e firmato: 60 lascia passare le 48 e ferma ancora un
-          # database rimasto indietro di un'era intera.
-          MASSIMO_MIGRAZIONI: "60"
+          # Il tetto e' il numero contato e confermato qui sopra, non uno di piu'.
+          MASSIMO_MIGRAZIONI: ${{ inputs.quante }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           DIARIO="$(mktemp)"
-          bash scripts/applica-migrazioni-mancanti.sh | tee "$DIARIO"
+          USCITA=0
+          bash scripts/applica-migrazioni-mancanti.sh | tee "$DIARIO" || USCITA=$?
+          # Il riepilogo si scrive anche se lo script si e' fermato a meta': chi
+          # guarda deve sapere quali sono entrate prima del guasto.
           {
             echo "## Migrazioni applicate in produzione"
             echo ""
-            grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico /- /' || echo "- nessuna: mancava niente"
+            grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico /- /' || echo "- nessuna"
+            if [ "$USCITA" != "0" ]; then
+              echo ""
+              echo "**Lo script si e' fermato (uscita $USCITA).** L'ultima della lista e' quella che non e' entrata: il suo file gira in una transazione, quindi non ha lasciato mezzo lavoro. Le altre sono entrate. Il motivo e' nel registro di questo passo."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
+          exit "$USCITA"
 
-      # La prova che lo script e' arrivato in fondo: rilanciato, non deve
-      # trovare piu' niente da applicare.
-      - name: Seconda passata, deve applicarne zero
+      # La prova che lo script e' arrivato in fondo: col tetto 0, se mancasse
+      # ancora qualcosa si fermerebbe senza applicarlo (uscita 4).
+      - name: Seconda passata, non deve mancare niente
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          MASSIMO_MIGRAZIONI: "60"
+          MASSIMO_MIGRAZIONI: "0"
         run: |
-          set -euo pipefail
+          set -uo pipefail
           DIARIO="$(mktemp)"
-          bash scripts/applica-migrazioni-mancanti.sh | tee "$DIARIO"
-          if grep -q '^▶ applico ' "$DIARIO"; then
-            echo "::error::La seconda passata ha applicato ancora qualcosa: il registro delle migrazioni non torna."
+          USCITA=0
+          bash scripts/applica-migrazioni-mancanti.sh 2>&1 | tee "$DIARIO" || USCITA=$?
+          if [ "$USCITA" != "0" ] || grep -q '^▶ applico ' "$DIARIO"; then
+            echo "::error::Dopo l'applicazione manca ancora qualcosa (uscita $USCITA): il registro delle migrazioni non torna."
             exit 1
           fi
 
@@ -172,8 +246,13 @@ jobs:
           node-version: "24"
           cache: "npm"
 
+      # Senza il segreto nell'ambiente: gli script d'installazione dei pacchetti
+      # (nove ne hanno uno) non devono poter leggere la riga del database.
+      - name: Installa le dipendenze
+        run: npm ci --legacy-peer-deps
+
       - name: Il database e' allineato al codice
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SALTO_E_ERRORE: "1"
-        run: npm ci --legacy-peer-deps && npm run db:check-drift
+        run: npm run db:check-drift

@@ -11,7 +11,8 @@
  * dal lavoro e lo eseguono con i valori che una persona puo' scrivere.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 // Lettore minimo dei passi del lavoro, senza librerie: il nome del passo, il suo
@@ -57,13 +58,34 @@ const passo = (nome: string) => {
 const esegui = (codice: string, env: Record<string, string>) =>
   spawnSync('bash', ['-c', codice], { encoding: 'utf8', env: { ...process.env, ...env } });
 
+// Un `bash` finto al posto dello script vero: stampa l'elenco come lo stampa lo
+// script quando si ferma prima di scrivere, ed esce col codice che gli diamo.
+const bashFinto = (uscita: number, mancano: string[], applica: string[] = []) => `bash() {
+  ${applica.map((f) => `echo "▶ applico ${f}"`).join('; ') || ':'}
+  ${mancano.length ? `echo "  Quelle che mancano:" >&2; ${mancano.map((f) => `echo "    - ${f}" >&2`).join('; ')}` : ':'}
+  return ${uscita}
+}
+`;
+const RIEPILOGO = { GITHUB_STEP_SUMMARY: '/dev/null' };
+
 describe('le migrazioni a mano partono solo con la conferma scritta', () => {
-  it('si avvia soltanto a mano, e solo dal ramo principale', () => {
+  it('si avvia soltanto a mano, solo dal ramo principale, in un ambiente che Nicola puo\' frenare', () => {
     const on = testo.slice(testo.indexOf('\non:'), testo.indexOf('\nconcurrency:'));
     expect(on).toContain('workflow_dispatch:');
     expect(on).not.toMatch(/^\s+(push|pull_request|schedule|workflow_run):/m);
-    expect(on).toMatch(/conferma:[\s\S]*required: true/);
+    expect(on).toMatch(/conferma:[\s\S]*required: true[\s\S]*quante:[\s\S]*required: true/);
     expect(testo).toContain("if: github.ref == 'refs/heads/main'");
+    expect(testo).toMatch(/^\s+environment: database-produzione$/m);
+  });
+
+  it('si mette in fila col rilascio automatico, che applica gli stessi file', () => {
+    // Collaudo del 19/10: con due gruppi diversi, un'unione su main durante questo
+    // lavoro faceva entrare due volte dieci migrazioni.
+    const proprio = testo.match(/^concurrency:\n\s+group: (\S+)/m)?.[1];
+    const rilascio = readFileSync(join(process.cwd(), '.github/workflows/deploy-dopo-ci.yml'), 'utf8')
+      .match(/^concurrency:\n\s+group: (\S+)/m)?.[1];
+    expect(rilascio).toBeDefined();
+    expect(proprio).toBe(rilascio);
   });
 
   it('la conferma viene prima di qualunque altro passo', () => {
@@ -73,18 +95,33 @@ describe('le migrazioni a mano partono solo con la conferma scritta', () => {
   it('senza APPLICA si ferma, con APPLICA va avanti', () => {
     const codice = passo('La conferma scritta').run as string;
     for (const sbagliata of ['', 'applica', 'APPLICA ', 'si', 'vai']) {
-      const r = esegui(codice, { CONFERMA: sbagliata });
+      const r = esegui(codice, { CONFERMA: sbagliata, QUANTE: '48' });
       expect(r.status, `ha accettato la conferma «${sbagliata}»`).not.toBe(0);
     }
-    expect(esegui(codice, { CONFERMA: 'APPLICA' }).status).toBe(0);
+    expect(esegui(codice, { CONFERMA: 'APPLICA', QUANTE: '48' }).status).toBe(0);
   });
 
-  it('la conferma passa da una variabile, non incollata nel comando', () => {
-    // Un valore come `APPLICA"; rm -rf ~; "` scritto nella casella non deve
-    // diventare codice: il testo arriva solo come variabile d'ambiente.
-    const p = passo('La conferma scritta');
-    expect(p.run).not.toContain('${{');
-    expect(p.env?.CONFERMA).toBe('${{ inputs.conferma }}');
+  it('il numero atteso deve essere un numero', () => {
+    const codice = passo('La conferma scritta').run as string;
+    for (const brutto of ['', 'tutte', '48 ', '-1', '4 8', '48;rm']) {
+      const r = esegui(codice, { CONFERMA: 'APPLICA', QUANTE: brutto });
+      expect(r.status, `ha accettato «${brutto}» come numero`).not.toBe(0);
+    }
+  });
+
+  it('quello che si scrive nelle caselle passa da variabili, non incollato nei comandi', () => {
+    for (const p of passi) {
+      if (p.run) expect(p.run, `il passo «${p.name}» incolla un valore nel comando`).not.toMatch(/\$\{\{\s*inputs\./);
+    }
+    expect(passo('La conferma scritta').env.CONFERMA).toBe('${{ inputs.conferma }}');
+  });
+
+  it('non parte durante la copia notturna del database', () => {
+    const codice = passo('Non durante la copia notturna').run as string;
+    const alle = (ora: string) => esegui(`date() { echo ${ora}; }\n${codice}`, {});
+    expect(alle('02').status).not.toBe(0);
+    expect(alle('03').status).not.toBe(0);
+    for (const ora of ['01', '04', '17', '23']) expect(alle(ora).status, `alle ${ora}`).toBe(0);
   });
 });
 
@@ -98,12 +135,15 @@ describe('la riga del database deve essere quella del Session pooler', () => {
     expect(r.status, r.stdout + r.stderr).toBe(0);
   });
 
-  it('ferma la connessione diretta, che da GitHub non si raggiunge', () => {
-    const r = esegui(codice(), {
-      SUPABASE_DB_URL: 'postgresql://postgres:segreta@db.abcdefgh.supabase.co:5432/postgres',
-    });
-    expect(r.status).not.toBe(0);
-    expect(r.stdout + r.stderr).toContain('Session pooler');
+  it('ferma la connessione diretta e il Transaction pooler', () => {
+    for (const riga of [
+      'postgresql://postgres:segreta@db.abcdefgh.supabase.co:5432/postgres',
+      'postgresql://postgres.abcdefgh:segreta@aws-0-eu-west-3.pooler.supabase.com:6543/postgres',
+    ]) {
+      const r = esegui(codice(), { SUPABASE_DB_URL: riga });
+      expect(r.status, `ha accettato ${riga.replace(/:[^:@]+@/, ':***@')}`).not.toBe(0);
+      expect(r.stdout + r.stderr).toContain('Session pooler');
+    }
   });
 
   it('ferma una riga vuota o incollata male, senza mai stamparla', () => {
@@ -116,27 +156,83 @@ describe('la riga del database deve essere quella del Session pooler', () => {
   });
 });
 
-describe('quello che fa dopo i due controlli', () => {
-  it('usa lo script del rilascio, poi lo rilancia e pretende zero', () => {
-    const prima = passo('Applica le migrazioni che mancano');
-    const seconda = passo('Seconda passata, deve applicarne zero');
-    expect(prima.run).toContain('bash scripts/applica-migrazioni-mancanti.sh');
-    expect(seconda.run).toContain('bash scripts/applica-migrazioni-mancanti.sh');
-    expect(seconda.run).toContain("grep -q '^▶ applico '");
-    // Il tetto lascia passare le 48 di oggi, e ferma ancora un database molto piu' indietro.
-    expect(Number(prima.env?.MASSIMO_MIGRAZIONI)).toBeGreaterThanOrEqual(48);
-    expect(Number(prima.env?.MASSIMO_MIGRAZIONI)).toBeLessThan(157);
+describe('il conto prima di scrivere', () => {
+  const codice = () => passo('Conta quelle che mancano, senza toccare niente').run as string;
+  const dieci = Array.from({ length: 10 }, (_, i) => `1${i}0_migrazione.sql`);
+
+  it('chiede allo script di fermarsi prima di scrivere (tetto 0)', () => {
+    expect(codice()).toContain('MASSIMO_MIGRAZIONI=0 bash scripts/applica-migrazioni-mancanti.sh');
+  });
+
+  it('va avanti solo se ne mancano esattamente quante ne aspetti', () => {
+    const giusto = esegui(bashFinto(4, dieci) + codice(), { QUANTE: '10', ...RIEPILOGO });
+    expect(giusto.status, giusto.stdout + giusto.stderr).toBe(0);
+    for (const attese of ['9', '11', '48', '0']) {
+      const r = esegui(bashFinto(4, dieci) + codice(), { QUANTE: attese, ...RIEPILOGO });
+      expect(r.status, `ne mancano 10 e ha accettato «${attese}»`).not.toBe(0);
+    }
+  });
+
+  it('se non manca niente e ne aspettavi zero, va avanti', () => {
+    expect(esegui(bashFinto(0, []) + codice(), { QUANTE: '0', ...RIEPILOGO }).status).toBe(0);
+    expect(esegui(bashFinto(0, []) + codice(), { QUANTE: '48', ...RIEPILOGO }).status).not.toBe(0);
+  });
+
+  it('se lo script si ferma per un altro motivo, non va avanti', () => {
+    for (const uscita of [1, 2, 3]) {
+      const r = esegui(bashFinto(uscita, dieci) + codice(), { QUANTE: '10', ...RIEPILOGO });
+      expect(r.status, `uscita ${uscita} dello script presa per buona`).not.toBe(0);
+    }
+  });
+});
+
+describe('quello che fa dopo il conto', () => {
+  it('applica con lo script del rilascio, e il tetto e\' il numero contato', () => {
+    const p = passo('Applica le migrazioni che mancano');
+    expect(p.run).toContain('bash scripts/applica-migrazioni-mancanti.sh');
+    expect(p.env.MASSIMO_MIGRAZIONI).toBe('${{ inputs.quante }}');
+  });
+
+  it('se lo script si ferma a meta\', il passo fallisce e il riepilogo dice cosa e\' entrato', () => {
+    const codice = passo('Applica le migrazioni che mancano').run as string;
+    const riepilogo = join(mkdtempSync(join(tmpdir(), 'migrazioni-a-mano-')), 'riepilogo.md');
+    const r = esegui(bashFinto(3, [], ['120_a.sql', '130_b.sql']) + codice, { GITHUB_STEP_SUMMARY: riepilogo });
+    expect(r.status).toBe(3);
+    const scritto = readFileSync(riepilogo, 'utf8');
+    expect(scritto).toContain('- 120_a.sql');
+    expect(scritto).toContain('- 130_b.sql');
+    expect(scritto).toContain('uscita 3');
+  });
+
+  it('la seconda passata non applica niente: se manca qualcosa si ferma', () => {
+    const p = passo('Seconda passata, non deve mancare niente');
+    expect(p.env.MASSIMO_MIGRAZIONI).toBe('0');
+    const codice = p.run as string;
+    expect(esegui(bashFinto(0, []) + codice, {}).status).toBe(0);
+    expect(esegui(bashFinto(4, ['163_x.sql']) + codice, {}).status).not.toBe(0);
+    expect(esegui(bashFinto(0, [], ['163_x.sql']) + codice, {}).status).not.toBe(0);
   });
 
   it('i controlli del passo 3 bocciano un esito che non e\' t|t|t|t|t', () => {
     const run = passo('I cinque controlli del passo 3').run as string;
     // Al posto del database vero, un psql finto che risponde come vogliamo.
     const finto = (esito: string) => `psql() { echo '${esito}'; }\n${run}`;
-    const ok = esegui(finto('t|t|t|t|t'), { SUPABASE_DB_URL: 'x', GITHUB_STEP_SUMMARY: '/dev/null' });
+    const ok = esegui(finto('t|t|t|t|t'), { SUPABASE_DB_URL: 'x', ...RIEPILOGO });
     expect(ok.status, ok.stdout + ok.stderr).toBe(0);
     for (const male of ['t|t|f|t|t', 'f|t|t|t|t', 't|t|t|t|', '']) {
-      const r = esegui(finto(male), { SUPABASE_DB_URL: 'x', GITHUB_STEP_SUMMARY: '/dev/null' });
+      const r = esegui(finto(male), { SUPABASE_DB_URL: 'x', ...RIEPILOGO });
       expect(r.status, `ha accettato l'esito «${male}»`).not.toBe(0);
+    }
+  });
+
+  it('i pacchetti si installano senza la riga del database nell\'ambiente', () => {
+    // Collaudo del 19/10: un pacchetto con uno script d'installazione leggeva la
+    // riga intera, password compresa.
+    const installa = passo('Installa le dipendenze');
+    expect(installa.run).toContain('npm ci');
+    expect(Object.keys(installa.env)).not.toContain('SUPABASE_DB_URL');
+    for (const p of passi) {
+      if (p.env.SUPABASE_DB_URL) expect(p.run ?? '', `«${p.name}» installa pacchetti col segreto`).not.toMatch(/npm (ci|install)/);
     }
   });
 });
