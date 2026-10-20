@@ -62,7 +62,10 @@ jobs:
       - name: La conferma scritta
         env:
           CONFERMA: ${{ inputs.conferma }}
+        # `read` toglie gli spazi prima e dopo: la tastiera del telefono ne
+        # aggiunge uno dopo la parola suggerita.
         run: |
+          read -r CONFERMA <<< "$CONFERMA" || true
           if [ "$CONFERMA" != "APPLICA" ]; then
             echo "::error::Nella casella della conferma c'e' scritto altro da APPLICA: non tocco il database."
             exit 1
@@ -168,11 +171,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          ERRORE="$(mktemp)"
           REGOLE="$(gh api "repos/$GITHUB_REPOSITORY/environments/database-produzione" \
-            --jq '[.protection_rules[]?.type] | join(",")' 2>/dev/null)" || REGOLE="?"
+            --jq '[.protection_rules[]?.type] | join(",")' 2> "$ERRORE")" || REGOLE="?"
+          # Un ambiente mai usato non esiste: GitHub lo crea al primo avvio,
+          # senza nessuna regola.
+          if [ "$REGOLE" = "?" ] && grep -q "HTTP 404" "$ERRORE"; then REGOLE="nessun ambiente"; fi
           case "$REGOLE" in
             *required_reviewers*)
               FRASE="Il secondo lavoro aspetta il tuo «Approve»: approva solo se l'elenco qui sotto e' quello che ti aspetti." ;;
+            "nessun ambiente")
+              FRASE="L'ambiente database-produzione non esiste ancora: GitHub lo crea adesso, senza «Approve». Il secondo lavoro scrive appena finisce il conto, senza aspettarti." ;;
             "?")
               FRASE="Non sono riuscito a leggere se l'ambiente database-produzione chiede l'«Approve». Se non lo chiede, il secondo lavoro scrive appena finisce il conto." ;;
             *)
@@ -208,20 +217,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Di nuovo: l'«Approve» di Nicola puo' arrivare ore dopo il conto.
-      - name: Migrazioni e script sono ancora quelli di main
-        run: |
-          git fetch --no-tags --depth=1 origin main || {
-            echo "::error::Non riesco a leggere main: non tocco il database."
-            exit 1
-          }
-          FILE=(migrations/ scripts/applica-migrazioni-mancanti.sh scripts/conta-migrazioni-mancanti.sh
-                scripts/check-migration-drift.mjs .github/workflows/migrazioni-a-mano.yml)
-          if ! git diff --quiet HEAD FETCH_HEAD -- "${FILE[@]}"; then
-            git diff --stat HEAD FETCH_HEAD -- "${FILE[@]}" || true
-            echo "::error::Da quando e' partito questo avvio, su main sono cambiati le migrazioni o gli script che le applicano (elenco qui sopra): userei la versione vecchia. Avvia di nuovo da «Run workflow», non da «Re-run»."
-            exit 1
-          fi
+      # Prima di scrivere, non dopo: un intoppo nell'installazione non deve far
+      # diventare rosso un lavoro che ha gia' applicato tutto (collaudo del
+      # 20/10). Senza eseguire gli script d'installazione dei pacchetti (nove ne
+      # hanno uno): l'ultimo passo carica `pg` con la riga del database
+      # nell'ambiente, e nessun pacchetto deve aver potuto riscriverlo. Al
+      # controllo serve solo `pg`, che e' tutto JavaScript.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Installa le dipendenze
+        run: npm ci --legacy-peer-deps --ignore-scripts
 
       - name: Installa il client Postgres
         env:
@@ -253,6 +262,22 @@ jobs:
           ULTIMA: ${{ inputs.ultima }}
         run: bash scripts/conta-migrazioni-mancanti.sh
 
+      # Di nuovo, attaccato alla scrittura: l'«Approve» di Nicola puo' arrivare
+      # ore dopo il conto, e «Re-run» riusa il commit di partenza.
+      - name: Migrazioni e script sono ancora quelli di main
+        run: |
+          git fetch --no-tags --depth=1 origin main || {
+            echo "::error::Non riesco a leggere main: non tocco il database."
+            exit 1
+          }
+          FILE=(migrations/ scripts/applica-migrazioni-mancanti.sh scripts/conta-migrazioni-mancanti.sh
+                scripts/check-migration-drift.mjs .github/workflows/migrazioni-a-mano.yml)
+          if ! git diff --quiet HEAD FETCH_HEAD -- "${FILE[@]}"; then
+            git diff --stat HEAD FETCH_HEAD -- "${FILE[@]}" || true
+            echo "::error::Da quando e' partito questo avvio, su main sono cambiati le migrazioni o gli script che le applicano (elenco qui sopra): userei la versione vecchia. Avvia di nuovo da «Run workflow», non da «Re-run»."
+            exit 1
+          fi
+
       # Il piu' vicino possibile alla scrittura. Resta scoperta solo una copia
       # che parte durante l'applicazione, che dura pochi minuti.
       - name: Non mentre gira la copia del database
@@ -270,26 +295,46 @@ jobs:
           fi
 
       - name: Applica le migrazioni che mancano
+        id: scrivi
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           # Il tetto e' il numero contato e confermato, non uno di piu'.
           MASSIMO_MIGRAZIONI: ${{ inputs.quante }}
         run: |
           set -uo pipefail
+          # Gli spazi prima e dopo li ha gia' tolti il conto; qui servono
+          # tolti anche al tetto, che lo script vuole fatto di sole cifre. Un
+          # tetto vuoto, per lo script, vorrebbe dire «nessun tetto».
+          read -r MASSIMO_MIGRAZIONI <<< "${MASSIMO_MIGRAZIONI:-}" || true
+          case "$MASSIMO_MIGRAZIONI" in
+            ''|*[!0-9]*)
+              echo "::error::Il tetto delle migrazioni non e' un numero: non scrivo niente."
+              exit 1
+              ;;
+          esac
+          export MASSIMO_MIGRAZIONI
           DIARIO="$(mktemp)"
           USCITA=0
-          bash scripts/applica-migrazioni-mancanti.sh | tee "$DIARIO" || USCITA=$?
+          bash scripts/applica-migrazioni-mancanti.sh 2>&1 | tee "$DIARIO" || USCITA=$?
           # Il riepilogo si scrive anche se lo script si e' fermato a meta': chi
-          # guarda deve sapere quali sono entrate prima del guasto.
+          # guarda deve sapere quali sono entrate prima del guasto, e perche'.
+          AVVIATE="$(grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico //' || true)"
           {
             echo "## Migrazioni avviate in produzione, in ordine"
             echo ""
-            grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico /- /' || echo "- nessuna"
+            if [ -n "$AVVIATE" ]; then printf '%s\n' "$AVVIATE" | sed 's/^/- /'; else echo "- nessuna"; fi
             if [ "$USCITA" != "0" ]; then
-              ULTIMO="$(grep '^▶ applico ' "$DIARIO" | tail -1 | sed 's/^▶ applico //' || true)"
+              ULTIMO="$(printf '%s\n' "$AVVIATE" | tail -n 1)"
               echo ""
-              echo "**Lo script si e' fermato (uscita $USCITA). L'ultimo file iniziato: ${ULTIMO:-nessuno}.** Il motivo e' nel registro di questo passo."
-              if [ -n "$ULTIMO" ]; then
+              echo "**Lo script si e' fermato (uscita $USCITA). L'ultimo file iniziato: ${ULTIMO:-nessuno}.** Le ultime righe del registro di questo passo:"
+              echo ""
+              # Come nel conto: nessuna riga con un indirizzo dentro. Via anche
+              # gli avvisi di Postgres (NOTICE), che coprirebbero l'errore.
+              grep -v -e '://' -e '@' -e 'NOTICE:' "$DIARIO" | tail -n 8 | sed 's/^/    /' || true
+              echo ""
+              if [ -z "$ULTIMO" ]; then
+                echo "Non e' partita nessuna migrazione: il database non e' stato toccato."
+              else
                 # Lo «▶ applico» si stampa PRIMA del file: se lo script si e'
                 # fermato fra due file, l'ultimo iniziato e' gia' entrato. Lo
                 # dice il registro delle migrazioni, non il diario.
@@ -305,11 +350,14 @@ jobs:
                 elif grep -qE '^[[:space:]]*COMMIT[[:space:]]*;' "migrations/$ULTIMO"; then
                   echo "$ULTIMO non risulta registrato e ha un COMMIT suo, quindi una parte puo' essere entrata. Va guardato il database prima di riavviare."
                 else
-                  echo "$ULTIMO non risulta registrato e gira in una transazione sola: se si e' rotto il file, non ha lasciato niente. Se invece si e' rotta solo la registrazione, il file e' entrato ma non risulta: lo dice il registro di questo passo."
+                  echo "$ULTIMO non risulta registrato e gira in una transazione sola: se si e' rotto il file, non ha lasciato niente. Se invece si e' rotta solo la registrazione, il file e' entrato ma non risulta."
+                fi
+                echo ""
+                echo "Le migrazioni dopo questo punto non sono entrate: il database e' rimasto a meta', e va riavviato appena si e' capito il motivo."
+                if printf '%s\n' "$AVVIATE" | grep -qE '^12[5-7]_'; then
+                  echo "Attenzione: la 125, la 126 e la 127 tolgono la guardia sui contanti, che solo la 163 rimette. Finche' la 163 non entra, il fattorino puo' chiudere una consegna in contanti senza aver dichiarato l'incasso."
                 fi
               fi
-              echo ""
-              echo "Le migrazioni dopo questo punto non sono entrate, e alcune rimettono a posto quello che le prime cambiano: la 125, la 126 e la 127 riscrivono la consegna e tolgono la guardia sui contanti, che solo la 163 rimette. Finche' non si riavvia, il database resta a meta'."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$USCITA"
@@ -325,13 +373,20 @@ jobs:
           DIARIO="$(mktemp)"
           USCITA=0
           bash scripts/applica-migrazioni-mancanti.sh 2>&1 | tee "$DIARIO" || USCITA=$?
-          if [ "$USCITA" != "0" ] || grep -q '^▶ applico ' "$DIARIO"; then
+          if grep -q '^▶ applico ' "$DIARIO" || [ "$USCITA" = "4" ]; then
             echo "::error::Dopo l'applicazione manca ancora qualcosa (uscita $USCITA): il registro delle migrazioni non torna."
             exit 1
           fi
+          if [ "$USCITA" != "0" ]; then
+            echo "::error::Non sono riuscito a ricontare (uscita $USCITA): le migrazioni del passo prima sono entrate, ma questo controllo non e' fatto. Il motivo e' qui sopra."
+            exit 1
+          fi
+          echo "**Seconda passata:** non manca piu' nessuna migrazione." >> "$GITHUB_STEP_SUMMARY"
 
-      # I cinque punti del passo 3 della procedura, letti dal database vero.
-      - name: I cinque controlli del passo 3
+      # I cinque punti del passo 3 della procedura, letti dal database vero, piu'
+      # la guardia sui contanti: la 125-127 la tolgono e solo la 163 la rimette,
+      # e nessuno dei cinque se ne accorgerebbe (collaudo del 20/10).
+      - name: I sei controlli finali
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
@@ -349,27 +404,16 @@ jobs:
                                    'sponsored_listings_owner_rw','messages_update_read')),
               exists(select 1 from information_schema.columns
                 where table_name = 'order_items' and column_name = 'product_name'),
-              exists(select 1 from pg_proc where proname = 'enqueue_order_status_email'))")"
-          echo "iscrizione in attesa | compenso HELD | porte chiuse | nome prodotto | email ordine"
+              exists(select 1 from pg_proc where proname = 'enqueue_order_status_email'),
+              (select prosrc like '%CASH_NOT_CONFIRMED%' from pg_proc
+                where oid = 'public.verify_delivery_code(uuid,text)'::regprocedure))")"
+          echo "iscrizione in attesa | compenso HELD | porte chiuse | nome prodotto | email ordine | guardia contanti"
           echo "$ESITO"
-          echo "**Controlli del passo 3:** \`$ESITO\` (atteso \`t|t|t|t|t\`)" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$ESITO" != "t|t|t|t|t" ]; then
-            echo "::error::Non tutti e cinque i controlli del passo 3 sono veri."
+          echo "**I sei controlli finali:** \`$ESITO\` (atteso \`t|t|t|t|t|t\`)" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$ESITO" != "t|t|t|t|t|t" ]; then
+            echo "::error::Non tutti e sei i controlli finali sono veri."
             exit 1
           fi
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-          cache: "npm"
-
-      # Senza eseguire gli script d'installazione dei pacchetti (nove ne hanno
-      # uno): il passo dopo carica `pg` con la riga del database nell'ambiente,
-      # e nessun pacchetto deve aver potuto riscriverlo durante l'installazione.
-      # Al controllo serve solo `pg`, che e' tutto JavaScript.
-      - name: Installa le dipendenze
-        run: npm ci --legacy-peer-deps --ignore-scripts
 
       # Il controllo della deriva confronta il registro con i file per nome:
       # dice se ogni file risulta applicato, non che lo schema sia identico.
@@ -378,3 +422,34 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SALTO_E_ERRORE: "1"
         run: npm run db:check-drift
+
+      # Se il lavoro si ferma, viene annullato o scade mentre scrive, il passo
+      # che scrive puo' non arrivare a scrivere il riepilogo (collaudo del
+      # 20/10: annullato, il riepilogo restava vuoto). Qui si riconta quello
+      # che manca ancora. Gira solo se il passo che scrive e' almeno partito.
+      - name: Se si e' fermato, quello che manca ancora
+        if: (failure() || cancelled()) && steps.scrivi.outcome != 'skipped'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          ELENCO="$(mktemp)"
+          USCITA=0
+          MASSIMO_MIGRAZIONI=0 bash scripts/applica-migrazioni-mancanti.sh > /dev/null 2> "$ELENCO" || USCITA=$?
+          MANCANO="$(grep -E '^    - .+\.sql$' "$ELENCO" | sed 's/^    - //' || true)"
+          {
+            echo "## Dopo l'interruzione: quello che manca ancora"
+            echo ""
+            if [ "$USCITA" = "0" ]; then
+              echo "Non manca piu' nessuna migrazione: sono entrate tutte. Il lavoro e' rosso per un controllo dopo la scrittura: il motivo e' nel passo rosso."
+            elif [ "$USCITA" = "4" ] && [ -n "$MANCANO" ]; then
+              N="$(printf '%s\n' "$MANCANO" | wc -l | tr -d ' ')"
+              ULTIMA="$(printf '%s\n' "$MANCANO" | tail -n 1)"
+              echo "Ne mancano ancora $N: il database e' rimasto a meta'. Quando hai capito il motivo, riavvia con quante = $N e ultima = ${ULTIMA%%_*}."
+              echo ""
+              printf '%s\n' "$MANCANO" | sed 's/^/- /'
+            else
+              echo "Non sono riuscito a ricontare (uscita $USCITA): va guardato il database prima di riavviare."
+            fi
+            echo ""
+            echo "Se il lavoro e' stato annullato o e' scaduto, l'ultima migrazione puo' finire di entrare anche dopo questo conto: ricontrolla prima di riavviare."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -24,6 +24,10 @@ set -uo pipefail
 
 QUANTE="${QUANTE:-}"
 ULTIMA="${ULTIMA:-}"
+# Via gli spazi prima e dopo: la tastiera del telefono ne aggiunge uno dopo
+# la parola suggerita («48 »), e Nicola non lo vede.
+read -r QUANTE <<< "$QUANTE" || true
+read -r ULTIMA <<< "$ULTIMA" || true
 
 case "$QUANTE" in
   ''|*[!0-9]*)
