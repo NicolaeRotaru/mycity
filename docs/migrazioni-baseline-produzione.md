@@ -64,6 +64,27 @@ fattorini della 124), perché riapplica la 119 e la 122 che la produzione ha gi�
 > server col client di servizio, che le regole non le guarda: dopo il passo 2 funzionano uguale. **Con quella richiesta online, il passo 2 si può
 > fare**, insieme al passo 0.
 
+> **Stato al 19/10/2026.** La #259 è online. Il passo 0 c'è: Supabase è sul piano Pro e tiene una
+> copia al giorno per sette giorni (l'ultima prima del passo 2: 19/10 alle 04:53 UTC). Dallo
+> strumento Supabase della sessione è entrata solo la 091: i comandi che cancellano o sostituiscono
+> qualcosa chiedono una conferma che sul telefono non compare, e la chiamata scade. Il passo 2 adesso
+> passa dal lavoro `.github/workflows/migrazioni-a-mano.yml`: si avvia dalla pagina Actions, solo da
+> `main`, con tre caselle: APPLICA, quante migrazioni ci si aspetta (48) e il numero dell'ultima
+> (163). Sono due lavori. Il primo conta senza scrivere (`scripts/conta-migrazioni-mancanti.sh`) e
+> mette l'elenco nel riepilogo: se il numero o l'ultima non tornano, si ferma. Il secondo parte solo
+> dopo il primo, nell'ambiente `database-produzione`: con la spunta «Required reviewers» aspetta
+> l'«Approve» di Nicola, che arriva dopo aver visto l'elenco. Il secondo riconta, gira questo stesso
+> script col tetto uguale al conto, lo rilancia col tetto 0, fa i cinque controlli del passo 3 più un
+> sesto sulla guardia dei contanti, e il controllo della deriva. Se il lavoro si ferma, viene
+> annullato o scade dopo aver cominciato a scrivere, un ultimo passo riconta quelle che mancano
+> ancora e scrive nel riepilogo con che caselle riavviare. Si mette in fila col rilascio automatico. Tutti e due i lavori si
+> fermano se sta girando la copia del database (`backup-db.yml`): l'orario scritto è le 02:17 UTC,
+> ma GitHub la fa partire fra le 07 e le 10 UTC, quindi si guarda se gira davvero. E si fermano se,
+> dopo l'avvio, su `main` sono cambiate le migrazioni o gli script che le applicano. Se il secondo
+> lavoro si ferma a metà, il database resta a metà: per esempio la 125, la 126 e la 127 tolgono la
+> guardia sui contanti, che solo la 163 rimette. Va riavviato appena si è capito il motivo. Serve il
+> segreto `SUPABASE_DB_URL` con la riga del Session pooler (la #255 è unita: si può cambiare).
+
 **Cosa devi fare.** La stringa del Session pooler va nel segreto `SUPABASE_DB_URL` appena è unita
 la richiesta #255 del sito, non prima (il perché è nella sezione qui sotto). I passi 0, 2 e 3 vanno fatti insieme, nello stesso giro e a
 bassa attività, solo dopo che è online il codice che legge i negozi da `seller_public_profiles`
