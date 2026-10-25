@@ -114,12 +114,18 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   if (support.id === user.id) return ApiErrors.invalidRequest('Sei l\'account assistenza');
 
   // Find-or-create: l'utente è sempre buyer_id, l'assistenza è seller_id.
-  const { data: existing } = await admin
+  // Un guasto nel cercarla non vuol dire «non c'è»: crearne un'altra urterebbe il vincolo di
+  // unicità e il primo messaggio del cliente andrebbe perso con un 500.
+  const { data: existing, error: erroreRicerca } = await admin
     .from('conversations')
     .select('id')
     .eq('buyer_id', user.id)
     .eq('seller_id', support.id)
     .maybeSingle();
+  if (erroreRicerca) {
+    logger.error(erroreRicerca, { context: 'support-conversazione-esistente' });
+    return ApiErrors.unavailable('Assistenza momentaneamente non raggiungibile');
+  }
 
   let conversationId = existing?.id ?? null;
   if (!conversationId) {

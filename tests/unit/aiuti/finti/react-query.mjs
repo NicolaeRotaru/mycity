@@ -14,6 +14,10 @@
  * identico.
  */
 export function useQuery(opzioni) {
+  // 25/10/2026 — Se la prova mette un array in `globalThis.__OPZIONI_QUERY__`, ci finiscono le
+  // opzioni di ogni domanda: così una prova può dire se una domanda PARTE (`enabled`) e con
+  // quale `queryFn`, che qui non viene mai chiamata. Chi non lo mette non si accorge di niente.
+  if (Array.isArray(globalThis.__OPZIONI_QUERY__)) globalThis.__OPZIONI_QUERY__.push(opzioni);
   const sorgente = globalThis.__DATI_QUERY__;
   const data = typeof sorgente === 'function' ? sorgente(opzioni) : sorgente;
   const base = {
@@ -74,7 +78,8 @@ export const useMutation = () => {
  *
  * Se la prova mette un array in `globalThis.__CACHE_SCRITTA__`, ogni `setQueryData` ci finisce
  * dentro come `[chiave, valore]`; chi non lo mette non si accorge di niente. `cancelQueries`
- * c'è perché chi scrive in memoria, prima, ferma la lettura in volo (pulsante Assistenza).
+ * c'è perché chi scrive in memoria, prima, ferma la lettura in volo (pulsante Assistenza): ci
+ * finisce come `['annulla', chiave]`, così una prova vede anche l'ORDINE fra le due.
  */
 export const useQueryClient = () => ({
   invalidateQueries: () => {},
@@ -82,7 +87,9 @@ export const useQueryClient = () => ({
     if (Array.isArray(globalThis.__CACHE_SCRITTA__)) globalThis.__CACHE_SCRITTA__.push([chiave, valore]);
   },
   getQueryData: () => undefined,
-  cancelQueries: async () => {},
+  cancelQueries: async (filtro) => {
+    if (Array.isArray(globalThis.__CACHE_SCRITTA__)) globalThis.__CACHE_SCRITTA__.push(['annulla', filtro?.queryKey]);
+  },
 });
 export class QueryClient {}
 export const QueryClientProvider = ({ children }) => children;

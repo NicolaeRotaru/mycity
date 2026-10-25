@@ -24,6 +24,8 @@ type Stato = {
   conversazioneConLAssistenza: { data: { id: string } | null; error: { message: string } | null };
   chiamate: Chiamata[];
   chiaviDelFreno: string[];
+  frenoChiuso: boolean;
+  avvisi: unknown[][];
   avvolte: number;
 };
 
@@ -34,6 +36,8 @@ const stato = vi.hoisted((): Stato => ({
   conversazioneConLAssistenza: { data: { id: 'conv-1' }, error: null },
   chiamate: [],
   chiaviDelFreno: [],
+  frenoChiuso: false,
+  avvisi: [],
   avvolte: 0,
 }));
 
@@ -46,7 +50,9 @@ vi.mock('@/lib/api/middleware', () => ({
 vi.mock('@/lib/rate-limit', () => ({
   rateLimitAsync: async ({ key }: { key: string }) => {
     stato.chiaviDelFreno.push(key);
-    return { allowed: true, remaining: 29, retryAfterSec: 0, limit: 30 };
+    return stato.frenoChiuso
+      ? { allowed: false, remaining: 0, retryAfterSec: 42, limit: 30 }
+      : { allowed: true, remaining: 29, retryAfterSec: 0, limit: 30 };
   },
   getClientIp: () => '10.0.0.1',
 }));
@@ -75,14 +81,18 @@ vi.mock('@/lib/supabase/server', () => ({
     },
   }),
 }));
-vi.mock('@/lib/logger', () => ({ logger: { warn: () => {}, error: () => {}, info: () => {} } }));
+vi.mock('@/lib/logger', () => ({ logger: { warn: (...a: unknown[]) => { stato.avvisi.push(a); }, error: () => {}, info: () => {} } }));
 
 import {
   NOME_ASSISTENZA,
   NOME_IN_ARRIVO,
+  TETTO_ATTESA_MS,
   conversazioneConLAssistenza,
   leggiIdAssistenza,
   nomeDellaControparte,
+  nomeInArrivo,
+  serveSapereChiEAssistenza,
+  validitaIdAssistenza,
 } from '@/lib/queries/controparte-della-chat';
 import { GET, POST } from '@/app/api/support/conversation/route';
 
@@ -102,10 +112,13 @@ beforeEach(() => {
   stato.conversazioneConLAssistenza = { data: { id: 'conv-1' }, error: null };
   stato.chiamate = [];
   stato.chiaviDelFreno = [];
+  stato.frenoChiuso = false;
+  stato.avvisi = [];
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('come il cliente vede la chat con l\'Assistenza', () => {
@@ -144,6 +157,37 @@ describe('come il cliente vede la chat con l\'Assistenza', () => {
   });
 });
 
+describe('quando serve chiedere chi è l\'Assistenza, e quando il nome è «in arrivo»', () => {
+  const conNegozio = { ...conAssistenza, seller_id: 'pane', insegna: 'Pane Quotidiano' };
+
+  it('serve solo al cliente, e solo se il negozio non ha un nome da mostrare', () => {
+    expect(serveSapereChiEAssistenza(conAssistenza, 'cliente')).toBe(true);
+    expect(serveSapereChiEAssistenza(conNegozio, 'cliente')).toBe(false);
+    expect(serveSapereChiEAssistenza({ ...conAssistenza, seller: { full_name: null, store_name: 'Fiori' } }, 'cliente')).toBe(false);
+    expect(serveSapereChiEAssistenza(conAssistenza, 'adm'), 'chi sta dal lato del negozio non chiede').toBe(false);
+    expect(serveSapereChiEAssistenza(conAssistenza, null)).toBe(false);
+  });
+
+  it('«in arrivo» vale solo per la riga senza nome, e smette quando l\'id arriva', () => {
+    expect(nomeInArrivo(conAssistenza, 'cliente', null, true)).toBe(true);
+    expect(nomeInArrivo(conAssistenza, 'cliente', null, false)).toBe(false);
+    expect(nomeInArrivo(conAssistenza, 'cliente', 'adm', true)).toBe(false);
+    expect(nomeInArrivo(conNegozio, 'cliente', null, true)).toBe(false);
+  });
+
+  it('un negozio che si chiama «…» non viene scambiato per un nome in arrivo', () => {
+    const puntini = { ...conAssistenza, seller_id: 'strano', insegna: NOME_IN_ARRIVO };
+    expect(nomeDellaControparte(puntini, 'cliente', null, true)).toBe(NOME_IN_ARRIVO);
+    expect(nomeInArrivo(puntini, 'cliente', null, true)).toBe(false);
+  });
+
+  it('un id letto vale un\'ora; un «non c\'è» si richiede presto', () => {
+    expect(validitaIdAssistenza({ state: { data: 'adm' } })).toBe(60 * 60 * 1000);
+    expect(validitaIdAssistenza({ state: { data: null } })).toBeLessThanOrEqual(30 * 1000);
+    expect(validitaIdAssistenza({ state: { data: undefined } })).toBeLessThanOrEqual(30 * 1000);
+  });
+});
+
 describe('GET /api/support/conversation dice chi fa da Assistenza, solo a chi ci ha già scritto', () => {
   it('tutte e due le rotte passano dal controllo d\'accesso', () => {
     expect(stato.avvolte).toBe(2);
@@ -158,6 +202,13 @@ describe('GET /api/support/conversation dice chi fa da Assistenza, solo a chi ci
     expect(chiamateSu('profiles', 'order')).toContainEqual(['created_at', { ascending: true }]);
     expect(chiamateSu('conversations', 'eq')).toEqual([['buyer_id', 'cliente'], ['seller_id', 'adm']]);
     expect(stato.chiaviDelFreno).toEqual(['support:who:cliente']);
+  });
+
+  it('chi chiede troppo spesso riceve 429, e il database non viene toccato', async () => {
+    stato.frenoChiuso = true;
+    const risposta = await chiediChiEAssistenza();
+    expect(risposta.status).toBe(429);
+    expect(stato.chiamate).toEqual([]);
   });
 
   it('a chi non ha mai scritto all\'Assistenza non dà l\'id', async () => {
@@ -216,6 +267,19 @@ describe('POST /api/support/conversation, dopo il riordino', () => {
     stato.admin = { data: null, error: { message: 'connessione caduta' } };
     expect((await apriChat()).status).toBe(503);
   });
+
+  it('un guasto nel cercare la chat già aperta dà 503 e non ne apre una seconda', async () => {
+    stato.conversazioneConLAssistenza = { data: null, error: { message: 'connessione caduta' } };
+    expect((await apriChat()).status).toBe(503);
+    expect(chiamateSu('conversations', 'insert'), 'una seconda chat urterebbe il vincolo di unicità').toEqual([]);
+    expect(chiamateSu('messages', 'insert'), 'il primo messaggio andrebbe perso').toEqual([]);
+  });
+
+  it('l\'account Assistenza non apre una chat con se stesso', async () => {
+    stato.utente = { id: 'adm' };
+    expect((await apriChat()).status).toBe(400);
+    expect(chiamateSu('conversations', 'insert')).toEqual([]);
+  });
 });
 
 describe('leggiIdAssistenza: una domanda fallita si riprova, non si ricorda', () => {
@@ -240,5 +304,60 @@ describe('leggiIdAssistenza: una domanda fallita si riprova, non si ricorda', ()
   it('una rete caduta lancia, così React Query riprova', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('rete caduta'); }));
     await expect(leggiIdAssistenza()).rejects.toThrow('rete caduta');
+  });
+
+  /**
+   * Una rete che non risponde mai: la richiesta finisce solo se qualcuno la annulla. Come il
+   * `fetch` vero, con un segnale già annullato si rifiuta subito. Torna lo stato del segnale
+   * al momento di ogni chiamata.
+   */
+  function reteMuta() {
+    const giaAnnullato: boolean[] = [];
+    vi.stubGlobal('fetch', vi.fn((_url: string, o?: RequestInit) => new Promise((_r, rifiuta) => {
+      giaAnnullato.push(!!o?.signal?.aborted);
+      if (o?.signal?.aborted) return rifiuta(new Error('annullata'));
+      o?.signal?.addEventListener('abort', () => rifiuta(new Error('annullata')));
+    })));
+    return giaAnnullato;
+  }
+
+  // Il numero è scritto qui per esteso, non preso da TETTO_ATTESA_MS: se il tetto cambiasse
+  // nel codice, una prova che legge la stessa costante cambierebbe insieme e non lo vedrebbe.
+  it('una rete muta si arrende dopo 4 secondi, non prima', async () => {
+    vi.useFakeTimers();
+    reteMuta();
+    let finita = false;
+    const domanda = leggiIdAssistenza().finally(() => { finita = true; });
+    domanda.catch(() => {});
+    await vi.advanceTimersByTimeAsync(3999);
+    expect(finita, 'si è arresa prima del tetto').toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(finita, 'dopo 4 secondi la domanda è ancora in piedi').toBe(true);
+    await expect(domanda).rejects.toThrow('annullata');
+    expect(TETTO_ATTESA_MS).toBe(4000);
+  });
+
+  it('a domanda finita il timer del tetto si spegne', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ supportId: 'adm' }), { status: 200 })));
+    expect(await leggiIdAssistenza()).toBe('adm');
+    expect(vi.getTimerCount(), 'un timer resta acceso dopo ogni domanda').toBe(0);
+  });
+
+  it('annullata da React Query si ferma subito, senza scriverlo come guasto', async () => {
+    reteMuta();
+    const annulla = new AbortController();
+    const domanda = leggiIdAssistenza(annulla.signal);
+    annulla.abort();
+    await expect(domanda).rejects.toThrow('annullata');
+    expect(stato.avvisi, 'un annullamento voluto finiva nei log come guasto').toEqual([]);
+  });
+
+  it('un segnale già annullato arriva alla rete già annullato', async () => {
+    const giaAnnullato = reteMuta();
+    const annulla = new AbortController();
+    annulla.abort();
+    await expect(leggiIdAssistenza(annulla.signal)).rejects.toThrow('annullata');
+    expect(giaAnnullato, 'la domanda partiva come se nessuno l\'avesse annullata').toEqual([true]);
   });
 });

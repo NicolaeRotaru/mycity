@@ -15,6 +15,9 @@ import {
   conversazioneConLAssistenza,
   leggiIdAssistenza,
   nomeDellaControparte,
+  nomeInArrivo,
+  serveSapereChiEAssistenza,
+  validitaIdAssistenza,
 } from '@/lib/queries/controparte-della-chat';
 
 type Counterpart = {
@@ -94,15 +97,17 @@ export default function MessagesListPage() {
 
   // 25/10/2026 — Chi fa da Assistenza: la sua conversazione si chiama «Assistenza MyCity».
   // Se la domanda fallisce si resta a prima (null); mentre arriva, `idInArrivo`.
+  // Si chiede solo se c'è una riga senza nome: chi ha solo negozi con l'insegna, o il
+  // negoziante che guarda i suoi clienti, non fa nessuna domanda in più.
   const {
     data: idAssistenzaLetto,
     isLoading: idAssistenzaInLettura,
     failureCount: tentativiFalliti,
   } = useQuery({
     queryKey: queryKeys.messages.idAssistenza(userId ?? ''),
-    enabled: !!userId,
-    queryFn: leggiIdAssistenza,
-    staleTime: 60 * 60 * 1000,
+    enabled: !!userId && conversations.some((c) => serveSapereChiEAssistenza(c, userId)),
+    queryFn: ({ signal }) => leggiIdAssistenza(signal),
+    staleTime: validitaIdAssistenza,
   });
   // Un id già noto resta anche se una rilettura cade; l'attesa vale solo per il primo tentativo.
   const idAssistenza = idAssistenzaLetto ?? null;
@@ -175,6 +180,7 @@ export default function MessagesListPage() {
             const iAmBuyer = c.buyer_id === userId;
             const conLAssistenza = conversazioneConLAssistenza(c, userId, idAssistenza);
             const counterpartName = nomeDellaControparte(c, userId, idAssistenza, idInArrivo);
+            const inArrivo = nomeInArrivo(c, userId, idAssistenza, idInArrivo);
             const unread = iAmBuyer ? c.buyer_unread_count : c.seller_unread_count;
             return (
               <Link
@@ -187,21 +193,26 @@ export default function MessagesListPage() {
                     iAmBuyer ? 'bg-secondary-100 text-secondary-700' : 'bg-primary-100 text-primary-800'
                   }`}>
                     {/* L'Assistenza vera ha un segno suo: un negozio può chiamarsi come lei, ma non avere questo. */}
-                    {conLAssistenza ? (
-                      <>
-                        <Headset size={18} aria-hidden="true" />
-                        <span className="sr-only">Account ufficiale di MyCity</span>
-                      </>
-                    ) : (counterpartName[0]?.toUpperCase() ?? '?')}
+                    {conLAssistenza ? <Headset size={18} aria-hidden="true" /> : (counterpartName[0]?.toUpperCase() ?? '?')}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline justify-between gap-2 mb-0.5">
-                      <h3 className={`font-semibold truncate ${unread > 0 ? 'text-ink-900' : 'text-ink-700'}`}>
-                        {counterpartName}
+                      {/* «Ufficiale» sta FUORI dal titolo che si accorcia: dentro, sui telefoni
+                          si leggeva «Assistenza MyCity Uff…», cioè sparivano proprio le lettere
+                          che distinguono l'Assistenza vera da un negozio con lo stesso nome. */}
+                      <div className="flex min-w-0 items-baseline gap-1.5">
+                        <h3 className={`font-semibold truncate ${unread > 0 ? 'text-ink-900' : 'text-ink-700'}`}>
+                          {inArrivo ? (
+                            <>
+                              <span aria-hidden="true">{counterpartName}</span>
+                              <span className="sr-only">Caricamento del nome</span>
+                            </>
+                          ) : counterpartName}
+                        </h3>
                         {conLAssistenza && (
-                          <span className="ml-1.5 rounded bg-primary-50 px-1.5 text-[11px] font-bold text-primary-800">Ufficiale</span>
+                          <span className="shrink-0 rounded bg-primary-50 px-1.5 text-[11px] font-bold text-primary-800">Ufficiale</span>
                         )}
-                      </h3>
+                      </div>
                       <span className="text-xs text-ink-400 shrink-0">
                         {formatRelative(c.last_message_at)}
                       </span>

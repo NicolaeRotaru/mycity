@@ -12,11 +12,13 @@ import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
 import {
-  NOME_IN_ARRIVO,
   conInsegnaDelNegozio,
   conversazioneConLAssistenza,
   leggiIdAssistenza,
   nomeDellaControparte,
+  nomeInArrivo,
+  serveSapereChiEAssistenza,
+  validitaIdAssistenza,
 } from '@/lib/queries/controparte-della-chat';
 
 type Message = {
@@ -74,22 +76,6 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
     });
   }, [params.id, router]);
 
-  // 25/10/2026 — Chi fa da Assistenza: la testata dice «Assistenza MyCity · Assistenza».
-  // Se la domanda fallisce si resta a prima (null); mentre arriva, `idInArrivo`.
-  const {
-    data: idAssistenzaLetto,
-    isLoading: idAssistenzaInLettura,
-    failureCount: tentativiFalliti,
-  } = useQuery({
-    queryKey: queryKeys.messages.idAssistenza(userId ?? ''),
-    enabled: !!userId,
-    queryFn: leggiIdAssistenza,
-    staleTime: 60 * 60 * 1000,
-  });
-  // Un id già noto resta anche se una rilettura cade; l'attesa vale solo per il primo tentativo.
-  const idAssistenza = idAssistenzaLetto ?? null;
-  const idInArrivo = idAssistenzaInLettura && (tentativiFalliti ?? 0) === 0;
-
   const {
     data: conversation,
     isLoading: conversazioneInArrivo,
@@ -116,6 +102,24 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
       return conInsegna;
     },
   });
+
+  // 25/10/2026 — Chi fa da Assistenza: la testata dice «Assistenza MyCity · Account ufficiale di MyCity».
+  // Se la domanda fallisce si resta a prima (null); mentre arriva, `idInArrivo`.
+  // Si chiede solo quando la conversazione non ha un nome da mostrare: con un negozio
+  // che ha l'insegna, o per il negoziante, la domanda non parte.
+  const {
+    data: idAssistenzaLetto,
+    isLoading: idAssistenzaInLettura,
+    failureCount: tentativiFalliti,
+  } = useQuery({
+    queryKey: queryKeys.messages.idAssistenza(userId ?? ''),
+    enabled: !!userId && !!conversation && serveSapereChiEAssistenza(conversation, userId),
+    queryFn: ({ signal }) => leggiIdAssistenza(signal),
+    staleTime: validitaIdAssistenza,
+  });
+  // Un id già noto resta anche se una rilettura cade; l'attesa vale solo per il primo tentativo.
+  const idAssistenza = idAssistenzaLetto ?? null;
+  const idInArrivo = idAssistenzaInLettura && (tentativiFalliti ?? 0) === 0;
 
   /**
    * 27/8/2026 (R091) — QUESTA LETTURA NON GUARDAVA IL PROPRIO ERRORE.
@@ -263,6 +267,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
   const iAmBuyer = conversation.buyer_id === userId;
   const conLAssistenza = conversazioneConLAssistenza(conversation, userId, idAssistenza);
   const counterpartName = nomeDellaControparte(conversation, userId, idAssistenza, idInArrivo);
+  const inArrivo = nomeInArrivo(conversation, userId, idAssistenza, idInArrivo);
 
   // Raggruppamento separatori di data
   const items: Array<{ type: 'date'; label: string; key: string } | { type: 'msg'; msg: Message }> = [];
@@ -291,12 +296,20 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
           <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
             iAmBuyer ? 'bg-secondary-100 text-secondary-700' : 'bg-primary-100 text-primary-800'
           }`}>
-            {conLAssistenza ? <><Headset size={18} aria-hidden="true" /><span className="sr-only">Account ufficiale di MyCity</span></> : (counterpartName[0]?.toUpperCase() ?? '?')}
+            {conLAssistenza ? <Headset size={18} aria-hidden="true" /> : (counterpartName[0]?.toUpperCase() ?? '?')}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="font-serif font-semibold text-ink-900 truncate">{counterpartName}</h2>
+            <h2 className="font-serif font-semibold text-ink-900 truncate">
+              {inArrivo ? (
+                <>
+                  <span aria-hidden="true">{counterpartName}</span>
+                  <span className="sr-only">Caricamento del nome</span>
+                </>
+              ) : counterpartName}
+            </h2>
+            {/* Sotto il nome, per l'Assistenza vera, il segno che un negozio con lo stesso nome non ha. */}
             <p className="text-xs text-ink-500">
-              {conLAssistenza ? 'Assistenza' : counterpartName === NOME_IN_ARRIVO ? '\u00a0' : iAmBuyer ? 'Negozio' : 'Cliente'}
+              {conLAssistenza ? 'Account ufficiale di MyCity' : inArrivo ? '\u00a0' : iAmBuyer ? 'Negozio' : 'Cliente'}
             </p>
           </div>
         </div>
