@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queries/keys';
 import { Headset, X, Send, Sparkles, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -53,6 +55,7 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
   }, [open]);
   useBottomSheetA11y(open, pannelloRef, avvioRef, onClose);
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   // 'menu' = scelta argomento; 'ai' = assistente prodotti AI (solo seller).
@@ -91,7 +94,12 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
         const j = await res.json().catch(() => ({}));
         throw new Error(apiErrorMessage(j, 'Impossibile aprire la chat'));
       }
-      const { conversationId } = await res.json();
+      const { conversationId, supportId } = await res.json();
+      // 25/10/2026 — La chat che si apre adesso sa già di essere con l'Assistenza:
+      // si chiama «Assistenza MyCity» subito, senza passare da «Utente».
+      if (typeof supportId === 'string' && supportId) {
+        queryClient.setQueryData(queryKeys.messages.idAssistenza, supportId);
+      }
       onClose();
       setText('');
       router.push(`/messages/${conversationId}`);

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Send, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Headset, Send, MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -12,6 +12,7 @@ import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
 import {
+  NOME_IN_ARRIVO,
   conInsegnaDelNegozio,
   conversazioneConLAssistenza,
   leggiIdAssistenza,
@@ -74,12 +75,18 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
   }, [params.id, router]);
 
   // 25/10/2026 — Chi fa da Assistenza: la testata dice «Assistenza MyCity · Assistenza».
-  const { data: idAssistenza = null } = useQuery({
+  // Se la domanda fallisce si resta a prima (null); mentre arriva, `idInArrivo`.
+  const {
+    data: idAssistenzaLetto,
+    isError: idAssistenzaNonLetto,
+    isLoading: idInArrivo,
+  } = useQuery({
     queryKey: queryKeys.messages.idAssistenza,
     enabled: !!userId,
     queryFn: leggiIdAssistenza,
     staleTime: 60 * 60 * 1000,
   });
+  const idAssistenza = idAssistenzaNonLetto ? null : (idAssistenzaLetto ?? null);
 
   const {
     data: conversation,
@@ -253,7 +260,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
 
   const iAmBuyer = conversation.buyer_id === userId;
   const conLAssistenza = conversazioneConLAssistenza(conversation, userId, idAssistenza);
-  const counterpartName = nomeDellaControparte(conversation, userId, idAssistenza);
+  const counterpartName = nomeDellaControparte(conversation, userId, idAssistenza, idInArrivo);
 
   // Raggruppamento separatori di data
   const items: Array<{ type: 'date'; label: string; key: string } | { type: 'msg'; msg: Message }> = [];
@@ -282,11 +289,13 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
           <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
             iAmBuyer ? 'bg-secondary-100 text-secondary-700' : 'bg-primary-100 text-primary-800'
           }`}>
-            {counterpartName[0]?.toUpperCase() ?? '?'}
+            {conLAssistenza ? <Headset size={18} aria-hidden="true" /> : (counterpartName[0]?.toUpperCase() ?? '?')}
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="font-serif font-semibold text-ink-900 truncate">{counterpartName}</h2>
-            <p className="text-xs text-ink-500">{conLAssistenza ? 'Assistenza' : iAmBuyer ? 'Negozio' : 'Cliente'}</p>
+            <p className="text-xs text-ink-500">
+              {conLAssistenza ? 'Assistenza' : counterpartName === NOME_IN_ARRIVO ? '' : iAmBuyer ? 'Negozio' : 'Cliente'}
+            </p>
           </div>
         </div>
 

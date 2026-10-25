@@ -4,13 +4,18 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { MessageCircle } from 'lucide-react';
+import { Headset, MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
-import { conInsegnaDelNegozio, leggiIdAssistenza, nomeDellaControparte } from '@/lib/queries/controparte-della-chat';
+import {
+  conInsegnaDelNegozio,
+  conversazioneConLAssistenza,
+  leggiIdAssistenza,
+  nomeDellaControparte,
+} from '@/lib/queries/controparte-della-chat';
 
 type Counterpart = {
   id: string;
@@ -88,12 +93,18 @@ export default function MessagesListPage() {
   });
 
   // 25/10/2026 — Chi fa da Assistenza: la sua conversazione si chiama «Assistenza MyCity».
-  const { data: idAssistenza = null } = useQuery({
+  // Se la domanda fallisce si resta a prima (null); mentre arriva, `idInArrivo`.
+  const {
+    data: idAssistenzaLetto,
+    isError: idAssistenzaNonLetto,
+    isLoading: idInArrivo,
+  } = useQuery({
     queryKey: queryKeys.messages.idAssistenza,
     enabled: !!userId,
     queryFn: leggiIdAssistenza,
     staleTime: 60 * 60 * 1000,
   });
+  const idAssistenza = idAssistenzaNonLetto ? null : (idAssistenzaLetto ?? null);
 
   // Realtime: re-fetch quando arriva un messaggio in una delle mie conversazioni.
   // `refetch` cambia identity ad ogni render → ref stabile per non ricreare
@@ -139,7 +150,7 @@ export default function MessagesListPage() {
         <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
           Messaggi
         </h1>
-        <p className="mt-1 text-sm text-ink-500">Conversazioni con i negozi</p>
+        <p className="mt-1 text-sm text-ink-500">Conversazioni con i negozi e con l'Assistenza</p>
       </header>
 
       {isError ? (
@@ -160,7 +171,8 @@ export default function MessagesListPage() {
         <div className="bg-white border border-cream-300 rounded-xl divide-y divide-cream-100 overflow-hidden">
           {conversations.map((c) => {
             const iAmBuyer = c.buyer_id === userId;
-            const counterpartName = nomeDellaControparte(c, userId, idAssistenza);
+            const conLAssistenza = conversazioneConLAssistenza(c, userId, idAssistenza);
+            const counterpartName = nomeDellaControparte(c, userId, idAssistenza, idInArrivo);
             const unread = iAmBuyer ? c.buyer_unread_count : c.seller_unread_count;
             return (
               <Link
@@ -172,7 +184,8 @@ export default function MessagesListPage() {
                   <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
                     iAmBuyer ? 'bg-secondary-100 text-secondary-700' : 'bg-primary-100 text-primary-800'
                   }`}>
-                    {counterpartName[0]?.toUpperCase() ?? '?'}
+                    {/* L'Assistenza vera ha un segno suo: un negozio può chiamarsi come lei, ma non avere questo. */}
+                    {conLAssistenza ? <Headset size={18} aria-hidden="true" /> : (counterpartName[0]?.toUpperCase() ?? '?')}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline justify-between gap-2 mb-0.5">

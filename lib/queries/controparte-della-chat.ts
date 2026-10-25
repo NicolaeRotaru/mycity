@@ -45,6 +45,9 @@ type Persona = { full_name: string | null; store_name: string | null } | null;
 /** Il nome con cui il cliente vede l'account Assistenza in chat. */
 export const NOME_ASSISTENZA = 'Assistenza MyCity';
 
+/** Al posto di «Utente» finché non si sa se dall'altra parte c'è l'Assistenza. */
+export const NOME_IN_ARRIVO = '…';
+
 /**
  * 25/10/2026 — Vero se, per il cliente, dall'altra parte c'è l'account Assistenza.
  *
@@ -68,34 +71,48 @@ export function conversazioneConLAssistenza(
  * Il cliente vede l'insegna del negozio (dalla vetrina, poi il ripiego di prima),
  * oppure «Assistenza MyCity» se scrive all'Assistenza; il negozio, e l'Assistenza
  * stessa, vedono il nome del cliente, come prima.
+ *
+ * `idInArrivo`: la pagina sta ancora chiedendo chi è l'Assistenza. Una riga che
+ * ricadrebbe su «Utente» potrebbe essere proprio l'Assistenza, e mostrare «Utente»
+ * per poi cambiarlo era il difetto stesso: in quell'attesa si legge «…».
  */
 export function nomeDellaControparte(
   conversazione: { buyer_id: string; seller_id: string; buyer: Persona; seller: Persona; insegna: string | null },
   userId: string | null,
-  idAssistenza?: string | null,
+  idAssistenza: string | null = null,
+  idInArrivo = false,
 ): string {
   const iAmBuyer = conversazione.buyer_id === userId;
   if (iAmBuyer) {
     if (conversazioneConLAssistenza(conversazione, userId, idAssistenza)) return NOME_ASSISTENZA;
     const negozio = conversazione.seller;
-    return conversazione.insegna ?? negozio?.store_name ?? negozio?.full_name ?? 'Utente';
+    const nome = conversazione.insegna ?? negozio?.store_name ?? negozio?.full_name ?? null;
+    if (nome) return nome;
+    return idInArrivo ? NOME_IN_ARRIVO : 'Utente';
   }
   return conversazione.buyer?.full_name ?? 'Utente';
 }
 
 /**
- * Chiede al server quale account fa da Assistenza. `null` se non risponde: la chat
- * resta quella di prima invece di fermarsi, perché il nome è un dettaglio e i
- * messaggi no.
+ * Chiede al server quale account fa da Assistenza: `null` se chi chiama non ha una
+ * conversazione con lei. Se la domanda fallisce LANCIA, così React Query riprova
+ * invece di ricordarsi per un'ora un guasto come se fosse una risposta. Le pagine
+ * trattano l'errore come `null`: la chat resta quella di prima e non si ferma,
+ * perché il nome è un dettaglio e i messaggi no.
  */
 export async function leggiIdAssistenza(): Promise<string | null> {
   try {
-    const risposta = await fetch('/api/support/conversation', { method: 'GET', credentials: 'same-origin' });
-    if (!risposta.ok) return null;
+    const risposta = await fetch('/api/support/conversation', {
+      method: 'GET',
+      credentials: 'same-origin',
+      // Un tetto all'attesa, dove il browser lo sa mettere.
+      signal: typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(4000) : undefined,
+    });
+    if (!risposta.ok) throw new Error(`account Assistenza non letto: ${risposta.status}`);
     const corpo = (await risposta.json()) as { supportId?: unknown };
     return typeof corpo.supportId === 'string' && corpo.supportId ? corpo.supportId : null;
   } catch (e) {
     logger.warn('[chat] account Assistenza non letto: la chat resta senza il suo nome', e);
-    return null;
+    throw e;
   }
 }
