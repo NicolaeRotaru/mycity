@@ -11,7 +11,12 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
-import { conInsegnaDelNegozio, nomeDellaControparte } from '@/lib/queries/controparte-della-chat';
+import {
+  conInsegnaDelNegozio,
+  conversazioneConLAssistenza,
+  leggiIdAssistenza,
+  nomeDellaControparte,
+} from '@/lib/queries/controparte-della-chat';
 
 type Message = {
   id: string;
@@ -67,6 +72,14 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
       setUserId(data.user.id);
     });
   }, [params.id, router]);
+
+  // 25/10/2026 — Chi fa da Assistenza: la testata dice «Assistenza MyCity · Assistenza».
+  const { data: idAssistenza = null } = useQuery({
+    queryKey: queryKeys.messages.idAssistenza,
+    enabled: !!userId,
+    queryFn: leggiIdAssistenza,
+    staleTime: 60 * 60 * 1000,
+  });
 
   const {
     data: conversation,
@@ -239,7 +252,8 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
   }
 
   const iAmBuyer = conversation.buyer_id === userId;
-  const counterpartName = nomeDellaControparte(conversation, userId);
+  const conLAssistenza = conversazioneConLAssistenza(conversation, userId, idAssistenza);
+  const counterpartName = nomeDellaControparte(conversation, userId, idAssistenza);
 
   // Raggruppamento separatori di data
   const items: Array<{ type: 'date'; label: string; key: string } | { type: 'msg'; msg: Message }> = [];
@@ -272,7 +286,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="font-serif font-semibold text-ink-900 truncate">{counterpartName}</h2>
-            <p className="text-xs text-ink-500">{iAmBuyer ? 'Negozio' : 'Cliente'}</p>
+            <p className="text-xs text-ink-500">{conLAssistenza ? 'Assistenza' : iAmBuyer ? 'Negozio' : 'Cliente'}</p>
           </div>
         </div>
 

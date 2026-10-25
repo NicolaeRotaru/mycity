@@ -14,8 +14,8 @@ import { fetchSellerPublicMap, type LettoreVista } from '@/lib/queries/seller-pu
  *
  * L'insegna adesso arriva dalla vista `seller_public_profiles`, una domanda sola
  * per tutto l'elenco. Il resto dell'aggancio resta com'era: il nome del cliente
- * visto dal negozio e quello dell'account Assistenza sono un altro lavoro, con la
- * sua scheda, e non cambiano qui.
+ * visto dal negozio è un altro lavoro, con la sua scheda. Il nome dell'account
+ * Assistenza è arrivato il 25/10/2026 (`conversazioneConLAssistenza`, più sotto).
  */
 
 /**
@@ -42,20 +42,60 @@ export async function conInsegnaDelNegozio<T extends { seller_id: string }>(
 
 type Persona = { full_name: string | null; store_name: string | null } | null;
 
+/** Il nome con cui il cliente vede l'account Assistenza in chat. */
+export const NOME_ASSISTENZA = 'Assistenza MyCity';
+
+/**
+ * 25/10/2026 — Vero se, per il cliente, dall'altra parte c'è l'account Assistenza.
+ *
+ * L'Assistenza non è un negozio: non sta nella vetrina pubblica e il suo profilo
+ * un cliente non lo legge, quindi né l'insegna né il profilo la riconoscono. La
+ * riconosce solo il seller_id, confrontato con l'account che usa
+ * /api/support/conversation (`idAssistenza`). Senza quell'id — rotta che non
+ * risponde, pagina ancora in caricamento — si resta al comportamento di prima.
+ */
+export function conversazioneConLAssistenza(
+  conversazione: { buyer_id: string; seller_id: string },
+  userId: string | null,
+  idAssistenza: string | null | undefined,
+): boolean {
+  return !!idAssistenza && conversazione.buyer_id === userId && conversazione.seller_id === idAssistenza;
+}
+
 /**
  * Il nome di chi sta dall'altra parte, come lo legge chi guarda.
  *
- * Il cliente vede l'insegna del negozio (dalla vetrina, poi il ripiego di prima);
- * il negozio vede il nome del cliente, come prima.
+ * Il cliente vede l'insegna del negozio (dalla vetrina, poi il ripiego di prima),
+ * oppure «Assistenza MyCity» se scrive all'Assistenza; il negozio, e l'Assistenza
+ * stessa, vedono il nome del cliente, come prima.
  */
 export function nomeDellaControparte(
-  conversazione: { buyer_id: string; buyer: Persona; seller: Persona; insegna: string | null },
+  conversazione: { buyer_id: string; seller_id: string; buyer: Persona; seller: Persona; insegna: string | null },
   userId: string | null,
+  idAssistenza?: string | null,
 ): string {
   const iAmBuyer = conversazione.buyer_id === userId;
   if (iAmBuyer) {
+    if (conversazioneConLAssistenza(conversazione, userId, idAssistenza)) return NOME_ASSISTENZA;
     const negozio = conversazione.seller;
     return conversazione.insegna ?? negozio?.store_name ?? negozio?.full_name ?? 'Utente';
   }
   return conversazione.buyer?.full_name ?? 'Utente';
+}
+
+/**
+ * Chiede al server quale account fa da Assistenza. `null` se non risponde: la chat
+ * resta quella di prima invece di fermarsi, perché il nome è un dettaglio e i
+ * messaggi no.
+ */
+export async function leggiIdAssistenza(): Promise<string | null> {
+  try {
+    const risposta = await fetch('/api/support/conversation', { method: 'GET', credentials: 'same-origin' });
+    if (!risposta.ok) return null;
+    const corpo = (await risposta.json()) as { supportId?: unknown };
+    return typeof corpo.supportId === 'string' && corpo.supportId ? corpo.supportId : null;
+  } catch (e) {
+    logger.warn('[chat] account Assistenza non letto: la chat resta senza il suo nome', e);
+    return null;
+  }
 }

@@ -13,6 +13,41 @@ const Schema = z.object({
 });
 
 /**
+ * L'account Assistenza: il primo admin (fonte di verità nel DB, no hardcode).
+ * Una funzione sola per chi apre la chat (POST) e per chi deve riconoscerla (GET):
+ * se un giorno la regola cambia, cambia per tutti e due.
+ */
+async function accountAssistenza(admin: ReturnType<typeof getAdminSupabase>): Promise<{ id: string } | null> {
+  const { data } = await admin
+    .from('profiles')
+    .select('id')
+    .eq('role', 'admin')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return (data as { id: string } | null) ?? null;
+}
+
+/**
+ * GET /api/support/conversation → `{ supportId }`
+ *
+ * 25/10/2026 — LA CHAT CON L'ASSISTENZA SI CHIAMAVA «UTENTE». Per il cliente la
+ * controparte della conversazione è l'account Assistenza, che non è un negozio:
+ * non sta nella vetrina pubblica e il suo profilo un cliente non lo legge. La
+ * chat ripiegava su «Utente · Negozio» e chi cercava aiuto non riconosceva la
+ * conversazione. La pagina chiede qui chi è l'Assistenza e la riconosce dal
+ * seller_id. Non svela niente di nuovo: quel seller_id il cliente lo vede già
+ * nella sua conversazione.
+ */
+export const GET = withAuth(async (): Promise<NextResponse> => {
+  const support = await accountAssistenza(getAdminSupabase());
+  return NextResponse.json(
+    { supportId: support?.id ?? null },
+    { status: 200, headers: { 'Cache-Control': 'private, max-age=300' } },
+  );
+});
+
+/**
  * POST /api/support/conversation
  * Trova-o-crea la conversazione tra l'utente corrente e l'account "Assistenza"
  * (un profilo con role='admin') e invia il primo messaggio. Riusa le tabelle
@@ -42,14 +77,7 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
 
   const admin = getAdminSupabase();
 
-  // Account assistenza: il primo admin (fonte di verità nel DB, no hardcode).
-  const { data: support } = await admin
-    .from('profiles')
-    .select('id')
-    .eq('role', 'admin')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  const support = await accountAssistenza(admin);
   if (!support) return ApiErrors.notFound('Assistenza non disponibile');
   if (support.id === user.id) return ApiErrors.invalidRequest('Sei l\'account assistenza');
 

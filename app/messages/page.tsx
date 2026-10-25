@@ -10,7 +10,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
-import { conInsegnaDelNegozio, nomeDellaControparte } from '@/lib/queries/controparte-della-chat';
+import { conInsegnaDelNegozio, leggiIdAssistenza, nomeDellaControparte } from '@/lib/queries/controparte-della-chat';
 
 type Counterpart = {
   id: string;
@@ -87,6 +87,14 @@ export default function MessagesListPage() {
     },
   });
 
+  // 25/10/2026 — Chi fa da Assistenza: la sua conversazione si chiama «Assistenza MyCity».
+  const { data: idAssistenza = null } = useQuery({
+    queryKey: queryKeys.messages.idAssistenza,
+    enabled: !!userId,
+    queryFn: leggiIdAssistenza,
+    staleTime: 60 * 60 * 1000,
+  });
+
   // Realtime: re-fetch quando arriva un messaggio in una delle mie conversazioni.
   // `refetch` cambia identity ad ogni render → ref stabile per non ricreare
   // il channel (Supabase: "cannot add postgres_changes callbacks after subscribe").
@@ -152,7 +160,7 @@ export default function MessagesListPage() {
         <div className="bg-white border border-cream-300 rounded-xl divide-y divide-cream-100 overflow-hidden">
           {conversations.map((c) => {
             const iAmBuyer = c.buyer_id === userId;
-            const counterpartName = nomeDellaControparte(c, userId);
+            const counterpartName = nomeDellaControparte(c, userId, idAssistenza);
             const unread = iAmBuyer ? c.buyer_unread_count : c.seller_unread_count;
             return (
               <Link

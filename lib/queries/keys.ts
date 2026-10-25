@@ -93,6 +93,7 @@ export const queryKeys = {
     conversations:           ['conversations'] as const,
     conversationsByUser: (uid: string) => ['conversations', uid] as const,
     byParam: (id: string)    => ['messages', id] as const,
+    idAssistenza:            ['support-account'] as const,
   },
 
   loyalty: {
