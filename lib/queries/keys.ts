@@ -93,7 +93,9 @@ export const queryKeys = {
     conversations:           ['conversations'] as const,
     conversationsByUser: (uid: string) => ['conversations', uid] as const,
     byParam: (id: string)    => ['messages', id] as const,
-    idAssistenza:            ['support-account'] as const,
+    // Per persona: la risposta dice se QUESTO utente ha una chat con l'Assistenza, e la
+    // memoria non si svuota all'uscita: su un telefono condiviso il secondo non eredita il primo.
+    idAssistenza: (uid: string) => ['support-account', uid] as const,
   },
 
   loyalty: {

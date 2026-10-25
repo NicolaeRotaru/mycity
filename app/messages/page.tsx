@@ -96,15 +96,17 @@ export default function MessagesListPage() {
   // Se la domanda fallisce si resta a prima (null); mentre arriva, `idInArrivo`.
   const {
     data: idAssistenzaLetto,
-    isError: idAssistenzaNonLetto,
-    isLoading: idInArrivo,
+    isLoading: idAssistenzaInLettura,
+    failureCount: tentativiFalliti,
   } = useQuery({
-    queryKey: queryKeys.messages.idAssistenza,
+    queryKey: queryKeys.messages.idAssistenza(userId ?? ''),
     enabled: !!userId,
     queryFn: leggiIdAssistenza,
     staleTime: 60 * 60 * 1000,
   });
-  const idAssistenza = idAssistenzaNonLetto ? null : (idAssistenzaLetto ?? null);
+  // Un id già noto resta anche se una rilettura cade; l'attesa vale solo per il primo tentativo.
+  const idAssistenza = idAssistenzaLetto ?? null;
+  const idInArrivo = idAssistenzaInLettura && (tentativiFalliti ?? 0) === 0;
 
   // Realtime: re-fetch quando arriva un messaggio in una delle mie conversazioni.
   // `refetch` cambia identity ad ogni render → ref stabile per non ricreare
@@ -185,12 +187,20 @@ export default function MessagesListPage() {
                     iAmBuyer ? 'bg-secondary-100 text-secondary-700' : 'bg-primary-100 text-primary-800'
                   }`}>
                     {/* L'Assistenza vera ha un segno suo: un negozio può chiamarsi come lei, ma non avere questo. */}
-                    {conLAssistenza ? <Headset size={18} aria-hidden="true" /> : (counterpartName[0]?.toUpperCase() ?? '?')}
+                    {conLAssistenza ? (
+                      <>
+                        <Headset size={18} aria-hidden="true" />
+                        <span className="sr-only">Account ufficiale di MyCity</span>
+                      </>
+                    ) : (counterpartName[0]?.toUpperCase() ?? '?')}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline justify-between gap-2 mb-0.5">
                       <h3 className={`font-semibold truncate ${unread > 0 ? 'text-ink-900' : 'text-ink-700'}`}>
                         {counterpartName}
+                        {conLAssistenza && (
+                          <span className="ml-1.5 rounded bg-primary-50 px-1.5 text-[11px] font-bold text-primary-800">Ufficiale</span>
+                        )}
                       </h3>
                       <span className="text-xs text-ink-400 shrink-0">
                         {formatRelative(c.last_message_at)}

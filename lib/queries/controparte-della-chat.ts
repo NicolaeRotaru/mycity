@@ -100,13 +100,20 @@ export function nomeDellaControparte(
  * trattano l'errore come `null`: la chat resta quella di prima e non si ferma,
  * perché il nome è un dettaglio e i messaggi no.
  */
+function segnaleConTetto(ms: number): AbortSignal | undefined {
+  if (typeof AbortController === 'undefined') return undefined;
+  const controllo = new AbortController();
+  setTimeout(() => controllo.abort(), ms);
+  return controllo.signal;
+}
+
 export async function leggiIdAssistenza(): Promise<string | null> {
   try {
     const risposta = await fetch('/api/support/conversation', {
       method: 'GET',
       credentials: 'same-origin',
-      // Un tetto all'attesa, dove il browser lo sa mettere.
-      signal: typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(4000) : undefined,
+      // Un tetto all'attesa, anche sui browser senza AbortSignal.timeout.
+      signal: segnaleConTetto(4000),
     });
     if (!risposta.ok) throw new Error(`account Assistenza non letto: ${risposta.status}`);
     const corpo = (await risposta.json()) as { supportId?: unknown };

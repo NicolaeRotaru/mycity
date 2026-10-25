@@ -29,7 +29,7 @@ async function accountAssistenza(admin: ReturnType<typeof getAdminSupabase>): Pr
     .order('created_at', { ascending: true })
     .limit(1)
     .maybeSingle();
-  if (error) throw error;
+  if (error) throw new Error(`account Assistenza non letto: ${error.code ?? ''} ${error.message}`, { cause: error });
   return (data as { id: string } | null) ?? null;
 }
 
@@ -63,7 +63,7 @@ export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
         .eq('seller_id', support.id)
         .limit(1)
         .maybeSingle();
-      if (error) throw error;
+      if (error) throw new Error(`conversazione con l'Assistenza non letta: ${error.code ?? ''} ${error.message}`, { cause: error });
       supportId = conv ? support.id : null;
     }
   } catch (e) {

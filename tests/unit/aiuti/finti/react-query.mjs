@@ -69,8 +69,20 @@ export const useMutation = () => {
     isPending: false, isError: false, error: null,
   };
 };
+/**
+ * 25/10/2026 — QUELLO CHE LA PAGINA HA SCRITTO NELLA MEMORIA.
+ *
+ * Se la prova mette un array in `globalThis.__CACHE_SCRITTA__`, ogni `setQueryData` ci finisce
+ * dentro come `[chiave, valore]`; chi non lo mette non si accorge di niente. `cancelQueries`
+ * c'è perché chi scrive in memoria, prima, ferma la lettura in volo (pulsante Assistenza).
+ */
 export const useQueryClient = () => ({
-  invalidateQueries: () => {}, setQueryData: () => {}, getQueryData: () => undefined,
+  invalidateQueries: () => {},
+  setQueryData: (chiave, valore) => {
+    if (Array.isArray(globalThis.__CACHE_SCRITTA__)) globalThis.__CACHE_SCRITTA__.push([chiave, valore]);
+  },
+  getQueryData: () => undefined,
+  cancelQueries: async () => {},
 });
 export class QueryClient {}
 export const QueryClientProvider = ({ children }) => children;

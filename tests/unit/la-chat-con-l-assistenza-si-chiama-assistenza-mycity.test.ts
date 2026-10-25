@@ -180,6 +180,13 @@ describe('GET /api/support/conversation dice chi fa da Assistenza, solo a chi ci
     expect(risposta.status).toBe(503);
     expect(JSON.stringify(await risposta.json())).not.toContain('supportId');
   });
+
+  it('nemmeno un guasto sulla lettura della conversazione', async () => {
+    stato.conversazioneConLAssistenza = { data: null, error: { message: 'connessione caduta' } };
+    const risposta = await chiediChiEAssistenza();
+    expect(risposta.status).toBe(503);
+    expect(JSON.stringify(await risposta.json())).not.toContain('supportId');
+  });
 });
 
 describe('POST /api/support/conversation, dopo il riordino', () => {

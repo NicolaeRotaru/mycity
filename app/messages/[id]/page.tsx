@@ -78,15 +78,17 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
   // Se la domanda fallisce si resta a prima (null); mentre arriva, `idInArrivo`.
   const {
     data: idAssistenzaLetto,
-    isError: idAssistenzaNonLetto,
-    isLoading: idInArrivo,
+    isLoading: idAssistenzaInLettura,
+    failureCount: tentativiFalliti,
   } = useQuery({
-    queryKey: queryKeys.messages.idAssistenza,
+    queryKey: queryKeys.messages.idAssistenza(userId ?? ''),
     enabled: !!userId,
     queryFn: leggiIdAssistenza,
     staleTime: 60 * 60 * 1000,
   });
-  const idAssistenza = idAssistenzaNonLetto ? null : (idAssistenzaLetto ?? null);
+  // Un id già noto resta anche se una rilettura cade; l'attesa vale solo per il primo tentativo.
+  const idAssistenza = idAssistenzaLetto ?? null;
+  const idInArrivo = idAssistenzaInLettura && (tentativiFalliti ?? 0) === 0;
 
   const {
     data: conversation,
@@ -289,12 +291,12 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
           <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
             iAmBuyer ? 'bg-secondary-100 text-secondary-700' : 'bg-primary-100 text-primary-800'
           }`}>
-            {conLAssistenza ? <Headset size={18} aria-hidden="true" /> : (counterpartName[0]?.toUpperCase() ?? '?')}
+            {conLAssistenza ? <><Headset size={18} aria-hidden="true" /><span className="sr-only">Account ufficiale di MyCity</span></> : (counterpartName[0]?.toUpperCase() ?? '?')}
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="font-serif font-semibold text-ink-900 truncate">{counterpartName}</h2>
             <p className="text-xs text-ink-500">
-              {conLAssistenza ? 'Assistenza' : counterpartName === NOME_IN_ARRIVO ? '' : iAmBuyer ? 'Negozio' : 'Cliente'}
+              {conLAssistenza ? 'Assistenza' : counterpartName === NOME_IN_ARRIVO ? '\u00a0' : iAmBuyer ? 'Negozio' : 'Cliente'}
             </p>
           </div>
         </div>

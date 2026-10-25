@@ -97,8 +97,12 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
       const { conversationId, supportId } = await res.json();
       // 25/10/2026 — La chat che si apre adesso sa già di essere con l'Assistenza:
       // si chiama «Assistenza MyCity» subito, senza passare da «Utente».
-      if (typeof supportId === 'string' && supportId) {
-        queryClient.setQueryData(queryKeys.messages.idAssistenza, supportId);
+      // Una lettura ancora in volo (partita prima di questa chat, quindi con «null») non deve
+      // sovrascriverla.
+      if (typeof supportId === 'string' && supportId && session?.user?.id) {
+        const chiave = queryKeys.messages.idAssistenza(session.user.id);
+        await queryClient.cancelQueries({ queryKey: chiave });
+        queryClient.setQueryData(chiave, supportId);
       }
       onClose();
       setText('');
