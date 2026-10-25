@@ -14,8 +14,8 @@ import { fetchSellerPublicMap, type LettoreVista } from '@/lib/queries/seller-pu
  *
  * L'insegna adesso arriva dalla vista `seller_public_profiles`, una domanda sola
  * per tutto l'elenco. Il resto dell'aggancio resta com'era: il nome del cliente
- * visto dal negozio e quello dell'account Assistenza sono un altro lavoro, con la
- * sua scheda, e non cambiano qui.
+ * visto dal negozio è un altro lavoro, con la sua scheda. Il nome dell'account
+ * Assistenza è arrivato il 25/10/2026 (`conversazioneConLAssistenza`, più sotto).
  */
 
 /**
@@ -42,20 +42,136 @@ export async function conInsegnaDelNegozio<T extends { seller_id: string }>(
 
 type Persona = { full_name: string | null; store_name: string | null } | null;
 
+/** Il nome con cui il cliente vede l'account Assistenza in chat. */
+export const NOME_ASSISTENZA = 'Assistenza MyCity';
+
+/** Al posto di «Utente» finché non si sa se dall'altra parte c'è l'Assistenza. */
+export const NOME_IN_ARRIVO = '…';
+
+/**
+ * 25/10/2026 — Vero se, per il cliente, dall'altra parte c'è l'account Assistenza.
+ *
+ * L'Assistenza non è un negozio: non sta nella vetrina pubblica e il suo profilo
+ * un cliente non lo legge, quindi né l'insegna né il profilo la riconoscono. La
+ * riconosce solo il seller_id, confrontato con l'account che usa
+ * /api/support/conversation (`idAssistenza`). Senza quell'id — rotta che non
+ * risponde, pagina ancora in caricamento — si resta al comportamento di prima.
+ */
+export function conversazioneConLAssistenza(
+  conversazione: { buyer_id: string; seller_id: string },
+  userId: string | null,
+  idAssistenza: string | null | undefined,
+): boolean {
+  return !!idAssistenza && conversazione.buyer_id === userId && conversazione.seller_id === idAssistenza;
+}
+
+/** L'insegna o il nome del negozio, se chi guarda può leggerlo; altrimenti `null`. */
+function nomeDelNegozio(conversazione: { seller: Persona; insegna: string | null }): string | null {
+  const negozio = conversazione.seller;
+  return conversazione.insegna ?? negozio?.store_name ?? negozio?.full_name ?? null;
+}
+
+/**
+ * Vero se, per chi guarda, questa conversazione non ha un nome da mostrare: è il
+ * cliente e il negozio non si legge. Solo così può essere l'Assistenza, ed è solo
+ * allora che vale la pena chiederlo al server. Un negozio con l'insegna, o il
+ * negoziante che guarda i suoi clienti, non hanno bisogno della domanda.
+ */
+export function serveSapereChiEAssistenza(
+  conversazione: { buyer_id: string; seller: Persona; insegna: string | null },
+  userId: string | null,
+): boolean {
+  return !!userId && conversazione.buyer_id === userId && nomeDelNegozio(conversazione) === null;
+}
+
+/**
+ * Vero mentre il nome di questa conversazione dipende ancora dalla risposta del
+ * server. Le pagine lo usano per mostrare «…» con un testo per chi usa il lettore
+ * di schermo, invece di confrontare il nome col testo «…»: un negozio può anche
+ * chiamarsi così.
+ */
+export function nomeInArrivo(
+  conversazione: { buyer_id: string; seller_id: string; seller: Persona; insegna: string | null },
+  userId: string | null,
+  idAssistenza: string | null,
+  idInArrivo: boolean,
+): boolean {
+  return idInArrivo
+    && serveSapereChiEAssistenza(conversazione, userId)
+    && !conversazioneConLAssistenza(conversazione, userId, idAssistenza);
+}
+
 /**
  * Il nome di chi sta dall'altra parte, come lo legge chi guarda.
  *
- * Il cliente vede l'insegna del negozio (dalla vetrina, poi il ripiego di prima);
- * il negozio vede il nome del cliente, come prima.
+ * Il cliente vede l'insegna del negozio (dalla vetrina, poi il ripiego di prima),
+ * oppure «Assistenza MyCity» se scrive all'Assistenza; il negozio, e l'Assistenza
+ * stessa, vedono il nome del cliente, come prima.
+ *
+ * `idInArrivo`: la pagina sta ancora chiedendo chi è l'Assistenza. Una riga che
+ * ricadrebbe su «Utente» potrebbe essere proprio l'Assistenza, e mostrare «Utente»
+ * per poi cambiarlo era il difetto stesso: in quell'attesa si legge «…».
  */
 export function nomeDellaControparte(
-  conversazione: { buyer_id: string; buyer: Persona; seller: Persona; insegna: string | null },
+  conversazione: { buyer_id: string; seller_id: string; buyer: Persona; seller: Persona; insegna: string | null },
   userId: string | null,
+  idAssistenza: string | null = null,
+  idInArrivo = false,
 ): string {
   const iAmBuyer = conversazione.buyer_id === userId;
   if (iAmBuyer) {
-    const negozio = conversazione.seller;
-    return conversazione.insegna ?? negozio?.store_name ?? negozio?.full_name ?? 'Utente';
+    if (conversazioneConLAssistenza(conversazione, userId, idAssistenza)) return NOME_ASSISTENZA;
+    const nome = nomeDelNegozio(conversazione);
+    if (nome) return nome;
+    return idInArrivo ? NOME_IN_ARRIVO : 'Utente';
   }
   return conversazione.buyer?.full_name ?? 'Utente';
+}
+
+/** Quanto si aspetta la risposta prima di arrendersi: il nome è un dettaglio. */
+export const TETTO_ATTESA_MS = 4000;
+
+/**
+ * Per quanto un id dell'Assistenza resta buono. Un id letto non cambia: un'ora. Un
+ * «non c'è» invece può diventare vecchio subito — il cliente scrive all'Assistenza
+ * da un'altra scheda — quindi si richiede alla prossima occasione, come ogni dato.
+ */
+export function validitaIdAssistenza(query: { state: { data: unknown } }): number {
+  return typeof query.state.data === 'string' ? 60 * 60 * 1000 : 30 * 1000;
+}
+
+/**
+ * Chiede al server quale account fa da Assistenza: `null` se chi chiama non ha una
+ * conversazione con lei. Se la domanda fallisce LANCIA, così React Query riprova
+ * invece di ricordarsi per un'ora un guasto come se fosse una risposta. Le pagine
+ * trattano l'errore come `null`: la chat resta quella di prima e non si ferma,
+ * perché il nome è un dettaglio e i messaggi no.
+ *
+ * `segnale` è quello di React Query: se la pagina si chiude, o il pulsante
+ * Assistenza scrive l'id in memoria, la richiesta si ferma davvero. Il tetto di
+ * attesa usa un timer suo, che si spegne appena la domanda finisce.
+ */
+export async function leggiIdAssistenza(segnale?: AbortSignal): Promise<string | null> {
+  const controllo = typeof AbortController === 'undefined' ? null : new AbortController();
+  const timer = controllo ? setTimeout(() => controllo.abort(), TETTO_ATTESA_MS) : null;
+  const inoltra = () => controllo?.abort();
+  if (segnale?.aborted) inoltra();
+  else segnale?.addEventListener('abort', inoltra, { once: true });
+  try {
+    const risposta = await fetch('/api/support/conversation', {
+      method: 'GET',
+      credentials: 'same-origin',
+      signal: controllo?.signal,
+    });
+    if (!risposta.ok) throw new Error(`account Assistenza non letto: ${risposta.status}`);
+    const corpo = (await risposta.json()) as { supportId?: unknown };
+    return typeof corpo.supportId === 'string' && corpo.supportId ? corpo.supportId : null;
+  } catch (e) {
+    // Una domanda annullata da chi l'ha fatta non è un guasto da segnalare.
+    if (!segnale?.aborted) logger.warn('[chat] account Assistenza non letto: la chat resta senza il suo nome', e);
+    throw e;
+  } finally {
+    if (timer) clearTimeout(timer);
+    segnale?.removeEventListener('abort', inoltra);
+  }
 }

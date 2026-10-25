@@ -5,11 +5,72 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
 const Schema = z.object({
   firstMessage: z.string().trim().min(1, 'Messaggio vuoto').max(4000, 'Massimo 4000 caratteri'),
+});
+
+/**
+ * L'account Assistenza: il primo admin (fonte di verità nel DB, no hardcode).
+ * Una funzione sola per chi apre la chat (POST) e per chi deve riconoscerla (GET):
+ * se un giorno la regola cambia, cambia per tutti e due.
+ *
+ * Un guasto del database LANCIA: «non sono riuscita a chiedere» non è «non c'è
+ * nessun admin», e scambiarli faceva ricordare il guasto come una risposta.
+ */
+async function accountAssistenza(admin: ReturnType<typeof getAdminSupabase>): Promise<{ id: string } | null> {
+  const { data, error } = await admin
+    .from('profiles')
+    .select('id')
+    .eq('role', 'admin')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`account Assistenza non letto: ${error.code ?? ''} ${error.message}`, { cause: error });
+  return (data as { id: string } | null) ?? null;
+}
+
+/**
+ * GET /api/support/conversation → `{ supportId }`
+ *
+ * 25/10/2026 — LA CHAT CON L'ASSISTENZA SI CHIAMAVA «UTENTE». Per il cliente la
+ * controparte della conversazione è l'account Assistenza, che non è un negozio:
+ * non sta nella vetrina pubblica e il suo profilo un cliente non lo legge. La
+ * chat ripiegava su «Utente · Negozio» e chi cercava aiuto non riconosceva la
+ * conversazione. La pagina chiede qui chi è l'Assistenza e la riconosce dal
+ * seller_id.
+ *
+ * L'id esce SOLO verso chi ha già una conversazione con l'Assistenza, cioè chi quel
+ * seller_id lo vede già nella sua chat: a tutti gli altri la risposta è `null`.
+ * Niente memoria nel browser (`no-store`): la tiene React Query, solo nella scheda.
+ */
+export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
+  const rl = await rateLimitAsync({ key: `support:who:${user.id}`, max: 30, windowMs: 60_000 });
+  if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
+
+  const admin = getAdminSupabase();
+  let supportId: string | null = null;
+  try {
+    const support = await accountAssistenza(admin);
+    if (support) {
+      const { data: conv, error } = await admin
+        .from('conversations')
+        .select('id')
+        .eq('buyer_id', user.id)
+        .eq('seller_id', support.id)
+        .limit(1)
+        .maybeSingle();
+      if (error) throw new Error(`conversazione con l'Assistenza non letta: ${error.code ?? ''} ${error.message}`, { cause: error });
+      supportId = conv ? support.id : null;
+    }
+  } catch (e) {
+    logger.error(e, { context: 'support-account-assistenza' });
+    return ApiErrors.unavailable('Assistenza momentaneamente non raggiungibile');
+  }
+  return NextResponse.json({ supportId }, { status: 200, headers: { 'Cache-Control': 'private, no-store' } });
 });
 
 /**
@@ -42,24 +103,29 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
 
   const admin = getAdminSupabase();
 
-  // Account assistenza: il primo admin (fonte di verità nel DB, no hardcode).
-  const { data: support } = await admin
-    .from('profiles')
-    .select('id')
-    .eq('role', 'admin')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  let support: { id: string } | null;
+  try {
+    support = await accountAssistenza(admin);
+  } catch (e) {
+    logger.error(e, { context: 'support-account-assistenza' });
+    return ApiErrors.unavailable('Assistenza momentaneamente non raggiungibile');
+  }
   if (!support) return ApiErrors.notFound('Assistenza non disponibile');
   if (support.id === user.id) return ApiErrors.invalidRequest('Sei l\'account assistenza');
 
   // Find-or-create: l'utente è sempre buyer_id, l'assistenza è seller_id.
-  const { data: existing } = await admin
+  // Un guasto nel cercarla non vuol dire «non c'è»: crearne un'altra urterebbe il vincolo di
+  // unicità e il primo messaggio del cliente andrebbe perso con un 500.
+  const { data: existing, error: erroreRicerca } = await admin
     .from('conversations')
     .select('id')
     .eq('buyer_id', user.id)
     .eq('seller_id', support.id)
     .maybeSingle();
+  if (erroreRicerca) {
+    logger.error(erroreRicerca, { context: 'support-conversazione-esistente' });
+    return ApiErrors.unavailable('Assistenza momentaneamente non raggiungibile');
+  }
 
   let conversationId = existing?.id ?? null;
   if (!conversationId) {
@@ -79,5 +145,6 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   });
   if (msgErr) return ApiErrors.internal('Impossibile inviare il messaggio');
 
-  return NextResponse.json({ conversationId }, { status: 200 });
+  // supportId: la chat appena aperta si chiama «Assistenza MyCity» subito, senza aspettare la GET.
+  return NextResponse.json({ conversationId, supportId: support.id }, { status: 200 });
 });
