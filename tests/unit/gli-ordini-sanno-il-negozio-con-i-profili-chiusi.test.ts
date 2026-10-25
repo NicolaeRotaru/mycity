@@ -1,11 +1,23 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi, attendi, clicca } from './aiuti/schermo';
 import { OGGI, DOPO_LA_161, PROFILI_CHIUSI_VISTA_VECCHIA, type Mondo } from './aiuti/database-coi-permessi';
 import { databaseDegliOrdini, type DatiOrdini } from './aiuti/database-degli-ordini-coi-permessi';
+
+/**
+ * 25/10/2026 — Le pagine dei messaggi chiedono anche chi fa da Assistenza
+ * (GET /api/support/conversation, scheda 1360). Qui l'Assistenza non c'entra: Maria scrive
+ * solo a negozi. Risponde «nessuna Assistenza per te» quella sola domanda; ogni altra
+ * chiamata di rete trova la porta chiusa di `_setup.ts`, come prima.
+ */
+const reteDiPrima = globalThis.fetch;
+vi.stubGlobal('fetch', (async (input: unknown, opzioni?: RequestInit) =>
+  String(input) === '/api/support/conversation'
+    ? new Response(JSON.stringify({ supportId: null }), { status: 200 })
+    : reteDiPrima(input as RequestInfo, opzioni)) as typeof fetch);
 
 /**
  * 18/10/2026 (seconda ondata, squadra ordini) — GLI ORDINI DEVONO SAPERE DI CHE NEGOZIO SONO ANCHE
