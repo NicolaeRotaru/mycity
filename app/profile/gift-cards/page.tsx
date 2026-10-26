@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, Textarea } from '@/components/ui/Field';
 import { queryKeys } from '@/lib/queries/keys';
 import { apiErrorMessage } from '@/lib/errors';
+import { BUONI_REGALO_IN_VENDITA } from '@/lib/funzioni-al-lancio';
 // 184 — `json.error` funziona solo se il server risponde `{error:'testo'}`.
 // Le rotte rispondono `{ok:false, error:{code,message}}`: `json.error` era
 // un oggetto, quindi falso-y mai e stringa mai, e finiva sempre nel
@@ -40,7 +41,7 @@ export default function GiftCardsPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const [userId, setUserId] = useState<string | null>(null);
-  const [tab, setTab] = useState<'buy' | 'redeem' | 'mine'>('buy');
+  const [tab, setTab] = useState<'buy' | 'redeem' | 'mine'>(BUONI_REGALO_IN_VENDITA ? 'buy' : 'redeem');
   const [amount, setAmount] = useState(25);
   const [recipientName, setRecipientName] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
@@ -179,7 +180,13 @@ export default function GiftCardsPage() {
           <Gift size={28} className="text-primary-600" />
           Gift Card MyCity
         </h1>
-        <p className="text-sm text-ink-500 mt-1">Regala buoni spesa ai tuoi cari. Spendibili nei negozi di Piacenza.</p>
+        <p className="text-sm text-ink-500 mt-1">
+          {/* Vendita dei buoni spenta al lancio (carta #209): servono prima il parere
+              legale e fiscale e le regole nei Termini. Credito e riscatto restano. */}
+          {BUONI_REGALO_IN_VENDITA
+            ? 'Regala buoni spesa ai tuoi cari. Spendibili nei negozi di Piacenza.'
+            : 'Qui trovi il tuo credito MyCity e riscatti un buono ricevuto.'}
+        </p>
       </div>
 
       {/* Saldo credito */}
@@ -210,12 +217,12 @@ export default function GiftCardsPage() {
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-cream-300">
-        <TabBtn id="buy" label="Regala" />
+        {BUONI_REGALO_IN_VENDITA && <TabBtn id="buy" label="Regala" />}
         <TabBtn id="redeem" label="Riscatta" />
         <TabBtn id="mine" label={`Le mie gift card (${cards.length})`} />
       </div>
 
-      {tab === 'buy' && (
+      {BUONI_REGALO_IN_VENDITA && tab === 'buy' && (
         <form
           onSubmit={(e) => { e.preventDefault(); buy.mutate(); }}
           className="bg-white border border-cream-300 rounded-2xl p-6 space-y-5 shadow-warm"
@@ -312,9 +319,11 @@ export default function GiftCardsPage() {
           <div className="bg-white border border-cream-300 rounded-2xl p-12 text-center">
             <Gift size={36} className="mx-auto text-ink-300 mb-3" />
             <p className="text-ink-600 font-medium">Nessuna gift card ancora</p>
-            <button onClick={() => setTab('buy')} className="mt-4 text-primary-700 hover:underline font-semibold text-sm">
+            {BUONI_REGALO_IN_VENDITA && (
+              <button onClick={() => setTab('buy')} className="mt-4 text-primary-700 hover:underline font-semibold text-sm">
               Regala la prima →
             </button>
+            )}
           </div>
         ) : (
           <div className="space-y-3">

@@ -38,8 +38,6 @@ export default function AdminShopOfMonthPage() {
   const [headline, setHeadline] = useState('');
   const [story, setStory] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
-  const [discountCode, setDiscountCode] = useState('');
-  const [discountPct, setDiscountPct] = useState<number | ''>('');
 
   const { data: existing } = useQuery({
     queryKey: queryKeys.admin.shopOfMonth(firstOfMonth),
@@ -59,8 +57,6 @@ export default function AdminShopOfMonthPage() {
       setHeadline(existing.headline ?? '');
       setStory(existing.story ?? '');
       setCoverUrl(existing.cover_image_url ?? '');
-      setDiscountCode(existing.discount_code ?? '');
-      setDiscountPct(existing.discount_percent ?? '');
     }
   }, [existing]);
 
@@ -95,8 +91,8 @@ export default function AdminShopOfMonthPage() {
         headline: headline.trim() || null,
         story: story.trim() || null,
         cover_image_url: coverUrl.trim() || null,
-        discount_code: discountCode.trim().toUpperCase() || null,
-        discount_percent: typeof discountPct === 'number' ? discountPct : null,
+        discount_code: null,
+        discount_percent: null,
         selected_by: user?.id ?? null,
       };
       const { error } = await supabase
@@ -167,29 +163,9 @@ export default function AdminShopOfMonthPage() {
           hint="Carica un file o incolla un URL."
         />
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-semibold text-ink-700 mb-1">Codice sconto (opzionale)</label>
-            <input
-              type="text"
-              value={discountCode}
-              onChange={(e) => setDiscountCode(e.target.value.toUpperCase())}
-              placeholder="BORGO15"
-              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm font-mono"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-ink-700 mb-1">Percentuale sconto</label>
-            <input
-              type="number"
-              value={discountPct}
-              onChange={(e) => setDiscountPct(e.target.value ? Number(e.target.value) : '')}
-              min={0}
-              max={50}
-              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-        </div>
+        {/* Il codice sconto del mese era testo libero, non legato ai coupon: la home lo
+            annunciava e la cassa non lo conosceva. Tolto; salvando, uno vecchio si cancella. */}
+        <p className="text-xs text-ink-500">Niente codice sconto del mese: un codice scritto qui non arrivava in cassa. Salvando, un codice già salvato per il mese viene tolto.</p>
 
         <Button type="submit" loading={save.isPending}>
           {existing ? 'Aggiorna pick' : 'Imposta pick del mese'}

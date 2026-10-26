@@ -8,6 +8,7 @@ import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import type { AttributeField } from '@/lib/category-attributes';
 import { restaDaRivedere, type EsitoPatchModulo } from '@/lib/products/aiPatch';
 import { dilloDopoIlPatch } from '@/components/seller/dilloDopoIlPatch';
+import { TRADUCI_ACCESO } from '@/lib/funzioni-al-lancio';
 import type {
   ProductChatSnapshot,
   ProductEditPatch,
@@ -166,6 +167,10 @@ export default function QuickAiTools({
           Perché non vende?
         </button>
 
+        {/* «Traduci» spento (carta #209): il prodotto ha un nome solo, tradurre cancellava l'italiano. */}
+
+        {TRADUCI_ACCESO && (
+
         <span className="inline-flex items-center gap-1 rounded-lg border border-cream-300 bg-white pl-2">
           <Languages size={15} className="text-ink-400" aria-hidden />
           <select
@@ -188,6 +193,8 @@ export default function QuickAiTools({
             {busy === 'translate' ? <Loader2 size={15} className="animate-spin" aria-hidden /> : 'Traduci'}
           </button>
         </span>
+
+        )}
       </div>
 
       {diag && (

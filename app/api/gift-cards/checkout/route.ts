@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { BUONI_REGALO_IN_VENDITA } from '@/lib/funzioni-al-lancio';
 
 export const runtime = 'nodejs';
 
@@ -34,6 +35,9 @@ const Body = z.object({
 export const POST = withAuthRateLimit(
   { name: 'gift-card-checkout', max: 10, windowMs: 10 * 60_000 },
   async ({ user, req }): Promise<NextResponse> => {
+    // Il freno vero della vendita spenta (carta #209): prima di Stripe, così una
+    // richiesta fatta a mano non incassa soldi di terzi senza regole né parere.
+    if (!BUONI_REGALO_IN_VENDITA) return ApiErrors.unavailable('I buoni regalo non sono ancora in vendita.');
     if (!isStripeConfigured()) return ApiErrors.unavailable('Pagamenti non disponibili al momento.');
     if (!user.email_confirmed_at) {
       return ApiErrors.forbidden('Conferma la tua email prima di acquistare una gift card.');

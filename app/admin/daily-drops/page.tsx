@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Field';
 import { formatPrice } from '@/lib/format';
 import { AdminPageTitle, AdminSectionLabel } from '@/components/admin/AdminUI';
+import { DROP_DEL_GIORNO_ACCESO } from '@/lib/funzioni-al-lancio';
 
 /**
  * Admin: Drop del giorno. La tabella daily_drops esisteva senza interfaccia: qui
@@ -141,7 +142,12 @@ export default function AdminDailyDropsPage() {
 
         <Textarea label="Headline (opzionale)" value={headline} rows={2} maxLength={200} onChange={(e) => setHeadline(e.target.value)} placeholder="Es: La salumeria che riscopre i sapori dimenticati" />
 
-        <Button type="submit" loading={save.isPending}>Salva drop</Button>
+        {!DROP_DEL_GIORNO_ACCESO && (
+          <p role="note" className="text-sm text-ink-700 bg-cream-50 border border-cream-300 rounded-lg p-3">
+            Il Drop del giorno è spento al lancio: la home non lo mostra e la cassa non applicherebbe il prezzo scontato.
+          </p>
+        )}
+        <Button type="submit" loading={save.isPending} disabled={!DROP_DEL_GIORNO_ACCESO}>Salva drop</Button>
       </form>
 
       <section>

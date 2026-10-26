@@ -14,6 +14,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { useConsegnaVeloceDelNegozio } from '@/lib/queries/consegna-veloce-del-negozio';
 import { trackProductPublished } from '@/lib/analytics/events';
 import { loadAutosave, clearAutosave } from '@/lib/hooks/useFormAutosave';
@@ -210,11 +211,14 @@ function NewProductInner() {
         title={fromId ? 'Duplica prodotto' : 'Nuovo prodotto'}
         sub={fromId
           ? 'Parti da una copia e modifica quello che serve.'
-          : 'Compila la scheda — o lascia che l\'AI la prepari per te da foto, voce o link.'}
+          : AI_NEGOZI_ACCESA
+            ? 'Compila la scheda — o lascia che l\'AI la prepari per te da foto, voce o link.'
+            : 'Compila la scheda: nome, foto, prezzo e descrizione.'}
         className="mb-0"
       />
 
-      {!fromId && (
+      {/* AI spenta al lancio (carta #209): niente creazione da foto né da link. */}
+      {!fromId && AI_NEGOZI_ACCESA && (
         <>
           <BulkPhotoCreate onCreated={() => router.push('/seller/products')} />
           <ImportFromUrlBox

@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Trophy, Medal, Crown, ArrowLeft } from 'lucide-react';
+import { Trophy, Crown, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
+import { CLASSIFICA_INVITI_ACCESA } from '@/lib/funzioni-al-lancio';
 
 type Entry = {
   user_id: string;
@@ -21,7 +22,7 @@ function anonName(full: string | null, store: string | null): string {
   return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }
 
-export default function ReferralLeaderboardPage() {
+function ClassificaInviti() {
   const { data: entries = [], isLoading } = useQuery({
     queryKey: queryKeys.referrals.leaderboard,
     queryFn: async (): Promise<Entry[]> => {
@@ -45,22 +46,7 @@ export default function ReferralLeaderboardPage() {
           <Trophy size={28} className="text-accent-600" />
           Classifica Referral
         </h1>
-        <p className="text-sm text-ink-500 mt-1">Top inviter del mese di <strong className="capitalize">{monthLabel}</strong>. I primi 3 vincono buoni speciali a fine mese!</p>
-      </div>
-
-      {/* Premi */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { rank: 1, prize: '€100', color: 'from-accent-300 to-accent-100', text: 'text-accent-800' },
-          { rank: 2, prize: '€50',  color: 'from-ink-200 to-ink-100',       text: 'text-ink-700' },
-          { rank: 3, prize: '€25',  color: 'from-accent-200 to-accent-100',   text: 'text-accent-800' },
-        ].map((p) => (
-          <div key={p.rank} className={`bg-gradient-to-br ${p.color} rounded-2xl p-4 text-center shadow-warm`}>
-            <Medal size={28} className={`mx-auto ${p.text}`} aria-hidden />
-            <p className={`font-serif font-bold text-lg ${p.text} mt-1`}>{p.prize}</p>
-            <p className={`text-xs ${p.text} opacity-80`}>#{p.rank} posto</p>
-          </div>
-        ))}
+        <p className="text-sm text-ink-500 mt-1">Chi ha portato più amici nel mese di <strong className="capitalize">{monthLabel}</strong>.</p>
       </div>
 
       {/* Classifica */}
@@ -102,10 +88,34 @@ export default function ReferralLeaderboardPage() {
         <ul className="list-disc list-inside space-y-1 text-ink-600">
           <li>Conta solo il mese corrente (azzera ogni 1° del mese)</li>
           <li>Conta solo i referral <strong>convertiti</strong> (l'amico ha fatto almeno un ordine)</li>
-          <li>I primi 3 ricevono il premio entro 7 giorni dalla fine del mese</li>
-          <li>Anti-frode: account scollegati o sospetti vengono esclusi</li>
         </ul>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Classifica degli inviti SPENTA al lancio (carta #209, firmata il 26/10/2026).
+ * Prima diceva «i primi 3 vincono 100, 50 e 25 euro»: nessun pezzo del sito
+ * pagava quei premi, e un premio a chi arriva primo è un concorso a premi
+ * (DPR 430/2001) mai comunicato al Ministero. I premi sono tolti anche dalla
+ * classifica vera; da spenta non legge nemmeno la vista.
+ */
+export default function ReferralLeaderboardPage() {
+  if (!CLASSIFICA_INVITI_ACCESA) return <ClassificaSpenta />;
+  return <ClassificaInviti />;
+}
+
+function ClassificaSpenta() {
+  return (
+    <div className="container mx-auto px-4 sm:px-6 py-8 max-w-3xl space-y-4">
+      <Link href="/profile/referral" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-800">
+        <ArrowLeft size={14} /> Invita un amico
+      </Link>
+      <h1 className="text-3xl font-serif font-bold text-ink-900">Classifica inviti</h1>
+      <p className="text-sm text-ink-700">
+        La classifica degli inviti non è attiva. Il credito per ogni amico che inviti resta quello scritto nella pagina «Invita un amico».
+      </p>
     </div>
   );
 }
