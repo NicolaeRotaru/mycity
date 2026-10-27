@@ -3,6 +3,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
+import { stradaAManoPerIDiritti } from '@/lib/legal/titolare';
 
 export const runtime = 'nodejs';
 
@@ -41,8 +42,13 @@ export const GET = withAuthRateLimit(
   let admin;
   try {
     admin = getAdminSupabase();
-  } catch {
-    return ApiErrors.unavailable('Servizio non configurato.');
+  } catch (e) {
+    // 27/10/2026 — «Servizio non configurato» lasciava la persona davanti a un
+    // muro: il diritto alla portabilità resta, cambia solo la strada.
+    logger.error('[account-export] esportazione automatica spenta: manca la chiave di servizio', {
+      errore: e instanceof Error ? e.message : 'errore',
+    });
+    return ApiErrors.unavailable(stradaAManoPerIDiritti('Scaricare i tuoi dati'));
   }
 
   // Query parallele
