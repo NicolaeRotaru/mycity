@@ -51,6 +51,9 @@ async function risposta(r: unknown): Promise<{ status: number; testo: string }> 
 beforeEach(() => {
   stato.senzaChiave = true;
   delete process.env[CASELLA];
+  delete process.env.SUPPORT_EMAIL;
+  delete process.env.RESEND_API_KEY;
+  delete process.env.RESEND_FROM;
   __resetRateLimitBuckets();
 });
 
@@ -70,12 +73,16 @@ describe("senza chiave di servizio, col controllo d'accesso vero", () => {
       expect(testo, "il controllo d'accesso rispondeva prima della rotta").not.toContain("Auth non configurato");
       expect(testo).toContain("Puoi fare la richiesta lo stesso");
       expect(testo).toContain("info@mycity-marketplace.com");
+      expect(testo, "nell'errore serve il collegamento alla casella").toContain("mailto:info@mycity-marketplace.com");
     });
   }
 
-  it("senza casella vera manda al modulo, senza indirizzi inventati", async () => {
+  // 27/10/2026 (secondo giro) — Senza chiave il modulo non salva, e senza
+  // posta del supporto non inoltra: mandarci la persona era farla girare in tondo.
+  it("senza casella vera e senza posta non manda al modulo che non arriva: lo dice e basta", async () => {
     const { testo } = await risposta(await chiediCancellazione(conGettone("POST", "/api/account/delete") as never));
-    expect(testo).toContain("modulo dei contatti");
+    expect(testo).not.toContain("modulo dei contatti");
+    expect(testo).toContain("non è partita");
     expect(testo).not.toMatch(/[a-z0-9.]+@[a-z0-9.-]+\.[a-z]+/i);
   });
 });

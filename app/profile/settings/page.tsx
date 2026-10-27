@@ -1,6 +1,6 @@
 'use client';
 
-import { recapitoPrivacy } from '@/lib/legal/titolare';
+import { recapitoDallaRisposta, recapitoPrivacy } from '@/lib/legal/titolare';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -55,6 +55,30 @@ const DEFAULT_PREFS: Prefs = {
   language: 'it',
 };
 
+/**
+ * 27/10/2026 (secondo giro) — L'ERRORE PORTA IL COLLEGAMENTO, NON SOLO IL TESTO.
+ *
+ * Senza chiave di servizio «Scarica i miei dati» e «Cancella account»
+ * rispondono con la strada a mano: «scrivi a info@…». Nel messaggio a comparsa
+ * quell'indirizzo andava ricopiato a mano. Adesso, se il server manda il
+ * collegamento (`details.recapito`), il messaggio ha un pulsante che apre
+ * l'email già indirizzata. Il testo resta quello del server, così com'è.
+ */
+function mostraErroreConLaStrada(corpo: unknown, ripiego: string): void {
+  const strada = recapitoDallaRisposta(corpo);
+  toast.error(apiErrorMessage(corpo, ripiego), {
+    duration: 15_000,
+    ...(strada
+      ? {
+          action: {
+            label: strada.href.startsWith('mailto:') ? `Scrivi a ${strada.testo}` : 'Apri il modulo dei contatti',
+            onClick: () => window.location.assign(strada.href),
+          },
+        }
+      : {}),
+  });
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('account');
@@ -79,7 +103,7 @@ export default function SettingsPage() {
   // Delete account (cooldown 7gg)
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
-  const [pendingDeletion, setPendingDeletion] = useState<{ effectiveAt: string; daysRemaining: number; motivo?: string | null } | null>(null);
+  const [pendingDeletion, setPendingDeletion] = useState<{ effectiveAt: string; daysRemaining: number; motivo?: string | null; rinviata?: boolean } | null>(null);
   // 27/10/2026 — La casella vera se c'è, il modulo dei contatti se no: mai il
   // ripiego scritto nel codice (lo stesso criterio della pagina privacy).
   const recapito = recapitoPrivacy();
@@ -122,6 +146,7 @@ export default function SettingsPage() {
                 effectiveAt: body.effectiveAt,
                 daysRemaining: body.daysRemaining,
                 motivo: typeof body.motivo === 'string' ? body.motivo : null,
+                rinviata: body.rinviata === true,
               });
             }
           }
@@ -242,7 +267,7 @@ export default function SettingsPage() {
       });
       if (!res.ok) {
         const corpo = await res.json().catch(() => null);
-        toast.error(apiErrorMessage(corpo, 'Esportazione non riuscita. Riprova più tardi.'));
+        mostraErroreConLaStrada(corpo, 'Esportazione non riuscita. Riprova più tardi.');
         return;
       }
       const blob = await res.blob();
@@ -277,7 +302,7 @@ export default function SettingsPage() {
       if (!res.ok) {
         // 27/10/2026 — Il server dice la strada a mano (dove scrivere): va
         // mostrata così com'è, non passata da un traduttore di errori generico.
-        toast.error(apiErrorMessage(body, 'Richiesta non riuscita'), { duration: 15_000 });
+        mostraErroreConLaStrada(body, 'Richiesta non riuscita');
         return;
       }
 
@@ -599,14 +624,25 @@ export default function SettingsPage() {
                     <Hourglass size={18} className="text-accent-900" aria-hidden />
                     Eliminazione programmata
                   </h3>
-                  {pendingDeletion.motivo ? (
+                  {pendingDeletion.rinviata || pendingDeletion.motivo ? (
                     /* 27/10/2026 — Il motivo del rinvio, come gliel'ha scritto il
                        giro notturno: senza, il conto alla rovescia arrivava a
-                       zero e restava lì, senza una riga di spiegazione. */
+                       zero e restava lì, senza una riga di spiegazione.
+                       Secondo giro: conta `rinviata`, non solo il testo. */
                     <p className="text-sm text-accent-900 mb-3 leading-relaxed" role="status">
-                      <strong>La cancellazione è in attesa.</strong> {pendingDeletion.motivo}
+                      <strong>La cancellazione è in attesa.</strong>{' '}
+                      {pendingDeletion.motivo ?? 'Il motivo ti è stato scritto nelle notifiche del tuo account.'}
                     </p>
                   ) : null}
+                  {pendingDeletion.rinviata ? (
+                    /* Rinviata: i 7 giorni sono passati. «Sarà eliminato tra 0
+                       giorni» e «puoi annullare entro questa data» erano falsi. */
+                    <p className="text-sm text-accent-700 mb-4">
+                      I 7 giorni per ripensarci sono passati, ma l&apos;account non è ancora stato eliminato,
+                      per il motivo scritto qui sopra. Finché non succede puoi ancora annullare la richiesta.
+                    </p>
+                  ) : (
+                  <>
                   <p className="text-sm text-accent-800 mb-1 leading-relaxed">
                     Il tuo account sarà eliminato definitivamente tra{' '}
                     <strong>{pendingDeletion.daysRemaining} {pendingDeletion.daysRemaining === 1 ? 'giorno' : 'giorni'}</strong>
@@ -617,6 +653,8 @@ export default function SettingsPage() {
                   <p className="text-sm text-accent-700 mb-4">
                     Puoi annullare in qualsiasi momento entro questa data. Dopo, i dati saranno rimossi in modo irreversibile.
                   </p>
+                  </>
+                  )}
                   <button
                     type="button"
                     onClick={handleCancelDeletion}

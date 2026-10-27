@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { withAuth, withAuthRateLimit, type ContestoRotta } from '@/lib/api/middleware';
-import { ApiErrors } from '@/lib/api/responses';
+import { ApiErrors, apiError } from '@/lib/api/responses';
 import { stradaAManoPerIDiritti } from '@/lib/legal/titolare';
 import { motivoDellAttesa } from '@/lib/privacy/avvisi-a-chi-aspetta';
 
@@ -16,7 +16,11 @@ function senzaChiave(cosa: string, e: unknown): NextResponse {
   logger.error('[account-delete] cancellazione automatica spenta: manca la chiave di servizio', {
     errore: e instanceof Error ? e.message : 'errore',
   });
-  return ApiErrors.unavailable(stradaAManoPerIDiritti(cosa));
+  // 27/10/2026 (secondo giro) — Con la frase viaggia il collegamento
+  // (`details.recapito`): la pagina lo offre come pulsante. Senza casella e
+  // senza un modulo che arrivi a qualcuno è null, e la frase lo dice.
+  const strada = stradaAManoPerIDiritti(cosa);
+  return apiError(503, strada.frase, 'SERVICE_UNAVAILABLE', { recapito: strada.recapito });
 }
 
 type Rotta = ReturnType<typeof withAuth>;

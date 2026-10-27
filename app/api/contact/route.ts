@@ -5,7 +5,7 @@ import { getAdminSupabase, getCurrentUser } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { verifyTurnstileToken } from '@/lib/captcha';
 import { logger } from '@/lib/logger';
-import { ApiErrors } from '@/lib/api/responses';
+import { ApiErrors, apiError } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 // 27/8/2026 (R011) — Qui dentro c'era una copia identica del filtro dell'HTML,
 // e `lib/html-escape.ts` diceva nel proprio commento di essere quella
@@ -66,10 +66,19 @@ export async function POST(req: Request) {
       errore: e instanceof Error ? e.message : 'errore',
     });
     if (await inoltraSenzaDatabase(payload)) return NextResponse.json({ ok: true });
+    // 27/10/2026 (secondo giro) — Qui senza casella si diceva «Riprova tra
+    // qualche ora»: falso, perché senza chiave e senza posta fra qualche ora è
+    // uguale. Ed era l'ultima tappa del giro in tondo che partiva da Cancella
+    // account. Adesso: la casella vera come collegamento, oppure la verità.
     const recapito = recapitoPrivacy();
-    return ApiErrors.unavailable(
+    return apiError(
+      503,
       'Il modulo dei contatti non funziona in questo momento e il tuo messaggio non è arrivato. ' +
-        (recapito.eUnaCasella ? `Scrivici a ${recapito.testo}.` : 'Riprova tra qualche ora.'),
+        (recapito.eUnaCasella
+          ? `Scrivici a ${recapito.testo}.`
+          : 'Non abbiamo ancora una casella email attiva a cui scrivere: è un guasto nostro, non tuo.'),
+      'SERVICE_UNAVAILABLE',
+      { recapito: recapito.eUnaCasella ? { href: recapito.href, testo: recapito.testo } : null },
     );
   }
 

@@ -196,13 +196,81 @@ export function recapitoInUnaFrase(t: Titolare = titolare()): string {
  * esercitando un diritto. Questa è la frase che gli dice cosa fare adesso.
  * Esempio: «Cancellare l'account in automatico non è disponibile in questo
  * momento. Puoi fare la richiesta lo stesso: scrivi a info@…».
+ *
+ * 27/10/2026 (secondo giro) — NIENTE GIRO IN TONDO.
+ *
+ * Senza casella, la frase mandava sempre al modulo dei contatti. Ma questa
+ * frase esce solo quando manca la chiave di servizio, e senza quella chiave il
+ * modulo non salva niente: arriva a una persona solo se può inoltrare per
+ * email. Se non può, rispondeva «riprova tra qualche ora». La persona andava
+ * da Cancella account al modulo e dal modulo a nessuno. Adesso al modulo si
+ * manda solo se arriva davvero; se no, lo si dice in chiaro, una volta sola.
+ * Accanto alla frase c'è il collegamento (`recapito`): la pagina lo offre come
+ * pulsante, così la casella non va ricopiata a mano.
  */
-export function stradaAManoPerIDiritti(cosa: string, t: Titolare = titolare()): string {
-  return (
-    `${cosa} in automatico non è disponibile in questo momento. ` +
-    `Puoi fare la richiesta lo stesso: scrivi a ${recapitoInUnaFrase(t)}. ` +
-    'Ti rispondiamo entro un mese, come prevede la legge.'
+export type StradaAMano = {
+  /** La frase da mostrare così com'è. */
+  frase: string;
+  /** Il collegamento da offrire accanto alla frase; null se nessun canale arriva a una persona. */
+  recapito: { href: string; testo: string } | null;
+};
+
+/** L'oggetto già scritto nella email, così la richiesta si riconosce subito. */
+const OGGETTO_DELLA_RICHIESTA = 'Richiesta sui miei dati personali';
+
+export function stradaAManoPerIDiritti(
+  cosa: string,
+  moduloArriva: boolean = ilModuloArrivaSenzaDatabase(),
+  t: Titolare = titolare(),
+): StradaAMano {
+  const nonDisponibile = `${cosa} in automatico non è disponibile in questo momento.`;
+  const entroUnMese = 'Ti rispondiamo entro un mese, come prevede la legge.';
+  const r = recapitoPrivacy(t);
+  if (r.eUnaCasella) {
+    return {
+      frase: `${nonDisponibile} Puoi fare la richiesta lo stesso: scrivi a ${r.testo}. ${entroUnMese}`,
+      recapito: { href: `${r.href}?subject=${encodeURIComponent(OGGETTO_DELLA_RICHIESTA)}`, testo: r.testo },
+    };
+  }
+  if (moduloArriva) {
+    return {
+      frase: `${nonDisponibile} Puoi fare la richiesta lo stesso: scrivi a ${recapitoInUnaFrase(t)}. ${entroUnMese}`,
+      recapito: { href: r.href, testo: r.testo },
+    };
+  }
+  return {
+    frase:
+      `${nonDisponibile} Non abbiamo ancora una casella email attiva per le richieste sulla privacy, ` +
+      'quindi la tua richiesta non è partita. È un guasto nostro, non tuo.',
+    recapito: null,
+  };
+}
+
+/**
+ * Il modulo dei contatti, senza database, arriva a una persona? Solo se può
+ * inoltrare per email: servono la casella del supporto (SUPPORT_EMAIL) e la
+ * posta (RESEND_API_KEY e RESEND_FROM, le due che `sendEmail` pretende in
+ * produzione). Sono variabili del server: in una pagina del browser vale false.
+ */
+export function ilModuloArrivaSenzaDatabase(): boolean {
+  return [process.env.SUPPORT_EMAIL, process.env.RESEND_API_KEY, process.env.RESEND_FROM].every(
+    (v) => typeof v === 'string' && v.trim() !== '',
   );
+}
+
+/**
+ * Il collegamento che il server mette accanto a un errore
+ * (`error.details.recapito`), letto da una pagina del browser. Passano solo due
+ * forme: una casella (mailto:) o il modulo dei contatti. Tutto il resto è null,
+ * così un dato storto non diventa mai un pulsante che porta altrove.
+ */
+export function recapitoDallaRisposta(corpo: unknown): { href: string; testo: string } | null {
+  const dettagli = (corpo as { error?: { details?: { recapito?: unknown } } } | null | undefined)?.error?.details;
+  const r = dettagli?.recapito as { href?: unknown; testo?: unknown } | null | undefined;
+  if (!r || typeof r.href !== 'string' || typeof r.testo !== 'string') return null;
+  const eUnaCasella = /^mailto:[^\s@?]+@[^\s@?]+\.[^\s@?]+(\?[^\s]*)?$/.test(r.href);
+  if (!eUnaCasella && r.href !== '/contact') return null;
+  return { href: r.href, testo: r.testo };
 }
 
 /**

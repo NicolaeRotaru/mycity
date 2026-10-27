@@ -167,6 +167,9 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       // quante no: un avviso dovuto per legge che non parte è un guasto.
       avvisiRecapitati: avvisi.recapitati,
       avvisiFalliti: avvisi.falliti,
+      // 27/10/2026 (secondo giro) — La spiegazione scritta nel pannello è
+      // partita anche per email? Qui quante no (posta spenta o indirizzo mancante).
+      avvisiEmailNonPartite: avvisi.emailNonPartite,
     },
     // 3/9/2026 — LA NOTTE CHE FALLISCE FINISCE ROSSA.
     //

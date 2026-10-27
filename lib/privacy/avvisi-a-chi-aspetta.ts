@@ -39,6 +39,8 @@
 import type { AvvisoAllInteressato, TappaAvviso } from '@/lib/cron-cancellazioni';
 import { chiaveAvviso } from '@/lib/cron-cancellazioni';
 import { createHash } from 'node:crypto';
+import { sendEmail } from '@/lib/email/client';
+import { escapeHtml } from '@/lib/html-escape';
 
 type Risposta = { data: unknown; error: { message: string } | null };
 
@@ -66,6 +68,12 @@ export type RapportoAvvisi = {
   giaDetti: number;
   /** Avvisi che NON siamo riusciti a recapitare: qui si sveglia qualcuno. */
   falliti: number;
+  /**
+   * Avvisi scritti nel pannello ma NON partiti anche per email (posta spenta,
+   * indirizzo mancante, invio rifiutato). L'avviso dovuto c'è; manca il canale
+   * che lo porta fuori dal sito. Si conta e si scrive nel registro degli errori.
+   */
+  emailNonPartite: number;
   /** Una riga per avviso, in ordine, per il registro. */
   esiti: Array<{ chiave: string; esito: 'recapitato' | 'gia-detto' | 'fallito'; errore?: string }>;
 };
@@ -113,8 +121,9 @@ export async function recapitaAvvisi(
   admin: ClienteAvvisi,
   avvisi: AvvisoAllInteressato[],
   registro: RegistroAvvisi,
+  posta?: PostaAvvisi,
 ): Promise<RapportoAvvisi> {
-  const rapporto: RapportoAvvisi = { recapitati: 0, giaDetti: 0, falliti: 0, esiti: [] };
+  const rapporto: RapportoAvvisi = { recapitati: 0, giaDetti: 0, falliti: 0, emailNonPartite: 0, esiti: [] };
 
   for (const a of avvisi) {
     const id = identificativoAvviso(a.chiave);
@@ -153,6 +162,10 @@ export async function recapitaAvvisi(
       registro.info('[avvisi-cancellazione] risposta recapitata all interessato', {
         userId: a.userId, tappa: a.tappa,
       });
+      // L'email parte solo qui, dopo la PRIMA scrittura riuscita: la riga in
+      // `notifications` (chiave primaria ricavata dalla chiave) fa da lucchetto,
+      // quindi trenta notti o due giri insieme non fanno trenta email.
+      if (posta && !(await speditaAncheTramitePosta(posta, a, registro))) rapporto.emailNonPartite++;
     } catch (e) {
       const errore = e instanceof Error ? e.message : 'errore';
       rapporto.falliti++;
@@ -166,6 +179,43 @@ export async function recapitaAvvisi(
   }
 
   return rapporto;
+}
+
+/**
+ * 27/10/2026 (secondo giro) — IL SECONDO CANALE: L'EMAIL.
+ *
+ * La spiegazione scritta solo nel pannello la legge chi rientra nel sito. Ma
+ * chi ha chiesto di cancellarsi sta cercando di andarsene: può non rientrare
+ * mai. Per questo la stessa spiegazione parte anche per email, una volta sola.
+ * Una prova passa una posta finta; la notte passa quella vera (`postaVera`).
+ */
+export type PostaAvvisi = {
+  indirizzoDi(userId: string): Promise<string | null>;
+  invia(lettera: { to: string; subject: string; html: string }): Promise<{ ok: boolean }>;
+};
+
+/** Vero se l'email è partita. Non lancia: un'email persa si conta, non ferma la notte. */
+async function speditaAncheTramitePosta(
+  posta: PostaAvvisi,
+  a: AvvisoAllInteressato,
+  registro: RegistroAvvisi,
+): Promise<boolean> {
+  try {
+    const to = await posta.indirizzoDi(a.userId);
+    if (!to) throw new Error('nessun indirizzo email per questa persona');
+    const esito = await posta.invia({
+      to,
+      subject: a.titolo,
+      html: `<p>${escapeHtml(a.corpo).replace(/\n/g, '<br>')}</p>`,
+    });
+    if (esito.ok !== true) throw new Error('invio non riuscito o posta non configurata');
+    return true;
+  } catch (e) {
+    registro.error('[avvisi-cancellazione] la spiegazione e nel pannello ma non e partita per email', {
+      userId: a.userId, tappa: a.tappa, errore: e instanceof Error ? e.message : 'errore',
+    });
+    return false;
+  }
 }
 
 /** Quello che la pagina dell'account deve poter dire a chi sta aspettando. */
@@ -256,7 +306,20 @@ export async function rispondiAChiAspetta(
   verdetto: { dovuti: AvvisoAllInteressato[] },
   registro: RegistroAvvisi,
 ): Promise<RapportoAvvisi> {
-  return recapitaAvvisi(admin as unknown as ClienteAvvisi, verdetto.dovuti, registro);
+  return recapitaAvvisi(admin as unknown as ClienteAvvisi, verdetto.dovuti, registro, postaVera(admin));
+}
+
+/** La posta vera: l'indirizzo dal servizio di accesso, l'invio da `sendEmail`. */
+function postaVera(admin: Amministrativo): PostaAvvisi {
+  return {
+    async indirizzoDi(userId) {
+      const { data, error } = await admin.auth.admin.getUserById(userId);
+      if (error) throw new Error(error.message);
+      return data.user?.email ?? null;
+    },
+    // Avviso di servizio dovuto per legge, non promozione: niente piede «annulla l'iscrizione».
+    invia: (l) => sendEmail({ ...l, tipo: 'transazionale' }),
+  };
 }
 
 /**

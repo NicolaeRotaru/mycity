@@ -45,6 +45,13 @@ function adminDiProva() {
   };
   return {
     ...(stato.mondo.admin as object),
+    // L'indirizzo a cui la notte spedisce la spiegazione per email.
+    auth: {
+      admin: {
+        ...((stato.mondo.admin as { auth?: { admin?: object } }).auth?.admin ?? {}),
+        getUserById: async (id: string) => ({ data: { user: id === UTENTE.id ? UTENTE : null }, error: null }),
+      },
+    },
     from(tabella: string) {
       const q = base.from(tabella);
       if (tabella === "notifications" && stato.rifiutaAvvisiA) {
@@ -80,10 +87,17 @@ vi.mock("@/lib/account/cancellazione", () => ({
   cancellaAccount: async (_a: unknown, userId: string): Promise<Esito> =>
     stato.esiti[userId] ?? { ok: true, fileRimossi: 0, erroriFile: [] },
 }));
-vi.mock("@/lib/api/middleware", () => ({
-  withAuth: (h: (c: { user: typeof UTENTE }) => unknown) => () => h({ user: UTENTE }),
-  withAuthRateLimit: (_o: unknown, h: (c: { user: typeof UTENTE }) => unknown) => () => h({ user: UTENTE }),
-  withCronAuth: (h: (r: unknown) => unknown) => (r: unknown) => h(r),
+// 27/10/2026 (secondo giro) — IL CONTROLLO D'ACCESSO È QUELLO VERO.
+// Qui c'era un withAuth finto che chiamava la rotta e basta: saltava
+// authenticate(), cioè proprio il punto in cui, senza chiave di servizio, la
+// risposta era «Auth non configurato». La prova era verde su un ramo che in
+// produzione non si eseguiva mai. Adesso si finge solo il servizio di accesso
+// di Supabase (di chi è il gettone); withAuth, withAuthRateLimit e
+// withCronAuth sono quelli di lib/api/middleware.ts.
+vi.mock("@/lib/supabase/anonimo", () => ({
+  creaClientAnonimo: () => ({
+    auth: { getUser: async () => ({ data: { user: UTENTE }, error: null }) },
+  }),
 }));
 vi.mock("@/lib/captcha", () => ({ verifyTurnstileToken: async () => ({ ok: true }) }));
 vi.mock("@/lib/email/client", () => ({ sendEmail: (x: unknown) => inviaEmail(x) }));
@@ -93,6 +107,7 @@ import { GET as statoCancellazione, POST as chiediCancellazione } from "@/app/ap
 import { GET as scaricaDati } from "@/app/api/account/export/route";
 import { POST as scriviAiContatti } from "@/app/api/contact/route";
 import { __resetRateLimitBuckets } from "@/lib/rate-limit";
+import { recapitoDallaRisposta } from "@/lib/legal/titolare";
 
 const CASELLA = "NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY";
 const giorniFa = (g: number) => new Date(Date.now() - g * 86_400_000).toISOString();
@@ -119,8 +134,22 @@ function ilFattorinoConLaCassaAperta(chiesta = CHIESTA, esito: Esito = CASSA_APE
   });
 }
 
+const SEGRETO_DELLA_NOTTE = "segreto-della-notte-di-prova";
 const passaLaNotte = () =>
-  notte(new Request("http://localhost/api/cron/process-deletions", { method: "POST" }) as never);
+  notte(new Request("http://localhost/api/cron/process-deletions", {
+    method: "POST",
+    headers: { authorization: `Bearer ${SEGRETO_DELLA_NOTTE}` },
+  }) as never);
+
+/** Chi bussa col gettone: il controllo d'accesso vero lo riconosce come il fattorino. */
+const conGettone = (metodo: string, percorso: string) =>
+  new Request("http://localhost" + percorso, { method: metodo, headers: { authorization: "Bearer gettone-del-fattorino" } });
+
+/** Le lettere spedite a una persona (non quelle al supporto). */
+const lettereA = (indirizzo: string) =>
+  inviaEmail.mock.calls
+    .map((c) => c[0] as { to?: string; subject?: string; html?: string })
+    .filter((l) => l.to === indirizzo);
 
 const suoi = () => stato.mondo.righe("notifications").filter((n) => n.user_id === "rider-1");
 
@@ -131,6 +160,9 @@ async function corpo(r: Response | unknown): Promise<string> {
 beforeEach(() => {
   delete process.env[CASELLA];
   delete process.env.SUPPORT_EMAIL;
+  delete process.env.RESEND_API_KEY;
+  delete process.env.RESEND_FROM;
+  process.env.CRON_SECRET = SEGRETO_DELLA_NOTTE;
   inviaEmail.mockClear();
   __resetRateLimitBuckets();
 });
@@ -147,6 +179,11 @@ describe("chi aspetta la cancellazione lo sa dal giro notturno vero", () => {
     expect(String(suoi()[0].body)).toContain("Garante");
     // Senza casella vera la frase non diventa «scrivi a il modulo dei contatti».
     expect(String(suoi()[0].body)).not.toContain("scrivi a il modulo");
+    // La stessa spiegazione gli arriva per email: il pannello è di un sito da
+    // cui sta cercando di andarsene, e non è detto che ci rientri.
+    const lettere = lettereA(UTENTE.email);
+    expect(lettere, "il motivo restava solo dentro il sito").toHaveLength(1);
+    expect(String(lettere[0].html)).toContain("120,00");
     // Un rinvio deciso da noi non è un guasto: la notte resta verde.
     expect(res.status).toBe(200);
   });
@@ -156,24 +193,27 @@ describe("chi aspetta la cancellazione lo sa dal giro notturno vero", () => {
     await passaLaNotte();
     await passaLaNotte();
     expect(suoi()).toHaveLength(1);
+    expect(lettereA(UTENTE.email), "trenta notti non sono trenta email").toHaveLength(1);
   });
 
   it("la pagina del suo account restituisce lo stesso motivo", async () => {
     ilFattorinoConLaCassaAperta();
     await passaLaNotte();
-    const body = (await (await statoCancellazione(new Request("http://localhost/api/account/delete") as never)).json()) as Record<string, unknown>;
+    const body = (await (await statoCancellazione(conGettone("GET", "/api/account/delete") as never)).json()) as Record<string, unknown>;
     expect(body.pending).toBe(true);
     expect(
       String(body.motivo ?? ""),
       "il conto alla rovescia fermo a zero era l unica cosa che vedeva",
     ).toContain("120,00 €");
+    expect(body.rinviata, "la pagina deve sapere che il conto alla rovescia non vale più").toBe(true);
   });
 
   it("chi non ha nessun rinvio non riceve un motivo inventato", async () => {
     ilFattorinoConLaCassaAperta();
-    const body = (await (await statoCancellazione(new Request("http://localhost/api/account/delete") as never)).json()) as Record<string, unknown>;
+    const body = (await (await statoCancellazione(conGettone("GET", "/api/account/delete") as never)).json()) as Record<string, unknown>;
     expect(body.pending).toBe(true);
     expect(body.motivo ?? null).toBeNull();
+    expect(body.rinviata, "nessun rinvio: il conto alla rovescia resta quello vero").toBe(false);
   });
 });
 
@@ -182,25 +222,74 @@ describe("senza la chiave di servizio nessuna porta è murata", () => {
 
   it("Cancella account dice dove scrivere, con la casella vera", async () => {
     process.env[CASELLA] = "info@mycity-marketplace.com";
-    const res = await chiediCancellazione(new Request("http://localhost/api/account/delete", { method: "POST" }) as never);
+    const res = await chiediCancellazione(conGettone("POST", "/api/account/delete") as never);
     expect(res.status).toBe(503);
     const testo = await corpo(res);
     expect(testo, "«Servizio non configurato» è vero per noi e un muro per lei").toContain("info@mycity-marketplace.com");
     expect(testo).not.toContain("Servizio non configurato");
+    // Nell'errore serve il collegamento, non solo l'indirizzo da ricopiare.
+    expect(recapitoDallaRisposta(JSON.parse(testo))?.href ?? "").toMatch(/^mailto:info@mycity-marketplace\.com\?subject=/);
   });
 
   it("Scarica i miei dati dice dove scrivere, con la casella vera", async () => {
     process.env[CASELLA] = "info@mycity-marketplace.com";
-    const res = await scaricaDati(new Request("http://localhost/api/account/export") as never);
+    const res = await scaricaDati(conGettone("GET", "/api/account/export") as never);
     expect(res.status).toBe(503);
-    expect(await corpo(res)).toContain("info@mycity-marketplace.com");
+    const testo = await corpo(res);
+    expect(testo).toContain("info@mycity-marketplace.com");
+    expect(recapitoDallaRisposta(JSON.parse(testo))?.href ?? "").toMatch(/^mailto:info@mycity-marketplace\.com/);
   });
 
-  it("senza casella vera non si mostra un indirizzo inventato: si manda al modulo", async () => {
-    const res = await chiediCancellazione(new Request("http://localhost/api/account/delete", { method: "POST" }) as never);
+  // 27/10/2026 (secondo giro) — Qui la prova pretendeva «si manda al modulo».
+  // Ma senza chiave il modulo non salva niente, e senza posta del supporto non
+  // inoltra: rispondeva «riprova tra qualche ora». Cancella account mandava al
+  // modulo, il modulo non arrivava a nessuno — la persona girava in tondo.
+  it("senza casella e senza posta del supporto non si manda la persona in tondo", async () => {
+    const res = await chiediCancellazione(conGettone("POST", "/api/account/delete") as never);
     const testo = await corpo(res);
-    expect(testo).toContain("modulo dei contatti");
+    expect(res.status).toBe(503);
+    expect(testo, "il modulo, senza chiave e senza posta, non arriva a nessuno").not.toContain("/contact");
+    expect(testo).not.toContain("modulo dei contatti");
+    expect(testo, "nessun indirizzo inventato").not.toMatch(/[a-z0-9.]+@[a-z0-9.-]+\.[a-z]+/i);
+    expect(testo, "lo dice in chiaro: la richiesta non è partita").toContain("non è partita");
+    // E il modulo, nella stessa situazione, non promette un «riprova» che non cambia niente.
+    const modulo = await scriviAiContatti(messaggio("7.0.0.9"));
+    expect(modulo.status).toBe(503);
+    const suo = await corpo(modulo);
+    expect(suo).not.toContain("Riprova");
+    expect(suo, "nessun indirizzo inventato").not.toMatch(/[a-z0-9.]+@[a-z0-9.-]+\.[a-z]+/i);
+  });
+
+  it("con la casella del supporto ma senza la posta, non si manda al modulo", async () => {
+    // Il caso più probabile in produzione: SUPPORT_EMAIL c'è, Resend no. Il
+    // modulo prova a inoltrare, la posta lo salta, e risponde 503.
+    process.env.SUPPORT_EMAIL = "supporto@example.com";
+    const testo = await corpo(await chiediCancellazione(conGettone("POST", "/api/account/delete") as never));
+    expect(testo, "senza posta il modulo non inoltra: mandarci la persona è il giro in tondo").not.toContain("/contact");
+    expect(testo).toContain("non è partita");
+    const modulo = await scriviAiContatti(messaggio("7.0.0.12"));
+    expect(modulo.status).toBe(503);
+  });
+
+  it("se Cancella account manda al modulo, il modulo arriva davvero a una persona", async () => {
+    process.env.SUPPORT_EMAIL = "supporto@example.com";
+    process.env.RESEND_API_KEY = "re_di_prova";
+    process.env.RESEND_FROM = "MyCity <no-reply@example.com>";
+    const testo = await corpo(await chiediCancellazione(conGettone("POST", "/api/account/delete") as never));
+    expect(testo).toContain("/contact");
     expect(testo).not.toMatch(/[a-z0-9.]+@[a-z0-9.-]+\.[a-z]+/i);
+    inviaEmail.mockResolvedValueOnce({ ok: true, id: "e-1" } as { ok: boolean });
+    const modulo = await scriviAiContatti(messaggio("7.0.0.10"));
+    expect(modulo.status, "il modulo a cui l abbiamo mandata deve arrivare a qualcuno").toBe(200);
+  });
+
+  it("se il modulo non funziona e la casella c'è, l'errore porta il collegamento alla casella", async () => {
+    process.env[CASELLA] = "info@mycity-marketplace.com";
+    const res = await scriviAiContatti(messaggio("7.0.0.11"));
+    expect(res.status).toBe(503);
+    const testo = await corpo(res);
+    expect(testo).toContain("Scrivici a info@mycity-marketplace.com");
+    expect(recapitoDallaRisposta(JSON.parse(testo))?.href ?? "").toMatch(/^mailto:info@mycity-marketplace\.com/);
   });
 
   const messaggio = (ip: string) =>
@@ -299,5 +388,18 @@ describe("nessuna pagina costruisce la casella privacy di ripiego", () => {
     };
     visita(radice);
     expect(colpevoli, "queste pagine mostrano un indirizzo che forse nessuno legge: usino recapitoPrivacy()").toEqual([]);
+  });
+});
+
+describe("il collegamento accanto all'errore si fida solo di due forme", () => {
+  it("passa una casella (mailto:) o il modulo; tutto il resto no", () => {
+    const r = (href: unknown) => recapitoDallaRisposta({ error: { details: { recapito: { href, testo: "x" } } } });
+    expect(r("mailto:info@mycity-marketplace.com?subject=Richiesta")?.href).toBe("mailto:info@mycity-marketplace.com?subject=Richiesta");
+    expect(r("/contact")?.href).toBe("/contact");
+    expect(r("javascript:alert(1)")).toBeNull();
+    expect(r("https://altro.example/contact")).toBeNull();
+    expect(r(42)).toBeNull();
+    expect(recapitoDallaRisposta(null)).toBeNull();
+    expect(recapitoDallaRisposta({ error: { details: { recapito: null } } })).toBeNull();
   });
 });
