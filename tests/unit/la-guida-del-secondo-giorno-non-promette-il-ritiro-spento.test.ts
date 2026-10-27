@@ -111,6 +111,24 @@ function vociDellElenco(html: string): string[] {
 }
 
 /**
+ * Tutte le parole che l'HTML porta fuori dai tag, dal titolo della scheda al piede, con gli
+ * spazi ridotti a uno: quello che Giulia puo' leggere, e un po' di piu'.
+ *
+ * 27/10/2026 (collaudo, secondo giro) — Fuori dall'elenco la guida la teneva solo la rete di
+ * parole qui sotto: un paragrafo aggiunto dopo l'elenco, «Passa tu dal negozio a prenderla.»,
+ * prometteva di nuovo il ritiro e la prova restava verde, perche' nessuna parola della rete
+ * c'era. La difesa e' la stessa dell'elenco: la frase intera, qui tutto il testo della mail.
+ * Una frase in piu', in qualunque punto e con qualunque parola, e la prova cade. Se cambia il
+ * piede comune a tutte le mail cambia anche questa stringa: e' voluto, e' quello che si legge.
+ */
+function paroleDellHtml(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Le parole con cui una email puo' dire al cliente «vieni tu a prenderla». E' una RETE, non la
  * prova: una parola che qui manca la buca. Per la guida la prova e' la frase intera (sopra); la
  * rete tiene gli altri modelli, dove la frase non e' fissata. «Un rider passa a prenderlo» resta
@@ -145,7 +163,21 @@ describe('ritiro in negozio spento: la posta non lo promette', () => {
         'e ogni ordine col suo stato lo trovi in «I miei ordini».',
     );
     expect(m!.subject).toBe('3 cose da sapere su MyCity');
-    // Fuori dall'elenco la frase non e' fissata: li' tiene la rete di parole.
+    // E fuori dall'elenco non si aggiunge niente: tutto il testo dell'HTML, frase per frase, dal
+    // titolo della scheda al piede. Un paragrafo in piu' sotto l'elenco («Passa tu dal negozio a
+    // prenderla.») cambia questa stringa, qualunque parola usi.
+    expect(paroleDellHtml(m!.html)).toBe(
+      '3 cose da sapere ' + // il titolo della scheda
+        'MyCity ' + // l'intestazione
+        '3 cose da sapere ' +
+        "Paghi alla consegna: la carta non e' obbligatoria " +
+        'La spesa te la portiamo a casa ' +
+        'Ogni ordine e il suo stato li trovi in «I miei ordini» ' +
+        'Vai su MyCity ' +
+        'Hai ricevuto questa email perché hai un account su MyCity. Gestisci preferenze · Privacy · Cookie',
+    );
+    // La rete di parole resta come secondo strato: guarda anche dentro i tag (i link), dove il
+    // testo qui sopra non arriva.
     expect(`${m!.subject} ${m!.html} ${m!.text}`).not.toMatch(PAROLE_DEL_RITIRO);
   });
 
