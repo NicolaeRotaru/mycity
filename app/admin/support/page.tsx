@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 type Message = {
   id: string;
@@ -36,7 +37,7 @@ export default function AdminSupportPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
 
-  const { data: messages = [], isLoading } = useQuery({
+  const { data: messages = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.support(filter),
     queryFn: async (): Promise<Message[]> => {
       let q = supabase
@@ -45,7 +46,8 @@ export default function AdminSupportPage() {
         .order('created_at', { ascending: false })
         .limit(100);
       if (filter !== 'all') q = q.eq('status', filter);
-      const { data } = await q;
+      const { data, error } = await q;
+      if (error) throw error;
       return (data ?? []) as Message[];
     },
   });
@@ -101,6 +103,14 @@ export default function AdminSupportPage() {
 
       {isLoading ? (
         <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-28 rounded-xl skeleton" />)}</div>
+      ) : isError ? (
+        <ErrorState
+          variant="compact"
+          title="Non riesco a leggere i messaggi di assistenza"
+          description="Non so se qualcuno ha scritto e aspetta una risposta. Riprova tra poco."
+          retry={() => void refetch()}
+          supportHref={null}
+        />
       ) : messages.length === 0 ? (
         <div className="bg-white border-2 border-cream-300 rounded-xl p-12 text-center">
           <Inbox size={40} strokeWidth={2} className="mx-auto text-ink-300 mb-2" aria-hidden />
