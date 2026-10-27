@@ -1,4 +1,4 @@
-import { SPEDIZIONE_BASE_EUR, SPEDIZIONE_PER_KM_EUR } from './constants';
+import { SPEDIZIONE_BASE_EUR, SPEDIZIONE_PER_KM_EUR, VELOCITA_MEDIA_BICI_KMH } from './constants';
 // Distanza haversine tra due coordinate (km)
 export function haversineKm(
   lat1: number, lng1: number,
@@ -36,11 +36,13 @@ export function prezzoSpedizioneEuro(distanceKm: number): number {
   return Math.round(fee * 10) / 10;
 }
 
-// Stima tempo consegna (minuti) dalla distanza, considerando velocità media
-// urbana di scooter (~25 km/h) + tempo fisso di preparazione (15 min).
+// Stima tempo consegna (minuti) dalla distanza: viaggio alla velocità media di
+// chi consegna (`VELOCITA_MEDIA_BICI_KMH`, al lancio una bici) + tempo fisso di
+// preparazione (15 min). Fino al 27/10/2026 qui c'era uno scooter a 25 km/h.
+// Non è la promessa al cliente prima dell'ordine — quella è «in giornata» —
+// ma il «fra quanti minuti arriva» quando il fattorino è già in strada.
 export function deliveryEtaMinutes(distanceKm: number, prepMinutes = 15): number {
-  const avgKmh = 25;
-  const travel = (distanceKm / avgKmh) * 60;
+  const travel = (distanceKm / VELOCITA_MEDIA_BICI_KMH) * 60;
   return Math.round(prepMinutes + travel);
 }
 

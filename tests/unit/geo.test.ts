@@ -67,8 +67,8 @@ describe('deliveryEtaMinutes', () => {
     expect(deliveryEtaMinutes(0)).toBe(15);
   });
 
-  it('5 km @ 25 km/h = 12 min travel + 15 prep = 27 min', () => {
-    expect(deliveryEtaMinutes(5)).toBe(27);
+  it('5 km in bici @ 15 km/h = 20 min travel + 15 prep = 35 min', () => {
+    expect(deliveryEtaMinutes(5)).toBe(35);
   });
 
   it('custom prep time', () => {
