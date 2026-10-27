@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { openConsentBanner } from '@/components/CookieBanner';
 import { Cookie } from 'lucide-react';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
-import { titolare } from '@/lib/legal/titolare';
+import { titolare, recapitoPrivacy } from '@/lib/legal/titolare';
 
 const VERSION = '2.0';
 const EFFECTIVE_DATE = '24 maggio 2026';
@@ -19,6 +19,9 @@ const TOC = [
 
 export default function CookiesPage() {
   const chiSiamo = titolare();
+  // 27/10/2026 — Come la pagina privacy: la casella vera se c'è, il modulo dei
+  // contatti se no. Mai il ripiego scritto nel codice, che forse nessuno legge.
+  const recapito = recapitoPrivacy(chiSiamo);
 
   return (
     <LegalLayout
@@ -135,8 +138,15 @@ export default function CookiesPage() {
       <LegalSection id="aggiornamenti" heading="5. Aggiornamenti">
         <p>
           Aggiorniamo questa policy ogni volta che vengono aggiunti, rimossi o modificati cookie
-          o tecnologie di tracciamento. Conserviamo le versioni precedenti su richiesta a{' '}
-          <a href={`mailto:${chiSiamo.emailPrivacy}`} className="text-primary-700 underline">{chiSiamo.emailPrivacy}</a>
+          o tecnologie di tracciamento. Conserviamo le versioni precedenti su richiesta{' '}
+          {recapito.eUnaCasella ? (
+            <>a <a href={recapito.href} className="text-primary-700 underline">{recapito.testo}</a></>
+          ) : (
+            <>
+              dal <Link href={recapito.href} className="text-primary-700 underline">modulo dei contatti</Link>{' '}
+              (la casella email della privacy non è ancora attiva)
+            </>
+          )}
           {chiSiamo.referentePrivacy ? <> (referente: {chiSiamo.referentePrivacy})</> : null}.
         </p>
         <p className="text-sm">

@@ -175,6 +175,37 @@ export function recapitoPrivacy(t: Titolare = titolare()): {
 }
 
 /**
+ * 27/10/2026 — IL RECAPITO DENTRO UNA FRASE.
+ *
+ * `recapitoPrivacy().testo`, senza una casella vera, è «il modulo dei
+ * contatti»: va bene come testo di un collegamento, ma attaccato a «scrivi a»
+ * diventava «scrivi a il modulo dei contatti». Questa è la forma che si attacca
+ * a «scrivi a»: l'indirizzo vero se c'è, la pagina del modulo se no. Mai un
+ * indirizzo inventato.
+ */
+export function recapitoInUnaFrase(t: Titolare = titolare()): string {
+  const r = recapitoPrivacy(t);
+  return r.eUnaCasella ? r.testo : 'noi con il modulo dei contatti del sito (pagina /contact)';
+}
+
+/**
+ * 27/10/2026 — LA STRADA A MANO, QUANDO QUELLA AUTOMATICA NON C'È.
+ *
+ * Senza la chiave di servizio «Scarica i miei dati» e «Cancella account»
+ * rispondevano «Servizio non configurato»: vero per noi, un muro per chi sta
+ * esercitando un diritto. Questa è la frase che gli dice cosa fare adesso.
+ * Esempio: «Cancellare l'account in automatico non è disponibile in questo
+ * momento. Puoi fare la richiesta lo stesso: scrivi a info@…».
+ */
+export function stradaAManoPerIDiritti(cosa: string, t: Titolare = titolare()): string {
+  return (
+    `${cosa} in automatico non è disponibile in questo momento. ` +
+    `Puoi fare la richiesta lo stesso: scrivi a ${recapitoInUnaFrase(t)}. ` +
+    'Ti rispondiamo entro un mese, come prevede la legge.'
+  );
+}
+
+/**
  * La frase di identificazione del titolare, costruita coi soli dati veri.
  * Esempio senza P.IVA: «Il titolare del trattamento è MyCity.»
  */

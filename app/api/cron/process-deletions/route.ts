@@ -9,6 +9,7 @@ import {
   type TentativoCancellazione,
   type VerdettoGiro,
 } from '@/lib/cron-cancellazioni';
+import { rispondiAChiAspetta } from '@/lib/privacy/avvisi-a-chi-aspetta';
 import {
   eseguiPotature,
   type ClientePotature,
@@ -123,7 +124,26 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   }
 
   const verdetto = verdettoDelGiro(tentativi, Date.now());
+
+  // 27/10/2026 — LA RISPOSTA DOVUTA ESCE DI CASA.
+  //
+  // `verdetto.dovuti` era calcolato ogni notte e non lo leggeva nessuno: chi
+  // aveva chiesto di sparire e restava (un fattorino con contanti da versare)
+  // vedeva un conto alla rovescia fermo a zero, e il motivo restava nei log.
+  // L'art. 12.3-12.4 chiede di dirglielo, col motivo e la strada del reclamo.
+  // Ogni avviso ha un identificativo ricavato dalla sua chiave: trenta notti di
+  // rinvio scrivono UNA riga, e due giri partiti insieme non ne scrivono due.
+  const avvisi = await rispondiAChiAspetta(admin, verdetto, logger);
   if (verdetto.daSvegliare) await sveglia(admin, verdetto);
+  if (avvisi.falliti > 0) {
+    await avvisaAmministratori(
+      admin,
+      'Persone non avvisate del rinvio della cancellazione',
+      avvisi.falliti === 1
+        ? "Stanotte una persona che aspetta la cancellazione non ha ricevuto il motivo dell'attesa. La legge chiede di dirglielo entro un mese."
+        : `Stanotte ${avvisi.falliti} persone che aspettano la cancellazione non hanno ricevuto il motivo dell'attesa. La legge chiede di dirglielo entro un mese.`,
+    );
+  }
 
   return NextResponse.json(
     {
@@ -143,6 +163,10 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       // `processed` (e allora non suona mai).
       rinviate: verdetto.rinviate,
       scadute: verdetto.scadute,
+      // 27/10/2026 — Quante persone hanno ricevuto il motivo dell'attesa, e
+      // quante no: un avviso dovuto per legge che non parte è un guasto.
+      avvisiRecapitati: avvisi.recapitati,
+      avvisiFalliti: avvisi.falliti,
     },
     // 3/9/2026 — LA NOTTE CHE FALLISCE FINISCE ROSSA.
     //
@@ -152,7 +176,7 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     // (`withCronAuth`). Un 500 fa due cose insieme: rende rossa l'esecuzione
     // nel pannello dei lavori periodici, e NON scrive il battito — cosi' se la
     // cosa va avanti anche il sorvegliante se ne accorge da solo.
-    { status: verdetto.daSvegliare || potature.fallite > 0 ? 500 : 200 },
+    { status: verdetto.daSvegliare || potature.fallite > 0 || avvisi.falliti > 0 ? 500 : 200 },
   );
 });
 

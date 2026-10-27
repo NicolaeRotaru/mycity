@@ -1,6 +1,6 @@
 'use client';
 
-import { titolare } from '@/lib/legal/titolare';
+import { recapitoPrivacy } from '@/lib/legal/titolare';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -79,7 +79,10 @@ export default function SettingsPage() {
   // Delete account (cooldown 7gg)
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
-  const [pendingDeletion, setPendingDeletion] = useState<{ effectiveAt: string; daysRemaining: number } | null>(null);
+  const [pendingDeletion, setPendingDeletion] = useState<{ effectiveAt: string; daysRemaining: number; motivo?: string | null } | null>(null);
+  // 27/10/2026 — La casella vera se c'è, il modulo dei contatti se no: mai il
+  // ripiego scritto nel codice (lo stesso criterio della pagina privacy).
+  const recapito = recapitoPrivacy();
   const [cancelingDeletion, setCancelingDeletion] = useState(false);
 
   useEffect(() => {
@@ -115,7 +118,11 @@ export default function SettingsPage() {
           if (res.ok) {
             const body = await res.json();
             if (body?.pending) {
-              setPendingDeletion({ effectiveAt: body.effectiveAt, daysRemaining: body.daysRemaining });
+              setPendingDeletion({
+                effectiveAt: body.effectiveAt,
+                daysRemaining: body.daysRemaining,
+                motivo: typeof body.motivo === 'string' ? body.motivo : null,
+              });
             }
           }
         }
@@ -267,7 +274,12 @@ export default function SettingsPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(apiErrorMessage(body, 'Richiesta non riuscita'));
+      if (!res.ok) {
+        // 27/10/2026 — Il server dice la strada a mano (dove scrivere): va
+        // mostrata così com'è, non passata da un traduttore di errori generico.
+        toast.error(apiErrorMessage(body, 'Richiesta non riuscita'), { duration: 15_000 });
+        return;
+      }
 
       // L'account NON viene eliminato subito: c'è un cooldown di 7 giorni
       // durante il quale l'utente può annullare. NON facciamo signOut così
@@ -558,12 +570,16 @@ export default function SettingsPage() {
                     che non e' quello di produzione: chi esercitava i suoi
                     diritti scriveva a una casella che non riceve. Adesso viene
                     dalla configurazione, come gli altri dati del titolare. */}
-                <a
-                  href={`mailto:${titolare().emailPrivacy}`}
-                  className="text-primary-700 hover:underline text-sm"
-                >
-                  {titolare().emailPrivacy}
-                </a>
+                {recapito.eUnaCasella ? (
+                  <a href={recapito.href} className="text-primary-700 hover:underline text-sm">
+                    {recapito.testo}
+                  </a>
+                ) : (
+                  <p className="text-sm text-ink-600">
+                    La casella email della privacy non è ancora attiva: scrivici dal{' '}
+                    <Link href={recapito.href} className="text-primary-700 hover:underline">modulo dei contatti</Link>.
+                  </p>
+                )}
               </div>
             </section>
           )}
@@ -583,6 +599,14 @@ export default function SettingsPage() {
                     <Hourglass size={18} className="text-accent-900" aria-hidden />
                     Eliminazione programmata
                   </h3>
+                  {pendingDeletion.motivo ? (
+                    /* 27/10/2026 — Il motivo del rinvio, come gliel'ha scritto il
+                       giro notturno: senza, il conto alla rovescia arrivava a
+                       zero e restava lì, senza una riga di spiegazione. */
+                    <p className="text-sm text-accent-900 mb-3 leading-relaxed" role="status">
+                      <strong>La cancellazione è in attesa.</strong> {pendingDeletion.motivo}
+                    </p>
+                  ) : null}
                   <p className="text-sm text-accent-800 mb-1 leading-relaxed">
                     Il tuo account sarà eliminato definitivamente tra{' '}
                     <strong>{pendingDeletion.daysRemaining} {pendingDeletion.daysRemaining === 1 ? 'giorno' : 'giorni'}</strong>
