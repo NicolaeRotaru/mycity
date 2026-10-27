@@ -93,6 +93,32 @@ function tuttaLaPosta(): Array<{ chi: string; testo: string }> {
   return letti;
 }
 
+/**
+ * Le voci dell'elenco «3 cose da sapere», nell'ordine in cui le legge Giulia.
+ *
+ * 27/10/2026 (collaudo) — La prova di prima cercava la parola «ritir»: il ritiro detto con altre
+ * parole («o passi a prenderla in negozio», «o la prendi tu al banco se il negozio lo permette»)
+ * tornava nella guida e la prova restava verde. La promessa sta nella FRASE, non in una parola: a
+ * ritiro spento la voce su come arriva la spesa e' «La spesa te la portiamo a casa» e basta.
+ * Qualunque seconda strada, con qualunque parola, allunga la voce e la prova cade.
+ */
+function vociDellElenco(html: string): string[] {
+  const elenco = html.match(/<ul[^>]*>([\s\S]*?)<\/ul>/);
+  if (!elenco) return [];
+  return (elenco[1].match(/<li[^>]*>[\s\S]*?<\/li>/g) ?? []).map((voce) =>
+    voce.replace(/^<li[^>]*>|<\/li>$/g, '').trim(),
+  );
+}
+
+/**
+ * Le parole con cui una email puo' dire al cliente «vieni tu a prenderla». E' una RETE, non la
+ * prova: una parola che qui manca la buca. Per la guida la prova e' la frase intera (sopra); la
+ * rete tiene gli altri modelli, dove la frase non e' fissata. «Un rider passa a prenderlo» resta
+ * fuori di proposito: in negozio ci va il fattorino, non il cliente.
+ */
+const PAROLE_DEL_RITIRO =
+  /ritir|in negozio|al banco|in bottega|prendi tu|passi a prender|passare a prender|vieni a prender|venire a prender/i;
+
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://mycity.example');
 });
@@ -102,17 +128,25 @@ afterEach(() => {
 });
 
 describe('ritiro in negozio spento: la posta non lo promette', () => {
-  it('Giulia si e iscritta due giorni fa: la guida «3 cose da sapere» non le parla di ritiro', () => {
+  it('Giulia si e iscritta due giorni fa: la guida «3 cose da sapere» le dice una strada sola, la spesa a casa', () => {
     interruttore.ritiroAttivo = false;
     const m = modelli.preparaEmailCicloDiVita('tutorial_day2', {});
     expect(m).not.toBeNull();
-    expect(`${m!.subject} ${m!.html} ${m!.text}`).not.toMatch(/ritir/i);
-    // Le tre cose da sapere restano tre: come si paga, come arriva la spesa, dove si segue l'ordine.
-    for (const parte of [m!.html, m!.text]) {
-      expect(parte).toMatch(/alla consegna/);
-      expect(parte).toMatch(/portiamo a casa/);
-      expect(parte).toMatch(/I miei ordini/);
-    }
+    // Le tre cose da sapere restano tre (come si paga, come arriva la spesa, dove si segue
+    // l'ordine) e quella su come arriva la spesa dice la consegna a casa e nient'altro: la frase
+    // intera, nell'HTML e nel testo semplice, non una parola da cercare.
+    expect(vociDellElenco(m!.html)).toEqual([
+      "Paghi alla consegna: la carta non e' obbligatoria",
+      'La spesa te la portiamo a casa',
+      'Ogni ordine e il suo stato li trovi in «I miei ordini»',
+    ]);
+    expect(m!.text).toBe(
+      'Tre cose da sapere: paghi alla consegna, la spesa te la portiamo a casa, ' +
+        'e ogni ordine col suo stato lo trovi in «I miei ordini».',
+    );
+    expect(m!.subject).toBe('3 cose da sapere su MyCity');
+    // Fuori dall'elenco la frase non e' fissata: li' tiene la rete di parole.
+    expect(`${m!.subject} ${m!.html} ${m!.text}`).not.toMatch(PAROLE_DEL_RITIRO);
   });
 
   it('nessun modello di email del file, di servizio o commerciale, nomina il ritiro', () => {
@@ -138,7 +172,7 @@ describe('ritiro in negozio spento: la posta non lo promette', () => {
         'abandoned_cart_4h',
       ]),
     );
-    const chiNomina = letti.filter((l) => /ritir/i.test(l.testo)).map((l) => l.chi);
+    const chiNomina = letti.filter((l) => PAROLE_DEL_RITIRO.test(l.testo)).map((l) => l.chi);
     expect(chiNomina).toEqual([]);
   });
 });
