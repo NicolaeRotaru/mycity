@@ -30,8 +30,8 @@ export type IngressiSpedizione = {
  * tornasse una spedizione a pagamento, torna qui e da nessun'altra parte. Gli ingressi restano
  * quelli di prima perché li passano già tutti i chiamanti.
  *
- * ⚠️ Un codice «spedizione gratis» adesso non toglie niente: la consegna resta. Se debba azzerare
- * anche i 3 euro, che pagano il fattorino, è una scelta di soldi e non di codice.
+ * Il codice «Spedizione gratuita» non passa più da qui: qui non c'è più niente da azzerare. Toglie
+ * la consegna in `prezziDelCarrello`, e il fattorino lo paga la piattaforma (vedi lì).
  */
 export function shippingForEuro(_opts: IngressiSpedizione): number {
   return 0;

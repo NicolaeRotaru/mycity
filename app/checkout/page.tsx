@@ -1259,8 +1259,10 @@ export default function CheckoutPage() {
                     addebita la consegna, è la sorpresa che fa abbandonare alla
                     fine. La frase non si scrive qui: nasce dalla cifra che la
                     cassa addebita davvero (`promessaSpedizione`, la stessa che
-                    parla in vetrina). A consegna gratuita sparisce da sé. */}
-                {promessaConsegna.dettaglioConsegna && (
+                    parla in vetrina). A consegna gratuita sparisce: la frase
+                    dice la tariffa di 3 € a negozio, e col codice «Spedizione
+                    gratuita» la cassa non la addebita (27/10/2026). */}
+                {consegnaDaPagare > 0 && promessaConsegna.dettaglioConsegna && (
                   <p className="mt-2 text-xs text-ink-500">{promessaConsegna.dettaglioConsegna}</p>
                 )}
               </>

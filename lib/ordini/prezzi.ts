@@ -44,7 +44,10 @@ export type IngressiPrezzo = {
   consegnaLat: number | null;
   consegnaLng: number | null;
   pickupInStore: boolean;
-  /** Il coupon copre la spedizione? */
+  /**
+   * Il codice «Spedizione gratuita» è applicato? Toglie al cliente la consegna di ogni negozio:
+   * il fattorino resta pagato, e quel compenso lo copre la piattaforma, non il negozio.
+   */
   couponSpedizioneGratis: boolean;
   /** Quanto sconta il coupon, in centesimi, sull'intero carrello. */
   couponScontoCents: number;
@@ -107,8 +110,22 @@ export function prezziDelCarrello(ing: IngressiPrezzo): EsitoPrezzo {
   const quoteCoupon = ripartisciCentesimi(scontiLimitati.codice, subtotali);
   const quoteRitiro = ripartisciCentesimi(scontiLimitati.ritiro, subtotali);
 
+  /**
+   * 27/10/2026 — IL CODICE «SPEDIZIONE GRATUITA» TOGLIE LA CONSEGNA.
+   *
+   * Al lancio la spedizione è zero per tutti e il cliente paga solo la consegna, 3 € per negozio.
+   * Il codice azzerava soltanto la spedizione: veniva accettato, segnato come usato, e il cliente
+   * pagava 23 € su 20 € di spesa, come chi il codice non ce l'ha. Adesso azzera la consegna.
+   *
+   * Chi paga il regalo: la piattaforma. La consegna è un suo incasso e non entra nel netto del
+   * negozio (`computeOrderSplit`), quindi azzerarla qui lascia il negozio com'è. Il compenso del
+   * fattorino resta quello di sempre (`riderFeeCents` qui sotto): non dipende dal codice del cliente.
+   * La prova è tests/unit/il-codice-spedizione-gratuita-toglie-davvero-la-consegna.test.ts.
+   */
+  const consegnaDaPagare = ing.pickupInStore || ing.couponSpedizioneGratis ? 0 : PLATFORM_DELIVERY_FEE_CENTS;
+
   const gruppi: PrezzoDiGruppo[] = ing.gruppi.map((g, i) => {
-    const deliveryFeeCents = ing.pickupInStore ? 0 : PLATFORM_DELIVERY_FEE_CENTS;
+    const deliveryFeeCents = consegnaDaPagare;
     const couponPortionCents = quoteCoupon[i];
     const pickupPortionCents = quoteRitiro[i];
     return {
