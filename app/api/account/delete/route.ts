@@ -1,7 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { withAuth, withAuthRateLimit } from '@/lib/api/middleware';
+import { withAuth, withAuthRateLimit, type ContestoRotta } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { stradaAManoPerIDiritti } from '@/lib/legal/titolare';
 import { motivoDellAttesa } from '@/lib/privacy/avvisi-a-chi-aspetta';
@@ -17,6 +17,28 @@ function senzaChiave(cosa: string, e: unknown): NextResponse {
     errore: e instanceof Error ? e.message : 'errore',
   });
   return ApiErrors.unavailable(stradaAManoPerIDiritti(cosa));
+}
+
+type Rotta = ReturnType<typeof withAuth>;
+
+/**
+ * 27/10/2026 — IL MURO STAVA UN PASSO PRIMA DELLA ROTTA.
+ *
+ * `withAuth` legge il profilo con la stessa chiave di servizio: senza, risponde
+ * 503 «Auth non configurato» prima che la rotta parli, e la strada a mano non
+ * usciva mai (la prova della squadra fingeva il controllo d'accesso). Quindi la
+ * chiave si guarda PRIMA dell'accesso. Non apre niente a nessuno: la risposta è
+ * la stessa frase per chiunque bussi, e non legge né scrive alcun dato.
+ */
+function primaLaStradaAMano(cosa: string, rotta: Rotta): Rotta {
+  return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
+    try {
+      getAdminSupabase();
+    } catch (e) {
+      return senzaChiave(cosa, e);
+    }
+    return ctx ? rotta(req, ctx) : rotta(req);
+  }) as Rotta;
 }
 
 export const runtime = 'nodejs';
@@ -39,7 +61,7 @@ export const runtime = 'nodejs';
  */
 
 // Rate limit destructive: 3 richieste / ora — anti-abuse + protezione (GDPR)
-export const POST = withAuthRateLimit({ name: 'account-delete', max: 3, windowMs: 60 * 60_000 }, async ({ user }): Promise<NextResponse> => {
+const chiedi = withAuthRateLimit({ name: 'account-delete', max: 3, windowMs: 60 * 60_000 }, async ({ user }): Promise<NextResponse> => {
   let admin;
   try {
     admin = getAdminSupabase();
@@ -81,7 +103,7 @@ export const POST = withAuthRateLimit({ name: 'account-delete', max: 3, windowMs
   }, { status: 200 });
 });
 
-export const DELETE = withAuth(async ({ user }): Promise<NextResponse> => {
+const annulla = withAuth(async ({ user }): Promise<NextResponse> => {
   let admin;
   try {
     admin = getAdminSupabase();
@@ -101,7 +123,7 @@ export const DELETE = withAuth(async ({ user }): Promise<NextResponse> => {
   return NextResponse.json({ ok: true, message: 'Richiesta annullata.' });
 });
 
-export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
+const leggiLoStato = withAuth(async ({ user }): Promise<NextResponse> => {
   let admin;
   try {
     admin = getAdminSupabase();
@@ -134,3 +156,7 @@ export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
     motivoDettoIl: attesa.dettoIl,
   });
 });
+
+export const POST = primaLaStradaAMano("Cancellare l'account", chiedi);
+export const DELETE = primaLaStradaAMano('Annullare la richiesta di cancellazione', annulla);
+export const GET = primaLaStradaAMano('Vedere lo stato della cancellazione', leggiLoStato);

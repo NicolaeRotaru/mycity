@@ -1,11 +1,42 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { withAuthRateLimit } from '@/lib/api/middleware';
+import { withAuth, withAuthRateLimit, type ContestoRotta } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { stradaAManoPerIDiritti } from '@/lib/legal/titolare';
 
 export const runtime = 'nodejs';
+
+function senzaChiave(cosa: string, e: unknown): NextResponse {
+  // 27/10/2026 — «Servizio non configurato» lasciava la persona davanti a un
+  // muro: il diritto alla portabilità resta, cambia solo la strada.
+  logger.error('[account-export] esportazione automatica spenta: manca la chiave di servizio', {
+    errore: e instanceof Error ? e.message : 'errore',
+  });
+  return ApiErrors.unavailable(stradaAManoPerIDiritti(cosa));
+}
+
+type Rotta = ReturnType<typeof withAuth>;
+
+/**
+ * 27/10/2026 — IL MURO STAVA UN PASSO PRIMA DELLA ROTTA.
+ *
+ * `withAuth` legge il profilo con la stessa chiave di servizio: senza, risponde
+ * 503 «Auth non configurato» prima che la rotta parli, e la strada a mano non
+ * usciva mai (la prova della squadra fingeva il controllo d'accesso). Quindi la
+ * chiave si guarda PRIMA dell'accesso. Non apre niente a nessuno: la risposta è
+ * la stessa frase per chiunque bussi, e non legge né scrive alcun dato.
+ */
+function primaLaStradaAMano(cosa: string, rotta: Rotta): Rotta {
+  return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
+    try {
+      getAdminSupabase();
+    } catch (e) {
+      return senzaChiave(cosa, e);
+    }
+    return ctx ? rotta(req, ctx) : rotta(req);
+  }) as Rotta;
+}
 
 /**
  * GDPR Art. 20 — Portabilità dei dati.
@@ -33,7 +64,7 @@ export const runtime = 'nodejs';
 // memoria: bastava un ciclo per tenere occupata l'istanza. Esportare i propri
 // dati è un diritto, e come tutti i diritti si esercita qualche volta, non
 // trecento al minuto. Tre al giorno.
-export const GET = withAuthRateLimit(
+const scarica = withAuthRateLimit(
   { name: 'account-export', max: 3, windowMs: 24 * 60 * 60_000 },
   async ({ user }): Promise<NextResponse> => {
   const userId = user.id;
@@ -43,12 +74,7 @@ export const GET = withAuthRateLimit(
   try {
     admin = getAdminSupabase();
   } catch (e) {
-    // 27/10/2026 — «Servizio non configurato» lasciava la persona davanti a un
-    // muro: il diritto alla portabilità resta, cambia solo la strada.
-    logger.error('[account-export] esportazione automatica spenta: manca la chiave di servizio', {
-      errore: e instanceof Error ? e.message : 'errore',
-    });
-    return ApiErrors.unavailable(stradaAManoPerIDiritti('Scaricare i tuoi dati'));
+    return senzaChiave('Scaricare i tuoi dati', e);
   }
 
   // Query parallele
@@ -294,3 +320,5 @@ export const GET = withAuthRateLimit(
   });
   },
 );
+
+export const GET = primaLaStradaAMano('Scaricare i tuoi dati', scarica);
