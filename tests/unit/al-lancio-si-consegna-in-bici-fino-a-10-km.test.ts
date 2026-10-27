@@ -40,6 +40,18 @@ const fuori = (casa: { lat: number; lng: number }) =>
   });
 const km = (casa: { lat: number; lng: number }) =>
   haversineKm(NEGOZIO_PIACENZA.lat, NEGOZIO_PIACENZA.lng, casa.lat, casa.lng);
+/** Il punto a `distanza` km dal negozio nella direzione `gradi` (0 = nord, 90 = est), sulla sfera. */
+function puntoA(distanza: number, gradi: number): { lat: number; lng: number } {
+  const rad = Math.PI / 180;
+  const d = distanza / 6371;
+  const verso = gradi * rad;
+  const lat1 = NEGOZIO_PIACENZA.lat * rad;
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(verso));
+  const lng2 =
+    NEGOZIO_PIACENZA.lng * rad +
+    Math.atan2(Math.sin(verso) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+  return { lat: lat2 / rad, lng: lng2 / rad };
+}
 
 describe('al lancio si consegna in bici fino a 10 km', () => {
   it('il confine deciso è 10 km', () => {
@@ -85,6 +97,38 @@ describe('al lancio si consegna in bici fino a 10 km', () => {
   it('IL TRATTO CHE NESSUNO GUARDAVA — a 10,6 e a 13 km la cassa dice no', () => {
     expect(fuori(CASA_A_10_6_KM), `a 10,6 km la cassa accetta (raggio: ${RAGGIO_CONSEGNA_KM} km)`).toBe(true);
     expect(fuori(CASA_A_13_KM), `a 13 km la cassa accetta (raggio: ${RAGGIO_CONSEGNA_KM} km)`).toBe(true);
+  });
+
+  /*
+   * 27/10/2026 (terzo giro) — IL CONFINE VALE IN OGNI DIREZIONE, NON SOLO VERSO EST.
+   *
+   * Tutti i punti qui sopra stanno alla latitudine del negozio, spostati verso est. Il collaudo ha
+   * passato al calcolo la latitudine del negozio al posto di quella della casa — un refuso di una
+   * parola — e queste prove restavano verdi: verso est le due latitudini sono uguali. Con quel
+   * refuso una casa 13 km a nord misurava 0 km, e la cassa la accettava. Qui la casa gira attorno
+   * al negozio in otto direzioni, a distanze dentro e fuori dal confine; i punti li calcola la
+   * prova sulla sfera, senza usare la funzione che misura la distanza.
+   */
+  it('13 km a nord la cassa dice no', () => {
+    const casa = puntoA(13, 0);
+    expect(km(casa)).toBeGreaterThan(12.9);
+    expect(km(casa)).toBeLessThan(13.1);
+    expect(fuori(casa), `una casa 13 km a nord risulta dentro la zona (raggio: ${RAGGIO_CONSEGNA_KM} km)`).toBe(true);
+  });
+
+  it('in otto direzioni: dentro i 10 km si consegna, oltre no', () => {
+    const sbagliati: string[] = [];
+    for (const gradi of [0, 45, 90, 135, 180, 225, 270, 315]) {
+      // 9,9 e 10,2 stanno a ridosso del confine: una tolleranza nascosta di 200 metri si vede.
+      for (const distanza of [0.5, 3, 7, 9.6, 9.9, 10.2, 10.6, 13, 20, 60]) {
+        const casa = puntoA(distanza, gradi);
+        if (Math.abs(km(casa) - distanza) > 0.05) sbagliati.push(`il punto a ${distanza} km verso ${gradi}° ne misura ${km(casa)}`);
+        if (fuori(casa) !== distanza > 10) {
+          sbagliati.push(`${distanza} km verso ${gradi}°: ${fuori(casa) ? 'fuori zona' : 'dentro la zona'}`);
+        }
+      }
+    }
+    expect(sbagliati).toEqual([]);
   });
 
   it('la stima del viaggio va alla velocità di una bici, non di uno scooter', () => {

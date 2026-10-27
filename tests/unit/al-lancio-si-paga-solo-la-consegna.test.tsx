@@ -11,6 +11,7 @@ import {
   VALUE_PROPS,
 } from '@/lib/constants';
 import { formatPrice } from '@/lib/format';
+import { haversineKm } from '@/lib/geo';
 import { prezziDelCarrello, type IngressiPrezzo } from '@/lib/ordini/prezzi';
 import {
   NEGOZIO_CHIUSO_COSA_SUCCEDE,
@@ -127,6 +128,77 @@ describe('in cassa si pagano solo i 3 euro di consegna per negozio', () => {
   it('col ritiro in negozio non si paga consegna', () => {
     const esito = conto([{ sellerId: 'forno', euro: 20 }], { pickupInStore: true });
     expect(consegnaPagata(esito.gruppi[0])).toBe(0);
+  });
+});
+
+/*
+ * 27/10/2026 (terzo giro) — IL TRATTO FRA 6 E 10 KM CHE NESSUNA PROVA GUARDAVA.
+ *
+ * Le prove qui sopra mettono la casa a 5 km, oppure senza coordinate. Il collaudo ha rimesso la
+ * spedizione a chilometri in una forma sola — sotto i 30 euro e oltre i 6 km, 2,50 € più 1,20 €
+ * al km — e tutto è rimasto verde: 20 euro di spesa a 9 km costavano 16,30 € di consegna invece
+ * di 3. Un punto solo prova quel punto, non il tratto. Qui si prova il tratto intero: ogni mezzo
+ * chilometro dal negozio fino al confine, in otto direzioni, con spese da 1 a 120 euro. In ogni
+ * punto la cassa chiede i 3 euro di consegna, e niente di più.
+ */
+const RAGGIO_DELLA_TERRA_KM = 6371;
+const DIREZIONI = [0, 45, 90, 135, 180, 225, 270, 315]; // gradi: 0 = nord, 90 = est
+const DISTANZE: number[] = [];
+for (let km = 0.5; km < RAGGIO_CONSEGNA_KM; km += 0.5) DISTANZE.push(km);
+DISTANZE.push(RAGGIO_CONSEGNA_KM - 0.05);
+const SPESE = [1, 5, 12, 20, 29.99, 30, 45, 120];
+
+/** Il punto a `km` dal negozio nella direzione `gradi`, sulla sfera: non usa la funzione che prova. */
+function puntoA(km: number, gradi: number): { lat: number; lng: number } {
+  const rad = Math.PI / 180;
+  const d = km / RAGGIO_DELLA_TERRA_KM;
+  const verso = gradi * rad;
+  const lat1 = NEGOZIO.lat * rad;
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(verso));
+  const lng2 =
+    NEGOZIO.lng * rad +
+    Math.atan2(Math.sin(verso) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+  return { lat: lat2 / rad, lng: lng2 / rad };
+}
+
+describe('a ogni distanza dentro la zona si pagano solo i 3 euro', () => {
+  it('i punti della griglia stanno dove dicono (se no la prova sotto non misura niente)', () => {
+    for (const gradi of DIREZIONI) {
+      for (const km of DISTANZE) {
+        const casa = puntoA(km, gradi);
+        const misurati = haversineKm(NEGOZIO.lat, NEGOZIO.lng, casa.lat, casa.lng);
+        expect(Math.abs(misurati - km), `${km} km verso ${gradi}° ne misura ${misurati}`).toBeLessThan(0.01);
+      }
+    }
+  });
+
+  it('IL CASO DEL COLLAUDO — 20 euro di spesa a 9 km pagano 3 euro di consegna, non 16,30', () => {
+    const casa = puntoA(9, 90);
+    const esito = conto([{ sellerId: 'forno', euro: 20 }], { consegnaLat: casa.lat, consegnaLng: casa.lng });
+    expect(
+      consegnaPagata(esito.gruppi[0]),
+      'oltre i 6 km la cassa somma ancora una spedizione a chilometri ai 3 euro di consegna',
+    ).toBe(PLATFORM_DELIVERY_FEE_CENTS);
+    expect(esito.grandTotalCents).toBe(2000 + PLATFORM_DELIVERY_FEE_CENTS);
+  });
+
+  it('ogni mezzo chilometro fino al confine, in ogni direzione e con ogni spesa: 3 euro e niente di più', () => {
+    const sbagliati: string[] = [];
+    for (const gradi of DIREZIONI) {
+      for (const km of DISTANZE) {
+        const casa = puntoA(km, gradi);
+        for (const euro of SPESE) {
+          const esito = conto([{ sellerId: 'forno', euro }], { consegnaLat: casa.lat, consegnaLng: casa.lng });
+          const pagata = consegnaPagata(esito.gruppi[0]);
+          const totale = Math.round(euro * 100) + PLATFORM_DELIVERY_FEE_CENTS;
+          if (pagata !== PLATFORM_DELIVERY_FEE_CENTS || esito.grandShippingCents !== 0 || esito.grandTotalCents !== totale) {
+            sbagliati.push(`${euro} € a ${km} km verso ${gradi}°: consegna ${pagata} cent, totale ${esito.grandTotalCents} invece di ${totale}`);
+          }
+        }
+      }
+    }
+    const casi = DIREZIONI.length * DISTANZE.length * SPESE.length;
+    expect(sbagliati.slice(0, 6), `${sbagliati.length} casi su ${casi} non pagano i soli 3 euro`).toEqual([]);
   });
 });
 

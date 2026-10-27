@@ -111,21 +111,45 @@ const FOCACCIA_E_MIELE: RigaCarrello[] = [
 /** Un importo come lo legge una persona: lo spazio prima di «€» qualunque esso sia. */
 const euro = (n: number) => formatPrice(n).replace(/\s+/g, ' ');
 
-/** Le cifre scritte accanto a «Spedizione», in ogni riepilogo della pagina. */
+/** Il testo scritto direttamente dentro un elemento, senza quello dei figli. */
+function testoDiretto(el: Element): string {
+  return Array.from(el.childNodes)
+    .filter((n) => n.nodeType === 3)
+    .map((n) => n.textContent ?? '')
+    .join('')
+    .trim();
+}
+
+/**
+ * L'etichetta di una riga a due colonne. Nei riepiloghi è il testo della colonna di sinistra
+ * («Spedizione», «Consegna MyCity»). Nei riquadri la colonna di sinistra è un blocco con titolo e
+ * sottotitolo, e l'etichetta è il titolo: il suo primo elemento.
+ *
+ * 27/10/2026 (terzo giro) — Prima si leggeva solo il testo diretto. Il riquadro «Consegna a
+ * domicilio» ha il titolo dentro un <p>, quindi nessuna prova lo leggeva: il collaudo gli ha fatto
+ * scrivere «Gratis» sopra i 3 € da pagare e tutte le prove sono rimaste verdi.
+ */
+function etichettaDi(colonna: Element): string {
+  const diretta = testoDiretto(colonna);
+  if (diretta) return diretta;
+  return colonna.firstElementChild ? testoDiretto(colonna.firstElementChild) : '';
+}
+
+/** Le cifre scritte accanto a «Spedizione», in ogni riepilogo e in ogni riquadro della pagina. */
 function spedizioniMostrate(radice: HTMLElement, cercata: RegExp = /^Spedizione/): string[] {
   const cifre: string[] = [];
   for (const riga of Array.from(radice.querySelectorAll('div'))) {
     const figli = Array.from(riga.children);
     if (figli.length !== 2) continue;
-    const etichetta = Array.from(figli[0].childNodes)
-      .filter((n) => n.nodeType === 3)
-      .map((n) => n.textContent ?? '')
-      .join('')
-      .trim();
-    if (!cercata.test(etichetta)) continue;
+    if (!cercata.test(etichettaDi(figli[0]))) continue;
     cifre.push(testoVisibile(figli[1]));
   }
   return cifre;
+}
+
+/** Ogni «gratis» o «gratuito/a» scritto in un testo, con un po' di contesto per capire dove sta. */
+function gratisScritti(testo: string): string[] {
+  return [...testo.matchAll(/.{0,50}\b(?:gratis|gratuit[aoei])\b.{0,50}/gi)].map((m) => m[0]);
 }
 
 async function finoA(condizione: () => boolean, giri = 40) {
@@ -223,9 +247,14 @@ async function spedizioneAllaCassa(mondo: Mondo, carrello: RigaCarrello[], opzio
   // non solo «Consegna MyCity». Leggendo quella sola, la prova restava verde mentre la riga
   // «Spedizione» sopra scriveva «Gratis» in verde su un ordine che pagava 3 € di consegna.
   const cifre = spedizioniMostrate(s.radice, /^(Spedizione|Consegna MyCity)/);
+  // 27/10/2026 (terzo giro) — Il riquadro «Consegna a domicilio», nel passo 2, si legge a parte:
+  // sta sempre in vista mentre si sceglie la fascia, ed è la prima cifra della consegna che si vede.
+  // Dentro il riquadro anche il titolo e la fascia («In giornata · 15:00–18:00») fanno una coppia:
+  // si tiene solo la colonna che dice un prezzo, o che dice «gratis».
+  const riquadro = spedizioniMostrate(s.radice, /^Consegna a domicilio/).filter((c) => /€|gratis|gratuit/i.test(c));
   const testo = testoVisibile(s.radice);
   s.smonta();
-  return { cifre, testo, letture: [...db.letture], errori: [...errori.values()] };
+  return { cifre, riquadro, testo, letture: [...db.letture], errori: [...errori.values()] };
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -372,6 +401,11 @@ describe('il carrello e la cassa mostrano la stessa consegna', () => {
       cassa.cifre,
       'il riepilogo della cassa ha una riga «Gratis» accanto alla consegna che fa pagare, o una cifra diversa dal carrello',
     ).toEqual([CONSEGNA(1)]);
+    expect(
+      cassa.riquadro,
+      'il riquadro «Consegna a domicilio» non scrive la consegna che la cassa addebita (o scrive «Gratis»)',
+    ).toEqual([CONSEGNA(1)]);
+    expect(gratisScritti(cassa.testo), 'la cassa scrive «Gratis» mentre fa pagare la consegna').toEqual([]);
   }, 60000);
 });
 
@@ -404,6 +438,8 @@ describe('un negozio che la vista non restituisce: la consegna è la stessa, una
     expect(cassa.errori, 'una lettura della cassa è caduta').toEqual([]);
     expect(cassa.cifre.length, cassa.testo.slice(0, 400)).toBeGreaterThan(0);
     expect(cassa.cifre, 'il riepilogo della cassa non dice le due consegne che addebita, una cifra sola').toEqual([CONSEGNA(2)]);
+    expect(cassa.riquadro, 'il riquadro «Consegna a domicilio» non dice le due consegne che la cassa addebita').toEqual([CONSEGNA(2)]);
+    expect(gratisScritti(cassa.testo), 'la cassa scrive «Gratis» mentre fa pagare due consegne').toEqual([]);
   }, 60000);
 });
 
