@@ -37,7 +37,16 @@ const stato: {
    * buone: altrimenti la notte diventerebbe rossa per loro, non per l'email.
    */
   registroInviiRotto: boolean;
-} = { mondo: fintoGiroNotturno(), senzaChiave: false, esiti: {}, rifiutaAvvisiA: null, registroInviiRotto: false };
+  /**
+   * 27/10/2026 (sesto giro) — Il registro delle azioni si legge, ma ogni riga
+   * nuova la rifiuta con un errore che NON è un doppione (qui un CHECK). È il
+   * pezzo che `registroInviiRotto` non raggiunge: lì si ferma già la lettura.
+   */
+  registroInviiRifiutaLeRighe: boolean;
+} = {
+  mondo: fintoGiroNotturno(), senzaChiave: false, esiti: {}, rifiutaAvvisiA: null,
+  registroInviiRotto: false, registroInviiRifiutaLeRighe: false,
+};
 
 const UTENTE = { id: "rider-1", email: "rider@example.com" };
 /**
@@ -78,6 +87,14 @@ function adminDiProva() {
       if (tabella === "audit_logs" && stato.registroInviiRotto) {
         const rifiuto = { data: null, error: { message: "permission denied for table audit_logs" } };
         q.select = () => ({ eq: async () => rifiuto });
+        q.insert = () => ({ then: (ok: (v: unknown) => unknown) => Promise.resolve(ok(rifiuto)) });
+      }
+      if (tabella === "audit_logs" && stato.registroInviiRifiutaLeRighe) {
+        // Il messaggio vero di PostgREST per un CHECK (23514): niente «duplicate key».
+        const rifiuto = {
+          data: null,
+          error: { message: 'new row for relation "audit_logs" violates check constraint "audit_logs_action_check"', code: "23514" },
+        };
         q.insert = () => ({ then: (ok: (v: unknown) => unknown) => Promise.resolve(ok(rifiuto)) });
       }
       q.single = async () => {
@@ -155,6 +172,7 @@ function ilFattorinoConLaCassaAperta(chiesta = CHIESTA, esito: Esito = CASSA_APE
   stato.senzaChiave = false;
   stato.rifiutaAvvisiA = null;
   stato.registroInviiRotto = false;
+  stato.registroInviiRifiutaLeRighe = false;
   stato.esiti = { "rider-1": esito };
   stato.mondo = fintoGiroNotturno({
     rpc: { process_expired_deletions: { data: [{ user_id: "rider-1", deleted_at: chiesta }], error: null } },
@@ -485,6 +503,34 @@ describe("la spiegazione per email che non parte si riprova, e se non parte anco
     expect(body.avvisiEmailBloccate).toBe(1);
     expect(res.status).toBe(500);
     expect(stato.mondo.notifiche()).toHaveLength(1);
+  });
+
+  // 27/10/2026 (sesto giro) — UN TURNO RIFIUTATO NON È UN TURNO PRESO DA ALTRI.
+  // La prova di sopra rompe il registro già alla lettura, quindi il rifiuto
+  // della riga del turno non lo raggiungeva nessuna prova. Il collaudo l'ha
+  // mostrato: trattare OGNI rifiuto come «in corso» (un altro giro spedisce
+  // lui) lasciava tutto verde, mentre non spediva nessuno — niente email,
+  // nessun allarme, una notte verde dopo l'altra. Solo il doppione vuol dire
+  // «in corso»; ogni altro no ferma l'email e sveglia qualcuno.
+  it("se il registro si legge ma rifiuta il turno dell'email, e non è un doppione, la notte è rossa e un amministratore lo sa", async () => {
+    ilFattorinoConLaCassaAperta();
+    stato.registroInviiRifiutaLeRighe = true;
+    inviaEmail.mockImplementation(async () => ({ ok: true }));
+    const stati: number[] = [];
+    const bloccate: unknown[] = [];
+    for (let n = 1; n <= 2; n++) {
+      const res = await passaLaNotte();
+      stati.push(res.status);
+      bloccate.push(((await (res as Response).json()) as Record<string, unknown>).avvisiEmailBloccate);
+    }
+
+    expect(suoi(), "il pannello non dipende dal registro delle email").toHaveLength(1);
+    expect(lettereA(UTENTE.email), "senza la riga del turno ogni notte partirebbe una email in più").toHaveLength(0);
+    expect(bloccate, "un turno rifiutato passa per un turno in volo: nessuno lo conta").toEqual([1, 1]);
+    expect(stati, "rossa la notte in cui l'email si ferma, verde le notti dopo l'allarme").toEqual([500, 200]);
+    const allarmi = stato.mondo.notifiche();
+    expect(allarmi, "nessun amministratore sa che la persona non riceve niente per email").toHaveLength(1);
+    expect(String(allarmi[0].title)).toContain("email");
   });
 });
 
