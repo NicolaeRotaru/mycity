@@ -31,6 +31,12 @@
  */
 
 import type { AuditAction } from '@/lib/audit';
+import type { CategoryRow } from '@/lib/products/aiPatch';
+import {
+  daCompletareDopoLaModifica,
+  messaggioDaCompletare,
+  type ProdottoAttuale,
+} from '@/lib/products/prontoPerLaVendita';
 
 /**
  * Le colonne di `products` che il venditore puo' cambiare dal suo pannello.
@@ -229,10 +235,16 @@ type CatenaScrittura = {
   eq: (colonna: string, valore: string) => CatenaScrittura;
 } & PromiseLike<{ error: { message?: string } | null }>;
 
+/** Una lettura di piu' righe (l'albero delle categorie). */
+type RispostaElenco = {
+  data: Record<string, unknown>[] | null;
+  error: { message?: string } | null;
+};
+
 /** Il minimo che serve del client Supabase: cosi' una prova puo' passargliene uno finto. */
 export type ClientDelCatalogo = {
   from: (tabella: string) => {
-    select: (colonne: string) => CatenaLettura;
+    select: (colonne: string) => CatenaLettura & PromiseLike<RispostaElenco>;
     update: (valori: Record<string, unknown>) => CatenaScrittura;
   };
 };
@@ -242,6 +254,62 @@ export class ProdottoNonTuo extends Error {
     super('Non puoi modificare un prodotto che non è tuo');
     this.name = 'ProdottoNonTuo';
   }
+}
+
+/**
+ * La modifica metterebbe in vendita una scheda incompleta. Il messaggio e'
+ * scritto per il negoziante (dice cosa manca): la rotta lo passa com'e', e
+ * riprovare non serve — serve completare la scheda.
+ */
+export class DaCompletare extends Error {
+  readonly mancanti: string[];
+  constructor(messaggio: string, mancanti: string[]) {
+    super(messaggio);
+    this.name = 'DaCompletare';
+    this.mancanti = mancanti;
+  }
+}
+
+/**
+ * 27/10/2026 — «ATTIVA» DALL'ELENCO METTEVA IN VENDITA UNA BOZZA SENZA ALLERGENI.
+ *
+ * Il modulo lascia salvare una bozza incompleta e blocca solo la
+ * pubblicazione. Ma nell'elenco «I miei prodotti» ogni bozza ha «Attiva», che
+ * passa da questa porta con `{ status: 'available' }` — e la porta non
+ * guardava niente: una focaccia senza allergeni ne' ingredienti andava in
+ * vetrina (Reg. UE 1169/2011). Il controllo sta qui, nell'unica porta, cosi'
+ * vale per il modulo, per l'elenco e per chiunque chiami la rotta. Le regole
+ * sono quelle del modulo e delle rotte dell'assistente
+ * (`daCompletareDopoLaModifica`): una regola sola, non tre copie.
+ *
+ * Le categorie si leggono solo quando la modifica mette (o sposta di
+ * categoria) un prodotto in vendita: un prezzo cambiato su un prodotto gia' in
+ * vetrina non paga una lettura in piu'. Le foto si contano su quello che si
+ * sta scrivendo, se c'e': il modulo aggiunge la prima foto e pubblica nello
+ * stesso salvataggio.
+ */
+async function controllaCheSiPossaVendere(
+  db: ClientDelCatalogo,
+  prima: Record<string, unknown>,
+  daScrivere: Record<string, unknown>,
+): Promise<void> {
+  const statoDopo = 'status' in daScrivere ? daScrivere.status : prima.status;
+  if (statoDopo !== 'available') return;
+  const cambiaCategoria = 'category_id' in daScrivere && daScrivere.category_id !== prima.category_id;
+  if (prima.status === 'available' && !cambiaCategoria) return;
+
+  const { data: categorie, error } = await db.from('categories').select('id, name, slug, parent_id');
+  if (error) throw error;
+
+  const { mancanti, categoriaNuova } = daCompletareDopoLaModifica({
+    prima: {
+      ...(prima as unknown as ProdottoAttuale),
+      images: ('images' in daScrivere ? daScrivere.images : prima.images) as string[] | null,
+    },
+    update: daScrivere,
+    categories: (categorie ?? []) as unknown as CategoryRow[],
+  });
+  if (mancanti.length > 0) throw new DaCompletare(messaggioDaCompletare(mancanti, categoriaNuova), mancanti);
 }
 
 export type EsitoSalvataggio = {
@@ -280,6 +348,9 @@ export async function salvaProdottoTracciato(opts: {
     .maybeSingle();
   if (erroreLettura) throw erroreLettura;
   if (!prima || prima.seller_id !== opts.attoreId) throw new ProdottoNonTuo();
+
+  // Prima di scrivere: una scheda incompleta non entra in vetrina da nessuna porta.
+  await controllaCheSiPossaVendere(opts.db, prima, daScrivere);
 
   // Il filtro sul negozio resta anche nella scrittura: la regola per riga del
   // database e' l'ultima difesa, non l'unica.

@@ -7,8 +7,10 @@ import {
   salvaProdottoTracciato,
   colonneAmmesse,
   ProdottoNonTuo,
+  DaCompletare,
   type ClientDelCatalogo,
 } from '@/lib/products/salvataggio-tracciato';
+import { erroreDiSalvataggio } from '@/lib/products/prontoPerLaVendita';
 
 export const runtime = 'nodejs';
 
@@ -69,7 +71,13 @@ async function handler(
     return apiSuccess({ id: prodottoId, campi: esito.campi });
   } catch (errore) {
     if (errore instanceof ProdottoNonTuo) return ApiErrors.forbidden(errore.message);
-    return ApiErrors.internal('Non sono riuscito a salvare. Riprova.');
+    // Una scheda incompleta o una regola del database (23514, es. il guardiano
+    // degli allergeni) non e' un guasto: il motivo arriva al negoziante, perche'
+    // «Riprova» darebbe lo stesso errore per sempre. Solo un guasto vero resta «Riprova».
+    if (errore instanceof DaCompletare) return ApiErrors.invalidRequest(errore.message, { mancanti: errore.mancanti });
+    const esito = erroreDiSalvataggio(errore as { code?: string | null; message?: string | null } | null);
+    if (esito.tipo === 'regola') return ApiErrors.invalidRequest(esito.messaggio);
+    return ApiErrors.internal(esito.messaggio);
   }
 }
 
