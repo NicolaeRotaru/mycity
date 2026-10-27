@@ -40,6 +40,13 @@ const stato: {
 } = { mondo: fintoGiroNotturno(), senzaChiave: false, esiti: {}, rifiutaAvvisiA: null, registroInviiRotto: false };
 
 const UTENTE = { id: "rider-1", email: "rider@example.com" };
+/**
+ * 27/10/2026 (quinto giro) — Un secondo fattorino con la SUA casella. Senza,
+ * la sua spiegazione non partiva perché mancava l'indirizzo, non perché la
+ * posta era giù: le prove con due persone provavano un'altra cosa.
+ */
+const SECONDO = { id: "rider-2", email: "rider2@example.com" };
+const PERSONE = [UTENTE, SECONDO];
 
 /**
  * Il finto database del giro notturno, con in più il `.single()` che usa la
@@ -55,7 +62,7 @@ function adminDiProva() {
     auth: {
       admin: {
         ...((stato.mondo.admin as { auth?: { admin?: object } }).auth?.admin ?? {}),
-        getUserById: async (id: string) => ({ data: { user: id === UTENTE.id ? UTENTE : null }, error: null }),
+        getUserById: async (id: string) => ({ data: { user: PERSONE.find((p) => p.id === id) ?? null }, error: null }),
       },
     },
     from(tabella: string) {
@@ -650,6 +657,45 @@ describe("la spiegazione per email si ritenta ogni notte, senza tetto e senza do
     await passaLaNotte();
     expect(lettereA(UTENTE.email), "partita una volta: la notte dopo non si rimanda").toHaveLength(1);
   });
+
+  // 27/10/2026 (quinto giro) — LA FINESTRA SI MISURA DALL'ULTIMO TENTATIVO.
+  // La prova di sopra guarda una notte sola, e la prima notte il primo
+  // tentativo e l'ultimo sono lo stesso: misurare dal primo restava verde. Dalla
+  // seconda notte no — il primo è di ieri, e il secondo giro rispediva.
+  it("IL CASO CHE ROMPEVA — due giri sfalsati ogni notte con la posta giù: una lettera per notte, anche dalla seconda in poi", async () => {
+    ilFattorinoConLaCassaAperta();
+    inviaEmail.mockImplementation(async () => ({ ok: false, error: "Resend 503" }) as { ok: boolean });
+    const lettereDopoLaNotte: number[] = [];
+    const secondiGiri: number[] = [];
+    for (let n = 1; n <= 3; n++) {
+      await passaLaNotte(); // il lavoro periodico di Vercel
+      vi.setSystemTime(Date.now() + 20 * 60_000); // venti minuti dopo, il cron esterno
+      secondiGiri.push((await unGiro()).status);
+      lettereDopoLaNotte.push(lettereA(UTENTE.email).length);
+    }
+    expect(lettereDopoLaNotte, "il secondo giro rispedisce: la finestra è misurata dal primo tentativo, non dall'ultimo").toEqual([1, 2, 3]);
+    expect(secondiGiri, "il secondo giro della notte non è una email ferma in più").toEqual([200, 200, 200]);
+    expect(stato.mondo.notifiche(), "una spiegazione ferma, un allarme").toHaveLength(1);
+  });
+
+  // 27/10/2026 (quinto giro) — NIENTE TETTO, PER TUTTO IL MESE.
+  // Tre notti giù non dicono niente di un tetto a cinque. Chi aspetta resta in
+  // attesa fino al termine di legge (30 giorni dalla richiesta): la spiegazione
+  // si ritenta ogni notte fino a lì, non per un numero di volte.
+  it("venti notti di posta giù, a un passo dal termine di legge: la ventunesima la spiegazione parte ancora", async () => {
+    ilFattorinoConLaCassaAperta(); // chiesta 8 giorni fa: la notte 21 è il giorno 29, dentro il mese
+    inviaEmail.mockImplementation(async () => ({ ok: false, error: "Resend 503" }) as { ok: boolean });
+    for (let n = 1; n <= 20; n++) await passaLaNotte();
+    expect(lettereA(UTENTE.email), "una prova a notte, tutte e venti: un tetto ai tentativi").toHaveLength(20);
+
+    inviaEmail.mockImplementation(async () => ({ ok: true }));
+    const ventunesima = await passaLaNotte();
+    const body = await letto(ventunesima);
+    expect(body.scadute, "la prova deve restare dentro il mese").toBe(0);
+    expect(lettereA(UTENTE.email), "la posta è tornata e la spiegazione non è ripartita: un tetto ai tentativi").toHaveLength(21);
+    expect(body.avvisiEmailBloccate).toBe(0);
+    expect(ventunesima.status).toBe(200);
+  });
 });
 
 describe("con la posta spenta l'allarme suona una volta per stato, non ogni notte", () => {
@@ -675,6 +721,46 @@ describe("con la posta spenta l'allarme suona una volta per stato, non ogni nott
     expect(battitoDellUltima, "il lavoro è vivo: il sorvegliante non deve crederlo morto").toBe(true);
     expect(ultimo.avvisiEmailBloccate, "lo stato resta detto nella risposta").toBe(1);
     expect(lettereA(UTENTE.email), "si riprova comunque ogni notte").toHaveLength(5);
+  });
+
+  // 27/10/2026 (quinto giro) — UN ALLARME PER OGNI SPIEGAZIONE FERMA, A OGNI
+  // AMMINISTRATORE. La prova di sopra ha un fattorino e un amministratore: un
+  // allarme ricavato solo dall'amministratore (o solo dall'avviso) restava
+  // verde. Con due persone ferme in notti diverse, la seconda spiegazione
+  // ferma trovava l'allarme della prima e restava muta, con la notte verde.
+  it("IL CASO CHE ROMPEVA — due fattorini fermi in notti diverse, due amministratori: ogni spiegazione ferma ha il suo allarme, per ognuno", async () => {
+    ilFattorinoConLaCassaAperta();
+    stato.esiti[SECONDO.id] = CASSA_APERTA;
+    const inCoda = [{ user_id: UTENTE.id, deleted_at: CHIESTA }];
+    stato.mondo = fintoGiroNotturno({
+      rpc: { process_expired_deletions: { data: inCoda, error: null } },
+      tabelle: {
+        notifications: [],
+        profiles: [
+          { id: UTENTE.id, role: "rider", deletion_requested_at: CHIESTA },
+          { id: SECONDO.id, role: "rider", deletion_requested_at: CHIESTA },
+          { id: "admin-1", role: "admin" },
+          { id: "admin-2", role: "admin" },
+        ],
+      },
+    });
+    const stati: number[] = [];
+    let quinta: Record<string, unknown> = {};
+    for (let n = 1; n <= 5; n++) {
+      // Dalla quarta notte aspetta la cancellazione anche il secondo fattorino.
+      if (n === 4) inCoda.push({ user_id: SECONDO.id, deleted_at: CHIESTA });
+      const res = await passaLaNotte();
+      stati.push(res.status);
+      quinta = await letto(res);
+    }
+    expect(lettereA(SECONDO.email), "anche la sua spiegazione si ritenta ogni notte").toHaveLength(2);
+    expect(stati, "la seconda spiegazione ferma resta muta: la notte 5 è verde").toEqual([200, 500, 200, 200, 500]);
+    expect(quinta.avvisiEmailBloccate).toBe(2);
+    expect(quinta.allarmiEmailNuovi, "ferma da stanotte è la seconda, non la prima").toBe(1);
+    const allarmi = stato.mondo.notifiche().filter((n) => n.title === "Spiegazione dell'attesa non partita per email");
+    const di = (amministratore: string) => allarmi.filter((n) => n.user_id === amministratore).length;
+    expect([di("admin-1"), di("admin-2")], "ogni amministratore sa di tutte e due").toEqual([2, 2]);
+    expect(new Set(allarmi.map((n) => n.id)).size, "quattro allarmi, quattro identificativi").toBe(4);
   });
 });
 
