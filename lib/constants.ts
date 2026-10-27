@@ -121,6 +121,18 @@ export const PLATFORM_DELIVERY_FEE_CENTS = 300;
  */
 export const MARKETPLACE_FEE_BPS = 1000; // 10.00%
 
+/**
+ * La commissione su una cifra di merce, in centesimi interi: `MARKETPLACE_FEE_BPS` arrotondato al
+ * centesimo. 27/10/2026 — la formula ha un posto solo, client-safe, perché la usano in due: il
+ * payout (`computeApplicationFeeCents` in lib/stripe/client) e la cassa (`prezziDelCarrello`), che
+ * col codice «Spedizione gratuita» deve sapere quanto dell'ordine resta alla piattaforma per pagare
+ * il fattorino. Con due copie, il giorno che cambia l'arrotondamento la cassa conterebbe un
+ * centesimo che il bonifico non trova.
+ */
+export function commissioneCents(merceCents: number): number {
+  return Math.round((merceCents * MARKETPLACE_FEE_BPS) / 10000);
+}
+
 // Riferimenti per icone (nomi lucide-react). Componenti li importano e
 // renderizzano per evitare di sparare emoji nelle UI strutturali.
 // 27/10/2026 — La prima promessa diceva «Spedizione gratuita sopra 30 € per negozio · 3,00 € di

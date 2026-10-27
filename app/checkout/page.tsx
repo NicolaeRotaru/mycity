@@ -17,7 +17,7 @@ import { leggiOrdiniCod } from '@/lib/ordini/risposta-ordini-cod';
 import { formatPrice, pluralize } from '@/lib/format';
 import { PICKUP_DISCOUNT_PERCENT, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingForEuro } from '@/lib/shipping';
-import { promessaSpedizione } from '@/lib/promesse-pubbliche';
+import { promessaSpedizione, rigaDelCodiceSpedizione } from '@/lib/promesse-pubbliche';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
 import { fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
@@ -681,6 +681,13 @@ export default function CheckoutPage() {
    * Il riquadro «Consegna a domicilio» legge lo stesso numero.
    */
   const consegnaDaPagare = grandShipping + platformDeliveryFee;
+  // 27/10/2026 — Col codice «Spedizione gratuita», sotto i 30 € per negozio la consegna resta in
+  // parte da pagare (`prezziDelCarrello`): la riga sotto il riquadro dice quanto copre il codice,
+  // invece della tariffa piena, che smentirebbe la cifra addebitata.
+  const rigaCodice =
+    appliedCoupon?.freeShipping && !pickupInStore
+      ? rigaDelCodiceSpedizione(Math.round(consegnaDaPagare * 100), groups.length)
+      : null;
   // Lo sconto che si mostra è quello DAVVERO applicato, non quello richiesto:
   // altrimenti le righe del riepilogo non fanno il totale.
   const discount = riepilogo.scontoCodice;
@@ -1260,10 +1267,10 @@ export default function CheckoutPage() {
                     fine. La frase non si scrive qui: nasce dalla cifra che la
                     cassa addebita davvero (`promessaSpedizione`, la stessa che
                     parla in vetrina). A consegna gratuita sparisce: la frase
-                    dice la tariffa di 3 € a negozio, e col codice «Spedizione
-                    gratuita» la cassa non la addebita (27/10/2026). */}
-                {consegnaDaPagare > 0 && promessaConsegna.dettaglioConsegna && (
-                  <p className="mt-2 text-xs text-ink-500">{promessaConsegna.dettaglioConsegna}</p>
+                    dice la tariffa di 3 € a negozio; col codice «Spedizione
+                    gratuita» dice quanto ne copre il codice (27/10/2026). */}
+                {consegnaDaPagare > 0 && (rigaCodice ?? promessaConsegna.dettaglioConsegna) && (
+                  <p className="mt-2 text-xs text-ink-500">{rigaCodice ?? promessaConsegna.dettaglioConsegna}</p>
                 )}
               </>
             )}

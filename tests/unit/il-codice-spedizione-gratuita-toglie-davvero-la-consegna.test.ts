@@ -17,6 +17,11 @@ import { COMPENSO_RIDER_CENTS, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constan
  *
  * Adesso il codice toglie la consegna, su ogni negozio del carrello. Il fattorino resta pagato,
  * e il regalo lo paga la piattaforma: il netto del negozio è lo stesso, con o senza codice.
+ *
+ * Secondo giro, stesso giorno: la consegna si toglie TUTTA da 30 € di spesa per negozio, sotto ne
+ * resta da pagare la parte che la commissione non copre. Tutta anche a 20 € voleva dire 21 € di
+ * bonifici su 20 € incassati con la carta: la prova è
+ * tests/unit/col-codice-spedizione-gratuita-i-bonifici-stanno-nell-addebito.test.ts.
  */
 
 function ingressi(subtotali: number[], opts: Partial<IngressiPrezzo> = {}): IngressiPrezzo {
@@ -35,22 +40,22 @@ function ingressi(subtotali: number[], opts: Partial<IngressiPrezzo> = {}): Ingr
 const consegnaPagata = (g: { shippingCents: number; deliveryFeeCents: number }) => g.shippingCents + g.deliveryFeeCents;
 
 describe('il codice «Spedizione gratuita»', () => {
-  it('toglie la consegna: 20 € di spesa, 20 € da pagare invece di 23', () => {
-    const senza = prezziDelCarrello(ingressi([2000]));
-    const con = prezziDelCarrello(ingressi([2000], { couponSpedizioneGratis: true }));
+  it('toglie la consegna: 30 € di spesa, 30 € da pagare invece di 33', () => {
+    const senza = prezziDelCarrello(ingressi([3000]));
+    const con = prezziDelCarrello(ingressi([3000], { couponSpedizioneGratis: true }));
 
-    expect(senza.grandTotalCents).toBe(2000 + PLATFORM_DELIVERY_FEE_CENTS);
+    expect(senza.grandTotalCents).toBe(3000 + PLATFORM_DELIVERY_FEE_CENTS);
     expect(con.grandTotalCents, 'il codice è stato accettato e consumato: deve togliere qualcosa').toBeLessThan(
       senza.grandTotalCents,
     );
     expect(consegnaPagata(con.gruppi[0])).toBe(0);
-    expect(con.grandTotalCents).toBe(2000);
+    expect(con.grandTotalCents).toBe(3000);
   });
 
   it('vale per ogni negozio del carrello, non solo per il primo', () => {
-    const con = prezziDelCarrello(ingressi([800, 1800], { couponSpedizioneGratis: true }));
+    const con = prezziDelCarrello(ingressi([3000, 4500], { couponSpedizioneGratis: true }));
     expect(con.gruppi.map(consegnaPagata)).toEqual([0, 0]);
-    expect(con.grandTotalCents).toBe(800 + 1800);
+    expect(con.grandTotalCents).toBe(3000 + 4500);
   });
 
   it('il fattorino resta pagato: il suo compenso non dipende dal codice del cliente', () => {
@@ -79,13 +84,13 @@ describe('il codice «Spedizione gratuita»', () => {
     expect(con.gruppi[0].riderFeeCents).toBe(0);
   });
 
-  it('la cassa mostra quello che addebita: consegna a zero e totale di 20 €', () => {
+  it('la cassa mostra quello che addebita: consegna a zero e totale di 30 €', () => {
     const r = riepilogoDaMostrare({
-      ...ingressi([2000], { couponSpedizioneGratis: true }),
+      ...ingressi([3000], { couponSpedizioneGratis: true }),
       usaCredito: false,
       creditoDisponibileCents: 0,
     });
     expect(r.spedizione + r.feeConsegna).toBe(0);
-    expect(r.totale).toBe(20);
+    expect(r.totale).toBe(30);
   });
 });

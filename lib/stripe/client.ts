@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
-import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
+import { MARKETPLACE_FEE_BPS, commissioneCents } from '@/lib/constants';
 
 let _stripe: Stripe | null = null;
 
@@ -387,7 +387,9 @@ export async function createConnectLoginLink(accountId: string): Promise<{ url: 
 export { MARKETPLACE_FEE_BPS };
 
 export function computeApplicationFeeCents(amountCents: number): number {
-  return Math.round((amountCents * MARKETPLACE_FEE_BPS) / 10000);
+  // La formula vive in lib/constants (`commissioneCents`): la cassa la usa per sapere quanto
+  // resta alla piattaforma, e deve contare lo stesso centesimo che conta il payout.
+  return commissioneCents(amountCents);
 }
 
 /**
@@ -409,6 +411,9 @@ export function computeApplicationFeeCents(amountCents: number): number {
  * releaseRiderPayout. Prima era la spedizione stessa, e li' stava il guasto:
  * sopra i 30 euro la spedizione e' zero, quindi il fattorino non veniva pagato.
  * Adesso il compenso e' coperto dalla fee di consegna, che vale quanto lui.
+ * Col codice «Spedizione gratuita» (27/10/2026) la fee scende, ma mai sotto
+ * compenso meno commissione (`prezziDelCarrello`): netto + compenso restano
+ * dentro l'addebito, che e' quello da cui partono i due bonifici.
  *
  * Invariante: sellerPayout + applicationFee + deliveryFee + shipping === total
  */

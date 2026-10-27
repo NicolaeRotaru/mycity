@@ -6,6 +6,7 @@ import {
 } from './constants';
 import { EXPRESS_ETA_LABEL } from './delivery';
 import { formatPrice } from './format';
+import { spesaPerConsegnaGratisColCodiceCents } from './ordini/prezzi';
 
 /**
  * LE PROMESSE PUBBLICHE — quelle scritte nelle pagine, derivate da chi le mantiene.
@@ -289,4 +290,20 @@ export function promessaSpedizione(
       ? `Consegna MyCity ${formatPrice(costoConsegna)} per negozio, su ogni ordine a domicilio`
       : null,
   };
+}
+
+/**
+ * 27/10/2026 — LA RIGA SOTTO LA CONSEGNA QUANDO IL CODICE «SPEDIZIONE GRATUITA» LA COPRE IN PARTE.
+ *
+ * Il codice regala la consegna fin dove la paga la commissione di quel negozio (`prezziDelCarrello`):
+ * da 30 € di spesa per negozio tutta, sotto una parte. Senza questa riga la cassa scriveva «Consegna
+ * MyCity 3,00 € per negozio» sopra un addebito di 1 €, e chi aveva letto «codice applicato» non
+ * capiva perché pagava ancora. `null` quando non c'è niente da spiegare: consegna già a zero, o un
+ * codice che su quella spesa non copre neanche un centesimo.
+ */
+export function rigaDelCodiceSpedizione(consegnaDaPagareCents: number, negozi: number): string | null {
+  const copertaCents = negozi * PLATFORM_DELIVERY_FEE_CENTS - consegnaDaPagareCents;
+  if (consegnaDaPagareCents <= 0 || copertaCents <= 0) return null;
+  const sogliaCents = spesaPerConsegnaGratisColCodiceCents();
+  return `Il codice copre ${formatPrice(copertaCents / 100)} della consegna; da ${formatPrice(sogliaCents / 100)} di spesa per negozio la copre tutta.`;
 }
