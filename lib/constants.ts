@@ -1,21 +1,18 @@
 import { EXPRESS_ETA_LABEL } from './delivery';
 import { formatPrice } from './format';
-export const FREE_SHIPPING_THRESHOLD = 30;
 export const LOW_STOCK_THRESHOLD = 5;
 export const NEW_PRODUCT_DAYS = 14;
 
-/** Spedizione flat di fallback quando le coordinate non sono note (€). */
-export const SHIPPING_PER_ORDER = 4.9;
-
 /**
- * 22/8/2026 — Le due tariffe che compongono il prezzo della spedizione a
- * distanza. Stavano scritte dentro il corpo di `prezzoSpedizioneEuro()` in lib/geo.ts,
- * mentre ogni altra grandezza economica del sito vive qui: chi cercava «quanto
- * costa la spedizione» non le trovava, e la pagina di amministrazione delle
- * consegne non poteva mostrarle accanto alle altre.
+ * 27/10/2026 — LA SPEDIZIONE A CHILOMETRI E LA SOGLIA DEI 30 EURO NON ESISTONO PIÙ.
+ *
+ * Qui vivevano `FREE_SHIPPING_THRESHOLD` (30 € per negozio), `SHIPPING_PER_ORDER` (4,90 € senza
+ * coordinate) e le due tariffe a distanza `SPEDIZIONE_BASE_EUR` + `SPEDIZIONE_PER_KM_EUR` (2,50 €
+ * più 1,20 € al km). Nicola ha firmato un'altra promessa (scelta 8 della carta #209, 26/10): il
+ * cliente paga SOLO la consegna, `PLATFORM_DELIVERY_FEE_CENTS` per negozio, sempre, anche sotto i
+ * 30 euro; col ritiro in negozio niente. Le costanti sono state tolte, non lasciate a zero: un
+ * numero che resta esportato prima o poi qualcuno lo rimette in una frase o in un conto.
  */
-export const SPEDIZIONE_BASE_EUR = 2.5;
-export const SPEDIZIONE_PER_KM_EUR = 1.2;
 /**
  * FIN DOVE SI CONSEGNA — in chilometri in linea d'aria dal negozio.
  *
@@ -41,9 +38,9 @@ export const SPEDIZIONE_PER_KM_EUR = 1.2;
  * Milano.
  *
  * La promessa sui tempi che va con questo confine è «in giornata» (scelta 8
- * della carta #209), non una stima a minuti: la frase «30-60 minuti» di
- * lib/promesse-pubbliche.ts e i testi di app/shipping/page.tsx («entro 15 km»)
- * vanno allineati a parte.
+ * della carta #209), non una stima a minuti: la frase «30-60 minuti» va
+ * allineata a parte. La pagina Spedizioni, la FAQ, «Vicino a te» e la pagina
+ * admin delle consegne leggono il confine da qui (27/10, secondo giro).
  *
  * 🟡 IL NUMERO È UNA DECISIONE COMMERCIALE, NON TECNICA: dice a chi possiamo
  * vendere. Sta qui, in una riga, apposta perché cambiarlo sia una firma e non
@@ -126,17 +123,14 @@ export const MARKETPLACE_FEE_BPS = 1000; // 10.00%
 
 // Riferimenti per icone (nomi lucide-react). Componenti li importano e
 // renderizzano per evitare di sparare emoji nelle UI strutturali.
-// La soglia vale per NEGOZIO, non sul totale del carrello: dirlo qui costa tre parole e toglie il
-// caso in cui uno legge «gratuita sopra 30 €», ne spende 35 fra due negozi e paga la spedizione.
-// E i minuti vengono da lib/delivery, dove il numero e' deciso — non riscritti qui.
-// La consegna la nomina il sottotitolo: «gratuita» da sola era falsa, perche' i 3 euro di
-// PLATFORM_DELIVERY_FEE_CENTS si pagano su ogni ordine portato a casa, anche sopra la soglia. La
-// frase nasce da quella cifra: portarla a zero fa tornare da se' il claim pulito. Le parole per la
-// vetrina le decide `promessaSpedizione()` in lib/promesse-pubbliche — qui non si puo' chiamare
-// (quel file importa questo, e il giro si chiuderebbe su se stesso), ma il numero e' lo stesso e
-// una prova tiene le due frasi allineate.
+// 27/10/2026 — La prima promessa diceva «Spedizione gratuita sopra 30 € per negozio · 3,00 € di
+// consegna». La soglia non esiste più: si paga solo la consegna, per negozio, e il confine è quello
+// della cassa. Le due cifre nascono dalle costanti qui sopra. Le parole della vetrina le decide
+// `promessaSpedizione()` in lib/promesse-pubbliche (qui non si può chiamare: quel file importa
+// questo, e il giro si chiuderebbe su se stesso); una prova tiene le frasi allineate.
+// I minuti della quarta promessa vengono da lib/delivery, dove il numero è deciso.
 export const VALUE_PROPS = [
-  { icon: 'Truck',      title: 'Spedizione gratuita',      subtitle: `sopra ${FREE_SHIPPING_THRESHOLD} € per negozio${PLATFORM_DELIVERY_FEE_CENTS > 0 ? ` · ${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} di consegna` : ''}` },
+  { icon: 'Truck',      title: 'Consegna a casa',          subtitle: PLATFORM_DELIVERY_FEE_CENTS > 0 ? `${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} per negozio, entro ${RAGGIO_CONSEGNA_KM} km` : `gratuita, entro ${RAGGIO_CONSEGNA_KM} km` },
   { icon: 'BanknoteArrowUp', title: 'Pagamento alla consegna', subtitle: 'in contanti, zero rischi' },
   { icon: 'Store',      title: '100% locale',              subtitle: 'venditori della tua città' },
   { icon: 'Zap',        title: 'Consegna rapida',          subtitle: `in ${EXPRESS_ETA_LABEL} dalla conferma del negozio` },

@@ -17,6 +17,7 @@ import { leggiOrdiniCod } from '@/lib/ordini/risposta-ordini-cod';
 import { formatPrice, pluralize } from '@/lib/format';
 import { PICKUP_DISCOUNT_PERCENT, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingForEuro } from '@/lib/shipping';
+import { promessaSpedizione } from '@/lib/promesse-pubbliche';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
 import { fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
@@ -51,8 +52,6 @@ import {
 import { OrderSummary, vaiAlPrimoBlocco } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
-import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
-import { promessaSpedizioneDelCarrello } from '@/lib/ordini/promessa-del-carrello';
 import { merceCheTengoIo, problemiDiDisponibilita, type TentativoAperto } from '@/lib/ordini/merce-che-tengo-io';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { leggiJson, messaggioDiRete } from '@/lib/api/leggi-json';
@@ -660,17 +659,11 @@ export default function CheckoutPage() {
     creditoDisponibileCents: walletCents ?? 0,
   });
 
-  // La promessa sulla spedizione ha una casa sola: `promessaSpedizione` la fa
-  // nascere dalla soglia e dal costo di consegna veri.
-  //
-  // 3/9/2026 — QUI LE SI PASSAVA IL TOTALE DI TUTTO IL CARRELLO, e la soglia
-  // dei 30 € vale per NEGOZIO: con 18 € dal fornaio e 18 dal macellaio la barra
-  // diceva «Spedizione gratis» e il riepilogo addebitava due spedizioni.
-  // Adesso la domanda parte dall'elenco dei negozi e la risposta guarda quello
-  // più lontano dalla soglia: «gratis» compare solo quando è vero per tutti.
-  const promessaConsegna = promessaSpedizioneDelCarrello(
-    sottototaliPerNegozioCents.map((c) => c / 100),
-  );
+  // La frase sulla consegna ha una casa sola: `promessaSpedizione` la fa nascere dal costo di
+  // consegna vero. 27/10/2026 — La soglia dei 30 € per negozio non esiste più (si paga solo la
+  // consegna, per negozio, sempre): la barra «ti mancano X €» e il conto sul negozio più lontano
+  // dalla soglia (lib/ordini/promessa-del-carrello.ts) sono stati tolti.
+  const promessaConsegna = promessaSpedizione();
 
   const walletEuro = (walletCents ?? 0) / 100;
   const grandSubtotal = riepilogo.subtotale;
@@ -1248,7 +1241,7 @@ export default function CheckoutPage() {
                     <p className="text-sm text-ink-600">{rigaQuandoArriva(consegna)}{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
                   </div>
                   <span className="font-serif text-lg font-extrabold text-ink-900">
-                    {grandShipping === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(grandShipping)}
+                    {grandShipping + platformDeliveryFee === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(grandShipping + platformDeliveryFee)}
                   </span>
                 </div>
                 {/* 3/9/2026 — «Gratis» da solo, mentre il riepilogo qui a fianco
@@ -1256,8 +1249,8 @@ export default function CheckoutPage() {
                     fine. La frase non si scrive qui: nasce dalla cifra che la
                     cassa addebita davvero (`promessaSpedizione`, la stessa che
                     parla in vetrina). A consegna gratuita sparisce da sé. */}
-                {promessaConsegna.promessa.dettaglioConsegna && (
-                  <p className="mt-2 text-xs text-ink-500">{promessaConsegna.promessa.dettaglioConsegna}</p>
+                {promessaConsegna.dettaglioConsegna && (
+                  <p className="mt-2 text-xs text-ink-500">{promessaConsegna.dettaglioConsegna}</p>
                 )}
               </>
             )}
@@ -1488,15 +1481,6 @@ export default function CheckoutPage() {
             </div>
 
             <CartGroupsList groups={groups} />
-
-            {/* Spinta add-back: a un soffio dalla spedizione gratis.
-                Il numero è il sottototale del negozio più lontano dalla soglia,
-                non il totale del carrello: la soglia vale per ciascun negozio,
-                e sommandoli la barra prometteva «gratis» su un ordine che
-                pagava due spedizioni. */}
-            <div className="px-5 pt-3">
-              <FreeShippingProgress subtotal={promessaConsegna.sottototaleDellaBarra} />
-            </div>
 
             {/* Coupon input */}
             <CouponInput

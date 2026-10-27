@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
 import { residuoRecuperabile } from '@/lib/stripe/payout';
 import { compensoRiderCents, shippingCentsFor } from '@/lib/shipping';
-import { COMPENSO_RIDER_CENTS, FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
+import { COMPENSO_RIDER_CENTS, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 
 /**
  * Quattro punti in cui i conti non tornavano.
@@ -129,7 +129,7 @@ describe('il compenso del fattorino', () => {
       { deliveryLat: 45.06,  deliveryLng: 9.700 },  // ~1,3 km
       { deliveryLat: 45.20,  deliveryLng: 9.900 },  // ~24 km
     ];
-    const subtotali = [5, 15, 29.99, FREE_SHIPPING_THRESHOLD, 60, 250];
+    const subtotali = [5, 15, 29.99, 30, 60, 250];
     const casiScoperti: string[] = [];
 
     for (const subtotal of subtotali) {
@@ -155,7 +155,7 @@ describe('il compenso del fattorino', () => {
 
   it('sopra la soglia la spedizione e zero, e la fee di consegna copre da sola il compenso', () => {
     const spedizione = shippingCentsFor({
-      subtotal: FREE_SHIPPING_THRESHOLD + 10,
+      subtotal: 40,
       storeLat: 45.05, storeLng: 9.69,
       // ~9 km: il bordo della zona servita in bici (10 km, decisione del 27/10/2026).
       // Prima qui c'era un indirizzo a ~24 km, che oggi la cassa non accetta più.

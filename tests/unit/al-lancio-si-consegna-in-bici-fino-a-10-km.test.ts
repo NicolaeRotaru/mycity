@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { RAGGIO_CONSEGNA_KM, VELOCITA_MEDIA_BICI_KMH } from '@/lib/constants';
 import { fuoriZonaDiConsegna } from '@/lib/ordini/zona-di-consegna';
-import { deliveryEtaMinutes } from '@/lib/geo';
+import { deliveryEtaMinutes, haversineKm } from '@/lib/geo';
 
 /**
  * 27/10/2026 — LA CASSA ACCETTAVA CONSEGNE FINO A 25 KM, MA AL LANCIO SI
@@ -25,6 +25,21 @@ const NEGOZIO_PIACENZA = { lat: 45.0526, lng: 9.6929 };
 // circa 78,7 km, quindi 0,1016° ≈ 8 km e 0,1906° ≈ 15 km.
 const CASA_A_8_KM = { lat: 45.0526, lng: 9.7945 };
 const CASA_A_15_KM = { lat: 45.0526, lng: 9.8835 };
+// 27/10 (secondo giro) — I punti vicini al confine. Con soli 8 e 15 km una tolleranza nascosta di
+// +4,5 km nel confronto (la cassa che accetta fino a 14,5) lasciava tutto verde. Questi tre stanno
+// a 9,6 · 10,6 · 13 km: il primo deve passare, gli altri due no.
+const CASA_A_9_6_KM = { lat: 45.0526, lng: 9.8150 };
+const CASA_A_10_6_KM = { lat: 45.0526, lng: 9.8277 };
+const CASA_A_13_KM = { lat: 45.0526, lng: 9.8582 };
+const fuori = (casa: { lat: number; lng: number }) =>
+  fuoriZonaDiConsegna({
+    storeLat: NEGOZIO_PIACENZA.lat,
+    storeLng: NEGOZIO_PIACENZA.lng,
+    deliveryLat: casa.lat,
+    deliveryLng: casa.lng,
+  });
+const km = (casa: { lat: number; lng: number }) =>
+  haversineKm(NEGOZIO_PIACENZA.lat, NEGOZIO_PIACENZA.lng, casa.lat, casa.lng);
 
 describe('al lancio si consegna in bici fino a 10 km', () => {
   it('il confine deciso è 10 km', () => {
@@ -52,6 +67,24 @@ describe('al lancio si consegna in bici fino a 10 km', () => {
       }),
       `una consegna a 15 km risulta dentro la zona (raggio: ${RAGGIO_CONSEGNA_KM} km)`,
     ).toBe(true);
+  });
+
+  it('i punti scelti stanno davvero dove dicono (se no la prova sotto non misura niente)', () => {
+    expect(km(CASA_A_9_6_KM)).toBeGreaterThan(9.3);
+    expect(km(CASA_A_9_6_KM)).toBeLessThan(9.9);
+    expect(km(CASA_A_10_6_KM)).toBeGreaterThan(10.3);
+    expect(km(CASA_A_10_6_KM)).toBeLessThan(10.9);
+    expect(km(CASA_A_13_KM)).toBeGreaterThan(12.7);
+    expect(km(CASA_A_13_KM)).toBeLessThan(13.3);
+  });
+
+  it('a 9,6 km si consegna ancora', () => {
+    expect(fuori(CASA_A_9_6_KM), 'un indirizzo dentro i 10 km risulta fuori zona').toBe(false);
+  });
+
+  it('IL TRATTO CHE NESSUNO GUARDAVA — a 10,6 e a 13 km la cassa dice no', () => {
+    expect(fuori(CASA_A_10_6_KM), `a 10,6 km la cassa accetta (raggio: ${RAGGIO_CONSEGNA_KM} km)`).toBe(true);
+    expect(fuori(CASA_A_13_KM), `a 13 km la cassa accetta (raggio: ${RAGGIO_CONSEGNA_KM} km)`).toBe(true);
   });
 
   it('la stima del viaggio va alla velocità di una bici, non di uno scooter', () => {

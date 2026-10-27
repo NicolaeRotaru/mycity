@@ -101,7 +101,8 @@ describe('il totale che si legge in cassa', () => {
     // le righe non tornerebbero col totale: il cliente fa la somma a mano.
     const ing = ingressi([1000], { couponScontoCents: 3000 });
     const r = riepilogoDaMostrare({ ...ing, usaCredito: false, creditoDisponibileCents: 0 });
-    expect(Math.round(r.scontoCodice * 100)).toBe(1489);
+    // 27/10/2026: senza spedizione a distanza il tetto è la merce meno un centesimo (1000 − 1).
+    expect(Math.round(r.scontoCodice * 100)).toBe(999);
     const somma = r.subtotale + r.spedizione + r.feeConsegna - r.scontoCodice - r.scontoRitiro - r.creditoUsato;
     expect(Math.round(somma * 100), 'le righe del riepilogo non fanno il totale').toBe(Math.round(r.totale * 100));
   });

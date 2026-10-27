@@ -13,8 +13,7 @@ import {
   type Dati,
 } from './aiuti/database-coi-permessi';
 import { formatPrice } from '@/lib/format';
-import { SHIPPING_PER_ORDER } from '@/lib/constants';
-import { shippingForEuro } from '@/lib/shipping';
+import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import { getCart } from '@/lib/cart';
 
 /**
@@ -113,7 +112,7 @@ const FOCACCIA_E_MIELE: RigaCarrello[] = [
 const euro = (n: number) => formatPrice(n).replace(/\s+/g, ' ');
 
 /** Le cifre scritte accanto a «Spedizione», in ogni riepilogo della pagina. */
-function spedizioniMostrate(radice: HTMLElement): string[] {
+function spedizioniMostrate(radice: HTMLElement, cercata: RegExp = /^Spedizione/): string[] {
   const cifre: string[] = [];
   for (const riga of Array.from(radice.querySelectorAll('div'))) {
     const figli = Array.from(riga.children);
@@ -123,7 +122,7 @@ function spedizioniMostrate(radice: HTMLElement): string[] {
       .map((n) => n.textContent ?? '')
       .join('')
       .trim();
-    if (!/^Spedizione/.test(etichetta)) continue;
+    if (!cercata.test(etichetta)) continue;
     cifre.push(testoVisibile(figli[1]));
   }
   return cifre;
@@ -161,12 +160,15 @@ async function spedizioneNelCarrello(mondo: Mondo, carrello: RigaCarrello[], opz
   const db = preparaIlMondo(mondo, carrello, opzioni);
   const pagina = (await monta('app/cart/page.tsx')).default;
   const s = accendi(pagina, {});
-  await finoA(() => db.letture.includes('user_addresses') && /calcolata sul tuo|stima/.test(testoVisibile(s.radice)));
+  // 27/10/2026 — Il carrello non legge più dove sta il negozio e dove si consegna: la consegna non
+  // dipende dalla distanza. Si aspetta la riga che dice quanto si paga.
+  await finoA(() => db.letture.includes('products') && /Consegna MyCity/.test(testoVisibile(s.radice)));
   await attendi();
-  const cifre = spedizioniMostrate(s.radice);
+  const cifre = spedizioniMostrate(s.radice, /^Consegna MyCity/);
+  const spedizioni = spedizioniMostrate(s.radice);
   const testo = testoVisibile(s.radice);
   s.smonta();
-  return { cifre, testo, letture: [...db.letture] };
+  return { cifre, spedizioni, testo, letture: [...db.letture] };
 }
 
 type Opzioni = { queryKey: readonly unknown[]; queryFn?: (c: unknown) => Promise<unknown>; enabled?: boolean };
@@ -215,7 +217,7 @@ async function spedizioneAllaCassa(mondo: Mondo, carrello: RigaCarrello[], opzio
   const s = accendi(pagina, {});
   await finoA(() => spedizioniMostrate(s.radice).length > 0);
   await attendi();
-  const cifre = spedizioniMostrate(s.radice);
+  const cifre = spedizioniMostrate(s.radice, /^Consegna MyCity/);
   const testo = testoVisibile(s.radice);
   s.smonta();
   return { cifre, testo, letture: [...db.letture], errori: [...errori.values()] };
@@ -334,45 +336,33 @@ afterEach(() => {
   localStorage.clear();
 });
 
-describe('la spedizione che il server addebita: la distanza fra Pane Quotidiano e la casa di Maria', () => {
-  it('la scena regge: a quella distanza la spedizione NON è la tariffa fissa', () => {
-    const aDistanza = shippingForEuro({
-      subtotal: 8, storeLat: NEGOZIO_IN_CENTRO.lat, storeLng: NEGOZIO_IN_CENTRO.lng,
-      deliveryLat: CASA_DI_MARIA.lat, deliveryLng: CASA_DI_MARIA.lng, pickupInStore: false,
-    });
-    expect(
-      euro(aDistanza),
-      'con la tariffa fissa uguale a quella sulla distanza la prova non distinguerebbe le due letture',
-    ).not.toBe(euro(SHIPPING_PER_ORDER));
-  });
+/*
+ * 27/10/2026 — SI PAGA SOLO LA CONSEGNA. Scelta 8 della carta #209: il cliente paga i 3 euro di
+ * consegna per negozio e nient'altro. Fino a ieri questa prova guardava che carrello, cassa e
+ * server facessero lo stesso conto della spedizione A DISTANZA fra Pane Quotidiano e la casa di
+ * Maria, letta dalla vista pubblica dei negozi. Quella spedizione non esiste più: adesso la prova
+ * guarda che il server non ne addebiti nessuna, e che carrello e cassa mostrino la stessa
+ * consegna, una per negozio. La vista resta letta dal server (zona di consegna) e dalla cassa.
+ */
+const CONSEGNA = (negozi: number) => euro((negozi * PLATFORM_DELIVERY_FEE_CENTS) / 100);
 
-  it.each(MONDI)('il server la addebita sulla distanza — %s', async (_n, mondo) => {
+describe('il server non addebita più una spedizione, né a distanza né fissa', () => {
+  it.each(MONDI)('Pane Quotidiano, casa di Maria — %s', async (_n, mondo) => {
     const addebitata = await spedizioneAddebitata(mondo, [{ sellerId: PANE, items: [{ productId: FOCACCIA, quantity: 1 }] }]);
-    expect(euro(addebitata)).not.toBe(euro(SHIPPING_PER_ORDER));
+    expect(euro(addebitata)).toBe(euro(0));
   });
 });
 
-describe('il carrello mostra la spedizione che il server addebita', () => {
+describe('il carrello e la cassa mostrano la stessa consegna', () => {
   it.each(MONDI)('Pane Quotidiano, casa di Maria — %s', async (_n, mondo) => {
-    const addebitata = await spedizioneAddebitata(mondo, [{ sellerId: PANE, items: [{ productId: FOCACCIA, quantity: 1 }] }]);
-    const { cifre, testo } = await spedizioneNelCarrello(mondo, UNA_FOCACCIA);
-    expect(cifre.length, `nel carrello non si trova la riga della spedizione: ${testo.slice(0, 400)}`).toBeGreaterThan(0);
-    for (const c of cifre) {
-      expect(c, 'il carrello mostra una spedizione e il server ne addebita un\'altra').toBe(euro(addebitata));
-    }
-    expect(testo, 'con tutti e due i punti noti il numero non è una stima').toContain('calcolata sul tuo indirizzo predefinito');
-  }, 60000);
-});
-
-describe('la cassa mostra la spedizione che il server addebita', () => {
-  it.each(MONDI)('Pane Quotidiano, casa di Maria — %s', async (_n, mondo) => {
-    const addebitata = await spedizioneAddebitata(mondo, [{ sellerId: PANE, items: [{ productId: FOCACCIA, quantity: 1 }] }]);
-    const { cifre, testo, errori } = await spedizioneAllaCassa(mondo, UNA_FOCACCIA);
-    expect(errori, 'una lettura della cassa è caduta').toEqual([]);
-    expect(cifre.length, `alla cassa non si trova la riga della spedizione: ${testo.slice(0, 400)}`).toBeGreaterThan(0);
-    for (const c of cifre) {
-      expect(c, 'la cassa mostra una spedizione e il server ne addebita un\'altra').toBe(euro(addebitata));
-    }
+    const carrello = await spedizioneNelCarrello(mondo, UNA_FOCACCIA);
+    expect(carrello.cifre.length, `nel carrello non si trova la riga della consegna: ${carrello.testo.slice(0, 400)}`).toBeGreaterThan(0);
+    for (const c of carrello.cifre) expect(c, 'il carrello mostra una consegna diversa').toBe(CONSEGNA(1));
+    expect(carrello.spedizioni, 'nel carrello è tornata una riga «Spedizione»').toEqual([]);
+    const cassa = await spedizioneAllaCassa(mondo, UNA_FOCACCIA);
+    expect(cassa.errori, 'una lettura della cassa è caduta').toEqual([]);
+    expect(cassa.cifre.length, `alla cassa non si trova la riga della consegna: ${cassa.testo.slice(0, 400)}`).toBeGreaterThan(0);
+    for (const c of cassa.cifre) expect(c, 'la cassa mostra una consegna diversa').toBe(CONSEGNA(1));
   }, 60000);
 });
 
@@ -387,46 +377,32 @@ describe('la cassa scrive il nome del negozio letto dalla vista, anche se il car
   }, 60000);
 });
 
-describe('un negozio che la vista non restituisce: la spedizione è quella fissa, come la fa il server', () => {
-  /**
-   * Il negozio del miele è approvato e i suoi prodotti si comprano, ma non ha l'insegna: la vista
-   * non lo restituisce. Il server allora non ha le sue coordinate e addebita la tariffa fissa.
-   * Il carrello e la cassa non devono inventarne un'altra: mostrano la stessa.
-   */
+describe('un negozio che la vista non restituisce: la consegna è la stessa, una per negozio', () => {
   const GRUPPI = [
     { sellerId: PANE, items: [{ productId: FOCACCIA, quantity: 1 }] },
     { sellerId: SENZA_INSEGNA, items: [{ productId: MIELE, quantity: 1 }] },
   ];
 
-  it.each(MONDI)('il server: distanza per il fornaio, tariffa fissa per il miele — %s', async (_n, mondo) => {
-    const addebitata = await spedizioneAddebitata(mondo, GRUPPI);
-    const soloIlFornaio = await spedizioneAddebitata(mondo, [GRUPPI[0]]);
-    expect(euro(addebitata - soloIlFornaio)).toBe(euro(SHIPPING_PER_ORDER));
+  it.each(MONDI)('il server non addebita spedizione nemmeno al negozio senza coordinate — %s', async (_n, mondo) => {
+    expect(euro(await spedizioneAddebitata(mondo, GRUPPI))).toBe(euro(0));
   });
 
-  it.each(MONDI)('il carrello mostra la somma che il server addebita, e la chiama stima — %s', async (_n, mondo) => {
-    const addebitata = await spedizioneAddebitata(mondo, GRUPPI);
-    const { cifre, testo } = await spedizioneNelCarrello(mondo, FOCACCIA_E_MIELE);
-    expect(cifre.length, `nel carrello non si trova la riga della spedizione: ${testo.slice(0, 400)}`).toBeGreaterThan(0);
-    for (const c of cifre) expect(c).toBe(euro(addebitata));
-    expect(testo, 'senza le coordinate di un negozio il numero va detto come stima').toContain('stima · potrebbe variare al checkout');
-  }, 60000);
-
-  it.each(MONDI)('la cassa mostra la somma che il server addebita — %s', async (_n, mondo) => {
-    const addebitata = await spedizioneAddebitata(mondo, GRUPPI);
-    const { cifre, testo, errori } = await spedizioneAllaCassa(mondo, FOCACCIA_E_MIELE);
-    expect(errori, 'una lettura della cassa è caduta').toEqual([]);
-    expect(cifre.length, `alla cassa non si trova la riga della spedizione: ${testo.slice(0, 400)}`).toBeGreaterThan(0);
-    for (const c of cifre) expect(c).toBe(euro(addebitata));
+  it.each(MONDI)('il carrello e la cassa mostrano due consegne — %s', async (_n, mondo) => {
+    const carrello = await spedizioneNelCarrello(mondo, FOCACCIA_E_MIELE);
+    expect(carrello.cifre.length, carrello.testo.slice(0, 400)).toBeGreaterThan(0);
+    for (const c of carrello.cifre) expect(c).toBe(CONSEGNA(2));
+    const cassa = await spedizioneAllaCassa(mondo, FOCACCIA_E_MIELE);
+    expect(cassa.errori, 'una lettura della cassa è caduta').toEqual([]);
+    expect(cassa.cifre.length, cassa.testo.slice(0, 400)).toBeGreaterThan(0);
+    for (const c of cassa.cifre) expect(c).toBe(CONSEGNA(2));
   }, 60000);
 });
 
 describe('se la vista non risponde, nessuna pagina indovina la spedizione', () => {
-  it.each(MONDI)('il carrello si disegna lo stesso, con la tariffa fissa detta come stima — %s', async (_n, mondo) => {
+  it.each(MONDI)('il carrello si disegna lo stesso, con la consegna che si paga — %s', async (_n, mondo) => {
     const { cifre, testo } = await spedizioneNelCarrello(mondo, UNA_FOCACCIA, { vistaGiu: true });
     expect(cifre.length, `il carrello non si disegna più: ${testo.slice(0, 400)}`).toBeGreaterThan(0);
-    for (const c of cifre) expect(c).toBe(euro(SHIPPING_PER_ORDER));
-    expect(testo).toContain('stima · potrebbe variare al checkout');
+    for (const c of cifre) expect(c).toBe(CONSEGNA(1));
   }, 60000);
 
   it.each(MONDI)('la cassa non lascia ordinare e dice che non riesce a leggere — %s', async (_n, mondo) => {

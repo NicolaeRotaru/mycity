@@ -72,7 +72,10 @@ describe('il ritiro in negozio: la promessa segue l’interruttore', () => {
 describe('il negozio chiuso: si dice quello che fanno le rotte', () => {
   it('la promessa non parla piu’ di code né di avvisi prima del pagamento', () => {
     expect(NEGOZIO_CHIUSO_COSA_SUCCEDE).not.toMatch(/parte alla riapertura/i);
-    expect(NEGOZIO_CHIUSO_COSA_SUCCEDE).toMatch(/non puoi ordinare|non parte/i);
+    // 27/10/2026: la cassa lascia prenotare per domani (negozioPuoServire guarda gli orari di
+    // domani), e la frase adesso lo dice; la consegna subito resta negli orari di apertura.
+    expect(NEGOZIO_CHIUSO_COSA_SUCCEDE).toMatch(/domani/i);
+    expect(NEGOZIO_CHIUSO_COSA_SUCCEDE).toMatch(/orari di apertura/i);
   });
 
   it('e dice la stessa cosa che dicono le due rotte quando rifiutano', () => {
@@ -102,11 +105,11 @@ describe('i tempi e la soglia: un numero, una casa', () => {
     expect(rispostaTempiDiConsegna().a).toContain(NEGOZIO_CHIUSO_COSA_SUCCEDE);
   });
 
-  it('la risposta sulla spedizione dice che la soglia vale per negozio, non sul totale', () => {
+  it('la risposta sulla spedizione dice che la consegna si paga per ogni negozio', () => {
     // È l'altra metà del difetto del carrello: «Gratis» calcolato sul totale globale mentre il
     // numero si calcola per negozio. Chi legge la FAQ deve sapere quale delle due è la regola.
-    expect(rispostaCostoSpedizione().a).toMatch(/ciascun negozio|dallo stesso venditore/);
-    expect(rispostaCostoSpedizione().a).toMatch(/non sul totale/i);
+    // 27/10/2026: la soglia non c'è più; resta da dire che la consegna si paga una per negozio.
+    expect(rispostaCostoSpedizione().a).toMatch(/per ogni negozio/);
   });
 });
 
@@ -205,8 +208,8 @@ describe('il riquadro «Lo sapevi?»: la frase regge i numeri che le stanno sopr
 });
 
 describe('le quattro promesse della home dicono la regola vera', () => {
-  it('la spedizione gratuita dichiara che la soglia è per negozio', () => {
-    const spedizione = VALUE_PROPS.find((v) => v.title === 'Spedizione gratuita');
+  it('la consegna dichiara che si paga per negozio', () => {
+    const spedizione = VALUE_PROPS.find((v) => v.title === 'Consegna a casa');
     expect(spedizione?.subtitle).toMatch(/per negozio/);
   });
 

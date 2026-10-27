@@ -1,4 +1,4 @@
-import { SPEDIZIONE_BASE_EUR, SPEDIZIONE_PER_KM_EUR, VELOCITA_MEDIA_BICI_KMH } from './constants';
+import { VELOCITA_MEDIA_BICI_KMH } from './constants';
 // Distanza haversine tra due coordinate (km)
 export function haversineKm(
   lat1: number, lng1: number,
@@ -15,26 +15,10 @@ export function haversineKm(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/**
- * Prezzo della spedizione a distanza: base + €/km, arrotondato a 0,10.
- *
- * 22/8/2026 — SI CHIAMAVA `prezzoSpedizioneEuro`, ED È IL NOME CHE HA FATTO IL DANNO.
- *
- * Questo non è mai stato il compenso del fattorino: è quanto paga il CLIENTE
- * per la spedizione. Il compenso del fattorino è fisso
- * (`COMPENSO_RIDER_CENTS`) e non dipende dalla distanza. Finché le due cose
- * hanno avuto lo stesso nome sono state trattate come la stessa cosa, ed è
- * così che sopra i trenta euro — dove la spedizione è gratis — il fattorino
- * consegnava e non veniva pagato (la storia per esteso in lib/shipping.ts).
- *
- * Un commento che avverte «attenzione al nome» è una toppa: chi legge il nome
- * in fondo a una riga altrove il commento non ce l'ha davanti. Adesso il nome
- * dice quello che la funzione fa.
- */
-export function prezzoSpedizioneEuro(distanceKm: number): number {
-  const fee = SPEDIZIONE_BASE_EUR + Math.max(0, distanceKm) * SPEDIZIONE_PER_KM_EUR;
-  return Math.round(fee * 10) / 10;
-}
+// 27/10/2026 — Qui c'era `prezzoSpedizioneEuro(km)`: 2,50 € più 1,20 € al chilometro, la
+// spedizione a distanza che il cliente pagava sotto i 30 euro, sopra i 3 euro di consegna. Non
+// esiste più (scelta 8 della carta #209: si paga solo la consegna, `PLATFORM_DELIVERY_FEE_CENTS`
+// per negozio). Tolta, non azzerata: una funzione di prezzo che resta in giro torna in un conto.
 
 // Stima tempo consegna (minuti) dalla distanza: viaggio alla velocità media di
 // chi consegna (`VELOCITA_MEDIA_BICI_KMH`, al lancio una bici) + tempo fisso di
