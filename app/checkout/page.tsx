@@ -670,6 +670,17 @@ export default function CheckoutPage() {
   const pickupDiscount = riepilogo.scontoRitiro;
   const grandShipping = riepilogo.spedizione;
   const platformDeliveryFee = riepilogo.feeConsegna;
+  /**
+   * 27/10/2026 — QUANTO SI PAGA PER FARSI PORTARE LA SPESA: UNA CIFRA SOLA.
+   *
+   * Al lancio la spedizione e' zero e si paga solo la consegna, 3 € per negozio. Il riepilogo
+   * (`OrderSummary`) ha una riga «Spedizione» che c'e' sempre e che a zero scrive «Gratis» in verde,
+   * e sotto una «Consegna MyCity»: con le due cifre passate separate, ogni ordine a domicilio
+   * leggeva «Spedizione Gratis» e subito sotto 3 € da pagare. Adesso la riga sempre visibile porta
+   * la somma, quindi dice «Gratis» solo quando davvero non si paga niente (il ritiro in negozio).
+   * Il riquadro «Consegna a domicilio» legge lo stesso numero.
+   */
+  const consegnaDaPagare = grandShipping + platformDeliveryFee;
   // Lo sconto che si mostra è quello DAVVERO applicato, non quello richiesto:
   // altrimenti le righe del riepilogo non fanno il totale.
   const discount = riepilogo.scontoCodice;
@@ -1241,7 +1252,7 @@ export default function CheckoutPage() {
                     <p className="text-sm text-ink-600">{rigaQuandoArriva(consegna)}{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
                   </div>
                   <span className="font-serif text-lg font-extrabold text-ink-900">
-                    {grandShipping + platformDeliveryFee === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(grandShipping + platformDeliveryFee)}
+                    {consegnaDaPagare === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(consegnaDaPagare)}
                   </span>
                 </div>
                 {/* 3/9/2026 — «Gratis» da solo, mentre il riepilogo qui a fianco
@@ -1495,8 +1506,7 @@ export default function CheckoutPage() {
 
             <OrderSummary
               subtotal={grandSubtotal}
-              shipping={grandShipping}
-              platformDeliveryFee={platformDeliveryFee}
+              shipping={consegnaDaPagare}
               pickupDiscount={pickupDiscount}
               couponDiscount={discount}
               creditApplied={creditApplied}

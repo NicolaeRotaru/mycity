@@ -1,5 +1,6 @@
 'use client';
 
+import { shippingForEuro } from '@/lib/shipping';
 import { RIQUADRO_LO_SAPEVI, frasePagamento, promessaSpedizione } from '@/lib/promesse-pubbliche';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { useEffect, useRef, useState } from 'react';
@@ -12,6 +13,7 @@ import caricatoreFotoRemote from '@/lib/image-loader';
 import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
+import { fetchSellerPublicMap, type SellerPublicProfile } from '@/lib/queries/seller-public-profiles';
 import ShareCartButton from '@/components/ShareCartButton';
 import EmptyState from '@/components/EmptyState';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
@@ -117,6 +119,20 @@ export default function CartPage() {
    */
   const [prezzoDiOggi, setPrezzoDiOggi] = useState<Record<string, number>>({});
 
+  /**
+   * 6/9/2026 — LA SPEDIZIONE SCRITTA QUI NON ERA QUELLA CHE SI PAGAVA ALLA CASSA.
+   *
+   * Questa pagina chiamava `shippingForEuro` con le coordinate sempre a `null`, la cassa con quelle
+   * dell'indirizzo salvato: stessa funzione, ingressi diversi, e il prezzo cambiava nell'ultimo
+   * passo. Il carrello legge gli stessi due ingressi della cassa: dove sta il negozio e dove
+   * consegniamo.
+   *
+   * 27/10/2026 — Al lancio `shippingForEuro` risponde zero (si paga solo la consegna, 3 € per
+   * negozio), ma gli ingressi restano quelli della cassa: il giorno che la spedizione torna a
+   * dipendere dalla distanza, carrello e cassa dicono ancora lo stesso numero senza toccare qui.
+   */
+  const [dovEIlNegozio, setDovEIlNegozio] = useState<Record<string, { lat: number | null; lng: number | null }>>({});
+  const [doveConsegniamo, setDoveConsegniamo] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
 
   /**
    * Il carrello vero si legge QUI, dopo il primo disegno: `useState([])` parte vuoto perché deve
@@ -177,6 +193,9 @@ export default function CartPage() {
     const idVarianti = Array.from(
       new Set(carrello.map((i) => i.variantId).filter((v): v is string => !!v)),
     );
+    const idNegozi = Array.from(
+      new Set(carrello.map((i) => i.sellerId).filter((v): v is string => !!v)),
+    );
     if (ids.length === 0) return;
     let vivo = true;
     void (async () => {
@@ -184,7 +203,7 @@ export default function CartPage() {
       // Chi è entrato lo dice la sessione già in memoria: da ospiti non si
       // chiedono le riserve, perché per riservare bisogna aver ordinato.
       const idCliente = (await supabase.auth.getSession()).data.session?.user?.id ?? null;
-      const [prodottiRes, variantiRes, tentativiRes, scontiRes] = await Promise.all([
+      const [prodottiRes, variantiRes, tentativiRes, scontiRes, negoziRes, indirizzoRes] = await Promise.all([
         // Il prezzo si legge insieme alla scorta: e' la stessa riga di tabella, non costa un viaggio in piu'.
         supabase.from('products').select('id, stock, price').in('id', ids),
         idVarianti.length > 0
@@ -201,6 +220,20 @@ export default function CartPage() {
           : Promise.resolve({ data: [] as TentativoAperto[] }),
         // Le promozioni attive: stessa funzione della cassa e delle due rotte che creano l'ordine.
         fetchActiveDiscounts(supabase, ids),
+        // Dove sta ogni negozio, dalla vista pubblica che leggono anche le due rotte che creano
+        // l'ordine (18/10/2026: `profiles`, a profili chiusi, al cliente non le restituisce). Se la
+        // lettura cade il carrello si disegna lo stesso: la cifra finale la da' la cassa.
+        fetchSellerPublicMap(supabase, idNegozi, 'id, store_lat, store_lng')
+          .catch(() => new Map<string, SellerPublicProfile>()),
+        // Dove consegniamo: l'indirizzo predefinito, letto con la stessa query della cassa.
+        idCliente
+          ? supabase
+              .from('user_addresses')
+              .select('lat, lng')
+              .eq('user_id', idCliente)
+              .order('is_default', { ascending: false })
+              .limit(1)
+          : Promise.resolve({ data: [] as Array<{ lat: number | null; lng: number | null }> }),
       ]);
       if (!vivo) return;
       setTengoIo(
@@ -215,6 +248,13 @@ export default function CartPage() {
         if (Number.isFinite(pieno)) prezzi[p.id] = discountedUnitCents(pieno, scontiRes.get(p.id) ?? 0) / 100;
       }
       setPrezzoDiOggi(prezzi);
+      setDovEIlNegozio(
+        Object.fromEntries(
+          [...negoziRes.values()].map((n) => [n.id, { lat: n.store_lat ?? null, lng: n.store_lng ?? null }]),
+        ),
+      );
+      const casa = ((indirizzoRes.data ?? []) as Array<{ lat: number | null; lng: number | null }>)[0];
+      setDoveConsegniamo({ lat: casa?.lat ?? null, lng: casa?.lng ?? null });
       // La variante si indicizza con la sua chiave di riga, così una riga con
       // variante non eredita la scorta del prodotto intero.
       for (const v of (variantiRes.data ?? []) as Array<{ id: string; stock: number | null }>) {
@@ -352,11 +392,28 @@ export default function CartPage() {
   // checkout: una fee per gruppo-negozio.
   const platformDeliveryFee = groups.length * (PLATFORM_DELIVERY_FEE_CENTS / 100);
 
-  // 27/10/2026 — Il cliente paga solo la consegna: una per negozio, sempre (scelta 8 della carta
-  // #209). Qui c'erano la spedizione a distanza per negozio e la parola «Gratis» sopra i 30 €:
-  // spariti tutti e due, insieme alle letture di dove sta il negozio e dove consegniamo, che
-  // servivano solo a quel conto.
-  const finalTotal = total + platformDeliveryFee;
+  /**
+   * La spedizione per negozio, con la stessa funzione e gli stessi ingressi della cassa (vedi
+   * `dovEIlNegozio`). 27/10/2026 — Al lancio risponde zero: il cliente paga solo la consegna, una
+   * per negozio (scelta 8 della carta #209). Non ha una riga sua, perche' a zero scriverebbe
+   * «Gratis» accanto a una consegna da pagare: entra nella riga «Consegna MyCity», che dice la
+   * cifra intera per farsi portare la spesa, la stessa del riepilogo della cassa.
+   */
+  const shippingCost = groups.reduce(
+    (somma, g) =>
+      somma
+      + shippingForEuro({
+        subtotal: g.items.reduce((s, it) => s + it.price * it.quantity, 0),
+        storeLat: dovEIlNegozio[g.key]?.lat ?? null,
+        storeLng: dovEIlNegozio[g.key]?.lng ?? null,
+        deliveryLat: doveConsegniamo.lat,
+        deliveryLng: doveConsegniamo.lng,
+        pickupInStore: false,
+      }),
+    0,
+  );
+  const consegnaDaPagare = shippingCost + platformDeliveryFee;
+  const finalTotal = total + consegnaDaPagare;
 
   /**
    * 6/9/2026 — LA RIGA DICEVA «TOGLILO PER CONTINUARE» E IL PULSANTE LASCIAVA CONTINUARE.
@@ -572,13 +629,14 @@ export default function CartPage() {
             <div className="flex justify-between items-baseline text-sm">
               <span className="text-ink-600">
                 Consegna MyCity
-                {groups.length > 1 && (
+                {/* «N negozi × 3 €» e' il conto solo finche' non c'e' una spedizione da sommare. */}
+                {groups.length > 1 && shippingCost === 0 && (
                   <span className="block text-xs text-ink-500 font-normal">
                     {pluralize(groups.length, 'negozio', 'negozi')} × {formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}
                   </span>
                 )}
               </span>
-              <span className="font-semibold text-ink-900">{formatPrice(platformDeliveryFee)}</span>
+              <span className="font-semibold text-ink-900">{formatPrice(consegnaDaPagare)}</span>
             </div>
 
             {/* Il totale cambia a ogni «+», «−» e rimozione: qui si dice anche

@@ -160,9 +160,11 @@ async function spedizioneNelCarrello(mondo: Mondo, carrello: RigaCarrello[], opz
   const db = preparaIlMondo(mondo, carrello, opzioni);
   const pagina = (await monta('app/cart/page.tsx')).default;
   const s = accendi(pagina, {});
-  // 27/10/2026 — Il carrello non legge più dove sta il negozio e dove si consegna: la consegna non
-  // dipende dalla distanza. Si aspetta la riga che dice quanto si paga.
-  await finoA(() => db.letture.includes('products') && /Consegna MyCity/.test(testoVisibile(s.radice)));
+  // Il carrello legge gli stessi ingressi della cassa (dove sta il negozio, dove si consegna): si
+  // aspetta che abbia letto l'indirizzo, poi la riga che dice quanto si paga.
+  await finoA(
+    () => db.letture.includes('products') && db.letture.includes('user_addresses') && /Consegna MyCity/.test(testoVisibile(s.radice)),
+  );
   await attendi();
   const cifre = spedizioniMostrate(s.radice, /^Consegna MyCity/);
   const spedizioni = spedizioniMostrate(s.radice);
@@ -217,7 +219,10 @@ async function spedizioneAllaCassa(mondo: Mondo, carrello: RigaCarrello[], opzio
   const s = accendi(pagina, {});
   await finoA(() => spedizioniMostrate(s.radice).length > 0);
   await attendi();
-  const cifre = spedizioniMostrate(s.radice, /^Consegna MyCity/);
+  // 27/10/2026 — Si leggono TUTTE le righe del riepilogo che parlano di farsi portare la spesa,
+  // non solo «Consegna MyCity». Leggendo quella sola, la prova restava verde mentre la riga
+  // «Spedizione» sopra scriveva «Gratis» in verde su un ordine che pagava 3 € di consegna.
+  const cifre = spedizioniMostrate(s.radice, /^(Spedizione|Consegna MyCity)/);
   const testo = testoVisibile(s.radice);
   s.smonta();
   return { cifre, testo, letture: [...db.letture], errori: [...errori.values()] };
@@ -342,7 +347,8 @@ afterEach(() => {
  * server facessero lo stesso conto della spedizione A DISTANZA fra Pane Quotidiano e la casa di
  * Maria, letta dalla vista pubblica dei negozi. Quella spedizione non esiste più: adesso la prova
  * guarda che il server non ne addebiti nessuna, e che carrello e cassa mostrino la stessa
- * consegna, una per negozio. La vista resta letta dal server (zona di consegna) e dalla cassa.
+ * consegna, una per negozio, con una riga sola: nessun «Gratis» accanto alla consegna da pagare.
+ * La vista resta letta dal server (zona di consegna), dalla cassa e dal carrello.
  */
 const CONSEGNA = (negozi: number) => euro((negozi * PLATFORM_DELIVERY_FEE_CENTS) / 100);
 
@@ -362,7 +368,10 @@ describe('il carrello e la cassa mostrano la stessa consegna', () => {
     const cassa = await spedizioneAllaCassa(mondo, UNA_FOCACCIA);
     expect(cassa.errori, 'una lettura della cassa è caduta').toEqual([]);
     expect(cassa.cifre.length, `alla cassa non si trova la riga della consegna: ${cassa.testo.slice(0, 400)}`).toBeGreaterThan(0);
-    for (const c of cassa.cifre) expect(c, 'la cassa mostra una consegna diversa').toBe(CONSEGNA(1));
+    expect(
+      cassa.cifre,
+      'il riepilogo della cassa ha una riga «Gratis» accanto alla consegna che fa pagare, o una cifra diversa dal carrello',
+    ).toEqual([CONSEGNA(1)]);
   }, 60000);
 });
 
@@ -394,7 +403,7 @@ describe('un negozio che la vista non restituisce: la consegna è la stessa, una
     const cassa = await spedizioneAllaCassa(mondo, FOCACCIA_E_MIELE);
     expect(cassa.errori, 'una lettura della cassa è caduta').toEqual([]);
     expect(cassa.cifre.length, cassa.testo.slice(0, 400)).toBeGreaterThan(0);
-    for (const c of cassa.cifre) expect(c).toBe(CONSEGNA(2));
+    expect(cassa.cifre, 'il riepilogo della cassa non dice le due consegne che addebita, una cifra sola').toEqual([CONSEGNA(2)]);
   }, 60000);
 });
 

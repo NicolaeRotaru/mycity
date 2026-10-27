@@ -229,12 +229,14 @@ describe('«Vicino a te» non mostra negozi oltre il confine della consegna', ()
 });
 
 describe('il carrello dice la stessa consegna', () => {
-  // La riga vera la legge la prova montata (la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi):
-  // qui si guarda che il carrello non abbia più gli attrezzi della spedizione a distanza.
+  // Le cifre vere le legge la prova montata (la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi):
+  // carrello e cassa scrivono la stessa consegna, e nessuno dei due una riga «Gratis» accanto.
+  // Il carrello chiama ancora `shippingForEuro` con gli ingressi della cassa: lo tiene fermo
+  // il-carrello-e-la-cassa-dicono-lo-stesso-numero. Qui si guarda che non torni la barra della soglia.
   const carrello = readFileSync(join(process.cwd(), 'app/cart/page.tsx'), 'utf8');
 
-  it('la frase del carrello vuoto la scrive promessaSpedizione, e non ci sono più spedizione né barra', () => {
+  it('la frase del carrello vuoto la scrive promessaSpedizione, e la barra «ti mancano X €» non c’è più', () => {
     expect(carrello).toContain('promessaSpedizione().titolo');
-    expect(carrello).not.toMatch(/shippingForEuro|dettoDellaSpedizione|FreeShippingProgress/);
+    expect(carrello).not.toMatch(/dettoDellaSpedizione|FreeShippingProgress/);
   });
 });
