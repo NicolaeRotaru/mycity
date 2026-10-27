@@ -174,8 +174,19 @@ export function fintoGiroNotturno(scenario: Scenario = {}) {
     /** Vero se il battito del lavoro è stato scritto: il freno anti-silenzio. */
     battitoScritto: () =>
       diario.some((v) => (v.op === 'upsert' || v.op === 'insert') && v.tabella === 'cron_heartbeats'),
-    /** Le notifiche finite nel pannello degli amministratori. */
-    notifiche: () =>
-      diario.flatMap((v) => (v.op === 'insert' && v.tabella === 'notifications' ? v.righe : [])),
+    /**
+     * Le notifiche finite nel pannello degli amministratori — SOLO loro.
+     * 27/10/2026: da quando la notte scrive anche alla persona che aspetta la
+     * cancellazione (il motivo del rinvio, art. 12.4), «tutte le notifiche» non
+     * vuol più dire «un allarme». Le altre si leggono con `righe('notifications')`.
+     */
+    notifiche: () => {
+      const amministratori = new Set(
+        (db.profiles ?? []).filter((p) => p.role === 'admin').map((p) => p.id),
+      );
+      return diario
+        .flatMap((v) => (v.op === 'insert' && v.tabella === 'notifications' ? v.righe : []))
+        .filter((n) => amministratori.has(n.user_id));
+    },
   };
 }

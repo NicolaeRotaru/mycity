@@ -1,8 +1,49 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { withAuth, withAuthRateLimit } from '@/lib/api/middleware';
-import { ApiErrors } from '@/lib/api/responses';
+import { withAuth, withAuthRateLimit, type ContestoRotta } from '@/lib/api/middleware';
+import { ApiErrors, apiError } from '@/lib/api/responses';
+import { stradaAManoPerIDiritti } from '@/lib/legal/titolare';
+import { motivoDellAttesa } from '@/lib/privacy/avvisi-a-chi-aspetta';
+
+/**
+ * 27/10/2026 — Senza la chiave di servizio le tre porte rispondevano
+ * «Servizio non configurato»: vero per noi, un muro per chi vuole cancellarsi.
+ * Adesso la risposta dice la strada a mano (la casella privacy, o il modulo
+ * dei contatti finché la casella non c'è). Resta 503: il servizio è giù davvero.
+ */
+function senzaChiave(cosa: string, e: unknown): NextResponse {
+  logger.error('[account-delete] cancellazione automatica spenta: manca la chiave di servizio', {
+    errore: e instanceof Error ? e.message : 'errore',
+  });
+  // 27/10/2026 (secondo giro) — Con la frase viaggia il collegamento
+  // (`details.recapito`): la pagina lo offre come pulsante. Senza casella e
+  // senza un modulo che arrivi a qualcuno è null, e la frase lo dice.
+  const strada = stradaAManoPerIDiritti(cosa);
+  return apiError(503, strada.frase, 'SERVICE_UNAVAILABLE', { recapito: strada.recapito });
+}
+
+type Rotta = ReturnType<typeof withAuth>;
+
+/**
+ * 27/10/2026 — IL MURO STAVA UN PASSO PRIMA DELLA ROTTA.
+ *
+ * `withAuth` legge il profilo con la stessa chiave di servizio: senza, risponde
+ * 503 «Auth non configurato» prima che la rotta parli, e la strada a mano non
+ * usciva mai (la prova della squadra fingeva il controllo d'accesso). Quindi la
+ * chiave si guarda PRIMA dell'accesso. Non apre niente a nessuno: la risposta è
+ * la stessa frase per chiunque bussi, e non legge né scrive alcun dato.
+ */
+function primaLaStradaAMano(cosa: string, rotta: Rotta): Rotta {
+  return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
+    try {
+      getAdminSupabase();
+    } catch (e) {
+      return senzaChiave(cosa, e);
+    }
+    return ctx ? rotta(req, ctx) : rotta(req);
+  }) as Rotta;
+}
 
 export const runtime = 'nodejs';
 
@@ -24,12 +65,12 @@ export const runtime = 'nodejs';
  */
 
 // Rate limit destructive: 3 richieste / ora — anti-abuse + protezione (GDPR)
-export const POST = withAuthRateLimit({ name: 'account-delete', max: 3, windowMs: 60 * 60_000 }, async ({ user }): Promise<NextResponse> => {
+const chiedi = withAuthRateLimit({ name: 'account-delete', max: 3, windowMs: 60 * 60_000 }, async ({ user }): Promise<NextResponse> => {
   let admin;
   try {
     admin = getAdminSupabase();
-  } catch {
-    return ApiErrors.unavailable();
+  } catch (e) {
+    return senzaChiave("Cancellare l'account", e);
   }
 
   const { data: profile } = await admin
@@ -66,12 +107,12 @@ export const POST = withAuthRateLimit({ name: 'account-delete', max: 3, windowMs
   }, { status: 200 });
 });
 
-export const DELETE = withAuth(async ({ user }): Promise<NextResponse> => {
+const annulla = withAuth(async ({ user }): Promise<NextResponse> => {
   let admin;
   try {
     admin = getAdminSupabase();
-  } catch {
-    return ApiErrors.unavailable();
+  } catch (e) {
+    return senzaChiave('Annullare la richiesta di cancellazione', e);
   }
 
   const { error } = await admin
@@ -86,12 +127,12 @@ export const DELETE = withAuth(async ({ user }): Promise<NextResponse> => {
   return NextResponse.json({ ok: true, message: 'Richiesta annullata.' });
 });
 
-export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
+const leggiLoStato = withAuth(async ({ user }): Promise<NextResponse> => {
   let admin;
   try {
     admin = getAdminSupabase();
-  } catch {
-    return ApiErrors.unavailable();
+  } catch (e) {
+    return senzaChiave('Vedere lo stato della cancellazione', e);
   }
 
   const { data } = await admin
@@ -105,10 +146,21 @@ export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
   }
   const requestedAt = new Date(data.deletion_requested_at).getTime();
   const effectiveAt = requestedAt + 7 * 86_400_000;
+  // 27/10/2026 — Il motivo del rinvio, parola per parola come gliel'ha scritto
+  // il giro notturno (stessa riga di `notifications`, nessun ricalcolo). Prima
+  // qui c'era solo il conto alla rovescia, che arrivava a zero e restava lì.
+  const attesa = await motivoDellAttesa(admin, user.id, data.deletion_requested_at, logger);
   return NextResponse.json({
     pending: true,
     requestedAt: data.deletion_requested_at,
     effectiveAt: new Date(effectiveAt).toISOString(),
     daysRemaining: Math.max(0, Math.ceil((effectiveAt - Date.now()) / 86_400_000)),
+    rinviata: attesa.inAttesa,
+    motivo: attesa.motivo,
+    motivoDettoIl: attesa.dettoIl,
   });
 });
+
+export const POST = primaLaStradaAMano("Cancellare l'account", chiedi);
+export const DELETE = primaLaStradaAMano('Annullare la richiesta di cancellazione', annulla);
+export const GET = primaLaStradaAMano('Vedere lo stato della cancellazione', leggiLoStato);
