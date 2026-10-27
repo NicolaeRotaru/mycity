@@ -18,6 +18,7 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   recapitaAvvisi,
   type ClienteAvvisi,
+  type LetturaAvvisi,
   type PostaAvvisi,
   type RegistroAvvisi,
 } from '@/lib/privacy/avvisi-a-chi-aspetta';
@@ -53,12 +54,23 @@ function databaseVero() {
   const righe = (t: string) => (tabelle[t] ??= []);
   const cliente: ClienteAvvisi = {
     from: (t) => ({
-      select: () => ({
-        eq: async (colonna, valore) =>
-          rotte.has(t)
-            ? { data: null, error: { message: `permission denied for table ${t}` } }
-            : { data: righe(t).filter((r) => r[colonna] === valore), error: null },
-      }),
+      // Applica TUTTI i filtri: il registro degli invii si legge per tabella e per avviso.
+      select: () => {
+        const filtri: Array<[string, unknown]> = [];
+        const lettura: LetturaAvvisi = {
+          eq: (colonna, valore) => {
+            filtri.push([colonna, valore]);
+            return lettura;
+          },
+          then: (ok, ko) =>
+            Promise.resolve(
+              rotte.has(t)
+                ? { data: null, error: { message: `permission denied for table ${t}` } }
+                : { data: righe(t).filter((r) => filtri.every(([c, v]) => r[c] === v)), error: null },
+            ).then(ok, ko),
+        };
+        return lettura;
+      },
       insert: async (nuove) => {
         if (rotte.has(t)) return { data: null, error: { message: `permission denied for table ${t}` } };
         if (nuove.some((n) => righe(t).some((r) => r.id === n.id))) {

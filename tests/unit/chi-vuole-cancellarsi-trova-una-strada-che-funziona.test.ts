@@ -43,9 +43,15 @@ const stato: {
    * pezzo che `registroInviiRotto` non raggiunge: lì si ferma già la lettura.
    */
   registroInviiRifiutaLeRighe: boolean;
+  /**
+   * 27/10/2026 (quarto giro, fase 2) — Una lettura sola che non riesce: quella
+   * della riga con questo identificativo in `notifications`. Le altre letture
+   * della stessa tabella (il pannello della persona) vanno.
+   */
+  rifiutaLetturaDi: string | null;
 } = {
   mondo: fintoGiroNotturno(), senzaChiave: false, esiti: {}, rifiutaAvvisiA: null,
-  registroInviiRotto: false, registroInviiRifiutaLeRighe: false,
+  registroInviiRotto: false, registroInviiRifiutaLeRighe: false, rifiutaLetturaDi: null,
 };
 
 const UTENTE = { id: "rider-1", email: "rider@example.com" };
@@ -84,9 +90,25 @@ function adminDiProva() {
           return { then: (ok: (v: unknown) => unknown) => Promise.resolve(ok({ data: null, error: { message: "permission denied" } })) };
         };
       }
+      if (tabella === "notifications" && stato.rifiutaLetturaDi) {
+        const bersaglio = stato.rifiutaLetturaDi;
+        const veraEq = (q.eq as (c: string, v: unknown) => unknown).bind(q);
+        q.eq = (c: string, v: unknown) => {
+          if (c !== "id" || v !== bersaglio) return veraEq(c, v);
+          const rotta: Record<string, unknown> = {
+            then: (ok: (x: unknown) => unknown) =>
+              Promise.resolve(ok({ data: null, error: { message: "canceling statement due to statement timeout" } })),
+          };
+          rotta.eq = () => rotta;
+          return rotta;
+        };
+      }
       if (tabella === "audit_logs" && stato.registroInviiRotto) {
         const rifiuto = { data: null, error: { message: "permission denied for table audit_logs" } };
-        q.select = () => ({ eq: async () => rifiuto });
+        // La lettura filtra per tabella E per avviso: due `eq` di fila.
+        const lettura: Record<string, unknown> = { then: (ok: (v: unknown) => unknown) => Promise.resolve(ok(rifiuto)) };
+        lettura.eq = () => lettura;
+        q.select = () => lettura;
         q.insert = () => ({ then: (ok: (v: unknown) => unknown) => Promise.resolve(ok(rifiuto)) });
       }
       if (tabella === "audit_logs" && stato.registroInviiRifiutaLeRighe) {
@@ -173,6 +195,7 @@ function ilFattorinoConLaCassaAperta(chiesta = CHIESTA, esito: Esito = CASSA_APE
   stato.rifiutaAvvisiA = null;
   stato.registroInviiRotto = false;
   stato.registroInviiRifiutaLeRighe = false;
+  stato.rifiutaLetturaDi = null;
   stato.esiti = { "rider-1": esito };
   stato.mondo = fintoGiroNotturno({
     rpc: { process_expired_deletions: { data: [{ user_id: "rider-1", deleted_at: chiesta }], error: null } },
@@ -858,5 +881,153 @@ describe("un allarme che non si riesce a scrivere non fa tornare verde la notte"
     for (let n = 1; n <= 3; n++) stati.push((await passaLaNotte()).status);
     expect(stati, "un allarme per stato vale solo se lo stato è stato detto a qualcuno").toEqual([200, 500, 500]);
     expect(stato.mondo.notifiche()).toHaveLength(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 27/10/2026 (quarto giro, fase 2) — LE MUTAZIONI CHE RESTAVANO VERDI.
+// Ogni prova qui sotto è nata da una mutazione che passava tutta la suite: il
+// commento dice quale, e la prova diventa rossa con quella mutazione.
+// ─────────────────────────────────────────────────────────────────────────────
+const GIU = async (_x: unknown) => ({ ok: false, error: "Resend 503" }) as { ok: boolean };
+const SU = async (_x: unknown) => ({ ok: true });
+
+describe("la posta a metà: ogni pezzo che manca, o che c'è ma è vuoto, chiude la strada del modulo", () => {
+  beforeEach(() => { stato.senzaChiave = true; });
+
+  // Mutazione: togliere RESEND_API_KEY da ilModuloArrivaSenzaDatabase.
+  it("con la casella del supporto e il mittente ma senza la chiave di Resend (RESEND_API_KEY) non manda al modulo", async () => {
+    process.env.SUPPORT_EMAIL = "supporto@example.com";
+    process.env.RESEND_FROM = "MyCity <no-reply@example.com>";
+    const testo = await corpo(await chiediCancellazione(conGettone("POST", "/api/account/delete") as never, CTX));
+    expect(testo, "senza la chiave di Resend la posta non parte: il modulo non inoltra a nessuno").not.toContain("/contact");
+    expect(testo).toContain("non è partita");
+  });
+
+  // Mutazione: `(v) => typeof v === 'string'` al posto del controllo «non vuota».
+  for (const nome of ["SUPPORT_EMAIL", "RESEND_API_KEY", "RESEND_FROM"]) {
+    for (const vuota of ["", "   "]) {
+      it(`con ${nome} presente ma vuota (${JSON.stringify(vuota)}) non manda al modulo`, async () => {
+        process.env.SUPPORT_EMAIL = "supporto@example.com";
+        process.env.RESEND_API_KEY = "re_di_prova";
+        process.env.RESEND_FROM = "MyCity <no-reply@example.com>";
+        process.env[nome] = vuota;
+        const testo = await corpo(await chiediCancellazione(conGettone("POST", "/api/account/delete") as never, CTX));
+        expect(testo, "una variabile vuota è una variabile che manca: il modulo non inoltra").not.toContain("/contact");
+        expect(testo).toContain("non è partita");
+      });
+    }
+  }
+});
+
+describe("il ritentativo dell'email regge le notti vere, non solo quelle di ventiquattro ore", () => {
+  // Mutazione: ORE_TRA_DUE_TENTATIVI da 20 a 24.
+  it("il giro che arriva dieci minuti prima dell'ora di ieri riprova lo stesso", async () => {
+    ilFattorinoConLaCassaAperta();
+    inviaEmail.mockImplementation(GIU);
+    await passaLaNotte();
+    expect(lettereA(UTENTE.email)).toHaveLength(1);
+    vi.setSystemTime(Date.now() + GIORNO - 10 * 60_000);
+    await unGiro();
+    expect(lettereA(UTENTE.email), "Vercel garantisce l'ora, non il minuto: la notte dopo deve riprovare").toHaveLength(2);
+  });
+
+  // Mutazione: un tetto ai tentativi (qui a 25). Il mese di legge è di trenta giorni.
+  it("trenta notti, il mese di legge intero: ventinove di posta giù, la trentesima la spiegazione parte", async () => {
+    ilFattorinoConLaCassaAperta(giorniFa(0));
+    inviaEmail.mockImplementation(GIU);
+    for (let n = 1; n <= 29; n++) await passaLaNotte();
+    const oggetto = lettereA(UTENTE.email)[0]?.subject;
+    const delRinvio = () => lettereA(UTENTE.email).filter((l) => l.subject === oggetto);
+    expect(delRinvio(), "una prova a notte, tutte e ventinove: un tetto ai tentativi").toHaveLength(29);
+    inviaEmail.mockImplementation(SU);
+    await passaLaNotte();
+    expect(delRinvio(), "la posta è tornata e la spiegazione non è ripartita").toHaveLength(30);
+  });
+
+  // Mutazione: `|| presi.length > 0` accanto al doppione → un rifiuto vero passa per «in corso».
+  it("prima notte posta giù, seconda notte il registro rifiuta il turno (non doppione): la notte è rossa e un amministratore lo sa", async () => {
+    ilFattorinoConLaCassaAperta();
+    inviaEmail.mockImplementation(GIU);
+    expect((await passaLaNotte()).status).toBe(200);
+    stato.registroInviiRifiutaLeRighe = true;
+    inviaEmail.mockImplementation(SU);
+    const seconda = await passaLaNotte();
+    const body = await letto(seconda);
+    expect(body.avvisiEmailBloccate, "il turno rifiutato dopo un tentativo già preso passa per un turno in volo").toBe(1);
+    expect(seconda.status).toBe(500);
+    expect(lettereA(UTENTE.email), "senza la riga del turno non si spedisce").toHaveLength(1);
+    expect(stato.mondo.notifiche()).toHaveLength(1);
+  });
+});
+
+describe("se la lettura dell'allarme già scritto non riesce, la notte resta rossa", () => {
+  // Mutazione: togliere `rotto = true` quando la lettura dell'allarme fallisce.
+  it("l'email è ferma e non si riesce a sapere se l'allarme c'è: rossa, notte dopo notte", async () => {
+    ilFattorinoConLaCassaAperta();
+    await passaLaNotte();
+    const { identificativoAvviso } = await import("@/lib/privacy/avvisi-a-chi-aspetta");
+    stato.rifiutaLetturaDi = identificativoAvviso(`${suoi()[0].id}:email-ferma:admin-1`);
+    const stati: number[] = [];
+    for (let n = 2; n <= 3; n++) stati.push((await passaLaNotte()).status);
+    expect(stati, "nessuno sa che la spiegazione è ferma, e la notte è verde").toEqual([500, 500]);
+    expect(stato.mondo.notifiche()).toHaveLength(0);
+  });
+});
+
+describe("i minori nati nel quarto giro", () => {
+  it("la lettura del registro degli invii guarda solo le righe delle notifiche (target_table)", async () => {
+    ilFattorinoConLaCassaAperta();
+    inviaEmail.mockImplementation(GIU);
+    await passaLaNotte();
+    // Una riga di un'altra tabella con lo stesso identificativo: non è l'email di questo avviso.
+    stato.mondo.righe("audit_logs").push({
+      id: "riga-di-un-altra-tabella",
+      action: "privacy.avviso_cancellazione.email_partita",
+      target_table: "orders",
+      target_id: suoi()[0].id,
+      metadata: {},
+    });
+    inviaEmail.mockImplementation(SU);
+    await passaLaNotte();
+    expect(lettereA(UTENTE.email), "una riga di un'altra tabella ha fermato l'email").toHaveLength(2);
+  });
+
+  it("la sveglia per le cancellazioni ferme parte prima delle email: se la posta si appende, la sveglia c'è già", async () => {
+    ilFattorinoConLaCassaAperta(giorniFa(40));
+    const svegliaGiaScritta: boolean[] = [];
+    inviaEmail.mockImplementation(async () => {
+      svegliaGiaScritta.push(stato.mondo.notifiche().length > 0);
+      return { ok: true };
+    });
+    const res = await passaLaNotte();
+    expect(res.status, "oltre il mese la notte sveglia qualcuno").toBe(500);
+    expect(svegliaGiaScritta.length).toBeGreaterThan(0);
+    expect(svegliaGiaScritta[0], "le email partivano prima della sveglia").toBe(true);
+  });
+
+  it("un giro rifatto a mano poche ore dopo non spedisce, e la risposta lo dice invece di sembrare tutto partito", async () => {
+    ilFattorinoConLaCassaAperta();
+    inviaEmail.mockImplementation(GIU);
+    await passaLaNotte();
+    await passaLaNotte();
+    inviaEmail.mockImplementation(SU);
+    vi.setSystemTime(Date.now() + 6 * 3_600_000);
+    const body = await letto(await unGiro());
+    expect(lettereA(UTENTE.email), "il turno di stanotte è già preso").toHaveLength(2);
+    expect(body.avvisiEmailRimandate, "0 non partite e 0 ferme: sembra tutto partito").toBe(1);
+  });
+
+  it("l'allarme dice chi è la persona, e si chiude la notte in cui l'email parte", async () => {
+    ilFattorinoConLaCassaAperta();
+    await passaLaNotte();
+    await passaLaNotte();
+    const [allarme] = stato.mondo.notifiche();
+    expect(String(allarme?.body ?? ""), "«scrivile tu», ma a chi?").toContain(UTENTE.id);
+    expect(allarme?.is_read ?? false).toBe(false);
+    inviaEmail.mockImplementation(SU);
+    await passaLaNotte();
+    expect(lettereA(UTENTE.email)).toHaveLength(3);
+    expect(stato.mondo.notifiche()[0]?.is_read, "l'email è partita e l'allarme chiede ancora di scriverle").toBe(true);
   });
 });

@@ -43,13 +43,20 @@ import { sendEmail } from '@/lib/email/client';
 import { escapeHtml } from '@/lib/html-escape';
 import { indirizzoPubblico } from '@/lib/env';
 
-type Risposta = { data: unknown; error: { message: string } | null };
+export type Risposta = { data: unknown; error: { message: string } | null };
 
 /** La fetta di client che serve qui. Una prova ne passa uno finto. */
+/**
+ * 27/10/2026 (quarto giro, fase 2) — Una lettura filtrata: si aspetta, oppure
+ * si stringe con un altro `eq`. Il registro degli invii filtra per tabella E
+ * per avviso, perché il suo indice è (target_table, target_id).
+ */
+export type LetturaAvvisi = PromiseLike<Risposta> & { eq(colonna: string, valore: unknown): LetturaAvvisi };
+
 export type ClienteAvvisi = {
   from(tabella: string): {
     select(colonne?: string): {
-      eq(colonna: string, valore: unknown): PromiseLike<Risposta>;
+      eq(colonna: string, valore: unknown): LetturaAvvisi;
     };
     insert(righe: Record<string, unknown>[]): PromiseLike<Risposta>;
   };
@@ -87,7 +94,20 @@ export type RapportoAvvisi = {
    * 27/10/2026 (quarto giro) — Quali avvisi hanno l'email ferma: i loro
    * identificativi. Chi chiama ne fa UN allarme per avviso, non uno a notte.
    */
-  emailBloccateAvvisi: string[];
+  emailBloccateAvvisi: Array<{ id: string; userId: string }>;
+  /**
+   * 27/10/2026 (quarto giro, fase 2) — Gli avvisi la cui email è partita
+   * stanotte. Se c'era un allarme («scrivile tu»), chi chiama lo chiude: la
+   * persona la spiegazione l'ha ricevuta.
+   */
+  emailPartiteAvvisi: string[];
+  /**
+   * 27/10/2026 (quarto giro, fase 2) — Email non tentate stanotte perché il
+   * tentativo l'ha preso un altro giro da meno di `ORE_TRA_DUE_TENTATIVI` ore
+   * (in volo, o un giro rifatto a mano). Né partite né ferme: senza questo
+   * numero la risposta diceva 0 e 0, e sembrava tutto partito.
+   */
+  emailRimandate: number;
   /** Una riga per avviso, in ordine, per il registro. */
   esiti: Array<{ chiave: string; esito: 'recapitato' | 'gia-detto' | 'fallito'; errore?: string }>;
 };
@@ -140,7 +160,8 @@ export async function recapitaAvvisi(
   adesso: number = Date.now(),
 ): Promise<RapportoAvvisi> {
   const rapporto: RapportoAvvisi = {
-    recapitati: 0, giaDetti: 0, falliti: 0, emailNonPartite: 0, emailBloccate: 0, emailBloccateAvvisi: [], esiti: [],
+    recapitati: 0, giaDetti: 0, falliti: 0, emailNonPartite: 0, emailBloccate: 0, emailBloccateAvvisi: [],
+    emailPartiteAvvisi: [], emailRimandate: 0, esiti: [],
   };
 
   for (const a of avvisi) {
@@ -183,8 +204,11 @@ export async function recapitaAvvisi(
       if (email === 'non-partita' || email === 'bloccata') rapporto.emailNonPartite++;
       if (email === 'bloccata') {
         rapporto.emailBloccate++;
-        rapporto.emailBloccateAvvisi.push(id);
+        // Con la persona: l'allarme deve dire a chi scrivere.
+        rapporto.emailBloccateAvvisi.push({ id, userId: a.userId });
       }
+      if (email === 'partita') rapporto.emailPartiteAvvisi.push(id);
+      if (email === 'in-corso') rapporto.emailRimandate++;
     }
   }
 
@@ -328,7 +352,14 @@ async function emailDovuta(
 ): Promise<EsitoEmail> {
   let tentativo: number;
   try {
-    const letto = await admin.from(REGISTRO_INVII).select('id, action, metadata').eq('target_id', idAvviso);
+    // 27/10/2026 (quarto giro, fase 2) — Anche la tabella: l'indice del
+    // registro è (target_table, target_id), e solo la tabella in testa lo usa.
+    // Senza, una lettura per avviso per notte poteva scorrere tutto il registro.
+    const letto = await admin
+      .from(REGISTRO_INVII)
+      .select('id, action, metadata')
+      .eq('target_table', 'notifications')
+      .eq('target_id', idAvviso);
     if (letto.error) throw new Error(letto.error.message);
     const righe = (Array.isArray(letto.data) ? letto.data : []) as Array<{ action?: unknown; metadata?: unknown }>;
     if (righe.some((r) => r.action === EMAIL_PARTITA)) return 'gia-partita';

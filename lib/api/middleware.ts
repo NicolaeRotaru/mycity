@@ -121,7 +121,23 @@ function getSupabaseAuthClient() {
   }
 }
 
-async function authenticate(req: NextRequest, ctx?: ContestoRotta): Promise<
+/**
+ * 27/10/2026 (quarto giro, fase 2) — PRIMA CHI SEI, POI LA CHIAVE.
+ *
+ * Chi sei si decide senza la chiave di servizio: il gettone lo verifica il
+ * client con la chiave pubblica, il cookie lo legge `getCurrentUser`. La chiave
+ * serve solo dopo, per leggere il profilo; senza, qui si rispondeva 503 «Auth
+ * non configurato». Per far uscire la strada a mano, le porte dei diritti
+ * guardavano la chiave PRIMA dell'accesso: 503 anche a chi non aveva fatto
+ * l'accesso, che invece deve ricevere 401 (le prove nel browser sul sito
+ * costruito senza chiavi lo hanno visto). Una rotta che ha qualcosa da dire a
+ * chi è entrato quando la chiave manca lo passa qui: si chiama solo DOPO aver
+ * deciso chi sei, quindi chi non è entrato riceve sempre 401.
+ */
+export type SeMancaLaChiave = (chi: { user: User; req: NextRequest }, guasto: unknown) => NextResponse;
+export type OpzioniAccesso = { seMancaLaChiave?: SeMancaLaChiave };
+
+async function authenticate(req: NextRequest, ctx?: ContestoRotta, opzioni: OpzioniAccesso = {}): Promise<
   | { ok: true; user: User; profile: Profile; supaUtente: ClientDiChiChiama }
   | { ok: false; response: NextResponse }
 > {
@@ -227,7 +243,15 @@ async function authenticate(req: NextRequest, ctx?: ContestoRotta): Promise<
   let profile: Profile | null = null;
   try {
     const { getAdminSupabase } = await import('@/lib/supabase/server');
-    const { data } = await getAdminSupabase()
+    let admin;
+    try {
+      admin = getAdminSupabase();
+    } catch (e) {
+      // Chi sei è già deciso, qui sopra e senza la chiave: manca solo lei.
+      if (!opzioni.seMancaLaChiave) throw e;
+      return { ok: false, response: opzioni.seMancaLaChiave({ user, req }, e) };
+    }
+    const { data } = await admin
       .from('profiles')
       .select('id, role, is_approved')
       .eq('id', user.id)
@@ -251,9 +275,9 @@ export function assertCanPurchase(profile: Profile): NextResponse | null {
  * Wrapper: richiede auth (qualsiasi role).
  *   export const POST = withAuth(async ({ user, profile }) => {...});
  */
-export function withAuth(handler: GenericHandler) {
+export function withAuth(handler: GenericHandler, opzioni: OpzioniAccesso = {}) {
   return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
-    const auth = await authenticate(req, ctx);
+    const auth = await authenticate(req, ctx, opzioni);
     if (!auth.ok) return auth.response;
     return handler({
       user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente,
@@ -279,6 +303,8 @@ export type AuthRateLimitOpts = {
   name: string;
   max: number;
   windowMs: number;
+  /** Cosa dire a chi HA fatto l'accesso quando manca la chiave di servizio (vedi `SeMancaLaChiave`). */
+  seMancaLaChiave?: SeMancaLaChiave;
 };
 
 
@@ -397,7 +423,7 @@ export function withAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandl
     // tre involucri su sei, e li' invece lo prendono tutti. Qui restava una
     // seconda chiamata con una chiave diversa, cioe' due giri di rete per la
     // stessa difesa.
-    const auth = await authenticate(req, ctx);
+    const auth = await authenticate(req, ctx, opts);
     if (!auth.ok) return auth.response;
     const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
     if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);

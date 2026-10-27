@@ -133,8 +133,13 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   // L'art. 12.3-12.4 chiede di dirglielo, col motivo e la strada del reclamo.
   // Ogni avviso ha un identificativo ricavato dalla sua chiave: trenta notti di
   // rinvio scrivono UNA riga, e due giri partiti insieme non ne scrivono due.
-  const avvisi = await rispondiAChiAspetta(admin, verdetto, logger);
+  //
+  // 27/10/2026 (quarto giro, fase 2) — PRIMA LA SVEGLIA, POI LE EMAIL. Ogni
+  // email può aspettare Resend fino a due volte dieci secondi: con la posta
+  // appesa e quindici persone in attesa la notte sforava i 300 secondi prima
+  // di arrivare alla sveglia, e le cancellazioni ferme non le sapeva nessuno.
   if (verdetto.daSvegliare) await sveglia(admin, verdetto);
+  const avvisi = await rispondiAChiAspetta(admin, verdetto, logger);
   if (avvisi.falliti > 0) {
     await avvisaAmministratori(
       admin,
@@ -162,6 +167,7 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   // risposta (`avvisiEmailBloccate`) e la notte torna verde. Se l'allarme non
   // si riesce a scrivere, la notte resta rossa.
   const allarmiEmail = await avvisaUnaVoltaPerAvviso(admin, avvisi.emailBloccateAvvisi);
+  await chiudiGliAllarmiDelleEmailPartite(admin, avvisi.emailPartiteAvvisi);
 
   return NextResponse.json(
     {
@@ -195,6 +201,9 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       // 27/10/2026 (quarto giro) — Di quelle, quante sono ferme da stanotte
       // (allarme nuovo): le altre l'amministratore le sa già.
       allarmiEmailNuovi: allarmiEmail.nuovi,
+      // 27/10/2026 (quarto giro, fase 2) — Quante email stanotte non si sono
+      // tentate perché il turno l'aveva già preso un altro giro da poco.
+      avvisiEmailRimandate: avvisi.emailRimandate,
     },
     // 3/9/2026 — LA NOTTE CHE FALLISCE FINISCE ROSSA.
     //
@@ -288,7 +297,7 @@ async function svegliaPerLaRitenzione(admin: Admin, rapporto: RapportoPotature):
  */
 async function avvisaUnaVoltaPerAvviso(
   admin: Admin,
-  avvisiFermi: string[],
+  avvisiFermi: Array<{ id: string; userId: string }>,
 ): Promise<{ nuovi: number; nonScritti: number }> {
   const conto = { nuovi: 0, nonScritti: 0 };
   if (avvisiFermi.length === 0) return conto;
@@ -305,7 +314,7 @@ async function avvisaUnaVoltaPerAvviso(
     logger.error('[cron-deletions] nessun amministratore a cui dirlo: allarme non recapitato', { avvisiFermi: avvisiFermi.length });
     return { nuovi: 0, nonScritti: avvisiFermi.length };
   }
-  for (const idAvviso of avvisiFermi) {
+  for (const { id: idAvviso, userId } of avvisiFermi) {
     let nuovo = false;
     let rotto = false;
     for (const a of amministratori) {
@@ -325,7 +334,10 @@ async function avvisaUnaVoltaPerAvviso(
           "Una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. " +
           "È scritta nel pannello del sito della persona, ma chi vuole andarsene può non rientrarci più: " +
           'controlla la posta del sito oppure scrivile tu. Il giro riprova da solo ogni notte; ' +
-          'questo avviso non si ripete finché la spiegazione resta ferma.',
+          'questo avviso non si ripete finché la spiegazione resta ferma, e si chiude da solo quando parte. ' +
+          // 27/10/2026 (quarto giro, fase 2) — «Scrivile tu», ma a chi: con più
+          // persone in attesa l'amministratore non lo sapeva.
+          `Chi aspetta: l'utente ${userId}.`,
         link: '/admin/users',
       });
       if (!error) nuovo = true;
@@ -338,6 +350,35 @@ async function avvisaUnaVoltaPerAvviso(
     else if (rotto) conto.nonScritti++;
   }
   return conto;
+}
+
+/**
+ * 27/10/2026 (quarto giro, fase 2) — L'ALLARME SI CHIUDE QUANDO L'EMAIL PARTE.
+ *
+ * «Scrivile tu» è vero finché la spiegazione è ferma. La notte in cui parte,
+ * gli allarmi di quell'avviso (uno per amministratore, stesso identificativo
+ * di `avvisaUnaVoltaPerAvviso`) si segnano letti. Non lancia: un allarme
+ * rimasto aperto è un fastidio da annotare, non un guasto della notte.
+ */
+async function chiudiGliAllarmiDelleEmailPartite(admin: Admin, partite: string[]): Promise<void> {
+  if (partite.length === 0) return;
+  try {
+    const { data, error } = await admin.from('profiles').select('id').eq('role', 'admin').limit(10);
+    if (error) throw new Error(error.message);
+    for (const idAvviso of partite) {
+      for (const a of (data ?? []) as { id: string }[]) {
+        const chiuso = await admin
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('id', identificativoAvviso(`${idAvviso}:email-ferma:${a.id}`));
+        if (chiuso.error) throw new Error(chiuso.error.message);
+      }
+    }
+  } catch (e) {
+    logger.warn('[cron-deletions] allarme della spiegazione partita non chiuso', {
+      errore: e instanceof Error ? e.message : 'errore',
+    });
+  }
 }
 
 async function avvisaAmministratori(admin: Admin, titolo: string, riga: string): Promise<void> {

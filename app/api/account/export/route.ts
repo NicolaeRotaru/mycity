@@ -1,6 +1,6 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { withAuth, withAuthRateLimit, type ContestoRotta } from '@/lib/api/middleware';
+import { withAuthRateLimit, type OpzioniAccesso } from '@/lib/api/middleware';
 import { apiError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { stradaAManoPerIDiritti } from '@/lib/legal/titolare';
@@ -20,26 +20,18 @@ function senzaChiave(cosa: string, e: unknown): NextResponse {
   return apiError(503, strada.frase, 'SERVICE_UNAVAILABLE', { recapito: strada.recapito });
 }
 
-type Rotta = ReturnType<typeof withAuth>;
-
 /**
- * 27/10/2026 — IL MURO STAVA UN PASSO PRIMA DELLA ROTTA.
+ * 27/10/2026 (quarto giro, fase 2) — PRIMA CHI SEI, POI LA CHIAVE.
  *
- * `withAuth` legge il profilo con la stessa chiave di servizio: senza, risponde
- * 503 «Auth non configurato» prima che la rotta parli, e la strada a mano non
- * usciva mai (la prova della squadra fingeva il controllo d'accesso). Quindi la
- * chiave si guarda PRIMA dell'accesso. Non apre niente a nessuno: la risposta è
- * la stessa frase per chiunque bussi, e non legge né scrive alcun dato.
+ * Qui c'era un involucro che guardava la chiave PRIMA del controllo d'accesso:
+ * senza chiave rispondeva 503 con la strada a mano a chiunque bussasse, anche
+ * a chi non aveva fatto l'accesso, che deve ricevere 401 nel formato ApiErrors.
+ * Adesso decide `withAuth`: prima chi sei (401 se nessuno), poi, se la chiave
+ * manca, la strada a mano. Prova:
+ * tests/unit/prima-chi-sei-poi-la-chiave-sulle-porte-dei-diritti.test.ts
  */
-function primaLaStradaAMano(cosa: string, rotta: Rotta): Rotta {
-  return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
-    try {
-      getAdminSupabase();
-    } catch (e) {
-      return senzaChiave(cosa, e);
-    }
-    return ctx ? rotta(req, ctx) : rotta(req);
-  }) as Rotta;
+function sullaPorta(cosa: string): OpzioniAccesso {
+  return { seMancaLaChiave: (_chi, e) => senzaChiave(cosa, e) };
 }
 
 /**
@@ -69,7 +61,7 @@ function primaLaStradaAMano(cosa: string, rotta: Rotta): Rotta {
 // dati è un diritto, e come tutti i diritti si esercita qualche volta, non
 // trecento al minuto. Tre al giorno.
 const scarica = withAuthRateLimit(
-  { name: 'account-export', max: 3, windowMs: 24 * 60 * 60_000 },
+  { name: 'account-export', max: 3, windowMs: 24 * 60 * 60_000, ...sullaPorta('Scaricare i tuoi dati') },
   async ({ user }): Promise<NextResponse> => {
   const userId = user.id;
   const userEmail = user.email ?? null;
@@ -325,4 +317,4 @@ const scarica = withAuthRateLimit(
   },
 );
 
-export const GET = primaLaStradaAMano('Scaricare i tuoi dati', scarica);
+export const GET = scarica;
