@@ -9,6 +9,7 @@ import {
   type TentativoCancellazione,
   type VerdettoGiro,
 } from '@/lib/cron-cancellazioni';
+import { rispondiAChiAspetta } from '@/lib/privacy/avvisi-a-chi-aspetta';
 import {
   eseguiPotature,
   type ClientePotature,
@@ -123,7 +124,42 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   }
 
   const verdetto = verdettoDelGiro(tentativi, Date.now());
+
+  // 27/10/2026 — LA RISPOSTA DOVUTA ESCE DI CASA.
+  //
+  // `verdetto.dovuti` era calcolato ogni notte e non lo leggeva nessuno: chi
+  // aveva chiesto di sparire e restava (un fattorino con contanti da versare)
+  // vedeva un conto alla rovescia fermo a zero, e il motivo restava nei log.
+  // L'art. 12.3-12.4 chiede di dirglielo, col motivo e la strada del reclamo.
+  // Ogni avviso ha un identificativo ricavato dalla sua chiave: trenta notti di
+  // rinvio scrivono UNA riga, e due giri partiti insieme non ne scrivono due.
+  const avvisi = await rispondiAChiAspetta(admin, verdetto, logger);
   if (verdetto.daSvegliare) await sveglia(admin, verdetto);
+  if (avvisi.falliti > 0) {
+    await avvisaAmministratori(
+      admin,
+      'Persone non avvisate del rinvio della cancellazione',
+      avvisi.falliti === 1
+        ? "Stanotte una persona che aspetta la cancellazione non ha ricevuto il motivo dell'attesa. La legge chiede di dirglielo entro un mese."
+        : `Stanotte ${avvisi.falliti} persone che aspettano la cancellazione non hanno ricevuto il motivo dell'attesa. La legge chiede di dirglielo entro un mese.`,
+    );
+  }
+  // 27/10/2026 (terzo giro) — LA SPIEGAZIONE PER EMAIL CHE NON PARTE NON È UNA
+  // NOTTE VERDE. La prima volta che la posta dice di no si riprova la notte
+  // dopo senza svegliare nessuno: un intoppo di una notte si sistema da solo.
+  // Quando non parte di nuovo — o non si può nemmeno tentare — chi vuole
+  // andarsene non ha ricevuto niente fuori dal sito, e non lo saprà se non
+  // glielo scrive qualcuno. Prima qui c'era solo un numero nel corpo.
+  if (avvisi.emailBloccate > 0) {
+    await avvisaAmministratori(
+      admin,
+      "Spiegazione dell'attesa non partita per email",
+      (avvisi.emailBloccate === 1
+        ? "Stanotte una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. È scritta nel pannello del sito della persona, ma chi vuole andarsene può non rientrarci più: controlla la posta del sito oppure scrivile tu."
+        : `Stanotte ${avvisi.emailBloccate} spiegazioni dell'attesa per la cancellazione non sono partite per email, e non è un intoppo di una notte sola. Sono scritte nel pannello del sito delle persone, ma chi vuole andarsene può non rientrarci più: controlla la posta del sito oppure scrivi tu a ciascuna.`) +
+        ' Il giro riprova da solo ogni notte.',
+    );
+  }
 
   return NextResponse.json(
     {
@@ -143,6 +179,17 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       // `processed` (e allora non suona mai).
       rinviate: verdetto.rinviate,
       scadute: verdetto.scadute,
+      // 27/10/2026 — Quante persone hanno ricevuto il motivo dell'attesa, e
+      // quante no: un avviso dovuto per legge che non parte è un guasto.
+      avvisiRecapitati: avvisi.recapitati,
+      avvisiFalliti: avvisi.falliti,
+      // 27/10/2026 (secondo giro) — La spiegazione scritta nel pannello è
+      // partita anche per email? Qui quante no stanotte: la notte dopo si riprova.
+      avvisiEmailNonPartite: avvisi.emailNonPartite,
+      // 27/10/2026 (terzo giro) — Di quelle, quante non si sistemano da sole
+      // (non partite di nuovo, o registro degli invii illeggibile): sono loro
+      // a rendere rossa la notte e a svegliare un amministratore.
+      avvisiEmailBloccate: avvisi.emailBloccate,
     },
     // 3/9/2026 — LA NOTTE CHE FALLISCE FINISCE ROSSA.
     //
@@ -152,7 +199,12 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     // (`withCronAuth`). Un 500 fa due cose insieme: rende rossa l'esecuzione
     // nel pannello dei lavori periodici, e NON scrive il battito — cosi' se la
     // cosa va avanti anche il sorvegliante se ne accorge da solo.
-    { status: verdetto.daSvegliare || potature.fallite > 0 ? 500 : 200 },
+    {
+      status:
+        verdetto.daSvegliare || potature.fallite > 0 || avvisi.falliti > 0 || avvisi.emailBloccate > 0
+          ? 500
+          : 200,
+    },
   );
 });
 
