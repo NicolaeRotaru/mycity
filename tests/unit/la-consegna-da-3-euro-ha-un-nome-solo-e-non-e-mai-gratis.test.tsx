@@ -75,6 +75,12 @@ describe('dopo il pagamento la pagina dell’ordine non scrive «gratis» sopra 
       const s = sorgente(p);
       expect(s, `${p} non scrive la colonna con cifraDellaVoce`).toMatch(/riepilogo\.voci\.map\([\s\S]{0,400}?cifraDellaVoce\(v,/);
       expect(s, `${p} decide da sola quando scrivere «GRATUITA»`).not.toMatch(/GRATUIT/);
+      // 27/10 (quarto giro): il controllo qui sopra guardava solo il maiuscolo, e «Gratis», «gratuita»,
+      // «inclusa» o «offerta» scritte dalla pagina passavano. Nel codice senza commenti la pagina non
+      // scrive da sola nessuna parola che regala la consegna: quella la decide il riepilogo.
+      const codice = s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      const regali = codice.match(/gratis|gratuit|omaggi|inclus[ao]|offert[ao]|a carico nostro|costo zero|nessun costo/gi) ?? [];
+      expect(regali, `${p} scrive da sola che la consegna non si paga`).toEqual([]);
     }
   });
 });

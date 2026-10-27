@@ -15,6 +15,13 @@ import { motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
  * Stripe, autenticazione e database sono finti; la regola della zona, il conto e la rotta sono veri.
  * Le coordinate della casa arrivano da dove le prende la rotta: gli indirizzi salvati, oppure la
  * geocodifica dell'indirizzo scritto.
+ *
+ * 27/10/2026 (quarto giro) — UNA FONTE ALLA VOLTA, E IL BROWSER CHE MENTE.
+ * Qui sotto le due strade davano la stessa casa: il collaudo ha fatto guardare alla carta solo la
+ * rubrica (`coordConsegna` al posto di `coordPerLaMappa`) e tutto è rimasto verde. Ma chi ordina la
+ * prima volta non ha la casa in rubrica: la sua posizione arriva solo dalla geocodifica, e con quel
+ * difetto una casa a 13 km pagava con la carta. Ora ogni caso accende UNA fonte sola, in quattro
+ * direzioni, e il browser giura di stare davanti al negozio: la rotta non deve credergli.
  */
 
 const P1 = '11111111-1111-1111-1111-111111111111';
@@ -23,15 +30,38 @@ const NEGOZIO = { lat: 45.0526, lng: 9.6929, nome: 'Forno di prova' };
 // Un grado di latitudine vale circa 111,2 km ovunque: spostarsi lungo il meridiano misura giusto.
 const KM_PER_GRADO = 111.195;
 const casaA = (km: number) => ({ lat: NEGOZIO.lat + km / KM_PER_GRADO, lng: NEGOZIO.lng });
+// Lungo il parallelo un grado di longitudine vale 111,2 km per il coseno della latitudine.
+const casaAEst = (km: number) => ({
+  lat: NEGOZIO.lat,
+  lng: NEGOZIO.lng + km / (KM_PER_GRADO * Math.cos((NEGOZIO.lat * Math.PI) / 180)),
+});
 const CASA_13_KM_NORD = casaA(13);
 const CASA_13_KM_SUD = casaA(-13);
+const CASA_13_KM_EST = casaAEst(13);
+const CASA_13_KM_OVEST = casaAEst(-13);
 const CASA_8_KM_NORD = casaA(8);
+const CASA_8_KM_SUD = casaA(-8);
 
-const state: { casa: { lat: number; lng: number } | null; products: unknown[]; sellers: unknown[] } = {
-  casa: null,
+type Fonte = 'rubrica' | 'geocodifica';
+const FONTI: Fonte[] = ['rubrica', 'geocodifica'];
+
+const state: {
+  rubrica: { lat: number; lng: number } | null;
+  geocodifica: { lat: number; lng: number } | null;
+  products: unknown[];
+  sellers: unknown[];
+} = {
+  rubrica: null,
+  geocodifica: null,
   products: [],
   sellers: [],
 };
+
+/** Accende una fonte sola: l'altra non sa niente della casa. */
+function casaDalla(fonte: Fonte, casa: { lat: number; lng: number }) {
+  state.rubrica = fonte === 'rubrica' ? casa : null;
+  state.geocodifica = fonte === 'geocodifica' ? casa : null;
+}
 
 const createSession = vi.fn(async (_input: unknown) => ({ id: 'cs_test', url: 'https://stripe.test/cs_test' }));
 
@@ -61,12 +91,12 @@ vi.mock('@/lib/coupons', () => ({ validateCoupon: vi.fn(async () => ({ ok: false
 
 vi.mock('@/lib/shipping-coordinate', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/shipping-coordinate')>();
-  return { ...actual, coordinateDaIndirizziSalvati: vi.fn(async () => state.casa) };
+  return { ...actual, coordinateDaIndirizziSalvati: vi.fn(async () => state.rubrica) };
 });
 
 vi.mock('@/lib/geocodifica', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/geocodifica')>();
-  return { ...actual, coordinateDiUnIndirizzo: vi.fn(async () => state.casa) };
+  return { ...actual, coordinateDiUnIndirizzo: vi.fn(async () => state.geocodifica) };
 });
 
 vi.mock('@/lib/supabase/server', () => {
@@ -115,7 +145,8 @@ vi.mock('@/lib/supabase/server', () => {
 
 import { POST } from '@/app/api/stripe/checkout/route';
 
-function richiesta(casa: { lat: number; lng: number }): never {
+/** Il browser manda sempre la posizione del negozio: una bugia comoda, che la rotta deve ignorare. */
+function richiesta(): never {
   return new Request('http://localhost/api/stripe/checkout', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -127,8 +158,8 @@ function richiesta(casa: { lat: number; lng: number }): never {
         city: 'Piacenza',
         zip: '29121',
         phone: '3330000000',
-        lat: casa.lat,
-        lng: casa.lng,
+        lat: NEGOZIO.lat,
+        lng: NEGOZIO.lng,
       },
       couponDiscountCents: 0,
       pickupDiscountCents: 0,
@@ -150,28 +181,43 @@ describe('la rotta della carta rifiuta un indirizzo fuori zona, come quella dei 
     const km = (c: { lat: number; lng: number }) => haversineKm(NEGOZIO.lat, NEGOZIO.lng, c.lat, c.lng);
     expect(km(CASA_13_KM_NORD)).toBeGreaterThan(RAGGIO_CONSEGNA_KM + 2);
     expect(km(CASA_13_KM_SUD)).toBeGreaterThan(RAGGIO_CONSEGNA_KM + 2);
+    expect(km(CASA_13_KM_EST)).toBeGreaterThan(RAGGIO_CONSEGNA_KM + 2);
+    expect(km(CASA_13_KM_OVEST)).toBeGreaterThan(RAGGIO_CONSEGNA_KM + 2);
     expect(km(CASA_8_KM_NORD)).toBeLessThan(RAGGIO_CONSEGNA_KM - 1);
+    expect(km(CASA_8_KM_SUD)).toBeLessThan(RAGGIO_CONSEGNA_KM - 1);
+    // Nord e sud sono tutta latitudine, est e ovest tutta longitudine.
+    expect(CASA_13_KM_NORD.lng).toBe(NEGOZIO.lng);
+    expect(CASA_13_KM_EST.lat).toBe(NEGOZIO.lat);
   });
 
-  for (const [dove, casa] of [
-    ['13 km a nord', CASA_13_KM_NORD],
-    ['13 km a sud', CASA_13_KM_SUD],
-  ] as const) {
-    it(`IL CASO DEL COLLAUDO — una casa ${dove}: la carta non apre il pagamento`, async () => {
-      state.casa = casa;
-      const res = await POST(richiesta(casa));
-      const corpo = (await res.json()) as { error?: { message?: string } };
-      expect(res.status, `la rotta della carta ha risposto ${res.status}: ${JSON.stringify(corpo)}`).toBe(400);
-      expect(corpo.error?.message).toBe(motivoFuoriZona(NEGOZIO.nome));
-      expect(createSession, 'il pagamento con la carta è stato aperto per una casa fuori zona').not.toHaveBeenCalled();
-    });
+  for (const fonte of FONTI) {
+    for (const [dove, casa] of [
+      ['13 km a nord', CASA_13_KM_NORD],
+      ['13 km a sud', CASA_13_KM_SUD],
+      ['13 km a est', CASA_13_KM_EST],
+      ['13 km a ovest', CASA_13_KM_OVEST],
+    ] as const) {
+      it(`IL CASO DEL COLLAUDO — una casa ${dove}, presa dalla ${fonte}: la carta non apre il pagamento`, async () => {
+        casaDalla(fonte, casa);
+        const res = await POST(richiesta());
+        const corpo = (await res.json()) as { error?: { message?: string } };
+        expect(res.status, `la rotta della carta ha risposto ${res.status}: ${JSON.stringify(corpo)}`).toBe(400);
+        expect(corpo.error?.message).toBe(motivoFuoriZona(NEGOZIO.nome));
+        expect(createSession, 'il pagamento con la carta è stato aperto per una casa fuori zona').not.toHaveBeenCalled();
+      });
+    }
   }
 
-  it('una casa 8 km a nord, dentro il confine: il pagamento si apre', async () => {
-    state.casa = CASA_8_KM_NORD;
-    const res = await POST(richiesta(CASA_8_KM_NORD));
-    const corpo = await res.json();
-    expect(res.status, JSON.stringify(corpo)).toBe(200);
-    expect(createSession).toHaveBeenCalledTimes(1);
-  });
+  for (const [fonte, dove, casa] of [
+    ['geocodifica', '8 km a nord', CASA_8_KM_NORD],
+    ['rubrica', '8 km a sud', CASA_8_KM_SUD],
+  ] as const) {
+    it(`una casa ${dove}, presa dalla ${fonte}, dentro il confine: il pagamento si apre`, async () => {
+      casaDalla(fonte, casa);
+      const res = await POST(richiesta());
+      const corpo = await res.json();
+      expect(res.status, JSON.stringify(corpo)).toBe(200);
+      expect(createSession).toHaveBeenCalledTimes(1);
+    });
+  }
 });

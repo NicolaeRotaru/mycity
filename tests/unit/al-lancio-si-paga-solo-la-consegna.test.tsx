@@ -217,6 +217,68 @@ describe('a ogni distanza dentro la zona si pagano solo i 3 euro', () => {
     const casi = DIREZIONI.length * DISTANZE.length * SPESE.length;
     expect(sbagliati.slice(0, 6), `${sbagliati.length} casi su ${casi} non pagano i soli 3 euro`).toEqual([]);
   });
+
+  /*
+   * 27/10/2026 (quarto giro) — DUE E TRE NEGOZI, IN POSTI DIVERSI.
+   *
+   * La griglia qui sopra ha un negozio solo, e la prova dei due negozi li mette nello stesso punto
+   * con la casa a 5 km. Il collaudo ha rimesso la tariffa a chilometri solo quando il carrello ha
+   * due negozi, e tutto è rimasto verde: chi comprava dal forno e dalla macelleria pagava la
+   * consegna a distanza, chi comprava da uno solo no. Qui il carrello ha due e tre negozi in tre
+   * punti diversi della città, la casa gira tutta la griglia e le spese si incrociano: ogni negozio
+   * chiede i suoi 3 euro e niente di più, e il totale è la merce più 3 euro per negozio.
+   */
+  it('con due e tre negozi in posti diversi, a ogni distanza e con ogni spesa: 3 euro per negozio e niente di più', () => {
+    const POSIZIONI: Record<string, { lat: number; lng: number }> = {
+      forno: NEGOZIO,
+      macelleria: puntoA(4, 200),
+      fioraio: puntoA(7, 60),
+    };
+    const carrelli: Array<Array<{ sellerId: string; euro: number }>> = [];
+    for (const a of SPESE) {
+      for (const b of SPESE) carrelli.push([{ sellerId: 'forno', euro: a }, { sellerId: 'macelleria', euro: b }]);
+    }
+    for (const a of [5, 20, 29.99]) {
+      for (const b of [1, 12, 45]) {
+        for (const c of [8, 29.99, 30]) {
+          carrelli.push([
+            { sellerId: 'forno', euro: a },
+            { sellerId: 'macelleria', euro: b },
+            { sellerId: 'fioraio', euro: c },
+          ]);
+        }
+      }
+    }
+    const sbagliati: string[] = [];
+    let casi = 0;
+    for (const gradi of DIREZIONI) {
+      for (const km of DISTANZE) {
+        const casa = puntoA(km, gradi);
+        for (const gruppi of carrelli) {
+          casi++;
+          const esito = conto(gruppi, {
+            coordinateNegozio: (id) => POSIZIONI[id],
+            consegnaLat: casa.lat,
+            consegnaLng: casa.lng,
+          });
+          const merce = gruppi.reduce((s, g) => s + Math.round(g.euro * 100), 0);
+          const atteso = merce + gruppi.length * PLATFORM_DELIVERY_FEE_CENTS;
+          const pagate = esito.gruppi.map(consegnaPagata);
+          if (
+            pagate.length !== gruppi.length ||
+            pagate.some((p) => p !== PLATFORM_DELIVERY_FEE_CENTS) ||
+            esito.grandShippingCents !== 0 ||
+            esito.grandTotalCents !== atteso
+          ) {
+            const chi = gruppi.map((g) => `${g.sellerId} ${g.euro} €`).join(' + ');
+            sbagliati.push(`${chi}, casa a ${km} km verso ${gradi}°: consegne ${pagate.join('/')} cent, totale ${esito.grandTotalCents} invece di ${atteso}`);
+          }
+        }
+      }
+    }
+    expect(casi, 'la griglia dei carrelli con più negozi è vuota').toBeGreaterThan(10_000);
+    expect(sbagliati.slice(0, 6), `${sbagliati.length} carrelli su ${casi} non pagano 3 euro per negozio`).toEqual([]);
+  });
 });
 
 describe('la pagina Spedizioni dice le cifre della cassa', () => {
