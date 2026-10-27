@@ -69,11 +69,19 @@ export type RapportoAvvisi = {
   /** Avvisi che NON siamo riusciti a recapitare: qui si sveglia qualcuno. */
   falliti: number;
   /**
-   * Avvisi scritti nel pannello ma NON partiti anche per email (posta spenta,
-   * indirizzo mancante, invio rifiutato). L'avviso dovuto c'è; manca il canale
-   * che lo porta fuori dal sito. Si conta e si scrive nel registro degli errori.
+   * Avvisi scritti nel pannello ma NON partiti anche per email stanotte (posta
+   * spenta, indirizzo mancante, invio rifiutato, registro degli invii che non
+   * si legge). L'avviso dovuto c'è; manca il canale che lo porta fuori dal
+   * sito. L'email resta dovuta: la notte dopo si riprova (`emailDovuta`).
    */
   emailNonPartite: number;
+  /**
+   * Di quelle, le email che non si sistemano da sole: non partite di nuovo
+   * (dal secondo tentativo in poi), oppure non tentate perché il registro
+   * degli invii non si legge. Qui si sveglia qualcuno: chi chiama rende rossa
+   * la notte, come per `falliti`.
+   */
+  emailBloccate: number;
   /** Una riga per avviso, in ordine, per il registro. */
   esiti: Array<{ chiave: string; esito: 'recapitato' | 'gia-detto' | 'fallito'; errore?: string }>;
 };
@@ -115,7 +123,7 @@ function eUnDoppione(messaggio: string): boolean {
  *
  * Non lancia mai: un avviso che non parte è un guasto da contare e da dire, non
  * una ragione per far cadere il resto del giro notturno. Chi chiama guarda
- * `falliti`.
+ * `falliti` e `emailBloccate`.
  */
 export async function recapitaAvvisi(
   admin: ClienteAvvisi,
@@ -123,49 +131,28 @@ export async function recapitaAvvisi(
   registro: RegistroAvvisi,
   posta?: PostaAvvisi,
 ): Promise<RapportoAvvisi> {
-  const rapporto: RapportoAvvisi = { recapitati: 0, giaDetti: 0, falliti: 0, emailNonPartite: 0, esiti: [] };
+  const rapporto: RapportoAvvisi = {
+    recapitati: 0, giaDetti: 0, falliti: 0, emailNonPartite: 0, emailBloccate: 0, esiti: [],
+  };
 
   for (const a of avvisi) {
     const id = identificativoAvviso(a.chiave);
     try {
-      const gia = await admin.from('notifications').select('id').eq('id', id);
-      if (gia.error) throw new Error(gia.error.message);
-      if (Array.isArray(gia.data) && gia.data.length > 0) {
+      if (await giaNelPannello(admin, id)) {
         rapporto.giaDetti++;
         rapporto.esiti.push({ chiave: a.chiave, esito: 'gia-detto' });
-        continue;
-      }
-
-      const scritto = await admin.from('notifications').insert([
-        {
-          id,
-          user_id: a.userId,
-          category: CATEGORIA,
-          title: a.titolo,
-          body: a.corpo,
-          link: a.link,
-        },
-      ]);
-      if (scritto.error) {
+      } else if (await scrittoOraNelPannello(admin, a, id)) {
+        rapporto.recapitati++;
+        rapporto.esiti.push({ chiave: a.chiave, esito: 'recapitato' });
+        registro.info('[avvisi-cancellazione] risposta recapitata all interessato', {
+          userId: a.userId, tappa: a.tappa,
+        });
+      } else {
         // Due giri partiti insieme: il secondo trova la chiave primaria
         // occupata. Non è un guasto, è il freno che ha funzionato.
-        if (eUnDoppione(scritto.error.message)) {
-          rapporto.giaDetti++;
-          rapporto.esiti.push({ chiave: a.chiave, esito: 'gia-detto' });
-          continue;
-        }
-        throw new Error(scritto.error.message);
+        rapporto.giaDetti++;
+        rapporto.esiti.push({ chiave: a.chiave, esito: 'gia-detto' });
       }
-
-      rapporto.recapitati++;
-      rapporto.esiti.push({ chiave: a.chiave, esito: 'recapitato' });
-      registro.info('[avvisi-cancellazione] risposta recapitata all interessato', {
-        userId: a.userId, tappa: a.tappa,
-      });
-      // L'email parte solo qui, dopo la PRIMA scrittura riuscita: la riga in
-      // `notifications` (chiave primaria ricavata dalla chiave) fa da lucchetto,
-      // quindi trenta notti o due giri insieme non fanno trenta email.
-      if (posta && !(await speditaAncheTramitePosta(posta, a, registro))) rapporto.emailNonPartite++;
     } catch (e) {
       const errore = e instanceof Error ? e.message : 'errore';
       rapporto.falliti++;
@@ -175,10 +162,53 @@ export async function recapitaAvvisi(
       registro.error('[avvisi-cancellazione] la persona non e stata avvisata', {
         userId: a.userId, tappa: a.tappa, errore,
       });
+      continue;
+    }
+
+    // 27/10/2026 (terzo giro) — L'EMAIL È DOVUTA FINCHÉ NON RISULTA PARTITA.
+    // Prima partiva solo nel ramo «scritto ora»: se quella notte la posta
+    // diceva di no, dalla notte dopo l'avviso era «già detto» e l'email non
+    // ripartiva mai più. Adesso l'email ha il suo lucchetto (`emailDovuta`) e
+    // vale per ogni avviso che è nel pannello, scritto stanotte o prima.
+    if (posta) {
+      const email = await emailDovuta(admin, posta, a, id, registro);
+      if (email === 'non-partita' || email === 'bloccata') rapporto.emailNonPartite++;
+      if (email === 'bloccata') rapporto.emailBloccate++;
     }
   }
 
   return rapporto;
+}
+
+/** Vero se l'avviso è già nel pannello della persona. Lancia se non si legge. */
+async function giaNelPannello(admin: ClienteAvvisi, id: string): Promise<boolean> {
+  const gia = await admin.from('notifications').select('id').eq('id', id);
+  if (gia.error) throw new Error(gia.error.message);
+  return Array.isArray(gia.data) && gia.data.length > 0;
+}
+
+/**
+ * Scrive l'avviso nel pannello. `false` se un altro giro l'ha scritto un attimo
+ * prima (la chiave primaria dice di no); lancia per ogni altro rifiuto.
+ */
+async function scrittoOraNelPannello(
+  admin: ClienteAvvisi,
+  a: AvvisoAllInteressato,
+  id: string,
+): Promise<boolean> {
+  const scritto = await admin.from('notifications').insert([
+    {
+      id,
+      user_id: a.userId,
+      category: CATEGORIA,
+      title: a.titolo,
+      body: a.corpo,
+      link: a.link,
+    },
+  ]);
+  if (!scritto.error) return true;
+  if (eUnDoppione(scritto.error.message)) return false;
+  throw new Error(scritto.error.message);
 }
 
 /**
@@ -186,7 +216,8 @@ export async function recapitaAvvisi(
  *
  * La spiegazione scritta solo nel pannello la legge chi rientra nel sito. Ma
  * chi ha chiesto di cancellarsi sta cercando di andarsene: può non rientrare
- * mai. Per questo la stessa spiegazione parte anche per email, una volta sola.
+ * mai. Per questo la stessa spiegazione parte anche per email, una volta sola
+ * — e se non parte, si riprova la notte dopo (`emailDovuta`).
  * Una prova passa una posta finta; la notte passa quella vera (`postaVera`).
  */
 export type PostaAvvisi = {
@@ -194,11 +225,110 @@ export type PostaAvvisi = {
   invia(lettera: { to: string; subject: string; html: string }): Promise<{ ok: boolean }>;
 };
 
+/**
+ * 27/10/2026 (terzo giro) — IL LUCCHETTO DELL'EMAIL È SUO, NON QUELLO DEL PANNELLO.
+ *
+ * L'email partiva solo la notte in cui la notifica veniva scritta per la prima
+ * volta. Se quella notte la posta diceva di no (Resend 503, posta spenta,
+ * indirizzo che non si legge), dalla notte dopo l'avviso risultava «già detto»
+ * e l'email non ripartiva mai più: trenta notti, zero email, notte verde.
+ *
+ * Adesso l'email ha il suo registro, nel registro delle azioni (`audit_logs`,
+ * che scrive solo il client amministrativo): una riga per ogni tentativo e una
+ * quando è partita, con l'identificativo dell'avviso in `target_id` e niente
+ * dati della persona. Ogni notte:
+ *  · se c'è «partita» non si fa niente: trenta notti restano UNA email;
+ *  · altrimenti si prende il turno del tentativo N+1 scrivendone la riga.
+ *    L'identificativo si ricava dalla chiave e da N, quindi due giri partiti
+ *    insieme sbattono sulla chiave primaria e spedisce uno solo;
+ *  · si spedisce, e solo se è partita si scrive «partita».
+ * Un giro che cade a metà perde al massimo un tentativo: la notte dopo si
+ * riprova. Il caso opposto — partita ma non segnata — rimanda la stessa
+ * spiegazione una volta in più: meglio due volte che nessuna.
+ *
+ * `bloccata` è quella che sveglia qualcuno: non parte di nuovo (un intoppo di
+ * una notte si sistema da solo, uno che si ripete no), oppure il registro non
+ * si legge — e senza un posto dove segnare «partita», spedire vorrebbe dire
+ * una email ogni notte.
+ */
+type EsitoEmail = 'partita' | 'gia-partita' | 'in-corso' | 'non-partita' | 'bloccata';
+
+const REGISTRO_INVII = 'audit_logs';
+const EMAIL_TENTATA = 'privacy.avviso_cancellazione.email_tentata';
+const EMAIL_PARTITA = 'privacy.avviso_cancellazione.email_partita';
+
+/** Una riga del registro degli invii. Il giro notturno non è una persona: `actor_id` resta vuoto. */
+function rigaDegliInvii(
+  a: AvvisoAllInteressato,
+  idAvviso: string,
+  azione: string,
+  quale: string,
+  tentativo: number,
+): Record<string, unknown> {
+  return {
+    id: identificativoAvviso(`${a.chiave}:email:${quale}`),
+    actor_id: null,
+    action: azione,
+    target_table: 'notifications',
+    target_id: idAvviso,
+    metadata: { tappa: a.tappa, tentativo },
+  };
+}
+
+/** Porta fuori l'email di un avviso che è già nel pannello. Non lancia mai. */
+async function emailDovuta(
+  admin: ClienteAvvisi,
+  posta: PostaAvvisi,
+  a: AvvisoAllInteressato,
+  idAvviso: string,
+  registro: RegistroAvvisi,
+): Promise<EsitoEmail> {
+  let tentativo: number;
+  try {
+    const letto = await admin.from(REGISTRO_INVII).select('id, action').eq('target_id', idAvviso);
+    if (letto.error) throw new Error(letto.error.message);
+    const righe = (Array.isArray(letto.data) ? letto.data : []) as Array<{ action?: unknown }>;
+    if (righe.some((r) => r.action === EMAIL_PARTITA)) return 'gia-partita';
+    tentativo = righe.filter((r) => r.action === EMAIL_TENTATA).length + 1;
+
+    const turno = await admin
+      .from(REGISTRO_INVII)
+      .insert([rigaDegliInvii(a, idAvviso, EMAIL_TENTATA, `tentativo:${tentativo}`, tentativo)]);
+    if (turno.error) {
+      // Un altro giro ha preso questo stesso tentativo un attimo prima: spedisce lui.
+      if (eUnDoppione(turno.error.message)) return 'in-corso';
+      throw new Error(turno.error.message);
+    }
+  } catch (e) {
+    registro.error('[avvisi-cancellazione] registro degli invii non disponibile: l email non si tenta, per non spedirla ogni notte', {
+      userId: a.userId, tappa: a.tappa, errore: e instanceof Error ? e.message : 'errore',
+    });
+    return 'bloccata';
+  }
+
+  if (!(await speditaAncheTramitePosta(posta, a, registro, tentativo))) {
+    return tentativo > 1 ? 'bloccata' : 'non-partita';
+  }
+
+  try {
+    const segno = await admin
+      .from(REGISTRO_INVII)
+      .insert([rigaDegliInvii(a, idAvviso, EMAIL_PARTITA, 'partita', tentativo)]);
+    if (segno.error && !eUnDoppione(segno.error.message)) throw new Error(segno.error.message);
+  } catch (e) {
+    registro.error('[avvisi-cancellazione] email partita ma non segnata: la notte dopo puo ripartire una seconda volta', {
+      userId: a.userId, tappa: a.tappa, errore: e instanceof Error ? e.message : 'errore',
+    });
+  }
+  return 'partita';
+}
+
 /** Vero se l'email è partita. Non lancia: un'email persa si conta, non ferma la notte. */
 async function speditaAncheTramitePosta(
   posta: PostaAvvisi,
   a: AvvisoAllInteressato,
   registro: RegistroAvvisi,
+  tentativo: number,
 ): Promise<boolean> {
   try {
     const to = await posta.indirizzoDi(a.userId);
@@ -212,7 +342,7 @@ async function speditaAncheTramitePosta(
     return true;
   } catch (e) {
     registro.error('[avvisi-cancellazione] la spiegazione e nel pannello ma non e partita per email', {
-      userId: a.userId, tappa: a.tappa, errore: e instanceof Error ? e.message : 'errore',
+      userId: a.userId, tappa: a.tappa, tentativo, errore: e instanceof Error ? e.message : 'errore',
     });
     return false;
   }
@@ -297,9 +427,9 @@ type Amministrativo = ReturnType<typeof getAdminSupabase>;
  *
  *     const avvisi = await rispondiAChiAspetta(admin, verdetto, logger);
  *
- * e poi `avvisi.falliti` va nel conto che rende rossa la notte, accanto a
- * `potature.fallite`: una risposta dovuta per legge che non parte è un guasto
- * come gli altri.
+ * e poi `avvisi.falliti` e `avvisi.emailBloccate` vanno nel conto che rende
+ * rossa la notte, accanto a `potature.fallite`: una risposta dovuta per legge
+ * che non parte è un guasto come gli altri.
  */
 export async function rispondiAChiAspetta(
   admin: Amministrativo,

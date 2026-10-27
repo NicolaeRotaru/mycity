@@ -31,7 +31,13 @@ const stato: {
   esiti: Record<string, Esito>;
   /** Il database rifiuta gli avvisi scritti a questa persona (e solo a lei). */
   rifiutaAvvisiA: string | null;
-} = { mondo: fintoGiroNotturno(), senzaChiave: false, esiti: {}, rifiutaAvvisiA: null };
+  /**
+   * Il registro delle azioni non si legge e non si scrive — solo lì dove la
+   * notte segna i tentativi d'invio. Le potature della stessa tabella restano
+   * buone: altrimenti la notte diventerebbe rossa per loro, non per l'email.
+   */
+  registroInviiRotto: boolean;
+} = { mondo: fintoGiroNotturno(), senzaChiave: false, esiti: {}, rifiutaAvvisiA: null, registroInviiRotto: false };
 
 const UTENTE = { id: "rider-1", email: "rider@example.com" };
 
@@ -62,6 +68,11 @@ function adminDiProva() {
           return { then: (ok: (v: unknown) => unknown) => Promise.resolve(ok({ data: null, error: { message: "permission denied" } })) };
         };
       }
+      if (tabella === "audit_logs" && stato.registroInviiRotto) {
+        const rifiuto = { data: null, error: { message: "permission denied for table audit_logs" } };
+        q.select = () => ({ eq: async () => rifiuto });
+        q.insert = () => ({ then: (ok: (v: unknown) => unknown) => Promise.resolve(ok(rifiuto)) });
+      }
       q.single = async () => {
         const r = await q;
         return { data: Array.isArray(r.data) ? (r.data[0] ?? null) : null, error: r.error };
@@ -71,7 +82,9 @@ function adminDiProva() {
   };
 }
 
-const inviaEmail = vi.fn(async (_x: unknown) => ({ ok: false, skipped: true, reason: "non configurata" }) as { ok: boolean });
+/** La posta spenta, com'è oggi in produzione: risponde di no, senza lanciare. */
+const POSTA_SPENTA = async (_x: unknown) => ({ ok: false, skipped: true, reason: "non configurata" }) as { ok: boolean };
+const inviaEmail = vi.fn(POSTA_SPENTA);
 
 vi.mock("@/lib/supabase/server", () => ({
   getAdminSupabase: () => {
@@ -121,6 +134,7 @@ const CASSA_APERTA: Esito = { ok: false, motivo: "cassa_da_versare", errore: MOT
 function ilFattorinoConLaCassaAperta(chiesta = CHIESTA, esito: Esito = CASSA_APERTA) {
   stato.senzaChiave = false;
   stato.rifiutaAvvisiA = null;
+  stato.registroInviiRotto = false;
   stato.esiti = { "rider-1": esito };
   stato.mondo = fintoGiroNotturno({
     rpc: { process_expired_deletions: { data: [{ user_id: "rider-1", deleted_at: chiesta }], error: null } },
@@ -164,6 +178,9 @@ beforeEach(() => {
   delete process.env.RESEND_FROM;
   process.env.CRON_SECRET = SEGRETO_DELLA_NOTTE;
   inviaEmail.mockClear();
+  // Ogni prova riparte con la posta spenta: una posta «buona» lasciata da una
+  // prova non deve far passare quella dopo.
+  inviaEmail.mockImplementation(POSTA_SPENTA);
   __resetRateLimitBuckets();
 });
 
@@ -190,6 +207,12 @@ describe("chi aspetta la cancellazione lo sa dal giro notturno vero", () => {
 
   it("trenta notti non sono trenta messaggi: la seconda notte non riscrive", async () => {
     ilFattorinoConLaCassaAperta();
+    // 27/10/2026 (terzo giro) — Qui la posta era spenta, e la prova chiedeva
+    // UNA email dopo due notti: blindava proprio il difetto, la spiegazione
+    // non partita la prima notte che non ripartiva mai. Una email sola si
+    // chiede quando la prima È PARTITA; quella che non parte si riprova (vedi
+    // «la spiegazione per email che non parte si riprova», qui sotto).
+    inviaEmail.mockImplementation(async () => ({ ok: true }));
     await passaLaNotte();
     await passaLaNotte();
     expect(suoi()).toHaveLength(1);
@@ -370,6 +393,59 @@ describe("un messaggio dovuto che non parte non passa per partito", () => {
     ilFattorinoConLaCassaAperta(giorniFa(40), { ok: false, errore: "timeout", fileRimossi: 0, erroriFile: [] });
     await passaLaNotte();
     expect(suoi().map((n) => n.title)).toEqual(["La tua cancellazione è in ritardo"]);
+  });
+});
+
+describe("la spiegazione per email che non parte si riprova, e se non parte ancora qualcuno lo sa", () => {
+  it("IL CASO CHE ROMPEVA — Resend dice di no la prima notte: la notte dopo la spiegazione parte", async () => {
+    ilFattorinoConLaCassaAperta();
+    inviaEmail.mockImplementation(async () => ({ ok: false, error: "Resend 503" }) as { ok: boolean });
+    const prima = await passaLaNotte();
+    expect(prima.status, "un intoppo di una notte non è ancora un guasto: la notte dopo si riprova").toBe(200);
+    expect(stato.mondo.notifiche(), "si sveglia qualcuno per un intoppo che si sistema da solo").toHaveLength(0);
+
+    inviaEmail.mockImplementation(async () => ({ ok: true }));
+    const seconda = await passaLaNotte();
+    expect(
+      lettereA(UTENTE.email),
+      "la spiegazione non partita la prima notte non riparte mai: l'avviso risulta «già detto»",
+    ).toHaveLength(2);
+    expect(seconda.status).toBe(200);
+
+    await passaLaNotte();
+    await passaLaNotte();
+    expect(lettereA(UTENTE.email), "partita una volta, non si rimanda").toHaveLength(2);
+    expect(suoi(), "il pannello resta con un avviso solo").toHaveLength(1);
+  });
+
+  it("IL CASO CHE ROMPEVA — se la posta dice di no anche la notte dopo, la notte è rossa e un amministratore lo sa", async () => {
+    ilFattorinoConLaCassaAperta();
+    const prima = await passaLaNotte();
+    expect(prima.status).toBe(200);
+    const seconda = await passaLaNotte();
+    const body = (await (seconda as Response).json()) as Record<string, unknown>;
+
+    expect(lettereA(UTENTE.email), "la seconda notte la spiegazione si riprova").toHaveLength(2);
+    expect(body.avvisiEmailBloccate, "quante spiegazioni restano ferme la risposta non lo dice").toBe(1);
+    expect(seconda.status, "la spiegazione non parte da due notti e la notte resta verde").toBe(500);
+    const allarmi = stato.mondo.notifiche();
+    expect(allarmi, "nessun amministratore sa che la persona non ha ricevuto niente per email").toHaveLength(1);
+    expect(String(allarmi[0].title)).toContain("email");
+    expect(String(allarmi[0].body)).toContain("scrivile tu");
+  });
+
+  it("se il registro degli invii non si legge, non si spedisce alla cieca e un amministratore lo sa subito", async () => {
+    ilFattorinoConLaCassaAperta();
+    stato.registroInviiRotto = true;
+    inviaEmail.mockImplementation(async () => ({ ok: true }));
+    const res = await passaLaNotte();
+    const body = (await (res as Response).json()) as Record<string, unknown>;
+
+    expect(suoi(), "il pannello non dipende dal registro delle email").toHaveLength(1);
+    expect(lettereA(UTENTE.email), "senza registro ogni notte partirebbe una email in più").toHaveLength(0);
+    expect(body.avvisiEmailBloccate).toBe(1);
+    expect(res.status).toBe(500);
+    expect(stato.mondo.notifiche()).toHaveLength(1);
   });
 });
 

@@ -144,6 +144,22 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
         : `Stanotte ${avvisi.falliti} persone che aspettano la cancellazione non hanno ricevuto il motivo dell'attesa. La legge chiede di dirglielo entro un mese.`,
     );
   }
+  // 27/10/2026 (terzo giro) — LA SPIEGAZIONE PER EMAIL CHE NON PARTE NON È UNA
+  // NOTTE VERDE. La prima volta che la posta dice di no si riprova la notte
+  // dopo senza svegliare nessuno: un intoppo di una notte si sistema da solo.
+  // Quando non parte di nuovo — o non si può nemmeno tentare — chi vuole
+  // andarsene non ha ricevuto niente fuori dal sito, e non lo saprà se non
+  // glielo scrive qualcuno. Prima qui c'era solo un numero nel corpo.
+  if (avvisi.emailBloccate > 0) {
+    await avvisaAmministratori(
+      admin,
+      "Spiegazione dell'attesa non partita per email",
+      (avvisi.emailBloccate === 1
+        ? "Stanotte una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. È scritta nel pannello del sito della persona, ma chi vuole andarsene può non rientrarci più: controlla la posta del sito oppure scrivile tu."
+        : `Stanotte ${avvisi.emailBloccate} spiegazioni dell'attesa per la cancellazione non sono partite per email, e non è un intoppo di una notte sola. Sono scritte nel pannello del sito delle persone, ma chi vuole andarsene può non rientrarci più: controlla la posta del sito oppure scrivi tu a ciascuna.`) +
+        ' Il giro riprova da solo ogni notte.',
+    );
+  }
 
   return NextResponse.json(
     {
@@ -168,8 +184,12 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       avvisiRecapitati: avvisi.recapitati,
       avvisiFalliti: avvisi.falliti,
       // 27/10/2026 (secondo giro) — La spiegazione scritta nel pannello è
-      // partita anche per email? Qui quante no (posta spenta o indirizzo mancante).
+      // partita anche per email? Qui quante no stanotte: la notte dopo si riprova.
       avvisiEmailNonPartite: avvisi.emailNonPartite,
+      // 27/10/2026 (terzo giro) — Di quelle, quante non si sistemano da sole
+      // (non partite di nuovo, o registro degli invii illeggibile): sono loro
+      // a rendere rossa la notte e a svegliare un amministratore.
+      avvisiEmailBloccate: avvisi.emailBloccate,
     },
     // 3/9/2026 — LA NOTTE CHE FALLISCE FINISCE ROSSA.
     //
@@ -179,7 +199,12 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     // (`withCronAuth`). Un 500 fa due cose insieme: rende rossa l'esecuzione
     // nel pannello dei lavori periodici, e NON scrive il battito — cosi' se la
     // cosa va avanti anche il sorvegliante se ne accorge da solo.
-    { status: verdetto.daSvegliare || potature.fallite > 0 || avvisi.falliti > 0 ? 500 : 200 },
+    {
+      status:
+        verdetto.daSvegliare || potature.fallite > 0 || avvisi.falliti > 0 || avvisi.emailBloccate > 0
+          ? 500
+          : 200,
+    },
   );
 });
 
