@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 import { fraseComeArriva } from '@/lib/promesse-pubbliche';
+import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 
 export const revalidate = 600;
 
@@ -9,7 +10,8 @@ const CATEGORY_LONG_DESC: Record<string, string> = {
   // dall'interruttore in lib/promesse-pubbliche.ts, i minuti dal numero deciso in lib/delivery.ts.
   alimentari: `Alimentari freschi e tipici dei negozi di Piacenza. ${fraseComeArriva()}`,
   abbigliamento: 'Abbigliamento donna, uomo e bambino dei negozi di Piacenza. Compra online dai brand locali.',
-  casa: 'Casa, arredamento e cucina dai negozi di Piacenza. Consegna locale rapida.',
+  // 27/10/2026 (terzo giro) — Qui c’era una consegna promessa «rapida», senza confine né tempo.
+  casa: `Casa, arredamento e cucina dai negozi di Piacenza, consegnati fino a ${RAGGIO_CONSEGNA_KM} km dal negozio.`,
   elettronica: 'Elettronica e accessori dai negozi di Piacenza. Garanzia e supporto locale.',
   libri: 'Libri, fumetti e cartoleria dei negozi di Piacenza.',
   giardino: 'Piante, semi e attrezzi per il giardino dai negozi di Piacenza.',

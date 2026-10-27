@@ -1,7 +1,7 @@
 'use client';
 
 import { shippingForEuro } from '@/lib/shipping';
-import { RIQUADRO_LO_SAPEVI, frasePagamento, promessaSpedizione } from '@/lib/promesse-pubbliche';
+import { RIQUADRO_LO_SAPEVI, frasePagamento, promessaSpedizione, VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -628,7 +628,7 @@ export default function CartPage() {
 
             <div className="flex justify-between items-baseline text-sm">
               <span className="text-ink-600">
-                Consegna MyCity
+                {VOCE_CONSEGNA}
                 {/* «N negozi × 3 €» e' il conto solo finche' non c'e' una spedizione da sommare. */}
                 {groups.length > 1 && shippingCost === 0 && (
                   <span className="block text-xs text-ink-500 font-normal">
