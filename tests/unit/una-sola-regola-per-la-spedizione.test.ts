@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { shippingForEuro, shippingCentsFor } from '@/lib/shipping';
-import { FREE_SHIPPING_THRESHOLD, SHIPPING_PER_ORDER, PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
-import { haversineKm, prezzoSpedizioneEuro } from '@/lib/geo';
+import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -24,17 +23,17 @@ const NEGOZIO = { lat: 45.0526, lng: 9.6934 };   // Piacenza centro
 const CASA = { lat: 45.0701, lng: 9.7120 };      // ~2,4 km
 
 describe('la spedizione la calcola un posto solo', () => {
-  it('sotto la soglia, senza coordinate, vale la tariffa fissa condivisa', () => {
+  it('27/10/2026 — senza coordinate non parte una tariffa fissa: si paga solo la consegna', () => {
     const costo = shippingForEuro({
       subtotal: 10, storeLat: null, storeLng: null,
       deliveryLat: null, deliveryLng: null, pickupInStore: false,
     });
-    expect(costo).toBe(SHIPPING_PER_ORDER);
+    expect(costo).toBe(0);
   });
 
-  it('sopra la soglia la spedizione è gratis', () => {
+  it('a 30 euro di spesa la spedizione è zero, come sotto', () => {
     const costo = shippingForEuro({
-      subtotal: FREE_SHIPPING_THRESHOLD, storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng,
+      subtotal: 30, storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng,
       deliveryLat: CASA.lat, deliveryLng: CASA.lng, pickupInStore: false,
     });
     expect(costo).toBe(0);
@@ -47,14 +46,13 @@ describe('la spedizione la calcola un posto solo', () => {
     })).toBe(0);
   });
 
-  it('con le coordinate note il prezzo è quello della distanza, allo stesso centesimo', () => {
+  it('con le coordinate note non c’è un prezzo a distanza', () => {
     const dallaFonteUnica = shippingForEuro({
       subtotal: 12, storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng,
       deliveryLat: CASA.lat, deliveryLng: CASA.lng, pickupInStore: false,
     });
     // Il calcolo che stava scritto dentro la pagina del checkout.
-    const comeFacevaLaPagina = prezzoSpedizioneEuro(haversineKm(NEGOZIO.lat, NEGOZIO.lng, CASA.lat, CASA.lng));
-    expect(dallaFonteUnica).toBe(comeFacevaLaPagina);
+    expect(dallaFonteUnica, 'la spedizione a distanza è tornata').toBe(0);
   });
 
   it('il coupon «spedizione gratis» azzera anche con le coordinate note', () => {

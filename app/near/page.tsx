@@ -10,6 +10,7 @@ import NearbyStoresMapLazy, { type NearbyStore } from '@/components/NearbyStores
 import { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import CollectionHeader from '@/components/CollectionHeader';
 import { haversineKm } from '@/lib/geo';
+import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 import { frasePosizione, motivoPosizione, siAspetta, type MotivoPosizione } from '@/lib/posizione';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi } from '@/lib/supabase/blocchi';
@@ -250,7 +251,7 @@ export default function NearMePage() {
         icon={MapPin}
         eyebrow="Negozi vicini"
         title="Vicino a te"
-        blurb="I negozi della tua zona a Piacenza, con consegna locale rapida."
+        blurb={`I negozi della tua zona a Piacenza: consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio.`}
         breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Vicino a te' }]}
       />
 
@@ -306,7 +307,9 @@ export default function NearMePage() {
             <input
               type="range"
               min={1}
-              max={20}
+              // 27/10/2026 — Il cursore arrivava a 20 km e la cassa rifiuta oltre il confine: un negozio
+              // a 15 km compariva qui e poi non si poteva ordinare. Il massimo è il confine della cassa.
+              max={RAGGIO_CONSEGNA_KM}
               step={1}
               value={radiusKm}
               onChange={(e) => setRadiusKm(Number(e.target.value))}

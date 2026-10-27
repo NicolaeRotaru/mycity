@@ -1,6 +1,6 @@
 'use client';
 
-import { shippingForEuro, dettoDellaSpedizione } from '@/lib/shipping';
+import { shippingForEuro } from '@/lib/shipping';
 import { RIQUADRO_LO_SAPEVI, frasePagamento, promessaSpedizione } from '@/lib/promesse-pubbliche';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { useEffect, useRef, useState } from 'react';
@@ -16,7 +16,6 @@ import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { fetchSellerPublicMap, type SellerPublicProfile } from '@/lib/queries/seller-public-profiles';
 import ShareCartButton from '@/components/ShareCartButton';
 import EmptyState from '@/components/EmptyState';
-import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
 import { vaiAlPrimoBlocco } from '@/components/checkout/OrderSummary';
 import { CartUpsell } from '@/components/cart/CartUpsell';
@@ -50,31 +49,12 @@ const storeInitials = (name: string) =>
   name.trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase();
 
 /**
- * 6/9/2026 — IL CARRELLO VUOTO PROMETTEVA «SPEDIZIONE GRATIS SOPRA €30» E TACEVA I 3 € DI CONSEGNA.
- *
- * La frase era battuta a mano, con la soglia dentro. Due guai in uno.
- *
- * Il primo è la verità: su ogni ordine portato a casa si pagano comunque 3 € di «Consegna MyCity»
- * per negozio, anche sopra i 30. È il costo che chi compra scopriva soltanto dopo aver riempito il
- * carrello — cioè dopo aver scelto — ed è il difetto per cui `promessaSpedizione` è stata scritta:
- * la scheda prodotto, il distintivo di catalogo e la barra «ti manca poco» le parole le chiedono
- * già a lei. Questa riga era rimasta l'ultima a scriversele da sola.
- *
- * Il secondo è la durata: la soglia vive in `FREE_SHIPPING_THRESHOLD` e la consegna in
- * `PLATFORM_DELIVERY_FEE_CENTS`. Con i numeri ricopiati qui dentro, il giorno che uno dei due
- * cambia questa frase resta indietro da sola e nessuno se ne accorge.
- *
- * Adesso tutti e due li dice `promessaSpedizione()`: su un carrello vuoto `mancano` È la soglia, e
- * `costoConsegna` è la cifra che la cassa addebita davvero. Portare la consegna a zero fa sparire
- * la coda da sé; alzarla la aggiorna qui senza riscrivere niente.
+ * La frase del carrello vuoto. 6/9/2026: era battuta a mano e prometteva «Spedizione gratis sopra
+ * €30» tacendo i 3 € di consegna; da allora la scrive `promessaSpedizione()`. 27/10/2026: la soglia
+ * non esiste più (si paga solo la consegna, per negozio), e la frase dice solo quello.
  */
 function descrizioneDelCarrelloVuoto(): string {
-  const spedizione = promessaSpedizione(0);
-  const consegna =
-    spedizione.costoConsegna > 0
-      ? `, più ${formatPrice(spedizione.costoConsegna)} di consegna per negozio`
-      : '';
-  return `Scopri i prodotti dei negozi della tua città. Spedizione gratis sopra ${formatPrice(spedizione.mancano)}${consegna}.`;
+  return `Scopri i prodotti dei negozi della tua città. ${promessaSpedizione().titolo}.`;
 }
 
 /**
@@ -142,17 +122,14 @@ export default function CartPage() {
   /**
    * 6/9/2026 — LA SPEDIZIONE SCRITTA QUI NON ERA QUELLA CHE SI PAGAVA ALLA CASSA.
    *
-   * Questa pagina chiamava `shippingForEuro` passando sempre le coordinate a `null`, e senza
-   * coordinate quella funzione ripiega sulla tariffa fissa di 4,90 €. La cassa le passa eccome: chi
-   * ha un indirizzo salvato se lo ritrova già scelto appena la pagina si apre, con la sua latitudine
-   * e longitudine, e allora la spedizione diventa 2,50 € più 1,20 € al chilometro. Negozio in centro
-   * a Piacenza, cliente a 2,9 km, carrello da 20 €: qui 4,90, un tocco dopo 6,00. Sotto i due
-   * chilometri succedeva il contrario — 4,90 qui e 3,10 alla cassa — quindi il prezzo ballava in
-   * tutte e due le direzioni proprio nell'ultimo passo.
+   * Questa pagina chiamava `shippingForEuro` con le coordinate sempre a `null`, la cassa con quelle
+   * dell'indirizzo salvato: stessa funzione, ingressi diversi, e il prezzo cambiava nell'ultimo
+   * passo. Il carrello legge gli stessi due ingressi della cassa: dove sta il negozio e dove
+   * consegniamo.
    *
-   * Adesso il carrello legge gli stessi due ingressi della cassa: dove sta il negozio e dove
-   * consegniamo. Quando uno dei due manca — ospite, nessun indirizzo salvato, negozio senza
-   * coordinate — si resta sulla tariffa fissa e la riga lo dice, come faceva prima.
+   * 27/10/2026 — Al lancio `shippingForEuro` risponde zero (si paga solo la consegna, 3 € per
+   * negozio), ma gli ingressi restano quelli della cassa: il giorno che la spedizione torna a
+   * dipendere dalla distanza, carrello e cassa dicono ancora lo stesso numero senza toccare qui.
    */
   const [dovEIlNegozio, setDovEIlNegozio] = useState<Record<string, { lat: number | null; lng: number | null }>>({});
   const [doveConsegniamo, setDoveConsegniamo] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
@@ -243,17 +220,9 @@ export default function CartPage() {
           : Promise.resolve({ data: [] as TentativoAperto[] }),
         // Le promozioni attive: stessa funzione della cassa e delle due rotte che creano l'ordine.
         fetchActiveDiscounts(supabase, ids),
-        // Dove sta ogni negozio: senza queste la spedizione non puo' che essere la tariffa fissa.
-        //
-        // 18/10/2026 — SI LEGGE DALLA VETRINA PUBBLICA, COME LE DUE ROTTE CHE CREANO L'ORDINE.
-        // Qui si chiedeva `profiles`, che dopo le migrazioni 110, 112 e 161 a un cliente
-        // restituisce solo la sua riga: le coordinate del negozio sparivano senza errore, il
-        // carrello mostrava la tariffa fissa e la cassa addebitava la distanza. La vista
-        // `seller_public_profiles` e' quella che leggono le rotte dei contanti e della carta, quindi
-        // le coordinate sono le stesse. Un negozio che la vista non restituisce resta senza
-        // coordinate qui come la': il server addebita la tariffa fissa, e qui si mostra quella. Se
-        // la lettura cade, il riepilogo resta sulla tariffa fissa e la chiama «stima»: la cifra
-        // finale la da' la cassa.
+        // Dove sta ogni negozio, dalla vista pubblica che leggono anche le due rotte che creano
+        // l'ordine (18/10/2026: `profiles`, a profili chiusi, al cliente non le restituisce). Se la
+        // lettura cade il carrello si disegna lo stesso: la cifra finale la da' la cassa.
         fetchSellerPublicMap(supabase, idNegozi, 'id, store_lat, store_lng')
           .catch(() => new Map<string, SellerPublicProfile>()),
         // Dove consegniamo: l'indirizzo predefinito, letto con la stessa query della cassa.
@@ -358,15 +327,6 @@ export default function CartPage() {
 
   const total = cartTotal(righe);
   const count = cartCount(righe);
-  // La parola sulla spedizione NON si calcola piu' qui: la dava `total >= FREE_SHIPPING_THRESHOLD`,
-  // cioe' il totale di tutto il carrello, mentre il numero addebitato si calcola per negozio. Con
-  // 20 € dal fornaio e 15 € dal macellaio la riga diceva «Gratis*» e nel totale c'erano 9,80 €.
-  // Adesso la parola la deriva `dettoDellaSpedizione` dallo stesso numero — vedi piu' sotto, dove
-  // `shippingCost` esiste.
-  //
-  // 27/8/2026 (R013) — E qui restava `const freeShipping = total >= FREE_SHIPPING_THRESHOLD;`,
-  // che dopo quel cambio non leggeva piu' nessuno: proprio la riga che diceva «Gratis» sul totale
-  // sbagliato, rimasta li' a far credere che quella regola fosse ancora viva.
 
   // «Vuoto» è un'affermazione sul mondo — ho guardato e non c'è niente — e non si può fare prima di
   // aver guardato. Il verdetto lo dà `statoDellaVista`, che senza `letto` non torna mai «vuoto».
@@ -433,25 +393,11 @@ export default function CartPage() {
   const platformDeliveryFee = groups.length * (PLATFORM_DELIVERY_FEE_CENTS / 100);
 
   /**
-   * 22/8/2026 — LA SPEDIZIONE ERA UN 4,90 SCRITTO A MANO, E PER TUTTO IL
-   * CARRELLO.
-   *
-   * Due errori in una riga. Il primo: il numero era battuto qui dentro, mentre
-   * il prezzo vero lo decide `shippingForEuro` — quella che usa il checkout e
-   * usano le due rotte che creano l'ordine. Il secondo, piu' caro: era UNA
-   * spedizione per tutto il carrello, ma la spedizione si paga PER NEGOZIO. Con
-   * due negozi il carrello prometteva 4,90 e il checkout ne chiedeva 9,80: il
-   * raddoppio compariva all'ultimo passo, dove l'abbandono costa di piu'.
-   *
-   * Adesso e' la stessa funzione del checkout, chiamata per gruppo-negozio.
-   *
-   * 6/9/2026 — E CON GLI STESSI INGRESSI. Qui le coordinate erano scritte a `null` con accanto un
-   * commento che diceva «esattamente come fa il checkout prima che la persona lo scriva». Non era
-   * vero: chi ha un indirizzo salvato se lo ritrova gia' scelto appena la cassa si apre, con le sue
-   * coordinate, e la stessa funzione con quelle in mano risponde un altro numero. Due pagine, la
-   * stessa formula, ingressi diversi: il prezzo cambiava nell'ultimo passo. Ora gli ingressi sono
-   * gli stessi — dove sta il negozio e dove consegniamo — e quando uno dei due manca si torna alla
-   * tariffa fissa, che e' quello che fa anche la cassa.
+   * La spedizione per negozio, con la stessa funzione e gli stessi ingressi della cassa (vedi
+   * `dovEIlNegozio`). 27/10/2026 — Al lancio risponde zero: il cliente paga solo la consegna, una
+   * per negozio (scelta 8 della carta #209). Non ha una riga sua, perche' a zero scriverebbe
+   * «Gratis» accanto a una consegna da pagare: entra nella riga «Consegna MyCity», che dice la
+   * cifra intera per farsi portare la spesa, la stessa del riepilogo della cassa.
    */
   const shippingCost = groups.reduce(
     (somma, g) =>
@@ -466,16 +412,8 @@ export default function CartPage() {
       }),
     0,
   );
-  /** Vero quando il numero qui sopra nasce dagli stessi dati della cassa: allora non e' una stima. */
-  const spedizioneSulTuoIndirizzo =
-    doveConsegniamo.lat != null
-    && doveConsegniamo.lng != null
-    && groups.every((g) => dovEIlNegozio[g.key]?.lat != null && dovEIlNegozio[g.key]?.lng != null);
-  const finalTotal = total + shippingCost + platformDeliveryFee;
-  // Una parola sola, e nasce dal numero che sta dentro `finalTotal`.
-  const detto = dettoDellaSpedizione({ costo: shippingCost, negozi: groups.length, formatta: formatPrice });
-  const groupSubtotal = (g: { items: CartItem[] }) =>
-    g.items.reduce((s, it) => s + it.price * it.quantity, 0);
+  const consegnaDaPagare = shippingCost + platformDeliveryFee;
+  const finalTotal = total + consegnaDaPagare;
 
   /**
    * 6/9/2026 — LA RIGA DICEVA «TOGLILO PER CONTINUARE» E IL PULSANTE LASCIAVA CONTINUARE.
@@ -521,7 +459,6 @@ export default function CartPage() {
 
           {/* Gruppi per negozio */}
           {groups.map((g) => {
-            const sub = groupSubtotal(g);
             return (
               <div key={g.key} className="space-y-3">
                 {/* Header negozio */}
@@ -531,9 +468,6 @@ export default function CartPage() {
                   </span>
                   <span className="text-sm font-bold text-ink-900">{g.storeName}</span>
                 </div>
-
-                {/* Progress spedizione gratis per negozio */}
-                <FreeShippingProgress subtotal={sub} className="p-3" />
 
                 {g.items.map((item) => (
                   <div key={`${item.id}::${item.variantId ?? ''}`} className="bg-white border border-cream-300 rounded-xl p-4 flex gap-4 hover:shadow-card transition-shadow">
@@ -690,43 +624,19 @@ export default function CartPage() {
                 <span className="text-ink-600">Subtotale</span>
                 <span className="font-semibold">{formatPrice(total)}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-ink-600">
-                  {/* Soglia spedizione gratis: qui è globale, al checkout è
-                      calcolata per-negozio → nel multi-negozio "Gratis" non è
-                      garantito. Onestà: etichetta come stima finché i due modelli
-                      non sono allineati. */}
-                  {detto.gratis && multiStore ? 'Spedizione stimata' : 'Spedizione'}
-                  {/* 107 — La nota compariva solo in certi casi. La spedizione
-                      al checkout si calcola per negozio e sulla distanza: quando uno dei due punti
-                      non lo sappiamo è una stima, e dirlo costa zero.
-                      6/9/2026 — Quando invece li sappiamo tutti e due, il numero è già quello della
-                      cassa: chiamarlo «stima» sarebbe stato prudente per finta. */}
-                  <span className="block text-xs text-ink-500 font-normal">
-                    {spedizioneSulTuoIndirizzo
-                      ? 'calcolata sul tuo indirizzo predefinito'
-                      : 'stima · potrebbe variare al checkout'}
-                  </span>
-                  {detto.nota && (
-                    <span className="block text-xs text-ink-500 font-normal">{detto.nota}</span>
-                  )}
-                </span>
-                <span className={`font-semibold ${detto.gratis ? 'text-olive-700' : 'text-ink-900'}`}>
-                  {detto.etichetta}
-                </span>
-              </div>
             </div>
 
             <div className="flex justify-between items-baseline text-sm">
               <span className="text-ink-600">
                 Consegna MyCity
-                {groups.length > 1 && (
+                {/* «N negozi × 3 €» e' il conto solo finche' non c'e' una spedizione da sommare. */}
+                {groups.length > 1 && shippingCost === 0 && (
                   <span className="block text-xs text-ink-500 font-normal">
                     {pluralize(groups.length, 'negozio', 'negozi')} × {formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}
                   </span>
                 )}
               </span>
-              <span className="font-semibold text-ink-900">{formatPrice(platformDeliveryFee)}</span>
+              <span className="font-semibold text-ink-900">{formatPrice(consegnaDaPagare)}</span>
             </div>
 
             {/* Il totale cambia a ogni «+», «−» e rimozione: qui si dice anche

@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { shippingForEuro, shippingCentsFor } from '@/lib/shipping';
-import { FREE_SHIPPING_THRESHOLD, SHIPPING_PER_ORDER } from '@/lib/constants';
-import { haversineKm, prezzoSpedizioneEuro } from '@/lib/geo';
 
 /**
  * Unit test puri per lib/shipping — FONTE UNICA del costo di spedizione,
@@ -40,10 +38,10 @@ describe('shippingForEuro', () => {
     ).toBe(0);
   });
 
-  it('è 0 al raggiungimento della soglia di spedizione gratuita', () => {
+  it('è 0 anche con 30 euro di spesa', () => {
     expect(
       shippingForEuro({
-        subtotal: FREE_SHIPPING_THRESHOLD,
+        subtotal: 30,
         storeLat: PC.lat,
         storeLng: PC.lng,
         deliveryLat: FAR.lat,
@@ -53,8 +51,10 @@ describe('shippingForEuro', () => {
     ).toBe(0);
   });
 
-  it('usa la tariffa distanza-based quando le coordinate sono note', () => {
-    const expected = prezzoSpedizioneEuro(haversineKm(PC.lat, PC.lng, FAR.lat, FAR.lng));
+  // 27/10/2026 — Scelta 8 della carta #209: si paga solo la consegna, per negozio. La tariffa a
+  // distanza (2,50 € + 1,20 €/km) e quella fissa senza coordinate (4,90 €) non esistono più.
+  it('con le coordinate note non parte una tariffa a distanza', () => {
+    const expected = 0;
     expect(
       shippingForEuro({
         subtotal: 10,
@@ -67,7 +67,7 @@ describe('shippingForEuro', () => {
     ).toBe(expected);
   });
 
-  it('ripiega sulla tariffa flat quando mancano le coordinate', () => {
+  it('senza coordinate non parte una tariffa fissa', () => {
     expect(
       shippingForEuro({
         subtotal: 10,
@@ -77,7 +77,7 @@ describe('shippingForEuro', () => {
         deliveryLng: FAR.lng,
         pickupInStore: false,
       }),
-    ).toBe(SHIPPING_PER_ORDER);
+    ).toBe(0);
   });
 });
 
@@ -91,7 +91,7 @@ describe('shippingCentsFor', () => {
       deliveryLng: null,
       pickupInStore: false,
     });
-    expect(cents).toBe(Math.round(SHIPPING_PER_ORDER * 100));
+    expect(cents).toBe(0);
     expect(Number.isInteger(cents)).toBe(true);
   });
 });

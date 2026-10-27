@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
-import { shippingForEuro } from '@/lib/shipping';
-import { FREE_SHIPPING_THRESHOLD, RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 
 /**
  * 6/9/2026 — IL SITO ACCETTAVA UNA CONSEGNA A MILANO E NON CHIEDEVA UN
@@ -92,32 +91,6 @@ describe('la zona di consegna', () => {
   });
 });
 
-describe('la spedizione gratis sopra la soglia', () => {
-  it('vale in città, come sempre', () => {
-    expect(
-      shippingForEuro({
-        subtotal: FREE_SHIPPING_THRESHOLD + 5,
-        storeLat: NEGOZIO_PIACENZA.lat,
-        storeLng: NEGOZIO_PIACENZA.lng,
-        deliveryLat: CASA_A_PIACENZA.lat,
-        deliveryLng: CASA_A_PIACENZA.lng,
-        pickupInStore: false,
-      }),
-    ).toBe(0);
-  });
-
-  it('IL CASO CHE ROMPEVA — non azzera più una consegna fuori zona', () => {
-    const costo = shippingForEuro({
-      subtotal: FREE_SHIPPING_THRESHOLD + 5,
-      storeLat: NEGOZIO_PIACENZA.lat,
-      storeLng: NEGOZIO_PIACENZA.lng,
-      deliveryLat: CASA_A_MILANO.lat,
-      deliveryLng: CASA_A_MILANO.lng,
-      pickupInStore: false,
-    });
-    expect(costo, 'il carrello scriveva «Gratis» su 60 km di consegna che non faremo mai').toBeGreaterThan(0);
-  });
-});
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * E ADESSO LA CASSA VERA: l'ordine a Milano non deve nascere.

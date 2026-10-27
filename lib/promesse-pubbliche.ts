@@ -1,11 +1,12 @@
 import {
-  FREE_SHIPPING_THRESHOLD,
   PICKUP_DISCOUNT_PERCENT,
   PLATFORM_DELIVERY_FEE_CENTS,
+  RAGGIO_CONSEGNA_KM,
   RITIRO_IN_NEGOZIO_ATTIVO,
 } from './constants';
 import { EXPRESS_ETA_LABEL } from './delivery';
 import { formatPrice } from './format';
+import { spesaPerConsegnaGratisColCodiceCents } from './ordini/prezzi';
 
 /**
  * LE PROMESSE PUBBLICHE — quelle scritte nelle pagine, derivate da chi le mantiene.
@@ -124,15 +125,18 @@ export function riquadroRitiroInNegozio(
 }
 
 /**
- * Cosa succede se il negozio è chiuso — e la risposta è quella che danno le rotte, non quella che
- * faceva più piacere leggere.
+ * Cosa succede se il negozio è chiuso — e la risposta è quella che dà la cassa.
  *
- * Il codice che decide (`app/api/orders/cod/route.ts` e `app/api/stripe/checkout/route.ts`) su
- * negozio chiuso risponde con un conflitto: «<negozio> è chiuso in questo momento. Riprova durante
- * gli orari di apertura». Quindi la promessa pubblica dice la stessa cosa.
+ * 27/10/2026 — LA FRASE DICEVA «NON PUOI ORDINARE», E LA CASSA LASCIA PRENOTARE PER DOMANI.
+ * Con la consegna immediata, a negozio chiuso le due rotte rispondono con un conflitto. Ma la
+ * cassa offre anche le fasce di domani (`FASCE_DI_DOMANI` in lib/quando-arriva.ts), e
+ * `negozioPuoServire` in lib/store-hours.ts per quelle guarda gli orari di domani, non se il
+ * negozio è aperto adesso. Alle 21:30 si può ordinare il pane per la mattina dopo: è l'abitudine
+ * che un forno vuole, e la frase la scoraggiava. Una prova esegue la regola della cassa e legge
+ * questa frase.
  */
 export const NEGOZIO_CHIUSO_COSA_SUCCEDE =
-  "Se il negozio è chiuso non puoi ordinare in quel momento: l'ordine non parte e non viene messo in coda. Torna negli orari di apertura, che trovi sulla pagina del negozio.";
+  'Se il negozio è chiuso puoi prenotare per domani, scegliendo una fascia oraria in cassa: la consegna subito, invece, parte solo negli orari di apertura.';
 
 /** La risposta sui tempi di consegna, col numero preso da dove è deciso. */
 export function rispostaTempiDiConsegna(): DomandaRisposta {
@@ -143,18 +147,21 @@ export function rispostaTempiDiConsegna(): DomandaRisposta {
 }
 
 /**
- * La riga sulla spedizione gratuita, con la soglia presa da dove è decisa — e il costo di consegna
- * detto nella stessa frase, che altrimenti la risposta è vera a metà (vedi `promessaSpedizione`).
+ * Quanto costa farsi portare la spesa, con le cifre prese da dove sono decise.
+ *
+ * 27/10/2026 — La risposta diceva «GRATUITA sopra €30» e «sotto soglia in media €2,50–4,50»: una
+ * forbice scritta a mano che non era il conto della cassa (2,50 € più 1,20 € al km, più 3 euro di
+ * consegna). Adesso si paga solo la consegna per negozio, e il confine è quello della cassa.
  */
 export function rispostaCostoSpedizione(): DomandaRisposta {
-  const { costoConsegna } = promessaSpedizione(FREE_SHIPPING_THRESHOLD);
-  const consegna =
+  const { costoConsegna } = promessaSpedizione();
+  const quanto =
     costoConsegna > 0
-      ? ` Resta la consegna: ${formatPrice(costoConsegna)} per negozio su ogni ordine portato a casa, anche sopra la soglia.`
-      : '';
+      ? `Paghi solo la consegna: ${formatPrice(costoConsegna)} per ogni negozio da cui ordini, qualunque sia la spesa.`
+      : 'La consegna è gratuita, qualunque sia la spesa.';
   return {
     q: 'Quanto costa la spedizione?',
-    a: `La spedizione è GRATUITA per ordini sopra €${FREE_SHIPPING_THRESHOLD} dallo stesso venditore — la soglia vale per ciascun negozio, non sul totale del carrello. Sotto soglia il costo varia in base alla distanza dal negozio (in media €2,50–4,50).${consegna} Vedi tutti i dettagli nella pagina Spedizioni.`,
+    a: `${quanto} Non c'è un costo a chilometro: consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio. Vedi tutti i dettagli nella pagina Spedizioni.`,
   };
 }
 
@@ -241,13 +248,17 @@ export const RIQUADRO_LO_SAPEVI =
  * confronta il numero che dice con quello che la cassa addebita davvero.
  */
 export interface PromessaSpedizione {
-  /** L'ordine ha superato la soglia oltre la quale la spedizione del negozio non si paga. */
+  /**
+   * Sempre `false` dal 27/10/2026: la soglia della spedizione gratis non esiste più. Resta nel tipo
+   * perché la scheda prodotto e la card di catalogo lo leggono ancora per decidere se mostrare la
+   * pastiglia verde «gratis»: con `false` non la mostrano più.
+   */
   sopraSoglia: boolean;
-  /** Quanto manca alla soglia, in euro. Zero se è già superata. */
+  /** Sempre zero dal 27/10/2026: non c'è più una soglia da raggiungere. */
   mancano: number;
-  /** Quanto si paga comunque per farsi portare l'ordine a casa, in euro. Zero = niente. */
+  /** Quanto si paga per farsi portare l'ordine a casa, in euro, per negozio. Zero = niente. */
   costoConsegna: number;
-  /** La frase principale: quella del badge sulla scheda e della barra di avanzamento. */
+  /** La frase principale: quella del badge sulla scheda e della riga sotto il prezzo. */
   titolo: string;
   /** La stessa cosa in un'etichetta stretta, per le card di catalogo. */
   breve: string;
@@ -255,36 +266,44 @@ export interface PromessaSpedizione {
   dettaglioConsegna: string | null;
 }
 
+/**
+ * 27/10/2026 — LA SOGLIA DEI 30 EURO NON ESISTE PIÙ. Scelta 8 della carta #209: il cliente paga
+ * solo la consegna, per negozio, sempre. Le frasi «Spedizione gratis · 3,00 € di consegna» e «Ti
+ * mancano X € alla spedizione gratis» promettevano un traguardo che la cassa non dà più.
+ *
+ * Il primo argomento (il sottototale) non cambia più la risposta: resta perché la scheda prodotto
+ * e la card di catalogo lo passano ancora, e si toglie quando si toccano quei file.
+ */
 export function promessaSpedizione(
-  sottototale: number,
-  soglia: number = FREE_SHIPPING_THRESHOLD,
+  _sottototale: number = 0,
   consegnaCents: number = PLATFORM_DELIVERY_FEE_CENTS,
 ): PromessaSpedizione {
   const costoConsegna = Math.max(0, consegnaCents) / 100;
-  const sopraSoglia = sottototale >= soglia;
-  const mancano = sopraSoglia ? 0 : Math.max(0, soglia - sottototale);
-  // La coda che rende onesta ogni frase con dentro la parola «gratis». Se la consegna non si paga
-  // più, la coda sparisce da sé e il claim torna pulito: è tutto quello che serve fare.
-  const coda = costoConsegna > 0 ? ` · ${formatPrice(costoConsegna)} di consegna` : '';
-
+  const siPaga = costoConsegna > 0;
   return {
-    sopraSoglia,
-    mancano,
+    sopraSoglia: false,
+    mancano: 0,
     costoConsegna,
-    titolo: sopraSoglia
-      ? `Spedizione gratis${coda}`
-      : `Ti mancano ${formatPrice(mancano)} alla spedizione gratis${coda}`,
-    // 6/9/2026 — L'ETICHETTA CORTA DICEVA «Sped. gratis + 3,00 €», E QUEI TRE EURO NON AVEVANO UN
-    // NOME. Sulla pillola verde del catalogo — che nel sistema dei colori vuol dire «bel
-    // vantaggio» — si leggeva «gratis» e subito dopo una cifra senza sostantivo: chi guarda non sa
-    // se sono in più, in meno, o un supplemento del negozio. La cifra non si toglie (è il costo
-    // vero, ed è per dirlo prima della scelta che questa funzione esiste): si dice di che cosa è.
-    breve: sopraSoglia
-      ? `Sped. gratis${costoConsegna > 0 ? ` · consegna ${formatPrice(costoConsegna)}` : ''}`
-      : `−${formatPrice(mancano)} alla sped. gratis${costoConsegna > 0 ? ` (consegna ${formatPrice(costoConsegna)})` : ''}`,
-    dettaglioConsegna:
-      costoConsegna > 0
-        ? `Consegna MyCity ${formatPrice(costoConsegna)} per negozio, su ogni ordine a domicilio`
-        : null,
+    titolo: siPaga ? `Consegna a casa ${formatPrice(costoConsegna)} per negozio` : 'Consegna a casa gratuita',
+    breve: siPaga ? `Consegna ${formatPrice(costoConsegna)}` : 'Consegna gratuita',
+    dettaglioConsegna: siPaga
+      ? `Consegna MyCity ${formatPrice(costoConsegna)} per negozio, su ogni ordine a domicilio`
+      : null,
   };
+}
+
+/**
+ * 27/10/2026 — LA RIGA SOTTO LA CONSEGNA QUANDO IL CODICE «SPEDIZIONE GRATUITA» LA COPRE IN PARTE.
+ *
+ * Il codice regala la consegna fin dove la paga la commissione di quel negozio (`prezziDelCarrello`):
+ * da 30 € di spesa per negozio tutta, sotto una parte. Senza questa riga la cassa scriveva «Consegna
+ * MyCity 3,00 € per negozio» sopra un addebito di 1 €, e chi aveva letto «codice applicato» non
+ * capiva perché pagava ancora. `null` quando non c'è niente da spiegare: consegna già a zero, o un
+ * codice che su quella spesa non copre neanche un centesimo.
+ */
+export function rigaDelCodiceSpedizione(consegnaDaPagareCents: number, negozi: number): string | null {
+  const copertaCents = negozi * PLATFORM_DELIVERY_FEE_CENTS - consegnaDaPagareCents;
+  if (consegnaDaPagareCents <= 0 || copertaCents <= 0) return null;
+  const sogliaCents = spesaPerConsegnaGratisColCodiceCents();
+  return `Il codice copre ${formatPrice(copertaCents / 100)} della consegna; da ${formatPrice(sogliaCents / 100)} di spesa per negozio la copre tutta.`;
 }
