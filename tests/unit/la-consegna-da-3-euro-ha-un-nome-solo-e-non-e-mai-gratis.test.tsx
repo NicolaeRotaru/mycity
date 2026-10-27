@@ -33,6 +33,16 @@ const RIEPILOGO_RILETTO =
   `Subtotale ${euro(2000)} ${VOCE_CONSEGNA} ${TRE_EURO} Totale ${euro(2300)} ` +
   `Ordina e paga alla consegna · ${euro(2300)} Non paghi adesso. Paghi in contanti al rider quando arriva. ` +
   'Reso entro 14 giorni Venditore locale';
+/**
+ * Lo stesso riepilogo per chi paga con la carta, riletto il 27/10 sera: 23 euro, niente regali.
+ * Rispetto ai contanti cambiano solo le parole sul pagamento, sotto il totale.
+ */
+const RIEPILOGO_RILETTO_CARTA =
+  `Subtotale ${euro(2000)} ${VOCE_CONSEGNA} ${TRE_EURO} Totale ${euro(2300)} ` +
+  `Paga con carta · ${euro(2300)} Pagamento sicuro con Stripe. Niente costi nascosti. ` +
+  'Reso entro 14 giorni Venditore locale';
+/** Le parole con cui un riepilogo può regalare una consegna che invece si paga. */
+const REGALO = /gratis|gratuit|omaggi|offert|regal|in dono|a costo zero|inclus/i;
 
 /** Le righe della colonna come le scrive la pagina dell'ordine: «etichetta cifra». */
 function righeDellaPagina(ordine: OrdinePerRiepilogo, subtotaleCentesimi: number): string[] {
@@ -134,6 +144,31 @@ describe('la cassa chiama la consegna come il carrello, e scrive «Gratis» solo
     // Con la carta cambiano le parole sul pagamento, non quelle sulla consegna.
     expect(riepilogo({ shipping: 0, platformDeliveryFee: tre, paymentMethod: 'card' })).toBe(
       riepilogo({ shipping: tre, paymentMethod: 'card' }),
+    );
+  });
+
+  /**
+   * 27/10/2026 (quinto giro della fase 2) — E CON LA CARTA. Il collaudo ha scritto «· in omaggio con
+   * la carta» accanto ai 3 euro solo quando si paga con la carta. La prova qui sopra rileggeva il
+   * testo dei contanti e confrontava la carta con sé stessa: tutte e due le strade della carta
+   * dicevano lo stesso regalo, e restava verde. Qui chi paga con la carta legge il SUO testo riletto,
+   * da tutte e tre le strade con cui arrivano i 3 euro; e la riga della consegna dice le stesse
+   * parole dei contanti, fino al totale.
+   */
+  it('IL CASO DEL COLLAUDO — con la carta i 3 euro dicono il testo riletto, senza regali, da ogni strada', () => {
+    const tre = PLATFORM_DELIVERY_FEE_CENTS / 100;
+    for (const p of [
+      { shipping: tre, paymentMethod: 'card' as const },
+      { shipping: 0, platformDeliveryFee: tre, paymentMethod: 'card' as const },
+      { shipping: tre, platformDeliveryFee: 0, paymentMethod: 'card' as const },
+    ]) {
+      const t = riepilogo(p);
+      expect(t, `con la carta il riepilogo regala la consegna che si paga: ${t}`).not.toMatch(REGALO);
+      expect(t, 'il riepilogo della carta è cambiato: rileggilo contro la cassa').toBe(RIEPILOGO_RILETTO_CARTA);
+    }
+    const finoAlTotale = (t: string) => t.slice(0, t.indexOf('Totale'));
+    expect(finoAlTotale(riepilogo({ shipping: 0, platformDeliveryFee: tre, paymentMethod: 'card' }))).toBe(
+      finoAlTotale(RIEPILOGO_RILETTO),
     );
   });
 
