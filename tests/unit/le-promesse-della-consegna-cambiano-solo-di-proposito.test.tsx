@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
-import ShippingPage from '@/app/shipping/page';
+import ShippingPage, { metadata as metadatiSpedizioni } from '@/app/shipping/page';
 import { metadata as metadatiVicinoATe } from '@/app/near/layout';
 import { PLATFORM_DELIVERY_FEE_CENTS, RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 import { formatPrice } from '@/lib/format';
@@ -25,6 +25,12 @@ import { avvisoNessunNegozioVicino, NEGOZIO_CHIUSO_COSA_SUCCEDE } from '@/lib/pr
  * SE QUESTA PROVA DIVENTA ROSSA perché hai cambiato una frase: rileggi la frase nuova contro quello
  * che fa la cassa, e solo allora aggiorna il testo qui sotto. Diventare rossa a ogni cambio è il suo
  * mestiere: sono promesse fatte a chi compra.
+ *
+ * 27/10/2026 (quinto giro) — ANCHE QUELLO CHE LEGGE GOOGLE. Il collaudo ha riscritto la descrizione
+ * della pagina Spedizioni, quella che compare sotto il link nei risultati di ricerca e nelle
+ * condivisioni: «Consegna a costo zero entro due giorni; fuori città ti facciamo un prezzo su misura».
+ * Tre promesse false in una riga, e tutto restava verde: si tenevano ferme solo le frasi della pagina.
+ * Ora la scheda per Google è tenuta ferma campo per campo, intera: anche un campo aggiunto si vede.
  */
 
 const TRE_EURO = formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100);
@@ -99,6 +105,22 @@ describe('la pagina Spedizioni dice, frase per frase, quello che fa la cassa', (
       sparite: [],
     });
     expect(frasi).toEqual(PAGINA_SPEDIZIONI);
+  });
+
+  it('IL CASO DEL COLLAUDO — la scheda per Google e per le condivisioni è quella riletta, campo per campo', () => {
+    expect(metadatiSpedizioni, 'la scheda della pagina Spedizioni per Google è cambiata: rileggila contro la cassa').toEqual({
+      title: 'Spedizioni e consegne · MyCity',
+      description: 'Tempi, costi e modalità di consegna su MyCity.',
+      alternates: { canonical: '/shipping' },
+      openGraph: {
+        title: 'Spedizioni e consegne · MyCity',
+        description: 'Tempi, costi e modalità di consegna dei negozi di Piacenza su MyCity.',
+        type: 'website',
+        locale: 'it_IT',
+        siteName: 'MyCity',
+        url: '/shipping',
+      },
+    });
   });
 
   it('a negozio chiuso la frase pubblica è quella riletta: si prenota per domani', () => {

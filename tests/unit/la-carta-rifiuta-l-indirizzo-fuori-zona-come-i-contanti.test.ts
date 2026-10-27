@@ -22,6 +22,13 @@ import { motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
  * prima volta non ha la casa in rubrica: la sua posizione arriva solo dalla geocodifica, e con quel
  * difetto una casa a 13 km pagava con la carta. Ora ogni caso accende UNA fonte sola, in quattro
  * direzioni, e il browser giura di stare davanti al negozio: la rotta non deve credergli.
+ *
+ * 27/10/2026 (quinto giro) — OGNI NEGOZIO DEL CARRELLO, NON SOLO IL PRIMO.
+ * Il carrello aveva un negozio solo. Il collaudo ha fatto misurare alla carta solo il primo negozio
+ * della lista e tutto è rimasto verde: con il primo negozio sotto casa e il secondo a 13 km, la carta
+ * apriva il pagamento per tutti e due, e la spesa del secondo non poteva arrivare. In fondo al file il
+ * carrello ha due negozi, uno sotto casa e uno a 13 km, nei due ordini: il lontano primo e il lontano
+ * secondo. Il pagamento non si apre in nessuno dei due, e si apre quando tutti e due stanno dentro.
  */
 
 const P1 = '11111111-1111-1111-1111-111111111111';
@@ -41,6 +48,11 @@ const CASA_13_KM_EST = casaAEst(13);
 const CASA_13_KM_OVEST = casaAEst(-13);
 const CASA_8_KM_NORD = casaA(8);
 const CASA_8_KM_SUD = casaA(-8);
+
+/** Il secondo negozio del carrello: quello sotto casa. */
+const P_SOTTO_CASA = '55555555-5555-5555-5555-555555555555';
+const S_SOTTO_CASA = '66666666-6666-6666-6666-666666666666';
+const SOTTO_CASA = 'Latteria sotto casa';
 
 type Fonte = 'rubrica' | 'geocodifica';
 const FONTI: Fonte[] = ['rubrica', 'geocodifica'];
@@ -220,4 +232,68 @@ describe('la rotta della carta rifiuta un indirizzo fuori zona, come quella dei 
       expect(createSession).toHaveBeenCalledTimes(1);
     });
   }
+});
+
+/** La stessa richiesta di sopra, con il carrello che si vuole. */
+async function richiestaCon(groups: unknown[]): Promise<never> {
+  const base = (await (richiesta() as unknown as Request).json()) as Record<string, unknown>;
+  return new Request('http://localhost/api/stripe/checkout', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...base, groups }),
+  }) as never;
+}
+
+const PRODOTTI_DI_DUE_NEGOZI = [
+  { id: P_SOTTO_CASA, name: 'Latte', price: 10, images: ['a.jpg'], seller_id: S_SOTTO_CASA, stock: 50, status: 'available' },
+  { id: P1, name: 'Pane', price: 10, images: ['a.jpg'], seller_id: S1, stock: 50, status: 'available' },
+];
+const GRUPPO_SOTTO_CASA = { sellerId: S_SOTTO_CASA, items: [{ productId: P_SOTTO_CASA, quantity: 1 }], shippingCents: 0 };
+const GRUPPO_DEL_FORNO = { sellerId: S1, items: [{ productId: P1, quantity: 1 }], shippingCents: 0 };
+const IL_FORNO = { id: S1, store_name: NEGOZIO.nome, full_name: null, store_lat: NEGOZIO.lat, store_lng: NEGOZIO.lng };
+/** Il negozio sotto casa sta esattamente dove sta la casa. */
+const sottoCasa = (casa: { lat: number; lng: number }) => ({
+  id: S_SOTTO_CASA,
+  store_name: SOTTO_CASA,
+  full_name: null,
+  store_lat: casa.lat,
+  store_lng: casa.lng,
+});
+
+describe('con due negozi nel carrello, la carta misura il confine da ognuno dei due', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    state.products = PRODOTTI_DI_DUE_NEGOZI;
+  });
+
+  for (const fonte of FONTI) {
+    for (const [ordine, lontanoPrimo] of [
+      ['il negozio sotto casa primo, il forno a 13 km secondo', false],
+      ['il forno a 13 km primo, il negozio sotto casa secondo', true],
+    ] as const) {
+      it(`IL CASO DEL COLLAUDO — ${ordine}, casa presa dalla ${fonte}: la carta non apre il pagamento`, async () => {
+        const casa = CASA_13_KM_NORD;
+        // L'ordine conta due volte: nella lista dei negozi letta dal database e nel carrello.
+        state.sellers = lontanoPrimo ? [IL_FORNO, sottoCasa(casa)] : [sottoCasa(casa), IL_FORNO];
+        casaDalla(fonte, casa);
+        const res = await POST(
+          await richiestaCon(lontanoPrimo ? [GRUPPO_DEL_FORNO, GRUPPO_SOTTO_CASA] : [GRUPPO_SOTTO_CASA, GRUPPO_DEL_FORNO]),
+        );
+        const corpo = (await res.json()) as { error?: { message?: string } };
+        expect(res.status, `la rotta della carta ha risposto ${res.status}: ${JSON.stringify(corpo)}`).toBe(400);
+        expect(corpo.error?.message).toBe(motivoFuoriZona(NEGOZIO.nome));
+        expect(createSession, 'la carta ha aperto il pagamento con un negozio del carrello fuori zona').not.toHaveBeenCalled();
+      });
+    }
+  }
+
+  it('tutti e due dentro il confine (sotto casa e a 8 km): il pagamento si apre, una volta sola', async () => {
+    const casa = CASA_8_KM_NORD;
+    state.sellers = [sottoCasa(casa), IL_FORNO];
+    casaDalla('geocodifica', casa);
+    const res = await POST(await richiestaCon([GRUPPO_SOTTO_CASA, GRUPPO_DEL_FORNO]));
+    const corpo = await res.json();
+    expect(res.status, JSON.stringify(corpo)).toBe(200);
+    expect(createSession).toHaveBeenCalledTimes(1);
+  });
 });

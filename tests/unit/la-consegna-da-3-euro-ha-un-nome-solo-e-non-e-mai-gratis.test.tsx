@@ -28,6 +28,11 @@ const TRE_EURO = formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100);
 const euro = (centesimi: number) => formatPrice(centesimi / 100);
 const sorgente = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
 const GRATIS = /gratis|gratuit/i;
+/** Il riepilogo della cassa con 20 euro di spesa e una consegna, riletto il 27/10: 23 euro, niente regali. */
+const RIEPILOGO_RILETTO =
+  `Subtotale ${euro(2000)} ${VOCE_CONSEGNA} ${TRE_EURO} Totale ${euro(2300)} ` +
+  `Ordina e paga alla consegna · ${euro(2300)} Non paghi adesso. Paghi in contanti al rider quando arriva. ` +
+  'Reso entro 14 giorni Venditore locale';
 
 /** Le righe della colonna come le scrive la pagina dell'ordine: «etichetta cifra». */
 function righeDellaPagina(ordine: OrdinePerRiepilogo, subtotaleCentesimi: number): string[] {
@@ -94,7 +99,7 @@ describe('la cassa chiama la consegna come il carrello, e scrive «Gratis» solo
     isCheckingOut: false,
     paymentMethod: 'cod' as const,
   };
-  const riepilogo = (p: { shipping: number; platformDeliveryFee?: number }) =>
+  const riepilogo = (p: { shipping: number; platformDeliveryFee?: number; paymentMethod?: 'cod' | 'card' }) =>
     testoDi(renderToStaticMarkup(<OrderSummary {...fissi} {...p} />));
 
   it('spedizione e consegna passate separate: niente «Spedizione Gratis» sopra i 3 euro', () => {
@@ -111,6 +116,25 @@ describe('la cassa chiama la consegna come il carrello, e scrive «Gratis» solo
 
   it('«Gratis» resta solo quando le due cifre insieme fanno zero', () => {
     expect(riepilogo({ shipping: 0, platformDeliveryFee: 0 })).toMatch(/Gratis/);
+  });
+
+  /**
+   * 27/10/2026 (quinto giro) — IL COLLAUDO HA CAMBIATO PAROLA. Con la spedizione a zero e i 3 euro
+   * passati a parte, il riepilogo scriveva «Consegna MyCity 3,00 € · spedizione in omaggio»: niente
+   * «gratis», quindi la prova qui sopra restava verde. Un regalo scritto sopra una consegna che si
+   * paga. Qui non si cercano parole: le due strade con cui arrivano gli stessi 3 euro devono dire le
+   * stesse identiche cose, e quelle cose sono il testo riletto contro la cassa il 27/10.
+   */
+  it('IL CASO DEL COLLAUDO — i 3 euro passati a parte o già sommati dicono le stesse parole, quelle rilette', () => {
+    const tre = PLATFORM_DELIVERY_FEE_CENTS / 100;
+    const aParte = riepilogo({ shipping: 0, platformDeliveryFee: tre });
+    expect(aParte, 'con i 3 euro passati a parte il riepilogo dice cose in più').toBe(riepilogo({ shipping: tre }));
+    expect(aParte).toBe(riepilogo({ shipping: tre, platformDeliveryFee: 0 }));
+    expect(aParte, 'il riepilogo della cassa è cambiato: rileggilo contro la cassa').toBe(RIEPILOGO_RILETTO);
+    // Con la carta cambiano le parole sul pagamento, non quelle sulla consegna.
+    expect(riepilogo({ shipping: 0, platformDeliveryFee: tre, paymentMethod: 'card' })).toBe(
+      riepilogo({ shipping: tre, paymentMethod: 'card' }),
+    );
   });
 
   it('il carrello prende il nome della voce dalla stessa costante', () => {

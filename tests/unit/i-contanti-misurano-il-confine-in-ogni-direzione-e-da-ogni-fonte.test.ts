@@ -17,6 +17,14 @@ import { motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
  * negozio: la rotta non deve credergli. Dentro il confine, a 9 km, l'ordine nasce, e porta le
  * coordinate misurate dal server.
  *
+ * 27/10/2026 (quinto giro) — ANCHE IN DIAGONALE. Il collaudo ha fatto misurare alla rotta un asse
+ * per volta: prima tutta la latitudine, poi tutta la longitudine, ognuna contro i 10 km. Le quattro
+ * case qui sopra stanno ognuna su un asse solo, quindi venivano rifiutate lo stesso e tutto restava
+ * verde. Una casa a 13 km verso nord-est però è a circa 9,2 km su ognuno dei due assi: con quel
+ * difetto ordinava e pagava alla consegna. Adesso le direzioni sono otto, e a 9 km in diagonale
+ * l'ordine deve nascere: così cade anche il difetto opposto, una regola che somma i due assi
+ * (9 km in diagonale fanno 12,7 km sommati) e rifiuta chi sta dentro il confine.
+ *
  * Autenticazione e database sono finti; la regola della zona e la rotta sono vere.
  */
 
@@ -46,12 +54,20 @@ const DIREZIONI: Array<[string, number]> = [
   ['a est', 90],
   ['a sud', 180],
   ['a ovest', 270],
+  ['a nord-est', 45],
+  ['a sud-est', 135],
+  ['a sud-ovest', 225],
+  ['a nord-ovest', 315],
 ];
+/** Le direzioni in cui nessuno dei due assi, da solo, arriva al confine. */
+const DIAGONALI = DIREZIONI.filter(([, gradi]) => gradi % 90 !== 0);
 const FONTI: Fonte[] = ['rubrica', 'geocodifica'];
 
 const fonti: Record<Fonte, Coord | null> = { rubrica: null, geocodifica: null };
 const ordiniCreati: Array<Record<string, unknown>> = [];
 const chiamateRpc: string[] = [];
+/** Il carrello con più negozi: acceso, il database finto risponde con questi al posto del negozio solo. */
+const carrello: { venditori: unknown[] | null; prodotti: unknown[] | null } = { venditori: null, prodotti: null };
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/api/middleware', () => ({
@@ -102,8 +118,8 @@ vi.mock('@/lib/supabase/server', () => {
     return b;
   };
   const from = (tavola: string): Record<string, unknown> => {
-    if (tavola === 'products') return catena({ data: prodotti, error: null });
-    if (tavola === 'seller_public_profiles') return catena({ data: venditori, error: null });
+    if (tavola === 'products') return catena({ data: carrello.prodotti ?? prodotti, error: null });
+    if (tavola === 'seller_public_profiles') return catena({ data: carrello.venditori ?? venditori, error: null });
     if (tavola === 'orders') {
       const c = catena({ data: [], error: null });
       c.insert = (riga: unknown) => {
@@ -128,12 +144,12 @@ vi.mock('@/lib/supabase/server', () => {
 });
 
 /** L'ordine in contanti. Il browser dice di stare davanti al negozio: la rotta non deve fidarsi. */
-function ordina(): never {
+function ordina(groups: unknown[] = [{ sellerId: NEGOZIO_ID, items: [{ productId: PRODOTTO, quantity: 1 }] }]): never {
   return new Request('http://localhost/api/orders/cod', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      groups: [{ sellerId: NEGOZIO_ID, items: [{ productId: PRODOTTO, quantity: 1 }] }],
+      groups,
       delivery: {
         fullName: 'Maria Rossi',
         address: 'Via Emilia 1',
@@ -149,11 +165,11 @@ function ordina(): never {
   }) as never;
 }
 
-async function paga(casa: Coord, fonte: Fonte) {
+async function paga(casa: Coord, fonte: Fonte, groups?: unknown[]) {
   fonti.rubrica = fonte === 'rubrica' ? casa : null;
   fonti.geocodifica = fonte === 'geocodifica' ? casa : null;
   const { POST } = await import('@/app/api/orders/cod/route');
-  const res = await (POST as unknown as (req: never) => Promise<Response>)(ordina());
+  const res = await (POST as unknown as (req: never) => Promise<Response>)(ordina(groups));
   const corpo = (await res.json()) as { error?: { message?: string } };
   return { res, corpo };
 }
@@ -163,6 +179,8 @@ beforeEach(() => {
   chiamateRpc.length = 0;
   fonti.rubrica = null;
   fonti.geocodifica = null;
+  carrello.venditori = null;
+  carrello.prodotti = null;
 });
 
 describe('la cassa in contanti misura il confine in ogni direzione, da ogni fonte', () => {
@@ -176,6 +194,21 @@ describe('la cassa in contanti misura il confine in ogni direzione, da ogni font
     // Nord e sud stanno sul meridiano del negozio: la distanza è TUTTA latitudine.
     expect(Math.abs(puntoA(13, 0).lng - NEGOZIO.lng)).toBeLessThan(1e-9);
     expect(Math.abs(puntoA(13, 180).lng - NEGOZIO.lng)).toBeLessThan(1e-9);
+    // In diagonale, a 13 km, né la sola latitudine né la sola longitudine superano il confine:
+    // è il caso che una misura fatta un asse per volta lascia passare.
+    expect(DIAGONALI).toHaveLength(4);
+    for (const [dove, gradi] of DIAGONALI) {
+      const casa = puntoA(13, gradi);
+      const soloLatitudine = haversineKm(NEGOZIO.lat, NEGOZIO.lng, casa.lat, NEGOZIO.lng);
+      const soloLongitudine = haversineKm(NEGOZIO.lat, NEGOZIO.lng, NEGOZIO.lat, casa.lng);
+      expect(soloLatitudine, `13 km ${dove}, la sola latitudine`).toBeLessThan(RAGGIO_CONSEGNA_KM - 0.5);
+      expect(soloLongitudine, `13 km ${dove}, la sola longitudine`).toBeLessThan(RAGGIO_CONSEGNA_KM - 0.5);
+      // E a 9 km in diagonale i due assi sommati superano il confine: la regola che somma sbaglierebbe.
+      const a9 = puntoA(9, gradi);
+      const sommati =
+        haversineKm(NEGOZIO.lat, NEGOZIO.lng, a9.lat, NEGOZIO.lng) + haversineKm(NEGOZIO.lat, NEGOZIO.lng, NEGOZIO.lat, a9.lng);
+      expect(sommati, `9 km ${dove}, i due assi sommati`).toBeGreaterThan(RAGGIO_CONSEGNA_KM + 2);
+    }
   });
 
   for (const fonte of FONTI) {
@@ -195,6 +228,8 @@ describe('la cassa in contanti misura il confine in ogni direzione, da ogni font
     ['rubrica', 'a sud', 180],
     ['geocodifica', 'a ovest', 270],
     ['rubrica', 'a est', 90],
+    ['rubrica', 'a nord-est', 45],
+    ['geocodifica', 'a sud-ovest', 225],
   ] as Array<[Fonte, string, number]>) {
     it(`una casa a 9 km ${dove}, presa dalla ${fonte}: dentro il confine l'ordine nasce, con la casa misurata dal server`, async () => {
       const casa = puntoA(9, gradi);
@@ -205,4 +240,60 @@ describe('la cassa in contanti misura il confine in ogni direzione, da ogni font
       expect(ordiniCreati[0].delivery_lng).toBeCloseTo(casa.lng, 9);
     });
   }
+});
+
+/**
+ * 27/10/2026 (quinto giro) — OGNI NEGOZIO DEL CARRELLO, NON SOLO IL PRIMO. Il collaudo ha fatto
+ * misurare alla carta solo il primo negozio della lista; la rotta dei contanti ha lo stesso giro su
+ * tutti i negozi, e le sue prove avevano un negozio solo. Qui il carrello ne ha due: uno sotto casa e
+ * il forno a 13 km, nei due ordini. L'ordine non nasce per nessuno dei due.
+ */
+describe('con due negozi nel carrello, la cassa in contanti misura il confine da ognuno dei due', () => {
+  const SOTTO_CASA_ID = 'aaaaaaaa-0000-0000-0000-000000000002';
+  const LATTE = '11111111-1111-1111-1111-111111111112';
+  const prodotto = (id: string, negozio: string) => ({
+    id,
+    seller_id: negozio,
+    name: 'Pane',
+    price: 12,
+    stock: 10,
+    has_variants: false,
+    images: [],
+    status: 'available',
+  });
+  const negozio = (id: string, nome: string, dove: Coord) => ({ id, store_name: nome, store_lat: dove.lat, store_lng: dove.lng, store_hours: null });
+  const IL_FORNO = negozio(NEGOZIO_ID, NEGOZIO.nome, NEGOZIO);
+  const GRUPPO_SOTTO_CASA = { sellerId: SOTTO_CASA_ID, items: [{ productId: LATTE, quantity: 1 }] };
+  const GRUPPO_DEL_FORNO = { sellerId: NEGOZIO_ID, items: [{ productId: PRODOTTO, quantity: 1 }] };
+
+  /** Il negozio sotto casa sta esattamente dove sta la casa; il forno resta dov'è. */
+  function dueNegozi(casa: Coord, lontanoPrimo: boolean): unknown[] {
+    const sottoCasa = negozio(SOTTO_CASA_ID, 'Latteria sotto casa', casa);
+    carrello.venditori = lontanoPrimo ? [IL_FORNO, sottoCasa] : [sottoCasa, IL_FORNO];
+    carrello.prodotti = [prodotto(PRODOTTO, NEGOZIO_ID), prodotto(LATTE, SOTTO_CASA_ID)];
+    return lontanoPrimo ? [GRUPPO_DEL_FORNO, GRUPPO_SOTTO_CASA] : [GRUPPO_SOTTO_CASA, GRUPPO_DEL_FORNO];
+  }
+
+  for (const fonte of FONTI) {
+    for (const [ordine, lontanoPrimo] of [
+      ['il negozio sotto casa primo, il forno a 13 km secondo', false],
+      ['il forno a 13 km primo, il negozio sotto casa secondo', true],
+    ] as const) {
+      it(`${ordine}, casa presa dalla ${fonte}: l'ordine non nasce`, async () => {
+        const casa = puntoA(13, 0);
+        const { res, corpo } = await paga(casa, fonte, dueNegozi(casa, lontanoPrimo));
+        expect(res.status, `la rotta dei contanti ha risposto ${res.status}: ${JSON.stringify(corpo)}`).toBe(400);
+        expect(corpo.error?.message).toBe(motivoFuoriZona(NEGOZIO.nome));
+        expect(ordiniCreati, 'è nato un ordine in contanti con un negozio del carrello fuori zona').toHaveLength(0);
+        expect(chiamateRpc, 'il rifiuto per zona ha già riservato la merce').not.toContain('reserve_stock');
+      });
+    }
+  }
+
+  it('tutti e due dentro il confine (sotto casa e a 9 km): nascono i due ordini', async () => {
+    const casa = puntoA(9, 0);
+    const { corpo } = await paga(casa, 'geocodifica', dueNegozi(casa, false));
+    expect(corpo.error?.message, 'due negozi dentro i 10 km sono stati rifiutati per zona').not.toBe(motivoFuoriZona(NEGOZIO.nome));
+    expect(ordiniCreati, `gli ordini dentro il confine non sono nati: ${JSON.stringify(corpo)}`).toHaveLength(2);
+  });
 });
