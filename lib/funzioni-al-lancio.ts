@@ -9,8 +9,8 @@
  * del mese), un regalo di 5 euro che non esiste (newsletter), pulsanti che
  * rispondono «servizio non configurato» (AI per i negozi), una traduzione che
  * cancella l'italiano (Traduci), un caricamento da file che non legge l'Excel
- * italiano. Anche l'app installabile e i codici sconto restano spenti, ma non
- * da qui: come, lo dice la nota in fondo al file.
+ * italiano. L'app installabile e i codici sconto non hanno un interruttore
+ * qui: come stanno oggi lo dice la nota in fondo al file.
  *
  * Perché costanti nel codice e non variabili NEXT_PUBLIC: una variabile del
  * browser si fissa quando il sito viene costruito, e una variabile assente
@@ -66,14 +66,16 @@ export const TRADUCI_ACCESO: boolean = false;
  *  importate. Il modulo «Nuovo prodotto» resta acceso. */
 export const CARICAMENTO_DA_FILE_ACCESO: boolean = false;
 
-/* SPENTE, MA NON DA QUI (nessun interruttore finché nessuno lo legge).
+/* SENZA INTERRUTTORE QUI (nessun interruttore finché nessuno lo legge).
  *
  * App installabile: oggi l'app non si installa perché il manifest non è nel
- * <head> (difetto 239). Il banner si spegne con la squadra dell'app, che
- * prima di riaccendere lo prova su un Android vero.
+ * <head> (difetto 239), ma il banner che invita a installarla si vede ancora.
+ * Lo spegne la squadra dell'app, che prima di riaccendere prova tutto su un
+ * Android vero.
  *
- * Codici sconto in cassa: oggi si spengono nel database, mettendo non attivi
- * i codici BENVENUTO10 e SPED5 (comando SQL di Nicola). L'interruttore della
+ * Codici sconto in cassa: spenti nel database dal 27/10/2026 alle 12:01, con
+ * BENVENUTO10 e SPED5 non attivi (comando SQL di Nicola, carta #214). La cassa
+ * però li applicherebbe ancora se qualcuno li riattivasse: l'interruttore della
  * cassa arriva con la squadra della cassa. Prima di riaccenderli va deciso chi
  * paga lo sconto: oggi il netto del negozio si calcola sul totale già
  * scontato, quindi un codice di MyCity lo pagherebbe il negozio al 90%. */
