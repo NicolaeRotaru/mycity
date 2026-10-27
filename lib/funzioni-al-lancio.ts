@@ -8,9 +8,9 @@
  * inviti), prezzi che la cassa non applica (Drop del giorno, codice del Negozio
  * del mese), un regalo di 5 euro che non esiste (newsletter), pulsanti che
  * rispondono «servizio non configurato» (AI per i negozi), una traduzione che
- * cancella l'italiano (Traduci), un'app installabile che nessuno ha provato,
- * un caricamento da file che non legge l'Excel italiano, codici sconto che il
- * negozio pagherebbe al 90%.
+ * cancella l'italiano (Traduci), un caricamento da file che non legge l'Excel
+ * italiano. Anche l'app installabile e i codici sconto restano spenti, ma non
+ * da qui: come, lo dice la nota in fondo al file.
  *
  * Perché costanti nel codice e non variabili NEXT_PUBLIC: una variabile del
  * browser si fissa quando il sito viene costruito, e una variabile assente
@@ -23,6 +23,10 @@
  * chiama a mano). La pagina è vetrina; il freno vero è la rotta.
  *
  * Prima di riaccenderne una, leggi il «Per riaccendere» accanto.
+ *
+ * Qui sta solo un interruttore che qualcuno legge davvero: un `false` che
+ * nessun file importa scrive «spento» su una cosa che nessuno spegne. Lo
+ * controlla tests/unit/ogni-interruttore-del-lancio-lo-legge-qualcuno.test.ts.
  */
 
 /** Vendita dei buoni regalo. Per riaccendere: parere legale e IVA sul buono
@@ -56,20 +60,20 @@ export const AI_NEGOZI_ACCESA: boolean = false;
  *  un nome solo, e tradurre vuol dire cancellare l'italiano. */
 export const TRADUCI_ACCESO: boolean = false;
 
-/** App installabile (manifest nel <head> e banner «Metti MyCity in Home»).
- *  Per riaccendere: provare il banner su un Android vero insieme alla barra in
- *  basso, al banner dei cookie e alla chat; e allineare la descrizione del
- *  manifest alle promesse di consegna vere. */
-export const APP_INSTALLABILE_ACCESA: boolean = false;
-
 /** Caricamento dei prodotti da file CSV. Per riaccendere: il lettore deve
  *  riconoscere il punto e virgola e la codifica dell'Excel italiano, e le
  *  regole del database (allergeni, misure) devono valere anche sulle righe
  *  importate. Il modulo «Nuovo prodotto» resta acceso. */
 export const CARICAMENTO_DA_FILE_ACCESO: boolean = false;
 
-/** Codici sconto in cassa. Per riaccendere: decidere chi paga lo sconto. Oggi
- *  il netto del negozio si calcola sul totale già scontato, quindi un codice
- *  di MyCity lo pagherebbe il negozio al 90%. Il credito MyCity non dipende da
- *  qui. */
-export const CODICI_SCONTO_IN_CASSA: boolean = false;
+/* SPENTE, MA NON DA QUI (nessun interruttore finché nessuno lo legge).
+ *
+ * App installabile: oggi l'app non si installa perché il manifest non è nel
+ * <head> (difetto 239). Il banner si spegne con la squadra dell'app, che
+ * prima di riaccendere lo prova su un Android vero.
+ *
+ * Codici sconto in cassa: oggi si spengono nel database, mettendo non attivi
+ * i codici BENVENUTO10 e SPED5 (comando SQL di Nicola). L'interruttore della
+ * cassa arriva con la squadra della cassa. Prima di riaccenderli va deciso chi
+ * paga lo sconto: oggi il netto del negozio si calcola sul totale già
+ * scontato, quindi un codice di MyCity lo pagherebbe il negozio al 90%. */
