@@ -30,31 +30,40 @@ export const SPEDIZIONE_PER_KM_EUR = 1.2;
  * la stessa consegna veniva quotata oltre 70 € alla cassa dopo che il carrello
  * aveva scritto 4,90.
  *
- * DA DOVE VIENE IL NUMERO — non è inventato, ed è il più LARGO fra i due
- * riferimenti che il progetto ha già, perché una zona più stretta di quello che
- * serviamo oggi rifiuterebbe clienti veri:
- *   · la promessa pubblica «in 30-60 minuti dalla conferma del negozio, nei
- *     comuni serviti» (lib/promesse-pubbliche.ts), con la stima di consegna a
- *     15 minuti di preparazione più il viaggio a 25 km/h (`deliveryEtaMinutes`,
- *     lib/geo.ts), sta in piedi fino a circa 19 km;
- *   · la prova sui soldi tests/unit/soldi-storni-sconti-e-compensi.test.ts
- *     percorre come caso normale una consegna a ~24 km, quotata 8,50 €: quella
- *     distanza il sito la serve già oggi.
- * Si prende la seconda, arrotondata a 25. Dentro ci stanno Piacenza e la sua
- * cintura fino a Fiorenzuola e Castel San Giovanni; fuori restano Cremona
- * (35 km), Lodi (35 km) e Milano (60 km) — i casi che non sappiamo servire.
+ * DA DOVE VIENE IL NUMERO — 27/10/2026, decisione di Nicola: al lancio le
+ * consegne le fa lui, IN BICI, fino a 10 km dal negozio. Prima qui c'era 25,
+ * preso dal caso più lontano che una prova sui soldi percorreva (~24 km): un
+ * confine che nessuno può pedalare. Con 25 la cassa accettava un indirizzo a
+ * 20 km, il cliente pagava in contanti alla consegna e aspettava un fattorino
+ * che non sarebbe partito — il primo cliente perso, e un negozio che prepara
+ * la merce per niente. Dentro i 10 km ci sta Piacenza città con la prima
+ * cintura; fuori restano Fiorenzuola, Castel San Giovanni, Cremona, Lodi,
+ * Milano.
  *
- * ⚠️ I due riferimenti non vanno d'accordo, ed è una cosa da decidere, non da
- * nascondere: a 24 km la promessa dei 30-60 minuti è già rotta oggi, prima e
- * a prescindere da questo controllo. O si stringe la zona o si cambia la
- * promessa.
+ * La promessa sui tempi che va con questo confine è «in giornata» (scelta 8
+ * della carta #209), non una stima a minuti: la frase «30-60 minuti» di
+ * lib/promesse-pubbliche.ts e i testi di app/shipping/page.tsx («entro 15 km»)
+ * vanno allineati a parte.
  *
  * 🟡 IL NUMERO È UNA DECISIONE COMMERCIALE, NON TECNICA: dice a chi possiamo
  * vendere. Sta qui, in una riga, apposta perché cambiarlo sia una firma e non
- * una caccia al tesoro. Chi lo alza si prenda anche il compenso del fattorino
- * (`COMPENSO_RIDER_CENTS`), che è fisso e non cresce coi chilometri.
+ * una caccia al tesoro. La prova
+ * tests/unit/al-lancio-si-consegna-in-bici-fino-a-10-km.test.ts lo inchioda:
+ * chi lo cambia cambia anche quella, con la decisione nuova accanto. Chi lo
+ * alza si prenda anche il compenso del fattorino (`COMPENSO_RIDER_CENTS`), che
+ * è fisso e non cresce coi chilometri.
  */
-export const RAGGIO_CONSEGNA_KM = 25;
+export const RAGGIO_CONSEGNA_KM = 10;
+
+/**
+ * La velocità media di chi consegna, in km/h, per stimare il tempo di viaggio
+ * (`deliveryEtaMinutes` in lib/geo.ts: il «fra quanti minuti arriva» mentre il
+ * fattorino è in strada). Al lancio si consegna in bici (decisione del
+ * 27/10/2026): in città una bici fa 12-18 km/h fra semafori e incroci. Prima la
+ * stima usava 25 km/h, che è uno scooter: 10 km risultavano 24 minuti invece
+ * di 40, e il cliente leggeva un arrivo che non poteva succedere.
+ */
+export const VELOCITA_MEDIA_BICI_KMH = 15;
 
 /**
  * Sconto percentuale per ritiro in negozio.

@@ -157,7 +157,9 @@ describe('il compenso del fattorino', () => {
     const spedizione = shippingCentsFor({
       subtotal: FREE_SHIPPING_THRESHOLD + 10,
       storeLat: 45.05, storeLng: 9.69,
-      deliveryLat: 45.20, deliveryLng: 9.90,   // lontano: col vecchio calcolo erano 8,50 euro
+      // ~9 km: il bordo della zona servita in bici (10 km, decisione del 27/10/2026).
+      // Prima qui c'era un indirizzo a ~24 km, che oggi la cassa non accetta più.
+      deliveryLat: 45.10, deliveryLng: 9.78,
       pickupInStore: false,
     });
     expect(spedizione).toBe(0);
