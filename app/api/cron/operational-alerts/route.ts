@@ -640,8 +640,10 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   `;
 
   if (adminEmail) {
+    let esitoInvio: Awaited<ReturnType<typeof sendEmail>> | null = null;
+    let erroreInvio: unknown = null;
     try {
-      await sendEmail({
+      esitoInvio = await sendEmail({
         to: adminEmail,
         subject: `[MyCity Alert] ${fresh.length} anomalie operative`,
         html: body,
@@ -665,11 +667,28 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
         tipo: 'transazionale',
       });
     } catch (err) {
-      // Stessa ragione: se l'invio fallisce mentre ci sono anomalie fresche,
-      // il giro NON e' riuscito.
-      logger.error('[cron-alerts] email send failed', err);
+      erroreInvio = err;
+    }
+    /**
+     * 27/10/2026 — IL CATCH QUI SOPRA NON SCATTAVA MAI.
+     *
+     * `sendEmail` non lancia: quando Resend rifiuta (dominio non verificato)
+     * o la posta non e' configurata restituisce {ok:false}. Nessuno leggeva
+     * l'esito, quindi il giro scriveva l'attesa di sei ore per allarmi mai
+     * partiti e rispondeva ok:true. Adesso un allarme non recapitato fa
+     * fallire il giro, e l'attesa NON si scrive: il giro dopo lo ritenta.
+     */
+    if (!esitoInvio || !esitoInvio.ok) {
+      const motivo = erroreInvio instanceof Error
+        ? erroreInvio.message
+        : esitoInvio && 'reason' in esitoInvio
+          ? esitoInvio.reason
+          : esitoInvio && 'error' in esitoInvio
+            ? String(esitoInvio.error)
+            : String(erroreInvio ?? 'invio fallito');
+      logger.error('[cron-alerts] email d\'allarme NON recapitata', { motivo, fresh: fresh.length });
       return NextResponse.json(
-        { ok: false, alerts: alerts.length, fresh: fresh.length, errore: 'allarmi non recapitati' },
+        { ok: false, alerts: alerts.length, fresh: fresh.length, errore: 'allarmi non recapitati', motivo },
         { status: 500 },
       );
     }

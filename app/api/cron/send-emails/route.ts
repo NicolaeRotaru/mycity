@@ -64,6 +64,37 @@ async function annullaRiga(supa: { from: (t: string) => any }, id: unknown): Pro
   }
 }
 
+/**
+ * 27/10/2026 — UN GUASTO DI CONFIGURAZIONE NON E' UN TENTATIVO.
+ *
+ * Quando manca la chiave di Resend o il mittente, `sendEmail` risponde
+ * «saltata». Il giro la contava come un invio fallito: un tentativo in piu' e
+ * un rinvio crescente, e al quinto (circa tredici ore) la riga veniva annullata
+ * per sempre, col motivo vero perso («invio fallito»). Il giorno in cui si
+ * accende il database prima della posta, si buttavano cosi' tutti i benvenuti.
+ * Lo stesso per un errore di un attimo nel leggere l'indirizzo: la riga si
+ * annullava subito.
+ *
+ * Adesso la riga si RILASCIA: niente tentativo, niente annullo, `send_at`
+ * invariato (cosi' l'allarme della coda arretrata la vede), e il motivo vero
+ * scritto in `last_error`. Riparte da sola quando la posta e' pronta.
+ */
+async function rilasciaRiga(
+  supa: Parameters<typeof annullaRiga>[0],
+  id: unknown,
+  motivo: string,
+): Promise<void> {
+  const { error } = await supa
+    .from('email_queue')
+    .update({ claimed_at: null, last_error: motivo.slice(0, 500) })
+    .eq('id', id);
+  if (error) {
+    logger.error('[cron] riga di posta non rilasciata: tornera dopo la prenotazione di 15 minuti', {
+      id, message: error.message,
+    });
+  }
+}
+
 const handler = withCronAuth(async (_req): Promise<NextResponse> => {
   let supaCfg;
   try { supaCfg = requireSupabaseService(); } catch (e) {
@@ -141,7 +172,7 @@ async function processBatch(
     metadata?: Record<string, unknown> | null;
   }[],
 ): Promise<NextResponse> {
-  let sent = 0, skipped = 0, errors = 0;
+  let sent = 0, skipped = 0, errors = 0, rinviate = 0;
 
   /**
    * 22/8/2026 — QUATTRO VIAGGI AL DATABASE PER OGNI EMAIL SPEDITA.
@@ -197,8 +228,23 @@ async function processBatch(
       await annullaRiga(supa, row.id);
       continue;
     }
-    const { data: authUser } = await supa.auth.admin.getUserById(row.user_id).catch(() => ({ data: null as any }));
-    const email = authUser?.user?.email;
+    // 27/10/2026 — Un errore nel leggere l'indirizzo non e' «persona senza
+    // indirizzo»: la riga si rilascia e si riprova, non si butta.
+    let lettura: { data: { user?: { email?: string | null } | null } | null; error: unknown };
+    try {
+      lettura = await supa.auth.admin.getUserById(row.user_id);
+    } catch (e) {
+      lettura = { data: null, error: e };
+    }
+    if (lettura.error) {
+      rinviate++;
+      const perche = lettura.error instanceof Error
+        ? lettura.error.message
+        : String((lettura.error as { message?: unknown }).message ?? lettura.error);
+      await rilasciaRiga(supa, row.id, `indirizzo non letto: ${perche}`);
+      continue;
+    }
+    const email = lettura.data?.user?.email;
     if (!email) {
       skipped++;
       await annullaRiga(supa, row.id);
@@ -249,6 +295,13 @@ async function processBatch(
           id: row.id, template: row.template, message: errSegno.message,
         });
       }
+    } else if ('skipped' in res && res.skipped) {
+      // 27/10/2026 — Posta non configurata: si aspetta, non si consuma (vedi `rilasciaRiga`).
+      rinviate++;
+      logger.warn('[cron] posta non pronta: riga rimessa in attesa senza consumare tentativi', {
+        id: row.id, template: row.template, motivo: res.reason,
+      });
+      await rilasciaRiga(supa, row.id, `posta non pronta: ${res.reason}`);
     } else {
       errors++;
       // 182 — Prima si rilasciava il claim e basta: nessun contatore, nessuna
@@ -279,5 +332,5 @@ async function processBatch(
       }
     }
   }
-  return NextResponse.json({ ok: true, sent, skipped, errors, total: batch.length });
+  return NextResponse.json({ ok: true, sent, skipped, errors, rinviate, total: batch.length });
 }

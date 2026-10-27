@@ -122,6 +122,21 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
     });
     if ('ok' in res && res.ok) {
       sent++;
+    } else if ('skipped' in res && res.skipped) {
+      // 27/10/2026 — Il carrello e' segnato «avvisato» PRIMA di spedire (cosi'
+      // due giri non scrivono due volte). Se pero' l'invio salta perche' la
+      // posta non e' configurata, il segno restava e il promemoria non partiva
+      // mai piu'. Il segno si toglie: il giro dopo, a posta pronta, ci riprova.
+      errors++;
+      const { error: errRilascio } = await supa
+        .from('abandoned_carts')
+        .update({ recovery_email_sent_at: null })
+        .eq('user_id', c.user_id);
+      if (errRilascio) {
+        logger.error('[abandoned-carts] invio saltato e carrello NON rimesso da avvisare', {
+          user: c.user_id, motivo: res.reason, message: errRilascio.message,
+        });
+      }
     } else {
       errors++;
     }

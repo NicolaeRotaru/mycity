@@ -14,7 +14,10 @@
 const CACHE_VERSION = 'v2';
 const STATIC_CACHE = `mycity-static-${CACHE_VERSION}`;
 const IMAGE_CACHE = `mycity-images-${CACHE_VERSION}`;
-const HTML_CACHE = `mycity-html-${CACHE_VERSION}`;
+// 27/10/2026 — Le pagine hanno una versione loro: la v2 conteneva le etichette
+// di spedizione (nome, indirizzo, telefono del cliente) aperte dai negozi.
+// Cambiando nome, all'attivazione la v2 si cancella; foto e file fissi no.
+const HTML_CACHE = 'mycity-html-v3';
 
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [
@@ -147,10 +150,26 @@ async function staleWhileRevalidate(req, cacheName, maxEntries, freschezzaMs = 0
  * quelle pagine tornano fuori dalla cache a chi non le doveva vedere. Non e'
  * una fuga verso internet: e' una fuga verso la persona seduta dopo di te.
  */
-const PERCORSI_PRIVATI = ['/orders', '/profile', '/seller', '/rider', '/admin', '/checkout', '/cart'];
+const PERCORSI_PRIVATI = ['/orders', '/profile', '/seller', '/rider', '/admin', '/checkout', '/cart', '/api'];
 
 function ePrivata(url) {
   return PERCORSI_PRIVATI.some((p) => url.pathname === p || url.pathname.startsWith(p + '/'));
+}
+
+/**
+ * 27/10/2026 — L'ETICHETTA DEL NEGOZIO FINIVA QUI.
+ *
+ * «Stampa etichetta» apre /api/seller/orders/<id>/label in una scheda nuova:
+ * e' una navigazione, e /api/seller non comincia con /seller. Il PDF col nome,
+ * l'indirizzo e il telefono del cliente restava nella cache delle pagine,
+ * leggibile da chi usa lo stesso tablet dopo, anche senza sessione. La Cache
+ * API non guarda il Cache-Control del server, quindi il «private, no-cache»
+ * della rotta non bastava. Due difese: /api e' privato, e si tiene solo cio'
+ * che e' davvero una pagina HTML. Non si filtra sul Cache-Control: tutte le
+ * pagine escono gia' «no-store», e la cache offline sparirebbe intera.
+ */
+function eUnaPagina(res) {
+  return (res.headers.get('content-type') || '').toLowerCase().includes('text/html');
 }
 
 // Network-first per HTML: prova rete, fallback offline.
@@ -159,7 +178,7 @@ async function networkFirstHtml(req) {
   const privata = ePrivata(url);
   try {
     const res = await fetch(req);
-    if (res.ok && req.url.startsWith(self.location.origin) && !privata) {
+    if (res.ok && req.url.startsWith(self.location.origin) && !privata && eUnaPagina(res)) {
       const cache = await caches.open(HTML_CACHE);
       cache.put(req, res.clone());
       trimCache(HTML_CACHE, MAX_HTML_ENTRIES);

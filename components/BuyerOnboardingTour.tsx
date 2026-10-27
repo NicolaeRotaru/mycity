@@ -29,7 +29,9 @@ const STEPS = [
   {
     icon: Gift,
     title: 'Benvenuto su MyCity',
-    body: 'Hai €5 di benvenuto pronti per il tuo primo ordine. Si applicano in automatico al checkout.',
+    // 27/10/2026 — Qui si prometteva uno sconto di benvenuto «applicato in automatico
+    // al checkout»: la cassa non lo applicava, e al lancio non c'e' nessun regalo in euro.
+    body: 'Qui ordini dai negozi veri di Piacenza e paghi alla consegna.',
     cta: 'Vai avanti',
   },
   {
