@@ -41,7 +41,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 // #92 — le miniature si chiedono gia' piccole al server
 import { sizedImage, logoNegozio } from '@/lib/image-url';
-import { fraseDelBonificoAMano, riepilogoOrdine, statoPagamento } from '@/lib/ordini/riepilogo-ordine';
+import { cifraDellaVoce, fraseDelBonificoAMano, riepilogoOrdine, statoPagamento } from '@/lib/ordini/riepilogo-ordine';
 
 type OrderRow = {
   id: string;
@@ -682,9 +682,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                 <div key={v.etichetta} className="flex justify-between">
                   <span className="text-ink-600">{v.etichetta}</span>
                   <span>
-                    {v.etichetta === 'Spedizione' && v.centesimi === 0
-                      ? 'GRATUITA'
-                      : `${v.segno === 'meno' ? '−' : ''}${formatPrice(v.centesimi / 100)}`}
+                    {cifraDellaVoce(v, (c) => formatPrice(c / 100))}
                   </span>
                 </div>
               ))}

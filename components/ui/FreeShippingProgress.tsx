@@ -11,8 +11,10 @@ import { promessaSpedizione } from '@/lib/promesse-pubbliche';
  * falsa proprio sull'ultimo schermo prima di «Aggiungi». Resta una riga sola, con la cifra che
  * la cassa addebita: le parole le decide `promessaSpedizione()`, non questo file.
  *
- * Il nome e la prop `subtotal` restano per la scheda prodotto, che la importa ed è fuori da
- * questo lavoro: `subtotal` non cambia più niente, e si toglie quando si tocca quella pagina.
+ * 27/10/2026 (terzo giro) — La scheda prodotto non la monta più: sotto il riquadro che dice già
+ * «Consegna MyCity 3,00 € per negozio» ripeteva la stessa cifra con un altro nome, e due nomi si
+ * leggono come due costi. Il componente resta, con la frase di `promessaSpedizione()`; la prop
+ * `subtotal` non cambia più niente.
  */
 export function FreeShippingProgress({ className }: { subtotal?: number; className?: string }) {
   const promessa = promessaSpedizione();

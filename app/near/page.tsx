@@ -11,6 +11,7 @@ import { type ProductPreview, type StoreCardData } from '@/components/StorePrevi
 import CollectionHeader from '@/components/CollectionHeader';
 import { haversineKm } from '@/lib/geo';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { avvisoNessunNegozioVicino } from '@/lib/promesse-pubbliche';
 import { frasePosizione, motivoPosizione, siAspetta, type MotivoPosizione } from '@/lib/posizione';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi } from '@/lib/supabase/blocchi';
@@ -342,7 +343,7 @@ export default function NearMePage() {
         </div>
       ) : (
         <div className="rounded-2xl border border-surface-200 bg-cream-50 p-8 text-center text-ink-500">
-          Nessun negozio entro {radiusKm} km. Aumenta il raggio per vederne di più.
+          {avvisoNessunNegozioVicino(radiusKm)}
         </div>
       )}
     </div>

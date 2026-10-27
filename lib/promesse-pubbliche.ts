@@ -9,6 +9,17 @@ import { formatPrice } from './format';
 import { spesaPerConsegnaGratisColCodiceCents } from './ordini/prezzi';
 
 /**
+ * IL NOME DELLA VOCE DA 3 EURO — uno solo, in ogni schermata.
+ *
+ * 27/10/2026 (terzo giro) — La stessa cifra aveva quattro nomi: «Consegna MyCity» nel carrello e
+ * sulla pagina dell'ordine, «Spedizione» nel riepilogo della cassa, «Consegna a casa» nella riga
+ * sotto il prezzo della scheda prodotto, che la diceva due volte con due nomi. Chi legge due nomi
+ * pensa a due costi, e somma: 6 euro invece di 3. Qui il nome sta in un posto, e chi scrive la voce
+ * lo prende da qui (carrello, cassa, pagina dell'ordine, vetrina).
+ */
+export const VOCE_CONSEGNA = 'Consegna MyCity';
+
+/**
  * LE PROMESSE PUBBLICHE — quelle scritte nelle pagine, derivate da chi le mantiene.
  *
  * ── Il difetto che ha prodotto questo file ───────────────────────────────────────────────────
@@ -284,10 +295,10 @@ export function promessaSpedizione(
     sopraSoglia: false,
     mancano: 0,
     costoConsegna,
-    titolo: siPaga ? `Consegna a casa ${formatPrice(costoConsegna)} per negozio` : 'Consegna a casa gratuita',
+    titolo: siPaga ? `${VOCE_CONSEGNA} ${formatPrice(costoConsegna)} per negozio` : 'Consegna a casa gratuita',
     breve: siPaga ? `Consegna ${formatPrice(costoConsegna)}` : 'Consegna gratuita',
     dettaglioConsegna: siPaga
-      ? `Consegna MyCity ${formatPrice(costoConsegna)} per negozio, su ogni ordine a domicilio`
+      ? `${VOCE_CONSEGNA} ${formatPrice(costoConsegna)} per negozio, su ogni ordine a domicilio`
       : null,
   };
 }
@@ -306,4 +317,18 @@ export function rigaDelCodiceSpedizione(consegnaDaPagareCents: number, negozi: n
   if (consegnaDaPagareCents <= 0 || copertaCents <= 0) return null;
   const sogliaCents = spesaPerConsegnaGratisColCodiceCents();
   return `Il codice copre ${formatPrice(copertaCents / 100)} della consegna; da ${formatPrice(sogliaCents / 100)} di spesa per negozio la copre tutta.`;
+}
+
+/**
+ * «Vicino a te» senza negozi nel raggio scelto: cosa si dice a chi guarda la lista vuota.
+ *
+ * 27/10/2026 (terzo giro) — L'avviso diceva sempre «Aumenta il raggio per vederne di più». Il cursore
+ * però si ferma al confine della consegna (`RAGGIO_CONSEGNA_KM`): lì l'invito è un vicolo cieco, e
+ * oltre quel confine la cassa non consegna comunque. Al confine si dice com'è.
+ */
+export function avvisoNessunNegozioVicino(raggioKm: number): string {
+  const nessuno = `Nessun negozio entro ${raggioKm} km.`;
+  return raggioKm < RAGGIO_CONSEGNA_KM
+    ? `${nessuno} Aumenta il raggio per vederne di più.`
+    : `${nessuno} Per ora consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio, e oltre non arriviamo.`;
 }

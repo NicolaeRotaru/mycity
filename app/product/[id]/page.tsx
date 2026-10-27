@@ -51,7 +51,6 @@ import { Badge } from '@/components/ui/Badge';
 import { QualityMarks } from '@/components/ui/QualityMarks';
 import { DeliveryCutoff } from '@/components/ui/DeliveryCutoff';
 import { useExternalProduct } from '@/components/hooks/useExternalProduct';
-import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import { SocialProof } from '@/components/ui/SocialProof';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
@@ -830,14 +829,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               </span>
             </div>
 
-            {/* La barra riceveva `price * qty`, cioe' il solo prodotto aperto: con 25 € gia'
-                nel carrello e un articolo da 6 € scriveva «Ti mancano 24,00 €» mentre la
-                soglia era gia' passata. E la pastiglia accanto guardava il prezzo di UN
-                pezzo: con due pezzi da 18 € la barra diceva «ce l'hai» e la pastiglia non
-                compariva. Adesso i due segnali leggono la stessa cifra — quello che il
-                carrello varra' premendo «Aggiungi», visto che `addToCart` somma a quello
-                che c'e' gia'. */}
-            <FreeShippingProgress subtotal={subtotaleConQuestoProdotto} />
+            {/* 27/10/2026 (terzo giro) — Qui c'era la riga di `FreeShippingProgress`: «Consegna a casa 3,00 €
+                per negozio», subito sotto «Consegna MyCity 3,00 € per negozio» del riquadro qui sopra.
+                Due nomi per la stessa cifra si leggono come due costi da sommare: la consegna si dice
+                una volta sola, nel riquadro, col nome di carrello, cassa e ordine (`VOCE_CONSEGNA`). */}
           </div>
 
           {/* Scheda venditore: avatar, valutazione (reale, da store_reviews),

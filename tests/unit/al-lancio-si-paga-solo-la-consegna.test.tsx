@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ShippingPage from '@/app/shipping/page';
+import { metadata as metadatiVicinoATe } from '@/app/near/layout';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import {
   COMPENSO_RIDER_CENTS,
@@ -10,10 +11,13 @@ import {
   RAGGIO_CONSEGNA_KM,
   VALUE_PROPS,
 } from '@/lib/constants';
+import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { formatPrice } from '@/lib/format';
 import { haversineKm } from '@/lib/geo';
 import { prezziDelCarrello, type IngressiPrezzo } from '@/lib/ordini/prezzi';
+import { fuoriZonaDiConsegna } from '@/lib/ordini/zona-di-consegna';
 import {
+  avvisoNessunNegozioVicino,
   NEGOZIO_CHIUSO_COSA_SUCCEDE,
   promessaSpedizione,
   rispostaCostoSpedizione,
@@ -83,6 +87,19 @@ function importiIn(testo: string): number[] {
 /** Ogni distanza in chilometri scritta nel testo. */
 function chilometriIn(testo: string): number[] {
   return [...testo.matchAll(/(\d+(?:[.,]\d+)?)\s*km\b/gi)].map((m) => Number(m[1].replace(',', '.')));
+}
+
+/** Ogni numero scritto in cifre nel testo, così com'è scritto: «3,00», «10», «24». */
+function numeriIn(testo: string): string[] {
+  return [...testo.matchAll(/\d+(?:[.,]\d+)?/g)].map((m) => m[0]);
+}
+
+/** I blocchi di testo di un pezzo di HTML (paragrafi, voci di elenco, titoli, riquadri), uno per uno. */
+function blocchiDi(html: string): string[] {
+  return html
+    .split(/<\/(?:p|li|div|h[1-6])>|<br\s*\/?>/i)
+    .map((b) => testoDi(b).trim())
+    .filter(Boolean);
 }
 
 const TRE_EURO = formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100);
@@ -200,10 +217,73 @@ describe('a ogni distanza dentro la zona si pagano solo i 3 euro', () => {
     const casi = DIREZIONI.length * DISTANZE.length * SPESE.length;
     expect(sbagliati.slice(0, 6), `${sbagliati.length} casi su ${casi} non pagano i soli 3 euro`).toEqual([]);
   });
+
+  /*
+   * 27/10/2026 (quarto giro) — DUE E TRE NEGOZI, IN POSTI DIVERSI.
+   *
+   * La griglia qui sopra ha un negozio solo, e la prova dei due negozi li mette nello stesso punto
+   * con la casa a 5 km. Il collaudo ha rimesso la tariffa a chilometri solo quando il carrello ha
+   * due negozi, e tutto è rimasto verde: chi comprava dal forno e dalla macelleria pagava la
+   * consegna a distanza, chi comprava da uno solo no. Qui il carrello ha due e tre negozi in tre
+   * punti diversi della città, la casa gira tutta la griglia e le spese si incrociano: ogni negozio
+   * chiede i suoi 3 euro e niente di più, e il totale è la merce più 3 euro per negozio.
+   */
+  it('con due e tre negozi in posti diversi, a ogni distanza e con ogni spesa: 3 euro per negozio e niente di più', () => {
+    const POSIZIONI: Record<string, { lat: number; lng: number }> = {
+      forno: NEGOZIO,
+      macelleria: puntoA(4, 200),
+      fioraio: puntoA(7, 60),
+    };
+    const carrelli: Array<Array<{ sellerId: string; euro: number }>> = [];
+    for (const a of SPESE) {
+      for (const b of SPESE) carrelli.push([{ sellerId: 'forno', euro: a }, { sellerId: 'macelleria', euro: b }]);
+    }
+    for (const a of [5, 20, 29.99]) {
+      for (const b of [1, 12, 45]) {
+        for (const c of [8, 29.99, 30]) {
+          carrelli.push([
+            { sellerId: 'forno', euro: a },
+            { sellerId: 'macelleria', euro: b },
+            { sellerId: 'fioraio', euro: c },
+          ]);
+        }
+      }
+    }
+    const sbagliati: string[] = [];
+    let casi = 0;
+    for (const gradi of DIREZIONI) {
+      for (const km of DISTANZE) {
+        const casa = puntoA(km, gradi);
+        for (const gruppi of carrelli) {
+          casi++;
+          const esito = conto(gruppi, {
+            coordinateNegozio: (id) => POSIZIONI[id],
+            consegnaLat: casa.lat,
+            consegnaLng: casa.lng,
+          });
+          const merce = gruppi.reduce((s, g) => s + Math.round(g.euro * 100), 0);
+          const atteso = merce + gruppi.length * PLATFORM_DELIVERY_FEE_CENTS;
+          const pagate = esito.gruppi.map(consegnaPagata);
+          if (
+            pagate.length !== gruppi.length ||
+            pagate.some((p) => p !== PLATFORM_DELIVERY_FEE_CENTS) ||
+            esito.grandShippingCents !== 0 ||
+            esito.grandTotalCents !== atteso
+          ) {
+            const chi = gruppi.map((g) => `${g.sellerId} ${g.euro} €`).join(' + ');
+            sbagliati.push(`${chi}, casa a ${km} km verso ${gradi}°: consegne ${pagate.join('/')} cent, totale ${esito.grandTotalCents} invece di ${atteso}`);
+          }
+        }
+      }
+    }
+    expect(casi, 'la griglia dei carrelli con più negozi è vuota').toBeGreaterThan(10_000);
+    expect(sbagliati.slice(0, 6), `${sbagliati.length} carrelli su ${casi} non pagano 3 euro per negozio`).toEqual([]);
+  });
 });
 
 describe('la pagina Spedizioni dice le cifre della cassa', () => {
-  const testo = testoDi(renderToStaticMarkup(<ShippingPage />));
+  const html = renderToStaticMarkup(<ShippingPage />);
+  const testo = testoDi(html);
   const consegnaDellaCassa = consegnaPagata(conto([{ sellerId: 'forno', euro: 20 }]).gruppi[0]) / 100;
 
   it('ogni importo in euro della pagina è la consegna che la cassa addebita', () => {
@@ -232,6 +312,45 @@ describe('la pagina Spedizioni dice le cifre della cassa', () => {
   it('a negozio chiuso la pagina dice quello che fa la cassa', () => {
     expect(testo).toContain(NEGOZIO_CHIUSO_COSA_SUCCEDE);
   });
+
+  /*
+   * 27/10/2026 (terzo giro) — Le prove qui sopra cercano le parole vecchie: «48 ore», «preventivo»,
+   * «gratis». Il collaudo ha aggiunto alla pagina, una per volta, «segnalacelo entro 2 giorni»,
+   * «oltre il confine su richiesta, con un supplemento», «sopra i trenta euro la consegna te la
+   * offriamo noi» e «a negozio chiuso non si possono fare ordini»: sempre verde. Qui si guarda la
+   * cosa e non la parola: ogni numero viene da dove è deciso, e ogni promessa ha la sua regola.
+   */
+  it('ogni numero scritto in cifre viene da dove è deciso: consegna, confine, tempi, garanzia legale', () => {
+    const ammessi = new Set([
+      ...numeriIn(TRE_EURO),
+      String(RAGGIO_CONSEGNA_KM),
+      ...numeriIn(EXPRESS_ETA_LABEL),
+      '24', // la garanzia legale di 24 mesi, che la prova qui sopra pretende
+    ]);
+    const estranei = numeriIn(testo).filter((n) => !ammessi.has(n));
+    expect(estranei, `numeri che la cassa non conosce: ${estranei.join(', ')}`).toEqual([]);
+  });
+
+  it('niente scadenze per segnalare un problema, nemmeno scritte in lettere', () => {
+    expect(testo).not.toMatch(/\bentro\s+(?:\S+\s+)?(?:or[ae]|giorn[oi]|settiman[ae]|mes[ei])\b/i);
+  });
+
+  it('niente consegna regalata, detta con altre parole', () => {
+    expect(testo).not.toMatch(/offr|omaggi|regal|inclus|\beuro\b|\b(?:dieci|quindici|venti|trenta|quaranta|cinquanta|cento)\b/i);
+  });
+
+  it('niente consegne oltre il confine a un altro prezzo', () => {
+    expect(testo).not.toMatch(/supplement|su richiesta|sovrapprezz|maggiorazion|extra/i);
+  });
+
+  it('a negozio chiuso ogni frase della pagina dice che si prenota, nessuna che non si può', () => {
+    const chiuso = blocchiDi(html).filter((b) => /chius[oa]/i.test(b));
+    expect(chiuso.length, 'la pagina non dice cosa succede a negozio chiuso').toBeGreaterThan(0);
+    for (const b of chiuso) {
+      expect(b).toMatch(/prenot/i);
+      expect(b).not.toMatch(/\bnon\b|riprova/i);
+    }
+  });
 });
 
 describe('a negozio chiuso si prenota per domani, e la frase pubblica lo dice', () => {
@@ -247,6 +366,9 @@ describe('a negozio chiuso si prenota per domani, e la frase pubblica lo dice', 
   it('la frase non scoraggia il pre-ordine della sera', () => {
     expect(NEGOZIO_CHIUSO_COSA_SUCCEDE).toMatch(/domani/i);
     expect(NEGOZIO_CHIUSO_COSA_SUCCEDE).not.toMatch(/non puoi ordinare/i);
+    // Terzo giro: «l'ordine non parte, riprova domani» diceva «domani» e restava verde.
+    expect(NEGOZIO_CHIUSO_COSA_SUCCEDE).toMatch(/prenot/i);
+    expect(NEGOZIO_CHIUSO_COSA_SUCCEDE).not.toMatch(/non parte|non viene|riprova|non si pu[oò]|non puoi|in coda/i);
   });
 });
 
@@ -298,6 +420,39 @@ describe('«Vicino a te» non mostra negozi oltre il confine della consegna', ()
   it('niente «consegna locale rapida» senza un confine', () => {
     expect(sorgente).not.toMatch(/consegna locale rapida/i);
   });
+
+  it('la lista parte da un raggio dentro il confine: il cursore non basta, conta il punto di partenza', () => {
+    const m = sorgente.match(/\[radiusKm,\s*setRadiusKm\]\s*=\s*useState(?:<[^>]*>)?\(([^)]*)\)/);
+    expect(m, 'non trovo lo stato del raggio in app/near/page.tsx').not.toBeNull();
+    const iniziale = m![1].trim();
+    const km = iniziale === 'RAGGIO_CONSEGNA_KM' ? RAGGIO_CONSEGNA_KM : Number(iniziale);
+    expect(Number.isFinite(km), `useState(${iniziale}): la prova sa leggere un numero o RAGGIO_CONSEGNA_KM`).toBe(true);
+    expect(km).toBeGreaterThan(0);
+    expect(km, `«Vicino a te» parte filtrando a ${km} km, oltre il confine di ${RAGGIO_CONSEGNA_KM}`).toBeLessThanOrEqual(
+      RAGGIO_CONSEGNA_KM,
+    );
+  });
+
+  it('al confine la lista vuota non dice di aumentare il raggio, che non si può', () => {
+    const alConfine = avvisoNessunNegozioVicino(RAGGIO_CONSEGNA_KM);
+    expect(alConfine).not.toMatch(/aument/i);
+    expect(alConfine).toContain(`${RAGGIO_CONSEGNA_KM} km`);
+    expect(avvisoNessunNegozioVicino(3)).toMatch(/aument/i);
+    expect(sorgente).toContain('avvisoNessunNegozioVicino(radiusKm)');
+    expect(sorgente).not.toMatch(/Aumenta il raggio/);
+  });
+
+  it('nemmeno la descrizione per Google e per le condivisioni promette una consegna «rapida»', () => {
+    const descrizioni = [
+      metadatiVicinoATe.description,
+      metadatiVicinoATe.openGraph?.description,
+      metadatiVicinoATe.twitter?.description,
+    ].map((d) => String(d ?? ''));
+    for (const d of descrizioni) expect(d).not.toMatch(/rapid|express|immediat/i);
+    expect(String(metadatiVicinoATe.description)).toContain(`${RAGGIO_CONSEGNA_KM} km`);
+    const categorie = readFileSync(join(process.cwd(), 'app/category/[slug]/layout.tsx'), 'utf8');
+    expect(categorie).not.toMatch(/consegna (locale )?rapida/i);
+  });
 });
 
 describe('il carrello dice la stessa consegna', () => {
@@ -310,5 +465,28 @@ describe('il carrello dice la stessa consegna', () => {
   it('la frase del carrello vuoto la scrive promessaSpedizione, e la barra «ti mancano X €» non c’è più', () => {
     expect(carrello).toContain('promessaSpedizione().titolo');
     expect(carrello).not.toMatch(/dettoDellaSpedizione|FreeShippingProgress/);
+  });
+});
+
+describe('dove la cassa non può misurare la distanza, admin e /shipping lo dicono com’è', () => {
+  // La regola eseguita: senza una delle due coordinate la cassa non blocca (lib/ordini/zona-di-consegna.ts).
+  it('senza la posizione del negozio o della casa la cassa accetta qualunque distanza', () => {
+    const milano = { lat: 45.4642, lng: 9.19 };
+    expect(fuoriZonaDiConsegna({ storeLat: null, storeLng: null, deliveryLat: milano.lat, deliveryLng: milano.lng })).toBe(false);
+    expect(fuoriZonaDiConsegna({ storeLat: NEGOZIO.lat, storeLng: NEGOZIO.lng, deliveryLat: null, deliveryLng: null })).toBe(false);
+  });
+
+  it('/shipping: la frase del confine dice anche il caso in cui la cassa non lo misura', () => {
+    const blocchi = blocchiDi(renderToStaticMarkup(<ShippingPage />));
+    const confine = blocchi.find((b) => b.includes(`${RAGGIO_CONSEGNA_KM} km`) && /cassa/i.test(b));
+    expect(confine, 'la pagina non dice più come la cassa controlla il confine').toBeDefined();
+    expect(confine, String(confine)).toMatch(/mappa|posizione/i);
+  });
+
+  it('admin: la riga del confine dice anche quando la cassa non può misurare', () => {
+    const admin = readFileSync(join(process.cwd(), 'app/admin/delivery/page.tsx'), 'utf8');
+    const riga = admin.match(/title="Confine della consegna"\s*desc="([^"]*)"/);
+    expect(riga, 'non trovo la riga «Confine della consegna» in app/admin/delivery/page.tsx').not.toBeNull();
+    expect(riga![1]).toMatch(/posizione|mappa/i);
   });
 });

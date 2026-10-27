@@ -76,7 +76,7 @@ export default function AdminDeliveryPage() {
             <Row
               icon={MapPin}
               title="Confine della consegna"
-              desc="In linea d'aria dal negozio: oltre, la cassa rifiuta l'indirizzo"
+              desc="In linea d'aria dal negozio: oltre, la cassa rifiuta l'indirizzo. Se il negozio non ha la posizione sulla vetrina o l'indirizzo non si trova sulla mappa, la cassa non può misurare e lo accetta: la distanza va guardata a mano"
               value={`${RAGGIO_CONSEGNA_KM} km`}
             />
             <Row
