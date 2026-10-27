@@ -37,6 +37,7 @@ import {
   attesaDichiarata,
   identificativoAvviso,
   type ClienteAvvisi,
+  type LetturaAvvisi,
   type RegistroAvvisi,
 } from '@/lib/privacy/avvisi-a-chi-aspetta';
 
@@ -221,7 +222,7 @@ describe('chi aspetta la cancellazione sa perché aspetta', () => {
     // niente (le due corse partono insieme) ma la scrittura rifiuta il doppione.
     const inCorsa: ClienteAvvisi = {
       from: () => ({
-        select: () => ({ eq: async () => ({ data: [], error: null }) }),
+        select: () => ({ eq: () => letturaVuota() }),
         insert: async (righe: Record<string, unknown>[]) => {
           const id = String(righe[0].id);
           if (scritte.some((r) => r.id === id)) {
@@ -248,7 +249,7 @@ describe('chi aspetta la cancellazione sa perché aspetta', () => {
   it('un avviso che non parte si conta come guasto, e non fa cadere gli altri', async () => {
     const rotto: ClienteAvvisi = {
       from: () => ({
-        select: () => ({ eq: async () => ({ data: [], error: null }) }),
+        select: () => ({ eq: () => letturaVuota() }),
         insert: async () => ({ data: null, error: { message: 'permission denied' } }),
       }),
     };
@@ -287,3 +288,12 @@ describe('chi aspetta la cancellazione sa perché aspetta', () => {
     expect(dovuti[0].corpo).toContain('il modulo dei contatti');
   });
 });
+
+/** 27/10/2026 (quarto giro, fase 2) — Una lettura che non trova niente, anche stretta con più `eq`. */
+function letturaVuota(): LetturaAvvisi {
+  const lettura: LetturaAvvisi = {
+    eq: () => lettura,
+    then: (ok, ko) => Promise.resolve({ data: [], error: null }).then(ok, ko),
+  };
+  return lettura;
+}
