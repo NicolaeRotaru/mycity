@@ -22,7 +22,6 @@ import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/html-escape';
 import { recapitoPrivacy } from '@/lib/legal/titolare';
 import { formatPrice } from '@/lib/format';
-import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 
 const BRAND = 'MyCity';
 
@@ -134,7 +133,7 @@ export function orderConfirmedBuyerTemplate(args: { name?: string | null; orderI
       <tr><td style="padding:8px 0;color:${COLORI.tenue}">Totale</td><td style="padding:8px 0;text-align:right;font-weight:600">${formatPrice(args.total)}</td></tr>
     </table>
     <p style="margin:24px 0">${btn(orderUrl, 'Vedi ordine')}</p>
-    <p style="margin:0;font-size:13px;color:${COLORI.tenue}">Riceverai aggiornamenti quando il negozio prepara e il rider ritira l'ordine.</p>
+    <p style="margin:0;font-size:13px;color:${COLORI.tenue}">Se il negozio non può accettarlo ti scriviamo qui. Lo stato aggiornato lo trovi sempre in «I miei ordini».</p>
   `;
   return {
     subject: `Ordine #${args.orderId.slice(0, 8)} ricevuto — ${BRAND}`,
@@ -260,6 +259,50 @@ export function motivoDelRimborsoInChiaro(motivo?: string | null): string | null
   if (Object.prototype.hasOwnProperty.call(MOTIVI_IN_CHIARO, testo)) return MOTIVI_IN_CHIARO[testo];
   if (/^[a-z0-9]+(_[a-z0-9]+)+$/.test(testo)) return null;
   return testo;
+}
+
+/**
+ * 27/10/2026 — L'ORDINE ANNULLATO, DETTO PER EMAIL A CHI L'AVEVA FATTO.
+ *
+ * Il negozio rifiuta, l'amministrazione annulla, o il giro notturno fa scadere
+ * un ordine mai accettato. Sulla carta parte gia' «Rimborso emesso»; chi paga
+ * alla consegna non riceveva niente, e aspettava un fattorino che non sarebbe
+ * arrivato. Il messaggio dice tre cose: quale ordine, perche' (se lo sappiamo
+ * dire a parole) e che non c'e' niente da pagare. Se aveva usato credito
+ * MyCity, torna indietro, e lo si dice.
+ */
+export function ordineAnnullatoTemplate(args: {
+  orderId: string;
+  motivo?: string | null;
+  /** Il credito MyCity speso sull'ordine e restituito con l'annullo, in euro. */
+  creditoRestituitoEuro?: number;
+}) {
+  const ordine = `#${args.orderId.slice(0, 6).toUpperCase()}`;
+  const motivo = motivoDelRimborsoInChiaro(args.motivo);
+  const credito = Number(args.creditoRestituitoEuro ?? 0);
+  const negozi = `${appUrl()}/search`;
+  const p = (testo: string) => `<p style="margin:0 0 12px;line-height:1.6">${testo}</p>`;
+  const rigaCredito = credito > 0
+    ? `Il credito MyCity che avevi usato (${formatPrice(credito)}) ti è stato restituito.`
+    : '';
+  const body = `
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Il tuo ordine è stato annullato</h1>
+    ${p(`L'ordine <strong>${ordine}</strong> è stato annullato e non verrà preparato né consegnato.`)}
+    ${motivo ? `<p style="margin:0 0 12px;color:${COLORI.tenue}">Motivo: ${escapeHtml(motivo)}</p>` : ''}
+    ${p('<strong>Non devi pagare niente.</strong>')}
+    ${rigaCredito ? p(rigaCredito) : ''}
+    <p style="margin:24px 0">${btn(negozi, 'Cerca in un altro negozio')}</p>
+  `;
+  return {
+    subject: `Ordine ${ordine} annullato — non devi pagare niente`,
+    html: shell('Ordine annullato', body),
+    text:
+      `L'ordine ${ordine} è stato annullato e non verrà preparato né consegnato.` +
+      (motivo ? ` Motivo: ${motivo}.` : '') +
+      ' Non devi pagare niente.' +
+      (rigaCredito ? ` ${rigaCredito}` : '') +
+      ` Altri negozi: ${negozi}`,
+  };
 }
 
 /**
@@ -526,13 +569,24 @@ const TEMPLATE_CICLO_DI_VITA = {
     };
   },
 
+  /**
+   * 27/10/2026 — QUESTO MESSAGGIO PARTE ANCHE A CHI HA DETTO NO ALLA PUBBLICITA'.
+   *
+   * Sta in `TEMPLATE_DI_SERVIZIO`, quindi esce senza guardare `email_marketing`
+   * e senza il piede di disiscrizione. Portava pero' «invita un amico, ricevi
+   * €5 di credito» e la spedizione gratis sopra una soglia: incentivi
+   * economici, cioe' pubblicita' (art. 130 Codice Privacy). E dal 26/10 al
+   * lancio non c'e' nessun regalo in euro. Restano solo le tre cose che servono
+   * per usare il servizio: come si paga, come arriva la spesa, dove si segue
+   * l'ordine. Se un giorno torna un incentivo, va in un template commerciale.
+   */
   tutorial_day2: (): EmailPronta => {
     const body = `
       <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">3 cose da sapere</h1>
       <ul style="margin:0 0 16px;padding-left:20px;line-height:1.8">
         <li>Paghi alla consegna: la carta non e' obbligatoria</li>
-        <li>Spedizione gratis sopra ${FREE_SHIPPING_THRESHOLD} € nello stesso negozio</li>
-        <li>Invita un amico: quando riceve il primo ordine, tu ricevi €5 di credito</li>
+        <li>La spesa te la portiamo a casa, oppure la ritiri tu se il negozio lo permette</li>
+        <li>Ogni ordine e il suo stato li trovi in «I miei ordini»</li>
       </ul>
       <p style="margin:24px 0">${btn(appUrl(), `Vai su ${BRAND}`)}</p>
     `;
@@ -540,21 +594,29 @@ const TEMPLATE_CICLO_DI_VITA = {
       subject: `3 cose da sapere su ${BRAND}`,
       html: shell('3 cose da sapere', body),
       text:
-        `Tre cose da sapere: paghi alla consegna, spedizione gratis sopra ${FREE_SHIPPING_THRESHOLD} € nello stesso negozio, ` +
-        'e se inviti un amico ricevi €5 di credito quando lui riceve il primo ordine.',
+        'Tre cose da sapere: paghi alla consegna, la spesa te la portiamo a casa (o la ritiri tu se il negozio lo permette), ' +
+        'e ogni ordine col suo stato lo trovi in «I miei ordini».',
     };
   },
 
+  /**
+   * 27/10/2026 — «€5 DI BENVENUTO, LO SCONTO SI APPLICA DA SOLO ALLA CASSA».
+   *
+   * Non era vero: la cassa legge solo il credito, non i punti, e il credito
+   * c'e' solo se la persona va da sola in Profilo → Punti e li converte. E dal
+   * 26/10 la scelta firmata e' «nessun regalo in euro al lancio». Il messaggio
+   * resta un invito al primo ordine, senza una cifra che in cassa non compare.
+   */
   first_order_promo: (): EmailPronta => {
     const body = `
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Hai €5 di benvenuto</h1>
-      <p style="margin:0 0 16px;line-height:1.6">Usali al primo ordine: lo sconto si applica da solo alla cassa.</p>
-      <p style="margin:24px 0">${btn(`${appUrl()}/search`, 'Vai allo shopping')}</p>
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Il tuo primo ordine ti aspetta</h1>
+      <p style="margin:0 0 16px;line-height:1.6">Scegli un negozio di Piacenza e ordina quello che ti serve: paghi alla consegna.</p>
+      <p style="margin:24px 0">${btn(`${appUrl()}/search`, 'Vai ai negozi')}</p>
     `;
     return {
-      subject: 'Sblocca €5 al primo ordine',
-      html: shell('€5 al primo ordine', body),
-      text: `Hai €5 di sconto al primo ordine. Usali su ${BRAND}.`,
+      subject: `Il tuo primo ordine su ${BRAND}`,
+      html: shell('Il tuo primo ordine', body),
+      text: `Il tuo primo ordine ti aspetta su ${BRAND}: scegli un negozio di Piacenza e paghi alla consegna. ${appUrl()}/search`,
     };
   },
 
@@ -571,16 +633,26 @@ const TEMPLATE_CICLO_DI_VITA = {
     };
   },
 
+  /**
+   * 27/10/2026 — IL «CI MANCHI» COL CODICE CHE NON ESISTE.
+   *
+   * Partiva al sessantesimo giorno dall'iscrizione anche a chi ordina ogni
+   * sabato («non ti vediamo da un po'»), e prometteva RITORNO10, un codice che
+   * nessuna migrazione crea: in cassa «codice non valido» alla cliente migliore.
+   * Senza codice e senza la frase falsa, resta un messaggio sulle novita' dei
+   * negozi, vero per chiunque lo riceva. Lo sconto, se si fara', e' una scelta
+   * di soldi di Nicola: va creato prima il codice, poi si scrive.
+   */
   winback_60d: (): EmailPronta => {
     const body = `
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Ci manchi</h1>
-      <p style="margin:0 0 16px;line-height:1.6">Non ti vediamo da un po'. Usa il codice <strong>RITORNO10</strong> per il -10% sul prossimo ordine.</p>
-      <p style="margin:24px 0">${btn(`${appUrl()}/search`, 'Torna a fare la spesa')}</p>
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Novità dai negozi di Piacenza</h1>
+      <p style="margin:0 0 16px;line-height:1.6">Ecco cosa trovi oggi nei negozi di Piacenza su ${BRAND}.</p>
+      <p style="margin:24px 0">${btn(`${appUrl()}/search`, 'Guarda i negozi')}</p>
     `;
     return {
-      subject: 'Ci manchi! Torna con uno sconto',
-      html: shell('Ci manchi', body),
-      text: 'Codice RITORNO10 per -10% sul prossimo ordine.',
+      subject: `Novità dai negozi di Piacenza su ${BRAND}`,
+      html: shell('Novita dai negozi', body),
+      text: `Ecco cosa trovi oggi nei negozi di Piacenza su ${BRAND}: ${appUrl()}/search`,
     };
   },
 

@@ -350,11 +350,12 @@ function HomeBlock({
             <div>
               <span className="inline-flex items-center gap-1.5 bg-white/80 text-primary-800 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ring-1 ring-primary-200">
                 <Gift size={14} strokeWidth={2.4} />
-                {c.badge || '€5 in regalo'}
+                {/* 27/10/2026 — Qui si promettevano soldi all'iscrizione, senza nessun meccanismo dietro: via. */}
+                {c.badge || 'Newsletter'}
               </span>
               <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mt-3 mb-3">
                 {c.heading ? c.heading : (
-                  <>Iscriviti e prendi <span className="text-primary-700">€5 di sconto</span><br />al primo ordine.</>
+                  <>Le novità dei negozi di Piacenza, <span className="text-primary-700">una volta a settimana</span>.</>
                 )}
               </h2>
               <p className="text-ink-700 text-base">

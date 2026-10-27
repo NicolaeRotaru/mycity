@@ -9,6 +9,7 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ORE_PER_ACCETTARE, ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
 import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
+import { avvisaIlClienteDellAnnullo } from '@/lib/ordini/annulla';
 
 /**
  * 6/9/2026 — QUALI RIMBORSI FALLITI HA SENSO RITENTARE.
@@ -263,6 +264,12 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
         body: `L'ordine #${o.id.slice(0, 6).toUpperCase()} è stato annullato: il negozio non lo ha accettato in tempo.${isCardPaid ? ' Il rimborso è in corso.' : ''}`,
         link: '/orders',
       });
+
+      // 27/10/2026 — La campanella si vede solo riaprendo il sito. Chi paga alla
+      // consegna riceve anche la email; sulla carta l'ha gia' mandata refundOrder.
+      if (!isCardPaid) {
+        await avvisaIlClienteDellAnnullo(admin, o, "Il negozio non ha accettato l'ordine in tempo");
+      }
 
       canceled++;
     } catch (e) {
