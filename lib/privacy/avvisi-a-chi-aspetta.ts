@@ -41,6 +41,7 @@ import { chiaveAvviso } from '@/lib/cron-cancellazioni';
 import { createHash } from 'node:crypto';
 import { sendEmail } from '@/lib/email/client';
 import { escapeHtml } from '@/lib/html-escape';
+import { indirizzoPubblico } from '@/lib/env';
 
 type Risposta = { data: unknown; error: { message: string } | null };
 
@@ -82,6 +83,11 @@ export type RapportoAvvisi = {
    * la notte, come per `falliti`.
    */
   emailBloccate: number;
+  /**
+   * 27/10/2026 (quarto giro) — Quali avvisi hanno l'email ferma: i loro
+   * identificativi. Chi chiama ne fa UN allarme per avviso, non uno a notte.
+   */
+  emailBloccateAvvisi: string[];
   /** Una riga per avviso, in ordine, per il registro. */
   esiti: Array<{ chiave: string; esito: 'recapitato' | 'gia-detto' | 'fallito'; errore?: string }>;
 };
@@ -130,9 +136,11 @@ export async function recapitaAvvisi(
   avvisi: AvvisoAllInteressato[],
   registro: RegistroAvvisi,
   posta?: PostaAvvisi,
+  /** L'ora del giro: decide se un nuovo tentativo d'invio tocca a questa notte. */
+  adesso: number = Date.now(),
 ): Promise<RapportoAvvisi> {
   const rapporto: RapportoAvvisi = {
-    recapitati: 0, giaDetti: 0, falliti: 0, emailNonPartite: 0, emailBloccate: 0, esiti: [],
+    recapitati: 0, giaDetti: 0, falliti: 0, emailNonPartite: 0, emailBloccate: 0, emailBloccateAvvisi: [], esiti: [],
   };
 
   for (const a of avvisi) {
@@ -171,9 +179,12 @@ export async function recapitaAvvisi(
     // ripartiva mai più. Adesso l'email ha il suo lucchetto (`emailDovuta`) e
     // vale per ogni avviso che è nel pannello, scritto stanotte o prima.
     if (posta) {
-      const email = await emailDovuta(admin, posta, a, id, registro);
+      const email = await emailDovuta(admin, posta, a, id, registro, adesso);
       if (email === 'non-partita' || email === 'bloccata') rapporto.emailNonPartite++;
-      if (email === 'bloccata') rapporto.emailBloccate++;
+      if (email === 'bloccata') {
+        rapporto.emailBloccate++;
+        rapporto.emailBloccateAvvisi.push(id);
+      }
     }
   }
 
@@ -253,6 +264,36 @@ export type PostaAvvisi = {
  */
 type EsitoEmail = 'partita' | 'gia-partita' | 'in-corso' | 'non-partita' | 'bloccata';
 
+/**
+ * 27/10/2026 (quarto giro) — UN TENTATIVO PER NOTTE, ANCHE CON DUE GIRI SFALSATI.
+ *
+ * Il lavoro notturno entra da due porte (il lavoro periodico di Vercel e il
+ * cron esterno), a qualche minuto di distanza. Il turno del tentativo N+1 si
+ * prendeva appena il tentativo N era nel registro, a qualunque ora: il secondo
+ * giro vedeva il primo ancora in volo, prendeva il tentativo dopo e spediva.
+ * La persona riceveva la stessa spiegazione due volte; e se l'invio del
+ * secondo falliva, l'email risultava «ferma» — e un amministratore veniva
+ * svegliato — già la prima notte.
+ *
+ * Adesso un tentativo nuovo si prende solo se l'ultimo è stato preso almeno
+ * tante ore fa. Il lucchetto non lascia fessure: il giro che legge DOPO la
+ * riga dell'altro la vede e si ferma (`in-corso`); il giro che legge PRIMA
+ * calcola lo stesso tentativo, quindi lo stesso identificativo, e il database
+ * ne accetta uno solo (chiave primaria).
+ *
+ * Perché 20: meno di un giorno, così ogni notte si riprova anche quando il
+ * lavoro periodico arriva in anticipo (Vercel garantisce l'ora, non il minuto);
+ * più di qualunque distanza tra i due giri della stessa notte.
+ */
+export const ORE_TRA_DUE_TENTATIVI = 20;
+const ORA_MS = 3_600_000;
+
+/** Quando è stato preso un tentativo; -Infinity se la riga non lo dice. */
+function presoIl(metadata: unknown): number {
+  const quando = Date.parse(String((metadata as { presoIl?: unknown } | null | undefined)?.presoIl ?? ''));
+  return Number.isFinite(quando) ? quando : -Infinity;
+}
+
 const REGISTRO_INVII = 'audit_logs';
 const EMAIL_TENTATA = 'privacy.avviso_cancellazione.email_tentata';
 const EMAIL_PARTITA = 'privacy.avviso_cancellazione.email_partita';
@@ -264,6 +305,7 @@ function rigaDegliInvii(
   azione: string,
   quale: string,
   tentativo: number,
+  adesso: number,
 ): Record<string, unknown> {
   return {
     id: identificativoAvviso(`${a.chiave}:email:${quale}`),
@@ -271,7 +313,7 @@ function rigaDegliInvii(
     action: azione,
     target_table: 'notifications',
     target_id: idAvviso,
-    metadata: { tappa: a.tappa, tentativo },
+    metadata: { tappa: a.tappa, tentativo, presoIl: new Date(adesso).toISOString() },
   };
 }
 
@@ -282,18 +324,24 @@ async function emailDovuta(
   a: AvvisoAllInteressato,
   idAvviso: string,
   registro: RegistroAvvisi,
+  adesso: number,
 ): Promise<EsitoEmail> {
   let tentativo: number;
   try {
-    const letto = await admin.from(REGISTRO_INVII).select('id, action').eq('target_id', idAvviso);
+    const letto = await admin.from(REGISTRO_INVII).select('id, action, metadata').eq('target_id', idAvviso);
     if (letto.error) throw new Error(letto.error.message);
-    const righe = (Array.isArray(letto.data) ? letto.data : []) as Array<{ action?: unknown }>;
+    const righe = (Array.isArray(letto.data) ? letto.data : []) as Array<{ action?: unknown; metadata?: unknown }>;
     if (righe.some((r) => r.action === EMAIL_PARTITA)) return 'gia-partita';
-    tentativo = righe.filter((r) => r.action === EMAIL_TENTATA).length + 1;
+    const presi = righe.filter((r) => r.action === EMAIL_TENTATA);
+    // Il tentativo di questa notte l'ha già preso un altro giro (in volo, o
+    // finito male): non si rispedisce e non si conta come un no in più.
+    const ultimo = Math.max(-Infinity, ...presi.map((r) => presoIl(r.metadata)));
+    if (adesso - ultimo < ORE_TRA_DUE_TENTATIVI * ORA_MS) return 'in-corso';
+    tentativo = presi.length + 1;
 
     const turno = await admin
       .from(REGISTRO_INVII)
-      .insert([rigaDegliInvii(a, idAvviso, EMAIL_TENTATA, `tentativo:${tentativo}`, tentativo)]);
+      .insert([rigaDegliInvii(a, idAvviso, EMAIL_TENTATA, `tentativo:${tentativo}`, tentativo, adesso)]);
     if (turno.error) {
       // Un altro giro ha preso questo stesso tentativo un attimo prima: spedisce lui.
       if (eUnDoppione(turno.error.message)) return 'in-corso';
@@ -313,7 +361,7 @@ async function emailDovuta(
   try {
     const segno = await admin
       .from(REGISTRO_INVII)
-      .insert([rigaDegliInvii(a, idAvviso, EMAIL_PARTITA, 'partita', tentativo)]);
+      .insert([rigaDegliInvii(a, idAvviso, EMAIL_PARTITA, 'partita', tentativo, adesso)]);
     if (segno.error && !eUnDoppione(segno.error.message)) throw new Error(segno.error.message);
   } catch (e) {
     registro.error('[avvisi-cancellazione] email partita ma non segnata: la notte dopo puo ripartire una seconda volta', {
@@ -321,6 +369,32 @@ async function emailDovuta(
     });
   }
   return 'partita';
+}
+
+/**
+ * 27/10/2026 (quarto giro) — L'EMAIL PORTA I COLLEGAMENTI, NON SOLO IL TESTO.
+ *
+ * Il corpo è scritto per il pannello: senza casella privacy dice «scrivi a noi
+ * con il modulo dei contatti del sito (pagina /contact)». Dentro il sito
+ * «/contact» è un indirizzo; in una email è una parola, senza dominio e senza
+ * niente da cliccare, letta da chi sta cercando di andarsene. Qui «/contact»
+ * diventa l'indirizzo intero e cliccabile, e in fondo c'è la pagina
+ * dell'account (`a.link`), dove si vede lo stato della richiesta.
+ */
+const PAGINA_DEI_CONTATTI = '/contact';
+
+function corpoDellEmail(a: AvvisoAllInteressato): string {
+  const sito = indirizzoPubblico().url.replace(/\/+$/, '');
+  const collegamento = (percorso: string) => {
+    const url = escapeHtml(`${sito}${percorso}`);
+    return `<a href="${url}">${url}</a>`;
+  };
+  const testo = a.corpo
+    .split(PAGINA_DEI_CONTATTI)
+    .map((pezzo) => escapeHtml(pezzo).replace(/\n/g, '<br>'))
+    .join(collegamento(PAGINA_DEI_CONTATTI));
+  const pagina = a.link ? `<p>La tua richiesta, sul sito: ${collegamento(a.link)}</p>` : '';
+  return `<p>${testo}</p>${pagina}`;
 }
 
 /** Vero se l'email è partita. Non lancia: un'email persa si conta, non ferma la notte. */
@@ -336,7 +410,7 @@ async function speditaAncheTramitePosta(
     const esito = await posta.invia({
       to,
       subject: a.titolo,
-      html: `<p>${escapeHtml(a.corpo).replace(/\n/g, '<br>')}</p>`,
+      html: corpoDellEmail(a),
     });
     if (esito.ok !== true) throw new Error('invio non riuscito o posta non configurata');
     return true;

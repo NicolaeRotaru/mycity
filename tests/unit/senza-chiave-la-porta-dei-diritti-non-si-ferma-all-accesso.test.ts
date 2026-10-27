@@ -39,6 +39,14 @@ import { GET as scaricaDati } from "@/app/api/account/export/route";
 import { __resetRateLimitBuckets } from "@/lib/rate-limit";
 
 const CASELLA = "NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY";
+/**
+ * 27/10/2026 (quarto giro) — IL CONTESTO CHE NEXT PASSA SEMPRE.
+ * Next chiama ogni rotta con due argomenti: la richiesta e il contesto
+ * ({ params }). Le prove chiamavano con uno solo, e il ramo
+ * `ctx ? rotta(req, ctx)` — quello di produzione — non lo eseguiva nessuno:
+ * una guardia saltata proprio lì restava verde.
+ */
+const CTX = { params: Promise.resolve({}) } as never;
 
 const conGettone = (metodo: string, percorso: string) =>
   new Request("http://localhost" + percorso, { method: metodo, headers: { authorization: "Bearer gettone" } });
@@ -59,10 +67,10 @@ beforeEach(() => {
 
 describe("senza chiave di servizio, col controllo d'accesso vero", () => {
   const porte: Array<[string, () => Promise<unknown>]> = [
-    ["Cancella account", () => chiediCancellazione(conGettone("POST", "/api/account/delete") as never)],
-    ["Annulla la cancellazione", () => annullaCancellazione(conGettone("DELETE", "/api/account/delete") as never)],
-    ["Stato della cancellazione", () => statoCancellazione(conGettone("GET", "/api/account/delete") as never)],
-    ["Scarica i miei dati", () => scaricaDati(conGettone("GET", "/api/account/export") as never)],
+    ["Cancella account", () => chiediCancellazione(conGettone("POST", "/api/account/delete") as never, CTX)],
+    ["Annulla la cancellazione", () => annullaCancellazione(conGettone("DELETE", "/api/account/delete") as never, CTX)],
+    ["Stato della cancellazione", () => statoCancellazione(conGettone("GET", "/api/account/delete") as never, CTX)],
+    ["Scarica i miei dati", () => scaricaDati(conGettone("GET", "/api/account/export") as never, CTX)],
   ];
 
   for (const [nome, bussa] of porte) {
@@ -80,7 +88,7 @@ describe("senza chiave di servizio, col controllo d'accesso vero", () => {
   // 27/10/2026 (secondo giro) — Senza chiave il modulo non salva, e senza
   // posta del supporto non inoltra: mandarci la persona era farla girare in tondo.
   it("senza casella vera e senza posta non manda al modulo che non arriva: lo dice e basta", async () => {
-    const { testo } = await risposta(await chiediCancellazione(conGettone("POST", "/api/account/delete") as never));
+    const { testo } = await risposta(await chiediCancellazione(conGettone("POST", "/api/account/delete") as never, CTX));
     expect(testo).not.toContain("modulo dei contatti");
     expect(testo).toContain("non è partita");
     expect(testo).not.toMatch(/[a-z0-9.]+@[a-z0-9.-]+\.[a-z]+/i);

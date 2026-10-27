@@ -173,6 +173,8 @@ async function rispondeLaRotta(input: unknown, init?: RequestInit): Promise<Resp
   }
   const res = await statoCancellazione(
     new Request('http://localhost' + percorso, { method: metodo, headers: init?.headers }) as never,
+    // Il contesto che Next passa sempre alla rotta (quarto giro).
+    { params: Promise.resolve({}) } as never,
   );
   risposte.push({ status: res.status, corpo: (await res.clone().json()) as Record<string, unknown> });
   return res;
@@ -249,5 +251,23 @@ describe('la pagina dell account dice quello che la rotta sa della cancellazione
     expect(zona).toContain('entro questa data');
     expect(zona, 'nessun rinvio: niente «i 7 giorni sono passati»').not.toContain('I 7 giorni per ripensarci sono passati');
     expect(zona, 'nessun rinvio: niente «in attesa»').not.toContain('La cancellazione è in attesa');
+  });
+
+  // 27/10/2026 (quarto giro) — Le prove guardavano la pagina solo a 8 giorni
+  // (tappa «rinviata»). Oltre il mese la tappa è «termine-scaduto»: la rotta
+  // poteva tornare a dire rinviata:false, o perdere quell'avviso, e la pagina a
+  // contare «tra 0 giorni», con tutte le prove verdi.
+  it('oltre il mese, con un guasto nostro: niente conto alla rovescia, il ritardo detto dalla rotta e dalla pagina', async () => {
+    ilFattorinoHaChiestoDiCancellarsi(40, { ok: false, errore: 'timeout', fileRimossi: 0, erroriFile: [] });
+    await passaLaNotte();
+
+    const zona = await apreLaZonaPericolosa();
+
+    expect(risposte).toHaveLength(1);
+    expect(risposte[0].corpo.rinviata, 'oltre il mese la cancellazione è ferma: la rotta deve dirlo').toBe(true);
+    expect(String(risposte[0].corpo.motivo ?? ''), 'la rotta ha perso l avviso del termine scaduto').toContain('quel mese è passato');
+    expect(zona, 'la pagina non dice che il termine di legge è passato').toContain('quel mese è passato');
+    expect(zona).toContain('I 7 giorni per ripensarci sono passati');
+    expect(zona, 'un conto alla rovescia a zero per chi aspetta da quaranta giorni').not.toContain('eliminato definitivamente tra');
   });
 });

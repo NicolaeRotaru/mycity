@@ -18,7 +18,7 @@
  * aveva già la sua prova verde, ed era proprio quella prova a far sembrare
  * fatto un lavoro che in produzione non girava.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fintoGiroNotturno } from "./aiuti/finto-giro-notturno";
@@ -116,13 +116,26 @@ vi.mock("@/lib/captcha", () => ({ verifyTurnstileToken: async () => ({ ok: true 
 vi.mock("@/lib/email/client", () => ({ sendEmail: (x: unknown) => inviaEmail(x) }));
 
 import { POST as notte } from "@/app/api/cron/process-deletions/route";
-import { GET as statoCancellazione, POST as chiediCancellazione } from "@/app/api/account/delete/route";
+import {
+  GET as statoCancellazione,
+  POST as chiediCancellazione,
+  DELETE as annullaCancellazione,
+} from "@/app/api/account/delete/route";
 import { GET as scaricaDati } from "@/app/api/account/export/route";
 import { POST as scriviAiContatti } from "@/app/api/contact/route";
 import { __resetRateLimitBuckets } from "@/lib/rate-limit";
 import { recapitoDallaRisposta } from "@/lib/legal/titolare";
 
 const CASELLA = "NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY";
+/**
+ * 27/10/2026 (quarto giro) — IL CONTESTO CHE NEXT PASSA SEMPRE.
+ * Next chiama ogni rotta con due argomenti: la richiesta e il contesto
+ * ({ params }). Le prove chiamavano con uno solo, e il ramo
+ * `ctx ? rotta(req, ctx)` — quello di produzione — non lo eseguiva nessuno:
+ * una guardia saltata proprio lì restava verde.
+ */
+const CTX = { params: Promise.resolve({}) } as never;
+const GIORNO = 86_400_000;
 const giorniFa = (g: number) => new Date(Date.now() - g * 86_400_000).toISOString();
 const CHIESTA = giorniFa(8);
 const MOTIVO =
@@ -149,11 +162,22 @@ function ilFattorinoConLaCassaAperta(chiesta = CHIESTA, esito: Esito = CASSA_APE
 }
 
 const SEGRETO_DELLA_NOTTE = "segreto-della-notte-di-prova";
-const passaLaNotte = () =>
+/** Un giro del lavoro notturno, all'ora che segna l'orologio. */
+const unGiro = () =>
   notte(new Request("http://localhost/api/cron/process-deletions", {
     method: "POST",
     headers: { authorization: `Bearer ${SEGRETO_DELLA_NOTTE}` },
   }) as never);
+
+/**
+ * Una notte nuova: l'orologio va avanti di un giorno, poi gira il lavoro.
+ * 27/10/2026 (quarto giro) — La spiegazione per email si ritenta una volta per
+ * notte, non a ogni giro: due giri della stessa notte non sono due notti.
+ */
+const passaLaNotte = () => {
+  vi.setSystemTime(Date.now() + GIORNO);
+  return unGiro();
+};
 
 /** Chi bussa col gettone: il controllo d'accesso vero lo riconosce come il fattorino. */
 const conGettone = (metodo: string, percorso: string) =>
@@ -172,6 +196,10 @@ async function corpo(r: Response | unknown): Promise<string> {
 }
 
 beforeEach(() => {
+  // L'orologio lo muoviamo noi, e solo lui: i timer restano veri.
+  const adesso = Date.now();
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(adesso);
   delete process.env[CASELLA];
   delete process.env.SUPPORT_EMAIL;
   delete process.env.RESEND_API_KEY;
@@ -182,6 +210,10 @@ beforeEach(() => {
   // prova non deve far passare quella dopo.
   inviaEmail.mockImplementation(POSTA_SPENTA);
   __resetRateLimitBuckets();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("chi aspetta la cancellazione lo sa dal giro notturno vero", () => {
@@ -222,7 +254,7 @@ describe("chi aspetta la cancellazione lo sa dal giro notturno vero", () => {
   it("la pagina del suo account restituisce lo stesso motivo", async () => {
     ilFattorinoConLaCassaAperta();
     await passaLaNotte();
-    const body = (await (await statoCancellazione(conGettone("GET", "/api/account/delete") as never)).json()) as Record<string, unknown>;
+    const body = (await (await statoCancellazione(conGettone("GET", "/api/account/delete") as never, CTX)).json()) as Record<string, unknown>;
     expect(body.pending).toBe(true);
     expect(
       String(body.motivo ?? ""),
@@ -233,7 +265,7 @@ describe("chi aspetta la cancellazione lo sa dal giro notturno vero", () => {
 
   it("chi non ha nessun rinvio non riceve un motivo inventato", async () => {
     ilFattorinoConLaCassaAperta();
-    const body = (await (await statoCancellazione(conGettone("GET", "/api/account/delete") as never)).json()) as Record<string, unknown>;
+    const body = (await (await statoCancellazione(conGettone("GET", "/api/account/delete") as never, CTX)).json()) as Record<string, unknown>;
     expect(body.pending).toBe(true);
     expect(body.motivo ?? null).toBeNull();
     expect(body.rinviata, "nessun rinvio: il conto alla rovescia resta quello vero").toBe(false);
@@ -245,7 +277,7 @@ describe("senza la chiave di servizio nessuna porta è murata", () => {
 
   it("Cancella account dice dove scrivere, con la casella vera", async () => {
     process.env[CASELLA] = "info@mycity-marketplace.com";
-    const res = await chiediCancellazione(conGettone("POST", "/api/account/delete") as never);
+    const res = await chiediCancellazione(conGettone("POST", "/api/account/delete") as never, CTX);
     expect(res.status).toBe(503);
     const testo = await corpo(res);
     expect(testo, "«Servizio non configurato» è vero per noi e un muro per lei").toContain("info@mycity-marketplace.com");
@@ -256,7 +288,7 @@ describe("senza la chiave di servizio nessuna porta è murata", () => {
 
   it("Scarica i miei dati dice dove scrivere, con la casella vera", async () => {
     process.env[CASELLA] = "info@mycity-marketplace.com";
-    const res = await scaricaDati(conGettone("GET", "/api/account/export") as never);
+    const res = await scaricaDati(conGettone("GET", "/api/account/export") as never, CTX);
     expect(res.status).toBe(503);
     const testo = await corpo(res);
     expect(testo).toContain("info@mycity-marketplace.com");
@@ -268,7 +300,7 @@ describe("senza la chiave di servizio nessuna porta è murata", () => {
   // inoltra: rispondeva «riprova tra qualche ora». Cancella account mandava al
   // modulo, il modulo non arrivava a nessuno — la persona girava in tondo.
   it("senza casella e senza posta del supporto non si manda la persona in tondo", async () => {
-    const res = await chiediCancellazione(conGettone("POST", "/api/account/delete") as never);
+    const res = await chiediCancellazione(conGettone("POST", "/api/account/delete") as never, CTX);
     const testo = await corpo(res);
     expect(res.status).toBe(503);
     expect(testo, "il modulo, senza chiave e senza posta, non arriva a nessuno").not.toContain("/contact");
@@ -287,7 +319,7 @@ describe("senza la chiave di servizio nessuna porta è murata", () => {
     // Il caso più probabile in produzione: SUPPORT_EMAIL c'è, Resend no. Il
     // modulo prova a inoltrare, la posta lo salta, e risponde 503.
     process.env.SUPPORT_EMAIL = "supporto@example.com";
-    const testo = await corpo(await chiediCancellazione(conGettone("POST", "/api/account/delete") as never));
+    const testo = await corpo(await chiediCancellazione(conGettone("POST", "/api/account/delete") as never, CTX));
     expect(testo, "senza posta il modulo non inoltra: mandarci la persona è il giro in tondo").not.toContain("/contact");
     expect(testo).toContain("non è partita");
     const modulo = await scriviAiContatti(messaggio("7.0.0.12"));
@@ -298,7 +330,7 @@ describe("senza la chiave di servizio nessuna porta è murata", () => {
     process.env.SUPPORT_EMAIL = "supporto@example.com";
     process.env.RESEND_API_KEY = "re_di_prova";
     process.env.RESEND_FROM = "MyCity <no-reply@example.com>";
-    const testo = await corpo(await chiediCancellazione(conGettone("POST", "/api/account/delete") as never));
+    const testo = await corpo(await chiediCancellazione(conGettone("POST", "/api/account/delete") as never, CTX));
     expect(testo).toContain("/contact");
     expect(testo).not.toMatch(/[a-z0-9.]+@[a-z0-9.-]+\.[a-z]+/i);
     inviaEmail.mockResolvedValueOnce({ ok: true, id: "e-1" } as { ok: boolean });
@@ -477,5 +509,222 @@ describe("il collegamento accanto all'errore si fida solo di due forme", () => {
     expect(r(42)).toBeNull();
     expect(recapitoDallaRisposta(null)).toBeNull();
     expect(recapitoDallaRisposta({ error: { details: { recapito: null } } })).toBeNull();
+  });
+});
+
+/**
+ * 27/10/2026 (quarto giro) — LE PROVE CHE MANCAVANO.
+ *
+ * Il collaudo del terzo giro ha trovato mutazioni che restavano verdi e
+ * situazioni che nessuna prova guardava. Ogni prova qui sotto diventa rossa su
+ * una di quelle; il messaggio dell'asserzione dice quale.
+ */
+const richiestaAlModulo = (ip: string) =>
+  new Request("http://localhost/api/contact", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-forwarded-for": ip },
+    body: JSON.stringify({ name: "Maria Rossi", email: "maria@example.com", subject: "Privacy", message: "Vorrei cancellare il mio account, grazie." }),
+  });
+
+const letto = async (r: unknown) => (await (r as Response).json()) as Record<string, unknown>;
+
+describe("con la posta a metà, Cancella account non riapre il giro in tondo", () => {
+  beforeEach(() => { stato.senzaChiave = true; });
+
+  it("con la chiave di Resend ma senza il mittente (RESEND_FROM) non manda al modulo", async () => {
+    process.env.SUPPORT_EMAIL = "supporto@example.com";
+    process.env.RESEND_API_KEY = "re_di_prova";
+    const testo = await corpo(await chiediCancellazione(conGettone("POST", "/api/account/delete") as never, CTX));
+    expect(testo, "senza mittente la posta non parte: il modulo non inoltra a nessuno").not.toContain("/contact");
+    expect(testo).toContain("non è partita");
+  });
+
+  it("con Resend acceso ma senza la casella del supporto (SUPPORT_EMAIL) non manda al modulo", async () => {
+    process.env.RESEND_API_KEY = "re_di_prova";
+    process.env.RESEND_FROM = "MyCity <no-reply@example.com>";
+    const testo = await corpo(await chiediCancellazione(conGettone("POST", "/api/account/delete") as never, CTX));
+    expect(testo, "senza casella del supporto il modulo non sa a chi inoltrare").not.toContain("/contact");
+    expect(testo).toContain("non è partita");
+    const modulo = await scriviAiContatti(richiestaAlModulo("7.0.0.20"));
+    expect(modulo.status, "e infatti il modulo, così, non arriva a nessuno").toBe(503);
+  });
+});
+
+describe("senza casella e senza posta nessuna delle quattro porte manda in tondo", () => {
+  beforeEach(() => { stato.senzaChiave = true; });
+
+  const porte: Array<[string, () => Promise<unknown>]> = [
+    ["Cancella account", () => chiediCancellazione(conGettone("POST", "/api/account/delete") as never, CTX)],
+    ["Annulla la cancellazione", () => annullaCancellazione(conGettone("DELETE", "/api/account/delete") as never, CTX)],
+    ["Stato della cancellazione", () => statoCancellazione(conGettone("GET", "/api/account/delete") as never, CTX)],
+    ["Scarica i miei dati", () => scaricaDati(conGettone("GET", "/api/account/export") as never, CTX)],
+  ];
+
+  for (const [nome, bussa] of porte) {
+    it(`${nome}: dice che la richiesta non è partita, non manda al modulo che non arriva`, async () => {
+      const res = (await bussa()) as Response;
+      const testo = await corpo(res);
+      expect(res.status).toBe(503);
+      expect(testo, "il controllo d'accesso ha risposto prima della rotta").not.toContain("Auth non configurato");
+      expect(testo, "senza chiave e senza posta il modulo non arriva a nessuno").not.toContain("/contact");
+      expect(testo).toContain("non è partita");
+    });
+  }
+});
+
+describe("oltre il mese la rotta dell'account dice il ritardo, non un conto alla rovescia", () => {
+  it("con un guasto nostro: rinviata e il motivo del termine scaduto", async () => {
+    ilFattorinoConLaCassaAperta(giorniFa(40), { ok: false, errore: "timeout", fileRimossi: 0, erroriFile: [] });
+    await passaLaNotte();
+    const body = await letto(await statoCancellazione(conGettone("GET", "/api/account/delete") as never, CTX));
+    expect(body.pending).toBe(true);
+    expect(body.rinviata, "oltre il mese la cancellazione è ferma: «tra 0 giorni» non vale").toBe(true);
+    expect(String(body.motivo ?? ""), "il termine di legge è passato e la rotta non lo dice").toContain("quel mese è passato");
+  });
+
+  it("con la cassa aperta: il ritardo vince sul rinvio, e la rotta dice il ritardo", async () => {
+    ilFattorinoConLaCassaAperta(giorniFa(40));
+    await passaLaNotte();
+    const body = await letto(await statoCancellazione(conGettone("GET", "/api/account/delete") as never, CTX));
+    expect(body.rinviata).toBe(true);
+    expect(String(body.motivo ?? "")).toContain("quel mese è passato");
+  });
+});
+
+describe("la spiegazione per email si ritenta ogni notte, senza tetto e senza doppioni", () => {
+  it("la risposta della notte dice quante spiegazioni non sono uscite per email", async () => {
+    ilFattorinoConLaCassaAperta();
+    const body = await letto(await passaLaNotte());
+    expect(body.avvisiEmailNonPartite, "posta spenta: la spiegazione è nel pannello e non è uscita").toBe(1);
+    expect(body.avvisiEmailBloccate, "una notte sola è un intoppo, non ancora un guasto").toBe(0);
+  });
+
+  it("tre notti di posta giù e poi su: la spiegazione parte la quarta notte", async () => {
+    ilFattorinoConLaCassaAperta();
+    inviaEmail.mockImplementation(async () => ({ ok: false, error: "Resend 503" }) as { ok: boolean });
+    await passaLaNotte();
+    await passaLaNotte();
+    await passaLaNotte();
+    expect(lettereA(UTENTE.email), "una prova a notte, tutte e tre").toHaveLength(3);
+
+    inviaEmail.mockImplementation(async () => ({ ok: true }));
+    const quarta = await passaLaNotte();
+    const body = await letto(quarta);
+    expect(lettereA(UTENTE.email), "la posta è tornata e la spiegazione non è ripartita: un tetto ai tentativi").toHaveLength(4);
+    expect(body.avvisiEmailBloccate).toBe(0);
+    expect(quarta.status).toBe(200);
+
+    await passaLaNotte();
+    expect(lettereA(UTENTE.email), "partita una volta, non si rimanda").toHaveLength(4);
+  });
+
+  it("IL CASO CHE ROMPEVA — un secondo giro parte mentre il primo sta ancora spedendo: una email, nessun falso allarme", async () => {
+    ilFattorinoConLaCassaAperta();
+    let rilascia: (v: { ok: boolean }) => void = () => {};
+    let fermo = false;
+    inviaEmail.mockImplementation(async (x: unknown) => {
+      if ((x as { to?: string }).to === UTENTE.email && !fermo) {
+        fermo = true;
+        return new Promise<{ ok: boolean }>((r) => { rilascia = r; });
+      }
+      // Se il secondo giro provasse a spedire, la posta gli direbbe di no.
+      return { ok: false, error: "Resend 503" } as { ok: boolean };
+    });
+
+    vi.setSystemTime(Date.now() + GIORNO);
+    const primo = unGiro();
+    for (let i = 0; i < 500 && !fermo; i++) await new Promise((r) => setTimeout(r, 0));
+    expect(fermo, "il primo giro non è arrivato a spedire").toBe(true);
+
+    // Venti minuti dopo, la stessa notte: l'altro lavoro periodico.
+    vi.setSystemTime(Date.now() + 20 * 60_000);
+    const secondo = await unGiro();
+    const suo = await letto(secondo);
+    expect(lettereA(UTENTE.email), "il secondo giro rispedisce la spiegazione che il primo sta spedendo").toHaveLength(1);
+    expect(suo.avvisiEmailBloccate, "un tentativo in volo non è una email ferma").toBe(0);
+    expect(secondo.status, "falso allarme la prima notte").toBe(200);
+    expect(stato.mondo.notifiche(), "nessun amministratore da svegliare").toHaveLength(0);
+
+    rilascia({ ok: true });
+    expect((await primo).status).toBe(200);
+    await passaLaNotte();
+    expect(lettereA(UTENTE.email), "partita una volta: la notte dopo non si rimanda").toHaveLength(1);
+  });
+});
+
+describe("con la posta spenta l'allarme suona una volta per stato, non ogni notte", () => {
+  it("cinque notti di posta spenta: un allarme solo, e le notti dopo il battito si scrive", async () => {
+    ilFattorinoConLaCassaAperta();
+    const battiti = () =>
+      stato.mondo.diario.filter((v) => {
+        const voce = v as { op: string; tabella?: string };
+        return (voce.op === "upsert" || voce.op === "insert") && voce.tabella === "cron_heartbeats";
+      }).length;
+    const stati: number[] = [];
+    let ultimo: Record<string, unknown> = {};
+    let battitoDellUltima = false;
+    for (let n = 1; n <= 5; n++) {
+      const prima = battiti();
+      const res = await passaLaNotte();
+      stati.push(res.status);
+      ultimo = await letto(res);
+      battitoDellUltima = battiti() > prima;
+    }
+    expect(stati, "rossa la notte in cui la spiegazione si ferma, non tutte le notti dopo").toEqual([200, 500, 200, 200, 200]);
+    expect(stato.mondo.notifiche(), "un allarme nuovo, uguale al precedente, ogni notte").toHaveLength(1);
+    expect(battitoDellUltima, "il lavoro è vivo: il sorvegliante non deve crederlo morto").toBe(true);
+    expect(ultimo.avvisiEmailBloccate, "lo stato resta detto nella risposta").toBe(1);
+    expect(lettereA(UTENTE.email), "si riprova comunque ogni notte").toHaveLength(5);
+  });
+});
+
+describe("il modulo dei contatti e l'allarme non si fanno ingannare", () => {
+  it("il modulo non dice ok quando Resend risponde con un errore vero ({ ok:false, error })", async () => {
+    stato.senzaChiave = true;
+    process.env.SUPPORT_EMAIL = "supporto@example.com";
+    process.env.RESEND_API_KEY = "re_di_prova";
+    process.env.RESEND_FROM = "MyCity <no-reply@example.com>";
+    inviaEmail.mockResolvedValueOnce({ ok: false, error: "Resend 422: dominio non verificato" } as { ok: boolean });
+    const res = await scriviAiContatti(richiestaAlModulo("7.0.0.21"));
+    expect(inviaEmail).toHaveBeenCalledTimes(1);
+    expect(res.status, "Maria legge «inviato» e Resend l'ha rifiutato").toBe(503);
+  });
+
+  it("due persone, a una il motivo non si scrive: la notte è rossa anche se all'altra è arrivato", async () => {
+    ilFattorinoConLaCassaAperta();
+    stato.esiti["rider-2"] = CASSA_APERTA;
+    stato.mondo = fintoGiroNotturno({
+      rpc: {
+        process_expired_deletions: {
+          data: [{ user_id: "rider-1", deleted_at: CHIESTA }, { user_id: "rider-2", deleted_at: CHIESTA }],
+          error: null,
+        },
+      },
+      tabelle: {
+        notifications: [],
+        profiles: [
+          { id: "rider-1", role: "rider", deletion_requested_at: CHIESTA },
+          { id: "rider-2", role: "rider", deletion_requested_at: CHIESTA },
+          { id: "admin-1", role: "admin" },
+        ],
+      },
+    });
+    stato.rifiutaAvvisiA = "rider-1";
+    const res = await passaLaNotte();
+    const body = await letto(res);
+    expect([body.avvisiRecapitati, body.avvisiFalliti]).toEqual([1, 1]);
+    expect(res.status, "uno recapitato non compensa uno non partito").toBe(500);
+    expect(stato.mondo.notifiche().map((n) => n.title)).toContain("Persone non avvisate del rinvio della cancellazione");
+  });
+});
+
+describe("un allarme che non si riesce a scrivere non fa tornare verde la notte", () => {
+  it("la spiegazione è ferma e il database rifiuta l'allarme: la notte resta rossa finché qualcuno lo sa", async () => {
+    ilFattorinoConLaCassaAperta();
+    stato.rifiutaAvvisiA = "admin-1";
+    const stati: number[] = [];
+    for (let n = 1; n <= 3; n++) stati.push((await passaLaNotte()).status);
+    expect(stati, "un allarme per stato vale solo se lo stato è stato detto a qualcuno").toEqual([200, 500, 500]);
+    expect(stato.mondo.notifiche()).toHaveLength(0);
   });
 });

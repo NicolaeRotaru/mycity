@@ -9,7 +9,7 @@ import {
   type TentativoCancellazione,
   type VerdettoGiro,
 } from '@/lib/cron-cancellazioni';
-import { rispondiAChiAspetta } from '@/lib/privacy/avvisi-a-chi-aspetta';
+import { identificativoAvviso, rispondiAChiAspetta } from '@/lib/privacy/avvisi-a-chi-aspetta';
 import {
   eseguiPotature,
   type ClientePotature,
@@ -150,16 +150,18 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   // Quando non parte di nuovo — o non si può nemmeno tentare — chi vuole
   // andarsene non ha ricevuto niente fuori dal sito, e non lo saprà se non
   // glielo scrive qualcuno. Prima qui c'era solo un numero nel corpo.
-  if (avvisi.emailBloccate > 0) {
-    await avvisaAmministratori(
-      admin,
-      "Spiegazione dell'attesa non partita per email",
-      (avvisi.emailBloccate === 1
-        ? "Stanotte una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. È scritta nel pannello del sito della persona, ma chi vuole andarsene può non rientrarci più: controlla la posta del sito oppure scrivile tu."
-        : `Stanotte ${avvisi.emailBloccate} spiegazioni dell'attesa per la cancellazione non sono partite per email, e non è un intoppo di una notte sola. Sono scritte nel pannello del sito delle persone, ma chi vuole andarsene può non rientrarci più: controlla la posta del sito oppure scrivi tu a ciascuna.`) +
-        ' Il giro riprova da solo ogni notte.',
-    );
-  }
+  //
+  // 27/10/2026 (quarto giro) — UN ALLARME PER STATO, NON PER NOTTE.
+  // Con la posta spenta la stessa spiegazione resta ferma per settimane: qui
+  // ogni notte nasceva un allarme nuovo, uguale al precedente, e la notte
+  // finiva rossa. Il pannello si riempiva di copie, non c'era modo di dire
+  // «lo so», e il 500 non scriveva il battito: il sorvegliante dava per morto
+  // un lavoro vivo. Adesso ogni spiegazione ferma ha UN allarme, con un
+  // identificativo ricavato dall'avviso: la notte in cui si ferma è rossa e
+  // sveglia qualcuno; le notti dopo l'allarme c'è già, il numero resta nella
+  // risposta (`avvisiEmailBloccate`) e la notte torna verde. Se l'allarme non
+  // si riesce a scrivere, la notte resta rossa.
+  const allarmiEmail = await avvisaUnaVoltaPerAvviso(admin, avvisi.emailBloccateAvvisi);
 
   return NextResponse.json(
     {
@@ -190,6 +192,9 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       // (non partite di nuovo, o registro degli invii illeggibile): sono loro
       // a rendere rossa la notte e a svegliare un amministratore.
       avvisiEmailBloccate: avvisi.emailBloccate,
+      // 27/10/2026 (quarto giro) — Di quelle, quante sono ferme da stanotte
+      // (allarme nuovo): le altre l'amministratore le sa già.
+      allarmiEmailNuovi: allarmiEmail.nuovi,
     },
     // 3/9/2026 — LA NOTTE CHE FALLISCE FINISCE ROSSA.
     //
@@ -201,7 +206,11 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     // cosa va avanti anche il sorvegliante se ne accorge da solo.
     {
       status:
-        verdetto.daSvegliare || potature.fallite > 0 || avvisi.falliti > 0 || avvisi.emailBloccate > 0
+        verdetto.daSvegliare ||
+        potature.fallite > 0 ||
+        avvisi.falliti > 0 ||
+        allarmiEmail.nuovi > 0 ||
+        allarmiEmail.nonScritti > 0
           ? 500
           : 200,
     },
@@ -269,6 +278,68 @@ async function svegliaPerLaRitenzione(admin: Admin, rapporto: RapportoPotature):
  * amministratore guarda comunque, e nel registro degli errori, che arriva a
  * Sentry.
  */
+/**
+ * 27/10/2026 (quarto giro) — L'allarme per una spiegazione ferma, uno per
+ * avviso e per amministratore: l'identificativo si ricava dall'avviso, quindi
+ * la seconda notte trova la riga e non ne scrive un'altra (e due giri insieme
+ * sbattono sulla chiave primaria). `nuovi`: avvisi fermi da stanotte, la notte
+ * è rossa. `nonScritti`: allarme che non si riesce a scrivere, la notte resta
+ * rossa perché nessuno lo sa.
+ */
+async function avvisaUnaVoltaPerAvviso(
+  admin: Admin,
+  avvisiFermi: string[],
+): Promise<{ nuovi: number; nonScritti: number }> {
+  const conto = { nuovi: 0, nonScritti: 0 };
+  if (avvisiFermi.length === 0) return conto;
+  let amministratori: { id: string }[];
+  try {
+    const { data, error } = await admin.from('profiles').select('id').eq('role', 'admin').limit(10);
+    if (error) throw new Error(error.message);
+    amministratori = (data ?? []) as { id: string }[];
+  } catch (e) {
+    logger.error('[cron-deletions] allarme per la spiegazione ferma non scritto', { e });
+    return { nuovi: 0, nonScritti: avvisiFermi.length };
+  }
+  if (amministratori.length === 0) {
+    logger.error('[cron-deletions] nessun amministratore a cui dirlo: allarme non recapitato', { avvisiFermi: avvisiFermi.length });
+    return { nuovi: 0, nonScritti: avvisiFermi.length };
+  }
+  for (const idAvviso of avvisiFermi) {
+    let nuovo = false;
+    let rotto = false;
+    for (const a of amministratori) {
+      const id = identificativoAvviso(`${idAvviso}:email-ferma:${a.id}`);
+      const gia = await admin.from('notifications').select('id').eq('id', id);
+      if (gia.error) {
+        rotto = true;
+        continue;
+      }
+      if (Array.isArray(gia.data) && gia.data.length > 0) continue;
+      const { error } = await admin.from('notifications').insert({
+        id,
+        user_id: a.id,
+        category: 'system',
+        title: "Spiegazione dell'attesa non partita per email",
+        body:
+          "Una spiegazione dell'attesa per la cancellazione non è partita per email, e non è un intoppo di una notte sola. " +
+          "È scritta nel pannello del sito della persona, ma chi vuole andarsene può non rientrarci più: " +
+          'controlla la posta del sito oppure scrivile tu. Il giro riprova da solo ogni notte; ' +
+          'questo avviso non si ripete finché la spiegazione resta ferma.',
+        link: '/admin/users',
+      });
+      if (!error) nuovo = true;
+      else if (!/duplicate key|23505|already exists/i.test(error.message)) {
+        rotto = true;
+        logger.error('[cron-deletions] allarme per la spiegazione ferma non scritto', { message: error.message });
+      }
+    }
+    if (nuovo) conto.nuovi++;
+    else if (rotto) conto.nonScritti++;
+  }
+  return conto;
+}
+
 async function avvisaAmministratori(admin: Admin, titolo: string, riga: string): Promise<void> {
   try {
     const { data: amministratori } = await admin
