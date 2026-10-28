@@ -14,7 +14,8 @@ import { queryKeys } from '@/lib/queries/keys';
 import { useConsegnaVeloceDelNegozio } from '@/lib/queries/consegna-veloce-del-negozio';
 import { normalizeCondition, type ProductCondition, type ProductUnit } from '@/lib/products/schema';
 import { type ProductVariant } from '@/lib/products/variants';
-import { saveProductVariants, loadProductVariants } from '@/lib/products/persistVariants';
+import { loadProductVariants } from '@/lib/products/persistVariants';
+import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
 import { AlertTriangle, EyeOff } from 'lucide-react';
 import { nascondiProdotto } from '@/lib/products/nascondi';
 import { salvaProdottoDalBrowser } from '@/lib/products/salva-dal-browser';
@@ -100,7 +101,13 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       payload,
       variants: nextVariants,
       campiDallAi,
-    }: { payload: ProductPayload; variants: ProductVariant[]; campiDallAi: string[] }) => {
+      scorteViste,
+    }: {
+      payload: ProductPayload;
+      variants: ProductVariant[];
+      campiDallAi: string[];
+      scorteViste: Record<string, number>;
+    }) => {
       await salvaProdottoDalBrowser({
         prodottoId: id,
         payload: payload as unknown as Record<string, unknown>,
@@ -108,8 +115,9 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
         campiDallAi,
       });
       // Sincronizza le varianti (insert/update/delete); il trigger DB riallinea
-      // products.stock e has_variants.
-      await saveProductVariants(id, nextVariants);
+      // products.stock e has_variants. Con le scorte viste all'apertura: una
+      // variante venduta mentre il modulo era aperto non torna in magazzino.
+      await saveProductVariantsServer(supabase, id, nextVariants, scorteViste);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.seller.products });
@@ -204,7 +212,12 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
         productId={id}
         sellerOffersExpress={offersExpress}
         consegnaDelNegozioNonLetta={consegnaNonLetta}
-        onSubmit={(payload, ctx) => update.mutate({ payload, variants: ctx.variants, campiDallAi: ctx.campiDallAi })}
+        onSubmit={(payload, ctx) => update.mutate({
+            payload,
+            variants: ctx.variants,
+            campiDallAi: ctx.campiDallAi,
+            scorteViste: ctx.scorteViste,
+          })}
         onDelete={async () => {
           const ok = await confirmDialog({
             title: 'Nascondere il prodotto?',

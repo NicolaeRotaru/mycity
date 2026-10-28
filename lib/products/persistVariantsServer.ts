@@ -9,11 +9,18 @@ import { type ProductVariant } from '@/lib/products/variants';
  *
  * Il diff insert/update/delete mantiene stabili gli id delle varianti invariate
  * (riferimenti in order_items). Il trigger DB riallinea products.stock/has_variants.
+ *
+ * 28/10/2026 — `scorteViste` (id → pezzi, com'erano all'apertura del modulo):
+ * la scorta di una variante gia' salvata si riscrive solo se e' diversa da
+ * quella vista. Mentre il modulo resta aperto `reserve_stock` la abbassa a ogni
+ * vendita: riscrivere il numero vecchio rimetterebbe in vetrina pezzi venduti.
+ * Senza `scorteViste` (l'amministrazione) si riscrive tutto, come prima.
  */
 export async function saveProductVariantsServer(
   supabase: SupabaseClient,
   productId: string,
   variants: ProductVariant[],
+  scorteViste?: Record<string, number>,
 ): Promise<void> {
   const { data: existing, error: loadErr } = await supabase
     .from('product_variants')
@@ -27,7 +34,7 @@ export async function saveProductVariantsServer(
   const toUpdate: Array<{ id: string; row: Record<string, unknown> }> = [];
 
   variants.forEach((v, i) => {
-    const row = {
+    const row: Record<string, unknown> = {
       product_id: productId,
       options: v.options,
       label: v.label,
@@ -36,6 +43,8 @@ export async function saveProductVariantsServer(
     };
     if (v.id && existingIds.has(v.id)) {
       keepIds.add(v.id);
+      const vista = scorteViste?.[v.id];
+      if (vista !== undefined && Math.max(0, Math.trunc(vista || 0)) === row.stock) delete row.stock;
       toUpdate.push({ id: v.id, row });
     } else {
       toInsert.push(row);
