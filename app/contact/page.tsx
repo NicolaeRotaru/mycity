@@ -17,6 +17,7 @@ const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 export default function ContactPage() {
   const whatsapp = linkWhatsApp(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER, 'Ciao MyCity, ho una domanda');
+  const telefono = process.env.NEXT_PUBLIC_SUPPORT_PHONE?.trim() || null;
   const chiSiamo = titolare();
   const identita = rigaIdentita(chiSiamo);
 
@@ -105,12 +106,20 @@ export default function ContactPage() {
             <div className="text-xs text-ink-500 mt-1">Lun-Ven 9–18</div>
           </a>
         )}
-        <a href="tel:+390523000000" className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
-          <div className="mb-2"><Phone size={28} className="text-primary-600" aria-hidden /></div>
-          <div className="font-bold">Telefono</div>
-          <div className="text-sm text-ink-600">+39 0523 000000</div>
-          <div className="text-xs text-ink-500 mt-1">Lun-Ven 9–18</div>
-        </a>
+        {/*
+          28/10/2026 — Il telefono era rimasto scritto a mano: «+39 0523 000000», un segnaposto con
+          un link tel: cliccabile. Come per WhatsApp, la carta compare solo se il numero c'è davvero
+          (NEXT_PUBLIC_SUPPORT_PHONE). Nicola, 26/10: nessun telefono pubblico finché qualcuno non
+          risponde davvero.
+        */}
+        {telefono && (
+          <a href={`tel:${telefono.replace(/[^\d+]/g, '')}`} className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
+            <div className="mb-2"><Phone size={28} className="text-primary-600" aria-hidden /></div>
+            <div className="font-bold">Telefono</div>
+            <div className="text-sm text-ink-600">{telefono}</div>
+            <div className="text-xs text-ink-500 mt-1">Lun-Ven 9–18</div>
+          </a>
+        )}
       </div>
 
       <div className="grid md:grid-cols-5 gap-8">

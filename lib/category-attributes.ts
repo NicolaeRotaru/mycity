@@ -196,9 +196,29 @@ export function findLabelForKey(key: string): string {
 /**
  * Formatta un valore JSONB per la visualizzazione lato cliente.
  */
+/**
+ * 28/10/2026 — Le bozze nate dalla foto salvano le caselle sì/no come testo («true»/«false»).
+ * `Boolean("false")` è vero: il negozio vedeva spuntata la casella sbagliata e il cliente leggeva
+ * «Vegano false». Qui il sì/no si legge in un punto solo, per il testo come per il booleano.
+ */
+export function attributoSpuntato(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
+  return false;
+}
+
+/**
+ * Chiavi salvate negli attributi che NON sono caratteristiche del prodotto: `alt_text` è la
+ * descrizione della foto per chi non vede, già usata come testo alternativo dell'immagine.
+ */
+export const CHIAVI_FUORI_DALLA_GRIGLIA: readonly string[] = Object.freeze(['alt_text']);
+
 export function formatAttributeValue(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'boolean') return value ? 'Sì' : 'No';
+  if (typeof value === 'string' && /^(true|false)$/i.test(value.trim())) {
+    return attributoSpuntato(value) ? 'Sì' : 'No';
+  }
   if (typeof value === 'number') return String(value);
   if (typeof value === 'string') {
     // Riconosce date ISO YYYY-MM-DD e le mostra in formato italiano

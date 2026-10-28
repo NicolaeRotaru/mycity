@@ -1,4 +1,5 @@
 import {
+  MARKETPLACE_FEE_BPS,
   PICKUP_DISCOUNT_PERCENT,
   PLATFORM_DELIVERY_FEE_CENTS,
   RAGGIO_CONSEGNA_KM,
@@ -191,12 +192,33 @@ export function rispostaCostoSpedizione(): DomandaRisposta {
  */
 export type MetodoPagamento = 'carta-adesso' | 'contanti-alla-consegna';
 
-export const METODI_AL_CHECKOUT: readonly MetodoPagamento[] = Object.freeze([
-  'carta-adesso',
-  'contanti-alla-consegna',
-]);
+/*
+ * 28/10/2026 — L'ELENCO ERA FISSO, LA CASSA NO.
+ *
+ * L'elenco conteneva sempre 'carta-adesso'. La cassa invece accende la carta solo se esiste
+ * `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, che in produzione manca (al lancio si paga solo in
+ * contanti, decisione di Nicola del 26/10). Risultato: la scheda prodotto prometteva «oppure con
+ * carta adesso» e la cassa offriva solo i contanti. Adesso la condizione è UNA, qui, e la legge
+ * anche il checkout (`cartaAlCheckoutDisponibile`): la frase e la cassa non possono più divergere.
+ */
+export function cartaAlCheckoutDisponibile(
+  chiave: string | undefined = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+): boolean {
+  return !!chiave && chiave.trim() !== '';
+}
 
-export function frasePagamento(metodi: readonly MetodoPagamento[] = METODI_AL_CHECKOUT): string {
+export function metodiAlCheckout(
+  chiave: string | undefined = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+): readonly MetodoPagamento[] {
+  return cartaAlCheckoutDisponibile(chiave)
+    ? ['carta-adesso', 'contanti-alla-consegna']
+    : ['contanti-alla-consegna'];
+}
+
+/** I metodi che la cassa offre in questa build (la chiave pubblica è fissata al momento della build). */
+export const METODI_AL_CHECKOUT: readonly MetodoPagamento[] = Object.freeze([...metodiAlCheckout()]);
+
+export function frasePagamento(metodi: readonly MetodoPagamento[] = metodiAlCheckout()): string {
   const contanti = metodi.includes('contanti-alla-consegna');
   const carta = metodi.includes('carta-adesso');
   if (contanti && carta) return 'Paghi in contanti alla consegna, oppure con carta adesso';
@@ -230,8 +252,25 @@ export const FRASE_RESO = 'Reso entro 14 giorni';
  *
  * La versione onesta non rinuncia al vantaggio: dice quello vero — che il costo c'è ed è scritto lì.
  */
-export const RIQUADRO_LO_SAPEVI =
-  'Ogni euro di questo carrello va ai commercianti di Piacenza. La nostra parte è la consegna, ed è la riga qui sopra: nessun costo a sorpresa.';
+/*
+ * 28/10/2026 — ANCHE LA SECONDA VERSIONE NON REGGEVA I NUMERI.
+ *
+ * «Ogni euro di questo carrello va ai commercianti. La nostra parte è la consegna»: falso, perché
+ * oltre ai 3 € di consegna MyCity trattiene il 10% della merce al negozio (decisione di Nicola del
+ * 26/10: 10% IVA inclusa). La frase adesso nasce dalla stessa commissione che usa la cassa: se la
+ * percentuale cambia, cambia anche il riquadro.
+ */
+export function riquadroLoSapevi(commissioneBps: number = MARKETPLACE_FEE_BPS): string {
+  if (commissioneBps <= 0) {
+    return 'Il prezzo dei prodotti è quello del negozio, e al negozio va tutto. La nostra parte è la consegna che vedi qui sopra.';
+  }
+  const nostra = commissioneBps / 100;
+  const negozio = 100 - nostra;
+  const pct = (n: number) => `${Number.isInteger(n) ? n : n.toFixed(1).replace('.', ',')}%`;
+  return `Il prezzo dei prodotti è quello del negozio. Al negozio va il ${pct(negozio)}, a noi il ${pct(nostra)} e la consegna che vedi qui sopra.`;
+}
+
+export const RIQUADRO_LO_SAPEVI = riquadroLoSapevi();
 
 /**
  * LA SPEDIZIONE — quello che si scrive in vetrina, deciso dove si decide quanto si paga.

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Plus, Layers } from 'lucide-react';
 import type { AttributeField } from '@/lib/category-attributes';
+import { attributoSpuntato } from '@/lib/category-attributes';
 
 interface Props {
   fields: AttributeField[];
@@ -214,7 +215,7 @@ const AttributesFields = ({
                 <input
                   id={id}
                   type="checkbox"
-                  checked={Boolean(values[f.key])}
+                  checked={attributoSpuntato(values[f.key])}
                   onChange={(e) => onChange(f.key, e.target.checked)}
                   className="w-4 h-4 text-primary-700 rounded focus:ring-primary-700"
                 />

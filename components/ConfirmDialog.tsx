@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { useTranslations } from 'next-intl';
 import { AlertTriangle, Check, type LucideIcon } from 'lucide-react';
 
@@ -33,7 +33,32 @@ export type ConfirmOptions = {
   icon?: LucideIcon | string;
 };
 
-type State = (ConfirmOptions & { resolve: (ok: boolean) => void }) | null;
+type State = (ConfirmOptions & { resolve: (ok: boolean) => void; opener: HTMLElement | null }) | null;
+
+/*
+ * 28/10/2026 — LA DICHIARAZIONE DI ACCESSIBILITÀ PROMETTEVA PIÙ DI QUESTO DIALOGO.
+ *
+ * Il dialogo si dichiara `aria-modal="true"` (allo screen reader: «il resto della pagina è
+ * inerte»), ma col Tab se ne usciva, e alla chiusura il fuoco cadeva sul corpo della pagina:
+ * chi naviga da tastiera dopo «Annullare l'ordine?» ripartiva dall'inizio. Ora il fuoco resta
+ * dentro (Tab e Maiusc+Tab girano fra i bottoni) e torna all'elemento che ha aperto il dialogo.
+ * L'elemento si annota quando il dialogo viene CHIESTO: dopo, l'`autoFocus` l'ha già spostato.
+ */
+const FOCUSABILI =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+export function fuocoSuccessivo(
+  focusabili: readonly HTMLElement[],
+  attivo: Element | null,
+  indietro: boolean,
+): HTMLElement | null {
+  if (focusabili.length === 0) return null;
+  const i = attivo ? focusabili.indexOf(attivo as HTMLElement) : -1;
+  if (i === -1) return indietro ? focusabili[focusabili.length - 1] : focusabili[0];
+  if (indietro && i === 0) return focusabili[focusabili.length - 1];
+  if (!indietro && i === focusabili.length - 1) return focusabili[0];
+  return null; // dentro la lista: il browser va avanti da sé
+}
 
 let current: State = null;
 const listeners = new Set<() => void>();
@@ -46,7 +71,11 @@ const notify = () => listeners.forEach((cb) => cb());
 export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
   return new Promise((resolve) => {
     if (current) current.resolve(false); // chiudi silenziosamente la precedente
-    current = { ...opts, resolve };
+    const opener =
+      typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    current = { ...opts, resolve, opener };
     notify();
   });
 }
@@ -56,6 +85,7 @@ function closeWith(ok: boolean) {
   const s = current;
   current = null;
   notify();
+  if (s.opener && s.opener.isConnected) s.opener.focus?.();
   s.resolve(ok);
 }
 
@@ -66,6 +96,7 @@ export function ConfirmDialogHost() {
     () => current,
     () => null,
   );
+  const boxRef = useRef<HTMLDivElement | null>(null);
 
   // ESC annulla; Invio NON conferma da solo. Blocca lo scroll mentre è aperto.
   //
@@ -79,7 +110,12 @@ export function ConfirmDialogHost() {
   useEffect(() => {
     if (!state) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); closeWith(false); }
+      if (e.key === 'Escape') { e.preventDefault(); closeWith(false); return; }
+      if (e.key === 'Tab' && boxRef.current) {
+        const lista = Array.from(boxRef.current.querySelectorAll<HTMLElement>(FOCUSABILI));
+        const prossimo = fuocoSuccessivo(lista, document.activeElement, e.shiftKey);
+        if (prossimo) { e.preventDefault(); prossimo.focus(); }
+      }
     };
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
@@ -120,6 +156,7 @@ export function ConfirmDialogHost() {
       aria-labelledby="confirm-title"
     >
       <div
+        ref={boxRef}
         className="bg-white w-full sm:w-auto sm:min-w-[420px] sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden animate-slideUp sm:animate-popIn pb-[max(env(safe-area-inset-bottom),16px)] sm:pb-0"
         onClick={(e) => e.stopPropagation()}
       >
