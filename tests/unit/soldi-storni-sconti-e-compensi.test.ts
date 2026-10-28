@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
 import { residuoRecuperabile } from '@/lib/stripe/payout';
 import { compensoRiderCents, shippingCentsFor } from '@/lib/shipping';
-import { COMPENSO_RIDER_CENTS, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
+import { COMPENSO_RIDER_CENTS, PLATFORM_DELIVERY_FEE_CENTS, RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { haversineKm } from '@/lib/geo';
+import { fuoriZonaDiConsegna } from '@/lib/ordini/zona-di-consegna';
 
 /**
  * Quattro punti in cui i conti non tornavano.
@@ -154,12 +156,26 @@ describe('il compenso del fattorino', () => {
   });
 
   it('sopra la soglia la spedizione e zero, e la fee di consegna copre da sola il compenso', () => {
+    const negozio = { storeLat: 45.05, storeLng: 9.69 };
+    // Il bordo della zona servita: nove decimi del confine, a nord del negozio (4,5 km col confine
+    // a 5 km, correzione di Nicola del 28/10/2026). Il punto si ricava dal confine, così resta al
+    // bordo anche quando il confine cambia. Il 27/10 qui c'era un indirizzo a ~9 km, il bordo del
+    // confine a 10 km: col confine a 5 la cassa lo rifiuta. Prima ancora, uno a ~24 km.
+    const KM_PER_GRADO = (6371 * Math.PI) / 180; // un grado di latitudine, sulla sfera di haversineKm
+    const casa = {
+      deliveryLat: negozio.storeLat + (RAGGIO_CONSEGNA_KM * 0.9) / KM_PER_GRADO,
+      deliveryLng: negozio.storeLng,
+    };
+    const km = haversineKm(negozio.storeLat, negozio.storeLng, casa.deliveryLat, casa.deliveryLng);
+    expect(
+      fuoriZonaDiConsegna({ ...negozio, ...casa }),
+      `a ${km.toFixed(1)} km la cassa rifiuta l'indirizzo: la prova guarda un ordine che non può nascere`,
+    ).toBe(false);
+    expect(km, `la consegna non sta più al bordo della zona di ${RAGGIO_CONSEGNA_KM} km`).toBeGreaterThan(RAGGIO_CONSEGNA_KM * 0.8);
     const spedizione = shippingCentsFor({
       subtotal: 40,
-      storeLat: 45.05, storeLng: 9.69,
-      // ~9 km: il bordo della zona servita in bici (10 km, decisione del 27/10/2026).
-      // Prima qui c'era un indirizzo a ~24 km, che oggi la cassa non accetta più.
-      deliveryLat: 45.10, deliveryLng: 9.78,
+      ...negozio,
+      ...casa,
       pickupInStore: false,
     });
     expect(spedizione).toBe(0);

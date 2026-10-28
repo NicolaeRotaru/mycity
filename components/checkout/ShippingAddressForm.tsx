@@ -237,8 +237,11 @@ export function ShippingAddressForm({
                Chi abita fuori zona compilava tutto — nome, via, CAP, telefono,
                metodo di pagamento — e lo scopriva solo al clic finale. Il
                numero viene da dove è deciso (RAGGIO_CONSEGNA_KM), così la frase
-               non può dire una cosa mentre la cassa ne fa un'altra. */
-            hint={`Consegniamo a Piacenza e dintorni, entro ${RAGGIO_CONSEGNA_KM} km dal negozio`}
+               non può dire una cosa mentre la cassa ne fa un'altra.
+               28/10/2026 — Via «e dintorni»: col confine a 5 km Podenzano,
+               Rottofreno e Gossolengo restano fuori, e la frase li prometteva.
+               Il limite vero è la distanza dal negozio, e la frase dice quella. */
+            hint={`Consegniamo a Piacenza, fino a ${RAGGIO_CONSEGNA_KM} km dal negozio`}
           />
         </div>
         <Input

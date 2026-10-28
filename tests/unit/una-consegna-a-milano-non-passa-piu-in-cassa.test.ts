@@ -85,7 +85,8 @@ describe('la zona di consegna', () => {
 
   it('il messaggio è un offerta, e non promette il ritiro in negozio finché è spento', () => {
     const detto = motivoFuoriZona('Pane Quotidiano');
-    expect(detto).toContain('Piacenza e dintorni');
+    // 28/10/2026 — diceva «Piacenza e dintorni», che col confine a 5 km promette paesi rifiutati.
+    expect(detto).toContain(`Per ora consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio`);
     expect(detto).toContain('Pane Quotidiano');
     expect(detto, 'manda in negozio a ritirare mentre la cassa non lo permette').not.toContain('Puoi ritirare in negozio');
   });
@@ -200,7 +201,7 @@ describe('la cassa in contanti, con un indirizzo fuori zona', () => {
 
     expect(res.status, 'l ordine per Milano è ancora passato').toBe(400);
     expect(ordiniCreati, 'è nato un ordine che nessuno può consegnare').toHaveLength(0);
-    expect(corpo.error.message).toContain('Piacenza e dintorni');
+    expect(corpo.error.message, 'la cassa non rifiuta col messaggio della zona').toBe(motivoFuoriZona('Pane Quotidiano'));
     expect(corpo.error.message, 'il messaggio non nomina il negozio').toContain('Pane Quotidiano');
   });
 

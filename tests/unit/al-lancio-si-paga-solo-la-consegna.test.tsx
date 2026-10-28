@@ -227,12 +227,31 @@ describe('a ogni distanza dentro la zona si pagano solo i 3 euro', () => {
    * consegna a distanza, chi comprava da uno solo no. Qui il carrello ha due e tre negozi in tre
    * punti diversi della città, la casa gira tutta la griglia e le spese si incrociano: ogni negozio
    * chiede i suoi 3 euro e niente di più, e il totale è la merce più 3 euro per negozio.
+   *
+   * 28/10/2026 (sesto giro) — LA PROVA SEGUE IL CONFINE DA SOLA. Contava i casi contro una soglia
+   * scritta a mano, più di 10.000, tarata sul confine a 10 km: 8 direzioni × 20 distanze × 91
+   * carrelli fa 14.560. Col confine a 5 km le distanze sono 10 e i casi 7.280, e la prova usciva
+   * rossa sulla soglia prima di guardare un solo prezzo. Anche la macelleria a 4 km e il fioraio a
+   * 7 km dal forno erano scritti a mano: col confine a 5, in 4.144 casi su 7.280 la casa stava oltre
+   * il confine di almeno un negozio del carrello, cioè un carrello che la cassa non lascia nascere.
+   * Adesso i negozi stanno a frazioni del confine, e la casa gira fino a sette decimi del confine dal
+   * forno: da ogni negozio dista al massimo sette decimi più tre decimi, cioè meno del confine. La
+   * prova lo verifica con la regola della cassa, e conta i casi verificati contro le dimensioni della
+   * griglia. Il prossimo cambio del confine non la riscrive.
    */
   it('con due e tre negozi in posti diversi, a ogni distanza e con ogni spesa: 3 euro per negozio e niente di più', () => {
+    // I negozi a frazioni del confine, non a chilometri scritti a mano: col confine a 5 km la
+    // macelleria sta a 1 km dal forno e il fioraio a 1,5 km.
+    const QUOTA_MACELLERIA = 1 / 5;
+    const QUOTA_FIORAIO = 3 / 10;
+    // La casa gira fino a sette decimi del confine dal forno: la sua distanza dal forno più quella
+    // del negozio più lontano non arriva al confine, quindi ogni casa sta nella zona di ogni negozio.
+    // Il forno fino al confine lo guarda già la prova qui sopra; qui il bordo lo tocca il fioraio.
+    const QUOTA_CASA = 1 - Math.max(QUOTA_MACELLERIA, QUOTA_FIORAIO);
     const POSIZIONI: Record<string, { lat: number; lng: number }> = {
       forno: NEGOZIO,
-      macelleria: puntoA(4, 200),
-      fioraio: puntoA(7, 60),
+      macelleria: puntoA(RAGGIO_CONSEGNA_KM * QUOTA_MACELLERIA, 200),
+      fioraio: puntoA(RAGGIO_CONSEGNA_KM * QUOTA_FIORAIO, 60),
     };
     const carrelli: Array<Array<{ sellerId: string; euro: number }>> = [];
     for (const a of SPESE) {
@@ -250,12 +269,26 @@ describe('a ogni distanza dentro la zona si pagano solo i 3 euro', () => {
       }
     }
     const sbagliati: string[] = [];
-    let casi = 0;
+    const fuoriZona: string[] = [];
+    let verificati = 0;
     for (const gradi of DIREZIONI) {
       for (const km of DISTANZE) {
-        const casa = puntoA(km, gradi);
+        const kmDalForno = km * QUOTA_CASA;
+        const casa = puntoA(kmDalForno, gradi);
         for (const gruppi of carrelli) {
-          casi++;
+          const lontani = gruppi
+            .filter((g) =>
+              fuoriZonaDiConsegna({
+                storeLat: POSIZIONI[g.sellerId].lat,
+                storeLng: POSIZIONI[g.sellerId].lng,
+                deliveryLat: casa.lat,
+                deliveryLng: casa.lng,
+              }),
+            )
+            .map((g) => g.sellerId);
+          if (lontani.length > 0) {
+            fuoriZona.push(`casa a ${kmDalForno.toFixed(2)} km dal forno verso ${gradi}°: oltre il confine di ${lontani.join(' e ')}`);
+          }
           const esito = conto(gruppi, {
             coordinateNegozio: (id) => POSIZIONI[id],
             consegnaLat: casa.lat,
@@ -271,13 +304,25 @@ describe('a ogni distanza dentro la zona si pagano solo i 3 euro', () => {
             esito.grandTotalCents !== atteso
           ) {
             const chi = gruppi.map((g) => `${g.sellerId} ${g.euro} €`).join(' + ');
-            sbagliati.push(`${chi}, casa a ${km} km verso ${gradi}°: consegne ${pagate.join('/')} cent, totale ${esito.grandTotalCents} invece di ${atteso}`);
+            sbagliati.push(`${chi}, casa a ${kmDalForno.toFixed(2)} km dal forno verso ${gradi}°: consegne ${pagate.join('/')} cent, totale ${esito.grandTotalCents} invece di ${atteso}`);
           }
+          verificati++;
         }
       }
     }
-    expect(casi, 'la griglia dei carrelli con più negozi è vuota').toBeGreaterThan(10_000);
-    expect(sbagliati.slice(0, 6), `${sbagliati.length} carrelli su ${casi} non pagano 3 euro per negozio`).toEqual([]);
+    // Prima il conto, che è la cosa provata: gira su ogni caso della griglia. Poi le garanzie che la
+    // griglia è quella dichiarata: ha carrelli da due e da tre negozi, è stata percorsa tutta (il
+    // numero viene dalle sue dimensioni, non da una soglia scritta a mano) ed è fatta solo di
+    // carrelli che la cassa lascia nascere.
+    expect(sbagliati.slice(0, 6), `${sbagliati.length} carrelli su ${verificati} non pagano 3 euro per negozio`).toEqual([]);
+    expect(new Set(carrelli.map((c) => c.length)), 'mancano i carrelli da due o da tre negozi').toEqual(new Set([2, 3]));
+    expect(verificati, 'la griglia dei carrelli con più negozi non è stata percorsa tutta').toBe(
+      DIREZIONI.length * DISTANZE.length * carrelli.length,
+    );
+    expect(
+      fuoriZona.slice(0, 6),
+      `${fuoriZona.length} casi su ${verificati} hanno la casa oltre il confine di un negozio del carrello: la cassa non li lascia nascere`,
+    ).toEqual([]);
   });
 });
 

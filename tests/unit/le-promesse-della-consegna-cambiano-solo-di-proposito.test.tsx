@@ -89,7 +89,10 @@ const PAGINA_SPEDIZIONI = [
   'In consegna (con nome del rider)',
   'Consegnato',
   'Aree servite',
-  `Consegniamo a Piacenza e dintorni, fino a ${KM} km dal negozio in linea d'aria. Quando scrivi il tuo indirizzo, in cassa misuriamo la distanza e ti diciamo subito se ci arriviamo. Se l'indirizzo non si trova sulla mappa, la cassa non riesce a misurarla e l'ordine passa senza questo controllo.`,
+  // 28/10/2026 — riletta col confine a 5 km: via «e dintorni», che prometteva Podenzano, Rottofreno
+  // e Gossolengo. Lo spazio prima della virgola è il grassetto di «Piacenza» che `testoDi` scioglie
+  // in uno spazio, come in «vai ai contatti .» più sotto: sullo schermo non c'è.
+  `Consegniamo a Piacenza , fino a ${KM} km dal negozio in linea d'aria. Quando scrivi il tuo indirizzo, in cassa misuriamo la distanza e ti diciamo subito se ci arriviamo. Se l'indirizzo non si trova sulla mappa, la cassa non riesce a misurarla e l'ordine passa senza questo controllo.`,
   'Problemi con la consegna?',
   'Se la consegna è in ritardo, il pacco è danneggiato o non è arrivato, scrivici appena puoi: vai ai contatti . Per i difetti dei prodotti vale comunque la garanzia legale di 24 mesi.',
 ];

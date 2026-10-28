@@ -51,11 +51,18 @@ export function fuoriZonaDiConsegna(opts: DoveVaLaConsegna & { pickupInStore?: b
  * (`RITIRO_IN_NEGOZIO_ATTIVO`): oggi è spento, e mandare qualcuno in negozio a
  * ritirare quando la cassa non glielo permette è una porta chiusa spacciata per
  * via d'uscita.
+ *
+ * 28/10/2026 — Il messaggio diceva «Per ora consegniamo a Piacenza e
+ * dintorni»: col confine a 5 km Podenzano, Rottofreno e Gossolengo restano
+ * fuori, e chi abitava lì si sentiva rifiutare con una frase che lo includeva.
+ * Adesso dice il limite vero, letto da `RAGGIO_CONSEGNA_KM`, ed è scritto una
+ * volta sola per le due strade: acceso o spento il ritiro, il confine è lo stesso.
  */
 export function motivoFuoriZona(nomeNegozio?: string | null): string {
   const negozio = nomeNegozio?.trim();
   const dove = negozio ? `da ${negozio}` : 'da questo negozio';
+  const troppoLontano = `Per ora consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio: il tuo indirizzo è troppo lontano ${dove}.`;
   return RITIRO_IN_NEGOZIO_ATTIVO
-    ? `Per ora consegniamo a Piacenza e dintorni: il tuo indirizzo è troppo lontano ${dove}. Puoi ritirare in negozio.`
-    : `Per ora consegniamo a Piacenza e dintorni: il tuo indirizzo è troppo lontano ${dove}. Prova con un negozio più vicino a te.`;
+    ? `${troppoLontano} Puoi ritirare in negozio.`
+    : `${troppoLontano} Prova con un negozio più vicino a te.`;
 }

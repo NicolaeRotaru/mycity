@@ -117,7 +117,10 @@ export default function ShippingPage() {
 
         <div className="space-y-3">
           <h2 className="text-xl font-bold text-ink-900 mb-2">Aree servite</h2>
-          <p>Consegniamo a <strong>Piacenza</strong> e dintorni, fino a <strong>{confine}</strong> dal negozio in linea
+          {/* 28/10/2026 — Qui c'era «Piacenza e dintorni»: col confine a 5 km Podenzano, Rottofreno e
+              Gossolengo restano fuori, e la frase li prometteva. Il limite vero è la distanza dal
+              negozio. */}
+          <p>Consegniamo a <strong>Piacenza</strong>, fino a <strong>{confine}</strong> dal negozio in linea
           d&apos;aria. Quando scrivi il tuo indirizzo, in cassa misuriamo la distanza e ti diciamo subito se ci
           arriviamo. Se l&apos;indirizzo non si trova sulla mappa, la cassa non riesce a misurarla e
           l&apos;ordine passa senza questo controllo.</p>
