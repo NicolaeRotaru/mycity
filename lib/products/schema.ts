@@ -128,3 +128,26 @@ export function buildProductPayload(input: BuildPayloadInput) {
     status,
   };
 }
+
+/**
+ * 28/10/2026 — LA SCORTA VISTA ALL'APERTURA NON E' LA SCORTA DI ADESSO.
+ *
+ * Il modulo di modifica legge la scorta una volta sola. Mentre resta aperto,
+ * `reserve_stock` la abbassa a ogni vendita. Se al salvataggio il modulo
+ * rimanda il numero visto all'apertura, rimette in vetrina merce gia' venduta.
+ * Per questo la scorta parte solo se il negoziante l'ha cambiata: e' l'unico
+ * caso in cui il suo numero e' piu' vero di quello del database.
+ *
+ * `null` vuol dire «scorta illimitata» ed e' un valore, non un vuoto: passare
+ * da 5 a illimitata (o viceversa) e' un cambio. Se il valore visto non lo
+ * conosciamo (`undefined`), il cambio si presume: meglio scrivere che perdere
+ * quello che il negoziante ha battuto.
+ */
+export function scortaCambiata(scritta: unknown, vista: unknown): boolean {
+  if (vista === undefined) return true;
+  if (scritta === null || vista === null) return scritta !== vista;
+  const a = Number(scritta);
+  const b = Number(vista);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return true;
+  return a !== b;
+}
