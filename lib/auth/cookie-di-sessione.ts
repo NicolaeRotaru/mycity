@@ -276,30 +276,27 @@ function daBase64Url(testo: string): string {
 }
 
 /**
- * `auth.getUser()` qui SCRIVERÀ la sessione (cioè la rinnoverà)?
+ * IL NOME DELLA TESSERA, E SOLO DELLA TESSERA.
  *
- * Si legge la scadenza dal cookie di sessione, ricomponendo i pezzi `.0`,
- * `.1`. Se il cookie non si legge, la libreria non ha niente da rinnovare
- * (non trova una sessione): è una lettura. Non è un controllo di sicurezza —
- * la tessera la verifica il server — serve solo a scegliere quanto aspettare.
+ * `eCookieDiSessione` prende tutto quello che comincia con `sb-` e contiene
+ * `-auth-token`: va bene per sapere se il servizio di accesso ha toccato
+ * qualcosa, ma prende anche `sb-<progetto>-auth-token-code-verifier`, il
+ * cookie che resta in tasca dopo un cambio email o un recupero password.
+ * Messo in fila con la tessera, il suo testo finiva incollato in coda alla
+ * sessione: il JSON non si leggeva più, la tessera scaduta passava per
+ * «niente da rinnovare», il tetto restava di 3 secondi e il rinnovo lento
+ * veniva abbandonato — il cliente fuori, sulla schermata di accesso.
+ *
+ * Qui passa solo la tessera intera (`…-auth-token`) o un suo pezzo
+ * (`…-auth-token.0`, `.1`).
  */
-export function sessioneDaRinnovare(
-  cookie: ReadonlyArray<{ name: string; value: string }>,
-  adessoMs: number,
-  margineMs: number = MARGINE_RINNOVO_MS,
-): boolean {
-  const pezzi = cookie
-    .filter((c) => eCookieDiSessione(c.name))
-    .map((c) => {
-      const m = /\.(\d+)$/.exec(c.name);
-      return { indice: m ? Number(m[1]) : -1, value: c.value };
-    })
-    .sort((a, b) => a.indice - b.indice);
-  if (pezzi.length === 0) return false;
-  let valore = pezzi.map((p) => p.value).join('');
+const NOME_TESSERA = /^(sb-.+-auth-token)(?:\.(\d+))?$/;
+
+/** La tessera scade entro il margine? Testo illeggibile = non c'è sessione. */
+function tesseraInScadenza(valore: string, adessoMs: number, margineMs: number): boolean {
   try {
-    if (valore.startsWith('base64-')) valore = daBase64Url(valore.slice('base64-'.length));
-    const sessione = JSON.parse(valore) as { expires_at?: unknown } | null;
+    const testo = valore.startsWith('base64-') ? daBase64Url(valore.slice('base64-'.length)) : valore;
+    const sessione = JSON.parse(testo) as { expires_at?: unknown } | null;
     const scade = sessione && typeof sessione === 'object' ? sessione.expires_at : undefined;
     if (typeof scade !== 'number') return false;
     return scade * 1000 - adessoMs < margineMs;
@@ -308,6 +305,42 @@ export function sessioneDaRinnovare(
     // rinnova niente. Non è un errore da nascondere: è il caso «non c'è».
     return false;
   }
+}
+
+/**
+ * `auth.getUser()` qui SCRIVERÀ la sessione (cioè la rinnoverà)?
+ *
+ * Si legge la scadenza dal cookie della tessera, ricomponendolo come lo
+ * ricompone `@supabase/ssr`: se c'è il cookie intero vale quello, se no si
+ * incollano i pezzi `.0`, `.1`, … finché sono in fila. Se il cookie non si
+ * legge, la libreria non ha niente da rinnovare (non trova una sessione): è
+ * una lettura. Non è un controllo di sicurezza — la tessera la verifica il
+ * server — serve solo a scegliere quanto aspettare. Con più tessere (più
+ * progetti sullo stesso dominio) basta che una scada: dalla parte severa,
+ * meglio aspettare di più una lettura che abbandonare un rinnovo.
+ */
+export function sessioneDaRinnovare(
+  cookie: ReadonlyArray<{ name: string; value: string }>,
+  adessoMs: number,
+  margineMs: number = MARGINE_RINNOVO_MS,
+): boolean {
+  const tessere = new Map<string, { intera?: string; pezzi: Map<number, string> }>();
+  for (const c of cookie) {
+    const m = NOME_TESSERA.exec(c.name);
+    if (!m) continue;
+    const voce = tessere.get(m[1]) ?? { pezzi: new Map<number, string>() };
+    if (m[2] === undefined) voce.intera = c.value;
+    else voce.pezzi.set(Number(m[2]), c.value);
+    tessere.set(m[1], voce);
+  }
+  for (const { intera, pezzi } of tessere.values()) {
+    let valore = intera ?? '';
+    if (!valore) {
+      for (let i = 0; pezzi.has(i); i += 1) valore += pezzi.get(i);
+    }
+    if (valore && tesseraInScadenza(valore, adessoMs, margineMs)) return true;
+  }
+  return false;
 }
 
 export type EsitoScritturaSessione<T> = {
