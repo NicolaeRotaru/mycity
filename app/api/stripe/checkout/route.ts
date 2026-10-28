@@ -380,7 +380,55 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     });
   }
 
-  const sellers = venditoriLetti.data;
+  /**
+   * 28/10/2026 — UNA LETTURA DEI NEGOZI CORTA FERMA IL PAGAMENTO.
+   *
+   * Stessa porta della rotta dei contanti: l'errore si buttava e nessuno
+   * contava i negozi tornati. Con la lista vuota «negozio chiuso» e «fuori
+   * zona» non controllavano nessuno e la consegna perdeva le coordinate del
+   * negozio. Ogni negozio del carrello deve tornare, o il pagamento non si apre.
+   */
+  if (venditoriLetti.error || !venditoriLetti.data) {
+    logger.error('[stripe] lettura dei negozi fallita: pagamento non aperto', {
+      userId: user.id,
+      negozi: sellerIds.length,
+      message: venditoriLetti.error?.message ?? 'nessun dato',
+    });
+    return ApiErrors.unavailable('Non riusciamo a controllare il negozio in questo momento. Riprova fra poco.');
+  }
+  const sellers = [...venditoriLetti.data];
+  const negoziLetti = new Set(sellers.map((s) => s.id));
+  const negoziMancanti = sellerIds.filter((id) => !negoziLetti.has(id));
+  if (negoziMancanti.length > 0) {
+    // Un negozio approvato senza insegna la vetrina non lo restituisce: i dati
+    // per i controlli si prendono dal profilo, col client di servizio. Chi non
+    // e' un negozio approvato non passa.
+    const { data: profiliMancanti, error: errProfili } = await admin
+      .from('profiles')
+      .select('id, store_name, store_lat, store_lng, store_hours, role, is_approved')
+      .in('id', negoziMancanti);
+    const recuperati = (profiliMancanti ?? []).filter((p) => p.role === 'seller' && p.is_approved === true);
+    if (errProfili || recuperati.length !== negoziMancanti.length) {
+      logger.error('[stripe] negozi del carrello non trovati: pagamento non aperto', {
+        userId: user.id,
+        negoziMancanti,
+        trovatiNelProfilo: recuperati.length,
+        message: errProfili?.message,
+      });
+      return errProfili
+        ? ApiErrors.unavailable('Non riusciamo a controllare il negozio in questo momento. Riprova fra poco.')
+        : ApiErrors.conflict('Un negozio del carrello non accetta ordini in questo momento. Toglilo dal carrello e riprova.');
+    }
+    for (const p of recuperati) {
+      sellers.push({
+        id: p.id,
+        store_name: p.store_name,
+        store_lat: p.store_lat,
+        store_lng: p.store_lng,
+        store_hours: p.store_hours,
+      });
+    }
+  }
 
   const sellerNameMap = new Map<string, string>();
   const sellerCoordMap = new Map<string, { lat: number | null; lng: number | null }>();
