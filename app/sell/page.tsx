@@ -136,8 +136,12 @@ export default function SellPage() {
     );
   }
 
-  // STATO: già in attesa di approvazione
-  if (profile?.approval_status === 'pending' && profile?.role === 'seller') {
+  // STATO: già in attesa di approvazione.
+  // Ondata 10 — «pending» da solo non basta: la funzione del database che crea
+  // il profilo fa nascere OGNI profilo in 'pending', anche chi non ha mai
+  // mandato niente. La richiesta vera è quella con approval_requested_at
+  // (lo scrive l'invio del modulo qui sotto): senza, si mostra il modulo.
+  if (profile?.approval_status === 'pending' && profile?.role === 'seller' && profile?.approval_requested_at) {
     return (
       <div className="container mx-auto p-6 max-w-2xl">
         <PendingNotice requestedAt={profile.approval_requested_at} />

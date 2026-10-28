@@ -48,7 +48,7 @@
  *     QUANTE volte succede — oggi quel numero non ce l'ha nessuno.
  */
 
-import { TETTO_PORTIERE_MS, chiediConTetto, type Risposta } from './decisione-portiere';
+import { chiediConTetto, type Risposta } from './decisione-portiere';
 
 /**
  * I cookie di sessione di Supabase si chiamano `sb-<progetto>-auth-token`, e
@@ -243,6 +243,73 @@ export function verificaConsegnaSessione(
   return { stato: 'consegnata', sessioneAffidabile: true, registra: null };
 }
 
+/**
+ * ONDATA 10 — QUANTO SI ASPETTA UNA CHIAMATA CHE STA RINNOVANDO LA SESSIONE.
+ *
+ * Tre secondi vanno bene per una lettura: abbandonarla non costa niente. Un
+ * rinnovo abbandonato invece brucia la tessera del cliente (il server ha già
+ * stampato la coppia nuova). Qui si aspetta di più — dieci secondi — e solo
+ * quando la tessera è davvero scaduta o sta per scadere: per tutti gli altri
+ * il tetto resta quello di tre secondi.
+ *
+ * Il tetto non sparisce: un fornitore appeso per sempre terrebbe appesa la
+ * pagina per sempre. Se scatta anche questo, la scrittura tardiva si conta e
+ * si registra (scelta d), non si nasconde.
+ */
+export const TETTO_RINNOVO_MS = 10_000;
+
+/**
+ * Con quanto anticipo la libreria di accesso considera scaduta una tessera.
+ * `@supabase/auth-js` rinnova quando mancano meno di 90 secondi; qui si
+ * prende un margine più largo, dalla parte severa: meglio aspettare di più
+ * una lettura che abbandonare un rinnovo.
+ */
+export const MARGINE_RINNOVO_MS = 120_000;
+
+function daBase64Url(testo: string): string {
+  const b64 = testo.replace(/-/g, '+').replace(/_/g, '/');
+  const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - (b64.length % 4));
+  const binario = atob(b64 + pad);
+  const byte = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i += 1) byte[i] = binario.charCodeAt(i);
+  return new TextDecoder().decode(byte);
+}
+
+/**
+ * `auth.getUser()` qui SCRIVERÀ la sessione (cioè la rinnoverà)?
+ *
+ * Si legge la scadenza dal cookie di sessione, ricomponendo i pezzi `.0`,
+ * `.1`. Se il cookie non si legge, la libreria non ha niente da rinnovare
+ * (non trova una sessione): è una lettura. Non è un controllo di sicurezza —
+ * la tessera la verifica il server — serve solo a scegliere quanto aspettare.
+ */
+export function sessioneDaRinnovare(
+  cookie: ReadonlyArray<{ name: string; value: string }>,
+  adessoMs: number,
+  margineMs: number = MARGINE_RINNOVO_MS,
+): boolean {
+  const pezzi = cookie
+    .filter((c) => eCookieDiSessione(c.name))
+    .map((c) => {
+      const m = /\.(\d+)$/.exec(c.name);
+      return { indice: m ? Number(m[1]) : -1, value: c.value };
+    })
+    .sort((a, b) => a.indice - b.indice);
+  if (pezzi.length === 0) return false;
+  let valore = pezzi.map((p) => p.value).join('');
+  try {
+    if (valore.startsWith('base64-')) valore = daBase64Url(valore.slice('base64-'.length));
+    const sessione = JSON.parse(valore) as { expires_at?: unknown } | null;
+    const scade = sessione && typeof sessione === 'object' ? sessione.expires_at : undefined;
+    if (typeof scade !== 'number') return false;
+    return scade * 1000 - adessoMs < margineMs;
+  } catch {
+    // Cookie illeggibile: la libreria non ne ricava una sessione, quindi non
+    // rinnova niente. Non è un errore da nascondere: è il caso «non c'è».
+    return false;
+  }
+}
+
 export type EsitoScritturaSessione<T> = {
   /** Com'è andata la chiamata: la stessa forma di sempre. */
   risposta: Risposta<T>;
@@ -269,7 +336,7 @@ export type EsitoScritturaSessione<T> = {
 export async function chiediConTettoSuScritturaDiSessione<T>(
   fai: () => PromiseLike<T>,
   raccoglitore: RaccoglitoreCookie,
-  ms: number = TETTO_PORTIERE_MS,
+  ms: number = TETTO_RINNOVO_MS,
 ): Promise<EsitoScritturaSessione<T>> {
   const risposta = await chiediConTetto(fai, ms);
   // Il sigillo va messo QUI: nello stesso momento in cui la risposta è
