@@ -42,12 +42,26 @@ const casaAEst = (km: number) => ({
   lat: NEGOZIO.lat,
   lng: NEGOZIO.lng + km / (KM_PER_GRADO * Math.cos((NEGOZIO.lat * Math.PI) / 180)),
 });
-const CASA_13_KM_NORD = casaA(13);
-const CASA_13_KM_SUD = casaA(-13);
-const CASA_13_KM_EST = casaAEst(13);
-const CASA_13_KM_OVEST = casaAEst(-13);
-const CASA_8_KM_NORD = casaA(8);
-const CASA_8_KM_SUD = casaA(-8);
+/**
+ * 28/10/2026 — IL CONFINE È SCESO A 5 KM (correzione di Nicola): LE CASE SI MISURANO DAL CONFINE.
+ *
+ * Fino al 27/10 le case di queste prove stavano a 8-9 km (dentro) e a 12-13 km (fuori) da un confine di 10. Col confine a 5 la casa
+ * «dentro» era fuori, e la casa lontana in diagonale non metteva più alla prova la misura fatta un
+ * asse per volta: ogni asse, da solo, superava già i 5 km. Adesso le due distanze si leggono dal
+ * confine: dentro a quattro quinti (4 km col confine a 5), fuori a sei quinti (6 km). In diagonale,
+ * a 6 km, nessun asse da solo arriva al confine (4,2 km ciascuno); a 4 km i due assi sommati lo
+ * superano (5,7 km): un confine «a quadrato» e uno «a rombo» restano rossi, anche col secondo
+ * negozio. Questa prova controlla il MECCANISMO e non va riscritta quando cambia il NUMERO: il numero
+ * lo inchioda tests/unit/al-lancio-si-consegna-in-bici-fino-a-5-km.test.ts.
+ */
+const CASA_DENTRO_KM = RAGGIO_CONSEGNA_KM - RAGGIO_CONSEGNA_KM / 5;
+const CASA_FUORI_KM = RAGGIO_CONSEGNA_KM + RAGGIO_CONSEGNA_KM / 5;
+const CASA_FUORI_NORD = casaA(CASA_FUORI_KM);
+const CASA_FUORI_SUD = casaA(-CASA_FUORI_KM);
+const CASA_FUORI_EST = casaAEst(CASA_FUORI_KM);
+const CASA_FUORI_OVEST = casaAEst(-CASA_FUORI_KM);
+const CASA_DENTRO_NORD = casaA(CASA_DENTRO_KM);
+const CASA_DENTRO_SUD = casaA(-CASA_DENTRO_KM);
 
 /** Il secondo negozio del carrello: quello sotto casa. */
 const P_SOTTO_CASA = '55555555-5555-5555-5555-555555555555';
@@ -191,23 +205,23 @@ describe('la rotta della carta rifiuta un indirizzo fuori zona, come quella dei 
 
   it('i punti stanno dove dicono (se no la prova sotto non misura niente)', () => {
     const km = (c: { lat: number; lng: number }) => haversineKm(NEGOZIO.lat, NEGOZIO.lng, c.lat, c.lng);
-    expect(km(CASA_13_KM_NORD)).toBeGreaterThan(RAGGIO_CONSEGNA_KM + 2);
-    expect(km(CASA_13_KM_SUD)).toBeGreaterThan(RAGGIO_CONSEGNA_KM + 2);
-    expect(km(CASA_13_KM_EST)).toBeGreaterThan(RAGGIO_CONSEGNA_KM + 2);
-    expect(km(CASA_13_KM_OVEST)).toBeGreaterThan(RAGGIO_CONSEGNA_KM + 2);
-    expect(km(CASA_8_KM_NORD)).toBeLessThan(RAGGIO_CONSEGNA_KM - 1);
-    expect(km(CASA_8_KM_SUD)).toBeLessThan(RAGGIO_CONSEGNA_KM - 1);
+    expect(km(CASA_FUORI_NORD)).toBeGreaterThan(RAGGIO_CONSEGNA_KM * 1.1);
+    expect(km(CASA_FUORI_SUD)).toBeGreaterThan(RAGGIO_CONSEGNA_KM * 1.1);
+    expect(km(CASA_FUORI_EST)).toBeGreaterThan(RAGGIO_CONSEGNA_KM * 1.1);
+    expect(km(CASA_FUORI_OVEST)).toBeGreaterThan(RAGGIO_CONSEGNA_KM * 1.1);
+    expect(km(CASA_DENTRO_NORD)).toBeLessThan(RAGGIO_CONSEGNA_KM * 0.9);
+    expect(km(CASA_DENTRO_SUD)).toBeLessThan(RAGGIO_CONSEGNA_KM * 0.9);
     // Nord e sud sono tutta latitudine, est e ovest tutta longitudine.
-    expect(CASA_13_KM_NORD.lng).toBe(NEGOZIO.lng);
-    expect(CASA_13_KM_EST.lat).toBe(NEGOZIO.lat);
+    expect(CASA_FUORI_NORD.lng).toBe(NEGOZIO.lng);
+    expect(CASA_FUORI_EST.lat).toBe(NEGOZIO.lat);
   });
 
   for (const fonte of FONTI) {
     for (const [dove, casa] of [
-      ['13 km a nord', CASA_13_KM_NORD],
-      ['13 km a sud', CASA_13_KM_SUD],
-      ['13 km a est', CASA_13_KM_EST],
-      ['13 km a ovest', CASA_13_KM_OVEST],
+      [`${CASA_FUORI_KM} km a nord`, CASA_FUORI_NORD],
+      [`${CASA_FUORI_KM} km a sud`, CASA_FUORI_SUD],
+      [`${CASA_FUORI_KM} km a est`, CASA_FUORI_EST],
+      [`${CASA_FUORI_KM} km a ovest`, CASA_FUORI_OVEST],
     ] as const) {
       it(`IL CASO DEL COLLAUDO — una casa ${dove}, presa dalla ${fonte}: la carta non apre il pagamento`, async () => {
         casaDalla(fonte, casa);
@@ -221,8 +235,8 @@ describe('la rotta della carta rifiuta un indirizzo fuori zona, come quella dei 
   }
 
   for (const [fonte, dove, casa] of [
-    ['geocodifica', '8 km a nord', CASA_8_KM_NORD],
-    ['rubrica', '8 km a sud', CASA_8_KM_SUD],
+    ['geocodifica', `${CASA_DENTRO_KM} km a nord`, CASA_DENTRO_NORD],
+    ['rubrica', `${CASA_DENTRO_KM} km a sud`, CASA_DENTRO_SUD],
   ] as const) {
     it(`una casa ${dove}, presa dalla ${fonte}, dentro il confine: il pagamento si apre`, async () => {
       casaDalla(fonte, casa);
@@ -268,11 +282,11 @@ describe('con due negozi nel carrello, la carta misura il confine da ognuno dei 
 
   for (const fonte of FONTI) {
     for (const [ordine, lontanoPrimo] of [
-      ['il negozio sotto casa primo, il forno a 13 km secondo', false],
-      ['il forno a 13 km primo, il negozio sotto casa secondo', true],
+      ['il negozio sotto casa primo, il forno fuori dal confine secondo', false],
+      ['il forno fuori dal confine primo, il negozio sotto casa secondo', true],
     ] as const) {
       it(`IL CASO DEL COLLAUDO — ${ordine}, casa presa dalla ${fonte}: la carta non apre il pagamento`, async () => {
-        const casa = CASA_13_KM_NORD;
+        const casa = CASA_FUORI_NORD;
         // L'ordine conta due volte: nella lista dei negozi letta dal database e nel carrello.
         state.sellers = lontanoPrimo ? [IL_FORNO, sottoCasa(casa)] : [sottoCasa(casa), IL_FORNO];
         casaDalla(fonte, casa);
@@ -287,8 +301,8 @@ describe('con due negozi nel carrello, la carta misura il confine da ognuno dei 
     }
   }
 
-  it('tutti e due dentro il confine (sotto casa e a 8 km): il pagamento si apre, una volta sola', async () => {
-    const casa = CASA_8_KM_NORD;
+  it(`tutti e due dentro il confine (sotto casa e a ${CASA_DENTRO_KM} km): il pagamento si apre, una volta sola`, async () => {
+    const casa = CASA_DENTRO_NORD;
     state.sellers = [sottoCasa(casa), IL_FORNO];
     casaDalla('geocodifica', casa);
     const res = await POST(await richiestaCon([GRUPPO_SOTTO_CASA, GRUPPO_DEL_FORNO]));
@@ -348,27 +362,27 @@ describe('la carta misura il confine in ogni direzione e da ogni fonte, come i c
     state.sellers = [IL_FORNO];
   });
 
-  it('i punti stanno dove dicono: a 13 km in diagonale nessun asse da solo passa il confine, a 9 km i due sommati sì', () => {
+  it(`i punti stanno dove dicono: a ${CASA_FUORI_KM} km in diagonale nessun asse da solo passa il confine, a ${CASA_DENTRO_KM} km i due sommati sì`, () => {
     const km = (c: { lat: number; lng: number }) => haversineKm(NEGOZIO.lat, NEGOZIO.lng, c.lat, c.lng);
     for (const [dove, gradi] of DIREZIONI) {
-      expect(km(puntoA(13, gradi)), `13 km ${dove}`).toBeGreaterThan(RAGGIO_CONSEGNA_KM + 2);
-      expect(km(puntoA(9, gradi)), `9 km ${dove}`).toBeLessThan(RAGGIO_CONSEGNA_KM - 0.5);
+      expect(km(puntoA(CASA_FUORI_KM, gradi)), `${CASA_FUORI_KM} km ${dove}`).toBeGreaterThan(RAGGIO_CONSEGNA_KM * 1.1);
+      expect(km(puntoA(CASA_DENTRO_KM, gradi)), `${CASA_DENTRO_KM} km ${dove}`).toBeLessThan(RAGGIO_CONSEGNA_KM * 0.9);
     }
     expect(DIAGONALI).toHaveLength(4);
     for (const [dove, gradi] of DIAGONALI) {
-      const a13 = puntoA(13, gradi);
-      expect(km({ lat: a13.lat, lng: NEGOZIO.lng }), `13 km ${dove}, la sola latitudine`).toBeLessThan(RAGGIO_CONSEGNA_KM - 0.5);
-      expect(km({ lat: NEGOZIO.lat, lng: a13.lng }), `13 km ${dove}, la sola longitudine`).toBeLessThan(RAGGIO_CONSEGNA_KM - 0.5);
-      const a9 = puntoA(9, gradi);
-      const sommati = km({ lat: a9.lat, lng: NEGOZIO.lng }) + km({ lat: NEGOZIO.lat, lng: a9.lng });
-      expect(sommati, `9 km ${dove}, i due assi sommati`).toBeGreaterThan(RAGGIO_CONSEGNA_KM + 2);
+      const casaFuori = puntoA(CASA_FUORI_KM, gradi);
+      expect(km({ lat: casaFuori.lat, lng: NEGOZIO.lng }), `${CASA_FUORI_KM} km ${dove}, la sola latitudine`).toBeLessThan(RAGGIO_CONSEGNA_KM * 0.9);
+      expect(km({ lat: NEGOZIO.lat, lng: casaFuori.lng }), `${CASA_FUORI_KM} km ${dove}, la sola longitudine`).toBeLessThan(RAGGIO_CONSEGNA_KM * 0.9);
+      const casaDentro = puntoA(CASA_DENTRO_KM, gradi);
+      const sommati = km({ lat: casaDentro.lat, lng: NEGOZIO.lng }) + km({ lat: NEGOZIO.lat, lng: casaDentro.lng });
+      expect(sommati, `${CASA_DENTRO_KM} km ${dove}, i due assi sommati`).toBeGreaterThan(RAGGIO_CONSEGNA_KM * 1.1);
     }
   });
 
   for (const fonte of FONTI) {
     for (const [dove, gradi] of DIREZIONI) {
-      it(`IL CASO DEL COLLAUDO — una casa a 13 km ${dove}, presa dalla ${fonte}: la carta non apre il pagamento`, async () => {
-        casaDalla(fonte, puntoA(13, gradi));
+      it(`IL CASO DEL COLLAUDO — una casa a ${CASA_FUORI_KM} km ${dove}, presa dalla ${fonte}: la carta non apre il pagamento`, async () => {
+        casaDalla(fonte, puntoA(CASA_FUORI_KM, gradi));
         const res = await POST(richiesta());
         const corpo = (await res.json()) as { error?: { message?: string } };
         expect(res.status, `la rotta della carta ha risposto ${res.status}: ${JSON.stringify(corpo)}`).toBe(400);
@@ -377,11 +391,11 @@ describe('la carta misura il confine in ogni direzione e da ogni fonte, come i c
       });
     }
     for (const [dove, gradi] of DIAGONALI) {
-      it(`una casa a 9 km ${dove}, presa dalla ${fonte}: dentro il confine il pagamento si apre`, async () => {
-        casaDalla(fonte, puntoA(9, gradi));
+      it(`una casa a ${CASA_DENTRO_KM} km ${dove}, presa dalla ${fonte}: dentro il confine il pagamento si apre`, async () => {
+        casaDalla(fonte, puntoA(CASA_DENTRO_KM, gradi));
         const res = await POST(richiesta());
         const corpo = await res.json();
-        expect(res.status, `una casa dentro i 10 km è stata rifiutata: ${JSON.stringify(corpo)}`).toBe(200);
+        expect(res.status, `una casa dentro i ${RAGGIO_CONSEGNA_KM} km è stata rifiutata: ${JSON.stringify(corpo)}`).toBe(200);
         expect(createSession).toHaveBeenCalledTimes(1);
       });
     }
@@ -396,11 +410,11 @@ describe('col secondo negozio, la carta misura la diagonale da ognuno dei due', 
 
   for (const fonte of FONTI) {
     for (const [ordine, lontanoPrimo] of [
-      ['il negozio sotto casa primo, il forno a 13 km verso nord-est secondo', false],
-      ['il forno a 13 km verso nord-est primo, il negozio sotto casa secondo', true],
+      ['il negozio sotto casa primo, il forno fuori dal confine verso nord-est secondo', false],
+      ['il forno fuori dal confine verso nord-est primo, il negozio sotto casa secondo', true],
     ] as const) {
       it(`IL CASO DEL COLLAUDO — ${ordine}, casa presa dalla ${fonte}: la carta non apre il pagamento`, async () => {
-        const casa = puntoA(13, 45);
+        const casa = puntoA(CASA_FUORI_KM, 45);
         state.sellers = lontanoPrimo ? [IL_FORNO, sottoCasa(casa)] : [sottoCasa(casa), IL_FORNO];
         casaDalla(fonte, casa);
         const res = await POST(
@@ -414,8 +428,8 @@ describe('col secondo negozio, la carta misura la diagonale da ognuno dei due', 
     }
   }
 
-  it('tutti e due dentro il confine, il forno a 9 km verso sud-ovest: il pagamento si apre, una volta sola', async () => {
-    const casa = puntoA(9, 225);
+  it(`tutti e due dentro il confine, il forno a ${CASA_DENTRO_KM} km verso sud-ovest: il pagamento si apre, una volta sola`, async () => {
+    const casa = puntoA(CASA_DENTRO_KM, 225);
     state.sellers = [IL_FORNO, sottoCasa(casa)];
     casaDalla('rubrica', casa);
     const res = await POST(await richiestaCon([GRUPPO_DEL_FORNO, GRUPPO_SOTTO_CASA]));
@@ -448,14 +462,16 @@ describe('col secondo negozio, la carta misura la diagonale da ognuno dei due', 
  */
 /** Tutto il giro, una direzione ogni 7,5 gradi (0 = nord, 90 = est). */
 const GIRO = Array.from({ length: 48 }, (_, i) => i * 7.5);
-const DENTRO_KM = RAGGIO_CONSEGNA_KM - 0.2;
-const FUORI_KM = RAGGIO_CONSEGNA_KM + 0.2;
+// 28/10/2026 — Un cinquantesimo del confine: 200 metri a 10 km, 100 a 5. Con 200 metri e il confine a 5
+// un ottagono coi lati a 4,85 km, girato di 3,75°, passava fra le case del giro.
+const DENTRO_KM = RAGGIO_CONSEGNA_KM - RAGGIO_CONSEGNA_KM / 50;
+const FUORI_KM = RAGGIO_CONSEGNA_KM + RAGGIO_CONSEGNA_KM / 50;
 /** Il confine sbagliato del collaudo: 10/111 di grado su tutti e due gli assi, la longitudine non corretta. */
 const nelRiquadroInGradi = (c: { lat: number; lng: number }) =>
   Math.abs(c.lat - NEGOZIO.lat) <= RAGGIO_CONSEGNA_KM / KM_PER_GRADO &&
   Math.abs(c.lng - NEGOZIO.lng) <= RAGGIO_CONSEGNA_KM / KM_PER_GRADO;
 
-describe('la carta misura il confine come un cerchio di 10 km, non come un riquadro in gradi', () => {
+describe(`la carta misura il confine come un cerchio di ${RAGGIO_CONSEGNA_KM} km, non come un riquadro in gradi`, () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.products = [
@@ -466,10 +482,10 @@ describe('la carta misura il confine come un cerchio di 10 km, non come un riqua
 
   it('i punti stanno dove dicono, e il riquadro in gradi li sbaglia (se no le prove sotto non misurano niente)', () => {
     const km = (c: { lat: number; lng: number }) => haversineKm(NEGOZIO.lat, NEGOZIO.lng, c.lat, c.lng);
-    expect(km(puntoA(12, 35))).toBeGreaterThan(RAGGIO_CONSEGNA_KM + 1.5);
-    expect(nelRiquadroInGradi(puntoA(12, 35)), '12 km verso 35° deve stare dentro il riquadro').toBe(true);
-    expect(km(puntoA(8, 90))).toBeLessThan(RAGGIO_CONSEGNA_KM - 1.5);
-    expect(nelRiquadroInGradi(puntoA(8, 90)), '8 km a est deve stare fuori dal riquadro').toBe(false);
+    expect(km(puntoA(CASA_FUORI_KM, 35))).toBeGreaterThan(RAGGIO_CONSEGNA_KM * 1.1);
+    expect(nelRiquadroInGradi(puntoA(CASA_FUORI_KM, 35)), `${CASA_FUORI_KM} km verso 35° deve stare dentro il riquadro`).toBe(true);
+    expect(km(puntoA(CASA_DENTRO_KM, 90))).toBeLessThan(RAGGIO_CONSEGNA_KM * 0.9);
+    expect(nelRiquadroInGradi(puntoA(CASA_DENTRO_KM, 90)), `${CASA_DENTRO_KM} km a est deve stare fuori dal riquadro`).toBe(false);
     for (const gradi of GIRO) {
       expect(km(puntoA(DENTRO_KM, gradi)), `${DENTRO_KM} km verso ${gradi}°`).toBeCloseTo(DENTRO_KM, 2);
       expect(km(puntoA(FUORI_KM, gradi)), `${FUORI_KM} km verso ${gradi}°`).toBeCloseTo(FUORI_KM, 2);
@@ -480,20 +496,20 @@ describe('la carta misura il confine come un cerchio di 10 km, non come un riqua
   });
 
   for (const fonte of FONTI) {
-    it(`IL CASO DEL COLLAUDO — una casa a 12 km verso 35°, presa dalla ${fonte}: la carta non apre il pagamento`, async () => {
-      casaDalla(fonte, puntoA(12, 35));
+    it(`IL CASO DEL COLLAUDO — una casa a ${CASA_FUORI_KM} km verso 35°, presa dalla ${fonte}: la carta non apre il pagamento`, async () => {
+      casaDalla(fonte, puntoA(CASA_FUORI_KM, 35));
       const res = await POST(richiesta());
       const corpo = (await res.json()) as { error?: { message?: string } };
       expect(res.status, `la rotta della carta ha risposto ${res.status}: ${JSON.stringify(corpo)}`).toBe(400);
       expect(corpo.error?.message).toBe(motivoFuoriZona(NEGOZIO.nome));
-      expect(createSession, 'il pagamento con la carta è stato aperto per una casa a 12 km').not.toHaveBeenCalled();
+      expect(createSession, `il pagamento con la carta è stato aperto per una casa a ${CASA_FUORI_KM} km`).not.toHaveBeenCalled();
     });
 
-    it(`IL CASO DEL COLLAUDO — una casa a 8 km a est, presa dalla ${fonte}: il pagamento si apre`, async () => {
-      casaDalla(fonte, puntoA(8, 90));
+    it(`IL CASO DEL COLLAUDO — una casa a ${CASA_DENTRO_KM} km a est, presa dalla ${fonte}: il pagamento si apre`, async () => {
+      casaDalla(fonte, puntoA(CASA_DENTRO_KM, 90));
       const res = await POST(richiesta());
       const corpo = await res.json();
-      expect(res.status, `una casa a 8 km è stata rifiutata: ${JSON.stringify(corpo)}`).toBe(200);
+      expect(res.status, `una casa a ${CASA_DENTRO_KM} km è stata rifiutata: ${JSON.stringify(corpo)}`).toBe(200);
       expect(createSession).toHaveBeenCalledTimes(1);
     });
 

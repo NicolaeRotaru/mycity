@@ -100,16 +100,33 @@ function paginaConLaPosizione() {
 const TESTATA = ['Home', 'Vicino a te', 'Negozi vicini', 'Vicino a te', `I negozi della tua zona a Piacenza: consegniamo fino a ${KM} km dal negozio.`];
 
 describe('«Vicino a te», montata, dice il confine com’è e non invita a cercare oltre', () => {
-  it('a 5 km, con la lista vuota: le frasi rilette, e l’invito ad aumentare il raggio solo perché il cursore può salire', () => {
-    const { s } = paginaConLaPosizione();
+  /*
+   * 28/10/2026 — Il confine è sceso a 5 km (correzione di Nicola) e la pagina si apre al confine, letto
+   * da RAGGIO_CONSEGNA_KM: all'apertura il cursore è già in fondo, e l'invito ad aumentare il raggio non
+   * c'è. Torna solo se si porta il cursore sotto il confine, perché solo allora il cursore può salire.
+   */
+  it('all’apertura, al confine e con la lista vuota: nessun invito ad aumentare il raggio; torna solo se il cursore può salire', () => {
+    const { s, cursore } = paginaConLaPosizione();
+    expect(cursore.max, 'il cursore va oltre il confine della cassa').toBe(String(KM));
+    expect(cursore.value, 'la pagina non si apre al confine della cassa').toBe(String(KM));
     expect(frasiDi(s.radice), 'la pagina «Vicino a te» è cambiata: rileggi le frasi contro la cassa').toEqual([
       ...TESTATA,
-      '0 negozi entro 5 km',
+      `0 negozi entro ${KM} km`,
       'Lista Mappa',
-      'Raggio: 5 km',
-      avvisoNessunNegozioVicino(5),
+      `Raggio: ${KM} km`,
+      `Nessun negozio entro ${KM} km. Per ora consegniamo fino a ${KM} km dal negozio, e oltre non arriviamo.`,
     ]);
-    expect(avvisoNessunNegozioVicino(5)).toBe('Nessun negozio entro 5 km. Aumenta il raggio per vederne di più.');
+    const sotto = Math.max(1, KM - 2);
+    s.agisci(() => sposta(cursore, String(sotto)));
+    expect(cursore.value).toBe(String(sotto));
+    expect(frasiDi(s.radice), 'sotto il confine la pagina «Vicino a te» dice qualcosa che non è stato riletto').toEqual([
+      ...TESTATA,
+      `0 negozi entro ${sotto} km`,
+      'Lista Mappa',
+      `Raggio: ${sotto} km`,
+      avvisoNessunNegozioVicino(sotto),
+    ]);
+    expect(avvisoNessunNegozioVicino(sotto)).toBe(`Nessun negozio entro ${sotto} km. Aumenta il raggio per vederne di più.`);
   });
 
   it('IL CASO DEL COLLAUDO — col cursore in fondo, al confine: «oltre non arriviamo», e nessuna frase dopo', () => {

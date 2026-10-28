@@ -63,6 +63,21 @@ const DIREZIONI: Array<[string, number]> = [
 const DIAGONALI = DIREZIONI.filter(([, gradi]) => gradi % 90 !== 0);
 const FONTI: Fonte[] = ['rubrica', 'geocodifica'];
 
+/**
+ * 28/10/2026 — IL CONFINE È SCESO A 5 KM (correzione di Nicola): LE CASE SI MISURANO DAL CONFINE.
+ *
+ * Fino al 27/10 le case di queste prove stavano a 9 km (dentro) e a 13 km (fuori) da un confine di 10. Col confine a 5 la casa
+ * «dentro» era fuori, e la casa lontana in diagonale non metteva più alla prova la misura fatta un
+ * asse per volta: ogni asse, da solo, superava già i 5 km. Adesso le due distanze si leggono dal
+ * confine: dentro a quattro quinti (4 km col confine a 5), fuori a sei quinti (6 km). In diagonale,
+ * a 6 km, nessun asse da solo arriva al confine (4,2 km ciascuno); a 4 km i due assi sommati lo
+ * superano (5,7 km): un confine «a quadrato» e uno «a rombo» restano rossi, anche col secondo
+ * negozio. Questa prova controlla il MECCANISMO e non va riscritta quando cambia il NUMERO: il numero
+ * lo inchioda tests/unit/al-lancio-si-consegna-in-bici-fino-a-5-km.test.ts.
+ */
+const CASA_DENTRO_KM = RAGGIO_CONSEGNA_KM - RAGGIO_CONSEGNA_KM / 5;
+const CASA_FUORI_KM = RAGGIO_CONSEGNA_KM + RAGGIO_CONSEGNA_KM / 5;
+
 const fonti: Record<Fonte, Coord | null> = { rubrica: null, geocodifica: null };
 const ordiniCreati: Array<Record<string, unknown>> = [];
 const chiamateRpc: string[] = [];
@@ -186,35 +201,35 @@ beforeEach(() => {
 describe('la cassa in contanti misura il confine in ogni direzione, da ogni fonte', () => {
   it('i punti stanno dove dicono (se no le prove sotto non misurano niente)', () => {
     for (const [dove, gradi] of DIREZIONI) {
-      const a13 = haversineKm(NEGOZIO.lat, NEGOZIO.lng, puntoA(13, gradi).lat, puntoA(13, gradi).lng);
-      const a9 = haversineKm(NEGOZIO.lat, NEGOZIO.lng, puntoA(9, gradi).lat, puntoA(9, gradi).lng);
-      expect(a13, `13 km ${dove}`).toBeGreaterThan(RAGGIO_CONSEGNA_KM + 2);
-      expect(a9, `9 km ${dove}`).toBeLessThan(RAGGIO_CONSEGNA_KM - 0.5);
+      const km = (d: number) => haversineKm(NEGOZIO.lat, NEGOZIO.lng, puntoA(d, gradi).lat, puntoA(d, gradi).lng);
+      expect(km(CASA_FUORI_KM), `${CASA_FUORI_KM} km ${dove}`).toBeGreaterThan(RAGGIO_CONSEGNA_KM * 1.1);
+      expect(km(CASA_DENTRO_KM), `${CASA_DENTRO_KM} km ${dove}`).toBeLessThan(RAGGIO_CONSEGNA_KM * 0.9);
     }
     // Nord e sud stanno sul meridiano del negozio: la distanza è TUTTA latitudine.
-    expect(Math.abs(puntoA(13, 0).lng - NEGOZIO.lng)).toBeLessThan(1e-9);
-    expect(Math.abs(puntoA(13, 180).lng - NEGOZIO.lng)).toBeLessThan(1e-9);
-    // In diagonale, a 13 km, né la sola latitudine né la sola longitudine superano il confine:
+    expect(Math.abs(puntoA(CASA_FUORI_KM, 0).lng - NEGOZIO.lng)).toBeLessThan(1e-9);
+    expect(Math.abs(puntoA(CASA_FUORI_KM, 180).lng - NEGOZIO.lng)).toBeLessThan(1e-9);
+    // In diagonale, fuori dal confine, né la sola latitudine né la sola longitudine superano il confine:
     // è il caso che una misura fatta un asse per volta lascia passare.
     expect(DIAGONALI).toHaveLength(4);
     for (const [dove, gradi] of DIAGONALI) {
-      const casa = puntoA(13, gradi);
+      const casa = puntoA(CASA_FUORI_KM, gradi);
       const soloLatitudine = haversineKm(NEGOZIO.lat, NEGOZIO.lng, casa.lat, NEGOZIO.lng);
       const soloLongitudine = haversineKm(NEGOZIO.lat, NEGOZIO.lng, NEGOZIO.lat, casa.lng);
-      expect(soloLatitudine, `13 km ${dove}, la sola latitudine`).toBeLessThan(RAGGIO_CONSEGNA_KM - 0.5);
-      expect(soloLongitudine, `13 km ${dove}, la sola longitudine`).toBeLessThan(RAGGIO_CONSEGNA_KM - 0.5);
-      // E a 9 km in diagonale i due assi sommati superano il confine: la regola che somma sbaglierebbe.
-      const a9 = puntoA(9, gradi);
+      expect(soloLatitudine, `${CASA_FUORI_KM} km ${dove}, la sola latitudine`).toBeLessThan(RAGGIO_CONSEGNA_KM * 0.9);
+      expect(soloLongitudine, `${CASA_FUORI_KM} km ${dove}, la sola longitudine`).toBeLessThan(RAGGIO_CONSEGNA_KM * 0.9);
+      // E dentro il confine, in diagonale, i due assi sommati lo superano: la regola che somma sbaglierebbe.
+      const casaDentro = puntoA(CASA_DENTRO_KM, gradi);
       const sommati =
-        haversineKm(NEGOZIO.lat, NEGOZIO.lng, a9.lat, NEGOZIO.lng) + haversineKm(NEGOZIO.lat, NEGOZIO.lng, NEGOZIO.lat, a9.lng);
-      expect(sommati, `9 km ${dove}, i due assi sommati`).toBeGreaterThan(RAGGIO_CONSEGNA_KM + 2);
+        haversineKm(NEGOZIO.lat, NEGOZIO.lng, casaDentro.lat, NEGOZIO.lng) +
+        haversineKm(NEGOZIO.lat, NEGOZIO.lng, NEGOZIO.lat, casaDentro.lng);
+      expect(sommati, `${CASA_DENTRO_KM} km ${dove}, i due assi sommati`).toBeGreaterThan(RAGGIO_CONSEGNA_KM * 1.1);
     }
   });
 
   for (const fonte of FONTI) {
     for (const [dove, gradi] of DIREZIONI) {
-      it(`IL CASO DEL COLLAUDO — una casa a 13 km ${dove}, presa dalla ${fonte}: l'ordine non nasce`, async () => {
-        const { res, corpo } = await paga(puntoA(13, gradi), fonte);
+      it(`IL CASO DEL COLLAUDO — una casa a ${CASA_FUORI_KM} km ${dove}, presa dalla ${fonte}: l'ordine non nasce`, async () => {
+        const { res, corpo } = await paga(puntoA(CASA_FUORI_KM, gradi), fonte);
         expect(res.status, `la rotta dei contanti ha risposto ${res.status}: ${JSON.stringify(corpo)}`).toBe(400);
         expect(corpo.error?.message).toBe(motivoFuoriZona(NEGOZIO.nome));
         expect(ordiniCreati, 'è nato un ordine in contanti che nessuno può consegnare').toHaveLength(0);
@@ -231,10 +246,10 @@ describe('la cassa in contanti misura il confine in ogni direzione, da ogni font
     ['rubrica', 'a nord-est', 45],
     ['geocodifica', 'a sud-ovest', 225],
   ] as Array<[Fonte, string, number]>) {
-    it(`una casa a 9 km ${dove}, presa dalla ${fonte}: dentro il confine l'ordine nasce, con la casa misurata dal server`, async () => {
-      const casa = puntoA(9, gradi);
+    it(`una casa a ${CASA_DENTRO_KM} km ${dove}, presa dalla ${fonte}: dentro il confine l'ordine nasce, con la casa misurata dal server`, async () => {
+      const casa = puntoA(CASA_DENTRO_KM, gradi);
       const { corpo } = await paga(casa, fonte);
-      expect(corpo.error?.message, 'una casa dentro i 10 km è stata rifiutata per zona').not.toBe(motivoFuoriZona(NEGOZIO.nome));
+      expect(corpo.error?.message, `una casa dentro i ${RAGGIO_CONSEGNA_KM} km è stata rifiutata per zona`).not.toBe(motivoFuoriZona(NEGOZIO.nome));
       expect(ordiniCreati, `l'ordine dentro il confine non è nato: ${JSON.stringify(corpo)}`).toHaveLength(1);
       expect(ordiniCreati[0].delivery_lat).toBeCloseTo(casa.lat, 9);
       expect(ordiniCreati[0].delivery_lng).toBeCloseTo(casa.lng, 9);
@@ -276,11 +291,11 @@ describe('con due negozi nel carrello, la cassa in contanti misura il confine da
 
   for (const fonte of FONTI) {
     for (const [ordine, lontanoPrimo] of [
-      ['il negozio sotto casa primo, il forno a 13 km secondo', false],
-      ['il forno a 13 km primo, il negozio sotto casa secondo', true],
+      ['il negozio sotto casa primo, il forno fuori dal confine secondo', false],
+      ['il forno fuori dal confine primo, il negozio sotto casa secondo', true],
     ] as const) {
       it(`${ordine}, casa presa dalla ${fonte}: l'ordine non nasce`, async () => {
-        const casa = puntoA(13, 0);
+        const casa = puntoA(CASA_FUORI_KM, 0);
         const { res, corpo } = await paga(casa, fonte, dueNegozi(casa, lontanoPrimo));
         expect(res.status, `la rotta dei contanti ha risposto ${res.status}: ${JSON.stringify(corpo)}`).toBe(400);
         expect(corpo.error?.message).toBe(motivoFuoriZona(NEGOZIO.nome));
@@ -290,10 +305,10 @@ describe('con due negozi nel carrello, la cassa in contanti misura il confine da
     }
   }
 
-  it('tutti e due dentro il confine (sotto casa e a 9 km): nascono i due ordini', async () => {
-    const casa = puntoA(9, 0);
+  it(`tutti e due dentro il confine (sotto casa e a ${CASA_DENTRO_KM} km): nascono i due ordini`, async () => {
+    const casa = puntoA(CASA_DENTRO_KM, 0);
     const { corpo } = await paga(casa, 'geocodifica', dueNegozi(casa, false));
-    expect(corpo.error?.message, 'due negozi dentro i 10 km sono stati rifiutati per zona').not.toBe(motivoFuoriZona(NEGOZIO.nome));
+    expect(corpo.error?.message, `due negozi dentro i ${RAGGIO_CONSEGNA_KM} km sono stati rifiutati per zona`).not.toBe(motivoFuoriZona(NEGOZIO.nome));
     expect(ordiniCreati, `gli ordini dentro il confine non sono nati: ${JSON.stringify(corpo)}`).toHaveLength(2);
   });
 });
@@ -314,11 +329,15 @@ describe('con due negozi nel carrello, la cassa in contanti misura il confine da
  * una casa ogni 15 gradi un ottagono della misura giusta (i lati a 9,83 km) passava ancora fra una
  * casa e l'altra. La prima prova qui sotto lo conta, su ogni ottagono da 9 a 11 km girato in ogni verso.
  */
-describe('la cassa in contanti misura il confine come un cerchio di 10 km, non uno da 12 e non un ottagono', () => {
+describe(`la cassa in contanti misura il confine come un cerchio di ${RAGGIO_CONSEGNA_KM} km, non uno più largo e non un ottagono`, () => {
   /** Tutto il giro, una direzione ogni 7,5 gradi (0 = nord, 90 = est). */
   const GIRO = Array.from({ length: 48 }, (_, i) => i * 7.5);
-  const DENTRO_KM = RAGGIO_CONSEGNA_KM - 0.2;
-  const FUORI_KM = RAGGIO_CONSEGNA_KM + 0.2;
+  // 28/10/2026 — Un cinquantesimo del confine: 200 metri a 10 km, 100 a 5. Con 200 metri e il confine a 5
+  // un ottagono coi lati a 4,85 km, girato di 3,75°, passava fra le case del giro.
+  const DENTRO_KM = RAGGIO_CONSEGNA_KM - RAGGIO_CONSEGNA_KM / 50;
+  const FUORI_KM = RAGGIO_CONSEGNA_KM + RAGGIO_CONSEGNA_KM / 50;
+  /** Il caso del collaudo: un decimo oltre il confine (11 km su 10, 5,5 su 5), dentro un raggio più largo di un quinto. */
+  const UN_DECIMO_OLTRE_KM = RAGGIO_CONSEGNA_KM + RAGGIO_CONSEGNA_KM / 10;
   /**
    * Un ottagono col centro sul negozio: i lati stanno a `apotema` km, il primo guarda verso `rotazione`
    * gradi. Una casa ci sta dentro se, misurata verso il lato più vicino, non lo supera.
@@ -331,35 +350,35 @@ describe('la cassa in contanti misura il confine come un cerchio di 10 km, non u
   const caseSbagliate = (giro: number[], accetta: (km: number, gradi: number) => boolean) =>
     giro.filter((g) => !accetta(DENTRO_KM, g) || accetta(FUORI_KM, g)).length;
 
-  it('le case stanno dove dicono, e sbagliano il raggio da 12 km e ogni ottagono (se no la prova sotto non misura niente)', () => {
+  it('le case stanno dove dicono, e sbagliano il raggio più largo di un quinto e ogni ottagono (se no la prova sotto non misura niente)', () => {
     for (const gradi of GIRO) {
       const km = (d: number) => haversineKm(NEGOZIO.lat, NEGOZIO.lng, puntoA(d, gradi).lat, puntoA(d, gradi).lng);
       expect(km(DENTRO_KM), `${DENTRO_KM} km verso ${gradi}°`).toBeCloseTo(DENTRO_KM, 2);
       expect(km(FUORI_KM), `${FUORI_KM} km verso ${gradi}°`).toBeCloseTo(FUORI_KM, 2);
     }
-    expect(caseSbagliate(GIRO, (km) => km <= 12), 'il raggio da 12 km del collaudo').toBeGreaterThan(0);
+    expect(caseSbagliate(GIRO, (km) => km <= RAGGIO_CONSEGNA_KM * 1.2), 'il raggio più largo di un quinto (12 km su 10) del collaudo').toBeGreaterThan(0);
     const salvi: string[] = [];
     for (let rotazione = 0; rotazione < 45; rotazione += 0.5) {
-      for (let centesimi = 900; centesimi <= 1100; centesimi++) {
-        const apotema = centesimi / 100;
+      for (let millesimi = 900; millesimi <= 1100; millesimi++) {
+        const apotema = (RAGGIO_CONSEGNA_KM * millesimi) / 1000;
         if (caseSbagliate(GIRO, (km, g) => nellOttagono(km, g, apotema, rotazione)) === 0) {
           salvi.push(`lati a ${apotema} km, girato di ${rotazione}°`);
         }
       }
     }
     expect(salvi, 'questi ottagoni passano fra le case del giro').toEqual([]);
-    // Con una casa ogni 15 gradi, invece, l'ottagono coi lati a 9,83 km non ne sbaglia nessuna.
+    // Con una casa ogni 15 gradi, invece, l'ottagono coi lati al 98,3% del confine (9,83 km su 10) non ne sbaglia nessuna.
     const ogni15Gradi = GIRO.filter((g) => g % 15 === 0);
     expect(ogni15Gradi).toHaveLength(24);
-    expect(caseSbagliate(ogni15Gradi, (km, g) => nellOttagono(km, g, 9.83, 0))).toBe(0);
+    expect(caseSbagliate(ogni15Gradi, (km, g) => nellOttagono(km, g, RAGGIO_CONSEGNA_KM * 0.983, 0))).toBe(0);
   });
 
   for (const fonte of FONTI) {
-    it(`IL CASO DEL COLLAUDO — una casa a 11 km verso nord-est, presa dalla ${fonte}: l'ordine non nasce`, async () => {
-      const { res, corpo } = await paga(puntoA(11, 45), fonte);
+    it(`IL CASO DEL COLLAUDO — una casa a ${UN_DECIMO_OLTRE_KM} km verso nord-est, presa dalla ${fonte}: l'ordine non nasce`, async () => {
+      const { res, corpo } = await paga(puntoA(UN_DECIMO_OLTRE_KM, 45), fonte);
       expect(res.status, `la rotta dei contanti ha risposto ${res.status}: ${JSON.stringify(corpo)}`).toBe(400);
       expect(corpo.error?.message).toBe(motivoFuoriZona(NEGOZIO.nome));
-      expect(ordiniCreati, 'è nato un ordine in contanti per una casa a 11 km').toHaveLength(0);
+      expect(ordiniCreati, `è nato un ordine in contanti per una casa a ${UN_DECIMO_OLTRE_KM} km`).toHaveLength(0);
       expect(chiamateRpc, 'il rifiuto per zona ha già riservato la merce').not.toContain('reserve_stock');
     });
 

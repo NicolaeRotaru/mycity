@@ -125,7 +125,10 @@ export default function NearMePage() {
   const [motivo, setMotivo] = useState<MotivoPosizione | null>(null);
   const [cerco, setCerco] = useState(false);
   const [view, setView] = useState<'list' | 'map'>('list');
-  const [radiusKm, setRadiusKm] = useState(5);
+  // 28/10/2026 — La pagina si apre al confine della cassa, letto da dove è deciso. Prima partiva da
+  // un 5 scritto a mano: col confine a 10 si apriva a metà, e se il confine scende sotto 5 si
+  // aprirebbe oltre il massimo del cursore, con in lista negozi che la cassa poi rifiuta.
+  const [radiusKm, setRadiusKm] = useState<number>(RAGGIO_CONSEGNA_KM);
 
   /**
    * 24/8/2026 — IL PERMESSO NON SI CHIEDE PIÙ A FREDDO, E LA PAGINA NON ASPETTA PIÙ.

@@ -37,20 +37,31 @@ export const NEW_PRODUCT_DAYS = 14;
  * cintura; fuori restano Fiorenzuola, Castel San Giovanni, Cremona, Lodi,
  * Milano.
  *
+ * 28/10/2026, 08:30 — CORREZIONE DI NICOLA: 5 KM, NON 10. «Mi ero sbagliato,
+ * la consegna va fatta in un'area di 5 km.» Con 10 la cassa accettava un
+ * indirizzo a 8 km: il cliente pagava, e in bici non ci si arrivava — un
+ * rimborso, un negozio che ha preparato per niente, il primo cliente perso.
+ * Da un negozio in centro, dentro i 5 km ci sta Piacenza città; fuori restano
+ * Podenzano, Rottofreno, Gossolengo e la prima cintura. Il confine si misura
+ * in linea d'aria (`haversineKm`, in lib/ordini/zona-di-consegna.ts): 5 km in
+ * linea d'aria sono circa 6-7 km di strada, una stima e non una misura.
+ *
  * La promessa sui tempi che va con questo confine è «in giornata» (scelta 8
  * della carta #209), non una stima a minuti: la frase «30-60 minuti» va
  * allineata a parte. La pagina Spedizioni, la FAQ, «Vicino a te» e la pagina
- * admin delle consegne leggono il confine da qui (27/10, secondo giro).
+ * admin delle consegne leggono il confine da qui (27/10, secondo giro); dal
+ * 28/10 anche il raggio con cui si apre «Vicino a te».
  *
  * 🟡 IL NUMERO È UNA DECISIONE COMMERCIALE, NON TECNICA: dice a chi possiamo
  * vendere. Sta qui, in una riga, apposta perché cambiarlo sia una firma e non
  * una caccia al tesoro. La prova
- * tests/unit/al-lancio-si-consegna-in-bici-fino-a-10-km.test.ts lo inchioda:
- * chi lo cambia cambia anche quella, con la decisione nuova accanto. Chi lo
- * alza si prenda anche il compenso del fattorino (`COMPENSO_RIDER_CENTS`), che
- * è fisso e non cresce coi chilometri.
+ * tests/unit/al-lancio-si-consegna-in-bici-fino-a-5-km.test.ts lo inchioda
+ * (fino al 28/10 si chiamava …-fino-a-10-km.test.ts): chi lo cambia cambia
+ * anche quella, nome compreso, con la decisione nuova accanto. Chi lo alza si
+ * prenda anche il compenso del fattorino (`COMPENSO_RIDER_CENTS`), che è fisso
+ * e non cresce coi chilometri.
  */
-export const RAGGIO_CONSEGNA_KM = 10;
+export const RAGGIO_CONSEGNA_KM = 5;
 
 /**
  * La velocità media di chi consegna, in km/h, per stimare il tempo di viaggio
