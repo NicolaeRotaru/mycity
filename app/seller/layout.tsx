@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
@@ -13,14 +15,51 @@ import { Store, Mail, Home, Pencil, X, PauseCircle, Clock, ArrowLeft } from 'luc
 // tratteniamo davvero, cosi' il giorno che cambia questa pagina non resta indietro.
 import { COMMISSIONE_DEL_PERCENTO } from '@/app/seller/earnings/commissione';
 
+/**
+ * Ondata 10 — lo stato della richiesta del negozio, letto davvero.
+ *
+ * Il layout decideva «in attesa / rifiutato / sospeso» su approval_status e
+ * rejection_reason, ma useProfile quei campi non li legge: in produzione
+ * erano sempre vuoti, e ogni negozio non approvato — anche chi la richiesta
+ * non l'aveva mai mandata — leggeva «Stiamo verificando i dati, entro 48
+ * ore». Ogni profilo nasce 'pending': la richiesta vera è quella con
+ * approval_requested_at (la scrive l'invio del modulo su /sell, come lì).
+ * La chiave sta sotto ['profile'], così l'invio da /sell la rinfresca.
+ */
+type StatoRichiestaNegozio = {
+  approval_status: string | null;
+  approval_requested_at: string | null;
+  rejection_reason: string | null;
+};
+
 export default function SellerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { profile, isAuthenticated, isLoading, isSeller, isAdmin, isBuyer, isRider } = useProfile();
   const isApproved = !!profile?.is_approved;
   const allowed = (isSeller && isApproved) || isAdmin;
-  type SellerProfileExt = { approval_status?: string | null; rejection_reason?: string | null };
+  type SellerProfileExt = Partial<StatoRichiestaNegozio>;
   const profileExt = profile as (typeof profile & SellerProfileExt) | null;
-  const approvalStatus = profileExt?.approval_status ?? undefined;
+  const profileId = profile?.id ?? '';
+  const daLeggereLaRichiesta = isSeller && !isApproved && !!profileId;
+  const richiesta = useQuery({
+    queryKey: ['profile', 'stato-richiesta-negozio', profileId] as const,
+    enabled: daLeggereLaRichiesta,
+    queryFn: async (): Promise<StatoRichiestaNegozio> => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('approval_status, approval_requested_at, rejection_reason')
+        .eq('id', profileId)
+        .single();
+      if (error) throw error;
+      return data as StatoRichiestaNegozio;
+    },
+  });
+  const statoRichiesta = daLeggereLaRichiesta ? richiesta.data ?? null : null;
+  const approvalStatus = statoRichiesta?.approval_status ?? profileExt?.approval_status ?? undefined;
+  const rejectionReason = statoRichiesta?.rejection_reason ?? profileExt?.rejection_reason ?? null;
+  const richiestaInviata = !!(statoRichiesta?.approval_requested_at ?? profileExt?.approval_requested_at);
+  // Lato severo: se lo stato non si legge, non si promette nessuna verifica.
+  const statoIllegibile = daLeggereLaRichiesta && richiesta.isError && !statoRichiesta;
   const isPending   = isSeller && approvalStatus === 'pending';
   const isSuspended = isSeller && approvalStatus === 'suspended';
   const isRejected  = isSeller && approvalStatus === 'rejected';
@@ -37,7 +76,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
     // Niente più redirect silenzioso per wrong-role: mostriamo schermata
   }, [isAuthenticated, isLoading, router]);
 
-  if (isLoading || !isAuthenticated) {
+  if (isLoading || !isAuthenticated || (daLeggereLaRichiesta && richiesta.isLoading)) {
     return <LoadingState />;
   }
 
@@ -110,9 +149,9 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             <X size={32} className="text-secondary-600" aria-hidden />
           </div>
           <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Richiesta non approvata</h1>
-          {profileExt?.rejection_reason && (
+          {rejectionReason && (
             <p className="text-sm text-secondary-700 bg-secondary-50 border border-secondary-200 rounded-lg px-3 py-2 max-w-md mx-auto mb-3">
-              <strong>Motivo:</strong> {profileExt?.rejection_reason}
+              <strong>Motivo:</strong> {rejectionReason}
             </p>
           )}
           <p className="text-ink-600 mb-4 max-w-md mx-auto">
@@ -120,6 +159,32 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
             <Button href="/sell" icon={Pencil}>Ripresenta la richiesta</Button>
+            <Button href="/?shop=1" variant="secondary" icon={Home}>Vai al marketplace</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if ((isPending || pending) && !richiestaInviata) {
+    // La richiesta non ci è arrivata (o non sappiamo se è arrivata): niente
+    // «stiamo verificando». /sell legge lo stato vero e mostra il modulo o l'attesa.
+    return (
+      <div className="container mx-auto p-6 max-w-2xl">
+        <div className="bg-white border-2 border-primary-200 rounded-2xl p-8 text-center">
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-primary-100 flex items-center justify-center mb-4">
+            <Store size={32} className="text-primary-600" aria-hidden />
+          </div>
+          <h1 className="text-2xl font-extrabold text-ink-900 mb-2">
+            {statoIllegibile ? 'Il tuo negozio non è ancora attivo' : 'Manca un passo: la richiesta di attivazione'}
+          </h1>
+          <p className="text-ink-600 mb-4 max-w-md mx-auto">
+            {statoIllegibile
+              ? 'Non siamo riusciti a leggere lo stato della tua richiesta. Nella pagina della richiesta vedi se è già in valutazione o se manca ancora qualcosa.'
+              : 'Il tuo account negozio è creato, ma la richiesta di attivazione non ci è ancora arrivata. Inviala con i dati della tua attività: da quel momento la verifichiamo entro 48 ore lavorative.'}
+          </p>
+          <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
+            <Button href="/sell" icon={Pencil}>{statoIllegibile ? 'Vedi la tua richiesta' : 'Invia la richiesta'}</Button>
             <Button href="/?shop=1" variant="secondary" icon={Home}>Vai al marketplace</Button>
           </div>
         </div>

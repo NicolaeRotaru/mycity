@@ -234,3 +234,45 @@ export function motivoLeggibile(risposta: Risposta<ConErrore>): string {
   if (!err) return 'nessun errore';
   return err instanceof Error ? err.message : String((err as { message?: string })?.message ?? 'errore');
 }
+
+export type RuoloArea = 'buyer' | 'seller' | 'rider' | 'admin';
+
+export type AccessoArea = { azione: 'entra' } | { azione: 'rimanda'; verso: string };
+
+/** La pagina dove un negozio non ancora approvato vede l'attesa o il rifiuto. */
+export const PAGINA_ATTESA_NEGOZIO = '/seller/dashboard';
+
+/**
+ * ONDATA 10 — «RUOLO SBAGLIATO» E «NON ANCORA APPROVATO» NON SONO LA STESSA COSA.
+ *
+ * Prima erano un solo ramo: chi non era approvato veniva rimandato a
+ * /seller/dashboard, che sta anch'essa sotto /seller — e il portiere lo
+ * rimandava di nuovo lì, all'infinito. Il primo contatto del negozio nuovo
+ * con MyCity era una pagina di errore del browser.
+ *
+ * - Ruolo sbagliato: come sempre (venditore → il suo pannello, gli altri → home).
+ * - Amministratore: entra. L'approvazione non è un requisito del ruolo admin
+ *   (le rotte /api admin guardano solo il ruolo): chi viene promosso dal
+ *   pannello deve poter entrare nel pannello.
+ * - Negozio non approvato: entra SOLO sulla dashboard, dove il layout mostra la
+ *   schermata di attesa o di rifiuto. Il resto del pannello resta chiuso.
+ * - Fattorino non approvato: resta fuori. Decisione 1 del 26/10 (Nicola): il
+ *   reclutamento pubblico è chiuso, nessun documento si carica dal sito.
+ */
+export function decidiAccessoArea(stato: {
+  role: RuoloArea | undefined;
+  approved: boolean;
+  allowed: readonly RuoloArea[];
+  pathname: string;
+}): AccessoArea {
+  const { role, approved, allowed, pathname } = stato;
+  const fuori: AccessoArea = {
+    azione: 'rimanda',
+    verso: role === 'seller' ? PAGINA_ATTESA_NEGOZIO : '/',
+  };
+  if (!role || !allowed.includes(role)) return fuori;
+  if (role === 'admin' || approved) return { azione: 'entra' };
+  const percorso = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  if (role === 'seller' && percorso === PAGINA_ATTESA_NEGOZIO) return { azione: 'entra' };
+  return fuori;
+}

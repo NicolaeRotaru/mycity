@@ -26,7 +26,16 @@ import {
   decidiCacheProfilo,
   decidiPortiere,
   motivoLeggibile,
+  decidiAccessoArea,
 } from '@/lib/auth/decisione-portiere';
+import {
+  TETTO_RINNOVO_MS,
+  chiediConTettoSuScritturaDiSessione,
+  creaRaccoglitoreCookie,
+  eCookieDiSessione,
+  sessioneDaRinnovare,
+  travasaCookie,
+} from '@/lib/auth/cookie-di-sessione';
 
 /**
  * Middleware strict: il client browser usa @supabase/ssr, la sessione
@@ -80,7 +89,7 @@ function findRoleRule(pathname: string) {
  */
 function haCookieDiSessione(req: NextRequest): boolean {
   for (const c of req.cookies.getAll()) {
-    if (c.name.startsWith('sb-') && c.name.includes('-auth-token')) return true;
+    if (eCookieDiSessione(c.name)) return true;
   }
   return false;
 }
@@ -164,7 +173,7 @@ type ProfiloInCache = { role: string | undefined; approved: boolean; emailConfer
 function improntaSessione(req: NextRequest): string {
   const pezzi: string[] = [];
   for (const c of req.cookies.getAll()) {
-    if (c.name.startsWith('sb-') && c.name.includes('-auth-token')) pezzi.push(`${c.name}=${c.value}`);
+    if (eCookieDiSessione(c.name)) pezzi.push(`${c.name}=${c.value}`);
   }
   // Nessuna sessione: nessuna impronta. Vuoto e' «non lo so», e chi chiama
   // ripiega — non su un valore uguale per tutti, che sarebbe peggio di niente.
@@ -427,6 +436,13 @@ export async function middleware(req: NextRequest) {
   }
 
   // Client server-side che legge/scrive cookie su richiesta+risposta.
+  //
+  // Ondata 10 — I cookie che il servizio di accesso decide finiscono anche in
+  // una scatola (`raccoglitore`), e la scatola si versa su OGNI risposta che
+  // esce, rimandi compresi (`esci`). Prima finivano solo su `res`: quattro
+  // uscite su cinque costruivano una risposta nuova, e il browser restava con
+  // una tessera che il server aveva gia' bruciato.
+  const raccoglitore = creaRaccoglitoreCookie();
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_KEY, {
     cookies: {
       get(name: string) {
@@ -435,12 +451,19 @@ export async function middleware(req: NextRequest) {
       set(name: string, value: string, options: CookieOptions) {
         req.cookies.set({ name, value, ...options });
         res.cookies.set({ name, value, ...options });
+        raccoglitore.set(name, value, options);
       },
       remove(name: string, options: CookieOptions) {
         req.cookies.set({ name, value: '', ...options });
         res.cookies.set({ name, value: '', ...options });
+        raccoglitore.remove(name, options);
       },
     },
+  });
+  raccoglitore.alTardivo((cookie) => {
+    if (eCookieDiSessione(cookie.name)) {
+      logger.warn('[portiere] rinnovo della sessione arrivato a risposta gia partita', { percorso: pathname });
+    }
   });
 
   // Refresh sessione (best-effort)
@@ -470,7 +493,23 @@ export async function middleware(req: NextRequest) {
     else logger.warn(messaggio, contesto);
   };
 
-  const rispostaUtente = await chiediConTetto(() => supabase.auth.getUser(), TETTO_PORTIERE_MS);
+  // Ondata 10 — `getUser()` non e' sempre una lettura: con la tessera scaduta
+  // la rinnova, cioe' SCRIVE la sessione. Abbandonare quella risposta dopo tre
+  // secondi lascia il cliente con la tessera bruciata. Quindi: tre secondi se
+  // la tessera e' buona (lettura), dieci se va rinnovata (scrittura).
+  const staRinnovando = sessioneDaRinnovare(req.cookies.getAll(), Date.now());
+  const {
+    risposta: rispostaUtente,
+    daConsegnare,
+    consegna,
+  } = await chiediConTettoSuScritturaDiSessione(
+    () => supabase.auth.getUser(),
+    raccoglitore,
+    staRinnovando ? TETTO_RINNOVO_MS : TETTO_PORTIERE_MS,
+  );
+  if (staRinnovando && consegna.registra) {
+    logger.warn(consegna.registra, { percorso: pathname, motivo: motivoLeggibile(rispostaUtente) });
+  }
   const user = rispostaUtente.stato === 'ok' ? (rispostaUtente.valore.data?.user ?? null) : null;
   const decisione = decidiPortiere({
     fornitore: comeStaIlFornitore(rispostaUtente),
@@ -479,8 +518,10 @@ export async function middleware(req: NextRequest) {
   });
   if (decisione.registra) registraGuasto(decisione.registra, rispostaUtente);
 
-  // Helper: aggiunge CSP a una response redirect (mantiene protezione cross-cut).
+  // Helper: ogni risposta di rimando porta la CSP E i cookie di sessione
+  // appena rinnovati (senza, il browser resta con la tessera bruciata).
   const withCsp = (r: NextResponse) => {
+    travasaCookie(daConsegnare, r);
     r.headers.set('Content-Security-Policy', csp);
     return r;
   };
@@ -558,8 +599,7 @@ export async function middleware(req: NextRequest) {
     if (isMarketplaceBrowsePath(pathname)) {
       const url = req.nextUrl.clone();
       url.searchParams.delete(SHOPPING_MODE_QUERY);
-      const enterRes = NextResponse.redirect(url);
-      enterRes.headers.set('Content-Security-Policy', csp);
+      const enterRes = withCsp(NextResponse.redirect(url));
       enterRes.cookies.set(cookieOpts);
       return enterRes;
     }
@@ -578,11 +618,13 @@ export async function middleware(req: NextRequest) {
 
   // Il role-check si applica SOLO alle rotte role-protected (/admin,/seller,/rider).
   // Per le rotte solo-auth (/profile) basta l'utente autenticato verificato sopra.
+  // Ondata 10: «ruolo sbagliato» e «ruolo giusto ma non approvato» sono due
+  // casi diversi — la regola sta in `decidiAccessoArea`, provata da sola.
   if (roleRule) {
-    if (!role || !roleRule.allowed.includes(role as ProfileRole & ('admin' | 'seller' | 'rider')) || !approved) {
+    const accesso = decidiAccessoArea({ role, approved, allowed: roleRule.allowed, pathname });
+    if (accesso.azione === 'rimanda') {
       const url = req.nextUrl.clone();
-      // Buyer/rider fuori posto → home. Seller fuori posto → dashboard (non marketplace).
-      url.pathname = role === 'seller' ? '/seller/dashboard' : '/';
+      url.pathname = accesso.verso;
       return withCsp(NextResponse.redirect(url));
     }
   }
