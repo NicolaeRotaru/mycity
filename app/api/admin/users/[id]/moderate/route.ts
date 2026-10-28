@@ -74,7 +74,12 @@ function buildModeration(action: Action, reason: string | undefined, adminId: st
       };
     case 'reject':
       return {
-        patch: { approval_status: 'rejected', is_approved: false, rejection_reason: reason },
+        // `approved_at` qui e' l'ora della DECISIONE, non dell'approvazione: la
+        // potatura dei documenti dei respinti (migrations/135) conta i 90 giorni
+        // da questo campo e salta chi ce l'ha vuoto. Senza, chi era rifiutato
+        // senza mai essere stato approvato teneva i documenti per sempre; e chi
+        // era stato approvato anni prima li perdeva la notte stessa.
+        patch: { approval_status: 'rejected', is_approved: false, rejection_reason: reason, approved_at: now },
         note,
         audit: 'user.reject',
       };
@@ -113,6 +118,23 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   if (!target) return ApiErrors.notFound('Utente non trovato.');
 
   /**
+   * 28/10/2026 — SI MODERANO SOLO NEGOZI E FATTORINI, E MAI SE' STESSI.
+   *
+   * Prima passava qualunque profilo: un cliente si vedeva arrivare «Il tuo
+   * negozio e' stato approvato», e sospendere un amministratore rispondeva
+   * `{ok:true}` senza togliergli niente — l'involucro admin guarda il ruolo, non
+   * `is_approved`. Meglio un rifiuto chiaro che un «fatto» falso.
+   */
+  if (target.id === user.id || params.id === user.id) {
+    return ApiErrors.forbidden('Non puoi moderare il tuo stesso account.');
+  }
+  if (target.role !== 'seller' && target.role !== 'rider') {
+    return ApiErrors.invalidRequest(
+      'Da qui si moderano solo negozi e fattorini: per questo ruolo l\'approvazione non ha effetto.',
+    );
+  }
+
+  /**
    * 8/9/2026 — LA TERZA PORTA: SI APPROVAVA SENZA MAI GUARDARE L'ETÀ.
    *
    * La schermata di approvazione la data di nascita non la mostra nemmeno, e
@@ -134,12 +156,15 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     );
   }
 
-  const { patch, note, audit } = buildModeration(body.action, body.reason?.trim(), user.id, target.role ?? 'seller');
+  const { patch, note, audit } = buildModeration(body.action, body.reason?.trim(), user.id, target.role);
 
   const { error: updErr } = await admin.from('profiles').update(patch).eq('id', params.id);
   if (updErr) return ApiErrors.internal('Aggiornamento fallito.');
 
-  await admin.from('notifications').insert({ category: 'system', user_id: params.id, ...note });
+  // L'esito della notifica si guarda: chi e' rifiutato deve ricevere il motivo,
+  // e se non parte chi ha premuto il pulsante lo deve sapere.
+  const { error: notErr } = await admin.from('notifications').insert({ category: 'system', user_id: params.id, ...note });
+  if (notErr) console.error('[moderate] notifica non inviata', { target: params.id, action: body.action, error: notErr.message });
 
   await writeAudit({
     actorId: user.id,
@@ -149,7 +174,12 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     metadata: { role: target.role, name: target.store_name ?? target.full_name, reason: body.reason ?? null },
   });
 
-  return NextResponse.json({ ok: true }, { status: 200 });
+  return NextResponse.json(
+    notErr
+      ? { ok: true, notifica_inviata: false, avviso: 'Stato aggiornato, ma la notifica all\'utente non e\' partita: avvisalo a mano.' }
+      : { ok: true, notifica_inviata: true },
+    { status: 200 },
+  );
 }
 
 // 30/8/2026 (R017) — L'ADATTATORE A MANO NON C'E' PIU'.
