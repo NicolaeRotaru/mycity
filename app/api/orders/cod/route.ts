@@ -121,6 +121,37 @@ function ordineGiaInCorso(): NextResponse {
 }
 
 /**
+ * 28/10/2026 — «NON VEDO SE IL TUO ORDINE C'E'» SI DICE TENENDO LA CHIAVE.
+ *
+ * Sulla chiave abbandonata la rotta guarda gli ordini veri prima di ricrearli.
+ * Se quella lettura cade, ci si ferma con un 503: giusto. Ma un 503 senza
+ * `inCorso`, per il browser, vuol dire «butta la chiave» (`laChiaveVaButtata`):
+ * il carrello resta pieno, il tocco dopo parte con una chiave nuova che non
+ * conosce gli ordini gia' nati, e nasce il SECONDO ordine in contanti.
+ *
+ * Qui gli ordini potrebbero esserci, e la chiave e' l'unico filo che li lega a
+ * quel carrello: resta. Al tocco dopo, con la stessa chiave, la rotta rilegge:
+ * se li trova li restituisce, se non ci sono li crea una volta sola.
+ *
+ * `inCorso` e' il nome che il browser sa leggere oggi per «tieni la chiave».
+ * Un segnale col nome giusto («la chiave puo' avere ordini») chiede di toccare
+ * anche lib/ordini/chiave-dopo-l-errore.ts: va fatto insieme, non da una parte.
+ */
+function nonVedoSeLOrdineCe(): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: 'SERVICE_UNAVAILABLE',
+        message: 'Non riusciamo a controllare il tuo ordine in questo momento. Riprova fra poco.',
+      },
+      inCorso: true,
+    },
+    { status: 503 },
+  );
+}
+
+/**
  * Crea ordini COD (pagamento alla consegna) SERVER-SIDE.
  *
  * SICUREZZA (H1 / COD): in passato il client inseriva direttamente gli ordini
@@ -271,7 +302,7 @@ export const POST = withAuthRateLimit(
             logger.error('[cod] chiave abbandonata: non riesco a vedere se gli ordini sono gia nati', {
               chiave: chiaveTentativo, message: errOrdiniDopo.message,
             });
-            return ApiErrors.unavailable("Non riusciamo a controllare il tuo ordine in questo momento. Riprova fra poco.");
+            return nonVedoSeLOrdineCe();
           }
           if (ordiniDopo && ordiniDopo.length > 0) {
             /**

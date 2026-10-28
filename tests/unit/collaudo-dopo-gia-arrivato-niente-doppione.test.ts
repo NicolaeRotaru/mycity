@@ -27,12 +27,15 @@ const stato: {
   riga: { order_ids: unknown[]; created_at: string } | null;
   provaFallisce: boolean;
   scrittureProva: number;
+  /** Quante letture della tabella degli ordini cadono ancora (rete del server, database lento). */
+  letturaOrdiniFallisce: number;
 } = {
   aperto: true,
   venditori: { data: [], error: null },
   riga: null,
   provaFallisce: false,
   scrittureProva: 0,
+  letturaOrdiniFallisce: 0,
 };
 const ordiniCreati: Array<Record<string, unknown>> = [];
 const profili: unknown[] = [];
@@ -120,10 +123,16 @@ vi.mock('@/lib/supabase/server', () => {
     if (tavola === 'profiles') return catena(() => ({ data: profili, error: null }));
     if (tavola === 'orders') {
       // Una lettura degli ordini restituisce quelli nati finora, come farebbe il database.
-      const c = catena(() => ({
-        data: ordiniCreati.map((o, i) => ({ id: `ord-${i + 1}`, seller_id: o.seller_id, total_price: o.total_price })),
-        error: null,
-      }));
+      const c = catena(() => {
+        if (stato.letturaOrdiniFallisce > 0) {
+          stato.letturaOrdiniFallisce--;
+          return { data: null, error: { message: 'timeout di rete' } };
+        }
+        return {
+          data: ordiniCreati.map((o, i) => ({ id: `ord-${i + 1}`, seller_id: o.seller_id, total_price: o.total_price })),
+          error: null,
+        };
+      });
       c.insert = (riga: unknown) => {
         ordiniCreati.push((Array.isArray(riga) ? riga[0] : riga) as Record<string, unknown>);
         const id = `ord-${ordiniCreati.length}`;
@@ -175,6 +184,7 @@ beforeEach(() => {
   stato.riga = null;
   stato.provaFallisce = false;
   stato.scrittureProva = 0;
+  stato.letturaOrdiniFallisce = 0;
   vi.mocked(logger.error).mockClear();
 });
 
@@ -229,5 +239,54 @@ describe('collaudo: dopo «il tuo ordine è già arrivato» il browser non crea 
     expect(secondo.res.status, JSON.stringify(secondo.corpo)).toBe(200);
     expect(stato.riga?.order_ids).toEqual([{ id: 'ord-1', sellerId: NEGOZIO_ID, totalCents: expect.any(Number) }]);
     expect(ordiniCreati).toHaveLength(1);
+  });
+
+  /**
+   * 28/10/2026 — IL RAMO SCOMODO: LA LETTURA DEGLI ORDINI CADE PROPRIO SULLA CHIAVE ABBANDONATA.
+   *
+   * La rotta, non riuscendo a vedere se gli ordini ci sono, si ferma con un 503. Giusto. Ma quel
+   * 503 non diceva `inCorso`: il browser buttava la chiave, il carrello restava pieno, e il tocco
+   * dopo partiva con una chiave nuova che non conosce gli ordini già nati. Secondo ordine.
+   */
+  it('lettura degli ordini in errore sulla chiave abbandonata: la chiave resta, il tocco dopo ritrova l\'ordine', async () => {
+    stato.provaFallisce = true;
+    const b = browser('cod-chiave-lettura-ko');
+    await ordina('cod-chiave-lettura-ko'); // gli ordini nascono, la prova no, la risposta si perde
+    expect(ordiniCreati).toHaveLength(1);
+    passaUnMinutoEMezzo();
+
+    stato.letturaOrdiniFallisce = 1; // al 2° tocco la lettura degli ordini cade, al 3° no
+    const secondo = await b.tocca();
+    expect(ordiniCreati).toHaveLength(1);
+    expect(secondo?.res.status, JSON.stringify(secondo?.corpo)).toBe(503);
+    expect(secondo?.corpo, 'il 503 deve dire al browser di tenere la chiave').toMatchObject({ ok: false, inCorso: true });
+    expect(b.carrelloPieno).toBe(true);
+
+    const terzo = await b.tocca();
+    expect(
+      ordiniCreati,
+      `3° tocco: SECONDO ordine sullo stesso carrello (${terzo?.res.status} ${JSON.stringify(terzo?.corpo)})`,
+    ).toHaveLength(1);
+    expect(terzo?.res.status, JSON.stringify(terzo?.corpo)).toBe(200);
+    expect(terzo?.corpo).toMatchObject({ ripetuto: true, orderIds: ['ord-1'] });
+    expect(b.carrelloPieno).toBe(false);
+  });
+
+  it('lettura in errore ma ordini mai nati: la chiave tenuta non blocca, al tocco dopo l\'ordine nasce una volta sola', async () => {
+    // Un invio morto prima di creare qualcosa: la riga della chiave c'e', vecchia, e vuota.
+    stato.riga = { order_ids: [], created_at: new Date(Date.now() - 90_000).toISOString() };
+    const b = browser('cod-chiave-mai-nata');
+    stato.letturaOrdiniFallisce = 2; // due tocchi di fila con la lettura che cade
+    const primo = await b.tocca();
+    const secondo = await b.tocca();
+    expect(primo?.res.status).toBe(503);
+    expect(secondo?.res.status).toBe(503);
+    expect(ordiniCreati).toHaveLength(0);
+    expect(b.carrelloPieno).toBe(true);
+
+    const terzo = await b.tocca();
+    expect(terzo?.res.status, JSON.stringify(terzo?.corpo)).toBe(200);
+    expect(ordiniCreati).toHaveLength(1);
+    expect(b.carrelloPieno).toBe(false);
   });
 });
