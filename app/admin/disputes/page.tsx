@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { comeSiDivideIlReclamo, pagamentoPerChiDecide, type OrdineDaRimborsare } from '@/lib/rimborsi/regole-del-rimborso';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 
@@ -25,7 +26,7 @@ type Dispute = {
   resolution_notes: string | null;
   refund_cents: number | null;
   created_at: string;
-  opener: { full_name: string | null; email: string | null } | null;
+  opener: { full_name: string | null } | null;
   against: { store_name: string | null; full_name: string | null } | null;
 };
 
@@ -53,7 +54,7 @@ export default function AdminDisputesPage() {
   const [resolution, setResolution] = useState('');
   const [refundEur, setRefundEur] = useState('');
 
-  const { data: disputes = [], isLoading } = useQuery({
+  const { data: disputes = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.disputes(filter),
     queryFn: async (): Promise<Dispute[]> => {
       let q = supabase
@@ -61,13 +62,14 @@ export default function AdminDisputesPage() {
         .select(`
           id, order_id, opener_id, reason, description, status, resolution_notes,
           refund_cents, created_at,
-          opener:profiles!disputes_opener_id_fkey ( full_name, email ),
+          opener:profiles!disputes_opener_id_fkey ( full_name ),
           against:profiles!disputes_against_id_fkey ( store_name, full_name )
         `)
         .order('created_at', { ascending: false })
         .limit(100);
       if (filter !== 'all') q = q.eq('status', filter);
-      const { data } = await q;
+      const { data, error } = await q;
+      if (error) throw error;
       return (data ?? []) as unknown as Dispute[];
     },
   });
@@ -147,7 +149,7 @@ export default function AdminDisputesPage() {
         e.count += 1;
         byStore.set(storeName, e);
       }
-      const openerName = d.opener?.full_name ?? d.opener?.email;
+      const openerName = d.opener?.full_name;
       if (openerName) {
         const e = byOpener.get(openerName) ?? { name: openerName, count: 0 };
         e.count += 1;
@@ -239,6 +241,14 @@ export default function AdminDisputesPage() {
 
       {isLoading ? (
         <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-32 rounded-xl skeleton" />)}</div>
+      ) : isError ? (
+        <ErrorState
+          variant="compact"
+          title="Non riesco a leggere i reclami"
+          description="Non so se ci sono reclami da gestire. Riprova tra poco."
+          retry={() => void refetch()}
+          supportHref={null}
+        />
       ) : disputes.length === 0 ? (
         <div className="bg-white border-2 border-cream-300 rounded-xl p-12 text-center">
           <PartyPopper size={40} strokeWidth={2} className="mx-auto text-olive-500 mb-2" aria-hidden />
@@ -267,7 +277,7 @@ export default function AdminDisputesPage() {
                       </span>
                     </div>
                     <p className="text-sm text-ink-900 mt-2">
-                      <strong>{d.opener?.full_name ?? d.opener?.email ?? 'Cliente'}</strong>
+                      <strong>{d.opener?.full_name ?? 'Cliente'}</strong>
                       {' vs '}
                       <strong>{d.against?.store_name ?? d.against?.full_name ?? 'Venditore'}</strong>
                     </p>

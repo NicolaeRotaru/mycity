@@ -3,11 +3,12 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { Banknote, Clock, CheckCircle2, Store, Info } from 'lucide-react';
+import { Banknote, Clock, CheckCircle2, Store, Info, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { AdminPageTitle, AdminStatCard } from '@/components/admin/AdminUI';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 /**
  * Payout venditori (admin · Trust & Safety) — SOLA LETTURA.
@@ -85,8 +86,14 @@ function maskIban(iban: string | null): string | null {
   return `${clean.slice(0, 4)}••••${clean.slice(-4)}`;
 }
 
+/**
+ * Quanti ordini consegnati legge al massimo questa pagina. Arrivati al tetto i riquadri sommano
+ * solo quello che e' stato letto: la pagina lo dice, invece di spacciare un totale parziale.
+ */
+const TETTO_PAYOUT = 1000;
+
 export default function AdminPayoutsPage() {
-  const { data: orders = [], isLoading } = useQuery({
+  const { data: orders = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['admin', 'payouts'],
     refetchInterval: 60_000,
     queryFn: async (): Promise<PayoutOrder[]> => {
@@ -100,7 +107,7 @@ export default function AdminPayoutsPage() {
         .eq('delivery_status', 'DELIVERED')
         .not('seller_payout_cents', 'is', null)
         .order('created_at', { ascending: false })
-        .limit(1000);
+        .limit(TETTO_PAYOUT);
       if (error) throw error;
       return (data ?? []) as unknown as PayoutOrder[];
     },
@@ -145,6 +152,22 @@ export default function AdminPayoutsPage() {
 
   if (isLoading) return <LoadingState />;
 
+  // Lettura caduta: niente riquadri a 0,00 € ne' «nessun payout». Un importo non letto non si mostra.
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        <AdminPageTitle eyebrow="Trust & Safety" title="Payout venditori" />
+        <ErrorState
+          variant="compact"
+          title="Non riesco a leggere i payout dei negozi"
+          description="Non so quanto c’è da pagare ai negozi né cosa è già stato pagato. Riprova tra poco."
+          retry={() => void refetch()}
+          supportHref={null}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <AdminPageTitle
@@ -159,6 +182,15 @@ export default function AdminPayoutsPage() {
         <AdminStatCard icon={Clock} tone="accent" label="In sospeso" value={formatPrice(totals.holdCents / 100)} />
         <AdminStatCard icon={CheckCircle2} tone="primary" label="Già pagato" value={formatPrice(totals.paidCents / 100)} />
       </div>
+
+      {orders.length >= TETTO_PAYOUT && (
+        <div role="status" className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
+          <p>
+            <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PAYOUT} ordini consegnati. I totali qui sopra possono essere più bassi del vero.
+          </p>
+        </div>
+      )}
 
       {/* Nota: pagamento automatico, niente azioni manuali */}
       <div className="flex items-start gap-2.5 rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 text-sm text-ink-600">

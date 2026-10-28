@@ -22,7 +22,7 @@ import { trackSellerOrderAccepted } from '@/lib/analytics/events';
 import EmptyState from '@/components/EmptyState';
 import { Package, CheckCircle2, X, Printer, Bike, Phone, MapPin, Clock, Banknote } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
-import { riepilogoOrdine } from '@/lib/ordini/riepilogo-ordine';
+import { cifraDellaVoce, riepilogoOrdine } from '@/lib/ordini/riepilogo-ordine';
 import { nomeDellaRigaOrdine, fotoDellaRigaOrdine } from '@/lib/ordini/riga-ordine';
 import ReturnRequestCard, { type ReturnRow } from '@/components/seller/ReturnRequestCard';
 
@@ -558,9 +558,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
             <div key={v.etichetta} className="flex justify-between">
               <span className="text-ink-600">{v.etichetta}</span>
               <span>
-                {v.etichetta === 'Spedizione' && v.centesimi === 0
-                  ? 'GRATUITA'
-                  : `${v.segno === 'meno' ? '−' : ''}${formatPrice(v.centesimi / 100)}`}
+                {cifraDellaVoce(v, (c) => formatPrice(c / 100))}
               </span>
             </div>
           ))}

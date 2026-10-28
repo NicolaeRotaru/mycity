@@ -2,6 +2,7 @@
 
 import { AlertTriangle, Banknote, Check, Lock, RotateCcw, Store } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
+import { VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
 
 /**
  * Riepilogo costi + bottone submit del checkout.
@@ -14,8 +15,12 @@ import { formatPrice } from '@/lib/format';
 
 type Props = {
   subtotal: number;
+  /**
+   * Quanto paga il cliente per farsi portare la spesa, in euro. La cassa ci passa la consegna già
+   * sommata (3 € per negozio): vedi `consegnaDaPagare` in app/checkout/page.tsx.
+   */
   shipping: number;
-  /** Fee piattaforma €3/consegna per negozio (solo consegna a domicilio). */
+  /** Fee piattaforma €3/consegna per negozio, se chi chiama la tiene a parte: si somma a `shipping`. */
   platformDeliveryFee?: number;
   pickupDiscount: number;
   couponDiscount: number;
@@ -73,6 +78,7 @@ export function OrderSummary({
   motivoBlocco = null,
   couponSection,
 }: Props) {
+  const consegna = shipping + platformDeliveryFee;
   return (
     <>
       {couponSection}
@@ -82,18 +88,17 @@ export function OrderSummary({
           <span className="text-ink-600">Subtotale</span>
           <span className="font-semibold">{formatPrice(subtotal)}</span>
         </div>
+        {/* 27/10/2026 (terzo giro) — Qui c'erano due righe, «Spedizione» e «Consegna MyCity». La cassa
+            passa la consegna già sommata in `shipping`, quindi i 3 € uscivano col nome «Spedizione»,
+            mentre il carrello li chiama «Consegna MyCity»; e con le due cifre separate la prima riga
+            scriveva «Gratis» sopra «Consegna MyCity 3,00 €». Ora è una riga sola, col nome del carrello
+            e dell'ordine, e «Gratis» solo se le due cifre insieme fanno zero. */}
         <div className="flex justify-between">
-          <span className="text-ink-600">Spedizione</span>
-          <span className={`font-semibold ${shipping === 0 ? 'text-olive-600' : ''}`}>
-            {shipping === 0 ? 'Gratis' : formatPrice(shipping)}
+          <span className="text-ink-600">{VOCE_CONSEGNA}</span>
+          <span className={`font-semibold ${consegna === 0 ? 'text-olive-600' : ''}`}>
+            {consegna === 0 ? 'Gratis' : formatPrice(consegna)}
           </span>
         </div>
-        {platformDeliveryFee > 0 && (
-          <div className="flex justify-between">
-            <span className="text-ink-600">Consegna MyCity</span>
-            <span className="font-semibold">{formatPrice(platformDeliveryFee)}</span>
-          </div>
-        )}
         {pickupDiscount > 0 && (
           <div className="flex justify-between text-olive-700">
             <span>Sconto ritiro in negozio</span>

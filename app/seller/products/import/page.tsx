@@ -10,6 +10,7 @@ import { formatPrice } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { CARICAMENTO_DA_FILE_ACCESO } from '@/lib/funzioni-al-lancio';
 
 type ParsedRow = {
   name: string;
@@ -60,7 +61,7 @@ function parseCsv(text: string): { headers: string[]; rows: string[][] } {
  * - Security: "Sanitize ogni campo, no SQL injection via CSV malformato"
  * - Data Engineer: "Insert batch via Supabase con transazione atomica"
  */
-export default function BulkImportProductsPage() {
+function CaricamentoDaFile() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Map<string, string>>(new Map());
@@ -273,6 +274,37 @@ export default function BulkImportProductsPage() {
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+/**
+ * Caricamento da file SPENTO al lancio (carta #209). Il lettore divide solo
+ * sulla virgola, e l'Excel italiano salva col punto e virgola: il negozio si
+ * vedeva rispondere «Colonne mancanti» su un file giusto. Prima di riaccendere,
+ * il lettore va riparato (separatore, codifica, allergeni, misure del database).
+ */
+export default function BulkImportProductsPage() {
+  if (!CARICAMENTO_DA_FILE_ACCESO) return <CaricamentoSpento />;
+  return <CaricamentoDaFile />;
+}
+
+function CaricamentoSpento() {
+  return (
+    <div className="max-w-2xl space-y-4">
+      <Link href="/seller/products" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-800">
+        <ArrowLeft size={14} aria-hidden /> Prodotti
+      </Link>
+      <h1 className="text-2xl font-bold text-ink-900">Importa prodotti da file</h1>
+      <p className="text-sm text-ink-700">
+        Il caricamento da file non è attivo: non legge ancora i file salvati con Excel in italiano. Inserisci i prodotti uno alla volta dal modulo.
+      </p>
+      <Link
+        href="/seller/products/new"
+        className="inline-flex items-center gap-1 rounded-lg bg-primary-700 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-800"
+      >
+        Aggiungi un prodotto
+      </Link>
     </div>
   );
 }

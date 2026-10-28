@@ -11,7 +11,7 @@ const STATIC_PAGES = [
   { path: '/privacy', heading: /Privacy/i },
   { path: '/faq', heading: /Domande|FAQ/i },
   { path: '/contact', heading: /Contattaci|Contatto/i },
-  { path: '/shipping', heading: /Spedizione/i },
+  { path: '/shipping', heading: /Spedizioni e consegne/i },
   { path: '/returns', heading: /Resi|Reso/i },
   { path: '/help', heading: /Aiuto|Help/i },
   { path: '/status', heading: /Stato|Status/i },

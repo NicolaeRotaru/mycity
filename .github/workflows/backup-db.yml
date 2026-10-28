@@ -96,6 +96,7 @@ jobs:
           }
 
       - name: Verifica di sapere dove copiare
+        id: verifica
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
@@ -225,6 +226,11 @@ jobs:
           rclone listremotes
 
       - name: Esegui il backup
+        # La copia del database NON dipende dalle foto: se «Le foto vanno in copia?»
+        # o «Prepara rclone» falliscono, la copia di stanotte si fa lo stesso (il
+        # lavoro resta rosso per le foto). Non parte solo se manca l indirizzo del
+        # database o la passphrase: niente copia in chiaro.
+        if: ${{ !cancelled() && steps.verifica.outcome == 'success' }}
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
@@ -352,6 +358,7 @@ jobs:
           }
 
       - name: Verifica di avere i segreti
+        id: segreti
         env:
           DB: ${{ secrets.SUPABASE_DB_URL }}
           PASS: ${{ secrets.BACKUP_PASSPHRASE }}
@@ -407,6 +414,8 @@ jobs:
           rclone listremotes
 
       - name: Fai una copia fresca
+        # Come nella copia notturna: le foto non fermano la prova di ripristino.
+        if: ${{ !cancelled() && steps.segreti.outcome == 'success' }}
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
@@ -420,6 +429,7 @@ jobs:
           bash scripts/backup-db.sh
 
       - name: Riaprila su un database vuoto, e cronometra
+        if: ${{ !cancelled() && steps.segreti.outcome == 'success' }}
         env:
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
           PGHOST: localhost

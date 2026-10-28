@@ -23,6 +23,7 @@ import {
   eUnBonificoDiRimborso,
   rimborsiGiaScritti,
 } from '@/lib/stripe/elenco-dei-rimborsi';
+import { VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
 
 export type SegnoVoce = 'piu' | 'meno';
 
@@ -30,6 +31,11 @@ export type VoceRiepilogo = {
   etichetta: string;
   centesimi: number;
   segno: SegnoVoce;
+  /**
+   * Solo sulla riga «Spedizione», e solo se per farsi portare la spesa il cliente non ha pagato
+   * niente: né spedizione né consegna. È l'unico caso in cui la pagina può scrivere «GRATUITA».
+   */
+  gratis?: boolean;
 };
 
 export type OrdinePerRiepilogo = {
@@ -64,13 +70,24 @@ export function riepilogoOrdine(ordine: OrdinePerRiepilogo, subtotaleCentesimi: 
   const credito = Math.round(Number(ordine.wallet_applied_cents ?? 0)) || 0;
   const totale = inCentesimi(ordine.total_price);
 
-  const voci: VoceRiepilogo[] = [
-    { etichetta: 'Subtotale', centesimi: subtotaleCentesimi, segno: 'piu' },
-    { etichetta: 'Spedizione', centesimi: spedizione, segno: 'piu' },
-  ];
+  const voci: VoceRiepilogo[] = [{ etichetta: 'Subtotale', centesimi: subtotaleCentesimi, segno: 'piu' }];
+  // 27/10/2026 (terzo giro) — LA RIGA «SPEDIZIONE» A ZERO SCRIVEVA «GRATUITA» SOPRA I 3 EURO DI
+  // CONSEGNA. Dal 27/10 la spedizione è zero su ogni ordine (lib/shipping.ts) e si paga solo la
+  // consegna: la pagina dell'ordine, del cliente e del negozio, diceva «Spedizione GRATUITA» e
+  // subito sotto «Consegna MyCity 3,00 €», su ogni ordine. «Gratis» si dice solo se per portare a
+  // casa la spesa non si è pagato niente. La spedizione resta in colonna quando c'è (gli ordini di
+  // prima del 27/10 la pagavano) o quando non si è pagato niente per la consegna.
+  if (spedizione !== 0 || consegna === 0) {
+    voci.push({
+      etichetta: 'Spedizione',
+      centesimi: spedizione,
+      segno: 'piu',
+      ...(spedizione === 0 && consegna === 0 ? { gratis: true } : {}),
+    });
+  }
   // Le voci a zero non si mostrano: una riga «Sconto codice 0,00» non aggiunge niente e allunga la
   // colonna. Quelle diverse da zero invece devono esserci TUTTE, o il totale non si spiega.
-  if (consegna !== 0) voci.push({ etichetta: 'Consegna MyCity', centesimi: consegna, segno: 'piu' });
+  if (consegna !== 0) voci.push({ etichetta: VOCE_CONSEGNA, centesimi: consegna, segno: 'piu' });
   if (sconto !== 0) voci.push({ etichetta: 'Sconto codice', centesimi: sconto, segno: 'meno' });
   if (credito !== 0) voci.push({ etichetta: 'Credito MyCity', centesimi: credito, segno: 'meno' });
 
@@ -82,6 +99,16 @@ export function riepilogoOrdine(ordine: OrdinePerRiepilogo, subtotaleCentesimi: 
     torna: somma === totale,
     differenzaCentesimi: somma - totale,
   };
+}
+
+/**
+ * La cifra scritta accanto a una voce: una funzione sola per le due pagine dell'ordine (cliente e
+ * negozio), così «GRATUITA» lo decide il riepilogo, che sa anche della consegna, e non la pagina,
+ * che guardava la riga della spedizione da sola.
+ */
+export function cifraDellaVoce(v: VoceRiepilogo, euro: (centesimi: number) => string): string {
+  if (v.gratis) return 'GRATUITA';
+  return `${v.segno === 'meno' ? '−' : ''}${euro(v.centesimi)}`;
 }
 
 export type StatoPagamento =

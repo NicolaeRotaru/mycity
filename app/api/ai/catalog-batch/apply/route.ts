@@ -8,7 +8,7 @@ import { logger } from '@/lib/logger';
 import { resolveAiPatch, type CategoryRow } from '@/lib/products/aiPatch';
 import { PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import type { CatalogJobResult, CatalogOperation } from '@/lib/ai/catalogBatch';
-import { senzaCampiEconomici } from '@/lib/ai/catalogBatch';
+import { senzaCampiEconomici, operazioneAccesa } from '@/lib/ai/catalogBatch';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { classifyProductPolicy } from '@/lib/ai/moderation';
 import { cosaMancaDopoLaModifica } from '@/lib/products/prontoPerLaVendita';
@@ -63,6 +63,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   if (!job) return ApiErrors.notFound('Job non trovato.');
   if (job.seller_id !== user.id) return ApiErrors.forbidden('Non è un tuo job.');
   if (job.status !== 'ready') return ApiErrors.invalidRequest('Il job non è pronto da applicare.');
+  // «Traduci» spento (carta #209): il prodotto ha un nome solo, quindi un lotto di
+  // traduzione sostituirebbe l'italiano su tutto il catalogo. Ferma anche un
+  // lavoro nato prima dello spegnimento.
+  if (!operazioneAccesa(job.operation)) {
+    return ApiErrors.invalidRequest('Questo lavoro non si può applicare: la traduzione del catalogo non è attiva.');
+  }
 
   const results = (Array.isArray(job.results) ? job.results : []).filter(
     (r) => r.product_id && (!onlyIds || onlyIds.has(r.product_id)),

@@ -1,10 +1,20 @@
 import Link from 'next/link';
-import { Truck, Gift, Zap, Store, Clock, ChefHat, Package, Bike, CheckCircle2 } from 'lucide-react';
-// Le promesse pubbliche nascono dagli interruttori che le mantengono, non da un testo scritto qui:
-// il ritiro in negozio e' spento nel checkout e nelle due rotte, e questa pagina lo prometteva col
-// 10% di sconto (che vale zero anche lui). E i «30-60 minuti» hanno gia' una casa in lib/delivery.
-import { NEGOZIO_CHIUSO_COSA_SUCCEDE, riquadroRitiroInNegozio } from '@/lib/promesse-pubbliche';
+import { Truck, Banknote, MapPin, Zap, Store, Clock, ChefHat, Package, Bike, CheckCircle2 } from 'lucide-react';
+// Le promesse pubbliche nascono da chi le mantiene, non da un testo scritto qui: il ritiro in
+// negozio e' spento nel checkout e nelle due rotte, i «30-60 minuti» hanno gia' una casa in
+// lib/delivery, e il costo e il confine della consegna sono quelli della cassa.
+//
+// 27/10/2026 — QUESTA PAGINA AVEVA UNA TABELLA SUA. Scriveva a mano 2,50 · 3,50 · 4,50 € per
+// fascia di distanza, «GRATIS» sopra i 30 €, «oltre 10 km a preventivo» ed «entro 15 km». La cassa
+// faceva un altro conto (2,50 € più 1,20 € al km, più 3 € di consegna) e oggi ne fa un altro
+// ancora: si paga solo la consegna, per negozio, e si consegna fino a RAGGIO_CONSEGNA_KM. Qui non
+// si scrivono piu' cifre: le danno `promessaSpedizione()` e la costante del confine, e una prova
+// trasforma la pagina in HTML e confronta ogni euro e ogni chilometro col conto della cassa
+// (tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx).
+import { NEGOZIO_CHIUSO_COSA_SUCCEDE, promessaSpedizione, riquadroRitiroInNegozio } from '@/lib/promesse-pubbliche';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
+import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { formatPrice } from '@/lib/format';
 
 export const metadata = {
   title: 'Spedizioni e consegne · MyCity',
@@ -21,6 +31,10 @@ export const metadata = {
 };
 
 export default function ShippingPage() {
+  const { costoConsegna } = promessaSpedizione();
+  const quanto = costoConsegna > 0 ? formatPrice(costoConsegna) : null;
+  const confine = `${RAGGIO_CONSEGNA_KM} km`;
+
   return (
     <div className="container mx-auto px-6 py-10 max-w-3xl">
       <div className="mb-8 text-center">
@@ -30,14 +44,19 @@ export default function ShippingPage() {
 
       <div className="grid sm:grid-cols-3 gap-4 mb-10">
         <div className="bg-olive-50 border border-olive-200 rounded-xl p-5 text-center">
-          <div className="mb-2 flex justify-center"><Gift size={28} className="text-olive-600" aria-hidden /></div>
-          <div className="font-bold text-olive-900">Spedizione GRATIS</div>
-          <div className="text-sm text-olive-700 mt-1">Per ordini ≥ €30 dallo stesso venditore</div>
+          <div className="mb-2 flex justify-center"><Banknote size={28} className="text-olive-600" aria-hidden /></div>
+          <div className="font-bold text-olive-900">{quanto ? `Consegna ${quanto}` : 'Consegna senza costi'}</div>
+          <div className="text-sm text-olive-700 mt-1">Per ogni negozio, qualunque sia la spesa</div>
         </div>
         <div className="bg-primary-50 border border-primary-200 rounded-xl p-5 text-center">
           <div className="mb-2 flex justify-center"><Zap size={28} className="text-primary-600" aria-hidden /></div>
           <div className="font-bold text-primary-900">Consegna in {EXPRESS_ETA_LABEL}</div>
           <div className="text-sm text-primary-800 mt-1">Nei comuni serviti, negli orari di apertura del negozio</div>
+        </div>
+        <div className="bg-cream-50 border border-cream-300 rounded-xl p-5 text-center">
+          <div className="mb-2 flex justify-center"><MapPin size={28} className="text-ink-600" aria-hidden /></div>
+          <div className="font-bold text-ink-900">{`Fino a ${confine}`}</div>
+          <div className="text-sm text-ink-600 mt-1">dal negozio, in linea d&apos;aria</div>
         </div>
         {riquadroRitiroInNegozio() && (
           <div className="bg-secondary-50 border border-secondary-200 rounded-xl p-5 text-center">
@@ -63,48 +82,23 @@ export default function ShippingPage() {
         </div>
 
         <div className="space-y-3">
-          <h2 className="text-xl font-bold text-ink-900 mb-2">Costi di spedizione</h2>
-          <p>Il costo dipende dalla distanza dal negozio e dal venditore:</p>
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="bg-cream-50 text-left">
-                  <th className="border p-2 font-semibold">Distanza</th>
-                  <th className="border p-2 font-semibold">Costo medio</th>
-                  <th className="border p-2 font-semibold">Sopra €30</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="border p-2">0 - 2 km</td>
-                  <td className="border p-2">€ 2,50</td>
-                  <td className="border p-2 text-olive-700 font-semibold">GRATIS</td>
-                </tr>
-                <tr>
-                  <td className="border p-2">2 - 5 km</td>
-                  <td className="border p-2">€ 3,50</td>
-                  <td className="border p-2 text-olive-700 font-semibold">GRATIS</td>
-                </tr>
-                <tr>
-                  <td className="border p-2">5 - 10 km</td>
-                  <td className="border p-2">€ 4,50</td>
-                  <td className="border p-2 text-olive-700 font-semibold">GRATIS</td>
-                </tr>
-                <tr>
-                  <td className="border p-2">Oltre 10 km</td>
-                  <td className="border p-2">A preventivo</td>
-                  <td className="border p-2">—</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p className="text-sm">Il costo esatto è sempre mostrato al checkout prima di confermare.</p>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">Quanto costa la consegna</h2>
+          {quanto ? (
+            <p>Paghi solo la consegna: <strong>{`${quanto} per ogni negozio`}</strong> da cui ordini, qualunque sia
+            la spesa. Non c&apos;è un costo a chilometro e non c&apos;è una soglia da raggiungere.</p>
+          ) : (
+            <p>La consegna non si paga, qualunque sia la spesa.</p>
+          )}
+          <ul className="list-disc pl-5">
+            <li>Se ordini da due negozi paghi due consegne: ogni negozio ti porta la sua spesa.</li>
+            <li>Il totale lo vedi sempre in cassa, prima di confermare l’ordine.</li>
+          </ul>
         </div>
 
         {riquadroRitiroInNegozio() && (
           <div className="space-y-3">
             <h2 className="text-xl font-bold text-ink-900 mb-2">Ritiro in negozio</h2>
-            <p>Scegliendo il ritiro in negozio non paghi spese di spedizione. Riceverai una notifica
+            <p>Scegliendo il ritiro in negozio non paghi la consegna. Riceverai una notifica
             appena l&apos;ordine sarà pronto.</p>
           </div>
         )}
@@ -123,14 +117,23 @@ export default function ShippingPage() {
 
         <div className="space-y-3">
           <h2 className="text-xl font-bold text-ink-900 mb-2">Aree servite</h2>
-          <p>Attualmente operiamo a <strong>Piacenza</strong> e nei comuni limitrofi entro 15 km. Stiamo espandendo
-          progressivamente. Inserendo il tuo indirizzo al checkout sapremo se siamo già nella tua zona.</p>
+          {/* 28/10/2026 — Qui c'era «Piacenza e dintorni»: col confine a 5 km Podenzano, Rottofreno e
+              Gossolengo restano fuori, e la frase li prometteva. Il limite vero è la distanza dal
+              negozio. */}
+          <p>Consegniamo a <strong>Piacenza</strong>, fino a <strong>{confine}</strong> dal negozio in linea
+          d&apos;aria. Quando scrivi il tuo indirizzo, in cassa misuriamo la distanza e ti diciamo subito se ci
+          arriviamo. Se l&apos;indirizzo non si trova sulla mappa, la cassa non riesce a misurarla e
+          l&apos;ordine passa senza questo controllo.</p>
         </div>
 
         <div className="space-y-3">
           <h2 className="text-xl font-bold text-ink-900 mb-2">Problemi con la consegna?</h2>
-          <p>Se la consegna è in ritardo, il pacco è danneggiato o non arrivato, contatta il nostro supporto entro 48h:
-          <Link href="/contact" className="text-primary-700 underline ml-1">vai ai contatti</Link>.</p>
+          {/* 27/10/2026 — Qui c'era «contatta il nostro supporto entro 48h»: letto come una scadenza,
+              limita diritti che la legge non fa scadere (garanzia di conformità di 24 mesi, rischio
+              del pacco non arrivato a carico del venditore). Nessun termine inventato. */}
+          <p>Se la consegna è in ritardo, il pacco è danneggiato o non è arrivato, scrivici appena puoi:
+          <Link href="/contact" className="text-primary-700 underline ml-1">vai ai contatti</Link>.
+          Per i difetti dei prodotti vale comunque la garanzia legale di 24 mesi.</p>
         </div>
       </section>
     </div>

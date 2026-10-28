@@ -1,22 +1,7 @@
-import { COMPENSO_RIDER_CENTS, FREE_SHIPPING_THRESHOLD, SHIPPING_PER_ORDER } from './constants';
-import { haversineKm, prezzoSpedizioneEuro } from './geo';
-import { fuoriZonaDiConsegna } from './ordini/zona-di-consegna';
+import { COMPENSO_RIDER_CENTS } from './constants';
 
-/**
- * Calcolo spedizione per un gruppo (un venditore). FONTE UNICA condivisa tra
- * client (checkout UI) e server (/api/stripe/checkout, /api/orders/cod) così
- * che l'importo mostrato all'utente coincida sempre con quello addebitato.
- *
- * Regole (identiche alla UI originale):
- *  - ritiro in negozio o coupon FREE_SHIPPING → 0
- *  - subtotale ≥ soglia spedizione gratuita → 0, ma solo dentro la zona servita
- *  - coordinate negozio+consegna note → tariffa distanza (prezzoSpedizioneEuro)
- *  - altrimenti → tariffa flat di fallback
- *
- * SICUREZZA: il server passa SEMPRE il subtotale e le coordinate ricalcolati
- * dal DB, mai valori provenienti dal client.
- */
-export function shippingForEuro(opts: {
+/** Gli ingressi del conto della spedizione di un gruppo (un negozio). */
+export type IngressiSpedizione = {
   subtotal: number;
   storeLat: number | null;
   storeLng: number | null;
@@ -24,25 +9,32 @@ export function shippingForEuro(opts: {
   deliveryLng: number | null;
   pickupInStore: boolean;
   freeShipping?: boolean;
-}): number {
-  const { subtotal, storeLat, storeLng, deliveryLat, deliveryLng, pickupInStore, freeShipping } = opts;
-  if (pickupInStore || freeShipping) return 0;
-  /**
-   * 6/9/2026 — LA SOGLIA DELLA SPEDIZIONE GRATIS CORTOCIRCUITAVA LA DISTANZA.
-   *
-   * `subtotal >= 30 → 0` stava PRIMA del conto sui chilometri: una consegna a
-   * 60 km su un carrello da 35 € risultava gratuita, e il carrello scriveva
-   * «Gratis» su una consegna che non faremo mai. Fuori zona la promessa non si
-   * può fare: resta il prezzo della distanza, e l'ordine lo rifiutano comunque
-   * le due rotte che lo creano. La soglia continua a valere identica per tutti
-   * gli indirizzi che serviamo, che sono quelli veri.
-   */
-  const fuoriZona = fuoriZonaDiConsegna({ storeLat, storeLng, deliveryLat, deliveryLng, pickupInStore });
-  if (!fuoriZona && subtotal >= FREE_SHIPPING_THRESHOLD) return 0;
-  if (storeLat && storeLng && deliveryLat && deliveryLng) {
-    return prezzoSpedizioneEuro(haversineKm(storeLat, storeLng, deliveryLat, deliveryLng));
-  }
-  return SHIPPING_PER_ORDER;
+};
+
+/**
+ * La spedizione che il cliente paga per un gruppo (un negozio) OLTRE alla consegna. FONTE UNICA:
+ * la usano la cassa e, attraverso `prezziDelCarrello`, le due rotte che creano l'ordine, così
+ * l'importo mostrato coincide sempre con quello addebitato.
+ *
+ * 27/10/2026 — DA OGGI È ZERO, SEMPRE.
+ *
+ * Qui c'erano la soglia dei 30 euro per negozio e la tariffa a distanza (2,50 € più 1,20 € al
+ * chilometro, 4,90 € senza coordinate). Sotto i 30 euro il cliente pagava quella spedizione PIÙ i
+ * 3 euro di consegna: 20 euro di spesa a 5 km facevano 11,50 € di consegna. Nicola ha firmato
+ * un'altra promessa (scelta 8 della carta #209, 26/10): il cliente paga solo la consegna,
+ * `PLATFORM_DELIVERY_FEE_CENTS` per negozio, sempre — la aggiunge `prezziDelCarrello` — e col
+ * ritiro in negozio niente. La prova è tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx.
+ *
+ * La funzione resta perché è il punto unico da cui passa la spedizione: la colonna
+ * `shipping_cost` dell'ordine e la riga «Spedizione» di Stripe nascono da qui. Se un giorno
+ * tornasse una spedizione a pagamento, torna qui e da nessun'altra parte. Gli ingressi restano
+ * quelli di prima perché li passano già tutti i chiamanti.
+ *
+ * Il codice «Spedizione gratuita» non passa più da qui: qui non c'è più niente da azzerare. Toglie
+ * la consegna in `prezziDelCarrello`, e il fattorino lo paga la piattaforma (vedi lì).
+ */
+export function shippingForEuro(_opts: IngressiSpedizione): number {
+  return 0;
 }
 
 /** Come shippingForEuro ma restituisce centesimi interi. */
@@ -175,69 +167,4 @@ export function compensoDalContante(o: OrdineInContanti): {
 export function contanteDaRimettereCents(o: OrdineInContanti): number {
   const contanteInManoCents = Math.max(0, Math.round(Number(o.total_price ?? 0) * 100));
   return contanteInManoCents - compensoDalContante(o).trattenutoCents;
-}
-
-/**
- * COSA DICO AL CLIENTE DELLA SPEDIZIONE — la parola derivata dallo stesso numero che paga.
- *
- * ── Il difetto che ha prodotto questa funzione ───────────────────────────────────────────────
- * Nel carrello la parola e il numero avevano due basi diverse. `freeShipping` guardava il totale di
- * TUTTO il carrello (`total >= 30`); `shippingCost` sommava `shippingForEuro` per ogni gruppo-negozio,
- * e quella azzera solo se il subtotale DEL SINGOLO negozio supera la soglia.
- *
- * Il caso, coi numeri veri: 20 € dal fornaio più 15 € dal macellaio fanno 35 €, quindi la riga
- * stampava «Gratis*» — e dentro il totale c'erano 4,90 + 4,90 = **9,80 € di spedizione**, senza una
- * riga che li spiegasse. Il cliente legge «gratis» e paga dieci euro.
- *
- * ── Perché una funzione e non due righe corrette nel carrello ───────────────────────────────
- * Perché la stessa domanda la fanno il carrello, il checkout e la mail di conferma, e la risposta
- * era scritta a mano in ognuno. La regola non è «controlla meglio»: è che la parola deve nascere dal
- * numero, non accanto al numero. Qui non si può dire «gratis» avendo un costo in mano — la funzione
- * riceve il costo e basta.
- *
- * 🟢 Pura: nessuna rete, nessun orologio. Una prova la ESEGUE.
- */
-export interface DettoDellaSpedizione {
-  /** true SOLO se non si paga niente. Deriva dal costo, non da una soglia riletta a parte. */
-  gratis: boolean;
-  /** La parola da stampare: «Gratis» oppure l'importo. Mai «Gratis» con un costo in mano. */
-  etichetta: string;
-  /** La nota da mettere sotto, quando serve. Stringa vuota quando non serve. */
-  nota: string;
-  /** Il numero, per chi deve sommarlo: è lo stesso da cui viene l'etichetta. */
-  costo: number;
-}
-
-export function dettoDellaSpedizione(opts: {
-  /** Il costo totale della spedizione, già calcolato con `shippingForEuro` per ogni negozio. */
-  costo: number;
-  /** Quanti negozi ci sono nel carrello: cambia solo la nota, mai la parola. */
-  negozi?: number;
-  /** Come si scrive un importo. Iniettato così questa resta pura e la prova non dipende dal locale. */
-  formatta: (euro: number) => string;
-}): DettoDellaSpedizione {
-  const costo = Number.isFinite(opts.costo) ? Math.max(0, opts.costo) : 0;
-  const negozi = Math.max(1, Math.trunc(opts.negozi ?? 1));
-  const gratis = costo === 0;
-
-  if (gratis) {
-    return {
-      gratis: true,
-      etichetta: 'Gratis',
-      // L'asterisco orfano di prima non spiegava niente: la nota adesso dice la regola per esteso,
-      // e compare quando c'è più di un negozio, cioè quando la soglia si applica a ciascuno.
-      nota: negozi > 1 ? `Gratis sopra i ${FREE_SHIPPING_THRESHOLD} € di spesa nello stesso negozio` : '',
-      costo: 0,
-    };
-  }
-
-  return {
-    gratis: false,
-    etichetta: opts.formatta(costo),
-    nota:
-      negozi > 1
-        ? `${negozi} negozi: la soglia dei ${FREE_SHIPPING_THRESHOLD} € vale per ciascuno`
-        : `Gratis sopra i ${FREE_SHIPPING_THRESHOLD} € di spesa`,
-    costo,
-  };
 }

@@ -3,6 +3,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { DROP_DEL_GIORNO_ACCESO } from '@/lib/funzioni-al-lancio';
 
 export const runtime = 'nodejs';
 
@@ -23,6 +24,11 @@ const dropSchema = z.object({
 });
 
 export const POST = withAdminAuth(async ({ req }) => {
+  // Spento al lancio (carta #209): prima del corpo e della chiave di servizio,
+  // così risponde uguale anche dove la chiave manca. Il DELETE resta, per pulire.
+  if (!DROP_DEL_GIORNO_ACCESO) {
+    return ApiErrors.conflict('Il Drop del giorno è spento: la cassa non applica ancora il prezzo scontato.');
+  }
   let body: unknown;
   try { body = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
 

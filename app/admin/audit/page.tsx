@@ -6,6 +6,7 @@ import { Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
+import { ErrorState } from '@/components/ui/ErrorState';
 // 16/10/2026 — le etichette e le scelte del filtro vengono dall'elenco delle
 // azioni: qui c'era una lista a mano senza 'order.cash_declared'.
 import { etichettaAzioneAudit, opzioniFiltroAudit } from '@/lib/audit-azioni';
@@ -19,7 +20,7 @@ type AuditRow = {
   metadata: Record<string, unknown> | null;
   ip: string | null;
   created_at: string;
-  actor: { full_name: string | null; email: string | null } | null;
+  actor: { full_name: string | null } | null;
 };
 
 function formatDateTime(iso: string): string {
@@ -38,19 +39,20 @@ export default function AuditLogPage() {
   // o evento audit dedicato).
   const [filterAction, setFilterAction] = useState<string>('');
 
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: rows = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.audit(filterAction),
     queryFn: async (): Promise<AuditRow[]> => {
       let q = supabase
         .from('audit_logs')
         .select(`
           id, actor_id, action, target_table, target_id, metadata, ip, created_at,
-          actor:profiles!audit_logs_actor_id_fkey ( full_name, email )
+          actor:profiles!audit_logs_actor_id_fkey ( full_name )
         `)
         .order('created_at', { ascending: false })
         .limit(200);
       if (filterAction) q = q.eq('action', filterAction);
-      const { data } = await q;
+      const { data, error } = await q;
+      if (error) throw error;
       return (data ?? []) as unknown as AuditRow[];
     },
   });
@@ -81,6 +83,14 @@ export default function AuditLogPage() {
         <div className="space-y-2">
           {[...Array(6)].map((_, i) => <div key={i} className="h-16 rounded-xl skeleton" />)}
         </div>
+      ) : isError ? (
+        <ErrorState
+          variant="compact"
+          title="Non riesco a leggere il registro delle azioni"
+          description="Non so quali azioni sono state registrate. Riprova tra poco."
+          retry={() => void refetch()}
+          supportHref={null}
+        />
       ) : rows.length === 0 ? (
         <div className="bg-white border-2 border-cream-300 rounded-xl p-12 text-center">
           <Clock size={36} className="mx-auto text-ink-300 mb-3" />
@@ -98,7 +108,7 @@ export default function AuditLogPage() {
                     <span className="rounded bg-cream-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ink-600">{r.action}</span>
                   </div>
                   <p className="mt-0.5 text-xs text-ink-500">
-                    da <strong>{r.actor?.full_name ?? r.actor?.email ?? 'sistema'}</strong>
+                    da <strong>{r.actor?.full_name ?? 'sistema'}</strong>
                     {r.target_table && r.target_id && (
                       <> · <span className="font-mono">{r.target_table}/{r.target_id.slice(0, 8)}…</span></>
                     )}

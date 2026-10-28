@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { contanteDaRimettereCents } from '@/lib/shipping';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
 import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
@@ -71,10 +72,10 @@ type Group = {
 export default function AdminCodRemittancePage() {
   const qc = useQueryClient();
 
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: rows = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.codRemittances,
     queryFn: async (): Promise<Row[]> => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('orders')
         .select('id, rider_id, delivered_at, total_price, shipping_cost, rider_fee_cents, pickup_in_store, payment_method, delivery_status, cash_confirmed_at, rider:profiles!orders_rider_id_fkey(full_name)')
         .eq('payment_method', 'cod')
@@ -83,6 +84,8 @@ export default function AdminCodRemittancePage() {
         .not('rider_id', 'is', null)
         .order('delivered_at', { ascending: false })
         .limit(1000);
+      // Una lettura caduta non e' «nessuna rimessa»: l'errore deve arrivare alla pagina.
+      if (error) throw error;
       return (data ?? []) as unknown as Row[];
     },
   });
@@ -156,6 +159,15 @@ export default function AdminCodRemittancePage() {
 
       {isLoading ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-24 rounded-xl skeleton" />)}</div>
+      ) : isError ? (
+        // Senza lettura non si dice «nessuna rimessa» ne' «totale 0,00 €»: sono soldi che nessuno ha contato.
+        <ErrorState
+          variant="compact"
+          title="Non riesco a leggere le rimesse contanti"
+          description="Non so quali contanti i rider devono ancora rimettere. Riprova prima di confermare qualunque rimessa."
+          retry={() => void refetch()}
+          supportHref={null}
+        />
       ) : groups.length === 0 ? (
         <div className="bg-white border border-cream-300 rounded-2xl p-12 text-center">
           <CheckCircle2 size={40} strokeWidth={2} className="mx-auto text-olive-500 mb-2" aria-hidden />

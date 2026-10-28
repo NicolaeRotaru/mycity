@@ -8,6 +8,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { sendEmail } from '@/lib/email/client';
 import { verifyTurnstileToken } from '@/lib/captcha';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -68,7 +69,15 @@ export async function POST(request: Request) {
   if (!antiBot.ok) return ApiErrors.invalidRequest('Verifica anti-bot fallita. Riprova.');
 
   const email = parsed.data.email.trim().toLowerCase();
-  const admin = getAdminSupabase();
+  // Senza la chiave di servizio getAdminSupabase lancia: prima diventava un 500
+  // muto. Adesso è un «non disponibile» che si legge, e un errore nel registro.
+  let admin: ReturnType<typeof getAdminSupabase>;
+  try {
+    admin = getAdminSupabase();
+  } catch (e) {
+    logger.error('newsletter: chiave di servizio non disponibile', { error: e instanceof Error ? e.message : String(e) });
+    return ApiErrors.unavailable('Iscrizione momentaneamente non disponibile. Riprova più tardi.');
+  }
   const token = crypto.randomBytes(24).toString('base64url');
 
   // Se l'indirizzo c'è già ed è confermato non si fa nulla e non si dice nulla:

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { newId, siteByteSize, MAX_SITE_BYTES } from './store-site';
 import { safeInternalPath } from './safe-redirect';
+import { DROP_DEL_GIORNO_ACCESO, NEWSLETTER_ACCESA } from './funzioni-al-lancio';
 
 /**
  * Home del marketplace componibile a blocchi — tipi, validazione (zod), catalogo
@@ -304,9 +305,20 @@ export function isDefaultHomeSite(raw: unknown): boolean {
  * Helper puri (unit-testabili)
  * ========================================================================== */
 
-/** Sezioni effettivamente da renderizzare (solo quelle attive). */
+/**
+ * Le sezioni spente al lancio (carta #209) non si disegnano, anche se una home
+ * salvata dal pannello le ha accese: il Drop del giorno annuncia un prezzo che
+ * la cassa non applica, la newsletter promette 5 euro che nessuno dà.
+ */
+export function sezioneAccesa(type: HomeSectionType): boolean {
+  if (type === 'dropOfDay') return DROP_DEL_GIORNO_ACCESO;
+  if (type === 'newsletter') return NEWSLETTER_ACCESA;
+  return true;
+}
+
+/** Sezioni effettivamente da renderizzare: attive e non spente al lancio. */
 export function homeEnabledSections(site: HomeSite): HomeSection[] {
-  return site.sections.filter((s) => s.enabled);
+  return site.sections.filter((s) => s.enabled && sezioneAccesa(s.type));
 }
 
 /**

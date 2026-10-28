@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import Honeypot from './Honeypot';
 import Turnstile, { type ManopolaAntiBot } from './Turnstile';
 import { friendlyError } from '@/lib/errors';
+import { NEWSLETTER_ACCESA } from '@/lib/funzioni-al-lancio';
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
@@ -24,7 +25,7 @@ type Props = {
   variant?: 'dark' | 'light';
 };
 
-const NewsletterForm = ({ variant = 'dark' }: Props) => {
+const ModuloNewsletter = ({ variant = 'dark' }: Props) => {
   const t = useTranslations('newsletter');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -147,5 +148,12 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
     </form>
   );
 };
+
+/**
+ * Newsletter SPENTA al lancio (carta #209): in produzione la rotta non ha la
+ * chiave di servizio né la posta, e la home prometteva 5 euro che nessun pezzo
+ * del sito dà. Spenta, il modulo non si disegna né nel piede né in home.
+ */
+const NewsletterForm = (props: Props) => (NEWSLETTER_ACCESA ? <ModuloNewsletter {...props} /> : null);
 
 export default NewsletterForm;

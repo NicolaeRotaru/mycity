@@ -10,6 +10,11 @@ import path from 'node:path';
  */
 
 export default defineConfig({
+  // Le prove devono saper leggere il JSX dei componenti. tsconfig.json tiene
+  // "jsx": "preserve" perché serve a Next.js, e vite lo erediterebbe: allora
+  // qualunque prova che tocca un .tsx si ferma prima di partire. Qui diciamo
+  // a vite 8 (che trasforma il codice con oxc) di tradurre il JSX da solo.
+  oxc: { jsx: { runtime: 'automatic' } },
   test: {
     include: ['tests/unit/**/*.test.ts', 'tests/unit/**/*.test.tsx'],
     exclude: ['tests/e2e/**', 'tests/sql/**', 'node_modules/**'],

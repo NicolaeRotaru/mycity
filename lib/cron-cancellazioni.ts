@@ -39,7 +39,7 @@
  * cosa da guardare.
  */
 
-import { recapitoPrivacy } from '@/lib/legal/titolare';
+import { recapitoInUnaFrase } from '@/lib/legal/titolare';
 
 /** Un tentativo di cancellazione, come esce dal giro notturno. */
 export type TentativoCancellazione = {
@@ -106,7 +106,7 @@ export type VerdettoGiro = {
 export function verdettoDelGiro(
   tentativi: TentativoCancellazione[],
   adessoMs: number,
-  recapito: string = recapitoPrivacy().testo,
+  recapito: string = recapitoInUnaFrase(),
 ): VerdettoGiro {
   let fatte = 0;
   let rinviate = 0;

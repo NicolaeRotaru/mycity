@@ -1,6 +1,11 @@
 import { compensoRiderCents, shippingCentsFor } from '@/lib/shipping';
 import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
-import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
+import {
+  MARKETPLACE_FEE_BPS,
+  PICKUP_DISCOUNT_PERCENT,
+  PLATFORM_DELIVERY_FEE_CENTS,
+  commissioneCents,
+} from '@/lib/constants';
 
 /**
  * Il conto della cassa, in un posto solo.
@@ -44,7 +49,11 @@ export type IngressiPrezzo = {
   consegnaLat: number | null;
   consegnaLng: number | null;
   pickupInStore: boolean;
-  /** Il coupon copre la spedizione? */
+  /**
+   * Il codice «Spedizione gratuita» è applicato? Toglie al cliente la consegna di ogni negozio
+   * fin dove la paga la commissione di quel negozio (`consegnaDaPagareCents`): il fattorino resta
+   * pagato, e quel compenso lo copre la piattaforma, mai il negozio.
+   */
   couponSpedizioneGratis: boolean;
   /** Quanto sconta il coupon, in centesimi, sull'intero carrello. */
   couponScontoCents: number;
@@ -72,6 +81,46 @@ export type EsitoPrezzo = {
   scontoApplicatoCents: number;
   grandTotalCents: number;
 };
+
+/**
+ * 27/10/2026 — IL CODICE «SPEDIZIONE GRATUITA» REGALA LA CONSEGNA FIN DOVE LA PAGA L'ORDINE.
+ *
+ * Al lancio la spedizione è zero e il cliente paga solo la consegna, 3 € per negozio, che pagano il
+ * fattorino (3 €). Il codice azzerava solo la spedizione: accettato, segnato come usato, e il cliente
+ * pagava come chi non ce l'ha. Il primo rimedio azzerava tutta la consegna, e rompeva i bonifici: con
+ * la carta il netto del negozio e il compenso del fattorino escono dallo STESSO addebito
+ * (`source_transaction`, lib/stripe/payout.ts), e da un addebito Stripe non versa più di quanto ha
+ * incassato. 20 € dal fornaio col codice: incasso 20 €, al negozio 18 €, al fattorino 3 € — 21 € di
+ * bonifici su 20. Il secondo falliva, e il giro lo ritentava all'infinito.
+ *
+ * Adesso il codice toglie al cliente la parte di consegna che la piattaforma può regalare con quello
+ * che le resta di quell'ordine (commissione più spedizione): da 30 € di spesa per negozio tutta, a
+ * 20 € due euro su tre. Il negozio incassa lo stesso netto, il fattorino lo stesso compenso, e i
+ * bonifici non superano mai l'addebito. Pagare il resto col saldo della piattaforma è un'altra
+ * scelta, e si farebbe in lib/stripe/payout.ts, non qui.
+ * Prova: tests/unit/col-codice-spedizione-gratuita-i-bonifici-stanno-nell-addebito.test.ts.
+ */
+function consegnaDaPagareCents(a: {
+  pickupInStore: boolean;
+  codiceSpedizioneGratis: boolean;
+  /** La merce del negozio dopo gli sconti: la base su cui computeOrderSplit calcola la commissione. */
+  merceCents: number;
+  shippingCents: number;
+  riderFeeCents: number;
+}): number {
+  if (a.pickupInStore) return 0;
+  if (!a.codiceSpedizioneGratis) return PLATFORM_DELIVERY_FEE_CENTS;
+  const restaAllaPiattaforma = commissioneCents(Math.max(0, a.merceCents)) + a.shippingCents;
+  return Math.min(PLATFORM_DELIVERY_FEE_CENTS, Math.max(0, a.riderFeeCents - restaAllaPiattaforma));
+}
+
+/**
+ * Da quanta spesa per negozio il codice «Spedizione gratuita» toglie TUTTA la consegna: quella su
+ * cui la commissione basta da sola a pagare il fattorino. Si ricava dai due numeri, non si scrive.
+ */
+export function spesaPerConsegnaGratisColCodiceCents(): number {
+  return Math.ceil((compensoRiderCents({ pickupInStore: false }) * 10000) / MARKETPLACE_FEE_BPS);
+}
 
 export function prezziDelCarrello(ing: IngressiPrezzo): EsitoPrezzo {
   const subtotali = ing.gruppi.map((g) => g.subtotalCents);
@@ -108,9 +157,21 @@ export function prezziDelCarrello(ing: IngressiPrezzo): EsitoPrezzo {
   const quoteRitiro = ripartisciCentesimi(scontiLimitati.ritiro, subtotali);
 
   const gruppi: PrezzoDiGruppo[] = ing.gruppi.map((g, i) => {
-    const deliveryFeeCents = ing.pickupInStore ? 0 : PLATFORM_DELIVERY_FEE_CENTS;
     const couponPortionCents = quoteCoupon[i];
     const pickupPortionCents = quoteRitiro[i];
+    // 27/8/2026 (R008) — Il compenso del fattorino era riscritto qui dentro,
+    // con il 300 a mano e la motivazione «non importato da lib/shipping per
+    // non creare un giro di dipendenze»: motivazione falsa, questo file
+    // importa da lib/shipping dalla prima riga. Due copie della stessa cifra
+    // vogliono dire che il giorno in cui cambia una resta indietro.
+    const riderFeeCents = compensoRiderCents({ pickupInStore: ing.pickupInStore });
+    const deliveryFeeCents = consegnaDaPagareCents({
+      pickupInStore: ing.pickupInStore,
+      codiceSpedizioneGratis: ing.couponSpedizioneGratis,
+      merceCents: subtotali[i] - couponPortionCents - pickupPortionCents,
+      shippingCents: shippingPerGruppo[i],
+      riderFeeCents,
+    });
     return {
       sellerId: g.sellerId,
       subtotalCents: subtotali[i],
@@ -122,12 +183,7 @@ export function prezziDelCarrello(ing: IngressiPrezzo): EsitoPrezzo {
         0,
         subtotali[i] + shippingPerGruppo[i] + deliveryFeeCents - couponPortionCents - pickupPortionCents,
       ),
-      // 27/8/2026 (R008) — Il compenso del fattorino era riscritto qui dentro,
-      // con il 300 a mano e la motivazione «non importato da lib/shipping per
-      // non creare un giro di dipendenze»: motivazione falsa, questo file
-      // importa da lib/shipping dalla prima riga. Due copie della stessa cifra
-      // vogliono dire che il giorno in cui cambia una resta indietro.
-      riderFeeCents: compensoRiderCents({ pickupInStore: ing.pickupInStore }),
+      riderFeeCents,
     };
   });
 

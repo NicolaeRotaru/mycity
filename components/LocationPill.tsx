@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { MapPin, ChevronDown, X } from 'lucide-react';
 import { useLocalStorage } from '@/lib/hooks';
+import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 
 const STORAGE_KEY = 'mc_delivery_location';
 
@@ -11,8 +12,8 @@ const DEFAULT_LOC: Location = { city: 'Piacenza', zip: '29121' };
 
 /**
  * Pill "Consegna a Piacenza 29100" cliccabile per cambiare CAP.
- * In MVP supportiamo solo Piacenza (e provincia, raccontata via CAP), ma il
- * componente è pronto per altre città quando espanderemo.
+ * Al lancio consegniamo a Piacenza, fino a `RAGGIO_CONSEGNA_KM` km dal negozio
+ * (la provincia no), ma il componente è pronto per altre città quando espanderemo.
  */
 export default function LocationPill({ compact = false }: { compact?: boolean }) {
   const [loc, setLoc] = useLocalStorage<Location>(STORAGE_KEY, DEFAULT_LOC);
@@ -190,8 +191,12 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
             >
               Aggiorna posizione
             </button>
+            {/* 28/10/2026 — Qui c'era «In MVP serviamo Piacenza e provincia.», scritto a mano e falso
+                già col confine a 10 km: la provincia arriva a Fiorenzuola e a Castel San Giovanni.
+                Col confine a 5 km restano fuori anche Podenzano, Rottofreno e Gossolengo. Il limite
+                vero è la distanza dal negozio, letta da dove la decide la cassa. */}
             <p className="text-[11px] text-ink-400 mt-2 text-center">
-              In MVP serviamo Piacenza e provincia.
+              {`Consegniamo a Piacenza, fino a ${RAGGIO_CONSEGNA_KM} km dal negozio.`}
             </p>
           </div>
         </>

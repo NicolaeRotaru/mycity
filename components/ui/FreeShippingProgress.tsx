@@ -1,63 +1,32 @@
 import { Truck } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 import { promessaSpedizione } from '@/lib/promesse-pubbliche';
 
 /**
- * Barra "Ti mancano €3 alla spedizione gratis" → stato success al traguardo.
+ * La riga della consegna, sotto il prezzo.
  *
- * Leva AOV (valore medio ordine): incentiva ad aggiungere prodotti per
- * superare la soglia. Riusa FREE_SHIPPING_THRESHOLD già esistente.
+ * 27/10/2026 — FINO A OGGI ERA LA BARRA «TI MANCANO X € ALLA SPEDIZIONE GRATIS». La soglia dei
+ * 30 euro non esiste più: scelta 8 della carta #209, il cliente paga solo la consegna, per
+ * negozio, sempre. La barra spingeva verso un traguardo che la cassa non dà, cioè una promessa
+ * falsa proprio sull'ultimo schermo prima di «Aggiungi». Resta una riga sola, con la cifra che
+ * la cassa addebita: le parole le decide `promessaSpedizione()`, non questo file.
  *
- * ⚠️ Le parole non si scrivono qui: le decide `promessaSpedizione()`, che le fa nascere dalla
- * cifra che la cassa addebita davvero. Scritta a mano, questa barra prometteva «Hai la spedizione
- * gratis» mentre in cassa partivano comunque 3 € di consegna.
+ * 27/10/2026 (terzo giro) — La scheda prodotto non la monta più: sotto il riquadro che dice già
+ * «Consegna MyCity 3,00 € per negozio» ripeteva la stessa cifra con un altro nome, e due nomi si
+ * leggono come due costi. Il componente resta, con la frase di `promessaSpedizione()`; la prop
+ * `subtotal` non cambia più niente.
  */
-export function FreeShippingProgress({
-  subtotal,
-  threshold = FREE_SHIPPING_THRESHOLD,
-  className,
-}: {
-  subtotal: number;
-  threshold?: number;
-  className?: string;
-}) {
-  const promessa = promessaSpedizione(subtotal, threshold);
-  const pct = Math.min(100, threshold > 0 ? (subtotal / threshold) * 100 : 100);
-  const unlocked = promessa.sopraSoglia;
-
+export function FreeShippingProgress({ className }: { subtotal?: number; className?: string }) {
+  const promessa = promessaSpedizione();
   return (
-    <div
+    <p
       className={cn(
-        'rounded-xl border p-3',
-        // In-progress → accent (incoraggia ad aggiungere); sbloccato → olive (success).
-        unlocked ? 'border-olive-200 bg-olive-50' : 'border-accent-200 bg-accent-50',
+        'rounded-xl border border-cream-300 bg-cream-50 p-3 text-sm text-ink-700 flex items-center gap-2',
         className,
       )}
     >
-      {unlocked ? (
-        <p className="text-olive-700 font-semibold flex items-center gap-2 text-sm">
-          <Truck size={16} strokeWidth={2.4} className="shrink-0" aria-hidden />
-          <span>{promessa.titolo}</span>
-        </p>
-      ) : (
-        <>
-          <p className="text-accent-700 text-sm font-medium mb-2 flex items-center gap-2">
-            <Truck size={16} strokeWidth={2.4} className="shrink-0" aria-hidden />
-            <span>{promessa.titolo}</span>
-          </p>
-          <div className="w-full bg-accent-100 rounded-full h-2 overflow-hidden">
-            <div
-              className="bg-accent-500 h-2 rounded-full animate-progress-fill transition-[width] duration-500"
-              style={{ width: `${pct}%` }}
-              role="progressbar"
-              aria-valuenow={Math.round(pct)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-            />
-          </div>
-        </>
-      )}
-    </div>
+      <Truck size={16} strokeWidth={2.4} className="shrink-0" aria-hidden />
+      <span>{promessa.titolo}</span>
+    </p>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { haversineKm, prezzoSpedizioneEuro, deliveryEtaMinutes, formatEtaWindow } from '@/lib/geo';
+import { haversineKm, deliveryEtaMinutes, formatEtaWindow } from '@/lib/geo';
 
 /**
  * Unit test puri per lib/geo — calcoli geografici, fee rider, ETA.
@@ -36,39 +36,14 @@ describe('haversineKm', () => {
   });
 });
 
-describe('prezzoSpedizioneEuro', () => {
-  it('base fee for 0 km', () => {
-    expect(prezzoSpedizioneEuro(0)).toBe(2.5);
-  });
-
-  it('base + per_km * distance', () => {
-    // 2.5 + 1.2 * 5 = 8.5
-    expect(prezzoSpedizioneEuro(5)).toBe(8.5);
-  });
-
-  it('rounds to nearest 0.1', () => {
-    // 2.5 + 1.2 * 1.23 = 3.976 → 4.0
-    expect(prezzoSpedizioneEuro(1.23)).toBe(4);
-  });
-
-  it('clamps negative distance to 0', () => {
-    expect(prezzoSpedizioneEuro(-5)).toBe(2.5);
-  });
-
-  it('scales linearly', () => {
-    const fee10 = prezzoSpedizioneEuro(10);
-    const fee20 = prezzoSpedizioneEuro(20);
-    expect(fee20 - fee10).toBeCloseTo(12, 1);
-  });
-});
 
 describe('deliveryEtaMinutes', () => {
   it('default prep 15 min for 0 km', () => {
     expect(deliveryEtaMinutes(0)).toBe(15);
   });
 
-  it('5 km @ 25 km/h = 12 min travel + 15 prep = 27 min', () => {
-    expect(deliveryEtaMinutes(5)).toBe(27);
+  it('5 km in bici @ 15 km/h = 20 min travel + 15 prep = 35 min', () => {
+    expect(deliveryEtaMinutes(5)).toBe(35);
   });
 
   it('custom prep time', () => {

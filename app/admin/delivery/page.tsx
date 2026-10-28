@@ -1,39 +1,29 @@
 'use client';
 
-import { Truck, MapPin, Info, Store, Banknote, Gift, Bike } from 'lucide-react';
+import { Truck, MapPin, Info, Store, Banknote, Bike } from 'lucide-react';
 import {
-  FREE_SHIPPING_THRESHOLD,
-  SHIPPING_PER_ORDER,
   COMPENSO_RIDER_CENTS,
   PICKUP_DISCOUNT_PERCENT,
   RITIRO_IN_NEGOZIO_ATTIVO,
   PLATFORM_DELIVERY_FEE_CENTS,
-  SPEDIZIONE_BASE_EUR,
-  SPEDIZIONE_PER_KM_EUR,
+  RAGGIO_CONSEGNA_KM,
 } from '@/lib/constants';
-import { prezzoSpedizioneEuro } from '@/lib/geo';
 import { formatPrice } from '@/lib/format';
 import { AdminPageTitle, AdminStatCard } from '@/components/admin/AdminUI';
 
 /**
  * Zone & tariffe di consegna (admin · Contenuti) — SOLA LETTURA.
  *
- * La configurazione spedizione è STATICA nel codice (`lib/constants.ts` +
- * `lib/geo.ts`), fonte unica condivisa tra checkout client e API server
- * (lib/shipping.ts). Non esiste un meccanismo di persistenza (site_settings non
- * contiene una sezione delivery), quindi questa pagina mostra i valori REALI
- * correnti in sola lettura, con nota — niente salvataggi fabbricati.
+ * La configurazione della consegna è STATICA nel codice (`lib/constants.ts`), fonte unica
+ * condivisa tra la cassa e le rotte che creano l'ordine (`lib/shipping.ts`,
+ * `lib/ordini/prezzi.ts`). Non esiste un meccanismo di persistenza (site_settings non contiene
+ * una sezione delivery), quindi questa pagina mostra i valori REALI correnti in sola lettura.
  *
- * Differenza voluta dal mockup (60-content · DeliveryConfig): il mockup mostra
- * "zone per CAP" con tariffe €/km editabili. Nel prodotto reale non esistono
- * zone CAP: la tariffa di consegna è calcolata per DISTANZA (haversine →
- * prezzoSpedizioneEuro) quando le coordinate sono note, con un flat di fallback. Mostriamo
- * la regola reale, non una UI inventata.
+ * 27/10/2026 — Qui si mostravano la soglia della spedizione gratis (30 €), la tariffa fissa di
+ * ripiego (4,90 €) e la tariffa a distanza (2,50 € più 1,20 € al km) con cinque esempi. Non
+ * esistono più: il cliente paga solo la consegna, per negozio, sempre (scelta 8 della carta
+ * #209), e si consegna fino a `RAGGIO_CONSEGNA_KM` dal negozio, in bici (Nicola, 27/10).
  */
-
-// Campioni di tariffa distanza calcolati con la funzione REALE prezzoSpedizioneEuro(km):
-// così la tabella riflette esattamente quanto addebitato al checkout.
-const DISTANCE_SAMPLES = [1, 2, 3, 5, 8].map((km) => ({ km, fee: prezzoSpedizioneEuro(km) }));
 
 export default function AdminDeliveryPage() {
   return (
@@ -47,38 +37,22 @@ export default function AdminDeliveryPage() {
       {/* KPI riepilogo dei parametri principali */}
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
         <AdminStatCard
-          icon={Gift}
-          tone="olive"
-          label="Spedizione gratis sopra"
-          value={formatPrice(FREE_SHIPPING_THRESHOLD)}
-        />
-        <AdminStatCard
-          icon={Truck}
-          tone="primary"
-          label="Flat di fallback"
-          value={formatPrice(SHIPPING_PER_ORDER)}
-        />
-        {/* 22/8/2026 — le due tariffe che compongono il prezzo a distanza
-            stavano dentro il corpo della funzione, e qui non si vedevano: chi
-            apriva questa pagina per sapere «quanto costa la spedizione»
-            leggeva solo la soglia e il flat. */}
-        <AdminStatCard
-          icon={Truck}
-          tone="primary"
-          label="Base della tariffa a distanza"
-          value={formatPrice(SPEDIZIONE_BASE_EUR)}
-        />
-        <AdminStatCard
-          icon={Truck}
-          tone="primary"
-          label="Al chilometro"
-          value={formatPrice(SPEDIZIONE_PER_KM_EUR)}
-        />
-        <AdminStatCard
           icon={Banknote}
           tone="accent"
-          label="Fee piattaforma / ordine"
+          label="Consegna pagata dal cliente, per negozio"
           value={formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}
+        />
+        <AdminStatCard
+          icon={Bike}
+          tone="olive"
+          label="Compenso del fattorino, per consegna"
+          value={formatPrice(COMPENSO_RIDER_CENTS / 100)}
+        />
+        <AdminStatCard
+          icon={MapPin}
+          tone="primary"
+          label="Fin dove consegniamo"
+          value={`${RAGGIO_CONSEGNA_KM} km`}
         />
       </div>
 
@@ -88,21 +62,9 @@ export default function AdminDeliveryPage() {
           <h2 className="mb-4 font-serif text-[17px] font-bold text-ink-900">Costi base</h2>
           <div className="flex flex-col gap-2.5">
             <Row
-              icon={Gift}
-              title="Soglia spedizione gratuita"
-              desc="Sopra questo subtotale la consegna è gratis"
-              value={formatPrice(FREE_SHIPPING_THRESHOLD)}
-            />
-            <Row
-              icon={Truck}
-              title="Tariffa flat di fallback"
-              desc="Quando le coordinate non sono note"
-              value={formatPrice(SHIPPING_PER_ORDER)}
-            />
-            <Row
               icon={Banknote}
-              title="Fee infrastruttura delivery"
-              desc="Quota fissa MyCity su ogni consegna a domicilio"
+              title="Consegna pagata dal cliente"
+              desc="Per negozio, su ogni ordine a domicilio, qualunque sia la spesa"
               value={formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}
             />
             <Row
@@ -112,41 +74,30 @@ export default function AdminDeliveryPage() {
               value={formatPrice(COMPENSO_RIDER_CENTS / 100)}
             />
             <Row
+              icon={MapPin}
+              title="Confine della consegna"
+              desc="In linea d'aria dal negozio: oltre, la cassa rifiuta l'indirizzo. Se il negozio non ha la posizione sulla vetrina o l'indirizzo non si trova sulla mappa, la cassa non può misurare e lo accetta: la distanza va guardata a mano"
+              value={`${RAGGIO_CONSEGNA_KM} km`}
+            />
+            <Row
               icon={Store}
               title="Ritiro in negozio"
               desc={RITIRO_IN_NEGOZIO_ATTIVO
-                ? 'Il ritiro azzera la spedizione'
-                : 'Messo da parte: non se n\u2019è ancora parlato coi negozi'}
+                ? 'Il ritiro azzera la consegna'
+                : 'Messo da parte: non se n’è ancora parlato coi negozi'}
               value={RITIRO_IN_NEGOZIO_ATTIVO ? `− ${PICKUP_DISCOUNT_PERCENT}%` : 'non attivo'}
             />
           </div>
         </div>
 
-        {/* ── Quanto paga il CLIENTE per la spedizione (non il compenso del fattorino) ── */}
+        {/* ── Come si compone quello che paga il CLIENTE ── */}
         <div className="rounded-2xl border-2 border-cream-300 bg-white p-5 shadow-warm">
-          <h2 className="mb-1 font-serif text-[17px] font-bold text-ink-900">Spedizione pagata dal cliente</h2>
+          <h2 className="mb-1 font-serif text-[17px] font-bold text-ink-900">Consegna pagata dal cliente</h2>
           <p className="mb-4 text-xs text-ink-500">
-            Quando negozio e indirizzo hanno coordinate note, la spedizione è calcolata sulla distanza (haversine):
-            base + €/km, arrotondata a 0,10. <strong>Non è il compenso del fattorino</strong>, che è fisso a{' '}
-            {formatPrice(COMPENSO_RIDER_CENTS / 100)}: le due cose erano confuse, e sopra la soglia della
-            spedizione gratuita il fattorino restava senza paga.
-          </p>
-          <div className="flex flex-col gap-1.5">
-            {DISTANCE_SAMPLES.map((s) => (
-              <div
-                key={s.km}
-                className="flex items-center justify-between rounded-md bg-cream-50 px-3 py-2 text-sm"
-              >
-                <span className="inline-flex items-center gap-2 text-ink-600">
-                  <MapPin size={14} className="text-primary-700" aria-hidden /> {s.km} km
-                </span>
-                <strong className="font-mono text-ink-900">{formatPrice(s.fee)}</strong>
-              </div>
-            ))}
-          </div>
-          <p className="mt-3 text-xs text-ink-400">
-            Esempi calcolati con la funzione di tariffazione reale. Sopra {formatPrice(FREE_SHIPPING_THRESHOLD)} di
-            subtotale la spedizione resta gratuita.
+            Il cliente paga solo la consegna: {formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} per ogni negozio
+            da cui ordina, qualunque sia la spesa. Non c&apos;è un costo a chilometro e non c&apos;è una soglia di
+            spedizione gratis. Due negozi nello stesso carrello sono due consegne. La consegna copre il compenso
+            del fattorino, fisso a {formatPrice(COMPENSO_RIDER_CENTS / 100)}.
           </p>
         </div>
       </div>
@@ -156,7 +107,7 @@ export default function AdminDeliveryPage() {
         <Info size={16} className="mt-0.5 shrink-0 text-ink-400" aria-hidden />
         <p>
           Questi parametri sono definiti nel codice (<span className="font-mono text-xs">lib/constants.ts</span>,{' '}
-          <span className="font-mono text-xs">lib/geo.ts</span>) come fonte unica condivisa tra checkout e server, così
+          <span className="font-mono text-xs">lib/shipping.ts</span>) come fonte unica condivisa tra checkout e server, così
           l&apos;importo mostrato all&apos;utente coincide sempre con quello addebitato. Non sono modificabili da
           questa schermata: per cambiarli serve un rilascio.
         </p>

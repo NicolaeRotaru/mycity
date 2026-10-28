@@ -144,15 +144,14 @@ describe('la spedizione gratuita, in cassa, la dice chi la decide', () => {
     // «Spedizione gratis» su un ordine che pagava due spedizioni. L'invariante
     // resta lo stesso — la cassa non scrive la frase a mano — e la catena fino
     // alla casa unica è pinnata dalla riga qui sotto.
-    expect(src).toContain("from '@/lib/ordini/promessa-del-carrello'");
-    expect(src).toContain('promessaConsegna.promessa.dettaglioConsegna');
-    expect(leggi('lib/ordini/promessa-del-carrello.ts')).toContain("from '@/lib/promesse-pubbliche'");
+    expect(src).toContain('promessaSpedizione()');
+    expect(src).toContain('promessaConsegna.dettaglioConsegna');
   });
 
   it('e quella frase nasce dalla cifra che la cassa addebita davvero', async () => {
     const { promessaSpedizione } = await import('@/lib/promesse-pubbliche');
     // Con la consegna a pagamento la riga si vede; a consegna gratis sparisce.
-    expect(promessaSpedizione(50, 30, 300).dettaglioConsegna).toMatch(/3[.,]00/);
-    expect(promessaSpedizione(50, 30, 0).dettaglioConsegna).toBeNull();
+    expect(promessaSpedizione(50, 300).dettaglioConsegna).toMatch(/3[.,]00/);
+    expect(promessaSpedizione(50, 0).dettaglioConsegna).toBeNull();
   });
 });

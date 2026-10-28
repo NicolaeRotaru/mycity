@@ -13,6 +13,7 @@ import {
   type CategoryRow,
 } from '@/lib/products/aiPatch';
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
+import { TRADUCI_ACCESO } from '@/lib/funzioni-al-lancio';
 
 /**
  * Costruzione e parsing delle richieste per i job AI massivi sul catalogo
@@ -336,4 +337,14 @@ export function parseCatalogBatchEntry(
 
 export function langName(code: string | null | undefined): string | undefined {
   return code ? LANGS[code] : undefined;
+}
+
+/**
+ * Le operazioni del lotto che si possono applicare oggi. «translate» è spenta al
+ * lancio (carta #209): sostituisce nome, descrizione e tag italiani, perché il
+ * prodotto non ha campi per un'altra lingua. Il tipo resta, per i lavori vecchi.
+ */
+export function operazioneAccesa(v: unknown): boolean {
+  if (v === 'translate') return TRADUCI_ACCESO;
+  return isCatalogOperation(v);
 }

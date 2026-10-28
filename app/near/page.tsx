@@ -10,6 +10,8 @@ import NearbyStoresMapLazy, { type NearbyStore } from '@/components/NearbyStores
 import { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import CollectionHeader from '@/components/CollectionHeader';
 import { haversineKm } from '@/lib/geo';
+import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { avvisoNessunNegozioVicino } from '@/lib/promesse-pubbliche';
 import { frasePosizione, motivoPosizione, siAspetta, type MotivoPosizione } from '@/lib/posizione';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi } from '@/lib/supabase/blocchi';
@@ -123,7 +125,10 @@ export default function NearMePage() {
   const [motivo, setMotivo] = useState<MotivoPosizione | null>(null);
   const [cerco, setCerco] = useState(false);
   const [view, setView] = useState<'list' | 'map'>('list');
-  const [radiusKm, setRadiusKm] = useState(5);
+  // 28/10/2026 — La pagina si apre al confine della cassa, letto da dove è deciso. Prima partiva da
+  // un 5 scritto a mano: col confine a 10 si apriva a metà, e se il confine scende sotto 5 si
+  // aprirebbe oltre il massimo del cursore, con in lista negozi che la cassa poi rifiuta.
+  const [radiusKm, setRadiusKm] = useState<number>(RAGGIO_CONSEGNA_KM);
 
   /**
    * 24/8/2026 — IL PERMESSO NON SI CHIEDE PIÙ A FREDDO, E LA PAGINA NON ASPETTA PIÙ.
@@ -250,7 +255,7 @@ export default function NearMePage() {
         icon={MapPin}
         eyebrow="Negozi vicini"
         title="Vicino a te"
-        blurb="I negozi della tua zona a Piacenza, con consegna locale rapida."
+        blurb={`I negozi della tua zona a Piacenza: consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio.`}
         breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Vicino a te' }]}
       />
 
@@ -306,7 +311,9 @@ export default function NearMePage() {
             <input
               type="range"
               min={1}
-              max={20}
+              // 27/10/2026 — Il cursore arrivava a 20 km e la cassa rifiuta oltre il confine: un negozio
+              // a 15 km compariva qui e poi non si poteva ordinare. Il massimo è il confine della cassa.
+              max={RAGGIO_CONSEGNA_KM}
               step={1}
               value={radiusKm}
               onChange={(e) => setRadiusKm(Number(e.target.value))}
@@ -339,7 +346,7 @@ export default function NearMePage() {
         </div>
       ) : (
         <div className="rounded-2xl border border-surface-200 bg-cream-50 p-8 text-center text-ink-500">
-          Nessun negozio entro {radiusKm} km. Aumenta il raggio per vederne di più.
+          {avvisoNessunNegozioVicino(radiusKm)}
         </div>
       )}
     </div>

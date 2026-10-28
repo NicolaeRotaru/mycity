@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownWideNarrow, X, Tag, PackageCheck, Check, Search } from 'lucide-react';
+import { Filter, RotateCcw, CircleDot, Star, ArrowDownWideNarrow, X, Tag, PackageCheck, Check, Search } from 'lucide-react';
 import ProductGrid from '@/components/ProductGrid';
 import SponsoredCarousel from '@/components/SponsoredCarousel';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
@@ -12,7 +12,6 @@ import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
-import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 import { useTranslations } from 'next-intl';
 
 type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating' | 'discount_desc';
@@ -93,7 +92,6 @@ function SearchInner() {
   }, [minPrezzoInCorso, maxPrezzoInCorso]);
   const [categoryId, setCategoryId] = useState<string>(() => params.get('cat') ?? '');
   const [onlyOpenStores, setOnlyOpenStores] = useState(() => params.get('aperti') === '1');
-  const [freeShipping, setFreeShipping] = useState(() => params.get('da30') === '1');
   const [onlyPromo, setOnlyPromo] = useState(() => params.get('promo') === '1');
   const [onlyInStock, setOnlyInStock] = useState(() => params.get('disponibili') === '1');
   const [minRating, setMinRating] = useState<number>(() => numeroDaUrl('stelle', 0));
@@ -109,7 +107,6 @@ function SearchInner() {
     if (minPrice > 0) p.set('min', String(minPrice));
     if (maxPrice < 500) p.set('max', String(maxPrice));
     if (onlyOpenStores) p.set('aperti', '1');
-    if (freeShipping) p.set('da30', '1');
     if (onlyPromo) p.set('promo', '1');
     if (onlyInStock) p.set('disponibili', '1');
     if (minRating > 0) p.set('stelle', String(minRating));
@@ -117,7 +114,7 @@ function SearchInner() {
     const nuovo = p.toString();
     if (nuovo === params.toString()) return;
     router.replace(nuovo ? `/search?${nuovo}` : '/search', { scroll: false });
-  }, [q, categoryId, minPrice, maxPrice, onlyOpenStores, freeShipping, onlyPromo, onlyInStock, minRating, sort, params, router]);
+  }, [q, categoryId, minPrice, maxPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort, params, router]);
 
   /**
    * 6/9/2026 — LA LISTA DELLE CATEGORIE ERA PIATTA, E DUE SI CHIAMAVANO UGUALE.
@@ -170,7 +167,6 @@ function SearchInner() {
     setMaxPrezzoInCorso(500);
     setMinPrezzoInCorso(0);
     setOnlyOpenStores(false);
-    setFreeShipping(false);
     setOnlyPromo(false);
     setOnlyInStock(false);
     setMinRating(0);
@@ -195,7 +191,6 @@ function SearchInner() {
     minPrice > 0 && 'prezzo min',
     maxPrice < 500 && 'prezzo max',
     onlyOpenStores && 'aperti',
-    freeShipping && 'spedizione gratis',
     onlyPromo && 'promozione',
     onlyInStock && 'disponibili',
     minRating > 0 && `rating ${minRating}+`,
@@ -215,7 +210,6 @@ function SearchInner() {
   else if (maxPrice < 500) chips.push({ key: 'pmax', label: t('filterPrice', { max: maxPrice }), clear: () => { setMaxPrice(500); setMaxPrezzoInCorso(500); } });
   else if (minPrice > 0) chips.push({ key: 'pmin', label: t('filterPriceMin', { min: minPrice }), clear: () => { setMinPrice(0); setMinPrezzoInCorso(0); } });
   if (minRating > 0) chips.push({ key: 'rating', label: t('chip.minRating', { rating: minRating }), clear: () => setMinRating(0) });
-  if (freeShipping) chips.push({ key: 'free', label: t('chip.freeShipping'), clear: () => setFreeShipping(false) });
   if (onlyPromo) chips.push({ key: 'promo', label: t('chip.promotion'), clear: () => setOnlyPromo(false) });
   if (onlyInStock) chips.push({ key: 'stock', label: t('chip.inStock'), clear: () => setOnlyInStock(false) });
   if (onlyOpenStores) chips.push({ key: 'open', label: t('chip.openNow'), clear: () => setOnlyOpenStores(false) });
@@ -334,16 +328,6 @@ function SearchInner() {
 
       {/* Checkbox */}
       <div className="pt-3 space-y-2">
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input
-            type="checkbox"
-            checked={freeShipping}
-            onChange={(e) => setFreeShipping(e.target.checked)}
-            className="accent-primary-600"
-          />
-          <Truck size={14} strokeWidth={2.2} className="text-olive-600" />
-          <span>{t('freeShipping')}</span>
-        </label>
         <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input
             type="checkbox"
@@ -589,10 +573,9 @@ function SearchInner() {
           search={q || undefined}
           categoryId={categoryId || undefined}
           maxPrice={maxPrice < 500 ? maxPrice : undefined}
-          // #117 — I due filtri si sommano invece di escludersi: prima, con un
-          // prezzo minimo impostato, la spunta da-30-in-su non faceva piu'
-          // niente, restava accesa e contava fra i filtri attivi.
-          minPrice={Math.max(minPrice, freeShipping ? FREE_SHIPPING_THRESHOLD : 0) || undefined}
+          // 27/10/2026 — Qui si sommava la spunta «spedizione gratis», che filtrava i prodotti da
+          // 30 € in su: la soglia non esiste più (si paga solo la consegna) e la spunta è stata tolta.
+          minPrice={minPrice || undefined}
           onlyOpenStores={onlyOpenStores}
           onlyPromo={onlyPromo}
           onlyInStock={onlyInStock}

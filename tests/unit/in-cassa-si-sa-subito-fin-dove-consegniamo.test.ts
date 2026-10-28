@@ -40,10 +40,12 @@ describe('il modulo dell indirizzo in cassa', () => {
     const schermo = accendi(mod.ShippingAddressForm as never, props as never);
 
     const testo = testoVisibile(schermo.radice);
+    // 28/10/2026 — la riga diceva «Piacenza e dintorni»: col confine a 5 km Podenzano, Rottofreno e
+    // Gossolengo restano fuori. Adesso dice il limite vero, la distanza dal negozio.
     expect(
       testo,
       'chi abita fuori zona non lo scopre dal modulo: lo scoprirà al clic finale, dopo aver compilato tutto',
-    ).toContain('Piacenza e dintorni');
+    ).toContain(`Consegniamo a Piacenza, fino a ${RAGGIO_CONSEGNA_KM} km dal negozio`);
     expect(
       testo,
       `la distanza non viene dal posto dove è decisa (${RAGGIO_CONSEGNA_KM} km): due frasi che possono divergere`,

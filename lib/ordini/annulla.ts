@@ -5,6 +5,8 @@ import { logger } from '@/lib/logger';
 import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+import { sendEmail } from '@/lib/email/client';
+import { ordineAnnullatoTemplate } from '@/lib/email/templates';
 
 /**
  * ANNULLARE UN ORDINE VUOL DIRE ANCHE RESTITUIRE I SOLDI.
@@ -322,5 +324,67 @@ export async function annullaERimborsa(
   await restituisciCredito();
   await restituisciCoupon();
 
+  // 27/10/2026 — Sulla carta avvisa `refundOrder` («Rimborso emesso»). Qui,
+  // contanti o pagamento mai completato, non avvisava nessuno per email.
+  await avvisaIlClienteDellAnnullo(admin, order, opts.reason);
+
   return { ok: true, refundId: null };
+}
+
+/**
+ * 27/10/2026 — L'ORDINE ANNULLATO SI DICE PER EMAIL ANCHE A CHI PAGA ALLA CONSEGNA.
+ *
+ * Sulla carta il cliente riceve «Rimborso emesso» da `refundOrder`. Sul
+ * contrassegno non c'era niente da rimborsare, quindi niente email: restava la
+ * campanella del sito e una push, che arriva solo a chi l'ha accesa. Chi aveva
+ * ordinato il pane per la sera restava a casa ad aspettare il fattorino.
+ *
+ * E' un avviso sul SUO ordine: parte come transazionale, anche senza consenso
+ * commerciale. Non lancia mai, perche' l'annullo e' gia' scritto e una posta
+ * giu' non deve far credere al chiamante che sia fallito. Ma non tace: se la
+ * email non parte, lo scrive nel registro degli errori col motivo.
+ * La usano `annullaERimborsa` e il giro degli ordini scaduti.
+ */
+export async function avvisaIlClienteDellAnnullo(
+  admin: SupabaseClient,
+  ordine: { id: string; user_id: string | null; wallet_applied_cents?: number | null },
+  motivo: string | null | undefined,
+): Promise<boolean> {
+  try {
+    if (!ordine.user_id) return false;
+    const { data, error } = await admin.auth.admin.getUserById(ordine.user_id);
+    const email = data?.user?.email;
+    if (error || !email) {
+      logger.error('[annullo] email di annullo non spedita: indirizzo non letto', {
+        orderId: ordine.id, message: error?.message ?? 'nessun indirizzo',
+      });
+      return false;
+    }
+    const t = ordineAnnullatoTemplate({
+      orderId: ordine.id,
+      motivo,
+      creditoRestituitoEuro: Number(ordine.wallet_applied_cents ?? 0) / 100,
+    });
+    const res = await sendEmail({
+      to: email,
+      subject: t.subject,
+      html: t.html,
+      text: t.text,
+      tipo: 'transazionale',
+      tags: [{ name: 'template', value: 'order_canceled' }],
+    });
+    if (!res.ok) {
+      logger.error('[annullo] email di annullo NON partita', {
+        orderId: ordine.id,
+        motivo: 'reason' in res ? res.reason : 'error' in res ? String(res.error) : 'invio fallito',
+      });
+      return false;
+    }
+    return true;
+  } catch (e) {
+    logger.error('[annullo] email di annullo NON partita', {
+      orderId: ordine.id, error: e instanceof Error ? e.message : String(e),
+    });
+    return false;
+  }
 }

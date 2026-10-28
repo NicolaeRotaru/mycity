@@ -177,8 +177,23 @@ test.describe('l\'ordine che nasce davvero', () => {
    *
    * Restano scritti, e saltati con la ragione scritta accanto, perche' la
    * lista di cio' che NON e' provato dev'essere leggibile in CI e non un
-   * ricordo di qualcuno. Il giorno che l'ambiente c'e', si toglie la
-   * condizione qui sotto e girano.
+   * ricordo di qualcuno.
+   *
+   * 26/10/2026 — Le ultime tre NON hanno ancora un corpo: prima il loro corpo
+   * era `expect(SENZA_AMBIENTE_DI_PROVA).toBe(false)`, cioe' controllava
+   * l'interruttore e non la cassa, e con E2E_DATI_DI_PROVA acceso diventava
+   * verde in tre millesimi senza creare un ordine. Ora si saltano SEMPRE, con
+   * un motivo che dice che la prova non e' scritta: non possono diventare verdi
+   * a vuoto. Il giorno che l'ambiente c'e', si scrive il corpo vero (non basta
+   * togliere una condizione), e si aggiorna
+   * tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts.
+   * La logica del contrassegno intanto e' provata con un database finto in
+   * tests/unit/ordini-contrassegno-due-negozi.test.ts e nelle altre prove su
+   * app/api/orders/cod/route.ts.
+   *
+   * NON usare test.fixme: il riepilogo del lavoro «Prove nel browser (senza
+   * chiavi)» legge solo le annotazioni di tipo 'skip', e una fixme
+   * risulterebbe «saltata senza dire perche'».
    */
   const SENZA_AMBIENTE_DI_PROVA = !process.env.E2E_DATI_DI_PROVA;
   const PERCHE =
@@ -199,15 +214,17 @@ test.describe('l\'ordine che nasce davvero', () => {
     await expect(page.getByText(/Totale/i).first()).toBeVisible();
   });
 
+  const NON_SCRITTA = 'PROVA NON ANCORA SCRITTA, non e\' una prova verde: ';
+
   test('contrassegno: l\'ordine nasce e il negozio lo vede', async () => {
-    expect(SENZA_AMBIENTE_DI_PROVA).toBe(false);
+    test.skip(true, NON_SCRITTA + 'serve un database di prova con negozio, prodotto e cliente');
   });
 
   test('rifiuto del negozio su un ordine pagato: il rimborso esiste', async () => {
-    expect(SENZA_AMBIENTE_DI_PROVA).toBe(false);
+    test.skip(true, NON_SCRITTA + 'servono anche le chiavi Stripe in modalita\' prova');
   });
 
   test('consegna completata: il bonifico al negozio parte', async () => {
-    expect(SENZA_AMBIENTE_DI_PROVA).toBe(false);
+    test.skip(true, NON_SCRITTA + 'servono anche le chiavi Stripe in modalita\' prova');
   });
 });

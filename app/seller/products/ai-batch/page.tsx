@@ -16,6 +16,8 @@ import ImportFromUrlBox, { type ImportResult } from '@/components/products/Impor
 import { Card } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Field';
 import { Button } from '@/components/ui/Button';
+import Link from 'next/link';
+import { AI_NEGOZI_ACCESA, TRADUCI_ACCESO } from '@/lib/funzioni-al-lancio';
 
 /**
  * AI Studio — tre modi per lavorare col catalogo con l'intelligenza artificiale:
@@ -103,7 +105,7 @@ async function authedFetch(path: string, init?: RequestInit) {
   return json;
 }
 
-export default function CatalogAiBatchPage() {
+function CatalogAiBatchPageAcceso() {
   const [tab, setTab] = useState<Tab>('crea');
 
   return (
@@ -387,7 +389,7 @@ function CatalogTab() {
 
       {/* Scelta operazione */}
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-        {OPS.map((o) => {
+        {OPS.filter((o) => o.key !== 'translate' || TRADUCI_ACCESO).map((o) => {
           const Icon = o.icon;
           const active = operation === o.key;
           return (
@@ -471,4 +473,28 @@ function CatalogTab() {
       )}
     </div>
   );
+}
+
+/**
+ * AI per i negozi SPENTA al lancio (carta #209): in produzione non c'è la chiave
+ * e ogni richiesta risponderebbe «Servizio AI non configurato». La pagina resta
+ * raggiungibile dal menu, e dice cosa fare invece di offrire pulsanti morti.
+ */
+export default function CatalogAiBatchPage() {
+  if (!AI_NEGOZI_ACCESA) {
+    return (
+      <div className="max-w-2xl space-y-4">
+        <SellerPageTitle
+          eyebrow="Catalogo"
+          title="AI sul catalogo"
+          sub="Gli strumenti AI non sono attivi. I prodotti si inseriscono e si modificano dal modulo."
+          className="mb-0"
+        />
+        <Link href="/seller/products" className="inline-flex items-center gap-1 text-sm font-semibold text-primary-700 hover:underline">
+          Vai al catalogo
+        </Link>
+      </div>
+    );
+  }
+  return <CatalogAiBatchPageAcceso />;
 }

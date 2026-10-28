@@ -10,6 +10,7 @@ import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { trackReferralSent } from '@/lib/analytics/events';
+import { CLASSIFICA_INVITI_ACCESA } from '@/lib/funzioni-al-lancio';
 
 export default function ReferralPage() {
   const [copied, setCopied] = useState(false);
@@ -82,12 +83,15 @@ export default function ReferralPage() {
         <h1 className="text-2xl font-bold text-ink-900 mt-1">Invita un amico, ricevi €5 di credito</h1>
         <p className="text-sm text-ink-500">Condividi il tuo codice: quando il tuo amico riceve il suo primo ordine, tu ricevi €5 di credito MyCity, da usare sugli ordini pagati alla consegna.</p>
         {/* 🟡-21: la pagina leaderboard era orfana (nessun link la raggiungeva). */}
+        {/* Spenta al lancio (carta #209): niente link a una classifica non attiva. */}
+        {CLASSIFICA_INVITI_ACCESA && (
         <Link
           href="/profile/referral/leaderboard"
           className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary-700 hover:underline"
         >
           <Trophy size={16} aria-hidden /> Classifica inviti
         </Link>
+        )}
       </div>
 
       {/* CODICE */}

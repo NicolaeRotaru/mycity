@@ -73,13 +73,6 @@ export default function ShopOfMonthHero() {
               Vota il prossimo
             </Link>
           </div>
-          {pick.discount_code && pick.discount_percent ? (
-            <div className="mt-4 inline-flex items-center gap-3 bg-white/15 backdrop-blur border border-white/30 rounded-xl px-4 py-2">
-              <span className="text-xs uppercase tracking-wider text-primary-100">Sconto del mese</span>
-              <span className="font-mono font-extrabold text-lg tracking-wider">{pick.discount_code}</span>
-              <span className="bg-accent-400 text-ink-900 px-2 py-0.5 rounded-full text-xs font-bold">-{pick.discount_percent}%</span>
-            </div>
-          ) : null}
         </div>
 
         <div className="hidden md:flex items-center justify-center">

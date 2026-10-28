@@ -135,13 +135,6 @@ export default function ShopOfMonthPage() {
               >
                 Visita il negozio <ArrowRight size={16} strokeWidth={2.4} />
               </Link>
-              {pick.discount_code && pick.discount_percent ? (
-                <div className="inline-flex items-center gap-3 bg-white/15 backdrop-blur border border-white/30 rounded-xl px-4 py-2 ml-2">
-                  <span className="text-xs uppercase tracking-wider text-primary-100">Codice</span>
-                  <span className="font-mono font-extrabold text-lg">{pick.discount_code}</span>
-                  <span className="bg-accent-400 text-ink-900 px-2 py-0.5 rounded-full text-xs font-bold">-{pick.discount_percent}%</span>
-                </div>
-              ) : null}
             </div>
             {pick.cover_image_url && (
               <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden ring-4 ring-white/20">

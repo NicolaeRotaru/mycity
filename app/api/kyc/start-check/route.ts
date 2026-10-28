@@ -5,6 +5,7 @@ import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
 import { cancelloEtaServer } from '@/lib/maggiore-eta';
+import { rispostaPerErroreDatabase } from '@/lib/api/errore-database';
 
 export const runtime = 'nodejs';
 
@@ -25,10 +26,12 @@ export const runtime = 'nodejs';
 // Rate limit: 5 check / ora — costo Onfido ~€1.5 a check, anti-abuse
 export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 * 60_000 }, async ({ user }): Promise<NextResponse> => {
   const admin = getAdminSupabase();
-  const { data: profile } = await admin
+  // `profiles` non ha la colonna `email` (sta in auth.users, e qui arriva gia' da `user.email`):
+  // chiederla faceva fallire TUTTA la lettura (42703) e la rotta rispondeva «Profilo non trovato».
+  const { data: profile, error: erroreProfilo } = await admin
     .from('profiles')
     .select(`
-      id, role, email,
+      id, role,
       legal_first_name, legal_last_name, legal_fiscal_code, legal_birth_date,
       business_vat_number,
       kyc_id_doc_front_url, kyc_id_doc_back_url, kyc_selfie_url,
@@ -37,6 +40,13 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
     .eq('id', user.id)
     .single();
 
+  // Un guasto del database non e' un profilo mancante: chi legge deve poterli distinguere.
+  // Con `.single()` la riga che non c'e' arriva come PGRST116: quello e' «non trovato», non un guasto.
+  // (Resta `.single()` e non `.maybeSingle()`: e' il contratto che le altre rotte KYC e le loro prove usano.)
+  const profiloAssente = erroreProfilo?.code === 'PGRST116';
+  if (erroreProfilo && !profiloAssente) {
+    return rispostaPerErroreDatabase(erroreProfilo, 'kyc/start-check', 'Non riesco a leggere il profilo, riprova tra poco');
+  }
   if (!profile) return ApiErrors.notFound('Profilo non trovato');
 
   // Validazioni
