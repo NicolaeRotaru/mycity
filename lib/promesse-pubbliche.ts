@@ -227,6 +227,22 @@ export function frasePagamento(metodi: readonly MetodoPagamento[] = metodiAlChec
   return 'Metodi di pagamento in aggiornamento';
 }
 
+/*
+ * 28/10/2026 — ANCHE IL «COME» SEGUE I METODI DELLA CASSA.
+ *
+ * /come-funziona attaccava a mano «: al rider quando arriva, oppure su Stripe prima della conferma»
+ * dietro a `frasePagamento()`. Con la chiave Stripe assente (produzione) il cliente leggeva
+ * «Paghi in contanti alla consegna: … oppure su Stripe»: la carta spariva dalla frase e tornava
+ * dalla coda. Qui ogni modo di pagare porta con sé il suo «come», e non compare se il metodo manca.
+ */
+export function fraseComeSiPaga(metodi: readonly MetodoPagamento[] = metodiAlCheckout()): string {
+  const come: string[] = [];
+  if (metodi.includes('contanti-alla-consegna')) come.push('al rider quando arriva');
+  if (metodi.includes('carta-adesso')) come.push('su Stripe prima della conferma');
+  const frase = frasePagamento(metodi);
+  return come.length ? `${frase}: ${come.join(', oppure ')}.` : `${frase}.`;
+}
+
 /**
  * IL RESO — «gratuito» era vero solo per il difetto di conformità, non per il ripensamento.
  *
