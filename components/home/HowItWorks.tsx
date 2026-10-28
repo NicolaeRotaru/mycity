@@ -1,6 +1,7 @@
 import { Store, ShoppingBag, Banknote, ArrowRight, type LucideIcon } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import HomeCtaLink from '@/components/home/HomeCtaLink';
+import { QUANDO_ARRIVA_SENZA_NEGOZIO } from '@/lib/promesse-pubbliche';
 
 /**
  * Come funziona — 3 step per il nuovo visitatore.
@@ -42,7 +43,9 @@ const STEPS: Step[] = [
     Icon: Banknote,
     color: 'olive',
     title: 'Ricevi e paghi alla consegna',
-    desc: 'Te lo portiamo a casa in 30-60 minuti. Paghi al rider quando arriva: zero rischi.',
+    // 28/10/2026 — Era «in 30-60 minuti» scritto a mano: la promessa firmata da Nicola il 26/10 è
+    // «in giornata», negli orari del negozio. La frase nasce da lib/promesse-pubbliche.ts.
+    desc: `Te lo portiamo a casa ${QUANDO_ARRIVA_SENZA_NEGOZIO}. Paghi al rider quando arriva: zero rischi.`,
   },
 ];
 

@@ -147,6 +147,15 @@ export function riquadroRitiroInNegozio(
  * che un forno vuole, e la frase la scoraggiava. Una prova esegue la regola della cassa e legge
  * questa frase.
  */
+/**
+ * QUANDO ARRIVA, detto senza un negozio davanti (home, /come-funziona): la regola firmata da Nicola
+ * il 26/10 — «in giornata», niente minuti. Al lancio si consegna in bici e solo negli orari del
+ * negozio: «30-60 minuti» scritto in una pagina che non sa di quale negozio parla è una promessa
+ * che alle 19:50 non si mantiene. Sta qui, puro, perché lo leggono anche i componenti server
+ * (quello di `components/ui/DeliveryCutoff.tsx` vive in un modulo client).
+ */
+export const QUANDO_ARRIVA_SENZA_NEGOZIO = 'in giornata, negli orari di apertura del negozio';
+
 export const NEGOZIO_CHIUSO_COSA_SUCCEDE =
   'Se il negozio è chiuso puoi prenotare per domani, scegliendo una fascia oraria in cassa: la consegna subito, invece, parte solo negli orari di apertura.';
 
