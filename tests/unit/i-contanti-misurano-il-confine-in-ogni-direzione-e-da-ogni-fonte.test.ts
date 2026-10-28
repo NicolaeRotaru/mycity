@@ -297,3 +297,94 @@ describe('con due negozi nel carrello, la cassa in contanti misura il confine da
     expect(ordiniCreati, `gli ordini dentro il confine non sono nati: ${JSON.stringify(corpo)}`).toHaveLength(2);
   });
 });
+
+/**
+ * 28/10/2026 (settimo giro della fase 2) — UN CERCHIO DI 10 KM: NON UNO DA 12, E NON UN OTTAGONO.
+ *
+ * Il collaudo ha messo nella rotta dei contanti due confini sbagliati, uno per volta, e tutte le
+ * prove di sopra sono rimaste verdi. Le loro case stavano a 13 km, fuori anche da quei confini,
+ * oppure a 9 km, dentro anche a quelli:
+ *  · un raggio di 12 km: chi abita a 11 km ordinava e pagava alla consegna una spesa che nessuno
+ *    gli può portare;
+ *  · un ottagono al posto del cerchio: giusto sulle otto direzioni delle prove di sopra, sbagliato
+ *    fra l'una e l'altra, dove gli spigoli escono dal cerchio e i lati ci rientrano.
+ *
+ * Qui la rotta riceve tutto il giro: una casa ogni 7,5 gradi, 200 metri dentro il confine (l'ordine
+ * nasce) e 200 metri fuori (non nasce), da una fonte per volta. Ogni 7,5 gradi e non ogni 15: con
+ * una casa ogni 15 gradi un ottagono della misura giusta (i lati a 9,83 km) passava ancora fra una
+ * casa e l'altra. La prima prova qui sotto lo conta, su ogni ottagono da 9 a 11 km girato in ogni verso.
+ */
+describe('la cassa in contanti misura il confine come un cerchio di 10 km, non uno da 12 e non un ottagono', () => {
+  /** Tutto il giro, una direzione ogni 7,5 gradi (0 = nord, 90 = est). */
+  const GIRO = Array.from({ length: 48 }, (_, i) => i * 7.5);
+  const DENTRO_KM = RAGGIO_CONSEGNA_KM - 0.2;
+  const FUORI_KM = RAGGIO_CONSEGNA_KM + 0.2;
+  /**
+   * Un ottagono col centro sul negozio: i lati stanno a `apotema` km, il primo guarda verso `rotazione`
+   * gradi. Una casa ci sta dentro se, misurata verso il lato più vicino, non lo supera.
+   */
+  const nellOttagono = (km: number, gradi: number, apotema: number, rotazione: number) => {
+    const dalLato = ((((gradi - rotazione) % 45) + 45 + 22.5) % 45) - 22.5;
+    return km * Math.cos((dalLato * Math.PI) / 180) <= apotema;
+  };
+  /** Quante case di un giro sbaglia un confine: quelle dentro che rifiuta, più quelle fuori che accetta. */
+  const caseSbagliate = (giro: number[], accetta: (km: number, gradi: number) => boolean) =>
+    giro.filter((g) => !accetta(DENTRO_KM, g) || accetta(FUORI_KM, g)).length;
+
+  it('le case stanno dove dicono, e sbagliano il raggio da 12 km e ogni ottagono (se no la prova sotto non misura niente)', () => {
+    for (const gradi of GIRO) {
+      const km = (d: number) => haversineKm(NEGOZIO.lat, NEGOZIO.lng, puntoA(d, gradi).lat, puntoA(d, gradi).lng);
+      expect(km(DENTRO_KM), `${DENTRO_KM} km verso ${gradi}°`).toBeCloseTo(DENTRO_KM, 2);
+      expect(km(FUORI_KM), `${FUORI_KM} km verso ${gradi}°`).toBeCloseTo(FUORI_KM, 2);
+    }
+    expect(caseSbagliate(GIRO, (km) => km <= 12), 'il raggio da 12 km del collaudo').toBeGreaterThan(0);
+    const salvi: string[] = [];
+    for (let rotazione = 0; rotazione < 45; rotazione += 0.5) {
+      for (let centesimi = 900; centesimi <= 1100; centesimi++) {
+        const apotema = centesimi / 100;
+        if (caseSbagliate(GIRO, (km, g) => nellOttagono(km, g, apotema, rotazione)) === 0) {
+          salvi.push(`lati a ${apotema} km, girato di ${rotazione}°`);
+        }
+      }
+    }
+    expect(salvi, 'questi ottagoni passano fra le case del giro').toEqual([]);
+    // Con una casa ogni 15 gradi, invece, l'ottagono coi lati a 9,83 km non ne sbaglia nessuna.
+    const ogni15Gradi = GIRO.filter((g) => g % 15 === 0);
+    expect(ogni15Gradi).toHaveLength(24);
+    expect(caseSbagliate(ogni15Gradi, (km, g) => nellOttagono(km, g, 9.83, 0))).toBe(0);
+  });
+
+  for (const fonte of FONTI) {
+    it(`IL CASO DEL COLLAUDO — una casa a 11 km verso nord-est, presa dalla ${fonte}: l'ordine non nasce`, async () => {
+      const { res, corpo } = await paga(puntoA(11, 45), fonte);
+      expect(res.status, `la rotta dei contanti ha risposto ${res.status}: ${JSON.stringify(corpo)}`).toBe(400);
+      expect(corpo.error?.message).toBe(motivoFuoriZona(NEGOZIO.nome));
+      expect(ordiniCreati, 'è nato un ordine in contanti per una casa a 11 km').toHaveLength(0);
+      expect(chiamateRpc, 'il rifiuto per zona ha già riservato la merce').not.toContain('reserve_stock');
+    });
+
+    it(
+      `tutto il giro, una casa ogni 7,5 gradi presa dalla ${fonte}: a ${DENTRO_KM} km l'ordine nasce, a ${FUORI_KM} km no`,
+      async () => {
+        const sbagliate: string[] = [];
+        for (const gradi of GIRO) {
+          for (const distanza of [DENTRO_KM, FUORI_KM]) {
+            ordiniCreati.length = 0;
+            chiamateRpc.length = 0;
+            const { res, corpo } = await paga(puntoA(distanza, gradi), fonte);
+            const perZona = corpo.error?.message === motivoFuoriZona(NEGOZIO.nome);
+            const giusta =
+              distanza < RAGGIO_CONSEGNA_KM
+                ? !perZona && ordiniCreati.length === 1
+                : res.status === 400 && perZona && ordiniCreati.length === 0 && !chiamateRpc.includes('reserve_stock');
+            if (!giusta) {
+              sbagliate.push(`${distanza} km verso ${gradi}°: risposta ${res.status}, ordini nati ${ordiniCreati.length}`);
+            }
+          }
+        }
+        expect(sbagliate, 'la cassa in contanti sbaglia il confine in queste direzioni').toEqual([]);
+      },
+      60_000,
+    );
+  }
+});

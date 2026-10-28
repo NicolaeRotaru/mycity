@@ -33,6 +33,16 @@ const RIEPILOGO_RILETTO =
   `Subtotale ${euro(2000)} ${VOCE_CONSEGNA} ${TRE_EURO} Totale ${euro(2300)} ` +
   `Ordina e paga alla consegna · ${euro(2300)} Non paghi adesso. Paghi in contanti al rider quando arriva. ` +
   'Reso entro 14 giorni Venditore locale';
+/**
+ * Lo stesso riepilogo per chi paga con la carta, riletto il 27/10 sera: 23 euro, niente regali.
+ * Rispetto ai contanti cambiano solo le parole sul pagamento, sotto il totale.
+ */
+const RIEPILOGO_RILETTO_CARTA =
+  `Subtotale ${euro(2000)} ${VOCE_CONSEGNA} ${TRE_EURO} Totale ${euro(2300)} ` +
+  `Paga con carta · ${euro(2300)} Pagamento sicuro con Stripe. Niente costi nascosti. ` +
+  'Reso entro 14 giorni Venditore locale';
+/** Le parole con cui un riepilogo può regalare una consegna che invece si paga. */
+const REGALO = /gratis|gratuit|omaggi|offert|regal|in dono|a costo zero|inclus/i;
 
 /** Le righe della colonna come le scrive la pagina dell'ordine: «etichetta cifra». */
 function righeDellaPagina(ordine: OrdinePerRiepilogo, subtotaleCentesimi: number): string[] {
@@ -137,11 +147,95 @@ describe('la cassa chiama la consegna come il carrello, e scrive «Gratis» solo
     );
   });
 
+  /**
+   * 27/10/2026 (quinto giro della fase 2) — E CON LA CARTA. Il collaudo ha scritto «· in omaggio con
+   * la carta» accanto ai 3 euro solo quando si paga con la carta. La prova qui sopra rileggeva il
+   * testo dei contanti e confrontava la carta con sé stessa: tutte e due le strade della carta
+   * dicevano lo stesso regalo, e restava verde. Qui chi paga con la carta legge il SUO testo riletto,
+   * da tutte e tre le strade con cui arrivano i 3 euro; e la riga della consegna dice le stesse
+   * parole dei contanti, fino al totale.
+   */
+  it('IL CASO DEL COLLAUDO — con la carta i 3 euro dicono il testo riletto, senza regali, da ogni strada', () => {
+    const tre = PLATFORM_DELIVERY_FEE_CENTS / 100;
+    for (const p of [
+      { shipping: tre, paymentMethod: 'card' as const },
+      { shipping: 0, platformDeliveryFee: tre, paymentMethod: 'card' as const },
+      { shipping: tre, platformDeliveryFee: 0, paymentMethod: 'card' as const },
+    ]) {
+      const t = riepilogo(p);
+      expect(t, `con la carta il riepilogo regala la consegna che si paga: ${t}`).not.toMatch(REGALO);
+      expect(t, 'il riepilogo della carta è cambiato: rileggilo contro la cassa').toBe(RIEPILOGO_RILETTO_CARTA);
+    }
+    const finoAlTotale = (t: string) => t.slice(0, t.indexOf('Totale'));
+    expect(finoAlTotale(riepilogo({ shipping: 0, platformDeliveryFee: tre, paymentMethod: 'card' }))).toBe(
+      finoAlTotale(RIEPILOGO_RILETTO),
+    );
+  });
+
   it('il carrello prende il nome della voce dalla stessa costante', () => {
     const carrello = sorgente('app/cart/page.tsx');
     expect(carrello).toMatch(/\{VOCE_CONSEGNA\}/);
     expect(carrello, 'nel carrello il nome della consegna è tornato scritto a mano').not.toMatch(/^\s*Consegna MyCity\s*$/m);
   });
+});
+
+/**
+ * 28/10/2026 (settimo giro della fase 2) — E SOPRA I 30 EURO. Il collaudo ha scritto «in omaggio»
+ * accanto ai 3 euro solo quando la spesa supera i 30 euro, la soglia della spedizione gratis di prima
+ * del 27/10. Tutte le prove della cassa avevano 20 euro di spesa, quindi sono rimaste verdi. Qui la
+ * cassa riceve spese sotto, sulla e sopra quella soglia, coi contanti e con la carta, dalle tre strade
+ * con cui arrivano i 3 euro. Il testo è sempre quello riletto il 27/10, con la spesa e il totale di
+ * chi paga: la consegna costa 3 euro a ogni spesa, e non compare nessuna parola in più.
+ */
+describe('sopra la vecchia soglia dei 30 euro la cassa non regala la consegna da 3 euro', () => {
+  const tre = PLATFORM_DELIVERY_FEE_CENTS / 100;
+  /** Il testo riletto il 27/10, con la spesa e il totale di questa persona al posto di 20 e 23 euro. */
+  const riletto = (spesaCentesimi: number, paymentMethod: 'cod' | 'card') => {
+    const totale = euro(spesaCentesimi + PLATFORM_DELIVERY_FEE_CENTS);
+    const pagamento =
+      paymentMethod === 'card'
+        ? `Paga con carta · ${totale} Pagamento sicuro con Stripe. Niente costi nascosti. `
+        : `Ordina e paga alla consegna · ${totale} Non paghi adesso. Paghi in contanti al rider quando arriva. `;
+    return `Subtotale ${euro(spesaCentesimi)} ${VOCE_CONSEGNA} ${TRE_EURO} Totale ${totale} ${pagamento}Reso entro 14 giorni Venditore locale`;
+  };
+  const cassa = (
+    spesaCentesimi: number,
+    paymentMethod: 'cod' | 'card',
+    p: { shipping: number; platformDeliveryFee?: number },
+  ) =>
+    testoDi(
+      renderToStaticMarkup(
+        <OrderSummary
+          subtotal={spesaCentesimi / 100}
+          pickupDiscount={0}
+          couponDiscount={0}
+          total={(spesaCentesimi + PLATFORM_DELIVERY_FEE_CENTS) / 100}
+          isCheckingOut={false}
+          paymentMethod={paymentMethod}
+          {...p}
+        />,
+      ),
+    );
+
+  it('il testo riletto, rifatto coi 20 euro, è proprio quello riletto contro la cassa', () => {
+    expect(riletto(2000, 'cod')).toBe(RIEPILOGO_RILETTO);
+    expect(riletto(2000, 'card')).toBe(RIEPILOGO_RILETTO_CARTA);
+  });
+
+  for (const spesaCentesimi of [2999, 3000, 3001, 3500, 5000, 8000, 15000]) {
+    for (const paymentMethod of ['cod', 'card'] as const) {
+      const come = paymentMethod === 'card' ? 'con la carta' : 'in contanti';
+      it(`IL CASO DEL COLLAUDO — ${euro(spesaCentesimi)} di spesa, ${come}: la consegna costa 3 euro, senza regali`, () => {
+        for (const p of [{ shipping: tre }, { shipping: 0, platformDeliveryFee: tre }, { shipping: tre, platformDeliveryFee: 0 }]) {
+          const t = cassa(spesaCentesimi, paymentMethod, p);
+          expect(t, `sopra la vecchia soglia il riepilogo regala la consegna che si paga: ${t}`).not.toMatch(REGALO);
+          expect(t, `con ${euro(spesaCentesimi)} di spesa il riepilogo non è quello riletto`).toBe(
+            riletto(spesaCentesimi, paymentMethod),
+          );
+        }
+      });
+    }
+  }
 });
 
 describe('la scheda prodotto dice la consegna una volta, col nome di carrello e cassa', () => {
