@@ -1,7 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { monta } from './aiuti/monta-componente';
 import { accendi, attendi, clicca } from './aiuti/schermo';
 import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
@@ -170,5 +170,72 @@ describe('le varianti: si riscrive solo la scorta che il negoziante ha cambiato'
       { id: 'v-s', options: { Taglia: 'S' }, label: 'S', stock: 2 },
     ]);
     expect(aggiornamenti[0].riga.stock).toBe(2);
+  });
+});
+
+/**
+ * La pagina «Modifica prodotto» collega il modulo a chi salva le varianti. Se la
+ * pagina lascia cadere le scorte viste all'apertura, modulo e porta di scrittura
+ * possono essere giusti quanto vogliono: la variante venduta mentre la scheda
+ * era aperta torna comunque in magazzino. Qui si monta la pagina vera e si
+ * guarda cosa chiede di salvare quando il negoziante tocca solo il prezzo.
+ */
+describe('la pagina di modifica passa le scorte viste a chi salva le varianti', () => {
+  const globali = globalThis as Record<string, unknown>;
+  const ID = 'prod-focaccia';
+  const VARIANTI = [
+    { id: 'v-s', options: { Taglia: 'S' }, label: 'S', stock: 2 },
+    { id: 'v-m', options: { Taglia: 'M' }, label: 'M', stock: 3 },
+  ];
+  const PRODOTTO = {
+    id: ID,
+    seller_id: 'seller-1',
+    name: 'Focaccia genovese',
+    description: 'Focaccia con olio extravergine, cotta nel forno a legna.',
+    price: 4,
+    compare_at_price: null,
+    unit: 'pezzo',
+    condition: null,
+    stock: 5,
+    category_id: 'cat-1',
+    images: ['https://mycity.test/focaccia.jpg'],
+    attributes: {},
+    tags: [],
+    express_enabled: true,
+    status: 'available',
+  };
+
+  beforeEach(() => {
+    globali.__MUTAZIONI__ = [];
+    globali.__DATI_QUERY__ = (opzioni: { queryKey?: readonly unknown[] }) => {
+      const chiave = (opzioni?.queryKey ?? []) as unknown[];
+      if (chiave.some((p) => p === 'offers-express')) return true;
+      if (chiave.includes('variants')) return VARIANTI;
+      if (chiave.some((p) => p === 'form')) return CATEGORIE;
+      return PRODOTTO;
+    };
+  });
+
+  afterEach(() => {
+    delete globali.__MUTAZIONI__;
+    delete globali.__DATI_QUERY__;
+  });
+
+  it('IL CASO CHE ROMPEVA — tocca solo il prezzo: le scorte viste delle varianti arrivano al salvataggio', async () => {
+    const mod = await monta('app/seller/products/[id]/edit/page.tsx');
+    const s = accendi(mod.default, { params: { id: ID } });
+    expect((s.radice.textContent ?? '').replace(/\s+/g, ' '), 'la pagina non è a video').toContain('Salva modifiche');
+    s.agisci(() => scrivi(campo(s, 'price'), '5'));
+    await salva(s);
+    const mutazioni = globali.__MUTAZIONI__ as Array<Record<string, unknown>>;
+    expect(mutazioni, 'il salvataggio non è partito: la prova girerebbe a vuoto').toHaveLength(1);
+    const payload = mutazioni[0].payload as Record<string, unknown>;
+    expect(Number(payload.price)).toBe(5);
+    expect('stock' in payload, 'la pagina rimanda la scorta vista all\'apertura').toBe(false);
+    expect(
+      mutazioni[0].scorteViste,
+      'la pagina lascia cadere le scorte viste: ogni variante venduta nel frattempo torna in magazzino',
+    ).toEqual({ 'v-s': 2, 'v-m': 3 });
+    s.smonta();
   });
 });
