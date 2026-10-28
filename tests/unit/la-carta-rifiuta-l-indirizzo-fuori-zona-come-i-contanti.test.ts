@@ -436,13 +436,18 @@ describe('col secondo negozio, la carta misura la diagonale da ognuno dei due', 
  * persone vere: chi abita a 12 km verso 35° (nord-nord-est) pagava con la carta, chi abita a 8 km a
  * est veniva rifiutato.
  *
- * Qui la carta riceve quei due casi, e poi tutto il giro: una casa ogni 15 gradi, 200 metri dentro il
+ * Qui la carta riceve quei due casi, e poi tutto il giro: una casa ogni 7,5 gradi, 200 metri dentro il
  * confine (il pagamento si apre) e 200 metri fuori (non si apre), da una fonte per volta. Il riquadro
- * in gradi, il quadrato in chilometri, il rombo e un raggio spostato di più di 200 metri sbagliano
- * tutti almeno una di queste case.
+ * in gradi, il quadrato in chilometri, il rombo, ogni ottagono e un raggio spostato di più di 200 metri
+ * sbagliano tutti almeno una di queste case.
+ *
+ * 28/10/2026 (settimo giro) — ogni 7,5 gradi, non più ogni 15. Il collaudo ha messo un ottagono al
+ * posto del cerchio nella rotta dei contanti. Lo stesso ottagono coi lati a 9,83 km, messo nella carta,
+ * passava anche qui: con una casa ogni 15 gradi le 102 prove della carta restavano verdi. Con una casa
+ * ogni 7,5 gradi non si salva nessun ottagono: la prova dei contanti li conta tutti, da 9 a 11 km.
  */
-/** Tutto il giro, una direzione ogni 15 gradi (0 = nord, 90 = est). */
-const GIRO = Array.from({ length: 24 }, (_, i) => i * 15);
+/** Tutto il giro, una direzione ogni 7,5 gradi (0 = nord, 90 = est). */
+const GIRO = Array.from({ length: 48 }, (_, i) => i * 7.5);
 const DENTRO_KM = RAGGIO_CONSEGNA_KM - 0.2;
 const FUORI_KM = RAGGIO_CONSEGNA_KM + 0.2;
 /** Il confine sbagliato del collaudo: 10/111 di grado su tutti e due gli assi, la longitudine non corretta. */
@@ -493,7 +498,7 @@ describe('la carta misura il confine come un cerchio di 10 km, non come un riqua
     });
 
     it(
-      `tutto il giro, una casa ogni 15 gradi presa dalla ${fonte}: a ${DENTRO_KM} km il pagamento si apre, a ${FUORI_KM} km no`,
+      `tutto il giro, una casa ogni 7,5 gradi presa dalla ${fonte}: a ${DENTRO_KM} km il pagamento si apre, a ${FUORI_KM} km no`,
       async () => {
         const sbagliate: string[] = [];
         for (const gradi of GIRO) {

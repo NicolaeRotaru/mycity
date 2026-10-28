@@ -179,6 +179,65 @@ describe('la cassa chiama la consegna come il carrello, e scrive «Gratis» solo
   });
 });
 
+/**
+ * 28/10/2026 (settimo giro della fase 2) — E SOPRA I 30 EURO. Il collaudo ha scritto «in omaggio»
+ * accanto ai 3 euro solo quando la spesa supera i 30 euro, la soglia della spedizione gratis di prima
+ * del 27/10. Tutte le prove della cassa avevano 20 euro di spesa, quindi sono rimaste verdi. Qui la
+ * cassa riceve spese sotto, sulla e sopra quella soglia, coi contanti e con la carta, dalle tre strade
+ * con cui arrivano i 3 euro. Il testo è sempre quello riletto il 27/10, con la spesa e il totale di
+ * chi paga: la consegna costa 3 euro a ogni spesa, e non compare nessuna parola in più.
+ */
+describe('sopra la vecchia soglia dei 30 euro la cassa non regala la consegna da 3 euro', () => {
+  const tre = PLATFORM_DELIVERY_FEE_CENTS / 100;
+  /** Il testo riletto il 27/10, con la spesa e il totale di questa persona al posto di 20 e 23 euro. */
+  const riletto = (spesaCentesimi: number, paymentMethod: 'cod' | 'card') => {
+    const totale = euro(spesaCentesimi + PLATFORM_DELIVERY_FEE_CENTS);
+    const pagamento =
+      paymentMethod === 'card'
+        ? `Paga con carta · ${totale} Pagamento sicuro con Stripe. Niente costi nascosti. `
+        : `Ordina e paga alla consegna · ${totale} Non paghi adesso. Paghi in contanti al rider quando arriva. `;
+    return `Subtotale ${euro(spesaCentesimi)} ${VOCE_CONSEGNA} ${TRE_EURO} Totale ${totale} ${pagamento}Reso entro 14 giorni Venditore locale`;
+  };
+  const cassa = (
+    spesaCentesimi: number,
+    paymentMethod: 'cod' | 'card',
+    p: { shipping: number; platformDeliveryFee?: number },
+  ) =>
+    testoDi(
+      renderToStaticMarkup(
+        <OrderSummary
+          subtotal={spesaCentesimi / 100}
+          pickupDiscount={0}
+          couponDiscount={0}
+          total={(spesaCentesimi + PLATFORM_DELIVERY_FEE_CENTS) / 100}
+          isCheckingOut={false}
+          paymentMethod={paymentMethod}
+          {...p}
+        />,
+      ),
+    );
+
+  it('il testo riletto, rifatto coi 20 euro, è proprio quello riletto contro la cassa', () => {
+    expect(riletto(2000, 'cod')).toBe(RIEPILOGO_RILETTO);
+    expect(riletto(2000, 'card')).toBe(RIEPILOGO_RILETTO_CARTA);
+  });
+
+  for (const spesaCentesimi of [2999, 3000, 3001, 3500, 5000, 8000, 15000]) {
+    for (const paymentMethod of ['cod', 'card'] as const) {
+      const come = paymentMethod === 'card' ? 'con la carta' : 'in contanti';
+      it(`IL CASO DEL COLLAUDO — ${euro(spesaCentesimi)} di spesa, ${come}: la consegna costa 3 euro, senza regali`, () => {
+        for (const p of [{ shipping: tre }, { shipping: 0, platformDeliveryFee: tre }, { shipping: tre, platformDeliveryFee: 0 }]) {
+          const t = cassa(spesaCentesimi, paymentMethod, p);
+          expect(t, `sopra la vecchia soglia il riepilogo regala la consegna che si paga: ${t}`).not.toMatch(REGALO);
+          expect(t, `con ${euro(spesaCentesimi)} di spesa il riepilogo non è quello riletto`).toBe(
+            riletto(spesaCentesimi, paymentMethod),
+          );
+        }
+      });
+    }
+  }
+});
+
 describe('la scheda prodotto dice la consegna una volta, col nome di carrello e cassa', () => {
   it('le frasi della vetrina sulla consegna usano lo stesso nome della voce', () => {
     const p = promessaSpedizione();
