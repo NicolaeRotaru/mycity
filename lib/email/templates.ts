@@ -22,6 +22,8 @@ import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/html-escape';
 import { recapitoPrivacy } from '@/lib/legal/titolare';
 import { formatPrice } from '@/lib/format';
+// 27/10/2026 — Il ritiro in negozio si nomina in una email solo se c'e' davvero (`comeArrivaLaSpesa`).
+import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 
 const BRAND = 'MyCity';
 
@@ -190,8 +192,11 @@ export function orderReadyTemplate(args: {
     ${dove ? `<p style="margin:0 0 12px;line-height:1.6">Indirizzo: <strong>${escapeHtml(dove)}</strong></p>` : ''}
     ${codice ? `<p style="margin:0 0 12px;line-height:1.6">Mostra questo codice al negozio: <span style="font-family:monospace;font-size:18px;font-weight:700">${escapeHtml(codice)}</span></p>` : ''}
   `;
+  // 27/10/2026 — «un rider passa a prenderlo», non «lo ritira»: detto al cliente, «ritira» si
+  // confonde col ritiro in negozio, che al lancio e' spento. Finche' e' spento nessuna email
+  // nomina il ritiro (la prova scorre tutti i modelli di questo file).
   const corpoConsegna = `
-    <p style="margin:0 0 12px;line-height:1.6">Il tuo ordine e&#39; pronto${negozio ? ` da <strong>${escapeHtml(negozio)}</strong>` : ''}: un rider lo ritira a breve e te lo porta a casa.</p>
+    <p style="margin:0 0 12px;line-height:1.6">Il tuo ordine e&#39; pronto${negozio ? ` da <strong>${escapeHtml(negozio)}</strong>` : ''}: un rider passa a prenderlo a breve e te lo porta a casa.</p>
     <p style="margin:0 0 12px;line-height:1.6">Ti avvisiamo appena parte. Il codice che il fattorino ti chiedera&#39; alla consegna lo trovi nella pagina dell&#39;ordine.</p>
   `;
 
@@ -207,7 +212,7 @@ export function orderReadyTemplate(args: {
     html: shell('Ordine pronto', body),
     text: args.pickupInStore
       ? `Il tuo ordine e' pronto${dove ? ` da ritirare in ${dove}` : ''}.${codice ? ` Mostra il codice ${codice}.` : ''} ${orderUrl}`
-      : `Il tuo ordine e' pronto: un rider lo ritira a breve. ${orderUrl}`,
+      : `Il tuo ordine e' pronto: un rider passa a prenderlo a breve. ${orderUrl}`,
   };
 }
 
@@ -549,6 +554,29 @@ export type DatiCicloDiVita = {
 };
 export type EmailPronta = { subject: string; html: string; text: string };
 
+/**
+ * 27/10/2026 — COME ARRIVA LA SPESA, detto nella guida del secondo giorno.
+ *
+ * La guida scriveva «oppure la ritiri tu se il negozio lo permette». Al lancio il ritiro in
+ * negozio e' spento per tutti: `RITIRO_IN_NEGOZIO_ATTIVO` vale `false`, le due rotte che creano
+ * l'ordine forzano `pickupInStore = false` e la cassa non mostra l'opzione. E nessun negozio ha
+ * un'impostazione per «permetterlo». La mail parte a ogni nuovo cliente, anche senza consenso
+ * alla pubblicita': ognuno cercava in cassa un'opzione che non c'e', e la frase dava la colpa
+ * del no al negozio.
+ *
+ * Qui la frase NASCE dall'interruttore, come quelle di lib/promesse-pubbliche.ts: spento, il
+ * ritiro non si nomina; acceso, si nomina senza condizioni, perche' oggi nessun negozio puo'
+ * sceglierlo. Se un giorno il negozio potra' dire di no, la condizione torna insieme a quel dato.
+ */
+function comeArrivaLaSpesa(attivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO): { riga: string; inBreve: string } {
+  return attivo
+    ? {
+        riga: 'La spesa te la portiamo a casa, oppure la ritiri tu in negozio',
+        inBreve: 'la spesa te la portiamo a casa (o la ritiri tu in negozio)',
+      }
+    : { riga: 'La spesa te la portiamo a casa', inBreve: 'la spesa te la portiamo a casa' };
+}
+
 const TEMPLATE_CICLO_DI_VITA = {
   welcome: (d: DatiCicloDiVita): EmailPronta => {
     // Il nome arriva da `profiles.full_name`: lo scrive la persona nel proprio
@@ -579,13 +607,18 @@ const TEMPLATE_CICLO_DI_VITA = {
    * lancio non c'e' nessun regalo in euro. Restano solo le tre cose che servono
    * per usare il servizio: come si paga, come arriva la spesa, dove si segue
    * l'ordine. Se un giorno torna un incentivo, va in un template commerciale.
+   *
+   * 27/10/2026 (notte) — Diceva anche «oppure la ritiri tu se il negozio lo permette», col ritiro
+   * spento per tutti e nessun negozio che possa «permetterlo». Ora la frase su come arriva la
+   * spesa nasce dall'interruttore (`comeArrivaLaSpesa`): spento, il ritiro non si nomina.
    */
   tutorial_day2: (): EmailPronta => {
+    const comeArriva = comeArrivaLaSpesa();
     const body = `
       <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">3 cose da sapere</h1>
       <ul style="margin:0 0 16px;padding-left:20px;line-height:1.8">
         <li>Paghi alla consegna: la carta non e' obbligatoria</li>
-        <li>La spesa te la portiamo a casa, oppure la ritiri tu se il negozio lo permette</li>
+        <li>${comeArriva.riga}</li>
         <li>Ogni ordine e il suo stato li trovi in «I miei ordini»</li>
       </ul>
       <p style="margin:24px 0">${btn(appUrl(), `Vai su ${BRAND}`)}</p>
@@ -594,7 +627,7 @@ const TEMPLATE_CICLO_DI_VITA = {
       subject: `3 cose da sapere su ${BRAND}`,
       html: shell('3 cose da sapere', body),
       text:
-        'Tre cose da sapere: paghi alla consegna, la spesa te la portiamo a casa (o la ritiri tu se il negozio lo permette), ' +
+        `Tre cose da sapere: paghi alla consegna, ${comeArriva.inBreve}, ` +
         'e ogni ordine col suo stato lo trovi in «I miei ordini».',
     };
   },
@@ -737,6 +770,15 @@ const TEMPLATE_CICLO_DI_VITA = {
 } satisfies Record<string, (d: DatiCicloDiVita) => EmailPronta | null>;
 
 export type NomeTemplateCicloDiVita = keyof typeof TEMPLATE_CICLO_DI_VITA;
+
+/**
+ * Tutti i nomi dei messaggi del ciclo di vita, letti dall'oggetto e non scritti a mano: servono a
+ * chi deve controllarli TUTTI (la prova che a ritiro spento nessuna email nomina il ritiro). Un
+ * elenco a mano dimenticherebbe il prossimo template che si aggiunge.
+ */
+export const NOMI_TEMPLATE_CICLO_DI_VITA: readonly NomeTemplateCicloDiVita[] = Object.freeze(
+  Object.keys(TEMPLATE_CICLO_DI_VITA) as NomeTemplateCicloDiVita[],
+);
 
 /**
  * Prepara il messaggio del ciclo di vita che porta questo nome, o `null` se il
