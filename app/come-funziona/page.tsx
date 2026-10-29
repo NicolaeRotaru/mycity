@@ -1,3 +1,4 @@
+import { CONSEGNA_FRASE_INTERA } from '@/lib/promessa-consegna';
 import Link from 'next/link';
 import { Banknote, ShieldCheck, RotateCcw, ArrowRight, Store } from 'lucide-react';
 import { fraseComeSiPaga } from '@/lib/promesse-pubbliche';
@@ -6,7 +7,7 @@ import HowItWorks from '@/components/home/HowItWorks';
 export const metadata = {
   title: 'Come funziona · MyCity',
   description:
-    'Come funziona MyCity: scegli dai negozi di Piacenza, ordini in pochi tap e paghi alla consegna. Te lo portiamo a casa in 30-60 minuti, reso entro 14 giorni.',
+    "Come funziona MyCity: scegli dai negozi di Piacenza, ordini in pochi tap e paghi alla consegna. Te lo portiamo a casa all'ora che scegli, reso entro 14 giorni.",
   alternates: { canonical: '/come-funziona' },
   openGraph: {
     title: 'Come funziona · MyCity',
@@ -51,7 +52,7 @@ export default function ComeFunzionaPage() {
           <br className="hidden sm:block" /> ora a casa tua
         </h1>
         <p className="mt-4 text-lg text-ink-600">
-          Ordini dai negozi della tua città e <strong>paghi alla consegna</strong>. Te lo portiamo a casa in 30-60 minuti.
+          Ordini dai negozi della tua città e <strong>paghi alla consegna</strong>. {CONSEGNA_FRASE_INTERA}.
         </p>
       </section>
 

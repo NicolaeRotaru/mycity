@@ -5,8 +5,7 @@ import { useRef, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { X, MapPin, ShoppingCart, Gift, ArrowRight } from 'lucide-react';
-import { frasePagamento } from '@/lib/promesse-pubbliche';
-import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
+import { fraseComeSiPaga } from '@/lib/promesse-pubbliche';
 import { useProfile } from './hooks/useProfile';
 import { useLocalStorage } from '@/lib/hooks';
 import { Button } from '@/components/ui/Button';
@@ -42,14 +41,18 @@ const STEPS = [
   },
   {
     icon: ShoppingCart,
-    title: 'Ordina, paghi come vuoi',
-    // «carta o contanti alla consegna» era falso sulla meta' carta: al checkout la carta si paga
-    // subito. La frase e i minuti vengono da dove sono decisi.
-    body: `Aggiungi al carrello e al checkout scegli come pagare. ${frasePagamento()}. Consegna in ${EXPRESS_ETA_LABEL}.`,
+    // 29/10/2026 — «Ordina, paghi come vuoi» sopra una cassa che offre solo i contanti, e i minuti
+    // della veloce come cosa certa. Il modo di pagare esce dai metodi della cassa (`fraseComeSiPaga`):
+    // il giorno che torna la carta, la frase cambia da sola. La consegna arriva all'ora che scegli.
+    title: 'Ordina e scegli quando arriva',
+    body: `Aggiungi al carrello e in cassa scegli l'ora in cui ti arriva a casa. ${fraseComeSiPaga()}`,
     cta: 'Inizia a esplorare',
     href: '/search',
   },
 ];
+
+/** I passi del giro, letti anche dalla prova delle promesse. */
+export const PASSI_DEL_GIRO = STEPS;
 
 export default function BuyerOnboardingTour() {
   const pathname = usePathname();

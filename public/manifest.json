@@ -1,7 +1,7 @@
 {
   "name": "MyCity Piacenza — marketplace locale",
   "short_name": "MyCity",
-  "description": "Compra dai negozi di Piacenza, consegna in 30-60 min, pagamento alla consegna.",
+  "description": "Compra dai negozi di Piacenza, consegna a casa all'ora che scegli, pagamento alla consegna.",
   "id": "/",
   "start_url": "/?source=pwa",
   "display": "standalone",

@@ -12,7 +12,6 @@ import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { DAY_KEYS, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
-import { EXPRESS_ETA_LABEL, deliveryWindow } from '@/lib/delivery';
 import caricatoreFotoRemote from '@/lib/image-loader';
 
 type StoreMediaItem = { type: 'image' | 'video'; url: string };
@@ -96,9 +95,6 @@ export default function HeroStoreCard() {
   const hours = (store.store_hours ?? null) as StoreHours | null;
   const todayIntervals = hours && typeof hours === 'object' ? hours[todayKey] : undefined;
   const openNow = Array.isArray(todayIntervals) && isOpenNow(todayIntervals);
-  // La finestra di consegna la calcola la casa unica (lib/delivery), che sa qual è l'orario limite:
-  // dopo quello si consegna domani, e dirlo «oggi» e' una promessa che il server poi rifiuta.
-  const finestra = deliveryWindow(Date.now());
   const deliveryToday = openNow;
 
   const cover = coverFromMedia(store.store_media);
@@ -196,15 +192,14 @@ export default function HeroStoreCard() {
 
             {/* Riga secondaria: consegna stimata.
                 «oggi, entro 18:00» era scritto a mano, e restava «oggi» anche alle 22 e anche col
-                negozio chiuso. Adesso viene da `deliveryWindow`, che l'orario limite lo conosce, e
-                si mostra solo se il negozio è aperto adesso: una stima su un negozio chiuso è una
+                negozio chiuso. Adesso si mostra solo se il negozio è aperto adesso: una stima su un negozio chiuso è una
                 promessa che nessuno può mantenere. */}
             {openNow && (
               <div className="flex items-center justify-between text-xs pt-2 border-t border-cream-200">
-                <span className="text-ink-500">Consegna stimata</span>
-                <span className="font-semibold text-ink-900">
-                  {finestra.day}, in {EXPRESS_ETA_LABEL}
-                </span>
+                {/* 29/10/2026 — Era «oggi, in 30 minuti o un'ora» a ogni negozio aperto, senza sapere se
+                    c'era un fattorino: la consegna arriva nella fascia che il cliente sceglie in cassa. */}
+                <span className="text-ink-500">Consegna a casa</span>
+                <span className="font-semibold text-ink-900">all&apos;ora che scegli</span>
               </div>
             )}
           </div>

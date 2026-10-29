@@ -1,3 +1,4 @@
+import { CONSEGNA_ALL_ORA_CHE_SCEGLI } from '@/lib/promessa-consegna';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -7,7 +8,7 @@ export const metadata: Metadata = {
   alternates: { canonical: '/stores' },
   openGraph: {
     title: 'Negozi di Piacenza · MyCity',
-    description: 'Tutti i negozi locali di Piacenza in un solo posto. Consegna in 30-60 minuti.',
+    description: `Tutti i negozi locali di Piacenza in un solo posto. ${CONSEGNA_ALL_ORA_CHE_SCEGLI}.`,
     type: 'website',
     locale: 'it_IT',
     siteName: 'MyCity',

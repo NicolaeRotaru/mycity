@@ -1,3 +1,4 @@
+import { CONSEGNA_ALL_ORA_CHE_SCEGLI } from '@/lib/promessa-consegna';
 import './globals.css';
 import { Inter, Fraunces } from 'next/font/google';
 import type { Metadata, Viewport } from 'next';
@@ -96,7 +97,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
   title: 'MyCity Piacenza — Marketplace dei negozi della tua città',
   description:
-    'Compra online dai negozi di Piacenza: alimentari, abbigliamento, casa, elettronica, libri. Consegna in 30-60 minuti, pagamento alla consegna.',
+    `Compra online dai negozi di Piacenza: alimentari, abbigliamento, casa, elettronica, libri. ${CONSEGNA_ALL_ORA_CHE_SCEGLI}, pagamento alla consegna.`,
   manifest: '/manifest.json',
   icons: {
     // Prima il favicon classico: e' l'indirizzo che i lettori piu' vecchi e

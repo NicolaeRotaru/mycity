@@ -1,3 +1,4 @@
+import { CONSEGNA_ALL_ORA_CHE_SCEGLI, CONSEGNA_FRASE_INTERA } from '@/lib/promessa-consegna';
 import { z } from 'zod';
 import {
   Banknote, Zap, MapPin, Truck, ShieldCheck, Tag, Sparkles, Gift, Heart, Check,
@@ -60,12 +61,14 @@ export type Branding = z.infer<typeof brandingSchema>;
 
 export const DEFAULT_WEDGE_ITEMS: { icon: WedgeIconKey; text: string }[] = [
   { icon: 'banknote', text: 'Paghi alla consegna' },
-  { icon: 'zap', text: 'Consegna in 30-60 min' },
+  // 29/10/2026 — Erano i minuti della veloce, promessi con un solo fattorino in attesa di approvazione: la
+  // consegna normale arriva all'ora che sceglie il cliente, la veloce solo se c'è chi la fa.
+  { icon: 'zap', text: CONSEGNA_ALL_ORA_CHE_SCEGLI },
   { icon: 'mappin', text: 'Negozi veri di Piacenza' },
 ];
 
 export const DEFAULT_FOOTER_TAGLINE =
-  'Il marketplace dei negozi di Piacenza. Compra dai commercianti locali, ricevi a casa in 30-60 minuti.';
+  `Il marketplace dei negozi di Piacenza. Compra dai commercianti locali. ${CONSEGNA_FRASE_INTERA}.`;
 
 export function defaultBranding(): Branding {
   return {

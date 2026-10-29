@@ -1,5 +1,6 @@
 'use client';
 
+import { CONSEGNA_ALL_ORA_CHE_SCEGLI } from '@/lib/promessa-consegna';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -318,7 +319,7 @@ const Footer = () => {
               <Banknote size={14} strokeWidth={2} className="text-olive-600" /> Pagamento alla consegna
             </span>
             <span className="flex items-center gap-1.5">
-              <Truck size={14} strokeWidth={2} className="text-olive-600" /> Consegna in 30-60 min
+              <Truck size={14} strokeWidth={2} className="text-olive-600" /> {CONSEGNA_ALL_ORA_CHE_SCEGLI}
             </span>
             <span className="flex items-center gap-1.5">
               <Lock size={14} strokeWidth={2} className="text-olive-600" /> Acquisto sicuro

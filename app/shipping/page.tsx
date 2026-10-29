@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { Truck, Banknote, MapPin, Zap, Store, Clock, ChefHat, Package, Bike, CheckCircle2 } from 'lucide-react';
 // Le promesse pubbliche nascono da chi le mantiene, non da un testo scritto qui: il ritiro in
-// negozio e' spento nel checkout e nelle due rotte, i «30-60 minuti» hanno gia' una casa in
-// lib/delivery, e il costo e il confine della consegna sono quelli della cassa.
+// negozio e' spento nel checkout e nelle due rotte, i minuti della veloce e le sue condizioni hanno una
+// casa in lib/promessa-consegna, e il costo e il confine della consegna sono quelli della cassa.
 //
 // 27/10/2026 — QUESTA PAGINA AVEVA UNA TABELLA SUA. Scriveva a mano 2,50 · 3,50 · 4,50 € per
 // fascia di distanza, «GRATIS» sopra i 30 €, «oltre 10 km a preventivo» ed «entro 15 km». La cassa
@@ -12,7 +12,7 @@ import { Truck, Banknote, MapPin, Zap, Store, Clock, ChefHat, Package, Bike, Che
 // trasforma la pagina in HTML e confronta ogni euro e ogni chilometro col conto della cassa
 // (tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx).
 import { NEGOZIO_CHIUSO_COSA_SUCCEDE, fraseTariffaConsegna, riquadroRitiroInNegozio, riquadroTariffaConsegna } from '@/lib/promesse-pubbliche';
-import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
+import { QUANDO_SI_PUO_LA_VELOCE, VELOCE_IN_MINUTI } from '@/lib/promessa-consegna';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 
 export const metadata = {
@@ -34,6 +34,9 @@ export default function ShippingPage() {
   // sotto i 10 € addebita 4 €: titolo, riga sotto e il «si paga o no» del paragrafo vengono dallo stesso conto.
   const tariffa = riquadroTariffaConsegna();
   const confine = `${RAGGIO_CONSEGNA_KM} km`;
+  // 29/10/2026 — Era «Consegna in …» e «Consegniamo in … minuti: è la nostra promessa», come cosa
+  // certa. La normale arriva nella fascia scelta in cassa; la veloce si può solo alle sue condizioni.
+  const titoloVeloce = VELOCE_IN_MINUTI.charAt(0).toUpperCase() + VELOCE_IN_MINUTI.slice(1);
 
   return (
     <div className="container mx-auto px-6 py-10 max-w-3xl">
@@ -50,8 +53,8 @@ export default function ShippingPage() {
         </div>
         <div className="bg-primary-50 border border-primary-200 rounded-xl p-5 text-center">
           <div className="mb-2 flex justify-center"><Zap size={28} className="text-primary-600" aria-hidden /></div>
-          <div className="font-bold text-primary-900">Consegna in {EXPRESS_ETA_LABEL}</div>
-          <div className="text-sm text-primary-800 mt-1">Nei comuni serviti, negli orari di apertura del negozio</div>
+          <div className="font-bold text-primary-900">{titoloVeloce}</div>
+          <div className="text-sm text-primary-800 mt-1">{QUANDO_SI_PUO_LA_VELOCE}</div>
         </div>
         <div className="bg-cream-50 border border-cream-300 rounded-xl p-5 text-center">
           <div className="mb-2 flex justify-center"><MapPin size={28} className="text-ink-600" aria-hidden /></div>
@@ -72,10 +75,11 @@ export default function ShippingPage() {
       <section className="max-w-none space-y-8 text-ink-700 leading-relaxed">
         <div className="space-y-3">
           <h2 className="text-xl font-bold text-ink-900 mb-2">Tempi di consegna</h2>
-          <p>Consegniamo in <strong>{EXPRESS_ETA_LABEL}</strong> dalla conferma del venditore. È la nostra promessa:
-          il negozio è nella tua città, il rider fa un percorso breve.</p>
+          <p>La consegna arriva nella <strong>fascia oraria che scegli in cassa</strong>. Se ti serve prima,
+          c&apos;è la consegna <strong>{VELOCE_IN_MINUTI}</strong> dalla conferma del negozio: si può{' '}
+          {QUANDO_SI_PUO_LA_VELOCE}. Quando non si può, la cassa non te la propone.</p>
           <ul className="list-disc pl-5">
-            <li>Il tempo parte da quando il negozio conferma l’ordine, non da quando lo invii</li>
+            <li>I minuti della veloce partono da quando il negozio conferma l’ordine, non da quando lo invii</li>
             <li>Vale negli orari di apertura del negozio che hai scelto</li>
             <li>{NEGOZIO_CHIUSO_COSA_SUCCEDE}</li>
           </ul>

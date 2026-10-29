@@ -100,7 +100,7 @@ const EXTRACT_TOOL: Anthropic.Tool = {
     type: 'object',
     properties: {
       name: { type: 'string', description: 'Nome del prodotto in italiano, fedele all\'annuncio (3-80 caratteri).' },
-      description: { type: 'string', description: 'Descrizione in italiano (30-600 caratteri) basata sull\'annuncio reale.' },
+      description: { type: 'string', description: 'Descrizione in italiano (da 30 a 600 caratteri) basata sull\'annuncio reale.' },
       category_slug: {
         type: 'string', enum: [...CATEGORY_SLUGS],
         description: 'Categoria del marketplace MyCity più adatta. Esattamente una di: alimentari, abbigliamento, casa, elettronica, libri, giardino, bellezza, sport.',

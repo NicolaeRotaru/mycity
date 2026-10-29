@@ -1,15 +1,23 @@
 /**
  * Cosa può promettere una scheda prodotto sulla consegna — e cosa non può promettere.
  *
+ * 29/10/2026 — LE FRASI DI QUANDO ARRIVA LA SPESA (regola di Nicola, registro dei fatti
+ * `consegna.promessa`): la consegna normale arriva nella fascia oraria che il cliente sceglie in
+ * cassa; la veloce arriva in mezz'ora-un'ora dalla conferma del negozio, e si può solo dalle 8 alle
+ * 21, a negozi aperti, con un fattorino in servizio (`veloceSiPuo`, lib/ordini/consegna-veloce.ts).
+ * Le frasi sotto sono la casa unica di queste parole per testata, piede, contatti del negozio,
+ * scheda prodotto e pagina Spedizioni: nessuna frase fissa promette i minuti come cosa certa.
+ * Prova: tests/unit/la-consegna-si-promette-all-ora-che-scegli.test.tsx
+ *
  * ─────────────────────────────────────────────────────────────────────────────
  * IL DIFETTO CHE QUESTO FILE CHIUDE
  * ─────────────────────────────────────────────────────────────────────────────
- * Sulla scheda prodotto c'è un conto alla rovescia: «Ordina entro 02:14:31 e **arriva oggi** in
- * 30-60 min». Compariva ogni volta che il prodotto era disponibile e il negozio offriva la consegna
+ * Sulla scheda prodotto c'è un conto alla rovescia: «Ordina entro 02:14:31 e **arriva oggi**» coi
+ * minuti della veloce. Compariva ogni volta che il prodotto era disponibile e il negozio offriva la consegna
  * veloce. Nessuno guardava **se il negozio era aperto**.
  *
  * Quindi: negozio chiuso di mattina — giorno di chiusura, prima dell'apertura, domenica — e la
- * scheda del prodotto scrive «arriva oggi in 30-60 min», mentre la pagina di quello stesso negozio,
+ * scheda del prodotto scrive «arriva oggi», mentre la pagina di quello stesso negozio,
  * due clic più in là, dice «Chiuso ora». Il percorso prosegue: carrello, indirizzo, pagamento.
  * **Il muro arriva alla fine**, dal server, al clic di conferma: «Il negozio è chiuso in questo
  * momento» (`isStoreClosedForOrder`, che il checkout non chiama mai).
@@ -35,6 +43,19 @@
  * Prova: tests/unit/il-conto-alla-rovescia-col-negozio-chiuso.test.ts
  */
 import { DAY_KEYS, isOpenNow, romeNow, type HoursInterval, type StoreHours } from '@/lib/store-hours';
+import { EXPRESS_ETA_MAX, EXPRESS_ETA_MIN } from '@/lib/delivery';
+import { APERTURA_EXPRESS, CHIUSURA_EXPRESS } from '@/lib/quando-arriva';
+
+/** La consegna normale: arriva nella fascia che il cliente sceglie in cassa. Frase corta. */
+export const CONSEGNA_ALL_ORA_CHE_SCEGLI = "Consegna a casa, all'ora che scegli";
+/** I minuti della veloce, detti per esteso. Si scrivono solo accanto alla sua condizione. */
+export const VELOCE_IN_MINUTI = `veloce in ${EXPRESS_ETA_MIN}-${EXPRESS_ETA_MAX} minuti`;
+/** Quando si può la veloce: le tre condizioni di `veloceSiPuo`, dette al cliente. */
+export const QUANDO_SI_PUO_LA_VELOCE = `dalle ${APERTURA_EXPRESS} alle ${CHIUSURA_EXPRESS}, a negozi aperti, con un fattorino in servizio`;
+/** Quando la cassa ha appena detto che la veloce si può (risposta di /api/consegna/veloce). */
+export const CONSEGNA_O_VELOCE_ADESSO = `Consegna a casa all'ora che scegli, oppure ${VELOCE_IN_MINUTI}`;
+/** La frase intera, dove c'è spazio e non si può chiedere al server: la veloce con la sua condizione. */
+export const CONSEGNA_FRASE_INTERA = `${CONSEGNA_O_VELOCE_ADESSO} quando c'è un fattorino in servizio`;
 
 export type PromessaConsegna =
   | { tipo: 'express' }
@@ -120,4 +141,36 @@ export function promessaDiConsegna(s: {
 /** La riga da mostrare quando il negozio è chiuso. Senza orario non se ne inventa uno. */
 export function rigaNegozioChiuso(riapre: string | null): string {
   return riapre ? `Il negozio è chiuso ora, riapre ${riapre}` : 'Il negozio è chiuso ora';
+}
+
+/**
+ * 29/10/2026 — LA RIGA DELLA CONSEGNA SULLA SCHEDA PRODOTTO, CON LE REGOLE DELLA CASSA.
+ *
+ * Prima la scheda contava fino alle 18 per ogni negozio («Ordina entro 05:30:00 e arriva oggi» al
+ * forno che chiude alle 13), prometteva «domani» la sera del sabato a un negozio chiuso la domenica,
+ * e sui prodotti esauriti o senza l'interruttore Express scriveva «Consegna in 2-3 giorni»: una
+ * consegna che la cassa non ha. La cassa offre la fascia oraria che sceglie il cliente, e la veloce
+ * solo quando `veloceSiPuo` dice sì. Qui la scheda dice la stessa cosa:
+ *   · esaurito → nessun tempo di consegna (`null`);
+ *   · importato da un altro marketplace → il suo tempo;
+ *   · negozio chiuso adesso → quando riapre, e che l'ora si sceglie in cassa;
+ *   · altrimenti → all'ora che scegli, e la veloce solo se la cassa ha risposto sì.
+ * Niente conto alla rovescia: la scheda non si fa un calendario suo. `adesso: null` vuol dire «prima
+ * dell'idratazione»: senza orologio non si giudica l'apertura e non si promette niente di più.
+ */
+export function rigaConsegnaDellaScheda(s: {
+  esaurito: boolean;
+  orari?: unknown;
+  adesso: Date | null;
+  /** Risposta di /api/consegna/veloce: `true` solo con `possibile: true`; `null` se manca o è caduta. */
+  veloce: boolean | null;
+  consegnaEsterna?: string | null;
+}): string | null {
+  if (s.esaurito) return null;
+  if (s.consegnaEsterna) return `Consegna in ${s.consegnaEsterna}`;
+  if (s.adesso) {
+    const p = promessaDiConsegna({ idoneoExpress: true, disponibile: true, orari: s.orari, adesso: s.adesso });
+    if (p.tipo === 'chiuso') return `${rigaNegozioChiuso(p.riapre)}: in cassa scegli l'ora della consegna`;
+  }
+  return s.veloce === true ? CONSEGNA_O_VELOCE_ADESSO : CONSEGNA_ALL_ORA_CHE_SCEGLI;
 }
