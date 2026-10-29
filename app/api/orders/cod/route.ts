@@ -838,7 +838,18 @@ export const POST = withAuthRateLimit(
     // parola «multi» al posto del negozio.
     const ordiniCreati: Array<{ id: string; sellerId: string; totalCents: number }> = [];
     const reservedStockPerGroup: Array<Array<{ product_id: string; variant_id: string | null; qty: number }>> = [];
-    const walletAppliedPerGroup: number[] = [];
+    /**
+     * 29/10/2026 — Il credito tolto a ogni negozio, con il riferimento della
+     * SPESA che lo ha tolto. Lo storno usa quel riferimento, non l'id
+     * dell'ordine: l'id ora nasce dalla chiave del tentativo
+     * (`idOrdiniDelTentativo`), e due tentativi con la stessa chiave fanno
+     * ordini con lo stesso id. Il diario del credito (migrazione 143) tiene
+     * una riga sola per (motivo, riferimento): col riferimento dell'ordine
+     * il secondo storno veniva scartato come doppione, e il credito tolto
+     * dal secondo tentativo fallito non tornava piu'. La spesa invece e'
+     * una per tentativo: il suo storno e' unico, e resta uno solo.
+     */
+    const walletAppliedPerGroup: Array<{ cents: number; ref: string }> = [];
     // #159 — Gli avvisi da mandare a fine giro, non uno per volta dentro il
     // ciclo: se un negozio successivo fallisce non deve restare in giro la
     // posta di un ordine che poi viene cancellato.
@@ -850,12 +861,13 @@ export const POST = withAuthRateLimit(
         await admin.from('order_items').delete().eq('order_id', oid);
         await admin.from('orders').delete().eq('id', oid);
         await admin.rpc('restore_stock', { p_items: reservedStockPerGroup[j] });
-        if (walletAppliedPerGroup[j] > 0) {
+        const speso = walletAppliedPerGroup[j];
+        if (speso && speso.cents > 0) {
           await admin.rpc('wallet_credit', {
             p_user: user.id,
-            p_cents: walletAppliedPerGroup[j],
+            p_cents: speso.cents,
             p_reason: 'order_cod_refund',
-            p_ref: oid,
+            p_ref: speso.ref,
           });
         }
       }
@@ -916,13 +928,16 @@ export const POST = withAuthRateLimit(
 
       // Credito MyCity (opt-in): addebito atomico fino a coprire il totale del
       // gruppo. Speso greedy gruppo-per-gruppo; se l'ordine fallisce, si storna.
+      // Il riferimento e' della spesa, uno per tentativo: lo storno lo riusa.
+      // Davanti l'id dell'ordine (se c'e' la chiave), per chi legge il diario.
       let walletAppliedCents = 0;
+      const walletRef = `${idDiQuestoInvio ? idDiQuestoInvio[i] : 'cod'}:${crypto.randomUUID()}`;
       if (body.useCredit && grossTotalCents > 0) {
         const { data: applied, error: wErr } = await admin.rpc('wallet_debit', {
           p_user: user.id,
           p_max_cents: grossTotalCents,
           p_reason: 'order_cod',
-          p_ref: null,
+          p_ref: walletRef,
         });
         if (wErr) {
           logger.warn('[cod] wallet_debit fallita', { sellerId: g.sellerId, message: wErr.message });
@@ -1019,7 +1034,7 @@ export const POST = withAuthRateLimit(
             p_user: user.id,
             p_cents: walletAppliedCents,
             p_reason: 'order_cod_refund',
-            p_ref: null,
+            p_ref: walletRef,
           });
         }
         logger.error(orderErr ?? new Error('cod-order-insert-null'), { context: 'cod-order-insert', sellerId: g.sellerId });
@@ -1027,7 +1042,7 @@ export const POST = withAuthRateLimit(
       }
 
       reservedStockPerGroup.push(groupStockItems);
-      walletAppliedPerGroup.push(walletAppliedCents);
+      walletAppliedPerGroup.push({ cents: walletAppliedCents, ref: walletRef });
 
       const itemsRows = itemsPerGroupCents[i].map((it) => ({
         order_id: order.id,
@@ -1047,7 +1062,7 @@ export const POST = withAuthRateLimit(
             p_user: user.id,
             p_cents: walletAppliedCents,
             p_reason: 'order_cod_refund',
-            p_ref: order.id,
+            p_ref: walletRef,
           });
         }
         reservedStockPerGroup.pop();
