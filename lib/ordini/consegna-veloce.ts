@@ -91,3 +91,16 @@ export function rigaQuandoArrivaNelCarrello(ora: number | null, veloce: boolean 
   if (veloce && expressSiPuo(ora)) return `Consegna in ${EXPRESS_ETA_LABEL}`;
   return 'Consegna nella fascia che scegli in cassa';
 }
+
+/**
+ * Come il carrello e la cassa leggono la risposta di /api/consegna/veloce. Solo `possibile: true`
+ * vale sì; `possibile: false` vale no; tutto il resto (rete caduta, risposta storta, errore) vale
+ * «non so», e chi non sa non promette la veloce né il suo prezzo.
+ */
+export function leggiEsitoDellaVeloce(esito: unknown): boolean | null {
+  if (!esito || typeof esito !== 'object') return null;
+  const possibile = (esito as { possibile?: unknown }).possibile;
+  if (possibile === true) return true;
+  if (possibile === false) return false;
+  return null;
+}

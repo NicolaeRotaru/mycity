@@ -39,7 +39,8 @@ import { avvisoNessunNegozioVicino, NEGOZIO_CHIUSO_COSA_SUCCEDE } from '@/lib/pr
  */
 
 const TRE_EURO = formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100);
-const QUATTRO_EURO = formatPrice((PLATFORM_DELIVERY_FEE_CENTS + SUPPLEMENTO_CONSEGNA_CENTS) / 100);
+// 29/10/2026 22:21 — una consegna sola per il carrello: l'euro in più vale per negozio in più, spesa piccola e veloce.
+const UN_EURO = formatPrice(SUPPLEMENTO_CONSEGNA_CENTS / 100);
 const DIECI_EURO = formatPrice(SPESA_SENZA_SUPPLEMENTO_CENTS / 100);
 const KM = RAGGIO_CONSEGNA_KM;
 
@@ -75,8 +76,8 @@ const PAGINA_SPEDIZIONI = [
   'Tempi, costi e opzioni per ricevere il tuo ordine.',
   // 29/10/2026 — riletta con la regola firmata (registro dei fatti, consegna.promessa): 3 € con la
   // fascia, 4 € sotto i 10 € o con la veloce. Via «qualunque sia la spesa»: 8 € di merce pagano 4 €.
-  `Consegna ${TRE_EURO} o ${QUATTRO_EURO}`,
-  `Per ogni negozio: ${QUATTRO_EURO} sotto i ${DIECI_EURO} di spesa o con la consegna veloce`,
+  `Consegna da ${TRE_EURO}`,
+  'Una sola per tutto il carrello',
   'Consegna in 30-60 min',
   'Nei comuni serviti, negli orari di apertura del negozio',
   `Fino a ${KM} km`,
@@ -88,7 +89,7 @@ const PAGINA_SPEDIZIONI = [
   NEGOZIO_CHIUSO,
   'Quanto costa la consegna',
   // Lo spazio prima del punto è il grassetto della tariffa che `testoDi` scioglie in uno spazio.
-  `Paghi solo la consegna, per ogni negozio da cui ordini: ${TRE_EURO} per negozio con la fascia oraria che scegli; ${QUATTRO_EURO} sotto i ${DIECI_EURO} di spesa o con la consegna veloce, mai di più . Non c'è un costo a chilometro.`,
+  `Paghi solo la consegna, per ogni negozio da cui ordini: ${TRE_EURO} una volta sola per tutto il carrello, all’ora che scegli in cassa; ${UN_EURO} in più per ogni negozio in più e ${UN_EURO} in più per ogni negozio dove spendi meno di ${DIECI_EURO}; la consegna veloce ${UN_EURO} in più, compresa se un negozio è sotto i ${DIECI_EURO} . Non c'è un costo a chilometro.`,
   'Se ordini da due negozi paghi due consegne: ogni negozio ti porta la sua spesa.',
   'Il totale lo vedi sempre in cassa, prima di confermare l’ordine.',
   'Tracciamento',

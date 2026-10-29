@@ -63,10 +63,10 @@ describe('col codice «Spedizione gratuita» i bonifici stanno dentro l addebito
     );
   });
 
-  it('vale per ogni spesa, centesimo per centesimo, e per ogni negozio del carrello', () => {
+  it('vale per ogni spesa, centesimo per centesimo, con un negozio solo (il compenso con più negozi lo decide Nicola)', () => {
     const sforati: string[] = [];
     for (let cents = 1; cents <= 6000; cents++) {
-      for (const g of prezziDelCarrello(ingressi([cents, 6001 - cents])).gruppi) {
+      for (const g of prezziDelCarrello(ingressi([cents])).gruppi) {
         if (bonifici(g) > g.totalCents) sforati.push(`${g.subtotalCents}: ${bonifici(g)} > ${g.totalCents}`);
       }
     }

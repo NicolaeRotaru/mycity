@@ -1,6 +1,18 @@
 'use client';
 
-import { RIQUADRO_LO_SAPEVI, frasePagamento, promessaSpedizione, VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
+import {
+  ETICHETTA_VAI_ALLA_CASSA,
+  RIGA_COME_SI_CALCOLA,
+  RIQUADRO_LO_SAPEVI,
+  avvisoSpesaPiccola,
+  fraseGiroUnico,
+  frasePagamento,
+  promessaSpedizione,
+  rigaDellaVeloceNelCarrello,
+  righeDellaConsegna,
+  spiegazioneDellaConsegna,
+  VOCE_CONSEGNA,
+} from '@/lib/promesse-pubbliche';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -22,7 +34,7 @@ import { toast } from 'sonner';
 import { fondoDellaBarra, corsieSotto } from '@/lib/ui/barra-in-fondo';
 import { chiaveDellaRiga, merceCheTengoIo, type TentativoAperto } from '@/lib/ordini/merce-che-tengo-io';
 import { seguiAltezza, osservatoreDelBrowser } from '@/lib/altezza-banner';
-import { rigaQuandoArrivaNelCarrello } from '@/lib/ordini/consegna-veloce';
+import { leggiEsitoDellaVeloce, rigaQuandoArrivaNelCarrello } from '@/lib/ordini/consegna-veloce';
 import { prezziDelCarrello } from '@/lib/ordini/prezzi';
 
 /**
@@ -162,8 +174,8 @@ export default function CartPage() {
       if (negozi.length === 0) return;
       fetch(`/api/consegna/veloce?negozi=${negozi.join(',')}`, { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
-        .then((esito: { possibile?: boolean } | null) => {
-          if (vivo) setVeloceSiPuoAdesso(esito ? esito.possibile === true : null);
+        .then((esito: unknown) => {
+          if (vivo) setVeloceSiPuoAdesso(leggiEsitoDellaVeloce(esito));
         })
         .catch(() => {
           if (vivo) setVeloceSiPuoAdesso(null);
@@ -426,10 +438,13 @@ export default function CartPage() {
     pickupInStore: false,
     couponSpedizioneGratis: false,
     couponScontoCents: 0,
-    // Nel carrello la fascia non è ancora scelta: si conta quella oraria. Il prezzo della veloce lo
-    // dice la mattonella «Adesso» della cassa, prima che la si scelga.
+    // Nel carrello la fascia non è ancora scelta: si conta quella oraria. La veloce sta sotto il
+    // totale come scelta, col suo prezzo vero (dalle voci del conto) o «compresa».
     consegnaVeloce: false,
   });
+  const vociConsegna = contoConsegna.consegna;
+  const supplementoVeloceCents = vociConsegna.supplementoVeloceCents;
+  const spiegazione = spiegazioneDellaConsegna(frasePagamento());
   const shippingCost = contoConsegna.grandShippingCents / 100;
   const tariffeConsegnaCents = contoConsegna.gruppi.map((g) => g.deliveryFeeCents);
   const consegnaDaPagare =
@@ -468,18 +483,20 @@ export default function CartPage() {
             Il tuo carrello <span className="text-ink-500 font-normal font-sans text-lg">({pluralize(count, 'articolo', 'articoli')})</span>
           </h1>
 
-          {/* Avviso multi-negozio: ogni negozio consegna separatamente */}
+          {/* Più negozi, una consegna sola: il fattorino fa un giro solo (regola del 29/10). */}
           {multiStore && (
             <div className="flex items-center gap-2 rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 text-sm text-ink-600">
               <Package size={16} className="text-ink-500 shrink-0" aria-hidden />
               <span>
-                Ordine da <strong className="text-ink-900">{pluralize(groups.length, 'negozio', 'negozi')}</strong> · ogni negozio consegna separatamente
+                {fraseGiroUnico(groups.length)}
               </span>
             </div>
           )}
 
           {/* Gruppi per negozio */}
-          {groups.map((g) => {
+          {groups.map((g, indiceNegozio) => {
+            const spesaDelNegozioCents = contoConsegna.gruppi[indiceNegozio]?.subtotalCents ?? 0;
+            const spesaPiccola = avvisoSpesaPiccola(spesaDelNegozioCents);
             return (
               <div key={g.key} className="space-y-3">
                 {/* Header negozio */}
@@ -487,8 +504,14 @@ export default function CartPage() {
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-[9px] font-bold text-white">
                     {storeInitials(g.storeName)}
                   </span>
-                  <span className="text-sm font-bold text-ink-900">{g.storeName}</span>
+                  <span className="text-sm font-bold text-ink-900">
+                    {g.storeName}
+                    {multiStore && <span className="font-normal text-ink-600"> · {formatPrice(spesaDelNegozioCents / 100)}</span>}
+                  </span>
                 </div>
+                {spesaPiccola && (
+                  <p className="rounded-lg border border-cream-300 bg-cream-50 px-3 py-2 text-sm text-ink-700">{spesaPiccola}</p>
+                )}
 
                 {g.items.map((item) => (
                   <div key={`${item.id}::${item.variantId ?? ''}`} className="bg-white border border-cream-300 rounded-xl p-4 flex gap-4 hover:shadow-card transition-shadow">
@@ -648,22 +671,21 @@ export default function CartPage() {
             </div>
 
             <div className="flex justify-between items-baseline text-sm">
-              <span className="text-ink-600">
-                {VOCE_CONSEGNA}
-                {/* «N negozi × 3 €» e' il conto solo finche' non c'e' una spedizione da sommare. */}
-                {groups.length > 1 && shippingCost === 0 && tariffeConsegnaCents.every((t) => t === tariffeConsegnaCents[0]) && (
-                  <span className="block text-xs text-ink-500 font-normal">
-                    {pluralize(groups.length, 'negozio', 'negozi')} × {formatPrice(tariffeConsegnaCents[0] / 100)}
-                  </span>
-                )}
-              </span>
+              <span className="text-ink-600">{VOCE_CONSEGNA}</span>
               <span className="font-semibold text-ink-900">{formatPrice(consegnaDaPagare)}</span>
             </div>
+            {/* Il dettaglio sta FUORI dalla colonna dei numeri: chi somma la colonna trova il totale.
+                Solo le voci che costano qualcosa (`righeDellaConsegna`, dalle voci del conto vero). */}
+            {shippingCost === 0 && (
+              <ul className="-mt-1 space-y-0.5 text-xs text-ink-500" aria-label="Come è fatta la consegna">
+                {righeDellaConsegna(vociConsegna).map((r) => <li key={r}>{r}</li>)}
+              </ul>
+            )}
 
             {/* Il totale cambia a ogni «+», «−» e rimozione: qui si dice anche
                 a chi non lo vede cambiare. */}
             <p className="sr-only" role="status" aria-live="polite">
-              Carrello aggiornato: {count} {count === 1 ? 'articolo' : 'articoli'}, totale {formatPrice(finalTotal)}
+              Carrello aggiornato: {count} {count === 1 ? 'articolo' : 'articoli'}, consegna {formatPrice(consegnaDaPagare)}, totale {formatPrice(finalTotal)}
             </p>
 
             <div className="border-t border-cream-300 pt-3 flex justify-between items-baseline">
@@ -673,6 +695,29 @@ export default function CartPage() {
                 <div className="text-xs tracking-label text-ink-400 uppercase">IVA inclusa</div>
               </div>
             </div>
+
+            {/* La veloce è una scelta della cassa, detta col suo prezzo vero: solo se adesso si può davvero. */}
+            {rigaDellaVeloceNelCarrello(veloceSiPuoAdesso, supplementoVeloceCents, vociConsegna.totaleCents) && (
+              <p className="text-xs text-ink-600">
+                {rigaDellaVeloceNelCarrello(veloceSiPuoAdesso, supplementoVeloceCents, vociConsegna.totaleCents)}
+              </p>
+            )}
+
+            <details className="text-sm text-ink-600">
+              <summary className="flex min-h-[44px] cursor-pointer items-center font-semibold text-ink-800">
+                {RIGA_COME_SI_CALCOLA} ›
+              </summary>
+              <div className="space-y-2 pb-2 text-xs">
+                <p>{spiegazione.apertura}</p>
+                <ul className="list-disc space-y-1 pl-4">
+                  {spiegazione.punti.map((p) => <li key={p}>{p}</li>)}
+                </ul>
+                <ul className="space-y-0.5">
+                  {spiegazione.esempi.map((e) => <li key={e}>{e}</li>)}
+                </ul>
+                <p>{spiegazione.chiusura}</p>
+              </div>
+            </details>
 
             {/* Il pulsante resta raggiungibile da tastiera e dichiara di essere bloccato con
                 `aria-disabled` — un elemento `disabled` esce dal giro del Tab e sparisce senza
@@ -692,7 +737,7 @@ export default function CartPage() {
                 href="/checkout"
                 className="flex items-center justify-center gap-2 w-full text-center bg-primary-700 hover:bg-primary-800 text-white py-3.5 rounded-lg font-bold shadow-warm-sm hover:shadow-warm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
               >
-                <Lock size={16} strokeWidth={2.4} aria-hidden /> Procedi al checkout
+                <Lock size={16} strokeWidth={2.4} aria-hidden /> {ETICHETTA_VAI_ALLA_CASSA}
               </Link>
             )}
 
@@ -762,6 +807,7 @@ export default function CartPage() {
         <div className="leading-tight">
           <div className="text-xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
           <div className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(finalTotal)}</div>
+          <div className="text-xs text-ink-500">con la consegna</div>
         </div>
         {bloccanti.length > 0 ? (
           <button
@@ -777,7 +823,7 @@ export default function CartPage() {
             href="/checkout"
             className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 text-white py-3 rounded-lg font-extrabold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
           >
-            <Lock size={16} strokeWidth={2.4} aria-hidden /> Procedi al checkout
+            <Lock size={16} strokeWidth={2.4} aria-hidden /> {ETICHETTA_VAI_ALLA_CASSA}
           </Link>
         )}
       </div>

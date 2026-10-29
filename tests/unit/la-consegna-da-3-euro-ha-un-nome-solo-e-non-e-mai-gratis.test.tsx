@@ -241,7 +241,7 @@ describe('sopra la vecchia soglia dei 30 euro la cassa non regala la consegna da
 describe('la scheda prodotto dice la consegna una volta, col nome di carrello e cassa', () => {
   it('le frasi della vetrina sulla consegna usano lo stesso nome della voce', () => {
     const p = promessaSpedizione();
-    expect(p.titolo.startsWith(`${VOCE_CONSEGNA} ${TRE_EURO}`), p.titolo).toBe(true);
+    expect(p.titolo.startsWith(`${VOCE_CONSEGNA} da ${TRE_EURO}`), p.titolo).toBe(true);
     expect(String(p.dettaglioConsegna).startsWith(`${VOCE_CONSEGNA} ${TRE_EURO}`), String(p.dettaglioConsegna)).toBe(true);
   });
 

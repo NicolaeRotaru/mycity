@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   FASCE_DI_DOMANI,
@@ -47,7 +47,22 @@ type Props = {
   veloceDisponibile: boolean;
   /** «+1 €» o «compresa» (`prezzoDellaVeloce`): la veloce dice il suo prezzo prima di sceglierla. */
   prezzoVeloce: string;
+  /** Perché adesso la veloce non si può, come lo dice il server. `null` = non lo sappiamo. */
+  motivoVeloce?: string | null;
 };
+
+/** 29/10/2026 — La riga che si legge quando «Adesso» era scelta e la veloce non si può più. */
+export const AVVISO_VELOCE_CADUTA =
+  'La consegna veloce adesso non si può più: ho scelto la prima fascia libera. Controlla l’ora qui sotto, il prezzo della consegna lo vedi nel riepilogo.';
+
+/**
+ * Cosa fa la cassa quando la veloce cade dopo che il cliente ha scelto «Adesso»: torna alla prima
+ * fascia possibile (la rotta rifiuterebbe «Adesso» con un 409) e LO DICE. Pura, per la prova.
+ */
+export function quandoLaVeloceCade(a: { day: Giorno; expressAvailable: boolean; ora: number }): { day: Giorno; avviso: string } | null {
+  if (a.day !== 'now' || a.expressAvailable) return null;
+  return { day: giornoDiPartenza(a.ora), avviso: AVVISO_VELOCE_CADUTA };
+}
 
 export function DeliverySlotPicker({
   day,
@@ -58,6 +73,7 @@ export function DeliverySlotPicker({
   onTomorrowTimeChange,
   veloceDisponibile,
   prezzoVeloce,
+  motivoVeloce = null,
 }: Props) {
   // Calcolato a render: le fasce di "Oggi" già trascorse sono escluse.
   const ora = new Date().getHours();
@@ -67,10 +83,20 @@ export function DeliverySlotPicker({
 
   // Se «Adesso» era scelta e non si può più (fattorino spento, negozio chiuso, le 21), si torna
   // alla prima fascia possibile, come dopo le 21: la rotta la rifiuterebbe comunque con un 409.
+  // 29/10/2026 — Lo spostamento era muto: la rete cadeva un minuto e l'ordine partiva con la
+  // fascia, senza che nessuno lo dicesse. Adesso una riga lo dice finché il cliente non sceglie.
+  const [avvisoSpostata, setAvvisoSpostata] = useState<string | null>(null);
   useEffect(() => {
-    if (day === 'now' && !expressAvailable) onDayChange(giornoDiPartenza(ora));
+    const caduta = quandoLaVeloceCade({ day, expressAvailable, ora });
+    if (!caduta) return;
+    setAvvisoSpostata(caduta.avviso);
+    onDayChange(caduta.day);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day, expressAvailable]);
+  const scegliGiorno = (g: Giorno) => {
+    setAvvisoSpostata(null);
+    onDayChange(g);
+  };
   const times = day === 'today' ? todayTimes : FASCE_DI_DOMANI;
   const current = day === 'today' ? todayTime : tomorrowTime;
   const onTimeChange = day === 'today' ? onTodayTimeChange : onTomorrowTimeChange;
@@ -95,26 +121,32 @@ export function DeliverySlotPicker({
       <div className="grid grid-cols-3 gap-3">
         <DayTile
           active={day === 'now'}
-          onClick={() => expressAvailable && onDayChange('now')}
+          onClick={() => expressAvailable && scegliGiorno('now')}
           disabled={!expressAvailable}
           title="Adesso"
           subtitle={expressAvailable ? `${SOTTOTITOLO_ADESSO} · ${prezzoVeloce}` : 'Non disponibile'}
-          badge={{ text: 'Express', cls: 'text-accent-700 bg-accent-50' }}
+          badge={{ text: 'Veloce', cls: 'text-ink-700 bg-cream-100' }}
         />
         <DayTile
           active={day === 'today'}
-          onClick={() => oggiPossibile && onDayChange('today')}
+          onClick={() => oggiPossibile && scegliGiorno('today')}
           disabled={!oggiPossibile}
           title="Oggi"
           subtitle={oggiPossibile ? "Scegli l'ora" : 'Non più oggi'}
         />
         <DayTile
           active={day === 'tomorrow'}
-          onClick={() => onDayChange('tomorrow')}
+          onClick={() => scegliGiorno('tomorrow')}
           title="Domani"
-          subtitle="Standard"
+          subtitle="Scegli l'ora"
         />
       </div>
+      {avvisoSpostata && (
+        <p role="status" className="text-sm text-ink-700">{avvisoSpostata}</p>
+      )}
+      {!expressAvailable && motivoVeloce && !avvisoSpostata && (
+        <p className="text-xs text-ink-500">{motivoVeloce}</p>
+      )}
 
       {/* Lista fasce orarie — solo per Oggi / Domani */}
       {day !== 'now' && (

@@ -123,19 +123,28 @@ export const COMPENSO_RIDER_CENTS = 300;
 export const PLATFORM_DELIVERY_FEE_CENTS = 300;
 
 /**
- * 29/10/2026 16:13 — LA CONSEGNA COSTA 3 € O 4 €, MAI DI PIÙ (registro dei fatti, consegna.promessa).
+ * 29/10/2026 22:21 — LA CONSEGNA È UNA SOLA PER TUTTO IL CARRELLO (registro dei fatti, consegna.promessa).
  *
- * 3 € per negozio con la fascia oraria che sceglie il cliente. Un euro in più sotto i 10 € di merce
- * di quel negozio (dopo gli sconti), e un euro in più per la consegna veloce, la fascia «Adesso».
- * I due euro non si sommano: il massimo è 4 € per negozio. Il fattorino resta a 3 €
- * (`COMPENSO_RIDER_CENTS`): l'euro in più resta a MyCity, dentro `delivery_fee_cents`.
- * Il conto lo fa una funzione sola: `tariffaConsegnaCents` in lib/ordini/prezzi.ts.
+ * 3 € di base per tutto il carrello con la fascia oraria che sceglie il cliente; 1 € in più per ogni
+ * negozio in più; 1 € in più per ogni negozio in cui la merce (dopo gli sconti) sta sotto i 10 €; la
+ * veloce («Adesso») 1 € in più una volta sola, compresa se c'è già un euro della spesa piccola.
+ * Il fattorino resta al compenso di oggi per ogni ordine (`COMPENSO_RIDER_CENTS`): gli euro in più
+ * restano a MyCity, dentro `delivery_fee_cents`.
+ * Il conto lo fa una funzione sola: `vociDellaConsegna` in lib/ordini/prezzi.ts.
  */
 export const SUPPLEMENTO_CONSEGNA_CENTS = 100;
 /** Da quanta merce per negozio (dopo gli sconti) la consegna con la fascia torna a 3 €. */
 export const SPESA_SENZA_SUPPLEMENTO_CENTS = 1000;
-/** Il tetto della consegna per negozio: base più UN supplemento, mai due. */
+/**
+ * La consegna più alta di un carrello con UN negozio solo: base più un euro. Con più negozi non c'è
+ * più un massimo (regola del 29/10 alle 22:21): ogni negozio in più e ogni negozio sotto i 10 €
+ * aggiungono il loro euro.
+ */
 export const CONSEGNA_MASSIMA_CENTS = PLATFORM_DELIVERY_FEE_CENTS + SUPPLEMENTO_CONSEGNA_CENTS;
+/** 29/10/2026 22:21 — Ogni negozio in più nel carrello: una fermata in più nello stesso giro. */
+export const CONSEGNA_NEGOZIO_IN_PIU_CENTS = 100;
+/** La consegna veloce («Adesso»): una volta sola per tutto il carrello, compresa se un negozio è sotto i 10 €. */
+export const SUPPLEMENTO_VELOCE_CENTS = 100;
 
 /**
  * Commissione marketplace in basis point (1000 = 10.00%) trattenuta da MyCity
@@ -168,7 +177,7 @@ export function commissioneCents(merceCents: number): number {
 // questo, e il giro si chiuderebbe su se stesso); una prova tiene le frasi allineate.
 // I minuti della quarta promessa vengono da lib/delivery, dove il numero è deciso.
 export const VALUE_PROPS = [
-  { icon: 'Truck',      title: 'Consegna a casa',          subtitle: PLATFORM_DELIVERY_FEE_CENTS > 0 ? `${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} per negozio, entro ${RAGGIO_CONSEGNA_KM} km` : `gratuita, entro ${RAGGIO_CONSEGNA_KM} km` },
+  { icon: 'Truck',      title: 'Consegna a casa',          subtitle: PLATFORM_DELIVERY_FEE_CENTS > 0 ? `da ${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} per tutto il carrello, entro ${RAGGIO_CONSEGNA_KM} km` : `gratuita, entro ${RAGGIO_CONSEGNA_KM} km` },
   { icon: 'BanknoteArrowUp', title: 'Pagamento alla consegna', subtitle: 'in contanti, zero rischi' },
   { icon: 'Store',      title: '100% locale',              subtitle: 'venditori della tua città' },
   { icon: 'Zap',        title: 'Consegna rapida',          subtitle: `in ${EXPRESS_ETA_LABEL} dalla conferma del negozio` },

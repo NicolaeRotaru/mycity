@@ -53,10 +53,12 @@ describe('il codice «Spedizione gratuita»', () => {
     expect(con.grandTotalCents).toBe(3000);
   });
 
-  it('vale per ogni negozio del carrello, non solo per il primo', () => {
+  it('toglie la base una volta sola: l’euro del negozio in più resta da pagare', () => {
     const con = prezziDelCarrello(ingressi([3000, 4500], { couponSpedizioneGratis: true }));
-    expect(con.gruppi.map(consegnaPagata)).toEqual([0, 0]);
-    expect(con.grandTotalCents).toBe(3000 + 4500);
+    // 29/10/2026 22:21 — Una consegna sola: il negozio da 45 € porta la base, che il codice toglie;
+    // quello da 30 € porta l'euro del negozio in più, che il codice non toglie mai.
+    expect(con.gruppi.map(consegnaPagata)).toEqual([100, 0]);
+    expect(con.grandTotalCents).toBe(3000 + 4500 + 100);
   });
 
   it('il fattorino resta pagato: il suo compenso non dipende dal codice del cliente', () => {

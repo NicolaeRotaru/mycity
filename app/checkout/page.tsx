@@ -17,7 +17,8 @@ import { leggiOrdiniCod } from '@/lib/ordini/risposta-ordini-cod';
 import { formatPrice, pluralize } from '@/lib/format';
 import { PICKUP_DISCOUNT_PERCENT, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingForEuro } from '@/lib/shipping';
-import { cartaAlCheckoutDisponibile, promessaSpedizione, rigaDelCodiceSpedizione } from '@/lib/promesse-pubbliche';
+import { cartaAlCheckoutDisponibile, fraseOrdiniDivisi, promessaSpedizione, rigaDelCodiceSpedizione } from '@/lib/promesse-pubbliche';
+import { leggiEsitoDellaVeloce } from '@/lib/ordini/consegna-veloce';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
 import { fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
@@ -538,6 +539,7 @@ export default function CheckoutPage() {
   // negozi aperti, un fattorino approvato e online (`veloceSiPuo`, la stessa decisione delle due
   // rotte). Finché non risponde, o se la lettura cade, la veloce non c'è: mai promettere alla cieca.
   const [veloceDisponibile, setVeloceDisponibile] = useState(false);
+  const [motivoVeloce, setMotivoVeloce] = useState<string | null>(null);
   const negoziDelCarrello = groups.map((g) => g.sellerId).filter(Boolean).join(',');
   useEffect(() => {
     if (!negoziDelCarrello) return;
@@ -545,11 +547,17 @@ export default function CheckoutPage() {
     const chiedi = () =>
       fetch(`/api/consegna/veloce?negozi=${negoziDelCarrello}`, { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
-        .then((esito: { possibile?: boolean } | null) => {
-          if (vivo) setVeloceDisponibile(esito?.possibile === true);
+        .then((esito: unknown) => {
+          if (!vivo) return;
+          setVeloceDisponibile(leggiEsitoDellaVeloce(esito) === true);
+          const perche = (esito as { perche?: unknown } | null)?.perche;
+          setMotivoVeloce(typeof perche === 'string' ? perche : null);
         })
         .catch(() => {
-          if (vivo) setVeloceDisponibile(false);
+          if (vivo) {
+            setVeloceDisponibile(false);
+            setMotivoVeloce(null);
+          }
         });
     void chiedi();
     const battito = setInterval(chiedi, 60_000);
@@ -1283,7 +1291,11 @@ export default function CheckoutPage() {
                   onTomorrowTimeChange={setSlotTomorrowTime}
                   veloceDisponibile={veloceDisponibile}
                   prezzoVeloce={prezzoDellaVeloce(Math.round(riepilogo.supplementoVeloce * 100))}
+                  motivoVeloce={motivoVeloce}
                 />
+                {fraseOrdiniDivisi(groups.length) && (
+                  <p className="mt-2 text-xs text-ink-500">{fraseOrdiniDivisi(groups.length)}</p>
+                )}
 
                 {/* Metodo + costo di consegna (invariato). */}
                 <div className="flex items-center justify-between rounded-lg border border-cream-300 bg-cream-50 px-4 py-3 mt-3">

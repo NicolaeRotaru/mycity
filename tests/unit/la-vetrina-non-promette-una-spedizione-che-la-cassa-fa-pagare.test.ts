@@ -128,7 +128,7 @@ describe('le vetrine prendono le parole da lì, invece di riscriverle', () => {
 
   it('le quattro promesse del sito nominano la consegna finché si paga', () => {
     const spedizione = VALUE_PROPS.find((v) => v.title === 'Consegna a casa');
-    expect(spedizione?.subtitle).toMatch(/per negozio/);
+    expect(spedizione?.subtitle).toMatch(/per tutto il carrello/);
     if (PLATFORM_DELIVERY_FEE_CENTS > 0) {
       expect(spedizione?.subtitle, 'il titolo dice «gratuita» e il sottotitolo tace i 3 €').toContain(
         formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100),

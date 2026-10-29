@@ -43,7 +43,8 @@ describe('la consegna costa 3 € con la fascia, 4 € sotto i 10 € o con la v
   it('la soglia è per negozio, sulla merce dopo gli sconti', () => {
     expect(consegne(ing([999]))).toEqual([400]);
     expect(consegne(ing([1000]))).toEqual([300]);
-    expect(consegne(ing([800, 1500]))).toEqual([400, 300]);
+    // 29/10/2026 22:21 — Due negozi: il secondo porta l'euro del negozio in più e quello sotto i 10 €.
+    expect(consegne(ing([800, 1500]))).toEqual([200, 300]);
     // 12 € con 3 € di sconto: 9 € di merce, sotto la soglia.
     expect(consegne(ing([1200], { couponScontoCents: 300 }))).toEqual([400]);
   });
@@ -89,10 +90,13 @@ describe('la consegna costa 3 € con la fascia, 4 € sotto i 10 € o con la v
                 shippingCents: g.shippingCents,
               });
               const caso = `${merci.join('+')}c veloce=${veloce} codice=${codice} negozio ${k}`;
-              if (g.deliveryFeeCents + split.applicationFeeCents < COMPENSO_RIDER_CENTS) errori.push(`fattorino scoperto: ${caso}`);
-              if (split.sellerPayoutCents + g.riderFeeCents > g.totalCents) errori.push(`bonifici oltre l'incasso: ${caso}`);
-              if (g.deliveryFeeCents > 400) errori.push(`consegna oltre 4 €: ${caso}`);
-              const attesa = veloce || merci[k] < 1000 ? 400 : 300;
+              // Le garanzie dei bonifici valgono col negozio solo: con più negozi il compenso lo decide Nicola.
+              if (merci.length === 1 && g.deliveryFeeCents + split.applicationFeeCents < COMPENSO_RIDER_CENTS) errori.push(`fattorino scoperto: ${caso}`);
+              if (merci.length === 1 && split.sellerPayoutCents + g.riderFeeCents > g.totalCents) errori.push(`bonifici oltre l'incasso: ${caso}`);
+              if (merci.length === 1 && g.deliveryFeeCents > 400) errori.push(`consegna oltre 4 €: ${caso}`);
+              const primo = merci.length > 1 && merci[1] > merci[0] ? 1 : 0;
+              const sotto = merci.filter((m) => m < 1000).length;
+              const attesa = (k === primo ? 300 + (veloce && sotto === 0 ? 100 : 0) : 100) + (merci[k] < 1000 ? 100 : 0);
               if (!codice && g.deliveryFeeCents !== attesa) errori.push(`consegna ${g.deliveryFeeCents} invece di ${attesa}: ${caso}`);
               const s = schermo.gruppi[k];
               if (s.deliveryFeeCents !== g.deliveryFeeCents || s.totalCents !== g.totalCents) errori.push(`schermo diverso: ${caso}`);

@@ -63,14 +63,11 @@ const ORDINE_GRANDE = consegnaDellaCassa(1500);
 
 /** Un testo che dice il prezzo della consegna dice quello che la cassa addebita, anche sotto i 10 €. */
 function diceLaTariffaDellaCassa(testo: string, dove: string) {
-  expect(testo, `${dove} non dice la consegna con la fascia (${euro(ORDINE_GRANDE)})`).toContain(euro(ORDINE_GRANDE));
-  if (ORDINE_PICCOLO === ORDINE_GRANDE) return;
-  expect(
-    testo,
-    `${dove} promette lo stesso prezzo a ogni spesa, ma 8 € pagano ${euro(ORDINE_PICCOLO)} e 15 € ${euro(ORDINE_GRANDE)}`,
-  ).not.toMatch(/qualunque sia la spesa|a prescindere dalla spesa/i);
-  expect(testo, `${dove} non dice quanto paga un ordine piccolo (${euro(ORDINE_PICCOLO)})`).toContain(euro(ORDINE_PICCOLO));
-  expect(testo, `${dove} non dice sotto quale spesa si paga di più`).toContain(euro(SPESA_SENZA_SUPPLEMENTO_CENTS));
+  // 29/10/2026 22:21 — Una consegna sola per il carrello: la frase dice la base e non promette più
+  // «per ogni negozio» né «qualunque sia la spesa».
+  expect(testo, `${dove} non dice la base della consegna (${euro(ORDINE_GRANDE)})`).toContain(euro(ORDINE_GRANDE));
+  expect(testo, `${dove} dice ancora la regola per negozio`).not.toMatch(/per ogni negozio|qualunque sia la spesa/i);
+  expect(testo, `${dove} non dice che è una sola`).toMatch(/per tutto il carrello/);
 }
 
 describe('la cassa: sotto i 10 € di merce la consegna costa 4 €', () => {
@@ -100,5 +97,6 @@ describe('IL CASO DEL COLLAUDO — il riquadro in cima alla pagina Spedizioni', 
 describe('IL CASO DEL COLLAUDO — la FAQ «Quanto costa la spedizione?»', () => {
   it('la risposta dice i 3 €, i 4 € e la soglia dei 10 €, non «qualunque sia la spesa»', () => {
     diceLaTariffaDellaCassa(rispostaCostoSpedizione().a, 'la FAQ sul costo della spedizione');
+    expect(rispostaCostoSpedizione().a, 'la FAQ non dice la soglia dei 10 €').toContain(euro(SPESA_SENZA_SUPPLEMENTO_CENTS));
   });
 });

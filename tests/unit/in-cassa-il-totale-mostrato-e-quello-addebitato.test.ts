@@ -65,7 +65,8 @@ describe('il totale che si legge in cassa', () => {
 
     const mostrato = riepilogoDaMostrare({ ...ing, usaCredito: false, creditoDisponibileCents: 0 });
 
-    expect(addebitato, 'il server non addebita piu 3,01 € su questo carrello').toBe(301);
+    // 29/10/2026 — Dopo il buono la merce è 1 centesimo: sotto i 10 € la consegna è 4 €.
+    expect(addebitato, 'il server non addebita piu 4,01 € su questo carrello').toBe(401);
     expect(
       Math.round(mostrato.totale * 100),
       'la cassa mostra un totale diverso da quello che il cliente paghera',

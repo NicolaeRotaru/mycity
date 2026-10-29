@@ -58,7 +58,7 @@ const SEMPRE_APERTO = Object.fromEntries(
   ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((k) => [k, [['00:00', '23:59']]]),
 );
 const SEMPRE_CHIUSO = { mon: [['05:00', '05:01']] };
-const fornaio = (orari: unknown) => ({ id: FORNAIO, role: 'seller', store_name: 'Il fornaio', store_hours: orari });
+const fornaio = (orari: unknown) => ({ id: FORNAIO, role: 'seller', is_approved: true, store_name: 'Il fornaio', store_hours: orari });
 const nicola = (online: boolean, approvato = true) => ({
   id: 'r1',
   role: 'rider',

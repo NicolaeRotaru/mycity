@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { getClientIp, rateLimitAsync } from '@/lib/rate-limit';
 import { romeNow } from '@/lib/store-hours';
 import { contaFattoriniOnline, veloceSiPuo, type EsitoVeloce } from '@/lib/ordini/consegna-veloce';
 
@@ -8,11 +9,18 @@ import { contaFattoriniOnline, veloceSiPuo, type EsitoVeloce } from '@/lib/ordin
  * GET /api/consegna/veloce?negozi=<id>,<id> — la cassa e il carrello chiedono qui se possono
  * offrire «Adesso». La decisione è `veloceSiPuo`, la stessa delle due rotte che creano l'ordine.
  * Risponde solo sì/no e il perché: nessun dato dei fattorini esce da qui.
+ *
+ * 29/10/2026 — Era pubblica senza freno, e leggeva `profiles` su qualunque id: con l'uuid di un
+ * cliente rispondeva diverso che con un uuid inesistente. Adesso ha un limite di richieste per
+ * indirizzo (la rotta serve anche a chi non ha fatto l'accesso, quindi niente `withAuthRateLimit`)
+ * e legge solo negozi approvati: un id che non è un negozio pubblico vale come uno che non esiste.
  */
 export const dynamic = 'force-dynamic';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_NEGOZI = 20;
+/** Il carrello chiede una volta al minuto e la cassa a ogni cambio: 30 al minuto bastano a tutti. */
+const FRENO = { max: 30, windowMs: 60_000 } as const;
 const NON_RIESCO: EsitoVeloce = {
   possibile: false,
   perche: 'Adesso non riesco a confermare la consegna veloce. Scegli una fascia oraria.',
@@ -23,6 +31,13 @@ function rispondi(esito: EsitoVeloce, status = 200) {
 }
 
 export async function GET(req: Request) {
+  const rl = await rateLimitAsync({ key: `consegna-veloce:${getClientIp(req)}`, ...FRENO });
+  if (!rl.allowed) {
+    return NextResponse.json(NON_RIESCO, {
+      status: 429,
+      headers: { 'Cache-Control': 'no-store', 'Retry-After': String(rl.retryAfterSec) },
+    });
+  }
   const ids = Array.from(
     new Set(
       (new URL(req.url).searchParams.get('negozi') ?? '')
@@ -38,7 +53,12 @@ export async function GET(req: Request) {
     const admin = getAdminSupabase();
     let negozi: Array<{ nome: string; orari: unknown }> | null = [];
     if (ids.length > 0) {
-      const { data, error } = await admin.from('profiles').select('id, store_name, store_hours').in('id', ids);
+      const { data, error } = await admin
+        .from('profiles')
+        .select('id, store_name, store_hours')
+        .eq('role', 'seller')
+        .eq('is_approved', true)
+        .in('id', ids);
       if (error || !data || data.length !== ids.length) {
         logger.error('consegna veloce: orari dei negozi non letti', { error: error?.message, chiesti: ids.length });
         negozi = null;

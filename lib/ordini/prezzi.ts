@@ -3,9 +3,11 @@ import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
 import {
   MARKETPLACE_FEE_BPS,
   PICKUP_DISCOUNT_PERCENT,
+  CONSEGNA_NEGOZIO_IN_PIU_CENTS,
   PLATFORM_DELIVERY_FEE_CENTS,
   SPESA_SENZA_SUPPLEMENTO_CENTS,
   SUPPLEMENTO_CONSEGNA_CENTS,
+  SUPPLEMENTO_VELOCE_CENTS,
   commissioneCents,
 } from '@/lib/constants';
 
@@ -90,6 +92,10 @@ export type EsitoPrezzo = {
   /** Lo sconto DAVVERO applicato, già limitato al tetto. */
   scontoApplicatoCents: number;
   grandTotalCents: number;
+  /** Le voci della consegna del carrello, PRIMA del codice «Spedizione gratuita». */
+  consegna: VociDellaConsegna;
+  /** La consegna da pagare per tutto il carrello: la somma di `deliveryFeeCents` degli ordini. */
+  grandDeliveryFeeCents: number;
 };
 
 /**
@@ -111,29 +117,116 @@ export type EsitoPrezzo = {
  * Prova: tests/unit/col-codice-spedizione-gratuita-i-bonifici-stanno-nell-addebito.test.ts.
  */
 /**
- * 29/10/2026 — LA TARIFFA DELLA CONSEGNA, IN UN POSTO SOLO.
+ * 29/10/2026 22:21 — LA CONSEGNA È UNA SOLA, PER TUTTO IL CARRELLO (registro dei fatti, consegna.promessa).
  *
- * Prima la consegna era 3 € fissi qui dentro, e la regola firmata da Nicola il 29/10 (3 € con la
- * fascia, 4 € sotto i 10 € di spesa o con la veloce, mai più di 4 €) non c'era: su ogni ordine
- * piccolo o veloce MyCity incassava un euro in meno. La soglia guarda la merce di QUEL negozio
- * dopo gli sconti, la stessa base su cui computeOrderSplit calcola la commissione. Il ritiro in
- * negozio non ha consegna. Prova: tests/unit/la-consegna-costa-3-o-4-euro-per-negozio.test.ts.
+ * L'ondata 13 faceva pagare 3 € o 4 € a OGNI negozio: 15 € dal fornaio più 12 € dal fruttivendolo
+ * uscivano a 6 € di consegna, ma il fattorino fa un giro solo. La regola firmata da Nicola:
+ *   ① 3 € di base per tutto il carrello, con la fascia che sceglie il cliente;
+ *   ② 1 € in più per ogni negozio in più (una fermata in più nel giro);
+ *   ③ 1 € in più per ogni negozio in cui la merce, dopo gli sconti, sta sotto i 10 €;
+ *   ④ la veloce («Adesso») costa 1 € in più una volta sola, ma è compresa se al punto ③ c'è già
+ *      almeno un euro.
+ * Esempi (fascia / veloce): 15 → 3/4 · 8 → 4/4 · 15+12 → 4/5 · 15+6 → 5/5 · 6+7 → 6/6 ·
+ * 15+12+20 → 5/6 · 15+12+5 → 6/6 · 5+6+7 → 8/8. Non c'è più un massimo.
+ *
+ * Il carrello resta diviso in un ordine per negozio, e la consegna si divide fra gli ordini senza
+ * perdere né creare centesimi: il «primo negozio» (la spesa più alta, a parità il primo del
+ * carrello) porta la base e l'euro della veloce quando si paga; ogni altro ordine porta il suo euro
+ * di fermata; ogni ordine sotto i 10 € porta il suo euro in più. Il fattorino NON cambia: resta il
+ * compenso di oggi per ogni ordine, perché quanto prende per un giro con più negozi lo deve ancora
+ * decidere Nicola. Prova: tests/unit/la-consegna-e-una-sola-per-tutto-il-carrello.test.ts.
+ */
+export type VociDellaConsegna = {
+  /** I 3 € di base, una volta sola. Zero col ritiro in negozio o col carrello vuoto. */
+  baseCents: number;
+  /** Quanti negozi ci sono oltre al primo, e quanto costano. */
+  negoziInPiu: number;
+  negoziInPiuCents: number;
+  /** In quanti negozi la merce (dopo gli sconti) sta sotto i 10 €, e quanto costano. */
+  negoziSottoSoglia: number;
+  spesaPiccolaCents: number;
+  /** Quanto si paga per la veloce: zero se non è scelta o se è compresa. */
+  veloceCents: number;
+  /** La veloce, se la si sceglie, è già pagata dall'euro della spesa piccola. */
+  veloceCompresa: boolean;
+  /** Quanto costerebbe in più la veloce su questo carrello, scelta o no: zero se è compresa. */
+  supplementoVeloceCents: number;
+  /** La consegna di tutto il carrello: la somma delle voci, e la somma di `perOrdineCents`. */
+  totaleCents: number;
+  /** La posizione del negozio che porta la base (e la veloce). -1 se non c'è consegna. */
+  primo: number;
+  /** La consegna di ogni ordine, nella stessa posizione dei negozi. */
+  perOrdineCents: number[];
+};
+
+export function vociDellaConsegna(a: {
+  pickupInStore: boolean;
+  /**
+   * Per ogni negozio del carrello: la spesa con cui si sceglie il primo (la merce prima degli
+   * sconti, così due spese uguali restano pari) e la merce dopo gli sconti, su cui si guarda la
+   * soglia dei 10 €.
+   */
+  negozi: Array<{ spesaCents: number; merceCents: number }>;
+  consegnaVeloce: boolean;
+}): VociDellaConsegna {
+  const n = a.negozi.length;
+  if (a.pickupInStore || n === 0) {
+    return {
+      baseCents: 0, negoziInPiu: 0, negoziInPiuCents: 0, negoziSottoSoglia: 0, spesaPiccolaCents: 0,
+      veloceCents: 0, veloceCompresa: false, supplementoVeloceCents: 0, totaleCents: 0, primo: -1, perOrdineCents: a.negozi.map(() => 0),
+    };
+  }
+  let primo = 0;
+  a.negozi.forEach((g, i) => {
+    if (g.spesaCents > a.negozi[primo].spesaCents) primo = i;
+  });
+  const sotto = a.negozi.map((g) => g.merceCents < SPESA_SENZA_SUPPLEMENTO_CENTS);
+  const negoziSottoSoglia = sotto.filter(Boolean).length;
+  const spesaPiccolaCents = negoziSottoSoglia * SUPPLEMENTO_CONSEGNA_CENTS;
+  const veloceCompresa = spesaPiccolaCents > 0;
+  const veloceCents = a.consegnaVeloce && !veloceCompresa ? SUPPLEMENTO_VELOCE_CENTS : 0;
+  const perOrdineCents = a.negozi.map((_, i) =>
+    (i === primo ? PLATFORM_DELIVERY_FEE_CENTS + veloceCents : CONSEGNA_NEGOZIO_IN_PIU_CENTS)
+    + (sotto[i] ? SUPPLEMENTO_CONSEGNA_CENTS : 0),
+  );
+  return {
+    baseCents: PLATFORM_DELIVERY_FEE_CENTS,
+    negoziInPiu: n - 1,
+    negoziInPiuCents: (n - 1) * CONSEGNA_NEGOZIO_IN_PIU_CENTS,
+    negoziSottoSoglia,
+    spesaPiccolaCents,
+    veloceCents,
+    veloceCompresa,
+    supplementoVeloceCents: veloceCompresa ? 0 : SUPPLEMENTO_VELOCE_CENTS,
+    totaleCents: perOrdineCents.reduce((s, x) => s + x, 0),
+    primo,
+    perOrdineCents,
+  };
+}
+
+/**
+ * La consegna di un carrello con UN negozio solo: 3 € con la fascia, 4 € sotto i 10 € di merce o
+ * con la veloce. È `vociDellaConsegna` con un negozio, non una seconda regola.
  */
 export function tariffaConsegnaCents(a: {
   pickupInStore: boolean;
   merceCents: number;
   consegnaVeloce: boolean;
 }): number {
-  if (a.pickupInStore) return 0;
-  const supplemento = a.consegnaVeloce || a.merceCents < SPESA_SENZA_SUPPLEMENTO_CENTS;
-  return PLATFORM_DELIVERY_FEE_CENTS + (supplemento ? SUPPLEMENTO_CONSEGNA_CENTS : 0);
+  return vociDellaConsegna({
+    pickupInStore: a.pickupInStore,
+    negozi: [{ spesaCents: a.merceCents, merceCents: a.merceCents }],
+    consegnaVeloce: a.consegnaVeloce,
+  }).totaleCents;
 }
 
 function consegnaDaPagareCents(a: {
   pickupInStore: boolean;
   codiceSpedizioneGratis: boolean;
-  /** La tariffa piena di questo negozio (`tariffaConsegnaCents`). */
+  /** La consegna piena di questo ordine (`vociDellaConsegna().perOrdineCents`). */
   tariffaCents: number;
+  /** La parte di base che porta questo ordine: i 3 € sul primo negozio, zero sugli altri. */
+  baseCents: number;
   /** La merce del negozio dopo gli sconti: la base su cui computeOrderSplit calcola la commissione. */
   merceCents: number;
   shippingCents: number;
@@ -141,13 +234,13 @@ function consegnaDaPagareCents(a: {
 }): number {
   if (a.pickupInStore) return 0;
   if (!a.codiceSpedizioneGratis) return a.tariffaCents;
-  // Il codice toglie solo la parte dei 3 € che toglieva prima; il supplemento resta da pagare
-  // (scelta dell'AD del 29/10, scritta in DECISIONI).
-  const supplementoCents = Math.max(0, a.tariffaCents - PLATFORM_DELIVERY_FEE_CENTS);
+  // Il codice toglie solo la parte dei 3 € di base che toglieva prima; gli euro in più (negozi in
+  // più, spesa piccola, veloce) restano da pagare (scelta dell'AD del 29/10, scritta in DECISIONI).
+  const euroInPiuCents = Math.max(0, a.tariffaCents - a.baseCents);
   const restaAllaPiattaforma = commissioneCents(Math.max(0, a.merceCents)) + a.shippingCents;
   return (
-    supplementoCents
-    + Math.min(PLATFORM_DELIVERY_FEE_CENTS, Math.max(0, a.riderFeeCents - restaAllaPiattaforma))
+    euroInPiuCents
+    + Math.min(a.baseCents, Math.max(0, a.riderFeeCents - restaAllaPiattaforma))
   );
 }
 
@@ -193,6 +286,16 @@ export function prezziDelCarrello(ing: IngressiPrezzo): EsitoPrezzo {
   const quoteCoupon = ripartisciCentesimi(scontiLimitati.codice, subtotali);
   const quoteRitiro = ripartisciCentesimi(scontiLimitati.ritiro, subtotali);
 
+  // La consegna è del carrello intero (vociDellaConsegna): qui si divide fra gli ordini.
+  const consegna = vociDellaConsegna({
+    pickupInStore: ing.pickupInStore,
+    negozi: ing.gruppi.map((_, i) => ({
+      spesaCents: subtotali[i],
+      merceCents: subtotali[i] - quoteCoupon[i] - quoteRitiro[i],
+    })),
+    consegnaVeloce: ing.consegnaVeloce,
+  });
+
   const gruppi: PrezzoDiGruppo[] = ing.gruppi.map((g, i) => {
     const couponPortionCents = quoteCoupon[i];
     const pickupPortionCents = quoteRitiro[i];
@@ -203,15 +306,12 @@ export function prezziDelCarrello(ing: IngressiPrezzo): EsitoPrezzo {
     // vogliono dire che il giorno in cui cambia una resta indietro.
     const riderFeeCents = compensoRiderCents({ pickupInStore: ing.pickupInStore });
     const merceCents = subtotali[i] - couponPortionCents - pickupPortionCents;
-    const tariffaCents = tariffaConsegnaCents({
-      pickupInStore: ing.pickupInStore,
-      merceCents,
-      consegnaVeloce: ing.consegnaVeloce,
-    });
+    const tariffaCents = consegna.perOrdineCents[i];
     const deliveryFeeCents = consegnaDaPagareCents({
       pickupInStore: ing.pickupInStore,
       codiceSpedizioneGratis: ing.couponSpedizioneGratis,
       tariffaCents,
+      baseCents: i === consegna.primo ? consegna.baseCents : 0,
       merceCents,
       shippingCents: shippingPerGruppo[i],
       riderFeeCents,
@@ -239,12 +339,14 @@ export function prezziDelCarrello(ing: IngressiPrezzo): EsitoPrezzo {
     pickupDiscountCents,
     scontoApplicatoCents: scontiLimitati.codice + scontiLimitati.ritiro,
     grandTotalCents: gruppi.reduce((s, g) => s + g.totalCents, 0),
+    consegna,
+    grandDeliveryFeeCents: gruppi.reduce((s, g) => s + g.deliveryFeeCents, 0),
   };
 }
 
 /**
  * Quanto costa in più la consegna veloce su questo carrello: la differenza fra i due conti veri,
- * non un «+1 €» scritto a mano. Zero quando ogni negozio è già sotto i 10 € (la veloce è compresa).
+ * non un «+1 €» scritto a mano. Zero quando almeno un negozio è sotto i 10 € (la veloce è compresa).
  */
 export function supplementoDellaVeloceCents(ing: Omit<IngressiPrezzo, 'consegnaVeloce'>): number {
   const consegna = (e: EsitoPrezzo) => e.gruppi.reduce((s, g) => s + g.deliveryFeeCents, 0);
