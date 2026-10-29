@@ -42,6 +42,7 @@ import {
   rigaQuandoArriva,
   siPuoConfermare,
 } from '@/lib/quando-arriva';
+import { eConsegnaVeloce, prezzoDellaVeloce } from '@/lib/ordini/consegna-veloce';
 import {
   bozzaDaSalvare,
   bozzaLetta,
@@ -533,6 +534,31 @@ export default function CheckoutPage() {
   const deliverySlot = etichettaPerLOrdine(consegna);
   const consegnaConfermabile = siPuoConfermare(consegna);
 
+  // 29/10/2026 — «Adesso» si offre solo se il server dice che si può mantenere: dalle 8 alle 21,
+  // negozi aperti, un fattorino approvato e online (`veloceSiPuo`, la stessa decisione delle due
+  // rotte). Finché non risponde, o se la lettura cade, la veloce non c'è: mai promettere alla cieca.
+  const [veloceDisponibile, setVeloceDisponibile] = useState(false);
+  const negoziDelCarrello = groups.map((g) => g.sellerId).filter(Boolean).join(',');
+  useEffect(() => {
+    if (!negoziDelCarrello) return;
+    let vivo = true;
+    const chiedi = () =>
+      fetch(`/api/consegna/veloce?negozi=${negoziDelCarrello}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((esito: { possibile?: boolean } | null) => {
+          if (vivo) setVeloceDisponibile(esito?.possibile === true);
+        })
+        .catch(() => {
+          if (vivo) setVeloceDisponibile(false);
+        });
+    void chiedi();
+    const battito = setInterval(chiedi, 60_000);
+    return () => {
+      vivo = false;
+      clearInterval(battito);
+    };
+  }, [negoziDelCarrello]);
+
   // Usa il credito MyCity (opt-in, default sì): applicato solo agli ordini COD.
   const [useCredit, setUseCredit] = useState(true);
 
@@ -655,6 +681,7 @@ export default function CheckoutPage() {
     couponScontoCents: Math.round((appliedCoupon?.discount ?? 0) * 100),
     // Il credito si applica solo agli ordini COD in questo flusso (la carta
     // passa da Stripe, dove il credito arriverà più avanti).
+    consegnaVeloce: eConsegnaVeloce({ fascia: deliverySlot, ritiroInNegozio: pickupInStore }),
     usaCredito: paymentMethod === 'cod' && useCredit,
     creditoDisponibileCents: walletCents ?? 0,
   });
@@ -686,7 +713,11 @@ export default function CheckoutPage() {
   // invece della tariffa piena, che smentirebbe la cifra addebitata.
   const rigaCodice =
     appliedCoupon?.freeShipping && !pickupInStore
-      ? rigaDelCodiceSpedizione(Math.round(consegnaDaPagare * 100), groups.length)
+      ? rigaDelCodiceSpedizione(
+          Math.round(consegnaDaPagare * 100),
+          groups.length,
+          Math.round(riepilogo.consegnaSenzaCodice * 100),
+        )
       : null;
   // Lo sconto che si mostra è quello DAVVERO applicato, non quello richiesto:
   // altrimenti le righe del riepilogo non fanno il totale.
@@ -1250,6 +1281,8 @@ export default function CheckoutPage() {
                   onTodayTimeChange={setSlotTodayTime}
                   tomorrowTime={slotTomorrowTime}
                   onTomorrowTimeChange={setSlotTomorrowTime}
+                  veloceDisponibile={veloceDisponibile}
+                  prezzoVeloce={prezzoDellaVeloce(Math.round(riepilogo.supplementoVeloce * 100))}
                 />
 
                 {/* Metodo + costo di consegna (invariato). */}

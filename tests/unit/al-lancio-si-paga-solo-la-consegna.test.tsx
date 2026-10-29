@@ -55,6 +55,7 @@ function conto(gruppi: Array<{ sellerId: string; euro: number }>, opz: Partial<I
     pickupInStore: false,
     couponSpedizioneGratis: false,
     couponScontoCents: 0,
+    consegnaVeloce: false,
     ...opz,
   });
 }

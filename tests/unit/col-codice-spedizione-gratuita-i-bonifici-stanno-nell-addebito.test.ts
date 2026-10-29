@@ -35,6 +35,7 @@ function ingressi(subtotali: number[], opts: Partial<IngressiPrezzo> = {}): Ingr
     pickupInStore: false,
     couponSpedizioneGratis: true,
     couponScontoCents: 0,
+    consegnaVeloce: false,
     ...opts,
   };
 }

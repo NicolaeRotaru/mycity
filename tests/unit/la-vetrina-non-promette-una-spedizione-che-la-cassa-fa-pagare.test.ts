@@ -69,6 +69,7 @@ describe('e la cifra è quella che la cassa addebita davvero', () => {
     pickupInStore: false,
     couponSpedizioneGratis: false,
     couponScontoCents: 0,
+    consegnaVeloce: false,
   });
   const gruppo = cassa.gruppi[0];
 

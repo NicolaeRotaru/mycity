@@ -32,6 +32,7 @@ function carrello(subtotali: number[], opts: Partial<Parameters<typeof prezziDel
     pickupInStore: false,
     couponSpedizioneGratis: false,
     couponScontoCents: 0,
+    consegnaVeloce: false,
     ...opts,
   });
 }

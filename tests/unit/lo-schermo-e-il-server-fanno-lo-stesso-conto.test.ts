@@ -37,6 +37,7 @@ function comeIlServer(ing: Parameters<typeof calcolaTotali>[0]) {
     pickupInStore: ing.pickupInStore,
     couponSpedizioneGratis: ing.couponSpedizioneGratis,
     couponScontoCents: Math.round(ing.couponScontoEuro * 100),
+    consegnaVeloce: ing.consegnaVeloce,
   });
 }
 
@@ -50,6 +51,7 @@ const CASI: Array<[string, Parameters<typeof calcolaTotali>[0]]> = [
       pickupInStore: false,
       couponSpedizioneGratis: false,
       couponScontoEuro: 0,
+      consegnaVeloce: false,
       creditoDisponibileEuro: 0,
     },
   ],
@@ -62,6 +64,7 @@ const CASI: Array<[string, Parameters<typeof calcolaTotali>[0]]> = [
       pickupInStore: false,
       couponSpedizioneGratis: false,
       couponScontoEuro: 0,
+      consegnaVeloce: false,
       creditoDisponibileEuro: 0,
     },
   ],
@@ -74,6 +77,7 @@ const CASI: Array<[string, Parameters<typeof calcolaTotali>[0]]> = [
       pickupInStore: false,
       couponSpedizioneGratis: true,
       couponScontoEuro: 5,
+      consegnaVeloce: false,
       creditoDisponibileEuro: 0,
     },
   ],
@@ -86,6 +90,7 @@ const CASI: Array<[string, Parameters<typeof calcolaTotali>[0]]> = [
       pickupInStore: true,
       couponSpedizioneGratis: false,
       couponScontoEuro: 0,
+      consegnaVeloce: false,
       creditoDisponibileEuro: 0,
     },
   ],
@@ -98,6 +103,7 @@ const CASI: Array<[string, Parameters<typeof calcolaTotali>[0]]> = [
       pickupInStore: false,
       couponSpedizioneGratis: false,
       couponScontoEuro: 0,
+      consegnaVeloce: false,
       creditoDisponibileEuro: 0,
     },
   ],
@@ -110,6 +116,7 @@ const CASI: Array<[string, Parameters<typeof calcolaTotali>[0]]> = [
       pickupInStore: false,
       couponSpedizioneGratis: false,
       couponScontoEuro: 0,
+      consegnaVeloce: false,
       creditoDisponibileEuro: 0,
     },
   ],
@@ -122,6 +129,7 @@ const CASI: Array<[string, Parameters<typeof calcolaTotali>[0]]> = [
       pickupInStore: false,
       couponSpedizioneGratis: false,
       couponScontoEuro: 500,
+      consegnaVeloce: false,
       creditoDisponibileEuro: 0,
     },
   ],
@@ -159,6 +167,7 @@ describe('lo schermo e il server fanno lo stesso conto', () => {
       pickupInStore: false,
       couponSpedizioneGratis: false,
       couponScontoEuro: 1000,
+      consegnaVeloce: false,
       creditoDisponibileEuro: 0,
     });
     expect(t.totale).toBeGreaterThanOrEqual(0);
@@ -173,6 +182,7 @@ describe('lo schermo e il server fanno lo stesso conto', () => {
       pickupInStore: false,
       couponSpedizioneGratis: false,
       couponScontoEuro: 0,
+      consegnaVeloce: false,
       creditoDisponibileEuro: 9999,
     });
     expect(t.creditoApplicato).toBe(t.totale);

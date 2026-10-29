@@ -1,6 +1,5 @@
 'use client';
 
-import { shippingForEuro } from '@/lib/shipping';
 import { RIQUADRO_LO_SAPEVI, frasePagamento, promessaSpedizione, VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { useEffect, useRef, useState } from 'react';
@@ -11,7 +10,6 @@ import { formatPrice, pluralize } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { FOTO_MANCANTE } from '@/lib/foto-mancante';
-import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { fetchSellerPublicMap, type SellerPublicProfile } from '@/lib/queries/seller-public-profiles';
 import ShareCartButton from '@/components/ShareCartButton';
@@ -24,8 +22,8 @@ import { toast } from 'sonner';
 import { fondoDellaBarra, corsieSotto } from '@/lib/ui/barra-in-fondo';
 import { chiaveDellaRiga, merceCheTengoIo, type TentativoAperto } from '@/lib/ordini/merce-che-tengo-io';
 import { seguiAltezza, osservatoreDelBrowser } from '@/lib/altezza-banner';
-import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
-import { expressSiPuo, giornoDiPartenza } from '@/lib/quando-arriva';
+import { rigaQuandoArrivaNelCarrello } from '@/lib/ordini/consegna-veloce';
+import { prezziDelCarrello } from '@/lib/ordini/prezzi';
 
 /**
  * 3/9/2026 — DAL TELEFONO, IL PULSANTE CHE PORTA I SOLDI ERA L'ULTIMA COSA DELLA PAGINA.
@@ -74,10 +72,11 @@ function descrizioneDelCarrelloVuoto(): string {
  * orologio del quale fidarsi): in quel caso la riga non promette nessun tempo, invece di
  * inventarne uno.
  */
-function quandoArrivaScrittoNelCarrello(ora: number | null): string | null {
-  if (ora === null) return null;
-  if (expressSiPuo(ora)) return `Consegna in ${EXPRESS_ETA_LABEL}`;
-  return giornoDiPartenza(ora) === 'today' ? 'Consegna in giornata' : 'Consegna domani';
+function quandoArrivaScrittoNelCarrello(ora: number | null, veloce: boolean | null): string | null {
+  // 29/10/2026 — L'orologio non bastava: a negozio chiuso o senza un fattorino online il carrello
+  // prometteva i minuti e il no arrivava all'ultimo tocco in cassa. Ora decide la stessa risposta
+  // della cassa e delle rotte (`veloceSiPuo`, letta da /api/consegna/veloce): senza, niente minuti.
+  return rigaQuandoArrivaNelCarrello(ora, veloce);
 }
 
 export default function CartPage() {
@@ -151,12 +150,31 @@ export default function CartPage() {
    * alle 21:05 la pagina prometterebbe ancora mezz'ora solo perché l'ora era stata letta alle 20:59.
    */
   const [oraDiAdesso, setOraDiAdesso] = useState<number | null>(null);
+  // La veloce si può mantenere adesso? `null` = non ancora letto o lettura caduta: nessun tempo
+  // promesso. La risposta è quella delle rotte (negozi aperti, 8-21, un fattorino online).
+  const [veloceSiPuoAdesso, setVeloceSiPuoAdesso] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const leggiLOra = () => setOraDiAdesso(new Date().getHours());
+    let vivo = true;
+    const leggiLOra = () => {
+      setOraDiAdesso(new Date().getHours());
+      const negozi = Array.from(new Set(getCart().map((i) => i.sellerId).filter((v): v is string => !!v)));
+      if (negozi.length === 0) return;
+      fetch(`/api/consegna/veloce?negozi=${negozi.join(',')}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((esito: { possibile?: boolean } | null) => {
+          if (vivo) setVeloceSiPuoAdesso(esito ? esito.possibile === true : null);
+        })
+        .catch(() => {
+          if (vivo) setVeloceSiPuoAdesso(null);
+        });
+    };
     leggiLOra();
     const battito = setInterval(leggiLOra, 60_000);
-    return () => clearInterval(battito);
+    return () => {
+      vivo = false;
+      clearInterval(battito);
+    };
   }, []);
 
   useEffect(() => {
@@ -385,12 +403,10 @@ export default function CartPage() {
   }
   const groups = groupOrder.map((k) => ({ key: k, ...groupsByStore.get(k)! }));
   const multiStore = groups.length > 1;
-  // 107 — Il carrello sommava merce e spedizione e si fermava lì. Al checkout
-  // si aggiungono 3 € di «Consegna MyCity» per ogni negozio: il totale mostrato
-  // qui era piu' basso di quello che si paga davvero, e la differenza compariva
-  // all'ultimo passo — dove l'abbandono costa di piu'. Stessa matematica del
-  // checkout: una fee per gruppo-negozio.
-  const platformDeliveryFee = groups.length * (PLATFORM_DELIVERY_FEE_CENTS / 100);
+  // 107 — Il carrello sommava merce e spedizione e si fermava lì: la consegna compariva solo
+  // all'ultimo passo, dove l'abbandono costa di piu'. 29/10/2026 — e poi la contava «negozi × 3 €»
+  // a mano, mentre la consegna è 3 € o 4 € per negozio (sotto i 10 € di spesa): adesso il numero
+  // viene da `prezziDelCarrello`, lo stesso conto della cassa e delle due rotte.
 
   /**
    * La spedizione per negozio, con la stessa funzione e gli stessi ingressi della cassa (vedi
@@ -399,20 +415,25 @@ export default function CartPage() {
    * «Gratis» accanto a una consegna da pagare: entra nella riga «Consegna MyCity», che dice la
    * cifra intera per farsi portare la spesa, la stessa del riepilogo della cassa.
    */
-  const shippingCost = groups.reduce(
-    (somma, g) =>
-      somma
-      + shippingForEuro({
-        subtotal: g.items.reduce((s, it) => s + it.price * it.quantity, 0),
-        storeLat: dovEIlNegozio[g.key]?.lat ?? null,
-        storeLng: dovEIlNegozio[g.key]?.lng ?? null,
-        deliveryLat: doveConsegniamo.lat,
-        deliveryLng: doveConsegniamo.lng,
-        pickupInStore: false,
-      }),
-    0,
-  );
-  const consegnaDaPagare = shippingCost + platformDeliveryFee;
+  const contoConsegna = prezziDelCarrello({
+    gruppi: groups.map((g) => ({
+      sellerId: g.key,
+      subtotalCents: Math.round(g.items.reduce((somma, it) => somma + it.price * it.quantity, 0) * 100),
+    })),
+    coordinateNegozio: (key) => ({ lat: dovEIlNegozio[key]?.lat ?? null, lng: dovEIlNegozio[key]?.lng ?? null }),
+    consegnaLat: doveConsegniamo.lat,
+    consegnaLng: doveConsegniamo.lng,
+    pickupInStore: false,
+    couponSpedizioneGratis: false,
+    couponScontoCents: 0,
+    // Nel carrello la fascia non è ancora scelta: si conta quella oraria. Il prezzo della veloce lo
+    // dice la mattonella «Adesso» della cassa, prima che la si scelga.
+    consegnaVeloce: false,
+  });
+  const shippingCost = contoConsegna.grandShippingCents / 100;
+  const tariffeConsegnaCents = contoConsegna.gruppi.map((g) => g.deliveryFeeCents);
+  const consegnaDaPagare =
+    (contoConsegna.grandShippingCents + tariffeConsegnaCents.reduce((somma, x) => somma + x, 0)) / 100;
   const finalTotal = total + consegnaDaPagare;
 
   /**
@@ -512,7 +533,7 @@ export default function CartPage() {
                           alzare la quantità, e non capiva perché. */}
                       {(() => {
                         const rimasti = massimo(item.id, item.variantId);
-                        const quando = quandoArrivaScrittoNelCarrello(oraDiAdesso);
+                        const quando = quandoArrivaScrittoNelCarrello(oraDiAdesso, veloceSiPuoAdesso);
                         if (rimasti === 0) {
                           return (
                             <p role="alert" className="text-xs text-red-600 font-semibold flex items-center gap-1">
@@ -630,9 +651,9 @@ export default function CartPage() {
               <span className="text-ink-600">
                 {VOCE_CONSEGNA}
                 {/* «N negozi × 3 €» e' il conto solo finche' non c'e' una spedizione da sommare. */}
-                {groups.length > 1 && shippingCost === 0 && (
+                {groups.length > 1 && shippingCost === 0 && tariffeConsegnaCents.every((t) => t === tariffeConsegnaCents[0]) && (
                   <span className="block text-xs text-ink-500 font-normal">
-                    {pluralize(groups.length, 'negozio', 'negozi')} × {formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}
+                    {pluralize(groups.length, 'negozio', 'negozi')} × {formatPrice(tariffeConsegnaCents[0] / 100)}
                   </span>
                 )}
               </span>

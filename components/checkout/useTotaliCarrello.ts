@@ -30,6 +30,8 @@ export type IngressiTotali = {
   pickupInStore: boolean;
   couponSpedizioneGratis: boolean;
   couponScontoEuro: number;
+  /** La fascia scelta è la veloce («Adesso»)? Obbligatorio: cambia la consegna. */
+  consegnaVeloce: boolean;
   /** Credito MyCity disponibile, in euro. Zero se non si può usare. */
   creditoDisponibileEuro: number;
 };
@@ -63,6 +65,7 @@ export function calcolaTotali(ing: IngressiTotali): TotaliCarrello {
     pickupInStore: ing.pickupInStore,
     couponSpedizioneGratis: ing.couponSpedizioneGratis,
     couponScontoCents: Math.round(ing.couponScontoEuro * 100),
+    consegnaVeloce: ing.consegnaVeloce,
   });
 
   const costoConsegnaCents = centesimi.gruppi.reduce((s, g) => s + g.deliveryFeeCents, 0);
@@ -101,6 +104,7 @@ export function useTotaliCarrello(ing: IngressiTotali): TotaliCarrello {
       ing.pickupInStore,
       ing.couponSpedizioneGratis,
       ing.couponScontoEuro,
+      ing.consegnaVeloce,
       ing.creditoDisponibileEuro,
     ],
   );

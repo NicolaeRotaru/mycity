@@ -10,7 +10,8 @@ import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
-import { motivoNegozioChiuso, negozioPuoServire } from '@/lib/store-hours';
+import { motivoNegozioChiuso, negozioPuoServire, romeNow } from '@/lib/store-hours';
+import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
@@ -657,12 +658,24 @@ export const POST = withAuthRateLimit(
     // 3/9/2026 — SI GUARDA LA FASCIA SCELTA, NON SOLO L'OROLOGIO. Dalle 20:00 la
     // cassa propone «Domani»: rifiutare quell'ordine perché il negozio è chiuso
     // adesso vuol dire perdere tutti gli ordini della sera per il giorno dopo.
+    const consegnaVeloce = eConsegnaVeloce({ fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore });
     if (!body.pickupInStore) {
       for (const s of sellers ?? []) {
         if (!negozioPuoServire(s.store_hours, body.deliverySlot)) {
           return esciERilascia(ApiErrors.conflict(motivoNegozioChiuso(s.store_name ?? 'Il negozio', body.deliverySlot)));
         }
       }
+    }
+
+    // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso, un
+    // fattorino approvato e online. La stessa decisione della cassa (`veloceSiPuo`).
+    if (consegnaVeloce) {
+      const veloce = veloceSiPuo({
+        adesso: romeNow(),
+        negozi: (sellers ?? []).map((s) => ({ nome: s.store_name ?? 'Il negozio', orari: s.store_hours })),
+        fattoriniOnline: await contaFattoriniOnline(admin),
+      });
+      if (!veloce.possibile) return esciERilascia(ApiErrors.conflict(veloce.perche));
     }
 
     // --- 3. Valida ogni gruppo + calcola subtotale per gruppo dal DB.
@@ -813,6 +826,7 @@ export const POST = withAuthRateLimit(
       pickupInStore: body.pickupInStore,
       couponSpedizioneGratis: couponFreeShipping,
       couponScontoCents: couponDiscountCents,
+      consegnaVeloce,
     });
     const shippingPerGroupCents = prezzi.gruppi.map((g) => g.shippingCents);
 

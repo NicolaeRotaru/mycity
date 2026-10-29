@@ -11,7 +11,7 @@ import { Truck, Banknote, MapPin, Zap, Store, Clock, ChefHat, Package, Bike, Che
 // si scrivono piu' cifre: le danno `promessaSpedizione()` e la costante del confine, e una prova
 // trasforma la pagina in HTML e confronta ogni euro e ogni chilometro col conto della cassa
 // (tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx).
-import { NEGOZIO_CHIUSO_COSA_SUCCEDE, promessaSpedizione, riquadroRitiroInNegozio } from '@/lib/promesse-pubbliche';
+import { NEGOZIO_CHIUSO_COSA_SUCCEDE, fraseTariffaConsegna, promessaSpedizione, riquadroRitiroInNegozio } from '@/lib/promesse-pubbliche';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 import { formatPrice } from '@/lib/format';
@@ -84,8 +84,8 @@ export default function ShippingPage() {
         <div className="space-y-3">
           <h2 className="text-xl font-bold text-ink-900 mb-2">Quanto costa la consegna</h2>
           {quanto ? (
-            <p>Paghi solo la consegna: <strong>{`${quanto} per ogni negozio`}</strong> da cui ordini, qualunque sia
-            la spesa. Non c&apos;è un costo a chilometro e non c&apos;è una soglia da raggiungere.</p>
+            <p>Paghi solo la consegna, per ogni negozio da cui ordini: <strong>{fraseTariffaConsegna()}</strong>.
+            Non c&apos;è un costo a chilometro.</p>
           ) : (
             <p>La consegna non si paga, qualunque sia la spesa.</p>
           )}

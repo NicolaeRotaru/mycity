@@ -6,8 +6,10 @@ import {
   PICKUP_DISCOUNT_PERCENT,
   RITIRO_IN_NEGOZIO_ATTIVO,
   PLATFORM_DELIVERY_FEE_CENTS,
+  CONSEGNA_MASSIMA_CENTS,
   RAGGIO_CONSEGNA_KM,
 } from '@/lib/constants';
+import { fraseTariffaConsegna } from '@/lib/promesse-pubbliche';
 import { formatPrice } from '@/lib/format';
 import { AdminPageTitle, AdminStatCard } from '@/components/admin/AdminUI';
 
@@ -40,7 +42,7 @@ export default function AdminDeliveryPage() {
           icon={Banknote}
           tone="accent"
           label="Consegna pagata dal cliente, per negozio"
-          value={formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}
+          value={`${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}–${formatPrice(CONSEGNA_MASSIMA_CENTS / 100)}`}
         />
         <AdminStatCard
           icon={Bike}
@@ -64,8 +66,8 @@ export default function AdminDeliveryPage() {
             <Row
               icon={Banknote}
               title="Consegna pagata dal cliente"
-              desc="Per negozio, su ogni ordine a domicilio, qualunque sia la spesa"
-              value={formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}
+              desc={`Per negozio: ${fraseTariffaConsegna()}`}
+              value={`${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}–${formatPrice(CONSEGNA_MASSIMA_CENTS / 100)}`}
             />
             <Row
               icon={Bike}
@@ -94,8 +96,8 @@ export default function AdminDeliveryPage() {
         <div className="rounded-2xl border-2 border-cream-300 bg-white p-5 shadow-warm">
           <h2 className="mb-1 font-serif text-[17px] font-bold text-ink-900">Consegna pagata dal cliente</h2>
           <p className="mb-4 text-xs text-ink-500">
-            Il cliente paga solo la consegna: {formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} per ogni negozio
-            da cui ordina, qualunque sia la spesa. Non c&apos;è un costo a chilometro e non c&apos;è una soglia di
+            Il cliente paga solo la consegna, per ogni negozio da cui ordina: {fraseTariffaConsegna()}.
+            L&apos;euro in più resta a MyCity. Non c&apos;è un costo a chilometro e non c&apos;è una soglia di
             spedizione gratis. Due negozi nello stesso carrello sono due consegne. La consegna copre il compenso
             del fattorino, fisso a {formatPrice(COMPENSO_RIDER_CENTS / 100)}.
           </p>

@@ -6,6 +6,7 @@ import {
   FASCE_DI_DOMANI,
   SOTTOTITOLO_ADESSO,
   expressSiPuo,
+  giornoDiPartenza,
   fasceAncoraPossibili,
   type Giorno,
 } from '@/lib/quando-arriva';
@@ -39,6 +40,13 @@ type Props = {
   /** fascia oraria selezionata per "domani" */
   tomorrowTime: string;
   onTomorrowTimeChange: (t: string) => void;
+  /**
+   * 29/10/2026 — La veloce si può mantenere adesso? Lo dice il server (`veloceSiPuo`): negozi
+   * aperti e un fattorino online. Senza, «Adesso» non si offre, qualunque ora sia.
+   */
+  veloceDisponibile: boolean;
+  /** «+1 €» o «compresa» (`prezzoDellaVeloce`): la veloce dice il suo prezzo prima di sceglierla. */
+  prezzoVeloce: string;
 };
 
 export function DeliverySlotPicker({
@@ -48,12 +56,21 @@ export function DeliverySlotPicker({
   onTodayTimeChange,
   tomorrowTime,
   onTomorrowTimeChange,
+  veloceDisponibile,
+  prezzoVeloce,
 }: Props) {
   // Calcolato a render: le fasce di "Oggi" già trascorse sono escluse.
   const ora = new Date().getHours();
   const todayTimes = fasceAncoraPossibili(ora);
   const oggiPossibile = todayTimes.length > 0;
-  const expressAvailable = expressSiPuo(ora);
+  const expressAvailable = expressSiPuo(ora) && veloceDisponibile;
+
+  // Se «Adesso» era scelta e non si può più (fattorino spento, negozio chiuso, le 21), si torna
+  // alla prima fascia possibile, come dopo le 21: la rotta la rifiuterebbe comunque con un 409.
+  useEffect(() => {
+    if (day === 'now' && !expressAvailable) onDayChange(giornoDiPartenza(ora));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day, expressAvailable]);
   const times = day === 'today' ? todayTimes : FASCE_DI_DOMANI;
   const current = day === 'today' ? todayTime : tomorrowTime;
   const onTimeChange = day === 'today' ? onTodayTimeChange : onTomorrowTimeChange;
@@ -81,7 +98,7 @@ export function DeliverySlotPicker({
           onClick={() => expressAvailable && onDayChange('now')}
           disabled={!expressAvailable}
           title="Adesso"
-          subtitle={expressAvailable ? SOTTOTITOLO_ADESSO : 'Non disponibile'}
+          subtitle={expressAvailable ? `${SOTTOTITOLO_ADESSO} · ${prezzoVeloce}` : 'Non disponibile'}
           badge={{ text: 'Express', cls: 'text-accent-700 bg-accent-50' }}
         />
         <DayTile

@@ -4,6 +4,8 @@ import {
   PLATFORM_DELIVERY_FEE_CENTS,
   RAGGIO_CONSEGNA_KM,
   RITIRO_IN_NEGOZIO_ATTIVO,
+  SPESA_SENZA_SUPPLEMENTO_CENTS,
+  SUPPLEMENTO_CONSEGNA_CENTS,
 } from './constants';
 import { EXPRESS_ETA_LABEL } from './delivery';
 import { formatPrice } from './format';
@@ -361,9 +363,7 @@ export function promessaSpedizione(
     costoConsegna,
     titolo: siPaga ? `${VOCE_CONSEGNA} ${formatPrice(costoConsegna)} per negozio` : 'Consegna a casa gratuita',
     breve: siPaga ? `Consegna ${formatPrice(costoConsegna)}` : 'Consegna gratuita',
-    dettaglioConsegna: siPaga
-      ? `${VOCE_CONSEGNA} ${formatPrice(costoConsegna)} per negozio, su ogni ordine a domicilio`
-      : null,
+    dettaglioConsegna: siPaga ? `${VOCE_CONSEGNA} ${fraseTariffaConsegna(consegnaCents)}` : null,
   };
 }
 
@@ -376,8 +376,31 @@ export function promessaSpedizione(
  * capiva perché pagava ancora. `null` quando non c'è niente da spiegare: consegna già a zero, o un
  * codice che su quella spesa non copre neanche un centesimo.
  */
-export function rigaDelCodiceSpedizione(consegnaDaPagareCents: number, negozi: number): string | null {
-  const copertaCents = negozi * PLATFORM_DELIVERY_FEE_CENTS - consegnaDaPagareCents;
+/**
+ * 29/10/2026 — LA TARIFFA DELLA CONSEGNA IN UNA FRASE SOLA (registro dei fatti, consegna.promessa).
+ * 3 € per negozio con la fascia, 4 € sotto i 10 € di spesa o con la consegna veloce, mai di più.
+ * I numeri nascono dalle costanti e il conto lo fa `tariffaConsegnaCents`: la frase non li riscrive.
+ * La usano la cassa, la pagina Spedizioni e il pannello consegne dell'amministratore.
+ */
+export function fraseTariffaConsegna(baseCents: number = PLATFORM_DELIVERY_FEE_CENTS): string {
+  const base = formatPrice(Math.max(0, baseCents) / 100);
+  const piena = formatPrice((Math.max(0, baseCents) + SUPPLEMENTO_CONSEGNA_CENTS) / 100);
+  const soglia = formatPrice(SPESA_SENZA_SUPPLEMENTO_CENTS / 100);
+  return `${base} per negozio con la fascia oraria che scegli; ${piena} sotto i ${soglia} di spesa o con la consegna veloce, mai di più`;
+}
+
+export function rigaDelCodiceSpedizione(
+  consegnaDaPagareCents: number,
+  negozi: number,
+  /**
+   * 29/10/2026 — Quanto si pagherebbe SENZA codice (spedizione più tariffe, `tariffaConsegnaCents`).
+   * Dal 29/10 la tariffa non è più 3 € fissi: sotto i 10 € o con la veloce è 4 €, e il codice
+   * l'euro in più non lo copre. Senza questo numero la riga contava come «coperto» un euro che il
+   * cliente paga.
+   */
+  tariffaSenzaCodiceCents: number = negozi * PLATFORM_DELIVERY_FEE_CENTS,
+): string | null {
+  const copertaCents = tariffaSenzaCodiceCents - consegnaDaPagareCents;
   if (consegnaDaPagareCents <= 0 || copertaCents <= 0) return null;
   const sogliaCents = spesaPerConsegnaGratisColCodiceCents();
   return `Il codice copre ${formatPrice(copertaCents / 100)} della consegna; da ${formatPrice(sogliaCents / 100)} di spesa per negozio la copre tutta.`;

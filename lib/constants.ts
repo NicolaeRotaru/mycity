@@ -123,6 +123,21 @@ export const COMPENSO_RIDER_CENTS = 300;
 export const PLATFORM_DELIVERY_FEE_CENTS = 300;
 
 /**
+ * 29/10/2026 16:13 — LA CONSEGNA COSTA 3 € O 4 €, MAI DI PIÙ (registro dei fatti, consegna.promessa).
+ *
+ * 3 € per negozio con la fascia oraria che sceglie il cliente. Un euro in più sotto i 10 € di merce
+ * di quel negozio (dopo gli sconti), e un euro in più per la consegna veloce, la fascia «Adesso».
+ * I due euro non si sommano: il massimo è 4 € per negozio. Il fattorino resta a 3 €
+ * (`COMPENSO_RIDER_CENTS`): l'euro in più resta a MyCity, dentro `delivery_fee_cents`.
+ * Il conto lo fa una funzione sola: `tariffaConsegnaCents` in lib/ordini/prezzi.ts.
+ */
+export const SUPPLEMENTO_CONSEGNA_CENTS = 100;
+/** Da quanta merce per negozio (dopo gli sconti) la consegna con la fascia torna a 3 €. */
+export const SPESA_SENZA_SUPPLEMENTO_CENTS = 1000;
+/** Il tetto della consegna per negozio: base più UN supplemento, mai due. */
+export const CONSEGNA_MASSIMA_CENTS = PLATFORM_DELIVERY_FEE_CENTS + SUPPLEMENTO_CONSEGNA_CENTS;
+
+/**
  * Commissione marketplace in basis point (1000 = 10.00%) trattenuta da MyCity
  * su ogni vendita. Sorgente unica e client-safe: la importano sia il calcolo
  * del payout Stripe (lib/stripe/client → computeApplicationFeeCents) sia
