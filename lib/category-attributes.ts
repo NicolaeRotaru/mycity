@@ -196,9 +196,50 @@ export function findLabelForKey(key: string): string {
 /**
  * Formatta un valore JSONB per la visualizzazione lato cliente.
  */
+/**
+ * 28/10/2026 — Le bozze nate dalla foto salvano le caselle sì/no come testo («true»/«false»).
+ * `Boolean("false")` è vero: il negozio vedeva spuntata la casella sbagliata e il cliente leggeva
+ * «Vegano false». Qui il sì/no si legge in un punto solo, per il testo come per il booleano.
+ */
+export function attributoSpuntato(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  if (typeof value === 'string') {
+    const parola = value.trim().toLowerCase();
+    return parola === '1' || PAROLE_DEL_SI.has(parola);
+  }
+  return false;
+}
+
+/**
+ * 29/10/2026 — UNA regola sola per il sì/no, letta da casella del negoziante, marchio di qualità
+ * («Bio», «Cruelty free»), griglia «Caratteristiche» e proposta dell'assistente. Prima erano
+ * quattro: la casella capiva solo «true», il marchio anche «sì»/«yes»/«1», e il cliente vedeva
+ * il marchio su una casella che il negozio trovava vuota. Tutto ciò che non è un sì è un no
+ * («false», «no», «0», false, vuoto): la riparazione di «Vegano false» resta valida.
+ */
+const PAROLE_DEL_SI: ReadonlySet<string> = new Set(['true', 'sì', 'si', 'yes', 'vero']);
+/**
+ * Le parole che la griglia scrive «No». Le cifre («1», «0») restano cifre nella griglia, perché
+ * lì non si sa se «1» è una casella o «1 anno di garanzia»: per questo l'assistente salva le
+ * caselle come booleano (`resolveAiPatch`, `pianoPatchPerIlModulo`).
+ */
+const PAROLE_DEL_NO: ReadonlySet<string> = new Set(['false', 'no', 'falso']);
+
+/**
+ * Chiavi salvate negli attributi che NON sono caratteristiche del prodotto: `alt_text` è la
+ * descrizione della foto per chi non vede, già usata come testo alternativo dell'immagine.
+ */
+export const CHIAVI_FUORI_DALLA_GRIGLIA: readonly string[] = Object.freeze(['alt_text']);
+
 export function formatAttributeValue(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'boolean') return value ? 'Sì' : 'No';
+  if (typeof value === 'string') {
+    const parola = value.trim().toLowerCase();
+    if (PAROLE_DEL_NO.has(parola)) return 'No';
+    if (PAROLE_DEL_SI.has(parola)) return 'Sì';
+  }
   if (typeof value === 'number') return String(value);
   if (typeof value === 'string') {
     // Riconosce date ISO YYYY-MM-DD e le mostra in formato italiano

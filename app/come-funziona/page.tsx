@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Banknote, ShieldCheck, RotateCcw, ArrowRight, Store } from 'lucide-react';
-import { frasePagamento } from '@/lib/promesse-pubbliche';
+import { fraseComeSiPaga } from '@/lib/promesse-pubbliche';
 import HowItWorks from '@/components/home/HowItWorks';
 
 export const metadata = {
@@ -23,7 +23,8 @@ const REASSURANCE = [
     Icon: Banknote,
     title: 'Puoi pagare alla consegna',
     // «Carta o contanti, decidi tu» faceva credere che anche la carta si potesse dare al rider.
-    desc: `${frasePagamento()}: al rider quando arriva, oppure su Stripe prima della conferma.`,
+    // Il «come» (rider / Stripe) nasce dagli stessi metodi della cassa: senza chiave Stripe, niente Stripe.
+    desc: fraseComeSiPaga(),
   },
   {
     Icon: RotateCcw,

@@ -19,7 +19,7 @@ import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import { FRASE_RESO, frasePagamento, promessaSpedizione } from '@/lib/promesse-pubbliche';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { RatingStars } from '@/components/ui/RatingStars';
-import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
+import { CHIAVI_FUORI_DALLA_GRIGLIA, findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
 import { UNIT_SUFFIX, CONDITION_LABELS, type ProductUnit, type ProductCondition } from '@/lib/products/schema';
 import { deriveOptionGroups, findVariant } from '@/lib/products/variants';
 import { isExpressEligible } from '@/lib/products/express';
@@ -910,7 +910,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             typeof product.attributes === 'object' &&
             (() => {
               const entries = Object.entries(product.attributes as Record<string, unknown>).filter(
-                ([key]) => !ALLERGEN_ACCORDION_KEYS.includes(key),
+                ([key]) => !ALLERGEN_ACCORDION_KEYS.includes(key) && !CHIAVI_FUORI_DALLA_GRIGLIA.includes(key),
               );
               if (entries.length === 0) return null;
               return (

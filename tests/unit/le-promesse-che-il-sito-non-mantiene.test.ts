@@ -137,8 +137,8 @@ describe('le pagine pubbliche non riscrivono piu’ le promesse a mano', () => {
 });
 
 describe('il pagamento: la frase nasce dai metodi che il checkout offre davvero', () => {
-  it('col carrello di oggi: contanti alla consegna, oppure carta ADESSO', () => {
-    const f = frasePagamento();
+  it('con la carta accesa: contanti alla consegna, oppure carta ADESSO', () => {
+    const f = frasePagamento(['carta-adesso', 'contanti-alla-consegna']);
     expect(f, "«carta alla consegna» non esiste: al checkout la carta si paga subito, su Stripe").not.toMatch(
       /carta o contanti alla consegna/i,
     );
@@ -162,7 +162,10 @@ describe('il pagamento: la frase nasce dai metodi che il checkout offre davvero'
     const src = readFileSync(join(process.cwd(), 'components/checkout/PaymentMethodSelector.tsx'), 'utf8');
     expect(src, 'la carta anticipata su Stripe').toMatch(/Carta di credito \/ debito/);
     expect(src, 'i contanti al rider').toMatch(/Contanti alla consegna/);
-    expect(METODI_AL_CHECKOUT).toHaveLength(2);
+    // 28/10/2026 — L'elenco non è più fisso: segue la chiave pubblica di Stripe, come la cassa.
+    // Al lancio (chiave assente) c'è solo il contante; con la chiave i metodi tornano due.
+    expect(METODI_AL_CHECKOUT.length).toBe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ? 2 : 1);
+    expect(METODI_AL_CHECKOUT).toContain('contanti-alla-consegna');
   });
 });
 

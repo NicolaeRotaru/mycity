@@ -1,5 +1,4 @@
 import { frasePagamento } from '@/lib/promesse-pubbliche';
-import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { headers } from 'next/headers';
 import { HydrationBoundary } from '@tanstack/react-query';
 import { unstable_cache } from 'next/cache';
@@ -31,7 +30,7 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
       <>
         Alimentari, abbigliamento, casa, elettronica: ordini dai commercianti
         della tua via in pochi tap e <strong className="text-ink-900">puoi pagare alla consegna</strong>.
-        A casa in 30-60 minuti.
+        Consegna in giornata.
       </>
     ),
     ctaPrimary: 'Inizia a esplorare',
@@ -49,7 +48,7 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
         {/* La carta alla consegna non esiste: al checkout la carta si paga subito, su Stripe.
             La frase nasce dall'elenco dei metodi, e i minuti da lib/delivery. */}
         Scegli dai commercianti della tua città e
-        <strong className="text-ink-900"> {frasePagamento().toLowerCase()}</strong>. A casa in {EXPRESS_ETA_LABEL}.
+        <strong className="text-ink-900"> {frasePagamento().toLowerCase()}</strong>. Consegna in giornata.
       </>
     ),
     ctaPrimary: 'Scopri cosa c’è oggi',

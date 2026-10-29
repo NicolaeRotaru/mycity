@@ -17,7 +17,7 @@ import { leggiOrdiniCod } from '@/lib/ordini/risposta-ordini-cod';
 import { formatPrice, pluralize } from '@/lib/format';
 import { PICKUP_DISCOUNT_PERCENT, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingForEuro } from '@/lib/shipping';
-import { promessaSpedizione, rigaDelCodiceSpedizione } from '@/lib/promesse-pubbliche';
+import { cartaAlCheckoutDisponibile, promessaSpedizione, rigaDelCodiceSpedizione } from '@/lib/promesse-pubbliche';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
 import { fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
@@ -540,8 +540,8 @@ export default function CheckoutPage() {
   // Pagamento: 'cod' = contanti alla consegna (sempre disponibile);
   // 'card' = Stripe Checkout, disponibile solo se la sitewide publishable
   // key e' configurata in produzione (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).
-  const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
-  const stripeAvailable = !!STRIPE_PUBLISHABLE_KEY;
+  // La condizione e' una sola, condivisa con la frase della scheda prodotto e del carrello.
+  const stripeAvailable = cartaAlCheckoutDisponibile();
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card'>(stripeAvailable ? 'card' : 'cod');
 
   /*

@@ -20,7 +20,7 @@ import BarcodeScanner from '@/components/seller/BarcodeScanner';
 import AIDescriptionButton from '@/components/AIDescriptionButton';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
-import { getAttributesForCategory, AI_ATTR_TO_FIELD } from '@/lib/category-attributes';
+import { getAttributesForCategory, AI_ATTR_TO_FIELD, attributoSpuntato } from '@/lib/category-attributes';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
@@ -40,6 +40,7 @@ import { useFormAutosave } from '@/lib/hooks/useFormAutosave';
 import {
   createProductSchema,
   buildProductPayload,
+  scortaCambiata,
   normalizeCondition,
   UNIT_OPTIONS,
   UNIT_SUFFIX,
@@ -94,6 +95,13 @@ interface ProductFormProps {
        * la macchina?».
        */
       campiDallAi: string[];
+      /**
+       * La scorta di ogni variante gia' salvata, com'era all'apertura del
+       * modulo (id → pezzi). Chi salva le varianti la usa per non riscrivere
+       * le scorte che il negoziante non ha toccato: nel frattempo le vendite
+       * le hanno abbassate (vedi `scortaCambiata`).
+       */
+      scorteViste: Record<string, number>;
     },
   ) => void;
   onDelete?: () => void;
@@ -207,6 +215,17 @@ export default function ProductForm({
   const [daControllare, setDaControllare] = useState<VoceDaControllare[]>([]);
   const idDaControllare = useId();
   const hasVariants = variants.length > 0;
+  /**
+   * La scorta com'era quando il modulo si e' aperto. Un `ref`: il modulo non
+   * si ricarica mentre resta aperto, e questo e' il numero che il negoziante
+   * ha davanti — non quello del database, che le vendite abbassano.
+   */
+  const scortaAllApertura = useRef({
+    prodotto: initialValues?.stock,
+    varianti: Object.fromEntries(
+      (initialValues?.variants ?? []).filter((v) => v.id).map((v) => [v.id as string, v.stock]),
+    ) as Record<string, number>,
+  });
 
   // ---- Categoria a due livelli (il DB ha già parent_id) ---------------------
   const currentCategoryId = watch('category_id') || '';
@@ -384,7 +403,7 @@ export default function ProductForm({
             if (!opt) continue;
             setAttribute(targetKey, opt);
           } else if (field.type === 'checkbox') {
-            setAttribute(targetKey, /^(true|1|s[iì]|yes|vero)$/i.test(value));
+            setAttribute(targetKey, attributoSpuntato(value));
           } else {
             setAttribute(targetKey, value);
           }
@@ -675,6 +694,19 @@ export default function ProductForm({
       });
       if (hasVariants) payload.stock = totalVariantStock(variants);
       /**
+       * 28/10/2026 — CHI CORREGGE LA DESCRIZIONE NON RIMETTE IN MAGAZZINO LA
+       * MERCE VENDUTA. La scorta partiva sempre, col numero visto all'apertura:
+       * cinque focacce lette alle 9, due vendute alle 9:05, una parola corretta
+       * alle 9:10 — e in vetrina tornavano cinque. Se il negoziante non l'ha
+       * cambiata, la scorta non parte e in banca dati resta quella vera. Con le
+       * varianti la somma la riallinea il trigger quando cambia una variante.
+       *
+       * LA PROVA: tests/unit/chi-corregge-la-descrizione-non-rimette-in-magazzino-la-merce-venduta.test.ts
+       */
+      if (mode === 'edit' && !scortaCambiata(payload.stock, scortaAllApertura.current.prodotto)) {
+        delete (payload as Partial<ProductPayload>).stock;
+      }
+      /**
        * 6/9/2026 — UN SALVATAGGIO SCRIVE SOLO QUELLO CHE L'UTENTE HA CHIESTO.
        *
        * Il modulo avvisava del rischio e lasciava il pulsante acceso: chi
@@ -694,7 +726,12 @@ export default function ProductForm({
       if (consegnaDelNegozioNonLetta && !consegnaSceltaDalNegoziante) {
         delete (payload as Partial<ProductPayload>).express_enabled;
       }
-      onSubmit(payload, { intent, variants, campiDallAi: [...campiDallAi.current] });
+      onSubmit(payload, {
+        intent,
+        variants,
+        campiDallAi: [...campiDallAi.current],
+        scorteViste: { ...scortaAllApertura.current.varianti },
+      });
     });
 
   // ---- Anteprima prezzo -----------------------------------------------------

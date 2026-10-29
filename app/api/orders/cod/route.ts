@@ -24,6 +24,7 @@ import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { decisioneSuChiaveOccupata } from '@/lib/ordini/tentativo';
+import { idOrdiniDelTentativo } from '@/lib/ordini/chiave-dopo-l-errore';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { ordineInContantiPuoNascere } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
@@ -62,8 +63,15 @@ const DeliverySchema = z.object({
   lng: z.number().min(-180).max(180).nullable().optional(),
 }).refine((d) => !(d.lat === 0 && d.lng === 0), { message: 'Coordinate di consegna non valide' });
 
+/**
+ * Quanti negozi al massimo in un carrello. Serve anche a rileggere gli ordini
+ * di una chiave: gli identificativi si rifanno per tutte le posizioni possibili,
+ * cosi' un carrello cambiato fra un tocco e l'altro non nasconde gli ordini nati.
+ */
+const NEGOZI_PER_CARRELLO = 10;
+
 const Body = z.object({
-  groups: z.array(GroupSchema).min(1).max(10),
+  groups: z.array(GroupSchema).min(1).max(NEGOZI_PER_CARRELLO),
   delivery: DeliverySchema,
   couponCode: z.string().max(40).optional().nullable(),
   pickupInStore: z.boolean().default(false),
@@ -102,11 +110,94 @@ const Body = z.object({
  * `error.details`, ma spostarlo tocca il file che lo legge: quando si fa, si
  * fanno le due cose insieme.
  */
+/**
+ * Quante volte si prova a scrivere la riga che dice «questi ordini sono nati da
+ * questa chiave». Un intoppo di rete passa al secondo colpo; se non passa
+ * nemmeno al terzo non e' un intoppo, e scatta l'allarme.
+ */
+const SCRITTURE_DELLA_PROVA = 3;
+
 function ordineGiaInCorso(): NextResponse {
   return NextResponse.json(
     {
       ok: false,
       error: { code: 'CONFLICT', message: 'Ordine già in corso, attendi qualche secondo.' },
+      inCorso: true,
+    },
+    { status: 409 },
+  );
+}
+
+/**
+ * 28/10/2026 — «NON VEDO SE IL TUO ORDINE C'E'» SI DICE TENENDO LA CHIAVE.
+ *
+ * Sulla chiave abbandonata la rotta guarda gli ordini veri prima di ricrearli.
+ * Se quella lettura cade, ci si ferma con un 503: giusto. Ma un 503 senza
+ * `inCorso`, per il browser, vuol dire «butta la chiave» (`laChiaveVaButtata`):
+ * il carrello resta pieno, il tocco dopo parte con una chiave nuova che non
+ * conosce gli ordini gia' nati, e nasce il SECONDO ordine in contanti.
+ *
+ * Qui gli ordini potrebbero esserci, e la chiave e' l'unico filo che li lega a
+ * quel carrello: resta. Al tocco dopo, con la stessa chiave, la rotta rilegge:
+ * se li trova li restituisce, se non ci sono li crea una volta sola.
+ *
+ * `inCorso` e' il nome che il browser sa leggere oggi per «tieni la chiave».
+ * Un segnale col nome giusto («la chiave puo' avere ordini») chiede di toccare
+ * anche lib/ordini/chiave-dopo-l-errore.ts: va fatto insieme, non da una parte.
+ */
+function nonVedoSeLOrdineCe(): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: 'SERVICE_UNAVAILABLE',
+        message: 'Non riusciamo a controllare il tuo ordine in questo momento. Riprova fra poco.',
+      },
+      inCorso: true,
+    },
+    { status: 503 },
+  );
+}
+
+/**
+ * 29/10/2026 — LA CHIAVE CHE NON SI RIESCE A REGISTRARE NON SI BUTTA.
+ *
+ * Se l'inserimento della chiave cade per un guasto (non per un duplicato), la
+ * rotta non sa se quella chiave aveva gia' ordini: e' proprio il caso della
+ * risposta persa sulla rete, col cliente che ritocca «Ordina» con la stessa
+ * chiave. Un 503 senza `inCorso` faceva buttare la chiave al browser, col
+ * carrello pieno: al tocco dopo una chiave nuova, e il SECONDO ordine.
+ * Qui la chiave resta: al tocco dopo la rotta rilegge e decide.
+ */
+function nonRiescoARegistrare(): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message: "Impossibile registrare l'ordine, riprova fra poco." },
+      inCorso: true,
+    },
+    { status: 503 },
+  );
+}
+
+/**
+ * 29/10/2026 — UNA PARTE DELL'ORDINE C'E', L'ALTRA NO: CI SI FERMA.
+ *
+ * Sulla chiave abbandonata si trovano gli ordini di quella chiave, ma non
+ * tutti i negozi del carrello. Ricreare farebbe il doppione di quelli nati;
+ * dire «fatto» perderebbe in silenzio quelli mancanti. Scelta di Nicola del
+ * 26/10: coi soldi il sito si ferma, avvisa con la cifra, e la correzione la
+ * fa lui a mano. La chiave resta (`inCorso`), cosi' nessun tocco successivo
+ * crea niente.
+ */
+function ordineArrivatoInParte(): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: 'CONFLICT',
+        message: 'Una parte del tuo ordine è già arrivata ai negozi. Non riprovare: controlla «I miei ordini», ti aiutiamo noi a sistemare il resto.',
+      },
       inCorso: true,
     },
     { status: 409 },
@@ -201,7 +292,7 @@ export const POST = withAuthRateLimit(
           logger.error('[cod] rivendicazione del tentativo fallita', {
             chiave: chiaveTentativo, message: errRivendica.message,
           });
-          return ApiErrors.unavailable("Impossibile registrare l'ordine, riprova.");
+          return nonRiescoARegistrare();
         }
 
         // Chiave gia' presa: o e' lo stesso invio ripetuto, o e' il gemello
@@ -238,6 +329,98 @@ export const POST = withAuthRateLimit(
         const nataDa = gia?.created_at ? Date.now() - new Date(gia.created_at as string).getTime() : 0;
         const decisione = decisioneSuChiaveOccupata({ ordiniGia: null, natoDaMs: nataDa });
         if (decisione === 'chiave-abbandonata') {
+          /**
+           * 28/10/2026 — PRIMA DI RICREARE, SI GUARDA SE GLI ORDINI CI SONO GIA'.
+           *
+           * «Senza ordini» qui voleva dire «la riga della chiave non li elenca».
+           * Ma quella riga si riempie in fondo alla rotta, DOPO che gli ordini
+           * sono nati: se quella scrittura non passa (o la rotta cade fra le due
+           * cose), la riga resta vuota e gli ordini esistono lo stesso. Il cliente
+           * che dopo un minuto ritocca «Ordina» — la risposta persa sulla rete del
+           * telefono — si vedeva cancellare la chiave e creare un SECONDO ordine:
+           * merce scalata due volte, credito tolto due volte.
+           *
+           * Gli ordini veri sono la prova che conta. Se da quando la chiave e'
+           * nata questa persona ha ordini in contanti, non si ricrea niente: ci
+           * si ferma, lo si dice con la cifra, e la persona trova l'ordine fra i
+           * suoi. Se la lettura stessa non riesce, ci si ferma lo stesso.
+           *
+           * 29/10/2026 — Ma «ordini di questa persona dopo l'ora della chiave»
+           * prendeva anche quelli di un'altra scheda o di un altro telefono, e
+           * quelli gia' annullati: la cassa diceva «fatto», svuotava il carrello
+           * e l'ordine di adesso non nasceva. Si cercano solo gli ordini di
+           * QUESTA chiave: il loro identificativo nasce dalla chiave
+           * (`idOrdiniDelTentativo`). Nessuno → la chiave si libera e l'ordine
+           * nasce, come prima del 28/10. Tutti i negozi del carrello → e' lo
+           * stesso invio, si restituiscono. Una parte → ci si ferma.
+           */
+          const idDellaChiave = await idOrdiniDelTentativo(chiaveTentativo, user.id, NEGOZI_PER_CARRELLO);
+          const { data: ordiniDopo, error: errOrdiniDopo } = await admin
+            .from('orders')
+            .select('id, seller_id, total_price')
+            .eq('user_id', user.id)
+            .in('id', idDellaChiave);
+          if (errOrdiniDopo) {
+            logger.error('[cod] chiave abbandonata: non riesco a vedere se gli ordini sono gia nati', {
+              chiave: chiaveTentativo, message: errOrdiniDopo.message,
+            });
+            return nonVedoSeLOrdineCe();
+          }
+          if (ordiniDopo && ordiniDopo.length > 0) {
+            /**
+             * 28/10/2026 — SI RISPONDE «FATTO», NON «ERRORE».
+             *
+             * Qui c'era un 409 «gia' arrivato». Ma il browser, su ogni errore
+             * che non dice `inCorso`, butta la chiave e lascia il carrello
+             * pieno (app/checkout/page.tsx, `laChiaveVaButtata`): il tocco dopo
+             * partiva con una chiave nuova e creava il SECONDO ordine — proprio
+             * quello che il messaggio prometteva di evitare. Gli ordini esistono:
+             * si restituiscono come un invio ripetuto, il browser svuota il
+             * carrello e apre l'ordine. E la riga della chiave si riscrive con
+             * loro, cosi' il prossimo invio li ritrova al primo colpo.
+             */
+            const ordiniTrovati = ordiniDopo.map((o) => ({
+              id: o.id as string,
+              sellerId: o.seller_id as string,
+              totalCents: Math.round(Number(o.total_price ?? 0) * 100),
+            }));
+            const negoziDelCarrello = new Set(body.groups.map((g) => g.sellerId));
+            const negoziTrovati = new Set(ordiniTrovati.map((o) => o.sellerId));
+            const tuttiINegozi =
+              ordiniTrovati.length === body.groups.length &&
+              negoziTrovati.size === negoziDelCarrello.size &&
+              [...negoziDelCarrello].every((s) => negoziTrovati.has(s));
+            if (!tuttiINegozi) {
+              logger.error('[cod] chiave abbandonata con l\'ordine nato solo in parte: fermo, serve una correzione a mano', {
+                chiave: chiaveTentativo,
+                userId: user.id,
+                ordini: ordiniTrovati.map((o) => o.id),
+                negoziDelCarrello: [...negoziDelCarrello],
+                totaleCents: ordiniTrovati.reduce((s, o) => s + o.totalCents, 0),
+              });
+              return ordineArrivatoInParte();
+            }
+            logger.error('[cod] chiave abbandonata ma con ordini gia nati: NON ricreo, li restituisco', {
+              chiave: chiaveTentativo,
+              userId: user.id,
+              ordini: ordiniTrovati.map((o) => o.id),
+              totaleCents: ordiniTrovati.reduce((s, o) => s + o.totalCents, 0),
+            });
+            const { error: errRiscrivi } = await admin
+              .from('cod_checkout_attempts')
+              .update({ order_ids: ordiniTrovati })
+              .eq('chiave', chiaveTentativo)
+              .eq('user_id', user.id);
+            if (errRiscrivi) {
+              logger.warn('[cod] riga del tentativo non riscritta: il prossimo invio rilegge gli ordini', {
+                chiave: chiaveTentativo, message: errRiscrivi.message,
+              });
+            }
+            return NextResponse.json(
+              { orderIds: ordiniTrovati.map((o) => o.id), ordini: ordiniTrovati, ripetuto: true },
+              { status: 200 },
+            );
+          }
           logger.warn('[cod] tentativo abbandonato: libero la chiave e riprovo', {
             chiave: chiaveTentativo, secondi: Math.round(nataDa / 1000),
           });
@@ -401,9 +584,68 @@ export const POST = withAuthRateLimit(
       });
     }
 
-    const sellers = venditoriLetti.data;
+    /**
+     * 28/10/2026 — UNA LETTURA DEI NEGOZI CORTA FERMA L'ORDINE, NON LO LASCIA PASSARE.
+     *
+     * Qui si prendeva `venditoriLetti.data` e basta: l'errore si buttava, e
+     * nessuno contava quanti negozi erano tornati. Con la lista vuota o
+     * parziale «negozio chiuso» e «fuori zona» non avevano nessuno da
+     * controllare, e il prezzo della consegna perdeva le coordinate del
+     * negozio. La migrazione 110 lo aveva gia' fatto succedere una volta (zero
+     * righe, nessun errore): allora si e' cambiata tabella, ma la porta e'
+     * rimasta aperta per il prossimo motivo — un negozio uscito dalla vetrina
+     * fra il carrello e la cassa, un permesso cambiato, la rete.
+     *
+     * Ogni negozio del carrello deve tornare. Se non torna, l'ordine si ferma
+     * e resta scritto forte (scelta di Nicola del 26/10: coi soldi il sito si
+     * ferma e avvisa, non indovina).
+     */
+    if (venditoriLetti.error || !venditoriLetti.data) {
+      logger.error('[cod] lettura dei negozi fallita: ordine fermato', {
+        userId: user.id,
+        negozi: sellerIds.length,
+        message: venditoriLetti.error?.message ?? 'nessun dato',
+      });
+      return esciERilascia(ApiErrors.unavailable('Non riusciamo a controllare il negozio in questo momento. Riprova fra poco.'));
+    }
+    const sellers = [...venditoriLetti.data];
+    const negoziLetti = new Set(sellers.map((s) => s.id));
+    const negoziMancanti = sellerIds.filter((id) => !negoziLetti.has(id));
+    if (negoziMancanti.length > 0) {
+      // La vetrina non restituisce un negozio approvato senza insegna: e' un
+      // caso vero, e non deve perdere le vendite. I dati per i controlli si
+      // prendono allora dal profilo, col client di servizio (le regole per riga
+      // non lo svuotano). Chi non e' un negozio approvato non passa.
+      const { data: profiliMancanti, error: errProfili } = await admin
+        .from('profiles')
+        .select('id, store_name, store_lat, store_lng, store_hours, role, is_approved')
+        .in('id', negoziMancanti);
+      const recuperati = (profiliMancanti ?? []).filter((p) => p.role === 'seller' && p.is_approved === true);
+      if (errProfili || recuperati.length !== negoziMancanti.length) {
+        logger.error('[cod] negozi del carrello non trovati: ordine fermato', {
+          userId: user.id,
+          negoziMancanti,
+          trovatiNelProfilo: recuperati.length,
+          message: errProfili?.message,
+        });
+        return esciERilascia(
+          errProfili
+            ? ApiErrors.unavailable('Non riusciamo a controllare il negozio in questo momento. Riprova fra poco.')
+            : ApiErrors.conflict('Un negozio del carrello non accetta ordini in questo momento. Toglilo dal carrello e riprova.'),
+        );
+      }
+      for (const p of recuperati) {
+        sellers.push({
+          id: p.id,
+          store_name: p.store_name,
+          store_lat: p.store_lat,
+          store_lng: p.store_lng,
+          store_hours: p.store_hours,
+        });
+      }
+    }
     const sellerCoordMap = new Map<string, { lat: number | null; lng: number | null }>();
-    for (const s of sellers ?? []) {
+    for (const s of sellers) {
       sellerCoordMap.set(s.id, { lat: s.store_lat ?? null, lng: s.store_lng ?? null });
     }
 
@@ -596,7 +838,18 @@ export const POST = withAuthRateLimit(
     // parola «multi» al posto del negozio.
     const ordiniCreati: Array<{ id: string; sellerId: string; totalCents: number }> = [];
     const reservedStockPerGroup: Array<Array<{ product_id: string; variant_id: string | null; qty: number }>> = [];
-    const walletAppliedPerGroup: number[] = [];
+    /**
+     * 29/10/2026 — Il credito tolto a ogni negozio, con il riferimento della
+     * SPESA che lo ha tolto. Lo storno usa quel riferimento, non l'id
+     * dell'ordine: l'id ora nasce dalla chiave del tentativo
+     * (`idOrdiniDelTentativo`), e due tentativi con la stessa chiave fanno
+     * ordini con lo stesso id. Il diario del credito (migrazione 143) tiene
+     * una riga sola per (motivo, riferimento): col riferimento dell'ordine
+     * il secondo storno veniva scartato come doppione, e il credito tolto
+     * dal secondo tentativo fallito non tornava piu'. La spesa invece e'
+     * una per tentativo: il suo storno e' unico, e resta uno solo.
+     */
+    const walletAppliedPerGroup: Array<{ cents: number; ref: string }> = [];
     // #159 — Gli avvisi da mandare a fine giro, non uno per volta dentro il
     // ciclo: se un negozio successivo fallisce non deve restare in giro la
     // posta di un ordine che poi viene cancellato.
@@ -608,12 +861,13 @@ export const POST = withAuthRateLimit(
         await admin.from('order_items').delete().eq('order_id', oid);
         await admin.from('orders').delete().eq('id', oid);
         await admin.rpc('restore_stock', { p_items: reservedStockPerGroup[j] });
-        if (walletAppliedPerGroup[j] > 0) {
+        const speso = walletAppliedPerGroup[j];
+        if (speso && speso.cents > 0) {
           await admin.rpc('wallet_credit', {
             p_user: user.id,
-            p_cents: walletAppliedPerGroup[j],
+            p_cents: speso.cents,
             p_reason: 'order_cod_refund',
-            p_ref: oid,
+            p_ref: speso.ref,
           });
         }
       }
@@ -631,6 +885,13 @@ export const POST = withAuthRateLimit(
       reservedStockPerGroup.length = 0;
       walletAppliedPerGroup.length = 0;
     };
+
+    // 29/10/2026 — L'identificativo di ogni ordine nasce dalla chiave del
+    // tentativo: e' il legame che la chiave abbandonata rilegge (sopra), e la
+    // chiave primaria di `orders` rifiuta da sola un secondo ordine uguale.
+    const idDiQuestoInvio = chiaveTentativo
+      ? await idOrdiniDelTentativo(chiaveTentativo, user.id, body.groups.length)
+      : null;
 
     for (let i = 0; i < body.groups.length; i++) {
       const g = body.groups[i];
@@ -667,13 +928,16 @@ export const POST = withAuthRateLimit(
 
       // Credito MyCity (opt-in): addebito atomico fino a coprire il totale del
       // gruppo. Speso greedy gruppo-per-gruppo; se l'ordine fallisce, si storna.
+      // Il riferimento e' della spesa, uno per tentativo: lo storno lo riusa.
+      // Davanti l'id dell'ordine (se c'e' la chiave), per chi legge il diario.
       let walletAppliedCents = 0;
+      const walletRef = `${idDiQuestoInvio ? idDiQuestoInvio[i] : 'cod'}:${crypto.randomUUID()}`;
       if (body.useCredit && grossTotalCents > 0) {
         const { data: applied, error: wErr } = await admin.rpc('wallet_debit', {
           p_user: user.id,
           p_max_cents: grossTotalCents,
           p_reason: 'order_cod',
-          p_ref: null,
+          p_ref: walletRef,
         });
         if (wErr) {
           logger.warn('[cod] wallet_debit fallita', { sellerId: g.sellerId, message: wErr.message });
@@ -700,6 +964,7 @@ export const POST = withAuthRateLimit(
       // una colonna che non conosce, fa fallire l'istruzione intera, e senza
       // ripiego non nascerebbe nessun ordine fino alla firma sul database.
       const rigaOrdine = {
+        ...(idDiQuestoInvio ? { id: idDiQuestoInvio[i] } : {}),
         user_id: user.id,
         seller_id: g.sellerId,
         total_price: totalCents / 100,
@@ -769,7 +1034,7 @@ export const POST = withAuthRateLimit(
             p_user: user.id,
             p_cents: walletAppliedCents,
             p_reason: 'order_cod_refund',
-            p_ref: null,
+            p_ref: walletRef,
           });
         }
         logger.error(orderErr ?? new Error('cod-order-insert-null'), { context: 'cod-order-insert', sellerId: g.sellerId });
@@ -777,7 +1042,7 @@ export const POST = withAuthRateLimit(
       }
 
       reservedStockPerGroup.push(groupStockItems);
-      walletAppliedPerGroup.push(walletAppliedCents);
+      walletAppliedPerGroup.push({ cents: walletAppliedCents, ref: walletRef });
 
       const itemsRows = itemsPerGroupCents[i].map((it) => ({
         order_id: order.id,
@@ -797,7 +1062,7 @@ export const POST = withAuthRateLimit(
             p_user: user.id,
             p_cents: walletAppliedCents,
             p_reason: 'order_cod_refund',
-            p_ref: order.id,
+            p_ref: walletRef,
           });
         }
         reservedStockPerGroup.pop();
@@ -1037,12 +1302,32 @@ export const POST = withAuthRateLimit(
     if (chiaveTentativo && createdOrderIds.length > 0) {
       // La riga esiste gia' dall'inizio (rivendicata): qui si riempie con gli
       // ordini veri, cosi' un invio ripetuto li ritrova invece di ricrearli.
-      const { error: errChiave } = await admin
-        .from('cod_checkout_attempts')
-        .update({ order_ids: ordiniCreati })
-        .eq('chiave', chiaveTentativo)
-        .eq('user_id', user.id);
-      if (errChiave) logger.warn('[cod] tentativo non completato', { message: errChiave.message });
+      //
+      // 28/10/2026 — Non piu' «se ci riesco». Questa riga e' la prova su cui si
+      // regge il riconoscimento del secondo invio: si riprova, e se non passa
+      // scatta l'allarme con gli ordini e la cifra. La risposta resta «fatto»
+      // perche' gli ordini ESISTONO: dire «errore» farebbe ritoccare «Ordina».
+      // Il doppione lo ferma comunque il controllo sugli ordini veri, sopra,
+      // nel ramo della chiave abbandonata.
+      let errChiave: { message: string } | null = null;
+      for (let prova = 0; prova < SCRITTURE_DELLA_PROVA; prova++) {
+        const { error } = await admin
+          .from('cod_checkout_attempts')
+          .update({ order_ids: ordiniCreati })
+          .eq('chiave', chiaveTentativo)
+          .eq('user_id', user.id);
+        errChiave = error;
+        if (!error) break;
+      }
+      if (errChiave) {
+        logger.error('[cod] prova del tentativo NON scritta: ordini nati senza la riga che ferma il doppione', {
+          chiave: chiaveTentativo,
+          userId: user.id,
+          ordini: createdOrderIds,
+          totaleCents: ordiniCreati.reduce((s, o) => s + o.totalCents, 0),
+          message: errChiave.message,
+        });
+      }
     }
 
     // 22/8/2026 — al contratto: `{ ok: true, data: { … } }`, come ogni altra

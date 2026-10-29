@@ -3,6 +3,7 @@ import {
   getAttributesForCategory,
   findLabelForKey,
   AI_ATTR_TO_FIELD,
+  attributoSpuntato,
   type AttributeField,
 } from '@/lib/category-attributes';
 import {
@@ -536,7 +537,7 @@ export function propostaPerIlModulo(
   const campo = campi.find((f) => f.key === proposta.chiave);
   if (!campo) return { motivo: proposta.motivo };
   const valore =
-    campo.type === 'checkbox' ? /^(true|1|s[iì]|yes|vero)$/i.test(proposta.valore.trim()) : proposta.valore.trim();
+    campo.type === 'checkbox' ? attributoSpuntato(proposta.valore) : proposta.valore.trim();
   return { motivo: proposta.motivo, valore };
 }
 
@@ -556,7 +557,7 @@ export type ScritturaModulo =
   | { campo: 'category_id'; valore: string; etichetta: string }
   | { campo: 'tags'; valore: string[]; etichetta: string }
   /** `valore: ''` toglie l'attributo. */
-  | { campo: 'attributo'; chiave: string; valore: string; etichetta: string }
+  | { campo: 'attributo'; chiave: string; valore: string | boolean; etichetta: string }
   | { campo: 'status'; valore: string; etichetta: string };
 
 export type PianoPatchModulo = {
@@ -746,7 +747,9 @@ export function pianoPatchPerIlModulo(
       const field = fields.find((f) => f.key === targetKey);
       if (!field) continue;
       if (field.type === 'select' && !(field.options ?? []).includes(value)) continue;
-      scritture.push({ campo: 'attributo', chiave: targetKey, valore: value, etichetta: field.label });
+      // Una casella si salva come vero/falso: «sì» scritto dall'assistente non resta testo.
+      const valore = field.type === 'checkbox' ? attributoSpuntato(value) : value;
+      scritture.push({ campo: 'attributo', chiave: targetKey, valore, etichetta: field.label });
     }
   }
   if (Array.isArray(patch.attributes_remove)) {
@@ -1060,7 +1063,8 @@ export function resolveAiPatch(opts: {
         const field = fields.find((f) => f.key === targetKey);
         if (!field) continue;
         if (field.type === 'select' && !(field.options ?? []).includes(value)) continue;
-        merged[targetKey] = value;
+        // Come il modulo: una casella si salva come vero/falso, mai come il testo «sì».
+        merged[targetKey] = field.type === 'checkbox' ? attributoSpuntato(value) : value;
         changed.push(field.label);
       }
     }

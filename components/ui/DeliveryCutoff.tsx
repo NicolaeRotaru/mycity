@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Bike } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { deliveryWindow, splitDuration, DEFAULT_CUTOFF_HOUR, EXPRESS_ETA_LABEL, STANDARD_ETA_LABEL } from '@/lib/delivery';
+import { deliveryWindow, splitDuration, DEFAULT_CUTOFF_HOUR, STANDARD_ETA_LABEL } from '@/lib/delivery';
 import { promessaDiConsegna, rigaNegozioChiuso } from '@/lib/promessa-consegna';
 
 /**
@@ -55,6 +55,9 @@ export function useDeliveryCutoff(cutoffHour = DEFAULT_CUTOFF_HOUR) {
   return { hydrated: true as const, day: win.day, h, m, s };
 }
 
+/** La promessa onesta quando non si sa di quale negozio si parla: nessun «oggi», nessun minuto. */
+export const RIGA_CONSEGNA_SENZA_NEGOZIO = 'Consegna in giornata, negli orari di apertura del negozio';
+
 const pad = (n: number) => String(n).padStart(2, '0');
 
 /**
@@ -70,6 +73,7 @@ export function DeliveryCutoff({
   available = true,
   storeHours,
   externalDeliveryLabel,
+  senzaNegozio = false,
   className,
 }: {
   cutoffHour?: number;
@@ -84,6 +88,13 @@ export function DeliveryCutoff({
   storeHours?: unknown;
   /** Prodotto importato da marketplace: mostra il tempo di consegna esterno. */
   externalDeliveryLabel?: string | null;
+  /**
+   * 28/10/2026 — La home mostrava il conto alla rovescia «arriva oggi in 30-60 min» senza orari
+   * di nessun negozio: `deliveryWindow` non conosce i giorni della settimana, quindi la domenica
+   * prometteva «oggi». Dove non c'è UN negozio di cui conoscere gli orari, non si promette «oggi»:
+   * si dice la regola vera (in giornata, negli orari del negozio). Nicola, 26/10: niente minuti.
+   */
+  senzaNegozio?: boolean;
   className?: string;
 }) {
   const { hydrated, day, h, m, s } = useDeliveryCutoff(cutoffHour);
@@ -104,14 +115,16 @@ export function DeliveryCutoff({
   });
 
   // Prodotto importato: il tempo di consegna è quello indicato dal marketplace.
-  const content = externalDeliveryLabel ? (
+  const content = senzaNegozio ? (
+    <span>{RIGA_CONSEGNA_SENZA_NEGOZIO}</span>
+  ) : externalDeliveryLabel ? (
     <span>Consegna in <strong>{externalDeliveryLabel}</strong></span>
   ) : promessa.tipo === 'chiuso' ? (
     <span><strong>{rigaNegozioChiuso(promessa.riapre)}</strong></span>
   ) : !available ? (
     <span>Consegna in <strong>{STANDARD_ETA_LABEL}</strong></span>
   ) : day === 'oggi' && hydrated ? (
-    <span>Ordina entro {timer} e <strong>arriva oggi</strong> in {EXPRESS_ETA_LABEL}</span>
+    <span>Ordina entro {timer} e <strong>arriva oggi</strong></span>
   ) : (
     <span>Arriva <strong>{day}</strong></span>
   );

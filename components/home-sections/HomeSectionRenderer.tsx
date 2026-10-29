@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { frasePagamento } from '@/lib/promesse-pubbliche';
+import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -73,7 +74,9 @@ const DEFAULT_TRUST_BULLETS = [
   // la carta si paga subito su Stripe. La frase nasce dall'elenco dei metodi.
   { Icon: Banknote,  color: 'olive',     t: 'Puoi pagare alla consegna', d: `${frasePagamento()}: l’account serve solo per confermare l’ordine.` },
   { Icon: HomeIcon,  color: 'primary',   t: '100% commercianti locali', d: 'Solo negozi verificati di Piacenza.' },
-  { Icon: Truck,     color: 'accent',    t: 'Consegna in 30-60 min',    d: 'Rider del territorio, percorsi brevi.' },
+  // 28/10/2026 — Era «Consegna in 30-60 min · Rider del territorio» senza un rider approvato:
+  // la promessa firmata da Nicola il 26/10 è «in giornata», fino a 5 km dal negozio.
+  { Icon: Truck,     color: 'accent',    t: 'Consegna in giornata',     d: `Fino a ${RAGGIO_CONSEGNA_KM} km dal negozio, negli orari di apertura.` },
   { Icon: RotateCcw, color: 'secondary', t: 'Reso entro 14 giorni',     d: 'Cambi idea? Ti rimborsiamo senza domande.' },
 ] as const;
 
@@ -164,7 +167,7 @@ function HomeBlock({
                   </div>
                 )}
 
-                <DeliveryCutoff variant="banner" className="max-w-sm" />
+                <DeliveryCutoff variant="banner" senzaNegozio className="max-w-sm" />
 
                 <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 text-sm text-ink-600">
                   <span className="inline-flex items-center gap-1.5">
@@ -173,7 +176,7 @@ function HomeBlock({
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <Check size={16} strokeWidth={2.4} className="text-olive-600" />
-                    In 30-60 minuti, dai negozi della tua zona
+                    In giornata, dai negozi della tua zona
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <Check size={16} strokeWidth={2.4} className="text-olive-600" />

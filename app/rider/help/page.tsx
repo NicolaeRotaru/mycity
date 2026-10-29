@@ -60,7 +60,7 @@ const TOPICS: { icon: LucideIcon; title: string; items: { q: string; a: string }
     title: 'Sicurezza e supporto',
     items: [
       { q: 'Sono assicurato?',
-        a: 'Sì, MyCity stipula una polizza RC obbligatoria per ogni rider attivo. Per gli infortuni gravi attiva subito il supporto al 0523 000000.' },
+        a: 'Sì, MyCity stipula una polizza RC obbligatoria per ogni rider attivo. In caso di infortunio chiama subito il 112, poi avvisa il supporto MyCity.' },
       { q: 'Cosa succede se un cliente è aggressivo?',
         a: 'Allontanati. Chiama il supporto. La consegna viene annullata e pagata come fatta. Eventuali abusi portano al ban del cliente.' },
       { q: 'Posso lavorare anche con altre piattaforme?',
@@ -129,16 +129,20 @@ export default function RiderHelpPage() {
 
         {/* Canali rapidi (link conservati) */}
         <div className="flex flex-col gap-2">
+          {/*
+            28/10/2026 — Qui c'era «Emergenza +39 0523 000000 · 24/7»: un numero finto, proprio quello
+            indicato per gli infortuni. Finché non c'è un numero presidiato davvero, l'emergenza è il 112.
+          */}
           <a
-            href="tel:+390523000000"
+            href="tel:112"
             className="flex items-center gap-3 rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3 hover:bg-cream-50"
           >
             <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary-50">
               <Phone size={17} className="text-secondary-600" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-ink-900">Emergenza</p>
-              <p className="text-xs text-ink-500">+39 0523 000000 · 24/7</p>
+              <p className="text-sm font-bold text-ink-900">Infortunio o pericolo</p>
+              <p className="text-xs text-ink-500">Chiama il 112 · numero unico di emergenza</p>
             </div>
           </a>
           {whatsapp && (

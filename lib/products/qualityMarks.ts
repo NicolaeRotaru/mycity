@@ -11,6 +11,7 @@
  * Sorgenti, in ordine: denominazioni nel nome/descrizione/tag · booleani strutturati
  * negli attributi · parole chiave curate nei tag. Dedup per chiave.
  */
+import { attributoSpuntato } from '@/lib/category-attributes';
 
 export type QualityMarkTone = 'origin' | 'natural' | 'diet';
 
@@ -63,16 +64,6 @@ const TAG_KEYWORD_MARKS: { match: string[]; mark: QualityMark }[] = [
 
 const TONE_ORDER: Record<QualityMarkTone, number> = { origin: 0, natural: 1, diet: 2 };
 
-/** Un attributo certificazione è "vero" se booleano true, 1, o stringa sì/true/yes. */
-function isTruthyAttr(v: unknown): boolean {
-  if (v === true) return true;
-  if (typeof v === 'number') return v === 1;
-  if (typeof v === 'string') {
-    const t = v.trim().toLowerCase();
-    return t === 'true' || t === 'sì' || t === 'si' || t === '1' || t === 'yes';
-  }
-  return false;
-}
 
 function toStringArray(tags: unknown): string[] {
   if (!Array.isArray(tags)) return [];
@@ -100,7 +91,8 @@ export function deriveQualityMarks(input: QualityMarkInput): QualityMark[] {
 
   // 2) Booleani certificazione negli attributi.
   for (const { keys, mark } of ATTRIBUTE_MARKS) {
-    if (keys.some((k) => isTruthyAttr(attributes[k]))) add(mark);
+    // Stessa regola della casella del negoziante: il marchio c'è solo se la casella è spuntata.
+    if (keys.some((k) => attributoSpuntato(attributes[k]))) add(mark);
   }
 
   // 3) Parole chiave nei tag liberi.
