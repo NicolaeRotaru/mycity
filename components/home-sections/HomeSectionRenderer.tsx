@@ -74,7 +74,7 @@ const DEFAULT_TRUST_BULLETS = [
   // la carta si paga subito su Stripe. La frase nasce dall'elenco dei metodi.
   { Icon: Banknote,  color: 'olive',     t: 'Puoi pagare alla consegna', d: `${frasePagamento()}: l’account serve solo per confermare l’ordine.` },
   { Icon: HomeIcon,  color: 'primary',   t: '100% commercianti locali', d: 'Solo negozi verificati di Piacenza.' },
-  // 28/10/2026 — Era «Consegna in 30-60 min · Rider del territorio» senza un rider approvato:
+  // 28/10/2026 — Era la promessa dei minuti della veloce («Rider del territorio») senza un rider approvato:
   // la promessa firmata da Nicola il 26/10 è «in giornata», fino a 5 km dal negozio.
   { Icon: Truck,     color: 'accent',    t: 'Consegna in giornata',     d: `Fino a ${RAGGIO_CONSEGNA_KM} km dal negozio, negli orari di apertura.` },
   { Icon: RotateCcw, color: 'secondary', t: 'Reso entro 14 giorni',     d: 'Cambi idea? Ti rimborsiamo senza domande.' },
@@ -554,8 +554,8 @@ export default function HomeSectionRenderer({
    * LE STESSE QUATTRO PROMESSE, DUE VOLTE NELLA STESSA PAGINA.
    *
    * La scheda «Perché scegliere MyCity» dentro «Attività live» e la banda fiducia leggono lo
-   * stesso elenco (DEFAULT_TRUST_BULLETS): pagamento alla consegna, negozi locali, 30-60
-   * minuti, reso in 14 giorni. Nell'ordine di partenza ci sono tutte e due, quindi chi scorre
+   * stesso elenco (DEFAULT_TRUST_BULLETS): pagamento alla consegna, negozi locali, la consegna
+   * rapida, reso in 14 giorni. Nell'ordine di partenza ci sono tutte e due, quindi chi scorre
    * la home le legge due volte a poche schermate di distanza — più una terza in forma corta
    * nell'hero e una quarta nel piè di pagina.
    *

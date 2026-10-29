@@ -1,5 +1,6 @@
 'use client';
 
+import { QUANDO_SI_PUO_LA_VELOCE, VELOCE_IN_MINUTI } from '@/lib/promessa-consegna';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Zap, Palette, CheckCircle2 } from 'lucide-react';
@@ -177,7 +178,7 @@ export default function SellerProfilePage() {
               <Zap size={18} strokeWidth={2.4} className="text-amber-500" aria-hidden /> Offro consegna Express
             </p>
             <p className="text-sm text-ink-500 mt-0.5">
-              Diventa il default per i tuoi prodotti (~30–60 min se disponibile). Puoi escludere singoli prodotti dalla loro scheda.
+              Per ora non cambia cosa vede il cliente: in cassa sceglie l&apos;ora della consegna, e la {VELOCE_IN_MINUTI} gliela proponiamo solo {QUANDO_SI_PUO_LA_VELOCE}.
             </p>
           </div>
           <input

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { FRASE_RESO, frasePagamento } from '@/lib/promesse-pubbliche';
-import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
+import { CONSEGNA_ALL_ORA_CHE_SCEGLI } from '@/lib/promessa-consegna';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -42,7 +42,7 @@ const BENEFITS: { Icon: LucideIcon; text: string }[] = [
   // Le due frasi che promettevano quello che il sito non fa — la carta alla consegna e il reso
   // gratuito su tutto — adesso nascono dalle promesse pubbliche, dove sono derivate dal codice.
   { Icon: Banknote, text: frasePagamento() },
-  { Icon: Truck, text: `Consegna in ${EXPRESS_ETA_LABEL} dai negozi della tua via` },
+  { Icon: Truck, text: `${CONSEGNA_ALL_ORA_CHE_SCEGLI}, dai negozi della tua città` },
   { Icon: BadgeCheck, text: '100% commercianti locali verificati' },
   { Icon: RotateCcw, text: FRASE_RESO },
 ];

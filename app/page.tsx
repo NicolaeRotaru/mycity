@@ -1,3 +1,4 @@
+import { CONSEGNA_ALL_ORA_CHE_SCEGLI } from '@/lib/promessa-consegna';
 import { frasePagamento } from '@/lib/promesse-pubbliche';
 import { headers } from 'next/headers';
 import { HydrationBoundary } from '@tanstack/react-query';
@@ -40,15 +41,16 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
     headline: (
       <>
         Ordini dai negozi di Piacenza.<br />
-        <span className="text-primary-700 italic">Paghi come vuoi.</span>
+        <span className="text-primary-700 italic">{frasePagamento()}.</span>
       </>
     ),
     subhead: (
       <>
-        {/* La carta alla consegna non esiste: al checkout la carta si paga subito, su Stripe.
-            La frase nasce dall'elenco dei metodi, e i minuti da lib/delivery. */}
-        Scegli dai commercianti della tua città e
-        <strong className="text-ink-900"> {frasePagamento().toLowerCase()}</strong>. Consegna in giornata.
+        {/* 29/10/2026 — Il titolo diceva «Paghi come vuoi.» sopra una cassa che offre solo i
+            contanti: adesso il modo di pagare è il titolo, e nasce dall'elenco dei metodi
+            (`frasePagamento`). Sotto, quando arriva: all'ora che scegli, niente minuti. */}
+        Scegli dai commercianti della tua città:
+        <strong className="text-ink-900"> {CONSEGNA_ALL_ORA_CHE_SCEGLI.toLowerCase()}</strong>.
       </>
     ),
     ctaPrimary: 'Scopri cosa c’è oggi',

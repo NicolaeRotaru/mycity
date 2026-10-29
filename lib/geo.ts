@@ -23,8 +23,11 @@ export function haversineKm(
 // Stima tempo consegna (minuti) dalla distanza: viaggio alla velocità media di
 // chi consegna (`VELOCITA_MEDIA_BICI_KMH`, al lancio una bici) + tempo fisso di
 // preparazione (15 min). Fino al 27/10/2026 qui c'era uno scooter a 25 km/h.
-// Non è la promessa al cliente prima dell'ordine — quella è «in giornata» —
-// ma il «fra quanti minuti arriva» quando il fattorino è già in strada.
+// Non è la promessa al cliente prima dell'ordine — quella è la fascia che sceglie in cassa, o la
+// veloce quando `veloceSiPuo` dice sì — ma il «fra quanti minuti arriva» col fattorino già in strada.
+// Al confine dei 5 km (`RAGGIO_CONSEGNA_KM`): 15 di preparazione + 20 in bici = 35 minuti; con
+// l'andata del fattorino al negozio (altri 20 al massimo) fanno 55, dentro i 60 della veloce. Col
+// vecchio confine di 10 km erano 95. Prova: tests/unit/la-consegna-si-promette-all-ora-che-scegli.test.tsx
 export function deliveryEtaMinutes(distanceKm: number, prepMinutes = 15): number {
   const travel = (distanceKm / VELOCITA_MEDIA_BICI_KMH) * 60;
   return Math.round(prepMinutes + travel);

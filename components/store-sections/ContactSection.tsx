@@ -1,5 +1,6 @@
 'use client';
 
+import { CONSEGNA_ALL_ORA_CHE_SCEGLI } from '@/lib/promessa-consegna';
 import { Phone, MapPin, ExternalLink, Truck, Banknote } from 'lucide-react';
 import { streetFromAddress } from '@/lib/store-hours';
 import type { SectionContext } from './SectionContext';
@@ -61,7 +62,7 @@ export default function ContactSection({ ctx }: { ctx: SectionContext }) {
             valide per tutti gli ordini su MyCity — consegna locale + pagamento alla consegna. */}
         <span className="inline-flex items-center gap-2.5 text-ink-700">
           <Truck size={16} className="shrink-0 text-olive-600" aria-hidden />
-          Consegna in 30-60 min
+          {CONSEGNA_ALL_ORA_CHE_SCEGLI}
         </span>
         <span className="inline-flex items-center gap-2.5 text-ink-700">
           <Banknote size={16} className="shrink-0 text-olive-600" aria-hidden />
