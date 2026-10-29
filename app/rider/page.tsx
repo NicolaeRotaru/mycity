@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Store, MapPin, Navigation, ArrowRight, Layers, Power, Package, ChefHat, Star, Banknote,
-  AlertTriangle, RotateCcw,
+  AlertTriangle, RotateCcw, Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDate, formatPrice, formatPriceFromCents } from '@/lib/format';
@@ -23,6 +23,7 @@ import { conNegozioSePossibile } from '@/lib/queries/negozio-dell-ordine';
 import { useProfile } from '@/components/hooks/useProfile';
 import { trackRiderOrderAccepted } from '@/lib/analytics/events';
 import { compensoConsegnaEuro } from '@/lib/shipping';
+import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 import CashConfirmDialog from '@/components/rider/CashConfirmDialog';
 import {
   CHIAVE_INCASSI_DA_DICHIARARE,
@@ -62,6 +63,8 @@ type AvailableOrder = {
   delivery_address: string | null;
   payment_method: string | null;
   user_id: string;
+  delivery_slot?: string | null;
+  created_at?: string | null;
   seller: {
     store_name: string | null;
     store_logo: string | null;
@@ -69,6 +72,17 @@ type AvailableOrder = {
   } | null;
   order_items: { id: string; quantity: number }[];
 };
+
+/** La fascia scelta dal cliente, nel giorno vero: senza, il fattorino non sa quando passare. */
+function RigaFascia({ ordine }: { ordine: { delivery_slot?: string | null; created_at?: string | null } }) {
+  const fascia = fasciaLeggibile(ordine);
+  if (!fascia) return null;
+  return (
+    <p className="mt-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink-800">
+      <Clock size={14} aria-hidden className="shrink-0 text-primary-600" /> Consegna: {fascia}
+    </p>
+  );
+}
 
 /** Riga negozio → cliente, replica del DeliveryRoute del design kit rider. */
 function DeliveryRoute({ store, cust, small }: { store: string; cust: string; small?: boolean }) {
@@ -131,6 +145,7 @@ export default function RiderDashboardPage() {
           .select(`
             id, total_price, shipping_cost, rider_fee_cents, delivery_status,
             delivery_city, delivery_address, payment_method, user_id, rider_id, seller_id,
+            delivery_slot, created_at,
             order_items ( id, quantity )
           `)
           .eq('rider_id', user.id)
@@ -496,6 +511,7 @@ export default function RiderDashboardPage() {
               store={activeOne.seller?.store_name ?? 'Negozio'}
               cust={`${activeOne.delivery_address ?? ''}${activeOne.delivery_city ? ', ' + activeOne.delivery_city : ''}`}
             />
+            <RigaFascia ordine={activeOne} />
             <div className="mt-3 flex items-center justify-between border-t border-cream-200 pt-3">
               <span className="text-sm font-bold text-olive-700">{formatPrice(compensoConsegnaEuro(activeOne))}</span>
               <span className="inline-flex items-center gap-1.5 text-sm font-bold text-primary-700">
@@ -562,6 +578,7 @@ export default function RiderDashboardPage() {
                     cust={`${o.delivery_city ?? 'Piacenza'}${o.delivery_zip ? ' · ' + o.delivery_zip : ''}`}
                     small
                   />
+                  <RigaFascia ordine={o} />
                   <div className="mt-3 flex items-center justify-between">
                     <div>
                       <p className="text-[11px] text-ink-400">Compenso</p>
@@ -596,6 +613,7 @@ export default function RiderDashboardPage() {
                       cust={`${o.delivery_city ?? 'Piacenza'}${o.delivery_zip ? ' · ' + o.delivery_zip : ''}`}
                       small
                     />
+                    <RigaFascia ordine={o} />
                   </div>
                 ))}
               </div>

@@ -29,6 +29,7 @@ import { trackRiderDeliveryCompleted } from '@/lib/analytics/events';
 import { queryKeys } from '@/lib/queries/keys';
 import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 import { compensoConsegnaEuro } from '@/lib/shipping';
+import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 import { seguiAltezzaBarraAzioni, spazioSottoIlContenuto } from '@/lib/ui/altezza-barra-azioni';
 import {
   AVVISO_INCASSO_DOPO_LA_CONSEGNA,
@@ -48,6 +49,7 @@ type OrderRow = {
   total_price: number;
   shipping_cost: number;
   delivery_status: OrderStatus;
+  delivery_slot?: string | null;
   created_at: string;
   accepted_at: string | null;
   ready_at: string | null;
@@ -99,7 +101,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
       const { data, error } = await supabase
         .from('orders')
         .select(`
-          id, user_id, seller_id, total_price, shipping_cost, rider_fee_cents, pickup_in_store, delivery_status,
+          id, user_id, seller_id, total_price, shipping_cost, rider_fee_cents, pickup_in_store, delivery_status, delivery_slot,
           created_at, accepted_at, ready_at, picked_up_at, delivered_at, canceled_at,
           payment_method, cash_confirmed_at,
           delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
@@ -452,6 +454,11 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
                 ? order.seller?.store_address
                 : `${order.delivery_address}, ${order.delivery_zip ?? ''} ${order.delivery_city ?? ''}`}
             </p>
+            {fasciaLeggibile(order) && (
+              <p className="-mt-2 mb-3 flex items-center gap-1.5 text-sm font-semibold text-ink-900">
+                <Clock size={14} aria-hidden className="shrink-0 text-primary-600" /> Consegna: {fasciaLeggibile(order)}
+              </p>
+            )}
             {/* 18/10/2026 — Il negozio che la vetrina pubblica non mostra piu' (per
                 esempio sospeso dopo che l'ordine e' partito) non ha indirizzo ne'
                 telefono da darti: niente «Naviga», niente «Chiama». Invece di lasciarti
