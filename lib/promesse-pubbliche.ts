@@ -10,6 +10,7 @@ import {
   CONSEGNA_NEGOZIO_IN_PIU_CENTS,
 } from './constants';
 import { EXPRESS_ETA_LABEL } from './delivery';
+import { QUANDO_SI_PUO_LA_VELOCE } from './promessa-consegna';
 import { formatPrice } from './format';
 import { spesaPerConsegnaGratisColCodiceCents, tariffaConsegnaCents, vociDellaConsegna, type VociDellaConsegna } from './ordini/prezzi';
 
@@ -104,10 +105,19 @@ export function promesseRitiroInNegozio(
  * frase NASCE dall'interruttore, e i minuti dal numero deciso in lib/delivery.ts: riaccendere il
  * ritiro la fa ricomparire dappertutto da sé.
  */
+/**
+ * 30/10/2026 — I MINUTI NON SONO UNA PROMESSA FISSA. La consegna arriva nella fascia che il cliente
+ * sceglie; la veloce, in `EXPRESS_ETA_LABEL`, c'è solo quando si può davvero (`veloceSiPuo` in
+ * lib/ordini/consegna-veloce.ts: negozi aperti, dalle 8 alle 21, un fattorino in servizio). Le
+ * domande frequenti e le descrizioni Google dei negozi e delle categorie dicevano «in 30-60 min»
+ * come cosa certa, e in produzione non c'era nessun fattorino approvato.
+ */
 export function fraseComeArriva(attivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO): string {
+  // Corta: sta dentro la descrizione Google della pagina negozio, che si taglia a 160 caratteri.
+  const veloce = `veloce in ${EXPRESS_ETA_LABEL} con un fattorino in servizio`;
   return attivo
-    ? `Consegna locale in ${EXPRESS_ETA_LABEL} o ritiro in negozio.`
-    : `Consegna locale in ${EXPRESS_ETA_LABEL}.`;
+    ? `Consegna locale nella fascia oraria che scegli o ritiro in negozio; ${veloce}.`
+    : `Consegna locale nella fascia oraria che scegli; ${veloce}.`;
 }
 
 /** La prima risposta delle FAQ: i passi per ordinare, senza quello che non si può fare. */
@@ -167,7 +177,7 @@ export const NEGOZIO_CHIUSO_COSA_SUCCEDE =
 export function rispostaTempiDiConsegna(): DomandaRisposta {
   return {
     q: "In quanto tempo arriva l'ordine?",
-    a: `In ${EXPRESS_ETA_LABEL} dalla conferma del negozio, nei comuni serviti e negli orari di apertura del negozio. ${NEGOZIO_CHIUSO_COSA_SUCCEDE}`,
+    a: `Nella fascia oraria che scegli in cassa, nei comuni serviti. La consegna veloce, in ${EXPRESS_ETA_LABEL} dalla conferma del negozio, si può ${QUANDO_SI_PUO_LA_VELOCE}: la cassa te la propone solo allora. ${NEGOZIO_CHIUSO_COSA_SUCCEDE}`,
   };
 }
 

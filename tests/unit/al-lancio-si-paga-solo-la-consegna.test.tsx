@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { QUANDO_SI_PUO_LA_VELOCE } from '@/lib/promessa-consegna';
 import {
   CONSEGNA_NEGOZIO_IN_PIU_CENTS as EURO_NEGOZIO_IN_PIU,
   SPESA_SENZA_SUPPLEMENTO_CENTS as SOGLIA_SPESA,
@@ -391,6 +392,8 @@ describe('la pagina Spedizioni dice le cifre della cassa', () => {
       ...numeriIn(formatPrice(SOGLIA_SPESA / 100)),
       String(RAGGIO_CONSEGNA_KM),
       ...numeriIn(EXPRESS_ETA_LABEL),
+      // 30/10/2026 — Le ore della veloce (8-21), dette dalla frase che nasce da lib/quando-arriva.
+      ...numeriIn(QUANDO_SI_PUO_LA_VELOCE),
       '24', // la garanzia legale di 24 mesi, che la prova qui sopra pretende
     ]);
     const estranei = numeriIn(testo).filter((n) => !ammessi.has(n));

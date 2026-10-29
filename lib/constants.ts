@@ -189,5 +189,7 @@ export const VALUE_PROPS = [
   { icon: 'Truck',      title: 'Consegna a casa',          subtitle: PLATFORM_DELIVERY_FEE_CENTS > 0 ? `da ${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} per tutto il carrello, entro ${RAGGIO_CONSEGNA_KM} km` : `gratuita, entro ${RAGGIO_CONSEGNA_KM} km` },
   { icon: 'BanknoteArrowUp', title: 'Pagamento alla consegna', subtitle: 'in contanti, zero rischi' },
   { icon: 'Store',      title: '100% locale',              subtitle: 'venditori della tua città' },
-  { icon: 'Zap',        title: 'Consegna rapida',          subtitle: `in ${EXPRESS_ETA_LABEL} dalla conferma del negozio` },
+  // 30/10/2026 — Diceva «Consegna rapida in 30-60 min dalla conferma» come cosa certa: la veloce c'è
+  // solo coi negozi aperti e un fattorino in servizio (lib/ordini/consegna-veloce.ts, veloceSiPuo).
+  { icon: 'Zap',        title: 'Consegna rapida',          subtitle: `in ${EXPRESS_ETA_LABEL} quando c'è un fattorino in servizio, se no all'ora che scegli` },
 ] as const;

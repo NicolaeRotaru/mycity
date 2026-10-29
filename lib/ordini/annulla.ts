@@ -7,6 +7,8 @@ import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere'
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { sendEmail } from '@/lib/email/client';
 import { ordineAnnullatoTemplate } from '@/lib/email/templates';
+import { consegnaDopoLAnnullo, type RigaRicalcolata } from '@/lib/ordini/prezzi';
+import { eConsegnaVeloce } from '@/lib/ordini/consegna-veloce';
 
 /**
  * ANNULLARE UN ORDINE VUOL DIRE ANCHE RESTITUIRE I SOLDI.
@@ -261,7 +263,9 @@ export async function annullaERimborsa(
     }
 
     try {
-      const totaleCent = Math.round(Number(order.total_price) * 100);
+      // 30/10/2026 — Prima si rifà la consegna dei negozi rimasti: il rimborso rende il totale nuovo.
+      const giro = await ricalcolaLaConsegnaDelGiro(admin, order.id);
+      const totaleCent = giro ? giro.totaleCents : Math.round(Number(order.total_price) * 100);
       const giaRimborsato = Number(order.refunded_amount_cents ?? 0);
       const residuoCent = Math.max(0, totaleCent - giaRimborsato);
       const res = await refundOrder({
@@ -320,6 +324,9 @@ export async function annullaERimborsa(
   if (!preso || preso.length === 0) return { ok: false, motivo: 'GIA_ANNULLATO' };
 
   await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
+
+  // 30/10/2026 — Coi contanti la consegna dei negozi rimasti si rifà: cambia quanto si paga alla porta.
+  await ricalcolaLaConsegnaDelGiro(admin, order.id);
 
   await restituisciCredito();
   await restituisciCoupon();
@@ -386,5 +393,149 @@ export async function avvisaIlClienteDellAnnullo(
       orderId: ordine.id, error: e instanceof Error ? e.message : String(e),
     });
     return false;
+  }
+}
+
+/**
+ * 30/10/2026 00:35 — L'ORDINE CHE SE NE VA PRIMA DELLA CONSEGNA RIFÀ LA CONSEGNA DEGLI ALTRI
+ * (registro dei fatti, consegna.negozio-che-rifiuta). Il conto sta in `consegnaDopoLAnnullo`
+ * (lib/ordini/prezzi.ts); qui si leggono gli ordini dello stesso carrello e si riscrivono.
+ *
+ * Una funzione sola per tutte le strade che annullano prima della consegna: `annullaERimborsa`
+ * (rifiuto del negozio, annullo del cliente e dell'amministrazione) e il giro degli ordini scaduti.
+ * Va chiamata PRIMA del rimborso: con la carta l'ordine annullato cede agli ordini rimasti la
+ * differenza della consegna, e il rimborso (`refundOrder`, che rilegge l'ordine) rende il totale
+ * nuovo. Pane 15 + frutta 12, il forno rifiuta: frutta 3 € di consegna e 3 € al fattorino, totale
+ * 15 €; il forno rende 16 € invece di 18.
+ *
+ * Il carrello con la carta è la sessione di pagamento (`stripe_session_id`); quello in contanti è
+ * il tentativo di cassa (`cod_checkout_attempts.order_ids`, gli id nell'ordine del carrello). Un
+ * reso DOPO la consegna non passa di qui: la consegna è fatta e resta com'è. Per questo, se un
+ * ordine del carrello è già consegnato, non si tocca niente.
+ *
+ * Non lancia mai: se non riesce a leggere il carrello, l'annullo va avanti com'era (rimborso pieno)
+ * e resta l'errore nel registro. Ritorna il totale nuovo dell'ordine annullato, o null.
+ *
+ * LIMITE DICHIARATO: due annulli dello stesso carrello nello stesso istante possono leggersi a
+ * vicenda prima della scrittura. Le scritture sono condizionate alla consegna che c'era (`eq`), così
+ * la seconda non sovrascrive a occhio; la chiusura completa è un blocco nel database (migrazione,
+ * da firmare a parte).
+ */
+const COLONNE_GIRO =
+  'id, user_id, delivery_status, total_price, gross_total_cents, wallet_applied_cents, shipping_cost, ' +
+  'delivery_fee_cents, rider_fee_cents, discount_amount, delivery_slot, pickup_in_store, stripe_session_id, created_at';
+
+type RigaDelGiro = {
+  id: string;
+  user_id: string;
+  delivery_status: string | null;
+  total_price: number | string | null;
+  gross_total_cents: number | null;
+  wallet_applied_cents: number | null;
+  shipping_cost: number | string | null;
+  delivery_fee_cents: number | null;
+  rider_fee_cents: number | null;
+  discount_amount: number | string | null;
+  delivery_slot: string | null;
+  pickup_in_store: boolean | null;
+  stripe_session_id: string | null;
+  created_at: string | null;
+};
+
+const centesimi = (euro: number | string | null | undefined) => Math.round(Number(euro ?? 0) * 100);
+const lordoDi = (r: RigaDelGiro) =>
+  r.gross_total_cents != null ? Number(r.gross_total_cents) : centesimi(r.total_price) + Number(r.wallet_applied_cents ?? 0);
+
+async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise<RigaDelGiro[] | null> {
+  const sessione = o.stripe_session_id?.trim();
+  if (sessione) {
+    const { data, error } = await admin.from('orders').select(COLONNE_GIRO).eq('stripe_session_id', sessione);
+    if (error || !Array.isArray(data)) return null;
+    return (data as unknown as RigaDelGiro[]).sort(
+      (x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id),
+    );
+  }
+  const { data: tentativi, error: errT } = await admin
+    .from('cod_checkout_attempts')
+    .select('order_ids')
+    .eq('user_id', o.user_id)
+    .contains('order_ids', JSON.stringify([{ id: o.id }]))
+    .limit(1);
+  if (errT || !Array.isArray(tentativi) || tentativi.length === 0) return null;
+  const elenco = (tentativi[0] as { order_ids: unknown }).order_ids;
+  const ids = Array.isArray(elenco)
+    ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)
+    : [];
+  if (ids.length < 2) return null;
+  const { data, error } = await admin.from('orders').select(COLONNE_GIRO).in('id', ids);
+  if (error || !Array.isArray(data)) return null;
+  const righe = data as unknown as RigaDelGiro[];
+  return ids.map((id) => righe.find((r) => r.id === id)).filter((r): r is RigaDelGiro => !!r);
+}
+
+export async function ricalcolaLaConsegnaDelGiro(
+  admin: SupabaseClient,
+  orderId: string,
+): Promise<{ totaleCents: number; differenzaCents: number } | null> {
+  try {
+    const { data: lui, error } = await admin.from('orders').select(COLONNE_GIRO).eq('id', orderId).maybeSingle();
+    if (error || !lui || typeof lui !== 'object') return null;
+    const ordine = lui as unknown as RigaDelGiro;
+    if (ordine.pickup_in_store || ordine.delivery_status === 'DELIVERED') return null;
+    const carrello = await ordiniDelCarrello(admin, ordine);
+    if (!carrello || carrello.length < 2 || !carrello.some((r) => r.id === orderId)) return null;
+    if (carrello.some((r) => r.delivery_status === 'DELIVERED')) return null;
+
+    const conto = consegnaDopoLAnnullo({
+      ordini: carrello.map((r) => {
+        const consegna = Number(r.delivery_fee_cents ?? 0);
+        const spedizione = centesimi(r.shipping_cost);
+        const merce = lordoDi(r) - consegna - spedizione;
+        return {
+          id: r.id,
+          spesaCents: merce + centesimi(r.discount_amount),
+          merceCents: merce,
+          shippingCents: spedizione,
+          deliveryFeeCents: consegna,
+          riderFeeCents: Number(r.rider_fee_cents ?? 0),
+          giaAnnullato: r.delivery_status === 'CANCELED' && r.id !== orderId,
+        };
+      }),
+      annullaId: orderId,
+      consegnaVeloce: eConsegnaVeloce({ fascia: ordine.delivery_slot, ritiroInNegozio: false }),
+      pickupInStore: false,
+    });
+    if (!conto) return null;
+
+    const riscrivi = async (r: RigaDelGiro, riga: RigaRicalcolata) => {
+      const lordo = lordoDi(r) + riga.deltaCents;
+      const { error: errW } = await admin
+        .from('orders')
+        .update({
+          delivery_fee_cents: riga.deliveryFeeCents,
+          rider_fee_cents: riga.riderFeeCents,
+          gross_total_cents: lordo,
+          total_price: Math.max(0, centesimi(r.total_price) + riga.deltaCents) / 100,
+        })
+        .eq('id', r.id)
+        .eq('delivery_fee_cents', Number(r.delivery_fee_cents ?? 0));
+      if (errW) throw new Error(`ordine ${r.id}: ${errW.message}`);
+    };
+    // Prima l'ordine che se ne va (il rimborso scende), poi quelli che restano.
+    await riscrivi(ordine, conto.annullato);
+    for (const riga of conto.rimasti) {
+      const r = carrello.find((c) => c.id === riga.id);
+      if (r && (riga.deltaCents !== 0 || riga.riderFeeCents !== Number(r.rider_fee_cents ?? 0))) await riscrivi(r, riga);
+    }
+    logger.info('[ricalcolaLaConsegnaDelGiro] consegna rifatta sui negozi rimasti', {
+      orderId, differenzaCents: conto.differenzaCents, rimasti: conto.rimasti.length,
+    });
+    return {
+      totaleCents: Math.max(0, centesimi(ordine.total_price) + conto.annullato.deltaCents),
+      differenzaCents: conto.differenzaCents,
+    };
+  } catch (err) {
+    logger.error('[ricalcolaLaConsegnaDelGiro] consegna del carrello NON rifatta: rimborso pieno', { orderId, err });
+    return null;
   }
 }

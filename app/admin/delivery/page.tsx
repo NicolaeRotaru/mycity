@@ -3,14 +3,28 @@
 import { Truck, MapPin, Info, Store, Banknote, Bike } from 'lucide-react';
 import {
   COMPENSO_RIDER_CENTS,
+  COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS,
+  CONSEGNA_NEGOZIO_IN_PIU_CENTS,
+  SPESA_SENZA_SUPPLEMENTO_CENTS,
+  SUPPLEMENTO_CONSEGNA_CENTS,
+  SUPPLEMENTO_VELOCE_CENTS,
   PICKUP_DISCOUNT_PERCENT,
   RITIRO_IN_NEGOZIO_ATTIVO,
   PLATFORM_DELIVERY_FEE_CENTS,
-  CONSEGNA_MASSIMA_CENTS,
   RAGGIO_CONSEGNA_KM,
 } from '@/lib/constants';
-import { fraseTariffaConsegna } from '@/lib/promesse-pubbliche';
 import { formatPrice } from '@/lib/format';
+
+// 30/10/2026 — Diceva «3,00 €–4,00 €» a consegna: con la regola del 29/10 (consegna.promessa) la
+// consegna è una per carrello, un negozio in più porta 1 € e il carrello non ha un massimo. Qui si
+// dice la regola, con le cifre prese dalle costanti.
+const eur = (cents: number) => formatPrice(cents / 100);
+const BASE = eur(PLATFORM_DELIVERY_FEE_CENTS);
+const IN_PIU = eur(CONSEGNA_NEGOZIO_IN_PIU_CENTS);
+const PICCOLA = eur(SUPPLEMENTO_CONSEGNA_CENTS);
+const SOGLIA = eur(SPESA_SENZA_SUPPLEMENTO_CENTS);
+const VELOCE = eur(SUPPLEMENTO_VELOCE_CENTS);
+const COMPENSO = `${eur(COMPENSO_RIDER_CENTS)} il giro + ${eur(COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS)} a negozio in più`;
 import { AdminPageTitle, AdminStatCard } from '@/components/admin/AdminUI';
 
 /**
@@ -41,14 +55,14 @@ export default function AdminDeliveryPage() {
         <AdminStatCard
           icon={Banknote}
           tone="accent"
-          label="Consegna pagata dal cliente, per negozio"
-          value={`${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}–${formatPrice(CONSEGNA_MASSIMA_CENTS / 100)}`}
+          label="Consegna pagata dal cliente, per tutto il carrello"
+          value={`da ${BASE}`}
         />
         <AdminStatCard
           icon={Bike}
           tone="olive"
-          label="Compenso del fattorino, per consegna"
-          value={formatPrice(COMPENSO_RIDER_CENTS / 100)}
+          label="Compenso del fattorino, per giro"
+          value={COMPENSO}
         />
         <AdminStatCard
           icon={MapPin}
@@ -65,15 +79,33 @@ export default function AdminDeliveryPage() {
           <div className="flex flex-col gap-2.5">
             <Row
               icon={Banknote}
-              title="Consegna pagata dal cliente"
-              desc={`Per negozio: ${fraseTariffaConsegna()}`}
-              value={`${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}–${formatPrice(CONSEGNA_MASSIMA_CENTS / 100)}`}
+              title="Base della consegna"
+              desc="Una volta sola per tutto il carrello, con la fascia oraria che sceglie il cliente"
+              value={BASE}
+            />
+            <Row
+              icon={Store}
+              title="Ogni negozio in più"
+              desc="Una fermata in più nello stesso giro"
+              value={`+ ${IN_PIU}`}
+            />
+            <Row
+              icon={Banknote}
+              title="Spesa piccola"
+              desc={`Per ogni negozio in cui la merce, dopo gli sconti, sta sotto i ${SOGLIA}`}
+              value={`+ ${PICCOLA}`}
+            />
+            <Row
+              icon={Truck}
+              title="Consegna veloce"
+              desc="Una volta sola; compresa se c'è già almeno un euro di spesa piccola"
+              value={`+ ${VELOCE}`}
             />
             <Row
               icon={Bike}
               title="Compenso del fattorino"
-              desc="Fisso per consegna, non a distanza"
-              value={formatPrice(COMPENSO_RIDER_CENTS / 100)}
+              desc="Per il giro, non a distanza: la veloce e la spesa piccola restano a MyCity"
+              value={COMPENSO}
             />
             <Row
               icon={MapPin}
@@ -96,10 +128,12 @@ export default function AdminDeliveryPage() {
         <div className="rounded-2xl border-2 border-cream-300 bg-white p-5 shadow-warm">
           <h2 className="mb-1 font-serif text-[17px] font-bold text-ink-900">Consegna pagata dal cliente</h2>
           <p className="mb-4 text-xs text-ink-500">
-            Il cliente paga solo la consegna, per ogni negozio da cui ordina: {fraseTariffaConsegna()}.
-            L&apos;euro in più resta a MyCity. Non c&apos;è un costo a chilometro e non c&apos;è una soglia di
-            spedizione gratis. Due negozi nello stesso carrello sono due consegne. La consegna copre il compenso
-            del fattorino, fisso a {formatPrice(COMPENSO_RIDER_CENTS / 100)}.
+            Il cliente paga una consegna sola per tutto il carrello: {BASE} di base, {IN_PIU} per ogni negozio
+            in più, {PICCOLA} per ogni negozio sotto i {SOGLIA} di merce, {VELOCE} per la veloce (compresa se
+            c&apos;è già la spesa piccola). Non c&apos;è un massimo: tre negozi sotto i {SOGLIA} fanno{' '}
+            {eur(PLATFORM_DELIVERY_FEE_CENTS + 2 * CONSEGNA_NEGOZIO_IN_PIU_CENTS + 3 * SUPPLEMENTO_CONSEGNA_CENTS)}.
+            Il fattorino prende {COMPENSO}. Se un negozio rifiuta prima della consegna, la consegna si rifà
+            sui negozi rimasti.
           </p>
         </div>
       </div>

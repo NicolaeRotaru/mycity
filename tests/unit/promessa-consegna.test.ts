@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
+import { VELOCE_IN_MINUTI } from '@/lib/promessa-consegna';
 import { rispostaTempiDiConsegna } from '@/lib/promesse-pubbliche';
 
 /**
@@ -81,10 +82,13 @@ describe('la promessa di consegna', () => {
   it('la promessa nuova arriva davvero al cliente, comunque sia scritta', () => {
     expect(rispostaTempiDiConsegna().a).toContain(EXPRESS_ETA_LABEL);
     expect(EXPRESS_ETA_LABEL).toMatch(/30-60/);
+    expect(VELOCE_IN_MINUTI).toContain(EXPRESS_ETA_LABEL.replace(/\s*min$/, ''));
 
     const spedizioni = readFileSync(join(RADICE, 'app/shipping/page.tsx'), 'utf8');
     expect(
-      spedizioni.includes('EXPRESS_ETA_LABEL') || /30-60 min/.test(spedizioni),
+      // 30/10/2026 — Oggi la pagina legge `VELOCE_IN_MINUTI` (lib/promessa-consegna), che nasce dagli
+      // stessi minuti di lib/delivery: vale come leggerlo da lì.
+      spedizioni.includes('EXPRESS_ETA_LABEL') || spedizioni.includes('VELOCE_IN_MINUTI') || /30-60 min/.test(spedizioni),
       'la pagina Spedizioni deve dire il tempo: o lo legge da lib/delivery, o lo scrive',
     ).toBe(true);
 

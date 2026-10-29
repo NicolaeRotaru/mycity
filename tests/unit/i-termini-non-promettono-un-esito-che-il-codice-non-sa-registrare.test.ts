@@ -116,8 +116,12 @@ describe('i tre meccanismi, letti dove vivono davvero', () => {
   it('l’annullamento restituisce il residuo INTERO, la quota di consegna compresa', () => {
     const annulla = leggi('lib/ordini/annulla.ts');
     expect(annulla).toMatch(/residuoCent\s*=\s*Math\.max\(0,\s*totaleCent\s*-\s*giaRimborsato\)/);
-    // Nessuno scomputa la consegna. Quando qualcuno lo fara', questa riga cade.
-    expect(senzaCommenti(annulla)).not.toMatch(/shipping_cost/);
+    // 30/10/2026 — Lo scomputo è arrivato, ed è la regola di Nicola (consegna.negozio-che-rifiuta):
+    // in un carrello con più negozi l'ordine che se ne va prima della consegna cede ai rimasti la
+    // differenza della consegna, e solo quella. Il totale da rendere lo dà `ricalcolaLaConsegnaDelGiro`
+    // (prova coi centesimi: se-un-negozio-rifiuta-la-consegna-si-rifa-sui-negozi-rimasti.test.ts);
+    // senza carrello, o con un conto che non si riconosce, si rende tutto come prima.
+    expect(senzaCommenti(annulla)).toMatch(/totaleCent = giro \? giro\.totaleCents : Math\.round\(Number\(order\.total_price\) \* 100\)/);
   });
 });
 

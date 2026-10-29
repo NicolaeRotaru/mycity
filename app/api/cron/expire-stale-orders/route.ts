@@ -9,7 +9,7 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ORE_PER_ACCETTARE, ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
 import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
-import { avvisaIlClienteDellAnnullo } from '@/lib/ordini/annulla';
+import { avvisaIlClienteDellAnnullo, ricalcolaLaConsegnaDelGiro } from '@/lib/ordini/annulla';
 
 /**
  * 6/9/2026 — QUALI RIMBORSI FALLITI HA SENSO RITENTARE.
@@ -162,12 +162,16 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     }
     if (!claimed || claimed.length === 0) continue;
 
+    // 30/10/2026 — Il negozio che non conferma in tempo esce dal giro: la consegna dei negozi rimasti
+    // dello stesso carrello si rifà (consegna.negozio-che-rifiuta), e il rimborso rende il totale nuovo.
+    const giro = await ricalcolaLaConsegnaDelGiro(admin, o.id);
+
     try {
       if (isCardPaid) {
         try {
           await refundOrder({
             orderId: o.id,
-            amountCents: Math.round(Number(o.total_price) * 100),
+            amountCents: giro ? giro.totaleCents : Math.round(Number(o.total_price) * 100),
             reason: 'Ordine annullato: il venditore non lo ha accettato in tempo',
             notifyBuyer: true,
             // L'ordine l'ha annullato questo giro, qui sopra, e la merce non

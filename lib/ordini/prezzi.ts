@@ -365,3 +365,125 @@ export function supplementoDellaVeloceCents(ing: Omit<IngressiPrezzo, 'consegnaV
       - consegna(prezziDelCarrello({ ...ing, consegnaVeloce: false })),
   );
 }
+
+/**
+ * 30/10/2026 00:35 — SE UN NEGOZIO DEL CARRELLO SE NE VA, LA CONSEGNA SI RIFÀ SUI NEGOZI RIMASTI
+ * (registro dei fatti, consegna.negozio-che-rifiuta).
+ *
+ * Pane 15 € e frutta 12 €: consegna 4 €, il forno porta la base (3 €) e la frutta il suo euro di
+ * fermata. Il forno rifiuta. Prima l'ordine della frutta restava con 1 € di consegna e la base se ne
+ * andava col rimborso del forno: il fattorino faceva il giro per 1 € e MyCity incassava 13 € su un
+ * giro che vale 15. La regola di Nicola: la consegna si rifà coi negozi rimasti, con la stessa regola
+ * (la frutta da sola: 3 €); al cliente torna la merce del forno più la differenza della consegna
+ * (15 + (4 − 3) = 16 €); il fattorino prende il compenso del giro coi negozi rimasti (3 €).
+ *
+ * Qui c'è il conto, puro. Lo usano tutte le strade che annullano un ordine PRIMA della consegna
+ * (`ricalcolaLaConsegnaDelGiro` in lib/ordini/annulla.ts: rifiuto del negozio, annullo, ordini
+ * scaduti). La consegna non si perde e non si crea: quello che gli ordini rimasti prendono in più
+ * lo cede l'ordine annullato, che rende al cliente quel tanto in meno. Con la carta i soldi sono già
+ * sulla stessa charge e il rimborso scende della differenza; coi contanti cambia il totale da pagare
+ * alla porta.
+ *
+ * Si rifiuta di contare (null) quando gli ordini non portano il conto che la regola darebbe oggi:
+ * un carrello nato con una regola vecchia, o già ricalcolato da un annullo precedente rimasto a
+ * metà. Riscrivere a occhio un conto che non si riconosce sposterebbe soldi veri a caso.
+ * Prova: tests/unit/se-un-negozio-rifiuta-la-consegna-si-rifa-sui-negozi-rimasti.test.ts.
+ */
+export type OrdineDelGiro = {
+  id: string;
+  /** La merce prima degli sconti: sceglie il «primo negozio», come in cassa. */
+  spesaCents: number;
+  /** La merce dopo gli sconti: la soglia dei 10 € e la commissione. */
+  merceCents: number;
+  shippingCents: number;
+  /** La consegna scritta sull'ordine, adesso. */
+  deliveryFeeCents: number;
+  /** Il compenso del fattorino scritto sull'ordine, adesso. */
+  riderFeeCents: number;
+  /** Già annullato da un annullo precedente (non quello di adesso). */
+  giaAnnullato: boolean;
+};
+
+export type RigaRicalcolata = {
+  id: string;
+  deliveryFeeCents: number;
+  riderFeeCents: number;
+  /** Di quanto cambia la consegna di questo ordine (e quindi il suo totale). */
+  deltaCents: number;
+};
+
+export type ConsegnaDopoLAnnullo = {
+  /** Gli ordini del carrello che restano, con la consegna e il compenso nuovi. */
+  rimasti: RigaRicalcolata[];
+  /** L'ordine annullato adesso: cede la differenza e non paga più nessun fattorino. */
+  annullato: RigaRicalcolata;
+  /** Quanto la consegna dei rimasti sale: è quanto il cliente si vede rendere in meno. */
+  differenzaCents: number;
+};
+
+function contoDelGiro(
+  ordini: OrdineDelGiro[],
+  consegnaVeloce: boolean,
+  codiceSpedizioneGratis: boolean,
+): Array<{ deliveryFeeCents: number; riderFeeCents: number }> {
+  const voci = vociDellaConsegna({
+    pickupInStore: false,
+    negozi: ordini.map((o) => ({ spesaCents: o.spesaCents, merceCents: o.merceCents })),
+    consegnaVeloce,
+  });
+  return ordini.map((o, i) => {
+    const riderFeeCents = compensoRiderCents({ pickupInStore: false, negozioInPiu: i !== voci.primo });
+    return {
+      riderFeeCents,
+      deliveryFeeCents: consegnaDaPagareCents({
+        pickupInStore: false,
+        codiceSpedizioneGratis,
+        tariffaCents: voci.perOrdineCents[i],
+        baseCents: i === voci.primo ? voci.baseCents : 0,
+        merceCents: o.merceCents,
+        shippingCents: o.shippingCents,
+        riderFeeCents,
+      }),
+    };
+  });
+}
+
+export function consegnaDopoLAnnullo(a: {
+  /** Tutti gli ordini del carrello, nell'ordine del carrello, compreso quello che si annulla. */
+  ordini: OrdineDelGiro[];
+  annullaId: string;
+  consegnaVeloce: boolean;
+  pickupInStore: boolean;
+}): ConsegnaDopoLAnnullo | null {
+  if (a.pickupInStore) return null;
+  const vivi = a.ordini.filter((o) => !o.giaAnnullato);
+  const chiSeNeVa = vivi.find((o) => o.id === a.annullaId);
+  if (!chiSeNeVa || vivi.length < 2) return null;
+
+  // Il conto scritto deve essere quello della regola, col codice o senza: altrimenti non si tocca.
+  const scritto = (c: Array<{ deliveryFeeCents: number; riderFeeCents: number }>) =>
+    c.every((x, i) => x.deliveryFeeCents === vivi[i].deliveryFeeCents && x.riderFeeCents === vivi[i].riderFeeCents);
+  const codice = [false, true].find((conCodice) => scritto(contoDelGiro(vivi, a.consegnaVeloce, conCodice)));
+  if (codice === undefined) return null;
+
+  const restano = vivi.filter((o) => o.id !== a.annullaId);
+  const dopo = contoDelGiro(restano, a.consegnaVeloce, codice);
+  const rimasti = restano.map((o, i) => ({
+    id: o.id,
+    deliveryFeeCents: dopo[i].deliveryFeeCents,
+    riderFeeCents: dopo[i].riderFeeCents,
+    deltaCents: dopo[i].deliveryFeeCents - o.deliveryFeeCents,
+  }));
+  const differenzaCents = rimasti.reduce((s, r) => s + r.deltaCents, 0);
+  const consegnaAnnullato = Math.max(0, chiSeNeVa.deliveryFeeCents - differenzaCents);
+  return {
+    rimasti,
+    annullato: {
+      id: chiSeNeVa.id,
+      deliveryFeeCents: consegnaAnnullato,
+      riderFeeCents: 0,
+      deltaCents: -differenzaCents,
+    },
+    differenzaCents,
+  };
+}
