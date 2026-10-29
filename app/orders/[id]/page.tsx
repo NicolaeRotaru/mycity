@@ -42,6 +42,8 @@ import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 // #92 — le miniature si chiedono gia' piccole al server
 import { sizedImage, logoNegozio } from '@/lib/image-url';
 import { cifraDellaVoce, fraseDelBonificoAMano, riepilogoOrdine, statoPagamento } from '@/lib/ordini/riepilogo-ordine';
+import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
+import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
 
 type OrderRow = {
   id: string;
@@ -52,6 +54,7 @@ type OrderRow = {
   discount_amount: number | null;
   wallet_applied_cents: number | null;
   pickup_in_store: boolean | null;
+  delivery_slot?: string | null;
   delivery_status: OrderStatus;
   payment_status: string;
   payment_method: string | null;
@@ -103,7 +106,7 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
     .from('orders')
     .select(`
       id, total_price, shipping_cost, delivery_fee_cents, discount_amount, wallet_applied_cents,
-      pickup_in_store, delivery_status, payment_status, payment_method, stripe_refund_id, created_at,
+      pickup_in_store, delivery_slot, delivery_status, payment_status, payment_method, stripe_refund_id, created_at,
       accepted_at, ready_at, picked_up_at, delivered_at,
       delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
       delivery_lat, delivery_lng,
@@ -338,13 +341,16 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   // del marketplace. Niente orari assoluti finti: solo derivazioni reali.
   // Senza una posizione fresca non si promette un tempo: «In viaggio» è vero,
   // «In arrivo a breve» era una promessa che nessuno stava mantenendo.
+  // Chi ha scelto una fascia programmata legge la sua fascia nel giorno vero, non «30-60 min».
+  const fasciaDelCliente = order ? fasciaLeggibile(order) : null;
+  const fasciaProgrammata = fasciaDelCliente && fasciaDelCliente !== ETICHETTA_ADESSO ? fasciaDelCliente : null;
   const etaLabel = isDelivered
     ? 'Consegnato'
     : isCancelled
     ? '—'
     : status === 'OUT_FOR_DELIVERY'
     ? (riderEtaMin != null ? `~${riderEtaMin} min` : 'In viaggio')
-    : '30-60 min dalla conferma';
+    : fasciaProgrammata ?? '30-60 min dalla conferma';
   const etaCaption = isDelivered ? 'Stato consegna' : 'Consegna stimata';
 
   // Hint relativo "consegna stimata" da accepted_at/ready_at, quando sensato:
@@ -758,6 +764,11 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                 {order.delivery_notes && <span className="mt-1 block italic text-ink-500">Note: {order.delivery_notes}</span>}
               </span>
             </div>
+            {fasciaLeggibile(order) && (
+              <p className="mt-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink-800">
+                <Clock size={14} aria-hidden className="shrink-0 text-primary-600" /> Consegna: {fasciaLeggibile(order)}
+              </p>
+            )}
           </Card>
 
           {/* AZIONI */}
