@@ -1,0 +1,104 @@
+import { describe, it, expect } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
+import ShippingPage from '@/app/shipping/page';
+import { prezziDelCarrello, type IngressiPrezzo } from '@/lib/ordini/prezzi';
+import { rispostaCostoSpedizione } from '@/lib/promesse-pubbliche';
+import { SPESA_SENZA_SUPPLEMENTO_CENTS } from '@/lib/constants';
+import { formatPrice } from '@/lib/format';
+
+/**
+ * 29/10/2026 — LA TARIFFA SCRITTA DICE ANCHE I 4 EURO.
+ *
+ * La regola firmata da Nicola (registro dei fatti, consegna.promessa): 3 € per negozio con la
+ * fascia, 4 € sotto i 10 € di merce di quel negozio o con la consegna veloce. La cassa la fa da
+ * `tariffaConsegnaCents`. Due frasi pubbliche erano rimaste alla regola vecchia dei 3 € fissi:
+ *   - il riquadro in cima a /shipping: «Consegna 3,00 € · Per ogni negozio, qualunque sia la spesa»;
+ *   - la FAQ «Quanto costa la spedizione?»: «3,00 € per ogni negozio da cui ordini, qualunque sia
+ *     la spesa».
+ * Un ordine da 8 € di pane paga 4 €. Chi ha letto «qualunque sia la spesa» vede in cassa un euro in
+ * più che nessuno gli ha detto.
+ *
+ * La prova non cerca solo la frase: chiede che, finché la cassa fa pagare diverso a 8 € e a 15 €,
+ * ogni testo che dice il prezzo nomini anche la cifra dell'ordine piccolo e la soglia. Riscrivere
+ * «qualunque sia la spesa» con altre parole non basta a farla tornare verde.
+ */
+
+function consegnaDellaCassa(merceCents: number, consegnaVeloce = false): number {
+  const ingressi: IngressiPrezzo = {
+    gruppi: [{ sellerId: 's1', subtotalCents: merceCents }],
+    coordinateNegozio: () => ({ lat: null, lng: null }),
+    consegnaLat: null,
+    consegnaLng: null,
+    pickupInStore: false,
+    couponSpedizioneGratis: false,
+    couponScontoCents: 0,
+    consegnaVeloce,
+  };
+  return prezziDelCarrello(ingressi).gruppi[0].deliveryFeeCents;
+}
+
+const euro = (cents: number) => formatPrice(cents / 100);
+
+/** Il testo di un pezzo di HTML, con le entità sciolte. */
+function testoDi(html: string): string {
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&#x27;|&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/[ \t\r\n]+/g, ' ');
+}
+
+/** I blocchi di testo come li legge la persona: riquadri, paragrafi, voci d'elenco, titoli. */
+function blocchiDi(html: string): string[] {
+  return html
+    .split(/<\/(?:p|li|div|h[1-6])>|<br\s*\/?>/i)
+    .map((b) => testoDi(b).trim())
+    .filter(Boolean);
+}
+
+const ORDINE_PICCOLO = consegnaDellaCassa(800);
+const ORDINE_GRANDE = consegnaDellaCassa(1500);
+
+/** Un testo che dice il prezzo della consegna dice quello che la cassa addebita, anche sotto i 10 €. */
+function diceLaTariffaDellaCassa(testo: string, dove: string) {
+  expect(testo, `${dove} non dice la consegna con la fascia (${euro(ORDINE_GRANDE)})`).toContain(euro(ORDINE_GRANDE));
+  if (ORDINE_PICCOLO === ORDINE_GRANDE) return;
+  expect(
+    testo,
+    `${dove} promette lo stesso prezzo a ogni spesa, ma 8 € pagano ${euro(ORDINE_PICCOLO)} e 15 € ${euro(ORDINE_GRANDE)}`,
+  ).not.toMatch(/qualunque sia la spesa|a prescindere dalla spesa/i);
+  expect(testo, `${dove} non dice quanto paga un ordine piccolo (${euro(ORDINE_PICCOLO)})`).toContain(euro(ORDINE_PICCOLO));
+  expect(testo, `${dove} non dice sotto quale spesa si paga di più`).toContain(euro(SPESA_SENZA_SUPPLEMENTO_CENTS));
+}
+
+describe('la cassa: sotto i 10 € di merce la consegna costa 4 €', () => {
+  it('8 € con la fascia → 400 centesimi, 15 € con la fascia → 300, 15 € veloce → 400', () => {
+    expect(ORDINE_PICCOLO).toBe(400);
+    expect(ORDINE_GRANDE).toBe(300);
+    expect(consegnaDellaCassa(1500, true)).toBe(400);
+  });
+});
+
+describe('IL CASO DEL COLLAUDO — il riquadro in cima alla pagina Spedizioni', () => {
+  const blocchi = blocchiDi(renderToStaticMarkup(<ShippingPage />));
+
+  it('il riquadro del prezzo nomina anche i 4 € e la soglia dei 10 €', () => {
+    const i = blocchi.findIndex((b) => /^Consegna\b/.test(b) && b.includes('€'));
+    expect(i, `non trovo il riquadro del prezzo: ${blocchi.slice(0, 6).join(' | ')}`).toBeGreaterThanOrEqual(0);
+    diceLaTariffaDellaCassa(`${blocchi[i]} · ${blocchi[i + 1] ?? ''}`, 'il riquadro in cima a /shipping');
+  });
+
+  it('nessun altro blocco della pagina promette lo stesso prezzo a ogni spesa', () => {
+    if (ORDINE_PICCOLO === ORDINE_GRANDE) return;
+    const sbagliati = blocchi.filter((b) => /qualunque sia la spesa|a prescindere dalla spesa/i.test(b));
+    expect(sbagliati).toEqual([]);
+  });
+});
+
+describe('IL CASO DEL COLLAUDO — la FAQ «Quanto costa la spedizione?»', () => {
+  it('la risposta dice i 3 €, i 4 € e la soglia dei 10 €, non «qualunque sia la spesa»', () => {
+    diceLaTariffaDellaCassa(rispostaCostoSpedizione().a, 'la FAQ sul costo della spedizione');
+  });
+});

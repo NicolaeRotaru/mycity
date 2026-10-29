@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ShippingPage, { metadata as metadatiSpedizioni } from '@/app/shipping/page';
 import { metadata as metadatiVicinoATe } from '@/app/near/layout';
-import { PLATFORM_DELIVERY_FEE_CENTS, RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import {
+  PLATFORM_DELIVERY_FEE_CENTS,
+  RAGGIO_CONSEGNA_KM,
+  SPESA_SENZA_SUPPLEMENTO_CENTS,
+  SUPPLEMENTO_CONSEGNA_CENTS,
+} from '@/lib/constants';
 import { formatPrice } from '@/lib/format';
 import { avvisoNessunNegozioVicino, NEGOZIO_CHIUSO_COSA_SUCCEDE } from '@/lib/promesse-pubbliche';
 
@@ -34,6 +39,8 @@ import { avvisoNessunNegozioVicino, NEGOZIO_CHIUSO_COSA_SUCCEDE } from '@/lib/pr
  */
 
 const TRE_EURO = formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100);
+const QUATTRO_EURO = formatPrice((PLATFORM_DELIVERY_FEE_CENTS + SUPPLEMENTO_CONSEGNA_CENTS) / 100);
+const DIECI_EURO = formatPrice(SPESA_SENZA_SUPPLEMENTO_CENTS / 100);
 const KM = RAGGIO_CONSEGNA_KM;
 
 /** Il testo di un pezzo di HTML, con le entità sciolte. */
@@ -66,8 +73,10 @@ const NEGOZIO_CHIUSO =
 const PAGINA_SPEDIZIONI = [
   'Spedizioni e consegne',
   'Tempi, costi e opzioni per ricevere il tuo ordine.',
-  `Consegna ${TRE_EURO}`,
-  'Per ogni negozio, qualunque sia la spesa',
+  // 29/10/2026 — riletta con la regola firmata (registro dei fatti, consegna.promessa): 3 € con la
+  // fascia, 4 € sotto i 10 € o con la veloce. Via «qualunque sia la spesa»: 8 € di merce pagano 4 €.
+  `Consegna ${TRE_EURO} o ${QUATTRO_EURO}`,
+  `Per ogni negozio: ${QUATTRO_EURO} sotto i ${DIECI_EURO} di spesa o con la consegna veloce`,
   'Consegna in 30-60 min',
   'Nei comuni serviti, negli orari di apertura del negozio',
   `Fino a ${KM} km`,
@@ -78,7 +87,8 @@ const PAGINA_SPEDIZIONI = [
   'Vale negli orari di apertura del negozio che hai scelto',
   NEGOZIO_CHIUSO,
   'Quanto costa la consegna',
-  `Paghi solo la consegna: ${TRE_EURO} per ogni negozio da cui ordini, qualunque sia la spesa. Non c'è un costo a chilometro e non c'è una soglia da raggiungere.`,
+  // Lo spazio prima del punto è il grassetto della tariffa che `testoDi` scioglie in uno spazio.
+  `Paghi solo la consegna, per ogni negozio da cui ordini: ${TRE_EURO} per negozio con la fascia oraria che scegli; ${QUATTRO_EURO} sotto i ${DIECI_EURO} di spesa o con la consegna veloce, mai di più . Non c'è un costo a chilometro.`,
   'Se ordini da due negozi paghi due consegne: ogni negozio ti porta la sua spesa.',
   'Il totale lo vedi sempre in cassa, prima di confermare l’ordine.',
   'Tracciamento',

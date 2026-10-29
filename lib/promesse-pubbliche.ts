@@ -9,7 +9,7 @@ import {
 } from './constants';
 import { EXPRESS_ETA_LABEL } from './delivery';
 import { formatPrice } from './format';
-import { spesaPerConsegnaGratisColCodiceCents } from './ordini/prezzi';
+import { spesaPerConsegnaGratisColCodiceCents, tariffaConsegnaCents } from './ordini/prezzi';
 
 /**
  * IL NOME DELLA VOCE DA 3 EURO — uno solo, in ogni schermata.
@@ -177,11 +177,16 @@ export function rispostaTempiDiConsegna(): DomandaRisposta {
  * consegna). Adesso si paga solo la consegna per negozio, e il confine è quello della cassa.
  */
 export function rispostaCostoSpedizione(): DomandaRisposta {
-  const { costoConsegna } = promessaSpedizione();
+  // 29/10/2026 — Diceva «3,00 € per ogni negozio, qualunque sia la spesa» anche dopo la regola dei
+  // 4 € sotto i 10 €: un ordine da 8 € pagava in cassa un euro che la FAQ negava. Ora la frase
+  // nasce dalla tariffa della cassa: «qualunque sia la spesa» solo se la spesa davvero non conta.
+  const { fasciaCents, pienaCents } = tariffeDellaCassa();
   const quanto =
-    costoConsegna > 0
-      ? `Paghi solo la consegna: ${formatPrice(costoConsegna)} per ogni negozio da cui ordini, qualunque sia la spesa.`
-      : 'La consegna è gratuita, qualunque sia la spesa.';
+    pienaCents <= 0
+      ? 'La consegna è gratuita, qualunque sia la spesa.'
+      : fasciaCents === pienaCents
+        ? `Paghi solo la consegna: ${formatPrice(fasciaCents / 100)} per ogni negozio da cui ordini, qualunque sia la spesa.`
+        : `Paghi solo la consegna, una per ogni negozio da cui ordini: ${fraseTariffaConsegna()}.`;
   return {
     q: 'Quanto costa la spedizione?',
     a: `${quanto} Non c'è un costo a chilometro: consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio. Vedi tutti i dettagli nella pagina Spedizioni.`,
@@ -387,6 +392,44 @@ export function fraseTariffaConsegna(baseCents: number = PLATFORM_DELIVERY_FEE_C
   const piena = formatPrice((Math.max(0, baseCents) + SUPPLEMENTO_CONSEGNA_CENTS) / 100);
   const soglia = formatPrice(SPESA_SENZA_SUPPLEMENTO_CENTS / 100);
   return `${base} per negozio con la fascia oraria che scegli; ${piena} sotto i ${soglia} di spesa o con la consegna veloce, mai di più`;
+}
+
+/**
+ * Le due tariffe estreme come le calcola la cassa (`tariffaConsegnaCents`): con la fascia e una
+ * spesa sopra la soglia, e la più alta (veloce, o spesa sotto la soglia). Se sono uguali la spesa
+ * non conta, e solo allora una frase può dire «qualunque sia la spesa».
+ */
+function tariffeDellaCassa(): { fasciaCents: number; pienaCents: number } {
+  return {
+    fasciaCents: tariffaConsegnaCents({ pickupInStore: false, merceCents: SPESA_SENZA_SUPPLEMENTO_CENTS, consegnaVeloce: false }),
+    pienaCents: tariffaConsegnaCents({ pickupInStore: false, merceCents: 0, consegnaVeloce: true }),
+  };
+}
+
+/**
+ * 29/10/2026 — IL RIQUADRO DEL PREZZO IN CIMA ALLA PAGINA SPEDIZIONI.
+ *
+ * Scriveva «Consegna 3,00 € · Per ogni negozio, qualunque sia la spesa» mentre la cassa, sotto i
+ * 10 € di merce di quel negozio, addebita 4 €. Il paragrafo sotto era già stato corretto, il
+ * riquadro no: la stessa pagina diceva due tariffe. Ora titolo e riga sotto nascono dalla tariffa
+ * della cassa. `siPaga` dice alla pagina se c'è qualcosa da pagare, con lo stesso conto.
+ */
+export function riquadroTariffaConsegna(): { siPaga: boolean; titolo: string; sottotitolo: string } {
+  const { fasciaCents, pienaCents } = tariffeDellaCassa();
+  if (pienaCents <= 0) {
+    return { siPaga: false, titolo: 'Consegna senza costi', sottotitolo: 'Per ogni negozio, qualunque sia la spesa' };
+  }
+  const fascia = formatPrice(fasciaCents / 100);
+  if (fasciaCents === pienaCents) {
+    return { siPaga: true, titolo: `Consegna ${fascia}`, sottotitolo: 'Per ogni negozio, qualunque sia la spesa' };
+  }
+  const piena = formatPrice(pienaCents / 100);
+  const soglia = formatPrice(SPESA_SENZA_SUPPLEMENTO_CENTS / 100);
+  return {
+    siPaga: true,
+    titolo: `Consegna ${fascia} o ${piena}`,
+    sottotitolo: `Per ogni negozio: ${piena} sotto i ${soglia} di spesa o con la consegna veloce`,
+  };
 }
 
 export function rigaDelCodiceSpedizione(

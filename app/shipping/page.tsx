@@ -8,13 +8,12 @@ import { Truck, Banknote, MapPin, Zap, Store, Clock, ChefHat, Package, Bike, Che
 // fascia di distanza, «GRATIS» sopra i 30 €, «oltre 10 km a preventivo» ed «entro 15 km». La cassa
 // faceva un altro conto (2,50 € più 1,20 € al km, più 3 € di consegna) e oggi ne fa un altro
 // ancora: si paga solo la consegna, per negozio, e si consegna fino a RAGGIO_CONSEGNA_KM. Qui non
-// si scrivono piu' cifre: le danno `promessaSpedizione()` e la costante del confine, e una prova
+// si scrivono piu' cifre: le danno `riquadroTariffaConsegna()`, `fraseTariffaConsegna()` e la costante del confine, e una prova
 // trasforma la pagina in HTML e confronta ogni euro e ogni chilometro col conto della cassa
 // (tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx).
-import { NEGOZIO_CHIUSO_COSA_SUCCEDE, fraseTariffaConsegna, promessaSpedizione, riquadroRitiroInNegozio } from '@/lib/promesse-pubbliche';
+import { NEGOZIO_CHIUSO_COSA_SUCCEDE, fraseTariffaConsegna, riquadroRitiroInNegozio, riquadroTariffaConsegna } from '@/lib/promesse-pubbliche';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
-import { formatPrice } from '@/lib/format';
 
 export const metadata = {
   title: 'Spedizioni e consegne · MyCity',
@@ -31,8 +30,9 @@ export const metadata = {
 };
 
 export default function ShippingPage() {
-  const { costoConsegna } = promessaSpedizione();
-  const quanto = costoConsegna > 0 ? formatPrice(costoConsegna) : null;
+  // 29/10/2026 — Il riquadro scriveva «Consegna 3,00 € · qualunque sia la spesa» sopra una cassa che
+  // sotto i 10 € addebita 4 €: titolo, riga sotto e il «si paga o no» del paragrafo vengono dallo stesso conto.
+  const tariffa = riquadroTariffaConsegna();
   const confine = `${RAGGIO_CONSEGNA_KM} km`;
 
   return (
@@ -45,8 +45,8 @@ export default function ShippingPage() {
       <div className="grid sm:grid-cols-3 gap-4 mb-10">
         <div className="bg-olive-50 border border-olive-200 rounded-xl p-5 text-center">
           <div className="mb-2 flex justify-center"><Banknote size={28} className="text-olive-600" aria-hidden /></div>
-          <div className="font-bold text-olive-900">{quanto ? `Consegna ${quanto}` : 'Consegna senza costi'}</div>
-          <div className="text-sm text-olive-700 mt-1">Per ogni negozio, qualunque sia la spesa</div>
+          <div className="font-bold text-olive-900">{tariffa.titolo}</div>
+          <div className="text-sm text-olive-700 mt-1">{tariffa.sottotitolo}</div>
         </div>
         <div className="bg-primary-50 border border-primary-200 rounded-xl p-5 text-center">
           <div className="mb-2 flex justify-center"><Zap size={28} className="text-primary-600" aria-hidden /></div>
@@ -83,7 +83,7 @@ export default function ShippingPage() {
 
         <div className="space-y-3">
           <h2 className="text-xl font-bold text-ink-900 mb-2">Quanto costa la consegna</h2>
-          {quanto ? (
+          {tariffa.siPaga ? (
             <p>Paghi solo la consegna, per ogni negozio da cui ordini: <strong>{fraseTariffaConsegna()}</strong>.
             Non c&apos;è un costo a chilometro.</p>
           ) : (
