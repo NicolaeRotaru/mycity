@@ -101,13 +101,16 @@ vi.mock('@/lib/supabase/server', () => {
     { id: '22222222-2222-2222-2222-222222222222', seller_id: 'bbbbbbbb-0000-0000-0000-000000000002', name: 'Fiori', price: 8, stock: 10, has_variants: false, images: [], status: 'available' },
   ];
   const venditori = [
-    { id: 'aaaaaaaa-0000-0000-0000-000000000001', store_name: 'Forno', full_name: null, store_lat: 45.05, store_lng: 9.69, store_hours: null, email: 'a@b.it' },
-    { id: 'bbbbbbbb-0000-0000-0000-000000000002', store_name: 'Fiorista', full_name: null, store_lat: 45.06, store_lng: 9.70, store_hours: null, email: 'c@d.it' },
+    { id: 'aaaaaaaa-0000-0000-0000-000000000001', store_name: 'Forno', full_name: null, store_lat: 45.05, store_lng: 9.69, store_hours: null, email: 'a@b.it', role: 'seller', is_approved: true },
+    { id: 'bbbbbbbb-0000-0000-0000-000000000002', store_name: 'Fiorista', full_name: null, store_lat: 45.06, store_lng: 9.70, store_hours: null, email: 'c@d.it', role: 'seller', is_approved: true },
   ];
 
   const from = (table: string): Record<string, unknown> => {
     if (table === 'products') return risolvibile({ data: prodotti, error: null });
     if (table === 'profiles') return risolvibile({ data: venditori, error: null });
+    // Il ramo della cassa ora vuole ogni negozio del carrello in vetrina (o approvato
+    // nel profilo): la vetrina finta restituisce i due negozi, come in produzione.
+    if (table === 'seller_public_profiles') return risolvibile({ data: venditori, error: null });
     if (table === 'product_variants') return risolvibile({ data: [], error: null });
     if (table === 'orders') {
       return {

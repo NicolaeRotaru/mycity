@@ -24,6 +24,7 @@ import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { decisioneSuChiaveOccupata } from '@/lib/ordini/tentativo';
+import { idOrdiniDelTentativo } from '@/lib/ordini/chiave-dopo-l-errore';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { ordineInContantiPuoNascere } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
@@ -62,8 +63,15 @@ const DeliverySchema = z.object({
   lng: z.number().min(-180).max(180).nullable().optional(),
 }).refine((d) => !(d.lat === 0 && d.lng === 0), { message: 'Coordinate di consegna non valide' });
 
+/**
+ * Quanti negozi al massimo in un carrello. Serve anche a rileggere gli ordini
+ * di una chiave: gli identificativi si rifanno per tutte le posizioni possibili,
+ * cosi' un carrello cambiato fra un tocco e l'altro non nasconde gli ordini nati.
+ */
+const NEGOZI_PER_CARRELLO = 10;
+
 const Body = z.object({
-  groups: z.array(GroupSchema).min(1).max(10),
+  groups: z.array(GroupSchema).min(1).max(NEGOZI_PER_CARRELLO),
   delivery: DeliverySchema,
   couponCode: z.string().max(40).optional().nullable(),
   pickupInStore: z.boolean().default(false),
@@ -148,6 +156,51 @@ function nonVedoSeLOrdineCe(): NextResponse {
       inCorso: true,
     },
     { status: 503 },
+  );
+}
+
+/**
+ * 29/10/2026 — LA CHIAVE CHE NON SI RIESCE A REGISTRARE NON SI BUTTA.
+ *
+ * Se l'inserimento della chiave cade per un guasto (non per un duplicato), la
+ * rotta non sa se quella chiave aveva gia' ordini: e' proprio il caso della
+ * risposta persa sulla rete, col cliente che ritocca «Ordina» con la stessa
+ * chiave. Un 503 senza `inCorso` faceva buttare la chiave al browser, col
+ * carrello pieno: al tocco dopo una chiave nuova, e il SECONDO ordine.
+ * Qui la chiave resta: al tocco dopo la rotta rilegge e decide.
+ */
+function nonRiescoARegistrare(): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: { code: 'SERVICE_UNAVAILABLE', message: "Impossibile registrare l'ordine, riprova fra poco." },
+      inCorso: true,
+    },
+    { status: 503 },
+  );
+}
+
+/**
+ * 29/10/2026 — UNA PARTE DELL'ORDINE C'E', L'ALTRA NO: CI SI FERMA.
+ *
+ * Sulla chiave abbandonata si trovano gli ordini di quella chiave, ma non
+ * tutti i negozi del carrello. Ricreare farebbe il doppione di quelli nati;
+ * dire «fatto» perderebbe in silenzio quelli mancanti. Scelta di Nicola del
+ * 26/10: coi soldi il sito si ferma, avvisa con la cifra, e la correzione la
+ * fa lui a mano. La chiave resta (`inCorso`), cosi' nessun tocco successivo
+ * crea niente.
+ */
+function ordineArrivatoInParte(): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: 'CONFLICT',
+        message: 'Una parte del tuo ordine è già arrivata ai negozi. Non riprovare: controlla «I miei ordini», ti aiutiamo noi a sistemare il resto.',
+      },
+      inCorso: true,
+    },
+    { status: 409 },
   );
 }
 
@@ -239,7 +292,7 @@ export const POST = withAuthRateLimit(
           logger.error('[cod] rivendicazione del tentativo fallita', {
             chiave: chiaveTentativo, message: errRivendica.message,
           });
-          return ApiErrors.unavailable("Impossibile registrare l'ordine, riprova.");
+          return nonRiescoARegistrare();
         }
 
         // Chiave gia' presa: o e' lo stesso invio ripetuto, o e' il gemello
@@ -291,13 +344,22 @@ export const POST = withAuthRateLimit(
            * nata questa persona ha ordini in contanti, non si ricrea niente: ci
            * si ferma, lo si dice con la cifra, e la persona trova l'ordine fra i
            * suoi. Se la lettura stessa non riesce, ci si ferma lo stesso.
+           *
+           * 29/10/2026 — Ma «ordini di questa persona dopo l'ora della chiave»
+           * prendeva anche quelli di un'altra scheda o di un altro telefono, e
+           * quelli gia' annullati: la cassa diceva «fatto», svuotava il carrello
+           * e l'ordine di adesso non nasceva. Si cercano solo gli ordini di
+           * QUESTA chiave: il loro identificativo nasce dalla chiave
+           * (`idOrdiniDelTentativo`). Nessuno → la chiave si libera e l'ordine
+           * nasce, come prima del 28/10. Tutti i negozi del carrello → e' lo
+           * stesso invio, si restituiscono. Una parte → ci si ferma.
            */
+          const idDellaChiave = await idOrdiniDelTentativo(chiaveTentativo, user.id, NEGOZI_PER_CARRELLO);
           const { data: ordiniDopo, error: errOrdiniDopo } = await admin
             .from('orders')
             .select('id, seller_id, total_price')
             .eq('user_id', user.id)
-            .eq('payment_method', 'cod')
-            .gte('created_at', gia?.created_at as string);
+            .in('id', idDellaChiave);
           if (errOrdiniDopo) {
             logger.error('[cod] chiave abbandonata: non riesco a vedere se gli ordini sono gia nati', {
               chiave: chiaveTentativo, message: errOrdiniDopo.message,
@@ -322,6 +384,22 @@ export const POST = withAuthRateLimit(
               sellerId: o.seller_id as string,
               totalCents: Math.round(Number(o.total_price ?? 0) * 100),
             }));
+            const negoziDelCarrello = new Set(body.groups.map((g) => g.sellerId));
+            const negoziTrovati = new Set(ordiniTrovati.map((o) => o.sellerId));
+            const tuttiINegozi =
+              ordiniTrovati.length === body.groups.length &&
+              negoziTrovati.size === negoziDelCarrello.size &&
+              [...negoziDelCarrello].every((s) => negoziTrovati.has(s));
+            if (!tuttiINegozi) {
+              logger.error('[cod] chiave abbandonata con l\'ordine nato solo in parte: fermo, serve una correzione a mano', {
+                chiave: chiaveTentativo,
+                userId: user.id,
+                ordini: ordiniTrovati.map((o) => o.id),
+                negoziDelCarrello: [...negoziDelCarrello],
+                totaleCents: ordiniTrovati.reduce((s, o) => s + o.totalCents, 0),
+              });
+              return ordineArrivatoInParte();
+            }
             logger.error('[cod] chiave abbandonata ma con ordini gia nati: NON ricreo, li restituisco', {
               chiave: chiaveTentativo,
               userId: user.id,
@@ -796,6 +874,13 @@ export const POST = withAuthRateLimit(
       walletAppliedPerGroup.length = 0;
     };
 
+    // 29/10/2026 — L'identificativo di ogni ordine nasce dalla chiave del
+    // tentativo: e' il legame che la chiave abbandonata rilegge (sopra), e la
+    // chiave primaria di `orders` rifiuta da sola un secondo ordine uguale.
+    const idDiQuestoInvio = chiaveTentativo
+      ? await idOrdiniDelTentativo(chiaveTentativo, user.id, body.groups.length)
+      : null;
+
     for (let i = 0; i < body.groups.length; i++) {
       const g = body.groups[i];
       const shipping = shippingPerGroupCents[i];
@@ -864,6 +949,7 @@ export const POST = withAuthRateLimit(
       // una colonna che non conosce, fa fallire l'istruzione intera, e senza
       // ripiego non nascerebbe nessun ordine fino alla firma sul database.
       const rigaOrdine = {
+        ...(idDiQuestoInvio ? { id: idDiQuestoInvio[i] } : {}),
         user_id: user.id,
         seller_id: g.sellerId,
         total_price: totalCents / 100,

@@ -63,7 +63,9 @@ function dati(): Dati {
       },
       {
         id: SENZA_INSEGNA, role: 'seller', is_approved: true, store_name: null,
-        store_lat: 45.03, store_lng: 9.66, store_hours: null,
+        // Dentro i 5 km da casa di Maria (circa 1,5 km): la rotta ora legge le coordinate dal
+        // profilo e controlla la zona anche per lui. A 45.03/9.66 era a 6 km, fuori zona.
+        store_lat: 45.06, store_lng: 9.7, store_hours: null,
       },
       { id: MARIA, role: 'buyer', is_approved: false, store_name: null, full_name: 'Maria Rossi', wallet_balance_cents: 0 },
     ],
@@ -315,6 +317,20 @@ vi.mock('@/lib/supabase/server', () => {
       // Gli indirizzi salvati si leggono dal database finto: sono le coordinate con cui il
       // server prezza la consegna.
       if (tavola === 'user_addresses') return (g.__DB_DEL_SERVER__ as { from: (t: string) => unknown }).from(tavola);
+      // Il client di servizio non ha regole per riga: un negozio approvato che la vista non
+      // restituisce (senza insegna) lo ritrova nel profilo, con ruolo e approvazione. La rotta
+      // dei contanti lo chiede cosi' (`.in('id', mancanti)`): si risponde con quelle righe.
+      if (tavola === 'profiles') {
+        let ids: string[] | null = null;
+        const b = vuoto({ data: [], error: null });
+        b.in = (_c: string, v: string[]) => ((ids = v), b);
+        b.then = (risolvi: (v: unknown) => unknown) => {
+          const tutti = (g.__PROFILI_DI_SERVIZIO__ as Array<{ id: string }> | undefined) ?? [];
+          const righe = ids ? tutti.filter((r) => (ids as string[]).includes(r.id)) : [];
+          return Promise.resolve({ data: righe, error: null }).then(risolvi);
+        };
+        return b;
+      }
       if (tavola === 'orders') {
         return {
           insert: (riga: Record<string, unknown>) => {
@@ -343,6 +359,7 @@ vi.mock('@/lib/supabase/server', () => {
 async function spedizioneAddebitata(mondo: Mondo, gruppi: Array<{ sellerId: string; items: Array<{ productId: string; quantity: number }> }>) {
   const db = databaseCoiPermessi(dati(), mondo, MARIA, RPC);
   globale.__DB_DEL_SERVER__ = db.client;
+  globale.__PROFILI_DI_SERVIZIO__ = dati().profiles;
   ordiniScritti.length = 0;
   globale.__ORDINI_SCRITTI__ = ordiniScritti;
   const { POST } = await import('@/app/api/orders/cod/route');
@@ -364,7 +381,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  for (const k of ['__CLIENT_SUPABASE__', '__UTENTE__', '__DATI_QUERY__', '__ESITO_QUERY__', '__DB_DEL_SERVER__', '__ORDINI_SCRITTI__', '__QUERY_FINTA__']) {
+  for (const k of ['__CLIENT_SUPABASE__', '__UTENTE__', '__DATI_QUERY__', '__ESITO_QUERY__', '__DB_DEL_SERVER__', '__ORDINI_SCRITTI__', '__QUERY_FINTA__', '__PROFILI_DI_SERVIZIO__']) {
     delete globale[k];
   }
   localStorage.clear();
