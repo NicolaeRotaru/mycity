@@ -64,9 +64,9 @@ const ORDINE_GRANDE = consegnaDellaCassa(1500);
 /** Un testo che dice il prezzo della consegna dice quello che la cassa addebita, anche sotto i 10 €. */
 function diceLaTariffaDellaCassa(testo: string, dove: string) {
   // 29/10/2026 22:21 — Una consegna sola per il carrello: la frase dice la base e non promette più
-  // «per ogni negozio» né «qualunque sia la spesa».
+  // «per ogni negozio da cui ordini» né «qualunque sia la spesa» («per ogni negozio in più» è la regola nuova).
   expect(testo, `${dove} non dice la base della consegna (${euro(ORDINE_GRANDE)})`).toContain(euro(ORDINE_GRANDE));
-  expect(testo, `${dove} dice ancora la regola per negozio`).not.toMatch(/per ogni negozio|qualunque sia la spesa/i);
+  expect(testo, `${dove} dice ancora la regola per negozio`).not.toMatch(/per ogni negozio da cui ordini|qualunque sia la spesa/i);
   expect(testo, `${dove} non dice che è una sola`).toMatch(/per tutto il carrello/);
 }
 

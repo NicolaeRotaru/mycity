@@ -419,11 +419,11 @@ describe('il carrello e la cassa mostrano la stessa consegna', () => {
     expect(
       cassa.cifre,
       'il riepilogo della cassa ha una riga «Gratis» accanto alla consegna che fa pagare, o una cifra diversa dal carrello',
-    ).toEqual([CONSEGNA(1)]);
+    ).toEqual([CONSEGNA_FOCACCIA]);
     expect(
       cassa.riquadro,
       'il riquadro «Consegna a domicilio» non scrive la consegna che la cassa addebita (o scrive «Gratis»)',
-    ).toEqual([CONSEGNA(1)]);
+    ).toEqual([CONSEGNA_FOCACCIA]);
     expect(gratisScritti(cassa.testo), 'la cassa scrive «Gratis» mentre fa pagare la consegna').toEqual([]);
   }, 60000);
 });

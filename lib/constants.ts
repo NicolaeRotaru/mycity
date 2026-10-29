@@ -116,6 +116,15 @@ export const RITIRO_IN_NEGOZIO_ATTIVO = false;
  */
 export const COMPENSO_RIDER_CENTS = 300;
 /**
+ * 29/10/2026 23:04 — Il fattorino prende 3 € per il giro (`COMPENSO_RIDER_CENTS`, sull'ordine che
+ * porta la base della consegna) e 1 € per ogni negozio in più da cui passa (registro dei fatti,
+ * logistica.compenso-fattorino). Prima dell'ondata 14 prendeva 3 € su OGNI ordine: con 15 + 12 €
+ * il cliente pagava 4 € di consegna e il fattorino ne prendeva 6, e con la carta i bonifici della
+ * stessa charge superavano l'addebito. È un fatto suo, non `CONSEGNA_NEGOZIO_IN_PIU_CENTS`: oggi
+ * valgono uguale, ma uno lo paga il cliente e l'altro lo prende il fattorino.
+ */
+export const COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS = 100;
+/**
  * Fee di consegna trattenuta dalla piattaforma (in centesimi) su ogni ordine
  * con consegna a domicilio. NON si applica ai ritiri in negozio. La incassa
  * MyCity: non finisce nel payout del venditore né nel compenso del rider.
@@ -128,8 +137,8 @@ export const PLATFORM_DELIVERY_FEE_CENTS = 300;
  * 3 € di base per tutto il carrello con la fascia oraria che sceglie il cliente; 1 € in più per ogni
  * negozio in più; 1 € in più per ogni negozio in cui la merce (dopo gli sconti) sta sotto i 10 €; la
  * veloce («Adesso») 1 € in più una volta sola, compresa se c'è già un euro della spesa piccola.
- * Il fattorino resta al compenso di oggi per ogni ordine (`COMPENSO_RIDER_CENTS`): gli euro in più
- * restano a MyCity, dentro `delivery_fee_cents`.
+ * Il fattorino prende 3 € per il giro e 1 € per ogni negozio in più (`COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS`):
+ * gli euro della spesa piccola e della veloce restano a MyCity, dentro `delivery_fee_cents`.
  * Il conto lo fa una funzione sola: `vociDellaConsegna` in lib/ordini/prezzi.ts.
  */
 export const SUPPLEMENTO_CONSEGNA_CENTS = 100;

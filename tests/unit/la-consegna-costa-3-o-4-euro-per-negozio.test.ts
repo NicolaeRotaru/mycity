@@ -90,10 +90,13 @@ describe('la consegna costa 3 € con la fascia, 4 € sotto i 10 € o con la v
                 shippingCents: g.shippingCents,
               });
               const caso = `${merci.join('+')}c veloce=${veloce} codice=${codice} negozio ${k}`;
-              // Le garanzie dei bonifici valgono col negozio solo: con più negozi il compenso lo decide Nicola.
-              if (merci.length === 1 && g.deliveryFeeCents + split.applicationFeeCents < COMPENSO_RIDER_CENTS) errori.push(`fattorino scoperto: ${caso}`);
-              if (merci.length === 1 && split.sellerPayoutCents + g.riderFeeCents > g.totalCents) errori.push(`bonifici oltre l'incasso: ${caso}`);
-              if (merci.length === 1 && g.deliveryFeeCents > 400) errori.push(`consegna oltre 4 €: ${caso}`);
+              // 29/10/2026 23:04 — Le garanzie dei bonifici tornano a valere con più negozi: il fattorino
+              // prende 3 € sul primo e 1 € su ogni altro (logistica.compenso-fattorino).
+              const compensoAtteso = merci.length > 1 && k !== (merci[1] > merci[0] ? 1 : 0) ? 100 : COMPENSO_RIDER_CENTS;
+              if (g.riderFeeCents !== compensoAtteso) errori.push(`compenso ${g.riderFeeCents} invece di ${compensoAtteso}: ${caso}`);
+              if (g.deliveryFeeCents + split.applicationFeeCents < g.riderFeeCents) errori.push(`fattorino scoperto: ${caso}`);
+              if (split.sellerPayoutCents + g.riderFeeCents > g.totalCents) errori.push(`bonifici oltre l'incasso: ${caso}`);
+              if (g.deliveryFeeCents > 400) errori.push(`consegna oltre 4 €: ${caso}`);
               const primo = merci.length > 1 && merci[1] > merci[0] ? 1 : 0;
               const sotto = merci.filter((m) => m < 1000).length;
               const attesa = (k === primo ? 300 + (veloce && sotto === 0 ? 100 : 0) : 100) + (merci[k] < 1000 ? 100 : 0);

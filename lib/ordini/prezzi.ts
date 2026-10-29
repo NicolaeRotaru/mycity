@@ -132,9 +132,11 @@ export type EsitoPrezzo = {
  * Il carrello resta diviso in un ordine per negozio, e la consegna si divide fra gli ordini senza
  * perdere né creare centesimi: il «primo negozio» (la spesa più alta, a parità il primo del
  * carrello) porta la base e l'euro della veloce quando si paga; ogni altro ordine porta il suo euro
- * di fermata; ogni ordine sotto i 10 € porta il suo euro in più. Il fattorino NON cambia: resta il
- * compenso di oggi per ogni ordine, perché quanto prende per un giro con più negozi lo deve ancora
- * decidere Nicola. Prova: tests/unit/la-consegna-e-una-sola-per-tutto-il-carrello.test.ts.
+ * di fermata; ogni ordine sotto i 10 € porta il suo euro in più. Il fattorino si divide allo stesso
+ * modo (Nicola, 29/10 alle 23:04, logistica.compenso-fattorino): 3 € per il giro sul primo negozio,
+ * 1 € su ogni altro; la spesa piccola e la veloce restano a MyCity. Così ogni ordine incassa almeno
+ * il compenso che versa, e con la carta i bonifici della stessa charge stanno dentro l'addebito.
+ * Prove: tests/unit/la-consegna-e-una-sola-per-tutto-il-carrello.test.ts, sonda-collaudo-a.test.ts.
  */
 export type VociDellaConsegna = {
   /** I 3 € di base, una volta sola. Zero col ritiro in negozio o col carrello vuoto. */
@@ -304,7 +306,14 @@ export function prezziDelCarrello(ing: IngressiPrezzo): EsitoPrezzo {
     // non creare un giro di dipendenze»: motivazione falsa, questo file
     // importa da lib/shipping dalla prima riga. Due copie della stessa cifra
     // vogliono dire che il giorno in cui cambia una resta indietro.
-    const riderFeeCents = compensoRiderCents({ pickupInStore: ing.pickupInStore });
+    //
+    // 29/10/2026 23:04 — Il giro è uno: 3 € sull'ordine che porta la base, 1 € su ogni negozio in
+    // più (logistica.compenso-fattorino). Con 3 € su ogni ordine il fattorino prendeva 6 € su un
+    // carrello 15 + 12 € che il cliente paga 4 €, e con la carta i bonifici superavano l'addebito.
+    const riderFeeCents = compensoRiderCents({
+      pickupInStore: ing.pickupInStore,
+      negozioInPiu: i !== consegna.primo,
+    });
     const merceCents = subtotali[i] - couponPortionCents - pickupPortionCents;
     const tariffaCents = consegna.perOrdineCents[i];
     const deliveryFeeCents = consegnaDaPagareCents({

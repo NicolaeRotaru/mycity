@@ -63,7 +63,10 @@ describe('il codice «Spedizione gratuita»', () => {
 
   it('il fattorino resta pagato: il suo compenso non dipende dal codice del cliente', () => {
     const con = prezziDelCarrello(ingressi([2000, 1500], { couponSpedizioneGratis: true }));
-    expect(con.gruppi.map((g) => g.riderFeeCents)).toEqual([COMPENSO_RIDER_CENTS, COMPENSO_RIDER_CENTS]);
+    const senza = prezziDelCarrello(ingressi([2000, 1500], { couponSpedizioneGratis: false }));
+    expect(con.gruppi.map((g) => g.riderFeeCents)).toEqual(senza.gruppi.map((g) => g.riderFeeCents));
+    // 29/10/2026 23:04 — 3 € per il giro sul negozio che porta la base, 1 € sul negozio in più.
+    expect(con.gruppi.map((g) => g.riderFeeCents)).toEqual([COMPENSO_RIDER_CENTS, 100]);
   });
 
   it('il negozio incassa lo stesso netto: il regalo lo paga la piattaforma, non lui', () => {

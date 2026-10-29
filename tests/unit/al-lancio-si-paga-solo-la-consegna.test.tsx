@@ -151,8 +151,10 @@ describe('in cassa si pagano solo i 3 euro di consegna per negozio', () => {
     // 29/10/2026 22:21 — Una consegna sola: la macelleria (spesa più alta) porta la base, il forno
     // l'euro del negozio in più e quello della spesa sotto i 10 €.
     expect(esito.gruppi.map(consegnaPagata)).toEqual([EURO_NEGOZIO_IN_PIU + EURO_SPESA_PICCOLA, PLATFORM_DELIVERY_FEE_CENTS]);
-    expect(esito.grandTotalCents).toBe(800 + 1800 + 2 * PLATFORM_DELIVERY_FEE_CENTS);
-    expect(esito.gruppi.map((g) => g.riderFeeCents)).toEqual([COMPENSO_RIDER_CENTS, COMPENSO_RIDER_CENTS]);
+    expect(esito.grandTotalCents).toBe(800 + 1800 + PLATFORM_DELIVERY_FEE_CENTS + EURO_NEGOZIO_IN_PIU + EURO_SPESA_PICCOLA);
+    // 29/10/2026 23:04 — Un giro solo (logistica.compenso-fattorino): 3 € sulla macelleria che porta
+    // la base, 1 € sul forno, il negozio in più. Prima erano 3 € su ognuno: 6 € al fattorino.
+    expect(esito.gruppi.map((g) => g.riderFeeCents)).toEqual([EURO_NEGOZIO_IN_PIU, COMPENSO_RIDER_CENTS]);
   });
 
   it('col ritiro in negozio non si paga consegna', () => {
