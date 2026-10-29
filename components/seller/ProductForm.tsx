@@ -20,7 +20,7 @@ import BarcodeScanner from '@/components/seller/BarcodeScanner';
 import AIDescriptionButton from '@/components/AIDescriptionButton';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
-import { getAttributesForCategory, AI_ATTR_TO_FIELD } from '@/lib/category-attributes';
+import { getAttributesForCategory, AI_ATTR_TO_FIELD, attributoSpuntato } from '@/lib/category-attributes';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
@@ -403,7 +403,7 @@ export default function ProductForm({
             if (!opt) continue;
             setAttribute(targetKey, opt);
           } else if (field.type === 'checkbox') {
-            setAttribute(targetKey, /^(true|1|s[iì]|yes|vero)$/i.test(value));
+            setAttribute(targetKey, attributoSpuntato(value));
           } else {
             setAttribute(targetKey, value);
           }

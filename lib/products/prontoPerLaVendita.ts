@@ -254,7 +254,6 @@ function diceQualcosa(v: unknown): boolean {
 }
 
 export function valoreLeggibile(v: unknown): string {
-  if (typeof v === 'string' && /^(true|false)$/i.test(v.trim())) return /^true$/i.test(v.trim()) ? 'Sì' : 'No';
   return formatAttributeValue(typeof v === 'string' ? v.trim() : v);
 }
 
