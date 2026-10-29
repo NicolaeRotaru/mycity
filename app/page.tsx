@@ -29,7 +29,8 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
     ),
     subhead: (
       <>
-        Alimentari, abbigliamento, casa, elettronica: ordini dai commercianti
+        {/* 29/10/2026 — Senza abbigliamento: al lancio non c'è (catalogo.categorie, Nicola 29/10 00:05). */}
+        Alimentari, casa, elettronica: ordini dai commercianti
         della tua via in pochi tap e <strong className="text-ink-900">puoi pagare alla consegna</strong>.
         Consegna in giornata.
       </>
@@ -37,7 +38,8 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
     ctaPrimary: 'Inizia a esplorare',
   },
   b: {
-    eyebrow: 'Spesa, moda e casa · consegna a domicilio',
+    // 29/10/2026 — Era «Spesa, moda e casa»: al lancio niente abbigliamento (catalogo.categorie).
+    eyebrow: 'Spesa, casa e regali · consegna a domicilio',
     headline: (
       <>
         Ordini dai negozi di Piacenza.<br />

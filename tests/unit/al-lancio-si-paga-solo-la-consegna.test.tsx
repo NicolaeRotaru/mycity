@@ -22,6 +22,7 @@ import {
   VALUE_PROPS,
 } from '@/lib/constants';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
+import { APERTURA_EXPRESS, CHIUSURA_EXPRESS } from '@/lib/quando-arriva';
 import { formatPrice } from '@/lib/format';
 import { haversineKm } from '@/lib/geo';
 import { prezziDelCarrello, type IngressiPrezzo } from '@/lib/ordini/prezzi';
@@ -391,6 +392,9 @@ describe('la pagina Spedizioni dice le cifre della cassa', () => {
       ...numeriIn(formatPrice(SOGLIA_SPESA / 100)),
       String(RAGGIO_CONSEGNA_KM),
       ...numeriIn(EXPRESS_ETA_LABEL),
+      // 29/10/2026 — La pagina dice quando si può la veloce: «dalle 8 alle 21», le ore di `veloceSiPuo`.
+      String(APERTURA_EXPRESS),
+      String(CHIUSURA_EXPRESS),
       '24', // la garanzia legale di 24 mesi, che la prova qui sopra pretende
     ]);
     const estranei = numeriIn(testo).filter((n) => !ammessi.has(n));

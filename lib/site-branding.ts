@@ -70,6 +70,16 @@ export const DEFAULT_WEDGE_ITEMS: { icon: WedgeIconKey; text: string }[] = [
 export const DEFAULT_FOOTER_TAGLINE =
   `Il marketplace dei negozi di Piacenza. Compra dai commercianti locali. ${CONSEGNA_FRASE_INTERA}.`;
 
+/**
+ * La descrizione del sito per Google e per le anteprime dei link (app/layout.tsx).
+ * 29/10/2026 — Diceva «alimentari, abbigliamento, casa…»: al lancio l'abbigliamento non c'è
+ * (registro dei fatti, catalogo.categorie, Nicola 29/10 alle 00:05). Vive qui, accanto agli altri
+ * testi del sito, perché la radice del sito non si può importare in una prova.
+ * Prova: tests/unit/le-frasi-della-consegna-non-tornano-indietro.test.tsx
+ */
+export const DESCRIZIONE_DEL_SITO =
+  `Compra online dai negozi di Piacenza: alimentari, casa, elettronica, libri. ${CONSEGNA_ALL_ORA_CHE_SCEGLI}, pagamento alla consegna.`;
+
 export function defaultBranding(): Branding {
   return {
     announcement: { items: DEFAULT_WEDGE_ITEMS.map((i) => ({ ...i })), promoLinkEnabled: true },

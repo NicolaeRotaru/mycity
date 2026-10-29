@@ -78,13 +78,16 @@ const PAGINA_SPEDIZIONI = [
   // fascia, 4 € sotto i 10 € o con la veloce. Via «qualunque sia la spesa»: 8 € di merce pagano 4 €.
   `Consegna da ${TRE_EURO}`,
   'Una sola per tutto il carrello',
-  'Consegna in 30-60 min',
-  'Nei comuni serviti, negli orari di apertura del negozio',
+  // 29/10/2026 — riletta con la regola di Nicola (registro dei fatti, consegna.promessa): i minuti
+  // della veloce non sono più una promessa certa, stanno accanto alle tre condizioni di `veloceSiPuo`.
+  'Veloce in 30-60 minuti',
+  'dalle 8 alle 21, a negozi aperti, con un fattorino in servizio',
   `Fino a ${KM} km`,
   "dal negozio, in linea d'aria",
   'Tempi di consegna',
-  'Consegniamo in 30-60 min dalla conferma del venditore. È la nostra promessa: il negozio è nella tua città, il rider fa un percorso breve.',
-  'Il tempo parte da quando il negozio conferma l’ordine, non da quando lo invii',
+  // Lo spazio prima del punto è il grassetto della fascia che `testoDi` scioglie in uno spazio.
+  "La consegna arriva nella fascia oraria che scegli in cassa . Se ti serve prima, c'è la consegna veloce in 30-60 minuti dalla conferma del negozio: si può dalle 8 alle 21, a negozi aperti, con un fattorino in servizio. Quando non si può, la cassa non te la propone.",
+  'I minuti della veloce partono da quando il negozio conferma l’ordine, non da quando lo invii',
   'Vale negli orari di apertura del negozio che hai scelto',
   NEGOZIO_CHIUSO,
   'Quanto costa la consegna',

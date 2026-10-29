@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import ShippingPage from '@/app/shipping/page';
+import { EXPRESS_ETA_LABEL, EXPRESS_ETA_MAX, EXPRESS_ETA_MIN } from '@/lib/delivery';
 import { rispostaTempiDiConsegna } from '@/lib/promesse-pubbliche';
 
 /**
@@ -82,11 +85,17 @@ describe('la promessa di consegna', () => {
     expect(rispostaTempiDiConsegna().a).toContain(EXPRESS_ETA_LABEL);
     expect(EXPRESS_ETA_LABEL).toMatch(/30-60/);
 
-    const spedizioni = readFileSync(join(RADICE, 'app/shipping/page.tsx'), 'utf8');
-    expect(
-      spedizioni.includes('EXPRESS_ETA_LABEL') || /30-60 min/.test(spedizioni),
-      'la pagina Spedizioni deve dire il tempo: o lo legge da lib/delivery, o lo scrive',
-    ).toBe(true);
+    // 29/10/2026 — La pagina Spedizioni non scrive più «Consegna in 30-60 min» come cosa certa: dice
+    // la veloce coi suoi minuti accanto alle sue condizioni (lib/promessa-consegna, che li legge da
+    // lib/delivery). Qui si guarda il testo che arriva al cliente, non il nome della costante: un
+    // numero diverso scritto a mano fa diventare rossa la prova.
+    const spedizioni = renderToStaticMarkup(createElement(ShippingPage)).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+    expect(spedizioni, 'la pagina Spedizioni deve dire i minuti della veloce decisi in lib/delivery').toContain(
+      `veloce in ${EXPRESS_ETA_MIN}-${EXPRESS_ETA_MAX} minuti`,
+    );
+    expect(spedizioni.match(/\d+\s*[-–]\s*\d+\s*min/g) ?? [], 'nessun altro tempo scritto a mano').toEqual(
+      (spedizioni.match(/\d+\s*[-–]\s*\d+\s*min/g) ?? []).map(() => `${EXPRESS_ETA_MIN}-${EXPRESS_ETA_MAX} min`),
+    );
 
     const faq = readFileSync(join(RADICE, 'app/faq/page.tsx'), 'utf8');
     expect(

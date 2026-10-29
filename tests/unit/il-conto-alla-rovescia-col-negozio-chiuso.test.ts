@@ -147,23 +147,38 @@ describe('la riga che legge la persona', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('l\'invariante sul conto alla rovescia', () => {
-  const src = readFileSync(join(process.cwd(), 'components/ui/DeliveryCutoff.tsx'), 'utf8');
-  const senzaCommenti = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/[^\n]*$/gm, ' ');
+  /*
+   * 29/10/2026 — Il conto alla rovescia non c'è più (regola di Nicola, consegna.promessa): il
+   * componente chiede la riga a `rigaConsegnaDellaScheda` (lib/promessa-consegna), che decide con
+   * `promessaDiConsegna`. Gli invarianti seguono la decisione dove vive adesso, e restano due:
+   * la decisione è della funzione, e «chiuso» viene prima della frase della consegna normale.
+   * Il comportamento nel browser, dopo il caricamento, lo prova
+   * tests/unit/le-frasi-della-consegna-non-tornano-indietro.test.tsx.
+   */
+  const togli = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/[^\n]*$/gm, ' ');
+  const componente = togli(readFileSync(join(process.cwd(), 'components/ui/DeliveryCutoff.tsx'), 'utf8'));
+  const libreria = togli(readFileSync(join(process.cwd(), 'lib/promessa-consegna.ts'), 'utf8'));
+  const inizio = libreria.indexOf('export function rigaConsegnaDellaScheda(');
+  const riga = libreria.slice(inizio);
 
   it('la decisione la prende la funzione, non un `if` scritto nel componente', () => {
-    expect(senzaCommenti).toMatch(/promessaDiConsegna\(/);
+    expect(componente).toMatch(/rigaConsegnaDellaScheda\(/);
+    expect(componente, 'il componente non deve rifarsi la decisione da solo').not.toMatch(/isOpenNow|DEFAULT_CUTOFF_HOUR|STANDARD_ETA_LABEL/);
+    expect(inizio, 'manca rigaConsegnaDellaScheda in lib/promessa-consegna').toBeGreaterThan(-1);
+    expect(riga).toMatch(/promessaDiConsegna\(/);
   });
 
-  it('il ramo del negozio chiuso esiste e viene PRIMA di quello standard', () => {
-    expect(senzaCommenti, 'manca il ramo del negozio chiuso').toMatch(/promessa\.tipo === 'chiuso'/);
-    const chiuso = senzaCommenti.indexOf("promessa.tipo === 'chiuso'");
-    const standard = senzaCommenti.indexOf('STANDARD_ETA_LABEL', chiuso);
-    expect(chiuso).toBeGreaterThan(-1);
-    expect(standard, 'il negozio chiuso non deve finire dentro «2-3 giorni»').toBeGreaterThan(chiuso);
+  it('il ramo del negozio chiuso esiste e viene PRIMA della frase della consegna normale', () => {
+    expect(riga, 'manca il ramo del negozio chiuso').toMatch(/\.tipo === 'chiuso'/);
+    const chiuso = riga.indexOf(".tipo === 'chiuso'");
+    const normale = riga.indexOf('CONSEGNA_ALL_ORA_CHE_SCEGLI', chiuso);
+    expect(normale, 'il negozio chiuso non deve finire dentro «all\'ora che scegli» senza dire che è chiuso').toBeGreaterThan(chiuso);
+    expect(riga, 'la scheda non promette più «2-3 giorni»').not.toMatch(/STANDARD_ETA_LABEL/);
   });
 
-  it('il componente riceve davvero gli orari', () => {
-    expect(senzaCommenti).toMatch(/storeHours/);
+  it('il componente riceve davvero gli orari, e li passa alla decisione', () => {
+    expect(componente).toMatch(/storeHours/);
+    expect(componente).toMatch(/orari:\s*storeHours/);
   });
 });
 
