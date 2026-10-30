@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * 30/10/2026 00:35 — consegna.negozio-che-rifiuta. Pane 15 € e frutta 12 €, consegna 4 €; il forno
- * rifiuta: la frutta resta a 3 € di consegna, al cliente tornano 16 €, il fattorino prende 3 €.
- * Prima l'ordine della frutta restava con 1 € di consegna e la base spariva col rimborso del forno.
- * Le prove passano dalle strade vere: il rifiuto/annullo (`annullaERimborsa`) e il giro degli
- * ordini scaduti, su un database finto che applica davvero filtri e scritture.
+ * 30/10/2026 — SE TUTTO IL CARRELLO SCADE INSIEME, O IL RIMBORSO CADE, I SOLDI TORNANO GIUSTI.
+ *
+ * Nato come appunto del collaudo («zz-collaudo-cron-due-scaduti»); rinominato col comportamento.
+ * Se diventa rosso: o il giro degli scaduti, con tutti gli ordini dello stesso carrello scaduti nello
+ * stesso giro, non rende più tutti i 31 € addebitati (in qualunque ordine li prenda); o un rimborso
+ * che cade dopo il ricalcolo lascia la consegna del carrello riscritta e l'ordine vivo con 1 € di
+ * consegna e il fattorino a 0. Il caso a tre negozi sta in
+ * se-un-negozio-rifiuta-la-consegna-si-rifa-sui-negozi-rimasti.test.ts.
  */
 
 const refundOrder = vi.fn(async (_a: { orderId: string; amountCents: number }) => ({ refundId: 're_1' }));
@@ -105,7 +108,7 @@ const riga = (id: string) => db.tabelle.orders.find((r) => r.id === id)!;
 beforeEach(() => refundOrder.mockClear());
 
 
-describe('collaudo: tutti gli ordini del carrello scadono nello stesso giro', () => {
+describe('tutti gli ordini del carrello scadono nello stesso giro', () => {
   it('carta, pane 15 (primo) + frutta 12, nessuno conferma: i rimborsi rendono tutti i 31 € addebitati', async () => {
     const vecchio = '2026-10-20T08:00:00Z';
     const ordini = carrello(['pane', 'frutta'], [1500, 1200], 'card', [vecchio, '2026-10-20T08:00:01Z']);
@@ -130,7 +133,7 @@ describe('collaudo: tutti gli ordini del carrello scadono nello stesso giro', ()
   });
 });
 
-describe('collaudo: il rimborso fallisce dopo che la consegna è stata riscritta', () => {
+describe('il rimborso fallisce dopo che la consegna è stata riscritta', () => {
   it('giro degli scaduti, Stripe non risponde sul pane: il pane torna NEW con i suoi 3 € al fattorino', async () => {
     const vecchio = '2026-10-20T08:00:00Z';
     const ordini = carrello(['pane', 'frutta'], [1500, 1200], 'card', [vecchio, '2999-01-01T00:00:01Z']);

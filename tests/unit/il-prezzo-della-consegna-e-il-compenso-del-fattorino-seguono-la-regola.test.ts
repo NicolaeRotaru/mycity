@@ -7,7 +7,12 @@ const ing = (merci: number[], o: Partial<IngressiPrezzo> = {}): IngressiPrezzo =
   consegnaLat: null, consegnaLng: null, pickupInStore: false,
   couponSpedizioneGratis: false, couponScontoCents: 0, consegnaVeloce: false, ...o,
 });
-describe('sonda collaudo A', () => {
+/**
+ * 30/10/2026 — Nato come «sonda-collaudo-a»; rinominato col comportamento. Se diventa rosso, il prezzo
+ * della consegna (consegna.promessa, 29/10 22:21) o il compenso del fattorino
+ * (logistica.compenso-fattorino, 29/10 23:04) non seguono più la regola di Nicola.
+ */
+describe('prezzo della consegna e compenso del fattorino seguono la regola', () => {
   it('15 + 12 euro: il cliente paga 4 euro e il fattorino prende 4 euro (3 per il giro + 1 per il negozio in piu)', () => {
     const e = prezziDelCarrello(ing([1500, 1200]));
     expect(e.grandDeliveryFeeCents).toBe(400);

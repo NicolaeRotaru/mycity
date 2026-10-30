@@ -1,6 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 /**
  * 30/10/2026 00:35 — consegna.negozio-che-rifiuta. Pane 15 € e frutta 12 €, consegna 4 €; il forno
@@ -23,6 +21,7 @@ vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => db }));
 import { prezziDelCarrello, consegnaDopoLAnnullo, type IngressiPrezzo } from '@/lib/ordini/prezzi';
 import { annullaERimborsa, COLONNE_ANNULLO } from '@/lib/ordini/annulla';
 import { computeOrderSplit } from '@/lib/stripe/client';
+import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
 
 type Riga = Record<string, unknown>;
 function finto(tabelle: Record<string, Riga[]>) {
@@ -148,28 +147,9 @@ describe('se un negozio del carrello se ne va prima della consegna, la consegna 
     expect(riga('frutta')).toMatchObject({ delivery_fee_cents: 300, total_price: 15 });
   });
 
-  it('carta, il forno rifiuta: i Termini (§4) dicono quello che torna davvero, non un rimborso integrale', async () => {
-    // Il conto vero, dalla strada vera: l ordine del pane è di 18 €, al cliente ne tornano 16.
-    const ordini = carrello(['pane', 'frutta'], [1500, 1200], 'card');
-    const pagato = ordini[0].gross_total_cents; // letto prima: l annullo riscrive la riga
-    expect(pagato).toBe(1800);
-    db = finto({ orders: ordini });
-    await annullaERimborsa(db as never, { ...ordini[0] } as never, { reason: 'Rifiutato dal negozio' });
-    const reso = refundOrder.mock.calls[0][0].amountCents;
-    expect(reso).toBeLessThan(pagato);
-    // Quindi il §4 non può promettere «rimborsato integralmente»: deve dire la regola che il codice fa.
-    const pagina = readFileSync(resolve(__dirname, '../../app/terms/page.tsx'), 'utf8');
-    const inizio = pagina.indexOf('id="ordini"');
-    expect(inizio).toBeGreaterThan(-1);
-    const s4 = pagina
-      .slice(inizio, pagina.indexOf('</LegalSection>', inizio))
-      .replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ')
-      .replace(/&apos;/g, "'")
-      .replace(/\s+/g, ' ');
-    expect(s4).not.toMatch(/rimborsat[oa] (integralmente|per intero)|rimborso (integrale|completo|totale)/i);
-    expect(s4).toMatch(/differenza della consegna/i);
-    expect(s4).toMatch(/negozi rimasti|Venditori rimasti/i);
-  });
+  // 30/10/2026 — La prova del §4 che cercava tre parole nel sorgente della pagina è passata, col
+  // comportamento, in i-termini-dicono-quello-che-l-annullo-rende-davvero.test.ts: disegna la pagina
+  // e confronta quello che dice col rimborso vero di annullaERimborsa sugli stessi casi.
 
   it('il reso dopo la consegna non cambia la consegna: con un ordine consegnato nel carrello non si tocca niente', async () => {
     const ordini = carrello(['pane', 'frutta'], [1500, 1200], 'cod');
@@ -180,8 +160,10 @@ describe('se un negozio del carrello se ne va prima della consegna, la consegna 
   });
 
   it('tre negozi, il primo non conferma in tempo: il giro degli scaduti rende 21 € e rifà la consegna', async () => {
+    // Pane e frutta sono appena arrivati: il giro non li considera scaduti (prima erano datati 2999).
     const vecchio = '2026-10-20T08:00:00Z';
-    const ordini = carrello(['carne', 'pane', 'frutta'], [2000, 1500, 1200], 'card', [vecchio, '2999-01-01T00:00:01Z', '2999-01-01T00:00:02Z']);
+    const adesso = new Date().toISOString();
+    const ordini = carrello(['carne', 'pane', 'frutta'], [2000, 1500, 1200], 'card', [vecchio, adesso, adesso]);
     db = finto({ orders: ordini });
     const { POST } = await import('@/app/api/cron/expire-stale-orders/route');
     await (POST as unknown as () => Promise<unknown>)();
@@ -189,5 +171,50 @@ describe('se un negozio del carrello se ne va prima della consegna, la consegna 
     expect(refundOrder.mock.calls.map((c) => c[0])).toEqual([expect.objectContaining({ orderId: 'carne', amountCents: 2100 })]);
     expect(riga('pane')).toMatchObject({ delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 18 });
     expect(riga('frutta')).toMatchObject({ delivery_fee_cents: 100, rider_fee_cents: 100, total_price: 13 });
+  });
+
+  it('tre negozi scadono tutti nello stesso giro: i rimborsi fanno 21 + 16 + 15 = 52 €, cioè tutto l addebitato', async () => {
+    const vecchio = '2026-10-20T08:00:00Z';
+    const ordini = carrello(['carne', 'pane', 'frutta'], [2000, 1500, 1200], 'card', [vecchio, vecchio, vecchio]);
+    const addebitato = ordini.reduce((s, o) => s + o.gross_total_cents, 0);
+    expect(addebitato).toBe(5200);
+    db = finto({ orders: ordini });
+    const { POST } = await import('@/app/api/cron/expire-stale-orders/route');
+    await (POST as unknown as () => Promise<unknown>)();
+    expect(ordini.map((o) => riga(o.id).delivery_status)).toEqual(['CANCELED', 'CANCELED', 'CANCELED']);
+    // Ognuno rende il totale scritto quando tocca a lui, non quello letto all'inizio del giro.
+    expect(refundOrder.mock.calls.map((c) => [c[0].orderId, c[0].amountCents])).toEqual([
+      ['carne', 2100],
+      ['pane', 1600],
+      ['frutta', 1500],
+    ]);
+    expect(refundOrder.mock.calls.reduce((s, c) => s + c[0].amountCents, 0)).toBe(addebitato);
+  });
+
+  it('tre negozi, due annulli in fila: il terzo resta con la consegna e il fattorino di un negozio solo, 3 €', async () => {
+    const ordini = carrello(['carne', 'pane', 'frutta'], [2000, 1500, 1200], 'cod');
+    db = finto({ orders: ordini, cod_checkout_attempts: [{ chiave: 'k', user_id: 'u1', order_ids: [{ id: 'carne' }, { id: 'pane' }, { id: 'frutta' }] }] });
+    await annullaERimborsa(db as never, { ...ordini[0] } as never, { reason: 'Rifiutato dal negozio' });
+    expect(riga('pane')).toMatchObject({ delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 18 });
+    await annullaERimborsa(db as never, { ...riga('pane') } as never, { reason: 'Rifiutato dal negozio' });
+    // L'ordine della carne è già annullato: non conta più nel giro (senza, la frutta restava a 1 €).
+    expect(riga('frutta')).toMatchObject({ delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 15 });
+  });
+
+  it('con la veloce: pane 15 e frutta 5, la frutta rifiuta → al pane 4 € di consegna (veloce compresa), tornano 6 €', async () => {
+    const e = prezziDelCarrello(ingressi([1500, 500], true));
+    const ordini = carrello(['pane', 'frutta'], [1500, 500], 'card').map((o, i) => ({
+      ...o,
+      delivery_fee_cents: e.gruppi[i].deliveryFeeCents,
+      rider_fee_cents: e.gruppi[i].riderFeeCents,
+      total_price: e.gruppi[i].totalCents / 100,
+      gross_total_cents: e.gruppi[i].totalCents,
+      delivery_slot: ETICHETTA_ADESSO,
+    }));
+    expect(ordini.map((o) => o.delivery_fee_cents)).toEqual([300, 200]);
+    db = finto({ orders: ordini });
+    await annullaERimborsa(db as never, { ...ordini[1] } as never, { reason: 'Rifiutato dal negozio' });
+    expect(refundOrder.mock.calls[0][0]).toMatchObject({ orderId: 'frutta', amountCents: 600 });
+    expect(riga('pane')).toMatchObject({ delivery_fee_cents: 400, rider_fee_cents: 300, total_price: 19 });
   });
 });

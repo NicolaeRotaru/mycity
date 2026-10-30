@@ -1,11 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * 30/10/2026 00:35 — consegna.negozio-che-rifiuta. Pane 15 € e frutta 12 €, consegna 4 €; il forno
- * rifiuta: la frutta resta a 3 € di consegna, al cliente tornano 16 €, il fattorino prende 3 €.
- * Prima l'ordine della frutta restava con 1 € di consegna e la base spariva col rimborso del forno.
- * Le prove passano dalle strade vere: il rifiuto/annullo (`annullaERimborsa`) e il giro degli
- * ordini scaduti, su un database finto che applica davvero filtri e scritture.
+ * 30/10/2026 — IL RICALCOLO DOPO UN ANNULLO REGGE I CASI SCOMODI (consegna.negozio-che-rifiuta).
+ *
+ * Nato come appunto del collaudo dell'ondata 15 («o15ca», lente A); rinominato col comportamento.
+ * Se diventa rosso, uno di questi soldi torna sbagliato dopo che un negozio del carrello se ne va:
+ *  · i rimasti non hanno la consegna e il fattorino di un carrello nuovo coi soli rimasti (V1);
+ *  · la consegna veloce sparisce dal conto, con la carta o coi contanti (V2, V3);
+ *  · il rimborso cade e il carrello resta riscritto a metà (V4, V5);
+ *  · due annulli quasi insieme rendono più o meno dei 31 € addebitati (V6, V7).
+ * Il caso base (pane 15 + frutta 12, tornano 16 €) sta in
+ * se-un-negozio-rifiuta-la-consegna-si-rifa-sui-negozi-rimasti.test.ts.
  */
 
 const refundOrder = vi.fn(async (_a: { orderId: string; amountCents: number }) => ({ refundId: 're_1' }));
@@ -83,7 +88,7 @@ function righe(merci: number[], veloce: boolean, pagamento: 'cod' | 'card') {
 const riga = (id: string) => db.tabelle.orders.find((r) => r.id === id)!;
 beforeEach(() => refundOrder.mockClear());
 
-describe('collaudo lente A: varianti', () => {
+describe('il ricalcolo dopo un annullo regge la veloce, il rimborso caduto e due annulli quasi insieme', () => {
   it('V1 proprieta: dopo l annullo i rimasti hanno la consegna e il fattorino di un carrello nuovo coi soli rimasti', () => {
     const out: string[] = [];
     const M = [1, 500, 999, 1000, 1500, 3000, 6000];
