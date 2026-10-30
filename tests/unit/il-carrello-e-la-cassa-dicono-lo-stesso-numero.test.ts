@@ -1,4 +1,7 @@
 /**
+ * @vitest-environment jsdom
+ */
+/**
  * 6/9/2026 — IL CARRELLO E LA CASSA SI CONTRADDICEVANO IN QUATTRO PUNTI, TUTTI SUI SOLDI.
  *
  * Sono due schermate una dopo l'altra, e chi compra le legge come una cosa sola. Quando il numero
@@ -18,11 +21,83 @@
  *   ④ LE VARIANTI. Nel riepilogo della cassa «Maglietta (M)» e «Maglietta (L)» erano due righe
  *      identiche, e avevano perfino la stessa chiave di React.
  *
- * Questa prova legge il sorgente delle due pagine: sono difetti di gravità minore, e il manuale del
+ * 30/10/2026 — Il punto ② non cerca più `shippingForEuro` nel carrello: dal 29/10 il carrello conta
+ * con `prezziDelCarrello`, come la cassa. Adesso il carrello si MONTA, e la consegna e il totale che
+ * scrive si confrontano con quelli della cassa (`riepilogoDaMostrare`) sugli stessi ingressi, sugli
+ * esempi firmati da Nicola. Diventa rossa se il carrello torna a fare un conto suo.
+ *
+ * Il resto della prova legge il sorgente delle due pagine: sono difetti di gravità minore, e il manuale del
  * lotto ammette la verifica sul sorgente. Diventa rossa se qualcuno rimette la divergenza.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { act } from 'react';
+import CartPage from '@/app/cart/page';
+import { formatPrice } from '@/lib/format';
+import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
+import { rigaDellaVeloceNelCarrello } from '@/lib/promesse-pubbliche';
+import { accendi } from './aiuti/schermo';
+
+vi.mock('next/link', () => ({ default: (p: { children?: unknown }) => p.children ?? null }));
+vi.mock('next/image', () => ({ default: () => null }));
+vi.mock('sonner', () => ({
+  toast: Object.assign(() => undefined, { success: () => undefined, error: () => undefined, info: () => undefined }),
+}));
+vi.mock('@/components/cart/CartUpsell', () => ({ CartUpsell: () => null }));
+vi.mock('@/components/ShareCartButton', () => ({ default: () => null }));
+vi.mock('@/lib/cart-sync', () => ({ syncAbandonedCart: () => undefined }));
+vi.mock('@/lib/promotions', async (originale) => ({
+  ...(await originale<typeof import('@/lib/promotions')>()),
+  fetchActiveDiscounts: async () => new Map(),
+}));
+vi.mock('@/lib/queries/seller-public-profiles', () => ({ fetchSellerPublicMap: async () => new Map() }));
+
+const reteDiPartenza = globalThis.fetch;
+// L'import pigro del database, dentro la pagina, sfugge al vi.mock qui sopra: nasce il client vero,
+// su un indirizzo finto, e ogni sua lettura riceve un 503 (la pagina si disegna lo stesso, come
+// quando la rete cade davvero). Le variabili, impostate prima di ogni prova, restano tali.
+process.env.NEXT_PUBLIC_SUPABASE_URL ??= 'http://supabase.finto.invalid';
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??= 'chiave-finta';
+globalThis.fetch = (async (input: unknown) => {
+  const url = String(typeof input === 'object' && input !== null && 'url' in input ? (input as { url: unknown }).url : input);
+  if (!url.includes('/api/consegna/veloce')) {
+    return { ok: false, status: 503, statusText: 'finto', headers: new Headers(), text: async () => '', json: async () => null };
+  }
+  return { ok: true, json: async () => ({ possibile: true }) };
+}) as unknown as typeof fetch;
+
+let schermo: ReturnType<typeof accendi> | null = null;
+afterEach(() => {
+  schermo?.smonta();
+  schermo = null;
+  localStorage.clear();
+  vi.useRealTimers();
+});
+afterAll(() => {
+  globalThis.fetch = reteDiPartenza;
+});
+
+/** Il carrello montato alle 14 (la veloce c'è), con un negozio per ogni spesa detta in euro. */
+async function carrelloCon(merciEuro: number[]) {
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+  vi.setSystemTime(new Date(2026, 9, 30, 14, 0));
+  localStorage.setItem(
+    'cart',
+    JSON.stringify(merciEuro.map((euro, i) => ({ id: `p-${i}`, name: `Prodotto ${i}`, price: euro, quantity: 1, sellerId: `neg-${i}`, storeName: `Negozio ${i}` }))),
+  );
+  schermo = accendi(CartPage);
+  for (let i = 0; i < 10; i++) {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+  const s = schermo;
+  return {
+    stato: () => s.radice.querySelector('[role="status"]')?.textContent ?? '',
+    pagina: () => s.radice.textContent ?? '',
+  };
+}
+
 
 const leggi = (p: string) => readFileSync(p, 'utf8');
 
@@ -41,41 +116,71 @@ describe('① quanti articoli ci sono nel carrello: una risposta sola', () => {
   });
 });
 
-describe('② la spedizione: stessa funzione, stessi ingressi', () => {
-  /** La chiamata a `shippingForEuro` dentro il carrello, presa per intero. */
-  const chiamata = CARRELLO.slice(
-    CARRELLO.indexOf('+ shippingForEuro({'),
-    CARRELLO.indexOf('pickupInStore: false,', CARRELLO.indexOf('+ shippingForEuro({')),
-  );
+describe('② la consegna: il carrello fa il conto della cassa, sugli stessi ingressi', () => {
+  /** La chiamata a `prezziDelCarrello` dentro il carrello, presa per intero. */
+  const inizio = CARRELLO.indexOf('= prezziDelCarrello({');
+  const chiamata = CARRELLO.slice(inizio, CARRELLO.indexOf('consegnaVeloce:', inizio));
 
-  it('la chiamata del carrello esiste ancora: senza, questa prova non misura niente', () => {
-    expect(chiamata.length, 'il carrello non chiama più `shippingForEuro`').toBeGreaterThan(20);
+  it('il carrello conta con la funzione della cassa: senza, questa prova non misura niente', () => {
+    expect(inizio, 'il carrello non chiama più `prezziDelCarrello`').toBeGreaterThan(0);
+    expect(chiamata.length).toBeGreaterThan(20);
+    expect(CASSA).toContain('riepilogoDaMostrare({');
   });
 
-  it('il carrello non passa più le coordinate a `null` scritte a mano', () => {
-    for (const campo of ['storeLat', 'storeLng', 'deliveryLat', 'deliveryLng']) {
-      expect(
-        chiamata,
-        `il carrello passa ancora \`${campo}: null\`: senza coordinate la funzione ripiega sui 4,90 € fissi mentre la cassa calcola sulla distanza`,
-      ).not.toMatch(new RegExp(`${campo}:\\s*null\\s*,`));
-    }
-  });
-
-  it('le coordinate arrivano da dove sta il negozio e da dove consegniamo', () => {
-    expect(chiamata).toContain('dovEIlNegozio');
-    expect(chiamata).toContain('doveConsegniamo');
-    // Le due letture che riempiono quelle due: le stesse tabelle che legge la cassa.
+  it('le coordinate arrivano da dove sta il negozio e da dove consegniamo, non a `null` scritte a mano', () => {
+    // Al lancio la spedizione a distanza vale zero: il giorno che torna, un carrello senza
+    // coordinate ripiegherebbe su una tariffa fissa mentre la cassa calcola sulla distanza.
+    expect(chiamata).toContain('dovEIlNegozio[key]');
+    expect(chiamata).toContain('consegnaLat: doveConsegniamo.lat');
+    expect(chiamata).toContain('consegnaLng: doveConsegniamo.lng');
+    expect(chiamata).not.toMatch(/consegnaL(at|ng):\s*null/);
     expect(CARRELLO).toContain("from('user_addresses')");
     expect(CARRELLO).toContain('store_lat, store_lng');
     expect(CASSA).toContain("from('user_addresses')");
   });
 
-  it('il commento che diceva il falso sulla cassa non c\'è più', () => {
-    expect(
-      CARRELLO,
-      'il commento affermava che la cassa aspetta che la persona scriva l\'indirizzo: non è vero, quello salvato ce l\'ha già',
-    ).not.toContain('esattamente come\n   * fa il checkout prima che la persona lo scriva');
-  });
+  /** Gli esempi firmati da Nicola il 29/10 alle 22:21: spesa per negozio → consegna con la fascia / con la veloce. */
+  const ESEMPI = [
+    { merci: [15], fascia: 300, veloce: 400 },
+    { merci: [8], fascia: 400, veloce: 400 },
+    { merci: [15, 12], fascia: 400, veloce: 500 },
+    { merci: [15, 6], fascia: 500, veloce: 500 },
+    { merci: [6, 7], fascia: 600, veloce: 600 },
+    { merci: [15, 12, 20], fascia: 500, veloce: 600 },
+    { merci: [5, 6, 7], fascia: 800, veloce: 800 },
+  ];
+
+  for (const e of ESEMPI) {
+    it(`spesa ${e.merci.join(' + ')} €: il carrello montato scrive la consegna e il totale della cassa`, async () => {
+      const c = await carrelloCon(e.merci);
+      // La cassa, con gli stessi ingressi che il carrello ha in mano: stessi negozi, stessa merce,
+      // nessuna coordinata letta (qui il database non risponde), nessun codice, nessun credito.
+      const cassa = (veloce: boolean) =>
+        riepilogoDaMostrare({
+          gruppi: e.merci.map((m, i) => ({ sellerId: `neg-${i}`, subtotalCents: Math.round(m * 100) })),
+          coordinateNegozio: () => ({ lat: null, lng: null }),
+          consegnaLat: null,
+          consegnaLng: null,
+          pickupInStore: false,
+          couponSpedizioneGratis: false,
+          couponScontoCents: 0,
+          consegnaVeloce: veloce,
+          usaCredito: false,
+          creditoDisponibileCents: 0,
+        });
+      const conFascia = cassa(false);
+      const conVeloce = cassa(true);
+      const consegnaCents = Math.round((conFascia.totale - conFascia.subtotale) * 100);
+      expect(consegnaCents, 'la cassa non segue più la regola firmata').toBe(e.fascia);
+      expect(Math.round((conVeloce.totale - conVeloce.subtotale) * 100)).toBe(e.veloce);
+      expect(c.stato(), 'il carrello scrive una consegna o un totale diversi da quelli della cassa').toContain(
+        `consegna ${formatPrice(consegnaCents / 100)}, totale ${formatPrice(conFascia.totale)}`,
+      );
+      expect(c.pagina(), 'la veloce del carrello costa diversa da quella della cassa').toContain(
+        rigaDellaVeloceNelCarrello(true, Math.round((conVeloce.totale - conFascia.totale) * 100), consegnaCents)!,
+      );
+    });
+  }
 });
 
 describe('③ il prezzo mostrato è quello che verrà addebitato', () => {
