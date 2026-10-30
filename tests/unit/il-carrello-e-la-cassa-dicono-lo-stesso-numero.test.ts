@@ -26,6 +26,13 @@
  * scrive si confrontano con quelli della cassa (`riepilogoDaMostrare`) sugli stessi ingressi, sugli
  * esempi firmati da Nicola. Diventa rossa se il carrello torna a fare un conto suo.
  *
+ * 30/10/2026 (ondata 17) — Gli esempi avevano tutti un pezzo per riga, e la prova leggeva solo la
+ * riga nascosta per i lettori di schermo: un conto della consegna che ignora la quantità, un totale
+ * a video senza la consegna, o una riga «Consegna MyCity» a 0 € mentre la cassa addebita 3 €,
+ * restavano verdi. Adesso ci sono anche più pezzi per riga (3 pagnotte da 2,50 €: 7,50 € di spesa,
+ * consegna 4 €), e si leggono le cifre che si VEDONO: la consegna, il subtotale e il totale, nel
+ * riepilogo e nella barra in fondo, confrontate con la cassa sugli stessi ingressi.
+ *
  * Il resto della prova legge il sorgente delle due pagine: sono difetti di gravità minore, e il manuale del
  * lotto ammette la verifica sul sorgente. Diventa rossa se qualcuno rimette la divergenza.
  */
@@ -35,7 +42,7 @@ import { act } from 'react';
 import CartPage from '@/app/cart/page';
 import { formatPrice } from '@/lib/format';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
-import { rigaDellaVeloceNelCarrello } from '@/lib/promesse-pubbliche';
+import { VOCE_CONSEGNA, rigaDellaVeloceNelCarrello } from '@/lib/promesse-pubbliche';
 import { accendi } from './aiuti/schermo';
 
 vi.mock('next/link', () => ({ default: (p: { children?: unknown }) => p.children ?? null }));
@@ -77,13 +84,27 @@ afterAll(() => {
   globalThis.fetch = reteDiPartenza;
 });
 
-/** Il carrello montato alle 14 (la veloce c'è), con un negozio per ogni spesa detta in euro. */
-async function carrelloCon(merciEuro: number[]) {
+/** Una riga del carrello: il prezzo di un pezzo e quanti pezzi. */
+type Riga = { prezzo: number; pezzi: number };
+
+/** Il carrello montato alle 14 (la veloce c'è): per ogni negozio, le sue righe. */
+async function carrelloCon(negozi: Riga[][]) {
   vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
   vi.setSystemTime(new Date(2026, 9, 30, 14, 0));
   localStorage.setItem(
     'cart',
-    JSON.stringify(merciEuro.map((euro, i) => ({ id: `p-${i}`, name: `Prodotto ${i}`, price: euro, quantity: 1, sellerId: `neg-${i}`, storeName: `Negozio ${i}` }))),
+    JSON.stringify(
+      negozi.flatMap((righe, n) =>
+        righe.map((r, i) => ({
+          id: `p-${n}-${i}`,
+          name: `Prodotto ${n}-${i}`,
+          price: r.prezzo,
+          quantity: r.pezzi,
+          sellerId: `neg-${n}`,
+          storeName: `Negozio ${n}`,
+        })),
+      ),
+    ),
   );
   schermo = accendi(CartPage);
   for (let i = 0; i < 10; i++) {
@@ -95,6 +116,18 @@ async function carrelloCon(merciEuro: number[]) {
   return {
     stato: () => s.radice.querySelector('[role="status"]')?.textContent ?? '',
     pagina: () => s.radice.textContent ?? '',
+    /**
+     * Le cifre che si VEDONO accanto a un'etichetta («Totale», «Consegna MyCity», «Subtotale»): per
+     * ogni elemento che dice solo l'etichetta, la prima cifra dell'elemento che lo segue. È quello che
+     * legge chi guarda lo schermo, non la riga nascosta per i lettori di schermo.
+     */
+    cifreAccantoA: (etichetta: string) =>
+      [...s.radice.querySelectorAll('span, div')]
+        .filter((el) => (el.textContent ?? '').trim() === etichetta)
+        .map((el) => {
+          const accanto = el.nextElementSibling;
+          return ((accanto?.firstElementChild ?? accanto)?.textContent ?? '').trim();
+        }),
   };
 }
 
@@ -139,45 +172,108 @@ describe('② la consegna: il carrello fa il conto della cassa, sugli stessi ing
     expect(CASSA).toContain("from('user_addresses')");
   });
 
-  /** Gli esempi firmati da Nicola il 29/10 alle 22:21: spesa per negozio → consegna con la fascia / con la veloce. */
-  const ESEMPI = [
-    { merci: [15], fascia: 300, veloce: 400 },
-    { merci: [8], fascia: 400, veloce: 400 },
-    { merci: [15, 12], fascia: 400, veloce: 500 },
-    { merci: [15, 6], fascia: 500, veloce: 500 },
-    { merci: [6, 7], fascia: 600, veloce: 600 },
-    { merci: [15, 12, 20], fascia: 500, veloce: 600 },
-    { merci: [5, 6, 7], fascia: 800, veloce: 800 },
+  /** Una riga sola, un pezzo solo, per ogni negozio: gli esempi detti in euro di spesa. */
+  const unPezzo = (...euro: number[]): Riga[][] => euro.map((e) => [{ prezzo: e, pezzi: 1 }]);
+
+  /**
+   * Gli esempi firmati da Nicola il 29/10 alle 22:21 (spesa per negozio → consegna con la fascia /
+   * con la veloce), e gli stessi conti con più pezzi per riga: la spesa di un negozio è prezzo ×
+   * pezzi. Se il carrello contasse un pezzo solo, 2 × 5 € farebbero 5 € e la consegna salirebbe a 4 €.
+   */
+  const ESEMPI: Array<{ negozi: Riga[][]; fascia: number; veloce: number }> = [
+    { negozi: unPezzo(15), fascia: 300, veloce: 400 },
+    { negozi: unPezzo(8), fascia: 400, veloce: 400 },
+    { negozi: unPezzo(15, 12), fascia: 400, veloce: 500 },
+    { negozi: unPezzo(15, 6), fascia: 500, veloce: 500 },
+    { negozi: unPezzo(6, 7), fascia: 600, veloce: 600 },
+    { negozi: unPezzo(15, 12, 20), fascia: 500, veloce: 600 },
+    { negozi: unPezzo(5, 6, 7), fascia: 800, veloce: 800 },
+    // Tre pagnotte da 2,50 €: 7,50 € di spesa, sotto i 10 €, consegna 4 €.
+    { negozi: [[{ prezzo: 2.5, pezzi: 3 }]], fascia: 400, veloce: 400 },
+    // Due pezzi da 5 € dallo stesso negozio: 10 €, non sotto i 10, consegna 3 € come la cassa.
+    { negozi: [[{ prezzo: 5, pezzi: 2 }]], fascia: 300, veloce: 400 },
+    { negozi: [[{ prezzo: 4, pezzi: 4 }]], fascia: 300, veloce: 400 },
+    // Due righe nello stesso negozio: 2 × 3 € + 3 × 1,50 € = 10,50 €.
+    { negozi: [[{ prezzo: 3, pezzi: 2 }, { prezzo: 1.5, pezzi: 3 }]], fascia: 300, veloce: 400 },
+    // Due negozi: 3 pagnotte da 2,50 € (7,50 €, spesa piccola) e 2 × 6 € (12 €): 3 + 1 + 1.
+    { negozi: [[{ prezzo: 2.5, pezzi: 3 }], [{ prezzo: 6, pezzi: 2 }]], fascia: 500, veloce: 500 },
   ];
 
+  /** «15 + 12», «3 × 2.5», «(2 × 3 e 3 × 1.5)»: la spesa di ogni negozio, per il nome della prova. */
+  const descrivi = (negozi: Riga[][]) =>
+    negozi
+      .map((righe) => {
+        const parti = righe.map((r) => (r.pezzi === 1 ? `${r.prezzo}` : `${r.pezzi} × ${r.prezzo}`));
+        return parti.length === 1 ? parti[0] : `(${parti.join(' e ')})`;
+      })
+      .join(' + ');
+
+  /**
+   * La cassa, con gli stessi ingressi che il carrello ha in mano: stessi negozi, stessa merce
+   * (prezzo × pezzi, riga per riga), nessuna coordinata letta (qui il database non risponde),
+   * nessun codice, nessun credito. Prima di confrontare, la cassa stessa deve seguire la regola firmata.
+   */
+  function laCassa(e: { negozi: Riga[][]; fascia: number; veloce: number }) {
+    const conto = (veloce: boolean) =>
+      riepilogoDaMostrare({
+        gruppi: e.negozi.map((righe, n) => ({
+          sellerId: `neg-${n}`,
+          subtotalCents: righe.reduce((somma, r) => somma + Math.round(r.prezzo * 100) * r.pezzi, 0),
+        })),
+        coordinateNegozio: () => ({ lat: null, lng: null }),
+        consegnaLat: null,
+        consegnaLng: null,
+        pickupInStore: false,
+        couponSpedizioneGratis: false,
+        couponScontoCents: 0,
+        consegnaVeloce: veloce,
+        usaCredito: false,
+        creditoDisponibileCents: 0,
+      });
+    const conFascia = conto(false);
+    const conVeloce = conto(true);
+    const consegnaCents = Math.round((conFascia.totale - conFascia.subtotale) * 100);
+    expect(consegnaCents, 'la cassa non segue più la regola firmata').toBe(e.fascia);
+    expect(Math.round((conVeloce.totale - conVeloce.subtotale) * 100)).toBe(e.veloce);
+    return { conFascia, conVeloce, consegnaCents };
+  }
+
   for (const e of ESEMPI) {
-    it(`spesa ${e.merci.join(' + ')} €: il carrello montato scrive la consegna e il totale della cassa`, async () => {
-      const c = await carrelloCon(e.merci);
-      // La cassa, con gli stessi ingressi che il carrello ha in mano: stessi negozi, stessa merce,
-      // nessuna coordinata letta (qui il database non risponde), nessun codice, nessun credito.
-      const cassa = (veloce: boolean) =>
-        riepilogoDaMostrare({
-          gruppi: e.merci.map((m, i) => ({ sellerId: `neg-${i}`, subtotalCents: Math.round(m * 100) })),
-          coordinateNegozio: () => ({ lat: null, lng: null }),
-          consegnaLat: null,
-          consegnaLng: null,
-          pickupInStore: false,
-          couponSpedizioneGratis: false,
-          couponScontoCents: 0,
-          consegnaVeloce: veloce,
-          usaCredito: false,
-          creditoDisponibileCents: 0,
-        });
-      const conFascia = cassa(false);
-      const conVeloce = cassa(true);
-      const consegnaCents = Math.round((conFascia.totale - conFascia.subtotale) * 100);
-      expect(consegnaCents, 'la cassa non segue più la regola firmata').toBe(e.fascia);
-      expect(Math.round((conVeloce.totale - conVeloce.subtotale) * 100)).toBe(e.veloce);
+    const spesa = `spesa ${descrivi(e.negozi)} €`;
+
+    it(`${spesa}: il carrello montato scrive la consegna e il totale della cassa`, async () => {
+      const { conFascia, conVeloce, consegnaCents } = laCassa(e);
+      const c = await carrelloCon(e.negozi);
       expect(c.stato(), 'il carrello scrive una consegna o un totale diversi da quelli della cassa').toContain(
         `consegna ${formatPrice(consegnaCents / 100)}, totale ${formatPrice(conFascia.totale)}`,
       );
       expect(c.pagina(), 'la veloce del carrello costa diversa da quella della cassa').toContain(
         rigaDellaVeloceNelCarrello(true, Math.round((conVeloce.totale - conFascia.totale) * 100), consegnaCents)!,
+      );
+    });
+
+    it(`${spesa}: a video la riga «${VOCE_CONSEGNA}» e il subtotale sono quelli della cassa`, async () => {
+      const { conFascia, consegnaCents } = laCassa(e);
+      const c = await carrelloCon(e.negozi);
+      const consegne = c.cifreAccantoA(VOCE_CONSEGNA);
+      expect(consegne.length, `la riga «${VOCE_CONSEGNA}» non si legge più a video`).toBeGreaterThan(0);
+      expect(consegne, 'a video la consegna è diversa da quella che la cassa addebita').toEqual(
+        consegne.map(() => formatPrice(consegnaCents / 100)),
+      );
+      const subtotali = c.cifreAccantoA('Subtotale');
+      expect(subtotali.length, 'il subtotale non si legge più a video').toBeGreaterThan(0);
+      expect(subtotali, 'a video la merce costa diversa da quella della cassa').toEqual(
+        subtotali.map(() => formatPrice(conFascia.subtotale)),
+      );
+    });
+
+    it(`${spesa}: a video il totale, nel riepilogo e nella barra in fondo, è quello della cassa`, async () => {
+      const { conFascia } = laCassa(e);
+      const c = await carrelloCon(e.negozi);
+      const totali = c.cifreAccantoA('Totale');
+      expect(totali.length, 'il totale a video si legge nel riepilogo e nella barra in fondo').toBeGreaterThanOrEqual(2);
+      expect(totali, 'a video il totale è diverso da quello che la cassa addebita').toEqual(
+        totali.map(() => formatPrice(conFascia.totale)),
       );
     });
   }

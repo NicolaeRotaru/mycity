@@ -134,11 +134,14 @@ describe('la consegna veloce si vende solo se c’è un fattorino online', () =>
 
   it('la cassa offre «Adesso» solo con il sì del server', () => {
     const picker = readFileSync('components/checkout/DeliverySlotPicker.tsx', 'utf8');
-    expect(picker).toContain('const expressAvailable = expressSiPuo(ora) && veloceDisponibile;');
+    // 30/10/2026 (ondata 18) — Il sì vero, non «non ha ancora risposto»: `null` è l'attesa, e la
+    // cassa la tiene ferma senza offrire né togliere «Adesso» (la prova montata è
+    // `la-veloce-resta-scelta-dopo-l-accesso`).
+    expect(picker).toContain('const expressAvailable = expressSiPuo(ora) && veloceDisponibile === true;');
     const cassa = readFileSync('app/checkout/page.tsx', 'utf8');
     expect(cassa).toContain('/api/consegna/veloce?negozi=');
     expect(cassa).toContain('veloceDisponibile={veloceDisponibile}');
-    expect(cassa).toContain('useState(false)');
+    expect(cassa).toContain('useState<{ negozi: string; possibile: boolean } | null>(null)');
   });
 });
 
