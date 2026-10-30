@@ -21,12 +21,16 @@
  * carrello smette di rileggere l'ora mentre resta aperto.
  *
  * ── 30/10/2026 (ondata 17): carrello e cassa leggono lo stesso orologio ───────────────────────────
- * Il carrello e la cassa leggono l'ora del TELEFONO. Per qualche ora il carrello era passato da
- * solo all'ora di Roma, e un telefono a Bucarest alle 21:30 (a Roma le 20:30) leggeva «Consegna in
- * 30-60 min» nel carrello e trovava «Adesso» spento in cassa. Il blocco in fondo monta il carrello
- * e il riquadro vero della cassa allo stesso istante, su telefoni a Roma, Bucarest e Londra.
- * Tornano anche due controlli persi: il disegno che arriva dal server parte senza ora, e la riga
- * «Ne restano solo N» si prova montata, con la scorta bassa.
+ * Il blocco in fondo monta il carrello e il riquadro vero della cassa allo stesso istante, su
+ * telefoni a Roma, Bucarest e Londra. Tornano anche due controlli persi: il disegno che arriva dal
+ * server parte senza ora, e la riga «Ne restano solo N» si prova montata, con la scorta bassa.
+ *
+ * ── 30/10/2026 (ondata 18): e l'orologio è quello di Roma ──────────────────────────────────────
+ * Carrello, cassa e vetrina leggono l'ora di ROMA (`romeNow`), come le rotte del server. Con l'ora
+ * del telefono, un telefono a Bucarest alle 21:30 (a Roma le 20:30) si vedeva togliere la veloce che
+ * la vetrina prometteva, e uno a Londra alle 20:30 (a Roma le 21:30) se la vedeva offrire mentre la
+ * rotta l'avrebbe rifiutata. Il blocco in fondo controlla che carrello e cassa dicano la stessa cosa
+ * E che sia quella dell'ora di Roma. Gli istanti delle prove sono scritti in ora di Roma.
  *
  * ⚠️ Cosa NON prova: un browser vero (qui c'è jsdom) né la rotta /api/consegna/veloce, che qui è
  * finta: la sua regola la prova `la-consegna-veloce-si-vende-solo-se-c-e-un-fattorino`.
@@ -120,12 +124,14 @@ const UN_FILONE = { id: 'p-filone', name: 'Filone', price: 15, quantity: 1, sell
 const UNA_FOCACCIA = { id: 'p-focaccia', name: 'Focaccia', price: 4, quantity: 1, sellerId: 'neg-pane', storeName: 'Pane Quotidiano' };
 
 /**
- * L'istante in cui il telefono segna le ore dette, il 30/10/2026: è l'orologio che leggono sia il
- * carrello sia la cassa. Che le due letture coincidano su telefoni con fusi diversi lo prova il
- * blocco «il carrello legge lo stesso orologio della cassa», in fondo.
+ * L'istante in cui a Roma sono le ore dette, il 30/10/2026 (ora solare: Roma è un'ora avanti sul
+ * tempo universale): è l'orologio che leggono carrello, cassa e vetrina, su qualunque telefono.
+ * Che le letture coincidano su telefoni con fusi diversi lo prova il blocco in fondo.
  */
-function sulTelefono(ore: number, minuti: number): Date {
-  return new Date(2026, 9, 30, ore, minuti);
+function aRomaAlle(ore: number, minuti: number): Date {
+  const istante = new Date(Date.UTC(2026, 9, 30, ore - 1, minuti));
+  expect(romeNow(istante).getHours(), `a Roma non sono le ${ore}: la prova non misurerebbe niente`).toBe(ore % 24);
+  return istante;
 }
 
 let schermo: ReturnType<typeof accendi> | null = null;
@@ -179,7 +185,7 @@ async function carrelloAllIstante(istante: Date, r: Risposta, scaffale: Scaffale
 
 /** Il carrello con un filone di Pane Quotidiano, aperto all'ora del telefono detta, con la risposta detta. */
 const carrelloAlle = (ore: number, minuti: number, r: Risposta, scaffale?: Scaffale) =>
-  carrelloAllIstante(sulTelefono(ore, minuti), r, scaffale);
+  carrelloAllIstante(aRomaAlle(ore, minuti), r, scaffale);
 
 describe('alle undici di sera la consegna in mezz\'ora non esiste', () => {
   it('la cassa non offre l\'express alle 22, e riparte da domani', () => {
@@ -248,7 +254,7 @@ describe('il carrello montato dice quello che la cassa offrirà davvero', () => 
     const c = await carrelloAlle(20, 59, 'si');
     expect(c.riga()).toBe(`Disponibile · Consegna in ${EXPRESS_ETA_LABEL}`);
     // Passano due minuti. La cassa risponde ancora sì (risposta vecchia): conta l'orologio.
-    vi.setSystemTime(sulTelefono(21, 1));
+    vi.setSystemTime(aRomaAlle(21, 1));
     await act(async () => {
       vi.advanceTimersByTime(60_000);
     });
@@ -293,7 +299,7 @@ describe('il primo disegno, quello che arriva dal server, non sa che ore sono', 
 
   it("il disegno del server non promette nessun tempo, e l'ora del carrello parte da null", () => {
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
-    vi.setSystemTime(sulTelefono(14, 0));
+    vi.setSystemTime(aRomaAlle(14, 0));
     risposta = 'si';
     banco.prodotti = [{ id: UN_FILONE.id, stock: 50, price: UN_FILONE.price }];
     localStorage.setItem('cart', JSON.stringify([UN_FILONE]));
@@ -374,11 +380,18 @@ describe('il carrello legge lo stesso orologio della cassa, su qualunque telefon
     return { promette, offre };
   }
 
-  it('Bucarest alle 21:30 (a Roma le 20:30): il carrello non promette la mezz\'ora che la cassa non offre', async () => {
+  it('Bucarest alle 21:30 (a Roma le 20:30): carrello e cassa offrono la veloce, come la vetrina', async () => {
     expect(romeNow(new Date('2026-10-30T19:30:00Z')).getHours(), 'a Roma sono le 20: il caso è quello giusto').toBe(20);
     const { promette, offre } = await carrelloECassa('Europe/Bucharest', '2026-10-30T19:30:00Z');
-    expect(offre, 'la cassa legge l\'ora del telefono: alle 21:30 «Adesso» è spento').toBe(false);
-    expect(promette, 'il carrello scrive «Consegna in 30-60 min» e la cassa, un tocco dopo, parte da una fascia').toBe(false);
+    expect(offre, 'la cassa legge l\'ora del telefono (21:30) e spegne «Adesso»: a Roma sono le 20:30').toBe(true);
+    expect(promette, 'il carrello legge l\'ora del telefono e non promette la veloce che la vetrina promette').toBe(true);
+  });
+
+  it('Londra alle 20:30 (a Roma le 21:30): né il carrello né la cassa offrono la veloce', async () => {
+    expect(romeNow(new Date('2026-10-30T20:30:00Z')).getHours(), 'a Roma sono le 21: il caso è quello giusto').toBe(21);
+    const { promette, offre } = await carrelloECassa('Europe/London', '2026-10-30T20:30:00Z');
+    expect(offre, 'la cassa offre una veloce che la rotta, all\'ora di Roma, rifiuterebbe').toBe(false);
+    expect(promette, 'il carrello promette la mezz\'ora alle 21:30 di Roma').toBe(false);
   });
 
   // Gli istanti intorno alle due porte della veloce: le 8 e le 21, viste da tre telefoni diversi.
@@ -396,10 +409,16 @@ describe('il carrello legge lo stesso orologio della cassa, su qualunque telefon
       const esiti: string[] = [];
       for (const istanteUtc of ISTANTI) {
         const { promette, offre } = await carrelloECassa(fuso, istanteUtc);
-        esiti.push(`${istanteUtc} carrello ${promette ? 'promette' : 'tace'} · cassa ${offre ? 'offre' : 'spenta'}`);
+        // Col sì della veloce, la verità è l'ora di Roma: la stessa che leggono vetrina e rotte.
+        const aRoma = expressSiPuo(romeNow(new Date(istanteUtc)).getHours());
+        esiti.push(
+          `${istanteUtc} carrello ${promette ? 'promette' : 'tace'} · cassa ${offre ? 'offre' : 'spenta'} · Roma ${aRoma ? 'sì' : 'no'}`,
+        );
       }
       const discordi = esiti.filter((e) => /promette · cassa spenta|tace · cassa offre/.test(e));
       expect(discordi, 'carrello e cassa dicono due cose diverse allo stesso istante').toEqual([]);
+      const fuoriDaRoma = esiti.filter((e) => /offre · Roma no|spenta · Roma sì/.test(e));
+      expect(fuoriDaRoma, 'carrello e cassa seguono l\'ora del telefono, non quella di Roma').toEqual([]);
       // Non passa per pigrizia: in ogni fuso c'è almeno un'ora con la veloce e una senza.
       expect(esiti.some((e) => e.includes('cassa offre')), esiti.join('\n')).toBe(true);
       expect(esiti.some((e) => e.includes('cassa spenta')), esiti.join('\n')).toBe(true);

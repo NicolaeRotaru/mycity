@@ -6,10 +6,12 @@ import {
   FASCE_DI_DOMANI,
   SOTTOTITOLO_ADESSO,
   expressSiPuo,
+  fasciaDiPartenzaOggi,
   giornoDiPartenza,
   fasceAncoraPossibili,
   type Giorno,
 } from '@/lib/quando-arriva';
+import { romeNow } from '@/lib/store-hours';
 
 /**
  * Selettore della fascia di consegna ("Quando vuoi riceverlo", step 2).
@@ -43,25 +45,51 @@ type Props = {
   /**
    * 29/10/2026 — La veloce si può mantenere adesso? Lo dice il server (`veloceSiPuo`): negozi
    * aperti e un fattorino online. Senza, «Adesso» non si offre, qualunque ora sia.
+   *
+   * 30/10/2026 (ondata 18) — `null` = il server non ha ancora risposto: è «non so ancora», non
+   * «no». Chi torna dall'accesso con «Adesso» nella bozza la ritrova scelta, e la cassa tiene
+   * fermo il pulsante finché la risposta non arriva. Solo un `false` sposta la scelta.
    */
-  veloceDisponibile: boolean;
+  veloceDisponibile: boolean | null;
   /** «+1 €» o «compresa» (`prezzoDellaVeloce`): la veloce dice il suo prezzo prima di sceglierla. */
   prezzoVeloce: string;
   /** Perché adesso la veloce non si può, come lo dice il server. `null` = non lo sappiamo. */
   motivoVeloce?: string | null;
 };
 
-/** 29/10/2026 — La riga che si legge quando «Adesso» era scelta e la veloce non si può più. */
-export const AVVISO_VELOCE_CADUTA =
-  'La consegna veloce adesso non si può più: ho scelto la prima fascia libera. Controlla l’ora qui sotto, il prezzo della consegna lo vedi nel riepilogo.';
+/**
+ * 29/10/2026 — La riga che si legge quando «Adesso» era scelta e la veloce non si può più.
+ *
+ * 30/10/2026 (ondata 18) — Diceva «ho scelto la prima fascia libera», ma la fascia segnata era
+ * quella di partenza della cassa (Domani · 15:00–18:30, non 9:00–12:00), e il selettore non sa se
+ * il negozio a quell'ora è aperto: «libera» non lo può dire. Adesso dice QUALE fascia ha messo e
+ * chiede di controllarla.
+ */
+export function avvisoVeloceCaduta(fascia: string): string {
+  return `La consegna veloce adesso non si può più: ho messo «${fascia}». Controlla qui sotto che l’ora ti vada bene; il prezzo della consegna lo vedi nel riepilogo.`;
+}
+
+/** 30/10/2026 (ondata 18) — Mentre il server non ha ancora detto se la veloce si può. */
+export const RIGA_VELOCE_IN_ATTESA =
+  'Sto controllando che ci sia un fattorino in servizio per la consegna veloce: appena arriva la risposta puoi ordinare.';
 
 /**
  * Cosa fa la cassa quando la veloce cade dopo che il cliente ha scelto «Adesso»: torna alla prima
- * fascia possibile (la rotta rifiuterebbe «Adesso» con un 409) e LO DICE. Pura, per la prova.
+ * fascia ancora possibile (la rotta rifiuterebbe «Adesso» con un 409) e LO DICE, nominandola.
+ * Mentre il server non ha ancora risposto (`inAttesa`) non cade niente: «non so» non è un «no».
+ * Pura, per la prova.
  */
-export function quandoLaVeloceCade(a: { day: Giorno; expressAvailable: boolean; ora: number }): { day: Giorno; avviso: string } | null {
-  if (a.day !== 'now' || a.expressAvailable) return null;
-  return { day: giornoDiPartenza(a.ora), avviso: AVVISO_VELOCE_CADUTA };
+export function quandoLaVeloceCade(a: {
+  day: Giorno;
+  expressAvailable: boolean;
+  ora: number;
+  inAttesa?: boolean;
+}): { day: Giorno; fascia: string; avviso: string } | null {
+  if (a.day !== 'now' || a.expressAvailable || a.inAttesa) return null;
+  const day = giornoDiPartenza(a.ora);
+  // `giornoDiPartenza` dà «oggi» solo se per oggi resta una fascia: il ripiego non scatta mai.
+  const fascia = day === 'today' ? (fasciaDiPartenzaOggi(a.ora) ?? FASCE_DI_DOMANI[0]) : FASCE_DI_DOMANI[0];
+  return { day, fascia, avviso: avvisoVeloceCaduta(fascia) };
 }
 
 export function DeliverySlotPicker({
@@ -76,10 +104,16 @@ export function DeliverySlotPicker({
   motivoVeloce = null,
 }: Props) {
   // Calcolato a render: le fasce di "Oggi" già trascorse sono escluse.
-  const ora = new Date().getHours();
+  // 30/10/2026 (ondata 18) — L'ora è quella di Roma, come la vetrina, il carrello e le rotte: con
+  // l'ora del telefono, un telefono a Bucarest alle 21:30 (a Roma le 20:30) si vedeva togliere la
+  // veloce che la vetrina prometteva, e uno a Londra alle 20:30 se la vedeva offrire alle 21:30.
+  const ora = romeNow().getHours();
   const todayTimes = fasceAncoraPossibili(ora);
   const oggiPossibile = todayTimes.length > 0;
-  const expressAvailable = expressSiPuo(ora) && veloceDisponibile;
+  const expressAvailable = expressSiPuo(ora) && veloceDisponibile === true;
+  // Il server non ha ancora risposto e l'orologio non dice già di no: la veloce è «non so ancora».
+  const veloceInAttesa = expressSiPuo(ora) && veloceDisponibile === null;
+  const adessoInAttesa = veloceInAttesa && day === 'now';
 
   // Se «Adesso» era scelta e non si può più (fattorino spento, negozio chiuso, le 21), si torna
   // alla prima fascia possibile, come dopo le 21: la rotta la rifiuterebbe comunque con un 409.
@@ -87,12 +121,15 @@ export function DeliverySlotPicker({
   // fascia, senza che nessuno lo dicesse. Adesso una riga lo dice finché il cliente non sceglie.
   const [avvisoSpostata, setAvvisoSpostata] = useState<string | null>(null);
   useEffect(() => {
-    const caduta = quandoLaVeloceCade({ day, expressAvailable, ora });
+    const caduta = quandoLaVeloceCade({ day, expressAvailable, ora, inAttesa: veloceInAttesa });
     if (!caduta) return;
     setAvvisoSpostata(caduta.avviso);
+    // La fascia nominata nell'avviso è quella che resta segnata: si mette prima di cambiare giorno.
+    if (caduta.day === 'today') onTodayTimeChange(caduta.fascia);
+    else onTomorrowTimeChange(caduta.fascia);
     onDayChange(caduta.day);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day, expressAvailable]);
+  }, [day, expressAvailable, veloceInAttesa]);
   const scegliGiorno = (g: Giorno) => {
     setAvvisoSpostata(null);
     onDayChange(g);
@@ -122,9 +159,16 @@ export function DeliverySlotPicker({
         <DayTile
           active={day === 'now'}
           onClick={() => expressAvailable && scegliGiorno('now')}
-          disabled={!expressAvailable}
+          // In attesa della risposta, la tessera già scelta resta com'è: spenta sembrerebbe tolta.
+          disabled={!expressAvailable && !adessoInAttesa}
           title="Adesso"
-          subtitle={expressAvailable ? `${SOTTOTITOLO_ADESSO} · ${prezzoVeloce}` : 'Non disponibile'}
+          subtitle={
+            expressAvailable || adessoInAttesa
+              ? `${SOTTOTITOLO_ADESSO} · ${prezzoVeloce}`
+              : veloceInAttesa
+                ? 'Sto controllando…'
+                : 'Non disponibile'
+          }
           badge={{ text: 'Veloce', cls: 'text-ink-700 bg-cream-100' }}
         />
         <DayTile
@@ -143,6 +187,9 @@ export function DeliverySlotPicker({
       </div>
       {avvisoSpostata && (
         <p role="status" className="text-sm text-ink-700">{avvisoSpostata}</p>
+      )}
+      {adessoInAttesa && (
+        <p role="status" className="text-sm text-ink-700">{RIGA_VELOCE_IN_ATTESA}</p>
       )}
       {!expressAvailable && motivoVeloce && !avvisoSpostata && (
         <p className="text-xs text-ink-500">{motivoVeloce}</p>

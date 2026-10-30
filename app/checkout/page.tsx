@@ -33,7 +33,8 @@ import { StepCard } from '@/components/checkout/StepCard';
 import { ScheletroCassa } from '@/components/checkout/ScheletroCassa';
 import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector, raccogliMetodoScelto } from '@/components/checkout/PaymentMethodSelector';
-import { DeliverySlotPicker } from '@/components/checkout/DeliverySlotPicker';
+import { DeliverySlotPicker, RIGA_VELOCE_IN_ATTESA } from '@/components/checkout/DeliverySlotPicker';
+import { romeNow } from '@/lib/store-hours';
 import {
   FASCE_DI_DOMANI,
   consegnaScelta,
@@ -475,7 +476,8 @@ export default function CheckoutPage() {
       // carrello di adesso. Se nel frattempo il carrello è cambiato, lo dice invece di mostrarlo.
       if (bozza.couponCode) setCouponCode(bozza.couponCode);
 
-      const ora = new Date().getHours();
+      // 30/10/2026 (ondata 18) — L'ora di Roma, come la vetrina e le rotte: non quella del telefono.
+      const ora = romeNow().getHours();
       const metodo = metodoDaRimettere(bozza.metodoPagamento, stripeAvailable);
       if (metodo) setPaymentMethod(metodo);
       const giorno = giornoDaRimettere(bozza.giorno, ora);
@@ -517,7 +519,12 @@ export default function CheckoutPage() {
   // ⚠️ SI PARTE DAL GIORNO CHE SI PUÒ DAVVERO SCEGLIERE. Prima si partiva sempre
   // da 'today' e la fascia ripiegava sulla prima dell'elenco: dopo le 20:00
   // quella è già passata, e finiva su orders.delivery_slot così com'era.
-  const oraDiApertura = new Date().getHours();
+  //
+  // 30/10/2026 (ondata 18) — Qui, nel riquadro delle fasce e nell'invio l'ora è quella di Roma
+  // (`romeNow`), come la vetrina, il carrello e le rotte che creano l'ordine. Con l'ora del
+  // telefono, un telefono a Londra alle 20:30 (a Roma le 21:30) si vedeva offrire «Adesso» e la
+  // rotta l'avrebbe rifiutata; uno a Bucarest alle 21:30 (a Roma le 20:30) se la vedeva togliere.
+  const oraDiApertura = romeNow().getHours();
   const [slotDay, setSlotDay] = useState(() => giornoDiPartenza(oraDiApertura));
   const [slotTodayTime, setSlotTodayTime] = useState(
     () => fasciaDiPartenzaOggi(oraDiApertura) ?? '',
@@ -526,7 +533,7 @@ export default function CheckoutPage() {
   // Tre risposte: non serve (ritiro) · questa fascia · non-valida (si frena).
   const consegna = consegnaScelta({
     giorno: slotDay,
-    ora: new Date().getHours(),
+    ora: romeNow().getHours(),
     fasciaOggi: slotTodayTime,
     fasciaDomani: slotTomorrowTime,
     ritiroInNegozio: pickupInStore,
@@ -537,10 +544,22 @@ export default function CheckoutPage() {
 
   // 29/10/2026 — «Adesso» si offre solo se il server dice che si può mantenere: dalle 8 alle 21,
   // negozi aperti, un fattorino approvato e online (`veloceSiPuo`, la stessa decisione delle due
-  // rotte). Finché non risponde, o se la lettura cade, la veloce non c'è: mai promettere alla cieca.
-  const [veloceDisponibile, setVeloceDisponibile] = useState(false);
+  // rotte). Se la lettura cade, la veloce non c'è: mai promettere alla cieca.
+  //
+  // 30/10/2026 (ondata 18) — Ma «non ha ancora risposto» non è «no». Si partiva da `false`, e chi
+  // tornava dall'accesso con «Adesso» nella bozza se la vedeva togliere prima che la domanda
+  // partisse (parte solo dopo la lettura del carrello), con la scritta «la veloce non si può più»;
+  // mezzo secondo dopo il server diceva sì. Adesso la risposta si tiene insieme ai negozi a cui si
+  // riferisce: finché non c'è una risposta PER QUESTI negozi, `veloceDisponibile` vale `null`, la
+  // scelta resta e il pulsante aspetta (`veloceDaAspettare`).
+  const [esitoVeloce, setEsitoVeloce] = useState<{ negozi: string; possibile: boolean } | null>(null);
   const [motivoVeloce, setMotivoVeloce] = useState<string | null>(null);
   const negoziDelCarrello = groups.map((g) => g.sellerId).filter(Boolean).join(',');
+  const veloceDisponibile: boolean | null =
+    esitoVeloce && esitoVeloce.negozi === negoziDelCarrello ? esitoVeloce.possibile : null;
+  // «Adesso» scelta senza ancora il sì del server: non si ordina (la rotta la rifiuterebbe con un 409).
+  const veloceDaAspettare =
+    eConsegnaVeloce({ fascia: deliverySlot, ritiroInNegozio: pickupInStore }) && veloceDisponibile !== true;
   useEffect(() => {
     if (!negoziDelCarrello) return;
     let vivo = true;
@@ -549,13 +568,14 @@ export default function CheckoutPage() {
         .then((r) => (r.ok ? r.json() : null))
         .then((esito: unknown) => {
           if (!vivo) return;
-          setVeloceDisponibile(leggiEsitoDellaVeloce(esito) === true);
+          // Una risposta arrivata che non è un sì (anche illeggibile) vale «no»: è un esito, non un'attesa.
+          setEsitoVeloce({ negozi: negoziDelCarrello, possibile: leggiEsitoDellaVeloce(esito) === true });
           const perche = (esito as { perche?: unknown } | null)?.perche;
           setMotivoVeloce(typeof perche === 'string' ? perche : null);
         })
         .catch(() => {
           if (vivo) {
-            setVeloceDisponibile(false);
+            setEsitoVeloce({ negozi: negoziDelCarrello, possibile: false });
             setMotivoVeloce(null);
           }
         });
@@ -1064,7 +1084,7 @@ export default function CheckoutPage() {
    * davvero quando si compra.
    */
   const ordineBloccato =
-    groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile;
+    groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile || veloceDaAspettare;
 
   /*
    * 6/9/2026 — E LA FRASE CHE SPIEGA IL BLOCCO, MOTIVO PER MOTIVO.
@@ -1092,7 +1112,9 @@ export default function CheckoutPage() {
           ? 'Scegli le opzioni (taglia/colore) degli articoli segnalati qui sopra.'
           : !consegnaConfermabile
             ? rigaQuandoArriva(consegna)
-            : null;
+            : veloceDaAspettare
+              ? (veloceDisponibile === null ? RIGA_VELOCE_IN_ATTESA : 'La consegna veloce adesso non si può: scegli una fascia qui sopra.')
+              : null;
 
   const validateAddress = (): Partial<Record<keyof AddressForm, string>> => {
     const e: Partial<Record<keyof AddressForm, string>> = {};
@@ -1150,13 +1172,18 @@ export default function CheckoutPage() {
     // riletto nel momento in cui conta, non solo quando si disegna.
     const consegnaAdesso = consegnaScelta({
       giorno: slotDay,
-      ora: new Date().getHours(),
+      ora: romeNow().getHours(),
       fasciaOggi: slotTodayTime,
       fasciaDomani: slotTomorrowTime,
       ritiroInNegozio: pickupInStore,
     });
     if (!siPuoConfermare(consegnaAdesso)) {
       toast.error(rigaQuandoArriva(consegnaAdesso));
+      return;
+    }
+    // 30/10/2026 (ondata 18) — «Adesso» senza il sì del server non parte, comunque arrivi l'invio.
+    if (veloceDaAspettare) {
+      toast.error(motivoDelBlocco ?? RIGA_VELOCE_IN_ATTESA);
       return;
     }
     trackCheckoutStep('address', { city: form.city });
@@ -1410,8 +1437,8 @@ export default function CheckoutPage() {
             <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-800">
               <strong>Il tuo carrello include prodotti da {groups.length} negozi diversi.</strong>{' '}
               {paymentMethod === 'card'
-                ? `Un unico pagamento, ${groups.length} ordini separati: ogni negozio prepara e fa consegnare il proprio.`
-                : `Verranno creati ${groups.length} ordini separati, uno per ciascun negozio. Ogni rider consegna il proprio ordine.`}
+                ? `Un unico pagamento, ${groups.length} ordini separati, uno per negozio. La consegna è una sola: il fattorino passa da tutti in un giro solo.`
+                : `Verranno creati ${groups.length} ordini separati, uno per ciascun negozio. La consegna è una sola: il fattorino passa da tutti in un giro solo.`}
             </div>
           )}
 

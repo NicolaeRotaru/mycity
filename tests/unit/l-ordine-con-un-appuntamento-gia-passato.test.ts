@@ -326,7 +326,8 @@ describe('gli invarianti sul checkout vero', () => {
     // dipende dall'orologio va riletto nell'istante in cui conta.
     const invio = checkout.slice(checkout.indexOf('const handleSubmit'));
     expect(invio, 'l\'invio non ricontrolla la fascia').toMatch(/consegnaScelta\(/);
-    expect(invio, 'l\'invio non rilegge l\'ora').toMatch(/ora: new Date\(\)\.getHours\(\)/);
+    // 30/10/2026 (ondata 18) — L'ora di Roma, come le rotte che rifiutano: non quella del telefono.
+    expect(invio, 'l\'invio non rilegge l\'ora').toMatch(/ora: romeNow\(\)\.getHours\(\)/);
     expect(invio, 'l\'invio non frena').toMatch(/if \(!siPuoConfermare\(/);
   });
 });
