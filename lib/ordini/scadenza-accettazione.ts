@@ -124,3 +124,63 @@ export function ancoraNeiTempi(ordine: OrdineDaScadere, adesso: Date = new Date(
   if (!scadenza) return false;
   return adesso.getTime() < scadenza.getTime();
 }
+
+/**
+ * 30/10/2026 — IL SECONDO FRENO DELLA VELOCE (carta #220, scelta di Nicola delle 16:13).
+ *
+ * La veloce promette 30-60 minuti DALLA CONFERMA del negozio. Se il negozio non conferma entro
+ * questi minuti la promessa non si può più mantenere: il carrello passa alla prima fascia ancora
+ * possibile e l'euro della veloce non si paga (lib/ordini/veloce-non-confermata.ts).
+ */
+export const MINUTI_PER_CONFERMARE_LA_VELOCE = 10;
+
+/** L'etichetta della veloce, come la scrive lib/quando-arriva.ts («Adesso · arrivo in …»). */
+function eFasciaVeloce(etichetta?: string | null): boolean {
+  return /^adesso\b/i.test(String(etichetta ?? '').trim());
+}
+
+function oraDaParete(d: Date): string {
+  const ora = romeNow(d);
+  return `${ora.getHours()}:${String(ora.getMinutes()).padStart(2, '0')}`;
+}
+
+/**
+ * Un istante scritto come lo legge una persona a Piacenza: «le 12:00 di domani», «le 20:00 di
+ * oggi», «le 9:00 di lunedì 2/11». Il giorno si conta rispetto ad `adesso`, sull'orologio da
+ * parete italiano: l'istante è UTC, la persona legge l'ora di Piacenza.
+ */
+export function scadenzaLeggibile(quando: Date, adesso: Date = new Date()): string {
+  const lui = romeNow(quando);
+  const oggi = romeNow(adesso);
+  const giorno = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const fra = Math.round((giorno(lui) - giorno(oggi)) / 86_400_000);
+  const ora = oraDaParete(quando);
+  if (fra === 0) return `le ${ora} di oggi`;
+  if (fra === 1) return `le ${ora} di domani`;
+  const nome = lui.toLocaleDateString('it-IT', { weekday: 'long' });
+  return `le ${ora} di ${nome} ${lui.getDate()}/${lui.getMonth() + 1}`;
+}
+
+/**
+ * La riga che dice al negoziante entro quando accettare. È la stessa nell'email «Nuovo ordine» e
+ * nelle pagine ordini del venditore, perché viene dalla stessa `scadenzaAccettazione` che usa il
+ * giro che annulla. Prima l'email diceva «entro 15 minuti» e il sito aspettava tre ore o la fine
+ * della fascia: l'ordine della sera per domani mattina sembrava già perso.
+ *
+ * Per la veloce la scadenza che conta è un'altra: i 10 minuti del freno.
+ * `null` quando la nascita dell'ordine non si legge: niente scadenza inventata.
+ */
+export function rigaScadenzaPerIlNegozio(ordine: OrdineDaScadere, adesso: Date = new Date()): string | null {
+  const nato = ordine.created_at ? new Date(ordine.created_at) : null;
+  if (!nato || Number.isNaN(nato.getTime())) return null;
+  if (eFasciaVeloce(ordine.delivery_slot)) {
+    const freno = new Date(nato.getTime() + MINUTI_PER_CONFERMARE_LA_VELOCE * 60_000);
+    return (
+      `È una consegna veloce: accettala entro le ${oraDaParete(freno)}. ` +
+      `Dopo ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti senza conferma la spesa passa alla prima fascia oraria libera.`
+    );
+  }
+  const scadenza = scadenzaAccettazione(ordine);
+  if (!scadenza) return null;
+  return `Accettalo o rifiutalo entro ${scadenzaLeggibile(scadenza, adesso)}.`;
+}

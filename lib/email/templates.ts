@@ -13,6 +13,7 @@
  * prima vivevano dentro la rotta del cron, stanno qui in fondo (R007).
  */
 
+import { rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
 import { env } from '@/lib/env';
 // 27/8/2026 (R011) — Il filtro dell'HTML era riscritto qui dentro, uguale ma
 // scritto in un altro modo, mentre `lib/html-escape.ts` dichiarava nel proprio
@@ -144,18 +145,58 @@ export function orderConfirmedBuyerTemplate(args: { name?: string | null; orderI
   };
 }
 
-export function newOrderSellerTemplate(args: { sellerName?: string | null; orderId: string; total: number; itemsCount: number }) {
+export function newOrderSellerTemplate(args: {
+  sellerName?: string | null;
+  orderId: string;
+  total: number;
+  itemsCount: number;
+  /** Quando è nato l'ordine. Se manca vale adesso: l'email parte quando l'ordine nasce. */
+  createdAt?: string | Date | null;
+  /** La fascia scritta sull'ordine. Se chi chiama non la passa, la scadenza non si inventa. */
+  deliverySlot?: string | null;
+}) {
   const orderUrl = `${appUrl()}/seller/orders/${args.orderId}`;
+  // 30/10/2026 — Qui c'era «Accetta o rifiuta l'ordine entro 15 minuti», mentre il sito aspetta
+  // almeno tre ore o la fine della fascia (lib/ordini/scadenza-accettazione.ts). La riga viene
+  // dalla stessa funzione che leggono le pagine ordini del negoziante.
+  const nato = args.createdAt ? new Date(args.createdAt) : new Date();
+  const senzaFascia = 'Accettalo o rifiutalo appena puoi: entro quando, lo trovi sulla pagina dell’ordine.';
+  const scadenza =
+    args.deliverySlot === undefined
+      ? senzaFascia
+      : (rigaScadenzaPerIlNegozio({ created_at: nato, delivery_slot: args.deliverySlot }, nato) ?? senzaFascia);
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">🛒 Nuovo ordine</h1>
     <p style="margin:0 0 12px;line-height:1.6">Hai ricevuto un nuovo ordine di ${args.itemsCount} articol${args.itemsCount === 1 ? 'o' : 'i'} per <strong>${formatPrice(args.total)}</strong>.</p>
-    <p style="margin:0 0 12px;line-height:1.6;color:${COLORI.attenzione};font-weight:600">Accetta o rifiuta l'ordine entro 15 minuti.</p>
+    <p style="margin:0 0 12px;line-height:1.6;color:${COLORI.attenzione};font-weight:600">${escapeHtml(scadenza)}</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Gestisci ordine')}</p>
   `;
   return {
     subject: `🛒 Nuovo ordine — ${formatPrice(args.total)}`,
     html: shell('Nuovo ordine', body),
-    text: `Nuovo ordine per ${formatPrice(args.total)}. Gestiscilo qui: ${orderUrl}`,
+    text: `Nuovo ordine per ${formatPrice(args.total)}. ${scadenza} Gestiscilo qui: ${orderUrl}`,
+  };
+}
+
+/**
+ * 30/10/2026 — IL NEGOZIO NON HA CONFERMATO LA VELOCE IN 10 MINUTI (carta #220).
+ *
+ * Al cliente: la spesa passa a una fascia, l'euro della veloce non lo paga, e può annullare senza
+ * costi. La frase è la stessa della campanella (lib/ordini/veloce-non-confermata.ts).
+ */
+export function veloceNonConfermataTemplate(args: { orderId: string; frase: string }) {
+  const orderUrl = `${appUrl()}/orders/${args.orderId}`;
+  // Chi scorre tutti i modelli del file li chiama anche con argomenti a metà: niente frase, niente crash.
+  const frase = String(args.frase ?? '');
+  const body = `
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">La tua spesa arriva in una fascia oraria</h1>
+    <p style="margin:0 0 12px;line-height:1.6">${escapeHtml(frase)}</p>
+    <p style="margin:24px 0">${btn(orderUrl, 'Vedi il tuo ordine')}</p>
+  `;
+  return {
+    subject: 'La consegna veloce non è partita: la tua spesa arriva in una fascia oraria',
+    html: shell('La tua spesa arriva in una fascia oraria', body),
+    text: `${frase} Il tuo ordine: ${orderUrl}`,
   };
 }
 

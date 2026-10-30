@@ -25,6 +25,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { cifraDellaVoce, riepilogoOrdine } from '@/lib/ordini/riepilogo-ordine';
 import { nomeDellaRigaOrdine, fotoDellaRigaOrdine } from '@/lib/ordini/riga-ordine';
 import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
+import { rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
 import ReturnRequestCard, { type ReturnRow } from '@/components/seller/ReturnRequestCard';
 
 type OrderRow = {
@@ -369,6 +370,10 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
             <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-ink-900">
               <Clock size={14} aria-hidden className="shrink-0 text-primary-600" /> Consegna: {fasciaLeggibile(order)}
             </p>
+          )}
+          {/* 30/10/2026 — Entro quando accettare: la stessa riga dell'email «Nuovo ordine». */}
+          {order.delivery_status === 'NEW' && rigaScadenzaPerIlNegozio(order) && (
+            <p className="mt-1 text-sm font-semibold text-primary-700">{rigaScadenzaPerIlNegozio(order)}</p>
           )}
         </div>
         <div className="flex items-center gap-2">
