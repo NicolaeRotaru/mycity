@@ -295,7 +295,11 @@ describe('la home: il titolo dice il modo di pagare della cassa, e niente abbigl
       const { tutto } = await home(v);
       expect(tutto.length, `variante ${v}`).toBeGreaterThan(0);
       const resto = tutto.split(frasePagamento()).join(' ');
-      expect(resto, `variante ${v}: «${resto}»`).not.toMatch(/carta|come vuoi|bancomat|satispay|paypal/i);
+      // 30/10/2026 — «paghi anche con Apple Pay» lasciava verde la prova: adesso vede anche i
+      // portafogli del telefono, il pagamento «online» e il POS.
+      expect(resto, `variante ${v}: «${resto}»`).not.toMatch(
+        /carta|come vuoi|bancomat|satispay|paypal|apple\s*pay|google\s*pay|\bonline\b|\bpos\b/i,
+      );
     }
   });
 

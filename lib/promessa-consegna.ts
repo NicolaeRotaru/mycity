@@ -193,6 +193,10 @@ export function rigaConsegnaDellaScheda(s: {
  *     cassa offrirà;
  *   · altrimenti niente. Niente anche senza orari scritti (non si sa) e prima dell'idratazione
  *     (`adesso: null`): l'ora la legge il browser, non il server.
+ *   · niente anche mentre la risposta della veloce manca e solo lei potrebbe dire «oggi».
+ * La usano tutte le schede che parlano della consegna di un negozio: la vetrina (HeroSection), la
+ * riga dell'elenco (StoreListRow), la scheda in home (StorePreviewCard) e il negozio in evidenza
+ * (HeroStoreCard). Ognuna chiede la veloce con `vetrinaChiedeLaVeloce`.
  */
 export type ConsegnaDellaVetrina = 'oggi' | 'domani' | null;
 
@@ -207,11 +211,15 @@ export function consegnaDellaVetrina(s: {
   if (!adesso || !haOrari(s.orari)) return null;
   // Il sì della cassa vale solo finché il negozio è aperto e la veloce è nelle sue ore: una
   // risposta letta alle 12:58 non deve tenere acceso «oggi» al forno che ha chiuso alle 13.
-  const veloceAdesso =
-    s.veloce === true && expressSiPuo(adesso.getHours()) && isOpenNow(fasceDelGiorno(s.orari, adesso.getDay()), adesso);
-  if (veloceAdesso) return 'oggi';
+  const veloceInGioco =
+    expressSiPuo(adesso.getHours()) && isOpenNow(fasceDelGiorno(s.orari, adesso.getDay()), adesso);
+  if (s.veloce === true && veloceInGioco) return 'oggi';
   const oggiSiPuo = fasceAncoraPossibili(adesso.getHours()).some((f) => negozioPuoServire(s.orari, f, adesso));
   if (oggiSiPuo) return 'oggi';
+  // 30/10/2026 — Le fasce non bastano e la veloce si potrebbe, ma la risposta della cassa non c'è
+  // (in viaggio o caduta): non si sa se oggi si può. Prima qui usciva «domani», e un attimo dopo
+  // «oggi»: un giorno sbagliato scritto mentre si aspetta. Finché non si sa, niente.
+  if (s.veloce === null && veloceInGioco) return null;
   const domaniSiPuo = FASCE_DI_DOMANI.some((f) => negozioPuoServire(s.orari, f, adesso));
   return domaniSiPuo ? 'domani' : null;
 }

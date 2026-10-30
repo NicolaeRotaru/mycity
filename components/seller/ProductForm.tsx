@@ -42,7 +42,7 @@ import {
   createProductSchema,
   buildProductPayload,
   scortaCambiata,
-  normalizeCondition,
+  condizioneDalSuggerimento,
   UNIT_OPTIONS,
   UNIT_SUFFIX,
   CONDITION_LABELS,
@@ -382,7 +382,8 @@ export default function ProductForm({
     if (data.attributes) {
       const cond = data.attributes['condizione'];
       if (typeof cond === 'string') {
-        const norm = normalizeCondition(cond);
+        // Come il menu: «usato» e «ricondizionato» letti dalla foto non entrano.
+        const norm = condizioneDalSuggerimento(cond);
         if (norm) setCondition(norm);
       }
       if (data.category_id) {

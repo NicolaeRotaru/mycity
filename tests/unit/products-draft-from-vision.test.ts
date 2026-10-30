@@ -38,7 +38,9 @@ describe('buildDraftProductInsert', () => {
     expect(out.category_id).toBe('casa-top');
     expect(out.name).toBe('Lampada da tavolo');
     expect(out.price).toBe(9.99);
-    expect(out.condition).toBe('usato');
+    // 30/10/2026 — «usato» non entra nella bozza: MyCity non vende l'usato (la condizione resta
+    // fuori dagli attributi, e non si scrive). Prova: l-usato-non-entra-da-nessuna-porta.
+    expect(out.condition).toBeNull();
     expect(out.attributes.marca).toBe('IKEA');
     expect(out.attributes.stile).toBe('Moderno'); // valore canonico
     expect(out.attributes.alt_text).toBe('lampada accesa');

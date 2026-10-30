@@ -1,5 +1,7 @@
 // lib/ai/patchSchema.ts
 
+import { CONDIZIONI_DA_SCEGLIERE } from '@/lib/products/schema';
+
 /**
  * Proprietà JSON-schema del "patch prodotto" proposto dall'AI — gemello di
  * AiProductPatch (lib/products/aiPatch) lato tool. Sorgente unica riusata dai
@@ -17,7 +19,8 @@ export const PRODUCT_PATCH_PROPERTIES: Record<string, unknown> = {
   unit: { type: 'string', enum: ['pezzo', 'kg', 'g', 'l', 'ml', 'confezione', 'paio', 'm'] },
   condition: {
     type: ['string', 'null'],
-    enum: ['nuovo', 'usato', 'ricondizionato', null],
+    // Solo le condizioni che il menu offre: MyCity non vende l'usato (30/10/2026).
+    enum: [...CONDIZIONI_DA_SCEGLIERE, null],
     description: 'null per "non specificata".',
   },
   stock: { type: 'number', description: 'Disponibilità in pezzi.' },

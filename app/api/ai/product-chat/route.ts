@@ -1,5 +1,6 @@
 import { sanitizeImageUrls } from '@/lib/ai/productContext';
 import { NextResponse } from 'next/server';
+import { CONDIZIONI_DA_SCEGLIERE } from '@/lib/products/schema';
 import type Anthropic from '@anthropic-ai/sdk';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { withSellerAuth } from '@/lib/api/middleware';
@@ -85,7 +86,8 @@ const EDIT_TOOL: Anthropic.Tool = {
           },
           condition: {
             type: ['string', 'null'],
-            enum: ['nuovo', 'usato', 'ricondizionato', null],
+            // Solo le condizioni che il menu offre: MyCity non vende l'usato (30/10/2026).
+            enum: [...CONDIZIONI_DA_SCEGLIERE, null],
             description: 'null per "non specificata".',
           },
           stock: { type: 'number', description: 'Disponibilità in pezzi.' },

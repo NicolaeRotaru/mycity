@@ -74,6 +74,21 @@ export function normalizeCondition(s: string): ProductCondition | '' {
   return '';
 }
 
+/**
+ * 30/10/2026 — La condizione che arriva da un SUGGERIMENTO (lettura della foto, assistente, rotte
+ * AI), letta con la stessa regola del menu. Il menu non offriva più «Usato» e «Ricondizionato», ma
+ * le altre porte le scrivevano ancora. Tre risposte:
+ *   · una condizione che il menu offre ('nuovo') → quella;
+ *   · `null` → il suggerimento nomina una condizione che MyCity non vende: si scarta, e non si
+ *     scrive niente (un prodotto vecchio con «usato» non perde il suo valore);
+ *   · '' → testo non riconosciuto, come `normalizeCondition`.
+ */
+export function condizioneDalSuggerimento(s: string): ProductCondition | '' | null {
+  const c = normalizeCondition(s);
+  if (c === '') return '';
+  return condizioneDaScegliere(c) ? c : null;
+}
+
 /** Stati prodotto gestiti dall'interfaccia venditore. */
 export const SELLER_STATUSES = ['available', 'draft', 'sold'] as const;
 export type SellerStatus = (typeof SELLER_STATUSES)[number];
