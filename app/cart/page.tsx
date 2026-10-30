@@ -36,6 +36,7 @@ import { chiaveDellaRiga, merceCheTengoIo, type TentativoAperto } from '@/lib/or
 import { seguiAltezza, osservatoreDelBrowser } from '@/lib/altezza-banner';
 import { leggiEsitoDellaVeloce, rigaQuandoArrivaNelCarrello } from '@/lib/ordini/consegna-veloce';
 import { prezziDelCarrello } from '@/lib/ordini/prezzi';
+import { expressSiPuo } from '@/lib/quando-arriva';
 
 /**
  * 3/9/2026 — DAL TELEFONO, IL PULSANTE CHE PORTA I SOLDI ERA L'ULTIMA COSA DELLA PAGINA.
@@ -165,6 +166,12 @@ export default function CartPage() {
   // La veloce si può mantenere adesso? `null` = non ancora letto o lettura caduta: nessun tempo
   // promesso. La risposta è quella delle rotte (negozi aperti, 8-21, un fattorino online).
   const [veloceSiPuoAdesso, setVeloceSiPuoAdesso] = useState<boolean | null>(null);
+  // 30/10/2026 — La riga della veloce sotto il totale leggeva solo la risposta della cassa: con una
+  // risposta vecchia di un minuto, o un telefono con l'ora avanti, alle 23 prometteva «in 30-60 min»
+  // proprio sotto la riga del prodotto che diceva «nella fascia che scegli». Adesso le due righe
+  // seguono la stessa regola: la risposta della cassa E l'orologio di chi guarda.
+  const veloceDaPromettere: boolean | null =
+    veloceSiPuoAdesso === null || oraDiAdesso === null ? null : veloceSiPuoAdesso && expressSiPuo(oraDiAdesso);
 
   useEffect(() => {
     let vivo = true;
@@ -697,9 +704,9 @@ export default function CartPage() {
             </div>
 
             {/* La veloce è una scelta della cassa, detta col suo prezzo vero: solo se adesso si può davvero. */}
-            {rigaDellaVeloceNelCarrello(veloceSiPuoAdesso, supplementoVeloceCents, vociConsegna.totaleCents) && (
+            {rigaDellaVeloceNelCarrello(veloceDaPromettere, supplementoVeloceCents, vociConsegna.totaleCents) && (
               <p className="text-xs text-ink-600">
-                {rigaDellaVeloceNelCarrello(veloceSiPuoAdesso, supplementoVeloceCents, vociConsegna.totaleCents)}
+                {rigaDellaVeloceNelCarrello(veloceDaPromettere, supplementoVeloceCents, vociConsegna.totaleCents)}
               </p>
             )}
 
