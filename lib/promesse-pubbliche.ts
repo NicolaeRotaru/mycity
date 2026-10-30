@@ -10,7 +10,7 @@ import {
   CONSEGNA_NEGOZIO_IN_PIU_CENTS,
 } from './constants';
 import { EXPRESS_ETA_LABEL } from './delivery';
-import { QUANDO_SI_PUO_LA_VELOCE } from './promessa-consegna';
+import { ORE_DELLA_VELOCE, QUANDO_SI_PUO_LA_VELOCE } from './promessa-consegna';
 import { formatPrice } from './format';
 import { spesaPerConsegnaGratisColCodiceCents, tariffaConsegnaCents, vociDellaConsegna, type VociDellaConsegna } from './ordini/prezzi';
 
@@ -114,10 +114,12 @@ export function promesseRitiroInNegozio(
  */
 export function fraseComeArriva(attivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO): string {
   // Corta: sta dentro la descrizione Google della pagina negozio, che si taglia a 160 caratteri.
-  const veloce = `veloce in ${EXPRESS_ETA_LABEL} con un fattorino in servizio`;
+  // 30/10/2026 (ondata 18) — Diceva solo «con un fattorino in servizio»: le tre condizioni vengono
+  // da QUANDO_SI_PUO_LA_VELOCE, e per starci la parte sulla fascia si è accorciata.
+  const veloce = `veloce in ${EXPRESS_ETA_LABEL}, ${QUANDO_SI_PUO_LA_VELOCE}`;
   return attivo
-    ? `Consegna locale nella fascia oraria che scegli o ritiro in negozio; ${veloce}.`
-    : `Consegna locale nella fascia oraria che scegli; ${veloce}.`;
+    ? `Consegna in fascia oraria o ritiro in negozio; ${veloce}.`
+    : `Consegna in fascia oraria; ${veloce}.`;
 }
 
 /** La prima risposta delle FAQ: i passi per ordinare, senza quello che non si può fare. */
@@ -186,21 +188,29 @@ export function rispostaTempiDiConsegna(): DomandaRisposta {
  *
  * 27/10/2026 — La risposta diceva «GRATUITA sopra €30» e «sotto soglia in media €2,50–4,50»: una
  * forbice scritta a mano che non era il conto della cassa (2,50 € più 1,20 € al km, più 3 euro di
- * consegna). Adesso si paga solo la consegna per negozio, e il confine è quello della cassa.
+ * consegna). Adesso si paga solo la consegna, una volta per tutto il carrello, e il confine è quello
+ * della cassa.
+ *
+ * 30/10/2026 (ondata 18) — Chiudeva con «Gli esempi sono nella pagina Spedizioni», e lì non c'erano:
+ * li mostra il carrello, sotto «Come si calcola la consegna» (`spiegazioneDellaConsegna`). La pagina
+ * Spedizioni non li disegna perché la sua prova (al-lancio-si-paga-solo-la-consegna) ammette solo le
+ * cifre delle costanti: quando quella prova imparerà gli esempi, la frase può tornare a Spedizioni.
  */
 export function rispostaCostoSpedizione(): DomandaRisposta {
   // 29/10/2026 22:21 — Diceva «una per ogni negozio da cui ordini»: dalla regola firmata la consegna è
   // una sola per tutto il carrello. Le cifre nascono dalle costanti e dal conto (`vociDellaConsegna`).
-  const { fasciaCents } = tariffeDellaCassa();
+  // 30/10/2026 (ondata 18) — «si paga o no» lo decide `tariffeDellaCassa().siPaga`, lo stesso del
+  // riquadro di Spedizioni: con la base a zero e gli euro in più accesi, 8 € di pane pagano 1 €.
+  const { fasciaCents, siPaga } = tariffeDellaCassa();
   const quanto =
-    fasciaCents <= 0
+    !siPaga
       ? 'La consegna è gratuita, qualunque sia la spesa.'
       : `Paghi la consegna una volta sola, per tutto il carrello: ${euro(fasciaCents)} all’ora che scegli. `
         + `Si aggiunge ${euro(CONSEGNA_NEGOZIO_IN_PIU_CENTS)} per ogni negozio in più e ${euro(SUPPLEMENTO_CONSEGNA_CENTS)} per ogni negozio dove spendi meno di ${euro(SPESA_SENZA_SUPPLEMENTO_CENTS)}. `
         + `La consegna veloce, in ${EXPRESS_ETA_LABEL}, costa ${euro(SUPPLEMENTO_VELOCE_CENTS)} in più, una volta sola; se hai già un negozio sotto i ${euro(SPESA_SENZA_SUPPLEMENTO_CENTS)}, è compresa.`;
   return {
     q: 'Quanto costa la consegna?',
-    a: `${quanto} Non c’è un costo a chilometro: consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio. Gli esempi sono nella pagina Spedizioni.`,
+    a: `${quanto} Non c’è un costo a chilometro: consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio. Gli esempi con le cifre li trovi nel carrello, sotto «${RIGA_COME_SI_CALCOLA}».`,
   };
 }
 
@@ -354,7 +364,10 @@ export interface PromessaSpedizione {
   sopraSoglia: boolean;
   /** Sempre zero dal 27/10/2026: non c'è più una soglia da raggiungere. */
   mancano: number;
-  /** Quanto si paga per farsi portare l'ordine a casa, in euro, per negozio. Zero = niente. */
+  /**
+   * La base della consegna, in euro, una volta sola per tutto il carrello (gli euro in più per i
+   * negozi in più, la spesa piccola e la veloce li aggiunge la cassa). Zero = niente di base.
+   */
   costoConsegna: number;
   /** La frase principale: quella del badge sulla scheda e della riga sotto il prezzo. */
   titolo: string;
@@ -389,20 +402,14 @@ export function promessaSpedizione(
 }
 
 /**
- * 27/10/2026 — LA RIGA SOTTO LA CONSEGNA QUANDO IL CODICE «SPEDIZIONE GRATUITA» LA COPRE IN PARTE.
- *
- * Il codice regala la consegna fin dove la paga la commissione di quel negozio (`prezziDelCarrello`):
- * da 30 € di spesa per negozio tutta, sotto una parte. Senza questa riga la cassa scriveva «Consegna
- * MyCity 3,00 € per negozio» sopra un addebito di 1 €, e chi aveva letto «codice applicato» non
- * capiva perché pagava ancora. `null` quando non c'è niente da spiegare: consegna già a zero, o un
- * codice che su quella spesa non copre neanche un centesimo.
- */
-/**
  * 29/10/2026 22:21 — LA TARIFFA DELLA CONSEGNA IN UNA FRASE SOLA (registro dei fatti, consegna.promessa).
  * Una consegna sola per tutto il carrello: 3 € di base, 1 € per ogni negozio in più, 1 € per ogni
  * negozio sotto i 10 €, la veloce 1 € una volta sola (compresa se c'è già la spesa piccola).
  * I numeri nascono dalle costanti; la frase non finisce con uno spazio, così chi la mette prima di
- * un punto non scrive «mai di più .». La usano la cassa, la pagina Spedizioni e il pannello consegne.
+ * un punto non scrive «mai di più .». La usano la pagina Spedizioni e `promessaSpedizione`, cioè la
+ * riga sotto il prezzo della scheda prodotto e quella sotto la consegna in cassa. Il pannello consegne
+ * dell'amministratore non la usa: ha una spiegazione sua, più lunga, col compenso del fattorino, e il
+ * suo esempio lo conta `vociDellaConsegna`, la funzione della cassa.
  */
 export function fraseTariffaConsegna(baseCents: number = PLATFORM_DELIVERY_FEE_CENTS): string {
   const soglia = euro(SPESA_SENZA_SUPPLEMENTO_CENTS);
@@ -414,14 +421,18 @@ export function fraseTariffaConsegna(baseCents: number = PLATFORM_DELIVERY_FEE_C
 }
 
 /**
- * La base come la calcola la cassa: un negozio sopra la soglia, con la fascia. Se è zero la
- * consegna non si paga, e le frasi lo dicono.
+ * La base come la calcola la cassa: un negozio sopra la soglia, con la fascia (`fasciaCents`), e il
+ * negozio più caro, sotto la soglia e con la veloce (`pienaCents`).
+ *
+ * 30/10/2026 (ondata 18) — `siPaga` è l'unica risposta a «la consegna si paga?», per la FAQ e per il
+ * riquadro di Spedizioni. Prima la FAQ guardava la base e il riquadro il conto più caro: con la base a
+ * zero e gli euro in più accesi, la FAQ diceva «gratuita» sopra una cassa che chiede 1 € a 8 € di pane.
+ * Si paga se paga anche un solo carrello: il negozio più caro, o un negozio in più.
  */
-function tariffeDellaCassa(): { fasciaCents: number; pienaCents: number } {
-  return {
-    fasciaCents: tariffaConsegnaCents({ pickupInStore: false, merceCents: SPESA_SENZA_SUPPLEMENTO_CENTS, consegnaVeloce: false }),
-    pienaCents: tariffaConsegnaCents({ pickupInStore: false, merceCents: 0, consegnaVeloce: true }),
-  };
+function tariffeDellaCassa(): { fasciaCents: number; pienaCents: number; siPaga: boolean } {
+  const fasciaCents = tariffaConsegnaCents({ pickupInStore: false, merceCents: SPESA_SENZA_SUPPLEMENTO_CENTS, consegnaVeloce: false });
+  const pienaCents = tariffaConsegnaCents({ pickupInStore: false, merceCents: 0, consegnaVeloce: true });
+  return { fasciaCents, pienaCents, siPaga: pienaCents > 0 || CONSEGNA_NEGOZIO_IN_PIU_CENTS > 0 };
 }
 
 /**
@@ -431,8 +442,8 @@ function tariffeDellaCassa(): { fasciaCents: number; pienaCents: number } {
  * sola, per tutto il carrello. `siPaga` dice alla pagina se c'è qualcosa da pagare.
  */
 export function riquadroTariffaConsegna(): { siPaga: boolean; titolo: string; sottotitolo: string } {
-  const { fasciaCents, pienaCents } = tariffeDellaCassa();
-  if (pienaCents <= 0) {
+  const { fasciaCents, siPaga } = tariffeDellaCassa();
+  if (!siPaga) {
     return { siPaga: false, titolo: 'Consegna senza costi', sottotitolo: 'Una sola per tutto il carrello' };
   }
   return { siPaga: true, titolo: `Consegna da ${euro(fasciaCents)}`, sottotitolo: 'Una sola per tutto il carrello' };
@@ -493,8 +504,10 @@ export function rigaSpesaPiccolaColCodice(negozio: string, differenzaCents: numb
 const ESEMPI_DELLA_CONSEGNA: number[][] = [[1500], [800], [1500, 1200], [1500, 600], [1500, 1200, 2000], [500, 600, 700]];
 
 /**
- * COME SI CALCOLA LA CONSEGNA — il testo lungo, uguale nel carrello, in cassa e nella pagina
- * Spedizioni. Ogni cifra viene dalle costanti, ogni esempio da `vociDellaConsegna`.
+ * COME SI CALCOLA LA CONSEGNA — il testo lungo del carrello (app/cart/page.tsx, sotto «Come si
+ * calcola la consegna»): è lì che la FAQ sul costo manda a vedere gli esempi.
+ * Ogni cifra viene dalle costanti, ogni esempio da `vociDellaConsegna`, l'ora della veloce da
+ * `ORE_DELLA_VELOCE` (30/10/2026, ondata 18: era scritta a mano, «dalle 8 alle 21»).
  */
 export function spiegazioneDellaConsegna(fraseDelPagamento: string = frasePagamento()): {
   apertura: string;
@@ -520,13 +533,23 @@ export function spiegazioneDellaConsegna(fraseDelPagamento: string = frasePagame
       `${euro(PLATFORM_DELIVERY_FEE_CENTS)} di base, all’ora che scegli in cassa.`,
       `${euro(CONSEGNA_NEGOZIO_IN_PIU_CENTS)} in più per ogni negozio in più: è una fermata in più nel giro.`,
       `${euro(SUPPLEMENTO_CONSEGNA_CENTS)} in più per ogni negozio dove spendi meno di ${soglia}. Si guarda negozio per negozio, sui prezzi già scontati.`,
-      `Consegna veloce, in ${EXPRESS_ETA_LABEL}: ${euro(SUPPLEMENTO_VELOCE_CENTS)} in più, una volta sola per tutto il carrello. Se hai già un negozio sotto i ${soglia}, la veloce è compresa: non paghi niente in più. La veloce si sceglie in cassa, alla voce «Adesso». Si può dalle 8 alle 21, se tutti i negozi del carrello sono aperti e c’è un fattorino in servizio.`,
+      `Consegna veloce, in ${EXPRESS_ETA_LABEL}: ${euro(SUPPLEMENTO_VELOCE_CENTS)} in più, una volta sola per tutto il carrello. Se hai già un negozio sotto i ${soglia}, la veloce è compresa: non paghi niente in più. La veloce si sceglie in cassa, alla voce «Adesso». Si può ${ORE_DELLA_VELOCE}, se tutti i negozi del carrello sono aperti e c’è un fattorino in servizio.`,
     ],
     esempi,
     chiusura: `Se in cassa usi un codice sconto, i ${soglia} si contano dopo lo sconto. Il totale con la consegna lo vedi sempre prima di confermare l’ordine. Non c’è un costo a chilometro: consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio. ${fraseDelPagamento}`,
   };
 }
 
+/**
+ * 27/10/2026 — LA RIGA SOTTO LA CONSEGNA QUANDO IL CODICE «SPEDIZIONE GRATUITA» LA COPRE IN PARTE.
+ *
+ * Il codice regala la base della consegna fin dove la paga la commissione del negozio più grande
+ * (`prezziDelCarrello`): tutta da `spesaPerConsegnaGratisColCodiceCents()` di spesa, sotto una parte,
+ * e gli euro in più mai. Senza questa riga la cassa scriveva la consegna intera sopra un addebito
+ * più basso, e chi aveva letto «codice applicato» non capiva perché pagava ancora. `null` quando non
+ * c'è niente da spiegare: consegna già a zero, o un codice che su quella spesa non copre neanche un
+ * centesimo. (30/10/2026, ondata 18: questo blocco era rimasto sopra `fraseTariffaConsegna`.)
+ */
 export function rigaDelCodiceSpedizione(
   consegnaDaPagareCents: number,
   negozi: number,
