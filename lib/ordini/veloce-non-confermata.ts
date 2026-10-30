@@ -37,7 +37,9 @@ import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/
  * Poi la scadenza delle tre ore (scadenza-accettazione.ts) si conta sulla fascia nuova.
  *
  * ⚠️ Con la CARTA il conto scritto sull'ordine non si tocca qui: 1 € torna con un rimborso
- * parziale chiesto a `refundOrder` (lib/stripe/payout.ts, il libro dei rimborsi). Se non parte, il
+ * parziale chiesto a `refundOrder` (lib/stripe/payout.ts, il libro dei rimborsi) PRIMA di scrivere
+ * la fascia, così un giro che muore a metà non perde l'euro (il giro dopo lo richiede con la stessa
+ * chiave). Se non parte, o torna meno di 1 €, il
  * cliente legge «te lo rendiamo a mano entro un giorno» e gli amministratori lo sanno. Al lancio
  * la carta è spenta. I negozi che avevano accettato e il fattorino assegnato ricevono la fascia nuova.
  */
@@ -173,7 +175,14 @@ async function avvisaIlCliente(admin: SupabaseClient, o: RigaVeloce, frase: stri
     body: frase,
     link: `/orders/${o.id}`,
   });
-  if (error) logger.error('[veloce-non-confermata] campanella al cliente NON scritta', { orderId: o.id, message: error.message });
+  if (error) {
+    logger.error('[veloce-non-confermata] campanella al cliente NON scritta', { orderId: o.id, message: error.message });
+    // Quando il carrello non si sposta, la campanella è l'unico segno che al cliente se n'è già parlato
+    // (nonSiSposta la rilegge a ogni giro). Senza, l'email ripartiva ogni 5 minuti fino all'annullo.
+    // Si aspetta il giro in cui la campanella si scrive: l'email parte una volta sola. Gli
+    // amministratori lo sanno già, nonSiSposta li avvisa prima, una volta per ordine.
+    if (nonSpostato) return;
+  }
   try {
     const { data, error: errU } = await admin.auth.admin.getUserById(o.user_id);
     const email = data?.user?.email;
@@ -311,6 +320,44 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
   const carta = carrello.some((c) => c.payment_method !== 'cod');
   const euro: ComeVaLEuro = !conto ? 'a-mano' : conto.toltaCents === 0 ? 'compresa' : carta ? 'tolto-carta' : 'tolto-contanti';
 
+  // ⑥ Con la carta il rimborso parte PRIMA di scrivere la fascia. Al contrario, un giro che moriva fra
+  // le due (la funzione che scade dentro la chiamata a Stripe) lasciava l'ordine in fascia senza
+  // l'euro reso: il giro dopo cerca solo le «Adesso» e non lo ritrovava più, e non lo sapeva nessuno.
+  // Così il giro dopo ritrova l'ordine ancora «Adesso» e richiede lo stesso rimborso: la chiave
+  // `veloce_non_confermata_<id>` fa sì che Stripe lo esegua una volta sola.
+  // ⑦ Il rimborso è fatto solo se `refundOrder` dice di aver reso tutto l'euro (`importoCents`).
+  const conLEuro = (conto?.righe ?? []).filter((r) => r.deltaCents !== 0);
+  const rimborsoNonFatto: typeof conLEuro = [];
+  let resiCents = 0;
+  if (euro === 'tolto-carta') {
+    const { refundOrder } = await import('@/lib/stripe/payout');
+    for (const r of conLEuro) {
+      try {
+        const esito = await refundOrder({
+          orderId: r.id,
+          amountCents: -r.deltaCents,
+          // L'euro della veloce è di MyCity (lib/constants.ts): dal negozio non si toglie niente.
+          quotaNegozioCents: 0,
+          reason: 'consegna veloce non confermata dal negozio in 10 minuti',
+          idempotencyKey: `veloce_non_confermata_${r.id}`,
+          notifyBuyer: false,
+          metadata: { motivo: 'veloce_non_confermata' },
+        });
+        const reso = Number(esito?.importoCents ?? 0);
+        resiCents += Number.isFinite(reso) && reso > 0 ? reso : 0;
+        if (!(reso >= -r.deltaCents)) {
+          logger.error('[veloce-non-confermata] rimborso dell euro della veloce partito solo in parte', {
+            orderId: r.id, chiesti: -r.deltaCents, resi: reso,
+          });
+          rimborsoNonFatto.push(r);
+        }
+      } catch (err) {
+        logger.error('[veloce-non-confermata] rimborso dell euro della veloce NON partito', { orderId: r.id, err });
+        rimborsoNonFatto.push(r);
+      }
+    }
+  }
+
   let aMeta = false;
   const deltaScritti = new Map<string, number>();
   const scritti: RigaVeloce[] = [];
@@ -340,7 +387,23 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
     if (!Array.isArray(righeScritte) || righeScritte.length === 0) {
       // Il primo è l'ordine non confermato: se non si scrive, il negozio l'ha accettato adesso
       // (o un altro giro l'ha già spostato). Vince lui, e non si avvisa nessuno.
-      if (i === 0) return 'accettato';
+      if (i === 0) {
+        // Con la carta l'euro è già tornato: se l'ordine è ancora «Adesso» l'ha confermato il negozio
+        // in quell'istante e la veloce resta. Al cliente va bene, ma il conto va saputo. Se invece l'ha
+        // già spostato un altro giro, era lo stesso rimborso (stessa chiave) e non c'è niente da dire.
+        if (resiCents > 0) {
+          const { data: ora } = await admin.from('orders').select('delivery_slot').eq('id', c.id).maybeSingle();
+          if ((ora as { delivery_slot?: string | null } | null)?.delivery_slot === ETICHETTA_ADESSO) {
+            await notifyAdmins(
+              '⚠️ Veloce confermata dopo il rimborso dell’euro',
+              `Il negozio ha confermato l'ordine ${codiceDi(o.id)} mentre il freno della veloce rendeva al cliente ${formatPriceFromCents(resiCents)} sulla carta. La veloce resta e il cliente ha già avuto indietro l'euro: non serve fare niente, ma la consegna di questo carrello è costata al cliente 1 € in meno di quello scritto.`,
+              '/admin/orders',
+              { unaVoltaPer: `veloce-resa-${o.id}` },
+            ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
+          }
+        }
+        return 'accettato';
+      }
       aMeta = true;
       continue;
     }
@@ -353,37 +416,17 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
     .reduce((s, c) => s + centesimi(c.total_price) + (deltaScritti.get(c.id) ?? 0), 0);
 
   // ④ L'euro è tolto davvero solo se OGNI ordine che lo portava è stato riscritto (contanti) o il
-  // rimborso parziale è partito (carta). Altrimenti il cliente non legge «non lo paghi».
-  const conLEuro = (conto?.righe ?? []).filter((r) => r.deltaCents !== 0);
+  // rimborso parziale è tornato per intero (carta, sopra). Altrimenti il cliente non legge «non lo paghi».
   let rimasti: typeof conLEuro = [];
   if (euro === 'tolto-contanti') rimasti = conLEuro.filter((r) => deltaScritti.get(r.id) !== r.deltaCents);
-  if (euro === 'tolto-carta') {
-    const { refundOrder } = await import('@/lib/stripe/payout');
-    for (const r of conLEuro) {
-      try {
-        await refundOrder({
-          orderId: r.id,
-          amountCents: -r.deltaCents,
-          // L'euro della veloce è di MyCity (lib/constants.ts): dal negozio non si toglie niente.
-          quotaNegozioCents: 0,
-          reason: 'consegna veloce non confermata dal negozio in 10 minuti',
-          idempotencyKey: `veloce_non_confermata_${r.id}`,
-          notifyBuyer: false,
-          metadata: { motivo: 'veloce_non_confermata' },
-        });
-      } catch (err) {
-        logger.error('[veloce-non-confermata] rimborso dell euro della veloce NON partito', { orderId: r.id, err });
-        rimasti.push(r);
-      }
-    }
-  }
+  if (euro === 'tolto-carta') rimasti = rimborsoNonFatto;
   const euroFinale: ComeVaLEuro = rimasti.length > 0 ? 'a-mano' : euro;
 
   const daFare: string[] = [];
   if (rimasti.length > 0) {
     const codici = rimasti.map((r) => codiceDi(r.id)).join(', ');
     daFare.push(carta
-      ? `Il rimborso automatico di 1 € sull’ordine ${codici} non è partito: rendi a mano al cliente l’euro della veloce entro un giorno.`
+      ? `Il rimborso automatico di 1 € sull’ordine ${codici} non è tornato per intero: rendi a mano al cliente l’euro della veloce entro un giorno.`
       : `L’euro della veloce sta sull’ordine ${codici}, cambiato nel frattempo, e non si è potuto togliere: rendilo a mano al cliente entro un giorno.`);
   } else if (euroFinale === 'a-mano') {
     daFare.push('Il conto della consegna non è quello della regola: rendi a mano al cliente l’euro della veloce entro un giorno, se c’era.');

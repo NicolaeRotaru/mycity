@@ -204,7 +204,10 @@ export function rigaScadenzaPerIlNegozio(ordine: OrdineDaScadere, adesso: Date =
     }
     return (
       `Sono passati i ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti per confermare la consegna veloce: se c’è una fascia ` +
-      `oraria libera la spesa passa lì da sola, e il cliente non paga l’euro della veloce. ${allAnnullo}`
+      // Niente «il cliente non paga l'euro della veloce»: quando la veloce è compresa nella spesa
+      // piccola non c'è nessun euro da togliere, e se il freno non trova una fascia l'euro resta.
+      // Al negozio serve sapere cosa succede all'ordine, non il conto del cliente.
+      `oraria libera la spesa passa lì da sola. ${allAnnullo}`
     );
   }
   const entro = fineDellaFascia(ordine) ?? annullo;

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ETICHETTA_ADESSO } from "@/lib/quando-arriva";
 import { rigaScadenzaPerIlNegozio, scadenzaAccettazione } from "@/lib/ordini/scadenza-accettazione";
+import { statoPagamento } from "@/lib/ordini/riepilogo-ordine";
 
 /**
  * IL SECONDO FRENO DELLA VELOCE (carta #220, scelta di Nicola del 30/10 alle 16:13).
@@ -34,7 +35,7 @@ function tabella(nome: string) {
   const b: Record<string, unknown> = {
     select: () => b,
     update: (v: Riga) => { valori = v; return b; },
-    insert: async (righe: Riga | Riga[]) => { (db[nome] ??= []).push(...(Array.isArray(righe) ? righe : [righe])); return { error: null }; },
+    insert: async (righe: Riga | Riga[]) => { if (guasto[`${nome}:insert`]) return { error: { message: "guasto" } }; (db[nome] ??= []).push(...(Array.isArray(righe) ? righe : [righe])); return { error: null }; },
     eq: (k: string, v: unknown) => { filtri.push((r) => r[k] === v); return b; },
     in: (k: string, vs: unknown[]) => { filtri.push((r) => vs.includes(r[k])); return b; },
     lt: (k: string, v: string) => { filtri.push((r) => String(r[k]) < v); return b; },
@@ -97,6 +98,7 @@ beforeEach(() => {
   db.notifications = [];
   prima.update = undefined;
   guasto.profiles = false;
+  guasto['notifications:insert'] = false;
   sendEmailMock.mockClear();
   notifyAdminsMock.mockClear();
 });
@@ -160,5 +162,35 @@ describe('il freno della veloce regge guasti, margini e concorrenza', () => {
     expect(scade?.toISOString()).toBe('2026-10-30T19:38:00.000Z');
     const riga = rigaScadenzaPerIlNegozio({ created_at: String(o('o1').created_at), delivery_slot: String(o('o1').delivery_slot) }, new Date('2026-10-30T16:50:00.000Z'));
     expect(riga).toContain('entro le 20:00 di oggi');
+  });
+
+  it('W-campanella-giu: se la campanella non si scrive, il cliente non riceve un email ogni 5 minuti', async () => {
+    db.profiles = [{ id: 'forno', store_hours: chiusoDomenica }];
+    guasto.profiles = true;
+    guasto['notifications:insert'] = true;
+    db.orders = [ordine({ created_at: '2026-10-31T19:20:00.000Z' })];
+    await giro('2026-10-31T19:35:00.000Z');
+    await giro('2026-10-31T19:40:00.000Z');
+    await giro('2026-10-31T19:45:00.000Z');
+    guasto['notifications:insert'] = false;
+    await giro('2026-10-31T19:50:00.000Z');
+    await giro('2026-10-31T19:55:00.000Z');
+    const alCliente = sendEmailMock.mock.calls.filter(([m]) => (m as { to?: string }).to === 'maria@esempio.it');
+    expect(alCliente).toHaveLength(1);
+    expect(db.notifications).toHaveLength(1);
+  });
+
+  it('W-compresa: dopo i 10 minuti la riga al negozio non promette «il cliente non paga l euro della veloce»', () => {
+    // 6 € da un negozio solo: la veloce è compresa nella spesa piccola, non c è nessun euro da togliere.
+    const riga = String(rigaScadenzaPerIlNegozio({ created_at: NATO, delivery_slot: ETICHETTA_ADESSO }, new Date('2026-10-30T17:20:00.000Z')));
+    expect(riga).not.toMatch(/euro della veloce/);
+    expect(riga).toContain('21:05');
+  });
+
+  it('W-riepilogo: un ordine carta rimborsato in parte dal freno dice «già pagato con carta», non niente', () => {
+    expect(statoPagamento({ payment_method: 'card', payment_status: 'PARTIALLY_REFUNDED', delivery_status: 'NEW' }, 1900))
+      .toEqual({ tipo: 'gia-pagato-con-carta', centesimi: 1900 });
+    // Rimborsato per intero resta «rimborsato»; i contanti non cambiano.
+    expect(statoPagamento({ payment_method: 'card', payment_status: 'REFUNDED', delivery_status: 'CANCELED' }, 1900)).toEqual({ tipo: 'rimborsato' });
   });
 });

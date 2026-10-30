@@ -24,7 +24,7 @@ const ERRORE_LETTURA_124 = { code: "42703", message: "column orders.gross_total_
 const ERRORE_SCRITTURA_124 = { code: "PGRST204", message: "Could not find the gross_total_cents column of orders in the schema cache" };
 const sendEmailMock = vi.fn(async (_m: unknown) => ({ ok: true }));
 const notifyAdminsMock = vi.fn(async (..._a: unknown[]) => undefined);
-const refundOrderMock = vi.fn(async (_a: unknown) => ({ refundId: "re_1", reversedCents: 0, pieno: false }));
+const refundOrderMock = vi.fn(async (_a: unknown): Promise<unknown> => ({ refundId: "re_1", reversedCents: 0, pieno: false, importoCents: 100 }));
 
 function tabella(nome: string) {
   const filtri: Array<(r: Riga) => boolean> = [];
@@ -328,5 +328,53 @@ describe("il secondo freno della veloce: il giro dell ondata 17", () => {
     const finita = String(rigaScadenzaPerIlNegozio(spostata, new Date("2026-10-30T19:30:00.000Z")));
     expect(finita).not.toContain("entro le 20:00");
     expect(finita).toContain("21:05");
+  });
+
+  it("V-carta-meno: se il rimborso rende meno di 1 €, il cliente non legge «ti torna sulla carta» e gli admin lo sanno", async () => {
+    refundOrderMock.mockResolvedValueOnce({ refundId: "re_1", reversedCents: 0, pieno: false, importoCents: 60 });
+    db.orders = [ordine({ payment_method: "card", payment_status: "PAID", stripe_session_id: "cs_1" })];
+    await giro("2026-10-30T17:16:00.000Z");
+    const frase = String(db.notifications[0].body);
+    expect(frase).not.toContain("ti torna sulla carta");
+    expect(frase).toContain("a mano");
+    expect(notifyAdminsMock).toHaveBeenCalledTimes(1);
+  });
+
+  for (const modo of ["cod", "card"] as const) {
+    it(`V-senza-124-due-negozi (${modo}): senza la 124 il carrello di due negozi si sposta tutto e l euro si toglie una volta`, async () => {
+      senza124.attivo = true;
+      const senzaLordo = (r: Riga) => { const { gross_total_cents: _x, ...v } = r; return v; };
+      const pago = modo === "card" ? { payment_method: "card", payment_status: "PAID", stripe_session_id: "cs_1" } : {};
+      db.orders = [
+        senzaLordo(ordine(pago)),
+        senzaLordo(ordine({ ...pago, id: "o2", seller_id: "frutta", total_price: 13, delivery_fee_cents: 100, rider_fee_cents: 100, created_at: "2026-10-30T17:05:00.001Z" })),
+      ];
+      if (modo === "cod") db.cod_checkout_attempts = [{ user_id: "maria", order_ids: [{ id: "o1" }, { id: "o2" }] }];
+      const esito = await giro("2026-10-30T17:16:00.000Z");
+      expect(esito).toMatchObject({ ok: true, spostati: 1 });
+      expect(o("o1").delivery_slot).toBe("Stasera · 18:00–20:00");
+      expect(o("o2").delivery_slot).toBe("Stasera · 18:00–20:00");
+      if (modo === "cod") {
+        expect(o("o1")).toMatchObject({ delivery_fee_cents: 300, total_price: 18 });
+        expect(o("o2")).toMatchObject({ delivery_fee_cents: 100, total_price: 13 });
+        expect(String(db.notifications.find((n) => n.user_id === "maria")?.body)).toContain("alla porta paghi 31,00");
+      } else {
+        expect(refundOrderMock).toHaveBeenCalledTimes(1);
+        expect(refundOrderMock.mock.calls[0][0]).toMatchObject({ orderId: "o1", amountCents: 100 });
+      }
+    });
+  }
+
+  it("V-carta-morte: se il giro muore fra la fascia e il rimborso, il giro dopo rende lo stesso l euro", async () => {
+    db.orders = [ordine({ payment_method: "card", payment_status: "PAID", stripe_session_id: "cs_1" })];
+    // Il primo giro si ferma dentro la chiamata a Stripe (la funzione scade e muore lì).
+    refundOrderMock.mockImplementationOnce(() => new Promise(() => {}));
+    void giro("2026-10-30T17:16:00.000Z");
+    await vi.waitFor(() => expect(refundOrderMock).toHaveBeenCalledTimes(1));
+    await giro("2026-10-30T17:21:00.000Z");
+    expect(refundOrderMock).toHaveBeenCalledTimes(2);
+    expect(refundOrderMock.mock.calls[1][0]).toMatchObject({ orderId: "o1", amountCents: 100, idempotencyKey: "veloce_non_confermata_o1" });
+    expect(o("o1").delivery_slot).toBe("Stasera · 18:00–20:00");
+    expect(String(db.notifications.find((n) => n.user_id === "maria")?.body)).toContain("ti torna sulla carta");
   });
 });

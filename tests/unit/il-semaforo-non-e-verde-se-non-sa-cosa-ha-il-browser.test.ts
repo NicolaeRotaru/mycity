@@ -73,6 +73,7 @@ function lavoriTuttiVivi(): Battito[] {
     'process-deletions',
     'external-price-alerts',
     'riquadra-casse',
+    'veloce-non-confermata',
     'operational-alerts',
   ].map((name) => ({ name, last_run_at: minutiFa(1) }));
 }
