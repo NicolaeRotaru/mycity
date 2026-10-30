@@ -11,6 +11,7 @@ import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { motivoNegozioChiuso, negozioPuoServire, romeNow } from '@/lib/store-hours';
+import { eFasciaDiOggi, fasciaFuoriTempo } from '@/lib/quando-arriva';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts } from '@/lib/promotions';
@@ -660,6 +661,12 @@ export const POST = withAuthRateLimit(
     // adesso vuol dire perdere tutti gli ordini della sera per il giorno dopo.
     const consegnaVeloce = eConsegnaVeloce({ fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore });
     if (!body.pickupInStore) {
+      // 30/10/2026 (ondata 21) — Una fascia di oggi si sceglie fino a 60 minuti prima della fine
+      // (scelta di Nicola). Alle 17:50 «In giornata · 15:00–18:00» vuol dire «arriva fra dieci
+      // minuti»: il negozio la riceverebbe già in ritardo. La stessa regola della cassa.
+      // L'orologio si legge solo per una fascia di oggi: domani, «Adesso» e niente non c'entrano.
+      const fuoriTempo = eFasciaDiOggi(body.deliverySlot) ? fasciaFuoriTempo(body.deliverySlot, romeNow()) : null;
+      if (fuoriTempo) return esciERilascia(ApiErrors.conflict(fuoriTempo));
       for (const s of sellers ?? []) {
         if (!negozioPuoServire(s.store_hours, body.deliverySlot)) {
           return esciERilascia(ApiErrors.conflict(motivoNegozioChiuso(s.store_name ?? 'Il negozio', body.deliverySlot)));

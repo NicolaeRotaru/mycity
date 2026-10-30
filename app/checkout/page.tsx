@@ -207,7 +207,7 @@ export default function CheckoutPage() {
         for (const v of vs ?? []) variantStock.set(v.id as string, (v.stock as number) ?? 0);
       }
 
-      const sellerInfo = new Map<string, { name: string; lat: number | null; lng: number | null }>();
+      const sellerInfo = new Map<string, { name: string; lat: number | null; lng: number | null; orari: unknown }>();
       const allSellerIds = Array.from(
         new Set([
           ...cart.map((c) => c.sellerId).filter(Boolean) as string[],
@@ -228,12 +228,15 @@ export default function CheckoutPage() {
        * Se la lettura cade non si indovina una spedizione: la domanda fallisce come quella dei
        * prodotti, e la cassa dice che non riesce a leggere il carrello.
        */
-      const negozi = await fetchSellerPublicMap(supabase, allSellerIds, 'id, store_name, store_lat, store_lng');
+      // 30/10/2026 (ondata 21) — Anche gli orari: la cassa propone solo le fasce che la rotta
+      // accetterebbe, e la rotta guarda gli orari di ogni negozio (`negozioPuoServire`).
+      const negozi = await fetchSellerPublicMap(supabase, allSellerIds, 'id, store_name, store_lat, store_lng, store_hours');
       for (const s of negozi.values()) {
         sellerInfo.set(s.id, {
           name: s.store_name ?? 'Negozio',
           lat: s.store_lat ?? null,
           lng: s.store_lng ?? null,
+          orari: s.store_hours ?? null,
         });
       }
 
@@ -352,7 +355,9 @@ export default function CheckoutPage() {
       // nel ripiego che tiene in piedi il checkout se la migrazione 071 non e'
       // applicata. `offers_express` invece se n'e' andata il 18/10/2026 con la
       // lettura del negozio da `profiles` e il suo ripiego.
-      return { groups: groupsArr, orphans: orphanItems, stockIssues, variantIssues, prezziCambiati };
+      // Gli orari dei negozi che restano nel carrello, gli stessi che legge la rotta.
+      const orariNegozi = groupsArr.map((g) => sellerInfo.get(g.sellerId)?.orari ?? null);
+      return { groups: groupsArr, orphans: orphanItems, stockIssues, variantIssues, prezziCambiati, orariNegozi };
     },
   });
 
@@ -360,6 +365,8 @@ export default function CheckoutPage() {
   const orphans = useMemo(() => cartData?.orphans ?? [], [cartData]);
   const stockIssues = useMemo(() => cartData?.stockIssues ?? [], [cartData]);
   const prezziCambiati = useMemo(() => cartData?.prezziCambiati ?? [], [cartData]);
+  // 30/10/2026 (ondata 21) — Gli orari dei negozi del carrello, per il selettore e per il freno.
+  const orariNegozi = useMemo<unknown[]>(() => cartData?.orariNegozi ?? [], [cartData]);
   const variantIssues = useMemo(() => cartData?.variantIssues ?? [], [cartData]);
 
   // Auto-rimozione degli articoli non più disponibili (id stale dopo re-seed,
@@ -524,7 +531,11 @@ export default function CheckoutPage() {
   // (`romeNow`), come la vetrina, il carrello e le rotte che creano l'ordine. Con l'ora del
   // telefono, un telefono a Londra alle 20:30 (a Roma le 21:30) si vedeva offrire «Adesso» e la
   // rotta l'avrebbe rifiutata; uno a Bucarest alle 21:30 (a Roma le 20:30) se la vedeva togliere.
-  const oraDiApertura = romeNow().getHours();
+  //
+  // 30/10/2026 (ondata 21) — Coi minuti: alle 17:50 «15:00–18:00» non si propone più (60 minuti
+  // dalla fine). Gli orari dei negozi arrivano dopo, col carrello: allora il selettore sposta da
+  // solo giorno e fascia sulla prima che i negozi possono servire.
+  const oraDiApertura = romeNow();
   const [slotDay, setSlotDay] = useState(() => giornoDiPartenza(oraDiApertura));
   const [slotTodayTime, setSlotTodayTime] = useState(
     () => fasciaDiPartenzaOggi(oraDiApertura) ?? '',
@@ -537,6 +548,8 @@ export default function CheckoutPage() {
     fasciaOggi: slotTodayTime,
     fasciaDomani: slotTomorrowTime,
     ritiroInNegozio: pickupInStore,
+    adesso: romeNow(),
+    orari: orariNegozi,
   });
   // null SOLO quando la fascia non serve: una fascia non valida ferma l'ordine.
   const deliverySlot = etichettaPerLOrdine(consegna);
@@ -1176,6 +1189,8 @@ export default function CheckoutPage() {
       fasciaOggi: slotTodayTime,
       fasciaDomani: slotTomorrowTime,
       ritiroInNegozio: pickupInStore,
+      adesso: romeNow(),
+      orari: orariNegozi,
     });
     if (!siPuoConfermare(consegnaAdesso)) {
       toast.error(rigaQuandoArriva(consegnaAdesso));
@@ -1319,6 +1334,7 @@ export default function CheckoutPage() {
                   veloceDisponibile={veloceDisponibile}
                   prezzoVeloce={prezzoDellaVeloce(Math.round(riepilogo.supplementoVeloce * 100))}
                   motivoVeloce={motivoVeloce}
+                  orariNegozi={orariNegozi}
                 />
                 {fraseOrdiniDivisi(groups.length) && (
                   <p className="mt-2 text-xs text-ink-500">{fraseOrdiniDivisi(groups.length)}</p>

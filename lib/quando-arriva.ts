@@ -35,6 +35,7 @@
  * mettersi alle 21:40 senza aspettare le 21:40.
  */
 import { EXPRESS_ETA_LABEL } from './delivery';
+import { negozioPuoServire } from './store-hours';
 
 export type Giorno = 'now' | 'today' | 'tomorrow';
 
@@ -88,14 +89,79 @@ export function fasciaAmmessa(valore: unknown): valore is string {
   return typeof valore === 'string' && FASCE_AMMESSE.includes(valore);
 }
 
-/** Le fasce di oggi non ancora passate. Vuota dopo l'ultima. */
-export function fasceAncoraPossibili(ora: number): string[] {
-  return FASCE_DI_OGGI.filter((f) => f.oraDiFine > ora).map((f) => f.etichetta);
+/**
+ * 30/10/2026 (ondata 21) — UNA FASCIA SI SCEGLIE FINO A 60 MINUTI PRIMA DELLA SUA FINE.
+ *
+ * Scelta di Nicola (fatto `consegna.fascia-fino-a-60-minuti`). Prima la fascia restava
+ * proponibile finché non era finita: lunedì alle 17:50 la cassa segnava da sola «In giornata ·
+ * 15:00–18:00», cioè «arriva entro dieci minuti», meno della veloce (30-60 min), e la rotta
+ * accettava. Nessun fattorino ce la fa. Dopo le 17:00 si propone la successiva.
+ */
+export const MINUTI_PRIMA_DELLA_FINE = 60;
+
+/** Un'ora intera (le 17 = 17:00) oppure l'orologio di Roma, coi minuti. */
+function minutiDi(adesso: number | Date): number {
+  return typeof adesso === 'number' ? adesso * 60 : adesso.getHours() * 60 + adesso.getMinutes();
 }
 
-/** «Oggi» si può ancora scegliere? Dalle 20:00 in poi, no. */
-export function oggiSiPuoAncora(ora: number): boolean {
-  return fasceAncoraPossibili(ora).length > 0;
+/** È una delle fasce di oggi? Solo per quelle conta la regola dei 60 minuti (e serve l'orologio). */
+export function eFasciaDiOggi(etichetta: string | null | undefined): boolean {
+  return FASCE_DI_OGGI.some((x) => x.etichetta === etichetta);
+}
+
+/**
+ * Perché questa fascia di oggi non si fa più in tempo, o `null` se si fa (o se non è di oggi).
+ *
+ * È la regola dei 60 minuti, in un posto solo: la usa la cassa per non proporla e la rotta
+ * dei contanti per rifiutarla con un 409.
+ */
+export function fasciaFuoriTempo(etichetta: string | null | undefined, adesso: number | Date): string | null {
+  const f = FASCE_DI_OGGI.find((x) => x.etichetta === etichetta);
+  if (!f) return null;
+  const mancano = f.oraDiFine * 60 - minutiDi(adesso);
+  if (mancano >= MINUTI_PRIMA_DELLA_FINE) return null;
+  if (mancano <= 0) {
+    return 'La fascia che hai scelto è già passata. Scegline una ancora disponibile, oppure ordina per domani.';
+  }
+  return 'La fascia che hai scelto finisce fra meno di un’ora: non si fa più in tempo. Scegline una più tardi, oppure ordina per domani.';
+}
+
+/**
+ * Tutti i negozi del carrello possono servire questa fascia? Sono gli orari che la rotta legge
+ * (`negozioPuoServire`, negozio per negozio): la cassa non propone quello che la rotta rifiuta.
+ * Senza orari (lista vuota) non c'è niente da chiedere, come nella rotta.
+ */
+function laServonoTutti(fascia: string, adesso: Date, orari: readonly unknown[]): boolean {
+  return orari.every((h) => negozioPuoServire(h, fascia, adesso));
+}
+
+/**
+ * Le fasce di oggi che si possono ancora scegliere. Vuota dopo l'ultima.
+ *
+ * Con l'ora intera (le vecchie chiamate) vale solo la regola dei 60 minuti alle :00. Con
+ * l'orologio di Roma contano i minuti e, se ci sono, gli orari dei negozi del carrello: giovedì
+ * alle 14:00 Pane Quotidiano non riapre, quindi per oggi non resta niente.
+ */
+export function fasceAncoraPossibili(ora: number): string[];
+export function fasceAncoraPossibili(adesso: Date, orari?: readonly unknown[]): string[];
+export function fasceAncoraPossibili(adesso: number | Date, orari: readonly unknown[] = []): string[] {
+  return FASCE_DI_OGGI.filter(
+    (f) =>
+      fasciaFuoriTempo(f.etichetta, adesso) === null &&
+      (typeof adesso === 'number' || laServonoTutti(f.etichetta, adesso, orari)),
+  ).map((f) => f.etichetta);
+}
+
+/** Le fasce di domani che i negozi del carrello possono servire: sabato, per la domenica chiusa, nessuna. */
+export function fasceDiDomaniPossibili(adesso: Date, orari: readonly unknown[] = []): string[] {
+  return FASCE_DI_DOMANI.filter((f) => laServonoTutti(f, adesso, orari));
+}
+
+/** «Oggi» si può ancora scegliere? Dalle 19:01 in poi, no; con gli orari, anche prima. */
+export function oggiSiPuoAncora(ora: number): boolean;
+export function oggiSiPuoAncora(adesso: Date, orari?: readonly unknown[]): boolean;
+export function oggiSiPuoAncora(adesso: number | Date, orari: readonly unknown[] = []): boolean {
+  return (typeof adesso === 'number' ? fasceAncoraPossibili(adesso) : fasceAncoraPossibili(adesso, orari)).length > 0;
 }
 
 /** L'express si può offrire adesso? */
@@ -107,15 +173,21 @@ export function expressSiPuo(ora: number): boolean {
  * Il giorno da cui partire, aprendo il checkout.
  *
  * Mai uno che non si può scegliere: era il difetto ①, dove si partiva da «oggi» anche a mezzanotte
- * e la fascia ripiegava su una del pomeriggio passato.
+ * e la fascia ripiegava su una del pomeriggio passato. Con gli orari dei negozi, giovedì alle
+ * 14:00 si parte da domani perché oggi il forno non riapre.
  */
-export function giornoDiPartenza(ora: number): Giorno {
-  return oggiSiPuoAncora(ora) ? 'today' : 'tomorrow';
+export function giornoDiPartenza(ora: number): Giorno;
+export function giornoDiPartenza(adesso: Date, orari?: readonly unknown[]): Giorno;
+export function giornoDiPartenza(adesso: number | Date, orari: readonly unknown[] = []): Giorno {
+  const oggi = typeof adesso === 'number' ? oggiSiPuoAncora(adesso) : oggiSiPuoAncora(adesso, orari);
+  return oggi ? 'today' : 'tomorrow';
 }
 
 /** La fascia da cui partire per «oggi»: la prima ancora possibile, o nessuna. */
-export function fasciaDiPartenzaOggi(ora: number): string | null {
-  return fasceAncoraPossibili(ora)[0] ?? null;
+export function fasciaDiPartenzaOggi(ora: number): string | null;
+export function fasciaDiPartenzaOggi(adesso: Date, orari?: readonly unknown[]): string | null;
+export function fasciaDiPartenzaOggi(adesso: number | Date, orari: readonly unknown[] = []): string | null {
+  return (typeof adesso === 'number' ? fasceAncoraPossibili(adesso) : fasceAncoraPossibili(adesso, orari))[0] ?? null;
 }
 
 /** Le tre risposte. La terza è quella che mancava. */
@@ -137,6 +209,12 @@ export function consegnaScelta(s: {
   fasciaOggi: string;
   fasciaDomani: string;
   ritiroInNegozio: boolean;
+  /**
+   * 30/10/2026 (ondata 21) — L'orologio di Roma e gli orari dei negozi del carrello. Con questi,
+   * la cassa frena le stesse fasce che la rotta rifiuterebbe (60 minuti, negozio chiuso).
+   */
+  adesso?: Date;
+  orari?: readonly unknown[];
 }): Consegna {
   if (s.ritiroInNegozio) return { tipo: 'non-serve' };
 
@@ -148,17 +226,25 @@ export function consegnaScelta(s: {
   }
 
   if (s.giorno === 'today') {
-    const possibili = fasceAncoraPossibili(s.ora);
+    const possibili = s.adesso ? fasceAncoraPossibili(s.adesso, s.orari) : fasceAncoraPossibili(s.ora);
     if (possibili.length === 0) {
       return { tipo: 'non-valida', perche: 'Per oggi non ci sono più fasce disponibili. Scegli Domani.' };
     }
     if (!possibili.includes(s.fasciaOggi)) {
-      return { tipo: 'non-valida', perche: 'La fascia scelta è già passata. Scegline una ancora disponibile.' };
+      const fuori = fasciaFuoriTempo(s.fasciaOggi, s.adesso ?? s.ora);
+      return {
+        tipo: 'non-valida',
+        perche: fuori ?? 'In quella fascia il negozio è chiuso. Scegline una ancora disponibile.',
+      };
     }
     return { tipo: 'scelta', etichetta: s.fasciaOggi };
   }
 
-  if (!FASCE_DI_DOMANI.includes(s.fasciaDomani)) {
+  const domani = s.adesso ? fasceDiDomaniPossibili(s.adesso, s.orari) : FASCE_DI_DOMANI;
+  if (domani.length === 0) {
+    return { tipo: 'non-valida', perche: 'Domani i negozi del carrello sono chiusi: per ora non c’è una fascia di consegna.' };
+  }
+  if (!domani.includes(s.fasciaDomani)) {
     return { tipo: 'non-valida', perche: 'Scegli una fascia per domani.' };
   }
   return { tipo: 'scelta', etichetta: s.fasciaDomani };
