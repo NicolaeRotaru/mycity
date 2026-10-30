@@ -47,7 +47,7 @@ import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/
 const COLONNE =
   'id, user_id, seller_id, delivery_status, delivery_slot, pickup_in_store, payment_method, payment_status, ' +
   'total_price, gross_total_cents, wallet_applied_cents, shipping_cost, delivery_fee_cents, rider_fee_cents, ' +
-  'discount_amount, stripe_session_id, rider_id, created_at';
+  'discount_amount, stripe_session_id, rider_id, created_at, refunded_amount_cents, stripe_refund_id';
 /**
  * Prima della migrazione 124 `gross_total_cents` non esiste: chiederla faceva fallire OGNI lettura
  * del freno, e nessuna veloce veniva mai spostata mentre l'email al negozio lo prometteva. Senza
@@ -82,6 +82,8 @@ type RigaVeloce = {
   stripe_session_id: string | null;
   rider_id?: string | null;
   created_at: string | null;
+  refunded_amount_cents?: number | null;
+  stripe_refund_id?: string | null;
 };
 
 const centesimi = (x: unknown) => Math.round(Number(x ?? 0) * 100);
@@ -127,11 +129,17 @@ export function fraseNonSpostato(scadenza: Date, adesso: Date, carta = false): s
 export type ComeVaLEuro = 'tolto-contanti' | 'tolto-carta' | 'compresa' | 'a-mano';
 
 /** La frase per il cliente: la stessa nella campanella e nell'email. «Non lo paghi» solo se è tolto davvero. */
-export function fraseDelFreno(a: { fascia: string; euro: ComeVaLEuro; totaleCents: number }): string {
+export function fraseDelFreno(a: { fascia: string; euro: ComeVaLEuro; totaleCents: number; sulCreditoCents?: number }): string {
   const inizio = `Il negozio non ha confermato in ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti: la tua spesa arriva nella fascia ${a.fascia}`;
   const fine = 'Se non ti va bene, puoi annullare l’ordine dalla sua pagina senza costi.';
   if (a.euro === 'compresa') return `${inizio}. La consegna veloce era già compresa nel prezzo, quindi il totale non cambia. ${fine}`;
   if (a.euro === 'tolto-contanti') {
+    // L'euro pagato col credito MyCity torna sul credito: alla porta non si toglie quello che non c'era.
+    const credito = a.sulCreditoCents ?? 0;
+    if (credito > 0) {
+      const porta = a.totaleCents > 0 ? `alla porta paghi ${formatPriceFromCents(a.totaleCents)}` : 'alla porta non paghi niente';
+      return `${inizio} e l’euro della veloce non lo paghi: ${formatPriceFromCents(credito)} ti torna sul credito MyCity e ${porta}. ${fine}`;
+    }
     return `${inizio} e l’euro della veloce non lo paghi: alla porta paghi ${formatPriceFromCents(a.totaleCents)}. ${fine}`;
   }
   if (a.euro === 'tolto-carta') return `${inizio} e l’euro della veloce non lo paghi: ti torna sulla carta. ${fine}`;
@@ -265,6 +273,30 @@ async function avvisaNegoziEFattorino(admin: SupabaseClient, o: RigaVeloce, spos
   if (error) logger.error('[veloce-non-confermata] avviso a negozi/fattorino NON scritto', { orderId: o.id, message: error.message });
 }
 
+/**
+ * ⑨ L'euro della veloce pagato col credito MyCity torna sul credito. Prima si toglieva dai contanti
+ * con `max(0, …)`: su una spesa pagata tutta col credito l'euro spariva (lordo 18 €, credito speso
+ * 19 €) e il cliente leggeva «alla porta paghi -1,00 €». Una volta sola anche se il giro si ripete:
+ * la coppia (`cod_refund`, `veloce_non_confermata_<id>`) è unica nel diario del credito (migrazioni
+ * 098 e 143), e 23505 vuol dire che un giro di prima l'ha già accreditata.
+ */
+async function rendiSulCredito(admin: SupabaseClient, c: RigaVeloce, cents: number): Promise<boolean> {
+  if (!c.user_id) return false;
+  try {
+    const { error } = await admin.rpc('wallet_credit', {
+      p_user: c.user_id,
+      p_cents: cents,
+      p_reason: 'cod_refund',
+      p_ref: `veloce_non_confermata_${c.id}`,
+    });
+    if (!error || (error as { code?: string }).code === '23505') return true;
+    logger.error('[veloce-non-confermata] euro della veloce NON tornato sul credito', { orderId: c.id, message: error.message });
+  } catch (err) {
+    logger.error('[veloce-non-confermata] euro della veloce NON tornato sul credito', { orderId: c.id, err });
+  }
+  return false;
+}
+
 async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: RigaVeloce[], adesso: Date): Promise<EsitoDelCarrello> {
   const vivi = carrello.filter((c) => !FUORI_DAL_GIRO.includes(String(c.delivery_status)));
   // ② Un ordine del carrello già partito col fattorino (o consegnato): spostare il resto spezzerebbe
@@ -332,6 +364,25 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
   if (euro === 'tolto-carta') {
     const { refundOrder } = await import('@/lib/stripe/payout');
     for (const r of conLEuro) {
+      // ⑧ Un giro di prima ha già reso l'euro e poi è morto, o la fascia non si è scritta: l'ordine è
+      // ancora «Adesso». Richiamare `refundOrder` con la stessa chiave non rifà il rimborso su Stripe,
+      // ma `accumula_rimborso` non ha chiave e lo prenotava di nuovo: il libro diceva 2 €, ne era
+      // uscito 1, e all'annullo il cliente ne riaveva 1 in meno. Già reso = esattamente l'euro e il
+      // rimborso nell'elenco dell'ordine (si scrive a Stripe riuscito). Ogni altro rimborso già sopra
+      // non si sa di chi è: non se ne prenota un altro, e lo guarda una persona.
+      const lui = carrello.find((c) => c.id === r.id);
+      const giaResi = Number(lui?.refunded_amount_cents ?? 0);
+      if (giaResi > 0) {
+        if (giaResi === -r.deltaCents && String(lui?.stripe_refund_id ?? '').trim() !== '') {
+          resiCents += giaResi;
+          continue;
+        }
+        logger.error('[veloce-non-confermata] sull ordine c è già un rimborso che non è l euro della veloce: non se ne prenota un altro', {
+          orderId: r.id, giaResi, chiesti: -r.deltaCents,
+        });
+        rimborsoNonFatto.push(r);
+        continue;
+      }
       try {
         const esito = await refundOrder({
           orderId: r.id,
@@ -360,15 +411,28 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
 
   let aMeta = false;
   const deltaScritti = new Map<string, number>();
+  const contantiScritti = new Map<string, number>();
+  const accreditati = new Set<string>();
+  let creditoResoCents = 0;
+  let sulCreditoCents = 0;
   const scritti: RigaVeloce[] = [];
   for (const [i, c] of daSpostare.entries()) {
     const riga = euro === 'tolto-contanti' ? conto?.righe.find((r) => r.id === c.id) : undefined;
-    const delta = riga?.deltaCents ?? 0;
+    let delta = riga?.deltaCents ?? 0;
     const valori: Record<string, unknown> = { delivery_slot: fascia };
+    // La parte dell'euro che i contanti non coprono è stata pagata col credito: torna lì (⑨).
+    const cassa = Math.max(0, centesimi(c.total_price));
+    const dalCredito = Math.max(0, -delta - cassa);
+    if (dalCredito > 0 && !(await rendiSulCredito(admin, c, dalCredito))) delta = 0;
+    if (dalCredito > 0 && delta !== 0) {
+      accreditati.add(c.id);
+      creditoResoCents += dalCredito;
+      valori.wallet_applied_cents = Number(c.wallet_applied_cents ?? 0) - dalCredito;
+    }
     if (riga && delta !== 0) {
       valori.delivery_fee_cents = riga.deliveryFeeCents;
       valori.gross_total_cents = lordoDi(c) + delta;
-      valori.total_price = Math.max(0, centesimi(c.total_price) + delta) / 100;
+      valori.total_price = Math.max(0, cassa + delta + dalCredito) / 100;
     }
     const scrivi = (v: Record<string, unknown>) => {
       let q = admin
@@ -391,12 +455,12 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
         // Con la carta l'euro è già tornato: se l'ordine è ancora «Adesso» l'ha confermato il negozio
         // in quell'istante e la veloce resta. Al cliente va bene, ma il conto va saputo. Se invece l'ha
         // già spostato un altro giro, era lo stesso rimborso (stessa chiave) e non c'è niente da dire.
-        if (resiCents > 0) {
+        if (resiCents + creditoResoCents > 0) {
           const { data: ora } = await admin.from('orders').select('delivery_slot').eq('id', c.id).maybeSingle();
           if ((ora as { delivery_slot?: string | null } | null)?.delivery_slot === ETICHETTA_ADESSO) {
             await notifyAdmins(
               '⚠️ Veloce confermata dopo il rimborso dell’euro',
-              `Il negozio ha confermato l'ordine ${codiceDi(o.id)} mentre il freno della veloce rendeva al cliente ${formatPriceFromCents(resiCents)} sulla carta. La veloce resta e il cliente ha già avuto indietro l'euro: non serve fare niente, ma la consegna di questo carrello è costata al cliente 1 € in meno di quello scritto.`,
+              `Il negozio ha confermato l'ordine ${codiceDi(o.id)} mentre il freno della veloce rendeva al cliente ${formatPriceFromCents(resiCents + creditoResoCents)} (sulla carta o sul credito MyCity). La veloce resta e il cliente ha già avuto indietro l'euro: non serve fare niente, ma la consegna di questo carrello è costata al cliente 1 € in meno di quello scritto.`,
               '/admin/orders',
               { unaVoltaPer: `veloce-resa-${o.id}` },
             ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
@@ -408,12 +472,16 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
       continue;
     }
     deltaScritti.set(c.id, delta);
+    if (delta !== 0) {
+      contantiScritti.set(c.id, delta + dalCredito);
+      if (dalCredito > 0) sulCreditoCents += dalCredito;
+    }
     scritti.push(c);
   }
 
   const totaleCents = carrello
     .filter((c) => !FUORI_DAL_GIRO.includes(String(c.delivery_status)))
-    .reduce((s, c) => s + centesimi(c.total_price) + (deltaScritti.get(c.id) ?? 0), 0);
+    .reduce((s, c) => s + Math.max(0, centesimi(c.total_price) + (contantiScritti.get(c.id) ?? 0)), 0);
 
   // ④ L'euro è tolto davvero solo se OGNI ordine che lo portava è stato riscritto (contanti) o il
   // rimborso parziale è tornato per intero (carta, sopra). Altrimenti il cliente non legge «non lo paghi».
@@ -426,8 +494,8 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
   if (rimasti.length > 0) {
     const codici = rimasti.map((r) => codiceDi(r.id)).join(', ');
     daFare.push(carta
-      ? `Il rimborso automatico di 1 € sull’ordine ${codici} non è tornato per intero: rendi a mano al cliente l’euro della veloce entro un giorno.`
-      : `L’euro della veloce sta sull’ordine ${codici}, cambiato nel frattempo, e non si è potuto togliere: rendilo a mano al cliente entro un giorno.`);
+      ? `Il rimborso automatico di 1 € sull’ordine ${codici} non è tornato per intero, o sull’ordine c’era già un altro rimborso: guarda su Stripe se l’euro è già uscito e, se no, rendilo a mano al cliente entro un giorno.`
+      : `L’euro della veloce sta sull’ordine ${codici}, cambiato nel frattempo o pagato col credito MyCity che non si è potuto riaccreditare, e non si è potuto togliere: rendilo a mano al cliente entro un giorno.${rimasti.some((r) => accreditati.has(r.id)) ? ' Su questo ordine l’euro è già tornato sul credito MyCity: non va reso di nuovo.' : ''}`);
   } else if (euroFinale === 'a-mano') {
     daFare.push('Il conto della consegna non è quello della regola: rendi a mano al cliente l’euro della veloce entro un giorno, se c’era.');
   }
@@ -441,7 +509,7 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
   }
 
   await avvisaNegoziEFattorino(admin, o, scritti, fascia);
-  await avvisaIlCliente(admin, o, fraseDelFreno({ fascia, euro: euroFinale, totaleCents }));
+  await avvisaIlCliente(admin, o, fraseDelFreno({ fascia, euro: euroFinale, totaleCents, sulCreditoCents }));
   logger.info('[veloce-non-confermata] carrello passato in fascia', { orderId: o.id, fascia, euro: euroFinale, ordini: deltaScritti.size });
   return aMeta || euroFinale === 'a-mano' ? 'a-mano' : 'spostato';
 }
