@@ -131,8 +131,17 @@ export default function TermsPage() {
         <p>
           L&apos;invio dell&apos;ordine costituisce proposta di acquisto irrevocabile; il contratto
           si perfeziona con l&apos;accettazione del Venditore (che può rifiutare per indisponibilità
-          o motivi giustificati). In caso di rifiuto, il pagamento è rimborsato integralmente.
+          o motivi giustificati). Se il Venditore rifiuta, o non conferma l&apos;ordine in tempo, e
+          nel carrello c&apos;era solo lui, ti torna tutto quello che hai pagato. Se nel carrello
+          c&apos;erano anche altri Venditori, la consegna si ricalcola sui Venditori rimasti, come se
+          avessi ordinato solo da loro: ti tornano la merce del Venditore che ha rifiutato e la
+          differenza della consegna. Se paghi alla consegna, alla porta paghi semplicemente di meno.
         </p>
+        {/* 30/10/2026 — Prima qui il §4 prometteva di rendere tutto il pagato: con la regola
+            consegna.negozio-che-rifiuta (firmata da Nicola il 30/10) in un carrello con più negozi
+            l'ordine che se ne va rende la merce e la differenza della consegna, non tutto
+            (pane 15 € + frutta 12 €, consegna 4 €: tornano 16 € su 18). Prova coi centesimi:
+            tests/unit/se-un-negozio-rifiuta-la-consegna-si-rifa-sui-negozi-rimasti.test.ts. */}
         <p>
           I prezzi sono comprensivi di IVA. Le spese di spedizione sono calcolate al checkout in
           base a peso, distanza e modalità di consegna scelta.

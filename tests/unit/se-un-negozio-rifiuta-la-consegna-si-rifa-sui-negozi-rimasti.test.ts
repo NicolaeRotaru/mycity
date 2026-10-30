@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 /**
  * 30/10/2026 00:35 — consegna.negozio-che-rifiuta. Pane 15 € e frutta 12 €, consegna 4 €; il forno
@@ -144,6 +146,29 @@ describe('se un negozio del carrello se ne va prima della consegna, la consegna 
     // Il secondo annullo dello stesso ordine non sposta altri soldi.
     await annullaERimborsa(db as never, { ...riga('pane') } as never, { reason: 'di nuovo' });
     expect(riga('frutta')).toMatchObject({ delivery_fee_cents: 300, total_price: 15 });
+  });
+
+  it('carta, il forno rifiuta: i Termini (§4) dicono quello che torna davvero, non un rimborso integrale', async () => {
+    // Il conto vero, dalla strada vera: l ordine del pane è di 18 €, al cliente ne tornano 16.
+    const ordini = carrello(['pane', 'frutta'], [1500, 1200], 'card');
+    const pagato = ordini[0].gross_total_cents; // letto prima: l annullo riscrive la riga
+    expect(pagato).toBe(1800);
+    db = finto({ orders: ordini });
+    await annullaERimborsa(db as never, { ...ordini[0] } as never, { reason: 'Rifiutato dal negozio' });
+    const reso = refundOrder.mock.calls[0][0].amountCents;
+    expect(reso).toBeLessThan(pagato);
+    // Quindi il §4 non può promettere «rimborsato integralmente»: deve dire la regola che il codice fa.
+    const pagina = readFileSync(resolve(__dirname, '../../app/terms/page.tsx'), 'utf8');
+    const inizio = pagina.indexOf('id="ordini"');
+    expect(inizio).toBeGreaterThan(-1);
+    const s4 = pagina
+      .slice(inizio, pagina.indexOf('</LegalSection>', inizio))
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ')
+      .replace(/&apos;/g, "'")
+      .replace(/\s+/g, ' ');
+    expect(s4).not.toMatch(/rimborsat[oa] (integralmente|per intero)|rimborso (integrale|completo|totale)/i);
+    expect(s4).toMatch(/differenza della consegna/i);
+    expect(s4).toMatch(/negozi rimasti|Venditori rimasti/i);
   });
 
   it('il reso dopo la consegna non cambia la consegna: con un ordine consegnato nel carrello non si tocca niente', async () => {
