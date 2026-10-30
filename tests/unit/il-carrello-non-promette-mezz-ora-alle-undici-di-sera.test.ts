@@ -20,12 +20,23 @@
  * sentito la cassa, se la riga sotto il totale dice il contrario di quella del prodotto, o se il
  * carrello smette di rileggere l'ora mentre resta aperto.
  *
+ * ── 30/10/2026 (ondata 17): l'ora è quella di Roma, e il primo disegno non ne ha una ─────────────
+ * Le ore delle prove sono ore di ROMA (`aRoma`), quelle della vetrina e della cassa. Il carrello
+ * leggeva l'ora del telefono (`new Date().getHours()`) e la prova, che fingeva l'ora locale, non
+ * poteva vederlo: un telefono a Londra alle 20:30 — a Roma sono le 21:30 — si vedeva offrire la
+ * veloce che la cassa non vende più. Tornano anche due controlli persi: il disegno che arriva dal
+ * server parte senza ora, e la riga «Ne restano solo N» si prova montata, con la scorta bassa.
+ *
  * ⚠️ Cosa NON prova: un browser vero (qui c'è jsdom) né la rotta /api/consegna/veloce, che qui è
  * finta: la sua regola la prova `la-consegna-veloce-si-vende-solo-se-c-e-un-fattorino`.
  */
 import { describe, it, expect, vi, afterEach, afterAll } from 'vitest';
-import { act } from 'react';
+import { readFileSync } from 'node:fs';
+import { act, createElement } from 'react';
+import { renderToString } from 'react-dom/server';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
+import { rigaQuandoArrivaNelCarrello } from '@/lib/ordini/consegna-veloce';
+import { romeNow } from '@/lib/store-hours';
 import {
   APERTURA_EXPRESS,
   CHIUSURA_EXPRESS,
@@ -75,10 +86,23 @@ const reteDiPartenza = globalThis.fetch;
 // L'import pigro del database, dentro la pagina, sfugge al vi.mock qui sopra: nasce il client vero,
 // su un indirizzo finto, e ogni sua lettura riceve un 503 (la pagina si disegna lo stesso, come
 // quando la rete cade davvero). Le variabili, impostate prima di ogni prova, restano tali.
+// Fa eccezione la lettura dei prodotti: risponde con la scorta e il prezzo del banco, così una
+// scorta bassa arriva davvero alla pagina (la riga «Ne restano solo N»).
 process.env.NEXT_PUBLIC_SUPABASE_URL ??= 'http://supabase.finto.invalid';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??= 'chiave-finta';
 globalThis.fetch = (async (input: unknown) => {
   const url = String(typeof input === 'object' && input !== null && 'url' in input ? (input as { url: unknown }).url : input);
+  if (url.includes('/rest/v1/products')) {
+    const corpo = JSON.stringify(banco.prodotti);
+    return {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: new Headers({ 'content-type': 'application/json' }),
+      text: async () => corpo,
+      json: async () => JSON.parse(corpo),
+    };
+  }
   if (!url.includes('/api/consegna/veloce')) {
     return { ok: false, status: 503, statusText: 'finto', headers: new Headers(), text: async () => '', json: async () => null };
   }
@@ -91,6 +115,18 @@ globalThis.fetch = (async (input: unknown) => {
 }) as unknown as typeof fetch;
 
 const UN_FILONE = { id: 'p-filone', name: 'Filone', price: 15, quantity: 1, sellerId: 'neg-pane', storeName: 'Pane Quotidiano' };
+const UNA_FOCACCIA = { id: 'p-focaccia', name: 'Focaccia', price: 4, quantity: 1, sellerId: 'neg-pane', storeName: 'Pane Quotidiano' };
+
+/**
+ * L'istante in cui a Roma — l'ora della vetrina e della cassa — sono le ore dette, il 30/10/2026.
+ * Le prove parlano in ore di Roma qualunque sia il fuso della macchina che le fa girare: fingere
+ * l'ora LOCALE nascondeva proprio il difetto di un carrello che legge l'ora del telefono.
+ */
+function aRoma(ore: number, minuti: number): Date {
+  const comeQui = new Date(2026, 9, 30, ore, minuti);
+  const scarto = romeNow(comeQui).getTime() - comeQui.getTime();
+  return new Date(comeQui.getTime() - scarto);
+}
 
 let schermo: ReturnType<typeof accendi> | null = null;
 
@@ -110,16 +146,20 @@ async function assesta() {
   }
 }
 
-/** Il carrello con un filone di Pane Quotidiano, aperto all'ora detta, con la risposta detta. */
-async function carrelloAlle(ore: number, minuti: number, r: Risposta) {
+/** Le righe del carrello e la scorta che ne dice il database. */
+type Scaffale = Array<{ riga: typeof UN_FILONE; scorta: number }>;
+
+/** Il carrello aperto in un istante preciso, con la risposta detta della cassa e la scorta detta. */
+async function carrelloAllIstante(istante: Date, r: Risposta, scaffale: Scaffale = [{ riga: UN_FILONE, scorta: 50 }]) {
   vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
-  vi.setSystemTime(new Date(2026, 9, 30, ore, minuti));
+  vi.setSystemTime(istante);
   risposta = r;
-  banco.prodotti = [{ id: UN_FILONE.id, stock: 50, price: UN_FILONE.price }];
-  localStorage.setItem('cart', JSON.stringify([UN_FILONE]));
+  banco.prodotti = scaffale.map((x) => ({ id: x.riga.id, stock: x.scorta, price: x.riga.price }));
+  localStorage.setItem('cart', JSON.stringify(scaffale.map((x) => x.riga)));
   schermo = accendi(CartPage);
   await assesta();
   const s = schermo;
+  const righe = () => [...s.radice.querySelectorAll('p')].map((p) => (p.textContent ?? '').trim());
   return {
     /**
      * Quello che la pagina PROMETTE, cioè tutto tranne il listino «Come si calcola la consegna»
@@ -131,12 +171,15 @@ async function carrelloAlle(ore: number, minuti: number, r: Risposta) {
       copia.querySelectorAll('details').forEach((d) => d.remove());
       return copia.textContent ?? '';
     },
-    riga: () =>
-      [...s.radice.querySelectorAll('p')]
-        .map((p) => (p.textContent ?? '').trim())
-        .find((t) => t.startsWith('Disponibile')),
+    riga: () => righe().find((t) => t.startsWith('Disponibile')),
+    /** La riga di una scorta bassa: «Ne restano solo N», col tempo di consegna se ce n'è uno. */
+    rigaDellaScorta: () => righe().find((t) => t.startsWith('Ne restano solo')),
   };
 }
+
+/** Il carrello con un filone di Pane Quotidiano, aperto all'ora di Roma detta, con la risposta detta. */
+const carrelloAlle = (ore: number, minuti: number, r: Risposta, scaffale?: Scaffale) =>
+  carrelloAllIstante(aRoma(ore, minuti), r, scaffale);
 
 describe('alle undici di sera la consegna in mezz\'ora non esiste', () => {
   it('la cassa non offre l\'express alle 22, e riparte da domani', () => {
@@ -205,13 +248,107 @@ describe('il carrello montato dice quello che la cassa offrirà davvero', () => 
     const c = await carrelloAlle(20, 59, 'si');
     expect(c.riga()).toBe(`Disponibile · Consegna in ${EXPRESS_ETA_LABEL}`);
     // Passano due minuti. La cassa risponde ancora sì (risposta vecchia): conta l'orologio.
-    vi.setSystemTime(new Date(2026, 9, 30, 21, 1));
+    vi.setSystemTime(aRoma(21, 1));
     await act(async () => {
       vi.advanceTimersByTime(60_000);
     });
     await assesta();
     expect(c.riga(), 'alle 21:01 la pagina prometteva ancora la mezz\'ora letta alle 20:59').toMatch(/^Disponibile · /);
     expect(c.pagina()).not.toContain(EXPRESS_ETA_LABEL);
+  });
+});
+
+describe('la riga «Ne restano solo N» dice lo stesso tempo della riga «Disponibile»', () => {
+  // Il filone ha scorta piena, la focaccia ne ha 2: due righe dello stesso negozio, due rami diversi.
+  const scaffale: Scaffale = [
+    { riga: UN_FILONE, scorta: 50 },
+    { riga: UNA_FOCACCIA, scorta: 2 },
+  ];
+
+  it('alle 14 col sì della cassa: «Ne restano solo 2 · Consegna in …», come «Disponibile»', async () => {
+    const c = await carrelloAlle(14, 0, 'si', scaffale);
+    expect(c.riga()).toBe(`Disponibile · Consegna in ${EXPRESS_ETA_LABEL}`);
+    expect(c.rigaDellaScorta(), 'la riga della scorta bassa non dice il tempo della cassa').toBe(
+      `Ne restano solo 2 · Consegna in ${EXPRESS_ETA_LABEL}`,
+    );
+  });
+
+  it('alle 14 senza fattorino: nessun minuto nemmeno qui, e la coda è quella di «Disponibile»', async () => {
+    const c = await carrelloAlle(14, 0, 'no', scaffale);
+    const coda = (c.riga() ?? '').replace(/^Disponibile · /, '');
+    expect(coda.length, 'la riga «Disponibile» non dice più quando arriva').toBeGreaterThan(0);
+    expect(c.rigaDellaScorta(), 'la riga della scorta bassa scrive i minuti a mano').toBe(`Ne restano solo 2 · ${coda}`);
+    expect(c.rigaDellaScorta()).not.toContain(EXPRESS_ETA_LABEL);
+  });
+
+  it('alle 23, anche con la risposta rimasta quella delle 20:59, niente minuti accanto alla scorta', async () => {
+    const c = await carrelloAlle(23, 0, 'si', scaffale);
+    expect(c.rigaDellaScorta()).toMatch(/^Ne restano solo 2/);
+    expect(c.rigaDellaScorta()).not.toContain(EXPRESS_ETA_LABEL);
+  });
+});
+
+describe('il primo disegno, quello che arriva dal server, non sa che ore sono', () => {
+  const CARRELLO = readFileSync('app/cart/page.tsx', 'utf8');
+
+  it("il disegno del server non promette nessun tempo, e l'ora del carrello parte da null", () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(aRoma(14, 0));
+    risposta = 'si';
+    banco.prodotti = [{ id: UN_FILONE.id, stock: 50, price: UN_FILONE.price }];
+    localStorage.setItem('cart', JSON.stringify([UN_FILONE]));
+    const dalServer = renderToString(createElement(CartPage));
+    expect(dalServer.length, 'il disegno del server è vuoto: la prova non misurerebbe niente').toBeGreaterThan(100);
+    expect(dalServer, "l'HTML del server promette un tempo con l'ora del server, non di chi compra").not.toContain(
+      EXPRESS_ETA_LABEL,
+    );
+    // Finché il carrello non è letto, la pagina non mostra righe: un'ora presa dal server non si
+    // vedrebbe a occhio. Per questo si guarda anche come nasce lo stato dell'ora, e che senza ora
+    // né la riga del prodotto né quella sotto il totale promettano un tempo.
+    expect(CARRELLO, "l'ora del carrello deve partire da null, non da `new Date()`").toMatch(
+      /\[oraDiAdesso, setOraDiAdesso\] = useState<number \| null>\(null\)/,
+    );
+    expect(CARRELLO, 'senza ora la riga sotto il totale non deve promettere niente').toMatch(/oraDiAdesso === null \? null/);
+    expect(rigaQuandoArrivaNelCarrello(null, true), 'senza ora la riga del prodotto non deve promettere niente').toBeNull();
+  });
+
+  it("nel browser, letta l'ora, la frase della consegna arriva", async () => {
+    const c = await carrelloAlle(14, 0, 'si');
+    expect(c.riga()).toBe(`Disponibile · Consegna in ${EXPRESS_ETA_LABEL}`);
+  });
+});
+
+describe("l'ora del carrello è quella di Roma, come in vetrina e in cassa, non quella del telefono", () => {
+  const fusoDiPartenza = process.env.TZ;
+  afterEach(() => {
+    if (fusoDiPartenza === undefined) delete process.env.TZ;
+    else process.env.TZ = fusoDiPartenza;
+  });
+
+  /** Un istante, visto da un telefono col fuso di Londra (il 30/10 Londra è un'ora indietro rispetto a Roma). */
+  function telefonoALondra(istanteUtc: string): Date {
+    process.env.TZ = 'Europe/London';
+    return new Date(istanteUtc);
+  }
+
+  it('un telefono a Londra alle 20:30 (a Roma sono le 21:30) non vede la veloce', async () => {
+    const istante = telefonoALondra('2026-10-30T20:30:00Z');
+    expect(istante.getHours(), 'il fuso di Londra non ha preso: la prova non misurerebbe niente').toBe(20);
+    expect(romeNow(istante).getHours()).toBe(21);
+    const c = await carrelloAllIstante(istante, 'si');
+    expect(c.riga(), "il carrello ha letto l'ora del telefono (20), la cassa conta quella di Roma (21)").toMatch(
+      /^Disponibile · /,
+    );
+    expect(c.riga()).not.toContain(EXPRESS_ETA_LABEL);
+    expect(c.pagina()).not.toContain(EXPRESS_ETA_LABEL);
+  });
+
+  it('lo stesso telefono alle 19:30 di Londra (20:30 a Roma) la vede: la prova non passa per pigrizia', async () => {
+    const istante = telefonoALondra('2026-10-30T19:30:00Z');
+    expect(istante.getHours()).toBe(19);
+    expect(romeNow(istante).getHours()).toBe(20);
+    const c = await carrelloAllIstante(istante, 'si');
+    expect(c.riga()).toBe(`Disponibile · Consegna in ${EXPRESS_ETA_LABEL}`);
   });
 });
 

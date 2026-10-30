@@ -37,6 +37,7 @@ import { seguiAltezza, osservatoreDelBrowser } from '@/lib/altezza-banner';
 import { leggiEsitoDellaVeloce, rigaQuandoArrivaNelCarrello } from '@/lib/ordini/consegna-veloce';
 import { prezziDelCarrello } from '@/lib/ordini/prezzi';
 import { expressSiPuo } from '@/lib/quando-arriva';
+import { romeNow } from '@/lib/store-hours';
 
 /**
  * 3/9/2026 — DAL TELEFONO, IL PULSANTE CHE PORTA I SOLDI ERA L'ULTIMA COSA DELLA PAGINA.
@@ -161,6 +162,10 @@ export default function CartPage() {
    *
    * Si rilegge ogni minuto perché un carrello lasciato aperto attraversa le 21: senza il battito,
    * alle 21:05 la pagina prometterebbe ancora mezz'ora solo perché l'ora era stata letta alle 20:59.
+   *
+   * 30/10/2026 — È l'ora di ROMA (`romeNow`), quella della vetrina e della cassa, non quella del
+   * telefono: con `new Date().getHours()` un telefono a Londra alle 20:30 — a Roma le 21:30 — si
+   * vedeva offrire nel carrello la veloce che la cassa, un tocco dopo, non vende più.
    */
   const [oraDiAdesso, setOraDiAdesso] = useState<number | null>(null);
   // La veloce si può mantenere adesso? `null` = non ancora letto o lettura caduta: nessun tempo
@@ -176,7 +181,7 @@ export default function CartPage() {
   useEffect(() => {
     let vivo = true;
     const leggiLOra = () => {
-      setOraDiAdesso(new Date().getHours());
+      setOraDiAdesso(romeNow().getHours());
       const negozi = Array.from(new Set(getCart().map((i) => i.sellerId).filter((v): v is string => !!v)));
       if (negozi.length === 0) return;
       fetch(`/api/consegna/veloce?negozi=${negozi.join(',')}`, { cache: 'no-store' })
