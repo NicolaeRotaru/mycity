@@ -114,7 +114,9 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
   openGraph: {
     title: 'MyCity Piacenza — Marketplace dei negozi della tua città',
-    description: 'Compra dai negozi della tua città. Consegna rapida, pagamento alla consegna.',
+    // 30/10/2026 (ondata 18) — Diceva «Consegna rapida, pagamento alla consegna.», mentre la descrizione
+    // per Google e l'immagine dell'anteprima dicono «all'ora che scegli»: la frase è una sola.
+    description: DESCRIZIONE_DEL_SITO,
     type: 'website',
     locale: 'it_IT',
     siteName: 'MyCity',
@@ -123,7 +125,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'MyCity Piacenza',
-    description: 'Compra dai negozi della tua città. Consegna rapida, pagamento alla consegna.',
+    description: DESCRIZIONE_DEL_SITO,
   },
 };
 

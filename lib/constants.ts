@@ -1,5 +1,7 @@
 import { EXPRESS_ETA_LABEL } from './delivery';
 import { formatPrice } from './format';
+// promessa-consegna non importa questo file (né i suoi: store-hours, quando-arriva, delivery): niente giro.
+import { QUANDO_SI_PUO_LA_VELOCE } from './promessa-consegna';
 export const LOW_STOCK_THRESHOLD = 5;
 export const NEW_PRODUCT_DAYS = 14;
 
@@ -191,5 +193,6 @@ export const VALUE_PROPS = [
   { icon: 'Store',      title: '100% locale',              subtitle: 'venditori della tua città' },
   // 30/10/2026 — Diceva «Consegna rapida in 30-60 min dalla conferma» come cosa certa: la veloce c'è
   // solo coi negozi aperti e un fattorino in servizio (lib/ordini/consegna-veloce.ts, veloceSiPuo).
-  { icon: 'Zap',        title: 'Consegna rapida',          subtitle: `in ${EXPRESS_ETA_LABEL} quando c'è un fattorino in servizio, se no all'ora che scegli` },
+  // 30/10/2026 (ondata 18) — Ne diceva una sola su tre: le condizioni vengono da QUANDO_SI_PUO_LA_VELOCE.
+  { icon: 'Zap',        title: 'Consegna rapida',          subtitle: `in ${EXPRESS_ETA_LABEL}, ${QUANDO_SI_PUO_LA_VELOCE}; se no all'ora che scegli` },
 ] as const;

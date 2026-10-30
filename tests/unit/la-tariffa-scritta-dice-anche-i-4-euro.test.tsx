@@ -18,6 +18,13 @@ import { formatPrice } from '@/lib/format';
  * Un ordine da 8 € di pane paga 4 €. Chi ha letto «qualunque sia la spesa» vede in cassa un euro in
  * più che nessuno gli ha detto.
  *
+ * 30/10/2026 (ondata 18) — LA REGOLA DI OGGI (consegna.promessa, 29/10 22:21): una consegna sola per
+ * tutto il carrello, 3 € di base, 1 € per ogni negozio in più, 1 € per ogni negozio sotto i 10 €, la
+ * veloce 1 € una volta sola. Il corpo della pagina diceva ancora «per ogni negozio da cui ordini» e
+ * «se ordini da due negozi paghi due consegne». Pane 15 € e frutta 12 €: la cassa conta 4 €, non due
+ * consegne. La pagina disegnata ora deve dirlo: la base una volta sola più l'euro del negozio in più,
+ * che sommati fanno quello che conta la cassa.
+ *
  * La prova non cerca solo la frase: chiede che, finché la cassa fa pagare diverso a 8 € e a 15 €,
  * ogni testo che dice il prezzo nomini anche la cifra dell'ordine piccolo e la soglia. Riscrivere
  * «qualunque sia la spesa» con altre parole non basta a farla tornare verde.
@@ -85,6 +92,29 @@ describe('IL CASO DEL COLLAUDO — il riquadro in cima alla pagina Spedizioni', 
     const i = blocchi.findIndex((b) => /^Consegna\b/.test(b) && b.includes('€'));
     expect(i, `non trovo il riquadro del prezzo: ${blocchi.slice(0, 6).join(' | ')}`).toBeGreaterThanOrEqual(0);
     diceLaTariffaDellaCassa(`${blocchi[i]} · ${blocchi[i + 1] ?? ''}`, 'il riquadro in cima a /shipping');
+  });
+
+  it('nessun blocco promette una consegna per negozio: pane 15 € e frutta 12 € fanno una consegna, quella della cassa', () => {
+    const perNegozio = blocchi.filter((b) => /per ogni negozio da cui ordini|due consegne|ogni negozio ti porta/i.test(b));
+    expect(perNegozio).toEqual([]);
+    const dueNegozi: IngressiPrezzo = {
+      gruppi: [{ sellerId: 's1', subtotalCents: 1500 }, { sellerId: 's2', subtotalCents: 1200 }],
+      coordinateNegozio: () => ({ lat: null, lng: null }),
+      consegnaLat: null,
+      consegnaLng: null,
+      pickupInStore: false,
+      couponSpedizioneGratis: false,
+      couponScontoCents: 0,
+      consegnaVeloce: false,
+    };
+    const consegna = prezziDelCarrello(dueNegozi).gruppi.reduce((t, g) => t + g.deliveryFeeCents, 0);
+    expect(consegna).toBe(400);
+    const tariffa = blocchi.find((b) => b.includes('una volta sola per tutto il carrello'));
+    expect(tariffa, 'la pagina non dice che la consegna è una sola').toBeTruthy();
+    const base = ORDINE_GRANDE;
+    const inPiu = consegna - base;
+    expect(tariffa).toContain(`${euro(base)} una volta sola per tutto il carrello`);
+    expect(tariffa).toContain(`${euro(inPiu)} in più per ogni negozio in più`);
   });
 
   it('nessun altro blocco della pagina promette lo stesso prezzo a ogni spesa', () => {

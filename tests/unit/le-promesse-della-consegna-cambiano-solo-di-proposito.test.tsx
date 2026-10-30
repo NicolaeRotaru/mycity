@@ -92,8 +92,10 @@ const PAGINA_SPEDIZIONI = [
   NEGOZIO_CHIUSO,
   'Quanto costa la consegna',
   // Lo spazio prima del punto è il grassetto della tariffa che `testoDi` scioglie in uno spazio.
-  `Paghi solo la consegna, per ogni negozio da cui ordini: ${TRE_EURO} una volta sola per tutto il carrello, all’ora che scegli in cassa; ${UN_EURO} in più per ogni negozio in più e ${UN_EURO} in più per ogni negozio dove spendi meno di ${DIECI_EURO}; la consegna veloce ${UN_EURO} in più, compresa se un negozio è sotto i ${DIECI_EURO} . Non c'è un costo a chilometro.`,
-  'Se ordini da due negozi paghi due consegne: ogni negozio ti porta la sua spesa.',
+  // 30/10/2026 (ondata 18) — riletta con la regola del 29/10 alle 22:21: via «per ogni negozio da cui
+  // ordini» e «se ordini da due negozi paghi due consegne». Pane 15 € e frutta 12 €: una consegna da 4 €.
+  `Oltre alla spesa paghi solo la consegna: ${TRE_EURO} una volta sola per tutto il carrello, all’ora che scegli in cassa; ${UN_EURO} in più per ogni negozio in più e ${UN_EURO} in più per ogni negozio dove spendi meno di ${DIECI_EURO}; la consegna veloce ${UN_EURO} in più, compresa se un negozio è sotto i ${DIECI_EURO} . Non c'è un costo a chilometro.`,
+  'Se ordini da più negozi la consegna resta una: il fattorino passa da tutti in un giro solo.',
   'Il totale lo vedi sempre in cassa, prima di confermare l’ordine.',
   'Tracciamento',
   'Da "I miei ordini" vedi in tempo reale:',

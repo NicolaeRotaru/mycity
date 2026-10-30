@@ -9,6 +9,13 @@
  * scheda prodotto e pagina Spedizioni: nessuna frase fissa promette i minuti come cosa certa.
  * Prova: tests/unit/la-consegna-si-promette-all-ora-che-scegli.test.tsx
  *
+ * 30/10/2026 (ondata 18) — Le tre condizioni della veloce erano riscritte a mano in altri cinque
+ * posti, e tre ne dicevano una sola («con un fattorino in servizio»): la descrizione Google dei
+ * negozi (`fraseComeArriva`), il piede del sito e «Come funziona» (`CONSEGNA_FRASE_INTERA`), le
+ * promesse della home (`VALUE_PROPS`); la spiegazione del carrello scriveva l'ora a mano. Adesso
+ * tutti prendono `QUANDO_SI_PUO_LA_VELOCE`, e la spiegazione del carrello `ORE_DELLA_VELOCE`.
+ * Prova: tests/unit/le-condizioni-della-veloce-hanno-una-casa-sola.test.tsx
+ *
  * ─────────────────────────────────────────────────────────────────────────────
  * IL DIFETTO CHE QUESTO FILE CHIUDE
  * ─────────────────────────────────────────────────────────────────────────────
@@ -56,12 +63,18 @@ import {
 export const CONSEGNA_ALL_ORA_CHE_SCEGLI = "Consegna a casa, all'ora che scegli";
 /** I minuti della veloce, detti per esteso. Si scrivono solo accanto alla sua condizione. */
 export const VELOCE_IN_MINUTI = `veloce in ${EXPRESS_ETA_MIN}-${EXPRESS_ETA_MAX} minuti`;
+/** Le ore della veloce («dalle 8 alle 21»), dalle costanti di lib/quando-arriva. */
+export const ORE_DELLA_VELOCE = `dalle ${APERTURA_EXPRESS} alle ${CHIUSURA_EXPRESS}`;
 /** Quando si può la veloce: le tre condizioni di `veloceSiPuo`, dette al cliente. */
-export const QUANDO_SI_PUO_LA_VELOCE = `dalle ${APERTURA_EXPRESS} alle ${CHIUSURA_EXPRESS}, a negozi aperti, con un fattorino in servizio`;
+export const QUANDO_SI_PUO_LA_VELOCE = `${ORE_DELLA_VELOCE}, a negozi aperti, con un fattorino in servizio`;
 /** Quando la cassa ha appena detto che la veloce si può (risposta di /api/consegna/veloce). */
 export const CONSEGNA_O_VELOCE_ADESSO = `Consegna a casa all'ora che scegli, oppure ${VELOCE_IN_MINUTI}`;
-/** La frase intera, dove c'è spazio e non si può chiedere al server: la veloce con la sua condizione. */
-export const CONSEGNA_FRASE_INTERA = `${CONSEGNA_O_VELOCE_ADESSO} quando c'è un fattorino in servizio`;
+/**
+ * La frase intera, dove c'è spazio e non si può chiedere al server: la veloce con le sue tre
+ * condizioni. 30/10/2026 — Diceva solo «quando c'è un fattorino in servizio»: alle 15, col forno
+ * chiuso dall'una e Nicola in servizio, la veloce non c'è.
+ */
+export const CONSEGNA_FRASE_INTERA = `${CONSEGNA_O_VELOCE_ADESSO}, ${QUANDO_SI_PUO_LA_VELOCE}`;
 
 export type PromessaConsegna =
   | { tipo: 'express' }

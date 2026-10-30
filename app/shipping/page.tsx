@@ -7,10 +7,12 @@ import { Truck, Banknote, MapPin, Zap, Store, Clock, ChefHat, Package, Bike, Che
 // 27/10/2026 — QUESTA PAGINA AVEVA UNA TABELLA SUA. Scriveva a mano 2,50 · 3,50 · 4,50 € per
 // fascia di distanza, «GRATIS» sopra i 30 €, «oltre 10 km a preventivo» ed «entro 15 km». La cassa
 // faceva un altro conto (2,50 € più 1,20 € al km, più 3 € di consegna) e oggi ne fa un altro
-// ancora: si paga solo la consegna, per negozio, e si consegna fino a RAGGIO_CONSEGNA_KM. Qui non
-// si scrivono piu' cifre: le danno `riquadroTariffaConsegna()`, `fraseTariffaConsegna()` e la costante del confine, e una prova
-// trasforma la pagina in HTML e confronta ogni euro e ogni chilometro col conto della cassa
-// (tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx).
+// ancora: si paga solo la consegna, una volta per tutto il carrello, e si consegna fino a
+// RAGGIO_CONSEGNA_KM. Qui non si scrivono piu' cifre: le danno `riquadroTariffaConsegna()`,
+// `fraseTariffaConsegna()` e la costante del confine, e una prova trasforma la pagina in HTML e
+// confronta ogni euro e ogni chilometro col conto della cassa
+// (tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx,
+// tests/unit/la-pagina-spedizioni-dice-la-consegna-di-oggi.test.tsx).
 import { NEGOZIO_CHIUSO_COSA_SUCCEDE, fraseTariffaConsegna, riquadroRitiroInNegozio, riquadroTariffaConsegna } from '@/lib/promesse-pubbliche';
 import { QUANDO_SI_PUO_LA_VELOCE, VELOCE_IN_MINUTI } from '@/lib/promessa-consegna';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
@@ -87,16 +89,20 @@ export default function ShippingPage() {
 
         <div className="space-y-3">
           <h2 className="text-xl font-bold text-ink-900 mb-2">Quanto costa la consegna</h2>
+          {/* 30/10/2026 (ondata 18) — Diceva «Paghi solo la consegna, per ogni negozio da cui ordini» e
+              «Se ordini da due negozi paghi due consegne»: dalla regola del 29/10 alle 22:21 la
+              consegna è una sola per tutto il carrello. Pane 15 € e frutta 12 €: una consegna da 4 €. */}
           {tariffa.siPaga ? (
-            <p>Paghi solo la consegna, per ogni negozio da cui ordini: <strong>{fraseTariffaConsegna()}</strong>.
+            <p>Oltre alla spesa paghi solo la consegna: <strong>{fraseTariffaConsegna()}</strong>.
             Non c&apos;è un costo a chilometro.</p>
           ) : (
             <p>La consegna non si paga, qualunque sia la spesa.</p>
           )}
           <ul className="list-disc pl-5">
-            <li>Se ordini da due negozi paghi due consegne: ogni negozio ti porta la sua spesa.</li>
+            <li>Se ordini da più negozi la consegna resta una: il fattorino passa da tutti in un giro solo.</li>
             <li>Il totale lo vedi sempre in cassa, prima di confermare l’ordine.</li>
           </ul>
+
         </div>
 
         {riquadroRitiroInNegozio() && (

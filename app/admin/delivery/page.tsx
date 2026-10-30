@@ -14,6 +14,7 @@ import {
   RAGGIO_CONSEGNA_KM,
 } from '@/lib/constants';
 import { formatPrice } from '@/lib/format';
+import { vociDellaConsegna } from '@/lib/ordini/prezzi';
 
 // 30/10/2026 — Diceva «3,00 €–4,00 €» a consegna: con la regola del 29/10 (consegna.promessa) la
 // consegna è una per carrello, un negozio in più porta 1 € e il carrello non ha un massimo. Qui si
@@ -24,6 +25,13 @@ const IN_PIU = eur(CONSEGNA_NEGOZIO_IN_PIU_CENTS);
 const PICCOLA = eur(SUPPLEMENTO_CONSEGNA_CENTS);
 const SOGLIA = eur(SPESA_SENZA_SUPPLEMENTO_CENTS);
 const VELOCE = eur(SUPPLEMENTO_VELOCE_CENTS);
+// 30/10/2026 (ondata 18) — L'esempio dei tre negozi sotto la soglia era una somma scritta a mano:
+// lo conta la stessa funzione della cassa, così se la regola cambia il pannello non resta indietro.
+const TRE_NEGOZI_PICCOLI_CENTS = vociDellaConsegna({
+  pickupInStore: false,
+  negozi: [500, 600, 700].map((m) => ({ spesaCents: m, merceCents: m })),
+  consegnaVeloce: false,
+}).totaleCents;
 const COMPENSO = `${eur(COMPENSO_RIDER_CENTS)} il giro + ${eur(COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS)} a negozio in più`;
 // 30/10/2026 — Nel riquadro grande (26 pixel, interlinea 1, colonna di circa 200 pixel) la frase
 // intera andava a capo su tre o quattro righe che si toccavano: lì il valore è corto e la frase
@@ -141,7 +149,7 @@ export default function AdminDeliveryPage() {
             Il cliente paga una consegna sola per tutto il carrello: {BASE} di base, {IN_PIU} per ogni negozio
             in più, {PICCOLA} per ogni negozio sotto i {SOGLIA} di merce, {VELOCE} per la veloce (compresa se
             c&apos;è già la spesa piccola). Non c&apos;è un massimo: tre negozi sotto i {SOGLIA} fanno{' '}
-            {eur(PLATFORM_DELIVERY_FEE_CENTS + 2 * CONSEGNA_NEGOZIO_IN_PIU_CENTS + 3 * SUPPLEMENTO_CONSEGNA_CENTS)}.
+            {eur(TRE_NEGOZI_PICCOLI_CENTS)}.
             Il fattorino prende {COMPENSO}. Se un negozio rifiuta prima della consegna, la consegna si rifà
             sui negozi rimasti.
           </p>
