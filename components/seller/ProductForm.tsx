@@ -46,7 +46,8 @@ import {
   UNIT_OPTIONS,
   UNIT_SUFFIX,
   CONDITION_LABELS,
-  PRODUCT_CONDITIONS,
+  CONDIZIONI_DA_SCEGLIERE,
+  condizioneDaScegliere,
   type ProductUnit,
   type ProductCondition,
   type ProductFormValues,
@@ -490,7 +491,8 @@ export default function ProductForm({
           setUnit(s.valore);
           break;
         case 'condition':
-          setCondition(s.valore);
+          // Il suggerimento non può rimettere fra le scelte una condizione che il modulo non offre.
+          if (condizioneDaScegliere(s.valore)) setCondition(s.valore);
           break;
         case 'stock':
           if (s.valore === null) {
@@ -875,7 +877,12 @@ export default function ProductForm({
           />
           <Select label="Condizione" value={condition} onChange={(e) => setCondition(e.target.value as ProductCondition | '')}>
             <option value="">— non specificata</option>
-            {PRODUCT_CONDITIONS.map((c) => (
+            {/* 30/10/2026 — Niente usato fra le scelte (MyCity non lo vende). Il valore di un
+                prodotto vecchio si mostra com è e si salva com è: non si riscrive da solo. */}
+            {condition && !condizioneDaScegliere(condition) && (
+              <option value={condition}>{CONDITION_LABELS[condition] ?? condition}</option>
+            )}
+            {CONDIZIONI_DA_SCEGLIERE.map((c) => (
               <option key={c} value={c}>{CONDITION_LABELS[c]}</option>
             ))}
           </Select>

@@ -286,6 +286,19 @@ describe('la home: il titolo dice il modo di pagare della cassa, e niente abbigl
     expect(titolo.replace(frasePagamento(), ' ')).not.toMatch(MODO_DI_PAGARE);
   });
 
+  // 30/10/2026 — Le due prove sopra guardano solo il titolo: «paghi anche con carta» nel
+  // sottotitolo della variante B le lasciava verdi. Qui si legge tutto l'eroe (occhiello, titolo,
+  // sottotitolo) di tutte e due le varianti, tolta la sola frase della cassa.
+  it('il sottotitolo di tutte e due le varianti non promette carta né altri modi di pagare', async () => {
+    const { frasePagamento } = await import('@/lib/promesse-pubbliche');
+    for (const v of ['a', 'b']) {
+      const { tutto } = await home(v);
+      expect(tutto.length, `variante ${v}`).toBeGreaterThan(0);
+      const resto = tutto.split(frasePagamento()).join(' ');
+      expect(resto, `variante ${v}: «${resto}»`).not.toMatch(/carta|come vuoi|bancomat|satispay|paypal/i);
+    }
+  });
+
   it('nessuna variante della home nomina l’abbigliamento, né i minuti come cosa certa', async () => {
     for (const v of ['a', 'b']) {
       const { tutto } = await home(v);

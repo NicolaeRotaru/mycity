@@ -25,6 +25,12 @@ const PICCOLA = eur(SUPPLEMENTO_CONSEGNA_CENTS);
 const SOGLIA = eur(SPESA_SENZA_SUPPLEMENTO_CENTS);
 const VELOCE = eur(SUPPLEMENTO_VELOCE_CENTS);
 const COMPENSO = `${eur(COMPENSO_RIDER_CENTS)} il giro + ${eur(COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS)} a negozio in più`;
+// 30/10/2026 — Nel riquadro grande (26 pixel, interlinea 1, colonna di circa 200 pixel) la frase
+// intera andava a capo su tre o quattro righe che si toccavano: lì il valore è corto e la frase
+// sta nell'etichetta. Euro tondi senza «,00», con lo spazio che non va a capo prima del simbolo.
+const eurTondo = (cents: number) => (cents % 100 === 0 ? `${cents / 100}\u00a0€` : eur(cents));
+const COMPENSO_CORTO = `${eurTondo(COMPENSO_RIDER_CENTS)} + ${eurTondo(COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS)}`;
+const COMPENSO_ETICHETTA = `Compenso del fattorino: il giro, più ${eurTondo(COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS)} per ogni negozio in più`;
 import { AdminPageTitle, AdminStatCard } from '@/components/admin/AdminUI';
 
 /**
@@ -61,8 +67,8 @@ export default function AdminDeliveryPage() {
         <AdminStatCard
           icon={Bike}
           tone="olive"
-          label="Compenso del fattorino, per giro"
-          value={COMPENSO}
+          label={COMPENSO_ETICHETTA}
+          value={COMPENSO_CORTO}
         />
         <AdminStatCard
           icon={MapPin}

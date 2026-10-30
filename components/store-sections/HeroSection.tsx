@@ -12,6 +12,8 @@ import caricatoreFotoRemote from '@/lib/image-loader';
 import { fotoDelNegozio } from '@/lib/media/foto-del-negozio';
 import { coverClassName, socialLinks, badgeLabel } from '@/lib/store-customization';
 import { isOpenNow, streetFromAddress, DAY_KEYS, type StoreHours } from '@/lib/store-hours';
+import { consegnaDellaVetrina, vetrinaChiedeLaVeloce } from '@/lib/promessa-consegna';
+import { useOraDiPiacenza, useVeloceDelNegozio } from '@/components/ui/DeliveryCutoff';
 import type { SectionConfig, SectionContext } from './SectionContext';
 import { ALTEZZA_COPERTINA } from './misure-vetrina';
 
@@ -54,11 +56,15 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
   const todayKey = DAY_KEYS[new Date().getDay()];
   const hasHours = HOUR_KEYS.some((k) => Array.isArray(hours[k]));
   const openNow = isOpenNow(hours[todayKey]);
-  // "Consegna oggi": derivata in modo sicuro dagli orari reali — il negozio ha
-  // almeno un intervallo configurato OGGI (todayKey). Se non riusciamo a leggere
-  // intervalli validi per oggi, il badge è semplicemente omesso (niente claim finto).
-  const todayIntervals = hours[todayKey];
-  const deliversToday = Array.isArray(todayIntervals) && todayIntervals.length > 0;
+  // 30/10/2026 — «Consegna oggi» guardava solo se oggi il negozio aveva un orario: giovedì 29/10
+  // alle 20:15 la vetrina di Pane Quotidiano diceva «Chiuso ora» e «Consegna oggi», e il forno
+  // aveva chiuso alle 13. Ora lo decide la regola della cassa (`consegnaDellaVetrina`): una fascia
+  // di oggi ancora aperta per gli orari del negozio, o il sì della cassa alla veloce; dopo, quello
+  // che la cassa offrirà («Consegna domani») o niente. L'ora la legge il browser (`adesso` è
+  // `null` nell'HTML del server), come il carrello.
+  const adesso = useOraDiPiacenza();
+  const veloce = useVeloceDelNegozio(store.id, vetrinaChiedeLaVeloce(store.store_hours, adesso));
+  const consegna = consegnaDellaVetrina({ orari: store.store_hours, adesso, veloce });
   const socials = socialLinks(custom);
   const badges = custom.badges ?? [];
 
@@ -127,8 +133,8 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
         </button>
 
         {/* Badge stato (Aperto/Chiuso ora) + "Consegna oggi" in alto a destra —
-            solo con orari reali. "Consegna oggi" è renderizzato quando il negozio
-            ha intervalli configurati per oggi (dato derivato da store_hours). */}
+            solo con orari reali. «Consegna oggi»/«Consegna domani» li decide
+            consegnaDellaVetrina, con le regole della cassa e l'ora del browser. */}
         {hasHours && (
           <div className="absolute right-4 top-4 z-20 flex flex-col items-end gap-1.5">
             <span
@@ -143,9 +149,9 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" aria-hidden />
               {openNow ? 'Aperto ora' : 'Chiuso ora'}
             </span>
-            {deliversToday && (
+            {consegna && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-olive-700 shadow backdrop-blur-sm">
-                <Truck size={13} strokeWidth={2.4} aria-hidden /> Consegna oggi
+                <Truck size={13} strokeWidth={2.4} aria-hidden /> {consegna === 'oggi' ? 'Consegna oggi' : 'Consegna domani'}
               </span>
             )}
           </div>

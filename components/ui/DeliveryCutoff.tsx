@@ -21,7 +21,7 @@ const UN_MINUTO = 60_000;
  * fra server e client. Batte al minuto e si ferma a scheda nascosta: serve solo a vedere un negozio
  * che apre o chiude mentre la pagina è aperta. Niente conto alla rovescia (29/10).
  */
-function useOraDiPiacenza(): Date | null {
+export function useOraDiPiacenza(): Date | null {
   const [adesso, setAdesso] = useState<Date | null>(null);
   useEffect(() => {
     let id: ReturnType<typeof setInterval> | null = null;
@@ -50,7 +50,7 @@ function useOraDiPiacenza(): Date | null {
  * (/api/consegna/veloce → `veloceSiPuo`). `null` se non si chiede, se la risposta non arriva o cade:
  * allora niente minuti.
  */
-function useVeloceDelNegozio(negozioId: string | undefined, chiedi: boolean): boolean | null {
+export function useVeloceDelNegozio(negozioId: string | undefined, chiedi: boolean): boolean | null {
   const [veloce, setVeloce] = useState<boolean | null>(null);
   useEffect(() => {
     if (!negozioId || !chiedi) return;

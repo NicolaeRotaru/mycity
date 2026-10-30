@@ -69,9 +69,12 @@ const VALORI_INIZIALI = {
  * quello che c'era. Un campo mandato con un valore diverso, invece, riscrive —
  * e se il negoziante non l'ha toccato, riscrive a sua insaputa.
  */
-function cosaCambiaInBancaDati(scritto: Record<string, unknown>): string[] {
+function cosaCambiaInBancaDati(
+  scritto: Record<string, unknown>,
+  inBancaDati: Record<string, unknown> = PRODOTTO_IN_BANCA_DATI,
+): string[] {
   return Object.keys(scritto)
-    .filter((c) => JSON.stringify(scritto[c]) !== JSON.stringify(PRODOTTO_IN_BANCA_DATI[c]))
+    .filter((c) => JSON.stringify(scritto[c]) !== JSON.stringify(inBancaDati[c]))
     .sort();
 }
 
@@ -103,13 +106,15 @@ function pulsante(s: Schermo, scritta: string): HTMLButtonElement {
  * prodotto mentre la lettura delle impostazioni del negozio è caduta: nessuna
  * risposta (`undefined`, che non è un «no») e il modulo che lo sa.
  */
-async function moduloConLaLetturaCaduta(): Promise<{ s: Schermo; salvati: Record<string, unknown>[] }> {
+async function moduloConLaLetturaCaduta(
+  iniziali: Record<string, unknown> = VALORI_INIZIALI,
+): Promise<{ s: Schermo; salvati: Record<string, unknown>[] }> {
   const salvati: Record<string, unknown>[] = [];
   const mod = await monta('components/seller/ProductForm.tsx');
   const s = accendi(mod.default, {
     mode: 'edit',
     categories: CATEGORIE,
-    initialValues: VALORI_INIZIALI,
+    initialValues: iniziali,
     onSubmit: (payload: Record<string, unknown>) => salvati.push(payload),
     sellerOffersExpress: undefined,
     consegnaDelNegozioNonLetta: true,
@@ -159,20 +164,61 @@ describe('il salvataggio di un prodotto scrive solo quello che il negoziante ha 
     s.smonta();
   });
 
-  it('sceglie lui la spedizione mentre la lettura è caduta: quella scelta si scrive', async () => {
+  // 30/10/2026 — Il pulsante si chiamava «Spedizione»; con le frasi dell ondata 14 è «Fascia oraria»
+  // (la consegna all ora che sceglie il cliente). Stessa scelta, stesso valore scritto: false.
+  it('sceglie lui la consegna a fascia oraria mentre la lettura è caduta: quella scelta si scrive', async () => {
     const { s, salvati } = await moduloConLaLetturaCaduta();
 
     // Il negoziante tocca il selettore: è una scelta sua, e va rispettata.
-    s.agisci(() => clicca(pulsante(s, 'Spedizione')));
+    s.agisci(() => clicca(pulsante(s, 'Fascia oraria')));
     await premiSalva(s);
 
     expect(salvati.length, 'il modulo non ha salvato niente: la prova girerebbe a vuoto').toBe(1);
     expect(
       cosaCambiaInBancaDati(salvati[0]),
-      'il negoziante ha scelto la spedizione e il modulo non l ha scritta: non scrivere niente non deve diventare non ascoltare',
+      'il negoziante ha scelto la fascia oraria e il modulo non l ha scritta: non scrivere niente non deve diventare non ascoltare',
     ).toEqual(['express_enabled']);
     expect(salvati[0].express_enabled).toBe(false);
 
+    s.smonta();
+  });
+});
+
+/**
+ * 30/10/2026 — IL MODULO NON OFFRE PIÙ «USATO» E «RICONDIZIONATO».
+ *
+ * MyCity non vende l usato (CONTESTO_BUSINESS.md, fra le cose da non costruire mai), e il modulo
+ * del negoziante lo lasciava scegliere come condizione. Le scelte offerte sono solo quelle nuove;
+ * un prodotto vecchio salvato con «usato» si apre e si salva ancora, e il valore non si riscrive
+ * da solo: toglierlo è una decisione del negoziante, non del modulo.
+ */
+function sceltePerLaCondizione(s: Schermo): string[] {
+  const select = Array.from(s.radice.querySelectorAll('select')).find((x) =>
+    Array.from(x.options).some((o) => /non specificata/.test(o.textContent ?? '')),
+  );
+  expect(select, 'il selettore della condizione non è a video: la prova girerebbe a vuoto').toBeTruthy();
+  return Array.from((select as HTMLSelectElement).options).map((o) => o.value);
+}
+
+describe('la condizione del prodotto: niente usato fra le scelte', () => {
+  it('un prodotto nuovo: si sceglie solo fra «non specificata» e «Nuovo»', async () => {
+    const { s } = await moduloConLaLetturaCaduta();
+    expect(sceltePerLaCondizione(s)).toEqual(['', 'nuovo']);
+    s.smonta();
+  });
+
+  it('un prodotto vecchio salvato «usato» si apre e si salva senza perdere il valore', async () => {
+    const vecchio = { ...PRODOTTO_IN_BANCA_DATI, condition: 'usato' };
+    const { s, salvati } = await moduloConLaLetturaCaduta({ ...VALORI_INIZIALI, condition: 'usato' });
+    // Il valore salvato resta leggibile nel selettore, così il negoziante vede cosa c è scritto.
+    expect(sceltePerLaCondizione(s)).toContain('usato');
+    expect(sceltePerLaCondizione(s)).not.toContain('ricondizionato');
+
+    await premiSalva(s);
+
+    expect(salvati.length, 'il modulo non ha salvato niente: la prova girerebbe a vuoto').toBe(1);
+    expect(cosaCambiaInBancaDati(salvati[0], vecchio), 'il salvataggio ha riscritto da solo la condizione').toEqual([]);
+    expect(salvati[0].condition).toBe('usato');
     s.smonta();
   });
 });
