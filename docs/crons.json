@@ -12,6 +12,13 @@
       "description": "Svuota la coda notifiche push"
     },
     {
+      "id": "veloce-non-confermata",
+      "endpoint": "GET /api/cron/veloce-non-confermata",
+      "schedule": "*/5 * * * *",
+      "soglia_sorveglianza_min": 30,
+      "description": "Il secondo freno della consegna veloce: un ordine «Adesso» che il negozio non conferma in 10 minuti passa da solo alla prima fascia in cui tutti i negozi del carrello sono aperti, e l'euro della veloce non si paga (contanti: scende il totale; carta: rimborso di 1 €; credito: torna sul credito). E' il primo posto da guardare se un cliente dice «il mio ordine e' cambiato da solo». Risponde 500 finche' c'e' un carrello da sistemare a mano: agli amministratori e' gia' arrivato l'avviso. La soglia del sorvegliante (lib/cron-health.ts) e' 30 minuti senza battito."
+    },
+    {
       "id": "send-emails",
       "endpoint": "GET /api/cron/send-emails",
       "schedule": "*/10 * * * *",

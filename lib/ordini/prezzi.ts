@@ -503,3 +503,32 @@ export function consegnaDopoLAnnullo(a: {
     differenzaCents,
   };
 }
+
+/**
+ * 30/10/2026 — LA VELOCE NON CONFERMATA IN 10 MINUTI NON SI PAGA (carta #220).
+ *
+ * Il conto della consegna dello stesso carrello senza la veloce, con la stessa regola della
+ * cassa. Pane 15 €: 4 € con la veloce, 3 € senza, quindi si toglie 1 € dall'ordine che porta la
+ * base. Pane 8 €: la veloce era compresa nell'euro della spesa piccola, e non si toglie niente.
+ * Il compenso del fattorino resta quello scritto: la veloce non lo cambia.
+ *
+ * `null` quando il conto scritto non è quello che la regola darebbe con la veloce: riscrivere a
+ * occhio un conto che non si riconosce sposterebbe soldi veri a caso.
+ * Prova: tests/unit/la-veloce-non-confermata-in-10-minuti-passa-a-una-fascia.test.ts.
+ */
+export function consegnaSenzaLaVeloce(ordini: OrdineDelGiro[]): { righe: RigaRicalcolata[]; toltaCents: number } | null {
+  const vivi = ordini.filter((o) => !o.giaAnnullato);
+  if (vivi.length === 0) return null;
+  const scritto = (c: Array<{ deliveryFeeCents: number; riderFeeCents: number }>) =>
+    c.every((x, i) => x.deliveryFeeCents === vivi[i].deliveryFeeCents && x.riderFeeCents === vivi[i].riderFeeCents);
+  const codice = [false, true].find((conCodice) => scritto(contoDelGiro(vivi, true, conCodice)));
+  if (codice === undefined) return null;
+  const dopo = contoDelGiro(vivi, false, codice);
+  const righe = vivi.map((o, i) => ({
+    id: o.id,
+    deliveryFeeCents: dopo[i].deliveryFeeCents,
+    riderFeeCents: o.riderFeeCents,
+    deltaCents: dopo[i].deliveryFeeCents - o.deliveryFeeCents,
+  }));
+  return { righe, toltaCents: -righe.reduce((s, r) => s + r.deltaCents, 0) };
+}

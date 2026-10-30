@@ -16,6 +16,7 @@ import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { Banknote, ChevronRight, ClipboardList, Clock } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
 import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
+import { LETTURA_ORDINI_DEL_NEGOZIO, rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
 import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
 
 type Order = {
@@ -92,8 +93,16 @@ export default function SellerOrdersPage() {
     },
     getNextPageParam: (ultima, tutte) => pagineSuccessiva(ultima.length, tutte.length),
     refetchInterval: 90_000,
+    // Al ritorno sul telefono si rilegge subito: la riga «entro quando accettare» usa l'ora della lettura.
+    ...LETTURA_ORDINI_DEL_NEGOZIO,
   });
   const orders = unisciPagine(queryOrders.data?.pages ?? []);
+  // 30/10/2026 — L'ora con cui si scrive «entro quando accettare» è quella dell'ultima lettura, non
+  // quella in cui la pagina si è disegnata la prima volta. React Query ridisegna solo se cambia quello
+  // che la pagina legge: con i dati uguali tutta la notte, sabato alle 8:30 la riga diceva ancora
+  // «entro le 12:00 di domani». `dataUpdatedAt` cambia a ogni lettura riuscita, `errorUpdatedAt` a
+  // ogni lettura caduta: tutte e due fanno ridisegnare la riga con l'ora vera.
+  const lettoAlle = new Date(Math.max(queryOrders.dataUpdatedAt, queryOrders.errorUpdatedAt) || Date.now());
 
   const vistaqueryOrders = vistaDaQuery(queryOrders, { quanti: orders.length });
   if (vistaqueryOrders.mostraScheletro) return <LoadingState />;
@@ -165,6 +174,10 @@ export default function SellerOrdersPage() {
                                 <span className="inline-flex items-center gap-1 rounded-full bg-cream-100 px-2 py-0.5 text-[11px] font-semibold text-ink-700 ring-1 ring-inset ring-cream-300">
                                   <Clock size={12} aria-hidden /> Consegna: {fascia}
                                 </span>
+                              )}
+                              {/* 30/10/2026 — Entro quando accettare: la stessa riga dell'email «Nuovo ordine». */}
+                              {o.delivery_status === 'NEW' && rigaScadenzaPerIlNegozio(o, lettoAlle) && (
+                                <span className="text-[11px] font-semibold text-primary-700">{rigaScadenzaPerIlNegozio(o, lettoAlle)}</span>
                               )}
                               {cod && (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-olive-50 px-2 py-0.5 text-[11px] font-semibold text-olive-700 ring-1 ring-inset ring-olive-200">

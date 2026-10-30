@@ -25,6 +25,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { cifraDellaVoce, riepilogoOrdine } from '@/lib/ordini/riepilogo-ordine';
 import { nomeDellaRigaOrdine, fotoDellaRigaOrdine } from '@/lib/ordini/riga-ordine';
 import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
+import { LETTURA_ORDINI_DEL_NEGOZIO, rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
 import ReturnRequestCard, { type ReturnRow } from '@/components/seller/ReturnRequestCard';
 
 type OrderRow = {
@@ -138,7 +139,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
   const [rejectOpen, setRejectOpen] = useState(false);
   const [codiceRitiro, setCodiceRitiro] = useState('');
 
-  const { data: order, isLoading, isError, refetch } = useQuery({
+  const { data: order, isLoading, isError, refetch, dataUpdatedAt, errorUpdatedAt } = useQuery({
     queryKey: queryKeys.seller.order(id),
     queryFn: async () => {
       const sel = (pay: string) => `
@@ -170,7 +171,13 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
       return (fallback.data ?? null) as unknown as OrderRow | null;
     },
     refetchInterval: 30_000,
+    // Al ritorno sul telefono si rilegge subito: la riga «entro quando accettare» usa l'ora della lettura.
+    ...LETTURA_ORDINI_DEL_NEGOZIO,
   });
+  // 30/10/2026 — «Entro quando accettare» si scrive con l'ora dell'ultima lettura: React Query
+  // ridisegna solo se cambia quello che la pagina legge, e coi dati uguali la riga restava ferma
+  // all'ora in cui la pagina si era aperta (sabato mattina diceva ancora «entro le 12:00 di domani»).
+  const lettoAlle = new Date(Math.max(dataUpdatedAt, errorUpdatedAt) || Date.now());
 
   // Codice ritiro: visibile solo al seller (RLS lo limita ai propri ordini)
   const { data: pickupCode } = useQuery({
@@ -369,6 +376,11 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
             <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-ink-900">
               <Clock size={14} aria-hidden className="shrink-0 text-primary-600" /> Consegna: {fasciaLeggibile(order)}
             </p>
+          )}
+          {/* 30/10/2026 — Entro quando accettare: la stessa riga dell'email «Nuovo ordine». */}
+          {/* L'ora è quella dell'ultima lettura (ogni 30 secondi), non quella in cui la pagina si è aperta. */}
+          {order.delivery_status === 'NEW' && rigaScadenzaPerIlNegozio(order, lettoAlle) && (
+            <p className="mt-1 text-sm font-semibold text-primary-700">{rigaScadenzaPerIlNegozio(order, lettoAlle)}</p>
           )}
         </div>
         <div className="flex items-center gap-2">

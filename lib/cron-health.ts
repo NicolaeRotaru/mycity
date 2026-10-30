@@ -60,6 +60,11 @@ export const CRON_MAX_STALENESS_MIN: Record<string, number> = {
   // lo tiene chiuso tests/unit/ogni-lavoro-periodico-e-sorvegliato.test.ts, che
   // legge le cartelle vere di app/api/cron/ e pretende una soglia per ognuna.
   'riquadra-casse': 1560, // cadenza 1×/giorno → 26 h
+  // 30/10/2026 — Il secondo freno della veloce (carta #220) era nato senza soglia: se si fermava, i
+  // clienti della veloce aspettavano tre ore pagando l'euro in più, e il semaforo restava verde. La
+  // sua regola vale 10 minuti, quindi la soglia è stretta apposta: sei giri saltati, non le due ore
+  // degli altri lavori da cinque minuti.
+  'veloce-non-confermata': 30, // cadenza 5 min
 };
 
 /**

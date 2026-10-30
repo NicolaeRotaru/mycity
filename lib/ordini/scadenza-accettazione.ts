@@ -1,4 +1,5 @@
 import { romeNow } from '@/lib/store-hours';
+import { giornoPiacenza, scartoFusoMinuti } from '@/lib/tempo-piacenza';
 
 /**
  * ENTRO QUANDO IL NEGOZIO DEVE ACCETTARE L'ORDINE.
@@ -97,21 +98,34 @@ export function scadenzaAccettazione(
   if (!nato || Number.isNaN(nato.getTime())) return null;
 
   const minimo = nato.getTime() + oreMinime * 3_600_000;
+  const fine = fineDellaFascia(ordine);
+  return new Date(fine ? Math.max(minimo, fine.getTime()) : minimo);
+}
+
+/**
+ * La fine della fascia promessa, come istante; `null` senza una fascia leggibile («Adesso», ritiro).
+ * È l'ora che il negozio legge come «entro quando accettare»: la regola delle tre ore resta solo
+ * nel giro notturno (`scadenzaAccettazione`), che annulla dopo.
+ *
+ * Gli orari delle fasce sono l'orologio da parete di Piacenza, `created_at` è un istante UTC.
+ * 30/10/2026 (collaudo dell'ondata 17) — prima si contava in DURATA dai minuti di parete della
+ * nascita: nelle due notti in cui l'ora legale cambia il conto sbagliava di un'ora, e al negozio
+ * l'email diceva «entro le 13:00» (marzo) o «entro le 11:00» (ottobre) su una fascia 9-12.
+ * Adesso si prende il giorno di Piacenza della nascita (più uno per «Domani»), l'ora di fine
+ * della fascia su quel giorno, e la si converte in UTC con lo scarto del fuso di QUEL momento.
+ */
+export function fineDellaFascia(ordine: OrdineDaScadere): Date | null {
+  const nato = ordine.created_at ? new Date(ordine.created_at) : null;
+  if (!nato || Number.isNaN(nato.getTime())) return null;
   const finestra = finestraDellaFascia(ordine.delivery_slot);
-  if (!finestra) return new Date(minimo);
-
-  // Quanto manca dalla nascita dell'ordine alla fine della finestra promessa.
-  // Si conta in DURATA, non costruendo una data locale: gli orari delle fasce
-  // sono l'orologio da parete italiano mentre `created_at` è un istante UTC, e
-  // una differenza di minuti attraversa i due mondi senza conversioni. (Nelle
-  // due notti in cui l'ora legale cambia il conto balla di un'ora: su una
-  // finestra di consegna non sposta niente.)
-  const oraItaliana = romeNow(nato);
-  const minutiDallaMezzanotte = oraItaliana.getHours() * 60 + oraItaliana.getMinutes();
-  const minutiAllaFineDellaFinestra =
-    (finestra.domani ? 24 * 60 : 0) + finestra.aMinuti - minutiDallaMezzanotte;
-
-  return new Date(Math.max(minimo, nato.getTime() + minutiAllaFineDellaFinestra * 60_000));
+  if (!finestra) return null;
+  const [anno, mese, giorno] = giornoPiacenza(nato).split('-').map(Number);
+  // La fine della fascia letta come se Piacenza fosse UTC; poi si toglie lo scarto del fuso.
+  // Due passate: lo scarto giusto è quello dell'istante vero, non di quello «finto UTC».
+  const comeSeFosseUtc = Date.UTC(anno, mese - 1, giorno + (finestra.domani ? 1 : 0), 0, finestra.aMinuti);
+  let istante = comeSeFosseUtc - scartoFusoMinuti(new Date(comeSeFosseUtc)) * 60_000;
+  istante = comeSeFosseUtc - scartoFusoMinuti(new Date(istante)) * 60_000;
+  return new Date(istante);
 }
 
 /**
@@ -124,3 +138,100 @@ export function ancoraNeiTempi(ordine: OrdineDaScadere, adesso: Date = new Date(
   if (!scadenza) return false;
   return adesso.getTime() < scadenza.getTime();
 }
+
+/**
+ * 30/10/2026 — IL SECONDO FRENO DELLA VELOCE (carta #220, scelta di Nicola delle 16:13).
+ *
+ * La veloce promette 30-60 minuti DALLA CONFERMA del negozio. Se il negozio non conferma entro
+ * questi minuti la promessa non si può più mantenere: il carrello passa alla prima fascia ancora
+ * possibile e l'euro della veloce non si paga (lib/ordini/veloce-non-confermata.ts).
+ */
+export const MINUTI_PER_CONFERMARE_LA_VELOCE = 10;
+
+/** L'etichetta della veloce, come la scrive lib/quando-arriva.ts («Adesso · arrivo in …»). */
+function eFasciaVeloce(etichetta?: string | null): boolean {
+  return /^adesso\b/i.test(String(etichetta ?? '').trim());
+}
+
+function oraDaParete(d: Date): string {
+  const ora = romeNow(d);
+  return `${ora.getHours()}:${String(ora.getMinutes()).padStart(2, '0')}`;
+}
+
+/**
+ * Un istante scritto come lo legge una persona a Piacenza: «le 12:00 di domani», «le 20:00 di
+ * oggi», «le 9:00 di lunedì 2/11». Il giorno si conta rispetto ad `adesso`, sull'orologio da
+ * parete italiano: l'istante è UTC, la persona legge l'ora di Piacenza.
+ */
+export function scadenzaLeggibile(quando: Date, adesso: Date = new Date()): string {
+  const lui = romeNow(quando);
+  const oggi = romeNow(adesso);
+  const giorno = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  const fra = Math.round((giorno(lui) - giorno(oggi)) / 86_400_000);
+  const ora = oraDaParete(quando);
+  if (fra === 0) return `le ${ora} di oggi`;
+  if (fra === 1) return `le ${ora} di domani`;
+  const nome = lui.toLocaleDateString('it-IT', { weekday: 'long' });
+  return `le ${ora} di ${nome} ${lui.getDate()}/${lui.getMonth() + 1}`;
+}
+
+/**
+ * La riga che dice al negoziante entro quando accettare. È la stessa nell'email «Nuovo ordine» e
+ * nelle pagine ordini del venditore, perché viene dalla stessa `scadenzaAccettazione` che usa il
+ * giro che annulla. Prima l'email diceva «entro 15 minuti» e il sito aspettava tre ore o la fine
+ * della fascia: l'ordine della sera per domani mattina sembrava già perso.
+ *
+ * Per la veloce la scadenza che conta è un'altra: i 10 minuti del freno.
+ * `null` quando la nascita dell'ordine non si legge: niente scadenza inventata.
+ */
+export function rigaScadenzaPerIlNegozio(ordine: OrdineDaScadere, adesso: Date = new Date()): string | null {
+  const nato = ordine.created_at ? new Date(ordine.created_at) : null;
+  if (!nato || Number.isNaN(nato.getTime())) return null;
+  const annullo = scadenzaAccettazione(ordine);
+  if (!annullo) return null;
+  // 30/10/2026 (ondata 17) — Mai una scadenza già passata: dopo l'ora scritta la riga dice cosa
+  // succede adesso. E sulle fasce l'ora da dire è la FINE della fascia, non le tre ore del giro
+  // notturno: la veloce spostata su 18:00–20:00 non si accetta alle 20:38.
+  if (adesso.getTime() >= annullo.getTime()) return 'Il tempo per accettarlo è finito: l’ordine si sta annullando da solo.';
+  const allAnnullo = `Se non fai niente, si annulla da solo alle ${scadenzaLeggibile(annullo, adesso).replace(/^le /, '')}.`;
+  if (eFasciaVeloce(ordine.delivery_slot)) {
+    const freno = new Date(nato.getTime() + MINUTI_PER_CONFERMARE_LA_VELOCE * 60_000);
+    if (adesso.getTime() < freno.getTime()) {
+      // Niente «passa alla prima fascia oraria libera» detto come certo: sabato sera, col negozio chiuso
+      // la domenica, il freno non trova nessuna fascia e l'ordine resta com'è (nonSiSposta).
+      return (
+        `È una consegna veloce: accettala entro le ${oraDaParete(freno)}. ` +
+        `Dopo ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti senza conferma la veloce cade: se c’è una fascia oraria libera la spesa passa lì da sola.`
+      );
+    }
+    return (
+      `Sono passati i ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti per confermare la consegna veloce: se c’è una fascia ` +
+      // Niente «il cliente non paga l'euro della veloce»: quando la veloce è compresa nella spesa
+      // piccola non c'è nessun euro da togliere, e se il freno non trova una fascia l'euro resta.
+      // Al negozio serve sapere cosa succede all'ordine, non il conto del cliente.
+      `oraria libera la spesa passa lì da sola. ${allAnnullo}`
+    );
+  }
+  const entro = fineDellaFascia(ordine) ?? annullo;
+  if (adesso.getTime() < entro.getTime()) return `Accettalo o rifiutalo entro ${scadenzaLeggibile(entro, adesso)}.`;
+  return `La fascia di consegna è finita: accettalo solo se puoi consegnarlo subito, altrimenti rifiutalo. ${allAnnullo}`;
+}
+
+/**
+ * 30/10/2026 (collaudo dell'ondata 20) — COME LE PAGINE ORDINI DEL NEGOZIO RILEGGONO GLI ORDINI.
+ *
+ * La riga di `rigaScadenzaPerIlNegozio` si scrive con l'ora dell'ULTIMA LETTURA. Col telefono
+ * bloccato la ricarica automatica si ferma (`refetchIntervalInBackground: false` nel
+ * QueryProvider) e al ritorno sulla pagina non si rileggeva niente (`refetchOnWindowFocus: false`,
+ * sempre nel QueryProvider): la pagina lasciata aperta venerdì alle 20:30, sabato alle 8:30 diceva
+ * ancora «entro le 12:00 di domani» per un ordine che scadeva quella mattina, fino al giro dopo
+ * (90 secondi sulla lista, 30 sul dettaglio) — e mostrava anche gli ordini di ieri sera, magari
+ * già annullati di notte.
+ *
+ * `always` e non `true`: con `true` si rilegge solo se il dato ha più di 30 secondi (staleTime del
+ * QueryProvider), e quattro secondi a cavallo della fine della fascia bastano per dire «entro le
+ * 12:00 di oggi» alle 12:00:01. Il costo è una lettura ogni volta che il negoziante torna sulla
+ * pagina; da nascosta continua a non leggere niente.
+ * Prova: tests/unit/entro-quando-accettare-si-rilegge-quando-il-telefono-si-riapre.test.tsx
+ */
+export const LETTURA_ORDINI_DEL_NEGOZIO = { refetchOnWindowFocus: 'always' } as const;

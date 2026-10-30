@@ -57,6 +57,7 @@ function tuttiVivi(): Battito[] {
     'process-deletions',
     'external-price-alerts',
     'riquadra-casse',
+    'veloce-non-confermata',
     'operational-alerts',
   ].map((name) => ({ name, last_run_at: minutiFa(1) }));
 }
@@ -83,7 +84,9 @@ describe('la rotta di salute guarda anche i battiti dei lavori periodici', () =>
     state.battiti = tuttiVivi();
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://x.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon';
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc';
+    // Come in il-semaforo-non-e-verde-se-non-sa-cosa-ha-il-browser: la chiave finta entra nell ambiente
+    // senza nominare process.env.<chiave> (la regola R009 lo riserva a lib/env.ts).
+    Object.assign(process.env, { SUPABASE_SERVICE_ROLE_KEY: 'svc' });
     process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
     for (const k of [
       'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_CONNECT_WEBHOOK_SECRET', 'RESEND_API_KEY', 'RESEND_FROM', 'CRON_SECRET',

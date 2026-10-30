@@ -200,6 +200,11 @@ export function statoPagamento(ordine: OrdinePerIlPagamento, totaleCentesimi: nu
     return { tipo: 'non-lo-so' };
   }
   if (stato === 'REFUNDED') return { tipo: 'rimborsato' };
-  if (metodo === 'card' && stato === 'PAID') return { tipo: 'gia-pagato-con-carta', centesimi: totaleCentesimi };
+  // 30/10/2026 — Rimborsata IN PARTE resta pagata con la carta: il freno della veloce rende 1 € su
+  // ogni veloce carta non confermata, e con «non lo so» il cliente non leggeva più «al rider non devi
+  // niente» proprio mentre la sua spesa cambiava fascia. La cifra è quella addebitata.
+  if (metodo === 'card' && (stato === 'PAID' || stato === 'PARTIALLY_REFUNDED')) {
+    return { tipo: 'gia-pagato-con-carta', centesimi: totaleCentesimi };
+  }
   return { tipo: 'non-lo-so' };
 }
