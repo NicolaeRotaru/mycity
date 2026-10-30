@@ -161,6 +161,12 @@ export default function CartPage() {
    *
    * Si rilegge ogni minuto perché un carrello lasciato aperto attraversa le 21: senza il battito,
    * alle 21:05 la pagina prometterebbe ancora mezz'ora solo perché l'ora era stata letta alle 20:59.
+   *
+   * 30/10/2026 — È l'ora del TELEFONO, la stessa che legge la cassa (`DeliverySlotPicker`, e la
+   * pagina della cassa con le sue fasce): il carrello promette la mezz'ora solo se la cassa, un
+   * tocco dopo, offre «Adesso». Per qualche ora l'avevamo spostato sull'ora di Roma da solo, e un
+   * telefono a Bucarest alle 21:30 (a Roma le 20:30) leggeva «Consegna in 30-60 min» nel carrello
+   * e in cassa trovava «Adesso» spento. Se l'ora diventa quella di Roma, cambia insieme alla cassa.
    */
   const [oraDiAdesso, setOraDiAdesso] = useState<number | null>(null);
   // La veloce si può mantenere adesso? `null` = non ancora letto o lettura caduta: nessun tempo
