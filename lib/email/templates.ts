@@ -184,18 +184,22 @@ export function newOrderSellerTemplate(args: {
  * Al cliente: la spesa passa a una fascia, l'euro della veloce non lo paga, e può annullare senza
  * costi. La frase è la stessa della campanella (lib/ordini/veloce-non-confermata.ts).
  */
-export function veloceNonConfermataTemplate(args: { orderId: string; frase: string }) {
+export function veloceNonConfermataTemplate(args: { orderId: string; frase: string; senzaFascia?: boolean }) {
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
   // Chi scorre tutti i modelli del file li chiama anche con argomenti a metà: niente frase, niente crash.
   const frase = String(args.frase ?? '');
+  // Senza una fascia possibile (sabato sera, negozio chiuso la domenica) il titolo non ne promette una.
+  const titolo = args.senzaFascia ? 'Ti contattiamo noi per la consegna' : 'La tua spesa arriva in una fascia oraria';
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">La tua spesa arriva in una fascia oraria</h1>
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">${titolo}</h1>
     <p style="margin:0 0 12px;line-height:1.6">${escapeHtml(frase)}</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Vedi il tuo ordine')}</p>
   `;
   return {
-    subject: 'La consegna veloce non è partita: la tua spesa arriva in una fascia oraria',
-    html: shell('La tua spesa arriva in una fascia oraria', body),
+    subject: args.senzaFascia
+      ? 'La consegna veloce non è partita: ti contattiamo noi'
+      : 'La consegna veloce non è partita: la tua spesa arriva in una fascia oraria',
+    html: shell(titolo, body),
     text: `${frase} Il tuo ordine: ${orderUrl}`,
   };
 }

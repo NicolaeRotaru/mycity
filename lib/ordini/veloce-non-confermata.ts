@@ -6,7 +6,8 @@ import { formatPriceFromCents } from '@/lib/format';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { consegnaSenzaLaVeloce } from '@/lib/ordini/prezzi';
 import { MINUTI_PER_CONFERMARE_LA_VELOCE } from '@/lib/ordini/scadenza-accettazione';
-import { ETICHETTA_ADESSO, FASCE_DI_DOMANI, fasceAncoraPossibili } from '@/lib/quando-arriva';
+import { EXPRESS_ETA_MAX } from '@/lib/delivery';
+import { ETICHETTA_ADESSO, FASCE_DI_DOMANI, FASCE_DI_OGGI } from '@/lib/quando-arriva';
 import { negozioPuoServire, romeNow } from '@/lib/store-hours';
 
 /**
@@ -22,7 +23,8 @@ import { negozioPuoServire, romeNow } from '@/lib/store-hours';
  * ── La regola (scelta ragionata dell'AD sulla carta firmata) ────────────────────────────────
  * Dopo 10 minuti dalla nascita, se un ordine veloce è ancora NEW, la veloce del carrello cade:
  * ① tutti gli ordini del carrello non ancora partiti col fattorino passano alla stessa fascia,
- *   la prima ancora possibile per tutti i negozi (oggi, o la prima di domani);
+ *   la prima ancora possibile per tutti i negozi (oggi, se ne resta almeno un'ora, o la prima di
+ *   domani); se nessuna va bene per tutti, l'ordine non si sposta e ci pensano gli amministratori;
  * ② l'euro della veloce si toglie dalla consegna dell'ordine che lo porta, tranne quando la veloce
  *   era compresa (spesa piccola): lì cambia solo la fascia;
  * ③ il compenso del fattorino resta quello scritto;
@@ -69,10 +71,35 @@ const centesimi = (x: unknown) => Math.round(Number(x ?? 0) * 100);
 const lordoDi = (r: RigaVeloce) =>
   typeof r.gross_total_cents === 'number' ? r.gross_total_cents : centesimi(r.total_price) + Number(r.wallet_applied_cents ?? 0);
 
-/** La prima fascia ancora possibile per tutti i negozi: prima quelle di oggi, poi quelle di domani. */
-export function fasciaDopoLaVeloce(oraDiPiacenza: Date, orari: unknown[]): string {
+/**
+ * Quanto deve restare, almeno, di una fascia di oggi per proporla al posto della veloce: i minuti
+ * che la veloce stessa si prende dopo la conferma. Collaudo del 30/10: alle 17:50 il freno metteva
+ * «15:00–18:00», cioè 10 minuti per un ordine che il negozio non ha ancora nemmeno confermato.
+ */
+export const MINUTI_MINIMI_DI_FASCIA = EXPRESS_ETA_MAX;
+
+/**
+ * La prima fascia che tutti i negozi del carrello possono servire davvero: prima quelle di oggi con
+ * almeno `MINUTI_MINIMI_DI_FASCIA` davanti, poi quelle di domani. `null` se non ce n'è nessuna:
+ * sabato sera col negozio chiuso la domenica non esiste un'etichetta vera da scrivere, e
+ * «Domani · 9:00–12:00» sarebbe una promessa che il negozio non può mantenere.
+ */
+export function fasciaDopoLaVeloce(oraDiPiacenza: Date, orari: unknown[]): string | null {
   const tutti = (f: string) => orari.every((h) => negozioPuoServire(h, f, oraDiPiacenza));
-  return fasceAncoraPossibili(oraDiPiacenza.getHours()).find(tutti) ?? FASCE_DI_DOMANI.find(tutti) ?? FASCE_DI_DOMANI[0];
+  const adesso = oraDiPiacenza.getHours() * 60 + oraDiPiacenza.getMinutes();
+  const oggi = FASCE_DI_OGGI.filter((f) => f.oraDiFine * 60 - adesso >= MINUTI_MINIMI_DI_FASCIA).map((f) => f.etichetta);
+  return oggi.find(tutti) ?? FASCE_DI_DOMANI.find(tutti) ?? null;
+}
+
+const TITOLO_SENZA_FASCIA = 'La consegna veloce non è partita: ti contattiamo noi';
+
+/** La frase per il cliente quando nessuna fascia di oggi o di domani va bene per tutti i negozi. */
+export function fraseSenzaFascia(): string {
+  return (
+    `Il negozio non ha confermato in ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti la tua consegna veloce, ` +
+    'e né oggi né domani c’è una fascia oraria in cui possa consegnare. Ti contattiamo noi per decidere insieme. ' +
+    'Se preferisci, puoi annullare l’ordine dalla sua pagina senza costi.'
+  );
 }
 
 export type ComeVaLEuro = 'tolto-contanti' | 'tolto-carta' | 'compresa' | 'a-mano';
@@ -117,12 +144,12 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<
   return righe.sort((x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id));
 }
 
-async function avvisaIlCliente(admin: SupabaseClient, o: RigaVeloce, frase: string): Promise<void> {
+async function avvisaIlCliente(admin: SupabaseClient, o: RigaVeloce, frase: string, senzaFascia = false): Promise<void> {
   if (!o.user_id) return;
   const { error } = await admin.from('notifications').insert({
     category: 'order',
     user_id: o.user_id,
-    title: 'La consegna veloce non è partita',
+    title: senzaFascia ? TITOLO_SENZA_FASCIA : 'La consegna veloce non è partita',
     body: frase,
     link: `/orders/${o.id}`,
   });
@@ -134,7 +161,7 @@ async function avvisaIlCliente(admin: SupabaseClient, o: RigaVeloce, frase: stri
       logger.error('[veloce-non-confermata] email al cliente non spedita: indirizzo non letto', { orderId: o.id });
       return;
     }
-    const t = veloceNonConfermataTemplate({ orderId: o.id, frase });
+    const t = veloceNonConfermataTemplate({ orderId: o.id, frase, senzaFascia });
     const res = await sendEmail({
       to: email,
       subject: t.subject,
@@ -150,6 +177,31 @@ async function avvisaIlCliente(admin: SupabaseClient, o: RigaVeloce, frase: stri
 }
 
 type EsitoDelCarrello = 'spostato' | 'accettato' | 'a-mano';
+
+/**
+ * Nessuna fascia vera per tutti i negozi (sabato sera, negozio chiuso la domenica): l'ordine NON si
+ * sposta su un'etichetta falsa. Resta com'è, col suo conto, e ci pensa una persona: gli
+ * amministratori e il cliente lo sanno subito. L'ordine resta «Adesso» e il giro dopo lo ritrova:
+ * l'avviso già scritto nella campanella è il segno che se n'è già parlato, e non si ripete.
+ */
+async function senzaFascia(admin: SupabaseClient, o: RigaVeloce): Promise<EsitoDelCarrello> {
+  const { data: gia, error } = await admin
+    .from('notifications')
+    .select('id')
+    .eq('link', `/orders/${o.id}`)
+    .eq('title', TITOLO_SENZA_FASCIA)
+    .limit(1);
+  if (error) throw new Error(`ordine ${o.id}: avvisi già spediti non letti: ${error.message}`);
+  if (Array.isArray(gia) && gia.length > 0) return 'a-mano';
+  await notifyAdmins(
+    '⚠️ Veloce non confermata senza una fascia possibile',
+    `L'ordine #${o.id.slice(0, 6).toUpperCase()} non è stato confermato in ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti e né oggi né domani c'è una fascia in cui tutti i negozi del carrello siano aperti. È rimasto com'era, con la veloce nel conto: senti il negozio e il cliente, e decidete insieme il giorno o l'annullo.`,
+    '/admin/orders',
+  ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
+  await avvisaIlCliente(admin, o, fraseSenzaFascia(), true);
+  logger.warn('[veloce-non-confermata] nessuna fascia possibile: carrello lasciato agli amministratori', { orderId: o.id });
+  return 'a-mano';
+}
 
 async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: RigaVeloce[], adesso: Date): Promise<EsitoDelCarrello> {
   const altri = carrello.filter(
@@ -168,6 +220,7 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
     }
   }
   const fascia = fasciaDopoLaVeloce(romeNow(adesso), orari);
+  if (!fascia) return senzaFascia(admin, o);
 
   const conto = consegnaSenzaLaVeloce(carrello.map((r) => {
     const consegna = Number(r.delivery_fee_cents ?? 0);
@@ -220,23 +273,36 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
     .filter((c) => c.delivery_status !== 'CANCELED')
     .reduce((s, c) => s + centesimi(c.total_price) + (deltaScritti.get(c.id) ?? 0), 0);
 
-  if (aMeta || euro === 'a-mano' || euro === 'tolto-carta') {
+  // L'euro è tolto davvero solo se OGNI ordine che lo portava è stato riscritto. Collaudo del 30/10:
+  // l'ordine del forno era già partito col fattorino (fuori da `daSpostare`), il conto restava 4 € e
+  // il cliente leggeva «non lo paghi: alla porta paghi 32,00 €», euro compreso. Stesso caso se
+  // l'ordine che lo porta cambia stato mentre il freno lavora.
+  const rimasti = euro === 'tolto-contanti'
+    ? (conto?.righe ?? []).filter((r) => r.deltaCents !== 0 && deltaScritti.get(r.id) !== r.deltaCents)
+    : [];
+  const euroFinale: ComeVaLEuro = rimasti.length > 0 ? 'a-mano' : euro;
+
+  const daFare: string[] = [];
+  if (euroFinale === 'tolto-carta') daFare.push('Rendi 1 € al cliente con un rimborso parziale sulla carta: è l’euro della veloce che non si paga.');
+  if (rimasti.length > 0) {
+    const codici = rimasti.map((r) => `#${r.id.slice(0, 6).toUpperCase()}`).join(', ');
+    daFare.push(`L’euro della veloce sta sull’ordine ${codici}, già partito col fattorino o cambiato nel frattempo, e non si è potuto togliere: rendilo a mano al cliente.`);
+  } else if (euroFinale === 'a-mano') {
+    daFare.push('Il conto della consegna non è quello della regola: togli a mano l’euro della veloce, se c’era.');
+  }
+  if (aMeta) daFare.push('Un altro ordine dello stesso carrello è cambiato nel frattempo ed è rimasto sulla veloce: mettilo nella stessa fascia.');
+  if (daFare.length > 0) {
     const codice = o.id.slice(0, 6).toUpperCase();
-    const cosa = euro === 'tolto-carta'
-      ? 'Rendi 1 € al cliente con un rimborso parziale sulla carta: è l’euro della veloce che non si paga.'
-      : euro === 'a-mano'
-        ? 'Il conto della consegna non è quello della regola: togli a mano l’euro della veloce, se c’era.'
-        : 'Un altro ordine dello stesso carrello è cambiato nel frattempo ed è rimasto sulla veloce: mettilo nella stessa fascia.';
     await notifyAdmins(
       '⚠️ Veloce non confermata da sistemare',
-      `L'ordine #${codice} non è stato confermato in ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti ed è passato alla fascia ${fascia}. ${cosa}`,
+      `L'ordine #${codice} non è stato confermato in ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti ed è passato alla fascia ${fascia}. ${daFare.join(' ')}`,
       '/admin/orders',
     ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
   }
 
-  await avvisaIlCliente(admin, o, fraseDelFreno({ fascia, euro, totaleCents }));
-  logger.info('[veloce-non-confermata] carrello passato in fascia', { orderId: o.id, fascia, euro, ordini: deltaScritti.size });
-  return aMeta || euro === 'a-mano' ? 'a-mano' : 'spostato';
+  await avvisaIlCliente(admin, o, fraseDelFreno({ fascia, euro: euroFinale, totaleCents }));
+  logger.info('[veloce-non-confermata] carrello passato in fascia', { orderId: o.id, fascia, euro: euroFinale, ordini: deltaScritti.size });
+  return aMeta || euroFinale === 'a-mano' ? 'a-mano' : 'spostato';
 }
 
 export type EsitoDelFreno =

@@ -181,3 +181,51 @@ describe("il secondo freno della veloce", () => {
     expect(conf.crons).toContainEqual({ path: "/api/cron/veloce-non-confermata", schedule: "*/5 * * * *" });
   });
 });
+
+/**
+ * Tre difetti trovati dal collaudo sul primo giro del freno (30/10/2026). Ognuno era rosso sul codice
+ * di prima: la fascia scelta guardava solo «non ancora finita», l euro si dava per tolto anche quando
+ * stava su un ordine già partito, e senza fasce servibili si ripiegava su «Domani · 9:00–12:00».
+ */
+describe("il secondo freno della veloce: i tre difetti del collaudo", () => {
+  it("V-fascia: veloce 17:38 non confermata, alle 17:50 non va a 15:00–18:00 (10 minuti) ma a 18:00–20:00", async () => {
+    db.orders = [ordine({ created_at: "2026-10-30T16:38:00.000Z" })];
+    await giro("2026-10-30T16:50:00.000Z");
+    expect(o("o1").delivery_slot).toBe("Stasera · 18:00–20:00");
+    expect(String(db.notifications[0]?.body)).not.toContain("15:00–18:00");
+  });
+
+  it("V-partito: l ordine che porta l euro è già partito col fattorino, il cliente non legge «alla porta paghi» e gli admin sono avvisati", async () => {
+    db.orders = [
+      ordine({ delivery_status: "PICKED_UP" }),
+      ordine({ id: "o2", seller_id: "frutta", total_price: 13, gross_total_cents: 1300, delivery_fee_cents: 100, rider_fee_cents: 100, created_at: "2026-10-30T17:05:00.001Z" }),
+    ];
+    db.cod_checkout_attempts = [{ user_id: "maria", order_ids: [{ id: "o1" }, { id: "o2" }] }];
+    const esito = await giro("2026-10-30T17:16:00.000Z");
+    expect(o("o1")).toMatchObject({ delivery_status: "PICKED_UP", delivery_fee_cents: 400, total_price: 19 });
+    expect(o("o2")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00", delivery_fee_cents: 100, total_price: 13 });
+    expect(db.notifications).toHaveLength(1);
+    expect(String(db.notifications[0].body)).not.toContain("alla porta paghi");
+    expect(notifyAdminsMock).toHaveBeenCalledTimes(1);
+    expect(String(notifyAdminsMock.mock.calls[0][1])).toContain("#O1");
+    expect(esito).toMatchObject({ daSistemareAMano: 1, spostati: 0 });
+  });
+
+  it("V-domenica: sabato 20:20 veloce, negozio chiuso la domenica, alle 20:35 niente «Domani · 9:00–12:00»: resta com è, admin e cliente avvisati una volta", async () => {
+    const lunSab: [string, string][] = [["08:00", "21:00"]];
+    db.profiles = [{ id: "forno", store_hours: { mon: lunSab, tue: lunSab, wed: lunSab, thu: lunSab, fri: lunSab, sat: lunSab, sun: [] } }];
+    db.orders = [ordine({ created_at: "2026-10-31T19:20:00.000Z" })];
+    await giro("2026-10-31T19:35:00.000Z");
+    expect(o("o1")).toMatchObject({ delivery_slot: ETICHETTA_ADESSO, delivery_fee_cents: 400, total_price: 19 });
+    expect(db.notifications).toHaveLength(1);
+    expect(String(db.notifications[0].body)).not.toContain("Domani");
+    expect(String(db.notifications[0].body)).not.toContain("non lo paghi");
+    expect(notifyAdminsMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(String((sendEmailMock.mock.calls[0][0] as { subject: string }).subject)).not.toContain("fascia");
+    await giro("2026-10-31T19:40:00.000Z");
+    expect(db.notifications).toHaveLength(1);
+    expect(notifyAdminsMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+  });
+});
