@@ -7,8 +7,10 @@ import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
  * Applica davvero filtri e scritture (come quello di
  * se-un-negozio-rifiuta-la-consegna-si-rifa-sui-negozi-rimasti.test.ts), e in più:
  *  · `prima124: true` fa il database di prima della migrazione 124: la colonna
- *    `gross_total_cents` non c'è, e un'istruzione che la nomina fallisce INTERA
- *    con 42703, come fa PostgreSQL;
+ *    `gross_total_cents` non c'è, e un'istruzione che la nomina fallisce INTERA.
+ *    Col codice vero di chi risponde: la lettura arriva a PostgreSQL (42703), la
+ *    scrittura no — la ferma prima PostgREST, che risponde PGRST204 (collaudo del
+ *    30/10: con 42703 anche sull'update la prova passava e il ripiego vero no);
  *  · `auth.admin.getUserById` risponde con un indirizzo, così l'email di annullo parte
  *    e la si può leggere dal finto `sendEmail`.
  */
@@ -16,6 +18,12 @@ export type Riga = Record<string, unknown>;
 
 const COLONNA_124 = 'gross_total_cents';
 const colonnaMancante = { code: '42703', message: `column orders.${COLONNA_124} does not exist` };
+const colonnaFuoriCache = {
+  code: 'PGRST204',
+  details: null,
+  hint: null,
+  message: `Could not find the '${COLONNA_124}' column of 'orders' in the schema cache`,
+};
 
 export function finto(tabelle: Record<string, Riga[]>, opzioni: { prima124?: boolean } = {}) {
   if (opzioni.prima124) for (const r of tabelle.orders ?? []) delete r[COLONNA_124];
@@ -25,16 +33,16 @@ export function finto(tabelle: Record<string, Riga[]>, opzioni: { prima124?: boo
     let valori: Riga | null = null;
     let lim = Infinity;
     let unico = false;
-    let fuoriSchema = false;
+    let fuoriSchema: typeof colonnaMancante | typeof colonnaFuoriCache | null = null;
     const q: Record<string, unknown> = {};
     Object.assign(q, {
       select: (colonne?: string) => {
-        if (opzioni.prima124 && t === 'orders' && String(colonne ?? '').includes(COLONNA_124)) fuoriSchema = true;
+        if (opzioni.prima124 && t === 'orders' && String(colonne ?? '').includes(COLONNA_124)) fuoriSchema ??= colonnaMancante;
         return q;
       },
       order: () => q,
       update: (v: Riga) => {
-        if (opzioni.prima124 && t === 'orders' && COLONNA_124 in v) fuoriSchema = true;
+        if (opzioni.prima124 && t === 'orders' && COLONNA_124 in v) fuoriSchema = colonnaFuoriCache;
         valori = v;
         return q;
       },
@@ -55,7 +63,7 @@ export function finto(tabelle: Record<string, Riga[]>, opzioni: { prima124?: boo
       single: () => ((unico = true), q),
       then: (ok: (x: unknown) => unknown, ko: (e: unknown) => unknown) => {
         // PostgreSQL non ignora una colonna che non conosce: l'istruzione non tocca niente.
-        if (fuoriSchema) return Promise.resolve({ data: null, error: colonnaMancante }).then(ok, ko);
+        if (fuoriSchema) return Promise.resolve({ data: null, error: fuoriSchema }).then(ok, ko);
         const prese = righe.filter((r) => filtri.every((f) => f(r)));
         if (valori) for (const r of prese) Object.assign(r, valori);
         const data = prese.slice(0, lim).map((r) => ({ ...r }));
