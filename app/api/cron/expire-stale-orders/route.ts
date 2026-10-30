@@ -214,6 +214,10 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
             continue;
           }
 
+          // 30/10/2026 (collaudo) — Prima la consegna del carrello torna com'era: l'ordine che rientra
+          // in coda è di nuovo vivo, e col conto rifatto avrebbe 1 € di consegna e il fattorino a 0.
+          if (giro) await giro.rimetti();
+
           // Rimetti l'ordine in coda: il prossimo giro riprovera'. Senza questo
           // resterebbe annullato e non rimborsato per sempre.
           const { error: errRipristino } = await admin

@@ -262,9 +262,10 @@ export async function annullaERimborsa(
       return { ok: false, motivo: 'RIMBORSO_DA_DIVIDERE' };
     }
 
+    let giro: GiroDelCarrello | null = null;
     try {
       // 30/10/2026 — Prima si rifà la consegna dei negozi rimasti: il rimborso rende il totale nuovo.
-      const giro = await ricalcolaLaConsegnaDelGiro(admin, order.id);
+      giro = await ricalcolaLaConsegnaDelGiro(admin, order.id);
       const totaleCent = giro ? giro.totaleCents : Math.round(Number(order.total_price) * 100);
       const giaRimborsato = Number(order.refunded_amount_cents ?? 0);
       const residuoCent = Math.max(0, totaleCent - giaRimborsato);
@@ -289,6 +290,9 @@ export async function annullaERimborsa(
       return { ok: true, refundId: res.refundId };
     } catch (err) {
       logger.error('[annullaERimborsa] rimborso fallito', { orderId: order.id, err });
+      // 30/10/2026 (collaudo) — Il rimborso non è partito e l'ordine resta vivo: la consegna del
+      // carrello torna com'era. Senza, il pane restava a 1 € di consegna e il fattorino a 0.
+      if (giro) await giro.rimetti();
       return { ok: false, motivo: 'RIMBORSO_FALLITO', dettaglio: err instanceof Error ? err.message : undefined };
     }
   }
@@ -416,14 +420,23 @@ export async function avvisaIlClienteDellAnnullo(
  * Non lancia mai: se non riesce a leggere il carrello, l'annullo va avanti com'era (rimborso pieno)
  * e resta l'errore nel registro. Ritorna il totale nuovo dell'ordine annullato, o null.
  *
- * LIMITE DICHIARATO: due annulli dello stesso carrello nello stesso istante possono leggersi a
- * vicenda prima della scrittura. Le scritture sono condizionate alla consegna che c'era (`eq`), così
- * la seconda non sovrascrive a occhio; la chiusura completa è un blocco nel database (migrazione,
+ * 30/10/2026 (collaudo) — Tre regole, perché i soldi tornino giusti anche con due annulli insieme:
+ * ① prima del conto l'ordine che se ne va mette il SEGNO (fattorino a 0): chi legge dopo vede un
+ * conto fuori regola e non sposta niente su di lui; ② ogni riga si scrive solo se è ancora come la si
+ * è letta, contando le righe toccate: se un altro è arrivato prima, quello già scritto torna indietro
+ * e si rilegge; ③ si rende il totale scritto adesso, mai quello che il chiamante aveva in mano (il
+ * giro degli scaduti rendeva 13 € invece di 15). Se poi il rimborso non parte, `rimetti` riporta il
+ * carrello com'era: l'ordine resta vivo con la sua consegna e il suo fattorino.
+ *
+ * LIMITE DICHIARATO: le scritture sono una per riga, non una transazione. Se il database cade a metà
+ * e non si riesce a tornare indietro, parte un avviso agli amministratori con l'ordine da sistemare.
+ * La chiusura completa è una funzione nel database che fa tutto il carrello insieme (migrazione,
  * da firmare a parte).
  */
 const COLONNE_GIRO =
   'id, user_id, delivery_status, total_price, gross_total_cents, wallet_applied_cents, shipping_cost, ' +
-  'delivery_fee_cents, rider_fee_cents, discount_amount, delivery_slot, pickup_in_store, stripe_session_id, created_at';
+  'delivery_fee_cents, rider_fee_cents, discount_amount, delivery_slot, pickup_in_store, stripe_session_id, created_at, ' +
+  'refunded_amount_cents';
 
 type RigaDelGiro = {
   id: string;
@@ -440,6 +453,7 @@ type RigaDelGiro = {
   pickup_in_store: boolean | null;
   stripe_session_id: string | null;
   created_at: string | null;
+  refunded_amount_cents: number | null;
 };
 
 const centesimi = (euro: number | string | null | undefined) => Math.round(Number(euro ?? 0) * 100);
@@ -473,67 +487,175 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
   return ids.map((id) => righe.find((r) => r.id === id)).filter((r): r is RigaDelGiro => !!r);
 }
 
-export async function ricalcolaLaConsegnaDelGiro(
+/** Quello che `ricalcolaLaConsegnaDelGiro` consegna a chi annulla. */
+export type GiroDelCarrello = {
+  /** Il totale dell'ordine che se ne va, come sta scritto adesso: è quanto si rende sulla carta. */
+  totaleCents: number;
+  differenzaCents: number;
+  /**
+   * Rimette la consegna del carrello com'era. Va chiamata quando il rimborso non parte e l'ordine
+   * resta vivo: senza, resterebbe con 1 € di consegna e il fattorino a 0. Torna false se il carrello
+   * è cambiato nel frattempo (un rimborso già scritto, un altro annullo): allora lo dice agli
+   * amministratori e non tocca niente.
+   */
+  rimetti: () => Promise<boolean>;
+};
+
+type ConsegnaScritta = { delivery_fee_cents: number; rider_fee_cents: number; gross_total_cents: number; total_price: number };
+const consegnaDi = (r: RigaDelGiro): ConsegnaScritta => ({
+  delivery_fee_cents: Number(r.delivery_fee_cents ?? 0),
+  rider_fee_cents: Number(r.rider_fee_cents ?? 0),
+  gross_total_cents: lordoDi(r),
+  total_price: centesimi(r.total_price) / 100,
+});
+
+/**
+ * Scrive una riga solo se è ancora come la si è letta — consegna, fattorino, stato e rimborsato —
+ * e conta le righe toccate. Zero righe vuol dire che il carrello è cambiato sotto
+ * mano: prima l'update tornava senza errore e si rendeva il totale vecchio.
+ */
+async function scriviSeUguale(
   admin: SupabaseClient,
-  orderId: string,
-): Promise<{ totaleCents: number; differenzaCents: number } | null> {
-  try {
-    const { data: lui, error } = await admin.from('orders').select(COLONNE_GIRO).eq('id', orderId).maybeSingle();
-    if (error || !lui || typeof lui !== 'object') return null;
-    const ordine = lui as unknown as RigaDelGiro;
-    if (ordine.pickup_in_store || ordine.delivery_status === 'DELIVERED') return null;
-    const carrello = await ordiniDelCarrello(admin, ordine);
-    if (!carrello || carrello.length < 2 || !carrello.some((r) => r.id === orderId)) return null;
-    if (carrello.some((r) => r.delivery_status === 'DELIVERED')) return null;
+  r: RigaDelGiro,
+  da: ConsegnaScritta,
+  a: ConsegnaScritta,
+): Promise<boolean> {
+  let q = admin
+    .from('orders')
+    .update(a)
+    .eq('id', r.id)
+    .eq('delivery_fee_cents', da.delivery_fee_cents)
+    .eq('rider_fee_cents', da.rider_fee_cents);
+  if (r.delivery_status != null) q = q.eq('delivery_status', r.delivery_status);
+  if (r.refunded_amount_cents != null) q = q.eq('refunded_amount_cents', Number(r.refunded_amount_cents));
+  const { data, error } = await q.select('id');
+  if (error) throw new Error(`ordine ${r.id}: ${error.message}`);
+  return Array.isArray(data) && data.length > 0;
+}
 
-    const conto = consegnaDopoLAnnullo({
-      ordini: carrello.map((r) => {
-        const consegna = Number(r.delivery_fee_cents ?? 0);
-        const spedizione = centesimi(r.shipping_cost);
-        const merce = lordoDi(r) - consegna - spedizione;
-        return {
-          id: r.id,
-          spesaCents: merce + centesimi(r.discount_amount),
-          merceCents: merce,
-          shippingCents: spedizione,
-          deliveryFeeCents: consegna,
-          riderFeeCents: Number(r.rider_fee_cents ?? 0),
-          giaAnnullato: r.delivery_status === 'CANCELED' && r.id !== orderId,
-        };
-      }),
-      annullaId: orderId,
-      consegnaVeloce: eConsegnaVeloce({ fascia: ordine.delivery_slot, ritiroInNegozio: false }),
-      pickupInStore: false,
-    });
-    if (!conto) return null;
+/** Un giro solo: 'CAMBIATO' se un'altra scrittura è arrivata prima (niente resta scritto). */
+async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<GiroDelCarrello | null | 'CAMBIATO'> {
+  const { data: lui, error } = await admin.from('orders').select(COLONNE_GIRO).eq('id', orderId).maybeSingle();
+  if (error || !lui || typeof lui !== 'object') return null;
+  const ordine = lui as unknown as RigaDelGiro;
+  // Niente da rifare: si rende il totale letto adesso, non quello che il chiamante aveva in mano.
+  const comE: GiroDelCarrello = { totaleCents: centesimi(ordine.total_price), differenzaCents: 0, rimetti: async () => true };
+  if (ordine.pickup_in_store || ordine.delivery_status === 'DELIVERED') return comE;
+  const nelCarrello = (c: RigaDelGiro[] | null): c is RigaDelGiro[] =>
+    !!c && c.length >= 2 && c.some((r) => r.id === orderId) && !c.some((r) => r.delivery_status === 'DELIVERED');
+  if (!nelCarrello(await ordiniDelCarrello(admin, ordine))) return comE;
 
-    const riscrivi = async (r: RigaDelGiro, riga: RigaRicalcolata) => {
-      const lordo = lordoDi(r) + riga.deltaCents;
-      const { error: errW } = await admin
-        .from('orders')
-        .update({
-          delivery_fee_cents: riga.deliveryFeeCents,
-          rider_fee_cents: riga.riderFeeCents,
-          gross_total_cents: lordo,
-          total_price: Math.max(0, centesimi(r.total_price) + riga.deltaCents) / 100,
-        })
-        .eq('id', r.id)
-        .eq('delivery_fee_cents', Number(r.delivery_fee_cents ?? 0));
-      if (errW) throw new Error(`ordine ${r.id}: ${errW.message}`);
-    };
-    // Prima l'ordine che se ne va (il rimborso scende), poi quelli che restano.
-    await riscrivi(ordine, conto.annullato);
-    for (const riga of conto.rimasti) {
-      const r = carrello.find((c) => c.id === riga.id);
-      if (r && (riga.deltaCents !== 0 || riga.riderFeeCents !== Number(r.rider_fee_cents ?? 0))) await riscrivi(r, riga);
+  const scritte: Array<{ r: RigaDelGiro; prima: ConsegnaScritta; dopo: ConsegnaScritta }> = [];
+  // Per primo il conto dell'ordine che se ne va: se il suo rimborso è già scritto
+  // (`refunded_amount_cents` cambiato) la sua riga non torna e il resto non si tocca.
+  // Poi i rimasti all'indietro, per ultimo il segno.
+  const rimetti = async (): Promise<boolean> => {
+    for (const s of [scritte[1], ...scritte.slice(2).reverse(), scritte[0]].filter((x) => !!x)) {
+      const tornata = await scriviSeUguale(admin, s.r, s.dopo, s.prima).catch((err) => {
+        logger.error('[ricalcolaLaConsegnaDelGiro] scrittura per rimettere il carrello caduta', { orderId, riga: s.r.id, err });
+        return false;
+      });
+      if (tornata) continue;
+      logger.error('[ricalcolaLaConsegnaDelGiro] consegna del carrello NON rimessa com era', { orderId, riga: s.r.id });
+      await notifyAdmins(
+        '⚠️ Carrello da sistemare a mano',
+        `L'annullo dell'ordine #${orderId.slice(0, 6).toUpperCase()} non è andato a buon fine, ma la consegna degli altri ordini dello stesso carrello ` +
+          `era già stata spostata e non si è potuta rimettere com'era (l'ordine #${s.r.id.slice(0, 6).toUpperCase()} è cambiato nel frattempo). ` +
+          'Controlla consegna, fattorino e totale degli ordini del carrello prima che il negozio li accetti.',
+        '/admin/orders',
+      ).catch((err) => logger.error('[ricalcolaLaConsegnaDelGiro] avviso agli amministratori non partito', { orderId, err }));
+      return false;
     }
-    logger.info('[ricalcolaLaConsegnaDelGiro] consegna rifatta sui negozi rimasti', {
-      orderId, differenzaCents: conto.differenzaCents, rimasti: conto.rimasti.length,
+    scritte.length = 0;
+    return true;
+  };
+  const passo = async (r: RigaDelGiro, da: ConsegnaScritta, a: ConsegnaScritta): Promise<boolean> => {
+    if (!(await scriviSeUguale(admin, r, da, a))) return false;
+    scritte.push({ r, prima: da, dopo: a });
+    return true;
+  };
+
+  let tutto = false;
+  let conto: ReturnType<typeof consegnaDopoLAnnullo> = null;
+  try {
+    // 1. IL SEGNO, PRIMA DEL CONTO: il fattorino a 0 sull'ordine che se ne va. Ogni altro annullo
+    //    dello stesso carrello che legge dopo vede un conto che non è quello della regola e non
+    //    tocca niente; chi aveva letto prima trova la riga cambiata e rilegge. Senza, due annulli
+    //    quasi insieme si leggevano a vicenda e il secondo rendeva 13 € invece di 15.
+    const comEra = consegnaDi(ordine);
+    const segno: ConsegnaScritta = { ...comEra, rider_fee_cents: 0 };
+    if (!(await passo(ordine, comEra, segno))) return 'CAMBIATO';
+
+    // 2. Il conto sul carrello letto DOPO il segno; l'ordine che se ne va col conto di prima.
+    const carrello = await ordiniDelCarrello(admin, ordine);
+    if (nelCarrello(carrello)) {
+      conto = consegnaDopoLAnnullo({
+        ordini: carrello.map((c) => {
+          const r = c.id === orderId ? ordine : c;
+          const consegna = Number(r.delivery_fee_cents ?? 0);
+          const spedizione = centesimi(r.shipping_cost);
+          const merce = lordoDi(r) - consegna - spedizione;
+          return {
+            id: r.id,
+            spesaCents: merce + centesimi(r.discount_amount),
+            merceCents: merce,
+            shippingCents: spedizione,
+            deliveryFeeCents: consegna,
+            riderFeeCents: Number(r.rider_fee_cents ?? 0),
+            giaAnnullato: r.delivery_status === 'CANCELED' && r.id !== orderId,
+          };
+        }),
+        annullaId: orderId,
+        consegnaVeloce: eConsegnaVeloce({ fascia: ordine.delivery_slot, ritiroInNegozio: false }),
+        pickupInStore: false,
+      });
+    }
+    // Niente da spostare: resta il segno (l'ordine se ne va comunque), che `rimetti` toglie.
+    if (!conto) return { ...comE, rimetti };
+
+    // 3. Prima l'ordine che se ne va (il rimborso scende), poi quelli che restano.
+    const verso = (r: RigaDelGiro, da: ConsegnaScritta, riga: RigaRicalcolata): ConsegnaScritta => ({
+      delivery_fee_cents: riga.deliveryFeeCents,
+      rider_fee_cents: riga.riderFeeCents,
+      gross_total_cents: da.gross_total_cents + riga.deltaCents,
+      total_price: Math.max(0, centesimi(r.total_price) + riga.deltaCents) / 100,
     });
-    return {
-      totaleCents: Math.max(0, centesimi(ordine.total_price) + conto.annullato.deltaCents),
-      differenzaCents: conto.differenzaCents,
-    };
+    tutto = await passo(ordine, segno, verso(ordine, segno, conto.annullato));
+    for (const riga of conto.rimasti) {
+      if (!tutto) break;
+      const r = carrello?.find((c) => c.id === riga.id);
+      if (r && (riga.deltaCents !== 0 || riga.riderFeeCents !== Number(r.rider_fee_cents ?? 0))) {
+        tutto = await passo(r, consegnaDi(r), verso(r, consegnaDi(r), riga));
+      }
+    }
+  } catch (err) {
+    // Una scrittura a metà non resta: si torna indietro, e si rende il totale com'era.
+    logger.error('[ricalcolaLaConsegnaDelGiro] consegna del carrello NON rifatta: rimborso pieno', { orderId, err });
+    return (await rimetti()) ? comE : null;
+  }
+  if (!tutto || !conto) return (await rimetti()) ? 'CAMBIATO' : null;
+
+  logger.info('[ricalcolaLaConsegnaDelGiro] consegna rifatta sui negozi rimasti', {
+    orderId, differenzaCents: conto.differenzaCents, rimasti: conto.rimasti.length,
+  });
+  return {
+    totaleCents: Math.round(scritte[1].dopo.total_price * 100),
+    differenzaCents: conto.differenzaCents,
+    rimetti,
+  };
+}
+
+export async function ricalcolaLaConsegnaDelGiro(admin: SupabaseClient, orderId: string): Promise<GiroDelCarrello | null> {
+  try {
+    // Se un altro annullo dello stesso carrello scrive fra la lettura e la scrittura, si rilegge.
+    for (let volta = 0; volta < 3; volta++) {
+      const esito = await rifaiIlGiro(admin, orderId);
+      if (esito !== 'CAMBIATO') return esito;
+    }
+    logger.error('[ricalcolaLaConsegnaDelGiro] il carrello cambia a ogni lettura: consegna NON rifatta', { orderId });
+    const { data } = await admin.from('orders').select('total_price').eq('id', orderId).maybeSingle();
+    if (!data) return null;
+    return { totaleCents: centesimi((data as { total_price: number | string | null }).total_price), differenzaCents: 0, rimetti: async () => true };
   } catch (err) {
     logger.error('[ricalcolaLaConsegnaDelGiro] consegna del carrello NON rifatta: rimborso pieno', { orderId, err });
     return null;
