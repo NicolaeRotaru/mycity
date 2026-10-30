@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ETICHETTA_ADESSO } from "@/lib/quando-arriva";
-import { scadenzaAccettazione } from "@/lib/ordini/scadenza-accettazione";
+import { rigaScadenzaPerIlNegozio, scadenzaAccettazione } from "@/lib/ordini/scadenza-accettazione";
 
 /**
  * IL SECONDO FRENO DELLA VELOCE (carta #220, scelta di Nicola del 30/10 alle 16:13).
@@ -105,7 +105,7 @@ afterEach(() => vi.useRealTimers());
 const lunSab: [string, string][] = [['08:00', '21:00']];
 const chiusoDomenica = { mon: lunSab, tue: lunSab, wed: lunSab, thu: lunSab, fri: lunSab, sat: lunSab, sun: [] };
 
-describe('collaudo A o16', () => {
+describe('il freno della veloce regge guasti, margini e concorrenza', () => {
   it('W-guasto: sabato 20:35, negozio chiuso la domenica, lettura orari in errore: niente «Domani · 9:00–12:00»', async () => {
     db.profiles = [{ id: 'forno', store_hours: chiusoDomenica }];
     guasto.profiles = true;
@@ -115,19 +115,21 @@ describe('collaudo A o16', () => {
     expect(String(db.notifications[0]?.body ?? '')).not.toContain('Domani · 9:00–12:00');
   });
 
-  it('W-guasto-poi: durante il guasto l ordine resta «Adesso» senza avvisi; finito il guasto il giro dopo legge gli orari veri', async () => {
+  it('W-guasto-poi: durante il guasto l ordine resta «Adesso», gli admin lo sanno e il cliente legge l ora vera dell annullo; finito il guasto niente fascia finta né secondo avviso', async () => {
     db.profiles = [{ id: 'forno', store_hours: chiusoDomenica }];
     guasto.profiles = true;
     db.orders = [ordine({ created_at: '2026-10-31T19:20:00.000Z' })];
     await giro('2026-10-31T19:35:00.000Z');
     expect(o('o1').delivery_slot).toBe(ETICHETTA_ADESSO);
-    expect(db.notifications).toHaveLength(0);
-    expect(notifyAdminsMock).not.toHaveBeenCalled();
+    expect(db.notifications).toHaveLength(1);
+    expect(String(db.notifications[0].body)).toContain('Se non conferma entro le 23:20');
+    expect(String(db.notifications[0].body)).not.toMatch(/contattiamo/);
+    expect(notifyAdminsMock).toHaveBeenCalledTimes(1);
 
     guasto.profiles = false;
     await giro('2026-10-31T19:40:00.000Z');
-    expect(o('o1').delivery_slot).not.toBe('Domani · 9:00–12:00');
-    expect(notifyAdminsMock).toHaveBeenCalled();
+    expect(o('o1').delivery_slot).toBe(ETICHETTA_ADESSO);
+    expect(db.notifications).toHaveLength(1);
   });
 
   it('W-margine: alle 19:05 la fascia 18:00–20:00 ha 55 minuti: si va a domani', async () => {
@@ -154,6 +156,9 @@ describe('collaudo A o16', () => {
     db.orders = [ordine({ created_at: '2026-10-30T16:38:00.000Z' })];
     await giro('2026-10-30T16:50:00.000Z');
     const scade = scadenzaAccettazione({ created_at: String(o('o1').created_at), delivery_slot: String(o('o1').delivery_slot) });
-    console.log('SCADE', o('o1').delivery_slot, scade?.toISOString());
+    expect(o('o1').delivery_slot).toBe('Stasera · 18:00–20:00');
+    expect(scade?.toISOString()).toBe('2026-10-30T19:38:00.000Z');
+    const riga = rigaScadenzaPerIlNegozio({ created_at: String(o('o1').created_at), delivery_slot: String(o('o1').delivery_slot) }, new Date('2026-10-30T16:50:00.000Z'));
+    expect(riga).toContain('entro le 20:00 di oggi');
   });
 });

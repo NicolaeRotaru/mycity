@@ -534,6 +534,10 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           orderId: created.orderId,
           total: created.totalCents / 100,
           itemsCount: created.itemsCount,
+          // 30/10/2026 — La fascia e la nascita dell'ordine (nato adesso, in questo webhook): senza,
+          // l'email diceva sempre «appena puoi» invece della scadenza vera.
+          deliverySlot: pickupInStore ? null : (delivery.slot ?? null),
+          createdAt: new Date(),
         });
         await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
       });

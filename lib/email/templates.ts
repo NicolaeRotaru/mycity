@@ -14,6 +14,7 @@
  */
 
 import { rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
+import { logger } from '@/lib/logger';
 import { env } from '@/lib/env';
 // 27/8/2026 (R011) — Il filtro dell'HTML era riscritto qui dentro, uguale ma
 // scritto in un altro modo, mentre `lib/html-escape.ts` dichiarava nel proprio
@@ -161,10 +162,15 @@ export function newOrderSellerTemplate(args: {
   // dalla stessa funzione che leggono le pagine ordini del negoziante.
   const nato = args.createdAt ? new Date(args.createdAt) : new Date();
   const senzaFascia = 'Accettalo o rifiutalo appena puoi: entro quando, lo trovi sulla pagina dell’ordine.';
-  const scadenza =
-    args.deliverySlot === undefined
-      ? senzaFascia
-      : (rigaScadenzaPerIlNegozio({ created_at: nato, delivery_slot: args.deliverySlot }, nato) ?? senzaFascia);
+  let scadenza = senzaFascia;
+  if (args.deliverySlot !== undefined) {
+    try {
+      scadenza = rigaScadenzaPerIlNegozio({ created_at: nato, delivery_slot: args.deliverySlot }, nato) ?? senzaFascia;
+    } catch (err) {
+      // L'avviso «Nuovo ordine» parte comunque: senza la riga della scadenza, mai senza l'email.
+      logger.error('[email] scadenza per il negozio non calcolata', { orderId: args.orderId, err });
+    }
+  }
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">🛒 Nuovo ordine</h1>
     <p style="margin:0 0 12px;line-height:1.6">Hai ricevuto un nuovo ordine di ${args.itemsCount} articol${args.itemsCount === 1 ? 'o' : 'i'} per <strong>${formatPrice(args.total)}</strong>.</p>
@@ -188,8 +194,9 @@ export function veloceNonConfermataTemplate(args: { orderId: string; frase: stri
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
   // Chi scorre tutti i modelli del file li chiama anche con argomenti a metà: niente frase, niente crash.
   const frase = String(args.frase ?? '');
-  // Senza una fascia possibile (sabato sera, negozio chiuso la domenica) il titolo non ne promette una.
-  const titolo = args.senzaFascia ? 'Ti contattiamo noi per la consegna' : 'La tua spesa arriva in una fascia oraria';
+  // Senza una fascia possibile (sabato sera, negozio chiuso la domenica) il titolo non ne promette una,
+  // e non promette nemmeno un contatto: la frase dice l'ora vera in cui l'ordine si annulla.
+  const titolo = args.senzaFascia ? 'Il negozio non ha ancora confermato' : 'La tua spesa arriva in una fascia oraria';
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">${titolo}</h1>
     <p style="margin:0 0 12px;line-height:1.6">${escapeHtml(frase)}</p>
@@ -197,7 +204,7 @@ export function veloceNonConfermataTemplate(args: { orderId: string; frase: stri
   `;
   return {
     subject: args.senzaFascia
-      ? 'La consegna veloce non è partita: ti contattiamo noi'
+      ? 'La consegna veloce non è ancora confermata dal negozio'
       : 'La consegna veloce non è partita: la tua spesa arriva in una fascia oraria',
     html: shell(titolo, body),
     text: `${frase} Il tuo ordine: ${orderUrl}`,

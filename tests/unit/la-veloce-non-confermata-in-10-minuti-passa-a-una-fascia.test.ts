@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { ETICHETTA_ADESSO } from "@/lib/quando-arriva";
-import { scadenzaAccettazione } from "@/lib/ordini/scadenza-accettazione";
+import { rigaScadenzaPerIlNegozio, scadenzaAccettazione } from "@/lib/ordini/scadenza-accettazione";
 
 /**
  * IL SECONDO FRENO DELLA VELOCE (carta #220, scelta di Nicola del 30/10 alle 16:13).
@@ -20,6 +20,7 @@ const db: Record<string, Riga[]> = {};
 const prima: { update?: () => void } = {};
 const sendEmailMock = vi.fn(async (_m: unknown) => ({ ok: true }));
 const notifyAdminsMock = vi.fn(async (..._a: unknown[]) => undefined);
+const refundOrderMock = vi.fn(async (_a: unknown) => ({ refundId: "re_1", reversedCents: 0, pieno: false }));
 
 function tabella(nome: string) {
   const filtri: Array<(r: Riga) => boolean> = [];
@@ -56,6 +57,7 @@ vi.mock("@/lib/api/middleware", () => ({
   withCronAuth: (h: (req: unknown) => unknown) => (req: unknown) => h(req),
 }));
 vi.mock("@/lib/logger", () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
+vi.mock("@/lib/stripe/payout", () => ({ refundOrder: (a: unknown) => refundOrderMock(a) }));
 vi.mock("@/lib/email/client", () => ({ sendEmail: (m: unknown) => sendEmailMock(m) }));
 vi.mock("@/lib/stripe/webhook/comune", async (originale) => ({
   ...(await originale<Record<string, unknown>>()),
@@ -98,6 +100,7 @@ beforeEach(() => {
   prima.update = undefined;
   sendEmailMock.mockClear();
   notifyAdminsMock.mockClear();
+  refundOrderMock.mockClear();
 });
 afterEach(() => vi.useRealTimers());
 
@@ -156,7 +159,7 @@ describe("il secondo freno della veloce", () => {
     await giro("2026-10-30T17:16:00.000Z");
     expect(o("o1")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00", delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 18 });
     expect(o("o2")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00", delivery_status: "ACCEPTED", delivery_fee_cents: 100, rider_fee_cents: 100, total_price: 13 });
-    expect(db.notifications).toHaveLength(1);
+    expect(db.notifications.filter((n) => n.user_id === "maria")).toHaveLength(1);
   });
 
   it("alle 20:30 le fasce di oggi sono finite: la prima di domani, e la scadenza si conta su quella", async () => {
@@ -195,37 +198,112 @@ describe("il secondo freno della veloce: i tre difetti del collaudo", () => {
     expect(String(db.notifications[0]?.body)).not.toContain("15:00–18:00");
   });
 
-  it("V-partito: l ordine che porta l euro è già partito col fattorino, il cliente non legge «alla porta paghi» e gli admin sono avvisati", async () => {
+  it("V-partito: un ordine del carrello è già partito col fattorino: il freno non sposta niente, non scrive al cliente e avvisa gli admin una volta", async () => {
     db.orders = [
       ordine({ delivery_status: "PICKED_UP" }),
       ordine({ id: "o2", seller_id: "frutta", total_price: 13, gross_total_cents: 1300, delivery_fee_cents: 100, rider_fee_cents: 100, created_at: "2026-10-30T17:05:00.001Z" }),
     ];
     db.cod_checkout_attempts = [{ user_id: "maria", order_ids: [{ id: "o1" }, { id: "o2" }] }];
     const esito = await giro("2026-10-30T17:16:00.000Z");
-    expect(o("o1")).toMatchObject({ delivery_status: "PICKED_UP", delivery_fee_cents: 400, total_price: 19 });
-    expect(o("o2")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00", delivery_fee_cents: 100, total_price: 13 });
-    expect(db.notifications).toHaveLength(1);
-    expect(String(db.notifications[0].body)).not.toContain("alla porta paghi");
+    expect(o("o1")).toMatchObject({ delivery_status: "PICKED_UP", delivery_slot: ETICHETTA_ADESSO, delivery_fee_cents: 400, total_price: 19 });
+    expect(o("o2")).toMatchObject({ delivery_slot: ETICHETTA_ADESSO, delivery_fee_cents: 100, total_price: 13 });
+    expect(db.notifications).toHaveLength(0);
+    expect(sendEmailMock).not.toHaveBeenCalled();
     expect(notifyAdminsMock).toHaveBeenCalledTimes(1);
     expect(String(notifyAdminsMock.mock.calls[0][1])).toContain("#O1");
+    expect(String(notifyAdminsMock.mock.calls[0][1])).toContain("#O2");
+    expect(notifyAdminsMock.mock.calls[0][3]).toMatchObject({ unaVoltaPer: expect.any(String) });
     expect(esito).toMatchObject({ daSistemareAMano: 1, spostati: 0 });
   });
 
-  it("V-domenica: sabato 20:20 veloce, negozio chiuso la domenica, alle 20:35 niente «Domani · 9:00–12:00»: resta com è, admin e cliente avvisati una volta", async () => {
+  it("V-domenica: sabato 20:20 veloce, negozio chiuso la domenica: niente fascia finta, niente «ti contattiamo noi», il cliente sa che alle 23:20 si annulla", async () => {
     const lunSab: [string, string][] = [["08:00", "21:00"]];
     db.profiles = [{ id: "forno", store_hours: { mon: lunSab, tue: lunSab, wed: lunSab, thu: lunSab, fri: lunSab, sat: lunSab, sun: [] } }];
     db.orders = [ordine({ created_at: "2026-10-31T19:20:00.000Z" })];
     await giro("2026-10-31T19:35:00.000Z");
     expect(o("o1")).toMatchObject({ delivery_slot: ETICHETTA_ADESSO, delivery_fee_cents: 400, total_price: 19 });
     expect(db.notifications).toHaveLength(1);
-    expect(String(db.notifications[0].body)).not.toContain("Domani");
-    expect(String(db.notifications[0].body)).not.toContain("non lo paghi");
+    const frase = String(db.notifications[0].body);
+    expect(frase).toContain("Il negozio non ha ancora confermato. Se non conferma entro le 23:20");
+    expect(frase).toMatch(/ordine si annulla e non paghi niente/);
+    expect(frase).not.toMatch(/contattiamo|Domani|non lo paghi/);
+    const mail = sendEmailMock.mock.calls[0][0] as { subject: string; html: string };
+    expect(`${mail.subject} ${mail.html}`).not.toMatch(/contattiamo/i);
     expect(notifyAdminsMock).toHaveBeenCalledTimes(1);
-    expect(sendEmailMock).toHaveBeenCalledTimes(1);
-    expect(String((sendEmailMock.mock.calls[0][0] as { subject: string }).subject)).not.toContain("fascia");
     await giro("2026-10-31T19:40:00.000Z");
     expect(db.notifications).toHaveLength(1);
     expect(notifyAdminsMock).toHaveBeenCalledTimes(1);
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("il secondo freno della veloce: il giro dell ondata 17", () => {
+  it("V-margine: la fascia nuova finisce almeno 60 minuti dopo: alle 19:00 «Stasera» va, alle 19:01 no", async () => {
+    db.orders = [ordine({ created_at: "2026-10-30T17:45:00.000Z" })];
+    await giro("2026-10-30T18:00:00.000Z");
+    expect(o("o1").delivery_slot).toBe("Stasera · 18:00–20:00");
+    db.orders = [ordine({ id: "o3", created_at: "2026-10-30T17:46:00.000Z" })];
+    await giro("2026-10-30T18:01:00.000Z");
+    expect(o("o3").delivery_slot).toBe("Domani · 9:00–12:00");
+  });
+
+  it("V-euro-altrove: l euro sta sull ordine già accettato, non su quello non confermato: si toglie lì e alla porta si paga 31 € invece di 32", async () => {
+    db.orders = [
+      ordine({ id: "o2", seller_id: "frutta", delivery_status: "ACCEPTED", created_at: "2026-10-30T17:04:59.000Z" }),
+      ordine({ total_price: 13, gross_total_cents: 1300, delivery_fee_cents: 100, rider_fee_cents: 100 }),
+    ];
+    db.cod_checkout_attempts = [{ user_id: "maria", order_ids: [{ id: "o1" }, { id: "o2" }] }];
+    await giro("2026-10-30T17:16:00.000Z");
+    expect(o("o2")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00", delivery_status: "ACCEPTED", delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 18, gross_total_cents: 1800 });
+    expect(o("o1")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00", delivery_fee_cents: 100, total_price: 13 });
+    const alCliente = db.notifications.filter((n) => n.user_id === "maria");
+    expect(String(alCliente[0]?.body)).toContain("alla porta paghi 31,00");
+  });
+
+  it("V-avvisi: quando il carrello cambia fascia lo sanno il negozio che aveva accettato e il fattorino assegnato", async () => {
+    db.orders = [
+      ordine(),
+      ordine({ id: "o2", seller_id: "frutta", delivery_status: "ASSIGNED", rider_id: "nicola", total_price: 13, gross_total_cents: 1300, delivery_fee_cents: 100, rider_fee_cents: 100, created_at: "2026-10-30T17:05:00.001Z" }),
+    ];
+    db.cod_checkout_attempts = [{ user_id: "maria", order_ids: [{ id: "o1" }, { id: "o2" }] }];
+    await giro("2026-10-30T17:16:00.000Z");
+    const a = (u: string) => db.notifications.filter((n) => n.user_id === u);
+    expect(a("maria")).toHaveLength(1);
+    expect(String(a("frutta")[0]?.body)).toContain("Stasera · 18:00–20:00");
+    expect(String(a("nicola")[0]?.body)).toContain("Stasera · 18:00–20:00");
+  });
+
+  it("V-carta: con la carta l euro torna da solo con un rimborso parziale di 1 €", async () => {
+    db.orders = [ordine({ payment_method: "card", payment_status: "PAID", stripe_session_id: "cs_1" })];
+    await giro("2026-10-30T17:16:00.000Z");
+    expect(refundOrderMock).toHaveBeenCalledTimes(1);
+    expect(refundOrderMock.mock.calls[0][0]).toMatchObject({ orderId: "o1", amountCents: 100 });
+    expect(o("o1")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00" });
+    expect(String(db.notifications[0].body)).toContain("ti torna sulla carta");
+    expect(notifyAdminsMock).not.toHaveBeenCalled();
+  });
+
+  it("V-carta-guasto: se il rimborso non parte, il cliente legge «te lo rendiamo a mano entro un giorno» e gli admin lo sanno", async () => {
+    refundOrderMock.mockRejectedValueOnce(new Error("stripe giù"));
+    db.orders = [ordine({ payment_method: "card", payment_status: "PAID", stripe_session_id: "cs_1" })];
+    await giro("2026-10-30T17:16:00.000Z");
+    const frase = String(db.notifications[0].body);
+    expect(frase).toContain("te lo rendiamo a mano entro un giorno");
+    expect(frase).not.toContain("non lo paghi");
+    expect(notifyAdminsMock).toHaveBeenCalledTimes(1);
+    expect(String(notifyAdminsMock.mock.calls[0][1])).toContain("#O1");
+  });
+
+  it("V-pagina: il negozio non legge «accettala entro le 18:15» dopo le 18:15, e sulla fascia nuova legge la fine della fascia", () => {
+    const veloce = { created_at: NATO, delivery_slot: ETICHETTA_ADESSO };
+    expect(rigaScadenzaPerIlNegozio(veloce, new Date("2026-10-30T17:10:00.000Z"))).toContain("entro le 18:15");
+    const dopo = String(rigaScadenzaPerIlNegozio(veloce, new Date("2026-10-30T17:20:00.000Z")));
+    expect(dopo).not.toContain("entro le 18:15");
+    expect(dopo).toContain("21:05");
+    const spostata = { created_at: NATO, delivery_slot: "Stasera · 18:00–20:00" };
+    expect(rigaScadenzaPerIlNegozio(spostata, new Date("2026-10-30T17:16:00.000Z"))).toContain("entro le 20:00 di oggi");
+    const finita = String(rigaScadenzaPerIlNegozio(spostata, new Date("2026-10-30T19:30:00.000Z")));
+    expect(finita).not.toContain("entro le 20:00");
+    expect(finita).toContain("21:05");
   });
 });

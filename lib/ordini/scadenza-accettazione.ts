@@ -97,21 +97,30 @@ export function scadenzaAccettazione(
   if (!nato || Number.isNaN(nato.getTime())) return null;
 
   const minimo = nato.getTime() + oreMinime * 3_600_000;
-  const finestra = finestraDellaFascia(ordine.delivery_slot);
-  if (!finestra) return new Date(minimo);
+  const fine = fineDellaFascia(ordine);
+  return new Date(fine ? Math.max(minimo, fine.getTime()) : minimo);
+}
 
-  // Quanto manca dalla nascita dell'ordine alla fine della finestra promessa.
-  // Si conta in DURATA, non costruendo una data locale: gli orari delle fasce
-  // sono l'orologio da parete italiano mentre `created_at` è un istante UTC, e
-  // una differenza di minuti attraversa i due mondi senza conversioni. (Nelle
-  // due notti in cui l'ora legale cambia il conto balla di un'ora: su una
-  // finestra di consegna non sposta niente.)
+/**
+ * La fine della fascia promessa, come istante; `null` senza una fascia leggibile («Adesso», ritiro).
+ * È l'ora che il negozio legge come «entro quando accettare»: la regola delle tre ore resta solo
+ * nel giro notturno (`scadenzaAccettazione`), che annulla dopo.
+ *
+ * Si conta in DURATA, non costruendo una data locale: gli orari delle fasce sono l'orologio da
+ * parete italiano mentre `created_at` è un istante UTC, e una differenza di minuti attraversa i
+ * due mondi senza conversioni. (Nelle due notti in cui l'ora legale cambia il conto balla di
+ * un'ora: su una finestra di consegna non sposta niente.)
+ */
+export function fineDellaFascia(ordine: OrdineDaScadere): Date | null {
+  const nato = ordine.created_at ? new Date(ordine.created_at) : null;
+  if (!nato || Number.isNaN(nato.getTime())) return null;
+  const finestra = finestraDellaFascia(ordine.delivery_slot);
+  if (!finestra) return null;
   const oraItaliana = romeNow(nato);
   const minutiDallaMezzanotte = oraItaliana.getHours() * 60 + oraItaliana.getMinutes();
   const minutiAllaFineDellaFinestra =
     (finestra.domani ? 24 * 60 : 0) + finestra.aMinuti - minutiDallaMezzanotte;
-
-  return new Date(Math.max(minimo, nato.getTime() + minutiAllaFineDellaFinestra * 60_000));
+  return new Date(nato.getTime() + minutiAllaFineDellaFinestra * 60_000);
 }
 
 /**
@@ -173,14 +182,27 @@ export function scadenzaLeggibile(quando: Date, adesso: Date = new Date()): stri
 export function rigaScadenzaPerIlNegozio(ordine: OrdineDaScadere, adesso: Date = new Date()): string | null {
   const nato = ordine.created_at ? new Date(ordine.created_at) : null;
   if (!nato || Number.isNaN(nato.getTime())) return null;
+  const annullo = scadenzaAccettazione(ordine);
+  if (!annullo) return null;
+  // 30/10/2026 (ondata 17) — Mai una scadenza già passata: dopo l'ora scritta la riga dice cosa
+  // succede adesso. E sulle fasce l'ora da dire è la FINE della fascia, non le tre ore del giro
+  // notturno: la veloce spostata su 18:00–20:00 non si accetta alle 20:38.
+  if (adesso.getTime() >= annullo.getTime()) return 'Il tempo per accettarlo è finito: l’ordine si sta annullando da solo.';
+  const allAnnullo = `Se non fai niente, si annulla da solo alle ${scadenzaLeggibile(annullo, adesso).replace(/^le /, '')}.`;
   if (eFasciaVeloce(ordine.delivery_slot)) {
     const freno = new Date(nato.getTime() + MINUTI_PER_CONFERMARE_LA_VELOCE * 60_000);
+    if (adesso.getTime() < freno.getTime()) {
+      return (
+        `È una consegna veloce: accettala entro le ${oraDaParete(freno)}. ` +
+        `Dopo ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti senza conferma la spesa passa alla prima fascia oraria libera.`
+      );
+    }
     return (
-      `È una consegna veloce: accettala entro le ${oraDaParete(freno)}. ` +
-      `Dopo ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti senza conferma la spesa passa alla prima fascia oraria libera.`
+      `Sono passati i ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti per confermare la consegna veloce: se c’è una fascia ` +
+      `oraria libera la spesa passa lì da sola, e il cliente non paga l’euro della veloce. ${allAnnullo}`
     );
   }
-  const scadenza = scadenzaAccettazione(ordine);
-  if (!scadenza) return null;
-  return `Accettalo o rifiutalo entro ${scadenzaLeggibile(scadenza, adesso)}.`;
+  const entro = fineDellaFascia(ordine) ?? annullo;
+  if (adesso.getTime() < entro.getTime()) return `Accettalo o rifiutalo entro ${scadenzaLeggibile(entro, adesso)}.`;
+  return `La fascia di consegna è finita: accettalo solo se puoi consegnarlo subito, altrimenti rifiutalo. ${allAnnullo}`;
 }
