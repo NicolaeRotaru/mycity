@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Negozi di Piacenza — Tutti i venditori locali · MyCity',
   description:
-    'Scopri tutti i negozi di Piacenza su MyCity: alimentari, abbigliamento, casa, elettronica e altro. Compra online dai commercianti della tua città.',
+    'Scopri tutti i negozi di Piacenza su MyCity: alimentari, casa, elettronica e altro. Compra online dai commercianti della tua città.',
   alternates: { canonical: '/stores' },
   openGraph: {
     title: 'Negozi di Piacenza · MyCity',

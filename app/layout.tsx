@@ -1,4 +1,4 @@
-import { CONSEGNA_ALL_ORA_CHE_SCEGLI } from '@/lib/promessa-consegna';
+import { DESCRIZIONE_DEL_SITO } from '@/lib/site-branding';
 import './globals.css';
 import { Inter, Fraunces } from 'next/font/google';
 import type { Metadata, Viewport } from 'next';
@@ -96,8 +96,8 @@ export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
   title: 'MyCity Piacenza — Marketplace dei negozi della tua città',
-  description:
-    `Compra online dai negozi di Piacenza: alimentari, abbigliamento, casa, elettronica, libri. ${CONSEGNA_ALL_ORA_CHE_SCEGLI}, pagamento alla consegna.`,
+  // 29/10/2026 — Senza abbigliamento, che al lancio non c'è (catalogo.categorie): il testo vive in lib/site-branding.
+  description: DESCRIZIONE_DEL_SITO,
   manifest: '/manifest.json',
   icons: {
     // Prima il favicon classico: e' l'indirizzo che i lettori piu' vecchi e
