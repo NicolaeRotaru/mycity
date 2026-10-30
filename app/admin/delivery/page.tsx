@@ -30,7 +30,9 @@ const COMPENSO = `${eur(COMPENSO_RIDER_CENTS)} il giro + ${eur(COMPENSO_RIDER_NE
 // sta nell'etichetta. Euro tondi senza «,00», con lo spazio che non va a capo prima del simbolo.
 const eurTondo = (cents: number) => (cents % 100 === 0 ? `${cents / 100}\u00a0€` : eur(cents));
 const COMPENSO_CORTO = `${eurTondo(COMPENSO_RIDER_CENTS)} + ${eurTondo(COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS)}`;
-const COMPENSO_ETICHETTA = `Compenso del fattorino: il giro, più ${eurTondo(COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS)} per ogni negozio in più`;
+// 30/10/2026 — La frase lunga stava nell'etichetta da 10 pixel in maiuscolo e andava a capo su
+// quattro righe: l'etichetta dice di cosa si parla, la spiegazione va sotto il valore.
+const COMPENSO_NOTA = `${eurTondo(COMPENSO_RIDER_CENTS)} il giro, più ${eurTondo(COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS)} per ogni negozio in più`;
 import { AdminPageTitle, AdminStatCard } from '@/components/admin/AdminUI';
 
 /**
@@ -61,14 +63,16 @@ export default function AdminDeliveryPage() {
         <AdminStatCard
           icon={Banknote}
           tone="accent"
-          label="Consegna pagata dal cliente, per tutto il carrello"
+          label="Consegna pagata dal cliente"
           value={`da ${BASE}`}
+          nota="Una sola consegna per tutto il carrello"
         />
         <AdminStatCard
           icon={Bike}
           tone="olive"
-          label={COMPENSO_ETICHETTA}
+          label="Compenso del fattorino"
           value={COMPENSO_CORTO}
+          nota={COMPENSO_NOTA}
         />
         <AdminStatCard
           icon={MapPin}

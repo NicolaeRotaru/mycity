@@ -9,7 +9,7 @@ import {
 import {
   PRODUCT_UNITS,
   SELLER_STATUSES,
-  normalizeCondition,
+  condizioneDalSuggerimento,
   type ProductCondition,
   type ProductUnit,
 } from '@/lib/products/schema';
@@ -715,8 +715,9 @@ export function pianoPatchPerIlModulo(
     scritture.push({ campo: 'unit', valore: patch.unit as ProductUnit, etichetta: 'unità' });
   }
   if ('condition' in patch) {
-    const valore = patch.condition == null ? '' : normalizeCondition(String(patch.condition));
-    scritture.push({ campo: 'condition', valore, etichetta: 'condizione' });
+    // «usato» e «ricondizionato» non si scrivono: il menu non li offre e MyCity non vende l'usato.
+    const valore = patch.condition == null ? '' : condizioneDalSuggerimento(String(patch.condition));
+    if (valore !== null) scritture.push({ campo: 'condition', valore, etichetta: 'condizione' });
   }
   if (patch.unlimited_stock === true) {
     scritture.push({ campo: 'stock', valore: null, etichetta: 'disponibilità' });
@@ -1011,9 +1012,13 @@ export function resolveAiPatch(opts: {
       update.condition = null;
       changed.push('condizione');
     } else {
-      const norm = normalizeCondition(String(patch.condition));
-      update.condition = norm || null;
-      changed.push('condizione');
+      // «usato» e «ricondizionato» si scartano senza scrivere: un prodotto vecchio che li ha già
+      // non perde il valore, e uno nuovo non li prende dall'assistente.
+      const norm = condizioneDalSuggerimento(String(patch.condition));
+      if (norm !== null) {
+        update.condition = norm || null;
+        changed.push('condizione');
+      }
     }
   }
 

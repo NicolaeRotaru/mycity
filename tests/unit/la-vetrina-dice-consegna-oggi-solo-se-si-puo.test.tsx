@@ -156,7 +156,10 @@ describe('consegnaDellaVetrina: la regola, senza disegno', () => {
     expect(consegnaDellaVetrina({ orari: {}, adesso: alle('2026-10-29T08:00:00Z'), veloce: true })).toBeNull();
     expect(consegnaDellaVetrina({ orari: FORNO, adesso: alle('2026-10-29T19:15:00Z'), veloce: true })).toBe('domani');
     expect(consegnaDellaVetrina({ orari: FORNO, adesso: alle('2026-10-29T08:00:00Z'), veloce: true })).toBe('oggi');
-    expect(consegnaDellaVetrina({ orari: FORNO, adesso: alle('2026-10-29T08:00:00Z'), veloce: null })).toBe('domani');
+    // Forno aperto alle 9 e la risposta della veloce non c'è ancora (o è caduta): non si sa se oggi
+    // si può, e non si scrive «domani» per poi passare a «oggi».
+    expect(consegnaDellaVetrina({ orari: FORNO, adesso: alle('2026-10-29T08:00:00Z'), veloce: null })).toBeNull();
+    expect(consegnaDellaVetrina({ orari: FORNO, adesso: alle('2026-10-29T08:00:00Z'), veloce: false })).toBe('domani');
     expect(consegnaDellaVetrina({ orari: FORNO, adesso: alle('2026-10-28T08:00:00Z'), veloce: null })).toBe('oggi');
   });
 });

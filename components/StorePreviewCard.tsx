@@ -8,6 +8,8 @@ import { VerifiedBadge } from './ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { sizedImage } from '@/lib/image-url';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
+import { consegnaDellaVetrina, vetrinaChiedeLaVeloce } from '@/lib/promessa-consegna';
+import { useOraDiPiacenza, useVeloceDelNegozio } from './ui/DeliveryCutoff';
 import type { PostoDellaFoto } from '@/lib/media/foto-del-negozio';
 
 export type StoreCardData = {
@@ -48,7 +50,7 @@ interface Props {
 
 /**
  * Card negozio "Vetrina pulita" (modello A) — un'unica identità coerente:
- * cover reale, logo, nome (sans), un solo stato ("Aperto · consegna oggi"),
+ * cover reale, logo, nome (sans), un solo stato ("Aperto · consegna oggi" se la cassa può),
  * rating con stella, 3 anteprime ordinate, un solo CTA. Usata nelle rail
  * orizzontali (home). Per le pagine-lista lunghe c'è invece StoreListRow.
  */
@@ -56,6 +58,13 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
   const hours = (store.store_hours ?? {}) as StoreHours;
   const todayKey = DAY_KEYS[new Date().getDay()];
   const open = isOpenNow(hours[todayKey]);
+  // 30/10/2026 — «consegna oggi» seguiva «aperto adesso»: alle 9 il forno aperto fino alle 13 lo
+  // diceva anche senza fattorino, quando le fasce del pomeriggio cadono a forno chiuso. Ora lo decide
+  // la regola della vetrina e della cassa (`consegnaDellaVetrina`), con l'ora del browser.
+  const adesso = useOraDiPiacenza();
+  const veloce = useVeloceDelNegozio(store.id, vetrinaChiedeLaVeloce(store.store_hours, adesso));
+  const consegna = consegnaDellaVetrina({ orari: store.store_hours, adesso, veloce });
+  const stato = consegna ? `${open ? 'Aperto' : 'Chiuso ora'} · consegna ${consegna}` : open ? 'Aperto ora' : 'Chiuso ora';
   const media = Array.isArray(store.store_media) ? store.store_media : [];
   const storeHref = `/store/${store.id}`;
   const thumbs = products.slice(0, 3);
@@ -106,7 +115,7 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
         {/* Un solo stato chiaro */}
         <span className={`mt-2 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${open ? 'bg-olive-100 text-olive-700' : 'bg-ink-100 text-ink-500'}`}>
           <span className={`inline-block h-1.5 w-1.5 rounded-full ${open ? 'animate-pulse-soft bg-olive-600' : 'bg-ink-400'}`} />
-          {open ? 'Aperto · consegna oggi' : 'Chiuso ora'}
+          {stato}
         </span>
 
         {/* 3 anteprime prodotti ordinate */}

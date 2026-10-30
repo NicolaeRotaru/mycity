@@ -13,6 +13,8 @@ import { isVerifiedStore } from '@/lib/store-trust';
 import { DAY_KEYS, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import { consegnaDellaVetrina, vetrinaChiedeLaVeloce } from '@/lib/promessa-consegna';
+import { useOraDiPiacenza, useVeloceDelNegozio } from '@/components/ui/DeliveryCutoff';
 
 type StoreMediaItem = { type: 'image' | 'video'; url: string };
 type Store = {
@@ -70,6 +72,11 @@ export default function HeroStoreCard() {
     },
   });
 
+  // L'ora del browser e la risposta della veloce: servono a «Consegna oggi» più sotto. Gli hook
+  // stanno prima delle uscite anticipate, quindi leggono il negozio quando c'è.
+  const adesso = useOraDiPiacenza();
+  const veloce = useVeloceDelNegozio(data?.store?.id, vetrinaChiedeLaVeloce(data?.store?.store_hours, adesso));
+
   // Tre esiti, non due. Il segnaposto di prima era un negozio inventato e credibile — «Salumeria
   // del Borgo», «Via Calzolai», sei prodotti con prezzi scritti a mano, «Aperto ora», «Consegna
   // oggi entro le 18:00» — mostrato sia mentre caricava sia quando negozio non ce n'era. Un numero
@@ -95,7 +102,11 @@ export default function HeroStoreCard() {
   const hours = (store.store_hours ?? null) as StoreHours | null;
   const todayIntervals = hours && typeof hours === 'object' ? hours[todayKey] : undefined;
   const openNow = Array.isArray(todayIntervals) && isOpenNow(todayIntervals);
-  const deliveryToday = openNow;
+  // 30/10/2026 — «Consegna oggi» era «aperto adesso»: alle 9 il forno aperto fino alle 13 lo diceva
+  // anche senza fattorino, quando le fasce del pomeriggio cadono a forno chiuso. Ora è la regola della
+  // vetrina e della cassa (`consegnaDellaVetrina`): una fascia di oggi ancora possibile, o il sì
+  // della cassa alla veloce.
+  const deliveryToday = consegnaDellaVetrina({ orari: store.store_hours, adesso, veloce }) === 'oggi';
 
   const cover = coverFromMedia(store.store_media);
   const zone = streetFromAddress(store.store_address);
@@ -155,8 +166,8 @@ export default function HeroStoreCard() {
               </div>
             )}
 
-            {/* Badge "Negozio locale" (sempre) + "Consegna oggi" (data-driven,
-                derivato dagli orari: mostrato solo se aperto ora). */}
+            {/* Badge "Negozio locale" (sempre) + "Consegna oggi" (solo se la cassa
+                può consegnare oggi: consegnaDellaVetrina). */}
             <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full ring-1 ring-primary-200">
                 <HomeIcon size={11} strokeWidth={2.4} aria-hidden /> Negozio locale

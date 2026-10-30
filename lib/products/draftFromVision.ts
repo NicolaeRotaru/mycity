@@ -1,6 +1,6 @@
 // lib/products/draftFromVision.ts
 import { getAttributesForCategory, type AttributeField } from '@/lib/category-attributes';
-import { normalizeCondition } from '@/lib/products/schema';
+import { condizioneDalSuggerimento } from '@/lib/products/schema';
 import {
   MAX_NOME_PRODOTTO,
   MAX_DESCRIZIONE_PRODOTTO,
@@ -158,7 +158,8 @@ export function buildDraftProductInsert(opts: {
       // «Manca: Allergeni».
       const targetKey = chiaveCampo(aiKey);
       if (targetKey === 'condizione') {
-        condition = normalizeCondition(value) || null;
+        // «usato» e «ricondizionato» non entrano nella bozza: MyCity non vende l'usato.
+        condition = condizioneDalSuggerimento(value) || null;
         continue;
       }
       if (!dichiarazioniConfermate && eCampoDichiarativo(targetKey)) continue;

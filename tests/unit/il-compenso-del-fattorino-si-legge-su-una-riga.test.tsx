@@ -32,6 +32,10 @@ describe('il riquadro del compenso del fattorino', () => {
     const inPiu = COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS / 100;
     expect(compenso!.valore).toBe(`${giro} € + ${inPiu} €`);
     expect(compenso!.valore.length, `«${compenso!.valore}» non sta su una riga`).toBeLessThanOrEqual(12);
-    expect(compenso!.etichetta).toMatch(new RegExp(`il giro, più ${inPiu}\\s€ per ogni negozio in più`));
+    // 30/10/2026 (ondata 17) — La frase lunga nell'etichetta da 10 pixel in maiuscolo andava a capo su
+    // quattro righe: l'etichetta dice di cosa si parla, la frase sta nella riga sotto il valore
+    // (prova: il-compenso-del-fattorino-si-legge-sotto-il-valore).
+    expect(compenso!.etichetta).toBe('Compenso del fattorino');
+    expect(html).toMatch(new RegExp(`<p class="mt-2[^"]*">${giro}\\s€ il giro, più ${inPiu}\\s€ per ogni negozio in più</p>`));
   });
 });

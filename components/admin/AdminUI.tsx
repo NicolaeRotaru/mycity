@@ -44,10 +44,15 @@ export function AdminSectionLabel({ icon: Icon, children }: { icon: LucideIcon; 
   );
 }
 
-/** Tile KPI: medaglione tinta + label + valore. Cliccabile se `href`. */
+/**
+ * Tile KPI: medaglione tinta + label + valore. Cliccabile se `href`.
+ * `label` è un nome corto (10 pixel, maiuscolo, accanto all'icona): la spiegazione lunga va in
+ * `nota`, una riga leggibile sotto il valore (30/10/2026: «Compenso del fattorino: il giro, più 1 €
+ * per ogni negozio in più» andava a capo su quattro righe nell'etichetta).
+ */
 export function AdminStatCard({
-  icon: Icon, tone, label, value, href,
-}: { icon: LucideIcon; tone: Tone; label: string; value: string | number; href?: string }) {
+  icon: Icon, tone, label, value, href, nota,
+}: { icon: LucideIcon; tone: Tone; label: string; value: string | number; href?: string; nota?: string }) {
   const t = TONE[tone];
   const inner = (
     <div className={`rounded-xl border-2 border-cream-300 bg-white p-4 transition-colors ${href ? 'hover:border-primary-400' : ''}`}>
@@ -58,6 +63,7 @@ export function AdminStatCard({
         <span className="text-[10px] font-bold uppercase tracking-[0.04em] text-ink-400">{label}</span>
       </div>
       <p className="text-[26px] font-extrabold leading-none text-ink-900">{value}</p>
+      {nota && <p className="mt-2 text-xs leading-snug text-ink-500">{nota}</p>}
     </div>
   );
   return href ? <Link href={href} className="block">{inner}</Link> : inner;

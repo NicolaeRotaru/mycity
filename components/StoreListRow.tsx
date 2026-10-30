@@ -7,6 +7,8 @@ import { VerifiedBadge } from './ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { sizedImage } from '@/lib/image-url';
 import { DAY_KEYS, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
+import { consegnaDellaVetrina, vetrinaChiedeLaVeloce } from '@/lib/promessa-consegna';
+import { useOraDiPiacenza, useVeloceDelNegozio } from '@/components/ui/DeliveryCutoff';
 import type { StoreCardData, ProductPreview } from './StorePreviewCard';
 
 interface Props {
@@ -25,6 +27,13 @@ const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
   const hours = (store.store_hours ?? {}) as StoreHours;
   const open = isOpenNow(hours[DAY_KEYS[new Date().getDay()]]);
   const street = streetFromAddress(store.store_address);
+  // 30/10/2026 — Qui c'era «consegna oggi» scritto fisso, per ogni negozio a ogni ora: giovedì 29/10
+  // alle 20:15 l'elenco lo diceva di Pane Quotidiano, chiuso dalle 13. Ora lo decide la stessa regola
+  // della vetrina e della cassa (`consegnaDellaVetrina`); l'ora la legge il browser, quindi
+  // nell'HTML del server il bollino non c'è.
+  const adesso = useOraDiPiacenza();
+  const veloce = useVeloceDelNegozio(store.id, vetrinaChiedeLaVeloce(store.store_hours, adesso));
+  const consegna = consegnaDellaVetrina({ orari: store.store_hours, adesso, veloce });
   const thumbs = products.slice(0, 3);
   const href = `/store/${store.id}`;
   const km =
@@ -87,7 +96,11 @@ const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
 
       <div className="flex shrink-0 flex-col items-end gap-1 text-right">
         {km && <span className="text-[13px] font-bold text-ink-900">{km}</span>}
-        <span className="rounded-full bg-olive-100 px-2 py-0.5 text-[11px] font-bold text-olive-700">consegna oggi</span>
+        {consegna && (
+          <span className="rounded-full bg-olive-100 px-2 py-0.5 text-[11px] font-bold text-olive-700">
+            {consegna === 'oggi' ? 'consegna oggi' : 'consegna domani'}
+          </span>
+        )}
         <ChevronRight size={16} className="text-ink-300" aria-hidden />
       </div>
     </Link>
