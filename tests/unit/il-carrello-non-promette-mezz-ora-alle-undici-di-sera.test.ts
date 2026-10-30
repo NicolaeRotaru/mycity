@@ -20,12 +20,13 @@
  * sentito la cassa, se la riga sotto il totale dice il contrario di quella del prodotto, o se il
  * carrello smette di rileggere l'ora mentre resta aperto.
  *
- * ── 30/10/2026 (ondata 17): l'ora è quella di Roma, e il primo disegno non ne ha una ─────────────
- * Le ore delle prove sono ore di ROMA (`aRoma`), quelle della vetrina e della cassa. Il carrello
- * leggeva l'ora del telefono (`new Date().getHours()`) e la prova, che fingeva l'ora locale, non
- * poteva vederlo: un telefono a Londra alle 20:30 — a Roma sono le 21:30 — si vedeva offrire la
- * veloce che la cassa non vende più. Tornano anche due controlli persi: il disegno che arriva dal
- * server parte senza ora, e la riga «Ne restano solo N» si prova montata, con la scorta bassa.
+ * ── 30/10/2026 (ondata 17): carrello e cassa leggono lo stesso orologio ───────────────────────────
+ * Il carrello e la cassa leggono l'ora del TELEFONO. Per qualche ora il carrello era passato da
+ * solo all'ora di Roma, e un telefono a Bucarest alle 21:30 (a Roma le 20:30) leggeva «Consegna in
+ * 30-60 min» nel carrello e trovava «Adesso» spento in cassa. Il blocco in fondo monta il carrello
+ * e il riquadro vero della cassa allo stesso istante, su telefoni a Roma, Bucarest e Londra.
+ * Tornano anche due controlli persi: il disegno che arriva dal server parte senza ora, e la riga
+ * «Ne restano solo N» si prova montata, con la scorta bassa.
  *
  * ⚠️ Cosa NON prova: un browser vero (qui c'è jsdom) né la rotta /api/consegna/veloce, che qui è
  * finta: la sua regola la prova `la-consegna-veloce-si-vende-solo-se-c-e-un-fattorino`.
@@ -44,6 +45,7 @@ import {
   giornoDiPartenza,
 } from '@/lib/quando-arriva';
 import CartPage from '@/app/cart/page';
+import { DeliverySlotPicker } from '@/components/checkout/DeliverySlotPicker';
 import { accendi } from './aiuti/schermo';
 
 const banco = vi.hoisted(() => ({
@@ -118,14 +120,12 @@ const UN_FILONE = { id: 'p-filone', name: 'Filone', price: 15, quantity: 1, sell
 const UNA_FOCACCIA = { id: 'p-focaccia', name: 'Focaccia', price: 4, quantity: 1, sellerId: 'neg-pane', storeName: 'Pane Quotidiano' };
 
 /**
- * L'istante in cui a Roma — l'ora della vetrina e della cassa — sono le ore dette, il 30/10/2026.
- * Le prove parlano in ore di Roma qualunque sia il fuso della macchina che le fa girare: fingere
- * l'ora LOCALE nascondeva proprio il difetto di un carrello che legge l'ora del telefono.
+ * L'istante in cui il telefono segna le ore dette, il 30/10/2026: è l'orologio che leggono sia il
+ * carrello sia la cassa. Che le due letture coincidano su telefoni con fusi diversi lo prova il
+ * blocco «il carrello legge lo stesso orologio della cassa», in fondo.
  */
-function aRoma(ore: number, minuti: number): Date {
-  const comeQui = new Date(2026, 9, 30, ore, minuti);
-  const scarto = romeNow(comeQui).getTime() - comeQui.getTime();
-  return new Date(comeQui.getTime() - scarto);
+function sulTelefono(ore: number, minuti: number): Date {
+  return new Date(2026, 9, 30, ore, minuti);
 }
 
 let schermo: ReturnType<typeof accendi> | null = null;
@@ -177,9 +177,9 @@ async function carrelloAllIstante(istante: Date, r: Risposta, scaffale: Scaffale
   };
 }
 
-/** Il carrello con un filone di Pane Quotidiano, aperto all'ora di Roma detta, con la risposta detta. */
+/** Il carrello con un filone di Pane Quotidiano, aperto all'ora del telefono detta, con la risposta detta. */
 const carrelloAlle = (ore: number, minuti: number, r: Risposta, scaffale?: Scaffale) =>
-  carrelloAllIstante(aRoma(ore, minuti), r, scaffale);
+  carrelloAllIstante(sulTelefono(ore, minuti), r, scaffale);
 
 describe('alle undici di sera la consegna in mezz\'ora non esiste', () => {
   it('la cassa non offre l\'express alle 22, e riparte da domani', () => {
@@ -248,7 +248,7 @@ describe('il carrello montato dice quello che la cassa offrirà davvero', () => 
     const c = await carrelloAlle(20, 59, 'si');
     expect(c.riga()).toBe(`Disponibile · Consegna in ${EXPRESS_ETA_LABEL}`);
     // Passano due minuti. La cassa risponde ancora sì (risposta vecchia): conta l'orologio.
-    vi.setSystemTime(aRoma(21, 1));
+    vi.setSystemTime(sulTelefono(21, 1));
     await act(async () => {
       vi.advanceTimersByTime(60_000);
     });
@@ -293,7 +293,7 @@ describe('il primo disegno, quello che arriva dal server, non sa che ore sono', 
 
   it("il disegno del server non promette nessun tempo, e l'ora del carrello parte da null", () => {
     vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
-    vi.setSystemTime(aRoma(14, 0));
+    vi.setSystemTime(sulTelefono(14, 0));
     risposta = 'si';
     banco.prodotti = [{ id: UN_FILONE.id, stock: 50, price: UN_FILONE.price }];
     localStorage.setItem('cart', JSON.stringify([UN_FILONE]));
@@ -318,38 +318,93 @@ describe('il primo disegno, quello che arriva dal server, non sa che ore sono', 
   });
 });
 
-describe("l'ora del carrello è quella di Roma, come in vetrina e in cassa, non quella del telefono", () => {
+describe('il carrello legge lo stesso orologio della cassa, su qualunque telefono', () => {
   const fusoDiPartenza = process.env.TZ;
   afterEach(() => {
     if (fusoDiPartenza === undefined) delete process.env.TZ;
     else process.env.TZ = fusoDiPartenza;
   });
 
-  /** Un istante, visto da un telefono col fuso di Londra (il 30/10 Londra è un'ora indietro rispetto a Roma). */
-  function telefonoALondra(istanteUtc: string): Date {
-    process.env.TZ = 'Europe/London';
-    return new Date(istanteUtc);
+  /** Lo scarto dal tempo universale di ogni fuso il 30/10/2026, in minuti come li dà `getTimezoneOffset`. */
+  const SCARTO: Record<string, number> = { 'Europe/Rome': -60, 'Europe/Bucharest': -120, 'Europe/London': 0 };
+
+  /** Un istante visto da un telefono col fuso detto. */
+  function telefonoA(fuso: string, istanteUtc: string): Date {
+    process.env.TZ = fuso;
+    const istante = new Date(istanteUtc);
+    expect(istante.getTimezoneOffset(), `il fuso ${fuso} non ha preso: la prova non misurerebbe niente`).toBe(SCARTO[fuso]);
+    return istante;
   }
 
-  it('un telefono a Londra alle 20:30 (a Roma sono le 21:30) non vede la veloce', async () => {
-    const istante = telefonoALondra('2026-10-30T20:30:00Z');
-    expect(istante.getHours(), 'il fuso di Londra non ha preso: la prova non misurerebbe niente').toBe(20);
-    expect(romeNow(istante).getHours()).toBe(21);
-    const c = await carrelloAllIstante(istante, 'si');
-    expect(c.riga(), "il carrello ha letto l'ora del telefono (20), la cassa conta quella di Roma (21)").toMatch(
-      /^Disponibile · /,
-    );
-    expect(c.riga()).not.toContain(EXPRESS_ETA_LABEL);
-    expect(c.pagina()).not.toContain(EXPRESS_ETA_LABEL);
+  /**
+   * La cassa, un tocco dopo il carrello, allo stesso istante e con la stessa risposta della veloce:
+   * offre «Adesso»? Si monta il riquadro vero della cassa, non una copia della sua regola.
+   */
+  async function laCassaOffreAdesso(veloceDisponibile: boolean): Promise<boolean> {
+    const cassa = accendi(DeliverySlotPicker, {
+      day: 'today',
+      onDayChange: () => undefined,
+      todayTime: '',
+      onTodayTimeChange: () => undefined,
+      tomorrowTime: '',
+      onTomorrowTimeChange: () => undefined,
+      veloceDisponibile,
+      prezzoVeloce: '+1 €',
+    });
+    try {
+      await assesta();
+      const adesso = cassa.radice.querySelector<HTMLButtonElement>('button[aria-label^="Adesso,"]');
+      expect(adesso, 'il riquadro «Adesso» della cassa non si trova: la prova non misurerebbe niente').not.toBeNull();
+      return !adesso!.disabled;
+    } finally {
+      cassa.smonta();
+    }
+  }
+
+  /** Il carrello e la cassa allo stesso istante, col sì della veloce: chi promette la mezz'ora? */
+  async function carrelloECassa(fuso: string, istanteUtc: string) {
+    const istante = telefonoA(fuso, istanteUtc);
+    const carrello = await carrelloAllIstante(istante, 'si');
+    const promette = carrello.pagina().includes(EXPRESS_ETA_LABEL);
+    const offre = await laCassaOffreAdesso(true);
+    schermo?.smonta();
+    schermo = null;
+    localStorage.clear();
+    vi.useRealTimers();
+    return { promette, offre };
+  }
+
+  it('Bucarest alle 21:30 (a Roma le 20:30): il carrello non promette la mezz\'ora che la cassa non offre', async () => {
+    expect(romeNow(new Date('2026-10-30T19:30:00Z')).getHours(), 'a Roma sono le 20: il caso è quello giusto').toBe(20);
+    const { promette, offre } = await carrelloECassa('Europe/Bucharest', '2026-10-30T19:30:00Z');
+    expect(offre, 'la cassa legge l\'ora del telefono: alle 21:30 «Adesso» è spento').toBe(false);
+    expect(promette, 'il carrello scrive «Consegna in 30-60 min» e la cassa, un tocco dopo, parte da una fascia').toBe(false);
   });
 
-  it('lo stesso telefono alle 19:30 di Londra (20:30 a Roma) la vede: la prova non passa per pigrizia', async () => {
-    const istante = telefonoALondra('2026-10-30T19:30:00Z');
-    expect(istante.getHours()).toBe(19);
-    expect(romeNow(istante).getHours()).toBe(20);
-    const c = await carrelloAllIstante(istante, 'si');
-    expect(c.riga()).toBe(`Disponibile · Consegna in ${EXPRESS_ETA_LABEL}`);
-  });
+  // Gli istanti intorno alle due porte della veloce: le 8 e le 21, viste da tre telefoni diversi.
+  const ISTANTI = [
+    '2026-10-30T05:30:00Z',
+    '2026-10-30T06:30:00Z',
+    '2026-10-30T07:30:00Z',
+    '2026-10-30T13:00:00Z',
+    '2026-10-30T18:30:00Z',
+    '2026-10-30T19:30:00Z',
+    '2026-10-30T20:30:00Z',
+  ];
+  for (const fuso of Object.keys(SCARTO)) {
+    it(`un telefono col fuso ${fuso}: a ogni ora il carrello promette la veloce solo se la cassa la offre`, async () => {
+      const esiti: string[] = [];
+      for (const istanteUtc of ISTANTI) {
+        const { promette, offre } = await carrelloECassa(fuso, istanteUtc);
+        esiti.push(`${istanteUtc} carrello ${promette ? 'promette' : 'tace'} · cassa ${offre ? 'offre' : 'spenta'}`);
+      }
+      const discordi = esiti.filter((e) => /promette · cassa spenta|tace · cassa offre/.test(e));
+      expect(discordi, 'carrello e cassa dicono due cose diverse allo stesso istante').toEqual([]);
+      // Non passa per pigrizia: in ogni fuso c'è almeno un'ora con la veloce e una senza.
+      expect(esiti.some((e) => e.includes('cassa offre')), esiti.join('\n')).toBe(true);
+      expect(esiti.some((e) => e.includes('cassa spenta')), esiti.join('\n')).toBe(true);
+    }, 20_000);
+  }
 });
 
 // Finito il file, la rete torna chiusa come la lascia _setup.ts.
