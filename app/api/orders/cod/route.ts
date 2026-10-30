@@ -1212,6 +1212,10 @@ export const POST = withAuthRateLimit(
               orderId: c.orderId,
               total: c.totalCents / 100,
               itemsCount: c.itemsCount,
+              // 30/10/2026 — La fascia e la nascita dell'ordine: senza, l'email diceva sempre
+              // «appena puoi» invece della scadenza vera (i 10 minuti della veloce, la fine della fascia).
+              deliverySlot: body.pickupInStore ? null : (body.deliverySlot ?? null),
+              createdAt: new Date(),
             });
             await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
           } catch (e) {
