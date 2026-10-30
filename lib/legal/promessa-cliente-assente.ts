@@ -127,6 +127,84 @@ export function siPuoPromettereLaTrattenuta(fatti: FattiDellaConsegna = fattiDel
   return fatti.esitoDiMancataConsegna && fatti.tentativiRegistrati && fatti.rimborso === 'al_netto_della_consegna';
 }
 
+/**
+ * 30/10/2026 — COSA TORNA QUANDO UN ORDINE SE NE VA PRIMA DELLA CONSEGNA (§4 e §6).
+ *
+ * La regola è di Nicola (registro dei fatti, consegna.negozio-che-rifiuta, 30/10 00:35): in un
+ * carrello con più negozi, l'ordine che se ne va prima della consegna rende la sua merce e la
+ * differenza della consegna, perché la consegna si rifà sui negozi rimasti. Il codice che la fa è
+ * `ricalcolaLaConsegnaDelGiro` (lib/ordini/annulla.ts), che non tocca niente se un altro ordine
+ * dello stesso carrello è già consegnato (la consegna è fatta).
+ *
+ * Il testo dei Termini nasce da questa tabella, e la prova
+ * (tests/unit/i-termini-dicono-quello-che-l-annullo-rende-davvero.test.ts) annulla davvero ogni
+ * caso e confronta quello che torna con quello che la pagina disegnata dice.
+ *
+ * ⚠️ Bozza legale: va riletta da legale-privacy prima della firma di Nicola.
+ */
+export type CasoDelCarrello = 'carrello-di-un-negozio' | 'altri-gia-consegnati' | 'altri-da-consegnare' | 'tutto-il-carrello';
+export type QuelloCheTorna = 'tutto' | 'merce-e-differenza';
+
+export const COSA_TORNA: Readonly<Record<CasoDelCarrello, QuelloCheTorna>> = {
+  'carrello-di-un-negozio': 'tutto',
+  'altri-gia-consegnati': 'tutto',
+  'altri-da-consegnare': 'merce-e-differenza',
+  'tutto-il-carrello': 'tutto',
+};
+const CASI_DEL_CARRELLO = Object.keys(COSA_TORNA) as CasoDelCarrello[];
+
+const QUANDO: Record<CasoDelCarrello, string> = {
+  'carrello-di-un-negozio': 'Se nel carrello c’era solo quell’ordine',
+  'altri-gia-consegnati': 'Se gli altri ordini dello stesso carrello sono già stati consegnati',
+  'altri-da-consegnare':
+    'Se nel carrello c’erano anche ordini di altri Venditori, non ancora consegnati, la consegna si ricalcola ' +
+    'sui Venditori rimasti, come se avessi ordinato solo da loro',
+  'tutto-il-carrello': 'Se si annullano tutti gli ordini del carrello',
+};
+const COSA: Record<QuelloCheTorna, string> = {
+  tutto: 'ti torna tutto quello che hai pagato, spese di consegna comprese',
+  'merce-e-differenza': 'ti tornano la merce di quell’ordine e la differenza della consegna',
+};
+
+/** La frase di un caso: quando, e cosa torna. */
+export function fraseDelCaso(caso: CasoDelCarrello): string {
+  return `${QUANDO[caso]}: ${COSA[COSA_TORNA[caso]]}.`;
+}
+
+/** Le cifre dell'esempio: pane 15 € e frutta 12 € nello stesso carrello, il forno rifiuta. */
+export type CifreDellEsempio = {
+  pagatoCents: number;
+  tornaCents: number;
+  altroPrimaCents: number;
+  altroDopoCents: number;
+  consegnaDopoCents: number;
+};
+export const CIFRE_DELL_ESEMPIO: CifreDellEsempio = {
+  pagatoCents: 1800,
+  tornaCents: 1600,
+  altroPrimaCents: 1300,
+  altroDopoCents: 1500,
+  consegnaDopoCents: 300,
+};
+const eur = (cents: number) => {
+  const v = cents / 100;
+  return `${Number.isInteger(v) ? String(v) : v.toFixed(2).replace('.', ',')} €`;
+};
+export function esempioDelCarrello(c: CifreDellEsempio = CIFRE_DELL_ESEMPIO): string {
+  return (
+    'Per esempio: pane da 15 € e frutta da 12 € nello stesso carrello; se il forno rifiuta, dell’ordine ' +
+    `del pane (${eur(c.pagatoCents)}) ti tornano ${eur(c.tornaCents)}, e l’ordine della frutta passa da ` +
+    `${eur(c.altroPrimaCents)} a ${eur(c.altroDopoCents)}, perché la sua consegna diventa quella di un ` +
+    `negozio solo (${eur(c.consegnaDopoCents)}). Se paghi alla consegna, alla porta paghi solo gli ordini ` +
+    'rimasti, con la consegna nuova.'
+  );
+}
+
+/** Il §4: il Venditore rifiuta o non conferma in tempo. Prima dell'accettazione niente è consegnato. */
+export function paragrafoDelRifiuto(): string {
+  return `${fraseDelCaso('carrello-di-un-negozio')} ${fraseDelCaso('altri-da-consegnare')} ${esempioDelCarrello()}`;
+}
+
 /** Quante telefonate promettere. Vale solo quando la procedura esiste davvero. */
 export const TENTATIVI_PROMESSI = 3;
 
@@ -155,9 +233,12 @@ export function paragrafiConsegne(fatti: FattiDellaConsegna = fattiDellaConsegna
     'Se la consegna non riesce perché l’Acquirente non è reperibile, l’ordine non si chiude da solo: ' +
       'resta in stato «in consegna» finché non interviene l’assistenza. Segnalalo dal modulo Contatti ' +
       'indicando il numero d’ordine.',
-    'In questo caso l’ordine è annullato e l’importo pagato è rimborsato per intero, spese di consegna ' +
-      'comprese, sullo stesso mezzo di pagamento usato per l’acquisto. Sugli ordini pagati alla consegna ' +
-      'non è stato addebitato nulla.',
+    // 30/10/2026 — Qui c'era «rimborsato per intero, spese di consegna comprese», sempre. In un carrello
+    // con più negozi non è vero (consegna.negozio-che-rifiuta): i casi e quello che torna li dice
+    // `COSA_TORNA`, e la prova li rifà con annullaERimborsa sulla pagina disegnata.
+    'In questo caso l’ordine è annullato e il rimborso va sullo stesso mezzo di pagamento usato per ' +
+      `l’acquisto. ${CASI_DEL_CARRELLO.map(fraseDelCaso).join(' ')} ${esempioDelCarrello()} ` +
+      'Sugli ordini pagati alla consegna non è stato addebitato nulla.',
     'MyCity non trattiene le spese di consegna in caso di mancata consegna: una trattenuta ' +
       'richiederebbe la prova dei tentativi di contatto, che la piattaforma oggi non registra. Se e ' +
       'quando quella procedura sarà attiva, questa sezione lo dirà con il numero di tentativi e i tempi ' +

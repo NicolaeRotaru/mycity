@@ -9,6 +9,16 @@ import { sendEmail } from '@/lib/email/client';
 import { ordineAnnullatoTemplate } from '@/lib/email/templates';
 import { consegnaDopoLAnnullo, type RigaRicalcolata } from '@/lib/ordini/prezzi';
 import { eConsegnaVeloce } from '@/lib/ordini/consegna-veloce';
+// 30/10/2026 — Il ricalcolo dopo un annullo legge e scrive `gross_total_cents`, che esiste solo dopo
+// la migrazione 124: senza ripiego, prima della 124 la lettura falliva intera e la regola del negozio
+// che rifiuta non scattava (rimborso pieno, senza che nessuno lo sapesse).
+import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
+import {
+  htmlDelCarrello,
+  righeDelCarrello,
+  type AvvisoDelCarrello,
+  type ComeHaPagato,
+} from '@/lib/email/annullo-nel-carrello';
 
 /**
  * ANNULLARE UN ORDINE VUOL DIRE ANCHE RESTITUIRE I SOLDI.
@@ -287,6 +297,12 @@ export async function annullaERimborsa(
       // farlo passare di qui sarebbe un passo indietro per chi compra.
       await restituisciCredito();
       await restituisciCoupon();
+      // 30/10/2026 — `refundOrder` manda «Rimborso emesso» con l'importo e basta: se la consegna del
+      // carrello si è rifatta, il cliente riceve anche il perché dei 16 € su 18 e il conto della frutta.
+      if (giro?.avviso) {
+        await avvisaIlClienteDellAnnullo(admin, order, opts.reason, { avviso: giro.avviso, come: 'carta' });
+        await avvisaLaCampanellaDelCarrello(admin, order.user_id, giro.avviso, 'carta');
+      }
       return { ok: true, refundId: res.refundId };
     } catch (err) {
       logger.error('[annullaERimborsa] rimborso fallito', { orderId: order.id, err });
@@ -330,14 +346,18 @@ export async function annullaERimborsa(
   await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
 
   // 30/10/2026 — Coi contanti la consegna dei negozi rimasti si rifà: cambia quanto si paga alla porta.
-  await ricalcolaLaConsegnaDelGiro(admin, order.id);
+  const giro = await ricalcolaLaConsegnaDelGiro(admin, order.id);
 
   await restituisciCredito();
   await restituisciCoupon();
 
   // 27/10/2026 — Sulla carta avvisa `refundOrder` («Rimborso emesso»). Qui,
   // contanti o pagamento mai completato, non avvisava nessuno per email.
-  await avvisaIlClienteDellAnnullo(admin, order, opts.reason);
+  // 30/10/2026 — Se la consegna del carrello si è rifatta, la stessa email dice il conto nuovo degli
+  // ordini rimasti («alla porta paghi 15 € invece di 13»), e lo dice anche la campanella.
+  const come: ComeHaPagato = order.payment_method === 'cod' ? 'contanti' : 'da-pagare';
+  await avvisaIlClienteDellAnnullo(admin, order, opts.reason, giro?.avviso ? { avviso: giro.avviso, come } : null);
+  if (giro?.avviso) await avvisaLaCampanellaDelCarrello(admin, order.user_id, giro.avviso, come);
 
   return { ok: true, refundId: null };
 }
@@ -360,6 +380,7 @@ export async function avvisaIlClienteDellAnnullo(
   admin: SupabaseClient,
   ordine: { id: string; user_id: string | null; wallet_applied_cents?: number | null },
   motivo: string | null | undefined,
+  carrello?: { avviso: AvvisoDelCarrello; come: ComeHaPagato } | null,
 ): Promise<boolean> {
   try {
     if (!ordine.user_id) return false;
@@ -376,11 +397,18 @@ export async function avvisaIlClienteDellAnnullo(
       motivo,
       creditoRestituitoEuro: Number(ordine.wallet_applied_cents ?? 0) / 100,
     });
+    // 30/10/2026 — Il carrello rifatto: le righe con le cifre nuove, sotto il testo di sempre.
+    const html = carrello
+      ? t.html.includes('</body>')
+        ? t.html.replace('</body>', `${htmlDelCarrello(carrello.avviso, carrello.come)}</body>`)
+        : t.html + htmlDelCarrello(carrello.avviso, carrello.come)
+      : t.html;
+    const text = carrello ? `${t.text}\n\n${righeDelCarrello(carrello.avviso, carrello.come).join('\n')}` : t.text;
     const res = await sendEmail({
       to: email,
       subject: t.subject,
-      html: t.html,
-      text: t.text,
+      html,
+      text,
       tipo: 'transazionale',
       tags: [{ name: 'template', value: 'order_canceled' }],
     });
@@ -397,6 +425,37 @@ export async function avvisaIlClienteDellAnnullo(
       orderId: ordine.id, error: e instanceof Error ? e.message : String(e),
     });
     return false;
+  }
+}
+
+/**
+ * 30/10/2026 — LA CAMPANELLA DICE IL CONTO NUOVO DEL CARRELLO.
+ *
+ * Le rotte che annullano scrivono già la loro campanella («ordine annullato», «rimborso emesso»);
+ * questa ne aggiunge una sola quando la consegna degli altri ordini dello stesso carrello si è
+ * rifatta, con le cifre. Non lancia mai: l'annullo è già scritto. Ma non tace: se non parte, lo
+ * scrive nel registro degli errori.
+ */
+export async function avvisaLaCampanellaDelCarrello(
+  admin: SupabaseClient,
+  userId: string | null | undefined,
+  avviso: AvvisoDelCarrello | null | undefined,
+  come: ComeHaPagato,
+): Promise<void> {
+  if (!avviso || !userId) return;
+  try {
+    const { error } = await admin.from('notifications').insert({
+      category: 'order',
+      user_id: userId,
+      title: 'Il conto del tuo carrello è cambiato',
+      body: righeDelCarrello(avviso, come).join(' '),
+      link: '/orders',
+    });
+    if (error) logger.error('[annullo] campanella del carrello NON scritta', { orderId: avviso.ordineId, message: error.message });
+  } catch (e) {
+    logger.error('[annullo] campanella del carrello NON scritta', {
+      orderId: avviso.ordineId, error: e instanceof Error ? e.message : String(e),
+    });
   }
 }
 
@@ -456,6 +515,13 @@ type RigaDelGiro = {
   refunded_amount_cents: number | null;
 };
 
+/** Le stesse colonne senza quelle della 124: prima della migrazione `lordoDi` rifà il lordo da totale e credito. */
+const COLONNE_GIRO_PRIMA_DELLA_124 = senzaColonne(COLONNE_GIRO, CAMPI_124);
+type Risposta = { data: unknown; error: unknown };
+/** Ogni lettura del giro passa di qui: con la 124 legge il lordo scritto, senza fa lo stesso conto. */
+const leggiIlGiro = (dove: string, q: (colonne: string) => PromiseLike<Risposta>) =>
+  conRipiegoSchema<Risposta>(`annulla.${dove}`, () => q(COLONNE_GIRO), () => q(COLONNE_GIRO_PRIMA_DELLA_124));
+
 const centesimi = (euro: number | string | null | undefined) => Math.round(Number(euro ?? 0) * 100);
 const lordoDi = (r: RigaDelGiro) =>
   r.gross_total_cents != null ? Number(r.gross_total_cents) : centesimi(r.total_price) + Number(r.wallet_applied_cents ?? 0);
@@ -463,7 +529,7 @@ const lordoDi = (r: RigaDelGiro) =>
 async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise<RigaDelGiro[] | null> {
   const sessione = o.stripe_session_id?.trim();
   if (sessione) {
-    const { data, error } = await admin.from('orders').select(COLONNE_GIRO).eq('stripe_session_id', sessione);
+    const { data, error } = await leggiIlGiro('carrello-carta', (c) => admin.from('orders').select(c).eq('stripe_session_id', sessione));
     if (error || !Array.isArray(data)) return null;
     return (data as unknown as RigaDelGiro[]).sort(
       (x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id),
@@ -481,7 +547,7 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaDelGiro): Promise
     ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)
     : [];
   if (ids.length < 2) return null;
-  const { data, error } = await admin.from('orders').select(COLONNE_GIRO).in('id', ids);
+  const { data, error } = await leggiIlGiro('carrello-contanti', (c) => admin.from('orders').select(c).in('id', ids));
   if (error || !Array.isArray(data)) return null;
   const righe = data as unknown as RigaDelGiro[];
   return ids.map((id) => righe.find((r) => r.id === id)).filter((r): r is RigaDelGiro => !!r);
@@ -499,6 +565,12 @@ export type GiroDelCarrello = {
    * amministratori e non tocca niente.
    */
   rimetti: () => Promise<boolean>;
+  /**
+   * 30/10/2026 — Le cifre per il cliente e per chi chiude a mano: quanto torna dell'ordine che se ne
+   * va e il conto nuovo di ogni ordine rimasto. null se la consegna del carrello non si è rifatta
+   * (carrello di un negozio solo, ritiro in negozio, un ordine già consegnato): il testo resta quello di oggi.
+   */
+  avviso: AvvisoDelCarrello | null;
 };
 
 type ConsegnaScritta = { delivery_fee_cents: number; rider_fee_cents: number; gross_total_cents: number; total_price: number };
@@ -520,26 +592,30 @@ async function scriviSeUguale(
   da: ConsegnaScritta,
   a: ConsegnaScritta,
 ): Promise<boolean> {
-  let q = admin
-    .from('orders')
-    .update(a)
-    .eq('id', r.id)
-    .eq('delivery_fee_cents', da.delivery_fee_cents)
-    .eq('rider_fee_cents', da.rider_fee_cents);
-  if (r.delivery_status != null) q = q.eq('delivery_status', r.delivery_status);
-  if (r.refunded_amount_cents != null) q = q.eq('refunded_amount_cents', Number(r.refunded_amount_cents));
-  const { data, error } = await q.select('id');
-  if (error) throw new Error(`ordine ${r.id}: ${error.message}`);
+  const scrivi = (valori: Partial<ConsegnaScritta>) => {
+    let q = admin
+      .from('orders')
+      .update(valori)
+      .eq('id', r.id)
+      .eq('delivery_fee_cents', da.delivery_fee_cents)
+      .eq('rider_fee_cents', da.rider_fee_cents);
+    if (r.delivery_status != null) q = q.eq('delivery_status', r.delivery_status);
+    if (r.refunded_amount_cents != null) q = q.eq('refunded_amount_cents', Number(r.refunded_amount_cents));
+    return q.select('id');
+  };
+  // Prima della 124 il lordo non si scrive (la colonna non c'è): consegna, fattorino e totale sì.
+  const { data, error } = await conRipiegoSchema<Risposta>('annulla.scriviSeUguale', () => scrivi(a), () => scrivi(senzaCampi(a, CAMPI_124)));
+  if (error) throw new Error(`ordine ${r.id}: ${(error as { message?: string }).message ?? String(error)}`);
   return Array.isArray(data) && data.length > 0;
 }
 
 /** Un giro solo: 'CAMBIATO' se un'altra scrittura è arrivata prima (niente resta scritto). */
 async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<GiroDelCarrello | null | 'CAMBIATO'> {
-  const { data: lui, error } = await admin.from('orders').select(COLONNE_GIRO).eq('id', orderId).maybeSingle();
+  const { data: lui, error } = await leggiIlGiro('ordine', (c) => admin.from('orders').select(c).eq('id', orderId).maybeSingle());
   if (error || !lui || typeof lui !== 'object') return null;
   const ordine = lui as unknown as RigaDelGiro;
   // Niente da rifare: si rende il totale letto adesso, non quello che il chiamante aveva in mano.
-  const comE: GiroDelCarrello = { totaleCents: centesimi(ordine.total_price), differenzaCents: 0, rimetti: async () => true };
+  const comE: GiroDelCarrello = { totaleCents: centesimi(ordine.total_price), differenzaCents: 0, rimetti: async () => true, avviso: null };
   if (ordine.pickup_in_store || ordine.delivery_status === 'DELIVERED') return comE;
   const nelCarrello = (c: RigaDelGiro[] | null): c is RigaDelGiro[] =>
     !!c && c.length >= 2 && c.some((r) => r.id === orderId) && !c.some((r) => r.delivery_status === 'DELIVERED');
@@ -577,6 +653,7 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
 
   let tutto = false;
   let conto: ReturnType<typeof consegnaDopoLAnnullo> = null;
+  let carrello: RigaDelGiro[] | null = null;
   try {
     // 1. IL SEGNO, PRIMA DEL CONTO: il fattorino a 0 sull'ordine che se ne va. Ogni altro annullo
     //    dello stesso carrello che legge dopo vede un conto che non è quello della regola e non
@@ -587,7 +664,7 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
     if (!(await passo(ordine, comEra, segno))) return 'CAMBIATO';
 
     // 2. Il conto sul carrello letto DOPO il segno; l'ordine che se ne va col conto di prima.
-    const carrello = await ordiniDelCarrello(admin, ordine);
+    carrello = await ordiniDelCarrello(admin, ordine);
     if (nelCarrello(carrello)) {
       conto = consegnaDopoLAnnullo({
         ordini: carrello.map((c) => {
@@ -638,10 +715,37 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
   logger.info('[ricalcolaLaConsegnaDelGiro] consegna rifatta sui negozi rimasti', {
     orderId, differenzaCents: conto.differenzaCents, rimasti: conto.rimasti.length,
   });
+  const tornaCents = Math.round(scritte[1].dopo.total_price * 100);
+  const rimasti = conto.rimasti
+    .map((riga) => carrello?.find((c) => c.id === riga.id))
+    .filter((r): r is RigaDelGiro => !!r)
+    .map((r) => {
+      const prima = consegnaDi(r);
+      const dopo = scritte.find((s) => s.r.id === r.id)?.dopo ?? prima;
+      return {
+        ordineId: r.id,
+        consegnaPrimaCents: prima.delivery_fee_cents,
+        consegnaCents: dopo.delivery_fee_cents,
+        totalePrimaCents: Math.round(prima.total_price * 100),
+        totaleCents: Math.round(dopo.total_price * 100),
+      };
+    });
+  const consegnaCents = scritte[1].dopo.delivery_fee_cents;
+  // La spesa si dice pulita solo senza credito né spedizione: con quelli il totale non è merce + consegna.
+  const pulita = Number(ordine.wallet_applied_cents ?? 0) === 0 && centesimi(ordine.shipping_cost) === 0;
   return {
-    totaleCents: Math.round(scritte[1].dopo.total_price * 100),
+    totaleCents: tornaCents,
     differenzaCents: conto.differenzaCents,
     rimetti,
+    avviso: {
+      ordineId: orderId,
+      pagatoCents: centesimi(ordine.total_price),
+      tornaCents,
+      consegnaCents,
+      spesaCents: pulita ? tornaCents - consegnaCents : null,
+      negoziRimasti: conto.rimasti.length,
+      rimasti,
+    },
   };
 }
 
@@ -655,7 +759,12 @@ export async function ricalcolaLaConsegnaDelGiro(admin: SupabaseClient, orderId:
     logger.error('[ricalcolaLaConsegnaDelGiro] il carrello cambia a ogni lettura: consegna NON rifatta', { orderId });
     const { data } = await admin.from('orders').select('total_price').eq('id', orderId).maybeSingle();
     if (!data) return null;
-    return { totaleCents: centesimi((data as { total_price: number | string | null }).total_price), differenzaCents: 0, rimetti: async () => true };
+    return {
+      totaleCents: centesimi((data as { total_price: number | string | null }).total_price),
+      differenzaCents: 0,
+      rimetti: async () => true,
+      avviso: null,
+    };
   } catch (err) {
     logger.error('[ricalcolaLaConsegnaDelGiro] consegna del carrello NON rifatta: rimborso pieno', { orderId, err });
     return null;
