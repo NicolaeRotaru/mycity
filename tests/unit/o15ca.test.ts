@@ -101,7 +101,14 @@ describe('collaudo lente A: varianti', () => {
         const exp = prezziDelCarrello(ing(merci.filter((_, j) => j !== k), veloce, codice)).gruppi;
         const got = c.rimasti.map((r) => `${r.deliveryFeeCents}/${r.riderFeeCents}`).join(',');
         const att = exp.map((g) => `${g.deliveryFeeCents}/${g.riderFeeCents}`).join(',');
-        if (got !== att) out.push(`${tag}: ${got} invece di ${att}`);
+        // La consegna è quella della regola quando la consegna di chi se ne va basta a coprirne la
+        // salita; sopra, il tetto del §4 (tests/unit/col-codice-spedizione-gratuita-chi-rifiuta-
+        // rende-tutta-la-merce.test.ts). Il fattorino è sempre quello del carrello nuovo.
+        const resto = full.gruppi.filter((_, i) => i !== k);
+        const sale = exp.reduce((s, g, j) => s + g.deliveryFeeCents - resto[j].deliveryFeeCents, 0);
+        const ciSta = sale <= full.gruppi[k].deliveryFeeCents;
+        if (ciSta && got !== att) out.push(`${tag}: ${got} invece di ${att}`);
+        if (c.rimasti.some((r, j) => r.riderFeeCents !== exp[j].riderFeeCents)) out.push(`${tag}: fattorino`);
         const prima = full.gruppi.reduce((s, g) => s + g.deliveryFeeCents, 0);
         const dopo = c.rimasti.reduce((s, r) => s + r.deliveryFeeCents, 0) + full.gruppi[k].deliveryFeeCents + c.annullato.deltaCents;
         if (prima !== dopo) out.push(`${tag}: conservazione ${prima} != ${dopo}`);

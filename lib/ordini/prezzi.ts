@@ -417,7 +417,10 @@ export type ConsegnaDopoLAnnullo = {
   rimasti: RigaRicalcolata[];
   /** L'ordine annullato adesso: cede la differenza e non paga più nessun fattorino. */
   annullato: RigaRicalcolata;
-  /** Quanto la consegna dei rimasti sale: è quanto il cliente si vede rendere in meno. */
+  /**
+   * Quanto la consegna dei rimasti sale: è quanto il cliente si vede rendere in meno. Mai più
+   * della consegna dell'ordine annullato, così la sua merce torna tutta (§4 dei Termini).
+   */
   differenzaCents: number;
 };
 
@@ -468,12 +471,25 @@ export function consegnaDopoLAnnullo(a: {
 
   const restano = vivi.filter((o) => o.id !== a.annullaId);
   const dopo = contoDelGiro(restano, a.consegnaVeloce, codice);
-  const rimasti = restano.map((o, i) => ({
-    id: o.id,
-    deliveryFeeCents: dopo[i].deliveryFeeCents,
-    riderFeeCents: dopo[i].riderFeeCents,
-    deltaCents: dopo[i].deliveryFeeCents - o.deliveryFeeCents,
-  }));
+  // Tetto: i rimasti salgono al massimo di quanto chi se ne va aveva di consegna, perché il §4 dei
+  // Termini promette che la sua merce torna tutta. Col codice «Spedizione gratuita» il forno da
+  // 30 € paga 0 di consegna e la frutta da 12 €, rimasta sola, ne pagherebbe 80 centesimi in più:
+  // senza tetto tornavano 29,20 € su 30. La parte che non ci sta resta alla piattaforma; il
+  // fattorino prende comunque il compenso del carrello nuovo.
+  // Prova: tests/unit/col-codice-spedizione-gratuita-chi-rifiuta-rende-tutta-la-merce.test.ts.
+  const sale = dopo.reduce((s, d, i) => s + d.deliveryFeeCents - restano[i].deliveryFeeCents, 0);
+  let oltreIlTetto = Math.max(0, sale - chiSeNeVa.deliveryFeeCents);
+  const rimasti = restano.map((o, i) => {
+    const regola = dopo[i].deliveryFeeCents - o.deliveryFeeCents;
+    const tolti = Math.min(oltreIlTetto, Math.max(0, regola));
+    oltreIlTetto -= tolti;
+    return {
+      id: o.id,
+      deliveryFeeCents: o.deliveryFeeCents + regola - tolti,
+      riderFeeCents: dopo[i].riderFeeCents,
+      deltaCents: regola - tolti,
+    };
+  });
   const differenzaCents = rimasti.reduce((s, r) => s + r.deltaCents, 0);
   const consegnaAnnullato = Math.max(0, chiSeNeVa.deliveryFeeCents - differenzaCents);
   return {
@@ -482,7 +498,7 @@ export function consegnaDopoLAnnullo(a: {
       id: chiSeNeVa.id,
       deliveryFeeCents: consegnaAnnullato,
       riderFeeCents: 0,
-      deltaCents: -differenzaCents,
+      deltaCents: consegnaAnnullato - chiSeNeVa.deliveryFeeCents,
     },
     differenzaCents,
   };
