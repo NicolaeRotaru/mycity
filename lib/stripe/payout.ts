@@ -631,6 +631,20 @@ export interface RefundOrderOpts {
   /** Idempotency-Key Stripe stabile (es. `return_<id>` / `dispute_<id>`). */
   idempotencyKey?: string;
   /**
+   * 30/10/2026 — DI CHI SONO I SOLDI CHE TORNANO AL CLIENTE.
+   *
+   * Di norma un rimborso parziale si toglie al negozio in proporzione alla sua quota
+   * (`amountCents × seller_payout_cents / lordo`): è giusto quando torna indietro merce.
+   * Non lo è quando torna una voce che il negozio non ha mai incassato. Il caso vero è l'euro
+   * della veloce non confermata (lib/ordini/veloce-non-confermata.ts): sta dentro
+   * `delivery_fee_cents` e resta a MyCity (lib/constants.ts, SUPPLEMENTO_CONSEGNA_CENTS).
+   * Sulla veloce di Maria (19 €, al forno 13,50 €) la proporzione toglieva 71 centesimi al forno.
+   *
+   * Chi chiede il rimborso dice qui quanti centesimi escono dalla quota del negozio (0 per
+   * l'euro della veloce). Non può superare il rimborso né la quota. Assente = la proporzione.
+   */
+  quotaNegozioCents?: number;
+  /**
    * 3/9/2026 — ANNULLARE L'ORDINE E RESTITUIRE TUTTO SONO DUE COSE DIVERSE.
    *
    * Fin qui erano la stessa cosa: solo un rimborso PIENO annullava la consegna
@@ -1611,8 +1625,13 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // dichiarato — sull'ordine e sulla scrivania degli amministratori. R82 —
   // vale anche per i contanti, dove lo storno stava senza nessuna protezione.
   const sellerNet = order.seller_payout_cents ?? 0;
+  const quotaDichiarata = opts.quotaNegozioCents;
   const sellerShare =
-    grossCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / grossCents), sellerNet) : 0;
+    typeof quotaDichiarata === 'number' && Number.isFinite(quotaDichiarata)
+      ? Math.max(0, Math.min(Math.round(quotaDichiarata), safeAmountCents, sellerNet))
+      : grossCents > 0
+        ? Math.min(Math.round((safeAmountCents * sellerNet) / grossCents), sellerNet)
+        : 0;
 
   let stornatoAlNegozio = 0;
   let recuperoNonRiuscito: string | null = null;

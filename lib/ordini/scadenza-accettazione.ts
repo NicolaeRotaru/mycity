@@ -1,4 +1,5 @@
 import { romeNow } from '@/lib/store-hours';
+import { giornoPiacenza, scartoFusoMinuti } from '@/lib/tempo-piacenza';
 
 /**
  * ENTRO QUANDO IL NEGOZIO DEVE ACCETTARE L'ORDINE.
@@ -106,21 +107,25 @@ export function scadenzaAccettazione(
  * È l'ora che il negozio legge come «entro quando accettare»: la regola delle tre ore resta solo
  * nel giro notturno (`scadenzaAccettazione`), che annulla dopo.
  *
- * Si conta in DURATA, non costruendo una data locale: gli orari delle fasce sono l'orologio da
- * parete italiano mentre `created_at` è un istante UTC, e una differenza di minuti attraversa i
- * due mondi senza conversioni. (Nelle due notti in cui l'ora legale cambia il conto balla di
- * un'ora: su una finestra di consegna non sposta niente.)
+ * Gli orari delle fasce sono l'orologio da parete di Piacenza, `created_at` è un istante UTC.
+ * 30/10/2026 (collaudo dell'ondata 17) — prima si contava in DURATA dai minuti di parete della
+ * nascita: nelle due notti in cui l'ora legale cambia il conto sbagliava di un'ora, e al negozio
+ * l'email diceva «entro le 13:00» (marzo) o «entro le 11:00» (ottobre) su una fascia 9-12.
+ * Adesso si prende il giorno di Piacenza della nascita (più uno per «Domani»), l'ora di fine
+ * della fascia su quel giorno, e la si converte in UTC con lo scarto del fuso di QUEL momento.
  */
 export function fineDellaFascia(ordine: OrdineDaScadere): Date | null {
   const nato = ordine.created_at ? new Date(ordine.created_at) : null;
   if (!nato || Number.isNaN(nato.getTime())) return null;
   const finestra = finestraDellaFascia(ordine.delivery_slot);
   if (!finestra) return null;
-  const oraItaliana = romeNow(nato);
-  const minutiDallaMezzanotte = oraItaliana.getHours() * 60 + oraItaliana.getMinutes();
-  const minutiAllaFineDellaFinestra =
-    (finestra.domani ? 24 * 60 : 0) + finestra.aMinuti - minutiDallaMezzanotte;
-  return new Date(nato.getTime() + minutiAllaFineDellaFinestra * 60_000);
+  const [anno, mese, giorno] = giornoPiacenza(nato).split('-').map(Number);
+  // La fine della fascia letta come se Piacenza fosse UTC; poi si toglie lo scarto del fuso.
+  // Due passate: lo scarto giusto è quello dell'istante vero, non di quello «finto UTC».
+  const comeSeFosseUtc = Date.UTC(anno, mese - 1, giorno + (finestra.domani ? 1 : 0), 0, finestra.aMinuti);
+  let istante = comeSeFosseUtc - scartoFusoMinuti(new Date(comeSeFosseUtc)) * 60_000;
+  istante = comeSeFosseUtc - scartoFusoMinuti(new Date(istante)) * 60_000;
+  return new Date(istante);
 }
 
 /**

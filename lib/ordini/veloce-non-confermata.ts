@@ -8,6 +8,7 @@ import { consegnaSenzaLaVeloce } from '@/lib/ordini/prezzi';
 import { MINUTI_PER_CONFERMARE_LA_VELOCE, scadenzaAccettazione, scadenzaLeggibile } from '@/lib/ordini/scadenza-accettazione';
 import { ETICHETTA_ADESSO, FASCE_DI_DOMANI, FASCE_DI_OGGI, fasceAncoraPossibili } from '@/lib/quando-arriva';
 import { negozioPuoServire, romeNow } from '@/lib/store-hours';
+import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 
 /**
  * 30/10/2026 — IL SECONDO FRENO DELLA VELOCE (carta #220, scelta di Nicola delle 16:13: «il
@@ -45,6 +46,15 @@ const COLONNE =
   'id, user_id, seller_id, delivery_status, delivery_slot, pickup_in_store, payment_method, payment_status, ' +
   'total_price, gross_total_cents, wallet_applied_cents, shipping_cost, delivery_fee_cents, rider_fee_cents, ' +
   'discount_amount, stripe_session_id, rider_id, created_at';
+/**
+ * Prima della migrazione 124 `gross_total_cents` non esiste: chiederla faceva fallire OGNI lettura
+ * del freno, e nessuna veloce veniva mai spostata mentre l'email al negozio lo prometteva. Senza
+ * la colonna il lordo si ricostruisce da `total_price` + credito (`lordoDi`), come in annulla.ts.
+ */
+const COLONNE_PRIMA_DELLA_124 = senzaColonne(COLONNE, CAMPI_124);
+type Risposta = { data: unknown; error: { message: string; code?: string } | null };
+const leggi = (dove: string, q: (colonne: string) => PromiseLike<Risposta>) =>
+  conRipiegoSchema<Risposta>(`veloce-non-confermata.${dove}`, () => q(COLONNE), () => q(COLONNE_PRIMA_DELLA_124));
 
 /** Gli stati di un ordine che il fattorino non ha ancora portato via dal negozio. */
 const NON_ANCORA_PARTITI = ['NEW', 'ACCEPTED', 'READY', 'ASSIGNED'];
@@ -130,7 +140,7 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<
   let righe: RigaVeloce[] | null = null;
   const sessione = o.stripe_session_id?.trim();
   if (sessione) {
-    const { data, error } = await admin.from('orders').select(COLONNE).eq('stripe_session_id', sessione);
+    const { data, error } = await leggi('sessione', (c) => admin.from('orders').select(c).eq('stripe_session_id', sessione));
     if (error || !Array.isArray(data)) return null;
     righe = data as unknown as RigaVeloce[];
   } else {
@@ -146,7 +156,7 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<
       ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)
       : [];
     if (ids.length < 2) return null;
-    const { data, error } = await admin.from('orders').select(COLONNE).in('id', ids);
+    const { data, error } = await leggi('carrello', (c) => admin.from('orders').select(c).in('id', ids));
     if (error || !Array.isArray(data)) return null;
     righe = data as unknown as RigaVeloce[];
   }
@@ -313,14 +323,19 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
       valori.gross_total_cents = lordoDi(c) + delta;
       valori.total_price = Math.max(0, centesimi(c.total_price) + delta) / 100;
     }
-    let q = admin
-      .from('orders')
-      .update(valori)
-      .eq('id', c.id)
-      .eq('delivery_slot', ETICHETTA_ADESSO)
-      .eq('delivery_status', String(c.delivery_status));
-    if (c.delivery_fee_cents != null) q = q.eq('delivery_fee_cents', Number(c.delivery_fee_cents));
-    const { data: righeScritte, error } = await q.select('id');
+    const scrivi = (v: Record<string, unknown>) => {
+      let q = admin
+        .from('orders')
+        .update(v)
+        .eq('id', c.id)
+        .eq('delivery_slot', ETICHETTA_ADESSO)
+        .eq('delivery_status', String(c.delivery_status));
+      if (c.delivery_fee_cents != null) q = q.eq('delivery_fee_cents', Number(c.delivery_fee_cents));
+      return q.select('id') as unknown as PromiseLike<Risposta>;
+    };
+    // Prima della 124 il lordo non si scrive (la colonna non c'è): fascia, consegna e totale sì.
+    const { data: righeScritte, error } = await conRipiegoSchema<Risposta>(
+      'veloce-non-confermata.sposta', () => scrivi(valori), () => scrivi(senzaCampi(valori, CAMPI_124)));
     if (error) throw new Error(`ordine ${c.id}: ${error.message}`);
     if (!Array.isArray(righeScritte) || righeScritte.length === 0) {
       // Il primo è l'ordine non confermato: se non si scrive, il negozio l'ha accettato adesso
@@ -349,6 +364,8 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
         await refundOrder({
           orderId: r.id,
           amountCents: -r.deltaCents,
+          // L'euro della veloce è di MyCity (lib/constants.ts): dal negozio non si toglie niente.
+          quotaNegozioCents: 0,
           reason: 'consegna veloce non confermata dal negozio in 10 minuti',
           idempotencyKey: `veloce_non_confermata_${r.id}`,
           notifyBuyer: false,
@@ -393,13 +410,14 @@ export type EsitoDelFreno =
 /** Il giro del freno: lo chiama app/api/cron/veloce-non-confermata ogni cinque minuti. */
 export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new Date()): Promise<EsitoDelFreno> {
   const soglia = new Date(adesso.getTime() - MINUTI_PER_CONFERMARE_LA_VELOCE * 60_000).toISOString();
-  const { data, error } = await admin
-    .from('orders')
-    .select(COLONNE)
-    .eq('delivery_status', 'NEW')
-    .eq('delivery_slot', ETICHETTA_ADESSO)
-    .lt('created_at', soglia)
-    .limit(100);
+  const { data, error } = await leggi('ricerca', (c) =>
+    admin
+      .from('orders')
+      .select(c)
+      .eq('delivery_status', 'NEW')
+      .eq('delivery_slot', ETICHETTA_ADESSO)
+      .lt('created_at', soglia)
+      .limit(100));
   if (error) {
     logger.error('[veloce-non-confermata] ricerca fallita', { message: error.message });
     return { ok: false, error: error.message };

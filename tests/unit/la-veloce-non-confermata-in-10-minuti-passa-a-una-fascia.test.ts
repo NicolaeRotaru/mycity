@@ -18,6 +18,10 @@ import { rigaScadenzaPerIlNegozio, scadenzaAccettazione } from "@/lib/ordini/sca
 type Riga = Record<string, unknown>;
 const db: Record<string, Riga[]> = {};
 const prima: { update?: () => void } = {};
+/** Il database prima della migrazione 124: la colonna `gross_total_cents` non esiste ancora. */
+const senza124 = { attivo: false };
+const ERRORE_LETTURA_124 = { code: "42703", message: "column orders.gross_total_cents does not exist" };
+const ERRORE_SCRITTURA_124 = { code: "PGRST204", message: "Could not find the gross_total_cents column of orders in the schema cache" };
 const sendEmailMock = vi.fn(async (_m: unknown) => ({ ok: true }));
 const notifyAdminsMock = vi.fn(async (..._a: unknown[]) => undefined);
 const refundOrderMock = vi.fn(async (_a: unknown) => ({ refundId: "re_1", reversedCents: 0, pieno: false }));
@@ -26,6 +30,12 @@ function tabella(nome: string) {
   const filtri: Array<(r: Riga) => boolean> = [];
   let valori: Riga | null = null;
   let quante = Infinity;
+  let colonne = "";
+  const errore124 = () => {
+    if (!senza124.attivo) return null;
+    if (valori && "gross_total_cents" in valori) return ERRORE_SCRITTURA_124;
+    return /\bgross_total_cents\b/.test(colonne) ? ERRORE_LETTURA_124 : null;
+  };
   const esegui = () => {
     if (valori && prima.update) { const f = prima.update; prima.update = undefined; f(); }
     const trovate = (db[nome] ?? []).filter((r) => filtri.every((f) => f(r))).slice(0, quante);
@@ -33,7 +43,7 @@ function tabella(nome: string) {
     return trovate.map((r) => ({ ...r }));
   };
   const b: Record<string, unknown> = {
-    select: () => b,
+    select: (c?: string) => { if (!valori) colonne = String(c ?? ""); return b; },
     update: (v: Riga) => { valori = v; return b; },
     insert: async (righe: Riga | Riga[]) => { (db[nome] ??= []).push(...(Array.isArray(righe) ? righe : [righe])); return { error: null }; },
     eq: (k: string, v: unknown) => { filtri.push((r) => r[k] === v); return b; },
@@ -46,9 +56,9 @@ function tabella(nome: string) {
     },
     limit: (n: number) => { quante = n; return b; },
     order: () => b,
-    maybeSingle: async () => ({ data: esegui()[0] ?? null, error: null }),
+    maybeSingle: async () => (errore124() ? { data: null, error: errore124() } : { data: esegui()[0] ?? null, error: null }),
     then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) =>
-      Promise.resolve({ data: esegui(), error: null }).then(ok, ko),
+      Promise.resolve(errore124() ? { data: null, error: errore124() } : { data: esegui(), error: null }).then(ok, ko),
   };
   return b;
 }
@@ -98,6 +108,7 @@ beforeEach(() => {
   db.cod_checkout_attempts = [];
   db.notifications = [];
   prima.update = undefined;
+  senza124.attivo = false;
   sendEmailMock.mockClear();
   notifyAdminsMock.mockClear();
   refundOrderMock.mockClear();
@@ -277,10 +288,22 @@ describe("il secondo freno della veloce: il giro dell ondata 17", () => {
     db.orders = [ordine({ payment_method: "card", payment_status: "PAID", stripe_session_id: "cs_1" })];
     await giro("2026-10-30T17:16:00.000Z");
     expect(refundOrderMock).toHaveBeenCalledTimes(1);
-    expect(refundOrderMock.mock.calls[0][0]).toMatchObject({ orderId: "o1", amountCents: 100 });
+    // L euro della veloce è di MyCity (lib/constants.ts, SUPPLEMENTO_CONSEGNA_CENTS): il negozio non ne paga niente.
+    expect(refundOrderMock.mock.calls[0][0]).toMatchObject({ orderId: "o1", amountCents: 100, quotaNegozioCents: 0 });
     expect(o("o1")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00" });
     expect(String(db.notifications[0].body)).toContain("ti torna sulla carta");
     expect(notifyAdminsMock).not.toHaveBeenCalled();
+  });
+
+  it("V-senza-124: prima della migrazione 124 il carrello si sposta lo stesso e alla porta paga 18 €", async () => {
+    senza124.attivo = true;
+    const { gross_total_cents: _nonCe, ...vecchio } = ordine();
+    db.orders = [vecchio];
+    const esito = await giro("2026-10-30T17:16:00.000Z");
+    expect(esito).toMatchObject({ ok: true, spostati: 1 });
+    expect(o("o1")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00", delivery_fee_cents: 300, total_price: 18 });
+    expect(o("o1")).not.toHaveProperty("gross_total_cents");
+    expect(String(db.notifications[0].body)).toContain("non lo paghi");
   });
 
   it("V-carta-guasto: se il rimborso non parte, il cliente legge «te lo rendiamo a mano entro un giorno» e gli admin lo sanno", async () => {
