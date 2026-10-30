@@ -160,6 +160,18 @@ export function giornoDellaFascia(etichetta: string | null | undefined): 'adesso
  */
 export const MINUTI_PRIMA_DELLA_FINE = 60;
 
+/**
+ * 30/10/2026 (collaudo dell'ondata 22) — IL RITIRO CHIEDE UN QUARTO D'ORA DI NEGOZIO APERTO.
+ *
+ * La regola del ritiro (`negozioPuoServire`) chiedeva il negozio aperto «in un momento» fra
+ * l'ordine e 60 minuti prima della fine della fascia: lunedì alle 12:50 bastavano i 10 minuti
+ * prima che Pane Quotidiano chiudesse alle 13 per accettare la 13:00–16:30, e il forno riapre
+ * quando la fascia è finita. Adesso dal momento del ritiro il negozio deve restare aperto almeno
+ * un quarto d'ora: il tempo di accettare e preparare la busta. Scelta ragionata dell'AD, coerente
+ * col caso 7 di Nicola (lunedì 19:15, la 19:30–21:00 sì: forno aperto fino alle 19:30).
+ */
+export const MINUTI_PER_IL_RITIRO = 15;
+
 /** Un'ora intera (le 17 = 17:00) oppure l'orologio di Roma, coi minuti. */
 function minutiDi(adesso: number | Date): number {
   return typeof adesso === 'number' ? adesso * 60 : adesso.getHours() * 60 + adesso.getMinutes();
@@ -191,10 +203,10 @@ export function fasciaFuoriTempo(etichetta: string | null | undefined, adesso: n
  * 30/10/2026 (ondata 22) — LA REGOLA UNICA: QUESTA FASCIA SI PUÒ SERVIRE ADESSO?
  *
  * Due domande, sempre nello stesso ordine: ① i 60 minuti (`fasciaFuoriTempo`) ② la regola del
- * ritiro, negozio per negozio (`negozioPuoServire`): ogni negozio del carrello dev'essere aperto
- * in un momento fra adesso e 60 minuti prima della fine della fascia; MyCity tiene la merce da
- * parte fino alla fascia. La usano il selettore, la cassa, la vetrina, la bozza e il freno della
- * veloce: così nessuno propone quello che le rotte rifiutano (`motivoFasciaRifiutata`).
+ * ritiro, negozio per negozio (`negozioPuoServire`): ogni negozio del carrello dev'essere aperto,
+ * per almeno `MINUTI_PER_IL_RITIRO`, a partire da un momento fra adesso e 60 minuti prima della
+ * fine della fascia; MyCity tiene la merce da parte fino alla fascia. La usano il selettore, la
+ * cassa, la vetrina, la bozza e il freno della veloce: così nessuno propone quello che le rotte rifiutano (`motivoFasciaRifiutata`).
  * Senza orari (lista vuota) resta solo la regola dei 60 minuti, come nelle rotte.
  */
 export function fasciaSiPuo(fascia: string, adesso: Date, orari: readonly unknown[] = []): boolean {

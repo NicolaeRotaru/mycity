@@ -1,5 +1,6 @@
 import {
   ETICHETTA_ADESSO,
+  MINUTI_PER_IL_RITIRO,
   MINUTI_PRIMA_DELLA_FINE,
   fasciaAmmessa,
   finestraDellaFascia,
@@ -149,13 +150,22 @@ function minutiDelGiorno(now: Date): number {
 }
 
 /**
- * Il negozio è aperto in almeno un momento fra `da` e `a` (estremi compresi, in minuti dalla
- * mezzanotte)? Gli intervalli sono [apre, chiude): alle 19:30 un forno che chiude alle 19:30 è
- * già chiuso.
+ * Il ritiro si può cominciare in un momento fra `da` e `a` (estremi compresi, in minuti dalla
+ * mezzanotte)? Cioè: il negozio è aperto in quel momento e resta aperto almeno
+ * `MINUTI_PER_IL_RITIRO` minuti. Gli intervalli sono [apre, chiude): alle 19:30 un forno che
+ * chiude alle 19:30 è già chiuso.
+ *
+ * 30/10/2026 (collaudo dell'ondata 22) — prima bastava un momento solo: lunedì alle 12:50 la
+ * 13:00–16:30 passava perché il forno era aperto ancora 10 minuti, e alle 12:55 il freno della
+ * veloce ci spostava la spesa. Il forno chiude alle 13 e riapre alle 16:30, quando la fascia è
+ * finita: nessuno accetta, prepara e consegna la busta in 5 minuti.
  */
-function apertoFra(intervals: HoursInterval[] | undefined, da: number, a: number): boolean {
+function ritiroPossibileFra(intervals: HoursInterval[] | undefined, da: number, a: number): boolean {
   if (!intervals || intervals.length === 0 || a < da) return false;
-  return intervals.some(([open, close]) => toMinutes(open) <= a && toMinutes(close) > da);
+  return intervals.some(([open, close]) => {
+    const inizio = Math.max(da, toMinutes(open));
+    return inizio <= a && inizio + MINUTI_PER_IL_RITIRO <= toMinutes(close);
+  });
 }
 
 /**
@@ -204,9 +214,9 @@ export function negozioPuoServire(
   if (!scelta || scelta.giorno === 'adesso') return !isStoreClosedForOrder(storeHours, now);
 
   // 30/10/2026 (ondata 22) — LA REGOLA DEL RITIRO (scelta di Nicola). La merce si ritira quando
-  // il negozio è aperto e MyCity la tiene da parte fino alla fascia: conta che il negozio sia
-  // aperto in un momento fra adesso e 60 minuti prima della fine della fascia, anche se durante la
-  // fascia è chiuso. Lunedì alle 12:00 Pane Quotidiano (9-13, 16:30-19:30) serve la 13:00–16:30
+  // il negozio è aperto e MyCity la tiene da parte fino alla fascia: conta che il ritiro si possa
+  // cominciare fra adesso e 60 minuti prima della fine della fascia, con il negozio che resta aperto
+  // almeno un quarto d'ora (`MINUTI_PER_IL_RITIRO`), anche se durante la fascia è chiuso. Lunedì alle 12:00 Pane Quotidiano (9-13, 16:30-19:30) serve la 13:00–16:30
   // (si ritira entro le 13); alle 14:00 no, riapre alle 16:30 e il ritiro andrebbe oltre le 15:30.
   const adesso = minutiDelGiorno(now);
   const limite = scelta.aMinuti - MINUTI_PRIMA_DELLA_FINE;
@@ -218,12 +228,12 @@ export function negozioPuoServire(
     // da parte una notte (sabato sera per la domenica chiusa); finché Nicola non decide la notte,
     // la cassa non la promette.
     const domaniKey = DAY_KEYS[(now.getDay() + 1) % 7];
-    return apertoFra(hours[domaniKey], 0, limite);
+    return ritiroPossibileFra(hours[domaniKey], 0, limite);
   }
 
   // Paletti ① e ②: una fascia di oggi già finita, o a meno di un'ora dalla fine, non ha più un
-  // momento per il ritiro (`apertoFra` con `limite < adesso` risponde no).
-  return apertoFra(hours[oggiKey], adesso, limite);
+  // momento per il ritiro (`ritiroPossibileFra` con `limite < adesso` risponde no).
+  return ritiroPossibileFra(hours[oggiKey], adesso, limite);
 }
 
 /**
