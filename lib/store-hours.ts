@@ -1,8 +1,8 @@
 import {
   ETICHETTA_ADESSO,
-  FASCE_DI_DOMANI,
-  FASCE_DI_OGGI,
+  MINUTI_PRIMA_DELLA_FINE,
   fasciaAmmessa,
+  finestraDellaFascia,
 } from './quando-arriva';
 
 export type HoursInterval = [string, string];
@@ -118,21 +118,13 @@ export function leggiFinestraConsegna(etichetta?: string | null): FinestraConseg
   if (!fasciaAmmessa(testo)) return null;
   if (testo === ETICHETTA_ADESSO) return { giorno: 'adesso' };
 
-  const eDiOggi = FASCE_DI_OGGI.some((f) => f.etichetta === testo);
-  const eDiDomani = FASCE_DI_DOMANI.includes(testo);
-  const giorno: 'oggi' | 'domani' | null = eDiOggi ? 'oggi' : eDiDomani ? 'domani' : null;
-  // Ammessa, ma di un tipo che qui non si sa collocare: non si indovina niente,
-  // e chi chiama ricade sulla regola dell'orologio.
-  if (!giorno) return null;
-
-  // Il trattino delle etichette è quello lungo (–), ma si accettano anche il
-  // trattino normale e quello medio.
-  const orari = testo.match(/(\d{1,2}):(\d{2})\s*[–—-]\s*(\d{1,2}):(\d{2})/);
-  // Fascia senza orario: non si sa quando, quindi non si allarga niente.
-  if (!orari) return null;
-  const da = Number(orari[1]) * 60 + Number(orari[2]);
-  const a = Number(orari[3]) * 60 + Number(orari[4]);
-  return { giorno, daMinuti: da, aMinuti: Math.max(da, a) };
+  // 30/10/2026 (ondata 22) — Giorno e minuti si leggono dalla stessa tabella che scrive le
+  // etichette (`finestraDellaFascia`), fasce di prima comprese: niente più orari pescati dal testo.
+  // Ammessa, ma di un tipo che qui non si sa collocare: non si indovina niente, e chi chiama
+  // ricade sulla regola dell'orologio.
+  const finestra = finestraDellaFascia(testo);
+  if (!finestra) return null;
+  return { giorno: finestra.giorno, daMinuti: finestra.daMinuti, aMinuti: Math.max(finestra.daMinuti, finestra.aMinuti) };
 }
 
 /**
@@ -156,10 +148,14 @@ function minutiDelGiorno(now: Date): number {
   return now.getHours() * 60 + now.getMinutes();
 }
 
-/** Il negozio è aperto in almeno un minuto di quella finestra? */
-function apertoNellaFinestra(intervals: HoursInterval[] | undefined, da: number, a: number): boolean {
-  if (!intervals || intervals.length === 0) return false;
-  return intervals.some(([open, close]) => toMinutes(open) < a && toMinutes(close) > da);
+/**
+ * Il negozio è aperto in almeno un momento fra `da` e `a` (estremi compresi, in minuti dalla
+ * mezzanotte)? Gli intervalli sono [apre, chiude): alle 19:30 un forno che chiude alle 19:30 è
+ * già chiuso.
+ */
+function apertoFra(intervals: HoursInterval[] | undefined, da: number, a: number): boolean {
+  if (!intervals || intervals.length === 0 || a < da) return false;
+  return intervals.some(([open, close]) => toMinutes(open) <= a && toMinutes(close) > da);
 }
 
 /**
@@ -207,17 +203,27 @@ export function negozioPuoServire(
   // Consegna immediata, o fascia che non si sa leggere: resta la regola di prima.
   if (!scelta || scelta.giorno === 'adesso') return !isStoreClosedForOrder(storeHours, now);
 
+  // 30/10/2026 (ondata 22) — LA REGOLA DEL RITIRO (scelta di Nicola). La merce si ritira quando
+  // il negozio è aperto e MyCity la tiene da parte fino alla fascia: conta che il negozio sia
+  // aperto in un momento fra adesso e 60 minuti prima della fine della fascia, anche se durante la
+  // fascia è chiuso. Lunedì alle 12:00 Pane Quotidiano (9-13, 16:30-19:30) serve la 13:00–16:30
+  // (si ritira entro le 13); alle 14:00 no, riapre alle 16:30 e il ritiro andrebbe oltre le 15:30.
+  const adesso = minutiDelGiorno(now);
+  const limite = scelta.aMinuti - MINUTI_PRIMA_DELLA_FINE;
+  const oggiKey = DAY_KEYS[now.getDay()];
+
   if (scelta.giorno === 'domani') {
+    // Per una fascia di domani il ritiro si fa domani, prima del limite. Scelta prudente (AD,
+    // 30/10): la regola alla lettera ammetterebbe anche il ritiro di stasera con la merce tenuta
+    // da parte una notte (sabato sera per la domenica chiusa); finché Nicola non decide la notte,
+    // la cassa non la promette.
     const domaniKey = DAY_KEYS[(now.getDay() + 1) % 7];
-    return apertoNellaFinestra(hours[domaniKey], scelta.daMinuti, scelta.aMinuti);
+    return apertoFra(hours[domaniKey], 0, limite);
   }
 
-  const adesso = minutiDelGiorno(now);
-  // Paletto ①: la fascia di oggi è già finita, non c'è niente da consegnare.
-  if (scelta.aMinuti <= adesso) return false;
-  // Paletto ②: della finestra conta solo la parte che deve ancora venire.
-  const oggiKey = DAY_KEYS[now.getDay()];
-  return apertoNellaFinestra(hours[oggiKey], Math.max(scelta.daMinuti, adesso), scelta.aMinuti);
+  // Paletti ① e ②: una fascia di oggi già finita, o a meno di un'ora dalla fine, non ha più un
+  // momento per il ritiro (`apertoFra` con `limite < adesso` risponde no).
+  return apertoFra(hours[oggiKey], adesso, limite);
 }
 
 /**

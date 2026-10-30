@@ -10,8 +10,8 @@ import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
-import { motivoNegozioChiuso, negozioPuoServire, romeNow } from '@/lib/store-hours';
-import { eFasciaDiOggi, fasciaFuoriTempo } from '@/lib/quando-arriva';
+import { romeNow } from '@/lib/store-hours';
+import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts } from '@/lib/promotions';
@@ -664,14 +664,13 @@ export const POST = withAuthRateLimit(
       // 30/10/2026 (ondata 21) — Una fascia di oggi si sceglie fino a 60 minuti prima della fine
       // (scelta di Nicola). Alle 17:50 «In giornata · 15:00–18:00» vuol dire «arriva fra dieci
       // minuti»: il negozio la riceverebbe già in ritardo. La stessa regola della cassa.
-      // L'orologio si legge solo per una fascia di oggi: domani, «Adesso» e niente non c'entrano.
-      const fuoriTempo = eFasciaDiOggi(body.deliverySlot) ? fasciaFuoriTempo(body.deliverySlot, romeNow()) : null;
-      if (fuoriTempo) return esciERilascia(ApiErrors.conflict(fuoriTempo));
-      for (const s of sellers ?? []) {
-        if (!negozioPuoServire(s.store_hours, body.deliverySlot)) {
-          return esciERilascia(ApiErrors.conflict(motivoNegozioChiuso(s.store_name ?? 'Il negozio', body.deliverySlot)));
-        }
-      }
+      // 30/10/2026 (ondata 22) — Prima i 60 minuti, poi la regola del ritiro negozio per negozio:
+      // la regola unica di lib/quando-arriva.ts, la stessa della cassa e della rotta della carta.
+      const rifiutata = motivoFasciaRifiutata(
+        body.deliverySlot,
+        (sellers ?? []).map((s) => ({ nome: s.store_name, orari: s.store_hours })),
+      );
+      if (rifiutata) return esciERilascia(ApiErrors.conflict(rifiutata));
     }
 
     // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso, un

@@ -6,8 +6,8 @@ import { formatPriceFromCents } from '@/lib/format';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { consegnaSenzaLaVeloce } from '@/lib/ordini/prezzi';
 import { MINUTI_PER_CONFERMARE_LA_VELOCE, scadenzaAccettazione, scadenzaLeggibile } from '@/lib/ordini/scadenza-accettazione';
-import { ETICHETTA_ADESSO, FASCE_DI_DOMANI, FASCE_DI_OGGI, fasceAncoraPossibili } from '@/lib/quando-arriva';
-import { negozioPuoServire, romeNow } from '@/lib/store-hours';
+import { ETICHETTA_ADESSO, fasceAncoraPossibili, fasceDiDomaniPossibili } from '@/lib/quando-arriva';
+import { romeNow } from '@/lib/store-hours';
 import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 
 /**
@@ -34,7 +34,7 @@ import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/
  *   negozio non conferma (dopo, la rotta di annullo non lo accetta più);
  * ⑤ la scrittura è condizionata su `delivery_status` e su `delivery_slot` = «Adesso»: se il negozio
  *   accetta mentre il freno lavora vince una sola delle due, e un secondo giro non trova niente.
- * Maria: alle 18:16 passa a «Stasera · 18:00–20:00» e alla porta paga 18 € invece di 19.
+ * Maria: alle 18:16 passa a «Oggi · 18:00–19:30» e alla porta paga 18 € invece di 19.
  * Poi la scadenza delle tre ore (scadenza-accettazione.ts) si conta sulla fascia nuova.
  *
  * ⚠️ Con la CARTA il conto scritto sull'ordine non si tocca qui: 1 € torna con un rimborso
@@ -92,26 +92,19 @@ const lordoDi = (r: RigaVeloce) =>
   typeof r.gross_total_cents === 'number' ? r.gross_total_cents : centesimi(r.total_price) + Number(r.wallet_applied_cents ?? 0);
 
 /**
- * Quanto deve restare, almeno, di una fascia di oggi per proporla al posto della veloce: un'ora,
- * il tempo che la veloce stessa si prende dopo la conferma. Collaudo del 30/10: alle 17:50 il
- * freno metteva «15:00–18:00», cioè 10 minuti per un ordine che il negozio non ha ancora confermato.
- */
-export const MINUTI_MINIMI_DI_FASCIA = 60;
-
-/**
- * La prima fascia che la cassa offrirebbe adesso a questo carrello: le stesse funzioni della cassa
- * (`fasceAncoraPossibili` per oggi, `FASCE_DI_DOMANI`, `negozioPuoServire` sugli orari di ogni
- * negozio), tenendo di oggi solo quelle che finiscono almeno `MINUTI_MINIMI_DI_FASCIA` dopo adesso.
+ * La prima fascia che la cassa offrirebbe adesso a questo carrello: la regola unica della cassa e
+ * delle rotte (`fasceAncoraPossibili` e `fasceDiDomaniPossibili`, lib/quando-arriva.ts), con i 60
+ * minuti prima della fine e la regola del ritiro sugli orari di ogni negozio. Collaudo del 30/10:
+ * alle 17:50 il freno metteva «15:00–18:00», cioè 10 minuti per un ordine che il negozio non ha
+ * ancora confermato.
+ *
+ * 30/10/2026 (ondata 22) — Qui c'era una seconda copia dei 60 minuti (`MINUTI_MINIMI_DI_FASCIA`):
+ * tolta, così il freno sposta la spesa solo su fasce che la cassa e le rotte accettano.
  * `null` se non ce n'è nessuna: sabato sera col negozio chiuso la domenica non esiste un'etichetta
- * vera da scrivere, e «Domani · 9:00–12:00» sarebbe una promessa che il negozio non può mantenere.
+ * vera da scrivere, e «Domani · 9:00–11:00» sarebbe una promessa che il negozio non può mantenere.
  */
 export function fasciaDopoLaVeloce(oraDiPiacenza: Date, orari: unknown[]): string | null {
-  const tutti = (f: string) => orari.every((h) => negozioPuoServire(h, f, oraDiPiacenza));
-  const adesso = oraDiPiacenza.getHours() * 60 + oraDiPiacenza.getMinutes();
-  const fine = new Map(FASCE_DI_OGGI.map((f) => [f.etichetta, f.oraDiFine * 60]));
-  const oggi = fasceAncoraPossibili(oraDiPiacenza.getHours())
-    .filter((f) => (fine.get(f) ?? 0) - adesso >= MINUTI_MINIMI_DI_FASCIA);
-  return oggi.find(tutti) ?? FASCE_DI_DOMANI.find(tutti) ?? null;
+  return fasceAncoraPossibili(oraDiPiacenza, orari)[0] ?? fasceDiDomaniPossibili(oraDiPiacenza, orari)[0] ?? null;
 }
 
 const TITOLO_NON_SPOSTATO = 'Il negozio non ha ancora confermato la consegna veloce';

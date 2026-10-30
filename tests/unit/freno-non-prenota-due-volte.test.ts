@@ -140,7 +140,7 @@ describe("il freno non prenota due volte l euro della veloce", () => {
     await giro("2026-10-30T17:16:00.000Z");
     expect(o1()).toMatchObject({ delivery_slot: ETICHETTA_ADESSO, refunded_amount_cents: 100 });
     await giro("2026-10-30T17:21:00.000Z");
-    expect(o1().delivery_slot).toBe("Stasera · 18:00–20:00");
+    expect(o1().delivery_slot).toBe("Oggi · 18:00–19:30");
     expect(rimborsiStripe.size).toBe(1);
     expect(o1().refunded_amount_cents).toBe(100);
     expect(campanella()).toContain("ti torna sulla carta");
@@ -151,7 +151,7 @@ describe("il freno non prenota due volte l euro della veloce", () => {
     void giro("2026-10-30T17:16:00.000Z");
     await vi.waitFor(() => expect(o1().stripe_refund_id).toBe("re_1"));
     await giro("2026-10-30T17:21:00.000Z");
-    expect(o1().delivery_slot).toBe("Stasera · 18:00–20:00");
+    expect(o1().delivery_slot).toBe("Oggi · 18:00–19:30");
     expect(rimborsiStripe.size).toBe(1);
     expect(o1().refunded_amount_cents).toBe(100);
     expect(campanella()).toContain("ti torna sulla carta");
@@ -176,7 +176,7 @@ describe("contanti pagati col credito MyCity: l euro della veloce torna sul cred
     await giro("2026-10-30T17:16:00.000Z");
     await giro("2026-10-30T17:21:00.000Z");
     const r = o1();
-    expect(r).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00", gross_total_cents: 1800, wallet_applied_cents: 1800, total_price: 0, delivery_fee_cents: 300 });
+    expect(r).toMatchObject({ delivery_slot: "Oggi · 18:00–19:30", gross_total_cents: 1800, wallet_applied_cents: 1800, total_price: 0, delivery_fee_cents: 300 });
     expect(diario).toEqual([{ user: "maria", cents: 100, reason: "cod_refund", ref: "veloce_non_confermata_o1" }]);
     expect(campanella()).toMatch(/1,00\s€ ti torna sul credito MyCity e alla porta non paghi niente/);
     expect(campanella()).not.toContain("-1,00");

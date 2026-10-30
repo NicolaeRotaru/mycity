@@ -10,6 +10,7 @@ import {
   giornoDiPartenza,
   fasceAncoraPossibili,
   fasceDiDomaniPossibili,
+  sottotitoloOggiSpento,
   type Giorno,
 } from '@/lib/quando-arriva';
 import { romeNow } from '@/lib/store-hours';
@@ -58,7 +59,7 @@ type Props = {
   motivoVeloce?: string | null;
   /**
    * 30/10/2026 (ondata 21) — Gli orari dei negozi del carrello (`store_hours`), gli stessi che
-   * legge la rotta. Senza, giovedì alle 14:00 la cassa proponeva «Oggi · 15:00–18:00» a un forno
+   * legge la rotta. Senza, giovedì alle 14:00 la cassa proponeva «In giornata · 15:00–18:00» a un forno
    * che il giovedì pomeriggio è chiuso, e il no arrivava solo premendo «Ordina».
    */
   orariNegozi?: readonly unknown[];
@@ -68,7 +69,7 @@ type Props = {
  * 29/10/2026 — La riga che si legge quando «Adesso» era scelta e la veloce non si può più.
  *
  * 30/10/2026 (ondata 18) — Diceva «ho scelto la prima fascia libera», ma la fascia segnata era
- * quella di partenza della cassa (Domani · 15:00–18:30, non 9:00–12:00), e il selettore non sa se
+ * quella di partenza della cassa (Domani · 11:00–13:00, non 7:30–9:00), e il selettore non sa se
  * il negozio a quell'ora è aperto: «libera» non lo può dire. Adesso dice QUALE fascia ha messo e
  * chiede di controllarla.
  */
@@ -205,7 +206,9 @@ export function DeliverySlotPicker({
           onClick={() => oggiPossibile && scegliGiorno('today')}
           disabled={!oggiPossibile}
           title="Oggi"
-          subtitle={oggiPossibile ? "Scegli l'ora" : 'Non più oggi'}
+          // 30/10/2026 (ondata 22) — Il motivo vero, come «Domani»: domenica alle 10 il negozio è
+          // chiuso, non è «troppo tardi».
+          subtitle={oggiPossibile ? "Scegli l'ora" : sottotitoloOggiSpento(adesso)}
         />
         <DayTile
           active={day === 'tomorrow'}

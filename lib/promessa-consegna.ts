@@ -49,14 +49,14 @@
  *
  * Prova: tests/unit/il-conto-alla-rovescia-col-negozio-chiuso.test.ts
  */
-import { DAY_KEYS, isOpenNow, negozioPuoServire, romeNow, type HoursInterval, type StoreHours } from '@/lib/store-hours';
+import { DAY_KEYS, isOpenNow, romeNow, type HoursInterval, type StoreHours } from '@/lib/store-hours';
 import { EXPRESS_ETA_MAX, EXPRESS_ETA_MIN } from '@/lib/delivery';
 import {
   APERTURA_EXPRESS,
   CHIUSURA_EXPRESS,
-  FASCE_DI_DOMANI,
   expressSiPuo,
   fasceAncoraPossibili,
+  fasceDiDomaniPossibili,
 } from '@/lib/quando-arriva';
 
 /** La consegna normale: arriva nella fascia che il cliente sceglie in cassa. Frase corta. */
@@ -201,7 +201,8 @@ export function rigaConsegnaDellaScheda(s: {
  * oggi»: il forno aveva chiuso alle 13. Il bollino guardava solo se oggi c'era un orario. Qui la
  * domanda è quella delle rotte che creano l'ordine:
  *   · «oggi» se una fascia di oggi non è ancora finita e il negozio è aperto nella parte che resta
- *     (`fasceAncoraPossibili` + `negozioPuoServire`), oppure se la cassa ha detto sì alla veloce;
+ *     (`fasceAncoraPossibili`, la regola unica della cassa e delle rotte, coi minuti e gli orari),
+ *     oppure se la cassa ha detto sì alla veloce;
  *   · altrimenti «domani» se domani c'è una fascia in cui il negozio è aperto: è quello che la
  *     cassa offrirà;
  *   · altrimenti niente. Niente anche senza orari scritti (non si sa) e prima dell'idratazione
@@ -227,13 +228,16 @@ export function consegnaDellaVetrina(s: {
   const veloceInGioco =
     expressSiPuo(adesso.getHours()) && isOpenNow(fasceDelGiorno(s.orari, adesso.getDay()), adesso);
   if (s.veloce === true && veloceInGioco) return 'oggi';
-  const oggiSiPuo = fasceAncoraPossibili(adesso.getHours()).some((f) => negozioPuoServire(s.orari, f, adesso));
+  // 30/10/2026 (ondata 22) — La stessa funzione della cassa, con la Date intera: prima qui contava
+  // solo l'ora, e lunedì dalle 19:01 alle 19:29 la vetrina diceva «oggi» mentre la cassa non aveva
+  // più fasce per oggi.
+  const oggiSiPuo = fasceAncoraPossibili(adesso, [s.orari]).length > 0;
   if (oggiSiPuo) return 'oggi';
   // 30/10/2026 — Le fasce non bastano e la veloce si potrebbe, ma la risposta della cassa non c'è
   // (in viaggio o caduta): non si sa se oggi si può. Prima qui usciva «domani», e un attimo dopo
   // «oggi»: un giorno sbagliato scritto mentre si aspetta. Finché non si sa, niente.
   if (s.veloce === null && veloceInGioco) return null;
-  const domaniSiPuo = FASCE_DI_DOMANI.some((f) => negozioPuoServire(s.orari, f, adesso));
+  const domaniSiPuo = fasceDiDomaniPossibili(adesso, [s.orari]).length > 0;
   return domaniSiPuo ? 'domani' : null;
 }
 

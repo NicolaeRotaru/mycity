@@ -108,13 +108,13 @@ const lunSab: [string, string][] = [['08:00', '21:00']];
 const chiusoDomenica = { mon: lunSab, tue: lunSab, wed: lunSab, thu: lunSab, fri: lunSab, sat: lunSab, sun: [] };
 
 describe('il freno della veloce regge guasti, margini e concorrenza', () => {
-  it('W-guasto: sabato 20:35, negozio chiuso la domenica, lettura orari in errore: niente «Domani · 9:00–12:00»', async () => {
+  it('W-guasto: sabato 20:35, negozio chiuso la domenica, lettura orari in errore: niente «Domani · 7:30–9:00»', async () => {
     db.profiles = [{ id: 'forno', store_hours: chiusoDomenica }];
     guasto.profiles = true;
     db.orders = [ordine({ created_at: '2026-10-31T19:20:00.000Z' })];
     await giro('2026-10-31T19:35:00.000Z');
-    expect(o('o1').delivery_slot).not.toBe('Domani · 9:00–12:00');
-    expect(String(db.notifications[0]?.body ?? '')).not.toContain('Domani · 9:00–12:00');
+    expect(o('o1').delivery_slot).not.toBe('Domani · 7:30–9:00');
+    expect(String(db.notifications[0]?.body ?? '')).not.toContain('Domani · 7:30–9:00');
   });
 
   it('W-guasto-poi: durante il guasto l ordine resta «Adesso», gli admin lo sanno e il cliente legge l ora vera dell annullo; finito il guasto niente fascia finta né secondo avviso', async () => {
@@ -134,10 +134,10 @@ describe('il freno della veloce regge guasti, margini e concorrenza', () => {
     expect(db.notifications).toHaveLength(1);
   });
 
-  it('W-margine: alle 19:05 la fascia 18:00–20:00 ha 55 minuti: si va a domani', async () => {
-    db.orders = [ordine({ created_at: '2026-10-30T17:50:00.000Z' })];
-    await giro('2026-10-30T18:05:00.000Z');
-    expect(o('o1').delivery_slot).toBe('Domani · 9:00–12:00');
+  it('W-margine: alle 20:05 la fascia 19:30–21:00 ha 55 minuti: si va a domani', async () => {
+    db.orders = [ordine({ created_at: '2026-10-30T18:50:00.000Z' })];
+    await giro('2026-10-30T19:05:00.000Z');
+    expect(o('o1').delivery_slot).toBe('Domani · 7:30–9:00');
   });
 
   it('W-concorrenza: l ordine che porta l euro cambia stato mentre il freno lavora: niente «alla porta paghi», admin avvisati', async () => {
@@ -149,7 +149,7 @@ describe('il freno della veloce regge guasti, margini e concorrenza', () => {
     prima.update = () => { db.orders[0].delivery_status = 'READY'; };
     await giro('2026-10-30T17:16:00.000Z');
     expect(o('o1')).toMatchObject({ delivery_status: 'READY', delivery_fee_cents: 400, total_price: 19 });
-    expect(o('o2').delivery_slot).toBe('Stasera · 18:00–20:00');
+    expect(o('o2').delivery_slot).toBe('Oggi · 18:00–19:30');
     expect(String(db.notifications[0]?.body)).not.toContain('alla porta paghi');
     expect(String(notifyAdminsMock.mock.calls[0]?.[1] ?? '')).toContain('#O1');
   });
@@ -158,10 +158,10 @@ describe('il freno della veloce regge guasti, margini e concorrenza', () => {
     db.orders = [ordine({ created_at: '2026-10-30T16:38:00.000Z' })];
     await giro('2026-10-30T16:50:00.000Z');
     const scade = scadenzaAccettazione({ created_at: String(o('o1').created_at), delivery_slot: String(o('o1').delivery_slot) });
-    expect(o('o1').delivery_slot).toBe('Stasera · 18:00–20:00');
+    expect(o('o1').delivery_slot).toBe('Oggi · 18:00–19:30');
     expect(scade?.toISOString()).toBe('2026-10-30T19:38:00.000Z');
     const riga = rigaScadenzaPerIlNegozio({ created_at: String(o('o1').created_at), delivery_slot: String(o('o1').delivery_slot) }, new Date('2026-10-30T16:50:00.000Z'));
-    expect(riga).toContain('entro le 20:00 di oggi');
+    expect(riga).toContain('entro le 19:30 di oggi');
   });
 
   it('W-campanella-giu: se la campanella non si scrive, il cliente non riceve un email ogni 5 minuti', async () => {

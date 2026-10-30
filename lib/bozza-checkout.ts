@@ -31,12 +31,18 @@
  *    da mostrare.
  *
  * Stessa idea per la fascia di consegna: si riporta indietro **solo se è ancora possibile**. Chi va
- * al login alle 19:55 e torna alle 20:05 non deve ritrovarsi «Stasera · 18:00–20:00» come se niente
+ * al login alle 19:55 e torna alle 20:05 non deve ritrovarsi «Oggi · 19:30–21:00» come se niente
  * fosse — quell'ora è passata mentre digitava la password.
  *
  * Prova: tests/unit/il-muro-dell-accesso-faceva-salire-il-totale.test.ts
  */
-import { fasceAncoraPossibili, FASCE_DI_DOMANI, type Giorno } from '@/lib/quando-arriva';
+import { fasceAncoraPossibili, fasceDiDomaniPossibili, FASCE_DI_DOMANI, type Giorno } from '@/lib/quando-arriva';
+
+/** L'ora intera (le vecchie chiamate) oppure l'orologio di Roma coi minuti, e gli orari dei negozi. */
+function fasceDi(giorno: 'today' | 'tomorrow', adesso: number | Date, orari: readonly unknown[]): string[] {
+  if (typeof adesso === 'number') return giorno === 'today' ? fasceAncoraPossibili(adesso) : FASCE_DI_DOMANI;
+  return giorno === 'today' ? fasceAncoraPossibili(adesso, orari) : fasceDiDomaniPossibili(adesso, orari);
+}
 
 /** I campi dell'indirizzo: gli unici che tornano indietro così come sono. */
 export type CampiIndirizzo = Record<string, unknown>;
@@ -121,20 +127,23 @@ export function metodoDaRimettere(
 /**
  * La fascia che si può davvero rimettere — e la risposta è `null` quando è passata.
  *
- * IL CASO: login alle 19:55, ritorno alle 20:05. La fascia «Stasera · 18:00–20:00» era scelta ed
+ * IL CASO: login alle 19:55, ritorno alle 20:05. La fascia «Oggi · 19:30–21:00» era scelta ed
  * era giusta; adesso non è più proponibile. Rimetterla vorrebbe dire riportare la persona
  * esattamente sull'ordine con l'appuntamento già passato, cioè il difetto che il lotto prima aveva
  * chiuso. `null` vuol dire «riparti dal valore che la pagina calcola adesso».
+ *
+ * 30/10/2026 (ondata 22) — Con l'orologio di Roma (la Date intera) e gli orari dei negozi del
+ * carrello si chiede alla regola unica della cassa: alle 19:15 l'ora sola diceva ancora «19» e
+ * rimetteva una fascia che la cassa e la rotta rifiutano.
  */
 export function fasciaDaRimettere(
   giorno: Giorno | undefined,
   fascia: string | undefined,
-  ora: number,
+  adesso: number | Date,
+  orari: readonly unknown[] = [],
 ): string | null {
-  if (!giorno || !fascia) return null;
-  if (giorno === 'tomorrow') return FASCE_DI_DOMANI.includes(fascia) ? fascia : null;
-  if (giorno === 'today') return fasceAncoraPossibili(ora).includes(fascia) ? fascia : null;
-  return null;
+  if (!giorno || !fascia || giorno === 'now') return null;
+  return fasceDi(giorno, adesso, orari).includes(fascia) ? fascia : null;
 }
 
 /**
@@ -143,8 +152,12 @@ export function fasciaDaRimettere(
  * Se per oggi non c'è più niente, «oggi» non si rimette: si lascia decidere alla pagina, che il
  * giorno di partenza lo sa calcolare guardando l'ora.
  */
-export function giornoDaRimettere(giorno: Giorno | undefined, ora: number): Giorno | null {
+export function giornoDaRimettere(
+  giorno: Giorno | undefined,
+  adesso: number | Date,
+  orari: readonly unknown[] = [],
+): Giorno | null {
   if (!giorno) return null;
-  if (giorno === 'today' && fasceAncoraPossibili(ora).length === 0) return null;
+  if (giorno === 'today' && fasceDi('today', adesso, orari).length === 0) return null;
   return giorno;
 }

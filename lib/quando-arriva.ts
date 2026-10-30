@@ -35,26 +35,60 @@
  * mettersi alle 21:40 senza aspettare le 21:40.
  */
 import { EXPRESS_ETA_LABEL } from './delivery';
-import { negozioPuoServire } from './store-hours';
+import { motivoNegozioChiuso, negozioPuoServire, romeNow } from './store-hours';
 
 export type Giorno = 'now' | 'today' | 'tomorrow';
 
 /**
- * Le fasce di oggi, ognuna con l'ora in cui FINISCE.
+ * 30/10/2026 (ondata 22) — LE SETTE FASCE DI NICOLA, UGUALI PER OGGI E PER DOMANI.
  *
- * L'ora di fine è il campo che conta: una fascia è ancora proponibile finché non è finita, non
- * finché non è cominciata. Alle 16 «15:00–18:00» va ancora bene.
+ * Scelta di Nicola (30/10 23:15, fatto `consegna.fasce-orarie`). Le fasce di prima (oggi 15-18 e
+ * 18-20, domani 9-12, 12-15, 15-18:30, 18:30-20) non seguivano gli orari veri: alle 15:00 di un
+ * giorno feriale nessuno dei 9 negozi di Piacenza con orario trovato è aperto
+ * (consegne/intelligence/2026-10-30-orari-negozi-piacenza.md), e quasi tutti chiudono fra le 19 e
+ * le 19:30. I minuti sono quelli dell'orologio di Roma, dalla mezzanotte.
  */
-export const FASCE_DI_OGGI: { etichetta: string; oraDiFine: number }[] = [
-  { etichetta: 'In giornata · 15:00–18:00', oraDiFine: 18 },
-  { etichetta: 'Stasera · 18:00–20:00', oraDiFine: 20 },
+const ORARI_DELLE_FASCE: readonly { orario: string; daMinuti: number; aMinuti: number }[] = [
+  { orario: '7:30–9:00', daMinuti: 7 * 60 + 30, aMinuti: 9 * 60 },
+  { orario: '9:00–11:00', daMinuti: 9 * 60, aMinuti: 11 * 60 },
+  { orario: '11:00–13:00', daMinuti: 11 * 60, aMinuti: 13 * 60 },
+  { orario: '13:00–16:30', daMinuti: 13 * 60, aMinuti: 16 * 60 + 30 },
+  { orario: '16:30–18:00', daMinuti: 16 * 60 + 30, aMinuti: 18 * 60 },
+  { orario: '18:00–19:30', daMinuti: 18 * 60, aMinuti: 19 * 60 + 30 },
+  { orario: '19:30–21:00', daMinuti: 19 * 60 + 30, aMinuti: 21 * 60 },
 ];
 
-export const FASCE_DI_DOMANI = [
-  'Domani · 9:00–12:00',
-  'Domani · 12:00–15:00',
-  'Domani · 15:00–18:30',
-  'Domani · 18:30–20:00',
+/** Una fascia di oggi coi suoi minuti. `oraDiFine` resta per chi la leggeva (19:30 = 19.5). */
+export type FasciaDiOggi = { etichetta: string; daMinuti: number; aMinuti: number; oraDiFine: number };
+
+/**
+ * Le fasce di oggi, ognuna con l'ora in cui FINISCE: è quella che conta per la regola dei 60
+ * minuti. Le etichette seguono la forma di sempre: «Oggi · 16:30–18:00».
+ */
+export const FASCE_DI_OGGI: FasciaDiOggi[] = ORARI_DELLE_FASCE.map((f) => ({
+  etichetta: `Oggi · ${f.orario}`,
+  daMinuti: f.daMinuti,
+  aMinuti: f.aMinuti,
+  oraDiFine: f.aMinuti / 60,
+}));
+
+export const FASCE_DI_DOMANI: string[] = ORARI_DELLE_FASCE.map((f) => `Domani · ${f.orario}`);
+
+/**
+ * LE FASCE DI PRIMA (fino al 30/10/2026). La cassa non le propone più.
+ *
+ * Restano lette per due motivi: sono scritte sugli ordini già nati (`orders.delivery_slot`, che
+ * leggono la scadenza, le email e la pagina dell'ordine), e una cassa aperta prima del rilascio
+ * le può ancora mandare. Le rotte le giudicano con la stessa regola delle nuove: lunedì alle 17:50
+ * «In giornata · 15:00–18:00» prende il 409 dei 60 minuti, con la carta come coi contanti.
+ */
+export const FASCE_DI_PRIMA: readonly { etichetta: string; giorno: 'oggi' | 'domani'; daMinuti: number; aMinuti: number }[] = [
+  { etichetta: 'In giornata · 15:00–18:00', giorno: 'oggi', daMinuti: 15 * 60, aMinuti: 18 * 60 },
+  { etichetta: 'Stasera · 18:00–20:00', giorno: 'oggi', daMinuti: 18 * 60, aMinuti: 20 * 60 },
+  { etichetta: 'Domani · 9:00–12:00', giorno: 'domani', daMinuti: 9 * 60, aMinuti: 12 * 60 },
+  { etichetta: 'Domani · 12:00–15:00', giorno: 'domani', daMinuti: 12 * 60, aMinuti: 15 * 60 },
+  { etichetta: 'Domani · 15:00–18:30', giorno: 'domani', daMinuti: 15 * 60, aMinuti: 18 * 60 + 30 },
+  { etichetta: 'Domani · 18:30–20:00', giorno: 'domani', daMinuti: 18 * 60 + 30, aMinuti: 20 * 60 },
 ];
 
 /** La finestra in cui un rider c'è davvero. Fuori da qui l'express non si offre. */
@@ -66,7 +100,8 @@ export const ETICHETTA_ADESSO = `Adesso · arrivo in ${EXPRESS_ETA_LABEL}`;
 export const SOTTOTITOLO_ADESSO = EXPRESS_ETA_LABEL;
 
 /**
- * TUTTE le fasce che la cassa può davvero proporre. Sette, e non una di più.
+ * TUTTE le fasce che una rotta può ricevere: l'express, le sette di oggi, le sette di domani e
+ * quelle di prima (lette, mai proposte).
  *
  * ⚠️ Questo elenco è un CANCELLO, non una comodità. La fascia scelta viaggia dal browser fino
  * alle due rotte che creano gli ordini, e lì decide se il negozio può servire: una fascia per
@@ -82,11 +117,36 @@ export const FASCE_AMMESSE: readonly string[] = [
   ETICHETTA_ADESSO,
   ...FASCE_DI_OGGI.map((f) => f.etichetta),
   ...FASCE_DI_DOMANI,
+  ...FASCE_DI_PRIMA.map((f) => f.etichetta),
 ];
 
-/** Vero solo per le sette etichette qui sopra. Il confronto è esatto: niente interpretazioni. */
+/** Vero solo per le etichette qui sopra. Il confronto è esatto: niente interpretazioni. */
 export function fasciaAmmessa(valore: unknown): valore is string {
   return typeof valore === 'string' && FASCE_AMMESSE.includes(valore);
+}
+
+/**
+ * Di che giorno parla un'etichetta, letto dall'ELENCO che la genera e non da una parola dentro
+ * il testo. `null` per tutto ciò che non è una fascia nota.
+ */
+export function finestraDellaFascia(
+  etichetta: string | null | undefined,
+): { giorno: 'oggi' | 'domani'; daMinuti: number; aMinuti: number } | null {
+  const oggi = FASCE_DI_OGGI.find((f) => f.etichetta === etichetta);
+  if (oggi) return { giorno: 'oggi', daMinuti: oggi.daMinuti, aMinuti: oggi.aMinuti };
+  const domani = FASCE_DI_DOMANI.indexOf(String(etichetta));
+  if (domani >= 0) {
+    const f = ORARI_DELLE_FASCE[domani];
+    return { giorno: 'domani', daMinuti: f.daMinuti, aMinuti: f.aMinuti };
+  }
+  const prima = FASCE_DI_PRIMA.find((f) => f.etichetta === etichetta);
+  return prima ? { giorno: prima.giorno, daMinuti: prima.daMinuti, aMinuti: prima.aMinuti } : null;
+}
+
+/** «adesso», «oggi», «domani», oppure `null` se l'etichetta non è una fascia nota. */
+export function giornoDellaFascia(etichetta: string | null | undefined): 'adesso' | 'oggi' | 'domani' | null {
+  if (etichetta === ETICHETTA_ADESSO) return 'adesso';
+  return finestraDellaFascia(etichetta)?.giorno ?? null;
 }
 
 /**
@@ -95,7 +155,8 @@ export function fasciaAmmessa(valore: unknown): valore is string {
  * Scelta di Nicola (fatto `consegna.fascia-fino-a-60-minuti`). Prima la fascia restava
  * proponibile finché non era finita: lunedì alle 17:50 la cassa segnava da sola «In giornata ·
  * 15:00–18:00», cioè «arriva entro dieci minuti», meno della veloce (30-60 min), e la rotta
- * accettava. Nessun fattorino ce la fa. Dopo le 17:00 si propone la successiva.
+ * accettava. Nessun fattorino ce la fa. È anche il margine della regola del ritiro
+ * (`negozioPuoServire`): il negozio deve essere aperto prima di quest'ora dalla fine.
  */
 export const MINUTI_PRIMA_DELLA_FINE = 60;
 
@@ -104,21 +165,21 @@ function minutiDi(adesso: number | Date): number {
   return typeof adesso === 'number' ? adesso * 60 : adesso.getHours() * 60 + adesso.getMinutes();
 }
 
-/** È una delle fasce di oggi? Solo per quelle conta la regola dei 60 minuti (e serve l'orologio). */
+/** È una fascia di oggi (anche di quelle di prima)? Solo per queste conta l'orologio dei 60 minuti. */
 export function eFasciaDiOggi(etichetta: string | null | undefined): boolean {
-  return FASCE_DI_OGGI.some((x) => x.etichetta === etichetta);
+  return finestraDellaFascia(etichetta)?.giorno === 'oggi';
 }
 
 /**
  * Perché questa fascia di oggi non si fa più in tempo, o `null` se si fa (o se non è di oggi).
  *
- * È la regola dei 60 minuti, in un posto solo: la usa la cassa per non proporla e la rotta
- * dei contanti per rifiutarla con un 409.
+ * È la regola dei 60 minuti, in un posto solo. Vale anche per il negozio senza orari scritti:
+ * lì la regola del ritiro non ha niente da chiedere, ma una fascia finita resta finita.
  */
 export function fasciaFuoriTempo(etichetta: string | null | undefined, adesso: number | Date): string | null {
-  const f = FASCE_DI_OGGI.find((x) => x.etichetta === etichetta);
-  if (!f) return null;
-  const mancano = f.oraDiFine * 60 - minutiDi(adesso);
+  const f = finestraDellaFascia(etichetta);
+  if (!f || f.giorno !== 'oggi') return null;
+  const mancano = f.aMinuti - minutiDi(adesso);
   if (mancano >= MINUTI_PRIMA_DELLA_FINE) return null;
   if (mancano <= 0) {
     return 'La fascia che hai scelto è già passata. Scegline una ancora disponibile, oppure ordina per domani.';
@@ -127,37 +188,67 @@ export function fasciaFuoriTempo(etichetta: string | null | undefined, adesso: n
 }
 
 /**
- * Tutti i negozi del carrello possono servire questa fascia? Sono gli orari che la rotta legge
- * (`negozioPuoServire`, negozio per negozio): la cassa non propone quello che la rotta rifiuta.
- * Senza orari (lista vuota) non c'è niente da chiedere, come nella rotta.
+ * 30/10/2026 (ondata 22) — LA REGOLA UNICA: QUESTA FASCIA SI PUÒ SERVIRE ADESSO?
+ *
+ * Due domande, sempre nello stesso ordine: ① i 60 minuti (`fasciaFuoriTempo`) ② la regola del
+ * ritiro, negozio per negozio (`negozioPuoServire`): ogni negozio del carrello dev'essere aperto
+ * in un momento fra adesso e 60 minuti prima della fine della fascia; MyCity tiene la merce da
+ * parte fino alla fascia. La usano il selettore, la cassa, la vetrina, la bozza e il freno della
+ * veloce: così nessuno propone quello che le rotte rifiutano (`motivoFasciaRifiutata`).
+ * Senza orari (lista vuota) resta solo la regola dei 60 minuti, come nelle rotte.
  */
-function laServonoTutti(fascia: string, adesso: Date, orari: readonly unknown[]): boolean {
-  return orari.every((h) => negozioPuoServire(h, fascia, adesso));
+export function fasciaSiPuo(fascia: string, adesso: Date, orari: readonly unknown[] = []): boolean {
+  return fasciaFuoriTempo(fascia, adesso) === null && orari.every((h) => negozioPuoServire(h, fascia, adesso));
+}
+
+/**
+ * La stessa regola, detta come la dicono le rotte: il motivo del 409, o `null` se l'ordine passa.
+ * Una casa sola per i contanti e per la carta: stesso controllo, stesso messaggio.
+ *
+ * L'orologio di Roma si legge una volta sola, e solo se serve (`adesso` lo passano le prove).
+ */
+export function motivoFasciaRifiutata(
+  fascia: string | null | undefined,
+  negozi: readonly { nome?: string | null; orari?: unknown }[],
+  adesso?: Date,
+): string | null {
+  const ora = adesso ?? (eFasciaDiOggi(fascia) ? romeNow() : undefined);
+  const fuori = ora ? fasciaFuoriTempo(fascia, ora) : null;
+  if (fuori) return fuori;
+  const chiuso = negozi.find((n) => !negozioPuoServire(n.orari, fascia, ora));
+  return chiuso ? motivoNegozioChiuso(chiuso.nome ?? 'Il negozio', fascia, ora) : null;
 }
 
 /**
  * Le fasce di oggi che si possono ancora scegliere. Vuota dopo l'ultima.
  *
  * Con l'ora intera (le vecchie chiamate) vale solo la regola dei 60 minuti alle :00. Con
- * l'orologio di Roma contano i minuti e, se ci sono, gli orari dei negozi del carrello: giovedì
- * alle 14:00 Pane Quotidiano non riapre, quindi per oggi non resta niente.
+ * l'orologio di Roma è la regola unica (`fasciaSiPuo`): giovedì alle 14:00 Pane Quotidiano non
+ * riapre, quindi per oggi non resta niente.
  */
 export function fasceAncoraPossibili(ora: number): string[];
 export function fasceAncoraPossibili(adesso: Date, orari?: readonly unknown[]): string[];
 export function fasceAncoraPossibili(adesso: number | Date, orari: readonly unknown[] = []): string[] {
-  return FASCE_DI_OGGI.filter(
-    (f) =>
-      fasciaFuoriTempo(f.etichetta, adesso) === null &&
-      (typeof adesso === 'number' || laServonoTutti(f.etichetta, adesso, orari)),
+  return FASCE_DI_OGGI.filter((f) =>
+    typeof adesso === 'number' ? fasciaFuoriTempo(f.etichetta, adesso) === null : fasciaSiPuo(f.etichetta, adesso, orari),
   ).map((f) => f.etichetta);
 }
 
-/** Le fasce di domani che i negozi del carrello possono servire: sabato, per la domenica chiusa, nessuna. */
+/** Le fasce di domani che i negozi del carrello possono servire: sabato sera, per la domenica chiusa, nessuna. */
 export function fasceDiDomaniPossibili(adesso: Date, orari: readonly unknown[] = []): string[] {
-  return FASCE_DI_DOMANI.filter((f) => laServonoTutti(f, adesso, orari));
+  return FASCE_DI_DOMANI.filter((f) => fasciaSiPuo(f, adesso, orari));
 }
 
-/** «Oggi» si può ancora scegliere? Dalle 19:01 in poi, no; con gli orari, anche prima. */
+/**
+ * Cosa dice la tessera «Oggi» quando è spenta: il motivo vero, come fa già «Domani».
+ * «Non più oggi» se anche senza negozi non resta una fascia (dopo le 20:00); altrimenti è il
+ * negozio che non si fa trovare aperto in tempo: domenica alle 10, giovedì alle 14.
+ */
+export function sottotitoloOggiSpento(adesso: Date): 'Non più oggi' | 'Negozio chiuso' {
+  return fasceAncoraPossibili(adesso, []).length > 0 ? 'Negozio chiuso' : 'Non più oggi';
+}
+
+/** «Oggi» si può ancora scegliere? Dalle 20:01 in poi, no; con gli orari, anche prima. */
 export function oggiSiPuoAncora(ora: number): boolean;
 export function oggiSiPuoAncora(adesso: Date, orari?: readonly unknown[]): boolean;
 export function oggiSiPuoAncora(adesso: number | Date, orari: readonly unknown[] = []): boolean {

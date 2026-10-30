@@ -48,9 +48,13 @@ describe('la sera, un ordine per domani passa se domani il negozio è aperto', (
     expect(motivoNegozioChiuso('Pasticceria', 'Domani · 9:00–12:00')).toContain('domani');
   });
 
-  it('e se domani è aperto ma NON in quella fascia, si ferma lo stesso', () => {
+  it('e se domani apre troppo tardi per ritirare prima della fascia, si ferma lo stesso', () => {
+    // 30/10 (ondata 22), regola del ritiro: aperto la mattina basta per la sera (si ritira e si
+    // tiene da parte); aperto solo dalle 19:30 non basta per la 18:00–19:30.
     const soloMattina = { wed: [['8:00', '13:00']] } as unknown;
-    expect(negozioPuoServire(soloMattina, 'Domani · 18:30–20:00', martediSera)).toBe(false);
+    expect(negozioPuoServire(soloMattina, 'Domani · 18:00–19:30', martediSera)).toBe(true);
+    const soloSera = { wed: [['19:30', '23:00']] } as unknown;
+    expect(negozioPuoServire(soloSera, 'Domani · 18:00–19:30', martediSera)).toBe(false);
     // La stessa fascia su un negozio che chiude alle 19 va bene: mezz'ora basta.
     expect(negozioPuoServire(pasticceria, 'Domani · 18:30–20:00', martediSera)).toBe(true);
   });
@@ -106,7 +110,7 @@ describe('le due rotte dei soldi passano davvero la fascia scelta', () => {
       const src = readFileSync(join(radice, rotta), 'utf8');
       // Senza `body.deliverySlot` la funzione ricadrebbe sempre su «adesso» e il
       // difetto tornerebbe identico, con la prova qui sopra ancora verde.
-      expect(src).toMatch(/negozioPuoServire\([\s\S]{0,140}?body\.deliverySlot/);
+      expect(src).toMatch(/motivoFasciaRifiutata\(\s*body\.deliverySlot/);
       expect(src, 'il rifiuto deve restare un conflitto').toMatch(/conflict\(/);
     });
   }

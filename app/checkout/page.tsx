@@ -484,14 +484,16 @@ export default function CheckoutPage() {
       if (bozza.couponCode) setCouponCode(bozza.couponCode);
 
       // 30/10/2026 (ondata 18) — L'ora di Roma, come la vetrina e le rotte: non quella del telefono.
-      const ora = romeNow().getHours();
+      // 30/10/2026 (ondata 22) — La Date intera, coi minuti, e gli orari dei negozi: la stessa
+      // regola della cassa e delle rotte. Con l'ora sola, alle 19:15 si rimetteva una fascia finita.
+      const adesso = romeNow();
       const metodo = metodoDaRimettere(bozza.metodoPagamento, stripeAvailable);
       if (metodo) setPaymentMethod(metodo);
-      const giorno = giornoDaRimettere(bozza.giorno, ora);
+      const giorno = giornoDaRimettere(bozza.giorno, adesso, orariNegozi);
       if (giorno) setSlotDay(giorno);
-      const oggi = fasciaDaRimettere('today', bozza.fasciaOggi, ora);
+      const oggi = fasciaDaRimettere('today', bozza.fasciaOggi, adesso, orariNegozi);
       if (oggi) setSlotTodayTime(oggi);
-      const domani = fasciaDaRimettere('tomorrow', bozza.fasciaDomani, ora);
+      const domani = fasciaDaRimettere('tomorrow', bozza.fasciaDomani, adesso, orariNegozi);
       if (domani) setSlotTomorrowTime(domani);
 
       localStorage.removeItem('mc_checkout_draft');

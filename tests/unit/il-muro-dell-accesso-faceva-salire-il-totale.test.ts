@@ -126,12 +126,12 @@ describe('il metodo di pagamento', () => {
 
 describe('la fascia di consegna', () => {
   it('IL CASO: login alle 19:55, ritorno alle 20:05 — la fascia passata NON torna', () => {
-    expect(fasciaDaRimettere('today', 'Stasera · 18:00–20:00', 19)).toBe('Stasera · 18:00–20:00');
-    expect(fasciaDaRimettere('today', 'Stasera · 18:00–20:00', 20)).toBeNull();
+    expect(fasciaDaRimettere('today', 'Oggi · 19:30–21:00', new Date(2026, 10, 2, 19, 55))).toBe('Oggi · 19:30–21:00');
+    expect(fasciaDaRimettere('today', 'Oggi · 19:30–21:00', new Date(2026, 10, 2, 20, 5))).toBeNull();
   });
 
   it('una fascia di oggi ancora buona torna', () => {
-    expect(fasciaDaRimettere('today', 'In giornata · 15:00–18:00', 14)).toBe('In giornata · 15:00–18:00');
+    expect(fasciaDaRimettere('today', 'Oggi · 16:30–18:00', 14)).toBe('Oggi · 16:30–18:00');
   });
 
   it('domani non scade con l\'ora di oggi', () => {
@@ -153,7 +153,7 @@ describe('la fascia di consegna', () => {
 describe('il giorno', () => {
   it('«oggi» non si rimette se per oggi non c\'è più niente', () => {
     expect(giornoDaRimettere('today', 14)).toBe('today');
-    expect(giornoDaRimettere('today', 20)).toBeNull();
+    expect(giornoDaRimettere('today', 21)).toBeNull();
   });
 
   it('domani si rimette a qualunque ora', () => {

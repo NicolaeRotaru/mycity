@@ -39,18 +39,18 @@ describe('fasciaFuoriTempo: la regola che usa la rotta', () => {
     expect(fasciaFuoriTempo('Domani · 9:00–12:00', tardi)).toBeNull();
     expect(fasciaFuoriTempo(ETICHETTA_ADESSO, tardi)).toBeNull();
   });
-  it('con l\'ora intera resta la regola di prima: alle 19 «Stasera» c\'è, alle 20 no', () => {
-    expect(fasceAncoraPossibili(19)).toEqual(['Stasera · 18:00–20:00']);
-    expect(fasceAncoraPossibili(20)).toEqual([]);
+  it('con l\'ora intera resta la regola di prima: alle 20 la 19:30–21:00 c\'è, alle 21 no', () => {
+    expect(fasceAncoraPossibili(20)).toEqual(['Oggi · 19:30–21:00']);
+    expect(fasceAncoraPossibili(21)).toEqual([]);
   });
 });
 
 describe('i casi di Pane Quotidiano', () => {
-  it('giovedì alle 14:00 oggi niente, si parte da domani 9:00–12:00', () => {
+  it('giovedì alle 14:00 oggi niente, si parte da domani 9:00–11:00', () => {
     const d = new Date(2026, 9, 29, 14, 0);
     expect(fasciaDiPartenzaOggi(d, [PANE_QUOTIDIANO])).toBeNull();
     expect(giornoDiPartenza(d, [PANE_QUOTIDIANO])).toBe('tomorrow');
-    expect(fasceDiDomaniPossibili(d, [PANE_QUOTIDIANO])[0]).toBe('Domani · 9:00–12:00');
+    expect(fasceDiDomaniPossibili(d, [PANE_QUOTIDIANO])[0]).toBe('Domani · 9:00–11:00');
   });
   it('domenica alle 10:00 niente oggi', () => {
     expect(fasceAncoraPossibili(new Date(2026, 10, 1, 10, 0), [PANE_QUOTIDIANO])).toEqual([]);
@@ -89,10 +89,9 @@ describe('una settimana intera, minuto per minuto: ogni fascia proposta la rotta
 describe('la rotta dei contanti usa la stessa regola', () => {
   it('controlla i 60 minuti prima degli orari dei negozi, e risponde con un 409', () => {
     const src = readFileSync(join(process.cwd(), 'app/api/orders/cod/route.ts'), 'utf8');
-    const regola = src.indexOf('fasciaFuoriTempo(body.deliverySlot');
-    const orari = src.indexOf('negozioPuoServire(s.store_hours, body.deliverySlot)');
+    // 30/10 (ondata 22): la regola unica (`motivoFasciaRifiutata`) fa i 60 minuti e poi gli orari.
+    const regola = src.indexOf('motivoFasciaRifiutata(');
     expect(regola).toBeGreaterThan(-1);
-    expect(regola).toBeLessThan(orari);
-    expect(src.slice(regola, orari)).toContain('ApiErrors.conflict(fuoriTempo)');
+    expect(src.slice(regola)).toContain('ApiErrors.conflict(rifiutata)');
   });
 });

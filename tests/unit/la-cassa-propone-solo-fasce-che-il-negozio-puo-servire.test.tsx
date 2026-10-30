@@ -26,8 +26,8 @@ const LUNEDI_17_00 = '2026-11-02T16:00:00Z';
 const LUNEDI_17_01 = '2026-11-02T16:01:00Z';
 const LUNEDI_17_50 = '2026-11-02T16:50:00Z';
 
-const POMERIGGIO = 'In giornata · 15:00–18:00';
-const STASERA = 'Stasera · 18:00–20:00';
+const POMERIGGIO = 'Oggi · 16:30–18:00';
+const STASERA = 'Oggi · 18:00–19:30';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -76,7 +76,7 @@ describe('la tessera «Oggi» guarda gli orari del negozio', () => {
     expect(giornoDiPartenza(adesso, [PANE_QUOTIDIANO])).toBe('tomorrow');
     const caduta = quandoLaVeloceCade({ day: 'now', expressAvailable: false, ora: 14, adesso, orari: [PANE_QUOTIDIANO] });
     expect(caduta?.day).toBe('tomorrow');
-    expect(caduta?.fascia).toBe('Domani · 9:00–12:00');
+    expect(caduta?.fascia).toBe('Domani · 9:00–11:00');
   });
 
   it('domenica alle 10:00 niente «Oggi»', () => {
@@ -96,7 +96,7 @@ describe('la tessera «Oggi» guarda gli orari del negozio', () => {
 describe('una fascia si sceglie fino a 60 minuti prima della sua fine', () => {
   it('lunedì alle 17:50 la 15:00–18:00 non c\'è: la prima proposta è la successiva', () => {
     alle(LUNEDI_17_50);
-    expect(fasceProposte(cassa('today'))).toEqual([STASERA]);
+    expect(fasceProposte(cassa('today'))).toEqual([STASERA, 'Oggi · 19:30–21:00']);
   });
 
   it('lunedì alle 17:00 la 15:00–18:00 c\'è ancora (mancano 60 minuti)', () => {
