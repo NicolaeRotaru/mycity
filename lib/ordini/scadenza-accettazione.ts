@@ -216,3 +216,22 @@ export function rigaScadenzaPerIlNegozio(ordine: OrdineDaScadere, adesso: Date =
   if (adesso.getTime() < entro.getTime()) return `Accettalo o rifiutalo entro ${scadenzaLeggibile(entro, adesso)}.`;
   return `La fascia di consegna è finita: accettalo solo se puoi consegnarlo subito, altrimenti rifiutalo. ${allAnnullo}`;
 }
+
+/**
+ * 30/10/2026 (collaudo dell'ondata 20) — COME LE PAGINE ORDINI DEL NEGOZIO RILEGGONO GLI ORDINI.
+ *
+ * La riga di `rigaScadenzaPerIlNegozio` si scrive con l'ora dell'ULTIMA LETTURA. Col telefono
+ * bloccato la ricarica automatica si ferma (`refetchIntervalInBackground: false` nel
+ * QueryProvider) e al ritorno sulla pagina non si rileggeva niente (`refetchOnWindowFocus: false`,
+ * sempre nel QueryProvider): la pagina lasciata aperta venerdì alle 20:30, sabato alle 8:30 diceva
+ * ancora «entro le 12:00 di domani» per un ordine che scadeva quella mattina, fino al giro dopo
+ * (90 secondi sulla lista, 30 sul dettaglio) — e mostrava anche gli ordini di ieri sera, magari
+ * già annullati di notte.
+ *
+ * `always` e non `true`: con `true` si rilegge solo se il dato ha più di 30 secondi (staleTime del
+ * QueryProvider), e quattro secondi a cavallo della fine della fascia bastano per dire «entro le
+ * 12:00 di oggi» alle 12:00:01. Il costo è una lettura ogni volta che il negoziante torna sulla
+ * pagina; da nascosta continua a non leggere niente.
+ * Prova: tests/unit/entro-quando-accettare-si-rilegge-quando-il-telefono-si-riapre.test.tsx
+ */
+export const LETTURA_ORDINI_DEL_NEGOZIO = { refetchOnWindowFocus: 'always' } as const;

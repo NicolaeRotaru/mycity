@@ -16,7 +16,7 @@ import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { Banknote, ChevronRight, ClipboardList, Clock } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
 import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
-import { rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
+import { LETTURA_ORDINI_DEL_NEGOZIO, rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
 import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
 
 type Order = {
@@ -93,6 +93,8 @@ export default function SellerOrdersPage() {
     },
     getNextPageParam: (ultima, tutte) => pagineSuccessiva(ultima.length, tutte.length),
     refetchInterval: 90_000,
+    // Al ritorno sul telefono si rilegge subito: la riga «entro quando accettare» usa l'ora della lettura.
+    ...LETTURA_ORDINI_DEL_NEGOZIO,
   });
   const orders = unisciPagine(queryOrders.data?.pages ?? []);
   // 30/10/2026 — L'ora con cui si scrive «entro quando accettare» è quella dell'ultima lettura, non

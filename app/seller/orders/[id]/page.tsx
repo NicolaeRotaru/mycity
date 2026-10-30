@@ -25,7 +25,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { cifraDellaVoce, riepilogoOrdine } from '@/lib/ordini/riepilogo-ordine';
 import { nomeDellaRigaOrdine, fotoDellaRigaOrdine } from '@/lib/ordini/riga-ordine';
 import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
-import { rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
+import { LETTURA_ORDINI_DEL_NEGOZIO, rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
 import ReturnRequestCard, { type ReturnRow } from '@/components/seller/ReturnRequestCard';
 
 type OrderRow = {
@@ -171,6 +171,8 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
       return (fallback.data ?? null) as unknown as OrderRow | null;
     },
     refetchInterval: 30_000,
+    // Al ritorno sul telefono si rilegge subito: la riga «entro quando accettare» usa l'ora della lettura.
+    ...LETTURA_ORDINI_DEL_NEGOZIO,
   });
   // 30/10/2026 — «Entro quando accettare» si scrive con l'ora dell'ultima lettura: React Query
   // ridisegna solo se cambia quello che la pagina legge, e coi dati uguali la riga restava ferma
