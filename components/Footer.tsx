@@ -115,13 +115,14 @@ const iconaDi = (slug: string): LucideIcon => ICONE[slug] ?? Tag;
  * Adesso l'elenco arriva dal database, con la stessa chiave di cache del
  * mega-menu in alto: su una pagina normale il dato è già in casa, quindi qui
  * non parte nessuna lettura in più, e una categoria aggiunta domani compare da
- * sola. QUESTE NOVE RESTANO COME RISERVA — sono le madri create dalle
+ * sola. QUESTE RESTANO COME RISERVA — sono le madri create dalle
  * migrazioni 002 e 013, in ordine alfabetico come le ordina il database. Servono
  * per il primo disegno della pagina e per il giorno in cui la lettura fallisce:
  * un piede con la colonna vuota è peggio di un piede un po' vecchio.
  */
+// 30/10/2026 — Otto, senza «Abbigliamento»: al lancio non c'è (catalogo.categorie, Nicola 29/10
+// 00:05). Se il database lo restituisce, è il dato del database a dirlo, non questa riserva.
 const CATEGORIE_DI_RISERVA: Categoria[] = [
-  { slug: 'abbigliamento', name: 'Abbigliamento' },
   { slug: 'alimentari',    name: 'Alimentari' },
   { slug: 'bellezza',      name: 'Bellezza' },
   { slug: 'casa',          name: 'Casa & Cucina' },

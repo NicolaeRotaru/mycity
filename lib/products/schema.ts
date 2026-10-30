@@ -37,6 +37,10 @@ export const UNIT_SUFFIX: Record<ProductUnit, string> = {
   m: '/m',
 };
 
+/**
+ * Le condizioni che un prodotto può avere SCRITTE in banca dati: servono a leggere anche i prodotti
+ * vecchi. Non sono le scelte del modulo (sotto).
+ */
 export const PRODUCT_CONDITIONS = ['nuovo', 'usato', 'ricondizionato'] as const;
 export type ProductCondition = (typeof PRODUCT_CONDITIONS)[number];
 export const CONDITION_LABELS: Record<ProductCondition, string> = {
@@ -44,6 +48,19 @@ export const CONDITION_LABELS: Record<ProductCondition, string> = {
   usato: 'Usato',
   ricondizionato: 'Ricondizionato',
 };
+
+/**
+ * 30/10/2026 — Le condizioni che il negoziante può SCEGLIERE. MyCity non vende l usato
+ * (CONTESTO_BUSINESS.md, fra le cose da non costruire mai): «Usato» e «Ricondizionato» non si
+ * offrono più. Un prodotto vecchio che le ha già resta leggibile e si salva com è: il modulo
+ * mostra il suo valore, ma non lo propone a chi sceglie.
+ */
+export const CONDIZIONI_DA_SCEGLIERE: readonly ProductCondition[] = ['nuovo'];
+
+/** Vero se la condizione si può scegliere nel modulo. */
+export function condizioneDaScegliere(c: unknown): c is ProductCondition {
+  return typeof c === 'string' && (CONDIZIONI_DA_SCEGLIERE as readonly string[]).includes(c);
+}
 
 /**
  * Normalizza testo libero (AI o vecchio attributo per-categoria `stato`) nella

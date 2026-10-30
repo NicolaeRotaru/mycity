@@ -61,10 +61,10 @@ export type HeroDefaults = {
 const SPAZIO_SEZIONE = 'py-6';
 const SPAZIO_FASCIA = 'py-6 md:py-10';
 
+// 30/10/2026 — Senza «Abbigliamento»: al lancio non c'è (catalogo.categorie, Nicola 29/10 00:05).
 const HERO_CHIPS = [
   { slug: 'alimentari',    label: 'Alimentari' },
   { slug: 'elettronica',   label: 'Elettronica' },
-  { slug: 'abbigliamento', label: 'Abbigliamento' },
   { slug: 'bellezza',      label: 'Bellezza' },
   { slug: 'casa',          label: 'Casa & Cucina' },
 ];

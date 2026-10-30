@@ -42,9 +42,15 @@
  *
  * Prova: tests/unit/il-conto-alla-rovescia-col-negozio-chiuso.test.ts
  */
-import { DAY_KEYS, isOpenNow, romeNow, type HoursInterval, type StoreHours } from '@/lib/store-hours';
+import { DAY_KEYS, isOpenNow, negozioPuoServire, romeNow, type HoursInterval, type StoreHours } from '@/lib/store-hours';
 import { EXPRESS_ETA_MAX, EXPRESS_ETA_MIN } from '@/lib/delivery';
-import { APERTURA_EXPRESS, CHIUSURA_EXPRESS } from '@/lib/quando-arriva';
+import {
+  APERTURA_EXPRESS,
+  CHIUSURA_EXPRESS,
+  FASCE_DI_DOMANI,
+  expressSiPuo,
+  fasceAncoraPossibili,
+} from '@/lib/quando-arriva';
 
 /** La consegna normale: arriva nella fascia che il cliente sceglie in cassa. Frase corta. */
 export const CONSEGNA_ALL_ORA_CHE_SCEGLI = "Consegna a casa, all'ora che scegli";
@@ -173,4 +179,49 @@ export function rigaConsegnaDellaScheda(s: {
     if (p.tipo === 'chiuso') return `${rigaNegozioChiuso(p.riapre)}: in cassa scegli l'ora della consegna`;
   }
   return s.veloce === true ? CONSEGNA_O_VELOCE_ADESSO : CONSEGNA_ALL_ORA_CHE_SCEGLI;
+}
+
+/**
+ * 30/10/2026 — IL BOLLINO DELLA CONSEGNA NELLA VETRINA DEL NEGOZIO, CON LE REGOLE DELLA CASSA.
+ *
+ * Giovedì 29/10 alle 20:15 la vetrina di Pane Quotidiano diceva insieme «Chiuso ora» e «Consegna
+ * oggi»: il forno aveva chiuso alle 13. Il bollino guardava solo se oggi c'era un orario. Qui la
+ * domanda è quella delle rotte che creano l'ordine:
+ *   · «oggi» se una fascia di oggi non è ancora finita e il negozio è aperto nella parte che resta
+ *     (`fasceAncoraPossibili` + `negozioPuoServire`), oppure se la cassa ha detto sì alla veloce;
+ *   · altrimenti «domani» se domani c'è una fascia in cui il negozio è aperto: è quello che la
+ *     cassa offrirà;
+ *   · altrimenti niente. Niente anche senza orari scritti (non si sa) e prima dell'idratazione
+ *     (`adesso: null`): l'ora la legge il browser, non il server.
+ */
+export type ConsegnaDellaVetrina = 'oggi' | 'domani' | null;
+
+export function consegnaDellaVetrina(s: {
+  orari?: unknown;
+  /** L'ora di Piacenza letta nel browser (`romeNow()`); `null` prima dell'idratazione. */
+  adesso: Date | null;
+  /** Risposta di /api/consegna/veloce: `true` solo con `possibile: true`; `null` se non chiesta o caduta. */
+  veloce: boolean | null;
+}): ConsegnaDellaVetrina {
+  const adesso = s.adesso;
+  if (!adesso || !haOrari(s.orari)) return null;
+  // Il sì della cassa vale solo finché il negozio è aperto e la veloce è nelle sue ore: una
+  // risposta letta alle 12:58 non deve tenere acceso «oggi» al forno che ha chiuso alle 13.
+  const veloceAdesso =
+    s.veloce === true && expressSiPuo(adesso.getHours()) && isOpenNow(fasceDelGiorno(s.orari, adesso.getDay()), adesso);
+  if (veloceAdesso) return 'oggi';
+  const oggiSiPuo = fasceAncoraPossibili(adesso.getHours()).some((f) => negozioPuoServire(s.orari, f, adesso));
+  if (oggiSiPuo) return 'oggi';
+  const domaniSiPuo = FASCE_DI_DOMANI.some((f) => negozioPuoServire(s.orari, f, adesso));
+  return domaniSiPuo ? 'domani' : null;
+}
+
+/**
+ * Serve chiedere alla cassa della veloce? Solo se le fasce non bastano già a dire «oggi» e se un sì
+ * è possibile: negozio aperto adesso e dentro le ore della veloce. A forno chiuso non si chiede.
+ */
+export function vetrinaChiedeLaVeloce(orari: unknown, adesso: Date | null): boolean {
+  if (!adesso || !haOrari(orari)) return false;
+  if (consegnaDellaVetrina({ orari, adesso, veloce: null }) === 'oggi') return false;
+  return expressSiPuo(adesso.getHours()) && isOpenNow(fasceDelGiorno(orari, adesso.getDay()), adesso);
 }
