@@ -188,7 +188,8 @@ export function newOrderSellerTemplate(args: {
  * 30/10/2026 — IL NEGOZIO NON HA CONFERMATO LA VELOCE IN 10 MINUTI (carta #220).
  *
  * Al cliente: la spesa passa a una fascia, l'euro della veloce non lo paga, e può annullare senza
- * costi. La frase è la stessa della campanella (lib/ordini/veloce-non-confermata.ts).
+ * costi finché il negozio non conferma (dopo, la rotta di annullo accetta solo un ordine NEW).
+ * La frase è la stessa della campanella (lib/ordini/veloce-non-confermata.ts).
  */
 export function veloceNonConfermataTemplate(args: { orderId: string; frase: string; senzaFascia?: boolean }) {
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;

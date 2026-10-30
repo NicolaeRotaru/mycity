@@ -197,9 +197,11 @@ export function rigaScadenzaPerIlNegozio(ordine: OrdineDaScadere, adesso: Date =
   if (eFasciaVeloce(ordine.delivery_slot)) {
     const freno = new Date(nato.getTime() + MINUTI_PER_CONFERMARE_LA_VELOCE * 60_000);
     if (adesso.getTime() < freno.getTime()) {
+      // Niente «passa alla prima fascia oraria libera» detto come certo: sabato sera, col negozio chiuso
+      // la domenica, il freno non trova nessuna fascia e l'ordine resta com'è (nonSiSposta).
       return (
         `È una consegna veloce: accettala entro le ${oraDaParete(freno)}. ` +
-        `Dopo ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti senza conferma la spesa passa alla prima fascia oraria libera.`
+        `Dopo ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti senza conferma la veloce cade: se c’è una fascia oraria libera la spesa passa lì da sola.`
       );
     }
     return (

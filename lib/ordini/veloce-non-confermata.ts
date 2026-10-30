@@ -30,7 +30,8 @@ import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/
  * ② l'euro della veloce si toglie dalla consegna dell'ordine che lo porta, tranne quando la veloce
  *   era compresa (spesa piccola): lì cambia solo la fascia;
  * ③ il compenso del fattorino resta quello scritto;
- * ④ il cliente lo sa subito, per email e nella campanella, e può annullare senza costi;
+ * ④ il cliente lo sa subito, per email e nella campanella, e può annullare senza costi finché il
+ *   negozio non conferma (dopo, la rotta di annullo non lo accetta più);
  * ⑤ la scrittura è condizionata su `delivery_status` e su `delivery_slot` = «Adesso»: se il negozio
  *   accetta mentre il freno lavora vince una sola delle due, e un secondo giro non trova niente.
  * Maria: alle 18:16 passa a «Stasera · 18:00–20:00» e alla porta paga 18 € invece di 19.
@@ -131,7 +132,10 @@ export type ComeVaLEuro = 'tolto-contanti' | 'tolto-carta' | 'compresa' | 'a-man
 /** La frase per il cliente: la stessa nella campanella e nell'email. «Non lo paghi» solo se è tolto davvero. */
 export function fraseDelFreno(a: { fascia: string; euro: ComeVaLEuro; totaleCents: number; sulCreditoCents?: number }): string {
   const inizio = `Il negozio non ha confermato in ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti: la tua spesa arriva nella fascia ${a.fascia}`;
-  const fine = 'Se non ti va bene, puoi annullare l’ordine dalla sua pagina senza costi.';
+  // Il limite è quello della rotta di annullo (app/api/orders/[id]/cancel): il cliente annulla solo
+  // un ordine NEW. Prima la frase lo prometteva senza condizioni: alle 12:58 il forno accettava la
+  // fascia nuova e alle 13:10 il tasto Annulla non c'era più, mentre la campanella diceva di sì.
+  const fine = 'Se non ti va bene, puoi annullarlo senza costi dalla sua pagina finché il negozio non lo conferma.';
   if (a.euro === 'compresa') return `${inizio}. La consegna veloce era già compresa nel prezzo, quindi il totale non cambia. ${fine}`;
   if (a.euro === 'tolto-contanti') {
     // L'euro pagato col credito MyCity torna sul credito: alla porta non si toglie quello che non c'era.
@@ -297,7 +301,14 @@ async function rendiSulCredito(admin: SupabaseClient, c: RigaVeloce, cents: numb
   return false;
 }
 
-async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: RigaVeloce[], adesso: Date): Promise<EsitoDelCarrello> {
+/**
+ * `fatto`: quello che il giro ha già fatto sul carrello e non si disfa (l'euro reso sulla carta o sul
+ * credito, un ordine già spostato). Se dopo una scrittura cade, il giro lo legge agli amministratori.
+ * Le frasi dipendono dallo stato, non dal giro: lo stesso stato dà lo stesso avviso, una volta sola.
+ */
+async function spostaIlCarrello(
+  admin: SupabaseClient, o: RigaVeloce, carrello: RigaVeloce[], adesso: Date, fatto: string[] = [],
+): Promise<EsitoDelCarrello> {
   const vivi = carrello.filter((c) => !FUORI_DAL_GIRO.includes(String(c.delivery_status)));
   // ② Un ordine del carrello già partito col fattorino (o consegnato): spostare il resto spezzerebbe
   // il giro e l'euro della veloce starebbe su un conto che non si può più riscrivere. Non si tocca
@@ -375,11 +386,14 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
       if (giaResi > 0) {
         if (giaResi === -r.deltaCents && String(lui?.stripe_refund_id ?? '').trim() !== '') {
           resiCents += giaResi;
+          fatto.push(`${formatPriceFromCents(giaResi)} già reso sulla carta per l’ordine ${codiceDi(r.id)}`);
           continue;
         }
         logger.error('[veloce-non-confermata] sull ordine c è già un rimborso che non è l euro della veloce: non se ne prenota un altro', {
           orderId: r.id, giaResi, chiesti: -r.deltaCents,
         });
+        // Stessa frase del giro che l'ha reso: se poi una scrittura cade, l'avviso non si ripete.
+        fatto.push(`${formatPriceFromCents(giaResi)} già reso sulla carta per l’ordine ${codiceDi(r.id)}`);
         rimborsoNonFatto.push(r);
         continue;
       }
@@ -396,6 +410,7 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
         });
         const reso = Number(esito?.importoCents ?? 0);
         resiCents += Number.isFinite(reso) && reso > 0 ? reso : 0;
+        if (Number.isFinite(reso) && reso > 0) fatto.push(`${formatPriceFromCents(reso)} già reso sulla carta per l’ordine ${codiceDi(r.id)}`);
         if (!(reso >= -r.deltaCents)) {
           logger.error('[veloce-non-confermata] rimborso dell euro della veloce partito solo in parte', {
             orderId: r.id, chiesti: -r.deltaCents, resi: reso,
@@ -425,6 +440,7 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
     const dalCredito = Math.max(0, -delta - cassa);
     if (dalCredito > 0 && !(await rendiSulCredito(admin, c, dalCredito))) delta = 0;
     if (dalCredito > 0 && delta !== 0) {
+      fatto.push(`${formatPriceFromCents(dalCredito)} già tornato sul credito MyCity per l’ordine ${codiceDi(c.id)}`);
       accreditati.add(c.id);
       creditoResoCents += dalCredito;
       valori.wallet_applied_cents = Number(c.wallet_applied_cents ?? 0) - dalCredito;
@@ -456,11 +472,39 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
         // in quell'istante e la veloce resta. Al cliente va bene, ma il conto va saputo. Se invece l'ha
         // già spostato un altro giro, era lo stesso rimborso (stessa chiave) e non c'è niente da dire.
         if (resiCents + creditoResoCents > 0) {
-          const { data: ora } = await admin.from('orders').select('delivery_slot').eq('id', c.id).maybeSingle();
-          if ((ora as { delivery_slot?: string | null } | null)?.delivery_slot === ETICHETTA_ADESSO) {
+          // «Zero righe scritte» ha tre cause: il negozio ha accettato, il cliente ha annullato (o il
+          // negozio ha rifiutato), oppure un altro negozio del carrello ha cambiato la consegna. Si
+          // rilegge anche lo stato: prima si guardava solo la fascia, e a un ordine annullato mentre
+          // l'euro tornava sulla carta gli amministratori leggevano «il negozio ha confermato».
+          const reso = formatPriceFromCents(resiCents + creditoResoCents);
+          const { data: ora, error: errOra } = await admin
+            .from('orders').select('delivery_slot, delivery_status').eq('id', c.id).maybeSingle();
+          const vero = ora as { delivery_slot?: string | null; delivery_status?: string | null } | null;
+          const stato = String(vero?.delivery_status ?? '');
+          if (errOra || !vero) {
+            await notifyAdmins(
+              '⚠️ Veloce: euro reso e ordine non riletto',
+              `Mentre il freno della veloce rendeva al cliente ${reso} (sulla carta o sul credito MyCity), l'ordine ${codiceDi(o.id)} è cambiato e non si è potuto rileggere${errOra ? ` (${errOra.message})` : ''}. Guarda tu com'è adesso: se è annullato, controlla che al cliente sia tornato in tutto quello che ha pagato, non di più; se è confermato, la veloce resta e l'euro è già reso.`,
+              '/admin/orders',
+              { unaVoltaPer: `veloce-resa-non-riletto-${o.id}` },
+            ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
+            return 'a-mano';
+          }
+          if (FUORI_DAL_GIRO.includes(stato)) {
+            await notifyAdmins(
+              stato === 'CANCELED' ? '⚠️ Ordine annullato mentre il freno rendeva l’euro' : '⚠️ Ordine rifiutato mentre il freno rendeva l’euro',
+              `L'ordine ${codiceDi(o.id)} risulta ${stato === 'CANCELED' ? 'annullato' : 'rifiutato dal negozio'} (stato riletto adesso: ${stato}) mentre il freno della veloce rendeva al cliente ${reso} (sulla carta o sul credito MyCity). Il negozio non l'ha confermato e la fascia non è cambiata. Controlla che in tutto al cliente sia tornato quello che ha pagato, non di più e non di meno: l'euro della veloce è già fra quello che gli è tornato.`,
+              '/admin/orders',
+              { unaVoltaPer: `veloce-resa-annullato-${o.id}` },
+            ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
+            return 'a-mano';
+          }
+          // Ancora «Adesso» e non più NEW: l'ha confermato il negozio in quell'istante e la veloce resta.
+          // Ancora «Adesso» e NEW: è cambiata la consegna, e il giro dopo riprova con la stessa chiave.
+          if (vero.delivery_slot === ETICHETTA_ADESSO && stato !== 'NEW') {
             await notifyAdmins(
               '⚠️ Veloce confermata dopo il rimborso dell’euro',
-              `Il negozio ha confermato l'ordine ${codiceDi(o.id)} mentre il freno della veloce rendeva al cliente ${formatPriceFromCents(resiCents + creditoResoCents)} (sulla carta o sul credito MyCity). La veloce resta e il cliente ha già avuto indietro l'euro: non serve fare niente, ma la consegna di questo carrello è costata al cliente 1 € in meno di quello scritto.`,
+              `Il negozio ha confermato l'ordine ${codiceDi(o.id)} mentre il freno della veloce rendeva al cliente ${reso} (sulla carta o sul credito MyCity). La veloce resta e il cliente ha già avuto indietro l'euro: non serve fare niente, ma la consegna di questo carrello è costata al cliente 1 € in meno di quello scritto.`,
               '/admin/orders',
               { unaVoltaPer: `veloce-resa-${o.id}` },
             ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
@@ -471,6 +515,7 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
       aMeta = true;
       continue;
     }
+    fatto.push(`ordine ${codiceDi(c.id)} già passato alla fascia ${fascia}`);
     deltaScritti.set(c.id, delta);
     if (delta !== 0) {
       contantiScritti.set(c.id, delta + dalCredito);
@@ -515,7 +560,8 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
 }
 
 export type EsitoDelFreno =
-  | { ok: true; spostati: number; accettatiNelFrattempo: number; daSistemareAMano: number }
+  /** `guasti`: carrelli in cui una scrittura è caduta a metà (sono anche fra quelli da sistemare a mano). */
+  | { ok: true; spostati: number; accettatiNelFrattempo: number; daSistemareAMano: number; guasti: number }
   | { ok: false; error: string };
 
 /** Il giro del freno: lo chiama app/api/cron/veloce-non-confermata ogni cinque minuti. */
@@ -537,21 +583,39 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
   let spostati = 0;
   let accettatiNelFrattempo = 0;
   let daSistemareAMano = 0;
+  let guasti = 0;
   const visti = new Set<string>();
   for (const o of (data ?? []) as unknown as RigaVeloce[]) {
     if (visti.has(o.id) || o.pickup_in_store) continue;
+    const fatto: string[] = [];
     try {
       const carrello = (await ordiniDelCarrello(admin, o)) ?? [o];
       for (const c of carrello) visti.add(c.id);
       const lui = carrello.find((c) => c.id === o.id) ?? o;
-      const esito = await spostaIlCarrello(admin, lui, carrello, adesso);
+      const esito = await spostaIlCarrello(admin, lui, carrello, adesso, fatto);
       if (esito === 'spostato') spostati++;
       else if (esito === 'accettato') accettatiNelFrattempo++;
       else daSistemareAMano++;
     } catch (err) {
+      // Una scrittura è caduta a metà. Prima il carrello si contava «da sistemare a mano» e la cosa
+      // restava nei log: con la carta l'euro era già tornato, l'ordine restava «Adesso» e nessuna
+      // persona lo sapeva (tre giri di fila, zero avvisi). Adesso gli amministratori leggono cosa è già
+      // fatto e cosa resta; la chiave dipende da quello che è fatto, così lo stesso guasto ogni 5 minuti
+      // arriva una volta, e se il giro dopo fa un passo in più arriva l'avviso aggiornato.
+      guasti++;
       daSistemareAMano++;
-      logger.error('[veloce-non-confermata] carrello NON spostato', { orderId: o.id, err });
+      const perche = err instanceof Error ? err.message : String(err);
+      logger.error('[veloce-non-confermata] carrello NON spostato', { orderId: o.id, err, fatto });
+      await notifyAdmins(
+        '⚠️ Freno della veloce fermo a metà',
+        `Il freno della veloce non è riuscito a finire il carrello dell'ordine ${codiceDi(o.id)}: ${perche}. ` +
+          `Già fatto: ${fatto.length > 0 ? fatto.join('; ') : 'niente'}. ` +
+          'Il freno riprova da solo ogni 5 minuti e non rende due volte quello che è già reso. Se l’ordine resta «Adesso», ' +
+          'senti il negozio e mettilo tu in una fascia col cliente, avvisandolo.',
+        '/admin/orders',
+        { unaVoltaPer: `veloce-guasto-${o.id}:${fatto.join('|') || 'niente'}` },
+      ).catch((e) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err: e }));
     }
   }
-  return { ok: true, spostati, accettatiNelFrattempo, daSistemareAMano };
+  return { ok: true, spostati, accettatiNelFrattempo, daSistemareAMano, guasti };
 }

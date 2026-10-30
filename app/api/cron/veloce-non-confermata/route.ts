@@ -16,7 +16,13 @@ export const runtime = 'nodejs';
 
 export const POST = withCronAuth(async (): Promise<NextResponse> => {
   const esito = await frenoDellaVeloce(getAdminSupabase() as unknown as SupabaseClient);
-  return NextResponse.json(esito, { status: esito.ok ? 200 : 500 });
+  // 200 vuol dire «tutto a posto». Prima un carrello rimasto da sistemare a mano (per esempio la fascia
+  // che non si scrive, con l'euro già tornato sulla carta) rispondeva 200 {ok:true}: il guardiano dei
+  // lavori scrive nei log solo le risposte da 400 in su, e il semaforo restava verde. Adesso il pannello
+  // dei lavori mostra il problema finché il carrello non è sistemato; gli amministratori l'hanno già
+  // nella campanella (lib/ordini/veloce-non-confermata.ts), e il battito si scrive lo stesso.
+  const tuttoAPosto = esito.ok && esito.daSistemareAMano === 0;
+  return NextResponse.json(esito, { status: tuttoAPosto ? 200 : 500 });
 });
 
 export const GET = POST;

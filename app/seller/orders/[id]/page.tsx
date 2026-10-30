@@ -139,7 +139,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
   const [rejectOpen, setRejectOpen] = useState(false);
   const [codiceRitiro, setCodiceRitiro] = useState('');
 
-  const { data: order, isLoading, isError, refetch } = useQuery({
+  const { data: order, isLoading, isError, refetch, dataUpdatedAt, errorUpdatedAt } = useQuery({
     queryKey: queryKeys.seller.order(id),
     queryFn: async () => {
       const sel = (pay: string) => `
@@ -172,6 +172,10 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
     },
     refetchInterval: 30_000,
   });
+  // 30/10/2026 — «Entro quando accettare» si scrive con l'ora dell'ultima lettura: React Query
+  // ridisegna solo se cambia quello che la pagina legge, e coi dati uguali la riga restava ferma
+  // all'ora in cui la pagina si era aperta (sabato mattina diceva ancora «entro le 12:00 di domani»).
+  const lettoAlle = new Date(Math.max(dataUpdatedAt, errorUpdatedAt) || Date.now());
 
   // Codice ritiro: visibile solo al seller (RLS lo limita ai propri ordini)
   const { data: pickupCode } = useQuery({
@@ -372,8 +376,9 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
             </p>
           )}
           {/* 30/10/2026 — Entro quando accettare: la stessa riga dell'email «Nuovo ordine». */}
-          {order.delivery_status === 'NEW' && rigaScadenzaPerIlNegozio(order) && (
-            <p className="mt-1 text-sm font-semibold text-primary-700">{rigaScadenzaPerIlNegozio(order)}</p>
+          {/* L'ora è quella dell'ultima lettura (ogni 30 secondi), non quella in cui la pagina si è aperta. */}
+          {order.delivery_status === 'NEW' && rigaScadenzaPerIlNegozio(order, lettoAlle) && (
+            <p className="mt-1 text-sm font-semibold text-primary-700">{rigaScadenzaPerIlNegozio(order, lettoAlle)}</p>
           )}
         </div>
         <div className="flex items-center gap-2">

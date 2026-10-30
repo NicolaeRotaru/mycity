@@ -220,6 +220,14 @@ git push origin main
 **Chi li fa partire**: Vercel. L'elenco e le cadenze stanno in `vercel.json`
 → `crons`; a parole sono descritti in `docs/crons.json`.
 
+**Il freno della veloce** (`/api/cron/veloce-non-confermata`, ogni 5 minuti):
+un ordine «Adesso» che il negozio non conferma in 10 minuti passa da solo a
+una fascia, e l'euro della veloce non si paga. Se un cliente dice «il mio
+ordine è cambiato da solo», si guarda qui per primo. Risponde 500 finché c'è
+un carrello da sistemare a mano, e agli amministratori arriva l'avviso con
+cosa è già fatto (per esempio l'euro già reso sulla carta) e cosa resta. Il
+sorvegliante lo dà per fermo dopo 30 minuti senza battito (`lib/cron-health.ts`).
+
 **Diagnosi**:
 1. Vercel → il progetto **mycity** → scheda **Cron Jobs**: c'è l'ultimo giro di
    ognuno e come è finito. (Da riga di comando: `vercel crons ls`.)
