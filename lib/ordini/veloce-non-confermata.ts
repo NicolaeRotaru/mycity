@@ -215,9 +215,13 @@ async function spostaIlCarrello(admin: SupabaseClient, o: RigaVeloce, carrello: 
   let orari: unknown[] = [];
   if (venditori.length > 0) {
     const { data: negozi, error } = await admin.from('profiles').select('id, store_hours').in('id', venditori);
-    if (!error && Array.isArray(negozi)) {
-      orari = venditori.map((v) => (negozi as Array<{ id: string; store_hours: unknown }>).find((n) => n.id === v)?.store_hours ?? null);
+    // Senza gli orari non si sceglie nessuna fascia: con `orari = []` ogni fascia sembrava buona
+    // (every() su una lista vuota è vero) e il sabato sera la veloce finiva su «Domani · 9:00–12:00»
+    // col negozio chiuso la domenica. L'ordine resta «Adesso» e il prossimo giro del freno riprova.
+    if (error || !Array.isArray(negozi)) {
+      throw new Error(`ordine ${o.id}: orari dei negozi non letti: ${error?.message ?? 'risposta vuota'}`);
     }
+    orari = venditori.map((v) => (negozi as Array<{ id: string; store_hours: unknown }>).find((n) => n.id === v)?.store_hours ?? null);
   }
   const fascia = fasciaDopoLaVeloce(romeNow(adesso), orari);
   if (!fascia) return senzaFascia(admin, o);
