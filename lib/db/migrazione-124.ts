@@ -91,6 +91,30 @@ function nominaUnVincoloDiStato(errore: unknown): boolean {
   return VINCOLI_DI_STATO_124.some((vincolo) => testo.includes(vincolo));
 }
 
+/**
+ * 30/10/2026 — UNA SCRITTURA NON ARRIVA A POSTGRESQL: LA FERMA PRIMA POSTGREST.
+ *
+ * I codici qui sopra sono di PostgreSQL, e tornano quando la richiesta arriva
+ * al database: è il caso di una LETTURA che chiede `gross_total_cents` (42703).
+ * Una SCRITTURA che la porta no: PostgREST confronta i campi con lo schema che
+ * ha in memoria e risponde da solo `PGRST204 — Could not find the
+ * 'gross_total_cents' column of 'orders' in the schema cache`. Senza questo
+ * codice il ripiego di ogni `update`/`insert` con i campi della 124 non
+ * scattava mai: dopo il rifiuto di un negozio il segno dell'annullo cadeva, il
+ * ricalcolo del carrello si fermava e la carta rendeva 18 € invece di 16
+ * (collaudo dell'ondata 16; era il debito dichiarato in `migrazione-148.ts`).
+ *
+ * Come per il 23514, per NOME: PGRST204 vale solo se nomina una colonna che
+ * nasce con la 124. Un nome scritto male nel codice resta un errore vero.
+ */
+function nominaUnaColonna124(errore: unknown): boolean {
+  const e = errore as { message?: unknown; details?: unknown } | null;
+  const testo = `${typeof e?.message === 'string' ? e.message : ''} ${typeof e?.details === 'string' ? e.details : ''}`;
+  // Il bordo di parola tiene fuori i nomi più lunghi (`gross_total_cents_bis`):
+  // `_` conta come lettera, quindi `payout_tentativo` non si trova dentro `rider_payout_tentativo`.
+  return COLONNE_124.some((colonna) => new RegExp(`\\b${colonna}\\b`).test(testo));
+}
+
 export function eSchemaIndietro(errore: unknown): boolean {
   const code = (errore as { code?: string } | null)?.code;
   if (!code) return false;
@@ -98,6 +122,8 @@ export function eSchemaIndietro(errore: unknown): boolean {
   // quale, ed è uno dei due sugli stati del bonifico. Un CHECK senza nome, o
   // con il nome di un paletto sui soldi, resta un errore vero.
   if (code === '23514') return nominaUnVincoloDiStato(errore);
+  // PGRST204 = PostgREST non trova una colonna in una scrittura. Vale solo se è una della 124.
+  if (code === 'PGRST204') return nominaUnaColonna124(errore);
   return SCHEMA_INDIETRO.has(code);
 }
 

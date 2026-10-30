@@ -1,5 +1,6 @@
 'use client';
 
+import { CONSEGNA_ALL_ORA_CHE_SCEGLI } from '@/lib/promessa-consegna';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -114,13 +115,14 @@ const iconaDi = (slug: string): LucideIcon => ICONE[slug] ?? Tag;
  * Adesso l'elenco arriva dal database, con la stessa chiave di cache del
  * mega-menu in alto: su una pagina normale il dato è già in casa, quindi qui
  * non parte nessuna lettura in più, e una categoria aggiunta domani compare da
- * sola. QUESTE NOVE RESTANO COME RISERVA — sono le madri create dalle
+ * sola. QUESTE RESTANO COME RISERVA — sono le madri create dalle
  * migrazioni 002 e 013, in ordine alfabetico come le ordina il database. Servono
  * per il primo disegno della pagina e per il giorno in cui la lettura fallisce:
  * un piede con la colonna vuota è peggio di un piede un po' vecchio.
  */
+// 30/10/2026 — Otto, senza «Abbigliamento»: al lancio non c'è (catalogo.categorie, Nicola 29/10
+// 00:05). Se il database lo restituisce, è il dato del database a dirlo, non questa riserva.
 const CATEGORIE_DI_RISERVA: Categoria[] = [
-  { slug: 'abbigliamento', name: 'Abbigliamento' },
   { slug: 'alimentari',    name: 'Alimentari' },
   { slug: 'bellezza',      name: 'Bellezza' },
   { slug: 'casa',          name: 'Casa & Cucina' },
@@ -318,7 +320,7 @@ const Footer = () => {
               <Banknote size={14} strokeWidth={2} className="text-olive-600" /> Pagamento alla consegna
             </span>
             <span className="flex items-center gap-1.5">
-              <Truck size={14} strokeWidth={2} className="text-olive-600" /> Consegna in 30-60 min
+              <Truck size={14} strokeWidth={2} className="text-olive-600" /> {CONSEGNA_ALL_ORA_CHE_SCEGLI}
             </span>
             <span className="flex items-center gap-1.5">
               <Lock size={14} strokeWidth={2} className="text-olive-600" /> Acquisto sicuro

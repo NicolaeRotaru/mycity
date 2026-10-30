@@ -1,5 +1,6 @@
 'use client';
 
+import { QUANDO_SI_PUO_LA_VELOCE, VELOCE_IN_MINUTI } from '@/lib/promessa-consegna';
 import { useId, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -41,11 +42,12 @@ import {
   createProductSchema,
   buildProductPayload,
   scortaCambiata,
-  normalizeCondition,
+  condizioneDalSuggerimento,
   UNIT_OPTIONS,
   UNIT_SUFFIX,
   CONDITION_LABELS,
-  PRODUCT_CONDITIONS,
+  CONDIZIONI_DA_SCEGLIERE,
+  condizioneDaScegliere,
   type ProductUnit,
   type ProductCondition,
   type ProductFormValues,
@@ -175,8 +177,8 @@ export default function ProductForm({
   const [unit, setUnit] = useState<ProductUnit>((initialValues?.unit as ProductUnit) ?? 'pezzo');
   const [condition, setCondition] = useState<ProductCondition | ''>((initialValues?.condition as ProductCondition) ?? '');
   const [unlimitedStock, setUnlimitedStock] = useState<boolean>(initialValues?.stock === null);
-  // Tempo di consegna (scelta binaria): true = consegna veloce 30-60 min
-  // (express_enabled = true), false = spedizione 2-3 giorni (express_enabled = false).
+  // Tempo di consegna (scelta binaria) salvato in express_enabled. 29/10/2026: per ora non cambia
+  // cosa vede il cliente — la cassa offre la fascia oraria, e la veloce con le regole di `veloceSiPuo`.
   // Un valore storico null ("eredita") viene risolto sul default del negozio.
   const [fastDelivery, setFastDelivery] = useState<boolean>(
     initialValues?.expressEnabled === true
@@ -380,7 +382,8 @@ export default function ProductForm({
     if (data.attributes) {
       const cond = data.attributes['condizione'];
       if (typeof cond === 'string') {
-        const norm = normalizeCondition(cond);
+        // Come il menu: «usato» e «ricondizionato» letti dalla foto non entrano.
+        const norm = condizioneDalSuggerimento(cond);
         if (norm) setCondition(norm);
       }
       if (data.category_id) {
@@ -489,7 +492,8 @@ export default function ProductForm({
           setUnit(s.valore);
           break;
         case 'condition':
-          setCondition(s.valore);
+          // Il suggerimento non può rimettere fra le scelte una condizione che il modulo non offre.
+          if (condizioneDaScegliere(s.valore)) setCondition(s.valore);
           break;
         case 'stock':
           if (s.valore === null) {
@@ -874,7 +878,12 @@ export default function ProductForm({
           />
           <Select label="Condizione" value={condition} onChange={(e) => setCondition(e.target.value as ProductCondition | '')}>
             <option value="">— non specificata</option>
-            {PRODUCT_CONDITIONS.map((c) => (
+            {/* 30/10/2026 — Niente usato fra le scelte (MyCity non lo vende). Il valore di un
+                prodotto vecchio si mostra com è e si salva com è: non si riscrive da solo. */}
+            {condition && !condizioneDaScegliere(condition) && (
+              <option value={condition}>{CONDITION_LABELS[condition] ?? condition}</option>
+            )}
+            {CONDIZIONI_DA_SCEGLIERE.map((c) => (
               <option key={c} value={c}>{CONDITION_LABELS[c]}</option>
             ))}
           </Select>
@@ -1041,7 +1050,7 @@ export default function ProductForm({
               <Bike size={18} strokeWidth={2.2} className="mt-0.5 shrink-0 text-primary-600" aria-hidden />
               <span>
                 <span className="block text-sm font-semibold text-ink-800">Consegna veloce</span>
-                <span className="block text-xs text-ink-500">30-60 min · rider locale</span>
+                <span className="block text-xs text-ink-500">Se c&apos;è un fattorino in servizio</span>
               </span>
             </button>
             <button
@@ -1057,11 +1066,15 @@ export default function ProductForm({
             >
               <Truck size={18} strokeWidth={2.2} className="mt-0.5 shrink-0 text-ink-500" aria-hidden />
               <span>
-                <span className="block text-sm font-semibold text-ink-800">Spedizione</span>
-                <span className="block text-xs text-ink-500">2-3 giorni</span>
+                <span className="block text-sm font-semibold text-ink-800">Fascia oraria</span>
+                <span className="block text-xs text-ink-500">All&apos;ora che sceglie il cliente</span>
               </span>
             </button>
           </div>
+          <p className="text-xs text-ink-500 mt-1.5">
+            Per ora questa scelta non cambia cosa vede il cliente: in cassa sceglie l&apos;ora della
+            consegna, e la {VELOCE_IN_MINUTI} gliela proponiamo solo {QUANDO_SI_PUO_LA_VELOCE}.
+          </p>
           {consegnaDelNegozioNonLetta ? (
             <p className="text-xs text-amber-700 mt-1.5">
               Non riesco a leggere le impostazioni di consegna del tuo negozio. Il resto lo salvi

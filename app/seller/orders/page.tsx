@@ -13,8 +13,9 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import EmptyState from '@/components/EmptyState';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
-import { Banknote, ChevronRight, ClipboardList } from 'lucide-react';
+import { Banknote, ChevronRight, ClipboardList, Clock } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
+import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
 
 type Order = {
@@ -23,6 +24,8 @@ type Order = {
   delivery_status: OrderStatus;
   payment_method?: string | null;
   created_at: string;
+  delivery_slot?: string | null;
+  pickup_in_store?: boolean | null;
   delivery_full_name: string | null;
   delivery_address: string | null;
   order_items: { id: string; quantity: number }[];
@@ -74,13 +77,13 @@ export default function SellerOrdersPage() {
       // payment_method serve per il badge "Contanti". Se la colonna non è (ancora)
       // presente in questo ambiente, ricadiamo sulla select senza romperci.
       const withPay = await base(`
-        id, total_price, delivery_status, payment_method, created_at,
+        id, total_price, delivery_status, payment_method, created_at, delivery_slot, pickup_in_store,
         delivery_full_name, delivery_address,
         order_items ( id, quantity )
       `);
       if (!withPay.error) return (withPay.data ?? []) as unknown as Order[];
       const fallback = await base(`
-        id, total_price, delivery_status, created_at,
+        id, total_price, delivery_status, created_at, delivery_slot, pickup_in_store,
         delivery_full_name, delivery_address,
         order_items ( id, quantity )
       `);
@@ -145,6 +148,7 @@ export default function SellerOrdersPage() {
                   {group.orders.map((o) => {
                     const itemCount = o.order_items.reduce((s, i) => s + i.quantity, 0);
                     const cod = isCod(o.payment_method);
+                    const fascia = fasciaLeggibile(o);
                     return (
                       <Link
                         key={o.id}
@@ -157,6 +161,11 @@ export default function SellerOrdersPage() {
                               <p className="font-mono text-xs text-ink-400">#{o.id.slice(0, 6).toUpperCase()}</p>
                               <span className="text-ink-300">·</span>
                               <p className="text-xs text-ink-500">{formatDate(o.created_at)}</p>
+                              {fascia && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-cream-100 px-2 py-0.5 text-[11px] font-semibold text-ink-700 ring-1 ring-inset ring-cream-300">
+                                  <Clock size={12} aria-hidden /> Consegna: {fascia}
+                                </span>
+                              )}
                               {cod && (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-olive-50 px-2 py-0.5 text-[11px] font-semibold text-olive-700 ring-1 ring-inset ring-olive-200">
                                   <Banknote size={12} aria-hidden /> Contanti

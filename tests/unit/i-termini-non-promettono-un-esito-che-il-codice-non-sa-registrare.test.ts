@@ -63,9 +63,12 @@ describe('oggi il codice non sa gestire il cliente assente, e i Termini lo dicon
     expect(testo).not.toMatch(TENTATIVI);
   });
 
-  it('e dice invece quello che succede davvero: rimborso intero, spese comprese', () => {
+  it('e dice invece quello che succede davvero: torna tutto col carrello di un negozio solo, merce e differenza della consegna con più negozi', () => {
     const testo = paragrafiConsegne().join('\n');
-    expect(testo).toMatch(/rimborsato per intero/i);
+    // 30/10/2026 — «rimborsato per intero» valeva sempre; ora vale per il carrello di un negozio solo
+    // (consegna.negozio-che-rifiuta). Le cifre vere le confronta i-termini-dicono-quello-che-l-annullo-rende-davvero.test.ts.
+    expect(testo).toMatch(/Se nel carrello c’era solo quell’ordine: ti torna tutto quello che hai pagato/i);
+    expect(testo).toMatch(/la merce di quell’ordine e la differenza della consegna/i);
     expect(testo).toMatch(/spese di consegna\s+comprese/i);
     // Il cliente deve sapere che l'ordine NON si chiude da solo: e' la parte che
     // gli fa perdere il venerdi' sera se non gliela diciamo.
@@ -113,12 +116,12 @@ describe('i tre meccanismi, letti dove vivono davvero', () => {
     );
   });
 
-  it('l’annullamento restituisce il residuo INTERO, la quota di consegna compresa', () => {
-    const annulla = leggi('lib/ordini/annulla.ts');
-    expect(annulla).toMatch(/residuoCent\s*=\s*Math\.max\(0,\s*totaleCent\s*-\s*giaRimborsato\)/);
-    // Nessuno scomputa la consegna. Quando qualcuno lo fara', questa riga cade.
-    expect(senzaCommenti(annulla)).not.toMatch(/shipping_cost/);
-  });
+  // 30/10/2026 — Qui c'era «l'annullamento restituisce il residuo INTERO, la quota di consegna
+  // compresa», provato con una regex su una riga di annulla.ts. Non è più vero in un carrello con più
+  // negozi (consegna.negozio-che-rifiuta: torna la merce più la differenza della consegna, 16 € su 18),
+  // e una regex non vede il comportamento. Il controllo vive ora, coi rimborsi veri di annullaERimborsa
+  // e la pagina disegnata, in i-termini-dicono-quello-che-l-annullo-rende-davvero.test.ts (residuo
+  // compreso: un ordine già rimborsato di 5 € ne rende 5 in meno).
 });
 
 describe('la pagina non tiene una copia sua del §6', () => {

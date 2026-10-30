@@ -1,5 +1,7 @@
 import { EXPRESS_ETA_LABEL } from './delivery';
 import { formatPrice } from './format';
+// promessa-consegna non importa questo file (né i suoi: store-hours, quando-arriva, delivery): niente giro.
+import { QUANDO_SI_PUO_LA_VELOCE } from './promessa-consegna';
 export const LOW_STOCK_THRESHOLD = 5;
 export const NEW_PRODUCT_DAYS = 14;
 
@@ -116,11 +118,44 @@ export const RITIRO_IN_NEGOZIO_ATTIVO = false;
  */
 export const COMPENSO_RIDER_CENTS = 300;
 /**
+ * 29/10/2026 23:04 — Il fattorino prende 3 € per il giro (`COMPENSO_RIDER_CENTS`, sull'ordine che
+ * porta la base della consegna) e 1 € per ogni negozio in più da cui passa (registro dei fatti,
+ * logistica.compenso-fattorino). Prima dell'ondata 14 prendeva 3 € su OGNI ordine: con 15 + 12 €
+ * il cliente pagava 4 € di consegna e il fattorino ne prendeva 6, e con la carta i bonifici della
+ * stessa charge superavano l'addebito. È un fatto suo, non `CONSEGNA_NEGOZIO_IN_PIU_CENTS`: oggi
+ * valgono uguale, ma uno lo paga il cliente e l'altro lo prende il fattorino.
+ */
+export const COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS = 100;
+/**
  * Fee di consegna trattenuta dalla piattaforma (in centesimi) su ogni ordine
  * con consegna a domicilio. NON si applica ai ritiri in negozio. La incassa
  * MyCity: non finisce nel payout del venditore né nel compenso del rider.
  */
 export const PLATFORM_DELIVERY_FEE_CENTS = 300;
+
+/**
+ * 29/10/2026 22:21 — LA CONSEGNA È UNA SOLA PER TUTTO IL CARRELLO (registro dei fatti, consegna.promessa).
+ *
+ * 3 € di base per tutto il carrello con la fascia oraria che sceglie il cliente; 1 € in più per ogni
+ * negozio in più; 1 € in più per ogni negozio in cui la merce (dopo gli sconti) sta sotto i 10 €; la
+ * veloce («Adesso») 1 € in più una volta sola, compresa se c'è già un euro della spesa piccola.
+ * Il fattorino prende 3 € per il giro e 1 € per ogni negozio in più (`COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS`):
+ * gli euro della spesa piccola e della veloce restano a MyCity, dentro `delivery_fee_cents`.
+ * Il conto lo fa una funzione sola: `vociDellaConsegna` in lib/ordini/prezzi.ts.
+ */
+export const SUPPLEMENTO_CONSEGNA_CENTS = 100;
+/** Da quanta merce per negozio (dopo gli sconti) la consegna con la fascia torna a 3 €. */
+export const SPESA_SENZA_SUPPLEMENTO_CENTS = 1000;
+/**
+ * La consegna più alta di un carrello con UN negozio solo: base più un euro. Con più negozi non c'è
+ * più un massimo (regola del 29/10 alle 22:21): ogni negozio in più e ogni negozio sotto i 10 €
+ * aggiungono il loro euro.
+ */
+export const CONSEGNA_MASSIMA_CENTS = PLATFORM_DELIVERY_FEE_CENTS + SUPPLEMENTO_CONSEGNA_CENTS;
+/** 29/10/2026 22:21 — Ogni negozio in più nel carrello: una fermata in più nello stesso giro. */
+export const CONSEGNA_NEGOZIO_IN_PIU_CENTS = 100;
+/** La consegna veloce («Adesso»): una volta sola per tutto il carrello, compresa se un negozio è sotto i 10 €. */
+export const SUPPLEMENTO_VELOCE_CENTS = 100;
 
 /**
  * Commissione marketplace in basis point (1000 = 10.00%) trattenuta da MyCity
@@ -153,8 +188,11 @@ export function commissioneCents(merceCents: number): number {
 // questo, e il giro si chiuderebbe su se stesso); una prova tiene le frasi allineate.
 // I minuti della quarta promessa vengono da lib/delivery, dove il numero è deciso.
 export const VALUE_PROPS = [
-  { icon: 'Truck',      title: 'Consegna a casa',          subtitle: PLATFORM_DELIVERY_FEE_CENTS > 0 ? `${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} per negozio, entro ${RAGGIO_CONSEGNA_KM} km` : `gratuita, entro ${RAGGIO_CONSEGNA_KM} km` },
+  { icon: 'Truck',      title: 'Consegna a casa',          subtitle: PLATFORM_DELIVERY_FEE_CENTS > 0 ? `da ${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} per tutto il carrello, entro ${RAGGIO_CONSEGNA_KM} km` : `gratuita, entro ${RAGGIO_CONSEGNA_KM} km` },
   { icon: 'BanknoteArrowUp', title: 'Pagamento alla consegna', subtitle: 'in contanti, zero rischi' },
   { icon: 'Store',      title: '100% locale',              subtitle: 'venditori della tua città' },
-  { icon: 'Zap',        title: 'Consegna rapida',          subtitle: `in ${EXPRESS_ETA_LABEL} dalla conferma del negozio` },
+  // 30/10/2026 — Diceva «Consegna rapida in 30-60 min dalla conferma» come cosa certa: la veloce c'è
+  // solo coi negozi aperti e un fattorino in servizio (lib/ordini/consegna-veloce.ts, veloceSiPuo).
+  // 30/10/2026 (ondata 18) — Ne diceva una sola su tre: le condizioni vengono da QUANDO_SI_PUO_LA_VELOCE.
+  { icon: 'Zap',        title: 'Consegna rapida',          subtitle: `in ${EXPRESS_ETA_LABEL}, ${QUANDO_SI_PUO_LA_VELOCE}; se no all'ora che scegli` },
 ] as const;

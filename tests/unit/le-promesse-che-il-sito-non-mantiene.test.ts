@@ -213,7 +213,7 @@ describe('il riquadro «Lo sapevi?»: la frase regge i numeri che le stanno sopr
 describe('le quattro promesse della home dicono la regola vera', () => {
   it('la consegna dichiara che si paga per negozio', () => {
     const spedizione = VALUE_PROPS.find((v) => v.title === 'Consegna a casa');
-    expect(spedizione?.subtitle).toMatch(/per negozio/);
+    expect(spedizione?.subtitle).toMatch(/per tutto il carrello/);
   });
 
   it('e i minuti vengono da dove sono decisi, non riscritti a mano', () => {

@@ -1,5 +1,6 @@
 // lib/products/economics.ts
 import { MARKETPLACE_FEE_BPS, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
+import { tariffaConsegnaCents } from '@/lib/ordini/prezzi';
 
 /**
  * Economia del venditore su un prezzo di vendita: quanto incassa davvero dopo
@@ -50,7 +51,8 @@ export function sellerEconomics(price: number | null | undefined): SellerEconomi
     commission,
     netToSeller: round2(p - commission),
     feeRate: MARKETPLACE_FEE_RATE,
-    deliveryFee: PLATFORM_DELIVERY_FEE_EUR,
+    // 29/10/2026 — la consegna con la fascia per questa spesa: 4 € sotto i 10 €, 3 € da 10 € in su.
+    deliveryFee: tariffaConsegnaCents({ pickupInStore: false, merceCents: Math.round(p * 100), consegnaVeloce: false }) / 100,
   };
 }
 

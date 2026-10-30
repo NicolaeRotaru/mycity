@@ -9,7 +9,8 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ORE_PER_ACCETTARE, ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
 import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
-import { avvisaIlClienteDellAnnullo } from '@/lib/ordini/annulla';
+import { avvisaIlClienteDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro } from '@/lib/ordini/annulla';
+import { righePerChiChiudeAMano, type ComeHaPagato } from '@/lib/email/annullo-nel-carrello';
 
 /**
  * 6/9/2026 — QUALI RIMBORSI FALLITI HA SENSO RITENTARE.
@@ -162,12 +163,16 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     }
     if (!claimed || claimed.length === 0) continue;
 
+    // 30/10/2026 — Il negozio che non conferma in tempo esce dal giro: la consegna dei negozi rimasti
+    // dello stesso carrello si rifà (consegna.negozio-che-rifiuta), e il rimborso rende il totale nuovo.
+    const giro = await ricalcolaLaConsegnaDelGiro(admin, o.id);
+
     try {
       if (isCardPaid) {
         try {
           await refundOrder({
             orderId: o.id,
-            amountCents: Math.round(Number(o.total_price) * 100),
+            amountCents: giro ? giro.totaleCents : Math.round(Number(o.total_price) * 100),
             reason: 'Ordine annullato: il venditore non lo ha accettato in tempo',
             notifyBuyer: true,
             // L'ordine l'ha annullato questo giro, qui sopra, e la merce non
@@ -199,7 +204,10 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
             });
             await notifyAdmins(
               'Ordine annullato da chiudere a mano',
-              `L'ordine #${o.id.slice(0, 6).toUpperCase()} e' stato annullato perche' il negozio non lo ha accettato, ma il rimborso non puo' riuscire (${motivo}). Controlla su Stripe se il cliente ha gia' avuto i suoi soldi.`,
+              `L'ordine #${o.id.slice(0, 6).toUpperCase()} e' stato annullato perche' il negozio non lo ha accettato, ma il rimborso non puo' riuscire (${motivo}). Controlla su Stripe se il cliente ha gia' avuto i suoi soldi.` +
+                // 30/10/2026 — Il carrello resta riscritto (l'ordine resta annullato): chi chiude a mano
+                // deve sapere il conto nuovo, o rende il totale vecchio.
+                (giro?.avviso ? ` ${righePerChiChiudeAMano(giro.avviso)}` : ''),
               '/admin/orders',
             ).catch((errAvviso) =>
               logger.error('[cron] expire-stale-orders: avviso agli amministratori non partito', {
@@ -209,6 +217,10 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
             daChiudereAMano++;
             continue;
           }
+
+          // 30/10/2026 (collaudo) — Prima la consegna del carrello torna com'era: l'ordine che rientra
+          // in coda è di nuovo vivo, e col conto rifatto avrebbe 1 € di consegna e il fattorino a 0.
+          if (giro) await giro.rimetti();
 
           // Rimetti l'ordine in coda: il prossimo giro riprovera'. Senza questo
           // resterebbe annullato e non rimborsato per sempre.
@@ -267,9 +279,14 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
 
       // 27/10/2026 — La campanella si vede solo riaprendo il sito. Chi paga alla
       // consegna riceve anche la email; sulla carta l'ha gia' mandata refundOrder.
-      if (!isCardPaid) {
-        await avvisaIlClienteDellAnnullo(admin, o, "Il negozio non ha accettato l'ordine in tempo");
+      // 30/10/2026 — Se la consegna del carrello si è rifatta, il cliente legge il conto nuovo degli
+      // ordini rimasti: nell'email (sulla carta un'email in più, oltre al «Rimborso emesso») e nella campanella.
+      const come: ComeHaPagato = isCardPaid ? 'carta' : o.payment_method === 'cod' ? 'contanti' : 'da-pagare';
+      const carrello = giro?.avviso ? { avviso: giro.avviso, come } : null;
+      if (!isCardPaid || carrello) {
+        await avvisaIlClienteDellAnnullo(admin, o, "Il negozio non ha accettato l'ordine in tempo", carrello);
       }
+      await avvisaLaCampanellaDelCarrello(admin, o.user_id, giro?.avviso, come);
 
       canceled++;
     } catch (e) {

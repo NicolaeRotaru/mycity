@@ -1,7 +1,18 @@
 'use client';
 
-import { shippingForEuro } from '@/lib/shipping';
-import { RIQUADRO_LO_SAPEVI, frasePagamento, promessaSpedizione, VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
+import {
+  ETICHETTA_VAI_ALLA_CASSA,
+  RIGA_COME_SI_CALCOLA,
+  RIQUADRO_LO_SAPEVI,
+  avvisoSpesaPiccola,
+  fraseGiroUnico,
+  frasePagamento,
+  promessaSpedizione,
+  rigaDellaVeloceNelCarrello,
+  righeDellaConsegna,
+  spiegazioneDellaConsegna,
+  VOCE_CONSEGNA,
+} from '@/lib/promesse-pubbliche';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -11,7 +22,6 @@ import { formatPrice, pluralize } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { FOTO_MANCANTE } from '@/lib/foto-mancante';
-import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { fetchSellerPublicMap, type SellerPublicProfile } from '@/lib/queries/seller-public-profiles';
 import ShareCartButton from '@/components/ShareCartButton';
@@ -24,8 +34,10 @@ import { toast } from 'sonner';
 import { fondoDellaBarra, corsieSotto } from '@/lib/ui/barra-in-fondo';
 import { chiaveDellaRiga, merceCheTengoIo, type TentativoAperto } from '@/lib/ordini/merce-che-tengo-io';
 import { seguiAltezza, osservatoreDelBrowser } from '@/lib/altezza-banner';
-import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
-import { expressSiPuo, giornoDiPartenza } from '@/lib/quando-arriva';
+import { leggiEsitoDellaVeloce, rigaQuandoArrivaNelCarrello } from '@/lib/ordini/consegna-veloce';
+import { prezziDelCarrello } from '@/lib/ordini/prezzi';
+import { expressSiPuo } from '@/lib/quando-arriva';
+import { romeNow } from '@/lib/store-hours';
 
 /**
  * 3/9/2026 — DAL TELEFONO, IL PULSANTE CHE PORTA I SOLDI ERA L'ULTIMA COSA DELLA PAGINA.
@@ -74,10 +86,11 @@ function descrizioneDelCarrelloVuoto(): string {
  * orologio del quale fidarsi): in quel caso la riga non promette nessun tempo, invece di
  * inventarne uno.
  */
-function quandoArrivaScrittoNelCarrello(ora: number | null): string | null {
-  if (ora === null) return null;
-  if (expressSiPuo(ora)) return `Consegna in ${EXPRESS_ETA_LABEL}`;
-  return giornoDiPartenza(ora) === 'today' ? 'Consegna in giornata' : 'Consegna domani';
+function quandoArrivaScrittoNelCarrello(ora: number | null, veloce: boolean | null): string | null {
+  // 29/10/2026 — L'orologio non bastava: a negozio chiuso o senza un fattorino online il carrello
+  // prometteva i minuti e il no arrivava all'ultimo tocco in cassa. Ora decide la stessa risposta
+  // della cassa e delle rotte (`veloceSiPuo`, letta da /api/consegna/veloce): senza, niente minuti.
+  return rigaQuandoArrivaNelCarrello(ora, veloce);
 }
 
 export default function CartPage() {
@@ -149,14 +162,46 @@ export default function CartPage() {
    *
    * Si rilegge ogni minuto perché un carrello lasciato aperto attraversa le 21: senza il battito,
    * alle 21:05 la pagina prometterebbe ancora mezz'ora solo perché l'ora era stata letta alle 20:59.
+   *
+   * 30/10/2026 (ondata 18) — È l'ora di ROMA (`romeNow`), la stessa che leggono la cassa
+   * (`DeliverySlotPicker`, e la pagina della cassa con le sue fasce), la vetrina e le rotte che
+   * creano l'ordine: il carrello promette la mezz'ora solo se la cassa, un tocco dopo, offre
+   * «Adesso», su qualunque telefono. Si sono spostati tutti e tre insieme: col carrello da solo su
+   * Roma, un telefono a Bucarest alle 21:30 (a Roma le 20:30) leggeva la mezz'ora nel carrello e
+   * trovava «Adesso» spento in cassa.
    */
   const [oraDiAdesso, setOraDiAdesso] = useState<number | null>(null);
+  // La veloce si può mantenere adesso? `null` = non ancora letto o lettura caduta: nessun tempo
+  // promesso. La risposta è quella delle rotte (negozi aperti, 8-21, un fattorino online).
+  const [veloceSiPuoAdesso, setVeloceSiPuoAdesso] = useState<boolean | null>(null);
+  // 30/10/2026 — La riga della veloce sotto il totale leggeva solo la risposta della cassa: con una
+  // risposta vecchia di un minuto, o un telefono con l'ora avanti, alle 23 prometteva «in 30-60 min»
+  // proprio sotto la riga del prodotto che diceva «nella fascia che scegli». Adesso le due righe
+  // seguono la stessa regola: la risposta della cassa E l'orologio di chi guarda.
+  const veloceDaPromettere: boolean | null =
+    veloceSiPuoAdesso === null || oraDiAdesso === null ? null : veloceSiPuoAdesso && expressSiPuo(oraDiAdesso);
 
   useEffect(() => {
-    const leggiLOra = () => setOraDiAdesso(new Date().getHours());
+    let vivo = true;
+    const leggiLOra = () => {
+      setOraDiAdesso(romeNow().getHours());
+      const negozi = Array.from(new Set(getCart().map((i) => i.sellerId).filter((v): v is string => !!v)));
+      if (negozi.length === 0) return;
+      fetch(`/api/consegna/veloce?negozi=${negozi.join(',')}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((esito: unknown) => {
+          if (vivo) setVeloceSiPuoAdesso(leggiEsitoDellaVeloce(esito));
+        })
+        .catch(() => {
+          if (vivo) setVeloceSiPuoAdesso(null);
+        });
+    };
     leggiLOra();
     const battito = setInterval(leggiLOra, 60_000);
-    return () => clearInterval(battito);
+    return () => {
+      vivo = false;
+      clearInterval(battito);
+    };
   }, []);
 
   useEffect(() => {
@@ -385,12 +430,10 @@ export default function CartPage() {
   }
   const groups = groupOrder.map((k) => ({ key: k, ...groupsByStore.get(k)! }));
   const multiStore = groups.length > 1;
-  // 107 — Il carrello sommava merce e spedizione e si fermava lì. Al checkout
-  // si aggiungono 3 € di «Consegna MyCity» per ogni negozio: il totale mostrato
-  // qui era piu' basso di quello che si paga davvero, e la differenza compariva
-  // all'ultimo passo — dove l'abbandono costa di piu'. Stessa matematica del
-  // checkout: una fee per gruppo-negozio.
-  const platformDeliveryFee = groups.length * (PLATFORM_DELIVERY_FEE_CENTS / 100);
+  // 107 — Il carrello sommava merce e spedizione e si fermava lì: la consegna compariva solo
+  // all'ultimo passo, dove l'abbandono costa di piu'. 29/10/2026 — e poi la contava «negozi × 3 €»
+  // a mano, mentre la consegna è 3 € o 4 € per negozio (sotto i 10 € di spesa): adesso il numero
+  // viene da `prezziDelCarrello`, lo stesso conto della cassa e delle due rotte.
 
   /**
    * La spedizione per negozio, con la stessa funzione e gli stessi ingressi della cassa (vedi
@@ -399,20 +442,28 @@ export default function CartPage() {
    * «Gratis» accanto a una consegna da pagare: entra nella riga «Consegna MyCity», che dice la
    * cifra intera per farsi portare la spesa, la stessa del riepilogo della cassa.
    */
-  const shippingCost = groups.reduce(
-    (somma, g) =>
-      somma
-      + shippingForEuro({
-        subtotal: g.items.reduce((s, it) => s + it.price * it.quantity, 0),
-        storeLat: dovEIlNegozio[g.key]?.lat ?? null,
-        storeLng: dovEIlNegozio[g.key]?.lng ?? null,
-        deliveryLat: doveConsegniamo.lat,
-        deliveryLng: doveConsegniamo.lng,
-        pickupInStore: false,
-      }),
-    0,
-  );
-  const consegnaDaPagare = shippingCost + platformDeliveryFee;
+  const contoConsegna = prezziDelCarrello({
+    gruppi: groups.map((g) => ({
+      sellerId: g.key,
+      subtotalCents: Math.round(g.items.reduce((somma, it) => somma + it.price * it.quantity, 0) * 100),
+    })),
+    coordinateNegozio: (key) => ({ lat: dovEIlNegozio[key]?.lat ?? null, lng: dovEIlNegozio[key]?.lng ?? null }),
+    consegnaLat: doveConsegniamo.lat,
+    consegnaLng: doveConsegniamo.lng,
+    pickupInStore: false,
+    couponSpedizioneGratis: false,
+    couponScontoCents: 0,
+    // Nel carrello la fascia non è ancora scelta: si conta quella oraria. La veloce sta sotto il
+    // totale come scelta, col suo prezzo vero (dalle voci del conto) o «compresa».
+    consegnaVeloce: false,
+  });
+  const vociConsegna = contoConsegna.consegna;
+  const supplementoVeloceCents = vociConsegna.supplementoVeloceCents;
+  const spiegazione = spiegazioneDellaConsegna(frasePagamento());
+  const shippingCost = contoConsegna.grandShippingCents / 100;
+  const tariffeConsegnaCents = contoConsegna.gruppi.map((g) => g.deliveryFeeCents);
+  const consegnaDaPagare =
+    (contoConsegna.grandShippingCents + tariffeConsegnaCents.reduce((somma, x) => somma + x, 0)) / 100;
   const finalTotal = total + consegnaDaPagare;
 
   /**
@@ -447,18 +498,20 @@ export default function CartPage() {
             Il tuo carrello <span className="text-ink-500 font-normal font-sans text-lg">({pluralize(count, 'articolo', 'articoli')})</span>
           </h1>
 
-          {/* Avviso multi-negozio: ogni negozio consegna separatamente */}
+          {/* Più negozi, una consegna sola: il fattorino fa un giro solo (regola del 29/10). */}
           {multiStore && (
             <div className="flex items-center gap-2 rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 text-sm text-ink-600">
               <Package size={16} className="text-ink-500 shrink-0" aria-hidden />
               <span>
-                Ordine da <strong className="text-ink-900">{pluralize(groups.length, 'negozio', 'negozi')}</strong> · ogni negozio consegna separatamente
+                {fraseGiroUnico(groups.length)}
               </span>
             </div>
           )}
 
           {/* Gruppi per negozio */}
-          {groups.map((g) => {
+          {groups.map((g, indiceNegozio) => {
+            const spesaDelNegozioCents = contoConsegna.gruppi[indiceNegozio]?.subtotalCents ?? 0;
+            const spesaPiccola = avvisoSpesaPiccola(spesaDelNegozioCents);
             return (
               <div key={g.key} className="space-y-3">
                 {/* Header negozio */}
@@ -466,8 +519,14 @@ export default function CartPage() {
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-[9px] font-bold text-white">
                     {storeInitials(g.storeName)}
                   </span>
-                  <span className="text-sm font-bold text-ink-900">{g.storeName}</span>
+                  <span className="text-sm font-bold text-ink-900">
+                    {g.storeName}
+                    {multiStore && <span className="font-normal text-ink-600"> · {formatPrice(spesaDelNegozioCents / 100)}</span>}
+                  </span>
                 </div>
+                {spesaPiccola && (
+                  <p className="rounded-lg border border-cream-300 bg-cream-50 px-3 py-2 text-sm text-ink-700">{spesaPiccola}</p>
+                )}
 
                 {g.items.map((item) => (
                   <div key={`${item.id}::${item.variantId ?? ''}`} className="bg-white border border-cream-300 rounded-xl p-4 flex gap-4 hover:shadow-card transition-shadow">
@@ -512,7 +571,7 @@ export default function CartPage() {
                           alzare la quantità, e non capiva perché. */}
                       {(() => {
                         const rimasti = massimo(item.id, item.variantId);
-                        const quando = quandoArrivaScrittoNelCarrello(oraDiAdesso);
+                        const quando = quandoArrivaScrittoNelCarrello(oraDiAdesso, veloceSiPuoAdesso);
                         if (rimasti === 0) {
                           return (
                             <p role="alert" className="text-xs text-red-600 font-semibold flex items-center gap-1">
@@ -627,22 +686,21 @@ export default function CartPage() {
             </div>
 
             <div className="flex justify-between items-baseline text-sm">
-              <span className="text-ink-600">
-                {VOCE_CONSEGNA}
-                {/* «N negozi × 3 €» e' il conto solo finche' non c'e' una spedizione da sommare. */}
-                {groups.length > 1 && shippingCost === 0 && (
-                  <span className="block text-xs text-ink-500 font-normal">
-                    {pluralize(groups.length, 'negozio', 'negozi')} × {formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}
-                  </span>
-                )}
-              </span>
+              <span className="text-ink-600">{VOCE_CONSEGNA}</span>
               <span className="font-semibold text-ink-900">{formatPrice(consegnaDaPagare)}</span>
             </div>
+            {/* Il dettaglio sta FUORI dalla colonna dei numeri: chi somma la colonna trova il totale.
+                Solo le voci che costano qualcosa (`righeDellaConsegna`, dalle voci del conto vero). */}
+            {shippingCost === 0 && (
+              <ul className="-mt-1 space-y-0.5 text-xs text-ink-500" aria-label="Come è fatta la consegna">
+                {righeDellaConsegna(vociConsegna).map((r) => <li key={r}>{r}</li>)}
+              </ul>
+            )}
 
             {/* Il totale cambia a ogni «+», «−» e rimozione: qui si dice anche
                 a chi non lo vede cambiare. */}
             <p className="sr-only" role="status" aria-live="polite">
-              Carrello aggiornato: {count} {count === 1 ? 'articolo' : 'articoli'}, totale {formatPrice(finalTotal)}
+              Carrello aggiornato: {count} {count === 1 ? 'articolo' : 'articoli'}, consegna {formatPrice(consegnaDaPagare)}, totale {formatPrice(finalTotal)}
             </p>
 
             <div className="border-t border-cream-300 pt-3 flex justify-between items-baseline">
@@ -652,6 +710,29 @@ export default function CartPage() {
                 <div className="text-xs tracking-label text-ink-400 uppercase">IVA inclusa</div>
               </div>
             </div>
+
+            {/* La veloce è una scelta della cassa, detta col suo prezzo vero: solo se adesso si può davvero. */}
+            {rigaDellaVeloceNelCarrello(veloceDaPromettere, supplementoVeloceCents, vociConsegna.totaleCents) && (
+              <p className="text-xs text-ink-600">
+                {rigaDellaVeloceNelCarrello(veloceDaPromettere, supplementoVeloceCents, vociConsegna.totaleCents)}
+              </p>
+            )}
+
+            <details className="text-sm text-ink-600">
+              <summary className="flex min-h-[44px] cursor-pointer items-center font-semibold text-ink-800">
+                {RIGA_COME_SI_CALCOLA} ›
+              </summary>
+              <div className="space-y-2 pb-2 text-xs">
+                <p>{spiegazione.apertura}</p>
+                <ul className="list-disc space-y-1 pl-4">
+                  {spiegazione.punti.map((p) => <li key={p}>{p}</li>)}
+                </ul>
+                <ul className="space-y-0.5">
+                  {spiegazione.esempi.map((e) => <li key={e}>{e}</li>)}
+                </ul>
+                <p>{spiegazione.chiusura}</p>
+              </div>
+            </details>
 
             {/* Il pulsante resta raggiungibile da tastiera e dichiara di essere bloccato con
                 `aria-disabled` — un elemento `disabled` esce dal giro del Tab e sparisce senza
@@ -671,7 +752,7 @@ export default function CartPage() {
                 href="/checkout"
                 className="flex items-center justify-center gap-2 w-full text-center bg-primary-700 hover:bg-primary-800 text-white py-3.5 rounded-lg font-bold shadow-warm-sm hover:shadow-warm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
               >
-                <Lock size={16} strokeWidth={2.4} aria-hidden /> Procedi al checkout
+                <Lock size={16} strokeWidth={2.4} aria-hidden /> {ETICHETTA_VAI_ALLA_CASSA}
               </Link>
             )}
 
@@ -741,6 +822,7 @@ export default function CartPage() {
         <div className="leading-tight">
           <div className="text-xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
           <div className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(finalTotal)}</div>
+          <div className="text-xs text-ink-500">con la consegna</div>
         </div>
         {bloccanti.length > 0 ? (
           <button
@@ -756,7 +838,7 @@ export default function CartPage() {
             href="/checkout"
             className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 text-white py-3 rounded-lg font-extrabold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
           >
-            <Lock size={16} strokeWidth={2.4} aria-hidden /> Procedi al checkout
+            <Lock size={16} strokeWidth={2.4} aria-hidden /> {ETICHETTA_VAI_ALLA_CASSA}
           </Link>
         )}
       </div>

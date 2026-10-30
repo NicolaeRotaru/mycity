@@ -24,6 +24,7 @@ import { Package, CheckCircle2, X, Printer, Bike, Phone, MapPin, Clock, Banknote
 import { queryKeys } from '@/lib/queries/keys';
 import { cifraDellaVoce, riepilogoOrdine } from '@/lib/ordini/riepilogo-ordine';
 import { nomeDellaRigaOrdine, fotoDellaRigaOrdine } from '@/lib/ordini/riga-ordine';
+import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 import ReturnRequestCard, { type ReturnRow } from '@/components/seller/ReturnRequestCard';
 
 type OrderRow = {
@@ -38,6 +39,8 @@ type OrderRow = {
   delivery_fee_cents?: number | null;
   discount_amount?: number | null;
   wallet_applied_cents?: number | null;
+  // La fascia scelta in cassa («Domani · 9:00–12:00»): a schermo passa da fasciaLeggibile.
+  delivery_slot?: string | null;
   created_at: string;
   accepted_at: string | null;
   ready_at: string | null;
@@ -139,7 +142,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
     queryKey: queryKeys.seller.order(id),
     queryFn: async () => {
       const sel = (pay: string) => `
-          id, user_id, total_price, shipping_cost, delivery_status, pickup_in_store,${pay} created_at,
+          id, user_id, total_price, shipping_cost, delivery_status, pickup_in_store, delivery_slot,${pay} created_at,
           accepted_at, ready_at, picked_up_at, delivered_at, canceled_at,
           delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
           rider_id,
@@ -362,6 +365,11 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
             Ordine #{order.id.slice(0, 6).toUpperCase()}
           </h1>
           <p className="text-sm text-ink-500">{formatDate(order.created_at)}</p>
+          {fasciaLeggibile(order) && (
+            <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-ink-900">
+              <Clock size={14} aria-hidden className="shrink-0 text-primary-600" /> Consegna: {fasciaLeggibile(order)}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {cod && (

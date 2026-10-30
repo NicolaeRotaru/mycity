@@ -37,6 +37,10 @@ export const UNIT_SUFFIX: Record<ProductUnit, string> = {
   m: '/m',
 };
 
+/**
+ * Le condizioni che un prodotto può avere SCRITTE in banca dati: servono a leggere anche i prodotti
+ * vecchi. Non sono le scelte del modulo (sotto).
+ */
 export const PRODUCT_CONDITIONS = ['nuovo', 'usato', 'ricondizionato'] as const;
 export type ProductCondition = (typeof PRODUCT_CONDITIONS)[number];
 export const CONDITION_LABELS: Record<ProductCondition, string> = {
@@ -44,6 +48,19 @@ export const CONDITION_LABELS: Record<ProductCondition, string> = {
   usato: 'Usato',
   ricondizionato: 'Ricondizionato',
 };
+
+/**
+ * 30/10/2026 — Le condizioni che il negoziante può SCEGLIERE. MyCity non vende l usato
+ * (CONTESTO_BUSINESS.md, fra le cose da non costruire mai): «Usato» e «Ricondizionato» non si
+ * offrono più. Un prodotto vecchio che le ha già resta leggibile e si salva com è: il modulo
+ * mostra il suo valore, ma non lo propone a chi sceglie.
+ */
+export const CONDIZIONI_DA_SCEGLIERE: readonly ProductCondition[] = ['nuovo'];
+
+/** Vero se la condizione si può scegliere nel modulo. */
+export function condizioneDaScegliere(c: unknown): c is ProductCondition {
+  return typeof c === 'string' && (CONDIZIONI_DA_SCEGLIERE as readonly string[]).includes(c);
+}
 
 /**
  * Normalizza testo libero (AI o vecchio attributo per-categoria `stato`) nella
@@ -55,6 +72,21 @@ export function normalizeCondition(s: string): ProductCondition | '' {
   if (t.includes('usat')) return 'usato';
   if (t.includes('nuov')) return 'nuovo';
   return '';
+}
+
+/**
+ * 30/10/2026 — La condizione che arriva da un SUGGERIMENTO (lettura della foto, assistente, rotte
+ * AI), letta con la stessa regola del menu. Il menu non offriva più «Usato» e «Ricondizionato», ma
+ * le altre porte le scrivevano ancora. Tre risposte:
+ *   · una condizione che il menu offre ('nuovo') → quella;
+ *   · `null` → il suggerimento nomina una condizione che MyCity non vende: si scarta, e non si
+ *     scrive niente (un prodotto vecchio con «usato» non perde il suo valore);
+ *   · '' → testo non riconosciuto, come `normalizeCondition`.
+ */
+export function condizioneDalSuggerimento(s: string): ProductCondition | '' | null {
+  const c = normalizeCondition(s);
+  if (c === '') return '';
+  return condizioneDaScegliere(c) ? c : null;
 }
 
 /** Stati prodotto gestiti dall'interfaccia venditore. */

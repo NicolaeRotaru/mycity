@@ -35,7 +35,7 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
      * migrazione 070 — accetta soltanto sette tipi di immagine, con un tetto di 10 MB. Nessun
      * video e' mai entrato: il fornaio che voleva far vedere il forno acceso trascinava il
      * filmato, aspettava, e si prendeva un errore. E anche se il tipo passasse, quindici secondi
-     * fatti col telefono pesano 30-60 MB, cioe' tre volte il tetto.
+     * fatti col telefono pesano fra 30 e 60 MB, cioe' tre volte il tetto.
      *
      * Fra il riaprire il video (deposito nuovo, tetto piu' alto, compressione nel browser: un
      * lavoro vero, con una migrazione, che non e' di questo lotto) e il non prometterlo piu', si

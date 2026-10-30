@@ -43,6 +43,7 @@ describe('il compenso del fattorino', () => {
       pickupInStore: false,
       couponSpedizioneGratis: false,
       couponScontoCents: 0,
+      consegnaVeloce: false,
     });
     expect(
       esito.gruppi[0].riderFeeCents,
@@ -61,6 +62,7 @@ describe('il compenso del fattorino', () => {
       pickupInStore: false,
       couponSpedizioneGratis: false,
       couponScontoCents: 0,
+      consegnaVeloce: false,
     });
     expect(esito.gruppi[0].riderFeeCents).toBe(compensoRiderCents({ pickupInStore: false }));
   });
@@ -75,6 +77,7 @@ describe('il compenso del fattorino', () => {
       pickupInStore: true,
       couponSpedizioneGratis: false,
       couponScontoCents: 0,
+      consegnaVeloce: false,
     });
     expect(esito.gruppi[0].riderFeeCents).toBe(0);
   });

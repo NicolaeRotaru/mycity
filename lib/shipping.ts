@@ -1,4 +1,4 @@
-import { COMPENSO_RIDER_CENTS } from './constants';
+import { COMPENSO_RIDER_CENTS, COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS } from './constants';
 
 /** Gli ingressi del conto della spedizione di un gruppo (un negozio). */
 export type IngressiSpedizione = {
@@ -61,11 +61,18 @@ export function shippingCentsFor(opts: Parameters<typeof shippingForEuro>[0]): n
  * su ogni ordine, anche quando il cliente non paga spedizione.
  *
  * Con il ritiro in negozio non c'è consegna, quindi non c'è compenso.
+ *
+ * 29/10/2026 23:04 — Con più negozi il giro è uno (logistica.compenso-fattorino): 3 € sull'ordine
+ * che porta la base della consegna, 1 € su ogni altro ordine del carrello (`negozioInPiu`). Così
+ * il compenso di ogni ordine non supera mai la consegna che quell'ordine incassa.
  */
 export function compensoRiderCents(opts: {
   pickupInStore: boolean;
+  /** Questo ordine è un negozio in più del giro, non quello che porta la base. */
+  negozioInPiu?: boolean;
 }): number {
-  return opts.pickupInStore ? 0 : COMPENSO_RIDER_CENTS;
+  if (opts.pickupInStore) return 0;
+  return opts.negozioInPiu ? COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS : COMPENSO_RIDER_CENTS;
 }
 
 /**

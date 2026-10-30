@@ -1,4 +1,15 @@
 import { describe, it, expect } from 'vitest';
+import { QUANDO_SI_PUO_LA_VELOCE } from '@/lib/promessa-consegna';
+import {
+  CONSEGNA_NEGOZIO_IN_PIU_CENTS as EURO_NEGOZIO_IN_PIU,
+  SPESA_SENZA_SUPPLEMENTO_CENTS as SOGLIA_SPESA,
+  SUPPLEMENTO_CONSEGNA_CENTS as EURO_SPESA_PICCOLA,
+} from '@/lib/constants';
+
+/** 29/10/2026 22:21 — La regola firmata: una consegna sola per il carrello (base, negozi in più, spesa piccola). */
+const regolaDelCarrello = (merciCents: number[]) =>
+  PLATFORM_DELIVERY_FEE_CENTS + (merciCents.length - 1) * EURO_NEGOZIO_IN_PIU
+  + merciCents.filter((m) => m < SOGLIA_SPESA).length * EURO_SPESA_PICCOLA;
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -55,6 +66,7 @@ function conto(gruppi: Array<{ sellerId: string; euro: number }>, opz: Partial<I
     pickupInStore: false,
     couponSpedizioneGratis: false,
     couponScontoCents: 0,
+    consegnaVeloce: false,
     ...opz,
   });
 }
@@ -137,9 +149,13 @@ describe('in cassa si pagano solo i 3 euro di consegna per negozio', () => {
       { sellerId: 'forno', euro: 8 },
       { sellerId: 'macelleria', euro: 18 },
     ]);
-    expect(esito.gruppi.map(consegnaPagata)).toEqual([PLATFORM_DELIVERY_FEE_CENTS, PLATFORM_DELIVERY_FEE_CENTS]);
-    expect(esito.grandTotalCents).toBe(800 + 1800 + 2 * PLATFORM_DELIVERY_FEE_CENTS);
-    expect(esito.gruppi.map((g) => g.riderFeeCents)).toEqual([COMPENSO_RIDER_CENTS, COMPENSO_RIDER_CENTS]);
+    // 29/10/2026 22:21 — Una consegna sola: la macelleria (spesa più alta) porta la base, il forno
+    // l'euro del negozio in più e quello della spesa sotto i 10 €.
+    expect(esito.gruppi.map(consegnaPagata)).toEqual([EURO_NEGOZIO_IN_PIU + EURO_SPESA_PICCOLA, PLATFORM_DELIVERY_FEE_CENTS]);
+    expect(esito.grandTotalCents).toBe(800 + 1800 + PLATFORM_DELIVERY_FEE_CENTS + EURO_NEGOZIO_IN_PIU + EURO_SPESA_PICCOLA);
+    // 29/10/2026 23:04 — Un giro solo (logistica.compenso-fattorino): 3 € sulla macelleria che porta
+    // la base, 1 € sul forno, il negozio in più. Prima erano 3 € su ognuno: 6 € al fattorino.
+    expect(esito.gruppi.map((g) => g.riderFeeCents)).toEqual([EURO_NEGOZIO_IN_PIU, COMPENSO_RIDER_CENTS]);
   });
 
   it('col ritiro in negozio non si paga consegna', () => {
@@ -207,8 +223,9 @@ describe('a ogni distanza dentro la zona si pagano solo i 3 euro', () => {
         for (const euro of SPESE) {
           const esito = conto([{ sellerId: 'forno', euro }], { consegnaLat: casa.lat, consegnaLng: casa.lng });
           const pagata = consegnaPagata(esito.gruppi[0]);
-          const totale = Math.round(euro * 100) + PLATFORM_DELIVERY_FEE_CENTS;
-          if (pagata !== PLATFORM_DELIVERY_FEE_CENTS || esito.grandShippingCents !== 0 || esito.grandTotalCents !== totale) {
+          const attesa = regolaDelCarrello([Math.round(euro * 100)]);
+          const totale = Math.round(euro * 100) + attesa;
+          if (pagata !== attesa || esito.grandShippingCents !== 0 || esito.grandTotalCents !== totale) {
             sbagliati.push(`${euro} € a ${km} km verso ${gradi}°: consegna ${pagata} cent, totale ${esito.grandTotalCents} invece di ${totale}`);
           }
         }
@@ -295,11 +312,12 @@ describe('a ogni distanza dentro la zona si pagano solo i 3 euro', () => {
             consegnaLng: casa.lng,
           });
           const merce = gruppi.reduce((s, g) => s + Math.round(g.euro * 100), 0);
-          const atteso = merce + gruppi.length * PLATFORM_DELIVERY_FEE_CENTS;
+          const regola = regolaDelCarrello(gruppi.map((g) => Math.round(g.euro * 100)));
+          const atteso = merce + regola;
           const pagate = esito.gruppi.map(consegnaPagata);
           if (
             pagate.length !== gruppi.length ||
-            pagate.some((p) => p !== PLATFORM_DELIVERY_FEE_CENTS) ||
+            pagate.reduce((s, p) => s + p, 0) !== regola ||
             esito.grandShippingCents !== 0 ||
             esito.grandTotalCents !== atteso
           ) {
@@ -314,7 +332,7 @@ describe('a ogni distanza dentro la zona si pagano solo i 3 euro', () => {
     // griglia è quella dichiarata: ha carrelli da due e da tre negozi, è stata percorsa tutta (il
     // numero viene dalle sue dimensioni, non da una soglia scritta a mano) ed è fatta solo di
     // carrelli che la cassa lascia nascere.
-    expect(sbagliati.slice(0, 6), `${sbagliati.length} carrelli su ${verificati} non pagano 3 euro per negozio`).toEqual([]);
+    expect(sbagliati.slice(0, 6), `${sbagliati.length} carrelli su ${verificati} non pagano la consegna della regola`).toEqual([]);
     expect(new Set(carrelli.map((c) => c.length)), 'mancano i carrelli da due o da tre negozi').toEqual(new Set([2, 3]));
     expect(verificati, 'la griglia dei carrelli con più negozi non è stata percorsa tutta').toBe(
       DIREZIONI.length * DISTANZE.length * carrelli.length,
@@ -335,7 +353,8 @@ describe('la pagina Spedizioni dice le cifre della cassa', () => {
     const importi = importiIn(testo);
     expect(importi.length, `la pagina non dice quanto costa la consegna: ${testo.slice(0, 300)}`).toBeGreaterThan(0);
     for (const i of importi) {
-      expect(i, `la pagina scrive ${i} € e la cassa addebita ${consegnaDellaCassa} €`).toBe(consegnaDellaCassa);
+      // 29/10/2026 22:21 — La pagina dice anche l'euro dei negozi in più e la soglia dei 10 €.
+      expect([consegnaDellaCassa, EURO_NEGOZIO_IN_PIU / 100, EURO_SPESA_PICCOLA / 100, SOGLIA_SPESA / 100], `la pagina scrive ${i} € e la cassa non lo conosce`).toContain(i);
     }
   });
 
@@ -368,8 +387,13 @@ describe('la pagina Spedizioni dice le cifre della cassa', () => {
   it('ogni numero scritto in cifre viene da dove è deciso: consegna, confine, tempi, garanzia legale', () => {
     const ammessi = new Set([
       ...numeriIn(TRE_EURO),
+      ...numeriIn(formatPrice(EURO_NEGOZIO_IN_PIU / 100)),
+      ...numeriIn(formatPrice(EURO_SPESA_PICCOLA / 100)),
+      ...numeriIn(formatPrice(SOGLIA_SPESA / 100)),
       String(RAGGIO_CONSEGNA_KM),
       ...numeriIn(EXPRESS_ETA_LABEL),
+      // 30/10/2026 — Le ore della veloce (8-21), dette dalla frase che nasce da lib/quando-arriva.
+      ...numeriIn(QUANDO_SI_PUO_LA_VELOCE),
       '24', // la garanzia legale di 24 mesi, che la prova qui sopra pretende
     ]);
     const estranei = numeriIn(testo).filter((n) => !ammessi.has(n));

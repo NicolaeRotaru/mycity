@@ -1,3 +1,4 @@
+import { CONSEGNA_ALL_ORA_CHE_SCEGLI } from '@/lib/promessa-consegna';
 import type { Metadata } from 'next';
 import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 import { fraseComeArriva } from '@/lib/promesse-pubbliche';
@@ -32,7 +33,7 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
     return { title: 'Categoria non trovata · MyCity', robots: { index: false } };
   }
   const name = cat.name;
-  const desc = CATEGORY_LONG_DESC[params.slug] ?? `Acquista ${name.toLowerCase()} dai negozi di Piacenza su MyCity. Consegna in 30-60 minuti.`;
+  const desc = CATEGORY_LONG_DESC[params.slug] ?? `Acquista ${name.toLowerCase()} dai negozi di Piacenza su MyCity. ${CONSEGNA_ALL_ORA_CHE_SCEGLI}.`;
   return {
     title: `${name} a Piacenza — Compra online dai negozi locali · MyCity`,
     description: desc,

@@ -3,156 +3,133 @@
 import { useEffect, useState } from 'react';
 import { Bike } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { deliveryWindow, splitDuration, DEFAULT_CUTOFF_HOUR, STANDARD_ETA_LABEL } from '@/lib/delivery';
-import { promessaDiConsegna, rigaNegozioChiuso } from '@/lib/promessa-consegna';
+import { romeNow } from '@/lib/store-hours';
+import { rigaConsegnaDellaScheda } from '@/lib/promessa-consegna';
+import { QUANDO_ARRIVA_SENZA_NEGOZIO } from '@/lib/promesse-pubbliche';
 
 /**
- * useDeliveryCutoff — countdown SSR-safe verso l'orario limite consegna.
- *
- * `now` parte null durante SSR (come DropOfDay) per evitare hydration
- * mismatch: Date.now() differisce tra server e client.
+ * La promessa onesta quando non si sa di quale negozio si parla: nessun «oggi», nessun minuto.
+ * 29/10/2026 — Una copia sola: la frase vive in lib/promesse-pubbliche (che i componenti client
+ * importano già), qui si attacca solo «Consegna». Prima erano due testi uguali scritti a mano.
  */
-export function useDeliveryCutoff(cutoffHour = DEFAULT_CUTOFF_HOUR) {
-  const [now, setNow] = useState<number | null>(null);
-  // 102 — Prima: un `setInterval` da un secondo, per sempre, anche con la scheda
-  // in secondo piano — su ogni home e su ogni scheda prodotto. Su un telefono
-  // quel timer tiene sveglio il processore e mangia batteria per aggiornare un
-  // conto alla rovescia che nessuno sta guardando.
-  // Due accorgimenti: si ferma quando la scheda non e' visibile, e batte al
-  // minuto finche' manca piu' di un quarto d'ora — al secondo solo alla fine,
-  // che e' l'unico momento in cui la fretta si sente.
+export const RIGA_CONSEGNA_SENZA_NEGOZIO = `Consegna ${QUANDO_ARRIVA_SENZA_NEGOZIO}`;
+
+const UN_MINUTO = 60_000;
+
+/**
+ * L'ora di Piacenza (`romeNow`, come le rotte), `null` prima dell'idratazione: Date.now() differisce
+ * fra server e client. Batte al minuto e si ferma a scheda nascosta: serve solo a vedere un negozio
+ * che apre o chiude mentre la pagina è aperta. Niente conto alla rovescia (29/10).
+ */
+export function useOraDiPiacenza(): Date | null {
+  const [adesso, setAdesso] = useState<Date | null>(null);
   useEffect(() => {
     let id: ReturnType<typeof setInterval> | null = null;
-
     const ferma = () => { if (id) { clearInterval(id); id = null; } };
-
     const avvia = () => {
       ferma();
-      setNow(Date.now());
-      const win = deliveryWindow(Date.now(), cutoffHour);
-      const mancaPoco = new Date(win.targetIso).getTime() - Date.now() <= 15 * 60_000;
-      id = setInterval(() => setNow(Date.now()), mancaPoco ? 1000 : 60_000);
+      setAdesso(romeNow());
+      id = setInterval(() => setAdesso(romeNow()), UN_MINUTO);
     };
-
     const suVisibilita = () => {
       if (document.visibilityState === 'visible') avvia();
       else ferma();
     };
-
     avvia();
     document.addEventListener('visibilitychange', suVisibilita);
     return () => {
       ferma();
       document.removeEventListener('visibilitychange', suVisibilita);
     };
-  }, [cutoffHour]);
-
-  if (now === null) {
-    return { hydrated: false as const, day: 'oggi' as const, h: 0, m: 0, s: 0 };
-  }
-  const win = deliveryWindow(now, cutoffHour);
-  const { h, m, s } = splitDuration(new Date(win.targetIso).getTime() - now);
-  return { hydrated: true as const, day: win.day, h, m, s };
+  }, []);
+  return adesso;
 }
 
-/** La promessa onesta quando non si sa di quale negozio si parla: nessun «oggi», nessun minuto. */
-export const RIGA_CONSEGNA_SENZA_NEGOZIO = 'Consegna in giornata, negli orari di apertura del negozio';
-
-const pad = (n: number) => String(n).padStart(2, '0');
+/**
+ * La veloce si nomina solo se la cassa dice sì: stessa domanda del carrello e della cassa
+ * (/api/consegna/veloce → `veloceSiPuo`). `null` se non si chiede, se la risposta non arriva o cade:
+ * allora niente minuti.
+ */
+export function useVeloceDelNegozio(negozioId: string | undefined, chiedi: boolean): boolean | null {
+  const [veloce, setVeloce] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!negozioId || !chiedi) return;
+    let vivo = true;
+    fetch(`/api/consegna/veloce?negozi=${encodeURIComponent(negozioId)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((esito: { possibile?: boolean } | null) => {
+        if (vivo) setVeloce(esito ? esito.possibile === true : null);
+      })
+      .catch(() => {
+        if (vivo) setVeloce(null);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [negozioId, chiedi]);
+  return negozioId && chiedi ? veloce : null;
+}
 
 /**
- * Mostra la promessa di consegna a due velocità, legata alla disponibilità:
- *  - `available` (prodotto a inventario e pronto): Express ~30-60 min, in giornata
- *    entro il cutoff → "🛵 Ordina entro 02:14:31 e arriva oggi in 30-60 min".
- *  - non disponibile / su ordinazione: Standard → "🛵 Consegna in 2-3 giorni".
+ * Quando arriva la spesa, detto come lo dice la cassa (29/10/2026, regola di Nicola):
+ *  - prodotto esaurito → nessun tempo di consegna (il componente non disegna niente);
+ *  - negozio chiuso adesso → quando riapre, e che l'ora si sceglie in cassa;
+ *  - altrimenti → «Consegna a casa, all'ora che scegli», e la veloce solo se la cassa ha detto sì.
+ * Non c'è più il «Consegna in 2-3 giorni» (la cassa non ha quella consegna) né il conto fino alle 18
+ * (sbagliato per ogni negozio che non chiude alle 18). La decisione è `rigaConsegnaDellaScheda`.
  * Variante `banner` per blocchi in evidenza, `inline` per pagine prodotto.
  */
 export function DeliveryCutoff({
-  cutoffHour = DEFAULT_CUTOFF_HOUR,
   variant = 'inline',
-  available = true,
+  esaurito = false,
   storeHours,
+  negozioId,
   externalDeliveryLabel,
   senzaNegozio = false,
   className,
 }: {
-  cutoffHour?: number;
   variant?: 'inline' | 'banner';
-  /** Prodotto a inventario e pronto (stock > 0). false → Standard 2-3 giorni. */
-  available?: boolean;
+  /** Prodotto esaurito: nessun tempo di consegna. */
+  esaurito?: boolean;
   /**
-   * Gli orari del negozio. Senza, ci si comporta come prima: un negozio di cui non sappiamo gli
-   * orari non è un negozio chiuso — è la stessa scelta che fa il server, che senza orari lascia
-   * passare l'ordine.
+   * Gli orari del negozio. Senza, un negozio di cui non sappiamo gli orari non è un negozio chiuso —
+   * è la stessa scelta che fa il server, che senza orari lascia passare l'ordine.
    */
   storeHours?: unknown;
+  /** Il negozio del prodotto: serve per chiedere alla cassa se la veloce si può adesso. */
+  negozioId?: string;
   /** Prodotto importato da marketplace: mostra il tempo di consegna esterno. */
   externalDeliveryLabel?: string | null;
   /**
-   * 28/10/2026 — La home mostrava il conto alla rovescia «arriva oggi in 30-60 min» senza orari
-   * di nessun negozio: `deliveryWindow` non conosce i giorni della settimana, quindi la domenica
-   * prometteva «oggi». Dove non c'è UN negozio di cui conoscere gli orari, non si promette «oggi»:
-   * si dice la regola vera (in giornata, negli orari del negozio). Nicola, 26/10: niente minuti.
+   * Dove non c'è UN negozio di cui conoscere gli orari (la home), non si promette «oggi»: si dice
+   * la regola vera (in giornata, negli orari del negozio). Nicola, 26/10: niente minuti.
    */
   senzaNegozio?: boolean;
   className?: string;
 }) {
-  const { hydrated, day, h, m, s } = useDeliveryCutoff(cutoffHour);
+  const adesso = useOraDiPiacenza();
+  const veloce = useVeloceDelNegozio(negozioId, !senzaNegozio && !esaurito && !externalDeliveryLabel);
 
-  // Pre-hydration: messaggio statico senza timer (no mismatch, no layout shift).
-  const timer = hydrated && day === 'oggi'
-    ? <span className="font-mono font-bold tabular-nums">{pad(h)}:{pad(m)}:{pad(s)}</span>
-    : null;
-
-  // Le risposte sono TRE: si può promettere oggi · si consegna in giornate · il negozio è chiuso.
-  // La terza mancava, e senza di lei il conto alla rovescia prometteva «arriva oggi» a negozio
-  // chiuso — con il rifiuto che arrivava dal server all'ultimo clic, dopo indirizzo e pagamento.
-  const promessa = promessaDiConsegna({
-    idoneoExpress: available,
-    disponibile: available,
-    orari: storeHours,
-    adesso: hydrated ? new Date() : undefined,
-  });
-
-  // Prodotto importato: il tempo di consegna è quello indicato dal marketplace.
-  const content = senzaNegozio ? (
-    <span>{RIGA_CONSEGNA_SENZA_NEGOZIO}</span>
-  ) : externalDeliveryLabel ? (
-    <span>Consegna in <strong>{externalDeliveryLabel}</strong></span>
-  ) : promessa.tipo === 'chiuso' ? (
-    <span><strong>{rigaNegozioChiuso(promessa.riapre)}</strong></span>
-  ) : !available ? (
-    <span>Consegna in <strong>{STANDARD_ETA_LABEL}</strong></span>
-  ) : day === 'oggi' && hydrated ? (
-    <span>Ordina entro {timer} e <strong>arriva oggi</strong></span>
-  ) : (
-    <span>Arriva <strong>{day}</strong></span>
-  );
+  const riga = senzaNegozio
+    ? RIGA_CONSEGNA_SENZA_NEGOZIO
+    : rigaConsegnaDellaScheda({ esaurito, orari: storeHours, adesso, veloce, consegnaEsterna: externalDeliveryLabel });
+  if (riga === null) return null;
 
   if (variant === 'banner') {
     return (
-      // 6/9/2026 — LA SCATOLA NASCEVA DI UNA RIGA E NE DIVENTAVA DUE.
-      //
-      // Prima dell'idratazione il testo è «Arriva oggi», undici caratteri. Dopo diventa
-      // «Ordina entro 02:14:31 e arriva oggi in 30-60 min», una cinquantina: dentro i 384
-      // punti dell'hero non ci sta su una riga, va a capo, la scatola cresce di venti punti e
-      // spinge giù le tre righe di rassicurazione — proprio mentre uno le sta leggendo.
-      //
-      // Il commento qui sopra diceva «no layout shift»: valeva per le cifre del contatore, che
-      // sono a larghezza fissa, non per la frase, che quadruplica. Lo spazio delle due righe
-      // adesso è riservato da subito: il testo cambia, la scatola no.
+      // 6/9/2026 — La scatola riserva da subito lo spazio di due righe: la frase cambia dopo
+      // l'idratazione (negozio chiuso, o la veloce confermata dalla cassa) e va a capo nei 384
+      // punti dell'hero; senza la riserva la scatola crescerebbe mentre uno legge le righe sotto.
       <div
         className={cn(
           'flex items-center gap-2 rounded-lg bg-olive-50 text-olive-800 px-3 py-2 text-sm font-medium',
           // Due righe di testo piccolo (2 × 1,25rem) più il padding verticale (2 × 0,5rem).
-          // Vale a ogni misura di schermo: la scatola è larga `max-w-sm` sempre, quindi la
-          // frase lunga va a capo anche da computer.
           'min-h-[3.5rem]',
           className,
         )}
       >
         <Bike size={18} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
-        {content}
+        <span>{riga}</span>
       </div>
     );
   }
@@ -160,7 +137,7 @@ export function DeliveryCutoff({
   return (
     <span className={cn('inline-flex items-center gap-1.5 text-sm text-olive-700 font-medium', className)}>
       <Bike size={15} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
-      {content}
+      <span>{riga}</span>
     </span>
   );
 }

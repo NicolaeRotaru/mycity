@@ -22,7 +22,6 @@ import { RatingStars } from '@/components/ui/RatingStars';
 import { CHIAVI_FUORI_DALLA_GRIGLIA, findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
 import { UNIT_SUFFIX, CONDITION_LABELS, type ProductUnit, type ProductCondition } from '@/lib/products/schema';
 import { deriveOptionGroups, findVariant } from '@/lib/products/variants';
-import { isExpressEligible } from '@/lib/products/express';
 import { loadProductVariants } from '@/lib/products/persistVariants';
 import { deriveQualityMarks } from '@/lib/products/qualityMarks';
 import { useFavorites } from '@/components/hooks/useFavorites';
@@ -469,11 +468,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const freeShipping = spedizione.sopraSoglia;
 
   const sellerProfile = Array.isArray(product.profiles) ? product.profiles[0] : product.profiles;
-  // Idoneità alla consegna veloce (30-60 min): override prodotto + Express del negozio.
-  const expressEligible = isExpressEligible(
-    product.express_enabled as boolean | null,
-    (sellerProfile as { offers_express?: boolean | null } | null)?.offers_express,
-  );
+  // 29/10/2026 — Qui c'era `expressEligible` (interruttore Express del prodotto e del negozio): decideva
+  // fra «arriva oggi» e «Consegna in 2-3 giorni», ma la cassa non lo guarda e non ha una consegna a
+  // 2-3 giorni. La riga della consegna segue la cassa: `rigaConsegnaDellaScheda` in DeliveryCutoff.
 
   const purchaseBlockedMessage = isAdmin
     ? 'Gli account assistenza non possono acquistare sul marketplace.'
@@ -798,11 +795,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 pagamento alla consegna + reso, in un unico riquadro olive. Le righe
                 dinamiche restano tali (DeliveryCutoff conserva la sua logica). */}
             <div className="flex flex-col gap-2 rounded-lg bg-olive-50 border border-olive-200 px-3.5 py-3">
-              {/* Consegna: marketplace esterno se importato, altrimenti Express/Standard */}
+              {/* Consegna: marketplace esterno se importato, altrimenti la regola della cassa */}
               <DeliveryCutoff
                 variant="inline"
-                available={!isOutOfStock && expressEligible}
+                esaurito={isOutOfStock}
                 storeHours={(sellerProfile as { store_hours?: unknown } | null)?.store_hours}
+                negozioId={(sellerProfile?.id ?? product.seller_id) || undefined}
                 externalDeliveryLabel={external?.delivery_label}
               />
               <span className="inline-flex items-center gap-2 text-sm text-olive-800">

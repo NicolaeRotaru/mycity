@@ -13,7 +13,7 @@ import {
   type Dati,
 } from './aiuti/database-coi-permessi';
 import { formatPrice } from '@/lib/format';
-import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
+import { PLATFORM_DELIVERY_FEE_CENTS, SUPPLEMENTO_CONSEGNA_CENTS } from '@/lib/constants';
 import { getCart } from '@/lib/cart';
 
 /**
@@ -397,6 +397,8 @@ afterEach(() => {
  * La vista resta letta dal server (zona di consegna), dalla cassa e dal carrello.
  */
 const CONSEGNA = (negozi: number) => euro((negozi * PLATFORM_DELIVERY_FEE_CENTS) / 100);
+// 29/10/2026 — Nel carrello la focaccia da 8 € sta sotto i 10 €: la consegna è la base più un euro.
+const CONSEGNA_FOCACCIA = euro((PLATFORM_DELIVERY_FEE_CENTS + SUPPLEMENTO_CONSEGNA_CENTS) / 100);
 
 describe('il server non addebita più una spedizione, né a distanza né fissa', () => {
   it.each(MONDI)('Pane Quotidiano, casa di Maria — %s', async (_n, mondo) => {
@@ -409,7 +411,7 @@ describe('il carrello e la cassa mostrano la stessa consegna', () => {
   it.each(MONDI)('Pane Quotidiano, casa di Maria — %s', async (_n, mondo) => {
     const carrello = await spedizioneNelCarrello(mondo, UNA_FOCACCIA);
     expect(carrello.cifre.length, `nel carrello non si trova la riga della consegna: ${carrello.testo.slice(0, 400)}`).toBeGreaterThan(0);
-    for (const c of carrello.cifre) expect(c, 'il carrello mostra una consegna diversa').toBe(CONSEGNA(1));
+    for (const c of carrello.cifre) expect(c, 'il carrello mostra una consegna diversa').toBe(CONSEGNA_FOCACCIA);
     expect(carrello.spedizioni, 'nel carrello è tornata una riga «Spedizione»').toEqual([]);
     const cassa = await spedizioneAllaCassa(mondo, UNA_FOCACCIA);
     expect(cassa.errori, 'una lettura della cassa è caduta').toEqual([]);
@@ -417,11 +419,11 @@ describe('il carrello e la cassa mostrano la stessa consegna', () => {
     expect(
       cassa.cifre,
       'il riepilogo della cassa ha una riga «Gratis» accanto alla consegna che fa pagare, o una cifra diversa dal carrello',
-    ).toEqual([CONSEGNA(1)]);
+    ).toEqual([CONSEGNA_FOCACCIA]);
     expect(
       cassa.riquadro,
       'il riquadro «Consegna a domicilio» non scrive la consegna che la cassa addebita (o scrive «Gratis»)',
-    ).toEqual([CONSEGNA(1)]);
+    ).toEqual([CONSEGNA_FOCACCIA]);
     expect(gratisScritti(cassa.testo), 'la cassa scrive «Gratis» mentre fa pagare la consegna').toEqual([]);
   }, 60000);
 });
@@ -464,7 +466,7 @@ describe('se la vista non risponde, nessuna pagina indovina la spedizione', () =
   it.each(MONDI)('il carrello si disegna lo stesso, con la consegna che si paga — %s', async (_n, mondo) => {
     const { cifre, testo } = await spedizioneNelCarrello(mondo, UNA_FOCACCIA, { vistaGiu: true });
     expect(cifre.length, `il carrello non si disegna più: ${testo.slice(0, 400)}`).toBeGreaterThan(0);
-    for (const c of cifre) expect(c).toBe(CONSEGNA(1));
+    for (const c of cifre) expect(c).toBe(CONSEGNA_FOCACCIA);
   }, 60000);
 
   it.each(MONDI)('la cassa non lascia ordinare e dice che non riesce a leggere — %s', async (_n, mondo) => {

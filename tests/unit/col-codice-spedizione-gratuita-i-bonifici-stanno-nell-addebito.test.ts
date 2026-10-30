@@ -35,6 +35,7 @@ function ingressi(subtotali: number[], opts: Partial<IngressiPrezzo> = {}): Ingr
     pickupInStore: false,
     couponSpedizioneGratis: true,
     couponScontoCents: 0,
+    consegnaVeloce: false,
     ...opts,
   };
 }
@@ -63,10 +64,41 @@ describe('col codice «Spedizione gratuita» i bonifici stanno dentro l addebito
   });
 
   it('vale per ogni spesa, centesimo per centesimo, e per ogni negozio del carrello', () => {
+    // 29/10/2026 23:04 — Il fattorino prende 3 € per il giro e 1 € per ogni negozio in più
+    // (logistica.compenso-fattorino): la prova torna a valere con più negozi, com'era prima del lotto.
     const sforati: string[] = [];
     for (let cents = 1; cents <= 6000; cents++) {
-      for (const g of prezziDelCarrello(ingressi([cents, 6001 - cents])).gruppi) {
+      for (const g of prezziDelCarrello(ingressi([cents])).gruppi) {
         if (bonifici(g) > g.totalCents) sforati.push(`${g.subtotalCents}: ${bonifici(g)} > ${g.totalCents}`);
+      }
+      for (const g of prezziDelCarrello(ingressi([cents, 6001 - cents])).gruppi) {
+        if (bonifici(g) > g.totalCents) sforati.push(`${cents}+${6001 - cents}: ${bonifici(g)} > ${g.totalCents}`);
+      }
+    }
+    expect(sforati.slice(0, 5)).toEqual([]);
+  });
+
+  it('con la carta e più negozi i bonifici dalla stessa charge non superano mai l addebito', () => {
+    // Il caso del collaudo: 3 negozi da 10 € addebitavano 35,00 € e versavano 36,00 €
+    // (27 € ai negozi, 3 € al fattorino per OGNI ordine). Stripe rifiuta l'ultimo bonifico.
+    const carrelli = [
+      [1000, 1000, 1000],
+      [1500, 1200, 1100],
+      [1500, 1200],
+      [1500, 600],
+      [500, 600, 700],
+      [3000, 4500, 1000, 999],
+    ];
+    const sforati: string[] = [];
+    for (const merci of carrelli) {
+      for (const couponSpedizioneGratis of [false, true]) {
+        for (const consegnaVeloce of [false, true]) {
+          const e = prezziDelCarrello(ingressi(merci, { couponSpedizioneGratis, consegnaVeloce }));
+          const versati = e.gruppi.reduce((s, g) => s + bonifici(g), 0);
+          const caso = `${merci.join('+')} codice=${couponSpedizioneGratis} veloce=${consegnaVeloce}`;
+          if (versati > e.grandTotalCents) sforati.push(`${caso}: bonifici ${versati} > addebito ${e.grandTotalCents}`);
+          for (const g of e.gruppi) if (bonifici(g) > g.totalCents) sforati.push(`${caso} ${g.sellerId}: ${bonifici(g)} > ${g.totalCents}`);
+        }
       }
     }
     expect(sforati.slice(0, 5)).toEqual([]);

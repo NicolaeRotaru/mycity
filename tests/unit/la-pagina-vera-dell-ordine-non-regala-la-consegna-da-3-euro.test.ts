@@ -49,6 +49,7 @@ function ordineDallaCassa(subtotalCents: number, pagamento: Pagamento): Riga {
     pickupInStore: false,
     couponSpedizioneGratis: false,
     couponScontoCents: 0,
+    consegnaVeloce: false,
   });
   const g = p.gruppi[0];
   return {

@@ -1,3 +1,4 @@
+import { CONSEGNA_ALL_ORA_CHE_SCEGLI, CONSEGNA_FRASE_INTERA } from '@/lib/promessa-consegna';
 import { z } from 'zod';
 import {
   Banknote, Zap, MapPin, Truck, ShieldCheck, Tag, Sparkles, Gift, Heart, Check,
@@ -60,12 +61,24 @@ export type Branding = z.infer<typeof brandingSchema>;
 
 export const DEFAULT_WEDGE_ITEMS: { icon: WedgeIconKey; text: string }[] = [
   { icon: 'banknote', text: 'Paghi alla consegna' },
-  { icon: 'zap', text: 'Consegna in 30-60 min' },
+  // 29/10/2026 — Erano i minuti della veloce, promessi con un solo fattorino in attesa di approvazione: la
+  // consegna normale arriva all'ora che sceglie il cliente, la veloce solo se c'è chi la fa.
+  { icon: 'zap', text: CONSEGNA_ALL_ORA_CHE_SCEGLI },
   { icon: 'mappin', text: 'Negozi veri di Piacenza' },
 ];
 
 export const DEFAULT_FOOTER_TAGLINE =
-  'Il marketplace dei negozi di Piacenza. Compra dai commercianti locali, ricevi a casa in 30-60 minuti.';
+  `Il marketplace dei negozi di Piacenza. Compra dai commercianti locali. ${CONSEGNA_FRASE_INTERA}.`;
+
+/**
+ * La descrizione del sito per Google e per le anteprime dei link (app/layout.tsx).
+ * 29/10/2026 — Diceva «alimentari, abbigliamento, casa…»: al lancio l'abbigliamento non c'è
+ * (registro dei fatti, catalogo.categorie, Nicola 29/10 alle 00:05). Vive qui, accanto agli altri
+ * testi del sito, perché la radice del sito non si può importare in una prova.
+ * Prova: tests/unit/le-frasi-della-consegna-non-tornano-indietro.test.tsx
+ */
+export const DESCRIZIONE_DEL_SITO =
+  `Compra online dai negozi di Piacenza: alimentari, casa, elettronica, libri. ${CONSEGNA_ALL_ORA_CHE_SCEGLI}, pagamento alla consegna.`;
 
 export function defaultBranding(): Branding {
   return {

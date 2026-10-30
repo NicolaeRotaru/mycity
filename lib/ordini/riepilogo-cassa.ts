@@ -1,4 +1,4 @@
-import { prezziDelCarrello, type IngressiPrezzo } from './prezzi';
+import { prezziDelCarrello, supplementoDellaVeloceCents, type IngressiPrezzo } from './prezzi';
 
 /**
  * QUELLO CHE SI LEGGE IN CASSA, dallo stesso conto che poi addebita.
@@ -52,6 +52,10 @@ export type RiepilogoDaMostrare = {
   creditoUsato: number;
   /** Quello che la persona paga: la cifra grossa sul pulsante. */
   totale: number;
+  /** Spedizione più tariffe di consegna PRIMA del codice «Spedizione gratuita», in euro. */
+  consegnaSenzaCodice: number;
+  /** Quanto costa in più la veloce su questo carrello, in euro (zero = compresa). */
+  supplementoVeloce: number;
 };
 
 export function riepilogoDaMostrare(ing: IngressiRiepilogo): RiepilogoDaMostrare {
@@ -78,5 +82,8 @@ export function riepilogoDaMostrare(ing: IngressiRiepilogo): RiepilogoDaMostrare
     scontoCodice: scontoCodiceCents / 100,
     creditoUsato: creditoUsatoCents / 100,
     totale: Math.max(0, prezzi.grandTotalCents - creditoUsatoCents) / 100,
+    consegnaSenzaCodice:
+      (prezzi.grandShippingCents + prezzi.gruppi.reduce((s, g) => s + g.tariffaConsegnaCents, 0)) / 100,
+    supplementoVeloce: supplementoDellaVeloceCents(ing) / 100,
   };
 }

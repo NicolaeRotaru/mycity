@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
 import { rigaIdentita, titolare } from '@/lib/legal/titolare';
-import { paragrafiConsegne } from '@/lib/legal/promessa-cliente-assente';
+import { paragrafiConsegne, paragrafoDelRifiuto } from '@/lib/legal/promessa-cliente-assente';
 
 export const metadata = {
   title: 'Termini di servizio · MyCity',
@@ -131,8 +131,16 @@ export default function TermsPage() {
         <p>
           L&apos;invio dell&apos;ordine costituisce proposta di acquisto irrevocabile; il contratto
           si perfeziona con l&apos;accettazione del Venditore (che può rifiutare per indisponibilità
-          o motivi giustificati). In caso di rifiuto, il pagamento è rimborsato integralmente.
+          o motivi giustificati). Se il Venditore rifiuta, o non conferma l&apos;ordine in tempo,
+          l&apos;ordine è annullato. {paragrafoDelRifiuto()}
         </p>
+        {/* 30/10/2026 — Prima qui il §4 prometteva di rendere tutto il pagato: con la regola
+            consegna.negozio-che-rifiuta (firmata da Nicola il 30/10) in un carrello con più negozi
+            l'ordine che se ne va rende la merce e la differenza della consegna, non tutto
+            (pane 15 € + frutta 12 €, consegna 4 €: tornano 16 € su 18). Prova coi centesimi:
+            tests/unit/se-un-negozio-rifiuta-la-consegna-si-rifa-sui-negozi-rimasti.test.ts.
+            Il testo lo genera `paragrafoDelRifiuto()` (lib/legal/promessa-cliente-assente.ts), e
+            i-termini-dicono-quello-che-l-annullo-rende-davvero.test.ts lo confronta coi rimborsi veri. */}
         <p>
           I prezzi sono comprensivi di IVA. Le spese di spedizione sono calcolate al checkout in
           base a peso, distanza e modalità di consegna scelta.

@@ -33,6 +33,7 @@ function ingressi(subtotali: number[], opts: Partial<IngressiPrezzo> = {}): Ingr
     pickupInStore: false,
     couponSpedizioneGratis: false,
     couponScontoCents: 0,
+    consegnaVeloce: false,
     ...opts,
   };
 }
@@ -52,15 +53,20 @@ describe('il codice «Spedizione gratuita»', () => {
     expect(con.grandTotalCents).toBe(3000);
   });
 
-  it('vale per ogni negozio del carrello, non solo per il primo', () => {
+  it('toglie la base una volta sola: l’euro del negozio in più resta da pagare', () => {
     const con = prezziDelCarrello(ingressi([3000, 4500], { couponSpedizioneGratis: true }));
-    expect(con.gruppi.map(consegnaPagata)).toEqual([0, 0]);
-    expect(con.grandTotalCents).toBe(3000 + 4500);
+    // 29/10/2026 22:21 — Una consegna sola: il negozio da 45 € porta la base, che il codice toglie;
+    // quello da 30 € porta l'euro del negozio in più, che il codice non toglie mai.
+    expect(con.gruppi.map(consegnaPagata)).toEqual([100, 0]);
+    expect(con.grandTotalCents).toBe(3000 + 4500 + 100);
   });
 
   it('il fattorino resta pagato: il suo compenso non dipende dal codice del cliente', () => {
     const con = prezziDelCarrello(ingressi([2000, 1500], { couponSpedizioneGratis: true }));
-    expect(con.gruppi.map((g) => g.riderFeeCents)).toEqual([COMPENSO_RIDER_CENTS, COMPENSO_RIDER_CENTS]);
+    const senza = prezziDelCarrello(ingressi([2000, 1500], { couponSpedizioneGratis: false }));
+    expect(con.gruppi.map((g) => g.riderFeeCents)).toEqual(senza.gruppi.map((g) => g.riderFeeCents));
+    // 29/10/2026 23:04 — 3 € per il giro sul negozio che porta la base, 1 € sul negozio in più.
+    expect(con.gruppi.map((g) => g.riderFeeCents)).toEqual([COMPENSO_RIDER_CENTS, 100]);
   });
 
   it('il negozio incassa lo stesso netto: il regalo lo paga la piattaforma, non lui', () => {
