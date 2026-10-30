@@ -161,11 +161,51 @@ function minutiDelGiorno(now: Date): number {
  * finita: nessuno accetta, prepara e consegna la busta in 5 minuti.
  */
 function ritiroPossibileFra(intervals: HoursInterval[] | undefined, da: number, a: number): boolean {
-  if (!intervals || intervals.length === 0 || a < da) return false;
-  return intervals.some(([open, close]) => {
+  return ultimoInizioDelRitiro(intervals, da, a) !== null;
+}
+
+/**
+ * L'ULTIMO minuto fra `da` e `a` in cui il ritiro si può ancora cominciare, con lo stesso quarto
+ * d'ora di negozio aperto di `ritiroPossibileFra` (che è questa domanda ridotta a sì/no); `null`
+ * se non ce n'è nessuno. Una regola sola per due domande: «si può servire?» (la cassa, le rotte,
+ * il freno) e «entro quando il negozio deve accettare?» (lib/ordini/scadenza-accettazione.ts).
+ */
+function ultimoInizioDelRitiro(intervals: HoursInterval[] | undefined, da: number, a: number): number | null {
+  if (!intervals || intervals.length === 0 || a < da) return null;
+  let ultimo: number | null = null;
+  for (const [open, close] of intervals) {
     const inizio = Math.max(da, toMinutes(open));
-    return inizio <= a && inizio + MINUTI_PER_IL_RITIRO <= toMinutes(close);
-  });
+    const fine = Math.min(a, toMinutes(close) - MINUTI_PER_IL_RITIRO);
+    if (inizio <= fine && (ultimo === null || fine > ultimo)) ultimo = fine;
+  }
+  return ultimo;
+}
+
+/** Il giorno e i minuti in cui il ritiro per questa fascia si può cominciare (la regola del ritiro). */
+function finestraDelRitiro(
+  hours: StoreHours,
+  scelta: { giorno: 'oggi' | 'domani'; aMinuti: number },
+  now: Date,
+): { intervals: HoursInterval[] | undefined; da: number; a: number } {
+  const limite = scelta.aMinuti - MINUTI_PRIMA_DELLA_FINE;
+  // Per una fascia di domani il ritiro si fa domani, prima del limite. Scelta prudente (AD,
+  // 30/10): la regola alla lettera ammetterebbe anche il ritiro di stasera con la merce tenuta
+  // da parte una notte (sabato sera per la domenica chiusa); finché Nicola non decide la notte,
+  // la cassa non la promette.
+  if (scelta.giorno === 'domani') return { intervals: hours[DAY_KEYS[(now.getDay() + 1) % 7]], da: 0, a: limite };
+  // Paletti ① e ②: una fascia di oggi già finita, o a meno di un'ora dalla fine, non ha più un
+  // momento per il ritiro (`limite < adesso` risponde no).
+  return { intervals: hours[DAY_KEYS[now.getDay()]], da: minutiDelGiorno(now), a: limite };
+}
+
+/** Gli orari scritti, se il negozio li ha impostati davvero; `null` = nessun blocco (NULL-safe). */
+function orariImpostati(storeHours: unknown): StoreHours | null {
+  if (!storeHours || typeof storeHours !== 'object') return null;
+  const hours = storeHours as StoreHours;
+  const configured = DAY_KEYS.some(
+    (k) => Array.isArray(hours[k]) && (hours[k] as HoursInterval[]).length > 0,
+  );
+  return configured ? hours : null;
 }
 
 /**
@@ -202,12 +242,8 @@ export function negozioPuoServire(
   fascia?: string | null,
   now: Date = romeNow(),
 ): boolean {
-  if (!storeHours || typeof storeHours !== 'object') return true;
-  const hours = storeHours as StoreHours;
-  const configured = DAY_KEYS.some(
-    (k) => Array.isArray(hours[k]) && (hours[k] as HoursInterval[]).length > 0,
-  );
-  if (!configured) return true;
+  const hours = orariImpostati(storeHours);
+  if (!hours) return true;
 
   const scelta = leggiFinestraConsegna(fascia);
   // Consegna immediata, o fascia che non si sa leggere: resta la regola di prima.
@@ -218,22 +254,43 @@ export function negozioPuoServire(
   // cominciare fra adesso e 60 minuti prima della fine della fascia, con il negozio che resta aperto
   // almeno un quarto d'ora (`MINUTI_PER_IL_RITIRO`), anche se durante la fascia è chiuso. Lunedì alle 12:00 Pane Quotidiano (9-13, 16:30-19:30) serve la 13:00–16:30
   // (si ritira entro le 13); alle 14:00 no, riapre alle 16:30 e il ritiro andrebbe oltre le 15:30.
-  const adesso = minutiDelGiorno(now);
-  const limite = scelta.aMinuti - MINUTI_PRIMA_DELLA_FINE;
-  const oggiKey = DAY_KEYS[now.getDay()];
+  const ritiro = finestraDelRitiro(hours, scelta, now);
+  return ritiroPossibileFra(ritiro.intervals, ritiro.da, ritiro.a);
+}
 
-  if (scelta.giorno === 'domani') {
-    // Per una fascia di domani il ritiro si fa domani, prima del limite. Scelta prudente (AD,
-    // 30/10): la regola alla lettera ammetterebbe anche il ritiro di stasera con la merce tenuta
-    // da parte una notte (sabato sera per la domenica chiusa); finché Nicola non decide la notte,
-    // la cassa non la promette.
-    const domaniKey = DAY_KEYS[(now.getDay() + 1) % 7];
-    return ritiroPossibileFra(hours[domaniKey], 0, limite);
-  }
+/**
+ * 30/10/2026 (ondata 23) — ENTRO QUANDO SI PUÒ ANCORA RITIRARE PER QUESTA FASCIA.
+ *
+ * La stessa regola del ritiro di `negozioPuoServire`, detta come un'ora invece che come un sì/no.
+ * Lunedì alle 12:00 Pane Quotidiano (9-13, 16:30-19:30) serve la «Oggi · 13:00–16:30» perché il
+ * ritiro si comincia entro le 12:45 (il forno chiude alle 13 e riapre alle 16:30, a fascia finita):
+ * `minuto` = 12:45. `apertoFinoAllaFine` = il negozio è aperto di fila da quel minuto fino alla fine
+ * della fascia (la 9:00–11:00 col forno aperto fino alle 13): lì l'ora che conta resta la fine
+ * della fascia, come prima.
+ *
+ * `null` quando la regola non ha niente da dire: orari mai impostati, la veloce, una fascia che
+ * non si sa leggere, oppure nessun momento per il ritiro (un ordine che la cassa non avrebbe fatto).
+ */
+export type UltimoRitiro = { giorno: 'oggi' | 'domani'; minuto: number; apertoFinoAllaFine: boolean };
 
-  // Paletti ① e ②: una fascia di oggi già finita, o a meno di un'ora dalla fine, non ha più un
-  // momento per il ritiro (`ritiroPossibileFra` con `limite < adesso` risponde no).
-  return ritiroPossibileFra(hours[oggiKey], adesso, limite);
+export function ultimoRitiroDellaFascia(
+  storeHours: unknown,
+  fascia?: string | null,
+  now: Date = romeNow(),
+): UltimoRitiro | null {
+  const hours = orariImpostati(storeHours);
+  if (!hours) return null;
+  const scelta = leggiFinestraConsegna(fascia);
+  if (!scelta || scelta.giorno === 'adesso') return null;
+  const ritiro = finestraDelRitiro(hours, scelta, now);
+  const ultimo = ultimoInizioDelRitiro(ritiro.intervals, ritiro.da, ritiro.a);
+  if (ultimo === null) return null;
+  const minuto: number = ultimo;
+  const fineFascia = scelta.aMinuti;
+  const apertoFinoAllaFine = (ritiro.intervals ?? []).some(
+    ([open, close]) => toMinutes(open) <= minuto && toMinutes(close) >= fineFascia,
+  );
+  return { giorno: scelta.giorno, minuto, apertoFinoAllaFine };
 }
 
 /**

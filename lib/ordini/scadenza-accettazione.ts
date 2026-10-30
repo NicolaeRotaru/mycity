@@ -1,4 +1,5 @@
-import { romeNow } from '@/lib/store-hours';
+import { finestraDellaFascia } from '@/lib/quando-arriva';
+import { romeNow, ultimoRitiroDellaFascia } from '@/lib/store-hours';
 import { giornoPiacenza, scartoFusoMinuti } from '@/lib/tempo-piacenza';
 
 /**
@@ -41,43 +42,15 @@ import { giornoPiacenza, scartoFusoMinuti } from '@/lib/tempo-piacenza';
 /** Ore minime che il venditore ha comunque per accettare, qualunque sia la fascia. */
 export const ORE_PER_ACCETTARE = 3;
 
-export type FinestraDiConsegna = {
-  /** La consegna è per il giorno dopo quello in cui l'ordine è nato. */
-  domani: boolean;
-  daMinuti: number;
-  /** La fine della finestra, in minuti dalla mezzanotte del giorno di consegna. */
-  aMinuti: number;
-};
-
-/**
- * La fascia scritta sull'ordine, letta come giorno + finestra.
+/*
+ * 30/10/2026 (ondata 23) — LA FASCIA SI LEGGE DALLA CASA UNICA.
  *
- * Le etichette le scrive `lib/quando-arriva.ts` («Domani · 9:00–12:00»,
- * «Stasera · 18:00–20:00», «Adesso · arrivo in …»). `leggiFasciaConsegna` in
- * `lib/store-hours.ts` fa metà di questo lavoro, ma di proposito risponde solo
- * su «domani»: a lei serve sapere se guardare gli orari di domani, qui serve
- * anche la fine delle fasce di oggi.
- *
- * `null` = non c'è nessun appuntamento da rispettare (ritiro, consegna
- * immediata, fascia che non si sa leggere): vale la regola delle tre ore.
+ * Qui c'era un `finestraDellaFascia` suo, omonimo di quello di `lib/quando-arriva.ts` e con regole
+ * diverse: cercava la parola «domani» e due orari dentro il testo, quindi leggeva come fascia
+ * anche un'etichetta che la cassa non propone e le rotte rifiutano («Domani · 10:00–14:00»), e su
+ * quella spostava la scadenza. Adesso giorno e minuti vengono dalla tabella che scrive le
+ * etichette: un'etichetta che non è una fascia nota non sposta niente, vale la regola delle tre ore.
  */
-export function finestraDellaFascia(etichetta?: string | null): FinestraDiConsegna | null {
-  const testo = String(etichetta ?? '').trim();
-  if (!testo) return null;
-  const domani = /domani/i.test(testo);
-  // Il trattino delle etichette è quello lungo (–), ma si accettano anche il
-  // trattino normale e quello medio, come fa già `leggiFasciaConsegna`.
-  const orari = testo.match(/(\d{1,2}):(\d{2})\s*[–—-]\s*(\d{1,2}):(\d{2})/);
-  if (!orari) {
-    // «Domani» senza orari: l'appuntamento è comunque domani, e finisce con la
-    // giornata. «Adesso · arrivo in 30-60 min» non ha orari e non dice domani:
-    // resta la regola delle tre ore.
-    return domani ? { domani: true, daMinuti: 0, aMinuti: 24 * 60 } : null;
-  }
-  const da = Number(orari[1]) * 60 + Number(orari[2]);
-  const a = Number(orari[3]) * 60 + Number(orari[4]);
-  return { domani, daMinuti: da, aMinuti: Math.max(da, a) };
-}
 
 type OrdineDaScadere = {
   created_at?: string | Date | null;
@@ -104,7 +77,7 @@ export function scadenzaAccettazione(
 
 /**
  * La fine della fascia promessa, come istante; `null` senza una fascia leggibile («Adesso», ritiro).
- * È l'ora che il negozio legge come «entro quando accettare»: la regola delle tre ore resta solo
+ * È l’ora del giro notturno; il negozio legge `entroQuandoAccettare` (l’ultimo ritiro possibile, qui sotto). La regola delle tre ore resta solo
  * nel giro notturno (`scadenzaAccettazione`), che annulla dopo.
  *
  * Gli orari delle fasce sono l'orologio da parete di Piacenza, `created_at` è un istante UTC.
@@ -119,13 +92,49 @@ export function fineDellaFascia(ordine: OrdineDaScadere): Date | null {
   if (!nato || Number.isNaN(nato.getTime())) return null;
   const finestra = finestraDellaFascia(ordine.delivery_slot);
   if (!finestra) return null;
+  return istanteDiParete(nato, finestra.giorno === 'domani' ? 1 : 0, Math.max(finestra.daMinuti, finestra.aMinuti));
+}
+
+/**
+ * L'istante UTC di un'ora da parete di Piacenza: `minuti` dalla mezzanotte del giorno di Piacenza
+ * della nascita, più `piuGiorni`.
+ */
+function istanteDiParete(nato: Date, piuGiorni: number, minuti: number): Date {
   const [anno, mese, giorno] = giornoPiacenza(nato).split('-').map(Number);
-  // La fine della fascia letta come se Piacenza fosse UTC; poi si toglie lo scarto del fuso.
+  // L'ora letta come se Piacenza fosse UTC; poi si toglie lo scarto del fuso.
   // Due passate: lo scarto giusto è quello dell'istante vero, non di quello «finto UTC».
-  const comeSeFosseUtc = Date.UTC(anno, mese - 1, giorno + (finestra.domani ? 1 : 0), 0, finestra.aMinuti);
+  const comeSeFosseUtc = Date.UTC(anno, mese - 1, giorno + piuGiorni, 0, minuti);
   let istante = comeSeFosseUtc - scartoFusoMinuti(new Date(comeSeFosseUtc)) * 60_000;
   istante = comeSeFosseUtc - scartoFusoMinuti(new Date(istante)) * 60_000;
   return new Date(istante);
+}
+
+/**
+ * 30/10/2026 (ondata 23) — ENTRO QUANDO IL NEGOZIO DEVE ACCETTARE: L'ULTIMO RITIRO POSSIBILE.
+ *
+ * Il difetto: l'ora detta al negozio era la FINE della fascia. Con la regola del ritiro (ondata
+ * 22) la merce si ritira quando il negozio è aperto, anche prima della fascia. Lunedì alle 12:00
+ * Maria ordina da Pane Quotidiano (9-13, 16:30-19:30) per «Oggi · 13:00–16:30»: il forno chiude
+ * alle 13 e riapre alle 16:30, quindi la spesa si ritira entro le 12:45. Il forno però leggeva
+ * «accettalo entro le 16:30», e se accettava alle 14 nessuno poteva più ritirarla.
+ *
+ * La regola: l'ora è l'ultimo momento in cui il ritiro per quella fascia si può ancora cominciare,
+ * dalla STESSA funzione delle rotte e della cassa (`ultimoRitiroDellaFascia` in lib/store-hours.ts),
+ * col quarto d'ora di negozio aperto. Il minuto dell'ultimo ritiro vale tutto (le rotte leggono i
+ * minuti, non i secondi): «entro le 12:45» regge fino alle 12:45:59. Se il negozio è aperto di fila
+ * fino alla fine della fascia, l'ora resta la fine della fascia, come prima.
+ *
+ * Senza orari del negozio (`orari` non passato o mai impostato), con la veloce o senza una fascia
+ * leggibile: la fine della fascia, come prima. `null` senza fascia.
+ */
+export function entroQuandoAccettare(ordine: OrdineDaScadere, orari?: unknown): Date | null {
+  const fine = fineDellaFascia(ordine);
+  if (!fine || !ordine.created_at) return fine;
+  const nato = new Date(ordine.created_at);
+  const ritiro = ultimoRitiroDellaFascia(orari, ordine.delivery_slot, romeNow(nato));
+  if (!ritiro || ritiro.apertoFinoAllaFine) return fine;
+  const inizio = istanteDiParete(nato, ritiro.giorno === 'domani' ? 1 : 0, ritiro.minuto);
+  return new Date(Math.min(fine.getTime(), inizio.getTime() + 59_999));
 }
 
 /**
@@ -184,7 +193,12 @@ export function scadenzaLeggibile(quando: Date, adesso: Date = new Date()): stri
  * Per la veloce la scadenza che conta è un'altra: i 10 minuti del freno.
  * `null` quando la nascita dell'ordine non si legge: niente scadenza inventata.
  */
-export function rigaScadenzaPerIlNegozio(ordine: OrdineDaScadere, adesso: Date = new Date()): string | null {
+export function rigaScadenzaPerIlNegozio(
+  ordine: OrdineDaScadere,
+  adesso: Date = new Date(),
+  /** Gli orari del negozio (`profiles.store_hours`): senza, l'ora resta la fine della fascia. */
+  orari?: unknown,
+): string | null {
   const nato = ordine.created_at ? new Date(ordine.created_at) : null;
   if (!nato || Number.isNaN(nato.getTime())) return null;
   const annullo = scadenzaAccettazione(ordine);
@@ -212,8 +226,13 @@ export function rigaScadenzaPerIlNegozio(ordine: OrdineDaScadere, adesso: Date =
       `oraria libera la spesa passa lì da sola. ${allAnnullo}`
     );
   }
-  const entro = fineDellaFascia(ordine) ?? annullo;
+  const entro = entroQuandoAccettare(ordine, orari) ?? annullo;
   if (adesso.getTime() < entro.getTime()) return `Accettalo o rifiutalo entro ${scadenzaLeggibile(entro, adesso)}.`;
+  const fine = fineDellaFascia(ordine);
+  if (fine && adesso.getTime() < fine.getTime()) {
+    // L'ultimo ritiro è passato ma la fascia no: il negozio ha chiuso (o chiude) prima della fascia.
+    return `Il negozio chiude prima della fascia e il tempo per preparare la spesa è finito: accettalo solo se può partire subito, altrimenti rifiutalo. ${allAnnullo}`;
+  }
   return `La fascia di consegna è finita: accettalo solo se puoi consegnarlo subito, altrimenti rifiutalo. ${allAnnullo}`;
 }
 
