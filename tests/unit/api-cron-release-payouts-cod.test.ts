@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * release-payouts — pass COD (🔴-1 slice 3). Invariante chiave "paga dopo
@@ -15,6 +15,7 @@ type OrderRow = {
   dispute_status?: string | null;
   payout_claimed_at?: string | null;
   rider_payout_status?: string | null;
+  delivered_at?: string | null;
 };
 const state: { orders: OrderRow[] } = { orders: [] };
 const releaseOrderPayoutMock = vi.fn(async (_id: string) => ({ ok: true as const, transferId: 'tr_1' }));
@@ -95,7 +96,8 @@ function ordersBuilder(rows: OrderRow[]) {
           disputeOk(o),
       );
       if (patch) for (const o of out) Object.assign(o, patch);
-      return resolve({ data: out.map((o) => ({ id: o.id })), error: null });
+      // 31/10/2026 — il passaggio dei contanti legge anche il giorno della consegna.
+      return resolve({ data: out.map((o) => ({ id: o.id, delivered_at: o.delivered_at })), error: null });
     },
   };
   return b;
@@ -120,11 +122,17 @@ beforeEach(() => {
   state.orders = [];
   releaseOrderPayoutMock.mockClear();
   releaseRiderPayoutMock.mockClear();
+  // 31/10/2026 — i contanti li paga Stripe solo dal giorno scritto qui
+  // (lib/stripe/payout.ts, contantiPagabiliDaStripe).
+  vi.stubEnv('PAGAMENTI_CONTANTI_DA_STRIPE_DAL', '2026-01-01');
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe('release-payouts pass COD', () => {
   it('paga il venditore per un ordine COD in HELD (rimessa confermata)', async () => {
-    state.orders = [{ id: 'cod1', payment_method: 'cod', payout_status: 'HELD', delivery_status: 'DELIVERED' }];
+    state.orders = [{ id: 'cod1', payment_method: 'cod', payout_status: 'HELD', delivery_status: 'DELIVERED', delivered_at: new Date().toISOString() }];
     const res = await run();
     expect(await res.json()).toMatchObject({ ok: true, codReleased: 1 });
     expect(releaseOrderPayoutMock).toHaveBeenCalledWith('cod1');

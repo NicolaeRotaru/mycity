@@ -100,6 +100,8 @@ function tabellaOrdini(righe: Ordine[]) {
   const minoriDi: Record<string, string> = {};
   const nonOltre: Record<string, string> = {};
   const nonNulli: string[] = [];
+  const nonPrimaDi: Record<string, string> = {};
+  let tetto = Infinity;
   const gruppiOr: string[] = [];
   let scrittura: Record<string, unknown> | null = null;
 
@@ -121,11 +123,12 @@ function tabellaOrdini(righe: Ordine[]) {
     eq: (c: string, v: unknown) => ((uguali[c] = v), b),
     in: (c: string, v: unknown[]) => ((dentro[c] = v), b),
     is: () => b,
-    not: (c: string, _op: string, v: unknown) => (v === null ? nonNulli.push(c) : null, b),
+    not: (c: string, op: string, v: unknown) =>
+      (v === null ? nonNulli.push(c) : op === 'lt' ? (nonPrimaDi[c] = String(v)) : null, b),
     or: (expr: string) => (gruppiOr.push(expr), b),
     lte: (c: string, v: string) => ((nonOltre[c] = v), b),
     lt: (c: string, v: string) => ((minoriDi[c] = v), b),
-    limit: () => b,
+    limit: (n: number) => ((tetto = n), b),
     then: (risolvi: (x: unknown) => unknown) => {
       const fuori = righe.filter((o) => {
         const r = o as Record<string, unknown>;
@@ -138,8 +141,12 @@ function tabellaOrdini(righe: Ordine[]) {
           if (r[c] == null || String(r[c]) > v) return false;
         }
         for (const c of nonNulli) if (r[c] == null) return false;
+        // not.lt come PostgREST: una colonna vuota non passa (NOT (NULL < x) e' NULL).
+        for (const [c, v] of Object.entries(nonPrimaDi)) {
+          if (r[c] == null || String(r[c]) < v) return false;
+        }
         return passaTuttiGliOr(o);
-      });
+      }).slice(0, tetto);
       if (scrittura) for (const o of fuori) Object.assign(o, scrittura);
       return risolvi({ data: fuori.map((o) => ({ ...o })), error: null });
     },
@@ -186,9 +193,14 @@ beforeEach(() => {
   state.avvisoRecente = null;
   releaseOrderPayoutMock.mockClear();
   releaseRiderPayoutMock.mockClear();
+  // 31/10/2026 — i contanti passano da Stripe solo se consegnati dal giorno
+  // scritto qui (lib/stripe/payout.ts, contantiPagabiliDaStripe). Le prove dei
+  // contanti qui sotto parlano di ordini consegnati dopo quel giorno.
+  vi.stubEnv('PAGAMENTI_CONTANTI_DA_STRIPE_DAL', '2026-01-01');
 });
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
 describe('R040 — il compenso del fattorino rimasto a meta', () => {
@@ -242,6 +254,7 @@ describe('R124 — il reclamo interno vale anche sui contanti', () => {
         payment_method: 'cod',
         payout_status: 'HELD',
         delivery_status: 'DELIVERED',
+        delivered_at: dueOreFa(),
         internal_dispute_status: 'OPEN',
       },
     ];
@@ -262,6 +275,7 @@ describe('R124 — il reclamo interno vale anche sui contanti', () => {
         payment_method: 'cod',
         payout_status: 'HELD',
         delivery_status: 'DELIVERED',
+        delivered_at: dueOreFa(),
         internal_dispute_status: 'RESOLVED',
       },
     ];
@@ -341,6 +355,7 @@ describe('R044 — i contanti non entrano nel saldo Stripe', () => {
         payment_method: 'cod',
         payout_status: 'HELD',
         delivery_status: 'DELIVERED',
+        delivered_at: dueOreFa(),
         seller_payout_cents: 10_000,
         seller_payout_reversed_cents: 0,
       },
@@ -365,6 +380,7 @@ describe('R044 — i contanti non entrano nel saldo Stripe', () => {
         payment_method: 'cod',
         payout_status: 'HELD',
         delivery_status: 'DELIVERED',
+        delivered_at: dueOreFa(),
         seller_payout_cents: 10_000,
         seller_payout_reversed_cents: 0,
       },
@@ -384,6 +400,7 @@ describe('R044 — i contanti non entrano nel saldo Stripe', () => {
         payment_method: 'cod',
         payout_status: 'HELD',
         delivery_status: 'DELIVERED',
+        delivered_at: dueOreFa(),
         seller_payout_cents: 10_000,
         seller_payout_reversed_cents: 0,
       },
@@ -393,5 +410,60 @@ describe('R044 — i contanti non entrano nel saldo Stripe', () => {
 
     expect(esito.codReleased).toBe(1);
     expect(esito.codSaldoInsufficiente).toBe(false);
+  });
+});
+
+describe('31/10 — i contanti gia pagati a mano non entrano nel conto del saldo', () => {
+  // Al lancio il negozio i contanti li riceve con un bonifico a mano di Nicola
+  // e l'ordine resta HELD. Stripe non li paghera' mai (releaseOrderPayout li
+  // rifiuta): se il giro li somma lo stesso, dice «saldo insufficiente» quando
+  // non e' vero e ferma i contanti che invece Stripe deve pagare.
+  it('con la data accesa, i contanti vecchi pagati a mano non fermano il bonifico di quelli nuovi', async () => {
+    vi.stubEnv('PAGAMENTI_CONTANTI_DA_STRIPE_DAL', '2026-10-01');
+    state.saldoDisponibile = 5_000; // 50 €
+    state.ordini = [
+      // 100 € consegnati il 20/9: il negozio li ha gia' avuti a mano.
+      { id: 'cod-a-mano', payment_method: 'cod', payout_status: 'HELD', delivery_status: 'DELIVERED', seller_payout_cents: 10_000, seller_payout_reversed_cents: 0, delivered_at: '2026-09-20T10:00:00.000Z' },
+      // 20 € consegnati dopo il giorno d'inizio: questi li paga Stripe.
+      { id: 'cod-nuovo', payment_method: 'cod', payout_status: 'HELD', delivery_status: 'DELIVERED', seller_payout_cents: 2_000, seller_payout_reversed_cents: 0, delivered_at: dueOreFa() },
+    ];
+
+    const esito = await giro();
+
+    expect(esito.codSaldoInsufficiente, 'il saldo conta anche i contanti che Stripe non paghera mai').toBe(false);
+    expect(state.notifiche, 'avviso falso: 20 € da pagare, 50 € sul saldo').toEqual([]);
+    expect(releaseOrderPayoutMock).toHaveBeenCalledWith('cod-nuovo');
+    expect(releaseOrderPayoutMock, 'il contante gia pagato a mano non va nemmeno provato').not.toHaveBeenCalledWith('cod-a-mano');
+  });
+
+  it('senza la data nessun contante parte da Stripe: niente avviso di saldo insufficiente', async () => {
+    vi.stubEnv('PAGAMENTI_CONTANTI_DA_STRIPE_DAL', '');
+    state.saldoDisponibile = 1000;
+    state.ordini = [
+      { id: 'cod-a-mano', payment_method: 'cod', payout_status: 'HELD', delivery_status: 'DELIVERED', seller_payout_cents: 10_000, seller_payout_reversed_cents: 0, delivered_at: dueOreFa() },
+    ];
+
+    const esito = await giro();
+
+    expect(state.notifiche, 'avviso a Nicola per bonifici che non partiranno mai da Stripe').toEqual([]);
+    expect(esito.codSaldoInsufficiente).toBe(false);
+    expect(releaseOrderPayoutMock).not.toHaveBeenCalled();
+  });
+
+  it('duecento contanti vecchi pagati a mano non riempiono il lotto: quello nuovo parte lo stesso', async () => {
+    vi.stubEnv('PAGAMENTI_CONTANTI_DA_STRIPE_DAL', '2026-10-01');
+    const vecchi = Array.from({ length: 200 }, (_, i) => ({
+      id: `cod-vecchio-${i}`, payment_method: 'cod', payout_status: 'HELD', delivery_status: 'DELIVERED',
+      seller_payout_cents: 1_000, seller_payout_reversed_cents: 0, delivered_at: '2026-09-15T10:00:00.000Z',
+    }));
+    state.ordini = [
+      ...vecchi,
+      { id: 'cod-nuovo', payment_method: 'cod', payout_status: 'HELD', delivery_status: 'DELIVERED', seller_payout_cents: 2_000, seller_payout_reversed_cents: 0, delivered_at: dueOreFa() },
+    ];
+
+    const esito = await giro();
+
+    expect(releaseOrderPayoutMock, 'restano HELD per sempre: senza il giorno nella ricerca occupano tutto il lotto').toHaveBeenCalledWith('cod-nuovo');
+    expect(esito.codReleased).toBe(1);
   });
 });

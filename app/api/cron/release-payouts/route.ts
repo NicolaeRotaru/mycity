@@ -9,6 +9,8 @@ import {
   releaseRiderPayout,
   FILTRO_RIDER_RITENTABILI,
   STATI_RIDER_RITENTABILI,
+  contantiPagabiliDaStripe,
+  VAR_CONTANTI_DA_STRIPE,
 } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 // R044 — l'avviso agli amministratori e' quello gia' usato dal webhook: una casa sola.
@@ -352,9 +354,27 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   let codSkipped = 0;
   let codFailed = 0;
   let codSaldoInsufficiente = false;
-  const { data: codCands } = await admin
+  // 31/10/2026 — SI CERCANO SOLO I CONTANTI CHE STRIPE PUO' PAGARE.
+  // Al lancio il negozio i contanti li riceve con un bonifico a mano di Nicola
+  // e l'ordine resta HELD: releaseOrderPayout li rifiuta (contantiPagabiliDaStripe),
+  // ma qui sotto il controllo del saldo li sommava lo stesso. Senza la data
+  // l'avviso «saldo insufficiente» partiva per bonifici che Stripe non fara'
+  // mai; con la data, i contanti vecchi gonfiavano il conto e fermavano quelli
+  // nuovi. E restando HELD per sempre, duecento ordini vecchi avrebbero
+  // riempito il lotto. Ora il giorno d'inizio filtra gia' la ricerca, e la
+  // stessa regola di releaseOrderPayout filtra le righe tornate: si somma
+  // solo quello che partira' davvero. Senza una data valida, il passaggio non
+  // cerca niente. (La regola: lib/stripe/payout.ts, contantiPagabiliDaStripe.)
+  const dalContanti = process.env[VAR_CONTANTI_DA_STRIPE];
+  const inizioContanti =
+    dalContanti && contantiPagabiliDaStripe(dalContanti, dalContanti)
+      ? new Date(Date.parse(dalContanti)).toISOString()
+      : null;
+  const { data: codTrovati } = !inizioContanti ? { data: [] } : await admin
     .from('orders')
-    .select('id, seller_payout_cents, seller_payout_reversed_cents')
+    .select('id, seller_payout_cents, seller_payout_reversed_cents, delivered_at')
+    // «Non prima del giorno d'inizio»: come gte, e una consegna senza data resta fuori.
+    .not('delivered_at', 'lt', inizioContanti)
     .eq('payout_status', 'HELD')
     .eq('payment_method', 'cod')
     .eq('delivery_status', 'DELIVERED')
@@ -366,7 +386,10 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     // regola che non torna diventa una discussione col negoziante.
     .or('internal_dispute_status.is.null,internal_dispute_status.eq.RESOLVED')
     .limit(BATCH_LIMIT);
-  const codIds = (codCands ?? []).map((o) => o.id as string);
+  const codCands = (codTrovati ?? []).filter((o) =>
+    contantiPagabiliDaStripe((o as { delivered_at?: string | null }).delivered_at, dalContanti),
+  );
+  const codIds = codCands.map((o) => o.id as string);
   if (codIds.length > 0) {
     /**
      * 27/8/2026 (R044) — I CONTANTI NON ENTRANO NEL SALDO STRIPE.
@@ -390,7 +413,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
      * bloccare i pagamenti di tutti.
      */
     try {
-      const daPagareCents = (codCands ?? []).reduce((somma, o) => {
+      const daPagareCents = codCands.reduce((somma, o) => {
         const netto = (o as { seller_payout_cents?: number | null }).seller_payout_cents ?? 0;
         const gia = (o as { seller_payout_reversed_cents?: number | null }).seller_payout_reversed_cents ?? 0;
         return somma + Math.max(0, netto - gia);
