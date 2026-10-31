@@ -10,13 +10,14 @@ import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { trackReferralSent } from '@/lib/analytics/events';
-import { CLASSIFICA_INVITI_ACCESA } from '@/lib/funzioni-al-lancio';
+import { CLASSIFICA_INVITI_ACCESA, INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
 
 export default function ReferralPage() {
   const [copied, setCopied] = useState(false);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: queryKeys.referrals.mine,
+    enabled: INVITI_E_PUNTI_ACCESI,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
@@ -49,6 +50,18 @@ export default function ReferralPage() {
       };
     },
   });
+
+  // 31/10/2026 — Inviti e punti spenti al lancio (INVITI_E_PUNTI_ACCESI): niente link
+  // da condividere che prometta €5 che oggi nessuno registra.
+  if (!INVITI_E_PUNTI_ACCESI) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-2xl space-y-4">
+        <Link href="/profile" className="text-sm text-primary-700 hover:underline">← Profilo</Link>
+        <h1 className="text-2xl font-bold text-ink-900">Invita un amico</h1>
+        <p className="text-sm text-ink-600">Gli inviti non sono ancora attivi: al lancio non c&apos;è un premio per chi invita un amico. Quando lo accendiamo te lo diciamo qui.</p>
+      </div>
+    );
+  }
 
   if (isLoading || !profile) return <LoadingState />;
 

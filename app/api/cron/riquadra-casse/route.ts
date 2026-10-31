@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
+import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { logger } from '@/lib/logger';
 import { aggiornaQuadratura } from '@/lib/cassa/quadratura';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
@@ -23,7 +24,9 @@ export const runtime = 'nodejs';
  * consegnato in contanti. Non ripara solo quel caso: ripara qualunque strada
  * futura che chiuda un ordine senza avvisare la cassa.
  */
-const handler = withCronAuth(async (): Promise<NextResponse> => {
+const handler = withCronAuth(async (req): Promise<NextResponse> => {
+  // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
+  if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   const admin = getAdminSupabase();
 
   const oggi = giornoLocale(new Date());

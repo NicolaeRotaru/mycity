@@ -38,7 +38,7 @@ import {
   LifeBuoy, MessageCircle, ArrowLeft, ShoppingBag,
 } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
-import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
+import { conFattorinoDellOrdine, conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 // #92 — le miniature si chiedono gia' piccole al server
 import { sizedImage, logoNegozio } from '@/lib/image-url';
 import { cifraDellaVoce, fraseDelBonificoAMano, riepilogoOrdine, statoPagamento } from '@/lib/ordini/riepilogo-ordine';
@@ -111,7 +111,6 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
       delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
       delivery_lat, delivery_lng,
       rider_lat, rider_lng, rider_position_updated_at, rider_id,
-      rider:profiles!orders_rider_id_fkey ( full_name ),
       seller_id,
       order_items (
         id, quantity, unit_price, product_id, product_name, product_image,
@@ -139,7 +138,10 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
     [data as unknown as Omit<OrderRow, 'seller'>],
     'id, store_name, store_logo, store_phone, store_address, store_lat, store_lng',
   );
-  return conNegozio as OrderRow;
+  // 31/10/2026 (migrazione 164) — Il nome del fattorino arriva dalla vista `nomi_pubblici`, non da
+  // `profiles`: dopo la 161 l'aggancio a `profiles` tornava vuoto e la scheda diceva sempre «Il tuo rider».
+  const [conFattorino] = await conFattorinoDellOrdine(supabase, [conNegozio]);
+  return conFattorino as unknown as OrderRow;
 };
 
 // Timestamp del singolo step della timeline (se registrato).

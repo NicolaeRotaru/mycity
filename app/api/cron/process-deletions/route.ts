@@ -2,6 +2,13 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
+import {
+  chiamataDelCalendario,
+  chiamataDelCalendarioFerma,
+  giroCheSoloConta,
+  rispostaDelFermo,
+  segnaGiroNonFatto,
+} from '@/lib/cron/fermo-dei-lavori';
 import { logger } from '@/lib/logger';
 import { cancellaAccount } from '@/lib/account/cancellazione';
 import {
@@ -11,7 +18,9 @@ import {
 } from '@/lib/cron-cancellazioni';
 import { identificativoAvviso, rispondiAChiAspetta } from '@/lib/privacy/avvisi-a-chi-aspetta';
 import {
+  contaPotature,
   eseguiPotature,
+  type ClienteCheConta,
   type ClientePotature,
   type RapportoPotature,
 } from '@/lib/privacy/potature-ritenzione';
@@ -32,9 +41,13 @@ export const runtime = 'nodejs';
  *  3) Log audit per compliance
  *
  * Cadenza: ogni notte alle 4. Chi la fa partire sta in `vercel.json` → `crons`.
- * A mano si chiama così:
+ * A mano si chiama così (finché LAVORI_A_ORARIO non è «accesi» serve ?a_mano=1).
+ * Una chiamata a mano CONTA e non cancella niente — il primo giro si fa così:
  *   curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
- *     https://yourapp.com/api/cron/process-deletions
+ *     "https://yourapp.com/api/cron/process-deletions?a_mano=1"
+ * Cancella davvero solo con `&cancella=1` scritto esatto, dopo aver letto il conto.
+ * La chiamata del calendario cancella solo con CANCELLAZIONI_A_ORARIO=accese: finché
+ * manca, ogni notte conta e basta, anche con gli altri lavori accesi.
  *
  * Schedule consigliato: ogni giorno alle 04:00 Europe/Rome.
  */
@@ -44,8 +57,60 @@ export const runtime = 'nodejs';
 
 type Admin = ReturnType<typeof getAdminSupabase>;
 
-export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse> => {
+/**
+ * Il conto del giro senza il giro: gli account che la notte cancellerebbe e le
+ * righe che le potature toccherebbero. Non scrive niente e non lascia il
+ * battito, perche' il lavoro non e' stato fatto.
+ *
+ * `process_expired_deletions` qui si puo' chiamare: e' una SELECT sui profili
+ * con la richiesta scaduta (migrations/040_account_deletion_cooldown.sql), non
+ * tocca niente. Restano fuori dal conto, e la risposta lo dice, le cose che
+ * per ogni account si scoprono solo cancellando: i file nello storage, le prove
+ * di consegna, i dati da togliere su Stripe.
+ */
+async function contaSenzaCancellare(admin: Admin, dalCalendario: boolean): Promise<NextResponse> {
+  const { data, error } = await admin.rpc('process_expired_deletions');
+  if (error) {
+    logger.error('[cron-deletions] conto: RPC fallita', error);
+    return segnaGiroNonFatto(ApiErrors.internal(error.message), 'solo_conta');
+  }
+  const scadute = (data ?? []) as Array<{ user_id: string; deleted_at: string | null }>;
+  const potature = await contaPotature(admin as unknown as ClienteCheConta);
+
+  const conto = NextResponse.json({
+      ok: true,
+      soloConta: true,
+      nienteCancellato: true,
+      ...(dalCalendario ? { motivo: 'CANCELLAZIONI_A_ORARIO non è «accese»: la notte conta e non cancella' } : {}),
+      account: {
+        quanti: scadute.length,
+        elenco: scadute.map((r) => ({ userId: r.user_id, chiestaIl: r.deleted_at })),
+      },
+      potature,
+      nonContati:
+        "Per ogni account, i file nello storage, le prove di consegna e i dati su Stripe: si vedono solo cancellando.",
+    });
+
+  // 31/10/2026 — LA NOTTE CHE CONTA È LA NOTTE DI QUESTO LAVORO, E LASCIA IL BATTITO.
+  // Finché le cancellazioni sono spente, il conto del calendario È il giro della
+  // notte: senza battito, dopo 26 ore il sorvegliante direbbe «process-deletions
+  // fermo» ogni 6 ore, per settimane, e insegnerebbe a ignorare gli allarmi.
+  // Il conto a mano invece non è il giro di nessuno: niente battito.
+  return dalCalendario ? conto : segnaGiroNonFatto(conto, 'solo_conta');
+}
+
+export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse> => {
+  // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
+  if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   const admin = getAdminSupabase();
+
+  // 31/10/2026 — UN GIRO A MANO CONTA PRIMA DI CANCELLARE, PER DIFETTO.
+  // Una chiamata a mano (o con `solo_conta`) legge e basta: quali account sono
+  // scaduti e quante righe toccherebbero le potature. Cancella solo con
+  // `cancella=1` scritto esatto, o dal calendario con CANCELLAZIONI_A_ORARIO=accese.
+  // Sta prima di qualunque scrittura, quindi prima delle potature, che sono la
+  // prima cosa che la notte cancella.
+  if (giroCheSoloConta(req)) return contaSenzaCancellare(admin, chiamataDelCalendario(req));
 
   // 8/9/2026 — LE POTATURE NON STANNO PIU' QUI DENTRO.
   //

@@ -16,6 +16,7 @@ import { checkoutChiuso } from '@/lib/ordini/partenza';
 import { leggiOrdiniCod } from '@/lib/ordini/risposta-ordini-cod';
 import { formatPrice, pluralize } from '@/lib/format';
 import { PICKUP_DISCOUNT_PERCENT, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
+import { CODICI_SCONTO_IN_CASSA } from '@/lib/funzioni-al-lancio';
 import { shippingForEuro } from '@/lib/shipping';
 import { cartaAlCheckoutDisponibile, fraseOrdiniDivisi, promessaSpedizione, rigaDelCodiceSpedizione } from '@/lib/promesse-pubbliche';
 import { leggiEsitoDellaVeloce } from '@/lib/ordini/consegna-veloce';
@@ -481,7 +482,8 @@ export default function CheckoutPage() {
 
       // Lo sconto: si rimette il CODICE, e la verifica che c'è già nella pagina lo ricontrolla sul
       // carrello di adesso. Se nel frattempo il carrello è cambiato, lo dice invece di mostrarlo.
-      if (bozza.couponCode) setCouponCode(bozza.couponCode);
+      // 31/10/2026 — Con i codici sconto spenti (CODICI_SCONTO_IN_CASSA) non si rimette nemmeno quello salvato.
+      if (CODICI_SCONTO_IN_CASSA && bozza.couponCode) setCouponCode(bozza.couponCode);
 
       // 30/10/2026 (ondata 18) — L'ora di Roma, come la vetrina e le rotte: non quella del telefono.
       // 30/10/2026 (ondata 22) — La Date intera, coi minuti, e gli orari dei negozi: la stessa
@@ -1592,7 +1594,8 @@ export default function CheckoutPage() {
 
             <CartGroupsList groups={groups} />
 
-            {/* Coupon input */}
+            {/* Coupon input — 31/10/2026: spento con CODICI_SCONTO_IN_CASSA, come le rotte che lo rifiutano. */}
+            {CODICI_SCONTO_IN_CASSA && (
             <CouponInput
               couponCode={couponCode}
               appliedCoupon={appliedCoupon}
@@ -1602,6 +1605,7 @@ export default function CheckoutPage() {
               onRemove={() => { setAppliedCoupon(null); setCouponCode(''); }}
               applying={verificaCodice}
             />
+            )}
 
             <OrderSummary
               subtotal={grandSubtotal}

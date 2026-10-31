@@ -45,10 +45,15 @@ describe('① la frase sul pagamento segue la stessa condizione della cassa', ()
     expect(frasePagamento()).toBe('Paghi in contanti alla consegna');
   });
 
-  it('con la chiave la carta torna, da sé', () => {
+  // 31/10/2026 — La chiave non basta più: la carta vuole anche CARTA_ACCESA (scelta di Nicola).
+  it('con la chiave ma l\'interruttore spento la frase resta «solo contanti»', () => {
     vi.stubEnv('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', 'pk_test_123');
-    expect(frasePagamento()).toBe('Paghi in contanti alla consegna, oppure con carta adesso');
-    expect(metodiAlCheckout('   ')).toEqual(['contanti-alla-consegna']);
+    expect(frasePagamento()).toBe('Paghi in contanti alla consegna');
+  });
+
+  it('con la chiave e l\'interruttore acceso la carta torna, da sé', () => {
+    expect(frasePagamento(metodiAlCheckout('pk_test_123', true))).toBe('Paghi in contanti alla consegna, oppure con carta adesso');
+    expect(metodiAlCheckout('   ', true)).toEqual(['contanti-alla-consegna']);
   });
 
   it('la cassa legge la stessa condizione, non una sua copia', () => {

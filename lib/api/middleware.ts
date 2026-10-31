@@ -7,6 +7,7 @@ import { ApiErrors } from './responses';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { purchaseBlockReason } from '@/lib/shopping-access';
 import { arrivaDaUnAltroSito } from '@/lib/api/provenienza';
+import { giroNonFatto } from '@/lib/cron/fermo-dei-lavori';
 
 // 22/8/2026 — spostata in lib/api/segreti.ts: i chiamanti sono due, e la
 // rotta di stato — che aveva lo stesso bisogno — non potendola importare da
@@ -596,6 +597,16 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
         lavoro: nomeDelLavoro(req), status: risposta.status,
       });
     }
+
+    // 31/10/2026 — UN GIRO CHE NON E' AVVENUTO NON LASCIA IL BATTITO.
+    //
+    // Con il fermo dei lavori acceso (lib/cron/fermo-dei-lavori.ts) la rotta
+    // risponde 200 senza fare niente, e lo stesso il conto senza cancellare di
+    // process-deletions. Scrivere il battito vorrebbe dire far vedere al
+    // semaforo un lavoro vivo mentre e' fermo, e toccare il database proprio
+    // nella chiamata che non lo deve toccare. Lo dice la rotta stessa, con
+    // un'intestazione: il battito segue quello che il lavoro ha fatto davvero.
+    if (giroNonFatto(risposta)) return risposta;
 
     // 27/8/2026 (R181) — IL BATTITO SI ASPETTA, NON SI SPARA.
     //

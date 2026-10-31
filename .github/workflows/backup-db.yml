@@ -43,6 +43,13 @@ jobs:
     name: Copia notturna
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # 31/10/2026 — `issues: write` serve SOLO al passo dell'allarme in fondo:
+    # apre (o aggiorna) una segnalazione quando la copia non riesce. Qui si
+    # ripete `contents: read`, perche' i permessi di un lavoro sostituiscono
+    # quelli del file invece di aggiungersi.
+    permissions:
+      contents: read
+      issues: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -272,6 +279,53 @@ jobs:
           path: backup/*.gpg
           retention-days: 30
           if-no-files-found: error
+
+      # 31/10/2026 (ondata 1) — VENTUNO NOTTI ROSSE E NESSUNO LO HA SAPUTO.
+      #
+      # Dal 19/8 al 7/9 la copia e' fallita ventuno volte di fila (la storia e'
+      # nel passo «Installa il client Postgres»). Il rosso c'era, ma stava in
+      # una pagina che nessuno apre di notte, e nessun sensore lo guardava: per
+      # tre settimane, se il database si fosse perso, non c'era niente da cui
+      # ripartire.
+      #
+      # Adesso un fallimento lascia un segno che arriva da solo: una
+      # segnalazione nel deposito, che GitHub manda per posta al proprietario.
+      # Se ce n'e' gia' una aperta si aggiunge un commento, cosi' una settimana
+      # rotta fa una segnalazione con sette righe e non sette segnalazioni. Si
+      # chiude a mano quando la copia torna a riuscire.
+      #
+      # Il deposito e' pubblico: nella segnalazione vanno solo la data e il
+      # collegamento all'esecuzione, mai un pezzo del registro della copia.
+      - name: Suona l'allarme, la copia notturna non e' riuscita
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPOSITO: ${{ github.repository }}
+          PROPRIETARIO: ${{ github.repository_owner }}
+          INDIRIZZO_CORSA: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITOLO: "La copia notturna del database non e' riuscita"
+        run: |
+          set -euo pipefail
+          QUANDO="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          RIGA="Copia fallita il $QUANDO: $INDIRIZZO_CORSA"
+          APERTA="$(gh issue list --repo "$DEPOSITO" --state open --limit 100 --json number,title \
+            --jq '[.[] | select(.title == env.TITOLO)][0].number // empty')"
+          if [ -n "$APERTA" ]; then
+            gh issue comment "$APERTA" --repo "$DEPOSITO" --body "$RIGA"
+            echo "::error::La copia notturna non e' riuscita: aggiunto alla segnalazione #$APERTA."
+          else
+            CORPO="$(printf '%s\n\n%s\n\n%s\n' \
+              "@$PROPRIETARIO la copia notturna del database non e' riuscita: stanotte non c'e' una copia nuova da cui ripartire." \
+              "$RIGA" \
+              "Apri l'esecuzione per vedere quale passo e' caduto. Chiudi questa segnalazione quando la copia torna verde.")"
+            gh issue create --repo "$DEPOSITO" --title "$TITOLO" --body "$CORPO"
+            echo "::error::La copia notturna non e' riuscita: aperta una segnalazione nel deposito."
+          fi
+          {
+            echo "## ⛔ La copia notturna non e' riuscita"
+            echo ""
+            echo "$RIGA"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   prova-di-ripristino:
     name: La copia si riapre davvero (mensile)

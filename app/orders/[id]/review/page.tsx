@@ -13,7 +13,7 @@ import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import { Package, Store, Bike } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
-import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
+import { conFattorinoDellOrdine, conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 
 /**
  * 3/9/2026 — LE STELLE NON DICEVANO QUAL È IL VOTO SCELTO.
@@ -72,8 +72,7 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
       const { data, error } = await supabase
         .from('orders')
         .select(`
-          id, delivery_status, seller_id, rider_id,
-          rider:profiles!orders_rider_id_fkey   ( full_name )
+          id, delivery_status, seller_id, rider_id
         `)
         .eq('id', id)
         .single();
@@ -82,10 +81,13 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
       // non da `profiles` (lib/queries/negozio-dell-ordine.ts).
       const [conNegozio] = await conNegozioDellOrdine(
         supabase,
-        [data as unknown as Omit<OrderForReview, 'seller'>],
+        [data as unknown as Omit<OrderForReview, 'seller' | 'rider'>],
         'id, store_name',
       );
-      return conNegozio as OrderForReview;
+      // 31/10/2026 (migrazione 164) — Il nome del fattorino da valutare viene dalla vista
+      // `nomi_pubblici`, non da `profiles`: dopo la 161 qui c'era sempre «Il tuo rider».
+      const [conFattorino] = await conFattorinoDellOrdine(supabase, [conNegozio]);
+      return conFattorino as OrderForReview;
     },
   });
 

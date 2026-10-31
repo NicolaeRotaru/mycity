@@ -4,6 +4,7 @@ import { sendEmail } from '@/lib/email/client';
 import { requireSupabaseService } from '@/lib/env';
 import { preparaEmailCicloDiVita, TEMPLATE_DI_SERVIZIO } from '@/lib/email/templates';
 import { withCronAuth } from '@/lib/api/middleware';
+import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { EMAIL_PER_GIRO } from '@/lib/email/ritmo-della-coda';
@@ -52,10 +53,18 @@ export const runtime = 'nodejs';
  * questo, una riga che non si riesce ad annullare torna nel giro dopo e prova a
  * partire di nuovo — in silenzio.
  */
-async function annullaRiga(supa: { from: (t: string) => any }, id: unknown): Promise<void> {
+async function annullaRiga(
+  supa: { from: (t: string) => any },
+  id: unknown,
+  motivo?: string,
+): Promise<void> {
   const { error } = await supa
     .from('email_queue')
-    .update({ cancelled_at: new Date().toISOString() })
+    .update(
+      motivo
+        ? { cancelled_at: new Date().toISOString(), claimed_at: null, last_error: motivo.slice(0, 500) }
+        : { cancelled_at: new Date().toISOString() },
+    )
     .eq('id', id);
   if (error) {
     logger.error('[cron] riga di posta non annullata: tornera nel prossimo giro', {
@@ -117,7 +126,46 @@ async function rilasciaRiga(
   }
 }
 
-const handler = withCronAuth(async (_req): Promise<NextResponse> => {
+/**
+ * 31/10/2026 — UNA RIGA FERMA DA MESI NON PARTE IL GIORNO IN CUI SI ACCENDE LA POSTA.
+ *
+ * La coda non aveva un limite verso il passato: `claim_pending_emails` prende
+ * ogni riga con `send_at` gia' passato, dalla piu' vecchia. Con la posta spenta
+ * (chiave Resend o UNSUBSCRIBE_SECRET mancanti) le righe vengono rinviate di
+ * mezz'ora a ogni giro, senza tetto: il giorno dell'accensione sarebbero partiti
+ * insieme benvenuti di persone iscritte a giugno, «il tuo ordine e' pronto» per
+ * spese ritirate da settimane, promozioni e «ci manchi» scaduti.
+ *
+ * La scadenza la scrive il database quando la riga nasce (`scade_at`,
+ * migrazione 165: l'ora prevista piu' tre giorni) e non si sposta quando la
+ * riga viene rinviata. Qui si guarda soltanto: passata la scadenza la riga si
+ * chiude col motivo, senza spedire. Una riga senza `scade_at` (la funzione del
+ * database non ancora aggiornata) si comporta come prima.
+ */
+function scaduta(row: { scade_at?: string | null }): boolean {
+  if (!row.scade_at) return false;
+  const quando = Date.parse(row.scade_at);
+  return Number.isFinite(quando) && quando <= Date.now();
+}
+
+/**
+ * 31/10/2026 — UN ACCOUNT CHE NON ESISTE PIU' NON E' UN ERRORE DI UN ATTIMO.
+ *
+ * Quando un account si cancella (lib/account/cancellazione.ts) l'utente sparisce
+ * dall'autenticazione ma il profilo resta, anonimizzato: le sue righe in coda
+ * restano. L'autenticazione risponde 404 «user_not_found», e il giro lo trattava
+ * come un guasto passeggero: rilasciava la riga e la riprendeva ogni mezz'ora,
+ * per sempre. Qui la persona non c'e': la riga si chiude.
+ */
+function personaInesistente(errore: unknown): boolean {
+  if (!errore || typeof errore !== 'object') return false;
+  const e = errore as { status?: unknown; code?: unknown };
+  return e.status === 404 || e.code === 'user_not_found';
+}
+
+const handler = withCronAuth(async (req): Promise<NextResponse> => {
+  // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
+  if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   let supaCfg;
   try { supaCfg = requireSupabaseService(); } catch (e) {
     return ApiErrors.unavailable(e instanceof Error ? e.message : 'config error');
@@ -192,9 +240,11 @@ async function processBatch(
      * niente da dire.
      */
     metadata?: Record<string, unknown> | null;
+    /** 31/10/2026 — Quando la riga smette di valere (migrazione 165). */
+    scade_at?: string | null;
   }[],
 ): Promise<NextResponse> {
-  let sent = 0, skipped = 0, errors = 0, rinviate = 0;
+  let sent = 0, skipped = 0, errors = 0, rinviate = 0, scadute = 0;
 
   /**
    * 22/8/2026 — QUATTRO VIAGGI AL DATABASE PER OGNI EMAIL SPEDITA.
@@ -210,17 +260,36 @@ async function processBatch(
    */
   const profili = new Map<string, { full_name?: string | null; email_marketing?: boolean | null }>();
   const idPersone = [...new Set(batch.map((r) => r.user_id))];
+  /**
+   * 31/10/2026 — SE I PROFILI NON SI LEGGONO, IL CONSENSO NON SI SA.
+   *
+   * L'errore della lettura non si guardava: con un timeout la mappa restava
+   * vuota, ogni riga di marketing risultava «senza consenso» e veniva annullata
+   * per sempre. Un consenso che non si e' riusciti a leggere non e' un no: le
+   * righe di marketing si rilasciano e si riprovano, quelle di servizio partono.
+   */
+  let consensoIgnoto: string | null = null;
   if (idPersone.length > 0) {
-    const { data: righeProfilo } = await supa
+    const { data: righeProfilo, error: errProfili } = await supa
       .from('profiles')
       .select('id, full_name, email_marketing')
       .in('id', idPersone);
+    if (errProfili) {
+      consensoIgnoto = String((errProfili as { message?: unknown }).message ?? errProfili);
+      logger.error('[cron] profili non letti: il marketing di questo giro si rimanda', { message: consensoIgnoto });
+    }
     for (const p of (righeProfilo ?? []) as Array<{ id: string; full_name: string | null; email_marketing: boolean | null }>) {
       profili.set(p.id, p);
     }
   }
 
   for (const row of batch) {
+    if (scaduta(row)) {
+      skipped++;
+      scadute++;
+      await annullaRiga(supa, row.id, 'scaduta: non partita entro la scadenza (scade_at)');
+      continue;
+    }
     const userProfile = profili.get(row.user_id) ?? null;
     // Il nome di battesimo: lo scrive la persona nel proprio profilo, quindi e'
     // testo di un altro, e il template lo filtra prima di metterlo nell'HTML.
@@ -245,6 +314,11 @@ async function processBatch(
     // servizio. Gli altri (promo / re-engagement / win-back) sono marketing →
     // solo con consenso.
     const isMarketing = !TEMPLATE_DI_SERVIZIO.has(row.template);
+    if (isMarketing && consensoIgnoto !== null) {
+      rinviate++;
+      await rilasciaRiga(supa, row.id, `consenso non letto: ${consensoIgnoto}`);
+      continue;
+    }
     if (isMarketing && !userProfile?.email_marketing) {
       skipped++;
       await annullaRiga(supa, row.id);
@@ -257,6 +331,11 @@ async function processBatch(
       lettura = await supa.auth.admin.getUserById(row.user_id);
     } catch (e) {
       lettura = { data: null, error: e };
+    }
+    if (lettura.error && personaInesistente(lettura.error)) {
+      skipped++;
+      await annullaRiga(supa, row.id, 'account non piu esistente: niente da spedire');
+      continue;
     }
     if (lettura.error) {
       rinviate++;
@@ -354,5 +433,5 @@ async function processBatch(
       }
     }
   }
-  return NextResponse.json({ ok: true, sent, skipped, errors, rinviate, total: batch.length });
+  return NextResponse.json({ ok: true, sent, skipped, errors, rinviate, scadute, total: batch.length });
 }

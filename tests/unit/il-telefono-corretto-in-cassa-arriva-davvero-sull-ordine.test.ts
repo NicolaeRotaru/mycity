@@ -51,6 +51,12 @@ const state: {
 const createSession = vi.fn(async () => ({ id: 'cs_nuova', url: 'https://stripe.test/cs_nuova' }));
 const aggiornaIntento = vi.fn(async (_patch: unknown) => ({ error: null as { message: string } | null }));
 
+// 31/10/2026 — Al lancio la carta è spenta (CARTA_ACCESA in lib/funzioni-al-lancio.ts) e la rotta
+// la rifiuta anche con le chiavi. Questa prova misura il percorso della carta: la accende per finta.
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
+  ...((await originale()) as Record<string, unknown>),
+  CARTA_ACCESA: true,
+}));
 vi.mock('@/lib/api/middleware', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api/middleware')>();
   return {

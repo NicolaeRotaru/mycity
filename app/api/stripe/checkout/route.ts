@@ -1,4 +1,5 @@
 import { prezziDelCarrello } from '@/lib/ordini/prezzi';
+import { CARTA_ACCESA, CODICI_SCONTO_IN_CASSA } from '@/lib/funzioni-al-lancio';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
@@ -102,6 +103,12 @@ const Body = z.object({
 export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, windowMs: 10 * 60_000 }, async ({ user, profile, req }): Promise<NextResponse> => {
   const purchaseBlock = assertCanPurchase(profile);
   if (purchaseBlock) return purchaseBlock;
+  // 31/10/2026 — Al lancio la carta è spenta (CARTA_ACCESA, scelta di Nicola): la
+  // rotta la rifiuta anche con le chiavi Stripe presenti. Prima la governava solo
+  // la presenza della chiave, e chi la metteva su Vercel apriva la carta da sé.
+  if (!CARTA_ACCESA) {
+    return ApiErrors.unavailable('Al momento si paga solo in contanti alla consegna.');
+  }
   if (!isStripeConfigured()) {
     return ApiErrors.unavailable('Pagamenti elettronici non disponibili. Usa pagamento alla consegna.');
   }
@@ -610,6 +617,12 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
    * ingresso il resoconto della pulizia: chiedere il codice prima di aver
    * liberato non si compila più.
    */
+  // 31/10/2026 — I codici sconto in cassa sono spenti (CODICI_SCONTO_IN_CASSA): un
+  // codice di MyCity oggi lo pagherebbe il negozio al 90%. Si rifiuta qui, dove si
+  // rifiuta un codice non valido, prima di rivendicarlo.
+  if (!CODICI_SCONTO_IN_CASSA && body.couponCode?.trim()) {
+    return ApiErrors.invalidRequest('I codici sconto non sono attivi: togli il codice e riprova.');
+  }
   const codiceSconto = await rivendicaIlCodiceSconto(
     riserveLiberate,
     { admin, lettura: supa },
