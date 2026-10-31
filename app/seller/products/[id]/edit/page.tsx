@@ -213,6 +213,11 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     variants,
     nonRecedibile: product.non_recedibile === true,
   };
+  // La spunta «escluso dal recesso» qui NON si passa (`recessoSegnabile`): la porta unica
+  // PATCH /api/seller/products/:id tiene solo le colonne di colonneAmmesse
+  // (lib/products/salvataggio-tracciato.ts) e non_recedibile non c'e'. Mostrarla voleva dire
+  // «Modifiche salvate» con la spunta buttata via. Si accende quando la porta la porta.
+
 
   const status = product.status as string;
 

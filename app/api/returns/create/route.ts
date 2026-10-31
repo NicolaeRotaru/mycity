@@ -6,7 +6,7 @@ import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
-import { MOTIVO_RIPENSAMENTO, rifiutoDelRecesso, type ProdottoPerIlRecesso } from '@/lib/ordini/recesso';
+import { MOTIVO_RIPENSAMENTO, notaDegliEsclusi, rifiutoDelRecesso, type ProdottoPerIlRecesso } from '@/lib/ordini/recesso';
 
 export const runtime = 'nodejs';
 
@@ -115,6 +115,8 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
    * negozio ha ancora potuto segnarne uno). Dopo la 180 e i tipi rigenerati
    * (lib/database.types.ts) si puo' tornare a 'id, name, non_recedibile'.
    */
+  // Ordine misto (torta esclusa + miele): il reso nasce, e la nota dice al negozio cosa non rimborsare.
+  let notaRecesso: string | null = null;
   if (body.reason === MOTIVO_RIPENSAMENTO) {
     let domandaRighe = supa.from('order_items').select('product_id').eq('order_id', body.orderId);
     if (body.orderItemId) domandaRighe = domandaRighe.eq('id', body.orderItemId);
@@ -141,6 +143,7 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
       }
       const rifiuto = rifiutoDelRecesso(body.reason, (prodotti ?? []) as ProdottoPerIlRecesso[]);
       if (rifiuto) return ApiErrors.invalidRequest(rifiuto);
+      notaRecesso = notaDegliEsclusi(body.reason, (prodotti ?? []) as ProdottoPerIlRecesso[]);
     }
   }
 
@@ -162,7 +165,7 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
       buyer_id: user.id,
       seller_id: order.seller_id,
       reason: body.reason,
-      notes: body.notes ?? null,
+      notes: [body.notes, notaRecesso].filter(Boolean).join('\n\n') || null,
       photo_urls: body.photoUrls ?? [],
       status: 'REQUESTED',
     })

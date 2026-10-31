@@ -101,10 +101,35 @@ describe('reso per «Cambio idea» su un prodotto escluso dal recesso', () => {
     expect(db.tabelle.returns, 'il reso per ripensamento sulla torta e\' nato').toHaveLength(0);
   });
 
-  it('IL CASO CHE ROMPEVA — tutto l\'ordine per ripensamento, con dentro la torta: rifiutato', async () => {
+  /**
+   * 31/10/2026 (collaudo) — UNA TORTA ESCLUSA NON TOGLIE IL RECESSO AL MIELE.
+   * La pagina dei resi non fa scegliere la riga: chiede il reso di tutto
+   * l'ordine. Rifiutarlo intero perche' dentro c'e' la torta toglieva il
+   * ripensamento anche al miele, che ce l'ha. Il reso nasce, e la nota dice al
+   * negozio di lasciare fuori la torta dal rimborso (l'importo lo sceglie lui).
+   */
+  it('IL CASO CHE ROMPEVA — tutto l\'ordine per ripensamento, torta + miele: il reso nasce, la torta resta fuori', async () => {
+    const res = await POST(richiesta({ orderId: ORDINE, reason: 'CHANGED_MIND', notes: 'Il miele non mi piace' }));
+    expect(res.status, 'il ripensamento sul miele e\' stato rifiutato per colpa della torta').toBe(201);
+    expect(db.tabelle.returns).toHaveLength(1);
+    const note = String(db.tabelle.returns[0].notes);
+    expect(note).toMatch(/^Il miele non mi piace/);
+    expect(note).toMatch(/Esclusi dal recesso.*Torta di compleanno/);
+    expect(note).not.toMatch(/Miele/);
+  });
+
+  it('tutto l\'ordine per ripensamento, ma ogni prodotto e\' escluso: rifiutato', async () => {
+    db.tabelle.order_items = [{ id: RIGA_TORTA, order_id: ORDINE, product_id: 'torta' }];
     const res = await POST(richiesta({ orderId: ORDINE, reason: 'CHANGED_MIND' }));
     expect(res.status).toBe(400);
     expect(db.tabelle.returns).toHaveLength(0);
+  });
+
+  it('controprova: il ripensamento su un ordine senza esclusi non si porta dietro nessuna nota', async () => {
+    db.tabelle.order_items = [{ id: RIGA_MIELE, order_id: ORDINE, product_id: 'miele' }];
+    const res = await POST(richiesta({ orderId: ORDINE, reason: 'CHANGED_MIND' }));
+    expect(res.status).toBe(201);
+    expect(db.tabelle.returns[0].notes).toBeNull();
   });
 
   it('se i prodotti non si leggono non si decide al buio: errore, nessun reso', async () => {

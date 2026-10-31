@@ -39,7 +39,7 @@ function torta(extra: Riga = {}): Riga {
   };
 }
 
-async function apri(initialValues: Riga) {
+async function apri(initialValues: Riga, altro: Riga = { recessoSegnabile: true }) {
   const mod = await monta('components/seller/ProductForm.tsx');
   const inviati: Riga[] = [];
   const s = accendi(mod.default, {
@@ -49,6 +49,7 @@ async function apri(initialValues: Riga) {
     onSubmit: (payload: Riga) => inviati.push(payload),
     sellerOffersExpress: false,
     productId: 'p-1',
+    ...altro,
   });
   await attendi();
   await attendi();
@@ -82,6 +83,22 @@ describe('la spunta «escluso dal recesso» nel modulo prodotto', () => {
   it('un prodotto gia\' segnato si apre spuntato, e un salvataggio che non lo tocca non lo riscrive', async () => {
     const m = await apri(torta({ nonRecedibile: true }));
     expect(m.spunta()?.checked).toBe(true);
+    await m.salva();
+    expect(m.inviati).toHaveLength(1);
+    expect('non_recedibile' in m.inviati[0]).toBe(false);
+    m.s.smonta();
+  }, 60000);
+
+  /**
+   * 31/10/2026 (collaudo) — UNA SPUNTA CHE NON ARRIVA IN BANCA DATI NON SI MOSTRA.
+   * In modifica la porta del venditore (colonneAmmesse) butta via non_recedibile, e
+   * prima della migrazione 180 la creazione con la spunta falliva (PGRST204). La pagina
+   * che non puo' salvarla non passa `recessoSegnabile`: il forno non vede una spunta
+   * che dice «escluso» mentre il reso per ripensamento resta aperto.
+   */
+  it('IL CASO CHE ROMPEVA — senza una strada che la salvi, la spunta non compare e non parte', async () => {
+    const m = await apri(torta({ nonRecedibile: true }), {});
+    expect(m.spunta(), 'la spunta compare anche dove il salvataggio la butta via').toBeNull();
     await m.salva();
     expect(m.inviati).toHaveLength(1);
     expect('non_recedibile' in m.inviati[0]).toBe(false);

@@ -135,6 +135,15 @@ interface ProductFormProps {
    * pulsanti AI per il giorno in cui si riaccendono.
    */
   aiAccesa?: boolean;
+  /**
+   * 31/10/2026 — LA SPUNTA «ESCLUSO DAL RECESSO» SI MOSTRA SOLO SE ARRIVA IN BANCA DATI.
+   * La passa a true la pagina che sa due cose: la colonna c'e' (migrazione 180)
+   * e la sua strada di salvataggio la porta. Senza, la spunta non compare:
+   * prima della 180 la creazione falliva (PGRST204), e in modifica la porta
+   * unica del venditore la buttava via mentre il negoziante leggeva «Modifiche
+   * salvate». Una spunta che non si salva e' una promessa falsa, sul recesso.
+   */
+  recessoSegnabile?: boolean;
 }
 
 export default function ProductForm({
@@ -147,6 +156,7 @@ export default function ProductForm({
   deleteLabel = 'Elimina prodotto',
   deleting = false,
   onDiscard,
+  recessoSegnabile = false,
   productId,
   sellerOffersExpress = false,
   consegnaDelNegozioNonLetta = false,
@@ -720,7 +730,7 @@ export default function ProductForm({
        * riscrive la banca dati, e un modulo aperto prima della migrazione 180
        * continua a salvare.
        */
-      if (nonRecedibile !== recedibileAllApertura) payload.non_recedibile = nonRecedibile;
+      if (recessoSegnabile && nonRecedibile !== recedibileAllApertura) payload.non_recedibile = nonRecedibile;
       /**
        * 28/10/2026 — CHI CORREGGE LA DESCRIZIONE NON RIMETTE IN MAGAZZINO LA
        * MERCE VENDUTA. La scorta partiva sempre, col numero visto all'apertura:
@@ -958,11 +968,13 @@ export default function ProductForm({
           </div>
         )}
 
-        <Checkbox
-          label="Escluso dal recesso: fresco che si deteriora in fretta, o fatto su ordinazione"
-          checked={nonRecedibile}
-          onChange={(e) => setNonRecedibile(e.target.checked)}
-        />
+        {recessoSegnabile && (
+          <Checkbox
+            label="Escluso dal recesso: fresco che si deteriora in fretta, o fatto su ordinazione"
+            checked={nonRecedibile}
+            onChange={(e) => setNonRecedibile(e.target.checked)}
+          />
+        )}
 
         {/* Categoria + sottocategoria (a due livelli) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -13,11 +13,14 @@
 -- Un campo sul prodotto, che il negozio spunta nel modulo. Predefinito false:
 -- nessun prodotto cambia finche' il negozio non lo segna.
 --
--- Il sito regge anche PRIMA di questa migrazione: la pagina di modifica legge
--- il campo a parte (se manca, la spunta resta vuota), il modulo lo manda solo
--- se il negoziante lo cambia, e la rotta dei resi tratta la riga senza la
--- colonna come «nessun prodotto escluso». Dopo averla applicata va rigenerato
--- lib/database.types.ts.
+-- Il sito regge anche PRIMA di questa migrazione: «Nuovo prodotto» mostra la
+-- spunta solo se una riga di products letta con `*` ha la colonna (senza, un
+-- prodotto spuntato non si salverebbe: PGRST204), la pagina di modifica legge il
+-- campo a parte, e la rotta dei resi tratta la riga senza la colonna come
+-- «nessun prodotto escluso». In MODIFICA la spunta resta nascosta finche' la
+-- porta unica del venditore (colonneAmmesse, lib/products/salvataggio-tracciato.ts)
+-- non porta non_recedibile: oggi la butterebbe via. Dopo averla applicata va
+-- rigenerato lib/database.types.ts.
 --
 -- Si annulla con: ALTER TABLE public.products DROP COLUMN non_recedibile;
 
