@@ -30,7 +30,9 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
       { href: '/orders', icon: Package, label: 'I miei ordini' },
       { href: '/favorites', icon: Heart, label: 'Preferiti' },
       { href: '/profile/loyalty', icon: Sparkles, label: 'Punti & Livello' },
-      { href: '/profile/referral', icon: Megaphone, label: 'Invita amici · €5 per te' },
+      // Niente cifre nell'etichetta: la promessa dei 5 euro vive solo in /profile/referral,
+      // che segue INVITI_E_PUNTI_ACCESI. Qui restava accesa anche con gli inviti spenti.
+      { href: '/profile/referral', icon: Megaphone, label: 'Invita amici' },
       { href: '/profile/addresses', icon: MapPin, label: 'Indirizzi' },
       { href: '/profile/gift-cards', icon: Gift, label: 'Gift Card' },
       { href: '/lists', icon: ListChecks, label: 'Liste curate' },

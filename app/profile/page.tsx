@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
 
 type ProfileForm = {
   full_name: string;
@@ -109,6 +110,9 @@ export default function ProfilePage() {
       </div>
 
       <div className="space-y-6">
+        {/* Inviti spenti al lancio (INVITI_E_PUNTI_ACCESI): niente riquadro che promette €5
+            mentre /profile/referral dice che non c'è un premio. */}
+        {INVITI_E_PUNTI_ACCESI && (
         <Link
           href="/profile/referral"
           className="block rounded-2xl bg-gradient-to-r from-primary-600 to-secondary-600 p-5 text-white transition-all hover:shadow-lg"
@@ -126,6 +130,7 @@ export default function ProfilePage() {
             </span>
           </div>
         </Link>
+        )}
 
         <div className="rounded-2xl border border-cream-300 bg-white p-6">
           <h2 className="mb-4 text-lg font-bold">Dati personali</h2>

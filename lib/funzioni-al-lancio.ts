@@ -106,7 +106,8 @@ export const CODICI_SCONTO_IN_CASSA: boolean = false;
 export const APP_INSTALLABILE_ACCESA: boolean = false;
 
 /** Inviti («invita un amico», codice ?ref= all'iscrizione) e punti. Letto da
- *  app/sign-up e app/profile/referral. Per riaccendere: l'invito va registrato
+ *  app/sign-up, app/profile/referral e app/profile (il riquadro dei 5 euro).
+ *  Per riaccendere: l'invito va registrato
  *  dal server. Oggi la pagina di iscrizione cerca chi ha invitato leggendo
  *  `profiles` dal browser di chi non ha ancora un account: le regole del
  *  database non lo permettono, e l'invito non si registrava mai. */
