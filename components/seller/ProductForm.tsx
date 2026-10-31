@@ -36,7 +36,7 @@ import {
   type VoceDaControllare,
 } from '@/lib/products/aiPatch';
 import { dilloDopoIlPatch } from '@/components/seller/dilloDopoIlPatch';
-import { colonneDelPatchAi } from '@/lib/products/salvataggio-tracciato';
+import { colonneDelPatchAi, SCORTA_VISTA } from '@/lib/products/salvataggio-tracciato';
 import { useFormAutosave } from '@/lib/hooks/useFormAutosave';
 import {
   createProductSchema,
@@ -709,6 +709,19 @@ export default function ProductForm({
        */
       if (mode === 'edit' && !scortaCambiata(payload.stock, scortaAllApertura.current.prodotto)) {
         delete (payload as Partial<ProductPayload>).stock;
+      }
+      /**
+       * 31/10/2026 — E QUELLA CAMBIATA SI SCRIVE SOLO SE NESSUNO L'HA MOSSA.
+       * Accanto alla scorta nuova parte quella vista all'apertura: la porta di
+       * scrittura la confronta con la banca dati e, se nel frattempo e' arrivato
+       * un ordine, non salva e lo dice. Con le varianti la scorta del prodotto
+       * non parte proprio: e' la somma delle varianti, e la tiene il trigger.
+       *
+       * LA PROVA: tests/unit/la-scorta-si-scrive-solo-se-in-banca-dati-c-e-ancora-quella-vista.test.ts
+       */
+      if (mode === 'edit' && hasVariants) delete (payload as Partial<ProductPayload>).stock;
+      if (mode === 'edit' && 'stock' in payload && typeof scortaAllApertura.current.prodotto === 'number') {
+        (payload as unknown as Record<string, unknown>)[SCORTA_VISTA] = scortaAllApertura.current.prodotto;
       }
       /**
        * 6/9/2026 — UN SALVATAGGIO SCRIVE SOLO QUELLO CHE L'UTENTE HA CHIESTO.

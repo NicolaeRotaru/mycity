@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { type ProductVariant } from '@/lib/products/variants';
+import { ScortaCambiata } from '@/lib/products/salvataggio-tracciato';
 
 /**
  * Persistenza varianti lato server (client admin service-role). Identica nella
@@ -14,7 +15,15 @@ import { type ProductVariant } from '@/lib/products/variants';
  * la scorta di una variante gia' salvata si riscrive solo se e' diversa da
  * quella vista. Mentre il modulo resta aperto `reserve_stock` la abbassa a ogni
  * vendita: riscrivere il numero vecchio rimetterebbe in vetrina pezzi venduti.
- * Senza `scorteViste` (l'amministrazione) si riscrive tutto, come prima.
+ * Senza `scorteViste` si riscrive tutto, come prima.
+ *
+ * 31/10/2026 — E QUELLA CAMBIATA A MANO SI SCRIVE SOLO SE NESSUNO L'HA MOSSA.
+ * La S vista a 2, venduta a 1 nel frattempo, riscritta a 4 dal negoziante: in
+ * banca dati andava 4, e la vendita spariva. Adesso, se la scorta di una
+ * variante cambiata non e' piu' quella vista, non si scrive niente (nessuna
+ * variante, nessuna cancellazione) e l'errore `ScortaCambiata` lo dice. Resta
+ * il buco dei millisecondi fra questa lettura e la scrittura: per chiuderlo
+ * serve una funzione del database che scriva solo «se e' ancora N».
  */
 export async function saveProductVariantsServer(
   supabase: SupabaseClient,
@@ -24,10 +33,11 @@ export async function saveProductVariantsServer(
 ): Promise<void> {
   const { data: existing, error: loadErr } = await supabase
     .from('product_variants')
-    .select('id')
+    .select('id, stock')
     .eq('product_id', productId);
   if (loadErr) throw loadErr;
   const existingIds = new Set((existing ?? []).map((r) => r.id as string));
+  const scortaInBanca = new Map((existing ?? []).map((r) => [r.id as string, (r as { stock?: unknown }).stock]));
 
   const keepIds = new Set<string>();
   const toInsert: Array<Record<string, unknown>> = [];
@@ -45,6 +55,10 @@ export async function saveProductVariantsServer(
       keepIds.add(v.id);
       const vista = scorteViste?.[v.id];
       if (vista !== undefined && Math.max(0, Math.trunc(vista || 0)) === row.stock) delete row.stock;
+      const adesso = scortaInBanca.get(v.id);
+      if ('stock' in row && vista !== undefined && typeof adesso === 'number' && adesso !== vista) {
+        throw new ScortaCambiata(vista, adesso);
+      }
       toUpdate.push({ id: v.id, row });
     } else {
       toInsert.push(row);

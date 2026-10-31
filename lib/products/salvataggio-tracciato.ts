@@ -19,11 +19,18 @@
  * non si sa ne' quando e' successo, ne' se il numero l'aveva scritto lui o
  * l'aveva proposto l'assistente, ne' a quanto tornare.
  *
- * La cura e' la stessa delle altre malattie «protezione su una strada sola»: la
- * regola scende sul DATO. Qui dentro c'e' l'unica porta di scrittura del
- * catalogo per il venditore — legge com'era, scrive, e registra la differenza —
- * e le pagine non fanno altro che chiamarla. Una porta nuova che nasce domani
- * o passa di qui, o non scrive.
+ * La cura: le pagine del venditore che MODIFICANO un prodotto (il modulo, la
+ * modifica veloce dell'elenco) passano tutte da qui — rilegge com'era, scrive,
+ * e registra la differenza.
+ *
+ * 31/10/2026 — QUESTA PORTA NON E' L'UNICA, E NON VA DETTO CHE LO SIA. La regola
+ * per riga «Sellers can update their own products» (migrations/001) e' ancora
+ * in piedi: il client del browser puo' scrivere `products` senza passare di
+ * qui, e la traccia si salta. E' una regola delle pagine, non del dato. Per
+ * farla diventare del dato serve una migrazione che tolga quella regola (o un
+ * trigger che pretenda il passaggio dal server): lavoro di sicurezza, fuori da
+ * questo file. Fino ad allora, una pagina nuova che scrive diretto non la
+ * ferma nessuno.
  *
  * Niente `next/server` e niente client vero: il database e il registro entrano
  * come argomenti, cosi' una prova puo' ESEGUIRE questa funzione invece di
@@ -64,6 +71,20 @@ export const COLONNE_DEL_VENDITORE = [
 
 export type ColonnaDelVenditore = (typeof COLONNE_DEL_VENDITORE)[number];
 
+/**
+ * 31/10/2026 — LA SCORTA CHE IL NEGOZIANTE AVEVA DAVANTI.
+ *
+ * Non e' una colonna: e' la condizione della scrittura. La scorta si scrive
+ * come numero assoluto, e mentre il modulo resta aperto le vendite la
+ * abbassano. Alle 9 il fornaio apre la focaccia (5), alle 9:05 ne vendono due
+ * (in banca dati 3), alle 9:10 scrive 6 per aggiungerne una appena sfornata:
+ * senza condizione in banca dati andava 6, e due focacce che non esistono
+ * tornavano in vetrina. Con `stock_visto` accanto a `stock` la porta scrive
+ * solo se in banca dati c'e' ancora il numero visto; se no si ferma e lo dice.
+ * Passa da `colonneAmmesse` perche' le rotte buttano via tutto il resto.
+ */
+export const SCORTA_VISTA = 'stock_visto';
+
 /** Le colonne da rileggere prima di scrivere, per sapere com'era. */
 export const COLONNE_DA_RILEGGERE = ['id', 'seller_id', ...COLONNE_DEL_VENDITORE].join(', ');
 
@@ -78,6 +99,8 @@ export function colonneAmmesse(corpo: unknown): Record<string, unknown> {
   for (const colonna of COLONNE_DEL_VENDITORE) {
     if (colonna in dentro && dentro[colonna] !== undefined) pulito[colonna] = dentro[colonna];
   }
+  const vista = dentro[SCORTA_VISTA];
+  if (typeof vista === 'number' && Number.isFinite(vista)) pulito[SCORTA_VISTA] = vista;
   return pulito;
 }
 
@@ -232,7 +255,9 @@ type CatenaLettura = {
 };
 
 type CatenaScrittura = {
-  eq: (colonna: string, valore: string) => CatenaScrittura;
+  eq: (colonna: string, valore: string | number) => CatenaScrittura;
+  /** Rilegge le righe scritte: serve a sapere se il confronta-e-scrivi ha trovato la riga. */
+  select?: (colonne: string) => PromiseLike<{ data: unknown[] | null; error: { message?: string } | null }>;
 } & PromiseLike<{ error: { message?: string } | null }>;
 
 /** Una lettura di piu' righe (l'albero delle categorie). */
@@ -312,6 +337,33 @@ async function controllaCheSiPossaVendere(
   if (mancanti.length > 0) throw new DaCompletare(messaggioDaCompletare(mancanti, categoriaNuova), mancanti);
 }
 
+/**
+ * La scorta in banca dati non e' piu' quella che il negoziante aveva davanti:
+ * nel frattempo qualcuno ha comprato. La scorta non si scrive, e il messaggio
+ * dice cosa fare — riprovare con lo stesso numero darebbe lo stesso errore.
+ *
+ * E' un `DaCompletare` di proposito: e' la famiglia degli errori scritti per
+ * il negoziante, che la rotta passa com'e' invece di «Riprova». Niente `code`
+ * del database: `friendlyError` lo coprirebbe con «valore non valido».
+ */
+export class ScortaCambiata extends DaCompletare {
+  readonly vista: number;
+  readonly attuale: unknown;
+  constructor(vista: number, attuale: unknown) {
+    const ora =
+      typeof attuale === 'number' || (typeof attuale === 'string' && attuale !== '')
+        ? `ora sono ${attuale}`
+        : 'nel frattempo è cambiata';
+    super(
+      `La scorta è cambiata mentre modificavi: avevi davanti ${vista} pezzi, ${ora}. Riapri il prodotto, controlla il numero e salva di nuovo.`,
+      ['scorta'],
+    );
+    this.name = 'ScortaCambiata';
+    this.vista = vista;
+    this.attuale = attuale;
+  }
+}
+
 export type EsitoSalvataggio = {
   /** I campi davvero cambiati (vuoto = il salvataggio non ha mosso niente). */
   campi: string[];
@@ -338,7 +390,15 @@ export async function salvaProdottoTracciato(opts: {
   campiDallAi?: string[];
   scriviTraccia: (voce: VoceDiTraccia) => void | Promise<void>;
 }): Promise<EsitoSalvataggio> {
-  const daScrivere = colonneAmmesse(opts.payload);
+  const { [SCORTA_VISTA]: scortaVista, ...daScrivere } = colonneAmmesse(opts.payload);
+  // Il confronta-e-scrivi: con la scorta vista accanto, la scorta non toccata
+  // non parte (in banca dati resta quella vera) e quella cambiata si scrive
+  // solo se nessuno l'ha mossa nel frattempo.
+  let condizione: number | undefined;
+  if ('stock' in daScrivere && typeof scortaVista === 'number') {
+    if (stessoValore(daScrivere.stock, scortaVista)) delete daScrivere.stock;
+    else condizione = scortaVista;
+  }
   if (Object.keys(daScrivere).length === 0) return { campi: [], tracciato: false };
 
   const { data: prima, error: erroreLettura } = await opts.db
@@ -349,17 +409,36 @@ export async function salvaProdottoTracciato(opts: {
   if (erroreLettura) throw erroreLettura;
   if (!prima || prima.seller_id !== opts.attoreId) throw new ProdottoNonTuo();
 
-  // Prima di scrivere: una scheda incompleta non entra in vetrina da nessuna porta.
+  if (condizione !== undefined && !stessoValore(prima.stock, condizione)) {
+    throw new ScortaCambiata(condizione, prima.stock);
+  }
+
+  // Prima di scrivere: una scheda incompleta non entra in vetrina da questa
+  // porta. Non da tutte: il caricamento da file e il primo inserimento del
+  // nuovo prodotto scrivono `products` dal browser senza passare di qui, e la'
+  // il database ferma solo l'alimentare senza allergeni (migrazione 126).
   await controllaCheSiPossaVendere(opts.db, prima, daScrivere);
 
   // Il filtro sul negozio resta anche nella scrittura: la regola per riga del
   // database e' l'ultima difesa, non l'unica.
-  const { error } = await opts.db
+  const scrittura = opts.db
     .from('products')
     .update(daScrivere)
     .eq('id', opts.prodottoId)
     .eq('seller_id', opts.attoreId);
-  if (error) throw error;
+  if (condizione === undefined) {
+    const { error } = await scrittura;
+    if (error) throw error;
+  } else {
+    // Fra la rilettura e la scrittura passano millisecondi, ma un ordine ci sta:
+    // la condizione va nella scrittura stessa, e una riga non trovata vuol dire
+    // che la scorta e' cambiata proprio in quel momento.
+    const condizionata = scrittura.eq('stock', condizione);
+    if (!condizionata.select) throw new Error('Il client del catalogo non sa rileggere la riga scritta.');
+    const { data, error } = await condizionata.select('id');
+    if (error) throw error;
+    if (!data || data.length === 0) throw new ScortaCambiata(condizione, undefined);
+  }
 
   const voce = tracciaDellaModifica({
     prodottoId: opts.prodottoId,

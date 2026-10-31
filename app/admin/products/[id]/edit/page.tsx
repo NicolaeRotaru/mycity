@@ -53,7 +53,15 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
   });
 
   const update = useMutation({
-    mutationFn: async ({ payload, variants: nextVariants }: { payload: ProductPayload; variants: ProductVariant[] }) => {
+    mutationFn: async ({
+      payload,
+      variants: nextVariants,
+      scorteViste,
+    }: {
+      payload: ProductPayload;
+      variants: ProductVariant[];
+      scorteViste: Record<string, number>;
+    }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/admin/products', {
         method: 'PATCH',
@@ -61,7 +69,10 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
           'content-type': 'application/json',
           ...(session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify({ id, ...payload, variants: nextVariants }),
+        // 31/10/2026 — con le scorte viste all'apertura: una variante venduta
+        // mentre la scheda era aperta non torna in vetrina (la rotta le passa a
+        // chi salva le varianti, che riscrive solo quelle cambiate a mano).
+        body: JSON.stringify({ id, ...payload, variants: nextVariants, scorteViste }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) throw new Error(body?.error?.message ?? 'Salvataggio non riuscito');
@@ -146,7 +157,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
         submitting={update.isPending}
         deleting={removeProduct.isPending}
         productId={id}
-        onSubmit={(payload, ctx) => update.mutate({ payload, variants: ctx.variants })}
+        onSubmit={(payload, ctx) => update.mutate({ payload, variants: ctx.variants, scorteViste: ctx.scorteViste })}
         onDelete={async () => {
           const ok = await confirmDialog({
             title: 'Eliminare il prodotto?',

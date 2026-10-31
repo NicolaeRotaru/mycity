@@ -21,6 +21,7 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { nascondiProdotto } from '@/lib/products/nascondi';
 import { salvaProdottoDalBrowser } from '@/lib/products/salva-dal-browser';
+import { SCORTA_VISTA } from '@/lib/products/salvataggio-tracciato';
 import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
 
 type SellerProductRow = {
@@ -153,7 +154,7 @@ export default function SellerProductsPage() {
 
   // Modifica in blocco: prezzo + stock direttamente nella lista, salvati in un colpo.
   const bulkSave = useMutation({
-    mutationFn: async (edits: Record<string, { price?: string; stock?: string }>) => {
+    mutationFn: async (edits: Record<string, { price?: string; stock?: string; stockVisto?: number }>) => {
       const ids = Object.keys(edits);
       for (const id of ids) {
         const e = edits[id];
@@ -165,6 +166,9 @@ export default function SellerProductsPage() {
         if (e.stock != null && e.stock !== '') {
           const n = Number(e.stock);
           if (Number.isFinite(n)) patch.stock = n;
+          // 31/10/2026 — la scorta che aveva davanti quando l'ha cambiata: se nel
+          // frattempo e' arrivato un ordine la porta non scrive e lo dice.
+          if (Number.isFinite(n) && typeof e.stockVisto === 'number') patch[SCORTA_VISTA] = e.stockVisto;
         }
         if (Object.keys(patch).length === 0) continue;
         // 8/9/2026 — QUI SI CAMBIA UN PREZZO: DEVE RESTARE SCRITTO.
@@ -204,13 +208,21 @@ export default function SellerProductsPage() {
 
   // Stato "modifica in blocco".
   const [bulk, setBulk] = useState(false);
-  const [edits, setEdits] = useState<Record<string, { price?: string; stock?: string }>>({});
+  const [edits, setEdits] = useState<Record<string, { price?: string; stock?: string; stockVisto?: number }>>({});
   const editCount = Object.keys(edits).filter((id) => {
     const e = edits[id];
     return (e.price != null && e.price !== '') || (e.stock != null && e.stock !== '');
   }).length;
-  const setField = (id: string, k: 'price' | 'stock', v: string) =>
-    setEdits((e) => ({ ...e, [id]: { ...(e[id] ?? {}), [k]: v } }));
+  const setField = (id: string, k: 'price' | 'stock', v: string, vista?: number | null) =>
+    setEdits((e) => ({
+      ...e,
+      [id]: {
+        ...(e[id] ?? {}),
+        [k]: v,
+        // Il numero a video al primo tasto, non quello di dopo un ricaricamento.
+        ...(k === 'stock' && e[id]?.stockVisto === undefined && typeof vista === 'number' ? { stockVisto: vista } : {}),
+      },
+    }));
   const valOf = (p: SellerProductRow, k: 'price' | 'stock'): string => {
     const e = edits[p.id];
     if (e && e[k] != null) return e[k] as string;
@@ -367,7 +379,7 @@ export default function SellerProductsPage() {
                       {bulk ? (
                         <input
                           value={valOf(p, 'stock')}
-                          onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''))}
+                          onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''), p.stock)}
                           inputMode="numeric"
                           aria-label={`Stock di ${p.name}`}
                           className="w-20 rounded-md border border-cream-300 px-2 py-1.5 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
@@ -467,7 +479,7 @@ export default function SellerProductsPage() {
                           Stock
                           <input
                             value={valOf(p, 'stock')}
-                            onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''))}
+                            onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''), p.stock)}
                             inputMode="numeric"
                             aria-label={`Stock di ${p.name}`}
                             className="w-16 rounded-md border border-cream-300 px-2 py-1 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"

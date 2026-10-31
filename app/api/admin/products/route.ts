@@ -4,6 +4,7 @@ import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
 import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
+import { ScortaCambiata } from '@/lib/products/salvataggio-tracciato';
 import { MYCITY_SELLER_ID } from '@/lib/products/mycitySeller';
 import { type ProductVariant } from '@/lib/products/variants';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -71,6 +72,10 @@ const updateSchema = z.object({
   id: z.string().uuid(),
   seller_id: z.string().uuid().optional(),
   variants: z.array(variantSchema).optional(),
+  /** id variante → pezzi, com'erano all'apertura della scheda. */
+  scorteViste: z.record(z.string(), z.number().int()).optional(),
+  /** La scorta del prodotto com'era all'apertura: la condizione per scriverne una nuova. */
+  stock_visto: z.number().int().optional(),
   ...productFields,
   ...externalFields,
 }).partial({ name: true, price: true });
@@ -152,7 +157,7 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
   try { body = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.issues[0]?.message ?? 'Dati non validi');
-  const { id, variants, ...rest } = parsed.data;
+  const { id, variants, scorteViste, stock_visto: scortaVista, ...rest } = parsed.data;
 
   const admin = getAdminSupabase();
   if (rest.seller_id && !(await assertSeller(admin, rest.seller_id))) {
@@ -176,15 +181,31 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
   if (rest.status !== undefined) patch.status = rest.status;
   Object.assign(patch, externalPatch(rest));
 
+  // 31/10/2026 — LA SCORTA SI SCRIVE SOLO SE E' ANCORA QUELLA VISTA. Con
+  // `stock_visto` la scorta non toccata non parte, e quella cambiata va in
+  // banca dati solo se nel frattempo nessun ordine l'ha abbassata.
+  let condizione: number | undefined;
+  if (patch.stock !== undefined && scortaVista !== undefined) {
+    if (patch.stock === scortaVista) delete patch.stock;
+    else condizione = scortaVista;
+  }
+
   if (Object.keys(patch).length > 0) {
-    const { error } = await admin.from('products').update(patch).eq('id', id);
-    if (error) return ApiErrors.internal('Impossibile aggiornare il prodotto');
+    if (condizione === undefined) {
+      const { error } = await admin.from('products').update(patch).eq('id', id);
+      if (error) return ApiErrors.internal('Impossibile aggiornare il prodotto');
+    } else {
+      const { data, error } = await admin.from('products').update(patch).eq('id', id).eq('stock', condizione).select('id');
+      if (error) return ApiErrors.internal('Impossibile aggiornare il prodotto');
+      if (!data || data.length === 0) return ApiErrors.conflict(new ScortaCambiata(condizione, undefined).message);
+    }
   }
 
   if (variants) {
     try {
-      await saveProductVariantsServer(admin, id, variants as ProductVariant[]);
-    } catch {
+      await saveProductVariantsServer(admin, id, variants as ProductVariant[], scorteViste);
+    } catch (errore) {
+      if (errore instanceof ScortaCambiata) return ApiErrors.conflict(errore.message);
       return ApiErrors.internal('Errore nel salvataggio delle varianti');
     }
   }
