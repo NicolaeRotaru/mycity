@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
+import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { ApiErrors } from '@/lib/api/responses';
 import {
   isPushConfigured, iscrizioniPerUtenti, sendPushToUser, type PushDeliveryOptions,
@@ -55,7 +56,9 @@ function contrassegno(n: { id: string; link: string | null }): string {
  */
 export const runtime = 'nodejs';
 
-const handler = withCronAuth(async (): Promise<NextResponse> => {
+const handler = withCronAuth(async (req): Promise<NextResponse> => {
+  // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
+  if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   // Se le chiavi VAPID non sono configurate, non tocchiamo le notifiche
   // (così quando verranno configurate, l'arretrato recente verrà comunque inviato).
   if (!isPushConfigured()) {

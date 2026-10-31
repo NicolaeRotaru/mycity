@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { env } from '@/lib/env';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
+import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { fetchExternalSnapshot } from '@/lib/products/externalSync';
@@ -36,7 +37,9 @@ type Row = {
   external_synced_at: string | null;
 };
 
-const handler = withCronAuth(async (): Promise<NextResponse> => {
+const handler = withCronAuth(async (req): Promise<NextResponse> => {
+  // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
+  if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
   // 27/8/2026 (R009) — IL CLIENT AMMINISTRATIVO SI PRENDE DA UN POSTO SOLO.
   // Qui se ne costruiva uno a mano: cinque copie in giro per il progetto, e

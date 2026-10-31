@@ -3,6 +3,7 @@ import { sendEmail } from '@/lib/email/client';
 import { preparaEmailCicloDiVita } from '@/lib/email/templates';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
+import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { potaCarrelliRecuperati } from '@/lib/carrelli-abbandonati';
@@ -44,7 +45,9 @@ function troppoVecchio(ultimaAttivita: unknown): boolean {
   return Number.isFinite(quando) && Date.now() - quando > ETA_MASSIMA_PROMEMORIA_ORE * 3_600_000;
 }
 
-const handler = withCronAuth(async (): Promise<NextResponse> => {
+const handler = withCronAuth(async (req): Promise<NextResponse> => {
+  // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
+  if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   // 27/8/2026 (R009) — IL CLIENT AMMINISTRATIVO SI PRENDE DA UN POSTO SOLO.
   // Qui se ne costruiva uno a mano: cinque copie in giro per il progetto, e
   // ognuna e' un posto in piu' da ricordare il giorno in cui la chiave di

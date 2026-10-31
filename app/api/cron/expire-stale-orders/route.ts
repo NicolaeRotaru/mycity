@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
+import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 // L'avviso agli amministratori e' quello gia' usato dal giro dei bonifici e dal
@@ -74,7 +75,9 @@ function orariDelNegozio(riga: unknown): unknown {
   return (uno as { store_hours?: unknown } | null | undefined)?.store_hours;
 }
 
-export const POST = withCronAuth(async (): Promise<NextResponse> => {
+export const POST = withCronAuth(async (req): Promise<NextResponse> => {
+  // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
+  if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   const admin = getAdminSupabase();
   const cutoff = new Date().toISOString();
 

@@ -419,3 +419,94 @@ export async function eseguiPotature(
   const fallite = esiti.filter((e) => !e.ok).length;
   return { fatte: esiti.length - fallite, fallite, esiti };
 }
+
+/**
+ * 31/10/2026 — CONTARE QUELLO CHE LA NOTTE TOGLIEREBBE, SENZA TOGLIERLO.
+ *
+ * Il primo giro di `process-deletions` si fa a mano (lib/cron/fermo-dei-lavori.ts),
+ * e prima di cancellare qualcosa che non torna indietro si vuole sapere quanto.
+ * Qui le potature girano DAVVERO — la stessa lista, gli stessi filtri, lo stesso
+ * ordine — ma contro un client che non sa scrivere: ogni `update` e ogni
+ * `delete` diventa una lettura che conta le righe con quei filtri. Nessun
+ * secondo elenco di filtri da tenere allineato a mano.
+ *
+ * Quello che non si puo' contare senza farlo resta fuori, e lo dice: le
+ * funzioni del database (azzerano le colonne mentre restituiscono i file) e lo
+ * storage. Il client finto le rifiuta PRIMA di chiamarle.
+ *
+ * Il conto e' «righe toccate», non «righe con dati personali»: una potatura che
+ * riscrive NULL su righe gia' pulite le conta lo stesso, come la notte le tocca.
+ * E ogni conto guarda i dati di ADESSO: una riga che due potature toccano (un
+ * buono regalo scaduto ed esaurito) entra in tutte e due, mentre la notte vera
+ * la trova gia' pulita alla seconda. I numeri non si sommano.
+ */
+type RispostaConConto = { count: number | null; error: { message: string } | null };
+
+type FiltrabileConConto = PromiseLike<RispostaConConto> & {
+  eq(colonna: string, valore: unknown): FiltrabileConConto;
+  lt(colonna: string, valore: unknown): FiltrabileConConto;
+  is(colonna: string, valore: unknown): FiltrabileConConto;
+  not(colonna: string, operatore: string, valore: unknown): FiltrabileConConto;
+  or(espressione: string): FiltrabileConConto;
+};
+
+/** Il minimo che serve per contare: leggere, e nient'altro. */
+export type ClienteCheConta = {
+  from(tabella: string): {
+    select(colonne: string, opzioni: { count: 'exact'; head: true }): FiltrabileConConto;
+  };
+};
+
+export type ContoPotatura =
+  | { cosa: string; righe: number }
+  | { cosa: string; righe: null; nonContata: string };
+
+export const NON_SI_CONTA_SENZA_FARLA =
+  'si conta solo eseguendola: una funzione del database o lo storage, che scrivono mentre leggono';
+
+const registroMuto: Registro = { info: () => {}, warn: () => {}, error: () => {} };
+
+export async function contaPotature(
+  admin: ClienteCheConta,
+  adessoMs: number = Date.now(),
+  passi: Potatura[] = potatureDiRitenzione(adessoMs),
+): Promise<ContoPotatura[]> {
+  const conti: ContoPotatura[] = [];
+
+  for (const passo of passi) {
+    let righe = 0;
+    const contando = (q: FiltrabileConConto): Filtrabile => ({
+      eq: (colonna, valore) => contando(q.eq(colonna, valore)),
+      lt: (colonna, valore) => contando(q.lt(colonna, valore)),
+      is: (colonna, valore) => contando(q.is(colonna, valore)),
+      not: (colonna, operatore, valore) => contando(q.not(colonna, operatore, valore)),
+      or: (espressione) => contando(q.or(espressione)),
+      // La lettura parte solo quando la potatura aspetta la risposta, cioe'
+      // dopo che ha messo tutti i filtri: come la scrittura vera.
+      then: (riuscita, fallita) =>
+        Promise.resolve(q)
+          .then(({ count, error }): Risposta => {
+            if (error) return { error };
+            if (typeof count !== 'number') return { error: { message: 'il database non ha restituito il conto' } };
+            righe += count;
+            return { error: null };
+          })
+          .then(riuscita, fallita),
+    });
+    const leggi = (tabella: string) => contando(admin.from(tabella).select('*', { count: 'exact', head: true }));
+    const senzaScrivere: ClientePotature = {
+      from: (tabella) => ({ update: () => leggi(tabella), delete: () => leggi(tabella) }),
+      rpc: () => Promise.reject(new Error(NON_SI_CONTA_SENZA_FARLA)),
+      storage: { from: () => ({ remove: () => Promise.reject(new Error(NON_SI_CONTA_SENZA_FARLA)) }) },
+    };
+
+    try {
+      await passo.fai(senzaScrivere, registroMuto);
+      conti.push({ cosa: passo.cosa, righe });
+    } catch (e) {
+      conti.push({ cosa: passo.cosa, righe: null, nonContata: e instanceof Error ? e.message : 'errore' });
+    }
+  }
+
+  return conti;
+}
