@@ -21,6 +21,12 @@ import { indirizzoContatto } from '../contatti-pubblici';
 
 export type Titolare = {
   denominazione: string;
+  /**
+   * Il nome legale e' quello VERO (variabile messa), o e' il ripiego «MyCity»?
+   * «MyCity» e' un marchio, non un soggetto: da solo non dice chi risponde.
+   * Vedi `personaCheGestisce`.
+   */
+  denominazioneConfigurata?: boolean;
   indirizzo: string | null;
   partitaIva: string | null;
   /** Numero REA camerale. Esiste solo con una societa' iscritta. */
@@ -105,9 +111,18 @@ function soloSeVero(valore: string | undefined): string | null {
   return eSegnaposto(valore) ? null : (valore as string).trim();
 }
 
+/**
+ * La persona fisica che gestisce MyCity. Nicola, 20/8/2026: «per il
+ * responsabile di privacy sono io: Nicolae Rotaru». Finche' non c'e' una
+ * societa' col suo nome legale, e' lei che risponde: un marchio non e' un
+ * titolare (art. 13.1.a GDPR chiede l'identita' di chi tratta i dati).
+ */
+const PERSONA_CHE_GESTISCE = 'Nicolae Rotaru';
+
 export function titolare(): Titolare {
   return {
     denominazione: process.env.NEXT_PUBLIC_TITOLARE_NOME?.trim() || 'MyCity',
+    denominazioneConfigurata: Boolean(process.env.NEXT_PUBLIC_TITOLARE_NOME?.trim()),
     indirizzo: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_INDIRIZZO),
     partitaIva: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_PIVA),
     rea: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_REA),
@@ -115,7 +130,7 @@ export function titolare(): Titolare {
     capitale: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_CAPITALE),
     emailPrivacy: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY) ?? indirizzoContatto('privacy'),
     emailPrivacyConfigurata: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY) !== null,
-    referentePrivacy: process.env.NEXT_PUBLIC_TITOLARE_REFERENTE_PRIVACY?.trim() || 'Nicolae Rotaru',
+    referentePrivacy: process.env.NEXT_PUBLIC_TITOLARE_REFERENTE_PRIVACY?.trim() || PERSONA_CHE_GESTISCE,
     emailDpo: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_DPO),
     emailResi: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_RESI),
     emailReclami: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_RECLAMI),
@@ -145,6 +160,28 @@ export function rigaIdentita(t: Titolare = titolare()): string {
   if (t.capitale) pezzi.push(`Capitale sociale ${t.capitale}`);
   if (t.pec) pezzi.push(`PEC: ${t.pec}`);
   return pezzi.join(' · ');
+}
+
+/**
+ * 31/10/2026 (ondata 6) — IL SITO NON DICEVA CHI C'E' DIETRO.
+ *
+ * In produzione nessuna variabile NEXT_PUBLIC_TITOLARE_* e' messa: l'informativa
+ * diceva «Il titolare del trattamento è MyCity» e il piede solo «© MyCity». Un
+ * marchio non e' una persona ne' una societa': chi legge non sa a chi risponde.
+ * Sede, partita IVA e PEC non esistono ancora e restano fuori (mai inventarle);
+ * il nome di chi gestisce invece esiste, ed e' quello che si stampa.
+ *
+ * Restituisce la persona finche' manca il nome legale; `null` quando il nome
+ * legale c'e' (allora e' quello a parlare, da solo).
+ */
+export function personaCheGestisce(t: Titolare = titolare()): string | null {
+  return t.denominazioneConfigurata ? null : PERSONA_CHE_GESTISCE;
+}
+
+/** Chi e' il titolare, detto in una frase: «Nicolae Rotaru, che gestisce MyCity». */
+export function chiRisponde(t: Titolare = titolare()): string {
+  const persona = personaCheGestisce(t);
+  return persona ? `${persona}, che gestisce ${t.denominazione}` : t.denominazione;
 }
 
 /**

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
-import { recapitoPrivacy, titolare } from '@/lib/legal/titolare';
+import { chiRisponde, recapitoPrivacy, titolare } from '@/lib/legal/titolare';
 import {
   DOVE_CHIEDIAMO_L_IBAN,
   L_AVVISO_A_CHI_PAGA,
@@ -60,7 +60,7 @@ export default function PrivacyPage() {
     >
       <LegalSection id="titolare" heading="1. Titolare del trattamento">
         <p>
-          Il titolare del trattamento è <strong>{ownerData.denominazione}</strong>
+          Il titolare del trattamento è <strong>{chiRisponde(ownerData)}</strong>
           {ownerData.indirizzo ? <>, con sede in {ownerData.indirizzo}</> : null}
           {ownerData.partitaIva ? <>, P.IVA {ownerData.partitaIva}</> : null}.
         </p>
