@@ -22,6 +22,7 @@ import { trackSellerOrderAccepted } from '@/lib/analytics/events';
 import EmptyState from '@/components/EmptyState';
 import { Package, CheckCircle2, X, Printer, Bike, Phone, MapPin, Clock, Banknote } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
+import { conFattorinoDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 import { cifraDellaVoce, riepilogoOrdine } from '@/lib/ordini/riepilogo-ordine';
 import { nomeDellaRigaOrdine, fotoDellaRigaOrdine } from '@/lib/ordini/riga-ordine';
 import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
@@ -158,7 +159,6 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
           accepted_at, ready_at, picked_up_at, delivered_at, canceled_at,
           delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
           rider_id,
-          rider:profiles!orders_rider_id_fkey ( full_name ),
           seller:profiles!orders_seller_id_fkey ( store_hours ),
           order_items (
             id, quantity, unit_price, product_name, product_image,
@@ -172,15 +172,20 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
       // «Non trovato» e «non raggiungibile» sono due cose diverse: `.maybeSingle()` fa tornare
       // `null` quando la riga non c'e', cosi' l'ordine mancante finisce nel suo ramo e il guasto
       // di rete resta un errore vero, con il suo «Riprova». Con `.single()` erano la stessa cosa.
+      // 31/10/2026 (migrazione 164) — Il nome del fattorino arriva dalla vista `nomi_pubblici`, non
+      // da `profiles`: dopo la 161 il negozio legge solo la propria riga, e qui c'era sempre
+      // «Rider assegnato». Gli orari (`seller:profiles`) restano: sono la riga del negozio stesso.
+      const conFattorino = async (riga: unknown): Promise<OrderRow | null> =>
+        riga ? ((await conFattorinoDellOrdine(supabase, [riga as OrderRow]))[0] as OrderRow) : null;
       const withPay = await supabase
         .from('orders')
         .select(sel(' payment_method, delivery_fee_cents, discount_amount, wallet_applied_cents,'))
         .eq('id', id)
         .maybeSingle();
-      if (!withPay.error) return (withPay.data ?? null) as unknown as OrderRow | null;
+      if (!withPay.error) return conFattorino(withPay.data);
       const fallback = await supabase.from('orders').select(sel('')).eq('id', id).maybeSingle();
       if (fallback.error) throw fallback.error;
-      return (fallback.data ?? null) as unknown as OrderRow | null;
+      return conFattorino(fallback.data);
     },
     refetchInterval: 30_000,
     // Al ritorno sul telefono si rilegge subito: la riga «entro quando accettare» usa l'ora della lettura.

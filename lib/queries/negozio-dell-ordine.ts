@@ -1,5 +1,6 @@
 import { logger } from '@/lib/logger';
 import {
+  fetchNomiPubblici,
   fetchSellerPublicMap,
   type LettoreVista,
   type SellerPublicProfile,
@@ -74,4 +75,25 @@ export async function conNegozioSePossibile<T extends { seller_id?: string | nul
     logger.warn('[ordini] negozi non letti dalla vetrina: righe mostrate senza negozio', e);
     return righe.map((r) => ({ ...r, seller: null }));
   }
+}
+
+/**
+ * Attacca a ogni riga il suo fattorino, col nome letto dalla vista `nomi_pubblici` (migrazione 164).
+ *
+ * 31/10/2026 (ondata 1) — Il nome si agganciava a `profiles` dentro la lettura dell'ordine
+ * (`rider:profiles!orders_rider_id_fkey ( full_name )`): dopo le migrazioni 110, 112 e 161 il cliente
+ * e il negozio leggevano «Il tuo rider» / «Rider assegnato», senza un errore. La forma resta
+ * `{ full_name }` perche' le pagine la leggono gia' cosi'; dentro c'e' solo il nome di battesimo.
+ * Nessuna riga si perde: un nome che non arriva e' `null`, e la pagina scrive la sua frase generica.
+ */
+export async function conFattorinoDellOrdine<T extends { rider_id?: string | null }>(
+  supa: LettoreVista,
+  righe: T[],
+): Promise<Array<T & { rider: { full_name: string | null } | null }>> {
+  if (righe.length === 0) return [];
+  const nomi = await fetchNomiPubblici(supa, righe.map((r) => r.rider_id));
+  return righe.map((r) => ({
+    ...r,
+    rider: r.rider_id ? { full_name: nomi.get(r.rider_id) ?? null } : null,
+  }));
 }

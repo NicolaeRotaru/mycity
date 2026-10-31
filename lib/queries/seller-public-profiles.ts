@@ -1,4 +1,5 @@
 import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
+import { logger } from '@/lib/logger';
 
 /**
  * IL NEGOZIO PUBBLICO SI LEGGE DALLA VETRINA, NON DALLA TABELLA DEI PROFILI.
@@ -151,4 +152,64 @@ export async function conNegozioApprovato<T extends { seller_id?: string | null 
   return attachSellerProfiles(rows, negozi).filter(
     (r): r is T & { profiles: SellerPublicProfile } => negozioApprovato(r.profiles),
   );
+}
+
+/**
+ * I NOMI DELLE PERSONE CHE ALTRI DEVONO LEGGERE SI LEGGONO DALLA VISTA, NON DA `profiles`.
+ *
+ * 31/10/2026 (ondata 1, migrazione 164) — Il nome del fattorino (al cliente e al negozio del suo
+ * ordine), chi ha scritto una domanda sotto un prodotto, chi ha scritto una recensione al negozio:
+ * tutti e tre si leggevano da `profiles`. Dopo le migrazioni 110, 112 e 161 quella tabella si legge
+ * solo per la propria riga, e la lettura torna vuota SENZA errore: «Il tuo rider», «Cliente» per tutti.
+ *
+ * Qui una domanda sola alla vista `nomi_pubblici` per tutti gli id. Torna solo il nome di battesimo.
+ * Prima che la 164 sia applicata la vista non c'e': si legge `profiles` come oggi, e l'avviso nei
+ * registri dice che il ripiego e' in corso. Un nome e' un dettaglio: se la lettura cade, la pagina
+ * resta in piedi senza nomi e l'errore va nei registri — non si butta.
+ */
+export const VISTA_NOMI_PUBBLICI = 'nomi_pubblici';
+
+/** La prima parola del nome: mai il cognome. */
+export function nomeDiBattesimo(nome: string | null | undefined): string | null {
+  const primo = (nome ?? '').trim().split(/\s+/)[0];
+  return primo ? primo : null;
+}
+
+/** La vista non esiste ancora (migrazione 164 non applicata): PostgREST dice PGRST205, Postgres 42P01. */
+function vistaNonAncoraCreata(errore: unknown): boolean {
+  const code = (errore as { code?: string } | null)?.code;
+  return code === 'PGRST205' || code === '42P01';
+}
+
+/** id -> nome di battesimo, per le persone che chi legge puo' vedere. Gli id senza nome mancano. */
+export async function fetchNomiPubblici(
+  supabase: LettoreVista,
+  ids: Array<string | null | undefined>,
+): Promise<Map<string, string>> {
+  const unici = [...new Set(ids.filter((i): i is string => !!i))];
+  const nomi = new Map<string, string>();
+  if (unici.length === 0) return nomi;
+
+  let righe: Array<{ id: string; nome: string | null }>;
+  const vista = await supabase.from(VISTA_NOMI_PUBBLICI).select('id, nome').in('id', unici);
+  if (!vista.error) {
+    righe = (vista.data ?? []) as Array<{ id: string; nome: string | null }>;
+  } else if (vistaNonAncoraCreata(vista.error)) {
+    logger.warn('[nomi] vista nomi_pubblici assente (migrazione 164 non applicata): leggo profiles', vista.error);
+    const vecchia = await supabase.from('profiles').select('id, full_name').in('id', unici);
+    if (vecchia.error) {
+      logger.warn('[nomi] nomi non letti nemmeno da profiles: le firme restano generiche', vecchia.error);
+      return nomi;
+    }
+    righe = ((vecchia.data ?? []) as Array<{ id: string; full_name: string | null }>).map((p) => ({ id: p.id, nome: p.full_name }));
+  } else {
+    logger.warn('[nomi] vista nomi_pubblici non letta: le firme restano generiche', vista.error);
+    return nomi;
+  }
+
+  for (const r of righe) {
+    const nome = nomeDiBattesimo(r.nome);
+    if (nome) nomi.set(r.id, nome);
+  }
+  return nomi;
 }

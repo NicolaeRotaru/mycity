@@ -7,6 +7,7 @@ import { normalizeCustomization, accentHex, socialLinks } from '@/lib/store-cust
 import { normalizeSite } from '@/lib/store-site';
 import type { SectionContext, SectionPromo, SectionReview, StoreContextRow } from './SectionContext';
 import { domandaNegozio } from '@/lib/queries/catalogo';
+import { fetchNomiPubblici } from '@/lib/queries/seller-public-profiles';
 
 /**
  * Carica tutto ciò che serve a renderizzare una pagina vetrina (home o custom):
@@ -51,17 +52,10 @@ export function useStorePageData(id: string) {
       }>;
 
       // Profili autore (nome) per le recensioni con user_id.
-      const userIds = Array.from(new Set(rows.map((r) => r.user_id).filter((v): v is string => !!v)));
-      const authorById = new Map<string, string | null>();
-      if (userIds.length > 0) {
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('id, full_name, public_handle')
-          .in('id', userIds);
-        for (const p of (profs ?? []) as Array<{ id: string; full_name: string | null; public_handle: string | null }>) {
-          authorById.set(p.id, p.full_name || p.public_handle || null);
-        }
-      }
+      // 31/10/2026 (migrazione 164) — I nomi si leggono dalla vista `nomi_pubblici`, non da
+      // `profiles`: dopo la 161 quella lettura dava zero righe, l'errore si ignorava, e ogni
+      // recensione era firmata «Cliente». Torna il nome di battesimo; un guasto va nei registri.
+      const authorById = await fetchNomiPubblici(supabase, rows.map((r) => r.user_id));
 
       return rows.map((r) => ({
         id: r.id,
