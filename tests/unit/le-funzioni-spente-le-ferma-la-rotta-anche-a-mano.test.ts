@@ -128,8 +128,9 @@ describe('newsletter spenta: una POST a mano non iscrive e non scrive a nessuno'
 
 describe('lotto AI sul catalogo: il freno sta prima della spesa', () => {
   it('AI spenta: /start risponde 503 e non manda niente al modello', async () => {
-    const res = await avviaLotto(richiesta('/api/ai/catalog-batch/start', { operation: 'improve' }));
-    expect(res.status).toBe(503);
+    // Chi passa il freno arriva al database finto, che cade: niente risposta.
+    const res = await avviaLotto(richiesta('/api/ai/catalog-batch/start', { operation: 'improve' })).catch(() => null);
+    expect(res?.status).toBe(503);
     expect(stato.adminChiesto).toBe(0);
     expect(stato.submitBatch).not.toHaveBeenCalled();
     expect(stato.registraSpesaAi).not.toHaveBeenCalled();
@@ -137,8 +138,10 @@ describe('lotto AI sul catalogo: il freno sta prima della spesa', () => {
 
   it('«Traduci» spento: /start rifiuta il lotto translate prima di crearlo e pagarlo', async () => {
     stato.aiAccesa = true;
-    const res = await avviaLotto(richiesta('/api/ai/catalog-batch/start', { operation: 'translate', targetLang: 'en' }));
-    expect(res.status).toBe(400);
+    const res = await avviaLotto(
+      richiesta('/api/ai/catalog-batch/start', { operation: 'translate', targetLang: 'en' }),
+    ).catch(() => null);
+    expect(res?.status).toBe(400);
     expect(stato.adminChiesto).toBe(0);
     expect(stato.submitBatch).not.toHaveBeenCalled();
     expect(stato.registraSpesaAi).not.toHaveBeenCalled();
@@ -151,8 +154,8 @@ describe('lotto AI sul catalogo: il freno sta prima della spesa', () => {
   });
 
   it('AI spenta: /apply su un lavoro rimasto «pronto» risponde 503 e non tocca i prodotti', async () => {
-    const res = await applicaLotto(richiesta('/api/ai/catalog-batch/apply', { jobId: 'job-1' }));
-    expect(res.status).toBe(503);
+    const res = await applicaLotto(richiesta('/api/ai/catalog-batch/apply', { jobId: 'job-1' })).catch(() => null);
+    expect(res?.status).toBe(503);
     expect(stato.adminChiesto).toBe(0);
   });
 });
