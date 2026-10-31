@@ -204,14 +204,24 @@ function finestraDelRitiro(
  * impostati», cioè aperto a qualunque ora, e gli ordini passavano. La settimana scritta per intero
  * (tutti e sette i giorni presenti, anche vuoti: lo fa l'editor degli orari) è una scelta, non un
  * dato che manca. Un giorno solo, vuoto, resta «non lo so», come prima.
+ *
+ * 31/10/2026 (ondata 3, secondo giro) — Non servono tutti e sette. L'editor di prima scriveva solo
+ * il giorno toccato, e «Chiudi» compare solo sui giorni aperti: Pane Quotidiano (la domenica mai
+ * scritta) in ferie restava con sei liste vuote e senza `sun`, e martedì 3/11 alle 10:00 l'ordine
+ * per «Domani · 9:00–11:00» passava. L'editor mostra un giorno mai scritto come chiuso, quindi
+ * basta la maggior parte della settimana scritta (`GIORNI_PER_UNA_SETTIMANA_SCRITTA`), tutta
+ * chiusa. Uno o due giorni vuoti e basta restano «non lo so».
  */
+const GIORNI_PER_UNA_SETTIMANA_SCRITTA = 4;
+
 export function orariImpostati(storeHours: unknown): StoreHours | null {
   if (!storeHours || typeof storeHours !== 'object') return null;
   const hours = storeHours as StoreHours;
   const configured = DAY_KEYS.some(
     (k) => Array.isArray(hours[k]) && (hours[k] as HoursInterval[]).length > 0,
   );
-  const settimanaScritta = DAY_KEYS.every((k) => Array.isArray(hours[k]));
+  const giorniScritti = DAY_KEYS.filter((k) => Array.isArray(hours[k])).length;
+  const settimanaScritta = giorniScritti >= GIORNI_PER_UNA_SETTIMANA_SCRITTA;
   return configured || settimanaScritta ? hours : null;
 }
 

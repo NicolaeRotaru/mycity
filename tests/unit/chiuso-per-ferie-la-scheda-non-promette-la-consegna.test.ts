@@ -37,6 +37,13 @@ describe('chiuso per ferie: la scheda non promette la consegna che la cassa rifi
     expect(riga).not.toMatch(/ora che scegli|in cassa scegli/);
   });
 
+  it('Pane Quotidiano in ferie con la domenica mai scritta (l editor di prima): la scheda dice chiuso', () => {
+    const ferieSenzaDomenica = { mon: [], tue: [], wed: [], thu: [], fri: [], sat: [] };
+    expect(isStoreClosedForOrder(ferieSenzaDomenica, sabatoAlle10), 'la cassa').toBe(true);
+    expect(rigaConsegnaDellaScheda({ esaurito: false, orari: ferieSenzaDomenica, adesso: sabatoAlle10, veloce: null }))
+      .toBe('Il negozio è chiuso ora');
+  });
+
   it('anche con la veloce che risponde sì, la scheda non promette niente', () => {
     const riga = rigaConsegnaDellaScheda({ esaurito: false, orari: FERIE, adesso: martediAlle20, veloce: true });
     expect(riga).toBe('Il negozio è chiuso ora');
