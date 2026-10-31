@@ -90,6 +90,29 @@ export type PayoutResult =
  * source_transaction = stripe_charge_id lega il transfer alla charge specifica
  * (cruciale per multi-seller e per evitare fallimenti con balance basso).
  */
+/** La variabile d'ambiente col giorno da cui i bonifici dei contanti li fa Stripe (data ISO). */
+export const VAR_CONTANTI_DA_STRIPE = 'PAGAMENTI_CONTANTI_DA_STRIPE_DAL';
+
+/**
+ * Un contrassegno si può pagare al negozio da Stripe? Solo se c'è il giorno
+ * d'inizio, è una data vera, e la consegna è da quel giorno in poi. Tutto il
+ * resto — variabile vuota, data storta, consegna senza data — vuol dire «lo ha
+ * pagato o lo paga Nicola a mano»: no.
+ */
+export function contantiPagabiliDaStripe(
+  consegnatoIl: string | null | undefined,
+  dal: string | undefined = process.env[VAR_CONTANTI_DA_STRIPE],
+): boolean {
+  if (!dal) return false;
+  const inizio = Date.parse(dal);
+  if (Number.isNaN(inizio)) {
+    logger.error(`[stripe] ${VAR_CONTANTI_DA_STRIPE} non è una data: nessun bonifico dei contanti parte da Stripe`, { dal });
+    return false;
+  }
+  const consegna = consegnatoIl ? Date.parse(consegnatoIl) : Number.NaN;
+  return !Number.isNaN(consegna) && consegna >= inizio;
+}
+
 export async function releaseOrderPayout(orderId: string): Promise<PayoutResult> {
   const admin = getAdminSupabase();
   // 046 — serve anche quanto è già stato addebitato al venditore: il payout
@@ -97,7 +120,7 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
   // Il ripiego copre la finestra fra l'unione del codice e la firma sulla
   // migrazione 124: senza, una `select` che nomina una colonna inesistente
   // fallisce e nessun pagamento partirebbe (lib/db/migrazione-124.ts).
-  const COLONNE_PAYOUT = 'id, seller_id, payout_status, seller_payout_cents, seller_payout_reversed_cents, payout_tentativo, stripe_charge_id, stripe_transfer_group, delivery_status';
+  const COLONNE_PAYOUT = 'id, seller_id, payout_status, seller_payout_cents, seller_payout_reversed_cents, payout_tentativo, stripe_charge_id, stripe_transfer_group, delivery_status, payment_method, delivered_at';
   const { data: order, error } = await conRipiegoSchema(
     'orders.select (payout venditore)',
     () => admin.from('orders').select(COLONNE_PAYOUT).eq('id', orderId).single(),
@@ -113,6 +136,21 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
   }
   if (!order.seller_payout_cents || order.seller_payout_cents <= 0) {
     return { ok: false, code: 'INVALID_AMOUNT', reason: 'Importo payout non valido' };
+  }
+  // 31/10/2026 — I CONTANTI PAGATI A MANO NON SI PAGANO UNA SECONDA VOLTA.
+  // Al lancio il bonifico al negozio dei contanti lo fa Nicola a mano
+  // (registro dei fatti, `pagamenti.al-lancio`), e l'ordine resta HELD: il sito
+  // non ha un modo di segnarlo «pagato con bonifico». Il giorno in cui la
+  // chiave Stripe entra su Vercel, il giro li avrebbe pagati tutti di nuovo dal
+  // saldo della piattaforma. Adesso un contrassegno passa da qui solo se è
+  // stato consegnato dal giorno scritto in PAGAMENTI_CONTANTI_DA_STRIPE_DAL:
+  // senza quella data, nessuno.
+  if (order.payment_method === 'cod' && !contantiPagabiliDaStripe(order.delivered_at)) {
+    return {
+      ok: false,
+      code: 'BAD_STATE',
+      reason: `Contanti: bonifico al negozio a mano per le consegne prima di ${VAR_CONTANTI_DA_STRIPE}`,
+    };
   }
 
   const { data: seller } = await admin
@@ -385,23 +423,34 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
   // il fattorino restava senza il suo. La colonna esiste dalla migrazione 126;
   // semplicemente non ci scriveva nessuno. Chi decide che «vecchio» vuol dire
   // «chi l'aveva preso e' morto» resta il giro (app/api/cron/release-payouts).
+  //
+  // 31/10/2026 — IL TURNO SI PRENDE CON DUE SCRITTURE A FILTRI SEMPLICI.
+  // Qui c'era UNA scrittura con dentro un «oppure» (`.or(FILTRO_RIDER_RITENTABILI)`)
+  // e poi `.select('id')`. PostgREST applica l'«oppure» anche alle righe che
+  // restituisce: `id` non porta `rider_payout_status`, e la risposta era 42703
+  // senza scrivere niente — ogni compenso con carta finiva in TRANSFER_FAILED
+  // (stessa misura di `prendiIlTurno` in lib/stripe/webhook/registro-eventi.ts).
+  // Ognuna delle due è una sola UPDATE: fra due giri in gara la vince uno solo.
   const valoriTurnoRider = { rider_payout_status: 'PROCESSING', rider_payout_claimed_at: new Date().toISOString() };
+  const prendiIlTurnoDelFattorino = async (valori: Partial<typeof valoriTurnoRider>) => {
+    const libero = await admin
+      .from('orders')
+      .update(valori)
+      .eq('id', order.id)
+      .is('rider_payout_status', null)
+      .select('id');
+    if (libero.error || (libero.data ?? []).length > 0) return libero;
+    return await admin
+      .from('orders')
+      .update(valori)
+      .eq('id', order.id)
+      .in('rider_payout_status', [...STATI_RIDER_RITENTABILI])
+      .select('id');
+  };
   const { data: claimed, error: claimErr } = await conRipiegoSchema(
     'orders.update (turno del compenso fattorino)',
-    () =>
-      admin
-        .from('orders')
-        .update(valoriTurnoRider)
-        .eq('id', order.id)
-        .or(FILTRO_RIDER_RITENTABILI)
-        .select('id'),
-    () =>
-      admin
-        .from('orders')
-        .update(senzaCampi(valoriTurnoRider, ['rider_payout_claimed_at']))
-        .eq('id', order.id)
-        .or(FILTRO_RIDER_RITENTABILI)
-        .select('id'),
+    () => prendiIlTurnoDelFattorino(valoriTurnoRider),
+    () => prendiIlTurnoDelFattorino(senzaCampi(valoriTurnoRider, ['rider_payout_claimed_at'])),
   );
   if (claimErr) {
     // Vedi releaseOrderPayout: un errore DB non va mascherato da no-op silenzioso.
