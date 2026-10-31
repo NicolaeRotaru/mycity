@@ -13,6 +13,8 @@ import {
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { RimborsiDaDividere } from '@/components/admin/RimborsiDaDividere';
 import { queryKeys } from '@/lib/queries/keys';
@@ -69,7 +71,11 @@ export default function AdminOrdersPage() {
   const PER_PAGINA = 50;
   const [pagina, setPagina] = useState(1);
 
-  const { data: orders = [], isLoading } = useQuery({
+  // 31/10/2026 — Qui c'era `const { data: orders = [], isLoading }`: il ripiego `= []`
+  // trasformava una lettura caduta in «0 ordini · Nessun ordine», identico a un pannello
+  // davvero vuoto. La lettura l'errore lo solleva (sotto); adesso la pagina lo guarda, come
+  // `admin/coupons` e `admin/sponsored`. Quattro stati: carico · vuoto · rotto · pieno.
+  const lettura = useQuery({
     queryKey: [...queryKeys.admin.orders, filter, pagina],
     queryFn: async () => {
       // #90 — Prima si scaricava la tabella ordini INTERA, ogni trenta secondi,
@@ -111,11 +117,26 @@ export default function AdminOrdersPage() {
     onError: (e: unknown) => toast.error(friendlyError(e)),
   });
 
+  const vista = vistaDaQuery(lettura);
   // Il filtro ora e' nella query: qui resta solo la lista com'e' arrivata.
+  const orders: Row[] = lettura.data ?? [];
   const filtered = orders;
   const forseAltri = orders.length >= PER_PAGINA * pagina;
 
-  if (isLoading) return <LoadingState />;
+  if (vista.mostraErrore && !lettura.data) {
+    return (
+      <div className="space-y-5">
+        <AdminPageTitle eyebrow="Operatività" title="Ordini" sub="Non sono riuscito a leggere gli ordini" />
+        <ErrorState
+          title="Non riesco a leggere gli ordini"
+          description="Non vuol dire che non ce ne siano: vuol dire che non li ho potuti guardare. Riprova fra un momento."
+          retry={() => { void lettura.refetch(); }}
+          supportHref={null}
+        />
+      </div>
+    );
+  }
+  if (!lettura.data) return <LoadingState />;
 
   // Export CSV — Operations Manager: "indispensabile per commercialista"
   //
@@ -270,7 +291,11 @@ export default function AdminOrdersPage() {
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-ink-400">Nessun ordine</td>
+                <td colSpan={8} className="p-8 text-center text-ink-400">
+                  {/* Stessa frase delle tabelle sorelle (coupon, sponsorizzati): qui ci si
+                      arriva solo dopo aver letto davvero, mai su una lettura caduta. */}
+                  {filter === 'all' ? 'Nessun ordine.' : `Nessun ordine nello stato «${ORDER_STATUS_LABEL[filter]}».`}
+                </td>
               </tr>
             )}
           </tbody>
