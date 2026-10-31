@@ -91,8 +91,14 @@ function client(d: DatiOrdini, mondo: Mondo, chi: string | null, opzioni: { con1
       || (d.orders ?? []).some((o) => o.seller_id === chi && o.user_id === id)
       || (d.store_reviews ?? []).some((r) => r.store_id === chi && r.user_id === id)
     );
+  // L'ascolto in tempo reale delle pagine dei messaggi: qui non arriva niente, ma si apre e si chiude
+  // senza errori, cosi' nel registro della prova restano solo i guasti veri.
+  const canale: Record<string, unknown> = {};
+  Object.assign(canale, { on: () => canale, subscribe: () => canale, unsubscribe: async () => 'ok' });
   return {
     ...base,
+    channel: () => canale,
+    removeChannel: async () => 'ok',
     rpc: async (nome: string, argomenti: Record<string, unknown> = {}) => {
       if (nome !== 'nomi_dei_clienti_del_negozio' || !opzioni.con181) return base.rpc(nome);
       const ids = (argomenti.p_ids as unknown[]) ?? [];
