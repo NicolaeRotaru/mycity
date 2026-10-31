@@ -42,8 +42,7 @@ export default function SellerCustomersPage() {
       const { data: orders, error: ordersError } = await supabase
         .from('orders')
         .select(`
-          id, user_id, total_price, created_at,
-          buyer:profiles!orders_user_id_fkey ( full_name )
+          id, user_id, total_price, created_at, delivery_full_name
         `)
         .eq('seller_id', user.id)
         // #90 — Un tetto esplicito. Queste pagine leggevano la tabella intera:
@@ -60,18 +59,25 @@ export default function SellerCustomersPage() {
       if (ordersError) throw ordersError;
 
       const byUser = new Map<string, CustomerRow>();
-      type OrderRow = { id: string; user_id: string | null; total_price: number; created_at: string; buyer: { full_name: string | null } | null };
+      // 31/10/2026 — Il nome arrivava da `profiles!orders_user_id_fkey`: dopo la 161 il
+      // negozio non legge più il profilo del cliente, l'aggancio tornava vuoto senza errore e
+      // la pagina diceva «Cliente» a ogni riga — e la ricerca per nome non trovava nessuno.
+      // Il nome di consegna sta sull'ordine, che il negozio legge già: si usa il più recente
+      // che c'è (gli ordini arrivano dal più nuovo).
+      type OrderRow = { id: string; user_id: string | null; total_price: number; created_at: string; delivery_full_name: string | null };
       for (const o of (orders ?? []) as unknown as OrderRow[]) {
         if (!o.user_id) continue;
+        const nome = o.delivery_full_name?.trim() || null;
         const existing = byUser.get(o.user_id);
         if (existing) {
+          existing.fullName = existing.fullName ?? nome;
           existing.totalSpent += Number(o.total_price);
           existing.ordersCount += 1;
           existing.firstOrderAt = o.created_at;
         } else {
           byUser.set(o.user_id, {
             userId:     o.user_id,
-            fullName:   o.buyer?.full_name ?? null,
+            fullName:   nome,
             totalSpent: Number(o.total_price),
             ordersCount: 1,
             lastOrderAt: o.created_at,

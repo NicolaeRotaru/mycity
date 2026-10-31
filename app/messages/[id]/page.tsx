@@ -43,6 +43,10 @@ type Conversation = {
   seller: CounterpartProfile | null;
   /** L'insegna del negozio, dalla vetrina pubblica (lib/queries/controparte-della-chat.ts). */
   insegna: string | null;
+  /** Vero se la vetrina non ha risposto: il cliente legge «Nome non disponibile», non «Utente». */
+  insegnaNonLetta: boolean;
+  /** Il nome del cliente, per il negozio: dalla migrazione 181, perché `profiles` non lo dà più. */
+  cliente: string | null;
 };
 
 function formatTime(iso: string): string {
@@ -98,7 +102,11 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
       if (!data) return null;
       // 18/10/2026 — L'insegna del negozio in testa alla chat la dice la vetrina
       // pubblica, non `profiles`: regge anche quando `profiles` si chiude.
-      const [conInsegna] = await conInsegnaDelNegozio(supabase, [data as unknown as Omit<Conversation, 'insegna'>]);
+      const [conInsegna] = await conInsegnaDelNegozio(
+        supabase,
+        [data as unknown as Omit<Conversation, 'insegna' | 'insegnaNonLetta' | 'cliente'>],
+        userId,
+      );
       return conInsegna;
     },
   });
