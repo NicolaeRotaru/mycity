@@ -32,6 +32,8 @@ vi.mock('@/lib/funzioni-al-lancio', async (originale) => {
     get DROP_DEL_GIORNO_ACCESO() { return stato.dropAcceso; },
     get TRADUCI_ACCESO() { return stato.traduciAcceso; },
     get NEWSLETTER_ACCESA() { return stato.newsletterAccesa; },
+    // Qui si prova «Traduci»: gli strumenti AI restano accesi (hanno le loro prove).
+    AI_NEGOZI_ACCESA: true,
   };
 });
 
