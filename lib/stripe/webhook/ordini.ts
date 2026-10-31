@@ -288,7 +288,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     const motivo = riportata === null
       ? 'La fascia scelta è già passata quando è arrivato il pagamento.'
       : motivoFasciaRifiutata(riportata, await orariDeiNegozi(admin, groups));
-    if (motivo && await rimborsaLaFasciaPersa(admin, session, pendingCheckoutId, motivo)) return;
+    if (motivo && await rimborsaLaFasciaPersa(admin, session, pendingCheckoutId, motivo, { buyerId, fascia: fasciaScelta })) return;
     fasciaDellOrdine = riportata ?? fasciaScelta;
   }
 

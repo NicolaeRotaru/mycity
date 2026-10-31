@@ -17,13 +17,21 @@
  *   nasce: è lo stesso istante da cui contano la scadenza d'accettazione e il giro. Se dice no si
  *   rimborsa subito, con una chiave stabile, e non nasce nessun ordine. La finestra si stringe
  *   soltanto col passare del tempo, quindi un evento riconsegnato non cambia la risposta.
- * Prova: `tests/unit/con-la-carta-la-fascia-si-guarda-quando-si-paga.test.ts`.
+ * ③ Il rimborso lo sa anche il cliente (`diciloAlCliente`): campanella ed email con quanto torna,
+ *   perché, e che non c'è nessun ordine. Prima lo sapevano solo gli amministratori, e dopo 30
+ *   secondi la pagina degli ordini gli diceva «nessun ordine»: soldi addebitati e spariti.
+ * Prove: `tests/unit/con-la-carta-la-fascia-si-guarda-quando-si-paga.test.ts`,
+ * `tests/unit/rimborso-della-fascia-persa-il-cliente-lo-sa.test.ts`.
  */
 import type Stripe from 'stripe';
 import { getStripe } from '@/lib/stripe/client';
 import type { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { notifyAdmins } from './comune';
+import { sendEmail } from '@/lib/email/client';
+import { env } from '@/lib/env';
+import { formatPriceFromCents } from '@/lib/format';
+import { escapeHtml } from '@/lib/html-escape';
+import { idDaChiave, notifyAdmins, provaAMandare } from './comune';
 import { scritturaFacoltativa } from './esito';
 import { merceDelCarrello } from './quadratura';
 
@@ -51,6 +59,7 @@ export async function rimborsaLaFasciaPersa(
   session: Stripe.Checkout.Session,
   pendingCheckoutId: string,
   motivo: string,
+  cliente: { buyerId: string; fascia: string },
 ): Promise<boolean> {
   const { data: giaNati, error: errGiaNati } = await admin.from('orders').select('id').eq('stripe_session_id', session.id);
   if (errGiaNati) throw new Error(`[stripe] fascia non più possibile: ordini non letti (${errGiaNati.message})`);
@@ -91,10 +100,53 @@ export async function rimborsaLaFasciaPersa(
       if (error) logger.warn('[stripe] fascia non più possibile: codice sconto non restituito', { pendingCheckoutId, message: error.message });
     }
   }
+  await diciloAlCliente(admin, session, pendingCheckoutId, motivo, cliente);
   await notifyAdmins(
     '⚠️ Pagamento rimborsato: fascia non più possibile',
     `Il carrello ${pendingCheckoutId} è stato pagato quando la fascia scelta non si poteva più servire (${motivo}). Rimborsato in automatico, nessun ordine creato.`,
     '/admin/orders',
+    { unaVoltaPer: `fascia-persa:${pendingCheckoutId}` },
   );
   return true;
+}
+
+/**
+ * Il cliente ha pagato e non nasce nessun ordine: glielo si dice, una volta sola. La campanella ha
+ * un id che dipende dal carrello, quindi Stripe che riconsegna l'evento trova la riga già scritta
+ * (23505) e l'email non riparte. Non lancia mai: il rimborso è già fatto, e far ritentare Stripe
+ * per un avviso rifarebbe tutto il giro. Un avviso che non parte resta scritto nel registro.
+ */
+async function diciloAlCliente(
+  admin: Admin,
+  session: Stripe.Checkout.Session,
+  pendingCheckoutId: string,
+  motivo: string,
+  cliente: { buyerId: string; fascia: string },
+): Promise<void> {
+  const importo = formatPriceFromCents(session.amount_total ?? 0);
+  const titolo = '💶 Pagamento rimborsato: nessun ordine creato';
+  const frase = `Hai pagato ${importo}, ma quando è arrivato il pagamento la consegna «${cliente.fascia}» non si poteva più fare. ` +
+    `Ti abbiamo rimborsato tutto e nessun ordine è stato creato.`;
+  const banca = 'Il rimborso torna sulla carta che hai usato, di solito entro 5-10 giorni lavorativi: i tempi li decide la tua banca.';
+  const { error } = await admin.from('notifications').insert({
+    id: idDaChiave(`fascia-persa-cliente:${pendingCheckoutId}`),
+    category: 'order',
+    user_id: cliente.buyerId,
+    title: titolo,
+    body: `${frase} Puoi rifare l'ordine con un'altra fascia.`,
+    link: '/cart',
+  });
+  if ((error as { code?: string } | null)?.code === '23505') return;
+  if (error) logger.error('[stripe] fascia non più possibile: campanella al cliente non scritta', { pendingCheckoutId, message: error.message });
+  const destinatario = session.customer_details?.email ?? session.customer_email ?? null;
+  if (!destinatario) return;
+  const carrello = `${env.appUrl().replace(/\/$/, '')}/cart`;
+  const testo = `${frase} Motivo: ${motivo} ${banca} Puoi rifare l'ordine con un'altra fascia: ${carrello}`;
+  const p = (t: string) => `<p style="margin:0 0 12px;line-height:1.6">${escapeHtml(t)}</p>`;
+  await provaAMandare('email di rimborso per fascia non più possibile', { pendingCheckoutId }, () => sendEmail({
+    to: destinatario,
+    subject: `💶 Rimborso di ${importo}: la consegna scelta non era più possibile`,
+    html: `${p(frase)}${p(`Motivo: ${motivo}`)}${p(banca)}<p style="margin:24px 0"><a href="${escapeHtml(carrello)}">Rifai l'ordine con un'altra fascia</a></p>`,
+    text: testo,
+  }));
 }
