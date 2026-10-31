@@ -324,3 +324,117 @@ export function pagamentoPerChiDecide(ordine: OrdineDaRimborsare): {
     avviso: rimborsabile.perche === 'ok' ? null : motivoNienteDaRestituire(rimborsabile.perche),
   };
 }
+
+/**
+ * 31/10/2026 — IL RECESSO: QUANDO SI CHIUDE E QUANTO SI RIMBORSA.
+ *
+ * Il ripensamento (motivo CHANGED_MIND) e' il recesso del consumatore (Cod. Cons.
+ * artt. 52, 56 e 57). Il negozio non puo' dire di no e, tornata la merce, deve
+ * restituire il prezzo INTERO dei prodotti resi, piu' la consegna quando torna
+ * tutto l'ordine. Puo' scendere sotto l'intero solo se la merce e' tornata
+ * rovinata o usata oltre la prova (art. 57 c.2), e deve scriverlo: la nota
+ * arriva al cliente.
+ *
+ * Il collaudo del 31/10 ha chiuso un recesso da 30 € con 1 centesimo: la merce
+ * era tornata, il cliente restava senza soldi e il bonifico al negozio ripartiva.
+ * La regola vive qui, una volta: la usano le rotte `avanza` e `decide` e la
+ * scheda del negozio.
+ */
+export const MOTIVO_DEL_RECESSO = 'CHANGED_MIND';
+/** I giorni che il cliente ha per rispedire la merce (Cod. Cons. art. 57). */
+export const GIORNI_PER_RISPEDIRE = 14;
+/** Sotto questa lunghezza la nota non spiega niente: «x» non e' un motivo. */
+export const MOTIVO_MINIMO_CARATTERI = 10;
+const UN_GIORNO_MS = 24 * 60 * 60 * 1000;
+
+export interface ResoDaValutare {
+  reason?: string | null;
+  status: string;
+  created_at?: string | null;
+  decided_at?: string | null;
+}
+
+export function eUnRecesso(reso: { reason?: string | null }): boolean {
+  return reso.reason === MOTIVO_DEL_RECESSO;
+}
+
+/**
+ * Da quando corrono i 14 giorni per rispedire: dal piu' tardi fra la richiesta e
+ * l'approvazione. Chi aspetta il via del negozio prima di spedire non perde giorni.
+ */
+function inizioDeiGiorni(reso: ResoDaValutare): number | null {
+  const date = [reso.created_at, reso.decided_at]
+    .map((d) => Date.parse(d ?? ''))
+    .filter((t) => Number.isFinite(t));
+  return date.length > 0 ? Math.max(...date) : null;
+}
+
+/**
+ * Perche' il NEGOZIO (o l'amministratore) non puo' chiudere questo reso senza
+ * rimborso; `null` se puo'. Il cliente che ritira la sua richiesta non passa da
+ * qui: rinunciare al proprio recesso e' un suo diritto.
+ */
+export function percheIlRecessoNonSiChiude(reso: ResoDaValutare, adesso: number): string | null {
+  if (!eUnRecesso(reso)) return null;
+  if (reso.status === 'APPROVED') {
+    const inizio = inizioDeiGiorni(reso);
+    if (inizio !== null && adesso - inizio > GIORNI_PER_RISPEDIRE * UN_GIORNO_MS) return null;
+    return (
+      `Il cliente ha ${GIORNI_PER_RISPEDIRE} giorni dall'approvazione per rispedire la merce (Cod. Cons. art. 57): ` +
+      'il recesso non si chiude senza rimborso prima che siano passati. Se ci ha ripensato, può ritirare lui la richiesta.'
+    );
+  }
+  if (reso.status === 'REQUESTED') {
+    return (
+      'Il recesso non si può rifiutare né chiudere senza rimborso (Cod. Cons. artt. 52-57): approvalo, ' +
+      "e quando la merce torna rimborsa l'intero. Se il cliente ci ha ripensato, può ritirare lui la richiesta: il bonifico riparte subito."
+    );
+  }
+  const prossimo = reso.status === 'SHIPPED_BACK' ? 'segna la merce come ricevuta e poi rimborsa' : 'rimborsa';
+  return (
+    'Il recesso non si può chiudere senza rimborso (Cod. Cons. artt. 52-57): ' +
+    `${prossimo}, anche meno dell'intero se la merce è tornata rovinata, scrivendo il motivo.`
+  );
+}
+
+/**
+ * L'intero del recesso: il residuo dell'ordine se torna tutto (consegna compresa),
+ * altrimenti il prezzo della riga resa, mai oltre il residuo.
+ */
+export function interoDelRecesso(massimoCents: number, rigaResaCents: number | null): number {
+  return rigaResaCents === null ? massimoCents : Math.min(rigaResaCents, massimoCents);
+}
+
+export interface RigaDellOrdine {
+  id: string;
+  unit_price?: number | string | null;
+  quantity?: number | string | null;
+}
+
+/**
+ * Il prezzo della riga resa, in centesimi. `null` vuol dire che torna tutto
+ * l'ordine: nessuna riga indicata, la riga non si trova, o e' l'unica dell'ordine
+ * (allora l'intero comprende la consegna).
+ */
+export function rigaResaCents(righe: RigaDellOrdine[] | null, orderItemId: string | null): number | null {
+  if (!orderItemId || !righe || righe.length <= 1) return null;
+  const riga = righe.find((r) => r.id === orderItemId);
+  if (!riga) return null;
+  return Math.round(Number(riga.unit_price ?? 0) * Number(riga.quantity ?? 1) * 100);
+}
+
+/** Perche' questo importo non basta a chiudere il recesso; `null` se basta. */
+export function percheIlRimborsoDelRecessoNonBasta(input: {
+  reso: { reason?: string | null };
+  importoCents: number;
+  interoCents: number;
+  motivo?: string | null;
+}): string | null {
+  if (!eUnRecesso(input.reso)) return null;
+  if (input.importoCents >= input.interoCents) return null;
+  if ((input.motivo ?? '').trim().length >= MOTIVO_MINIMO_CARATTERI) return null;
+  return (
+    `Col recesso il rimborso è l'intero: ${(input.interoCents / 100).toFixed(2)} € (Cod. Cons. artt. 56-57). ` +
+    'Puoi rimborsare meno solo se la merce è tornata rovinata o usata oltre la prova: scrivilo nella nota, arriva al cliente.'
+  );
+}
