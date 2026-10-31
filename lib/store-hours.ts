@@ -5,7 +5,7 @@ import {
   fasciaAmmessa,
   finestraDellaFascia,
 } from './quando-arriva';
-import { RITIRO_IN_NEGOZIO_ATTIVO } from './constants';
+import { RITIRO_IN_NEGOZIO_ATTIVO } from './ritiro-in-negozio';
 
 export type HoursInterval = [string, string];
 export type StoreHours = Partial<
