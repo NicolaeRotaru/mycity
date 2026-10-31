@@ -95,7 +95,13 @@ type Opzioni = { queryKey: readonly unknown[]; queryFn?: (c: unknown) => Promise
  */
 async function aSchermo(file: string, nome: string, props: Record<string, unknown>, mondo: Mondo, chi: string | null) {
   const componente = (await monta(file))[nome];
-  globale.__CLIENT_SUPABASE__ = databaseCoiPermessi(dati(), mondo, chi).client;
+  // 31/10/2026 — «Trending ora» si disegna solo con visite vere: senza, la classifica era finta.
+  // Le visite delle ultime 24 ore qui sono date, anche al panettone della bottega non approvata.
+  const visite = () => [
+    { product_id: 'p-panettone', view_count: 20 },
+    { product_id: 'p-focaccia', view_count: 12 },
+  ];
+  globale.__CLIENT_SUPABASE__ = databaseCoiPermessi(dati(), mondo, chi, { trending_product_ids_24h: visite }).client;
   globale.__UTENTE__ = chi ? { id: chi } : null;
 
   const risposte = new Map<string, unknown>();
