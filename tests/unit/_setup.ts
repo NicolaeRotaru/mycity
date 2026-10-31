@@ -69,3 +69,14 @@ afterEach(() => {
     else process.env[chiave] = valore;
   }
 });
+
+/**
+ * ③ I LAVORI A ORARIO, NELLE PROVE, SONO ACCESI.
+ *
+ * 31/10/2026 — In produzione il fermo è acceso per difetto (lib/cron/fermo-dei-lavori.ts):
+ * senza `LAVORI_A_ORARIO=accesi` le rotte di `app/api/cron` rispondono «fermo» e non
+ * lavorano. Le prove di quelle rotte raccontano cosa fa il lavoro QUANDO gira, quindi qui
+ * partono accese. Chi prova il fermo la variabile se la toglie da sé — e la deve togliere:
+ * è la prova `i-lavori-a-orario-si-fermano-finche-nicola-non-li-accende`.
+ */
+process.env.LAVORI_A_ORARIO = 'accesi';

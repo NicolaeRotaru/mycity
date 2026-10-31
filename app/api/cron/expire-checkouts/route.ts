@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
+import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -22,7 +23,9 @@ export const runtime = 'nodejs';
  *   curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
  *     https://yourapp.com/api/cron/expire-checkouts
  */
-export const POST = withCronAuth(async (): Promise<NextResponse> => {
+export const POST = withCronAuth(async (req): Promise<NextResponse> => {
+  // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
+  if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   const admin = getAdminSupabase();
 
   // 162 — PRIMA DI RIMETTERE IN VENDITA, GUARDA SE E' GIA' STATO VENDUTO.

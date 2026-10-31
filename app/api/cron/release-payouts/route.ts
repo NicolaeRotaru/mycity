@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
+import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { isStripeConfigured, getStripe } from '@/lib/stripe/client';
 import { ORE_ATTESA_BONIFICO } from '@/lib/stripe/tempi-bonifico';
 import {
@@ -115,7 +116,9 @@ const PAYOUT_DISPUTE_FILTER = 'dispute_status.is.null,dispute_status.eq.WON';
  *   curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
  *     https://yourapp.com/api/cron/release-payouts
  */
-export const POST = withCronAuth(async (): Promise<NextResponse> => {
+export const POST = withCronAuth(async (req): Promise<NextResponse> => {
+  // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
+  if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   if (!isStripeConfigured()) {
     return NextResponse.json({ ok: false, error: 'Stripe non configurato' }, { status: 503 });
   }

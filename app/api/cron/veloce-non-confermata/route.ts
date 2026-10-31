@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
+import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { frenoDellaVeloce } from '@/lib/ordini/veloce-non-confermata';
 
 /**
@@ -14,7 +15,9 @@ import { frenoDellaVeloce } from '@/lib/ordini/veloce-non-confermata';
  */
 export const runtime = 'nodejs';
 
-export const POST = withCronAuth(async (): Promise<NextResponse> => {
+export const POST = withCronAuth(async (req): Promise<NextResponse> => {
+  // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
+  if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   const esito = await frenoDellaVeloce(getAdminSupabase() as unknown as SupabaseClient);
   // 200 vuol dire «tutto a posto». Prima un carrello rimasto da sistemare a mano (per esempio la fascia
   // che non si scrive, con l'euro già tornato sulla carta) rispondeva 200 {ok:true}: il guardiano dei

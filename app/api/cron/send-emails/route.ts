@@ -4,6 +4,7 @@ import { sendEmail } from '@/lib/email/client';
 import { requireSupabaseService } from '@/lib/env';
 import { preparaEmailCicloDiVita, TEMPLATE_DI_SERVIZIO } from '@/lib/email/templates';
 import { withCronAuth } from '@/lib/api/middleware';
+import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { EMAIL_PER_GIRO } from '@/lib/email/ritmo-della-coda';
@@ -162,7 +163,9 @@ function personaInesistente(errore: unknown): boolean {
   return e.status === 404 || e.code === 'user_not_found';
 }
 
-const handler = withCronAuth(async (_req): Promise<NextResponse> => {
+const handler = withCronAuth(async (req): Promise<NextResponse> => {
+  // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
+  if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   let supaCfg;
   try { supaCfg = requireSupabaseService(); } catch (e) {
     return ApiErrors.unavailable(e instanceof Error ? e.message : 'config error');

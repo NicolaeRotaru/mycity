@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { withCronAuth } from '@/lib/api/middleware';
+import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { logger } from '@/lib/logger';
 import { lavoriFermi, type CronHeartbeat } from '@/lib/cron-health';
 import { env } from '@/lib/env';
@@ -46,7 +47,9 @@ type AlertRow = {
 // Non re-notifichiamo la stessa (tipo+entità) entro questa finestra.
 const COOLDOWN_HOURS = 6;
 
-export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse> => {
+export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse> => {
+  // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
+  if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   const admin = getAdminSupabase();
   const alerts: AlertRow[] = [];
   /**

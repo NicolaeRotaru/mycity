@@ -73,7 +73,16 @@ class FintaQuery {
     private readonly errori: Record<string, string>,
   ) {}
 
-  select(_colonne?: string) { this.azione = 'select'; return this; }
+  private conta = false;
+  private soloTesta = false;
+
+  /** `select('*', { count: 'exact', head: true })` — il conto senza le righe, come PostgREST. */
+  select(_colonne?: string, opzioni?: { count?: string; head?: boolean }) {
+    this.azione = 'select';
+    this.conta = opzioni?.count === 'exact';
+    this.soloTesta = opzioni?.head === true;
+    return this;
+  }
   update(valori: Riga) { this.azione = 'update'; this.valori = valori; return this; }
   delete() { this.azione = 'delete'; return this; }
   insert(righe: Riga | Riga[]) {
@@ -110,12 +119,16 @@ class FintaQuery {
     return this.tetto == null ? scelte : scelte.slice(0, this.tetto);
   }
 
-  then<T>(risolvi: (v: { data: Riga[] | null; error: { message: string } | null }) => T): Promise<T> {
+  then<T>(risolvi: (v: { data: Riga[] | null; error: { message: string } | null; count?: number | null }) => T): Promise<T> {
     const guasto = this.errori[this.tabella];
     if (guasto) return Promise.resolve(risolvi({ data: null, error: { message: guasto } }));
 
     if (this.azione === 'select') {
-      return Promise.resolve(risolvi({ data: this.righe(), error: null }));
+      const righe = this.righe();
+      if (this.conta) {
+        return Promise.resolve(risolvi({ data: this.soloTesta ? null : righe, error: null, count: righe.length }));
+      }
+      return Promise.resolve(risolvi({ data: righe, error: null }));
     }
     if (this.azione === 'insert' || this.azione === 'upsert') {
       this.db[this.tabella] = [...(this.db[this.tabella] ?? []), ...this.daScrivere];
