@@ -281,6 +281,9 @@ describe('la riga «Ne restano solo N» dice lo stesso tempo della riga «Dispon
 
   it('alle 14 senza fattorino: nessun minuto nemmeno qui, e la coda è quella di «Disponibile»', async () => {
     const c = await carrelloAlle(14, 0, 'no', scaffale);
+    // La scorta arriva da una lettura asincrona: si aspetta la riga, non un numero fisso di giri.
+    // Con le 6.560 prove insieme la macchina e' carica e i giri fissi non bastavano (31/10/2026).
+    await vi.waitFor(() => expect(c.rigaDellaScorta()).toBeDefined());
     const coda = (c.riga() ?? '').replace(/^Disponibile · /, '');
     expect(coda.length, 'la riga «Disponibile» non dice più quando arriva').toBeGreaterThan(0);
     expect(c.rigaDellaScorta(), 'la riga della scorta bassa scrive i minuti a mano').toBe(`Ne restano solo 2 · ${coda}`);
@@ -289,6 +292,7 @@ describe('la riga «Ne restano solo N» dice lo stesso tempo della riga «Dispon
 
   it('alle 23, anche con la risposta rimasta quella delle 20:59, niente minuti accanto alla scorta', async () => {
     const c = await carrelloAlle(23, 0, 'si', scaffale);
+    await vi.waitFor(() => expect(c.rigaDellaScorta()).toBeDefined());
     expect(c.rigaDellaScorta()).toMatch(/^Ne restano solo 2/);
     expect(c.rigaDellaScorta()).not.toContain(EXPRESS_ETA_LABEL);
   });
