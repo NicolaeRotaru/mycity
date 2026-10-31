@@ -1,4 +1,5 @@
 import { prezziDelCarrello } from '@/lib/ordini/prezzi';
+import { CODICI_SCONTO_IN_CASSA } from '@/lib/funzioni-al-lancio';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
@@ -798,6 +799,12 @@ export const POST = withAuthRateLimit(
     let couponFreeShipping = false;
     let validatedCouponCode: string | null = null;
     if (body.couponCode && body.couponCode.trim()) {
+      // 31/10/2026 — I codici sconto in cassa sono spenti (CODICI_SCONTO_IN_CASSA):
+      // un codice di MyCity oggi lo pagherebbe il negozio al 90%. Si rifiuta qui,
+      // come un codice non valido, e la merce riservata si libera.
+      if (!CODICI_SCONTO_IN_CASSA) {
+        return esciERilascia(ApiErrors.invalidRequest('I codici sconto non sono attivi: togli il codice e riprova.'));
+      }
       const couponRes = await validateCoupon(body.couponCode, grandSubtotalCents / 100, user.id, supa);
       if (!couponRes.ok) return esciERilascia(ApiErrors.invalidRequest(`Coupon non valido: ${couponRes.reason}`));
       couponDiscountCents = Math.max(0, Math.round(couponRes.discount * 100));

@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { apiErrorMessage } from '@/lib/errors';
+import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
 // 184 — `json.error` funziona solo se il server risponde `{error:'testo'}`.
 // Le rotte rispondono `{ok:false, error:{code,message}}`: `json.error` era
 // un oggetto, quindi falso-y mai e stringa mai, e finiva sempre nel
@@ -117,6 +118,21 @@ export default function SellerPromotePage() {
       setPaying(false);
     }
   };
+
+  // 31/10/2026 — Sponsorizzate sospese al lancio (ABBONAMENTO_NEGOZI_ACCESO): la
+  // rotta rifiuta il pagamento, quindi la pagina non lo propone. Dopo tutti gli hook.
+  if (!ABBONAMENTO_NEGOZI_ACCESO) {
+    return (
+      <div>
+        <SellerPageTitle eyebrow="Crescita" title="Sponsorizza" sub="Le campagne sponsorizzate non sono attive al lancio." />
+        <Card variant="elevated" padding="lg">
+          <p className="text-sm text-ink-700">
+            Per ora non si paga niente per mettere in evidenza un prodotto: le sponsorizzate sono sospese. Ti avvisiamo noi quando tornano.
+          </p>
+        </Card>
+      </div>
+    );
+  }
 
   const vistaqueryProducts = vistaDaQuery(queryProducts);
   if (vistaqueryProducts.mostraScheletro) return <LoadingState />;

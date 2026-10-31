@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
 import { apiErrorMessage } from '@/lib/errors';
+import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
 // 31/8/2026 (R037) — La percentuale non si scrive qui: arriva da dove viene poi
 // trattenuta sul venduto, cosi' non puo' piu' restare indietro da sola.
 import { COMMISSIONE_DEL_PERCENTO } from '@/app/seller/earnings/commissione';
@@ -23,7 +24,9 @@ import { COMMISSIONE_DEL_PERCENTO } from '@/app/seller/earnings/commissione';
  */
 export function SubscriptionBanner({ status }: { status: string | null | undefined }) {
   const [loading, setLoading] = useState(false);
-  if (status === 'active') return null;
+  // 31/10/2026 — Abbonamento sospeso al lancio (ABBONAMENTO_NEGOZI_ACCESO): nessun
+  // invito a pagare 50 € al mese che la rotta poi rifiuterebbe.
+  if (!ABBONAMENTO_NEGOZI_ACCESO || status === 'active') return null;
 
   const isPastDue = status === 'past_due';
 

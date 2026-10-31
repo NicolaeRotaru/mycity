@@ -26,6 +26,7 @@ import { Suspense } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { indirizzoPubblico } from '@/lib/env';
+import { APP_INSTALLABILE_ACCESA } from '@/lib/funzioni-al-lancio';
 
 // `style` con il corsivo dentro NON è un dettaglio: senza, si scarica solo la
 // variante dritta e il browser inclina le lettere da solo (corsivo finto). Nel
@@ -98,7 +99,8 @@ export const metadata: Metadata = {
   title: 'MyCity Piacenza — Marketplace dei negozi della tua città',
   // 29/10/2026 — Senza abbigliamento, che al lancio non c'è (catalogo.categorie): il testo vive in lib/site-branding.
   description: DESCRIZIONE_DEL_SITO,
-  manifest: '/manifest.json',
+  // 31/10/2026 — App installabile spenta al lancio (APP_INSTALLABILE_ACCESA): niente manifest.
+  ...(APP_INSTALLABILE_ACCESA ? { manifest: '/manifest.json' } : {}),
   icons: {
     // Prima il favicon classico: e' l'indirizzo che i lettori piu' vecchi e
     // parecchi aggregatori chiedono da soli (/favicon.ico), e fino a oggi
@@ -244,7 +246,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <DailyCheckIn />
             <CartCrossDeviceSync />
             <BuyerOnboardingTour />
-            <PWAInstallBanner />
+            {APP_INSTALLABILE_ACCESA && <PWAInstallBanner />}
           </QueryProvider>
           <ToastProvider />
           <ConfirmDialogHost />

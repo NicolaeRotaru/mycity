@@ -42,6 +42,12 @@ const venditori = [
   { id: NEGOZIO, store_name: 'Forno', store_lat: 45.05, store_lng: 9.69, store_hours: null },
 ];
 
+// 31/10/2026 — Al lancio la carta è spenta (CARTA_ACCESA in lib/funzioni-al-lancio.ts) e la rotta
+// la rifiuta anche con le chiavi. Questa prova misura il percorso della carta: la accende per finta.
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
+  ...((await originale()) as Record<string, unknown>),
+  CARTA_ACCESA: true,
+}));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/api/middleware', () => ({
   withAuthRateLimit: (

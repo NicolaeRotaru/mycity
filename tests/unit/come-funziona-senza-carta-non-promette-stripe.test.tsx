@@ -20,9 +20,18 @@ afterEach(() => {
 
 // La banda di rassicurazione nasce quando il modulo viene caricato: la chiave va fissata PRIMA
 // dell'import, come succede in una build vera.
-async function paginaConChiave(chiave: string): Promise<string> {
+// 31/10/2026 — La chiave non basta più: la carta vuole anche CARTA_ACCESA (lib/funzioni-al-lancio.ts).
+// `cartaAccesa` lo accende per finta; senza, vale quello del file vero (spento al lancio).
+async function paginaConChiave(chiave: string, cartaAccesa?: boolean): Promise<string> {
   vi.resetModules();
   vi.stubEnv('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', chiave);
+  if (cartaAccesa === undefined) vi.doUnmock('@/lib/funzioni-al-lancio');
+  else {
+    vi.doMock('@/lib/funzioni-al-lancio', async (originale) => ({
+      ...((await originale()) as Record<string, unknown>),
+      CARTA_ACCESA: cartaAccesa,
+    }));
+  }
   const { default: ComeFunzionaPage } = await import('@/app/come-funziona/page');
   const html = renderToStaticMarkup(createElement(ComeFunzionaPage));
   return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
@@ -37,8 +46,14 @@ describe('/come-funziona dice come si paga davvero', () => {
     expect(testo).not.toMatch(/carta/i);
   });
 
-  it('con la chiave la carta su Stripe torna, da sé', async () => {
+  it('con la chiave ma l\'interruttore spento (come al lancio) non nomina Stripe', async () => {
     const testo = await paginaConChiave('pk_test_123');
+    expect(testo).toMatch(/Paghi in contanti alla consegna/);
+    expect(testo).not.toMatch(/Stripe/);
+  });
+
+  it('con la chiave e l\'interruttore acceso la carta su Stripe torna, da sé', async () => {
+    const testo = await paginaConChiave('pk_test_123', true);
     expect(testo).toMatch(/oppure con carta adesso/);
     expect(testo).toMatch(/su Stripe prima della conferma/);
   });

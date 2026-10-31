@@ -5,6 +5,7 @@ import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
 
 export const runtime = 'nodejs';
 
@@ -17,6 +18,10 @@ export const runtime = 'nodejs';
 export const POST = withAuthRateLimit(
   { name: 'seller-subscription-portal', max: 10, windowMs: 10 * 60_000 },
   async ({ user }): Promise<NextResponse> => {
+    // 31/10/2026 — L'abbonamento e le sponsorizzate sono sospesi al lancio
+    // (ABBONAMENTO_NEGOZI_ACCESO): niente pagamenti chiesti al negozio, anche con
+    // le chiavi Stripe presenti.
+    if (!ABBONAMENTO_NEGOZI_ACCESO) return ApiErrors.unavailable('L’abbonamento dei negozi non è attivo al momento.');
     if (!isStripeConfigured()) return ApiErrors.unavailable('Pagamenti non disponibili al momento.');
 
     const supa = await getServerSupabase();
