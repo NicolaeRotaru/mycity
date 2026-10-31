@@ -409,6 +409,17 @@ export async function salvaProdottoTracciato(opts: {
   if (erroreLettura) throw erroreLettura;
   if (!prima || prima.seller_id !== opts.attoreId) throw new ProdottoNonTuo();
 
+  // 31/10/2026 — UN SALVATAGGIO RIMANDATO NON E' UNA SCORTA CAMBIATA. Il
+  // negoziante porta la focaccia da 5 a 8, la scrittura passa ma la risposta
+  // si perde, e lui preme di nuovo «Salva»: in banca dati c'e' gia' 8, cioe'
+  // proprio il numero che chiede. Nessuna vendita da proteggere, niente da
+  // scrivere per la scorta — e il resto del salvataggio va avanti.
+  if (condizione !== undefined && stessoValore(prima.stock, daScrivere.stock)) {
+    delete daScrivere.stock;
+    condizione = undefined;
+    if (Object.keys(daScrivere).length === 0) return { campi: [], tracciato: false };
+  }
+
   if (condizione !== undefined && !stessoValore(prima.stock, condizione)) {
     throw new ScortaCambiata(condizione, prima.stock);
   }

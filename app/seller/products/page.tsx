@@ -34,6 +34,13 @@ type SellerProductRow = {
 };
 
 /** Tab di filtro sugli stati realmente usati dal catalogo. */
+/**
+ * Il motivo che la porta di scrittura da' quando la scorta in banca dati non e'
+ * piu' quella vista (`ScortaCambiata` di lib/products/salvataggio-tracciato, e la
+ * stessa frase per le varianti): arriva qui come testo, dalla rotta.
+ */
+const SCORTA_CAMBIATA = /cambiata mentre modificavi/;
+
 const TABS: { key: string; label: string; match: (s: string) => boolean }[] = [
   { key: 'all',       label: 'Tutti',      match: () => true },
   { key: 'available', label: 'In vendita', match: (s) => s === 'available' },
@@ -178,11 +185,34 @@ export default function SellerProductsPage() {
         // di sapere dopo cosa c'era prima. La banda del 30% qui non c'entra —
         // il numero lo batte il negoziante — ma la traccia si', per lo stesso
         // motivo per cui serve sul modulo del prodotto.
-        await salvaProdottoDalBrowser({
-          prodottoId: id,
-          payload: patch,
-          origine: 'venditore-elenco-blocco',
-        });
+        try {
+          await salvaProdottoDalBrowser({
+            prodottoId: id,
+            payload: patch,
+            origine: 'venditore-elenco-blocco',
+          });
+        } catch (err) {
+          // 31/10/2026 — DOPO UN CONFLITTO LA LISTA NON RESTA SUI NUMERI VECCHI.
+          // Quelli gia' salvati escono dalle modifiche (non si rimandano), e la
+          // scorta che nel frattempo e' cambiata si toglie: il campo torna al
+          // numero vero della banca dati (onError rilegge la lista) e il
+          // negoziante lo riscrive guardando quello.
+          const giaSalvati = ids.slice(0, ids.indexOf(id));
+          const scortaMossa = 'stock_visto' in patch && err instanceof Error && SCORTA_CAMBIATA.test(err.message);
+          setEdits((attuali) => {
+            const resto = { ...attuali };
+            for (const s of giaSalvati) delete resto[s];
+            if (scortaMossa && resto[id]) {
+              const senzaScorta = { ...resto[id] };
+              delete senzaScorta.stock;
+              delete senzaScorta.stockVisto;
+              if (senzaScorta.price != null && senzaScorta.price !== '') resto[id] = senzaScorta;
+              else delete resto[id];
+            }
+            return resto;
+          });
+          throw err;
+        }
       }
       return ids.length;
     },
@@ -192,7 +222,10 @@ export default function SellerProductsPage() {
       setBulk(false);
       setEdits({});
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => {
+      qc.invalidateQueries({ queryKey: queryKeys.seller.products });
+      toast.error(friendlyError(err));
+    },
   });
 
   const askDelete = async (p: SellerProductRow) => {

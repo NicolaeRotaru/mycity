@@ -27,7 +27,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
   const router = useRouter();
   const qc = useQueryClient();
 
-  const { data: product, isLoading, error } = useQuery({
+  const { data: product, isLoading, error, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto } = useQuery({
     queryKey: queryKeys.seller.product(id),
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -43,11 +43,19 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       }
       return data as Record<string, unknown>;
     },
+    // 31/10/2026 — IL MODULO SI APRE SOLO CON LA SCORTA DELLA BANCA DATI.
+    // Il modulo tiene la scorta vista all'apertura e la manda accanto a quella
+    // nuova: se partisse dalla copia in memoria (letta minuti prima, prima di
+    // una vendita) ogni «Salva» direbbe «la scorta e' cambiata», anche dopo
+    // aver riaperto il prodotto come chiede il messaggio. Si rilegge sempre,
+    // e il modulo aspetta che quella lettura finisca (sotto, prima del modulo).
+    refetchOnMount: 'always',
   });
 
-  const { data: variants = [], isLoading: variantsLoading } = useQuery({
+  const { data: variants = [], isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette } = useQuery({
     queryKey: [...queryKeys.seller.product(id), 'variants'],
     queryFn: () => loadProductVariants(id),
+    refetchOnMount: 'always',
   });
 
   const { data: categories = [] } = useQuery({
@@ -151,7 +159,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  if (isLoading || variantsLoading || consegnaInLettura) return <LoadingState />;
+  if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette) || consegnaInLettura) return <LoadingState />;
   if (error || !product) {
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">

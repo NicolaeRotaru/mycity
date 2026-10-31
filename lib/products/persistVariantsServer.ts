@@ -56,6 +56,9 @@ export async function saveProductVariantsServer(
       const vista = scorteViste?.[v.id];
       if (vista !== undefined && Math.max(0, Math.trunc(vista || 0)) === row.stock) delete row.stock;
       const adesso = scortaInBanca.get(v.id);
+      // Gia' in banca dati il numero che il negoziante chiede (un salvataggio
+      // rimandato dopo una risposta persa): niente da scrivere, niente conflitto.
+      if ('stock' in row && vista !== undefined && adesso === row.stock) delete row.stock;
       if ('stock' in row && vista !== undefined && typeof adesso === 'number' && adesso !== vista) {
         throw new DaCompletare(
           `La scorta di «${v.label}» è cambiata mentre modificavi: avevi davanti ${vista} pezzi, ora sono ${adesso}. Riapri il prodotto, controlla il numero e salva di nuovo.`,
