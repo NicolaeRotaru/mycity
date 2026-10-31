@@ -21,6 +21,20 @@ import { indirizzoContatto } from '../contatti-pubblici';
 
 export type Titolare = {
   denominazione: string;
+  /**
+   * 31/10/2026 (ondata 6) — IL SITO NON DICEVA CHI C'E' DIETRO.
+   *
+   * In produzione nessuna variabile NEXT_PUBLIC_TITOLARE_* e' messa: l'informativa
+   * diceva «Il titolare del trattamento è MyCity» e il piede solo «© MyCity». Un
+   * marchio non e' una persona ne' una societa': chi legge non sa a chi risponde.
+   * Sede, partita IVA e PEC non esistono ancora e restano fuori (mai inventarle);
+   * il nome di chi gestisce invece esiste, ed e' quello che si stampa.
+   *
+   * La persona che gestisce MyCity finche' manca il nome legale; `null` quando
+   * il nome legale c'e' (allora parla quello, da solo). Opzionale solo perche'
+   * i Titolare scritti a mano nelle prove vecchie non la portano.
+   */
+  gestore?: string | null;
   indirizzo: string | null;
   partitaIva: string | null;
   /** Numero REA camerale. Esiste solo con una societa' iscritta. */
@@ -105,9 +119,18 @@ function soloSeVero(valore: string | undefined): string | null {
   return eSegnaposto(valore) ? null : (valore as string).trim();
 }
 
+/**
+ * La persona fisica che gestisce MyCity. Nicola, 20/8/2026: «per il
+ * responsabile di privacy sono io: Nicolae Rotaru». Finche' non c'e' una
+ * societa' col suo nome legale, e' lei che risponde: un marchio non e' un
+ * titolare (art. 13.1.a GDPR chiede l'identita' di chi tratta i dati).
+ */
+const PERSONA_CHE_GESTISCE = 'Nicolae Rotaru';
+
 export function titolare(): Titolare {
   return {
     denominazione: process.env.NEXT_PUBLIC_TITOLARE_NOME?.trim() || 'MyCity',
+    gestore: process.env.NEXT_PUBLIC_TITOLARE_NOME?.trim() ? null : PERSONA_CHE_GESTISCE,
     indirizzo: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_INDIRIZZO),
     partitaIva: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_PIVA),
     rea: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_REA),
@@ -115,7 +138,7 @@ export function titolare(): Titolare {
     capitale: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_CAPITALE),
     emailPrivacy: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY) ?? indirizzoContatto('privacy'),
     emailPrivacyConfigurata: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY) !== null,
-    referentePrivacy: process.env.NEXT_PUBLIC_TITOLARE_REFERENTE_PRIVACY?.trim() || 'Nicolae Rotaru',
+    referentePrivacy: process.env.NEXT_PUBLIC_TITOLARE_REFERENTE_PRIVACY?.trim() || PERSONA_CHE_GESTISCE,
     emailDpo: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_DPO),
     emailResi: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_RESI),
     emailReclami: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_RECLAMI),
@@ -136,9 +159,15 @@ export function titolare(): Titolare {
  *
  * Nicola, 20/8/2026: «non c'e' ancora una partita IVA attiva, la attivo quando
  * raggiungeremo i 5000€». Finche' non c'e', qui non si stampa niente.
+ *
+ * 31/10/2026 (ondata 6) — Niente sede ne' P.IVA, ma la persona si': i Termini
+ * dicevano «gestita da MyCity» e il piede «© MyCity», un marchio e basta.
+ * Questa e' la riga che Termini, piede e contatti stampano gia' accanto al
+ * nome: mettendo qui chi gestisce, lo dicono tutti e tre senza toccarli.
  */
 export function rigaIdentita(t: Titolare = titolare()): string {
   const pezzi: string[] = [];
+  if (t.gestore) pezzi.push(`Titolare: ${t.gestore}`);
   if (t.indirizzo) pezzi.push(`Sede: ${t.indirizzo}`);
   if (t.partitaIva) pezzi.push(`P.IVA / C.F. ${t.partitaIva}`);
   if (t.rea) pezzi.push(`REA ${t.rea}`);

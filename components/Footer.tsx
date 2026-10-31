@@ -353,7 +353,7 @@ const Footer = () => {
           I dati legali si stampano solo se esistono davvero (lib/legal/titolare).
           Qui c'erano una sede, una P.IVA di soli zeri, un REA e una PEC inventati,
           su OGNI pagina del sito. Finché non c'è una partita IVA attiva questa
-          riga resta vuota, e non si stampa affatto.
+          riga dice solo chi risponde («Titolare: …»), niente sede né P.IVA.
         */}
         {identita && <div>{identita}</div>}
         <div>

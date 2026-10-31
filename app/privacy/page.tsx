@@ -60,7 +60,7 @@ export default function PrivacyPage() {
     >
       <LegalSection id="titolare" heading="1. Titolare del trattamento">
         <p>
-          Il titolare del trattamento è <strong>{ownerData.denominazione}</strong>
+          Il titolare del trattamento è <strong>{ownerData.gestore ? `${ownerData.gestore}, che gestisce ${ownerData.denominazione}` : ownerData.denominazione}</strong>
           {ownerData.indirizzo ? <>, con sede in {ownerData.indirizzo}</> : null}
           {ownerData.partitaIva ? <>, P.IVA {ownerData.partitaIva}</> : null}.
         </p>
