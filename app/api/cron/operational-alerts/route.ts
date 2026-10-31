@@ -573,10 +573,12 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   const { data: recent } = await admin
     .from('operational_alert_log')
     .select('alert_key')
-    .in('alert_key', keys)
+    .in('alert_key', [...keys, ...keys.map(chiaveCampanella)])
     .gte('last_sent_at', cutoff);
   const recentSet = new Set((recent ?? []).map((r: { alert_key: string }) => r.alert_key));
   const fresh = alerts.filter((a) => !recentSet.has(a.key));
+  // La campanella ha la sua memoria: vedi `chiaveCampanella` in fondo al file.
+  const daSuonare = fresh.filter((a) => !recentSet.has(chiaveCampanella(a.key)));
 
   if (fresh.length === 0) {
     return NextResponse.json({
@@ -585,6 +587,55 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       fresh: 0,
       message: 'Anomalie presenti ma già notificate di recente (cooldown attivo)',
     });
+  }
+
+  /**
+   * 27/8/2026 (R183) — LE NOTIFICHE IN-APP SI CREANO PRIMA DELL'INVIO EMAIL.
+   *
+   * Stavano dopo, e se l'invio falliva la funzione usciva con 500 senza
+   * arrivarci: con Resend giu' non arrivava proprio niente, nemmeno nel
+   * pannello. Ed e' esattamente il caso che questo lavoro deve sorvegliare —
+   * l'allarme EMAIL_BACKLOG dice testualmente «send-emails fermo o Resend
+   * down?» — quindi il recapito che salta e' quello piu' probabile.
+   *
+   * 31/10/2026 — E PRIMA ANCHE DEL CONTROLLO SU SUPPORT_EMAIL. La cura del 27/8
+   * si fermava a meta': senza la casella degli allarmi la rotta usciva con 500
+   * qualche riga piu' giu', prima di arrivare qui, e la campanella non suonava.
+   * Un canale rotto non deve spegnere l'altro.
+   *
+   * 31/10/2026 — LA CAMPANELLA HA UNA MEMORIA SUA. L'attesa di sei ore si
+   * scrive solo se l'email parte davvero (27/10), e il giro corre ogni 15
+   * minuti: con la posta giu' ogni giro ritrovava gli stessi allarmi «freschi»
+   * e la campanella suonava di nuovo — 96 avvisi al giorno per amministratore,
+   * proprio mentre la posta non va. Adesso la campanella segna il suo invio
+   * sotto `CAMPANELLA|<chiave>` e suona una volta ogni sei ore per allarme;
+   * l'email, che e' quella che non e' partita, si ritenta a ogni giro.
+   */
+  const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin').limit(10);
+  if (daSuonare.length > 0 && admins && admins.length > 0) {
+    const notifications = admins.map((a: { id: string }) => ({
+      user_id: a.id,
+      // #33 — categoria 'system': un allarme operativo non e' una promozione e
+      // non si spegne con gli interruttori del marketing.
+      category: 'system',
+      title: `⚠️ ${daSuonare.length} alert operativi`,
+      body: daSuonare.slice(0, 3).map((al) => al.detail).join('; '),
+      link: '/admin/today',
+    }));
+    const esitoCampanella = await admin.from('notifications').insert(notifications);
+    if (esitoCampanella?.error) {
+      // Non si segna l'invio: il giro dopo ci riprova invece di tacere sei ore.
+      logger.error('[operational-alerts] campanella non scritta: si ritenta al prossimo giro', {
+        motivo: esitoCampanella.error.message, anomalie: daSuonare.length,
+      });
+    } else {
+      await admin
+        .from('operational_alert_log')
+        .upsert(
+          daSuonare.map((a) => ({ alert_key: chiaveCampanella(a.key), last_sent_at: new Date().toISOString() })),
+          { onConflict: 'alert_key' },
+        );
+    }
   }
 
   // Notifica admin via email + notification in-app (solo per gli alert "freschi")
@@ -606,28 +657,6 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       { ok: false, alerts: alerts.length, fresh: fresh.length, errore: 'SUPPORT_EMAIL non configurata: nessuno riceve gli allarmi' },
       { status: 500 },
     );
-  }
-  /**
-   * 27/8/2026 (R183) — LE NOTIFICHE IN-APP SI CREANO PRIMA DELL'INVIO EMAIL.
-   *
-   * Stavano dopo, e se l'invio falliva la funzione usciva con 500 senza
-   * arrivarci: con Resend giu' non arrivava proprio niente, nemmeno nel
-   * pannello. Ed e' esattamente il caso che questo lavoro deve sorvegliare —
-   * l'allarme EMAIL_BACKLOG dice testualmente «send-emails fermo o Resend
-   * down?» — quindi il recapito che salta e' quello piu' probabile.
-   */
-  const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin').limit(10);
-  if (admins && admins.length > 0) {
-    const notifications = admins.map((a: { id: string }) => ({
-      user_id: a.id,
-      // #33 — categoria 'system': un allarme operativo non e' una promozione e
-      // non si spegne con gli interruttori del marketing.
-      category: 'system',
-      title: `⚠️ ${fresh.length} alert operativi`,
-      body: fresh.slice(0, 3).map((al) => al.detail).join('; '),
-      link: '/admin/today',
-    }));
-    await admin.from('notifications').insert(notifications);
   }
 
   const body = `
@@ -718,3 +747,14 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
 // del segreto: cambia solo la porta da cui si entra. Il POST resta valido
 // perché il cron esterno continua a girare finché non lo spegni.
 export const GET = POST;
+
+/**
+ * La memoria della campanella sta nella stessa tabella dell'attesa email
+ * (`operational_alert_log`: una chiave e l'ora dell'ultimo invio; la usa gia'
+ * anche release-payouts con chiavi sue), con un prefisso che la tiene separata.
+ * Due canali, due memorie: l'email non partita non deve far risuonare la
+ * campanella, e la campanella suonata non deve fermare il ritento dell'email.
+ */
+function chiaveCampanella(chiave: string): string {
+  return `CAMPANELLA|${chiave}`;
+}
