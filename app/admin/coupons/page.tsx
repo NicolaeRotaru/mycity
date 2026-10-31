@@ -230,7 +230,8 @@ export default function AdminCouponsPage() {
             {vista.mostraVuoto && (
               <tr>
                 <td colSpan={7} className="p-6 text-center text-ink-500">
-                  Nessun codice sconto: ho guardato e non ce n’è ancora nessuno.
+                  {/* Stessa forma delle tabelle sorelle (sponsorizzati, ordini): qui si arriva solo dopo una lettura riuscita. */}
+                  Nessun codice sconto.
                 </td>
               </tr>
             )}

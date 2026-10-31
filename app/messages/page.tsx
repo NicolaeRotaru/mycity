@@ -38,6 +38,10 @@ type ConversationRow = {
   seller: Counterpart | null;
   /** L'insegna del negozio, dalla vetrina pubblica (lib/queries/controparte-della-chat.ts). */
   insegna: string | null;
+  /** Vero se la vetrina non ha risposto: il cliente legge «Nome non disponibile», non «Utente». */
+  insegnaNonLetta: boolean;
+  /** Il nome del cliente, per il negozio: dalla migrazione 181, perché `profiles` non lo dà più. */
+  cliente: string | null;
 };
 
 function formatRelative(iso: string): string {
@@ -91,7 +95,11 @@ export default function MessagesListPage() {
       // 18/10/2026 — L'insegna del negozio la dice la vetrina pubblica, non
       // `profiles`: il cliente continua a vedere a chi sta scrivendo anche quando
       // `profiles` si chiude.
-      return conInsegnaDelNegozio(supabase, (data ?? []) as unknown as Array<Omit<ConversationRow, 'insegna'>>);
+      return conInsegnaDelNegozio(
+        supabase,
+        (data ?? []) as unknown as Array<Omit<ConversationRow, 'insegna' | 'insegnaNonLetta' | 'cliente'>>,
+        userId,
+      );
     },
   });
 

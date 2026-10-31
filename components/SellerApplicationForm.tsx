@@ -145,6 +145,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
     address: defaultValues?.storeAddress ?? '',
     lat:     defaultValues?.storeLat     ?? 45.0532,
     lng:     defaultValues?.storeLng     ?? 9.6914,
+    // Il selettore la conferma appena si apre, se il negozio una posizione l'aveva già.
+    confermata: false,
   });
   const [locationError, setLocationError] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(defaultValues?.storeLogo ?? null);
@@ -200,6 +202,12 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
   const submit = (data: SchemaData) => {
     if (!location.address.trim()) {
       setLocationError("Inserisci l'indirizzo del negozio");
+      return;
+    }
+    // L'indirizzo scritto non basta: senza «Cerca», GPS o un tocco sulla mappa le coordinate sono
+    // il punto in cui si apre la mappa, e il negozio verrebbe salvato dove non è.
+    if (!location.confermata) {
+      setLocationError("Metti il negozio sulla mappa: premi «Cerca» accanto all'indirizzo, oppure tocca la mappa nel punto giusto. Senza la posizione, i clienti vicini non possono ordinarti la consegna.");
       return;
     }
     onSubmit({

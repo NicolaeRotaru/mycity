@@ -94,8 +94,10 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
 
   const [location, setLocation] = useState<StoreLocation>({
     address: defaultValues?.storeAddress ?? '',
-    lat:     defaultValues?.storeLat     ?? 41.9028,
-    lng:     defaultValues?.storeLng     ?? 12.4964,
+    lat:     defaultValues?.storeLat     ?? 45.0532,
+    lng:     defaultValues?.storeLng     ?? 9.6914,
+    // Il selettore la conferma appena si apre, se il negozio una posizione l'aveva già.
+    confermata: false,
   });
   const [locationError, setLocationError] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(defaultValues?.storeLogo ?? null);
@@ -166,6 +168,12 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
         location.lng >= -180 && location.lng <= 180;
       if (!validCoords) {
         setLocationError('Coordinate non valide. Cerca un indirizzo, usa la tua posizione, o sposta il pin sulla mappa.');
+        return;
+      }
+      // L'indirizzo scritto non basta: senza «Cerca», GPS o un tocco sulla mappa le coordinate sono
+      // il punto in cui si apre la mappa, e il negozio verrebbe salvato dove non è.
+      if (!location.confermata) {
+        setLocationError("Metti il negozio sulla mappa: premi «Cerca» accanto all'indirizzo, oppure tocca la mappa nel punto giusto. Senza la posizione, i clienti vicini non possono ordinarti la consegna.");
         return;
       }
     }

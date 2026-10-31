@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { newId, siteByteSize, MAX_SITE_BYTES } from './store-site';
 import { safeInternalPath } from './safe-redirect';
 import { DROP_DEL_GIORNO_ACCESO, NEWSLETTER_ACCESA } from './funzioni-al-lancio';
+import { logger } from './logger';
 
 /**
  * Home del marketplace componibile a blocchi — tipi, validazione (zod), catalogo
@@ -287,13 +288,63 @@ export function defaultHomeSite(): HomeSite {
   };
 }
 
+/** Una sezione salvata che non si può disegnare, e perché. */
+export type SezioneScartata = { posizione: number; id: string | null; type: string | null; motivo: string };
+
+/**
+ * Legge la home salvata SEZIONE PER SEZIONE e dice quali sezioni ha dovuto lasciare fuori.
+ *
+ * 31/10/2026 — PRIMA ERA TUTTO O NIENTE. La home salvata si validava in un colpo solo: bastava
+ * UNA sezione non più valida (un banner con la foto in `http://`, un id scritto male, una regola
+ * diventata più stretta dopo il salvataggio) perché sparisse la home intera composta dal
+ * pannello, e al suo posto tornassero le 11 sezioni di partenza. Senza un log, senza un avviso.
+ * Peggio: l'editor leggeva la stessa cosa e mostrava quelle 11 come «home effettiva», così al
+ * primo salvataggio la home di partenza sovrascriveva per sempre quella vera.
+ *
+ * Adesso si scarta solo la sezione rotta e le altre restano dove l'admin le ha messe. La home di
+ * partenza torna solo quando non c'è niente di salvato, o quando nessuna sezione si salva.
+ */
+export function leggiHomeSite(raw: unknown): { site: HomeSite; scartate: SezioneScartata[] } {
+  if (isDefaultHomeSite(raw)) return { site: defaultHomeSite(), scartate: [] };
+  const grezza = raw as { version?: unknown; sections?: unknown };
+  // Un'altra versione è un altro formato: le sue sezioni non si leggono con queste regole.
+  if (grezza.version !== undefined && grezza.version !== 1) {
+    return {
+      site: defaultHomeSite(),
+      scartate: [{ posizione: -1, id: null, type: null, motivo: 'versione della home non riconosciuta' }],
+    };
+  }
+  if (!Array.isArray(grezza.sections)) return { site: defaultHomeSite(), scartate: [] };
+
+  const sections: HomeSection[] = [];
+  const scartate: SezioneScartata[] = [];
+  grezza.sections.forEach((el: unknown, posizione: number) => {
+    const campo = (k: 'id' | 'type'): string | null => {
+      const v = el && typeof el === 'object' ? (el as Record<string, unknown>)[k] : undefined;
+      return typeof v === 'string' ? v : null;
+    };
+    const letta = homeSectionSchema.safeParse(el);
+    if (!letta.success) {
+      const motivo = letta.error.issues[0]?.message ?? 'sezione non valida';
+      scartate.push({ posizione, id: campo('id'), type: campo('type'), motivo });
+    } else if (sections.length >= MAX_HOME_SECTIONS) {
+      const motivo = `oltre il massimo di ${MAX_HOME_SECTIONS} sezioni`;
+      scartate.push({ posizione, id: campo('id'), type: campo('type'), motivo });
+    } else {
+      sections.push(letta.data);
+    }
+  });
+
+  if (sections.length === 0) return { site: defaultHomeSite(), scartate };
+  return { site: { version: 1, sections }, scartate };
+}
+
 /** Normalizza un valore qualsiasi (incl. JSONB dal DB) a una HomeSite renderizzabile. */
 export function normalizeHomeSite(raw: unknown): HomeSite {
-  if (raw && typeof raw === 'object' && Object.keys(raw as object).length > 0) {
-    const parsed = homeSiteSchema.safeParse(raw);
-    if (parsed.success && parsed.data.sections.length > 0) return parsed.data;
-  }
-  return defaultHomeSite();
+  const { site, scartate } = leggiHomeSite(raw);
+  // Una sezione lasciata fuori non sparisce in silenzio: resta scritto quale e perché.
+  if (scartate.length > 0) logger.warn('[home] sezioni salvate scartate perché non valide', { scartate });
+  return site;
 }
 
 /** Vero se la home è "vuota" (nessuna personalizzazione salvata): render = default. */
