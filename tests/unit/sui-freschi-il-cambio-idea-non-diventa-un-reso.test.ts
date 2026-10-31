@@ -126,9 +126,9 @@ describe('reso per «Cambio idea» su un prodotto escluso dal recesso', () => {
     expect(db.tabelle.returns).toHaveLength(1);
   });
 
-  it('controprova: prima della migrazione 180 (colonna mancante) il ripensamento resta possibile', async () => {
-    db.errori.products = { code: '42703', message: 'column products.non_recedibile does not exist' };
-    const res = await POST(richiesta({ orderId: ORDINE, orderItemId: RIGA_MIELE, reason: 'CHANGED_MIND' }));
+  it('controprova: prima della migrazione 180 (riga senza la colonna) il ripensamento resta possibile', async () => {
+    db.tabelle.products = [{ id: 'torta', name: 'Torta di compleanno' }, { id: 'miele', name: 'Miele di acacia' }];
+    const res = await POST(richiesta({ orderId: ORDINE, orderItemId: RIGA_TORTA, reason: 'CHANGED_MIND' }));
     expect(res.status).toBe(201);
   });
 });

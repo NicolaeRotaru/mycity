@@ -15,8 +15,9 @@
 --
 -- Il sito regge anche PRIMA di questa migrazione: la pagina di modifica legge
 -- il campo a parte (se manca, la spunta resta vuota), il modulo lo manda solo
--- se il negoziante lo cambia, e la rotta dei resi tratta la colonna mancante
--- come «nessun prodotto escluso».
+-- se il negoziante lo cambia, e la rotta dei resi tratta la riga senza la
+-- colonna come «nessun prodotto escluso». Dopo averla applicata va rigenerato
+-- lib/database.types.ts.
 --
 -- Si annulla con: ALTER TABLE public.products DROP COLUMN non_recedibile;
 

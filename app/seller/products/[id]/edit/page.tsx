@@ -41,12 +41,13 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       if ((data as { seller_id?: string }).seller_id !== user.id) {
         throw new Error('Non puoi modificare un prodotto che non è tuo');
       }
-      // 31/10/2026 — «Escluso dal recesso» (migrazione 180) si legge a parte: se la
-      // colonna non c'e' ancora, il modulo si apre lo stesso con la spunta vuota, e
-      // il modulo la manda solo se il negoziante la cambia.
+      // 31/10/2026 — «Escluso dal recesso» (migrazione 180) si legge a parte, con `*`:
+      // prima della 180 la colonna non c'e', la riga arriva senza e la spunta resta
+      // vuota; il modulo la manda solo se il negoziante la cambia. Con i tipi
+      // rigenerati (lib/database.types.ts) la colonna puo' entrare nella lettura qui sopra.
       const { data: recesso } = await supabase
         .from('products')
-        .select('non_recedibile')
+        .select('*')
         .eq('id', id)
         .maybeSingle();
       const nonRecedibile = (recesso as { non_recedibile?: unknown } | null)?.non_recedibile === true;

@@ -8,9 +8,6 @@ import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
 import { MOTIVO_RIPENSAMENTO, rifiutoDelRecesso, type ProdottoPerIlRecesso } from '@/lib/ordini/recesso';
 
-/** Postgres «undefined_column»: la migrazione 180 non e' ancora applicata. */
-const COLONNA_MANCANTE = '42703';
-
 export const runtime = 'nodejs';
 
 const REASON = z.enum(['DAMAGED', 'WRONG_ITEM', 'NOT_AS_DESCRIBED', 'CHANGED_MIND', 'LATE', 'OTHER']);
@@ -113,6 +110,10 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
    * Pane, freschi e ordinazioni (products.non_recedibile, migrazione 180).
    * I prodotti si leggono col servizio: un prodotto nascosto dopo l'ordine
    * resta escluso. Se la lettura non riesce non si decide al buio.
+   * `*` e non la colonna per nome: prima della migrazione 180 la colonna non
+   * c'e', la riga arriva senza, e vale «nessun prodotto escluso» (vero: nessun
+   * negozio ha ancora potuto segnarne uno). Dopo la 180 e i tipi rigenerati
+   * (lib/database.types.ts) si puo' tornare a 'id, name, non_recedibile'.
    */
   if (body.reason === MOTIVO_RIPENSAMENTO) {
     let domandaRighe = supa.from('order_items').select('product_id').eq('order_id', body.orderId);
@@ -132,13 +133,13 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
     if (ids.length > 0) {
       const { data: prodotti, error: pErr } = await getAdminSupabase()
         .from('products')
-        .select('id, name, non_recedibile')
+        .select('*')
         .in('id', ids);
-      if (pErr && pErr.code !== COLONNA_MANCANTE) {
+      if (pErr) {
         logger.error(pErr, { context: 'returns-recesso-prodotti' });
         return ApiErrors.internal('Non riesco a verificare se i prodotti sono esclusi dal recesso: riprova fra poco.');
       }
-      const rifiuto = rifiutoDelRecesso(body.reason, pErr ? [] : ((prodotti ?? []) as ProdottoPerIlRecesso[]));
+      const rifiuto = rifiutoDelRecesso(body.reason, (prodotti ?? []) as ProdottoPerIlRecesso[]);
       if (rifiuto) return ApiErrors.invalidRequest(rifiuto);
     }
   }
