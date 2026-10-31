@@ -155,6 +155,12 @@ export function newOrderSellerTemplate(args: {
   createdAt?: string | Date | null;
   /** La fascia scritta sull'ordine. Se chi chiama non la passa, la scadenza non si inventa. */
   deliverySlot?: string | null;
+  /**
+   * Gli orari del negozio (`profiles.store_hours`), letti dal database da chi manda l'email.
+   * Senza, la scadenza resta la fine della fascia: lunedì alle 12:00 Pane Quotidiano leggeva
+   * «entro le 16:30» per la 13:00–16:30, con l'ultimo ritiro alle 12:45.
+   */
+  storeHours?: unknown;
 }) {
   const orderUrl = `${appUrl()}/seller/orders/${args.orderId}`;
   // 30/10/2026 — Qui c'era «Accetta o rifiuta l'ordine entro 15 minuti», mentre il sito aspetta
@@ -165,7 +171,7 @@ export function newOrderSellerTemplate(args: {
   let scadenza = senzaFascia;
   if (args.deliverySlot !== undefined) {
     try {
-      scadenza = rigaScadenzaPerIlNegozio({ created_at: nato, delivery_slot: args.deliverySlot }, nato) ?? senzaFascia;
+      scadenza = rigaScadenzaPerIlNegozio({ created_at: nato, delivery_slot: args.deliverySlot }, nato, args.storeHours) ?? senzaFascia;
     } catch (err) {
       // L'avviso «Nuovo ordine» parte comunque: senza la riga della scadenza, mai senza l'email.
       logger.error('[email] scadenza per il negozio non calcolata', { orderId: args.orderId, err });

@@ -38,7 +38,8 @@ describe('entro quando accettare: l’ultimo ritiro possibile per la fascia', ()
     // Alle 14 il forno è chiuso fino a fascia finita: non può più leggere «entro le 16:30».
     const alle14 = riga(roma(12), 'Oggi · 13:00–16:30', roma(14));
     expect(alle14).not.toMatch(/entro le 16:30/);
-    expect(alle14).toMatch(/^Il negozio chiude prima della fascia/);
+    // Ondata 24: alle 14 il ritiro non è più possibile e la riga lo dice (l'ordine si annulla).
+    expect(alle14).toMatch(/^Il ritiro per questa fascia non è più possibile/);
   });
 
   it('caso 2 — lunedì 12:45 il freno della veloce sposta sulla 13:00–16:30: la scadenza è prima delle 13 e non è già passata', () => {
@@ -51,9 +52,11 @@ describe('entro quando accettare: l’ultimo ritiro possibile per la fascia', ()
     expect(riga(roma(14), 'Oggi · 19:30–21:00')).toBe('Accettalo o rifiutalo entro le 19:15 di oggi.');
   });
 
-  it('caso 4 — lunedì 9:30, «Oggi · 9:00–11:00»: niente cambia, il forno è aperto in tutta la fascia', () => {
-    expect(riga(roma(9, 30), 'Oggi · 9:00–11:00')).toBe('Accettalo o rifiutalo entro le 11:00 di oggi.');
-    expect(riga(roma(9, 30), 'Oggi · 9:00–11:00')).toBe(riga(roma(9, 30), 'Oggi · 9:00–11:00', roma(9, 30), undefined));
+  // Ondata 24 (scelta dell'AD, coi 60 minuti): anche col forno aperto per tutta la fascia la scadenza
+  // è l'ultimo ritiro, la fine della fascia meno 60 minuti. Senza orari resta la fine della fascia.
+  it('caso 4 — lunedì 9:30, «Oggi · 9:00–11:00»: entro le 10:00, l’ultimo ritiro anche col forno aperto in tutta la fascia', () => {
+    expect(riga(roma(9, 30), 'Oggi · 9:00–11:00')).toBe('Accettalo o rifiutalo entro le 10:00 di oggi.');
+    expect(riga(roma(9, 30), 'Oggi · 9:00–11:00', roma(9, 30), null)).toBe('Accettalo o rifiutalo entro le 11:00 di oggi.');
   });
 
   it('caso 5 — lunedì 18:00, «Domani · 13:00–16:30»: entro le 12:45 di martedì', () => {
@@ -96,7 +99,6 @@ describe('entro quando accettare: l’ultimo ritiro possibile per la fascia', ()
           }
           verifica(ultimoRitiro >= 0, `${f} alle ${h}:${m} del giorno ${g}: la cassa la propone, ma nessun ritiro`);
           if (ultimoRitiro < 0) continue;
-          const apertoFinoAllaFine = aperto[giorno].slice(ultimoRitiro, a).every(Boolean);
 
           const testo = riga(roma(h, m, g), f) ?? '';
           const letto = testo.match(/^Accettalo o rifiutalo entro le (\d{1,2}):(\d{2}) di (oggi|domani)\.$/);
@@ -105,13 +107,12 @@ describe('entro quando accettare: l’ultimo ritiro possibile per la fascia', ()
           const [, hh, mm, quale] = letto;
           verifica(quale === (domani ? 'domani' : 'oggi'), `${f} alle ${h}:${m} del giorno ${g}: «${testo}» — giorno sbagliato`);
           const scadenza = Number(hh) * 60 + Number(mm);
-          // «entro le 12:45» vale tutto il minuto delle 12:45; «entro le 11:00» (la fine della fascia) vale fino alle 10:59.
-          const ultimoMinutoUtile = apertoFinoAllaFine ? scadenza - 1 : scadenza;
+          // «entro le 12:45» vale tutto il minuto delle 12:45 (ondata 24: sempre l'ultimo ritiro).
+          const ultimoMinutoUtile = scadenza;
           const dove = `${f} alle ${h}:${m} del giorno ${g}: «${testo}»`;
           verifica(aperto[giorno][ultimoMinutoUtile] === true, `${dove} — il negozio è chiuso alla scadenza`);
           verifica(scadenza <= a, `${dove} — oltre la fine della fascia`);
-          if (!apertoFinoAllaFine) verifica(scadenza === ultimoRitiro, `${dove} — non è l’ultimo ritiro possibile`);
-          else verifica(scadenza === a, `${dove} — aperto fino alla fine: resta la fine della fascia`);
+          verifica(scadenza === ultimoRitiro, `${dove} — non è l’ultimo ritiro possibile`);
           controllate++;
         }
       }

@@ -1,5 +1,5 @@
 import { finestraDellaFascia } from '@/lib/quando-arriva';
-import { romeNow, ultimoRitiroDellaFascia } from '@/lib/store-hours';
+import { DAY_KEYS, leggiFinestraConsegna, romeNow, ultimoRitiroDellaFascia, type StoreHours } from '@/lib/store-hours';
 import { giornoPiacenza, scartoFusoMinuti } from '@/lib/tempo-piacenza';
 
 /**
@@ -35,6 +35,12 @@ import { giornoPiacenza, scartoFusoMinuti } from '@/lib/tempo-piacenza';
  * comunque essere scaduto. Se un giorno la regola qui dentro potesse scadere
  * PRIMA delle tre ore, quel filtro comincerebbe a saltare ordini da annullare.
  *
+ * 30/10/2026 (ondata 24) — Quel giorno è arrivato: col negozio che ha gli orari, l'ordine su una
+ * fascia scade all'ultimo ritiro possibile, che può cadere pochi minuti dopo la nascita (lunedì
+ * 12:00 per la 13:00–16:30 da Pane Quotidiano: alle 12:45). Il giro notturno quindi non screma
+ * più con le tre ore: legge tutti gli ordini fermi e chiede a `ancoraNeiTempi` uno per uno.
+ * Senza orari del negozio, sulla veloce e senza fascia le tre ore restano il minimo.
+ *
  * 🟢 Puro: nessuna rete. L'ora di «adesso» si passa da fuori, così una prova
  * può mettersi alle 00:15 senza aspettare le 00:15.
  */
@@ -66,9 +72,16 @@ type OrdineDaScadere = {
 export function scadenzaAccettazione(
   ordine: OrdineDaScadere,
   oreMinime: number = ORE_PER_ACCETTARE,
+  /** Gli orari del negozio (`profiles.store_hours`): con questi l'ordine su una fascia scade all'ultimo ritiro. */
+  orari?: unknown,
 ): Date | null {
   const nato = ordine.created_at ? new Date(ordine.created_at) : null;
   if (!nato || Number.isNaN(nato.getTime())) return null;
+
+  const ritiro = ultimoMomentoDelRitiro(ordine, orari);
+  // Nessun momento per il ritiro: l'ordine è già scaduto, il giro dopo lo annulla.
+  if (ritiro === 'impossibile') return nato;
+  if (ritiro) return ritiro;
 
   const minimo = nato.getTime() + oreMinime * 3_600_000;
   const fine = fineDellaFascia(ordine);
@@ -121,18 +134,51 @@ function istanteDiParete(nato: Date, piuGiorni: number, minuti: number): Date {
  * La regola: l'ora è l'ultimo momento in cui il ritiro per quella fascia si può ancora cominciare,
  * dalla STESSA funzione delle rotte e della cassa (`ultimoRitiroDellaFascia` in lib/store-hours.ts),
  * col quarto d'ora di negozio aperto. Il minuto dell'ultimo ritiro vale tutto (le rotte leggono i
- * minuti, non i secondi): «entro le 12:45» regge fino alle 12:45:59. Se il negozio è aperto di fila
- * fino alla fine della fascia, l'ora resta la fine della fascia, come prima.
+ * minuti, non i secondi): «entro le 12:45» regge fino alle 12:45:59. Dall'ondata 24 vale anche col
+ * negozio aperto per tutta la fascia (la 9:00–11:00 alle 9:30: entro le 10:00), e senza un momento
+ * per il ritiro l'ora è già passata (`ultimoMomentoDelRitiro`, qui sotto).
  *
  * Senza orari del negozio (`orari` non passato o mai impostato), con la veloce o senza una fascia
  * leggibile: la fine della fascia, come prima. `null` senza fascia.
  */
 export function entroQuandoAccettare(ordine: OrdineDaScadere, orari?: unknown): Date | null {
+  const ritiro = ultimoMomentoDelRitiro(ordine, orari);
+  if (ritiro === 'impossibile') return new Date(ordine.created_at as string | Date);
+  return ritiro ?? fineDellaFascia(ordine);
+}
+
+/** Gli orari scritti, se il negozio li ha impostati davvero (la stessa domanda di lib/store-hours.ts). */
+function orariImpostati(orari: unknown): orari is StoreHours {
+  if (!orari || typeof orari !== 'object') return false;
+  return DAY_KEYS.some((k) => {
+    const giorno = (orari as StoreHours)[k];
+    return Array.isArray(giorno) && giorno.length > 0;
+  });
+}
+
+/**
+ * 30/10/2026 (ondata 24) — L'ULTIMO MOMENTO UTILE PER IL RITIRO, SEMPRE (scelta dell'AD, coi 60 minuti).
+ *
+ * Il difetto: l'ondata 23 diceva l'ultimo ritiro solo quando il negozio chiudeva prima della fine
+ * della fascia; se era aperto per tutta la fascia, e quando il ritiro non era più possibile,
+ * tornava la FINE della fascia. E il giro notturno non leggeva gli orari: lunedì 12:00 da Pane
+ * Quotidiano per la 13:00–16:30 l'ordine restava vivo fino alle 16:30, con l'ultimo ritiro alle 12:45.
+ *
+ * La regola: con gli orari del negozio, la scadenza è l'ultimo minuto in cui il ritiro si può ancora
+ * cominciare (`ultimoRitiroDellaFascia`, la stessa regola di cassa e rotte), anche col negozio aperto
+ * per tutta la fascia (lì è la fine della fascia meno 60 minuti). Il minuto vale tutto: «entro le
+ * 12:45» regge fino alle 12:45:59. `'impossibile'` = nessun momento per il ritiro: l'ordine scade,
+ * mai la fine della fascia come ripiego. `null` = la regola del ritiro non ha niente da dire (niente
+ * fascia, la veloce, orari mai impostati): restano la fine della fascia e le tre ore, come prima.
+ */
+function ultimoMomentoDelRitiro(ordine: OrdineDaScadere, orari: unknown): Date | 'impossibile' | null {
+  if (!ordine.created_at || !orariImpostati(orari) || eFasciaVeloce(ordine.delivery_slot)) return null;
   const fine = fineDellaFascia(ordine);
-  if (!fine || !ordine.created_at) return fine;
+  const scelta = leggiFinestraConsegna(ordine.delivery_slot);
+  if (!fine || !scelta || scelta.giorno === 'adesso') return null;
   const nato = new Date(ordine.created_at);
   const ritiro = ultimoRitiroDellaFascia(orari, ordine.delivery_slot, romeNow(nato));
-  if (!ritiro || ritiro.apertoFinoAllaFine) return fine;
+  if (!ritiro) return 'impossibile';
   const inizio = istanteDiParete(nato, ritiro.giorno === 'domani' ? 1 : 0, ritiro.minuto);
   return new Date(Math.min(fine.getTime(), inizio.getTime() + 59_999));
 }
@@ -142,8 +188,13 @@ export function entroQuandoAccettare(ordine: OrdineDaScadere, orari?: unknown): 
  *
  * È la domanda che fa il lavoro notturno prima di toccare un ordine.
  */
-export function ancoraNeiTempi(ordine: OrdineDaScadere, adesso: Date = new Date()): boolean {
-  const scadenza = scadenzaAccettazione(ordine);
+export function ancoraNeiTempi(
+  ordine: OrdineDaScadere,
+  adesso: Date = new Date(),
+  /** Gli orari del negozio: il giro notturno li legge dal database insieme all'ordine. */
+  orari?: unknown,
+): boolean {
+  const scadenza = scadenzaAccettazione(ordine, ORE_PER_ACCETTARE, orari);
   if (!scadenza) return false;
   return adesso.getTime() < scadenza.getTime();
 }
@@ -201,8 +252,12 @@ export function rigaScadenzaPerIlNegozio(
 ): string | null {
   const nato = ordine.created_at ? new Date(ordine.created_at) : null;
   if (!nato || Number.isNaN(nato.getTime())) return null;
-  const annullo = scadenzaAccettazione(ordine);
+  const annullo = scadenzaAccettazione(ordine, ORE_PER_ACCETTARE, orari);
   if (!annullo) return null;
+  // 30/10/2026 (ondata 24) — Col ritiro non più possibile la riga lo dice: mai «entro le 16:30».
+  if (ultimoMomentoDelRitiro(ordine, orari) !== null && adesso.getTime() >= annullo.getTime()) {
+    return 'Il ritiro per questa fascia non è più possibile: l’ordine si sta annullando da solo.';
+  }
   // 30/10/2026 (ondata 17) — Mai una scadenza già passata: dopo l'ora scritta la riga dice cosa
   // succede adesso. E sulle fasce l'ora da dire è la FINE della fascia, non le tre ore del giro
   // notturno: la veloce spostata su 18:00–20:00 non si accetta alle 20:38.
@@ -226,13 +281,10 @@ export function rigaScadenzaPerIlNegozio(
       `oraria libera la spesa passa lì da sola. ${allAnnullo}`
     );
   }
+  // Con gli orari del negozio `entro` è la stessa ora dell'annullo (l'ultimo ritiro): passata quella,
+  // la riga l'ha già detto sopra. Senza orari resta la fine della fascia, e dopo le tre ore.
   const entro = entroQuandoAccettare(ordine, orari) ?? annullo;
   if (adesso.getTime() < entro.getTime()) return `Accettalo o rifiutalo entro ${scadenzaLeggibile(entro, adesso)}.`;
-  const fine = fineDellaFascia(ordine);
-  if (fine && adesso.getTime() < fine.getTime()) {
-    // L'ultimo ritiro è passato ma la fascia no: il negozio ha chiuso (o chiude) prima della fascia.
-    return `Il negozio chiude prima della fascia e il tempo per preparare la spesa è finito: accettalo solo se può partire subito, altrimenti rifiutalo. ${allAnnullo}`;
-  }
   return `La fascia di consegna è finita: accettalo solo se puoi consegnarlo subito, altrimenti rifiutalo. ${allAnnullo}`;
 }
 

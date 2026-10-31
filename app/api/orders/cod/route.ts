@@ -1193,13 +1193,17 @@ export const POST = withAuthRateLimit(
     dopoLaRisposta(async () => {
       const negoziCoinvolti = Array.from(new Set(comunicazioni.map((c) => c.sellerId)));
       const nomiNegozio = new Map<string, string>();
+      // 30/10/2026 (ondata 24) — Gli orari del negozio, per dire nell'email l'ultimo ritiro e non
+      // la fine della fascia («entro le 12:45», non «entro le 16:30»).
+      const orariNegozio = new Map<string, unknown>();
       try {
         const { data: profiliNegozi } = await admin
           .from('profiles')
-          .select('id, store_name')
+          .select('id, store_name, store_hours')
           .in('id', negoziCoinvolti);
         for (const p of profiliNegozi ?? []) {
           nomiNegozio.set(p.id as string, (p.store_name as string) ?? 'il negozio');
+          orariNegozio.set(p.id as string, (p as { store_hours?: unknown }).store_hours);
         }
       } catch (e) {
         logger.warn('[cod] nomi dei negozi non letti per la posta', { e });
@@ -1222,6 +1226,7 @@ export const POST = withAuthRateLimit(
               // «appena puoi» invece della scadenza vera (i 10 minuti della veloce, la fine della fascia).
               deliverySlot: body.pickupInStore ? null : (body.deliverySlot ?? null),
               createdAt: new Date(),
+              storeHours: orariNegozio.get(c.sellerId),
             });
             await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
           } catch (e) {
