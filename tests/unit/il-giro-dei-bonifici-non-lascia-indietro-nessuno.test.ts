@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * IL GIRO DEI BONIFICI, QUATTRO DIFETTI TROVATI IL 27/8/2026.
@@ -465,5 +467,199 @@ describe('31/10 — i contanti gia pagati a mano non entrano nel conto del saldo
 
     expect(releaseOrderPayoutMock, 'restano HELD per sempre: senza il giorno nella ricerca occupano tutto il lotto').toHaveBeenCalledWith('cod-nuovo');
     expect(esito.codReleased).toBe(1);
+  });
+});
+
+describe('collaudo 31/10 (secondo giro) — il giro legge il giorno dei contanti come releaseOrderPayout', () => {
+  // Il giorno si leggeva con Date.parse: «01/12/2026» diventava il 12 gennaio,
+  // e la ricerca tirava dentro (e sommava nel saldo) i contrassegni di novembre
+  // che Nicola aveva gia girato a mano.
+  it('«01/12/2026»: i contanti di novembre pagati a mano non si rileggono e non si sommano nel saldo', async () => {
+    vi.stubEnv('PAGAMENTI_CONTANTI_DA_STRIPE_DAL', '01/12/2026');
+    state.saldoDisponibile = 1_000; // 10 €
+    state.ordini = [
+      { id: 'cod-novembre', payment_method: 'cod', payout_status: 'HELD', delivery_status: 'DELIVERED', seller_payout_cents: 10_000, seller_payout_reversed_cents: 0, delivered_at: '2026-11-10T10:00:00.000Z' },
+    ];
+
+    const esito = await giro();
+
+    expect(releaseOrderPayoutMock, 'il contrassegno gia pagato a mano riparte da Stripe').not.toHaveBeenCalled();
+    expect(state.notifiche, 'avviso di saldo insufficiente per 100 € che il negozio ha gia avuto').toEqual([]);
+    expect(esito.codSaldoInsufficiente).toBe(false);
+  });
+
+  it('«2026-12-01»: la consegna delle 00:30 di Piacenza parte, quella delle 23:30 del giorno prima no', async () => {
+    vi.stubEnv('PAGAMENTI_CONTANTI_DA_STRIPE_DAL', '2026-12-01');
+    state.ordini = [
+      // 00:30 del 1/12 a Piacenza = 23:30 del 30/11 a Greenwich.
+      { id: 'cod-0030', payment_method: 'cod', payout_status: 'HELD', delivery_status: 'DELIVERED', seller_payout_cents: 2_000, seller_payout_reversed_cents: 0, delivered_at: '2026-11-30T23:30:00.000Z' },
+      // 23:30 del 30/11 a Piacenza: pagata a mano.
+      { id: 'cod-2330', payment_method: 'cod', payout_status: 'HELD', delivery_status: 'DELIVERED', seller_payout_cents: 2_000, seller_payout_reversed_cents: 0, delivered_at: '2026-11-30T22:30:00.000Z' },
+    ];
+
+    await giro();
+
+    expect(releaseOrderPayoutMock, 'il giorno valeva dall una di notte di Piacenza').toHaveBeenCalledWith('cod-0030');
+    expect(releaseOrderPayoutMock).not.toHaveBeenCalledWith('cod-2330');
+  });
+});
+
+/**
+ * 31/10/2026 — IL RECLAMO CHIUSO A FAVORE DEL NEGOZIO LIBERA IL BONIFICO.
+ *
+ * La prova non ricopia il trigger: legge l'ULTIMA definizione di
+ * `public.dispute_block_payout()` fra le migrazioni (quella che il database
+ * ha davvero) e la applica alla riga dell'ordine, come farebbe Postgres
+ * all'apertura del reclamo. Poi chiude il reclamo come lo chiude
+ * app/api/admin/disputes/[id]/resolve (`statoDelReclamoSullOrdine`) e lancia
+ * il giro vero. Con la 063 il trigger scriveva 'OPEN' sulla colonna della
+ * banca, che nessuno riporta indietro: il negozio non veniva pagato mai piu'.
+ */
+function ultimaFunzioneDelTrigger(): { file: string; corpo: string } {
+  const cartella = join(process.cwd(), 'migrations');
+  const file = readdirSync(cartella)
+    .filter((f) => /^\d+_.*\.sql$/.test(f))
+    .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+  let ultima: { file: string; corpo: string } | null = null;
+  for (const f of file) {
+    const testo = readFileSync(join(cartella, f), 'utf8').replace(/--[^\n]*/g, '');
+    const m = /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.dispute_block_payout\(\)[\s\S]*?\$\$([\s\S]*?)\$\$/i.exec(testo);
+    if (m) ultima = { file: f, corpo: m[1] };
+  }
+  if (!ultima) throw new Error('nessuna migrazione definisce public.dispute_block_payout()');
+  return ultima;
+}
+
+/** Valuta una condizione SQL semplice (IS NULL, IS NOT NULL, = '…', <> '…', AND, OR, parentesi). */
+function condizioneVera(cond: string, riga: Record<string, unknown>): boolean {
+  const pezzi =
+    cond.match(/\(|\)|\bAND\b|\bOR\b|[a-z_]+\s+IS\s+NOT\s+NULL|[a-z_]+\s+IS\s+NULL|[a-z_]+\s*(?:=|<>)\s*'[^']*'/gi) ?? [];
+  if (pezzi.join('').replace(/\s+/g, '') !== cond.replace(/\s+/g, '')) {
+    throw new Error(`condizione del trigger che la prova non sa leggere: ${cond}`);
+  }
+  let i = 0;
+  const valore = (c: string) => riga[c] ?? null;
+  const atomo = (): boolean => {
+    const p = pezzi[i++];
+    if (p === '(') {
+      const v = oppure();
+      i++;
+      return v;
+    }
+    let m = /^([a-z_]+)\s+IS\s+NOT\s+NULL$/i.exec(p);
+    if (m) return valore(m[1]) != null;
+    m = /^([a-z_]+)\s+IS\s+NULL$/i.exec(p);
+    if (m) return valore(m[1]) == null;
+    m = /^([a-z_]+)\s*(=|<>)\s*'([^']*)'$/i.exec(p);
+    if (m) return m[2] === '=' ? valore(m[1]) === m[3] : valore(m[1]) != null && valore(m[1]) !== m[3];
+    throw new Error(`pezzo di condizione che la prova non sa leggere: ${p}`);
+  };
+  const eAnche = (): boolean => {
+    let v = atomo();
+    while (/^AND$/i.test(pezzi[i] ?? '')) {
+      i++;
+      const d = atomo();
+      v = v && d;
+    }
+    return v;
+  };
+  const oppure = (): boolean => {
+    let v = eAnche();
+    while (/^OR$/i.test(pezzi[i] ?? '')) {
+      i++;
+      const d = eAnche();
+      v = v || d;
+    }
+    return v;
+  };
+  return cond.trim() === '' ? true : oppure();
+}
+
+/** Quello che fa Postgres quando nasce una riga in `disputes` per questo ordine. */
+function apriIlReclamo(ordine: Record<string, unknown>): void {
+  const { file, corpo } = ultimaFunzioneDelTrigger();
+  const m = /UPDATE\s+public\.orders\s+SET\s+([\s\S]+?)\s+WHERE\s+([\s\S]+?);/i.exec(corpo);
+  if (!m) throw new Error(`${file}: dispute_block_payout non scrive su orders come la prova si aspetta:\n${corpo}`);
+  const dove = m[2].replace(/^\s*id\s*=\s*NEW\.order_id\s*(AND\s*)?/i, '');
+  if (!condizioneVera(dove, ordine)) return;
+  for (const assegnazione of m[1].split(',')) {
+    const a = /^\s*([a-z_]+)\s*=\s*(.+?)\s*$/i.exec(assegnazione);
+    if (!a) throw new Error(`${file}: assegnazione che la prova non sa leggere: ${assegnazione}`);
+    const v = a[2];
+    if (/^'.*'$/.test(v)) ordine[a[1]] = v.slice(1, -1);
+    else if (/^now\(\)$/i.test(v)) ordine[a[1]] = new Date().toISOString();
+    else if (/^NULL$/i.test(v)) ordine[a[1]] = null;
+    else throw new Error(`${file}: valore che la prova non sa leggere: ${v}`);
+  }
+}
+
+/** Quello che scrive chi chiude il reclamo dal pannello (resolve/route.ts, scriviIlReclamoSullOrdine). */
+async function chiudiIlReclamo(ordine: Record<string, unknown>, esito: { rimborsoEmesso: boolean; rimborsoPieno: boolean }) {
+  const { statoDelReclamoSullOrdine } = await import('@/lib/rimborsi/regole-del-rimborso');
+  // La pausa del carrello non si tocca (SENZA_LA_PAUSA_DEL_CARRELLO).
+  if (ordine.internal_dispute_status !== 'RIMBORSO_DA_RIPARTIRE') ordine.internal_dispute_status = statoDelReclamoSullOrdine(esito);
+}
+
+describe('184 — il reclamo chiuso a favore del negozio libera di nuovo il bonifico', () => {
+  const ordineConCarta = (): Ordine => ({
+    id: 'carta-reclamo', payment_method: 'card', payout_status: 'HELD', delivery_status: 'DELIVERED',
+    delivered_at: dueOreFa(), dispute_status: null, internal_dispute_status: null,
+  });
+
+  it('con il reclamo aperto il bonifico resta fermo', async () => {
+    const o = ordineConCarta();
+    apriIlReclamo(o as Record<string, unknown>);
+    state.ordini = [o];
+    await giro();
+    expect(releaseOrderPayoutMock, 'reclamo aperto e il negozio viene pagato lo stesso').not.toHaveBeenCalled();
+  });
+
+  it('chiuso a favore del negozio, senza rimborso: il bonifico parte', async () => {
+    const o = ordineConCarta();
+    apriIlReclamo(o as Record<string, unknown>);
+    await chiudiIlReclamo(o as Record<string, unknown>, { rimborsoEmesso: false, rimborsoPieno: false });
+    state.ordini = [o];
+    await giro();
+    expect(releaseOrderPayoutMock, 'il trigger ha lasciato OPEN sulla colonna della banca: il negozio non viene pagato mai piu').toHaveBeenCalledWith('carta-reclamo');
+  });
+
+  it('chiuso con un rimborso parziale: il resto al negozio parte', async () => {
+    const o = ordineConCarta();
+    apriIlReclamo(o as Record<string, unknown>);
+    await chiudiIlReclamo(o as Record<string, unknown>, { rimborsoEmesso: true, rimborsoPieno: false });
+    state.ordini = [o];
+    await giro();
+    expect(releaseOrderPayoutMock).toHaveBeenCalledWith('carta-reclamo');
+  });
+
+  it('chiuso con il rimborso intero al cliente: al negozio non parte niente', async () => {
+    const o = ordineConCarta();
+    apriIlReclamo(o as Record<string, unknown>);
+    await chiudiIlReclamo(o as Record<string, unknown>, { rimborsoEmesso: true, rimborsoPieno: true });
+    state.ordini = [o];
+    await giro();
+    expect(releaseOrderPayoutMock).not.toHaveBeenCalled();
+  });
+
+  it('il reclamo non tocca la contestazione in banca: se la banca ha aperto, il bonifico resta fermo', async () => {
+    const o: Ordine = { ...ordineConCarta(), dispute_status: 'OPEN' };
+    apriIlReclamo(o as Record<string, unknown>);
+    await chiudiIlReclamo(o as Record<string, unknown>, { rimborsoEmesso: false, rimborsoPieno: false });
+    expect(o.dispute_status, 'chiudere il reclamo ha toccato la colonna della banca').toBe('OPEN');
+    state.ordini = [o];
+    await giro();
+    expect(releaseOrderPayoutMock, 'pagato con i soldi che la banca ha gia ripreso').not.toHaveBeenCalled();
+  });
+
+  it('vale anche per i contanti: reclamo chiuso a favore del negozio, il contrassegno parte', async () => {
+    const o: Ordine = {
+      id: 'cod-reclamo-chiuso', payment_method: 'cod', payout_status: 'HELD', delivery_status: 'DELIVERED',
+      delivered_at: dueOreFa(), dispute_status: null, internal_dispute_status: null,
+    };
+    apriIlReclamo(o as Record<string, unknown>);
+    await chiudiIlReclamo(o as Record<string, unknown>, { rimborsoEmesso: false, rimborsoPieno: false });
+    state.ordini = [o];
+    await giro();
+    expect(releaseOrderPayoutMock).toHaveBeenCalledWith('cod-reclamo-chiuso');
   });
 });

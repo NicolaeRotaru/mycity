@@ -10,6 +10,7 @@ import {
   FILTRO_RIDER_RITENTABILI,
   STATI_RIDER_RITENTABILI,
   contantiPagabiliDaStripe,
+  inizioContantiDaStripe,
   VAR_CONTANTI_DA_STRIPE,
 } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
@@ -365,11 +366,15 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   // stessa regola di releaseOrderPayout filtra le righe tornate: si somma
   // solo quello che partira' davvero. Senza una data valida, il passaggio non
   // cerca niente. (La regola: lib/stripe/payout.ts, contantiPagabiliDaStripe.)
+  //
+  // Collaudo del 31/10, secondo giro: il giorno si legge con la stessa regola
+  // di releaseOrderPayout (inizioContantiDaStripe: solo AAAA-MM-GG, dalla
+  // mezzanotte di Piacenza). Con `Date.parse` «01/12/2026» diventava il 12
+  // gennaio, e la ricerca tirava dentro e sommava nel saldo i contrassegni di
+  // novembre già girati a mano.
   const dalContanti = process.env[VAR_CONTANTI_DA_STRIPE];
-  const inizioContanti =
-    dalContanti && contantiPagabiliDaStripe(dalContanti, dalContanti)
-      ? new Date(Date.parse(dalContanti)).toISOString()
-      : null;
+  const inizioContantiMs = inizioContantiDaStripe(dalContanti);
+  const inizioContanti = inizioContantiMs === null ? null : new Date(inizioContantiMs).toISOString();
   const { data: codTrovati } = !inizioContanti ? { data: [] } : await admin
     .from('orders')
     .select('id, seller_payout_cents, seller_payout_reversed_cents, delivered_at')

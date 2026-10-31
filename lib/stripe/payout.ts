@@ -8,6 +8,7 @@ import { indirizzoContatto } from '@/lib/contatti-pubblici';
 import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 import { compensoDalContante } from '@/lib/shipping';
 import { formatPriceFromCents } from '@/lib/format';
+import { giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
 // La merce che torna a scaffale ha una casa sola: la decisione è pura e
 // verificabile, qui si usa e basta (lib/ordini/rimessa-a-scaffale.ts).
 import { rimettiLaMerceAScaffale } from '@/lib/ordini/rimessa-a-scaffale';
@@ -90,25 +91,65 @@ export type PayoutResult =
  * source_transaction = stripe_charge_id lega il transfer alla charge specifica
  * (cruciale per multi-seller e per evitare fallimenti con balance basso).
  */
-/** La variabile d'ambiente col giorno da cui i bonifici dei contanti li fa Stripe (data ISO). */
+/** La variabile d'ambiente col giorno da cui i bonifici dei contanti li fa Stripe (AAAA-MM-GG). */
 export const VAR_CONTANTI_DA_STRIPE = 'PAGAMENTI_CONTANTI_DA_STRIPE_DAL';
 
+/** L'unico formato accettato: `AAAA-MM-GG`, il giorno e basta. */
+const FORMATO_GIORNO_CONTANTI = /^\d{4}-\d{2}-\d{2}$/;
+
 /**
- * Un contrassegno si può pagare al negozio da Stripe? Solo se c'è il giorno
- * d'inizio, è una data vera, e la consegna è da quel giorno in poi. Tutto il
- * resto — variabile vuota, data storta, consegna senza data — vuol dire «lo ha
- * pagato o lo paga Nicola a mano»: no.
+ * 31/10/2026 (collaudo, secondo giro) — IL GIORNO D'INIZIO SI SCRIVE IN UN MODO SOLO.
+ *
+ * Qui si leggeva la variabile con `Date.parse`, che prende quasi tutto e lo
+ * legge a modo suo. «01/12/2026», cioè il primo dicembre scritto all'italiana,
+ * per `Date.parse` è il 12 gennaio: un contrassegno consegnato il 10 novembre e
+ * già girato a mano da Nicola risultava «dopo l'inizio», e Stripe lo pagava una
+ * seconda volta dal saldo della piattaforma. E anche «2026-12-01» valeva
+ * dall'una di notte di Piacenza (mezzanotte di Greenwich): una consegna delle
+ * 00:30 del primo dicembre restava fuori da tutti e due i giri.
+ *
+ * Adesso vale SOLO `AAAA-MM-GG`, un giorno che esiste davvero, dalla
+ * mezzanotte di Piacenza (Europe/Rome, ora legale compresa). Tutto il resto —
+ * vuota, «01/12/2026», «2026-12-01T00:00», una parola, il 30 febbraio — vale
+ * come «non messa»: nessun contrassegno passa da Stripe, e il log dice il
+ * valore letto, così chi l'ha scritta male lo vede.
+ *
+ * Restituisce l'istante (millisecondi) da cui i contrassegni li paga Stripe,
+ * oppure `null`.
+ */
+export function inizioContantiDaStripe(
+  dal: string | undefined = process.env[VAR_CONTANTI_DA_STRIPE],
+): number | null {
+  const valoreLetto = dal ?? null;
+  const giorno = (dal ?? '').trim();
+  if (!giorno) {
+    logger.warn(`[stripe] ${VAR_CONTANTI_DA_STRIPE} non messa: i bonifici dei contanti restano a mano`, { valoreLetto });
+    return null;
+  }
+  const valido =
+    FORMATO_GIORNO_CONTANTI.test(giorno) && giornoPiacenza(inizioGiornoPiacenza(giorno)) === giorno;
+  if (!valido) {
+    logger.error(
+      `[stripe] ${VAR_CONTANTI_DA_STRIPE} non è un giorno AAAA-MM-GG: vale come non messa, nessun bonifico dei contanti parte da Stripe`,
+      { valoreLetto },
+    );
+    return null;
+  }
+  return inizioGiornoPiacenza(giorno).getTime();
+}
+
+/**
+ * Un contrassegno si può pagare al negozio da Stripe? Solo se il giorno
+ * d'inizio è valido (`inizioContantiDaStripe`) e la consegna è da quella
+ * mezzanotte di Piacenza in poi. Tutto il resto — variabile vuota o storta,
+ * consegna senza data — vuol dire «lo ha pagato o lo paga Nicola a mano»: no.
  */
 export function contantiPagabiliDaStripe(
   consegnatoIl: string | null | undefined,
   dal: string | undefined = process.env[VAR_CONTANTI_DA_STRIPE],
 ): boolean {
-  if (!dal) return false;
-  const inizio = Date.parse(dal);
-  if (Number.isNaN(inizio)) {
-    logger.error(`[stripe] ${VAR_CONTANTI_DA_STRIPE} non è una data: nessun bonifico dei contanti parte da Stripe`, { dal });
-    return false;
-  }
+  const inizio = inizioContantiDaStripe(dal);
+  if (inizio === null) return false;
   const consegna = consegnatoIl ? Date.parse(consegnatoIl) : Number.NaN;
   return !Number.isNaN(consegna) && consegna >= inizio;
 }
