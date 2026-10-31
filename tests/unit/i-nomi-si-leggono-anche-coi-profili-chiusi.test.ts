@@ -253,14 +253,16 @@ describe('le domande sotto un prodotto sono firmate col nome di chi le ha scritt
 
 describe('le recensioni nella vetrina del negozio sono firmate col nome di chi le ha scritte', () => {
   async function autori(mondo: MondoNomi, chi: string | null) {
-    const { useStorePageData } = (await monta('components/store-sections/useStorePageData.ts')) as {
+    // Il hook qui si chiama come una funzione: il finto di react-query non usa lo stato di React,
+    // e serve solo a raccogliere la `queryFn` delle recensioni scritta dentro il file vero.
+    const { useStorePageData: datiDelNegozio } = (await monta('components/store-sections/useStorePageData.ts')) as {
       useStorePageData: (id: string) => unknown;
     };
     globale.__CLIENT_SUPABASE__ = databaseDellaVetrina(mondo, chi);
     const chieste: Opzioni[] = [];
     globale.__DATI_QUERY__ = (o: Opzioni) => { chieste.push(o); return undefined; };
     globale.__ESITO_QUERY__ = undefined;
-    useStorePageData(PANE);
+    datiDelNegozio(PANE);
     const recensioni = chieste.find((o) => JSON.stringify(o.queryKey).includes(PANE) && /review/i.test(JSON.stringify(o.queryKey)));
     expect(recensioni, 'la lettura delle recensioni del negozio').toBeTruthy();
     const righe = (await recensioni!.queryFn!({ queryKey: recensioni!.queryKey })) as Array<{ author: string | null }>;
