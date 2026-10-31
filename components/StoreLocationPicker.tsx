@@ -5,8 +5,16 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Search, RadioTower, Target, MapPin, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
-// Centro Italia (Roma) come fallback iniziale prima che il seller imposti la propria posizione
-const DEFAULT_MAP_CENTER = { lat: 41.9028, lng: 12.4964 };
+// 31/10/2026 — LA MAPPA SI APRE SU PIACENZA, E QUEL PUNTO NON È IL NEGOZIO.
+// Prima si apriva su Roma e il selettore mandava subito quelle coordinate al modulo: chi scriveva
+// l'indirizzo senza premere «Cerca» salvava il negozio a Roma, a 500 km dai clienti, fuori dal
+// raggio di consegna (lib/ordini/zona-di-consegna.ts). Ora il punto di partenza è il centro di
+// Piacenza, e finché il negozio non cerca l'indirizzo, usa il GPS o tocca la mappa, la posizione
+// mandata al modulo ha `confermata: false`: il modulo non la salva e dice cosa fare.
+const DEFAULT_MAP_CENTER = { lat: 45.0532, lng: 9.6914 };
+// Il punto di partenza di prima. Un negozio salvato con queste coordinate esatte non ha mai dato
+// la sua posizione: si tratta come «posizione mai data», non come il suo negozio.
+const VECCHIO_PUNTO_DI_PARTENZA = { lat: 41.9028, lng: 12.4964 };
 
 const isValidLatLng = (lat: unknown, lng: unknown): lat is number =>
   typeof lat === 'number' && typeof lng === 'number' &&
@@ -17,6 +25,11 @@ export type StoreLocation = {
   address: string;
   lat: number;
   lng: number;
+  /**
+   * true solo se la posizione l'ha data il negozio: salvata prima, cercata, presa dal GPS, toccata
+   * o trascinata sulla mappa. false = è il punto in cui si apre la mappa: non va salvata.
+   */
+  confermata: boolean;
 };
 
 interface Props {
@@ -29,7 +42,11 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
 
-  const initialCoords = isValidLatLng(defaultValue?.lat, defaultValue?.lng)
+  const eraIlVecchioPuntoDiPartenza =
+    defaultValue?.lat === VECCHIO_PUNTO_DI_PARTENZA.lat && defaultValue?.lng === VECCHIO_PUNTO_DI_PARTENZA.lng;
+  const posizioneSalvataVera =
+    isValidLatLng(defaultValue?.lat, defaultValue?.lng) && !eraIlVecchioPuntoDiPartenza;
+  const initialCoords = posizioneSalvataVera
     ? { lat: defaultValue!.lat as number, lng: defaultValue!.lng as number }
     : DEFAULT_MAP_CENTER;
   const hadInvalidStoredCoords =
@@ -40,18 +57,24 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
   // identificativo farebbero leggere al lettore di schermo sempre il primo.
   const idIndirizzo = useId();
   const [address, setAddress] = useState(defaultValue?.address ?? '');
+  // La mappa registra i suoi ascoltatori una volta sola: senza questo, toccarla rimandava al modulo
+  // l'indirizzo di quando si era aperta (spesso vuoto), e il modulo diceva «inserisci l'indirizzo».
+  const indirizzoRef = useRef(address);
+  const [confermata, setConfermata] = useState(posizioneSalvataVera);
   const [coords, setCoords] = useState(initialCoords);
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(
     hadInvalidStoredCoords
       ? 'Le coordinate salvate non sono valide. Cerca di nuovo l\'indirizzo o trascina il pin sulla mappa, poi salva.'
-      : null
+      : eraIlVecchioPuntoDiPartenza
+        ? 'La posizione salvata non è il tuo negozio: era il punto in cui si apriva la mappa, a Roma. Cerca l\'indirizzo o tocca la mappa sul negozio, poi salva.'
+        : null
   );
 
   // Sincronizza il parent con le coord (eventualmente sanificate) all'avvio
   useEffect(() => {
-    onChange({ address, lat: initialCoords.lat, lng: initialCoords.lng });
+    onChange({ address, lat: initialCoords.lat, lng: initialCoords.lng, confermata: posizioneSalvataVera });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -88,7 +111,8 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
 
       const updatePos = (lat: number, lng: number) => {
         setCoords({ lat, lng });
-        onChange({ address, lat, lng });
+        setConfermata(true);
+        onChange({ address: indirizzoRef.current, lat, lng, confermata: true });
       };
 
       marker.on('dragend', () => {
@@ -155,7 +179,8 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
         return;
       }
       setCoords({ lat, lng });
-      onChange({ address, lat, lng });
+      setConfermata(true);
+      onChange({ address, lat, lng, confermata: true });
     } catch {
       setError('Errore di rete durante la ricerca. Riprova.');
     } finally {
@@ -174,7 +199,8 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
       (pos) => {
         const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setCoords(newCoords);
-        onChange({ ...newCoords, address });
+        setConfermata(true);
+        onChange({ ...newCoords, address: indirizzoRef.current, confermata: true });
         setLocating(false);
       },
       (err) => {
@@ -201,7 +227,8 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
             value={address}
             onChange={(e) => {
               setAddress(e.target.value);
-              onChange({ address: e.target.value, lat: coords.lat, lng: coords.lng });
+              indirizzoRef.current = e.target.value;
+              onChange({ address: e.target.value, lat: coords.lat, lng: coords.lng, confermata });
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {

@@ -293,8 +293,13 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // negozio. Riusa la RPC active_promo_products (SECURITY INVOKER → rispetta RLS).
   // I prodotti col solo prezzo barrato (compare_at_price) vengono gestiti più sotto
   // senza query extra.
+  // 31/10/2026 — una chiave SUA. La pagina /promozioni salva sotto queryKeys.promotions.active
+  // le righe della promo (un elenco); qui serve un insieme di id. Con la stessa chiave la griglia
+  // leggeva l'elenco della pagina e ci chiamava sopra .has(): con zero promozioni la pagina
+  // disegna proprio questa griglia, e andava in errore. Sotto lo stesso prefisso, così chi
+  // invalida le promozioni attive invalida anche questa.
   const { data: promoIds = new Set<string>() } = useQuery<Set<string>>({
-    queryKey: queryKeys.promotions.active,
+    queryKey: [...queryKeys.promotions.active, 'ids'],
     enabled: !!onlyPromo,
     staleTime: 60_000,
     queryFn: async (): Promise<Set<string>> => {
