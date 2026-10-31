@@ -1,5 +1,14 @@
 import { Package, ShoppingBag, Euro, Star, Rocket, type LucideIcon } from 'lucide-react';
 import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
+import { spiegazioneCommissione } from '@/app/seller/earnings/commissione';
+
+// 31/10/2026 (ondata 4) — Qui c'era «Bonifico mensile il giorno 5»: una terza
+// versione dei tempi, diversa dalla pagina Guadagni e da quello che facciamo
+// davvero. La risposta adesso è la stessa frase della pagina Guadagni.
+const tempiBonifico = spiegazioneCommissione().find((p) => p.tema === 'bonifico');
+const RISPOSTA_TEMPI_BONIFICO = tempiBonifico
+  ? `${tempiBonifico.prima}${tempiBonifico.forte}${tempiBonifico.dopo}`
+  : 'Da "Guadagni" vedi quanto ti spetta e quando arriva.';
 
 /**
  * 30/8/2026 (R037) — AL NEGOZIO SCRIVEVAMO «PAGHI L'8%», E NE TRATTENEVAMO IL 10.
@@ -57,7 +66,7 @@ export const TOPICS: ArgomentoAiuto[] = [
     title: 'Guadagni e pagamenti',
     items: [
       { q: 'Quando ricevo i soldi delle vendite?',
-        a: 'Bonifico mensile il giorno 5 sull\'IBAN che hai registrato in Impostazioni. Da "Guadagni" vedi il prossimo importo previsto.' },
+        a: `${RISPOSTA_TEMPI_BONIFICO} Da "Guadagni" vedi il prossimo importo previsto.` },
       { q: 'Quanto tratteniamo?',
         a: `Il ${COMMISSIONE_PERCENTO}% sul venduto effettivamente concluso. Nessun costo mensile o di iscrizione.` },
       { q: 'Cosa succede se un ordine viene rimborsato?',

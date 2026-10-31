@@ -78,42 +78,25 @@ export default function SellPage() {
       const eta = controlloEta(form.legalBirthDate);
       if (!eta.ok) throw new Error(eta.messaggio ?? 'Controlla la data di nascita.');
 
-      const now = new Date().toISOString();
-      const { error } = await supabase.from('profiles').update({
-        // Contatti
-        phone: form.contactPhone,
-        // Anagrafica titolare
-        legal_first_name:      form.legalFirstName,
-        legal_last_name:       form.legalLastName,
-        legal_fiscal_code:     form.legalFiscalCode.toUpperCase(),
-        legal_birth_date:      form.legalBirthDate,
-        legal_residence_addr:  form.legalResidenceAddr,
-        legal_residence_city:  form.legalResidenceCity,
-        legal_residence_zip:   form.legalResidenceZip,
-        // Dati azienda (P.IVA, ragione sociale, ecc.) temporaneamente non raccolti
-        // in fase di iscrizione: le colonne restano null e verranno popolate dopo.
-        // Vetrina
-        store_name:          form.storeName,
-        store_phone:         form.contactPhone,
-        store_description:   form.storeDescription || null,
-        store_logo:          form.storeLogo,
-        store_media:         form.storeMedia,
-        store_address:       form.storeAddress,
-        store_lat:           form.storeLat,
-        store_lng:           form.storeLng,
-        // Pagamenti
-        billing_iban:        form.billingIban ? form.billingIban.toUpperCase() : null,
-        // Stato richiesta
-        role:                'seller',
-        is_approved:         false,
-        approval_status:     'pending',
-        approval_requested_at: now,
-        // Consensi
-        tos_accepted_at:        now,
-        privacy_accepted_at:    now,
-        data_accuracy_confirmed_at: now,
-      }).eq('id', user.id);
-      if (error) throw error;
+      /**
+       * 31/10/2026 (ondata 4) — LA RICHIESTA LA SCRIVE IL SERVER.
+       *
+       * Qui c'era un aggiornamento del profilo fatto dal browser con dentro
+       * `role: 'seller'`. La guardia del database sui profili (migrazione 119)
+       * non lascia a nessuno cambiarsi il ruolo da solo — giustamente — e chi si
+       * era iscritto come cliente veniva respinto dopo aver compilato tutto il
+       * modulo. Adesso decide e scrive /api/seller/apply, che controlla anche
+       * chi può chiedere (un negozio sospeso no).
+       */
+      const risposta = await fetch('/api/seller/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!risposta.ok) {
+        const corpo = (await risposta.json().catch(() => null)) as { error?: { message?: string } } | null;
+        throw new Error(corpo?.error?.message ?? 'Non è stato possibile inviare la richiesta. Riprova fra un momento.');
+      }
     },
     onSuccess: () => {
       invalidaProfiloDiChiEntrato(qc);
@@ -149,6 +132,17 @@ export default function SellPage() {
     );
   }
 
+  // STATO: negozio sospeso. La sospensione la toglie lo staff: il modulo qui
+  // non si mostra, perché rimandarlo riportava il negozio «in attesa» e lo
+  // rimetteva nella coda delle richieste nuove (il server ora lo rifiuta).
+  if (profile?.approval_status === 'suspended') {
+    return (
+      <div className="container mx-auto p-6 max-w-2xl">
+        <SuspendedNotice />
+      </div>
+    );
+  }
+
   // STATO: richiesta rifiutata in passato — può ripresentare
   const wasRejected = profile?.approval_status === 'rejected';
 
@@ -166,7 +160,6 @@ export default function SellPage() {
 
       <SellerApplicationForm
         defaultValues={{
-          contactEmail:    profile?.email ?? '',
           contactPhone:    profile?.phone ?? '',
           legalFirstName:  profile?.legal_first_name ?? profile?.full_name?.split(' ')[0] ?? '',
           legalLastName:   profile?.legal_last_name  ?? profile?.full_name?.split(' ').slice(1).join(' ') ?? '',
@@ -175,6 +168,11 @@ export default function SellPage() {
           legalResidenceAddr: profile?.legal_residence_addr ?? profile?.address ?? '',
           legalResidenceCity: profile?.legal_residence_city ?? profile?.city ?? '',
           legalResidenceZip:  profile?.legal_residence_zip  ?? profile?.zip  ?? '',
+          businessLegalName: profile?.business_legal_name ?? '',
+          businessVatNumber: profile?.business_vat_number ?? '',
+          businessAddress:   profile?.business_address ?? '',
+          businessCity:      profile?.business_city ?? '',
+          businessZip:       profile?.business_zip ?? '',
           storeName:         profile?.store_name ?? '',
           storeDescription:  profile?.store_description ?? '',
           billingIban:       profile?.billing_iban ?? '',
@@ -184,9 +182,22 @@ export default function SellPage() {
           storeLat:          profile?.store_lat ?? undefined,
           storeLng:          profile?.store_lng ?? undefined,
         }}
+        emailAccesso={profile?.email ?? null}
         onSubmit={(data) => submit.mutate(data)}
         isLoading={submit.isPending}
       />
+    </div>
+  );
+}
+
+function SuspendedNotice() {
+  return (
+    <div className="bg-white border-2 border-secondary-200 rounded-2xl p-8 text-center">
+      <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Il tuo negozio è sospeso</h1>
+      <p className="text-ink-600 mb-6">
+        Non serve rimandare la richiesta: per capire il motivo e riattivare il negozio scrivi all&apos;assistenza.
+      </p>
+      <Button href="/contact" size="lg">Scrivi all&apos;assistenza</Button>
     </div>
   );
 }
