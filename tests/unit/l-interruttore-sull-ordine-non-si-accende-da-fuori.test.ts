@@ -14,7 +14,11 @@ import { BIN_POSTGRES, avviaPostgres, type Postgres } from './postgres-usa-e-get
  * accendeva come prima istruzione, prima di sapere chi aveva bussato.
  *
  * La prova gira su un PostgreSQL vero, col guardiano e la funzione del ritiro
- * presi dall'ultima migrazione che li definisce: il negozio con la spia accesa
+ * come sono PRIMA della 179: l'ultima definizione scritta (124 per il ritiro,
+ * 127 per il guardiano) e, per il ritiro, la riparazione che la 125 le ha fatto
+ * sopra senza riscriverla (il codice NULL non chiude piu' l'ordine). La 179
+ * riscrive il ritiro da capo: se riparte dal testo vecchio, la riparazione si
+ * perde, e le prove sul codice qui sotto lo dicono. Il negozio con la spia accesa
  * a mano deve restare fermo, mentre le funzioni del database (che girano come
  * il loro proprietario) e il server con la chiave service_role scrivono come
  * prima.
@@ -23,11 +27,11 @@ import { BIN_POSTGRES, avviaPostgres, type Postgres } from './postgres-usa-e-get
 const MIGRAZIONI = join(process.cwd(), 'migrations');
 const CORREZIONE = join(MIGRAZIONI, '179_l_interruttore_sull_ordine_non_si_accende_da_fuori.sql');
 
-/** Il testo della funzione dall'ultima migrazione che la definisce. */
+/** Il testo della funzione dall'ultima migrazione, prima della 179, che la definisce. */
 function ultimaDefinizione(nome: string): string {
   const intestazione = `CREATE OR REPLACE FUNCTION public.${nome}(`;
   const file = readdirSync(MIGRAZIONI)
-    .filter((f) => f.endsWith('.sql'))
+    .filter((f) => f.endsWith('.sql') && f < '179_')
     .sort()
     .filter((f) => readFileSync(join(MIGRAZIONI, f), 'utf8').includes(intestazione))
     .pop();
@@ -41,12 +45,27 @@ function ultimaDefinizione(nome: string): string {
   return dopo.slice(0, dopo.indexOf(';', chiude) + 1);
 }
 
+/**
+ * La 125 non riscrive il ritiro: ne prende il corpo in vigore e ne cambia il
+ * confronto del codice (un codice NULL o vuoto e' un rifiuto, non un «uguale»).
+ * Qui si esegue quel blocco cosi' com'e', sopra la definizione della 124.
+ */
+function riparazioneDelRitiroNella125(): string {
+  const testo = readFileSync(join(MIGRAZIONI, '125_radiografia_21_agosto_bloccanti.sql'), 'utf8');
+  const dove = testo.indexOf("p.proname = 'confirm_pickup_by_seller'");
+  const apre = testo.lastIndexOf('DO $migra$', dove);
+  const chiude = testo.indexOf('$migra$;', dove);
+  if (dove < 0 || apre < 0 || chiude < 0) throw new Error('125: riparazione del ritiro non trovata');
+  return testo.slice(apre, chiude + '$migra$;'.length);
+}
+
 const NEGOZIO = '00000000-0000-0000-0000-0000000000a1';
 const ALTRO_NEGOZIO = '00000000-0000-0000-0000-0000000000a2';
 const CLIENTE = '00000000-0000-0000-0000-0000000000c1';
 const ORDINE = '00000000-0000-0000-0000-000000000001';
 const RITIRO_ALTRUI = '00000000-0000-0000-0000-000000000002';
 const RITIRO_MIO = '00000000-0000-0000-0000-000000000003';
+const RITIRO_SENZA_CODICE = '00000000-0000-0000-0000-000000000004';
 
 describe.skipIf(!BIN_POSTGRES)("l'interruttore sull'ordine non si accende da fuori (database vero)", () => {
   let pg: Postgres;
@@ -97,6 +116,7 @@ describe.skipIf(!BIN_POSTGRES)("l'interruttore sull'ordine non si accende da fuo
     `);
     pg.psql(ultimaDefinizione('enforce_order_update_rules'));
     pg.psql(ultimaDefinizione('confirm_pickup_by_seller'));
+    pg.psql(riparazioneDelRitiroNella125());
     if (existsSync(CORREZIONE)) pg.psql(readFileSync(CORREZIONE, 'utf8'));
     pg.psql(`
       CREATE TRIGGER trg_enforce_order_update BEFORE UPDATE ON public.orders
@@ -114,8 +134,10 @@ describe.skipIf(!BIN_POSTGRES)("l'interruttore sull'ordine non si accende da fuo
                                  seller_payout_cents, payment_method, pickup_in_store, delivery_status) VALUES
         ('${ORDINE}', '${NEGOZIO}', '${CLIENTE}', 48.00, 'PENDING', 'PENDING', 4300, 'card', false, 'NEW'),
         ('${RITIRO_ALTRUI}', '${ALTRO_NEGOZIO}', '${CLIENTE}', 20.00, 'PENDING', 'PENDING', 1800, 'cod', true, 'READY'),
-        ('${RITIRO_MIO}', '${NEGOZIO}', '${CLIENTE}', 15.00, 'PENDING', 'PENDING', 1350, 'cod', true, 'READY');
-      INSERT INTO public.order_delivery_codes (order_id, code) VALUES ('${RITIRO_ALTRUI}', '1111'), ('${RITIRO_MIO}', '2222');
+        ('${RITIRO_MIO}', '${NEGOZIO}', '${CLIENTE}', 15.00, 'PENDING', 'PENDING', 1350, 'cod', true, 'READY'),
+        ('${RITIRO_SENZA_CODICE}', '${NEGOZIO}', '${CLIENTE}', 12.00, 'PENDING', 'PENDING', 1080, 'cod', true, 'READY');
+      INSERT INTO public.order_delivery_codes (order_id, code) VALUES
+        ('${RITIRO_ALTRUI}', '1111'), ('${RITIRO_MIO}', '2222'), ('${RITIRO_SENZA_CODICE}', '3333');
     `);
   }, 60_000);
 
@@ -162,6 +184,17 @@ describe.skipIf(!BIN_POSTGRES)("l'interruttore sull'ordine non si accende da fuo
     );
     expect(uscita).toContain('FORBIDDEN');
     expect(uscita.split('\n').pop()).toBe('spia=');
+  });
+
+  it('senza il codice del cliente il ritiro non si chiude', () => {
+    expect(comeNegozio(`SELECT public.confirm_pickup_by_seller('${RITIRO_SENZA_CODICE}', NULL)`)).toContain('WRONG_CODE');
+    expect(comeNegozio(`SELECT public.confirm_pickup_by_seller('${RITIRO_SENZA_CODICE}', '   ')`)).toContain('WRONG_CODE');
+    expect(ordine(RITIRO_SENZA_CODICE, `delivery_status || '|' || payment_status || '|' || payout_status`)).toBe('READY|PENDING|PENDING');
+  });
+
+  it('col codice sbagliato il ritiro non si chiude', () => {
+    expect(comeNegozio(`SELECT public.confirm_pickup_by_seller('${RITIRO_SENZA_CODICE}', '9999')`)).toContain('WRONG_CODE');
+    expect(ordine(RITIRO_SENZA_CODICE, 'delivery_status')).toBe('READY');
   });
 
   it('il ritiro giusto chiude ancora l\'ordine', () => {

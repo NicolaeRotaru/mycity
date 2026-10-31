@@ -29,12 +29,18 @@
 --     istruzione, prima di sapere se chi chiama e' il negozio dell'ordine, e
 --     usciva con la spia accesa su ogni rifiuto. Ora la accende solo dopo
 --     tutti i controlli, subito prima di scrivere l'ordine.
+--     ATTENZIONE: la versione in vigore NON e' il testo della 124. La 125
+--     (riga 186) l'ha riparata sul posto, senza riscriverla: un codice NULL o
+--     vuoto e' un rifiuto. Riscrivendo la funzione da capo, quella riga va
+--     tenuta: senza, `stored_code <> trim(NULL)` da' NULL, l'IF non scatta e
+--     l'ordine risulta consegnato senza che il cliente abbia dato il codice.
 --
 -- FUORI DA QUI (debito dichiarato): `enforce_profile_update_rules` (119) ha la
 -- stessa costruzione con `mycity.allow_profile_write`.
 --
 -- REVERSIBILE. Le due funzioni si ricreano col testo della 127 (riga 314) e
--- della 124 (riga 160).
+-- della 124 (riga 160), seguito dal blocco della 125 (riga 186) che ripara il
+-- confronto del codice.
 --
 -- LA PROVA: tests/unit/l-interruttore-sull-ordine-non-si-accende-da-fuori.test.ts,
 -- su un PostgreSQL vero usa e getta.
@@ -134,7 +140,8 @@ $function$;
 -- =========================================================
 -- ② IL RITIRO IN NEGOZIO: PRIMA SI CONTROLLA, POI SI DISARMA
 -- =========================================================
--- Il testo e' quello della 124 (riga 160); cambia solo il posto del set_config.
+-- Il testo e' quello in vigore: la 124 (riga 160) con il confronto del codice
+-- riparato dalla 125 (riga 186). Cambia solo il posto del set_config.
 CREATE OR REPLACE FUNCTION public.confirm_pickup_by_seller(p_order_id uuid, p_code text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -175,7 +182,8 @@ BEGIN
   IF v_locked IS NOT NULL AND v_locked > now() THEN
     RETURN jsonb_build_object('ok', false, 'reason', 'LOCKED');
   END IF;
-  IF stored_code IS NULL OR stored_code <> trim(p_code) THEN
+  -- 125: un codice assente o vuoto e' un rifiuto, non un confronto che da' NULL.
+  IF p_code IS NULL OR btrim(p_code) = '' OR stored_code IS NULL OR stored_code IS DISTINCT FROM btrim(p_code) THEN
     UPDATE public.order_delivery_codes
        SET attempts = attempts + 1,
            locked_until = CASE WHEN attempts + 1 >= 5 THEN now() + interval '15 minutes' ELSE locked_until END

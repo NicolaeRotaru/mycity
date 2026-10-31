@@ -39,6 +39,12 @@ export function giftCardCodeForSession(sessionId: string): string {
   return `MC-${s}`;
 }
 
+function paymentIntentDellaSessione(session: Stripe.Checkout.Session): string | null {
+  const pi = session.payment_intent;
+  if (typeof pi === 'string') return pi || null;
+  return pi?.id ?? null;
+}
+
 /**
  * Pagamento gift card riuscito → crea la riga `gift_cards` (server-side, service
  * role) e invia il codice al destinatario + conferma al buyer. Best-effort sulle
@@ -75,6 +81,10 @@ export async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
     // non aveva niente da confrontare. Scritta la sessione, il secondo
     // tentativo prende il 23505 gia' gestito qui sotto come no-op.
     stripe_session_id: session.id,
+    // 31/10/2026 (178) — IL PAGAMENTO CHE REGGE IL BUONO. Rimborso e
+    // contestazione in banca arrivano col pagamento (payment_intent), non con
+    // la sessione: e' con questa colonna che il buono si ritrova.
+    stripe_payment_intent: paymentIntentDellaSessione(session),
     amount_cents: amountCents,
     balance_cents: amountCents,
     buyer_id: buyerId,
