@@ -188,6 +188,8 @@ describe('nel modulo vero, con la rotta vera della dettatura', () => {
   async function apriIlModulo(prodotto: Prodotto | null) {
     const mod = await monta('components/seller/ProductForm.tsx');
     return accendi(mod.default, {
+      // I pulsanti AI, come il giorno in cui si riaccendono (al lancio sono spenti).
+      aiAccesa: true,
       mode: prodotto ? 'edit' : 'create',
       categories: CATEGORIE,
       initialValues: prodotto

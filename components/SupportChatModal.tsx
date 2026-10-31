@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useCloseOnBack } from './hooks/useCloseOnBack';
 import { useBottomSheetA11y } from './hooks/useBottomSheetA11y';
 import SupportProductAssistant from './SupportProductAssistant';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 
 type SupportRole = 'buyer' | 'seller' | 'rider' | 'default';
 
@@ -69,7 +70,12 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
   }, [open]);
 
   const presets = PRESETS[role] ?? PRESETS.default;
-  const canUseAi = role === 'seller';
+  // 31/10/2026 — Con l'AI per i negozi spenta (carta #209) la voce «Modifica un
+  // prodotto con l'AI» portava a /api/ai/catalog-chat, che risponde «Servizio AI non
+  // configurato»: in produzione ANTHROPIC_API_KEY non c'è. Il negoziante che apriva
+  // l'Assistenza trovava come prima scelta una porta chiusa. Si legge lo stesso
+  // interruttore delle altre schermate del negozio.
+  const canUseAi = role === 'seller' && AI_NEGOZI_ACCESA;
 
   const start = async (message: string) => {
     const body = message.trim();
@@ -134,7 +140,7 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
       >
         <div className="bg-primary-600 text-white px-5 py-4 flex items-center justify-between">
           <h2 className="font-bold flex items-center gap-2">
-            {view === 'ai' ? (
+            {view === 'ai' && canUseAi ? (
               <>
                 <button onClick={() => setView('menu')} aria-label="Indietro" className="-ml-1">
                   <ChevronLeft size={20} strokeWidth={2.4} />

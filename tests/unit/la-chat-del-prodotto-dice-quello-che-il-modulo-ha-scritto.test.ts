@@ -158,6 +158,8 @@ describe('la chat del prodotto, nel modulo vero, con la risposta che il modello 
   async function apriEChiedi(richiesta: string) {
     const mod = await monta('components/seller/ProductForm.tsx');
     const s = accendi(mod.default, {
+      // I pulsanti AI, come il giorno in cui si riaccendono (al lancio sono spenti).
+      aiAccesa: true,
       mode: 'edit',
       categories: CATEGORIE,
       initialValues: {

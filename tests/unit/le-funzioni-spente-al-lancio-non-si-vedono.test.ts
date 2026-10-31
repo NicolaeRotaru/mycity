@@ -100,7 +100,9 @@ describe.skipIf(interruttori.TRADUCI_ACCESO)('«Traduci» spento', () => {
       onApplyPatch: () => ({ applicati: [], scartati: [] }),
     });
     const pulsanti = Array.from(s.radice.querySelectorAll('button')).map((b) => b.textContent ?? '');
-    expect(pulsanti.length, 'controprova: gli altri strumenti devono restare').toBeGreaterThan(0);
+    // Con l'AI dei negozi spenta il riquadro intero non c'è (prova in
+    // con-le-funzioni-spente-il-negozio-non-vede-ingressi-che-non-portano-a-niente).
+    if (interruttori.AI_NEGOZI_ACCESA) expect(pulsanti.length, 'controprova: gli altri strumenti devono restare').toBeGreaterThan(0);
     expect(pulsanti.filter((t) => /traduci/i.test(t)), '«Traduci» scrive l\'inglese al posto dell\'italiano').toEqual([]);
     expect(s.radice.querySelector('select[aria-label="Lingua di traduzione"]')).toBeNull();
     s.smonta();
