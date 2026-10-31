@@ -4,6 +4,7 @@ import { env, requireSupabasePublic } from '@/lib/env';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { conDurataMassima } from '@/lib/auth/cookie-di-sessione';
 import {
   destinazioneDopoLaConferma,
   leggiLinkDiConferma,
@@ -122,10 +123,10 @@ async function verificaIlLink(req: NextRequest, link: Extract<LinkDiConferma, { 
         return req.cookies.get(name)?.value;
       },
       set(name: string, value: string, options: CookieOptions) {
-        raccolta.cookies.set({ name, value, ...options });
+        raccolta.cookies.set({ name, value, ...conDurataMassima(options) });
       },
       remove(name: string, options: CookieOptions) {
-        raccolta.cookies.set({ name, value: '', ...options });
+        raccolta.cookies.set({ name, value: '', ...conDurataMassima(options) });
       },
     },
   });

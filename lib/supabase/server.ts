@@ -3,6 +3,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
 import { requireSupabasePublic, requireSupabaseService } from '@/lib/env';
 import { logger } from '@/lib/logger';
+import { conDurataMassima } from '@/lib/auth/cookie-di-sessione';
 
 /**
  * Client Supabase server-side che usa i cookie della richiesta corrente.
@@ -20,7 +21,7 @@ export async function getServerSupabase() {
       },
       set(name: string, value: string, options: CookieOptions) {
         try {
-          cookieStore.set({ name, value, ...options });
+          cookieStore.set({ name, value, ...conDurataMassima(options) });
         } catch {
           // In Server Components la mutation dei cookie può fallire: ignora,
           // il middleware si occupa del refresh.
@@ -28,7 +29,7 @@ export async function getServerSupabase() {
       },
       remove(name: string, options: CookieOptions) {
         try {
-          cookieStore.set({ name, value: '', ...options });
+          cookieStore.set({ name, value: '', ...conDurataMassima(options) });
         } catch {
           /* idem sopra */
         }

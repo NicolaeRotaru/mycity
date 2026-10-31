@@ -88,6 +88,13 @@ export const COMMISSIONE_DEL_PERCENTO = `${siPronunciaConVocale(COMMISSIONE_PERC
  */
 export const PREZZO_ABBONAMENTO_MESE = '€50';
 
+/**
+ * Come si scrive l'IVA sulla commissione (fatto pricing.commissione: «IVA inclusa», la
+ * conferma il commercialista). I Termini dicevano «IVA esclusa» mentre le pagine dicevano
+ * «IVA inclusa»: adesso tutte e due le leggono da qui.
+ */
+export const IVA_SULLA_COMMISSIONE = 'IVA inclusa';
+
 function fraseCanone(abbonamentoAcceso: boolean): string {
   return abbonamentoAcceso
     ? `Abbonamento ${PREZZO_ABBONAMENTO_MESE}/mese, attivo dopo l'approvazione del negozio.`
@@ -95,9 +102,12 @@ function fraseCanone(abbonamentoAcceso: boolean): string {
 }
 
 export function frasePrezzoNegozi(abbonamentoAcceso: boolean = ABBONAMENTO_NEGOZI_ACCESO): string {
-  const commissione = `Paghi ${articoloDavantiA(COMMISSIONE_PERCENTO)}${COMMISSIONE_PERCENTO}% solo su quello che vendi tramite MyCity, IVA inclusa.`;
+  const commissione = `Paghi ${articoloDavantiA(COMMISSIONE_PERCENTO)}${COMMISSIONE_PERCENTO}% solo su quello che vendi tramite MyCity, ${IVA_SULLA_COMMISSIONE}.`;
   return `${fraseCanone(abbonamentoAcceso)} ${commissione}`;
 }
+
+/** Il canone come lo dicono le pagine e i Termini: segue l'interruttore dell'abbonamento. */
+export const CANONE_NEGOZI = fraseCanone(ABBONAMENTO_NEGOZI_ACCESO);
 
 /** La frase che leggono home, /sell, FAQ, aiuto e area venditori. */
 export const FRASE_PREZZO_NEGOZI = frasePrezzoNegozi();
@@ -154,7 +164,7 @@ export function spiegazioneCommissione(
       tema: 'commissione',
       prima: 'Su MyCity paghi ',
       forte: `solo ${articoloDavantiA(COMMISSIONE_PERCENTO)}${COMMISSIONE_PERCENTO}% del venduto`,
-      dopo: ` realmente concluso tramite MyCity, IVA inclusa (non rimborsi, non ordini annullati). ${fraseCanone(abbonamentoAcceso)}`,
+      dopo: ` realmente concluso tramite MyCity, ${IVA_SULLA_COMMISSIONE} (non rimborsi, non ordini annullati). ${fraseCanone(abbonamentoAcceso)}`,
     },
     paragrafoBonifico(cartaAccesa),
   ];

@@ -5,6 +5,7 @@ import { safeInternalPath } from '@/lib/safe-redirect';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { conDurataMassima } from '@/lib/auth/cookie-di-sessione';
 import { rimandoDelRitornoSenzaSessione } from '@/lib/auth/link-email';
 import { vaChiestaSenzaTrattenere, verbalizzaSenzaTrattenere, versioneAccettata } from '@/lib/auth/accettazione-testi';
 
@@ -50,10 +51,10 @@ export async function GET(req: NextRequest) {
         return req.cookies.get(name)?.value;
       },
       set(name: string, value: string, options: CookieOptions) {
-        res.cookies.set({ name, value, ...options });
+        res.cookies.set({ name, value, ...conDurataMassima(options) });
       },
       remove(name: string, options: CookieOptions) {
-        res.cookies.set({ name, value: '', ...options });
+        res.cookies.set({ name, value: '', ...conDurataMassima(options) });
       },
     },
   });
