@@ -21,7 +21,6 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { nascondiProdotto } from '@/lib/products/nascondi';
 import { salvaProdottoDalBrowser } from '@/lib/products/salva-dal-browser';
-import { SCORTA_VISTA } from '@/lib/products/salvataggio-tracciato';
 import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
 
 type SellerProductRow = {
@@ -167,8 +166,9 @@ export default function SellerProductsPage() {
           const n = Number(e.stock);
           if (Number.isFinite(n)) patch.stock = n;
           // 31/10/2026 — la scorta che aveva davanti quando l'ha cambiata: se nel
-          // frattempo e' arrivato un ordine la porta non scrive e lo dice.
-          if (Number.isFinite(n) && typeof e.stockVisto === 'number') patch[SCORTA_VISTA] = e.stockVisto;
+          // frattempo e' arrivato un ordine la porta non scrive e lo dice
+          // (la chiave e' `SCORTA_VISTA` di lib/products/salvataggio-tracciato).
+          if (Number.isFinite(n) && typeof e.stockVisto === 'number') patch.stock_visto = e.stockVisto;
         }
         if (Object.keys(patch).length === 0) continue;
         // 8/9/2026 — QUI SI CAMBIA UN PREZZO: DEVE RESTARE SCRITTO.

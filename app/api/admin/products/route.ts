@@ -4,7 +4,7 @@ import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
 import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
-import { ScortaCambiata } from '@/lib/products/salvataggio-tracciato';
+import { DaCompletare } from '@/lib/products/salvataggio-tracciato';
 import { MYCITY_SELLER_ID } from '@/lib/products/mycitySeller';
 import { type ProductVariant } from '@/lib/products/variants';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -197,7 +197,11 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
     } else {
       const { data, error } = await admin.from('products').update(patch).eq('id', id).eq('stock', condizione).select('id');
       if (error) return ApiErrors.internal('Impossibile aggiornare il prodotto');
-      if (!data || data.length === 0) return ApiErrors.conflict(new ScortaCambiata(condizione, undefined).message);
+      if (!data || data.length === 0) {
+        return ApiErrors.conflict(
+          `La scorta è cambiata mentre la scheda era aperta: avevi davanti ${condizione} pezzi. Riapri il prodotto, controlla il numero e salva di nuovo.`,
+        );
+      }
     }
   }
 
@@ -205,7 +209,8 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
     try {
       await saveProductVariantsServer(admin, id, variants as ProductVariant[], scorteViste);
     } catch (errore) {
-      if (errore instanceof ScortaCambiata) return ApiErrors.conflict(errore.message);
+      // La variante venduta mentre la scheda era aperta: il motivo, non «Riprova».
+      if (errore instanceof DaCompletare) return ApiErrors.conflict(errore.message);
       return ApiErrors.internal('Errore nel salvataggio delle varianti');
     }
   }

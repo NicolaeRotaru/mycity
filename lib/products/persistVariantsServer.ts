@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { type ProductVariant } from '@/lib/products/variants';
-import { ScortaCambiata } from '@/lib/products/salvataggio-tracciato';
+import { DaCompletare } from '@/lib/products/salvataggio-tracciato';
 
 /**
  * Persistenza varianti lato server (client admin service-role). Identica nella
@@ -21,7 +21,7 @@ import { ScortaCambiata } from '@/lib/products/salvataggio-tracciato';
  * La S vista a 2, venduta a 1 nel frattempo, riscritta a 4 dal negoziante: in
  * banca dati andava 4, e la vendita spariva. Adesso, se la scorta di una
  * variante cambiata non e' piu' quella vista, non si scrive niente (nessuna
- * variante, nessuna cancellazione) e l'errore `ScortaCambiata` lo dice. Resta
+ * variante, nessuna cancellazione) e un `DaCompletare` lo dice al negoziante. Resta
  * il buco dei millisecondi fra questa lettura e la scrittura: per chiuderlo
  * serve una funzione del database che scriva solo «se e' ancora N».
  */
@@ -57,7 +57,10 @@ export async function saveProductVariantsServer(
       if (vista !== undefined && Math.max(0, Math.trunc(vista || 0)) === row.stock) delete row.stock;
       const adesso = scortaInBanca.get(v.id);
       if ('stock' in row && vista !== undefined && typeof adesso === 'number' && adesso !== vista) {
-        throw new ScortaCambiata(vista, adesso);
+        throw new DaCompletare(
+          `La scorta di «${v.label}» è cambiata mentre modificavi: avevi davanti ${vista} pezzi, ora sono ${adesso}. Riapri il prodotto, controlla il numero e salva di nuovo.`,
+          ['scorta'],
+        );
       }
       toUpdate.push({ id: v.id, row });
     } else {

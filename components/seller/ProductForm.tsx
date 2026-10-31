@@ -36,7 +36,7 @@ import {
   type VoceDaControllare,
 } from '@/lib/products/aiPatch';
 import { dilloDopoIlPatch } from '@/components/seller/dilloDopoIlPatch';
-import { colonneDelPatchAi, SCORTA_VISTA } from '@/lib/products/salvataggio-tracciato';
+import { colonneDelPatchAi } from '@/lib/products/salvataggio-tracciato';
 import { useFormAutosave } from '@/lib/hooks/useFormAutosave';
 import {
   createProductSchema,
@@ -721,7 +721,8 @@ export default function ProductForm({
        */
       if (mode === 'edit' && hasVariants) delete (payload as Partial<ProductPayload>).stock;
       if (mode === 'edit' && 'stock' in payload && typeof scortaAllApertura.current.prodotto === 'number') {
-        (payload as unknown as Record<string, unknown>)[SCORTA_VISTA] = scortaAllApertura.current.prodotto;
+        // La chiave e' `SCORTA_VISTA` di lib/products/salvataggio-tracciato.
+        (payload as unknown as Record<string, unknown>).stock_visto = scortaAllApertura.current.prodotto;
       }
       /**
        * 6/9/2026 — UN SALVATAGGIO SCRIVE SOLO QUELLO CHE L'UTENTE HA CHIESTO.
