@@ -950,6 +950,27 @@ export interface Database {
         };
         Relationships: [];
       };
+      kyc_file_da_togliere: {
+        Row: {
+          id: number;
+          profilo: string;
+          percorsi: string;
+          messo_at: string;
+        };
+        Insert: {
+          id: number;
+          profilo: string;
+          percorsi: string;
+          messo_at?: string;
+        };
+        Update: {
+          id?: number;
+          profilo?: string;
+          percorsi?: string;
+          messo_at?: string;
+        };
+        Relationships: [];
+      };
       loyalty_accounts: {
         Row: {
           user_id: string;
