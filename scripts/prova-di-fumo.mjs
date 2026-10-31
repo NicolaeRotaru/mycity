@@ -280,6 +280,11 @@ function indirizzoDiProduzione(rilascio) {
   return eUnIndirizzo(completo) ? completo : null;
 }
 
+/**
+ * @param {any} rispostaDeiRilasci la risposta di /v6/deployments
+ * @param {{ commitCheEsce?: string, sulDominio?: any }} [opzioni]
+ * @returns {string | null}
+ */
 export function rilascioDaTornare(rispostaDeiRilasci, { commitCheEsce = '', sulDominio = null } = {}) {
   const elenco = Array.isArray(rispostaDeiRilasci?.deployments) ? rispostaDeiRilasci.deployments : [];
   const daScartare = String(commitCheEsce ?? '').trim().toLowerCase();
