@@ -7,7 +7,7 @@ vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
   NEWSLETTER_ACCESA: false,
 }));
 
-import { normalizeHomeSite, leggiHomeSite, defaultHomeSite, homeEnabledSections } from '@/lib/home-site';
+import { normalizeHomeSite, defaultHomeSite, homeEnabledSections } from '@/lib/home-site';
 import { logger } from '@/lib/logger';
 
 /**
@@ -39,11 +39,11 @@ describe('la home salvata si legge sezione per sezione', () => {
 
   it('dice quale sezione ha lasciato fuori, e lo scrive nel log', () => {
     const avviso = vi.spyOn(logger, 'warn').mockImplementation(() => {});
-    const { scartate } = leggiHomeSite(salvata);
-    expect(scartate).toHaveLength(1);
-    expect(scartate[0]).toMatchObject({ posizione: 1, id: 'b1', type: 'banner' });
     normalizeHomeSite(salvata);
     expect(avviso).toHaveBeenCalledTimes(1);
+    const { scartate } = avviso.mock.calls[0][1] as { scartate: Array<Record<string, unknown>> };
+    expect(scartate).toHaveLength(1);
+    expect(scartate[0]).toMatchObject({ posizione: 1, id: 'b1', type: 'banner' });
   });
 
   it('newsletter e Drop salvati accesi non compaiono con gli interruttori spenti', () => {
