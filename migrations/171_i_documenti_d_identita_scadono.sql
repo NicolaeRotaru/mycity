@@ -33,27 +33,36 @@
 -- caricamento scrive sempre cosi': `<utente>/<tipo>-<millisecondi>.<est>`.
 -- Un percorso senza nessuna delle due date non si giudica e non si tocca.
 --
--- COSA FA. Come la 135: azzera le sei colonne UNA RIGA ALLA VOLTA e
--- restituisce i percorsi vecchi, perche' il database non parla con lo storage
--- e i file li toglie la potatura della notte (lib/privacy/potature-ritenzione.ts,
--- passo `documenti-kyc-iscrizione-a-meta`). Il profilo resta: e' l'account
--- della persona, non il suo documento.
+-- COME SI CANCELLA. La regola vive in UN posto: la vista
+-- `documenti_iscrizione_a_meta`. La potatura della notte
+-- (lib/privacy/potature-ritenzione.ts, passo `documenti-kyc-iscrizione-a-meta`)
+-- fa `DELETE FROM documenti_iscrizione_a_meta WHERE caricati_at < <30 giorni fa>`.
+-- Il trigger INSTEAD OF qui sotto, riga per riga, azzera le sei colonne del
+-- profilo e mette i percorsi vecchi nella coda `kyc_file_da_togliere`; poi la
+-- notte prende la coda (`kyc_file_da_togliere_prendi`) e toglie i file dal
+-- secchio, perche' il database non parla con lo storage. Prima le colonne,
+-- poi i file, come la 135: il caso peggiore e' un file orfano, mai un profilo
+-- che punta a una fotografia sparita. Il profilo resta: e' l'account della
+-- persona, non il suo documento.
 --
--- DUE VOLTE, O IN CONCORRENZA. L'UPDATE rimette nel WHERE le tre condizioni e
--- i percorsi letti: se tra la lettura e l'azzeramento la persona invia la
+-- IL CONTO SENZA CANCELLARE. `contaPotature` trasforma ogni `delete` in una
+-- lettura con gli stessi filtri: qui conta le righe della vista piu' vecchie
+-- di 30 giorni, cioe' esattamente quelle che la notte cancellerebbe.
+--
+-- DUE VOLTE, O IN CONCORRENZA. Il trigger rimette nel WHERE le tre condizioni
+-- e i percorsi letti: se tra la lettura e l'azzeramento la persona invia la
 -- richiesta o carica un documento nuovo, la riga cambia, il WHERE non vale
--- piu' e quel profilo si lascia stare (ci si riprova la notte dopo). Rigirata
--- subito, la funzione non trova niente: le colonne sono gia' vuote.
+-- piu', il trigger restituisce NULL e quel profilo si lascia stare (ci si
+-- riprova la notte dopo). Rigirata subito, la vista e' vuota. La coda si
+-- svuota con un DELETE ... RETURNING: due notti insieme non prendono la stessa
+-- riga. Se la presa riesce ma lo storage rifiuta, i percorsi finiscono nel
+-- registro e la potatura risulta fallita (come la 135).
 --
--- IL CONTO SENZA CANCELLARE. `contaPotature` (il riassunto prima della notte)
--- non puo' chiamare la funzione che cancella; chiama
--- legge la vista `documenti_iscrizione_a_meta` con un conto PostgREST (una
--- SELECT, come le altre potature): la regola vive in un posto solo, la vista,
--- e la funzione che cancella legge la stessa vista.
---
--- Idempotente: CREATE OR REPLACE e REVOKE.
--- Rollback: DROP FUNCTION documenti_da_cancellare_iscrizione_a_meta(int);
---           DROP VIEW documenti_iscrizione_a_meta (nessun dato toccato).
+-- Idempotente: CREATE ... IF NOT EXISTS / OR REPLACE, DROP TRIGGER IF EXISTS.
+-- Rollback: DROP TRIGGER documenti_iscrizione_a_meta_si_toglie ON documenti_iscrizione_a_meta;
+--           DROP FUNCTION documenti_iscrizione_a_meta_togli(); DROP FUNCTION kyc_file_da_togliere_prendi();
+--           DROP VIEW documenti_iscrizione_a_meta; DROP TABLE kyc_file_da_togliere
+--           (solo a coda vuota: dentro ci sono percorsi di file ancora da togliere).
 -- =============================================================================
 
 CREATE OR REPLACE VIEW public.documenti_iscrizione_a_meta
@@ -81,52 +90,72 @@ WITH (security_invoker = true) AS
      AND p.kyc_provider_checked_at IS NULL
      AND cardinality(d.file) > 0;
 
-CREATE OR REPLACE FUNCTION public.documenti_da_cancellare_iscrizione_a_meta(p_giorni int DEFAULT 30)
-RETURNS TABLE (user_id uuid, percorsi text[])
+-- La coda dei file gia' staccati dal profilo e non ancora tolti dal secchio.
+CREATE TABLE IF NOT EXISTS public.kyc_file_da_togliere (
+  id        bigserial   PRIMARY KEY,
+  profilo   uuid        NOT NULL,
+  percorsi  text[]      NOT NULL,
+  messo_at  timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.kyc_file_da_togliere ENABLE ROW LEVEL SECURITY;
+
+CREATE OR REPLACE FUNCTION public.documenti_iscrizione_a_meta_togli()
+RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
-DECLARE
-  r record;
-  v_azzerate int;
 BEGIN
-  FOR r IN
-    SELECT d.profilo, d.file
-      FROM public.documenti_iscrizione_a_meta d
-     WHERE d.caricati_at < now() - make_interval(days => greatest(p_giorni, 1))
-  LOOP
-    UPDATE public.profiles
-       SET kyc_id_doc_front_url = NULL,
-           kyc_id_doc_back_url  = NULL,
-           kyc_selfie_url       = NULL,
-           rider_license_url    = NULL,
-           rider_insurance_url  = NULL,
-           rider_haccp_url      = NULL
-     WHERE id = r.profilo
-       AND approval_status = 'pending'
-       AND approval_requested_at IS NULL
-       AND kyc_provider_checked_at IS NULL
-       AND array_remove(ARRAY[
-             kyc_id_doc_front_url, kyc_id_doc_back_url, kyc_selfie_url,
-             rider_license_url, rider_insurance_url, rider_haccp_url
-           ], NULL) = r.file;
-    GET DIAGNOSTICS v_azzerate = ROW_COUNT;
-    CONTINUE WHEN v_azzerate = 0;
-    user_id  := r.profilo;
-    percorsi := r.file;
-    RETURN NEXT;
-  END LOOP;
+  UPDATE public.profiles
+     SET kyc_id_doc_front_url = NULL,
+         kyc_id_doc_back_url  = NULL,
+         kyc_selfie_url       = NULL,
+         rider_license_url    = NULL,
+         rider_insurance_url  = NULL,
+         rider_haccp_url      = NULL
+   WHERE id = OLD.profilo
+     AND approval_status = 'pending'
+     AND approval_requested_at IS NULL
+     AND kyc_provider_checked_at IS NULL
+     AND array_remove(ARRAY[
+           kyc_id_doc_front_url, kyc_id_doc_back_url, kyc_selfie_url,
+           rider_license_url, rider_insurance_url, rider_haccp_url
+         ], NULL) = OLD.file;
+  IF NOT FOUND THEN
+    RETURN NULL; -- il profilo e' cambiato nel frattempo: non si tocca, e non si conta
+  END IF;
+  INSERT INTO public.kyc_file_da_togliere (profilo, percorsi) VALUES (OLD.profilo, OLD.file);
+  RETURN OLD;
 END;
 $$;
 
+DROP TRIGGER IF EXISTS documenti_iscrizione_a_meta_si_toglie ON public.documenti_iscrizione_a_meta;
+CREATE TRIGGER documenti_iscrizione_a_meta_si_toglie
+  INSTEAD OF DELETE ON public.documenti_iscrizione_a_meta
+  FOR EACH ROW EXECUTE FUNCTION public.documenti_iscrizione_a_meta_togli();
+
+-- Prende (e toglie dalla coda) i percorsi da cancellare dal secchio kyc-docs.
+-- Stessa forma della 135 (user_id, percorsi): la notte li legge allo stesso modo.
+CREATE OR REPLACE FUNCTION public.kyc_file_da_togliere_prendi()
+RETURNS TABLE (user_id uuid, percorsi text[])
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  DELETE FROM public.kyc_file_da_togliere q
+   RETURNING q.profilo, q.percorsi;
+$$;
+
 -- Una funzione nasce con EXECUTE concesso a PUBLIC (vedi 135): si toglie a
--- PUBLIC, o la porta resta aperta. Le chiama solo il lavoro notturno, con la
+-- PUBLIC, o la porta resta aperta. Le usa solo il lavoro notturno, con la
 -- chiave di servizio.
-REVOKE EXECUTE ON FUNCTION public.documenti_da_cancellare_iscrizione_a_meta(int) FROM PUBLIC, anon, authenticated;
--- La vista mostra percorsi di documenti d'identita': la legge solo la chiave di
--- servizio (security_invoker: chi legge usa i propri permessi, migrations/152).
+REVOKE EXECUTE ON FUNCTION public.documenti_iscrizione_a_meta_togli() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.kyc_file_da_togliere_prendi() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.kyc_file_da_togliere_prendi() TO service_role;
+-- La vista e la coda mostrano percorsi di documenti d'identita': solo la chiave
+-- di servizio (security_invoker: chi legge usa i propri permessi, migrations/152).
 REVOKE ALL ON public.documenti_iscrizione_a_meta FROM PUBLIC, anon, authenticated;
-GRANT SELECT ON public.documenti_iscrizione_a_meta TO service_role;
+GRANT SELECT, DELETE ON public.documenti_iscrizione_a_meta TO service_role;
+REVOKE ALL ON public.kyc_file_da_togliere FROM PUBLIC, anon, authenticated;
 
 NOTIFY pgrst, 'reload schema';

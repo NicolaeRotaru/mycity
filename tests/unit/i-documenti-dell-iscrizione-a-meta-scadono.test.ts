@@ -11,9 +11,9 @@
  *     «a meta'». 29 giorni resta · 31 si cancella · approvato resta · respinto
  *     resta alla regola di prima · chi ha inviato e aspetta resta · chi sta
  *     ancora caricando resta.
- *  ② LA NOTTE (lib/privacy/potature-ritenzione.ts): la potatura chiama quella
- *     funzione con 30 giorni, toglie i file dal secchio, e il conto senza
- *     cancellare li CONTA invece di dire «non contata».
+ *  ② LA NOTTE (lib/privacy/potature-ritenzione.ts): la potatura cancella dalla
+ *     vista con 30 giorni, prende la coda e toglie i file dal secchio, e il
+ *     conto senza cancellare li CONTA invece di dire «non contata».
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
@@ -21,6 +21,7 @@ import { join } from 'node:path';
 import {
   potatureDiRitenzione,
   contaPotature,
+  eseguiPotature,
   type ClientePotature,
   type ClienteCheConta,
   type Registro,
@@ -98,55 +99,79 @@ describe.skipIf(!BIN_POSTGRES)("chi e' «a meta' iscrizione» lo decide il datab
   });
 
   it('31 giorni si cancella; 29, approvato, respinto, inviato, ancora in corso restano', () => {
-    const tolti = pg.psql(`
-      SELECT right(user_id::text, 1) || ':' || array_to_string(percorsi, ',')
-        FROM public.documenti_da_cancellare_iscrizione_a_meta(${GIORNI}) ORDER BY user_id;`);
-    expect(tolti).toBe(`2:${f.b31fronte},${f.b31selfie}\n8:${f.senzaFile31}`);
+    expect(pg.psql(`
+      WITH tolte AS (DELETE FROM public.documenti_iscrizione_a_meta
+                      WHERE caricati_at < now() - interval '${GIORNI} days' RETURNING 1)
+      SELECT count(*) FROM tolte;`)).toBe('2');
     expect(docRimasti()).toBe('1=1 2=0 3=1 4=1 5=1 6=1 7=2 8=0 9=0');
+    const presi = pg.psql(`
+      SELECT right(user_id::text, 1) || ':' || array_to_string(percorsi, ',')
+        FROM public.kyc_file_da_togliere_prendi() ORDER BY user_id;`);
+    expect(presi).toBe(`2:${f.b31fronte},${f.b31selfie}\n8:${f.senzaFile31}`);
   });
 
-  it('rigirata non trova niente, e nessuno da fuori la puo\' chiamare', () => {
-    expect(pg.psql(`SELECT count(*) FROM public.documenti_da_cancellare_iscrizione_a_meta(${GIORNI});`)).toBe('0');
-    expect(pg.psql(`SELECT count(*) FROM public.documenti_iscrizione_a_meta WHERE caricati_at < now() - interval '${GIORNI} days';`)).toBe('0');
+  it('rigirata non trova niente, la coda presa e\' vuota, e nessuno da fuori ci arriva', () => {
     expect(pg.psql(`
-      SELECT bool_or(has_function_privilege(r, 'public.documenti_da_cancellare_iscrizione_a_meta(int)', 'EXECUTE')
-                     OR has_table_privilege(r, 'public.documenti_iscrizione_a_meta', 'SELECT'))
+      WITH tolte AS (DELETE FROM public.documenti_iscrizione_a_meta
+                      WHERE caricati_at < now() - interval '${GIORNI} days' RETURNING 1)
+      SELECT count(*) FROM tolte;`)).toBe('0');
+    expect(pg.psql(`SELECT count(*) FROM public.kyc_file_da_togliere_prendi();`)).toBe('0');
+    expect(pg.psql(`
+      SELECT bool_or(has_function_privilege(r, 'public.kyc_file_da_togliere_prendi()', 'EXECUTE')
+                     OR has_table_privilege(r, 'public.documenti_iscrizione_a_meta', 'SELECT')
+                     OR has_table_privilege(r, 'public.documenti_iscrizione_a_meta', 'DELETE')
+                     OR has_table_privilege(r, 'public.kyc_file_da_togliere', 'SELECT'))
         FROM unnest(ARRAY['anon', 'authenticated']) r;`)).toBe('f');
   });
 });
 
 describe('la notte toglie i documenti dell\'iscrizione a meta\'', () => {
   const muto: Registro = { info: () => {}, warn: () => {}, error: () => {} };
+  const adesso = Date.parse('2026-10-31T03:00:00Z');
+  const limite = new Date(adesso - GIORNI * GIORNO_MS).toISOString();
 
-  it('chiama la funzione con 30 giorni e toglie i file dal secchio kyc-docs', async () => {
-    const chiamate: Array<{ nome: string; argomenti?: Record<string, unknown> }> = [];
-    const rimossi: Array<{ secchio: string; percorsi: string[] }> = [];
-    const filtro: Record<string, unknown> = {};
-    for (const m of ['eq', 'neq', 'lt', 'lte', 'gt', 'gte', 'is', 'in', 'not', 'or', 'filter']) filtro[m] = () => filtro;
-    filtro.then = (ok: (r: unknown) => unknown, ko: (e: unknown) => unknown) => Promise.resolve({ error: null }).then(ok, ko);
+  it('cancella dalla vista con 30 giorni, poi prende la coda e toglie i file da kyc-docs', async () => {
+    const diario: string[] = [];
+    const filtro = (op: string, tabella: string) => {
+      const filtri: string[] = [];
+      const q: Record<string, unknown> = {};
+      for (const m of ['eq', 'lt', 'is', 'not', 'or']) {
+        q[m] = (...a: unknown[]) => { filtri.push(`${m}:${a.join(',')}`); return q; };
+      }
+      q.then = (ok: (r: unknown) => unknown, ko: (e: unknown) => unknown) => {
+        diario.push(`${op} ${tabella} ${filtri.join(' ')}`);
+        return Promise.resolve({ error: null }).then(ok, ko);
+      };
+      return q;
+    };
     const admin = {
-      from: () => ({ update: () => filtro, delete: () => filtro }),
+      from: (t: string) => ({ update: () => filtro('update', t), delete: () => filtro('delete', t) }),
       rpc: async (nome: string, argomenti?: Record<string, unknown>) => {
-        chiamate.push({ nome, argomenti });
-        if (nome === 'documenti_da_cancellare_iscrizione_a_meta') {
-          return { data: [{ user_id: 'u2', percorsi: ['u2/kyc_selfie-1.jpg', 'u2/kyc_id_front-1.jpg'] }], error: null };
-        }
-        return { data: [], error: null };
+        diario.push(`rpc ${nome} ${JSON.stringify(argomenti ?? null)}`);
+        return nome === 'kyc_file_da_togliere_prendi'
+          ? { data: [{ user_id: 'u2', percorsi: ['u2/kyc_selfie-1.jpg', 'u2/kyc_id_front-1.jpg'] }], error: null }
+          : { data: [], error: null };
       },
-      storage: { from: (secchio: string) => ({ remove: async (percorsi: string[]) => { rimossi.push({ secchio, percorsi }); return { error: null }; } }) },
+      storage: {
+        from: (secchio: string) => ({
+          remove: async (percorsi: string[]) => { diario.push(`remove ${secchio} ${percorsi.join(',')}`); return { error: null }; },
+        }),
+      },
     } as unknown as ClientePotature;
 
-    for (const passo of potatureDiRitenzione(Date.now())) {
-      try { await passo.fai(admin, muto); } catch { /* le altre potature non sono questa prova */ }
-    }
+    const passi = potatureDiRitenzione(adesso).filter((p) => p.cosa === 'documenti-kyc-iscrizione-a-meta');
+    expect(passi).toHaveLength(1);
+    const rapporto = await eseguiPotature(admin, muto, adesso, passi);
 
-    expect(chiamate.filter((c) => c.nome === 'documenti_da_cancellare_iscrizione_a_meta'))
-      .toEqual([{ nome: 'documenti_da_cancellare_iscrizione_a_meta', argomenti: { p_giorni: GIORNI } }]);
-    expect(rimossi).toContainEqual({ secchio: 'kyc-docs', percorsi: ['u2/kyc_selfie-1.jpg', 'u2/kyc_id_front-1.jpg'] });
+    expect(rapporto.fallite).toBe(0);
+    expect(diario).toEqual([
+      `delete documenti_iscrizione_a_meta lt:caricati_at,${limite}`,
+      'rpc kyc_file_da_togliere_prendi {}',
+      'remove kyc-docs u2/kyc_selfie-1.jpg,u2/kyc_id_front-1.jpg',
+    ]);
   });
 
-  it('il conto senza cancellare li conta, con la stessa regola, senza cancellare niente', async () => {
-    const adesso = Date.parse('2026-10-31T03:00:00Z');
+  it('il conto senza cancellare li conta, con la stessa vista e lo stesso filtro, senza cancellare niente', async () => {
     const letture: string[] = [];
     let rpcChiamate = 0;
     const admin = {
@@ -154,7 +179,7 @@ describe('la notte toglie i documenti dell\'iscrizione a meta\'', () => {
         select: () => {
           const filtri: string[] = [];
           const q: Record<string, unknown> = {};
-          for (const m of ['eq', 'neq', 'lte', 'gt', 'gte', 'is', 'in', 'not', 'or', 'filter']) q[m] = () => q;
+          for (const m of ['eq', 'is', 'not', 'or']) q[m] = () => q;
           q.lt = (colonna: string, valore: string) => { filtri.push(`${colonna}<${valore}`); return q; };
           q.then = (ok: (r: unknown) => unknown, ko: (e: unknown) => unknown) => {
             letture.push(`${tabella} ${filtri.join(' ')}`);
@@ -168,10 +193,10 @@ describe('la notte toglie i documenti dell\'iscrizione a meta\'', () => {
 
     const conti = await contaPotature(admin, adesso);
 
-    expect(conti.filter((c) => c.righe === 7)).toHaveLength(1);
-    expect(letture).toContain(
-      `documenti_iscrizione_a_meta caricati_at<${new Date(adesso - GIORNI * GIORNO_MS).toISOString()}`,
-    );
+    expect(conti.find((c) => c.cosa === 'documenti-kyc-iscrizione-a-meta')).toEqual({
+      cosa: 'documenti-kyc-iscrizione-a-meta', righe: 7,
+    });
+    expect(letture).toContain(`documenti_iscrizione_a_meta caricati_at<${limite}`);
     expect(rpcChiamate, 'il conto non chiama funzioni del database').toBe(0);
   });
 });

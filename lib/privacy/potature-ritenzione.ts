@@ -89,12 +89,12 @@ export type Potatura = {
   /** Fa la potatura. Se non riesce LANCIA: il motore la conta e tira dritto. */
   fai: (admin: ClientePotature, registro: Registro) => Promise<void>;
   /**
-   * Il conto senza cancellare, per le potature che lavorano dentro una
-   * funzione del database (che scrive mentre legge, quindi `contaPotature`
-   * non la puo' rigirare a vuoto). Legge con la stessa regola della funzione
-   * che cancella, solo con SELECT; se manca, il passo resta «non contato».
+   * Il lavoro sui FILE delle righe che `fai` ha appena toccato (lo storage non
+   * si puo' rigirare a vuoto). Gira dopo `fai`, nello stesso passo; il conto
+   * senza cancellare non lo fa girare, perche' le righe che contano sono quelle
+   * di `fai`: i file le seguono.
    */
-  conta?: (admin: ClienteCheConta) => Promise<number>;
+  poi?: (admin: ClientePotature, registro: Registro) => Promise<void>;
 };
 
 export type EsitoPotatura = { cosa: string; ok: boolean; errore?: string };
@@ -147,12 +147,12 @@ async function potaFileScaduti(
   registro: Registro,
   funzione:
     | 'documenti_da_cancellare_respinti'
-    | 'documenti_da_cancellare_iscrizione_a_meta'
+    | 'kyc_file_da_togliere_prendi'
     | 'foto_consegna_da_cancellare',
   secchio: 'kyc-docs' | 'cod-proof',
-  giorni = 90,
+  argomenti: Record<string, unknown> = { p_giorni: 90 },
 ): Promise<void> {
-  const data = await esigiRpc(admin, funzione, { p_giorni: giorni });
+  const data = await esigiRpc(admin, funzione, argomenti);
   let tolti = 0;
   const rimasti: string[] = [];
   for (const riga of (data ?? []) as Array<{ percorsi: string[] | null }>) {
@@ -368,27 +368,24 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
     // 31/10/2026 — I DOCUMENTI DI CHI SI FERMA A META' ISCRIZIONE.
     // `approval_status` nasce 'pending' e la potatura qui sopra guarda solo i
     // respinti: chi caricava carta d'identita' e selfie e poi abbandonava
-    // restava 'pending' per sempre, coi documenti nel secchio. Trenta giorni
-    // dall'ultimo documento caricato, se la richiesta non e' mai partita
-    // (migrations/171: chi ha inviato e aspetta l'amministratore non si tocca).
+    // restava 'pending' per sempre, coi documenti nel secchio. Chi e' «a meta'»
+    // lo dice la vista della migrazione 171 (mai inviata, ultimo documento
+    // caricato da piu' di 30 giorni). Cancellare dalla vista azzera le colonne
+    // del profilo e mette i percorsi in coda (lo fa il database, riga per
+    // riga, ricontrollando la regola); `poi` prende la coda e toglie i file.
+    // Essendo una `delete` filtrata, il conto senza cancellare la conta come
+    // le altre: stessa vista, stesso filtro.
     {
       cosa: 'documenti-kyc-iscrizione-a-meta',
-      fai: (admin, registro) =>
-        potaFileScaduti(
-          admin, registro, 'documenti_da_cancellare_iscrizione_a_meta', 'kyc-docs',
-          GIORNI_DOCUMENTI_ISCRIZIONE_A_META,
+      fai: (admin) =>
+        esigi(
+          admin
+            .from('documenti_iscrizione_a_meta')
+            .delete()
+            .lt('caricati_at', giorni(GIORNI_DOCUMENTI_ISCRIZIONE_A_META)),
         ),
-      // Il conto legge la stessa vista da cui la funzione cancella: una
-      // SELECT, quindi nel riassunto della notte si conta senza toccare niente.
-      conta: async (admin) => {
-        const { count, error } = await admin
-          .from('documenti_iscrizione_a_meta')
-          .select('*', { count: 'exact', head: true })
-          .lt('caricati_at', giorni(GIORNI_DOCUMENTI_ISCRIZIONE_A_META));
-        if (error) throw new Error(error.message);
-        if (typeof count !== 'number') throw new Error('il database non ha restituito il conto');
-        return count;
-      },
+      poi: (admin, registro) =>
+        potaFileScaduti(admin, registro, 'kyc_file_da_togliere_prendi', 'kyc-docs', {}),
     },
     // 27/8/2026 (R058) — LE FOTO DELLA CONSEGNA IN CONTANTI.
     // I contanti, la firma e «il pacco lasciato» — cioe' quasi sempre la porta
@@ -447,6 +444,7 @@ export async function eseguiPotature(
   for (const passo of passi) {
     try {
       await passo.fai(admin, registro);
+      if (passo.poi) await passo.poi(admin, registro);
       esiti.push({ cosa: passo.cosa, ok: true });
     } catch (e) {
       const errore = e instanceof Error ? e.message : 'errore';
@@ -516,14 +514,6 @@ export async function contaPotature(
   const conti: ContoPotatura[] = [];
 
   for (const passo of passi) {
-    if (passo.conta) {
-      try {
-        conti.push({ cosa: passo.cosa, righe: await passo.conta(admin) });
-      } catch (e) {
-        conti.push({ cosa: passo.cosa, righe: null, nonContata: e instanceof Error ? e.message : 'errore' });
-      }
-      continue;
-    }
     let righe = 0;
     const contando = (q: FiltrabileConConto): Filtrabile => ({
       eq: (colonna, valore) => contando(q.eq(colonna, valore)),
