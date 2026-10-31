@@ -37,6 +37,7 @@ import {
   travasaCookie,
   conDurataMassima,
 } from '@/lib/auth/cookie-di-sessione';
+import { vaRiaccettataSenzaTrattenere } from '@/lib/legal/versione';
 
 /**
  * Middleware strict: il client browser usa @supabase/ssr, la sessione
@@ -66,6 +67,12 @@ const ROLE_PROTECTED: Array<{ prefix: string; allowed: ('admin' | 'seller' | 'ri
 // specifico. 🟠-18: /profile/** era senza guard server-side (protezione
 // per-pagina incoerente). Qui la centralizziamo con returnTo preciso.
 const AUTH_REQUIRED = ['/profile'];
+
+/** La pagina da cui si ordina: lì si chiedono i Termini in vigore a chi ne ha accettati di vecchi. */
+const PERCORSO_PAGAMENTO = '/checkout';
+function eIlPagamento(pathname: string): boolean {
+  return pathname === PERCORSO_PAGAMENTO || pathname.startsWith(`${PERCORSO_PAGAMENTO}/`);
+}
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -417,7 +424,10 @@ export async function middleware(req: NextRequest) {
    * il venditore, chi ha il cookie scaduto o di un'altra sessione, e chiunque
    * si trovi su una pagina protetta, fanno la strada intera di sempre.
    */
-  if (!needsAuth && needsSellerGate) {
+  // 31/10/2026 (ondata 6) — Sul pagamento la scorciatoia non vale: lì si
+  // guarda quali Termini ha accettato la persona (vedi sotto).
+  const sulPagamento = eIlPagamento(pathname);
+  if (!needsAuth && needsSellerGate && !sulPagamento) {
     const messoDaParte = await leggiRuoloDalCookie(req);
     if (messoDaParte && messoDaParte.emailConfermata && messoDaParte.role !== 'seller') {
       return res;
@@ -544,6 +554,27 @@ export async function middleware(req: NextRequest) {
     const url = req.nextUrl.clone();
     url.pathname = '/auth/verify-email';
     return withCsp(NextResponse.redirect(url));
+  }
+
+  // 31/10/2026 (ondata 6) — PRIMA DI PAGARE, I TERMINI IN VIGORE.
+  // Fatto legale.termini-riaccettazione: chi ha accettato una versione vecchia
+  // li riaccetta prima di ordinare. Le porte d'ingresso non bastano: con una
+  // sessione aperta si arriva al pagamento senza ripassarci, e l'accesso con la
+  // password non lo chiede. Solo sul pagamento, perché una lettura in più su
+  // ogni pagina la pagherebbero tutti. Nel dubbio (scaduto, rotto) si passa:
+  // fermare un ordine costa più di una domanda rimandata.
+  if (sulPagamento) {
+    const riaccetta = await vaRiaccettataSenzaTrattenere(() => supabase, user.id, TETTO_PORTIERE_MS);
+    if (riaccetta === 'chiedi') {
+      const url = req.nextUrl.clone();
+      url.pathname = '/accetta-condizioni';
+      url.search = '';
+      url.searchParams.set('next', pathname);
+      return withCsp(NextResponse.redirect(url));
+    }
+    if (riaccetta !== 'lascia-entrare') {
+      logger.warn('[portiere] Termini accettati non controllati prima del pagamento', { esito: riaccetta });
+    }
   }
 
   type ProfileRole = 'buyer' | 'seller' | 'rider' | 'admin';
