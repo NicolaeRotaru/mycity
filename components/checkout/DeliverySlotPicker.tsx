@@ -77,6 +77,20 @@ export function avvisoVeloceCaduta(fascia: string): string {
   return `La consegna veloce adesso non si può più: ho messo «${fascia}». Controlla qui sotto che l’ora ti vada bene; il prezzo della consegna lo vedi nel riepilogo.`;
 }
 
+/**
+ * 31/10/2026 — Quando la veloce cade e i negozi del carrello non servono nessuna fascia né oggi né
+ * domani (sabato sera da Pane Quotidiano, con la domenica chiusa). Prima l'avviso diceva «ho messo
+ * «Domani · 9:00–12:00»», una fascia che il negozio non serve, mentre la tessera diceva «Negozio chiuso».
+ */
+export const AVVISO_VELOCE_CADUTA_SENZA_FASCE =
+  'La consegna veloce adesso non si può più, e i negozi del carrello non hanno fasce di consegna né oggi né domani: per ora non si può ordinare.';
+
+/**
+ * 31/10/2026 — Ogni quanto il selettore rilegge l'ora di Roma. Prima la leggeva solo al disegno:
+ * aperto alle 16:55, alle 17:05 offriva ancora una fascia che la cassa poi rifiutava.
+ */
+export const OGNI_QUANTO_RILEGGO_L_ORA_MS = 30_000;
+
 /** 30/10/2026 (ondata 18) — Mentre il server non ha ancora detto se la veloce si può. */
 export const RIGA_VELOCE_IN_ATTESA =
   'Sto controllando che ci sia un fattorino in servizio per la consegna veloce: appena arriva la risposta puoi ordinare.';
@@ -95,13 +109,15 @@ export function quandoLaVeloceCade(a: {
   /** 30/10/2026 (ondata 21) — L'orologio di Roma e gli orari dei negozi: si cade su una fascia servibile. */
   adesso?: Date;
   orari?: readonly unknown[];
-}): { day: Giorno; fascia: string; avviso: string } | null {
+}): { day: Giorno; fascia: string | null; avviso: string } | null {
   if (a.day !== 'now' || a.expressAvailable || a.inAttesa) return null;
   const day = a.adesso ? giornoDiPartenza(a.adesso, a.orari) : giornoDiPartenza(a.ora);
   const oggi = a.adesso ? fasciaDiPartenzaOggi(a.adesso, a.orari) : fasciaDiPartenzaOggi(a.ora);
-  const domani = (a.adesso ? fasceDiDomaniPossibili(a.adesso, a.orari) : FASCE_DI_DOMANI)[0] ?? FASCE_DI_DOMANI[0];
+  const domani = (a.adesso ? fasceDiDomaniPossibili(a.adesso, a.orari) : FASCE_DI_DOMANI)[0] ?? null;
   // `giornoDiPartenza` dà «oggi» solo se per oggi resta una fascia: il ripiego non scatta mai.
   const fascia = day === 'today' ? (oggi ?? domani) : domani;
+  // Nessuna fascia servibile: non se ne nomina una finta, si dice che per ora non si può.
+  if (!fascia) return { day, fascia: null, avviso: AVVISO_VELOCE_CADUTA_SENZA_FASCE };
   return { day, fascia, avviso: avvisoVeloceCaduta(fascia) };
 }
 
@@ -125,6 +141,11 @@ export function DeliverySlotPicker({
   // 30/10/2026 (ondata 21) — Coi minuti e con gli orari dei negozi del carrello: si propone solo
   // quello che la rotta accetterebbe. Una fascia di oggi vale fino a 60 minuti dalla sua fine
   // (alle 17:50 non si promette «entro le 18»), e solo se ogni negozio in quella fascia è aperto.
+  const [, setBattito] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setBattito((n) => n + 1), OGNI_QUANTO_RILEGGO_L_ORA_MS);
+    return () => clearInterval(id);
+  }, []);
   const adesso = romeNow();
   const ora = adesso.getHours();
   const todayTimes = fasceAncoraPossibili(adesso, orariNegozi);
@@ -146,8 +167,10 @@ export function DeliverySlotPicker({
     if (!caduta) return;
     setAvvisoSpostata(caduta.avviso);
     // La fascia nominata nell'avviso è quella che resta segnata: si mette prima di cambiare giorno.
-    if (caduta.day === 'today') onTodayTimeChange(caduta.fascia);
-    else onTomorrowTimeChange(caduta.fascia);
+    if (caduta.fascia) {
+      if (caduta.day === 'today') onTodayTimeChange(caduta.fascia);
+      else onTomorrowTimeChange(caduta.fascia);
+    }
     onDayChange(caduta.day);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day, expressAvailable, veloceInAttesa]);
@@ -224,7 +247,9 @@ export function DeliverySlotPicker({
       {adessoInAttesa && (
         <p role="status" className="text-sm text-ink-700">{RIGA_VELOCE_IN_ATTESA}</p>
       )}
-      {!expressAvailable && motivoVeloce && !avvisoSpostata && (
+      {/* 31/10/2026 — Il perché resta anche sotto l'avviso: «il negozio è chiuso» è l'unica notizia sugli
+          orari che arriva alla cassa, e serviva proprio quando la veloce cade. */}
+      {!expressAvailable && motivoVeloce && (
         <p className="text-xs text-ink-500">{motivoVeloce}</p>
       )}
 

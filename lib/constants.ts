@@ -90,19 +90,7 @@ export const VELOCITA_MEDIA_BICI_KMH = 15;
  */
 export const PICKUP_DISCOUNT_PERCENT = 0;
 
-/**
- * Il ritiro in negozio si puo' scegliere in cassa?
- *
- * No, per adesso. Stesso motivo dello sconto qui sopra: coi negozi non se n'e'
- * ancora parlato. Tenerlo acceso senza sconto non basterebbe, perche' un ordine
- * ritirato in negozio oggi non arriva mai a «consegnato»: il solo modo di
- * chiudere un ordine e' il bottone del fattorino, e su un ritiro il fattorino
- * non c'e'. Il negoziante consegnerebbe a mano e resterebbe senza incasso.
- *
- * Si riaccende cambiando questa riga in `true` — ma prima va data al venditore
- * una via per confermare il ritiro.
- */
-export const RITIRO_IN_NEGOZIO_ATTIVO = false;
+export { RITIRO_IN_NEGOZIO_ATTIVO } from './ritiro-in-negozio';
 
 /**
  * Quanto prende il fattorino per una consegna, in centesimi.

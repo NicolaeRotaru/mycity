@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { RITIRO_IN_NEGOZIO_ATTIVO } from './ritiro-in-negozio';
+
 /**
  * Personalizzazione vetrina negozio — tipi, validazione (zod), cataloghi curati
  * e helper puri. Modulo "single source of truth" sul modello di lib/store-hours.ts.
@@ -101,7 +103,7 @@ export const DEFAULT_COVER = COVER_PRESETS[0].key;
 const COVER_KEYS: string[] = COVER_PRESETS.map((p) => p.key);
 
 /** Badge "punti di forza" selezionabili dal venditore (catalogo chiuso). */
-export const BADGE_CATALOG = [
+const TUTTI_I_BADGE = [
   { key: 'produzione_propria', label: 'Produzione propria' },
   { key: 'consegna_rapida',    label: 'Consegna rapida' },
   { key: 'prodotti_locali',    label: 'Prodotti locali' },
@@ -112,8 +114,21 @@ export const BADGE_CATALOG = [
   { key: 'sostenibile',        label: 'Sostenibile' },
 ] as const;
 
-export type BadgeKey = (typeof BADGE_CATALOG)[number]['key'];
-const BADGE_KEYS: string[] = BADGE_CATALOG.map((b) => b.key);
+export type BadgeKey = (typeof TUTTI_I_BADGE)[number]['key'];
+/** Tutti i badge che un salvataggio accetta: anche uno spento già scelto non deve rompere il modulo. */
+const BADGE_KEYS: string[] = TUTTI_I_BADGE.map((b) => b.key);
+
+/**
+ * 31/10/2026 — Un badge che promette un servizio spento non si offre e non si mostra. Il ritiro in
+ * negozio è messo da parte (`RITIRO_IN_NEGOZIO_ATTIVO`), ma il negoziante poteva scegliere il
+ * bollino «Ritiro in negozio» e la sua pagina lo esponeva, anche come categoria in copertina.
+ */
+function badgeAttivo(key: string): boolean {
+  return key !== 'ritiro_in_negozio' || RITIRO_IN_NEGOZIO_ATTIVO;
+}
+
+/** I badge che il venditore può scegliere adesso. */
+export const BADGE_CATALOG = TUTTI_I_BADGE.filter((b) => badgeAttivo(b.key));
 
 export const MAX_FEATURED = 8;
 export const MAX_BADGES = 6;
@@ -202,7 +217,10 @@ export type StoreCustomization = z.infer<typeof storeCustomizationSchema>;
 export function normalizeCustomization(raw: unknown): StoreCustomization {
   if (!raw || typeof raw !== 'object') return {};
   const parsed = storeCustomizationSchema.safeParse(raw);
-  return parsed.success ? parsed.data : {};
+  if (!parsed.success) return {};
+  // Un badge spento già salvato non arriva alla pagina, né all'editor: il prossimo salvataggio lo toglie.
+  const { badges } = parsed.data;
+  return badges ? { ...parsed.data, badges: badges.filter(badgeAttivo) } : parsed.data;
 }
 
 /** Hex dell'accent, con fallback al brand se assente/non valido. */
@@ -262,5 +280,5 @@ export function socialLinks(c?: StoreCustomization | null): SocialLink[] {
 }
 
 export function badgeLabel(key: string): string {
-  return BADGE_CATALOG.find((b) => b.key === key)?.label ?? key;
+  return TUTTI_I_BADGE.find((b) => b.key === key)?.label ?? key;
 }

@@ -228,17 +228,25 @@ export function paragrafiConsegne(fatti: FattiDellaConsegna = fattiDellaConsegna
     ];
   }
 
+  // 31/10/2026 — Qui c'era «resta in stato "in consegna" finché non interviene l'assistenza»: era vero
+  // finché il fattorino non aveva altra strada che il codice del cliente. Ora ce l'ha (rotta
+  // app/api/rider/orders/[id]/cliente-assente) e la procedura l'ha scelta Nicola (registro dei fatti,
+  // consegna.cliente-assente, 31/10 12:23): niente risposta neanche al telefono → «cliente assente»,
+  // ordine annullato con `annullaERimborsa`, rimborso intero, merce al Venditore, nessuna trattenuta.
+  // I tentativi restano NON registrati: per questo il numero di telefonate non si promette.
   return [
     apertura,
-    'Se la consegna non riesce perché l’Acquirente non è reperibile, l’ordine non si chiude da solo: ' +
-      'resta in stato «in consegna» finché non interviene l’assistenza. Segnalalo dal modulo Contatti ' +
-      'indicando il numero d’ordine.',
+    'Se alla consegna l’Acquirente non è reperibile, il Rider prova a telefonargli. Se non risponde, ' +
+      'il Rider segna «cliente assente»: l’ordine non si chiude da solo e non resta in sospeso, lo ' +
+      'annulla il Rider e la merce torna al Venditore.',
     // 30/10/2026 — Qui c'era «rimborsato per intero, spese di consegna comprese», sempre. In un carrello
     // con più negozi non è vero (consegna.negozio-che-rifiuta): i casi e quello che torna li dice
     // `COSA_TORNA`, e la prova li rifà con annullaERimborsa sulla pagina disegnata.
     'In questo caso l’ordine è annullato e il rimborso va sullo stesso mezzo di pagamento usato per ' +
       `l’acquisto. ${CASI_DEL_CARRELLO.map(fraseDelCaso).join(' ')} ${esempioDelCarrello()} ` +
-      'Sugli ordini pagati alla consegna non è stato addebitato nulla.',
+      'Sugli ordini pagati alla consegna non è stato addebitato nulla. Il credito MyCity usato ' +
+      'sull’ordine torna sul tuo saldo. Per qualsiasi dubbio scrivi dal modulo Contatti indicando il ' +
+      'numero d’ordine.',
     'MyCity non trattiene le spese di consegna in caso di mancata consegna: una trattenuta ' +
       'richiederebbe la prova dei tentativi di contatto, che la piattaforma oggi non registra. Se e ' +
       'quando quella procedura sarà attiva, questa sezione lo dirà con il numero di tentativi e i tempi ' +

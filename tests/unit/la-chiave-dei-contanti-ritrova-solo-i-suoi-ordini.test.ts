@@ -27,6 +27,7 @@ const PIACENZA = { lat: 45.0526, lng: 9.6929 };
 type Riga = Record<string, unknown>;
 const stato = vi.hoisted(() => ({
   ordini: [] as Riga[],
+  articoli: [] as Riga[],
   tentativi: [] as Riga[],
   profili: [] as Riga[],
   vetrina: null as null | { data: Riga[] | null; error: { message: string } | null },
@@ -69,6 +70,7 @@ vi.mock('@/lib/supabase/server', () => {
   ];
   /** Le colonne su cui ogni tabella finta filtra davvero: le altre condizioni non toccano questi dati. */
   const colonne: Record<string, string[]> = {
+    order_items: ['order_id'],
     orders: ['id', 'user_id', 'payment_method', 'created_at'],
     cod_checkout_attempts: ['chiave', 'user_id'],
     profiles: ['id'],
@@ -81,6 +83,7 @@ vi.mock('@/lib/supabase/server', () => {
     if (nome === 'profiles') return stato.profili;
     if (nome === 'seller_public_profiles') return stato.negozi;
     if (nome === 'products') return prodotti;
+    if (nome === 'order_items') return stato.articoli;
     return [];
   };
   const tavola = (nome: string) => {
@@ -107,6 +110,7 @@ vi.mock('@/lib/supabase/server', () => {
           stato.ordini.push({ ...valori, id, created_at: new Date().toISOString() });
           return { data: { id }, error: null };
         }
+        if (nome === 'order_items') { stato.articoli.push({ ...valori }); return { data: null, error: null }; }
         if (nome === 'cod_checkout_attempts') {
           if (stato.rivendicaGuasta) return { data: null, error: { code: '08006', message: 'connessione persa' } };
           if (stato.tentativi.some((t) => t.chiave === valori.chiave)) return { data: null, error: { code: '23505', message: 'duplicate key' } };
@@ -199,6 +203,7 @@ const alForno = () => stato.ordini.filter((o) => o.seller_id === FORNO);
 
 beforeEach(() => {
   stato.ordini.length = 0;
+  stato.articoli.length = 0;
   stato.tentativi.length = 0;
   stato.profili.length = 0;
   stato.negozi.length = 0;

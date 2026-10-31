@@ -5,6 +5,7 @@ import {
   fasciaAmmessa,
   finestraDellaFascia,
 } from './quando-arriva';
+import { RITIRO_IN_NEGOZIO_ATTIVO } from './ritiro-in-negozio';
 
 export type HoursInterval = [string, string];
 export type StoreHours = Partial<
@@ -65,11 +66,8 @@ export function romeNow(base: Date = new Date()): Date {
  */
 export function isStoreClosedForOrder(storeHours: unknown, now: Date = romeNow()): boolean {
   if (!storeHours || typeof storeHours !== 'object') return false;
-  const hours = storeHours as StoreHours;
-  const configured = DAY_KEYS.some(
-    (k) => Array.isArray(hours[k]) && (hours[k] as HoursInterval[]).length > 0,
-  );
-  if (!configured) return false;
+  const hours = orariImpostati(storeHours);
+  if (!hours) return false;
   const todayKey = DAY_KEYS[now.getDay()];
   return !isOpenNow(hours[todayKey], now);
 }
@@ -198,14 +196,33 @@ function finestraDelRitiro(
   return { intervals: hours[DAY_KEYS[now.getDay()]], da: minutiDelGiorno(now), a: limite };
 }
 
-/** Gli orari scritti, se il negozio li ha impostati davvero; `null` = nessun blocco (NULL-safe). */
-function orariImpostati(storeHours: unknown): StoreHours | null {
+/**
+ * Gli orari scritti, se il negozio li ha impostati davvero; `null` = nessun blocco (NULL-safe).
+ *
+ * 31/10/2026 — «Impostati» vuol dire anche «tutti chiusi». Prima contava solo un giorno con delle
+ * ore: il negoziante che per le ferie premeva «Chiudi» su ogni giorno tornava «orari mai
+ * impostati», cioè aperto a qualunque ora, e gli ordini passavano. La settimana scritta per intero
+ * (tutti e sette i giorni presenti, anche vuoti: lo fa l'editor degli orari) è una scelta, non un
+ * dato che manca. Un giorno solo, vuoto, resta «non lo so», come prima.
+ *
+ * 31/10/2026 (ondata 3, secondo giro) — Non servono tutti e sette. L'editor di prima scriveva solo
+ * il giorno toccato, e «Chiudi» compare solo sui giorni aperti: Pane Quotidiano (la domenica mai
+ * scritta) in ferie restava con sei liste vuote e senza `sun`, e martedì 3/11 alle 10:00 l'ordine
+ * per «Domani · 9:00–11:00» passava. L'editor mostra un giorno mai scritto come chiuso, quindi
+ * basta la maggior parte della settimana scritta (`GIORNI_PER_UNA_SETTIMANA_SCRITTA`), tutta
+ * chiusa. Uno o due giorni vuoti e basta restano «non lo so».
+ */
+const GIORNI_PER_UNA_SETTIMANA_SCRITTA = 4;
+
+export function orariImpostati(storeHours: unknown): StoreHours | null {
   if (!storeHours || typeof storeHours !== 'object') return null;
   const hours = storeHours as StoreHours;
   const configured = DAY_KEYS.some(
     (k) => Array.isArray(hours[k]) && (hours[k] as HoursInterval[]).length > 0,
   );
-  return configured ? hours : null;
+  const giorniScritti = DAY_KEYS.filter((k) => Array.isArray(hours[k])).length;
+  const settimanaScritta = giorniScritti >= GIORNI_PER_UNA_SETTIMANA_SCRITTA;
+  return configured || settimanaScritta ? hours : null;
 }
 
 /**
@@ -294,6 +311,12 @@ export function ultimoRitiroDellaFascia(
 }
 
 /**
+ * 31/10/2026 — Il ritiro in negozio è spento (`RITIRO_IN_NEGOZIO_ATTIVO`): la cassa non lo offre,
+ * e il no della rotta non può consigliarlo. Torna da solo quando l'interruttore si riaccende.
+ */
+const OPPURE_RITIRA = RITIRO_IN_NEGOZIO_ATTIVO ? ', oppure ritira in negozio' : '';
+
+/**
  * Perché l'ordine non parte, detto alla persona.
  *
  * Una casa sola per tutt'e due le rotte, e una frase per ciascuno dei tre no.
@@ -309,13 +332,13 @@ export function motivoNegozioChiuso(
 ): string {
   const scelta = leggiFinestraConsegna(fascia);
   if (scelta?.giorno === 'domani') {
-    return `${nomeNegozio} domani è chiuso in quella fascia. Scegli un altro orario, oppure ritira in negozio.`;
+    return `${nomeNegozio} domani è chiuso in quella fascia. Scegli un altro orario${OPPURE_RITIRA}.`;
   }
   if (scelta?.giorno === 'oggi') {
     if (scelta.aMinuti <= minutiDelGiorno(now)) {
       return 'La fascia che hai scelto è già passata. Scegline una ancora disponibile, oppure ordina per domani.';
     }
-    return `${nomeNegozio} oggi è chiuso in quella fascia. Scegli un altro orario, oppure ritira in negozio.`;
+    return `${nomeNegozio} oggi è chiuso in quella fascia. Scegli un altro orario${OPPURE_RITIRA}.`;
   }
   return `${nomeNegozio} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`;
 }

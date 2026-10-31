@@ -193,6 +193,8 @@ describe('«Migliora tutto» e la diagnosi, nel modulo vero', () => {
   async function apriLaFocaccia() {
     const mod = await monta('components/seller/ProductForm.tsx');
     return accendi(mod.default, {
+      // I pulsanti AI, come il giorno in cui si riaccendono (al lancio sono spenti).
+      aiAccesa: true,
       mode: 'edit',
       categories: CATEGORIE,
       initialValues: {

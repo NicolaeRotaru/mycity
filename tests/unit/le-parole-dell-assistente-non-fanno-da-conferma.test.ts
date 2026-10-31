@@ -206,6 +206,8 @@ describe('nel modulo vero, dopo la dettatura', () => {
   async function detta(testo: string, prodotto: { categoria: string; attributi: Record<string, unknown> } | null) {
     const mod = await monta('components/seller/ProductForm.tsx');
     const s = accendi(mod.default, {
+      // I pulsanti AI, come il giorno in cui si riaccendono (al lancio sono spenti).
+      aiAccesa: true,
       mode: prodotto ? 'edit' : 'create',
       categories: CATEGORIE,
       initialValues: prodotto

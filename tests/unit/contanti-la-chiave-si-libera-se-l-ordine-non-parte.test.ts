@@ -266,9 +266,13 @@ describe('la chiave del tentativo in contanti, quando l ordine non parte', () =>
 describe('la chiave nel browser dopo un errore', () => {
   it('si butta, cosi chi corregge il carrello e ripreme riparte pulito', async () => {
     const { laChiaveVaButtata } = await import('@/lib/ordini/chiave-dopo-l-errore');
-    expect(laChiaveVaButtata({ error: { message: 'Il negozio e chiuso' } })).toBe(true);
-    expect(laChiaveVaButtata({})).toBe(true);
-    expect(laChiaveVaButtata(undefined)).toBe(true);
+    // 31/10/2026 — si butta quando il server dice di averla liberata lui
+    // (`chiaveLiberata`, da `esciERilascia`). Una risposta che non si sa
+    // leggere (`{}`: la funzione caduta a meta') la tiene: lì l'ordine può
+    // essere già nato, e una chiave nuova farebbe il doppione.
+    expect(laChiaveVaButtata({ error: { message: 'Il negozio e chiuso' }, chiaveLiberata: true })).toBe(true);
+    expect(laChiaveVaButtata({})).toBe(false);
+    expect(laChiaveVaButtata(undefined)).toBe(false);
   });
 
   it('ma NON quando il server dice che c e un invio gemello in corso', async () => {

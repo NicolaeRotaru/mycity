@@ -25,7 +25,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
   const router = useRouter();
   const qc = useQueryClient();
 
-  const { data: product, isLoading, error } = useQuery({
+  const { data: product, isLoading, error, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto } = useQuery({
     queryKey: queryKeys.admin.product(id),
     queryFn: async () => {
       const { data, error } = await supabase
@@ -36,11 +36,19 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
       if (error) throw error;
       return data as Record<string, unknown>;
     },
+    // 31/10/2026 — IL MODULO SI APRE SOLO CON LA SCORTA DELLA BANCA DATI.
+    // Il modulo tiene la scorta vista all'apertura e la manda accanto a quella
+    // nuova: se partisse dalla copia in memoria (letta minuti prima, prima di
+    // una vendita) ogni «Salva» direbbe «la scorta e' cambiata», anche dopo
+    // aver riaperto il prodotto come chiede il messaggio. Si rilegge sempre,
+    // e il modulo aspetta che quella lettura finisca (sotto, prima del modulo).
+    refetchOnMount: 'always',
   });
 
-  const { data: variants = [], isLoading: variantsLoading } = useQuery({
+  const { data: variants = [], isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette } = useQuery({
     queryKey: [...queryKeys.admin.product(id), 'variants'],
     queryFn: () => loadProductVariants(id),
+    refetchOnMount: 'always',
   });
 
   const { data: categories = [] } = useQuery({
@@ -53,7 +61,15 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
   });
 
   const update = useMutation({
-    mutationFn: async ({ payload, variants: nextVariants }: { payload: ProductPayload; variants: ProductVariant[] }) => {
+    mutationFn: async ({
+      payload,
+      variants: nextVariants,
+      scorteViste,
+    }: {
+      payload: ProductPayload;
+      variants: ProductVariant[];
+      scorteViste: Record<string, number>;
+    }) => {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/admin/products', {
         method: 'PATCH',
@@ -61,7 +77,10 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
           'content-type': 'application/json',
           ...(session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify({ id, ...payload, variants: nextVariants }),
+        // 31/10/2026 — con le scorte viste all'apertura: una variante venduta
+        // mentre la scheda era aperta non torna in vetrina (la rotta le passa a
+        // chi salva le varianti, che riscrive solo quelle cambiate a mano).
+        body: JSON.stringify({ id, ...payload, variants: nextVariants, scorteViste }),
       });
       const body = await res.json().catch(() => null);
       if (!res.ok) throw new Error(body?.error?.message ?? 'Salvataggio non riuscito');
@@ -89,7 +108,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  if (isLoading || variantsLoading) return <LoadingState />;
+  if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette)) return <LoadingState />;
   if (error || !product) {
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
@@ -146,7 +165,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
         submitting={update.isPending}
         deleting={removeProduct.isPending}
         productId={id}
-        onSubmit={(payload, ctx) => update.mutate({ payload, variants: ctx.variants })}
+        onSubmit={(payload, ctx) => update.mutate({ payload, variants: ctx.variants, scorteViste: ctx.scorteViste })}
         onDelete={async () => {
           const ok = await confirmDialog({
             title: 'Eliminare il prodotto?',
