@@ -30,6 +30,9 @@ const MOTIVO_CLIENTE_ASSENTE = 'cliente_assente';
 
 const IdOrdine = z.string().uuid();
 
+/** 400 → «4,00 €», come nelle email. */
+const euro = (cents: number) => `${(cents / 100).toFixed(2).replace('.', ',')} €`;
+
 async function handler(user: { id: string }, idGrezzo: string): Promise<NextResponse> {
   const id = IdOrdine.safeParse(idGrezzo);
   if (!id.success) return ApiErrors.notFound('Ordine non trovato');
@@ -75,14 +78,26 @@ async function handler(user: { id: string }, idGrezzo: string): Promise<NextResp
   }
 
   const sigla = order.id.slice(0, 6).toUpperCase();
+  // 31/10/2026 (collaudo) — Qui il cliente leggeva sempre «Ti abbiamo rimborsato tutto», anche quando il
+  // credito MyCity speso sull'ordine non era tornato (`creditoNonTornatoCents`): la carta sì, il credito
+  // no. Ora la frase dice cosa è tornato e cosa manca. Gli amministratori li ha già avvisati
+  // `annullaERimborsa`, con ordine, cliente e importo.
+  const mancanteCents = esito.creditoNonTornatoCents ?? 0;
+  const primaFrase = `Il fattorino non ti ha trovato all'indirizzo dell'ordine #${sigla}.`;
+  const corpoCliente =
+    mancanteCents > 0
+      ? `${primaFrase} ${esito.refundId ? 'Il rimborso sulla carta è partito' : 'Non devi pagare niente'}, ` +
+        `ma il credito MyCity che avevi usato (${euro(mancanteCents)}) non è ancora tornato sul tuo saldo. ` +
+        "L'abbiamo segnalato all'assistenza, che te lo restituisce a mano: non devi fare niente."
+      : esito.refundId
+        ? `${primaFrase} Ti abbiamo rimborsato tutto.`
+        : `${primaFrase} Non devi pagare niente.`;
   const { error: nErr } = await admin.from('notifications').insert([
     {
       category: 'order',
       user_id: order.user_id,
       title: '✕ Ordine annullato: non eri in casa',
-      body: esito.refundId
-        ? `Il fattorino non ti ha trovato all'indirizzo dell'ordine #${sigla}. Ti abbiamo rimborsato tutto.`
-        : `Il fattorino non ti ha trovato all'indirizzo dell'ordine #${sigla}. Non devi pagare niente.`,
+      body: corpoCliente,
       link: `/orders/${order.id}`,
     },
     ...(order.seller_id

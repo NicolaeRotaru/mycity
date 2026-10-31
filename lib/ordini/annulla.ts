@@ -185,6 +185,14 @@ export async function annullaERimborsa(
     return walletCents;
   }
 
+  // 31/10/2026 (collaudo) — L'email di annullo scrive «Il credito MyCity che avevi usato (4,00 €) ti è
+  // stato restituito» leggendo `wallet_applied_cents`. Se lo storno è caduto, quella riga mentiva: l'email
+  // riceve solo il credito tornato davvero, e con 0 la riga non esce.
+  const conIlCreditoTornato = (nonTornatoCents: number) => ({
+    ...order,
+    wallet_applied_cents: Math.max(0, Number(order.wallet_applied_cents ?? 0) - nonTornatoCents),
+  });
+
   /**
    * 27/8/2026 (R121) — IL CODICE SCONTO RESTAVA BRUCIATO.
    *
@@ -358,7 +366,7 @@ export async function annullaERimborsa(
       // 30/10/2026 — `refundOrder` manda «Rimborso emesso» con l'importo e basta: se la consegna del
       // carrello si è rifatta, il cliente riceve anche il perché dei 16 € su 18 e il conto della frutta.
       if (giro?.avviso) {
-        await avvisaIlClienteDellAnnullo(admin, order, opts.reason, { avviso: giro.avviso, come: 'carta' });
+        await avvisaIlClienteDellAnnullo(admin, conIlCreditoTornato(creditoNonTornato), opts.reason, { avviso: giro.avviso, come: 'carta' });
         await avvisaLaCampanellaDelCarrello(admin, order.user_id, giro.avviso, 'carta');
       }
       return {
@@ -418,7 +426,12 @@ export async function annullaERimborsa(
   // 30/10/2026 — Se la consegna del carrello si è rifatta, la stessa email dice il conto nuovo degli
   // ordini rimasti («alla porta paghi 15 € invece di 13»), e lo dice anche la campanella.
   const come: ComeHaPagato = order.payment_method === 'cod' ? 'contanti' : 'da-pagare';
-  await avvisaIlClienteDellAnnullo(admin, order, opts.reason, giro?.avviso ? { avviso: giro.avviso, come } : null);
+  await avvisaIlClienteDellAnnullo(
+    admin,
+    conIlCreditoTornato(creditoNonTornato),
+    opts.reason,
+    giro?.avviso ? { avviso: giro.avviso, come } : null,
+  );
   if (giro?.avviso) await avvisaLaCampanellaDelCarrello(admin, order.user_id, giro.avviso, come);
 
   return { ok: true, refundId: null, ...(creditoNonTornato > 0 ? { creditoNonTornatoCents: creditoNonTornato } : {}) };
