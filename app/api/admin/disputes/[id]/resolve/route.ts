@@ -259,6 +259,12 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // Chiudere il reclamo aggiornava soltanto la tabella dei reclami: il campo
   // sull'ordine restava 'OPEN' per sempre, e il venditore non veniva pagato mai
   // piu'. Non c'era nessun punto nel codice che lo riportasse indietro.
+  //
+  // 31/10/2026 — Dalla migrazione 184 il trigger non scrive piu' sull'ordine:
+  // il reclamo aperto lo vede il giro dei bonifici dalla tabella `disputes`.
+  // Chiuso il reclamo, la riga qui sotto ('RESOLVED') basta a far ripartire il
+  // bonifico; la pausa del carrello, se c'e', resta finche' non la toglie la
+  // divisione. Prima la 063 lasciava 'OPEN' su `dispute_status` per sempre.
   if (dispute.order_id) {
     // 050 / 173 — Questa rotta scriveva `orders.dispute_status`, che è la
     // colonna del CHARGEBACK BANCARIO e appartiene solo al webhook di Stripe.

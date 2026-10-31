@@ -47,6 +47,7 @@ function scrittura(valori: Riga) {
     eq: () => b,
     in: () => b,
     or: () => b,
+    is: () => b,
     select: () => b,
     then: (risolvi: (x: unknown) => unknown) => {
       Object.assign(state.ordine, valori);

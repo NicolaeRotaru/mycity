@@ -107,12 +107,25 @@ function nominaUnVincoloDiStato(errore: unknown): boolean {
  * Come per il 23514, per NOME: PGRST204 vale solo se nomina una colonna che
  * nasce con la 124. Un nome scritto male nel codice resta un errore vero.
  */
+/**
+ * 31/10/2026 — LE ORE DEI TURNI DEI BONIFICI NASCONO CON LA 126, NON CON LA 124.
+ *
+ * Il turno del bonifico (al negozio e al fattorino) scrive l'ora in cui è
+ * stato preso, e il suo ripiego la toglie se il database non ce l'ha. Ma il
+ * riconoscimento del PGRST204 qui sotto guardava solo le colonne della 124:
+ * su un database senza la 126 — la produzione di oggi — PostgREST rispondeva
+ * «Could not find the 'payout_claimed_at' column», il ripiego non scattava e
+ * ogni bonifico finiva in TRANSFER_FAILED prima di partire. Sempre per NOME:
+ * valgono solo queste due, che sono quelle che il ripiego toglie davvero.
+ */
+export const COLONNE_126_DEI_TURNI = ['payout_claimed_at', 'rider_payout_claimed_at'] as const;
+
 function nominaUnaColonna124(errore: unknown): boolean {
   const e = errore as { message?: unknown; details?: unknown } | null;
   const testo = `${typeof e?.message === 'string' ? e.message : ''} ${typeof e?.details === 'string' ? e.details : ''}`;
   // Il bordo di parola tiene fuori i nomi più lunghi (`gross_total_cents_bis`):
   // `_` conta come lettera, quindi `payout_tentativo` non si trova dentro `rider_payout_tentativo`.
-  return COLONNE_124.some((colonna) => new RegExp(`\\b${colonna}\\b`).test(testo));
+  return [...COLONNE_124, ...COLONNE_126_DEI_TURNI].some((colonna) => new RegExp(`\\b${colonna}\\b`).test(testo));
 }
 
 export function eSchemaIndietro(errore: unknown): boolean {
