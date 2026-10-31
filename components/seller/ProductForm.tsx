@@ -711,6 +711,20 @@ export default function ProductForm({
         delete (payload as Partial<ProductPayload>).stock;
       }
       /**
+       * 31/10/2026 — E QUELLA CAMBIATA SI SCRIVE SOLO SE NESSUNO L'HA MOSSA.
+       * Accanto alla scorta nuova parte quella vista all'apertura: la porta di
+       * scrittura la confronta con la banca dati e, se nel frattempo e' arrivato
+       * un ordine, non salva e lo dice. Con le varianti la scorta del prodotto
+       * non parte proprio: e' la somma delle varianti, e la tiene il trigger.
+       *
+       * LA PROVA: tests/unit/la-scorta-si-scrive-solo-se-in-banca-dati-c-e-ancora-quella-vista.test.ts
+       */
+      if (mode === 'edit' && hasVariants) delete (payload as Partial<ProductPayload>).stock;
+      if (mode === 'edit' && 'stock' in payload && typeof scortaAllApertura.current.prodotto === 'number') {
+        // La chiave e' `SCORTA_VISTA` di lib/products/salvataggio-tracciato.
+        (payload as unknown as Record<string, unknown>).stock_visto = scortaAllApertura.current.prodotto;
+      }
+      /**
        * 6/9/2026 — UN SALVATAGGIO SCRIVE SOLO QUELLO CHE L'UTENTE HA CHIESTO.
        *
        * Il modulo avvisava del rischio e lasciava il pulsante acceso: chi

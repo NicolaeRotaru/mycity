@@ -34,6 +34,13 @@ type SellerProductRow = {
 };
 
 /** Tab di filtro sugli stati realmente usati dal catalogo. */
+/**
+ * Il motivo che la porta di scrittura da' quando la scorta in banca dati non e'
+ * piu' quella vista (`ScortaCambiata` di lib/products/salvataggio-tracciato, e la
+ * stessa frase per le varianti): arriva qui come testo, dalla rotta.
+ */
+const SCORTA_CAMBIATA = /cambiata mentre modificavi/;
+
 const TABS: { key: string; label: string; match: (s: string) => boolean }[] = [
   { key: 'all',       label: 'Tutti',      match: () => true },
   { key: 'available', label: 'In vendita', match: (s) => s === 'available' },
@@ -153,7 +160,7 @@ export default function SellerProductsPage() {
 
   // Modifica in blocco: prezzo + stock direttamente nella lista, salvati in un colpo.
   const bulkSave = useMutation({
-    mutationFn: async (edits: Record<string, { price?: string; stock?: string }>) => {
+    mutationFn: async (edits: Record<string, { price?: string; stock?: string; stockVisto?: number }>) => {
       const ids = Object.keys(edits);
       for (const id of ids) {
         const e = edits[id];
@@ -165,6 +172,10 @@ export default function SellerProductsPage() {
         if (e.stock != null && e.stock !== '') {
           const n = Number(e.stock);
           if (Number.isFinite(n)) patch.stock = n;
+          // 31/10/2026 — la scorta che aveva davanti quando l'ha cambiata: se nel
+          // frattempo e' arrivato un ordine la porta non scrive e lo dice
+          // (la chiave e' `SCORTA_VISTA` di lib/products/salvataggio-tracciato).
+          if (Number.isFinite(n) && typeof e.stockVisto === 'number') patch.stock_visto = e.stockVisto;
         }
         if (Object.keys(patch).length === 0) continue;
         // 8/9/2026 — QUI SI CAMBIA UN PREZZO: DEVE RESTARE SCRITTO.
@@ -174,11 +185,34 @@ export default function SellerProductsPage() {
         // di sapere dopo cosa c'era prima. La banda del 30% qui non c'entra —
         // il numero lo batte il negoziante — ma la traccia si', per lo stesso
         // motivo per cui serve sul modulo del prodotto.
-        await salvaProdottoDalBrowser({
-          prodottoId: id,
-          payload: patch,
-          origine: 'venditore-elenco-blocco',
-        });
+        try {
+          await salvaProdottoDalBrowser({
+            prodottoId: id,
+            payload: patch,
+            origine: 'venditore-elenco-blocco',
+          });
+        } catch (err) {
+          // 31/10/2026 — DOPO UN CONFLITTO LA LISTA NON RESTA SUI NUMERI VECCHI.
+          // Quelli gia' salvati escono dalle modifiche (non si rimandano), e la
+          // scorta che nel frattempo e' cambiata si toglie: il campo torna al
+          // numero vero della banca dati (onError rilegge la lista) e il
+          // negoziante lo riscrive guardando quello.
+          const giaSalvati = ids.slice(0, ids.indexOf(id));
+          const scortaMossa = 'stock_visto' in patch && err instanceof Error && SCORTA_CAMBIATA.test(err.message);
+          setEdits((attuali) => {
+            const resto = { ...attuali };
+            for (const s of giaSalvati) delete resto[s];
+            if (scortaMossa && resto[id]) {
+              const senzaScorta = { ...resto[id] };
+              delete senzaScorta.stock;
+              delete senzaScorta.stockVisto;
+              if (senzaScorta.price != null && senzaScorta.price !== '') resto[id] = senzaScorta;
+              else delete resto[id];
+            }
+            return resto;
+          });
+          throw err;
+        }
       }
       return ids.length;
     },
@@ -188,7 +222,10 @@ export default function SellerProductsPage() {
       setBulk(false);
       setEdits({});
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => {
+      qc.invalidateQueries({ queryKey: queryKeys.seller.products });
+      toast.error(friendlyError(err));
+    },
   });
 
   const askDelete = async (p: SellerProductRow) => {
@@ -204,13 +241,21 @@ export default function SellerProductsPage() {
 
   // Stato "modifica in blocco".
   const [bulk, setBulk] = useState(false);
-  const [edits, setEdits] = useState<Record<string, { price?: string; stock?: string }>>({});
+  const [edits, setEdits] = useState<Record<string, { price?: string; stock?: string; stockVisto?: number }>>({});
   const editCount = Object.keys(edits).filter((id) => {
     const e = edits[id];
     return (e.price != null && e.price !== '') || (e.stock != null && e.stock !== '');
   }).length;
-  const setField = (id: string, k: 'price' | 'stock', v: string) =>
-    setEdits((e) => ({ ...e, [id]: { ...(e[id] ?? {}), [k]: v } }));
+  const setField = (id: string, k: 'price' | 'stock', v: string, vista?: number | null) =>
+    setEdits((e) => ({
+      ...e,
+      [id]: {
+        ...(e[id] ?? {}),
+        [k]: v,
+        // Il numero a video al primo tasto, non quello di dopo un ricaricamento.
+        ...(k === 'stock' && e[id]?.stockVisto === undefined && typeof vista === 'number' ? { stockVisto: vista } : {}),
+      },
+    }));
   const valOf = (p: SellerProductRow, k: 'price' | 'stock'): string => {
     const e = edits[p.id];
     if (e && e[k] != null) return e[k] as string;
@@ -367,7 +412,7 @@ export default function SellerProductsPage() {
                       {bulk ? (
                         <input
                           value={valOf(p, 'stock')}
-                          onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''))}
+                          onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''), p.stock)}
                           inputMode="numeric"
                           aria-label={`Stock di ${p.name}`}
                           className="w-20 rounded-md border border-cream-300 px-2 py-1.5 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
@@ -467,7 +512,7 @@ export default function SellerProductsPage() {
                           Stock
                           <input
                             value={valOf(p, 'stock')}
-                            onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''))}
+                            onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''), p.stock)}
                             inputMode="numeric"
                             aria-label={`Stock di ${p.name}`}
                             className="w-16 rounded-md border border-cream-300 px-2 py-1 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
