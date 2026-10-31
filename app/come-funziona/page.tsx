@@ -1,13 +1,13 @@
 import { CONSEGNA_FRASE_INTERA } from '@/lib/promessa-consegna';
 import Link from 'next/link';
 import { Banknote, ShieldCheck, RotateCcw, ArrowRight, Store } from 'lucide-react';
-import { fraseComeSiPaga } from '@/lib/promesse-pubbliche';
+import { fraseComeSiPaga, SPIEGAZIONE_RESO } from '@/lib/promesse-pubbliche';
 import HowItWorks from '@/components/home/HowItWorks';
 
 export const metadata = {
   title: 'Come funziona · MyCity',
   description:
-    "Come funziona MyCity: scegli dai negozi di Piacenza, ordini in pochi tap e paghi alla consegna. Te lo portiamo a casa all'ora che scegli, reso entro 14 giorni.",
+    "Come funziona MyCity: scegli dai negozi di Piacenza, ordini in pochi tap e paghi alla consegna. Te lo portiamo a casa all'ora che scegli, reso entro 14 giorni sui prodotti non deperibili.",
   alternates: { canonical: '/come-funziona' },
   openGraph: {
     title: 'Come funziona · MyCity',
@@ -30,7 +30,7 @@ const REASSURANCE = [
   {
     Icon: RotateCcw,
     title: 'Reso entro 14 giorni',
-    desc: 'Cambi idea? Ti rimborsiamo senza domande.',
+    desc: SPIEGAZIONE_RESO,
   },
   {
     Icon: ShieldCheck,

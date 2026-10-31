@@ -304,7 +304,24 @@ export function fraseComeSiPaga(metodi: readonly MetodoPagamento[] = metodiAlChe
  * Carrello e checkout scrivevano già la versione onesta: la scheda prodotto era l'unica a promettere
  * la gratuità, ed è l'ultimo schermo prima dell'acquisto.
  */
-export const FRASE_RESO = 'Reso entro 14 giorni';
+/*
+ * 31/10/2026 (ondata 3) — E IL RESO NON VALE SU PANE E FRESCHI.
+ *
+ * «Reso entro 14 giorni» stava su ogni scheda, anche del pane, e la home e «Come funziona»
+ * aggiungevano «Cambi idea? Ti rimborsiamo senza domande.». L'art. 59 lett. d del Codice del
+ * Consumo esclude il ripensamento sui beni che si deteriorano in fretta, e l'art. 49 c.1 lett. m
+ * obbliga a dirlo PRIMA dell'acquisto: il sito diceva il contrario proprio dove si compra. Il primo
+ * negozio vero è un forno. Adesso ogni frase sul reso porta l'esclusione, da qui. Quali categorie
+ * sono escluse prodotto per prodotto è una decisione ancora da prendere (e un campo che il prodotto
+ * non ha): finché manca, l'esclusione si dice a tutti. Prova:
+ * tests/unit/il-reso-dice-quali-prodotti-sono-esclusi.test.tsx
+ */
+/** Chi resta fuori dal ripensamento (art. 59 lett. d Cod. Cons.), detto in parole semplici. */
+export const RESO_ESCLUSI = 'esclusi i prodotti freschi e deperibili';
+export const FRASE_RESO = `Reso entro 14 giorni, ${RESO_ESCLUSI}`;
+/** La spiegazione breve, dove c'è una riga in più (home, «Come funziona»). Niente «senza domande». */
+export const SPIEGAZIONE_RESO =
+  'Cambi idea? Hai 14 giorni per il recesso, ma non su pane, freschi e prodotti che si deteriorano in fretta. Se un prodotto arriva difettoso, vale sempre la garanzia legale.';
 
 /**
  * IL RIQUADRO «LO SAPEVI?» DEL CARRELLO — la frase che non reggeva i numeri sopra di sé.

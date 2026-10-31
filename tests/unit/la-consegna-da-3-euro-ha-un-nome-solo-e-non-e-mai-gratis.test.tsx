@@ -6,7 +6,7 @@ import { OrderSummary } from '@/components/checkout/OrderSummary';
 import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import { formatPrice } from '@/lib/format';
 import { cifraDellaVoce, riepilogoOrdine, type OrdinePerRiepilogo } from '@/lib/ordini/riepilogo-ordine';
-import { promessaSpedizione, VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
+import { FRASE_RESO, promessaSpedizione, VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
 
 /**
  * 27/10/2026 (terzo giro) — LA CONSEGNA DA 3 EURO: UN NOME SOLO, E MAI «GRATIS» SOPRA DI LEI.
@@ -32,7 +32,7 @@ const GRATIS = /gratis|gratuit/i;
 const RIEPILOGO_RILETTO =
   `Subtotale ${euro(2000)} ${VOCE_CONSEGNA} ${TRE_EURO} Totale ${euro(2300)} ` +
   `Ordina e paga alla consegna · ${euro(2300)} Non paghi adesso. Paghi in contanti al rider quando arriva. ` +
-  'Reso entro 14 giorni Venditore locale';
+  `${FRASE_RESO} Venditore locale`;
 /**
  * Lo stesso riepilogo per chi paga con la carta, riletto il 27/10 sera: 23 euro, niente regali.
  * Rispetto ai contanti cambiano solo le parole sul pagamento, sotto il totale.
@@ -40,7 +40,7 @@ const RIEPILOGO_RILETTO =
 const RIEPILOGO_RILETTO_CARTA =
   `Subtotale ${euro(2000)} ${VOCE_CONSEGNA} ${TRE_EURO} Totale ${euro(2300)} ` +
   `Paga con carta · ${euro(2300)} Pagamento sicuro con Stripe. Niente costi nascosti. ` +
-  'Reso entro 14 giorni Venditore locale';
+  `${FRASE_RESO} Venditore locale`;
 /** Le parole con cui un riepilogo può regalare una consegna che invece si paga. */
 const REGALO = /gratis|gratuit|omaggi|offert|regal|in dono|a costo zero|inclus/i;
 
@@ -196,7 +196,7 @@ describe('sopra la vecchia soglia dei 30 euro la cassa non regala la consegna da
       paymentMethod === 'card'
         ? `Paga con carta · ${totale} Pagamento sicuro con Stripe. Niente costi nascosti. `
         : `Ordina e paga alla consegna · ${totale} Non paghi adesso. Paghi in contanti al rider quando arriva. `;
-    return `Subtotale ${euro(spesaCentesimi)} ${VOCE_CONSEGNA} ${TRE_EURO} Totale ${totale} ${pagamento}Reso entro 14 giorni Venditore locale`;
+    return `Subtotale ${euro(spesaCentesimi)} ${VOCE_CONSEGNA} ${TRE_EURO} Totale ${totale} ${pagamento}${FRASE_RESO} Venditore locale`;
   };
   const cassa = (
     spesaCentesimi: number,
