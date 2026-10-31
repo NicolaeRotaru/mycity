@@ -14,9 +14,30 @@ import caricatoreFotoRemote from '@/lib/image-loader';
 type Trending = Tendenza;
 
 /**
+ * Quante visite nelle ultime 24 ore servono a un prodotto per entrare nella classifica.
+ *
+ * 31/10/2026 — LA CLASSIFICA ERA FINTA. Senza visite la lettura ripiega sugli ultimi prodotti
+ * pubblicati (`view_count: 0`), e questo riquadro li metteva in fila con le medaglie #1, #2 e #3
+ * sotto «Trending ora»: una classifica senza nessuna visita e nessuna vendita dietro. Tolto il
+ * negozio di prova, le medaglie sarebbero andate ai prodotti di Pane Quotidiano per il solo
+ * fatto di essere gli ultimi caricati.
+ *
+ * Adesso entra solo chi ha visite misurate, almeno queste. Sotto la soglia il riquadro non si
+ * disegna: meglio nessuna classifica che una classifica inventata.
+ */
+export const VISITE_MINIME_PER_LA_CLASSIFICA = 3;
+
+/** I prodotti che la classifica può mostrare: solo quelli con visite vere, dal più visto. */
+export function classificaVera(items: readonly Trending[]): Trending[] {
+  return items
+    .filter((it) => Number(it.view_count) >= VISITE_MINIME_PER_LA_CLASSIFICA)
+    .sort((a, b) => b.view_count - a.view_count);
+}
+
+/**
  * "Trending ora": top 8 prodotti più visualizzati nelle ultime 24h.
- * Aggrega `product_views` (vedi migration 027), in fallback mostra
- * gli ultimi prodotti pubblicati se non ci sono ancora views.
+ * Aggrega `product_views` (vedi migration 027). Se nessun prodotto arriva alla soglia di
+ * visite qui sopra, il riquadro non c'è.
  */
 export default function TrendingNow() {
   const { data: items = [], isLoading } = useQuery({
@@ -38,7 +59,8 @@ export default function TrendingNow() {
     );
   }
 
-  if (items.length === 0) return null;
+  const classifica = classificaVera(items);
+  if (classifica.length === 0) return null;
 
   return (
     <section>
@@ -58,7 +80,7 @@ export default function TrendingNow() {
       </div>
 
       <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-        {items.map((it, i) => {
+        {classifica.map((it, i) => {
           const p = it.product;
           const img = Array.isArray(p.images) && p.images[0] ? p.images[0] : null;
           return (
