@@ -12,6 +12,7 @@ import {
 import { EXPRESS_ETA_LABEL } from './delivery';
 import { ORE_DELLA_VELOCE, QUANDO_SI_PUO_LA_VELOCE } from './promessa-consegna';
 import { formatPrice } from './format';
+import { CARTA_ACCESA } from './funzioni-al-lancio';
 import { spesaPerConsegnaGratisColCodiceCents, tariffaConsegnaCents, vociDellaConsegna, type VociDellaConsegna } from './ordini/prezzi';
 
 /**
@@ -243,16 +244,25 @@ export type MetodoPagamento = 'carta-adesso' | 'contanti-alla-consegna';
  * carta adesso» e la cassa offriva solo i contanti. Adesso la condizione è UNA, qui, e la legge
  * anche il checkout (`cartaAlCheckoutDisponibile`): la frase e la cassa non possono più divergere.
  */
+/*
+ * 31/10/2026 — LA CHIAVE NON BASTA PIÙ: SERVE L'INTERRUTTORE.
+ *
+ * «Al lancio solo contanti» si reggeva sull'assenza della chiave: chi la metteva su Vercel
+ * cambiava cassa e frasi senza un avviso. Adesso la carta vuole DUE cose, la chiave e
+ * `CARTA_ACCESA` (lib/funzioni-al-lancio.ts), che si cambia solo con la firma di Nicola.
+ */
 export function cartaAlCheckoutDisponibile(
   chiave: string | undefined = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+  accesa: boolean = CARTA_ACCESA,
 ): boolean {
-  return !!chiave && chiave.trim() !== '';
+  return accesa === true && !!chiave && chiave.trim() !== '';
 }
 
 export function metodiAlCheckout(
   chiave: string | undefined = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+  accesa: boolean = CARTA_ACCESA,
 ): readonly MetodoPagamento[] {
-  return cartaAlCheckoutDisponibile(chiave)
+  return cartaAlCheckoutDisponibile(chiave, accesa)
     ? ['carta-adesso', 'contanti-alla-consegna']
     : ['contanti-alla-consegna'];
 }

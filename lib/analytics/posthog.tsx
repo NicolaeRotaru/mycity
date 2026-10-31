@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { readConsent } from '@/lib/consent';
+import { POSTHOG_ACCESO } from '@/lib/funzioni-al-lancio';
 import type { CaptureResult } from 'posthog-js';
 import {
   indirizzoSenzaDatiPersonali,
@@ -32,7 +33,9 @@ import {
  *   4. Vercel → Settings → Environment Variables: NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
  */
 
-const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+// 31/10/2026 — PostHog spento al lancio (POSTHOG_ACCESO): senza l'interruttore la
+// chiave su Vercel non basta a farlo partire.
+const POSTHOG_KEY = POSTHOG_ACCESO ? process.env.NEXT_PUBLIC_POSTHOG_KEY : undefined;
 const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
 
 // #227 — L'indirizzo che riceve gli eventi finisce sempre per `.i.posthog.com`.
@@ -256,12 +259,34 @@ export function proprietaSenzaDatiPersonali(
 }
 
 /**
+ * 31/10/2026 — I CLIC RACCOLTI DA SOLI NON PARTONO DALLE PAGINE CON DATI DI TERZI.
+ *
+ * Sulle pagine di `PAGINE_CON_DATI_DI_TERZI` si spegneva solo la telecamera. La raccolta automatica
+ * dei clic restava accesa: il negoziante che tocca il telefono del cliente in un ordine mandava
+ * negli Stati Uniti un evento col testo dell'elemento, cioè quel numero. Qui quei clic si fermano.
+ * Se non si sa su che pagina è nato il clic, non parte: meglio un clic in meno che un numero fuori.
+ */
+const EVENTI_DEI_CLIC = new Set(['$autocapture', '$rageclick', '$dead_click', '$copy_autocapture']);
+
+export function clicDaNonSpedire(evento: CaptureResult): boolean {
+  if (!EVENTI_DEI_CLIC.has(evento.event)) return false;
+  const dallEvento = evento.properties?.$pathname;
+  const percorsi = [
+    typeof dallEvento === 'string' ? dallEvento : null,
+    typeof window !== 'undefined' ? window.location?.pathname ?? null : null,
+  ].filter((p): p is string => !!p);
+  if (percorsi.length === 0) return true;
+  return percorsi.some((p) => !laPaginaSiPuoFilmare(p));
+}
+
+/**
  * Il cancello sul DATO: ogni evento passa di qui prima di partire, compresi
  * quelli che la libreria manda da sola (pageleave, autocapture, telecamera).
  * Non lancia mai: la telemetria non deve poter rompere una pagina.
  */
 export function eventoSenzaDatiPersonali(evento: CaptureResult | null): CaptureResult | null {
   if (!evento) return evento;
+  if (clicDaNonSpedire(evento)) return null;
   try {
     if (evento.properties) evento.properties = proprietaSenzaDatiPersonali(evento.properties);
     if (evento.$set) evento.$set = proprietaSenzaDatiPersonali(evento.$set);

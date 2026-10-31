@@ -13,6 +13,7 @@ import { Input, PasswordInput, Checkbox } from '@/components/ui/Field';
 import { Button } from '@/components/ui/Button';
 import { AuthShell, AuthAlternatives } from '@/components/ui/AuthShell';
 import { friendlyError } from '@/lib/errors';
+import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
 import { ritornoDopoLaConferma } from '@/lib/analytics/porta-di-ingresso';
 import { memoriaDellaScheda, percorsoVerificaEmail, ricordaEmailDaConfermare } from '@/lib/auth/conferma-email';
 
@@ -58,7 +59,11 @@ function arrivaDaUnOrdine(returnTo: string): boolean {
 function SignUpInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const refCode = searchParams.get('ref')?.trim().toUpperCase() ?? null;
+  // 31/10/2026 — Inviti spenti al lancio (INVITI_E_PUNTI_ACCESI). Il codice ?ref= si
+  // ignora: niente «Codice applicato» (l'invito non si registrava mai: la lettura di
+  // `profiles` dal browser di chi non ha un account la bloccano le regole del database),
+  // niente lettura di `profiles`, niente riga in `referrals`.
+  const refCode = INVITI_E_PUNTI_ACCESI ? (searchParams.get('ref')?.trim().toUpperCase() ?? null) : null;
   /**
    * #112 — Dove torna chi si registra.
    *

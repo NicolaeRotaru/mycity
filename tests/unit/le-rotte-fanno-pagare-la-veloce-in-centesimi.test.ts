@@ -17,6 +17,12 @@ const S2 = 'bbbbbbbb-0000-0000-0000-000000000002';
 const stato: { fattorini: number | null; inseriti: Array<Record<string, unknown>> } = { fattorini: 1, inseriti: [] };
 const createSession = vi.fn(async (_i: unknown) => ({ id: 'cs_test', url: 'https://stripe.test/cs_test' }));
 
+// 31/10/2026 — Al lancio la carta è spenta (CARTA_ACCESA in lib/funzioni-al-lancio.ts) e la rotta
+// la rifiuta anche con le chiavi. Questa prova misura il percorso della carta: la accende per finta.
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
+  ...((await originale()) as Record<string, unknown>),
+  CARTA_ACCESA: true,
+}));
 vi.mock('@/lib/ordini/consegna-veloce', async (importOriginal) => {
   const vero = await importOriginal<typeof import('@/lib/ordini/consegna-veloce')>();
   return { ...vero, contaFattoriniOnline: vi.fn(async () => stato.fattorini) };

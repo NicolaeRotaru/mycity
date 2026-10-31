@@ -9,8 +9,10 @@
  * del mese), un regalo di 5 euro che non esiste (newsletter), pulsanti che
  * rispondono «servizio non configurato» (AI per i negozi), una traduzione che
  * cancella l'italiano (Traduci), un caricamento da file che non legge l'Excel
- * italiano. L'app installabile e i codici sconto non hanno un interruttore
- * qui: come stanno oggi lo dice la nota in fondo al file.
+ * italiano. Dal 31/10/2026 qui stanno anche la carta, l'abbonamento dei
+ * negozi, i codici sconto in cassa, l'app installabile, inviti e punti e
+ * PostHog: prima la loro accensione dipendeva da una chiave messa su Vercel, o
+ * da nessuno — e un «spento» che nessuno leggeva diceva il falso.
  *
  * Perché costanti nel codice e non variabili NEXT_PUBLIC: una variabile del
  * browser si fissa quando il sito viene costruito, e una variabile assente
@@ -66,16 +68,52 @@ export const TRADUCI_ACCESO: boolean = false;
  *  importate. Il modulo «Nuovo prodotto» resta acceso. */
 export const CARICAMENTO_DA_FILE_ACCESO: boolean = false;
 
-/* SENZA INTERRUTTORE QUI (nessun interruttore finché nessuno lo legge).
+/*
+ * 31/10/2026 — LE SCELTE CHE PRIMA DIPENDEVANO DA UNA CHIAVE O DA NESSUNO.
  *
- * App installabile: oggi l'app non si installa perché il manifest non è nel
- * <head> (difetto 239), ma il banner che invita a installarla si vede ancora.
- * Lo spegne la squadra dell'app, che prima di riaccendere prova tutto su un
- * Android vero.
- *
- * Codici sconto in cassa: spenti nel database dal 27/10/2026 alle 12:01, con
- * BENVENUTO10 e SPED5 non attivi (comando SQL di Nicola, carta #214). La cassa
- * però li applicherebbe ancora se qualcuno li riattivasse: l'interruttore della
- * cassa arriva con la squadra della cassa. Prima di riaccenderli va deciso chi
- * paga lo sconto: oggi il netto del negozio si calcola sul totale già
- * scontato, quindi un codice di MyCity lo pagherebbe il negozio al 90%. */
+ * Nicola, 31/10: «accendi solo la carta» — la carta entra nel lancio, ma si
+ * accende con un interruttore suo. Fino a ieri «al lancio solo contanti» si
+ * reggeva sull'assenza di NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: chi la metteva su
+ * Vercel cambiava la cassa e tutte le frasi del pagamento senza un avviso.
+ * Adesso la chiave serve ma non basta: senza il `true` qui sotto la carta resta
+ * spenta, e la rotta la rifiuta anche con le chiavi presenti.
+ */
+
+/** Pagamento con carta al checkout. Letto da app/api/stripe/checkout (rifiuto),
+ *  dalla cassa e dalle frasi del pagamento (`cartaAlCheckoutDisponibile` in
+ *  lib/promesse-pubbliche.ts). Per riaccendere: chiavi Stripe in produzione,
+ *  webhook collegato e un pagamento vero provato fino al payout del negozio. */
+export const CARTA_ACCESA: boolean = false;
+
+/** Abbonamento da 50 € al mese dei negozi e campagne sponsorizzate: soldi che
+ *  Stripe chiederebbe al negozio. Letto da app/api/seller/subscription/checkout,
+ *  subscription/portal, app/api/sponsored/checkout, dal banner del pannello
+ *  negozio e da /seller/promote. Per riaccendere: è un costo nuovo per il
+ *  negozio, cioè uno dei paletti del lancio — serve la firma di Nicola. */
+export const ABBONAMENTO_NEGOZI_ACCESO: boolean = false;
+
+/** Codici sconto in cassa, in contanti e con carta. Spenti anche nel database
+ *  dal 27/10/2026 12:01 (BENVENUTO10 e SPED5 non attivi, carta #214): questo è
+ *  il freno della cassa, che li rifiuta anche se un admin ne riattiva uno. Per
+ *  riaccendere: decidere chi paga lo sconto — oggi il netto del negozio si
+ *  calcola sul totale già scontato, quindi un codice di MyCity lo pagherebbe il
+ *  negozio al 90%. */
+export const CODICI_SCONTO_IN_CASSA: boolean = false;
+
+/** App installabile: manifest nel <head> e banner «metti MyCity in home».
+ *  Letto da app/layout.tsx. Per riaccendere: provare l'installazione su un
+ *  Android vero e su un iPhone, icone comprese. */
+export const APP_INSTALLABILE_ACCESA: boolean = false;
+
+/** Inviti («invita un amico», codice ?ref= all'iscrizione) e punti. Letto da
+ *  app/sign-up e app/profile/referral. Per riaccendere: l'invito va registrato
+ *  dal server. Oggi la pagina di iscrizione cerca chi ha invitato leggendo
+ *  `profiles` dal browser di chi non ha ancora un account: le regole del
+ *  database non lo permettono, e l'invito non si registrava mai. */
+export const INVITI_E_PUNTI_ACCESI: boolean = false;
+
+/** PostHog (analisi del comportamento, server negli Stati Uniti). Letto da
+ *  lib/analytics/posthog.tsx: spento, non parte nemmeno con la chiave su
+ *  Vercel. Per riaccendere: informativa privacy che lo nomina; la raccolta
+ *  automatica dei clic resta comunque fuori dalle pagine con dati di terzi. */
+export const POSTHOG_ACCESO: boolean = false;
