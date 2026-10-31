@@ -51,8 +51,33 @@ export function notaDegliEsclusi(motivo: string, prodotti: ProdottoPerIlRecesso[
   if (motivo !== MOTIVO_RIPENSAMENTO) return null;
   const esclusi = prodotti.filter(esclusoDalRecesso);
   if (esclusi.length === 0 || esclusi.length === prodotti.length) return null;
-  const nomi = esclusi.map((p) => (p.name ?? '').trim()).filter(Boolean);
+  const nomi = [...new Set(esclusi.map((p) => (p.name ?? '').trim()).filter(Boolean))];
   return `Esclusi dal recesso (art. 59 Cod. Cons.), da non rimborsare per «Cambio idea»: ${nomi.length > 0 ? nomi.join(', ') : 'alcuni prodotti dell\'ordine'}.`;
+}
+
+/** Una riga d'ordine come la legge la rotta dei resi. */
+export type RigaPerIlRecesso = { product_id?: string | null; product_name?: string | null };
+
+/**
+ * 31/10/2026 (collaudo) — UN PRODOTTO TOLTO DAL CATALOGO NON CONTA COME ESCLUSO.
+ * Un prodotto per ogni riga dell'ordine, non per ogni prodotto trovato. Se il
+ * prodotto della riga non c'e' piu' (tolto dal catalogo: `product_id` NULL, o
+ * la riga di `products` cancellata) l'esclusione non si puo' leggere, e la riga
+ * vale come recedibile: il recesso e' la regola, l'esclusione l'eccezione che
+ * il negozio deve aver segnato.
+ * Esempio: torta (esclusa) + miele tolto dal catalogo, «Cambio idea» su tutto
+ * l'ordine. Prima il miele spariva dal conto, restava solo la torta, e il reso
+ * si rifiutava intero; ora il miele conta, il reso nasce, la torta resta fuori.
+ */
+export function prodottiDelleRighe(
+  righe: RigaPerIlRecesso[],
+  prodotti: Array<ProdottoPerIlRecesso & { id?: string | null }>,
+): ProdottoPerIlRecesso[] {
+  const perId = new Map(prodotti.filter((p) => typeof p.id === 'string').map((p) => [p.id as string, p]));
+  return righe.map((r) => {
+    const trovato = typeof r.product_id === 'string' ? perId.get(r.product_id) : undefined;
+    return trovato ?? { name: r.product_name ?? null, non_recedibile: false };
+  });
 }
 
 /**
@@ -66,6 +91,6 @@ export function colonnaDelRecessoPresente(riga: unknown): boolean {
 }
 
 function elencoDeiNomi(prodotti: ProdottoPerIlRecesso[]): string {
-  const nomi = prodotti.map((p) => (p.name ?? '').trim()).filter(Boolean);
+  const nomi = [...new Set(prodotti.map((p) => (p.name ?? '').trim()).filter(Boolean))];
   return nomi.length > 0 ? ` (${nomi.join(', ')})` : '';
 }

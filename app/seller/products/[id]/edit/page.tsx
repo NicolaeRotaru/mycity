@@ -19,6 +19,10 @@ import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer'
 import { AlertTriangle, EyeOff } from 'lucide-react';
 import { nascondiProdotto } from '@/lib/products/nascondi';
 import { salvaProdottoDalBrowser } from '@/lib/products/salva-dal-browser';
+import { colonnaDelRecessoPresente } from '@/lib/ordini/recesso';
+
+/** Campo interno della lettura: la banca dati ha gia' la colonna del recesso? */
+const RECESSO_SEGNABILE = '__recessoSegnabile';
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
 
@@ -51,7 +55,13 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
         .eq('id', id)
         .maybeSingle();
       const nonRecedibile = (recesso as { non_recedibile?: unknown } | null)?.non_recedibile === true;
-      return { ...(data as Record<string, unknown>), non_recedibile: nonRecedibile } as Record<string, unknown>;
+      // La spunta compare solo se la colonna c'e' davvero (dopo la 180): se no
+      // il salvataggio la manderebbe a una colonna che non esiste.
+      return {
+        ...(data as Record<string, unknown>),
+        non_recedibile: nonRecedibile,
+        [RECESSO_SEGNABILE]: colonnaDelRecessoPresente(recesso),
+      } as Record<string, unknown>;
     },
     // 31/10/2026 — IL MODULO SI APRE SOLO CON LA SCORTA DELLA BANCA DATI.
     // Il modulo tiene la scorta vista all'apertura e la manda accanto a quella
@@ -213,10 +223,10 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     variants,
     nonRecedibile: product.non_recedibile === true,
   };
-  // La spunta «escluso dal recesso» qui NON si passa (`recessoSegnabile`): la porta unica
-  // PATCH /api/seller/products/:id tiene solo le colonne di colonneAmmesse
-  // (lib/products/salvataggio-tracciato.ts) e non_recedibile non c'e'. Mostrarla voleva dire
-  // «Modifiche salvate» con la spunta buttata via. Si accende quando la porta la porta.
+  // La spunta «escluso dal recesso»: la porta unica PATCH /api/seller/products/:id
+  // la tiene (COLONNA_DEL_RECESSO in lib/products/salvataggio-tracciato.ts), e si
+  // mostra solo se la banca dati ha la colonna (migrazione 180).
+  const recessoSegnabile = product[RECESSO_SEGNABILE] === true;
 
 
   const status = product.status as string;
@@ -246,6 +256,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
         deleteLabel="Nascondi prodotto"
         deleting={nascondiIlProdotto.isPending}
         productId={id}
+        recessoSegnabile={recessoSegnabile}
         sellerOffersExpress={offersExpress}
         consegnaDelNegozioNonLetta={consegnaNonLetta}
         onSubmit={(payload, ctx) => update.mutate({

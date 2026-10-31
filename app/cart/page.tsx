@@ -12,6 +12,8 @@ import {
   righeDellaConsegna,
   spiegazioneDellaConsegna,
   VOCE_CONSEGNA,
+  RESO_CARRELLO,
+  RESO_CARRELLO_ESCLUSI,
 } from '@/lib/promesse-pubbliche';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { useEffect, useRef, useState } from 'react';
@@ -777,9 +779,9 @@ export default function CartPage() {
               <p className="flex items-start gap-2">
                 <RotateCcw size={14} className="text-olive-600 shrink-0 mt-0.5" aria-hidden />
                 <span>
-                  Reso entro 14 giorni ·{' '}
+                  {RESO_CARRELLO} ·{' '}
                   <Link href="/returns" className="font-semibold text-primary-700 underline hover:text-primary-800">
-                    alcuni prodotti sono esclusi
+                    {RESO_CARRELLO_ESCLUSI}
                   </Link>
                 </span>
               </p>

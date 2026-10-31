@@ -319,6 +319,27 @@ export function fraseComeSiPaga(metodi: readonly MetodoPagamento[] = metodiAlChe
 /** Chi resta fuori dal ripensamento (art. 59 lett. d Cod. Cons.), detto in parole semplici. */
 export const RESO_ESCLUSI = 'esclusi i prodotti freschi e deperibili';
 export const FRASE_RESO = `Reso entro 14 giorni, ${RESO_ESCLUSI}`;
+/*
+ * 31/10/2026 (ondata 6) — IL PRODOTTO CHE IL NEGOZIO HA SEGNATO COME ESCLUSO.
+ *
+ * Scelta di Nicola (fatto `legale.recesso-esclusi`): freschi che si deteriorano
+ * in fretta e prodotti su ordinazione escono dal recesso, e il negozio li segna
+ * nel modulo (`products.non_recedibile`, migrazione 180). Sulla scheda della
+ * torta su ordinazione «Reso entro 14 giorni» era falso anche con l'esclusione
+ * accanto: la cliente legge il numero, non la coda. Lì si dice cosa resta.
+ */
+export const FRASE_RESO_ESCLUSO =
+  'Escluso dal recesso: è fresco o fatto su ordinazione. Resta la garanzia se arriva difettoso o sbagliato';
+
+/** La frase del reso per UNA scheda: quella dell'escluso se il negozio l'ha segnato, se no la generale. */
+export function fraseResoDelProdotto(prodotto: { non_recedibile?: unknown } | null | undefined): string {
+  return prodotto?.non_recedibile === true ? FRASE_RESO_ESCLUSO : FRASE_RESO;
+}
+
+/** Il carrello mescola prodotti: dice il termine e rimanda ai resi per gli esclusi. */
+export const RESO_CARRELLO = 'Reso entro 14 giorni';
+export const RESO_CARRELLO_ESCLUSI = 'alcuni prodotti sono esclusi';
+
 /** La spiegazione breve, dove c'è una riga in più (home, «Come funziona»). Niente «senza domande». */
 export const SPIEGAZIONE_RESO =
   'Cambi idea? Hai 14 giorni per il recesso, ma non su pane, freschi e prodotti che si deteriorano in fretta. Se un prodotto arriva difettoso, vale sempre la garanzia legale.';
