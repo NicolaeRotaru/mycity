@@ -133,7 +133,7 @@ vi.mock('@/lib/supabase/auth-server', () => ({
 }));
 vi.mock('@/lib/captcha', () => ({ verifyTurnstileToken: async () => ({ ok: true }) }));
 
-import { GET as conferma } from '@/app/auth/confirm/route';
+import { GET as apriLink, POST as premiIlPulsante } from '@/app/auth/confirm/route';
 import { POST as accedi } from '@/app/api/auth/signin/route';
 import { GET as ritorno } from '@/app/auth/callback/route';
 import {
@@ -149,6 +149,24 @@ function richiesta(percorso: string, cookie?: Record<string, string>): NextReque
   const headers = new Headers({ 'user-agent': 'telefono-di-lucia', 'x-forwarded-for': '5.6.7.8' });
   if (cookie) headers.set('cookie', Object.entries(cookie).map(([k, v]) => `${k}=${v}`).join('; '));
   return new NextRequest(`${APP}${percorso}`, { headers });
+}
+
+/**
+ * 31/10/2026 — Aprire il link (GET) mostra un pulsante; premerlo (POST) lo
+ * consuma, cosi' i filtri antivirus della posta non lo bruciano in anteprima.
+ * Qui la persona apre il link e preme il pulsante, con gli stessi header.
+ */
+async function conferma(req: NextRequest): Promise<Response> {
+  const pagina = await apriLink(req);
+  if (pagina.headers.get('location')) return pagina;
+  const campi = new URLSearchParams();
+  for (const m of (await pagina.text()).matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)">/g)) {
+    campi.set(m[1], m[2].replace(/&#(\d+);/g, (_t, n) => String.fromCharCode(Number(n))));
+  }
+  const headers = new Headers(req.headers);
+  headers.set('content-type', 'application/x-www-form-urlencoded');
+  headers.set('origin', APP);
+  return premiIlPulsante(new NextRequest(`${APP}/auth/confirm`, { method: 'POST', headers, body: campi.toString() }));
 }
 
 function dove(res: Response): URL {

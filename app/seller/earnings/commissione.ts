@@ -1,5 +1,6 @@
 import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
 import { fraseAttesaBonifico } from '@/lib/stripe/tempi-bonifico';
+import { CARTA_ACCESA } from '@/lib/funzioni-al-lancio';
 
 /**
  * 31/8/2026 (R037) — SULLA PAGINA DEI SUOI SOLDI PROMETTEVAMO AL NEGOZIO L'8%,
@@ -76,25 +77,54 @@ export type ParagrafoCommissione = {
   prima: string;
   forte: string;
   dopo: string;
+  /** Di cosa parla: chi mostra solo i tempi del bonifico lo cerca per nome. */
+  tema?: 'commissione' | 'bonifico';
 };
+
+/**
+ * QUANDO ARRIVANO I SOLDI AL NEGOZIO — 31/10/2026 (ondata 4).
+ *
+ * Qui c'era «Il bonifico parte in automatico circa un'ora dopo la consegna».
+ * Un'ora dopo la consegna parte solo lo spostamento interno a Stripe, dal conto
+ * di MyCity a quello del negozio: in BANCA i soldi arrivano giorni dopo, col
+ * calendario dei versamenti di Stripe. E al lancio la carta è spenta: i clienti
+ * pagano in contanti e il bonifico lo fa MyCity ogni lunedì, per le consegne
+ * della settimana prima (scelta di Nicola del 31/10/2026). Un negoziante che
+ * guarda la banca un'ora dopo e non trova niente smette di fidarsi.
+ */
+function paragrafoBonifico(cartaAccesa: boolean): ParagrafoCommissione {
+  const reso = ' In caso di reso o contestazione la quota corrispondente viene trattenuta o recuperata.';
+  if (!cartaAccesa) {
+    return {
+      tema: 'bonifico',
+      prima: 'Al lancio i clienti pagano in contanti alla consegna: ',
+      forte: 'il bonifico sul tuo IBAN te lo facciamo ogni lunedì',
+      dopo: `, per le consegne della settimana prima.${reso}`,
+    };
+  }
+  const quando = fraseAttesaBonifico();
+  return {
+    tema: 'bonifico',
+    prima: `${quando.charAt(0).toUpperCase()}${quando.slice(1)} `,
+    forte: 'la tua parte passa sul tuo conto Stripe',
+    dopo: `; sul conto in banca arriva dopo, secondo il calendario dei versamenti di Stripe (di solito qualche giorno lavorativo, la prima volta di più).${reso}`,
+  };
+}
 
 /**
  * E' una funzione e non una costante perche' anche i tempi del bonifico non si
  * riscrivono qui: li dice `fraseAttesaBonifico()`, dove quel numero e' stato
  * deciso.
  */
-export function spiegazioneCommissione(): ParagrafoCommissione[] {
+export function spiegazioneCommissione(cartaAccesa: boolean = CARTA_ACCESA): ParagrafoCommissione[] {
   return [
     {
+      tema: 'commissione',
       prima: 'Su MyCity paghi ',
       forte: `solo ${articoloDavantiA(COMMISSIONE_PERCENTO)}${COMMISSIONE_PERCENTO}% del venduto`,
       dopo: ' realmente concluso (non rimborsi, non ordini annullati). Nessuna commissione mensile, nessun costo di iscrizione.',
     },
-    {
-      prima: 'Il bonifico parte ',
-      forte: `in automatico ${fraseAttesaBonifico()}`,
-      dopo: '. In caso di reso o contestazione la quota corrispondente viene trattenuta o recuperata.',
-    },
+    paragrafoBonifico(cartaAccesa),
   ];
 }
 

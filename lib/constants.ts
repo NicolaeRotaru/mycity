@@ -48,9 +48,14 @@ export const NEW_PRODUCT_DAYS = 14;
  * in linea d'aria (`haversineKm`, in lib/ordini/zona-di-consegna.ts): 5 km in
  * linea d'aria sono circa 6-7 km di strada, una stima e non una misura.
  *
- * La promessa sui tempi che va con questo confine è «in giornata» (scelta 8
- * della carta #209), non una stima a minuti: la frase «30-60 minuti» va
- * allineata a parte. La pagina Spedizioni, la FAQ, «Vicino a te» e la pagina
+ * La promessa sui tempi che va con questo confine (registro dei fatti,
+ * `consegna.promessa`): la consegna normale arriva nella fascia che il cliente
+ * sceglie in cassa; la veloce in 30-60 minuti (`EXPRESS_ETA_LABEL`). Al confine
+ * dei 5 km il conto in bici ci sta: 15 di preparazione + 20 di viaggio + al
+ * massimo 20 di andata del fattorino al negozio = 55 (`deliveryEtaMinutes`,
+ * lib/geo.ts); oltre i 5 km non si consegna, quindi nemmeno la veloce
+ * (`fuoriZonaDiConsegna`). Prova: tests/unit/la-veloce-al-confine-dei-5-km.test.ts.
+ * La pagina Spedizioni, la FAQ, «Vicino a te» e la pagina
  * admin delle consegne leggono il confine da qui (27/10, secondo giro); dal
  * 28/10 anche il raggio con cui si apre «Vicino a te».
  *

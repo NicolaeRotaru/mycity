@@ -19,6 +19,7 @@ import { Input, Textarea, Checkbox } from '@/components/ui/Field';
 // PRIMA di firmare: la commissione qui non si scrive a mano, si prende da dove
 // viene poi trattenuta davvero.
 import { COMMISSIONE_DEL_PERCENTO } from '@/app/seller/earnings/commissione';
+import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
 import { Store, CheckCircle2, CreditCard, Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -27,18 +28,28 @@ import { useTranslations } from 'next-intl';
  *
  * Differenze rispetto al vecchio VendorForm:
  *  - raccoglie dati anagrafici del titolare (richiesti per legge)
- *  - i dati azienda (P.IVA, ragione sociale, sede legale) sono temporaneamente
- *    disattivati: verranno raccolti più avanti nel percorso del venditore
- *  - richiede consensi espliciti a ToS, Privacy, accuratezza dati, addebito €50/mese
+ *  - raccoglie i dati dell'impresa (ragione sociale, partita IVA, sede legale):
+ *    sono quelli che «Venduto da» mostra al cliente sotto ogni prodotto, e che
+ *    l'amministratore controlla prima di approvare. Fino al 31/10/2026 erano
+ *    «disattivati, verranno raccolti più avanti» — ma il «più avanti» non
+ *    esisteva: il negozio veniva approvato senza partita IVA.
+ *  - richiede consensi espliciti a ToS, Privacy, accuratezza dati; l'addebito
+ *    mensile dell'abbonamento SOLO se l'abbonamento è acceso
+ *    (`ABBONAMENTO_NEGOZI_ACCESO`): al lancio è sospeso, e far accettare un
+ *    addebito che non faremo è una promessa falsa scritta in un contratto.
+ *  - non chiede un'«email operativa»: non c'era nessuna colonna dove salvarla e
+ *    il valore veniva buttato via. Avvisi e risposte vanno all'email di accesso.
  *  - dopo l'invio NON attiva il negozio: parte la procedura di approvazione admin
  *
  * Il form è lungo ma in una pagina sola (no wizard) per consentire la
  * compilazione "tutta insieme" tipica del primo onboarding.
  */
 
+/** Il prezzo dell'abbonamento detto in un posto solo di questa pagina. */
+const PREZZO_ABBONAMENTO_MESE = '€50';
+
 const SellerSchema = z.object({
   // Contatti operativi
-  contactEmail: z.string().email('Email non valida'),
   contactPhone: z.string().regex(/^[0-9 +]{8,16}$/, 'Numero di telefono non valido'),
 
   // Anagrafica titolare
@@ -50,8 +61,13 @@ const SellerSchema = z.object({
   legalResidenceCity: z.string().min(2, 'Inserisci la città'),
   legalResidenceZip:  z.string().regex(/^[0-9]{5}$/, 'CAP non valido (5 cifre)'),
 
-  // NOTA: i dati azienda (ragione sociale, P.IVA, sede legale, PEC, SDI) sono
-  // temporaneamente disattivati nell'onboarding. Verranno raccolti più avanti.
+  // Dati dell'impresa: li mostra «Venduto da» e li controlla l'amministratore.
+  // Il controllo completo della partita IVA (la cifra finale) lo fa il server.
+  businessLegalName: z.string().min(2, 'Inserisci la ragione sociale'),
+  businessVatNumber: z.string().regex(/^\s*(IT)?\s*[0-9]{11}\s*$/i, 'Partita IVA non valida (11 cifre)'),
+  businessAddress: z.string().min(3, 'Inserisci la via della sede legale'),
+  businessCity: z.string().min(2, 'Inserisci la città della sede legale'),
+  businessZip: z.string().regex(/^[0-9]{5}$/, 'CAP non valido (5 cifre)'),
 
   // Vetrina pubblica
   storeName: z.string().min(3, 'Nome del negozio (almeno 3 caratteri)'),
@@ -66,7 +82,9 @@ const SellerSchema = z.object({
   acceptTos: z.boolean().refine((v) => v === true, { message: 'Devi accettare i Termini di servizio' }),
   acceptPrivacy: z.boolean().refine((v) => v === true, { message: 'Devi accettare la Privacy policy' }),
   acceptAccuracy: z.boolean().refine((v) => v === true, { message: 'Devi confermare i dati' }),
-  acceptBilling: z.boolean().refine((v) => v === true, { message: "Devi accettare l'addebito" }),
+  acceptBilling: ABBONAMENTO_NEGOZI_ACCESO
+    ? z.boolean().refine((v) => v === true, { message: "Devi accettare l'addebito" })
+    : z.boolean().optional(),
 });
 
 type SchemaData = z.infer<typeof SellerSchema>;
@@ -83,6 +101,8 @@ interface Props {
   defaultValues?: Partial<SchemaData & { storeLogo: string | null; storeMedia: StoreMediaItem[]; storeAddress: string; storeLat: number; storeLng: number }>;
   onSubmit: (data: SellerApplicationData) => void;
   isLoading?: boolean;
+  /** L'email con cui la persona accede: è lì che arrivano avvisi e risposte. */
+  emailAccesso?: string | null;
 }
 
 const Section = ({
@@ -117,12 +137,11 @@ const Field = ({
   </div>
 );
 
-export default function SellerApplicationForm({ defaultValues, onSubmit, isLoading = false }: Props) {
+export default function SellerApplicationForm({ defaultValues, onSubmit, isLoading = false, emailAccesso = null }: Props) {
   const tStates = useTranslations('states');
   const { register, handleSubmit, watch, formState: { errors } } = useForm<SchemaData>({
     resolver: zodResolver(SellerSchema),
     defaultValues: {
-      contactEmail:    defaultValues?.contactEmail    ?? '',
       contactPhone:    defaultValues?.contactPhone    ?? '',
       legalFirstName:  defaultValues?.legalFirstName  ?? '',
       legalLastName:   defaultValues?.legalLastName   ?? '',
@@ -131,6 +150,11 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
       legalResidenceAddr: defaultValues?.legalResidenceAddr ?? '',
       legalResidenceCity: defaultValues?.legalResidenceCity ?? '',
       legalResidenceZip:  defaultValues?.legalResidenceZip  ?? '',
+      businessLegalName: defaultValues?.businessLegalName ?? '',
+      businessVatNumber: defaultValues?.businessVatNumber ?? '',
+      businessAddress:   defaultValues?.businessAddress   ?? '',
+      businessCity:      defaultValues?.businessCity      ?? '',
+      businessZip:       defaultValues?.businessZip       ?? '',
       storeName:         defaultValues?.storeName         ?? '',
       storeDescription:  defaultValues?.storeDescription  ?? '',
       billingIban:       defaultValues?.billingIban       ?? '',
@@ -230,7 +254,11 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         </h1>
         <p className="text-primary-100 text-sm leading-relaxed">
           Vetrina dedicata, prodotti illimitati.
-          <strong className="text-white"> Abbonamento €50/mese</strong> e commissione {COMMISSIONE_DEL_PERCENTO} sulle vendite, attivi solo dopo approvazione del nostro team.
+          {ABBONAMENTO_NEGOZI_ACCESO ? (
+            <><strong className="text-white"> Abbonamento {PREZZO_ABBONAMENTO_MESE}/mese</strong> e commissione {COMMISSIONE_DEL_PERCENTO} sulle vendite, attivi solo dopo approvazione del nostro team.</>
+          ) : (
+            <> Nessun costo mensile: <strong className="text-white">commissione {COMMISSIONE_DEL_PERCENTO}</strong> solo sulle vendite, attiva dopo l&apos;approvazione del nostro team.</>
+          )}
         </p>
         <ul className="text-xs text-primary-100 mt-3 space-y-1">
           <li className="flex items-start gap-1.5">
@@ -243,7 +271,11 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           </li>
           <li className="flex items-start gap-1.5">
             <CheckCircle2 size={16} aria-hidden className="shrink-0 mt-0.5" />
-            <span>Abbonamento €50/mese + commissione {COMMISSIONE_DEL_PERCENTO} sulle vendite</span>
+            <span>
+              {ABBONAMENTO_NEGOZI_ACCESO
+                ? `Abbonamento ${PREZZO_ABBONAMENTO_MESE}/mese + commissione ${COMMISSIONE_DEL_PERCENTO} sulle vendite`
+                : `Commissione ${COMMISSIONE_DEL_PERCENTO} sulle vendite, nessun abbonamento`}
+            </span>
           </li>
           <li className="flex items-start gap-1.5">
             <CheckCircle2 size={16} aria-hidden className="shrink-0 mt-0.5" />
@@ -254,16 +286,11 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
 
       {/* STEP 1: Contatti */}
       <Section step={1} title="Contatti operativi" subtitle="Come ti contatteremo per ordini e supporto">
-        <Input
-          label="Email operativa"
-          required
-          type="email"
-          inputMode="email"
-          placeholder="negozio@example.com"
-          {...register('contactEmail')}
-          error={errors.contactEmail?.message}
-          hint="Diverso da quella di login? Inserisci quella che leggi tutti i giorni"
-        />
+        <p className="text-sm text-ink-600">
+          {emailAccesso
+            ? <>Avvisi d&apos;ordine e risposte arrivano a <strong>{emailAccesso}</strong>, l&apos;email con cui accedi.</>
+            : <>Avvisi d&apos;ordine e risposte arrivano all&apos;email con cui accedi.</>}
+        </p>
         <Input
           label="Telefono"
           required
@@ -305,8 +332,28 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         </div>
       </Section>
 
-      {/* STEP 3: Vetrina */}
-      <Section step={3} title="La tua vetrina pubblica" subtitle="Quello che vedranno i clienti">
+      {/* STEP 3: Dati dell'impresa */}
+      <Section step={3} title="Dati dell'impresa" subtitle="Li vede il cliente sotto «Venduto da» e li controlliamo prima di approvare">
+        <Input label="Ragione sociale" required placeholder="Es. Salumeria del Borgo di Mario Rossi" {...register('businessLegalName')} error={errors.businessLegalName?.message} />
+        <Input
+          label="Partita IVA"
+          required
+          inputMode="numeric"
+          maxLength={13}
+          placeholder="01234567890"
+          {...register('businessVatNumber')}
+          error={errors.businessVatNumber?.message}
+          hint="11 cifre"
+        />
+        <Input label="Sede legale" required placeholder="Via, numero civico" {...register('businessAddress')} error={errors.businessAddress?.message} />
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Input label="Città della sede legale" required {...register('businessCity')} error={errors.businessCity?.message} />
+          <Input label="CAP della sede legale" required inputMode="numeric" maxLength={5} {...register('businessZip')} error={errors.businessZip?.message} />
+        </div>
+      </Section>
+
+      {/* STEP 4: Vetrina */}
+      <Section step={4} title="La tua vetrina pubblica" subtitle="Quello che vedranno i clienti">
         {/* Logo upload */}
         <Field label="Logo del negozio">
           <div className="flex items-center gap-4">
@@ -366,8 +413,12 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         </Field>
       </Section>
 
-      {/* STEP 4: Pagamenti */}
-      <Section step={4} title="Pagamenti" subtitle="Come ricevi i guadagni e come ti addebitiamo l'abbonamento">
+      {/* STEP 5: Pagamenti */}
+      <Section
+        step={5}
+        title="Pagamenti"
+        subtitle={ABBONAMENTO_NEGOZI_ACCESO ? "Come ricevi i guadagni e come ti addebitiamo l'abbonamento" : 'Come ricevi i guadagni'}
+      >
         <Input
           label="IBAN per i bonifici dei tuoi incassi"
           className="uppercase font-mono text-xs"
@@ -377,21 +428,23 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           hint="Italiano (IT) o europeo. Lo riceveremo cifrato."
         />
 
+        {ABBONAMENTO_NEGOZI_ACCESO && (
         <div className="bg-accent-50 border border-accent-200 rounded-lg p-4 text-sm text-accent-900">
           <p className="font-semibold mb-1 inline-flex items-center gap-1.5">
             <CreditCard size={18} aria-hidden />
             Carta di credito per abbonamento
           </p>
           <p>
-            L'abbonamento (€50/mese) viene addebitato <strong>solo dopo che l'admin avrà approvato la richiesta</strong>.
+            L'abbonamento ({PREZZO_ABBONAMENTO_MESE}/mese) viene addebitato <strong>solo dopo che l'admin avrà approvato la richiesta</strong>.
             In quel momento ti chiederemo di inserire la carta tramite un pagamento sicuro (Stripe). Non ti chiediamo i
             dati carta adesso per ridurre i tuoi rischi.
           </p>
         </div>
+        )}
       </Section>
 
-      {/* STEP 5: Consensi */}
-      <Section step={5} title="Consensi legali" subtitle="Obbligatori per attivare il negozio">
+      {/* STEP 6: Consensi */}
+      <Section step={6} title="Consensi legali" subtitle="Obbligatori per attivare il negozio">
         <Consent
           label={<>Ho letto e accetto i <Link href="/terms" target="_blank" className="text-primary-700 underline">Termini di servizio</Link> per venditori</>}
           register={register('acceptTos')}
@@ -407,11 +460,13 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           register={register('acceptAccuracy')}
           error={errors.acceptAccuracy?.message as string | undefined}
         />
-        <Consent
-          label="Accetto che, all'approvazione, mi venga richiesto l'inserimento della carta per l'addebito mensile di €50"
-          register={register('acceptBilling')}
-          error={errors.acceptBilling?.message as string | undefined}
-        />
+        {ABBONAMENTO_NEGOZI_ACCESO && (
+          <Consent
+            label={`Accetto che, all'approvazione, mi venga richiesto l'inserimento della carta per l'addebito mensile di ${PREZZO_ABBONAMENTO_MESE}`}
+            register={register('acceptBilling')}
+            error={errors.acceptBilling?.message as string | undefined}
+          />
+        )}
       </Section>
 
       <button

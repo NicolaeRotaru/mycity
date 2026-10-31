@@ -172,7 +172,8 @@ export function rigaNegozioChiuso(riapre: string | null): string {
  * solo quando `veloceSiPuo` dice sì. Qui la scheda dice la stessa cosa:
  *   · esaurito → nessun tempo di consegna (`null`);
  *   · importato da un altro marketplace → il suo tempo;
- *   · negozio chiuso adesso → quando riapre, e che l'ora si sceglie in cassa;
+ *   · negozio chiuso adesso → quando riapre, e che l'ora si sceglie in cassa se la cassa ne ha una;
+ *   · la cassa senza fasce né oggi né domani → che le consegne di oggi sono finite, e quando riapre;
  *   · altrimenti → all'ora che scegli, e la veloce solo se la cassa ha risposto sì.
  * Niente conto alla rovescia: la scheda non si fa un calendario suo. `adesso: null` vuol dire «prima
  * dell'idratazione»: senza orologio non si giudica l'apertura e non si promette niente di più.
@@ -189,7 +190,24 @@ export function rigaConsegnaDellaScheda(s: {
   if (s.consegnaEsterna) return `Consegna in ${s.consegnaEsterna}`;
   if (s.adesso) {
     const p = promessaDiConsegna({ idoneoExpress: true, disponibile: true, orari: s.orari, adesso: s.adesso });
-    if (p.tipo === 'chiuso') return `${rigaNegozioChiuso(p.riapre)}: in cassa scegli l'ora della consegna`;
+    // 31/10/2026 (ondata 3) — La cassa propone solo le fasce di oggi e di domani. Sabato alle 21:30,
+    // forno lun-sab 08-13, non ne ha nessuna (oggi finito, domenica chiuso), e la scheda diceva
+    // «riapre lunedì alle 08:00: in cassa scegli l'ora». Lo stesso alle 12:59, a forno ancora
+    // aperto: «all'ora che scegli» e una cassa vuota. L'ora in cassa si promette solo se c'è.
+    const cassaSenzaFasce =
+      haOrari(s.orari) &&
+      fasceAncoraPossibili(s.adesso, [s.orari]).length === 0 &&
+      fasceDiDomaniPossibili(s.adesso, [s.orari]).length === 0;
+    if (p.tipo === 'chiuso') {
+      return cassaSenzaFasce
+        ? rigaNegozioChiuso(p.riapre)
+        : `${rigaNegozioChiuso(p.riapre)}: in cassa scegli l'ora della consegna`;
+    }
+    if (cassaSenzaFasce) {
+      if (s.veloce === true) return `Consegna ${VELOCE_IN_MINUTI}`;
+      const riapre = quandoRiapre(s.orari, s.adesso);
+      return riapre ? `Le consegne di oggi sono finite, il negozio riapre ${riapre}` : 'Le consegne di oggi sono finite';
+    }
   }
   return s.veloce === true ? CONSEGNA_O_VELOCE_ADESSO : CONSEGNA_ALL_ORA_CHE_SCEGLI;
 }

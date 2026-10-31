@@ -65,7 +65,9 @@ export function isStripeConfigured(): boolean {
  *  - Al webhook checkout.session.completed vengono creati N ordini DB
  *    (uno per ciascun seller) con payout_status=HELD.
  *  - I transfer ai seller partono DOPO DELIVERED via cron automatico
- *    (app/api/cron/release-payouts, consegna +24h). I rimborsi/recessi
+ *    (app/api/cron/release-payouts, consegna + ORE_ATTESA_BONIFICO, oggi 1h:
+ *    lib/stripe/tempi-bonifico.ts). In banca arrivano dopo, col calendario
+ *    dei versamenti di Stripe. I rimborsi/recessi
  *    tardivi sono recuperati dal venditore via reversal (claw-back).
  *  - Ogni transfer usa source_transaction=charge_id per legare la
  *    liquidità a quella specifica charge (vedi /api/stripe/payout).

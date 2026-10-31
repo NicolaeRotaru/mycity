@@ -94,7 +94,11 @@ const ISCRIZIONE = {
   contactEmail: "forno@esempio.it", contactPhone: "3331234567",
   legalFirstName: "Mario", legalLastName: "Rossi", legalFiscalCode: "RSSMRA80A01G535X",
   legalBirthDate: "1980-01-01", legalResidenceAddr: "Via Roma 1", legalResidenceCity: "Piacenza",
-  legalResidenceZip: "29121", storeName: "Forno Bello", storeDescription: "", billingIban: "",
+  legalResidenceZip: "29121",
+  // 31/10/2026 (ondata 4): il modulo ora chiede i dati dell'impresa.
+  businessLegalName: "Forno Bello di Mario Rossi", businessVatNumber: "01234567897",
+  businessAddress: "Via Roma 10", businessCity: "Piacenza", businessZip: "29121",
+  storeName: "Forno Bello", storeDescription: "", billingIban: "",
   storeAddress: "Via Roma 10, Piacenza",
 };
 const CONTATTI = { storeName: "Forno Bello", storePhone: "3331234567", storeAddress: "Via Roma 10, Piacenza" };
