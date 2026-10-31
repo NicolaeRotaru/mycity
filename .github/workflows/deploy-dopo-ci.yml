@@ -563,6 +563,11 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          # 31/10/2026 — Il commit che sta per uscire: il posto dove tornare
+          # indietro deve essere un ALTRO commit (vedi rilascioDaTornare).
+          COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # Il dominio che usano i clienti: da li' si legge dove tornare.
+          DOMINIO_DI_PRODUZIONE: ${{ vars.DOMINIO_DI_PRODUZIONE }}
         # 27/8/2026 (R189) — LA VERSIONE ERA «L'ULTIMA CHE C'E' ADESSO».
         #
         # `vercel@latest` vuol dire che lo strumento che pubblica in produzione
@@ -584,10 +589,26 @@ jobs:
           # L'elenco arriva dall'API, non dallo stdout della CLI: cosi' non
           # dipende da come la CLI decide di stampare le sue righe.
           RILASCI="$(curl -sS --max-time 30 -H "Authorization: Bearer $TOKEN" \
-            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&target=production&state=READY&limit=5" || true)"
-          PRECEDENTE="$(printf '%s' "$RILASCI" | node scripts/prova-di-fumo.mjs --rilascio-di-adesso || true)"
+            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&target=production&state=READY&limit=20" || true)"
+          # 31/10/2026 (ondata 1) — QUI SI PRENDEVA IL PRIMO RILASCIO PRONTO, E
+          # DI SOLITO ERA LO STESSO COMMIT. Con il rilascio automatico di Vercel
+          # acceso, l'unione su main e' gia' online da minuti quando questo
+          # lavoro parte: «tornare» al primo dell'elenco rimetteva il codice che
+          # sta uscendo. Adesso lo script scarta i rilasci di questo commit, e
+          # l'elenco e' piu' lungo (20) perche' i primi possono essere tutti suoi.
+          #
+          # 31/10/2026 (ondata 1, secondo giro) — E L'ELENCO NON SA CHI USANO I
+          # CLIENTI. Se X era stato riportato a W, l'elenco dice ancora [X, W] e
+          # il primo di un altro commit e' X, il codice gia' tolto perche' rotto.
+          # Lo sa solo il dominio: si chiede a Vercel quale rilascio lo serve
+          # adesso. Se non risponde e i candidati sono piu' di uno, lo script
+          # non sceglie a caso e il ritorno indietro resta da fare a mano.
+          DOMINIO="${DOMINIO_DI_PRODUZIONE:-mycity-marketplace.com}"
+          SUL_DOMINIO="$(curl -sS --max-time 30 -H "Authorization: Bearer $TOKEN" \
+            "https://api.vercel.com/v13/deployments/$DOMINIO?teamId=$VERCEL_ORG_ID" || true)"
+          PRECEDENTE="$(printf '%s' "$RILASCI" | COMMIT_CHE_ESCE="${COMMIT:-}" RILASCIO_SUL_DOMINIO="$SUL_DOMINIO" node scripts/prova-di-fumo.mjs --rilascio-di-adesso || true)"
           if [ -z "$PRECEDENTE" ]; then
-            echo "::warning::Non ho trovato il rilascio che sta in produzione adesso: se quello nuovo non risponde, da qui non potro' tornare indietro."
+            echo "::warning::Non so quale rilascio serve $DOMINIO adesso, o c'e' solo ${COMMIT:-quello che esce}: se quello nuovo non risponde, da qui non potro' tornare indietro."
           else
             echo "In produzione adesso c'e': $PRECEDENTE"
           fi

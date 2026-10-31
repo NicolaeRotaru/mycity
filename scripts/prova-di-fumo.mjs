@@ -236,22 +236,77 @@ export function estraiIndirizzo(uscitaDellaCli) {
  * Qui arriva la risposta dell'elenco dei rilasci di Vercel. Si prende il primo
  * che sia davvero in produzione e davvero pronto: uno ancora in costruzione o
  * un'anteprima non sono posti dove tornare.
+ *
+ * 31/10/2026 (ondata 1) — E CHE NON SIA LO STESSO COMMIT CHE STA USCENDO.
+ * Finche' `vercel.json` tiene acceso il rilascio automatico, Vercel pubblica
+ * da solo ogni unione su `main` entro pochi secondi: quando questo lavoro
+ * parte, dopo la CI, il primo rilascio pronto in produzione e' gia' lo STESSO
+ * commit che sta per pubblicare. Tornare li' voleva dire rimettere online il
+ * codice rotto e scrivere «annullato» nel riepilogo. Con `commitCheEsce` quei
+ * rilasci si scartano; uno di cui l'elenco non dice il commit resta buono,
+ * come prima, perche' da qui non si puo' sapere se e' lo stesso.
  */
-export function rilascioDaTornare(rispostaDeiRilasci) {
+export function commitDelRilascio(rilascio) {
+  const meta = rilascio?.meta ?? {};
+  const grezzo = meta.githubCommitSha ?? meta.gitlabCommitSha ?? meta.bitbucketCommitSha ?? meta.gitCommitSha ?? rilascio?.gitSource?.sha ?? '';
+  return String(grezzo).trim().toLowerCase();
+}
+
+/**
+ * 31/10/2026 (ondata 1, secondo giro) — E CHE SIA QUELLO SUL DOMINIO, NON
+ * L'ULTIMO COSTRUITO. Il collaudo: X esce rotto e viene riportato a W con
+ * `vercel rollback`; poi esce Y. L'elenco, dal piu' recente, dice [X, W], e il
+ * primo «di un altro commit» e' X: il codice gia' tolto perche' rotto.
+ * L'elenco non distingue «X e' vivo» da «X e' stato tolto»: lo sa solo il
+ * dominio. `sulDominio` e' la risposta di Vercel per il dominio di produzione
+ * (GET /v13/deployments/<dominio>), cioe' il rilascio che usano i clienti.
+ *   · se sul dominio c'e' un altro commit, si torna li';
+ *   · se c'e' gia' il commit che esce, Vercel l'ha spostato da solo: prima
+ *     c'era l'ultimo rilascio di un altro commit, e si torna a quello;
+ *   · se il dominio non si sa, si sceglie solo quando c'e' un candidato solo
+ *     (un commit solo). Con due o piu' commit diversi e' tirare a indovinare,
+ *     e la risposta giusta e' nessun indirizzo: il ritorno si fa a mano.
+ */
+function indirizzoDiProduzione(rilascio) {
+  // L'elenco chiama lo stato ora `state` ora `readyState` a seconda della
+  // versione dell'API: leggerne uno solo vorrebbe dire scartare tutto.
+  const stato = String(rilascio?.readyState ?? rilascio?.state ?? '').toUpperCase();
+  if (stato !== 'READY') return null;
+  const bersaglio = String(rilascio?.target ?? '').toLowerCase();
+  if (bersaglio !== 'production') return null;
+  const grezzo = String(rilascio?.url ?? '').trim();
+  if (!grezzo) return null;
+  const completo = /^https?:\/\//i.test(grezzo) ? grezzo : `https://${grezzo}`;
+  return eUnIndirizzo(completo) ? completo : null;
+}
+
+/**
+ * @param {any} rispostaDeiRilasci la risposta di /v6/deployments
+ * @param {{ commitCheEsce?: string, sulDominio?: any }} [opzioni]
+ * @returns {string | null}
+ */
+export function rilascioDaTornare(rispostaDeiRilasci, { commitCheEsce = '', sulDominio = null } = {}) {
   const elenco = Array.isArray(rispostaDeiRilasci?.deployments) ? rispostaDeiRilasci.deployments : [];
+  const daScartare = String(commitCheEsce ?? '').trim().toLowerCase();
+  const candidati = [];
   for (const rilascio of elenco) {
-    // L'elenco chiama lo stato ora `state` ora `readyState` a seconda della
-    // versione dell'API: leggerne uno solo vorrebbe dire scartare tutto.
-    const stato = String(rilascio?.readyState ?? rilascio?.state ?? '').toUpperCase();
-    if (stato !== 'READY') continue;
-    const bersaglio = String(rilascio?.target ?? '').toLowerCase();
-    if (bersaglio !== 'production') continue;
-    const grezzo = String(rilascio?.url ?? '').trim();
-    if (!grezzo) continue;
-    const completo = /^https?:\/\//i.test(grezzo) ? grezzo : `https://${grezzo}`;
-    if (eUnIndirizzo(completo)) return completo;
+    const indirizzo = indirizzoDiProduzione(rilascio);
+    if (!indirizzo) continue;
+    const commit = commitDelRilascio(rilascio);
+    if (daScartare && commit === daScartare) continue;
+    candidati.push({ indirizzo, commit });
   }
-  return null;
+
+  const deiClienti = indirizzoDiProduzione(sulDominio);
+  if (deiClienti) {
+    if (!daScartare || commitDelRilascio(sulDominio) !== daScartare) return deiClienti;
+    return candidati[0]?.indirizzo ?? null;
+  }
+
+  // Un rilascio senza commit conta come un commit a se': non si sa se e' lo
+  // stesso di un altro.
+  const commitDiversi = new Set(candidati.map((c, i) => c.commit || `senza-commit-${i}`));
+  return commitDiversi.size === 1 ? candidati[0].indirizzo : null;
 }
 
 /**
@@ -536,9 +591,15 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     } catch {
       risposta = null;
     }
-    const trovato = rilascioDaTornare(risposta);
+    let sulDominio = null;
+    try {
+      sulDominio = JSON.parse(process.env.RILASCIO_SUL_DOMINIO ?? '');
+    } catch {
+      sulDominio = null;
+    }
+    const trovato = rilascioDaTornare(risposta, { commitCheEsce: process.env.COMMIT_CHE_ESCE ?? '', sulDominio });
     if (!trovato) {
-      console.error("Nell'elenco dei rilasci non c'e' nessuna produzione pronta: non saprei a quale indirizzo tornare indietro.");
+      console.error("Non so quale rilascio usano i clienti adesso: il dominio non ha risposto e nell'elenco non c'e' un solo commit diverso da quello che sta uscendo. Non scelgo a caso dove tornare indietro.");
       process.exit(USCITA.INDIRIZZO_NON_VALIDO);
     }
     console.log(trovato);
