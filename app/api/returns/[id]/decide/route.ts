@@ -10,9 +10,14 @@ import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 import { chiComandaIlReso } from '../../chi-comanda-il-reso';
 import {
+  eUnRecesso,
+  interoDelRecesso,
   motivoNienteDaRestituire,
+  percheIlRimborsoDelRecessoNonBasta,
   quantoSiPuoRestituire,
+  rigaResaCents,
   type OrdineDaRimborsare,
+  type RigaDellOrdine,
 } from '@/lib/rimborsi/regole-del-rimborso';
 import { avvisoDelRimborsoNonRegistrato, RIMBORSO_PARTITO_MA_NON_REGISTRATO } from '@/lib/rimborsi/bonifici-da-fare';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
@@ -42,7 +47,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const supa = await getServerSupabase();
   const { data: ret, error } = await supa
     .from('returns')
-    .select('id, status, seller_id, buyer_id, order_id, reason, refund_amount_cents, created_at')
+    .select('id, status, seller_id, buyer_id, order_id, reason, refund_amount_cents, created_at, order_item_id')
     .eq('id', params.id)
     .single();
 
@@ -122,6 +127,34 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       return ApiErrors.invalidRequest(
         `Il rimborso non può superare quello che resta dell ordine: al massimo ${(residuoCent / 100).toFixed(2)} €.`,
       );
+    }
+    /**
+     * 31/10/2026 — IL RECESSO SI RIMBORSA PER INTERO ANCHE DA QUI.
+     * `avanza` rifiutava 1 centesimo su un recesso da 30 €, ma «Approva reso» con
+     * l'importo accanto lo emetteva subito e scriveva REFUNDED: la stessa chiusura,
+     * per l'altra porta. La regola e' la stessa di `avanza` (lib/rimborsi): sotto
+     * l'intero solo con il motivo nella nota, che arriva al cliente.
+     */
+    if (eUnRecesso(ret)) {
+      const orderItemId = (ret as { order_item_id?: string | null }).order_item_id ?? null;
+      let righe: RigaDellOrdine[] | null = null;
+      if (orderItemId) {
+        const { data: lette, error: errRighe } = await admin
+          .from('order_items')
+          .select('id, unit_price, quantity')
+          .eq('order_id', ret.order_id);
+        if (errRighe || !lette) {
+          return ApiErrors.unavailable("Non riesco a leggere i prodotti dell'ordine: riprova tra poco.");
+        }
+        righe = lette as RigaDellOrdine[];
+      }
+      const nonBasta = percheIlRimborsoDelRecessoNonBasta({
+        reso: ret,
+        importoCents: body.refundAmountCents!,
+        interoCents: interoDelRecesso(residuoCent, rigaResaCents(righe, orderItemId)),
+        motivo: body.notes,
+      });
+      if (nonBasta) return ApiErrors.conflict(nonBasta);
     }
   }
 

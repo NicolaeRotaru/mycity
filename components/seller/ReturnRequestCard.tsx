@@ -223,7 +223,11 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
               maxLength={1000}
-              placeholder="Nota per il cliente (opzionale)"
+              placeholder={
+                recesso
+                  ? `Nota per il cliente. Se rimborsi subito meno dell'intero scrivi il motivo (merce rovinata o usata oltre la prova, almeno ${MOTIVO_MINIMO_CARATTERI} caratteri): la legge il cliente.`
+                  : 'Nota per il cliente (opzionale)'
+              }
               className="w-full border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
             />
             <div className="flex gap-2 flex-wrap">
@@ -234,14 +238,18 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
               >
                 <Check size={16} strokeWidth={2.4} /> Approva reso
               </button>
-              <button
-                onClick={() => decide.mutate('REJECTED')}
-                disabled={decide.isPending}
-                className="inline-flex items-center gap-1.5 bg-white border border-secondary-300 text-secondary-700 hover:bg-secondary-50 px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
-              >
-                <X size={16} strokeWidth={2.4} /> Rifiuta
-              </button>
+              {/* Il recesso non si rifiuta (Cod. Cons. art. 52): la rotta `decide` lo respinge, la scheda non lo offre. */}
+              {!recesso && (
+                <button
+                  onClick={() => decide.mutate('REJECTED')}
+                  disabled={decide.isPending}
+                  className="inline-flex items-center gap-1.5 bg-white border border-secondary-300 text-secondary-700 hover:bg-secondary-50 px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
+                >
+                  <X size={16} strokeWidth={2.4} /> Rifiuta
+                </button>
+              )}
             </div>
+            {chiusuraNegata && <p className="text-xs text-ink-500">{chiusuraNegata}</p>}
           </div>
         ) : (
           <div className="pt-2 border-t border-cream-200 space-y-3 text-ink-700">
