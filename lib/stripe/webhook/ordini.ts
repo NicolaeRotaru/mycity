@@ -30,6 +30,9 @@ import { scritturaObbligatoria } from './esito';
 import { chiudiIlCarrelloPerQuadratura } from './quadratura';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
+import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
+import { fasciaAlGiornoDellOrdine } from '@/lib/ordini/fascia-leggibile';
+import { orariDeiNegozi, rimborsaLaFasciaPersa } from './fascia-al-pagamento';
 
 export type PendingGroup = {
   sellerId: string;
@@ -272,6 +275,23 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     }
   }
 
+  // 31/10/2026 — LA FASCIA SI GUARDA QUANDO SI PAGA, E SI SCRIVE DAL GIORNO DELL'ORDINE.
+  // La rotta la controlla quando apre la pagina di Stripe, che resta pagabile per ore; l'ordine
+  // nasce qui. ① «Domani» scelto alle 23:50 e pagato alle 00:10 si riporta al giorno dell'ordine
+  // ② la regola unica dei contanti si rifà adesso: se dice no, rimborso e nessun ordine.
+  // Il perché intero in lib/stripe/webhook/fascia-al-pagamento.ts.
+  const fasciaScelta = pickupInStore ? null : (delivery.slot ?? null);
+  let fasciaDellOrdine = fasciaScelta;
+  if (fasciaScelta) {
+    const sceltaIl = typeof session.created === 'number' ? new Date(session.created * 1000) : new Date();
+    const riportata = fasciaAlGiornoDellOrdine(fasciaScelta, sceltaIl, new Date());
+    const motivo = riportata === null
+      ? 'La fascia scelta è già passata quando è arrivato il pagamento.'
+      : motivoFasciaRifiutata(riportata, await orariDeiNegozi(admin, groups));
+    if (motivo && await rimborsaLaFasciaPersa(admin, session, pendingCheckoutId, motivo)) return;
+    fasciaDellOrdine = riportata ?? fasciaScelta;
+  }
+
   const buyerEmail = session.customer_details?.email ?? session.customer_email ?? null;
   const buyerName = session.customer_details?.name ?? delivery.full_name;
   // `nuovo` distingue gli ordini creati adesso da quelli ripescati perche'
@@ -312,8 +332,8 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
       discount_amount: (g.couponPortionCents + g.pickupPortionCents) / 100,
       coupon_code: couponCode,
       pickup_in_store: pickupInStore,
-      // Fascia di consegna scelta dal buyer (dal pending_checkout.delivery.slot).
-      delivery_slot: pickupInStore ? null : (delivery.slot ?? null),
+      // Fascia di consegna scelta dal buyer, detta dal giorno in cui nasce l'ordine.
+      delivery_slot: fasciaDellOrdine,
       payment_status: 'PAID',
       payment_method: 'card',
       delivery_status: 'NEW',
@@ -549,7 +569,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           itemsCount: created.itemsCount,
           // 30/10/2026 — La fascia e la nascita dell'ordine (nato adesso, in questo webhook): senza,
           // l'email diceva sempre «appena puoi» invece della scadenza vera.
-          deliverySlot: pickupInStore ? null : (delivery.slot ?? null),
+          deliverySlot: fasciaDellOrdine,
           createdAt: new Date(),
           storeHours: orari,
         });
