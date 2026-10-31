@@ -46,6 +46,8 @@ describe("la griglia «solo promo» con zero promozioni attive", () => {
     client.setQueryData(queryKeys.promotions.active, []);
 
     const errori: unknown[] = [];
+    // React e jsdom stampano l errore per esteso: qui conta SE la griglia si rompe, non il testo.
+    const zitto = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const sentinella = (e: ErrorEvent) => { errori.push(e.error ?? e.message); e.preventDefault(); };
     window.addEventListener("error", sentinella);
     const radice = document.createElement("div");
@@ -63,8 +65,9 @@ describe("la griglia «solo promo» con zero promozioni attive", () => {
       errori.push(e);
     } finally {
       window.removeEventListener("error", sentinella);
+      zitto.mockRestore();
     }
-    expect(errori.map(String), "la griglia è andata in errore").toEqual([]);
+    expect(errori.length, "la griglia «solo promo» è andata in errore invece di mostrare lo stato vuoto").toBe(0);
     expect(radice.textContent).toContain("Nessuna promozione attiva al momento");
     act(() => root.unmount());
   });
