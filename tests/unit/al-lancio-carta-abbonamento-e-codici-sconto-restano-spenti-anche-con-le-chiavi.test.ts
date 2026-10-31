@@ -98,6 +98,24 @@ vi.mock('@/lib/supabase/server', () => {
     { id: PRODOTTO, seller_id: NEGOZIO, name: 'Pane', price: 5, stock: 10, has_variants: false, images: [], status: 'available' },
   ];
   const venditori = [{ id: NEGOZIO, store_name: 'Forno', store_lat: 45.05, store_lng: 9.69, store_hours: null }];
+  // Una riga sola, per le rotte dell'abbonamento: il negozio approvato, col suo cliente Stripe e il
+  // prodotto da sponsorizzare. Così, alla base, quelle rotte arrivano davvero fino a Stripe.
+  const rigaSola = (table: string): unknown =>
+    table === 'profiles'
+      ? { role: 'seller', is_approved: true, stripe_customer_id: 'cus_1', subscription_status: null, email: 'forno@test.it' }
+      : table === 'products'
+        ? { id: PRODOTTO, seller_id: 'cliente-1', name: 'Pane', status: 'available' }
+        : null;
+  const catena = (table: string): Record<string, unknown> => {
+    const c: Record<string, unknown> = {};
+    for (const m of ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'is', 'in', 'order', 'limit', 'filter', 'match', 'select', 'insert', 'update', 'upsert']) {
+      c[m] = () => c;
+    }
+    c.single = () => Promise.resolve({ data: rigaSola(table), error: null });
+    c.maybeSingle = c.single;
+    c.then = (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(ok, ko);
+    return c;
+  };
   const letture = (table: string) => ({
     select: () => ({
       in: () => {
@@ -105,8 +123,10 @@ vi.mock('@/lib/supabase/server', () => {
         if (table === 'product_variants') return Promise.resolve({ data: [], error: null });
         return Promise.resolve({ data: venditori, error: null });
       },
-      eq: () => Promise.resolve({ data: [], error: null }),
+      eq: () => catena(table),
     }),
+    insert: () => catena(table),
+    update: () => catena(table),
   });
   const adminFrom = (table: string): Record<string, unknown> => {
     if (table === 'orders') {
