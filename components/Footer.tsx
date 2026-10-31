@@ -15,7 +15,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useProfile } from './hooks/useProfile';
 import { useBranding } from './hooks/useBranding';
 import NewsletterForm from './NewsletterForm';
-import { personaCheGestisce, rigaIdentita, titolare } from '@/lib/legal/titolare';
+import { rigaIdentita, titolare } from '@/lib/legal/titolare';
 import { linkWhatsApp } from '@/lib/contatto-whatsapp';
 import { indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
 
@@ -137,8 +137,6 @@ const CATEGORIE_DI_RISERVA: Categoria[] = [
 const Footer = () => {
   const chiSiamo = titolare();
   const identita = rigaIdentita(chiSiamo);
-  // Finche' manca il nome legale, «© MyCity» da solo non dice chi risponde: si dice la persona.
-  const gestore = personaCheGestisce(chiSiamo);
   const whatsapp = linkWhatsApp(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER, 'Ciao MyCity, ho una domanda');
 
   const pathname = usePathname();
@@ -357,7 +355,8 @@ const Footer = () => {
           su OGNI pagina del sito. Finché non c'è una partita IVA attiva questa
           riga resta vuota, e non si stampa affatto.
         */}
-        {gestore && <div>Gestito da {gestore}</div>}
+        {/* Finche' manca il nome legale, «© MyCity» da solo non dice chi risponde: si dice la persona. */}
+        {chiSiamo.gestore && <div>Gestito da {chiSiamo.gestore}</div>}
         {identita && <div>{identita}</div>}
         <div>
           <Link href="/terms" className="underline hover:text-primary-700">Termini</Link> ·{' '}
