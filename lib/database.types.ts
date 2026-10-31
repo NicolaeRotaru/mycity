@@ -747,6 +747,7 @@ export interface Database {
           claimed_at: string | null;
           attempts: number;
           last_error: string | null;
+          scade_at: string | null;
         };
         Insert: {
           id?: string;
@@ -760,6 +761,7 @@ export interface Database {
           claimed_at?: string | null;
           attempts?: number;
           last_error?: string | null;
+          scade_at?: string | null;
         };
         Update: {
           id?: string;
@@ -773,6 +775,7 @@ export interface Database {
           claimed_at?: string | null;
           attempts?: number;
           last_error?: string | null;
+          scade_at?: string | null;
         };
         Relationships: [];
       };
