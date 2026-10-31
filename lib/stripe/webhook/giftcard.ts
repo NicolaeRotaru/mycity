@@ -21,6 +21,8 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { env } from '@/lib/env';
 import { sendEmail } from '@/lib/email/client';
 import { logger } from '@/lib/logger';
+import { colonnaNonTrovata, type ErroreDatabase } from '@/lib/db/migrazione-148';
+import { senzaCampi } from '@/lib/db/migrazione-124';
 import { giftCardRecipientTemplate, giftCardBuyerTemplate } from '@/lib/email/templates';
 
 /**
@@ -37,6 +39,15 @@ export function giftCardCodeForSession(sessionId: string): string {
   let s = '';
   for (let i = 0; i < 12; i++) s += alphabet[digest[i] % 32];
   return `MC-${s}`;
+}
+
+/**
+ * Il database non ha ancora la colonna del pagamento (migrazione 178 non
+ * applicata)? Per NOME: un'altra colonna mancante resta un errore vero.
+ */
+function senzaColonnaDelPagamento(errore: ErroreDatabase & { details?: string }): boolean {
+  if (!colonnaNonTrovata(errore)) return false;
+  return /\bstripe_payment_intent\b/.test(`${errore?.message ?? ''} ${errore?.details ?? ''}`);
 }
 
 function paymentIntentDellaSessione(session: Stripe.Checkout.Session): string | null {
@@ -68,7 +79,7 @@ export async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
   }
 
   const code = giftCardCodeForSession(session.id);
-  const { error } = await admin.from('gift_cards').insert({
+  const riga = {
     code,
     // 27/8/2026 (R045) — LA SESSIONE VA SCRITTA, ALTRIMENTI LA DIFESA E' SPENTA.
     //
@@ -91,7 +102,19 @@ export async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
     recipient_name: recipientName,
     recipient_email: recipientEmail,
     message,
-  });
+  };
+  let { error } = await admin.from('gift_cards').insert(riga);
+  if (error && senzaColonnaDelPagamento(error)) {
+    // Il codice puo' arrivare in produzione prima della migrazione 178: senza
+    // ripiego il pagamento e' incassato e il buono non nasce. Nasce lo stesso,
+    // senza il pagamento segnato — e lo si dice forte, perche' un buono cosi'
+    // non si ritrova dal pagamento quando torna indietro.
+    logger.error('[stripe] gift_card creata senza il pagamento: manca la migrazione 178', {
+      sessionId: session.id,
+      paymentIntent: riga.stripe_payment_intent,
+    });
+    ({ error } = await admin.from('gift_cards').insert(senzaCampi(riga, ['stripe_payment_intent'])));
+  }
 
   if (error) {
     if (error.code === '23505') {

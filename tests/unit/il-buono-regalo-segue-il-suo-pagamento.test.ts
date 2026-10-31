@@ -157,6 +157,33 @@ describe.skipIf(!BIN_POSTGRES)('il buono regalo segue il suo pagamento (database
     expect(pg.psql(`SELECT balance_cents || '|' || void_reason FROM public.gift_cards WHERE code = 'BUONO-BUONO';`)).toBe('0|refunded');
   });
 
+  it('il pagamento tornato indietro prima che il buono nasca: il buono nasce spento', () => {
+    // Stripe non garantisce l'ordine degli eventi: il ritorno del pagamento
+    // puo' arrivare prima della nascita del buono (un tentativo caduto e ripetuto).
+    const nasce = (codice: string, importo: number, pagamento: string) =>
+      pg.psql(`INSERT INTO public.gift_cards (code, amount_cents, balance_cents, stripe_session_id, stripe_payment_intent)
+               VALUES ('${codice}', ${importo}, ${importo}, 'cs_${pagamento}', '${pagamento}');`);
+    const stato = (codice: string) =>
+      pg.psql(`SELECT balance_cents || '|' || coalesce(void_reason, '-') || '|' || coalesce(voided_cents, 0) FROM public.gift_cards WHERE code = '${codice}';`);
+
+    expect(JSON.parse(pagamentoTornatoIndietro(null, 'pi_prima_del_buono', 'refunded'))).toMatchObject({ esito: 'non_trovato' });
+    // Stripe riconsegna lo stesso evento prima che il buono nasca: niente cambia.
+    pagamentoTornatoIndietro(null, 'pi_prima_del_buono', 'refunded');
+    nasce('BUONO-NATO-TARDI', 4000, 'pi_prima_del_buono');
+    expect(stato('BUONO-NATO-TARDI')).toBe('0|refunded|4000');
+    expect(() => comeUtente(CHI_RISCATTA, `SELECT public.redeem_gift_card('BUONO-NATO-TARDI')`)).toThrow(/non più valida/);
+    expect(JSON.parse(pagamentoTornatoIndietro(null, 'pi_prima_del_buono', 'refunded'))).toMatchObject({ esito: 'gia_annullato' });
+
+    pagamentoTornatoIndietro(null, 'pi_contestato_prima', 'disputed');
+    nasce('BUONO-CONTESTATO-PRIMA', 3000, 'pi_contestato_prima');
+    expect(stato('BUONO-CONTESTATO-PRIMA')).toBe('0|disputed|3000');
+
+    // Un pagamento mai tornato indietro: il buono nasce vivo.
+    nasce('BUONO-VIVO', 1500, 'pi_vivo');
+    expect(stato('BUONO-VIVO')).toBe('1500|-|0');
+    expect(saldo(CHI_RISCATTA)).toBe(0);
+  });
+
   it('dal browser l\'annullo non si chiama', () => {
     expect(() =>
       comeUtente(CHI_RISCATTA, `SELECT public.gift_card_void_for_payment('cs_buono', NULL, 'refunded')`),

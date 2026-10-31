@@ -58,8 +58,9 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
     // buono regalo: rimborsato per intero, il buono si spegne con lui. Su un
     // rimborso parziale non si indovina quanto togliere: lo si dice e basta.
     // Lo spegne il database (`gift_card_void_for_payment`, 178), una volta
-    // sola anche se Stripe riconsegna l'evento; 'non_trovato' = il pagamento
-    // non ha comprato un buono. Un errore si rilancia, cosi' Stripe riprova.
+    // sola anche se Stripe riconsegna l'evento; 'non_trovato' = nessun buono
+    // con quel pagamento (ancora): il database se lo annota e, se il buono
+    // nasce dopo, nasce spento. Un errore si rilancia, cosi' Stripe riprova.
     const pieno = charge.refunded === true || (charge.amount_refunded ?? 0) >= (charge.amount ?? 0);
     if (!pieno) {
       logger.warn('[stripe] rimborso parziale su un pagamento senza ordini: nessun annullo automatico del buono', { paymentIntent: pi });

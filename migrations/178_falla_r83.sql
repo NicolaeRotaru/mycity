@@ -27,11 +27,20 @@
 --     sua chiave unica (143) su motivo+codice.
 --     Se il buono non c'e' ancora risponde 'non_trovato': chi chiama deve
 --     trattarlo come «da rifare», non come «fatto».
+--  ⑤ Il pagamento puo' tornare indietro PRIMA che il buono nasca: Stripe non
+--     garantisce l'ordine degli eventi, e la nascita puo' arrivare in ritardo
+--     (un tentativo caduto che Stripe ripete ore dopo). Allora l'annullo non
+--     trova il buono: lo annota in `gift_card_pending_voids`, e il buono che
+--     nasce con quel pagamento nasce gia' spento (trigger BEFORE INSERT).
+--     Annullo e nascita prendono la stessa serratura (advisory lock sul
+--     pagamento): se corrono insieme, il secondo aspetta e vede il primo.
 --  ④ `redeem_gift_card` rifiuta un buono annullato. Lo stesso FOR UPDATE mette
 --     in fila riscatto e annullo: se il riscatto passa prima, l'annullo
 --     riprende il credito; se passa dopo, trova il buono spento.
 --
 -- REVERSIBILE. `DROP FUNCTION public.gift_card_void_for_payment(text, text, text);`
+-- `DROP TRIGGER gift_cards_apply_pending_void ON public.gift_cards;`
+-- `DROP FUNCTION public.gift_card_apply_pending_void(); DROP TABLE public.gift_card_pending_voids;`
 -- `redeem_gift_card` si ricrea col testo della 087; le colonne nuove, vuote,
 -- non disturbano nessuno.
 --
@@ -68,6 +77,20 @@ COMMENT ON COLUMN public.gift_cards.voided_cents IS
   'Quanto si e'' tolto all''annullo: saldo del buono + credito ripreso dal portafoglio (178).';
 
 -- =========================================================
+-- ⑤ IL PAGAMENTO TORNATO INDIETRO PRIMA DEL BUONO
+-- =========================================================
+CREATE TABLE IF NOT EXISTS public.gift_card_pending_voids (
+  stripe_payment_intent text PRIMARY KEY,
+  void_reason text NOT NULL CHECK (void_reason IN ('refunded', 'disputed')),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.gift_card_pending_voids ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.gift_card_pending_voids FROM PUBLIC, anon, authenticated;
+
+COMMENT ON TABLE public.gift_card_pending_voids IS
+  'Pagamenti tornati indietro quando il loro buono regalo non era ancora nato (178): il buono nasce spento.';
+
+-- =========================================================
 -- ③ L'ANNULLO
 -- =========================================================
 CREATE OR REPLACE FUNCTION public.gift_card_void_for_payment(p_session_id text, p_payment_intent text, p_reason text)
@@ -85,6 +108,11 @@ BEGIN
     RAISE EXCEPTION 'gift_card_void_for_payment: serve la sessione o il pagamento';
   END IF;
 
+  -- ⑤ La stessa serratura della nascita del buono: i due non si incrociano.
+  IF coalesce(p_payment_intent, '') <> '' THEN
+    PERFORM pg_advisory_xact_lock(hashtext('gift_card_payment:' || p_payment_intent));
+  END IF;
+
   SELECT code, amount_cents, balance_cents, redeemed_by, voided_at, voided_cents
     INTO g
     FROM public.gift_cards
@@ -95,6 +123,13 @@ BEGIN
    FOR UPDATE;
 
   IF NOT FOUND THEN
+    -- ⑤ Il buono non e' ancora nato: lo si annota, e nascera' spento.
+    IF coalesce(p_payment_intent, '') <> '' THEN
+      INSERT INTO public.gift_card_pending_voids (stripe_payment_intent, void_reason)
+      VALUES (p_payment_intent, p_reason)
+      ON CONFLICT (stripe_payment_intent) DO NOTHING;
+      RETURN jsonb_build_object('esito', 'non_trovato', 'in_attesa', true);
+    END IF;
     RETURN jsonb_build_object('esito', 'non_trovato');
   END IF;
   IF g.voided_at IS NOT NULL THEN
@@ -127,6 +162,37 @@ COMMENT ON FUNCTION public.gift_card_void_for_payment(text, text, text) IS
 
 REVOKE ALL ON FUNCTION public.gift_card_void_for_payment(text, text, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.gift_card_void_for_payment(text, text, text) TO service_role;
+
+-- ⑤ Il buono che nasce con un pagamento gia' tornato indietro nasce spento.
+CREATE OR REPLACE FUNCTION public.gift_card_apply_pending_void()
+RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_reason text;
+BEGIN
+  IF coalesce(NEW.stripe_payment_intent, '') = '' THEN
+    RETURN NEW;
+  END IF;
+  -- Prima la serratura, poi la lettura: se l'annullo corre in parallelo, qui
+  -- si aspetta che finisca e la lettura (nuova istantanea) lo vede.
+  PERFORM pg_advisory_xact_lock(hashtext('gift_card_payment:' || NEW.stripe_payment_intent));
+  SELECT void_reason INTO v_reason
+    FROM public.gift_card_pending_voids
+   WHERE stripe_payment_intent = NEW.stripe_payment_intent;
+  IF FOUND THEN
+    NEW.voided_cents := NEW.balance_cents;
+    NEW.balance_cents := 0;
+    NEW.voided_at := now();
+    NEW.void_reason := v_reason;
+  END IF;
+  RETURN NEW;
+END; $$;
+
+REVOKE ALL ON FUNCTION public.gift_card_apply_pending_void() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS gift_cards_apply_pending_void ON public.gift_cards;
+CREATE TRIGGER gift_cards_apply_pending_void
+  BEFORE INSERT ON public.gift_cards
+  FOR EACH ROW EXECUTE FUNCTION public.gift_card_apply_pending_void();
 
 -- =========================================================
 -- ④ IL RISCATTO
