@@ -409,17 +409,16 @@ export async function salvaProdottoTracciato(opts: {
   if (erroreLettura) throw erroreLettura;
   if (!prima || prima.seller_id !== opts.attoreId) throw new ProdottoNonTuo();
 
-  // 31/10/2026 — UN SALVATAGGIO RIMANDATO NON E' UNA SCORTA CAMBIATA. Il
-  // negoziante porta la focaccia da 5 a 8, la scrittura passa ma la risposta
-  // si perde, e lui preme di nuovo «Salva»: in banca dati c'e' gia' 8, cioe'
-  // proprio il numero che chiede. Nessuna vendita da proteggere, niente da
-  // scrivere per la scorta — e il resto del salvataggio va avanti.
-  if (condizione !== undefined && stessoValore(prima.stock, daScrivere.stock)) {
-    delete daScrivere.stock;
-    condizione = undefined;
-    if (Object.keys(daScrivere).length === 0) return { campi: [], tracciato: false };
-  }
-
+  // 31/10/2026 — SI CONFRONTA COL NUMERO VISTO, MAI CON QUELLO SCRITTO. Un
+  // giro prima qui c'era una scorciatoia: «in banca dati c'e' gia' il numero
+  // che chiedi, allora e' un salvataggio rimandato». Ma lo stesso quadro nasce
+  // da una vendita: il fornaio apre la focaccia a 5, un cliente ne compra 1
+  // (in banca dati 4), a lui ne cade una e scrive 4. La scorciatoia salvava 4
+  // senza dire niente, e in vetrina restava una focaccia che non c'e' (la vera
+  // e' 3). Da qui i due casi non si distinguono, quindi vince quello che costa
+  // soldi: e' un conflitto, sempre. Il salvataggio rimandato dopo una risposta
+  // persa riceve «ora sono 8», il modulo riparte dalla banca dati e il secondo
+  // «Salva» passa.
   if (condizione !== undefined && !stessoValore(prima.stock, condizione)) {
     throw new ScortaCambiata(condizione, prima.stock);
   }

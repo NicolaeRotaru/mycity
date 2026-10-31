@@ -21,9 +21,16 @@ import { DaCompletare } from '@/lib/products/salvataggio-tracciato';
  * La S vista a 2, venduta a 1 nel frattempo, riscritta a 4 dal negoziante: in
  * banca dati andava 4, e la vendita spariva. Adesso, se la scorta di una
  * variante cambiata non e' piu' quella vista, non si scrive niente (nessuna
- * variante, nessuna cancellazione) e un `DaCompletare` lo dice al negoziante. Resta
- * il buco dei millisecondi fra questa lettura e la scrittura: per chiuderlo
- * serve una funzione del database che scriva solo «se e' ancora N».
+ * variante, nessuna cancellazione) e un `DaCompletare` lo dice al negoziante.
+ *
+ * Il confronto e' col numero VISTO, mai con quello scritto: la S vista a 2,
+ * venduta a 1 nel frattempo, portata a 1 dal negoziante che ne ha tolta una
+ * difettosa e' un conflitto (la vera e' 0), anche se in banca dati c'e' gia'
+ * il numero che chiede. E la condizione sta anche nella scrittura
+ * (`.eq('stock', vista)`): una vendita arrivata fra la lettura e la scrittura
+ * lascia la riga non trovata, e la scorta non si sovrascrive. Le righe gia'
+ * scritte prima di quella non tornano indietro: per farle andare tutte o
+ * nessuna serve una funzione del database (migrazione 169).
  */
 export async function saveProductVariantsServer(
   supabase: SupabaseClient,
@@ -41,7 +48,7 @@ export async function saveProductVariantsServer(
 
   const keepIds = new Set<string>();
   const toInsert: Array<Record<string, unknown>> = [];
-  const toUpdate: Array<{ id: string; row: Record<string, unknown> }> = [];
+  const toUpdate: Array<{ id: string; row: Record<string, unknown>; vista?: number; label: string }> = [];
 
   variants.forEach((v, i) => {
     const row: Record<string, unknown> = {
@@ -56,16 +63,12 @@ export async function saveProductVariantsServer(
       const vista = scorteViste?.[v.id];
       if (vista !== undefined && Math.max(0, Math.trunc(vista || 0)) === row.stock) delete row.stock;
       const adesso = scortaInBanca.get(v.id);
-      // Gia' in banca dati il numero che il negoziante chiede (un salvataggio
-      // rimandato dopo una risposta persa): niente da scrivere, niente conflitto.
-      if ('stock' in row && vista !== undefined && adesso === row.stock) delete row.stock;
       if ('stock' in row && vista !== undefined && typeof adesso === 'number' && adesso !== vista) {
-        throw new DaCompletare(
-          `La scorta di «${v.label}» è cambiata mentre modificavi: avevi davanti ${vista} pezzi, ora sono ${adesso}. Riapri il prodotto, controlla il numero e salva di nuovo.`,
-          ['scorta'],
-        );
+        throw scortaVarianteCambiata(v.label, vista, adesso);
       }
-      toUpdate.push({ id: v.id, row });
+      // La condizione va nella scrittura solo se la lettura ha visto una scorta vera.
+      const condizionata = 'stock' in row && vista !== undefined && typeof adesso === 'number';
+      toUpdate.push({ id: v.id, row, label: v.label, ...(condizionata ? { vista } : {}) });
     } else {
       toInsert.push(row);
     }
@@ -77,11 +80,31 @@ export async function saveProductVariantsServer(
     if (error) throw error;
   }
   for (const u of toUpdate) {
-    const { error } = await supabase.from('product_variants').update(u.row).eq('id', u.id);
+    if (u.vista === undefined) {
+      const { error } = await supabase.from('product_variants').update(u.row).eq('id', u.id);
+      if (error) throw error;
+      continue;
+    }
+    const { data, error } = await supabase
+      .from('product_variants')
+      .update(u.row)
+      .eq('id', u.id)
+      .eq('stock', u.vista)
+      .select('id');
     if (error) throw error;
+    if (!data || data.length === 0) throw scortaVarianteCambiata(u.label, u.vista, undefined);
   }
   if (toInsert.length > 0) {
     const { error } = await supabase.from('product_variants').insert(toInsert);
     if (error) throw error;
   }
+}
+
+/** Il messaggio per il negoziante: il motivo e cosa fare, non «Riprova». */
+function scortaVarianteCambiata(label: string, vista: number, adesso: number | undefined): DaCompletare {
+  const ora = typeof adesso === 'number' ? `ora sono ${adesso}` : 'nel frattempo è cambiata';
+  return new DaCompletare(
+    `La scorta di «${label}» è cambiata mentre modificavi: avevi davanti ${vista} pezzi, ${ora}. Riapri il prodotto, controlla il numero e salva di nuovo.`,
+    ['scorta'],
+  );
 }

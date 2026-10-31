@@ -197,21 +197,15 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
     } else {
       const { data, error } = await admin.from('products').update(patch).eq('id', id).eq('stock', condizione).select('id');
       if (error) return ApiErrors.internal('Impossibile aggiornare il prodotto');
+      // Nessuna riga: in banca dati la scorta non e' piu' quella vista. Anche
+      // quando c'e' gia' proprio il numero scritto: vista 5, venduta 1 online
+      // (in banca 4), scritto 4 dopo un pezzo rotto e' una vendita da non
+      // cancellare, non un salvataggio rimandato. Si ferma tutto e lo si dice;
+      // il modulo riparte dalla banca dati.
       if (!data || data.length === 0) {
-        // Un salvataggio rimandato (la risposta di prima si e' persa): in banca
-        // dati c'e' gia' il numero chiesto, quindi non e' un conflitto. La
-        // scorta resta com'e' e si scrive il resto.
-        const { data: ora } = await admin.from('products').select('stock').eq('id', id).maybeSingle();
-        if ((ora as { stock?: unknown } | null)?.stock !== patch.stock) {
-          return ApiErrors.conflict(
-            `La scorta è cambiata mentre la scheda era aperta: avevi davanti ${condizione} pezzi. Riapri il prodotto, controlla il numero e salva di nuovo.`,
-          );
-        }
-        delete patch.stock;
-        if (Object.keys(patch).length > 0) {
-          const { error: erroreResto } = await admin.from('products').update(patch).eq('id', id);
-          if (erroreResto) return ApiErrors.internal('Impossibile aggiornare il prodotto');
-        }
+        return ApiErrors.conflict(
+          `La scorta è cambiata mentre la scheda era aperta: avevi davanti ${condizione} pezzi. Riapri il prodotto, controlla il numero e salva di nuovo.`,
+        );
       }
     }
   }
