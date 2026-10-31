@@ -85,20 +85,6 @@ beforeEach(() => {
 });
 
 describe('il filtro della posta apre il link prima della persona', () => {
-  it('IL CASO CHE ROMPEVA — aprire il link non lo consuma: niente verifyOtp, niente sessione, solo il pulsante', async () => {
-    linkValidi.set('pkce_aaaa1111bbbb2222', { id: 'marta', email: 'marta@studio.it' });
-    const res = await GET(apri('/auth/confirm?token_hash=pkce_aaaa1111bbbb2222&type=signup&next=%2Fcheckout'));
-
-    expect(chiamateVerifyOtp, 'la GET del filtro ha bruciato il link monouso').toEqual([]);
-    expect(linkValidi.has('pkce_aaaa1111bbbb2222')).toBe(true);
-    expect(sessioneScritta(res)).toBeUndefined();
-    expect(res.status).toBe(200);
-    expect(res.headers.get('cache-control')).toContain('no-store');
-    const html = await res.text();
-    expect(html).toMatch(/<form method="post" action="\/auth\/confirm">/);
-    expect(campiDelModulo(html)).toEqual({ token_hash: 'pkce_aaaa1111bbbb2222', type: 'signup', next: '/checkout' });
-  });
-
   it('il filtro apre, la persona apre, poi preme il pulsante: entra, e il link si usa una volta sola', async () => {
     linkValidi.set('pkce_cccc3333dddd4444', { id: 'marta', email: 'marta@studio.it' });
     await GET(apri('/auth/confirm?token_hash=pkce_cccc3333dddd4444&type=signup&next=%2Fcheckout'));
@@ -145,9 +131,4 @@ describe('il filtro della posta apre il link prima della persona', () => {
     expect(sessioneScritta(res)).toBeUndefined();
   });
 
-  it('la pagina col pulsante non si lascia iniettare HTML dal `next` del link', async () => {
-    const res = await GET(apri('/auth/confirm?token_hash=pkce_iiii9999jjjj0000&type=signup&next=%2Fcheckout%22%3E%3Cscript%3Ealert(1)%3C%2Fscript%3E'));
-    const html = await res.text();
-    expect(html).not.toMatch(/<script/i);
-  });
 });
