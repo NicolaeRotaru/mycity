@@ -16,11 +16,9 @@ import { laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
  * la tabella degli articoli, e la rete che cade dopo il salvataggio.
  */
 
-const CLIENTE = 'cliente-1';
 const FORNO = 'aaaaaaaa-0000-4000-8000-000000000001';
 const FIORAIO = 'bbbbbbbb-0000-4000-8000-000000000002';
 const PANE = '11111111-1111-4111-8111-111111111111';
-const FIORI = '22222222-2222-4222-8222-222222222222';
 const PIACENZA = { lat: 45.0526, lng: 9.6929 };
 
 type Riga = Record<string, unknown>;
@@ -170,7 +168,6 @@ vi.mock('@/lib/supabase/server', () => {
 });
 
 const AL_FORNO = { sellerId: FORNO, items: [{ productId: PANE, quantity: 1 }] };
-const AL_FIORAIO = { sellerId: FIORAIO, items: [{ productId: FIORI, quantity: 1 }] };
 
 async function ordina(chiave: string, gruppi = [AL_FORNO]) {
   const { POST } = await import('@/app/api/orders/cod/route');
