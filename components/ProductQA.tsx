@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useProfile } from './hooks/useProfile';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { fetchNomiPubblici } from '@/lib/queries/seller-public-profiles';
 import { Button } from '@/components/ui/Button';
 
 type Question = {
@@ -66,8 +67,7 @@ export default function ProductQA({ productId, sellerId }: Props) {
       const { data, error } = await supabase
         .from('product_questions')
         .select(`
-          id, product_id, author_id, question, answer, answered_at, created_at,
-          author:profiles!product_questions_author_id_fkey ( full_name )
+          id, product_id, author_id, question, answer, answered_at, created_at
         `)
         .eq('product_id', productId)
         .eq('is_public', true)
@@ -75,7 +75,11 @@ export default function ProductQA({ productId, sellerId }: Props) {
         .order('created_at', { ascending: false })
         .limit(20);
       if (error) throw error;
-      return (data ?? []) as unknown as Question[];
+      // 31/10/2026 (migrazione 164) — Chi ha scritto la domanda si legge dalla vista `nomi_pubblici`,
+      // non da `profiles`: dopo la 161 l'aggancio tornava vuoto e ogni domanda era firmata «Cliente».
+      const righe = (data ?? []) as unknown as Array<Omit<Question, 'author'>>;
+      const nomi = await fetchNomiPubblici(supabase, righe.map((q) => q.author_id));
+      return righe.map((q) => ({ ...q, author: { full_name: nomi.get(q.author_id) ?? null } })) as Question[];
     },
   });
 
