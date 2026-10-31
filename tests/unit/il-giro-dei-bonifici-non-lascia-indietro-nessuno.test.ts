@@ -47,7 +47,14 @@ const state: {
   msPerBonifico: number;
   notifiche: Array<{ title: string }>;
   avvisoRecente: { alert_key: string } | null;
-} = { ordini: [], saldoDisponibile: 1_000_000, msPerBonifico: 0, notifiche: [], avvisoRecente: null };
+  /** Gli ordini con un reclamo aperto nella tabella `disputes` (status 'open'). */
+  reclamiAperti: Set<string>;
+  /** La lettura dei reclami aperti non riesce (rete, PostgREST). */
+  reclamiIllegibili: boolean;
+} = {
+  ordini: [], saldoDisponibile: 1_000_000, msPerBonifico: 0, notifiche: [], avvisoRecente: null,
+  reclamiAperti: new Set(), reclamiIllegibili: false,
+};
 
 const releaseOrderPayoutMock = vi.fn(async (_id: string) => {
   // R141 — un bonifico vero e' una chiamata di rete: qui il tempo lo facciamo
@@ -170,7 +177,22 @@ vi.mock('@/lib/supabase/server', () => ({
           upsert: () => Promise.resolve({ error: null }),
         };
       }
-      // Nessun reso e nessuna contestazione aperta.
+      if (tabella === 'disputes') {
+        // I reclami aperti, come li legge il giro: order_id in (...) e status in ('open', 'under_review').
+        return {
+          select: () => ({
+            in: (_c: string, ids: string[]) => ({
+              in: () =>
+                Promise.resolve(
+                  state.reclamiIllegibili
+                    ? { data: null, error: { message: 'lettura dei reclami non riuscita' } }
+                    : { data: ids.filter((id) => state.reclamiAperti.has(id)).map((order_id) => ({ order_id })), error: null },
+                ),
+            }),
+          }),
+        };
+      }
+      // Nessun reso aperto.
       return { select: () => ({ in: () => ({ in: () => Promise.resolve({ data: [], error: null }) }) }) };
     },
   }),
@@ -193,6 +215,8 @@ beforeEach(() => {
   state.msPerBonifico = 0;
   state.notifiche = [];
   state.avvisoRecente = null;
+  state.reclamiAperti = new Set();
+  state.reclamiIllegibili = false;
   releaseOrderPayoutMock.mockClear();
   releaseRiderPayoutMock.mockClear();
   // 31/10/2026 — i contanti passano da Stripe solo se consegnati dal giorno
@@ -577,7 +601,10 @@ function condizioneVera(cond: string, riga: Record<string, unknown>): boolean {
 
 /** Quello che fa Postgres quando nasce una riga in `disputes` per questo ordine. */
 function apriIlReclamo(ordine: Record<string, unknown>): void {
+  state.reclamiAperti.add(String(ordine.id));
   const { file, corpo } = ultimaFunzioneDelTrigger();
+  // Un trigger che non scrive niente lascia l'ordine com'e': il reclamo aperto lo vede il giro dalla tabella `disputes`.
+  if (!/\bUPDATE\b/i.test(corpo)) return;
   const m = /UPDATE\s+public\.orders\s+SET\s+([\s\S]+?)\s+WHERE\s+([\s\S]+?);/i.exec(corpo);
   if (!m) throw new Error(`${file}: dispute_block_payout non scrive su orders come la prova si aspetta:\n${corpo}`);
   const dove = m[2].replace(/^\s*id\s*=\s*NEW\.order_id\s*(AND\s*)?/i, '');
@@ -596,6 +623,7 @@ function apriIlReclamo(ordine: Record<string, unknown>): void {
 /** Quello che scrive chi chiude il reclamo dal pannello (resolve/route.ts, scriviIlReclamoSullOrdine). */
 async function chiudiIlReclamo(ordine: Record<string, unknown>, esito: { rimborsoEmesso: boolean; rimborsoPieno: boolean }) {
   const { statoDelReclamoSullOrdine } = await import('@/lib/rimborsi/regole-del-rimborso');
+  state.reclamiAperti.delete(String(ordine.id));
   // La pausa del carrello non si tocca (SENZA_LA_PAUSA_DEL_CARRELLO).
   if (ordine.internal_dispute_status !== 'RIMBORSO_DA_RIPARTIRE') ordine.internal_dispute_status = statoDelReclamoSullOrdine(esito);
 }
@@ -661,5 +689,52 @@ describe('184 — il reclamo chiuso a favore del negozio libera di nuovo il boni
     state.ordini = [o];
     await giro();
     expect(releaseOrderPayoutMock).toHaveBeenCalledWith('cod-reclamo-chiuso');
+  });
+
+  /**
+   * Collaudo 31/10 (terzo giro). Carrello di due negozi, A e B, pagato con una
+   * carta sola. Sul A il cliente apre un reclamo; poi dal cruscotto Stripe parte
+   * un rimborso, e il webhook ferma i bonifici di tutto il carrello finche' chi
+   * amministra non lo divide (fermaIBonifici, la funzione vera). Se il trigger
+   * scrive 'OPEN' su internal_dispute_status, fermaIBonifici salta il A (ferma
+   * solo vuoto o 'RESOLVED'): chiuso il reclamo, il A torna 'RESOLVED' e il giro
+   * gli versa il netto intero prima che si sappia quanto del rimborso e' suo.
+   */
+  it('reclamo aperto e rimborso dal cruscotto sul carrello: chiuso il reclamo, il negozio aspetta la divisione', async () => {
+    const a: Ordine = { ...ordineConCarta(), id: 'carrello-a' };
+    const b: Ordine = { ...ordineConCarta(), id: 'carrello-b' };
+    state.ordini = [a, b];
+    apriIlReclamo(a as Record<string, unknown>);
+    const { fermaIBonifici } = await import('@/lib/stripe/webhook/rimborsi-da-fuori');
+    await fermaIBonifici([a.id, b.id]);
+    await chiudiIlReclamo(a as Record<string, unknown>, { rimborsoEmesso: false, rimborsoPieno: false });
+    await giro();
+    expect(a.internal_dispute_status, 'la pausa del carrello non e stata messa sul negozio del reclamo').toBe('RIMBORSO_DA_RIPARTIRE');
+    expect(releaseOrderPayoutMock, 'il negozio del reclamo e pagato tutto prima della divisione del rimborso').not.toHaveBeenCalled();
+  });
+
+  it('la pausa tolta dalla divisione mentre il reclamo e ancora aperto: il bonifico aspetta il reclamo', async () => {
+    const o = ordineConCarta();
+    state.ordini = [o];
+    apriIlReclamo(o as Record<string, unknown>);
+    const { fermaIBonifici } = await import('@/lib/stripe/webhook/rimborsi-da-fuori');
+    await fermaIBonifici([o.id]);
+    o.internal_dispute_status = null; // la divisione toglie la pausa a tutto il carrello
+    await giro();
+    expect(releaseOrderPayoutMock, 'reclamo ancora aperto e il negozio viene pagato').not.toHaveBeenCalled();
+  });
+
+  it('se la lettura dei reclami aperti non riesce, il giro non paga a occhi chiusi', async () => {
+    const carta = ordineConCarta();
+    const cod: Ordine = {
+      id: 'cod-reclamo-illeggibile', payment_method: 'cod', payout_status: 'HELD', delivery_status: 'DELIVERED',
+      delivered_at: dueOreFa(), dispute_status: null, internal_dispute_status: null,
+    };
+    apriIlReclamo(carta as Record<string, unknown>);
+    apriIlReclamo(cod as Record<string, unknown>);
+    state.reclamiIllegibili = true;
+    state.ordini = [carta, cod];
+    await giro();
+    expect(releaseOrderPayoutMock, 'reclami non letti e i negozi pagati lo stesso').not.toHaveBeenCalled();
   });
 });

@@ -18,19 +18,29 @@
 -- chiuso A FAVORE DEL NEGOZIO lasciava il negozio senza il suo bonifico per
 -- quell'ordine, in silenzio.
 --
--- COSA FA. Ridefinisce la funzione del trigger: all'apertura di un reclamo
--- scrive 'OPEN' nella colonna DEL RECLAMO (`internal_dispute_status`), non in
--- quella della banca. Il giro la legge gia' (paga solo vuoto o 'RESOLVED'),
--- quindi il bonifico resta fermo finche' il reclamo e' aperto, e riparte da
--- solo quando chi decide lo chiude a favore del negozio. Il trigger non
--- sovrascrive:
---   · 'LOST' (rimborso intero al cliente: al negozio non spetta piu' niente);
---   · 'RIMBORSO_DA_RIPARTIRE' (la pausa del carrello di piu' negozi, che toglie
---     solo la divisione — lib/stripe/rimborsi-da-fuori.ts). Anche in quel caso
---     il giro non paga finche' il reclamo e' aperto: legge i reclami aperti
---     dalla tabella `disputes`.
--- Un reclamo nuovo su un ordine con un reclamo vecchio gia' 'RESOLVED' lo
--- riporta a 'OPEN'.
+-- PERCHE' NON SCRIVE SU NESSUNA COLONNA DELL'ORDINE. La prima versione di
+-- questa migrazione spostava il 'OPEN' su `internal_dispute_status`. Il
+-- collaudo del 31/10 l'ha bocciata con un caso vero: su quella colonna sta
+-- anche la pausa del carrello di piu' negozi ('RIMBORSO_DA_RIPARTIRE'), che il
+-- webhook mette quando dal cruscotto Stripe parte un rimborso da dividere
+-- (lib/stripe/webhook/rimborsi-da-fuori.ts, fermaIBonifici). La pausa si
+-- mette solo sugli ordini con lo stato vuoto o 'RESOLVED': un ordine con il
+-- reclamo aperto ('OPEN') restava senza pausa, chiuso il reclamo tornava
+-- 'RESOLVED' e il giro gli versava il netto intero prima della divisione.
+--
+-- COSA FA. Ridefinisce la funzione del trigger perche' non scriva piu' niente
+-- sull'ordine. Il bonifico con un reclamo aperto lo ferma gia' il giro
+-- (app/api/cron/release-payouts), che legge i reclami aperti dalla tabella
+-- `disputes` (status 'open' o 'under_review') sia per la carta sia per i
+-- contanti, e che da questo giro non paga se quella lettura non riesce. Cosi':
+--   · reclamo aperto  → il giro non paga (lo legge da `disputes`);
+--   · reclamo chiuso a favore del negozio → la rotta di chiusura scrive
+--     'RESOLVED' e il giro paga, senza nessun 'OPEN' rimasto indietro;
+--   · rimborso intero al cliente → 'LOST', il giro non paga;
+--   · rimborso dal cruscotto su un carrello di piu' negozi → la pausa si
+--     mette anche sul negozio del reclamo, e la chiusura del reclamo non la
+--     toglie (SENZA_LA_PAUSA_DEL_CARRELLO): la toglie solo la divisione.
+-- La colonna della banca (`dispute_status`) la scrive solo il webhook Stripe.
 --
 -- COSA NON FA. Non tocca le righe gia' scritte: un ordine che ha oggi
 -- `dispute_status = 'OPEN'` puo' averlo dal trigger vecchio OPPURE da una
@@ -43,11 +53,6 @@ CREATE OR REPLACE FUNCTION public.dispute_block_payout()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public
 AS $$
 BEGIN
-  PERFORM set_config('mycity.allow_order_write', '1', true);
-  UPDATE public.orders
-     SET internal_dispute_status = 'OPEN'
-   WHERE id = NEW.order_id
-     AND (internal_dispute_status IS NULL OR internal_dispute_status = 'RESOLVED');
   RETURN NEW;
 END;
 $$;
@@ -55,4 +60,4 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.dispute_block_payout() FROM anon, authenticated;
 
 COMMENT ON FUNCTION public.dispute_block_payout() IS
-  'All''apertura di un reclamo interno ferma il bonifico scrivendo orders.internal_dispute_status = OPEN. Non tocca dispute_status: quella e la colonna del chargeback bancario e la scrive solo il webhook Stripe (184).';
+  'Dalla 184 non scrive sull''ordine: il bonifico con un reclamo aperto lo ferma il giro leggendo la tabella disputes. dispute_status e del chargeback bancario (solo webhook Stripe); internal_dispute_status porta l''esito del reclamo e la pausa del carrello.';

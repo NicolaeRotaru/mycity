@@ -229,6 +229,17 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     ]);
     for (const r of openReturns.data ?? []) blocked.add(r.order_id as string);
     for (const d of openDisputes.data ?? []) blocked.add(d.order_id as string);
+    // 31/10/2026 (184) — Il reclamo aperto lo ferma SOLO questa lettura: il
+    // trigger sui reclami non scrive piu' sull'ordine. Una lettura non riuscita
+    // non vuol dire «nessun reclamo»: questo giro non paga, il prossimo ritenta.
+    if (openReturns.error || openDisputes.error) {
+      logger.error('[cron] resi o reclami aperti non letti: bonifici carta rimandati al prossimo giro', {
+        ordini: ids.length,
+        resi: openReturns.error?.message,
+        reclami: openDisputes.error?.message,
+      });
+      for (const id of ids) blocked.add(id);
+    }
   }
 
   let released = 0;
@@ -456,6 +467,15 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     ]);
     for (const r of codReturns.data ?? []) codBlocked.add(r.order_id as string);
     for (const d of codDisputes.data ?? []) codBlocked.add(d.order_id as string);
+    // 31/10/2026 (184) — Come per la carta: senza la lettura dei reclami non si paga.
+    if (codReturns.error || codDisputes.error) {
+      logger.error('[cron] resi o reclami aperti non letti: bonifici dei contanti rimandati al prossimo giro', {
+        ordini: codIds.length,
+        resi: codReturns.error?.message,
+        reclami: codDisputes.error?.message,
+      });
+      for (const id of codIds) codBlocked.add(id);
+    }
 
     const tempoFinitoCod = cronometroDelPasso();
     for (const id of codIds) {
