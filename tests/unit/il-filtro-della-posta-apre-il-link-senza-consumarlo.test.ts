@@ -6,10 +6,10 @@
  * i gateway antivirus) aprono ogni link in anteprima con una GET. I link di
  * Supabase sono monouso: se la GET di /auth/confirm chiamava `verifyOtp`, il
  * link era gia' consumato quando la persona cliccava, e lei leggeva «link
- * scaduto». Qui: la GET mostra un pulsante, il POST del pulsante consuma il link.
+ * scaduto». Qui: la GET mostra un pulsante, premere il pulsante consuma il link.
  *
  * Questo file prova solo l'apertura (GET), quella che fa il filtro; il pulsante
- * (POST) e' provato in il-link-di-conferma-non-lo-brucia-l-antivirus.test.ts.
+ * e' provato in il-link-di-conferma-non-lo-brucia-l-antivirus.test.ts.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
