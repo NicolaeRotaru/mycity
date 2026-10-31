@@ -9,6 +9,7 @@ import { formatPrice, formatDate } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { apiErrorMessage } from '@/lib/errors';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
+import { eUnRecesso, MOTIVO_MINIMO_CARATTERI, percheIlRecessoNonSiChiude } from '@/lib/rimborsi/regole-del-rimborso';
 
 export type ReturnRow = {
   id: string;
@@ -19,6 +20,8 @@ export type ReturnRow = {
   refund_amount_cents: number | null;
   decision_notes: string | null;
   created_at: string;
+  order_item_id?: string | null;
+  decided_at?: string | null;
 };
 
 const REASON_LABEL: Record<string, string> = {
@@ -147,13 +150,13 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  // 31/10/2026 — Il ripensamento e' un recesso: con la merce in rientro o gia' tornata si chiude
-  // solo rimborsando (Cod. Cons. artt. 52-57). Da «Approvato» la chiusura resta, e la rotta la
-  // ammette solo passati i 14 giorni che il cliente ha per rispedire.
-  const recesso = ret.reason === 'CHANGED_MIND';
-  const tappe = (TAPPE[ret.status] ?? []).filter(
-    (t) => !(recesso && t.stato === 'CANCELED' && ret.status !== 'APPROVED'),
-  );
+  // 31/10/2026 — Il ripensamento e' un recesso (Cod. Cons. artt. 52-57). La scheda usa la stessa
+  // regola della rotta: non offre «Chiudi senza rimborso» che poi la rotta rifiuta, nemmeno da
+  // «Approvato» prima dei 14 giorni che il cliente ha per rispedire.
+  const [adesso] = useState(() => Date.now());
+  const recesso = eUnRecesso(ret);
+  const chiusuraNegata = percheIlRecessoNonSiChiude(ret, adesso);
+  const tappe = (TAPPE[ret.status] ?? []).filter((t) => !(t.stato === 'CANCELED' && chiusuraNegata));
 
   return (
     <div className="bg-white border-2 border-accent-300 rounded-2xl overflow-hidden shadow-warm">
@@ -269,7 +272,11 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
                   maxLength={1000}
-                  placeholder="Nota per il cliente (opzionale)"
+                  placeholder={
+                    recesso && ret.status === 'RECEIVED'
+                      ? `Nota per il cliente. Se rimborsi meno dell'intero scrivi il motivo (merce rovinata o usata oltre la prova, almeno ${MOTIVO_MINIMO_CARATTERI} caratteri): la legge il cliente.`
+                      : 'Nota per il cliente (opzionale)'
+                  }
                   className="w-full border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
                 />
                 <div className="flex gap-2 flex-wrap">
@@ -284,6 +291,9 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
                     </button>
                   ))}
                 </div>
+                {chiusuraNegata && ret.status === 'APPROVED' && (
+                  <p className="text-xs text-ink-500">{chiusuraNegata}</p>
+                )}
                 <p className="text-xs text-ink-400">
                   Finché il reso resta aperto, il bonifico di questo ordine non parte.
                 </p>

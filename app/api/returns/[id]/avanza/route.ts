@@ -15,8 +15,14 @@ import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 import { chiComandaIlReso } from '../../chi-comanda-il-reso';
 import {
+  eUnRecesso,
+  interoDelRecesso,
   motivoNienteDaRestituire,
+  percheIlRecessoNonSiChiude,
+  percheIlRimborsoDelRecessoNonBasta,
   quantoSiPuoRestituire,
+  rigaResaCents,
+  type RigaDellOrdine,
   type OrdineDaRimborsare,
 } from '@/lib/rimborsi/regole-del-rimborso';
 import {
@@ -87,26 +93,23 @@ const PARTENZE_AMMESSE: Record<string, string[]> = {
  * e i 14 giorni che ha per farlo (art. 57) sono passati. Altrimenti si rimborsa,
  * anche in parte se la merce e' tornata rovinata.
  */
-const GIORNI_PER_RISPEDIRE = 14;
-const UN_GIORNO_MS = 24 * 60 * 60 * 1000;
+// La regola vive in lib/rimborsi/regole-del-rimborso.ts, la stessa che usa la scheda del negozio.
 
-function percheIlRecessoNonSiChiude(
-  ret: { reason?: string | null; status: string; created_at?: string | null },
-  adesso: number,
-): string | null {
-  if (ret.reason !== 'CHANGED_MIND') return null;
-  if (ret.status === 'APPROVED') {
-    const aperto = Date.parse(ret.created_at ?? '');
-    if (Number.isFinite(aperto) && adesso - aperto > GIORNI_PER_RISPEDIRE * UN_GIORNO_MS) return null;
-    return (
-      `Il cliente ha ${GIORNI_PER_RISPEDIRE} giorni dalla richiesta per rispedire la merce (Cod. Cons. art. 57): ` +
-      'il recesso non si chiude senza rimborso prima che siano passati.'
-    );
-  }
-  return (
-    'Il recesso entro 14 giorni non si può chiudere senza rimborso (Cod. Cons. artt. 52-57): ' +
-    'segna la merce come ricevuta e rimborsa, anche in parte se è tornata danneggiata.'
-  );
+/**
+ * 31/10/2026 — IL CLIENTE PUO' RITIRARE LA SUA RICHIESTA.
+ *
+ * Un recesso che il cliente lascia cadere prima che la merce parta restava
+ * aperto: il negozio non puo' chiuderlo (sarebbe il rifiuto per un'altra porta)
+ * e il bonifico dell'ordine stava fermo almeno 14 giorni. Chi ha chiesto il reso
+ * puo' ritirarlo finche' la merce non e' in viaggio. Chi e' il cliente lo dice
+ * l'ordine, non la riga del reso.
+ */
+const PARTENZE_DEL_RITIRO = ['REQUESTED', 'APPROVED'];
+
+async function eIlClienteDellOrdine(orderId: string, utenteId: string): Promise<{ sellerId: string | null } | null> {
+  const { data } = await getAdminSupabase().from('orders').select('user_id, seller_id').eq('id', orderId).single();
+  const ordine = data as { user_id?: string | null; seller_id?: string | null } | null;
+  return ordine?.user_id && ordine.user_id === utenteId ? { sellerId: ordine.seller_id ?? null } : null;
 }
 
 async function handler(req: NextRequest, user: { id: string }, params: { id: string }): Promise<NextResponse> {
@@ -131,7 +134,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const supa = await getServerSupabase();
   const { data: ret, error } = await supa
     .from('returns')
-    .select('id, status, seller_id, buyer_id, order_id, reason, refund_amount_cents, created_at, refund_id')
+    .select('id, status, seller_id, buyer_id, order_id, reason, refund_amount_cents, created_at, refund_id, order_item_id, decided_at')
     .eq('id', params.id)
     .single();
 
@@ -147,10 +150,16 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * Il venditore vero e' quello dell'ordine, che il cliente non tocca.
    */
   const comando = await chiComandaIlReso(ret.order_id, user.id);
+  let ritiro: { sellerId: string | null } | null = null;
   if (!comando.autorizzato) {
-    return comando.motivo === 'ordine-mancante'
-      ? ApiErrors.notFound('Ordine del reso non trovato')
-      : ApiErrors.forbidden();
+    if (comando.motivo === 'ordine-mancante') return ApiErrors.notFound('Ordine del reso non trovato');
+    if (body.stato === 'CANCELED') ritiro = await eIlClienteDellOrdine(ret.order_id, user.id);
+    if (!ritiro) return ApiErrors.forbidden();
+    if (!PARTENZE_DEL_RITIRO.includes(ret.status)) {
+      return ApiErrors.conflict(
+        'La merce è già in viaggio o in negozio: la richiesta non si può più ritirare. Scrivi al negozio.',
+      );
+    }
   }
 
   // Un «rimborsato» rimasto a meta' si riprende (vedi `ripresa`, piu' sotto).
@@ -160,7 +169,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     return ApiErrors.conflict(`Un reso in ${ret.status} non può passare a ${body.stato}.`);
   }
 
-  if (body.stato === 'CANCELED') {
+  if (body.stato === 'CANCELED' && !ritiro) {
     const perche = percheIlRecessoNonSiChiude(ret, Date.now());
     if (perche) return ApiErrors.conflict(perche);
   }
@@ -258,6 +267,33 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       return ApiErrors.invalidRequest(
         `Il rimborso non può superare quello che resta dell ordine: al massimo ${(residuoCent / 100).toFixed(2)} €.`,
       );
+    }
+    /**
+     * 31/10/2026 — IL RECESSO SI RIMBORSA PER INTERO.
+     * Il collaudo ha chiuso un recesso da 30 € con 1 centesimo: merce tornata, cliente
+     * senza soldi, bonifico al negozio libero. Sotto l'intero si passa solo scrivendo
+     * il motivo (merce rovinata o usata oltre la prova), che arriva al cliente.
+     * Vale anche per l'amministratore.
+     */
+    if (eUnRecesso(ret)) {
+      let righe: RigaDellOrdine[] | null = null;
+      if (ret.order_item_id) {
+        const { data: lette, error: errRighe } = await admin
+          .from('order_items')
+          .select('id, unit_price, quantity')
+          .eq('order_id', ret.order_id);
+        if (errRighe || !lette) {
+          return ApiErrors.unavailable("Non riesco a leggere i prodotti dell'ordine: riprova tra poco.");
+        }
+        righe = lette as RigaDellOrdine[];
+      }
+      const nonBasta = percheIlRimborsoDelRecessoNonBasta({
+        reso: ret,
+        importoCents: importoRimborso,
+        interoCents: interoDelRecesso(residuoCent, rigaResaCents(righe, ret.order_item_id ?? null)),
+        motivo: body.note,
+      });
+      if (nonBasta) return ApiErrors.conflict(nonBasta);
     }
     if (!!ordine.stripe_payment_intent && !isStripeConfigured()) {
       return ApiErrors.unavailable('Stripe non configurato: impossibile emettere il rimborso ora.');
@@ -362,16 +398,18 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     // #33 — la categoria decide se la persona vuole ancora ricevere questo
     // tipo di avviso: senza, gli interruttori non spegnevano niente.
     category: 'order',
-    user_id: ret.buyer_id,
+    user_id: ritiro ? (ritiro.sellerId ?? ret.seller_id) : ret.buyer_id,
     // 17/10 (semplificazione) — Sui contanti il bonifico a questo punto e' solo
     // da fare: il titolo non dice «rimborsato», come non lo dice la pagina dell'ordine.
     // Sul misto dice anche il credito gia' tornato (titoloDelResoRimborsato).
     title:
       body.stato === 'REFUNDED'
         ? titoloDelResoRimborsato({ importoCents: importoRimborso, bonificoCents })
-        : TITOLO[body.stato],
+        : ritiro
+          ? '↩ Il cliente ha ritirato la richiesta di reso'
+          : TITOLO[body.stato],
     body: body.note ?? null,
-    link: `/orders/${ret.order_id}`,
+    link: ritiro ? `/seller/orders/${ret.order_id}` : `/orders/${ret.order_id}`,
   });
 
   return NextResponse.json({ ok: true, status: body.stato, refundId }, { status: 200 });

@@ -260,7 +260,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
     queryFn: async () => {
       const { data, error } = await supabase
         .from('returns')
-        .select('id, status, reason, notes, photo_urls, refund_amount_cents, decision_notes, created_at')
+        .select('id, status, reason, notes, photo_urls, refund_amount_cents, decision_notes, created_at, order_item_id, decided_at')
         .eq('order_id', id)
         .order('created_at', { ascending: false })
         .limit(1)
