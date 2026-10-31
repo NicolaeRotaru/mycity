@@ -205,7 +205,7 @@ function finestraDelRitiro(
  * (tutti e sette i giorni presenti, anche vuoti: lo fa l'editor degli orari) è una scelta, non un
  * dato che manca. Un giorno solo, vuoto, resta «non lo so», come prima.
  */
-function orariImpostati(storeHours: unknown): StoreHours | null {
+export function orariImpostati(storeHours: unknown): StoreHours | null {
   if (!storeHours || typeof storeHours !== 'object') return null;
   const hours = storeHours as StoreHours;
   const configured = DAY_KEYS.some(

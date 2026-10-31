@@ -49,7 +49,7 @@
  *
  * Prova: tests/unit/il-conto-alla-rovescia-col-negozio-chiuso.test.ts
  */
-import { DAY_KEYS, isOpenNow, romeNow, type HoursInterval, type StoreHours } from '@/lib/store-hours';
+import { DAY_KEYS, isOpenNow, orariImpostati, romeNow, type HoursInterval, type StoreHours } from '@/lib/store-hours';
 import { EXPRESS_ETA_MAX, EXPRESS_ETA_MIN } from '@/lib/delivery';
 import {
   APERTURA_EXPRESS,
@@ -93,11 +93,16 @@ function fasceDelGiorno(orari: StoreHours, indice: number): HoursInterval[] {
   return Array.isArray(v) ? (v as HoursInterval[]) : [];
 }
 
-/** Il negozio ha degli orari scritti da qualche parte? Senza, non si può dire niente sugli orari. */
+/**
+ * Il negozio ha degli orari scritti? Senza, non si può dire niente sugli orari.
+ *
+ * 31/10/2026 (ondata 3) — La regola è quella della cassa (`orariImpostati` di store-hours), non una
+ * copia. Prima qui contava solo un giorno con delle ore: per le ferie il negoziante preme «Chiudi»
+ * su ogni giorno, la cassa rifiutava l'ordine (settimana scritta = chiuso) e la scheda prodotto,
+ * che leggeva «orari mai impostati», prometteva ancora «Consegna a casa, all'ora che scegli».
+ */
 export function haOrari(orari: unknown): orari is StoreHours {
-  if (!orari || typeof orari !== 'object') return false;
-  const o = orari as StoreHours;
-  return DAY_KEYS.some((k) => Array.isArray(o[k]) && (o[k] as HoursInterval[]).length > 0);
+  return orariImpostati(orari) !== null;
 }
 
 /**
