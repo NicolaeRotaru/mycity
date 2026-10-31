@@ -268,9 +268,13 @@ export default function OrdersPage() {
           description="Quando ordini qualcosa, lo vedrai qui con il tracking in tempo reale."
           ctaLabel="Inizia a esplorare"
           ctaHref="/search"
-          secondaryLabel="€5 di benvenuto"
-          secondaryHref="/profile/loyalty"
         />
+        {/* 31/10/2026 — qui c'era un secondo invito, «€5 di benvenuto», verso la
+            pagina dei punti. La migrazione 168 ha tolto il regalo di benvenuto e
+            spento i punti (carta #209: nessun regalo in euro al lancio): chi non ha
+            ancora ordinato non ha nessun 5 euro da usare, quindi non glielo si
+            promette. Se il regalo tornera', tornera' con la sua regola fatta
+            rispettare dalla cassa, e solo allora il link. */}
       </div>
     );
   }

@@ -25,7 +25,12 @@
 --      spento — e' l'unica strada da cui entrano punti (benvenuto, ordini,
 --      badge, serie di visite, recensioni, inviti), quindi le chiude tutte;
 --      i movimenti in uscita restano;
---   ④ convert_loyalty_to_credit non crea credito nuovo finche' e' spento.
+--   ④ convert_loyalty_to_credit non crea credito nuovo finche' e' spento;
+--   ⑤ il premio dell'invito (reward_referrer_on_delivery, 089) non paga piu' i
+--      5 euro di credito a chi ha invitato: con gli inviti spenti la pagina non
+--      crea inviti, ma una riga in `referrals` scritta a mano li pagava comunque
+--      alla prima consegna dell'invitato. Stesso interruttore: inviti e punti
+--      sono una cosa sola anche nel sito (INVITI_E_PUNTI_ACCESI).
 --
 -- COSA NON FA. Non tocca loyalty_accounts, loyalty_transactions, il saldo del
 -- credito (profiles.wallet_balance_cents) ne' le notifiche gia' scritte: i punti
@@ -117,3 +122,52 @@ END; $$;
 
 REVOKE EXECUTE ON FUNCTION public.convert_loyalty_to_credit(int) FROM public, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.convert_loyalty_to_credit(int) TO authenticated;
+
+-- ⑤ Nessun premio in euro per gli inviti finche' l'interruttore e' spento.
+-- L'ultima definizione era la 089 (la 092 e la 119 toccano solo chi puo' scrivere
+-- l'invito e quanto vale, non il pagamento): stesso corpo, con un freno in piu'.
+-- Il freno sta DENTRO il blocco best-effort, prima di leggere l'invito: se un
+-- domani l'interruttore mancasse, il premio non parte e la consegna non si ferma.
+-- L'invito resta com'era (rewarded = false): non lo si consuma e non lo si paga.
+-- Chi riaccende decide anche cosa fare degli inviti rimasti in attesa.
+-- Il credito gia' accreditato da inviti passati resta nel portafoglio, spendibile.
+CREATE OR REPLACE FUNCTION public.reward_referrer_on_delivery()
+RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_ref public.referrals%ROWTYPE; v_cents int;
+BEGIN
+  IF NEW.delivery_status = 'DELIVERED' AND OLD.delivery_status IS DISTINCT FROM 'DELIVERED' THEN
+    BEGIN
+      IF NOT public.punti_fedelta_accesi() THEN
+        RETURN NEW;
+      END IF;
+      SELECT * INTO v_ref FROM public.referrals
+        WHERE referred_id = NEW.user_id AND rewarded = false
+        FOR UPDATE;
+      IF FOUND THEN
+        v_cents := GREATEST(0, COALESCE(round(v_ref.reward_amount * 100)::int, 500));
+        UPDATE public.referrals
+          SET rewarded = true, rewarded_at = now(), status = 'rewarded', converted_at = now()
+          WHERE id = v_ref.id;
+        IF v_cents > 0 THEN
+          PERFORM public.wallet_credit(v_ref.referrer_id, v_cents, 'referral_reward', NEW.id::text);
+          INSERT INTO public.notifications (user_id, title, body, link)
+          VALUES (
+            v_ref.referrer_id,
+            '🎉 Premio invito ricevuto!',
+            'Un amico che hai invitato ha completato il primo ordine: hai ricevuto €'
+              || to_char(v_cents / 100.0, 'FM999990.00') || ' di credito.',
+            '/profile/referral'
+          );
+        END IF;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      NULL; -- best-effort: la consegna non deve mai fallire per il premio referral
+    END;
+  END IF;
+  RETURN NEW;
+END; $$;
+
+REVOKE EXECUTE ON FUNCTION public.reward_referrer_on_delivery() FROM PUBLIC, anon, authenticated;
+
+NOTIFY pgrst, 'reload schema';
