@@ -84,6 +84,18 @@ export function chiamataDelCalendarioFerma(
 export const VARIABILE_DELLE_CANCELLAZIONI = 'CANCELLAZIONI_A_ORARIO';
 export const VALORE_CHE_ACCENDE_LE_CANCELLAZIONI = 'accese';
 
+/**
+ * Vero se la chiamata è quella del calendario di Vercel: un indirizzo che si
+ * legge e senza nessun parametro (in `vercel.json` le rotte non ne portano).
+ */
+export function chiamataDelCalendario(req: { url: string }): boolean {
+  try {
+    return [...new URL(req.url).searchParams.keys()].length === 0;
+  } catch {
+    return false;
+  }
+}
+
 export function giroCheSoloConta(
   req: { url: string },
   env: Record<string, string | undefined> = process.env,
@@ -96,8 +108,7 @@ export function giroCheSoloConta(
   }
   if (parametri.has('solo_conta')) return true;
   if (parametri.get(PARAMETRO_CANCELLA) === '1') return false;
-  const chiamataDelCalendario = [...parametri.keys()].length === 0;
-  if (chiamataDelCalendario) return env[VARIABILE_DELLE_CANCELLAZIONI] !== VALORE_CHE_ACCENDE_LE_CANCELLAZIONI;
+  if (chiamataDelCalendario(req)) return env[VARIABILE_DELLE_CANCELLAZIONI] !== VALORE_CHE_ACCENDE_LE_CANCELLAZIONI;
   return true;
 }
 

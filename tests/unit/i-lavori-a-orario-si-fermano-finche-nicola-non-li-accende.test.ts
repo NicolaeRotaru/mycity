@@ -288,7 +288,8 @@ describe('process-deletions: il primo giro conta e non cancella', () => {
     });
     finti.getAdminSupabase.mockImplementation(() => notte.admin);
     await chiama('process-deletions', query);
-    return notte.diario.some((v) => v.op !== 'rpc');
+    // Il battito non è una cancellazione: la notte che conta lo scrive, ed è giusto.
+    return notte.diario.some((v) => v.op !== 'rpc' && !('tabella' in v && v.tabella === 'cron_heartbeats'));
   }
 
   // Le varianti scomode del collaudo: un errore di battitura, o la shell che
@@ -314,6 +315,22 @@ describe('process-deletions: il primo giro conta e non cancella', () => {
     expect(await haScritto(''), 'un errore di battitura ha acceso le cancellazioni').toBe(false);
     process.env.CANCELLAZIONI_A_ORARIO = 'accese';
     expect(await haScritto(''), 'con i due interruttori accesi la notte cancella').toBe(true);
+  });
+
+  it('la notte che conta lascia il battito; il conto a mano no', async () => {
+    process.env.LAVORI_A_ORARIO = 'accesi';
+    const battito = async (query: string) => {
+      const notte = fintoGiroNotturno({
+        tabelle: tabelle(),
+        rpc: { process_expired_deletions: { data: scadute, error: null } },
+      });
+      finti.getAdminSupabase.mockImplementation(() => notte.admin);
+      const esito = await chiama('process-deletions', query);
+      expect(esito.corpo, `${query || 'il calendario'} non ha contato`).toMatchObject({ soloConta: true });
+      return notte.battitoScritto();
+    };
+    expect(await battito(''), 'la notte che conta non ha scritto il battito: il sorvegliante la dirà ferma').toBe(true);
+    expect(await battito('?a_mano=1'), 'il conto a mano ha scritto il battito di una notte').toBe(false);
   });
 
   // Coi due interruttori accesi, solo la chiamata del calendario (nessun parametro)

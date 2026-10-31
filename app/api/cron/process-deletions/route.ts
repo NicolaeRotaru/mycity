@@ -2,7 +2,13 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
-import { chiamataDelCalendarioFerma, giroCheSoloConta, rispostaDelFermo, segnaGiroNonFatto } from '@/lib/cron/fermo-dei-lavori';
+import {
+  chiamataDelCalendario,
+  chiamataDelCalendarioFerma,
+  giroCheSoloConta,
+  rispostaDelFermo,
+  segnaGiroNonFatto,
+} from '@/lib/cron/fermo-dei-lavori';
 import { logger } from '@/lib/logger';
 import { cancellaAccount } from '@/lib/account/cancellazione';
 import {
@@ -62,7 +68,7 @@ type Admin = ReturnType<typeof getAdminSupabase>;
  * per ogni account si scoprono solo cancellando: i file nello storage, le prove
  * di consegna, i dati da togliere su Stripe.
  */
-async function contaSenzaCancellare(admin: Admin): Promise<NextResponse> {
+async function contaSenzaCancellare(admin: Admin, dalCalendario: boolean): Promise<NextResponse> {
   const { data, error } = await admin.rpc('process_expired_deletions');
   if (error) {
     logger.error('[cron-deletions] conto: RPC fallita', error);
@@ -71,11 +77,11 @@ async function contaSenzaCancellare(admin: Admin): Promise<NextResponse> {
   const scadute = (data ?? []) as Array<{ user_id: string; deleted_at: string | null }>;
   const potature = await contaPotature(admin as unknown as ClienteCheConta);
 
-  return segnaGiroNonFatto(
-    NextResponse.json({
+  const conto = NextResponse.json({
       ok: true,
       soloConta: true,
       nienteCancellato: true,
+      ...(dalCalendario ? { motivo: 'CANCELLAZIONI_A_ORARIO non è «accese»: la notte conta e non cancella' } : {}),
       account: {
         quanti: scadute.length,
         elenco: scadute.map((r) => ({ userId: r.user_id, chiestaIl: r.deleted_at })),
@@ -83,9 +89,14 @@ async function contaSenzaCancellare(admin: Admin): Promise<NextResponse> {
       potature,
       nonContati:
         "Per ogni account, i file nello storage, le prove di consegna e i dati su Stripe: si vedono solo cancellando.",
-    }),
-    'solo_conta',
-  );
+    });
+
+  // 31/10/2026 — LA NOTTE CHE CONTA È LA NOTTE DI QUESTO LAVORO, E LASCIA IL BATTITO.
+  // Finché le cancellazioni sono spente, il conto del calendario È il giro della
+  // notte: senza battito, dopo 26 ore il sorvegliante direbbe «process-deletions
+  // fermo» ogni 6 ore, per settimane, e insegnerebbe a ignorare gli allarmi.
+  // Il conto a mano invece non è il giro di nessuno: niente battito.
+  return dalCalendario ? conto : segnaGiroNonFatto(conto, 'solo_conta');
 }
 
 export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse> => {
@@ -99,7 +110,7 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // `cancella=1` scritto esatto, o dal calendario con CANCELLAZIONI_A_ORARIO=accese.
   // Sta prima di qualunque scrittura, quindi prima delle potature, che sono la
   // prima cosa che la notte cancella.
-  if (giroCheSoloConta(req)) return contaSenzaCancellare(admin);
+  if (giroCheSoloConta(req)) return contaSenzaCancellare(admin, chiamataDelCalendario(req));
 
   // 8/9/2026 — LE POTATURE NON STANNO PIU' QUI DENTRO.
   //
