@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { diagnosiJavascript } from './_pagina-senza-javascript';
+import { INVITI_E_PUNTI_ACCESI } from '../../lib/funzioni-al-lancio';
 
 /**
  * Signup buyer end-to-end.
@@ -66,9 +67,25 @@ test.describe('Signup flow', () => {
     await expect(page).toHaveURL(/\/sign-in/);
   });
 
-  test('referral code from URL applied', async ({ page, request }) => {
+  /**
+   * 31/10/2026 — IL CODICE INVITO DELL'INDIRIZZO SI MOSTRA SOLO CON GLI INVITI ACCESI.
+   *
+   * Al lancio gli inviti sono spenti (`INVITI_E_PUNTI_ACCESI`, lib/funzioni-al-lancio.ts):
+   * «Codice applicato» prometteva un premio che non si registrava mai. Con l'interruttore
+   * spento la pagina non deve promettere niente; acceso, il codice torna a comparire. Prima
+   * di guardare che il codice NON c'è si aspetta il modulo disegnato: un'assenza su una
+   * pagina vuota non proverebbe niente.
+   */
+  test('il codice invito dell\'indirizzo si mostra solo con gli inviti accesi', async ({ page, request }) => {
     await servePaginaViva(request);
     await page.goto('/sign-up?ref=TEST123');
-    await expect(page.getByRole('main').getByText('TEST123').first()).toBeVisible({ timeout: 3000 });
+    const principale = page.getByRole('main');
+    if (INVITI_E_PUNTI_ACCESI) {
+      await expect(principale.getByText('TEST123').first()).toBeVisible({ timeout: 3000 });
+      return;
+    }
+    await expect(moduloIscrizione(page).locator('button[type="submit"]')).toBeVisible();
+    await expect(principale.getByText('TEST123')).toHaveCount(0);
+    await expect(principale.getByText(/Sei stato invitato/i)).toHaveCount(0);
   });
 });
