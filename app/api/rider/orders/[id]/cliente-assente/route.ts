@@ -90,7 +90,9 @@ async function handler(user: { id: string }, idGrezzo: string): Promise<NextResp
         `ma il credito MyCity che avevi usato (${euro(mancanteCents)}) non è ancora tornato sul tuo saldo. ` +
         "L'abbiamo segnalato all'assistenza, che te lo restituisce a mano: non devi fare niente."
       : esito.refundId
-        ? `${primaFrase} Ti abbiamo rimborsato tutto.`
+        ? // Non «ti abbiamo rimborsato tutto»: in un carrello con altri negozi ancora da consegnare
+          // torna la merce e la differenza della consegna (COSA_TORNA). La cifra la dice l'email.
+          `${primaFrase} Il rimborso sulla carta è partito: l'importo è nell'email «Rimborso emesso».`
         : `${primaFrase} Non devi pagare niente.`;
   const { error: nErr } = await admin.from('notifications').insert([
     {

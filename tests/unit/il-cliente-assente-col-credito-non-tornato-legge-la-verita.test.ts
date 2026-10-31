@@ -174,11 +174,12 @@ describe('cliente assente, credito MyCity che non torna', () => {
     expect(posta.text + posta.html).not.toMatch(/ti è stato restituito/);
   });
 
-  it('controprova: col credito tornato davvero la carta dice «rimborsato tutto» e l email lo conferma coi contanti', async () => {
+  it('controprova: col credito tornato davvero la carta dice solo che il rimborso è partito, e coi contanti l email conferma il credito', async () => {
     creditoGiu.si = false;
     db.ordine = carta({ wallet_applied_cents: 400 });
     await tocca();
-    expect(allaPersona().body).toMatch(/Ti abbiamo rimborsato tutto/);
+    expect(allaPersona().body).toMatch(/Il rimborso sulla carta è partito/);
+    expect(allaPersona().body).not.toMatch(/non è ancora tornato/);
     expect(notifyAdminsMock).not.toHaveBeenCalled();
 
     db.notifiche = [];
