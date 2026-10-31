@@ -70,6 +70,8 @@ afterEach(() => {
 async function apri(condizioneSalvata?: string) {
   const mod = await monta('components/seller/ProductForm.tsx');
   return accendi(mod.default, {
+    // I pulsanti AI, come il giorno in cui si riaccendono (al lancio sono spenti).
+    aiAccesa: true,
     mode: condizioneSalvata ? 'edit' : 'create',
     categories: [],
     initialValues: condizioneSalvata

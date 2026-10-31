@@ -38,6 +38,7 @@ import {
 import { dilloDopoIlPatch } from '@/components/seller/dilloDopoIlPatch';
 import { colonneDelPatchAi } from '@/lib/products/salvataggio-tracciato';
 import { useFormAutosave } from '@/lib/hooks/useFormAutosave';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import {
   createProductSchema,
   buildProductPayload,
@@ -125,6 +126,12 @@ interface ProductFormProps {
   consegnaDelNegozioNonLetta?: boolean;
   /** create: chiave localStorage per l'autosalvataggio della bozza. */
   autosaveKey?: string;
+  /**
+   * Gli strumenti AI del modulo. Le pagine non lo passano: vale l'interruttore
+   * AI_NEGOZI_ACCESA (carta #209). Lo passano le prove che verificano i
+   * pulsanti AI per il giorno in cui si riaccendono.
+   */
+  aiAccesa?: boolean;
 }
 
 export default function ProductForm({
@@ -141,6 +148,7 @@ export default function ProductForm({
   sellerOffersExpress = false,
   consegnaDelNegozioNonLetta = false,
   autosaveKey,
+  aiAccesa = AI_NEGOZI_ACCESA,
 }: ProductFormProps) {
   const schema = useMemo(
     () => createProductSchema({ minDescription: mode === 'create' ? 30 : 10 }),
@@ -538,6 +546,8 @@ export default function ProductForm({
   // almeno l'EAN. Il patch viene applicato allo stato del form (l'utente rivede).
   const handleBarcodeDetected = async (code: string) => {
     setAttribute('ean', code);
+    // AI spenta al lancio (carta #209): il codice si salva, la ricerca AI no.
+    if (!aiAccesa) { toast.success('Codice EAN salvato'); return; }
     const tid = toast.loading('Cerco il prodotto dal codice EAN…');
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -749,6 +759,9 @@ export default function ProductForm({
 
   return (
     <div className="space-y-6">
+      {/* AI per i negozi spenta al lancio (carta #209): questi strumenti chiamano
+          /api/ai/* e /api/vision/* e risponderebbero «servizio non configurato». */}
+      {aiAccesa && (<>
       <PhotoFillButton onFilled={handleExtracted} onImages={(files) => void handlePhotoImages(files)} />
 
       <VoiceProductButton
@@ -773,6 +786,7 @@ export default function ProductForm({
         imageUrls={imageUrls}
         onApplyPatch={applyPatch}
         disabled={!(watch('name') ?? '').trim() && imageUrls.length === 0}
+        accesa={aiAccesa}
       />
 
       <ProductChatAssistant
@@ -782,6 +796,7 @@ export default function ProductForm({
         imageUrls={imageUrls}
         onApplyPatch={applyPatch}
       />
+      </>)}
 
       {daControllare.length > 0 && (
         <section
@@ -834,14 +849,14 @@ export default function ProductForm({
 
         <Textarea
           label="Descrizione"
-          labelAction={
+          labelAction={aiAccesa ? (
             <AIDescriptionButton
               productName={watch('name') ?? ''}
               categoryName={categories.find((c) => c.id === currentCategoryId)?.name}
               currentText={watch('description') ?? ''}
               onResult={(text) => setValue('description', text, { shouldValidate: true })}
             />
-          }
+          ) : undefined}
           {...register('description')}
           rows={4}
           placeholder="Cosa è, materiali, dimensioni/taglia, condizione, cosa lo rende speciale…"
@@ -953,7 +968,7 @@ export default function ProductForm({
               <ScanLine size={16} strokeWidth={2.2} aria-hidden /> Scansiona codice EAN
             </button>
           )}
-          {variantableFields.length > 0 && (
+          {aiAccesa && variantableFields.length > 0 && (
             <button
               type="button"
               onClick={() => void handleSuggestVariants()}
@@ -1103,7 +1118,7 @@ export default function ProductForm({
           showCoverBadge
         />
 
-        {imageUrls.length >= 2 && (
+        {aiAccesa && imageUrls.length >= 2 && (
           <button
             type="button"
             onClick={() => void handleOrderPhotos()}

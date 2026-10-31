@@ -19,6 +19,7 @@ import EmptyState from '@/components/EmptyState';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { AI_NEGOZI_ACCESA, CARICAMENTO_DA_FILE_ACCESO } from '@/lib/funzioni-al-lancio';
 import { nascondiProdotto } from '@/lib/products/nascondi';
 import { salvaProdottoDalBrowser } from '@/lib/products/salva-dal-browser';
 import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
@@ -250,12 +251,16 @@ export default function SellerProductsPage() {
                 Modifica in blocco
               </Button>
             )}
+            {AI_NEGOZI_ACCESA && (
             <Button href="/seller/products/ai-batch" variant="secondary" size="sm">
               <Sparkles size={14} aria-hidden /> AI sul catalogo
             </Button>
+            )}
+            {CARICAMENTO_DA_FILE_ACCESO && (
             <Button href="/seller/products/import" variant="secondary" size="sm">
               <Download size={14} aria-hidden /> Importa CSV
             </Button>
+            )}
             <Button href="/seller/products/new" size="sm" icon={Plus}>Nuovo prodotto</Button>
           </>
         }
@@ -298,8 +303,8 @@ export default function SellerProductsPage() {
             description="Pubblica il tuo primo prodotto: bastano una foto e un prezzo."
             ctaLabel="Nuovo prodotto"
             ctaHref="/seller/products/new"
-            secondaryLabel="Importa CSV"
-            secondaryHref="/seller/products/import"
+            secondaryLabel={CARICAMENTO_DA_FILE_ACCESO ? 'Importa CSV' : undefined}
+            secondaryHref={CARICAMENTO_DA_FILE_ACCESO ? '/seller/products/import' : undefined}
           />
         </Card>
       ) : list.length === 0 ? (
