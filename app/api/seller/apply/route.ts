@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { ApiErrors } from '@/lib/api/responses';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
 import { controlloEta } from '@/lib/maggiore-eta';
 import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
@@ -78,7 +79,7 @@ const RichiestaNegozio = z.object({
   businessAddress: z.string().trim().min(3, 'Inserisci la via della sede legale'),
   businessCity: z.string().trim().min(2, 'Inserisci la città della sede legale'),
   businessZip: z.string().trim().regex(/^[0-9]{5}$/, 'CAP della sede legale non valido'),
-  storeName: z.string().trim().min(3, 'Nome del negozio (almeno 3 caratteri)'),
+  storeName: z.string().trim().min(3, 'Nome del negozio (almeno 3 caratteri)').max(80, 'Nome del negozio (al massimo 80 caratteri)'),
   storeDescription: z.string().max(500).optional().nullable(),
   storeLogo: z.string().url().nullable().optional(),
   storeMedia: z.array(z.unknown()).max(20).optional(),
@@ -96,10 +97,13 @@ const RichiestaNegozio = z.object({
 export const POST = withAuthRateLimit(
   { name: 'seller-apply', max: 10, windowMs: 60_000 },
   async ({ user, req }) => {
+    // Il corpo si legge col tetto, come in ogni rotta (tests/unit/nessun-corpo-senza-tetto.test.ts):
+    // un modulo da centinaia di megabyte non si carica in memoria prima di guardarlo.
     let corpo: unknown;
     try {
-      corpo = await req.json();
-    } catch {
+      corpo = await jsonRichiesta(req, TETTO_JSON);
+    } catch (errore) {
+      if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
       return ApiErrors.invalidRequest('Richiesta non leggibile');
     }
     const esito = RichiestaNegozio.safeParse(corpo);
