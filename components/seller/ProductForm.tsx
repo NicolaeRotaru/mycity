@@ -77,9 +77,12 @@ export interface ProductInitialValues {
   expressEnabled?: boolean | null;
   status?: string;
   variants?: ProductVariant[];
+  /** Escluso dal recesso (art. 59 Cod. Cons.): fresco che si deteriora in fretta o su ordinazione. */
+  nonRecedibile?: boolean | null;
 }
 
-export type ProductPayload = ReturnType<typeof buildProductPayload>;
+/** `non_recedibile` parte solo se il negoziante l'ha cambiato (vedi sotto, nel salvataggio). */
+export type ProductPayload = ReturnType<typeof buildProductPayload> & { non_recedibile?: boolean };
 
 interface ProductFormProps {
   mode: 'create' | 'edit';
@@ -211,6 +214,8 @@ export default function ProductForm({
     setConsegnaSceltaDalNegoziante(true);
   };
   const [status, setStatus] = useState<string>(initialValues?.status ?? 'available');
+  const recedibileAllApertura = initialValues?.nonRecedibile === true;
+  const [nonRecedibile, setNonRecedibile] = useState<boolean>(recedibileAllApertura);
   const [variants, setVariants] = useState<ProductVariant[]>(initialValues?.variants ?? []);
   // Assi di variante attivi (chiave campo → valori). Ricostruiti dalle varianti
   // esistenti in modifica; in creazione partono vuoti.
@@ -693,7 +698,7 @@ export default function ProductForm({
           return;
         }
       }
-      const payload = buildProductPayload({
+      const payload: ProductPayload = buildProductPayload({
         values,
         imageUrls,
         attributes,
@@ -707,6 +712,15 @@ export default function ProductForm({
         status: finalStatus,
       });
       if (hasVariants) payload.stock = totalVariantStock(variants);
+      /**
+       * 31/10/2026 — IL NEGOZIO DICE QUALI PRODOTTI SONO ESCLUSI DAL RECESSO.
+       * Pane e freschi, e cio' che si fa su ordinazione, non si rendono per
+       * ripensamento (art. 59 lett. c-d Cod. Cons.; scelta di Nicola del 31/10).
+       * Parte solo se il negoziante l'ha cambiato: un «no» mai toccato non
+       * riscrive la banca dati, e un modulo aperto prima della migrazione 180
+       * continua a salvare.
+       */
+      if (nonRecedibile !== recedibileAllApertura) payload.non_recedibile = nonRecedibile;
       /**
        * 28/10/2026 — CHI CORREGGE LA DESCRIZIONE NON RIMETTE IN MAGAZZINO LA
        * MERCE VENDUTA. La scorta partiva sempre, col numero visto all'apertura:
@@ -943,6 +957,12 @@ export default function ProductForm({
             </div>
           </div>
         )}
+
+        <Checkbox
+          label="Escluso dal recesso: fresco che si deteriora in fretta, o fatto su ordinazione"
+          checked={nonRecedibile}
+          onChange={(e) => setNonRecedibile(e.target.checked)}
+        />
 
         {/* Categoria + sottocategoria (a due livelli) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

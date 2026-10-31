@@ -6,6 +6,10 @@ import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
+import { MOTIVO_RIPENSAMENTO, rifiutoDelRecesso, type ProdottoPerIlRecesso } from '@/lib/ordini/recesso';
+
+/** Postgres «undefined_column»: la migrazione 180 non e' ancora applicata. */
+const COLONNA_MANCANTE = '42703';
 
 export const runtime = 'nodejs';
 
@@ -104,6 +108,41 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
   }
 
   // Anti-doppione: max 1 reso open per ordine
+  /**
+   * 31/10/2026 — «CAMBIO IDEA» NON VALE SUI PRODOTTI ESCLUSI DAL RECESSO.
+   * Pane, freschi e ordinazioni (products.non_recedibile, migrazione 180).
+   * I prodotti si leggono col servizio: un prodotto nascosto dopo l'ordine
+   * resta escluso. Se la lettura non riesce non si decide al buio.
+   */
+  if (body.reason === MOTIVO_RIPENSAMENTO) {
+    let domandaRighe = supa.from('order_items').select('product_id').eq('order_id', body.orderId);
+    if (body.orderItemId) domandaRighe = domandaRighe.eq('id', body.orderItemId);
+    const { data: righe, error: rErr } = await domandaRighe;
+    if (rErr) {
+      logger.error(rErr, { context: 'returns-recesso-righe' });
+      return ApiErrors.internal('Non riesco a verificare i prodotti dell\'ordine: riprova fra poco.');
+    }
+    const ids = [
+      ...new Set(
+        ((righe ?? []) as Array<{ product_id?: string | null }>)
+          .map((r) => r.product_id)
+          .filter((x): x is string => typeof x === 'string'),
+      ),
+    ];
+    if (ids.length > 0) {
+      const { data: prodotti, error: pErr } = await getAdminSupabase()
+        .from('products')
+        .select('id, name, non_recedibile')
+        .in('id', ids);
+      if (pErr && pErr.code !== COLONNA_MANCANTE) {
+        logger.error(pErr, { context: 'returns-recesso-prodotti' });
+        return ApiErrors.internal('Non riesco a verificare se i prodotti sono esclusi dal recesso: riprova fra poco.');
+      }
+      const rifiuto = rifiutoDelRecesso(body.reason, pErr ? [] : ((prodotti ?? []) as ProdottoPerIlRecesso[]));
+      if (rifiuto) return ApiErrors.invalidRequest(rifiuto);
+    }
+  }
+
   const { data: existing } = await supa
     .from('returns')
     .select('id, status')

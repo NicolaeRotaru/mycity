@@ -41,7 +41,16 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       if ((data as { seller_id?: string }).seller_id !== user.id) {
         throw new Error('Non puoi modificare un prodotto che non è tuo');
       }
-      return data as Record<string, unknown>;
+      // 31/10/2026 — «Escluso dal recesso» (migrazione 180) si legge a parte: se la
+      // colonna non c'e' ancora, il modulo si apre lo stesso con la spunta vuota, e
+      // il modulo la manda solo se il negoziante la cambia.
+      const { data: recesso } = await supabase
+        .from('products')
+        .select('non_recedibile')
+        .eq('id', id)
+        .maybeSingle();
+      const nonRecedibile = (recesso as { non_recedibile?: unknown } | null)?.non_recedibile === true;
+      return { ...(data as Record<string, unknown>), non_recedibile: nonRecedibile } as Record<string, unknown>;
     },
     // 31/10/2026 — IL MODULO SI APRE SOLO CON LA SCORTA DELLA BANCA DATI.
     // Il modulo tiene la scorta vista all'apertura e la manda accanto a quella
@@ -52,7 +61,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     refetchOnMount: 'always',
   });
 
-  const { data: variants = [], isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette } = useQuery({
+  const { data: variants = [], error: erroreVarianti, isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette } = useQuery({
     queryKey: [...queryKeys.seller.product(id), 'variants'],
     queryFn: () => loadProductVariants(id),
     refetchOnMount: 'always',
@@ -160,11 +169,23 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
   });
 
   if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette) || consegnaInLettura) return <LoadingState />;
-  if (error || !product) {
+  /**
+   * 31/10/2026 — SENZA LE VARIANTI LETTE IL MODULO NON SI APRE.
+   * Il ripiego `variants = []` apriva il modulo come se il prodotto non avesse
+   * taglie: al «Salva» saveProductVariantsServer le cancellava tutte, e negli
+   * ordini gia' fatti la riga perdeva la taglia (order_items.variant_id a NULL).
+   */
+  if (error || erroreVarianti || !product) {
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
         <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Errore</p>
-        <p className="text-sm mb-3">{error instanceof Error ? error.message : 'Prodotto non trovato'}</p>
+        <p className="text-sm mb-3">
+          {error instanceof Error
+            ? error.message
+            : erroreVarianti
+              ? 'Non riesco a leggere le taglie e le varianti di questo prodotto. Ricarica la pagina prima di modificarlo: salvando adesso le varianti andrebbero perse.'
+              : 'Prodotto non trovato'}
+        </p>
         <Link href="/seller/products" className="text-sm font-semibold text-rose-700 hover:underline">
           ← Torna ai miei prodotti
         </Link>
@@ -189,6 +210,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     expressEnabled: (product.express_enabled as boolean | null) ?? null,
     status: (product.status as string) ?? 'available',
     variants,
+    nonRecedibile: product.non_recedibile === true,
   };
 
   const status = product.status as string;
