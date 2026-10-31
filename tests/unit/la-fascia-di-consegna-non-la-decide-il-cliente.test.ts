@@ -148,7 +148,8 @@ describe('un negozio chiuso resta chiuso, qualunque cosa scriva il cliente nella
 
 describe('la fascia entra nella richiesta solo se è una di quelle che la cassa propone', () => {
   it('tutte e sette le etichette vere passano', () => {
-    expect(FASCE_AMMESSE.length).toBe(7);
+    // 30/10 (ondata 22): l'express, 7 di oggi, 7 di domani e le 6 di prima (lette, mai proposte).
+    expect(FASCE_AMMESSE.length).toBe(21);
     for (const vera of FASCE_AMMESSE) {
       expect(campoFasciaConsegna.parse(vera), vera).toBe(vera);
     }

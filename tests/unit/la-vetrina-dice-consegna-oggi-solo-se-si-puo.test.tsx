@@ -112,7 +112,8 @@ describe('la vetrina del negozio e la consegna di oggi', () => {
     const t = await vetrinaNelBrowser(FORNO);
     expect(t).toContain('Aperto ora');
     expect(t).toContain('Consegna oggi');
-    expect(chiamate.join(' ')).toContain('/api/consegna/veloce?negozi=pane-quotidiano');
+    // 30/10 (ondata 22): alle 9 le fasce del mattino bastano già a dire «oggi», la veloce non si chiede.
+    expect(chiamate.join(' ')).not.toContain('/api/consegna/veloce');
   });
 
   it('mercoledì alle 9, il forno riapre alle 16: la fascia 15-18 si può, «Consegna oggi» anche senza veloce', async () => {
@@ -122,12 +123,12 @@ describe('la vetrina del negozio e la consegna di oggi', () => {
     expect(t).toContain('Consegna oggi');
   });
 
-  it('giovedì alle 9 senza fattorino: le fasce del pomeriggio cadono a forno chiuso, niente «oggi»', async () => {
+  it('giovedì alle 9 senza fattorino: le fasce del mattino bastano, «Consegna oggi»', async () => {
     orologioA('2026-10-29T08:00:00Z');
     cassaDice(false);
     const t = await vetrinaNelBrowser(FORNO);
-    expect(t).not.toContain('Consegna oggi');
-    expect(t).toContain('Consegna domani');
+    expect(t).toContain('Consegna oggi');
+    expect(t).not.toContain('Consegna domani');
   });
 
   it('sabato alle 21, domenica chiuso: né oggi né domani', async () => {
@@ -158,8 +159,8 @@ describe('consegnaDellaVetrina: la regola, senza disegno', () => {
     expect(consegnaDellaVetrina({ orari: FORNO, adesso: alle('2026-10-29T08:00:00Z'), veloce: true })).toBe('oggi');
     // Forno aperto alle 9 e la risposta della veloce non c'è ancora (o è caduta): non si sa se oggi
     // si può, e non si scrive «domani» per poi passare a «oggi».
-    expect(consegnaDellaVetrina({ orari: FORNO, adesso: alle('2026-10-29T08:00:00Z'), veloce: null })).toBeNull();
-    expect(consegnaDellaVetrina({ orari: FORNO, adesso: alle('2026-10-29T08:00:00Z'), veloce: false })).toBe('domani');
+    expect(consegnaDellaVetrina({ orari: FORNO, adesso: alle('2026-10-29T08:00:00Z'), veloce: null })).toBe('oggi');
+    expect(consegnaDellaVetrina({ orari: FORNO, adesso: alle('2026-10-29T08:00:00Z'), veloce: false })).toBe('oggi');
     expect(consegnaDellaVetrina({ orari: FORNO, adesso: alle('2026-10-28T08:00:00Z'), veloce: null })).toBe('oggi');
   });
 });

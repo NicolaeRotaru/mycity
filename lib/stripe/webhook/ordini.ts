@@ -529,6 +529,19 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
         const { data: sellerAuth } = await admin.auth.admin.getUserById(created.sellerId);
         const sellerEmail = sellerAuth?.user?.email;
         if (!sellerEmail) return;
+        // 30/10/2026 (ondata 24) — Gli orari del negozio, per dire nell'email l'ultimo ritiro e non
+        // la fine della fascia. Se la lettura cade l'email parte lo stesso, con la fine della fascia.
+        let orari: unknown;
+        try {
+          const { data: negozio } = await admin
+            .from('profiles')
+            .select('store_hours')
+            .eq('id', created.sellerId)
+            .maybeSingle();
+          orari = (negozio as { store_hours?: unknown } | null)?.store_hours;
+        } catch (e) {
+          logger.warn('[webhook] orari del negozio non letti per l email «Nuovo ordine»', { orderId: created.orderId, e });
+        }
         const t = newOrderSellerTemplate({
           sellerName: null,
           orderId: created.orderId,
@@ -538,6 +551,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           // l'email diceva sempre «appena puoi» invece della scadenza vera.
           deliverySlot: pickupInStore ? null : (delivery.slot ?? null),
           createdAt: new Date(),
+          storeHours: orari,
         });
         await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
       });

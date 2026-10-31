@@ -45,8 +45,8 @@ import {
   siPuoConfermare,
 } from '@/lib/quando-arriva';
 
-const OGGI_PRIMA = FASCE_DI_OGGI[0].etichetta;   // «In giornata · 15:00–18:00»
-const OGGI_SECONDA = FASCE_DI_OGGI[1].etichetta; // «Stasera · 18:00–20:00»
+const OGGI_PRIMA = FASCE_DI_OGGI[4].etichetta;   // «Oggi · 16:30–18:00» (30/10, ondata 22)
+const OGGI_SECONDA = FASCE_DI_OGGI[6].etichetta; // «Oggi · 19:30–21:00»
 const DOMANI = FASCE_DI_DOMANI[0];
 
 const base = {
@@ -63,22 +63,23 @@ const base = {
 
 describe('le fasce ancora possibili', () => {
   it('di mattina ci sono tutt\'e due', () => {
-    expect(fasceAncoraPossibili(10)).toEqual([OGGI_PRIMA, OGGI_SECONDA]);
+    expect(fasceAncoraPossibili(10)).toEqual(FASCE_DI_OGGI.slice(1).map((f) => f.etichetta));
   });
 
   it('una fascia vale finché non è FINITA, non finché non è cominciata', () => {
     // Alle 16 «15:00–18:00» è in corso: si può ancora ricevere dentro.
-    expect(fasceAncoraPossibili(16)).toContain(OGGI_PRIMA);
+    expect(fasceAncoraPossibili(17)).toContain(OGGI_PRIMA);
     // Alle 18 quella è finita, resta la sera.
-    expect(fasceAncoraPossibili(18)).toEqual([OGGI_SECONDA]);
+    expect(fasceAncoraPossibili(18)).not.toContain(OGGI_PRIMA);
+    expect(fasceAncoraPossibili(18)).toContain(OGGI_SECONDA);
   });
 
-  it('IL CASO: dalle 20 in poi per oggi non resta niente', () => {
-    expect(fasceAncoraPossibili(20)).toEqual([]);
+  it('IL CASO: dalle 21 in poi per oggi non resta niente', () => {
+    expect(fasceAncoraPossibili(20)).toEqual([OGGI_SECONDA]);
     expect(fasceAncoraPossibili(21)).toEqual([]);
     expect(fasceAncoraPossibili(23)).toEqual([]);
-    expect(oggiSiPuoAncora(20)).toBe(false);
-    expect(oggiSiPuoAncora(19)).toBe(true);
+    expect(oggiSiPuoAncora(21)).toBe(false);
+    expect(oggiSiPuoAncora(20)).toBe(true);
   });
 
   it('a mezzanotte e alle sette del mattino le fasce del pomeriggio ci sono ancora', () => {
@@ -99,13 +100,13 @@ describe('il giorno di partenza', () => {
   });
 
   it('IL CASO: dalle 20 si parte da domani, non da un oggi impossibile', () => {
-    expect(giornoDiPartenza(20)).toBe('tomorrow');
+    expect(giornoDiPartenza(21)).toBe('tomorrow');
     expect(giornoDiPartenza(22)).toBe('tomorrow');
   });
 
   it('la fascia di partenza è la prima ANCORA possibile, e a fine giornata è «nessuna»', () => {
-    expect(fasciaDiPartenzaOggi(10)).toBe(OGGI_PRIMA);
-    expect(fasciaDiPartenzaOggi(18)).toBe(OGGI_SECONDA);
+    expect(fasciaDiPartenzaOggi(10)).toBe('Oggi · 9:00–11:00');
+    expect(fasciaDiPartenzaOggi(18)).toBe('Oggi · 18:00–19:30');
     // Prima qui ripiegava su OGGI_PRIMA — cioè su un orario passato.
     expect(fasciaDiPartenzaOggi(21)).toBeNull();
   });

@@ -144,7 +144,7 @@ describe("il freno della veloce dice il vero a chi deve saperlo", () => {
     // Maria: veloce in contanti alle 18:05, il forno non conferma, il freno la sposta alle 18:16.
     db.orders = [ordine()];
     await giro("2026-10-30T17:16:00.000Z");
-    expect(o("o1").delivery_slot).toBe("Stasera · 18:00–20:00");
+    expect(o("o1").delivery_slot).toBe("Oggi · 18:00–19:30");
     const campanella = String(db.notifications.find((n) => n.user_id === "maria")?.body ?? "");
     const email = String((sendEmailMock.mock.calls[0]?.[0] as { text?: string } | undefined)?.text ?? "");
     for (const t of [campanella, email]) {

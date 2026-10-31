@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 // L'avviso agli amministratori e' quello gia' usato dal giro dei bonifici e dal
 // webhook: una casa sola, cosi' i tre percorsi non divergono.
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
-import { ORE_PER_ACCETTARE, ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
+import { ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
 import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
 import { avvisaIlClienteDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro } from '@/lib/ordini/annulla';
@@ -57,19 +57,26 @@ export const runtime = 'nodejs';
  */
 
 /**
- * Ore in NEW sotto le quali un ordine non si tocca MAI.
+ * 30/10/2026 (ondata 24) — NIENTE PIÙ FILTRO DELLE TRE ORE NELLA RICERCA.
  *
- * 3/9/2026 — non è più tutta la regola, è solo il minimo. Chi decide davvero è
- * `scadenzaAccettazione`, che guarda la fascia di consegna: questo filtro serve
- * a non tirare su dal database ordini che di sicuro non sono ancora scaduti, e
- * il numero è lo stesso di là apposta (se qui fosse più grande, il cron
- * salterebbe ordini da annullare).
+ * Qui c'era «fermo da almeno tre ore» come filtro SQL, perché la scadenza non cadeva mai prima.
+ * Adesso sì: col negozio che ha gli orari, l'ordine su una fascia scade all'ultimo ritiro
+ * possibile. Lunedì alle 12:00 da Pane Quotidiano (9-13, 16:30-19:30) per la «Oggi · 13:00–16:30»
+ * l'ultimo ritiro è alle 12:45, e il filtro delle tre ore lo nascondeva fino alle 15:00 (poi la
+ * fascia lo teneva vivo fino alle 16:30). Si leggono tutti gli ordini fermi in NEW, con gli orari
+ * del negozio, e decide `ancoraNeiTempi` uno per uno: le tre ore restano il minimo per la veloce,
+ * per gli ordini senza fascia e per i negozi senza orari.
  */
-const STALE_NEW_ORDER_HOURS = ORE_PER_ACCETTARE;
+/** Gli orari del negozio letti insieme all'ordine (PostgREST: un oggetto, o una lista di uno). */
+function orariDelNegozio(riga: unknown): unknown {
+  const negozio = (riga as { seller?: unknown } | null)?.seller;
+  const uno = Array.isArray(negozio) ? negozio[0] : negozio;
+  return (uno as { store_hours?: unknown } | null | undefined)?.store_hours;
+}
 
 export const POST = withCronAuth(async (): Promise<NextResponse> => {
   const admin = getAdminSupabase();
-  const cutoff = new Date(Date.now() - STALE_NEW_ORDER_HOURS * 3_600_000).toISOString();
+  const cutoff = new Date().toISOString();
 
   const { data: candidates, error } = await admin
     .from('orders')
@@ -81,7 +88,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     // l'ordine della sera per domani mattina moriva alle 00:15.
     // 16/10/2026 — `internal_dispute_status`: la pausa del carrello, se c'è un
     // rimborso dal cruscotto ancora da dividere (più sotto).
-    .select('id, user_id, payment_method, payment_status, stripe_payment_intent, total_price, wallet_applied_cents, coupon_code, created_at, delivery_slot, internal_dispute_status')
+    .select('id, user_id, payment_method, payment_status, stripe_payment_intent, total_price, wallet_applied_cents, coupon_code, created_at, delivery_slot, internal_dispute_status, seller:profiles!orders_seller_id_fkey ( store_hours )')
     .eq('delivery_status', 'NEW')
     .lt('created_at', cutoff)
     .limit(100);
@@ -108,7 +115,9 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     // perché la cassa da oggi lo accetta — vuol dire annullarlo alle 00:15, col
     // negozio chiuso e nessuno che potesse accettarlo. Finché la fascia
     // promessa non è passata l'ordine è ancora buono e non si tocca.
-    if (ancoraNeiTempi(o)) {
+    // 30/10/2026 (ondata 24) — Con gli orari del negozio l'ordine su una fascia scade all'ultimo
+    // ritiro possibile, non alla fine della fascia: nessuno può più ritirarlo.
+    if (ancoraNeiTempi(o, new Date(), orariDelNegozio(o))) {
       rinviati++;
       continue;
     }

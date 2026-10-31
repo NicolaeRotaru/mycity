@@ -19,6 +19,17 @@ import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 import { LETTURA_ORDINI_DEL_NEGOZIO, rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
 import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
 
+/**
+ * 30/10/2026 (ondata 24) — Gli orari del negozio, letti insieme all'ordine (`seller:profiles(store_hours)`):
+ * senza, la riga «entro quando accettare» diceva la fine della fascia («entro le 16:30») invece
+ * dell'ultimo ritiro possibile («entro le 12:45»). PostgREST dà un oggetto, o una lista di uno.
+ */
+function orariDelNegozio(riga: object): unknown {
+  const negozio = (riga as { seller?: unknown }).seller;
+  const uno = Array.isArray(negozio) ? negozio[0] : negozio;
+  return (uno as { store_hours?: unknown } | null | undefined)?.store_hours;
+}
+
 type Order = {
   id: string;
   total_price: number;
@@ -80,12 +91,14 @@ export default function SellerOrdersPage() {
       const withPay = await base(`
         id, total_price, delivery_status, payment_method, created_at, delivery_slot, pickup_in_store,
         delivery_full_name, delivery_address,
+        seller:profiles!orders_seller_id_fkey ( store_hours ),
         order_items ( id, quantity )
       `);
       if (!withPay.error) return (withPay.data ?? []) as unknown as Order[];
       const fallback = await base(`
         id, total_price, delivery_status, created_at, delivery_slot, pickup_in_store,
         delivery_full_name, delivery_address,
+        seller:profiles!orders_seller_id_fkey ( store_hours ),
         order_items ( id, quantity )
       `);
       if (fallback.error) throw fallback.error;
@@ -176,8 +189,8 @@ export default function SellerOrdersPage() {
                                 </span>
                               )}
                               {/* 30/10/2026 — Entro quando accettare: la stessa riga dell'email «Nuovo ordine». */}
-                              {o.delivery_status === 'NEW' && rigaScadenzaPerIlNegozio(o, lettoAlle) && (
-                                <span className="text-[11px] font-semibold text-primary-700">{rigaScadenzaPerIlNegozio(o, lettoAlle)}</span>
+                              {o.delivery_status === 'NEW' && rigaScadenzaPerIlNegozio(o, lettoAlle, orariDelNegozio(o)) && (
+                                <span className="text-[11px] font-semibold text-primary-700">{rigaScadenzaPerIlNegozio(o, lettoAlle, orariDelNegozio(o))}</span>
                               )}
                               {cod && (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-olive-50 px-2 py-0.5 text-[11px] font-semibold text-olive-700 ring-1 ring-inset ring-olive-200">

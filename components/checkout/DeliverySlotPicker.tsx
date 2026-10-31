@@ -9,6 +9,8 @@ import {
   fasciaDiPartenzaOggi,
   giornoDiPartenza,
   fasceAncoraPossibili,
+  fasceDiDomaniPossibili,
+  sottotitoloOggiSpento,
   type Giorno,
 } from '@/lib/quando-arriva';
 import { romeNow } from '@/lib/store-hours';
@@ -55,13 +57,19 @@ type Props = {
   prezzoVeloce: string;
   /** Perché adesso la veloce non si può, come lo dice il server. `null` = non lo sappiamo. */
   motivoVeloce?: string | null;
+  /**
+   * 30/10/2026 (ondata 21) — Gli orari dei negozi del carrello (`store_hours`), gli stessi che
+   * legge la rotta. Senza, giovedì alle 14:00 la cassa proponeva «In giornata · 15:00–18:00» a un forno
+   * che il giovedì pomeriggio è chiuso, e il no arrivava solo premendo «Ordina».
+   */
+  orariNegozi?: readonly unknown[];
 };
 
 /**
  * 29/10/2026 — La riga che si legge quando «Adesso» era scelta e la veloce non si può più.
  *
  * 30/10/2026 (ondata 18) — Diceva «ho scelto la prima fascia libera», ma la fascia segnata era
- * quella di partenza della cassa (Domani · 15:00–18:30, non 9:00–12:00), e il selettore non sa se
+ * quella di partenza della cassa (Domani · 11:00–13:00, non 7:30–9:00), e il selettore non sa se
  * il negozio a quell'ora è aperto: «libera» non lo può dire. Adesso dice QUALE fascia ha messo e
  * chiede di controllarla.
  */
@@ -84,11 +92,16 @@ export function quandoLaVeloceCade(a: {
   expressAvailable: boolean;
   ora: number;
   inAttesa?: boolean;
+  /** 30/10/2026 (ondata 21) — L'orologio di Roma e gli orari dei negozi: si cade su una fascia servibile. */
+  adesso?: Date;
+  orari?: readonly unknown[];
 }): { day: Giorno; fascia: string; avviso: string } | null {
   if (a.day !== 'now' || a.expressAvailable || a.inAttesa) return null;
-  const day = giornoDiPartenza(a.ora);
+  const day = a.adesso ? giornoDiPartenza(a.adesso, a.orari) : giornoDiPartenza(a.ora);
+  const oggi = a.adesso ? fasciaDiPartenzaOggi(a.adesso, a.orari) : fasciaDiPartenzaOggi(a.ora);
+  const domani = (a.adesso ? fasceDiDomaniPossibili(a.adesso, a.orari) : FASCE_DI_DOMANI)[0] ?? FASCE_DI_DOMANI[0];
   // `giornoDiPartenza` dà «oggi» solo se per oggi resta una fascia: il ripiego non scatta mai.
-  const fascia = day === 'today' ? (fasciaDiPartenzaOggi(a.ora) ?? FASCE_DI_DOMANI[0]) : FASCE_DI_DOMANI[0];
+  const fascia = day === 'today' ? (oggi ?? domani) : domani;
   return { day, fascia, avviso: avvisoVeloceCaduta(fascia) };
 }
 
@@ -102,14 +115,22 @@ export function DeliverySlotPicker({
   veloceDisponibile,
   prezzoVeloce,
   motivoVeloce = null,
+  orariNegozi = [],
 }: Props) {
   // Calcolato a render: le fasce di "Oggi" già trascorse sono escluse.
   // 30/10/2026 (ondata 18) — L'ora è quella di Roma, come la vetrina, il carrello e le rotte: con
   // l'ora del telefono, un telefono a Bucarest alle 21:30 (a Roma le 20:30) si vedeva togliere la
   // veloce che la vetrina prometteva, e uno a Londra alle 20:30 se la vedeva offrire alle 21:30.
-  const ora = romeNow().getHours();
-  const todayTimes = fasceAncoraPossibili(ora);
+  //
+  // 30/10/2026 (ondata 21) — Coi minuti e con gli orari dei negozi del carrello: si propone solo
+  // quello che la rotta accetterebbe. Una fascia di oggi vale fino a 60 minuti dalla sua fine
+  // (alle 17:50 non si promette «entro le 18»), e solo se ogni negozio in quella fascia è aperto.
+  const adesso = romeNow();
+  const ora = adesso.getHours();
+  const todayTimes = fasceAncoraPossibili(adesso, orariNegozi);
   const oggiPossibile = todayTimes.length > 0;
+  const tomorrowTimes = fasceDiDomaniPossibili(adesso, orariNegozi);
+  const domaniPossibile = tomorrowTimes.length > 0;
   const expressAvailable = expressSiPuo(ora) && veloceDisponibile === true;
   // Il server non ha ancora risposto e l'orologio non dice già di no: la veloce è «non so ancora».
   const veloceInAttesa = expressSiPuo(ora) && veloceDisponibile === null;
@@ -121,7 +142,7 @@ export function DeliverySlotPicker({
   // fascia, senza che nessuno lo dicesse. Adesso una riga lo dice finché il cliente non sceglie.
   const [avvisoSpostata, setAvvisoSpostata] = useState<string | null>(null);
   useEffect(() => {
-    const caduta = quandoLaVeloceCade({ day, expressAvailable, ora, inAttesa: veloceInAttesa });
+    const caduta = quandoLaVeloceCade({ day, expressAvailable, ora, inAttesa: veloceInAttesa, adesso, orari: orariNegozi });
     if (!caduta) return;
     setAvvisoSpostata(caduta.avviso);
     // La fascia nominata nell'avviso è quella che resta segnata: si mette prima di cambiare giorno.
@@ -134,7 +155,7 @@ export function DeliverySlotPicker({
     setAvvisoSpostata(null);
     onDayChange(g);
   };
-  const times = day === 'today' ? todayTimes : FASCE_DI_DOMANI;
+  const times = day === 'today' ? todayTimes : tomorrowTimes;
   const current = day === 'today' ? todayTime : tomorrowTime;
   const onTimeChange = day === 'today' ? onTodayTimeChange : onTomorrowTimeChange;
 
@@ -151,6 +172,15 @@ export function DeliverySlotPicker({
     if (!todayTimes.includes(todayTime)) onTodayTimeChange(todayTimes[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day, todayTime, oggiPossibile, todayTimes.join('|')]);
+
+  // 30/10/2026 (ondata 21) — Lo stesso per «Domani»: sabato per la domenica chiusa non resta
+  // niente, e si torna a oggi se oggi si può; una fascia che i negozi non servono si sposta.
+  useEffect(() => {
+    if (day !== 'tomorrow') return;
+    if (!domaniPossibile) { if (oggiPossibile) onDayChange('today'); return; }
+    if (!tomorrowTimes.includes(tomorrowTime)) onTomorrowTimeChange(tomorrowTimes[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day, tomorrowTime, domaniPossibile, oggiPossibile, tomorrowTimes.join('|')]);
 
   return (
     <div className="space-y-3">
@@ -176,13 +206,16 @@ export function DeliverySlotPicker({
           onClick={() => oggiPossibile && scegliGiorno('today')}
           disabled={!oggiPossibile}
           title="Oggi"
-          subtitle={oggiPossibile ? "Scegli l'ora" : 'Non più oggi'}
+          // 30/10/2026 (ondata 22) — Il motivo vero, come «Domani»: domenica alle 10 il negozio è
+          // chiuso, non è «troppo tardi».
+          subtitle={oggiPossibile ? "Scegli l'ora" : sottotitoloOggiSpento(adesso)}
         />
         <DayTile
           active={day === 'tomorrow'}
-          onClick={() => scegliGiorno('tomorrow')}
+          onClick={() => domaniPossibile && scegliGiorno('tomorrow')}
+          disabled={!domaniPossibile}
           title="Domani"
-          subtitle="Scegli l'ora"
+          subtitle={domaniPossibile ? "Scegli l'ora" : 'Negozio chiuso'}
         />
       </div>
       {avvisoSpostata && (
@@ -204,7 +237,11 @@ export function DeliverySlotPicker({
           </legend>
           {times.length === 0 ? (
             <p className="text-sm text-ink-600">
-              Nessuna fascia disponibile per oggi — scegli <strong>Domani</strong>.
+              {day === 'today' ? (
+                <>Nessuna fascia disponibile per oggi — scegli <strong>Domani</strong>.</>
+              ) : (
+                <>Domani i negozi del carrello sono chiusi: nessuna fascia di consegna disponibile.</>
+              )}
             </p>
           ) : (
             <div className="flex flex-col gap-2">

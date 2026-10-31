@@ -28,6 +28,17 @@ import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 import { LETTURA_ORDINI_DEL_NEGOZIO, rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
 import ReturnRequestCard, { type ReturnRow } from '@/components/seller/ReturnRequestCard';
 
+/**
+ * 30/10/2026 (ondata 24) — Gli orari del negozio, letti insieme all'ordine (`seller:profiles(store_hours)`):
+ * senza, la riga «entro quando accettare» diceva la fine della fascia («entro le 16:30») invece
+ * dell'ultimo ritiro possibile («entro le 12:45»). PostgREST dà un oggetto, o una lista di uno.
+ */
+function orariDelNegozio(riga: object): unknown {
+  const negozio = (riga as { seller?: unknown }).seller;
+  const uno = Array.isArray(negozio) ? negozio[0] : negozio;
+  return (uno as { store_hours?: unknown } | null | undefined)?.store_hours;
+}
+
 type OrderRow = {
   id: string;
   user_id: string;
@@ -148,6 +159,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
           delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
           rider_id,
           rider:profiles!orders_rider_id_fkey ( full_name ),
+          seller:profiles!orders_seller_id_fkey ( store_hours ),
           order_items (
             id, quantity, unit_price, product_name, product_image,
             products ( name, images )
@@ -379,8 +391,8 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
           )}
           {/* 30/10/2026 — Entro quando accettare: la stessa riga dell'email «Nuovo ordine». */}
           {/* L'ora è quella dell'ultima lettura (ogni 30 secondi), non quella in cui la pagina si è aperta. */}
-          {order.delivery_status === 'NEW' && rigaScadenzaPerIlNegozio(order, lettoAlle) && (
-            <p className="mt-1 text-sm font-semibold text-primary-700">{rigaScadenzaPerIlNegozio(order, lettoAlle)}</p>
+          {order.delivery_status === 'NEW' && rigaScadenzaPerIlNegozio(order, lettoAlle, orariDelNegozio(order)) && (
+            <p className="mt-1 text-sm font-semibold text-primary-700">{rigaScadenzaPerIlNegozio(order, lettoAlle, orariDelNegozio(order))}</p>
           )}
         </div>
         <div className="flex items-center gap-2">

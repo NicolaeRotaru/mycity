@@ -13,7 +13,8 @@ import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
-import { motivoNegozioChiuso, negozioPuoServire, romeNow } from '@/lib/store-hours';
+import { romeNow } from '@/lib/store-hours';
+import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { fetchActiveDiscounts } from '@/lib/promotions';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
@@ -449,12 +450,17 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // ogni ordine serale per il giorno dopo moriva all'ultimo clic. Ora un ordine
   // per domani passa se domani, in quella fascia, il negozio è aperto.
   const consegnaVeloce = eConsegnaVeloce({ fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore });
+  //
+  // 30/10/2026 (ondata 22) — Qui mancavano i 60 minuti: alle 17:50 «15:00–18:00» passava con la
+  // carta e coi contanti prendeva un 409, e senza orari del negozio passava anche una fascia
+  // finita. Adesso è la regola unica di lib/quando-arriva.ts, la stessa dei contanti: stesso 409,
+  // stesso messaggio.
   if (!body.pickupInStore) {
-    for (const s of sellers ?? []) {
-      if (!negozioPuoServire((s as { store_hours?: unknown }).store_hours, body.deliverySlot)) {
-        return ApiErrors.conflict(motivoNegozioChiuso(s.store_name ?? 'Il negozio', body.deliverySlot));
-      }
-    }
+    const rifiutata = motivoFasciaRifiutata(
+      body.deliverySlot,
+      (sellers ?? []).map((s) => ({ nome: s.store_name, orari: (s as { store_hours?: unknown }).store_hours })),
+    );
+    if (rifiutata) return ApiErrors.conflict(rifiutata);
   }
 
   // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso, un

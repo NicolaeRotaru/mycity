@@ -139,17 +139,18 @@ describe.each(SCHEDE)('%s e la consegna di oggi', (_nome, scheda) => {
     expect(await nelBrowser(await scheda())).not.toMatch(/consegna oggi/i);
   });
 
-  it('giovedì alle 9:00, forno aperto ma senza fattorino: le fasce del pomeriggio cadono, niente «oggi»', async () => {
+  it('giovedì alle 9:00, forno aperto ma senza fattorino: le fasce del mattino bastano, «consegna oggi»', async () => {
     orologioA('2026-10-29T08:00:00Z');
     cassaDice(false);
-    expect(await nelBrowser(await scheda())).not.toMatch(/consegna oggi/i);
+    expect(await nelBrowser(await scheda())).toMatch(/consegna oggi/i);
   });
 
   it('giovedì alle 9:00, forno aperto e la cassa dice sì alla veloce: «consegna oggi»', async () => {
     orologioA('2026-10-29T08:00:00Z');
     const chiamate = cassaDice(true);
     expect(await nelBrowser(await scheda())).toMatch(/consegna oggi/i);
-    expect(chiamate.join(' ')).toContain('/api/consegna/veloce?negozi=pane-quotidiano');
+    // 30/10 (ondata 22): le fasce del mattino bastano già, la veloce non si chiede.
+    expect(chiamate.join(' ')).not.toContain('/api/consegna/veloce');
   });
 });
 
@@ -175,7 +176,8 @@ describe('la vetrina, mentre la risposta della veloce non c’è', () => {
     const t = await vetrina();
     expect(t).toContain('Aperto ora');
     expect(t).not.toContain('Consegna domani');
-    expect(t).not.toContain('Consegna oggi');
+    // 30/10 (ondata 22): le fasce del mattino dicono già «oggi», senza aspettare la veloce.
+    expect(t).toContain('Consegna oggi');
   });
 
   it('giovedì alle 9:00 la risposta cade: non sa, e non scrive un giorno', async () => {
@@ -183,7 +185,8 @@ describe('la vetrina, mentre la risposta della veloce non c’è', () => {
     cassaDice('cade');
     const t = await vetrina();
     expect(t).not.toContain('Consegna domani');
-    expect(t).not.toContain('Consegna oggi');
+    // 30/10 (ondata 22): le fasce del mattino dicono già «oggi», senza aspettare la veloce.
+    expect(t).toContain('Consegna oggi');
   });
 
   it('giovedì alle 20:15, forno chiuso: la domanda non si fa, e «Consegna domani» resta', async () => {

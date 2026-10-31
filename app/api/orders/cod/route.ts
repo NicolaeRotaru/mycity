@@ -10,7 +10,8 @@ import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
-import { motivoNegozioChiuso, negozioPuoServire, romeNow } from '@/lib/store-hours';
+import { romeNow } from '@/lib/store-hours';
+import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts } from '@/lib/promotions';
@@ -660,11 +661,16 @@ export const POST = withAuthRateLimit(
     // adesso vuol dire perdere tutti gli ordini della sera per il giorno dopo.
     const consegnaVeloce = eConsegnaVeloce({ fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore });
     if (!body.pickupInStore) {
-      for (const s of sellers ?? []) {
-        if (!negozioPuoServire(s.store_hours, body.deliverySlot)) {
-          return esciERilascia(ApiErrors.conflict(motivoNegozioChiuso(s.store_name ?? 'Il negozio', body.deliverySlot)));
-        }
-      }
+      // 30/10/2026 (ondata 21) — Una fascia di oggi si sceglie fino a 60 minuti prima della fine
+      // (scelta di Nicola). Alle 17:50 «In giornata · 15:00–18:00» vuol dire «arriva fra dieci
+      // minuti»: il negozio la riceverebbe già in ritardo. La stessa regola della cassa.
+      // 30/10/2026 (ondata 22) — Prima i 60 minuti, poi la regola del ritiro negozio per negozio:
+      // la regola unica di lib/quando-arriva.ts, la stessa della cassa e della rotta della carta.
+      const rifiutata = motivoFasciaRifiutata(
+        body.deliverySlot,
+        (sellers ?? []).map((s) => ({ nome: s.store_name, orari: s.store_hours })),
+      );
+      if (rifiutata) return esciERilascia(ApiErrors.conflict(rifiutata));
     }
 
     // 29/10/2026 — LA VELOCE SI VENDE SOLO SE SI PUÒ MANTENERE: 8-21, negozi aperti adesso, un
@@ -1187,13 +1193,17 @@ export const POST = withAuthRateLimit(
     dopoLaRisposta(async () => {
       const negoziCoinvolti = Array.from(new Set(comunicazioni.map((c) => c.sellerId)));
       const nomiNegozio = new Map<string, string>();
+      // 30/10/2026 (ondata 24) — Gli orari del negozio, per dire nell'email l'ultimo ritiro e non
+      // la fine della fascia («entro le 12:45», non «entro le 16:30»).
+      const orariNegozio = new Map<string, unknown>();
       try {
         const { data: profiliNegozi } = await admin
           .from('profiles')
-          .select('id, store_name')
+          .select('id, store_name, store_hours')
           .in('id', negoziCoinvolti);
         for (const p of profiliNegozi ?? []) {
           nomiNegozio.set(p.id as string, (p.store_name as string) ?? 'il negozio');
+          orariNegozio.set(p.id as string, (p as { store_hours?: unknown }).store_hours);
         }
       } catch (e) {
         logger.warn('[cod] nomi dei negozi non letti per la posta', { e });
@@ -1216,6 +1226,7 @@ export const POST = withAuthRateLimit(
               // «appena puoi» invece della scadenza vera (i 10 minuti della veloce, la fine della fascia).
               deliverySlot: body.pickupInStore ? null : (body.deliverySlot ?? null),
               createdAt: new Date(),
+              storeHours: orariNegozio.get(c.sellerId),
             });
             await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
           } catch (e) {

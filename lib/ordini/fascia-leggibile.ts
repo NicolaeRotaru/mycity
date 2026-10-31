@@ -1,4 +1,4 @@
-import { ETICHETTA_ADESSO, FASCE_DI_DOMANI, FASCE_DI_OGGI } from '@/lib/quando-arriva';
+import { ETICHETTA_ADESSO, giornoDellaFascia } from '@/lib/quando-arriva';
 
 /**
  * LA FASCIA DI CONSEGNA, DETTA COME UN GIORNO DEL CALENDARIO.
@@ -40,8 +40,10 @@ const giornoNelFuso = new Intl.DateTimeFormat('en-CA', {
 
 /** Quanti giorni dopo la data dell'ordine cade la fascia, o `null` se non è una fascia nota. */
 function giorniDopoLOrdine(fascia: string): number | null {
-  if (FASCE_DI_OGGI.some((f) => f.etichetta === fascia)) return 0;
-  if (FASCE_DI_DOMANI.includes(fascia)) return 1;
+  // Le sette di oggi e di domani, e quelle di prima che restano scritte sugli ordini già nati.
+  const giorno = giornoDellaFascia(fascia);
+  if (giorno === 'oggi') return 0;
+  if (giorno === 'domani') return 1;
   return null;
 }
 

@@ -116,16 +116,16 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 
 describe("il secondo freno della veloce", () => {
-  it("alle 18:16 la spesa di Maria passa a «Stasera · 18:00–20:00» e alla porta paga 18 € invece di 19", async () => {
+  it("alle 18:16 la spesa di Maria passa a «Oggi · 18:00–19:30» e alla porta paga 18 € invece di 19", async () => {
     db.orders = [ordine()];
     await giro("2026-10-30T17:16:00.000Z");
     expect(o("o1")).toMatchObject({
-      delivery_slot: "Stasera · 18:00–20:00", delivery_status: "NEW",
+      delivery_slot: "Oggi · 18:00–19:30", delivery_status: "NEW",
       delivery_fee_cents: 300, rider_fee_cents: 300, gross_total_cents: 1800, total_price: 18,
     });
     expect(db.notifications).toHaveLength(1);
     expect(db.notifications[0]).toMatchObject({ user_id: "maria", link: "/orders/o1" });
-    expect(String(db.notifications[0].body)).toContain("Stasera · 18:00–20:00");
+    expect(String(db.notifications[0].body)).toContain("Oggi · 18:00–19:30");
     expect(String(db.notifications[0].body)).toContain("non lo paghi");
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
     expect(sendEmailMock.mock.calls[0][0]).toMatchObject({ to: "maria@esempio.it" });
@@ -157,7 +157,7 @@ describe("il secondo freno della veloce", () => {
   it("con la spesa piccola la veloce era compresa: cambia solo la fascia, il totale resta", async () => {
     db.orders = [ordine({ total_price: 12, gross_total_cents: 1200 })];
     await giro("2026-10-30T17:16:00.000Z");
-    expect(o("o1")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00", delivery_fee_cents: 400, total_price: 12, gross_total_cents: 1200 });
+    expect(o("o1")).toMatchObject({ delivery_slot: "Oggi · 18:00–19:30", delivery_fee_cents: 400, total_price: 12, gross_total_cents: 1200 });
     expect(db.notifications).toHaveLength(1);
   });
 
@@ -168,17 +168,17 @@ describe("il secondo freno della veloce", () => {
     ];
     db.cod_checkout_attempts = [{ user_id: "maria", order_ids: [{ id: "o1" }, { id: "o2" }] }];
     await giro("2026-10-30T17:16:00.000Z");
-    expect(o("o1")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00", delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 18 });
-    expect(o("o2")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00", delivery_status: "ACCEPTED", delivery_fee_cents: 100, rider_fee_cents: 100, total_price: 13 });
+    expect(o("o1")).toMatchObject({ delivery_slot: "Oggi · 18:00–19:30", delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 18 });
+    expect(o("o2")).toMatchObject({ delivery_slot: "Oggi · 18:00–19:30", delivery_status: "ACCEPTED", delivery_fee_cents: 100, rider_fee_cents: 100, total_price: 13 });
     expect(db.notifications.filter((n) => n.user_id === "maria")).toHaveLength(1);
   });
 
   it("alle 20:30 le fasce di oggi sono finite: la prima di domani, e la scadenza si conta su quella", async () => {
     db.orders = [ordine({ created_at: "2026-10-30T19:15:00.000Z" })];
     await giro("2026-10-30T19:30:00.000Z");
-    expect(o("o1")).toMatchObject({ delivery_slot: "Domani · 9:00–12:00", delivery_fee_cents: 300, total_price: 18 });
+    expect(o("o1")).toMatchObject({ delivery_slot: "Domani · 7:30–9:00", delivery_fee_cents: 300, total_price: 18 });
     const scade = scadenzaAccettazione({ created_at: String(o("o1").created_at), delivery_slot: String(o("o1").delivery_slot) });
-    expect(scade?.toISOString()).toBe("2026-10-31T11:00:00.000Z");
+    expect(scade?.toISOString()).toBe("2026-10-31T08:00:00.000Z");
   });
 
   it("due giri di fila: un avviso solo, l euro tolto una volta sola", async () => {
@@ -205,7 +205,7 @@ describe("il secondo freno della veloce: i tre difetti del collaudo", () => {
   it("V-fascia: veloce 17:38 non confermata, alle 17:50 non va a 15:00–18:00 (10 minuti) ma a 18:00–20:00", async () => {
     db.orders = [ordine({ created_at: "2026-10-30T16:38:00.000Z" })];
     await giro("2026-10-30T16:50:00.000Z");
-    expect(o("o1").delivery_slot).toBe("Stasera · 18:00–20:00");
+    expect(o("o1").delivery_slot).toBe("Oggi · 18:00–19:30");
     expect(String(db.notifications[0]?.body)).not.toContain("15:00–18:00");
   });
 
@@ -249,13 +249,13 @@ describe("il secondo freno della veloce: i tre difetti del collaudo", () => {
 });
 
 describe("il secondo freno della veloce: il giro dell ondata 17", () => {
-  it("V-margine: la fascia nuova finisce almeno 60 minuti dopo: alle 19:00 «Stasera» va, alle 19:01 no", async () => {
-    db.orders = [ordine({ created_at: "2026-10-30T17:45:00.000Z" })];
-    await giro("2026-10-30T18:00:00.000Z");
-    expect(o("o1").delivery_slot).toBe("Stasera · 18:00–20:00");
-    db.orders = [ordine({ id: "o3", created_at: "2026-10-30T17:46:00.000Z" })];
-    await giro("2026-10-30T18:01:00.000Z");
-    expect(o("o3").delivery_slot).toBe("Domani · 9:00–12:00");
+  it("V-margine: la fascia nuova finisce almeno 60 minuti dopo: alle 20:00 «Oggi · 19:30–21:00» va, alle 20:01 no", async () => {
+    db.orders = [ordine({ created_at: "2026-10-30T18:45:00.000Z" })];
+    await giro("2026-10-30T19:00:00.000Z");
+    expect(o("o1").delivery_slot).toBe("Oggi · 19:30–21:00");
+    db.orders = [ordine({ id: "o3", created_at: "2026-10-30T18:46:00.000Z" })];
+    await giro("2026-10-30T19:01:00.000Z");
+    expect(o("o3").delivery_slot).toBe("Domani · 7:30–9:00");
   });
 
   it("V-euro-altrove: l euro sta sull ordine già accettato, non su quello non confermato: si toglie lì e alla porta si paga 31 € invece di 32", async () => {
@@ -265,8 +265,8 @@ describe("il secondo freno della veloce: il giro dell ondata 17", () => {
     ];
     db.cod_checkout_attempts = [{ user_id: "maria", order_ids: [{ id: "o1" }, { id: "o2" }] }];
     await giro("2026-10-30T17:16:00.000Z");
-    expect(o("o2")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00", delivery_status: "ACCEPTED", delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 18, gross_total_cents: 1800 });
-    expect(o("o1")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00", delivery_fee_cents: 100, total_price: 13 });
+    expect(o("o2")).toMatchObject({ delivery_slot: "Oggi · 18:00–19:30", delivery_status: "ACCEPTED", delivery_fee_cents: 300, rider_fee_cents: 300, total_price: 18, gross_total_cents: 1800 });
+    expect(o("o1")).toMatchObject({ delivery_slot: "Oggi · 18:00–19:30", delivery_fee_cents: 100, total_price: 13 });
     const alCliente = db.notifications.filter((n) => n.user_id === "maria");
     expect(String(alCliente[0]?.body)).toContain("alla porta paghi 31,00");
   });
@@ -280,8 +280,8 @@ describe("il secondo freno della veloce: il giro dell ondata 17", () => {
     await giro("2026-10-30T17:16:00.000Z");
     const a = (u: string) => db.notifications.filter((n) => n.user_id === u);
     expect(a("maria")).toHaveLength(1);
-    expect(String(a("frutta")[0]?.body)).toContain("Stasera · 18:00–20:00");
-    expect(String(a("nicola")[0]?.body)).toContain("Stasera · 18:00–20:00");
+    expect(String(a("frutta")[0]?.body)).toContain("Oggi · 18:00–19:30");
+    expect(String(a("nicola")[0]?.body)).toContain("Oggi · 18:00–19:30");
   });
 
   it("V-carta: con la carta l euro torna da solo con un rimborso parziale di 1 €", async () => {
@@ -290,7 +290,7 @@ describe("il secondo freno della veloce: il giro dell ondata 17", () => {
     expect(refundOrderMock).toHaveBeenCalledTimes(1);
     // L euro della veloce è di MyCity (lib/constants.ts, SUPPLEMENTO_CONSEGNA_CENTS): il negozio non ne paga niente.
     expect(refundOrderMock.mock.calls[0][0]).toMatchObject({ orderId: "o1", amountCents: 100, quotaNegozioCents: 0 });
-    expect(o("o1")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00" });
+    expect(o("o1")).toMatchObject({ delivery_slot: "Oggi · 18:00–19:30" });
     expect(String(db.notifications[0].body)).toContain("ti torna sulla carta");
     expect(notifyAdminsMock).not.toHaveBeenCalled();
   });
@@ -301,7 +301,7 @@ describe("il secondo freno della veloce: il giro dell ondata 17", () => {
     db.orders = [vecchio];
     const esito = await giro("2026-10-30T17:16:00.000Z");
     expect(esito).toMatchObject({ ok: true, spostati: 1 });
-    expect(o("o1")).toMatchObject({ delivery_slot: "Stasera · 18:00–20:00", delivery_fee_cents: 300, total_price: 18 });
+    expect(o("o1")).toMatchObject({ delivery_slot: "Oggi · 18:00–19:30", delivery_fee_cents: 300, total_price: 18 });
     expect(o("o1")).not.toHaveProperty("gross_total_cents");
     expect(String(db.notifications[0].body)).toContain("non lo paghi");
   });
@@ -352,8 +352,8 @@ describe("il secondo freno della veloce: il giro dell ondata 17", () => {
       if (modo === "cod") db.cod_checkout_attempts = [{ user_id: "maria", order_ids: [{ id: "o1" }, { id: "o2" }] }];
       const esito = await giro("2026-10-30T17:16:00.000Z");
       expect(esito).toMatchObject({ ok: true, spostati: 1 });
-      expect(o("o1").delivery_slot).toBe("Stasera · 18:00–20:00");
-      expect(o("o2").delivery_slot).toBe("Stasera · 18:00–20:00");
+      expect(o("o1").delivery_slot).toBe("Oggi · 18:00–19:30");
+      expect(o("o2").delivery_slot).toBe("Oggi · 18:00–19:30");
       if (modo === "cod") {
         expect(o("o1")).toMatchObject({ delivery_fee_cents: 300, total_price: 18 });
         expect(o("o2")).toMatchObject({ delivery_fee_cents: 100, total_price: 13 });
@@ -374,7 +374,7 @@ describe("il secondo freno della veloce: il giro dell ondata 17", () => {
     await giro("2026-10-30T17:21:00.000Z");
     expect(refundOrderMock).toHaveBeenCalledTimes(2);
     expect(refundOrderMock.mock.calls[1][0]).toMatchObject({ orderId: "o1", amountCents: 100, idempotencyKey: "veloce_non_confermata_o1" });
-    expect(o("o1").delivery_slot).toBe("Stasera · 18:00–20:00");
+    expect(o("o1").delivery_slot).toBe("Oggi · 18:00–19:30");
     expect(String(db.notifications.find((n) => n.user_id === "maria")?.body)).toContain("ti torna sulla carta");
   });
 });
