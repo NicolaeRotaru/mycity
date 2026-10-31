@@ -13,7 +13,7 @@ import SellerShell from '@/components/seller/SellerShell';
 import { Store, Mail, Home, Pencil, X, PauseCircle, Clock, ArrowLeft } from 'lucide-react';
 // 31/8/2026 (R037) — La commissione qui non si ribatte a mano: viene da dove la
 // tratteniamo davvero, cosi' il giorno che cambia questa pagina non resta indietro.
-import { COMMISSIONE_DEL_PERCENTO } from '@/app/seller/earnings/commissione';
+import { FRASE_PREZZO_NEGOZI } from '@/app/seller/earnings/commissione';
 
 /**
  * Ondata 10 — lo stato della richiesta del negozio, letto davvero.
@@ -95,7 +95,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           </p>
           <p className="text-sm text-ink-500 mb-6 max-w-md mx-auto">
             Se hai un'attività e vuoi vendere su MyCity puoi inviare la richiesta. Approvazione entro 48 ore lavorative,
-            poi avrai una vetrina dedicata. Abbonamento €50/mese e commissione {COMMISSIONE_DEL_PERCENTO} sulle vendite.
+            poi avrai una vetrina dedicata. {FRASE_PREZZO_NEGOZI}
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm">
             <Link

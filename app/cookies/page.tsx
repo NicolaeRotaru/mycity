@@ -59,7 +59,9 @@ export default function CookiesPage() {
             quelle che il sito installa e' esattamente cio' che il Garante
             guarda per primo. Rifatta leggendo il codice. */}
         <CookieTable rows={[
-          { name: 'sb-*-auth-token', purpose: 'Sessione utente (Supabase Auth)', duration: '1 settimana', provider: 'Prima parte' },
+          // 31/10/2026 (ondata 6) — Diceva «1 settimana» e la libreria lo teneva 400 giorni: il browser
+          // adesso lo taglia a 6 mesi (lib/supabase/client.ts), come la scelta sui cookie.
+          { name: 'sb-*-auth-token', purpose: 'Sessione utente (Supabase Auth): ti tiene dentro il tuo account finché non esci', duration: '6 mesi', provider: 'Prima parte' },
           { name: 'mc_consent', purpose: 'Memorizza le tue scelte sui cookie (versione breve, leggibile dal server)', duration: '6 mesi', provider: 'Prima parte' },
           { name: 'mc_consent_v1', purpose: 'Le stesse scelte, salvate nel browser per mostrarti lo stato nel banner', duration: 'Finché non le cambi', provider: 'Prima parte (archivio locale)' },
           { name: 'NEXT_LOCALE', purpose: 'La lingua che hai scelto per il sito', duration: '1 anno', provider: 'Prima parte' },

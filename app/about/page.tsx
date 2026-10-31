@@ -1,4 +1,5 @@
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { COMMISSIONE_PERCENTO } from '@/app/seller/earnings/commissione';
 import Link from 'next/link';
 import {
   Sparkles, MapPin, Handshake, Banknote, Briefcase, Store, ArrowRight,
@@ -27,7 +28,8 @@ const STATS = [
   // 29/10/2026 — Erano i minuti della veloce come «tempi di consegna» certi: il dato vero è il confine.
   { value: `${RAGGIO_CONSEGNA_KM} km`, label: 'il confine della consegna, dal negozio' },
   { value: '100%', label: 'venditori locali verificati' },
-  { value: '0€', label: 'commissioni mensili per i negozi' },
+  // 31/10/2026 (ondata 6) — Era «0€ commissioni mensili»: il negozio paga il 10% sul venduto tramite MyCity.
+  { value: `${COMMISSIONE_PERCENTO}%`, label: 'per i negozi, solo su quello che vendono tramite MyCity' },
   { value: 'Pay-on-delivery', label: 'paghi alla consegna, anche in contanti' },
 ];
 
