@@ -49,12 +49,11 @@ function ogniResoHaLaSuaEsclusione(t: string) {
 
 describe('la promessa del reso porta sempre l’esclusione dei freschi', () => {
   it('la frase unica del reso (scheda prodotto, accesso) nomina l’esclusione', async () => {
-    const { FRASE_RESO, SPIEGAZIONE_RESO } = await import('@/lib/promesse-pubbliche');
+    // Solo il nome che c'era già: la spiegazione lunga si legge disegnata, nelle pagine sotto.
+    const { FRASE_RESO } = await import('@/lib/promesse-pubbliche');
     expect(FRASE_RESO).toMatch(RESO);
     expect(FRASE_RESO).toMatch(ESCLUSIONE);
     expect(FRASE_RESO).not.toMatch(/gratuit/i);
-    expect(SPIEGAZIONE_RESO).toMatch(ESCLUSIONE);
-    expect(SPIEGAZIONE_RESO).not.toMatch(SENZA_DOMANDE);
   });
 
   it('il piede del sito', async () => {
