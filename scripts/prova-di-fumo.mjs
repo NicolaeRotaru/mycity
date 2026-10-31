@@ -236,9 +236,25 @@ export function estraiIndirizzo(uscitaDellaCli) {
  * Qui arriva la risposta dell'elenco dei rilasci di Vercel. Si prende il primo
  * che sia davvero in produzione e davvero pronto: uno ancora in costruzione o
  * un'anteprima non sono posti dove tornare.
+ *
+ * 31/10/2026 (ondata 1) — E CHE NON SIA LO STESSO COMMIT CHE STA USCENDO.
+ * Finche' `vercel.json` tiene acceso il rilascio automatico, Vercel pubblica
+ * da solo ogni unione su `main` entro pochi secondi: quando questo lavoro
+ * parte, dopo la CI, il primo rilascio pronto in produzione e' gia' lo STESSO
+ * commit che sta per pubblicare. Tornare li' voleva dire rimettere online il
+ * codice rotto e scrivere «annullato» nel riepilogo. Con `commitCheEsce` quei
+ * rilasci si scartano; uno di cui l'elenco non dice il commit resta buono,
+ * come prima, perche' da qui non si puo' sapere se e' lo stesso.
  */
-export function rilascioDaTornare(rispostaDeiRilasci) {
+export function commitDelRilascio(rilascio) {
+  const meta = rilascio?.meta ?? {};
+  const grezzo = meta.githubCommitSha ?? meta.gitlabCommitSha ?? meta.bitbucketCommitSha ?? meta.gitCommitSha ?? rilascio?.gitSource?.sha ?? '';
+  return String(grezzo).trim().toLowerCase();
+}
+
+export function rilascioDaTornare(rispostaDeiRilasci, { commitCheEsce = '' } = {}) {
   const elenco = Array.isArray(rispostaDeiRilasci?.deployments) ? rispostaDeiRilasci.deployments : [];
+  const daScartare = String(commitCheEsce ?? '').trim().toLowerCase();
   for (const rilascio of elenco) {
     // L'elenco chiama lo stato ora `state` ora `readyState` a seconda della
     // versione dell'API: leggerne uno solo vorrebbe dire scartare tutto.
@@ -246,6 +262,7 @@ export function rilascioDaTornare(rispostaDeiRilasci) {
     if (stato !== 'READY') continue;
     const bersaglio = String(rilascio?.target ?? '').toLowerCase();
     if (bersaglio !== 'production') continue;
+    if (daScartare && commitDelRilascio(rilascio) === daScartare) continue;
     const grezzo = String(rilascio?.url ?? '').trim();
     if (!grezzo) continue;
     const completo = /^https?:\/\//i.test(grezzo) ? grezzo : `https://${grezzo}`;
@@ -536,9 +553,9 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     } catch {
       risposta = null;
     }
-    const trovato = rilascioDaTornare(risposta);
+    const trovato = rilascioDaTornare(risposta, { commitCheEsce: process.env.COMMIT_CHE_ESCE ?? '' });
     if (!trovato) {
-      console.error("Nell'elenco dei rilasci non c'e' nessuna produzione pronta: non saprei a quale indirizzo tornare indietro.");
+      console.error("Nell'elenco dei rilasci non c'e' nessuna produzione pronta con un commit diverso da quello che sta uscendo: non saprei a quale indirizzo tornare indietro.");
       process.exit(USCITA.INDIRIZZO_NON_VALIDO);
     }
     console.log(trovato);

@@ -563,6 +563,9 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          # 31/10/2026 — Il commit che sta per uscire: il posto dove tornare
+          # indietro deve essere un ALTRO commit (vedi rilascioDaTornare).
+          COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
         # 27/8/2026 (R189) — LA VERSIONE ERA «L'ULTIMA CHE C'E' ADESSO».
         #
         # `vercel@latest` vuol dire che lo strumento che pubblica in produzione
@@ -584,10 +587,16 @@ jobs:
           # L'elenco arriva dall'API, non dallo stdout della CLI: cosi' non
           # dipende da come la CLI decide di stampare le sue righe.
           RILASCI="$(curl -sS --max-time 30 -H "Authorization: Bearer $TOKEN" \
-            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&target=production&state=READY&limit=5" || true)"
-          PRECEDENTE="$(printf '%s' "$RILASCI" | node scripts/prova-di-fumo.mjs --rilascio-di-adesso || true)"
+            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&target=production&state=READY&limit=20" || true)"
+          # 31/10/2026 (ondata 1) — QUI SI PRENDEVA IL PRIMO RILASCIO PRONTO, E
+          # DI SOLITO ERA LO STESSO COMMIT. Con il rilascio automatico di Vercel
+          # acceso, l'unione su main e' gia' online da minuti quando questo
+          # lavoro parte: «tornare» al primo dell'elenco rimetteva il codice che
+          # sta uscendo. Adesso lo script scarta i rilasci di questo commit, e
+          # l'elenco e' piu' lungo (20) perche' i primi possono essere tutti suoi.
+          PRECEDENTE="$(printf '%s' "$RILASCI" | COMMIT_CHE_ESCE="${COMMIT:-}" node scripts/prova-di-fumo.mjs --rilascio-di-adesso || true)"
           if [ -z "$PRECEDENTE" ]; then
-            echo "::warning::Non ho trovato il rilascio che sta in produzione adesso: se quello nuovo non risponde, da qui non potro' tornare indietro."
+            echo "::warning::Non ho trovato un rilascio di produzione con un commit diverso da ${COMMIT:-quello che esce}: se quello nuovo non risponde, da qui non potro' tornare indietro."
           else
             echo "In produzione adesso c'e': $PRECEDENTE"
           fi
