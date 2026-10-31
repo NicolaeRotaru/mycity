@@ -108,6 +108,7 @@ beforeEach(() => {
   process.env.CRON_SECRET = SEGRETO;
   // Il setup delle prove li accende per tutti: qui si parte come in produzione, senza variabile.
   delete process.env.LAVORI_A_ORARIO;
+  delete process.env.CANCELLAZIONI_A_ORARIO;
   process.env.STRIPE_SECRET_KEY = 'sk_test_finta';
   process.env.ANTHROPIC_API_KEY = 'chiave-finta';
 });
@@ -269,7 +270,7 @@ describe('process-deletions: il primo giro conta e non cancella', () => {
       rpc: { process_expired_deletions: { data: [], error: null } },
     });
     finti.getAdminSupabase.mockImplementation(() => vera.admin);
-    await chiama('process-deletions', '?a_mano=1');
+    await chiama('process-deletions', '?a_mano=1&cancella=1');
 
     const toccateDavvero = vera.diario.flatMap((v) => (v.op === 'update' || v.op === 'delete' ? [v.toccate] : []));
     const contate = (conto.corpo?.potature as Array<{ righe: number | null }>)
@@ -278,4 +279,51 @@ describe('process-deletions: il primo giro conta e non cancella', () => {
     expect(toccateDavvero.length).toBeGreaterThan(0);
     expect(contate).toEqual(toccateDavvero);
   });
+
+  /** Un giro con due account scaduti e righe da potare: dice se ha scritto qualcosa. */
+  async function haScritto(query: string): Promise<boolean> {
+    const notte = fintoGiroNotturno({
+      tabelle: tabelle(),
+      rpc: { process_expired_deletions: { data: scadute, error: null } },
+    });
+    finti.getAdminSupabase.mockImplementation(() => notte.admin);
+    await chiama('process-deletions', query);
+    return notte.diario.some((v) => v.op !== 'rpc');
+  }
+
+  // Le varianti scomode del collaudo: un errore di battitura, o la shell che
+  // taglia l'indirizzo al primo «&», devono lasciare il giro a contare.
+  it.each([
+    ['?a_mano=1', 'solo a_mano, come quando la shell taglia «&solo_conta=1»'],
+    ['?a_mano=1&solo_conta=true', 'solo_conta scritto «true»'],
+    ['?a_mano=1&soloConta=1', 'soloConta col maiuscolo'],
+    ['?a_mano=1&cancella=true', 'cancella scritto «true»'],
+    ['?a_mano=1&cancella=1&solo_conta=1', 'cancella e solo_conta insieme: vince il conto'],
+  ])('a mano con %s conta e non cancella niente (%s)', async (query) => {
+    expect(await haScritto(query), `${query} ha cancellato`).toBe(false);
+  });
+
+  it('a mano cancella davvero solo con cancella=1 scritto esatto', async () => {
+    expect(await haScritto('?a_mano=1&cancella=1')).toBe(true);
+  });
+
+  it('coi lavori accesi, la notte conta e basta finché le cancellazioni non hanno il loro interruttore', async () => {
+    process.env.LAVORI_A_ORARIO = 'accesi';
+    expect(await haScritto(''), 'la notte ha cancellato con le sole LAVORI_A_ORARIO accese').toBe(false);
+    process.env.CANCELLAZIONI_A_ORARIO = 'Accese';
+    expect(await haScritto(''), 'un errore di battitura ha acceso le cancellazioni').toBe(false);
+    process.env.CANCELLAZIONI_A_ORARIO = 'accese';
+    expect(await haScritto(''), 'con i due interruttori accesi la notte cancella').toBe(true);
+  });
+
+  // Coi due interruttori accesi, solo la chiamata del calendario (nessun parametro)
+  // o cancella=1 cancellano: un parametro sbagliato conta, non fa la notte vera.
+  it.each(['?a_mano=si', '?a_mano=1', '?soloConta=1', '?solo-conta=1', '?amano=1', '?x=1', '?cancella=true'])(
+    'coi due interruttori accesi, %s conta e non cancella',
+    async (query) => {
+      process.env.LAVORI_A_ORARIO = 'accesi';
+      process.env.CANCELLAZIONI_A_ORARIO = 'accese';
+      expect(await haScritto(query), `${query} ha cancellato`).toBe(false);
+    },
+  );
 });

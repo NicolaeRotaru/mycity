@@ -27,6 +27,8 @@ import { NextResponse } from 'next/server';
 export const VARIABILE_DEL_FERMO = 'LAVORI_A_ORARIO';
 export const VALORE_CHE_ACCENDE = 'accesi';
 export const PARAMETRO_A_MANO = 'a_mano';
+/** Il solo parametro che fa cancellare davvero un giro a mano di `process-deletions`. */
+export const PARAMETRO_CANCELLA = 'cancella';
 
 /** L'intestazione che dice a `withCronAuth` «questo giro non è avvenuto: niente battito». */
 export const INTESTAZIONE_GIRO_NON_FATTO = 'x-mycity-giro-non-fatto';
@@ -59,6 +61,44 @@ export function chiamataDelCalendarioFerma(
 ): boolean {
   if (env[VARIABILE_DEL_FERMO] === VALORE_CHE_ACCENDE) return false;
   return !parametroAcceso(req, PARAMETRO_A_MANO);
+}
+
+/**
+ * 31/10/2026 — `process-deletions` CONTA, E CANCELLA SOLO QUANDO LO SI DICE.
+ *
+ * Cancella account veri, e non si torna indietro. Il freno del primo giro era
+ * aperto per difetto: si contava solo con `solo_conta=1` scritto esatto. Bastava
+ * `solo_conta=true`, `soloConta=1`, o la shell che taglia l'indirizzo al primo
+ * `&` senza virgolette, e partiva la notte vera.
+ *
+ * Adesso è chiuso per difetto, e la cancellazione ha un interruttore suo:
+ * - `solo_conta`, con qualunque valore, conta sempre;
+ * - `cancella=1` scritto esatto cancella: è la chiamata a mano voluta;
+ * - nessun parametro è la chiamata del calendario: cancella solo con
+ *   `CANCELLAZIONI_A_ORARIO=accese`, anche se `LAVORI_A_ORARIO` è già «accesi».
+ *   Il piano tiene la cancellazione in «solo conta» per settimane dopo che gli
+ *   altri dieci lavori sono ripartiti: con un interruttore solo, accendere gli
+ *   altri l'avrebbe fatta partire dalla notte stessa;
+ * - qualunque altro parametro, o un indirizzo che non si legge, conta.
+ */
+export const VARIABILE_DELLE_CANCELLAZIONI = 'CANCELLAZIONI_A_ORARIO';
+export const VALORE_CHE_ACCENDE_LE_CANCELLAZIONI = 'accese';
+
+export function giroCheSoloConta(
+  req: { url: string },
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  let parametri: URLSearchParams;
+  try {
+    parametri = new URL(req.url).searchParams;
+  } catch {
+    return true;
+  }
+  if (parametri.has('solo_conta')) return true;
+  if (parametri.get(PARAMETRO_CANCELLA) === '1') return false;
+  const chiamataDelCalendario = [...parametri.keys()].length === 0;
+  if (chiamataDelCalendario) return env[VARIABILE_DELLE_CANCELLAZIONI] !== VALORE_CHE_ACCENDE_LE_CANCELLAZIONI;
+  return true;
 }
 
 /** Segna una risposta come «giro non avvenuto»: `withCronAuth` non scrive il battito. */

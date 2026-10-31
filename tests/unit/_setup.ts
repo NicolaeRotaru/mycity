@@ -80,3 +80,5 @@ afterEach(() => {
  * è la prova `i-lavori-a-orario-si-fermano-finche-nicola-non-li-accende`.
  */
 process.env.LAVORI_A_ORARIO = 'accesi';
+// La cancellazione degli account ha un interruttore suo (stessa ragione, stessa eccezione).
+process.env.CANCELLAZIONI_A_ORARIO = 'accese';

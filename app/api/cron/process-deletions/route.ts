@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
-import { chiamataDelCalendarioFerma, parametroAcceso, rispostaDelFermo, segnaGiroNonFatto } from '@/lib/cron/fermo-dei-lavori';
+import { chiamataDelCalendarioFerma, giroCheSoloConta, rispostaDelFermo, segnaGiroNonFatto } from '@/lib/cron/fermo-dei-lavori';
 import { logger } from '@/lib/logger';
 import { cancellaAccount } from '@/lib/account/cancellazione';
 import {
@@ -35,10 +35,13 @@ export const runtime = 'nodejs';
  *  3) Log audit per compliance
  *
  * Cadenza: ogni notte alle 4. Chi la fa partire sta in `vercel.json` → `crons`.
- * A mano si chiama così (finché LAVORI_A_ORARIO non è «accesi» serve ?a_mano=1;
- * con &solo_conta=1 conta e non cancella niente — il primo giro si fa così):
+ * A mano si chiama così (finché LAVORI_A_ORARIO non è «accesi» serve ?a_mano=1).
+ * Una chiamata a mano CONTA e non cancella niente — il primo giro si fa così:
  *   curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
- *     "https://yourapp.com/api/cron/process-deletions?a_mano=1&solo_conta=1"
+ *     "https://yourapp.com/api/cron/process-deletions?a_mano=1"
+ * Cancella davvero solo con `&cancella=1` scritto esatto, dopo aver letto il conto.
+ * La chiamata del calendario cancella solo con CANCELLAZIONI_A_ORARIO=accese: finché
+ * manca, ogni notte conta e basta, anche con gli altri lavori accesi.
  *
  * Schedule consigliato: ogni giorno alle 04:00 Europe/Rome.
  */
@@ -90,11 +93,13 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
   const admin = getAdminSupabase();
 
-  // 31/10/2026 — IL PRIMO GIRO A MANO CONTA PRIMA DI CANCELLARE.
-  // Con `?solo_conta=1` si legge e basta: quali account sono scaduti e quante
-  // righe toccherebbero le potature. Prima di qualunque scrittura, quindi prima
-  // delle potature, che sono la prima cosa che la notte cancella.
-  if (parametroAcceso(req, 'solo_conta')) return contaSenzaCancellare(admin);
+  // 31/10/2026 — UN GIRO A MANO CONTA PRIMA DI CANCELLARE, PER DIFETTO.
+  // Una chiamata a mano (o con `solo_conta`) legge e basta: quali account sono
+  // scaduti e quante righe toccherebbero le potature. Cancella solo con
+  // `cancella=1` scritto esatto, o dal calendario con CANCELLAZIONI_A_ORARIO=accese.
+  // Sta prima di qualunque scrittura, quindi prima delle potature, che sono la
+  // prima cosa che la notte cancella.
+  if (giroCheSoloConta(req)) return contaSenzaCancellare(admin);
 
   // 8/9/2026 — LE POTATURE NON STANNO PIU' QUI DENTRO.
   //
