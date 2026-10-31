@@ -833,6 +833,24 @@ export interface Database {
         };
         Relationships: [];
       };
+      gift_card_pending_voids: {
+        Row: {
+          stripe_payment_intent: string;
+          void_reason: string;
+          created_at: string;
+        };
+        Insert: {
+          stripe_payment_intent: string;
+          void_reason: string;
+          created_at?: string;
+        };
+        Update: {
+          stripe_payment_intent?: string;
+          void_reason?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       gift_cards: {
         Row: {
           code: string;
@@ -847,6 +865,10 @@ export interface Database {
           expires_at: string;
           created_at: string;
           stripe_session_id: string | null;
+          stripe_payment_intent: string | null;
+          voided_at: string | null;
+          void_reason: string | null;
+          voided_cents: number | null;
         };
         Insert: {
           code: string;
@@ -861,6 +883,10 @@ export interface Database {
           expires_at?: string;
           created_at?: string;
           stripe_session_id?: string | null;
+          stripe_payment_intent?: string | null;
+          voided_at?: string | null;
+          void_reason?: string | null;
+          voided_cents?: number | null;
         };
         Update: {
           code?: string;
@@ -875,6 +901,10 @@ export interface Database {
           expires_at?: string;
           created_at?: string;
           stripe_session_id?: string | null;
+          stripe_payment_intent?: string | null;
+          voided_at?: string | null;
+          void_reason?: string | null;
+          voided_cents?: number | null;
         };
         Relationships: [];
       };
@@ -1806,6 +1836,7 @@ export interface Database {
           external_data: Json | null;
           external_synced_at: string | null;
           external_sync_status: string;
+          non_recedibile: boolean;
         };
         Insert: {
           id?: string;
@@ -1831,6 +1862,7 @@ export interface Database {
           external_data?: Json | null;
           external_synced_at?: string | null;
           external_sync_status?: string;
+          non_recedibile?: boolean;
         };
         Update: {
           id?: string;
@@ -1856,6 +1888,7 @@ export interface Database {
           external_data?: Json | null;
           external_synced_at?: string | null;
           external_sync_status?: string;
+          non_recedibile?: boolean;
         };
         Relationships: [];
       };
