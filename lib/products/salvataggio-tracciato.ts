@@ -85,6 +85,19 @@ export type ColonnaDelVenditore = (typeof COLONNE_DEL_VENDITORE)[number];
  */
 export const SCORTA_VISTA = 'stock_visto';
 
+/**
+ * 31/10/2026 — «ESCLUSO DAL RECESSO» (migrazione 180) SI SCRIVE, MA NON SI RILEGGE.
+ *
+ * Il fornaio segna la torta su ordinazione come esclusa dal recesso anche in
+ * «Modifica prodotto», non solo quando la crea: senza questa riga la porta la
+ * buttava via e il modulo diceva «Modifiche salvate». Non entra in
+ * `COLONNE_DEL_VENDITORE` apposta: quelle si rileggono per nome a ogni
+ * salvataggio, e prima della 180 la colonna non c'e' — ogni salvataggio di
+ * ogni prodotto si fermerebbe. Il modulo la manda solo dove la colonna c'e' e
+ * solo se il negoziante l'ha cambiata. Dopo la 180 puo' entrare nella lista.
+ */
+export const COLONNA_DEL_RECESSO = 'non_recedibile';
+
 /** Le colonne da rileggere prima di scrivere, per sapere com'era. */
 export const COLONNE_DA_RILEGGERE = ['id', 'seller_id', ...COLONNE_DEL_VENDITORE].join(', ');
 
@@ -101,6 +114,8 @@ export function colonneAmmesse(corpo: unknown): Record<string, unknown> {
   }
   const vista = dentro[SCORTA_VISTA];
   if (typeof vista === 'number' && Number.isFinite(vista)) pulito[SCORTA_VISTA] = vista;
+  const recesso = dentro[COLONNA_DEL_RECESSO];
+  if (typeof recesso === 'boolean') pulito[COLONNA_DEL_RECESSO] = recesso;
   return pulito;
 }
 
@@ -136,11 +151,15 @@ function stessoValore(a: unknown, b: unknown): boolean {
 export function campiCambiati(
   prima: Record<string, unknown>,
   dopo: Record<string, unknown>,
-): ColonnaDelVenditore[] {
-  const cambiati: ColonnaDelVenditore[] = [];
+): Array<ColonnaDelVenditore | typeof COLONNA_DEL_RECESSO> {
+  const cambiati: Array<ColonnaDelVenditore | typeof COLONNA_DEL_RECESSO> = [];
   for (const colonna of COLONNE_DEL_VENDITORE) {
     if (!(colonna in dopo)) continue;
     if (!stessoValore(prima[colonna], dopo[colonna])) cambiati.push(colonna);
+  }
+  // Il recesso non si rilegge (vedi sopra): nel registro va il valore nuovo.
+  if (COLONNA_DEL_RECESSO in dopo && !stessoValore(prima[COLONNA_DEL_RECESSO], dopo[COLONNA_DEL_RECESSO])) {
+    cambiati.push(COLONNA_DEL_RECESSO);
   }
   return cambiati;
 }

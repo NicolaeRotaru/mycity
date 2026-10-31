@@ -77,9 +77,12 @@ export interface ProductInitialValues {
   expressEnabled?: boolean | null;
   status?: string;
   variants?: ProductVariant[];
+  /** Escluso dal recesso (art. 59 Cod. Cons.): fresco che si deteriora in fretta o su ordinazione. */
+  nonRecedibile?: boolean | null;
 }
 
-export type ProductPayload = ReturnType<typeof buildProductPayload>;
+/** `non_recedibile` parte solo se il negoziante l'ha cambiato (vedi sotto, nel salvataggio). */
+export type ProductPayload = ReturnType<typeof buildProductPayload> & { non_recedibile?: boolean };
 
 interface ProductFormProps {
   mode: 'create' | 'edit';
@@ -132,6 +135,15 @@ interface ProductFormProps {
    * pulsanti AI per il giorno in cui si riaccendono.
    */
   aiAccesa?: boolean;
+  /**
+   * 31/10/2026 — LA SPUNTA «ESCLUSO DAL RECESSO» SI MOSTRA SOLO SE ARRIVA IN BANCA DATI.
+   * La passa a true la pagina che sa due cose: la colonna c'e' (migrazione 180)
+   * e la sua strada di salvataggio la porta. Senza, la spunta non compare:
+   * prima della 180 la creazione falliva (PGRST204), e in modifica la porta
+   * unica del venditore la buttava via mentre il negoziante leggeva «Modifiche
+   * salvate». Una spunta che non si salva e' una promessa falsa, sul recesso.
+   */
+  recessoSegnabile?: boolean;
 }
 
 export default function ProductForm({
@@ -144,6 +156,7 @@ export default function ProductForm({
   deleteLabel = 'Elimina prodotto',
   deleting = false,
   onDiscard,
+  recessoSegnabile = false,
   productId,
   sellerOffersExpress = false,
   consegnaDelNegozioNonLetta = false,
@@ -211,6 +224,8 @@ export default function ProductForm({
     setConsegnaSceltaDalNegoziante(true);
   };
   const [status, setStatus] = useState<string>(initialValues?.status ?? 'available');
+  const recedibileAllApertura = initialValues?.nonRecedibile === true;
+  const [nonRecedibile, setNonRecedibile] = useState<boolean>(recedibileAllApertura);
   const [variants, setVariants] = useState<ProductVariant[]>(initialValues?.variants ?? []);
   // Assi di variante attivi (chiave campo → valori). Ricostruiti dalle varianti
   // esistenti in modifica; in creazione partono vuoti.
@@ -693,7 +708,7 @@ export default function ProductForm({
           return;
         }
       }
-      const payload = buildProductPayload({
+      const payload: ProductPayload = buildProductPayload({
         values,
         imageUrls,
         attributes,
@@ -707,6 +722,15 @@ export default function ProductForm({
         status: finalStatus,
       });
       if (hasVariants) payload.stock = totalVariantStock(variants);
+      /**
+       * 31/10/2026 — IL NEGOZIO DICE QUALI PRODOTTI SONO ESCLUSI DAL RECESSO.
+       * Pane e freschi, e cio' che si fa su ordinazione, non si rendono per
+       * ripensamento (art. 59 lett. c-d Cod. Cons.; scelta di Nicola del 31/10).
+       * Parte solo se il negoziante l'ha cambiato: un «no» mai toccato non
+       * riscrive la banca dati, e un modulo aperto prima della migrazione 180
+       * continua a salvare.
+       */
+      if (recessoSegnabile && nonRecedibile !== recedibileAllApertura) payload.non_recedibile = nonRecedibile;
       /**
        * 28/10/2026 — CHI CORREGGE LA DESCRIZIONE NON RIMETTE IN MAGAZZINO LA
        * MERCE VENDUTA. La scorta partiva sempre, col numero visto all'apertura:
@@ -942,6 +966,14 @@ export default function ProductForm({
               />
             </div>
           </div>
+        )}
+
+        {recessoSegnabile && (
+          <Checkbox
+            label="Escluso dal recesso: fresco che si deteriora in fretta, o fatto su ordinazione"
+            checked={nonRecedibile}
+            onChange={(e) => setNonRecedibile(e.target.checked)}
+          />
         )}
 
         {/* Categoria + sottocategoria (a due livelli) */}

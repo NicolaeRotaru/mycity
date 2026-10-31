@@ -15,6 +15,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
+import { colonnaDelRecessoPresente } from '@/lib/ordini/recesso';
 import { useConsegnaVeloceDelNegozio } from '@/lib/queries/consegna-veloce-del-negozio';
 import { trackProductPublished } from '@/lib/analytics/events';
 import { loadAutosave, clearAutosave } from '@/lib/hooks/useFormAutosave';
@@ -79,6 +80,24 @@ function NewProductInner() {
       if (error) throw error;
       return (data ?? []) as Category[];
     },
+  });
+
+  /**
+   * 31/10/2026 — LA SPUNTA «ESCLUSO DAL RECESSO» SOLO SE LA BANCA DATI LA SA SALVARE.
+   * Prima della migrazione 180 la colonna non c'e': un prodotto nuovo con la
+   * spunta non si salvava (PostgREST rifiuta la colonna, PGRST204). Si guarda
+   * una riga qualsiasi letta con `*` (i tipi del database non conoscono ancora
+   * la colonna): se c'e' `non_recedibile` la spunta compare, se no resta nascosta
+   * e il prodotto si salva come sempre. Una lettura caduta vale «no».
+   */
+  const { data: recessoSegnabile = false } = useQuery({
+    queryKey: ['products', 'colonna-del-recesso'],
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabase.from('products').select('*').limit(1).maybeSingle();
+      if (error) return false;
+      return colonnaDelRecessoPresente(data);
+    },
+    staleTime: Infinity,
   });
 
   /**
@@ -241,6 +260,7 @@ function NewProductInner() {
           submitting={create.isPending}
           sellerOffersExpress={offersExpress}
           consegnaDelNegozioNonLetta={consegnaNonLetta}
+          recessoSegnabile={recessoSegnabile}
           autosaveKey={fromId ? undefined : AUTOSAVE_KEY}
           onSubmit={(payload, ctx) => create.mutate({ payload, variants: ctx.variants })}
           onDiscard={async () => {

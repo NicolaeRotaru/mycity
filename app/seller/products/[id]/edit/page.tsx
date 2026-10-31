@@ -19,6 +19,10 @@ import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer'
 import { AlertTriangle, EyeOff } from 'lucide-react';
 import { nascondiProdotto } from '@/lib/products/nascondi';
 import { salvaProdottoDalBrowser } from '@/lib/products/salva-dal-browser';
+import { colonnaDelRecessoPresente } from '@/lib/ordini/recesso';
+
+/** Campo interno della lettura: la banca dati ha gia' la colonna del recesso? */
+const RECESSO_SEGNABILE = '__recessoSegnabile';
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
 
@@ -41,7 +45,23 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       if ((data as { seller_id?: string }).seller_id !== user.id) {
         throw new Error('Non puoi modificare un prodotto che non è tuo');
       }
-      return data as Record<string, unknown>;
+      // 31/10/2026 — «Escluso dal recesso» (migrazione 180) si legge a parte, con `*`:
+      // prima della 180 la colonna non c'e', la riga arriva senza e la spunta resta
+      // vuota; il modulo la manda solo se il negoziante la cambia. Con i tipi
+      // rigenerati (lib/database.types.ts) la colonna puo' entrare nella lettura qui sopra.
+      const { data: recesso } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      const nonRecedibile = (recesso as { non_recedibile?: unknown } | null)?.non_recedibile === true;
+      // La spunta compare solo se la colonna c'e' davvero (dopo la 180): se no
+      // il salvataggio la manderebbe a una colonna che non esiste.
+      return {
+        ...(data as Record<string, unknown>),
+        non_recedibile: nonRecedibile,
+        [RECESSO_SEGNABILE]: colonnaDelRecessoPresente(recesso),
+      } as Record<string, unknown>;
     },
     // 31/10/2026 — IL MODULO SI APRE SOLO CON LA SCORTA DELLA BANCA DATI.
     // Il modulo tiene la scorta vista all'apertura e la manda accanto a quella
@@ -52,7 +72,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     refetchOnMount: 'always',
   });
 
-  const { data: variants = [], isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette } = useQuery({
+  const { data: variants = [], error: erroreVarianti, isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette } = useQuery({
     queryKey: [...queryKeys.seller.product(id), 'variants'],
     queryFn: () => loadProductVariants(id),
     refetchOnMount: 'always',
@@ -160,11 +180,23 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
   });
 
   if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette) || consegnaInLettura) return <LoadingState />;
-  if (error || !product) {
+  /**
+   * 31/10/2026 — SENZA LE VARIANTI LETTE IL MODULO NON SI APRE.
+   * Il ripiego `variants = []` apriva il modulo come se il prodotto non avesse
+   * taglie: al «Salva» saveProductVariantsServer le cancellava tutte, e negli
+   * ordini gia' fatti la riga perdeva la taglia (order_items.variant_id a NULL).
+   */
+  if (error || erroreVarianti || !product) {
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
         <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Errore</p>
-        <p className="text-sm mb-3">{error instanceof Error ? error.message : 'Prodotto non trovato'}</p>
+        <p className="text-sm mb-3">
+          {error instanceof Error
+            ? error.message
+            : erroreVarianti
+              ? 'Non riesco a leggere le taglie e le varianti di questo prodotto. Ricarica la pagina prima di modificarlo: salvando adesso le varianti andrebbero perse.'
+              : 'Prodotto non trovato'}
+        </p>
         <Link href="/seller/products" className="text-sm font-semibold text-rose-700 hover:underline">
           ← Torna ai miei prodotti
         </Link>
@@ -189,7 +221,13 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     expressEnabled: (product.express_enabled as boolean | null) ?? null,
     status: (product.status as string) ?? 'available',
     variants,
+    nonRecedibile: product.non_recedibile === true,
   };
+  // La spunta «escluso dal recesso»: la porta unica PATCH /api/seller/products/:id
+  // la tiene (COLONNA_DEL_RECESSO in lib/products/salvataggio-tracciato.ts), e si
+  // mostra solo se la banca dati ha la colonna (migrazione 180).
+  const recessoSegnabile = product[RECESSO_SEGNABILE] === true;
+
 
   const status = product.status as string;
 
@@ -218,6 +256,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
         deleteLabel="Nascondi prodotto"
         deleting={nascondiIlProdotto.isPending}
         productId={id}
+        recessoSegnabile={recessoSegnabile}
         sellerOffersExpress={offersExpress}
         consegnaDelNegozioNonLetta={consegnaNonLetta}
         onSubmit={(payload, ctx) => update.mutate({

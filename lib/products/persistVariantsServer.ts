@@ -74,7 +74,19 @@ export async function saveProductVariantsServer(
     }
   });
 
-  const toDelete = [...existingIds].filter((id) => !keepIds.has(id));
+  /**
+   * 31/10/2026 — SI CANCELLA SOLO LA VARIANTE CHE IL NEGOZIANTE HA VISTO E TOLTO.
+   * Una pagina che apre il modulo con un ripiego vuoto (la lettura delle
+   * varianti e' caduta) manda zero varianti: senza questo freno le cancellava
+   * tutte, e negli ordini gia' fatti la riga perdeva la taglia
+   * (order_items.variant_id a NULL). Esempio: «Maglietta» con M (3) e L (2), la
+   * lettura cade, si corregge una parola e si salva: M e L restano. Con le
+   * scorte viste (`scorteViste`) si sa cosa c'era davanti; una variante che li'
+   * non c'e' (mai letta, o aggiunta da un'altra scheda nel frattempo) non si
+   * tocca. Senza `scorteViste` (chi non le passa) resta il comportamento di prima.
+   */
+  const vista = (id: string) => scorteViste === undefined || Object.prototype.hasOwnProperty.call(scorteViste, id);
+  const toDelete = [...existingIds].filter((id) => !keepIds.has(id) && vista(id));
   if (toDelete.length > 0) {
     const { error } = await supabase.from('product_variants').delete().in('id', toDelete);
     if (error) throw error;

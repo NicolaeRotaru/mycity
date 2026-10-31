@@ -16,7 +16,7 @@ import { formatPrice } from '@/lib/format';
 import { LARGHEZZA_MASSIMA, sizedImage } from '@/lib/image-url';
 import { SIZES_FOTO_PRODOTTO } from '@/lib/preload-foto';
 import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
-import { FRASE_RESO, frasePagamento, promessaSpedizione } from '@/lib/promesse-pubbliche';
+import { fraseResoDelProdotto, frasePagamento, promessaSpedizione } from '@/lib/promesse-pubbliche';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { RatingStars } from '@/components/ui/RatingStars';
 import { CHIAVI_FUORI_DALLA_GRIGLIA, findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
@@ -141,6 +141,19 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const { data: product, isLoading, isError, refetch } = useQuery(domandaProdotto(supabase, id));
 
   // Varianti (taglie/colori): caricate a parte, alimentano i selettori opzione.
+  // 31/10/2026 — «Escluso dal recesso» (migrazione 180) si legge a parte, con `*`:
+  // prima della 180 la colonna non c'e', la riga arriva senza e vale la frase
+  // generale (FRASE_RESO di lib/promesse-pubbliche, che nomina gli esclusi); cosi'
+  // anche se la lettura cade. La frase si sceglie la', mai una copia qui.
+  const { data: rigaDelRecesso = null } = useQuery({
+    queryKey: ['product', id, 'recesso'],
+    queryFn: async () => {
+      const { data } = await supabase.from('products').select('*').eq('id', id).maybeSingle();
+      return { non_recedibile: (data as { non_recedibile?: unknown } | null)?.non_recedibile === true };
+    },
+  });
+  const fraseReso = fraseResoDelProdotto(rigaDelRecesso);
+
   const { data: variants = [] } = useQuery({
     queryKey: ['product-variants', id],
     queryFn: () => loadProductVariants(id),
@@ -823,7 +836,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 <RotateCcw size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
                 {/* «gratuito» valeva solo per il difetto, non per il ripensamento: la pagina
                     resi dice che il cambio idea lo paga il cliente, e i freschi sono esclusi. */}
-                {FRASE_RESO}
+                {fraseReso}
               </span>
             </div>
 

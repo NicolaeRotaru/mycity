@@ -45,7 +45,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
     refetchOnMount: 'always',
   });
 
-  const { data: variants = [], isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette } = useQuery({
+  const { data: variants = [], error: erroreVarianti, isLoading: variantsLoading, isFetching: varianteInLettura, isFetchedAfterMount: variantiRilette } = useQuery({
     queryKey: [...queryKeys.admin.product(id), 'variants'],
     queryFn: () => loadProductVariants(id),
     refetchOnMount: 'always',
@@ -109,11 +109,20 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
   });
 
   if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette)) return <LoadingState />;
-  if (error || !product) {
+  // 31/10/2026 — SENZA LE VARIANTI IL MODULO NON SI APRE. Se la lettura delle
+  // taglie cade, `variants` resta [] e il modulo partiva senza taglie: al «Salva»
+  // la PATCH le riceveva vuote. Come nella pagina del negozio, si ferma e lo dice.
+  if (error || erroreVarianti || !product) {
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
         <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Errore</p>
-        <p className="text-sm mb-3">{error instanceof Error ? error.message : 'Prodotto non trovato'}</p>
+        <p className="text-sm mb-3">
+          {error instanceof Error
+            ? error.message
+            : erroreVarianti
+              ? 'Non riesco a leggere le taglie e le varianti di questo prodotto. Ricarica la pagina prima di modificarlo: salvando adesso le varianti andrebbero perse.'
+              : 'Prodotto non trovato'}
+        </p>
         <Link href="/admin/products" className="text-sm font-semibold text-rose-700 hover:underline">← Torna ai prodotti</Link>
       </div>
     );
