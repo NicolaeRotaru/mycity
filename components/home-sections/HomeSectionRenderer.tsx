@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { frasePagamento } from '@/lib/promesse-pubbliche';
+import { frasePagamento, SPIEGAZIONE_RESO } from '@/lib/promesse-pubbliche';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -77,7 +77,7 @@ const DEFAULT_TRUST_BULLETS = [
   // 28/10/2026 — Era la promessa dei minuti della veloce («Rider del territorio») senza un rider approvato:
   // la promessa firmata da Nicola il 26/10 è «in giornata», fino a 5 km dal negozio.
   { Icon: Truck,     color: 'accent',    t: 'Consegna in giornata',     d: `Fino a ${RAGGIO_CONSEGNA_KM} km dal negozio, negli orari di apertura.` },
-  { Icon: RotateCcw, color: 'secondary', t: 'Reso entro 14 giorni',     d: 'Cambi idea? Ti rimborsiamo senza domande.' },
+  { Icon: RotateCcw, color: 'secondary', t: 'Reso entro 14 giorni',     d: SPIEGAZIONE_RESO },
 ] as const;
 
 function trustColorClass(color: string): string {

@@ -1,6 +1,7 @@
 'use client';
 
 import { CONSEGNA_ALL_ORA_CHE_SCEGLI } from '@/lib/promessa-consegna';
+import { FRASE_RESO } from '@/lib/promesse-pubbliche';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -326,7 +327,7 @@ const Footer = () => {
               <Lock size={14} strokeWidth={2} className="text-olive-600" /> Acquisto sicuro
             </span>
             <span className="flex items-center gap-1.5">
-              <RotateCcw size={14} strokeWidth={2} className="text-olive-600" /> Reso entro 14 giorni
+              <RotateCcw size={14} strokeWidth={2} className="text-olive-600" /> {FRASE_RESO}
             </span>
           </div>
           <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-ink-500 justify-center">
