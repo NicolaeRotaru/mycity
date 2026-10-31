@@ -207,7 +207,7 @@ async function finche(condizione: () => boolean, cosa: string) {
       await new Promise((r) => setTimeout(r, 5));
     });
   }
-  throw new Error(`non e' successo: ${cosa}`);
+  expect(condizione(), `non e' successo: ${cosa}`).toBe(true);
 }
 
 function scrivi(el: HTMLInputElement, valore: string) {
@@ -260,10 +260,10 @@ describe('la modifica in blocco dopo un conflitto di scorta', () => {
     stato.tabelle.products[1].stock = 3; // due tranci venduti mentre il negoziante scriveva
 
     clicca('Salva modifiche');
-    await finche(() => stato.errori.length > 0, 'il conflitto sulla pizza');
+    await finche(() => stato.errori.length > 0 || stato.successi.length > 0, 'il primo «Salva»');
+    expect(stato.tabelle.products[1].stock, 'la vendita della pizza e\' sparita').toBe(3);
     expect(stato.errori[0]).toMatch(/ora sono 3/);
     expect(stato.tabelle.products[0].stock).toBe(8);
-    expect(stato.tabelle.products[1].stock, 'la vendita della pizza e\' sparita').toBe(3);
 
     // Il campo torna al numero vero: il negoziante lo vede e scrive quello giusto.
     await finche(() => campoScorta('Pizza al taglio')?.value === '3', 'la pizza torna a 3 pezzi');
