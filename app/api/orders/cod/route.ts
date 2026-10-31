@@ -224,6 +224,27 @@ function ordineArrivatoInParte(): NextResponse {
 }
 
 /**
+ * 31/10/2026 — L'ORDINE C'E' MA SENZA ARTICOLI: CI SI FERMA.
+ *
+ * La riga dell'ordine e' nata, i suoi articoli no (l'invio di allora e' morto
+ * in mezzo). Al negozio non e' arrivato niente. Non si dice «fatto» e non si
+ * ricrea: si avvisa e la chiave resta, come per l'ordine nato in parte.
+ */
+function ordineRimastoAMeta(): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: 'CONFLICT',
+        message: 'Il tuo ordine si è fermato a metà e il negozio non l’ha ricevuto. Non riprovare: ti aiutiamo noi a sistemarlo.',
+      },
+      inCorso: true,
+    },
+    { status: 409 },
+  );
+}
+
+/**
  * 31/10/2026 — IL BROWSER BUTTA LA CHIAVE SOLO SE GLIELO DICIAMO NOI.
  *
  * La regola era «butta la chiave, a meno che il server dica `inCorso`». Ma
@@ -481,6 +502,41 @@ export const POST = withAuthRateLimit(
                 totaleCents: ordiniTrovati.reduce((s, o) => s + o.totalCents, 0),
               });
               return ordineArrivatoInParte();
+            }
+            /**
+             * 31/10/2026 — UN ORDINE SENZA ARTICOLI NON E' «FATTO».
+             *
+             * La riga dell'ordine nasce prima dei suoi articoli. Se l'invio di
+             * allora e' morto fra le due cose — la funzione caduta, la rete giu'
+             * dopo il salvataggio — qui si trovava l'ordine, si rispondeva
+             * «fatto» e al negozio non arrivava niente: zero articoli, nessun
+             * avviso. Un ordine della chiave senza articoli e' rimasto a meta':
+             * ricrearlo darebbe il doppione (lo stesso identificativo), dirlo
+             * fatto lo perde. Ci si ferma con la cifra, come per l'ordine nato
+             * in parte, e la chiave resta.
+             */
+            const { data: articoliTrovati, error: errArticoli } = await admin
+              .from('order_items')
+              .select('order_id')
+              .in('order_id', ordiniTrovati.map((o) => o.id));
+            if (errArticoli) {
+              logger.error('[cod] chiave abbandonata: non riesco a vedere gli articoli degli ordini', {
+                chiave: chiaveTentativo, message: errArticoli.message,
+              });
+              return nonVedoSeLOrdineCe();
+            }
+            const conArticoli = new Set(
+              ((articoliTrovati as Array<{ order_id: string }> | null) ?? []).map((a) => a.order_id),
+            );
+            const aMeta = ordiniTrovati.filter((o) => !conArticoli.has(o.id));
+            if (aMeta.length > 0) {
+              logger.error('[cod] chiave abbandonata con un ordine senza articoli: fermo, serve una correzione a mano', {
+                chiave: chiaveTentativo,
+                userId: user.id,
+                ordini: aMeta.map((o) => o.id),
+                totaleCents: aMeta.reduce((s, o) => s + o.totalCents, 0),
+              });
+              return ordineRimastoAMeta();
             }
             logger.error('[cod] chiave abbandonata ma con ordini gia nati: NON ricreo, li restituisco', {
               chiave: chiaveTentativo,
@@ -1188,9 +1244,20 @@ export const POST = withAuthRateLimit(
         } else if (errRilettura) {
           const { error: errTogli } = await admin.from('orders').delete().eq('id', idAtteso).eq('user_id', user.id);
           if (errTogli) {
-            await rendiLaNostraParte();
-            logger.error('[cod] non so se l ordine e nato: tengo la chiave, serve un controllo a mano', {
+            /**
+             * 31/10/2026 — SE L'ORDINE PUO' ESSERCI, LA SUA MERCE NON SI RIMETTE.
+             *
+             * Qui si rendeva tutto (merce, credito) anche se la riga poteva
+             * essere salvata: restava un ordine in piedi senza merce riservata,
+             * e il tocco dopo lo ritrovava e diceva «fatto». Si tolgono solo
+             * gli ordini dei negozi prima, che sappiamo nati per intero; la
+             * merce e il credito di questo restano legati all'ordine che forse
+             * c'e', e lo sistema chi legge questo errore.
+             */
+            await rollbackCreatedCodOrders();
+            logger.error('[cod] non so se l ordine e nato: tengo la chiave, la merce e il credito, serve un controllo a mano', {
               chiave: chiaveTentativo, userId: user.id, orderId: idAtteso, message: errTogli.message,
+              merce: groupStockItems, creditoCents: walletAppliedCents,
             });
             return nonVedoSeLOrdineCe();
           }

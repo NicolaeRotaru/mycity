@@ -262,16 +262,18 @@ describe('dopo un errore il browser butta la chiave solo se il server l ha liber
     expect(laChiaveVaButtata(null)).toBe(false);
   });
 
-  it('la funzione muore dopo aver creato l ordine, «Ordina» dopo un minuto: un ordine solo', async () => {
+  it('la funzione muore dopo aver creato l ordine, «Ordina» dopo un minuto: un ordine solo, e niente «fatto» senza articoli', async () => {
     stato.muoreDopoLOrdine = true;
     const b = browser('cod-caduta-a-meta');
     const primo = await b.tocca();
     expect(primo?.res.ok).toBe(false);
     expect(alForno()).toHaveLength(1);
     invecchia('cod-caduta-a-meta');
-    await b.tocca();
+    const secondo = await b.tocca();
     expect(alForno(), 'SECONDO ordine sullo stesso carrello: la chiave nuova non conosce quello nato').toHaveLength(1);
-    expect(b.carrelloPieno).toBe(false);
+    // L'ordine e' nato senza articoli: dire «fatto» lo perderebbe, ricrearlo farebbe il doppione.
+    expect(secondo?.res.status, 'ha detto «fatto» con un ordine rimasto senza articoli').toBe(409);
+    expect(laChiaveVaButtata(secondo?.corpo), 'la chiave si e buttata col carrello pieno').toBe(false);
   });
 
   it('un errore normale libera la chiave e lo dice, così chi corregge il carrello riparte pulito', async () => {
