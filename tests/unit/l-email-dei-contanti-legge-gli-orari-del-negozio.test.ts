@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
 
 /**
  * 30/10/2026 (ondata 24) — L'EMAIL «NUOVO ORDINE» DEI CONTANTI LEGGE GLI ORARI DEL NEGOZIO.
