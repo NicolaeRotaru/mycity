@@ -30,18 +30,29 @@ export const ABBANDONATO_DOPO_MS = 60_000;
  * componente, quel ricaricamento creerebbe il secondo ordine.
  *
  * `deposito` e `genera` arrivano da fuori così la prova può eseguirli.
+ *
+ * 31/10/2026 — LA CHIAVE È DI QUEL CARRELLO, NON DELLA SCHEDA. Se la risposta
+ * del primo «Ordina» si perde, `chiudiTentativo` non gira e la chiave resta.
+ * Il prossimo ordine in quella scheda — giorni dopo, a un altro negozio — la
+ * riusava: la rotta trovava gli ordini vecchi, diceva «fatto» con quelli, e al
+ * negozio nuovo non arrivava niente. Adesso accanto alla chiave si tiene
+ * l'`impronta` del carrello (negozi, prodotti, quantità): se il carrello è
+ * cambiato, la chiave nasce nuova. Lo stesso carrello ripetuto la ritrova.
  */
 export function chiaveTentativo(
   deposito: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null,
   genera: () => string,
   nome = 'mycity:cod:tentativo',
+  impronta?: string,
 ): string {
   if (!deposito) return genera();
   try {
     const gia = deposito.getItem(nome);
-    if (gia) return gia;
+    const nomeImpronta = `${nome}:carrello`;
+    if (gia && (impronta === undefined || deposito.getItem(nomeImpronta) === impronta)) return gia;
     const nuova = genera();
     deposito.setItem(nome, nuova);
+    if (impronta !== undefined) deposito.setItem(nomeImpronta, impronta);
     return nuova;
   } catch {
     // Navigazione privata o memoria negata: meglio una chiave per invio che
@@ -57,6 +68,7 @@ export function chiudiTentativo(
   if (!deposito) return;
   try {
     deposito.removeItem(nome);
+    deposito.removeItem(`${nome}:carrello`);
   } catch {
     /* niente da chiudere */
   }

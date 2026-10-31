@@ -125,6 +125,8 @@ vi.mock('@/lib/supabase/server', () => {
     if (tavola === 'seller_public_profiles') return catena(() => stato.venditori);
     if (tavola === 'cod_checkout_attempts') return tentativi();
     if (tavola === 'profiles') return catena(() => ({ data: profili, error: null }));
+    // Ogni ordine nato qui ha i suoi articoli, come nel database: la rotta li guarda prima di dire «fatto».
+    if (tavola === 'order_items') return catena(() => ({ data: ordiniCreati.map((_, i) => ({ order_id: `ord-${i + 1}` })), error: null }));
     if (tavola === 'orders') {
       // Una lettura degli ordini restituisce quelli nati finora, come farebbe il database.
       const c = catena(() => ({
