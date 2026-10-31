@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { RITIRO_IN_NEGOZIO_ATTIVO } from './constants';
+import { RITIRO_IN_NEGOZIO_ATTIVO } from './ritiro-in-negozio';
 
 /**
  * Personalizzazione vetrina negozio — tipi, validazione (zod), cataloghi curati
