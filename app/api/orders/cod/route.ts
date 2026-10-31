@@ -120,6 +120,22 @@ const Body = z.object({
  */
 const SCRITTURE_DELLA_PROVA = 3;
 
+/**
+ * Per quanto una chiave del tentativo vale come «lo stesso invio ripetuto».
+ * Chi ritocca «Ordina» perche' la risposta si e' persa lo fa entro minuti; lo
+ * stesso pane il giorno dopo e' una spesa nuova. Mezza giornata tiene dentro il
+ * ritocco lento e fuori la spesa del mattino dopo.
+ */
+const RIPETUTO_ENTRO_MS = 12 * 60 * 60_000;
+/** Quante generazioni della stessa chiave si attraversano al massimo (ognuna e' una risposta persa a giorni di distanza). */
+const GENERAZIONI_DELLA_CHIAVE = 10;
+
+function tentativoScaduto(natoIl: unknown): boolean {
+  if (typeof natoIl !== 'string') return false;
+  const nato = new Date(natoIl).getTime();
+  return Number.isFinite(nato) && Date.now() - nato > RIPETUTO_ENTRO_MS;
+}
+
 function ordineGiaInCorso(): NextResponse {
   return NextResponse.json(
     {
@@ -288,13 +304,14 @@ export const POST = withAuthRateLimit(
      * `Idempotency-Key`). Se quella chiave e' gia' passata di qui, si
      * restituiscono gli ordini di allora invece di crearne altri.
      */
-    const chiaveTentativo = (req.headers.get('idempotency-key') ?? '').trim().slice(0, 100);
+    const chiaveDelBrowser = (req.headers.get('idempotency-key') ?? '').trim().slice(0, 100);
+    let chiaveTentativo = chiaveDelBrowser;
     /**
      * Cosa tiene insieme gli ordini nati dallo stesso carrello, nei conti.
      * Se il browser manda la sua chiave si usa quella; altrimenti se ne fa una
      * qui — l'importante e' che sia UNA per invio, non una per ordine.
      */
-    const chiaveCarrello = chiaveTentativo || `cod-${crypto.randomUUID()}`;
+    let chiaveCarrello = chiaveTentativo || `cod-${crypto.randomUUID()}`;
     if (chiaveTentativo) {
       /**
        * 21/8/2026 — LA CHIAVE SI RIVENDICA PRIMA, NON DOPO.
@@ -311,9 +328,46 @@ export const POST = withAuthRateLimit(
        * (23505) e non arriva mai a creare niente. Gli ordini veri si scrivono
        * dentro la stessa riga alla fine.
        */
-      const { error: errRivendica } = await admin
+      let { error: errRivendica } = await admin
         .from('cod_checkout_attempts')
         .insert({ chiave: chiaveTentativo, user_id: user.id, order_ids: [] });
+
+      /**
+       * 31/10/2026 — UNA CHIAVE VALE PER UN TENTATIVO, NON PER SEMPRE.
+       *
+       * Lunedi' la risposta del primo «Ordina» si perde: l'ordine nasce, ma il
+       * browser non chiude il tentativo e la chiave resta nella scheda, con
+       * l'impronta del carrello. Mercoledi', stessa scheda e stesso pane: stessa
+       * chiave. Qui si trovava la riga di lunedi', si rispondeva «fatto» con
+       * l'ordine di lunedi' e al forno non arrivava niente.
+       *
+       * Un invio ripetuto arriva entro minuti, non giorni. Una riga piu' vecchia
+       * di `RIPETUTO_ENTRO_MS` non si riusa: si passa alla generazione dopo della
+       * stessa chiave (`chiave~1`, `chiave~2`). E' calcolata, non casuale: il
+       * ritocco di mercoledi' ricade sulla stessa generazione e ritrova gli
+       * ordini di mercoledi', e gli identificativi degli ordini (che nascono
+       * dalla chiave) non si scontrano con quelli di lunedi'. Se la riga non si
+       * riesce a leggere si resta dove si e': meglio l'ordine di prima che il
+       * doppione.
+       */
+      for (
+        let generazione = 1;
+        generazione <= GENERAZIONI_DELLA_CHIAVE && (errRivendica as { code?: string } | null)?.code === '23505';
+        generazione++
+      ) {
+        const { data: vecchia } = await admin
+          .from('cod_checkout_attempts')
+          .select('created_at')
+          .eq('chiave', chiaveTentativo)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (!tentativoScaduto(vecchia?.created_at)) break;
+        chiaveTentativo = `${chiaveDelBrowser}~${generazione}`;
+        chiaveCarrello = chiaveTentativo;
+        ({ error: errRivendica } = await admin
+          .from('cod_checkout_attempts')
+          .insert({ chiave: chiaveTentativo, user_id: user.id, order_ids: [] }));
+      }
 
       if (errRivendica) {
         if ((errRivendica as { code?: string }).code !== '23505') {
