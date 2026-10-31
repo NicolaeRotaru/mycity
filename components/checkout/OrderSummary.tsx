@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Banknote, Check, Lock, RotateCcw, Store } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
-import { VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
+import { FRASE_RESO, VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
 
 /**
  * Riepilogo costi + bottone submit del checkout.
@@ -208,7 +208,7 @@ export function OrderSummary({
         </p>
         <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-ink-500">
           <li className="inline-flex items-center gap-1">
-            <RotateCcw size={13} strokeWidth={2.2} aria-hidden /> Reso entro 14 giorni
+            <RotateCcw size={13} strokeWidth={2.2} aria-hidden /> {FRASE_RESO}
           </li>
           <li className="inline-flex items-center gap-1">
             <Store size={13} strokeWidth={2.2} aria-hidden /> Venditore locale

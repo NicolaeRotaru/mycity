@@ -13,8 +13,11 @@ import { diagnosiJavascript } from './_pagina-senza-javascript';
 test.describe('Cart and Search', () => {
   test('empty cart shows EmptyState with CTA', async ({ page }) => {
     await page.goto('/cart');
-    // EmptyState con ctaLabel "Esplora i prodotti"
-    await expect(page.locator('text=carrello è vuoto').or(page.locator('text=Esplora'))).toBeVisible({ timeout: 5000 });
+    // 31/10/2026 — Il titolo del carrello vuoto, non «Esplora»: quella parola sta anche nel piè di
+    // pagina, e appena il carrello finiva di disegnarsi il selettore trovava tre elementi e la prova
+    // cadeva per la regola del selettore unico, a seconda di quanto era carica la macchina.
+    await expect(page.getByRole('heading', { name: /carrello è vuoto/i })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('main').getByRole('link', { name: /Esplora/i })).toBeVisible();
   });
 
   test('search page renders with input', async ({ page }) => {

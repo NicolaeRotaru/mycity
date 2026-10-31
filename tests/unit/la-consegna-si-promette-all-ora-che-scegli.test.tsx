@@ -150,7 +150,9 @@ describe('la scheda prodotto dice quello che dice la cassa', () => {
     const { rigaConsegnaDellaScheda } = await import('@/lib/promessa-consegna');
     const riga = rigaConsegnaDellaScheda({ esaurito: false, orari: FORNO, adesso: new Date(2026, 9, 31, 21, 30), veloce: null });
     expect(riga).toContain('riapre lunedì alle 08:00');
-    expect(riga).toMatch(/scegli l'ora/);
+    // 31/10/2026 (ondata 3) — Qui si pretendeva «scegli l'ora», ma alle 21:30 del sabato la cassa
+    // non ha fasce (oggi finito, domenica chiuso): era la promessa sbagliata, non quella giusta.
+    expect(riga).not.toMatch(/scegli l'ora/);
     expect(riga).not.toMatch(/domani/);
   });
 

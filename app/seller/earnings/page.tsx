@@ -13,7 +13,6 @@ import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
 import { riepilogoNegozio, riepilogoContanti } from '@/lib/guadagni/negozio';
 import { incassoPerGiorno } from '@/lib/guadagni/giorni';
-import { fraseAttesaBonifico } from '@/lib/stripe/tempi-bonifico';
 import { spiegazioneCommissione } from './commissione';
 import StripeConnectButton from '@/components/seller/StripeConnectButton';
 import StripeDashboardButton from '@/components/seller/StripeDashboardButton';
@@ -87,6 +86,9 @@ function payoutBadge(o: OrderRow): { label: string; cls: string } {
       return { label: o.payout_status ?? '—', cls: 'bg-cream-200 text-ink-700' };
   }
 }
+
+/** Quando arrivano i soldi: la stessa frase della spiegazione della commissione. */
+const tempiBonifico = spiegazioneCommissione().find((p) => p.tema === 'bonifico');
 
 export default function SellerEarningsPage() {
   const [period, setPeriod] = useState<PeriodKey>('30d');
@@ -290,9 +292,11 @@ export default function SellerEarningsPage() {
               )}.
             </p>
             <p className="mt-1 text-xs text-olive-700">
-              {/* R051 — qui c'era «~24 ore», mentre il bonifico parte un'ora dopo la
-                  consegna. Adesso il tempo lo dice chi lo esegue. */}
-              Pagamento automatico {fraseAttesaBonifico()}, verso l&apos;IBAN registrato su Stripe.
+              {/* 31/10/2026 (ondata 4) — qui c'era «Pagamento automatico circa un'ora
+                  dopo la consegna, verso l'IBAN»: un'ora dopo i soldi passano sul conto
+                  Stripe del negozio, non in banca, e al lancio si paga in contanti col
+                  bonifico del lunedì. La frase è la stessa della spiegazione qui sotto. */}
+              {tempiBonifico && <>{tempiBonifico.prima}{tempiBonifico.forte}{tempiBonifico.dopo}{' '}</>}
               Per saldo e bonifici reali apri la dashboard Stripe.
             </p>
           </div>
