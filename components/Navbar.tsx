@@ -124,7 +124,7 @@ export default function Navbar() {
         <div className="hidden md:block">
           <div className="container mx-auto px-4 py-3">
             <div className="flex items-center gap-4">
-              <Link href="/" className="text-2xl font-serif font-extrabold tracking-tight whitespace-nowrap leading-none focus-visible:outline-white">
+              <Link href="/" className="text-white hover:text-white text-2xl font-serif font-extrabold tracking-tight whitespace-nowrap leading-none focus-visible:outline-white">
                 <span className="text-accent-300">{branding.wordmark.accent}</span>{branding.wordmark.rest}
               </Link>
               <LocationPill />
@@ -141,7 +141,7 @@ export default function Navbar() {
                     {/* 27/8/2026 (R110) — era `accent-300`: sul terracotta
                         della barra stacca 3,87 volte, sotto il 4,5 richiesto a
                         un testo. `accent-200` arriva a 4,87. */}
-                    <Link href="/sign-in" className="px-3 py-2 hover:text-accent-200 font-medium focus-visible:outline-white">Accedi</Link>
+                    <Link href="/sign-in" className="px-3 py-2 text-white hover:text-accent-200 font-medium focus-visible:outline-white">Accedi</Link>
                     {/*
                       6/9/2026 — DUE PILLOLE GIALLE IDENTICHE, UNA ACCANTO ALL'ALTRA.
                       Il carrello e «Registrati» avevano lo stesso riempimento giallo,
@@ -214,7 +214,7 @@ export default function Navbar() {
         <div className="md:hidden">
           <div className="container mx-auto px-3 py-2.5">
             <div className="flex items-center gap-2">
-              <Link href="/" className="shrink-0 text-xl font-serif font-extrabold whitespace-nowrap leading-none focus-visible:outline-white">
+              <Link href="/" className="shrink-0 text-white hover:text-white text-xl font-serif font-extrabold whitespace-nowrap leading-none focus-visible:outline-white">
                 <span className="text-accent-300">{branding.wordmark.accent}</span>{branding.wordmark.rest}
               </Link>
               <div className="min-w-0 flex-1 flex justify-center">
@@ -242,7 +242,7 @@ export default function Navbar() {
                       </span>
                     </Link>
                   ) : (
-                    <Link href="/sign-in" className="shrink-0 text-sm font-medium hover:text-accent-200 focus-visible:outline-white">Accedi</Link>
+                    <Link href="/sign-in" className="shrink-0 text-sm text-white font-medium hover:text-accent-200 focus-visible:outline-white">Accedi</Link>
                   )}
                 </>
               )}

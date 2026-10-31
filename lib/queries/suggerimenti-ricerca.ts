@@ -34,12 +34,15 @@ type CatSuggest = { slug: string; name: string };
 
 /** I prodotti il cui nome contiene il termine, solo di negozi approvati. */
 export async function prodottiPerNome(supa: LettoreConFunzioni, term: string): Promise<ProdSuggest[]> {
-  const { data } = await supa
+  const { data, error } = await supa
     .from('products')
     .select('id, name, price, images, seller_id')
     .eq('status', 'available')
     .ilike('name', `%${term}%`)
     .limit(PRODOTTI_LETTI_NEL_RIPIEGO);
+  // supabase-js non lancia quando la rete cade: restituisce { data: null, error }. Un elenco vuoto
+  // qui vorrebbe dire «nessun prodotto si chiama così», che non è vero.
+  if (error) throw new Error(`ricerca dei prodotti per nome non riuscita: ${(error as { message?: string }).message ?? 'errore'}`);
   type Riga = { id: string; name: string; price: number | string; images: string[] | null; seller_id: string | null };
   const approvati = await conNegozioApprovato(supa, (data ?? []) as Riga[], COLONNE_NEGOZIO_IN_VETRINA);
   return approvati.slice(0, PRODOTTI_SUGGERITI).map((p) => ({
@@ -74,6 +77,11 @@ export async function leggiSuggerimentiRicerca(supa: LettoreConFunzioni, term: s
   // La RPC usa FTS italiano: per termini PARZIALI (es. "pomo") può non
   // matchare "Pomodori". Fallback ILIKE su name (stessa logica di /search)
   // così il suggest resta coerente con la pagina dei risultati.
+  //
+  // 31/10/2026 — supabase-js non lancia MAI quando la rete cade o il server risponde 500:
+  // restituisce { data: null, error }. Leggendo solo `.data` ogni guasto diventava un elenco vuoto,
+  // e la tendina diceva «nessun risultato» invece di «non riesco a cercare». Se la RPC è guasta
+  // proviamo il ripiego per nome; se è guasto anche quello, prodottiPerNome lancia.
   let prodRows = ((productsRes as { data: unknown }).data ?? []) as ProdSuggest[];
   if (prodRows.length === 0) prodRows = await prodottiPerNome(supa, term);
 
@@ -96,5 +104,11 @@ export async function leggiSuggerimentiRicerca(supa: LettoreConFunzioni, term: s
     slug: c.slug,
     name: c.name,
   }));
+  // Negozi o categorie guasti, e nessun prodotto da mostrare: «nessun risultato» sarebbe una bugia.
+  const erroreDi = (r: unknown) => (r as { error?: { message?: string } | null }).error ?? null;
+  const guasto = erroreDi(storesRes) ?? erroreDi(categoriesRes);
+  if (guasto && products.length === 0) {
+    throw new Error(`suggerimenti di ricerca non riusciti: ${guasto.message ?? 'errore'}`);
+  }
   return [...products, ...stores, ...cats];
 }
