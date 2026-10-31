@@ -13,6 +13,8 @@ import { formatPrice } from '@/lib/format';
 import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_ICON, type OrderStatus } from '@/lib/order-status';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import { queryKeys } from '@/lib/queries/keys';
 import { getAccountMenuItems } from '@/lib/account-menu';
 import { tassoAutorizzazione, tassoDaGuardare, type TentativoPagamento } from '@/lib/pagamenti/tasso-autorizzazione';
@@ -59,7 +61,7 @@ function HealthTile({
 }
 
 export default function AdminDashboard() {
-  const { data: stats, isLoading } = useQuery({
+  const letturaStats = useQuery({
     queryKey: queryKeys.admin.stats,
     queryFn: async () => {
       // I conti si fanno nel database, non nel browser.
@@ -140,7 +142,23 @@ export default function AdminDashboard() {
     retry: false,
   });
 
-  if (isLoading || !stats) {
+  // 31/10/2026 — Qui c'era `if (isLoading || !stats) return <LoadingState />`. Quando `admin_kpi`
+  // cade, `isLoading` torna falso ma `stats` resta undefined: la pagina rientrava sullo scheletro
+  // a ogni disegno, per sempre, senza dire che la lettura era fallita né dare un «Riprova». È la
+  // stessa riga già riparata sul cruscotto del negoziante (app/seller/dashboard/page.tsx).
+  const stats = letturaStats.data;
+  const vista = vistaDaQuery(letturaStats);
+  if (vista.mostraErrore && !stats) {
+    return (
+      <ErrorState
+        title="Non sono riuscito a leggere i numeri del marketplace"
+        description="Non vuol dire che siano a zero: vuol dire che non li ho potuti leggere. Riprova fra un momento."
+        retry={() => { void letturaStats.refetch(); }}
+        supportHref={null}
+      />
+    );
+  }
+  if (!stats) {
     return <LoadingState />;
   }
 

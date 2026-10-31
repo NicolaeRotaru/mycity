@@ -115,6 +115,13 @@ const NOME_BREVE: Record<StatoCampagna, string> = {
   ended: 'finite',
 };
 
+/** Al singolare, per la frase della tabella vuota: «Nessuna campagna attiva», non «attive». */
+const NOME_SINGOLARE: Record<StatoCampagna, string> = {
+  active: 'attiva',
+  paused: 'in pausa',
+  ended: 'finita',
+};
+
 const NOME_LUNGO: Record<StatoCampagna, string> = {
   active: `le campagne ${NOME_BREVE.active}`,
   paused: `le campagne ${NOME_BREVE.paused}`,
@@ -256,8 +263,11 @@ export function vistaDelleCampagne(
         : v.stato === 'carico'
           ? 'Sto leggendo…'
           : 'Posizionamenti a pagamento acquistati dai venditori.',
+    // 31/10/2026 — Le tabelle sorelle della cabina (coupon, sponsorizzati, ordini) dicono «vuoto»
+    // con la stessa forma: «Nessun X.», e solo dopo una lettura riuscita (la caduta ha il suo
+    // avviso). Col filtro la frase usciva al plurale («Nessuna campagna attive.»).
     frasePerTabellaVuota:
-      filtro === 'all' ? 'Nessuna campagna.' : `Nessuna campagna ${NOME_BREVE[filtro]}.`,
+      filtro === 'all' ? 'Nessuna campagna.' : `Nessuna campagna ${NOME_SINGOLARE[filtro]}.`,
     mostraScheletro: v.mostraScheletro,
     mostraVuoto: v.mostraVuoto,
     mostraErrore: v.mostraErrore,
