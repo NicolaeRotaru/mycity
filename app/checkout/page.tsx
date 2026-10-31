@@ -830,13 +830,15 @@ export default function CheckoutPage() {
    * morisse col componente, quel ricaricamento creerebbe il secondo ordine.
    */
   const nuovaChiaveTentativo = useCallback(
-    () =>
+    (improntaCarrello: string) =>
       chiaveTentativo(
         typeof window === 'undefined' ? null : window.sessionStorage,
         () =>
           typeof crypto !== 'undefined' && 'randomUUID' in crypto
             ? crypto.randomUUID()
             : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+        undefined,
+        improntaCarrello,
       ),
     [],
   );
@@ -881,7 +883,13 @@ export default function CheckoutPage() {
       // premuto due volte, o se la rete ritenta da sola, il server riconosce il
       // doppione e restituisce gli ordini gia' creati invece di farne altri.
       // Vive quanto il carrello: cambia solo quando cambia cosa si sta comprando.
-      const chiaveTentativo = `cod-${nuovaChiaveTentativo()}`;
+      // 31/10/2026 — la chiave e' legata a QUESTO carrello: se e' cambiato da
+      // una risposta persa, nasce nuova (lib/ordini/tentativo.ts).
+      const improntaCarrello = groups
+        .map((g) => `${g.sellerId}=${g.items.map((it) => `${it.id}:${it.variantId ?? ''}:${it.quantity}`).sort().join(',')}`)
+        .sort()
+        .join('|');
+      const chiaveTentativo = `cod-${nuovaChiaveTentativo(improntaCarrello)}`;
       const res = await fetch('/api/orders/cod', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'idempotency-key': chiaveTentativo },

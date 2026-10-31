@@ -88,6 +88,13 @@ export type Potatura = {
   cosa: string;
   /** Fa la potatura. Se non riesce LANCIA: il motore la conta e tira dritto. */
   fai: (admin: ClientePotature, registro: Registro) => Promise<void>;
+  /**
+   * Il lavoro sui FILE delle righe che `fai` ha appena toccato (lo storage non
+   * si puo' rigirare a vuoto). Gira dopo `fai`, nello stesso passo; il conto
+   * senza cancellare non lo fa girare, perche' le righe che contano sono quelle
+   * di `fai`: i file le seguono.
+   */
+  poi?: (admin: ClientePotature, registro: Registro) => Promise<void>;
 };
 
 export type EsitoPotatura = { cosa: string; ok: boolean; errore?: string };
@@ -138,11 +145,14 @@ async function esigiRpc(
 async function potaFileScaduti(
   admin: ClientePotature,
   registro: Registro,
-  funzione: 'documenti_da_cancellare_respinti' | 'foto_consegna_da_cancellare',
+  funzione:
+    | 'documenti_da_cancellare_respinti'
+    | 'kyc_file_da_togliere_prendi'
+    | 'foto_consegna_da_cancellare',
   secchio: 'kyc-docs' | 'cod-proof',
-  giorni = 90,
+  argomenti: Record<string, unknown> = { p_giorni: 90 },
 ): Promise<void> {
-  const data = await esigiRpc(admin, funzione, { p_giorni: giorni });
+  const data = await esigiRpc(admin, funzione, argomenti);
   let tolti = 0;
   const rimasti: string[] = [];
   for (const riga of (data ?? []) as Array<{ percorsi: string[] | null }>) {
@@ -169,6 +179,13 @@ async function potaFileScaduti(
     throw new Error(`${rimasti.length} file non rimossi dal secchio ${secchio}`);
   }
 }
+
+/**
+ * 31/10/2026 — Scelta di Nicola (registro dei fatti, `kyc.documenti-iscrizione-a-meta`):
+ * i documenti di chi carica carta e selfie e poi non finisce l'iscrizione si
+ * cancellano dopo 30 giorni. Se torna, li ricarica.
+ */
+export const GIORNI_DOCUMENTI_ISCRIZIONE_A_META = 30;
 
 const mesiFa = (adessoMs: number, m: number) => new Date(adessoMs - m * 30 * 86_400_000).toISOString();
 const giorniFa = (adessoMs: number, g: number) => new Date(adessoMs - g * 86_400_000).toISOString();
@@ -348,6 +365,28 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
       fai: (admin, registro) =>
         potaFileScaduti(admin, registro, 'documenti_da_cancellare_respinti', 'kyc-docs'),
     },
+    // 31/10/2026 — I DOCUMENTI DI CHI SI FERMA A META' ISCRIZIONE.
+    // `approval_status` nasce 'pending' e la potatura qui sopra guarda solo i
+    // respinti: chi caricava carta d'identita' e selfie e poi abbandonava
+    // restava 'pending' per sempre, coi documenti nel secchio. Chi e' «a meta'»
+    // lo dice la vista della migrazione 171 (mai inviata, ultimo documento
+    // caricato da piu' di 30 giorni). Cancellare dalla vista azzera le colonne
+    // del profilo e mette i percorsi in coda (lo fa il database, riga per
+    // riga, ricontrollando la regola); `poi` prende la coda e toglie i file.
+    // Essendo una `delete` filtrata, il conto senza cancellare la conta come
+    // le altre: stessa vista, stesso filtro.
+    {
+      cosa: 'documenti-kyc-iscrizione-a-meta',
+      fai: (admin) =>
+        esigi(
+          admin
+            .from('documenti_iscrizione_a_meta')
+            .delete()
+            .lt('caricati_at', giorni(GIORNI_DOCUMENTI_ISCRIZIONE_A_META)),
+        ),
+      poi: (admin, registro) =>
+        potaFileScaduti(admin, registro, 'kyc_file_da_togliere_prendi', 'kyc-docs', {}),
+    },
     // 27/8/2026 (R058) — LE FOTO DELLA CONSEGNA IN CONTANTI.
     // I contanti, la firma e «il pacco lasciato» — cioe' quasi sempre la porta
     // di casa del cliente. Stanno nella cartella del FATTORINO, quindi quando
@@ -405,6 +444,7 @@ export async function eseguiPotature(
   for (const passo of passi) {
     try {
       await passo.fai(admin, registro);
+      if (passo.poi) await passo.poi(admin, registro);
       esiti.push({ cosa: passo.cosa, ok: true });
     } catch (e) {
       const errore = e instanceof Error ? e.message : 'errore';

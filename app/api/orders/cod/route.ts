@@ -120,6 +120,22 @@ const Body = z.object({
  */
 const SCRITTURE_DELLA_PROVA = 3;
 
+/**
+ * Per quanto una chiave del tentativo vale come «lo stesso invio ripetuto».
+ * Chi ritocca «Ordina» perche' la risposta si e' persa lo fa entro minuti; lo
+ * stesso pane il giorno dopo e' una spesa nuova. Mezza giornata tiene dentro il
+ * ritocco lento e fuori la spesa del mattino dopo.
+ */
+const RIPETUTO_ENTRO_MS = 12 * 60 * 60_000;
+/** Quante generazioni della stessa chiave si attraversano al massimo (ognuna e' una risposta persa a giorni di distanza). */
+const GENERAZIONI_DELLA_CHIAVE = 10;
+
+function tentativoScaduto(natoIl: unknown): boolean {
+  if (typeof natoIl !== 'string') return false;
+  const nato = new Date(natoIl).getTime();
+  return Number.isFinite(nato) && Date.now() - nato > RIPETUTO_ENTRO_MS;
+}
+
 function ordineGiaInCorso(): NextResponse {
   return NextResponse.json(
     {
@@ -208,6 +224,52 @@ function ordineArrivatoInParte(): NextResponse {
 }
 
 /**
+ * 31/10/2026 — L'ORDINE C'E' MA SENZA ARTICOLI: CI SI FERMA.
+ *
+ * La riga dell'ordine e' nata, i suoi articoli no (l'invio di allora e' morto
+ * in mezzo). Al negozio non e' arrivato niente. Non si dice «fatto» e non si
+ * ricrea: si avvisa e la chiave resta, come per l'ordine nato in parte.
+ */
+function ordineRimastoAMeta(): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: {
+        code: 'CONFLICT',
+        message: 'Il tuo ordine si è fermato a metà e il negozio non l’ha ricevuto. Non riprovare: ti aiutiamo noi a sistemarlo.',
+      },
+      inCorso: true,
+    },
+    { status: 409 },
+  );
+}
+
+/**
+ * 31/10/2026 — IL BROWSER BUTTA LA CHIAVE SOLO SE GLIELO DICIAMO NOI.
+ *
+ * La regola era «butta la chiave, a meno che il server dica `inCorso`». Ma
+ * quando la funzione cade a meta' (tempo scaduto, 5xx della piattaforma) la
+ * risposta non e' nemmeno JSON: il browser la leggeva come `{}`, buttava la
+ * chiave col carrello pieno, e il tocco dopo — con una chiave nuova — creava il
+ * SECONDO ordine in contanti accanto a quello gia' nato.
+ *
+ * Adesso il segnale e' al contrario: `chiaveLiberata` lo mette solo chi ha
+ * davvero tolto la riga della chiave, cioe' `esciERilascia` quando nessun
+ * ordine e' rimasto in piedi. Ogni altro errore, anche quello che non sappiamo
+ * leggere, tiene la chiave: al tocco dopo la rotta rilegge e decide.
+ */
+async function conLaChiaveLiberata(risposta: NextResponse): Promise<NextResponse> {
+  const corpo: unknown = await risposta.clone().json().catch(() => null);
+  if (!corpo || typeof corpo !== 'object') return risposta;
+  const intestazioni = new Headers(risposta.headers);
+  intestazioni.delete('content-length');
+  return NextResponse.json({ ...(corpo as Record<string, unknown>), chiaveLiberata: true }, {
+    status: risposta.status,
+    headers: intestazioni,
+  });
+}
+
+/**
  * Crea ordini COD (pagamento alla consegna) SERVER-SIDE.
  *
  * SICUREZZA (H1 / COD): in passato il client inseriva direttamente gli ordini
@@ -263,13 +325,14 @@ export const POST = withAuthRateLimit(
      * `Idempotency-Key`). Se quella chiave e' gia' passata di qui, si
      * restituiscono gli ordini di allora invece di crearne altri.
      */
-    const chiaveTentativo = (req.headers.get('idempotency-key') ?? '').trim().slice(0, 100);
+    const chiaveDelBrowser = (req.headers.get('idempotency-key') ?? '').trim().slice(0, 100);
+    let chiaveTentativo = chiaveDelBrowser;
     /**
      * Cosa tiene insieme gli ordini nati dallo stesso carrello, nei conti.
      * Se il browser manda la sua chiave si usa quella; altrimenti se ne fa una
      * qui — l'importante e' che sia UNA per invio, non una per ordine.
      */
-    const chiaveCarrello = chiaveTentativo || `cod-${crypto.randomUUID()}`;
+    let chiaveCarrello = chiaveTentativo || `cod-${crypto.randomUUID()}`;
     if (chiaveTentativo) {
       /**
        * 21/8/2026 — LA CHIAVE SI RIVENDICA PRIMA, NON DOPO.
@@ -286,9 +349,46 @@ export const POST = withAuthRateLimit(
        * (23505) e non arriva mai a creare niente. Gli ordini veri si scrivono
        * dentro la stessa riga alla fine.
        */
-      const { error: errRivendica } = await admin
+      let { error: errRivendica } = await admin
         .from('cod_checkout_attempts')
         .insert({ chiave: chiaveTentativo, user_id: user.id, order_ids: [] });
+
+      /**
+       * 31/10/2026 — UNA CHIAVE VALE PER UN TENTATIVO, NON PER SEMPRE.
+       *
+       * Lunedi' la risposta del primo «Ordina» si perde: l'ordine nasce, ma il
+       * browser non chiude il tentativo e la chiave resta nella scheda, con
+       * l'impronta del carrello. Mercoledi', stessa scheda e stesso pane: stessa
+       * chiave. Qui si trovava la riga di lunedi', si rispondeva «fatto» con
+       * l'ordine di lunedi' e al forno non arrivava niente.
+       *
+       * Un invio ripetuto arriva entro minuti, non giorni. Una riga piu' vecchia
+       * di `RIPETUTO_ENTRO_MS` non si riusa: si passa alla generazione dopo della
+       * stessa chiave (`chiave~1`, `chiave~2`). E' calcolata, non casuale: il
+       * ritocco di mercoledi' ricade sulla stessa generazione e ritrova gli
+       * ordini di mercoledi', e gli identificativi degli ordini (che nascono
+       * dalla chiave) non si scontrano con quelli di lunedi'. Se la riga non si
+       * riesce a leggere si resta dove si e': meglio l'ordine di prima che il
+       * doppione.
+       */
+      for (
+        let generazione = 1;
+        generazione <= GENERAZIONI_DELLA_CHIAVE && (errRivendica as { code?: string } | null)?.code === '23505';
+        generazione++
+      ) {
+        const { data: vecchia } = await admin
+          .from('cod_checkout_attempts')
+          .select('created_at')
+          .eq('chiave', chiaveTentativo)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (!tentativoScaduto(vecchia?.created_at)) break;
+        chiaveTentativo = `${chiaveDelBrowser}~${generazione}`;
+        chiaveCarrello = chiaveTentativo;
+        ({ error: errRivendica } = await admin
+          .from('cod_checkout_attempts')
+          .insert({ chiave: chiaveTentativo, user_id: user.id, order_ids: [] }));
+      }
 
       if (errRivendica) {
         if ((errRivendica as { code?: string }).code !== '23505') {
@@ -403,6 +503,41 @@ export const POST = withAuthRateLimit(
               });
               return ordineArrivatoInParte();
             }
+            /**
+             * 31/10/2026 — UN ORDINE SENZA ARTICOLI NON E' «FATTO».
+             *
+             * La riga dell'ordine nasce prima dei suoi articoli. Se l'invio di
+             * allora e' morto fra le due cose — la funzione caduta, la rete giu'
+             * dopo il salvataggio — qui si trovava l'ordine, si rispondeva
+             * «fatto» e al negozio non arrivava niente: zero articoli, nessun
+             * avviso. Un ordine della chiave senza articoli e' rimasto a meta':
+             * ricrearlo darebbe il doppione (lo stesso identificativo), dirlo
+             * fatto lo perde. Ci si ferma con la cifra, come per l'ordine nato
+             * in parte, e la chiave resta.
+             */
+            const { data: articoliTrovati, error: errArticoli } = await admin
+              .from('order_items')
+              .select('order_id')
+              .in('order_id', ordiniTrovati.map((o) => o.id));
+            if (errArticoli) {
+              logger.error('[cod] chiave abbandonata: non riesco a vedere gli articoli degli ordini', {
+                chiave: chiaveTentativo, message: errArticoli.message,
+              });
+              return nonVedoSeLOrdineCe();
+            }
+            const conArticoli = new Set(
+              ((articoliTrovati as Array<{ order_id: string }> | null) ?? []).map((a) => a.order_id),
+            );
+            const aMeta = ordiniTrovati.filter((o) => !conArticoli.has(o.id));
+            if (aMeta.length > 0) {
+              logger.error('[cod] chiave abbandonata con un ordine senza articoli: fermo, serve una correzione a mano', {
+                chiave: chiaveTentativo,
+                userId: user.id,
+                ordini: aMeta.map((o) => o.id),
+                totaleCents: aMeta.reduce((s, o) => s + o.totalCents, 0),
+              });
+              return ordineRimastoAMeta();
+            }
             logger.error('[cod] chiave abbandonata ma con ordini gia nati: NON ricreo, li restituisco', {
               chiave: chiaveTentativo,
               userId: user.id,
@@ -469,7 +604,9 @@ export const POST = withAuthRateLimit(
           logger.warn('[cod] chiave del tentativo non liberata dopo un errore', {
             chiave: chiaveTentativo, message: errLibera.message,
           });
+          return risposta;
         }
+        return conLaChiaveLiberata(risposta);
       }
       return risposta;
     };
@@ -1047,13 +1184,87 @@ export const POST = withAuthRateLimit(
         delivery_lng: coordPerLaMappa?.lng ?? null,
       };
 
-      const { data: order, error: orderErr } = await conRipiegoSchema(
+      const { data: ordineInserito, error: orderErr } = await conRipiegoSchema(
         'orders.insert (cod)',
         () => admin.from('orders').insert(rigaOrdine).select('id').single(),
         () => admin.from('orders').insert(senzaCampi(rigaOrdine, CAMPI_124)).select('id').single(),
       );
+      let order = ordineInserito;
+      let ripreso = false;
 
-      if (orderErr || !order) {
+      /**
+       * 31/10/2026 — UN ERRORE SULL'INSERIMENTO NON VUOL DIRE «NON E' NATO».
+       *
+       * Se la connessione cade DOPO il salvataggio, la riga c'e' e la risposta
+       * dice errore. Qui si annullava tutto come se l'ordine non esistesse —
+       * merce rimessa, credito ridato, chiave buttata — e l'ordine restava
+       * senza articoli mentre il tocco dopo ne creava un secondo.
+       *
+       * L'identificativo nasce dalla chiave, quindi si puo' rileggere:
+       *  · 23505 → quell'ordine l'ha gia' fatto un invio gemello della stessa
+       *    chiave (il primo, lentissimo): si rende la nostra parte e si dice
+       *    `inCorso`, la chiave resta e il tocco dopo ritrova gli ordini;
+       *  · la riga c'e' → e' la nostra: si va avanti con quella;
+       *  · la rilettura cade → si prova a togliere la riga; se nemmeno questo
+       *    riesce non sappiamo niente, e la chiave resta (`inCorso`).
+       */
+      if (orderErr && idDiQuestoInvio) {
+        const idAtteso = idDiQuestoInvio[i];
+        const rendiLaNostraParte = async () => {
+          await rollbackCreatedCodOrders();
+          await admin.rpc('restore_stock', { p_items: groupStockItems });
+          if (walletAppliedCents > 0) {
+            await admin.rpc('wallet_credit', {
+              p_user: user.id,
+              p_cents: walletAppliedCents,
+              p_reason: 'order_cod_refund',
+              p_ref: walletRef,
+            });
+          }
+        };
+        if ((orderErr as { code?: string }).code === '23505') {
+          await rendiLaNostraParte();
+          logger.warn('[cod] ordine gia nato da un invio gemello della stessa chiave: tengo la chiave', {
+            chiave: chiaveTentativo, orderId: idAtteso,
+          });
+          return ordineGiaInCorso();
+        }
+        const { data: giaNato, error: errRilettura } = await admin
+          .from('orders')
+          .select('id')
+          .eq('id', idAtteso)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (!errRilettura && giaNato) {
+          logger.warn('[cod] inserimento dell ordine tornato con errore ma la riga c e: vado avanti con quella', {
+            chiave: chiaveTentativo, orderId: idAtteso, message: orderErr.message,
+          });
+          order = giaNato as { id: string };
+          ripreso = true;
+        } else if (errRilettura) {
+          const { error: errTogli } = await admin.from('orders').delete().eq('id', idAtteso).eq('user_id', user.id);
+          if (errTogli) {
+            /**
+             * 31/10/2026 — SE L'ORDINE PUO' ESSERCI, LA SUA MERCE NON SI RIMETTE.
+             *
+             * Qui si rendeva tutto (merce, credito) anche se la riga poteva
+             * essere salvata: restava un ordine in piedi senza merce riservata,
+             * e il tocco dopo lo ritrovava e diceva «fatto». Si tolgono solo
+             * gli ordini dei negozi prima, che sappiamo nati per intero; la
+             * merce e il credito di questo restano legati all'ordine che forse
+             * c'e', e lo sistema chi legge questo errore.
+             */
+            await rollbackCreatedCodOrders();
+            logger.error('[cod] non so se l ordine e nato: tengo la chiave, la merce e il credito, serve un controllo a mano', {
+              chiave: chiaveTentativo, userId: user.id, orderId: idAtteso, message: errTogli.message,
+              merce: groupStockItems, creditoCents: walletAppliedCents,
+            });
+            return nonVedoSeLOrdineCe();
+          }
+        }
+      }
+
+      if ((orderErr && !ripreso) || !order) {
         await rollbackCreatedCodOrders();
         await admin.rpc('restore_stock', { p_items: groupStockItems });
         if (walletAppliedCents > 0) {

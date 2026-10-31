@@ -27,6 +27,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
+import { CARICAMENTO_DA_FILE_ACCESO } from '@/lib/funzioni-al-lancio';
 import { esitoRientroDaStripe, type EsitoRientro, type StatoConnect } from './esito-stripe';
 
 /**
@@ -452,7 +453,7 @@ export default function SellerDashboard() {
       <NavGroup title="Il tuo negozio" hint="Vetrina, profilo, strumenti" tint={TINT.accent}>
         <NavTile href="/seller/site"            icon={LayoutTemplate} title="Costruisci il sito" desc="Vetrina e pagine" tint={TINT.accent} />
         <NavTile href="/seller/profile"         icon={Store}          title="Profilo negozio"    desc="Contatti e orari" tint={TINT.accent} />
-        <NavTile href="/seller/products/import" icon={Upload}         title="Importa prodotti"   desc="Carica in massa (CSV)" tint={TINT.accent} />
+        {CARICAMENTO_DA_FILE_ACCESO && <NavTile href="/seller/products/import" icon={Upload}         title="Importa prodotti"   desc="Carica in massa (CSV)" tint={TINT.accent} />}
         <NavTile href="/seller/help"            icon={LifeBuoy}       title="Centro venditori"   desc="Guide e assistenza" tint={TINT.accent} />
       </NavGroup>
 

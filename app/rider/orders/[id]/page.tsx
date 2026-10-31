@@ -196,6 +196,25 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  // 31/10/2026 — Cliente assente (scelta di Nicola, fatto consegna.cliente-assente): dopo aver
+  // provato a telefonare, il fattorino annulla la consegna. Rimborso intero con la carta, niente da
+  // pagare coi contanti, la merce torna in negozio. Il server ricontrolla chi e quando.
+  const clienteAssente = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/rider/orders/${id}/cliente-assente`, { method: 'POST' });
+      if (!res.ok) {
+        const corpo = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+        throw new Error(corpo?.error?.message ?? 'Impossibile annullare la consegna');
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
+      toast.success('Consegna annullata: riporta la merce al negozio');
+      router.push('/rider');
+    },
+    onError: (err: unknown) => toast.error(friendlyError(err)),
+  });
+
   // Verifica codice pickup → server function (atomica + notifiche)
   const verifyPickup = async (code: string) => {
     const { data, error } = await supabase.rpc('verify_pickup_code', {
@@ -626,6 +645,22 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
             className="mb-2 w-full rounded-xl border border-secondary-300 px-6 py-3 font-semibold text-secondary-700 hover:bg-secondary-50 disabled:opacity-50"
           >
             Non posso completarlo — rilascia ordine
+          </button>
+        )}
+
+        {/* 31/10/2026 — Cliente assente: solo in consegna, e solo dopo aver provato a telefonare. */}
+        {order.delivery_status === 'OUT_FOR_DELIVERY' && (
+          <button
+            onClick={() => {
+              if (confirm(
+                'Hai provato a telefonare al cliente e non risponde? L’ordine verrà annullato: con la carta ' +
+                  'il cliente riceve il rimborso intero, coi contanti non paga niente. Poi riporta la merce al negozio.',
+              )) clienteAssente.mutate();
+            }}
+            disabled={clienteAssente.isPending}
+            className="mb-2 w-full rounded-xl border border-secondary-300 px-6 py-3 font-semibold text-secondary-700 hover:bg-secondary-50 disabled:opacity-50"
+          >
+            Cliente assente — annulla la consegna
           </button>
         )}
 

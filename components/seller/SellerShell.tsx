@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { queryKeys } from '@/lib/queries/keys';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 
 type NavItem = { href: string; icon: LucideIcon; label: string; badge?: 'todo' };
 type NavGroup = { group: string; items: NavItem[] };
@@ -32,7 +33,8 @@ const NAV: NavGroup[] = [
     { href: '/seller/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { href: '/seller/orders', icon: Receipt, label: 'Ordini', badge: 'todo' },
     { href: '/seller/products', icon: Package, label: 'Prodotti' },
-    { href: '/seller/products/ai-batch', icon: Wand2, label: 'AI Studio' },
+    // AI spenta al lancio (carta #209): la voce porterebbe a «Gli strumenti AI non sono attivi».
+    ...(AI_NEGOZI_ACCESA ? [{ href: '/seller/products/ai-batch', icon: Wand2, label: 'AI Studio' }] : []),
   ] },
   { group: 'Crescita', items: [
     { href: '/seller/promotions', icon: Tag, label: 'Promozioni' },
@@ -302,7 +304,8 @@ export default function SellerShell({ children }: { children: React.ReactNode })
           </button>
         </div>
 
-        {/* Copilot — gestisci parlando */}
+        {/* Copilot — gestisci parlando (spento con l'AI dei negozi, carta #209) */}
+        {AI_NEGOZI_ACCESA && (
         <div className={`shrink-0 px-3 pb-1 pt-3 ${collapsed ? 'lg:px-2.5' : ''}`}>
           <Link
             href={COPILOT_HREF}
@@ -322,6 +325,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
             )}
           </Link>
         </div>
+        )}
 
         {/* Nav */}
         <nav className={`flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-2 ${collapsed ? 'lg:px-2' : ''}`}>
@@ -492,7 +496,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
       </div>
 
       {/* Copilot FAB — sempre raggiungibile */}
-      {pathname !== COPILOT_HREF && (
+      {AI_NEGOZI_ACCESA && pathname !== COPILOT_HREF && (
         <Link
           href={COPILOT_HREF}
           aria-label="Chiedi al Copilot"

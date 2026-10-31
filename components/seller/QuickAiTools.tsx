@@ -8,7 +8,7 @@ import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import type { AttributeField } from '@/lib/category-attributes';
 import { restaDaRivedere, type EsitoPatchModulo } from '@/lib/products/aiPatch';
 import { dilloDopoIlPatch } from '@/components/seller/dilloDopoIlPatch';
-import { TRADUCI_ACCESO } from '@/lib/funzioni-al-lancio';
+import { AI_NEGOZI_ACCESA, TRADUCI_ACCESO } from '@/lib/funzioni-al-lancio';
 import type {
   ProductChatSnapshot,
   ProductEditPatch,
@@ -36,6 +36,8 @@ type Props = {
   imageUrls: string[];
   onApplyPatch: (patch: ProductEditPatch) => EsitoPatchModulo;
   disabled?: boolean;
+  /** Vale l'interruttore AI_NEGOZI_ACCESA; la scheda prodotto passa il suo. */
+  accesa?: boolean;
 };
 
 const LANGS: { code: string; label: string }[] = [
@@ -64,6 +66,7 @@ export default function QuickAiTools({
   imageUrls,
   onApplyPatch,
   disabled = false,
+  accesa = AI_NEGOZI_ACCESA,
 }: Props) {
   const [busy, setBusy] = useState<null | 'seo' | 'translate' | 'diagnose'>(null);
   const [lang, setLang] = useState('en');
@@ -142,6 +145,10 @@ export default function QuickAiTools({
   };
 
   const hasDiagPatch = !!diag && restaDaRivedere(diag.patch);
+
+  // AI per i negozi spenta al lancio (carta #209): SEO e «Perché non vende?»
+  // chiamano /api/ai/* e risponderebbero «servizio non configurato».
+  if (!accesa) return null;
 
   return (
     <div className="rounded-lg border border-cream-200 bg-cream-50 p-3">

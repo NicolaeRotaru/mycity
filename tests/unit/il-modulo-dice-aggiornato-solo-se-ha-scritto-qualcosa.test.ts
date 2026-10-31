@@ -177,6 +177,8 @@ describe('la chat del prodotto, nel modulo vero', () => {
   async function chiediAllaChat(richiesta: string, atteso = rispostaDellAssistente.reply) {
     const mod = await monta('components/seller/ProductForm.tsx');
     const s = accendi(mod.default, {
+      // I pulsanti AI, come il giorno in cui si riaccendono (al lancio sono spenti).
+      aiAccesa: true,
       mode: 'edit',
       categories: CATEGORIE,
       initialValues: {

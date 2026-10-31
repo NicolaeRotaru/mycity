@@ -20,8 +20,13 @@ interface Props {
 
 /** Editor visuale degli orari di apertura (più fasce/giorno per la pausa pranzo). */
 export default function StoreHoursEditor({ value, onChange }: Props) {
+  // 31/10/2026 — Si scrive sempre la settimana intera: un giorno mai toccato diventa «chiuso» (lista
+  // vuota), come lo mostra già questo editor. Prima restava assente, e chi chiudeva tutti i giorni
+  // per le ferie salvava una settimana a metà, che il sito leggeva «orari mai impostati» = sempre aperto.
   const setDay = (key: keyof StoreHours, intervals: HoursInterval[]) => {
-    onChange({ ...value, [key]: intervals });
+    const settimana: StoreHours = {};
+    for (const d of DAYS) settimana[d.key] = value[d.key] ?? [];
+    onChange({ ...value, ...settimana, [key]: intervals });
   };
   const addInterval = (key: keyof StoreHours) => {
     setDay(key, [...(value[key] ?? []), ['09:00', '13:00']]);

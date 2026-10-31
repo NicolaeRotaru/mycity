@@ -12,11 +12,20 @@
  * butta lì crea il doppione che tutta questa storia serve a evitare: due
  * ordini, due riserve di merce, il credito tolto due volte.
  *
+ * 31/10/2026 — Il default era sbagliato: «butta, a meno che `inCorso`». Quando
+ * la funzione cade dopo aver creato l'ordine (tempo scaduto, 5xx della
+ * piattaforma) la risposta non e' JSON, arriva qui come `{}`, la chiave si
+ * buttava col carrello pieno e il tocco dopo creava il SECONDO ordine. Adesso
+ * si butta solo se il server dice di averla liberata lui (`chiaveLiberata`,
+ * messo da `esciERilascia` quando nessun ordine e' rimasto in piedi). Tutto il
+ * resto — anche la risposta che non si sa leggere — la tiene: con la stessa
+ * chiave la rotta rilegge e non crea il doppione.
+ *
  * 🟢 Pura: decide su un oggetto, non tocca niente. Una prova la ESEGUE.
  */
 export function laChiaveVaButtata(rispostaDelServer: unknown): boolean {
-  const corpo = (rispostaDelServer ?? {}) as { inCorso?: unknown };
-  return corpo.inCorso !== true;
+  const corpo = (rispostaDelServer ?? {}) as { inCorso?: unknown; chiaveLiberata?: unknown };
+  return corpo.inCorso !== true && corpo.chiaveLiberata === true;
 }
 
 /**
@@ -34,7 +43,10 @@ export function laChiaveVaButtata(rispostaDelServer: unknown): boolean {
  * carrello, passate in SHA-256). Chi rilegge sa esattamente quali ordini
  * cercare, e il database stesso rifiuta un secondo ordine con lo stesso
  * identificativo (chiave primaria): il doppione non puo' nascere nemmeno se
- * tutti gli altri controlli cadono.
+ * tutti gli altri controlli cadono — PURCHE' il browser tenga la stessa chiave.
+ * Per questo il 23505 su `orders` risponde `inCorso` e non libera la chiave:
+ * con un «errore» qualunque il browser la buttava e il tocco dopo, con una
+ * chiave nuova e identificativi nuovi, faceva il doppione (31/10/2026).
  *
  * Usa `crypto.subtle` del runtime, senza import: la pagina della cassa importa
  * questo file per `laChiaveVaButtata` e non deve portarsi dietro il crypto di Node.
