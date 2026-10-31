@@ -92,20 +92,39 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const t0 = Date.now();
   let dbOk = false;
   let dettaglio: string | undefined;
-
+  /**
+   * 31/10/2026 — «MANCA LA CHIAVE» USCIVA COME «IL DATABASE NON RISPONDE».
+   *
+   * `getAdminSupabase()` lancia prima di fare qualsiasi domanda quando la
+   * chiave di servizio (o l'indirizzo) non e' impostata. Stava dentro lo
+   * stesso try della query, quindi il monitor esterno leggeva «il database
+   * non risponde»: chi lo riceve apre la pagina di stato di Supabase, la trova
+   * verde e perde un'ora col fornitore, mentre bastava copiare una variabile
+   * su Vercel. Il database qui non e' nemmeno stato interrogato: lo si dice.
+   */
+  let configurazioneMancante = false;
+  let admin: ReturnType<typeof getAdminSupabase> | null = null;
   try {
-    const admin = getAdminSupabase();
-    const query = admin.from('categories').select('id').limit(1);
-    const esito = await Promise.race([
-      query.then(({ error }) => ({ scaduto: false as const, error })),
-      new Promise<{ scaduto: true; error: null }>((r) =>
-        setTimeout(() => r({ scaduto: true, error: null }), TETTO_MS)),
-    ]);
-    if (esito.scaduto) dettaglio = `nessuna risposta entro ${TETTO_MS}ms`;
-    else if (esito.error) dettaglio = esito.error.message;
-    else dbOk = true;
+    admin = getAdminSupabase();
   } catch (e) {
+    configurazioneMancante = true;
     dettaglio = e instanceof Error ? e.message : 'errore sconosciuto';
+  }
+
+  if (admin) {
+    try {
+      const query = admin.from('categories').select('id').limit(1);
+      const esito = await Promise.race([
+        query.then(({ error }) => ({ scaduto: false as const, error })),
+        new Promise<{ scaduto: true; error: null }>((r) =>
+          setTimeout(() => r({ scaduto: true, error: null }), TETTO_MS)),
+      ]);
+      if (esito.scaduto) dettaglio = `nessuna risposta entro ${TETTO_MS}ms`;
+      else if (esito.error) dettaglio = esito.error.message;
+      else dbOk = true;
+    } catch (e) {
+      dettaglio = e instanceof Error ? e.message : 'errore sconosciuto';
+    }
   }
 
   // I battiti si misurano con lo STESSO metro del gemello — stesse soglie,
@@ -117,13 +136,17 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   // seconda query non si fa (sarebbe una connessione in più tolta a un
   // database già in affanno, sulla rotta che si interroga proprio allora) e la
   // risposta lo dice invece di far passare «non guardato» per «sano».
-  let cron: EsitoBattiti = battitiNonLetti(attesi, 'battiti non letti: il database non risponde');
+  let cron: EsitoBattiti = battitiNonLetti(
+    attesi,
+    configurazioneMancante
+      ? 'battiti non letti: il server non ha la chiave di servizio del database (configurazione), il database non e stato interrogato'
+      : 'battiti non letti: il database non risponde',
+  );
   // Il messaggio grezzo del database è una mappa di dov'è scoperto il sito:
   // esce solo a chi ha il segreto in mano.
   let dettaglioBattiti: string | undefined;
-  if (dbOk) {
+  if (dbOk && admin) {
     try {
-      const admin = getAdminSupabase();
       const { data, error } = await admin.from('cron_heartbeats').select('name, last_run_at');
       if (error) {
         cron = battitiNonLetti(attesi, 'battiti non leggibili');

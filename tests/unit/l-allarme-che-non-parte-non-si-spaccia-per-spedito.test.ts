@@ -15,7 +15,7 @@ import type { NextRequest } from 'next/server';
  */
 
 let esitoInvio: Record<string, unknown> = { ok: true, id: 'finta' };
-const scritte: Array<{ tabella: string; metodo: string }> = [];
+const scritte: Array<{ tabella: string; metodo: string; righe: unknown }> = [];
 
 function tabella(nome: string): unknown {
   const chiamate: Array<{ m: string; a: unknown[] }> = [];
@@ -34,7 +34,7 @@ function tabella(nome: string): unknown {
       if (typeof k === 'symbol') return undefined;
       return (...a: unknown[]) => {
         chiamate.push({ m: String(k), a });
-        if (k === 'insert' || k === 'upsert') scritte.push({ tabella: nome, metodo: String(k) });
+        if (k === 'insert' || k === 'upsert') scritte.push({ tabella: nome, metodo: String(k), righe: a[0] });
         return c;
       };
     },
@@ -64,7 +64,12 @@ async function faiUnGiro() {
   } as unknown as NextRequest);
   return { http: res.status, corpo: await res.json() };
 }
-const attesaScritta = () => scritte.some((s) => s.tabella === 'operational_alert_log');
+// 31/10/2026 — l'attesa che conta qui e' quella dell'EMAIL. La campanella ha
+// una memoria sua (`CAMPANELLA|<chiave>`, stessa tabella) che si scrive anche
+// quando la posta non parte: e' cio' che le impedisce di suonare ogni 15 minuti.
+const attesaScritta = () => scritte.some((s) => s.tabella === 'operational_alert_log'
+  && ([] as Array<{ alert_key: string }>).concat(s.righe as never)
+    .some((r) => !String(r.alert_key).startsWith('CAMPANELLA|')));
 
 describe('il sorvegliante legge l esito della email d allarme', () => {
   const salvato = { ...process.env };
