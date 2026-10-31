@@ -25,6 +25,8 @@
 --   ② ha scritto una domanda pubblica sotto un prodotto (regola qa_public_read);
 --   ③ fa da fattorino a un ordine di chi legge, come cliente o come negozio.
 --      Il nome del fattorino resta invisibile a tutti gli altri.
+-- La legge SOLO chi ha fatto l'accesso. Chi guarda senza account vede domande
+-- e recensioni firmate «Cliente»: niente nomi a un anonimo.
 -- Il sito la legge con `fetchNomiPubblici` (lib/queries/seller-public-profiles.ts).
 --
 -- ORDINE DI APPLICAZIONE
@@ -38,6 +40,16 @@
 -- colonna sola, ridotta alla prima parola.
 --
 -- SICUREZZA
+-- · Niente `anon`. Il collaudo del 31/10 l'ha bocciata quando la concedeva
+--   anche a chi non ha l'account: con una richiesta sola a
+--   /rest/v1/nomi_pubblici un anonimo scaricava l'elenco di tutti gli autori di
+--   recensioni e domande, identificativo e nome. Ed e' la regola del guardiano
+--   tests/unit/nessuna-funzione-potente-in-mano-a-chi-non-ha-l-account.test.ts:
+--   il nome di una persona non sta in una vista leggibile senza account. Il
+--   REVOKE nomina PUBLIC e anon tutti e due: i privilegi di default di Supabase
+--   danno SELECT ad anon su ogni vista nuova, e togliere solo PUBLIC non chiude.
+--   Limite dichiarato: chi si registra legge i nomi di battesimo degli autori,
+--   cioe' quello che vede gia' sotto ogni recensione e domanda.
 -- · `security_barrier`: un filtro scritto da chi interroga non vede le righe
 --   prima del filtro della vista (come la 152 per le altre viste pubbliche).
 -- · La vista e' semplice e quindi «aggiornabile» per PostgreSQL: coi permessi
@@ -50,9 +62,11 @@
 -- COSA NON HO VERIFICATO DA QUI
 -- Non l'ho eseguita su un database vero: la logica e' provata da
 -- tests/unit/i-nomi-si-leggono-anche-coi-profili-chiusi.test.ts contro un
--- database finto che riproduce questi tre filtri. Prima di applicarla in
--- produzione: eseguirla su una copia e leggere la vista da anonimo, da cliente
--- e da negozio.
+-- database finto che riproduce questi tre filtri, e i permessi da
+-- tests/unit/i-nomi-pubblici-li-legge-solo-chi-ha-l-account.test.ts, che
+-- rilegge tutte le migrazioni. Prima di applicarla in produzione: eseguirla su
+-- una copia e leggere la vista da anonimo (deve dire «permission denied»), da
+-- cliente e da negozio.
 -- ════════════════════════════════════════════════════════════════════════════
 
 BEGIN;
@@ -92,9 +106,9 @@ WHERE
   );
 
 COMMENT ON VIEW public.nomi_pubblici IS
-  'Nome di battesimo da mostrare agli altri: autori di recensioni a negozi approvati e di domande pubbliche, e il fattorino per cliente e negozio del suo ordine. Permessi del proprietario apposta: profiles resta leggibile solo per la propria riga (110, 112, 161).';
+  'Nome di battesimo da mostrare agli altri, solo a chi ha l account: autori di recensioni a negozi approvati e di domande pubbliche, e il fattorino per cliente e negozio del suo ordine. Permessi del proprietario apposta: profiles resta leggibile solo per la propria riga (110, 112, 161). Mai ad anon.';
 
 REVOKE ALL ON public.nomi_pubblici FROM PUBLIC, anon, authenticated;
-GRANT SELECT ON public.nomi_pubblici TO anon, authenticated;
+GRANT SELECT ON public.nomi_pubblici TO authenticated;
 
 COMMIT;

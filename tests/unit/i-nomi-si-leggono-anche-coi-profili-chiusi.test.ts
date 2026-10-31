@@ -6,6 +6,8 @@ import { monta, testoVisibile } from './aiuti/monta-componente';
 import { accendi, attendi } from './aiuti/schermo';
 import { DOPO_LA_161, type Mondo } from './aiuti/database-coi-permessi';
 import { databaseDegliOrdini, type DatiOrdini } from './aiuti/database-degli-ordini-coi-permessi';
+import path from 'node:path';
+import { statoFinaleDeiPermessi } from './aiuti/permessi-dalle-migrazioni';
 
 /**
  * 31/10/2026 (ondata 1, migrazione 164) — I NOMI CHE ALTRI DEVONO LEGGERE SI VEDONO ANCHE QUANDO
@@ -21,6 +23,11 @@ import { databaseDegliOrdini, type DatiOrdini } from './aiuti/database-degli-ord
  * che applica i permessi di chi guarda. La vista `nomi_pubblici` del finto rifa' i tre filtri della
  * migrazione 164. Nel mondo «oggi» la vista non c'e' ancora (PGRST205) e `profiles` e' aperta a chi
  * ha il profilo pubblico: li' si prova che il sito non perde i nomi se esce prima della migrazione.
+ *
+ * CHI PUO' LEGGERE LA VISTA non lo decide questo file: lo legge dalle migrazioni vere, con lo stesso
+ * lettore del guardiano dei permessi. Se la 164 la concede a chi non ha l'account, l'anonimo legge i
+ * nomi e la prova «senza account: Cliente» diventa rossa; se non la concede a chi ha l'account, la
+ * diventano quelle di Maria. Il collaudo del 31/10 l'ha chiesto: un anonimo scaricava l'elenco intero.
  */
 
 const PANE = 'n-pane';
@@ -108,12 +115,19 @@ function lettura(risolvi: (filtri: Array<[string, string, unknown]>, colonne: st
 const passa = (riga: Record<string, unknown>, filtri: Array<[string, string, unknown]>) =>
   filtri.every(([t, k, v]) => (t === 'eq' ? riga[k] === v : (v as unknown[]).includes(riga[k])));
 
-/** `from('nomi_pubblici')` aggiunto a un client: assente oggi, coi tre filtri dopo la 164. */
+/** I permessi della vista come li lasciano le migrazioni vere (GRANT, REVOKE e privilegi di default). */
+const PERMESSI_DELLA_VISTA = statoFinaleDeiPermessi(path.resolve(process.cwd(), 'migrations')).viste.get('nomi_pubblici');
+/** Quello che risponde PostgREST a chi non ha il permesso di leggere una vista. */
+const VISTA_NEGATA = { code: '42501', message: 'permission denied for view nomi_pubblici' };
+
+/** `from('nomi_pubblici')` aggiunto a un client: assente oggi, coi tre filtri e i permessi della 164 dopo. */
 function conVistaDeiNomi(mondo: MondoNomi, chi: string | null, ordini: Array<Record<string, unknown>>) {
-  return (filtri: Array<[string, string, unknown]>) =>
-    mondo === 'oggi'
-      ? { data: null, error: VISTA_ASSENTE }
-      : { data: righeDellaVista(chi, ordini).filter((r) => passa(r, filtri)), error: null };
+  return (filtri: Array<[string, string, unknown]>) => {
+    if (mondo === 'oggi' || !PERMESSI_DELLA_VISTA) return { data: null, error: VISTA_ASSENTE };
+    const puoLeggere = chi === null ? PERMESSI_DELLA_VISTA.anonPuoLeggere : PERMESSI_DELLA_VISTA.autenticatoPuoLeggere;
+    if (!puoLeggere) return { data: null, error: VISTA_NEGATA };
+    return { data: righeDellaVista(chi, ordini).filter((r) => passa(r, filtri)), error: null };
+  };
 }
 
 /** Il database della vetrina (domande e recensioni) coi permessi di chi guarda. */
@@ -231,17 +245,24 @@ describe('il nome del fattorino si vede anche coi profili chiusi (dopo 161 e 164
 });
 
 describe('le domande sotto un prodotto sono firmate col nome di chi le ha scritte', () => {
-  for (const chi of [null, MARIA]) {
-    it(`dopo la 161 e la 164, chi guarda (${chi ?? 'senza account'}) legge «Beppe» e «Anna», non «Cliente»`, async () => {
-      const { testo, errori } = await aSchermo('components/ProductQA.tsx', { productId: PRODOTTO, sellerId: PANE }, databaseDellaVetrina('dopo', chi), chi);
-      expect([...errori.values()]).toEqual([]);
-      expect(testo).toContain('E senza glutine?');
-      expect(testo).toContain('Beppe');
-      expect(testo).toContain('Anna');
-      expect(testo).not.toContain('Cliente');
-      expect(testo).not.toContain('Neri');
-    });
-  }
+  it('dopo la 161 e la 164, Maria (con l account) legge «Beppe» e «Anna», non «Cliente»', async () => {
+    const { testo, errori } = await aSchermo('components/ProductQA.tsx', { productId: PRODOTTO, sellerId: PANE }, databaseDellaVetrina('dopo', MARIA), MARIA);
+    expect([...errori.values()]).toEqual([]);
+    expect(testo).toContain('E senza glutine?');
+    expect(testo).toContain('Beppe');
+    expect(testo).toContain('Anna');
+    expect(testo).not.toContain('Cliente');
+    expect(testo).not.toContain('Neri');
+  });
+
+  it('dopo la 161 e la 164, chi guarda senza account legge le domande firmate «Cliente», senza nessun nome', async () => {
+    const { testo, errori } = await aSchermo('components/ProductQA.tsx', { productId: PRODOTTO, sellerId: PANE }, databaseDellaVetrina('dopo', null), null);
+    expect([...errori.values()]).toEqual([]);
+    expect(testo).toContain('E senza glutine?');
+    expect(testo).toContain('Cliente');
+    expect(testo).not.toContain('Beppe');
+    expect(testo).not.toContain('Anna');
+  });
 
   it('oggi, prima della 164, il ripiego su profiles tiene il nome di chi ha il profilo pubblico', async () => {
     const { testo, errori } = await aSchermo('components/ProductQA.tsx', { productId: PRODOTTO, sellerId: PANE }, databaseDellaVetrina('oggi', null), null);
@@ -269,8 +290,12 @@ describe('le recensioni nella vetrina del negozio sono firmate col nome di chi l
     return righe.map((r) => r.author);
   }
 
-  it('dopo la 161 e la 164, chi guarda senza account legge «Beppe» e «Anna»', async () => {
-    expect(await autori('dopo', null)).toEqual(['Beppe', 'Anna']);
+  it('dopo la 161 e la 164, Maria (con l account) legge «Beppe» e «Anna»', async () => {
+    expect(await autori('dopo', MARIA)).toEqual(['Beppe', 'Anna']);
+  });
+
+  it('dopo la 161 e la 164, chi guarda senza account non riceve nessun nome: le recensioni restano, firmate «Cliente»', async () => {
+    expect(await autori('dopo', null)).toEqual([null, null]);
   });
 
   it('oggi, prima della 164, il ripiego tiene il nome di chi ha il profilo pubblico (e solo il nome)', async () => {
