@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { RatingStars } from '@/components/ui/RatingStars';
 import { queryKeys } from '@/lib/queries/keys';
+import { logger } from '@/lib/logger';
 
 type Review = {
   id: string;
@@ -35,17 +36,36 @@ export default function SellerReviewsPage() {
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
+      // 31/10/2026 — La lettura agganciava `profiles!store_reviews_reviewer_id_fkey`, un
+      // collegamento che non esiste: `store_reviews.user_id` punta ad auth.users, non a
+      // profiles. PostgREST rispondeva con un errore e la pagina restava in errore: il
+      // negoziante non vedeva né poteva rispondere a nessuna recensione. (Lo stesso
+      // difetto era sulla pagina del fattorino, già tolto.) Le recensioni si leggono da
+      // sole; il nome di chi le ha scritte arriva dopo, dalla funzione della migrazione
+      // 181, che dà al negozio solo id e nome dei suoi clienti.
       const { data, error } = await supabase
         .from('store_reviews')
-        .select(`
-          id, rating, comment, created_at, order_id, seller_reply, seller_reply_at,
-          reviewer:profiles!store_reviews_reviewer_id_fkey ( full_name )
-        `)
+        .select('id, user_id, rating, comment, created_at, order_id, seller_reply, seller_reply_at')
         .eq('store_id', user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      type StoreReviewRow = { id: string; rating: number; comment: string | null; created_at: string; order_id: string; seller_reply: string | null; seller_reply_at: string | null; reviewer: { full_name: string | null } | null };
-      return (data ?? []) as unknown as StoreReviewRow[];
+      type StoreReviewRow = { id: string; user_id: string; rating: number; comment: string | null; created_at: string; order_id: string; seller_reply: string | null; seller_reply_at: string | null };
+      const righe = (data ?? []) as unknown as StoreReviewRow[];
+      const nomi = new Map<string, string>();
+      const autori = [...new Set(righe.map((r) => r.user_id).filter(Boolean))];
+      if (autori.length > 0) {
+        // Un nome che non arriva (funzione giù, o non ancora applicata) non spegne le
+        // recensioni: si legge «Cliente», come per chi non ha messo il nome.
+        const { data: trovati, error: erroreNomi } = await supabase.rpc('nomi_dei_clienti_del_negozio', { p_ids: autori });
+        if (erroreNomi) logger.warn('[recensioni] nomi dei clienti non letti: recensioni mostrate con «Cliente»', erroreNomi);
+        for (const n of (trovati ?? []) as Array<{ id: string; full_name: string | null }>) {
+          if (n.full_name) nomi.set(n.id, n.full_name);
+        }
+      }
+      return righe.map(({ user_id, ...r }) => ({
+        ...r,
+        reviewer: nomi.has(user_id) ? { full_name: nomi.get(user_id) ?? null } : null,
+      }));
     },
   });
   const reviews = queryReviews.data ?? [];
