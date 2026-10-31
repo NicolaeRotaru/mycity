@@ -1,5 +1,5 @@
 'use client';;
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -23,6 +23,8 @@ import EmptyState from '@/components/EmptyState';
 import { Package, CheckCircle2, X, Printer, Bike, Phone, MapPin, Clock, Banknote } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
 import { conFattorinoDellOrdine } from '@/lib/queries/negozio-dell-ordine';
+import { eSchemaIndietro } from '@/lib/db/migrazione-124';
+import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { cifraDellaVoce, riepilogoOrdine } from '@/lib/ordini/riepilogo-ordine';
 import { nomeDellaRigaOrdine, fotoDellaRigaOrdine } from '@/lib/ordini/riga-ordine';
 import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
@@ -38,6 +40,34 @@ function orariDelNegozio(riga: object): unknown {
   const negozio = (riga as { seller?: unknown }).seller;
   const uno = Array.isArray(negozio) ? negozio[0] : negozio;
   return (uno as { store_hours?: unknown } | null | undefined)?.store_hours;
+}
+
+/**
+ * 31/10/2026 — L'ORA DELLA RIGA «ENTRO QUANDO ACCETTARE» E' QUELLA DELL'OROLOGIO, NON DELL'ULTIMA LETTURA.
+ *
+ * La riga si scriveva con l'ora dell'ultima lettura: alla riapertura del telefono restava quella
+ * vecchia finche' la rilettura non arrivava, fino al giro dopo con la pagina aperta, e senza rete
+ * per sempre (venerdi' sera diceva ancora «entro le 12:00 di domani» sabato mattina). Qui l'ora si
+ * riguarda da sola ogni 15 secondi e appena la pagina torna visibile, senza aspettare il database.
+ */
+const OGNI_QUANTO_SI_RIGUARDA_L_ORA_MS = 15_000;
+function useOraCheCorre(): number {
+  const [adesso, setAdesso] = useState(() => Date.now());
+  useEffect(() => {
+    const guarda = () => setAdesso(Date.now());
+    const suVisibilita = () => { if (document.visibilityState === 'visible') guarda(); };
+    const id = setInterval(guarda, OGNI_QUANTO_SI_RIGUARDA_L_ORA_MS);
+    document.addEventListener('visibilitychange', suVisibilita);
+    window.addEventListener('focus', guarda);
+    window.addEventListener('pageshow', guarda);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', suVisibilita);
+      window.removeEventListener('focus', guarda);
+      window.removeEventListener('pageshow', guarda);
+    };
+  }, []);
+  return adesso;
 }
 
 type OrderRow = {
@@ -95,12 +125,17 @@ function RejectDialog({
 }) {
   const [reason, setReason] = useState('');
   useEffect(() => { if (open) setReason(''); }, [open]);
+  // 31/10/2026 — Si dichiara modale, quindi si comporta da modale: Esc, Tab che resta dentro e
+  // fuoco che torna su «Rifiuta» alla chiusura, dallo stesso hook degli altri pannelli (regola in
+  // useBottomSheetA11y). Il pulsante di partenza si prende prima che il fuoco entri nel riquadro.
+  // Niente autoFocus sul motivo: lo spostava prima che si potesse ricordare da dove si partiva;
+  // il fuoco sul motivo lo mette l'hook, che lo trova per primo.
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const daDoveRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [open, onCancel]);
+    if (open && document.activeElement instanceof HTMLButtonElement) daDoveRef.current = document.activeElement;
+  }, [open]);
+  useBottomSheetA11y(open, boxRef, daDoveRef, onCancel);
 
   if (!open) return null;
   return (
@@ -112,6 +147,7 @@ function RejectDialog({
       aria-labelledby="reject-title"
     >
       <div
+        ref={boxRef}
         className="w-full overflow-hidden rounded-t-3xl bg-white shadow-warm-xl animate-slideUp sm:w-auto sm:min-w-[440px] sm:max-w-md sm:rounded-2xl sm:animate-popIn"
         onClick={(e) => e.stopPropagation()}
       >
@@ -123,12 +159,12 @@ function RejectDialog({
           <p className="mt-1.5 text-sm leading-relaxed text-ink-500">
             Il motivo sarà visibile al cliente. L&apos;azione non è reversibile.
           </p>
-          <label className="mt-4 block text-xs font-semibold text-ink-600">Motivo del rifiuto (opzionale)</label>
+          <label htmlFor="reject-reason" className="mt-4 block text-xs font-semibold text-ink-600">Motivo del rifiuto (opzionale)</label>
           <textarea
+            id="reject-reason"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
-            autoFocus
             placeholder="Es. prodotto esaurito, fuori zona di consegna…"
             className="mt-1.5 w-full resize-none rounded-xl border border-cream-300 px-3 py-2.5 text-sm text-ink-900 focus-visible:ring-2 focus-visible:ring-primary-700 focus:outline-none"
           />
@@ -183,6 +219,10 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         .eq('id', id)
         .maybeSingle();
       if (!withPay.error) return conFattorino(withPay.data);
+      // 31/10/2026 — Si ripiega SOLO se manca una colonna. Su un guasto qualsiasi (rete, tempo
+      // scaduto 57014) la lettura senza `payment_method` faceva leggere un ordine in contanti come
+      // «Carta (online)» e la consegna come gratuita: un guasto resta un guasto, col suo «Riprova».
+      if (!eSchemaIndietro(withPay.error)) throw withPay.error;
       const fallback = await supabase.from('orders').select(sel('')).eq('id', id).maybeSingle();
       if (fallback.error) throw fallback.error;
       return conFattorino(fallback.data);
@@ -194,7 +234,8 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
   // 30/10/2026 — «Entro quando accettare» si scrive con l'ora dell'ultima lettura: React Query
   // ridisegna solo se cambia quello che la pagina legge, e coi dati uguali la riga restava ferma
   // all'ora in cui la pagina si era aperta (sabato mattina diceva ancora «entro le 12:00 di domani»).
-  const lettoAlle = new Date(Math.max(dataUpdatedAt, errorUpdatedAt) || Date.now());
+  const adesso = useOraCheCorre();
+  const lettoAlle = new Date(Math.max(adesso, dataUpdatedAt || 0, errorUpdatedAt || 0));
 
   // Codice ritiro: visibile solo al seller (RLS lo limita ai propri ordini)
   const { data: pickupCode } = useQuery({

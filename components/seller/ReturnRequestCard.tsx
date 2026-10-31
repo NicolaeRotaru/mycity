@@ -147,7 +147,13 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  const tappe = TAPPE[ret.status] ?? [];
+  // 31/10/2026 — Il ripensamento e' un recesso: con la merce in rientro o gia' tornata si chiude
+  // solo rimborsando (Cod. Cons. artt. 52-57). Da «Approvato» la chiusura resta, e la rotta la
+  // ammette solo passati i 14 giorni che il cliente ha per rispedire.
+  const recesso = ret.reason === 'CHANGED_MIND';
+  const tappe = (TAPPE[ret.status] ?? []).filter(
+    (t) => !(recesso && t.stato === 'CANCELED' && ret.status !== 'APPROVED'),
+  );
 
   return (
     <div className="bg-white border-2 border-accent-300 rounded-2xl overflow-hidden shadow-warm">

@@ -53,6 +53,7 @@ export const runtime = 'nodejs';
  *  · SHIPPED_BACK/APPROVED → RECEIVED  la merce è tornata
  *  · RECEIVED    → REFUNDED      i soldi tornano al cliente (chiude il reso)
  *  · qualunque stato aperto → CANCELED  il reso si chiude senza rimborso
+ *    (non il recesso: vedi `percheIlRecessoNonSiChiude`)
  *    (merce mai partita, accordo di persona, cliente che ci ripensa): è la
  *    voce che libera il bonifico, e prima non c'era.
  *
@@ -71,6 +72,42 @@ const PARTENZE_AMMESSE: Record<string, string[]> = {
   REFUNDED: ['RECEIVED'],
   CANCELED: ['REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED'],
 };
+
+/**
+ * 31/10/2026 — IL RECESSO NON SI CHIUDE «SENZA RIMBORSO».
+ *
+ * Il ripensamento entro 14 giorni (motivo CHANGED_MIND) e' il recesso del
+ * consumatore: non si puo' rifiutare, e il rimborso e' dovuto appena la merce
+ * torna o il cliente prova di averla spedita (Cod. Cons. artt. 52, 56 c.3 e 57).
+ * `decide` bloccava il «Rifiuta», ma qui «chiudi senza rimborso» passava da
+ * ogni stato aperto: anche con la merce gia' in negozio. Era lo stesso rifiuto,
+ * per un'altra porta, e il giro dei bonifici pagava il negozio subito dopo.
+ *
+ * Resta una sola strada legittima: approvato, il cliente non ha rispedito nulla
+ * e i 14 giorni che ha per farlo (art. 57) sono passati. Altrimenti si rimborsa,
+ * anche in parte se la merce e' tornata rovinata.
+ */
+const GIORNI_PER_RISPEDIRE = 14;
+const UN_GIORNO_MS = 24 * 60 * 60 * 1000;
+
+function percheIlRecessoNonSiChiude(
+  ret: { reason?: string | null; status: string; created_at?: string | null },
+  adesso: number,
+): string | null {
+  if (ret.reason !== 'CHANGED_MIND') return null;
+  if (ret.status === 'APPROVED') {
+    const aperto = Date.parse(ret.created_at ?? '');
+    if (Number.isFinite(aperto) && adesso - aperto > GIORNI_PER_RISPEDIRE * UN_GIORNO_MS) return null;
+    return (
+      `Il cliente ha ${GIORNI_PER_RISPEDIRE} giorni dalla richiesta per rispedire la merce (Cod. Cons. art. 57): ` +
+      'il recesso non si chiude senza rimborso prima che siano passati.'
+    );
+  }
+  return (
+    'Il recesso entro 14 giorni non si può chiudere senza rimborso (Cod. Cons. artt. 52-57): ' +
+    'segna la merce come ricevuta e rimborsa, anche in parte se è tornata danneggiata.'
+  );
+}
 
 async function handler(req: NextRequest, user: { id: string }, params: { id: string }): Promise<NextResponse> {
   let body;
@@ -94,7 +131,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const supa = await getServerSupabase();
   const { data: ret, error } = await supa
     .from('returns')
-    .select('id, status, seller_id, buyer_id, order_id, refund_amount_cents, created_at, refund_id')
+    .select('id, status, seller_id, buyer_id, order_id, reason, refund_amount_cents, created_at, refund_id')
     .eq('id', params.id)
     .single();
 
@@ -121,6 +158,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const partenze = PARTENZE_AMMESSE[body.stato];
   if (!forseRipresa && !partenze.includes(ret.status)) {
     return ApiErrors.conflict(`Un reso in ${ret.status} non può passare a ${body.stato}.`);
+  }
+
+  if (body.stato === 'CANCELED') {
+    const perche = percheIlRecessoNonSiChiude(ret, Date.now());
+    if (perche) return ApiErrors.conflict(perche);
   }
 
   const admin = getAdminSupabase();
