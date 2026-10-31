@@ -88,6 +88,13 @@ export type Potatura = {
   cosa: string;
   /** Fa la potatura. Se non riesce LANCIA: il motore la conta e tira dritto. */
   fai: (admin: ClientePotature, registro: Registro) => Promise<void>;
+  /**
+   * Il conto senza cancellare, per le potature che lavorano dentro una
+   * funzione del database (che scrive mentre legge, quindi `contaPotature`
+   * non la puo' rigirare a vuoto). Legge con la stessa regola della funzione
+   * che cancella, solo con SELECT; se manca, il passo resta «non contato».
+   */
+  conta?: (admin: ClienteCheConta) => Promise<number>;
 };
 
 export type EsitoPotatura = { cosa: string; ok: boolean; errore?: string };
@@ -138,7 +145,10 @@ async function esigiRpc(
 async function potaFileScaduti(
   admin: ClientePotature,
   registro: Registro,
-  funzione: 'documenti_da_cancellare_respinti' | 'foto_consegna_da_cancellare',
+  funzione:
+    | 'documenti_da_cancellare_respinti'
+    | 'documenti_da_cancellare_iscrizione_a_meta'
+    | 'foto_consegna_da_cancellare',
   secchio: 'kyc-docs' | 'cod-proof',
   giorni = 90,
 ): Promise<void> {
@@ -169,6 +179,13 @@ async function potaFileScaduti(
     throw new Error(`${rimasti.length} file non rimossi dal secchio ${secchio}`);
   }
 }
+
+/**
+ * 31/10/2026 — Scelta di Nicola (registro dei fatti, `kyc.documenti-iscrizione-a-meta`):
+ * i documenti di chi carica carta e selfie e poi non finisce l'iscrizione si
+ * cancellano dopo 30 giorni. Se torna, li ricarica.
+ */
+export const GIORNI_DOCUMENTI_ISCRIZIONE_A_META = 30;
 
 const mesiFa = (adessoMs: number, m: number) => new Date(adessoMs - m * 30 * 86_400_000).toISOString();
 const giorniFa = (adessoMs: number, g: number) => new Date(adessoMs - g * 86_400_000).toISOString();
@@ -348,6 +365,31 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
       fai: (admin, registro) =>
         potaFileScaduti(admin, registro, 'documenti_da_cancellare_respinti', 'kyc-docs'),
     },
+    // 31/10/2026 — I DOCUMENTI DI CHI SI FERMA A META' ISCRIZIONE.
+    // `approval_status` nasce 'pending' e la potatura qui sopra guarda solo i
+    // respinti: chi caricava carta d'identita' e selfie e poi abbandonava
+    // restava 'pending' per sempre, coi documenti nel secchio. Trenta giorni
+    // dall'ultimo documento caricato, se la richiesta non e' mai partita
+    // (migrations/171: chi ha inviato e aspetta l'amministratore non si tocca).
+    {
+      cosa: 'documenti-kyc-iscrizione-a-meta',
+      fai: (admin, registro) =>
+        potaFileScaduti(
+          admin, registro, 'documenti_da_cancellare_iscrizione_a_meta', 'kyc-docs',
+          GIORNI_DOCUMENTI_ISCRIZIONE_A_META,
+        ),
+      // Il conto legge la stessa vista da cui la funzione cancella: una
+      // SELECT, quindi nel riassunto della notte si conta senza toccare niente.
+      conta: async (admin) => {
+        const { count, error } = await admin
+          .from('documenti_iscrizione_a_meta')
+          .select('*', { count: 'exact', head: true })
+          .lt('caricati_at', giorni(GIORNI_DOCUMENTI_ISCRIZIONE_A_META));
+        if (error) throw new Error(error.message);
+        if (typeof count !== 'number') throw new Error('il database non ha restituito il conto');
+        return count;
+      },
+    },
     // 27/8/2026 (R058) — LE FOTO DELLA CONSEGNA IN CONTANTI.
     // I contanti, la firma e «il pacco lasciato» — cioe' quasi sempre la porta
     // di casa del cliente. Stanno nella cartella del FATTORINO, quindi quando
@@ -474,6 +516,14 @@ export async function contaPotature(
   const conti: ContoPotatura[] = [];
 
   for (const passo of passi) {
+    if (passo.conta) {
+      try {
+        conti.push({ cosa: passo.cosa, righe: await passo.conta(admin) });
+      } catch (e) {
+        conti.push({ cosa: passo.cosa, righe: null, nonContata: e instanceof Error ? e.message : 'errore' });
+      }
+      continue;
+    }
     let righe = 0;
     const contando = (q: FiltrabileConConto): Filtrabile => ({
       eq: (colonna, valore) => contando(q.eq(colonna, valore)),
