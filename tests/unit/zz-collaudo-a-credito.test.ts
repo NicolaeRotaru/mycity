@@ -227,7 +227,7 @@ describe("il secondo freno della veloce: i tre difetti del collaudo", () => {
     expect(esito).toMatchObject({ daSistemareAMano: 1, spostati: 0 });
   });
 
-  it("V-domenica: sabato 20:20 veloce, negozio chiuso la domenica: niente fascia finta, niente «ti contattiamo noi», il cliente sa che alle 23:20 si annulla", async () => {
+  it("V-domenica: sabato 20:20 veloce, negozio chiuso la domenica: niente fascia finta, niente «ti contattiamo noi», il cliente sa che alle 21:00, quando il forno chiude, si annulla", async () => {
     const lunSab: [string, string][] = [["08:00", "21:00"]];
     db.profiles = [{ id: "forno", store_hours: { mon: lunSab, tue: lunSab, wed: lunSab, thu: lunSab, fri: lunSab, sat: lunSab, sun: [] } }];
     db.orders = [ordine({ created_at: "2026-10-31T19:20:00.000Z" })];
@@ -235,7 +235,7 @@ describe("il secondo freno della veloce: i tre difetti del collaudo", () => {
     expect(o("o1")).toMatchObject({ delivery_slot: ETICHETTA_ADESSO, delivery_fee_cents: 400, total_price: 19 });
     expect(db.notifications).toHaveLength(1);
     const frase = String(db.notifications[0].body);
-    expect(frase).toContain("Il negozio non ha ancora confermato. Se non conferma entro le 23:20");
+    expect(frase).toContain("Il negozio non ha ancora confermato. Se non conferma entro le 21:00 di oggi");
     expect(frase).toMatch(/ordine si annulla e non paghi niente/);
     expect(frase).not.toMatch(/contattiamo|Domani|non lo paghi/);
     const mail = sendEmailMock.mock.calls[0][0] as { subject: string; html: string };

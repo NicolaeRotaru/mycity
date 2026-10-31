@@ -1,5 +1,5 @@
 import { finestraDellaFascia } from '@/lib/quando-arriva';
-import { DAY_KEYS, leggiFinestraConsegna, romeNow, ultimoRitiroDellaFascia, type StoreHours } from '@/lib/store-hours';
+import { DAY_KEYS, isStoreClosedForOrder, leggiFinestraConsegna, romeNow, ultimoRitiroDellaFascia, type StoreHours } from '@/lib/store-hours';
 import { giornoPiacenza, scartoFusoMinuti } from '@/lib/tempo-piacenza';
 
 /**
@@ -82,6 +82,8 @@ export function scadenzaAccettazione(
   // Nessun momento per il ritiro: l'ordine è già scaduto, il giro dopo lo annulla.
   if (ritiro === 'impossibile') return nato;
   if (ritiro) return ritiro;
+  const chiusura = chiusuraPerLaVeloce(ordine, orari, oreMinime);
+  if (chiusura) return chiusura;
 
   const minimo = nato.getTime() + oreMinime * 3_600_000;
   const fine = fineDellaFascia(ordine);
@@ -207,6 +209,35 @@ export function ancoraNeiTempi(
  * possibile e l'euro della veloce non si paga (lib/ordini/veloce-non-confermata.ts).
  */
 export const MINUTI_PER_CONFERMARE_LA_VELOCE = 10;
+
+/**
+ * 31/10/2026 (ondata 5 del sito) — LA VELOCE NON CONFERMATA NON SI ASPETTA OLTRE LA CHIUSURA.
+ *
+ * Il difetto: la veloce che il freno non può spostare (nessuna fascia oggi né domani) restava viva
+ * tre ore. Sabato alle 20:20 Maria ordina la veloce dal forno aperto fino alle 21 e chiuso la
+ * domenica; alle 20:35 legge «se non conferma entro le 23:20 l'ordine si annulla», ma dalle 21
+ * nessuno può più accettarla né prepararla: aspettava tre ore, con l'euro della veloce nel conto,
+ * un ordine già morto.
+ *
+ * La regola: con gli orari del negozio la veloce scade quando il negozio smette di poterla servire
+ * (la stessa domanda della cassa per «Adesso», `isStoreClosedForOrder`), mai oltre le tre ore, e mai
+ * prima che il freno abbia fatto i suoi giri: senza questo minimo, alle 21:00 il giro notturno
+ * annullerebbe la veloce delle 20:52 che il freno alle 21:02 avrebbe spostato su una fascia di domani.
+ * `null` = niente da dire (non è la veloce, orari mai impostati, negozio aperto oltre le tre ore).
+ */
+const MINUTI_PER_I_GIRI_DEL_FRENO = 10; // due giri del freno, che parte ogni 5 minuti (vercel.json)
+
+function chiusuraPerLaVeloce(ordine: OrdineDaScadere, orari: unknown, oreMassime: number): Date | null {
+  if (!ordine.created_at || !orariImpostati(orari) || !eFasciaVeloce(ordine.delivery_slot)) return null;
+  const nato = new Date(ordine.created_at).getTime();
+  if (Number.isNaN(nato)) return null;
+  const minimo = nato + (MINUTI_PER_CONFERMARE_LA_VELOCE + MINUTI_PER_I_GIRI_DEL_FRENO) * 60_000;
+  for (let minuto = 0; minuto <= oreMassime * 60; minuto++) {
+    const t = nato + minuto * 60_000;
+    if (isStoreClosedForOrder(orari, romeNow(new Date(t)))) return new Date(Math.max(t, minimo));
+  }
+  return null;
+}
 
 /** L'etichetta della veloce, come la scrive lib/quando-arriva.ts («Adesso · arrivo in …»). */
 function eFasciaVeloce(etichetta?: string | null): boolean {
