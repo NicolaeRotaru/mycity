@@ -159,9 +159,15 @@ export function titolare(): Titolare {
  *
  * Nicola, 20/8/2026: «non c'e' ancora una partita IVA attiva, la attivo quando
  * raggiungeremo i 5000€». Finche' non c'e', qui non si stampa niente.
+ *
+ * 31/10/2026 (ondata 6) — Niente sede ne' P.IVA, ma la persona si': i Termini
+ * dicevano «gestita da MyCity» e il piede «© MyCity», un marchio e basta.
+ * Questa e' la riga che Termini, piede e contatti stampano gia' accanto al
+ * nome: mettendo qui chi gestisce, lo dicono tutti e tre senza toccarli.
  */
 export function rigaIdentita(t: Titolare = titolare()): string {
   const pezzi: string[] = [];
+  if (t.gestore) pezzi.push(`Titolare: ${t.gestore}`);
   if (t.indirizzo) pezzi.push(`Sede: ${t.indirizzo}`);
   if (t.partitaIva) pezzi.push(`P.IVA / C.F. ${t.partitaIva}`);
   if (t.rea) pezzi.push(`REA ${t.rea}`);

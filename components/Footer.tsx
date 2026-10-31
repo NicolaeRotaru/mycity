@@ -353,10 +353,8 @@ const Footer = () => {
           I dati legali si stampano solo se esistono davvero (lib/legal/titolare).
           Qui c'erano una sede, una P.IVA di soli zeri, un REA e una PEC inventati,
           su OGNI pagina del sito. Finché non c'è una partita IVA attiva questa
-          riga resta vuota, e non si stampa affatto.
+          riga dice solo chi risponde («Titolare: …»), niente sede né P.IVA.
         */}
-        {/* Finche' manca il nome legale, «© MyCity» da solo non dice chi risponde: si dice la persona. */}
-        {chiSiamo.gestore && <div>Gestito da {chiSiamo.gestore}</div>}
         {identita && <div>{identita}</div>}
         <div>
           <Link href="/terms" className="underline hover:text-primary-700">Termini</Link> ·{' '}

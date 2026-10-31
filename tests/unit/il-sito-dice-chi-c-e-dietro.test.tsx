@@ -68,7 +68,7 @@ describe('senza le variabili del titolare, il sito dice comunque chi c’è diet
 
   it('il piede di ogni pagina dice chi gestisce il sito', async () => {
     comeInProduzione();
-    expect(await piede()).toMatch(/Gestito da Nicolae Rotaru/);
+    expect(await piede()).toMatch(/Titolare: Nicolae Rotaru/);
   });
 
   it('e niente sede, partita IVA o PEC inventate al loro posto', async () => {
@@ -83,6 +83,6 @@ describe('quando il nome legale c’è, parla quello da solo', () => {
     // La forma di una ditta individuale: il nome legale contiene gia' la persona.
     comeInProduzione('MyCity di Nicolae Rotaru');
     expect((await fraseDelTitolare()).trim()).toBe('MyCity di Nicolae Rotaru');
-    expect(await piede()).not.toMatch(/Gestito da/);
+    expect(await piede()).not.toMatch(/Titolare:/);
   });
 });
