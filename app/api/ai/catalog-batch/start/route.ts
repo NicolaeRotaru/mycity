@@ -4,6 +4,7 @@ import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { env } from '@/lib/env';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { AiConfigError } from '@/lib/ai/client';
@@ -12,6 +13,7 @@ import {
   buildCatalogBatchRequests,
   isCatalogOperation,
   isSupportedLang,
+  operazioneAccesa,
   stimaCostoLottoEur,
   type CatalogOperation,
 } from '@/lib/ai/catalogBatch';
@@ -33,6 +35,8 @@ const MAX_PRODUCTS = 200;
 type Body = { operation?: string; targetLang?: string };
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  // Spento al lancio (carta #209): nessun lotto parte, nessuna riga, nessuna spesa.
+  if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
   // Job pesante: pochi avvii per ora.
   const rl = await rateLimitAsync({ key: `ai-catalog-batch-start:${user.id}`, max: 5, windowMs: 60 * 60_000 });
@@ -49,6 +53,11 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
   if (!isCatalogOperation(body.operation)) {
     return ApiErrors.invalidRequest('Operazione non valida.');
+  }
+  // «Traduci» spento: il lotto va fermato qui, prima di mandarlo al modello e di
+  // impegnarne la spesa. Prima lo fermava solo /apply, a soldi già spesi.
+  if (!operazioneAccesa(body.operation)) {
+    return ApiErrors.invalidRequest('La traduzione del catalogo non è attiva.');
   }
   const operation: CatalogOperation = body.operation;
   const targetLang = operation === 'translate' ? body.targetLang : undefined;
