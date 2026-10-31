@@ -4,6 +4,7 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { env } from '@/lib/env';
+import { TRADUCI_ACCESO } from '@/lib/funzioni-al-lancio';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { buildProductContext, type ProductContextInput } from '@/lib/ai/productContext';
@@ -59,6 +60,9 @@ type TranslateInput = { patch?: { name?: string; description?: string; tags?: st
 type Body = ProductContextInput & { targetLang?: string };
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  // «Traduci» spento (carta #209): il prodotto ha un nome solo, e la patch
+  // tradotta salvata dal venditore cancellerebbe l'italiano.
+  if (!TRADUCI_ACCESO) return ApiErrors.unavailable('La traduzione dei prodotti non è ancora attiva.');
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
   const rl = await rateLimitAsync({ key: `ai-translate:${user.id}`, max: 40, windowMs: 60 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);

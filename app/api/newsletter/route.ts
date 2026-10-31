@@ -9,6 +9,7 @@ import { sendEmail } from '@/lib/email/client';
 import { verifyTurnstileToken } from '@/lib/captcha';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
+import { NEWSLETTER_ACCESA } from '@/lib/funzioni-al-lancio';
 
 export const runtime = 'nodejs';
 
@@ -46,6 +47,9 @@ const VERSIONE_TESTO_CONSENSO = 'newsletter-v1';
 const RIPETIZIONE_CONFERMA_MS = 10 * 60_000;
 
 export async function POST(request: Request) {
+  // Spenta al lancio (carta #209): il modulo non si vede, e una richiesta fatta
+  // a mano non scrive nessuna riga e non manda nessuna email.
+  if (!NEWSLETTER_ACCESA) return ApiErrors.unavailable('L’iscrizione alla newsletter non è ancora attiva.');
   const ip = getClientIp(request);
   const rl = await rateLimitAsync({ key: `newsletter:${ip}`, max: 5, windowMs: 10 * 60_000 });
   if (!rl.allowed) {

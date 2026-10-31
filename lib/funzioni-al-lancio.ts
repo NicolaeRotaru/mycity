@@ -23,6 +23,10 @@
  * Ogni interruttore va letto DUE volte: dalla pagina (che non mostra la
  * funzione) e dalla rotta del server (che la rifiuta anche se qualcuno la
  * chiama a mano). La pagina è vetrina; il freno vero è la rotta.
+ * Due eccezioni, perché una rotta da frenare non c'è: la classifica inviti la
+ * legge il browser da una vista (nessun premio passa di mano, la promessa è
+ * solo nella pagina) e il caricamento da file è il lettore della pagina, che
+ * poi scrive come il modulo «Nuovo prodotto», acceso. Lì il freno è la pagina.
  *
  * Prima di riaccenderne una, leggi il «Per riaccendere» accanto.
  *
@@ -54,7 +58,9 @@ export const NEWSLETTER_ACCESA: boolean = false;
 
 /** Strumenti di intelligenza artificiale per i negozi. Per riaccendere:
  *  ANTHROPIC_API_KEY e chiave di servizio su Vercel, e chiusi prima i difetti
- *  AI aperti (modello in scadenza, prezzo proposto, chat che riscrive). */
+ *  AI aperti (modello in scadenza, prezzo proposto, chat che riscrive).
+ *  Il server lo legge in lib/ai/client.ts, dove nasce il collegamento da cui
+ *  passa ogni chiamata al modello: spento, la chiave da sola non riaccende niente. */
 export const AI_NEGOZI_ACCESA: boolean = false;
 
 /** «Traduci» un prodotto o il catalogo. Per riaccendere: le traduzioni devono

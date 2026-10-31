@@ -1,4 +1,4 @@
-import { ETICHETTA_ADESSO, giornoDellaFascia } from '@/lib/quando-arriva';
+import { ETICHETTA_ADESSO, FASCE_DI_OGGI, finestraDellaFascia, giornoDellaFascia } from '@/lib/quando-arriva';
 
 /**
  * LA FASCIA DI CONSEGNA, DETTA COME UN GIORNO DEL CALENDARIO.
@@ -47,8 +47,8 @@ function giorniDopoLOrdine(fascia: string): number | null {
   return null;
 }
 
-/** Il giorno di calendario a Piacenza in cui è nato l'ordine. */
-function giornoDellOrdine(creatoIl: string): { anno: number; mese: number; giorno: number } | null {
+/** Il giorno di calendario a Piacenza in cui è nato l'ordine (o in cui cade un istante qualsiasi). */
+function giornoDellOrdine(creatoIl: string | number | Date): { anno: number; mese: number; giorno: number } | null {
   const istante = new Date(creatoIl);
   if (Number.isNaN(istante.getTime())) return null;
   const parti = giornoNelFuso.formatToParts(istante);
@@ -84,4 +84,47 @@ export function fasciaLeggibile(ordine: OrdineConFascia): string | null {
   const giorno = new Date(Date.UTC(nato.anno, nato.mese - 1, nato.giorno + spostamento));
   const orario = fascia.slice(fascia.indexOf(SEPARATORE) + SEPARATORE.length);
   return `${GIORNI_DELLA_SETTIMANA[giorno.getUTCDay()]} ${giorno.getUTCDate()}/${giorno.getUTCMonth() + 1}${SEPARATORE}${orario}`;
+}
+
+/** Il giorno di Piacenza come «2026-11-03», o `null` se l'istante è illeggibile. */
+export function giornoDiPiacenza(istante: string | number | Date): string | null {
+  const g = giornoDellOrdine(istante);
+  return g ? `${g.anno}-${String(g.mese).padStart(2, '0')}-${String(g.giorno).padStart(2, '0')}` : null;
+}
+
+/** Quanti giorni di calendario di Piacenza separano due istanti, o `null` se uno è illeggibile. */
+function giorniFra(da: string | number | Date, a: string | number | Date): number | null {
+  const x = giornoDellOrdine(da);
+  const y = giornoDellOrdine(a);
+  if (!x || !y) return null;
+  return Math.round((Date.UTC(y.anno, y.mese - 1, y.giorno) - Date.UTC(x.anno, x.mese - 1, x.giorno)) / 86_400_000);
+}
+
+/**
+ * 31/10/2026 — LA FASCIA SCELTA IN CASSA, DETTA DAL GIORNO IN CUI NASCE L'ORDINE.
+ *
+ * Tutti i lettori (`fasciaLeggibile`, la scadenza d'accettazione, l'email al negozio) contano
+ * «Oggi» e «Domani» dal giorno di `orders.created_at`. Coi contanti l'ordine nasce quando si
+ * sceglie, e il conto torna. Con la carta nasce al webhook: lunedì alle 23:50 si sceglie
+ * «Domani · 9:00–11:00» (martedì), alle 00:10 si paga, e un ordine nato martedì con scritto
+ * «Domani» diceva mercoledì a tutti. Qui l'etichetta si riporta al giorno dell'ordine:
+ * martedì diventa «Oggi · 9:00–11:00». Così la regola resta una sola, per tutti i lettori.
+ *
+ * `null` = il giorno della fascia è già passato (o non ha un nome nel giorno nuovo): la fascia
+ * non si può più mantenere. La veloce e le etichette che non sono fasce tornano come sono.
+ * 🟢 Puro: i due istanti li passa chi chiama.
+ */
+export function fasciaAlGiornoDellOrdine(
+  fascia: string,
+  sceltaIl: string | number | Date,
+  natoIl: string | number | Date,
+): string | null {
+  const finestra = finestraDellaFascia(fascia);
+  if (!finestra) return fascia;
+  const passati = giorniFra(sceltaIl, natoIl);
+  if (passati === null || passati <= 0) return fascia;
+  const giorniDiDistanza = (finestra.giorno === 'domani' ? 1 : 0) - passati;
+  if (giorniDiDistanza < 0) return null;
+  const stessa = FASCE_DI_OGGI.find((f) => f.daMinuti === finestra.daMinuti && f.aMinuti === finestra.aMinuti);
+  return stessa?.etichetta ?? null;
 }

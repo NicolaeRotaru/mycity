@@ -31,6 +31,13 @@ const db = vi.hoisted(() => ({
   scritture: [] as { id: unknown; valori: Record<string, unknown> }[],
 }));
 
+// 31/10/2026 — La rotta ora legge l'interruttore spento al lancio: qui si
+// prova la funzione accesa, come prima.
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
+  ...((await originale()) as Record<string, unknown>),
+  AI_NEGOZI_ACCESA: true,
+}));
+
 vi.mock('@/lib/api/middleware', () => ({
   withSellerAuth:
     (h: (ctx: { user: { id: string }; req: Request }) => unknown) =>
