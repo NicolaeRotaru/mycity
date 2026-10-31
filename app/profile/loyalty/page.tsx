@@ -20,6 +20,7 @@ import {
   type LoyaltyAccount,
 } from '@/lib/loyalty';
 import { queryKeys } from '@/lib/queries/keys';
+import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
 
 type Tx = { id: string; delta: number; reason: string; created_at: string };
 
@@ -139,8 +140,11 @@ export default function LoyaltyPage() {
             <span className="text-6xl md:text-7xl font-serif font-extrabold">{points}</span>
             <span className="text-lg opacity-90">punti</span>
           </div>
+          {/* 31/10/2026 — Con i punti spenti (migrazione 168) i punti non diventano sconto: niente cifra in euro. */}
           <p className="text-sm opacity-90 mt-1">
-            = €{eurValue.toFixed(2)} di sconto disponibili (1 buono ogni {POINTS_REDEEM_RATE} punti)
+            {INVITI_E_PUNTI_ACCESI
+              ? <>= €{eurValue.toFixed(2)} di sconto disponibili (1 buono ogni {POINTS_REDEEM_RATE} punti)</>
+              : <>I punti non sono ancora attivi: quelli che hai restano tuoi.</>}
           </p>
 
           <div className="mt-6 flex items-center gap-3 bg-white/15 rounded-2xl p-4 backdrop-blur">
@@ -171,7 +175,8 @@ export default function LoyaltyPage() {
         </div>
       </div>
 
-      {/* Converti punti in credito spendibile */}
+      {/* Converti punti in credito spendibile — solo coi punti accesi: spenti, il database rifiuta la conversione (migrazione 168). */}
+      {INVITI_E_PUNTI_ACCESI ? (
       <div className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm">
         <div className="flex items-center gap-2 mb-1">
           <Wallet size={20} className="text-primary-600" />
@@ -191,6 +196,20 @@ export default function LoyaltyPage() {
           <p className="text-sm text-ink-400">Ti servono almeno 100 punti per convertire.</p>
         )}
       </div>
+      ) : (
+      <div className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm">
+        <div className="flex items-center gap-2 mb-1">
+          <Wallet size={20} className="text-primary-600" />
+          <h2 className="font-serif font-bold text-lg text-ink-900">I punti sono in pausa</h2>
+        </div>
+        <p className="text-sm text-ink-600">
+          Per ora gli ordini non danno punti e i punti non si convertono in credito. Quelli che hai restano tuoi.
+          {creditoNonLetto
+            ? <> Il credito che hai gi&agrave; non riusciamo a leggerlo adesso.</>
+            : walletCents > 0 && <> Hai già <strong>{formatPrice(walletCents / 100)}</strong> di credito, e resta spendibile negli ordini con pagamento alla consegna.</>}
+        </p>
+      </div>
+      )}
 
       {/* Streak card */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -201,7 +220,7 @@ export default function LoyaltyPage() {
           </div>
           <p className="text-3xl font-serif font-bold text-ink-900">{streak} <span className="text-base font-medium text-ink-600">{streak === 1 ? 'giorno' : 'giorni'}</span></p>
           <p className="text-xs text-ink-500 mt-1">
-            Visita ogni giorno per accumulare bonus a 7, 30, 100 giorni.
+            {INVITI_E_PUNTI_ACCESI ? 'Visita ogni giorno per accumulare bonus a 7, 30, 100 giorni.' : 'I giorni di fila in cui sei passato da MyCity.'}
           </p>
         </div>
         <div className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm">
@@ -214,7 +233,8 @@ export default function LoyaltyPage() {
         </div>
       </div>
 
-      {/* Come funziona */}
+      {/* Come funziona — spiega come si guadagnano punti: coi punti spenti sarebbe una promessa falsa. */}
+      {INVITI_E_PUNTI_ACCESI && (
       <div className="bg-cream-50 border border-cream-300 rounded-2xl p-6">
         <h2 className="font-serif font-bold text-lg text-ink-900 mb-4 flex items-center gap-2">
           <Sparkles size={18} className="text-primary-600" />
@@ -236,6 +256,7 @@ export default function LoyaltyPage() {
           ))}
         </ul>
       </div>
+      )}
 
       {/* Storico */}
       <div>
@@ -244,7 +265,7 @@ export default function LoyaltyPage() {
           <div className="bg-white border border-cream-300 rounded-2xl p-8 text-center">
             <Gift size={32} className="mx-auto text-ink-300 mb-3" />
             <p className="text-ink-600 font-medium mb-1">Nessun movimento</p>
-            <p className="text-sm text-ink-400">I punti che guadagnerai compariranno qui.</p>
+            <p className="text-sm text-ink-400">{INVITI_E_PUNTI_ACCESI ? 'I punti che guadagnerai compariranno qui.' : 'Qui compariranno i movimenti dei tuoi punti.'}</p>
             <Link href="/search" className="inline-flex items-center gap-1 mt-4 text-primary-700 hover:underline font-semibold text-sm">
               Vai allo shopping <ChevronRight size={14} />
             </Link>

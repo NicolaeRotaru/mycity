@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
 
 type Achievement = {
   id: string;
@@ -83,7 +84,7 @@ export default function AchievementsPage() {
           <Trophy size={28} className="text-accent-600" />
           I miei badge
         </h1>
-        <p className="text-sm text-ink-500 mt-1">Sblocca achievement per guadagnare punti loyalty extra</p>
+        <p className="text-sm text-ink-500 mt-1">{INVITI_E_PUNTI_ACCESI ? 'Sblocca achievement per guadagnare punti loyalty extra' : 'Sblocca i badge con i tuoi ordini e le tue recensioni'}</p>
       </div>
 
       {/* Progress overall */}
@@ -120,7 +121,8 @@ export default function AchievementsPage() {
                     {a.title}
                   </p>
                   <p className="text-xs text-ink-600 mt-0.5">{a.description}</p>
-                  {a.points_reward > 0 && (
+                  {/* Coi punti spenti (migrazione 168) il badge non accredita punti: niente «+N pt». */}
+                  {INVITI_E_PUNTI_ACCESI && a.points_reward > 0 && (
                     <p className="inline-flex items-center gap-1 text-xs font-bold mt-2 bg-white/70 rounded-full px-2 py-0.5">
                       <Sparkles size={11} className="text-primary-600" />
                       +{a.points_reward} pt
