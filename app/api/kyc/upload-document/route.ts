@@ -17,10 +17,48 @@ const ALLOWED_KINDS = new Set([
 ]);
 
 /**
+ * Quante volte si rilegge il profilo e si riprova lo scambio del percorso
+ * quando un altro caricamento dello stesso tipo l'ha cambiato nel frattempo.
+ */
+const TENTATIVI_SCAMBIO = 3;
+
+/** Il tipo di documento e la colonna del profilo che ne tiene il percorso. */
+const COLONNA_PER_TIPO: Record<string, string> = {
+  id_front:        'kyc_id_doc_front_url',
+  id_back:         'kyc_id_doc_back_url',
+  selfie:          'kyc_selfie_url',
+  rider_license:   'rider_license_url',
+  rider_insurance: 'rider_insurance_url',
+  rider_haccp:     'rider_haccp_url',
+};
+
+/**
+ * Toglie un file dal secchio senza far fallire il caricamento, ma mai in
+ * silenzio: il percorso finisce nel registro, perché è l'unico posto da cui
+ * l'orfano si ritrova.
+ */
+async function togliDalSecchio(
+  admin: ReturnType<typeof getAdminSupabase>,
+  percorso: string,
+  contesto: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const { error } = await admin.storage.from('kyc-docs').remove([percorso]);
+    if (!error) return;
+    logger.error('[kyc] copia del documento non tolta dal secchio', { ...contesto, percorso, err: error.message });
+  } catch (e) {
+    logger.error('[kyc] copia del documento non tolta dal secchio', {
+      ...contesto, percorso, err: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+/**
  * Upload di documento KYC in bucket privato "kyc-docs".
  *
  * - Solo l'utente autenticato puo' caricare per se' stesso.
- * - I file vanno in path `{userId}/{kind}-{timestamp}.{ext}`.
+ * - I file vanno in path `{userId}/{kind}-{timestamp}.{ext}`; ricaricare lo
+ *   stesso tipo toglie la copia di prima (una sola copia per tipo).
  * - Il bucket NON e' pubblico: gli URL si generano signed con
  *   createSignedUrl quando servono (admin review, provider KYC).
  *
@@ -117,6 +155,26 @@ export const POST = withAuthRateLimit({ name: 'kyc-upload', max: 20, windowMs: 1
   const ext = ESTENSIONE_PER_TIPO[tipoVero];
   const path = `${user.id}/${kind}-${Date.now()}.${ext}`;
 
+  /**
+   * 31/10/2026 — LA FOTO MOSSA RESTAVA NEL SECCHIO PER SEMPRE.
+   *
+   * Ogni caricamento ha un percorso nuovo (c'è l'orario dentro) e il profilo
+   * tiene solo l'ultimo. Chi ricaricava la carta d'identità perché la prima
+   * foto era mossa lasciava la prima copia nel secchio senza nessun puntatore:
+   * la potatura dei 90 giorni cancella solo i percorsi scritti nel profilo, e
+   * l'orfano non lo trovava più nessuno (art. 5.1.e e 17 GDPR).
+   *
+   * Leggere il percorso di prima e toglierlo dopo l'aggiornamento non basta:
+   * due caricamenti ravvicinati dello stesso tipo leggono tutti e due il
+   * percorso vecchio prima che uno dei due aggiorni il profilo, e la copia di
+   * quello che arriva per primo resta orfana. Quindi lo scambio è condizionato:
+   * il profilo si aggiorna SOLO se la colonna vale ancora quello che abbiamo
+   * letto. Se nel frattempo l'ha cambiata un altro caricamento, si rilegge e
+   * si riprova: ogni scambio riuscito toglie esattamente la copia che ha
+   * sostituito, e nel secchio ne resta una sola per tipo.
+   */
+  const colonna = COLONNA_PER_TIPO[kind];
+
   const { error: upErr } = await admin.storage
     .from('kyc-docs')
     .upload(path, bytes, { contentType: file.type, upsert: false });
@@ -125,22 +183,61 @@ export const POST = withAuthRateLimit({ name: 'kyc-upload', max: 20, windowMs: 1
     return ApiErrors.internal('Upload fallito (bucket "kyc-docs" esiste?)');
   }
 
-  // Mappa kind -> colonna profile
-  const column: Record<string, string> = {
-    id_front:        'kyc_id_doc_front_url',
-    id_back:         'kyc_id_doc_back_url',
-    selfie:          'kyc_selfie_url',
-    rider_license:   'rider_license_url',
-    rider_insurance: 'rider_insurance_url',
-    rider_haccp:     'rider_haccp_url',
-  };
   // Persistiamo il PATH nel bucket privato, NON una signed URL a lunga scadenza:
   // così un breach del DB non espone URL valide per 30 giorni. Le signed URL si
   // generano on-demand (start-check, review admin) con TTL breve.
-  await admin
-    .from('profiles')
-    .update({ [column[kind]]: path })
-    .eq('id', user.id);
+  let sostituito: string | null | undefined;
+  for (let tentativo = 1; tentativo <= TENTATIVI_SCAMBIO && sostituito === undefined; tentativo++) {
+    const { data: primaDiOra, error: errLettura } = await admin
+      .from('profiles')
+      .select(colonna)
+      .eq('id', user.id)
+      .single();
+    const valore = (primaDiOra as unknown as Record<string, unknown> | null)?.[colonna];
+    if (errLettura || (valore != null && typeof valore !== 'string')) {
+      // Senza il valore di adesso lo scambio non si può condizionare: scrivere
+      // alla cieca lascerebbe orfana la copia che il profilo indica.
+      logger.error('[kyc] percorso precedente non letto: documento non salvato', {
+        userId: user.id, kind, err: errLettura?.message ?? 'valore non testuale',
+      });
+      await togliDalSecchio(admin, path, { userId: user.id, kind, copia: 'nuova' });
+      return ApiErrors.internal('Documento non salvato. Riprova.');
+    }
+    const attuale = typeof valore === 'string' ? valore : null;
+
+    const scambio = admin
+      .from('profiles')
+      .update({ [colonna]: path })
+      .eq('id', user.id);
+    const { data: righe, error: errProfilo } = await (
+      attuale === null ? scambio.is(colonna, null) : scambio.eq(colonna, attuale)
+    ).select('id');
+    if (errProfilo) {
+      // Il profilo non punta al file appena caricato: lasciarlo nel secchio
+      // vorrebbe dire un documento d'identità senza puntatore. Si toglie, e la
+      // rotta non risponde «fatto» con un percorso che il profilo non ha.
+      logger.error('[kyc] percorso del documento non salvato nel profilo', {
+        userId: user.id, kind, err: errProfilo.message,
+      });
+      await togliDalSecchio(admin, path, { userId: user.id, kind, copia: 'nuova' });
+      return ApiErrors.internal('Documento non salvato. Riprova.');
+    }
+    if (Array.isArray(righe) && righe.length > 0) sostituito = attuale;
+  }
+  if (sostituito === undefined) {
+    // Altri caricamenti dello stesso tipo hanno vinto ogni scambio: questa
+    // copia non la indica nessuno, quindi non resta.
+    logger.warn('[kyc] scambio del percorso perso per caricamenti concorrenti', { userId: user.id, kind });
+    await togliDalSecchio(admin, path, { userId: user.id, kind, copia: 'nuova' });
+    return ApiErrors.conflict('Un altro caricamento dello stesso documento è in corso. Riprova.');
+  }
+
+  // Solo adesso, col profilo che punta alla copia nuova, la sostituita si toglie.
+  // Solo dentro la cartella della persona: un valore di prima del cambio a
+  // «percorso» (una URL firmata) o di un'altra cartella non si tocca.
+  if (sostituito !== null && sostituito !== path && sostituito.startsWith(`${user.id}/`)) {
+    await togliDalSecchio(admin, sostituito, { userId: user.id, kind, copia: 'vecchia' });
+  }
 
   // URL breve (10 min) solo per l'anteprima immediata lato client, non persistita.
   const { data: signed } = await admin.storage

@@ -53,7 +53,17 @@ vi.mock('@/lib/supabase/server', () => ({
       }),
       update: (patch: Record<string, unknown>) => {
         aggiornamentiProfilo.push(patch);
-        return { eq: () => Promise.resolve({ error: null }) };
+        // Lo scambio del percorso è condizionato (`.eq('id').is/eq(colonna).select()`):
+        // qui basta che riesca, una riga aggiornata.
+        const esito = { data: [{ id: FAKE_USER.id }], error: null };
+        const catena = {
+          eq: () => catena,
+          is: () => catena,
+          select: () => catena,
+          then: (ok: (v: typeof esito) => unknown, ko?: (e: unknown) => unknown) =>
+            Promise.resolve(esito).then(ok, ko),
+        };
+        return catena;
       },
     }),
     storage: {
