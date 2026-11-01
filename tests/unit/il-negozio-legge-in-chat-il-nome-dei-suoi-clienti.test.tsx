@@ -36,6 +36,9 @@ const RIGA_DEL_NEGOZIO = {
 type Opzioni = { queryKey: unknown[]; enabled?: boolean; queryFn?: (c: { signal?: AbortSignal }) => unknown };
 
 beforeEach(() => {
+  // Il canale Realtime finto dell aiuto di montaggio non concatena due .on(): la pagina lo
+  // segnala con un avviso innocuo, che qui si zittisce per non sporcare il verdetto.
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
   globali.__UTENTE__ = { id: 'u1', email: 'n@p.it' };
   globali.__ESITO_QUERY__ = undefined;
   globali.__OPZIONI_QUERY__ = [];
@@ -48,6 +51,7 @@ afterEach(() => {
   globali.__ESITO_QUERY__ = undefined;
   globali.__OPZIONI_QUERY__ = undefined;
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('la pagina /messages, per il negozio', () => {
