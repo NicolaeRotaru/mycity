@@ -220,6 +220,9 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   const { data: resi } = useQuery({
     queryKey: [...queryKeys.orders.detail(id), 'resi'],
     enabled: status === 'DELIVERED',
+    // Si rilegge a ogni apertura: il cliente torna qui subito dopo aver inviato o ritirato
+    // un reso, e la cache di 30 secondi gli mostrerebbe lo stato di prima.
+    refetchOnMount: 'always',
     queryFn: async (): Promise<RigaReso[]> => {
       const { data, error } = await supabase
         .from('returns')
@@ -479,6 +482,16 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
               <p role="status" className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-sm font-medium text-ink-700">
                 <Undo2 size={15} strokeWidth={2.2} aria-hidden /> {reso.testo}
               </p>
+            )}
+            {/* Una richiesta aperta si vede e si puo' ancora ritirare: la pagina del reso
+                ha «Ritira la richiesta», e finche' resta aperta un secondo reso non parte. */}
+            {reso?.aperto && (
+              <Link
+                href={`/orders/${id}/return`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-cream-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-cream-50"
+              >
+                Vedi la richiesta
+              </Link>
             )}
             {(!reso || reso.sePuoChiederne) && (
               <Link

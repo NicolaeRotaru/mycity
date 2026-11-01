@@ -121,6 +121,7 @@ describe('la posizione del fattorino', () => {
     radice?.remove();
     globali.__DATI_QUERY__ = undefined;
     globali.__PROFILO__ = undefined;
+    globali.__CLIENT_SUPABASE__ = undefined;
     document.body.innerHTML = '';
   });
 
@@ -150,5 +151,44 @@ describe('la posizione del fattorino', () => {
     dato = ordine({ delivery_status: 'DELIVERED', delivered_at: '2026-10-14T17:50:00Z' });
     await ridisegna();
     expect(accese.size, 'dopo la consegna c e ancora una sorveglianza accesa').toBe(0);
+  }, 60000);
+  it('scrive la posizione solo su un ordine ancora in strada: la scrittura porta il filtro sullo stato', async () => {
+    // Un client che annota ogni scrittura su orders con i suoi filtri.
+    const scritture: { valori: Record<string, unknown>; filtri: [string, string, unknown][] }[] = [];
+    const catena = (tavola: string): Record<string, unknown> => {
+      const c: Record<string, unknown> = {};
+      const passa = () => c;
+      for (const m of ['select', 'order', 'limit', 'maybeSingle', 'single', 'is', 'neq', 'gte', 'lte']) c[m] = passa;
+      c.eq = passa;
+      c.in = passa;
+      c.update = (valori: Record<string, unknown>) => {
+        const riga = { valori, filtri: [] as [string, string, unknown][] };
+        if (tavola === 'orders') scritture.push(riga);
+        const u: Record<string, unknown> = {
+          eq: (col: string, v: unknown) => (riga.filtri.push(['eq', col, v]), u),
+          in: (col: string, v: unknown) => (riga.filtri.push(['in', col, v]), u),
+          then: (ok: (x: unknown) => unknown) => Promise.resolve({ data: null, error: null }).then(ok),
+        };
+        return u;
+      };
+      c.then = (ok: (x: unknown) => unknown) => Promise.resolve({ data: null, error: null }).then(ok);
+      return c;
+    };
+    globali.__CLIENT_SUPABASE__ = { from: catena };
+
+    const accese = gpsFinto();
+    await accendiPagina();
+    await premiAttivaGps();
+    const [sorveglianza] = Array.from(accese.values());
+    await act(async () => sorveglianza.ok({ coords: { latitude: 45.05, longitude: 9.69 } }));
+    await attendi();
+
+    const posizione = scritture.filter((w) => 'rider_lat' in w.valori);
+    expect(posizione.length, 'la posizione non e stata scritta').toBe(1);
+    const filtroStato = posizione[0].filtri.find(([tipo, col]) => tipo === 'in' && col === 'delivery_status');
+    expect(filtroStato, 'la scrittura della posizione non guarda lo stato dell ordine').toBeTruthy();
+    const stati = filtroStato![2] as string[];
+    expect(stati).not.toContain('CANCELED');
+    expect(stati).not.toContain('DELIVERED');
   }, 60000);
 });

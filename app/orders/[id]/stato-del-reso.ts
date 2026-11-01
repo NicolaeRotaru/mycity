@@ -29,14 +29,16 @@ export type StatoDelReso = {
   testo: string;
   /** Vero se si puo' ancora chiedere un reso nuovo (nessuno aperto, nessuno gia' rimborsato). */
   sePuoChiederne: boolean;
+  /** Vero se c'e' una richiesta aperta: la pagina porta alla richiesta, dove si puo' ritirare. */
+  aperto: boolean;
 };
 
 /** Il reso piu' recente decide cosa vede il cliente; nessun reso → `null` (si mostra il pulsante). */
 export function statoDelReso(resi: RigaReso[] | null | undefined): StatoDelReso | null {
   if (!resi || resi.length === 0) return null;
   const aperto = resi.find((r) => r.status in APERTI);
-  if (aperto) return { testo: APERTI[aperto.status], sePuoChiederne: false };
+  if (aperto) return { testo: APERTI[aperto.status], sePuoChiederne: false, aperto: true };
   const ultimo = [...resi].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))[0];
-  if (ultimo.status === 'REFUNDED') return { testo: CHIUSI.REFUNDED, sePuoChiederne: false };
-  return { testo: CHIUSI[ultimo.status] ?? 'Richiesta di reso registrata', sePuoChiederne: true };
+  if (ultimo.status === 'REFUNDED') return { testo: CHIUSI.REFUNDED, sePuoChiederne: false, aperto: false };
+  return { testo: CHIUSI[ultimo.status] ?? 'Richiesta di reso registrata', sePuoChiederne: true, aperto: false };
 }
