@@ -220,6 +220,9 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   const { data: resi } = useQuery({
     queryKey: [...queryKeys.orders.detail(id), 'resi'],
     enabled: status === 'DELIVERED',
+    // Si rilegge a ogni apertura: il cliente torna qui subito dopo aver inviato o ritirato
+    // un reso, e la cache di 30 secondi gli mostrerebbe lo stato di prima.
+    refetchOnMount: 'always',
     queryFn: async (): Promise<RigaReso[]> => {
       const { data, error } = await supabase
         .from('returns')
