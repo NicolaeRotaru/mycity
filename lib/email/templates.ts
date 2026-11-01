@@ -193,14 +193,34 @@ export function newOrderSellerTemplate(args: {
 /**
  * 30/10/2026 — IL NEGOZIO NON HA CONFERMATO LA VELOCE IN 10 MINUTI (carta #220).
  *
- * Al cliente: la spesa passa a una fascia, l'euro della veloce non lo paga, e può annullare senza
- * costi finché il negozio non conferma (dopo, la rotta di annullo accetta solo un ordine NEW).
- * La frase è la stessa della campanella (lib/ordini/veloce-non-confermata.ts).
+ * Al cliente: la spesa passa a una fascia, l'euro della veloce non lo paga, e può annullare
+ * finché il negozio non accetta la spesa nella fascia nuova (la rotta di annullo,
+ * app/api/orders/[id]/cancel, accetta solo un ordine NEW; dopo il tasto Annulla sparisce).
+ * La frase arriva da lib/ordini/veloce-non-confermata.ts, la stessa della campanella.
+ *
+ * 1/11/2026 — L'EMAIL SI LEGGE DOPO, E DOPO «SENZA COSTI» NON E' PIU' VERO.
+ * La campanella si legge subito; l'email spesso ore dopo, quando il forno ha già accettato la
+ * fascia nuova. La frase chiudeva con «puoi annullarlo senza costi dalla sua pagina finché il
+ * negozio non lo conferma»: chi la leggeva alle 13:10 capiva «il negozio non ha confermato (la
+ * veloce), quindi posso annullare», e sulla pagina il tasto non c'era più. Nell'email quella
+ * chiusura si sostituisce con `CHIUSURA_ANNULLO_EMAIL`, che dice il limite in modo che regga anche
+ * letta tardi. La frase della campanella non cambia (sta in lib/ordini).
  */
+export const CHIUSURA_ANNULLO_EMAIL =
+  'Se non ti va bene, puoi annullarlo dalla pagina dell’ordine, ma solo finché il negozio non lo conferma nella fascia nuova: fino a quel momento l’annullo non ti costa niente. ' +
+  'Quando il negozio l’ha confermato, il tasto Annulla non c’è più e l’ordine non si annulla.';
+
+/** La chiusura «puoi annullarlo…» della frase del freno, se c'è: è sempre l'ultima frase. */
+const CHIUSURA_ANNULLO_DELLA_CAMPANELLA = /\s*Se non ti va bene, puoi annullarlo[^.]*\.\s*$/;
+
 export function veloceNonConfermataTemplate(args: { orderId: string; frase: string; senzaFascia?: boolean }) {
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
   // Chi scorre tutti i modelli del file li chiama anche con argomenti a metà: niente frase, niente crash.
-  const frase = String(args.frase ?? '');
+  const grezza = String(args.frase ?? '');
+  // Senza fascia (fraseNonSpostato) la frase non promette nessun annullo: resta com'è.
+  const frase = CHIUSURA_ANNULLO_DELLA_CAMPANELLA.test(grezza)
+    ? `${grezza.replace(CHIUSURA_ANNULLO_DELLA_CAMPANELLA, '')} ${CHIUSURA_ANNULLO_EMAIL}`
+    : grezza;
   // Senza una fascia possibile (sabato sera, negozio chiuso la domenica) il titolo non ne promette una,
   // e non promette nemmeno un contatto: la frase dice l'ora vera in cui l'ordine si annulla.
   const titolo = args.senzaFascia ? 'Il negozio non ha ancora confermato' : 'La tua spesa arriva in una fascia oraria';
@@ -215,6 +235,30 @@ export function veloceNonConfermataTemplate(args: { orderId: string; frase: stri
       : 'La consegna veloce non è partita: la tua spesa arriva in una fascia oraria',
     html: shell(titolo, body),
     text: `${frase} Il tuo ordine: ${orderUrl}`,
+  };
+}
+
+/**
+ * 1/11/2026 — UN CLIENTE HA SCRITTO AL NEGOZIO.
+ *
+ * Il negozio non apre l'app per vedere se qualcuno gli ha scritto: senza un
+ * avviso, il messaggio restava li' finche' non passava per caso. Qui c'e' solo
+ * il fatto e il link alla chat: NIENTE testo del messaggio e niente nome del
+ * cliente. La posta passa per server di altri e resta nelle caselle per anni;
+ * quello che il cliente ha scritto lo legge il negozio dentro MyCity.
+ */
+export function messaggioNuovoAlNegozioTemplate(args: { conversationId: string }) {
+  const chatUrl = `${appUrl()}/messages/${encodeURIComponent(String(args.conversationId ?? ''))}`;
+  const body = `
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Hai un messaggio nuovo da un cliente</h1>
+    <p style="margin:0 0 12px;line-height:1.6">Un cliente ti ha scritto nella chat di MyCity. Rispondi da lì: il messaggio lo trovi aprendo la conversazione.</p>
+    <p style="margin:0 0 12px;line-height:1.6">Se ti scrive ancora prima che tu abbia letto, non ti mandiamo altre email: le trovi tutte nella stessa chat.</p>
+    <p style="margin:24px 0">${btn(chatUrl, 'Apri la chat')}</p>
+  `;
+  return {
+    subject: 'Hai un messaggio nuovo da un cliente',
+    html: shell('Messaggio nuovo', body),
+    text: `Un cliente ti ha scritto nella chat di MyCity. Rispondi da qui: ${chatUrl}`,
   };
 }
 
