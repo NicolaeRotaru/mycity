@@ -220,7 +220,9 @@ const codiceDi = (id: string) => `#${id.slice(0, 6).toUpperCase()}`;
  * in cui si annulla da solo, gli amministratori lo sanno. Una volta sola: l'avviso già scritto nella
  * campanella è il segno che se n'è già parlato. Il giro dopo riprova comunque a trovare la fascia.
  */
-async function nonSiSposta(admin: SupabaseClient, o: RigaVeloce, adesso: Date, perche: string): Promise<EsitoDelCarrello> {
+// 31/10/2026 (ondata 5) — `orari` = gli orari del negozio dell'ordine: con quelli l'ora detta è la chiusura,
+// la stessa del giro notturno (scadenza-accettazione.ts), non le tre ore.
+async function nonSiSposta(admin: SupabaseClient, o: RigaVeloce, adesso: Date, perche: string, orari?: unknown): Promise<EsitoDelCarrello> {
   const { data: gia, error } = await admin
     .from('notifications')
     .select('id')
@@ -229,7 +231,7 @@ async function nonSiSposta(admin: SupabaseClient, o: RigaVeloce, adesso: Date, p
     .limit(1);
   if (error) throw new Error(`ordine ${o.id}: avvisi già spediti non letti: ${error.message}`);
   if (Array.isArray(gia) && gia.length > 0) return 'a-mano';
-  const scadenza = scadenzaAccettazione(o) ?? new Date(adesso.getTime() + 3 * 3_600_000);
+  const scadenza = scadenzaAccettazione(o, undefined, orari) ?? new Date(adesso.getTime() + 3 * 3_600_000);
   await notifyAdmins(
     '⚠️ Veloce non confermata: il carrello non si è potuto spostare',
     `L'ordine ${codiceDi(o.id)} non è stato confermato in ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti e il freno non l'ha spostato: ${perche}. È rimasto com'era, con la veloce nel conto, e si annulla da solo alle ${scadenzaLeggibile(scadenza, adesso).replace(/^le /, '')}: senti il negozio, e se serve scegli tu la fascia col cliente.`,
@@ -337,7 +339,7 @@ async function spostaIlCarrello(
     orari = venditori.map((v) => letti.find((n) => n.id === v)?.store_hours ?? null);
   }
   const fascia = fasciaDopoLaVeloce(romeNow(adesso), orari);
-  if (!fascia) return nonSiSposta(admin, o, adesso, 'né oggi né domani c’è una fascia in cui tutti i negozi del carrello siano aperti');
+  if (!fascia) return nonSiSposta(admin, o, adesso, 'né oggi né domani c’è una fascia in cui tutti i negozi del carrello siano aperti', o.seller_id ? orari[venditori.indexOf(o.seller_id)] : undefined);
 
   const conto = consegnaSenzaLaVeloce(carrello.map((r) => {
     const consegna = Number(r.delivery_fee_cents ?? 0);

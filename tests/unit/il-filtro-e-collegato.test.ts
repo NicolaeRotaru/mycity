@@ -21,6 +21,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const risposteFiltro: { allowed: boolean; reason: string } = { allowed: false, reason: 'armi' };
 const runMessage = vi.fn();
 
+// 31/10/2026 — La rotta ora legge l'interruttore spento al lancio: qui si
+// prova la funzione accesa, come prima.
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
+  ...((await originale()) as Record<string, unknown>),
+  TRADUCI_ACCESO: true,
+}));
+
 vi.mock('@/lib/ai/run', () => ({
   runMessage: (...args: unknown[]) => runMessage(...args),
   AiCallError: class extends Error {},

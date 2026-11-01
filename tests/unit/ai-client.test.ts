@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+// 31/10/2026 — La rotta ora legge l'interruttore spento al lancio: qui si
+// prova la funzione accesa, come prima.
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
+  ...((await originale()) as Record<string, unknown>),
+  AI_NEGOZI_ACCESA: true,
+}));
+
 /**
  * Test del client AI centralizzato: config-throw, singleton, calcolo costo.
  */

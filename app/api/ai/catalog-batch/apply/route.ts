@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
 import { rateLimitAsync } from '@/lib/rate-limit';
@@ -34,6 +35,10 @@ type JobRow = {
 };
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  // Spento al lancio (carta #209): un lavoro rimasto «pronto» non si applica a
+  // mano. Senza modello il filtro dice «no» a nome e descrizione, e il lavoro si
+  // chiuderebbe «applicato» con dentro solo tag e categoria.
+  if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');
   const rl = await rateLimitAsync({ key: `ai-catalog-batch-apply:${user.id}`, max: 20, windowMs: 60 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 

@@ -25,6 +25,13 @@ const updateMock = vi.fn<(r: Record<string, unknown>) => Promise<{ error: null }
 const sendEmailMock = vi.fn<(arg: unknown) => Promise<{ ok: boolean }>>(() => Promise.resolve({ ok: true }));
 const verificaAntiBot = vi.fn<() => Promise<{ ok: true } | { ok: false; reason: string }>>(() => Promise.resolve({ ok: true as const }));
 
+// 31/10/2026 — La rotta ora legge l'interruttore spento al lancio: qui si
+// prova la funzione accesa, come prima.
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
+  ...((await originale()) as Record<string, unknown>),
+  NEWSLETTER_ACCESA: true,
+}));
+
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     from: () => ({

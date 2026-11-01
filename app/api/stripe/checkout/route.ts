@@ -22,6 +22,7 @@ import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
 import { riusoDellaCassaAperta, type SessioneRiletta } from '@/lib/ordini/riuso-della-cassa-aperta';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
+import { giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
 import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/riconcilia-consenso';
@@ -198,6 +199,9 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         // Anche la fascia di consegna: chi torna indietro solo per cambiarla
         // non deve ritrovarsi il pagamento di prima, con l'orario di prima.
         fascia: body.pickupInStore ? null : (body.deliverySlot ?? null),
+        // 31/10/2026 — e il giorno in cui la si sceglie: «Domani» detto alle 23:50 e alle 00:05
+        // sono due giorni diversi, e il webhook conta la fascia dal momento della pagina.
+        giorno: body.pickupInStore || !body.deliverySlot ? null : giornoDiPiacenza(new Date()),
       }),
     )
     .digest('hex');

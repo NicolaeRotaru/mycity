@@ -1,6 +1,7 @@
 // lib/ai/client.ts
 import Anthropic from '@anthropic-ai/sdk';
 import { env } from '@/lib/env';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 
 /**
  * Client Anthropic centralizzato — server-only.
@@ -125,6 +126,16 @@ let _client: Anthropic | null = null;
  * Server-only: non importare da componenti client.
  */
 export function getAnthropic(): Anthropic {
+  // 31/10/2026 — L'interruttore «AI per i negozi» lo legge il server, qui.
+  // Prima lo leggevano solo le pagine: il freno vero era la chiave mancante, e
+  // chi l'avesse messa su Vercel per un altro motivo riaccendeva tutte le rotte
+  // /api/ai, /api/vision e il resto mentre la pagina diceva «spento». Ogni
+  // chiamata al modello passa da qui, quindi spento vuol dire nessuna chiamata,
+  // come senza chiave. Va prima del singleton: un client già costruito non
+  // deve scavalcare lo spegnimento.
+  if (!AI_NEGOZI_ACCESA) {
+    throw new AiConfigError('Strumenti AI per i negozi spenti al lancio (AI_NEGOZI_ACCESA = false).');
+  }
   if (_client) return _client;
   const apiKey = env.anthropicKey();
   if (!apiKey) throw new AiConfigError();
