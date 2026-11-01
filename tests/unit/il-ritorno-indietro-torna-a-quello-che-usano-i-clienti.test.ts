@@ -80,10 +80,33 @@ describe('il ritorno indietro torna al rilascio che usano i clienti', () => {
     }
   });
 
-  it('Y sul dominio e un solo altro commit nell elenco: si torna a quello, perche non c e altro dove i clienti potessero essere', () => {
-    expect(
-      rilascioDaTornare({ deployments: [RILASCIO_Y, RILASCIO_W, RILASCIO_W] }, { commitCheEsce: Y, sulDominio: sulDominio(RILASCIO_Y) }),
-    ).toBe('https://mycity-w-dei-clienti.vercel.app');
+  // 1/11/2026 (ondata 9, collaudo) — «Un solo altro commit» non basta: l'elenco
+  // legge 20 rilasci, e dopo qualche rilancio di X rotto W ne esce. Allora
+  // l'unico altro commit e' X. Nel caso ambiguo: sempre null.
+  it('Y sul dominio o dominio sconosciuto, W uscito dai 20 letti: mai X, sempre nessun indirizzo', () => {
+    const X2 = rilascio(X, 'x-rilanciato');
+    const xSenzaSha = { ...rilascio(X, 'x-senza-sha'), meta: {} };
+    const elenchi = [[RILASCIO_Y, RILASCIO_X], [RILASCIO_Y, RILASCIO_X, X2], [RILASCIO_Y, xSenzaSha], [RILASCIO_X], [RILASCIO_Y, RILASCIO_W]];
+    for (const deployments of elenchi) {
+      for (const dominio of [sulDominio(RILASCIO_Y), null]) {
+        const scelto = rilascioDaTornare({ deployments }, { commitCheEsce: Y, sulDominio: dominio });
+        expect(scelto, `elenco ${deployments.map((d) => d.uid).join(', ')} · dominio ${dominio ? 'Y' : 'sconosciuto'}`).toBeNull();
+      }
+    }
+  });
+
+  it('il dominio risponde senza commit: nessun indirizzo, perche puo essere proprio Y appena rotto', () => {
+    const ySenzaSha = { ...sulDominio(RILASCIO_Y), meta: {} };
+    expect(rilascioDaTornare({ deployments: [RILASCIO_X, RILASCIO_W] }, { commitCheEsce: Y, sulDominio: ySenzaSha })).toBeNull();
+  });
+
+  it('senza sapere quale commit esce, nemmeno il dominio basta', () => {
+    expect(rilascioDaTornare({ deployments: [RILASCIO_W] }, { sulDominio: sulDominio(RILASCIO_W) })).toBeNull();
+  });
+
+  it('il dominio non pronto o non di produzione non e un posto dove tornare', () => {
+    expect(rilascioDaTornare({ deployments: [] }, { commitCheEsce: Y, sulDominio: { ...sulDominio(RILASCIO_W), readyState: 'ERROR' } })).toBeNull();
+    expect(rilascioDaTornare({ deployments: [] }, { commitCheEsce: Y, sulDominio: { ...sulDominio(RILASCIO_W), target: 'preview' } })).toBeNull();
   });
 
   it('Y sul dominio e nessun altro commit: nessun indirizzo', () => {
