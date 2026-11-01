@@ -3,6 +3,8 @@ import type { Metadata } from 'next';
 import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 import { fraseComeArriva } from '@/lib/promesse-pubbliche';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { creaClientAnonimo } from '@/lib/supabase/anonimo';
+import { logger } from '@/lib/logger';
 
 export const revalidate = 600;
 
@@ -20,11 +22,46 @@ const CATEGORY_LONG_DESC: Record<string, string> = {
   sport: 'Sport, fitness e tempo libero dai negozi di Piacenza.',
 };
 
-type CategoryMeta = { slug: string; name: string };
+type CategoryMeta = { id: string; slug: string; name: string };
 
 // 27/8/2026 (R010) — vedi `lib/supabase/lettura-per-metadati.ts`.
 const fetchCategory = (slug: string) =>
-  leggiPerMetadati<CategoryMeta>('categories', 'slug, name', { slug });
+  leggiPerMetadati<CategoryMeta>('categories', 'id, slug, name', { slug });
+
+/**
+ * 1/11/2026 — UNA CATEGORIA VUOTA NON SI MANDA A GOOGLE.
+ *
+ * Delle 72 categorie solo 3 avevano un prodotto: le altre erano pagine vuote che Google poteva
+ * indicizzare. La mappa del sito già le toglie (`app/sitemap.ts`); qui la pagina stessa dice
+ * «non indicizzarmi» finché dentro — o in una sua sottocategoria — non c'è almeno un prodotto
+ * disponibile. Risponde `null` quando non lo sa (lettura fallita): allora la pagina resta
+ * indicizzabile come prima, perché un errore di rete non deve togliere da Google le categorie vere.
+ */
+async function haProdotti(idCategoria: string): Promise<boolean | null> {
+  try {
+    const supa = creaClientAnonimo();
+    const cat = await supa.from('categories').select('id, parent_id');
+    if (cat.error) throw cat.error;
+    const figlieDi = new Map<string, string[]>();
+    for (const c of (cat.data ?? []) as { id: string; parent_id: string | null }[]) {
+      if (!c.parent_id) continue;
+      figlieDi.set(c.parent_id, [...(figlieDi.get(c.parent_id) ?? []), c.id]);
+    }
+    const ids = new Set<string>([idCategoria]);
+    const daVedere = [idCategoria];
+    while (daVedere.length > 0 && ids.size < 500) {
+      for (const f of figlieDi.get(daVedere.pop() as string) ?? []) {
+        if (!ids.has(f)) { ids.add(f); daVedere.push(f); }
+      }
+    }
+    const prod = await supa.from('products').select('id').eq('status', 'available').in('category_id', [...ids]).limit(1);
+    if (prod.error) throw prod.error;
+    return (prod.data ?? []).length > 0;
+  } catch (e) {
+    logger.warn('[categoria] non so se la categoria ha prodotti: resta indicizzabile', { idCategoria, e });
+    return null;
+  }
+}
 
 export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const params = await props.params;
@@ -33,6 +70,7 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
     return { title: 'Categoria non trovata · MyCity', robots: { index: false } };
   }
   const name = cat.name;
+  const vuota = cat.id ? (await haProdotti(cat.id)) === false : false;
   const desc = CATEGORY_LONG_DESC[params.slug] ?? `Acquista ${name.toLowerCase()} dai negozi di Piacenza su MyCity. ${CONSEGNA_ALL_ORA_CHE_SCEGLI}.`;
   return {
     title: `${name} a Piacenza — Compra online dai negozi locali · MyCity`,
@@ -44,6 +82,7 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
       siteName: 'MyCity',
     },
     alternates: { canonical: `/category/${params.slug}` },
+    ...(vuota ? { robots: { index: false, follow: true } } : {}),
   };
 }
 
