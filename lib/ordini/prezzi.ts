@@ -471,15 +471,26 @@ export function consegnaDopoLAnnullo(a: {
   // già un annullato, quindi, la consegna scritta può stare sotto la regola (mai sopra, mai sotto
   // zero); il fattorino deve essere sempre quello della regola.
   // Prova: tests/unit/col-codice-il-secondo-rifiuto-rifa-il-giro.test.ts.
+  // 1/11/2026 — Sotto la regola, però, lo stesso conto scritto sta spesso sotto TUTTE E DUE le
+  // regole (col codice la consegna è sempre più bassa): provando prima «senza codice» il giro di un
+  // carrello col codice si rifaceva senza, e la latteria da 9,99 € saliva a 3,80 € invece di 3 €
+  // (80 centesimi resi in meno al cliente). Quindi prima si cerca il conto esatto, col codice o
+  // senza; solo se manca, la consegna sotto la regola, e lì vince la regola più vicina, che è
+  // quella col codice. Prova: tests/unit/col-codice-il-secondo-rifiuto-resta-col-codice.test.ts.
   const dopoUnAnnullo = a.ordini.some((o) => o.giaAnnullato);
-  const scritto = (c: Array<{ deliveryFeeCents: number; riderFeeCents: number }>) =>
+  const scritto = (c: Array<{ deliveryFeeCents: number; riderFeeCents: number }>, sottoLaRegola: boolean) =>
     c.every(
       (x, i) =>
         x.riderFeeCents === vivi[i].riderFeeCents &&
         (x.deliveryFeeCents === vivi[i].deliveryFeeCents ||
-          (dopoUnAnnullo && vivi[i].deliveryFeeCents >= 0 && vivi[i].deliveryFeeCents < x.deliveryFeeCents)),
+          (sottoLaRegola && vivi[i].deliveryFeeCents >= 0 && vivi[i].deliveryFeeCents < x.deliveryFeeCents)),
     );
-  const codice = [false, true].find((conCodice) => scritto(contoDelGiro(vivi, a.consegnaVeloce, conCodice)));
+  const esatto = [false, true].find((conCodice) => scritto(contoDelGiro(vivi, a.consegnaVeloce, conCodice), false));
+  const codice =
+    esatto ??
+    (dopoUnAnnullo
+      ? [true, false].find((conCodice) => scritto(contoDelGiro(vivi, a.consegnaVeloce, conCodice), true))
+      : undefined);
   if (codice === undefined) return null;
 
   const restano = vivi.filter((o) => o.id !== a.annullaId);
