@@ -182,7 +182,8 @@ describe('reso col credito ripreso dopo un guasto', () => {
     expect(o.refunded_amount_cents).toBe(2000);
   });
   // Importi sotto i 10 € e sopra i 30 €, credito che copre tutto l'ordine, e il doppio tocco su «rimborsato».
-  for (const [lordo, reso] of [[1000, 800], [5000, 3500]] as const) {
+  // 1000/800 e 5000/3500 li ferma anche il tetto del lordo; 5000/800 e 8000/3100 no: li', senza freno, si conta due volte.
+  for (const [lordo, reso] of [[1000, 800], [5000, 3500], [5000, 800], [8000, 3100]] as const) {
     it(`solo credito, ${lordo / 100} € e reso da ${reso / 100} €: contato una volta anche col doppio tocco`, async () => {
       const netto = Math.round(lordo * 0.9);
       finto.db = creaFintoDatabase({

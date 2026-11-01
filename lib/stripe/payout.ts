@@ -1454,6 +1454,12 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // viene dopo, che il tentativo di prima non aveva raggiunto. Se non manca niente, non si tocca niente.
   const bonificoDiPrima =
     tipo === 'contanti' && opts.idempotencyKey ? bonificoDellaChiave(order, opts.idempotencyKey) : null;
+  // Il testimone del rimborso col solo credito di questa chiave (vedi il freno piu' sotto): con lui
+  // la prenotazione c'e' gia', e i controlli si fanno sull'ordine com'era quando e' partita.
+  const segnoDelCreditoGiaScritto =
+    tipo === 'contanti' && !!opts.idempotencyKey && !bonificoDiPrima &&
+    rimborsiGiaScritti({ stripe_refund_id: (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null })
+      .has(`wallet:${opts.idempotencyKey}`);
 
   // Prima si divide, poi si rimborsa: il perché sta su `RimborsoInAttesaDellaDivisione`.
   // Prima di prenotare l'importo, così non resta niente da togliere.
@@ -1547,12 +1553,12 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // Sul bonifico rimasto a meta' questi controlli li ha gia' fatti il tentativo di prima, e
   // adesso l'ordine dice «rimborsato»: lo stato dice cosa e' TORNATO, non cosa era ARRIVATO.
   // Si guarda l'ordine com'era quando quel tentativo e' partito, cioe' incassato.
-  const comeAllInizio = bonificoDiPrima ? { ...order, payment_status: 'PAID' } : order;
+  const comeAllInizio = bonificoDiPrima || segnoDelCreditoGiaScritto ? { ...order, payment_status: 'PAID' } : order;
   const rimborsabile = quantoSiPuoRestituire(order);
-  if (!bonificoDiPrima && rimborsabile.perche === 'nessun-incasso') {
+  if (!bonificoDiPrima && !segnoDelCreditoGiaScritto && rimborsabile.perche === 'nessun-incasso') {
     throw new RimborsoNonRitentabile(motivoNienteDaRestituire('nessun-incasso'));
   }
-  const safeAmountCents = Math.max(0, Math.min(rimborsoGiaUscito ? (rimborsoGiaUscito.amount ?? 0) : opts.amountCents, bonificoDiPrima ? grossCents : rimborsabile.massimoCents));
+  const safeAmountCents = Math.max(0, Math.min(rimborsoGiaUscito ? (rimborsoGiaUscito.amount ?? 0) : opts.amountCents, bonificoDiPrima || segnoDelCreditoGiaScritto ? grossCents : rimborsabile.massimoCents));
   if (safeAmountCents <= 0) throw new RimborsoNonRitentabile('refundOrder: importo rimborso non valido');
 
   // R71 — IN CHE MODO TORNANO I SOLDI. Carta → sulla carta. Contanti → la parte
@@ -1586,35 +1592,53 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     };
   }
 
-  // 1/11/2026 (collaudo finale) — IL RIMBORSO COL SOLO CREDITO DI QUESTA CHIAVE E' GIA' USCITO.
-  // Lo stesso freno della carta (`ilRimborsoDellaChiaveGiaUscito`), col testimone del credito:
-  // il diario, che ha una riga sola per chiave (indice unico, 098 e 143). Il caso: ordine in
-  // contanti pagato col credito, il negozio approva 20 €, il credito esce, la scrittura sul reso
-  // cade e il negozio segue i passi normali con la stessa chiave `return_<id>`. Prima si
-  // prenotava di nuovo: l'ordine contava 40 € su 20 usciti e al negozio si toglieva la quota due
-  // volte. Dopo che il credito e' uscito non si torna mai indietro (vedi il blocco dei soldi):
-  // quella prenotazione e quella quota le ha gia' fatte il tentativo di prima. Una lettura
-  // caduta lancia qui, prima di toccare qualunque cosa. (Col bonifico il segno sull'ordine fa
-  // gia' lo stesso lavoro: `bonificoDiPrima`.)
-  if (
-    tipo === 'contanti' && opts.idempotencyKey && !bonificoDiPrima &&
-    ripartoVero.bonificoCents === 0 && ripartoVero.creditoCents > 0
-  ) {
-    const giaAccreditato = await accreditoADiario(admin, opts.idempotencyKey);
-    // Il credito c'e' E l'ordine lo conta: il tentativo di prima e' arrivato fin qui. Se non lo
-    // conta (il guasto doppio: accredito in errore e diario muto, prenotazione stornata) si va
-    // avanti come prima: `wallet_credit` risponde 23505 e il rimborso si registra una volta.
-    if (giaAccreditato != null && Number(order.refunded_amount_cents ?? 0) >= giaAccreditato) {
-      controllaLaCifraGiaAccreditata(giaAccreditato, ripartoVero.creditoCents);
-      return {
-        refundId: `wallet:${opts.idempotencyKey}`,
-        reversedCents: 0,
-        pieno: Number(order.refunded_amount_cents ?? 0) >= grossCents,
-        modo,
-        importoCents: giaAccreditato,
-        creditoCents: giaAccreditato,
-        bonificoCents: 0,
-      };
+  // 1/11/2026 (collaudo finale, secondo giro) — IL CREDITO DI QUESTA CHIAVE E' GIA' CONTATO?
+  // Lo stesso freno della carta e del bonifico, con un TESTIMONE PER CHIAVE sull'ordine: il segno
+  // `wallet:<chiave>` nell'elenco dei rimborsi, scritto subito dopo la prenotazione e tolto dal
+  // `catch` insieme a lei. Segno presente = prenotazione presente (contata una volta), qualunque
+  // altro rimborso abbia l'ordine. Il totale rimborsato non basta: un altro reso lo inganna.
+  //  · segno e credito a diario: il tentativo di prima e' arrivato oltre il credito. Non si rifa'
+  //    niente. Se lo stato del pagamento non e' mai stato scritto (la funzione e' morta prima della
+  //    quota del negozio) lo si dice a chi amministra, come fa la carta.
+  //  · segno senza credito a diario: il tentativo di prima e' morto fra la prenotazione e il
+  //    credito. Si finisce il lavoro senza prenotare di nuovo (`creditoDiPrima`).
+  //  · niente segno: nessuna prenotazione in piedi. Si va come sempre; se il credito c'e' gia'
+  //    (guasto doppio, prenotazione stornata) `wallet_credit` risponde 23505 e si registra una volta.
+  const segnoDelCredito = (k: string) => `wallet:${k}`;
+  const soloCredito = tipo === 'contanti' && !!opts.idempotencyKey && !bonificoDiPrima &&
+    ripartoVero.bonificoCents === 0 && ripartoVero.creditoCents > 0;
+  let creditoDiPrima = false;
+  if (soloCredito) {
+    if (segnoDelCreditoGiaScritto) {
+      // Una lettura caduta lancia qui, prima di toccare qualunque cosa.
+      const giaAccreditato = await accreditoADiario(admin, opts.idempotencyKey as string);
+      if (giaAccreditato == null) {
+        creditoDiPrima = true;
+      } else {
+        controllaLaCifraGiaAccreditata(giaAccreditato, ripartoVero.creditoCents);
+        const statoMaiScritto = order.payment_status !== 'REFUNDED' && order.payment_status !== 'PARTIALLY_REFUNDED';
+        if (statoMaiScritto) {
+          try {
+            await notifyAdmins(
+              '⚠️ Rimborso ripreso: controlla i conti dell ordine',
+              `Il credito da ${formatPriceFromCents(giaAccreditato)} sull'ordine #${order.id.slice(0, 8)} era già uscito, ma il rimborso non risulta finito. ` +
+                'Non l ho rifatto: controlla lo stato del pagamento e la quota ripresa al negozio.',
+              '/admin/orders',
+            );
+          } catch (e) {
+            logger.error('[refundOrder] avviso del credito ripreso non inviato', { orderId: order.id, e });
+          }
+        }
+        return {
+          refundId: segnoDelCredito(opts.idempotencyKey as string),
+          reversedCents: 0,
+          pieno: Number(order.refunded_amount_cents ?? 0) >= grossCents,
+          modo,
+          importoCents: giaAccreditato,
+          creditoCents: giaAccreditato,
+          bonificoCents: 0,
+        };
+      }
     }
   }
 
@@ -1641,7 +1665,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // stessa istruzione. Se non rivendica, non si chiama Stripe: si esce.
   // Il bonifico rimasto a meta' ha gia' la sua prenotazione: non se ne fa un'altra.
   let newRefundedTotal = Number(order.refunded_amount_cents ?? 0);
-  if (!bonificoDiPrima) {
+  if (!bonificoDiPrima && !creditoDiPrima) {
     const { data: claimRimborso, error: errClaim } = await admin
       .rpc('accumula_rimborso', { p_order_id: order.id, p_delta: safeAmountCents });
     if (errClaim) {
@@ -1791,6 +1815,14 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
         refundId = segno;
       } else {
         refundId = `wallet:${chiave}`;
+        // Il testimone di questa chiave (vedi il freno qui sopra), PRIMA del credito: e' il passo
+        // che non si disfa. Una ripresa che lo trova gia' non lo riscrive e non lo toglie.
+        if (soloCredito && !creditoDiPrima) {
+          segnoDaTogliere = refundId;
+          const elencoLetto = (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null;
+          const errSegno = await aggiungiAllElencoDeiRimborsi(admin, order.id, elencoLetto, refundId);
+          if (errSegno) throw new Error(`refundOrder COD: credito non scritto sull ordine: ${errSegno.message}`);
+        }
       }
       // Idempotente sulla chiave: unique index su wallet_ledger(reason, ref),
       // migrazioni 098 e 143.
@@ -1840,7 +1872,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
       });
     }
     // Il bonifico rimasto a meta' non ha prenotato niente: la prenotazione resta del tentativo di prima.
-    const { error: errStorno } = bonificoDiPrima
+    const { error: errStorno } = bonificoDiPrima || creditoDiPrima
       ? { error: null }
       : await admin.rpc('storna_rimborso', { p_order_id: order.id, p_delta: safeAmountCents });
     if (errStorno) {
