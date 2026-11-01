@@ -166,8 +166,11 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
   // `domandaCategorie`, altrimenti il precarico del server non verrebbe
   // riconosciuto. Se la rotta non risponde si legge dal database come prima.
   const { data: tutte = [], isLoading: caricoCategorie, isError } = useQuery(domandaCategoriePubbliche(supabase));
+  // La lettura delle piene NON blocca il disegno: il server precarica solo le categorie, e
+  // aspettarla metteva gli scheletri nell'HTML del server (Google e il primo disegno non vedevano
+  // nessuna tessera). Finché non c'è si mostrano tutte, come prima; quando arriva si filtra.
   const piene = useQuery(domandaCategoriePiene(supabase));
-  const isLoading = caricoCategorie || piene.isLoading;
+  const isLoading = caricoCategorie;
   const categories = useMemo(
     () => soloLePiene(tutte, piene.isError ? null : piene.data),
     [tutte, piene.isError, piene.data],
