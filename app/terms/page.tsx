@@ -23,7 +23,7 @@ export const metadata = {
 
 // 31/10/2026 (ondata 6) — Il numero che si accetta e quello che si legge sono lo stesso.
 const VERSION = /terms-([\d.]+)/.exec(VERSIONE_TESTI_LEGALI)?.[1] ?? VERSIONE_TESTI_LEGALI;
-const EFFECTIVE_DATE = '24 maggio 2026';
+const EFFECTIVE_DATE = '1 novembre 2026';
 
 const TOC = [
   { id: 'premesse', label: '1 · Premesse e definizioni' },

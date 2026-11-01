@@ -7,7 +7,7 @@ import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
 import { titolare, recapitoPrivacy } from '@/lib/legal/titolare';
 
 const VERSION = '2.0';
-const EFFECTIVE_DATE = '24 maggio 2026';
+const EFFECTIVE_DATE = '1 novembre 2026';
 
 const TOC = [
   { id: 'cosa-sono', label: 'Cosa sono i cookie' },
