@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useProfile } from './hooks/useProfile';
 import { useBranding } from './hooks/useBranding';
 import NewsletterForm from './NewsletterForm';
+import { domandaCategoriePiene, soloLePiene } from './CategoryShowcase';
 import { rigaIdentita, titolare } from '@/lib/legal/titolare';
 import { linkWhatsApp } from '@/lib/contatto-whatsapp';
 import { indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
@@ -165,8 +166,14 @@ const Footer = () => {
     },
   });
 
+  // 1/11/2026 — Il piede elencava nove categorie, otto senza un prodotto. Adesso restano solo
+  // quelle con qualcosa dentro (stessa lettura e stessa chiave della vetrina in home). Finché la
+  // risposta non c'è non si elenca nessuna categoria — mostrarle tutte e poi toglierle era proprio
+  // il difetto. Se la lettura fallisce si torna all'elenco intero, come prima.
+  const piene = useQuery({ ...domandaCategoriePiene(supabase), enabled: !areaPro && !isSellerArea });
   const madriLette = (categorie ?? []).filter((c) => c.parent_id === null);
-  const madri = madriLette.length > 0 ? madriLette : CATEGORIE_DI_RISERVA;
+  const madriTutte = madriLette.length > 0 ? madriLette : CATEGORIE_DI_RISERVA;
+  const madri = piene.isError ? madriTutte : piene.data ? soloLePiene(madriTutte, piene.data) : [];
 
   if (areaPro) return null;
 
