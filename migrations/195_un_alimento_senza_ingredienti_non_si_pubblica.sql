@@ -19,7 +19,12 @@
 --   alimento esaurito o in bozza quando torna lo stock. Il guardiano vedeva
 --   ancora lo stato vecchio e lasciava passare.
 -- Il trigger nuovo si chiama «zz_prodotti_alimentari_dichiarazioni» (scatta
--- dopo trg_auto_republish) e guarda ogni INSERT e ogni UPDATE. Il DROP del
+-- dopo trg_auto_republish) e guarda ogni INSERT e ogni UPDATE, ma su un UPDATE
+-- controlla solo quando il prodotto diventa comprabile o cambiano dichiarazioni
+-- o categoria (collaudo finale dell'1/11: la prima versione bloccava anche lo
+-- scalo della merce e il cambio prezzo di un alimento gia' in vetrina). Se e'
+-- la merce che torna a scaffale a ripubblicarlo, il movimento riesce e il
+-- prodotto resta fuori vendita. Il DROP del
 -- vecchio e il CREATE del nuovo stanno qui, cosi' la 195 regge anche su un
 -- database dove la 126 non e' ancora passata.
 --
@@ -48,10 +53,27 @@ DECLARE
   v_radice text;
   v_allergeni text;
   v_ingredienti text;
+  v_pubblica boolean := true;
+  v_cambia boolean := true;
+  v_manca text;
 BEGIN
   -- Solo i prodotti comprabili. Bozze e archiviati passano.
   IF NEW.status IS DISTINCT FROM 'available' THEN
     RETURN NEW;
+  END IF;
+
+  -- Su un UPDATE si controlla solo quando il prodotto DIVENTA comprabile o
+  -- cambiano le sue dichiarazioni o la categoria. Mai sulla giacenza o sul
+  -- prezzo di un prodotto che resta in vetrina: un alimento gia' in vendita
+  -- prima della 195 deve restare comprabile (reserve_stock), annullabile
+  -- (restore_stock, cancel_order) e modificabile nel prezzo.
+  IF TG_OP = 'UPDATE' THEN
+    v_pubblica := OLD.status IS DISTINCT FROM 'available';
+    v_cambia := NEW.attributes IS DISTINCT FROM OLD.attributes
+             OR NEW.category_id IS DISTINCT FROM OLD.category_id;
+    IF NOT v_pubblica AND NOT v_cambia THEN
+      RETURN NEW;
+    END IF;
   END IF;
   IF NEW.category_id IS NULL THEN
     RETURN NEW;
@@ -71,18 +93,28 @@ BEGIN
   END IF;
 
   v_allergeni := btrim(coalesce(NEW.attributes ->> 'allergeni', ''));
-  IF v_allergeni = '' THEN
-    RAISE EXCEPTION 'Un prodotto alimentare non si puo pubblicare senza dichiarare gli allergeni. Se non ne contiene nessuno, scrivi «Nessuno dei 14 allergeni».'
-      USING ERRCODE = '23514';
-  END IF;
-
   v_ingredienti := btrim(coalesce(NEW.attributes ->> 'ingredienti', ''));
-  IF v_ingredienti = '' THEN
-    RAISE EXCEPTION 'Un prodotto alimentare non si puo pubblicare senza la lista degli ingredienti. Salvalo come bozza e completala dal prodotto.'
-      USING ERRCODE = '23514';
+  IF v_allergeni = '' THEN
+    v_manca := 'Un prodotto alimentare non si puo pubblicare senza dichiarare gli allergeni. Se non ne contiene nessuno, scrivi «Nessuno dei 14 allergeni».';
+  ELSIF v_ingredienti = '' THEN
+    v_manca := 'Un prodotto alimentare non si puo pubblicare senza la lista degli ingredienti. Salvalo come bozza e completala dal prodotto.';
+  END IF;
+  IF v_manca IS NULL THEN
+    RETURN NEW;
   END IF;
 
-  RETURN NEW;
+  -- La merce che torna a scaffale (annullo di un ordine, rifornimento): la
+  -- ripubblicazione automatica (trg_auto_republish, 032) lo rimetterebbe in
+  -- vendita. Qui non si blocca il movimento di magazzino, che deve riuscire
+  -- (altrimenti l'ordine non si annulla): il prodotto resta dov'era, fuori
+  -- vendita, finche' il negozio non completa le dichiarazioni.
+  IF TG_OP = 'UPDATE' AND v_pubblica AND NOT v_cambia
+     AND NEW.stock IS DISTINCT FROM OLD.stock THEN
+    NEW.status := OLD.status;
+    RETURN NEW;
+  END IF;
+
+  RAISE EXCEPTION '%', v_manca USING ERRCODE = '23514';
 END$$;
 
 COMMENT ON FUNCTION public.alimentare_senza_allergeni_non_si_pubblica() IS

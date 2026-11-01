@@ -45,15 +45,14 @@ BEGIN
   -- vendita da solo quando torna lo stock (trg_auto_republish della 032).
   INSERT INTO public.products (seller_id, name, description, price, stock, category_id, attributes, status)
   VALUES (v_seller, 'Prova 195 esaurito', 'x', 1, 0, v_cat, '{"allergeni":"Glutine"}'::jsonb, 'out_of_stock');
-  v_passato := false;
-  BEGIN
-    UPDATE public.products SET stock = 5 WHERE name = 'Prova 195 esaurito' AND seller_id = v_seller;
-    v_passato := true;
-  EXCEPTION WHEN check_violation THEN
-    v_passato := false;
-  END;
-  IF v_passato THEN
+  -- Il movimento di magazzino riesce (un annullo non si deve bloccare), ma il
+  -- prodotto resta fuori vendita.
+  UPDATE public.products SET stock = 5 WHERE name = 'Prova 195 esaurito' AND seller_id = v_seller;
+  IF EXISTS (SELECT 1 FROM public.products WHERE name = 'Prova 195 esaurito' AND seller_id = v_seller AND status = 'available') THEN
     RAISE EXCEPTION 'FAIL: alimento senza ingredienti tornato in vendita al rifornimento';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.products WHERE name = 'Prova 195 esaurito' AND seller_id = v_seller AND stock = 5) THEN
+    RAISE EXCEPTION 'FAIL: il rifornimento non e passato';
   END IF;
 
   -- Con allergeni e ingredienti il rifornimento lo rimette in vendita.
