@@ -297,6 +297,38 @@ export function eventoSenzaDatiPersonali(evento: CaptureResult | null): CaptureR
   return evento;
 }
 
+/**
+ * 1/11/2026 — L'INDIRIZZO D'INGRESSO USCIVA INTERO DALLA PORTA DEI FLAG.
+ *
+ * `before_send` gira solo sugli eventi. La richiesta che legge i flag
+ * (`POST /flags/?v=2`) e' un'altra porta: nel corpo porta
+ * `person_properties.$initial_current_url`, cioe' l'indirizzo della pagina
+ * d'ingresso cosi' com'era (`/search?q=mario.rossi@gmail.com`). PostHog lo
+ * ripulisce da se' solo con `mask_personal_data_properties`, e solo per i
+ * parametri di cui conosce il NOME (i suoi: gclid, fbclid… piu' quelli che gli
+ * diamo noi). Allora gli diamo i nomi di TUTTI i parametri dell'indirizzo su
+ * cui la libreria parte — e' proprio quello che diventera' `$initial_current_url`
+ * — tranne le etichette di campagna, che PostHog legge a parte per l'attribuzione.
+ * Il cancelletto se ne va del tutto: e' li' che Supabase mette i gettoni.
+ */
+export function opzioniIndirizzoIngressoMascherato(
+  search: string = typeof window === 'undefined' ? '' : window.location.search,
+) {
+  const nomi = new Set<string>(['q', 'email', 'phone', 'telefono', 'token', 'code', 'token_hash']);
+  try {
+    for (const nome of new URLSearchParams(search).keys()) {
+      if (!/^utm_/i.test(nome)) nomi.add(nome);
+    }
+  } catch {
+    // indirizzo illeggibile: restano i nomi fissi
+  }
+  return {
+    mask_personal_data_properties: true,
+    custom_personal_data_properties: [...nomi],
+    disable_capture_url_hashes: true,
+  };
+}
+
 let posthogInstance: PostHogLike | null = null;
 
 async function getPosthog() {
@@ -325,6 +357,10 @@ async function getPosthog() {
     capture_pageleave: true,
     // Il cancello sul DATO: ogni evento passa di qui prima di partire.
     before_send: eventoSenzaDatiPersonali,
+    // La porta dei flag (`POST /flags/?v=2`) non passa da `before_send`: porta
+    // `person_properties.$initial_current_url`, l'indirizzo d'ingresso. PostHog
+    // lo maschera solo per NOME di parametro, quindi gli diamo i nomi presenti.
+    ...opzioniIndirizzoIngressoMascherato(),
     session_recording: opzioniRegistrazioneSchermo(),
     autocapture: {
       dom_event_allowlist: ['click', 'submit'],
