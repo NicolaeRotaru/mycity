@@ -3,7 +3,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { NextResponse } from 'next/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
-import { getAnthropic, estimateCostEur, type ModelId } from '@/lib/ai/client';
+import { getAnthropic, estimateCostEur, segnalaModelloRitirato, type ModelId } from '@/lib/ai/client';
 import { aggiungiSpesaCents, spesaDiOggiCents, statoContoCondiviso } from '@/lib/ai/tettoSpesa';
 import { decidiSpesaAi, euroInCents, leggiCopieAttese } from '@/lib/ai/decisioneTettoSpesa';
 
@@ -325,6 +325,8 @@ export async function runMessage<TInput = unknown>(
   // Circuit breaker: blocca se si è già superato il budget giornaliero.
   await controllaTettoSpesaAi(args.feature);
   const client = getAnthropic(); // può lanciare AiConfigError (gestito a monte)
+  // Dal 30/11/2026 un modello ritirato ancora in uso si vede nei log d.errore.
+  segnalaModelloRitirato(args.model);
 
   let response: Anthropic.Message;
   try {

@@ -74,7 +74,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const categories = (categoriesData ?? []) as CategoryRow[];
   const current = row as unknown as ProductRow;
 
-  const { update, changed, protetti } = resolveAiPatch({
+  const { update, changed, protetti, rifiutati } = resolveAiPatch({
     patch,
     current: {
       attributes: current.attributes ?? null,
@@ -101,6 +101,11 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     // il negoziante deve sapere perche' non succede niente, e dove si fa.
     if (protetti.length > 0) {
       return ApiErrors.invalidRequest(messaggioDichiarazioniProtette(protetti));
+    }
+    // 1/11/2026 — Se l'unica modifica era un prezzo rifiutato, il motivo
+    // arriva al negoziante invece di un «nessuna modifica valida» muto.
+    if (rifiutati.length > 0) {
+      return ApiErrors.invalidRequest(rifiutati.map((r) => r.motivo).join('; '), { rifiutati });
     }
     return ApiErrors.invalidRequest('Nessuna modifica valida da applicare.');
   }
@@ -181,6 +186,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   return NextResponse.json({
     ok: true,
     changed,
+    rifiutati,
     product: productSnapshot(updated as unknown as ProductRow, categories),
   });
 });
