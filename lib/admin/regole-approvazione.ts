@@ -16,7 +16,7 @@
 
 /** Le colonne che la rotta deve leggere per poter decidere. */
 export const COLONNE_PER_APPROVARE =
-  'business_vat_number, kyc_id_doc_front_url, kyc_selfie_url, rider_license_url, rider_insurance_url';
+  'approval_status, business_vat_number, kyc_id_doc_front_url, kyc_selfie_url, rider_license_url, rider_insurance_url';
 
 type ColonnaDocumento = 'kyc_id_doc_front_url' | 'kyc_selfie_url' | 'rider_license_url' | 'rider_insurance_url';
 
@@ -43,6 +43,7 @@ export const DOCUMENTI_OBBLIGATORI: Record<'seller' | 'rider', ReadonlyArray<{ c
 
 export type ProfiloDaApprovare = {
   role: string;
+  approval_status?: string | null;
   business_vat_number?: string | null;
 } & Partial<Record<ColonnaDocumento, string | null>>;
 
@@ -59,6 +60,8 @@ export function partitaIvaValida(grezza: string | null | undefined): boolean {
   if (typeof grezza !== 'string') return false;
   const piva = normalizzaPartitaIva(grezza);
   if (!/^[0-9]{11}$/.test(piva)) return false;
+  // «00000000000» torna col calcolo (somma 0, controllo 0) ma non è una partita vera.
+  if (/^0+$/.test(piva)) return false;
   let somma = 0;
   for (let i = 0; i < 10; i++) {
     let c = Number(piva[i]);
@@ -73,25 +76,37 @@ export function partitaIvaValida(grezza: string | null | undefined): boolean {
 
 const presente = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
 
+export type AzioneCheApprova = 'approve' | 'reactivate';
+
 /**
- * `null` se il profilo si può approvare; altrimenti il messaggio per lo staff,
- * che dice cosa manca e cosa fare.
+ * `null` se il profilo si può approvare (o riattivare); altrimenti il messaggio
+ * per lo staff, che dice cosa manca e cosa fare.
+ *
+ * Riattivare un SOSPESO non è una nuova approvazione: il negozio era già stato
+ * approvato, e un negozio storico senza partita IVA non ha nessuna pagina per
+ * inserirla (/sell risponde «sei sospeso»). Ripetere il controllo lì lo terrebbe
+ * sospeso per sempre. Il controllo resta per `approve` e per `reactivate` da
+ * rifiutato o in attesa, che portano ad «approvato» chi non lo è mai stato.
  */
-export function motivoPerNonApprovare(p: ProfiloDaApprovare): string | null {
+export function motivoPerNonApprovare(p: ProfiloDaApprovare, azione: AzioneCheApprova = 'approve'): string | null {
   if (p.role !== 'seller' && p.role !== 'rider') return null;
+  if (azione === 'reactivate' && p.approval_status === 'suspended') return null;
+
+  const verbo = azione === 'reactivate' ? 'Non si riattiva' : 'Non si approva';
+  const prima = azione === 'reactivate' ? 'prima di riattivare' : 'prima di approvare';
 
   if (p.role === 'seller') {
     if (!presente(p.business_vat_number)) {
-      return 'Non si approva: il negozio non ha la partita IVA. Fatti mandare la partita IVA dal negoziante e falla inserire prima di approvare.';
+      return `${verbo}: il negozio non ha la partita IVA. Fatti mandare la partita IVA dal negoziante e falla inserire ${prima}.`;
     }
     if (!partitaIvaValida(p.business_vat_number)) {
-      return 'Non si approva: la partita IVA del negozio non è valida (servono 11 cifre con il carattere di controllo giusto). Falla correggere prima di approvare.';
+      return `${verbo}: la partita IVA del negozio non è valida (servono 11 cifre con il carattere di controllo giusto). Falla correggere ${prima}.`;
     }
   }
 
   const mancanti = DOCUMENTI_OBBLIGATORI[p.role].filter((d) => !presente(p[d.colonna])).map((d) => d.nome);
   if (mancanti.length > 0) {
-    return `Non si approva: mancano i documenti obbligatori (${mancanti.join(', ')}). Chiedi di caricarli prima di approvare.`;
+    return `${verbo}: mancano i documenti obbligatori (${mancanti.join(', ')}). Chiedi di caricarli ${prima}.`;
   }
   return null;
 }

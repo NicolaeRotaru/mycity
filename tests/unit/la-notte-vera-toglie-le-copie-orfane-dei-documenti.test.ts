@@ -72,10 +72,34 @@ describe('la notte vera pota le copie orfane dei documenti d identita', () => {
     expect(res.status).toBe(200);
   });
 
-  it('il conto senza cancellare non elenca e non tocca lo storage', async () => {
+  it('IL CASO CHE ROMPEVA — il conto a mano dice quanti documenti orfani la notte toglierebbe, e non ne toglie nessuno', async () => {
+    mondo.attuale = fintoGiroNotturno({
+      tabelle: {
+        profiles: [{ id: 'u1', kyc_id_doc_front_url: 'u1/vivo.jpg' }],
+        notifications: [],
+      },
+      secchi: {
+        'kyc-docs': {
+          '': [{ name: 'u1', id: null }],
+          u1: [
+            { name: 'vivo.jpg', id: 'f0', created_at: giorniFa(40) },
+            { name: 'o1.jpg', id: 'f1', created_at: giorniFa(40) },
+            { name: 'o2.jpg', id: 'f2', created_at: giorniFa(30) },
+            { name: 'o3.jpg', id: 'f3', created_at: giorniFa(20) },
+            // Troppo giovane: la notte non lo toglierebbe, quindi non si conta.
+            { name: 'nuovo.jpg', id: 'f4', created_at: giorniFa(1) },
+          ],
+        },
+      },
+    });
     const res = await POST(richiesta('http://localhost/api/cron/process-deletions?a_mano=1&solo_conta=1'));
     expect(res.status).toBe(200);
-    expect(mondo.attuale.elenchi).toEqual([]);
-    expect(rimossiDaiDocumenti()).toEqual([]);
+    const corpo = await res.json();
+    const voce = (corpo.fileDaTogliere as Array<{ cosa: string; file: number | null }> | undefined)?.find(
+      (p) => p.cosa === 'documenti-kyc-orfani',
+    );
+    expect(voce, 'il conto a mano tace sui documenti d identita').toEqual({ cosa: 'documenti-kyc-orfani', file: 3 });
+    expect(rimossiDaiDocumenti(), 'il conto ha tolto file').toEqual([]);
+    expect(mondo.attuale.diario.some((v) => v.op === 'file-rimossi')).toBe(false);
   });
 });

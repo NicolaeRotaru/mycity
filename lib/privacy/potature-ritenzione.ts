@@ -445,6 +445,45 @@ export function potaturaDegliOrfaniKyc(adessoMs: number): Potatura {
   };
 }
 
+/**
+ * 1/11/2026 — IL CONTO DELLE COPIE ORFANE, SENZA TOGLIERNE NESSUNA.
+ *
+ * Il conto a mano (`contaPotature`) non sa elencare lo storage, e taceva sui
+ * documenti d'identita': acceso il giro vero, la prima notte ne sparivano fino
+ * a `TETTO_ORFANI_PER_NOTTE` da un secchio senza backup, senza che nessuno
+ * l'avesse visto prima. Qui il passo gira in «solo conta» (elencare e leggere
+ * i profili sono letture), e lo storage passato ha `remove` che rifiuta: anche
+ * se un giorno la modalita' si rompesse, non si toglie niente.
+ * Il numero sono FILE, non righe: quelli che la notte toglierebbe, tetto
+ * compreso. Per questo ha un tipo suo e non sta nell'elenco delle righe
+ * toccate, dove si confronterebbe con le scritture del database.
+ */
+export type ContoFile =
+  | { cosa: string; file: number }
+  | { cosa: string; file: null; nonContata: string };
+
+export async function contaOrfaniKyc(admin: ClienteOrfani, adessoMs: number = Date.now()): Promise<ContoFile> {
+  const cosa = 'documenti-kyc-orfani';
+  const senzaTogliere: ClienteOrfani = {
+    from: (tabella) => admin.from(tabella),
+    storage: {
+      from: (secchio) => {
+        const vero = admin.storage.from(secchio);
+        return {
+          list: (prefisso, opzioni) => vero.list(prefisso, opzioni),
+          remove: () => Promise.reject(new Error(NON_SI_CONTA_SENZA_FARLA)),
+        };
+      },
+    },
+  };
+  try {
+    const r = await potaOrfaniKyc(senzaTogliere, registroMuto, adessoMs, { soloConta: true });
+    return { cosa, file: r.daTogliere };
+  } catch (e) {
+    return { cosa, file: null, nonContata: e instanceof Error ? e.message : 'errore' };
+  }
+}
+
 /** Tutto quello che la notte deve potare: le finestre dichiarate e gli orfani di kyc-docs. */
 export function potatureNotturne(adessoMs: number): Potatura[] {
   return [...potatureDiRitenzione(adessoMs), potaturaDegliOrfaniKyc(adessoMs)];

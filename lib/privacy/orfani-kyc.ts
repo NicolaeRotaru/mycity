@@ -93,6 +93,11 @@ export type OpzioniOrfani = {
   tetto?: number;
   /** Quante voci per pagina, sia nell'elenco del secchio sia nella lettura dei profili. */
   pagina?: number;
+  /**
+   * 1/11/2026 — Solo conta: elenca, legge i profili e li rilegge (tutte letture),
+   * ma non chiama MAI `remove`. Dice in `daTogliere` quanti file la notte toglierebbe.
+   */
+  soloConta?: boolean;
 };
 
 export type RiepilogoOrfani = {
@@ -104,8 +109,10 @@ export type RiepilogoOrfani = {
   orfani: number;
   /** Orfani lasciati perche' troppo giovani o senza data. */
   recenti: number;
-  /** Orfani tolti davvero. */
+  /** Orfani tolti davvero (sempre 0 in «solo conta»). */
   rimossi: number;
+  /** Orfani che hanno passato tutti i controlli: quelli che la notte toglie (o toglierebbe). */
+  daTogliere: number;
   /** Orfani vecchi lasciati per il tetto: li prende la notte dopo. */
   rinviati: number;
   /** Sottocartelle dentro la cartella di una persona: non sono del caricamento, non si toccano. */
@@ -285,10 +292,10 @@ export async function potaOrfaniKyc(
     daTogliere.push(...(await ancoraOrfani(admin, registro, uid, candidati)));
   }
 
-  // ④ La rimozione, a gruppi.
+  // ④ La rimozione, a gruppi. In «solo conta» non si arriva a chiamare lo storage.
   let rimossi = 0;
   const rifiutati: string[] = [];
-  for (let i = 0; i < daTogliere.length; i += pagina) {
+  for (let i = 0; !opzioni.soloConta && i < daTogliere.length; i += pagina) {
     const gruppo = daTogliere.slice(i, i + pagina);
     const { error } = await admin.storage.from(SECCHIO_DOCUMENTI).remove(gruppo);
     if (error) {
@@ -305,11 +312,22 @@ export async function potaOrfaniKyc(
     orfani: orfani.length,
     recenti: orfani.length - maturi.length,
     rimossi,
+    daTogliere: daTogliere.length,
     rinviati: maturi.length - scelti.length,
     cartelleSaltate,
     salvatiAllaRilettura: scelti.length - daTogliere.length,
   };
-  registro.info('[cron-deletions] orfani del secchio kyc-docs', riepilogo);
+  // 1/11/2026 — Se la rilettura ha salvato qualcosa, la lettura generale ha
+  // mancato riferimenti vivi: senza l'ultimo controllo sarebbero spariti
+  // documenti veri. Non e' una notizia, e' un campanello.
+  if (riepilogo.salvatiAllaRilettura > 0) {
+    registro.warn(
+      '[cron-deletions] orfani kyc: la lettura dei profili ha mancato riferimenti vivi, salvati solo dalla rilettura',
+      riepilogo,
+    );
+  } else {
+    registro.info('[cron-deletions] orfani del secchio kyc-docs', riepilogo);
+  }
   if (rifiutati.length > 0) {
     throw new Error(`${rifiutati.length} orfani non rimossi dal secchio ${SECCHIO_DOCUMENTI}`);
   }

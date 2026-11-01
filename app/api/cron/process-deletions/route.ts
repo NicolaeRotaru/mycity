@@ -18,6 +18,7 @@ import {
 } from '@/lib/cron-cancellazioni';
 import { identificativoAvviso, rispondiAChiAspetta } from '@/lib/privacy/avvisi-a-chi-aspetta';
 import {
+  contaOrfaniKyc,
   contaPotature,
   eseguiPotature,
   potatureNotturne,
@@ -25,6 +26,7 @@ import {
   type ClientePotature,
   type RapportoPotature,
 } from '@/lib/privacy/potature-ritenzione';
+import type { ClienteOrfani } from '@/lib/privacy/orfani-kyc';
 
 export const runtime = 'nodejs';
 
@@ -76,7 +78,12 @@ async function contaSenzaCancellare(admin: Admin, dalCalendario: boolean): Promi
     return segnaGiroNonFatto(ApiErrors.internal(error.message), 'solo_conta');
   }
   const scadute = (data ?? []) as Array<{ user_id: string; deleted_at: string | null }>;
+  // 1/11/2026 — Nel conto entrano anche i documenti d'identita' orfani che la
+  // notte toglierebbe: sono file di un secchio senza backup, e chi accende le
+  // cancellazioni deve vederli prima.
+  // Sono FILE, non righe: stanno in una voce loro, accanto alle potature.
   const potature = await contaPotature(admin as unknown as ClienteCheConta);
+  const fileDaTogliere = [await contaOrfaniKyc(admin as unknown as ClienteOrfani)];
 
   const conto = NextResponse.json({
       ok: true,
@@ -88,8 +95,10 @@ async function contaSenzaCancellare(admin: Admin, dalCalendario: boolean): Promi
         elenco: scadute.map((r) => ({ userId: r.user_id, chiestaIl: r.deleted_at })),
       },
       potature,
+      fileDaTogliere,
       nonContati:
-        "Per ogni account, i file nello storage, le prove di consegna e i dati su Stripe: si vedono solo cancellando.",
+        "Per ogni account, i file nello storage, le prove di consegna e i dati su Stripe: si vedono solo cancellando. " +
+        "I documenti d'identità orfani invece sono contati: «fileDaTogliere» dice quanti file la notte toglierebbe.",
     });
 
   // 31/10/2026 — LA NOTTE CHE CONTA È LA NOTTE DI QUESTO LAVORO, E LASCIA IL BATTITO.
