@@ -49,7 +49,11 @@ export default function RiderShell({
   // Consegna attiva (/rider/orders/[id]): flusso full-screen "map-led" con footer
   // sticky proprio. Nascondiamo la tab bar (come Glovo durante la consegna) per
   // non avere due barre in fondo, e togliamo il padding-bottom dedicato.
-  const isActiveDelivery = /^\/rider\/orders\/[^/]+/.test(pathname);
+  const deliveryMatch = /^\/rider\/orders\/([^/]+)/.exec(pathname);
+  const isActiveDelivery = deliveryMatch !== null;
+  // L'ordine che il fattorino sta portando va nell'allarme SOS: senza, la
+  // consolle admin scriveva «Non era in consegna» anche a meta' consegna.
+  const activeOrderId = deliveryMatch?.[1];
 
   return (
     <div className="min-h-screen w-full bg-cream-100">
@@ -64,7 +68,7 @@ export default function RiderShell({
         </div>
 
         {/* SOS sempre raggiungibile: flottante, sopra la tab bar (P0-7). */}
-        {showSOS && <SOSButton />}
+        {showSOS && <SOSButton orderId={activeOrderId} />}
 
         {/* BOTTOM TAB BAR fissa — ancorata alla colonna phone-width. */}
         {!isActiveDelivery && (
