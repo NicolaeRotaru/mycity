@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { env } from '@/lib/env';
 
 /**
  * 1/11/2026 — IL RIENTRO COL LINK DI RECUPERO PASSATO DA /auth/confirm.
@@ -24,7 +25,12 @@ function segreto(): string | null {
   // Ripiego: una chiave DERIVATA da quella di servizio, mai la chiave stessa.
   // Il risultato non esce dal server (resta nella firma di un biscotto
   // httpOnly), e chi lo vede non può risalire alla chiave.
-  const servizio = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  let servizio: string | undefined;
+  try {
+    servizio = env.supabaseServiceRoleKey();
+  } catch {
+    return null;
+  }
   if (!servizio) return null;
   return crypto.createHmac('sha256', servizio).update('mycity:segno-recupero-password:v1').digest('base64url');
 }
