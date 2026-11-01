@@ -36,6 +36,7 @@ export type EsitoSentinella =
   | { stato: 'ok'; consegnati: number; righe: number }
   | { stato: 'nessun-ordine' }
   | { stato: 'muta'; consegnati: number }
+  | { stato: 'parziale'; consegnati: number; righe: number }
   | { stato: 'non-letta'; motivo: string };
 
 type Conteggio = { count: number | null; error: { message?: string } | null };
@@ -63,6 +64,16 @@ export async function controllaPostaDegliOrdini(supa: any, adesso: Date = new Da
       .gte('created_at', da);
     if (righe.error) throw new Error(String(righe.error.message ?? righe.error));
     const r = righe.count ?? 0;
+    // Ogni consegna con un cliente scrive una riga: meno righe che consegne vuol dire che il
+    // trigger ne ha perse (la sua eccezione le ingoia). Le righe nate negli ultimi 5 minuti
+    // possono solo far salire il conto delle righe, quindi non danno falsi allarmi.
+    if (r > 0 && r < n) {
+      logger.error(
+        "[cron] POSTA D'ORDINE A META': meno email «consegnato» in coda che ordini consegnati.",
+        { consegnatiNelleUltime24Ore: n, righeInCoda: r },
+      );
+      return { stato: 'parziale', consegnati: n, righe: r };
+    }
     if (r > 0) return { stato: 'ok', consegnati: n, righe: r };
 
     logger.error(
