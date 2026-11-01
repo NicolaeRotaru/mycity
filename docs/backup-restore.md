@@ -44,14 +44,16 @@
 - **Elenco delle foto** (`storage.objects` + `storage.buckets`): nella copia
   notturna dal 31/8/2026. Non sono le foto: è la lista di quali file
   esistevano, con che nome e in che secchio — la mappa per sapere cosa manca
-- **File delle foto** (immagini prodotti, stories, reviews): ⚠️ **ANCORA
-  NESSUNA COPIA NOSTRA.** Il pezzo che le copia è scritto e pronto dentro
-  `scripts/backup-db.sh`, ed è **spento** solo perché mancano il secchio di
-  destinazione e le sue chiavi. Dall'8/9/2026 non c'è più niente da modificare
-  nel codice: si accende mettendo tre valori nelle impostazioni di GitHub
-  (§3), e da lì in poi ogni notte copia **e rilegge** almeno una foto. Finché è
-  spento, ogni notte scrive `esito-foto: non-configurato` e non finge di aver
-  copiato
+- **File delle foto** (secchi pubblici `products` — prodotti e loghi dei
+  negozi —, `stories`, `reviews`): dal 1/11/2026 **nella copia notturna**,
+  scaricati dall'API Storage di Supabase da `scripts/copia-foto.mjs` e cifrati
+  accanto al database (`mycity-foto_<data>.tar.gpg`, stesso artefatto, 30
+  giorni). `kyc-docs` **mai**. Serve **un** segreto, gratis:
+  `SUPABASE_SERVICE_ROLE_KEY`. Finché manca, ogni notte il passo «Copia le foto
+  accanto al database» è **rosso e suona l'allarme** (il database si conserva
+  lo stesso). La prova mensile riapre davvero una foto dal pacco
+- **Allarme**: se la copia notturna **o** la prova mensile di ripristino
+  falliscono, si apre una segnalazione nel deposito (posta al proprietario)
 - **Codice**: GitHub origin/main + tutti i branch
 - **Env vars**: Vercel → progetto → Settings → Environment Variables (NON in repo)
 - **Restore drill**: ogni 3 mesi, documenta tempi
@@ -64,7 +66,7 @@
 |---|---|---|---|
 | Postgres DB | notturna (GitHub Actions, cifrata) | 24 h | 30 min |
 | Elenco delle foto (`storage.objects`) | notturna, dentro la stessa copia | 24 h | 30 min |
-| File delle foto (le immagini vere) | ⚠️ **nessuna copia** — il pezzo che le copia è pronto e spento (§3) | ∞ | ∞ |
+| File delle foto (le immagini vere) | notturna, pacco cifrato nello stesso artefatto (dal 1/11/2026, serve `SUPABASE_SERVICE_ROLE_KEY`) — §3 | 24 h | da misurare alla prima prova mensile |
 | Codice | ogni push | 0 | 5 min (re-deploy) |
 | Env vars | manuale on change | – | 1h (re-input) |
 | DNS Netsons | static | – | 1h (re-config) |
@@ -132,12 +134,46 @@ Dove trovi `SUPABASE_DB_URL`:
 > chi lo legge in emergenza smette di cercare la copia, perché il documento
 > gli dice che c'è.
 
-**31/8/2026 (R180) — dove siamo adesso, in due righe:**
+**1/11/2026 — dove siamo adesso:**
 
 | Cosa | Copiata? | Dove |
 |---|---|---|
 | L'**elenco** dei file (nome, secchio, data, proprietario) | ✅ sì, ogni notte | `mycity-elenco-foto_<data>.dump.gpg`, cifrato, insieme al database |
-| I **file** veri (le immagini) | ❌ no — pronto ma spento | serve un secchio di destinazione e le sue chiavi |
+| I **file** dei secchi pubblici (`products`, `stories`, `reviews`) | ✅ sì, ogni notte — **appena c'è il segreto `SUPABASE_SERVICE_ROLE_KEY`** | `mycity-foto_<data>.tar.gpg`, cifrato, nello stesso artefatto del database (30 giorni) |
+| I file di `kyc-docs` (documenti d'identità) | ❌ mai, per scelta di privacy | — |
+| I file di `invoices` e `cod-proof` | ❌ no, finché non si decide (GDPR) | — |
+| Copia delle foto **fuori da GitHub** (rclone, secchio a pagamento) | ❌ spenta | serve un secchio di destinazione e le sue chiavi (sotto) |
+
+#### I file: come funziona la copia di stanotte (1/11/2026)
+
+- Il passo **«Copia le foto accanto al database»** del lavoro notturno lancia
+  `bash scripts/copia-foto.sh copia`. Lo script `scripts/copia-foto.mjs`
+  chiede l'elenco di ogni secchio **a pagine da mille**, entra nelle cartelle,
+  scarica ogni file con la chiave di servizio e lo mette in una cartella
+  temporanea; poi tutto si impacchetta e si **cifra** con la stessa
+  `BACKUP_PASSPHRASE` del database. La cartella in chiaro si cancella sempre,
+  e il passo che conserva prende solo i file `.gpg`.
+- **Fallisce a voce alta**: un elenco o un download che non riesce (dopo tre
+  tentativi), un file da zero byte, una copia senza nemmeno un file, o la
+  chiave che manca → passo rosso, nessun pacco a metà, **allarme**. La copia
+  del database di quella notte si conserva lo stesso.
+- **Tetto**: oltre 3000 MB (variabile `FOTO_TETTO_MB`) si ferma e lo dice,
+  invece di riempire il disco della macchina di turno. La misura vera la dà la
+  prima notte, nel riepilogo del lavoro.
+- **L'indirizzo** del progetto si ricava dalla riga del Session pooler
+  (`postgres.<progetto>`); se serve, si forza con la variabile `SUPABASE_URL`.
+- **La prova mensile** fa la stessa copia e poi `copia-foto.sh riapri`: decifra
+  il pacco e **estrae davvero una foto**; vuota o assente → rosso e allarme.
+- Prove: `tests/unit/le-foto-sono-nella-copia-di-sicurezza.test.ts` (fornitore
+  finto con l'elenco a pagine, `kyc-docs` rifiutato, download rotto, chiave
+  sbagliata, script veri con gpg vero) e
+  `tests/unit/la-prova-di-ripristino-fallita-suona-l-allarme.test.ts`.
+- **Non provato da qui:** la forma delle risposte dell'API Storage vera (scritta
+  dalla documentazione di Supabase, mai chiamata con la chiave di produzione) e
+  quanto pesano davvero le foto.
+- **Limite noto:** l'elenco `storage.objects` nella copia comprende ancora le
+  righe di `kyc-docs` (solo nomi di file, cifrati, nessun contenuto): pg_dump
+  non sa escludere righe, e toglierle vuol dire cambiare il formato di quel file.
 
 #### L'elenco: cosa copre e cosa no
 
@@ -162,12 +198,11 @@ fornitore), **la copia del database non si perde lo stesso**: viene scritta e
 cifrata comunque, e il lavoro notturno diventa rosso alla fine con
 `esito-elenco-foto: fallito`.
 
-#### I file: pronti a partire, ancora spenti
+#### La copia fuori da GitHub (rclone): pronta, ancora spenta
 
-**Stato vero, oggi: le immagini dei prodotti non hanno nessuna copia nostra.**
-Se il progetto Supabase sparisce, spariscono con lui.
-
-Il pezzo che le copia è già scritto in fondo a `scripts/backup-db.sh` e si
+La copia di stanotte vive fra gli artefatti di GitHub, 30 giorni. Una seconda
+copia **fuori** da GitHub, con lo storico dei file cancellati, è il pezzo con
+rclone qui sotto. Il pezzo che le copia è già scritto in fondo a `scripts/backup-db.sh` e si
 accende da solo: non serve modificare nessun file, servono **due variabili
 d'ambiente e `rclone` installato**. Quello che manca non è codice — è un
 secchio di destinazione fuori dal fornitore e le sue chiavi, che costano

@@ -442,6 +442,18 @@ jobs:
               echo "Senza, l'ordine vero non nasce mai: nessuno ha visto un acquisto arrivare in fondo."
               echo "Il browser però ha guardato lo stesso — vedi il lavoro «Prove nel browser (senza chiavi)», che non dipende da nessun segreto."
             fi
+            # 1/11/2026 — Le tre prove dell'acquisto vero (tests/e2e/12-…):
+            # contrassegno, rimborso, bonifico al negozio. Oggi sono dichiarate
+            # saltate alla nascita, perche' il loro corpo non e' ancora
+            # scritto. Si dice qui, in cima, anche quando il resto e' verde.
+            echo ""
+            if [ -z "${E2E_DATI_DI_PROVA:-}" ]; then
+              echo "⚠️ **Le tre prove dell'acquisto vero (contrassegno, rimborso, bonifico al negozio): NON girate.**"
+              echo ""
+              echo "Manca \`E2E_DATI_DI_PROVA\`, e comunque il loro corpo non e' ancora scritto: in questa CI nessun ordine e' mai nato, nessun rimborso e nessun bonifico sono stati visti."
+            else
+              echo "⚠️ **Le tre prove dell'acquisto vero: NON girate nemmeno con \`E2E_DATI_DI_PROVA\` acceso.** Il loro corpo non e' ancora scritto: restano saltate col motivo, non diventano verdi."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   # 3/9/2026 — LE PROVE NEL BROWSER NON POSSONO PIU' SPEGNERSI DA SOLE.

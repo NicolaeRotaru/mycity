@@ -20,6 +20,7 @@ import { identificativoAvviso, rispondiAChiAspetta } from '@/lib/privacy/avvisi-
 import {
   contaPotature,
   eseguiPotature,
+  potatureNotturne,
   type ClienteCheConta,
   type ClientePotature,
   type RapportoPotature,
@@ -121,7 +122,17 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // Adesso ogni potatura gira per conto suo e chi fallisce si conta: la regola
   // sta in `lib/privacy/potature-ritenzione.ts`, dove una prova la puo' ESEGUIRE
   // senza tirarsi dietro `next/server` e mezzo Next.
-  const potature = await eseguiPotature(admin as unknown as ClientePotature, logger);
+  // 1/11/2026 — La notte vera pota anche le copie orfane dei documenti
+  // d'identita' (lib/privacy/orfani-kyc.ts): l'elenco di prima piu' quel passo.
+  // Il conto senza cancellare resta sull'elenco di prima: quel passo elenca lo
+  // storage, e il client che conta non lo sa fare.
+  const adesso = Date.now();
+  const potature = await eseguiPotature(
+    admin as unknown as ClientePotature,
+    logger,
+    adesso,
+    potatureNotturne(adesso),
+  );
 
   // 6/9/2026 — ANCHE QUESTO NUMERO NON LO GUARDAVA NESSUNO.
   //

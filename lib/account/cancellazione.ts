@@ -296,32 +296,76 @@ export async function cancellaFilePersonali(
 
   for (const secchio of SECCHI_CON_FILE_PERSONALI) {
     try {
-      const { data: elenco, error } = await admin.storage.from(secchio).list(userId, { limit: 1000 });
-      if (error) { errori.push(`${secchio}: ${error.message}`); continue; }
-      if (!elenco || elenco.length === 0) continue;
+      // Quello che si e' letto si toglie comunque; l'errore resta dichiarato.
+      const elenco = await elencaCartella(admin, secchio, userId);
+      if (elenco.errore) errori.push(`${secchio}: ${elenco.errore}`);
+      if (elenco.voci.length === 0) continue;
 
       // Un livello di sottocartelle (per esempio cod-proof/<utente>/<ordine>/).
       const percorsi: string[] = [];
-      for (const voce of elenco) {
+      for (const voce of elenco.voci) {
         if (voce.id === null) {
-          const { data: dentro } = await admin.storage
-            .from(secchio)
-            .list(`${userId}/${voce.name}`, { limit: 1000 });
-          for (const f of dentro ?? []) percorsi.push(`${userId}/${voce.name}/${f.name}`);
+          // 1/11/2026 — Prima l'errore di questo elenco si buttava via: la
+          // sottocartella restava piena e il conto diceva «rimossi» lo stesso.
+          const dentro = await elencaCartella(admin, secchio, `${userId}/${voce.name}`);
+          if (dentro.errore) errori.push(`${secchio}/${voce.name}: ${dentro.errore}`);
+          for (const f of dentro.voci) percorsi.push(`${userId}/${voce.name}/${f.name}`);
         } else {
           percorsi.push(`${userId}/${voce.name}`);
         }
       }
-      if (percorsi.length === 0) continue;
 
-      const { error: errRimozione } = await admin.storage.from(secchio).remove(percorsi);
-      if (errRimozione) errori.push(`${secchio}: ${errRimozione.message}`);
-      else rimossi += percorsi.length;
+      for (let i = 0; i < percorsi.length; i += FILE_PER_PAGINA) {
+        const gruppo = percorsi.slice(i, i + FILE_PER_PAGINA);
+        const { error: errRimozione } = await admin.storage.from(secchio).remove(gruppo);
+        if (errRimozione) errori.push(`${secchio}: ${errRimozione.message}`);
+        else rimossi += gruppo.length;
+      }
     } catch (e) {
       errori.push(`${secchio}: ${e instanceof Error ? e.message : 'errore'}`);
     }
   }
   return { rimossi, errori };
+}
+
+/** Quante voci chiede ogni pagina dell'elenco dello storage (e quanti file per rimozione). */
+const FILE_PER_PAGINA = 1000;
+/**
+ * Il tetto di sicurezza delle pagine per cartella: 50 pagine = 50.000 file.
+ * Oltre, l'elenco si ferma e lo dice come errore, invece di girare per sempre.
+ */
+export const TETTO_PAGINE_PER_CARTELLA = 50;
+
+/**
+ * 1/11/2026 — L'elenco INTERO di una cartella, pagina per pagina.
+ *
+ * Prima si chiedeva una pagina sola da 1000: oltre i 1000 file di una persona
+ * il resto restava nello storage, e nessuno lo sapeva. Si va avanti finche' la
+ * pagina torna piena; se si arriva al tetto senza una pagina corta, l'elenco
+ * non e' completo e si dichiara errore. Le voci lette fin li' tornano lo stesso:
+ * sono file di questa persona, e toglierli non e' mai un danno.
+ */
+async function elencaCartella(
+  admin: Admin,
+  secchio: string,
+  cartella: string,
+): Promise<{ voci: Array<{ name: string; id: string | null }>; errore?: string }> {
+  const voci: Array<{ name: string; id: string | null }> = [];
+  for (let pagina = 0; pagina < TETTO_PAGINE_PER_CARTELLA; pagina += 1) {
+    const { data, error } = await admin.storage.from(secchio).list(cartella, {
+      limit: FILE_PER_PAGINA,
+      offset: pagina * FILE_PER_PAGINA,
+      sortBy: { column: 'name', order: 'asc' },
+    });
+    if (error) return { voci, errore: `elenco di ${cartella} non letto: ${error.message}` };
+    const lette = data ?? [];
+    voci.push(...lette.map((v) => ({ name: v.name, id: v.id ?? null })));
+    if (lette.length < FILE_PER_PAGINA) return { voci };
+  }
+  return {
+    voci,
+    errore: `elenco di ${cartella} oltre ${TETTO_PAGINE_PER_CARTELLA * FILE_PER_PAGINA} file: non tutto letto`,
+  };
 }
 
 /**
