@@ -46,7 +46,8 @@ async function caricaByte(bytes: Uint8Array) {
   const input = box.querySelector('input[type="file"]') as HTMLInputElement;
   Object.defineProperty(input, 'files', {
     configurable: true,
-    value: [{ size: bytes.length, text: async () => new TextDecoder('utf-8').decode(bytes) }],
+    // Un File vero: il lettore puo' leggere i byte (arrayBuffer) e riconoscere la codifica.
+    value: [new File([bytes as unknown as BlobPart], 'prodotti.csv', { type: 'text/csv' })],
   });
   await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })); });
   await flush();
