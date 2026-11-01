@@ -151,7 +151,7 @@ export default function SellerDashboard() {
         // qui non le arrivavano. Un ordine da 100 € rimborsato per 40 restava
         // 100 sul cruscotto del negoziante.
         supabase.from('orders')
-          .select('total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, refunded_amount_cents, created_at')
+          .select('total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, refunded_amount_cents, wallet_applied_cents, created_at')
           .eq('seller_id', user.id)
           .gte('created_at', inizio30.toISOString()),
         supabase.rpc('numeri_del_negozio', { p_seller: user.id, p_giorni: 30 }),

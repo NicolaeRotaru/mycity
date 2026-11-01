@@ -15,8 +15,9 @@
  * Con tre numeri il negoziante non sa a quale credere, e chi decide i prezzi
  * neanche. Qui si fissano due grandezze, distinte e dette per nome:
  *
- *   incassato     = quanto ha incassato il marketplace su quegli ordini (lordo),
- *                   MENO quello che è tornato indietro al cliente
+ *   incassato     = quanto ha incassato il marketplace su quegli ordini (lordo,
+ *                   credito MyCity compreso), MENO quello che è tornato
+ *                   indietro al cliente
  *   tuoNetto      = quanto resta al negozio, togliendo commissione, spedizione
  *                   e quota di consegna
  *
@@ -47,6 +48,17 @@ export type OrdinePerMetriche = {
    * pannello.
    */
   refunded_amount_cents?: number | null;
+  /**
+   * Quanto il cliente ha pagato col credito MyCity su questo ordine, in centesimi.
+   *
+   * 1/11/2026 — Negli ordini in contanti `total_price` e' scritto DOPO aver tolto
+   * il credito: e' la cassa che il fattorino deve riportare, non quello che il
+   * cliente ha speso. Commissione e quota del negozio invece nascono sul lordo
+   * (app/api/orders/cod/route.ts). Contare solo `total_price` faceva vedere al
+   * negoziante meno di quello che riceve: 50 euro pagati con 20 di credito
+   * entravano per 30, e il suo netto scendeva di 20.
+   */
+  wallet_applied_cents?: number | null;
   created_at?: string | null;
 };
 
@@ -76,7 +88,9 @@ function cent(v: number | string | null | undefined): number {
  * diventa rossa se qualcuno ci prova.
  */
 export function incassatoDellOrdineCents(o: OrdinePerMetriche): number {
-  return Math.max(0, cent(o.total_price) - (o.refunded_amount_cents ?? 0));
+  // Il credito MyCity e' pagamento vero: torna dentro, come il contante e la carta.
+  const pagatoCents = cent(o.total_price) + Math.max(0, o.wallet_applied_cents ?? 0);
+  return Math.max(0, pagatoCents - (o.refunded_amount_cents ?? 0));
 }
 
 export type MetricheVenditore = {
