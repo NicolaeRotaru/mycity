@@ -13,6 +13,21 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { linkWhatsApp } from '@/lib/contatto-whatsapp';
+import { COMPENSO_RIDER_CENTS, COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS } from '@/lib/constants';
+import { formatPrice } from '@/lib/format';
+import { fraseAttesaBonifico } from '@/lib/stripe/tempi-bonifico';
+
+/*
+ * 1/11/2026 — Le risposte su soldi e polizza leggono gli stessi numeri dei
+ * pagamenti. Prima promettevano «base + km», «bonifico il giorno 5», un PDF
+ * mensile e una polizza pagata da MyCity: niente di questo esiste nel codice.
+ * Il compenso è fisso (lib/constants.ts), parte circa un'ora dopo la consegna
+ * (lib/stripe/tempi-bonifico.ts, lo stesso tempo del giro dei pagamenti) e la
+ * polizza RC la carica il fattorino all'iscrizione. Chi la paghi è una scelta
+ * ancora aperta: qui non si promette niente.
+ */
+const COMPENSO_GIRO = formatPrice(COMPENSO_RIDER_CENTS / 100);
+const COMPENSO_NEGOZIO_IN_PIU = formatPrice(COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS / 100);
 
 export const metadata = {
   title: 'Centro rider · MyCity',
@@ -48,11 +63,11 @@ const TOPICS: { icon: LucideIcon; title: string; items: { q: string; a: string }
     title: 'Guadagni e bonifici',
     items: [
       { q: 'Quando vengo pagato?',
-        a: 'Bonifico mensile il giorno 5 sull\'IBAN inserito in Impostazioni. Vedi sempre il prossimo importo previsto in "Guadagni".' },
+        a: `Consegne pagate con carta: il compenso parte verso il conto che hai collegato in "Guadagni" ${fraseAttesaBonifico()}; da lì arriva sul tuo IBAN coi tempi della banca. Consegne in contanti: il compenso te lo tieni tu dall'incasso.` },
       { q: 'Come è calcolato il compenso?',
-        a: 'Base fissa + km percorsi. Più la zona è densa, più consegne fai per ora.' },
+        a: `È fisso, non dipende dai chilometri: ${COMPENSO_GIRO} per ogni giro di consegna, più ${COMPENSO_NEGOZIO_IN_PIU} per ogni negozio in più nello stesso giro. Se il cliente ritira in negozio non c'è consegna e non c'è compenso.` },
       { q: 'Riceverò una busta paga?',
-        a: 'Sì, ricevi un riepilogo PDF dei guadagni alla fine di ogni mese. Per regime fiscale chiedi al commercialista.' },
+        a: 'No, non è una busta paga. In "Guadagni" vedi le tue consegne con i compensi già versati e quelli in arrivo. Per il regime fiscale chiedi al commercialista.' },
     ],
   },
   {
@@ -60,7 +75,7 @@ const TOPICS: { icon: LucideIcon; title: string; items: { q: string; a: string }
     title: 'Sicurezza e supporto',
     items: [
       { q: 'Sono assicurato?',
-        a: 'Sì, MyCity stipula una polizza RC obbligatoria per ogni rider attivo. In caso di infortunio chiama subito il 112, poi avvisa il supporto MyCity.' },
+        a: 'Per attivare l\'account ti chiediamo una polizza RC valida, con la sua scadenza: la carichi nell\'iscrizione insieme agli altri documenti. In caso di infortunio chiama subito il 112, poi avvisa il supporto MyCity.' },
       { q: 'Cosa succede se un cliente è aggressivo?',
         a: 'Allontanati. Chiama il supporto. La consegna viene annullata e pagata come fatta. Eventuali abusi portano al ban del cliente.' },
       { q: 'Posso lavorare anche con altre piattaforme?',
