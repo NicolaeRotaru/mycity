@@ -250,6 +250,31 @@ jobs:
           mkdir -p "$BACKUP_DIR"
           bash scripts/backup-db.sh
 
+      # 1/11/2026 — LE FOTO VERE, SENZA UNA DESTINAZIONE NUOVA.
+      #
+      # Fino a oggi le immagini di prodotti, negozi, storie e recensioni non
+      # erano in nessuna copia: il pezzo con rclone qui sopra vuole un secchio a
+      # pagamento ed e' spento. Qui le foto dei secchi pubblici si scaricano
+      # dall'API Storage di Supabase e finiscono, cifrate, accanto al database
+      # (backup/mycity-foto_<data>.tar.gpg): il passo «Conserva la copia» le
+      # prende insieme a lui. `kyc-docs` mai.
+      #
+      # Serve il segreto SUPABASE_SERVICE_ROLE_KEY. Senza, questo passo e' ROSSO
+      # e suona l'allarme: «le foto non sono in copia» deve arrivare a qualcuno,
+      # non restare un avviso giallo. La copia del database si conserva lo
+      # stesso (il passo dopo gira con `!cancelled()`).
+      - name: Copia le foto accanto al database
+        if: ${{ !cancelled() && steps.verifica.outcome == 'success' }}
+        env:
+          FOTO_CHIAVE_SERVIZIO: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          BACKUP_DIR: ${{ github.workspace }}/backup
+          FOTO_SECCHI: ${{ vars.FOTO_SECCHI }}
+          FOTO_TETTO_MB: ${{ vars.FOTO_TETTO_MB }}
+        run: bash scripts/copia-foto.sh copia
+
       # 8/9/2026 — LA COPIA DEL DATABASE NON DEVE MORIRE INSIEME ALLE FOTO.
       #
       # Di norma un passo fallito salta tutti quelli dopo. Quindi la notte in cui
@@ -334,6 +359,12 @@ jobs:
     # Gira il primo del mese, e a mano quando serve. Non ogni notte: e' una
     # verifica, non una copia.
     if: github.event.schedule == '41 3 1 * *' || github.event_name == 'workflow_dispatch'
+    # 1/11/2026 — `issues: write` serve solo all'allarme in fondo (come nella
+    # copia notturna); `contents: read` si ripete perche' i permessi di un
+    # lavoro sostituiscono quelli del file.
+    permissions:
+      contents: read
+      issues: write
     services:
       postgres:
         image: postgres:16
@@ -482,6 +513,21 @@ jobs:
           mkdir -p "$BACKUP_DIR"
           bash scripts/backup-db.sh
 
+      # 1/11/2026 — Come nella copia notturna (la storia e' nel passo omonimo
+      # del lavoro qui sopra): la copia fresca porta anche le foto, cosi' piu'
+      # sotto la prova puo' riaprirne una davvero.
+      - name: Copia le foto accanto al database
+        if: ${{ !cancelled() && steps.segreti.outcome == 'success' }}
+        env:
+          FOTO_CHIAVE_SERVIZIO: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          BACKUP_DIR: ${{ github.workspace }}/backup
+          FOTO_SECCHI: ${{ vars.FOTO_SECCHI }}
+          FOTO_TETTO_MB: ${{ vars.FOTO_TETTO_MB }}
+        run: bash scripts/copia-foto.sh copia
+
       - name: Riaprila su un database vuoto, e cronometra
         if: ${{ !cancelled() && steps.segreti.outcome == 'success' }}
         env:
@@ -562,3 +608,55 @@ jobs:
           echo "### Prova di ripristino" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "La copia si riapre: **sì**, in **$((fine - inizio)) secondi**." >> "$GITHUB_STEP_SUMMARY"
+
+      # 1/11/2026 — LA PROVA CHE LE FOTO SI RIAPRONO. La scheda che ha chiesto la
+      # copia delle foto lo diceva nell'ultima riga: «la prova mensile verifica
+      # che almeno un file si riapra». Qui si decifra il pacco della copia
+      # fresca e si estrae davvero una foto; vuota o assente = rosso.
+      - name: Riapri una foto dalla copia
+        if: ${{ !cancelled() && steps.segreti.outcome == 'success' }}
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          BACKUP_DIR: ${{ github.workspace }}/backup
+        run: bash scripts/copia-foto.sh riapri
+
+      # 1/11/2026 — LA PROVA MENSILE CADEVA IN SILENZIO.
+      #
+      # La copia notturna, quando fallisce, apre una segnalazione (passo
+      # «Suona l'allarme» del lavoro qui sopra). La prova di ripristino no: se
+      # la copia non si riapriva, il lavoro diventava rosso in una pagina che
+      # nessuno apre il primo del mese, e la scoperta arrivava il giorno
+      # dell'incidente. Qui lo stesso allarme, con lo stesso canale: una
+      # segnalazione nel deposito che GitHub manda per posta al proprietario, o
+      # un commento se ce n'e' gia' una aperta. Solo la data e il collegamento:
+      # il deposito e' pubblico.
+      - name: Suona l'allarme, la prova di ripristino non e' riuscita
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPOSITO: ${{ github.repository }}
+          PROPRIETARIO: ${{ github.repository_owner }}
+          INDIRIZZO_CORSA: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITOLO: "La prova mensile di ripristino della copia non e' riuscita"
+        run: |
+          set -euo pipefail
+          QUANDO="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          RIGA="Prova di ripristino fallita il $QUANDO: $INDIRIZZO_CORSA"
+          APERTA="$(gh issue list --repo "$DEPOSITO" --state open --limit 100 --json number,title \
+            --jq '[.[] | select(.title == env.TITOLO)][0].number // empty')"
+          if [ -n "$APERTA" ]; then
+            gh issue comment "$APERTA" --repo "$DEPOSITO" --body "$RIGA"
+            echo "::error::La prova di ripristino non e' riuscita: aggiunto alla segnalazione #$APERTA."
+          else
+            CORPO="$(printf '%s\n\n%s\n\n%s\n' \
+              "@$PROPRIETARIO la prova mensile di ripristino non e' riuscita: non sappiamo se la copia di sicurezza si riapre." \
+              "$RIGA" \
+              "Apri l'esecuzione per vedere quale passo e' caduto. Chiudi questa segnalazione quando la prova torna verde.")"
+            gh issue create --repo "$DEPOSITO" --title "$TITOLO" --body "$CORPO"
+            echo "::error::La prova di ripristino non e' riuscita: aperta una segnalazione nel deposito."
+          fi
+          {
+            echo "## ⛔ La prova di ripristino non e' riuscita"
+            echo ""
+            echo "$RIGA"
+          } >> "$GITHUB_STEP_SUMMARY"
