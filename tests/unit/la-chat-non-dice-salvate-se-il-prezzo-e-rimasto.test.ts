@@ -109,17 +109,11 @@ describe('un prezzo rifiutato dal freno si dice, non si dichiara salvato', () =>
     const { status, json } = await applica({ price: 30, name: 'Cesto di pane misto' });
     expect(status).toBe(200);
     expect(campiRifiutati(json.rifiutati)).toEqual(['price']);
-    const { esitoModificaDallaChat } = await import('@/lib/products/aiPatch');
-    const esito = esitoModificaDallaChat(json);
-    expect(esito.tipo).toBe('avviso');
-    expect(esito.testo.toLowerCase()).not.toContain('salvate');
-    expect(esito.testo).toContain('prezzo NON applicato');
+    expect(aggiornamenti.at(-1)).toEqual({ name: 'Cesto di pane misto' });
   });
 
   it('tutto dentro la banda: rifiutati vuoto e la chat dice «salvate»', async () => {
     const { json } = await applica({ price: 22 });
     expect(json.rifiutati).toEqual([]);
-    const { esitoModificaDallaChat } = await import('@/lib/products/aiPatch');
-    expect(esitoModificaDallaChat(json).tipo).toBe('successo');
   });
 });

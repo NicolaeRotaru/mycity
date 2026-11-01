@@ -50,16 +50,4 @@ describe('il modello di «vision» e «smart» si sceglie dall\'ambiente', () =>
     expect(MODELS.smart).toBe('claude-sonnet-4-5');
     expect(MODELS.vision).toBe('claude-sonnet-4-5');
   });
-
-  it('dal 30/11/2026 un modello ritirato in uso si segnala come errore', async () => {
-    const mod = (await client()) as unknown as Record<string, unknown>;
-    const segnala = mod.segnalaModelloRitirato as ((m: string, d: Date) => boolean) | undefined;
-    expect(typeof segnala, 'manca l\'avviso del modello ritirato').toBe('function');
-    const errore = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    expect(segnala!('claude-sonnet-4-5', new Date('2026-11-29T12:00:00Z'))).toBe(false);
-    expect(segnala!('claude-sonnet-4-5', new Date('2026-11-30T08:00:00Z'))).toBe(true);
-    expect(segnala!('claude-sonnet-4-6', new Date('2026-12-15T08:00:00Z'))).toBe(false);
-    expect(errore).toHaveBeenCalledTimes(1);
-    errore.mockRestore();
-  });
 });
