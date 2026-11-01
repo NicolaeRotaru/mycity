@@ -57,6 +57,29 @@ function paymentIntentDellaSessione(session: Stripe.Checkout.Session): string | 
 }
 
 /**
+ * Il buono appena scritto e' gia' annullato? Se lo stato non si legge, la
+ * risposta e' «no»: il riscatto di un buono annullato lo ferma comunque il
+ * database, mentre un buono pagato senza codice resterebbe perso.
+ */
+async function buonoNatoSpento(code: string): Promise<boolean> {
+  try {
+    const { data, error } = await getAdminSupabase()
+      .from('gift_cards')
+      .select('voided_at')
+      .eq('code', code)
+      .maybeSingle();
+    if (error) {
+      logger.warn('[stripe] gift_card: stato non letto, codice inviato', { code: code.slice(0, 5), error: error.message });
+      return false;
+    }
+    return !!(data as { voided_at?: string | null } | null)?.voided_at;
+  } catch (e) {
+    logger.warn('[stripe] gift_card: stato non letto, codice inviato', { code: code.slice(0, 5), error: (e as Error).message });
+    return false;
+  }
+}
+
+/**
  * Pagamento gift card riuscito → crea la riga `gift_cards` (server-side, service
  * role) e invia il codice al destinatario + conferma al buyer. Best-effort sulle
  * email; idempotente sul codice (PK).
@@ -104,7 +127,9 @@ export async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
     message,
   };
   let { error } = await admin.from('gift_cards').insert(riga);
+  let pagamentoSegnato = !!riga.stripe_payment_intent;
   if (error && senzaColonnaDelPagamento(error)) {
+    pagamentoSegnato = false;
     // Il codice puo' arrivare in produzione prima della migrazione 178: senza
     // ripiego il pagamento e' incassato e il buono non nasce. Nasce lo stesso,
     // senza il pagamento segnato — e lo si dice forte, perche' un buono cosi'
@@ -126,6 +151,11 @@ export async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
     // Pagamento incassato e carta regalo non creata: senza errore nessuno lo
     // scopre e il cliente resta senza quello che ha pagato.
     throw new Error(`gift_card non creata (sessione ${session.id}): ${error.message}`);
+  }
+
+  if (pagamentoSegnato && (await buonoNatoSpento(code))) {
+    logger.warn('[stripe] gift_card nata annullata: codice non inviato', { sessionId: session.id });
+    return;
   }
 
   const amountEuro = amountCents / 100;
