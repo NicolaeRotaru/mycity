@@ -58,6 +58,9 @@ describe('la decisione registrata dalla pagina admin fa partire l esito', () => 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     await act(async () => { root.render(createElement(QueryClientProvider, { client: qc }, createElement(Pagina))); });
     await flush();
+    // Sotto carico (suite intera in parallelo) la lettura delle segnalazioni puo'
+    // arrivare dopo i microtask di flush: si aspetta la scheda, senza tempi fissi.
+    await vi.waitFor(() => { if (!box.querySelector('li select')) throw new Error('scheda non ancora disegnata'); }, { timeout: 5000 });
 
     const select = box.querySelector('li select') as HTMLSelectElement;
     expect(select).toBeTruthy();
@@ -75,6 +78,7 @@ describe('la decisione registrata dalla pagina admin fa partire l esito', () => 
     const form = box.querySelector('li form') as HTMLFormElement;
     await act(async () => { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
     await flush();
+    await vi.waitFor(() => { if (!chiamate.length) throw new Error('esito non ancora partito'); }, { timeout: 5000 }).catch(() => {});
 
     // la decisione e' stata scritta sul database...
     expect(aggiornamenti).toHaveLength(1);
