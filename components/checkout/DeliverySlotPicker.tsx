@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   FASCE_DI_DOMANI,
@@ -90,6 +90,18 @@ export const AVVISO_VELOCE_CADUTA_SENZA_FASCE =
  * aperto alle 16:55, alle 17:05 offriva ancora una fascia che la cassa poi rifiutava.
  */
 export const OGNI_QUANTO_RILEGGO_L_ORA_MS = 30_000;
+
+/**
+ * 01/11/2026 — La riga che si legge quando la fascia di oggi scelta dal cliente scade mentre la cassa
+ * è aperta. Prima lo spostamento era muto: lunedì alle 16:55 «Oggi · 16:30–18:00», alle 17:05
+ * «Oggi · 18:00–19:30» e nessuno lo diceva. `nuova` = `null` quando per oggi non resta niente.
+ */
+export function avvisoFasciaScaduta(vecchia: string, nuova: string | null): string {
+  if (!nuova) {
+    return `La fascia «${vecchia}» adesso non si può più e per oggi non ne resta nessuna: ho spostato la consegna a domani. Scegli qui sotto l’ora che ti va bene.`;
+  }
+  return `La fascia «${vecchia}» adesso non si può più: ho messo «${nuova}». Controlla qui sotto che l’ora ti vada bene.`;
+}
 
 /** 30/10/2026 (ondata 18) — Mentre il server non ha ancora detto se la veloce si può. */
 export const RIGA_VELOCE_IN_ATTESA =
@@ -189,12 +201,28 @@ export function DeliverySlotPicker({
   // `return` che usciva subito: il giorno restava "oggi", la mattonella restava
   // premuta e la fascia restava quella di partenza — cioè un orario già passato,
   // che finiva dritto su orders.delivery_slot.
+  //
+  // 01/11/2026 — E se la fascia spostata era una che il cliente vedeva fra le possibili (cioè è
+  // scaduta col passare dell'ora, non la fascia di partenza della cassa) una riga lo dice.
+  const fasceDiOggiPrima = useRef<string[] | null>(null);
   useEffect(() => {
     if (day !== 'today') return;
-    if (!oggiPossibile) { onDayChange('tomorrow'); return; }
-    if (!todayTimes.includes(todayTime)) onTodayTimeChange(todayTimes[0]);
+    const eraPossibile = fasceDiOggiPrima.current?.includes(todayTime) ?? false;
+    if (!oggiPossibile) {
+      if (eraPossibile) setAvvisoSpostata(avvisoFasciaScaduta(todayTime, null));
+      onDayChange('tomorrow');
+      return;
+    }
+    if (!todayTimes.includes(todayTime)) {
+      if (eraPossibile) setAvvisoSpostata(avvisoFasciaScaduta(todayTime, todayTimes[0]));
+      onTodayTimeChange(todayTimes[0]);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day, todayTime, oggiPossibile, todayTimes.join('|')]);
+  // Le fasce di oggi di questo disegno: al prossimo, l'effetto qui sopra le confronta con l'ora nuova.
+  useEffect(() => {
+    fasceDiOggiPrima.current = todayTimes;
+  });
 
   // 30/10/2026 (ondata 21) — Lo stesso per «Domani»: sabato per la domenica chiusa non resta
   // niente, e si torna a oggi se oggi si può; una fascia che i negozi non servono si sposta.
@@ -287,7 +315,10 @@ export function DeliverySlotPicker({
                         name="deliverySlot"
                         value={t}
                         checked={checked}
-                        onChange={() => onTimeChange(t)}
+                        onChange={() => {
+                          setAvvisoSpostata(null);
+                          onTimeChange(t);
+                        }}
                         className="w-4 h-4 accent-primary-600"
                       />
                       {t}
