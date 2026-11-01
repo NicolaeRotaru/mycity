@@ -1,6 +1,6 @@
 import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
 import { fraseAttesaBonifico } from '@/lib/stripe/tempi-bonifico';
-import { CARTA_ACCESA } from '@/lib/funzioni-al-lancio';
+import { ABBONAMENTO_NEGOZI_ACCESO, CARTA_ACCESA } from '@/lib/funzioni-al-lancio';
 
 /**
  * 31/8/2026 (R037) — SULLA PAGINA DEI SUOI SOLDI PROMETTEVAMO AL NEGOZIO L'8%,
@@ -73,6 +73,45 @@ export const COMMISSIONE_DEL_PERCENTO = `${siPronunciaConVocale(COMMISSIONE_PERC
  * Sta spezzato in tre perche' il grassetto resti dov'era senza che la frase
  * debba diventare JSX — e quindi illeggibile a una prova.
  */
+/**
+ * IL PREZZO PER I NEGOZI, IN UNA FRASE SOLA — 31/10/2026 (ondata 6).
+ *
+ * Il sito diceva ai negozi cinque prezzi diversi: «zero commissioni» in home,
+ * «Apri gratis… Nessuna commissione mensile» nell'anteprima di /sell, «0€ di
+ * commissioni mensili» in «Chi siamo», «Nessun costo mensile» nell'aiuto e qui
+ * sotto, e «Abbonamento €50/mese» nell'area venditori. Il prezzo firmato da Nicola
+ * il 26/10 (fatti pricing.abbonamento e pricing.commissione) è uno: 50 € al mese di
+ * listino, sospeso finché il negozio non incassa con MyCity, più il 10% IVA
+ * inclusa solo sul venduto tramite MyCity. Adesso ogni pagina legge questa frase,
+ * e se l'abbonamento si accende (`ABBONAMENTO_NEGOZI_ACCESO`) la frase cambia da sola.
+ * Prova: tests/unit/ai-negozi-diciamo-un-prezzo-solo.test.tsx
+ */
+export const PREZZO_ABBONAMENTO_MESE = '€50';
+
+/**
+ * Come si scrive l'IVA sulla commissione (fatto pricing.commissione: «IVA inclusa», la
+ * conferma il commercialista). I Termini dicevano «IVA esclusa» mentre le pagine dicevano
+ * «IVA inclusa»: adesso tutte e due le leggono da qui.
+ */
+export const IVA_SULLA_COMMISSIONE = 'IVA inclusa';
+
+function fraseCanone(abbonamentoAcceso: boolean): string {
+  return abbonamentoAcceso
+    ? `Abbonamento ${PREZZO_ABBONAMENTO_MESE}/mese, attivo dopo l'approvazione del negozio.`
+    : 'Nessun canone finché non incassi con MyCity.';
+}
+
+export function frasePrezzoNegozi(abbonamentoAcceso: boolean = ABBONAMENTO_NEGOZI_ACCESO): string {
+  const commissione = `Paghi ${articoloDavantiA(COMMISSIONE_PERCENTO)}${COMMISSIONE_PERCENTO}% solo su quello che vendi tramite MyCity, ${IVA_SULLA_COMMISSIONE}.`;
+  return `${fraseCanone(abbonamentoAcceso)} ${commissione}`;
+}
+
+/** Il canone come lo dicono le pagine e i Termini: segue l'interruttore dell'abbonamento. */
+export const CANONE_NEGOZI = fraseCanone(ABBONAMENTO_NEGOZI_ACCESO);
+
+/** La frase che leggono home, /sell, FAQ, aiuto e area venditori. */
+export const FRASE_PREZZO_NEGOZI = frasePrezzoNegozi();
+
 export type ParagrafoCommissione = {
   prima: string;
   forte: string;
@@ -116,13 +155,16 @@ function paragrafoBonifico(cartaAccesa: boolean): ParagrafoCommissione {
  * riscrivono qui: li dice `fraseAttesaBonifico()`, dove quel numero e' stato
  * deciso.
  */
-export function spiegazioneCommissione(cartaAccesa: boolean = CARTA_ACCESA): ParagrafoCommissione[] {
+export function spiegazioneCommissione(
+  cartaAccesa: boolean = CARTA_ACCESA,
+  abbonamentoAcceso: boolean = ABBONAMENTO_NEGOZI_ACCESO,
+): ParagrafoCommissione[] {
   return [
     {
       tema: 'commissione',
       prima: 'Su MyCity paghi ',
       forte: `solo ${articoloDavantiA(COMMISSIONE_PERCENTO)}${COMMISSIONE_PERCENTO}% del venduto`,
-      dopo: ' realmente concluso (non rimborsi, non ordini annullati). Nessuna commissione mensile, nessun costo di iscrizione.',
+      dopo: ` realmente concluso tramite MyCity, ${IVA_SULLA_COMMISSIONE} (non rimborsi, non ordini annullati). ${fraseCanone(abbonamentoAcceso)}`,
     },
     paragrafoBonifico(cartaAccesa),
   ];

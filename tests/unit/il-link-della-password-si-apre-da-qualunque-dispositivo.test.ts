@@ -64,7 +64,20 @@ const adminFinto = {
       };
     }
     if (tabella === 'consent_log') {
+      // 1/11/2026 — Si legge anche: «ha accettato» ora vuol dire «l'ultima riga
+      // del verbale porta la versione in vigore», non «c'e' una data nel profilo».
+      const filtro: Record<string, string> = {};
+      const lettura = {
+        eq: (c: string, v: string) => { filtro[c] = v; return lettura; },
+        order: () => lettura,
+        limit: () => lettura,
+        maybeSingle: async () => {
+          const righe = verbale.filter((r) => r.user_id === filtro.user_id && r.categoria === filtro.categoria);
+          return { data: righe.length ? righe[righe.length - 1] : null, error: null };
+        },
+      };
       return {
+        select: () => lettura,
         insert: async (riga: Record<string, unknown>) => {
           verbale.push(riga);
           return { error: null };
@@ -240,7 +253,7 @@ describe('② un link che non funziona non porta mai a una pagina muta', () => {
 
 describe('③ la conferma dell’iscrizione da un altro dispositivo', () => {
   it('apre la sessione, torna al checkout col segnale d’iscrizione e mette a verbale i testi accettati', async () => {
-    linkValidi.set('pkce_conferma123456', utente('maria', { versione_testi_accettati: '2026-09-01' }));
+    linkValidi.set('pkce_conferma123456', utente('maria', { versione_testi_accettati: 'privacy-2.0+terms-3.0' }));
     profili.set('maria', { tos_accepted_at: null });
     // Il modello dell'email passa `{{ .RedirectTo }}`: un indirizzo intero che
     // punta alla vecchia porta, con il `next` vero dentro.
@@ -255,7 +268,7 @@ describe('③ la conferma dell’iscrizione da un altro dispositivo', () => {
     expect(arrivo.searchParams.get('auth')).toBe('signup');
     expect(sessioneScritta(res)).toBeTruthy();
     expect(verbale, 'chi conferma da qui deve lasciare la riga di Termini e Informativa').toHaveLength(1);
-    expect(verbale[0]).toMatchObject({ user_id: 'maria', categoria: 'privacy_terms', versione_testo: '2026-09-01', ip: '5.6.7.8' });
+    expect(verbale[0]).toMatchObject({ user_id: 'maria', categoria: 'privacy_terms', versione_testo: 'privacy-2.0+terms-3.0', ip: '5.6.7.8' });
     expect(profili.get('maria')!.tos_accepted_at).toBeTruthy();
   });
 
@@ -271,6 +284,8 @@ describe('③ la conferma dell’iscrizione da un altro dispositivo', () => {
     linkValidi.set('pkce_codificata12', utente('gino'));
     profili.set('gina', { tos_accepted_at: '2026-10-01T10:00:00Z' });
     profili.set('gino', { tos_accepted_at: '2026-10-01T10:00:00Z' });
+    // 1/11/2026 — Hanno gia' accettato i testi in vigore: la riga a verbale c'e'.
+    for (const id of ['gina', 'gino']) verbale.push({ user_id: id, categoria: 'privacy_terms', versione_testo: 'privacy-2.0+terms-3.0' });
     for (const [forma, link] of Object.entries(forme)) {
       const arrivo = dove(await conferma(richiesta(link)));
       expect(arrivo.pathname, `forma ${forma}`).toBe('/checkout');
@@ -294,7 +309,7 @@ describe('④ i link di oggi (/auth/callback?code=) restano in servizio', () => 
   const next = encodeURIComponent('/checkout?registrazione=email');
 
   it('nello stesso browser (col cookie del verificatore) funzionano come prima', async () => {
-    codiciValidi.set('codice-1', utente('anna', { versione_testi_accettati: '2026-09-01' }));
+    codiciValidi.set('codice-1', utente('anna', { versione_testi_accettati: 'privacy-2.0+terms-3.0' }));
     profili.set('anna', { tos_accepted_at: null });
     const res = await ritorno(richiesta(`/auth/callback?code=codice-1&next=${next}`, { [COOKIE_VERIFICATORE]: 'meta-segreta' }));
     expect(dove(res).pathname).toBe('/checkout');
@@ -322,7 +337,7 @@ describe('④ i link di oggi (/auth/callback?code=) restano in servizio', () => 
   });
 
   it('un accesso con Google andato storto non viene raccontato come «email confermata»', async () => {
-    const res = await ritorno(richiesta('/auth/callback?code=codice-x&versione=2026-09-01'));
+    const res = await ritorno(richiesta('/auth/callback?code=codice-x&versione=privacy-2.0%2Bterms-3.0'));
     const avviso = avvisoAlRitornoSullAccesso(dove(res).searchParams.get('error'), '');
     expect(avviso).not.toBeNull();
     expect(avviso!.testo).not.toMatch(/confermata/i);
@@ -409,14 +424,14 @@ describe('⑥ chi entra poi con la password lascia il verbale che il ritorno fal
   }
 
   it('IL CASO CHE ROMPEVA — conferma fallita sul telefono, accesso col computer: la riga si scrive, una volta sola', async () => {
-    const anna = { ...utente('anna', { versione_testi_accettati: '2026-09-01' }), email_confirmed_at: '2026-10-01T10:05:00Z' };
+    const anna = { ...utente('anna', { versione_testi_accettati: 'privacy-2.0+terms-3.0' }), email_confirmed_at: '2026-10-01T10:05:00Z' };
     profili.set('anna', { tos_accepted_at: null });
     accessoConPassword.mockResolvedValue({ data: { user: anna, session: { access_token: 'a', refresh_token: 'r' } }, error: null });
 
     const primo = await accedi(accesso('7.7.7.1') as never);
     expect(primo.status).toBe(200);
     expect(verbale, 'chi entra con la password dopo un ritorno fallito restava senza verbale').toHaveLength(1);
-    expect(verbale[0]).toMatchObject({ user_id: 'anna', versione_testo: '2026-09-01', user_agent: 'computer-di-anna' });
+    expect(verbale[0]).toMatchObject({ user_id: 'anna', versione_testo: 'privacy-2.0+terms-3.0', user_agent: 'computer-di-anna' });
 
     const secondo = await accedi(accesso('7.7.7.2') as never);
     expect(secondo.status).toBe(200);
@@ -424,7 +439,7 @@ describe('⑥ chi entra poi con la password lascia il verbale che il ritorno fal
   });
 
   it('se il verbale non si può scrivere, l’accesso non si blocca', async () => {
-    const anna = { ...utente('anna', { versione_testi_accettati: '2026-09-01' }), email_confirmed_at: '2026-10-01T10:05:00Z' };
+    const anna = { ...utente('anna', { versione_testi_accettati: 'privacy-2.0+terms-3.0' }), email_confirmed_at: '2026-10-01T10:05:00Z' };
     accessoConPassword.mockResolvedValue({ data: { user: anna, session: { access_token: 'a', refresh_token: 'r' } }, error: null });
     const guasto = vi.spyOn(adminFinto, 'from').mockImplementation(() => { throw new Error('database giù'); });
     const res = await accedi(accesso('7.7.7.3') as never);
@@ -437,12 +452,12 @@ describe('⑥ chi entra poi con la password lascia il verbale che il ritorno fal
     profili.set('rosa', { tos_accepted_at: null });
     const veroFrom = adminFinto.from.bind(adminFinto);
     const guasto = vi.spyOn(adminFinto, 'from').mockImplementation((tabella: string) => {
-      if (tabella === 'consent_log') return { insert: async () => ({ error: { message: 'permission denied for table consent_log' } }) } as never;
+      if (tabella === 'consent_log') return { ...veroFrom('consent_log'), insert: async () => ({ error: { message: 'permission denied for table consent_log' } }) } as never;
       return veroFrom(tabella);
     });
-    const esito = await verbalizzaAccettazione(adminFinto, { utenteId: 'rosa', versione: '2026-09-01', ip: null, userAgent: null });
+    const esito = await verbalizzaAccettazione(adminFinto, { utenteId: 'rosa', versione: 'privacy-2.0+terms-3.0', ip: null, userAgent: null });
 
-    const rosa = { ...utente('rosa', { versione_testi_accettati: '2026-09-01' }), email_confirmed_at: '2026-10-01T10:05:00Z' };
+    const rosa = { ...utente('rosa', { versione_testi_accettati: 'privacy-2.0+terms-3.0' }), email_confirmed_at: '2026-10-01T10:05:00Z' };
     accessoConPassword.mockResolvedValue({ data: { user: rosa, session: { access_token: 'a', refresh_token: 'r' } }, error: null });
     const res = await accedi(accesso('7.7.7.4') as never);
     guasto.mockRestore();
@@ -455,7 +470,7 @@ describe('⑥ chi entra poi con la password lascia il verbale che il ritorno fal
   it('se il database non risponde, chi ha la password giusta entra lo stesso dopo il tetto di attesa', async () => {
     // Collaudo del 15/10: il database tace mentre il servizio di accesso risponde.
     // Prima la richiesta restava appesa finché la piattaforma non la chiudeva.
-    const anna = { ...utente('anna', { versione_testi_accettati: '2026-09-01' }), email_confirmed_at: '2026-10-01T10:05:00Z' };
+    const anna = { ...utente('anna', { versione_testi_accettati: 'privacy-2.0+terms-3.0' }), email_confirmed_at: '2026-10-01T10:05:00Z' };
     accessoConPassword.mockResolvedValue({ data: { user: anna, session: { access_token: 'a', refresh_token: 'r' } }, error: null });
     const muto = vi.spyOn(adminFinto, 'from').mockImplementation(() => ({
       select: () => ({ eq: () => ({ maybeSingle: () => new Promise(() => {}) }) }),
@@ -493,8 +508,12 @@ describe('⑦ la domanda «ha già accettato?» non trattiene chi ha appena conf
   it('la decisione: chi non ha mai accettato va chiesto, chi ha accettato o non ha profilo entra', async () => {
     profili.set('nuova', { tos_accepted_at: null });
     profili.set('vecchia', { tos_accepted_at: '2026-01-01T00:00:00Z' });
+    // 1/11/2026 — Ha accettato chi ha a verbale i testi in vigore; la data da sola non basta.
+    verbale.push({ user_id: 'vecchia', categoria: 'privacy_terms', versione_testo: 'privacy-2.0+terms-3.0' });
+    profili.set('solo-data', { tos_accepted_at: '2026-01-01T00:00:00Z' });
     expect(await vaChiestaSenzaTrattenere(() => adminFinto, 'nuova', 50)).toBe('chiedi');
     expect(await vaChiestaSenzaTrattenere(() => adminFinto, 'vecchia', 50)).toBe('lascia-entrare');
+    expect(await vaChiestaSenzaTrattenere(() => adminFinto, 'solo-data', 50)).toBe('chiedi');
     expect(await vaChiestaSenzaTrattenere(() => adminFinto, 'sconosciuta', 50)).toBe('lascia-entrare');
   });
 

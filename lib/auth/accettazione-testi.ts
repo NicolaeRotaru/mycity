@@ -17,6 +17,7 @@
  */
 
 import { chiediConTetto } from '@/lib/auth/decisione-portiere';
+import { eLaVersioneInVigore, ultimaVersioneAVerbale } from '@/lib/legal/versione';
 
 /** Il minimo del client amministrativo che serve qui: le tabelle. */
 type TabellaMinima = {
@@ -40,14 +41,20 @@ function tabella(admin: ClientPerVerbale, nome: string): TabellaMinima {
  *
  * Prima i suoi dati (la registrazione con email ce la mette), poi l'indirizzo
  * di ritorno (il pulsante Google la mette li'). `null` = non lo sappiamo.
+ *
+ * 1/11/2026 (ondata 6) — Vale solo la versione IN VIGORE. Chi si e' registrato
+ * coi Termini 2.0 porta «2.0» nei suoi dati per sempre: restituirla mandava le
+ * porte d'ingresso a metterla a verbale e a lasciarlo entrare senza chiedergli
+ * i 3.0. Con `null` le porte passano dalla domanda, che lo manda a riaccettare.
  */
 export function versioneAccettata(
   utente: { user_metadata?: Record<string, unknown> | null } | null | undefined,
   dallIndirizzo?: string | null,
 ): string | null {
   const daiDati = utente?.user_metadata?.versione_testi_accettati;
-  if (typeof daiDati === 'string' && daiDati.trim()) return daiDati.trim().slice(0, 60);
-  if (typeof dallIndirizzo === 'string' && dallIndirizzo.trim()) return dallIndirizzo.trim().slice(0, 60);
+  for (const portata of [daiDati, dallIndirizzo]) {
+    if (typeof portata === 'string' && eLaVersioneInVigore(portata)) return portata.trim();
+  }
   return null;
 }
 
@@ -69,7 +76,11 @@ export async function verbalizzaAccettazione(
     .eq('id', dati.utenteId)
     .maybeSingle();
   if (!profilo) return 'profilo-assente';
-  if (profilo.tos_accepted_at) return 'gia-accettata';
+  // 1/11/2026 (ondata 6) — «Gia' accettata» vuol dire: l'ultima riga del verbale
+  // porta la versione in vigore. La data nel profilo non dice QUALE testo: Maria
+  // (1/9, Termini 2.0) e chi ha la data senza nessuna riga ricevevano «gia'
+  // accettata», e la riga coi Termini 3.0 non entrava mai.
+  if (eLaVersioneInVigore(await ultimaVersioneAVerbale(admin, dati.utenteId))) return 'gia-accettata';
 
   const { error } = await tabella(admin, 'consent_log').insert({
     user_id: dati.utenteId,
@@ -116,8 +127,14 @@ export async function verbalizzaSenzaTrattenere(
 }
 
 /**
- * Questa persona non ha mai accettato i testi, e non sappiamo quale versione
- * abbia davanti: va chiesto. `false` anche quando il profilo non c'e'.
+ * Questa persona non ha accettato i testi IN VIGORE: va chiesto. `false`
+ * anche quando il profilo non c'e'.
+ *
+ * 1/11/2026 (ondata 6) — La regola e' una sola, per le porte d'ingresso, la
+ * cassa e l'area del negozio: ha accettato i testi in vigore solo chi ha come
+ * ultima riga `privacy_terms` del verbale la versione `VERSIONE_TESTI_LEGALI`.
+ * Una data nel profilo senza riga, una riga senza versione o di una versione
+ * superata NON sono un'accettazione dei testi in vigore.
  *
  * Non e' esportata: senza tetto, un database muto la lascia appesa. Le porte
  * d'ingresso passano da `vaChiestaSenzaTrattenere`.
@@ -127,12 +144,13 @@ async function vaChiestaLAccettazione(admin: ClientPerVerbale, utenteId: string)
     .select('tos_accepted_at')
     .eq('id', utenteId)
     .maybeSingle();
-  return !!profilo && !profilo.tos_accepted_at;
+  if (!profilo) return false;
+  return !eLaVersioneInVigore(await ultimaVersioneAVerbale(admin, utenteId));
 }
 
 /**
  * `chiedi` = mandala alla pagina che chiede Termini e Informativa.
- * `lascia-entrare` = ha gia' accettato, oppure il profilo non c'e'.
+ * `lascia-entrare` = ha gia' accettato i testi in vigore, oppure il profilo non c'e'.
  * `scaduto` / `rotto` = non lo sappiamo: si entra, e si richiede al prossimo
  * ritorno da un link.
  */

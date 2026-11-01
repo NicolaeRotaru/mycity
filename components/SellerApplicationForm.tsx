@@ -18,7 +18,7 @@ import { Input, Textarea, Checkbox } from '@/components/ui/Field';
 // 31/8/2026 (R037) — Questa e' la pagina dove il negozio legge le condizioni
 // PRIMA di firmare: la commissione qui non si scrive a mano, si prende da dove
 // viene poi trattenuta davvero.
-import { COMMISSIONE_DEL_PERCENTO } from '@/app/seller/earnings/commissione';
+import { COMMISSIONE_DEL_PERCENTO, FRASE_PREZZO_NEGOZI, IVA_SULLA_COMMISSIONE } from '@/app/seller/earnings/commissione';
 import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
 import { Store, CheckCircle2, CreditCard, Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -253,12 +253,9 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           Diventa venditore business
         </h1>
         <p className="text-primary-100 text-sm leading-relaxed">
-          Vetrina dedicata, prodotti illimitati.
-          {ABBONAMENTO_NEGOZI_ACCESO ? (
-            <><strong className="text-white"> Abbonamento {PREZZO_ABBONAMENTO_MESE}/mese</strong> e commissione {COMMISSIONE_DEL_PERCENTO} sulle vendite, attivi solo dopo approvazione del nostro team.</>
-          ) : (
-            <> Nessun costo mensile: <strong className="text-white">commissione {COMMISSIONE_DEL_PERCENTO}</strong> solo sulle vendite, attiva dopo l&apos;approvazione del nostro team.</>
-          )}
+          Vetrina dedicata, prodotti illimitati.{' '}
+          {/* 31/10/2026 (ondata 6) — Diceva «Nessun costo mensile»: il prezzo dei negozi è una frase sola. */}
+          <strong className="text-white">{FRASE_PREZZO_NEGOZI}</strong> Vale dopo l&apos;approvazione del nostro team.
         </p>
         <ul className="text-xs text-primary-100 mt-3 space-y-1">
           <li className="flex items-start gap-1.5">
@@ -274,7 +271,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
             <span>
               {ABBONAMENTO_NEGOZI_ACCESO
                 ? `Abbonamento ${PREZZO_ABBONAMENTO_MESE}/mese + commissione ${COMMISSIONE_DEL_PERCENTO} sulle vendite`
-                : `Commissione ${COMMISSIONE_DEL_PERCENTO} sulle vendite, nessun abbonamento`}
+                : `Commissione ${COMMISSIONE_DEL_PERCENTO} solo sul venduto tramite MyCity, ${IVA_SULLA_COMMISSIONE}`}
             </span>
           </li>
           <li className="flex items-start gap-1.5">

@@ -218,7 +218,9 @@ const PAGINE_CON_LA_PROMESSA: Record<string, number> = {
 /** Quante volte il file USA il valore agganciato (la riga di import non conta). */
 function usiDelValoreAgganciato(sorgente: string): number {
   const senzaImport = sorgente.replace(/import[\s\S]*?from\s*['"][^'"]+['"];?/g, '');
-  return [...senzaImport.matchAll(new RegExp(NOME_DEL_VALORE_AGGANCIATO, 'g'))].length;
+  // 31/10/2026 (ondata 6) — Vale anche la frase intera del prezzo (`FRASE_PREZZO_NEGOZI`), che nasce
+  // dalla stessa commissione: l'area venditori adesso dice il prezzo con quella, non con la sola percentuale.
+  return [...senzaImport.matchAll(new RegExp(`${NOME_DEL_VALORE_AGGANCIATO}|FRASE_PREZZO_NEGOZI`, 'g'))].length;
 }
 
 describe('la percentuale non si può più scrivere a mano', () => {

@@ -1,6 +1,6 @@
 import { Package, ShoppingBag, Euro, Star, Rocket, type LucideIcon } from 'lucide-react';
 import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
-import { spiegazioneCommissione } from '@/app/seller/earnings/commissione';
+import { FRASE_PREZZO_NEGOZI, spiegazioneCommissione } from '@/app/seller/earnings/commissione';
 
 // 31/10/2026 (ondata 4) — Qui c'era «Bonifico mensile il giorno 5»: una terza
 // versione dei tempi, diversa dalla pagina Guadagni e da quello che facciamo
@@ -68,7 +68,8 @@ export const TOPICS: ArgomentoAiuto[] = [
       { q: 'Quando ricevo i soldi delle vendite?',
         a: `${RISPOSTA_TEMPI_BONIFICO} Da "Guadagni" vedi il prossimo importo previsto.` },
       { q: 'Quanto tratteniamo?',
-        a: `Il ${COMMISSIONE_PERCENTO}% sul venduto effettivamente concluso. Nessun costo mensile o di iscrizione.` },
+        // 31/10/2026 (ondata 6) — Diceva «Nessun costo mensile»: il prezzo dei negozi è una frase sola.
+        a: `${FRASE_PREZZO_NEGOZI} La percentuale si calcola sul venduto effettivamente concluso.` },
       { q: 'Cosa succede se un ordine viene rimborsato?',
         a: 'Non viene calcolato nel netto. Se è già stato pagato, viene compensato sul payout successivo.' },
     ],
