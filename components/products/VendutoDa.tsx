@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { domandaVendutoDa } from '@/lib/queries/venduto-da';
@@ -23,7 +24,22 @@ export function VendutoDa({ sellerId, storeName }: { sellerId: string; storeName
   // 126), la domanda falliva e il riquadro non si disegnava senza una riga nei log.
   // La domanda e' la stessa che il server fa nel guscio della pagina: il browser
   // trova gia' la risposta, e l'avviso resta nei registri del server.
-  const { data } = useQuery(domandaVendutoDa(supabase, sellerId));
+  const { data, error } = useQuery(domandaVendutoDa(supabase, sellerId));
+
+  // 1/11/2026 (ondata 5) — NEL BROWSER IN PRODUZIONE IL NO SPARIVA ANCORA. Se il
+  // precarico del server non riesce, la lettura la rifa' il telefono del cliente;
+  // li' `logger.error` non scrive in console in produzione e manda a Sentry, che
+  // in produzione non e' acceso. Il riquadro tornava `null` senza una riga da
+  // nessuna parte. Adesso il no lascia una traccia con il negozio e il motivo.
+  useEffect(() => {
+    if (!error) return;
+    console.error('[venduto-da] il riquadro «Venduto da» non si disegna: la vista pubblica dei negozi ha detto no', {
+      sellerId,
+      storeName: storeName ?? null,
+      codice: (error as { code?: string } | null)?.code ?? null,
+      motivo: error instanceof Error ? error.message : String(error),
+    });
+  }, [error, sellerId, storeName]);
 
   if (!data) return null;
 
