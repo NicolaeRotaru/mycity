@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
+import { safeInternalPath } from '@/lib/safe-redirect';
 
 /**
  * Chiede Termini e Informativa a chi è entrato da una strada che non li
@@ -18,7 +19,8 @@ import { friendlyError } from '@/lib/errors';
 function Contenuto() {
   const router = useRouter();
   const params = useSearchParams();
-  const dove = params.get('next') || '/';
+  // Il ritorno arriva dall'indirizzo: si torna solo a una pagina del sito.
+  const dove = safeInternalPath(params.get('next'), '/');
   const [accettato, setAccettato] = useState(false);
   const [inCorso, setInCorso] = useState(false);
 
