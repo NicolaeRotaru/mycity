@@ -14,8 +14,13 @@ import { Button } from '@/components/ui/Button';
  * e per un marketplace è anche la difesa più economica che esista: chi vede una
  * cosa sbagliata ce la dice prima che la compri qualcun altro.
  *
- * Si può segnalare senza account. Chi lascia un recapito riceve un esito
+ * Si può segnalare senza account. Chi lascia un recapito ha diritto a un esito
  * motivato: è l'altra metà dell'obbligo, e la parte che si dimentica sempre.
+ *
+ * 1/11/2026 — QUI SI PROMETTEVA UN ESITO CHE NON PARTIVA. Il modulo diceva «ti
+ * diciamo com'è andata», ma nessun codice mandava l'esito. Il mittente adesso
+ * esiste (PATCH /api/segnalazioni), però la pagina admin non lo chiama ancora:
+ * finché non lo fa, qui non si promette niente che non succede.
  */
 const MOTIVI: Array<{ valore: string; etichetta: string }> = [
   { valore: 'contraffatto', etichetta: 'Prodotto contraffatto' },
@@ -55,7 +60,7 @@ export function Segnala({
         }),
       });
       if (!res.ok) throw new Error('Segnalazione non inviata');
-      toast.success('Segnalazione ricevuta. La guardiamo e ti diciamo com\'è andata.');
+      toast.success('Segnalazione ricevuta: la esaminiamo.');
       setAperto(false);
       setDettaglio('');
     } catch {
@@ -82,8 +87,8 @@ export function Segnala({
       <div role="dialog" aria-modal="true" aria-label="Segnala un contenuto" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
         <h2 className="font-serif text-lg font-bold text-ink-900">Segnala un contenuto</h2>
         <p className="mt-1 text-[13px] leading-relaxed text-ink-600">
-          Dicci che cosa non va. Guardiamo ogni segnalazione e, se lasci un recapito, ti scriviamo com
-          è finita e perché.
+          Dicci che cosa non va. Guardiamo ogni segnalazione e la chiudiamo con una decisione
+          motivata.
         </p>
 
         <label htmlFor="segnala-motivo" className="mt-4 block text-sm font-medium text-ink-700">Motivo</label>
@@ -111,7 +116,7 @@ export function Segnala({
         />
 
         <label htmlFor="segnala-email" className="mt-3 block text-sm font-medium text-ink-700">
-          La tua email, se vuoi la risposta (facoltativa)
+          La tua email, se vuoi essere ricontattato (facoltativa)
         </label>
         <input
           id="segnala-email"
