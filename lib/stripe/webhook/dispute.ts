@@ -116,6 +116,24 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     'id, dispute_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, gross_total_cents, total_price, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost',
   );
   if (orders.length === 0) {
+    // 31/10/2026 (178) — Senza ordini il pagamento contestato puo' essere quello
+    // di un buono regalo: la banca si e' gia' ripresa i soldi, il buono si spegne.
+    // Lo spegne il database (`gift_card_void_for_payment`, 178), una volta
+    // sola anche se Stripe riconsegna l'evento. Un errore si rilancia, cosi'
+    // Stripe riprova.
+    const pi = typeof dispute.payment_intent === 'string' ? dispute.payment_intent : (dispute.payment_intent?.id ?? null);
+    if (pi) {
+      const { data: buono, error: errBuono } = await getAdminSupabase().rpc('gift_card_void_for_payment', {
+        p_session_id: null,
+        p_payment_intent: pi,
+        p_reason: 'disputed',
+      });
+      if (errBuono) throw new Error(`[stripe] buono regalo della contestazione non annullato (${pi}): ${errBuono.message}`);
+      if ((buono as { esito?: string } | null)?.esito === 'annullato') {
+        logger.warn('[stripe] buono regalo annullato: il suo pagamento è contestato in banca', { disputeId: dispute.id, paymentIntent: pi, buono });
+        return;
+      }
+    }
     logger.warn('[stripe] dispute.created: nessun ordine trovato', { disputeId: dispute.id });
     return;
   }

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
@@ -15,6 +16,7 @@ import EmptyState from '@/components/EmptyState';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { Banknote, ChevronRight, ClipboardList, Clock } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
+import { eSchemaIndietro } from '@/lib/db/migrazione-124';
 import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 import { LETTURA_ORDINI_DEL_NEGOZIO, rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
 import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
@@ -28,6 +30,34 @@ function orariDelNegozio(riga: object): unknown {
   const negozio = (riga as { seller?: unknown }).seller;
   const uno = Array.isArray(negozio) ? negozio[0] : negozio;
   return (uno as { store_hours?: unknown } | null | undefined)?.store_hours;
+}
+
+/**
+ * 31/10/2026 — L'ORA DELLA RIGA «ENTRO QUANDO ACCETTARE» E' QUELLA DELL'OROLOGIO, NON DELL'ULTIMA LETTURA.
+ *
+ * La riga si scriveva con l'ora dell'ultima lettura: alla riapertura del telefono restava quella
+ * vecchia finche' la rilettura non arrivava, fino al giro dopo con la pagina aperta, e senza rete
+ * per sempre (venerdi' sera diceva ancora «entro le 12:00 di domani» sabato mattina). Qui l'ora si
+ * riguarda da sola ogni 15 secondi e appena la pagina torna visibile, senza aspettare il database.
+ */
+const OGNI_QUANTO_SI_RIGUARDA_L_ORA_MS = 15_000;
+function useOraCheCorre(): number {
+  const [adesso, setAdesso] = useState(() => Date.now());
+  useEffect(() => {
+    const guarda = () => setAdesso(Date.now());
+    const suVisibilita = () => { if (document.visibilityState === 'visible') guarda(); };
+    const id = setInterval(guarda, OGNI_QUANTO_SI_RIGUARDA_L_ORA_MS);
+    document.addEventListener('visibilitychange', suVisibilita);
+    window.addEventListener('focus', guarda);
+    window.addEventListener('pageshow', guarda);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', suVisibilita);
+      window.removeEventListener('focus', guarda);
+      window.removeEventListener('pageshow', guarda);
+    };
+  }, []);
+  return adesso;
 }
 
 type Order = {
@@ -95,6 +125,10 @@ export default function SellerOrdersPage() {
         order_items ( id, quantity )
       `);
       if (!withPay.error) return (withPay.data ?? []) as unknown as Order[];
+      // 31/10/2026 — Si ripiega SOLO se manca una colonna. Su un guasto qualsiasi (rete, tempo
+      // scaduto 57014) la lettura senza `payment_method` faceva leggere gli ordini in contanti come
+      // «Carta (online)» senza il segno dei contanti: un guasto resta un guasto, col suo «Riprova».
+      if (!eSchemaIndietro(withPay.error)) throw withPay.error;
       const fallback = await base(`
         id, total_price, delivery_status, created_at, delivery_slot, pickup_in_store,
         delivery_full_name, delivery_address,
@@ -115,7 +149,8 @@ export default function SellerOrdersPage() {
   // che la pagina legge: con i dati uguali tutta la notte, sabato alle 8:30 la riga diceva ancora
   // «entro le 12:00 di domani». `dataUpdatedAt` cambia a ogni lettura riuscita, `errorUpdatedAt` a
   // ogni lettura caduta: tutte e due fanno ridisegnare la riga con l'ora vera.
-  const lettoAlle = new Date(Math.max(queryOrders.dataUpdatedAt, queryOrders.errorUpdatedAt) || Date.now());
+  const adesso = useOraCheCorre();
+  const lettoAlle = new Date(Math.max(adesso, queryOrders.dataUpdatedAt || 0, queryOrders.errorUpdatedAt || 0));
 
   const vistaqueryOrders = vistaDaQuery(queryOrders, { quanti: orders.length });
   if (vistaqueryOrders.mostraScheletro) return <LoadingState />;

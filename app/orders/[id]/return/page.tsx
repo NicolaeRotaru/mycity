@@ -9,6 +9,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import EmptyState from '@/components/EmptyState';
 import { Textarea } from '@/components/ui/Field';
 import { haUnaParteInContanti } from '@/lib/rimborsi/regole-del-rimborso';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
@@ -24,6 +25,18 @@ const REASONS: Array<{ value: string; label: string; icon: LucideIcon }> = [
   { value: 'OTHER',             label: 'Altro',                         icon: Pencil },
 ];
 
+/**
+ * 31/10/2026 — IL CLIENTE PUO' RITIRARE LA SUA RICHIESTA, E QUI TROVA IL PULSANTE.
+ *
+ * La scheda del negozio diceva «se il cliente ci ha ripensato, puo' ritirare lui la
+ * richiesta», e la rotta `avanza` lo permette (CANCELED, solo a chi ha fatto l'ordine,
+ * finche' la merce non e' partita). Ma nessuna pagina del cliente la chiamava: il
+ * recesso lasciato cadere restava aperto e il bonifico al negozio fermo 14 giorni.
+ * Gli stati sono gli stessi della rotta (`PARTENZE_DEL_RITIRO`) e della creazione.
+ */
+const STATI_APERTI = ['REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED'];
+const STATI_RITIRABILI = ['REQUESTED', 'APPROVED'];
+
 export default function NewReturnPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -35,18 +48,56 @@ export default function NewReturnPage() {
   const [submitting, setSubmitting] = useState(false);
   const [order, setOrder] = useState<any>(null);
   const [loaded, setLoaded] = useState(false);
+  const [resoAperto, setResoAperto] = useState<{ id: string; status: string } | null>(null);
+  const [ritiroInCorso, setRitiroInCorso] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from('orders')
-        .select('id, total_price, delivered_at, delivery_status, payment_method, stripe_payment_intent, wallet_applied_cents')
-        .eq('id', params.id)
-        .single();
+      const [{ data }, { data: aperti }] = await Promise.all([
+        supabase
+          .from('orders')
+          .select('id, total_price, delivered_at, delivery_status, payment_method, stripe_payment_intent, wallet_applied_cents')
+          .eq('id', params.id)
+          .single(),
+        supabase.from('returns').select('id, status').eq('order_id', params.id).in('status', STATI_APERTI).limit(1),
+      ]);
       setOrder(data);
+      setResoAperto((aperti as Array<{ id: string; status: string }> | null)?.[0] ?? null);
       setLoaded(true);
     })();
   }, [params.id]);
+
+  async function ritira() {
+    if (!resoAperto) return;
+    const ok = await confirmDialog({
+      title: 'Ritirare la richiesta di reso?',
+      message: 'Il reso si chiude e il prodotto resta a te: non devi rispedire niente e non ricevi un rimborso.',
+      confirmLabel: 'Sì, ritira',
+      cancelLabel: 'No, tienila',
+      danger: true,
+    });
+    if (!ok) return;
+    setRitiroInCorso(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const r = await fetch(`/api/returns/${resoAperto.id}/avanza`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ stato: 'CANCELED' }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(apiErrorMessage(data, 'La richiesta non si è ritirata.'));
+      toast.success('Richiesta di reso ritirata');
+      router.push(`/orders/${params.id}`);
+    } catch (e) {
+      toast.error(friendlyError(e));
+    } finally {
+      setRitiroInCorso(false);
+    }
+  }
 
   async function uploadPhoto(file: File) {
     setUploading(true);
@@ -120,6 +171,43 @@ export default function NewReturnPage() {
         />
       </div>
     );
+
+  // Viene prima del controllo sui 14 giorni: un recesso chiesto il tredicesimo giorno si
+  // ritira anche il quindicesimo, e un secondo reso sullo stesso ordine la creazione lo rifiuta.
+  if (resoAperto) {
+    const ritirabile = STATI_RITIRABILI.includes(resoAperto.status);
+    return (
+      <div className="container mx-auto max-w-xl px-4 py-8">
+        <Link href={`/orders/${params.id}`} className="text-sm text-primary-700 hover:underline">
+          ← Torna all&apos;ordine
+        </Link>
+        <div className="mt-4 rounded-2xl bg-white p-6 shadow ring-1 ring-cream-300">
+          <h1 className="text-2xl font-bold text-ink-900">Hai già una richiesta di reso aperta</h1>
+          {ritirabile ? (
+            <>
+              <p className="mt-3 text-ink-700">
+                Se ci hai ripensato e vuoi tenere il prodotto, puoi ritirarla: il reso si chiude e non
+                devi rispedire niente.
+              </p>
+              <button
+                type="button"
+                onClick={ritira}
+                disabled={ritiroInCorso}
+                className="mt-5 rounded-lg border border-secondary-300 bg-white px-4 py-2 text-sm font-semibold text-secondary-700 hover:bg-secondary-50 disabled:opacity-50"
+              >
+                Ritira la richiesta
+              </button>
+            </>
+          ) : (
+            <p className="mt-3 text-ink-700">
+              La merce è già in viaggio o in negozio: la richiesta non si può più ritirare. Se ti
+              serve qualcosa, scrivi al negozio.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   /**
    * 22/8/2026 — LA PAGINA LEGGEVA STATO E DATA DI CONSEGNA E NON LI USAVA MAI.

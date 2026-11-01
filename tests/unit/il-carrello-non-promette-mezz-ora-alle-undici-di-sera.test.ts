@@ -273,6 +273,9 @@ describe('la riga «Ne restano solo N» dice lo stesso tempo della riga «Dispon
 
   it('alle 14 col sì della cassa: «Ne restano solo 2 · Consegna in …», come «Disponibile»', async () => {
     const c = await carrelloAlle(14, 0, 'si', scaffale);
+    // Come i casi qui sotto: la scorta arriva da una lettura asincrona, si aspetta la riga.
+    // Questo caso era rimasto ai giri fissi, e con 7.128 prove insieme è caduto (31/10/2026).
+    await vi.waitFor(() => expect(c.rigaDellaScorta()).toBeDefined());
     expect(c.riga()).toBe(`Disponibile · Consegna in ${EXPRESS_ETA_LABEL}`);
     expect(c.rigaDellaScorta(), 'la riga della scorta bassa non dice il tempo della cassa').toBe(
       `Ne restano solo 2 · Consegna in ${EXPRESS_ETA_LABEL}`,

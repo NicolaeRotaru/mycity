@@ -53,7 +53,30 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   // R81 — Una lettura caduta non è «nessun ordine»: prima il gestore usciva
   // bene, la rotta rispondeva 200, e un rimborso pieno non veniva mai scritto.
   if (errOrdini) throw new Error(`[stripe] ordini del rimborso non letti: ${errOrdini.message}`);
-  if (!orders || orders.length === 0) return;
+  if (!orders || orders.length === 0) {
+    // 31/10/2026 (178) — Un pagamento senza ordini puo' essere quello di un
+    // buono regalo: rimborsato per intero, il buono si spegne con lui. Su un
+    // rimborso parziale non si indovina quanto togliere: lo si dice e basta.
+    // Lo spegne il database (`gift_card_void_for_payment`, 178), una volta
+    // sola anche se Stripe riconsegna l'evento; 'non_trovato' = nessun buono
+    // con quel pagamento (ancora): il database se lo annota e, se il buono
+    // nasce dopo, nasce spento. Un errore si rilancia, cosi' Stripe riprova.
+    const pieno = charge.refunded === true || (charge.amount_refunded ?? 0) >= (charge.amount ?? 0);
+    if (!pieno) {
+      logger.warn('[stripe] rimborso parziale su un pagamento senza ordini: nessun annullo automatico del buono', { paymentIntent: pi });
+      return;
+    }
+    const { data: buono, error: errBuono } = await admin.rpc('gift_card_void_for_payment', {
+      p_session_id: null,
+      p_payment_intent: pi,
+      p_reason: 'refunded',
+    });
+    if (errBuono) throw new Error(`[stripe] buono regalo del rimborso non annullato (${pi}): ${errBuono.message}`);
+    if ((buono as { esito?: string } | null)?.esito === 'annullato') {
+      logger.warn('[stripe] buono regalo annullato: il suo pagamento è stato rimborsato', { paymentIntent: pi, buono });
+    }
+    return;
+  }
 
   // Solo i refund PIENI annullano gli ordini a tappeto.
   const fullyRefunded = charge.refunded === true || (charge.amount_refunded ?? 0) >= (charge.amount ?? 0);

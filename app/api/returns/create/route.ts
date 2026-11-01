@@ -6,6 +6,14 @@ import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
+import {
+  MOTIVO_RIPENSAMENTO,
+  notaDegliEsclusi,
+  prodottiDelleRighe,
+  rifiutoDelRecesso,
+  type ProdottoPerIlRecesso,
+  type RigaPerIlRecesso,
+} from '@/lib/ordini/recesso';
 
 export const runtime = 'nodejs';
 
@@ -104,6 +112,47 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
   }
 
   // Anti-doppione: max 1 reso open per ordine
+  /**
+   * 31/10/2026 — «CAMBIO IDEA» NON VALE SUI PRODOTTI ESCLUSI DAL RECESSO.
+   * Pane, freschi e ordinazioni (products.non_recedibile, migrazione 180).
+   * I prodotti si leggono col servizio: un prodotto nascosto dopo l'ordine
+   * resta escluso. Se la lettura non riesce non si decide al buio.
+   * `*` e non la colonna per nome: prima della migrazione 180 la colonna non
+   * c'e', la riga arriva senza, e vale «nessun prodotto escluso» (vero: nessun
+   * negozio ha ancora potuto segnarne uno). Dopo la 180 e i tipi rigenerati
+   * (lib/database.types.ts) si puo' tornare a 'id, name, non_recedibile'.
+   */
+  // Ordine misto (torta esclusa + miele): il reso nasce, e la nota dice al negozio cosa non rimborsare.
+  let notaRecesso: string | null = null;
+  if (body.reason === MOTIVO_RIPENSAMENTO) {
+    let domandaRighe = supa.from('order_items').select('product_id, product_name').eq('order_id', body.orderId);
+    if (body.orderItemId) domandaRighe = domandaRighe.eq('id', body.orderItemId);
+    const { data: righe, error: rErr } = await domandaRighe;
+    if (rErr) {
+      logger.error(rErr, { context: 'returns-recesso-righe' });
+      return ApiErrors.internal('Non riesco a verificare i prodotti dell\'ordine: riprova fra poco.');
+    }
+    const righeOrdine = (righe ?? []) as RigaPerIlRecesso[];
+    const ids = [
+      ...new Set(righeOrdine.map((r) => r.product_id).filter((x): x is string => typeof x === 'string')),
+    ];
+    if (ids.length > 0) {
+      const { data: prodotti, error: pErr } = await getAdminSupabase()
+        .from('products')
+        .select('*')
+        .in('id', ids);
+      if (pErr) {
+        logger.error(pErr, { context: 'returns-recesso-prodotti' });
+        return ApiErrors.internal('Non riesco a verificare se i prodotti sono esclusi dal recesso: riprova fra poco.');
+      }
+      // Un prodotto per riga: quella col prodotto tolto dal catalogo conta come recedibile.
+      const perRiga = prodottiDelleRighe(righeOrdine, (prodotti ?? []) as Array<ProdottoPerIlRecesso & { id?: string }>);
+      const rifiuto = rifiutoDelRecesso(body.reason, perRiga);
+      if (rifiuto) return ApiErrors.invalidRequest(rifiuto);
+      notaRecesso = notaDegliEsclusi(body.reason, perRiga);
+    }
+  }
+
   const { data: existing } = await supa
     .from('returns')
     .select('id, status')
@@ -122,7 +171,7 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
       buyer_id: user.id,
       seller_id: order.seller_id,
       reason: body.reason,
-      notes: body.notes ?? null,
+      notes: [body.notes, notaRecesso].filter(Boolean).join('\n\n') || null,
       photo_urls: body.photoUrls ?? [],
       status: 'REQUESTED',
     })

@@ -6,6 +6,7 @@ import { Gift, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from './hooks/useProfile';
 import { useLocalStorage } from '@/lib/hooks';
+import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
 
 const DISMISS_KEY = 'mc_welcome_dismissed';
 
@@ -29,6 +30,12 @@ export default function WelcomeCreditBanner() {
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
 
   useEffect(() => {
+    // 31/10/2026 — coi punti spenti (INVITI_E_PUNTI_ACCESI = false, migrazione
+    // 168) i 100 punti del benvenuto non si convertono piu' in credito: la
+    // striscia «Hai €5 di sconto, usali al primo ordine» prometterebbe 5 euro
+    // che la cassa non da'. Chi li aveva gia' ricevuti tiene i suoi punti,
+    // ma la promessa in euro non si fa. Non si interroga neanche il database.
+    if (!INVITI_E_PUNTI_ACCESI) return;
     if (!isAuthenticated || !isBuyer || !profile?.id || dismissed) return;
 
     (async () => {
