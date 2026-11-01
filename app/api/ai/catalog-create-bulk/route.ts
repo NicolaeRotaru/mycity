@@ -17,6 +17,7 @@ import {
 import {
   MAX_NOME_PRODOTTO,
   MAX_DESCRIZIONE_PRODOTTO,
+  chiaveCampo,
   type CategoryRow,
 } from '@/lib/products/aiPatch';
 import {
@@ -44,6 +45,37 @@ export const runtime = 'nodejs';
  * `buildDraftProductInsert`, che è la porta unica; qui c'è il gemello, così chi
  * manda troppo se lo sente dire invece di vedersi tagliare il testo in silenzio.
  */
+/**
+ * 1/11/2026 — UNA LISTA INGREDIENTI LUNGA FACEVA CADERE TUTTO IL LOTTO.
+ *
+ * Il tetto di 500 caratteri stava nello schema, su OGNI attributo: la focaccia
+ * con 900 caratteri di ingredienti faceva rispondere «Dati prodotti non
+ * validi.» alla richiesta intera, e nessuna delle dodici bozze nasceva. Una
+ * lista ingredienti vera (etichetta UE) supera spesso i 500 caratteri.
+ *
+ * Adesso (scelta di Nicola): ingredienti e valori nutrizionali arrivano fino a
+ * 2000 caratteri e entrano interi; gli altri campi restano a 500. Il tetto si
+ * controlla prodotto per prodotto: chi lo supera finisce fra gli scartati col
+ * suo nome e il nome del campo, e gli altri nascono. Niente si taglia in silenzio.
+ */
+const MAX_VALORE_LUNGO = 2000;
+const CAMPI_LUNGHI = new Set(['ingredienti', 'valori_nutrizionali']);
+
+function tettoDelCampo(chiaveAi: string): number {
+  return CAMPI_LUNGHI.has(chiaveCampo(chiaveAi)) ? MAX_VALORE_LUNGO : MAX_VALORE_ATTRIBUTO;
+}
+
+/** Il primo campo che supera il suo tetto, oppure null. */
+function campoOltreIlTetto(
+  attributes: Record<string, string> | undefined,
+): { campo: string; tetto: number } | null {
+  for (const [chiave, valore] of Object.entries(attributes ?? {})) {
+    const tetto = tettoDelCampo(chiave);
+    if (valore.trim().length > tetto) return { campo: chiave, tetto };
+  }
+  return null;
+}
+
 const DraftSchema = z.object({
   name: z.string().max(MAX_NOME_PRODOTTO * 4).optional(),
   description: z.string().max(MAX_DESCRIZIONE_PRODOTTO * 2).optional(),
@@ -51,7 +83,10 @@ const DraftSchema = z.object({
   subcategory_id: z.string().uuid().nullable().optional(),
   category_slug: z.string().max(200).optional(),
   suggested_price: z.number().nullable().optional(),
-  attributes: z.record(z.string().max(MAX_VALORE_ATTRIBUTO)).optional(),
+  // Il tetto per campo si controlla per prodotto (vedi `campoOltreIlTetto`):
+  // nessun tetto qui, perche' un tetto nello schema fa cadere il lotto intero.
+  // Il corpo della richiesta e' gia' limitato da TETTO_JSON_CON_FOTO.
+  attributes: z.record(z.string()).optional(),
   tags: z.array(z.string().max(60)).max(50).optional(),
   alt_text: z.string().max(MAX_ALT_TEXT).nullable().optional(),
   // R36 — Solo con questa spunta allergeni e ingredienti letti dalle foto
@@ -116,6 +151,14 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       scartati.push({ nome: nomeDi(item), motivo: 'foto non caricate su MyCity' });
       continue;
     }
+    const oltre = campoOltreIlTetto(item.draft.attributes);
+    if (oltre) {
+      scartati.push({
+        nome: nomeDi(item),
+        motivo: `il campo «${oltre.campo}» supera ${oltre.tetto} caratteri: accorcialo e riprova`,
+      });
+      continue;
+    }
     daControllare.push({ item, imageUrls });
   }
 
@@ -162,9 +205,18 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       scartati.push({ nome: nomeDi(item), motivo: esito.value.reason });
       return;
     }
-    payloads.push(
-      buildDraftProductInsert({ draft: item.draft, imageUrls, categories, sellerId: user.id }),
-    );
+    const payload = buildDraftProductInsert({ draft: item.draft, imageUrls, categories, sellerId: user.id });
+    // `buildDraftProductInsert` taglia ogni attributo a 500: per ingredienti e
+    // valori nutrizionali che ci sono entrati, rimette il testo intero (gia'
+    // controllato sotto i 2000 qui sopra). Il tetto per campo andrebbe nella
+    // porta unica (lib/products/draftFromVision.ts), fuori da questa rotta.
+    for (const [chiaveAi, grezzo] of Object.entries(item.draft.attributes ?? {})) {
+      const chiave = chiaveCampo(chiaveAi);
+      if (CAMPI_LUNGHI.has(chiave) && chiave in payload.attributes) {
+        payload.attributes[chiave] = grezzo.trim();
+      }
+    }
+    payloads.push(payload);
   });
 
   if (payloads.length === 0) {
