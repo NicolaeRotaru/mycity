@@ -1,5 +1,8 @@
 import Link from 'next/link';
-import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
+import { CANONE_NEGOZI, COMMISSIONE_DEL_PERCENTO, IVA_SULLA_COMMISSIONE } from '@/app/seller/earnings/commissione';
+import { indirizzoContatto } from '@/lib/contatti-pubblici';
+import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
+import { metodiAlCheckout } from '@/lib/promesse-pubbliche';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
 import { rigaIdentita, titolare } from '@/lib/legal/titolare';
 import { paragrafiConsegne, paragrafoDelRifiuto } from '@/lib/legal/promessa-cliente-assente';
@@ -18,7 +21,8 @@ export const metadata = {
   },
 };
 
-const VERSION = '2.0';
+// 31/10/2026 (ondata 6) — Il numero che si accetta e quello che si legge sono lo stesso.
+const VERSION = /terms-([\d.]+)/.exec(VERSIONE_TESTI_LEGALI)?.[1] ?? VERSIONE_TESTI_LEGALI;
 const EFFECTIVE_DATE = '24 maggio 2026';
 
 const TOC = [
@@ -45,6 +49,11 @@ const TOC = [
 export default function TermsPage() {
   const chiSiamo = titolare();
   const identita = rigaIdentita(chiSiamo);
+  // 31/10/2026 (ondata 6) — Il modulo di recesso aveva per destinatario «MyCity», un marchio,
+  // senza un indirizzo a cui scrivere. Finché manca la casella dei resi, la casella pubblica.
+  const destinatarioRecesso = chiSiamo.gestore ? `${chiSiamo.gestore}, che gestisce ${chiSiamo.denominazione}` : chiSiamo.denominazione;
+  const emailRecesso = chiSiamo.emailResi ?? indirizzoContatto('info');
+  const conCarta = metodiAlCheckout().includes('carta-adesso');
 
   return (
     <LegalLayout
@@ -148,17 +157,27 @@ export default function TermsPage() {
       </LegalSection>
 
       <LegalSection id="pagamenti" heading="5. Pagamenti">
+        {/* 31/10/2026 (ondata 6) — Prometteva carte, Apple Pay, Google Pay, «Stripe, S.A.» e un
+            incasso «in custodia» fino a 14 giorni. Al lancio si paga in contanti alla consegna; la
+            carta compare solo quando la cassa la offre (fatti pagamenti.al-lancio e
+            pagamenti.bonifico-contanti-al-negozio). Il testo segue i metodi del checkout. */}
         <p>
-          I pagamenti sono gestiti da provider PSP autorizzati (Stripe, S.A.). MyCity, in qualità
-          di marketplace facilitator, incassa l&apos;importo dell&apos;ordine in custodia
-          (&quot;<strong>escrow</strong>&quot;) e lo trasferisce al Venditore (al netto della
-          commissione di servizio) dopo la conferma di consegna o, comunque, alla scadenza del
-          periodo di recesso (14 giorni).
+          Modalità accettate: {conCarta ? <>pagamento in contanti alla consegna oppure con carta di credito o debito al momento dell&apos;ordine</> : <>pagamento in contanti alla consegna</>}.
+          Si può pagare solo con i metodi proposti al momento dell&apos;ordine.
         </p>
         <p>
-          Modalità accettate: carta di credito/debito (Visa, Mastercard, Amex), Apple Pay,
-          Google Pay e, dove indicato dal Venditore, pagamento alla consegna in contanti.
+          I contanti li riceve il Rider alla consegna e li consegna a MyCity. MyCity versa al
+          Venditore quanto gli spetta, al netto della commissione di servizio, con un bonifico
+          <strong> ogni lunedì</strong> per le consegne della settimana precedente.
         </p>
+        {conCarta && (
+          <p>
+            I pagamenti con carta sono gestiti da Stripe Payments Europe Ltd., fornitore di servizi
+            di pagamento autorizzato: MyCity non vede né conserva i dati della carta. La parte del
+            Venditore, al netto della commissione di servizio, gli viene trasferita dopo la
+            conferma di consegna.
+          </p>
+        )}
         <p>
           <strong>Documenti fiscali</strong>: MyCity è un intermediario e <strong>non emette
           fatture</strong> per gli ordini. Ogni adempimento fiscale relativo alla vendita
@@ -189,7 +208,10 @@ export default function TermsPage() {
           <strong>14 giorni</strong> dalla consegna, senza necessità di motivare la richiesta.
         </p>
         <p>
-          Sono esclusi dal recesso, ai sensi dell&apos;art. 59 Cod. Cons.: prodotti deperibili,
+          {/* 31/10/2026 (ondata 6) — Fatto legale.recesso-esclusi: i freschi e il fatto su ordinazione,
+              detti con i nomi che il cliente riconosce. */}
+          Sono esclusi dal recesso, ai sensi dell&apos;art. 59 Cod. Cons.: prodotti deperibili
+          (pane, dolci, salumi, latticini e gli altri freschi), prodotti fatti su ordinazione,
           prodotti confezionati su misura o personalizzati, prodotti sigillati (per igiene) aperti
           dopo la consegna, beni che dopo la consegna risultino mescolati con altri beni in modo
           non separabile, contenuti digitali forniti su supporto non materiale dopo l&apos;avvio
@@ -197,9 +219,7 @@ export default function TermsPage() {
         </p>
         <p>
           Per esercitare il recesso usa il flusso &quot;Richiedi reso&quot; nel dettaglio ordine
-          {chiSiamo.emailResi && (
-            <> o scrivi a <a href={`mailto:${chiSiamo.emailResi}`} className="text-primary-700 underline">{chiSiamo.emailResi}</a></>
-          )}.
+          {' '}o scrivi a <a href={`mailto:${emailRecesso}`} className="text-primary-700 underline">{emailRecesso}</a>.
           Le spese di restituzione sono a carico dell&apos;Acquirente salvo prodotto difettoso o
           errore del Venditore.
         </p>
@@ -233,8 +253,8 @@ export default function TermsPage() {
             reso&quot; nel dettaglio dell&apos;ordine. Se preferisci scrivere, copia questo testo.
           </p>
           <pre className="whitespace-pre-wrap text-sm text-ink-800 font-mono leading-relaxed">
-{`Destinatario: ${chiSiamo.denominazione}${chiSiamo.indirizzo ? `, ${chiSiamo.indirizzo}` : ''}${chiSiamo.emailResi ? `
-Email: ${chiSiamo.emailResi}` : ''}
+{`Destinatario: ${destinatarioRecesso}${chiSiamo.indirizzo ? `, ${chiSiamo.indirizzo}` : ''}
+Email: ${emailRecesso}
 
 Con la presente notifico il recesso dal mio contratto di vendita
 dei seguenti beni:
@@ -274,10 +294,14 @@ Data: ......................................................`}
           <li>collaborare nella gestione di dispute, resi e reclami.</li>
         </ul>
         <p>
-          La <strong>commissione di servizio</strong> trattenuta da MyCity è pari al{' '}
-          {MARKETPLACE_FEE_BPS / 100}% del subtotale dei prodotti, IVA esclusa; non si applica
-          alle spese di spedizione né alla quota di consegna. Eventuali variazioni saranno
-          comunicate con preavviso di 30 giorni come da art. 15.
+          {/* 31/10/2026 (ondata 6) — Diceva «IVA esclusa» mentre le pagine del negozio dicono «IVA
+              inclusa» (fatti pricing.commissione e pricing.abbonamento): la percentuale, l'IVA e il
+              canone si leggono dalle stesse costanti delle pagine. */}
+          La <strong>commissione di servizio</strong> trattenuta da MyCity è{' '}
+          {COMMISSIONE_DEL_PERCENTO} del subtotale dei prodotti venduti tramite il Servizio,{' '}
+          {IVA_SULLA_COMMISSIONE}; non si applica alle spese di spedizione né alla quota di
+          consegna. {CANONE_NEGOZI} Eventuali variazioni saranno comunicate con preavviso di 30
+          giorni come da art. 15.
         </p>
         {/* 6/9/2026 — I dati dei clienti mancavano dagli obblighi del negozio.
             L'informativa promette all'Acquirente «li condividiamo solo con il

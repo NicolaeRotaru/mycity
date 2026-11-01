@@ -35,7 +35,9 @@ import {
   eCookieDiSessione,
   sessioneDaRinnovare,
   travasaCookie,
+  conDurataMassima,
 } from '@/lib/auth/cookie-di-sessione';
+import { vaChiestaSenzaTrattenere } from '@/lib/auth/accettazione-testi';
 
 /**
  * Middleware strict: il client browser usa @supabase/ssr, la sessione
@@ -65,6 +67,12 @@ const ROLE_PROTECTED: Array<{ prefix: string; allowed: ('admin' | 'seller' | 'ri
 // specifico. 🟠-18: /profile/** era senza guard server-side (protezione
 // per-pagina incoerente). Qui la centralizziamo con returnTo preciso.
 const AUTH_REQUIRED = ['/profile'];
+
+/** La pagina da cui si ordina: lì si chiedono i Termini in vigore a chi ne ha accettati di vecchi. */
+const PERCORSO_PAGAMENTO = '/checkout';
+function eIlPagamento(pathname: string): boolean {
+  return pathname === PERCORSO_PAGAMENTO || pathname.startsWith(`${PERCORSO_PAGAMENTO}/`);
+}
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -416,7 +424,10 @@ export async function middleware(req: NextRequest) {
    * il venditore, chi ha il cookie scaduto o di un'altra sessione, e chiunque
    * si trovi su una pagina protetta, fanno la strada intera di sempre.
    */
-  if (!needsAuth && needsSellerGate) {
+  // 31/10/2026 (ondata 6) — Sul pagamento la scorciatoia non vale: lì si
+  // guarda quali Termini ha accettato la persona (vedi sotto).
+  const sulPagamento = eIlPagamento(pathname);
+  if (!needsAuth && needsSellerGate && !sulPagamento) {
     const messoDaParte = await leggiRuoloDalCookie(req);
     if (messoDaParte && messoDaParte.emailConfermata && messoDaParte.role !== 'seller') {
       return res;
@@ -448,12 +459,15 @@ export async function middleware(req: NextRequest) {
       get(name: string) {
         return req.cookies.get(name)?.value;
       },
-      set(name: string, value: string, options: CookieOptions) {
+      // 31/10/2026 (ondata 6) — Mai oltre i 6 mesi della cookie policy: la libreria scrive 400 giorni.
+      set(name: string, value: string, opzioniLibreria: CookieOptions) {
+        const options = conDurataMassima(opzioniLibreria);
         req.cookies.set({ name, value, ...options });
         res.cookies.set({ name, value, ...options });
         raccoglitore.set(name, value, options);
       },
-      remove(name: string, options: CookieOptions) {
+      remove(name: string, opzioniLibreria: CookieOptions) {
+        const options = conDurataMassima(opzioniLibreria);
         req.cookies.set({ name, value: '', ...options });
         res.cookies.set({ name, value: '', ...options });
         raccoglitore.remove(name, options);
@@ -542,6 +556,30 @@ export async function middleware(req: NextRequest) {
     return withCsp(NextResponse.redirect(url));
   }
 
+  // 31/10/2026 (ondata 6) — PRIMA DI PAGARE, I TERMINI IN VIGORE.
+  // Fatto legale.termini-riaccettazione: chi ha accettato una versione vecchia
+  // li riaccetta prima di ordinare. Le porte d'ingresso non bastano: con una
+  // sessione aperta si arriva al pagamento senza ripassarci, e l'accesso con la
+  // password non lo chiede. Solo sul pagamento, perché una lettura in più su
+  // ogni pagina la pagherebbero tutti. Nel dubbio (scaduto, rotto) si passa:
+  // fermare un ordine costa più di una domanda rimandata.
+  // 1/11/2026 — La regola è quella delle porte d'ingresso (`vaChiestaSenzaTrattenere`):
+  // una data nel profilo senza la riga dei testi in vigore non basta più.
+  const versoLeCondizioni = () => {
+    const url = req.nextUrl.clone();
+    url.pathname = '/accetta-condizioni';
+    url.search = '';
+    url.searchParams.set('next', pathname);
+    return withCsp(NextResponse.redirect(url));
+  };
+  if (sulPagamento) {
+    const riaccetta = await vaChiestaSenzaTrattenere(() => supabase, user.id, TETTO_PORTIERE_MS);
+    if (riaccetta === 'chiedi') return versoLeCondizioni();
+    if (riaccetta !== 'lascia-entrare') {
+      logger.warn('[portiere] Termini accettati non controllati prima del pagamento', { esito: riaccetta });
+    }
+  }
+
   type ProfileRole = 'buyer' | 'seller' | 'rider' | 'admin';
 
   // 086 — Sulle aree protette il profilo si rilegge SEMPRE: un ruolo vecchio
@@ -626,6 +664,19 @@ export async function middleware(req: NextRequest) {
       const url = req.nextUrl.clone();
       url.pathname = accesso.verso;
       return withCsp(NextResponse.redirect(url));
+    }
+  }
+
+  // 1/11/2026 (ondata 6) — L'AREA DEL NEGOZIO, COME LA CASSA.
+  // Un negozio già approvato non ripassa dalle porte d'ingresso (la sessione
+  // resta aperta per settimane): senza questo cancello lavorava sotto i Termini
+  // 3.0 senza averli mai riaccettati. Stessa regola, stesso tetto; nel dubbio
+  // (scaduto, rotto) si entra e si richiede alla pagina dopo.
+  if (roleRule?.prefix === '/seller' && role === 'seller' && approved) {
+    const riaccetta = await vaChiestaSenzaTrattenere(() => supabase, user.id, TETTO_PORTIERE_MS);
+    if (riaccetta === 'chiedi') return versoLeCondizioni();
+    if (riaccetta !== 'lascia-entrare') {
+      logger.warn('[portiere] Termini accettati non controllati nell area del negozio', { esito: riaccetta });
     }
   }
 

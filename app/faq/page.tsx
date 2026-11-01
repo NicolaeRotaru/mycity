@@ -6,7 +6,9 @@ import { ShoppingCart, Truck, CreditCard, Undo2, Settings, Store, Bike, Mail, ty
 // Le promesse pubbliche nascono dagli stessi interruttori che le mantengono: il ritiro in negozio
 // e' spento nel checkout e nelle due rotte, ma questa pagina lo prometteva lo stesso, con tanto di
 // istruzione per selezionare un'opzione che non c'e'.
+import { FRASE_PREZZO_NEGOZI } from '@/app/seller/earnings/commissione';
 import {
+  fraseComeSiPaga,
   promesseRitiroInNegozio,
   rispostaComeOrdinare,
   rispostaCostoSpedizione,
@@ -53,7 +55,9 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: 'Quali metodi di pagamento accettate?',
-        a: 'Attualmente è disponibile il pagamento alla consegna (contanti o POS al rider). Stiamo integrando carte, PayPal e Apple/Google Pay.',
+        // 31/10/2026 (ondata 6) — Prometteva il «POS al rider», che non esiste, e carte e PayPal
+        // «in arrivo»: la risposta adesso nasce dai metodi che la cassa offre davvero.
+        a: fraseComeSiPaga(),
       },
       {
         q: 'Il pagamento è sicuro?',
@@ -144,7 +148,8 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'Quanto costa vendere?',
-        a: 'Zero commissioni mensili. Si paga solo una piccola commissione sulle vendite effettivamente concluse.',
+        // 31/10/2026 (ondata 6) — «Zero commissioni mensili»: il prezzo dei negozi è una frase sola.
+        a: FRASE_PREZZO_NEGOZI,
       },
       {
         q: 'Come gestisco i miei ordini?',

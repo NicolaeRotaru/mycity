@@ -60,6 +60,31 @@ export function eCookieDiSessione(nome: string): boolean {
   return nome.startsWith('sb-') && nome.includes('-auth-token');
 }
 
+/**
+ * 31/10/2026 (ondata 6) — IL COOKIE DI ACCESSO NON RESTA PIU' DI 6 MESI, NEANCHE DAL SERVER.
+ *
+ * @supabase/ssr 0.5.2 scrive la sessione con maxAge di 400 giorni
+ * (dist/main/utils/constants.js) e lo impone anche sopra le nostre opzioni. La
+ * cookie policy promette 6 mesi (scelta di Nicola del 31/10, fatto
+ * privacy.consenso-cookie-durata). Il browser lo tagliava gia'
+ * (lib/supabase/client.ts), ma a ogni rinnovo il server lo riscriveva a 400
+ * giorni. Ogni punto del server che scrive un cookie della libreria passa da qui.
+ * Prova: tests/unit/il-server-non-tiene-il-cookie-di-accesso-oltre-6-mesi.test.ts
+ */
+export const DURATA_MASSIMA_SESSIONE_S = 180 * 24 * 60 * 60;
+
+export function conDurataMassima<T extends { maxAge?: number; expires?: Date }>(opzioni: T): T {
+  const fuori = { ...opzioni };
+  if (typeof fuori.maxAge === 'number') {
+    fuori.maxAge = Math.min(Math.floor(fuori.maxAge), DURATA_MASSIMA_SESSIONE_S);
+  }
+  if (fuori.expires instanceof Date) {
+    const tetto = Date.now() + DURATA_MASSIMA_SESSIONE_S * 1000;
+    if (fuori.expires.getTime() > tetto) fuori.expires = new Date(tetto);
+  }
+  return fuori;
+}
+
 /** Le opzioni di un cookie, nella forma che accetta anche `NextResponse`. */
 export type OpzioniCookie = {
   path?: string;

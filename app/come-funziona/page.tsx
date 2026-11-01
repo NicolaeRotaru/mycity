@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Banknote, ShieldCheck, RotateCcw, ArrowRight, Store } from 'lucide-react';
 import { fraseComeSiPaga, SPIEGAZIONE_RESO } from '@/lib/promesse-pubbliche';
 import HowItWorks from '@/components/home/HowItWorks';
+import { FRASE_PREZZO_NEGOZI } from '@/app/seller/earnings/commissione';
 
 export const metadata = {
   title: 'Come funziona · MyCity',
@@ -97,7 +98,7 @@ export default function ComeFunzionaPage() {
               <h3 className="flex items-center gap-2 text-lg font-bold">
                 <Store size={18} strokeWidth={2.2} className="text-primary-600" aria-hidden /> Hai un negozio?
               </h3>
-              <p className="text-sm text-ink-600">Vendi su MyCity: vetrina pro, niente canone.</p>
+              <p className="text-sm text-ink-600">Vendi su MyCity con la tua vetrina. {FRASE_PREZZO_NEGOZI}</p>
             </div>
             <ArrowRight size={22} strokeWidth={2.2} className="shrink-0 text-primary-600 transition-transform group-hover:translate-x-1" aria-hidden />
           </Link>

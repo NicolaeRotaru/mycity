@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { frasePagamento, SPIEGAZIONE_RESO } from '@/lib/promesse-pubbliche';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { FRASE_PREZZO_NEGOZI } from '@/app/seller/earnings/commissione';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -387,7 +388,7 @@ function HomeBlock({
               </span>
               <p className="text-base md:text-lg">
                 <span className="font-serif font-bold">{c.heading || 'Hai un negozio a Piacenza?'}</span>{' '}
-                <span className="text-ink-300">{c.subtext || 'Vendi online con zero commissioni.'}</span>
+                <span className="text-ink-300">{c.subtext || FRASE_PREZZO_NEGOZI}</span>
               </p>
             </div>
             <HomeCtaLink

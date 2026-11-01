@@ -3,7 +3,7 @@ import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { getClientIp, rateLimitAsync } from '@/lib/rate-limit';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
-import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
+import { VERSIONE_TESTI_LEGALI, eLaVersioneInVigore, ultimaVersioneAVerbale } from '@/lib/legal/versione';
 
 export const runtime = 'nodejs';
 
@@ -35,8 +35,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .eq('id', user.id)
       .maybeSingle();
 
-    // Già accettato: non si scrive una seconda riga per la stessa cosa.
-    if (profilo?.tos_accepted_at) return NextResponse.json({ ok: true, gia: true }, { status: 200 });
+    // Già accettata LA VERSIONE IN VIGORE: non si scrive una seconda riga per la stessa cosa.
+    // 31/10/2026 (ondata 6) — Prima bastava la data nel profilo: chi aveva
+    // accettato i Termini 2.0 cliccava «accetto» sui 3.0 e riceveva «già
+    // accettato», senza nessuna riga con la versione nuova. Ora si guarda la
+    // versione dell'ultima riga del verbale (fatto legale.termini-riaccettazione).
+    if (profilo?.tos_accepted_at && eLaVersioneInVigore(await ultimaVersioneAVerbale(admin, user.id))) {
+      return NextResponse.json({ ok: true, gia: true }, { status: 200 });
+    }
 
     // 27/8/2026 (R024 · R062) — L'INDIRIZZO DI RETE SE LO SCRIVEVA L'UTENTE.
     // `x-forwarded-for` e' una catena, e il primo pezzo lo mette il chiamante:
