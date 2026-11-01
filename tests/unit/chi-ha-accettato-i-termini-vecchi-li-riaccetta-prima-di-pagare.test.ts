@@ -16,6 +16,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const RIGA_2_0 = { versione_testo: 'privacy-2.0+terms-2.0' };
 let rigaVerbale: { versione_testo: string } | null = RIGA_2_0;
+let verbaleRotto = false;
 const inseriti: Array<{ tabella: string; riga: Record<string, unknown> }> = [];
 
 function catena(tabella: string) {
@@ -24,7 +25,7 @@ function catena(tabella: string) {
   q.single = async () => ({ data: { role: 'buyer', is_approved: true }, error: null });
   q.maybeSingle = async () => ({
     data: tabella === 'consent_log' ? rigaVerbale : { tos_accepted_at: '2026-09-01T10:00:00Z' },
-    error: null,
+    error: tabella === 'consent_log' && verbaleRotto ? { message: 'verbale illeggibile' } : null,
   });
   q.insert = (riga: Record<string, unknown>) => {
     inseriti.push({ tabella, riga });
@@ -79,6 +80,7 @@ function doveLaManda(res: Response): string | null {
 
 beforeEach(() => {
   rigaVerbale = RIGA_2_0;
+  verbaleRotto = false;
   inseriti.length = 0;
 });
 
@@ -115,8 +117,11 @@ describe('Maria ha accettato i Termini 2.0, ora sono in vigore i 3.0', () => {
     expect(inseriti).toHaveLength(0);
   });
 
-  it('senza nessuna riga leggibile nel verbale il pagamento non diventa un giro senza fine', async () => {
-    rigaVerbale = null;
+  // 1/11/2026 — «Nessuna riga» non vale piu' come «in regola» (vedi
+  // la-riaccettazione-guarda-la-versione-a-verbale-non-la-data.test.ts): resta
+  // vero che un verbale che non si lascia leggere non blocca il pagamento.
+  it('se il verbale non si lascia leggere il pagamento non diventa un giro senza fine', async () => {
+    verbaleRotto = true;
     const res = await middleware(aperturaDelPagamento());
     expect(doveLaManda(res)).not.toBe('/accetta-condizioni?next=/checkout');
   });

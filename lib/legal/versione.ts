@@ -1,5 +1,3 @@
-import { chiediConTetto } from '@/lib/auth/decisione-portiere';
-
 /**
  * La versione dei testi legali che l'utente sta accettando.
  *
@@ -63,25 +61,10 @@ export async function ultimaVersioneAVerbale(client: ClientConVerbale, utenteId:
   return typeof data?.versione_testo === 'string' ? data.versione_testo : null;
 }
 
-/** Quanto si aspetta il verbale prima di lasciar passare comunque: lo stesso tetto delle porte d'ingresso. */
-export const TETTO_RIACCETTAZIONE_MS = 2000;
-
-/**
- * `chiedi` = a verbale c'è un'accettazione, ma di testi che non sono più in vigore.
- * `lascia-entrare` = ha accettato quelli in vigore, oppure non c'è nessuna riga: chi
- * non ha mai accettato lo fermano già le porte d'ingresso, e un verbale che la
- * persona non riesce a leggere non deve diventare un giro senza fine fra il
- * pagamento e la pagina che chiede.
- * `scaduto` / `rotto` = non lo sappiamo: si passa, e si richiede la volta dopo.
+/*
+ * 1/11/2026 (ondata 6) — Qui c'era una seconda regola, usata solo dalla cassa:
+ * «nessuna riga a verbale = lascia entrare». Chi aveva la data nel profilo ma
+ * nessuna riga pagava sotto i Termini 3.0 senza averli visti. La regola ora e'
+ * una sola, `vaChiestaSenzaTrattenere` in `lib/auth/accettazione-testi.ts`, e la
+ * usano le porte d'ingresso, la cassa e l'area del negozio.
  */
-export type EsitoRiaccettazione = 'chiedi' | 'lascia-entrare' | 'scaduto' | 'rotto';
-
-export async function vaRiaccettataSenzaTrattenere(
-  client: () => ClientConVerbale,
-  utenteId: string,
-  ms: number = TETTO_RIACCETTAZIONE_MS,
-): Promise<EsitoRiaccettazione> {
-  const r = await chiediConTetto(() => ultimaVersioneAVerbale(client(), utenteId), ms);
-  if (r.stato !== 'ok') return r.stato;
-  return r.valore !== null && !eLaVersioneInVigore(r.valore) ? 'chiedi' : 'lascia-entrare';
-}

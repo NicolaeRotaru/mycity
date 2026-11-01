@@ -37,7 +37,7 @@ import {
   travasaCookie,
   conDurataMassima,
 } from '@/lib/auth/cookie-di-sessione';
-import { vaRiaccettataSenzaTrattenere } from '@/lib/legal/versione';
+import { vaChiestaSenzaTrattenere } from '@/lib/auth/accettazione-testi';
 
 /**
  * Middleware strict: il client browser usa @supabase/ssr, la sessione
@@ -563,15 +563,18 @@ export async function middleware(req: NextRequest) {
   // password non lo chiede. Solo sul pagamento, perché una lettura in più su
   // ogni pagina la pagherebbero tutti. Nel dubbio (scaduto, rotto) si passa:
   // fermare un ordine costa più di una domanda rimandata.
+  // 1/11/2026 — La regola è quella delle porte d'ingresso (`vaChiestaSenzaTrattenere`):
+  // una data nel profilo senza la riga dei testi in vigore non basta più.
+  const versoLeCondizioni = () => {
+    const url = req.nextUrl.clone();
+    url.pathname = '/accetta-condizioni';
+    url.search = '';
+    url.searchParams.set('next', pathname);
+    return withCsp(NextResponse.redirect(url));
+  };
   if (sulPagamento) {
-    const riaccetta = await vaRiaccettataSenzaTrattenere(() => supabase, user.id, TETTO_PORTIERE_MS);
-    if (riaccetta === 'chiedi') {
-      const url = req.nextUrl.clone();
-      url.pathname = '/accetta-condizioni';
-      url.search = '';
-      url.searchParams.set('next', pathname);
-      return withCsp(NextResponse.redirect(url));
-    }
+    const riaccetta = await vaChiestaSenzaTrattenere(() => supabase, user.id, TETTO_PORTIERE_MS);
+    if (riaccetta === 'chiedi') return versoLeCondizioni();
     if (riaccetta !== 'lascia-entrare') {
       logger.warn('[portiere] Termini accettati non controllati prima del pagamento', { esito: riaccetta });
     }
@@ -661,6 +664,19 @@ export async function middleware(req: NextRequest) {
       const url = req.nextUrl.clone();
       url.pathname = accesso.verso;
       return withCsp(NextResponse.redirect(url));
+    }
+  }
+
+  // 1/11/2026 (ondata 6) — L'AREA DEL NEGOZIO, COME LA CASSA.
+  // Un negozio già approvato non ripassa dalle porte d'ingresso (la sessione
+  // resta aperta per settimane): senza questo cancello lavorava sotto i Termini
+  // 3.0 senza averli mai riaccettati. Stessa regola, stesso tetto; nel dubbio
+  // (scaduto, rotto) si entra e si richiede alla pagina dopo.
+  if (roleRule?.prefix === '/seller' && role === 'seller' && approved) {
+    const riaccetta = await vaChiestaSenzaTrattenere(() => supabase, user.id, TETTO_PORTIERE_MS);
+    if (riaccetta === 'chiedi') return versoLeCondizioni();
+    if (riaccetta !== 'lascia-entrare') {
+      logger.warn('[portiere] Termini accettati non controllati nell area del negozio', { esito: riaccetta });
     }
   }
 
