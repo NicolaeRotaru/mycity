@@ -83,6 +83,8 @@ type OrderRow = {
 
 // Segmenti progresso consegna (il rider parte da ASSIGNED).
 const FLOW: OrderStatus[] = ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+/** Gli stati in cui il fattorino ha l'ordine in mano: solo qui la sua posizione serve al cliente. */
+const STATI_CON_POSIZIONE: OrderStatus[] = ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'];
 
 export default function RiderOrderDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
@@ -288,12 +290,17 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
       toast.error('Geolocalizzazione non supportata');
       return;
     }
+    // 1/11/2026 — Una sola sorveglianza alla volta: se ne restava una vecchia (un errore GPS seguito
+    // da «Attiva GPS» di nuovo), quella prima perdeva il suo numero e scriveva per sempre.
+    stopSharing();
     setSharing(true);
     const wid = navigator.geolocation.watchPosition(
       async (pos) => {
         const now = Date.now();
         if (now - lastWriteAt.current < 30_000) return; // throttle
         lastWriteAt.current = now;
+        // 1/11/2026 — Si scrive solo su un ordine ancora in strada: un ordine annullato o
+        // consegnato non riceve piu' la posizione, anche se la sorveglianza fosse ancora accesa.
         await supabase
           .from('orders')
           .update({
@@ -301,11 +308,14 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
             rider_lng: pos.coords.longitude,
             rider_position_updated_at: new Date().toISOString(),
           })
-          .eq('id', id);
+          .eq('id', id)
+          .in('delivery_status', STATI_CON_POSIZIONE);
       },
       (err) => {
+        // 1/11/2026 — Prima qui si spegneva solo la scritta: la pagina diceva «Attiva il GPS»
+        // e intanto la sorveglianza restava accesa e continuava a mandare la posizione.
         toast.error('Errore GPS: ' + err.message);
-        setSharing(false);
+        stopSharing();
       },
       // maximumAge 30s + low-accuracy = ~10x battery improvement
       { enableHighAccuracy: false, maximumAge: 30_000, timeout: 30_000 },
@@ -322,6 +332,14 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
   };
 
   useEffect(() => () => stopSharing(), []);
+
+  // 1/11/2026 — La posizione si spegne quando l'ordine esce dalla strada, qualunque sia la via:
+  // annullato dal negozio o dal cliente, consegnato da un'altra scheda, rilasciato. Prima si
+  // fermava solo con il codice di consegna giusto, e un ordine annullato la riceveva ancora.
+  const ordineInStrada = !!order && STATI_CON_POSIZIONE.includes(order.delivery_status);
+  useEffect(() => {
+    if (!ordineInStrada) stopSharing();
+  }, [ordineInStrada]);
 
   /**
    * 30/8/2026 (R095) — LO SPAZIO SOTTO IL CONTENUTO SEGUE LA BARRA VERA.
@@ -535,7 +553,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
         )}
 
         {/* GPS SHARING */}
-        {!done && (
+        {ordineInStrada && (
           <div className={`mb-3.5 rounded-xl border-2 p-4 ${sharing ? 'border-olive-300 bg-olive-50' : 'border-accent-300 bg-accent-50'}`}>
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">

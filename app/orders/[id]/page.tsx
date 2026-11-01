@@ -44,6 +44,7 @@ import { sizedImage, logoNegozio } from '@/lib/image-url';
 import { cifraDellaVoce, fraseDelBonificoAMano, riepilogoOrdine, statoPagamento } from '@/lib/ordini/riepilogo-ordine';
 import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
+import { statoDelReso, type RigaReso } from './stato-del-reso';
 
 type OrderRow = {
   id: string;
@@ -212,6 +213,24 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
       return data;
     },
   });
+
+  // 1/11/2026 — I resi di questo ordine: senza, la richiesta inviata spariva dalla pagina e il
+  // cliente ricompilava tutto. Se la lettura non riesce si mostra il pulsante di prima: il server
+  // rifiuta comunque un secondo reso aperto.
+  const { data: resi } = useQuery({
+    queryKey: [...queryKeys.orders.detail(id), 'resi'],
+    enabled: status === 'DELIVERED',
+    queryFn: async (): Promise<RigaReso[]> => {
+      const { data, error } = await supabase
+        .from('returns')
+        .select('id, status, created_at')
+        .eq('order_id', id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as RigaReso[];
+    },
+  });
+  const reso = statoDelReso(resi);
 
   const cancel = useMutation({
     mutationFn: async () => {
@@ -456,12 +475,19 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             <Button onClick={handleReorder} size="sm" icon={Repeat} loading={riordinoInCorso}>
               Ripeti ordine
             </Button>
-            <Link
-              href={`/orders/${id}/return`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-cream-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-cream-50"
-            >
-              <Undo2 size={15} strokeWidth={2.2} aria-hidden /> Richiedi reso
-            </Link>
+            {reso && (
+              <p role="status" className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-sm font-medium text-ink-700">
+                <Undo2 size={15} strokeWidth={2.2} aria-hidden /> {reso.testo}
+              </p>
+            )}
+            {(!reso || reso.sePuoChiederne) && (
+              <Link
+                href={`/orders/${id}/return`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-cream-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-cream-50"
+              >
+                <Undo2 size={15} strokeWidth={2.2} aria-hidden /> Richiedi reso
+              </Link>
+            )}
             <Link
               href={`/orders/${id}/dispute`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
@@ -643,17 +669,19 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                       : 'In arrivo al negozio'}
                   </p>
                 </div>
+                {/* 1/11/2026 — Il pulsante si chiamava «Contatta il rider» ma chiamava il negozio:
+                    il numero del fattorino l'ordine non lo ha. Adesso dice chi chiama davvero. */}
                 {order.seller?.store_phone && (
                   <button
                     type="button"
                     onClick={() => setContact({
-                      kind: 'rider',
-                      name: order.rider?.full_name ?? 'Il tuo rider',
-                      sub: 'Rider della consegna',
+                      kind: 'store',
+                      name: order.seller?.store_name ?? 'Il negozio',
+                      sub: 'Il negozio che ha preparato l\'ordine',
                       phone: order.seller?.store_phone ?? null,
                       orderRef,
                     })}
-                    aria-label="Contatta il rider"
+                    aria-label="Chiama il negozio"
                     className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-cream-300 bg-white text-primary-700 hover:bg-cream-50"
                   >
                     <Phone size={17} strokeWidth={2.2} aria-hidden />
