@@ -50,4 +50,44 @@ describe('collaudo B: sospendi e riattiva aggira il controllo', () => {
     console.log('negozio stato finale', profilo.approval_status, profilo.is_approved);
     expect(profilo.is_approved, 'negozio approvato senza partita IVA passando da sospeso').not.toBe(true);
   });
+
+  for (const stato of ['rejected', null] as const) {
+    it(`si sospende solo un approvato: con stato ${stato ?? 'vuoto'} risponde 400 e non scrive`, async () => {
+      profilo = { id: 'rider-2', role: 'rider', full_name: 'Ugo', legal_birth_date: null, approval_status: stato, is_approved: false };
+      idBersaglio = 'rider-2';
+      expect((await MODERA(req('suspend'))).status).toBe(400);
+      expect(profilo.approval_status).toBe(stato);
+    });
+  }
+
+  it('il doppio clic su «sospendi» dice che è già sospeso', async () => {
+    profilo = { id: 'seller-3', role: 'seller', store_name: 'Bar', legal_birth_date: null, approval_status: 'suspended', approved_by: 'admin-0', is_approved: false };
+    idBersaglio = 'seller-3';
+    const r = await MODERA(req('suspend'));
+    expect(r.status).toBe(400);
+    expect(JSON.stringify(await r.json())).toMatch(/già sospeso/);
+  });
+});
+
+describe('ricollaudo: un sospeso mai approvato non torna attivo senza documenti', () => {
+  it('fattorino sospeso, mai approvato, senza documenti: «riattiva» risponde 400 e resta sospeso', async () => {
+    // Il caso trovato in produzione il 1/11: approved_at e approved_by vuoti, nessun documento.
+    profilo = { id: 'rider-9', role: 'rider', full_name: 'Dati vecchi', legal_birth_date: null, approval_status: 'suspended', is_approved: false, approved_at: null, approved_by: null };
+    idBersaglio = 'rider-9';
+    expect((await MODERA(req('reactivate'))).status).toBe(400);
+    expect(profilo.approval_status).toBe('suspended');
+    expect(profilo.is_approved).toBe(false);
+  });
+
+  it('approvato, sospeso, riattivato: torna attivo senza rifare i documenti', async () => {
+    profilo = { id: 'rider-8', role: 'rider', full_name: 'Già bravo', legal_birth_date: null, approval_status: 'pending', is_approved: false,
+      kyc_id_doc_front_url: 'f', kyc_selfie_url: 's', rider_license_url: 'p', rider_insurance_url: 'rc' };
+    idBersaglio = 'rider-8';
+    expect((await MODERA(req('approve'))).status).toBe(200);
+    expect((await MODERA(req('suspend'))).status).toBe(200);
+    // I documenti spariscono nel frattempo (per esempio la potatura): la riattivazione non li richiede.
+    profilo = { ...profilo, kyc_id_doc_front_url: null, rider_license_url: null };
+    expect((await MODERA(req('reactivate'))).status).toBe(200);
+    expect(profilo.is_approved).toBe(true);
+  });
 });

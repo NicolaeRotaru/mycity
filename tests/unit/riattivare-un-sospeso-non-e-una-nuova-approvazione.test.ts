@@ -68,14 +68,14 @@ beforeEach(() => {
 
 describe('riattivare un sospeso', () => {
   it('il negozio storico senza partita IVA, sospeso, si riattiva', async () => {
-    usa({ ...NEGOZIO_STORICO, approval_status: 'suspended' });
+    usa({ ...NEGOZIO_STORICO, approval_status: 'suspended', approved_by: 'admin-0' });
     const r = await MODERA(richiesta('reactivate'));
     expect(r.status, 'il negozio sospeso resta fermo per sempre: non ha una pagina per la partita IVA').toBe(200);
     expect(aggiornamenti[0]).toMatchObject({ approval_status: 'approved', is_approved: true });
   });
 
   it('il fattorino sospeso si riattiva anche se i documenti non sono sul profilo', async () => {
-    usa({ ...FATTORINO_SENZA_DOC, approval_status: 'suspended' });
+    usa({ ...FATTORINO_SENZA_DOC, approval_status: 'suspended', approved_by: 'admin-0' });
     expect((await MODERA(richiesta('reactivate'))).status).toBe(200);
   });
 });
@@ -98,7 +98,7 @@ describe('il controllo resta dove porta ad «approvato» chi non lo era', () => 
   });
 
   it('approvare un sospeso senza partita IVA resta bloccato: «approva» controlla sempre', async () => {
-    usa({ ...NEGOZIO_STORICO, approval_status: 'suspended' });
+    usa({ ...NEGOZIO_STORICO, approval_status: 'suspended', approved_by: 'admin-0' });
     expect((await MODERA(richiesta('approve'))).status).toBe(400);
   });
 });

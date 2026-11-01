@@ -16,7 +16,7 @@
 
 /** Le colonne che la rotta deve leggere per poter decidere. */
 export const COLONNE_PER_APPROVARE =
-  'approval_status, business_vat_number, kyc_id_doc_front_url, kyc_selfie_url, rider_license_url, rider_insurance_url';
+  'approval_status, approved_by, business_vat_number, kyc_id_doc_front_url, kyc_selfie_url, rider_license_url, rider_insurance_url';
 
 type ColonnaDocumento = 'kyc_id_doc_front_url' | 'kyc_selfie_url' | 'rider_license_url' | 'rider_insurance_url';
 
@@ -44,6 +44,7 @@ export const DOCUMENTI_OBBLIGATORI: Record<'seller' | 'rider', ReadonlyArray<{ c
 export type ProfiloDaApprovare = {
   role: string;
   approval_status?: string | null;
+  approved_by?: string | null;
   business_vat_number?: string | null;
 } & Partial<Record<ColonnaDocumento, string | null>>;
 
@@ -90,7 +91,11 @@ export type AzioneCheApprova = 'approve' | 'reactivate';
  */
 export function motivoPerNonApprovare(p: ProfiloDaApprovare, azione: AzioneCheApprova = 'approve'): string | null {
   if (p.role !== 'seller' && p.role !== 'rider') return null;
-  if (azione === 'reactivate' && p.approval_status === 'suspended') return null;
+  // 1/11/2026 (ricollaudo) — solo chi e' stato davvero approvato da un
+  // amministratore (`approved_by` scritto) torna attivo senza rifare il
+  // controllo. In produzione c'era un fattorino sospeso mai approvato e senza
+  // nessun documento: un clic su «Riattiva» lo avrebbe mandato a consegnare.
+  if (azione === 'reactivate' && p.approval_status === 'suspended' && presente(p.approved_by)) return null;
 
   const verbo = azione === 'reactivate' ? 'Non si riattiva' : 'Non si approva';
   const prima = azione === 'reactivate' ? 'prima di riattivare' : 'prima di approvare';

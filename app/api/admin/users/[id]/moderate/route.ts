@@ -86,7 +86,7 @@ function buildModeration(action: Action, reason: string | undefined, adminId: st
       };
     case 'reactivate':
       return {
-        patch: { is_approved: true, approval_status: 'approved', rejection_reason: null, approved_at: now },
+        patch: { is_approved: true, approval_status: 'approved', rejection_reason: null, approved_at: now, approved_by: adminId },
         note,
         audit: 'user.reactivate',
       };
@@ -177,6 +177,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * pannello mostra «Sospendi» solo agli approvati, ma il controllo vero e'
    * questo, non il bottone.
    */
+  if (body.action === 'suspend' && target.approval_status === 'suspended') {
+    return ApiErrors.invalidRequest('Questo profilo è già sospeso.');
+  }
   if (body.action === 'suspend' && target.approval_status !== 'approved') {
     return ApiErrors.invalidRequest(
       'Si sospende solo un profilo approvato. Questo non lo è: per chi è in attesa o respinto usa «Approva» o «Rifiuta».',
