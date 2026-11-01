@@ -235,7 +235,7 @@ export default function RiderProfilePage() {
         {obbligatoriScaduti.length > 0 && (
           <div role="alert" className="mb-2.5 rounded-lg border border-secondary-200 bg-secondary-50 px-3.5 py-3 text-sm text-secondary-800">
             <p className="font-bold">Hai {obbligatoriScaduti.join(' e ')} scadut{obbligatoriScaduti.length > 1 ? 'e' : 'a'}.</p>
-            <p className="mt-0.5 text-xs">Non fare consegne finché non carichi il documento nuovo in «Documenti e verifica».</p>
+            <p className="mt-0.5 text-xs">Non fare consegne finché non lo rinnovi: in «Documenti e verifica» carica la foto del documento nuovo, poi scrivi la nuova data di scadenza e premi «Salva i dati».</p>
           </div>
         )}
         <div className="flex flex-col gap-2">

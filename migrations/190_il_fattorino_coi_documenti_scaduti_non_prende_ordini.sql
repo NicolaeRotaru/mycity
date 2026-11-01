@@ -17,9 +17,17 @@
 --   ② un guardiano sugli ordini rifiuta OGNI assegnazione (anche da admin o da
 --      una strada che non passa da prendi_ordine) a un fattorino coi documenti
 --      scaduti. E' la cintura: la funzione da sola si aggira scrivendo rider_id.
---   ③ un fattorino gia' approvato non puo' piu' cambiare da solo le date di
---      scadenza: le nuove date le registra lo staff dopo aver visto il
---      documento. Prima dell'approvazione (iscrizione) restano libere.
+--   ③ un fattorino gia' approvato non sposta piu' una scadenza «a parole»:
+--      una data nuova passa solo se ha caricato un documento NUOVO dopo
+--      l'ultima data registrata (una data per ogni documento caricato).
+--      Cosi' chi ha la patente scaduta la rinnova da solo in «Documenti e
+--      verifica» (carica la foto nuova, poi salva la data) e non resta
+--      bloccato per sempre; chi vuole solo allungare la data senza documento
+--      nuovo viene rifiutato. Lo staff scrive sempre. Prima dell'approvazione
+--      (iscrizione) le date restano libere.
+--      Ogni data ricorda a quale documento si riferisce nelle colonne
+--      rider_license_expiry_doc / rider_insurance_expiry_doc, che il
+--      fattorino non puo' scrivere (sono fuori dalla lista della 119).
 --
 -- Non si toglie is_rider_approvato(): quella decide anche la lettura degli
 -- ordini GIA' suoi, e un fattorino a meta' consegna deve poterla chiudere.
@@ -27,8 +35,10 @@
 -- Rollback (ritorno indietro):
 --   DROP TRIGGER trg_presa_solo_con_documenti_validi ON public.orders;
 --   DROP FUNCTION public.presa_solo_con_documenti_validi();
---   DROP TRIGGER trg_date_documenti_rider_dello_staff ON public.profiles;
+--   DROP TRIGGER trg_scadenze_documenti_rider ON public.profiles;
 --   DROP FUNCTION public.date_documenti_rider_dello_staff();
+--   ALTER TABLE public.profiles DROP COLUMN rider_license_expiry_doc,
+--                               DROP COLUMN rider_insurance_expiry_doc;
 --   DROP FUNCTION public.rider_documenti_scaduti(uuid);
 --   e si riesegue il CREATE OR REPLACE di prendi_ordine dalla migrazione 123.
 -- =============================================================================
@@ -124,8 +134,28 @@ CREATE TRIGGER trg_presa_solo_con_documenti_validi
   BEFORE UPDATE OF rider_id ON public.orders
   FOR EACH ROW EXECUTE FUNCTION public.presa_solo_con_documenti_validi();
 
--- ③ Le date dei documenti, dopo l'approvazione, le scrive lo staff.
--- Stessa idea di «privilegiato» del guardiano dei profili (migrazione 119).
+-- ③ Le date dei documenti, dopo l'approvazione: una data nuova per ogni
+-- documento nuovo. Ogni data ricorda il documento a cui si riferisce.
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS rider_license_expiry_doc   text,
+  ADD COLUMN IF NOT EXISTS rider_insurance_expiry_doc text;
+
+COMMENT ON COLUMN public.profiles.rider_license_expiry_doc IS
+  'Percorso del documento patente a cui si riferisce rider_license_expires_on. Lo scrive solo il trigger trg_scadenze_documenti_rider (migrazione 190).';
+COMMENT ON COLUMN public.profiles.rider_insurance_expiry_doc IS
+  'Percorso della polizza RC a cui si riferisce rider_insurance_expires_on. Lo scrive solo il trigger trg_scadenze_documenti_rider (migrazione 190).';
+
+-- Le date gia' registrate valgono per il documento gia' caricato: senza questo
+-- ogni fattorino approvato potrebbe spostare la sua data una volta «gratis».
+SELECT set_config('mycity.allow_profile_write', '1', true);
+UPDATE public.profiles
+   SET rider_license_expiry_doc = rider_license_url
+ WHERE rider_license_expires_on IS NOT NULL AND rider_license_url IS NOT NULL;
+UPDATE public.profiles
+   SET rider_insurance_expiry_doc = rider_insurance_url
+ WHERE rider_insurance_expires_on IS NOT NULL AND rider_insurance_url IS NOT NULL;
+SELECT set_config('mycity.allow_profile_write', '0', true);
+
 CREATE OR REPLACE FUNCTION public.date_documenti_rider_dello_staff()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -136,24 +166,37 @@ DECLARE
   is_priv boolean := public.is_admin()
     OR coalesce((SELECT auth.jwt() ->> 'role'), '') = 'service_role'
     OR coalesce(current_setting('mycity.allow_profile_write', true), '') = '1';
+  libero boolean := is_priv OR OLD.is_approved IS NOT TRUE;
 BEGIN
-  IF is_priv OR OLD.is_approved IS NOT TRUE THEN
-    RETURN NEW;
+  IF NEW.rider_license_expires_on IS DISTINCT FROM OLD.rider_license_expires_on THEN
+    IF NOT libero AND NEW.rider_license_url IS NOT DISTINCT FROM OLD.rider_license_expiry_doc THEN
+      RAISE EXCEPTION 'profiles: per cambiare la scadenza della patente carica prima la foto della patente nuova'
+        USING ERRCODE = '42501';
+    END IF;
+    NEW.rider_license_expiry_doc := NEW.rider_license_url;
   END IF;
 
-  IF NEW.rider_license_expires_on   IS DISTINCT FROM OLD.rider_license_expires_on
-  OR NEW.rider_insurance_expires_on IS DISTINCT FROM OLD.rider_insurance_expires_on THEN
-    RAISE EXCEPTION 'profiles: dopo l''approvazione le scadenze di patente e assicurazione le aggiorna lo staff'
-      USING ERRCODE = '42501';
+  IF NEW.rider_insurance_expires_on IS DISTINCT FROM OLD.rider_insurance_expires_on THEN
+    IF NOT libero AND NEW.rider_insurance_url IS NOT DISTINCT FROM OLD.rider_insurance_expiry_doc THEN
+      RAISE EXCEPTION 'profiles: per cambiare la scadenza dell''assicurazione carica prima la polizza nuova'
+        USING ERRCODE = '42501';
+    END IF;
+    NEW.rider_insurance_expiry_doc := NEW.rider_insurance_url;
   END IF;
+
   RETURN NEW;
 END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION public.date_documenti_rider_dello_staff() FROM public, anon, authenticated;
 
+-- Il nome comincia per «trg_s»: i trigger BEFORE scattano in ordine alfabetico,
+-- quindi questo gira DOPO il guardiano dei profili (trg_enforce_profile_update_rules,
+-- migrazione 119). Il guardiano rifiuta chi prova a scrivere a mano le colonne
+-- *_expiry_doc; poi qui le aggiorna solo il database.
 DROP TRIGGER IF EXISTS trg_date_documenti_rider_dello_staff ON public.profiles;
-CREATE TRIGGER trg_date_documenti_rider_dello_staff
+DROP TRIGGER IF EXISTS trg_scadenze_documenti_rider ON public.profiles;
+CREATE TRIGGER trg_scadenze_documenti_rider
   BEFORE UPDATE OF rider_license_expires_on, rider_insurance_expires_on ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.date_documenti_rider_dello_staff();
 

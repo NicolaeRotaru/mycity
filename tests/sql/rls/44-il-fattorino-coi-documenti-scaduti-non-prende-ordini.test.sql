@@ -12,8 +12,13 @@
 --   ③ fattorino con documenti validi fino a oggi compreso: prende l'ordine
 --   ④ il fattorino approvato non sposta da solo la scadenza in avanti
 --   ⑤ chi non e' ancora approvato (iscrizione) scrive le sue date
+--   ⑥ il fattorino scaduto carica la patente nuova e poi salva la data nuova:
+--      passa (niente vicolo cieco: si rinnova da solo)
+--   ⑦ subito dopo, senza un altro documento, non sposta di nuovo la data
+--   ⑧ non scrive a mano il documento a cui la data si riferisce
 --
--- Senza la 190 i passi ①, ② e ④ sono rossi. Transazione con ROLLBACK.
+-- Senza la 190 i passi ①, ② e ④ sono rossi; con la 190 che vieta ogni
+-- cambio di data dopo l'approvazione il passo ⑥ e' rosso. ROLLBACK finale.
 -- =============================================================================
 
 BEGIN;
@@ -100,6 +105,56 @@ BEGIN
           AND rider_license_expires_on > (now() AT TIME ZONE 'Europe/Rome')::date));
   EXCEPTION WHEN insufficient_privilege THEN
     INSERT INTO esiti VALUES ('il fattorino approvato non riscrive da solo la scadenza', true, SQLERRM);
+  END;
+END $$;
+
+-- ⑥ Il fattorino scaduto rinnova: la rotta di caricamento (permessi di servizio)
+-- scrive il documento nuovo, poi lui salva la data nuova dal modulo.
+DO $$
+BEGIN
+  PERFORM set_config('mycity.allow_profile_write', '1', true);
+  UPDATE public.profiles
+     SET rider_license_url = '22222222-2222-2222-2222-222222222222/rider_license-2.jpg'
+   WHERE id = '22222222-2222-2222-2222-222222222222';
+  PERFORM set_config('mycity.allow_profile_write', '0', true);
+  BEGIN
+    UPDATE public.profiles
+       SET rider_license_expires_on = (now() AT TIME ZONE 'Europe/Rome')::date + 3650
+     WHERE id = '22222222-2222-2222-2222-222222222222';
+    INSERT INTO esiti SELECT 'col documento nuovo il fattorino salva la scadenza nuova',
+      (SELECT rider_license_expires_on > (now() AT TIME ZONE 'Europe/Rome')::date
+         FROM public.profiles WHERE id = '22222222-2222-2222-2222-222222222222'),
+      'data salvata';
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO esiti VALUES ('col documento nuovo il fattorino salva la scadenza nuova', false, SQLERRM);
+  END;
+END $$;
+
+-- ⑦ Stesso documento, seconda data: rifiutata.
+DO $$
+BEGIN
+  BEGIN
+    UPDATE public.profiles
+       SET rider_license_expires_on = (now() AT TIME ZONE 'Europe/Rome')::date + 7000
+     WHERE id = '22222222-2222-2222-2222-222222222222';
+    INSERT INTO esiti VALUES ('senza un altro documento la data non si sposta di nuovo', false, 'l''UPDATE e'' passato');
+  EXCEPTION WHEN insufficient_privilege THEN
+    INSERT INTO esiti VALUES ('senza un altro documento la data non si sposta di nuovo', true, SQLERRM);
+  END;
+END $$;
+
+-- ⑧ Il «documento a cui si riferisce la data» non si scrive a mano.
+DO $$
+BEGIN
+  BEGIN
+    UPDATE public.profiles
+       SET rider_license_expiry_doc = 'falso'
+     WHERE id = '22222222-2222-2222-2222-222222222222';
+    INSERT INTO esiti VALUES ('il fattorino non scrive a mano il documento della data', false, 'l''UPDATE e'' passato');
+  EXCEPTION WHEN insufficient_privilege THEN
+    INSERT INTO esiti VALUES ('il fattorino non scrive a mano il documento della data', true, SQLERRM);
+  WHEN undefined_column THEN
+    INSERT INTO esiti VALUES ('il fattorino non scrive a mano il documento della data', false, SQLERRM);
   END;
 END $$;
 
