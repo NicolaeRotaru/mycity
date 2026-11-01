@@ -16,10 +16,11 @@
  * Comportamento:
  *   - manca SUPABASE_DB_URL  -> SKIP (exit 0), stampa come configurarlo
  *   - manca il pacchetto pg  -> SKIP (exit 0), suggerisce `npm i -D pg`
- *   - non si collega         -> exit 1, con il perche' e cosa cambiare
- *                               (da GitHub Actions: la riga del «Session pooler»)
- *   - drift rilevato         -> exit 1 con l'elenco dei file non applicati
- *   - tutto applicato        -> exit 0
+ *   - non si collega         -> exit 1 (USCITA.NON_HO_CONTROLLATO), con il perche'
+ *                               e cosa cambiare (da GitHub Actions: la riga del
+ *                               «Session pooler»)
+ *   - drift rilevato         -> exit 2 (USCITA.DERIVA) con l'elenco dei file non applicati
+ *   - tutto applicato        -> exit 0 (USCITA.ALLINEATO)
  *
  * Pensato per girare in locale/CI in un job OPT-IN (richiede la connection
  * string con password: NON metterla in un workflow pubblico senza secret).
@@ -233,6 +234,56 @@ export function spiegaIlCollegamentoFallito(errore, url) {
   return righe;
 }
 
+/**
+ * 1/11/2026 (ondata 9) — «NON MI COLLEGO» E «MANCANO MIGRAZIONI» USCIVANO
+ * CON LO STESSO NUMERO. Tutte e due davano 1: per chi guarda solo il colore
+ * del lavoro (o un passo che decide sul codice d'uscita) una rete che non
+ * arriva al database e quattro migrazioni mai applicate in produzione erano
+ * la stessa cosa. Sono due guasti opposti: nel primo il confronto non e'
+ * nemmeno partito, nel secondo e' partito e ha trovato la deriva vera (come
+ * la mattina del 31/10: «4 migration NON applicate»). Adesso hanno due numeri.
+ * L'1 resta a tutto cio' che vuol dire «non ho controllato» (manca la riga,
+ * manca pg, non mi collego), perche' e' quello che i lavori gia' conoscono.
+ */
+export const USCITA = Object.freeze({ ALLINEATO: 0, NON_HO_CONTROLLATO: 1, DERIVA: 2 });
+
+/**
+ * Il verdetto del confronto, separato dal database perche' sia provabile.
+ * @param {Array<{prefix: string, name: string, file: string, impronta?: string}>} repo i file in migrations/
+ * @param {Array<{version: string, name: string}>} applicate le righe di supabase_migrations.schema_migrations
+ * @returns {{ codice: number, mancanti: string[], righe: string[], errore: boolean }}
+ */
+export function esitoDelConfronto(repo, applicate) {
+  const perNome = new Set(applicate.map((a) => String(a.name ?? '')));
+  const perVersione = new Set(applicate.map((a) => String(a.version ?? '')));
+
+  // Una migrazione risulta applicata se il database conosce il suo numero
+  // OPPURE il suo nome: i due elenchi storici non sono allineati al 100%, e
+  // pretendere entrambi darebbe falsi allarmi su tutto il passato.
+  const missing = repo.filter((m) => !perNome.has(m.name) && !perVersione.has(m.prefix));
+
+  if (missing.length === 0) {
+    const righe = [`✅ check-migration-drift: tutte le ${repo.length} migrazioni risultano applicate.`];
+    // #46 — L'impronta del contenuto, STAMPATA e non confrontata (vedi la nota
+    // in testa al file). Il registro di Supabase non ha una colonna dove
+    // conservarla, quindi resta un appiglio per chi indaga a mano: si confronta
+    // l'impronta di oggi con quella scritta nel log del rilascio in cui la
+    // migrazione e' stata applicata, e si vede se il file e' stato toccato da
+    // allora. Un occhio umano, non un cancello.
+    for (const m of repo.slice(-5)) righe.push(`   ${m.file} · md5 ${m.impronta}`);
+    return { codice: USCITA.ALLINEATO, mancanti: [], righe, errore: false };
+  }
+
+  const righe = [`❌ check-migration-drift: ${missing.length} migration NON applicate al DB:`];
+  for (const m of missing) righe.push(`   - ${m.file}`);
+  righe.push(
+    '\nApplicale (Supabase SQL editor / CLI / MCP apply_migration) e rilancia.',
+    'Nota: migration storiche pre-tracking potrebbero comparire qui; in tal caso',
+    'verifica manualmente e, se gia\' applicate, ignorale.',
+  );
+  return { codice: USCITA.DERIVA, mancanti: missing.map((m) => m.file), righe, errore: true };
+}
+
 function repoMigrationNames() {
   return fs
     .readdirSync(MIGRATIONS_DIR)
@@ -287,7 +338,7 @@ async function main() {
     // messaggio dicesse cosa cambiare. Adesso si dice dove non si arriva e
     // perche', senza mai stampare la password.
     for (const riga of spiegaIlCollegamentoFallito(err, DB_URL)) console.error(riga);
-    process.exit(1);
+    process.exit(USCITA.NON_HO_CONTROLLATO);
   }
   let applicate;
   try {
@@ -299,33 +350,9 @@ async function main() {
     await client.end();
   }
 
-  const repo = repoMigrationNames();
-  const perNome = new Set(applicate.map((a) => a.name));
-  const perVersione = new Set(applicate.map((a) => a.version));
-
-  // Una migrazione risulta applicata se il database conosce il suo numero
-  // OPPURE il suo nome: i due elenchi storici non sono allineati al 100%, e
-  // pretendere entrambi darebbe falsi allarmi su tutto il passato.
-  const missing = repo.filter((m) => !perNome.has(m.name) && !perVersione.has(m.prefix));
-
-  if (missing.length === 0) {
-    console.log(`✅ check-migration-drift: tutte le ${repo.length} migrazioni risultano applicate.`);
-    // #46 — L'impronta del contenuto, STAMPATA e non confrontata (vedi la nota
-    // in testa al file). Il registro di Supabase non ha una colonna dove
-    // conservarla, quindi resta un appiglio per chi indaga a mano: si confronta
-    // l'impronta di oggi con quella scritta nel log del rilascio in cui la
-    // migrazione e' stata applicata, e si vede se il file e' stato toccato da
-    // allora. Un occhio umano, non un cancello.
-    for (const m of repo.slice(-5)) console.log(`   ${m.file} · md5 ${m.impronta}`);
-    process.exit(0);
-  }
-
-  console.error(`❌ check-migration-drift: ${missing.length} migration NON applicate al DB:`);
-  for (const m of missing) console.error(`   - ${m.file}`);
-  console.error('\nApplicale (Supabase SQL editor / CLI / MCP apply_migration) e rilancia.');
-  console.error('Nota: migration storiche pre-tracking potrebbero comparire qui; in tal caso');
-  console.error('verifica manualmente e, se gia\' applicate, ignorale.');
-  process.exit(1);
+  const esito = esitoDelConfronto(repoMigrationNames(), applicate);
+  for (const riga of esito.righe) (esito.errore ? console.error : console.log)(riga);
+  process.exit(esito.codice);
 }
 
 // Si parte solo quando il file e' lanciato da riga di comando: le prove lo

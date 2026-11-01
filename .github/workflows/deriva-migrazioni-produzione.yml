@@ -69,4 +69,19 @@ jobs:
       - name: Confronta il repository con il database vero
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: npm run db:check-drift
+        # 1/11/2026 (ondata 9) — Il colore rosso da solo non diceva QUALE dei
+        # due guasti: «non mi collego» e «mancano migrazioni» uscivano tutti e
+        # due con 1. Adesso lo script li separa (1 = non ho controllato,
+        # 2 = deriva vera) e qui si traduce il numero in una riga che si legge
+        # in cima al lavoro. Le prove: tests/unit/la-deriva-distingue-non-mi-collego-da-mancano-migrazioni.test.ts
+        run: |
+          set +e
+          npm run db:check-drift
+          codice=$?
+          set -e
+          if [ "$codice" -eq 2 ]; then
+            echo "::error::Mancano migrazioni in produzione: sono scritte nel repository ma il database vero non le ha mai applicate. L'elenco e' nel log qui sopra."
+          elif [ "$codice" -ne 0 ]; then
+            echo "::error::Il confronto NON e' partito: non mi sono collegata al database (il perche' e' nel log qui sopra). Non vuol dire che mancano migrazioni. Da GitHub Actions in SUPABASE_DB_URL serve la riga del «Session pooler» (IPv4, porta 5432), non la connessione diretta db.<progetto>.supabase.co."
+          fi
+          exit "$codice"

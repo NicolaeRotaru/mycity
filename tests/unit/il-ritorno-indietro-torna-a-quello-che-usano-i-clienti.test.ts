@@ -52,10 +52,42 @@ describe('il ritorno indietro torna al rilascio che usano i clienti', () => {
     expect(rilascioDaTornare({ deployments: [RILASCIO_X, RILASCIO_W] }, { commitCheEsce: Y })).toBeNull();
   });
 
-  it('se Vercel ha gia messo Y sul dominio da solo, si torna all ultimo rilascio di un altro commit', () => {
+  // 1/11/2026 (ondata 9) — QUESTA PROVA PRETENDEVA IL DIFETTO. Diceva «se Y e'
+  // gia' sul dominio si torna all'ultimo rilascio di un altro commit», e
+  // voleva proprio mycity-x-rotto: il rilascio gia' tolto perche' rotto, cioe'
+  // la scena che il resto del file esiste per impedire. Prima di Y i clienti
+  // usavano W, ma il dominio ormai dice Y e l'elenco [Y, X, W] non distingue
+  // X vivo da X tolto: la risposta giusta e' nessun indirizzo, e il ritorno si
+  // fa a mano.
+  it('se Vercel ha gia messo Y sul dominio da solo, fra X scartato e W non tira a indovinare', () => {
     expect(
       rilascioDaTornare({ deployments: [RILASCIO_Y, RILASCIO_X, RILASCIO_W] }, { commitCheEsce: Y, sulDominio: sulDominio(RILASCIO_Y) }),
-    ).toBe('https://mycity-x-rotto.vercel.app');
+      'X era gia stato tolto perche rotto: tornarci vuol dire rimettere online il codice rotto',
+    ).toBeNull();
+  });
+
+  it('X scartato, W dei clienti, Y sul dominio che esce: mai X, in nessun ordine dell elenco', () => {
+    const elenchi = [
+      [RILASCIO_X, RILASCIO_W],
+      [RILASCIO_Y, RILASCIO_X, RILASCIO_W],
+      [RILASCIO_X, RILASCIO_Y, RILASCIO_W],
+      [RILASCIO_Y, RILASCIO_Y, RILASCIO_X, RILASCIO_W],
+    ];
+    for (const deployments of elenchi) {
+      const scelto = rilascioDaTornare({ deployments }, { commitCheEsce: Y, sulDominio: sulDominio(RILASCIO_Y) });
+      expect(scelto, `elenco ${deployments.map((d) => d.uid).join(', ')}`).not.toBe('https://mycity-x-rotto.vercel.app');
+      expect(scelto).toBeNull();
+    }
+  });
+
+  it('Y sul dominio e un solo altro commit nell elenco: si torna a quello, perche non c e altro dove i clienti potessero essere', () => {
+    expect(
+      rilascioDaTornare({ deployments: [RILASCIO_Y, RILASCIO_W, RILASCIO_W] }, { commitCheEsce: Y, sulDominio: sulDominio(RILASCIO_Y) }),
+    ).toBe('https://mycity-w-dei-clienti.vercel.app');
+  });
+
+  it('Y sul dominio e nessun altro commit: nessun indirizzo', () => {
+    expect(rilascioDaTornare({ deployments: [RILASCIO_Y] }, { commitCheEsce: Y, sulDominio: sulDominio(RILASCIO_Y) })).toBeNull();
   });
 
   it('da riga di comando legge il dominio dalla variabile RILASCIO_SUL_DOMINIO', () => {
@@ -65,6 +97,15 @@ describe('il ritorno indietro torna al rilascio che usano i clienti', () => {
     });
     expect(esito.uscita).toBe(0);
     expect(esito.stdout.trim()).toBe('https://mycity-w-dei-clienti.vercel.app');
+  });
+
+  it('da riga di comando, con Y gia sul dominio e X scartato nell elenco, non stampa nessun indirizzo', () => {
+    const esito = cli(['--rilascio-di-adesso'], {
+      stdin: JSON.stringify({ deployments: [RILASCIO_Y, RILASCIO_X, RILASCIO_W] }),
+      env: { COMMIT_CHE_ESCE: Y, RILASCIO_SUL_DOMINIO: JSON.stringify(sulDominio(RILASCIO_Y)) },
+    });
+    expect(esito.stdout).not.toContain('mycity-x-rotto');
+    expect(esito.stdout.trim()).toBe('');
   });
 
   it('il passo di rilascio chiede a Vercel chi serve il dominio e si segna W', () => {
