@@ -329,6 +329,50 @@ export function opzioniIndirizzoIngressoMascherato(
   };
 }
 
+/**
+ * 1/11/2026 — IL VISITATORE DI RITORNO RIMANDAVA L'INDIRIZZO SALVATO PRIMA.
+ *
+ * PostHog scrive l'indirizzo d'ingresso UNA volta sola (`register_once` di
+ * `$initial_person_info`) e lo rimanda a ogni `POST /flags/?v=2`. La maschera
+ * in `init` vale solo per chi arriva dopo: chi aveva consentito prima ha in
+ * memoria l'indirizzo intero, e senza questa pulizia lo spedirebbe per sempre.
+ * Gira nel `loaded` di `init`, prima che parta la richiesta dei flag: ogni
+ * parametro diventa `<masked>` tranne le etichette di campagna, e il
+ * cancelletto se ne va. Riscrive la memoria solo se qualcosa e' cambiato.
+ */
+export function indirizzoSenzaParametri(indirizzo: string): string {
+  try {
+    const url = new URL(indirizzo);
+    const parti: string[] = [];
+    for (const [nome, valore] of url.searchParams) {
+      parti.push(
+        `${encodeURIComponent(nome)}=${/^utm_/i.test(nome) ? encodeURIComponent(valore) : '<masked>'}`,
+      );
+    }
+    return `${url.origin}${url.pathname}${parti.length ? `?${parti.join('&')}` : ''}`;
+  } catch {
+    // indirizzo illeggibile: meglio niente parametri che un dato personale
+    return indirizzo.split(/[?#]/)[0];
+  }
+}
+
+type PersistenzaPosthog = {
+  props?: Record<string, unknown>;
+  register?: (props: Record<string, unknown>) => unknown;
+};
+
+export function ripulisciIndirizzoIngressoSalvato(istanza: unknown): void {
+  try {
+    const persistenza = (istanza as { persistence?: PersistenzaPosthog } | null)?.persistence;
+    const info = persistenza?.props?.['$initial_person_info'] as Record<string, unknown> | undefined;
+    if (!persistenza?.register || !info || typeof info.u !== 'string') return;
+    const pulito = indirizzoSenzaParametri(info.u);
+    if (pulito !== info.u) persistenza.register({ $initial_person_info: { ...info, u: pulito } });
+  } catch {
+    /* la pulizia non deve mai far cadere l'avvio dell'analitica */
+  }
+}
+
 let posthogInstance: PostHogLike | null = null;
 
 async function getPosthog() {
@@ -361,6 +405,9 @@ async function getPosthog() {
     // `person_properties.$initial_current_url`, l'indirizzo d'ingresso. PostHog
     // lo maschera solo per NOME di parametro, quindi gli diamo i nomi presenti.
     ...opzioniIndirizzoIngressoMascherato(),
+    // Chi aveva consentito prima ha l'indirizzo d'ingresso gia' salvato intero
+    // (`register_once` non lo riscrive): lo ripuliamo qui, prima dei flag.
+    loaded: ripulisciIndirizzoIngressoSalvato,
     session_recording: opzioniRegistrazioneSchermo(),
     autocapture: {
       dom_event_allowlist: ['click', 'submit'],
