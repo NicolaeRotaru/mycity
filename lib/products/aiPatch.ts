@@ -75,7 +75,34 @@ export type ResolvedPatch = {
    * patch non ne conteneva.
    */
   protetti: string[];
+  /**
+   * 1/11/2026 — I campi che il modello voleva scrivere e che il server NON ha
+   * scritto (prezzo fuori banda, prezzo pieno barrato), con il motivo. Stanno a
+   * parte da `changed`: chi risponde al negoziante li deve dire, non annegarli
+   * in un «modifiche salvate».
+   */
+  rifiutati: CampoRifiutato[];
 };
+
+export type CampoRifiutato = { campo: string; motivo: string };
+
+/**
+ * 1/11/2026 — «MODIFICHE SALVATE», E IL PREZZO ERA QUELLO VECCHIO.
+ *
+ * La chat dell'assistenza leggeva solo `ok` e diceva «salvate»; il motivo del
+ * rifiuto restava in una riga di `changed` che si mostrava solo se conteneva
+ * «NON ». Qui la risposta della rotta diventa la frase giusta: verde solo se
+ * tutto e' entrato, altrimenti cosa e' rimasto fuori e perche'.
+ */
+export function esitoModificaDallaChat(risposta: unknown): { tipo: 'successo' | 'avviso'; testo: string } {
+  const r = (risposta && typeof risposta === 'object' ? risposta : {}) as Record<string, unknown>;
+  const rifiutati = (Array.isArray(r.rifiutati) ? r.rifiutati : [])
+    .filter((x): x is CampoRifiutato => !!x && typeof x === 'object' && typeof (x as CampoRifiutato).motivo === 'string')
+    .map((x) => x.motivo.trim())
+    .filter(Boolean);
+  if (rifiutati.length === 0) return { tipo: 'successo', testo: 'Modifiche salvate sul prodotto' };
+  return { tipo: 'avviso', testo: `Modifica applicata solo in parte. ${rifiutati.join('; ')}.` };
+}
 
 /**
  * 15/10/2026 (R41) — LE DICHIARAZIONI DI UN ALIMENTO LE FA IL NEGOZIANTE, MAI L'AI.
@@ -450,6 +477,10 @@ function resolveCategoryId(
  */
 export const BANDA_PREZZO_AI = 0.30;
 
+/** Il prezzo pieno barrato non lo scrive l'AI: lo sconto e' una scelta del negozio. */
+export const MOTIVO_PREZZO_PIENO_RIFIUTATO =
+  'prezzo pieno barrato NON applicato: lo sconto lo decide il negozio, va scritto a mano';
+
 /**
  * 30/8/2026 (R158) — LA MISURA DEL NOME E DELLA DESCRIZIONE, IN UN POSTO SOLO.
  *
@@ -707,9 +738,10 @@ export function pianoPatchPerIlModulo(
   if ('compare_at_price' in patch) {
     if (patch.compare_at_price == null) {
       scritture.push({ campo: 'compareAtPrice', valore: null, etichetta: 'prezzo pieno' });
-    } else if (typeof patch.compare_at_price === 'number' && patch.compare_at_price > 0) {
-      scritture.push({ campo: 'compareAtPrice', valore: patch.compare_at_price, etichetta: 'prezzo pieno' });
     }
+    // 1/11/2026 — Un prezzo pieno barrato proposto dall'AI non entra nel
+    // modulo: veniva dal mercato, non da uno sconto vero del negozio. L'AI puo'
+    // solo toglierlo (null); metterlo resta una scelta a mano.
   }
   if (patch.unit && (PRODUCT_UNITS as readonly string[]).includes(patch.unit)) {
     scritture.push({ campo: 'unit', valore: patch.unit as ProductUnit, etichetta: 'unità' });
@@ -959,6 +991,7 @@ export function resolveAiPatch(opts: {
   const { current, categories } = opts;
   const update: Record<string, unknown> = {};
   const changed: string[] = [];
+  const rifiutati: CampoRifiutato[] = [];
 
   // La proposta si legge con `propostaLeggibile`, come la leggono la chat e il
   // modulo: una voce scritta male sparisce invece di far cadere la rotta. Le
@@ -988,7 +1021,9 @@ export function resolveAiPatch(opts: {
     // nel browser (R145): finche' era scritta solo qui, meta' dei suggerimenti
     // non ci passava.
     if (prezzoAiFuoriBanda(patch.price, current.price)) {
-      changed.push(motivoPrezzoRifiutato(patch.price, current.price));
+      const motivo = motivoPrezzoRifiutato(patch.price, current.price);
+      changed.push(motivo);
+      rifiutati.push({ campo: 'price', motivo });
     } else {
       update.price = patch.price;
       changed.push('prezzo');
@@ -999,8 +1034,10 @@ export function resolveAiPatch(opts: {
       update.compare_at_price = null;
       changed.push('prezzo pieno');
     } else if (typeof patch.compare_at_price === 'number' && patch.compare_at_price > 0) {
-      update.compare_at_price = patch.compare_at_price;
-      changed.push('prezzo pieno');
+      // 1/11/2026 — Uno sconto barrato inventato dall'AI non si scrive mai:
+      // si dice perche', cosi' la chat non lo da' per fatto.
+      changed.push(MOTIVO_PREZZO_PIENO_RIFIUTATO);
+      rifiutati.push({ campo: 'compare_at_price', motivo: MOTIVO_PREZZO_PIENO_RIFIUTATO });
     }
   }
   if (patch.unit && (PRODUCT_UNITS as readonly string[]).includes(patch.unit)) {
@@ -1090,5 +1127,5 @@ export function resolveAiPatch(opts: {
     changed.push('stato');
   }
 
-  return { update, changed, protetti };
+  return { update, changed, protetti, rifiutati };
 }

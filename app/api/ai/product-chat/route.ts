@@ -49,7 +49,7 @@ Come lavori:
 
 Regole per "edit_product":
 - In "patch" inserisci SOLO i campi che cambiano rispetto allo stato attuale.
-- Per TOGLIERE un valore: usa null per gli scalari (compare_at_price, condition) e "attributes_remove" per gli attributi.
+- Per TOGLIERE un valore: usa null per gli scalari (condition) e "attributes_remove" per gli attributi.
 - "tags" è la lista COMPLETA desiderata (ricostruiscila partendo da quella attuale per aggiungere o togliere).
 - "attributes" usa SOLO le chiavi dell'elenco degli attributi validi e, per i campi a scelta, SOLO le opzioni elencate.
 - "category_slug" deve essere uno degli slug forniti; "subcategory_name" è il nome della sottocategoria.
@@ -76,10 +76,6 @@ const EDIT_TOOL: Anthropic.Tool = {
           name: { type: 'string' },
           description: { type: 'string' },
           price: { type: 'number', description: 'Prezzo di vendita in euro.' },
-          compare_at_price: {
-            type: ['number', 'null'],
-            description: 'Prezzo pieno barrato in euro. null per rimuoverlo.',
-          },
           unit: {
             type: 'string',
             enum: ['pezzo', 'kg', 'g', 'l', 'ml', 'confezione', 'paio', 'm'],

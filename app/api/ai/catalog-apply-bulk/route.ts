@@ -54,7 +54,7 @@ type BulkBody = { changes?: Change[] };
  * `nonApplicato`: su una modifica scritta solo in parte, cosa non e' entrato e
  * perche' (le dichiarazioni di un alimento, che il Copilot non scrive mai).
  */
-type Esito = { productId: string; ok: boolean; motivo?: string; nonApplicato?: string };
+type Esito = { productId: string; ok: boolean; motivo?: string; nonApplicato?: string; rifiutati?: string[] };
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
   // Una chiamata porta fino a duecento modifiche: dieci all'ora sono duemila
@@ -99,7 +99,13 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
 
   // Primo giro: risolvi i patch. Niente rete, solo validazione.
-  const risolte: { id: string; row: ProductRow; update: Record<string, unknown>; nonApplicato: string | null }[] = [];
+  const risolte: {
+    id: string;
+    row: ProductRow;
+    update: Record<string, unknown>;
+    nonApplicato: string | null;
+    rifiutati: string[];
+  }[] = [];
   const esiti: Esito[] = [];
   for (const c of changes) {
     const row = miei.get(c.productId);
@@ -107,7 +113,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       esiti.push({ productId: c.productId, ok: false, motivo: 'non e un tuo prodotto' });
       continue;
     }
-    const { update, protetti } = resolveAiPatch({
+    const { update, protetti, rifiutati } = resolveAiPatch({
       patch: c.patch,
       current: {
         attributes: row.attributes ?? null,
@@ -124,9 +130,18 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     // fatta solo di dichiarazioni (prodotto fermo) sia quando insieme c'era
     // altro: prima, in quel caso, il resto si scriveva e l'esito era «ok» senza
     // una parola, e il Copilot rispondeva «Applicato a 1 prodotti su 1».
-    const nonApplicato = fraseSulleDichiarazioni(protetti);
+    // 1/11/2026 — Anche un prezzo rifiutato dal freno del 30% si dice: prima
+    // l'esito era «ok» e il Copilot rispondeva «Applicato», col prezzo vecchio.
+    const nonApplicato =
+      [fraseSulleDichiarazioni(protetti), ...rifiutati.map((r) => r.motivo)].filter(Boolean).join('; ') || null;
+    const campiRifiutati = rifiutati.map((r) => r.campo);
     if (Object.keys(update).length === 0) {
-      esiti.push({ productId: c.productId, ok: false, motivo: nonApplicato ?? 'nessuna modifica valida' });
+      esiti.push({
+        productId: c.productId,
+        ok: false,
+        motivo: nonApplicato ?? 'nessuna modifica valida',
+        ...(campiRifiutati.length > 0 ? { rifiutati: campiRifiutati } : {}),
+      });
       continue;
     }
     // R36 — Messo in vendita (o spostato di categoria) dal copilot = stessi
@@ -140,7 +155,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       });
       continue;
     }
-    risolte.push({ id: c.productId, row, update, nonApplicato });
+    risolte.push({ id: c.productId, row, update, nonApplicato, rifiutati: campiRifiutati });
   }
 
   // Secondo giro: il filtro di conformita', solo su chi tocca nome o
@@ -206,7 +221,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       continue;
     }
     applied += 1;
-    esiti.push(r.nonApplicato ? { productId: r.id, ok: true, nonApplicato: r.nonApplicato } : { productId: r.id, ok: true });
+    esiti.push({
+      productId: r.id,
+      ok: true,
+      ...(r.nonApplicato ? { nonApplicato: r.nonApplicato } : {}),
+      ...(r.rifiutati.length > 0 ? { rifiutati: r.rifiutati } : {}),
+    });
     const prima: Record<string, unknown> = {};
     for (const campo of Object.keys(r.update)) prima[campo] = (r.row as unknown as Record<string, unknown>)[campo];
     void writeAudit({
