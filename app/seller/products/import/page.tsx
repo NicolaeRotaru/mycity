@@ -10,6 +10,7 @@ import { formatPrice } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { statoAlCaricamentoDaFile } from '@/lib/category-attributes';
 import { CARICAMENTO_DA_FILE_ACCESO } from '@/lib/funzioni-al-lancio';
 
 type ParsedRow = {
@@ -18,11 +19,16 @@ type ParsedRow = {
   price: number;
   stock: number;
   category_slug: string;
+  /** Colonne facoltative del file: per un alimento senza, il prodotto nasce bozza. */
+  allergeni: string;
+  ingredienti: string;
   errors: string[];
 };
 
-const TEMPLATE_CSV = `name,description,price,stock,category_slug
-"Pane casereccio","Pane fresco a lievitazione naturale",4.50,20,alimentari
+type CategoriaDelFile = { id: string; slug: string; parent_id: string | null };
+
+const TEMPLATE_CSV = `name,description,price,stock,category_slug,allergeni,ingredienti
+"Pane casereccio","Pane fresco a lievitazione naturale",4.50,20,alimentari,"Glutine","Farina di grano tenero tipo 0, acqua, lievito madre, sale"
 "T-shirt cotone","100% cotone biologico, taglie S-XL",19.90,15,abbigliamento
 "Caricatore USB-C","Adattatore 65W, compatibile MacBook/iPad",29.00,8,elettronica`;
 
@@ -65,6 +71,7 @@ function CaricamentoDaFile() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Map<string, string>>(new Map());
+  const [categoryRows, setCategoryRows] = useState<CategoriaDelFile[]>([]);
   const [parsed, setParsed] = useState<ParsedRow[]>([]);
   const [importing, setImporting] = useState(false);
 
@@ -73,10 +80,11 @@ function CaricamentoDaFile() {
       if (!data.user) { router.push('/sign-in?returnTo=/seller/products/import'); return; }
       setUserId(data.user.id);
     });
-    supabase.from('categories').select('id, slug').then(({ data }) => {
+    supabase.from('categories').select('id, slug, parent_id').then(({ data }) => {
       const m = new Map<string, string>();
       for (const c of data ?? []) m.set(c.slug, c.id);
       setCategories(m);
+      setCategoryRows((data ?? []) as CategoriaDelFile[]);
     });
   }, [router]);
 
@@ -111,6 +119,8 @@ function CaricamentoDaFile() {
         price: Number(get('price').replace(',', '.')),
         stock: parseInt(get('stock'), 10) || 0,
         category_slug: get('category_slug').toLowerCase(),
+        allergeni: headers.includes('allergeni') ? get('allergeni') : '',
+        ingredienti: headers.includes('ingredienti') ? get('ingredienti') : '',
         errors: [],
       };
       // Validation
@@ -136,19 +146,35 @@ function CaricamentoDaFile() {
 
     setImporting(true);
     try {
-      const payload = valid.map((r) => ({
-        seller_id: userId,
-        name: r.name,
-        description: r.description,
-        price: r.price,
-        stock: r.stock,
-        category_id: categories.get(r.category_slug),
-        status: 'available',
-      }));
+      let bozze = 0;
+      const payload = valid.map((r) => {
+        const categoryId = categories.get(r.category_slug);
+        const attributes: Record<string, string> = {};
+        if (r.allergeni.trim()) attributes.allergeni = r.allergeni.trim();
+        if (r.ingredienti.trim()) attributes.ingredienti = r.ingredienti.trim();
+        // Il file salta il modulo: un campo obbligatorio vuoto (per un alimento
+        // Allergeni e Ingredienti) fa nascere il prodotto BOZZA, non in vendita.
+        const { status } = statoAlCaricamentoDaFile(categoryRows, categoryId, attributes);
+        if (status === 'draft') bozze++;
+        return {
+          seller_id: userId,
+          name: r.name,
+          description: r.description,
+          price: r.price,
+          stock: r.stock,
+          category_id: categoryId,
+          attributes,
+          status,
+        };
+      });
       // Batch insert
       const { error } = await supabase.from('products').insert(payload);
       if (error) throw error;
-      toast.success(`${valid.length} prodotti importati`);
+      toast.success(
+        bozze > 0
+          ? `${valid.length} prodotti importati · ${bozze} in bozza: mancano allergeni o ingredienti, completali dal prodotto per metterli in vendita`
+          : `${valid.length} prodotti importati`,
+      );
       router.push('/seller/products');
     } catch (err) {
       toast.error(friendlyError(err));
@@ -196,6 +222,7 @@ function CaricamentoDaFile() {
             <li>• <code className="bg-white px-1">price</code> · prezzo in € (decimali con punto o virgola)</li>
             <li>• <code className="bg-white px-1">stock</code> · quantità disponibile</li>
             <li>• <code className="bg-white px-1">category_slug</code> · alimentari, abbigliamento, casa, elettronica, libri, sport, giocattoli, giardino, bellezza</li>
+            <li>• <code className="bg-white px-1">allergeni</code> · <code className="bg-white px-1">ingredienti</code> · obbligatori per gli alimentari (se non ci sono, il prodotto viene salvato in bozza e non va in vendita finché non li completi)</li>
           </ul>
         </div>
       </section>
