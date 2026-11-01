@@ -122,7 +122,7 @@ describe('lo staff non può approvare un fattorino minorenne', () => {
   it('sospendere e rifiutare restano possibili: quelle non sono approvazioni', async () => {
     profiloBersaglio = {
       id: 'rider-1', role: 'rider', store_name: null, full_name: 'Minore Prova',
-      legal_birth_date: nataAnniFa(15),
+      legal_birth_date: nataAnniFa(15), approval_status: 'approved',
     };
 
     const r = await MODERA(richiesta('suspend'));

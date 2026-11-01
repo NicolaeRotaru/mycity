@@ -116,7 +116,7 @@ describe('il bersaglio si controlla', () => {
     const r = await MODERA(richiesta('approve'));
     expect(r.status).toBe(200);
     idBersaglio = 'seller-1';
-    profiloBersaglio = { id: 'seller-1', role: 'seller', store_name: 'Pane', full_name: null, legal_birth_date: null };
+    profiloBersaglio = { id: 'seller-1', role: 'seller', store_name: 'Pane', full_name: null, legal_birth_date: null, approval_status: 'approved' };
     const r2 = await MODERA(richiesta('suspend'));
     expect(r2.status).toBe(200);
     expect(aggiornamenti).toHaveLength(2);

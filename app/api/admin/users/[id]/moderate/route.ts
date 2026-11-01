@@ -167,6 +167,22 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * solo SOSPESO: era già approvato, e un negozio storico senza partita IVA
    * resterebbe fermo per sempre (non ha una pagina per inserirla).
    */
+  /**
+   * 1/11/2026 (collaudo finale) — SI SOSPENDE SOLO CHI E' APPROVATO.
+   *
+   * Il «riattiva da sospeso» qui sotto non rifà il controllo, perché un sospeso
+   * era già approvato. Ma la rotta accettava `suspend` anche su un profilo in
+   * attesa o respinto: due chiamate (sospendi, poi riattiva) portavano ad
+   * `approved` un fattorino senza documenti o un negozio senza partita IVA. Il
+   * pannello mostra «Sospendi» solo agli approvati, ma il controllo vero e'
+   * questo, non il bottone.
+   */
+  if (body.action === 'suspend' && target.approval_status !== 'approved') {
+    return ApiErrors.invalidRequest(
+      'Si sospende solo un profilo approvato. Questo non lo è: per chi è in attesa o respinto usa «Approva» o «Rifiuta».',
+    );
+  }
+
   if (approva) {
     const motivo = motivoPerNonApprovare(target, body.action === 'reactivate' ? 'reactivate' : 'approve');
     if (motivo) return ApiErrors.invalidRequest(motivo);
