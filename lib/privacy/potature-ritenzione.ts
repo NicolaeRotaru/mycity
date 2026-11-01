@@ -33,6 +33,8 @@
  * mezzo a `next/server`, questa decisione una prova non la puo' ESEGUIRE.
  */
 
+import { potaOrfaniKyc, type ClienteOrfani } from './orfani-kyc';
+
 /** Cosa risponde una scrittura del database: PostgREST non lancia, restituisce. */
 type Risposta = { error: { message: string } | null };
 
@@ -424,6 +426,28 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
         .not('recipient_email', 'is', null)),
     },
   ];
+}
+
+/**
+ * 1/11/2026 — LE COPIE ORFANE DEL SECCHIO DEI DOCUMENTI (lib/privacy/orfani-kyc.ts).
+ *
+ * Sta FUORI da `potatureDiRitenzione` di proposito: e' l'unica potatura che
+ * ELENCA lo storage e LEGGE i profili, e il conto senza cancellare
+ * (`contaPotature`) non sa fare nessuna delle due cose senza scrivere. La notte
+ * vera la prende da `potatureNotturne`, che e' l'elenco di prima piu' questa.
+ */
+export function potaturaDegliOrfaniKyc(adessoMs: number): Potatura {
+  return {
+    cosa: 'documenti-kyc-orfani',
+    fai: async (admin, registro) => {
+      await potaOrfaniKyc(admin as unknown as ClienteOrfani, registro, adessoMs);
+    },
+  };
+}
+
+/** Tutto quello che la notte deve potare: le finestre dichiarate e gli orfani di kyc-docs. */
+export function potatureNotturne(adessoMs: number): Potatura[] {
+  return [...potatureDiRitenzione(adessoMs), potaturaDegliOrfaniKyc(adessoMs)];
 }
 
 /**
