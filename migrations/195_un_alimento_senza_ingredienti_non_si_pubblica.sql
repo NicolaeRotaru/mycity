@@ -8,8 +8,20 @@
 -- alimento con gli allergeni e senza ingredienti. Reg. UE 1169/2011 art. 9:
 -- l'elenco degli ingredienti e' obbligatorio anche nella vendita a distanza.
 --
--- La 126 non si tocca: qui si RIDEFINISCE la stessa funzione (stesso nome,
--- stesso trigger), con allergeni E ingredienti. Le bozze restano libere.
+-- La 126 non si tocca: qui si RIDEFINISCE la stessa funzione (stesso nome),
+-- con allergeni E ingredienti. Le bozze restano libere.
+--
+-- E si RIFA' il trigger, per due buchi trovati al collaudo dell'1/11/2026:
+-- ① il trigger della 126 guardava solo UPDATE OF status, attributes,
+--   category_id: un rifornimento (UPDATE stock) passava senza controllo;
+-- ② i trigger BEFORE scattano in ordine alfabetico: «prodotti_alimentari_…»
+--   girava PRIMA di «trg_auto_republish» (032), che rimette 'available' un
+--   alimento esaurito o in bozza quando torna lo stock. Il guardiano vedeva
+--   ancora lo stato vecchio e lasciava passare.
+-- Il trigger nuovo si chiama «zz_prodotti_alimentari_dichiarazioni» (scatta
+-- dopo trg_auto_republish) e guarda ogni INSERT e ogni UPDATE. Il DROP del
+-- vecchio e il CREATE del nuovo stanno qui, cosi' la 195 regge anche su un
+-- database dove la 126 non e' ancora passata.
 --
 -- DA FIRMARE DA NICOLA prima di applicarla in produzione (rosso).
 -- Prima di applicarla: controllare quanti alimenti 'available' sono gia' senza
@@ -23,10 +35,11 @@
 -- (rossa prima della 195, verde dopo).
 --
 -- RITORNO INDIETRO (ripristina il guardiano della 126, solo allergeni):
---   esegui di nuovo il blocco CREATE OR REPLACE FUNCTION
---   public.alimentare_senza_allergeni_non_si_pubblica() della
---   migrations/126_radiografia_22_agosto.sql (righe 501-536). Il trigger
---   prodotti_alimentari_allergeni non cambia e non va ricreato.
+--   DROP TRIGGER IF EXISTS zz_prodotti_alimentari_dichiarazioni ON public.products;
+--   poi esegui di nuovo, dalla migrations/126_radiografia_22_agosto.sql,
+--   il blocco CREATE OR REPLACE FUNCTION
+--   public.alimentare_senza_allergeni_non_si_pubblica() e il blocco
+--   DROP/CREATE TRIGGER prodotti_alimentari_allergeni che lo segue.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION public.alimentare_senza_allergeni_non_si_pubblica()
@@ -76,5 +89,12 @@ COMMENT ON FUNCTION public.alimentare_senza_allergeni_non_si_pubblica() IS
   'Reg. UE 1169/2011: allergeni e ingredienti devono esserci prima dell acquisto, anche a distanza (dalla 195 anche gli ingredienti).';
 
 REVOKE ALL ON FUNCTION public.alimentare_senza_allergeni_non_si_pubblica() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS prodotti_alimentari_allergeni ON public.products;
+DROP TRIGGER IF EXISTS zz_prodotti_alimentari_dichiarazioni ON public.products;
+CREATE TRIGGER zz_prodotti_alimentari_dichiarazioni
+  BEFORE INSERT OR UPDATE ON public.products
+  FOR EACH ROW
+  EXECUTE FUNCTION public.alimentare_senza_allergeni_non_si_pubblica();
 
 NOTIFY pgrst, 'reload schema';
