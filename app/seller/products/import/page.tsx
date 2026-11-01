@@ -58,29 +58,75 @@ function contaFuoriVirgolette(line: string, sep: string): number {
  * chiama «\uFEFFname».
  */
 function parseCsv(text: string): { headers: string[]; rows: string[][]; separatore: ';' | ',' } {
-  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length === 0) return { headers: [], rows: [], separatore: ',' };
+  const pulito = text.replace(/^\uFEFF/, '');
+  // La prima riga (i nomi delle colonne) non ha mai un a capo dentro le virgolette.
+  const primaRiga = pulito.split(/\r?\n/, 1)[0] ?? '';
+  if (primaRiga.trim().length === 0) return { headers: [], rows: [], separatore: ',' };
   const separatore: ';' | ',' =
-    contaFuoriVirgolette(lines[0], ';') > contaFuoriVirgolette(lines[0], ',') ? ';' : ',';
+    contaFuoriVirgolette(primaRiga, ';') > contaFuoriVirgolette(primaRiga, ',') ? ';' : ',';
 
-  const parseLine = (line: string): string[] => {
-    const out: string[] = [];
-    let cur = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; continue; }
-      if (ch === '"') { inQuotes = !inQuotes; continue; }
-      if (ch === separatore && !inQuotes) { out.push(cur); cur = ''; continue; }
+  // 01/11/2026 — collaudo finale. Il lettore divideva il file in righe PRIMA di
+  // guardare le virgolette: una cella con l'a capo (Alt+Invio in Excel) faceva
+  // due prodotti rotti. Ora si legge carattere per carattere, e un a capo dentro
+  // le virgolette resta nella cella.
+  const righe: string[][] = [];
+  let riga: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < pulito.length; i++) {
+    const ch = pulito[i];
+    if (inQuotes) {
+      if (ch === '"' && pulito[i + 1] === '"') { cur += '"'; i++; continue; }
+      if (ch === '"') { inQuotes = false; continue; }
       cur += ch;
+      continue;
     }
-    out.push(cur);
-    return out.map((s) => s.trim());
-  };
+    // Le virgolette aprono una cella solo all'inizio: una virgoletta sola in
+    // mezzo al testo (5" di schermo) e' un carattere, e non si mangia le righe dopo.
+    if (ch === '"' && cur.length === 0) { inQuotes = true; continue; }
+    if (ch === separatore) { riga.push(cur); cur = ''; continue; }
+    if (ch === '\r' && pulito[i + 1] === '\n') continue;
+    if (ch === '\n' || ch === '\r') { riga.push(cur); righe.push(riga); riga = []; cur = ''; continue; }
+    cur += ch;
+  }
+  riga.push(cur);
+  righe.push(riga);
 
-  const headers = parseLine(lines[0]).map((h) => h.toLowerCase());
-  const rows = lines.slice(1).map(parseLine);
-  return { headers, rows, separatore };
+  const pieni = righe
+    .map((r) => r.map((c) => c.trim()))
+    .filter((r) => r.some((c) => c.length > 0));
+  if (pieni.length === 0) return { headers: [], rows: [], separatore };
+  const headers = pieni[0].map((h) => h.toLowerCase());
+  return { headers, rows: pieni.slice(1), separatore };
+}
+
+/**
+ * 01/11/2026 — collaudo finale. Excel per Windows in italiano salva il CSV «di
+ * serie» (delimitato dal separatore di elenco) in Windows-1252, senza BOM:
+ * letto come UTF-8, «Caffè» diventava «Caff�». Si prova UTF-8 in modo stretto
+ * e, se il file non lo e', si legge come Windows-1252.
+ */
+function decodificaCsv(bytes: ArrayBuffer | Uint8Array): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder('windows-1252').decode(bytes);
+  }
+}
+
+async function leggiFile(file: File): Promise<string> {
+  if (typeof file.arrayBuffer === 'function') return decodificaCsv(await file.arrayBuffer());
+  return file.text();
+}
+
+/**
+ * Il prezzo come lo scrive Excel italiano: «4,50», «19,90 €», «1.234,50».
+ * Con la virgola, la virgola e' il decimale e i punti sono le migliaia.
+ */
+function leggiPrezzo(grezzo: string): number {
+  const s = grezzo.replace(/[^\d,.-]/g, '');
+  if (s === '') return NaN;
+  return Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s);
 }
 
 /**
@@ -129,7 +175,7 @@ function CaricamentoDaFile() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) { toast.error('File troppo grande (max 2MB)'); return; }
-    const text = await file.text();
+    const text = await leggiFile(file);
     const { headers, rows } = parseCsv(text);
     const required = ['name', 'description', 'price', 'stock', 'category_slug'];
     const missingHeaders = required.filter((h) => !headers.includes(h));
@@ -148,7 +194,7 @@ function CaricamentoDaFile() {
       const row: ParsedRow = {
         name: get('name'),
         description: get('description'),
-        price: Number(get('price').replace(',', '.')),
+        price: leggiPrezzo(get('price')),
         stock: parseInt(get('stock'), 10) || 0,
         category_slug: get('category_slug').toLowerCase(),
         allergeni: headers.includes('allergeni') ? get('allergeni') : '',

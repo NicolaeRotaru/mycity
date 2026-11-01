@@ -88,9 +88,27 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
       // La regola del database scarta in silenzio una scrittura non permessa: zero righe
       // aggiornate non è «fatto», è «non registrato».
       if (!data || data.length === 0) throw new Error('Decisione non registrata: il database non ha aggiornato la segnalazione.');
+      // 01/11/2026 — collaudo finale. La decisione si salvava e basta: chi aveva
+      // segnalato e il venditore non ricevevano niente (DSA art. 16.5 e 17), e i
+      // Termini promettono «ti scriviamo com'e' andata e perche'». Con una
+      // decisione presa, la rotta manda l'esito a entrambi.
+      if (decisione === 'in_esame') return { comunicato: true };
+      try {
+        const r = await fetch('/api/segnalazioni', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: s.id }),
+        });
+        return { comunicato: r.ok };
+      } catch {
+        return { comunicato: false };
+      }
     },
-    onSuccess: () => {
+    onSuccess: (esito) => {
       toast.success('Decisione registrata');
+      if (esito?.comunicato === false) {
+        toast.error("L'esito non è partito a chi ha segnalato e al venditore: registra di nuovo la decisione per rimandarlo.");
+      }
       qc.invalidateQueries({ queryKey: CHIAVE });
     },
     onError: (e: unknown) => toast.error(friendlyError(e)),
@@ -123,6 +141,8 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
         onSubmit={(e) => {
           e.preventDefault();
           if (serveMotivo && !motivoValido) return;
+          // Un doppio invio nello stesso istante faceva due salvataggi e due esiti.
+          if (decidi.isPending) return;
           decidi.mutate();
         }}
       >
