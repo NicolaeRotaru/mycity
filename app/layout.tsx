@@ -99,8 +99,10 @@ export const metadata: Metadata = {
   title: 'MyCity Piacenza — Marketplace dei negozi della tua città',
   // 29/10/2026 — Senza abbigliamento, che al lancio non c'è (catalogo.categorie): il testo vive in lib/site-branding.
   description: DESCRIZIONE_DEL_SITO,
-  // 31/10/2026 — App installabile spenta al lancio (APP_INSTALLABILE_ACCESA): niente manifest.
-  ...(APP_INSTALLABILE_ACCESA ? { manifest: '/manifest.json' } : {}),
+  // 1/11/2026 — Il manifest e l'icona Apple NON stanno qui: il layout è force-dynamic e Next 15.5
+  // manda in streaming i metadata delle pagine dinamiche, che finiscono nel <body>, dove Chrome il
+  // manifest non lo cerca. Sono scritti a mano nel <head> qui sotto (dietro APP_INSTALLABILE_ACCESA).
+  // Prova: tests/unit/il-manifest-sta-nella-testa-della-pagina.test.tsx
   icons: {
     // Prima il favicon classico: e' l'indirizzo che i lettori piu' vecchi e
     // parecchi aggregatori chiedono da soli (/favicon.ico), e fino a oggi
@@ -111,7 +113,6 @@ export const metadata: Metadata = {
       { url: '/icon-192.svg', type: 'image/svg+xml' },
       { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
     ],
-    apple: '/apple-touch-icon.png',
   },
   alternates: { canonical: '/' },
   openGraph: {
@@ -199,6 +200,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="preconnect" href="https://js.stripe.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://api.stripe.com" />
         <link rel="dns-prefetch" href="https://challenges.cloudflare.com" />
+        {/* Nel <head> scritto a mano, non nei metadata: vedi il commento su `metadata`. */}
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        {APP_INSTALLABILE_ACCESA && <link rel="manifest" href="/manifest.json" />}
       </head>
       {/*
         6/9/2026, secondo giro — DELLA «ZONA SICURA» LEGGEVAMO SOLO IL BORDO DI SOTTO.
