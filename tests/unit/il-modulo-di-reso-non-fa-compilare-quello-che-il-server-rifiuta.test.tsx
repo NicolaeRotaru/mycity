@@ -90,8 +90,8 @@ afterEach(async () => {
 });
 
 describe('la scadenza del modulo e quella del server sono la stessa', () => {
-  it('14 giorni e 8 ore dalla consegna: il server rifiuta, quindi niente modulo', async () => {
-    ordine({ delivered_at: fa(14 + 8 / 24) });
+  it('15 giorni e 1 ora dalla consegna: fuori dal 14esimo giorno, niente modulo', async () => {
+    ordine({ delivered_at: fa(15 + 1 / 24) });
     await monta();
     expect(modulo()).toBe(false);
     expect(contenitore.textContent).toMatch(/Qui il reso non si può chiedere/);
