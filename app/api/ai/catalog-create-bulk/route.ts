@@ -84,8 +84,9 @@ const DraftSchema = z.object({
   category_slug: z.string().max(200).optional(),
   suggested_price: z.number().nullable().optional(),
   // Il tetto per campo si controlla per prodotto (vedi `campoOltreIlTetto`):
-  // qui solo il tetto largo, il corpo intero e' gia' limitato da TETTO_JSON_CON_FOTO.
-  attributes: z.record(z.string().max(MAX_VALORE_LUNGO * 4)).optional(),
+  // nessun tetto qui, perche' un tetto nello schema fa cadere il lotto intero.
+  // Il corpo della richiesta e' gia' limitato da TETTO_JSON_CON_FOTO.
+  attributes: z.record(z.string()).optional(),
   tags: z.array(z.string().max(60)).max(50).optional(),
   alt_text: z.string().max(MAX_ALT_TEXT).nullable().optional(),
   // R36 — Solo con questa spunta allergeni e ingredienti letti dalle foto

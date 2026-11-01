@@ -109,4 +109,20 @@ describe('catalog-create-bulk: una lista ingredienti lunga non fa cadere il lott
     expect(scartati.find((s) => s.nome === 'Focaccia')?.motivo).toContain('ingredienti');
     expect(scartati.find((s) => s.nome === 'Olive')?.motivo).toContain('origine');
   });
+
+  it('un campo enorme (oltre 8000 caratteri) scarta solo quel prodotto, non tutto il lotto', async () => {
+    const res = await POST(
+      makeReq({
+        items: [
+          item('Focaccia', { ingredienti: 'x'.repeat(9000), allergeni: 'Glutine' }),
+          item('Pane', { ingredienti: 'farina, acqua, sale', allergeni: 'Glutine' }),
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    const payloads = insertMock.mock.calls[0][0] as Array<{ name: string }>;
+    expect(payloads.map((p) => p.name)).toEqual(['Pane']);
+    expect((json.scartati as Array<{ nome: string; motivo: string }>)[0]).toMatchObject({ nome: 'Focaccia' });
+  });
 });
