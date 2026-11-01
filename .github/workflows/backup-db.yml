@@ -233,6 +233,7 @@ jobs:
           rclone listremotes
 
       - name: Esegui il backup
+        id: dump
         # La copia del database NON dipende dalle foto: se «Le foto vanno in copia?»
         # o «Prepara rclone» falliscono, la copia di stanotte si fa lo stesso (il
         # lavoro resta rosso per le foto). Non parte solo se manca l indirizzo del
@@ -249,31 +250,6 @@ jobs:
         run: |
           mkdir -p "$BACKUP_DIR"
           bash scripts/backup-db.sh
-
-      # 1/11/2026 — LE FOTO VERE, SENZA UNA DESTINAZIONE NUOVA.
-      #
-      # Fino a oggi le immagini di prodotti, negozi, storie e recensioni non
-      # erano in nessuna copia: il pezzo con rclone qui sopra vuole un secchio a
-      # pagamento ed e' spento. Qui le foto dei secchi pubblici si scaricano
-      # dall'API Storage di Supabase e finiscono, cifrate, accanto al database
-      # (backup/mycity-foto_<data>.tar.gpg): il passo «Conserva la copia» le
-      # prende insieme a lui. `kyc-docs` mai.
-      #
-      # Serve il segreto SUPABASE_SERVICE_ROLE_KEY. Senza, questo passo e' ROSSO
-      # e suona l'allarme: «le foto non sono in copia» deve arrivare a qualcuno,
-      # non restare un avviso giallo. La copia del database si conserva lo
-      # stesso (il passo dopo gira con `!cancelled()`).
-      - name: Copia le foto accanto al database
-        if: ${{ !cancelled() && steps.verifica.outcome == 'success' }}
-        env:
-          FOTO_CHIAVE_SERVIZIO: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
-          BACKUP_DIR: ${{ github.workspace }}/backup
-          FOTO_SECCHI: ${{ vars.FOTO_SECCHI }}
-          FOTO_TETTO_MB: ${{ vars.FOTO_TETTO_MB }}
-        run: bash scripts/copia-foto.sh copia
 
       # 8/9/2026 — LA COPIA DEL DATABASE NON DEVE MORIRE INSIEME ALLE FOTO.
       #
@@ -296,12 +272,66 @@ jobs:
       # abbia un account GitHub. Il lavoro rifiuta gia' di partire senza
       # BACKUP_PASSPHRASE, quindi una copia buona e' sempre `.gpg`: qualunque
       # altra cosa resta nel contenitore e muore con lui.
+      #
+      # 1/11/2026 — E SI CONSERVA PRIMA DELLE FOTO. Le foto possono metterci a
+      # lungo; se il lavoro arriva al suo tempo massimo viene annullato, e un
+      # passo con `!cancelled()` dopo di loro non gira piu': il database di
+      # stanotte morirebbe con il contenitore, senza nemmeno l'allarme. Qui il
+      # database esce subito, e le foto hanno un caricamento tutto loro.
       - name: Conserva la copia fuori dal contenitore
+        id: conserva
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: backup-database-${{ github.run_id }}
           path: backup/*.gpg
+          retention-days: 30
+          if-no-files-found: error
+
+      # 1/11/2026 — LE FOTO VERE, SENZA UNA DESTINAZIONE NUOVA.
+      #
+      # Fino a oggi le immagini di prodotti, negozi, storie e recensioni non
+      # erano in nessuna copia: il pezzo con rclone qui sopra vuole un secchio a
+      # pagamento ed e' spento. Qui le foto dei secchi pubblici si scaricano
+      # dall'API Storage di Supabase e finiscono, cifrate, accanto al database
+      # (backup/mycity-foto_<data>.tar.gpg): il passo «Conserva la copia» le
+      # prende insieme a lui. `kyc-docs` mai.
+      #
+      # Serve il segreto SUPABASE_SERVICE_ROLE_KEY. Senza, questo passo e' ROSSO
+      # e suona l'allarme: «le foto non sono in copia» deve arrivare a qualcuno,
+      # non restare un avviso giallo. La copia del database si conserva lo
+      # stesso: e' gia' stata conservata nel passo prima.
+      #
+      # Ha un tempo massimo suo (15 minuti) e ogni richiesta al fornitore ne ha
+      # uno (60 secondi): un fornitore che non risponde fa rosso questo passo,
+      # non annulla tutto il lavoro.
+      #
+      # `uscita` dice PERCHE' e' caduto: 3 = la chiave non c'e' (non
+      # configurata), altro = un guasto. L'allarme in fondo li distingue.
+      - name: Copia le foto accanto al database
+        id: copia-foto
+        if: ${{ !cancelled() && steps.verifica.outcome == 'success' }}
+        timeout-minutes: 15
+        env:
+          FOTO_CHIAVE_SERVIZIO: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          BACKUP_DIR: ${{ github.workspace }}/backup
+          FOTO_SECCHI: ${{ vars.FOTO_SECCHI }}
+          FOTO_TETTO_MB: ${{ vars.FOTO_TETTO_MB }}
+        run: |
+          uscita=0
+          bash scripts/copia-foto.sh copia || uscita=$?
+          echo "uscita=$uscita" >> "$GITHUB_OUTPUT"
+          exit "$uscita"
+
+      - name: Conserva le foto fuori dal contenitore
+        if: ${{ !cancelled() && steps.copia-foto.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-foto-${{ github.run_id }}
+          path: backup/mycity-foto_*.tar.gpg
           retention-days: 30
           if-no-files-found: error
 
@@ -321,9 +351,23 @@ jobs:
       #
       # Il deposito e' pubblico: nella segnalazione vanno solo la data e il
       # collegamento all'esecuzione, mai un pezzo del registro della copia.
+      #
+      # 1/11/2026 — L'ALLARME DICE COSA E' CADUTO. Finche' manca la chiave delle
+      # foto cade solo il loro passo, e la segnalazione diceva «non c'e' una
+      # copia nuova del database» ogni notte: falso, e la notte in cui il
+      # database cade davvero sarebbe stata una riga in piu' nella stessa
+      # segnalazione che tutti hanno imparato a ignorare. Adesso:
+      #  - database o sua conservazione caduti → la segnalazione del database;
+      #  - database conservato, cadute solo le foto → una segnalazione a parte;
+      #    se il motivo e' «chiave non configurata» (uscita 3) e quella
+      #    segnalazione e' gia' aperta, non si aggiunge un commento ogni notte.
       - name: Suona l'allarme, la copia notturna non e' riuscita
         if: failure()
         env:
+          ESITO_DUMP: ${{ steps.dump.outcome }}
+          ESITO_CONSERVA: ${{ steps.conserva.outcome }}
+          USCITA_FOTO: ${{ steps.copia-foto.outputs.uscita }}
+          TITOLO_FOTO: "Le foto non sono nella copia di sicurezza (il database sì)"
           GH_TOKEN: ${{ github.token }}
           DEPOSITO: ${{ github.repository }}
           PROPRIETARIO: ${{ github.repository_owner }}
@@ -332,22 +376,38 @@ jobs:
         run: |
           set -euo pipefail
           QUANDO="$(date -u '+%Y-%m-%d %H:%M UTC')"
-          RIGA="Copia fallita il $QUANDO: $INDIRIZZO_CORSA"
+          SOLO_FOTO=no
+          if [ "${ESITO_DUMP:-}" = "success" ] && [ "${ESITO_CONSERVA:-}" = "success" ]; then SOLO_FOTO=si; fi
+          if [ "$SOLO_FOTO" = "si" ]; then
+            TITOLO="$TITOLO_FOTO"
+            if [ "${USCITA_FOTO:-}" = "3" ]; then
+              RIGA="Foto non copiate il $QUANDO: manca il segreto SUPABASE_SERVICE_ROLE_KEY. Il database e' copiato e conservato. $INDIRIZZO_CORSA"
+            else
+              RIGA="Foto non copiate il $QUANDO (il database e' copiato e conservato): $INDIRIZZO_CORSA"
+            fi
+            APRI="@$PROPRIETARIO stanotte la copia del database c'e', ma le foto di prodotti e negozi non sono state copiate."
+            CHIUDI="Apri l'esecuzione per il motivo (riga «esito-file-foto»). Chiudi questa segnalazione quando le foto tornano in copia."
+          else
+            RIGA="Copia fallita il $QUANDO: $INDIRIZZO_CORSA"
+            APRI="@$PROPRIETARIO la copia notturna del database non e' riuscita: stanotte non c'e' una copia nuova da cui ripartire."
+            CHIUDI="Apri l'esecuzione per vedere quale passo e' caduto. Chiudi questa segnalazione quando la copia torna verde."
+          fi
+          export TITOLO
           APERTA="$(gh issue list --repo "$DEPOSITO" --state open --limit 100 --json number,title \
             --jq '[.[] | select(.title == env.TITOLO)][0].number // empty')"
-          if [ -n "$APERTA" ]; then
+          if [ -n "$APERTA" ] && [ "$SOLO_FOTO" = "si" ] && [ "${USCITA_FOTO:-}" = "3" ]; then
+            # Stesso motivo di ieri, gia' segnalato: niente commento ogni notte.
+            echo "::warning::Le foto non sono in copia (manca la chiave): la segnalazione #$APERTA e' gia' aperta."
+          elif [ -n "$APERTA" ]; then
             gh issue comment "$APERTA" --repo "$DEPOSITO" --body "$RIGA"
-            echo "::error::La copia notturna non e' riuscita: aggiunto alla segnalazione #$APERTA."
+            echo "::error::$TITOLO: aggiunto alla segnalazione #$APERTA."
           else
-            CORPO="$(printf '%s\n\n%s\n\n%s\n' \
-              "@$PROPRIETARIO la copia notturna del database non e' riuscita: stanotte non c'e' una copia nuova da cui ripartire." \
-              "$RIGA" \
-              "Apri l'esecuzione per vedere quale passo e' caduto. Chiudi questa segnalazione quando la copia torna verde.")"
+            CORPO="$(printf '%s\n\n%s\n\n%s\n' "$APRI" "$RIGA" "$CHIUDI")"
             gh issue create --repo "$DEPOSITO" --title "$TITOLO" --body "$CORPO"
-            echo "::error::La copia notturna non e' riuscita: aperta una segnalazione nel deposito."
+            echo "::error::$TITOLO: aperta una segnalazione nel deposito."
           fi
           {
-            echo "## ⛔ La copia notturna non e' riuscita"
+            echo "## ⛔ $TITOLO"
             echo ""
             echo "$RIGA"
           } >> "$GITHUB_STEP_SUMMARY"
@@ -499,6 +559,7 @@ jobs:
           rclone listremotes
 
       - name: Fai una copia fresca
+        id: fresca
         # Come nella copia notturna: le foto non fermano la prova di ripristino.
         if: ${{ !cancelled() && steps.segreti.outcome == 'success' }}
         env:
@@ -517,7 +578,9 @@ jobs:
       # del lavoro qui sopra): la copia fresca porta anche le foto, cosi' piu'
       # sotto la prova puo' riaprirne una davvero.
       - name: Copia le foto accanto al database
+        id: copia-foto
         if: ${{ !cancelled() && steps.segreti.outcome == 'success' }}
+        timeout-minutes: 15
         env:
           FOTO_CHIAVE_SERVIZIO: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
@@ -529,6 +592,7 @@ jobs:
         run: bash scripts/copia-foto.sh copia
 
       - name: Riaprila su un database vuoto, e cronometra
+        id: riapri-db
         if: ${{ !cancelled() && steps.segreti.outcome == 'success' }}
         env:
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
@@ -633,6 +697,9 @@ jobs:
       - name: Suona l'allarme, la prova di ripristino non e' riuscita
         if: failure()
         env:
+          ESITO_FRESCA: ${{ steps.fresca.outcome }}
+          ESITO_RIAPRI_DB: ${{ steps.riapri-db.outcome }}
+          TITOLO_FOTO: "Prova mensile: il database si riapre, le foto no"
           GH_TOKEN: ${{ github.token }}
           DEPOSITO: ${{ github.repository }}
           PROPRIETARIO: ${{ github.repository_owner }}
@@ -641,22 +708,30 @@ jobs:
         run: |
           set -euo pipefail
           QUANDO="$(date -u '+%Y-%m-%d %H:%M UTC')"
-          RIGA="Prova di ripristino fallita il $QUANDO: $INDIRIZZO_CORSA"
+          # Il database si e' riaperto e a cadere sono solo le foto: si dice
+          # quello, non «non sappiamo se la copia si riapre».
+          if [ "${ESITO_FRESCA:-}" = "success" ] && [ "${ESITO_RIAPRI_DB:-}" = "success" ]; then
+            TITOLO="$TITOLO_FOTO"
+            RIGA="Prova di ripristino del $QUANDO: il database si riapre, le foto no. $INDIRIZZO_CORSA"
+            APRI="@$PROPRIETARIO la prova mensile ha riaperto il database, ma nessuna foto si e' riaperta dalla copia."
+          else
+            RIGA="Prova di ripristino fallita il $QUANDO: $INDIRIZZO_CORSA"
+            APRI="@$PROPRIETARIO la prova mensile di ripristino non e' riuscita: non sappiamo se la copia di sicurezza si riapre."
+          fi
+          export TITOLO
           APERTA="$(gh issue list --repo "$DEPOSITO" --state open --limit 100 --json number,title \
             --jq '[.[] | select(.title == env.TITOLO)][0].number // empty')"
           if [ -n "$APERTA" ]; then
             gh issue comment "$APERTA" --repo "$DEPOSITO" --body "$RIGA"
-            echo "::error::La prova di ripristino non e' riuscita: aggiunto alla segnalazione #$APERTA."
+            echo "::error::$TITOLO: aggiunto alla segnalazione #$APERTA."
           else
-            CORPO="$(printf '%s\n\n%s\n\n%s\n' \
-              "@$PROPRIETARIO la prova mensile di ripristino non e' riuscita: non sappiamo se la copia di sicurezza si riapre." \
-              "$RIGA" \
+            CORPO="$(printf '%s\n\n%s\n\n%s\n' "$APRI" "$RIGA" \
               "Apri l'esecuzione per vedere quale passo e' caduto. Chiudi questa segnalazione quando la prova torna verde.")"
             gh issue create --repo "$DEPOSITO" --title "$TITOLO" --body "$CORPO"
-            echo "::error::La prova di ripristino non e' riuscita: aperta una segnalazione nel deposito."
+            echo "::error::$TITOLO: aperta una segnalazione nel deposito."
           fi
           {
-            echo "## ⛔ La prova di ripristino non e' riuscita"
+            echo "## ⛔ $TITOLO"
             echo ""
             echo "$RIGA"
           } >> "$GITHUB_STEP_SUMMARY"

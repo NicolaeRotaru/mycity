@@ -250,11 +250,12 @@ function lavoro(nome: string): LavoroYaml {
 const FALLITO: EsitoFinto = { esito: 'failure' };
 
 describe('il lavoro notturno e la prova mensile usano davvero la copia delle foto', () => {
-  it('ogni notte le foto si copiano prima che la copia venga conservata', () => {
+  it('ogni notte le foto si copiano, dopo che il database e gia conservato, e si conservano anche loro', () => {
     const girati = percorso(lavoro('backup').steps ?? [], { event_name: 'schedule', schedule: '17 2 * * *' }, {});
     const foto = girati.indexOf('Copia le foto accanto al database');
     expect(foto, 'nessun passo copia le foto').toBeGreaterThan(-1);
-    expect(foto).toBeLessThan(girati.indexOf('Conserva la copia fuori dal contenitore'));
+    expect(girati.indexOf('Conserva la copia fuori dal contenitore')).toBeLessThan(foto);
+    expect(girati.indexOf('Conserva le foto fuori dal contenitore')).toBeGreaterThan(foto);
   });
 
   it('se le foto cadono, il database si conserva lo stesso e l allarme suona', () => {

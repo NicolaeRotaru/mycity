@@ -46,9 +46,13 @@ if [[ "$MESTIERE" == "copia" ]]; then
   trap pulisci EXIT
 
   mkdir -p "$CHIARO"
-  if ! node "$QUI/copia-foto.mjs" "$CHIARO"; then
+  # L'uscita dello script si passa com'e': il 3 («non configurata») e' diverso
+  # da un guasto, e l'allarme del lavoro notturno lo tratta in un altro modo.
+  uscita=0
+  node "$QUI/copia-foto.mjs" "$CHIARO" || uscita=$?
+  if [[ "$uscita" -ne 0 ]]; then
     riepilogo "❌ **Le foto non sono in copia stanotte** — guarda la riga «esito-file-foto» nel registro del passo."
-    exit 1
+    exit "$uscita"
   fi
   tar -C "$CHIARO" -cf - . | gpg --batch --yes --symmetric --cipher-algo AES256 \
     --passphrase "$BACKUP_PASSPHRASE" --output "$PACCO"

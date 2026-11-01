@@ -32,12 +32,62 @@
  *   SUPABASE_URL               https://<progetto>.supabase.co (facoltativa: se
  *                              manca si ricava dall'utente di SUPABASE_DB_URL,
  *                              che nel Session pooler e' «postgres.<progetto>»)
- *   FOTO_SECCHI                default «products stories reviews»
+ *   FOTO_SECCHI                default «products stories reviews». Passano
+ *                              SOLO i secchi dichiarati `pubblico: true` in
+ *                              lib/storage/regole-secchi.ts (la casa unica
+ *                              delle regole dei magazzini): `cod-proof`,
+ *                              `invoices`, `kyc-docs` restano fuori anche se
+ *                              qualcuno li scrive qui.
  *   FOTO_TETTO_MB              default 3000: oltre, si ferma e lo dice
+ *
+ * Uscite: 0 riuscita · 1 fallita · 2 uso sbagliato · 3 non configurata (manca
+ * la chiave o l'indirizzo). Il 3 e' distinto apposta: il lavoro notturno lo usa
+ * per non riscrivere ogni notte «manca la chiave» nella stessa segnalazione.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+/** Ogni richiesta ha una scadenza: un fornitore che non risponde non deve mangiarsi la notte. */
+export const SCADENZA_MS = 60_000;
+/** Il file che Supabase mette nelle cartelle «vuote» create dal pannello: non e' una foto. */
+export const SEGNAPOSTO = '.emptyFolderPlaceholder';
+
+const REGOLE_SECCHI = join(dirname(fileURLToPath(import.meta.url)), '..', 'lib', 'storage', 'regole-secchi.ts');
+
+/**
+ * I secchi pubblici, letti dalla casa unica delle regole (lib/storage/regole-secchi.ts).
+ * Si legge il testo, non si importa: lo script gira con node senza TypeScript.
+ * Se il file cambia forma e non si legge piu', si ferma: indovinare qui vorrebbe
+ * dire rischiare di copiare un magazzino privato.
+ * @param {string} [testo]
+ * @returns {Set<string>}
+ */
+export function secchiPubblici(testo = readFileSync(REGOLE_SECCHI, 'utf8')) {
+  const pubblici = new Set();
+  let trovati = 0;
+  for (const m of testo.matchAll(/nome:\s*'([^']+)'[^}]*?pubblico:\s*(true|false)/g)) {
+    trovati++;
+    if (m[2] === 'true') pubblici.add(m[1]);
+  }
+  if (trovati === 0) throw new Error(`non riesco a leggere quali secchi sono pubblici da ${REGOLE_SECCHI}`);
+  return pubblici;
+}
+
+/**
+ * Il tetto in byte da FOTO_TETTO_MB. Vuoto = 3000 MB. Qualunque altra cosa che
+ * non sia un numero positivo e' un errore chiaro, non un NaN che spegne il tetto.
+ * @param {string | undefined} valore
+ * @returns {number}
+ */
+export function tettoDaMb(valore) {
+  if (valore === undefined || String(valore).trim() === '') return 3000 * 1024 * 1024;
+  const n = Number(String(valore).trim());
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new Error(`FOTO_TETTO_MB deve essere un numero di megabyte maggiore di zero, non «${valore}»`);
+  }
+  return n * 1024 * 1024;
+}
 
 export const SECCHI_PREDEFINITI = ['products', 'stories', 'reviews'];
 /** Mai, per nessun motivo: documenti d'identita'. */
@@ -59,16 +109,21 @@ export function indirizzoDalDb(dbUrl) {
 }
 
 /**
- * Separa l'elenco dei secchi e toglie quelli vietati, dicendolo.
+ * Separa l'elenco dei secchi e tiene solo quelli pubblici, dicendo cosa scarta.
  * @param {string | undefined} testo
  * @param {(riga: string) => void} [avvisa]
+ * @param {Set<string>} [pubblici]
  * @returns {string[]}
  */
-export function secchiDaCopiare(testo, avvisa = () => {}) {
+export function secchiDaCopiare(testo, avvisa = () => {}, pubblici = secchiPubblici()) {
   const chiesti = (testo && testo.trim() ? testo.trim().split(/[\s,]+/) : SECCHI_PREDEFINITI).filter(Boolean);
   return chiesti.filter((s) => {
     if (SECCHI_VIETATI.has(s)) {
       avvisa(`[foto] Il secchio ${s} non si copia mai (documenti d'identita'): saltato.`);
+      return false;
+    }
+    if (!pubblici.has(s)) {
+      avvisa(`[foto] Il secchio ${s} non e' dichiarato pubblico in lib/storage/regole-secchi.ts: saltato. Un magazzino privato non entra in questa copia senza una decisione.`);
       return false;
     }
     return true;
@@ -86,10 +141,10 @@ function intestazioni(chiave) {
 /**
  * Tutti i file di un secchio, cartella per cartella, a pagine di `pagina`.
  * Nell'API di Supabase una voce con `id: null` e' una cartella.
- * @param {{ base: string, chiave: string, secchio: string, pagina?: number, fetchFn?: typeof fetch }} opzioni
+ * @param {{ base: string, chiave: string, secchio: string, pagina?: number, fetchFn?: typeof fetch, scadenzaMs?: number }} opzioni
  * @returns {Promise<string[]>}
  */
-export async function elencaSecchio({ base, chiave, secchio, pagina = 1000, fetchFn = fetch }) {
+export async function elencaSecchio({ base, chiave, secchio, pagina = 1000, fetchFn = fetch, scadenzaMs = SCADENZA_MS }) {
   const file = [];
   const daVisitare = [''];
   while (daVisitare.length) {
@@ -97,6 +152,7 @@ export async function elencaSecchio({ base, chiave, secchio, pagina = 1000, fetc
     for (let offset = 0; ; offset += pagina) {
       const risposta = await fetchFn(`${base}/storage/v1/object/list/${encodeURIComponent(secchio)}`, {
         method: 'POST',
+        signal: AbortSignal.timeout(scadenzaMs),
         headers: { ...intestazioni(chiave), 'Content-Type': 'application/json' },
         body: JSON.stringify({ prefix: prefisso, limit: pagina, offset, sortBy: { column: 'name', order: 'asc' } }),
       });
@@ -108,7 +164,7 @@ export async function elencaSecchio({ base, chiave, secchio, pagina = 1000, fetc
       for (const v of voci) {
         const nome = prefisso ? `${prefisso}/${v.name}` : v.name;
         if (v.id === null || v.id === undefined) daVisitare.push(nome);
-        else file.push(nome);
+        else if (v.name !== SEGNAPOSTO) file.push(nome);
       }
       if (voci.length < pagina) break;
     }
@@ -116,14 +172,22 @@ export async function elencaSecchio({ base, chiave, secchio, pagina = 1000, fetc
   return file;
 }
 
-async function scaricaUno({ base, chiave, secchio, nome, fetchFn, tentativi = 3 }) {
+/** Il file non c'e' piu' (cancellato fra l'elenco e il download): non e' un guasto della copia. */
+const SPARITO = Symbol('sparito');
+
+async function scaricaUno({ base, chiave, secchio, nome, fetchFn, scadenzaMs, tentativi = 3 }) {
   let ultimo = '';
   for (let i = 0; i < tentativi; i++) {
     try {
       const r = await fetchFn(`${base}/storage/v1/object/${encodeURIComponent(secchio)}/${codifica(nome)}`, {
         headers: intestazioni(chiave),
+        signal: AbortSignal.timeout(scadenzaMs),
       });
       if (r.ok) return Buffer.from(await r.arrayBuffer());
+      // Supabase risponde 404, o 400 con «not_found» nel corpo, per un file che non esiste piu'.
+      if (r.status === 404) return SPARITO;
+      const corpo = await r.text().catch(() => '');
+      if (r.status === 400 && /not.?found/i.test(corpo)) return SPARITO;
       ultimo = `risposta ${r.status}`;
     } catch (e) {
       ultimo = e instanceof Error ? e.message : String(e);
@@ -136,8 +200,9 @@ async function scaricaUno({ base, chiave, secchio, nome, fetchFn, tentativi = 3 
  * Copia i secchi nella cartella. Restituisce quanti file e quanti byte.
  * Lancia un errore — mai un mezzo successo — se qualcosa non riesce.
  * @param {{ base: string, chiave: string, secchi: string[], cartella: string, pagina?: number,
- *   tettoByte?: number, fetchFn?: typeof fetch, scrivi?: (riga: string) => void }} opzioni
- * @returns {Promise<{ file: number, byte: number, perSecchio: Record<string, number> }>}
+ *   tettoByte?: number, fetchFn?: typeof fetch, scrivi?: (riga: string) => void,
+ *   scadenzaMs?: number, pubblici?: Set<string> }} opzioni
+ * @returns {Promise<{ file: number, byte: number, spariti: string[], perSecchio: Record<string, number> }>}
  */
 export async function copiaFoto({
   base,
@@ -147,6 +212,8 @@ export async function copiaFoto({
   pagina = 1000,
   tettoByte = 3000 * 1024 * 1024,
   fetchFn = fetch,
+  scadenzaMs = SCADENZA_MS,
+  pubblici = secchiPubblici(),
   scrivi = (r) => {
     process.stdout.write(`${r}\n`);
   },
@@ -156,15 +223,24 @@ export async function copiaFoto({
   const radice = resolve(cartella);
   let file = 0;
   let byte = 0;
+  /** @type {string[]} */
+  const spariti = [];
+  /** @type {Record<string, number>} */
   const perSecchio = {};
   for (const secchio of secchi) {
     if (SECCHI_VIETATI.has(secchio)) throw new Error(`il secchio ${secchio} non si copia mai`);
-    const nomi = await elencaSecchio({ base, chiave, secchio, pagina, fetchFn });
+    if (!pubblici.has(secchio)) throw new Error(`il secchio ${secchio} non e' pubblico: non entra in questa copia`);
+    const nomi = await elencaSecchio({ base, chiave, secchio, pagina, fetchFn, scadenzaMs });
     scrivi(`[foto] ${secchio}: ${nomi.length} file da scaricare`);
     for (const nome of nomi) {
       const dove = resolve(radice, secchio, nome);
       if (!dove.startsWith(radice + sep)) throw new Error(`nome di file fuori dalla cartella: ${secchio}/${nome}`);
-      const contenuto = await scaricaUno({ base, chiave, secchio, nome, fetchFn });
+      const contenuto = await scaricaUno({ base, chiave, secchio, nome, fetchFn, scadenzaMs });
+      if (contenuto === SPARITO) {
+        spariti.push(`${secchio}/${nome}`);
+        scrivi(`[foto] ${secchio}/${nome} non c'e' piu' (cancellato dopo l'elenco): saltato.`);
+        continue;
+      }
       if (contenuto.length === 0) throw new Error(`il file ${secchio}/${nome} e' arrivato vuoto (zero byte)`);
       byte += contenuto.length;
       if (byte > tettoByte) {
@@ -179,7 +255,7 @@ export async function copiaFoto({
   if (file === 0) {
     throw new Error(`nessun file in nessun secchio (${secchi.join(', ')}): chiave o secchi sbagliati, una copia vuota non e' una copia`);
   }
-  return { file, byte, perSecchio };
+  return { file, byte, spariti, perSecchio };
 }
 
 async function principale() {
@@ -196,12 +272,14 @@ async function principale() {
     );
     process.exit(3);
   }
-  const secchi = secchiDaCopiare(process.env.FOTO_SECCHI, (r) => process.stderr.write(`${r}\n`));
-  const tettoMb = Number(process.env.FOTO_TETTO_MB || 3000);
   try {
-    const esito = await copiaFoto({ base, chiave, secchi, cartella: join(cartella), tettoByte: tettoMb * 1024 * 1024 });
+    const tettoByte = tettoDaMb(process.env.FOTO_TETTO_MB);
+    const secchi = secchiDaCopiare(process.env.FOTO_SECCHI, (r) => process.stderr.write(`${r}\n`));
+    if (secchi.length === 0) throw new Error('nessun secchio pubblico da copiare in FOTO_SECCHI');
+    const esito = await copiaFoto({ base, chiave, secchi, cartella: join(cartella), tettoByte });
     const mb = (esito.byte / 1024 / 1024).toFixed(1);
-    process.stdout.write(`[foto] esito-file-foto: copiati ${esito.file} file (${mb} MB) da ${secchi.join(' ')}\n`);
+    const spariti = esito.spariti.length ? `; ${esito.spariti.length} spariti fra l'elenco e il download` : '';
+    process.stdout.write(`[foto] esito-file-foto: copiati ${esito.file} file (${mb} MB) da ${secchi.join(' ')}${spariti}\n`);
   } catch (e) {
     process.stderr.write(`[foto] esito-file-foto: fallita — ${e instanceof Error ? e.message : String(e)}\n`);
     process.exit(1);

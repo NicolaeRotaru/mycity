@@ -47,13 +47,18 @@
 - **File delle foto** (secchi pubblici `products` — prodotti e loghi dei
   negozi —, `stories`, `reviews`): dal 1/11/2026 **nella copia notturna**,
   scaricati dall'API Storage di Supabase da `scripts/copia-foto.mjs` e cifrati
-  accanto al database (`mycity-foto_<data>.tar.gpg`, stesso artefatto, 30
-  giorni). `kyc-docs` **mai**. Serve **un** segreto, gratis:
+  accanto al database (`mycity-foto_<data>.tar.gpg`, fra gli artefatti come il
+  database ma in un caricamento suo, `backup-foto-<corsa>`, 30 giorni). Passano
+  solo i secchi `pubblico: true` di `lib/storage/regole-secchi.ts`: `kyc-docs`,
+  `cod-proof`, `invoices` **mai**. Serve **un** segreto, gratis:
   `SUPABASE_SERVICE_ROLE_KEY`. Finché manca, ogni notte il passo «Copia le foto
-  accanto al database» è **rosso e suona l'allarme** (il database si conserva
-  lo stesso). La prova mensile riapre davvero una foto dal pacco
+  accanto al database» è **rosso** e apre **una volta** la segnalazione «Le
+  foto non sono nella copia di sicurezza (il database sì)», senza un commento
+  ogni notte. Il database si conserva **prima** delle foto, in un caricamento
+  a parte. La prova mensile riapre davvero una foto dal pacco
 - **Allarme**: se la copia notturna **o** la prova mensile di ripristino
-  falliscono, si apre una segnalazione nel deposito (posta al proprietario)
+  falliscono, si apre una segnalazione nel deposito (posta al proprietario).
+  Il titolo dice cosa è caduto: il database, oppure solo le foto
 - **Codice**: GitHub origin/main + tutti i branch
 - **Env vars**: Vercel → progetto → Settings → Environment Variables (NON in repo)
 - **Restore drill**: ogni 3 mesi, documenta tempi
@@ -139,7 +144,7 @@ Dove trovi `SUPABASE_DB_URL`:
 | Cosa | Copiata? | Dove |
 |---|---|---|
 | L'**elenco** dei file (nome, secchio, data, proprietario) | ✅ sì, ogni notte | `mycity-elenco-foto_<data>.dump.gpg`, cifrato, insieme al database |
-| I **file** dei secchi pubblici (`products`, `stories`, `reviews`) | ✅ sì, ogni notte — **appena c'è il segreto `SUPABASE_SERVICE_ROLE_KEY`** | `mycity-foto_<data>.tar.gpg`, cifrato, nello stesso artefatto del database (30 giorni) |
+| I **file** dei secchi pubblici (`products`, `stories`, `reviews`) | ✅ sì, ogni notte — **appena c'è il segreto `SUPABASE_SERVICE_ROLE_KEY`** | `mycity-foto_<data>.tar.gpg`, cifrato, fra gli artefatti (`backup-foto-<corsa>`, 30 giorni) |
 | I file di `kyc-docs` (documenti d'identità) | ❌ mai, per scelta di privacy | — |
 | I file di `invoices` e `cod-proof` | ❌ no, finché non si decide (GDPR) | — |
 | Copia delle foto **fuori da GitHub** (rclone, secchio a pagamento) | ❌ spenta | serve un secchio di destinazione e le sue chiavi (sotto) |
@@ -149,7 +154,9 @@ Dove trovi `SUPABASE_DB_URL`:
 - Il passo **«Copia le foto accanto al database»** del lavoro notturno lancia
   `bash scripts/copia-foto.sh copia`. Lo script `scripts/copia-foto.mjs`
   chiede l'elenco di ogni secchio **a pagine da mille**, entra nelle cartelle,
-  scarica ogni file con la chiave di servizio e lo mette in una cartella
+  scarica ogni file con la chiave di servizio (ogni richiesta scade dopo 60
+  secondi, il passo dopo 15 minuti; salta i segnaposto `.emptyFolderPlaceholder`
+  e conta a parte i file cancellati fra l'elenco e il download) e lo mette in una cartella
   temporanea; poi tutto si impacchetta e si **cifra** con la stessa
   `BACKUP_PASSPHRASE` del database. La cartella in chiaro si cancella sempre,
   e il passo che conserva prende solo i file `.gpg`.
@@ -157,7 +164,8 @@ Dove trovi `SUPABASE_DB_URL`:
   tentativi), un file da zero byte, una copia senza nemmeno un file, o la
   chiave che manca → passo rosso, nessun pacco a metà, **allarme**. La copia
   del database di quella notte si conserva lo stesso.
-- **Tetto**: oltre 3000 MB (variabile `FOTO_TETTO_MB`) si ferma e lo dice,
+- **Tetto**: oltre 3000 MB (variabile `FOTO_TETTO_MB`; un valore che non è un
+  numero è un errore, non un tetto spento) si ferma e lo dice,
   invece di riempire il disco della macchina di turno. La misura vera la dà la
   prima notte, nel riepilogo del lavoro.
 - **L'indirizzo** del progetto si ricava dalla riga del Session pooler
