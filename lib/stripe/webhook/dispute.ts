@@ -141,6 +141,32 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
   const admin = getAdminSupabase();
 
   /**
+   * 1/11/2026 — UNA RICHIESTA DI INFORMAZIONI NON E' UN CHARGEBACK.
+   *
+   * Per Stripe la «richiesta di informazioni» della banca (inquiry) e' una
+   * contestazione con stato `warning_needs_response`: i soldi a MyCity NON
+   * vengono tolti. Qui era trattata come un chargeback vero: al negozio si
+   * stornava il bonifico, e alla chiusura (`warning_closed`) nessuno glielo
+   * restituiva. Adesso si ferma solo il bonifico che non e' ancora partito
+   * ('OPEN', come sempre) e si avvisa; niente storni. Riparte alla chiusura.
+   */
+  if (eUnaRichiestaDiInformazioni(dispute)) {
+    scritturaObbligatoria(
+      await admin
+        .from('orders')
+        .update({ dispute_status: 'OPEN', disputed_at: new Date().toISOString() })
+        .in('id', orders.map((o) => o.id)),
+      'richiesta di informazioni aperta sugli ordini',
+    );
+    await notifyAdmins(
+      'ℹ️ La banca chiede informazioni su un pagamento',
+      `Richiesta di informazioni ${dispute.id} sull'ordine ${orders[0].id}${orders.length > 1 ? ` (+${orders.length - 1})` : ''} — ${((dispute.amount ?? 0) / 100).toFixed(2)}€. Nessun soldo tolto, nessuno storno al negozio: il bonifico non ancora partito resta fermo finché la banca chiude.`,
+      '/admin/disputes',
+    );
+    return;
+  }
+
+  /**
    * 27/8/2026 (R052) — QUANTO HA CONTESTATO DAVVERO LA BANCA.
    *
    * Un chargeback puo' riguardare una PARTE del pagamento. Qui il recupero dal
@@ -288,6 +314,33 @@ export function promemoriaOTotale(promemoria: number | null | undefined, totale:
   return (promemoria ?? 0) > 0 ? (promemoria as number) : (totale ?? 0);
 }
 
+/** Stati Stripe della richiesta di informazioni (inquiry): soldi non tolti. */
+function eUnaRichiestaDiInformazioni(dispute: Stripe.Dispute): boolean {
+  return String(dispute.status ?? '').startsWith('warning_');
+}
+
+/**
+ * 1/11/2026 — QUANTO RESTITUIRE, CONTANDO SOLO QUESTA CONTESTAZIONE.
+ *
+ * Senza promemoria si ricadeva sul totale stornato. Ma se il pagamento era
+ * gia' stato rimborsato per intero (payment_status 'REFUNDED') prima della
+ * contestazione, lo storno di quel totale e' del rimborso, non della banca:
+ * la contestazione non ha tolto niente e alla vittoria non c'e' niente da
+ * restituire (null: l'ordine non si rimette in coda). Ripagarlo voleva dire
+ * pagare due volte negozio e fattorino.
+ * Il ripiego sul totale resta solo per un pagamento non rimborsato per
+ * intero (contestazione aperta prima della migrazione 126).
+ */
+function stornatoDaQuestaContestazione(
+  promemoria: number | null | undefined,
+  totale: number | null | undefined,
+  paymentStatus: unknown,
+): number | null {
+  if ((promemoria ?? 0) > 0) return promemoria as number;
+  if (paymentStatus === 'REFUNDED') return null;
+  return promemoriaOTotale(promemoria, totale);
+}
+
 /**
  * charge.dispute.closed → won: sblocca (gli ordini HELD tornano eleggibili al
  * payout cron). lost: i fondi sono già stati prelevati da Stripe (reversal già
@@ -305,7 +358,7 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
   // vinta: il negozio si faceva ripagare 32,40 € invece di 27,40. Il database
   // finto delle prove restituiva la riga intera, e il difetto non si vedeva.
   // Sono colonne della 126: dove non c'è, `findOrdersForDispute` le toglie.
-  const orders = await findOrdersForDispute(dispute, 'id, dispute_status, delivery_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, dispute_seller_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, dispute_rider_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
+  const orders = await findOrdersForDispute(dispute, 'id, dispute_status, delivery_status, payment_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, dispute_seller_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, dispute_rider_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
   if (orders.length === 0) return;
   const admin = getAdminSupabase();
   const ids = orders.map((o) => o.id);
@@ -330,6 +383,16 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
       // con la chiave vecchia Stripe avrebbe restituito il transfer gia'
       // stornato, e il venditore avrebbe vinto la causa senza essere pagato.
       for (const o of daRipagare) {
+        const stornatoPerLaContestazione = stornatoDaQuestaContestazione(
+          o.dispute_seller_reversed_cents, o.seller_payout_reversed_cents,
+          (o as { payment_status?: unknown }).payment_status,
+        );
+        // 1/11/2026 — Rimborsato per intero prima della contestazione: lo storno
+        // e' del rimborso. Resta 'REVERSED', il giro dei bonifici non lo vede.
+        if (stornatoPerLaContestazione === null) {
+          logger.info('[stripe] contestazione vinta su un pagamento già rimborsato: niente da ripagare al negozio', { orderId: o.id });
+          continue;
+        }
         // 22/8/2026 — SI SOTTRAE, NON SI AZZERA.
         //
         // Qui c'era `seller_payout_reversed_cents: 0`. Quel campo e' un totale
@@ -347,9 +410,6 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
         // zero: la 126 crea la colonna con DEFAULT 0, quindi una contestazione
         // aperta prima della 126 la trova a zero e non a vuoto. Usare quello
         // zero vorrebbe dire non ripagare niente.
-        const stornatoPerLaContestazione = promemoriaOTotale(
-          o.dispute_seller_reversed_cents, o.seller_payout_reversed_cents,
-        );
         const valori = {
           payout_status: 'HELD',       // torna fra i candidati del prossimo giro
           stripe_transfer_id: null,    // il transfer precedente e' stato stornato
@@ -396,9 +456,14 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
     const riderDaRipagare = orders.filter((o) => o.rider_payout_status === 'REVERSED' && o.rider_id);
     if (riderDaRipagare.length > 0) {
       for (const o of riderDaRipagare) {
-        const stornatoPerLaContestazione = promemoriaOTotale(
+        const stornatoPerLaContestazione = stornatoDaQuestaContestazione(
           o.dispute_rider_reversed_cents, o.rider_payout_reversed_cents,
+          (o as { payment_status?: unknown }).payment_status,
         );
+        if (stornatoPerLaContestazione === null) {
+          logger.info('[stripe] contestazione vinta su un pagamento già rimborsato: niente da ripagare al fattorino', { orderId: o.id });
+          continue;
+        }
         const valori = {
           rider_payout_status: 'HELD',
           rider_transfer_id: null,
@@ -469,6 +534,12 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
       );
     }
     const scaffaleNonRiuscito: string[] = [];
+    // 1/11/2026 — Una richiesta di informazioni diventata contestazione non
+    // passa da handleDisputeCreated una seconda volta: il bonifico al negozio
+    // non e' stato stornato. Persa la contestazione, va ripreso a mano.
+    const nonStornati = orders.filter(
+      (o) => o.payout_status === 'TRANSFERRED' && !giaChiusiPersi.has(o.id) && (o.dispute_seller_reversed_cents ?? 0) <= 0,
+    );
     if (nonConsegnati.length > 0) {
       scritturaObbligatoria(
         await admin
@@ -500,7 +571,24 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
       `Contestazione persa su ordine ${ids[0]}. ${consegnati.length > 0 ? 'La merce era gia stata consegnata: la giacenza non e stata toccata.' : 'Ordine annullato.'}` +
         (scaffaleNonRiuscito.length > 0
           ? ` La merce di ${scaffaleNonRiuscito.length} ordine/i non e tornata a scaffale: la giacenza va sistemata a mano.`
+          : '') +
+        (nonStornati.length > 0
+          ? ` Nessuno storno al negozio registrato per questa contestazione su ${nonStornati.map((o) => `${o.id.slice(0, 8)} (${o.stripe_transfer_id ?? 'senza bonifico'})`).join(', ')}: la quota va ripresa a mano (Stripe → Connect → Trasferimenti → Storna).`
           : ''),
+      '/admin/disputes',
+    );
+  } else if (dispute.status === 'warning_closed') {
+    // 1/11/2026 — La richiesta di informazioni si chiude senza contestazione:
+    // il bonifico fermo riparte. 'WON' e non vuoto, perche' il giro lo accetta
+    // gia'. Solo dove e' ancora 'OPEN': un avviso ripetuto o in ritardo non
+    // riscrive un esito vero.
+    scritturaObbligatoria(
+      await admin.from('orders').update({ dispute_status: 'WON' }).in('id', ids).eq('dispute_status', 'OPEN'),
+      'richiesta di informazioni chiusa sugli ordini',
+    );
+    await notifyAdmins(
+      'ℹ️ Richiesta di informazioni chiusa',
+      `La banca ha chiuso la richiesta sull'ordine ${ids[0]} senza contestazione: il bonifico al negozio riparte al prossimo giro.`,
       '/admin/disputes',
     );
   } else {
