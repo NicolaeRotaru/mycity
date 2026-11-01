@@ -1019,21 +1019,68 @@ export const POST = withAuthRateLimit(
     // posta di un ordine che poi viene cancellato.
     const comunicazioni: Array<{ orderId: string; sellerId: string; totalCents: number; itemsCount: number }> = [];
 
+    /**
+     * 1/11/2026 — SE L'ANNULLAMENTO CADE, L'ORDINE E LA CHIAVE RESTANO.
+     *
+     * Qui non si leggeva l'esito di nessuna cancellazione: si svuotava
+     * `createdOrderIds` comunque, e `esciERilascia` liberava la chiave anche se
+     * l'ordine del primo negozio era rimasto in piedi. Il browser buttava la
+     * chiave e il tocco dopo creava un secondo ordine allo stesso negozio.
+     *
+     * Adesso un ordine che non si riesce a togliere resta in `createdOrderIds`
+     * (cosi' la chiave non si libera), con la sua merce e il suo credito
+     * legati a lui (non si rimettono: l'ordine c'e'), e parte un allarme per
+     * il controllo a mano. Il codice sconto torna solo se non resta nessun ordine.
+     */
     const rollbackCreatedCodOrders = async () => {
+      const restano: number[] = [];
       for (let j = createdOrderIds.length - 1; j >= 0; j--) {
         const oid = createdOrderIds[j];
-        await admin.from('order_items').delete().eq('order_id', oid);
-        await admin.from('orders').delete().eq('id', oid);
-        await admin.rpc('restore_stock', { p_items: reservedStockPerGroup[j] });
+        const { error: errArticoli } = await admin.from('order_items').delete().eq('order_id', oid);
+        const { error: errOrdine } = errArticoli
+          ? { error: errArticoli }
+          : await admin.from('orders').delete().eq('id', oid);
+        if (errOrdine) {
+          restano.unshift(j);
+          logger.error('[cod] annullamento non riuscito: l ordine resta in piedi, la chiave resta, serve un controllo a mano', {
+            chiave: chiaveTentativo, userId: user.id, orderId: oid, message: errOrdine.message,
+            merce: reservedStockPerGroup[j], creditoCents: walletAppliedPerGroup[j]?.cents ?? 0,
+          });
+          continue;
+        }
+        const { error: errMerce } = await admin.rpc('restore_stock', { p_items: reservedStockPerGroup[j] });
+        if (errMerce) {
+          logger.error('[cod] ordine annullato ma la merce non e tornata: va rimessa a mano', {
+            userId: user.id, orderId: oid, merce: reservedStockPerGroup[j], message: errMerce.message,
+          });
+        }
         const speso = walletAppliedPerGroup[j];
         if (speso && speso.cents > 0) {
-          await admin.rpc('wallet_credit', {
+          const { error: errCredito } = await admin.rpc('wallet_credit', {
             p_user: user.id,
             p_cents: speso.cents,
             p_reason: 'order_cod_refund',
             p_ref: speso.ref,
           });
+          if (errCredito) {
+            logger.error('[cod] ordine annullato ma il credito non e tornato: va ridato a mano', {
+              userId: user.id, orderId: oid, creditoCents: speso.cents, ref: speso.ref, message: errCredito.message,
+            });
+          }
         }
+      }
+      if (restano.length > 0) {
+        // Restano solo gli ordini in piedi, con la loro merce e il loro credito:
+        // `esciERilascia` vede che qualcosa e' nato e tiene la chiave.
+        const ids = restano.map((j) => createdOrderIds[j]);
+        const merce = restano.map((j) => reservedStockPerGroup[j]);
+        const crediti = restano.map((j) => walletAppliedPerGroup[j]);
+        createdOrderIds.splice(0, createdOrderIds.length, ...ids);
+        reservedStockPerGroup.splice(0, reservedStockPerGroup.length, ...merce);
+        walletAppliedPerGroup.splice(0, walletAppliedPerGroup.length, ...crediti);
+        ordiniCreati.length = 0;
+        comunicazioni.length = 0;
+        return;
       }
       // #171 — Anche il codice sconto torna disponibile. Era «consumato» col
       // claim atomico prima di creare gli ordini: se gli ordini vengono
@@ -1293,18 +1340,10 @@ export const POST = withAuthRateLimit(
       const { error: itemsErr } = await admin.from('order_items').insert(itemsRows);
       if (itemsErr) {
         logger.error(itemsErr, { context: 'cod-order-items-insert', orderId: order.id });
-        await admin.from('orders').delete().eq('id', order.id);
-        await admin.rpc('restore_stock', { p_items: groupStockItems });
-        if (walletAppliedCents > 0) {
-          await admin.rpc('wallet_credit', {
-            p_user: user.id,
-            p_cents: walletAppliedCents,
-            p_reason: 'order_cod_refund',
-            p_ref: walletRef,
-          });
-        }
-        reservedStockPerGroup.pop();
-        walletAppliedPerGroup.pop();
+        // 1/11/2026 — Questo ordine si annulla insieme agli altri, con lo stesso
+        // controllo: se la sua cancellazione cade resta in `createdOrderIds`,
+        // con la sua merce e il suo credito, e la chiave non si libera.
+        createdOrderIds.push(order.id);
         await rollbackCreatedCodOrders();
         return esciERilascia(ApiErrors.internal('Errore nella creazione ordine.'));
       }
