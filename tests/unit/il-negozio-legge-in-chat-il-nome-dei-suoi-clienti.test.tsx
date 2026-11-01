@@ -8,67 +8,15 @@
  * Il nome del cliente sta in `profiles`, che al negozio non si apre, e la
  * funzione della migrazione 181 non è in produzione. Ora lo dà la rotta server
  * /api/chat/nomi-clienti, che risponde SOLO per le conversazioni in cui chi
- * chiede è il negozio. Due prove:
- *  1. la rotta: il negozio riceve il nome; chi non è il negozio di nessuna
- *     conversazione non riceve nessun nome;
- *  2. la pagina /messages vera: per il negozio la riga dice il nome del cliente
+ * chiede è il negozio (la prova della rotta sta in
+ * la-rotta-dei-nomi-dei-clienti-risponde-solo-al-negozio.test.ts). Qui la pagina /messages vera: per il negozio la riga dice il nome del cliente
  *     e il sottotitolo «Conversazioni con i clienti».
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { monta } from './aiuti/monta-componente';
 import { accendi, attendi } from './aiuti/schermo';
 
-let UTENTE = { id: 'negozio-1', email: 'n@p.it' };
-
-vi.mock('@/lib/api/middleware', () => ({
-  withAuthRateLimit: (_o: unknown, handler: (ctx: { user: typeof UTENTE }) => unknown) =>
-    () => handler({ user: UTENTE }),
-}));
-
-// Il DB finto: due conversazioni, una del negozio-1 con la cliente Giulia, una di un altro negozio con Marco.
-const CONVERSAZIONI = [
-  { id: 'c1', seller_id: 'negozio-1', buyer_id: 'giulia' },
-  { id: 'c2', seller_id: 'negozio-2', buyer_id: 'marco' },
-];
-const PROFILI = [
-  { id: 'giulia', full_name: 'Giulia Rossi' },
-  { id: 'marco', full_name: 'Marco Bianchi' },
-];
-
-function tabella(nome: string) {
-  let righe: Array<Record<string, unknown>> = nome === 'conversations' ? [...CONVERSAZIONI] : [...PROFILI];
-  const catena: Record<string, unknown> = {
-    select: () => catena,
-    eq: (col: string, v: unknown) => { righe = righe.filter((r) => r[col] === v); return catena; },
-    in: (col: string, vs: unknown[]) => { righe = righe.filter((r) => vs.includes(r[col])); return catena; },
-    limit: () => catena,
-    then: (ok: (v: unknown) => void) => ok({ data: righe, error: null }),
-  };
-  return catena;
-}
-
-vi.mock('@/lib/supabase/server', () => ({
-  getAdminSupabase: () => ({ from: (n: string) => tabella(n) }),
-}));
-
 const globali = globalThis as Record<string, unknown>;
-
-describe('la rotta dei nomi dei clienti', () => {
-  it('il negozio riceve il nome della sua cliente, non quello dei clienti degli altri', async () => {
-    UTENTE = { id: 'negozio-1', email: 'n@p.it' };
-    const { GET } = await import('@/app/api/chat/nomi-clienti/route');
-    const r = await (GET as unknown as () => Promise<Response>)();
-    expect(r.status).toBe(200);
-    expect(await r.json()).toEqual({ nomi: { giulia: 'Giulia Rossi' } });
-  });
-
-  it('chi non è il negozio di nessuna conversazione non riceve nessun nome', async () => {
-    UTENTE = { id: 'giulia', email: 'g@p.it' };
-    const { GET } = await import('@/app/api/chat/nomi-clienti/route');
-    const r = await (GET as unknown as () => Promise<Response>)();
-    expect(await r.json()).toEqual({ nomi: {} });
-  });
-});
 
 const RIGA_DEL_NEGOZIO = {
   id: 'c1',
