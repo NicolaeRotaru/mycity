@@ -154,12 +154,21 @@ export type Scenario = {
   rpc?: Record<string, { data: unknown; error: { message: string } | null }>;
   /** Tabelle che rispondono con un errore invece che con le righe. */
   errori?: Record<string, string>;
+  /**
+   * 1/11/2026 — Cosa contiene lo storage, secchio per secchio e cartella per
+   * cartella (`''` = la radice). La notte vera ELENCA il secchio dei documenti
+   * per trovare le copie orfane: senza `list` quel passo cadrebbe e la notte
+   * suonerebbe l'allarme. Vuoto per difetto.
+   */
+  secchi?: Record<string, Record<string, Array<{ name: string; id: string | null; created_at?: string | null }>>>;
 };
 
 export function fintoGiroNotturno(scenario: Scenario = {}) {
   const db: Tabelle = scenario.tabelle ?? {};
   const diario: Voce[] = [];
   const errori = scenario.errori ?? {};
+  /** Ogni elenco chiesto allo storage, in ordine: «secchio:cartella». Fuori dal diario, che resta com'era. */
+  const elenchi: string[] = [];
 
   const admin = {
     from: (tabella: string) => new FintaQuery(tabella, db, diario, errori),
@@ -169,6 +178,12 @@ export function fintoGiroNotturno(scenario: Scenario = {}) {
     },
     storage: {
       from: (secchio: string) => ({
+        list: async (prefisso: string, opzioni?: { limit?: number; offset?: number }) => {
+          elenchi.push(`${secchio}:${prefisso}`);
+          const tutte = scenario.secchi?.[secchio]?.[prefisso] ?? [];
+          const da = opzioni?.offset ?? 0;
+          return { data: tutte.slice(da, da + (opzioni?.limit ?? 100)), error: null };
+        },
         remove: async (percorsi: string[]) => {
           diario.push({ op: 'file-rimossi', secchio, percorsi });
           return { error: null };
@@ -181,6 +196,7 @@ export function fintoGiroNotturno(scenario: Scenario = {}) {
   return {
     db,
     diario,
+    elenchi,
     admin,
     /** Le righe di una tabella, come stanno DOPO il giro. */
     righe: (tabella: string) => db[tabella] ?? [],
