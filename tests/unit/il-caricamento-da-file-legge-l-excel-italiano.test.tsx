@@ -1,6 +1,6 @@
 /**
  * @vitest-environment jsdom
- * Collaudo A, sessione S3 — varianti scomode del caricamento da file (temporaneo, non va committato).
+ * Collaudo finale 1/11/2026, sessione S3 — varianti scomode del caricamento da file.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, createElement } from 'react';

@@ -107,7 +107,7 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
     onSuccess: (esito) => {
       toast.success('Decisione registrata');
       if (esito?.comunicato === false) {
-        toast.error('L esito non è partito a chi ha segnalato e al venditore: registra di nuovo la decisione per rimandarlo.');
+        toast.error("L'esito non è partito a chi ha segnalato e al venditore: registra di nuovo la decisione per rimandarlo.");
       }
       qc.invalidateQueries({ queryKey: CHIAVE });
     },
@@ -141,6 +141,8 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
         onSubmit={(e) => {
           e.preventDefault();
           if (serveMotivo && !motivoValido) return;
+          // Un doppio invio nello stesso istante faceva due salvataggi e due esiti.
+          if (decidi.isPending) return;
           decidi.mutate();
         }}
       >

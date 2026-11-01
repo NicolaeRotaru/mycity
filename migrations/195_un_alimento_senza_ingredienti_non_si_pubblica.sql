@@ -8,8 +8,11 @@
 -- alimento con gli allergeni e senza ingredienti. Reg. UE 1169/2011 art. 9:
 -- l'elenco degli ingredienti e' obbligatorio anche nella vendita a distanza.
 --
--- La 126 non si tocca: qui si RIDEFINISCE la stessa funzione (stesso nome),
--- con allergeni E ingredienti. Le bozze restano libere.
+-- La 126 non si tocca, e nemmeno la sua funzione: qui nasce una funzione NUOVA
+-- (alimento_senza_dichiarazioni_non_si_pubblica), con allergeni E ingredienti.
+-- Col nome nuovo, una 126 applicata DOPO la 195 (database rimesso in fila)
+-- riscrive solo la sua funzione e non tocca il guardiano della 195. Le bozze
+-- restano libere.
 --
 -- E si RIFA' il trigger, per due buchi trovati al collaudo dell'1/11/2026:
 -- ① il trigger della 126 guardava solo UPDATE OF status, attributes,
@@ -47,18 +50,19 @@
 --      AND (btrim(coalesce(p.attributes->>'allergeni','')) = ''
 --        OR btrim(coalesce(p.attributes->>'ingredienti','')) = '');
 --
--- Prova: tests/sql/195_un_alimento_senza_ingredienti_non_si_pubblica.test.sql
+-- Prove: tests/sql/rls/46-un-alimento-senza-ingredienti-non-si-pubblica.test.sql e
+-- tests/sql/rls/47-un-alimento-gia-in-vetrina-resta-comprabile.test.sql (le lancia run.sh, quindi la CI)
 -- (rossa prima della 195, verde dopo).
 --
 -- RITORNO INDIETRO (ripristina il guardiano della 126, solo allergeni):
 --   DROP TRIGGER IF EXISTS zz_prodotti_alimentari_dichiarazioni ON public.products;
---   poi esegui di nuovo, dalla migrations/126_radiografia_22_agosto.sql,
---   il blocco CREATE OR REPLACE FUNCTION
---   public.alimentare_senza_allergeni_non_si_pubblica() e il blocco
---   DROP/CREATE TRIGGER prodotti_alimentari_allergeni che lo segue.
+--   DROP FUNCTION IF EXISTS public.alimento_senza_dichiarazioni_non_si_pubblica();
+--   poi esegui di nuovo, dalla migrations/126_radiografia_22_agosto.sql, il
+--   blocco DROP/CREATE TRIGGER prodotti_alimentari_allergeni (la funzione
+--   della 126 non e' stata toccata).
 -- ═══════════════════════════════════════════════════════════════════════════
 
-CREATE OR REPLACE FUNCTION public.alimentare_senza_allergeni_non_si_pubblica()
+CREATE OR REPLACE FUNCTION public.alimento_senza_dichiarazioni_non_si_pubblica()
 RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
 DECLARE
   v_radice text;
@@ -128,16 +132,16 @@ BEGIN
   RAISE EXCEPTION '%', v_manca USING ERRCODE = '23514';
 END$$;
 
-COMMENT ON FUNCTION public.alimentare_senza_allergeni_non_si_pubblica() IS
+COMMENT ON FUNCTION public.alimento_senza_dichiarazioni_non_si_pubblica() IS
   'Reg. UE 1169/2011: allergeni e ingredienti devono esserci prima dell acquisto, anche a distanza (dalla 195 anche gli ingredienti).';
 
-REVOKE ALL ON FUNCTION public.alimentare_senza_allergeni_non_si_pubblica() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.alimento_senza_dichiarazioni_non_si_pubblica() FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS prodotti_alimentari_allergeni ON public.products;
 DROP TRIGGER IF EXISTS zz_prodotti_alimentari_dichiarazioni ON public.products;
 CREATE TRIGGER zz_prodotti_alimentari_dichiarazioni
   BEFORE INSERT OR UPDATE ON public.products
   FOR EACH ROW
-  EXECUTE FUNCTION public.alimentare_senza_allergeni_non_si_pubblica();
+  EXECUTE FUNCTION public.alimento_senza_dichiarazioni_non_si_pubblica();
 
 NOTIFY pgrst, 'reload schema';

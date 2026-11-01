@@ -9,13 +9,14 @@ SELECT '19600000-0000-0000-0000-000000000001', 'collaudo196@test.it', '{"role":"
 INSERT INTO public.categories (name, slug)
 SELECT 'Alimentari', 'alimentari'
  WHERE NOT EXISTS (SELECT 1 FROM public.categories WHERE slug = 'alimentari' AND parent_id IS NULL);
--- la riga esisteva gia' quando la 195 non c'era: la inserisco col guardiano spento
-ALTER TABLE public.products DISABLE TRIGGER zz_prodotti_alimentari_dichiarazioni;
+-- la riga esisteva gia' quando la 195 non c'era: la inserisco coi guardiani spenti
+-- (tutti: se la 126 e' stata rimessa dopo la 195, c'e' anche il suo trigger)
+SET LOCAL session_replication_role = replica;
 INSERT INTO public.products (id, seller_id, name, description, price, stock, category_id, attributes, status)
 SELECT '19600000-0000-0000-0000-0000000000aa', (SELECT id FROM public.profiles LIMIT 1), 'Focaccia vecchia', 'Focaccia genovese', 3, 10,
        (SELECT id FROM public.categories WHERE slug='alimentari' AND parent_id IS NULL LIMIT 1),
        '{}'::jsonb, 'available';
-ALTER TABLE public.products ENABLE TRIGGER zz_prodotti_alimentari_dichiarazioni;
+SET LOCAL session_replication_role = origin;
 DO $$
 DECLARE ok boolean; rotto text := '';
 BEGIN

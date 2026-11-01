@@ -81,7 +81,9 @@ function parseCsv(text: string): { headers: string[]; rows: string[][]; separato
       cur += ch;
       continue;
     }
-    if (ch === '"') { inQuotes = true; continue; }
+    // Le virgolette aprono una cella solo all'inizio: una virgoletta sola in
+    // mezzo al testo (5" di schermo) e' un carattere, e non si mangia le righe dopo.
+    if (ch === '"' && cur.length === 0) { inQuotes = true; continue; }
     if (ch === separatore) { riga.push(cur); cur = ''; continue; }
     if (ch === '\r' && pulito[i + 1] === '\n') continue;
     if (ch === '\n' || ch === '\r') { riga.push(cur); righe.push(riga); riga = []; cur = ''; continue; }
