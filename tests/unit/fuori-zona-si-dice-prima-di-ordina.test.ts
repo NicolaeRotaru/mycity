@@ -31,7 +31,7 @@ vi.mock('@/lib/queries/seller-public-profiles', () => ({
   fetchSellerPublicMap: async () => new Map([['neg-0', { id: 'neg-0', store_lat: 45.0526, store_lng: 9.693 }]]),
 }));
 
-const casa = { lat: null as number | null, lng: null as number | null };
+const casa = { lat: null as number | null, lng: null as number | null, letta: false };
 // L'import pigro del database dentro la pagina sfugge a un vi.mock sul modulo del client: si
 // finge invece il costruttore che quel modulo chiama, e le variabili che gli servono.
 process.env.NEXT_PUBLIC_SUPABASE_URL ??= 'http://supabase.finto.invalid';
@@ -41,13 +41,15 @@ vi.mock('@supabase/ssr', () => {
   const catena = (tabella: string) => {
     const c: Record<string, unknown> = {};
     for (const k of ['select', 'eq', 'in', 'order', 'limit']) c[k] = () => c;
-    c.then = (ok: (v: unknown) => unknown) =>
-      Promise.resolve({
+    c.then = (ok: (v: unknown) => unknown) => {
+      if (tabella === 'user_addresses') casa.letta = true;
+      return Promise.resolve({
         data: tabella === 'user_addresses' ? [{ lat: casa.lat, lng: casa.lng }]
           : tabella === 'products' ? [{ id: 'p-0-0', stock: 10, price: 12 }]
             : (righe[tabella] ?? []),
         error: null,
       }).then(ok);
+    };
     return c;
   };
   return {
@@ -75,17 +77,22 @@ afterAll(() => {
 async function carrelloCon(lat: number | null, lng: number | null) {
   casa.lat = lat;
   casa.lng = lng;
+  casa.letta = false;
   vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
   vi.setSystemTime(new Date(2026, 9, 30, 14, 0));
   localStorage.setItem('cart', JSON.stringify([
     { id: 'p-0-0', name: 'Pane', price: 12, quantity: 1, sellerId: 'neg-0', storeName: 'Negozio 0' },
   ]));
   schermo = accendi(CartPage);
-  for (let i = 0; i < 10; i++) {
+  // Si aspetta che la pagina abbia chiesto dove consegniamo (sotto carico l'import pigro del
+  // database arriva tardi), poi qualche giro ancora perche' la risposta arrivi a schermo.
+  for (let i = 0, dopo = 0; i < 2000 && dopo < 10; i++) {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0));
     });
+    if (casa.letta) dopo++;
   }
+  expect(casa.letta, 'la pagina non ha chiesto l\'indirizzo: la prova non misura niente').toBe(true);
   return schermo.radice.textContent ?? '';
 }
 
