@@ -121,6 +121,49 @@ function nataDalLinkDiRecupero(sessione: { access_token?: string | null } | null
   }
 }
 
+/**
+ * 1/11/2026 — Il link passato da /auth/confirm apre una sessione che Supabase
+ * marca «otp» (non «recovery»), e nel browser non arriva nessun evento. Per
+ * quelle sessioni, e solo per quelle, si chiede al server se ha messo il segno
+ * del recupero dopo un `verifyOtp` riuscito (lib/auth/segno-recupero.ts).
+ * Chi è entrato con la password non arriva mai fin qui.
+ */
+function nataDaUnLinkOtp(sessione: { access_token?: string | null } | null | undefined): boolean {
+  const gettone = sessione?.access_token;
+  if (typeof gettone !== 'string') return false;
+  const parti = gettone.split('.');
+  if (parti.length !== 3) return false;
+  try {
+    const b64 = parti[1].replace(/-/g, '+').replace(/_/g, '/');
+    const dati = JSON.parse(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4))) as {
+      amr?: Array<{ method?: unknown }>;
+    };
+    return Array.isArray(dati.amr) && dati.amr.some((voce) => voce?.method === 'otp');
+  } catch {
+    return false;
+  }
+}
+
+async function ilServerHaSegnatoIlRecupero(sessione: { access_token?: string | null } | null | undefined): Promise<boolean> {
+  if (!nataDaUnLinkOtp(sessione)) return false;
+  try {
+    const risposta = await fetch('/auth/recupero', { method: 'GET', credentials: 'same-origin', cache: 'no-store' });
+    if (!risposta.ok) return false;
+    const corpo = (await risposta.json()) as { recupero?: unknown };
+    return corpo.recupero === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Il link di recupero, in una delle sue tre strade, è passato da qui. */
+async function sessioneDiRecupero(
+  annunciato: boolean,
+  sessione: { access_token?: string | null } | null | undefined,
+): Promise<boolean> {
+  return annunciato || nataDalLinkDiRecupero(sessione) || (await ilServerHaSegnatoIlRecupero(sessione));
+}
+
 function ResetPasswordInner() {
   const router = useRouter();
   const [recoveryReady, setRecoveryReady] = useState(false);
@@ -157,7 +200,7 @@ function ResetPasswordInner() {
     // un breve delay se c'è una sessione di recovery.
     const t = setTimeout(async () => {
       const { data } = await supabase.auth.getSession();
-      if (recuperoAnnunciato.current || nataDalLinkDiRecupero(data.session)) setRecoveryReady(true);
+      if (await sessioneDiRecupero(recuperoAnnunciato.current, data.session)) setRecoveryReady(true);
       else setMotivo(motivoLinkPasswordSenzaSessione(new URLSearchParams(window.location.search), window.location.hash));
       setCheckingSession(false);
     }, 800);
@@ -187,7 +230,7 @@ function ResetPasswordInner() {
         setSubmitting(false);
         return;
       }
-      if (!recuperoAnnunciato.current && !nataDalLinkDiRecupero(sess.session)) {
+      if (!(await sessioneDiRecupero(recuperoAnnunciato.current, sess.session))) {
         toast.error('Per cambiare la password apri il link che ti abbiamo mandato via email. Richiedilo qui sotto.');
         setRecoveryReady(false);
         setSubmitting(false);

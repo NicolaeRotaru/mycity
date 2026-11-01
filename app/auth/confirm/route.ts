@@ -5,6 +5,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { conDurataMassima } from '@/lib/auth/cookie-di-sessione';
+import { BISCOTTO_RECUPERO, DURATA_RECUPERO_SECONDI, firmaSegnoRecupero, sessioneDelGettone } from '@/lib/auth/segno-recupero';
 import {
   destinazioneDopoLaConferma,
   leggiLinkDiConferma,
@@ -135,6 +136,26 @@ async function verificaIlLink(req: NextRequest, link: Extract<LinkDiConferma, { 
   if (error || !data?.session) {
     logger.warn('[auth/confirm] link non verificato', { tipo: link.tipo, codice: error?.code ?? null });
     return NextResponse.redirect(new URL(rimandoLinkNonRiuscito(link.tipo, 'link_scaduto', link.next), env.appUrl()), 303);
+  }
+
+  // 1/11/2026 — Il segno del recupero lo mette il server, solo qui, dopo un
+  // `verifyOtp` di tipo recovery riuscito: Supabase questa sessione la marca
+  // «otp», e la pagina della nuova password altrimenti non la riconoscerebbe.
+  if (link.tipo === 'recovery') {
+    const segno = firmaSegnoRecupero(sessioneDelGettone(data.session.access_token));
+    if (segno) {
+      raccolta.cookies.set({
+        name: BISCOTTO_RECUPERO,
+        value: segno,
+        httpOnly: true,
+        secure: new URL(env.appUrl()).protocol === 'https:',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: DURATA_RECUPERO_SECONDI,
+      });
+    } else {
+      logger.warn('[auth/confirm] segno del recupero non firmato (manca il segreto o la sessione)');
+    }
   }
 
   const conICookie = (dove: URL) => {
