@@ -91,7 +91,7 @@ export default function SellerAnalyticsPage() {
           // 3/9/2026 — senza `refunded_amount_cents` la definizione unica del
           // fatturato non puo' togliere i rimborsi: la pagina Andamento
           // mostrava l'ordine rimborsato per intero.
-          .select('id, total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, refunded_amount_cents, created_at')
+          .select('id, total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, refunded_amount_cents, wallet_applied_cents, created_at')
           .eq('seller_id', userId!)
           .gte('created_at', since30),
       ]);
