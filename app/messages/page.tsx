@@ -44,19 +44,6 @@ type ConversationRow = {
   cliente: string | null;
 };
 
-/**
- * 1/11/2026 — Il nome dei clienti, per il negozio, dalla rotta server
- * /api/chat/nomi-clienti: `profiles` non lo lascia leggere al negozio, e la
- * funzione della migrazione 181 non è ancora in produzione. La rotta risponde
- * solo per le conversazioni in cui chi chiede è il negozio.
- */
-async function leggiNomiDeiClienti({ signal }: { signal?: AbortSignal }): Promise<Record<string, string>> {
-  const risposta = await fetch('/api/chat/nomi-clienti', { method: 'GET', credentials: 'same-origin', signal });
-  if (!risposta.ok) throw new Error(`nomi dei clienti non letti: ${risposta.status}`);
-  const corpo = (await risposta.json()) as { nomi?: unknown };
-  return corpo.nomi && typeof corpo.nomi === 'object' ? (corpo.nomi as Record<string, string>) : {};
-}
-
 function formatRelative(iso: string): string {
   const d = new Date(iso);
   const diffMs = Date.now() - d.getTime();
@@ -114,17 +101,6 @@ export default function MessagesListPage() {
         userId,
       );
     },
-  });
-
-  // 1/11/2026 — Il negozio vede il nome dei suoi clienti: si chiede alla rotta
-  // server solo se c'è una conversazione in cui chi guarda è il negozio e il
-  // nome non è già arrivato. Se la domanda cade resta il ripiego «Cliente».
-  const ioNegozio = !!userId && conversations.some((c) => c.seller_id === userId);
-  const { data: nomiDeiClienti } = useQuery({
-    queryKey: ['chat-nomi-clienti', userId ?? ''],
-    enabled: ioNegozio && conversations.some((c) => c.seller_id === userId && !c.cliente),
-    queryFn: leggiNomiDeiClienti,
-    staleTime: 5 * 60_000,
   });
 
   // 25/10/2026 — Chi fa da Assistenza: la sua conversazione si chiama «Assistenza MyCity».
@@ -189,9 +165,7 @@ export default function MessagesListPage() {
         <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
           Messaggi
         </h1>
-        <p className="mt-1 text-sm text-ink-500">
-          {ioNegozio ? 'Conversazioni con i clienti' : "Conversazioni con i negozi e con l'Assistenza"}
-        </p>
+        <p className="mt-1 text-sm text-ink-500">Conversazioni con i negozi e con l'Assistenza</p>
       </header>
 
       {isError ? (
@@ -210,9 +184,7 @@ export default function MessagesListPage() {
         </div>
       ) : (
         <div className="bg-white border border-cream-300 rounded-xl divide-y divide-cream-100 overflow-hidden">
-          {conversations.map((riga) => {
-            const nomeDalServer = riga.seller_id === userId && !riga.cliente ? nomiDeiClienti?.[riga.buyer_id] : undefined;
-            const c = nomeDalServer ? { ...riga, cliente: nomeDalServer } : riga;
+          {conversations.map((c) => {
             const iAmBuyer = c.buyer_id === userId;
             const conLAssistenza = conversazioneConLAssistenza(c, userId, idAssistenza);
             const counterpartName = nomeDellaControparte(c, userId, idAssistenza, idInArrivo);
