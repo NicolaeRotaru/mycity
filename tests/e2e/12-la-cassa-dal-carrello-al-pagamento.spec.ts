@@ -214,17 +214,68 @@ test.describe('l\'ordine che nasce davvero', () => {
     await expect(page.getByText(/Totale/i).first()).toBeVisible();
   });
 
+  /*
+   * 1/11/2026 — TRE GUSCI DICHIARATI, NON TRE PROVE CHE SI SALTANO DA SOLE.
+   *
+   * Fino a ieri erano tre `test(...)` normali col salto dentro il corpo. La
+   * forma era la stessa dei gusci di prima: basta cambiare `true` con
+   * l'interruttore e tornano tre verdi a vuoto. Adesso sono dichiarate saltate
+   * gia' alla nascita (`test.skip(titolo, …)`), col motivo esatto, e
+   * tests/unit/nessuna-prova-nel-browser-e-un-guscio-vuoto.test.ts diventa
+   * rosso se una prova normale non tocca mai la pagina ne' il server.
+   *
+   * Perche' i corpi non ci sono ancora, una per una (non e' pigrizia, e' quello
+   * che manca davvero):
+   *  - contrassegno: la rotta /api/orders/cod rilegge dal database prodotto,
+   *    scorte, negozio approvato, zona dei 5 km, orari e fascia di consegna, e
+   *    vuole un cliente con l'email confermata. Il Supabase locale della CI
+   *    (tests/supabase-locale/avvia.sh) ha un negozio e un cliente, ma nessun
+   *    prodotto, nessun orario, e nessun lavoro accende il sito contro di lui.
+   *  - rimborso e bonifico: servono le chiavi Stripe in modalita' prova, un
+   *    pagamento vero di prova con il webhook firmato, e per il bonifico un
+   *    conto collegato di prova del negozio.
+   */
   const NON_SCRITTA = 'PROVA NON ANCORA SCRITTA, non e\' una prova verde: ';
 
-  test('contrassegno: l\'ordine nasce e il negozio lo vede', async () => {
-    test.skip(true, NON_SCRITTA + 'serve un database di prova con negozio, prodotto e cliente');
-  });
+  test.skip(
+    'contrassegno: l\'ordine nasce e il negozio lo vede',
+    {
+      annotation: {
+        type: 'skip',
+        description:
+          NON_SCRITTA +
+          'serve un database di prova con un prodotto in vendita, gli orari del negozio, ' +
+          'un cliente con l\'email confermata, e un lavoro della CI che accenda il sito contro di lui',
+      },
+    },
+    async () => {},
+  );
 
-  test('rifiuto del negozio su un ordine pagato: il rimborso esiste', async () => {
-    test.skip(true, NON_SCRITTA + 'servono anche le chiavi Stripe in modalita\' prova');
-  });
+  test.skip(
+    'rifiuto del negozio su un ordine pagato: il rimborso esiste',
+    {
+      annotation: {
+        type: 'skip',
+        description:
+          NON_SCRITTA +
+          'servono le chiavi Stripe in modalita\' prova e il segreto del webhook di prova, ' +
+          'per avere un ordine pagato davvero da rifiutare',
+      },
+    },
+    async () => {},
+  );
 
-  test('consegna completata: il bonifico al negozio parte', async () => {
-    test.skip(true, NON_SCRITTA + 'servono anche le chiavi Stripe in modalita\' prova');
-  });
+  test.skip(
+    'consegna completata: il bonifico al negozio parte',
+    {
+      annotation: {
+        type: 'skip',
+        description:
+          NON_SCRITTA +
+          'servono le chiavi Stripe in modalita\' prova e un conto collegato di prova del negozio, ' +
+          'per vedere il giro dei bonifici fare un trasferimento vero',
+      },
+    },
+    async () => {},
+  );
 });

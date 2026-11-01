@@ -49,16 +49,34 @@ function catena(scriviConMock: boolean) {
   return c;
 }
 
+/** Una lettura che accetta i filtri della paginazione e non trova niente. */
+function letturaVuota(): Record<string, unknown> {
+  const l: Record<string, unknown> = {
+    then: (risolvi: (v: { data: unknown[]; error: null }) => unknown) =>
+      Promise.resolve({ data: [], error: null }).then(risolvi),
+  };
+  for (const f of ['or', 'order', 'gt', 'eq', 'limit']) l[f] = () => l;
+  return l;
+}
+
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: vi.fn(() => ({
     rpc: rpcMock,
     from: vi.fn(() => ({
       update: vi.fn(() => catena(true)),
-      select: vi.fn(() => ({ eq: selectEqMock })),
+      // 1/11/2026 — La notte legge anche i riferimenti ai documenti nei profili
+      // (le copie orfane, lib/privacy/orfani-kyc.ts): `or().order().limit()`.
+      select: vi.fn(() => ({ eq: selectEqMock, or: () => letturaVuota() })),
       delete: vi.fn(() => ({ ...catena(false), ilike: vi.fn(() => Promise.resolve({ error: null })) })),
     })),
     auth: { admin: { deleteUser: deleteUserMock } },
-    storage: { from: vi.fn(() => ({ remove: vi.fn(() => Promise.resolve({ error: null })) })) },
+    storage: {
+      from: vi.fn(() => ({
+        remove: vi.fn(() => Promise.resolve({ error: null })),
+        // Il secchio dei documenti, vuoto: la notte lo elenca per trovare le copie orfane.
+        list: vi.fn(() => Promise.resolve({ data: [], error: null })),
+      })),
+    },
   })),
 }));
 

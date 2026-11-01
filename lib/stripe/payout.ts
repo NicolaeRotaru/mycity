@@ -1316,6 +1316,98 @@ export async function cosaMancaAlBonifico(chiave: string, creditoCents: number):
   }
 }
 
+/**
+ * 1/11/2026 — IL RIMBORSO CON LA CARTA DI QUESTA CHIAVE E' GIA' USCITO?
+ *
+ * Le rotte dei resi passano a `refundOrder` la chiave `return_<id>`, una per
+ * tutto il reso. Se un passo DOPO il rimborso cade (la scrittura sul reso, la
+ * risposta di Stripe persa per strada, l'elenco dei rimborsi dell'ordine), il
+ * negozio riprova con la stessa chiave: prima si prenotava di nuovo la cifra,
+ * Stripe restituiva lo stesso rimborso (entro 24 ore) e al negozio la sua parte
+ * si toglieva due volte; dopo 24 ore la chiave e' scaduta e il cliente veniva
+ * rimborsato due volte.
+ *
+ * Il testimone e' Stripe, non il database (le cui scritture sono proprio quelle
+ * cadute): si cercano sul pagamento i rimborsi non falliti di QUESTO ordine
+ * (`metadata.order_id` — un carrello di due negozi ha un pagamento solo) con
+ * questa chiave, o col reso di questa chiamata per quelli nati prima del segno.
+ * Una lettura caduta lancia: niente e' stato toccato, si riprova.
+ */
+const METADATO_DELLA_CHIAVE = 'chiave_rimborso';
+const PAGINE_DI_RIMBORSI = 20;
+
+async function ilRimborsoDellaChiaveGiaUscito(
+  order: { id: string; stripe_payment_intent?: string | null },
+  chiave: string,
+  idDelReso: string | null,
+): Promise<{ uscito: Stripe.Refund; totaleDellOrdineCents: number } | null> {
+  const stripe = getStripe();
+  // Il client vero ha sempre l'elenco; i finti di alcune prove vecchie solo `create`.
+  if (typeof stripe.refunds?.list !== 'function') {
+    logger.warn('[refundOrder] elenco dei rimborsi Stripe non disponibile: controllo della chiave saltato', { orderId: order.id });
+    return null;
+  }
+  let uscito: Stripe.Refund | null = null;
+  let totaleDellOrdineCents = 0;
+  let dopo: string | undefined;
+  for (let pagina = 0; pagina < PAGINE_DI_RIMBORSI; pagina++) {
+    const elenco = await stripe.refunds.list({
+      payment_intent: order.stripe_payment_intent as string,
+      limit: 100,
+      ...(dopo ? { starting_after: dopo } : {}),
+    });
+    const righe = elenco?.data ?? [];
+    for (const r of righe) {
+      if (r.status === 'failed' || r.status === 'canceled') continue;
+      const m = (r.metadata ?? {}) as Record<string, string>;
+      // Di un altro ordine dello stesso carrello: non e' nostro. Senza ordine (dal
+      // cruscotto, etichetta mancata) si conta: un carrello che lo deve dividere
+      // non arriva fin qui (`RimborsoInAttesaDellaDivisione`).
+      if (m.order_id && m.order_id !== order.id) continue;
+      totaleDellOrdineCents += r.amount ?? 0;
+      if (!uscito && m.order_id === order.id && (m[METADATO_DELLA_CHIAVE] === chiave || (idDelReso && m.return_id === idDelReso))) uscito = r;
+    }
+    if (!elenco?.has_more || righe.length === 0) return uscito ? { uscito, totaleDellOrdineCents } : null;
+    dopo = righe[righe.length - 1].id;
+  }
+  throw new Error('refundOrder: troppi rimborsi sul pagamento, il controllo della chiave non si chiude');
+}
+
+/**
+ * 1/11/2026 — LA PRENOTAZIONE CON LA RISPOSTA PERSA.
+ *
+ * `accumula_rimborso` puo' scrivere e perdere la risposta: prima `refundOrder`
+ * usciva lasciando l'ordine «rimborsato» senza soldi usciti, senza avviso, e il
+ * secondo tentativo leggeva 409. Si rilegge il totale: se porta la prenotazione
+ * di questa chiamata la si storna; se non si sa (lettura caduta, totale
+ * diverso, storno caduto) lo si dice a chi amministra.
+ */
+async function prenotazioneConRispostaPersa(
+  admin: ReturnType<typeof getAdminSupabase>,
+  orderId: string,
+  primaCents: number,
+  deltaCents: number,
+): Promise<void> {
+  const { data, error } = await admin.from('orders').select('refunded_amount_cents').eq('id', orderId).single();
+  const ora = error || !data ? null : Number((data as { refunded_amount_cents?: number | null }).refunded_amount_cents ?? 0);
+  if (ora === primaCents) return;
+  if (ora === primaCents + deltaCents) {
+    const { error: errStorno } = await admin.rpc('storna_rimborso', { p_order_id: orderId, p_delta: deltaCents });
+    if (!errStorno) return;
+    logger.error('[refundOrder] storno della prenotazione persa non riuscito', { orderId, message: errStorno.message });
+  }
+  try {
+    await notifyAdmins(
+      '⚠️ Rimborso forse segnato senza soldi usciti',
+      `Sull'ordine #${orderId.slice(0, 8)} la prenotazione di un rimborso da ${formatPriceFromCents(deltaCents)} non ha risposto, ` +
+        'e non sono riuscito a toglierla. Nessun soldo è uscito: controlla il totale rimborsato dell ordine prima di riprovare.',
+      '/admin/orders',
+    );
+  } catch (e) {
+    logger.error('[refundOrder] avviso della prenotazione persa non inviato', { orderId, e });
+  }
+}
+
 export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso> {
   const admin = getAdminSupabase();
   // R84 — `cash_confirmed_at`, `payment_status` e `wallet_applied_cents` non si
@@ -1370,6 +1462,61 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     throw new RimborsoInAttesaDellaDivisione(order.id);
   }
 
+  // Il rimborso di questa chiave e' gia' uscito su Stripe (`ilRimborsoDellaChiaveGiaUscito`).
+  // Se l'ordine lo conta gia' (il tentativo di prima e' andato oltre Stripe e
+  // poi e' caduto un passo dopo) non si rifa' niente: ne' rimborso, ne'
+  // prenotazione, ne' quota del negozio. Se non lo conta (la risposta di Stripe
+  // si era persa e la prenotazione e' stata stornata) si finisce il lavoro
+  // usando QUEL rimborso, senza crearne un altro: dopo 24 ore la chiave e'
+  // scaduta e Stripe ne farebbe uno nuovo.
+  let rimborsoGiaUscito: Stripe.Refund | null = null;
+  if (tipo === 'carta' && opts.idempotencyKey) {
+    const idDelReso = typeof opts.metadata?.return_id === 'string' ? opts.metadata.return_id : null;
+    const visto = await ilRimborsoDellaChiaveGiaUscito(order, opts.idempotencyKey, idDelReso);
+    if (visto) {
+      const { uscito, totaleDellOrdineCents } = visto;
+      const registrato = Number(order.refunded_amount_cents ?? 0);
+      const nonContato = registrato <= totaleDellOrdineCents - (uscito.amount ?? 0);
+      if (nonContato) {
+        rimborsoGiaUscito = uscito;
+      } else {
+        const elencoLetto = (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null;
+        const giaNellElenco = rimborsiGiaScritti({ stripe_refund_id: elencoLetto }).has(uscito.id);
+        if (!giaNellElenco) {
+          const errElenco = await aggiungiAllElencoDeiRimborsi(admin, order.id, elencoLetto, uscito.id);
+          if (errElenco) {
+            logger.error('[refundOrder] rimborso gia uscito non aggiunto all elenco dell ordine', {
+              orderId: order.id, rimborso: uscito.id, message: errElenco.message,
+            });
+          }
+        }
+        // Contato solo in parte, o mai arrivato all'elenco: il tentativo di prima
+        // puo' essere morto prima della quota del negozio. Lo guarda una persona.
+        if (!giaNellElenco || registrato < totaleDellOrdineCents) {
+          try {
+            await notifyAdmins(
+              '⚠️ Rimborso ripreso: controlla i conti dell ordine',
+              `Il rimborso ${uscito.id} da ${formatPriceFromCents(uscito.amount ?? 0)} sull'ordine #${order.id.slice(0, 8)} era già uscito. ` +
+                'Non l ho rifatto: controlla il totale rimborsato e la quota ripresa al negozio.',
+              '/admin/orders',
+            );
+          } catch (e) {
+            logger.error('[refundOrder] avviso del rimborso ripreso non inviato', { orderId: order.id, e });
+          }
+        }
+        return {
+          refundId: uscito.id,
+          reversedCents: 0,
+          pieno: registrato >= lordoDellOrdine(order),
+          modo: 'carta',
+          importoCents: uscito.amount ?? 0,
+          creditoCents: 0,
+          bonificoCents: 0,
+        };
+      }
+    }
+  }
+
   // 055 — DUE BASI DIVERSE, E IL CONTO NON TORNAVA.
   //
   // `total_price` e' la cassa attesa: il totale DOPO lo scomputo del credito
@@ -1405,7 +1552,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   if (!bonificoDiPrima && rimborsabile.perche === 'nessun-incasso') {
     throw new RimborsoNonRitentabile(motivoNienteDaRestituire('nessun-incasso'));
   }
-  const safeAmountCents = Math.max(0, Math.min(opts.amountCents, bonificoDiPrima ? grossCents : rimborsabile.massimoCents));
+  const safeAmountCents = Math.max(0, Math.min(rimborsoGiaUscito ? (rimborsoGiaUscito.amount ?? 0) : opts.amountCents, bonificoDiPrima ? grossCents : rimborsabile.massimoCents));
   if (safeAmountCents <= 0) throw new RimborsoNonRitentabile('refundOrder: importo rimborso non valido');
 
   // R71 — IN CHE MODO TORNANO I SOLDI. Carta → sulla carta. Contanti → la parte
@@ -1467,6 +1614,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
       .rpc('accumula_rimborso', { p_order_id: order.id, p_delta: safeAmountCents });
     if (errClaim) {
       logger.error('[refundOrder] accumulo rimborso fallito', { orderId: order.id, message: errClaim.message });
+      await prenotazioneConRispostaPersa(admin, order.id, alreadyRefunded, safeAmountCents);
       throw new Error('refundOrder: impossibile registrare il rimborso');
     }
     const rivendicato = Array.isArray(claimRimborso) ? claimRimborso[0] : claimRimborso;
@@ -1555,7 +1703,8 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
       // getStripe sta dentro la protezione: senza chiavi lancia, e prima la
       // prenotazione restava in piedi anche in quel caso.
       const stripe = getStripe();
-      const refund: Stripe.Refund = await stripe.refunds.create(
+      // Il rimborso della chiave gia' uscito e non contato: si usa quello, non se ne crea un altro.
+      const refund: Stripe.Refund = rimborsoGiaUscito ?? await stripe.refunds.create(
         {
           payment_intent: order.stripe_payment_intent as string,
           amount: safeAmountCents,
@@ -1563,6 +1712,7 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
             order_id: order.id,
             ...(opts.reason ? { reason: opts.reason } : {}),
             ...(opts.metadata ?? {}),
+            ...(opts.idempotencyKey ? { [METADATO_DELLA_CHIAVE]: chiave } : {}),
           },
         },
         // Idempotency-Key: doppio-click su risoluzione dispute/reso NON genera doppio rimborso.

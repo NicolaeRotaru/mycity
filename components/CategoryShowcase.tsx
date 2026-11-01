@@ -15,6 +15,69 @@ import { domandaCategoriePubbliche } from '@/lib/queries/categorie-pubbliche';
 import { fotoDiCategoria, motivoDaSegnalare } from '@/lib/immagine-categoria';
 import { logger } from '@/lib/logger';
 
+/**
+ * 1/11/2026 — IN VETRINA SOLO LE CATEGORIE CON QUALCOSA DENTRO.
+ *
+ * Delle nove categorie principali solo Alimentari aveva prodotti: la home ne mostrava sei, cinque
+ * vuote, e il piede ne elencava nove, otto vuote. Ogni tessera vuota è un clic che porta a una
+ * pagina senza niente. Adesso una categoria si mostra se ha almeno un prodotto disponibile, suo o
+ * di una sua sottocategoria (lo stesso conto della mappa del sito, `app/sitemap.ts`).
+ *
+ * La risposta è l'elenco degli id «pieni». La chiave è condivisa tra la home e il piede: sulla
+ * stessa pagina la lettura parte una volta sola. Se la lettura fallisce si mostrano tutte, come
+ * prima: un errore di rete non deve far sparire le categorie vere.
+ */
+export const CHIAVE_CATEGORIE_PIENE = ['categories', 'con-prodotti'] as const;
+
+/** Quanti prodotti si guardano al massimo per sapere quali categorie sono piene. */
+const PRODOTTI_LETTI_PER_LE_CATEGORIE = 5000;
+
+/** Le categorie che hanno un prodotto: la sua e tutte quelle sopra di lei. */
+export function categorieConProdotti(
+  categorie: ReadonlyArray<{ id: string; parent_id?: string | null }>,
+  prodotti: ReadonlyArray<{ category_id?: string | null }>,
+): string[] {
+  const madreDi = new Map(categorie.map((c) => [c.id, c.parent_id ?? null]));
+  const piene = new Set<string>();
+  for (const p of prodotti) {
+    let id = p.category_id ?? null;
+    // Il tetto ai passi tiene fermo il giro se una categoria finisse per essere madre di sé stessa.
+    for (let passi = 0; id && !piene.has(id) && passi < 10; passi += 1) {
+      piene.add(id);
+      id = madreDi.get(id) ?? null;
+    }
+  }
+  return [...piene];
+}
+
+type ClientPiene = { from: (tabella: string) => any }; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+export function domandaCategoriePiene(supa: ClientPiene) {
+  return {
+    queryKey: CHIAVE_CATEGORIE_PIENE,
+    staleTime: 10 * 60_000,
+    queryFn: async (): Promise<string[]> => {
+      const [cat, prod] = await Promise.all([
+        supa.from('categories').select('id, parent_id'),
+        supa.from('products').select('category_id').eq('status', 'available').limit(PRODOTTI_LETTI_PER_LE_CATEGORIE),
+      ]);
+      if (cat.error) throw cat.error;
+      if (prod.error) throw prod.error;
+      return categorieConProdotti(cat.data ?? [], prod.data ?? []);
+    },
+  };
+}
+
+/**
+ * Tiene solo le categorie piene. `piene` assente (lettura fallita) = tutte, come prima.
+ * Una categoria senza id (la riserva scritta nel codice) non si può controllare: resta.
+ */
+export function soloLePiene<T extends { id?: string }>(categorie: T[], piene: ReadonlyArray<string> | null | undefined): T[] {
+  if (!piene) return categorie;
+  const insieme = new Set(piene);
+  return categorie.filter((c) => !c.id || insieme.has(c.id));
+}
+
 const ICON_MAP: Record<string, LucideIcon> = {
   abbigliamento:  Shirt,
   alimentari:     Apple,
@@ -102,7 +165,16 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
   // di essere richiesta una volta per ognuno. La CHIAVE resta quella di
   // `domandaCategorie`, altrimenti il precarico del server non verrebbe
   // riconosciuto. Se la rotta non risponde si legge dal database come prima.
-  const { data: categories = [], isLoading, isError } = useQuery(domandaCategoriePubbliche(supabase));
+  const { data: tutte = [], isLoading: caricoCategorie, isError } = useQuery(domandaCategoriePubbliche(supabase));
+  // La lettura delle piene NON blocca il disegno: il server precarica solo le categorie, e
+  // aspettarla metteva gli scheletri nell'HTML del server (Google e il primo disegno non vedevano
+  // nessuna tessera). Finché non c'è si mostrano tutte, come prima; quando arriva si filtra.
+  const piene = useQuery(domandaCategoriePiene(supabase));
+  const isLoading = caricoCategorie;
+  const categories = useMemo(
+    () => soloLePiene(tutte, piene.isError ? null : piene.data),
+    [tutte, piene.isError, piene.data],
+  );
 
   // Le tessere che finiscono in home, ognuna con la sua foto già decisa dal
   // dato. Si calcola qui, prima delle uscite anticipate qui sotto: un hook non

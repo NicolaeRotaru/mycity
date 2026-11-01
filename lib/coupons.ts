@@ -102,9 +102,11 @@ export async function validateCoupon(
     // aprirebbe la porta a «compro, mi faccio rimborsare, riuso il buono».
     //
     // ⚠️ La stessa regola vive nella funzione `check_coupon` del database, che
-    // è quella che risponde al carrello nel browser. Finché la migrazione
-    // gemella non è applicata, la cassa accetta il codice ma il carrello lo
-    // rifiuta ancora: le due copie vanno cambiate insieme.
+    // è quella che risponde al carrello nel browser: la copia gemella è nella
+    // migrazione 185 (la 114 contava ancora tutti gli ordini). Le due copie
+    // vanno cambiate insieme: la prova
+    // tests/unit/il-carrello-conta-il-primo-ordine-come-la-cassa.test.ts
+    // diventa rossa se divergono.
     const { count } = await client
       .from('orders')
       .select('id', { count: 'exact', head: true })

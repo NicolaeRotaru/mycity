@@ -122,7 +122,7 @@ describe('lo staff non può approvare un fattorino minorenne', () => {
   it('sospendere e rifiutare restano possibili: quelle non sono approvazioni', async () => {
     profiloBersaglio = {
       id: 'rider-1', role: 'rider', store_name: null, full_name: 'Minore Prova',
-      legal_birth_date: nataAnniFa(15),
+      legal_birth_date: nataAnniFa(15), approval_status: 'approved',
     };
 
     const r = await MODERA(richiesta('suspend'));
@@ -137,6 +137,8 @@ describe('la riparazione non blocca chi ha l età, né chi la data non ce l ha',
     profiloBersaglio = {
       id: 'rider-1', role: 'rider', store_name: null, full_name: 'Luca Rossi',
       legal_birth_date: nataAnniFa(30),
+      // 1/11/2026: l'approvazione ora pretende i documenti del fattorino.
+      kyc_id_doc_front_url: 'f', kyc_selfie_url: 's', rider_license_url: 'p', rider_insurance_url: 'rc',
     };
 
     const r = await MODERA(richiesta('approve'));
@@ -149,6 +151,8 @@ describe('la riparazione non blocca chi ha l età, né chi la data non ce l ha',
     profiloBersaglio = {
       id: 'seller-9', role: 'seller', store_name: 'Pane Quotidiano', full_name: null,
       legal_birth_date: null,
+      // 1/11/2026: l'approvazione ora pretende una partita IVA valida.
+      business_vat_number: '01234567897',
     };
 
     const r = await MODERA(richiesta('approve'));

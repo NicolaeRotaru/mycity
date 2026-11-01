@@ -70,7 +70,7 @@ Chiama SEMPRE lo strumento "manage_product" per rispondere (anche solo per parla
 
 Regole per "patch":
 - Inserisci SOLO i campi che cambiano rispetto allo stato attuale.
-- Per TOGLIERE un valore: null per gli scalari (compare_at_price, condition) e "attributes_remove" per gli attributi.
+- Per TOGLIERE un valore: null per gli scalari (condition) e "attributes_remove" per gli attributi.
 - "tags" è la lista COMPLETA desiderata (ricostruiscila da quella attuale).
 - "attributes" usa SOLO le chiavi degli attributi validi e, per i campi a scelta, SOLO le opzioni elencate.
 - "category_slug" deve essere uno degli slug forniti; "subcategory_name" è il nome della sottocategoria.
@@ -104,10 +104,6 @@ const MANAGE_TOOL: Anthropic.Tool = {
           name: { type: 'string' },
           description: { type: 'string' },
           price: { type: 'number', description: 'Prezzo di vendita in euro.' },
-          compare_at_price: {
-            type: ['number', 'null'],
-            description: 'Prezzo pieno barrato in euro. null per rimuoverlo.',
-          },
           unit: {
             type: 'string',
             enum: ['pezzo', 'kg', 'g', 'l', 'ml', 'confezione', 'paio', 'm'],
@@ -171,6 +167,15 @@ const MAX_CATALOG = 100; // prodotti elencati come testo
 const MAX_CATALOG_IMAGES = 10; // miniature inviate per il match visivo
 const MAX_HISTORY = 20;
 const MAX_CONTENT = 2000;
+
+/** I campi che il modello, in identificazione, non ha visto: non si propongono. */
+const CAMPI_NON_VISTI_IN_IDENTIFICAZIONE = ['description', 'tags', 'attributes', 'attributes_remove'] as const;
+
+function senzaCampiNonVisti<T extends object>(proposta: T): T {
+  const copia = { ...proposta } as Record<string, unknown>;
+  for (const k of CAMPI_NON_VISTI_IN_IDENTIFICAZIONE) delete copia[k];
+  return copia as T;
+}
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
@@ -395,7 +400,12 @@ Identifica di quale prodotto parla il venditore e imposta "product_id". Se non s
     // (16/10/2026) La proposta torna alla chat nella forma in cui il server la
     // applicherebbe: una voce scritta fuori schema (`[["allergeni"]]`) faceva
     // cadere la chat mentre disegnava la scheda. Vedi `propostaPerLaChat`.
-    const patch = matched ? propostaPerLaChat(toolInput?.patch, categories) : {};
+    const proposta = matched ? propostaPerLaChat(toolInput?.patch, categories) : {};
+    // 1/11/2026 — In identificazione (nessun prodotto aperto) il modello vede
+    // del catalogo solo id, nome, prezzo, stato e categoria: tag, descrizione e
+    // caratteristiche non li ha letti. Una proposta che li riscrive e' alla
+    // cieca, quindi qui non esce: si propone dal giro dopo, a scheda aperta.
+    const patch = focused ? proposta : senzaCampiNonVisti(proposta);
 
     return NextResponse.json({
       reply,

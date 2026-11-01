@@ -38,6 +38,7 @@ import { chiaveDellaRiga, merceCheTengoIo, type TentativoAperto } from '@/lib/or
 import { seguiAltezza, osservatoreDelBrowser } from '@/lib/altezza-banner';
 import { leggiEsitoDellaVeloce, rigaQuandoArrivaNelCarrello } from '@/lib/ordini/consegna-veloce';
 import { prezziDelCarrello } from '@/lib/ordini/prezzi';
+import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { expressSiPuo } from '@/lib/quando-arriva';
 import { romeNow } from '@/lib/store-hours';
 
@@ -514,6 +515,16 @@ export default function CartPage() {
           {groups.map((g, indiceNegozio) => {
             const spesaDelNegozioCents = contoConsegna.gruppi[indiceNegozio]?.subtotalCents ?? 0;
             const spesaPiccola = avvisoSpesaPiccola(spesaDelNegozioCents);
+            // 1/11/2026 — La zona si diceva solo premendo «ordina»: la rotta rifiutava chi abita oltre
+            // il raggio (Podenzano, Rottofreno) dopo che aveva riempito il carrello e la cassa. Le due
+            // coordinate qui ci sono gia' (negozio e indirizzo predefinito): la domanda e' la stessa
+            // delle rotte, con la stessa funzione. Senza una delle due, come la', non si avvisa.
+            const fuoriZona = fuoriZonaDiConsegna({
+              storeLat: dovEIlNegozio[g.key]?.lat ?? null,
+              storeLng: dovEIlNegozio[g.key]?.lng ?? null,
+              deliveryLat: doveConsegniamo.lat,
+              deliveryLng: doveConsegniamo.lng,
+            });
             return (
               <div key={g.key} className="space-y-3">
                 {/* Header negozio */}
@@ -528,6 +539,11 @@ export default function CartPage() {
                 </div>
                 {spesaPiccola && (
                   <p className="rounded-lg border border-cream-300 bg-cream-50 px-3 py-2 text-sm text-ink-700">{spesaPiccola}</p>
+                )}
+                {fuoriZona && (
+                  <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                    {motivoFuoriZona(g.storeName)}
+                  </p>
                 )}
 
                 {g.items.map((item) => (

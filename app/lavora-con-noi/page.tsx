@@ -30,7 +30,7 @@ const PATHS = [
   {
     Icon: Bike,
     title: 'Diventa rider',
-    body: 'Consegna in bici o scooter nel centro di Piacenza, scegli i tuoi turni e vieni pagato ogni settimana. Tragitti brevi, tutto in città.',
+    body: 'Consegna in bici o scooter nel centro di Piacenza, scegli i tuoi turni e ricevi un compenso fisso per ogni consegna. Tragitti brevi, tutto in città.',
     href: '/sign-up?role=rider',
     cta: 'Candidati come rider',
   },

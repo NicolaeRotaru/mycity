@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Receipt, Package, Wand2,
   Tag, Megaphone, Camera, BarChart3,
-  Users, Star, Wallet,
+  Users, Star, Wallet, MessageCircle,
   Store, User, LifeBuoy,
   Sparkles, Bell, Search, Plus, Menu, X,
   PanelLeftClose, PanelLeftOpen, ExternalLink, LogOut,
@@ -44,6 +44,8 @@ const NAV: NavGroup[] = [
   ] },
   { group: 'Relazioni', items: [
     { href: '/seller/customers', icon: Users, label: 'Clienti' },
+    // 1/11/2026 — i clienti scrivono dalla scheda prodotto: senza questa voce il negozio non aveva una strada per leggerli.
+    { href: '/messages', icon: MessageCircle, label: 'Messaggi' },
     { href: '/seller/reviews', icon: Star, label: 'Recensioni' },
     { href: '/seller/earnings', icon: Wallet, label: 'Guadagni' },
   ] },

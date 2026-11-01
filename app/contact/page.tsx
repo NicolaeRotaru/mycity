@@ -9,7 +9,7 @@ import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Field';
 import { Mail, MessageCircle, Phone, MapPin, Clock, Lightbulb } from 'lucide-react';
-import { rigaIdentita, titolare } from '@/lib/legal/titolare';
+import { nomePubblico, rigaIdentita, titolare } from '@/lib/legal/titolare';
 import { linkWhatsApp } from '@/lib/contatto-whatsapp';
 import { indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
 
@@ -19,7 +19,8 @@ export default function ContactPage() {
   const whatsapp = linkWhatsApp(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER, 'Ciao MyCity, ho una domanda');
   const telefono = process.env.NEXT_PUBLIC_SUPPORT_PHONE?.trim() || null;
   const chiSiamo = titolare();
-  const identita = rigaIdentita(chiSiamo);
+  // Persona e sede stanno già nella riga del riquadro: qui solo gli altri dati veri (P.IVA, REA, PEC).
+  const identita = rigaIdentita({ ...chiSiamo, gestore: null, indirizzo: null });
 
   const [form, setForm] = useState({ name: '', email: '', subject: 'Domanda generale', message: '' });
   const [sending, setSending] = useState(false);
@@ -194,10 +195,17 @@ export default function ContactPage() {
 
         <aside className="md:col-span-2 space-y-4">
           <div className="bg-gradient-to-br from-primary-50 to-secondary-50 border border-primary-100 rounded-2xl p-6">
-            <h3 className="font-bold text-ink-900 mb-2 flex items-center gap-2"><MapPin size={18} className="text-primary-600 shrink-0" aria-hidden /> Sede</h3>
+            <h3 className="font-bold text-ink-900 mb-2 flex items-center gap-2"><MapPin size={18} className="text-primary-600 shrink-0" aria-hidden /> Chi gestisce MyCity</h3>
+            {/* 01/11/2026 (ondata 5) — Il riquadro «Sede» stampava solo «MyCity»:
+                un marchio, senza persona né indirizzo. Chi legge deve sapere a chi
+                risponde (la persona che gestisce, finché manca il nome legale) e,
+                se la sede non è ancora pubblica, vederlo detto invece di un vuoto. */}
             <p className="text-sm text-ink-700 leading-relaxed">
-              {chiSiamo.denominazione}
-              {chiSiamo.indirizzo ? <><br />{chiSiamo.indirizzo}</> : null}
+              {nomePubblico(chiSiamo)}
+              <br />
+              {chiSiamo.indirizzo
+                ? <>Sede: {chiSiamo.indirizzo}</>
+                : <span className="text-ink-500">Indirizzo della sede non ancora pubblicato</span>}
             </p>
             {/* Solo i dati veri: finché non c'è una partita IVA, qui non c'è niente. */}
             {identita && (

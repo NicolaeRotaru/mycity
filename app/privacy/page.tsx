@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
-import { recapitoPrivacy, titolare } from '@/lib/legal/titolare';
+import { recapitoPrivacy, stradaDeiDiritti, titolare } from '@/lib/legal/titolare';
 import {
   DOVE_CHIEDIAMO_L_IBAN,
   L_AVVISO_A_CHI_PAGA,
@@ -44,6 +44,7 @@ export default function PrivacyPage() {
   // non riceve niente: meglio mandare al modulo dei contatti, che qualcuno
   // legge davvero, che promettere una risposta che non arrivera' mai.
   const dovePerIDiritti = recapitoPrivacy(ownerData);
+  const strada = stradaDeiDiritti(ownerData);
   return (
     <LegalLayout
       title="Informativa sulla privacy"
@@ -243,13 +244,42 @@ export default function PrivacyPage() {
           <li><strong>Opporsi</strong> al trattamento basato sul legittimo interesse o per marketing (art. 21);</li>
           <li><strong>Non essere</strong> sottoposto a decisioni automatizzate con effetti significativi (art. 22).</li>
         </ul>
-        <p>
-          Puoi esercitare questi diritti dalla pagina{' '}
-          <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni → Privacy</Link>{' '}
-          (dove trovi i pulsanti &quot;Scarica i miei dati&quot; e &quot;Cancella account&quot;) oppure
-          scrivendo a{' '}
-          <a href={dovePerIDiritti.href} className="text-primary-700 underline">{dovePerIDiritti.testo}</a>.
-        </p>
+        {/* 1/11/2026 (ondata 6) — La strada si dice com'è oggi: senza la
+            chiave di servizio i pulsanti delle Impostazioni rispondono 503 e
+            il modulo dei contatti può non arrivare a nessuno. Vedi
+            `stradaDeiDiritti` in lib/legal/titolare.ts. */}
+        {strada.pulsantiAttivi ? (
+          <p data-diritti="strada">
+            Puoi esercitare questi diritti dalla pagina{' '}
+            <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni</Link>{' '}
+            (nella scheda &quot;Privacy e dati&quot; trovi &quot;Scarica i tuoi dati&quot;, nella scheda
+            &quot;Zona pericolosa&quot; &quot;Elimina il tuo account&quot;)
+            {strada.recapito ? (
+              <>
+                {' '}oppure scrivendo a{' '}
+                <a href={strada.recapito.href} className="text-primary-700 underline">{strada.recapito.testo}</a>
+              </>
+            ) : null}
+            .
+          </p>
+        ) : (
+          <p data-diritti="strada">
+            In questo momento scaricare i tuoi dati e cancellare l&apos;account dalle Impostazioni non
+            funziona in automatico.{' '}
+            {strada.recapito ? (
+              <>
+                Puoi fare la richiesta lo stesso scrivendo a{' '}
+                <a href={strada.recapito.href} className="text-primary-700 underline">{strada.recapito.testo}</a>:
+                ti rispondiamo entro un mese, come prevede la legge.
+              </>
+            ) : (
+              <>
+                Non abbiamo ancora una casella email attiva per le richieste sulla privacy: è un guasto
+                nostro, non tuo. Resta il diritto di reclamo al Garante, qui sotto.
+              </>
+            )}
+          </p>
+        )}
         <p>
           Hai diritto di presentare reclamo al{' '}
           <a href="https://www.garanteprivacy.it/" target="_blank" rel="noopener noreferrer" className="text-primary-700 underline">

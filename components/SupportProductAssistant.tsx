@@ -19,7 +19,7 @@ import { uploadProductImages, ALLOWED_IMAGE_TYPES } from '@/lib/products/uploadI
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
-import type { AiProductPatch } from '@/lib/products/aiPatch';
+import { esitoModificaDallaChat, type AiProductPatch } from '@/lib/products/aiPatch';
 import type { ProductSnapshot } from '@/lib/products/aiSnapshot';
 import {
   ETICHETTE_STATO,
@@ -71,6 +71,11 @@ type Msg = {
   proposal?: Proposal;
   /** true quando la proposta è stata applicata. */
   applied?: boolean;
+  /**
+   * 1/11/2026 — Quello che il server NON ha scritto (es. il prezzo fuori banda).
+   * Se c'è, la scheda non dice «Modifiche salvate»: dice cosa non è entrato.
+   */
+  nonEntrato?: string;
   /** Bozza di nuovo prodotto proposta dalle foto (solo nei turni assistant). */
   newDraft?: NewDraft;
   /** true quando la bozza è stata creata. */
@@ -216,12 +221,17 @@ export default function SupportProductAssistant() {
       if (!res.ok) throw new Error(apiErrorMessage(json, 'Errore'));
 
       if (json.product) setFocused(json.product as ProductSnapshot);
-      setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, applied: true } : m)));
-      toast.success('Modifiche salvate sul prodotto');
-      // Quello che il server NON ha applicato (prezzo fuori banda, allergeni)
-      // si dice, invece di sparire dietro «salvate».
+      // 1/11/2026 — Quello che il server NON ha scritto (prezzo fuori banda,
+      // prezzo pieno barrato) si dice AL POSTO di «salvate», non sotto: nel
+      // toast e nella scheda stessa.
+      const esito = esitoModificaDallaChat(json);
+      const nonEntrato = esito.tipo === 'successo' ? undefined : esito.testo;
+      setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, applied: true, nonEntrato } : m)));
+      if (esito.tipo === 'successo') toast.success(esito.testo);
+      else toast.warning(esito.testo, { duration: 15_000 });
+      // Allergeni e ingredienti hanno la loro frase in `changed`.
       for (const riga of Array.isArray(json.changed) ? (json.changed as string[]) : []) {
-        if (riga.includes('NON ')) toast.warning(riga);
+        if (riga.includes('NON ') && !esito.testo.includes(riga)) toast.warning(riga);
       }
     } catch (err) {
       toast.error(friendlyError(err));
@@ -457,7 +467,11 @@ export default function SupportProductAssistant() {
                         </div>
                       );
                     })()}
-                  {m.applied ? (
+                  {m.applied && m.nonEntrato ? (
+                    <p className="flex items-start gap-1.5 text-sm font-semibold text-accent-800">
+                      <AlertTriangle size={15} strokeWidth={2.4} className="mt-0.5 shrink-0" aria-hidden /> {m.nonEntrato}
+                    </p>
+                  ) : m.applied ? (
                     <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
                       <Check size={15} strokeWidth={2.6} aria-hidden /> Modifiche salvate
                     </p>

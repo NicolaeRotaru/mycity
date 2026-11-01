@@ -10,6 +10,8 @@ import { formatPrice } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { getAttributesForCategory } from '@/lib/category-attributes';
+import { cosaMancaPerVendere } from '@/lib/products/prontoPerLaVendita';
 import { CARICAMENTO_DA_FILE_ACCESO } from '@/lib/funzioni-al-lancio';
 
 type ParsedRow = {
@@ -18,36 +20,113 @@ type ParsedRow = {
   price: number;
   stock: number;
   category_slug: string;
+  /** Colonne facoltative del file: per un alimento senza, il prodotto nasce bozza. */
+  allergeni: string;
+  ingredienti: string;
   errors: string[];
 };
 
-const TEMPLATE_CSV = `name,description,price,stock,category_slug
-"Pane casereccio","Pane fresco a lievitazione naturale",4.50,20,alimentari
-"T-shirt cotone","100% cotone biologico, taglie S-XL",19.90,15,abbigliamento
-"Caricatore USB-C","Adattatore 65W, compatibile MacBook/iPad",29.00,8,elettronica`;
+type CategoriaDelFile = { id: string; slug: string; parent_id: string | null };
 
-function parseCsv(text: string): { headers: string[]; rows: string[][] } {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length === 0) return { headers: [], rows: [] };
+/**
+ * 01/11/2026 — ondata 6. Il modello usa il punto e virgola: e' il separatore
+ * con cui l'Excel italiano salva i CSV (la virgola e' quella dei decimali), e
+ * cosi' il file scaricato, aperto e risalvato in Excel torna uguale.
+ */
+const TEMPLATE_CSV = `name;description;price;stock;category_slug;allergeni;ingredienti
+"Pane casereccio";"Pane fresco a lievitazione naturale";4,50;20;alimentari;"Glutine";"Farina di grano tenero tipo 0, acqua, lievito madre, sale"
+"T-shirt cotone";"100% cotone biologico, taglie S-XL";19,90;15;abbigliamento;;
+"Caricatore USB-C";"Adattatore 65W, compatibile MacBook/iPad";29,00;8;elettronica;;`;
 
-  const parseLine = (line: string): string[] => {
-    const out: string[] = [];
-    let cur = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; continue; }
-      if (ch === '"') { inQuotes = !inQuotes; continue; }
-      if (ch === ',' && !inQuotes) { out.push(cur); cur = ''; continue; }
+/** Quante volte compare `sep` fuori dalle virgolette. */
+function contaFuoriVirgolette(line: string, sep: string): number {
+  let n = 0;
+  let inQuotes = false;
+  for (const ch of line) {
+    if (ch === '"') inQuotes = !inQuotes;
+    else if (ch === sep && !inQuotes) n++;
+  }
+  return n;
+}
+
+/**
+ * 01/11/2026 — ondata 6. Il lettore divideva solo sulla virgola: un file
+ * salvato dall'Excel italiano (punto e virgola) arrivava come UNA colonna e il
+ * negozio si sentiva dire «Colonne mancanti» su un file giusto. Il separatore
+ * si riconosce dalla prima riga (quella dei nomi delle colonne), e il BOM che
+ * Excel mette in testa ai CSV UTF-8 si toglie, se no la prima colonna si
+ * chiama «\uFEFFname».
+ */
+function parseCsv(text: string): { headers: string[]; rows: string[][]; separatore: ';' | ',' } {
+  const pulito = text.replace(/^\uFEFF/, '');
+  // La prima riga (i nomi delle colonne) non ha mai un a capo dentro le virgolette.
+  const primaRiga = pulito.split(/\r?\n/, 1)[0] ?? '';
+  if (primaRiga.trim().length === 0) return { headers: [], rows: [], separatore: ',' };
+  const separatore: ';' | ',' =
+    contaFuoriVirgolette(primaRiga, ';') > contaFuoriVirgolette(primaRiga, ',') ? ';' : ',';
+
+  // 01/11/2026 — collaudo finale. Il lettore divideva il file in righe PRIMA di
+  // guardare le virgolette: una cella con l'a capo (Alt+Invio in Excel) faceva
+  // due prodotti rotti. Ora si legge carattere per carattere, e un a capo dentro
+  // le virgolette resta nella cella.
+  const righe: string[][] = [];
+  let riga: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < pulito.length; i++) {
+    const ch = pulito[i];
+    if (inQuotes) {
+      if (ch === '"' && pulito[i + 1] === '"') { cur += '"'; i++; continue; }
+      if (ch === '"') { inQuotes = false; continue; }
       cur += ch;
+      continue;
     }
-    out.push(cur);
-    return out.map((s) => s.trim());
-  };
+    // Le virgolette aprono una cella solo all'inizio: una virgoletta sola in
+    // mezzo al testo (5" di schermo) e' un carattere, e non si mangia le righe dopo.
+    if (ch === '"' && cur.length === 0) { inQuotes = true; continue; }
+    if (ch === separatore) { riga.push(cur); cur = ''; continue; }
+    if (ch === '\r' && pulito[i + 1] === '\n') continue;
+    if (ch === '\n' || ch === '\r') { riga.push(cur); righe.push(riga); riga = []; cur = ''; continue; }
+    cur += ch;
+  }
+  riga.push(cur);
+  righe.push(riga);
 
-  const headers = parseLine(lines[0]).map((h) => h.toLowerCase());
-  const rows = lines.slice(1).map(parseLine);
-  return { headers, rows };
+  const pieni = righe
+    .map((r) => r.map((c) => c.trim()))
+    .filter((r) => r.some((c) => c.length > 0));
+  if (pieni.length === 0) return { headers: [], rows: [], separatore };
+  const headers = pieni[0].map((h) => h.toLowerCase());
+  return { headers, rows: pieni.slice(1), separatore };
+}
+
+/**
+ * 01/11/2026 — collaudo finale. Excel per Windows in italiano salva il CSV «di
+ * serie» (delimitato dal separatore di elenco) in Windows-1252, senza BOM:
+ * letto come UTF-8, «Caffè» diventava «Caff�». Si prova UTF-8 in modo stretto
+ * e, se il file non lo e', si legge come Windows-1252.
+ */
+function decodificaCsv(bytes: ArrayBuffer | Uint8Array): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder('windows-1252').decode(bytes);
+  }
+}
+
+async function leggiFile(file: File): Promise<string> {
+  if (typeof file.arrayBuffer === 'function') return decodificaCsv(await file.arrayBuffer());
+  return file.text();
+}
+
+/**
+ * Il prezzo come lo scrive Excel italiano: «4,50», «19,90 €», «1.234,50».
+ * Con la virgola, la virgola e' il decimale e i punti sono le migliaia.
+ */
+function leggiPrezzo(grezzo: string): number {
+  const s = grezzo.replace(/[^\d,.-]/g, '');
+  if (s === '') return NaN;
+  return Number(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s);
 }
 
 /**
@@ -65,6 +144,7 @@ function CaricamentoDaFile() {
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Map<string, string>>(new Map());
+  const [categoryRows, setCategoryRows] = useState<CategoriaDelFile[]>([]);
   const [parsed, setParsed] = useState<ParsedRow[]>([]);
   const [importing, setImporting] = useState(false);
 
@@ -73,10 +153,11 @@ function CaricamentoDaFile() {
       if (!data.user) { router.push('/sign-in?returnTo=/seller/products/import'); return; }
       setUserId(data.user.id);
     });
-    supabase.from('categories').select('id, slug').then(({ data }) => {
+    supabase.from('categories').select('id, slug, parent_id').then(({ data }) => {
       const m = new Map<string, string>();
       for (const c of data ?? []) m.set(c.slug, c.id);
       setCategories(m);
+      setCategoryRows((data ?? []) as CategoriaDelFile[]);
     });
   }, [router]);
 
@@ -94,12 +175,17 @@ function CaricamentoDaFile() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) { toast.error('File troppo grande (max 2MB)'); return; }
-    const text = await file.text();
+    const text = await leggiFile(file);
     const { headers, rows } = parseCsv(text);
     const required = ['name', 'description', 'price', 'stock', 'category_slug'];
     const missingHeaders = required.filter((h) => !headers.includes(h));
     if (missingHeaders.length > 0) {
-      toast.error(`Colonne mancanti: ${missingHeaders.join(', ')}`);
+      // Una sola colonna letta = il file non usa ne' «;» ne' «,» (es. tabulazioni).
+      toast.error(
+        headers.length <= 1
+          ? 'Il file sembra salvato con un separatore diverso: le colonne vanno separate con il punto e virgola (;) o con la virgola (,). Scarica il modello, compilalo e salvalo come CSV.'
+          : `Colonne mancanti: ${missingHeaders.join(', ')}`,
+      );
       return;
     }
 
@@ -108,9 +194,11 @@ function CaricamentoDaFile() {
       const row: ParsedRow = {
         name: get('name'),
         description: get('description'),
-        price: Number(get('price').replace(',', '.')),
+        price: leggiPrezzo(get('price')),
         stock: parseInt(get('stock'), 10) || 0,
         category_slug: get('category_slug').toLowerCase(),
+        allergeni: headers.includes('allergeni') ? get('allergeni') : '',
+        ingredienti: headers.includes('ingredienti') ? get('ingredienti') : '',
         errors: [],
       };
       // Validation
@@ -136,19 +224,56 @@ function CaricamentoDaFile() {
 
     setImporting(true);
     try {
-      const payload = valid.map((r) => ({
-        seller_id: userId,
-        name: r.name,
-        description: r.description,
-        price: r.price,
-        stock: r.stock,
-        category_id: categories.get(r.category_slug),
-        status: 'available',
-      }));
+      // Quante bozze per ogni cosa che manca, per dirlo al negoziante.
+      const perMotivo = new Map<string, number>();
+      let bozze = 0;
+      const payload = valid.map((r) => {
+        const categoryId = categories.get(r.category_slug);
+        const attributes: Record<string, string> = {};
+        if (r.allergeni.trim()) attributes.allergeni = r.allergeni.trim();
+        if (r.ingredienti.trim()) attributes.ingredienti = r.ingredienti.trim();
+        // 01/11/2026 — ondata 6. Il file salta il modulo, ma non il suo
+        // controllo: stessa regola (`cosaMancaPerVendere`) per foto,
+        // descrizione e campi obbligatori della categoria (allergeni e
+        // ingredienti per gli alimenti). Prima solo gli alimenti nascevano
+        // bozza: un prodotto senza foto ne' descrizione andava in vetrina.
+        // Il file non porta foto, quindi chi arriva da qui nasce bozza e la
+        // foto si aggiunge dalla scheda.
+        const mancanti = cosaMancaPerVendere({
+          name: r.name,
+          description: r.description,
+          price: r.price,
+          haCategoria: Boolean(categoryId),
+          categoriaTop: getAttributesForCategory(categoryRows, categoryId).topSlug,
+          numeroFoto: 0,
+          attributes,
+        });
+        const status: 'available' | 'draft' = mancanti.length > 0 ? 'draft' : 'available';
+        if (status === 'draft') {
+          bozze++;
+          for (const m of mancanti) perMotivo.set(m, (perMotivo.get(m) ?? 0) + 1);
+        }
+        return {
+          seller_id: userId,
+          name: r.name,
+          description: r.description,
+          price: r.price,
+          stock: r.stock,
+          category_id: categoryId,
+          attributes,
+          status,
+        };
+      });
       // Batch insert
       const { error } = await supabase.from('products').insert(payload);
       if (error) throw error;
-      toast.success(`${valid.length} prodotti importati`);
+      toast.success(
+        bozze > 0
+          ? `${valid.length} prodotti importati · ${bozze} in bozza, non ancora in vendita. Manca: ${[...perMotivo]
+              .map(([m, n]) => `${m} (${n})`)
+              .join(', ')}. Completali da «I miei prodotti» per metterli in vendita.`
+          : `${valid.length} prodotti importati`,
+      );
       router.push('/seller/products');
     } catch (err) {
       toast.error(friendlyError(err));
@@ -196,6 +321,9 @@ function CaricamentoDaFile() {
             <li>• <code className="bg-white px-1">price</code> · prezzo in € (decimali con punto o virgola)</li>
             <li>• <code className="bg-white px-1">stock</code> · quantità disponibile</li>
             <li>• <code className="bg-white px-1">category_slug</code> · alimentari, abbigliamento, casa, elettronica, libri, sport, giocattoli, giardino, bellezza</li>
+            <li>• <code className="bg-white px-1">allergeni</code> · <code className="bg-white px-1">ingredienti</code> · obbligatori per gli alimentari</li>
+            <li>• Il file non porta le foto: i prodotti caricati nascono in bozza e vanno in vendita quando aggiungi la foto dalla scheda (servono anche una descrizione di almeno 10 caratteri e, per gli alimentari, allergeni e ingredienti)</li>
+            <li>• Va bene il file salvato da Excel in italiano (colonne separate dal punto e virgola) o con la virgola</li>
           </ul>
         </div>
       </section>

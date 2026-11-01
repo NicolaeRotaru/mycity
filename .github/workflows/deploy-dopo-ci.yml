@@ -608,7 +608,11 @@ jobs:
             "https://api.vercel.com/v13/deployments/$DOMINIO?teamId=$VERCEL_ORG_ID" || true)"
           PRECEDENTE="$(printf '%s' "$RILASCI" | COMMIT_CHE_ESCE="${COMMIT:-}" RILASCIO_SUL_DOMINIO="$SUL_DOMINIO" node scripts/prova-di-fumo.mjs --rilascio-di-adesso || true)"
           if [ -z "$PRECEDENTE" ]; then
-            echo "::warning::Non so quale rilascio serve $DOMINIO adesso, o c'e' solo ${COMMIT:-quello che esce}: se quello nuovo non risponde, da qui non potro' tornare indietro."
+            # 1/11/2026 (ondata 9) — Anche quando sul dominio c'e' gia' il
+            # commit che esce (il rilascio automatico di Vercel l'ha messo li'
+            # prima che questo lavoro partisse): chi c'era prima non si sa, e
+            # fra piu' rilasci possibili non si sceglie a caso.
+            echo "::warning::Non so a quale rilascio tornare: o non so chi serve $DOMINIO, o c'e' gia' ${COMMIT:-quello che esce} e non so chi c'era prima, o c'e' solo lui. Se quello nuovo non risponde, da qui non potro' tornare indietro e il ritorno va fatto a mano."
           else
             echo "In produzione adesso c'e': $PRECEDENTE"
           fi

@@ -70,7 +70,8 @@ beforeEach(() => {
   notifiche = [];
   erroreNotifica = null;
   idBersaglio = 'rider-1';
-  profiloBersaglio = { id: 'rider-1', role: 'rider', store_name: null, full_name: 'Luca', legal_birth_date: null };
+  // 1/11/2026: l'approvazione ora pretende i documenti del fattorino (regole-approvazione).
+  profiloBersaglio = { id: 'rider-1', role: 'rider', store_name: null, full_name: 'Luca', legal_birth_date: null, kyc_id_doc_front_url: 'f', kyc_selfie_url: 's', rider_license_url: 'p', rider_insurance_url: 'rc' };
 });
 
 describe('il rifiuto fa partire l orologio dei 90 giorni', () => {
@@ -115,7 +116,7 @@ describe('il bersaglio si controlla', () => {
     const r = await MODERA(richiesta('approve'));
     expect(r.status).toBe(200);
     idBersaglio = 'seller-1';
-    profiloBersaglio = { id: 'seller-1', role: 'seller', store_name: 'Pane', full_name: null, legal_birth_date: null };
+    profiloBersaglio = { id: 'seller-1', role: 'seller', store_name: 'Pane', full_name: null, legal_birth_date: null, approval_status: 'approved' };
     const r2 = await MODERA(richiesta('suspend'));
     expect(r2.status).toBe(200);
     expect(aggiornamenti).toHaveLength(2);

@@ -18,6 +18,7 @@
  */
 
 import { indirizzoContatto } from '../contatti-pubblici';
+import { env } from '../env';
 
 export type Titolare = {
   denominazione: string;
@@ -146,6 +147,40 @@ export function titolare(): Titolare {
     emailSicurezza: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_SICUREZZA),
     emailSegnalazioni: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_SEGNALAZIONI),
   };
+}
+
+/**
+ * Il nome da stampare dove si dice chi gestisce il servizio.
+ *
+ * 1/11/2026 (ondata 5) — Finche' non c'e' una denominazione legale, il solo
+ * marchio («gestita da MyCity») non dice chi risponde del contratto. Scelta di
+ * Nicola: si nomina la persona, col marchio fra parentesi.
+ */
+export function nomePubblico(t: Titolare = titolare()): string {
+  return t.gestore ? `${t.gestore} (${t.denominazione})` : t.denominazione;
+}
+
+/**
+ * I dati d'identita' che la legge chiede e che ancora mancano (art. 7 d.lgs.
+ * 70/2003, art. 49 Codice del Consumo). Non si inventano: si elencano, cosi'
+ * il vuoto si vede nei registri invece di restare silenzioso.
+ */
+export function datiObbligatoriMancanti(t: Titolare = titolare()): string[] {
+  const mancanti: string[] = [];
+  if (!t.indirizzo) mancanti.push('sede');
+  if (!t.partitaIva) mancanti.push('partita IVA');
+  if (!t.pec) mancanti.push('PEC');
+  return mancanti;
+}
+
+/** Scrive nei registri cosa manca, a ogni pagina legale disegnata. */
+export function segnalaDatiMancanti(t: Titolare = titolare()): string[] {
+  const mancanti = datiObbligatoriMancanti(t);
+  if (mancanti.length > 0) {
+    // console diretto: questo file lo importano anche componenti del browser (il piede).
+    console.warn(`[titolare] dati obbligatori mancanti: ${mancanti.join(', ')} (variabili NEXT_PUBLIC_TITOLARE_*)`);
+  }
+  return mancanti;
 }
 
 /**
@@ -285,6 +320,41 @@ export function ilModuloArrivaSenzaDatabase(): boolean {
   return [process.env.SUPPORT_EMAIL, process.env.RESEND_API_KEY, process.env.RESEND_FROM].every(
     (v) => typeof v === 'string' && v.trim() !== '',
   );
+}
+
+/**
+ * I pulsanti «Scarica i tuoi dati» ed «Elimina il tuo account» funzionano?
+ * Solo se il server ha la chiave di servizio e l'indirizzo del database: senza,
+ * /api/account/export e /api/account/delete rispondono 503. Variabili del
+ * server: in una pagina del browser vale false.
+ */
+export function iPulsantiDeiDirittiFunzionano(): boolean {
+  return [env.supabaseServiceRoleKey(), env.supabaseUrl()].every(
+    (v) => typeof v === 'string' && v.trim() !== '',
+  );
+}
+
+/**
+ * 1/11/2026 (ondata 6) — LA STRADA DEI DIRITTI, DETTA COM'È OGGI.
+ *
+ * L'informativa mandava i diritti a «Impostazioni → Privacy» e al modulo dei
+ * contatti anche quando, senza la chiave di servizio, i pulsanti rispondono 503
+ * e il modulo non salva niente (e arriva a una persona solo se può inoltrare
+ * per email). Una strada che non arriva a nessuno, scritta in un'informativa, è
+ * una promessa falsa. Qui si decide, una volta sola, quale strada esiste:
+ * - `pulsantiAttivi`: le Impostazioni fanno davvero il lavoro;
+ * - `recapito`: dove scrivere — la casella privacy se c'è; il modulo dei
+ *   contatti solo se arriva (database su, oppure inoltro per email); se no null.
+ */
+export function stradaDeiDiritti(t: Titolare = titolare()): {
+  pulsantiAttivi: boolean;
+  recapito: { href: string; testo: string; eUnaCasella: boolean } | null;
+} {
+  const pulsantiAttivi = iPulsantiDeiDirittiFunzionano();
+  const r = recapitoPrivacy(t);
+  if (r.eUnaCasella) return { pulsantiAttivi, recapito: r };
+  const moduloArriva = pulsantiAttivi || ilModuloArrivaSenzaDatabase();
+  return { pulsantiAttivi, recapito: moduloArriva ? r : null };
 }
 
 /**

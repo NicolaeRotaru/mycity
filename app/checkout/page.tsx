@@ -21,6 +21,7 @@ import { shippingForEuro } from '@/lib/shipping';
 import { cartaAlCheckoutDisponibile, fraseOrdiniDivisi, promessaSpedizione, rigaDelCodiceSpedizione } from '@/lib/promesse-pubbliche';
 import { leggiEsitoDellaVeloce } from '@/lib/ordini/consegna-veloce';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
+import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
@@ -32,7 +33,7 @@ import { Textarea } from '@/components/ui/Field';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
 import { StepCard } from '@/components/checkout/StepCard';
 import { ScheletroCassa } from '@/components/checkout/ScheletroCassa';
-import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
+import { ShippingAddressForm, useCoordinateDellaZona } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector, raccogliMetodoScelto } from '@/components/checkout/PaymentMethodSelector';
 import { DeliverySlotPicker, RIGA_VELOCE_IN_ATTESA } from '@/components/checkout/DeliverySlotPicker';
 import { romeNow } from '@/lib/store-hours';
@@ -1108,8 +1109,29 @@ export default function CheckoutPage() {
    * e a separarsi sarebbe stato il pulsante del telefono — l'unico che si vede
    * davvero quando si compra.
    */
+  /*
+   * 1/11/2026 — FUORI ZONA SI DICE QUI, NON DOPO «ORDINA».
+   *
+   * Il confine lo controllavano solo le due rotte che creano l'ordine: chi abita
+   * oltre il raggio compilava tutto e si sentiva rifiutare alla fine. La cassa ha
+   * gia' le coordinate del negozio e quelle dell'indirizzo scelto: fa la stessa
+   * domanda delle rotte, con la stessa funzione, e ferma il pulsante con la
+   * stessa frase. Col ritiro in negozio non c'e' zona.
+   */
+  // Con l'indirizzo scritto a mano le coordinate del modulo sono vuote: la zona
+  // le cerca come le cerchera' il server, solo per avvisare (non per il prezzo).
+  const coordZona = useCoordinateDellaZona(form, pickupInStore);
+  const gruppoFuoriZona = groups.find((g) => fuoriZonaDiConsegna({
+    storeLat: g.storeLat,
+    storeLng: g.storeLng,
+    deliveryLat: coordZona?.lat ?? null,
+    deliveryLng: coordZona?.lng ?? null,
+    pickupInStore,
+  }));
+  const fuoriZona = gruppoFuoriZona !== undefined;
+
   const ordineBloccato =
-    groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile || veloceDaAspettare;
+    groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || fuoriZona || !consegnaConfermabile || veloceDaAspettare;
 
   /*
    * 6/9/2026 — E LA FRASE CHE SPIEGA IL BLOCCO, MOTIVO PER MOTIVO.
@@ -1135,11 +1157,13 @@ export default function CheckoutPage() {
         ? 'Alcuni articoli superano la disponibilità: riduci le quantità o toglili dal carrello.'
         : variantIssues.length > 0
           ? 'Scegli le opzioni (taglia/colore) degli articoli segnalati qui sopra.'
-          : !consegnaConfermabile
-            ? rigaQuandoArriva(consegna)
-            : veloceDaAspettare
-              ? (veloceDisponibile === null ? RIGA_VELOCE_IN_ATTESA : 'La consegna veloce adesso non si può: scegli una fascia qui sopra.')
-              : null;
+          : fuoriZona
+            ? motivoFuoriZona(gruppoFuoriZona?.storeName)
+            : !consegnaConfermabile
+              ? rigaQuandoArriva(consegna)
+              : veloceDaAspettare
+                ? (veloceDisponibile === null ? RIGA_VELOCE_IN_ATTESA : 'La consegna veloce adesso non si può: scegli una fascia qui sopra.')
+                : null;
 
   const validateAddress = (): Partial<Record<keyof AddressForm, string>> => {
     const e: Partial<Record<keyof AddressForm, string>> = {};

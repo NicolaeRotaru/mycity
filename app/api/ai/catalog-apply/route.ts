@@ -74,7 +74,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const categories = (categoriesData ?? []) as CategoryRow[];
   const current = row as unknown as ProductRow;
 
-  const { update, changed, protetti } = resolveAiPatch({
+  const { update, changed, protetti, rifiutati } = resolveAiPatch({
     patch,
     current: {
       attributes: current.attributes ?? null,
@@ -96,11 +96,25 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     categories,
   });
 
+  // 1/11/2026 — Ogni uscita anticipata porta anche il perché del prezzo
+  // rifiutato: con un prezzo fuori banda chiesto insieme agli allergeni, o su
+  // una scheda incompleta, il negoziante leggeva solo l'altro messaggio e non
+  // sapeva che il prezzo non era entrato. La rotta in blocco lo faceva già.
+  const conIlPrezzo = (messaggio: string, dettagli?: Record<string, unknown>) =>
+    rifiutati.length > 0
+      ? ApiErrors.invalidRequest([messaggio, ...rifiutati.map((r) => r.motivo)].join('; '), { ...(dettagli ?? {}), rifiutati })
+      : ApiErrors.invalidRequest(messaggio, dettagli);
+
   if (Object.keys(update).length === 0) {
     // R41 — Se la modifica chiedeva solo di cambiare allergeni o ingredienti,
     // il negoziante deve sapere perche' non succede niente, e dove si fa.
     if (protetti.length > 0) {
-      return ApiErrors.invalidRequest(messaggioDichiarazioniProtette(protetti));
+      return conIlPrezzo(messaggioDichiarazioniProtette(protetti));
+    }
+    // 1/11/2026 — Se l'unica modifica era un prezzo rifiutato, il motivo
+    // arriva al negoziante invece di un «nessuna modifica valida» muto.
+    if (rifiutati.length > 0) {
+      return ApiErrors.invalidRequest(rifiutati.map((r) => r.motivo).join('; '), { rifiutati });
     }
     return ApiErrors.invalidRequest('Nessuna modifica valida da applicare.');
   }
@@ -110,7 +124,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // (per un alimento: Allergeni e Ingredienti). Il modulo li faceva, la chat no.
   const { mancanti, categoriaNuova } = daCompletareDopoLaModifica({ prima: current, update, categories });
   if (mancanti.length > 0) {
-    return ApiErrors.invalidRequest(messaggioDaCompletare(mancanti, categoriaNuova), { mancanti });
+    return conIlPrezzo(messaggioDaCompletare(mancanti, categoriaNuova), { mancanti });
   }
 
   // #5 — Il cancello sui prodotti vietati c'era sulla rotta che li crea, e
@@ -129,7 +143,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         'catalog-apply-policy',
       );
       if (!verdetto.allowed) {
-        return ApiErrors.invalidRequest(`Questa modifica non si puo' pubblicare: ${verdetto.reason}`);
+        return conIlPrezzo(`Questa modifica non si puo' pubblicare: ${verdetto.reason}`);
       }
     }
   } catch (err) {
@@ -181,6 +195,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   return NextResponse.json({
     ok: true,
     changed,
+    rifiutati,
     product: productSnapshot(updated as unknown as ProductRow, categories),
   });
 });

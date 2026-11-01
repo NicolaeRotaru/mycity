@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Plus, X } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Field';
@@ -27,6 +27,69 @@ export type AddressForm = {
   phone: string;
   notes: string;
 };
+
+/**
+ * 1/11/2026 — DOVE STA L'INDIRIZZO SCRITTO A MANO, PER SAPERE LA ZONA PRIMA DI «ORDINA».
+ *
+ * La cassa diceva «fuori zona» solo con un indirizzo SALVATO: quello scritto a
+ * mano, o corretto, non ha coordinate (cambiare via, citta' o CAP le azzera, e
+ * deve: il punto vecchio non vale piu'). Il server invece se lo geolocalizza e
+ * rifiuta chi abita oltre il raggio — ma solo dopo «ordina», a carrello pieno.
+ *
+ * Qui la cassa fa la stessa ricerca del server, con la stessa domanda
+ * («via, CAP citta', Italia» come in lib/geocodifica.ts) attraverso /api/geocode,
+ * mezzo secondo dopo che si e' smesso di scrivere. Le coordinate trovate servono
+ * SOLO alla zona: non entrano nel modulo, ne' nel prezzo della consegna, ne'
+ * nell'ordine.
+ *
+ * Un indirizzo che non si trova, o la rete che non risponde, non blocca
+ * nessuno (come sul server): la risposta e' «non so», cioe' null. Le coordinate
+ * valgono solo per l'indirizzo per cui sono state chieste: se nel frattempo il
+ * testo cambia, quelle vecchie non si usano.
+ */
+export const ATTESA_ZONA_MS = 600;
+
+export function domandaDellaZona(ind: { address: string; city: string; zip: string }): string {
+  return `${ind.address.trim()}, ${ind.zip.trim()} ${ind.city.trim()}, Italia`.slice(0, 300);
+}
+
+export function useCoordinateDellaZona(
+  ind: { address: string; city: string; zip: string; lat: number | null; lng: number | null },
+  spento = false,
+): { lat: number; lng: number } | null {
+  const conosciute = ind.lat != null && ind.lng != null;
+  const domanda = !spento && !conosciute && ind.address.trim().length >= 3 ? domandaDellaZona(ind) : null;
+  const [trovate, setTrovate] = useState<{ domanda: string; lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (!domanda) return;
+    let vale = true;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch('/api/geocode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ q: domanda }),
+        });
+        if (!res.ok) return;
+        const j = (await res.json()) as { lat?: unknown; lng?: unknown };
+        if (vale && typeof j.lat === 'number' && typeof j.lng === 'number' && Number.isFinite(j.lat) && Number.isFinite(j.lng)) {
+          setTrovate({ domanda, lat: j.lat, lng: j.lng });
+        }
+      } catch {
+        // Rete giu': non si sa, quindi non si avvisa — decide il server, come prima.
+      }
+    }, ATTESA_ZONA_MS);
+    return () => {
+      vale = false;
+      clearTimeout(timer);
+    };
+  }, [domanda]);
+
+  if (spento) return null;
+  if (conosciute) return { lat: ind.lat as number, lng: ind.lng as number };
+  return trovate && trovate.domanda === domanda ? { lat: trovate.lat, lng: trovate.lng } : null;
+}
 
 export type SavedAddress = {
   id: string;

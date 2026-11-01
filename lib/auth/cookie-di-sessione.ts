@@ -48,7 +48,7 @@
  *     QUANTE volte succede — oggi quel numero non ce l'ha nessuno.
  */
 
-import { chiediConTetto, type Risposta } from './decisione-portiere';
+import { TETTO_PORTIERE_MS, chiediConTetto, type Risposta } from './decisione-portiere';
 
 /**
  * I cookie di sessione di Supabase si chiamano `sb-<progetto>-auth-token`, e
@@ -366,6 +366,34 @@ export function sessioneDaRinnovare(
     if (valore && tesseraInScadenza(valore, adessoMs, margineMs)) return true;
   }
   return false;
+}
+
+/**
+ * ONDATA 8 — QUANTO ASPETTA IL PORTIERE QUANDO CHIEDE «CHI SEI?».
+ *
+ * Se `auth.getUser()` rinnoverà la tessera lo decide la libreria, con le sue
+ * regole e il suo orologio: `sessioneDaRinnovare` lo indovina soltanto. Quando
+ * indovinava «è una lettura» e invece la libreria rinnovava, il tetto restava
+ * di tre secondi. Un rinnovo arrivato a 3,5 secondi veniva buttato, il server
+ * aveva già bruciato la tessera vecchia, e il cliente era fuori al click dopo.
+ *
+ * I due sbagli non costano uguale. Aspettare di più costa qualche secondo, e
+ * solo quando il fornitore è già lento (di solito risponde in meno di tre).
+ * Abbandonare un rinnovo costa la sessione. Quindi, dalla parte severa:
+ * - con una tessera in tasca (anche illeggibile per noi) si può rinnovare:
+ *   tetto lungo, `TETTO_RINNOVO_MS`;
+ * - senza nessuna tessera la libreria non ha niente da rinnovare: tetto corto,
+ *   `TETTO_PORTIERE_MS`, e il catalogo resta veloce per chi non è entrato.
+ *
+ * Il tetto lungo resta un tetto: un fornitore appeso non tiene appesa la
+ * pagina per sempre, e la scrittura tardiva si conta (scelta d).
+ * Prova: tests/unit/il-rinnovo-oltre-i-tre-secondi-arriva-al-browser.test.ts
+ */
+export function tettoPerChiedereChiSei(
+  cookie: ReadonlyArray<{ name: string; value: string }>,
+): number {
+  const haTessera = cookie.some((c) => NOME_TESSERA.test(c.name) && c.value !== '');
+  return haTessera ? TETTO_RINNOVO_MS : TETTO_PORTIERE_MS;
 }
 
 export type EsitoScritturaSessione<T> = {

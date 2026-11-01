@@ -1,4 +1,6 @@
-import { contenutoFileCsv } from '@/lib/csv-sicuro';
+import {
+  raccogliAFinestre, righeCsvConAvviso, contenutoCsv, nomeFileCsv, pezzoNomeFile, fraseSenzaId,
+} from '@/lib/admin/esporta-csv';
 
 /**
  * 8/9/2026 — IL FILE DEGLI UTENTI CONTENEVA I CINQUECENTO PIÙ RECENTI E NON LO
@@ -67,7 +69,9 @@ export type RaccoltaUtenti = {
   /** Vero solo se il database ha detto «sono finiti», non se ci siamo stancati. */
   completo: boolean;
   letture: number;
-  motivo?: 'tetto' | 'ricerca';
+  /** `senza-id`: righe arrivate senza identificativo, contate e lasciate fuori. */
+  motivo?: 'tetto' | 'ricerca' | 'senza-id';
+  senzaId?: number;
 };
 
 /** Una riga del file, nell'ordine delle intestazioni. */
@@ -83,41 +87,18 @@ export function rigaCsvUtente(u: UtenteDaEsportare): unknown[] {
 }
 
 /**
- * Legge finestra dopo finestra finché il database non restituisce PIÙ NIENTE.
- *
- * Il criterio di fine è «zero righe», non «meno righe di quante ne ho chieste»:
- * PostgREST ha un suo tetto di righe per richiesta che si cambia dal pannello
- * di Supabase, e se quel tetto è più basso della finestra la prima lettura
- * torna corta — il criterio furbo direbbe «sono finiti» e rifabbricherebbe il
- * file monco che sembra intero. Si paga una lettura in più, quella vuota.
- *
- * I doppioni si tolgono per identificativo: mentre si sfoglia, un iscritto
- * nuovo entra in cima e sposta tutte le righe di uno.
+ * Legge tutti gli utenti a finestre. L'algoritmo (fine a «zero righe»,
+ * doppioni tolti per id, righe senza id contate e lasciate fuori, tetto) sta in
+ * `lib/admin/esporta-csv.ts`, lo stesso degli ordini: qui c'è solo il tetto.
  */
 export async function raccogliUtentiDaEsportare(
   leggi: LettoreDiUtenti,
   opzioni: { perLettura?: number; tettoLetture?: number } = {},
 ): Promise<RaccoltaUtenti> {
-  const perLettura = Math.max(1, Math.trunc(opzioni.perLettura ?? UTENTI_PER_LETTURA));
-  const tetto = Math.max(1, Math.trunc(opzioni.tettoLetture ?? TETTO_LETTURE_UTENTI));
-
-  const perId = new Map<string, UtenteDaEsportare>();
-  let letture = 0;
-  let da = 0;
-
-  for (let giro = 0; giro < tetto; giro++) {
-    const blocco = await leggi(da, da + perLettura - 1);
-    letture++;
-    for (const utente of blocco) {
-      if (utente?.id && !perId.has(utente.id)) perId.set(utente.id, utente);
-    }
-    if (blocco.length === 0) {
-      return { righe: [...perId.values()], completo: true, letture };
-    }
-    da += blocco.length;
-  }
-
-  return { righe: [...perId.values()], completo: false, letture, motivo: 'tetto' };
+  return raccogliAFinestre(leggi, {
+    perLettura: opzioni.perLettura ?? UTENTI_PER_LETTURA,
+    tettoLetture: opzioni.tettoLetture ?? TETTO_LETTURE_UTENTI,
+  });
 }
 
 /**
@@ -142,16 +123,16 @@ export function avvisoFileUtentiParziale(raccolta: RaccoltaUtenti): string {
   const quante = raccolta.righe.length;
   const dettaglio = raccolta.motivo === 'ricerca'
     ? `Qui dentro ci sono solo i primi ${quante} risultati della ricerca: ce ne sono altri che non sono stati scaricati.`
+    : raccolta.motivo === 'senza-id'
+    ? `Qui dentro ci sono ${quante} utenti, letti fino in fondo.`
     : `Qui dentro ci sono solo i primi ${quante} utenti, il resto non è stato scaricato.`;
-  return `ATTENZIONE: elenco INCOMPLETO. ${dettaglio} NON usarlo come elenco degli iscritti: rifai l'esportazione restringendo la ricerca, o chiedi l'elenco completo.`;
+  return `ATTENZIONE: elenco INCOMPLETO. ${dettaglio}${fraseSenzaId(raccolta.senzaId)} NON usarlo come elenco degli iscritti: rifai l'esportazione restringendo la ricerca, o chiedi l'elenco completo.`;
 }
 
 /** Le righe del file: l'avviso (se serve), le intestazioni, gli utenti. */
 export function righeCsvUtenti(raccolta: RaccoltaUtenti): unknown[][] {
-  const testa: unknown[][] = raccolta.completo
-    ? []
-    : [[avvisoFileUtentiParziale(raccolta)], []];
-  return [...testa, [...INTESTAZIONI_CSV_UTENTI], ...raccolta.righe.map(rigaCsvUtente)];
+  return righeCsvConAvviso(raccolta, INTESTAZIONI_CSV_UTENTI, rigaCsvUtente,
+    () => avvisoFileUtentiParziale(raccolta));
 }
 
 /**
@@ -159,7 +140,7 @@ export function righeCsvUtenti(raccolta: RaccoltaUtenti): unknown[][] {
  * neutralizzata: nessun nome scelto da un utente diventa una formula eseguita.
  */
 export function contenutoCsvUtenti(raccolta: RaccoltaUtenti): string {
-  return contenutoFileCsv(righeCsvUtenti(raccolta));
+  return contenutoCsv(righeCsvUtenti(raccolta));
 }
 
 /**
@@ -172,9 +153,10 @@ export function nomeFileUtenti(opzioni: {
   filtro?: string;
   ricerca?: string;
 }): string {
-  const pezzo = (t: string) => t.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  const filtro = opzioni.filtro && opzioni.filtro !== 'all' ? `-${pezzo(opzioni.filtro)}` : '';
-  const cercato = opzioni.ricerca?.trim() ? `-cerca-${pezzo(opzioni.ricerca).slice(0, 24)}` : '';
-  const parziale = opzioni.completo ? '' : '-PARZIALE';
-  return `mycity-utenti-${opzioni.oggi}${filtro}${cercato}${parziale}.csv`;
+  const filtro = opzioni.filtro && opzioni.filtro !== 'all' ? pezzoNomeFile(opzioni.filtro) : '';
+  const parola = opzioni.ricerca?.trim() ? pezzoNomeFile(opzioni.ricerca, 24) : '';
+  // Una ricerca di soli caratteri non latini («王», «Иван») o simboli dà una
+  // parola vuota: il nome dice comunque che è una ricerca, non l'elenco intero.
+  const cercato = opzioni.ricerca?.trim() ? (parola ? `cerca-${parola}` : 'cerca') : '';
+  return nomeFileCsv({ prefisso: 'mycity-utenti', oggi: opzioni.oggi, completo: opzioni.completo, pezzi: [filtro, cercato] });
 }

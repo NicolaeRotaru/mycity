@@ -1,6 +1,7 @@
 // lib/ai/tettoSpesa.ts
 import { logger } from '@/lib/logger';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { RIPIEGO_TOLLERATO_MINUTI as TOLLERANZA_RIPIEGO_MINUTI } from '@/lib/ai/decisioneTettoSpesa';
 
 /**
  * 8/9/2026 (lotto gravi, corsia 11) — QUI STA DOVE IL NUMERO E' CONSERVATO.
@@ -197,6 +198,21 @@ function segnalaRipiego(motivo: string, giorno: string, adesso: number = Date.no
         daMinuti: Math.floor((adesso - _stato.ripiegoDa) / 60_000),
         ripieghi: _ripieghiSegnalati,
       },
+    );
+    return;
+  }
+  // 1/11/2026 (ondata 7) — UN GUASTO CHE DURA NON E' PIU' UN GUASTO.
+  // Oltre l'ora di tolleranza `decidiSpesaAi` tratta il ripiego come durevole
+  // e stringe la quota di questa copia; il registro invece restava a un `warn`
+  // ogni cento chiamate per sempre. Il tetto cambiava e nessuno lo sapeva.
+  // Adesso, passata l'ora, e' un `error` (Sentry) una volta per finestra.
+  const daMinuti = Math.floor((adesso - _stato.ripiegoDa) / 60_000);
+  if (daMinuti > TOLLERANZA_RIPIEGO_MINUTI) {
+    if (adesso - _stato.dettoAlle < RIPETI_ALLARME_MS) return;
+    _stato.dettoAlle = adesso;
+    logger.error(
+      '[ai] il conto della spesa condiviso non risponde da oltre un ora: il tetto giornaliero vale per copia, non per il sito (quota ridotta per copia).',
+      { motivo, detto_dal_database: _stato.motivo, giorno, daMinuti, ripieghi: _ripieghiSegnalati },
     );
     return;
   }

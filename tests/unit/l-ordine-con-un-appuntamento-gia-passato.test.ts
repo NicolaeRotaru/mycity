@@ -261,7 +261,7 @@ describe('gli invarianti sul checkout vero', () => {
     // silenziosa lasciava il giorno su "oggi" con dentro una fascia passata.
     // Spegnere solo la mattonella non lo cura: chi era già su "oggi" ci resta.
     expect(picker, 'l\'effetto torna a uscire senza spostare il giorno')
-      .toMatch(/if\s*\(!oggiPossibile\)\s*\{\s*onDayChange\('tomorrow'\)/);
+      .toMatch(/if\s*\(!oggiPossibile\)\s*\{[^}]*?onDayChange\('tomorrow'\)/);
   });
 
   it('il selettore non decide più da solo: chiede al modulo', () => {

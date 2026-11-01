@@ -7,6 +7,7 @@ import { writeAudit, type AuditAction } from '@/lib/audit';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { risultaMinorenne, anniCompiuti, ETA_MINIMA_RIDER } from '@/lib/maggiore-eta';
 import { giornoPiacenza } from '@/lib/tempo-piacenza';
+import { COLONNE_PER_APPROVARE, motivoPerNonApprovare } from '@/lib/admin/regole-approvazione';
 
 export const runtime = 'nodejs';
 
@@ -85,7 +86,7 @@ function buildModeration(action: Action, reason: string | undefined, adminId: st
       };
     case 'reactivate':
       return {
-        patch: { is_approved: true, approval_status: 'approved', rejection_reason: null, approved_at: now },
+        patch: { is_approved: true, approval_status: 'approved', rejection_reason: null, approved_at: now, approved_by: adminId },
         note,
         audit: 'user.reactivate',
       };
@@ -112,7 +113,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const admin = getAdminSupabase();
   const { data: target } = await admin
     .from('profiles')
-    .select('id, role, store_name, full_name, legal_birth_date')
+    .select(`id, role, store_name, full_name, legal_birth_date, ${COLONNE_PER_APPROVARE}`)
     .eq('id', params.id)
     .single();
   if (!target) return ApiErrors.notFound('Utente non trovato.');
@@ -154,6 +155,40 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     return ApiErrors.forbidden(
       `Non si approva: la data di nascita dice ${anni} anni. Servono ${ETA_MINIMA_RIDER} anni compiuti (condizioni d'uso, punto 3). Se la data è sbagliata, falla correggere prima di approvare.`,
     );
+  }
+
+  /**
+   * 1/11/2026 — PARTITA IVA E DOCUMENTI SI GUARDANO QUI, NON NEL BROWSER.
+   *
+   * Un negozio senza partita IVA e un fattorino senza patente né polizza
+   * passavano con un 200. Vale anche per `reactivate`: un respinto si riattiva
+   * da qui senza passare da `approve`, e dopo 90 giorni i suoi documenti sono
+   * già stati cancellati dalla potatura (migrations/135). Non vale per chi è
+   * solo SOSPESO: era già approvato, e un negozio storico senza partita IVA
+   * resterebbe fermo per sempre (non ha una pagina per inserirla).
+   */
+  /**
+   * 1/11/2026 (collaudo finale) — SI SOSPENDE SOLO CHI E' APPROVATO.
+   *
+   * Il «riattiva da sospeso» qui sotto non rifà il controllo, perché un sospeso
+   * era già approvato. Ma la rotta accettava `suspend` anche su un profilo in
+   * attesa o respinto: due chiamate (sospendi, poi riattiva) portavano ad
+   * `approved` un fattorino senza documenti o un negozio senza partita IVA. Il
+   * pannello mostra «Sospendi» solo agli approvati, ma il controllo vero e'
+   * questo, non il bottone.
+   */
+  if (body.action === 'suspend' && target.approval_status === 'suspended') {
+    return ApiErrors.invalidRequest('Questo profilo è già sospeso.');
+  }
+  if (body.action === 'suspend' && target.approval_status !== 'approved') {
+    return ApiErrors.invalidRequest(
+      'Si sospende solo un profilo approvato. Questo non lo è: per chi è in attesa o respinto usa «Approva» o «Rifiuta».',
+    );
+  }
+
+  if (approva) {
+    const motivo = motivoPerNonApprovare(target, body.action === 'reactivate' ? 'reactivate' : 'approve');
+    if (motivo) return ApiErrors.invalidRequest(motivo);
   }
 
   const { patch, note, audit } = buildModeration(body.action, body.reason?.trim(), user.id, target.role);

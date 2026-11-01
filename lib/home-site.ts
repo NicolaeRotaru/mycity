@@ -3,6 +3,7 @@ import { newId, siteByteSize, MAX_SITE_BYTES } from './store-site';
 import { safeInternalPath } from './safe-redirect';
 import { DROP_DEL_GIORNO_ACCESO, NEWSLETTER_ACCESA } from './funzioni-al-lancio';
 import { logger } from './logger';
+import { promessaSuperata } from './site-branding';
 
 /**
  * Home del marketplace componibile a blocchi — tipi, validazione (zod), catalogo
@@ -339,11 +340,49 @@ export function leggiHomeSite(raw: unknown): { site: HomeSite; scartate: Sezione
   return { site: { version: 1, sections }, scartate };
 }
 
+/** I testi dell'eroe che l'amministratore può salvare: tutti finiscono in cima alla home. */
+const TESTI_EROE = ['eyebrow', 'headline', 'subhead', 'ctaLabel'] as const;
+
+/** Una frase salvata dell'eroe lasciata fuori perché promette cose superate. */
+export type FraseScartata = { id: string; campo: (typeof TESTI_EROE)[number]; motivo: string; testo: string };
+
+/**
+ * 01/11/2026 — Il freno delle promesse superate, sull'eroe della home.
+ * La riga salvata il 24/6 in site_settings.home_site vince sul codice e dice «Alimentari,
+ * abbigliamento, … arriva a casa in 30-60 min»: l'abbigliamento al lancio non c'è, e i 30-60
+ * minuti sono la consegna veloce, non una certezza. L'ondata 5 ha messo il freno su striscia e
+ * piede (lib/site-branding.ts, `promessaSuperata`); qui lo stesso freno passa sull'eroe. Il campo
+ * scartato torna vuoto, così il renderer usa il testo del codice (app/page.tsx, HERO_VARIANTS),
+ * e il motivo finisce nei log: la frase giusta la salva Nicola dal pannello.
+ * Prova: tests/unit/l-eroe-salvato-della-home-non-ripubblica-promesse-superate.test.ts
+ */
+export function togliPromesseSuperate(site: HomeSite): { site: HomeSite; frasi: FraseScartata[] } {
+  const frasi: FraseScartata[] = [];
+  const sections = site.sections.map((s) => {
+    if (s.type !== 'hero') return s;
+    const config: Record<string, unknown> = { ...s.config };
+    for (const campo of TESTI_EROE) {
+      const testo = config[campo];
+      if (typeof testo !== 'string' || testo === '') continue;
+      const motivo = promessaSuperata(testo);
+      if (!motivo) continue;
+      frasi.push({ id: s.id, campo, motivo, testo });
+      config[campo] = '';
+    }
+    return { ...s, config } as HomeSection;
+  });
+  return { site: { ...site, sections }, frasi };
+}
+
 /** Normalizza un valore qualsiasi (incl. JSONB dal DB) a una HomeSite renderizzabile. */
 export function normalizeHomeSite(raw: unknown): HomeSite {
-  const { site, scartate } = leggiHomeSite(raw);
+  const { site: letta, scartate } = leggiHomeSite(raw);
   // Una sezione lasciata fuori non sparisce in silenzio: resta scritto quale e perché.
   if (scartate.length > 0) logger.warn('[home] sezioni salvate scartate perché non valide', { scartate });
+  const { site, frasi } = togliPromesseSuperate(letta);
+  if (frasi.length > 0) {
+    logger.warn('[home] frasi salvate dell\'eroe scartate: promettono cose superate, riscrivile da /admin/home', { frasi });
+  }
   return site;
 }
 

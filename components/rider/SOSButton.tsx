@@ -20,15 +20,66 @@ import { captureError } from '@/lib/analytics/sentry';
  *
  * Flusso:
  *   1. Click SOS → dialog di conferma
- *   2. Conferma → 3 azioni parallele:
- *      a) chiamata 112 (tel:)
- *      b) insert in rider_sos_events con posizione GPS
- *      c) push notification a tutti gli admin
+ *   2. Conferma → subito il tastierino col 112 (tel:), sincrono, senza attese
+ *   3. Poi, con un tempo massimo: insert in rider_sos_events con posizione GPS
+ *      → il trigger del database crea una notifica nel pannello per gli admin
+ *      (nessun push/SMS immediato: il push parte dal lavoro periodico send-push)
  */
 
 type Props = {
   orderId?: string;
 };
+
+/** Quanto aspettiamo la rete per l'avviso a MyCity, dopo che il 112 e' gia' aperto. */
+const TEMPO_MASSIMO_AVVISO_MS = 15_000;
+/** Quanto aspettiamo il GPS: la posizione e' utile, ma non vale un avviso in ritardo. */
+const TEMPO_MASSIMO_GPS_MS = 5_000;
+
+function conTempoMassimo<T>(lavoro: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`SOS: nessuna risposta entro ${ms} ms`)), ms);
+    lavoro.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
+
+/** Posizione GPS best effort: null se non arriva in tempo (anche se il browser ignora il suo timeout). */
+async function leggiPosizione(): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const pos = await conTempoMassimo(
+      new Promise<GeolocationPosition>((resolve, reject) => {
+        if (typeof navigator === 'undefined' || !navigator.geolocation) return reject(new Error('No geo'));
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: TEMPO_MASSIMO_GPS_MS, enableHighAccuracy: true });
+      }),
+      TEMPO_MASSIMO_GPS_MS + 500,
+    );
+    return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Scrive l'evento in rider_sos_events (il trigger del database crea la notifica agli admin).
+ * L'utente si legge dalla sessione salvata sul telefono (getSession), senza chiamata di rete:
+ * chi puo' scrivere lo decide comunque la regola del database (rider_id = auth.uid()).
+ */
+async function inviaAvvisoSOS(orderId: string | undefined): Promise<boolean> {
+  const [{ data: { session } }, posizione] = await Promise.all([supabase.auth.getSession(), leggiPosizione()]);
+  const user = session?.user;
+  if (!user) return false;
+  const { error } = await supabase.from('rider_sos_events').insert({
+    rider_id: user.id,
+    order_id: orderId ?? null,
+    lat: posizione?.lat ?? null,
+    lng: posizione?.lng ?? null,
+    triggered_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+  return true;
+}
 
 export default function SOSButton({ orderId }: Props) {
   const [open, setOpen] = useState(false);
@@ -38,37 +89,14 @@ export default function SOSButton({ orderId }: Props) {
   const [sending, setSending] = useState(false);
 
   const triggerSOS = async () => {
-    setSending(true);
-    // 1. Posizione GPS (best effort, alta accuratezza)
-    let lat: number | null = null, lng: number | null = null;
-    try {
-      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-        if (!navigator.geolocation) return reject(new Error('No geo'));
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8_000, enableHighAccuracy: true });
-      });
-      lat = pos.coords.latitude;
-      lng = pos.coords.longitude;
-    } catch {}
-
-    // 2. Scrivi su DB (rider_sos_events) → trigger notifica admin
-    let alertSent = false;
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { error } = await supabase.from('rider_sos_events').insert({
-          rider_id: user.id,
-          order_id: orderId ?? null,
-          lat, lng,
-          triggered_at: new Date().toISOString(),
-        });
-        if (error) throw error;
-        alertSent = true;
-      }
-    } catch (e) {
-      captureError(e, { context: 'SOSButton' });
-    }
-
-    // 3. APRE IL TASTIERINO COL 112 GIA' COMPOSTO — non chiama.
+    // 1/11/2026 — PRIMA IL 112, POI TUTTO IL RESTO.
+    // Prima il tastierino si apriva solo dopo tre attese in fila: GPS (fino a 8 secondi),
+    // una chiamata di rete per sapere chi e' l'utente, la scrittura nel database. Le due
+    // chiamate di rete non avevano un tempo massimo: con poco segnale restavano appese e il
+    // 112 non si apriva mai. Chiamare il 112 non ha bisogno di internet: va per primo, in
+    // modo sincrono, dentro il gesto del fattorino (cosi' il browser non lo blocca).
+    //
+    // 1. APRE IL TASTIERINO COL 112 GIA' COMPOSTO — non chiama.
     //
     // `tel:` apre il compositore del telefono col numero scritto. La chiamata parte SOLO se
     // il fattorino preme il tasto verde. I due messaggi qui sotto dicevano «Stiamo chiamando
@@ -79,6 +107,17 @@ export default function SOSButton({ orderId }: Props) {
     // Venti righe piu' in basso il dialogo di conferma lo diceva gia' giusto: «Verra' avviata
     // la chiamata al 112». Il testo esatto era li' dentro, e questi due non l'avevano preso.
     window.location.href = 'tel:112';
+    setSending(true);
+
+    // 2. L'avviso a MyCity parte DOPO, e ha un tempo massimo: se la rete non risponde in
+    //    tempo il fattorino lo legge, invece di restare su «Invio…» per sempre.
+    let alertSent = false;
+    try {
+      alertSent = await conTempoMassimo(inviaAvvisoSOS(orderId), TEMPO_MASSIMO_AVVISO_MS);
+    } catch (e) {
+      captureError(e, { context: 'SOSButton' });
+    }
+
     setSending(false);
     setOpen(false);
     if (alertSent) {
@@ -155,7 +194,7 @@ export default function SOSButton({ orderId }: Props) {
                 </li>
                 <li className="flex items-start gap-2">
                   <AlertTriangle size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
-                  <span>Gli amministratori MyCity riceveranno un alert immediato</span>
+                  <span>Gli amministratori MyCity vedranno l&apos;avviso nel loro pannello, se il telefono è connesso. Non aspettare loro: per l&apos;aiuto subito c&apos;è il 112</span>
                 </li>
               </ul>
               <p className="text-xs text-ink-500">
