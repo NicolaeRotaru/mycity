@@ -40,3 +40,11 @@ export function statoDelReso(resi: RigaReso[] | null | undefined): StatoDelReso 
   if (ultimo.status === 'REFUNDED') return { testo: CHIUSI.REFUNDED, sePuoChiederne: false };
   return { testo: CHIUSI[ultimo.status] ?? 'Richiesta di reso registrata', sePuoChiederne: true };
 }
+
+/**
+ * La frase di un reso solo, per la lista dei resi del cliente (app/orders/resi).
+ * Stesse parole della pagina dell'ordine: il cliente legge la stessa cosa nei due posti.
+ */
+export function testoDelloStato(status: string): string {
+  return APERTI[status] ?? CHIUSI[status] ?? 'Richiesta di reso registrata';
+}

@@ -14,6 +14,7 @@ import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
 import { useTranslations } from 'next-intl';
+import { scadenzaDelRecesso, prodottiDelModulo, ripensamentoAmmesso, type RigaDelModulo } from './regole-del-modulo';
 import { Package, RefreshCw, AlertTriangle, MessageSquare, Clock, Pencil, type LucideIcon } from 'lucide-react';
 
 const REASONS: Array<{ value: string; label: string; icon: LucideIcon }> = [
@@ -50,18 +51,24 @@ export default function NewReturnPage() {
   const [loaded, setLoaded] = useState(false);
   const [resoAperto, setResoAperto] = useState<{ id: string; status: string } | null>(null);
   const [ritiroInCorso, setRitiroInCorso] = useState(false);
+  const [righe, setRighe] = useState<RigaDelModulo[]>([]);
 
   useEffect(() => {
     (async () => {
-      const [{ data }, { data: aperti }] = await Promise.all([
+      const [{ data }, { data: aperti }, risposteRighe] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, total_price, delivered_at, delivery_status, payment_method, stripe_payment_intent, wallet_applied_cents')
+          .select('id, total_price, delivered_at, created_at, delivery_status, payment_method, stripe_payment_intent, wallet_applied_cents')
           .eq('id', params.id)
           .single(),
         supabase.from('returns').select('id, status').eq('order_id', params.id).in('status', STATI_APERTI).limit(1),
+        // `products(*)` e non la colonna per nome: prima della migrazione 180
+        // `non_recedibile` non c'e' e vale «nessun prodotto escluso», come nella rotta.
+        supabase.from('order_items').select('product_id, product_name, products(*)').eq('order_id', params.id),
       ]);
       setOrder(data);
+      const lette = (risposteRighe as { data?: unknown } | null)?.data;
+      setRighe(Array.isArray(lette) ? (lette as RigaDelModulo[]) : []);
       setResoAperto((aperti as Array<{ id: string; status: string }> | null)?.[0] ?? null);
       setLoaded(true);
     })();
@@ -220,10 +227,13 @@ export default function NewReturnPage() {
    * I due campi erano già letti, riga 40. Bastava guardarli.
    */
   const consegnato = order.delivery_status === 'DELIVERED';
-  const giorniDallaConsegna = order.delivered_at
-    ? Math.floor((Date.now() - new Date(order.delivered_at).getTime()) / 86_400_000)
-    : null;
-  const fuoriTempo = giorniDallaConsegna !== null && giorniDallaConsegna > 14;
+  // 1/11/2026 — stesso conto della rotta (giorni con la virgola, base consegna o
+  // ordine): prima la pagina arrotondava per difetto e lasciava compilare un
+  // reso che il server rifiutava come scaduto. Vedi regole-del-modulo.ts.
+  const { scaduto: fuoriTempo, giorniPassati: giorniDallaConsegna } = scadenzaDelRecesso(order);
+  const motivi = ripensamentoAmmesso(prodottiDelModulo(righe))
+    ? REASONS
+    : REASONS.filter((r) => r.value !== 'CHANGED_MIND');
 
   if (!consegnato || fuoriTempo) {
     return (
@@ -289,8 +299,15 @@ export default function NewReturnPage() {
 
       <div className="mt-6 rounded-2xl bg-white p-6 shadow ring-1 ring-cream-300">
         <label className="block text-sm font-medium text-ink-700">Motivo del reso</label>
+        {motivi.length < REASONS.length && (
+          <p className="mt-1 text-sm text-ink-600">
+            «Ho cambiato idea» qui non c&apos;è: i prodotti di questo ordine sono freschi o fatti su
+            ordinazione, e la legge non prevede il recesso. Se sono arrivati difettosi o sbagliati,
+            scegli quel motivo: la garanzia vale sempre.
+          </p>
+        )}
         <div className="mt-2 space-y-2">
-          {REASONS.map((r) => (
+          {motivi.map((r) => (
             <label key={r.value} className="flex cursor-pointer items-center gap-3 rounded-lg border border-cream-300 p-3 hover:bg-cream-50">
               <input
                 type="radio"

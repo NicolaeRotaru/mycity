@@ -10,6 +10,7 @@ import {
   MessageCircle, RotateCcw,
   type LucideIcon,
 } from 'lucide-react';
+import { HREF_DEI_RESI, voceAttiva } from '@/components/account/voce-dei-resi';
 import { supabase } from '@/lib/supabase/client';
 import { logoNegozio } from '@/lib/image-url';
 import { useProfile } from '@/components/hooks/useProfile';
@@ -32,7 +33,7 @@ const NAV: NavGroup[] = [
   { group: 'Account', items: [
     { href: '/profile', icon: User, label: 'Profilo' },
     { href: '/orders', icon: Package, label: 'Ordini' },
-    { href: '/returns', icon: RotateCcw, label: 'Resi' },
+    { href: HREF_DEI_RESI, icon: RotateCcw, label: 'Resi' },
     { href: '/profile/addresses', icon: MapPin, label: 'Indirizzi' },
   ] },
   { group: 'Attività', items: [
@@ -52,9 +53,7 @@ const NAV: NavGroup[] = [
 ];
 
 function isActive(pathname: string, href: string): boolean {
-  // /profile è attivo solo sulla pagina esatta (le sottopagine hanno la loro voce).
-  if (href === '/profile') return pathname === '/profile';
-  return pathname === href || pathname.startsWith(href + '/');
+  return voceAttiva(pathname, href);
 }
 
 function getInitials(name: string): string {

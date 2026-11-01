@@ -8,6 +8,7 @@ import {
   MessageCircle, RotateCcw,
   type LucideIcon,
 } from 'lucide-react';
+import { HREF_DEI_RESI, voceAttiva } from '@/components/account/voce-dei-resi';
 import AccountSidebar from '@/components/account/AccountSidebar';
 import { useNotificationsCount } from '@/components/hooks/useNotificationsCount';
 import { useMessagesUnread } from '@/components/hooks/useMessagesUnread';
@@ -27,7 +28,7 @@ type NavItem = { href: string; icon: LucideIcon; label: string; badge?: NavBadge
 const MOBILE_NAV: NavItem[] = [
   { href: '/profile', icon: User, label: 'Profilo' },
   { href: '/orders', icon: Package, label: 'Ordini' },
-  { href: '/returns', icon: RotateCcw, label: 'Resi' },
+  { href: HREF_DEI_RESI, icon: RotateCcw, label: 'Resi' },
   { href: '/profile/addresses', icon: MapPin, label: 'Indirizzi' },
   { href: '/favorites', icon: Heart, label: 'Preferiti' },
   { href: '/messages', icon: MessageCircle, label: 'Messaggi', badge: 'messages' },
@@ -40,8 +41,7 @@ const MOBILE_NAV: NavItem[] = [
 ];
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === '/profile') return pathname === '/profile';
-  return pathname === href || pathname.startsWith(href + '/');
+  return voceAttiva(pathname, href);
 }
 
 function MobileAccountNav() {
