@@ -80,6 +80,34 @@ export const DEFAULT_FOOTER_TAGLINE =
 export const DESCRIZIONE_DEL_SITO =
   `Compra online dai negozi di Piacenza: alimentari, casa, elettronica, libri. ${CONSEGNA_ALL_ORA_CHE_SCEGLI}, pagamento alla consegna.`;
 
+/**
+ * 01/11/2026 — Le frasi salvate dall'amministratore vincono sui testi del codice: una riga scritta
+ * prima delle ondate 13-14 resterebbe pubblicata anche dopo l'unione (è successo all'eroe della
+ * home, site_settings.home_site, salvato il 24/6: «abbigliamento… arriva a casa in 30-60 min»).
+ * Questo è il freno: riconosce le due promesse superate — l'abbigliamento, che al lancio non c'è
+ * (catalogo.categorie), e i 30-60 minuti dati come cosa certa, senza dire che sono la veloce
+ * (consegna.promessa, Nicola 29/10). Ritorna il motivo, oppure null se il testo è a posto.
+ * Prova: tests/unit/il-branding-salvato-non-ripubblica-promesse-superate.test.ts
+ */
+export function promessaSuperata(testo: string): string | null {
+  const t = testo.toLowerCase();
+  if (/\babbigliamento\b/.test(t)) return 'abbigliamento: al lancio non c\'è';
+  if (/\b30\s*[-–]\s*60\s*min/.test(t) && !/\bveloce\b/.test(t)) {
+    return '30-60 minuti promessi come certi, senza dire che sono la consegna veloce';
+  }
+  return null;
+}
+
+function scartaSeSuperata(campo: string, testo: string): boolean {
+  const motivo = promessaSuperata(testo);
+  if (motivo) {
+    // Non sparisce in silenzio: chi legge i log sa quale frase salvata va riscritta da /admin/branding.
+    console.error(`[site-branding] frase salvata scartata (${campo}): ${motivo} — «${testo}»`);
+    return true;
+  }
+  return false;
+}
+
 export function defaultBranding(): Branding {
   return {
     announcement: { items: DEFAULT_WEDGE_ITEMS.map((i) => ({ ...i })), promoLinkEnabled: true },
@@ -94,13 +122,15 @@ export function normalizeBranding(raw: unknown): Branding {
     const parsed = brandingSchema.safeParse(raw);
     if (parsed.success) {
       const b = parsed.data;
+      const items = b.announcement.items.filter((i) => !scartaSeSuperata('announcement', i.text));
+      const tagline = b.footerTagline && !scartaSeSuperata('footerTagline', b.footerTagline) ? b.footerTagline : '';
       return {
         announcement: {
-          items: b.announcement.items.length > 0 ? b.announcement.items : DEFAULT_WEDGE_ITEMS.map((i) => ({ ...i })),
+          items: items.length > 0 ? items : DEFAULT_WEDGE_ITEMS.map((i) => ({ ...i })),
           promoLinkEnabled: b.announcement.promoLinkEnabled,
         },
         wordmark: { accent: b.wordmark.accent || 'My', rest: b.wordmark.rest || 'City' },
-        footerTagline: b.footerTagline || DEFAULT_FOOTER_TAGLINE,
+        footerTagline: tagline || DEFAULT_FOOTER_TAGLINE,
       };
     }
   }

@@ -268,3 +268,41 @@ export function getAttributesForCategory(
   if (!cur) return { fields: [], topSlug: null };
   return { fields: CATEGORY_ATTRIBUTES[cur.slug] ?? [], topSlug: cur.slug };
 }
+
+/**
+ * I campi obbligatori della categoria che nel dato sono vuoti (etichette).
+ * Un testo fatto solo di spazi conta come vuoto, come nel guardiano del database.
+ */
+export function campiObbligatoriMancanti(
+  fields: readonly AttributeField[],
+  attributes: Record<string, unknown> | null | undefined,
+): string[] {
+  const attr = attributes ?? {};
+  return fields
+    .filter((f) => f.required)
+    .filter((f) => {
+      const v = attr[f.key];
+      if (v === null || v === undefined) return true;
+      if (typeof v === 'string') return v.trim() === '';
+      if (Array.isArray(v)) return v.length === 0;
+      return false;
+    })
+    .map((f) => f.label);
+}
+
+/**
+ * Lo stato con cui nasce un prodotto caricato da file.
+ * Il caricamento da file salta il modulo, quindi salta anche i suoi controlli:
+ * un prodotto a cui manca un campo obbligatorio della sua categoria (per gli
+ * alimentari: Allergeni e Ingredienti, Reg. UE 1169/2011) nasce BOZZA, non in
+ * vendita. Il negoziante lo completa dal modulo e lo pubblica da li.
+ */
+export function statoAlCaricamentoDaFile(
+  categories: Array<{ id: string; slug: string; parent_id: string | null }>,
+  categoryId: string | null | undefined,
+  attributes: Record<string, unknown> | null | undefined,
+): { status: 'available' | 'draft'; mancanti: string[] } {
+  const { fields } = getAttributesForCategory(categories, categoryId);
+  const mancanti = campiObbligatoriMancanti(fields, attributes);
+  return { status: mancanti.length > 0 ? 'draft' : 'available', mancanti };
+}

@@ -102,7 +102,7 @@ BEGIN
   VALUES ('d0000000-0000-0000-0000-000000000003',
           '11111111-1111-1111-1111-111111111111',
           (SELECT alimentari FROM categorie_prova),
-          'Pane comune', 3.00, 'available', '{"allergeni":"Glutine"}'::jsonb);
+          'Pane comune', 3.00, 'available', '{"allergeni":"Glutine","ingredienti":"Farina, acqua, sale"}'::jsonb);
   INSERT INTO esiti VALUES ('con gli allergeni dichiarati si pubblica', true, 'passato');
 EXCEPTION WHEN others THEN
   INSERT INTO esiti VALUES ('con gli allergeni dichiarati si pubblica', false, 'rifiutato: ' || SQLERRM);
@@ -117,7 +117,7 @@ BEGIN
   VALUES ('d0000000-0000-0000-0000-000000000004',
           '11111111-1111-1111-1111-111111111111',
           (SELECT alimentari FROM categorie_prova),
-          'Mele', 2.00, 'available', '{"allergeni":"Nessuno dei 14 allergeni"}'::jsonb);
+          'Mele', 2.00, 'available', '{"allergeni":"Nessuno dei 14 allergeni","ingredienti":"Mele"}'::jsonb);
   INSERT INTO esiti VALUES ('«nessuno dei 14 allergeni» e una dichiarazione valida', true, 'passato');
 EXCEPTION WHEN others THEN
   INSERT INTO esiti VALUES ('«nessuno dei 14 allergeni» e una dichiarazione valida', false, 'rifiutato: ' || SQLERRM);
