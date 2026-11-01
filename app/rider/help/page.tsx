@@ -77,7 +77,9 @@ const TOPICS: { icon: LucideIcon; title: string; items: { q: string; a: string }
       { q: 'Sono assicurato?',
         a: 'Per attivare l\'account ti chiediamo una polizza RC valida, con la sua scadenza: la carichi nell\'iscrizione insieme agli altri documenti. In caso di infortunio chiama subito il 112, poi avvisa il supporto MyCity.' },
       { q: 'Cosa succede se un cliente è aggressivo?',
-        a: 'Allontanati. Chiama il supporto. La consegna viene annullata e pagata come fatta. Eventuali abusi portano al ban del cliente.' },
+        // Il compenso si versa solo sulle consegne completate (lib/stripe/payout.ts):
+        // qui non si promette altro finché Nicola non decide diversamente.
+        a: 'Allontanati e mettiti al sicuro: se sei in pericolo chiama il 112. Poi avvisa il supporto MyCity, che decide cosa fare della consegna e del cliente. Il compenso oggi arriva solo per le consegne completate.' },
       { q: 'Posso lavorare anche con altre piattaforme?',
         a: 'Sì, sei libero. Non c\'è esclusiva.' },
     ],

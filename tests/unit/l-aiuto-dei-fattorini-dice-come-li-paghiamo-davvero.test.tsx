@@ -53,6 +53,15 @@ describe('aiuto fattorini: le promesse seguono il codice', () => {
     expect(aiuto).toMatch(/un'ora dopo la consegna/);
   });
 
+  // lib/stripe/payout.ts (releaseRiderPayout) paga solo gli ordini DELIVERED:
+  // una consegna annullata non riceve il compenso, quindi la pagina non può
+  // promettere il contrario.
+  it('non promette il compenso su una consegna annullata', () => {
+    const html = renderToStaticMarkup(createElement(RiderHelpPage));
+    expect(html).not.toMatch(/annullata e pagata come fatta/);
+    expect(aiuto).not.toMatch(/annullat[ao][^.]*pagat[ao]/i);
+  });
+
   it('per le emergenze resta il 112', () => {
     expect(aiuto).toMatch(/112/);
     expect(aiuto).not.toMatch(/0523 ?000000/);
