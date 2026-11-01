@@ -30,7 +30,7 @@ import { VendutoDa } from '@/components/products/VendutoDa';
 const SELLER = '11111111-2222-3333-4444-555555555555';
 
 describe('«Venduto da»: se la vista dice no, resta una traccia', () => {
-  let spia: ReturnType<typeof vi.spyOn>;
+  let spia: { mock: { calls: unknown[][] }; mockRestore: () => void };
   beforeEach(() => {
     spia = vi.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -45,7 +45,7 @@ describe('«Venduto da»: se la vista dice no, resta una traccia', () => {
     stato.risposta = { data: undefined, error: errore };
     const html = renderToString(<VendutoDa sellerId={SELLER} storeName="Pane Quotidiano" />);
     expect(html).toBe('');
-    const righe = spia.mock.calls.filter((c) => String(c[0]).includes('[venduto-da]'));
+    const righe = spia.mock.calls.filter((c: unknown[]) => String(c[0]).includes('[venduto-da]'));
     expect(righe.length).toBe(1);
     expect(righe[0][1]).toMatchObject({ sellerId: SELLER, storeName: 'Pane Quotidiano', codice: '42703' });
     expect(String((righe[0][1] as { motivo: string }).motivo)).toContain('business_legal_name');
@@ -59,6 +59,6 @@ describe('«Venduto da»: se la vista dice no, resta una traccia', () => {
     const html = renderToString(<VendutoDa sellerId={SELLER} />);
     expect(html).toContain('Venduto da');
     expect(html).toContain('Pane Quotidiano');
-    expect(spia.mock.calls.filter((c) => String(c[0]).includes('[venduto-da]')).length).toBe(0);
+    expect(spia.mock.calls.filter((c: unknown[]) => String(c[0]).includes('[venduto-da]')).length).toBe(0);
   });
 });
