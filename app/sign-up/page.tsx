@@ -1,6 +1,5 @@
 'use client';
 
-import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 import { useRef, Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -14,7 +13,6 @@ import { Button } from '@/components/ui/Button';
 import { AuthShell, AuthAlternatives } from '@/components/ui/AuthShell';
 import { friendlyError } from '@/lib/errors';
 import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
-import { ritornoDopoLaConferma } from '@/lib/analytics/porta-di-ingresso';
 import { memoriaDellaScheda, percorsoVerificaEmail, ricordaEmailDaConfermare } from '@/lib/auth/conferma-email';
 
 /**
@@ -33,7 +31,6 @@ const ROLES: { value: Role; Icon: LucideIcon; title: string; subtitle: string }[
 ];
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? '';
 
 function isRole(v: string | null): v is Role {
   return v === 'buyer' || v === 'seller' || v === 'rider';
@@ -143,28 +140,27 @@ function SignUpInner() {
        * sta nel percorso di ritorno, non fra i parametri che la rotta
        * riscrive, così sopravvive anche al giro da /accetta-condizioni.
        */
-      const base = APP_URL || window.location.origin;
-      const emailRedirectTo = ritornoDopoLaConferma(base, returnTo, 'email');
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          // #79 — L'accettazione di Termini e Informativa non veniva registrata
-          // da nessuna parte: c'era la spunta nel modulo e basta. Il giorno in
-          // cui qualcuno contesta una condizione — un reso, una commissione —
-          // non c'e' modo di dimostrare che l'aveva accettata, ne' QUALE
-          // versione del testo aveva davanti. La versione viaggia con la
-          // registrazione e il server la mette a verbale al primo accesso.
-          data: {
-            role,
-            full_name: fullName.trim() || undefined,
-            versione_testi_accettati: VERSIONE_TESTI_LEGALI,
-          },
+      // Una regola sola per il controllo anti-robot: la registrazione passa
+      // dal server, come l'accesso. Il server costruisce il ritorno dal link
+      // (con returnTo) e mette nella registrazione ruolo, nome e la versione
+      // dei testi accettati (#79).
+      const risposta = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          role,
+          fullName: fullName.trim() || undefined,
+          returnTo,
           captchaToken: captchaToken || undefined,
-          emailRedirectTo,
-        },
+        }),
       });
-      if (error) throw error;
+      const corpo = (await risposta.json().catch(() => null)) as
+        | { user?: { id?: string } | null; error?: { message?: string } }
+        | null;
+      if (!risposta.ok) throw new Error(corpo?.error?.message || 'Registrazione non riuscita. Riprova.');
+      const data = { user: corpo?.user ?? null };
 
       if (referrerId && data.user?.id && data.user.id !== referrerId) {
         await supabase.from('referrals').insert({

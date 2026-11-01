@@ -13,6 +13,21 @@ export const runtime = 'nodejs';
 
 const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
+/**
+ * Una regola sola per il controllo anti-robot (la stessa della registrazione):
+ * acceso quando c'e' la coppia di chiavi, segreta e pubblica, e allora vale qui
+ * sul server. Senza la coppia la porta resta aperta alle persone e restano i
+ * limiti di frequenza.
+ */
+function antiRobotAcceso(): boolean {
+  const segreta = Boolean(process.env.TURNSTILE_SECRET_KEY?.trim());
+  const pubblica = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
+  if (segreta !== pubblica) {
+    logger.error(new Error("Chiavi anti-robot a meta': serve la coppia, segreta e pubblica"), { context: 'captcha' });
+  }
+  return segreta && pubblica;
+}
+
 /** La stessa risposta per i due modi in cui Supabase dice «email non confermata». */
 function rispostaEmailDaConfermare() {
   return NextResponse.json(
@@ -62,9 +77,11 @@ export async function POST(request: Request) {
     return ApiErrors.rateLimited(rlEmail.retryAfterSec, 'Troppi tentativi su questo account. Riprova tra qualche minuto.');
   }
 
-  const cap = await verifyTurnstileToken(captchaToken, ip);
-  if (!cap.ok) {
-    return ApiErrors.invalidRequest(cap.reason);
+  if (antiRobotAcceso()) {
+    const cap = await verifyTurnstileToken(captchaToken, ip);
+    if (!cap.ok) {
+      return ApiErrors.invalidRequest(cap.reason);
+    }
   }
 
   try {
