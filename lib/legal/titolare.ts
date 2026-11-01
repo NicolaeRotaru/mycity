@@ -149,6 +149,40 @@ export function titolare(): Titolare {
 }
 
 /**
+ * Il nome da stampare dove si dice chi gestisce il servizio.
+ *
+ * 1/11/2026 (ondata 5) — Finche' non c'e' una denominazione legale, il solo
+ * marchio («gestita da MyCity») non dice chi risponde del contratto. Scelta di
+ * Nicola: si nomina la persona, col marchio fra parentesi.
+ */
+export function nomePubblico(t: Titolare = titolare()): string {
+  return t.gestore ? `${t.gestore} (${t.denominazione})` : t.denominazione;
+}
+
+/**
+ * I dati d'identita' che la legge chiede e che ancora mancano (art. 7 d.lgs.
+ * 70/2003, art. 49 Codice del Consumo). Non si inventano: si elencano, cosi'
+ * il vuoto si vede nei registri invece di restare silenzioso.
+ */
+export function datiObbligatoriMancanti(t: Titolare = titolare()): string[] {
+  const mancanti: string[] = [];
+  if (!t.indirizzo) mancanti.push('sede');
+  if (!t.partitaIva) mancanti.push('partita IVA');
+  if (!t.pec) mancanti.push('PEC');
+  return mancanti;
+}
+
+/** Scrive nei registri cosa manca, a ogni pagina legale disegnata. */
+export function segnalaDatiMancanti(t: Titolare = titolare()): string[] {
+  const mancanti = datiObbligatoriMancanti(t);
+  if (mancanti.length > 0) {
+    // console diretto: questo file lo importano anche componenti del browser (il piede).
+    console.warn(`[titolare] dati obbligatori mancanti: ${mancanti.join(', ')} (variabili NEXT_PUBLIC_TITOLARE_*)`);
+  }
+  return mancanti;
+}
+
+/**
  * La riga di identificazione in fondo alle pagine, coi soli dati veri.
  *
  * Cosa c'era prima, su OGNI pagina del sito: «Sede legale: Via Roma 1, 29121

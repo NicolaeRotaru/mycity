@@ -4,7 +4,7 @@ import { indirizzoContatto } from '@/lib/contatti-pubblici';
 import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 import { metodiAlCheckout } from '@/lib/promesse-pubbliche';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
-import { rigaIdentita, titolare } from '@/lib/legal/titolare';
+import { nomePubblico, rigaIdentita, segnalaDatiMancanti, titolare } from '@/lib/legal/titolare';
 import { paragrafiConsegne, paragrafoDelRifiuto } from '@/lib/legal/promessa-cliente-assente';
 
 export const metadata = {
@@ -48,10 +48,12 @@ const TOC = [
 
 export default function TermsPage() {
   const chiSiamo = titolare();
-  const identita = rigaIdentita(chiSiamo);
+  // 1/11/2026 (ondata 5) — «gestita da» nomina la persona; la riga d'identita' non la ripete.
+  const identita = rigaIdentita({ ...chiSiamo, gestore: null });
+  segnalaDatiMancanti(chiSiamo);
   // 31/10/2026 (ondata 6) — Il modulo di recesso aveva per destinatario «MyCity», un marchio,
   // senza un indirizzo a cui scrivere. Finché manca la casella dei resi, la casella pubblica.
-  const destinatarioRecesso = chiSiamo.gestore ? `${chiSiamo.gestore}, che gestisce ${chiSiamo.denominazione}` : chiSiamo.denominazione;
+  const destinatarioRecesso = nomePubblico(chiSiamo);
   const emailRecesso = chiSiamo.emailResi ?? indirizzoContatto('info');
   const conCarta = metodiAlCheckout().includes('carta-adesso');
 
@@ -67,7 +69,7 @@ export default function TermsPage() {
         <p>
           I presenti Termini di Servizio (&quot;<strong>Termini</strong>&quot;) regolano l&apos;utilizzo
           della piattaforma MyCity (il &quot;<strong>Servizio</strong>&quot;), gestita da
-          <strong> {chiSiamo.denominazione}</strong>
+          <strong> {nomePubblico(chiSiamo)}</strong>
           {identita ? <> — {identita}</> : null} (di seguito &quot;MyCity&quot;, &quot;noi&quot;).
         </p>
         <p>
