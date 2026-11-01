@@ -1,4 +1,5 @@
--- Prova del collaudo finale dell'1/11/2026. Un alimento gia' in vendita PRIMA della 195 (allergeni si', ingredienti no: la 126 lo lasciava passare).
+-- Prova del collaudo finale dell'1/11/2026. Un alimento gia' in vendita PRIMA della 195 senza allergeni ne'
+-- ingredienti: e' il caso vero di produzione (7 prodotti su 9 in vendita il 1/11/2026).
 -- Dopo la 195: il cliente lo compra (reserve_stock, come checkout carta e contrassegno) e il negozio cambia il prezzo.
 BEGIN;
 SET mycity.allow_profile_write = '1';
@@ -13,7 +14,7 @@ ALTER TABLE public.products DISABLE TRIGGER zz_prodotti_alimentari_dichiarazioni
 INSERT INTO public.products (id, seller_id, name, description, price, stock, category_id, attributes, status)
 SELECT '19600000-0000-0000-0000-0000000000aa', (SELECT id FROM public.profiles LIMIT 1), 'Focaccia vecchia', 'Focaccia genovese', 3, 10,
        (SELECT id FROM public.categories WHERE slug='alimentari' AND parent_id IS NULL LIMIT 1),
-       '{"allergeni":"Glutine"}'::jsonb, 'available';
+       '{}'::jsonb, 'available';
 ALTER TABLE public.products ENABLE TRIGGER zz_prodotti_alimentari_dichiarazioni;
 DO $$
 DECLARE ok boolean; rotto text := '';

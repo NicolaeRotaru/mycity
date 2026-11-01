@@ -29,12 +29,23 @@
 -- database dove la 126 non e' ancora passata.
 --
 -- DA FIRMARE DA NICOLA prima di applicarla in produzione (rosso).
--- Prima di applicarla: controllare quanti alimenti 'available' sono gia' senza
--- ingredienti (il trigger scatta solo su INSERT/UPDATE, quelli esistenti restano
--- comprabili finche' non si modificano):
---   SELECT p.id, p.name FROM products p JOIN categories c ON c.id = p.category_id
+-- Prima di applicarla: contare gli alimenti gia' in vendita a cui mancano
+-- allergeni o ingredienti. Restano comprabili, annullabili e col prezzo
+-- modificabile anche dopo la 195 (il controllo non guarda giacenza e prezzo),
+-- ma PRIMA di ripubblicarli o di cambiarne le dichiarazioni o la categoria vanno
+-- completati allergeni e ingredienti, altrimenti il salvataggio viene rifiutato.
+-- Il 1/11/2026 erano 7 su 9 prodotti in vendita, tutti senza allergeni e senza
+-- ingredienti (il catalogo del fornaio).
+--   WITH RECURSIVE alimentari AS (
+--     SELECT id FROM categories WHERE slug = 'alimentari' AND parent_id IS NULL
+--     UNION ALL
+--     SELECT c.id FROM categories c JOIN alimentari a ON c.parent_id = a.id
+--   )
+--   SELECT count(*) FROM products p
 --    WHERE p.status = 'available'
---      AND btrim(coalesce(p.attributes->>'ingredienti','')) = '';
+--      AND p.category_id IN (SELECT id FROM alimentari)
+--      AND (btrim(coalesce(p.attributes->>'allergeni','')) = ''
+--        OR btrim(coalesce(p.attributes->>'ingredienti','')) = '');
 --
 -- Prova: tests/sql/195_un_alimento_senza_ingredienti_non_si_pubblica.test.sql
 -- (rossa prima della 195, verde dopo).
