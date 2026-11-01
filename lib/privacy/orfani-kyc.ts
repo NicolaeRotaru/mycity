@@ -25,6 +25,10 @@
  *    e il passo fallisce: e' molto piu' probabile una lettura sbagliata (colonna
  *    rinominata, permessi) che «tutti i documenti sono orfani».
  *  · Un tetto di file rimossi per notte: il resto aspetta la notte dopo.
+ *  · Prima di togliere, per ogni cartella `<uid>` si RILEGGE il profilo e si
+ *    toglie solo cio' che nessuna delle sei colonne indica; se la rilettura
+ *    fallisce, quella cartella non si tocca. Il secchio non e' nel backup: un
+ *    documento vivo tolto per sbaglio non torna.
  */
 
 import type { Registro } from './potature-ritenzione';
@@ -56,10 +60,18 @@ export type VoceSecchio = {
   updated_at?: string | null;
 };
 
-type LetturaProfili = {
+/**
+ * La lettura dei profili. Si pagina A CHIAVE (`gt('id', ultimo)` + `limit`) e non
+ * con `range`: l'insieme filtrato cambia mentre si legge (un account cancellato,
+ * una potatura che azzera le colonne), e con lo scostamento le righe scalano e
+ * una salta — i suoi documenti vivi sembrerebbero orfani.
+ */
+type LetturaProfili = PromiseLike<{ data: Record<string, unknown>[] | null; error: Errore }> & {
   or(espressione: string): LetturaProfili;
   order(colonna: string, opzioni: { ascending: boolean }): LetturaProfili;
-  range(da: number, a: number): PromiseLike<{ data: Record<string, unknown>[] | null; error: Errore }>;
+  gt(colonna: string, valore: string): LetturaProfili;
+  eq(colonna: string, valore: string): LetturaProfili;
+  limit(quante: number): LetturaProfili;
 };
 
 /** Il minimo che serve: elencare e togliere dal secchio, leggere i profili. */
@@ -98,6 +110,8 @@ export type RiepilogoOrfani = {
   rinviati: number;
   /** Sottocartelle dentro la cartella di una persona: non sono del caricamento, non si toccano. */
   cartelleSaltate: number;
+  /** Orfani salvati all'ultimo controllo: il profilo, riletto, li indica (o non si e' potuto rileggere). */
+  salvatiAllaRilettura: number;
 };
 
 /**
@@ -107,16 +121,24 @@ export type RiepilogoOrfani = {
  */
 export function percorsoDelRiferimento(valore: unknown): string | null {
   if (typeof valore !== 'string' || valore.trim() === '') return null;
-  if (!/^https?:\/\//i.test(valore)) return valore;
-  const segno = `/${SECCHIO_DOCUMENTI}/`;
-  const i = valore.indexOf(segno);
-  if (i < 0) return null;
-  const resto = valore.slice(i + segno.length).split('?')[0];
-  try {
-    return decodeURIComponent(resto) || null;
-  } catch {
-    return resto || null;
+  let percorso = valore.trim();
+  if (/^https?:\/\//i.test(percorso)) {
+    const segno = `/${SECCHIO_DOCUMENTI}/`;
+    const i = percorso.indexOf(segno);
+    if (i < 0) return null;
+    percorso = percorso.slice(i + segno.length).split('?')[0];
+    try {
+      percorso = decodeURIComponent(percorso);
+    } catch {
+      /* resta com'e' */
+    }
   }
+  // Un valore scritto «/u1/x.jpg» o «kyc-docs/u1/x.jpg» indica lo stesso file
+  // che l'elenco chiama «u1/x.jpg»: senza normalizzare sembrerebbe orfano.
+  percorso = percorso.replace(/^\/+/, '');
+  if (percorso.startsWith(`${SECCHIO_DOCUMENTI}/`)) percorso = percorso.slice(SECCHIO_DOCUMENTI.length + 1);
+  percorso = percorso.replace(/^\/+/, '');
+  return percorso || null;
 }
 
 async function elencaTutto(
@@ -138,25 +160,61 @@ async function elencaTutto(
   }
 }
 
+const COLONNE_LETTE = ['id', ...COLONNE_DOCUMENTI_KYC].join(', ');
+
+function percorsiDellaRiga(riga: Record<string, unknown>, dove: Set<string>): void {
+  for (const c of COLONNE_DOCUMENTI_KYC) {
+    const p = percorsoDelRiferimento(riga[c]);
+    if (p) dove.add(p);
+  }
+}
+
 async function leggiRiferimenti(admin: ClienteOrfani, pagina: number): Promise<Set<string>> {
   const vivi = new Set<string>();
   const filtro = COLONNE_DOCUMENTI_KYC.map((c) => `${c}.not.is.null`).join(',');
-  for (let da = 0; ; da += pagina) {
-    const { data, error } = await admin
-      .from('profiles')
-      .select(['id', ...COLONNE_DOCUMENTI_KYC].join(', '))
-      .or(filtro)
-      .order('id', { ascending: true })
-      .range(da, da + pagina - 1);
+  let ultimo: string | null = null;
+  for (;;) {
+    let q = admin.from('profiles').select(COLONNE_LETTE).or(filtro).order('id', { ascending: true });
+    if (ultimo !== null) q = q.gt('id', ultimo);
+    const { data, error } = await q.limit(pagina);
     if (error) throw new Error(`riferimenti ai documenti non letti: ${error.message}`);
     if (!Array.isArray(data)) throw new Error('riferimenti ai documenti non letti: il database non ha restituito righe');
-    for (const riga of data) {
-      for (const c of COLONNE_DOCUMENTI_KYC) {
-        const p = percorsoDelRiferimento(riga[c]);
-        if (p) vivi.add(p);
-      }
-    }
+    for (const riga of data) percorsiDellaRiga(riga, vivi);
     if (data.length < pagina) return vivi;
+    const id = data[data.length - 1]?.id;
+    if (typeof id !== 'string' || (ultimo !== null && id <= ultimo)) {
+      throw new Error('riferimenti ai documenti non letti: la pagina non avanza');
+    }
+    ultimo = id;
+  }
+}
+
+/**
+ * L'ultimo controllo, cartella per cartella: rilegge il profilo della persona e
+ * dice quali candidati sono ANCORA orfani. Se la rilettura fallisce, nessuno.
+ */
+async function ancoraOrfani(
+  admin: ClienteOrfani,
+  registro: Registro,
+  uid: string,
+  candidati: string[],
+): Promise<string[]> {
+  try {
+    const { data, error } = await admin.from('profiles').select(COLONNE_LETTE).eq('id', uid);
+    if (error || !Array.isArray(data)) {
+      registro.warn('[cron-deletions] orfani kyc: profilo non riletto, non si tocca niente', {
+        uid, err: error?.message ?? 'nessuna riga restituita',
+      });
+      return [];
+    }
+    const vivi = new Set<string>();
+    for (const riga of data) percorsiDellaRiga(riga, vivi);
+    return candidati.filter((p) => !vivi.has(p));
+  } catch (e) {
+    registro.warn('[cron-deletions] orfani kyc: profilo non riletto, non si tocca niente', {
+      uid, err: e instanceof Error ? e.message : String(e),
+    });
+    return [];
   }
 }
 
@@ -211,7 +269,21 @@ export async function potaOrfaniKyc(
   const maturi = orfani
     .filter((f): f is { percorso: string; eta: number } => f.eta !== null && f.eta < limite)
     .sort((a, b) => a.eta - b.eta);
-  const daTogliere = maturi.slice(0, tetto).map((f) => f.percorso);
+  const scelti = maturi.slice(0, tetto).map((f) => f.percorso);
+
+  // ③-bis L'ultimo controllo prima di togliere: si rilegge il profilo della
+  // cartella. Un file fuori da una cartella non ha un profilo da rileggere: resta.
+  const perCartella = new Map<string, string[]>();
+  for (const p of scelti) {
+    const i = p.indexOf('/');
+    if (i <= 0) continue;
+    const uid = p.slice(0, i);
+    perCartella.set(uid, [...(perCartella.get(uid) ?? []), p]);
+  }
+  const daTogliere: string[] = [];
+  for (const [uid, candidati] of perCartella) {
+    daTogliere.push(...(await ancoraOrfani(admin, registro, uid, candidati)));
+  }
 
   // ④ La rimozione, a gruppi.
   let rimossi = 0;
@@ -233,8 +305,9 @@ export async function potaOrfaniKyc(
     orfani: orfani.length,
     recenti: orfani.length - maturi.length,
     rimossi,
-    rinviati: maturi.length - daTogliere.length,
+    rinviati: maturi.length - scelti.length,
     cartelleSaltate,
+    salvatiAllaRilettura: scelti.length - daTogliere.length,
   };
   registro.info('[cron-deletions] orfani del secchio kyc-docs', riepilogo);
   if (rifiutati.length > 0) {

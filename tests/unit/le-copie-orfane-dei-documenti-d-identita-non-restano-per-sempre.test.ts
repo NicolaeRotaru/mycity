@@ -8,6 +8,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { potaOrfaniKyc, type ClienteOrfani, type VoceSecchio } from '@/lib/privacy/orfani-kyc';
 import { eseguiPotature, potatureNotturne } from '@/lib/privacy/potature-ritenzione';
 
+type Lettura = ReturnType<ReturnType<ClienteOrfani['from']>['select']>;
+type Risp = { data: Record<string, unknown>[] | null; error: { message: string } | null };
+
 const ADESSO = Date.parse('2026-11-01T03:00:00Z');
 const giorniFa = (g: number) => new Date(ADESSO - g * 86_400_000).toISOString();
 
@@ -24,6 +27,7 @@ function mondo(opz: {
   file: Record<string, string>;
   profili: Array<Record<string, unknown>>;
   profiliRotti?: 'subito' | 'seconda-pagina';
+  rilettureRotte?: boolean;
   rimozioneRifiutata?: boolean;
 }): { admin: ClienteOrfani; m: Mondo } {
   const m: Mondo = {
@@ -38,17 +42,33 @@ function mondo(opz: {
       expect(tabella).toBe('profiles');
       return {
         select: () => {
+          // Un finto PostgREST: i filtri si applicano quando si aspetta la risposta.
+          const filtri: Array<(r: Record<string, unknown>) => boolean> = [];
+          let quante = Infinity;
+          let rilettura = false;
           const q = {
             or: () => q,
             order: () => q,
-            range: async (da: number, a: number) => {
-              m.rangeCalls.push([da, a]);
-              if (opz.profiliRotti === 'subito') return { data: null, error: { message: 'permission denied' } };
-              if (opz.profiliRotti === 'seconda-pagina' && da > 0) return { data: null, error: { message: 'timeout' } };
-              return { data: m.profili.slice(da, a + 1), error: null };
+            gt: (c: string, v: string) => { filtri.push((r) => String(r[c]) > v); return q; },
+            eq: (c: string, v: string) => { rilettura = true; filtri.push((r) => r[c] === v); return q; },
+            limit: (n: number) => { quante = n; return q; },
+            then: (ok?: ((v: Risp) => unknown) | null, ko?: ((e: unknown) => unknown) | null) => {
+              let risposta: { data: Record<string, unknown>[] | null; error: { message: string } | null };
+              const da = filtri.length === 0 ? 0 : 1;
+              if (!rilettura) m.rangeCalls.push([da, da]);
+              if (!rilettura && opz.profiliRotti === 'subito') risposta = { data: null, error: { message: 'permission denied' } };
+              else if (!rilettura && opz.profiliRotti === 'seconda-pagina' && filtri.length > 0) risposta = { data: null, error: { message: 'timeout' } };
+              else if (rilettura && opz.rilettureRotte) risposta = { data: null, error: { message: 'timeout' } };
+              else {
+                const righe = m.profili
+                  .filter((r) => filtri.every((f) => f(r)))
+                  .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+                risposta = { data: righe.slice(0, quante), error: null };
+              }
+              return Promise.resolve(risposta).then(ok, ko);
             },
           };
-          return q;
+          return q as unknown as Lettura;
         },
       };
     },
@@ -148,7 +168,7 @@ describe('le copie orfane dei documenti d identita', () => {
     expect(m.secchio.has('u4/selfie-c.jpg')).toBe(true);
     expect(r).toMatchObject({ listati: 15, riferiti: 10, orfani: 5, rimossi: 5 });
     expect(m.listCalls.some((c) => c.prefisso === '' && c.offset >= 4)).toBe(true);
-    expect(m.rangeCalls.some(([da]) => da >= 4)).toBe(true);
+    expect(m.rangeCalls.filter(([da]) => da > 0).length, 'i profili non sono stati letti oltre la prima pagina').toBeGreaterThanOrEqual(2);
   });
 
   it('non toglie piu del tetto in una notte, e i piu vecchi per primi', async () => {
@@ -171,5 +191,43 @@ describe('le copie orfane dei documenti d identita', () => {
     expect(passi).toHaveLength(1);
     const rapporto = await eseguiPotature(admin as never, muto(), ADESSO, passi);
     expect(rapporto.fallite).toBe(1);
+  });
+  it('rilegge il profilo prima di togliere: un riferimento scritto dopo la lettura salva il file', async () => {
+    const { admin, m } = mondo({
+      file: { 'u1/selfie-nuovo.jpg': giorniFa(30), 'u1/vivo.jpg': giorniFa(30) },
+      profili: [{ id: 'u1', kyc_selfie_url: 'u1/vivo.jpg' }],
+    });
+    // Fra la lettura in blocco e la rimozione il profilo passa a indicare l'altro file.
+    const listaVera = admin.from('profiles').select;
+    let letture = 0;
+    admin.from = () => ({
+      select: (c: string) => {
+        letture += 1;
+        if (letture === 2) m.profili[0].kyc_id_doc_front_url = 'u1/selfie-nuovo.jpg';
+        return listaVera(c);
+      },
+    });
+    const r = await potaOrfaniKyc(admin, muto(), ADESSO);
+    expect(m.rimozioni, 'un documento che il profilo indica e stato tolto').toEqual([]);
+    expect(r).toMatchObject({ rimossi: 0, salvatiAllaRilettura: 1 });
+  });
+
+  it('se la rilettura del profilo fallisce, quella cartella non si tocca', async () => {
+    const { admin, m } = mondo({
+      file: { 'u1/a.jpg': giorniFa(30), 'u1/vivo.jpg': giorniFa(30) },
+      profili: [{ id: 'u1', kyc_selfie_url: 'u1/vivo.jpg' }],
+      rilettureRotte: true,
+    });
+    await potaOrfaniKyc(admin, muto(), ADESSO);
+    expect(m.rimozioni).toEqual([]);
+  });
+
+  it('un valore salvato con la barra iniziale o col nome del secchio indica lo stesso file', async () => {
+    const { admin, m } = mondo({
+      file: { 'u1/a.jpg': giorniFa(30), 'u1/b.jpg': giorniFa(30), 'u1/c.jpg': giorniFa(30) },
+      profili: [{ id: 'u1', kyc_selfie_url: '/u1/a.jpg', kyc_id_doc_front_url: 'kyc-docs/u1/b.jpg' }],
+    });
+    await potaOrfaniKyc(admin, muto(), ADESSO);
+    expect([...m.secchio.keys()].sort()).toEqual(['u1/a.jpg', 'u1/b.jpg']);
   });
 });
