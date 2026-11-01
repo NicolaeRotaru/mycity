@@ -49,11 +49,14 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       // prima della 180 la colonna non c'e', la riga arriva senza e la spunta resta
       // vuota; il modulo la manda solo se il negoziante la cambia. Con i tipi
       // rigenerati (lib/database.types.ts) la colonna puo' entrare nella lettura qui sopra.
-      const { data: recesso } = await supabase
+      // Se questa lettura cade il modulo non si apre: aperto, nasconderebbe la spunta
+      // e il negoziante non vedrebbe che il prodotto è escluso dal recesso.
+      const { data: recesso, error: erroreRecesso } = await supabase
         .from('products')
         .select('*')
         .eq('id', id)
         .maybeSingle();
+      if (erroreRecesso) throw erroreRecesso;
       const nonRecedibile = (recesso as { non_recedibile?: unknown } | null)?.non_recedibile === true;
       // La spunta compare solo se la colonna c'e' davvero (dopo la 180): se no
       // il salvataggio la manderebbe a una colonna che non esiste.
