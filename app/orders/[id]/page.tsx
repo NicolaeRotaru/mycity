@@ -480,6 +480,16 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                 <Undo2 size={15} strokeWidth={2.2} aria-hidden /> {reso.testo}
               </p>
             )}
+            {/* Una richiesta aperta si vede e si puo' ancora ritirare: la pagina del reso
+                ha «Ritira la richiesta», e finche' resta aperta un secondo reso non parte. */}
+            {reso?.aperto && (
+              <Link
+                href={`/orders/${id}/return`}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-cream-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-cream-50"
+              >
+                Vedi la richiesta
+              </Link>
+            )}
             {(!reso || reso.sePuoChiederne) && (
               <Link
                 href={`/orders/${id}/return`}

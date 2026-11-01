@@ -100,6 +100,11 @@ describe.skipIf(!BIN_POSTGRES)('la posizione non si scrive su un ordine chiuso (
     expect(posizione(ANNULLATO)).toBe('vuota|vuota|vuota');
   });
 
+  it("nemmeno scrivendo solo l'ora della posizione", () => {
+    comeFattorino(`UPDATE public.orders SET rider_position_updated_at = now() WHERE id = '${ANNULLATO}'`);
+    expect(posizione(ANNULLATO)).toBe('vuota|vuota|vuota');
+  });
+
   it('su un ordine in consegna la posizione si scrive ancora', () => {
     comeFattorino(
       `UPDATE public.orders SET rider_lat = 45.05, rider_lng = 9.69, rider_position_updated_at = '2026-11-01 10:00+00'
