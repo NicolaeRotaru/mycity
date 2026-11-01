@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
-  normalizeBranding, promessaSuperata, defaultBranding, DEFAULT_FOOTER_TAGLINE, DESCRIZIONE_DEL_SITO,
+  normalizeBranding, defaultBranding, DEFAULT_FOOTER_TAGLINE,
 } from '@/lib/site-branding';
 
 /**
@@ -35,12 +35,14 @@ describe('il branding salvato non ripubblica promesse superate', () => {
     expect(b.announcement.items).toEqual(defaultBranding().announcement.items);
   });
 
-  it('la veloce detta come veloce resta ammessa, e i testi del codice sono puliti', () => {
-    expect(promessaSuperata('Consegna all\'ora che scegli, oppure veloce in 30-60 minuti')).toBeNull();
-    expect(promessaSuperata('Spedizione in 30-60 min garantita')).not.toBeNull();
-    expect(promessaSuperata('Moda e abbigliamento')).not.toBeNull();
-    for (const t of [DEFAULT_FOOTER_TAGLINE, DESCRIZIONE_DEL_SITO, ...defaultBranding().announcement.items.map((i) => i.text)]) {
-      expect(promessaSuperata(t)).toBeNull();
-    }
+  it('la veloce detta come veloce resta ammessa: il freno non scarta le frasi giuste', () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const b = normalizeBranding({
+      announcement: { items: [{ icon: 'zap', text: 'Oppure veloce in 30-60 minuti' }] },
+      footerTagline: 'Il marketplace dei negozi di Piacenza.',
+    });
+    expect(b.announcement.items.map((i) => i.text)).toEqual(['Oppure veloce in 30-60 minuti']);
+    expect(b.footerTagline).toBe('Il marketplace dei negozi di Piacenza.');
+    expect(err).not.toHaveBeenCalled();
   });
 });
