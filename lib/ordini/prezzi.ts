@@ -464,8 +464,21 @@ export function consegnaDopoLAnnullo(a: {
   if (!chiSeNeVa || vivi.length < 2) return null;
 
   // Il conto scritto deve essere quello della regola, col codice o senza: altrimenti non si tocca.
+  // 1/11/2026 — Dopo un annullo che ha toccato il tetto qui sotto, i rimasti portano una consegna
+  // PIÙ BASSA della regola (la parte oltre il tetto l'ha tenuta la piattaforma), col fattorino
+  // della regola. Prima quel carrello non si riconosceva più: al secondo rifiuto il conto tornava
+  // null e il fattorino dell'ultimo negozio restava a 1 € invece di 3 €. Solo se nel carrello c'è
+  // già un annullato, quindi, la consegna scritta può stare sotto la regola (mai sopra, mai sotto
+  // zero); il fattorino deve essere sempre quello della regola.
+  // Prova: tests/unit/col-codice-il-secondo-rifiuto-rifa-il-giro.test.ts.
+  const dopoUnAnnullo = a.ordini.some((o) => o.giaAnnullato);
   const scritto = (c: Array<{ deliveryFeeCents: number; riderFeeCents: number }>) =>
-    c.every((x, i) => x.deliveryFeeCents === vivi[i].deliveryFeeCents && x.riderFeeCents === vivi[i].riderFeeCents);
+    c.every(
+      (x, i) =>
+        x.riderFeeCents === vivi[i].riderFeeCents &&
+        (x.deliveryFeeCents === vivi[i].deliveryFeeCents ||
+          (dopoUnAnnullo && vivi[i].deliveryFeeCents >= 0 && vivi[i].deliveryFeeCents < x.deliveryFeeCents)),
+    );
   const codice = [false, true].find((conCodice) => scritto(contoDelGiro(vivi, a.consegnaVeloce, conCodice)));
   if (codice === undefined) return null;
 
