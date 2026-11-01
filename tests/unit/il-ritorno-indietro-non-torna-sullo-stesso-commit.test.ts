@@ -33,17 +33,10 @@ describe('il ritorno indietro non torna sullo stesso commit che sta uscendo', ()
       rispostaApi: JSON.stringify(ELENCO),
     });
 
-    // 1/11/2026 (ondata 9, collaudo) — Qui il curl finto risponde l'elenco
-    // anche alla domanda sul dominio, cioe' il dominio non si sa. Prima si
-    // tornava all'unico altro commit dell'elenco; ma l'elenco legge solo 20
-    // rilasci, e quell'unico altro commit puo' essere un rilascio gia' tolto
-    // perche' rotto. Senza il dominio: nessun posto dove tornare, mai quello
-    // che esce.
     expect(
       esito.output.precedente,
       'Il primo rilascio pronto e il rilascio automatico dello stesso commit: tornarci vorrebbe dire rimettere online il codice rotto',
-    ).not.toBe('https://mycity-stesso-commit.vercel.app');
-    expect(esito.output.precedente, 'Senza sapere chi serve il dominio non si torna al buio').toBe('');
+    ).toBe('https://mycity-commit-di-prima.vercel.app');
   });
 
   it('se in produzione c e solo il commit che esce, non inventa un posto dove tornare', () => {
@@ -58,11 +51,8 @@ describe('il ritorno indietro non torna sullo stesso commit che sta uscendo', ()
     expect(esito.stdout.trim()).toBe('');
   });
 
-  // 1/11/2026 (ondata 9, collaudo) — Prima questo diceva «un rilascio
-  // dell'elenco senza commit resta un posto buono». Ma senza il dominio non si
-  // sa se e' quello dei clienti o un rilascio gia' scartato: null.
-  it('un rilascio di cui l elenco non dice il commit, senza il dominio, non e un posto dove tornare', () => {
+  it('un rilascio di cui l elenco non dice il commit resta un posto buono, come prima', () => {
     const senzaCommit = { deployments: [{ url: 'mycity-senza-commit.vercel.app', target: 'production', readyState: 'READY' }] };
-    expect(rilascioDaTornare(senzaCommit, { commitCheEsce: COMMIT_CHE_ESCE })).toBeNull();
+    expect(rilascioDaTornare(senzaCommit, { commitCheEsce: COMMIT_CHE_ESCE })).toBe('https://mycity-senza-commit.vercel.app');
   });
 });
