@@ -9,7 +9,7 @@ import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Field';
 import { Mail, MessageCircle, Phone, MapPin, Clock, Lightbulb } from 'lucide-react';
-import { rigaIdentita, titolare } from '@/lib/legal/titolare';
+import { nomePubblico, rigaIdentita, titolare } from '@/lib/legal/titolare';
 import { linkWhatsApp } from '@/lib/contatto-whatsapp';
 import { indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
 
@@ -201,7 +201,7 @@ export default function ContactPage() {
                 risponde (la persona che gestisce, finché manca il nome legale) e,
                 se la sede non è ancora pubblica, vederlo detto invece di un vuoto. */}
             <p className="text-sm text-ink-700 leading-relaxed">
-              {chiSiamo.gestore ? `${chiSiamo.gestore} (${chiSiamo.denominazione})` : chiSiamo.denominazione}
+              {nomePubblico(chiSiamo)}
               <br />
               {chiSiamo.indirizzo
                 ? <>Sede: {chiSiamo.indirizzo}</>
