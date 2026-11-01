@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept, regolaDelSecchio, tettoInMB } from '@/lib/storage/regole-secchi';
+import { FotoHeicNonLeggibile, fotoProntaAlCaricamento } from '@/components/seller/site/foto-heic';
 
 type Props = {
   userId: string;
@@ -139,8 +140,21 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
         // sbagliarla bisogna riscrivere una chiamata a `.upload()`, che e' una
         // modifica visibile in una revisione — non una stringa cambiata di
         // nascosto.
+        // La foto HEIC dell'iPhone diventa JPEG prima di partire: com'era, i clienti su Chrome e
+        // Android vedevano un riquadro rotto. Se il browser non sa leggerla resta fuori, con un
+        // messaggio, e le altre foto scelte insieme partono lo stesso.
+        let pronta: File;
+        try {
+          pronta = await fotoProntaAlCaricamento(file);
+        } catch (err) {
+          if (err instanceof FotoHeicNonLeggibile) {
+            toast.error(err.message);
+            continue;
+          }
+          throw err;
+        }
         const { percorso, publicUrl } = await caricaImmagine(supabase, {
-          file,
+          file: pronta,
           userId,
           cartella: productId,
           secchio: SECCHIO_RECENSIONI,

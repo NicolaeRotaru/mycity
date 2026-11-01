@@ -20,6 +20,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
+import { fotoProntaAlCaricamento, fraseSeHeic } from '@/components/seller/site/foto-heic';
 
 /** Il magazzino delle storie. La sua regola sta in lib/storage/regole-secchi.ts, non qui. */
 const SECCHIO_STORIE = 'stories';
@@ -79,6 +80,9 @@ export default function SellerStoriesPage() {
   const create = useMutation({
     mutationFn: async () => {
       if (!image) throw new Error('Seleziona un\'immagine');
+      // La foto HEIC dell'iPhone diventa JPEG prima di partire (Chrome e Android non la mostrano);
+      // se il browser non sa leggerla, la storia non parte e chi carica legge cosa fare.
+      const foto = await fotoProntaAlCaricamento(image);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
@@ -105,7 +109,7 @@ export default function SellerStoriesPage() {
       let publicUrl: string;
       try {
         ({ publicUrl } = await caricaImmagine(supabase, {
-          file: image,
+          file: foto,
           userId: user.id,
           secchio: SECCHIO_STORIE,
         }));
@@ -135,7 +139,7 @@ export default function SellerStoriesPage() {
       qc.invalidateQueries({ queryKey: queryKeys.seller.myStories });
       qc.invalidateQueries({ queryKey: queryKeys.seller.storiesActive });
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(fraseSeHeic(err, (x) => friendlyError(x))),
     onSettled: () => setUploading(false),
   });
 

@@ -11,6 +11,7 @@ import { friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { avvisoPerGliScartati, mappaAccept, pesoMassimo } from '@/lib/storage/casella-di-caricamento';
 import { richiestaPerIlSito } from '@/lib/storage/foto-del-sito';
+import { fotoProntaAlCaricamento, fraseSeHeic } from './foto-heic';
 
 /**
  * Vedi `lib/storage/casella-di-caricamento.ts`: l'elenco dei file che questa casella accetta lo
@@ -31,11 +32,14 @@ const PESO_MASSIMO = pesoMassimo();
  * Stesso pattern di lib/products/uploadImages.ts.
  */
 export async function uploadSiteImage(file: File): Promise<string> {
+  // La foto HEIC dell'iPhone diventa JPEG qui, PRIMA di partire: salvata com'era, Chrome e
+  // Android la mostravano come un riquadro rotto. Se il browser non sa leggerla, si ferma qui.
+  const pronta = await fotoProntaAlCaricamento(file);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Non autenticato');
   // Cosa chiediamo al deposito lo decide `lib/storage/foto-del-sito.ts`, dove una prova può
   // ESEGUIRLO: qui dentro — 'use client', React, sonner, il client Supabase — non si poteva.
-  const { publicUrl } = await caricaImmagine(supabase, richiestaPerIlSito(file, user.id));
+  const { publicUrl } = await caricaImmagine(supabase, richiestaPerIlSito(pronta, user.id));
   return publicUrl;
 }
 
@@ -58,7 +62,7 @@ export function SingleImageUpload({ value, onChange }: { value: string; onChange
       try {
         onChange(await uploadSiteImage(f));
       } catch (e) {
-        toast.error(friendlyError(e));
+        toast.error(fraseSeHeic(e, (x) => friendlyError(x)));
       } finally {
         setBusy(false);
       }

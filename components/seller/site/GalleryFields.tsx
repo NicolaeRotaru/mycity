@@ -17,6 +17,7 @@ import {
   pesoMassimo,
 } from '@/lib/storage/casella-di-caricamento';
 import { uploadSiteImage } from './ImageUpload';
+import { fotoProntaAlCaricamento, MESSAGGIO_FOTO_HEIC } from './foto-heic';
 
 type GallerySec = Extract<SiteSection, { type: 'gallery' }>;
 type Cfg = GallerySec['config'];
@@ -66,7 +67,13 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
       if (toUpload.length === 0) return;
       setBusy(true);
       try {
-        const urls = await Promise.all(toUpload.map(uploadSiteImage));
+        // Prima si convertono le foto HEIC: quella che il browser non sa leggere resta fuori con
+        // un messaggio, le altre partono comunque (prima una sola cattiva fermava tutto il giro).
+        const preparate = await Promise.allSettled(toUpload.map(fotoProntaAlCaricamento));
+        const buone = preparate.flatMap((p) => (p.status === 'fulfilled' ? [p.value] : []));
+        if (buone.length < preparate.length) toast.error(MESSAGGIO_FOTO_HEIC);
+        if (buone.length === 0) return;
+        const urls = await Promise.all(buone.map(uploadSiteImage));
         set({ items: [...items, ...urls.map((url) => ({ url, alt: '' }) as Item)] });
       } catch (e) {
         toast.error(friendlyError(e));
