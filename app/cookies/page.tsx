@@ -71,6 +71,8 @@ export default function CookiesPage() {
           // bisogno del consenso, ma va scritto nell'informativa lo stesso:
           // quello che non si dichiara sembra nascosto.
           { name: 'mc_ruolo', purpose: 'Ricorda per pochi minuti il tuo ruolo e se il tuo negozio è approvato, così non serve rileggere il profilo dal database a ogni pagina. È firmato, non è leggibile dal browser e non contiene dati personali.', duration: '10 minuti', provider: 'Prima parte' },
+          // 1/11/2026 — Il segno del rientro col link di recupero (lib/auth/segno-recupero.ts).
+          { name: 'mycity_recupero', purpose: 'Dopo che hai aperto il link per scegliere una nuova password, ricorda per un\'ora che vieni da quel link, così puoi cambiarla. È firmato, non è leggibile dal browser e non contiene dati personali.', duration: '1 ora', provider: 'Prima parte' },
           { name: '__cf_bm', purpose: 'Anti-bot Cloudflare (sicurezza)', duration: '30 minuti', provider: 'Cloudflare' },
           { name: 'cf-turnstile-*', purpose: 'CAPTCHA Turnstile', duration: 'Sessione', provider: 'Cloudflare' },
           { name: '__stripe_mid / __stripe_sid', purpose: 'Anti-frode pagamenti', duration: '1 anno / 30 min', provider: 'Stripe' },

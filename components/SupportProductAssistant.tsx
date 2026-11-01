@@ -71,6 +71,11 @@ type Msg = {
   proposal?: Proposal;
   /** true quando la proposta è stata applicata. */
   applied?: boolean;
+  /**
+   * 1/11/2026 — Quello che il server NON ha scritto (es. il prezzo fuori banda).
+   * Se c'è, la scheda non dice «Modifiche salvate»: dice cosa non è entrato.
+   */
+  nonEntrato?: string;
   /** Bozza di nuovo prodotto proposta dalle foto (solo nei turni assistant). */
   newDraft?: NewDraft;
   /** true quando la bozza è stata creata. */
@@ -216,10 +221,12 @@ export default function SupportProductAssistant() {
       if (!res.ok) throw new Error(apiErrorMessage(json, 'Errore'));
 
       if (json.product) setFocused(json.product as ProductSnapshot);
-      setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, applied: true } : m)));
       // 1/11/2026 — Quello che il server NON ha scritto (prezzo fuori banda,
-      // prezzo pieno barrato) si dice AL POSTO di «salvate», non sotto.
+      // prezzo pieno barrato) si dice AL POSTO di «salvate», non sotto: nel
+      // toast e nella scheda stessa.
       const esito = esitoModificaDallaChat(json);
+      const nonEntrato = esito.tipo === 'successo' ? undefined : esito.testo;
+      setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, applied: true, nonEntrato } : m)));
       if (esito.tipo === 'successo') toast.success(esito.testo);
       else toast.warning(esito.testo, { duration: 15_000 });
       // Allergeni e ingredienti hanno la loro frase in `changed`.
@@ -460,7 +467,11 @@ export default function SupportProductAssistant() {
                         </div>
                       );
                     })()}
-                  {m.applied ? (
+                  {m.applied && m.nonEntrato ? (
+                    <p className="flex items-start gap-1.5 text-sm font-semibold text-accent-800">
+                      <AlertTriangle size={15} strokeWidth={2.4} className="mt-0.5 shrink-0" aria-hidden /> {m.nonEntrato}
+                    </p>
+                  ) : m.applied ? (
                     <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
                       <Check size={15} strokeWidth={2.6} aria-hidden /> Modifiche salvate
                     </p>

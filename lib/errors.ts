@@ -232,7 +232,10 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
       // Strip technical details
       const cleaned = e.message
         .replace(/\b[A-Z_]+\s*=\s*[^\s,]+/g, '')
-        .replace(/\(.*?\)/g, '')
+        // 1/11/2026 — Le parentesi coi soldi dentro sono il PERCHÉ di un rifiuto
+        // («prezzo NON applicato (20.00 → 30.00 €: oltre il 30%, va deciso a
+        // mano)»), non un dettaglio tecnico: restano. Le altre si tolgono.
+        .replace(/\(.*?\)/g, (parentesi) => (parentesi.includes('€') ? parentesi : ''))
         .trim();
       // Le righe multiple sono un segnale forte di stack trace → scarta.
       // Il limite di lunghezza scarta i dump tecnici ma deve lasciar passare i
