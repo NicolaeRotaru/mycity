@@ -163,10 +163,12 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * Un negozio senza partita IVA e un fattorino senza patente né polizza
    * passavano con un 200. Vale anche per `reactivate`: un respinto si riattiva
    * da qui senza passare da `approve`, e dopo 90 giorni i suoi documenti sono
-   * già stati cancellati dalla potatura (migrations/135).
+   * già stati cancellati dalla potatura (migrations/135). Non vale per chi è
+   * solo SOSPESO: era già approvato, e un negozio storico senza partita IVA
+   * resterebbe fermo per sempre (non ha una pagina per inserirla).
    */
   if (approva) {
-    const motivo = motivoPerNonApprovare(target);
+    const motivo = motivoPerNonApprovare(target, body.action === 'reactivate' ? 'reactivate' : 'approve');
     if (motivo) return ApiErrors.invalidRequest(motivo);
   }
 
