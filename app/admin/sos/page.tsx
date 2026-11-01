@@ -1,7 +1,8 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Check, MapPin, Phone, Clock, RotateCcw, Siren, History } from 'lucide-react';
+import { AlertTriangle, Check, MapPin, Phone, Clock, RotateCcw, Siren, History, Package } from 'lucide-react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
@@ -159,6 +160,19 @@ export default function AdminSOSPage() {
                             {s.rider.phone}
                           </a>
                         )}
+                        {/* Da quale consegna parte l'allarme: chi aiuta deve sapere
+                            che cosa stava portando il fattorino, e dove. */}
+                        {s.order_id ? (
+                          <Link
+                            href={`/admin/orders/${s.order_id}`}
+                            className="flex items-center gap-1.5 mt-1 text-sm font-semibold text-primary-700 hover:underline"
+                          >
+                            <Package size={14} strokeWidth={2.4} aria-hidden />
+                            Consegna #{s.order_id.slice(0, 6).toUpperCase()}: apri l’ordine
+                          </Link>
+                        ) : (
+                          <p className="text-sm text-ink-600 mt-1">Non era in consegna (nessun ordine collegato).</p>
+                        )}
                       </div>
                     </div>
                     {s.lat && s.lng && (
@@ -205,6 +219,11 @@ export default function AdminSOSPage() {
                 <p className="text-xs text-ink-500">
                   {new Date(s.triggered_at).toLocaleString('it-IT')} → risolto {s.resolved_at && new Date(s.resolved_at).toLocaleString('it-IT')}
                 </p>
+                {s.order_id && (
+                  <Link href={`/admin/orders/${s.order_id}`} className="text-xs text-primary-700 hover:underline">
+                    Consegna #{s.order_id.slice(0, 6).toUpperCase()}
+                  </Link>
+                )}
                 {s.resolution_note && <p className="text-xs text-ink-600 italic mt-1">&quot;{s.resolution_note}&quot;</p>}
               </li>
             ))}
