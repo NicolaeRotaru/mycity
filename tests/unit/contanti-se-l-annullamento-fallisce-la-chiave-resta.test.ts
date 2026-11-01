@@ -25,7 +25,6 @@ import { laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
  * far arrivare prima un invio gemello della stessa chiave.
  */
 
-const CLIENTE = 'cliente-1';
 const FORNO = 'aaaaaaaa-0000-4000-8000-000000000001';
 const FIORAIO = 'bbbbbbbb-0000-4000-8000-000000000002';
 const PANE = '11111111-1111-4111-8111-111111111111';
