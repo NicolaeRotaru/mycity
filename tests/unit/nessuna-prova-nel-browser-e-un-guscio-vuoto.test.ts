@@ -26,50 +26,115 @@ import { describe, expect, it } from 'vitest';
 
 const CARTELLA = join(process.cwd(), 'tests/e2e');
 const STRUMENTI = new Set(['page', 'request', 'context', 'browser']);
+/** I modi di `test.<modo>(…)` che dichiarano una prova. Gli altri (describe, beforeEach, step…) no. */
+const MODI_DICHIARAZIONE = new Set(['only', 'skip', 'fixme', 'fail']);
+
+/*
+ * 1/11/2026 — Il collaudo l'ha aggirata in quattro modi: titolo con
+ * sostituzione (`x ${y}`), titolo da variabile, `const prova = test`, corpo
+ * passato per nome. Ora:
+ *  - e' una dichiarazione OGNI chiamata a `test`, `test.only/skip/fixme/fail`
+ *    o a un loro alias locale (`const prova = test`, `test.extend(…)`) il cui
+ *    ultimo argomento e' una funzione — scritta li' o nominata e risolta verso
+ *    la sua definizione nel file. Il titolo non conta.
+ *  - una prova guarda se usa uno strumento destrutturato (`{ page }`,
+ *    `{ page: p }`) oppure, col parametro intero, `fx.page` / `fx.request` /
+ *    `fx.context` / `fx.browser`.
+ *
+ * LIMITE DICHIARATO: la regola guarda la forma, non il significato. `void page`
+ * o `page;` contano come uso, e un corpo che importa la funzione da un altro
+ * file non si risolve (resta rosso: meglio un rosso da spiegare che un verde
+ * finto). Non ferma chi vuole imbrogliare apposta: ferma il guscio per
+ * distrazione, che e' il modo in cui e' nato il difetto.
+ */
 
 type Difetto = { file: string; riga: number; titolo: string; perche: string };
+type Funzione = ts.ArrowFunction | ts.FunctionExpression | ts.FunctionDeclaration;
 
-function titoloDi(n: ts.Expression | undefined): string | null {
+function titoloDi(n: ts.Expression | undefined, fonte?: ts.SourceFile): string | null {
   if (!n) return null;
   if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) return n.text;
-  return null;
+  return fonte ? n.getText(fonte) : null;
 }
 
-/** `test`, `test.only`, `test.skip`, `test.fixme` → il nome del modo. */
-function modoDellaChiamata(c: ts.CallExpression): string | null {
+function eFunzione(n: ts.Node | undefined): n is Funzione {
+  return !!n && (ts.isArrowFunction(n) || ts.isFunctionExpression(n) || ts.isFunctionDeclaration(n));
+}
+
+/** Il file letto una volta: alias di `test` e funzioni con nome. */
+function mappa(fonte: ts.SourceFile) {
+  const alias = new Set(['test']);
+  const funzioni = new Map<string, Funzione>();
+  const dichiarati = new Set<string>();
+  const iniziali: [string, ts.Expression][] = [];
+  const visita = (n: ts.Node) => {
+    if (ts.isFunctionDeclaration(n) && n.name) funzioni.set(n.name.text, n);
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name)) dichiarati.add(n.name.text);
+    if (ts.isVariableDeclaration(n) && ts.isIdentifier(n.name) && n.initializer) {
+      iniziali.push([n.name.text, n.initializer]);
+      if (eFunzione(n.initializer)) funzioni.set(n.name.text, n.initializer);
+    }
+    ts.forEachChild(n, visita);
+  };
+  visita(fonte);
+  const radice = (e: ts.Expression): string | null => {
+    let x = e;
+    while (ts.isParenthesizedExpression(x) || ts.isAsExpression(x)) x = x.expression;
+    if (ts.isIdentifier(x)) return x.text;
+    if (ts.isPropertyAccessExpression(x)) return radice(x.expression);
+    if (ts.isCallExpression(x) && ts.isPropertyAccessExpression(x.expression) && x.expression.name.text === 'extend') {
+      return radice(x.expression.expression);
+    }
+    return null;
+  };
+  // Punto fisso: `const a = test; const b = a.only;` → anche b e' un alias.
+  for (let cambiato = true; cambiato; ) {
+    cambiato = false;
+    for (const [nome, ini] of iniziali) {
+      const r = radice(ini);
+      if (r && alias.has(r) && !alias.has(nome)) {
+        alias.add(nome);
+        cambiato = true;
+      }
+    }
+  }
+  return { alias, funzioni, dichiarati };
+}
+
+function eDichiarazione(c: ts.CallExpression, alias: Set<string>): string | null {
   const e = c.expression;
-  if (ts.isIdentifier(e) && e.text === 'test') return 'test';
-  if (ts.isPropertyAccessExpression(e) && ts.isIdentifier(e.expression) && e.expression.text === 'test') {
-    return e.name.text;
+  if (ts.isIdentifier(e) && alias.has(e.text)) return 'test';
+  if (ts.isPropertyAccessExpression(e) && ts.isIdentifier(e.expression) && alias.has(e.expression.text)) {
+    return MODI_DICHIARAZIONE.has(e.name.text) ? e.name.text : null;
   }
   return null;
 }
 
-/** I nomi degli strumenti chiesti dalla funzione della prova: `async ({ page, request }) => …`. */
-function strumentiChiesti(f: ts.ArrowFunction | ts.FunctionExpression): string[] {
-  const primo = f.parameters[0];
-  if (!primo || !ts.isObjectBindingPattern(primo.name)) return [];
-  return primo.name.elements
-    .map((el) => (el.propertyName && ts.isIdentifier(el.propertyName) ? el.propertyName.text : ts.isIdentifier(el.name) ? el.name.text : ''))
-    .filter((n) => STRUMENTI.has(n));
-}
-
-function nomiLocali(f: ts.ArrowFunction | ts.FunctionExpression): Set<string> {
-  const primo = f.parameters[0];
-  const fuori = new Set<string>();
-  if (!primo || !ts.isObjectBindingPattern(primo.name)) return fuori;
-  for (const el of primo.name.elements) {
-    const chiave = el.propertyName && ts.isIdentifier(el.propertyName) ? el.propertyName.text : ts.isIdentifier(el.name) ? el.name.text : '';
-    if (STRUMENTI.has(chiave) && ts.isIdentifier(el.name)) fuori.add(el.name.text);
+/**
+ * La funzione del corpo. Un nome dichiarato nel file ma non come funzione (il
+ * motivo di `test.skip(cond, PERCHE)`) non e' un corpo; un nome che non e'
+ * dichiarato nel file (importato) e' «sconosciuto».
+ */
+function risolvi(
+  arg: ts.Expression | undefined,
+  m: { funzioni: Map<string, Funzione>; dichiarati: Set<string> },
+): Funzione | 'sconosciuta' | null {
+  if (!arg) return null;
+  if (eFunzione(arg)) return arg;
+  if (ts.isIdentifier(arg)) {
+    const f = m.funzioni.get(arg.text);
+    if (f) return f;
+    return m.dichiarati.has(arg.text) ? null : 'sconosciuta';
   }
-  return fuori;
+  return null;
 }
 
-function usaUnoDi(corpo: ts.Node, nomi: Set<string>): boolean {
+function usa(corpo: ts.Node | undefined, vale: (n: ts.Node) => boolean): boolean {
+  if (!corpo) return false;
   let trovato = false;
   const visita = (n: ts.Node) => {
     if (trovato) return;
-    if (ts.isIdentifier(n) && nomi.has(n.text)) {
+    if (vale(n)) {
       trovato = true;
       return;
     }
@@ -77,6 +142,36 @@ function usaUnoDi(corpo: ts.Node, nomi: Set<string>): boolean {
   };
   ts.forEachChild(corpo, visita);
   return trovato;
+}
+
+/** Vero se la funzione chiede uno strumento per guardare il sito e lo usa. */
+function guarda(f: Funzione): boolean {
+  const primo = f.parameters[0];
+  if (!primo) return false;
+  if (ts.isIdentifier(primo.name)) {
+    const nome = primo.name.text;
+    return usa(
+      f.body,
+      (n) => ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === nome && STRUMENTI.has(n.name.text),
+    );
+  }
+  if (!ts.isObjectBindingPattern(primo.name)) return false;
+  const locali = new Set<string>();
+  const resti = new Set<string>();
+  for (const el of primo.name.elements) {
+    if (el.dotDotDotToken && ts.isIdentifier(el.name)) {
+      resti.add(el.name.text);
+      continue;
+    }
+    const chiave = el.propertyName && ts.isIdentifier(el.propertyName) ? el.propertyName.text : ts.isIdentifier(el.name) ? el.name.text : '';
+    if (STRUMENTI.has(chiave) && ts.isIdentifier(el.name)) locali.add(el.name.text);
+  }
+  return usa(
+    f.body,
+    (n) =>
+      (ts.isIdentifier(n) && locali.has(n.text) && !(ts.isPropertyAccessExpression(n.parent) && n.parent.name === n)) ||
+      (ts.isPropertyAccessExpression(n) && ts.isIdentifier(n.expression) && resti.has(n.expression.text) && STRUMENTI.has(n.name.text)),
+  );
 }
 
 function motivoDichiarato(arg: ts.Expression | undefined, fonte: ts.SourceFile): boolean {
@@ -98,27 +193,28 @@ function motivoDichiarato(arg: ts.Expression | undefined, fonte: ts.SourceFile):
 
 function gusciVuoti(file: string, testo: string): Difetto[] {
   const fonte = ts.createSourceFile(file, testo, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const m = mappa(fonte);
+  const { alias } = m;
   const difetti: Difetto[] = [];
   const visita = (n: ts.Node) => {
-    if (ts.isCallExpression(n)) {
-      const modo = modoDellaChiamata(n);
-      const titolo = titoloDi(n.arguments[0]);
-      const funzione = n.arguments[n.arguments.length - 1];
-      // Solo le DICHIARAZIONI di prova: titolo scritto + funzione in fondo.
-      // `test.skip(condizione, motivo)` dentro un corpo non ha ne' l'uno ne' l'altra.
-      if (modo && titolo !== null && funzione && (ts.isArrowFunction(funzione) || ts.isFunctionExpression(funzione))) {
+    if (ts.isCallExpression(n) && n.arguments.length >= 2) {
+      const modo = eDichiarazione(n, alias);
+      const ultimo = n.arguments[n.arguments.length - 1];
+      let funzione = modo ? risolvi(ultimo, m) : null;
+      // Su skip/fixme un nome importato e' quasi sempre il motivo, non il corpo.
+      if (funzione === 'sconosciuta' && modo !== 'test' && modo !== 'only' && modo !== 'fail') funzione = null;
+      // `test.skip(condizione, motivo)` dentro un corpo non finisce con una funzione: non e' una dichiarazione.
+      if (modo && funzione) {
         const riga = fonte.getLineAndCharacterOfPosition(n.getStart(fonte)).line + 1;
-        if (modo === 'test' || modo === 'only') {
-          const chiesti = strumentiChiesti(funzione);
-          if (chiesti.length === 0) {
-            difetti.push({ file, riga, titolo, perche: 'non chiede ne\' page ne\' request: non puo\' guardare niente' });
-          } else if (!usaUnoDi(funzione.body, nomiLocali(funzione))) {
-            difetti.push({ file, riga, titolo, perche: `chiede ${chiesti.join(', ')} ma non li usa mai` });
+        const titolo = titoloDi(n.arguments[0], fonte) ?? '?';
+        if (modo === 'test' || modo === 'only' || modo === 'fail') {
+          if (funzione === 'sconosciuta') {
+            difetti.push({ file, riga, titolo, perche: `il corpo «${ultimo.getText(fonte)}» non e' definito in questo file: non si puo' vedere cosa guarda` });
+          } else if (!guarda(funzione)) {
+            difetti.push({ file, riga, titolo, perche: 'non usa ne\' page ne\' request ne\' context ne\' browser: non puo\' guardare niente' });
           }
-        } else if (modo === 'skip' || modo === 'fixme') {
-          if (!motivoDichiarato(n.arguments.length >= 3 ? n.arguments[1] : undefined, fonte)) {
-            difetti.push({ file, riga, titolo, perche: 'saltata alla nascita senza un motivo scritto (annotation type skip)' });
-          }
+        } else if (!motivoDichiarato(n.arguments.length >= 3 ? n.arguments[1] : undefined, fonte)) {
+          difetti.push({ file, riga, titolo, perche: 'saltata alla nascita senza un motivo scritto (annotation type skip)' });
         }
       }
     }
@@ -126,6 +222,11 @@ function gusciVuoti(file: string, testo: string): Difetto[] {
   };
   visita(fonte);
   return difetti;
+}
+
+/** Per l'ultima prova: i titoli scritti delle dichiarazioni del file. */
+function modoDellaChiamata(c: ts.CallExpression): string | null {
+  return eDichiarazione(c, new Set(['test']));
 }
 
 describe('la regola sa riconoscere un guscio', () => {
@@ -173,6 +274,82 @@ describe('la regola sa riconoscere un guscio', () => {
     {
       nome: 'un salto con condizione dentro una prova vera non e\' una dichiarazione',
       testo: `test('ordine', async ({ page }) => { test.skip(!process.env.X, 'manca X'); await page.goto('/'); });`,
+      rossa: false,
+    },
+    // 1/11/2026 — le quattro scappatoie trovate dal collaudo.
+    {
+      nome: 'titolo con sostituzione',
+      testo: 'test(`ordine ${y}`, async () => { expect(FLAG).toBe(false); });',
+      rossa: true,
+    },
+    {
+      nome: 'titolo da variabile',
+      testo: `const t = 'ordine'; test(t, async () => { expect(FLAG).toBe(false); });`,
+      rossa: true,
+    },
+    {
+      nome: 'test con un altro nome',
+      testo: `const prova = test; prova('ordine', async () => { expect(FLAG).toBe(false); });`,
+      rossa: true,
+    },
+    {
+      nome: 'alias di un alias e test.extend',
+      testo: `const a = test.extend({}); const b = a; b.only('ordine', async () => { expect(FLAG).toBe(false); });`,
+      rossa: true,
+    },
+    {
+      nome: 'corpo passato per nome',
+      testo: `const corpo = async () => { expect(FLAG).toBe(false); }; test('ordine', corpo);`,
+      rossa: true,
+    },
+    {
+      nome: 'corpo come funzione dichiarata',
+      testo: `async function corpo() { expect(FLAG).toBe(false); } test('ordine', corpo);`,
+      rossa: true,
+    },
+    {
+      nome: 'corpo che viene da un altro file',
+      testo: `import { corpo } from './x'; test('ordine', corpo);`,
+      rossa: true,
+    },
+    {
+      nome: 'il nome dello strumento solo come proprieta\' di altro',
+      testo: `test('ordine', async ({ page }) => { expect(cose.page).toBe(1); });`,
+      rossa: true,
+    },
+    {
+      nome: 'parametro intero che non usa nessuno strumento',
+      testo: `test('ordine', async (fx) => { expect(fx.baseURL).toBe('x'); });`,
+      rossa: true,
+    },
+    {
+      nome: 'titolo con sostituzione su una prova vera',
+      testo: 'test(`${path} si apre`, async ({ page }) => { await page.goto(path); });',
+      rossa: false,
+    },
+    {
+      nome: 'parametro intero che usa la pagina',
+      testo: `test('ordine', async (fx) => { await fx.page.goto('/'); });`,
+      rossa: false,
+    },
+    {
+      nome: 'fixture personalizzata accanto alla pagina',
+      testo: `test('ordine', async ({ baseURL, page }) => { await page.goto(baseURL + '/'); });`,
+      rossa: false,
+    },
+    {
+      nome: 'il resto della destrutturazione che usa la richiesta',
+      testo: `test('ordine', async ({ baseURL, ...fx }) => { await fx.request.get(baseURL!); });`,
+      rossa: false,
+    },
+    {
+      nome: 'corpo per nome che guarda davvero',
+      testo: `async function corpo({ page }) { await page.goto('/'); } const prova = test; prova('ordine', corpo);`,
+      rossa: false,
+    },
+    {
+      nome: 'describe, beforeEach e le regex .test() non sono prove',
+      testo: `test.describe('g', () => {}); test.beforeEach(async () => {}); /x/.test('x');`,
       rossa: false,
     },
   ];
