@@ -53,3 +53,23 @@ it('con le sole categorie precaricate il piede le elenca, non resta senza catego
   const html = renderToString(createElement(QueryClientProvider, { client: qc }, createElement(Footer)));
   expect(html).toContain('/category/alimentari');
 });
+
+it('quando anche le piene sono lette, vetrina e piede tolgono le categorie vuote', async () => {
+  const { domandaCategoriePubbliche } = await import('@/lib/queries/categorie-pubbliche');
+  const { default: CategoryShowcase } = await import('@/components/CategoryShowcase');
+  const { default: Footer } = await import('@/components/Footer');
+  const { supabase } = await import('@/lib/supabase/client');
+  const categorie = [
+    { id: 'c-ali', slug: 'alimentari', name: 'Alimentari', parent_id: null },
+    { id: 'c-ele', slug: 'elettronica', name: 'Elettronica', parent_id: null },
+  ];
+  const qc = new QueryClient();
+  qc.setQueryData(domandaCategoriePubbliche(supabase as never).queryKey, categorie);
+  qc.setQueryData(['categories', 'tree'], categorie);
+  qc.setQueryData(['categories', 'con-prodotti'], ['c-ali']);
+  for (const pezzo of [CategoryShowcase, Footer]) {
+    const html = renderToString(createElement(QueryClientProvider, { client: qc }, createElement(pezzo)));
+    expect(html).toContain('/category/alimentari');
+    expect(html).not.toContain('/category/elettronica');
+  }
+});
