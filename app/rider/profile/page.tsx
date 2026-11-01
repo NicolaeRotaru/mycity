@@ -41,7 +41,7 @@ export default function RiderProfilePage() {
       if (!user) throw new Error('Non autenticato');
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, phone, rider_vehicle_type, rider_vehicle_plate, rider_zones, rider_haccp_expires_on, rider_license_expires_on, rider_insurance_expires_on, kyc_id_doc_front_url')
+        .select('id, full_name, phone, rider_vehicle_type, rider_vehicle_plate, rider_zones, rider_haccp_expires_on, rider_license_expires_on, rider_insurance_expires_on, kyc_id_doc_front_url, approval_status')
         .eq('id', user.id)
         .single();
       if (error) throw error;
@@ -108,6 +108,8 @@ export default function RiderProfilePage() {
   const licenseExpires = (p?.rider_license_expires_on as string | null) ?? null;
   const insuranceExpires = (p?.rider_insurance_expires_on as string | null) ?? null;
   const idUploaded = !!(p?.kyc_id_doc_front_url as string | null);
+  // «Verificato» solo quando l'admin ha approvato il fattorino: caricare il file non basta.
+  const riderApprovato = (p?.approval_status as string | null) === 'approved';
   const vehicleLabel = vehicleType ? (VEHICLE_LABELS[vehicleType] ?? vehicleType) : 'Non specificato';
   const VehicleIcon = vehicleType === 'CAR' ? Car : Bike;
 
@@ -116,33 +118,50 @@ export default function RiderProfilePage() {
 
   // Compliance / documenti: stato calcolato dalle scadenze reali.
   const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('it-IT') : null);
-  const soon = (d: string | null) => !!d && (new Date(d).getTime() - Date.now()) < 60 * 86400000; // <60gg
-  type DocStatus = 'ok' | 'soon' | 'missing';
+  // Le date di scadenza sono giorni di calendario (AAAA-MM-GG): un documento vale fino al suo
+  // ultimo giorno compreso. Si confrontano col giorno di oggi (ora locale), non coi millisecondi,
+  // cosi' un documento gia' scaduto non passa per «in scadenza».
+  const oggiIso = new Date().toLocaleDateString('sv-SE'); // AAAA-MM-GG locale
+  const giorno = (d: string) => d.slice(0, 10);
+  const scaduto = (d: string | null) => !!d && giorno(d) < oggiIso;
+  const soon = (d: string | null) =>
+    !!d && !scaduto(d) && (new Date(giorno(d)).getTime() - new Date(oggiIso).getTime()) < 60 * 86400000; // <60gg
+  type DocStatus = 'ok' | 'soon' | 'expired' | 'missing';
+  const statoScadenza = (d: string | null): DocStatus =>
+    !d ? 'missing' : scaduto(d) ? 'expired' : soon(d) ? 'soon' : 'ok';
+  const testoScadenza = (d: string | null, mancante: string) =>
+    !d ? mancante : scaduto(d) ? `Scaduto il ${fmtDate(d)}` : `Scade ${fmtDate(d)}`;
   const docs: { Icon: LucideIcon; label: string; sub: string; status: DocStatus }[] = [
     {
       Icon: IdCard, label: 'Patente di guida',
-      sub: licenseExpires ? `Scade ${fmtDate(licenseExpires)}` : 'Da caricare',
-      status: !licenseExpires ? 'missing' : soon(licenseExpires) ? 'soon' : 'ok',
+      sub: testoScadenza(licenseExpires, 'Da caricare'),
+      status: statoScadenza(licenseExpires),
     },
     {
       Icon: ShieldCheck, label: 'Assicurazione RC',
-      sub: insuranceExpires ? `Scade ${fmtDate(insuranceExpires)}` : 'Da caricare',
-      status: !insuranceExpires ? 'missing' : soon(insuranceExpires) ? 'soon' : 'ok',
+      sub: testoScadenza(insuranceExpires, 'Da caricare'),
+      status: statoScadenza(insuranceExpires),
     },
     {
       Icon: FileCheck, label: 'Documento identità',
-      sub: idUploaded ? 'Verificato' : 'Da caricare',
+      sub: !idUploaded ? 'Da caricare' : riderApprovato ? 'Verificato' : 'Caricato, in verifica',
       status: idUploaded ? 'ok' : 'missing',
     },
     {
       Icon: ShieldCheck, label: 'Attestato HACCP',
-      sub: haccpExpires ? `Scade ${fmtDate(haccpExpires)}` : 'Facoltativo (food)',
-      status: haccpExpires ? (soon(haccpExpires) ? 'soon' : 'ok') : 'missing',
+      sub: testoScadenza(haccpExpires, 'Facoltativo (food)'),
+      status: statoScadenza(haccpExpires),
     },
   ];
+  // Patente o assicurazione scadute: non si puo' guidare per le consegne. Lo si dice chiaro.
+  const obbligatoriScaduti = [
+    scaduto(licenseExpires) ? 'la patente' : null,
+    scaduto(insuranceExpires) ? "l'assicurazione" : null,
+  ].filter(Boolean) as string[];
   const STATUS_META: Record<DocStatus, { bg: string; text: string; label: string; Icon: LucideIcon }> = {
     ok:      { bg: 'bg-olive-50',     text: 'text-olive-700',     label: 'OK',          Icon: CircleCheck },
     soon:    { bg: 'bg-accent-50',    text: 'text-accent-700',    label: 'In scadenza', Icon: Clock },
+    expired: { bg: 'bg-secondary-50', text: 'text-secondary-700', label: 'Scaduto',     Icon: CircleAlert },
     missing: { bg: 'bg-secondary-50', text: 'text-secondary-600', label: 'Mancante',    Icon: CircleAlert },
   };
 
@@ -213,6 +232,12 @@ export default function RiderProfilePage() {
       {/* Documenti & compliance */}
       <div className="px-4 pb-4">
         <p className="mb-2.5 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">Documenti & compliance</p>
+        {obbligatoriScaduti.length > 0 && (
+          <div role="alert" className="mb-2.5 rounded-lg border border-secondary-200 bg-secondary-50 px-3.5 py-3 text-sm text-secondary-800">
+            <p className="font-bold">Hai {obbligatoriScaduti.join(' e ')} scadut{obbligatoriScaduti.length > 1 ? 'e' : 'a'}.</p>
+            <p className="mt-0.5 text-xs">Non fare consegne finché non carichi il documento nuovo in «Documenti e verifica».</p>
+          </div>
+        )}
         <div className="flex flex-col gap-2">
           {docs.map((d) => {
             const meta = STATUS_META[d.status];
@@ -226,12 +251,12 @@ export default function RiderProfilePage() {
                   <p className="text-sm font-bold text-ink-900">{d.label}</p>
                   <p className="text-xs text-ink-500">{d.sub}</p>
                 </div>
-                {d.status === 'missing' ? (
+                {d.status === 'missing' || d.status === 'expired' ? (
                   <Link
                     href="/rider/onboarding"
-                    className={`shrink-0 rounded-full px-3 py-[7px] text-xs font-bold text-white ${d.status === 'missing' ? 'bg-secondary-600 hover:bg-secondary-700' : ''}`}
+                    className={`shrink-0 rounded-full px-3 py-[7px] text-xs font-bold text-white ${d.status === 'missing' || d.status === 'expired' ? 'bg-secondary-600 hover:bg-secondary-700' : ''}`}
                   >
-                    Carica
+                    {d.status === 'expired' ? 'Aggiorna' : 'Carica'}
                   </Link>
                 ) : (
                   <span className={`inline-flex shrink-0 items-center gap-1 text-xs font-bold ${meta.text}`}>
