@@ -1601,20 +1601,11 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     ripartoVero.bonificoCents === 0 && ripartoVero.creditoCents > 0
   ) {
     const giaAccreditato = await accreditoADiario(admin, opts.idempotencyKey);
-    if (giaAccreditato != null) {
+    // Il credito c'e' E l'ordine lo conta: il tentativo di prima e' arrivato fin qui. Se non lo
+    // conta (il guasto doppio: accredito in errore e diario muto, prenotazione stornata) si va
+    // avanti come prima: `wallet_credit` risponde 23505 e il rimborso si registra una volta.
+    if (giaAccreditato != null && Number(order.refunded_amount_cents ?? 0) >= giaAccreditato) {
       controllaLaCifraGiaAccreditata(giaAccreditato, ripartoVero.creditoCents);
-      if (Number(order.refunded_amount_cents ?? 0) < giaAccreditato) {
-        try {
-          await notifyAdmins(
-            '⚠️ Rimborso ripreso: controlla i conti dell ordine',
-            `Il credito da ${formatPriceFromCents(giaAccreditato)} sull'ordine #${order.id.slice(0, 8)} era già uscito, ma l'ordine conta meno rimborsato. ` +
-              'Non l ho rifatto: controlla il totale rimborsato e la quota ripresa al negozio.',
-            '/admin/orders',
-          );
-        } catch (e) {
-          logger.error('[refundOrder] avviso del credito ripreso non inviato', { orderId: order.id, e });
-        }
-      }
       return {
         refundId: `wallet:${opts.idempotencyKey}`,
         reversedCents: 0,
