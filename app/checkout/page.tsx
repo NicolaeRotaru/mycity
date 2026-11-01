@@ -33,7 +33,7 @@ import { Textarea } from '@/components/ui/Field';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
 import { StepCard } from '@/components/checkout/StepCard';
 import { ScheletroCassa } from '@/components/checkout/ScheletroCassa';
-import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
+import { ShippingAddressForm, useCoordinateDellaZona } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector, raccogliMetodoScelto } from '@/components/checkout/PaymentMethodSelector';
 import { DeliverySlotPicker, RIGA_VELOCE_IN_ATTESA } from '@/components/checkout/DeliverySlotPicker';
 import { romeNow } from '@/lib/store-hours';
@@ -1118,11 +1118,14 @@ export default function CheckoutPage() {
    * domanda delle rotte, con la stessa funzione, e ferma il pulsante con la
    * stessa frase. Col ritiro in negozio non c'e' zona.
    */
+  // Con l'indirizzo scritto a mano le coordinate del modulo sono vuote: la zona
+  // le cerca come le cerchera' il server, solo per avvisare (non per il prezzo).
+  const coordZona = useCoordinateDellaZona(form, pickupInStore);
   const gruppoFuoriZona = groups.find((g) => fuoriZonaDiConsegna({
     storeLat: g.storeLat,
     storeLng: g.storeLng,
-    deliveryLat: form.lat,
-    deliveryLng: form.lng,
+    deliveryLat: coordZona?.lat ?? null,
+    deliveryLng: coordZona?.lng ?? null,
     pickupInStore,
   }));
   const fuoriZona = gruppoFuoriZona !== undefined;

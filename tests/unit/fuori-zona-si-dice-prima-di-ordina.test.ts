@@ -122,7 +122,7 @@ describe('la cassa ferma il pulsante fuori zona', () => {
     const def = src.match(/const gruppoFuoriZona\s*=\s*([\s\S]*?\}\)\);)/);
     expect(def, 'la cassa non chiede la zona').toBeTruthy();
     expect(def![1]).toMatch(/fuoriZonaDiConsegna\(/);
-    expect(def![1]).toMatch(/deliveryLat:\s*form\.lat/);
+    expect(def![1]).toMatch(/deliveryLat:\s*coordZona\?\.lat/);
     expect(def![1]).toMatch(/pickupInStore/);
   });
 
