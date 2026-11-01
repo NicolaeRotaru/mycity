@@ -31,11 +31,15 @@ function antiRobotAcceso(): boolean {
 }
 
 /**
- * Limiti di frequenza. Per indirizzo di rete il tetto e' largo: una famiglia,
- * un forno o un ufficio escono tutti dalla stessa rete e si devono poter
- * iscrivere tutti nella stessa ora. Il tetto stretto sta sull'email.
+ * Limiti di frequenza. Con il controllo anti-robot acceso il tetto per
+ * indirizzo di rete e' largo: una famiglia, un forno o un ufficio escono tutti
+ * dalla stessa rete e si devono poter iscrivere tutti nella stessa ora, e i
+ * programmi automatici li ferma il controllo. Senza il controllo resta il
+ * limite di frequenza di prima, che e' l'unica difesa. Il tetto stretto sta
+ * sempre anche sull'email.
  */
-const ISCRIZIONI_PER_RETE_ORA = 30;
+const ISCRIZIONI_PER_RETE_ORA_CON_CONTROLLO = 30;
+const ISCRIZIONI_PER_RETE_ORA_SENZA_CONTROLLO = 5;
 const ISCRIZIONI_PER_EMAIL_ORA = 5;
 const UN_ORA_MS = 60 * 60_000;
 
@@ -45,7 +49,12 @@ const NOME_MAX = 120;
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
-  const rl = await rateLimitAsync({ key: `signup:${ip}`, max: ISCRIZIONI_PER_RETE_ORA, windowMs: UN_ORA_MS });
+  const controlloAcceso = antiRobotAcceso();
+  const rl = await rateLimitAsync({
+    key: `signup:${ip}`,
+    max: controlloAcceso ? ISCRIZIONI_PER_RETE_ORA_CON_CONTROLLO : ISCRIZIONI_PER_RETE_ORA_SENZA_CONTROLLO,
+    windowMs: UN_ORA_MS,
+  });
   if (!rl.allowed) {
     return ApiErrors.rateLimited(rl.retryAfterSec, 'Troppe registrazioni da questo indirizzo. Riprova più tardi.');
   }
@@ -84,7 +93,7 @@ export async function POST(request: Request) {
     return ApiErrors.rateLimited(rlEmail.retryAfterSec, 'Troppe registrazioni per questa email. Riprova più tardi.');
   }
 
-  if (antiRobotAcceso()) {
+  if (controlloAcceso) {
     const cap = await verifyTurnstileToken(captchaToken, ip);
     if (!cap.ok) {
       return ApiErrors.invalidRequest(cap.reason);

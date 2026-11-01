@@ -126,12 +126,14 @@ describe('senza chiavi: le porte restano aperte alle persone', () => {
 });
 
 describe('sei clienti dalla stessa rete nella stessa ora', () => {
-  it('sono iscritti tutti e sei', async () => {
-    configura(false);
+  it('con il controllo acceso sono iscritti tutti e sei', async () => {
+    configura(true);
     const stessaLinea = '10.88.1.1';
     const esiti: number[] = [];
     for (let i = 1; i <= 6; i++) {
-      const r = await iscrizione(richiesta({ email: `cliente${i}@forno.it`, ...credenziali }, stessaLinea));
+      const r = await iscrizione(
+        richiesta({ email: `cliente${i}@forno.it`, ...credenziali, captchaToken: 'buono' }, stessaLinea),
+      );
       esiti.push(r.status);
     }
     expect(esiti).toEqual([201, 201, 201, 201, 201, 201]);
