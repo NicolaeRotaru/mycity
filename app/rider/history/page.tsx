@@ -8,11 +8,14 @@ import { Check } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { compensoConsegnaEuro } from '@/lib/shipping';
 
 type RiderOrderRow = {
   id: string;
   total_price: number | null;
   shipping_cost: number | null;
+  /** Il compenso vero del fattorino, quello del bonifico. */
+  rider_fee_cents: number | null;
   delivery_status: string;
   delivered_at: string | null;
   delivery_city: string | null;
@@ -50,7 +53,7 @@ export default function RiderHistoryPage() {
        */
       const { data, error } = await supabase
         .from('rider_consegne_storico')
-        .select('id, total_price, shipping_cost, delivery_status, delivered_at, delivery_city, payment_method')
+        .select('id, total_price, shipping_cost, rider_fee_cents, delivery_status, delivered_at, delivery_city, payment_method')
         .eq('rider_id', user.id)
         .order('delivered_at', { ascending: false });
       if (error) throw error;
@@ -58,7 +61,12 @@ export default function RiderHistoryPage() {
     },
   });
 
-  const totalEarned = orders.reduce((s, o) => s + Number(o.shipping_cost || 0), 0);
+  /*
+   * 1/11/2026 — Si somma il compenso del fattorino (`rider_fee_cents`), non
+   * `shipping_cost`, che è quanto ha pagato il CLIENTE: sopra i 30 € di spesa
+   * vale zero e la consegna compariva a «+0,00 €». Stessa regola di Guadagni.
+   */
+  const totalEarned = orders.reduce((s, o) => s + compensoConsegnaEuro(o), 0);
 
   // Raggruppa per giorno mantenendo l'ordine (già desc per delivered_at).
   const groups = useMemo(() => {
@@ -68,7 +76,7 @@ export default function RiderHistoryPage() {
       const label = o.delivered_at ? dayLabel(o.delivered_at) : 'Senza data';
       if (!map.has(key)) map.set(key, { label, total: 0, items: [] });
       const g = map.get(key)!;
-      g.total += Number(o.shipping_cost || 0);
+      g.total += compensoConsegnaEuro(o);
       g.items.push(o);
     }
     return Array.from(map.values());
@@ -115,7 +123,7 @@ export default function RiderHistoryPage() {
                         #{o.id.slice(0, 6).toUpperCase()} · {o.payment_method === 'cod' ? 'Contanti' : 'Carta'}
                       </p>
                     </div>
-                    <span className="shrink-0 font-bold text-olive-700">+{formatPrice(o.shipping_cost || 0)}</span>
+                    <span className="shrink-0 font-bold text-olive-700">+{formatPrice(compensoConsegnaEuro(o))}</span>
                   </Link>
                 ))}
               </div>

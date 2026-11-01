@@ -31,6 +31,8 @@ import {
   raccogliUtentiDaEsportare, raccoltaDallaRicerca, contenutoCsvUtenti, nomeFileUtenti,
   type UtenteDaEsportare,
 } from '@/lib/admin/esporta-utenti';
+import { esameRider, type DatiEsameRider, type StatoDocumento } from '@/lib/kyc/esame-rider';
+import { giornoPiacenza } from '@/lib/tempo-piacenza';
 
 type Profile = {
   id: string;
@@ -466,6 +468,23 @@ function AdminUsersPageInner() {
     },
   });
 
+  /**
+   * I documenti del fattorino (patente, polizza, documento, selfie) e la sua
+   * data di nascita: solo quando si apre la scheda di un fattorino, con link
+   * firmati brevi, e la lettura resta a verbale.
+   */
+  const { data: documentiRider, isLoading: documentiRiderInArrivo } = useQuery({
+    queryKey: [...queryKeys.admin.users(), 'documenti-rider', detailId],
+    enabled: !!detailId && detail?.role === 'rider',
+    staleTime: 0,
+    gcTime: 0,
+    queryFn: async (): Promise<DatiEsameRider | null> => {
+      const res = await fetch(`/api/kyc/documenti-rider/${detailId}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+
   if (isLoading) return <LoadingState />;
 
   if (error) {
@@ -874,6 +893,7 @@ function AdminUsersPageInner() {
         <DetailPanel
           profile={detail}
           datiIdentita={datiIdentita ?? null}
+          documentiRider={documentiRiderInArrivo ? undefined : (documentiRider ?? null)}
           onClose={() => setDetailId(null)}
           onApprove={() => { approve.mutate(detail.id); setDetailId(null); }}
           onReject={async () => {
@@ -997,12 +1017,14 @@ function EditUserModal({
 }
 
 function DetailPanel({
-  profile, datiIdentita, onClose, onApprove, onReject,
+  profile, datiIdentita, documentiRider, onClose, onApprove, onReject,
 }: {
   profile: Profile;
   // #81 — Codice fiscale e partita IVA arrivano solo qui, per questo utente,
   // e la lettura e' registrata: non viaggiano piu' con l'elenco di tutti.
   datiIdentita: { legal_fiscal_code: string | null; business_vat_number: string | null } | null;
+  /** Solo per i fattorini: undefined = in arrivo, null = lettura non riuscita. */
+  documentiRider?: DatiEsameRider | null;
   onClose: () => void;
   onApprove: () => void;
   onReject: () => void;
@@ -1027,6 +1049,18 @@ function DetailPanel({
    * scritta in `components/hooks/useBottomSheetA11y.ts`: nessun overlay del
    * marketplace scritto a mano, o passa da `Modal`, o passa da quell'aggancio.
    */
+  if (profile.role === 'rider') {
+    return (
+      <PannelloFattorino
+        profile={profile}
+        datiIdentita={datiIdentita}
+        documentiRider={documentiRider}
+        onClose={onClose}
+        onApprove={onApprove}
+        onReject={onReject}
+      />
+    );
+  }
   return (
     <Modal
       open
@@ -1081,6 +1115,118 @@ function DetailPanel({
             {profile.business_address} — {profile.business_city}
           </DetailRow>
           <DetailRow label="PEC">{profile.business_pec ?? '—'}</DetailRow>
+        </DetailGroup>
+      </div>
+    </Modal>
+  );
+}
+
+const STATO_DOCUMENTO: Record<StatoDocumento, { testo: string; colore: string }> = {
+  ok:             { testo: 'Valido',                   colore: 'bg-olive-100 text-olive-800' },
+  in_scadenza:    { testo: 'In scadenza',              colore: 'bg-accent-100 text-accent-800' },
+  scaduto:        { testo: 'Scaduto',                  colore: 'bg-rose-100 text-rose-800' },
+  mancante:       { testo: 'Manca',                    colore: 'bg-rose-100 text-rose-800' },
+  senza_scadenza: { testo: 'Scadenza non indicata',    colore: 'bg-accent-100 text-accent-800' },
+};
+
+/**
+ * Il pannello d'esame di un fattorino.
+ *
+ * In produzione la verifica e' solo manuale (`ManualReviewKycProvider` lascia
+ * tutto «PENDING»): questo pannello e' l'unico controllo vero. Mostra eta',
+ * documento, selfie, patente e polizza con le scadenze, e tiene «Approva»
+ * spento finche' manca qualcosa o un documento e' scaduto.
+ */
+function PannelloFattorino({
+  profile, datiIdentita, documentiRider, onClose, onApprove, onReject,
+}: {
+  profile: Profile;
+  datiIdentita: { legal_fiscal_code: string | null; business_vat_number: string | null } | null;
+  documentiRider?: DatiEsameRider | null;
+  onClose: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  const inArrivo = documentiRider === undefined;
+  const esito = esameRider(documentiRider ?? null, giornoPiacenza());
+  const motivi = inArrivo
+    ? ['Sto caricando i documenti…']
+    : documentiRider === null
+      ? ['Non riesco a leggere i documenti: riprova tra poco.']
+      : esito.motivi;
+  const puoApprovare = !inArrivo && documentiRider !== null && esito.puoApprovare;
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Richiesta fattorino"
+      description={profile.approval_requested_at ? `Inviata il ${formatDate(profile.approval_requested_at)}` : undefined}
+      size="xl"
+      footer={
+        <div className="flex w-full flex-col gap-2">
+          {!puoApprovare && (
+            <ul className="text-xs text-rose-700" aria-live="polite">
+              {motivi.map((m) => <li key={m}>{m}</li>)}
+            </ul>
+          )}
+          <div className="flex w-full gap-3">
+            <button
+              type="button"
+              onClick={onReject}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg border-2 border-rose-200 text-rose-700 hover:bg-rose-50 font-semibold"
+            >
+              <X size={18} strokeWidth={2.2} aria-hidden /> Rifiuta
+            </button>
+            <button
+              type="button"
+              onClick={onApprove}
+              disabled={!puoApprovare}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg bg-olive-600 hover:bg-olive-700 text-white font-bold shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <CheckCircle2 size={18} strokeWidth={2.2} aria-hidden /> Approva
+            </button>
+          </div>
+        </div>
+      }
+    >
+      <div className="space-y-5 text-sm">
+        <DetailGroup title="Fattorino" icon={User}>
+          <DetailRow label="Nome e cognome">
+            {[profile.legal_first_name, profile.legal_last_name].filter(Boolean).join(' ') || profile.full_name || '—'}
+          </DetailRow>
+          <DetailRow label="Età">
+            {inArrivo ? '…' : esito.eta === null ? 'Data di nascita mancante' : (
+              <span className={esito.maggiorenne ? '' : 'font-bold text-rose-700'}>
+                {esito.eta} anni{esito.maggiorenne ? '' : ' — minorenne'}
+              </span>
+            )}
+          </DetailRow>
+          <DetailRow label="Codice fiscale">
+            <code>{datiIdentita?.legal_fiscal_code ?? '—'}</code>
+          </DetailRow>
+          <DetailRow label="Email">{profile.email ?? '—'}</DetailRow>
+          <DetailRow label="Telefono">{profile.phone ?? profile.auth_phone ?? '—'}</DetailRow>
+        </DetailGroup>
+
+        <DetailGroup title="Documenti" icon={ReceiptText}>
+          {esito.documenti.map((d) => (
+            <DetailRow key={d.chiave} label={d.etichetta}>
+              <span className="inline-flex flex-wrap items-center gap-2">
+                {d.url ? (
+                  <a href={d.url} target="_blank" rel="noopener noreferrer" className="text-primary-700 underline">
+                    Apri {d.etichetta.toLowerCase()}
+                  </a>
+                ) : null}
+                {!inArrivo && (d.url || d.obbligatorio) && (
+                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${STATO_DOCUMENTO[d.stato].colore}`}>
+                    {STATO_DOCUMENTO[d.stato].testo}
+                  </span>
+                )}
+                {d.scade_il && <span className="text-xs text-ink-500">scade il {formatDate(d.scade_il)}</span>}
+              </span>
+            </DetailRow>
+          ))}
         </DetailGroup>
       </div>
     </Modal>
