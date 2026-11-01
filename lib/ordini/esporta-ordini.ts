@@ -111,15 +111,22 @@ export async function raccogliOrdiniDaEsportare(
   });
 }
 
-/** L'avviso che sta in prima riga quando l'elenco non e' arrivato in fondo. */
-export function avvisoFileParziale(quante: number, senzaId = 0): string {
-  return `ATTENZIONE: elenco INCOMPLETO. Qui dentro ci sono solo i primi ${quante} ordini, il resto non e' stato scaricato.${fraseSenzaId(senzaId)} NON usare questo file per la contabilita': rifai l'esportazione o chiedi l'elenco completo.`;
+/**
+ * L'avviso che sta in prima riga quando l'elenco non e' completo. Con
+ * `motivo === 'senza-id'` la lettura e' arrivata in fondo: si parla solo delle
+ * righe senza identificativo, non di un «resto non scaricato» che non c'e'.
+ */
+export function avvisoFileParziale(quante: number, senzaId = 0, motivo?: RaccoltaOrdini['motivo']): string {
+  const dettaglio = motivo === 'senza-id'
+    ? `Qui dentro ci sono ${quante} ordini, letti fino in fondo.`
+    : `Qui dentro ci sono solo i primi ${quante} ordini, il resto non e' stato scaricato.`;
+  return `ATTENZIONE: elenco INCOMPLETO. ${dettaglio}${fraseSenzaId(senzaId)} NON usare questo file per la contabilita': rifai l'esportazione o chiedi l'elenco completo.`;
 }
 
 /** Le righe del file: l'avviso (se serve), le intestazioni, gli ordini. */
 export function righeCsvOrdini(raccolta: RaccoltaOrdini): unknown[][] {
   return righeCsvConAvviso(raccolta, INTESTAZIONI_CSV_ORDINI, rigaCsvOrdine,
-    () => avvisoFileParziale(raccolta.righe.length, raccolta.senzaId));
+    () => avvisoFileParziale(raccolta.righe.length, raccolta.senzaId, raccolta.motivo));
 }
 
 /**

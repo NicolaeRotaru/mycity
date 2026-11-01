@@ -260,13 +260,11 @@ export function commitDelRilascio(rilascio) {
  * L'elenco non distingue «X e' vivo» da «X e' stato tolto»: lo sa solo il
  * dominio. `sulDominio` e' la risposta di Vercel per il dominio di produzione
  * (GET /v13/deployments/<dominio>), cioe' il rilascio che usano i clienti.
- *   · se sul dominio c'e' un altro commit, si torna li';
- *   · se c'e' gia' il commit che esce, Vercel l'ha spostato da solo, e chi
- *     c'era prima il dominio non lo dice piu': vale la stessa regola del
- *     dominio che non si sa (sotto);
- *   · se il dominio non si sa, si sceglie solo quando c'e' un candidato solo
- *     (un commit solo). Con due o piu' commit diversi e' tirare a indovinare,
- *     e la risposta giusta e' nessun indirizzo: il ritorno si fa a mano.
+ *   · se sul dominio c'e' un rilascio pronto di un altro commit, si torna li';
+ *   · in ogni altro caso (dominio che non si sa, dominio senza commit, dominio
+ *     gia' sul commit che esce) nessun indirizzo: il ritorno si fa a mano.
+ *     L'elenco non basta mai da solo (vedi il giro di correzione dentro la
+ *     funzione).
  *
  * 1/11/2026 (ondata 9) — IL SECONDO PUNTO TORNAVA AL RILASCIO GIA' SCARTATO.
  * Prima diceva «prima c'era l'ultimo rilascio di un altro commit, si torna a
@@ -277,9 +275,9 @@ export function commitDelRilascio(rilascio) {
  * usavano W, ma da qui non c'e' modo di saperlo: il dominio ormai dice Y, e
  * l'elenco non distingue un rilascio vivo da uno tolto. Leggere il dominio
  * «prima» non aiuta: quando questo lavoro parte, dopo la CI, il rilascio
- * automatico di Vercel l'ha gia' spostato. Quindi nessun ritorno al buio: con
- * piu' commit possibili la risposta e' null, e il lavoro finisce rosso
- * dicendo che il ritorno va fatto a mano.
+ * automatico di Vercel l'ha gia' spostato. Quindi nessun ritorno al buio: la
+ * risposta e' null, e il lavoro finisce rosso dicendo che il ritorno va
+ * fatto a mano.
  */
 function indirizzoDiProduzione(rilascio) {
   // L'elenco chiama lo stato ora `state` ora `readyState` a seconda della
@@ -300,28 +298,27 @@ function indirizzoDiProduzione(rilascio) {
  * @returns {string | null}
  */
 export function rilascioDaTornare(rispostaDeiRilasci, { commitCheEsce = '', sulDominio = null } = {}) {
-  const elenco = Array.isArray(rispostaDeiRilasci?.deployments) ? rispostaDeiRilasci.deployments : [];
+  // 1/11/2026 (ondata 9, giro di correzione dal collaudo) — L'ELENCO NON
+  // DECIDE PIU' NIENTE. Prima, senza il dominio (o col dominio gia' sul commit
+  // che esce), si tornava all'unico «altro commit» dell'elenco. Ma l'elenco
+  // legge solo gli ultimi 20 rilasci: dopo qualche rilancio di X rotto, W esce
+  // dalla finestra e l'elenco [Y, X] ha un solo altro commit, X — quello gia'
+  // tolto. La regola «un commit solo» non sa se quel commit e' stato scartato.
+  // Adesso si torna in automatico SOLO quando il dominio indica un rilascio
+  // READY di produzione, con il suo commit, e quel commit non e' quello che
+  // esce. In ogni altro caso null: niente ritorno al buio, il lavoro finisce
+  // rosso e dice che il ritorno va fatto a mano. Il ritorno automatico pieno
+  // torna possibile quando il rilascio automatico di Vercel (vercel.json) e'
+  // spento: allora il dominio letto qui e' ancora quello dei clienti.
+  void rispostaDeiRilasci;
   const daScartare = String(commitCheEsce ?? '').trim().toLowerCase();
-  const candidati = [];
-  for (const rilascio of elenco) {
-    const indirizzo = indirizzoDiProduzione(rilascio);
-    if (!indirizzo) continue;
-    const commit = commitDelRilascio(rilascio);
-    if (daScartare && commit === daScartare) continue;
-    candidati.push({ indirizzo, commit });
-  }
-
   const deiClienti = indirizzoDiProduzione(sulDominio);
-  // Sul dominio un altro commit: e' quello che usano i clienti, si torna li'.
-  // Sul dominio il commit che esce: chi c'era prima non si sa piu', e si
-  // ricade nella regola qui sotto (mai `candidati[0]`: puo' essere un
-  // rilascio gia' tolto perche' rotto).
-  if (deiClienti && (!daScartare || commitDelRilascio(sulDominio) !== daScartare)) return deiClienti;
-
-  // Un rilascio senza commit conta come un commit a se': non si sa se e' lo
-  // stesso di un altro.
-  const commitDiversi = new Set(candidati.map((c, i) => c.commit || `senza-commit-${i}`));
-  return commitDiversi.size === 1 ? candidati[0].indirizzo : null;
+  if (!deiClienti) return null;
+  // Senza il commit che esce, o senza il commit del dominio, non si sa se il
+  // dominio serve proprio il rilascio che si e' appena rotto.
+  const commitDelDominio = commitDelRilascio(sulDominio);
+  if (!daScartare || !commitDelDominio) return null;
+  return commitDelDominio === daScartare ? null : deiClienti;
 }
 
 /**

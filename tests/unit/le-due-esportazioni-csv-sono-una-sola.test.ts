@@ -124,8 +124,37 @@ describe('il nome del file: stesse regole per ordini e utenti', () => {
     expect(o).toBe('mycity-ordini-2026-11-01-perche-si-PARZIALE.csv');
   });
 
-  it('una ricerca fatta solo di simboli non lascia un «-cerca-» vuoto', () => {
-    expect(nomeFileUtenti({ oggi: '2026-11-01', completo: true, ricerca: '???' }))
+  it('una ricerca di soli simboli o caratteri non latini resta una ricerca nel nome', () => {
+    for (const ricerca of ['王', 'Иван', '!!!']) {
+      expect(nomeFileUtenti({ oggi: '2026-11-01', completo: true, ricerca }))
+        .toBe('mycity-utenti-2026-11-01-cerca.csv');
+    }
+    expect(nomeFileUtenti({ oggi: '2026-11-01', completo: true, ricerca: '   ' }))
       .toBe('mycity-utenti-2026-11-01.csv');
+  });
+});
+
+describe('con le sole righe senza id, l avviso non dice una cosa falsa', () => {
+  const righe: Grezza[] = [{ id: 'a' }, { id: null }, { id: 'b' }];
+
+  it('la lettura e arrivata in fondo: niente «il resto non e stato scaricato»', async () => {
+    const { ordini, utenti } = await attraversoLeDue(righe, { perLettura: 10 });
+    expect(ordini.motivo).toBe('senza-id');
+    expect(utenti.motivo).toBe('senza-id');
+    const primaO = contenutoCsvOrdini(ordini).replace(/^\uFEFF/, '').split('\n')[0];
+    const primaU = contenutoCsvUtenti(utenti).replace(/^\uFEFF/, '').split('\n')[0];
+    for (const prima of [primaO, primaU]) {
+      expect(prima).toContain('INCOMPLETO');
+      expect(prima).toContain('1 riga è arrivata senza identificativo');
+      expect(prima).not.toMatch(/resto non/);
+      expect(prima).not.toMatch(/solo i primi/);
+    }
+  });
+
+  it('quando invece ferma il tetto, il «resto non scaricato» resta', async () => {
+    const infinite = Array.from({ length: 50 }, (_, i) => ({ id: `r${i}` }));
+    const { ordini, utenti } = await attraversoLeDue(infinite, { perLettura: 2, tettoLetture: 2 });
+    expect(contenutoCsvOrdini(ordini)).toMatch(/resto non/);
+    expect(contenutoCsvUtenti(utenti)).toMatch(/resto non/);
   });
 });

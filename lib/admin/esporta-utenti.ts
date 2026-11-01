@@ -123,6 +123,8 @@ export function avvisoFileUtentiParziale(raccolta: RaccoltaUtenti): string {
   const quante = raccolta.righe.length;
   const dettaglio = raccolta.motivo === 'ricerca'
     ? `Qui dentro ci sono solo i primi ${quante} risultati della ricerca: ce ne sono altri che non sono stati scaricati.`
+    : raccolta.motivo === 'senza-id'
+    ? `Qui dentro ci sono ${quante} utenti, letti fino in fondo.`
     : `Qui dentro ci sono solo i primi ${quante} utenti, il resto non è stato scaricato.`;
   return `ATTENZIONE: elenco INCOMPLETO. ${dettaglio}${fraseSenzaId(raccolta.senzaId)} NON usarlo come elenco degli iscritti: rifai l'esportazione restringendo la ricerca, o chiedi l'elenco completo.`;
 }
@@ -153,6 +155,8 @@ export function nomeFileUtenti(opzioni: {
 }): string {
   const filtro = opzioni.filtro && opzioni.filtro !== 'all' ? pezzoNomeFile(opzioni.filtro) : '';
   const parola = opzioni.ricerca?.trim() ? pezzoNomeFile(opzioni.ricerca, 24) : '';
-  const cercato = parola ? `cerca-${parola}` : '';
+  // Una ricerca di soli caratteri non latini («王», «Иван») o simboli dà una
+  // parola vuota: il nome dice comunque che è una ricerca, non l'elenco intero.
+  const cercato = opzioni.ricerca?.trim() ? (parola ? `cerca-${parola}` : 'cerca') : '';
   return nomeFileCsv({ prefisso: 'mycity-utenti', oggi: opzioni.oggi, completo: opzioni.completo, pezzi: [filtro, cercato] });
 }
