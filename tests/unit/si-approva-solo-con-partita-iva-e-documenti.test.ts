@@ -140,7 +140,7 @@ describe('② il negozio si approva solo con una partita IVA valida', () => {
   });
 
   it('la sospensione non chiede la partita IVA', async () => {
-    usa({ ...NEGOZIO, business_vat_number: null });
+    usa({ ...NEGOZIO, business_vat_number: null, approval_status: 'approved' });
     expect((await MODERA(richiesta('suspend'))).status).toBe(200);
   });
 });
