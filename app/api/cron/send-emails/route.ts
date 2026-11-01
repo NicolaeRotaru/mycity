@@ -8,6 +8,7 @@ import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-d
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { EMAIL_PER_GIRO } from '@/lib/email/ritmo-della-coda';
+import { controllaPostaDegliOrdini } from '@/lib/email/sentinella-posta-ordini';
 
 /**
  * Cron endpoint per inviare email lifecycle dalla queue.
@@ -215,7 +216,12 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     });
   }
 
-  return await processBatch(supa, (batch ?? []) as any[]);
+  // 1/11/2026 — Con il trigger della migrazione 150 assente la coda resta vuota e
+  // questo giro risponde «sent: 0» come in un giorno senza ordini. Il controllo
+  // lo dice ad alta voce (lib/email/sentinella-posta-ordini.ts) e non ferma mai il giro.
+  const postaOrdini = await controllaPostaDegliOrdini(supa);
+
+  return await processBatch(supa, (batch ?? []) as any[], { postaOrdini: postaOrdini.stato });
 });
 
 export const GET = handler;
@@ -243,6 +249,7 @@ async function processBatch(
     /** 31/10/2026 — Quando la riga smette di valere (migrazione 165). */
     scade_at?: string | null;
   }[],
+  extra: Record<string, unknown> = {},
 ): Promise<NextResponse> {
   let sent = 0, skipped = 0, errors = 0, rinviate = 0, scadute = 0;
 
@@ -433,5 +440,5 @@ async function processBatch(
       }
     }
   }
-  return NextResponse.json({ ok: true, sent, skipped, errors, rinviate, scadute, total: batch.length });
+  return NextResponse.json({ ok: true, sent, skipped, errors, rinviate, scadute, total: batch.length, ...extra });
 }
