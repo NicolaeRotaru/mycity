@@ -150,6 +150,16 @@ describe('lo stesso reso con la carta, ripreso dopo un guasto', () => {
     expect(ordine().refunded_amount_cents).toBe(2000);
   });
 
+  for (const altroCents of [2000, 2500]) {
+    it(`carrello di due negozi: ${altroCents / 100} € rimborsati sull altro ordine non contano su questo`, async () => {
+      stato.suStripe.push({ id: 're_fuori', amount: altroCents, status: 'succeeded', metadata: { registrato_da_fuori: '1', order_id: 'altro' }, chiave: null });
+      await reso();
+      await reso();
+      expect(stato.storni.map((s) => s.amount)).toEqual([1800]);
+      expect(ordine().refunded_amount_cents).toBe(2000);
+    });
+  }
+
   it('risposta di Stripe persa, ordine senza altri rimborsi, ripreso dopo 24 ore: un rimborso solo, contato una volta', async () => {
     stato.rispostePerse = 1;
     await expect(reso()).rejects.toThrow();

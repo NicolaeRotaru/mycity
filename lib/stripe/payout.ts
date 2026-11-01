@@ -1586,6 +1586,47 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     };
   }
 
+  // 1/11/2026 (collaudo finale) — IL RIMBORSO COL SOLO CREDITO DI QUESTA CHIAVE E' GIA' USCITO.
+  // Lo stesso freno della carta (`ilRimborsoDellaChiaveGiaUscito`), col testimone del credito:
+  // il diario, che ha una riga sola per chiave (indice unico, 098 e 143). Il caso: ordine in
+  // contanti pagato col credito, il negozio approva 20 €, il credito esce, la scrittura sul reso
+  // cade e il negozio segue i passi normali con la stessa chiave `return_<id>`. Prima si
+  // prenotava di nuovo: l'ordine contava 40 € su 20 usciti e al negozio si toglieva la quota due
+  // volte. Dopo che il credito e' uscito non si torna mai indietro (vedi il blocco dei soldi):
+  // quella prenotazione e quella quota le ha gia' fatte il tentativo di prima. Una lettura
+  // caduta lancia qui, prima di toccare qualunque cosa. (Col bonifico il segno sull'ordine fa
+  // gia' lo stesso lavoro: `bonificoDiPrima`.)
+  if (
+    tipo === 'contanti' && opts.idempotencyKey && !bonificoDiPrima &&
+    ripartoVero.bonificoCents === 0 && ripartoVero.creditoCents > 0
+  ) {
+    const giaAccreditato = await accreditoADiario(admin, opts.idempotencyKey);
+    if (giaAccreditato != null) {
+      controllaLaCifraGiaAccreditata(giaAccreditato, ripartoVero.creditoCents);
+      if (Number(order.refunded_amount_cents ?? 0) < giaAccreditato) {
+        try {
+          await notifyAdmins(
+            '⚠️ Rimborso ripreso: controlla i conti dell ordine',
+            `Il credito da ${formatPriceFromCents(giaAccreditato)} sull'ordine #${order.id.slice(0, 8)} era già uscito, ma l'ordine conta meno rimborsato. ` +
+              'Non l ho rifatto: controlla il totale rimborsato e la quota ripresa al negozio.',
+            '/admin/orders',
+          );
+        } catch (e) {
+          logger.error('[refundOrder] avviso del credito ripreso non inviato', { orderId: order.id, e });
+        }
+      }
+      return {
+        refundId: `wallet:${opts.idempotencyKey}`,
+        reversedCents: 0,
+        pieno: Number(order.refunded_amount_cents ?? 0) >= grossCents,
+        modo,
+        importoCents: giaAccreditato,
+        creditoCents: giaAccreditato,
+        bonificoCents: 0,
+      };
+    }
+  }
+
   // L'email del cliente, prima dei soldi (vedi `emailDelCliente`). Col bonifico
   // serve all'avviso, e una lettura caduta ferma il rimborso; senza bonifico
   // serve solo all'email di rimborso, e una lettura caduta la salta.
