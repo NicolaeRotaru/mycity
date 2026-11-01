@@ -177,19 +177,19 @@ export default function Navbar() {
                       <CartButton count={cartCount} />
                     )}
                     {isSeller && (
-                      <Link href="/seller/orders" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
+                      <Link href="/seller/orders" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
                         <Package size={16} strokeWidth={2.2} />
                         Ordini
                       </Link>
                     )}
                     {isRider && (
-                      <Link href="/rider" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
+                      <Link href="/rider" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
                         <Bike size={16} strokeWidth={2.2} />
                         Consegne
                       </Link>
                     )}
                     {isAdmin && (
-                      <Link href="/admin" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
+                      <Link href="/admin" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
                         <Shield size={16} strokeWidth={2.2} />
                         Admin
                       </Link>
@@ -293,7 +293,7 @@ export const IconButton = ({ href, label, badge, unita = 'non letti', children }
   <Link
     href={href}
     title={label}
-    className="relative p-2 hover:bg-white/10 rounded-full transition-colors focus-visible:outline-white"
+    className="relative p-2 text-white hover:text-white hover:bg-white/10 rounded-full transition-colors focus-visible:outline-white"
   >
     <span aria-hidden>{children}</span>
     <span className="sr-only">{label}</span>
