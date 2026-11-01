@@ -53,7 +53,7 @@ Cosa ottimizzi (TUTTO insieme, solo dove migliora davvero):
 - "name": chiaro, specifico e cercabile (marca + tipo + dettaglio distintivo). Niente MAIUSCOLE urlate, niente keyword stuffing, niente emoji.
 - "description": calda, onesta e scannerizzabile (cos'è, materiali/ingredienti, dimensioni/taglia, condizione, a chi serve, cosa lo rende speciale). 250-600 caratteri. Non inventare ciò che non vedi o non trovi.
 - "price": allineato al mercato locale italiano. Ragiona sul netto venditore dopo la commissione e tienilo sano; se proponi un prezzo, spiega il perché nel "pricing".
-- "compare_at_price": SOLO se esiste uno sconto reale (prezzo pieno > prezzo). Altrimenti null o ometti.
+- Il prezzo pieno barrato (sconto) NON lo proponi mai: lo decide solo il negoziante.
 - "tags": 3-8 parole chiave minuscole utili alla ricerca (sinonimi, occasioni d'uso). Lista COMPLETA desiderata.
 - "attributes": COMPILA gli attributi mancanti che riesci a dedurre da foto/ricerca, usando SOLO le chiavi valide e, per i campi a scelta, SOLO le opzioni elencate. ${REGOLA_CAMPI_DICHIARATIVI}
 - "category_slug"/"subcategory_name": correggi solo se quella attuale è sbagliata.
@@ -68,7 +68,7 @@ Spiega ogni cambiamento in "field_notes" (campo → perché), con frasi brevi e 
 
 Regole per "patch" (le modifiche da applicare):
 - Inserisci SOLO i campi che cambiano rispetto allo stato attuale; ometti gli invariati.
-- Per TOGLIERE un valore: null per gli scalari (compare_at_price, condition) e "attributes_remove" per gli attributi.
+- Per TOGLIERE un valore: null per gli scalari (condition) e "attributes_remove" per gli attributi.
 - "tags" è la lista COMPLETA desiderata (ricostruiscila da quella attuale).
 - Prezzi in euro come numero (es. 4.90). Niente emoji in nessun campo.
 

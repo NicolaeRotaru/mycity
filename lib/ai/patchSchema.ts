@@ -12,10 +12,9 @@ export const PRODUCT_PATCH_PROPERTIES: Record<string, unknown> = {
   name: { type: 'string' },
   description: { type: 'string' },
   price: { type: 'number', description: 'Prezzo di vendita in euro.' },
-  compare_at_price: {
-    type: ['number', 'null'],
-    description: 'Prezzo pieno barrato in euro. null per rimuoverlo.',
-  },
+  // 1/11/2026 — Niente «prezzo pieno barrato» dall'AI: il modello lo prendeva
+  // dal mercato e la pagina mostrava uno sconto che il negozio non ha mai
+  // fatto. Lo sconto barrato lo scrive solo il negoziante, a mano.
   unit: { type: 'string', enum: ['pezzo', 'kg', 'g', 'l', 'ml', 'confezione', 'paio', 'm'] },
   condition: {
     type: ['string', 'null'],

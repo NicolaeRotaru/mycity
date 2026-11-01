@@ -19,7 +19,7 @@ import { uploadProductImages, ALLOWED_IMAGE_TYPES } from '@/lib/products/uploadI
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
-import type { AiProductPatch } from '@/lib/products/aiPatch';
+import { esitoModificaDallaChat, type AiProductPatch } from '@/lib/products/aiPatch';
 import type { ProductSnapshot } from '@/lib/products/aiSnapshot';
 import {
   ETICHETTE_STATO,
@@ -217,11 +217,14 @@ export default function SupportProductAssistant() {
 
       if (json.product) setFocused(json.product as ProductSnapshot);
       setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, applied: true } : m)));
-      toast.success('Modifiche salvate sul prodotto');
-      // Quello che il server NON ha applicato (prezzo fuori banda, allergeni)
-      // si dice, invece di sparire dietro «salvate».
+      // 1/11/2026 — Quello che il server NON ha scritto (prezzo fuori banda,
+      // prezzo pieno barrato) si dice AL POSTO di «salvate», non sotto.
+      const esito = esitoModificaDallaChat(json);
+      if (esito.tipo === 'successo') toast.success(esito.testo);
+      else toast.warning(esito.testo, { duration: 15_000 });
+      // Allergeni e ingredienti hanno la loro frase in `changed`.
       for (const riga of Array.isArray(json.changed) ? (json.changed as string[]) : []) {
-        if (riga.includes('NON ')) toast.warning(riga);
+        if (riga.includes('NON ') && !esito.testo.includes(riga)) toast.warning(riga);
       }
     } catch (err) {
       toast.error(friendlyError(err));

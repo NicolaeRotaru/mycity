@@ -15,16 +15,6 @@ import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
  * - Security: "Mai loggare la chiave. Mai importare questo modulo lato client."
  */
 
-/** Modelli usati dal marketplace. `as const` per literal types stretti. */
-export const MODELS = {
-  fast: 'claude-haiku-4-5-20251001',
-  vision: 'claude-sonnet-4-5',
-  smart: 'claude-sonnet-4-5',
-} as const;
-
-export type ModelRole = keyof typeof MODELS;
-export type ModelId = (typeof MODELS)[ModelRole];
-
 /**
  * Prezzi Anthropic in USD per milione di token (fonte: claude.com/pricing).
  * `input`/`output` sono le tariffe base. La cache si deriva dai moltiplicatori
@@ -35,7 +25,68 @@ export type ModelId = (typeof MODELS)[ModelRole];
 export const PRICE_PER_MTOK = {
   'claude-haiku-4-5-20251001': { input: 1, output: 5 },
   'claude-sonnet-4-5': { input: 3, output: 15 },
-} as const satisfies Record<ModelId, { input: number; output: number }>;
+  // 1/11/2026 — Il sostituto pronto di claude-sonnet-4-5 (che Anthropic spegne
+  // il 30/11/2026): stessa tariffa, accetta tool_choice forzato come lo usano
+  // le nostre rotte. Si accende solo con AI_MODELLO_VISION / AI_MODELLO_SMART.
+  // claude-sonnet-5-5 NON sta qui di proposito: rifiuta tool_choice {type:'tool'}.
+  'claude-sonnet-4-6': { input: 3, output: 15 },
+} as const;
+
+export type ModelId = keyof typeof PRICE_PER_MTOK;
+
+/**
+ * 1/11/2026 — IL MODELLO GRANDE SI SPEGNE IL 30 NOVEMBRE.
+ *
+ * claude-sonnet-4-5 serve a tutte le funzioni che guardano le foto o
+ * ragionano. Era scritto qui a mano: cambiarlo voleva dire un rilascio del
+ * codice, il giorno sbagliato. Ora il modello di «vision» e di «smart» si
+ * sceglie con una variabile d'ambiente (AI_MODELLO_VISION / AI_MODELLO_SMART),
+ * con lo stesso default di prima. Si accetta SOLO un modello che ha una riga
+ * prezzi: un nome sconosciuto renderebbe il costo NaN e il freno di spesa
+ * cieco, quindi resta il default e lo si dice nel log.
+ */
+export const MODELLO_PREDEFINITO: ModelId = 'claude-sonnet-4-5';
+
+/** Modelli che Anthropic ritira, con il giorno dello spegnimento (AAAA-MM-GG). */
+export const MODELLI_RITIRATI: Partial<Record<ModelId, string>> = {
+  'claude-sonnet-4-5': '2026-11-30',
+};
+
+export function eModelloConPrezzo(id: unknown): id is ModelId {
+  return typeof id === 'string' && Object.prototype.hasOwnProperty.call(PRICE_PER_MTOK, id);
+}
+
+export function modelloDaAmbiente(nomeVariabile: string, predefinito: ModelId = MODELLO_PREDEFINITO): ModelId {
+  const grezzo = process.env[nomeVariabile]?.trim();
+  if (!grezzo) return predefinito;
+  if (eModelloConPrezzo(grezzo)) return grezzo;
+  console.warn(`[ai] ${nomeVariabile} indica un modello senza prezzo in PRICE_PER_MTOK: resta ${predefinito}.`);
+  return predefinito;
+}
+
+/**
+ * Dal giorno dello spegnimento in poi, un modello ritirato ancora in uso si
+ * segnala come errore operativo: e' il guasto che sta per arrivare (o e' gia'
+ * arrivato), non un dettaglio. Restituisce true se ha segnalato.
+ */
+export function segnalaModelloRitirato(model: ModelId, adesso: Date = new Date()): boolean {
+  const giorno = MODELLI_RITIRATI[model];
+  if (!giorno) return false;
+  if (adesso.toISOString().slice(0, 10) < giorno) return false;
+  console.error(
+    `[ai] Il modello ${model} e' ritirato dal ${giorno}: impostare AI_MODELLO_VISION / AI_MODELLO_SMART su un modello attivo (es. claude-sonnet-4-6).`,
+  );
+  return true;
+}
+
+/** Modelli usati dal marketplace. */
+export const MODELS: { readonly fast: ModelId; readonly vision: ModelId; readonly smart: ModelId } = {
+  fast: 'claude-haiku-4-5-20251001',
+  vision: modelloDaAmbiente('AI_MODELLO_VISION'),
+  smart: modelloDaAmbiente('AI_MODELLO_SMART'),
+};
+
+export type ModelRole = keyof typeof MODELS;
 
 /** Moltiplicatori cache (relativi al prezzo input base). */
 export const CACHE_MULTIPLIER = { write5m: 1.25, read: 0.1 } as const;
