@@ -5,6 +5,8 @@ import { ApiErrors } from '@/lib/api/responses';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
+import { withAdminAuth } from '@/lib/api/middleware';
+import { comunicaEsito, MOTIVAZIONE_MINIMA } from './esito/comunica';
 
 export const runtime = 'nodejs';
 
@@ -131,3 +133,40 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ok: true, id: data.id }, { status: 201 });
   }
 }
+
+/**
+ * PATCH /api/segnalazioni — solo amministratori: comunica l'esito deciso.
+ *
+ * 1/11/2026 — La pagina /admin/segnalazioni salvava stato ed esito_motivato,
+ * ma nessun codice li mandava: ne' a chi aveva segnalato (regolamento sui
+ * servizi digitali, art. 16.5) ne' al venditore toccato (art. 17). Questa
+ * rotta li manda (vedi `esito/comunica.ts`): email a chi ha lasciato il
+ * recapito, notifica a chi ha un account e al venditore. Risponde 502 se un
+ * canale previsto e' fallito, cosi' l'amministratore lo vede invece di
+ * credere che sia partito. La pagina admin la chiama dopo aver salvato.
+ */
+const CorpoEsito = z.object({ id: z.string().uuid() });
+
+export const PATCH = withAdminAuth(async ({ req }) => {
+  let corpo;
+  try {
+    corpo = CorpoEsito.parse(await jsonRichiesta(req, TETTO_JSON));
+  } catch (e) {
+    return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
+  }
+  const r = await comunicaEsito(getAdminSupabase(), corpo.id);
+  if (!r.ok) {
+    if (r.motivo === 'non_trovata') return ApiErrors.notFound('Segnalazione non trovata');
+    if (r.motivo === 'non_decisa') {
+      return ApiErrors.conflict(`Prima registra la decisione e una motivazione di almeno ${MOTIVAZIONE_MINIMA} caratteri`);
+    }
+    return ApiErrors.internal('Segnalazione non letta: riprova');
+  }
+  const { segnalanteEmail, segnalanteNotifica, venditore } = r;
+  const fallito = [segnalanteEmail, segnalanteNotifica, venditore].includes('fallita');
+  if (fallito) logger.error('Esito della segnalazione non comunicato a tutti', { id: corpo.id, segnalanteEmail, segnalanteNotifica, venditore });
+  return NextResponse.json(
+    { ok: !fallito, segnalanteEmail, segnalanteNotifica, venditore },
+    { status: fallito ? 502 : 200 },
+  );
+});

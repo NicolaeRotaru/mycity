@@ -19,7 +19,7 @@ import { Button } from '@/components/ui/Button';
  *
  * 1/11/2026 — QUI SI PROMETTEVA UN ESITO CHE NON PARTIVA. Il modulo diceva «ti
  * diciamo com'è andata», ma nessun codice mandava l'esito. Il mittente adesso
- * esiste (/api/segnalazioni/esito), però la pagina admin non lo chiama ancora:
+ * esiste (PATCH /api/segnalazioni), però la pagina admin non lo chiama ancora:
  * finché non lo fa, qui non si promette niente che non succede.
  */
 const MOTIVI: Array<{ valore: string; etichetta: string }> = [
