@@ -76,7 +76,10 @@ async function caricaFile(csv: string): Promise<Array<Record<string, unknown>>> 
 beforeEach(() => { insert.mockClear(); });
 
 describe('caricamento da file: un alimento senza allergeni e ingredienti non va in vendita', () => {
-  it('file nel formato vecchio (senza colonne): l alimento nasce bozza, il resto in vendita', async () => {
+  // Dall'ondata 6 il file non porta foto: tutto nasce bozza, e la foto si
+  // aggiunge dalla scheda. Qui si controlla che l'alimento resti bozza e che
+  // allergeni e ingredienti del file vengano salvati.
+  it('file nel formato vecchio (senza colonne): l alimento nasce bozza, e anche il resto finche manca la foto', async () => {
     const righe = await caricaFile(
       'name,description,price,stock,category_slug\n' +
       '"Pane casereccio","Pane",4.50,20,pane\n' +
@@ -85,10 +88,10 @@ describe('caricamento da file: un alimento senza allergeni e ingredienti non va 
     const pane = righe.find((r) => r.name === 'Pane casereccio')!;
     const tovaglia = righe.find((r) => r.name === 'Tovaglia')!;
     expect(pane.status).toBe('draft');
-    expect(tovaglia.status).toBe('available');
+    expect(tovaglia.status).toBe('draft');
   });
 
-  it('con allergeni e ingredienti dal file: in vendita e con gli attributi salvati', async () => {
+  it('con allergeni e ingredienti dal file: gli attributi si salvano, la vendita aspetta la foto', async () => {
     const righe = await caricaFile(
       'name,description,price,stock,category_slug,allergeni,ingredienti\n' +
       '"Focaccia","Focaccia",3,10,alimentari,"Glutine","Farina, acqua, olio, sale"\n' +
@@ -96,7 +99,7 @@ describe('caricamento da file: un alimento senza allergeni e ingredienti non va 
       '"Biscotti","Biscotti",2,10,alimentari,"   ","Farina, burro"\n',
     );
     const focaccia = righe.find((r) => r.name === 'Focaccia')!;
-    expect(focaccia.status).toBe('available');
+    expect(focaccia.status).toBe('draft');
     expect(focaccia.attributes).toEqual({ allergeni: 'Glutine', ingredienti: 'Farina, acqua, olio, sale' });
     expect(righe.find((r) => r.name === 'Grissini')!.status).toBe('draft');
     expect(righe.find((r) => r.name === 'Biscotti')!.status).toBe('draft');
