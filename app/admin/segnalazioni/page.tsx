@@ -105,10 +105,9 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
       }
     },
     onSuccess: (esito) => {
+      toast.success('Decisione registrata');
       if (esito?.comunicato === false) {
-        toast.error('Decisione registrata, ma l esito non è partito: riprova a registrarla per rimandarlo.');
-      } else {
-        toast.success('Decisione registrata');
+        toast.error('L esito non è partito a chi ha segnalato e al venditore: registra di nuovo la decisione per rimandarlo.');
       }
       qc.invalidateQueries({ queryKey: CHIAVE });
     },
