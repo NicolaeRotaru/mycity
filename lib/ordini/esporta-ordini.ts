@@ -1,4 +1,6 @@
-import { contenutoFileCsv } from '@/lib/csv-sicuro';
+import {
+  raccogliAFinestre, righeCsvConAvviso, contenutoCsv, nomeFileCsv, pezzoNomeFile, fraseSenzaId,
+} from '@/lib/admin/esporta-csv';
 
 /**
  * 8/9/2026 - IL FILE PER IL COMMERCIALISTA CONTENEVA GLI ULTIMI CINQUANTA
@@ -63,7 +65,9 @@ export type RaccoltaOrdini = {
   /** Vero solo se il database ha detto «sono finiti», non se ci siamo stancati. */
   completo: boolean;
   letture: number;
-  motivo?: 'tetto';
+  /** `senza-id`: righe arrivate senza identificativo, contate e lasciate fuori. */
+  motivo?: 'tetto' | 'senza-id';
+  senzaId?: number;
 };
 
 /**
@@ -92,68 +96,38 @@ export function rigaCsvOrdine(o: OrdineDaEsportare): unknown[] {
 }
 
 /**
- * Legge finestra dopo finestra finche' il database non restituisce PIU' NIENTE.
- *
- * Il criterio di fine e' «zero righe», non «meno righe di quante ne ho
- * chieste», e la differenza non e' accademica: PostgREST ha un tetto di righe
- * per richiesta (`max-rows`) che si cambia dal pannello di Supabase. Se quel
- * tetto e' piu' basso della finestra, la prima lettura torna corta e il criterio
- * furbo direbbe «sono finiti» - ricreando esattamente il file monco che sembra
- * intero. Si paga una lettura in piu' alla fine, quella vuota.
- *
- * L'avanzamento e' di quante righe sono arrivate davvero, non di quante ne
- * abbiamo chieste, se no il tetto del server farebbe saltare dei blocchi.
- *
- * I doppioni si tolgono per identificativo. Servono: mentre si sfoglia, un
- * ordine nuovo entra in cima e sposta tutte le righe di uno, cosi' la finestra
- * dopo ripesca l'ultima riga di quella prima. Nel file del commercialista un
- * ordine contato due volte e' una somma gonfiata.
+ * Legge tutti gli ordini a finestre. L'algoritmo (fine a «zero righe»,
+ * doppioni tolti per id, righe senza id contate e lasciate fuori, tetto) sta in
+ * `lib/admin/esporta-csv.ts`, lo stesso degli utenti: qui c'è solo il tetto.
+ * Nel file del commercialista un ordine contato due volte è una somma gonfiata.
  */
 export async function raccogliOrdiniDaEsportare(
   leggi: LettoreDiOrdini,
   opzioni: { perLettura?: number; tettoLetture?: number } = {},
 ): Promise<RaccoltaOrdini> {
-  const perLettura = Math.max(1, Math.trunc(opzioni.perLettura ?? ORDINI_PER_LETTURA));
-  const tetto = Math.max(1, Math.trunc(opzioni.tettoLetture ?? TETTO_LETTURE));
-
-  const perId = new Map<string, OrdineDaEsportare>();
-  let letture = 0;
-  let da = 0;
-
-  for (let giro = 0; giro < tetto; giro++) {
-    const blocco = await leggi(da, da + perLettura - 1);
-    letture++;
-    for (const ordine of blocco) {
-      if (!perId.has(ordine.id)) perId.set(ordine.id, ordine);
-    }
-    if (blocco.length === 0) {
-      return { righe: [...perId.values()], completo: true, letture };
-    }
-    da += blocco.length;
-  }
-
-  return { righe: [...perId.values()], completo: false, letture, motivo: 'tetto' };
+  return raccogliAFinestre(leggi, {
+    perLettura: opzioni.perLettura ?? ORDINI_PER_LETTURA,
+    tettoLetture: opzioni.tettoLetture ?? TETTO_LETTURE,
+  });
 }
 
 /** L'avviso che sta in prima riga quando l'elenco non e' arrivato in fondo. */
-export function avvisoFileParziale(quante: number): string {
-  return `ATTENZIONE: elenco INCOMPLETO. Qui dentro ci sono solo i primi ${quante} ordini, il resto non e' stato scaricato. NON usare questo file per la contabilita': rifai l'esportazione o chiedi l'elenco completo.`;
+export function avvisoFileParziale(quante: number, senzaId = 0): string {
+  return `ATTENZIONE: elenco INCOMPLETO. Qui dentro ci sono solo i primi ${quante} ordini, il resto non e' stato scaricato.${fraseSenzaId(senzaId)} NON usare questo file per la contabilita': rifai l'esportazione o chiedi l'elenco completo.`;
 }
 
 /** Le righe del file: l'avviso (se serve), le intestazioni, gli ordini. */
 export function righeCsvOrdini(raccolta: RaccoltaOrdini): unknown[][] {
-  const testa: unknown[][] = raccolta.completo
-    ? []
-    : [[avvisoFileParziale(raccolta.righe.length)], []];
-  return [...testa, [...INTESTAZIONI_CSV_ORDINI], ...raccolta.righe.map(rigaCsvOrdine)];
+  return righeCsvConAvviso(raccolta, INTESTAZIONI_CSV_ORDINI, rigaCsvOrdine,
+    () => avvisoFileParziale(raccolta.righe.length, raccolta.senzaId));
 }
 
 /**
- * Il testo del file. Passa da `componiCsv`, quindi ogni cella e' neutralizzata:
+ * Il testo del file. Passa da `lib/csv-sicuro`, quindi ogni cella e' neutralizzata:
  * nessun nome scelto da un negoziante puo' diventare una formula eseguita.
  */
 export function contenutoCsvOrdini(raccolta: RaccoltaOrdini): string {
-  return contenutoFileCsv(righeCsvOrdini(raccolta));
+  return contenutoCsv(righeCsvOrdini(raccolta));
 }
 
 /**
@@ -161,9 +135,6 @@ export function contenutoCsvOrdini(raccolta: RaccoltaOrdini): string {
  * `-PARZIALE` quando l'elenco non e' completo.
  */
 export function nomeFileOrdini(opzioni: { oggi: string; completo: boolean; filtro?: string }): string {
-  const filtro = opzioni.filtro && opzioni.filtro !== 'all'
-    ? `-${opzioni.filtro.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
-    : '';
-  const parziale = opzioni.completo ? '' : '-PARZIALE';
-  return `mycity-ordini-${opzioni.oggi}${filtro}${parziale}.csv`;
+  const filtro = opzioni.filtro && opzioni.filtro !== 'all' ? pezzoNomeFile(opzioni.filtro) : '';
+  return nomeFileCsv({ prefisso: 'mycity-ordini', oggi: opzioni.oggi, completo: opzioni.completo, pezzi: [filtro] });
 }
