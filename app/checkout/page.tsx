@@ -423,7 +423,10 @@ export default function CheckoutPage() {
         .from('user_addresses')
         .select('*')
         .eq('user_id', authUser!.id)
-        .order('is_default', { ascending: false });
+        .order('is_default', { ascending: false })
+        // 5/11/2026 — Un secondo criterio fisso, lo stesso del carrello: senza predefinito due
+        // letture potevano restituire indirizzi in ordine diverso, e la cassa sceglierne un altro.
+        .order('id', { ascending: true });
       return (data ?? []) as SavedAddress[];
     },
   });

@@ -49,8 +49,11 @@ export type AddressForm = {
  */
 export const ATTESA_ZONA_MS = 600;
 
+// 5/11/2026 — La stessa frase che manda il server (`coordinateDiUnIndirizzo` in lib/geocodifica.ts),
+// carattere per carattere: prima qui si toglievano gli spazi da ogni campo e là solo dalla frase
+// intera, e con uno spazio in più dentro un campo le due domande alle mappe erano diverse.
 export function domandaDellaZona(ind: { address: string; city: string; zip: string }): string {
-  return `${ind.address.trim()}, ${ind.zip.trim()} ${ind.city.trim()}, Italia`.slice(0, 300);
+  return `${ind.address}, ${ind.zip} ${ind.city}, Italia`.trim().slice(0, 300);
 }
 
 export function useCoordinateDellaZona(

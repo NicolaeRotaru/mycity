@@ -280,6 +280,8 @@ export default function CartPage() {
               .select('lat, lng')
               .eq('user_id', idCliente)
               .order('is_default', { ascending: false })
+              // 5/11/2026 — Lo stesso secondo criterio della cassa: senza predefinito, lo stesso indirizzo.
+              .order('id', { ascending: true })
               .limit(1)
           : Promise.resolve({ data: [] as Array<{ lat: number | null; lng: number | null }> }),
       ]);
