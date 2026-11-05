@@ -336,6 +336,10 @@ export function messaggioSenzaDatiPersonali(message: string): string {
     .replace(/Key\s*\([^)]*\)\s*=\s*\([^)]*\)/gi, 'Key (…)=(…)')
     .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '<email>')
     .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '<id>')
+    // S10 (5/11/2026) — Un telefono si scrive con gli spazi («333 123 4567»,
+    // «+39 333 123 45 67»): la regola delle 6 cifre attaccate non lo vedeva, e
+    // passava intero verso PostHog e Google.
+    .replace(/\+?\d[\d\s.\-/]{6,}\d/g, '<numero>')
     .replace(/\b\d{6,}\b/g, '<numero>')
     .trim()
     .slice(0, 40);

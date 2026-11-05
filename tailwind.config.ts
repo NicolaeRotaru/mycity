@@ -17,6 +17,11 @@ export default {
   content: [
     './app/**/*.{js,ts,jsx,tsx}',
     './components/**/*.{js,ts,jsx,tsx}',
+    // S10 (5/11/2026) — lib/ scrive classi che finiscono a video (il cuore dei
+    // preferiti in lib/design/cuore-preferito.ts, le copertine dei negozi in
+    // lib/store-customization.ts): senza scansionarla, fill-secondary-500 e
+    // from-ink-700 non venivano generate e il cuore non si riempiva.
+    './lib/**/*.{js,ts,jsx,tsx}',
   ],
   // Rete di sicurezza per le classi colore che NON stanno dentro i `content`
   // qui sopra: `lib/` non viene scansionato, ma ci scrive classi che finiscono
@@ -101,7 +106,9 @@ export default {
           100: '#E7E5E4',
           200: '#D6D3D1',
           300: '#A8A29E',
-          400: '#78716C',
+          // S10 (5/11/2026) — era #78716C: 4,49:1 sul fondo panna, un pelo sotto i
+          // 4,5 del testo piccolo. #74706B fa 4,60 sul panna e 4,92 sul bianco.
+          400: '#74706B',
           500: '#57534E',
           600: '#44403C',
           700: '#3C3835',
@@ -155,6 +162,12 @@ export default {
         display: '-0.01em',
         editorial: '-0.015em',
         label: '0.04em',
+        // S10 (5/11/2026) — `tracking-wide` di Tailwind vale 0.025em, mentre il
+        // token del design per le maiuscole (--tracking-wide) e' 0.04em: lo
+        // stesso nome diceva due misure, e 37 etichette maiuscole scritte con
+        // `tracking-wide` respiravano diverso da quelle con `tracking-label`.
+        // Adesso i due nomi coincidono.
+        wide: '0.04em',
       },
       borderRadius: {
         // Bordi un filo più morbidi (era 0.5rem default)

@@ -133,7 +133,8 @@ function inEsadecimale(colore: string): string {
 describe('il metro si legge davvero dai file (se no non sta misurando niente)', () => {
   it('la tavolozza vera risponde', () => {
     expect(colori.cream?.['300'], 'la tavolozza non ha più cream-300').toBe('#EEDFBA');
-    expect(colori.ink?.['400'], 'la tavolozza non ha più ink-400').toBe('#78716C');
+    // S10 (5/11/2026) — ink-400 scurito da #78716C a #74706B (testo piccolo sul panna).
+    expect(colori.ink?.['400'], 'la tavolozza non ha più ink-400').toBe('#74706B');
   });
 
   it('il colore decorativo da solo NON basterebbe: è il difetto, in numeri', () => {

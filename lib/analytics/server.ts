@@ -31,6 +31,7 @@ import { logger } from '@/lib/logger';
  */
 
 import { clientIdGaValido } from '@/lib/analytics/ga-client-id';
+import { POSTHOG_ACCESO } from '@/lib/funzioni-al-lancio';
 
 const CHIAVE = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 const HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
@@ -224,7 +225,9 @@ export async function contaAcquisto(a: AcquistoDaContare): Promise<void> {
   // tutte e due.
   await contaAcquistoSuGoogle(a);
 
-  if (!CHIAVE) return;
+  // S10 (5/11/2026) — L'interruttore POSTHOG_ACCESO fermava solo il browser:
+  // con la chiave su Vercel l'acquisto partiva lo stesso da qui.
+  if (!POSTHOG_ACCESO || !CHIAVE) return;
   try {
     const risposta = await fetch(`${HOST.replace(/\/$/, '')}/capture/`, {
       method: 'POST',

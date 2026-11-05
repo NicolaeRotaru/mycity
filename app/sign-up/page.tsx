@@ -333,7 +333,7 @@ function SignUpInner() {
         </Button>
       </form>
 
-      <AuthAlternatives />
+      <AuthAlternatives condizioniDalModulo={acceptTos} />
 
       <p className="mt-6 text-[14px] text-ink-600">
         Hai già un account?{' '}
