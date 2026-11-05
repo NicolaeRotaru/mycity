@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Store, MapPin, Navigation, ArrowRight, Layers, Power, Package, ChefHat, Star, Banknote,
+  Store, MapPin, ArrowRight, Power, Package, ChefHat, Star, Banknote,
   AlertTriangle, RotateCcw, Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -110,6 +110,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** 5/11/2026 — Le consegne del fattorino ancora aperte: tutto tranne consegnato e annullato. */
+const STATI_DELLE_MIE_CONSEGNE_APERTE = ['NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'];
+
 export default function RiderDashboardPage() {
   const qc = useQueryClient();
   const router = useRouter();
@@ -149,6 +152,9 @@ export default function RiderDashboardPage() {
             order_items ( id, quantity )
           `)
           .eq('rider_id', user.id)
+          // 5/11/2026 — Solo le consegne ancora aperte: la bacheca rileggeva ogni minuto tutta la
+          // storia del fattorino (2.000 consegne per mostrarne una). La storia sta nella sua pagina.
+          .in('delivery_status', STATI_DELLE_MIE_CONSEGNE_APERTE)
           .order('created_at', { ascending: true }),
       ]);
       if (miei.error) throw miei.error;
@@ -162,10 +168,11 @@ export default function RiderDashboardPage() {
       );
 
       return {
-        // La vista puo' non esistere ancora (migrazione 122 da applicare): in
-        // quel caso la bacheca resta vuota e il fattorino vede solo i suoi
-        // ordini, invece di vedere un errore.
+        // 5/11/2026 — La vista esiste in produzione da tempo (migrazione 122): una lettura caduta
+        // non è «nessun ordine pronto». Si segna come lettura parziale e la bacheca lo dice, tenendo
+        // visibili le consegne del fattorino.
         liberi: (bacheca.data ?? []) as unknown as OrdineLibero[],
+        bachecaGuasta: !!bacheca.error,
         miei: mieiColNegozio as (AvailableOrder & { rider_id: string | null })[],
       };
     },
@@ -292,7 +299,7 @@ export default function RiderDashboardPage() {
   const myActive   = orders.filter((o) => o.rider_id && o.delivery_status !== 'DELIVERED' && o.delivery_status !== 'CANCELED');
   const available  = liberi.filter((o) => o.delivery_status === 'READY').sort(byZone);
   const inPrep     = liberi.filter((o) => o.delivery_status === 'ACCEPTED').sort(byZone);
-  const activeOne  = myActive[0];
+  const bachecaGuasta = letturaBacheca.data?.bachecaGuasta ?? false;
 
   const claim = useMutation({
     mutationFn: async (orderId: string) => {
@@ -495,11 +502,15 @@ export default function RiderDashboardPage() {
         </div>
       )}
 
-      {/* Consegna attiva (la tua) */}
-      {activeOne && (
+      {/* Consegne attive (le tue). 5/11/2026 — Tutte, non solo la prima: chi ne prende due (o i
+          due negozi dello stesso carrello) vedeva solo la più vecchia, e la seconda restava ferma. */}
+      {myActive.length > 0 && (
         <div className="mb-[18px] px-4">
-          <SectionLabel>La tua consegna</SectionLabel>
+          <SectionLabel>{myActive.length === 1 ? 'La tua consegna' : `Le tue consegne (${myActive.length})`}</SectionLabel>
+          <div className="flex flex-col gap-2.5">
+            {myActive.map((activeOne) => (
           <Link
+            key={activeOne.id}
             href={`/rider/orders/${activeOne.id}`}
             className="block rounded-xl border-2 border-accent-400 bg-surface-0 p-4 shadow-warm transition-shadow hover:shadow-warm-lg"
           >
@@ -519,42 +530,38 @@ export default function RiderDashboardPage() {
               </span>
             </div>
           </Link>
+            ))}
+          </div>
         </div>
       )}
 
       {/* Ordini disponibili / offline empty state */}
       {online ? (
         <div className="px-4">
-          {/* Giro intelligente: batch quando ci sono ≥2 ordini disponibili */}
-          {available.length >= 2 && (() => {
-            const batch = available.slice(0, 2);
-            const sum = batch.reduce((t, o) => t + compensoConsegnaEuro(o), 0);
-            return (
-              <div className="mb-3.5 rounded-xl border border-primary-300 bg-gradient-to-br from-primary-50 to-cream-50 p-3.5">
-                <div className="mb-2 flex items-center gap-2">
-                  <span className="inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-primary-600 text-white">
-                    <Layers size={16} strokeWidth={2.2} aria-hidden />
-                  </span>
-                  <span className="text-sm font-extrabold text-ink-900">Giro intelligente · 2 consegne</span>
-                  <span className="ml-auto rounded-full bg-surface-0 px-2 py-[3px] text-[11px] font-bold text-primary-700">
-                    +15% efficienza
-                  </span>
-                </div>
-                <p className="mb-2.5 text-[12.5px] leading-relaxed text-ink-600">
-                  Due consegne pronte vicine tra loro. Accetta la prima e continua col giro per ottimizzare i km.
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-1.5 text-xs text-ink-500">
-                    <Navigation size={13} className="text-ink-400" aria-hidden /> Stesso giro
-                  </span>
-                  <span className="text-base font-extrabold text-olive-700">{formatPrice(sum)}</span>
-                </div>
-              </div>
-            );
-          })()}
+          {/* 5/11/2026 — Qui c'era un riquadro del giro con una percentuale di efficienza: prendeva i primi due
+              ordini dell'elenco senza guardare nessuna distanza, e la percentuale era scritta fissa. */}
+          {bachecaGuasta && (
+            <div role="alert" className="mb-3.5 rounded-xl border border-secondary-200 bg-secondary-50 p-3.5">
+              <p className="flex items-center gap-2 text-sm font-semibold text-ink-900">
+                <AlertTriangle size={16} className="shrink-0 text-secondary-600" aria-hidden />
+                Non riesco a leggere gli ordini disponibili
+              </p>
+              <p className="mb-2.5 mt-1 text-[12.5px] leading-relaxed text-ink-600">
+                Potrebbero esserci ordini pronti che non vedi. Riprova fra un momento.
+              </p>
+              <Button
+                variant="secondary"
+                icon={RotateCcw}
+                loading={letturaBacheca.isFetching}
+                onClick={() => { void letturaBacheca.refetch(); }}
+              >
+                Riprova
+              </Button>
+            </div>
+          )}
 
           <SectionLabel>Ordini disponibili ({available.length})</SectionLabel>
-          {available.length === 0 ? (
+          {available.length === 0 && bachecaGuasta ? null : available.length === 0 ? (
             <div className="rounded-xl border border-cream-300 bg-surface-0 p-8 text-center text-sm text-ink-500">
               Nessun ordine pronto al momento. Riprova tra un po'.
             </div>

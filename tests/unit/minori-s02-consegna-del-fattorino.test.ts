@@ -91,21 +91,6 @@ async function accendiPagina() {
   await attendi();
 }
 
-/** La pagina riceve dal database lo stato nuovo dell'ordine (come dopo un aggiornamento). */
-async function ridisegna() {
-  await act(async () => {
-    root.render(createElement(Pagina, { params: { id: ORDINE } }));
-  });
-  await attendi();
-}
-
-async function premiAttivaGps() {
-  const b = Array.from(radice.querySelectorAll('button')).find((x) => (x.textContent ?? '').includes('Attiva GPS'));
-  expect(b, 'il pulsante «Attiva GPS» non c e').toBeTruthy();
-  await act(async () => clicca(b!));
-  await attendi();
-}
-
 const testo = () => radice.textContent ?? '';
 const pulsanteCon = (t: RegExp) => Array.from(radice.querySelectorAll('a, button')).find((b) => t.test(b.textContent ?? '')) as HTMLElement | undefined;
 
