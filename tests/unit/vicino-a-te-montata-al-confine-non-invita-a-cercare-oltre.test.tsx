@@ -97,6 +97,11 @@ function paginaConLaPosizione() {
   return { s, cursore: cursore as HTMLInputElement };
 }
 
+// 5/11/2026 (S07, schede 2094 e 2033) — con la posizione la pagina dice da dove misura e offre di
+// tornare a tutti i negozi; il conteggio dice «da dove sei adesso».
+const DA_DOVE = 'In cassa la distanza si misura dall’indirizzo di consegna, non da qui. Mostra tutti i negozi';
+const conta = (km: number) => `0 negozi entro ${km} km da dove sei adesso`;
+
 const TESTATA = ['Home', 'Vicino a te', 'Negozi vicini', 'Vicino a te', `I negozi della tua zona a Piacenza: consegniamo fino a ${KM} km dal negozio.`];
 
 describe('«Vicino a te», montata, dice il confine com’è e non invita a cercare oltre', () => {
@@ -111,7 +116,8 @@ describe('«Vicino a te», montata, dice il confine com’è e non invita a cerc
     expect(cursore.value, 'la pagina non si apre al confine della cassa').toBe(String(KM));
     expect(frasiDi(s.radice), 'la pagina «Vicino a te» è cambiata: rileggi le frasi contro la cassa').toEqual([
       ...TESTATA,
-      `0 negozi entro ${KM} km`,
+      conta(KM),
+      DA_DOVE,
       'Lista Mappa',
       `Raggio: ${KM} km`,
       `Nessun negozio entro ${KM} km. Per ora consegniamo fino a ${KM} km dal negozio, e oltre non arriviamo.`,
@@ -121,7 +127,8 @@ describe('«Vicino a te», montata, dice il confine com’è e non invita a cerc
     expect(cursore.value).toBe(String(sotto));
     expect(frasiDi(s.radice), 'sotto il confine la pagina «Vicino a te» dice qualcosa che non è stato riletto').toEqual([
       ...TESTATA,
-      `0 negozi entro ${sotto} km`,
+      conta(sotto),
+      DA_DOVE,
       'Lista Mappa',
       `Raggio: ${sotto} km`,
       avvisoNessunNegozioVicino(sotto),
@@ -136,7 +143,8 @@ describe('«Vicino a te», montata, dice il confine com’è e non invita a cerc
     expect(cursore.value).toBe(String(KM));
     expect(frasiDi(s.radice), 'al confine la pagina «Vicino a te» dice qualcosa che non è stato riletto').toEqual([
       ...TESTATA,
-      `0 negozi entro ${KM} km`,
+      conta(KM),
+      DA_DOVE,
       'Lista Mappa',
       `Raggio: ${KM} km`,
       `Nessun negozio entro ${KM} km. Per ora consegniamo fino a ${KM} km dal negozio, e oltre non arriviamo.`,
@@ -150,6 +158,6 @@ describe('«Vicino a te», montata, dice il confine com’è e non invita a cerc
     expect(mappa, 'la pagina non offre più la mappa').toBeTruthy();
     s.agisci(() => clicca(mappa as HTMLButtonElement));
     expect(mappa?.getAttribute('aria-pressed')).toBe('true');
-    expect(frasiDi(s.radice)).toEqual([...TESTATA, `0 negozi entro ${KM} km`, 'Lista Mappa', `Raggio: ${KM} km`]);
+    expect(frasiDi(s.radice)).toEqual([...TESTATA, conta(KM), DA_DOVE, 'Lista Mappa', `Raggio: ${KM} km`]);
   });
 });
