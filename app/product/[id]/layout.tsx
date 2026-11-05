@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
-import { leggiProdottoPerMetadati, prodottoDaIndicizzare } from '@/lib/queries/metadati-vetrina';
+import { disponibilitaPerGoogle, leggiProdottoPerMetadati, prodottoDaIndicizzare } from '@/lib/queries/metadati-vetrina';
+import { env } from '@/lib/env';
 import { sizedImage } from '@/lib/image-url';
 import { precaricoFoto } from '@/lib/preload-foto';
 import { HydrationBoundary } from '@tanstack/react-query';
@@ -18,7 +19,9 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
   const params = await props.params;
   const product = await fetchProduct(params.id);
   if (!product) {
-    return { title: 'Prodotto non trovato · MyCity', robots: { index: false } };
+    // 5/11/2026 — canonical nullo: senza, la pagina «non trovato» ereditava quello della home,
+    // e noindex più canonical alla home sono due segnali in contraddizione.
+    return { title: 'Prodotto non trovato · MyCity', robots: { index: false }, alternates: { canonical: null } };
   }
   const storeName = product.profiles?.store_name ?? 'MyCity';
   const img = Array.isArray(product.images) && product.images[0] ? [product.images[0]] : undefined;
@@ -88,16 +91,15 @@ export default async function ProductLayout(
     '@context': 'https://schema.org',
     '@type': 'Product',
     name: product.name,
+    sku: product.id,
     description: product.description ?? undefined,
     image: Array.isArray(product.images) ? product.images : undefined,
     offers: {
       '@type': 'Offer',
       price: Number(product.price).toFixed(2),
       priceCurrency: 'EUR',
-      availability:
-        product.status === 'available' && (product.stock ?? 0) > 0
-          ? 'https://schema.org/InStock'
-          : 'https://schema.org/OutOfStock',
+      availability: disponibilitaPerGoogle(product),
+      url: `${env.appUrl()}/product/${product.id}`,
       seller: product.profiles?.store_name
         ? { '@type': 'LocalBusiness', name: product.profiles.store_name }
         : undefined,

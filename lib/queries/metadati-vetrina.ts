@@ -60,6 +60,16 @@ export async function leggiProdottoPerMetadati(
  * La scheda va su Google solo se si puo' comprare: prodotto disponibile e negozio
  * approvato. Un «noindex» su un prodotto vendibile lo fa sparire dalla ricerca.
  */
+/**
+ * 5/11/2026 — La disponibilità che si dichiara a Google, con la stessa regola della pagina:
+ * `stock` nullo vuol dire «scorte illimitate», cioè si compra. Prima `(stock ?? 0) > 0` faceva
+ * di ogni prodotto a scorte illimitate un OutOfStock.
+ */
+export function disponibilitaPerGoogle(p: Pick<ProdottoPerMetadati, 'status' | 'stock'>): string {
+  const siCompra = p.status === 'available' && (p.stock === null || p.stock === undefined || p.stock > 0);
+  return siCompra ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+}
+
 export function prodottoDaIndicizzare(p: Pick<ProdottoPerMetadati, 'status' | 'profiles'>): boolean {
   // Niente import da altri moduli del catalogo: questo file gira anche sul
   // runtime edge delle anteprime, e deve restare leggero.

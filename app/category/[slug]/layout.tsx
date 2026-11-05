@@ -67,7 +67,7 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
   const params = await props.params;
   const cat = await fetchCategory(params.slug);
   if (!cat) {
-    return { title: 'Categoria non trovata · MyCity', robots: { index: false } };
+    return { title: 'Categoria non trovata · MyCity', robots: { index: false }, alternates: { canonical: null } };
   }
   const name = cat.name;
   const vuota = cat.id ? (await haProdotti(cat.id)) === false : false;

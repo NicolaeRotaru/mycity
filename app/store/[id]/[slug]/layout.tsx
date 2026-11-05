@@ -26,7 +26,7 @@ const fetchStore = (id: string) =>
 export async function generateMetadata(props: { params: Promise<{ id: string; slug: string }> }): Promise<Metadata> {
   const { id, slug } = await props.params;
   const store = await fetchStore(id);
-  const notFound: Metadata = { title: 'Pagina non trovata · MyCity', robots: { index: false } };
+  const notFound: Metadata = { title: 'Pagina non trovata · MyCity', robots: { index: false }, alternates: { canonical: null } };
   if (!store || store.role !== 'seller' || !store.is_approved) return notFound;
 
   const site = normalizeSite(store.store_site);

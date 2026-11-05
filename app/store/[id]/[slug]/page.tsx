@@ -15,6 +15,7 @@ import ScheletroNegozio from '@/components/store-sections/ScheletroNegozio';
 import { CONTENITORE_PAGINA_NEGOZIO } from '@/components/store-sections/misure-vetrina';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import EmptyState from '@/components/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 export default function StoreCustomPage(props: { params: Promise<{ id: string; slug: string }> }) {
   const { id, slug } = use(props.params);
@@ -47,6 +48,20 @@ export default function StoreCustomPage(props: { params: Promise<{ id: string; s
       />
     </div>
   );
+
+  // 5/11/2026 — Come la pagina principale del negozio: se la domanda non è arrivata non si dice
+  // «pagina non trovata», si offre «Riprova».
+  if (data.isError) {
+    return (
+      <div className="container mx-auto px-4 py-16 max-w-xl">
+        <ErrorState
+          title="Non riesco a caricare questa pagina"
+          description="Sembra un problema di collegamento. Riprova."
+          retry={() => { void data.refetch(); }}
+        />
+      </div>
+    );
+  }
 
   if (!data.approved || !data.ctx || !data.store) return notFound;
 

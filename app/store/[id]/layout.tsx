@@ -33,7 +33,7 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
   const params = await props.params;
   const store = await fetchStore(params.id);
   if (!store || store.role !== 'seller' || !store.is_approved) {
-    return { title: 'Negozio non trovato · MyCity', robots: { index: false } };
+    return { title: 'Negozio non trovato · MyCity', robots: { index: false }, alternates: { canonical: null } };
   }
   const name = store.store_name ?? 'Negozio';
   // 3/9/2026 — QUI SI PROMETTEVA IL RITIRO IN NEGOZIO, CHE ALLA CASSA NON C'E'.

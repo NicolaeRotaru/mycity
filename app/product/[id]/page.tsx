@@ -157,7 +157,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   });
   const fraseReso = fraseResoDelProdotto(rigaDelRecesso);
 
-  const { data: variants = [] } = useQuery({
+  const { data: variants = [], isError: variantiInErrore, refetch: rileggiVarianti } = useQuery({
     queryKey: ['product-variants', id],
     queryFn: () => loadProductVariants(id),
   });
@@ -400,9 +400,16 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     return (
       <div className="container mx-auto p-8 max-w-md text-center mt-8 bg-white rounded-2xl border">
         <Package size={48} strokeWidth={1.5} className="mx-auto text-ink-300 mb-3" aria-hidden />
-        <h1 className="text-xl font-bold text-ink-900 mb-2">Prodotto non trovato</h1>
-        <p className="text-sm text-ink-600 mb-5">Questo prodotto non esiste o è stato rimosso.</p>
-        <Button href="/">← Torna al marketplace</Button>
+        <h1 className="text-xl font-bold text-ink-900 mb-2">Prodotto non disponibile</h1>
+        {/* 5/11/2026 — Un prodotto segnato «esaurito» dal negozio non si legge più per chi compra,
+            e cadeva qui: «non esiste o è stato rimosso» era falso per il pane finito per oggi. */}
+        <p className="text-sm text-ink-600 mb-5">
+          Questo prodotto ora non è in vendita: può essere finito per oggi, oppure il negozio l&apos;ha tolto.
+        </p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button href="/stores">Vedi i negozi</Button>
+          <Button href="/search" variant="secondary">Cerca qualcosa di simile</Button>
+        </div>
       </div>
     );
   }
@@ -893,6 +900,21 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               sellerId={(sellerProfile?.id ?? product.seller_id) as string}
               storeName={product.profiles?.store_name ?? 'Negozio'}
             />
+          )}
+
+          {/* 5/11/2026 — Se le varianti non si leggono il selettore non si disegna e il prodotto
+              diventava impossibile da comprare senza un perché: lo si dice, con «Riprova». */}
+          {hasVariants && variantiInErrore && optionGroups.length === 0 && (
+            <div role="alert" className="flex flex-wrap items-center gap-2 rounded-lg border border-secondary-200 bg-secondary-50 px-3 py-2 text-sm text-secondary-800">
+              <span>Non riusciamo a caricare le opzioni di questo prodotto.</span>
+              <button
+                type="button"
+                onClick={() => { void rileggiVarianti(); }}
+                className="font-semibold underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 rounded"
+              >
+                Riprova
+              </button>
+            </div>
           )}
 
           {/* SELETTORE VARIANTI (taglie/colori) */}

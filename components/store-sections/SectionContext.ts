@@ -52,6 +52,14 @@ export type SectionContext = {
   customization: StoreCustomization;
   accent: string;
   reviews: SectionReview[];
+  /**
+   * 5/11/2026 — Media e totale VERI delle recensioni (store_review_stats, la stessa dell'elenco
+   * dei negozi). `reviews` sono solo le ultime 20 da leggere: contarle diceva «20» a un negozio
+   * con trenta recensioni, anche a Google. Assente = non si sa, si ripiega su `reviews`.
+   */
+  riepilogoRecensioni?: { media: number; totale: number } | null;
+  /** 5/11/2026 — La lettura delle recensioni è caduta: «nessuna recensione» sarebbe falso. */
+  recensioniInErrore?: boolean;
   promos: SectionPromo[];
   theme: ThemeKey;
   site: StoreSite;

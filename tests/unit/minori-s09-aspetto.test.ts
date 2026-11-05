@@ -137,3 +137,18 @@ describe('scheda prodotto — acquisto (app/product/[id]/page.tsx)', () => {
     expect(src).toMatch(/Venduto da <strong[^>]*>\{product\.profiles\?\.store_name\}<\/strong> · consegna MyCity/);
   });
 });
+
+describe('anteprime WhatsApp di prodotto e negozio (opengraph-image)', () => {
+  for (const f of ['app/store/[id]/opengraph-image.tsx', 'app/product/[id]/opengraph-image.tsx']) {
+    const src = leggi(f);
+    it(`316 — ${f}: il marchio in Fraunces 800, niente peso 900`, () => {
+      expect(src).toContain('fonts: await caratteriDelMarchio()');
+      expect(src).toMatch(/fontFamily: MARCHIO_FONT_FAMILY, fontWeight: MARCHIO_FONT_WEIGHT, color: '#F4BC53' \}\}>My</);
+      expect(src).not.toMatch(/fontWeight: 900/);
+    });
+    it(`375 — ${f}: l'immagine non si dichiara immutabile per un anno`, () => {
+      expect(src).toContain("headers: { 'cache-control': CACHE_ANTEPRIMA }");
+      expect(src).toMatch(/CACHE_ANTEPRIMA = 'public, max-age=300/);
+    });
+  }
+});
