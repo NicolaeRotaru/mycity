@@ -27,6 +27,8 @@
  * chiedere» non è un ruolo, e in cache durerebbe dieci minuti.
  */
 
+import type { ProfileRole } from '@/lib/shopping-access';
+
 /**
  * Quanto il portiere aspetta, al massimo, una risposta.
  *
@@ -235,7 +237,8 @@ export function motivoLeggibile(risposta: Risposta<ConErrore>): string {
   return err instanceof Error ? err.message : String((err as { message?: string })?.message ?? 'errore');
 }
 
-export type RuoloArea = 'buyer' | 'seller' | 'rider' | 'admin';
+// S10 (5/11/2026) — Un tipo solo per i ruoli: quello di lib/shopping-access.ts.
+export type RuoloArea = ProfileRole;
 
 export type AccessoArea = { azione: 'entra' } | { azione: 'rimanda'; verso: string };
 

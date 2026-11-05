@@ -250,13 +250,27 @@ async function authenticate(req: NextRequest, ctx?: ContestoRotta, opzioni: Opzi
     } catch (e) {
       // Chi sei è già deciso, qui sopra e senza la chiave: manca solo lei.
       if (!opzioni.seMancaLaChiave) throw e;
+      // S10 (5/11/2026) — Il limite per persona della rotta (3 cancellazioni
+      // all'ora, 3 esportazioni al giorno) stava dopo questo ritorno: senza
+      // chiave non scattava mai, e ogni richiesta scriveva una riga d'errore.
+      const freno = opzioni as Partial<AuthRateLimitOpts>;
+      if (freno.name && freno.max && freno.windowMs) {
+        const rl = await rateLimitAsync({ key: `${freno.name}:${user.id}`, max: freno.max, windowMs: freno.windowMs });
+        if (!rl.allowed) return { ok: false, response: ApiErrors.rateLimited(rl.retryAfterSec) };
+      }
       return { ok: false, response: opzioni.seMancaLaChiave({ user, req }, e) };
     }
-    const { data } = await admin
+    const { data, error } = await admin
       .from('profiles')
       .select('id, role, is_approved')
       .eq('id', user.id)
       .single();
+    // S10 (5/11/2026) — supabase-js non lancia: con il database giu' o la
+    // chiave revocata `data` e' null, e prima si rispondeva 403 «Profilo non
+    // trovato». Solo «nessuna riga» (PGRST116) vuol dire profilo assente.
+    if (error && error.code !== 'PGRST116') {
+      return { ok: false, response: ApiErrors.unavailable('Servizio temporaneamente non disponibile. Riprova fra poco.') };
+    }
     profile = (data as Profile | null) ?? null;
   } catch {
     return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
@@ -553,12 +567,21 @@ async function recordCronHeartbeat(req: NextRequest): Promise<void> {
 export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse>) {
   return async (req: NextRequest): Promise<NextResponse> => {
     const expected = process.env.CRON_SECRET;
-    if (!expected) return ApiErrors.unavailable('CRON_SECRET non configurato');
+    // S10 (5/11/2026) — Per sette settimane i lavori non sono partiti e il
+    // registro taceva: queste due uscite stanno PRIMA della riga d'errore e del
+    // battito. Adesso lasciano la loro riga (mai il segreto).
+    if (!expected) {
+      logger.error('[cron] rifiutato: CRON_SECRET assente', { lavoro: nomeDelLavoro(req) });
+      return ApiErrors.unavailable('CRON_SECRET non configurato');
+    }
     const authHeader = req.headers.get('authorization');
     const bearer = authHeader?.toLowerCase().startsWith('bearer ')
       ? authHeader.slice(7).trim()
       : null;
-    if (!secretsMatch(bearer, expected)) return ApiErrors.unauthorized();
+    if (!secretsMatch(bearer, expected)) {
+      logger.error('[cron] rifiutato: segreto diverso', { lavoro: nomeDelLavoro(req), conIntestazione: !!authHeader });
+      return ApiErrors.unauthorized();
+    }
 
     const risposta = await handler(req);
 

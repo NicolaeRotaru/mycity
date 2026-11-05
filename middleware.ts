@@ -17,6 +17,7 @@ import {
   SHOPPING_MODE_QUERY,
   isMarketplaceBrowsePath,
   sellerMayBrowseMarketplace,
+  type ProfileRole,
 } from '@/lib/shopping-access';
 import {
   type Risposta,
@@ -27,6 +28,7 @@ import {
   decidiPortiere,
   motivoLeggibile,
   decidiAccessoArea,
+  PAGINA_ATTESA_NEGOZIO,
 } from '@/lib/auth/decisione-portiere';
 import {
   TETTO_RINNOVO_MS,
@@ -375,7 +377,7 @@ export async function middleware(req: NextRequest) {
   // Uscita esplicita dalla modalità acquisto venditore.
   if (req.nextUrl.searchParams.get(EXIT_SHOPPING_QUERY) === '1') {
     const url = req.nextUrl.clone();
-    url.pathname = '/seller/dashboard';
+    url.pathname = PAGINA_ATTESA_NEGOZIO;
     url.searchParams.delete(EXIT_SHOPPING_QUERY);
     const exitRes = NextResponse.redirect(url);
     exitRes.headers.set('Content-Security-Policy', csp);
@@ -569,7 +571,9 @@ export async function middleware(req: NextRequest) {
     const url = req.nextUrl.clone();
     url.pathname = '/accetta-condizioni';
     url.search = '';
-    url.searchParams.set('next', pathname);
+    // S10 (5/11/2026) — Con i parametri: «?passo=2&registrazione=email» dicono
+    // a quale passo della cassa si torna e da dove si arriva.
+    url.searchParams.set('next', pathname + req.nextUrl.search);
     return withCsp(NextResponse.redirect(url));
   };
   if (sulPagamento) {
@@ -580,13 +584,13 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  type ProfileRole = 'buyer' | 'seller' | 'rider' | 'admin';
-
   // 086 — Sulle aree protette il profilo si rilegge SEMPRE: un ruolo vecchio
   // di dieci minuti lascerebbe dentro qualcuno appena tolto. Sul catalogo
   // invece basta sapere se è un venditore, e quello può aspettare.
   let profilo = roleRule ? null : await leggiRuoloDalCookie(req, user.id);
   let daSalvare = false;
+  // S10 (5/11/2026) — «Non ho potuto leggere il ruolo» non e' «ruolo sbagliato».
+  let profiloNonLetto = false;
   if (!profilo) {
     // 27/8/2026 (R185) — UN SECONDO STORTO DEL DATABASE DURAVA DIECI MINUTI.
     //
@@ -617,6 +621,9 @@ export async function middleware(req: NextRequest) {
       // della conferma dell'email lascerebbe scavalcare quel cancello.
       emailConfermata: true,
     };
+    const erroreProfilo = rispostaProfilo.stato === 'ok' ? rispostaProfilo.valore.error : null;
+    profiloNonLetto =
+      rispostaProfilo.stato !== 'ok' || (!!erroreProfilo && (erroreProfilo as { code?: string }).code !== 'PGRST116');
     const suProfilo = decidiCacheProfilo(rispostaProfilo);
     if (suProfilo.registra) registraGuasto(suProfilo.registra, rispostaProfilo);
     daSalvare = suProfilo.mettiInCache && decisione.scriviCookieRuolo;
@@ -649,7 +656,7 @@ export async function middleware(req: NextRequest) {
     const hasShoppingMode = req.cookies.get(SHOPPING_MODE_COOKIE)?.value === '1';
     if (!sellerMayBrowseMarketplace(hasShoppingMode)) {
       const url = req.nextUrl.clone();
-      url.pathname = '/seller/dashboard';
+      url.pathname = PAGINA_ATTESA_NEGOZIO;
       return withCsp(NextResponse.redirect(url));
     }
   }
@@ -659,6 +666,20 @@ export async function middleware(req: NextRequest) {
   // Ondata 10: «ruolo sbagliato» e «ruolo giusto ma non approvato» sono due
   // casi diversi — la regola sta in `decidiAccessoArea`, provata da sola.
   if (roleRule) {
+    // S10 (5/11/2026) — Se la lettura del profilo scade o si rompe, il ruolo e'
+    // «non letto»: prima diventava «nessun ruolo», il negoziante veniva
+    // mandato in home e la home (col cookie del ruolo ancora valido) lo
+    // rimandava al pannello, in tondo finche' il database restava lento. Qui
+    // si resta fuori (mai dentro nel dubbio) ma senza rimandi: una pagina che
+    // dice di riprovare.
+    if (profiloNonLetto) {
+      return withCsp(
+        new NextResponse('Il servizio risponde lentamente. Riprova fra qualche secondo.', {
+          status: 503,
+          headers: { 'Retry-After': '5', 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+        }),
+      );
+    }
     const accesso = decidiAccessoArea({ role, approved, allowed: roleRule.allowed, pathname });
     if (accesso.azione === 'rimanda') {
       const url = req.nextUrl.clone();

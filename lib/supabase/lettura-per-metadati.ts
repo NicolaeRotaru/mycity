@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { creaClientAnonimo } from '@/lib/supabase/anonimo';
+import { logger } from '@/lib/logger';
 
 /**
  * LA RIGA CHE SERVE AI METADATI DI UNA PAGINA — letta in un posto solo, e senza silenzi.
@@ -52,7 +53,16 @@ export async function leggiPerMetadati<T>(
     const supabase = client ?? creaClientAnonimo();
     let q = supabase.from(tabella).select(colonne);
     for (const [colonna, valore] of Object.entries(dove)) q = q.eq(colonna, valore);
-    const { data } = await q.single();
+    // S10 (5/11/2026) — Prima l'errore si buttava: un tempo scaduto o un 503
+    // diventavano «riga assente», e la pagina diceva a Google «non trovato»
+    // (noindex) per una scheda vera. Adesso solo «nessuna riga» e' null; un
+    // guasto lancia, la pagina va in errore e non si scrive niente di falso.
+    const { data, error } = await q.single();
+    // PGRST116 = nessuna riga: quello si' che e' «non trovato».
+    if (error && (error as { code?: string }).code !== 'PGRST116') {
+      logger.warn('[metadati] lettura non riuscita: non la tratto come «non trovato»', { tabella, code: error.code });
+      throw error;
+    }
     return (data as T | null) ?? null;
   })();
 
