@@ -82,7 +82,12 @@ export async function handleAccountUpdated(acct: Stripe.Account) {
   // R81 — Se Stripe blocca i versamenti di un negozio e il database non lo
   // registra, il giro dei bonifici continua a mandargli soldi che restano fermi
   // sul suo saldo: l'esito si legge, e su un errore Stripe riprova.
-  scritturaObbligatoria(await applyConnectAccountStatus(contoAdesso), 'stato del conto Stripe del negozio');
+  const esito = scritturaObbligatoria(await applyConnectAccountStatus(contoAdesso), 'stato del conto Stripe del negozio');
+  // 5/11/2026 — Zero righe: nessun profilo porta questo conto (l'id non era stato
+  // salvato). Non e' un errore da far ripetere a Stripe, ma va saputo.
+  if (esito.righe === 0) {
+    logger.error('[stripe] account.updated: nessun profilo con questo conto', { accountId: acct.id });
+  }
 }
 
 /**

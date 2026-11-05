@@ -55,18 +55,25 @@ import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere'
  * `account.updated` sia dalla route di refresh manuale, così lo stato resta
  * corretto anche se il webhook non viene consegnato.
  */
-export async function applyConnectAccountStatus(acct: Stripe.Account): Promise<{ error: unknown }> {
+export async function applyConnectAccountStatus(
+  acct: Stripe.Account,
+): Promise<{ error: unknown; righe: number | null }> {
   const admin = getAdminSupabase();
   // R81 — l'esito torna a chi chiama: il webhook `account.updated` deve poter
   // far riprovare Stripe se la scrittura non passa.
-  return admin
+  // 5/11/2026 — e quante righe ha toccato: zero vuol dire che nessun profilo
+  // porta quel conto (l'id non era stato salvato), e il negozio resterebbe
+  // «non collegato» senza che nessuno lo sappia.
+  const { data, error } = await admin
     .from('profiles')
     .update({
       stripe_charges_enabled: !!acct.charges_enabled,
       stripe_payouts_enabled: !!acct.payouts_enabled,
       stripe_details_submitted: !!acct.details_submitted,
     })
-    .eq('stripe_account_id', acct.id);
+    .eq('stripe_account_id', acct.id)
+    .select('id');
+  return { error, righe: error ? null : Array.isArray(data) ? data.length : null };
 }
 
 export type PayoutResult =

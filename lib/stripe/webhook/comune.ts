@@ -145,19 +145,28 @@ export async function notifyAdmins(
   if (errLettura && (chiave || opzioni.almenoUnDestinatario)) {
     throw new Error(`[stripe] amministratori non letti per l avviso «${title}»: ${errLettura.message}`);
   }
+  // 5/11/2026 — Anche quando non si lancia, un avviso sui soldi che non parte
+  // perche' la lettura degli amministratori e' caduta lascia una riga nel log,
+  // col testo dell'avviso: e' l'unica traccia del lavoro da fare.
+  if (errLettura) {
+    logger.error('[stripe] avviso agli amministratori NON mandato: amministratori non letti', {
+      title, body, link, message: errLettura.message,
+    });
+  }
   if (!admins || admins.length === 0) {
     if (opzioni.almenoUnDestinatario) throw new Error(`[stripe] nessun amministratore a cui mandare l avviso «${title}»`);
     return 'nessuno';
   }
   if (!chiave) {
     scritturaFacoltativa(
-      await admin.from('notifications').insert(admins.map((a) => ({ user_id: a.id, title, body, link }))),
+      // 5/11/2026 — 'system': gli avvisi di servizio non si spengono con «Aggiornamenti ordini».
+      await admin.from('notifications').insert(admins.map((a) => ({ category: 'system', user_id: a.id, title, body, link }))),
       `avviso agli amministratori: ${title}`,
     );
     return 'scritto';
   }
   const { error } = await admin.from('notifications').insert(
-    admins.map((a) => ({ id: idDellAvvisoAgliAmministratori(chiave, a.id), user_id: a.id, title, body, link })),
+    admins.map((a) => ({ id: idDellAvvisoAgliAmministratori(chiave, a.id), category: 'system', user_id: a.id, title, body, link })),
   );
   if (!error) return 'scritto';
   if ((error as { code?: string }).code === '23505') {

@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
+import { getServerSupabase } from '@/lib/supabase/server';
 import { createConnectOnboardingLink, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
+import { ContoNonSalvato, salvaIlConto } from '@/lib/stripe/salva-conto';
 import { withSellerAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
@@ -33,25 +34,20 @@ export const POST = withSellerAuthRateLimit({ name: 'stripe-onboarding', max: 10
   }
 
   try {
-    const { accountId, url } = await createConnectOnboardingLink({
+    const { url } = await createConnectOnboardingLink({
       sellerEmail: user.email,
       sellerId: user.id,
       existingAccount: profile.stripe_account_id ?? null,
       returnUrl: `${env.appUrl()}/seller/dashboard?stripe=connected`,
       refreshUrl: `${env.appUrl()}/seller/dashboard?stripe=refresh`,
       ruolo: 'venditore',
+      salvaConto: (id) => salvaIlConto(user.id, id),
     });
-
-    if (accountId !== profile.stripe_account_id) {
-      const admin = getAdminSupabase();
-      await admin
-        .from('profiles')
-        .update({ stripe_account_id: accountId })
-        .eq('id', user.id);
-    }
 
     return NextResponse.json({ url }, { status: 200 });
   } catch (err) {
+    // 5/11/2026 — l'id del conto non si e' salvato: non si manda a Stripe.
+    if (err instanceof ContoNonSalvato) return ApiErrors.unavailable(err.message);
     logger.error('[stripe] connect onboarding failed', err);
     return ApiErrors.internal('Errore Stripe');
   }
