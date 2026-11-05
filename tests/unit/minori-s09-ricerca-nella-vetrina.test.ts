@@ -42,3 +42,16 @@ describe('144 — una parola a metà dentro la vetrina', () => {
     expect(righe.map((r) => r.id)).toEqual([PANE_DEL_FORNO]);
   });
 });
+
+describe('144 — «Carica altri» arriva anche ai prodotti trovati per nome oltre la prima pagina', () => {
+  it('con la finestra della seconda pagina i prodotti per nome non finiscono dopo la prima', async () => {
+    const molti = Array.from({ length: 5 }, (_, i) => riga(`33333333-3333-3333-3333-00000000000${i}`, `Panino ${i}`, FORNO));
+    const db = fintoDb({ ...TABELLE, products: [...TABELLE.products, ...molti] }, {
+      search_products_smart: () => ({ data: [{ id: '11111111-1111-1111-1111-000000000001' }], error: null }),
+    });
+    const seconda = await leggiProdottiDellaGriglia(db.client as unknown as SupabaseClient, {
+      sort: 'relevance', search: 'pan', sellerId: FORNO, tetto: 3, finestra: [3, 5],
+    });
+    expect(seconda.length).toBe(3);
+  });
+});

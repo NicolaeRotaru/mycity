@@ -68,6 +68,7 @@ describe('115 — il video di YouTube non si carica senza che la persona lo chie
 describe('357 — «Indietro» sulla copertina del negozio', () => {
   it('chi arriva da fuori va all\'elenco dei negozi invece di non andare da nessuna parte', () => {
     const src = readFileSync('components/store-sections/HeroSection.tsx', 'utf8');
-    expect(src).toMatch(/if \(window\.history\.length > 1 && daQuestoSito\) router\.back\(\);\s*else router\.push\('\/stores'\);/);
+    expect(src).toMatch(/if \(window\.history\.length > 1\) router\.back\(\);\s*else router\.push\('\/stores'\);/);
+    expect(src).not.toMatch(/document\.referrer/);
   });
 });

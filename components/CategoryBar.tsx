@@ -111,7 +111,15 @@ const CategoryBar = () => {
     // 5/11/2026 — Il primo elemento raggiungibile E visibile: sul telefono è la X «Chiudi le
     // categorie», che sta prima dei link; da `sm` in su la X è nascosta e si va al primo link.
     const candidati = pannelloRef.current?.querySelectorAll<HTMLElement>('button, a[href]') ?? [];
-    const primo = Array.from(candidati).find((el) => window.getComputedStyle(el).display !== 'none');
+    // Visibile = né lui né un contenitore dentro il pannello sono display:none (la X sta in un
+    // div `sm:hidden`).
+    const visibile = (el: HTMLElement) => {
+      for (let n: HTMLElement | null = el; n && n !== pannelloRef.current; n = n.parentElement) {
+        if (window.getComputedStyle(n).display === 'none') return false;
+      }
+      return true;
+    };
+    const primo = Array.from(candidati).find(visibile);
     primo?.focus({ preventScroll: true });
   }, [open]);
 

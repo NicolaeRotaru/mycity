@@ -120,12 +120,15 @@ describe('1629 — «Ultimi visti»', () => {
 });
 
 describe('128/652 — visite e «Ultimi visti»', () => {
-  it('128 — senza consenso statistico «Ultimi visti» non si legge, non si mostra e si cancella', () => {
+  it('128 — con un no dichiarato «Ultimi visti» non si legge né si mostra; si cancella solo alla revoca', () => {
     const src = leggi('components/RecentlyViewed.tsx');
-    expect(src).toContain("setConsenso(hasConsent('analytics'))");
+    // «nessuna scelta» (readConsent nullo) non è un no: non nasconde e non cancella.
+    expect(src).toContain("setConsenso(scelta ? hasConsent('analytics') : null)");
     expect(src).toContain("enabled: !!userId && consenso !== false");
-    expect(src).toMatch(/if \(consenso !== false \|\| !userId\) return;\s*void supabase\.from\('recently_viewed'\)\.delete\(\)\.eq\('user_id', userId\)/);
     expect(src).toContain('consenso === false ||');
+    // la cancellazione parte solo dall'evento di cambio del consenso, non al caricamento
+    expect(src).toMatch(/if \(!hasConsent\('analytics'\)\) setRevocato\(true\)/);
+    expect(src).toMatch(/if \(!revocato \|\| !userId\) return;\s*void supabase\.from\('recently_viewed'\)\.delete\(\)/);
   });
   it('652 — il negoziante che apre il suo prodotto non conta come visita', () => {
     const src = leggi('components/ProductViewTracker.tsx');

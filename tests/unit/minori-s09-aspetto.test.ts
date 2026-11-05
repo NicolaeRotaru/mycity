@@ -82,7 +82,7 @@ describe('barra delle categorie (components/CategoryBar.tsx)', () => {
   });
   it('1558 — il fuoco va al primo elemento visibile, X compresa', () => {
     expect(src).toContain("querySelectorAll<HTMLElement>('button, a[href]')");
-    expect(src).toMatch(/getComputedStyle\(el\)\.display !== 'none'/);
+    expect(src).toMatch(/getComputedStyle\(n\)\.display === 'none'/);
   });
 });
 

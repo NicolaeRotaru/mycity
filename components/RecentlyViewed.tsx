@@ -12,7 +12,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { leggiVistiDiRecente, type VistoDiRecente } from '@/lib/queries/fasce-prodotti';
 import { useUtente } from '@/components/hooks/useUtente';
 import { useEffect, useState } from 'react';
-import { hasConsent } from '@/lib/consent';
+import { hasConsent, readConsent } from '@/lib/consent';
 
 type Item = VistoDiRecente;
 
@@ -37,17 +37,28 @@ export default function RecentlyViewed({ excludeId, className = '' }: Props) {
    * non si mostra, e le righe della persona si cancellano (la regola del database lascia a ognuno
    * le proprie). Finché non lo si è letto (`null`, il primo disegno) si resta come prima.
    */
+  // `false` solo per un NO dichiarato in questo browser (una scelta salvata senza statistiche):
+  // «nessuna scelta ancora» o un'informativa cambiata non sono un no, e non cancellano niente.
   const [consenso, setConsenso] = useState<boolean | null>(null);
+  const [revocato, setRevocato] = useState(false);
   useEffect(() => {
-    const leggi = () => setConsenso(hasConsent('analytics'));
+    const leggi = () => {
+      const scelta = readConsent();
+      setConsenso(scelta ? hasConsent('analytics') : null);
+    };
     leggi();
-    window.addEventListener('mc:consent-change', leggi);
-    return () => window.removeEventListener('mc:consent-change', leggi);
+    // La cancellazione scatta solo quando la persona TOGLIE il consenso mentre è qui.
+    const cambio = () => {
+      leggi();
+      if (!hasConsent('analytics')) setRevocato(true);
+    };
+    window.addEventListener('mc:consent-change', cambio);
+    return () => window.removeEventListener('mc:consent-change', cambio);
   }, []);
   useEffect(() => {
-    if (consenso !== false || !userId) return;
+    if (!revocato || !userId) return;
     void supabase.from('recently_viewed').delete().eq('user_id', userId).then(() => {});
-  }, [consenso, userId]);
+  }, [revocato, userId]);
 
   const { data: items = [] } = useQuery({
     queryKey: queryKeys.home.recentlyViewed(userId ?? ''),

@@ -213,7 +213,8 @@ export async function leggiProdottiDellaGriglia(
     if (termine && filtroCheStringe) {
       let perNome = base().ilike('name', `%${termine}%`);
       if (soloConVoto) perNome = perNome.in('id', d.idsColVoto!);
-      const { data: altri, error: errNome } = await perNome.limit(d.tetto);
+      // Fino alla fine della finestra chiesta, non una pagina sola: «Carica altri» deve arrivarci.
+      const { data: altri, error: errNome } = await perNome.limit(d.finestra ? d.finestra[1] + 1 : d.tetto);
       if (errNome) throw errNome;
       const gia = new Set(ordinati.map((r) => r.id));
       for (const r of (altri ?? []) as unknown as RigaGriglia[]) if (!gia.has(r.id)) ordinati.push(r);

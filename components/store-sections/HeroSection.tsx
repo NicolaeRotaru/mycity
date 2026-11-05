@@ -129,16 +129,11 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
         <button
           type="button"
           onClick={() => {
-            // 5/11/2026 — Chi arriva da un link (WhatsApp, Google) non ha una pagina del sito
-            // dietro: router.back() non faceva niente, o nei browser delle app usciva dal sito.
-            const daQuestoSito = (() => {
-              try {
-                return !!document.referrer && new URL(document.referrer).origin === window.location.origin;
-              } catch {
-                return false;
-              }
-            })();
-            if (window.history.length > 1 && daQuestoSito) router.back();
+            // 5/11/2026 — Chi apre il link del negozio in una scheda nuova (WhatsApp, Instagram)
+            // non ha niente dietro: router.back() non faceva niente, o nei browser delle app usciva
+            // dal sito. Con una sola voce di cronologia si va all'elenco dei negozi. (Il referrer
+            // non serve: dentro il sito non cambia a ogni pagina.)
+            if (window.history.length > 1) router.back();
             else router.push('/stores');
           }}
           className="absolute left-4 top-4 z-20 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3.5 py-2 text-sm font-semibold text-ink-800 shadow backdrop-blur-sm transition-colors hover:bg-white"
