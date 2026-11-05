@@ -4,7 +4,6 @@ import {
   MapPin,
   Banknote,
   ShieldCheck,
-  Star,
   ArrowLeft,
   Mail,
   Phone,
@@ -42,8 +41,10 @@ const TOPICS: { icon: LucideIcon; title: string; items: { q: string; a: string }
         a: 'Vai online dalla pagina "Disponibilità". Quando un ordine è pronto in zona riceverai una notifica push.' },
       { q: 'Posso scegliere le consegne?',
         a: 'Sì. Dalla dashboard rider clicchi "Accetta" sulle consegne disponibili. Nessuna penalità se rifiuti.' },
+      // 5/11/2026 — «Una alla volta» non era vero: la presa non ha limiti, e la bacheca mostra
+      // tutte le consegne che hai preso.
       { q: 'Quante consegne posso fare in parallelo?',
-        a: 'Una alla volta. Quando hai consegnato, vedi subito la prossima disponibile.' },
+        a: 'Puoi prenderne più di una: le consegne che hai preso le trovi tutte in cima alla bacheca. Prendine solo quante riesci a portare in tempo.' },
     ],
   },
   {
@@ -52,8 +53,10 @@ const TOPICS: { icon: LucideIcon; title: string; items: { q: string; a: string }
     items: [
       { q: 'Come trovo il negozio e il cliente?',
         a: 'Dentro la consegna apri la mappa: vedi entrambi i punti. Premi "Naviga" per aprire Google Maps o Apple Maps.' },
+      // 5/11/2026 — Il pulsante «Problema» non esiste, e «Cliente assente» annulla e rimborsa:
+      // la risposta dice la procedura vera, con le parole dei pulsanti che ci sono.
       { q: 'Cosa faccio se nessuno risponde alla consegna?',
-        a: 'Aspetta 5 min, chiama il cliente dal pulsante "Contatta" e attiva un report dal pulsante "Problema". L\'ordine viene gestito dal supporto.' },
+        a: 'Aspetta qualche minuto e chiama il cliente con "Chiama". Se non risponde premi "Cliente assente — annulla la consegna": l\'ordine si annulla (con la carta il cliente riceve il rimborso intero, coi contanti non paga niente) e tu riporti la merce al negozio. Se hai un dubbio, prima "Contatta l\'assistenza".' },
       { q: 'Posso chiedere mancia?',
         a: 'No, è vietato. La piattaforma garantisce un compenso fisso per consegna. I clienti possono apprezzarti con una recensione.' },
     ],
@@ -63,7 +66,7 @@ const TOPICS: { icon: LucideIcon; title: string; items: { q: string; a: string }
     title: 'Guadagni e bonifici',
     items: [
       { q: 'Quando vengo pagato?',
-        a: `Consegne pagate con carta: il compenso parte verso il conto che hai collegato in "Guadagni" ${fraseAttesaBonifico()}; da lì arriva sul tuo IBAN coi tempi della banca. Consegne in contanti: il compenso te lo tieni tu dall'incasso.` },
+        a: `Consegne pagate con carta: il compenso parte verso il conto che hai collegato in "Guadagni" ${fraseAttesaBonifico()}; da lì arriva sul tuo IBAN coi tempi della banca. Consegne in contanti: il compenso te lo tieni tu dall'incasso. Se il cliente ha pagato una parte col credito MyCity e il contante non basta, tieni quello che c'è e il resto del compenso ti arriva col bonifico.` },
       { q: 'Come è calcolato il compenso?',
         a: `È fisso, non dipende dai chilometri: ${COMPENSO_GIRO} per ogni giro di consegna, più ${COMPENSO_NEGOZIO_IN_PIU} per ogni negozio in più nello stesso giro. Se il cliente ritira in negozio non c'è consegna e non c'è compenso.` },
       { q: 'Riceverò una busta paga?',
@@ -75,7 +78,9 @@ const TOPICS: { icon: LucideIcon; title: string; items: { q: string; a: string }
     title: 'Sicurezza e supporto',
     items: [
       { q: 'Sono assicurato?',
-        a: 'Per attivare l\'account ti chiediamo una polizza RC valida, con la sua scadenza: la carichi nell\'iscrizione insieme agli altri documenti. In caso di infortunio chiama subito il 112, poi avvisa il supporto MyCity.' },
+        // 5/11/2026 — La condizione decisa per chi consegna per MyCity è anche la copertura INAIL
+        // contro gli infortuni (fatti logistica.fattorino-esterno e consegna.capienza).
+        a: 'Per attivare l\'account ti chiediamo una polizza RC valida, con la sua scadenza: la carichi nell\'iscrizione insieme agli altri documenti. Prima della prima consegna serve anche la copertura INAIL contro gli infortuni: senza, non si consegna. In caso di infortunio chiama subito il 112, poi avvisa il supporto MyCity.' },
       { q: 'Cosa succede se un cliente è aggressivo?',
         // Il compenso si versa solo sulle consegne completate (lib/stripe/payout.ts):
         // qui non si promette altro finché Nicola non decide diversamente.
@@ -84,16 +89,8 @@ const TOPICS: { icon: LucideIcon; title: string; items: { q: string; a: string }
         a: 'Sì, sei libero. Non c\'è esclusiva.' },
     ],
   },
-  {
-    icon: Star,
-    title: 'Rating e qualità',
-    items: [
-      { q: 'Cosa serve per essere "Top rider"?',
-        a: 'Rating medio ≥ 4.5 negli ultimi 90 giorni + 50+ consegne. Ricevi consegne prioritarie e il badge nel profilo.' },
-      { q: 'Cosa succede se il mio rating scende?',
-        a: 'Sotto 4.0 ricevi un avviso. Sotto 3.5 il supporto ti contatta per capire come migliorare insieme.' },
-    ],
-  },
+  // 5/11/2026 — Qui c'erano «Top rider» con consegne prioritarie e gli avvisi sotto 4,0 e 3,5:
+  // nessun codice li fa. Tornano quando esisteranno davvero.
 ];
 
 export default function RiderHelpPage() {
