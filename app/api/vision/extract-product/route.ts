@@ -9,11 +9,12 @@ import { ApiErrors } from '@/lib/api/responses';
 import { verificaImmagineBase64, TIPI_IMMAGINE, type TipoImmagine } from '@/lib/immagini-base64';
 import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
+import { CATEGORY_SLUGS as CATEGORY_SLUGS_CONDIVISE } from '@/lib/products/visionShared';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { sanitizeImageUrls } from '@/lib/ai/productContext';
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
 import { CATEGORY_ATTRIBUTES } from '@/lib/category-attributes';
-import { CAMPI_DICHIARATIVI } from '@/lib/products/aiPatch';
+import { CAMPI_DICHIARATIVI, eCampoDichiarativo } from '@/lib/products/aiPatch';
 import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 
 /**
@@ -28,17 +29,8 @@ import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 // Eseguito sempre lato server, mai bundled nel client.
 export const runtime = 'nodejs';
 
-const CATEGORY_SLUGS = [
-  'alimentari',
-  'abbigliamento',
-  'casa',
-  'elettronica',
-  'libri',
-  'giardino',
-  'bellezza',
-  'sport',
-] as const;
-
+// Una lista sola, con tutte e nove le categorie (S10, 5/11/2026: mancava «giocattoli»).
+const CATEGORY_SLUGS = CATEGORY_SLUGS_CONDIVISE;
 type CategorySlug = (typeof CATEGORY_SLUGS)[number];
 
 type ExtractInput = {
@@ -77,7 +69,7 @@ const EXTRACT_TOOL: Anthropic.Tool = {
         type: 'string',
         enum: [...CATEGORY_SLUGS],
         description:
-          'La categoria del marketplace piu\' adatta. Deve essere ESATTAMENTE una di: alimentari, abbigliamento, casa, elettronica, libri, giardino, bellezza, sport.',
+          'La categoria del marketplace piu\' adatta. Deve essere ESATTAMENTE una di: alimentari, abbigliamento, casa, elettronica, libri, giardino, bellezza, sport, giocattoli.',
       },
       subcategory: {
         type: 'string',
@@ -295,7 +287,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     const result = await runMessage<ExtractInput>({
       feature: 'vision-extract',
       model: MODELS.vision,
-      max_tokens: 512,
+      // S10 (5/11/2026) — 512 token non bastano a un'etichetta alimentare completa
+      // (ingredienti, valori nutrizionali, allergeni...): la risposta si tagliava
+      // e il negoziante leggeva «Riprova» all'infinito.
+      max_tokens: 1500,
       tools: [EXTRACT_TOOL],
       tool_choice: { type: 'tool', name: 'extract_product' },
       messages: [
@@ -314,7 +309,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   } catch (err) {
     // Log solo lo status, mai il messaggio raw (potrebbe contenere
     // frammenti della API key o dell'input).
-    if (err instanceof AiConfigError) return ApiErrors.unavailable('API key Anthropic non valida.');
+    if (err instanceof AiConfigError) return ApiErrors.unavailable(err.message);
     // 6/9/2026 — QUESTA MAPPA SCRITTA A MANO NON CONOSCEVA IL FRENO DI SPESA.
     //
     // A budget del giorno finito rispondeva «Errore nel servizio AI. Riprova.»:
@@ -390,7 +385,17 @@ Usa lo strumento web_search per IDENTIFICARE con certezza il prodotto reale most
           before: toolInput.confidence,
           after: verify.toolInput.confidence,
         });
-        toolInput = verify.toolInput;
+        // S10 (5/11/2026) — Il secondo giro cerca sul web: allergeni,
+        // ingredienti e le altre dichiarazioni si tengono SOLO dal primo giro,
+        // quello che legge l'etichetta. Quelle presi da internet si buttano.
+        const attributi: Record<string, string> = {};
+        for (const [k, v] of Object.entries(verify.toolInput.attributes ?? {})) {
+          if (!eCampoDichiarativo(k)) attributi[k] = v;
+        }
+        for (const [k, v] of Object.entries(toolInput.attributes ?? {})) {
+          if (eCampoDichiarativo(k)) attributi[k] = v;
+        }
+        toolInput = { ...verify.toolInput, attributes: attributi };
       }
     } catch (err) {
       // Verifica best-effort: se la ricerca web fallisce, teniamo l'estrazione

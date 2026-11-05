@@ -69,7 +69,15 @@ vi.mock('@/lib/supabase/server', () => ({
         return {
           select: () => ({ eq: () => ({ single: async () => ({ data: JOB, error: null }) }) }),
           // A fine giro il job viene segnato come applicato.
-          update: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }),
+          update: () => {
+            // S10 (5/11/2026) — la rotta prenota il lavoro con un update
+            // condizionato che restituisce le righe toccate (.select).
+            const c: Record<string, unknown> = {};
+            c.eq = () => c;
+            c.select = async () => ({ data: [{ id: 'job-1' }], error: null });
+            c.then = (ok: (x: unknown) => unknown) => Promise.resolve({ error: null }).then(ok);
+            return c;
+          },
         };
       }
       if (table === 'categories') {

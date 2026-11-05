@@ -19,6 +19,8 @@ export const CATEGORY_SLUGS = [
   'giardino',
   'bellezza',
   'sport',
+  // S10 (5/11/2026) — la nona categoria (migrazione 013) mancava: l'AI metteva i giocattoli altrove.
+  'giocattoli',
 ] as const;
 
 export type CategorySlug = (typeof CATEGORY_SLUGS)[number];

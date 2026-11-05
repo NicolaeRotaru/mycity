@@ -83,7 +83,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   // Una lettura sola per tutti i prodotti, e una per le categorie: prima erano
   // due letture PER MODIFICA.
-  const [{ data: rowsData }, { data: categoriesData }] = await Promise.all([
+  const [
+    { data: rowsData, error: erroreProdotti },
+    { data: categoriesData, error: erroreCategorie },
+  ] = await Promise.all([
     admin
       .from('products')
       .select(`${PRODUCT_SNAPSHOT_COLS}, seller_id`)
@@ -91,6 +94,13 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       .in('id', ids),
     admin.from('categories').select('id, name, slug, parent_id').order('name'),
   ]);
+
+  // S10 (5/11/2026) — Se una delle due letture cade non si scrive niente. Prima
+  // le categorie diventavano [] (e il controllo degli obbligatori di un
+  // alimento non scattava) e i prodotti risultavano «non tuoi».
+  if (erroreProdotti || erroreCategorie) {
+    return ApiErrors.unavailable('Non riesco a leggere il catalogo in questo momento. Riprova fra poco: non ho cambiato niente.');
+  }
 
   const categories = (categoriesData ?? []) as CategoryRow[];
   const miei = new Map<string, ProductRow>();
@@ -107,7 +117,17 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     rifiutati: string[];
   }[] = [];
   const esiti: Esito[] = [];
+  // S10 (5/11/2026) — Due voci sullo stesso prodotto si controllavano una per
+  // una contro la stessa fotografia, e insieme passavano quello che nessuna
+  // delle due avrebbe passato da sola. Una sola modifica per prodotto: vale la
+  // prima, le altre si scartano e si dice perche'.
+  const giaVisti = new Set<string>();
   for (const c of changes) {
+    if (giaVisti.has(c.productId)) {
+      esiti.push({ productId: c.productId, ok: false, motivo: 'una sola modifica per prodotto: questa voce in più è stata scartata' });
+      continue;
+    }
+    giaVisti.add(c.productId);
     const row = miei.get(c.productId);
     if (!row) {
       esiti.push({ productId: c.productId, ok: false, motivo: 'non e un tuo prodotto' });

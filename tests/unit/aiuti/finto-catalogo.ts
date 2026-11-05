@@ -29,7 +29,9 @@ export function fintoCatalogo(stato: StatoCatalogo) {
     if (tabella === 'catalog_ai_jobs') {
       if (d.op === 'update') {
         stato.lavoroApplicato += 1;
-        return { data: null, error: null };
+        // S10 (5/11/2026) — La rotta prenota il lavoro con un update che
+        // restituisce le righe toccate: una riga = prenotato.
+        return { data: [{ id: stato.lavoro?.id }], error: null };
       }
       return { data: stato.lavoro, error: null };
     }

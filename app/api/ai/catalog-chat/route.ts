@@ -2,7 +2,7 @@ import { assertSafeText, UnsafeContentError } from '@/lib/ai/moderation';
 import { sanitizeImageUrls } from '@/lib/ai/productContext';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 import { NextResponse } from 'next/server';
-import { CONDIZIONI_DA_SCEGLIERE } from '@/lib/products/schema';
+import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import type Anthropic from '@anthropic-ai/sdk';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { withSellerAuth } from '@/lib/api/middleware';
@@ -108,12 +108,8 @@ const MANAGE_TOOL: Anthropic.Tool = {
             type: 'string',
             enum: ['pezzo', 'kg', 'g', 'l', 'ml', 'confezione', 'paio', 'm'],
           },
-          condition: {
-            type: ['string', 'null'],
-            // Solo le condizioni che il menu offre: MyCity non vende l'usato (30/10/2026).
-            enum: [...CONDIZIONI_DA_SCEGLIERE, null],
-            description: 'null per "non specificata".',
-          },
+          // Una fonte sola (lib/ai/patchSchema.ts): niente «usato», e null solo per togliere.
+          condition: PRODUCT_PATCH_PROPERTIES.condition,
           stock: { type: 'number', description: 'Disponibilità in pezzi.' },
           unlimited_stock: {
             type: 'boolean',

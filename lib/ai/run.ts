@@ -5,7 +5,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { getAnthropic, estimateCostEur, segnalaModelloRitirato, type ModelId } from '@/lib/ai/client';
 import { aggiungiSpesaCents, spesaDiOggiCents, statoContoCondiviso } from '@/lib/ai/tettoSpesa';
-import { decidiSpesaAi, euroInCents, leggiCopieAttese } from '@/lib/ai/decisioneTettoSpesa';
+import { decidiSpesaAi, leggiCopieAttese } from '@/lib/ai/decisioneTettoSpesa';
 
 /**
  * Esecuzione centralizzata di `messages.create`.
@@ -186,8 +186,21 @@ export async function controllaTettoSpesaAi(feature: string): Promise<void> {
   }
 }
 
+/**
+ * S10 (5/11/2026) — Il conto condiviso e' in centesimi interi. Prima ogni
+ * chiamata entrava con almeno un centesimo: il filtro anti-contenuti, che costa
+ * circa 0,0006 €, veniva contato quindici volte tanto e il tetto si
+ * consumava prima del dovuto. Adesso le frazioni si accumulano in questa copia
+ * e al conto vanno solo i centesimi interi.
+ */
+let _restoCents = 0;
+
 export async function registraSpesaAi(costEur: number): Promise<void> {
-  await aggiungiSpesaCents(euroInCents(costEur));
+  if (!Number.isFinite(costEur) || costEur <= 0) return;
+  const cents = costEur * 100 + _restoCents;
+  const interi = Math.floor(cents);
+  _restoCents = cents - interi;
+  if (interi > 0) await aggiungiSpesaCents(interi);
 }
 
 /** Errore lanciato quando l'SDK fallisce; porta lo status per il mapping. */

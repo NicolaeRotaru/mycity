@@ -185,7 +185,7 @@ export function getAnthropic(): Anthropic {
   // come senza chiave. Va prima del singleton: un client già costruito non
   // deve scavalcare lo spegnimento.
   if (!AI_NEGOZI_ACCESA) {
-    throw new AiConfigError('Strumenti AI per i negozi spenti al lancio (AI_NEGOZI_ACCESA = false).');
+    throw new AiConfigError('Gli strumenti AI per i negozi non sono ancora attivi.');
   }
   if (_client) return _client;
   const apiKey = env.anthropicKey();

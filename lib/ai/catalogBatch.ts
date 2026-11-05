@@ -37,7 +37,7 @@ import { TRADUCI_ACCESO } from '@/lib/funzioni-al-lancio';
  * guardandolo. Questo elenco e' il perimetro, e vive qui perche' e' una
  * decisione, non una dimenticanza.
  */
-export const CAMPI_ECONOMICI = ['price', 'compare_at_price', 'stock', 'unlimited_stock', 'status'] as const;
+export const CAMPI_ECONOMICI = ['price', 'compare_at_price', 'unit', 'stock', 'unlimited_stock', 'status'] as const;
 
 /**
  * 21/8/2026 — IL FRENO C'ERA, ED ERA NEL POSTO IN CUI NON POTEVA FERMARE NIENTE.

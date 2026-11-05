@@ -125,7 +125,8 @@ export async function classifyProductPolicy(
     messages: [{ role: 'user', content: `<prodotto>\n${payload}\n</prodotto>` }],
   });
   if (!toolInput) return { allowed: false, reason: 'Classificazione non disponibile.' };
-  return toolInput.allowed
+  // Passa solo un sì scritto bene: «"false"», «no» o un oggetto non sono un sì.
+  return toolInput.allowed === true
     ? { allowed: true }
     : { allowed: false, reason: toolInput.reason ?? 'Non conforme.', category: toolInput.category };
 }

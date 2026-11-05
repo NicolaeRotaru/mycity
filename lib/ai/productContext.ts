@@ -2,6 +2,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { env } from '@/lib/env';
 import { recinta } from '@/lib/ai/recinto';
+import { opzioniCorte, voceCorta } from '@/lib/ai/tetti-testo';
 
 /**
  * Costruisce il blocco-contesto del prodotto come DATO (foto + scheda JSON +
@@ -94,8 +95,9 @@ export function buildProductContext(
 
   const attrLines = attributeSchema
     .map((f) => {
-      const opts2 = f.options && f.options.length ? ` [opzioni: ${f.options.join(', ')}]` : '';
-      return `- ${f.key} (${f.type ?? 'text'})${opts2}`;
+      const opzioni = opzioniCorte(f.options);
+      const opts2 = opzioni.length ? ` [opzioni: ${opzioni.join(', ')}]` : '';
+      return `- ${voceCorta(f.key)} (${voceCorta(f.type ?? 'text')})${opts2}`;
     })
     .join('\n');
 
@@ -129,7 +131,7 @@ export function buildProductContext(
   if (topCategories.length) {
     parts.push(
       `Categorie di primo livello disponibili (slug):\n${topCategories
-        .map((c) => `- ${c.slug} (${c.name})`)
+        .map((c) => `- ${voceCorta(c.slug)} (${voceCorta(c.name)})`)
         .join('\n')}`,
     );
   }

@@ -34,6 +34,24 @@ type JobRow = {
   results: CatalogJobResult[] | null;
 };
 
+type EsitoProdotto = { productId: string; esito: 'applicato' | 'saltato'; motivo?: string };
+
+/** Quante chiamate al filtro dei contenuti partono insieme. */
+const FILTRI_INSIEME = 5;
+
+/** Come Promise.allSettled, ma al massimo `quanti` lavori alla volta. */
+async function aGruppi<T, R>(
+  voci: T[],
+  quanti: number,
+  lavoro: (v: T) => Promise<R>,
+): Promise<PromiseSettledResult<R>[]> {
+  const esiti: PromiseSettledResult<R>[] = [];
+  for (let i = 0; i < voci.length; i += quanti) {
+    esiti.push(...(await Promise.allSettled(voci.slice(i, i + quanti).map(lavoro))));
+  }
+  return esiti;
+}
+
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
   // Spento al lancio (carta #209): un lavoro rimasto «pronto» non si applica a
   // mano. Senza modello il filtro dice «no» a nome e descrizione, e il lavoro si
@@ -80,6 +98,22 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   );
   if (results.length === 0) return ApiErrors.invalidRequest('Nessun risultato da applicare.');
 
+  // S10 (5/11/2026) — «pronto?» e «applicato» erano due passi separati: due
+  // «Applica» partiti insieme passavano tutti e due, e la spesa del filtro e le
+  // righe di audit raddoppiavano. Adesso il lavoro si prenota con un passaggio
+  // solo, che riesce a una richiesta sola.
+  const { data: prenotato, error: errorePrenotazione } = await admin
+    .from('catalog_ai_jobs')
+    .update({ status: 'applied', updated_at: new Date().toISOString() })
+    .eq('id', job.id)
+    .eq('seller_id', user.id)
+    .eq('status', 'ready')
+    .select('id');
+  if (errorePrenotazione) return ApiErrors.unavailable('Non riesco ad aprire il lavoro in questo momento. Riprova fra poco.');
+  if (!prenotato || (prenotato as unknown[]).length === 0) {
+    return ApiErrors.invalidRequest('Questo lavoro si sta già applicando o è già stato applicato.');
+  }
+
   const { data: categoriesData } = await admin
     .from('categories')
     .select('id, name, slug, parent_id')
@@ -87,18 +121,33 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const categories = (categoriesData ?? []) as CategoryRow[];
 
   let applied = 0;
+  // S10 (5/11/2026) — Per ogni prodotto l'esito e il motivo: prima la risposta
+  // dava solo un numero, e chi era stato saltato spariva in silenzio.
+  const esiti: EsitoProdotto[] = [];
+  // Un salto «di passaggio» (filtro caduto, scrittura non riuscita) lascia il
+  // lavoro ripetibile: il lavoro pagato non si butta per un guasto di un attimo.
+  let ripetibile = false;
 
   if (job.operation === 'moderate') {
     // "Applica" = metti in bozza i prodotti segnalati (de-pubblica).
     const flaggedIds = results.filter((r) => r.flagged).map((r) => r.product_id);
     if (flaggedIds.length > 0) {
-      const { data: updated } = await admin
+      const { data: updated, error: erroreBozza } = await admin
         .from('products')
         .update({ status: 'draft' })
         .eq('seller_id', user.id)
         .in('id', flaggedIds)
         .select('id');
+      if (erroreBozza) ripetibile = true;
       applied = (updated ?? []).length;
+      const messiInBozza = new Set(((updated ?? []) as Array<{ id: string }>).map((r) => r.id));
+      for (const id of flaggedIds) {
+        esiti.push(
+          messiInBozza.has(id)
+            ? { productId: id, esito: 'applicato' }
+            : { productId: id, esito: 'saltato', motivo: 'scrittura non riuscita' },
+        );
+      }
       // #196 — Anche la de-pubblicazione automatica lascia traccia: e' la
       // modifica piu' brusca che l'AI possa fare a un catalogo.
       for (const riga of (updated ?? []) as Array<{ id: string }>) {
@@ -147,28 +196,35 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         const patch = r.patch as Record<string, unknown>;
         return typeof patch.name === 'string' || typeof patch.description === 'string';
       });
-      const verdetti = await Promise.allSettled(
-        daFiltrare.map((r) => {
-          const row = current.get(r.product_id) as ProductRow;
-          const patch = r.patch as Record<string, unknown>;
-          return classifyProductPolicy(
-            {
-              name: typeof patch.name === 'string' ? patch.name : (row.name ?? ''),
-              description:
-                typeof patch.description === 'string'
-                  ? patch.description
-                  : (row.description ?? ''),
-            },
-            'catalog-batch-apply-policy',
-          );
-        }),
-      );
+      // S10 (5/11/2026) — Prima partivano fino a duecento chiamate tutte
+      // insieme: una raffica di «troppe richieste» faceva scartare come
+      // vietati anche i prodotti puliti. Adesso al massimo FILTRI_INSIEME alla
+      // volta, e un filtro caduto non si chiama «vietato».
+      const verdetti = await aGruppi(daFiltrare, FILTRI_INSIEME, (r) => {
+        const row = current.get(r.product_id) as ProductRow;
+        const patch = r.patch as Record<string, unknown>;
+        return classifyProductPolicy(
+          {
+            name: typeof patch.name === 'string' ? patch.name : (row.name ?? ''),
+            description:
+              typeof patch.description === 'string'
+                ? patch.description
+                : (row.description ?? ''),
+          },
+          'catalog-batch-apply-policy',
+        );
+      });
       // Chi non passa — o su cui il filtro e' caduto — non si scrive: nel
       // dubbio si nega, come fa il filtro stesso quando risponde.
-      const bloccati = new Set<string>();
+      const bloccati = new Map<string, string>();
       daFiltrare.forEach((r, i) => {
         const esito = verdetti[i];
-        if (esito.status === 'rejected' || !esito.value.allowed) bloccati.add(r.product_id);
+        if (esito.status === 'rejected') {
+          bloccati.set(r.product_id, 'filtro dei contenuti non disponibile: riprova più tardi');
+          ripetibile = true;
+        } else if (!esito.value.allowed) {
+          bloccati.set(r.product_id, `bloccato dal filtro dei contenuti${esito.value.reason ? `: ${esito.value.reason}` : ''}`);
+        }
       });
       if (bloccati.size > 0) {
         logger.warn('catalog-batch apply: modifiche scartate dal filtro', {
@@ -179,10 +235,17 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       }
 
       for (const r of results) {
-        if (bloccati.has(r.product_id)) continue;
+        const bloccato = bloccati.get(r.product_id);
+        if (bloccato) {
+          esiti.push({ productId: r.product_id, esito: 'saltato', motivo: bloccato });
+          continue;
+        }
         if (!r.patch || Object.keys(r.patch).length === 0) continue;
         const row = current.get(r.product_id);
-        if (!row) continue;
+        if (!row) {
+          esiti.push({ productId: r.product_id, esito: 'saltato', motivo: 'prodotto non trovato nel tuo catalogo' });
+          continue;
+        }
         const { update } = resolveAiPatch({
           // Seconda guardia, e non e' un doppione: la prima sta dove il
           // risultato del lotto viene letto, questa dove viene SCRITTO. Se
@@ -197,18 +260,45 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
           current: { attributes: row.attributes ?? null, category_id: row.category_id, has_variants: row.has_variants, price: row.price },
           categories,
         });
-        if (Object.keys(update).length === 0) continue;
+        if (Object.keys(update).length === 0) {
+          esiti.push({ productId: r.product_id, esito: 'saltato', motivo: 'nessuna modifica valida' });
+          continue;
+        }
         // R36 — Il lotto non tocca lo stato, ma puo' cambiare categoria: un
         // prodotto in vendita spostato fra gli alimentari senza allergeni e
         // ingredienti non si scrive.
-        if (cosaMancaDopoLaModifica({ prima: row, update, categories }).length > 0) continue;
+        // S10 (5/11/2026) — Si scarta solo il cambio di categoria, non tutta la
+        // modifica: nome e descrizione migliorati si scrivono lo stesso.
+        let notaCategoria: string | undefined;
+        const mancanti = cosaMancaDopoLaModifica({ prima: row, update, categories });
+        if (mancanti.length > 0) {
+          const senzaCategoria = { ...update };
+          delete senzaCategoria.category_id;
+          delete senzaCategoria.subcategory_id;
+          delete senzaCategoria.attributes;
+          const ancoraMancanti =
+            Object.keys(senzaCategoria).length > 0
+              ? cosaMancaDopoLaModifica({ prima: row, update: senzaCategoria, categories })
+              : mancanti;
+          if (Object.keys(senzaCategoria).length === 0 || ancoraMancanti.length > 0) {
+            esiti.push({ productId: r.product_id, esito: 'saltato', motivo: `campi obbligatori mancanti: ${mancanti.join(', ')}` });
+            continue;
+          }
+          for (const k of Object.keys(update)) delete update[k];
+          Object.assign(update, senzaCategoria);
+          notaCategoria = `categoria non cambiata, mancano: ${mancanti.join(', ')}`;
+        }
         const { error } = await admin
           .from('products')
           .update(update)
           .eq('id', r.product_id)
           .eq('seller_id', user.id);
-        if (!error) {
+        if (error) {
+          ripetibile = true;
+          esiti.push({ productId: r.product_id, esito: 'saltato', motivo: 'scrittura non riuscita' });
+        } else {
           applied += 1;
+          esiti.push({ productId: r.product_id, esito: 'applicato', ...(notaCategoria ? { motivo: notaCategoria } : {}) });
           // #196 — Il lavoro massivo tocca decine di prodotti in un colpo: senza
           // traccia, se qualcosa esce storto non si sa neanche da dove partire.
           const prima: Record<string, unknown> = {};
@@ -225,12 +315,21 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     }
   }
 
-  await admin
-    .from('catalog_ai_jobs')
-    .update({ status: 'applied', updated_at: new Date().toISOString() })
-    .eq('id', job.id)
-    .eq('seller_id', user.id);
+  // Il lavoro e' gia' segnato «applicato» dalla prenotazione. Se qualcosa e'
+  // saltato per un guasto di passaggio torna «pronto», cosi' si puo' ripetere
+  // (riscrivere lo stesso patch su chi e' gia' entrato non cambia niente).
+  if (ripetibile) {
+    await admin
+      .from('catalog_ai_jobs')
+      .update({ status: 'ready', updated_at: new Date().toISOString() })
+      .eq('id', job.id)
+      .eq('seller_id', user.id);
+  }
 
+  const saltati = esiti.filter((e) => e.esito === 'saltato').length;
+  if (saltati > 0) {
+    logger.warn('catalog-batch apply: prodotti saltati', { jobId: job.id, sellerId: user.id, saltati, ripetibile });
+  }
   logger.info('catalog-batch applied', { jobId: job.id, operation: job.operation, applied });
-  return NextResponse.json({ ok: true, applied });
+  return NextResponse.json({ ok: true, applied, saltati, ripetibile, esiti });
 });

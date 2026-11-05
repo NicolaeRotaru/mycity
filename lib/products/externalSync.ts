@@ -31,7 +31,7 @@ export { MARKETPLACES, EXTERNAL_TTL_MS, isStale, normalizeLabel } from '@/lib/pr
 export type { Marketplace, ExternalData, Availability } from '@/lib/products/externalSyncShared';
 
 const CATEGORY_SLUGS = [
-  'alimentari', 'abbigliamento', 'casa', 'elettronica', 'libri', 'giardino', 'bellezza', 'sport',
+  'alimentari', 'abbigliamento', 'casa', 'elettronica', 'libri', 'giardino', 'bellezza', 'sport', 'giocattoli',
 ] as const;
 
 /** Risultato completo dell'import (campi prodotto + blocco esterno). */
@@ -103,7 +103,7 @@ const EXTRACT_TOOL: Anthropic.Tool = {
       description: { type: 'string', description: 'Descrizione in italiano (da 30 a 600 caratteri) basata sull\'annuncio reale.' },
       category_slug: {
         type: 'string', enum: [...CATEGORY_SLUGS],
-        description: 'Categoria del marketplace MyCity più adatta. Esattamente una di: alimentari, abbigliamento, casa, elettronica, libri, giardino, bellezza, sport.',
+        description: 'Categoria del marketplace MyCity più adatta. Esattamente una di: alimentari, abbigliamento, casa, elettronica, libri, giardino, bellezza, sport, giocattoli.',
       },
       subcategory: { type: 'string', description: 'Nome della sottocategoria più adatta, in italiano. Vuoto se incerto.' },
       price_eur: { type: 'number', description: 'Prezzo attuale dell\'annuncio in euro (converti se in altra valuta). Numero positivo, max 2 decimali.' },
