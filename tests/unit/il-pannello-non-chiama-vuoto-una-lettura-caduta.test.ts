@@ -136,8 +136,11 @@ const RIGHE_TAGLIATE: Array<{ nome: string; file: string; riga: (i: number) => R
 ];
 
 describe.each(RIGHE_TAGLIATE)('pannello · $nome · elenco al tetto', (p) => {
+  // 5/11/2026 (S05, scheda 1801) — Le pagine chiedono TETTO+1 righe: «tagliato» è quando ne
+  // arriva una in più del tetto. Con TETTO esatte l'elenco è intero, e dirlo tagliato era falso.
   it.each([
-    ['al tetto', TETTO, true],
+    ['oltre il tetto', TETTO + 1, true],
+    ['al tetto esatto', TETTO, false],
     ['sotto il tetto', 3, false],
   ])('%s: dice se l’elenco è tagliato', async (_caso, quante, tagliato) => {
     G.__DATI_QUERY__ = Array.from({ length: quante as number }, (_, i) => p.riga(i));

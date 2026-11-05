@@ -17,7 +17,7 @@ import { anniCompiuti, ETA_MINIMA_RIDER } from '@/lib/maggiore-eta';
 /** Quanti giorni prima della scadenza un documento si segnala «in scadenza». */
 export const GIORNI_PREAVVISO_SCADENZA = 30;
 
-export type ChiaveDocumentoRider = 'documento_fronte' | 'documento_retro' | 'selfie' | 'patente' | 'polizza';
+export type ChiaveDocumentoRider = 'documento_fronte' | 'documento_retro' | 'selfie' | 'patente' | 'polizza' | 'haccp';
 
 /** Un documento come arriva dalla rotta admin: il link firmato e la sua scadenza, se ne ha una. */
 export type DocumentoRider = {
@@ -32,6 +32,8 @@ export type DocumentoRider = {
 export type DatiEsameRider = {
   legal_birth_date: string | null;
   documenti: DocumentoRider[];
+  /** Il veicolo dichiarato nel modulo (5/11/2026: prima non arrivava al pannello). */
+  veicolo?: { tipo: string | null; targa: string | null } | null;
 };
 
 export type StatoDocumento = 'ok' | 'mancante' | 'scaduto' | 'in_scadenza' | 'senza_scadenza';
@@ -57,6 +59,9 @@ export const DOCUMENTI_RIDER: ReadonlyArray<{ chiave: ChiaveDocumentoRider; etic
   { chiave: 'selfie', etichetta: 'Selfie', obbligatorio: true, scade: false },
   { chiave: 'patente', etichetta: 'Patente', obbligatorio: true, scade: true },
   { chiave: 'polizza', etichetta: 'Polizza RC', obbligatorio: true, scade: true },
+  // 5/11/2026 — L'attestato HACCP si caricava ma l'amministratore non lo vedeva mai.
+  // Non è obbligatorio (serve solo a chi consegna alimenti): si mostra, non blocca.
+  { chiave: 'haccp', etichetta: 'Attestato HACCP', obbligatorio: false, scade: true },
 ];
 
 const DATA = /^\d{4}-\d{2}-\d{2}$/;

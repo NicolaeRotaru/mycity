@@ -11,6 +11,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import {
   vistaDelleCampagne,
   nomeDellaCampagna,
@@ -238,12 +239,23 @@ export default function AdminSponsoredPage() {
                           <Play size={12} strokeWidth={2.4} aria-hidden /> Riprendi
                         </button>
                       )}
+                      {/* 5/11/2026 (S05) — Una campagna pagata dal negozio non si cancella con
+                          un tocco: si chiede conferma, come per i coupon, e il bersaglio è alto 44 px. */}
                       <button
                         type="button"
-                        onClick={() => del.mutate(l)}
+                        onClick={async () => {
+                          const ok = await confirmDialog({
+                            title: 'Eliminare la campagna?',
+                            message: `La campagna «${nome}» sparisce e non si può recuperare.`,
+                            confirmLabel: 'Sì, elimina',
+                            danger: true,
+                            icon: Trash2,
+                          });
+                          if (ok) del.mutate(l);
+                        }}
                         disabled={inCorso}
                         aria-label={`Elimina la campagna «${nome}»`}
-                        className="text-secondary-600 hover:text-secondary-700 disabled:opacity-50 text-xs font-semibold inline-flex items-center gap-1"
+                        className="ml-2 min-h-[44px] px-2 text-secondary-600 hover:text-secondary-700 disabled:opacity-50 text-xs font-semibold inline-flex items-center gap-1"
                       >
                         <Trash2 size={12} strokeWidth={2.4} aria-hidden /> Elimina
                       </button>

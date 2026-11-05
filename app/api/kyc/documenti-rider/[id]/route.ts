@@ -32,7 +32,9 @@ async function handler(req: NextRequest, adminUser: { id: string }, targetId: st
       id, role, legal_birth_date,
       kyc_id_doc_front_url, kyc_id_doc_back_url, kyc_selfie_url,
       rider_license_url, rider_license_expires_on,
-      rider_insurance_url, rider_insurance_expires_on
+      rider_insurance_url, rider_insurance_expires_on,
+      rider_haccp_url, rider_haccp_expires_on,
+      rider_vehicle_type, rider_vehicle_plate
     `)
     .eq('id', targetId)
     .maybeSingle();
@@ -48,12 +50,13 @@ async function handler(req: NextRequest, adminUser: { id: string }, targetId: st
     return firmato?.signedUrl ?? null;
   };
 
-  const [fronte, retro, selfie, patente, polizza] = await Promise.all([
+  const [fronte, retro, selfie, patente, polizza, haccp] = await Promise.all([
     firma(data.kyc_id_doc_front_url),
     firma(data.kyc_id_doc_back_url),
     firma(data.kyc_selfie_url),
     firma(data.rider_license_url),
     firma(data.rider_insurance_url),
+    firma(data.rider_haccp_url),
   ]);
 
   const documenti: DocumentoRider[] = [
@@ -62,11 +65,13 @@ async function handler(req: NextRequest, adminUser: { id: string }, targetId: st
     { chiave: 'selfie', etichetta: 'Selfie', url: selfie, scade_il: null },
     { chiave: 'patente', etichetta: 'Patente', url: patente, scade_il: data.rider_license_expires_on ?? null },
     { chiave: 'polizza', etichetta: 'Polizza RC', url: polizza, scade_il: data.rider_insurance_expires_on ?? null },
+    { chiave: 'haccp', etichetta: 'Attestato HACCP', url: haccp, scade_il: data.rider_haccp_expires_on ?? null },
   ];
 
   await writeAudit({
     actorId: adminUser.id,
-    action: 'kyc.approve', // l'elenco delle azioni non ha «lettura»: si usa la voce KYC con l'evento nei dettagli
+    // 5/11/2026 — Guardare i documenti non è approvarli: prima finiva come «KYC approvato».
+    action: 'kyc.view',
     targetTable: 'profiles',
     targetId,
     metadata: { evento: 'lettura_documenti_rider', documenti: documenti.filter((d) => d.url).map((d) => d.chiave) },
@@ -74,7 +79,11 @@ async function handler(req: NextRequest, adminUser: { id: string }, targetId: st
     userAgent: req.headers.get('user-agent') ?? undefined,
   });
 
-  const corpo: DatiEsameRider = { legal_birth_date: data.legal_birth_date ?? null, documenti };
+  const corpo: DatiEsameRider = {
+    legal_birth_date: data.legal_birth_date ?? null,
+    documenti,
+    veicolo: { tipo: data.rider_vehicle_type ?? null, targa: data.rider_vehicle_plate ?? null },
+  };
   return NextResponse.json(corpo, { headers: { 'Cache-Control': 'no-store' } });
 }
 
