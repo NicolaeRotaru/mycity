@@ -24,11 +24,9 @@
  * la porta di scrittura e' quella vera (`salvaProdottoTracciato`) su una banca dati finta.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, createElement, useState, type ReactNode } from 'react';
+import { act, createElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import QueryProvider from '@/components/providers/QueryProvider';
-import { queryKeys } from '@/lib/queries/keys';
 
 type Riga = Record<string, unknown>;
 
