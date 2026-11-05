@@ -1,7 +1,7 @@
 {
  "sessione": "S05",
  "ramo": "claude/youthful-gates-blkxmk-m05",
- "commit_finale": "VEDI_ULTIMO_COMMIT",
+ "commit_finale": "ac18d88c5b29f228bc4fbeb9157bdad664cecd10",
  "verify": {
   "typecheck": "verde",
   "lint": "verde (solo avvisi già presenti)",
