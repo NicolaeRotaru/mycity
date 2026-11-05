@@ -26,7 +26,7 @@ import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
 import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
-import { decisioneSuChiaveOccupata } from '@/lib/ordini/tentativo';
+import { decisioneSuChiaveOccupata, MESSAGGIO_ORDINE_IN_CORSO } from '@/lib/ordini/tentativo';
 import { idOrdiniDelTentativo } from '@/lib/ordini/chiave-dopo-l-errore';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { ordineInContantiPuoNascere } from '@/lib/ordini/ordine-in-contanti-puo-nascere';
@@ -35,6 +35,7 @@ import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/or
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { formatPriceFromCents } from '@/lib/format';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+import { MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI, sopraIlTettoDeiContanti } from '@/lib/ordini/tetto-dei-contanti';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
 // tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`
@@ -147,6 +148,28 @@ async function allarmeAgliAmministratori(titolo: string, corpo: string): Promise
   }
 }
 
+/**
+ * 5/11/2026 — GLI ORDINI DI PRIMA SONO TUTTI ANNULLATI: NON SI DICE «FATTO».
+ *
+ * Entro la finestra, lo stesso carrello ritoccato dopo che il negozio ha annullato l'ordine (o
+ * dopo l'annullo automatico) riceveva «Ordine effettuato!» con l'ordine annullato: il carrello si
+ * svuotava e la pagina diceva «Annullato». Se tutti gli ordini della chiave sono annullati non sono
+ * un invio da ripetere: si dice com'è andata e si libera la chiave, così il tocco dopo (con una
+ * chiave nuova, quindi identificativi nuovi) fa un ordine vero. Nessun doppione: di quella chiave
+ * non resta in piedi niente.
+ */
+function tuttiAnnullati(ordini: Array<{ delivery_status?: unknown }> | null | undefined): boolean {
+  return !!ordini && ordini.length > 0 && ordini.every((o) => o.delivery_status === 'CANCELED');
+}
+
+function ordineDiPrimaAnnullato(): Promise<NextResponse> {
+  return conLaChiaveLiberata(
+    ApiErrors.conflict(
+      'Il tuo ordine di prima con questo carrello è stato annullato. Tocca di nuovo «Ordina» per farne uno nuovo.',
+    ),
+  );
+}
+
 function tentativoScaduto(natoIl: unknown): boolean {
   if (typeof natoIl !== 'string') return false;
   const nato = new Date(natoIl).getTime();
@@ -157,7 +180,9 @@ function ordineGiaInCorso(): NextResponse {
   return NextResponse.json(
     {
       ok: false,
-      error: { code: 'CONFLICT', message: 'Ordine già in corso, attendi qualche secondo.' },
+      // 5/11/2026 — L'attesa vera: un invio gemello si considera morto dopo ABBANDONATO_DOPO_MS
+      // (un minuto), e fino ad allora ogni ritocco riceve questa risposta. «Qualche secondo» era falso.
+      error: { code: 'CONFLICT', message: MESSAGGIO_ORDINE_IN_CORSO },
       inCorso: true,
     },
     { status: 409 },
@@ -425,6 +450,16 @@ export const POST = withAuthRateLimit(
           .maybeSingle();
         const ordiniGia = (gia?.order_ids as Array<{ id: string; sellerId: string; totalCents: number }> | null) ?? null;
         if (ordiniGia && ordiniGia.length > 0) {
+          // 5/11/2026 — Prima di dire «fatto» si guarda se quegli ordini sono ancora vivi.
+          const { data: statiGia, error: errStatiGia } = await admin
+            .from('orders')
+            .select('id, delivery_status')
+            .eq('user_id', user.id)
+            .in('id', ordiniGia.map((o) => o.id));
+          if (!errStatiGia && tuttiAnnullati(statiGia as Array<{ delivery_status?: unknown }> | null)) {
+            logger.info('[cod] tentativo ripetuto ma gli ordini di prima sono annullati: libero la chiave', { chiave: chiaveTentativo });
+            return ordineDiPrimaAnnullato();
+          }
           logger.info('[cod] tentativo ripetuto: restituisco gli ordini gia creati', { chiave: chiaveTentativo });
           return NextResponse.json(
             { orderIds: ordiniGia.map((o) => o.id), ordini: ordiniGia, ripetuto: true },
@@ -477,7 +512,7 @@ export const POST = withAuthRateLimit(
           const idDellaChiave = await idOrdiniDelTentativo(chiaveTentativo, user.id, NEGOZI_PER_CARRELLO);
           const { data: ordiniDopo, error: errOrdiniDopo } = await admin
             .from('orders')
-            .select('id, seller_id, total_price')
+            .select('id, seller_id, total_price, delivery_status')
             .eq('user_id', user.id)
             .in('id', idDellaChiave);
           if (errOrdiniDopo) {
@@ -485,6 +520,10 @@ export const POST = withAuthRateLimit(
               chiave: chiaveTentativo, message: errOrdiniDopo.message,
             });
             return nonVedoSeLOrdineCe();
+          }
+          if (tuttiAnnullati(ordiniDopo as Array<{ delivery_status?: unknown }> | null)) {
+            logger.info('[cod] chiave abbandonata con gli ordini gia annullati: libero la chiave', { chiave: chiaveTentativo });
+            return ordineDiPrimaAnnullato();
           }
           if (ordiniDopo && ordiniDopo.length > 0) {
             /**
@@ -1006,6 +1045,10 @@ export const POST = withAuthRateLimit(
       consegnaVeloce,
     });
     const shippingPerGroupCents = prezzi.gruppi.map((g) => g.shippingCents);
+    // 5/11/2026 — Il tetto della legge sui contanti (lib/ordini/tetto-dei-contanti.ts), sul lordo.
+    if (sopraIlTettoDeiContanti(prezzi.grandTotalCents)) {
+      return esciERilascia(ApiErrors.conflict(MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI));
+    }
 
     // 058 / 165 — LA STESSA MATEMATICA DELLA CARTA, NON UNA SUA IMITAZIONE.
     //

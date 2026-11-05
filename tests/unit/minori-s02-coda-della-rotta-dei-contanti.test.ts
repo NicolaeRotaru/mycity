@@ -22,7 +22,7 @@ import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
 const NEGOZIO = 'aaaaaaaa-0000-0000-0000-000000000001';
 const NEGOZIO2 = 'aaaaaaaa-0000-0000-0000-000000000002';
 const PRODOTTO2 = '22222222-2222-2222-2222-222222222222';
-const banco = vi.hoisted(() => ({ creatoIl: null as string | null, inVolo: 0, massimo: 0, ordini: 0 }));
+const banco = vi.hoisted(() => ({ creatoIl: null as string | null, inVolo: 0, massimo: 0, ordini: 0, prezzoPane: 15 }));
 const logger = vi.hoisted(() => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() }));
 const PRODOTTO = '11111111-1111-1111-1111-111111111111';
 const posta: Array<{ to: string; html: string; text?: string }> = [];
@@ -87,7 +87,7 @@ vi.mock('@/lib/analytics/server', () => ({
 
 vi.mock('@/lib/supabase/server', () => {
   const prodotti = [
-    { id: PRODOTTO, seller_id: NEGOZIO, name: 'Pane', price: 15, stock: 10, has_variants: false, images: [], status: 'available' },
+    { id: PRODOTTO, seller_id: NEGOZIO, name: 'Pane', get price() { return banco.prezzoPane; }, stock: 100, has_variants: false, images: [], status: 'available' },
     { id: PRODOTTO2, seller_id: NEGOZIO2, name: 'Mele', price: 12, stock: 10, has_variants: false, images: [], status: 'available' },
   ];
   const venditori = [
@@ -129,8 +129,8 @@ vi.mock('@/lib/supabase/server', () => {
 });
 
 
-function richiesta(deliverySlot: string, opzioni: { dueNegozi?: boolean; chiave?: string } = {}): never {
-  const groups = [{ sellerId: NEGOZIO, items: [{ productId: PRODOTTO, quantity: 1 }] }];
+function richiesta(deliverySlot: string, opzioni: { dueNegozi?: boolean; chiave?: string; quantita?: number } = {}): never {
+  const groups = [{ sellerId: NEGOZIO, items: [{ productId: PRODOTTO, quantity: opzioni.quantita ?? 1 }] }];
   // Il banco legge sempre i due prodotti: il carrello ha sempre i due negozi.
   if (opzioni.dueNegozi) groups.push({ sellerId: NEGOZIO2, items: [{ productId: PRODOTTO2, quantity: 1 }] });
   return new Request('http://localhost/api/orders/cod', {
@@ -146,12 +146,13 @@ function richiesta(deliverySlot: string, opzioni: { dueNegozi?: boolean; chiave?
   }) as never;
 }
 
-async function ordina(ora: string, fascia: string, opzioni: { dueNegozi?: boolean; chiave?: string } = {}) {
+async function ordina(ora: string, fascia: string, opzioni: { dueNegozi?: boolean; chiave?: string; quantita?: number } = {}, atteso = 200) {
   vi.setSystemTime(new Date(ora));
   const { POST } = await import('@/app/api/orders/cod/route');
   const res = await (POST as unknown as (req: never) => Promise<Response>)(richiesta(fascia, opzioni));
-  expect(res.status, await res.clone().text()).toBe(200);
+  expect(res.status, await res.clone().text()).toBe(atteso);
   await new Promise((r) => setTimeout(r, 120));
+  return res;
 }
 
 beforeEach(() => {
@@ -161,6 +162,7 @@ beforeEach(() => {
   banco.inVolo = 0;
   banco.massimo = 0;
   banco.ordini = 0;
+  banco.prezzoPane = 15;
   logger.error.mockClear();
   vi.resetModules();
 });
@@ -189,5 +191,18 @@ describe('la coda della rotta dei contanti', () => {
       expect.stringContaining('prova del tentativo NON scritta'),
       expect.objectContaining({ chiave: 'chiave-della-scheda-1' }),
     );
+  });
+
+  it('37 · 99 pezzi da 60 € (5.940 €) non si pagano in contanti: 409 «scegli la carta», nessun ordine', async () => {
+    banco.prezzoPane = 60;
+    const res = await ordina('2026-10-30T20:15:00.000Z', 'Domani · 9:00–12:00', { dueNegozi: true, quantita: 99 }, 409);
+    expect(JSON.stringify(await res.json())).toContain('non si può pagare in contanti');
+    expect(banco.ordini).toBe(0);
+  });
+
+  it('37 · sotto il tetto (99 pezzi da 50 €, 4.950 € + 12 €) l ordine in contanti passa', async () => {
+    banco.prezzoPane = 50;
+    await ordina('2026-10-30T20:15:00.000Z', 'Domani · 9:00–12:00', { dueNegozi: true, quantita: 99 });
+    expect(banco.ordini).toBe(2);
   });
 });

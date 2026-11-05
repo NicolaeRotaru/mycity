@@ -22,6 +22,13 @@
 export const ABBANDONATO_DOPO_MS = 60_000;
 
 /**
+ * 5/11/2026 — Cosa legge chi ritocca «Ordina» mentre il tentativo è occupato: fino a
+ * ABBANDONATO_DOPO_MS, non «qualche secondo». Nasce dalla costante, così non può tornare a mentire.
+ */
+export const MESSAGGIO_ORDINE_IN_CORSO =
+  `Il tuo ordine è già in corso: aspetta fino a ${Math.round(ABBANDONATO_DOPO_MS / 1000)} secondi e riprova, senza cambiare il carrello.`;
+
+/**
  * La chiave di QUESTO tentativo: nasce al primo invio, resta uguale se
  * l'invio viene ripetuto, e muore quando l'ordine è andato a buon fine.
  *

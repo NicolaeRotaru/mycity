@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { logger } from '@/lib/logger';
-import { idOrdiniDelTentativo } from '@/lib/ordini/chiave-dopo-l-errore';
+import { idOrdiniDelTentativo, laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
 
 /**
  * Sessione S02 (5/11/2026) — schede 2513, 2137, 2667, 2139: nei rami «serve una correzione a
@@ -43,6 +43,9 @@ const stato = vi.hoisted(() => ({
   insertFallisceSu: null as string | null,
   cancellazioniFalliscono: false,
   rpcFallisce: false,
+  creditoDisponibile: 0,
+  chiamateRpc: [] as Array<{ nome: string; argomenti: Record<string, unknown> }>,
+  usaCredito: false,
 }));
 const notifyAdmins = vi.hoisted(() => vi.fn(async () => 'scritto'));
 vi.mock('@/lib/stripe/webhook/comune', () => ({ notifyAdmins }));
@@ -162,7 +165,11 @@ vi.mock('@/lib/supabase/server', () => {
   return {
     getAdminSupabase: () => ({
       from: tavola,
-      rpc: (nome: string) => Promise.resolve({ data: null, error: stato.rpcFallisce && nome === 'restore_stock' ? { message: 'giù' } : null }),
+      rpc: (nome: string, argomenti: Record<string, unknown> = {}) => {
+        stato.chiamateRpc.push({ nome, argomenti });
+        if (nome === 'wallet_debit') return Promise.resolve({ data: Math.min(stato.creditoDisponibile, Number(argomenti.p_max_cents)), error: null });
+        return Promise.resolve({ data: null, error: stato.rpcFallisce && nome === 'restore_stock' ? { message: 'giù' } : null });
+      },
       auth: { admin: { getUserById: async () => ({ data: { user: { email: 'negozio@test.it' } } }) } },
     }),
     getServerSupabase: async () => ({ from: tavola }),
@@ -181,7 +188,7 @@ async function ordina(chiave: string | null, gruppi = [AL_FORNO]) {
       groups: gruppi,
       delivery: { fullName: 'Maria Rossi', address: 'Via Emilia 1', city: 'Piacenza', zip: '29121', phone: '3331234567' },
       pickupInStore: false,
-      useCredit: false,
+      useCredit: stato.usaCredito,
     }),
   });
   const res = await (POST as unknown as (r: never) => Promise<Response>)(req as never);
@@ -208,6 +215,9 @@ beforeEach(() => {
   stato.insertFallisceSu = null;
   stato.cancellazioniFalliscono = false;
   stato.rpcFallisce = false;
+  stato.creditoDisponibile = 0;
+  stato.chiamateRpc.length = 0;
+  stato.usaCredito = false;
   notifyAdmins.mockClear();
   vi.mocked(logger.error).mockClear();
 });
@@ -281,5 +291,60 @@ describe('i rami «serve una correzione a mano» avvisano gli amministratori', (
     const { res } = await ordina(null, [AL_FORNO]);
     expect(res.ok).toBe(false);
     expect(errori().some((e) => e.includes('la merce non e tornata'))).toBe(true);
+  });
+});
+
+describe('gli ordini di prima già annullati non si spacciano per «fatto»', () => {
+  it('2475 · entro la finestra, stesso carrello dopo l annullo del negozio: 409 che lo dice e chiave liberata, poi l ordine nuovo nasce', async () => {
+    const chiave = 'cod-annullato-dal-negozio';
+    const [id] = await idOrdiniDelTentativo(chiave, CLIENTE, 1);
+    stato.tentativi.push({ chiave, user_id: CLIENTE, order_ids: [{ id, sellerId: FORNO, totalCents: 750 }], created_at: new Date().toISOString() });
+    stato.ordini.push({ id, user_id: CLIENTE, seller_id: FORNO, total_price: 7.5, payment_method: 'cod', delivery_status: 'CANCELED', created_at: new Date().toISOString() });
+    const primo = await ordina(chiave);
+    expect(primo.res.status, JSON.stringify(primo.corpo)).toBe(409);
+    expect(JSON.stringify(primo.corpo)).toContain('annullato');
+    expect(laChiaveVaButtata(primo.corpo)).toBe(true);
+    const secondo = await ordina(`${chiave}-nuova`);
+    expect(secondo.res.status).toBe(200);
+    expect(alForno().filter((o) => o.delivery_status !== 'CANCELED')).toHaveLength(1);
+  });
+
+  it('2475 · se l ordine di prima è vivo resta «fatto» con quello (nessun doppione)', async () => {
+    const chiave = 'cod-ancora-vivo';
+    const [id] = await idOrdiniDelTentativo(chiave, CLIENTE, 1);
+    stato.tentativi.push({ chiave, user_id: CLIENTE, order_ids: [{ id, sellerId: FORNO, totalCents: 750 }], created_at: new Date().toISOString() });
+    stato.ordini.push({ id, user_id: CLIENTE, seller_id: FORNO, total_price: 7.5, payment_method: 'cod', delivery_status: 'NEW', created_at: new Date().toISOString() });
+    const { res, ids } = await ordina(chiave);
+    expect(res.status).toBe(200);
+    expect(ids).toEqual([id]);
+    expect(alForno()).toHaveLength(1);
+  });
+
+  it('2143 · chiave abbandonata con l ordine ritrovato già annullato: niente «Ordine effettuato!»', async () => {
+    const chiave = 'cod-abbandonata-annullata';
+    stato.tentativi.push({ chiave, user_id: CLIENTE, order_ids: [], created_at: new Date(Date.now() - 120_000).toISOString() });
+    const [id] = await idOrdiniDelTentativo(chiave, CLIENTE, 1);
+    stato.ordini.push({ id, user_id: CLIENTE, seller_id: FORNO, total_price: 7.5, payment_method: 'cod', delivery_status: 'CANCELED', created_at: new Date().toISOString() });
+    stato.articoli.push({ order_id: id });
+    const { res, corpo } = await ordina(chiave);
+    expect(res.ok, JSON.stringify(corpo)).toBe(false);
+    expect(laChiaveVaButtata(corpo)).toBe(true);
+  });
+});
+
+describe('2136 · il credito tolto a un ordine che non nasce torna con lo stesso riferimento', () => {
+  it('scrittura dell ordine fallita col credito usato: wallet_credit rende la stessa cifra con il riferimento del prelievo', async () => {
+    stato.usaCredito = true;
+    stato.creditoDisponibile = 300;
+    stato.insertFallisceSu = FORNO;
+    const { res } = await ordina(null, [AL_FORNO]);
+    expect(res.ok).toBe(false);
+    const prelievo = stato.chiamateRpc.find((c) => c.nome === 'wallet_debit');
+    const storno = stato.chiamateRpc.find((c) => c.nome === 'wallet_credit');
+    expect(prelievo, 'il credito non è stato usato: la prova non prova niente').toBeTruthy();
+    expect(storno, 'il credito non è tornato').toBeTruthy();
+    expect(storno!.argomenti.p_cents).toBe(300);
+    expect(storno!.argomenti.p_ref).toBe(prelievo!.argomenti.p_ref);
+    expect(storno!.argomenti.p_user).toBe(CLIENTE);
   });
 });
