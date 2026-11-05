@@ -1,0 +1,1642 @@
+{
+  "sessione": "S09",
+  "ramo": "claude/youthful-gates-blkxmk-m09",
+  "commit_finale": "e44cf40",
+  "verify": {
+    "typecheck": "verde",
+    "lint": "verde",
+    "test": "rosso",
+    "note": "7638 prove verdi, 2 rosse: tests/unit/le-pagine-ordini-del-negozio-leggono-gli-orari.test.tsx (caso 1, lista e dettaglio), già rosse su origin/main (provato in una copia pulita, stessa uscita): non toccate. Lint: solo avvisi preesistenti. Il commit finale è quello che contiene questo referto; il codice verificato è al commit e44cf40. commit_finale = ultimo commit di codice; il referto sta nel commit successivo."
+  },
+  "revisore": "Il revisore (subagent) ha trovato 12 punti. Corretti: (1) «Ultimi visti» cancellava lo storico anche a chi non aveva mai scelto sui cookie → ora si cancella solo alla revoca; (2) «Indietro» usava document.referrer, che dentro il sito non cambia → ora basta la cronologia; (3) il fuoco del pannello categorie su desktop andava sulla X nascosta nel suo contenitore → controllo dei contenitori e prova nuova con la regola sm:hidden vera; (4) nella ricerca in vetrina «Carica altri» non arrivava oltre la prima pagina dei risultati per nome → corretto il tetto, prova nuova; (5) due file temporanei di una prova finiti in un commit → tolti. Respinto (7): la scritta sulle recensioni è vera, la regola «Verified buyers can write reviews» (migrazioni 061 e 093) accetta solo chi ha un ordine DELIVERED con quel prodotto, e order_items si legge per le proprie righe (002). Lasciati e annotati: (6) JSON-LD del prodotto col prezzo pieno quando c'è una promo (serve leggere lo sconto nel guscio server); (8) «Compra ora» porta la riga alla quantità scelta anche se ce n'erano di più (è il comportamento chiesto dalla scheda 572); (9) seller_public_profiles letta con limit 2000 ma max_rows 1000, come già in sitemap; (10) la griglia mostra lo scheletro mentre arrivano le letture dei filtri (meglio del falso «nessun prodotto»); (11) guardia difensiva in QueryProvider; (12) molte prove sono letture del sorgente: dove si poteva ho montato i componenti.",
+  "riepilogo": {
+    "riparato": 77,
+    "parziale": 27,
+    "gia_riparato": 3,
+    "non_codice": 2,
+    "scelta_di_nicola": 1,
+    "non_fatto": 17
+  },
+  "migrazioni_nuove": [],
+  "schede": [
+    {
+      "id": 911,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "I due loading.tsx del mio territorio hanno già role=status e la classe .skeleton.",
+      "prova": "app/product/[id]/loading.tsx:14 role=\"status\" e class skeleton; app/store/[id]/loading.tsx usa ScheletroNegozio (role=\"status\" riga 49, .skeleton)",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "app/orders/[id]/loading.tsx (S02) anche lui ha già role=status."
+    },
+    {
+      "id": 1484,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non chiuso: la finestra legge-poi-scrive si chiude solo con un vincolo nel database, e un indice unico semplice su (user_id, session_id) contraddice la regola «oltre mezz'ora nella stessa scheda è un accesso nuovo».",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Serve una migrazione pensata (indice unico parziale su una fascia di tempo, dopo aver ripulito i doppioni esistenti) che Nicola deve applicare a mano: non l'ho scritta per non rischiare un CREATE UNIQUE INDEX che fallisce sui dati veri."
+    },
+    {
+      "id": 259,
+      "esito": "riparato",
+      "cosa_ho_fatto": "cf-ipcountry/cf-ipcity si leggono solo col segreto di bordo (come getClientIp), un login senza utente collegato non si scrive, e i decodeURIComponent di città e cookie non fanno più cadere la rotta.",
+      "prova": "tests/unit/minori-s09-registro-visite.test.ts (6 prove, 3 rosse senza correzione)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/track/route.ts",
+        "tests/unit/minori-s09-registro-visite.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il logout NON si rifiuta senza utente come chiedeva la scheda: il browser lo manda dopo l'uscita (ActivityTracker.tsx:131), quindi sul server l'utente è sempre assente; rifiutarlo cancellerebbe tutti i logout."
+    },
+    {
+      "id": 1021,
+      "esito": "parziale",
+      "cosa_ho_fatto": "/categorie passa a max-w-7xl come /stores e le altre pagine di catalogo; /categorie, /category e la vetrina del negozio prendono il passo px-4 sm:px-6 come prodotto e carrello.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 1021",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/categorie/page.tsx",
+        "app/category/[slug]/page.tsx",
+        "components/store-sections/misure-vetrina.ts",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Restano: la cassa (app/checkout/page.tsx, max-w-6xl, altro territorio) e la vetrina del negozio a max-w-5xl, che ho lasciato perché allargarla cambia la composizione di copertina e sezioni: è una scelta di aspetto da fare guardando lo schermo."
+    },
+    {
+      "id": 1989,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Prova nuova che legge tutte le descrizioni scritte a mano (Casa compresa) e pretende che non promettano veloce/rapida/provincia/gratis/minuti fuori dalla frase condivisa fraseComeArriva().",
+      "prova": "tests/unit/minori-s09-categoria-su-google.test.ts › 1989 (provato: con «consegna veloce in tutta la provincia» su Casa diventa rossa)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s09-categoria-su-google.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il difetto era la prova debole: il testo di Casa oggi è giusto; ho aggiunto la difesa in un file nuovo invece di toccare la prova di S04."
+    },
+    {
+      "id": 2087,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il ripiego della descrizione non mette più il nome in minuscolo dopo «Acquista»: scrive «Abbigliamento · Bambini dai negozi di Piacenza su MyCity…», con la madre quando c'è.",
+      "prova": "tests/unit/minori-s09-categoria-su-google.test.ts › 2087",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/category/[slug]/layout.tsx",
+        "tests/unit/minori-s09-categoria-su-google.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il «Consegna in 30-60 minuti» era già stato tolto (oggi c'è CONSEGNA_ALL_ORA_CHE_SCEGLI)."
+    },
+    {
+      "id": 1936,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tolto dalla pagina categoria il filtro «Spedizione gratuita / da 30 €» col camioncino (stato, casella, chip e il minPrice 30 scritto a mano), come già fatto in /search.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 1936",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/category/[slug]/page.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Le chiavi freeShipping/chip.freeShipping in messages restano (non si tolgono chiavi dai messaggi)."
+    },
+    {
+      "id": 330,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Nel ramo hub ogni fila riporta il suo conteggio; se tutte sono vuote compare «nessun prodotto» con i link a /categorie e alla ricerca.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 330 (lettura del sorgente)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/category/[slug]/page.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Manca il caso «lettura caduta»: le file in errore si nascondono senza conteggio, quindi non compare né il vuoto né un «Riprova»."
+    },
+    {
+      "id": 284,
+      "esito": "riparato",
+      "cosa_ho_fatto": "«Altri prodotti» nell'hub passa categoryIds={[category.id]}, che la lettura usa così com'è: mostra solo i prodotti messi sulla madre, non di nuovo quelli delle figlie.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 284",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/category/[slug]/page.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 567,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Correzione minima della scheda: i metadati «non trovato» di prodotto, negozio, pagina del negozio e categoria hanno canonical nullo, così non ereditano quello della home.",
+      "prova": "tests/unit/minori-s09-scheda-prodotto.test.ts › 567",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/product/[id]/layout.tsx",
+        "app/store/[id]/layout.tsx",
+        "app/store/[id]/[slug]/layout.tsx",
+        "app/category/[slug]/layout.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Resta il soft 404 (codice 200): serve spostare app/loading.tsx in un gruppo di rotte e fare notFound() nel layout prima dello streaming; e il titolo di app/not-found.tsx (S10)."
+    },
+    {
+      "id": 1550,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il caricamento della radice mostra, sotto la barretta, la scritta «Stiamo caricando…» visibile (prima solo per il lettore di schermo): su una rete lenta non resta più un'area bianca muta.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 1550",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/loading.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Resta una scelta di aspetto: non è uno scheletro, di proposito (vedi il commento del 6/9)."
+    },
+    {
+      "id": 2637,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il sottotitolo di riserva della home (HERO_VARIANTS.a) non dice più «Alimentari, casa, elettronica» (categorie vuote) ma «Pane, alimentari e prodotti dei negozi».",
+      "prova": "tests/unit/minori-s09-home.test.ts › 2637",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "app/page.tsx è nel mio territorio (prefisso app/page.tsx), anche se la scheda lo dice fuori."
+    },
+    {
+      "id": 672,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La domanda delle categorie pubbliche ha staleTime pari alla vita della memoria del server (60 + 300 secondi): il precarico della home non viene più buttato via e richiesto dal telefono appena parte.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 672",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/queries/categorie-pubbliche.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1677,
+      "esito": "riparato",
+      "cosa_ho_fatto": "leggiSchedaPerIlGuscio non consegna più null sotto la chiave della scheda quando l'estraneo non vede il prodotto: restituisce [] e il browser rilegge con la sessione (il negoziante vede la sua bozza).",
+      "prova": "tests/unit/minori-s09-scheda-prodotto.test.ts › 1677",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/queries/scheda-con-venduto-da.ts",
+        "tests/unit/minori-s09-scheda-prodotto.test.ts",
+        "tests/unit/il-crawler-riceve-la-scheda.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Aggiornata la prova vecchia il-crawler-riceve-la-scheda (S04): cercava 'OutOfStock' nel layout, la regola ora sta in disponibilitaPerGoogle (scheda 565); il controllo resta, spostato dove sta la regola."
+    },
+    {
+      "id": 565,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Lo schema.org Offer del guscio usa disponibilitaPerGoogle (stock nullo = scorte illimitate = InStock, come la pagina) e porta url assoluto e sku.",
+      "prova": "tests/unit/minori-s09-scheda-prodotto.test.ts › 565",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/queries/metadati-vetrina.ts",
+        "app/product/[id]/layout.tsx",
+        "tests/unit/minori-s09-scheda-prodotto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 375,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Le due opengraph-image mandano cache-control 'public, max-age=300, s-maxage=300, stale-while-revalidate=86400' al posto dell'«immutable un anno» di Next: un prezzo cambiato o un'anteprima di ripiego durano minuti, non un anno.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 375",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/store/[id]/opengraph-image.tsx",
+        "app/product/[id]/opengraph-image.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Manca la seconda metà: distinguere in leggiPerMetadati l'errore del database dalla riga assente e rispondere 503 (file lib/supabase/lettura-per-metadati.ts, territorio S10)."
+    },
+    {
+      "id": 2576,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Prova nuova sul codice della scheda: la frase del reso è fraseResoDelProdotto(rigaDelRecesso), letta con non_recedibile, ed è proprio {fraseReso} quella disegnata accanto all'icona del reso; tornare a una frase generale la fa diventare rossa.",
+      "prova": "tests/unit/minori-s09-scheda-prodotto.test.ts › 2576 (mutante provato)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s09-scheda-prodotto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Prova leggera di lettura del sorgente, non un montaggio della pagina intera (1400 righe con decine di letture)."
+    },
+    {
+      "id": 405,
+      "esito": "parziale",
+      "cosa_ho_fatto": "La scheda scrive «Venduto da {negozio} · consegna MyCity» invece di «Venduto e consegnato da {negozio}».",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 405",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Resta la FAQ sul compenso del rider «in base alla distanza» (app/faq/page.tsx, territorio S08): va fatta nascere da COMPENSO_RIDER_CENTS."
+    },
+    {
+      "id": 158,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La scheda chiede prima se il cliente ha un ordine consegnato con quel prodotto (stessa domanda della verifica d'acquisto); se no, al posto di stelle, commento e foto scrive «Puoi recensire questo prodotto dopo averlo ricevuto». Se la lettura non risponde il modulo resta (decide il database).",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 158 (lettura del sorgente)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Non coperto: il negoziante sul proprio prodotto (il database glielo vieta dalla 093) vede ancora il modulo."
+    },
+    {
+      "id": 516,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Sotto «Lascia la tua recensione» la scheda dice «Pubblicano recensioni solo i clienti con un ordine consegnato di questo prodotto», e la frase dei 20 punti per le foto compare solo quando i punti sono accesi.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 516",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Manca il §11 dei Termini (app/terms/page.tsx, territorio S08). La vetrina del negozio (ReviewsSection) non ha ancora la frase."
+    },
+    {
+      "id": 670,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Nel mio territorio: foto delle recensioni (scheda prodotto e vetrina) con src originale e caricatoreFotoRemote; loghi nel carosello e nel visore delle storie col caricatore dei loghi; il negozio del mese col caricatore (scheda 374). Niente più doppia riduzione Supabase+Vercel in questi punti.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 670",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "components/store-sections/ReviewsSection.tsx",
+        "components/home/StoriesCarousel.tsx",
+        "components/StoryViewer.tsx",
+        "components/home/ShopOfMonthHero.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Restano MobileAccountSheet, app/shop-of-month (S04), app/lists/[id] (S04), app/seller/stories (S06); e la prova di struttura «nessuna <Image> remota senza loader» non l'ho scritta perché quei file la farebbero rossa. Aggiornata la prova il-logo-del-negozio-non-si-taglia-a-quadrato: l'eccezione ShopOfMonthHero è chiusa."
+    },
+    {
+      "id": 734,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "L'elenco delle recensioni non parte più all'apertura: si legge quando la sezione entra in vista.",
+      "prova": "app/product/[id]/page.tsx:215 enabled: recensioniInVista (IntersectionObserver alle righe ~356-374)",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Resta il tetto di 200 con ordinamento e filtro «con foto» nel browser; la paginazione con .range() non è fatta."
+    },
+    {
+      "id": 300,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La scheda legge isError e refetch delle varianti: se has_variants e la lettura fallisce, al posto del selettore compare «Non riusciamo a caricare le opzioni di questo prodotto · Riprova».",
+      "prova": "tests/unit/minori-s09-scheda-prodotto.test.ts › 300 (lettura del sorgente)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/product/[id]/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 287,
+      "esito": "riparato",
+      "cosa_ho_fatto": "«+20 punti» compare nel riquadro foto e nel messaggio dopo la recensione solo se INVITI_E_PUNTI_ACCESI è acceso (oggi spento).",
+      "prova": "tests/unit/minori-s09-foto-recensione.test.tsx › 287 + minori-s09-aspetto › 287",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/PhotoReviewUpload.tsx",
+        "app/product/[id]/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1678,
+      "esito": "riparato",
+      "cosa_ho_fatto": "leggiRigaDelProdotto risponde null quando Postgres rifiuta l'id con 22P02 (link tagliato): la scheda dice «Prodotto non trovato» invece di «controlla la connessione» con un Riprova inutile.",
+      "prova": "tests/unit/minori-s09-scheda-prodotto.test.ts › 1678",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/queries/catalogo.ts",
+        "tests/unit/minori-s09-scheda-prodotto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 413,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Il ramo «prodotto che non si legge» dice «Prodotto non disponibile — ora non è in vendita: può essere finito per oggi, oppure il negozio l'ha tolto» con «Vedi i negozi» e «Cerca qualcosa di simile».",
+      "prova": "tests/unit/minori-s09-scheda-prodotto.test.ts › 413",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/product/[id]/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La versione completa (mostrare nome, foto e negozio dei prodotti 'sold') richiede una migrazione sulle regole pubbliche: non fatta."
+    },
+    {
+      "id": 572,
+      "esito": "riparato",
+      "cosa_ho_fatto": "«Compra ora» si spegne dopo il primo tocco e dice «Apro la cassa…»; se il prodotto (con la stessa variante) è già nel carrello la riga si porta alla quantità scelta con updateQuantity invece di sommarla.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 572",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 894,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il cuore spento del pulsante della scheda prodotto passa da text-ink-300 (2,52:1) a text-ink-400 (4,87:1), come la card.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 894",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [
+        "lib/design/cuore-preferito.ts"
+      ],
+      "nota": "La pagina oggi prende il colore da BOTTONE_SPENTO in lib/design/cuore-preferito.ts (fuori dal mio territorio): cambiata una sola classe."
+    },
+    {
+      "id": 310,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La scheda legge lo sconto della promozione (stessa chiave e lettura di ActivePromoBadge) e mostra in grande, nel riquadro d'acquisto e nella barra fissa il prezzo scontato al centesimo come la cassa, col prezzo pieno barrato accanto; al carrello va il prezzo pieno, perché lo sconto lo applica lui.",
+      "prova": "tests/unit/minori-s09-scheda-prodotto.test.ts › 310",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "tests/unit/minori-s09-scheda-prodotto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il riquadro ActivePromoBadge resta e ripete prezzo barrato/nuovo: da valutare a schermo se toglierne il prezzo."
+    },
+    {
+      "id": 2296,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "La frase di 264 caratteri nasce in lib/promesse-pubbliche.ts (dettaglioConsegna, territorio S07) e la riga che cresce dopo il caricamento è DeliveryCutoff variant inline senza altezza riservata (components/ui/DeliveryCutoff.tsx, S10): accorciarla nella scheda vorrebbe dire riscrivere una promessa sui soldi fuori dalla sua casa."
+    },
+    {
+      "id": 1971,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Prova nuova sul codice della scheda (commenti esclusi): nessuna riga scritta in linea con una cifra di consegna e «per negozio». Il mutante della scheda («Consegna a casa {formatPrice(spedizione.costoConsegna)} per negozio») la fa diventare rossa.",
+      "prova": "tests/unit/minori-s09-scheda-prodotto.test.ts › 1971 (mutante provato)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s09-scheda-prodotto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Scheda di sola prova."
+    },
+    {
+      "id": 663,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Il messaggio delle varianti (scegli / esaurita / ultimi pezzi) sta in un div role=status aria-live=polite sempre montato: il cambio si annuncia.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 663",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/product/[id]/page.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Manca la seconda metà: il pulsante d'acquisto usa ancora disabled (esce dal giro del Tab). Passare ad aria-disabled richiede che handleAdd rifiuti anche l'esaurito, oggi non lo controlla: non l'ho cambiato per non aprire un percorso di acquisto di un prodotto esaurito."
+    },
+    {
+      "id": 414,
+      "esito": "riparato",
+      "cosa_ho_fatto": "L'ordinamento letto da ?ordine= passa solo se è in SORT_OPTIONS, altrimenti «relevance»: niente più «search.sort.…» come etichetta.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 414",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/search/page.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Non aggiunto il getMessageFallback in app/layout.tsx (altro territorio)."
+    },
+    {
+      "id": 239,
+      "esito": "riparato",
+      "cosa_ho_fatto": "I quattro pulsanti del voto minimo in ricerca hanno type=button e aria-pressed={minRating === r}, come nella pagina categoria.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 239",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/search/page.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2452,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La sitemap tiene tutte le categorie anche quando cade la lettura dei negozi (prima l'elenco prodotti usciva vuoto senza errore e toglieva ogni categoria).",
+      "prova": "tests/unit/minori-s09-mappa-del-sito.test.ts › 2452",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/sitemap.ts",
+        "tests/unit/minori-s09-mappa-del-sito.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 566,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tolto lastModified da tutte le righe (le tabelle non hanno una colonna di ultima modifica: «adesso» e la data di creazione erano date finte) e aggiunte /categorie, /come-funziona, /terms, /returns.",
+      "prova": "tests/unit/minori-s09-mappa-del-sito.test.ts › 566",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/sitemap.ts",
+        "tests/unit/minori-s09-mappa-del-sito.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Non aggiunte /regali, /promozioni e le pagine su misura dei negozi: la scheda stessa le subordina al fix del canonical e al contenuto. Per avere date vere serve una colonna updated_at (migrazione, scelta di Nicola)."
+    },
+    {
+      "id": 568,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "La sitemap manda solo le categorie con un prodotto disponibile di un negozio approvato e la pagina vuota ha noindex.",
+      "prova": "app/sitemap.ts categorieConProdotti + app/category/[slug]/layout.tsx:85 ...(vuota ? { robots: { index: false, follow: true } } : {})",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 320,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La pagina su misura del negozio (/store/<id>/<pagina>) controlla data.isError prima del «Pagina non trovata» e mostra ErrorState con Riprova, come la pagina principale.",
+      "prova": "tests/unit/minori-s09-vetrina-recensioni.test.ts › 320",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/store/[id]/[slug]/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2308,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La descrizione Google/WhatsApp del negozio la costruisce descrizioneDelNegozio: la frase sulla consegna (con «con un fattorino in servizio») resta intera, si accorcia prima «Compra online da» e solo poi il nome; una descrizione scritta dal negozio si taglia sull'ultima parola con i puntini.",
+      "prova": "tests/unit/minori-s09-negozi.test.ts › 2308",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/queries/metadati-vetrina.ts",
+        "app/store/[id]/layout.tsx",
+        "tests/unit/minori-s09-negozi.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 316,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Le anteprime di negozio e prodotto passano caratteriDelMarchio() a ImageResponse e scrivono «My»«City» (e la «My» di riserva) in Fraunces 800; tolti i pesi 900.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 316",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/store/[id]/opengraph-image.tsx",
+        "app/product/[id]/opengraph-image.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Come nell'anteprima generale: con fonts passati, anche il resto del testo esce in Fraunces (lo stesso comportamento già accettato in app/opengraph-image.tsx)."
+    },
+    {
+      "id": 274,
+      "esito": "parziale",
+      "cosa_ho_fatto": "L'url dello schema Store è costruito dal dominio pubblico (NEXT_PUBLIC_APP_URL letto in modo statico) più /store/<id>, uguale sul server e nel browser; il voto viene dal conto vero.",
+      "prova": "tests/unit/minori-s09-vetrina-recensioni.test.ts › 274",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/store/[id]/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Resta la differenza server/browser di aggregateRating (le stelle arrivano solo dal browser): la soluzione intera è spostare il JSON-LD nel layout server, come per il prodotto."
+    },
+    {
+      "id": 569,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Url assoluto e stelle/conteggio veri (store_review_stats) nello schema del negozio.",
+      "prova": "tests/unit/minori-s09-vetrina-recensioni.test.ts › 650/274",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/store/[id]/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Mancano openingHoursSpecification da store_hours e lo spostamento dello schema nel layout server, così le stelle ci sono già nella prima lettura."
+    },
+    {
+      "id": 860,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nel mio territorio il plurale è già accordato (/stores: «negozio locale pronto» / «negozi locali pronti»).",
+      "prova": "app/stores/page.tsx: stores.length === 1 ? 'negozio locale pronto' : 'negozi locali pronti'",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Gli altri punti della scheda (carrello, dashboard negozio, recensioni e clienti del venditore, reso, punti) sono di S07, S01, S06, S02, S08: lì va usato pluralize."
+    },
+    {
+      "id": 1552,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Quando si leggono TETTO_NEGOZI (200) negozi la riga sotto il titolo dice «Almeno 200 negozi…» (e «su almeno 200» coi filtri) invece di spacciare 200 per il totale.",
+      "prova": "tests/unit/minori-s09-negozi.test.ts › 1552",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/stores/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La paginazione vera oltre i 200 resta da fare."
+    },
+    {
+      "id": 1767,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Su «Negozi» le categorie di ogni negozio si allargano alle madri (conLeMadri, con tutte le categorie lette): col filtro «Alimentari» il forno coi prodotti in «Panificio» resta.",
+      "prova": "tests/unit/minori-s09-negozi.test.ts › 1767",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/stores/page.tsx",
+        "lib/queries/categorie-dei-negozi.ts",
+        "tests/unit/minori-s09-negozi.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1558,
+      "esito": "riparato",
+      "cosa_ho_fatto": "All'apertura del pannello il fuoco va sul primo pulsante o link visibile (né lui né un suo contenitore nel pannello display:none): sul telefono la X «Chiudi le categorie», da sm in su il primo link.",
+      "prova": "tests/unit/minori-s09-pannello-categorie.test.ts (con la regola sm:hidden vera; rossa con la versione che guardava solo il pulsante) + il-pannello-delle-categorie-si-apre-a-misura-di-schermo (aggiornata)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/CategoryBar.tsx",
+        "tests/unit/minori-s09-pannello-categorie.test.ts",
+        "tests/unit/il-pannello-delle-categorie-si-apre-a-misura-di-schermo.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Aggiornata la prova vecchia (S04): pretendeva il primo link anche sul telefono. Il revisore ha trovato che la mia prima versione rompeva il desktop: corretta."
+    },
+    {
+      "id": 309,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il mega-menu «Tutte le categorie» filtra madri e figlie con soloLePiene(domandaCategoriePiene), la stessa lettura e chiave di home e piede; se la lettura fallisce le elenca tutte come prima.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 309",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/CategoryBar.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 234,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tolto aria-haspopup dal pulsante «Tutte le categorie» e dal «Menu account» della testata: restano aria-expanded (e aria-controls sulla barra).",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 234",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/CategoryBar.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [
+        "components/Navbar.tsx"
+      ],
+      "nota": "Navbar.tsx è di un'altra sessione: tolta una sola riga (aria-haspopup=\"true\")."
+    },
+    {
+      "id": 2624,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Prova nuova: un prodotto in Forno (figlia di Alimentari) rende piena anche Alimentari; con la mutazione 'id = null' in categorieConProdotti diventa rossa.",
+      "prova": "tests/unit/minori-s09-categorie-piene.test.ts › 2624 (provata la mutazione)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s09-categorie-piene.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Scheda di sola prova: il codice era giusto."
+    },
+    {
+      "id": 2623,
+      "esito": "riparato",
+      "cosa_ho_fatto": "domandaCategoriePiene conta solo i prodotti dei negozi in seller_public_profiles (approvati), come la sitemap.",
+      "prova": "tests/unit/minori-s09-categorie-piene.test.ts › 2623",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/CategoryShowcase.tsx",
+        "tests/unit/minori-s09-categorie-piene.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il layout di categoria (haProdotti) usa il client anonimo, che per le regole del database vede già solo i prodotti dei negozi approvati: lì non serviva."
+    },
+    {
+      "id": 2629,
+      "esito": "riparato",
+      "cosa_ho_fatto": "domandaCategoriePiene sfoglia i prodotti per id, mille alla volta (il tetto vero del database), fino a 5000, invece di un limit(5000) che ne portava mille in ordine qualunque.",
+      "prova": "tests/unit/minori-s09-categorie-piene.test.ts › 2629 (database finto con max_rows 1000)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/CategoryShowcase.tsx",
+        "tests/unit/minori-s09-categorie-piene.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La strada migliore resta un conto fatto dal database (vista o funzione con distinct category_id): migrazione."
+    },
+    {
+      "id": 1604,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il velo scuro pieno (70%→15%→25%) resta solo quando la tessera ha una foto; sul gradiente del marchio resta un'ombra leggera in basso, sotto il nome, senza la banda chiara in mezzo.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 1604",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/CategoryShowcase.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Da guardare a schermo: il contrasto del nome bianco sul gradiente con l'ombra al 35%."
+    },
+    {
+      "id": 285,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il riquadro mostra la fascia oraria («nell'ultima ora», «tra le 14 e le 15», ora di Roma) invece di minuti calcolati su un'ora arrotondata; «ha appena ordinato» solo nell'ora corrente.",
+      "prova": "tests/unit/minori-s09-attivita-dal-vivo.test.ts",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/LiveActivityFeed.tsx",
+        "tests/unit/minori-s09-attivita-dal-vivo.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 101,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Le foto già caricate entrano nello stato e nella recensione nel finally, anche se una delle successive fallisce: restano visibili con la X per toglierle.",
+      "prova": "tests/unit/minori-s09-foto-recensione.test.tsx › 101",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/PhotoReviewUpload.tsx",
+        "tests/unit/minori-s09-foto-recensione.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 658,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Nelle foto della recensione il campo file è sr-only (raggiungibile con Tab), con aria-label «Aggiungi foto alla recensione (massimo N)» e l'anello di fuoco sul riquadro (focus-within).",
+      "prova": "tests/unit/minori-s09-foto-recensione.test.tsx › 658",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/PhotoReviewUpload.tsx",
+        "tests/unit/minori-s09-foto-recensione.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Non toccati (altri territori): l'importazione CSV app/seller/products/import/page.tsx (S06) e la foto del reso app/orders/[id]/return/page.tsx (S02)."
+    },
+    {
+      "id": 1022,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Il prezzo della card passa da text-base a text-lg, così pesa più del titolo da 13px.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 1022",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ProductCard.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il «+» resta pieno: provato a contorno, la prova il-catalogo-si-legge-anche-mentre-si-aggiorna lo boccia (WCAG 1.4.11, la superficie bianca su bianco fa 1:1). Un tono più tenue che regga 3:1 va scelto guardando lo schermo."
+    },
+    {
+      "id": 925,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Il «Drop del giorno» usa il segnaposto locale FOTO_MANCANTE (/foto-mancante.svg) invece di placehold.co; ProductCard, scheda prodotto, carrello e cassa lo usavano già.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 925",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home/DropOfDay.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Restano placehold.co nelle pagine del venditore: app/seller/products/page.tsx:385 e :488, components/seller/FeaturedProductsPicker.tsx:73 (S06)."
+    },
+    {
+      "id": 585,
+      "esito": "riparato",
+      "cosa_ho_fatto": "In ProductGrid le due chiamate negozi_aperti_adesso e prodotti_con_voto_almeno lanciano l'errore; la griglia mostra «Non riesco a sapere chi è aperto adesso» / «Non riesco a leggere i voti» con Riprova, invece del vuoto «filtri troppo stretti».",
+      "prova": "tests/unit/minori-s09-griglia-prodotti.test.tsx › 585 (rosse senza correzione)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ProductGrid.tsx",
+        "tests/unit/minori-s09-griglia-prodotti.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Non toccato: categorie_per_negozio su /stores e l'allineamento del database di produzione."
+    },
+    {
+      "id": 276,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tolto il secondo filtro sul voto nel browser (lo fa già il database con prodotti_con_voto_almeno); la lettura delle medie serve solo all'ordinamento e tiene i dati di prima (keepPreviousData); le letture dei filtri contano come caricamento.",
+      "prova": "tests/unit/minori-s09-griglia-prodotti.test.tsx › 276",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ProductGrid.tsx",
+        "tests/unit/minori-s09-griglia-prodotti.test.tsx",
+        "tests/unit/lo-scheletro-della-fila-in-home-non-e-una-griglia.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Aggiornata la prova vecchia lo-scheletro-della-fila-in-home-non-e-una-griglia (cercava il testo 'if (isLoading)', ora 'if (caricando)'): stesso controllo, nessun indebolimento."
+    },
+    {
+      "id": 279,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La griglia legge lo sconto dei prodotti visibili con fetchActiveDiscounts (product_active_discounts, la stessa della cassa) in ogni contesto, non solo in vetrina: in ricerca, categorie e home la scheda riceve il -X% vero.",
+      "prova": "tests/unit/minori-s09-griglia-prodotti.test.tsx › 279/584",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ProductGrid.tsx",
+        "tests/unit/minori-s09-griglia-prodotti.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 427,
+      "esito": "riparato",
+      "cosa_ho_fatto": "onCount non parte più quando la lettura (o un filtro) è in errore, e nemmeno mentre arrivano le letture dei filtri: niente «0 prodotti» sopra il messaggio d'errore.",
+      "prova": "tests/unit/minori-s09-griglia-prodotti.test.tsx › 427",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ProductGrid.tsx",
+        "tests/unit/minori-s09-griglia-prodotti.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Le pagine già mostrano la riga del conteggio solo se il valore non è null (resultCount parte da null)."
+    },
+    {
+      "id": 924,
+      "esito": "parziale",
+      "cosa_ho_fatto": "La fila delle promo in home non chiede più priority per le prime quattro foto; le collezioni del negozio erano già a prioritaPrimeFoto={false}.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 924",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home/PromoDeals.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "«Prodotti popolari» in home oggi è la seconda sezione, subito sotto l'hero (lib/home-site.ts:280): su desktop è sopra la piega, quindi ho lasciato la priorità. app/promozioni/page.tsx:109 è fuori dal mio territorio."
+    },
+    {
+      "id": 151,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Tolte le due promesse false: il messaggio dopo l'invio dice «Domanda pubblicata: la risposta del negozio comparirà qui sotto» e sopra il campo non c'è più «ti risponderà al più presto».",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 151",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ProductQA.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La correzione vera (notifica al negozio con un trigger su product_questions e una lista «Domande da rispondere» nell'area venditore) richiede una migrazione e il pannello negozio (S06): non fatta."
+    },
+    {
+      "id": 120,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tolto il bollino «Venditore verificato» mostrato senza condizione sotto ogni risposta; resta l'etichetta «Risposta del venditore».",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 120",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ProductQA.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 367,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tolto il pulsante «Utile» delle risposte, che contava un voto solo nello stato locale e lo perdeva ricaricando.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 367",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ProductQA.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 366,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La sezione domande legge isError: se la lettura cade mostra «Non riesco a caricare le domande · Riprova» invece di «Nessuna domanda ancora, sii il primo».",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 366",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ProductQA.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2432,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non chiuso.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Saltare la lettura dei nomi senza sessione rompe il ripiego di oggi: finché la migrazione 164 non è applicata in produzione, un anonimo legge i nomi da profiles (prova i-nomi-si-leggono-anche-coi-profili-chiusi › «oggi, prima della 164»). Si può fare solo dopo che Nicola applica la 164."
+    },
+    {
+      "id": 104,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Serve il tipo «domanda» nella segnalazione (enum dell'API app/api/segnalazioni, CHECK della tabella con una migrazione, pagina admin) e un comando admin per nascondere: tutto nel territorio di S05 e del database."
+    },
+    {
+      "id": 128,
+      "esito": "parziale",
+      "cosa_ho_fatto": "«Ultimi visti» non si legge né si mostra quando in questo browser c'è un no dichiarato ai cookie statistici, e le righe recently_viewed della persona si cancellano quando toglie il consenso mentre è sul sito (non al caricamento: «nessuna scelta» non è un no).",
+      "prova": "tests/unit/minori-s09-home.test.ts › 128 (lettura del sorgente)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/RecentlyViewed.tsx",
+        "tests/unit/le-vetrine-montate-reggono-con-i-profili-chiusi.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Manca la potatura a 14 mesi (lib/privacy/potature-ritenzione.ts, S08) e la cancellazione alla revoca fatta dal banner dei cookie (qui scatta solo dove compare il carosello). Aggiornata la prova vecchia le-vetrine-montate-reggono-con-i-profili-chiusi: la cliente dà il consenso (acceptAll) prima del controllo."
+    },
+    {
+      "id": 652,
+      "esito": "parziale",
+      "cosa_ho_fatto": "ProductViewTracker non scrive la visita quando chi guarda è il venditore del prodotto (sellerId).",
+      "prova": "tests/unit/minori-s09-home.test.ts › 652",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ProductViewTracker.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Mancano l'esclusione degli admin e quella nelle funzioni del database (andamento_del_negozio, trending_product_ids_24h): migrazione da firmare."
+    },
+    {
+      "id": 1629,
+      "esito": "riparato",
+      "cosa_ho_fatto": "«Ultimi visti» legge la lista intera (una memoria sola per utente) e toglie il prodotto aperto quando disegna; si rilegge a ogni apertura (staleTime 0) mostrando intanto quella di prima, così compare anche il prodotto appena lasciato.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 1629",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/RecentlyViewed.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 517,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Tolto «Vino dei Colli» dalle ricerche suggerite a ogni visitatore (al suo posto «Focaccia»).",
+      "prova": "tests/unit/minori-s09-home.test.ts › 517",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/SearchBar.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il resto è una scelta di Nicola e lavoro di altri: un campo «solo maggiorenni» sul prodotto, la dichiarazione dei 18 anni in cassa e la verifica alla consegna (S06, S07, S02), più «l'enoteca» in Chi siamo (S08). Il riferimento di legge va riconfermato."
+    },
+    {
+      "id": 1549,
+      "esito": "riparato",
+      "cosa_ho_fatto": "StoreAvatar (usato in 7 punti) passa dal nuovo caricatoreLogoNegozio: misura fatta da Supabase con solo la larghezza, mai il ritaglio quadrato, e logo intero (object-contain), come AccountSidebar.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 1549",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/StoreAvatar.tsx",
+        "tests/unit/minori-s09-home.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2257,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Ogni scheda chiede la veloce da sola tramite useVeloceDelNegozio (components/ui/DeliveryCutoff.tsx, S10) verso app/api/consegna/veloce (S02); la cura (una domanda sola per pagina con negozi=id,id) va fatta lì. Oggi non scatta: c'è un negozio solo."
+    },
+    {
+      "id": 336,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Tolta la mia correzione: la stessa la fa S07 sul suo ramo (chiaveDiOggi() da lib/store-hours) negli stessi sette file.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Su indicazione dell'AD (messaggio del 5/11): non riscrivere le righe degli orari in HeroStoreCard, StorePreviewCard, StoreListRow, HeroSection, HoursSection e ProductGrid per non scontrarsi all'unione. Le mie righe nuove (scheda 2269) prendono il giorno di Piacenza da sole (scrittaChiusoDaOrari in components/home/orari-di-oggi.ts)."
+    },
+    {
+      "id": 2270,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La pillola della scheda negozio dice solo «Aperto ora» / «Chiuso ora», uguale sul server e dopo il caricamento; «consegna oggi/domani» sta in una riga sotto con l'altezza già tenuta (min-h), quindi niente cambio di testo né di larghezza.",
+      "prova": "tests/unit/minori-s09-negozi.test.ts › 2270",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/StorePreviewCard.tsx",
+        "tests/unit/minori-s09-negozi.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 237,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nella scheda negozio della home il carosello della copertina (che sta dentro il link) è senza pallini: nessun pulsante dentro un collegamento; dove i pallini restano (vetrina) si chiamano «Foto 1 di 3».",
+      "prova": "tests/unit/minori-s09-negozi.test.ts › 237",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/StorePreviewCard.tsx"
+      ],
+      "file_altrui_toccati": [
+        "components/StoreMediaCarousel.tsx"
+      ],
+      "nota": "StoreMediaCarousel.tsx è fuori dal mio territorio: aggiunta la proprietà senzaPallini (spenta di serie) e cambiata l'etichetta dei pallini."
+    },
+    {
+      "id": 270,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La ricerca nella vetrina passa il termine alla griglia dopo 250 ms (come SearchBar), e la griglia manda search_performed solo quando non mostra più i risultati del termine precedente (isPlaceholderData).",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 236/270 (lettura del sorgente)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/StoreProductExplorer.tsx",
+        "components/ProductGrid.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 236,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il pulsante Filtri della vetrina ha aria-label («Filtri» o «Filtri, N attivi») e l'icona è aria-hidden.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 236",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/StoreProductExplorer.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 231,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il visore si ferma per il fuoco solo se l'ultimo gesto è stato un tasto (non per il fuoco messo dal codice su «Chiudi» all'apertura); il pulsante pausa/riprendi è una scelta che vince su tutto e la sua etichetta segue lo stato vero; la visualizzazione si conta una volta per storia.",
+      "prova": "tests/unit/minori-s09-storie.test.tsx (3 prove, rosse senza correzione)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/StoryViewer.tsx",
+        "tests/unit/minori-s09-storie.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 294,
+      "esito": "riparato",
+      "cosa_ho_fatto": "I testi di riserva della fila «Prodotti popolari» (che ordina per data) dicono il vero: «Appena arrivati · Ultimi arrivati dai negozi» e lo stato vuoto parla degli ultimi prodotti messi in vendita.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 294",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home-sections/HomeSectionRenderer.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "I segnaposto del pannello admin (components/admin/home/HomeSectionConfigForm.tsx:153-154, S05) dicono ancora «I più amati / Prodotti che vanno forte»."
+    },
+    {
+      "id": 2034,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Il riquadro newsletter della home non promette più «una volta a settimana» né «ogni venerdì»: titolo e testo di riserva non nominano cadenze.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 2034",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home-sections/HomeSectionRenderer.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Restano: l'etichetta «Newsletter mensile» in app/profile/settings/page.tsx (S08) e la condizione «esiste il lavoro che manda la newsletter» nel «Per riaccendere» di lib/funzioni-al-lancio.ts (S07)."
+    },
+    {
+      "id": 2444,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La sezione «trending» della home sta dentro MaybeSection: quando TrendingNow restituisce null il contenitore col suo margine sparisce.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 2444",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home-sections/HomeSectionRenderer.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1717,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La scheda dei prodotti frequenti conta in quanti ordini compare un prodotto (con la stessa variante) e tiene solo quelli presi in almeno due; il titolo è «Quello che compri spesso» (non «della settimana») e non mostra più un totale ai prezzi di allora.",
+      "prova": "tests/unit/minori-s09-ordina-di-nuovo.test.tsx › 1717",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home-sections/ReorderRail.tsx",
+        "tests/unit/minori-s09-ordina-di-nuovo.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1736,
+      "esito": "riparato",
+      "cosa_ho_fatto": "«Riordina» della home passa sellerId (dall'ordine) a riordina, come gli altri due punti: il carrello raggruppa per negozio, non per nome.",
+      "prova": "tests/unit/minori-s09-ordina-di-nuovo.test.tsx › 1736/160",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home-sections/ReorderRail.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 160,
+      "esito": "parziale",
+      "cosa_ho_fatto": "La lettura degli ordini recenti prende variant_id e variant_label, e «Riordina» / «Ricomprali tutti» li passano a riordina: la riga torna nel carrello con la sua variante.",
+      "prova": "tests/unit/minori-s09-ordina-di-nuovo.test.tsx › 1736/160",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home-sections/ReorderRail.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Non toccato prezziDiAdesso in lib/riordino.ts (S02): rilegge il prezzo del prodotto, non quello della variante."
+    },
+    {
+      "id": 845,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il prezzo grande del «Drop del giorno» prende font-serif (Fraunces) come i prezzi di scheda prodotto, carrello e cassa.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 845",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home/DropOfDay.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1032,
+      "esito": "parziale",
+      "cosa_ho_fatto": "La copertina del negozio in evidenza ha priority (non più pigra); le prime 4 tessere delle categorie erano già eager con fetchPriority high (CategoryShowcase, TESSERE_SUBITO).",
+      "prova": "tests/unit/minori-s09-home.test.ts › 1032",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home/HeroStoreCard.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Manca il precarico di vetrina_home sul server (precaricaHome), perché la copertina sia già nell'HTML."
+    },
+    {
+      "id": 2269,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Quando il negozio è chiuso la pillola dice «Chiuso · riapre alle 16:00» se riapre oggi (riapreOggiAlle sugli orari di oggi), così «Chiuso» e «Consegna oggi» insieme non sembrano una contraddizione; vale per la scheda della home e per la riga dell'elenco.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 2269",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home/orari-di-oggi.ts",
+        "components/home/HeroStoreCard.tsx",
+        "components/StoreListRow.tsx",
+        "tests/unit/minori-s09-home.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 369,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Provato e tolto.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Montare il riquadro solo da md in su (useMediaQuery + enabled) lo fa nascere solo dopo l'idratazione: sei prove esistenti che lo montano (le-schede-dei-negozi-dicono-consegna-oggi-solo-se-si-puo, le-frasi-della-consegna-non-tornano-indietro) diventano rosse perché vedono lo scheletro, e sul desktop la copertina arriverebbe un giro dopo. Va deciso con chi tiene quelle prove, oppure con un caricamento dinamico da md."
+    },
+    {
+      "id": 2271,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Riscritto il commento sopra lo stato di apertura: «Consegna oggi» non dipende più dall'«aperto adesso» ma da consegnaDellaVetrina.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 2271",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home/HeroStoreCard.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 292,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La striscia Eventi della home legge solo eventi senza fine o con ends_at nel futuro, e non mostra più la pillola «-X%» (nessun carrello o cassa applica lo sconto degli eventi).",
+      "prova": "tests/unit/minori-s09-home.test.ts › 292",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home/HomeEvents.tsx",
+        "tests/unit/minori-s09-home.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 370,
+      "esito": "riparato",
+      "cosa_ho_fatto": "MaybeSection parte da «pieno» e si nasconde solo dopo aver visto un figlio vuoto: le categorie precaricate dal server sono visibili nell'HTML invece di stare in display:none fino all'idratazione.",
+      "prova": "tests/unit/minori-s09-home-sezioni.test.tsx",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home/MaybeSection.tsx",
+        "tests/unit/minori-s09-home-sezioni.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il prezzo: una sezione davvero vuota (Drop del giorno senza offerta) mostra il suo margine per un istante, finché l'effetto la nasconde."
+    },
+    {
+      "id": 374,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il logo del «Negozio del mese» usa logoNegozio(…, 176) con caricatoreFotoRemote e object-contain dentro il cerchio: niente più ritaglio quadrato.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 374 (anche una prova che cerca sizedImage(…store_logo…,'thumb'|'card') in tutto components/ e app/)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home/ShopOfMonthHero.tsx",
+        "tests/unit/minori-s09-home.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1721,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il carosello disegna una bolla per negozio (unaBollaPerNegozio): le storie dello stesso negozio vanno in fila nel visore e la bolla apre sulla prima.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 1721",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home/StoriesCarousel.tsx",
+        "tests/unit/minori-s09-home.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1740,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Il carosello legge fino a 200 storie, toglie quelle dei non-negozi e solo dopo taglia a 30: un account qualunque non può più svuotarlo per tutti con 30 storie.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 1740",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home/StoriesCarousel.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Resta la regola di scrittura seller_stories_owner_write, che non chiede un negozio approvato: va stretta con una migrazione (territorio database)."
+    },
+    {
+      "id": 2453,
+      "esito": "riparato",
+      "cosa_ho_fatto": "TrendingNow non disegna più 12 riquadri di caricamento alti 176 punti: mentre carica non tiene spazio, e compare solo se la classifica vera non è vuota.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 2453",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/home/TrendingNow.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 345,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Sulla scheda prodotto l'anno di iscrizione si scrive «su MyCity dal 2026», così non si confonde col «dal 1987» (anno di fondazione) della vetrina.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 345",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/products/SellerCard.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Non uso founded_year qui: la colonna non è fra quelle lette dalla vista pubblica nella SellerCard, e aggiungerla rischia di far cadere la lettura dove la vista è indietro."
+    },
+    {
+      "id": 432,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Il bottone per seguire il negozio, finché lo stato non è letto, dice «Segui» (spento, col title che spiega) invece di «Non lo so»: la logica a tre stati resta.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 432",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/products/SellerCard.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Dopo un errore resta «Segui» spento, non «Riprova»: per distinguere errore e lettura in corso serve isError da components/hooks/useFollowStore.ts (S10); isLoading sul server è falso e farebbe vedere «Riprova» al primo disegno."
+    },
+    {
+      "id": 283,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tolta la percentuale «in tempo»: contava puntuale qualsiasi consegna entro 48 ore e la leggeva dal browser sugli ordini visibili a chi guarda (nessuno per un visitatore). Come chiede la scheda, il numero sparisce finché non lo calcola il database.",
+      "prova": "tests/unit/minori-s09-aspetto.test.ts › 283",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/products/SellerCard.tsx",
+        "tests/unit/minori-s09-aspetto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Per riaverla: una funzione o vista nel database che confronti delivered_at con la fine della fascia (migrazione)."
+    },
+    {
+      "id": 2622,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il registro di «Venduto da» prende il message dell'errore anche quando arriva come oggetto di PostgREST (motivoDellErrore), invece di «[object Object]».",
+      "prova": "tests/unit/minori-s09-scheda-prodotto.test.ts › 2622",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/products/VendutoDa.tsx",
+        "tests/unit/minori-s09-scheda-prodotto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 335,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il titolo di una collezione scelta a mano sta dentro ManualCollection: mentre carica si vede con lo scheletro, se la lettura fallisce o nessun prodotto è più in vendita la sezione non c'è.",
+      "prova": "tests/unit/minori-s09-collezione-vetrina.test.tsx",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/store-sections/CollectionSection.tsx",
+        "tests/unit/minori-s09-collezione-vetrina.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Allineato anche il margine della fila a carosello al nuovo passo px-4 sm:px-6 del contenitore (scheda 1021)."
+    },
+    {
+      "id": 357,
+      "esito": "riparato",
+      "cosa_ho_fatto": "«Indietro» sulla copertina del negozio torna indietro se c'è una pagina dietro (cronologia > 1), altrimenti va a /stores: chi apre il link in una scheda nuova da WhatsApp non resta bloccato.",
+      "prova": "tests/unit/minori-s09-collezione-vetrina.test.tsx › 357",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/store-sections/HeroSection.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Chi arriva da Google nella stessa scheda torna a Google, come col tasto del browser."
+    },
+    {
+      "id": 325,
+      "esito": "parziale",
+      "cosa_ho_fatto": "La sezione mostra sei recensioni e un pulsante «Mostra altre recensioni (N)» che apre tutte quelle lette; il numero nella linguetta è quello vero.",
+      "prova": "tests/unit/minori-s09-vetrina-recensioni.test.ts › 325",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/store-sections/ReviewsSection.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Oltre le 20 lette non si carica ancora niente (manca una pagina o una lettura a pagine)."
+    },
+    {
+      "id": 371,
+      "esito": "riparato",
+      "cosa_ho_fatto": "ReviewsSection legge l'utente una volta (useUtente) e fa una sola lettura review_helpful .in('review_id', ids) per le recensioni visibili; ReviewItem non chiama più getUser né legge i suoi voti da solo.",
+      "prova": "tests/unit/minori-s09-vetrina-recensioni.test.ts › 371",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/store-sections/ReviewsSection.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 115,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Nella vetrina e nella home il video YouTube/Vimeo non si carica più da solo: c'è un riquadro «Guarda il video (YouTube)» che avvisa del collegamento a YouTube/Vimeo, e l'iframe nasce solo al tocco (VideoAlClic).",
+      "prova": "tests/unit/minori-s09-collezione-vetrina.test.tsx › 115",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/store-sections/VideoAlClic.tsx",
+        "components/store-sections/VideoSection.tsx",
+        "components/home-sections/HomeSectionRenderer.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Restano le pagine CMS (components/cms/CmsBlockRenderer.tsx, S05) e la cookie policy / informativa da aggiornare con YouTube e Vimeo (S08)."
+    },
+    {
+      "id": 2407,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La lettura delle recensioni della vetrina lancia l'errore invece di dare una lista vuota, e la sezione recensioni, se la lettura è caduta, dice «Non riusciamo a caricare le recensioni» invece di sparire.",
+      "prova": "tests/unit/minori-s09-vetrina-recensioni.test.ts › 2407",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/store-sections/useStorePageData.ts",
+        "components/store-sections/ReviewsSection.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 650,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Media e numero delle recensioni del negozio vengono da store_review_stats([id]) (lo stesso conto di /stores), in un solo aiutante riepilogoRecensioni: intestazione, linguetta «Recensioni · N», sezione e aggregateRating per Google. Le 20 lette restano solo l'elenco.",
+      "prova": "tests/unit/minori-s09-vetrina-recensioni.test.ts › 650",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/store-sections/useStorePageData.ts",
+        "components/store-sections/SectionContext.ts",
+        "components/store-sections/riepilogo-recensioni.ts",
+        "components/store-sections/HeroSection.tsx",
+        "components/store-sections/SectionRenderer.tsx",
+        "components/store-sections/ReviewsSection.tsx",
+        "app/store/[id]/page.tsx",
+        "tests/unit/minori-s09-vetrina-recensioni.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2431,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non chiuso.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "La vista nomi_pubblici (migrazione 164) espone solo il nome di battesimo da full_name, non public_handle: per tornare a «beppe» serve una migrazione che aggiunga il nome pubblico alla vista (scelta di privacy da far firmare a Nicola)."
+    },
+    {
+      "id": 584,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La griglia non legge più seller_promotions con la stessa chiave della pagina del negozio (che chiede altre colonne): ha la sua chiave ['promotions','sconti-griglia',ids] e la fonte product_active_discounts, quindi lo sconto su tutto il negozio arriva alle schede.",
+      "prova": "tests/unit/minori-s09-griglia-prodotti.test.tsx › 279/584 (la seconda prova)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ProductGrid.tsx",
+        "tests/unit/minori-s09-griglia-prodotti.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La prova verifica che lo sconto arrivi in vetrina; la collisione di chiavi è chiusa per costruzione (la chiave condivisa non è più usata dalla griglia)."
+    },
+    {
+      "id": 2162,
+      "esito": "riparato",
+      "cosa_ho_fatto": "formatAttributeValue riceve la chiave: per una casella usa attributoSpuntato (la stessa regola di casella e marchio), quindi «1»/«0» diventano Sì/No; «sí» con l'accento acuto è un sì per tutti.",
+      "prova": "tests/unit/minori-s09-caratteristiche.test.ts › 2162",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/category-attributes.ts",
+        "app/product/[id]/page.tsx",
+        "tests/unit/minori-s09-caratteristiche.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "lib/category-attributes.ts è nel mio territorio; lib/products/prontoPerLaVendita.ts (S06) chiama ancora la versione senza chiave, comportamento invariato."
+    },
+    {
+      "id": 2158,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La prima foto della scheda (e la lente quando mostra la prima) usa come testo alternativo l'alt_text scritto dal negozio; senza, resta il nome del prodotto.",
+      "prova": "tests/unit/minori-s09-caratteristiche.test.ts › 2158",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/product/[id]/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Non provato con un lettore di schermo."
+    },
+    {
+      "id": 2164,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Con la chiave, nei campi conosciuti di testo (allergeni, ingredienti, marca…) le parole «no», «yes», «sì» restano come le ha scritte il negozio; la traduzione resta solo per le caselle e per le chiavi sconosciute.",
+      "prova": "tests/unit/minori-s09-caratteristiche.test.ts › 2164",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/category-attributes.ts",
+        "components/products/AllergensAccordion.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 83,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Serve legare l'obbligo a una proprietà della categoria (colonna nuova + trigger 195: migrazione) e bloccare lo slug delle categorie principali nel pannello admin (app/api/admin, S05)."
+    },
+    {
+      "id": 521,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Rendere obbligatoria la quantità netta come numero+unità e calcolare il prezzo al kg tocca lo schema prodotto e il modulo del venditore (lib/products/schema.ts, ProductForm: S06) e i prodotti già pubblicati; il calcolo del €/kg in scheda dipende da quel campo che oggi non esiste."
+    },
+    {
+      "id": 2638,
+      "esito": "riparato",
+      "cosa_ho_fatto": "togliPromesseSuperate guarda tutti i testi salvati di primo livello di ogni sezione (non solo l'eroe): un'intestazione con una promessa superata si svuota e torna il testo di riserva, e finisce nel registro.",
+      "prova": "tests/unit/minori-s09-home.test.ts › 2638",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/home-site.ts",
+        "tests/unit/minori-s09-home.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1848,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "L'occhio «visibile» lo disegna components/admin/home/HomeSectionsEditor.tsx (S05): lì va letto sezioneAccesa() da lib/home-site.ts, che è già esportata. L'errore va nella direzione sicura."
+    },
+    {
+      "id": 307,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Le due strade della scheda vanno decise: aggiungere tags a COLONNE_SCHEDA_PRODOTTO accenderebbe anche Bio/Vegano/Senza glutine dai tag (che la scheda stessa dice di togliere), e la colonna tags (migrazione 071) non so se c'è in produzione — se manca cade la scheda intera; togliere il codice morto sta in lib/products/qualityMarks.ts (territorio S06)."
+    },
+    {
+      "id": 2445,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Provato e tolto.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Togliere il ripiego fa diventare rosse una dozzina di prove esistenti (le-vetrine-montate-reggono-con-i-profili-chiusi e simili) che controllano proprio la lettura di ripiego di leggiTendenze con negozi approvati: è una lettura in più ma innocua. Va tolta insieme a quelle prove, d'accordo con chi le tiene (S04)."
+    },
+    {
+      "id": 2196,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non riprodotto.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "La lettura per prezzo crescente (lib/queries/griglia-prodotti.ts, base()) ordina per price e poi per id, quindi la finestra che si sposta è stabile; la scheda stessa dice «non riprodotto, va confermato». Senza un caso che lo mostri non ho cambiato niente."
+    },
+    {
+      "id": 144,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Quando una ricerca per pertinenza ha anche un filtro che stringe (negozio, categoria, prezzo, aperti ora), sotto i risultati pertinenti si aggiungono quelli con la parola nel nome, senza doppioni: dentro la vetrina il «Panino» del forno si trova anche se i primi 200 del sito sono di altri negozi.",
+      "prova": "tests/unit/minori-s09-ricerca-nella-vetrina.test.ts",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/queries/griglia-prodotti.ts",
+        "tests/unit/minori-s09-ricerca-nella-vetrina.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La correzione intera (passare negozio, categorie e prezzi a search_products_smart, così il taglio avviene dopo i filtri) richiede una migrazione che cambia la firma della funzione."
+    },
+    {
+      "id": 116,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La memoria delle letture (react-query) si svuota all'uscita e quando entra un account diverso da quello di prima: il nuovo negozio non legge più ordini e clienti del precedente, anche con le chiavi senza utente.",
+      "prova": "tests/unit/minori-s09-cambio-account.test.tsx",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s09-cambio-account.test.tsx"
+      ],
+      "file_altrui_toccati": [
+        "components/providers/QueryProvider.tsx"
+      ],
+      "nota": "La scheda chiedeva anche l'id utente nelle chiavi del pannello (lib/queries/keys.ts): con lo svuotamento non serve più per chiudere il difetto, e cambiarle vuol dire toccare tutte le pagine del venditore (S06). QueryProvider è di S10: aggiunto solo l'ascolto dell'accesso."
+    },
+    {
+      "id": 1745,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Comportamento scelto dal lotto del 18/10 (la bacheca resta in piedi con il negozio vuoto e torna al giro dopo, ≤60 s); la riprova rapida della lettura parziale toccherebbe app/rider/page.tsx (S02). La scheda la propone «se serve»."
+    },
+    {
+      "id": 1743,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda a Nicola: «Quando sospendi un negozio con ordini in viaggio, va bene che cliente e fattorino non ne vedano più nome e indirizzo, e che sia l'assistenza ad avvisare i fattorini?» (la scheda stessa propone di chiuderla così)."
+    },
+    {
+      "id": 1733,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Una memoria condivisa in fetchSellerPublicMap (lib/queries/seller-public-profiles.ts) cambierebbe il numero di letture che decine di prove esistenti contano (lettore del database per prova): va fatta con queryClient.fetchQuery e una chiave per negozio, insieme a chi tiene quelle prove."
+    },
+    {
+      "id": 319,
+      "esito": "non_codice",
+      "cosa_ho_fatto": "Le viste nomi_pubblici (migrazione 164) e nomi_dei_clienti_del_negozio (181) non ci sono nel database vero.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Nicola: applicare in produzione le migrazioni 164 e 181; il sito le usa già e ripiega su profiles finché mancano."
+    },
+    {
+      "id": 597,
+      "esito": "non_codice",
+      "cosa_ho_fatto": "Il negozio di prova «Panificio Demo» è un dato nel database di produzione.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Nicola: togliere approvazione o profilo pubblico al profilo 44444444-4444-4444-4444-aaaaaaaa0001 (o cancellarlo); sitemap e conteggio di Chi siamo lo seguono da soli."
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "La prova degli orari nelle pagine ordini del negozio è rossa anche su main",
+      "file": "tests/unit/le-pagine-ordini-del-negozio-leggono-gli-orari.test.tsx",
+      "gravita": "minore",
+      "descrizione": "I due casi «lunedì 12:00, Oggi · 13:00–16:30 → entro le 12:45» falliscono già su origin/main (verificato in una copia pulita): non toccata."
+    },
+    {
+      "titolo": "Le pagine del venditore chiedono ancora il segnaposto a placehold.co",
+      "file": "app/seller/products/page.tsx:385 · :488 · components/seller/FeaturedProductsPicker.tsx:73",
+      "gravita": "minore",
+      "descrizione": "Resto della scheda 925: tre punti fuori dal mio territorio usano ancora https://placehold.co al posto di /foto-mancante.svg."
+    },
+    {
+      "titolo": "Il pannello della home suggerisce ancora «I più amati / Prodotti che vanno forte»",
+      "file": "components/admin/home/HomeSectionConfigForm.tsx:153-154",
+      "gravita": "minore",
+      "descrizione": "I segnaposto dell'occhiello e del titolo della fila «Prodotti popolari» ripetono la promessa tolta dalla home (scheda 294): la fila ordina per data."
+    },
+    {
+      "titolo": "Il riordino rilegge il prezzo del prodotto, non della variante",
+      "file": "lib/riordino.ts (prezziDiAdesso)",
+      "gravita": "minore",
+      "descrizione": "Ora «Ordina di nuovo» passa la variante (scheda 160), ma il prezzo di adesso letto per il carrello è quello del prodotto: per una variante con prezzo diverso il carrello parte dalla cifra sbagliata finché la cassa non la rilegge."
+    },
+    {
+      "titolo": "Le pagine CMS caricano ancora YouTube/Vimeo senza clic",
+      "file": "components/cms/CmsBlockRenderer.tsx:78-84",
+      "gravita": "minore",
+      "descrizione": "Resto della scheda 115: vetrina e home ora caricano il video solo al tocco (components/store-sections/VideoAlClic.tsx, riusabile), le pagine CMS no; la cookie policy non nomina YouTube e Vimeo."
+    },
+    {
+      "titolo": "L'orologio della consegna gira anche dove il riquadro non si vede",
+      "file": "components/home/HeroStoreCard.tsx:77 · components/ui/DeliveryCutoff.tsx (useOraDiPiacenza)",
+      "gravita": "minore",
+      "descrizione": "Resto della scheda 369: sul telefono il riquadro in evidenza è nascosto ma montato, quindi fa la lettura vetrina_home e tiene acceso l'orologio. Montarlo solo da md rompe sei prove esistenti che lo montano senza matchMedia."
+    }
+  ]
+}

@@ -11,6 +11,8 @@ import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiVistiDiRecente, type VistoDiRecente } from '@/lib/queries/fasce-prodotti';
 import { useUtente } from '@/components/hooks/useUtente';
+import { useEffect, useState } from 'react';
+import { hasConsent, readConsent } from '@/lib/consent';
 
 type Item = VistoDiRecente;
 
@@ -29,15 +31,50 @@ export default function RecentlyViewed({ excludeId, className = '' }: Props) {
   // #88 — Dalla cache condivisa, non da una chiamata di rete propria.
   const { userId } = useUtente();
 
+  /**
+   * 5/11/2026 — «Ultimi visti» si scrive solo col consenso ai cookie statistici: è un dato di
+   * analitica. Quando il browser dice che il consenso NON c'è (tolto, o mai dato) non si legge e
+   * non si mostra, e le righe della persona si cancellano (la regola del database lascia a ognuno
+   * le proprie). Finché non lo si è letto (`null`, il primo disegno) si resta come prima.
+   */
+  // `false` solo per un NO dichiarato in questo browser (una scelta salvata senza statistiche):
+  // «nessuna scelta ancora» o un'informativa cambiata non sono un no, e non cancellano niente.
+  const [consenso, setConsenso] = useState<boolean | null>(null);
+  const [revocato, setRevocato] = useState(false);
+  useEffect(() => {
+    const leggi = () => {
+      const scelta = readConsent();
+      setConsenso(scelta ? hasConsent('analytics') : null);
+    };
+    leggi();
+    // La cancellazione scatta solo quando la persona TOGLIE il consenso mentre è qui.
+    const cambio = () => {
+      leggi();
+      if (!hasConsent('analytics')) setRevocato(true);
+    };
+    window.addEventListener('mc:consent-change', cambio);
+    return () => window.removeEventListener('mc:consent-change', cambio);
+  }, []);
+  useEffect(() => {
+    if (!revocato || !userId) return;
+    void supabase.from('recently_viewed').delete().eq('user_id', userId).then(() => {});
+  }, [revocato, userId]);
+
   const { data: items = [] } = useQuery({
     queryKey: queryKeys.home.recentlyViewed(userId ?? ''),
-    enabled: !!userId,
+    enabled: !!userId && consenso !== false,
     // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il
     // negozio a `profiles`, che dopo la migrazione 161 un cliente non legge piu'.
-    queryFn: (): Promise<Item[]> => leggiVistiDiRecente(supabase, { userId: userId!, excludeId }),
+    // 5/11/2026 — La lista si legge INTERA e il prodotto aperto si toglie al momento di disegnare:
+    // l'esclusione dentro la lettura, con una chiave senza il prodotto, faceva vedere dalla memoria
+    // il prodotto che si sta guardando, e mancava quello appena lasciato. Si rilegge a ogni
+    // apertura (si mostra intanto quella di prima), perché una visita nuova si scrive di continuo.
+    queryFn: (): Promise<Item[]> => leggiVistiDiRecente(supabase, { userId: userId! }),
+    staleTime: 0,
   });
+  const visibili = items.filter((it) => it.product.id !== excludeId);
 
-  if (!userId || items.length < 2) return null;
+  if (!userId || consenso === false || visibili.length < 2) return null;
 
   return (
     <section className={className}>
@@ -46,7 +83,7 @@ export default function RecentlyViewed({ excludeId, className = '' }: Props) {
         Ultimi visti
       </h2>
       <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-2 snap-x snap-mandatory">
-        {items.map((it) => {
+        {visibili.map((it) => {
           const p = it.product;
           const img = Array.isArray(p.images) && p.images[0] ? p.images[0] : null;
           return (

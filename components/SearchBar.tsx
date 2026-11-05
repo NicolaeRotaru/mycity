@@ -16,7 +16,9 @@ import { leggiSuggerimentiRicerca, type Suggerimento } from '@/lib/queries/sugge
 
 type Suggestion = Suggerimento;
 
-const POPULAR = ['Coppa Piacentina', 'Olio EVO', 'Pane fresco', 'Vino dei Colli', 'Salumi', 'Formaggi'];
+// 5/11/2026 — Tolto «Vino dei Colli»: il sito non verifica i 18 anni (né all'iscrizione, né sul
+// prodotto, né alla consegna), quindi non lo suggerisce a ogni visitatore.
+const POPULAR = ['Coppa Piacentina', 'Olio EVO', 'Pane fresco', 'Focaccia', 'Salumi', 'Formaggi'];
 
 type Props = {
   className?: string;

@@ -27,6 +27,7 @@ import ShopOfMonthHero from '@/components/home/ShopOfMonthHero';
 import StoriesCarousel from '@/components/home/StoriesCarousel';
 import HomeEvents from '@/components/home/HomeEvents';
 import PromoDeals from '@/components/home/PromoDeals';
+import VideoAlClic from '@/components/store-sections/VideoAlClic';
 import TrendingNow from '@/components/home/TrendingNow';
 import ReorderRail from '@/components/home-sections/ReorderRail';
 import { DeliveryCutoff } from '@/components/ui/DeliveryCutoff';
@@ -234,10 +235,12 @@ function HomeBlock({
               <div>
                 <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
                   <Heart size={14} strokeWidth={2.4} />
-                  {c.eyebrow || 'I più amati'}
+                  {/* 5/11/2026 — La fila non riceve un ordinamento: mostra gli ultimi prodotti
+                      caricati. I titoli di riserva dicevano «più amati / vanno forte / più visti». */}
+                  {c.eyebrow || 'Appena arrivati'}
                 </span>
                 <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mt-1">
-                  {c.heading || 'Prodotti che vanno forte'}
+                  {c.heading || 'Ultimi arrivati dai negozi'}
                 </h2>
               </div>
               <HomeCtaLink href="/search" ctaId="products_see_all" location="popular_products" className="inline-flex items-center gap-1 text-primary-700 hover:text-primary-800 font-semibold text-sm">
@@ -255,7 +258,7 @@ function HomeBlock({
               limit={c.limit ?? 12}
               rail
               emptyTitle="Ancora nessun prodotto da mostrare"
-              emptyDescription="Qui compaiono i prodotti più visti del momento. Intanto puoi sfogliare le categorie o i negozi."
+              emptyDescription="Qui compaiono gli ultimi prodotti messi in vendita dai negozi. Intanto puoi sfogliare le categorie o i negozi."
             />
           </div>
         </section>
@@ -359,12 +362,14 @@ function HomeBlock({
               </span>
               <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mt-3 mb-3">
                 {c.heading ? c.heading : (
-                  <>Le novità dei negozi di Piacenza, <span className="text-primary-700">una volta a settimana</span>.</>
+                  // 5/11/2026 — Nessun invio della newsletter esiste ancora: niente giorno né cadenza
+                  // promessi (prima: settimanale, il venerdì; le impostazioni dicevano «mensile»).
+                  <>Le novità dei negozi di Piacenza, <span className="text-primary-700">nella tua casella</span>.</>
                 )}
               </h2>
               <p className="text-ink-700 text-base">
                 {c.body ? c.body : (
-                  <>Ogni venerdì ricevi <strong>&quot;Cosa c&apos;è nel piatto a Piacenza&quot;</strong>: una ricetta, la storia di un negoziante, 3 offerte selezionate. Niente spam.</>
+                  <>Ricette, storie dei negozianti e novità dei negozi di Piacenza. Niente spam, e ti cancelli quando vuoi.</>
                 )}
               </p>
             </div>
@@ -415,7 +420,9 @@ function HomeBlock({
     case 'promo':
       return <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}><PromoDeals /></div>;
     case 'trending':
-      return <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}><TrendingNow /></div>;
+      // 5/11/2026 — Come le categorie: se la classifica è vuota il contenitore sparisce con lei,
+      // invece di lasciare il suo spazio bianco in home.
+      return <MaybeSection className={`container mx-auto px-4 sm:px-6 ${SPAZIO_SEZIONE}`}><TrendingNow /></MaybeSection>;
 
     /* ----------------------------------------------------- BLOCCHI DI CONTENUTO */
     case 'richText': {
@@ -522,15 +529,7 @@ function HomeBlock({
                     con il suo `src` e la sua lingua. */}
               </video>
             ) : (
-              <iframe
-                src={embedSrc}
-                title={c.heading || 'Video'}
-                className="absolute inset-0 w-full h-full"
-                loading="lazy"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
+              <VideoAlClic provider={c.provider === 'vimeo' ? 'vimeo' : 'youtube'} src={embedSrc} titolo={c.heading || 'Video'} />
             )}
           </div>
         </section>

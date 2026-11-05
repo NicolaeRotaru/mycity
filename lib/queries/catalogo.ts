@@ -117,6 +117,9 @@ export function domandaCategorie(supa: ClientDiLettura) {
   };
 }
 
+/** Il codice di Postgres per «questo testo non è un valore del tipo della colonna». */
+const TESTO_NON_VALIDO_PER_IL_TIPO = '22P02';
+
 /** La riga del prodotto, senza il negozio. `null` se il prodotto non c'e' (o chi guarda non lo vede). */
 export type RigaDelProdotto = Omit<SchedaProdotto, 'profiles'>;
 
@@ -128,11 +131,15 @@ export type RigaDelProdotto = Omit<SchedaProdotto, 'profiles'>;
  * di rete con un pulsante «Riprova» che non poteva funzionare.
  */
 export async function leggiRigaDelProdotto(supa: ClientDiLettura, id: string): Promise<RigaDelProdotto | null> {
+  // 5/11/2026 — Un link tagliato a metà (/product/3f2a1c9e-7b) non è un codice valido:
+  // Postgres lo rifiuta con 22P02 e la scheda diceva «controlla la connessione e riprova»,
+  // con un «Riprova» che non poteva funzionare. Un id malformato è un prodotto che non c'è.
   const { data, error } = await supa
     .from('products')
     .select(COLONNE_SCHEDA_PRODOTTO)
     .eq('id', id)
     .maybeSingle();
+  if (error && (error as { code?: string }).code === TESTO_NON_VALIDO_PER_IL_TIPO) return null;
   if (error) throw error;
   // Il collegamento alla categoria e' uno a uno: PostgREST lo restituisce
   // come oggetto, ma con le colonne elencate per nome i tipi generati lo

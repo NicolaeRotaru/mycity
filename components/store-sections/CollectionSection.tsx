@@ -6,6 +6,7 @@ import ProductCard from '@/components/ProductCard';
 import ProductGrid from '@/components/ProductGrid';
 import { queryKeys } from '@/lib/queries/keys';
 import SectionHeading from './SectionHeading';
+import SkeletonCard from '@/components/SkeletonCard';
 import type { SectionConfig, SectionContext } from './SectionContext';
 
 type Row = {
@@ -24,13 +25,15 @@ function ManualCollection({
   ctx,
   productIds,
   layout,
+  intestazione,
 }: {
   ctx: SectionContext;
   productIds: string[];
   layout: 'grid' | 'carousel';
+  intestazione: React.ReactNode;
 }) {
   const ids = productIds.slice(0, 24);
-  const { data: products = [] } = useQuery({
+  const { data: products = [], isLoading } = useQuery({
     queryKey: [...queryKeys.products.all, 'collection', ctx.storeId, ids.join(',')],
     enabled: ids.length > 0,
     queryFn: async (): Promise<Row[]> => {
@@ -45,10 +48,27 @@ function ManualCollection({
     },
   });
 
-  if (ids.length === 0 || products.length === 0) return null;
+  /**
+   * 5/11/2026 — IL TITOLO SI DISEGNA SOLO SE SOTTO C'È QUALCOSA.
+   * Prima l'intestazione («Le torte della domenica») stava fuori e restava sola, col vuoto sotto,
+   * mentre la lettura arrivava, se falliva, o quando nessun prodotto scelto era più in vendita.
+   * Ora: mentre carica titolo e scheletro; vuota o in errore, la sezione non c'è.
+   */
+  if (ids.length === 0) return null;
+  if (isLoading) {
+    return (
+      <section aria-busy="true">
+        {intestazione}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3" aria-hidden>
+          {ids.slice(0, 4).map((id) => <SkeletonCard key={id} />)}
+        </div>
+      </section>
+    );
+  }
   const ordered = ids
     .map((id) => products.find((p) => p.id === id))
     .filter((p): p is Row => Boolean(p));
+  if (ordered.length === 0) return null;
 
   const card = (p: Row) => (
     <ProductCard
@@ -72,23 +92,29 @@ function ManualCollection({
 
   if (layout === 'carousel') {
     // La riga scorrevole deve avere lo stesso margine del contenitore che la
-    // ospita (CONTENITORE_PAGINA_NEGOZIO = px-4 a ogni misura di schermo). Con
-    // sm:-mx-6 sm:px-6 da 640px in su sbordava di 8px per lato e faceva
-    // comparire la barra di scorrimento orizzontale sui tablet.
+    // ospita. 5/11/2026 — CONTENITORE_PAGINA_NEGOZIO è passato a px-4 sm:px-6
+    // (lo stesso passo del resto del sito), quindi la riga segue: -mx-4 px-4
+    // sul telefono, -mx-6 px-6 da 640px. Uguale al contenitore, non sborda.
     return (
-      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide px-4 pb-2">
-        {ordered.map((p) => (
-          <div key={p.id} className="w-40 shrink-0 snap-start sm:w-44">
-            {card(p)}
-          </div>
-        ))}
-      </div>
+      <section>
+        {intestazione}
+        <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide px-4 pb-2 sm:-mx-6 sm:px-6">
+          {ordered.map((p) => (
+            <div key={p.id} className="w-40 shrink-0 snap-start sm:w-44">
+              {card(p)}
+            </div>
+          ))}
+        </div>
+      </section>
     );
   }
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-      {ordered.map((p) => card(p))}
-    </div>
+    <section>
+      {intestazione}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        {ordered.map((p) => card(p))}
+      </div>
+    </section>
   );
 }
 
@@ -103,21 +129,24 @@ export default function CollectionSection({
   // Niente da mostrare se la collezione manuale è vuota.
   if (config.source.kind === 'manual' && config.source.productIds.length === 0) return null;
 
+  const intestazione = <SectionHeading accent={ctx.accent}>{config.heading || 'Collezione'}</SectionHeading>;
+  if (config.source.kind === 'manual') {
+    return (
+      <ManualCollection ctx={ctx} productIds={config.source.productIds} layout={config.layout} intestazione={intestazione} />
+    );
+  }
+
   return (
     <section>
-      <SectionHeading accent={ctx.accent}>{config.heading || 'Collezione'}</SectionHeading>
-      {config.source.kind === 'manual' ? (
-        <ManualCollection ctx={ctx} productIds={config.source.productIds} layout={config.layout} />
-      ) : (
-        <ProductGrid
-          sellerId={ctx.storeId}
-          categoryId={config.source.categoryId}
-          limit={config.source.limit}
-          rail={config.layout === 'carousel'}
-          prioritaPrimeFoto={false}
-          sort="newest"
-        />
-      )}
+      {intestazione}
+      <ProductGrid
+        sellerId={ctx.storeId}
+        categoryId={config.source.categoryId}
+        limit={config.source.limit}
+        rail={config.layout === 'carousel'}
+        prioritaPrimeFoto={false}
+        sort="newest"
+      />
     </section>
   );
 }

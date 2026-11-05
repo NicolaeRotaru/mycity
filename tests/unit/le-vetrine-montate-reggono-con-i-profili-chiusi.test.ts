@@ -159,6 +159,10 @@ describe('la home', () => {
   });
 
   it.each(CASI_CLIENTE)('«Ultimi visti» della cliente restano pieni — %s', async (_n, mondo) => {
+    // 5/11/2026 (S09, scheda 128) — «Ultimi visti» è un dato di analitica: si scrive e ora si
+    // mostra solo col consenso ai cookie statistici. La cliente di questa prova l'ha dato.
+    const { acceptAll } = await import('@/lib/consent');
+    acceptAll();
     const { testo } = await aSchermo('components/RecentlyViewed.tsx', 'default', {}, mondo, MARIA);
     expect(testo).toContain('Focaccia al rosmarino');
     expect(testo).toContain('Grissini stirati');

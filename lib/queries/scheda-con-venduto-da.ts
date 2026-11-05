@@ -57,7 +57,11 @@ export type VoceDelGuscio = { queryKey: readonly unknown[]; data: unknown };
  */
 export async function leggiSchedaPerIlGuscio(supa: ClientDiLettura, id: string): Promise<VoceDelGuscio[]> {
   const prodotto = await leggiRigaDelProdotto(supa, id);
-  if (!prodotto) return [{ queryKey: queryKeys.products.detail(id), data: null }];
+  // 5/11/2026 — Il guscio legge come un estraneo: una bozza, un prodotto «sold» o di un negozio
+  // in attesa per lui non esistono. Mettere `null` in cache faceva leggere «non esiste» anche al
+  // negoziante che apriva la sua scheda. Niente in cache: il browser rilegge con la sua sessione
+  // (il cliente vede comunque «non disponibile», il negoziante la sua scheda).
+  if (!prodotto) return [];
 
   const riga = prodotto.seller_id
     ? await leggiNegozioDallaVista(supa, prodotto.seller_id, COLONNE_SCHEDA_E_VENDUTO_DA)

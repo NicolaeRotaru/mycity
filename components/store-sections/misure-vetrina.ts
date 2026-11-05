@@ -23,4 +23,4 @@
 export const ALTEZZA_COPERTINA = 'h-60';
 
 /** Il contenitore della pagina negozio: stessa larghezza e stessi margini nell'attesa e dopo. */
-export const CONTENITORE_PAGINA_NEGOZIO = 'container mx-auto px-4 py-6 max-w-5xl space-y-4';
+export const CONTENITORE_PAGINA_NEGOZIO = 'container mx-auto px-4 sm:px-6 py-6 max-w-5xl space-y-4';

@@ -218,7 +218,9 @@ export function attributoSpuntato(value: unknown): boolean {
  * il marchio su una casella che il negozio trovava vuota. Tutto ciò che non è un sì è un no
  * («false», «no», «0», false, vuoto): la riparazione di «Vegano false» resta valida.
  */
-const PAROLE_DEL_SI: ReadonlySet<string> = new Set(['true', 'sì', 'si', 'yes', 'vero']);
+// 5/11/2026 — anche «sí» con l'accento acuto (la tastiera del telefono lo propone): prima casella e
+// marchio lo leggevano come un no, mentre la griglia lo scriveva così com'era.
+const PAROLE_DEL_SI: ReadonlySet<string> = new Set(['true', 'sì', 'sí', 'si', 'yes', 'vero']);
 /**
  * Le parole che la griglia scrive «No». Le cifre («1», «0») restano cifre nella griglia, perché
  * lì non si sa se «1» è una casella o «1 anno di garanzia»: per questo l'assistente salva le
@@ -232,10 +234,27 @@ const PAROLE_DEL_NO: ReadonlySet<string> = new Set(['false', 'no', 'falso']);
  */
 export const CHIAVI_FUORI_DALLA_GRIGLIA: readonly string[] = Object.freeze(['alt_text']);
 
-export function formatAttributeValue(value: unknown): string {
+/** Il tipo del campo con questa chiave, se è uno dei campi conosciuti. */
+export function tipoDelCampo(key: string): AttributeFieldType | null {
+  for (const fields of Object.values(CATEGORY_ATTRIBUTES)) {
+    const f = fields.find((field) => field.key === key);
+    if (f) return f.type;
+  }
+  return null;
+}
+
+/**
+ * 5/11/2026 — Con la chiave la griglia conosce il tipo del campo: una casella si scrive Sì/No con
+ * la stessa regola di casella e marchio (`attributoSpuntato`: anche «1», «0», «sí»), un campo di
+ * testo resta com'è (un allergene «no» non diventa «No», un «yes» non diventa «Sì»). Senza chiave
+ * resta il comportamento di prima.
+ */
+export function formatAttributeValue(value: unknown, key?: string): string {
   if (value === null || value === undefined || value === '') return '—';
+  const tipo = key ? tipoDelCampo(key) : null;
+  if (tipo === 'checkbox') return attributoSpuntato(value) ? 'Sì' : 'No';
   if (typeof value === 'boolean') return value ? 'Sì' : 'No';
-  if (typeof value === 'string') {
+  if (typeof value === 'string' && !tipo) {
     const parola = value.trim().toLowerCase();
     if (PAROLE_DEL_NO.has(parola)) return 'No';
     if (PAROLE_DEL_SI.has(parola)) return 'Sì';

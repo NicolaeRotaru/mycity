@@ -33,6 +33,9 @@ export default function HomeEvents() {
         .from('marketplace_events')
         .select('id, title, description, cover_image_url, starts_at, ends_at, discount_percent, cta_url')
         .in('status', ['scheduled', 'live'])
+        // 5/11/2026 — Il passaggio a «ended» è solo a mano: senza questo filtro restavano in home
+        // eventi già finiti.
+        .or(`ends_at.is.null,ends_at.gte.${new Date().toISOString()}`)
         .order('starts_at', { ascending: true })
         .limit(4);
       return (data ?? []) as Ev[];
@@ -78,11 +81,8 @@ export default function HomeEvents() {
                 // Eventi sulla STESSA copertina.
                 <Image src={sizedImage(e.cover_image_url, 'detail')} alt="" fill sizes="(max-width: 640px) 100vw, 25vw" loader={caricatoreFotoRemote} className="object-cover" />
               )}
-              {e.discount_percent ? (
-                <span className="absolute top-2 right-2 bg-accent-500 text-ink-900 text-xs font-bold px-2 py-0.5 rounded-full">
-                  -{e.discount_percent}%
-                </span>
-              ) : null}
+              {/* 5/11/2026 — Qui c'era la pillola «-X%» dello sconto dell'evento: né il carrello né
+                  la cassa lo applicano, quindi era uno sconto promesso e non dato. */}
             </div>
             <div className="p-4">
               <p className="font-bold text-ink-900 truncate group-hover:text-primary-700 transition-colors">{e.title}</p>

@@ -95,7 +95,12 @@ function SearchInner() {
   const [onlyPromo, setOnlyPromo] = useState(() => params.get('promo') === '1');
   const [onlyInStock, setOnlyInStock] = useState(() => params.get('disponibili') === '1');
   const [minRating, setMinRating] = useState<number>(() => numeroDaUrl('stelle', 0));
-  const [sort, setSort] = useState<SortOption>(() => (params.get('ordine') as SortOption) ?? 'relevance');
+  // 5/11/2026 — Un valore sconosciuto nell'indirizzo (link vecchio, scritto a mano) mostrava come
+  // etichetta il nome grezzo della traduzione, «search.sort.…»: si accettano solo quelli veri.
+  const [sort, setSort] = useState<SortOption>(() => {
+    const grezzo = params.get('ordine');
+    return SORT_OPTIONS.includes(grezzo as SortOption) ? (grezzo as SortOption) : 'relevance';
+  });
 
   // #118 — Ogni cambio di filtro riscrive l'indirizzo senza ricaricare la
   // pagina e senza spostare lo scorrimento: cosi' Indietro riporta i filtri di
@@ -313,6 +318,8 @@ function SearchInner() {
           {[0, 3, 4, 4.5].map((r) => (
             <button
               key={r}
+              type="button"
+              aria-pressed={minRating === r}
               onClick={() => setMinRating(r)}
               className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${
                 minRating === r

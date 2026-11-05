@@ -1,12 +1,12 @@
 'use client';;
-import { use, useRef, useState } from "react";
+import { use, useCallback, useRef, useState } from "react";
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { trackCategoryViewed } from '@/lib/analytics/events';
-import { Filter, RotateCcw, Truck, Tag, PackageCheck, CircleDot, Star, X, Search } from 'lucide-react';
+import { Filter, RotateCcw, Tag, PackageCheck, CircleDot, Star, X, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { supabase } from '@/lib/supabase/client';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
@@ -79,13 +79,18 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   const [maxPrice, setMaxPrice] = useState<number>(500);
   const [minPrice, setMinPrice] = useState<number>(0);
   const [sort, setSort] = useState<SortOption>('relevance');
-  const [freeShipping, setFreeShipping] = useState(false);
   const [onlyPromo, setOnlyPromo] = useState(false);
   const [onlyInStock, setOnlyInStock] = useState(false);
   const [onlyOpenStores, setOnlyOpenStores] = useState(false);
   const [minRating, setMinRating] = useState<number>(0);
   const [resultCount, setResultCount] = useState<number | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // 5/11/2026 — Nel ramo hub ogni fila vuota si nasconde da sola: se lo fanno tutte, sotto i
+  // bottoni delle sottocategorie la pagina restava bianca. Qui si raccolgono i conti delle file.
+  const [contiDelleFile, setContiDelleFile] = useState<Record<string, number>>({});
+  const segnaConto = useCallback((fila: string, n: number) => {
+    setContiDelleFile((c) => (c[fila] === n ? c : { ...c, [fila]: n }));
+  }, []);
   // #134 — Il pannello si dichiarava `aria-modal` e non si comportava da
   // modale: da tastiera il fuoco restava dietro il velo, senza Esc e senza
   // uscita. Lo stesso pannello nella pagina di ricerca era gia' a posto: era
@@ -98,7 +103,6 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
     setMaxPrice(500);
     setMinPrice(0);
     setSort('relevance');
-    setFreeShipping(false);
     setOnlyPromo(false);
     setOnlyInStock(false);
     setOnlyOpenStores(false);
@@ -108,7 +112,6 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   const activeFilters = [
     minPrice > 0,
     maxPrice < 500,
-    freeShipping,
     onlyPromo,
     onlyInStock,
     onlyOpenStores,
@@ -127,7 +130,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
    */
   if (isError) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 sm:px-6 py-8">
         <ErrorState
           title="Non riesco a caricare questa categoria"
           description="C'è stato un problema di collegamento. La categoria probabilmente c'è: riprova fra un attimo."
@@ -165,7 +168,6 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   else if (maxPrice < 500) chips.push({ key: 'pmax', label: t('filterPrice', { max: maxPrice }), clear: () => setMaxPrice(500) });
   else if (minPrice > 0) chips.push({ key: 'pmin', label: t('filterPriceMin', { min: minPrice }), clear: () => setMinPrice(0) });
   if (minRating > 0) chips.push({ key: 'rating', label: t('chip.minRating', { rating: minRating }), clear: () => setMinRating(0) });
-  if (freeShipping) chips.push({ key: 'free', label: t('chip.freeShipping'), clear: () => setFreeShipping(false) });
   if (onlyPromo) chips.push({ key: 'promo', label: t('chip.promotion'), clear: () => setOnlyPromo(false) });
   if (onlyInStock) chips.push({ key: 'stock', label: t('chip.inStock'), clear: () => setOnlyInStock(false) });
   if (onlyOpenStores) chips.push({ key: 'open', label: t('chip.openNow'), clear: () => setOnlyOpenStores(false) });
@@ -267,11 +269,6 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
       {/* Checkbox */}
       <div className="pt-3 space-y-2">
         <label className="flex items-center gap-2 text-sm cursor-pointer">
-          <input type="checkbox" checked={freeShipping} onChange={(e) => setFreeShipping(e.target.checked)} className="accent-primary-600" />
-          <Truck size={14} strokeWidth={2.2} className="text-olive-600" />
-          <span>{t('freeShipping')}</span>
-        </label>
-        <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input type="checkbox" checked={onlyPromo} onChange={(e) => setOnlyPromo(e.target.checked)} className="accent-primary-600" />
           <Tag size={14} strokeWidth={2.2} className="text-secondary-600" />
           <span>{t('promotion')}</span>
@@ -298,7 +295,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   const gridProps = {
     categoryId: category.id,
     maxPrice: maxPrice < 500 ? maxPrice : undefined,
-    minPrice: minPrice > 0 ? minPrice : (freeShipping ? 30 : undefined),
+    minPrice: minPrice > 0 ? minPrice : undefined,
     onlyOpenStores,
     onlyPromo,
     onlyInStock,
@@ -339,10 +336,34 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
               title={s.name}
               titleHref={`/category/${s.slug}`}
               seeAllHref={`/category/${s.slug}`}
+              onCount={(n) => segnaConto(s.id, n)}
             />
           ))}
-          <ProductGrid rail limit={12} categoryId={category.id} title="Altri prodotti" />
+          {/* 5/11/2026 — Solo i prodotti messi sulla madre: con `categoryId` la lettura allargava
+              alle figlie e ogni prodotto compariva due volte, nella sua fila e qui. */}
+          <ProductGrid
+            rail
+            limit={12}
+            categoryIds={[category.id]}
+            title="Altri prodotti"
+            onCount={(n) => segnaConto(category.id, n)}
+          />
         </div>
+
+        {[...subcategories.map((s) => s.id), category.id].every((fila) => contiDelleFile[fila] === 0) && (
+            <div className="rounded-2xl border border-cream-300 bg-white px-4 py-12 text-center">
+              <p className="font-serif text-lg font-bold text-ink-900">{t('noResultsGeneric')}</p>
+              <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">{t('noResultsDescription')}</p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <Link href="/categorie" className="rounded-full border border-cream-300 px-4 py-2 text-sm font-semibold text-ink-800 hover:border-primary-400">
+                  Vedi tutte le categorie
+                </Link>
+                <Link href="/search" className="rounded-full bg-primary-700 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-800">
+                  Cerca un prodotto
+                </Link>
+              </div>
+            </div>
+          )}
       </div>
     );
   }

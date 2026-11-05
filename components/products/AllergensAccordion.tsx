@@ -17,9 +17,10 @@ import { formatAttributeValue } from '@/lib/category-attributes';
  */
 
 
-function asText(value: unknown): string | null {
+function asText(value: unknown, key: string): string | null {
   if (value == null) return null;
-  const s = formatAttributeValue(value).trim();
+  // 5/11/2026 — con la chiave: un campo di testo resta testo («no» non diventa «No»).
+  const s = formatAttributeValue(value, key).trim();
   return s && s !== '—' ? s : null;
 }
 
@@ -32,10 +33,10 @@ export function AllergensAccordion({ attributes }: { attributes: unknown }) {
       ? (attributes as Record<string, unknown>)
       : {};
 
-  const allergeni = asText(attrs['allergeni']);
-  const ingredienti = asText(attrs['ingredienti']);
-  const conservazione = asText(attrs['conservazione']);
-  const valori = asText(attrs['valori_nutrizionali']);
+  const allergeni = asText(attrs['allergeni'], 'allergeni');
+  const ingredienti = asText(attrs['ingredienti'], 'ingredienti');
+  const conservazione = asText(attrs['conservazione'], 'conservazione');
+  const valori = asText(attrs['valori_nutrizionali'], 'valori_nutrizionali');
 
   // Niente dati reali → niente accordion (graceful: non inventiamo nulla).
   if (!allergeni && !ingredienti && !conservazione && !valori) return null;

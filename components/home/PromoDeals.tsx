@@ -54,7 +54,7 @@ export default function PromoDeals() {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        {items.map((it, i) => (
+        {items.map((it) => (
           <ProductCard
             key={it.product_id}
             id={it.product_id}
@@ -66,7 +66,9 @@ export default function PromoDeals() {
             discountPercent={it.discount_percent}
             stock={it.stock ?? undefined}
             hasVariants={it.has_variants ?? undefined}
-            priority={i < 4}
+            // 5/11/2026 — La fila delle promo in home sta sotto la piega: le sue foto
+            // non si chiedono come urgenti, per non rubare la coda a quello che si guarda.
+            priority={false}
           />
         ))}
       </div>

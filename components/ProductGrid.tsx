@@ -21,6 +21,7 @@ import { chiaveDiOggi, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { leggiProdottiDellaGriglia, type OrdineGriglia } from '@/lib/queries/griglia-prodotti';
 import { cEUnAltraPagina, finestraDellaPagina, pagineSuccessiva, unisciPagine } from '@/lib/paginazione';
 import { trackSearchPerformed } from '@/lib/analytics/events';
+import { fetchActiveDiscounts } from '@/lib/promotions';
 
 /**
  * L'ordinamento della griglia. Vive con la lettura, in `lib/queries/griglia-prodotti.ts`: chi
@@ -160,27 +161,36 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
    * stretti anche quattrocento potevano non bastare: l'elenco usciva corto
    * senza che nessuno lo dicesse.
    */
-  const { data: apertiOra } = useQuery<string[]>({
+  const domandaAperti = useQuery<string[]>({
     queryKey: queryKeys.stores.apertiOra,
     enabled: !!onlyOpenStores,
     // Un negozio apre e chiude a ore tonde: cinque minuti di memoria evitano
     // una domanda a ogni scorrimento senza far sbagliare nessuno.
     staleTime: 5 * 60_000,
     queryFn: async () => {
-      const { data } = await supabase.rpc('negozi_aperti_adesso');
+      // 5/11/2026 — L'errore si lancia: se diventasse una lista vuota la
+      // griglia direbbe «i filtri sono troppo stretti» quando invece non sa.
+      const { data, error } = await supabase.rpc('negozi_aperti_adesso');
+      if (error) throw error;
       return ((data ?? []) as Array<{ seller_id: string }>).map((r) => r.seller_id);
     },
   });
+  const apertiOra = domandaAperti.data;
 
-  const { data: idsColVoto } = useQuery<string[]>({
+  const domandaVoto = useQuery<string[]>({
     queryKey: queryKeys.products.conVotoAlmeno(minRating ?? 0),
     enabled: minRating !== undefined && minRating > 0,
     staleTime: 60_000,
     queryFn: async () => {
-      const { data } = await supabase.rpc('prodotti_con_voto_almeno', { p_min: minRating });
+      const { data, error } = await supabase.rpc('prodotti_con_voto_almeno', { p_min: minRating });
+      if (error) throw error;
       return ((data ?? []) as Array<{ product_id: string }>).map((r) => r.product_id);
     },
   });
+  const idsColVoto = domandaVoto.data;
+  const filtroInErrore =
+    (!!onlyOpenStores && domandaAperti.isError) ||
+    (minRating !== undefined && minRating > 0 && domandaVoto.isError);
 
   /**
    * 30/8/2026 (R080) — «CARICA ALTRI» RISCARICAVA OGNI VOLTA ANCHE I PRODOTTI
@@ -271,9 +281,15 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   };
   const prods = products as unknown as Prod[];
   type RatingMap = Record<string, { avg: number; count: number }>;
-  const { data: ratings = {} as RatingMap } = useQuery<RatingMap>({
+  // 5/11/2026 — Serve solo a ordinare per «più recensiti». Il voto minimo lo
+  // filtra già il database (`prodotti_con_voto_almeno`, qui sopra): rifarlo nel
+  // browser su medie non ancora arrivate scartava tutto, e la griglia diceva
+  // «Nessun prodotto trovato» a ogni «Carica altri». Mentre arriva la risposta
+  // nuova resta quella di prima, così l'ordine non salta.
+  const domandaVoti = useQuery<RatingMap>({
+    placeholderData: keepPreviousData,
     queryKey: queryKeys.products.ratings(prods.map((p) => p.id).sort().join(',')),
-    enabled: (minRating !== undefined && minRating > 0) || sort === 'rating',
+    enabled: sort === 'rating',
     queryFn: async (): Promise<RatingMap> => {
       if (prods.length === 0) return {};
       const ids = prods.map((p) => p.id);
@@ -288,6 +304,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       return map;
     },
   });
+  const ratings: RatingMap = domandaVoti.data ?? {};
 
   // Filtro "Promozione": insieme degli id prodotto con una promozione attiva del
   // negozio. Riusa la RPC active_promo_products (SECURITY INVOKER → rispetta RLS).
@@ -298,7 +315,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // leggeva l'elenco della pagina e ci chiamava sopra .has(): con zero promozioni la pagina
   // disegna proprio questa griglia, e andava in errore. Sotto lo stesso prefisso, così chi
   // invalida le promozioni attive invalida anche questa.
-  const { data: promoIds = new Set<string>() } = useQuery<Set<string>>({
+  const domandaPromo = useQuery<Set<string>>({
     queryKey: [...queryKeys.promotions.active, 'ids'],
     enabled: !!onlyPromo,
     staleTime: 60_000,
@@ -308,38 +325,28 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       return new Set(rows.map((r) => r.product_id));
     },
   });
+  const promoIds = domandaPromo.data ?? new Set<string>();
 
-  // Sconti promo del negozio: calcolati solo in vetrina (quando filtriamo per sellerId).
-  type PromoRow = { discount_percent: number; scope: string; category_id: string | null; product_ids: string[] | null };
-  const { data: promos = [] } = useQuery<PromoRow[]>({
-    queryKey: queryKeys.promotions.byStore(sellerId ?? ''),
-    enabled: !!sellerId,
-    queryFn: async (): Promise<PromoRow[]> => {
-      const nowIso = new Date().toISOString();
-      const { data } = await supabase
-        .from('seller_promotions')
-        .select('discount_percent, scope, category_id, product_ids')
-        .eq('seller_id', sellerId!)
-        .eq('status', 'active')
-        .lte('starts_at', nowIso)
-        .gte('ends_at', nowIso);
-      return (data ?? []) as PromoRow[];
-    },
+  /**
+   * 5/11/2026 — LO SCONTO DELLE PROMOZIONI SI LEGGE PER OGNI GRIGLIA, DALLA FONTE DELLA CASSA.
+   *
+   * Prima si leggeva solo dentro la vetrina di un negozio, e con la stessa chiave della pagina del
+   * negozio che chiedeva altre colonne: in ricerca, categorie e home le schede mostravano il
+   * prezzo pieno (anche col filtro «In promozione»), e in vetrina lo sconto su tutto il negozio
+   * spariva perché la griglia trovava in memoria le righe della pagina, senza `scope`.
+   * Adesso la percentuale per prodotto arriva da `product_active_discounts`, la stessa funzione
+   * che usa la cassa per far pagare il prezzo scontato: una chiamata sola per i prodotti visibili.
+   */
+  const idsVisibili = prods.map((p) => p.id).sort().join(',');
+  const { data: scontiPromo } = useQuery<Map<string, number>>({
+    queryKey: ['promotions', 'sconti-griglia', idsVisibili],
+    enabled: prods.length > 0,
     staleTime: 60_000,
+    placeholderData: keepPreviousData,
+    queryFn: () => fetchActiveDiscounts(supabase, prods.map((p) => p.id)),
   });
 
-  const discountFor = (p: Prod): number => {
-    if (!sellerId || promos.length === 0) return 0;
-    let best = 0;
-    for (const promo of promos) {
-      const applies =
-        promo.scope === 'store' ||
-        (promo.scope === 'category' && promo.category_id === p.category_id) ||
-        (promo.scope === 'products' && Array.isArray(promo.product_ids) && promo.product_ids.includes(p.id));
-      if (applies && promo.discount_percent > best) best = promo.discount_percent;
-    }
-    return best;
-  };
+  const discountFor = (p: Prod): number => scontiPromo?.get(p.id) ?? 0;
 
   // Sconto effettivo (%) per l'ordinamento "Sconto maggiore": il maggiore tra
   // lo sconto promo del negozio (solo in vetrina) e lo sconto da prezzo barrato.
@@ -360,9 +367,6 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
         const hours = (p.profiles?.store_hours ?? {}) as StoreHours;
         return isOpenNow(hours[todayKey]);
       });
-    }
-    if (minRating !== undefined && minRating > 0) {
-      arr = arr.filter((p) => (ratings[p.id]?.avg ?? 0) >= minRating);
     }
     if (onlyPromo) {
       arr = arr.filter((p) => {
@@ -400,14 +404,22 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     }
     return arr;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prods, onlyOpenStores, minRating, ratings, sort, onlyPromo, onlyInStock, promoIds, promos, sellerId]);
+  }, [prods, onlyOpenStores, ratings, sort, onlyPromo, onlyInStock, promoIds, scontiPromo]);
 
   // Notifica il conteggio visibile (post-filtro) al chiamante, per la riga
   // "N prodotti …" renderizzata fuori dalla griglia (SRP / categoria).
+  // 5/11/2026 — Le letture da cui dipendono i filtri contano come «sto caricando»: finché non
+  // arrivano, l'elenco vuoto non vuol dire «nessun prodotto».
+  const caricando =
+    isLoading || domandaAperti.isLoading || domandaVoto.isLoading || domandaPromo.isLoading;
+  const inErrore = isError || filtroInErrore;
+
+  // Con la lettura in errore il conteggio non si sa: non si dichiara «0 prodotti» sopra
+  // il messaggio d'errore.
   useEffect(() => {
-    if (!onCount || isLoading) return;
+    if (!onCount || caricando || inErrore) return;
     onCount(filtered.length);
-  }, [onCount, isLoading, filtered.length]);
+  }, [onCount, caricando, inErrore, filtered.length]);
 
   // Funnel: emette `search_performed` (PostHog + GA4) quando una ricerca
   // testuale si risolve. Solo in contesto ricerca (prop `search` valorizzata),
@@ -415,7 +427,9 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   const lastTrackedSearch = useRef<string | null>(null);
   useEffect(() => {
     const term = search?.trim();
-    if (!term || isLoading) return;
+    // Con `keepPreviousData` a schermo ci sono ancora i risultati del termine di prima:
+    // si conta solo quando sono arrivati quelli di questo termine.
+    if (!term || caricando || domanda.isPlaceholderData) return;
     if (lastTrackedSearch.current === term) return;
     lastTrackedSearch.current = term;
     // Il numero riportato è quello che la persona VEDE davvero.
@@ -427,7 +441,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     // ricerche finiscono a vuoto — quella che dice cosa manca in catalogo —
     // era falsa proprio nei casi che contano.
     trackSearchPerformed(term, filtered.length);
-  }, [search, isLoading, filtered.length]);
+  }, [search, caricando, domanda.isPlaceholderData, filtered.length]);
 
   /**
    * LA FORMA DEL BLOCCO SI DECIDE UNA VOLTA SOLA.
@@ -481,7 +495,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     </div>
   ) : null;
 
-  if (isLoading) {
+  if (caricando) {
     // Fila: scheletro a fila, così la forma non cambia quando arrivano i dati.
     // La condizione è `formaFila`, la stessa che userà il ramo qui sotto:
     // guardava `isSection`, e in home usciva una griglia di dodici scheletri
@@ -505,6 +519,17 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
 
   // Errore di rete/DB: le sezioni-rail si auto-nascondono (come quando sono vuote),
   // altrove mostriamo un errore onesto con "Riprova" invece del falso "Nessun prodotto".
+  if (filtroInErrore) {
+    if (isSection) return null;
+    return (
+      <ErrorState
+        title={onlyOpenStores && domandaAperti.isError ? 'Non riesco a sapere chi è aperto adesso' : 'Non riesco a leggere i voti dei prodotti'}
+        description="Il filtro non si può applicare in questo momento. Riprova, oppure togli il filtro."
+        onRetry={() => { void domandaAperti.refetch(); void domandaVoto.refetch(); }}
+      />
+    );
+  }
+
   if (isError) {
     if (isSection) return null;
     return (

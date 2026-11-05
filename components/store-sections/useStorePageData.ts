@@ -32,12 +32,14 @@ export function useStorePageData(id: string) {
       // l'embed PostgREST `author:profiles!...` non si risolve. Carichiamo i
       // profili autore in un secondo passaggio (id = user_id, 1:1 con auth.users)
       // e li uniamo client-side → nome reale, fallback "Cliente".
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('store_reviews')
         .select('id, rating, comment, created_at, seller_reply, user_id, order_id, photo_urls, helpful_count')
         .eq('store_id', id)
         .order('created_at', { ascending: false })
         .limit(20);
+      // 5/11/2026 — Un guasto non è «nessuna recensione»: l'errore sale.
+      if (error) throw error;
 
       const rows = (data ?? []) as Array<{
         id: string;
@@ -73,6 +75,18 @@ export function useStorePageData(id: string) {
     },
   });
 
+  // 5/11/2026 — Media e totale veri, dal database: le 20 recensioni lette sopra sono solo l'elenco.
+  const riepilogoQ = useQuery({
+    queryKey: [...queryKeys.reviews.store(id), 'riepilogo'],
+    queryFn: async (): Promise<{ media: number; totale: number } | null> => {
+      const { data, error } = await supabase.rpc('store_review_stats', { p_store_ids: [id] });
+      if (error) throw error;
+      const riga = ((data ?? []) as { store_id: string; avg: number | string; count: number }[]).find((r) => r.store_id === id);
+      return riga ? { media: Number(riga.avg), totale: Number(riga.count) } : { media: 0, totale: 0 };
+    },
+    staleTime: 60_000,
+  });
+
   const promosQ = useQuery({
     queryKey: queryKeys.promotions.byStore(id),
     queryFn: async (): Promise<SectionPromo[]> => {
@@ -106,6 +120,8 @@ export function useStorePageData(id: string) {
           customization: custom,
           accent,
           reviews,
+          riepilogoRecensioni: riepilogoQ.isError ? null : riepilogoQ.data ?? null,
+          recensioniInErrore: reviewsQ.isError,
           promos,
           theme: site.theme,
           site,

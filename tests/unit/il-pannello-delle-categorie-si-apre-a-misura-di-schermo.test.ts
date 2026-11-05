@@ -68,13 +68,16 @@ describe('il pannello «Tutte le categorie»', () => {
   it('all\'apertura porta il fuoco dentro, non sulla barra dietro', async () => {
     const { s, pannello } = await barraAperta();
 
-    const primoLink = pannello.querySelector('a[href]');
-    expect(primoLink, 'Il pannello si apre vuoto').toBeTruthy();
+    // 5/11/2026 (S09, scheda 1558) — il fuoco va sul primo elemento raggiungibile e visibile:
+    // sul telefono è la X «Chiudi le categorie», che sta prima dei link. In jsdom le classi
+    // responsive non si applicano, quindi la X è visibile come su un telefono.
+    expect(pannello.querySelector('a[href]'), 'Il pannello si apre vuoto').toBeTruthy();
+    const primoLink = pannello.querySelector('button, a[href]');
     expect(
       pannello.contains(document.activeElement),
       'Aperto il pannello, chi naviga da tastiera premeva Tab e finiva sulle voci della barra dietro: il pannello restava aperto e scavalcato',
     ).toBe(true);
-    expect(document.activeElement, 'Il fuoco deve entrare sul primo link del pannello').toBe(primoLink);
+    expect(document.activeElement, 'Il fuoco deve entrare sul primo elemento raggiungibile del pannello').toBe(primoLink);
   }, 60000);
 
   it('con Esc si chiude e restituisce il fuoco al pulsante', async () => {

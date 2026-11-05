@@ -37,11 +37,17 @@ interface Props {
   rounded?: string;
   /** Aspect-ratio dei singoli slot — default coprono tutto */
   className?: string;
+  /**
+   * 5/11/2026 — Senza pallini: per chi mette il carosello DENTRO un collegamento (la scheda del
+   * negozio in home). Un pulsante dentro un link l'HTML non lo ammette.
+   */
+  senzaPallini?: boolean;
 }
 
 const StoreMediaCarousel = ({
   media,
   posto,
+  senzaPallini = false,
   priority = false,
   heightClass = 'h-44 sm:h-56',
   fallbackClass = 'bg-gradient-to-br from-primary-500 via-primary-600 to-secondary-600',
@@ -106,7 +112,7 @@ const StoreMediaCarousel = ({
       </div>
 
       {/* Dots */}
-      {media.length > 1 && (
+      {media.length > 1 && !senzaPallini && (
         <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-10">
           {media.map((_, i) => (
             /* 22/8/2026 — il pallino era 8 pixel, e 8 pixel su un telefono non
@@ -117,7 +123,7 @@ const StoreMediaCarousel = ({
               key={i}
               type="button"
               onClick={(e) => { e.preventDefault(); scrollTo(i); }}
-              aria-label={`Slide ${i + 1}`}
+              aria-label={`Foto ${i + 1} di ${media.length}`}
               aria-current={i === active ? 'true' : undefined}
               className="w-6 h-6 flex items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             >

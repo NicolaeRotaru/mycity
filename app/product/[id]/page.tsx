@@ -10,9 +10,10 @@ import { Heart, Banknote, Bike, RotateCcw, Store, ShoppingCart, Ban, Check, Flam
 import { supabase } from '@/lib/supabase/client';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
 import { domandaProdotto, negozioDellaSchedaOperativo } from '@/lib/queries/catalogo';
-import { addToCart, cartTotal, getCart } from '@/lib/cart';
+import { addToCart, cartTotal, getCart, updateQuantity } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
+import { discountedUnitCents } from '@/lib/promotions';
 import { LARGHEZZA_MASSIMA, sizedImage } from '@/lib/image-url';
 import { SIZES_FOTO_PRODOTTO } from '@/lib/preload-foto';
 import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
@@ -57,6 +58,7 @@ import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { trackReviewSubmitted } from '@/lib/analytics/events';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { FOTO_MANCANTE } from '@/lib/foto-mancante';
+import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
 
 // Chiavi attributo gestite dall'accordion "Ingredienti e allergeni": vengono
 // escluse dalla griglia generica "Caratteristiche" per non duplicarle.
@@ -74,6 +76,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const router = useRouter();
   const qc = useQueryClient();
   const [quantity, setQuantity] = useState(1);
+  // 5/11/2026 — Dopo il primo tocco su «Compra ora» il pulsante si spegne fino al cambio pagina.
+  const [inPartenza, setInPartenza] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [activeImg, setActiveImg] = useState(0);
   const [lightbox, setLightbox] = useState(false);
@@ -154,7 +158,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   });
   const fraseReso = fraseResoDelProdotto(rigaDelRecesso);
 
-  const { data: variants = [] } = useQuery({
+  const { data: variants = [], isError: variantiInErrore, refetch: rileggiVarianti } = useQuery({
     queryKey: ['product-variants', id],
     queryFn: () => loadProductVariants(id),
   });
@@ -264,7 +268,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       setReviewRating(5);
       setReviewPhotos([]);
       toast.success(
-        reviewPhotos.length > 0
+        // 5/11/2026 — I punti sono spenti al lancio: si promettono solo se l'interruttore è acceso.
+        reviewPhotos.length > 0 && INVITI_E_PUNTI_ACCESI
           ? `Grazie! Recensione pubblicata · +20 punti loyalty per le foto`
           : 'Grazie per la recensione!'
       );
@@ -272,6 +277,46 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     onError: (err: unknown) => {
       if (err instanceof Error && err.message !== 'REDIRECT') toast.error(friendlyError(err));
     },
+  });
+
+  /**
+   * 5/11/2026 — IL MODULO SI APRIVA A CHI NON PUÒ RECENSIRE.
+   * Il database accetta la recensione solo da chi ha un ordine consegnato con questo prodotto;
+   * agli altri, dopo stelle, commento e foto caricate, arrivava solo «non hai i permessi».
+   * Qui si chiede prima, con la stessa domanda della verifica d'acquisto. Finché non si sa (o se
+   * la lettura cade) il modulo resta: decide comunque il database.
+   */
+  const { data: haRicevutoIlProdotto } = useQuery({
+    queryKey: ['reviews', 'puo-recensire', id, profile?.id ?? ''],
+    enabled: !!profile?.id,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabase
+        .from('order_items')
+        .select('id, orders!inner(user_id, delivery_status)')
+        .eq('product_id', id)
+        .eq('orders.user_id', profile!.id)
+        .eq('orders.delivery_status', 'DELIVERED')
+        .limit(1);
+      if (error) throw error;
+      return (data?.length ?? 0) > 0;
+    },
+  });
+
+  /**
+   * 5/11/2026 — LO SCONTO DELLA PROMOZIONE DEL NEGOZIO NEL PREZZO GRANDE.
+   * Carrello e cassa applicano lo sconto (product_active_discount); la scheda mostrava in grande il
+   * prezzo pieno, e quello vero solo nel riquadrino della promo. Stessa chiave e stessa lettura di
+   * ActivePromoBadge: una domanda sola.
+   */
+  const { data: scontoPromo = 0 } = useQuery({
+    queryKey: queryKeys.products.activeDiscount(id),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('product_active_discount', { p_product: id });
+      if (error) return 0;
+      return Number(data) || 0;
+    },
+    staleTime: 60_000,
   });
 
   useBottomSheetA11y(lightbox, lightboxRef, zoomTriggerRef, () => setLightbox(false));
@@ -372,9 +417,16 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     return (
       <div className="container mx-auto p-8 max-w-md text-center mt-8 bg-white rounded-2xl border">
         <Package size={48} strokeWidth={1.5} className="mx-auto text-ink-300 mb-3" aria-hidden />
-        <h1 className="text-xl font-bold text-ink-900 mb-2">Prodotto non trovato</h1>
-        <p className="text-sm text-ink-600 mb-5">Questo prodotto non esiste o è stato rimosso.</p>
-        <Button href="/">← Torna al marketplace</Button>
+        <h1 className="text-xl font-bold text-ink-900 mb-2">Prodotto non disponibile</h1>
+        {/* 5/11/2026 — Un prodotto segnato «esaurito» dal negozio non si legge più per chi compra,
+            e cadeva qui: «non esiste o è stato rimosso» era falso per il pane finito per oggi. */}
+        <p className="text-sm text-ink-600 mb-5">
+          Questo prodotto ora non è in vendita: può essere finito per oggi, oppure il negozio l&apos;ha tolto.
+        </p>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button href="/stores">Vedi i negozi</Button>
+          <Button href="/search" variant="secondary">Cerca qualcosa di simile</Button>
+        </div>
       </div>
     );
   }
@@ -420,12 +472,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  const price = Number(product.price);
+  const prezzoPieno = Number(product.price);
+  // Il prezzo che si paga: con la promo attiva, scontato come in cassa (al centesimo).
+  const price = scontoPromo > 0 ? discountedUnitCents(prezzoPieno, scontoPromo) / 100 : prezzoPieno;
   // Prezzo pieno barrato + unità + condizione (campi di primo livello).
   const compareAt = (product as { compare_at_price?: number | string | null }).compare_at_price;
   const compareAtNum = compareAt != null ? Number(compareAt) : null;
-  const compareValid = compareAtNum != null && compareAtNum > price;
-  const comparePct = compareValid ? Math.round((1 - price / compareAtNum) * 100) : 0;
+  const compareValid = compareAtNum != null && compareAtNum > prezzoPieno;
+  const comparePct = compareValid ? Math.round((1 - prezzoPieno / compareAtNum) * 100) : 0;
   const unitRaw = (product as { unit?: string | null }).unit ?? null;
   const unitSuffix = unitRaw && unitRaw !== 'pezzo' ? (UNIT_SUFFIX[unitRaw as ProductUnit] ?? '') : '';
   const conditionRaw = (product as { condition?: string | null }).condition ?? null;
@@ -457,6 +511,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     hasVariants && variants.length > 0 && variants.every((v) => v.stock === 0);
   const isOutOfStock = stock === 0 || tutteLeVariantiEsaurite;
   const canAdd = !isOutOfStock && !needsVariantChoice && mayPurchase;
+
+  // 5/11/2026 — La descrizione della foto che il negozio scrive per chi non vede (`alt_text`)
+  // non arrivava a nessuno: si toglieva dalla griglia «perché già usata come testo alternativo»,
+  // ma la foto usava il nome del prodotto. Adesso la prima foto la usa; senza, resta il nome.
+  const altDelNegozio = (product.attributes as Record<string, unknown> | null | undefined)?.alt_text;
+  const altPrimaFoto = typeof altDelNegozio === 'string' && altDelNegozio.trim() ? altDelNegozio.trim() : product.name;
 
   // Marchi di qualità (DOP/DOC/IGP/Bio/Vegano…) derivati da tag + attributi.
   const qualityMarks = deriveQualityMarks(product);
@@ -501,7 +561,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     addToCart({
       id: product.id,
       name: product.name,
-      price,
+      // Al carrello il prezzo pieno: lo sconto della promo lo applica lui, come la cassa.
+      price: prezzoPieno,
       image: images[0],
       quantity: qty,
       sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
@@ -516,6 +577,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   };
 
   const handleBuyNow = () => {
+    if (inPartenza) return;
     if (!mayPurchase) {
       toast.error(purchaseBlockedMessage);
       return;
@@ -524,17 +586,27 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di continuare`);
       return;
     }
-    addToCart({
-      id: product.id,
-      name: product.name,
-      price,
-      image: images[0],
-      quantity: qty,
-      sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
-      storeName: sellerProfile?.store_name ?? undefined,
-      variantId: selectedVariant?.id,
-      variantLabel: selectedVariant?.label,
-    });
+    setInPartenza(true);
+    // 5/11/2026 — «Compra ora» compra QUESTA quantità: se la riga c'è già si porta alla
+    // quantità scelta invece di sommarla (prima chi aveva già un filone ne trovava due).
+    const giaNelCarrello = getCart().some(
+      (c) => c.id === product.id && (c.variantId ?? null) === (selectedVariant?.id ?? null),
+    );
+    if (giaNelCarrello) {
+      updateQuantity(product.id, qty, selectedVariant?.id);
+    } else {
+      addToCart({
+        id: product.id,
+        name: product.name,
+        price: prezzoPieno,
+        image: images[0],
+        quantity: qty,
+        sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
+        storeName: sellerProfile?.store_name ?? undefined,
+        variantId: selectedVariant?.id,
+        variantLabel: selectedVariant?.label,
+      });
+    }
     // Il pulsante promette «paghi alla consegna»: la promessa viaggia fino alla
     // cassa, che senza questa riga si apriva sempre con la carta selezionata.
     ricordaMetodoScelto('cod');
@@ -583,7 +655,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 <div key={i} className="relative h-full w-full shrink-0 snap-center">
                   <Image
                     src={sizedImage(img, 'detail')}
-                    alt={i === 0 ? product.name : `${product.name} — foto ${i + 1}`}
+                    alt={i === 0 ? altPrimaFoto : `${product.name} — foto ${i + 1}`}
                     fill
                     priority={i === 0}
                     sizes={SIZES_FOTO_PRODOTTO}
@@ -688,7 +760,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={sizedImage(images[activeImg], LARGHEZZA_MASSIMA)}
-              alt={product.name}
+              alt={activeImg === 0 ? altPrimaFoto : `${product.name} — foto ${activeImg + 1}`}
               className="max-h-[90vh] max-w-[95vw] object-contain"
               onClick={(e) => e.stopPropagation()}
             />
@@ -788,10 +860,15 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 {formatPrice(price)}
                 {unitSuffix && <span className="text-base font-semibold text-ink-400">{unitSuffix}</span>}
               </span>
+              {scontoPromo > 0 && (
+                <span className="text-lg text-ink-400 line-through">
+                  <span className="sr-only">Prezzo pieno </span>{formatPrice(prezzoPieno)}
+                </span>
+              )}
               {compareValid && (
                 <>
                   <span className="text-lg text-ink-400 line-through">{formatPrice(compareAtNum)}</span>
-                  <span className="text-sm font-bold text-secondary-600">Risparmi {formatPrice(compareAtNum - price)}</span>
+                  <span className="text-sm font-bold text-secondary-600">Risparmi {formatPrice(compareAtNum - prezzoPieno)}</span>
                 </>
               )}
               <span className="text-sm text-ink-400">IVA inclusa</span>
@@ -802,7 +879,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               </span>
             )}
             {/* Promo attiva del negozio (prezzo barrato + nuovo prezzo) */}
-            <ActivePromoBadge productId={id} basePrice={price} />
+            <ActivePromoBadge productId={id} basePrice={prezzoPieno} />
 
             {/* Card rassicurazione consolidata (mockup 50-product): ETA consegna +
                 pagamento alla consegna + reso, in un unico riquadro olive. Le righe
@@ -856,6 +933,21 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             />
           )}
 
+          {/* 5/11/2026 — Se le varianti non si leggono il selettore non si disegna e il prodotto
+              diventava impossibile da comprare senza un perché: lo si dice, con «Riprova». */}
+          {hasVariants && variantiInErrore && optionGroups.length === 0 && (
+            <div role="alert" className="flex flex-wrap items-center gap-2 rounded-lg border border-secondary-200 bg-secondary-50 px-3 py-2 text-sm text-secondary-800">
+              <span>Non riusciamo a caricare le opzioni di questo prodotto.</span>
+              <button
+                type="button"
+                onClick={() => { void rileggiVarianti(); }}
+                className="font-semibold underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 rounded"
+              >
+                Riprova
+              </button>
+            </div>
+          )}
+
           {/* SELETTORE VARIANTI (taglie/colori) */}
           {hasVariants && optionGroups.length > 0 && (
             <div className="space-y-3">
@@ -892,6 +984,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   </div>
                 </div>
               ))}
+              {/* 5/11/2026 — Regione sempre montata: il cambio di disponibilità della variante
+                  si annuncia a chi usa il lettore di schermo. */}
+              <div role="status" aria-live="polite">
               {needsVariantChoice ? (
                 <p className="text-xs text-ink-500">
                   Scegli {optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} per vedere la disponibilità.
@@ -903,6 +998,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   {selectedVariant.stock === 1 ? 'Ultimo pezzo' : `Solo ${selectedVariant.stock} rimasti`} per «{selectedVariant.label}».
                 </p>
               ) : null}
+              </div>
             </div>
           )}
 
@@ -937,7 +1033,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                       >
                         <dt className="text-sm text-ink-500">{findLabelForKey(key)}</dt>
                         <dd className="text-sm text-ink-800 font-medium text-right">
-                          {formatAttributeValue(value)}
+                          {formatAttributeValue(value, key)}
                         </dd>
                       </div>
                     ))}
@@ -1050,10 +1146,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <button
               type="button"
               onClick={handleBuyNow}
-              disabled={!canAdd}
+              disabled={!canAdd || inPartenza}
+              aria-busy={inPartenza || undefined}
               className="block w-full text-center bg-ink-900 hover:bg-ink-800 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-lg font-bold"
             >
-              Compra ora · paghi alla consegna
+              {inPartenza ? 'Apro la cassa…' : 'Compra ora · paghi alla consegna'}
             </button>
 
             {(sellerProfile?.id ?? product.seller_id) && (
@@ -1065,7 +1162,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             )}
 
             <div className="pt-3 border-t border-surface-200 space-y-1.5 text-xs text-ink-500">
-              <p className="flex items-center gap-1.5"><Package size={13} className="shrink-0" aria-hidden /> Venduto e consegnato da <strong className="text-ink-700">{product.profiles?.store_name}</strong></p>
+              <p className="flex items-center gap-1.5"><Package size={13} className="shrink-0" aria-hidden /> Venduto da <strong className="text-ink-700">{product.profiles?.store_name}</strong> · consegna MyCity</p>
               <p className="flex items-center gap-1.5"><ShieldCheck size={13} className="shrink-0" aria-hidden /> Compri sicuro: paghi solo quando arriva.</p>
             </div>
           </div>
@@ -1145,7 +1242,13 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
           {/* h3 senza classe di misura usciva a 20px in Fraunces per la regola di
               globals.css, cioe' piu' grande dei titoli di pari grado. Qui il grado e'
               giusto — sta dentro la sezione «Recensioni» — e la misura e' dichiarata. */}
-          <h3 className="font-serif text-lg font-bold text-ink-900 mb-3">Lascia la tua recensione</h3>
+          <h3 className="font-serif text-lg font-bold text-ink-900 mb-1">Lascia la tua recensione</h3>
+          {/* 5/11/2026 — Come verifichiamo le recensioni (art. 22 c.4-bis Codice del Consumo):
+              è la regola che il database applica davvero. */}
+          <p className="mb-3 text-xs text-ink-500">
+            Pubblicano recensioni solo i clienti con un ordine consegnato di questo prodotto.
+            {INVITI_E_PUNTI_ACCESI && ' Chi aggiunge una foto riceve 20 punti fedeltà.'}
+          </p>
           {!isAuthenticated ? (
             <p className="text-sm text-ink-600">
               <Link href={`/sign-in?returnTo=/product/${id}`} className="text-primary-700 font-semibold hover:underline">
@@ -1153,6 +1256,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               </Link>{' '}
               per recensire questo prodotto.
             </p>
+          ) : haRicevutoIlProdotto === false ? (
+            <p className="text-sm text-ink-600">Puoi recensire questo prodotto dopo averlo ricevuto.</p>
           ) : (
             <form
               onSubmit={(e) => { e.preventDefault(); submitReview.mutate(); }}
@@ -1187,7 +1292,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 placeholder="Scrivi un commento (opzionale)…"
                 className="w-full border border-cream-300 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-700 resize-none"
               />
-              {/* Foto recensione: +20 punti, +35% credibilità (CRO Specialist) */}
+              {/* Foto recensione (i +20 punti valgono solo con i punti accesi). */}
               {profile?.id && (
                 <PhotoReviewUpload
                   userId={profile.id}
@@ -1307,11 +1412,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   <div className="grid grid-cols-4 gap-1.5 mt-2">
                     {r.photo_urls.filter(fotoDiCasa).slice(0, 4).map((url: string, i: number) => (
                       <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block relative aspect-square rounded-lg overflow-hidden bg-cream-100 hover:opacity-80">
+                        {/* 5/11/2026 — col caricatore: la misura la fa il CDN di Supabase, non una
+                            seconda volta l'ottimizzatore di Vercel su una foto già ridotta. */}
                         <Image
-                          src={sizedImage(url, 'card')}
+                          src={url}
                           alt={`Foto ${i + 1} della recensione`}
                           fill
                           sizes="(max-width: 768px) 25vw, 200px"
+                          loader={caricatoreFotoRemote}
                           className="object-cover"
                           loading="lazy"
                         />

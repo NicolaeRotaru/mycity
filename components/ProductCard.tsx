@@ -262,13 +262,15 @@ const ProductCard = ({
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 overflow-hidden">
               {showStrike ? (
                 <>
-                  <span className="text-base font-extrabold text-secondary-600">{formatPrice(bigPrice)}</span>
+                  {/* 5/11/2026 — Il prezzo era text-base (16px) contro un titolo di 13px: tre
+                      pixel di differenza. Cresce a text-lg, così pesa più del titolo. */}
+                  <span className="text-lg font-extrabold text-secondary-600">{formatPrice(bigPrice)}</span>
                   <s className="text-[11px] text-ink-500">
                     <span className="sr-only">Prezzo pieno </span>{formatPrice(strikePrice)}
                   </s>
                 </>
               ) : (
-                <span className="text-base font-extrabold text-ink-900">{formatPrice(price)}</span>
+                <span className="text-lg font-extrabold text-ink-900">{formatPrice(price)}</span>
               )}
             </div>
             <button

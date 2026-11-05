@@ -49,15 +49,10 @@ export default function TrendingNow() {
     refetchInterval: 5 * 60_000, // ogni 5 minuti
   });
 
-  if (isLoading) {
-    return (
-      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-        {[...Array(12)].map((_, i) => (
-          <div key={i} className="h-44 rounded-xl skeleton" aria-hidden />
-        ))}
-      </div>
-    );
-  }
+  // 5/11/2026 — Qui c'erano dodici riquadri di caricamento alti 176 punti. Con la soglia delle tre
+  // visite la classifica al lancio è quasi sempre vuota: i riquadri sparivano e la pagina saltava
+  // di ~700 punti sul telefono. Mentre carica non si tiene spazio: se arriva, la fila compare.
+  if (isLoading) return null;
 
   const classifica = classificaVera(items);
   if (classifica.length === 0) return null;

@@ -30,7 +30,8 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
     subhead: (
       <>
         {/* 29/10/2026 — Senza abbigliamento: al lancio non c'è (catalogo.categorie, Nicola 29/10 00:05). */}
-        Alimentari, casa, elettronica: ordini dai commercianti
+        {/* 5/11/2026 — «casa, elettronica» erano categorie vuote: si dice quello che c'è. */}
+        Pane, alimentari e prodotti dei negozi: ordini dai commercianti
         della tua via in pochi tap e <strong className="text-ink-900">puoi pagare alla consegna</strong>.
         Consegna in giornata.
       </>

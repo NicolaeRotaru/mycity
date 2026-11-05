@@ -29,8 +29,14 @@ import { logger } from '@/lib/logger';
  */
 export const CHIAVE_CATEGORIE_PIENE = ['categories', 'con-prodotti'] as const;
 
-/** Quanti prodotti si guardano al massimo per sapere quali categorie sono piene. */
+/**
+ * Quanti prodotti si guardano al massimo per sapere quali categorie sono piene, e in pagine da
+ * quante righe: il database ne restituisce al massimo mille per domanda (`max_rows`), quindi un
+ * `limit(5000)` secco ne portava mille, in un ordine qualunque, e oltre una categoria vera poteva
+ * sparire. Ora si sfoglia per id, mille alla volta.
+ */
 const PRODOTTI_LETTI_PER_LE_CATEGORIE = 5000;
+const RIGHE_PER_PAGINA = 1000;
 
 /** Le categorie che hanno un prodotto: la sua e tutte quelle sopra di lei. */
 export function categorieConProdotti(
@@ -57,13 +63,34 @@ export function domandaCategoriePiene(supa: ClientPiene) {
     queryKey: CHIAVE_CATEGORIE_PIENE,
     staleTime: 10 * 60_000,
     queryFn: async (): Promise<string[]> => {
-      const [cat, prod] = await Promise.all([
+      // 5/11/2026 — Contano solo i prodotti dei negozi approvati, come nella mappa del sito: un
+      // venditore collegato vede anche i suoi prodotti per le regole del database, e per lui una
+      // categoria con soli prodotti di un negozio non approvato risultava piena.
+      const [cat, negozi] = await Promise.all([
         supa.from('categories').select('id, parent_id'),
-        supa.from('products').select('category_id').eq('status', 'available').limit(PRODOTTI_LETTI_PER_LE_CATEGORIE),
+        supa.from('seller_public_profiles').select('id').limit(2000),
       ]);
       if (cat.error) throw cat.error;
-      if (prod.error) throw prod.error;
-      return categorieConProdotti(cat.data ?? [], prod.data ?? []);
+      if (negozi.error) throw negozi.error;
+      const approvati = new Set(((negozi.data ?? []) as { id: string }[]).map((n) => n.id));
+      const prodotti: { id: string; category_id: string | null; seller_id: string | null }[] = [];
+      let ultimo: string | null = null;
+      while (prodotti.length < PRODOTTI_LETTI_PER_LE_CATEGORIE) {
+        let q = supa
+          .from('products')
+          .select('id, category_id, seller_id')
+          .eq('status', 'available')
+          .order('id', { ascending: true })
+          .limit(RIGHE_PER_PAGINA);
+        if (ultimo) q = q.gt('id', ultimo);
+        const pagina = await q;
+        if (pagina.error) throw pagina.error;
+        const righe = (pagina.data ?? []) as typeof prodotti;
+        prodotti.push(...righe);
+        if (righe.length < RIGHE_PER_PAGINA) break;
+        ultimo = righe[righe.length - 1].id;
+      }
+      return categorieConProdotti(cat.data ?? [], prodotti.filter((p) => !!p.seller_id && approvati.has(p.seller_id)));
     },
   };
 }
@@ -278,8 +305,14 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
                 }}
               />
             )}
-            {/* Scrim per leggibilità */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/15 to-black/25" />
+            {/* Scrim per leggibilità. 5/11/2026 — Il velo scuro pieno serve solo sopra una foto:
+                senza, scuriva tutto il gradiente del marchio e lasciava una banda chiara in mezzo.
+                Sul gradiente basta un'ombra in basso, dove sta il nome. */}
+            <div
+              className={`absolute inset-0 bg-gradient-to-t ${
+                foto.src ? 'from-black/70 via-black/15 to-black/25' : 'from-black/35 via-transparent to-transparent'
+              }`}
+            />
             <span className="absolute left-2.5 top-2.5 text-white drop-shadow">
               <Icon size={18} strokeWidth={2.2} />
             </span>
