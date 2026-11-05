@@ -197,8 +197,11 @@ describe('chi puo\' avviarlo, e quando', () => {
     // `cancel-in-progress: true` da una delle due parti, l'arrivo dell'altro
     // fermerebbe a meta' una scrittura.
     const proprio = lavoro('applica').match(/concurrency:\n\s+group: (\S+)\n\s+cancel-in-progress: false\n/)?.[1];
+    // 5/11/2026 — Nel rilascio automatico il gruppo sta sul lavoro `vercel` (un giro scartato dal suo
+    // `if` non entra in fila). Per i rilasci di main il nome è lo stesso; solo il pulsante a mano su un
+    // altro ramo prende un gruppo suo, col suffisso dell'esecuzione.
     const rilascio = readFileSync(join(process.cwd(), '.github/workflows/deploy-dopo-ci.yml'), 'utf8')
-      .match(/^concurrency:\n\s+group: (\S+)\n\s+cancel-in-progress: false\n/m)?.[1];
+      .match(/\n {4}concurrency:\n(?:\s+#.*\n)*\s+group: (rilascio-produzione)(?:\$\{\{ github\.event_name == 'workflow_dispatch' && github\.ref != 'refs\/heads\/main' && format\('-\{0\}', github\.run_id\) \|\| '' \}\})?\n\s+cancel-in-progress: false\n/)?.[1];
     expect(rilascio).toBeDefined();
     expect(proprio).toBe(rilascio);
   });
