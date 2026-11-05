@@ -3,11 +3,8 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import type { ComponentType } from 'react';
-import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
-import { formatPrice } from '@/lib/format';
 import { prezziDelCarrello } from '@/lib/ordini/prezzi';
-import { VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
-import { monta, testoVisibile } from './aiuti/monta-componente';
+import { monta } from './aiuti/monta-componente';
 import { accendi, attendi } from './aiuti/schermo';
 
 /**
@@ -24,7 +21,6 @@ const ORDINE = 'a1b2c3d4-1111-4111-8111-111111111111';
 const NEGOZIO = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
 const FORNO = { lat: 45.0526, lng: 9.6929 };
 const CASA = { lat: 45.06, lng: 9.7 };
-const euro = (centesimi: number) => formatPrice(centesimi / 100);
 /** Le parole con cui un riepilogo può regalare una consegna che invece si paga. */
 const REGALO = /gratis|gratuit|omaggi|offert|regal|in dono|a costo zero|inclus/i;
 /** Gli spazi come li legge una persona: quelli dentro le cifre (non separabili) contano uno. */
