@@ -15,6 +15,8 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
+import { confirmDialog } from '@/components/ConfirmDialog';
+import { statoDellaPromo } from './stato-promo';
 
 type Promo = {
   id: string;
@@ -119,7 +121,19 @@ export default function SellerPromotionsPage() {
       toast.success('Promo cancellata');
       qc.invalidateQueries({ queryKey: queryKeys.seller.promotions });
     },
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
+
+  // Un tocco solo non chiude più una promo: si chiede conferma.
+  const chiediCancellazione = async (p: { id: string; title: string }) => {
+    const ok = await confirmDialog({
+      title: 'Cancellare la promozione?',
+      message: `«${p.title}» smette subito di valere: i clienti vedranno di nuovo il prezzo pieno.`,
+      confirmLabel: 'Sì, cancella',
+      danger: true,
+    });
+    if (ok) cancel.mutate(p.id);
+  };
 
   const vista = vistaDaQuery(queryPromos);
   if (!userId || vista.mostraScheletro) return <LoadingState />;
@@ -174,8 +188,10 @@ export default function SellerPromotionsPage() {
                   {p.scope === 'store' ? 'Tutto il negozio' : p.scope === 'category' ? 'Una categoria' : 'Prodotti selezionati'}
                 </p>
                 <button
-                  onClick={() => cancel.mutate(p.id)}
-                  className="mt-3 text-xs text-secondary-700 hover:underline font-semibold"
+                  type="button"
+                  onClick={() => { void chiediCancellazione(p); }}
+                  disabled={cancel.isPending}
+                  className="mt-3 text-xs text-secondary-700 hover:underline font-semibold disabled:opacity-50"
                 >
                   Cancella anticipatamente
                 </button>
@@ -196,7 +212,7 @@ export default function SellerPromotionsPage() {
                   <p className="font-semibold text-ink-700">{p.title}</p>
                   <p className="text-xs text-ink-400">-{p.discount_percent}% · Terminata {new Date(p.ends_at).toLocaleDateString('it-IT')}</p>
                 </div>
-                <span className="text-xs text-ink-400 uppercase tracking-wider">{p.status}</span>
+                <span className="text-xs text-ink-400 uppercase tracking-wider">{statoDellaPromo(p)}</span>
               </div>
             ))}
           </div>
@@ -222,14 +238,15 @@ export default function SellerPromotionsPage() {
             />
 
             {/* Step 2: Percentuale */}
-            <div>
-              <label className="block text-sm font-semibold text-ink-900 mb-2">Sconto</label>
+            <fieldset>
+              <legend className="block text-sm font-semibold text-ink-900 mb-2">Sconto</legend>
               <div className="grid grid-cols-6 gap-2">
                 {PERCENTS.map((p) => (
                   <button
                     key={p}
                     type="button"
                     onClick={() => setPercent(p)}
+                    aria-pressed={percent === p}
                     className={`py-2 rounded-lg font-bold border-2 transition-colors text-sm ${
                       percent === p
                         ? 'bg-secondary-500 text-white border-secondary-500'
@@ -240,7 +257,7 @@ export default function SellerPromotionsPage() {
                   </button>
                 ))}
               </div>
-            </div>
+            </fieldset>
 
             {/* Step 3: Cosa scontare */}
             <div>

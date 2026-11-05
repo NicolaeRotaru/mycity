@@ -219,10 +219,11 @@ export default function SellerStoriesPage() {
                     });
                     if (ok) del.mutate(s.id);
                   }}
-                  className="absolute bottom-2 right-2 bg-white/80 hover:bg-white text-rose-600 p-1.5 rounded-full"
+                  type="button"
+                  className="absolute bottom-2 right-2 inline-flex h-11 w-11 items-center justify-center bg-white/80 hover:bg-white text-rose-600 rounded-full"
                   aria-label="Elimina storia"
                 >
-                  <Trash2 size={12} strokeWidth={2.4} />
+                  <Trash2 size={18} strokeWidth={2.4} aria-hidden />
                 </button>
               </li>
             );

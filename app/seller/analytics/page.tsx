@@ -383,7 +383,13 @@ export default function SellerAnalyticsPage() {
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1.4fr_1fr]">
         <Card variant="bordered" padding="lg">
           <h2 className="mb-4 font-serif text-lg font-bold text-ink-900">Fatturato · ultimi 7 giorni</h2>
-          <div className="flex h-44 items-end gap-3">
+          {/* Per chi non vede le barre: gli stessi valori, in testo. */}
+          <ul className="sr-only">
+            {analytics.revenueSeries.map((d, i) => (
+              <li key={i}>{d.label}: {formatPrice(d.value)}</li>
+            ))}
+          </ul>
+          <div className="flex h-44 items-end gap-3" aria-hidden="true">
             {analytics.revenueSeries.map((d, i) => (
               <div key={i} className="flex h-full flex-1 flex-col items-center gap-2">
                 <div className="flex w-full flex-1 items-end">
