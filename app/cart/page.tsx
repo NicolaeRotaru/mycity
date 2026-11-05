@@ -41,6 +41,7 @@ import { leggiEsitoDellaVeloce, rigaQuandoArrivaNelCarrello } from '@/lib/ordini
 import { prezziDelCarrello } from '@/lib/ordini/prezzi';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { expressSiPuo } from '@/lib/quando-arriva';
+import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { romeNow } from '@/lib/store-hours';
 
 /**
@@ -94,7 +95,16 @@ function quandoArrivaScrittoNelCarrello(ora: number | null, veloce: boolean | nu
   // 29/10/2026 — L'orologio non bastava: a negozio chiuso o senza un fattorino online il carrello
   // prometteva i minuti e il no arrivava all'ultimo tocco in cassa. Ora decide la stessa risposta
   // della cassa e delle rotte (`veloceSiPuo`, letta da /api/consegna/veloce): senza, niente minuti.
-  return rigaQuandoArrivaNelCarrello(ora, veloce);
+  //
+  // 5/11/2026 — Ma «Consegna in 30-60 min» da sola diceva una consegna che il carrello non conta: il
+  // totale qui sotto è quello con la fascia (la veloce costa un euro in più, e la cassa la mette
+  // solo se la scegli), e alle 20:30 la cassa apre su domani. La veloce si dice come possibilità
+  // accanto alla fascia, che è la consegna conteggiata.
+  const riga = rigaQuandoArrivaNelCarrello(ora, veloce);
+  if (riga && veloce && ora !== null && expressSiPuo(ora)) {
+    return `Consegna nella fascia che scegli, o veloce in ${EXPRESS_ETA_LABEL}`;
+  }
+  return riga;
 }
 
 export default function CartPage() {

@@ -410,7 +410,11 @@ export default function CheckoutPage() {
   const { data: authUser, isPending: controlloAccessoInCorso } = useQuery({
     queryKey: queryKeys.checkout.authUser,
     queryFn: async () => (await supabase.auth.getUser()).data.user,
-    staleTime: 60_000,
+    // 5/11/2026 — Era 60 s, e nessuno svuotava la chiave: chi entrava dalla cassa e tornava entro
+    // un minuto riceveva il «nessuno» salvato da ospite e veniva rimandato all'accesso. Ora si
+    // rilegge a ogni apertura della cassa.
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Indirizzi salvati
@@ -914,10 +918,17 @@ export default function CheckoutPage() {
       // Vive quanto il carrello: cambia solo quando cambia cosa si sta comprando.
       // 31/10/2026 — la chiave e' legata a QUESTO carrello: se e' cambiato da
       // una risposta persa, nasce nuova (lib/ordini/tentativo.ts).
-      const improntaCarrello = groups
-        .map((g) => `${g.sellerId}=${g.items.map((it) => `${it.id}:${it.variantId ?? ''}:${it.quantity}`).sort().join(',')}`)
-        .sort()
-        .join('|');
+      // 5/11/2026 — Nell'impronta anche la fascia, il ritiro e l'indirizzo: lo stesso carrello
+      // rimandato con un'altra fascia o un altro indirizzo è un ordine diverso, non il doppione di
+      // quello di prima (la rotta rispondeva «fatto» con la fascia vecchia).
+      const improntaCarrello = [
+        ...groups
+          .map((g) => `${g.sellerId}=${g.items.map((it) => `${it.id}:${it.variantId ?? ''}:${it.quantity}`).sort().join(',')}`)
+          .sort(),
+        `fascia=${deliverySlot ?? ''}`,
+        `ritiro=${pickupInStore ? 1 : 0}`,
+        `ind=${[form.address, form.zip, form.city].map((x) => x.trim().toLowerCase()).join(',')}`,
+      ].join('|');
       const chiaveTentativo = `cod-${nuovaChiaveTentativo(improntaCarrello)}`;
       const res = await fetch('/api/orders/cod', {
         method: 'POST',
@@ -939,7 +950,9 @@ export default function CheckoutPage() {
           },
           couponCode: appliedCoupon?.coupon.code ?? null,
           pickupInStore,
-          useCredit,
+          // 5/11/2026 — Il credito si manda solo se la cassa l'ha letto e mostrato: se la lettura
+          // cade il saldo vale 0, la casella non compare, e il server non deve spenderlo lo stesso.
+          useCredit: useCredit && (walletCents ?? 0) > 0,
           deliverySlot,
           // R163 — la chiave del checkout: il server la riattacca a `order_placed`,
           // cosi' l'avvio e gli acquisti che ne sono nati si ritrovano.
