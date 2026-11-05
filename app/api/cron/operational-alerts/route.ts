@@ -2,7 +2,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { withCronAuth } from '@/lib/api/middleware';
-import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
+import { chiamataDelCalendarioFerma, rispostaDelFermo, VARIABILE_DEL_FERMO, VALORE_CHE_ACCENDE } from '@/lib/cron/fermo-dei-lavori';
+import { escapeHtml } from '@/lib/html-escape';
+import { ORE_PER_ACCETTARE, scadenzaAccettazione } from '@/lib/ordini/scadenza-accettazione';
+import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { lavoriFermi, type CronHeartbeat } from '@/lib/cron-health';
 import { env } from '@/lib/env';
@@ -50,7 +53,12 @@ const COOLDOWN_HOURS = 6;
 export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse> => {
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
-  const admin = getAdminSupabase();
+  let admin: ReturnType<typeof getAdminSupabase>;
+  try {
+    admin = getAdminSupabase();
+  } catch (e) {
+    return ApiErrors.unavailable(e instanceof Error ? e.message : 'config error');
+  }
   const alerts: AlertRow[] = [];
   /**
    * 22/8/2026 — IL SORVEGLIANTE FALLIVA IN SILENZIO E SI REGISTRAVA COME SANO.
@@ -71,7 +79,7 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   const oneHourAgo = new Date(Date.now() - 60 * 60_000).toISOString();
   const { data: stuckNew, error: err_stuckNew } = await admin
     .from('orders')
-    .select('id, created_at, total_price, seller_id, profiles!orders_seller_id_fkey(store_name)')
+    .select('id, created_at, delivery_slot, total_price, seller_id, profiles!orders_seller_id_fkey(store_name, store_hours)')
     .eq('delivery_status', 'NEW')
     .lt('created_at', oneHourAgo)
     .order('created_at', { ascending: true })
@@ -79,8 +87,17 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   if (err_stuckNew) controlliSaltati.push('ordini fermi in NEW');
 
   for (const o of stuckNew ?? []) {
-    const seller = (o as { profiles?: { store_name?: string } | null }).profiles;
+    const seller = (o as { profiles?: { store_name?: string; store_hours?: unknown } | null }).profiles;
     const id = (o as { id: string }).id;
+    // 5/11/2026 — L'ordine della sera per la mattina dopo resta nuovo, in regola, fino all'apertura:
+    // si segnala solo quando mancano meno di 30 minuti alla scadenza vera per accettarlo (la stessa
+    // del giro che annulla), non a un'ora dalla nascita.
+    const scadenza = scadenzaAccettazione(
+      o as { created_at: string; delivery_slot?: string | null },
+      ORE_PER_ACCETTARE,
+      seller?.store_hours,
+    );
+    if (scadenza && scadenza.getTime() - Date.now() > 30 * 60_000) continue;
     const minutesStuck = Math.floor((Date.now() - new Date((o as { created_at: string }).created_at).getTime()) / 60_000);
     alerts.push({
       key: `ORDER_STUCK_NEW|${id}`,
@@ -112,7 +129,12 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     });
   }
 
-  // 3) Cash on delivery non riconciliato del giorno precedente
+  // 3) Contanti consegnati e non confermati da più di un'ora.
+  // 5/11/2026 — Prima si guardavano solo gli ordini NATI ieri (giorno UTC): uno consegnato due giorni
+  // dopo l'ordine non cadeva mai nella finestra. Conta la consegna; l'attesa di sei ore della chiave
+  // evita le ripetizioni.
+  const unOraFaConsegna = new Date(Date.now() - 60 * 60_000).toISOString();
+  // Il giorno di ieri serve ancora alle quadrature del punto 7.
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
   const { data: codMissing, error: err_codMissing } = await admin
     .from('orders')
@@ -120,8 +142,8 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     .eq('payment_method', 'cod')
     .eq('delivery_status', 'DELIVERED')
     .is('cash_confirmed_at', null)
-    .gte('created_at', yesterday + 'T00:00:00Z')
-    .lte('created_at', yesterday + 'T23:59:59Z')
+    .lt('delivered_at', unOraFaConsegna)
+    .order('delivered_at', { ascending: true })
     .limit(20);
   if (err_codMissing) controlliSaltati.push('incassi in contanti mancanti');
 
@@ -132,7 +154,7 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
       key: `COD_NOT_CONFIRMED|${id}`,
       type: 'COD_NOT_CONFIRMED',
       detail: `Ordine COD #${id.slice(0, 8)} consegnato ma cash non confermato (rider: ${rider?.full_name ?? 'unknown'})`,
-      // R33 — /admin/orders/<id> non esiste; l'incasso si registra dalla pagina delle rimesse.
+      // R33 — L'incasso si registra dalla pagina delle rimesse, non dal dettaglio dell'ordine.
       url: '/admin/cod-remittance',
     });
   }
@@ -316,7 +338,12 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     alerts.push({
       key: `CRON_STALE|${c.name}`,
       type: 'CRON_STALE',
-      detail: `Cron "${c.name}" fermo da ${c.staleMin} min (soglia ${c.thresholdMin}): scheduler o deploy down?`,
+      detail:
+        `Cron "${c.name}" fermo da ${c.staleMin} min (soglia ${c.thresholdMin}): scheduler o deploy down?` +
+        // 5/11/2026 — Col fermo acceso i lavori non scrivono il battito, di proposito: si dice.
+        (process.env[VARIABILE_DEL_FERMO]?.trim() !== VALORE_CHE_ACCENDE
+          ? ` Attenzione: ${VARIABILE_DEL_FERMO} non è «${VALORE_CHE_ACCENDE}», i lavori a orario sono fermi di proposito e il battito vecchio è atteso.`
+          : ''),
       url: '/admin/today',
     });
   }
@@ -383,15 +410,19 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // 9) Backlog coda email (audit 🟡-9): se send-emails non gira o Resend è giù,
   // le email lifecycle si accumulano. Segnaliamo se troppe restano non inviate.
   const emailBacklogCutoff = new Date(Date.now() - 30 * 60_000).toISOString();
-  const { count: emailBacklog } = await admin
+  const { count: emailBacklog, error: err_emailBacklog } = await admin
     .from('email_queue')
     .select('id', { count: 'exact', head: true })
     .is('sent_at', null)
     .is('cancelled_at', null)
     .lte('send_at', emailBacklogCutoff);
+  // 5/11/2026 — Una coda che non si legge non è una coda vuota.
+  if (err_emailBacklog) controlliSaltati.push('coda email');
   if ((emailBacklog ?? 0) >= 50) {
     alerts.push({
-      key: `EMAIL_BACKLOG|${new Date().toISOString().slice(0, 13)}`,
+      // 5/11/2026 — Chiave fissa: con l'ora dentro, l'attesa di sei ore non agganciava mai e
+      // l'allarme tornava ogni ora.
+      key: 'EMAIL_BACKLOG',
       type: 'EMAIL_BACKLOG',
       detail: `Coda email: ${emailBacklog} messaggi non inviati da oltre 30 min. send-emails fermo o Resend down?`,
       url: '/admin/today',
@@ -488,7 +519,9 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
       .from('cod_reconciliations')
       .select('rider_id, remitted_at, collected_cents, status')
       .in('rider_id', idsInSospeso)
-      .is('remitted_at', null);
+      .is('remitted_at', null)
+      // 5/11/2026 — Un tetto, come tutte le altre letture di questo giro.
+      .limit(500);
     if (errCassa) {
       // Una cassa che non si legge NON e' un rinvio deciso da noi: non esclude
       // nessuno, e il giro non si dichiara sano.
@@ -546,15 +579,29 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     });
   }
 
-  if (controlliSaltati.length > 0) {
+  /**
+   * 5/11/2026 — UN CONTROLLO SALTATO NON BUTTA VIA GLI ALLARMI VERI.
+   *
+   * Prima, con un solo controllo illeggibile, il giro rispondeva 500 subito: prima della campanella
+   * e dell'email, quindi anche l'ordine fermo trovato da un altro controllo non arrivava a nessuno.
+   * Adesso gli allarmi trovati partono, con uno in più che dice cosa non si è potuto guardare, e il
+   * giro risponde comunque errore (il battito non conta come «tutto guardato»).
+   */
+  const incompleto = controlliSaltati.length > 0;
+  if (incompleto) {
     logger.error('[cron] sorvegliante incompleto: NON dichiarare sano quello che non ha guardato', {
       saltati: controlliSaltati,
     });
-    return NextResponse.json(
-      { ok: false, alerts: alerts.length, controlliSaltati },
-      { status: 500 },
-    );
+    alerts.push({
+      key: `SORVEGLIANTE_INCOMPLETO|${new Date().toISOString().slice(0, 10)}`,
+      type: 'SORVEGLIANTE_INCOMPLETO',
+      detail: `Il sorvegliante non ha potuto guardare: ${controlliSaltati.join(', ')}.`,
+      url: '/admin/today',
+    });
   }
+  /** Quello che non è andato nei canali (campanella, memoria dell'attesa): si dice nella risposta. */
+  const problemi: string[] = [];
+  const stato = () => (incompleto || problemi.length > 0 ? 500 : 200);
 
   if (alerts.length === 0) {
     return NextResponse.json({
@@ -573,23 +620,35 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // il cooldown. Evita di re-inviare lo stesso avviso ad ogni run (alert fatigue).
   const cutoff = new Date(Date.now() - COOLDOWN_HOURS * 60 * 60_000).toISOString();
   const keys = alerts.map((a) => a.key);
-  const { data: recent } = await admin
+  const { data: recent, error: errRecent } = await admin
     .from('operational_alert_log')
     .select('alert_key')
     .in('alert_key', [...keys, ...keys.map(chiaveCampanella)])
     .gte('last_sent_at', cutoff);
+  if (errRecent) {
+    // Meglio un doppione che un silenzio: si manda, ma si dice.
+    logger.error('[operational-alerts] attesa di sei ore non letta: si avvisa lo stesso', { motivo: errRecent.message });
+    problemi.push('attesa di sei ore non letta');
+  }
   const recentSet = new Set((recent ?? []).map((r: { alert_key: string }) => r.alert_key));
   const fresh = alerts.filter((a) => !recentSet.has(a.key));
   // La campanella ha la sua memoria: vedi `chiaveCampanella` in fondo al file.
-  const daSuonare = fresh.filter((a) => !recentSet.has(chiaveCampanella(a.key)));
+  // 5/11/2026 — Si guarda su TUTTI gli allarmi, non solo su quelli freschi per l'email: se l'email
+  // era partita e la campanella no, l'allarme non era più «fresco» e la campanella taceva sei ore.
+  const daSuonare = alerts.filter((a) => !recentSet.has(chiaveCampanella(a.key)));
 
-  if (fresh.length === 0) {
-    return NextResponse.json({
-      ok: true,
-      alerts: alerts.length,
-      fresh: 0,
-      message: 'Anomalie presenti ma già notificate di recente (cooldown attivo)',
-    });
+  if (fresh.length === 0 && daSuonare.length === 0) {
+    return NextResponse.json(
+      {
+        ok: stato() === 200,
+        alerts: alerts.length,
+        fresh: 0,
+        controlliSaltati,
+        ...(problemi.length ? { problemi } : {}),
+        message: 'Anomalie presenti ma già notificate di recente (cooldown attivo)',
+      },
+      { status: stato() },
+    );
   }
 
   /**
@@ -613,32 +672,59 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
    * proprio mentre la posta non va. Adesso la campanella segna il suo invio
    * sotto `CAMPANELLA|<chiave>` e suona una volta ogni sei ore per allarme;
    * l'email, che e' quella che non e' partita, si ritenta a ogni giro.
+   *
+   * 5/11/2026 — Gli esiti della lettura degli amministratori, della campanella e della sua memoria
+   * si leggono: se uno non va, la risposta lo dice e il giro non si dichiara sano.
    */
-  const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin').limit(10);
-  if (daSuonare.length > 0 && admins && admins.length > 0) {
-    const notifications = admins.map((a: { id: string }) => ({
-      user_id: a.id,
-      // #33 — categoria 'system': un allarme operativo non e' una promozione e
-      // non si spegne con gli interruttori del marketing.
-      category: 'system',
-      title: `⚠️ ${daSuonare.length} alert operativi`,
-      body: daSuonare.slice(0, 3).map((al) => al.detail).join('; '),
-      link: '/admin/today',
-    }));
-    const esitoCampanella = await admin.from('notifications').insert(notifications);
-    if (esitoCampanella?.error) {
-      // Non si segna l'invio: il giro dopo ci riprova invece di tacere sei ore.
-      logger.error('[operational-alerts] campanella non scritta: si ritenta al prossimo giro', {
-        motivo: esitoCampanella.error.message, anomalie: daSuonare.length,
-      });
-    } else {
-      await admin
-        .from('operational_alert_log')
-        .upsert(
-          daSuonare.map((a) => ({ alert_key: chiaveCampanella(a.key), last_sent_at: new Date().toISOString() })),
-          { onConflict: 'alert_key' },
-        );
+  if (daSuonare.length > 0) {
+    const { data: admins, error: errAdmins } = await admin.from('profiles').select('id').eq('role', 'admin').limit(10);
+    if (errAdmins) {
+      logger.error('[operational-alerts] amministratori non letti: campanella non suonata', { motivo: errAdmins.message });
+      problemi.push('amministratori non letti: campanella non suonata');
+    } else if (admins && admins.length > 0) {
+      const notifications = admins.map((a: { id: string }) => ({
+        user_id: a.id,
+        // #33 — categoria 'system': un allarme operativo non e' una promozione e
+        // non si spegne con gli interruttori del marketing.
+        category: 'system',
+        title: `⚠️ ${daSuonare.length} alert operativi`,
+        body: daSuonare.slice(0, 3).map((al) => al.detail).join('; '),
+        link: '/admin/today',
+      }));
+      const esitoCampanella = await admin.from('notifications').insert(notifications);
+      if (esitoCampanella?.error) {
+        // Non si segna l'invio: il giro dopo ci riprova invece di tacere sei ore.
+        logger.error('[operational-alerts] campanella non scritta: si ritenta al prossimo giro', {
+          motivo: esitoCampanella.error.message, anomalie: daSuonare.length,
+        });
+        problemi.push('campanella non scritta');
+      } else {
+        const esitoMemoria = await admin
+          .from('operational_alert_log')
+          .upsert(
+            daSuonare.map((a) => ({ alert_key: chiaveCampanella(a.key), last_sent_at: new Date().toISOString() })),
+            { onConflict: 'alert_key' },
+          );
+        if (esitoMemoria?.error) {
+          logger.error('[operational-alerts] attesa della campanella non registrata', { motivo: esitoMemoria.error.message });
+          problemi.push('attesa della campanella non registrata');
+        }
+      }
     }
+  }
+
+  if (fresh.length === 0) {
+    return NextResponse.json(
+      {
+        ok: stato() === 200,
+        alerts: alerts.length,
+        fresh: 0,
+        controlliSaltati,
+        ...(problemi.length ? { problemi } : {}),
+        message: 'Email già mandate di recente (cooldown attivo); campanella ripresa',
+      },
+      { status: stato() },
+    );
   }
 
   // Notifica admin via email + notification in-app (solo per gli alert "freschi")
@@ -657,16 +743,19 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
       anomalie: fresh.length,
     });
     return NextResponse.json(
-      { ok: false, alerts: alerts.length, fresh: fresh.length, errore: 'SUPPORT_EMAIL non configurata: nessuno riceve gli allarmi' },
+      { ok: false, alerts: alerts.length, fresh: fresh.length, controlliSaltati, errore: 'SUPPORT_EMAIL non configurata: nessuno riceve gli allarmi' },
       { status: 500 },
     );
   }
 
+  // 5/11/2026 — Nomi di negozi e fattorini li scrive la persona stessa: nell'HTML si filtrano.
+  // E l'indirizzo del sito viene da env.appUrl(), come il resto della posta (non la variabile grezza).
+  const sito = env.appUrl().replace(/\/$/, '');
   const body = `
     <h2>⚠️ Alert operational MyCity</h2>
     <p>Rilevate <strong>${fresh.length}</strong> nuove anomalie:</p>
     <ul>
-      ${fresh.map((a) => `<li><strong>[${a.type}]</strong> ${a.detail}${a.url ? ` <a href="${process.env.NEXT_PUBLIC_APP_URL}${a.url}">[apri]</a>` : ''}</li>`).join('\n')}
+      ${fresh.map((a) => `<li><strong>[${escapeHtml(a.type)}]</strong> ${escapeHtml(a.detail)}${a.url ? ` <a href="${escapeHtml(`${sito}${a.url}`)}">[apri]</a>` : ''}</li>`).join('\n')}
     </ul>
     <p style="color:#666;font-size:12px">Generato automaticamente dal cron operational-alerts.</p>
   `;
@@ -727,20 +816,30 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   }
 
   // Registra l'invio per il cooldown (upsert: aggiorna last_sent_at se esiste).
-  await admin
+  // 5/11/2026 — Se non si scrive, al giro dopo (15 minuti) gli stessi allarmi ripartono: si dice.
+  const esitoAttesa = await admin
     .from('operational_alert_log')
     .upsert(
       fresh.map((a) => ({ alert_key: a.key, last_sent_at: new Date().toISOString() })),
       { onConflict: 'alert_key' },
     );
+  if (esitoAttesa?.error) {
+    logger.error('[operational-alerts] attesa di sei ore non registrata: gli allarmi ripartiranno', { motivo: esitoAttesa.error.message });
+    problemi.push('attesa non registrata');
+  }
 
-  return NextResponse.json({
-    ok: true,
-    alerts: alerts.length,
-    fresh: fresh.length,
-    cancellazioniRinviate: sorveglianza.rinviate.length,
-    details: fresh,
-  });
+  return NextResponse.json(
+    {
+      ok: stato() === 200,
+      alerts: alerts.length,
+      fresh: fresh.length,
+      controlliSaltati,
+      ...(problemi.length ? { problemi } : {}),
+      cancellazioniRinviate: sorveglianza.rinviate.length,
+      details: fresh,
+    },
+    { status: stato() },
+  );
 });
 
 // I lavori periodici di Vercel bussano in GET, sempre — non c'è modo di
