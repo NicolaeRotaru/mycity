@@ -1,7 +1,7 @@
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
-import { cmsPageSchema, emptyCmsPage, leggiCmsPage, type CmsPage } from '@/lib/cms-page';
+import { cmsPageSchema, emptyCmsPage, leggiCmsPage, CMS_PAGES, type CmsPage } from '@/lib/cms-page';
 import { writeAudit } from '@/lib/audit';
 import { siteByteSize, MAX_SITE_BYTES } from '@/lib/home-site';
 import { sanitizeRichText } from '@/lib/sanitize-html';
@@ -36,6 +36,10 @@ export const GET = withAdminAuth(async ({ params }) => {
 
 export const PUT = withAdminAuth(async ({ user, req: r, params }) => {
     const slug = String(params.slug);
+    // Si pubblica solo una pagina che il sito legge davvero dal pannello.
+    if (!CMS_PAGES.some((p) => p.slug === slug)) {
+      return ApiErrors.invalidRequest('Questa pagina non si modifica dal pannello: il sito non legge i suoi contenuti da qui.');
+    }
     let body: unknown;
     try { body = await r.json(); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
     const raw = (body as { page?: unknown })?.page ?? body;

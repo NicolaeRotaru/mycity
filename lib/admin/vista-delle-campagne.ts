@@ -32,6 +32,8 @@
  * 🟢 Puro: nessuna rete, nessun React, nessun orologio. Una prova lo ESEGUE.
  */
 
+import type { AvvisoLettura } from './vista-dei-coupon';
+import { NON_LETTO } from '@/lib/letture-cruscotto';
 import { vistaDaQuery, type LetturaQuery } from '../vista-query';
 import type { StatoVista } from '../stato-vista';
 import { formatPriceFromCents } from '../format';
@@ -81,10 +83,9 @@ export interface RiquadroCampagne {
   numero: number | null;
 }
 
-export interface AvvisoLettura {
-  titolo: string;
-  dettaglio: string;
-}
+// 5/11/2026 (S05) — Un tipo solo per l'avviso di lettura e un trattino solo per «non lo so»:
+// erano dichiarati due volte nello stesso lotto (qui e in vista-dei-coupon / letture-cruscotto).
+export type { AvvisoLettura } from './vista-dei-coupon';
 
 export interface VistaCampagne {
   stato: StatoVista;
@@ -106,8 +107,8 @@ export interface VistaCampagne {
   avviso: AvvisoLettura | null;
 }
 
-/** Il trattino lungo: «non lo so», che non è «zero». */
-export const SEGNO_NON_SO = '—';
+/** Il trattino lungo: «non lo so», che non è «zero». È NON_LETTO di lib/letture-cruscotto. */
+export const SEGNO_NON_SO = NON_LETTO;
 
 const NOME_BREVE: Record<StatoCampagna, string> = {
   active: 'attive',

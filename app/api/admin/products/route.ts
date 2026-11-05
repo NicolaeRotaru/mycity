@@ -5,7 +5,6 @@ import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
 import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
 import { DaCompletare } from '@/lib/products/salvataggio-tracciato';
-import { MYCITY_SELLER_ID } from '@/lib/products/mycitySeller';
 import { type ProductVariant } from '@/lib/products/variants';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
@@ -80,10 +79,13 @@ const updateSchema = z.object({
   ...externalFields,
 }).partial({ name: true, price: true });
 
-/** Verifica che il seller esista e sia un venditore (o il negozio MyCity). */
+/**
+ * Verifica che il seller esista e sia un venditore. Vale anche per il negozio
+ * MyCity (5/11/2026): esiste solo se è stato lanciato il seed, e prima il suo id
+ * passava senza controllo anche quando il profilo non c'era.
+ */
 async function assertSeller(admin: ReturnType<typeof getAdminSupabase>, sellerId: string): Promise<boolean> {
-  if (sellerId === MYCITY_SELLER_ID) return true;
-  const { data } = await admin.from('profiles').select('role').eq('id', sellerId).single();
+  const { data } = await admin.from('profiles').select('role').eq('id', sellerId).maybeSingle();
   return (data as { role?: string } | null)?.role === 'seller';
 }
 

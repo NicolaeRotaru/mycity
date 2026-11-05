@@ -10,12 +10,17 @@ import { homeSectionSchema, type HomeSection, MAX_HOME_SECTIONS } from './home-s
 
 export const CMS_CONTENT_TYPES = ['richText', 'banner', 'gallery', 'video'] as const;
 
-/** Pagine note gestibili dall'admin (lo slug mappa la rotta pubblica). */
+/**
+ * Pagine note gestibili dall'admin (lo slug mappa la rotta pubblica).
+ *
+ * 5/11/2026 — Qui c'erano anche Termini, Privacy e FAQ: il pannello le «pubblicava»
+ * con «Pagina pubblicata!», ma solo /about legge i contenuti del pannello. Per le
+ * altre tre il pubblico continuava a vedere il testo scritto nel codice. Restano
+ * solo le pagine che leggono davvero quello che si pubblica: i testi legali
+ * cambiano nel codice (con la loro versione), non dal pannello.
+ */
 export const CMS_PAGES: { slug: string; label: string; route: string }[] = [
   { slug: 'about', label: 'Chi siamo', route: '/about' },
-  { slug: 'terms', label: 'Termini di servizio', route: '/terms' },
-  { slug: 'privacy', label: 'Privacy', route: '/privacy' },
-  { slug: 'faq', label: 'FAQ', route: '/faq' },
 ];
 
 export function cmsPageLabel(slug: string): string {
