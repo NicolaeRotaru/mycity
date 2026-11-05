@@ -5,7 +5,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { X, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { sizedImage, logoNegozio } from '@/lib/image-url';
+import { sizedImage } from '@/lib/image-url';
+import { caricatoreLogoNegozio } from '@/components/StoreAvatar';
 import caricatoreFotoRemote from '@/lib/image-loader';
 
 /**
@@ -234,10 +235,12 @@ export default function StoryViewer({ stories, startIndex = 0, onClose }: Props)
             <div className="absolute top-6 left-4 flex items-center gap-2">
               {active.seller.store_logo && (
                 <Image
-                  src={logoNegozio(active.seller.store_logo, 36)}
+                  src={active.seller.store_logo}
                   alt=""
                   width={36}
                   height={36}
+                  // 5/11/2026 — la misura la fa Supabase (solo larghezza), non anche Vercel.
+                  loader={caricatoreLogoNegozio}
                   className="rounded-full ring-2 ring-white bg-white object-contain w-9 h-9"
                 />
               )}

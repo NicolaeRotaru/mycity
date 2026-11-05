@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { Star, User, BadgeCheck, ThumbsUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
-import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
 import type { SectionContext, SectionReview } from './SectionContext';
 import { RatingStars } from '@/components/ui/RatingStars';
@@ -127,10 +127,11 @@ function ReviewItem({ r, accent, userId, giaVotata }: { r: SectionReview; accent
               className="block h-[72px] w-[72px] overflow-hidden rounded-lg bg-cream-100 transition-opacity hover:opacity-80"
             >
               <Image
-                src={sizedImage(url, 'thumb')}
+                src={url}
                 alt={`Foto ${i + 1} della recensione`}
                 width={72}
                 height={72}
+                loader={caricatoreFotoRemote}
                 className="h-full w-full object-cover"
                 loading="lazy"
               />

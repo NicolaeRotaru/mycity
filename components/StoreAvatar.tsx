@@ -2,7 +2,8 @@
 
 import Image from 'next/image';
 import { Store } from 'lucide-react';
-import caricatoreFotoRemote from '@/lib/image-loader';
+import type { ImageLoaderProps } from 'next/image';
+import { logoNegozio } from '@/lib/image-url';
 
 interface Props {
   logoUrl?: string | null;
@@ -24,6 +25,17 @@ const SIZE_PX = { sm: 40, md: 56, lg: 80, xl: 112 } as const;
 // Dimensione (px) dell'icona Lucide di fallback per ogni taglia avatar.
 const ICON_PX = { sm: 20, md: 24, lg: 32, xl: 44 } as const;
 
+/**
+ * 5/11/2026 — Il caricatore dei loghi dei negozi: come `caricatoreFotoRemote` lascia la misura al
+ * CDN di Supabase (niente seconda riduzione a Vercel), ma chiede solo la larghezza, MAI il ritaglio
+ * quadrato, perché un marchio con la scritta ritagliato diventa illeggibile. `width` è già in
+ * pixel veri: logoNegozio raddoppia, quindi qui si passa la metà.
+ */
+export function caricatoreLogoNegozio({ src, width }: ImageLoaderProps): string {
+  if (!src.startsWith('http')) return src;
+  return logoNegozio(src, Math.max(1, Math.ceil(width / 2)));
+}
+
 const StoreAvatar = ({ logoUrl, storeName, size = 'md', className = '' }: Props) => {
   const sizeClass = SIZE_CLASSES[size];
 
@@ -36,13 +48,18 @@ const StoreAvatar = ({ logoUrl, storeName, size = 'md', className = '' }: Props)
             ridimensionarlo era l'ottimizzatore di Vercel, che lo scarica, lo ricodifica per
             ogni misura e lo mette in conto. Col caricatore il taglio lo fa il CDN di
             Supabase, che quella foto ce l'ha già. */}
+        {/* 5/11/2026 — Il caricatore, alle misure di un avatar, sceglie la fascia quadrata
+            ('thumb'/'card') e chiede al CDN il ritaglio: un logo con la scritta perdeva i lati,
+            mentre AccountSidebar lo mostrava intero. Ora lo stesso trattamento del resto del sito:
+            la larghezza la chiede caricatoreLogoNegozio (solo larghezza, mai il ritaglio) e il
+            logo sta intero nel cerchio. */}
         <Image
           src={logoUrl}
           alt={storeName ?? 'logo negozio'}
           fill
           sizes={`${px}px`}
-          loader={caricatoreFotoRemote}
-          className="object-cover"
+          loader={caricatoreLogoNegozio}
+          className="object-contain"
         />
       </div>
     );

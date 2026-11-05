@@ -95,3 +95,26 @@ describe('310 — con una promozione il prezzo grande è quello che si paga', ()
     expect(src).toMatch(/<StickyAddToCart\s+price=\{price\}/);
   });
 });
+
+/** Il sorgente senza commenti: le frasi vere, non quelle che raccontano la storia. */
+const codiceDellaScheda = () =>
+  readFileSync('app/product/[id]/page.tsx', 'utf8').replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+
+describe('1971 — la scheda non riscrive a mano la consegna «per negozio»', () => {
+  it('nessuna riga scritta in linea con una cifra di consegna e «per negozio»', () => {
+    const codice = codiceDellaScheda();
+    expect(codice).not.toMatch(/Consegna[^<{]*\{formatPrice\([^)]*\)\}[^<]*per negozio/i);
+    expect(codice).not.toMatch(/per negozio<\/p>/);
+    expect(codice).not.toMatch(/costoConsegna\)\}\s*per negozio/);
+  });
+});
+
+describe('2576 — la scheda prodotto dice la frase del reso del SUO prodotto', () => {
+  it('la frase viene da fraseResoDelProdotto con la riga del recesso, ed è quella che si disegna', () => {
+    const codice = codiceDellaScheda();
+    expect(codice).toMatch(/const fraseReso = fraseResoDelProdotto\(rigaDelRecesso\);/);
+    expect(codice).toMatch(/non_recedibile: \(data as \{ non_recedibile\?: unknown \} \| null\)\?\.non_recedibile === true/);
+    expect(codice).toMatch(/<RotateCcw[^>]*\/>\s*\{fraseReso\}/);
+    expect(codice).not.toMatch(/fraseReso\w*\(\)/);
+  });
+});

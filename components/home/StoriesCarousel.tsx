@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
-import { logoNegozio } from '@/lib/image-url';
+import { caricatoreLogoNegozio } from '@/components/StoreAvatar';
 import { queryKeys } from '@/lib/queries/keys';
 import { conNegozioApprovato } from '@/lib/queries/seller-public-profiles';
 import StoryViewer from '@/components/StoryViewer';
@@ -107,10 +107,12 @@ export default function StoriesCarousel() {
               <div className="bg-white p-0.5 rounded-full">
                 {s.seller?.store_logo ? (
                   <Image
-                    src={logoNegozio(s.seller.store_logo, 56)}
+                    src={s.seller.store_logo}
                     alt=""
                     width={56}
                     height={56}
+                    // 5/11/2026 — la misura la fa Supabase (solo larghezza), non anche Vercel.
+                    loader={caricatoreLogoNegozio}
                     className="rounded-full object-contain w-14 h-14"
                   />
                 ) : (

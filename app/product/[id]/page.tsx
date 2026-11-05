@@ -1412,11 +1412,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   <div className="grid grid-cols-4 gap-1.5 mt-2">
                     {r.photo_urls.filter(fotoDiCasa).slice(0, 4).map((url: string, i: number) => (
                       <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block relative aspect-square rounded-lg overflow-hidden bg-cream-100 hover:opacity-80">
+                        {/* 5/11/2026 — col caricatore: la misura la fa il CDN di Supabase, non una
+                            seconda volta l'ottimizzatore di Vercel su una foto già ridotta. */}
                         <Image
-                          src={sizedImage(url, 'card')}
+                          src={url}
                           alt={`Foto ${i + 1} della recensione`}
                           fill
                           sizes="(max-width: 768px) 25vw, 200px"
+                          loader={caricatoreFotoRemote}
                           className="object-cover"
                           loading="lazy"
                         />

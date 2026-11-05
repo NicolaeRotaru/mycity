@@ -133,3 +133,30 @@ describe('128/652 — visite e «Ultimi visti»', () => {
     expect(registra).toMatch(/if \(userId && sellerId && userId === sellerId\) return;/);
   });
 });
+
+import { caricatoreLogoNegozio } from '@/components/StoreAvatar';
+
+describe('1549 — lo stesso logo non si taglia in due modi diversi', () => {
+  const LOGO = 'https://abc.supabase.co/storage/v1/object/public/logos/pane.png';
+  it('il caricatore dei loghi chiede solo la larghezza, mai il ritaglio quadrato', () => {
+    const url = new URL(caricatoreLogoNegozio({ src: LOGO, width: 96 }));
+    expect(url.searchParams.get('width')).toBe('96');
+    expect(url.searchParams.get('height')).toBeNull();
+    // Con la sola larghezza Supabase rimpicciolisce e basta: niente altezza, niente quadrato.
+  });
+  it('StoreAvatar lo usa e tiene il logo intero (object-contain)', () => {
+    const src = leggi('components/StoreAvatar.tsx');
+    expect(src).toContain('loader={caricatoreLogoNegozio}');
+    expect(src).toMatch(/className="object-contain"/);
+    expect(src).not.toContain('loader={caricatoreFotoRemote}');
+  });
+});
+
+describe('670 — le foto già ridotte da Supabase non si riducono di nuovo a Vercel', () => {
+  it('foto delle recensioni e loghi delle storie passano da un caricatore', () => {
+    expect(leggi('app/product/[id]/page.tsx')).toMatch(/src=\{url\}\s+alt=\{`Foto \$\{i \+ 1\} della recensione`\}[\s\S]{0,240}loader=\{caricatoreFotoRemote\}/);
+    expect(leggi('components/store-sections/ReviewsSection.tsx')).toMatch(/src=\{url\}[\s\S]{0,140}loader=\{caricatoreFotoRemote\}/);
+    expect(leggi('components/home/StoriesCarousel.tsx')).toContain('loader={caricatoreLogoNegozio}');
+    expect(leggi('components/StoryViewer.tsx')).toContain('loader={caricatoreLogoNegozio}');
+  });
+});
