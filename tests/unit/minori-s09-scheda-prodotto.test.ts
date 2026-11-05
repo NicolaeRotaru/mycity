@@ -72,3 +72,12 @@ describe('1677 — il guscio non mette in cache una scheda vuota', () => {
     await expect(leggiSchedaPerIlGuscio(supa, 'bozza-del-forno')).resolves.toEqual([]);
   });
 });
+
+import { motivoDellErrore } from '@/components/products/VendutoDa';
+
+describe('2622 — il registro di «Venduto da» tiene il motivo vero', () => {
+  it('l\'errore di PostgREST (oggetto semplice) non diventa «[object Object]»', () => {
+    expect(motivoDellErrore({ message: 'permission denied for view', code: '42501' })).toBe('permission denied for view');
+    expect(motivoDellErrore(new Error('rete'))).toBe('rete');
+  });
+});

@@ -125,7 +125,8 @@ export default function DropOfDay() {
           </p>
 
           <div className="flex items-baseline gap-3 pt-2">
-            <span className="text-4xl md:text-5xl font-extrabold text-accent-300">
+            {/* 5/11/2026 — font-serif: i prezzi editoriali sono in Fraunces, come sulla scheda prodotto. */}
+            <span className="text-4xl md:text-5xl font-extrabold font-serif text-accent-300">
               {formatPrice(drop.drop_price)}
             </span>
             <span className="text-lg line-through opacity-60">

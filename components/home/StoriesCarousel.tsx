@@ -36,6 +36,25 @@ type Story = {
   } | null;
 };
 
+const STORIE_LETTE = 200;
+const STORIE_MOSTRATE = 30;
+
+/** Le storie raggruppate per negozio (nell'ordine in cui il negozio compare) e una bolla a testa. */
+export function unaBollaPerNegozio<T extends { seller_id: string }>(storie: T[]): {
+  inSequenza: T[];
+  bolle: Array<{ storia: T; indice: number }>;
+} {
+  const perNegozio = new Map<string, T[]>();
+  for (const s of storie) perNegozio.set(s.seller_id, [...(perNegozio.get(s.seller_id) ?? []), s]);
+  const inSequenza: T[] = [];
+  const bolle: Array<{ storia: T; indice: number }> = [];
+  for (const gruppo of perNegozio.values()) {
+    bolle.push({ storia: gruppo[0], indice: inSequenza.length });
+    inSequenza.push(...gruppo);
+  }
+  return { inSequenza, bolle };
+}
+
 export default function StoriesCarousel() {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
@@ -53,9 +72,12 @@ export default function StoriesCarousel() {
         .select('id, seller_id, image_url, caption, link_url, view_count, expires_at')
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
-        .limit(30);
+        // 5/11/2026 — Si taglia DOPO aver tolto le storie dei non-negozi: tagliando prima, trenta
+        // storie recenti di un account qualunque riempivano tutti i posti e il carosello restava
+        // vuoto, comprese le storie vere dei negozi.
+        .limit(STORIE_LETTE);
       const storie = (data ?? []) as Array<Omit<Story, 'seller'>>;
-      const conNegozio = await conNegozioApprovato(supabase, storie, 'id, store_name, store_logo');
+      const conNegozio = (await conNegozioApprovato(supabase, storie, 'id, store_name, store_logo')).slice(0, STORIE_MOSTRATE);
       return conNegozio.map(({ profiles, ...storia }) => ({
         ...storia,
         seller: { id: profiles.id, store_name: profiles.store_name, store_logo: profiles.store_logo ?? null },
@@ -66,12 +88,18 @@ export default function StoriesCarousel() {
 
   if (stories.length === 0) return null;
 
+  // 5/11/2026 — Una bolla per NEGOZIO, non per storia: tre storie di Pane Quotidiano erano tre
+  // cerchi uguali in fila. Le storie di uno stesso negozio si mettono una dopo l'altra, e la bolla
+  // apre il visore sulla prima del suo negozio.
+  const { inSequenza, bolle } = unaBollaPerNegozio(stories);
+
   return (
     <>
       <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-        {stories.map((s, i) => (
+        {bolle.map(({ storia: s, indice: i }) => (
           <button
-            key={s.id}
+            key={s.seller_id}
+            type="button"
             onClick={() => setViewerIndex(i)}
             className="flex flex-col items-center gap-1 flex-shrink-0"
           >
@@ -98,7 +126,7 @@ export default function StoriesCarousel() {
       </div>
 
       {viewerIndex !== null && (
-        <StoryViewer stories={stories} startIndex={viewerIndex} onClose={() => setViewerIndex(null)} />
+        <StoryViewer stories={inSequenza} startIndex={viewerIndex} onClose={() => setViewerIndex(null)} />
       )}
     </>
   );

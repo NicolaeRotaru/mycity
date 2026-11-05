@@ -27,6 +27,7 @@ import ShopOfMonthHero from '@/components/home/ShopOfMonthHero';
 import StoriesCarousel from '@/components/home/StoriesCarousel';
 import HomeEvents from '@/components/home/HomeEvents';
 import PromoDeals from '@/components/home/PromoDeals';
+import VideoAlClic from '@/components/store-sections/VideoAlClic';
 import TrendingNow from '@/components/home/TrendingNow';
 import ReorderRail from '@/components/home-sections/ReorderRail';
 import { DeliveryCutoff } from '@/components/ui/DeliveryCutoff';
@@ -522,15 +523,7 @@ function HomeBlock({
                     con il suo `src` e la sua lingua. */}
               </video>
             ) : (
-              <iframe
-                src={embedSrc}
-                title={c.heading || 'Video'}
-                className="absolute inset-0 w-full h-full"
-                loading="lazy"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
+              <VideoAlClic provider={c.provider === 'vimeo' ? 'vimeo' : 'youtube'} src={embedSrc} titolo={c.heading || 'Video'} />
             )}
           </div>
         </section>

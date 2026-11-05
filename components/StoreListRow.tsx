@@ -1,5 +1,6 @@
 'use client';
 
+import { scrittaApertura } from '@/components/home/orari-di-oggi';
 import Link from 'next/link';
 import { Star, ChevronRight, Package } from 'lucide-react';
 import StoreAvatar from './StoreAvatar';
@@ -66,7 +67,9 @@ const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
           )}
           <span className={`inline-flex items-center gap-1.5 font-semibold ${open ? 'text-olive-700' : 'text-ink-400'}`}>
             <span className={`inline-block h-1.5 w-1.5 rounded-full ${open ? 'bg-olive-600' : 'bg-ink-300'}`} />
-            {open ? 'Aperto' : 'Chiuso'}
+            {/* 5/11/2026 — «Chiuso» accanto a «consegna oggi» senza dire quando riapre si leggeva
+                come una contraddizione: si dice l'ora. */}
+            {open ? 'Aperto' : scrittaApertura(false, hours[DAY_KEYS[romeNow().getDay()]])}
           </span>
         </div>
       </div>

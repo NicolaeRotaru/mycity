@@ -128,7 +128,19 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
         {/* Pill "Indietro" sulla cover */}
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => {
+            // 5/11/2026 — Chi arriva da un link (WhatsApp, Google) non ha una pagina del sito
+            // dietro: router.back() non faceva niente, o nei browser delle app usciva dal sito.
+            const daQuestoSito = (() => {
+              try {
+                return !!document.referrer && new URL(document.referrer).origin === window.location.origin;
+              } catch {
+                return false;
+              }
+            })();
+            if (window.history.length > 1 && daQuestoSito) router.back();
+            else router.push('/stores');
+          }}
           className="absolute left-4 top-4 z-20 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3.5 py-2 text-sm font-semibold text-ink-800 shadow backdrop-blur-sm transition-colors hover:bg-white"
         >
           <ArrowLeft size={16} strokeWidth={2.2} aria-hidden /> Indietro

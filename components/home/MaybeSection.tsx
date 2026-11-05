@@ -19,7 +19,10 @@ type Props = {
 
 export default function MaybeSection({ children, className }: Props) {
   const ref = useRef<HTMLElement | null>(null);
-  const [empty, setEmpty] = useState(true);
+  // 5/11/2026 — Si parte da «pieno»: il server disegna già le categorie precaricate, e con
+  // `true` il contenitore le spegneva (display:none) finché il telefono non finiva di caricare il
+  // codice. Si nasconde solo dopo aver visto davvero un figlio vuoto.
+  const [empty, setEmpty] = useState(false);
 
   useEffect(() => {
     const check = () => {
