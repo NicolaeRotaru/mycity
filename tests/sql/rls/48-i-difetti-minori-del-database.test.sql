@@ -450,6 +450,18 @@ SELECT 'il magazzino dei documenti d identità ha un tetto di peso e di tipi (16
        coalesce(file_size_limit::text, 'nessun tetto')
   FROM storage.buckets WHERE id = 'kyc-docs';
 
+-- ── ㉜ I documenti non tolti tornano in coda (2518) ─────────────────────────────
+DELETE FROM public.kyc_file_da_togliere;
+SELECT public.kyc_file_da_togliere_rimetti('d4800000-0000-0000-0000-000000000003', ARRAY['x/kyc_selfie-1.jpg']);
+INSERT INTO esiti
+SELECT 'i percorsi rimessi tornano nella coda che la notte dopo riprende (2518)',
+       count(*) = 1, count(*) || ' righe'
+  FROM public.kyc_file_da_togliere_prendi() WHERE percorsi = ARRAY['x/kyc_selfie-1.jpg'];
+INSERT INTO esiti
+SELECT 'la coda dei documenti la rimette solo il server (2518)',
+       NOT has_function_privilege('authenticated', 'public.kyc_file_da_togliere_rimetti(uuid, text[])', 'EXECUTE')
+       AND NOT has_function_privilege('anon', 'public.kyc_file_da_togliere_rimetti(uuid, text[])', 'EXECUTE'), '';
+
 -- ── Verdetto ──────────────────────────────────────────────────────────────────
 DO $$
 DECLARE r record; rossi int;

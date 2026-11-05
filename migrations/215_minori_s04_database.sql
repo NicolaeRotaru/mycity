@@ -54,6 +54,7 @@
 --   ㉚  Benvenuto e guida del secondo giorno partono solo dopo la conferma
 --       dell'email (542).
 --   ㉛  Gli avvisi della campanella scritti dal database senza faccine (982).
+--   ㉜  I documenti d'identità che lo storage non ha tolto tornano in coda (2518).
 --
 -- RITORNO INDIETRO DELLE 157, 158 E 159 (scheda 1623) — scritto qui perché le
 -- migrazioni esistenti non si toccano:
@@ -1135,3 +1136,21 @@ BEGIN
     END IF;
   END LOOP;
 END $$;
+
+-- ㉜ I DOCUMENTI CHE LO STORAGE NON HA TOLTO TORNANO IN CODA (2518) -----------------
+-- Prima (171): kyc_file_da_togliere_prendi svuota la coda con DELETE … RETURNING
+-- prima che lo storage tolga i file; se la rimozione falliva, i percorsi restavano
+-- solo nel registro della notte. Il giro notturno (lib/privacy/potature-ritenzione.ts)
+-- ora li rimette in coda con questa funzione, e la notte dopo ci riprova.
+CREATE OR REPLACE FUNCTION public.kyc_file_da_togliere_rimetti(p_profilo uuid, p_percorsi text[])
+ RETURNS void
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  INSERT INTO public.kyc_file_da_togliere (profilo, percorsi)
+  SELECT p_profilo, p_percorsi
+   WHERE p_profilo IS NOT NULL AND coalesce(array_length(p_percorsi, 1), 0) > 0;
+$function$;
+REVOKE EXECUTE ON FUNCTION public.kyc_file_da_togliere_rimetti(uuid, text[]) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.kyc_file_da_togliere_rimetti(uuid, text[]) TO service_role;
