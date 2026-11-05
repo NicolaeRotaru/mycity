@@ -16,6 +16,7 @@ import { Truck, Banknote, MapPin, Zap, Store, Clock, ChefHat, Package, Bike, Che
 import { NEGOZIO_CHIUSO_COSA_SUCCEDE, fraseTariffaConsegna, riquadroRitiroInNegozio, riquadroTariffaConsegna } from '@/lib/promesse-pubbliche';
 import { QUANDO_SI_PUO_LA_VELOCE, VELOCE_IN_MINUTI } from '@/lib/promessa-consegna';
 import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
+import { etichettaPronto } from '@/lib/order-status';
 
 export const metadata = {
   title: 'Spedizioni e consegne · MyCity',
@@ -47,7 +48,8 @@ export default function ShippingPage() {
         <p className="text-ink-600">Tempi, costi e opzioni per ricevere il tuo ordine.</p>
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-4 mb-10">
+      {/* 5/11/2026 — Col ritiro acceso le card sono 4: in una griglia da 3 l'ultima restava sola. */}
+      <div className={`grid ${riquadroRitiroInNegozio() ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-4 mb-10`}>
         <div className="bg-olive-50 border border-olive-200 rounded-xl p-5 text-center">
           <div className="mb-2 flex justify-center"><Banknote size={28} className="text-olive-600" aria-hidden /></div>
           <div className="font-bold text-olive-900">{tariffa.titolo}</div>
@@ -82,7 +84,7 @@ export default function ShippingPage() {
           {QUANDO_SI_PUO_LA_VELOCE}. Quando non si può, la cassa non te la propone.</p>
           <ul className="list-disc pl-5">
             <li>I minuti della veloce partono da quando il negozio conferma l’ordine, non da quando lo invii</li>
-            <li>Vale negli orari di apertura del negozio che hai scelto</li>
+            <li>La veloce vale solo se tutti i negozi del carrello sono aperti</li>
             <li>{NEGOZIO_CHIUSO_COSA_SUCCEDE}</li>
           </ul>
         </div>
@@ -119,7 +121,7 @@ export default function ShippingPage() {
           <ul className="space-y-1 list-none pl-0">
             <li className="flex items-center gap-2"><Clock size={18} className="text-ink-500 shrink-0" aria-hidden /> In attesa di conferma</li>
             <li className="flex items-center gap-2"><ChefHat size={18} className="text-ink-500 shrink-0" aria-hidden /> In preparazione presso il venditore</li>
-            <li className="flex items-center gap-2"><Package size={18} className="text-ink-500 shrink-0" aria-hidden /> Pronto per il ritiro / la consegna</li>
+            <li className="flex items-center gap-2"><Package size={18} className="text-ink-500 shrink-0" aria-hidden /> {etichettaPronto()}</li>
             <li className="flex items-center gap-2"><Bike size={18} className="text-ink-500 shrink-0" aria-hidden /> In consegna (con nome del rider)</li>
             <li className="flex items-center gap-2"><CheckCircle2 size={18} className="text-olive-600 shrink-0" aria-hidden /> Consegnato</li>
           </ul>
@@ -133,7 +135,8 @@ export default function ShippingPage() {
           <p>Consegniamo a <strong>Piacenza</strong>, fino a <strong>{confine}</strong> dal negozio in linea
           d&apos;aria. Quando scrivi il tuo indirizzo, in cassa misuriamo la distanza e ti diciamo subito se ci
           arriviamo. Se l&apos;indirizzo non si trova sulla mappa, la cassa non riesce a misurarla e
-          l&apos;ordine passa senza questo controllo.</p>
+          l&apos;ordine passa senza questo controllo; lo stesso succede se il negozio non ha ancora la
+          sua posizione sulla mappa.</p>
         </div>
 
         <div className="space-y-3">

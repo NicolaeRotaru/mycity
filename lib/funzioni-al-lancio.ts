@@ -23,10 +23,14 @@
  * Ogni interruttore va letto DUE volte: dalla pagina (che non mostra la
  * funzione) e dalla rotta del server (che la rifiuta anche se qualcuno la
  * chiama a mano). La pagina è vetrina; il freno vero è la rotta.
- * Due eccezioni, perché una rotta da frenare non c'è: la classifica inviti la
- * legge il browser da una vista (nessun premio passa di mano, la promessa è
- * solo nella pagina) e il caricamento da file è il lettore della pagina, che
- * poi scrive come il modulo «Nuovo prodotto», acceso. Lì il freno è la pagina.
+ * Le eccezioni, dove una rotta da frenare non c'è e il freno è la pagina (o il
+ * componente): la classifica inviti la legge il browser da una vista (nessun
+ * premio passa di mano, la promessa è solo nella pagina); il caricamento da
+ * file è il lettore della pagina, che poi scrive come il modulo «Nuovo
+ * prodotto», acceso; inviti e punti (`INVITI_E_PUNTI_ACCESI`) li frenano le
+ * pagine, il menu e il passaggio giornaliero, mentre i punti li scrive il
+ * database; l'app installabile (`APP_INSTALLABILE_ACCESA`) è solo il manifest
+ * nella pagina; PostHog (`POSTHOG_ACCESO`) parte solo dal browser.
  *
  * Prima di riaccenderne una, leggi il «Per riaccendere» accanto.
  *
@@ -112,7 +116,9 @@ export const CODICI_SCONTO_IN_CASSA: boolean = false;
 export const APP_INSTALLABILE_ACCESA: boolean = false;
 
 /** Inviti («invita un amico», codice ?ref= all'iscrizione) e punti. Letto da
- *  app/sign-up, app/profile/referral e app/profile (il riquadro dei 5 euro).
+ *  app/sign-up, app/profile/referral, app/profile (il riquadro dei 5 euro),
+ *  app/profile/loyalty, lib/account-menu.ts (la voce «Punti & Livello») e
+ *  components/DailyCheckIn.tsx (il passaggio giornaliero che dà i punti).
  *  Per riaccendere: l'invito va registrato
  *  dal server. Oggi la pagina di iscrizione cerca chi ha invitato leggendo
  *  `profiles` dal browser di chi non ha ancora un account: le regole del

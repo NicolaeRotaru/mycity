@@ -5,6 +5,7 @@ import {
   Calendar, AlertTriangle, Headset, Eye, LayoutTemplate, Palette,
   Zap, Tags, FileText, type LucideIcon,
 } from 'lucide-react';
+import { INVITI_E_PUNTI_ACCESI } from './funzioni-al-lancio';
 
 /**
  * Voci del menu account — fonte unica condivisa tra la tendina desktop
@@ -29,7 +30,8 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
     items.push(
       { href: '/orders', icon: Package, label: 'I miei ordini' },
       { href: '/favorites', icon: Heart, label: 'Preferiti' },
-      { href: '/profile/loyalty', icon: Sparkles, label: 'Punti & Livello' },
+      // 5/11/2026 — Punti spenti al lancio (INVITI_E_PUNTI_ACCESI): la voce si accende con loro.
+      ...(INVITI_E_PUNTI_ACCESI ? [{ href: '/profile/loyalty', icon: Sparkles, label: 'Punti & Livello' }] : []),
       // Niente cifre nell'etichetta: la promessa dei 5 euro vive solo in /profile/referral,
       // che segue INVITI_E_PUNTI_ACCESI. Qui restava accesa anche con gli inviti spenti.
       { href: '/profile/referral', icon: Megaphone, label: 'Invita amici' },

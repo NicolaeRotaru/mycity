@@ -150,8 +150,12 @@ describe('la spedizione gratuita, in cassa, la dice chi la decide', () => {
 
   it('e quella frase nasce dalla cifra che la cassa addebita davvero', async () => {
     const { promessaSpedizione } = await import('@/lib/promesse-pubbliche');
-    // Con la consegna a pagamento la riga si vede; a consegna gratis sparisce.
+    // Con la consegna a pagamento la riga si vede.
     expect(promessaSpedizione(50, 300).dettaglioConsegna).toMatch(/3[.,]00/);
-    expect(promessaSpedizione(50, 0).dettaglioConsegna).toBeNull();
+    // 5/11/2026 (S07, scheda 2307) — Con la base a zero ma gli euro in più accesi la consegna NON è
+    // gratis (8 € di pane pagano 1 €): la riga resta, senza «0,00 €». Sparisce solo quando non si
+    // paga niente di niente (lo prova minori-s07-promesse.test.ts con tutte le cifre a zero).
+    expect(promessaSpedizione(50, 0).dettaglioConsegna).not.toBeNull();
+    expect(promessaSpedizione(50, 0).dettaglioConsegna).not.toMatch(/(^|[^\d])0,00/);
   });
 });
