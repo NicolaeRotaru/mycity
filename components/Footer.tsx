@@ -19,6 +19,7 @@ import { domandaCategoriePiene, soloLePiene } from './CategoryShowcase';
 import { rigaIdentita, titolare } from '@/lib/legal/titolare';
 import { linkWhatsApp } from '@/lib/contatto-whatsapp';
 import { indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
+import { NEWSLETTER_ACCESA } from '@/lib/funzioni-al-lancio';
 
 const SOCIALS = [
   {
@@ -139,6 +140,10 @@ const Footer = () => {
   const chiSiamo = titolare();
   const identita = rigaIdentita(chiSiamo);
   const whatsapp = linkWhatsApp(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER, 'Ciao MyCity, ho una domanda');
+  // 5/11/2026 — Il simbolo del telefono con «Lun-Ven 9-18» c'era sempre, senza un numero: come
+  // la pagina Contattaci, si mostra solo se il numero c'è (Nicola, 26/10: niente telefono
+  // pubblico finché qualcuno non risponde davvero).
+  const telefono = process.env.NEXT_PUBLIC_SUPPORT_PHONE?.trim() || null;
 
   const pathname = usePathname();
   const { isSeller, isRider, isAuthenticated } = useProfile();
@@ -229,9 +234,9 @@ const Footer = () => {
             <li><Link href="/" className="text-ink-600 hover:text-primary-700 transition-colors">Home</Link></li>
             <li><Link href="/stores" className="text-ink-600 hover:text-primary-700 transition-colors">Negozi locali</Link></li>
             <li><Link href="/near" className="text-ink-600 hover:text-primary-700 transition-colors">Vicino a te</Link></li>
-            <li><Link href="/shop-of-month" className="text-ink-600 hover:text-primary-700 transition-colors">Negozio del mese</Link></li>
-            <li><Link href="/events" className="text-ink-600 hover:text-primary-700 transition-colors">Eventi MyCity</Link></li>
-            <li><Link href="/lists" className="text-ink-600 hover:text-primary-700 transition-colors">Liste curate</Link></li>
+            {/* 5/11/2026 — Tolti «Negozio del mese», «Eventi MyCity» e «Liste curate»: con un
+                negozio solo erano stanze vuote («nessun negozio in classifica», «nessun evento»,
+                liste vuote). Si rimettono quando ci sono negozi e contenuti veri. */}
             <li><Link href="/search" className="text-ink-600 hover:text-primary-700 transition-colors">Tutti i prodotti</Link></li>
           </ul>
         </div>
@@ -312,8 +317,9 @@ const Footer = () => {
         </div>
       </div>
 
-      {/* Newsletter */}
-      {!isSellerArea && (
+      {/* Newsletter — 5/11/2026: con la newsletter spenta il modulo non si disegna, ma la sua
+          fascia color crema restava vuota su ogni pagina. */}
+      {!isSellerArea && NEWSLETTER_ACCESA && (
         <div className="border-t border-cream-300 bg-cream-100">
           <div className="container mx-auto px-4 sm:px-6 py-6 max-w-2xl">
             <NewsletterForm variant="light" />
@@ -342,9 +348,11 @@ const Footer = () => {
             <a href={mailtoContatto('info')} className="inline-flex items-center gap-1.5 hover:text-primary-700 transition-colors">
               <Mail size={13} strokeWidth={2} /> {indirizzoContatto('info')}
             </a>
-            <span className="inline-flex items-center gap-1.5">
-              <Phone size={13} strokeWidth={2} /> Lun-Ven 9-18
-            </span>
+            {telefono && (
+              <a href={`tel:${telefono.replace(/[^\d+]/g, '')}`} className="inline-flex items-center gap-1.5 hover:text-primary-700 transition-colors">
+                <Phone size={13} strokeWidth={2} aria-hidden /> {telefono} · Lun-Ven 9-18
+              </a>
+            )}
             <span className="inline-flex items-center gap-1.5">
               <MapPin size={13} strokeWidth={2} /> Piacenza, IT
             </span>

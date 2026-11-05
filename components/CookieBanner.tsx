@@ -44,10 +44,9 @@ export default function CookieBanner() {
   });
 
   useEffect(() => {
-    const s = readConsent();
-    // Mostra se mai espresso o se scaduto (ts > 6 mesi)
-    const sixMonthsAgo = Date.now() - 180 * 24 * 60 * 60 * 1000;
-    if (!s || s.ts < sixMonthsAgo) {
+    // Mostra se mai espresso o se scaduto: la scadenza (CONSENT_MAX_AGE_DAYS) la decide
+    // readConsent, la stessa regola che leggono gli strumenti di misura.
+    if (!readConsent()) {
       setShow(true);
     }
     const onReopen = () => setShow(true);

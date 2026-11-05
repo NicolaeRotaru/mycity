@@ -69,6 +69,12 @@ export const CAMPI_KYC_DA_AZZERARE = {
   rider_license_url: null,
   rider_insurance_url: null,
   rider_haccp_url: null,
+  // 5/11/2026 — La verifica d'identità (app/api/kyc/start-check) adesso scrive davvero
+  // questi tre campi: l'identificativo del controllo presso il fornitore, il suo esito e
+  // quando. Restavano sul profilo dopo la cancellazione.
+  kyc_provider_check_id: null,
+  kyc_provider_status: null,
+  kyc_provider_checked_at: null,
 } as const;
 
 /**
@@ -709,14 +715,26 @@ async function propagaLaCancellazioneAStripe(
   admin: Admin,
   userId: string,
 ): Promise<{ ok: true } | { ok: false; errore: string }> {
-  const { data, error } = await admin.from('profiles').select('stripe_customer_id').eq('id', userId);
+  const { data, error } = await admin.from('profiles').select('stripe_customer_id, stripe_account_id').eq('id', userId);
   if (error) {
     // Non sappiamo se c'è un cliente là fuori. Andare avanti al buio
     // significherebbe scegliere di non poterlo più sapere.
     logger.error('[cancellazione] codice cliente Stripe non letto', { userId, err: error.message });
     return { ok: false, errore: `il codice del cliente Stripe non è stato letto (${error.message})` };
   }
-  const clienteStripe = (data?.[0] as { stripe_customer_id?: string | null } | undefined)?.stripe_customer_id;
+  const riga = data?.[0] as { stripe_customer_id?: string | null; stripe_account_id?: string | null } | undefined;
+  const clienteStripe = riga?.stripe_customer_id;
+
+  // 5/11/2026 — IL CONTO COLLEGATO (Stripe Connect) DI NEGOZI E FATTORINI.
+  // Si leggeva solo il cliente dell'abbonamento: il conto collegato restava aperto e il suo
+  // codice, che vive solo sul profilo, spariva con lui. Se ha ancora soldi (disponibili o in
+  // arrivo) la cancellazione si rinvia, come per la cassa contanti; se è a zero si chiude.
+  const contoCollegato = riga?.stripe_account_id;
+  if (contoCollegato) {
+    const chiusura = await chiudiIlContoCollegato(userId, contoCollegato);
+    if (!chiusura.ok) return chiusura;
+  }
+
   if (!clienteStripe) return { ok: true };
 
   if (!isStripeConfigured()) {
@@ -735,6 +753,33 @@ async function propagaLaCancellazioneAStripe(
     const messaggio = err instanceof Error ? err.message : 'errore sconosciuto';
     logger.error('[cancellazione] cliente Stripe non cancellato', { userId, err: messaggio });
     return { ok: false, errore: `il cliente su Stripe non è stato cancellato (${messaggio})` };
+  }
+}
+
+async function chiudiIlContoCollegato(
+  userId: string,
+  conto: string,
+): Promise<{ ok: true } | { ok: false; errore: string }> {
+  if (!isStripeConfigured()) {
+    logger.error('[cancellazione] conto Stripe collegato da chiudere ma Stripe non è configurato', { userId, conto });
+    return { ok: false, errore: 'Stripe non è configurato e il conto collegato non può essere chiuso' };
+  }
+  try {
+    const saldo = await getStripe().balance.retrieve({}, { stripeAccount: conto });
+    const ancoraSoldi = [...(saldo.available ?? []), ...(saldo.pending ?? [])].some((v) => (v.amount ?? 0) !== 0);
+    if (ancoraSoldi) {
+      logger.error('[cancellazione] rinviata: il conto Stripe collegato ha ancora un saldo', { userId, conto });
+      return { ok: false, errore: 'il conto Stripe collegato ha ancora un saldo da pagare o da ricevere' };
+    }
+    await getStripe().accounts.del(conto);
+    logger.info('[cancellazione] conto Stripe collegato chiuso', { userId, conto });
+    return { ok: true };
+  } catch (err) {
+    const codice = (err as { code?: string })?.code;
+    if (codice === 'resource_missing' || codice === 'account_invalid') return { ok: true };
+    const messaggio = err instanceof Error ? err.message : 'errore sconosciuto';
+    logger.error('[cancellazione] conto Stripe collegato non chiuso', { userId, conto, err: messaggio });
+    return { ok: false, errore: `il conto Stripe collegato non è stato chiuso (${messaggio})` };
   }
 }
 
@@ -843,6 +888,23 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
   // rossa, qualcuno viene svegliato e domani si riprova (lib/cron-cancellazioni.ts).
   // Le tabelle che spariscono con l'utente non fermano niente: la riga se ne
   // va comunque insieme a lui.
+  // 5/11/2026 — Lo stesso vale per i file: se l'elenco o la rimozione dei documenti
+  // d'identità, del selfie o delle prove di consegna non riesce, dopo deleteUser la riga
+  // del profilo coi loro percorsi sparisce e i file restano nel secchio per sempre. Ci si
+  // ferma, la notte diventa rossa e si riprova (stesso trattamento della pulizia qui sotto).
+  const fileRimasti = [...file.errori, ...prove.errori];
+  if (fileRimasti.length > 0) {
+    logger.error('[cancellazione] fermata: file personali non rimossi', { userId, errori: fileRimasti });
+    return {
+      ok: false,
+      errore:
+        'L\'account non è stato cancellato: alcuni file personali (documenti, foto) non si sono potuti ' +
+        'togliere. Cancellarlo adesso li lascerebbe nello storage senza più il legame con la persona. Si riprova.',
+      fileRimossi: file.rimossi + prove.rimossi,
+      erroriFile: fileRimasti,
+    };
+  }
+
   const perseSeAndiamoAvanti = puliziaFallita.filter((f) => f.sopravvive);
   if (perseSeAndiamoAvanti.length > 0) {
     const elenco = perseSeAndiamoAvanti.map((f) => `${f.tabella}: ${f.errore}`).join('; ');
