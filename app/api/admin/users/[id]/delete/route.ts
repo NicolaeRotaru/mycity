@@ -72,7 +72,9 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
     action: 'user.delete',
     targetTable: 'profiles',
     targetId: targetId,
-    metadata: { role: targetProfile.role, name: targetProfile.store_name ?? targetProfile.full_name },
+    // 5/11/2026 (S05) — Solo ruolo e id: il nome della persona appena cancellata
+    // restava scritto nel registro (e nel suo specchio activity_events).
+    metadata: { role: targetProfile.role },
   });
 
   return NextResponse.json({

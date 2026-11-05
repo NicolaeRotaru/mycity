@@ -8,7 +8,7 @@ import {
   Sun, LayoutDashboard, Receipt, Users, Gavel, Banknote, Siren, Wallet, MapPin,
   TrendingUp, Ticket, Megaphone, Zap, Crown, CalendarDays,
   LayoutTemplate, FileText, FolderTree, Palette, Rss, ScrollText, LifeBuoy,
-  Home, LogOut, Menu, X, MessageCircle,
+  Home, LogOut, Menu, X, MessageCircle, Flag, Package,
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -17,7 +17,7 @@ import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { useBranding } from '@/components/hooks/useBranding';
 
 /** Chiave su cui agganciare un badge "live" (pallino) calcolato da un conteggio. */
-type BadgeKey = 'disputes' | 'sos';
+type BadgeKey = 'disputes' | 'sos' | 'segnalazioni';
 type NavItem = { href: string; icon: LucideIcon; label: string; badge?: BadgeKey };
 type NavGroup = { group: string; items: NavItem[] };
 
@@ -32,10 +32,14 @@ const NAV: NavGroup[] = [
     { href: '/admin/today', icon: Sun, label: 'Today' },
     { href: '/admin', icon: LayoutDashboard, label: 'Panoramica' },
     { href: '/admin/orders', icon: Receipt, label: 'Ordini' },
+    { href: '/admin/products', icon: Package, label: 'Prodotti' },
     { href: '/admin/users', icon: Users, label: 'Utenti' },
   ] },
   { group: 'Trust & Safety', items: [
     { href: '/admin/disputes', icon: Gavel, label: 'Reclami', badge: 'disputes' },
+    // 5/11/2026 (S05) — Le segnalazioni di contenuti illeciti (DSA) avevano la
+    // pagina ma non la voce: ci si arrivava solo dal link della notifica.
+    { href: '/admin/segnalazioni', icon: Flag, label: 'Segnalazioni', badge: 'segnalazioni' },
     { href: '/admin/cod-remittance', icon: Banknote, label: 'Rimesse COD' },
     { href: '/admin/payouts', icon: Wallet, label: 'Payout venditori' },
     { href: '/admin/sos', icon: Siren, label: 'SOS rider', badge: 'sos' },
@@ -102,14 +106,16 @@ function useAdminBadgeCounts(): Record<BadgeKey, number> {
     queryKey: ['admin', 'sidebar-badges'],
     refetchInterval: 60_000,
     queryFn: async () => {
-      const [disputes, sos] = await Promise.all([
+      const [disputes, sos, segnalazioni] = await Promise.all([
         supabase.from('disputes').select('id', { count: 'exact', head: true }).eq('status', 'open'),
         supabase.from('rider_sos_events').select('id', { count: 'exact', head: true }).is('resolved_at', null),
+        // Le stesse «da esaminare» della pagina Segnalazioni.
+        supabase.from('segnalazioni').select('id', { count: 'exact', head: true }).in('stato', ['ricevuta', 'in_esame']),
       ]);
-      return { disputes: disputes.count ?? 0, sos: sos.count ?? 0 };
+      return { disputes: disputes.count ?? 0, sos: sos.count ?? 0, segnalazioni: segnalazioni.count ?? 0 };
     },
   });
-  return { disputes: data?.disputes ?? 0, sos: data?.sos ?? 0 };
+  return { disputes: data?.disputes ?? 0, sos: data?.sos ?? 0, segnalazioni: data?.segnalazioni ?? 0 };
 }
 
 /** Lista di navigazione condivisa (sidebar desktop + drawer mobile). */

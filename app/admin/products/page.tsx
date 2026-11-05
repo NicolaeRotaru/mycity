@@ -12,6 +12,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
+import { etichettaStatoProdotto } from '@/lib/admin/etichette';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
 import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
@@ -45,7 +46,7 @@ export default function AdminProductsPage() {
   const tConfirm = useTranslations('confirm');
   const [search, setSearch] = useState('');
 
-  const { data: products = [], isLoading, isError, refetch } = useQuery({
+  const { data: letti = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.products,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -56,7 +57,8 @@ export default function AdminProductsPage() {
           categories ( name )
         `)
         .order('created_at', { ascending: false })
-        .limit(TETTO_PRODOTTI);
+        // Una riga in più: se arriva, l'elenco è tagliato davvero (con 1000 esatte no).
+        .limit(TETTO_PRODOTTI + 1);
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
     },
@@ -75,6 +77,8 @@ export default function AdminProductsPage() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  const tagliato = letti.length > TETTO_PRODOTTI;
+  const products = letti.slice(0, TETTO_PRODOTTI);
   const filtered = products.filter((p) => {
     if (!search) return true;
     const s = search.toLowerCase();
@@ -104,7 +108,7 @@ export default function AdminProductsPage() {
       <AdminPageTitle
         eyebrow="Catalogo"
         title="Prodotti"
-        sub={`${filtered.length} di ${products.length}${products.length >= TETTO_PRODOTTI ? '+' : ''}`}
+        sub={`${filtered.length} di ${products.length}${tagliato ? '+' : ''}`}
         action={
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <input
@@ -124,7 +128,7 @@ export default function AdminProductsPage() {
         }
       />
 
-      {products.length >= TETTO_PRODOTTI && (
+      {tagliato && (
         <div role="status" className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
           <p>
@@ -181,7 +185,7 @@ export default function AdminProductsPage() {
                       p.status === 'sold'      ? 'bg-cream-100 text-ink-600' :
                                                   'bg-accent-100 text-accent-700'
                     }`}>
-                      {p.status}
+                      {etichettaStatoProdotto(p.status)}
                     </span>
                   </td>
                   <td className="p-3">

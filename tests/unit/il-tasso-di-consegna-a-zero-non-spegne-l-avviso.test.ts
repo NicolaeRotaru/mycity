@@ -142,8 +142,10 @@ describe('e sulla Panoramica vera l\'avviso si vede', () => {
   afterEach(chiudiLaPanoramica);
 
   it('dieci ordini lavorati, zero consegnati: la pagina manda a guardare gli ordini bloccati', async () => {
-    // READY = preparati e fermi li`: nessun fattorino li sta prendendo.
-    apriLaPanoramica({ total: 12, byStatus: { NEW: 1, ACCEPTED: 1, READY: 10, DELIVERED: 0 } });
+    // 5/11/2026 (S05, scheda 646) — «Lavorati» sono solo gli ordini arrivati in fondo
+    // (consegnati o annullati): un ordine pronto o in viaggio non è ancora un ordine perso.
+    // Il giorno peggiore resta questo: dieci ordini chiusi e nessuno consegnato.
+    apriLaPanoramica({ total: 12, byStatus: { NEW: 1, ACCEPTED: 1, CANCELED: 10, DELIVERED: 0 } });
     const testo = await testoDellaPanoramica();
 
     expect(testo).toContain('0,0%');

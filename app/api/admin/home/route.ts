@@ -1,5 +1,6 @@
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
+import { writeAudit } from '@/lib/audit';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import {
   homeSiteSchema, normalizeHomeSite, siteByteSize, MAX_SITE_BYTES, type HomeSite,
@@ -71,5 +72,6 @@ export const PUT = withAdminAuth(async ({ user, req }) => {
     .upsert({ id: 1, home_site: site, updated_by: user.id, updated_at: new Date().toISOString() });
   if (error) return ApiErrors.internal('Impossibile salvare la home');
 
+  await writeAudit({ actorId: user.id, action: 'home.update', targetTable: 'site_settings', targetId: '1', metadata: { sezioni: site.sections.length } });
   return apiSuccess({ site });
 });

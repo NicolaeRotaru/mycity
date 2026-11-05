@@ -229,7 +229,10 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       const res = await refundOrder({
         orderId: dispute.order_id,
         amountCents: importo,
-        reason: body.notes,
+        // 5/11/2026 (S05) — Stripe rifiuta i valori dei metadata oltre i 500
+        // caratteri: con note più lunghe il rimborso falliva e il reclamo
+        // tornava aperto. Le note intere restano sul reclamo e negli avvisi.
+        reason: body.notes.slice(0, 500),
         metadata: { dispute_id: dispute.id },
         idempotencyKey: `dispute_${dispute.id}`,
         notifyBuyer: true,
@@ -342,6 +345,28 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     body: body.notes,
     link: `/orders/${dispute.order_id}`,
   });
+
+  // 5/11/2026 (S05) — Anche il negozio sa come si è chiuso il reclamo a suo carico,
+  // e quanto è stato rimborsato al cliente: prima l'avviso partiva solo al cliente.
+  if (dispute.against_id) {
+    const esitoPerIlNegozio =
+      body.status === 'resolved_buyer'
+        ? 'Reclamo chiuso a favore del cliente'
+        : body.status === 'resolved_seller'
+          ? '✓ Reclamo chiuso a tuo favore'
+          : 'Reclamo respinto';
+    const rimborso = body.status === 'resolved_buyer' && importo && rimborsoEmesso
+      ? `\nRimborso al cliente: ${formatPriceFromCents(importo)}.`
+      : '';
+    const { error: eAvviso } = await admin.from('notifications').insert({
+      category: 'order',
+      user_id: dispute.against_id,
+      title: `${esitoPerIlNegozio} · ordine #${String(dispute.order_id).slice(0, 6).toUpperCase()}`,
+      body: `${body.notes}${rimborso}`,
+      link: `/seller/orders/${dispute.order_id}`,
+    });
+    if (eAvviso) logger.error('[dispute] avviso al negozio non scritto', { disputeId: dispute.id, err: eAvviso.message });
+  }
 
   await writeAudit({
     actorId: user.id,

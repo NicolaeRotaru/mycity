@@ -85,7 +85,11 @@ export default function AdminDailyDropsPage() {
     mutationFn: async () => {
       if (!productId) throw new Error('Seleziona un prodotto');
       if (originalPrice <= 0) throw new Error('Il prodotto non ha un prezzo valido');
+      // Un drop per giorno: se ce n'è già uno, si chiede prima di sostituirlo.
+      const gia = drops.find((x) => x.drop_date === dropDate);
+      if (gia && !window.confirm(`Per questo giorno c'è già «${gia.product?.name ?? 'un drop'}». Sostituirlo?`)) return false;
       await authedFetch('/api/admin/daily-drops', 'POST', {
+        sovrascrivi: Boolean(gia),
         product_id: productId,
         drop_date: dropDate,
         discount_percent: discountPct,
@@ -93,8 +97,10 @@ export default function AdminDailyDropsPage() {
         drop_price: dropPrice,
         headline: headline.trim(),
       });
+      return true;
     },
-    onSuccess: () => {
+    onSuccess: (salvato) => {
+      if (!salvato) return;
       toast.success('Drop salvato!');
       qc.invalidateQueries({ queryKey: queryKeys.admin.dailyDrops });
       qc.invalidateQueries({ queryKey: queryKeys.home.dailyDrop(dropDate) });
@@ -117,10 +123,19 @@ export default function AdminDailyDropsPage() {
       <AdminPageTitle
         eyebrow="Marketing"
         title="Daily drops"
-        sub="Offerte lampo a tempo limitato mostrate in home (un drop per data). Si auto-nasconde se per oggi non c'è nulla."
+        sub={DROP_DEL_GIORNO_ACCESO
+          ? "Offerte lampo a tempo limitato mostrate in home (un drop per data). Si auto-nasconde se per oggi non c'è nulla."
+          : 'Offerte lampo a tempo limitato (un drop per data). Spente al lancio: la home non le mostra.'}
       />
 
+      {!DROP_DEL_GIORNO_ACCESO && (
+        <p id="drop-spento" role="note" className="text-sm text-ink-700 bg-cream-50 border border-cream-300 rounded-lg p-3">
+          Il Drop del giorno è spento al lancio: la home non lo mostra e la cassa non applicherebbe il prezzo scontato.
+        </p>
+      )}
+
       <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="bg-white border border-cream-300 rounded-xl p-6 space-y-4">
+        <fieldset disabled={!DROP_DEL_GIORNO_ACCESO} aria-describedby={DROP_DEL_GIORNO_ACCESO ? undefined : 'drop-spento'} className="space-y-4 disabled:opacity-70">
         <Select label="Prodotto" value={productId} onChange={(e) => setProductId(e.target.value)}>
           <option value="">— Seleziona —</option>
           {products.map((p) => (
@@ -142,16 +157,15 @@ export default function AdminDailyDropsPage() {
 
         <Textarea label="Headline (opzionale)" value={headline} rows={2} maxLength={200} onChange={(e) => setHeadline(e.target.value)} placeholder="Es: La salumeria che riscopre i sapori dimenticati" />
 
-        {!DROP_DEL_GIORNO_ACCESO && (
-          <p role="note" className="text-sm text-ink-700 bg-cream-50 border border-cream-300 rounded-lg p-3">
-            Il Drop del giorno è spento al lancio: la home non lo mostra e la cassa non applicherebbe il prezzo scontato.
-          </p>
-        )}
-        <Button type="submit" loading={save.isPending} disabled={!DROP_DEL_GIORNO_ACCESO}>Salva drop</Button>
+        <Button type="submit" loading={save.isPending} disabled={!DROP_DEL_GIORNO_ACCESO} aria-describedby={DROP_DEL_GIORNO_ACCESO ? undefined : 'drop-spento'}>Salva drop</Button>
+        </fieldset>
       </form>
 
       <section>
         <AdminSectionLabel icon={Zap}>Drop programmati</AdminSectionLabel>
+        {!DROP_DEL_GIORNO_ACCESO && drops.length > 0 && (
+          <p className="text-xs text-ink-500 mb-2">Salvati ma non usciranno in home finché il Drop del giorno resta spento.</p>
+        )}
         {drops.length === 0 ? (
           <p className="text-sm text-ink-500">Nessun drop per oggi o per i prossimi giorni.</p>
         ) : (

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
@@ -41,7 +41,7 @@ import {
  */
 type Row = ColonneSalvo<
   'orders',
-  'id' | 'total_price' | 'delivery_status' | 'created_at' | 'delivery_full_name' | 'delivery_city',
+  'id' | 'total_price' | 'delivery_status' | 'created_at' | 'delivery_full_name' | 'delivery_city' | 'payment_method',
   { delivery_status: OrderStatus; created_at: string }
 > & {
   seller: Colonne<'profiles', 'store_name'> | null;
@@ -56,7 +56,7 @@ const FILTERS = ['all', 'NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OU
  * gemelli prima o poi smettono di esserlo.
  */
 const COLONNE_ORDINE = `
-  id, total_price, delivery_status, created_at,
+  id, total_price, delivery_status, created_at, payment_method,
   delivery_full_name, delivery_city,
   seller:profiles!orders_seller_id_fkey ( store_name ),
   rider:profiles!orders_rider_id_fkey   ( full_name )
@@ -77,6 +77,10 @@ export default function AdminOrdersPage() {
   // `admin/coupons` e `admin/sponsored`. Quattro stati: carico · vuoto · rotto · pieno.
   const lettura = useQuery({
     queryKey: [...queryKeys.admin.orders, filter, pagina],
+    // 5/11/2026 (S05) — «Carica altri 50» e il cambio di filtro tengono a schermo
+    // la lista di prima finché arriva la nuova: prima la pagina tornava allo
+    // scheletro intero e lo scorrimento ripartiva da capo.
+    placeholderData: keepPreviousData,
     queryFn: async () => {
       // #90 — Prima si scaricava la tabella ordini INTERA, ogni trenta secondi,
       // e il filtro di stato si applicava nel browser. A mille ordini sono
@@ -269,7 +273,9 @@ export default function AdminOrdersPage() {
                   </td>
                   <td className="p-3 text-right font-bold">{formatPrice(o.total_price)}</td>
                   <td className="p-3 text-right">
-                    {o.delivery_status !== 'CANCELED' ? (
+                    {/* Un ordine in contanti consegnato non si annulla (la rotta lo rifiuta):
+                        la merce l'ha il cliente. Si passa dal reclamo. */}
+                    {o.delivery_status !== 'CANCELED' && !(o.delivery_status === 'DELIVERED' && o.payment_method === 'cod') ? (
                       <button
                         type="button"
                         onClick={() => {

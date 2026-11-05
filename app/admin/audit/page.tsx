@@ -10,6 +10,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 // 16/10/2026 — le etichette e le scelte del filtro vengono dall'elenco delle
 // azioni: qui c'era una lista a mano senza 'order.cash_declared'.
 import { etichettaAzioneAudit, opzioniFiltroAudit } from '@/lib/audit-azioni';
+import { autoreDellaRiga } from '@/lib/admin/etichette';
 
 type AuditRow = {
   id: string;
@@ -108,7 +109,7 @@ export default function AuditLogPage() {
                     <span className="rounded bg-cream-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ink-600">{r.action}</span>
                   </div>
                   <p className="mt-0.5 text-xs text-ink-500">
-                    da <strong>{r.actor?.full_name ?? 'sistema'}</strong>
+                    da <strong>{autoreDellaRiga(r)}</strong>
                     {r.target_table && r.target_id && (
                       <> · <span className="font-mono">{r.target_table}/{r.target_id.slice(0, 8)}…</span></>
                     )}

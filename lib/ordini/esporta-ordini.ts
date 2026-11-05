@@ -81,11 +81,28 @@ export function importoPerExcel(valore: number | string | null): string {
   return numero.toFixed(2).replace('.', ',');
 }
 
+const DATA_PER_EXCEL = new Intl.DateTimeFormat('it-IT', {
+  timeZone: 'Europe/Rome',
+  day: '2-digit', month: '2-digit', year: 'numeric',
+  hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+});
+
+/**
+ * La data come la legge Excel in italiano, nell'ora di Piacenza: «06/09/2026 16:32».
+ * (5/11/2026 - prima usciva `2026-09-06T14:32:11.123Z`: ora di Greenwich, e una
+ * parola per Excel. Gli ordini fra mezzanotte e le 2 d'estate finivano nel giorno prima.)
+ */
+export function dataPerExcel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return DATA_PER_EXCEL.format(d).replace(',', '');
+}
+
 /** Una riga del file, nell'ordine delle intestazioni. */
 export function rigaCsvOrdine(o: OrdineDaEsportare): unknown[] {
   return [
     o.id,
-    o.created_at,
+    dataPerExcel(o.created_at),
     o.delivery_full_name ?? '',
     o.delivery_city ?? '',
     o.seller?.store_name ?? '',

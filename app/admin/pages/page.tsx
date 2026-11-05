@@ -12,7 +12,7 @@ export default function AdminPagesPage() {
       <AdminPageTitle
         eyebrow="Contenuti"
         title="Pagine"
-        sub="Pagine statiche e legali del sito, editabili a blocchi (testo, banner, galleria, video). Finché una pagina non è pubblicata con almeno un blocco, resta il contenuto predefinito."
+        sub="Pagine del sito editabili a blocchi (testo, banner, galleria, video). Finché una pagina non è pubblicata con almeno un blocco, resta il contenuto predefinito. Termini, Privacy e FAQ si cambiano nel codice, non da qui."
       />
 
       <div className="space-y-2">

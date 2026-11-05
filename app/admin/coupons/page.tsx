@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ticket, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { formatPrice } from '@/lib/format';
+import { formatPrice, formatPriceFromCents } from '@/lib/format';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -17,6 +17,8 @@ import { Button } from '@/components/ui/Button';
 import { Input, Select, Checkbox } from '@/components/ui/Field';
 import { scrivi } from '@/lib/esito-scrittura';
 import { vistaDeiCoupon, type Coupon, type CouponTipo } from '@/lib/admin/vista-dei-coupon';
+import { CODICI_SCONTO_IN_CASSA } from '@/lib/funzioni-al-lancio';
+import { spesaPerConsegnaGratisColCodiceCents } from '@/lib/ordini/prezzi';
 
 /**
  * 8/9/2026 — QUESTA PAGINA RACCONTAVA ESITI CHE NON ERANO SUCCESSI, IN DUE PUNTI.
@@ -130,6 +132,17 @@ export default function AdminCouponsPage() {
       />
 
       {/*
+        5/11/2026 (S05) — I codici sono spenti in cassa al lancio: le due casse rifiutano qualunque
+        codice. Creare e attivare qui senza dirlo faceva credere che un codice «Attivo» valesse.
+      */}
+      {!CODICI_SCONTO_IN_CASSA && (
+        <div role="status" className="rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-3 text-sm text-secondary-800">
+          <strong>I codici sono spenti in cassa:</strong> un codice attivo qui non vale per i clienti finché la
+          funzione non viene accesa.
+        </div>
+      )}
+
+      {/*
         La lettura è caduta: si ammette, non si disegna una tabella vuota. E il pulsante «Nuovo
         coupon» resta spento — chi crede che i codici siano spariti ne rifà uno uguale.
       */}
@@ -165,6 +178,12 @@ export default function AdminCouponsPage() {
               <option value="FIXED">Sconto fisso (€)</option>
               <option value="FREE_SHIPPING">Spedizione gratuita</option>
             </Select>
+            {form.type === 'FREE_SHIPPING' && (
+              <p className="sm:col-span-2 text-xs text-ink-600">
+                Toglie tutta la consegna solo da {formatPriceFromCents(spesaPerConsegnaGratisColCodiceCents())} di spesa
+                per negozio: sotto, il cliente paga comunque una parte della consegna. Non chiamarlo «spedizione gratis» ai clienti senza dirlo.
+              </p>
+            )}
             {form.type !== 'FREE_SHIPPING' && (
               <Input
                 label="Valore"
@@ -258,7 +277,7 @@ export default function AdminCouponsPage() {
                       c.active ? 'bg-olive-100 text-olive-700' : 'bg-cream-100 text-ink-500'
                     }`}
                   >
-                    {c.active ? 'Attivo' : 'Disattivato'}
+                    {c.active ? (CODICI_SCONTO_IN_CASSA ? 'Attivo' : 'Attivo (spento in cassa)') : 'Disattivato'}
                   </button>
                 </td>
                 <td className="p-3">

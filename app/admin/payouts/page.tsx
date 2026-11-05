@@ -41,6 +41,7 @@ type PayoutOrder = {
   delivery_status: string | null;
   payment_method: string | null;
   created_at: string | null;
+  delivered_at: string | null;
   seller: { store_name: string | null; billing_iban: string | null } | null;
 };
 
@@ -93,7 +94,7 @@ function maskIban(iban: string | null): string | null {
 const TETTO_PAYOUT = 1000;
 
 export default function AdminPayoutsPage() {
-  const { data: orders = [], isLoading, isError, refetch } = useQuery({
+  const { data: letti = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['admin', 'payouts'],
     refetchInterval: 60_000,
     queryFn: async (): Promise<PayoutOrder[]> => {
@@ -102,16 +103,22 @@ export default function AdminPayoutsPage() {
       const { data, error } = await supabase
         .from('orders')
         .select(
-          'id, seller_id, total_price, seller_payout_cents, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, created_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
+          'id, seller_id, total_price, seller_payout_cents, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, created_at, delivered_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
         )
         .eq('delivery_status', 'DELIVERED')
         .not('seller_payout_cents', 'is', null)
         .order('created_at', { ascending: false })
-        .limit(TETTO_PAYOUT);
+        // Una riga in più: se arriva, l'elenco è tagliato davvero (con 1000 esatte no).
+        .limit(TETTO_PAYOUT + 1);
       if (error) throw error;
       return (data ?? []) as unknown as PayoutOrder[];
     },
   });
+
+  const tagliato = letti.length > TETTO_PAYOUT;
+  const orders = useMemo(() => letti.slice(0, TETTO_PAYOUT), [letti]);
+  // Con l'elenco tagliato ogni somma è un minimo, non il totale.
+  const almeno = tagliato ? 'almeno ' : '';
 
   const groups = useMemo(() => {
     const map = new Map<string, SellerGroup>();
@@ -176,21 +183,24 @@ export default function AdminPayoutsPage() {
         sub="Riconciliazione dei bonifici ai negozi. Sola lettura: i pagamenti partono in automatico (carta ~1h dopo la consegna, COD dopo la conferma rimessa contanti)."
       />
 
-      {/* KPI: pronto · in sospeso · già pagato */}
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-        <AdminStatCard icon={Banknote} tone="olive" label="Da pagare (pronto)" value={formatPrice(totals.dueCents / 100)} />
-        <AdminStatCard icon={Clock} tone="accent" label="In sospeso" value={formatPrice(totals.holdCents / 100)} />
-        <AdminStatCard icon={CheckCircle2} tone="primary" label="Già pagato" value={formatPrice(totals.paidCents / 100)} />
-      </div>
-
-      {orders.length >= TETTO_PAYOUT && (
+      {/* L'avviso viene PRIMA dei riquadri: chi legge solo il numero deve già sapere che è parziale. */}
+      {tagliato && (
         <div role="status" className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
           <p>
-            <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PAYOUT} ordini consegnati. I totali qui sopra possono essere più bassi del vero.
+            <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PAYOUT} ordini consegnati. Mancano i più
+            vecchi, cioè proprio quelli da pagare da più tempo. I totali di questa pagina, anche quelli dei singoli
+            negozi, possono essere più bassi del vero.
           </p>
         </div>
       )}
+
+      {/* KPI: pronto · in sospeso · già pagato */}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
+        <AdminStatCard icon={Banknote} tone="olive" label="Da pagare (pronto)" value={`${almeno}${formatPrice(totals.dueCents / 100)}`} />
+        <AdminStatCard icon={Clock} tone="accent" label="In sospeso" value={`${almeno}${formatPrice(totals.holdCents / 100)}`} />
+        <AdminStatCard icon={CheckCircle2} tone="primary" label="Già pagato" value={`${almeno}${formatPrice(totals.paidCents / 100)}`} />
+      </div>
 
       {/* Nota: pagamento automatico, niente azioni manuali */}
       <div className="flex items-start gap-2.5 rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 text-sm text-ink-600">
@@ -224,7 +234,7 @@ export default function AdminPayoutsPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-400">Da liquidare</p>
-                  <p className="font-mono text-lg font-extrabold text-olive-700">{formatPrice(g.dueCents / 100)}</p>
+                  <p className="font-mono text-lg font-extrabold text-olive-700">{almeno}{formatPrice(g.dueCents / 100)}</p>
                   {g.paidCents > 0 && (
                     <p className="text-xs text-ink-500">{formatPrice(g.paidCents / 100)} già pagati</p>
                   )}
@@ -256,7 +266,7 @@ export default function AdminPayoutsPage() {
                               #{o.id.slice(0, 6).toUpperCase()}
                             </Link>
                           </td>
-                          <td className="px-5 py-3 text-xs text-ink-500">{fmtDate(o.payout_at ?? o.created_at)}</td>
+                          <td className="px-5 py-3 text-xs text-ink-500">{o.delivered_at ? fmtDate(o.delivered_at) : '—'}</td>
                           <td className="px-5 py-3 text-xs text-ink-600">
                             {o.payment_method === 'cod' ? 'Contanti' : 'Carta'}
                           </td>

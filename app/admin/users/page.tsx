@@ -309,6 +309,10 @@ function AdminUsersPageInner() {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(apiErrorMessage(body, 'Operazione fallita'));
+    // 5/11/2026 (S05) — Notifica o email non partite, consegne ancora in mano al
+    // fattorino sospeso: la rotta lo dice, la pagina lo deve mostrare.
+    const avviso = (body as { avviso?: string })?.avviso;
+    if (avviso) toast.warning(avviso, { duration: 10_000 });
   };
 
   const approve = useMutation({
@@ -362,7 +366,13 @@ function AdminUsersPageInner() {
   });
 
   const suspend = useMutation({
-    mutationFn: (id: string) => moderateUser(id, 'suspend'),
+    // 5/11/2026 (S05) — Il motivo si chiede anche per la sospensione: arriva al
+    // negozio o al fattorino, che altrimenti spariva dal sito senza sapere perché.
+    mutationFn: async (id: string) => {
+      const motivo = window.prompt('Motivo della sospensione (lo riceve l’utente):');
+      if (!motivo?.trim()) throw new Error('Specifica un motivo per la sospensione.');
+      return moderateUser(id, 'suspend', motivo.trim());
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
       toast.success(tAdmin('storeSuspended'));
@@ -476,8 +486,12 @@ function AdminUsersPageInner() {
   const { data: documentiRider, isLoading: documentiRiderInArrivo } = useQuery({
     queryKey: [...queryKeys.admin.users(), 'documenti-rider', detailId],
     enabled: !!detailId && detail?.role === 'rider',
-    staleTime: 0,
     gcTime: 0,
+    // 5/11/2026 (S05) — I link firmati valgono 120 secondi: quando si torna sulla
+    // scheda dopo più di 100 secondi si rileggono. Niente rilettura a orologio: ogni
+    // lettura lascia una riga nel registro degli accessi ai documenti.
+    staleTime: 100_000,
+    refetchOnWindowFocus: true,
     queryFn: async (): Promise<DatiEsameRider | null> => {
       const res = await fetch(`/api/kyc/documenti-rider/${detailId}`);
       if (!res.ok) return null;
@@ -778,10 +792,12 @@ function AdminUsersPageInner() {
         ) : filtered.map((p) => {
           const r = ROLE_LABELS[p.role] ?? ROLE_LABELS.buyer;
           const a = p.approval_status ? APPROVAL_LABELS[p.approval_status] : null;
-          const isSeller    = p.role === 'seller';
-          const isPending   = isSeller && p.approval_status === 'pending';
-          const isApproved  = isSeller && p.approval_status === 'approved' && p.is_approved;
-          const isSuspended = isSeller && p.approval_status === 'suspended';
+          // 5/11/2026 (S05) — Stessa regola della tabella: anche i fattorini si moderano.
+          // Prima dal telefono un fattorino in attesa non aveva «Esamina».
+          const moderabile  = siPuoModerare(p.role);
+          const isPending   = moderabile && p.approval_status === 'pending';
+          const isApproved  = moderabile && p.approval_status === 'approved' && p.is_approved;
+          const isSuspended = moderabile && p.approval_status === 'suspended';
           return (
             <div key={p.id} className="bg-white border border-cream-300 rounded-xl p-4">
               <div className="flex items-start justify-between gap-2">
@@ -797,7 +813,7 @@ function AdminUsersPageInner() {
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap text-xs text-ink-500">
-                {p.role === 'seller' && a && (
+                {moderabile && a && (
                   <span className={`inline-block px-2 py-0.5 rounded-full font-semibold ${a.color}`}>{a.label}</span>
                 )}
                 <span>Iscritto il {formatDate(p.created_at)}</span>
@@ -897,7 +913,7 @@ function AdminUsersPageInner() {
           onClose={() => setDetailId(null)}
           onApprove={() => { approve.mutate(detail.id); setDetailId(null); }}
           onReject={async () => {
-            const reason = window.prompt('Motivo del rifiuto (visibile al venditore):');
+            const reason = window.prompt(`Motivo del rifiuto (visibile ${detail.role === 'rider' ? 'al fattorino' : 'al negozio'}):`);
             if (!reason?.trim()) return;
             reject.mutate({ id: detail.id, reason: reason.trim() });
             setDetailId(null);
@@ -1137,6 +1153,12 @@ const STATO_DOCUMENTO: Record<StatoDocumento, { testo: string; colore: string }>
  * documento, selfie, patente e polizza con le scadenze, e tiene «Approva»
  * spento finche' manca qualcosa o un documento e' scaduto.
  */
+const VEICOLI: Record<string, string> = { BIKE: 'Bicicletta', EBIKE: 'Bici elettrica', SCOOTER: 'Scooter', CAR: 'Auto' };
+function etichettaVeicolo(tipo: string | null | undefined): string {
+  if (!tipo) return '—';
+  return VEICOLI[tipo] ?? tipo;
+}
+
 function PannelloFattorino({
   profile, datiIdentita, documentiRider, onClose, onApprove, onReject,
 }: {
@@ -1207,6 +1229,12 @@ function PannelloFattorino({
           </DetailRow>
           <DetailRow label="Email">{profile.email ?? '—'}</DetailRow>
           <DetailRow label="Telefono">{profile.phone ?? profile.auth_phone ?? '—'}</DetailRow>
+          <DetailRow label="Veicolo">
+            {inArrivo ? '…' : etichettaVeicolo(documentiRider?.veicolo?.tipo)}
+          </DetailRow>
+          <DetailRow label="Targa">
+            {inArrivo ? '…' : (documentiRider?.veicolo?.targa?.trim() || '—')}
+          </DetailRow>
         </DetailGroup>
 
         <DetailGroup title="Documenti" icon={ReceiptText}>

@@ -69,8 +69,27 @@ type Group = {
   senzaIncasso: Row[];
 };
 
+/**
+ * 5/11/2026 (S05) — Il tetto della lettura. Si chiede una riga in più: se arriva,
+ * l'elenco è tagliato e la pagina lo dice (prima con 1000 righe esatte taceva
+ * sempre, e i totali sembravano completi).
+ */
+const TETTO_RIMESSE = 1000;
+
+/** Da «12,50» (o «12.50») ai centesimi; null se non è un importo. */
+function centesimiDa(testo: string): number | null {
+  const t = testo.trim().replace(/\s|€/g, '').replace(',', '.');
+  if (!/^\d+(\.\d{1,2})?$/.test(t)) return null;
+  return Math.round(Number(t) * 100);
+}
+
 export default function AdminCodRemittancePage() {
   const qc = useQueryClient();
+  // La riga rider·giorno che si sta confermando: il tocco su «Conferma rimessa»
+  // apre il passo dei contanti contati, non chiama il server.
+  const [aperta, setAperta] = useState<string | null>(null);
+  const [contati, setContati] = useState('');
+  const [nota, setNota] = useState('');
 
   const { data: rows = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.codRemittances,
@@ -83,16 +102,17 @@ export default function AdminCodRemittancePage() {
         .eq('payout_status', 'AWAITING_REMITTANCE')
         .not('rider_id', 'is', null)
         .order('delivered_at', { ascending: false })
-        .limit(1000);
+        .limit(TETTO_RIMESSE + 1);
       // Una lettura caduta non e' «nessuna rimessa»: l'errore deve arrivare alla pagina.
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
     },
   });
 
+  const tagliato = rows.length > TETTO_RIMESSE;
   const groups = useMemo(() => {
     const map = new Map<string, Group>();
-    for (const o of rows) {
+    for (const o of rows.slice(0, TETTO_RIMESSE)) {
       if (!o.delivered_at || !o.rider_id) continue;
       // 22/8/2026 — era `toISOString()`, cioè il giorno di Greenwich, mentre
       // il fattorino quadra sul giorno di Piacenza. Nelle sere d'estate le
@@ -118,13 +138,15 @@ export default function AdminCodRemittancePage() {
   }, [rows]);
 
   const confirm = useMutation({
-    mutationFn: async ({ riderId, date }: { riderId: string; date: string }): Promise<{ rilasciati: number; saltati: number }> => {
+    mutationFn: async ({ riderId, date, contatiCents, attesiCents, nota: notaInviata }: {
+      riderId: string; date: string; contatiCents: number; attesiCents: number; nota?: string;
+    }): Promise<{ rilasciati: number; saltati: number }> => {
       // Cookie-based (niente Bearer): l'RPC confirm_cod_remittance verifica
       // is_admin() leggendo l'auth.uid() dell'admin via getServerSupabase.
       const res = await fetch('/api/admin/cod-remittance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ riderId, date }),
+        body: JSON.stringify({ riderId, date, contatiCents, attesiCents, ...(notaInviata ? { nota: notaInviata } : {}) }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message ?? data?.error ?? 'Errore conferma rimessa');
@@ -134,6 +156,7 @@ export default function AdminCodRemittancePage() {
       };
     },
     onSuccess: ({ rilasciati, saltati }) => {
+      setAperta(null); setContati(''); setNota('');
       qc.invalidateQueries({ queryKey: queryKeys.admin.codRemittances });
       toast.success(`Rimessa confermata · ${rilasciati} ordini rilasciati al payout`);
       // Gli ordini senza incasso registrato non si pagano al buio: si dicono.
@@ -147,6 +170,10 @@ export default function AdminCodRemittancePage() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  // Con l'elenco tagliato il gruppo del giorno più vecchio letto può essere a metà, ma la
+  // conferma rilascia TUTTI gli ordini di quel fattorino in quel giorno: lì non si conferma.
+  const giornoAlConfine = tagliato && rows[TETTO_RIMESSE - 1]?.delivered_at
+    ? giornoLocale(new Date(rows[TETTO_RIMESSE - 1].delivered_at)) : null;
   const totalToRemit = groups.reduce((s, g) => s + g.toRemitCents, 0);
 
   return (
@@ -175,9 +202,15 @@ export default function AdminCodRemittancePage() {
         </div>
       ) : (
         <>
+          {tagliato && (
+            <div role="alert" className="rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-3 text-sm text-secondary-800">
+              <strong>Elenco tagliato:</strong> ci sono più di {TETTO_RIMESSE} consegne in attesa di rimessa. Qui sotto
+              vedi solo le {TETTO_RIMESSE} più recenti: il totale e i gruppi sono parziali, e le più vecchie mancano.
+            </div>
+          )}
           <div className="bg-cream-50 border border-cream-300 rounded-xl px-4 py-3 text-sm text-ink-700">
             In attesa: <strong>{groups.length}</strong> rider·giorno · totale da rimettere{' '}
-            <strong>{formatPrice(totalToRemit / 100)}</strong>
+            <strong>{tagliato ? 'almeno ' : ''}{formatPrice(totalToRemit / 100)}</strong>
           </div>
           <div className="space-y-3">
             {groups.map((g) => (
@@ -192,18 +225,71 @@ export default function AdminCodRemittancePage() {
                   </p>
                   <p className="text-lg font-bold text-ink-900 mt-1">{formatPrice(g.toRemitCents / 100)}</p>
                 </div>
-                <Button
-                  size="sm"
-                  icon={Check}
-                  loading={
-                    confirm.isPending &&
-                    confirm.variables?.riderId === g.riderId &&
-                    confirm.variables?.date === g.date
-                  }
-                  onClick={() => confirm.mutate({ riderId: g.riderId, date: g.date })}
-                >
-                  Conferma rimessa
-                </Button>
+                {g.date === giornoAlConfine || (giornoAlConfine !== null && g.date < giornoAlConfine) ? (
+                  <p className="text-xs font-semibold text-secondary-700">Gruppo forse incompleto (elenco tagliato): non si conferma da qui.</p>
+                ) : aperta !== `${g.riderId}|${g.date}` ? (
+                  <Button
+                    size="sm"
+                    icon={Check}
+                    onClick={() => { setAperta(`${g.riderId}|${g.date}`); setContati(''); setNota(''); }}
+                  >
+                    Conferma rimessa
+                  </Button>
+                ) : (() => {
+                  const contatiCents = centesimiDa(contati);
+                  const diverso = contatiCents !== null && contatiCents !== g.toRemitCents;
+                  const pronto = contatiCents !== null && (!diverso || nota.trim().length > 0);
+                  const idCampo = `contati-${g.riderId}-${g.date}`;
+                  return (
+                    <form
+                      className="w-full border-t border-cream-200 pt-3 space-y-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!pronto || contatiCents === null) return;
+                        confirm.mutate({
+                          riderId: g.riderId, date: g.date, contatiCents, attesiCents: g.toRemitCents,
+                          nota: diverso ? nota.trim() : undefined,
+                        });
+                      }}
+                    >
+                      <p className="text-sm text-ink-800">
+                        Stai confermando che <strong>{g.riderName}</strong> ti ha consegnato i contanti di{' '}
+                        <strong>{new Date(g.date).toLocaleDateString('it-IT')}</strong>: {g.orders} ordini, atteso{' '}
+                        <strong>{formatPrice(g.toRemitCents / 100)}</strong>. Dopo la conferma i negozi vengono pagati.
+                      </p>
+                      <label htmlFor={idCampo} className="block text-xs font-semibold text-ink-700">Contanti contati (€)</label>
+                      <input
+                        id={idCampo}
+                        inputMode="decimal"
+                        className="w-40 rounded-lg border border-cream-300 px-3 py-2 text-sm"
+                        value={contati}
+                        onChange={(e) => setContati(e.target.value)}
+                        placeholder={(g.toRemitCents / 100).toFixed(2).replace('.', ',')}
+                      />
+                      {diverso && (
+                        <>
+                          <p role="alert" className="text-xs font-semibold text-secondary-700">
+                            Hai contato {formatPrice((contatiCents ?? 0) / 100)} invece di {formatPrice(g.toRemitCents / 100)}: scrivi cosa è successo.
+                          </p>
+                          <label htmlFor={`${idCampo}-nota`} className="block text-xs font-semibold text-ink-700">Nota (obbligatoria)</label>
+                          <textarea
+                            id={`${idCampo}-nota`}
+                            className="w-full rounded-lg border border-cream-300 px-3 py-2 text-sm"
+                            maxLength={500}
+                            value={nota}
+                            onChange={(e) => setNota(e.target.value)}
+                          />
+                        </>
+                      )}
+                      <div className="flex gap-2">
+                        <Button size="sm" type="submit" icon={Check} disabled={!pronto} loading={confirm.isPending}>
+                          Conferma i contanti ricevuti
+                        </Button>
+                        <Button size="sm" type="button" variant="ghost" onClick={() => setAperta(null)}>Annulla</Button>
+                      </div>
+                    </form>
+                  );
+                })()}
                 {g.senzaIncasso.length > 0 && (
                   <div className="w-full border-t border-cream-200 pt-3">
                     <p className="text-xs text-ink-600">

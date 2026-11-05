@@ -16,10 +16,11 @@ import {
 } from '@/lib/promesse-pubbliche';
 
 type QA = { q: string; a: React.ReactNode };
-type Section = { title: string; icon: LucideIcon; items: QA[] };
+type Section = { id: string; title: string; icon: LucideIcon; items: QA[] };
 
 const SECTIONS: Section[] = [
   {
+    id: 'ordini',
     title: 'Acquisti e ordini',
     icon: ShoppingCart,
     items: [
@@ -37,6 +38,7 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    id: 'spedizioni',
     title: 'Spedizioni e consegne',
     icon: Truck,
     items: [
@@ -50,6 +52,7 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    id: 'pagamenti',
     title: 'Pagamenti',
     icon: CreditCard,
     items: [
@@ -90,6 +93,7 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    id: 'resi',
     title: 'Resi e rimborsi',
     icon: Undo2,
     items: [
@@ -112,6 +116,7 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    id: 'account',
     title: 'Account e impostazioni',
     icon: Settings,
     items: [
@@ -139,6 +144,7 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    id: 'vendere',
     title: 'Vendere su MyCity',
     icon: Store,
     items: [
@@ -158,6 +164,7 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    id: 'rider',
     title: 'Diventare rider',
     icon: Bike,
     items: [
@@ -199,7 +206,9 @@ export default function FaqPage() {
         {SECTIONS.map((section) => {
           const Icon = section.icon;
           return (
-          <section key={section.title}>
+          // 5/11/2026 (S05) — Un id stabile per sezione: il Centro assistenza porta qui
+          // con «/faq#ordini», e senza id il segnalibro apriva la pagina in cima.
+          <section key={section.title} id={section.id} className="scroll-mt-24">
             <h2 className="text-xl font-bold text-ink-900 mb-4 flex items-center gap-2">
               <Icon size={24} className="text-primary-600 shrink-0" aria-hidden /> {section.title}
             </h2>
