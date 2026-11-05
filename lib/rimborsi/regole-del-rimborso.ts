@@ -416,11 +416,27 @@ export interface RigaDellOrdine {
  * l'ordine: nessuna riga indicata, la riga non si trova, o e' l'unica dell'ordine
  * (allora l'intero comprende la consegna).
  */
-export function rigaResaCents(righe: RigaDellOrdine[] | null, orderItemId: string | null): number | null {
+export function rigaResaCents(
+  righe: RigaDellOrdine[] | null,
+  orderItemId: string | null,
+  /**
+   * 5/11/2026 — Lo sconto del codice sull'ordine (`discount_amount`, in centesimi).
+   * L'intero della riga e' quello che il cliente ha pagato per lei: la sua parte
+   * del codice si toglie in proporzione. Senza, l'intero era prezzo per quantita'
+   * e un rimborso giusto (pro quota) veniva fermato come «meno dell'intero».
+   */
+  scontoCents = 0,
+): number | null {
   if (!orderItemId || !righe || righe.length <= 1) return null;
   const riga = righe.find((r) => r.id === orderItemId);
   if (!riga) return null;
-  return Math.round(Number(riga.unit_price ?? 0) * Number(riga.quantity ?? 1) * 100);
+  const lordo = (r: RigaDellOrdine) => Math.round(Number(r.unit_price ?? 0) * Number(r.quantity ?? 1) * 100);
+  const suaCents = lordo(riga);
+  const sconto = Math.max(0, Math.round(scontoCents));
+  if (sconto <= 0) return suaCents;
+  const tuttiCents = righe.reduce((s, r) => s + lordo(r), 0);
+  if (tuttiCents <= 0) return suaCents;
+  return Math.max(0, suaCents - Math.round((sconto * suaCents) / tuttiCents));
 }
 
 /** Perche' questo importo non basta a chiudere il recesso; `null` se basta. */

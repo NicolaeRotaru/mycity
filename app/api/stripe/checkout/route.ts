@@ -17,7 +17,7 @@ import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { romeNow } from '@/lib/store-hours';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
-import { fetchActiveDiscounts } from '@/lib/promotions';
+import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
 import { riusoDellaCassaAperta, type SessioneRiletta } from '@/lib/ordini/riuso-della-cassa-aperta';
@@ -375,6 +375,10 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   }
 
   const { data: products, error: prodErr } = prodottiLetti;
+  // 5/11/2026 — Uno sconto non letto non e' «nessuno sconto»: niente prezzo pieno a sorpresa.
+  if ((discountMap as MappaSconti).scontiNonLetti === true) {
+    return ApiErrors.unavailable('Non riusciamo a leggere le promozioni in questo momento. Riprova fra poco.');
+  }
 
   if (prodErr || !products || products.length === 0) {
     return ApiErrors.notFound('Prodotti non trovati.');

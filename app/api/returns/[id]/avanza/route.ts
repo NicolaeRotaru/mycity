@@ -183,7 +183,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // R84 — Il tetto lo decide la stessa regola che usa chi muove i soldi: sui
   // contanti conta solo quello che e' stato incassato davvero.
   const COLONNE_ORDINE =
-    'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, cash_confirmed_at, payment_status, delivery_status, stripe_refund_id';
+    'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, cash_confirmed_at, payment_status, delivery_status, stripe_refund_id, discount_amount';
   let ordine: OrdineDaRimborsare | null = null;
   let importoRimborso = 0;
   /**
@@ -291,7 +291,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       const nonBasta = percheIlRimborsoDelRecessoNonBasta({
         reso: ret,
         importoCents: importoRimborso,
-        interoCents: interoDelRecesso(residuoCent, rigaResaCents(righe, ret.order_item_id ?? null)),
+        interoCents: interoDelRecesso(residuoCent, rigaResaCents(righe, ret.order_item_id ?? null, Math.round(Number((ordine as { discount_amount?: number | string | null } | null)?.discount_amount ?? 0) * 100))),
         motivo: body.note,
       });
       if (nonBasta) return ApiErrors.conflict(nonBasta);
