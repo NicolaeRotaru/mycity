@@ -427,7 +427,7 @@ export interface PromessaSpedizione {
 
 /**
  * 27/10/2026 — LA SOGLIA DEI 30 EURO NON ESISTE PIÙ. Scelta 8 della carta #209: il cliente paga
- * solo la consegna, per negozio, sempre. Le frasi «Spedizione gratis · 3,00 € di consegna» e «Ti
+ * solo la consegna (dal 29/10 una sola per tutto il carrello). Le frasi «Spedizione gratis · 3,00 € di consegna» e «Ti
  * mancano X € alla spedizione gratis» promettevano un traguardo che la cassa non dà più.
  *
  * Il primo argomento (il sottototale) non cambia più la risposta: resta perché la scheda prodotto

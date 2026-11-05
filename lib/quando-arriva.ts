@@ -256,8 +256,13 @@ export function fasceDiDomaniPossibili(adesso: Date, orari: readonly unknown[] =
  * «Non più oggi» se anche senza negozi non resta una fascia (dopo le 20:00); altrimenti è il
  * negozio che non si fa trovare aperto in tempo: domenica alle 10, giovedì alle 14.
  */
-export function sottotitoloOggiSpento(adesso: Date): 'Non più oggi' | 'Negozio chiuso' {
-  return fasceAncoraPossibili(adesso, []).length > 0 ? 'Negozio chiuso' : 'Non più oggi';
+export function sottotitoloOggiSpento(adesso: Date, orari: readonly unknown[] = []): 'Non più oggi' | 'Negozio chiuso' {
+  if (fasceAncoraPossibili(adesso, []).length === 0) return 'Non più oggi';
+  // 5/11/2026 — «Negozio chiuso» solo se un negozio del carrello è chiuso davvero adesso. Lunedì
+  // alle 19:20 il forno è aperto fino alle 19:30 ma non fa più in tempo per una fascia di oggi:
+  // la tessera diceva «Negozio chiuso» a negozio aperto.
+  const unoChiusoAdesso = orari.some((h) => !negozioPuoServire(h, null, adesso));
+  return unoChiusoAdesso || orari.length === 0 ? 'Negozio chiuso' : 'Non più oggi';
 }
 
 /** «Oggi» si può ancora scegliere? Dalle 20:01 in poi, no; con gli orari, anche prima. */

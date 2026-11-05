@@ -259,7 +259,7 @@ export function DeliverySlotPicker({
           title="Oggi"
           // 30/10/2026 (ondata 22) — Il motivo vero, come «Domani»: domenica alle 10 il negozio è
           // chiuso, non è «troppo tardi».
-          subtitle={oggiPossibile ? "Scegli l'ora" : sottotitoloOggiSpento(adesso)}
+          subtitle={oggiPossibile ? "Scegli l'ora" : sottotitoloOggiSpento(adesso, orariNegozi)}
         />
         <DayTile
           active={day === 'tomorrow'}

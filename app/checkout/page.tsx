@@ -221,12 +221,12 @@ export default function CheckoutPage() {
        *
        * Qui si chiedeva `profiles`, con un ripiego sullo stesso `profiles` se mancava una colonna.
        * Dopo le migrazioni 110, 112 e 161 un cliente da `profiles` legge solo la propria riga: la
-       * risposta tornava vuota senza errore, la spedizione si mostrava a tariffa fissa e le due
+       * risposta tornava vuota senza errore, la spedizione si mostrava senza distanza e le due
        * rotte che creano l'ordine — che leggono `seller_public_profiles` — la addebitavano sulla
        * distanza. Il totale scritto sul pulsante non era quello pagato.
        *
        * Adesso la domanda e' la stessa delle rotte, sulla stessa vista: un negozio che la vista non
-       * restituisce resta senza coordinate qui come la', e vale la tariffa fissa per tutte e due.
+       * restituisce resta senza coordinate qui come la', per tutte e due (la spedizione oggi vale zero comunque).
        * Se la lettura cade non si indovina una spedizione: la domanda fallisce come quella dei
        * prodotti, e la cassa dice che non riesce a leggere il carrello.
        */
@@ -734,7 +734,7 @@ export default function CheckoutPage() {
 
   // La frase sulla consegna ha una casa sola: `promessaSpedizione` la fa nascere dal costo di
   // consegna vero. 27/10/2026 — La soglia dei 30 € per negozio non esiste più (si paga solo la
-  // consegna, per negozio, sempre): la barra «ti mancano X €» e il conto sul negozio più lontano
+  // consegna, una sola per tutto il carrello): la barra «ti mancano X €» e il conto sul negozio più lontano
   // dalla soglia (lib/ordini/promessa-del-carrello.ts) sono stati tolti.
   const promessaConsegna = promessaSpedizione();
 

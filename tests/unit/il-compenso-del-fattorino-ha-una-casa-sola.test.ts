@@ -64,7 +64,7 @@ describe('il compenso del fattorino', () => {
       couponScontoCents: 0,
       consegnaVeloce: false,
     });
-    expect(esito.gruppi[0].riderFeeCents).toBe(compensoRiderCents({ pickupInStore: false }));
+    expect(esito.gruppi[0].riderFeeCents).toBe(compensoRiderCents({ pickupInStore: false, negozioInPiu: false }));
   });
 
   it('sul ritiro in negozio non c e consegna, quindi non c e compenso', async () => {

@@ -866,7 +866,7 @@ export const POST = withAuthRateLimit(
     // Coordinate della consegna prese dal database, non dal browser: il prezzo
     // della consegna dipende dalla distanza, e finora quel numero lo scriveva il
     // client. Se l'indirizzo non è fra quelli salvati dalla persona, si resta
-    // senza coordinate e vale la tariffa fissa.
+    // senza coordinate (la spedizione oggi vale zero comunque).
     const coordConsegna = await coordinateDaIndirizziSalvati(admin, user.id, {
       address: body.delivery.address,
       city: body.delivery.city,
@@ -889,7 +889,7 @@ export const POST = withAuthRateLimit(
      *
      * ATTENZIONE, e' il punto: queste coordinate NON entrano nel prezzo. La
      * spedizione resta calcolata come oggi, sulle coordinate degli indirizzi
-     * salvati o sulla tariffa fissa. Servono a far vedere dove va la spesa.
+     * salvati (o senza coordinate). Servono a far vedere dove va la spesa.
      */
     const coordPerLaMappa =
       coordConsegna ?? (await coordinateDiUnIndirizzo({
