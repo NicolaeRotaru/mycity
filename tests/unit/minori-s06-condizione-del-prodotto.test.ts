@@ -56,3 +56,9 @@ describe('2284 — togliere la condizione', () => {
     expect(readFileSync('components/seller/ProductForm.tsx', 'utf8')).toContain("if (s.valore === '') setCondition('');");
   });
 });
+
+describe('2289 (revisore) — negazione con parole in mezzo', () => {
+  it.each(['Nuovo, mai stato usato', 'Nuovo, non è mai stato usato', 'Brand new, never used'])('«%s» → nuovo', (t) => {
+    expect(normalizeCondition(t)).toBe('nuovo');
+  });
+});

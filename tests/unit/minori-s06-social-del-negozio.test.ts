@@ -37,3 +37,12 @@ describe('580 — WhatsApp all\'italiana', () => {
     expect(socialLinks({ socials: { whatsapp: '333 1234567' } })[0].href).toBe('https://wa.me/393331234567');
   });
 });
+
+describe('295 (revisore) — link che non portano il nome del profilo', () => {
+  it('profile.php?id= e /p/… restano com\'erano e il controllo li ferma', () => {
+    const s = normalizzaSocials({ facebook: 'https://www.facebook.com/profile.php?id=1000123', instagram: 'https://www.instagram.com/p/Cxyz/' });
+    expect(s?.facebook).toBe('https://www.facebook.com/profile.php?id=1000123');
+    expect(s?.instagram).toBe('https://www.instagram.com/p/Cxyz/');
+    expect(storeCustomizationSchema.safeParse({ socials: s }).success).toBe(false);
+  });
+});

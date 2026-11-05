@@ -120,3 +120,11 @@ describe('2122 · 2123 — il riquadro «Richiesta in valutazione» di /sell', (
     expect(src).toMatch(/approval_requested_at && !modifica/);
   });
 });
+
+describe('186 (revisore) — correggere la richiesta in attesa non riavvisa', () => {
+  it('nessun secondo avviso agli amministratori', () => {
+    const src = readFileSync('app/api/seller/apply/route.ts', 'utf8');
+    expect(src).toMatch(/const eraGiaInAttesa = attuale\.approval_status === 'pending'/);
+    expect(src).toContain('if (!eraGiaInAttesa) try {');
+  });
+});

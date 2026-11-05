@@ -19,3 +19,10 @@ describe('1503 — la fascia a ogni gradino', () => {
     expect(larghezza / proporzioneA(schermo)).toBeGreaterThanOrEqual(serve);
   });
 });
+
+describe('1503 — le classi esistono davvero nel CSS', () => {
+  it('la copia che Tailwind scansiona (components/) è uguale a quella di lib', async () => {
+    const { CLASSI_FASCIA_BANNER_PER_TAILWIND } = await import('@/components/seller/site/classi-fascia-banner');
+    expect(CLASSI_FASCIA_BANNER_PER_TAILWIND).toBe(PROPORZIONI_FASCIA_BANNER);
+  });
+});

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -213,14 +213,15 @@ export default function SellerShell({ children }: { children: React.ReactNode })
     return () => mq.removeEventListener?.('change', aggiorna);
   }, []);
   const menuNascosto = !navOpen && !desktop;
-  useBottomSheetA11y(navOpen && !desktop, menuRef, hamburgerRef, () => setNavOpen(false));
-  // `inert` si scrive a mano: React 18 non conosce ancora l'attributo.
-  useEffect(() => {
+  // `inert` si scrive a mano: React 18 non conosce ancora l'attributo. Prima del hook
+  // (e in un layout effect): il fuoco che il hook mette nel menu non entra in un menu inert.
+  useLayoutEffect(() => {
     const el = menuRef.current;
     if (!el) return;
     if (menuNascosto) el.setAttribute('inert', '');
     else el.removeAttribute('inert');
   }, [menuNascosto]);
+  useBottomSheetA11y(navOpen && !desktop, menuRef, hamburgerRef, () => setNavOpen(false));
 
   // L'identità arriva dal profilo già condiviso: due chiamate di rete al minuto in meno (R075).
   const todo = useSellerTodoCount(profile?.id ?? null);

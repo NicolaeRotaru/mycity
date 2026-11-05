@@ -70,7 +70,7 @@ export function normalizeCondition(s: string): ProductCondition | '' {
   const t = s.toLowerCase();
   if (t.includes('ricond') || t.includes('refurb')) return 'ricondizionato';
   // 2289 — «Nuovo, mai usato»: la negazione dell'uso dice nuovo (prima vinceva «usat»).
-  if (/\b(mai|non)\s+usat/.test(t)) return 'nuovo';
+  if (/\b(mai|non|never|not)\b[^,.;]{0,20}\b(usat|used)/.test(t)) return 'nuovo';
   // 2261 — «Seminuovo», «come nuovo», «quasi nuovo», «non nuovo» non sono nuovi: prima
   // bastava la sillaba «nuov» e un oggetto usato entrava in vetrina come nuovo.
   // 2268 — Anche «used», «second hand», «di seconda mano» si riconoscono come usato.

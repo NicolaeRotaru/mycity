@@ -257,6 +257,9 @@ function handleDaLink(v: string | undefined, dominio: RegExp): string | undefine
   if (v === undefined) return v;
   const t = v.trim();
   const m = t.match(new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${dominio.source}\\/@?([A-Za-z0-9._-]+)`, 'i'));
+  // «profile.php?id=…», «/p/…», «/reel/…», «/share/…» non sono il nome del profilo: si lascia
+  // il valore com'è, e il controllo lo ferma invece di salvare un link sbagliato.
+  if (m && (/^(profile\.php|p|reel|reels|share|groups|pages|watch)$/i.test(m[1]) || /\?/.test(t))) return t;
   return (m ? m[1] : t).replace(/^@+/, '');
 }
 

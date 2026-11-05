@@ -137,7 +137,7 @@ export const POST = withAuthRateLimit(
     const admin = getAdminSupabase();
     const { data: attuale, error: errLettura } = await admin
       .from('profiles')
-      .select('role, approval_status')
+      .select('role, approval_status, approval_requested_at')
       .eq('id', user.id)
       .maybeSingle();
     if (errLettura) {
@@ -235,7 +235,9 @@ export const POST = withAuthRateLimit(
     }
 
     // Nicola deve saperlo subito: la coda dei negozi da approvare non avvisa da sola.
-    try {
+    // Una richiesta già in attesa che il negozio corregge non è un negozio nuovo: niente secondo avviso.
+    const eraGiaInAttesa = attuale.approval_status === 'pending' && !!(attuale as { approval_requested_at?: string | null }).approval_requested_at;
+    if (!eraGiaInAttesa) try {
       await notifyAdmins(
         'Nuovo negozio da approvare',
         `${f.storeName} ha chiesto di entrare su MyCity: approva da Utenti.`,

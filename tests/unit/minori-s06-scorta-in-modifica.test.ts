@@ -171,3 +171,27 @@ describe('2520 — nessuna migrazione fantasma', () => {
     }
   });
 });
+
+describe('2578 (revisore) — «Duplica» manda davvero l\'esclusione dal recesso', () => {
+  it('in creazione, con la spunta già messa dal prodotto copiato, parte non_recedibile: true', async () => {
+    const salvati: Record<string, unknown>[] = [];
+    const mod = await monta('components/seller/ProductForm.tsx');
+    const radice = document.createElement('div');
+    document.body.appendChild(radice);
+    const root = createRoot(radice);
+    await act(async () => {
+      root.render(createElement(mod.default as ComponentType<Record<string, unknown>>, {
+        mode: 'create', categories: CATEGORIE, recessoSegnabile: true,
+        initialValues: { ...iniziali(), name: 'Focaccia (copia)', status: 'draft', nonRecedibile: true },
+        onSubmit: (p: Record<string, unknown>) => salvati.push(p),
+        sellerOffersExpress: true, consegnaDelNegozioNonLetta: false,
+      }));
+    });
+    const b = Array.from(radice.querySelectorAll('button')).find((x) => /Pubblica prodotto/.test(x.textContent ?? ''));
+    expect(b, 'il pulsante «Pubblica prodotto» non è a video').toBeTruthy();
+    await act(async () => { clicca(b as HTMLButtonElement); });
+    await attendi(); await attendi();
+    expect(salvati.at(-1)?.non_recedibile).toBe(true);
+    root.unmount();
+  });
+});

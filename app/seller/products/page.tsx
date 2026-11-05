@@ -87,7 +87,7 @@ export default function SellerProductsPage() {
    * prodotti fra una pagina e l'altra.
    */
   const queryProducts = useInfiniteQuery({
-    queryKey: [...queryKeys.seller.products, ricerca],
+    queryKey: [...queryKeys.seller.products, 'elenco', ricerca],
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
       const { data: { user } } = await supabase.auth.getUser();

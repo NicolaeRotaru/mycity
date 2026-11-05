@@ -740,7 +740,10 @@ export default function ProductForm({
        * riscrive la banca dati, e un modulo aperto prima della migrazione 180
        * continua a salvare.
        */
-      if (recessoSegnabile && nonRecedibile !== recedibileAllApertura) payload.non_recedibile = nonRecedibile;
+      // In creazione (anche «Duplica», che parte con la spunta del prodotto copiato) il
+      // confronto è col default della banca dati (false): una spunta già messa deve partire.
+      const recessoDiPartenza = mode === 'create' ? false : recedibileAllApertura;
+      if (recessoSegnabile && nonRecedibile !== recessoDiPartenza) payload.non_recedibile = nonRecedibile;
       /**
        * 28/10/2026 — CHI CORREGGE LA DESCRIZIONE NON RIMETTE IN MAGAZZINO LA
        * MERCE VENDUTA. La scorta partiva sempre, col numero visto all'apertura:
