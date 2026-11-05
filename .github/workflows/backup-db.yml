@@ -642,10 +642,11 @@ jobs:
           utenti="$(ls "$cartella" | node scripts/copie-di-backup.mjs utenti)"
           echo "▶ ripristino da $principale (utenti: $utenti)"
 
-          gpg --batch --yes --decrypt --passphrase "$BACKUP_PASSPHRASE" \
-            --output /tmp/copia.dump "$cartella/$principale"
-          gpg --batch --yes --decrypt --passphrase "$BACKUP_PASSPHRASE" \
-            --output /tmp/copia_utenti.dump "$cartella/$utenti"
+          # 5/11/2026 — La passphrase da un descrittore, non dalla riga di comando.
+          gpg --batch --yes --decrypt --pinentry-mode loopback --passphrase-fd 3 \
+            --output /tmp/copia.dump "$cartella/$principale" 3<<<"$BACKUP_PASSPHRASE"
+          gpg --batch --yes --decrypt --pinentry-mode loopback --passphrase-fd 3 \
+            --output /tmp/copia_utenti.dump "$cartella/$utenti" 3<<<"$BACKUP_PASSPHRASE"
 
           psql -q -d postgres -c "CREATE DATABASE prova_ripristino;"
           inizio=$(date +%s)

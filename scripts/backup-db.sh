@@ -203,8 +203,10 @@ fi
 # rileggerlo.
 if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
   for f in "${DA_CIFRARE[@]}"; do
+    # 5/11/2026 — La passphrase arriva a gpg da un descrittore (3), non dalla riga di comando: un
+    # argomento si legge in /proc/<pid>/cmdline da ogni altro processo della stessa macchina.
     gpg --batch --yes --symmetric --cipher-algo AES256 \
-      --passphrase "$BACKUP_PASSPHRASE" --output "$f.gpg" "$f"
+      --pinentry-mode loopback --passphrase-fd 3 --output "$f.gpg" "$f" 3<<<"$BACKUP_PASSPHRASE"
     rm -f "$f"
     echo "[backup] Cifrato: $f.gpg"
   done
