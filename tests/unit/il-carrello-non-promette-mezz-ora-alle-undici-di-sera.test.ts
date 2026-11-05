@@ -318,10 +318,16 @@ describe('il primo disegno, quello che arriva dal server, non sa che ore sono', 
     // Finché il carrello non è letto, la pagina non mostra righe: un'ora presa dal server non si
     // vedrebbe a occhio. Per questo si guarda anche come nasce lo stato dell'ora, e che senza ora
     // né la riga del prodotto né quella sotto il totale promettano un tempo.
-    expect(CARRELLO, "l'ora del carrello deve partire da null, non da `new Date()`").toMatch(
-      /\[oraDiAdesso, setOraDiAdesso\] = useState<number \| null>\(null\)/,
+    // 5/11/2026 (S04, schede 2253 e 2306) — Si cercava il nome `oraDiAdesso`: rinominarlo faceva
+    // diventare rossa la prova senza nessun difetto. Ora il nome si legge dal codice, e si
+    // pretende che nessuno stato del carrello parta da un orologio (`new Date()`, `Date.now()`):
+    // il primo disegno è quello del server, che non sa che ore sono da chi compra.
+    const ora = CARRELLO.match(/const \[(\w+), \w+\] = useState<number \| null>\(null\)/);
+    expect(ora, "l'ora del carrello deve partire da null, non da `new Date()`").not.toBeNull();
+    expect(CARRELLO, 'uno stato del carrello parte da un orologio').not.toMatch(
+      /useState(?:<[^>]*>)?\(\s*(?:\(\)\s*=>\s*)?(?:new Date|Date\.now|romeNow)/,
     );
-    expect(CARRELLO, 'senza ora la riga sotto il totale non deve promettere niente').toMatch(/oraDiAdesso === null \? null/);
+    expect(CARRELLO, 'senza ora la riga sotto il totale non deve promettere niente').toContain(`${ora![1]} === null ? null`);
     expect(rigaQuandoArrivaNelCarrello(null, true), 'senza ora la riga del prodotto non deve promettere niente').toBeNull();
   });
 
