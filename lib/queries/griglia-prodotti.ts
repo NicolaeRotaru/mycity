@@ -200,6 +200,24 @@ export async function leggiProdottiDellaGriglia(
     const ordinati = data.sort(
       (a, b) => (rango.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rango.get(b.id) ?? Number.MAX_SAFE_INTEGER),
     );
+    /**
+     * 5/11/2026 — LA PERTINENZA SI CHIEDE SU TUTTO IL SITO, I FILTRI SI APPLICANO DOPO.
+     * `search_products_smart` non conosce negozio, categoria e prezzo: restituisce i primi 200 di
+     * tutto il catalogo, e dentro la vetrina di un negozio (o con una categoria) quelli del negozio
+     * potevano restare fuori dal taglio — «nessun risultato» con il prodotto lì. Quando c'è un
+     * filtro che stringe, sotto i pertinenti si aggiungono quelli che hanno la parola nel nome
+     * (la vecchia strada), senza doppioni.
+     */
+    const filtroCheStringe =
+      !!d.sellerId || !!categorieDaLeggere || d.minPrice !== undefined || d.maxPrice !== undefined || d.apertiOra !== undefined;
+    if (termine && filtroCheStringe) {
+      let perNome = base().ilike('name', `%${termine}%`);
+      if (soloConVoto) perNome = perNome.in('id', d.idsColVoto!);
+      const { data: altri, error: errNome } = await perNome.limit(d.tetto);
+      if (errNome) throw errNome;
+      const gia = new Set(ordinati.map((r) => r.id));
+      for (const r of (altri ?? []) as unknown as RigaGriglia[]) if (!gia.has(r.id)) ordinati.push(r);
+    }
     // Sul ramo pertinenza l'ordine lo decide la funzione del database, quindi
     // la finestra si taglia qui: e' lo stesso elenco, preso dal punto giusto.
     rows = d.finestra

@@ -1,5 +1,6 @@
 import { domandaCategorie, type CategoriaDiTesta, type ClientDiLettura } from '@/lib/queries/catalogo';
 import { logger } from '@/lib/logger';
+import { SECONDI_CATALOGO_FRESCO, SECONDI_CATALOGO_RIPIEGO } from '@/lib/queries/cache-pubblica';
 
 /** Dove il browser chiede le categorie: una rotta pubblica, con la sua scadenza. */
 export const PERCORSO_CATEGORIE_PUBBLICHE = '/api/catalogo/categorie';
@@ -29,6 +30,13 @@ export function domandaCategoriePubbliche(supa: ClientDiLettura) {
   const diretta = domandaCategorie(supa);
   return {
     queryKey: diretta.queryKey,
+    /**
+     * 5/11/2026 — Il precarico della home vive in memoria sul server fino a 60 secondi più 300 di
+     * ripiego, e arriva col suo orario di lettura; il browser considerava vecchio un dato oltre i
+     * 30 secondi e lo richiedeva appena partito, buttando via il lavoro del server. Le categorie
+     * cambiano forse una volta al mese: valgono quanto la memoria del server.
+     */
+    staleTime: (SECONDI_CATALOGO_FRESCO + SECONDI_CATALOGO_RIPIEGO) * 1000,
     queryFn: async (): Promise<CategoriaDiTesta[]> => {
       try {
         const risposta = await fetch(PERCORSO_CATEGORIE_PUBBLICHE);

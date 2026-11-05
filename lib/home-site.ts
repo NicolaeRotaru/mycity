@@ -344,7 +344,7 @@ export function leggiHomeSite(raw: unknown): { site: HomeSite; scartate: Sezione
 const TESTI_EROE = ['eyebrow', 'headline', 'subhead', 'ctaLabel'] as const;
 
 /** Una frase salvata dell'eroe lasciata fuori perché promette cose superate. */
-export type FraseScartata = { id: string; campo: (typeof TESTI_EROE)[number]; motivo: string; testo: string };
+export type FraseScartata = { id: string; campo: string; motivo: string; testo: string };
 
 /**
  * 01/11/2026 — Il freno delle promesse superate, sull'eroe della home.
@@ -359,9 +359,14 @@ export type FraseScartata = { id: string; campo: (typeof TESTI_EROE)[number]; mo
 export function togliPromesseSuperate(site: HomeSite): { site: HomeSite; frasi: FraseScartata[] } {
   const frasi: FraseScartata[] = [];
   const sections = site.sections.map((s) => {
-    if (s.type !== 'hero') return s;
     const config: Record<string, unknown> = { ...s.config };
-    for (const campo of TESTI_EROE) {
+    // 5/11/2026 — Prima il freno guardava solo l'eroe: un'intestazione salvata con una promessa
+    // superata in un'altra sezione usciva com'era. Per le altre sezioni si guardano tutti i testi
+    // salvati di primo livello; svuotati, torna il testo di riserva (già controllato).
+    const campi: readonly string[] = s.type === 'hero'
+      ? TESTI_EROE
+      : Object.keys(config).filter((k) => typeof config[k] === 'string');
+    for (const campo of campi) {
       const testo = config[campo];
       if (typeof testo !== 'string' || testo === '') continue;
       const motivo = promessaSuperata(testo);
@@ -381,7 +386,7 @@ export function normalizeHomeSite(raw: unknown): HomeSite {
   if (scartate.length > 0) logger.warn('[home] sezioni salvate scartate perché non valide', { scartate });
   const { site, frasi } = togliPromesseSuperate(letta);
   if (frasi.length > 0) {
-    logger.warn('[home] frasi salvate dell\'eroe scartate: promettono cose superate, riscrivile da /admin/home', { frasi });
+    logger.warn('[home] frasi salvate della home scartate: promettono cose superate, riscrivile da /admin/home', { frasi });
   }
   return site;
 }

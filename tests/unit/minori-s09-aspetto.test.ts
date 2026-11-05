@@ -210,3 +210,11 @@ describe('scheda di un prodotto nelle griglie (components/ProductCard.tsx)', () 
     expect(src).toContain('FOTO_MANCANTE');
   });
 });
+
+describe('1550 — mentre la pagina carica non resta una schermata bianca', () => {
+  it('la scritta «Stiamo caricando…» si vede, non è solo per il lettore di schermo', () => {
+    const src = leggi('app/loading.tsx');
+    expect(src).toMatch(/<p className="mt-6 text-center text-sm text-ink-500">Stiamo caricando…<\/p>/);
+    expect(src).not.toMatch(/<span className="sr-only">Stiamo caricando…<\/span>/);
+  });
+});

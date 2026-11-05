@@ -160,3 +160,29 @@ describe('670 — le foto già ridotte da Supabase non si riducono di nuovo a Ve
     expect(leggi('components/StoryViewer.tsx')).toContain('loader={caricatoreLogoNegozio}');
   });
 });
+
+import { togliPromesseSuperate, defaultHomeSite } from '@/lib/home-site';
+
+describe('2638 — il freno delle promesse superate vale per tutte le sezioni della home', () => {
+  it('un\'intestazione salvata fuori dall\'eroe con i 30-60 minuti certi si scarta', () => {
+    const site = defaultHomeSite();
+    const i = site.sections.findIndex((s) => s.type === 'popularProducts');
+    (site.sections[i].config as Record<string, unknown>).heading = 'Arriva a casa in 30-60 min';
+    const { site: pulita, frasi } = togliPromesseSuperate(site);
+    expect((pulita.sections[i].config as Record<string, unknown>).heading).toBe('');
+    expect(frasi.map((f) => f.campo)).toContain('heading');
+  });
+});
+
+describe('2637/672/517 — testi e letture della home', () => {
+  it('2637 — il sottotitolo di riserva non promette casa ed elettronica', () => {
+    expect(leggi('app/page.tsx')).not.toMatch(/Alimentari, casa, elettronica/);
+  });
+  it('672 — le categorie precaricate valgono quanto la memoria del server (60 + 300 s)', async () => {
+    const { domandaCategoriePubbliche } = await import('@/lib/queries/categorie-pubbliche');
+    expect(domandaCategoriePubbliche({} as never).staleTime).toBe(360_000);
+  });
+  it('517 — le ricerche suggerite a tutti non spingono il vino', () => {
+    expect(leggi('components/SearchBar.tsx')).not.toMatch(/'Vino dei Colli'/);
+  });
+});
