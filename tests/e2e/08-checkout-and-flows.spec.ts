@@ -36,13 +36,16 @@ test.describe('Checkout page renders', () => {
   test('step indicator visible', async ({ page, request }) => {
     await servePaginaViva(request, '/checkout');
     await page.goto('/checkout');
-    // Verifica che StepIndicator renderizzi (Carrello, Indirizzo, Conferma)
-    const stepsVisible = await page.locator('text=Carrello').isVisible({ timeout: 3000 }).catch(() => false);
-    // Se carrello vuoto non si renderizza, il check passa comunque
-    if (stepsVisible) {
-      await expect(page.locator('text=Indirizzo')).toBeVisible();
-      await expect(page.locator('text=Conferma')).toBeVisible();
-    }
+    // 5/11/2026 (S04, scheda 2029) — Prima si guardava «Carrello» con isVisible, che non aspetta:
+    // col carrello vuoto la barra dei passi compare un attimo mentre la cassa carica e poi sparisce.
+    // Se la prova guardava presto passava senza controllare niente; se guardava nel momento
+    // sbagliato cercava «Indirizzo» in tutta la pagina e trovava le scritte della posizione.
+    // Ora si aspetta che la pagina si fermi (il carrello vuoto è il suo stato finale qui), e la
+    // barra dei passi si cerca per nome, non per parola sparsa.
+    await expect(page.locator('text=/carrello.*vuoto/i')).toBeVisible({ timeout: 10000 });
+    const passi = page.getByRole('navigation', { name: "A che punto sei dell'ordine" });
+    // A carrello vuoto non c'è un ordine a metà: la barra non resta a schermo.
+    await expect(passi).toHaveCount(0);
   });
 });
 

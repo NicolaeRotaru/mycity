@@ -28,8 +28,11 @@ test.describe('Cart and Search', () => {
 
   test('category page renders', async ({ page }) => {
     await page.goto('/category/alimentari');
-    // Vedi titolo o empty state
-    await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 5000 });
+    // 5/11/2026 (S04, scheda 478) — Prima bastava il primo h1 o h2 visibile: il piede di pagina ne
+    // ha sempre uno, quindi la prova passava anche con la categoria rotta. Ora il titolo deve stare
+    // nel contenuto e nominare la categoria (o dire che non c'è).
+    await expect(page.getByRole('main').locator('h1').first()).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('main').locator('h1').first()).toContainText(/alimentari|non trovata/i);
   });
 
   test('stores page renders list', async ({ page, request }) => {
@@ -43,6 +46,9 @@ test.describe('Cart and Search', () => {
 
   test('404 page is custom', async ({ page }) => {
     const res = await page.goto('/this-page-does-not-exist-404');
-    expect([404, 200]).toContain(res?.status() ?? 0);
+    // 5/11/2026 (S04, scheda 478) — Accettava 200 o 404 e non guardava la pagina: passava anche
+    // con una pagina bianca. Ora: 404 vero, e la nostra pagina (app/not-found.tsx).
+    expect(res?.status()).toBe(404);
+    await expect(page.getByText('Pagina non trovata')).toBeVisible();
   });
 });

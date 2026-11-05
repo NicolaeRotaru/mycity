@@ -8,8 +8,10 @@ import { test, expect } from '@playwright/test';
 test.describe('Product detail page', () => {
   test('renders 404 for invalid product', async ({ page }) => {
     const response = await page.goto('/product/not-a-real-id', { waitUntil: 'domcontentloaded' });
-    // Next.js render 404 server-side
     expect(response?.status()).toBeLessThan(500);
+    // 5/11/2026 (S04, scheda 478) — «meno di 500» passava anche con una scheda qualunque a 200.
+    // La pagina del prodotto è disegnata nel browser: deve dire che il prodotto non c'è.
+    await expect(page.getByRole('heading', { name: 'Prodotto non trovato' })).toBeVisible({ timeout: 10000 });
   });
 
   test('search results link to product detail', async ({ page }) => {

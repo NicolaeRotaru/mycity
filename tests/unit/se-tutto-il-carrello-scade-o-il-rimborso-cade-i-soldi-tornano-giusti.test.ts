@@ -117,7 +117,6 @@ describe('tutti gli ordini del carrello scadono nello stesso giro', () => {
     const { POST } = await import('@/app/api/cron/expire-stale-orders/route');
     await (POST as unknown as () => Promise<unknown>)();
     const resi = refundOrder.mock.calls.map((c) => c[0]);
-    console.log('ADDEBITO', addebito, 'RIMBORSI', JSON.stringify(resi.map((r) => [r.orderId, r.amountCents])), 'FRUTTA', JSON.stringify(riga('frutta')));
     expect(resi.reduce((s, r) => s + r.amountCents, 0)).toBe(addebito);
   });
   it('stesso carrello, ordine inverso nel giro (frutta prima): i rimborsi rendono 31 €', async () => {
@@ -128,7 +127,6 @@ describe('tutti gli ordini del carrello scadono nello stesso giro', () => {
     const { POST } = await import('@/app/api/cron/expire-stale-orders/route');
     await (POST as unknown as () => Promise<unknown>)();
     const resi = refundOrder.mock.calls.map((c) => c[0]);
-    console.log('ADDEBITO', addebito, 'RIMBORSI', JSON.stringify(resi.map((r) => [r.orderId, r.amountCents])));
     expect(resi.reduce((s, r) => s + r.amountCents, 0)).toBe(addebito);
   });
 });
@@ -141,7 +139,6 @@ describe('il rimborso fallisce dopo che la consegna è stata riscritta', () => {
     refundOrder.mockImplementationOnce(async () => { throw new Error('Stripe 503'); });
     const { POST } = await import('@/app/api/cron/expire-stale-orders/route');
     await (POST as unknown as () => Promise<unknown>)();
-    console.log('PANE', JSON.stringify(riga('pane')), 'FRUTTA', JSON.stringify(riga('frutta')));
     expect(riga('pane').delivery_status).toBe('NEW');
     expect(riga('pane')).toMatchObject({ rider_fee_cents: 300, delivery_fee_cents: 300, total_price: 18 });
   });
@@ -150,7 +147,6 @@ describe('il rimborso fallisce dopo che la consegna è stata riscritta', () => {
     db = finto({ orders: ordini });
     refundOrder.mockImplementationOnce(async () => { throw new Error('Stripe 503'); });
     const esito = await annullaERimborsa(db as never, riga('pane') as never, { reason: 'rifiutato' } as never);
-    console.log('ESITO', JSON.stringify(esito), 'PANE', JSON.stringify(riga('pane')), 'FRUTTA', JSON.stringify(riga('frutta')));
     expect(riga('pane').delivery_status).not.toBe('CANCELED');
     expect(riga('pane')).toMatchObject({ rider_fee_cents: 300, delivery_fee_cents: 300, total_price: 18 });
   });
