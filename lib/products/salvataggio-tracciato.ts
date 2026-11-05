@@ -40,6 +40,7 @@
 import type { AuditAction } from '@/lib/audit';
 import type { CategoryRow } from '@/lib/products/aiPatch';
 import {
+  cosaMancaPerVendere,
   daCompletareDopoLaModifica,
   messaggioDaCompletare,
   type ProdottoAttuale,
@@ -342,6 +343,26 @@ export class DaCompletare extends Error {
  * sta scrivendo, se c'e': il modulo aggiunge la prima foto e pubblica nello
  * stesso salvataggio.
  */
+/** Le voci di `cosaMancaPerVendere` che dipendono da foto, nome e descrizione. */
+function vociDellaScheda(p: Record<string, unknown>): string[] {
+  const foto = Array.isArray(p.images) ? (p.images as unknown[]).length : 0;
+  return cosaMancaPerVendere({
+    name: String(p.name ?? ''),
+    description: String(p.description ?? ''),
+    price: 1,
+    haCategoria: true,
+    categoriaTop: null,
+    numeroFoto: foto,
+    attributes: {},
+  });
+}
+
+function cosaTogliereRendeIncompleto(prima: Record<string, unknown>, daScrivere: Record<string, unknown>): string[] {
+  if (!('images' in daScrivere) && !('name' in daScrivere) && !('description' in daScrivere)) return [];
+  const giaMancanti = new Set(vociDellaScheda(prima));
+  return vociDellaScheda({ ...prima, ...daScrivere }).filter((v) => !giaMancanti.has(v));
+}
+
 async function controllaCheSiPossaVendere(
   db: ClientDelCatalogo,
   prima: Record<string, unknown>,
@@ -350,7 +371,15 @@ async function controllaCheSiPossaVendere(
   const statoDopo = 'status' in daScrivere ? daScrivere.status : prima.status;
   if (statoDopo !== 'available') return;
   const cambiaCategoria = 'category_id' in daScrivere && daScrivere.category_id !== prima.category_id;
-  if (prima.status === 'available' && !cambiaCategoria) return;
+  if (prima.status === 'available' && !cambiaCategoria) {
+    // Già in vetrina, stessa categoria: la scheda intera non si ricontrolla (un
+    // alimento vecchio senza ingredienti deve poter cambiare prezzo), ma questa
+    // modifica non può TOGLIERE quello che c'era: le foto, il nome, la descrizione.
+    // Si ferma solo ciò che prima andava e dopo manca.
+    const tolti = cosaTogliereRendeIncompleto(prima, daScrivere);
+    if (tolti.length > 0) throw new DaCompletare(messaggioDaCompletare(tolti, null), tolti);
+    return;
+  }
 
   const { data: categorie, error } = await db.from('categories').select('id, name, slug, parent_id');
   if (error) throw error;
@@ -429,6 +458,14 @@ export async function salvaProdottoTracciato(opts: {
     else condizione = scortaVista;
   }
   if (Object.keys(daScrivere).length === 0) return { campi: [], tracciato: false };
+  // Un prezzo si scrive solo se è un numero maggiore di zero, da qualunque porta
+  // arrivi: il database accetta 0 e la cassa non scarta una riga a zero euro.
+  if ('price' in daScrivere) {
+    const prezzo = Number(daScrivere.price);
+    if (!Number.isFinite(prezzo) || prezzo <= 0) {
+      throw new DaCompletare('Il prezzo deve essere un numero maggiore di zero.', ['prezzo']);
+    }
+  }
 
   const { data: prima, error: erroreLettura } = await opts.db
     .from('products')

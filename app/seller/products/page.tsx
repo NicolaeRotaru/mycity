@@ -20,8 +20,8 @@ import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AI_NEGOZI_ACCESA, CARICAMENTO_DA_FILE_ACCESO } from '@/lib/funzioni-al-lancio';
-import { nascondiProdotto } from '@/lib/products/nascondi';
-import { salvaProdottoDalBrowser } from '@/lib/products/salva-dal-browser';
+import { nascondiProdottoTracciato, salvaProdottoDalBrowser } from '@/lib/products/salva-dal-browser';
+import { leggiPrezzo } from '@/app/seller/products/import/csv';
 import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
 
 type SellerProductRow = {
@@ -31,6 +31,8 @@ type SellerProductRow = {
   status: 'available' | 'sold' | string;
   images: string[] | null;
   stock: number | null;
+  /** Con le taglie la scorta è la somma delle varianti: in blocco non si cambia. */
+  has_variants?: boolean | null;
   categories: { name: string | null } | null;
 };
 
@@ -74,7 +76,7 @@ export default function SellerProductsPage() {
       const [da, a] = finestraDellaPagina(pageParam as number);
       const { data, error, count } = await supabase
         .from('products')
-        .select('id, name, price, status, images, stock, categories(name)', { count: 'exact' })
+        .select('id, name, price, status, images, stock, has_variants, categories(name)', { count: 'exact' })
         .eq('seller_id', user.id)
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
@@ -129,8 +131,8 @@ export default function SellerProductsPage() {
    */
   const nascondi = useMutation({
     mutationFn: async (id: string) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      await nascondiProdotto(supabase, { id, sellerId: user?.id });
+      // Dalla porta che scrive il registro (PATCH /api/seller/products/:id).
+      await nascondiProdottoTracciato(id, 'venditore-elenco');
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.seller.products });
@@ -163,12 +165,27 @@ export default function SellerProductsPage() {
   const bulkSave = useMutation({
     mutationFn: async (edits: Record<string, { price?: string; stock?: string; stockVisto?: number }>) => {
       const ids = Object.keys(edits);
+      // Prima di scrivere qualunque cosa: un prezzo illeggibile («2,50 €» si
+      // legge, «abc» no) o non maggiore di zero ferma tutto, con il nome del
+      // prodotto. Prima «0» metteva in vendita a zero euro, e «1.234,50» veniva
+      // saltato ma contato fra gli «aggiornati».
+      const prezziSbagliati = ids.filter((id) => {
+        const grezzo = edits[id].price;
+        if (grezzo == null || grezzo === '') return false;
+        const n = leggiPrezzo(grezzo);
+        return !Number.isFinite(n) || n <= 0;
+      });
+      if (prezziSbagliati.length > 0) {
+        const nomi = prezziSbagliati.map((id) => products.find((x) => x.id === id)?.name ?? id);
+        throw new Error(`Prezzo non valido per ${nomi.map((n) => `«${n}»`).join(', ')}: scrivi un numero maggiore di zero, per esempio 4,50.`);
+      }
+      let salvati = 0;
       for (const id of ids) {
         const e = edits[id];
         const patch: Record<string, number> = {};
         if (e.price != null && e.price !== '') {
-          const n = Number(e.price.replace(',', '.'));
-          if (Number.isFinite(n)) patch.price = n;
+          const n = leggiPrezzo(e.price);
+          if (Number.isFinite(n) && n > 0) patch.price = n;
         }
         if (e.stock != null && e.stock !== '') {
           const n = Number(e.stock);
@@ -192,6 +209,7 @@ export default function SellerProductsPage() {
             payload: patch,
             origine: 'venditore-elenco-blocco',
           });
+          salvati += 1;
         } catch (err) {
           // 31/10/2026 — DOPO UN CONFLITTO LA LISTA NON RESTA SUI NUMERI VECCHI.
           // Quelli gia' salvati escono dalle modifiche (non si rimandano), e la
@@ -215,7 +233,7 @@ export default function SellerProductsPage() {
           throw err;
         }
       }
-      return ids.length;
+      return salvati;
     },
     onSuccess: (n) => {
       qc.invalidateQueries({ queryKey: queryKeys.seller.products });
@@ -414,7 +432,9 @@ export default function SellerProductsPage() {
                     <td className={`px-4 py-3 text-right font-semibold ${
                       (p.stock ?? 0) === 0 ? 'text-secondary-600' : (p.stock ?? 0) <= 3 ? 'text-accent-700' : 'text-ink-700'
                     }`}>
-                      {bulk ? (
+                      {bulk && p.has_variants ? (
+                        <Link href={`/seller/products/${p.id}/edit`} className="text-xs font-semibold text-primary-700 underline">Taglie: dalla scheda</Link>
+                      ) : bulk ? (
                         <input
                           value={valOf(p, 'stock')}
                           onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''), p.stock)}
@@ -513,6 +533,9 @@ export default function SellerProductsPage() {
                             className="w-20 rounded-md border border-cream-300 px-2 py-1 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
                           />
                         </label>
+                        {p.has_variants ? (
+                          <Link href={`/seller/products/${p.id}/edit`} className="text-xs font-semibold text-primary-700 underline">Scorta delle taglie: dalla scheda</Link>
+                        ) : (
                         <label className="flex items-center gap-1.5 text-xs text-ink-500">
                           Stock
                           <input
@@ -523,6 +546,7 @@ export default function SellerProductsPage() {
                             className="w-16 rounded-md border border-cream-300 px-2 py-1 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
                           />
                         </label>
+                        )}
                       </div>
                     ) : (
                       <div className="mt-1 flex flex-wrap items-center gap-2">

@@ -16,8 +16,7 @@ import { normalizeCondition, type ProductCondition, type ProductUnit } from '@/l
 import { type ProductVariant } from '@/lib/products/variants';
 import { controllaScorteVariantiDalBrowser, loadProductVariants, saveProductVariants } from '@/lib/products/persistVariants';
 import { AlertTriangle, EyeOff } from 'lucide-react';
-import { nascondiProdotto } from '@/lib/products/nascondi';
-import { salvaProdottoDalBrowser } from '@/lib/products/salva-dal-browser';
+import { nascondiProdottoTracciato, salvaProdottoDalBrowser } from '@/lib/products/salva-dal-browser';
 import { colonnaDelRecessoPresente } from '@/lib/ordini/recesso';
 
 /** Campo interno della lettura: la banca dati ha gia' la colonna del recesso? */
@@ -175,9 +174,8 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
    */
   const nascondiIlProdotto = useMutation({
     mutationFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Non autenticato');
-      await nascondiProdotto(supabase, { id, sellerId: user.id });
+      // Dalla porta che scrive il registro (PATCH /api/seller/products/:id).
+      await nascondiProdottoTracciato(id, 'venditore-modulo');
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.seller.products });

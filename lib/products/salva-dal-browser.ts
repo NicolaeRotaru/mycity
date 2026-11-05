@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
+import { STATO_NASCOSTO } from '@/lib/products/nascondi';
 
 /**
  * Il salvataggio di un prodotto, visto dal browser.
@@ -48,4 +49,14 @@ export async function salvaProdottoDalBrowser(opts: {
     | null;
   if (!res.ok) throw new Error(json?.error?.message ?? 'Non sono riuscito a salvare. Riprova.');
   return json?.data?.campi ?? [];
+}
+
+/**
+ * «Nascondi» dalla porta che lascia la traccia: il prodotto va in bozza
+ * (STATO_NASCOSTO di lib/products/nascondi) e nel registro resta chi l'ha
+ * tolto dalla vetrina e quando. Prima la pagina scriveva lo stato dal browser,
+ * senza nessuna riga nel registro.
+ */
+export async function nascondiProdottoTracciato(prodottoId: string, origine = 'venditore-nascondi'): Promise<void> {
+  await salvaProdottoDalBrowser({ prodottoId, payload: { status: STATO_NASCOSTO }, origine });
 }
