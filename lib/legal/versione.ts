@@ -14,6 +14,22 @@
  */
 export const VERSIONE_TESTI_LEGALI = 'privacy-2.0+terms-3.0';
 
+/** Il giorno da cui valgono i Termini di questa versione: la pagina dei Termini e quella della riaccettazione lo leggono da qui. */
+export const TERMINI_IN_VIGORE_DAL = '1 novembre 2026';
+
+/**
+ * 5/11/2026 — Cosa cambia nei Termini di questa versione, detto a chi li aveva
+ * già accettati. La pagina che chiede di riaccettare non diceva né che i
+ * Termini erano cambiati né cosa cambiava. Sono le voci del commento qui sopra
+ * (terms-3.0), in parole semplici: quando la versione sale, si riscrivono.
+ */
+export const COSA_CAMBIA_NEI_TERMINI: readonly string[] = [
+  'quali prodotti sono esclusi dal diritto di recesso (per esempio pane e prodotti freschi)',
+  'i modi di pagamento come sono oggi, e quando il negozio riceve i soldi',
+  'a chi mandare il modulo di recesso',
+  'per i negozi: come si conta l\'IVA sulla commissione e quando si paga il canone',
+];
+
 /**
  * 31/10/2026 (ondata 6) — CHI HA ACCETTATO I TERMINI VECCHI LI RIACCETTA.
  *

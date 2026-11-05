@@ -38,6 +38,13 @@ const Corpo = z.object({
   nuovaPassword: z.string().min(LUNGHEZZA_MINIMA).max(200),
 });
 
+/** I fornitori con cui l'account accede (`email`, `google`…), da app_metadata o dalle identità. */
+function fornitoriDiAccesso(user: { app_metadata?: { providers?: unknown }; identities?: Array<{ provider?: string }> | null }): string[] {
+  const daiMetadati = user.app_metadata?.providers;
+  if (Array.isArray(daiMetadati)) return daiMetadati.filter((p): p is string => typeof p === 'string');
+  return (user.identities ?? []).map((i) => i.provider).filter((p): p is string => typeof p === 'string');
+}
+
 export const POST = withAuthRateLimit(
   // Cinque tentativi ogni quarto d'ora: chi cambia la password lo fa una volta,
   // e questa rotta è anche un modo per PROVARE password (la risposta dice se
@@ -54,6 +61,12 @@ export const POST = withAuthRateLimit(
     }
 
     const email = user.email?.trim();
+    // 5/11/2026 — Chi entra con Google HA un'email: il controllo sulla sola email
+    // non scattava mai, si provava la password e la risposta era «Password
+    // attuale non corretta». Si guarda con che cosa accede l'account: se fra i
+    // fornitori non c'è 'email', una password da cambiare non esiste.
+    const fornitori = fornitoriDiAccesso(user);
+    const senzaFornitoreEmail = fornitori.length > 0 && !fornitori.includes('email');
     if (!email) {
       // Chi è entrato solo con Google non ha una password da cambiare: mandarlo
       // avanti gli scriverebbe una password che non ha mai chiesto.
@@ -68,6 +81,12 @@ export const POST = withAuthRateLimit(
       password: corpo.passwordAttuale,
     });
     if (erroreVerifica) {
+      // Si prova comunque la password (chi è entrato con Google può averne impostata una col
+      // recupero): solo se non combacia e l'account non ha l'email fra i fornitori, la risposta
+      // giusta è «accedi senza password», non «password non corretta».
+      if (senzaFornitoreEmail) {
+        return ApiErrors.conflict('Questo account accede senza password: usa il tuo fornitore di accesso.');
+      }
       return ApiErrors.unauthorized('Password attuale non corretta');
     }
 

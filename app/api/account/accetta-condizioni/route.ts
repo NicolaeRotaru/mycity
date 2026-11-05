@@ -3,6 +3,7 @@ import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { getClientIp, rateLimitAsync } from '@/lib/rate-limit';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
+import { arrivaDaUnAltroSito } from '@/lib/api/provenienza';
 import { VERSIONE_TESTI_LEGALI, eLaVersioneInVigore, ultimaVersioneAVerbale } from '@/lib/legal/versione';
 
 export const runtime = 'nodejs';
@@ -17,6 +18,16 @@ export const runtime = 'nodejs';
  * in cui qualcuno contesta una condizione non c'è niente da mostrare.
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  // 5/11/2026 — Questa rotta apre la sessione da sola e non passa da
+  // `authenticate()`: il controllo di provenienza del 30/8 qui non c'era. Una
+  // pagina di un altro sito poteva mettere a verbale un «accetto» a nome di
+  // chi era entrato. Si guarda la provenienza prima di aprire la sessione.
+  if (arrivaDaUnAltroSito(req)) {
+    logger.warn('[condizioni] accettazione rifiutata: arriva da un altro sito', {
+      origine: req.headers.get('origin') ?? 'assente',
+    });
+    return ApiErrors.forbidden('Richiesta non consentita da questa origine');
+  }
   const supa = await getServerSupabase();
   const { data: { user } } = await supa.auth.getUser();
   if (!user) return ApiErrors.unauthorized();

@@ -203,11 +203,17 @@ export function databaseDellaVetrina(
       case 'in': return (f.valore as unknown[]).includes(v);
       case 'gt': return String(v) > String(f.valore);
       case 'ilike': {
-        const re = new RegExp(
-          `^${String(f.valore).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*').replace(/_/g, '.')}$`,
-          'i',
-        );
-        return re.test(String(v ?? ''));
+        // 5/11/2026 (S08) — Come Postgres: la barra rovesciata protegge il carattere dopo, quindi «\_» è un «_» vero.
+        let corpo = '';
+        const modello = String(f.valore);
+        for (let i = 0; i < modello.length; i++) {
+          const c = modello[i];
+          if (c === '\\' && i + 1 < modello.length) { corpo += modello[++i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); continue; }
+          if (c === '%') corpo += '.*';
+          else if (c === '_') corpo += '.';
+          else corpo += c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+        return new RegExp(`^${corpo}$`, 'i').test(String(v ?? ''));
       }
       default: throw new Error(`filtro ${f.tipo} non simulato`);
     }

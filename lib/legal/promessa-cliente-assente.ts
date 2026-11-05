@@ -103,16 +103,29 @@ export function esitiDelFattorinoInConsegna(
  * macchina degli stati avesse l'esito?» ed eseguire la risposta, invece di
  * ragionarci sopra.
  */
+/**
+ * 5/11/2026 — L'ESITO «CLIENTE ASSENTE» ESISTE, MA NON E' UN PASSAGGIO DI STATO.
+ *
+ * Il fattorino lo segna con la rotta app/api/rider/orders/[id]/cliente-assente, che annulla
+ * l'ordine con `annullaERimborsa` invece di passare dalla macchina degli stati: i due controlli
+ * qui sotto (passaggi del fattorino e nomi degli stati) non lo vedevano, e i fatti dicevano
+ * «nessun esito di mancata consegna». Sul §6 non cambia niente: la trattenuta chiede anche i
+ * tentativi registrati, che restano assenti.
+ */
+export const ROTTA_CLIENTE_ASSENTE = 'app/api/rider/orders/[id]/cliente-assente/route.ts';
+export const ESITO_CLIENTE_ASSENTE_REGISTRATO = true;
+
 export function fattiDellaConsegna(
   passaggi: readonly PassaggioDiStato[] = PASSAGGI_LECITI,
   statiConosciuti: readonly string[] = Object.keys(ORDER_STATUS_LABEL),
   tentativiRegistrati: boolean = TENTATIVI_DI_CONTATTO_REGISTRATI,
   rimborso: FattiDellaConsegna['rimborso'] = RIMBORSO_SU_CONSEGNA_FALLITA,
+  clienteAssenteRegistrato: boolean = ESITO_CLIENTE_ASSENTE_REGISTRATO,
 ): FattiDellaConsegna {
   const perIlFattorino = esitiDelFattorinoInConsegna(passaggi).some((a) => a !== 'DELIVERED');
   const traGliStati = statiConosciuti.some((s) => PAROLE_DI_MANCATA_CONSEGNA.test(s));
   return {
-    esitoDiMancataConsegna: perIlFattorino || traGliStati,
+    esitoDiMancataConsegna: perIlFattorino || traGliStati || clienteAssenteRegistrato,
     tentativiRegistrati,
     rimborso,
   };
@@ -155,9 +168,12 @@ const CASI_DEL_CARRELLO = Object.keys(COSA_TORNA) as CasoDelCarrello[];
 
 const QUANDO: Record<CasoDelCarrello, string> = {
   'carrello-di-un-negozio': 'Se nel carrello c’era solo quell’ordine',
-  'altri-gia-consegnati': 'Se gli altri ordini dello stesso carrello sono già stati consegnati',
+  // 5/11/2026 — Il caso misto (un altro ordine consegnato, uno ancora da consegnare) non lo
+  // diceva nessuna frase: il codice rende tutto appena uno degli altri è consegnato
+  // (lib/ordini/annulla.ts, rifaiIlGiro). Le due frasi adesso si dividono i casi senza buchi.
+  'altri-gia-consegnati': 'Se almeno uno degli altri ordini dello stesso carrello è già stato consegnato',
   'altri-da-consegnare':
-    'Se nel carrello c’erano anche ordini di altri Venditori, non ancora consegnati, la consegna si ricalcola ' +
+    'Se nel carrello c’erano anche ordini di altri Venditori e nessuno è ancora stato consegnato, la consegna si ricalcola ' +
     'sui Venditori rimasti, come se avessi ordinato solo da loro',
   'tutto-il-carrello': 'Se si annullano tutti gli ordini del carrello',
 };
@@ -190,9 +206,17 @@ const eur = (cents: number) => {
   const v = cents / 100;
   return `${Number.isInteger(v) ? String(v) : v.toFixed(2).replace('.', ',')} €`;
 };
-export function esempioDelCarrello(c: CifreDellEsempio = CIFRE_DELL_ESEMPIO): string {
+/**
+ * 5/11/2026 — L'esempio diceva sempre «se il forno rifiuta», anche nel §6, che parla del
+ * cliente non reperibile: lì il pane non si consegna, il forno non rifiuta niente. Il fatto
+ * che fa partire l'esempio adesso lo sceglie il paragrafo.
+ */
+export const SE_IL_FORNO_RIFIUTA = 'se il forno rifiuta';
+export const SE_IL_PANE_NON_SI_CONSEGNA = 'se l’ordine del pane non si può consegnare perché non sei reperibile';
+
+export function esempioDelCarrello(c: CifreDellEsempio = CIFRE_DELL_ESEMPIO, evento: string = SE_IL_FORNO_RIFIUTA): string {
   return (
-    'Per esempio: pane da 15 € e frutta da 12 € nello stesso carrello; se il forno rifiuta, dell’ordine ' +
+    `Per esempio: pane da 15 € e frutta da 12 € nello stesso carrello; ${evento}, dell’ordine ` +
     `del pane (${eur(c.pagatoCents)}) ti tornano ${eur(c.tornaCents)}, e l’ordine della frutta passa da ` +
     `${eur(c.altroPrimaCents)} a ${eur(c.altroDopoCents)}, perché la sua consegna diventa quella di un ` +
     `negozio solo (${eur(c.consegnaDopoCents)}). Se paghi alla consegna, alla porta paghi solo gli ordini ` +
@@ -243,7 +267,7 @@ export function paragrafiConsegne(fatti: FattiDellaConsegna = fattiDellaConsegna
     // con più negozi non è vero (consegna.negozio-che-rifiuta): i casi e quello che torna li dice
     // `COSA_TORNA`, e la prova li rifà con annullaERimborsa sulla pagina disegnata.
     'In questo caso l’ordine è annullato e il rimborso va sullo stesso mezzo di pagamento usato per ' +
-      `l’acquisto. ${CASI_DEL_CARRELLO.map(fraseDelCaso).join(' ')} ${esempioDelCarrello()} ` +
+      `l’acquisto. ${CASI_DEL_CARRELLO.map(fraseDelCaso).join(' ')} ${esempioDelCarrello(CIFRE_DELL_ESEMPIO, SE_IL_PANE_NON_SI_CONSEGNA)} ` +
       'Sugli ordini pagati alla consegna non è stato addebitato nulla. Il credito MyCity usato ' +
       'sull’ordine torna sul tuo saldo. Per qualsiasi dubbio scrivi dal modulo Contatti indicando il ' +
       'numero d’ordine.',

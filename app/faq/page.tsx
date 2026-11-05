@@ -7,7 +7,10 @@ import { ShoppingCart, Truck, CreditCard, Undo2, Settings, Store, Bike, Mail, ty
 // e' spento nel checkout e nelle due rotte, ma questa pagina lo prometteva lo stesso, con tanto di
 // istruzione per selezionare un'opzione che non c'e'.
 import { FRASE_PREZZO_NEGOZI } from '@/app/seller/earnings/commissione';
+import { COMPENSO_RIDER_CENTS, COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS } from '@/lib/constants';
+import { CODICI_SCONTO_IN_CASSA } from '@/lib/funzioni-al-lancio';
 import {
+  RESO_ESCLUSI,
   fraseComeSiPaga,
   promesseRitiroInNegozio,
   rispostaComeOrdinare,
@@ -16,6 +19,11 @@ import {
 } from '@/lib/promesse-pubbliche';
 
 type QA = { q: string; a: React.ReactNode };
+/** 300 → «3 €», 150 → «1,50 €». */
+function euro(cents: number): string {
+  const v = cents / 100;
+  return `${Number.isInteger(v) ? String(v) : v.toFixed(2).replace('.', ',')} €`;
+}
 type Section = { id: string; title: string; icon: LucideIcon; items: QA[] };
 
 const SECTIONS: Section[] = [
@@ -29,7 +37,9 @@ const SECTIONS: Section[] = [
       rispostaComeOrdinare(),
       {
         q: 'Posso comprare da più negozi nello stesso ordine?',
-        a: 'Sì. Il carrello supporta più venditori: alla conferma viene creato un ordine separato per ciascun negozio, ognuno con la propria spedizione e gestione.',
+        // 5/11/2026 — Diceva «ognuno con la propria spedizione», e due domande sotto la
+        // consegna si paga una volta sola per tutto il carrello (rispostaCostoSpedizione).
+        a: 'Sì. Il carrello supporta più venditori: alla conferma viene creato un ordine per ciascun negozio, che lo prepara e lo gestisce. La consegna è una sola per tutto il carrello: quanto costa lo trovi nella risposta sulle spese di consegna.',
       },
       {
         q: 'Posso annullare un ordine?',
@@ -88,7 +98,11 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'Posso usare un codice sconto?',
-        a: 'Sì: inserisci il codice nella sezione "Coupon" al checkout. Lo sconto viene applicato prima della conferma.',
+        // 5/11/2026 — Con i codici sconto spenti al lancio il campo in cassa non c'è: la
+        // risposta nasce dallo stesso interruttore della cassa.
+        a: CODICI_SCONTO_IN_CASSA
+          ? 'Sì: inserisci il codice nella sezione "Coupon" al checkout. Lo sconto viene applicato prima della conferma.'
+          : 'Al momento no: in cassa non si possono usare codici sconto.',
       },
     ],
   },
@@ -99,7 +113,9 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: 'Posso restituire un prodotto?',
-        a: 'Hai 14 giorni dalla consegna per esercitare il diritto di recesso. Vai su "I miei ordini" → apri l\'ordine → "Richiedi reso".',
+        // 5/11/2026 — Non diceva che pane e freschi sono esclusi (art. 59 Cod. Cons.), come
+        // invece dicono i Termini e la pagina Resi.
+        a: `Hai 14 giorni dalla consegna per esercitare il diritto di recesso, ${RESO_ESCLUSI} e quelli fatti su ordinazione. Vai su "I miei ordini" → apri l'ordine → "Richiedi reso".`,
       },
       {
         q: 'In quanto tempo ricevo il rimborso?',
@@ -184,7 +200,9 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'Quanto guadagna un rider?',
-        a: 'Il compenso è calcolato per consegna in base alla distanza. Vedi guadagni in tempo reale dalla dashboard rider.',
+        // 5/11/2026 — Diceva «in base alla distanza»: il compenso deciso da Nicola è fisso
+        // per giro, più una cifra per ogni negozio in più (lib/constants.ts).
+        a: `${euro(COMPENSO_RIDER_CENTS)} per ogni giro di consegna, più ${euro(COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS)} per ogni negozio in più nello stesso giro: non cambia con i chilometri. Vedi i guadagni in tempo reale dalla dashboard rider.`,
       },
     ],
   },

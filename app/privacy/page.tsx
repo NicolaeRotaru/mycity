@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
 import { recapitoPrivacy, stradaDeiDiritti, titolare } from '@/lib/legal/titolare';
+import { GIORNI_DOCUMENTI_ISCRIZIONE_A_META, MESI_DEI_MESSAGGI_DEI_CONTATTI } from '@/lib/privacy/potature-ritenzione';
 import {
   DOVE_CHIEDIAMO_L_IBAN,
   L_AVVISO_A_CHI_PAGA,
@@ -19,6 +20,8 @@ export const metadata = {
     locale: 'it_IT',
     siteName: 'MyCity',
     url: '/privacy',
+    // 5/11/2026 — Un openGraph proprio sostituisce quello del sito: senza `images` il link in chat usciva senza copertina.
+    images: ['/opengraph-image'],
   },
 };
 
@@ -56,7 +59,7 @@ export default function PrivacyPage() {
           Ai sensi degli artt. 13-14 Reg. UE 2016/679 (GDPR)
         </>
       }
-      summary="Non vendiamo i tuoi dati a terzi. Li trattiamo solo per erogare il servizio, rispettare gli obblighi di legge e — previo consenso — per il marketing. Li condividiamo solo con il negozio e il rider necessari al tuo ordine."
+      summary="Non vendiamo i tuoi dati a terzi. Li trattiamo solo per erogare il servizio, rispettare gli obblighi di legge e — previo consenso — per il marketing. Li condividiamo con il negozio e il rider del tuo ordine e con i fornitori tecnici elencati nella sezione 4."
       toc={TOC}
     >
       <LegalSection id="titolare" heading="1. Titolare del trattamento">
@@ -83,7 +86,7 @@ export default function PrivacyPage() {
           <li><strong>Dati anagrafici e di contatto:</strong> nome, cognome, email, telefono, indirizzo di consegna e di residenza.</li>
           <li><strong>Dati di account:</strong> credenziali (password hashata), data di registrazione, preferenze, log di accesso, indirizzo IP, user-agent.</li>
           <li><strong>Dati fiscali (Venditori):</strong> codice fiscale, partita IVA, ragione sociale, sede legale, PEC, codice SDI, IBAN.</li>
-          <li><strong>Documenti d&apos;identità (KYC per Venditori/Rider):</strong> documento di riconoscimento, patente, certificato HACCP, polizza RC — trattati e conservati con misure di sicurezza rafforzate.</li>
+          <li><strong>Documenti d&apos;identità (KYC per Venditori/Rider):</strong> documento di riconoscimento, un selfie da confrontare col documento, patente, certificato HACCP, polizza RC — trattati e conservati con misure di sicurezza rafforzate.</li>
           <li><strong>Dati di transazione:</strong> ordini, importi, metodi di pagamento, ultime 4 cifre della carta (mai il numero completo né il CVV).</li>
           {/* 11/10/2026 (R71) — Chi paga in contanti e restituisce un prodotto
               adesso può chiedere il rimborso con un bonifico, e per farlo ci
@@ -119,7 +122,15 @@ export default function PrivacyPage() {
       </LegalSection>
 
       <LegalSection id="finalita" heading="3. Finalità, basi giuridiche e periodi di conservazione">
-        <div className="overflow-x-auto">
+        {/* 5/11/2026 — Il contenitore che scorre di lato deve ricevere il fuoco: da
+            tastiera le colonne a destra non si leggevano. */}
+        <div
+          className="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-700"
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- un contenitore che scorre deve ricevere il fuoco (WCAG 2.1.1, axe scrollable-region-focusable)
+          tabIndex={0}
+          role="region"
+          aria-label="Tabella delle finalità e della conservazione (scorre di lato)"
+        >
           <table className="min-w-full border border-cream-300 text-sm">
             <thead className="bg-cream-50">
               <tr>
@@ -132,7 +143,12 @@ export default function PrivacyPage() {
               <tr><td className="border px-3 py-2">Creazione e gestione account</td><td className="border px-3 py-2">Esecuzione contratto (art. 6.1.b GDPR)</td><td className="border px-3 py-2">Fino a cancellazione account</td></tr>
               <tr><td className="border px-3 py-2">Esecuzione ordini e consegne</td><td className="border px-3 py-2">Esecuzione contratto</td><td className="border px-3 py-2">10 anni (obblighi fiscali)</td></tr>
               <tr><td className="border px-3 py-2">Fatturazione e contabilità</td><td className="border px-3 py-2">Obbligo di legge (art. 6.1.c)</td><td className="border px-3 py-2">10 anni (art. 2220 c.c.)</td></tr>
-              <tr><td className="border px-3 py-2">Verifica KYC e antiriciclaggio</td><td className="border px-3 py-2">Obbligo di legge</td><td className="border px-3 py-2">10 anni dalla cessazione rapporto</td></tr>
+              {/* 5/11/2026 — Diceva «10 anni dalla cessazione rapporto»: il sito invece toglie i
+                  documenti dei respinti a 90 giorni, quelli delle iscrizioni lasciate a metà a
+                  30 e tutti alla cancellazione dell'account (lib/privacy/potature-ritenzione.ts,
+                  lib/account/cancellazione.ts). La conservazione dice quello che il codice fa;
+                  finalità e base giuridica restano da far rivedere a un legale. */}
+              <tr><td className="border px-3 py-2">Verifica KYC e antiriciclaggio</td><td className="border px-3 py-2">Obbligo di legge</td><td className="border px-3 py-2">Fino alla cancellazione dell&apos;account, quando documenti e selfie si cancellano subito; domanda respinta: 90 giorni; iscrizione lasciata a metà: {GIORNI_DOCUMENTI_ISCRIZIONE_A_META} giorni</td></tr>
               {/* 27/8/2026 (R059) — La riga diceva 12 mesi e il lavoro notturno ne
                   applicava 14, e le righe di accesso non le cancellava mai
                   nessuno. Adesso il codice fa quello che c'è scritto qui, e
@@ -179,6 +195,9 @@ export default function PrivacyPage() {
                   cancellava mai. Adesso la regola è una sola, e la scrivono qui le
                   stesse parole che stanno accanto al codice. */}
               <tr><td className="border px-3 py-2">Rimborso con bonifico (IBAN)</td><td className="border px-3 py-2">{PERCHE_TENIAMO_L_IBAN}</td><td className="border px-3 py-2">{QUANTO_TENIAMO_L_IBAN}</td></tr>
+              {/* 5/11/2026 — I messaggi del modulo Contatti non avevano una riga: i 24 mesi
+                  comparivano solo dentro la frase sull'IBAN. Il numero è quello della potatura. */}
+              <tr><td className="border px-3 py-2">Assistenza clienti (messaggi dal modulo Contatti)</td><td className="border px-3 py-2">Legittimo interesse a rispondere e a tenere traccia delle richieste (art. 6.1.f)</td><td className="border px-3 py-2">{MESI_DEI_MESSAGGI_DEI_CONTATTI} mesi</td></tr>
               <tr><td className="border px-3 py-2">Gestione reclami e contenzioso</td><td className="border px-3 py-2">Legittimo interesse</td><td className="border px-3 py-2">Fino a prescrizione (10 anni)</td></tr>
             </tbody>
           </table>
@@ -186,12 +205,19 @@ export default function PrivacyPage() {
       </LegalSection>
 
       <LegalSection id="destinatari" heading="4. Destinatari dei dati (sub-responsabili)">
+        {/* 5/11/2026 — Il riassunto in cima prometteva il negozio e il rider, e qui non
+            c'erano: sono i destinatari che ricevono di più. */}
+        <p>
+          <strong>Il negozio da cui compri</strong> e <strong>il Rider che consegna</strong> ricevono nome,
+          telefono, indirizzo e note di consegna, solo per il tuo ordine.
+        </p>
         <p>
           I tuoi dati sono trattati da fornitori esterni che operano come Responsabili del
           trattamento ex art. 28 GDPR, vincolati da accordo DPA:
         </p>
         <ul className="list-disc list-inside space-y-1">
-          <li><strong>Supabase Inc.</strong> (Stati Uniti — Standard Contractual Clauses) — hosting database, autenticazione, storage.</li>
+          {/* 5/11/2026 — Diceva «Stati Uniti»: il database di produzione sta a Parigi (eu-west-3). */}
+          <li><strong>Supabase Inc.</strong> (dati ospitati nell&apos;Unione europea, a Parigi; eventuali accessi dagli Stati Uniti coperti da Standard Contractual Clauses) — hosting database, autenticazione, storage.</li>
           <li><strong>Stripe Payments Europe Ltd.</strong> (Irlanda) — gestione pagamenti elettronici, PSP autorizzato.</li>
           <li><strong>Resend Inc.</strong> (Stati Uniti — SCC) — invio email transazionali.</li>
           <li><strong>Cloudflare Inc.</strong> (Stati Uniti — SCC) — CDN, protezione DDoS, CAPTCHA.</li>
@@ -202,7 +228,10 @@ export default function PrivacyPage() {
               tacere chi tratta dice a chi legge che questa pagina è un modello
               copiato — e che tutto il resto va riletto riga per riga. */}
           <li><strong>Vercel Inc.</strong> (Stati Uniti — SCC) — hosting del sito: riceve e registra ogni richiesta, compreso l&apos;indirizzo IP, e conserva i registri tecnici del server.</li>
-          <li><strong>Upstash Inc.</strong> (Stati Uniti — SCC) — protezione dagli abusi: memorizza per pochi minuti un contatore per indirizzo IP, per fermare chi tenta troppe richieste di fila.</li>
+          {/* 5/11/2026 — Diceva «per pochi minuti, un contatore per indirizzo IP»: le chiavi dei
+              contatori contengono anche l'email usata per l'accesso e l'identificativo
+              dell'account, e le finestre arrivano a 24 ore (lib/rate-limit.ts). */}
+          <li><strong>Upstash Inc.</strong> (Stati Uniti — SCC) — protezione dagli abusi: memorizza, da un minuto fino a 24 ore, contatori legati all&apos;indirizzo IP, all&apos;email usata per accedere o all&apos;identificativo dell&apos;account, per fermare chi tenta troppe richieste di fila.</li>
           <li><strong>Verifica dei documenti d&apos;identità (KYC):</strong> l&apos;esame dei documenti di Venditori e Rider è svolto internamente da MyCity. Se in futuro verrà affidato a un fornitore esterno, il suo nome comparirà qui prima che il primo documento gli venga inviato.</li>
           <li><strong>OpenStreetMap Foundation</strong> (Regno Unito) — geocoding indirizzi.</li>
           {/* 27/8/2026 (R055) — La frase diceva «vengono mascherati i campi di
@@ -254,11 +283,19 @@ export default function PrivacyPage() {
             <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni</Link>{' '}
             (nella scheda &quot;Privacy e dati&quot; trovi &quot;Scarica i tuoi dati&quot;, nella scheda
             &quot;Zona pericolosa&quot; &quot;Elimina il tuo account&quot;)
+            {/* 5/11/2026 — Senza casella diventava «scrivendo a il modulo dei contatti». */}
             {strada.recapito ? (
-              <>
-                {' '}oppure scrivendo a{' '}
-                <a href={strada.recapito.href} className="text-primary-700 underline">{strada.recapito.testo}</a>
-              </>
+              strada.recapito.eUnaCasella ? (
+                <>
+                  {' '}oppure scrivendo a{' '}
+                  <a href={strada.recapito.href} className="text-primary-700 underline">{strada.recapito.testo}</a>
+                </>
+              ) : (
+                <>
+                  {' '}oppure scrivendoci dal{' '}
+                  <Link href={strada.recapito.href} className="text-primary-700 underline">modulo dei contatti</Link>
+                </>
+              )
             ) : null}
             .
           </p>
@@ -268,9 +305,13 @@ export default function PrivacyPage() {
             funziona in automatico.{' '}
             {strada.recapito ? (
               <>
-                Puoi fare la richiesta lo stesso scrivendo a{' '}
-                <a href={strada.recapito.href} className="text-primary-700 underline">{strada.recapito.testo}</a>:
-                ti rispondiamo entro un mese, come prevede la legge.
+                Puoi fare la richiesta lo stesso scrivendo{' '}
+                {strada.recapito.eUnaCasella ? (
+                  <>a <a href={strada.recapito.href} className="text-primary-700 underline">{strada.recapito.testo}</a></>
+                ) : (
+                  <>dal <Link href={strada.recapito.href} className="text-primary-700 underline">modulo dei contatti</Link></>
+                )}
+                : ti rispondiamo entro un mese, come prevede la legge.
               </>
             ) : (
               <>
@@ -316,16 +357,20 @@ export default function PrivacyPage() {
       <LegalSection id="modifiche" heading="9. Modifiche all&apos;informativa">
         <p>
           Possiamo aggiornare questa informativa per riflettere modifiche normative o operative.
-          Le versioni precedenti restano consultabili su richiesta scrivendo a{' '}
-          <a href={dovePerIDiritti.href} className="text-primary-700 underline">{dovePerIDiritti.testo}</a>.
+          Le versioni precedenti restano consultabili su richiesta scrivendo{' '}
+          {dovePerIDiritti.eUnaCasella ? (
+            <>a <a href={dovePerIDiritti.href} className="text-primary-700 underline">{dovePerIDiritti.testo}</a></>
+          ) : (
+            <>dal <Link href={dovePerIDiritti.href} className="text-primary-700 underline">modulo dei contatti</Link></>
+          )}
+          .
         </p>
       </LegalSection>
 
-      <div className="mt-10 p-4 bg-accent-50 border border-accent-200 rounded-lg text-xs text-accent-900">
-        <strong>Avviso legale:</strong> questo documento è ispirato al GDPR e alle linee guida del
-        Garante italiano. Va validato da un DPO/avvocato prima dell&apos;uso in produzione,
-        verificando che i sub-responsabili effettivamente integrati corrispondano a quelli elencati.
-      </div>
+      {/* 5/11/2026 — Qui c'era un riquadro pubblico «Avviso legale» con una nota interna:
+          il documento va validato da un DPO/avvocato prima dell'uso in produzione,
+          verificando che i sub-responsabili integrati corrispondano a quelli elencati.
+          La nota resta qui; la validazione è un passo di Nicola. */}
     </LegalLayout>
   );
 }

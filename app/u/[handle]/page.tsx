@@ -2,7 +2,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { notFound } from 'next/navigation';
-import { creaClientAnonimo } from '@/lib/supabase/anonimo';
+import { logger } from '@/lib/logger';
+import { handleEsatto, handleValido } from './handle';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { Trophy, Sparkles, MapPin } from 'lucide-react';
 
@@ -28,24 +29,42 @@ type Profile = {
  * stanno qui e non vanno mai tolti: SOLO le colonne che la pagina mostra, e SOLO se la persona ha
  * acceso il profilo pubblico (`public_profile_enabled = true`).
  */
+/**
+ * 5/11/2026 — Qualunque guasto (database fermo, chiave mancante, due righe) diventava «la
+ * persona non esiste», senza una riga nei registri. Adesso un guasto si scrive e si lancia
+ * (pagina d'errore con «Riprova»); «non trovato» solo quando la lettura riesce e non c'è niente.
+ */
 async function fetchProfileByHandle(handle: string) {
+  if (!handleValido(handle)) return null;
+  let supabase;
   try {
-    const supabase = getAdminSupabase();
-    const { data } = await supabase
-      .from('profiles')
-      .select('id, public_handle, public_bio, public_avatar_url, full_name')
-      .ilike('public_handle', handle)
-      .eq('public_profile_enabled', true)
-      .maybeSingle();
-    return data as Profile | null;
-  } catch {
-    return null;
+    supabase = getAdminSupabase();
+  } catch (e) {
+    logger.error('[profilo-pubblico] client di servizio non disponibile', { errore: e instanceof Error ? e.message : 'errore' });
+    throw e;
   }
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, public_handle, public_bio, public_avatar_url, full_name')
+    .ilike('public_handle', handleEsatto(handle))
+    .eq('public_profile_enabled', true)
+    .maybeSingle();
+  if (error) {
+    logger.error('[profilo-pubblico] lettura del profilo non riuscita', { message: error.message });
+    throw new Error('Profilo pubblico non leggibile');
+  }
+  return data as Profile | null;
 }
 
+/**
+ * 5/11/2026 — Si leggevano col client pubblico, ma l'unica regola su user_achievements lascia
+ * leggere solo i propri: chi guardava il profilo di un altro vedeva sempre zero. Si leggono qui
+ * sul server col client di servizio, e solo per chi ha acceso il profilo pubblico (la pagina li
+ * chiede solo dopo averlo trovato con `public_profile_enabled = true`).
+ */
 async function fetchAchievements(userId: string) {
   try {
-    const supabase = creaClientAnonimo();
+    const supabase = getAdminSupabase();
     const { data } = await supabase
       .from('user_achievements')
       .select('achievement_id, unlocked_at, achievement:achievements!user_achievements_achievement_id_fkey ( title, icon, tier )')
@@ -103,7 +122,8 @@ export default async function PublicProfilePage(props: { params: Promise<{ handl
         )}
         <div className="inline-flex items-center gap-1.5 text-xs bg-white/15 rounded-full px-3 py-1 mt-4">
           <MapPin size={12} />
-          Buyer su MyCity Piacenza
+          {/* 5/11/2026 — Diceva «Buyer», in inglese e anche sul profilo di un negoziante. */}
+          Su MyCity Piacenza
         </div>
       </div>
 

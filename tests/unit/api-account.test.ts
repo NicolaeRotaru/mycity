@@ -21,7 +21,8 @@ vi.mock('@/lib/api/middleware', () => ({
 const fromResults: Record<string, unknown> = {};
 function makeChain(table: string) {
   const chain: Record<string, unknown> = {};
-  const methods = ['select', 'eq', 'or', 'single', 'update', 'insert', 'order', 'limit'];
+  // 5/11/2026 (S08) — `is`: la richiesta di cancellazione scrive la data solo se è ancora vuota.
+  const methods = ['select', 'eq', 'or', 'is', 'in', 'single', 'update', 'insert', 'order', 'limit'];
   for (const m of methods) {
     chain[m] = vi.fn(() => {
       // single() / update().eq() risolvono la promise; gli altri sono chainable
