@@ -31,8 +31,12 @@ test.describe('Cart and Search', () => {
     // 5/11/2026 (S04, scheda 478) — Prima bastava il primo h1 o h2 visibile: il piede di pagina ne
     // ha sempre uno, quindi la prova passava anche con la categoria rotta. Ora il titolo deve stare
     // nel contenuto e nominare la categoria (o dire che non c'è).
-    await expect(page.getByRole('main').locator('h1').first()).toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('main').locator('h1').first()).toContainText(/alimentari|non trovata/i);
+    // 5/11/2026 (unione) — In queste prove il database non c'è: la pagina mostra il suo errore onesto
+    // («Non riesco a caricare questa categoria», con «Riprova»). Con il database, il nome della categoria
+    // o «non trovata». Resta escluso il titolo del piede di pagina: si cerca dentro il contenuto.
+    await expect(
+      page.getByRole('main').getByRole('heading', { name: /alimentari|non trovata|non riesco a caricare questa categoria/i }).first(),
+    ).toBeVisible({ timeout: 5000 });
   });
 
   test('stores page renders list', async ({ page, request }) => {

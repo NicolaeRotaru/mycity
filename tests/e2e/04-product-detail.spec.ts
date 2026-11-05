@@ -11,7 +11,12 @@ test.describe('Product detail page', () => {
     expect(response?.status()).toBeLessThan(500);
     // 5/11/2026 (S04, scheda 478) — «meno di 500» passava anche con una scheda qualunque a 200.
     // La pagina del prodotto è disegnata nel browser: deve dire che il prodotto non c'è.
-    await expect(page.getByRole('heading', { name: 'Prodotto non trovato' })).toBeVisible({ timeout: 10000 });
+    // 5/11/2026 (unione) — La pagina dice «Prodotto non disponibile» quando il prodotto non c'è, e
+    // «Impossibile caricare il prodotto» quando non ha potuto guardare (in queste prove il database non c'è).
+    // «Prodotto non trovato» esiste solo nel titolo della scheda del browser, non come titolo in pagina.
+    await expect(
+      page.getByRole('main').getByRole('heading', { name: /Prodotto non disponibile|Impossibile caricare il prodotto/i }),
+    ).toBeVisible({ timeout: 10000 });
   });
 
   test('search results link to product detail', async ({ page }) => {
