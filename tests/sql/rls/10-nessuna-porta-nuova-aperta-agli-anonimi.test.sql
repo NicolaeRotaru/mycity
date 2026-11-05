@@ -80,7 +80,12 @@ SELECT 'nessuna funzione potente nuova e'' aperta agli anonimi',
          -- restituisce solo id e conteggio delle visite, mai chi ha guardato.
          'negozio_approvato',           -- il negozio e' approvato? si'/no
          'prodotto_in_vetrina',         -- il prodotto e' in vetrina? si'/no
-         'trending_product_ids_24h'     -- i piu' visti: solo id e conteggio
+         'trending_product_ids_24h',    -- i piu' visti: solo id e conteggio
+         -- 5/11/2026 — migrazione 245 (S10, schede 256 e 732): la scritta «Ordinato N volte
+         -- negli ultimi 7 giorni» della scheda prodotto. Restituisce un numero solo, per un
+         -- prodotto in vendita: nessuna riga e nessun dato del cliente. Lo stesso numero lo
+         -- legge gia' chiunque abbia un account; senza, la scheda lo mostrava a zero.
+         'ordini_recenti_del_prodotto'  -- quanti ordini negli ultimi 7 giorni: un numero
        )
   ) fuori_lista;
 
