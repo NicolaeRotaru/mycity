@@ -17,7 +17,7 @@ import {
   type ColonneMassime,
 } from '@/lib/griglia-prodotti';
 import { ErrorState } from './ui/ErrorState';
-import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
+import { DAY_KEYS, isOpenNow, romeNow, type StoreHours } from '@/lib/store-hours';
 import { leggiProdottiDellaGriglia, type OrdineGriglia } from '@/lib/queries/griglia-prodotti';
 import { cEUnAltraPagina, finestraDellaPagina, pagineSuccessiva, unisciPagine } from '@/lib/paginazione';
 import { trackSearchPerformed } from '@/lib/analytics/events';
@@ -362,7 +362,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   const filtered = useMemo(() => {
     let arr = prods;
     if (onlyOpenStores) {
-      const todayKey = DAY_KEYS[new Date().getDay()];
+      const todayKey = DAY_KEYS[romeNow().getDay()];
       arr = arr.filter((p) => {
         const hours = (p.profiles?.store_hours ?? {}) as StoreHours;
         return isOpenNow(hours[todayKey]);

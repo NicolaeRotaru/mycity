@@ -12,7 +12,7 @@ import { isVerifiedStore } from '@/lib/store-trust';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { fotoDelNegozio } from '@/lib/media/foto-del-negozio';
 import { coverClassName, socialLinks, badgeLabel } from '@/lib/store-customization';
-import { isOpenNow, streetFromAddress, DAY_KEYS, type StoreHours } from '@/lib/store-hours';
+import { isOpenNow, romeNow, streetFromAddress, DAY_KEYS, type StoreHours } from '@/lib/store-hours';
 import { consegnaDellaVetrina, vetrinaChiedeLaVeloce } from '@/lib/promessa-consegna';
 import { useOraDiPiacenza, useVeloceDelNegozio } from '@/components/ui/DeliveryCutoff';
 import type { SectionConfig, SectionContext } from './SectionContext';
@@ -54,7 +54,7 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
   const media = (Array.isArray(store.store_media) ? store.store_media : []) as StoreMediaItem[];
   const street = streetFromAddress(store.store_address);
   const hours = (store.store_hours ?? {}) as StoreHours;
-  const todayKey = DAY_KEYS[new Date().getDay()];
+  const todayKey = DAY_KEYS[romeNow().getDay()];
   const hasHours = HOUR_KEYS.some((k) => Array.isArray(hours[k]));
   const openNow = isOpenNow(hours[todayKey]);
   // 30/10/2026 — «Consegna oggi» guardava solo se oggi il negozio aveva un orario: giovedì 29/10

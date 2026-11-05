@@ -10,7 +10,7 @@ import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
-import { DAY_KEYS, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
+import { DAY_KEYS, isOpenNow, romeNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { consegnaDellaVetrina, vetrinaChiedeLaVeloce } from '@/lib/promessa-consegna';
@@ -98,7 +98,7 @@ export default function HeroStoreCard() {
   // configurati per oggi ed è aperto adesso. Se gli orari mancano o non sono
   // parseabili, il badge "Consegna oggi" è omesso (niente promessa di consegna
   // non supportata dai dati) e la pill mostra "Chiuso".
-  const todayKey = DAY_KEYS[new Date().getDay()];
+  const todayKey = DAY_KEYS[romeNow().getDay()];
   const hours = (store.store_hours ?? null) as StoreHours | null;
   const todayIntervals = hours && typeof hours === 'object' ? hours[todayKey] : undefined;
   const openNow = Array.isArray(todayIntervals) && isOpenNow(todayIntervals);

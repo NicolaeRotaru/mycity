@@ -7,7 +7,7 @@ import StoreMediaCarousel, { type StoreMediaItem } from './StoreMediaCarousel';
 import { VerifiedBadge } from './ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { sizedImage } from '@/lib/image-url';
-import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
+import { DAY_KEYS, isOpenNow, romeNow, type StoreHours } from '@/lib/store-hours';
 import { consegnaDellaVetrina, vetrinaChiedeLaVeloce } from '@/lib/promessa-consegna';
 import { useOraDiPiacenza, useVeloceDelNegozio } from './ui/DeliveryCutoff';
 import type { PostoDellaFoto } from '@/lib/media/foto-del-negozio';
@@ -56,7 +56,7 @@ interface Props {
  */
 const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact = false, posto }: Props) => {
   const hours = (store.store_hours ?? {}) as StoreHours;
-  const todayKey = DAY_KEYS[new Date().getDay()];
+  const todayKey = DAY_KEYS[romeNow().getDay()];
   const open = isOpenNow(hours[todayKey]);
   // 30/10/2026 — «consegna oggi» seguiva «aperto adesso»: alle 9 il forno aperto fino alle 13 lo
   // diceva anche senza fattorino, quando le fasce del pomeriggio cadono a forno chiuso. Ora lo decide

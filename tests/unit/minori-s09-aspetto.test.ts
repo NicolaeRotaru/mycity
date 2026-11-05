@@ -152,3 +152,48 @@ describe('anteprime WhatsApp di prodotto e negozio (opengraph-image)', () => {
     });
   }
 });
+
+describe('domande sotto il prodotto (components/ProductQA.tsx)', () => {
+  const src = leggi('components/ProductQA.tsx');
+  it('151 — non promette una notifica che nessuno manda', () => {
+    expect(src).not.toMatch(/Riceverai una notifica/);
+    expect(src).not.toMatch(/ti risponderà al più presto/);
+  });
+  it('120 — niente bollino «Venditore verificato» incondizionato', () => {
+    expect(src).not.toMatch(/>\s*Venditore verificato/);
+  });
+  it('367 — niente pulsante «Utile» con un conteggio finto', () => {
+    expect(src).not.toMatch(/helpfulVotes|Utile\{/);
+  });
+  it('366 — una lettura caduta non diventa «Nessuna domanda ancora»', () => {
+    expect(src).toMatch(/\) : isError \? \(/);
+    expect(src.indexOf(') : isError ? (')).toBeLessThan(src.indexOf('Nessuna domanda ancora'));
+  });
+});
+
+describe('pagina di ricerca (app/search/page.tsx)', () => {
+  const src = leggi('app/search/page.tsx');
+  it('414 — un ordinamento sconosciuto nell\'indirizzo torna a «pertinenza»', () => {
+    expect(src).toMatch(/SORT_OPTIONS\.includes\(grezzo as SortOption\) \? \(grezzo as SortOption\) : 'relevance'/);
+    expect(src).not.toMatch(/\(params\.get\('ordine'\) as SortOption\) \?\? 'relevance'/);
+  });
+  it('239 — i pulsanti del voto minimo dicono quale è scelto', () => {
+    const voto = src.slice(src.indexOf('{[0, 3, 4, 4.5].map((r) => ('), src.indexOf("t('ratingAll')"));
+    expect(voto).toContain('type="button"');
+    expect(voto).toContain('aria-pressed={minRating === r}');
+  });
+});
+
+describe('«Venduto da» sotto la scheda prodotto (components/products/SellerCard.tsx)', () => {
+  const src = leggi('components/products/SellerCard.tsx');
+  it('345 — l\'anno di iscrizione si dice «su MyCity dal», non «dal» come la fondazione', () => {
+    expect(src).toContain('· su MyCity dal {memberSince}');
+  });
+  it('432 — il bottone Segui non dice mai «Non lo so»', () => {
+    expect(src).not.toMatch(/'Non lo so'/);
+  });
+  it('283 — niente percentuale «in tempo» calcolata sugli ordini che vede chi guarda', () => {
+    expect(src).not.toMatch(/onTimePct|in tempo\n|ONTIME_WINDOW_MS/);
+    expect(src).not.toMatch(/\.from\('orders'\)/);
+  });
+});

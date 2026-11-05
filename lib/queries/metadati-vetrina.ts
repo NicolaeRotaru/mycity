@@ -70,6 +70,31 @@ export function disponibilitaPerGoogle(p: Pick<ProdottoPerMetadati, 'status' | '
   return siCompra ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
 }
 
+/** Taglia a `max` caratteri sull'ultimo spazio, con i puntini: mai a metà parola. */
+export function tagliaAParola(testo: string, max: number): string {
+  if (testo.length <= max) return testo;
+  const dentro = testo.slice(0, max - 1);
+  const spazio = dentro.lastIndexOf(' ');
+  return `${(spazio > max / 2 ? dentro.slice(0, spazio) : dentro).replace(/[\s,;.:·-]+$/, '')}…`;
+}
+
+/**
+ * 5/11/2026 — La descrizione Google/WhatsApp di un negozio senza descrizione propria. Prima era
+ * «Compra online da {nome} su MyCity. {come arriva}» tagliata a 160 a metà parola: con un nome
+ * sopra i 20 caratteri si perdeva «con un fattorino in servizio», cioè la condizione della
+ * consegna veloce. Adesso la frase sulla consegna resta intera: si accorcia l'inizio, e solo
+ * come ultima risorsa il nome.
+ */
+export function descrizioneDelNegozio(nome: string, descrizione: string | null | undefined, comeArriva: string, max = 160): string {
+  if (descrizione) return tagliaAParola(descrizione, max);
+  const lunga = `Compra online da ${nome} su MyCity. ${comeArriva}`;
+  if (lunga.length <= max) return lunga;
+  const corta = `${nome} su MyCity. ${comeArriva}`;
+  if (corta.length <= max) return corta;
+  const spazioPerIlNome = Math.max(8, max - ` su MyCity. ${comeArriva}`.length);
+  return tagliaAParola(`${tagliaAParola(nome, spazioPerIlNome)} su MyCity. ${comeArriva}`, max);
+}
+
 export function prodottoDaIndicizzare(p: Pick<ProdottoPerMetadati, 'status' | 'profiles'>): boolean {
   // Niente import da altri moduli del catalogo: questo file gira anche sul
   // runtime edge delle anteprime, e deve restare leggero.

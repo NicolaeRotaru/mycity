@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRight, BadgeCheck, Bell, Star, Store, Clock } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Bell, Star, Store } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { logoNegozio } from '@/lib/image-url';
@@ -35,10 +35,10 @@ const SELECT_SELLER_CARD =
  * Ogni pezzo è renderizzato SOLO se il dato esiste (graceful).
  */
 
-// Soglia minima di ordini consegnati prima di mostrare la % puntuale (significatività).
-const ONTIME_MIN_SAMPLE = 5;
-// Finestra "in tempo": consegnato entro 48h dalla creazione dell'ordine.
-const ONTIME_WINDOW_MS = 48 * 60 * 60 * 1000;
+// 5/11/2026 — QUI C'ERA LA PERCENTUALE «IN TEMPO», E NON ERA UN DATO DEL NEGOZIO.
+// Contava puntuale ogni consegna entro 48 ore dalla creazione (la promessa vera è la fascia
+// scelta in cassa), e la leggeva dal browser attraverso le regole sugli ordini: il cliente
+// vedeva solo i suoi ordini, il visitatore nessuno. Tolta finché non la calcola il database.
 
 type SellerStats = {
   store_logo: string | null;
@@ -46,7 +46,6 @@ type SellerStats = {
   verified: boolean;
   rating: number | null;
   reviewCount: number;
-  onTimePct: number | null;
 };
 
 export function SellerCard({
@@ -65,7 +64,7 @@ export function SellerCard({
           .select(SELECT_SELLER_CARD)
           .eq('id', sellerId)
           .maybeSingle();
-      const [profileRes, reviewsRes, ordersRes] = await Promise.all([
+      const [profileRes, reviewsRes] = await Promise.all([
         // 22/8/2026 — ripiego sulle due colonne della migrazione 124: senza,
         // la scheda del venditore sotto il prodotto resta muta del tutto.
         conRipiegoSchema(
@@ -81,14 +80,6 @@ export function SellerCard({
             ),
         ),
         supabase.from('store_reviews').select('rating').eq('store_id', sellerId),
-        // Ordini consegnati del negozio: bastano created_at + delivered_at per la
-        // derivazione "in tempo" (entro 48h). Query leggera, capata a 200 righe.
-        supabase
-          .from('orders')
-          .select('created_at, delivered_at')
-          .eq('seller_id', sellerId)
-          .eq('delivery_status', 'DELIVERED')
-          .limit(200),
       ]);
       const reviews = (reviewsRes.data ?? []) as { rating: number }[];
       const reviewCount = reviews.length;
@@ -96,25 +87,12 @@ export function SellerCard({
         ? reviews.reduce((s, r) => s + Number(r.rating), 0) / reviewCount
         : null;
 
-      // % puntuale: solo sugli ordini con entrambi i timestamp; mostrata solo se
-      // il campione è abbastanza grande (ONTIME_MIN_SAMPLE), altrimenti null.
-      const delivered = (ordersRes.data ?? []) as { created_at: string | null; delivered_at: string | null }[];
-      const timed = delivered.filter((o) => o.created_at && o.delivered_at);
-      let onTimePct: number | null = null;
-      if (timed.length >= ONTIME_MIN_SAMPLE) {
-        const onTime = timed.filter(
-          (o) => new Date(o.delivered_at as string).getTime() - new Date(o.created_at as string).getTime() <= ONTIME_WINDOW_MS,
-        ).length;
-        onTimePct = Math.round((onTime / timed.length) * 100);
-      }
-
       return {
         store_logo: profileRes.data?.store_logo ?? null,
         created_at: profileRes.data?.created_at ?? null,
         verified: isVerifiedStore(profileRes.data),
         rating,
         reviewCount,
-        onTimePct,
       };
     },
     staleTime: 60_000,
@@ -172,14 +150,10 @@ export function SellerCard({
               <span>({data.reviewCount})</span>
             </span>
           )}
-          {data?.onTimePct != null && (
-            <span className="inline-flex items-center gap-1">
-              <Clock size={12} className="text-olive-600" aria-hidden />
-              <strong className="text-ink-700">{data.onTimePct}%</strong> in tempo
-            </span>
-          )}
           {contoLetto && followerCount > 0 && <span>· {followerCount} follower</span>}
-          {memberSince && <span>· dal {memberSince}</span>}
+          {/* 5/11/2026 — «dal 2026» accanto al nome si leggeva come l'anno di fondazione (la vetrina
+              usa «dal 1987» per quello): qui è l'anno di iscrizione, e lo si dice. */}
+          {memberSince && <span>· su MyCity dal {memberSince}</span>}
         </div>
       </div>
 
@@ -204,7 +178,10 @@ export function SellerCard({
           }`}
         >
           <Bell size={14} strokeWidth={2.4} fill={seguiAcceso ? 'currentColor' : 'none'} aria-hidden />
-          {!seguiPremibile ? 'Non lo so' : seguiAcceso ? 'Segui già' : 'Segui'}
+          {/* 5/11/2026 — Le tre posizioni restano; cambiano le parole: finché lo stato non è letto
+              il bottone dice «Segui», spento (il perché sta nel title), mai «Non lo so». La pagina
+              arriva dal server proprio in questo stato, quindi era la prima cosa che si leggeva. */}
+          {seguiAcceso && seguiPremibile ? 'Segui già' : 'Segui'}
         </button>
 
         <Link
