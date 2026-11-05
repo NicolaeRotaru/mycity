@@ -15,6 +15,7 @@ import {
   verdettoDelGiro,
   type TentativoCancellazione,
   type VerdettoGiro,
+  type TappaAvviso,
 } from '@/lib/cron-cancellazioni';
 import { identificativoAvviso, rispondiAChiAspetta } from '@/lib/privacy/avvisi-a-chi-aspetta';
 import {
@@ -267,7 +268,13 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // sveglia qualcuno; le notti dopo l'allarme c'è già, il numero resta nella
   // risposta (`avvisiEmailBloccate`) e la notte torna verde. Se l'allarme non
   // si riesce a scrivere, la notte resta rossa.
-  const allarmiEmail = await avvisaUnaVoltaPerAvviso(admin, avvisi.emailBloccateAvvisi);
+  // 5/11/2026 — Ogni allarme dice QUALE spiegazione è ferma (rinvio o termine scaduto): oltre il
+  // mese la stessa persona ne ha due, e prima i due allarmi erano identici.
+  const tappaDi = new Map(verdetto.dovuti.map((d) => [identificativoAvviso(d.chiave), d.tappa] as const));
+  const allarmiEmail = await avvisaUnaVoltaPerAvviso(
+    admin,
+    avvisi.emailBloccateAvvisi.map((x) => ({ ...x, tappa: tappaDi.get(x.id) })),
+  );
   await chiudiGliAllarmiDelleEmailPartite(admin, avvisi.emailPartiteAvvisi);
 
   return NextResponse.json(
@@ -339,10 +346,16 @@ async function sveglia(admin: Admin, verdetto: VerdettoGiro): Promise<void> {
     scadute: verdetto.scadute,
     riga: verdetto.riga,
   });
+  // 5/11/2026 — Quando a svegliare sono solo i termini scaduti (nessun guasto stanotte), la sveglia
+  // ha un identificativo ricavato da CHI è oltre il termine: la notte dopo, con le stesse persone,
+  // trova la riga e non ne scrive un'altra a ogni amministratore. Un guasto sveglia ogni notte.
+  const oltreIlTermine = [...new Set(verdetto.dovuti.filter((d) => d.tappa === 'termine-scaduto').map((d) => d.userId))].sort();
+  const chiave = verdetto.fallite === 0 && oltreIlTermine.length > 0 ? `sveglia-termine-scaduto:${oltreIlTermine.join(',')}` : undefined;
   await avvisaAmministratori(
     admin,
     'Cancellazioni account non eseguite',
     verdetto.riga ?? 'Il giro notturno delle cancellazioni non e andato a buon fine.',
+    chiave,
   );
 }
 
@@ -397,7 +410,7 @@ async function haAnnullatoNelFrattempo(admin: Admin, userId: string): Promise<bo
 
 async function avvisaUnaVoltaPerAvviso(
   admin: Admin,
-  avvisiFermi: Array<{ id: string; userId: string }>,
+  avvisiFermi: Array<{ id: string; userId: string; tappa?: TappaAvviso }>,
 ): Promise<{ nuovi: number; nonScritti: number }> {
   const conto = { nuovi: 0, nonScritti: 0 };
   if (avvisiFermi.length === 0) return conto;
@@ -414,7 +427,13 @@ async function avvisaUnaVoltaPerAvviso(
     logger.error('[cron-deletions] nessun amministratore a cui dirlo: allarme non recapitato', { avvisiFermi: avvisiFermi.length });
     return { nuovi: 0, nonScritti: avvisiFermi.length };
   }
-  for (const { id: idAvviso, userId } of avvisiFermi) {
+  for (const { id: idAvviso, userId, tappa } of avvisiFermi) {
+    const quale =
+      tappa === 'termine-scaduto'
+        ? ' La spiegazione ferma è quella del termine di legge scaduto.'
+        : tappa === 'rinviata'
+          ? ' La spiegazione ferma è quella del rinvio.'
+          : '';
     let nuovo = false;
     let rotto = false;
     for (const a of amministratori) {
@@ -437,7 +456,7 @@ async function avvisaUnaVoltaPerAvviso(
           'questo avviso non si ripete finché la spiegazione resta ferma, e si chiude da solo quando parte. ' +
           // 27/10/2026 (quarto giro, fase 2) — «Scrivile tu», ma a chi: con più
           // persone in attesa l'amministratore non lo sapeva.
-          `Chi aspetta: l'utente ${userId}.`,
+          `Chi aspetta: l'utente ${userId}.${quale}`,
         link: '/admin/users',
       });
       if (!error) nuovo = true;
@@ -494,12 +513,33 @@ async function chiudiGliAllarmiDelleEmailPartite(admin: Admin, partite: string[]
  * amministratore guarda comunque, e nel registro degli errori, che arriva a
  * Sentry.
  */
-async function avvisaAmministratori(admin: Admin, titolo: string, riga: string): Promise<void> {
+async function avvisaAmministratori(admin: Admin, titolo: string, riga: string, chiave?: string): Promise<void> {
   try {
     const { data: amministratori } = await admin
       .from('profiles').select('id').eq('role', 'admin').limit(10);
     if (!amministratori || amministratori.length === 0) {
       logger.error('[cron-deletions] nessun amministratore a cui dirlo: allarme non recapitato', { titolo });
+      return;
+    }
+    if (chiave) {
+      // Un allarme per stato: identificativo ricavato dalla chiave, uno per amministratore. La
+      // notte dopo il doppione sbatte sulla chiave primaria e non si scrive.
+      for (const a of amministratori as { id: string }[]) {
+        const id = identificativoAvviso(`${chiave}:${a.id}`);
+        const gia = await admin.from('notifications').select('id').eq('id', id);
+        if (!gia.error && Array.isArray(gia.data) && gia.data.length > 0) continue;
+        const { error } = await admin.from('notifications').insert({
+          id,
+          user_id: a.id,
+          category: 'system',
+          title: titolo,
+          body: riga,
+          link: '/admin/users',
+        });
+        if (error && !/duplicate key|23505|already exists/i.test(error.message)) {
+          logger.error('[cron-deletions] avviso agli amministratori non scritto', { message: error.message });
+        }
+      }
       return;
     }
     const { error } = await admin.from('notifications').insert(

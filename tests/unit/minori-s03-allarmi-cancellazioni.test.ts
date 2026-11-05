@@ -289,3 +289,22 @@ describe("l'allarme della spiegazione ferma si chiude per tutti gli amministrato
     ]);
   });
 });
+
+describe("oltre il mese, gli allarmi delle cancellazioni non si moltiplicano", () => {
+  it("2038 — cinque notti col termine scaduto: una sveglia sola per amministratore", async () => {
+    ilFattorinoConLaCassaAperta(giorniFa(40));
+    inviaEmail.mockImplementation(GIU);
+    for (let n = 0; n < 5; n++) await passaLaNotte();
+    const sveglie = stato.mondo.notifiche().filter((n) => n.title === "Cancellazioni account non eseguite" && n.user_id === "admin-1");
+    expect(sveglie).toHaveLength(1);
+  });
+
+  it("2037 — le due spiegazioni ferme della stessa persona hanno allarmi diversi", async () => {
+    ilFattorinoConLaCassaAperta(giorniFa(40));
+    inviaEmail.mockImplementation(GIU);
+    for (let n = 0; n < 3; n++) await passaLaNotte();
+    const allarmi = stato.mondo.notifiche().filter((n) => n.title === "Spiegazione dell'attesa non partita per email" && n.user_id === "admin-1");
+    expect(allarmi).toHaveLength(2);
+    expect(new Set(allarmi.map((n) => n.body)).size, "due allarmi identici: quale spiegazione è ferma?").toBe(2);
+  });
+});
