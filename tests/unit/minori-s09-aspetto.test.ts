@@ -197,3 +197,16 @@ describe('«Venduto da» sotto la scheda prodotto (components/products/SellerCar
     expect(src).not.toMatch(/\.from\('orders'\)/);
   });
 });
+
+describe('scheda di un prodotto nelle griglie (components/ProductCard.tsx)', () => {
+  it('1022 — il prezzo è più grande del titolo (text-lg contro 13px)', () => {
+    const src = leggi('components/ProductCard.tsx');
+    expect(src).toMatch(/text-lg font-extrabold text-ink-900">\{formatPrice\(price\)\}/);
+    expect(src).toMatch(/text-lg font-extrabold text-secondary-600">\{formatPrice\(bigPrice\)\}/);
+  });
+  it('925 — il «Drop del giorno» non chiede più il segnaposto a placehold.co', () => {
+    const src = leggi('components/home/DropOfDay.tsx');
+    expect(src).not.toContain('placehold.co');
+    expect(src).toContain('FOTO_MANCANTE');
+  });
+});

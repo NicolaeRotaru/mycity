@@ -13,6 +13,7 @@ import { domandaProdotto, negozioDellaSchedaOperativo } from '@/lib/queries/cata
 import { addToCart, cartTotal, getCart, updateQuantity } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
+import { discountedUnitCents } from '@/lib/promotions';
 import { LARGHEZZA_MASSIMA, sizedImage } from '@/lib/image-url';
 import { SIZES_FOTO_PRODOTTO } from '@/lib/preload-foto';
 import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
@@ -302,6 +303,22 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     },
   });
 
+  /**
+   * 5/11/2026 — LO SCONTO DELLA PROMOZIONE DEL NEGOZIO NEL PREZZO GRANDE.
+   * Carrello e cassa applicano lo sconto (product_active_discount); la scheda mostrava in grande il
+   * prezzo pieno, e quello vero solo nel riquadrino della promo. Stessa chiave e stessa lettura di
+   * ActivePromoBadge: una domanda sola.
+   */
+  const { data: scontoPromo = 0 } = useQuery({
+    queryKey: queryKeys.products.activeDiscount(id),
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('product_active_discount', { p_product: id });
+      if (error) return 0;
+      return Number(data) || 0;
+    },
+    staleTime: 60_000,
+  });
+
   useBottomSheetA11y(lightbox, lightboxRef, zoomTriggerRef, () => setLightbox(false));
 
   // #135 — Le frecce sinistra/destra sfogliano le foto, come ci si aspetta da
@@ -455,12 +472,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
-  const price = Number(product.price);
+  const prezzoPieno = Number(product.price);
+  // Il prezzo che si paga: con la promo attiva, scontato come in cassa (al centesimo).
+  const price = scontoPromo > 0 ? discountedUnitCents(prezzoPieno, scontoPromo) / 100 : prezzoPieno;
   // Prezzo pieno barrato + unità + condizione (campi di primo livello).
   const compareAt = (product as { compare_at_price?: number | string | null }).compare_at_price;
   const compareAtNum = compareAt != null ? Number(compareAt) : null;
-  const compareValid = compareAtNum != null && compareAtNum > price;
-  const comparePct = compareValid ? Math.round((1 - price / compareAtNum) * 100) : 0;
+  const compareValid = compareAtNum != null && compareAtNum > prezzoPieno;
+  const comparePct = compareValid ? Math.round((1 - prezzoPieno / compareAtNum) * 100) : 0;
   const unitRaw = (product as { unit?: string | null }).unit ?? null;
   const unitSuffix = unitRaw && unitRaw !== 'pezzo' ? (UNIT_SUFFIX[unitRaw as ProductUnit] ?? '') : '';
   const conditionRaw = (product as { condition?: string | null }).condition ?? null;
@@ -492,6 +511,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     hasVariants && variants.length > 0 && variants.every((v) => v.stock === 0);
   const isOutOfStock = stock === 0 || tutteLeVariantiEsaurite;
   const canAdd = !isOutOfStock && !needsVariantChoice && mayPurchase;
+
+  // 5/11/2026 — La descrizione della foto che il negozio scrive per chi non vede (`alt_text`)
+  // non arrivava a nessuno: si toglieva dalla griglia «perché già usata come testo alternativo»,
+  // ma la foto usava il nome del prodotto. Adesso la prima foto la usa; senza, resta il nome.
+  const altDelNegozio = (product.attributes as Record<string, unknown> | null | undefined)?.alt_text;
+  const altPrimaFoto = typeof altDelNegozio === 'string' && altDelNegozio.trim() ? altDelNegozio.trim() : product.name;
 
   // Marchi di qualità (DOP/DOC/IGP/Bio/Vegano…) derivati da tag + attributi.
   const qualityMarks = deriveQualityMarks(product);
@@ -536,7 +561,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     addToCart({
       id: product.id,
       name: product.name,
-      price,
+      // Al carrello il prezzo pieno: lo sconto della promo lo applica lui, come la cassa.
+      price: prezzoPieno,
       image: images[0],
       quantity: qty,
       sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
@@ -572,7 +598,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       addToCart({
         id: product.id,
         name: product.name,
-        price,
+        price: prezzoPieno,
         image: images[0],
         quantity: qty,
         sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
@@ -629,7 +655,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 <div key={i} className="relative h-full w-full shrink-0 snap-center">
                   <Image
                     src={sizedImage(img, 'detail')}
-                    alt={i === 0 ? product.name : `${product.name} — foto ${i + 1}`}
+                    alt={i === 0 ? altPrimaFoto : `${product.name} — foto ${i + 1}`}
                     fill
                     priority={i === 0}
                     sizes={SIZES_FOTO_PRODOTTO}
@@ -734,7 +760,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={sizedImage(images[activeImg], LARGHEZZA_MASSIMA)}
-              alt={product.name}
+              alt={activeImg === 0 ? altPrimaFoto : `${product.name} — foto ${activeImg + 1}`}
               className="max-h-[90vh] max-w-[95vw] object-contain"
               onClick={(e) => e.stopPropagation()}
             />
@@ -834,10 +860,15 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 {formatPrice(price)}
                 {unitSuffix && <span className="text-base font-semibold text-ink-400">{unitSuffix}</span>}
               </span>
+              {scontoPromo > 0 && (
+                <span className="text-lg text-ink-400 line-through">
+                  <span className="sr-only">Prezzo pieno </span>{formatPrice(prezzoPieno)}
+                </span>
+              )}
               {compareValid && (
                 <>
                   <span className="text-lg text-ink-400 line-through">{formatPrice(compareAtNum)}</span>
-                  <span className="text-sm font-bold text-secondary-600">Risparmi {formatPrice(compareAtNum - price)}</span>
+                  <span className="text-sm font-bold text-secondary-600">Risparmi {formatPrice(compareAtNum - prezzoPieno)}</span>
                 </>
               )}
               <span className="text-sm text-ink-400">IVA inclusa</span>
@@ -848,7 +879,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               </span>
             )}
             {/* Promo attiva del negozio (prezzo barrato + nuovo prezzo) */}
-            <ActivePromoBadge productId={id} basePrice={price} />
+            <ActivePromoBadge productId={id} basePrice={prezzoPieno} />
 
             {/* Card rassicurazione consolidata (mockup 50-product): ETA consegna +
                 pagamento alla consegna + reso, in un unico riquadro olive. Le righe
@@ -1002,7 +1033,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                       >
                         <dt className="text-sm text-ink-500">{findLabelForKey(key)}</dt>
                         <dd className="text-sm text-ink-800 font-medium text-right">
-                          {formatAttributeValue(value)}
+                          {formatAttributeValue(value, key)}
                         </dd>
                       </div>
                     ))}

@@ -81,3 +81,17 @@ describe('2622 — il registro di «Venduto da» tiene il motivo vero', () => {
     expect(motivoDellErrore(new Error('rete'))).toBe('rete');
   });
 });
+
+describe('310 — con una promozione il prezzo grande è quello che si paga', () => {
+  const src = readFileSync('app/product/[id]/page.tsx', 'utf8');
+  it('il prezzo mostrato è scontato come in cassa, col pieno barrato', () => {
+    expect(src).toMatch(/const price = scontoPromo > 0 \? discountedUnitCents\(prezzoPieno, scontoPromo\) \/ 100 : prezzoPieno;/);
+    expect(src).toMatch(/scontoPromo > 0 && \(\s*<span className="text-lg text-ink-400 line-through">/);
+  });
+  it('al carrello va il prezzo pieno: lo sconto lo applica lui, non due volte', () => {
+    expect(src.match(/price: prezzoPieno,/g)?.length).toBe(2);
+  });
+  it('barra fissa e riquadro d\'acquisto usano lo stesso prezzo', () => {
+    expect(src).toMatch(/<StickyAddToCart\s+price=\{price\}/);
+  });
+});
