@@ -86,6 +86,8 @@ afterEach(() => {
 
 /** Monta la pagina, esegue le letture che chiede (con la queryFn vera), rimonta: il riquadro letto. */
 async function testoDellaPagina(Pagina: unknown, ordine: Riga): Promise<{ tutto: string; radice: HTMLElement; smonta: () => void }> {
+  // Ogni ordine si rilegge da capo: senza, dentro una prova, il secondo ordine prendeva le risposte del primo.
+  risposte.clear();
   const g = globalThis as Record<string, unknown>;
   g.__RISPOSTA_SUPABASE__ = ({ tavola, colonne }: { tavola: string; colonne: string }) => {
     if (tavola !== 'orders') return { data: null, error: null };
@@ -195,5 +197,19 @@ describe('848 · nel territorio degli ordini e del fattorino niente ombre nere d
       (readFileSync(f, 'utf8').match(/(?<![\w-])shadow(?:-sm|-md|-lg|-xl|-2xl)?(?=[\s"'`])/g) ?? []).map((m) => `${f}: ${m}`),
     );
     expect(neri).toEqual([]);
+  });
+});
+
+describe('2078 · 2355 · la pagina vera con la carta', () => {
+  it('a 35 e 60 € con la carta non dice «la paghiamo noi»; rimborsata in parte dice quanto è tornato', async () => {
+    for (const sub of [3500, 6000]) {
+      const p = await testoDellaPagina(Cliente, ordineDallaCassa(sub, 'card'));
+      expect(p.tutto).not.toMatch(/la paghiamo noi|te la regaliamo/i);
+      p.smonta();
+    }
+    const o = { ...ordineDallaCassa(1500, 'card'), payment_status: 'PARTIALLY_REFUNDED', refunded_amount_cents: 100 };
+    const p = await testoDellaPagina(Cliente, o);
+    expect(p.tutto).toContain('già tornati sulla carta');
+    p.smonta();
   });
 });

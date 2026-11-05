@@ -110,7 +110,7 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
     .from('orders')
     .select(`
       id, total_price, shipping_cost, delivery_fee_cents, discount_amount, wallet_applied_cents,
-      pickup_in_store, delivery_slot, delivery_status, payment_status, payment_method, stripe_refund_id, created_at,
+      pickup_in_store, delivery_slot, delivery_status, payment_status, payment_method, stripe_refund_id, refunded_amount_cents, created_at,
       accepted_at, ready_at, picked_up_at, delivered_at,
       delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
       delivery_lat, delivery_lng,
@@ -810,7 +810,8 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             {pagamento.tipo === 'gia-pagato-con-carta' && (
               <div className="mt-3 flex items-center gap-2 rounded-lg bg-olive-50 px-3 py-2.5 text-[13px] font-medium text-olive-800">
                 <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-olive-700" aria-hidden />
-                Già pagato con carta · {formatPrice(pagamento.centesimi / 100)}. Al rider non devi niente.
+                Già pagato con carta · {formatPrice(pagamento.centesimi / 100)}
+                {pagamento.rimborsatoCentesimi ? ` · ${formatPrice(pagamento.rimborsatoCentesimi / 100)} già tornati sulla carta` : ''}. Al rider non devi niente.
               </div>
             )}
             {pagamento.tipo === 'rimborsato' && (
