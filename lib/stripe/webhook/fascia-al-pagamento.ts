@@ -124,29 +124,51 @@ async function diciloAlCliente(
   cliente: { buyerId: string; fascia: string },
 ): Promise<void> {
   const importo = formatPriceFromCents(session.amount_total ?? 0);
-  const titolo = '💶 Pagamento rimborsato: nessun ordine creato';
-  const frase = `Hai pagato ${importo}, ma quando è arrivato il pagamento la consegna «${cliente.fascia}» non si poteva più fare. ` +
-    `Ti abbiamo rimborsato tutto e nessun ordine è stato creato.`;
-  const banca = 'Il rimborso torna sulla carta che hai usato, di solito entro 5-10 giorni lavorativi: i tempi li decide la tua banca.';
-  const { error } = await admin.from('notifications').insert({
-    id: idDaChiave(`fascia-persa-cliente:${pendingCheckoutId}`),
-    category: 'order',
-    user_id: cliente.buyerId,
-    title: titolo,
-    body: `${frase} Puoi rifare l'ordine con un'altra fascia.`,
-    link: '/cart',
+  await avvisaIlClienteDelRimborsoAutomatico(admin, session, {
+    chiave: `fascia-persa-cliente:${pendingCheckoutId}`,
+    buyerId: cliente.buyerId,
+    frase: `Hai pagato ${importo}, ma quando è arrivato il pagamento la consegna «${cliente.fascia}» non si poteva più fare. ` +
+      `Ti abbiamo rimborsato tutto e nessun ordine è stato creato.`,
+    invito: "Puoi rifare l'ordine con un'altra fascia.",
+    oggetto: `💶 Rimborso di ${importo}: la consegna scelta non era più possibile`,
+    motivo,
+    traccia: { pendingCheckoutId },
   });
-  if ((error as { code?: string } | null)?.code === '23505') return;
-  if (error) logger.error('[stripe] fascia non più possibile: campanella al cliente non scritta', { pendingCheckoutId, message: error.message });
+}
+
+/**
+ * 5/11/2026 — Lo stesso avviso, per ogni rimborso automatico del webhook senza ordine
+ * (fascia persa, riserva scaduta, conto che non torna). Prima solo la fascia lo diceva al
+ * cliente: negli altri due rami lo sapevano solo gli amministratori.
+ */
+export async function avvisaIlClienteDelRimborsoAutomatico(
+  admin: Admin,
+  session: Stripe.Checkout.Session,
+  a: { chiave: string; buyerId: string | null; frase: string; invito: string; oggetto: string; motivo: string; traccia: Record<string, unknown> },
+): Promise<void> {
+  const titolo = '💶 Pagamento rimborsato: nessun ordine creato';
+  const banca = 'Il rimborso torna sulla carta che hai usato, di solito entro 5-10 giorni lavorativi: i tempi li decide la tua banca.';
+  if (a.buyerId) {
+    const { error } = await admin.from('notifications').insert({
+      id: idDaChiave(a.chiave),
+      category: 'order',
+      user_id: a.buyerId,
+      title: titolo,
+      body: `${a.frase} ${a.invito}`,
+      link: '/cart',
+    });
+    if ((error as { code?: string } | null)?.code === '23505') return;
+    if (error) logger.error('[stripe] rimborso automatico: campanella al cliente non scritta', { ...a.traccia, message: error.message });
+  }
   const destinatario = session.customer_details?.email ?? session.customer_email ?? null;
   if (!destinatario) return;
   const carrello = `${env.appUrl().replace(/\/$/, '')}/cart`;
-  const testo = `${frase} Motivo: ${motivo} ${banca} Puoi rifare l'ordine con un'altra fascia: ${carrello}`;
+  const testo = `${a.frase} Motivo: ${a.motivo} ${banca} ${a.invito} ${carrello}`;
   const p = (t: string) => `<p style="margin:0 0 12px;line-height:1.6">${escapeHtml(t)}</p>`;
-  await provaAMandare('email di rimborso per fascia non più possibile', { pendingCheckoutId }, () => sendEmail({
+  await provaAMandare('email di rimborso automatico al cliente', a.traccia, () => sendEmail({
     to: destinatario,
-    subject: `💶 Rimborso di ${importo}: la consegna scelta non era più possibile`,
-    html: `${p(frase)}${p(`Motivo: ${motivo}`)}${p(banca)}<p style="margin:24px 0"><a href="${escapeHtml(carrello)}">Rifai l'ordine con un'altra fascia</a></p>`,
+    subject: a.oggetto,
+    html: `${p(a.frase)}${p(`Motivo: ${a.motivo}`)}${p(banca)}<p style="margin:24px 0"><a href="${escapeHtml(carrello)}">${escapeHtml(a.invito)}</a></p>`,
     text: testo,
   }));
 }

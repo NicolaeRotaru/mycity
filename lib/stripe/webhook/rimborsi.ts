@@ -404,6 +404,29 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
   const ordini = (ordiniLetti ?? []) as unknown as OrdineDelRimborsoRespinto[];
   if (ordini.length === 0) {
     logger.warn('[stripe] rimborso fallito: nessun ordine trovato', { refundId: refund.id, paymentIntent });
+    // 5/11/2026 — Il webhook stesso rimborsa pagamenti senza ordine (riserva
+    // scaduta, conto che non torna, fascia persa: portano pending_checkout_id o
+    // motivo), e cosi' i buoni regalo. Se la banca li respinge, i soldi tornano
+    // a MyCity e il cliente resta senza: lo si dice, una volta per rimborso.
+    const m = (refund.metadata ?? {}) as Record<string, string>;
+    if (m.pending_checkout_id || m.motivo || m.kind) {
+      const carrello = m.pending_checkout_id?.trim() || null;
+      let cliente: string | null = null;
+      if (carrello) {
+        const { data: pc } = await admin.from('pending_checkouts').select('buyer_id').eq('id', carrello).maybeSingle();
+        cliente = (pc as { buyer_id?: string | null } | null)?.buyer_id ?? null;
+      }
+      await notifyAdmins(
+        '⚠️ Rimborso senza ordine respinto dalla banca',
+        `La banca ha respinto il rimborso ${refund.id} da ${((refund.amount ?? 0) / 100).toFixed(2)} € su un pagamento senza ordine` +
+          (m.motivo ? ` (${m.motivo})` : '') +
+          (carrello ? `, carrello ${carrello}` : '') +
+          (cliente ? `, cliente ${cliente}` : '') +
+          '. I soldi sono tornati a MyCity: il cliente va rimborsato in un altro modo.',
+        '/admin/orders',
+        { unaVoltaPer: `rimborso-respinto:${refund.id}` },
+      );
+    }
     return;
   }
 
