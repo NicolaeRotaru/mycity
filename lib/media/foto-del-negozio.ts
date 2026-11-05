@@ -48,13 +48,15 @@ export type PostoDellaFoto = 'copertina' | 'scheda-in-vetrina' | 'scheda-in-elen
  *    vede bene e una più piccola no. Da computer la colonna sta fra 296 e 360:
  *    dichiarati 320.
  *  - elenco (`grid-cols-1 … xl:grid-cols-4` dentro `max-w-7xl`): da telefono la
- *    scheda è larga quanto lo schermo (100vw), a schermo medio metà, poi 296.
+ *    scheda è larga quanto lo schermo (100vw), a schermo medio metà, a tre
+ *    colonne (1024-1279) un terzo (~400 punti), poi 296.
  *  - copertina: banda piena fino a 768, poi il contenitore da 1024.
  */
 export const RIQUADRO_DELLA_FOTO: Record<PostoDellaFoto, string> = {
   copertina: '(max-width: 768px) 100vw, 1024px',
   'scheda-in-vetrina': '(max-width: 640px) 50vw, 320px',
-  'scheda-in-elenco': '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 320px',
+  // 1607 — Il gradino a tre colonne (lg, da 1024 a 1279) c'è: lì la scheda è ~400 punti, non 320.
+  'scheda-in-elenco': '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1279px) 34vw, 320px',
 };
 
 /**

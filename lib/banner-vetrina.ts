@@ -31,10 +31,12 @@
  * Le proporzioni della fascia, per fascia di schermo.
  *
  *   telefono   16:9  →  a 360 punti di larghezza la fascia è alta 184
+ *   da 640      2:1  →  a 640 punti è alta 296 (1503: col 3:1 era 197, e il
+ *                        titolo a 30px usciva dal riquadro, tagliato in cima)
  *   tablet      3:1  →  a 768 punti è alta 240
  *   computer    4:1  →  a 1280 punti è alta 308  (prima erano 288 fissi)
  */
-export const PROPORZIONI_FASCIA_BANNER = 'aspect-[16/9] sm:aspect-[3/1] lg:aspect-[4/1]';
+export const PROPORZIONI_FASCIA_BANNER = 'aspect-[16/9] sm:aspect-[2/1] md:aspect-[3/1] lg:aspect-[4/1]';
 
 /** Il riquadro completo della fascia: proporzione, bordo, angoli, ritaglio. */
 export const CLASSI_FASCIA_BANNER =
