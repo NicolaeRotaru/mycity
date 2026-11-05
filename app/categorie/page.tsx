@@ -41,7 +41,7 @@ export default function CategoriePage() {
   if (vista.mostraScheletro) return <LoadingState />;
   if (vista.mostraErrore) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-5xl">
+      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-7xl">
         <ErrorState
           title="Non riesco a caricare le categorie"
           description="C'è stato un problema di collegamento. I negozi ci sono: riprova fra un attimo."
@@ -57,7 +57,7 @@ export default function CategoriePage() {
   const childrenOf = (id: string) => cats.filter((c) => c.parent_id === id);
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6 max-w-5xl">
+    <div className="container mx-auto px-4 sm:px-6 py-8 space-y-6 max-w-7xl">
       <CollectionHeader
         icon={LayoutGrid}
         eyebrow="Sfoglia per reparto"

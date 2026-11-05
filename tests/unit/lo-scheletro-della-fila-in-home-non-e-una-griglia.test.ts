@@ -40,9 +40,10 @@ const senzaCommenti = (src: string) =>
 
 const GRIGLIA = senzaCommenti(readFileSync(join(RADICE, 'components/ProductGrid.tsx'), 'utf8'));
 
-/** Il corpo del ramo che disegna lo scheletro, dal `if (isLoading)` al `return <SkeletonGrid`. */
+/** Il corpo del ramo che disegna lo scheletro, dal `if (caricando)` al `return <SkeletonGrid`.
+ *  (5/11/2026, S09: il ramo si chiamava `if (isLoading)`; ora conta anche le letture dei filtri.) */
 function ramoDelCaricamento(): string {
-  const da = GRIGLIA.indexOf('if (isLoading)');
+  const da = GRIGLIA.indexOf('if (caricando)');
   expect(da, 'non trovo il ramo del caricamento: la prova non misura niente').toBeGreaterThan(-1);
   const a = GRIGLIA.indexOf('<SkeletonGrid', da);
   expect(a, 'non trovo la fine del ramo del caricamento').toBeGreaterThan(da);

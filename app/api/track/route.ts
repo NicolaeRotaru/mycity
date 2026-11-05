@@ -6,6 +6,7 @@ import { parseUserAgent } from '@/lib/user-agent';
 import { parseConsentCookie, CONSENT_COOKIE } from '@/lib/consent';
 import { jsonConTetto } from '@/lib/api/corpo';
 import { indirizzoSenzaDatiPersonali } from '@/lib/analytics/indirizzo-senza-dati-personali';
+import { segretiCombaciano } from '@/lib/api/segreti';
 
 export const runtime = 'nodejs';
 
@@ -54,7 +55,7 @@ function readCookie(header: string | null, name: string): string | null {
   if (!header) return null;
   for (const part of header.split(';')) {
     const [k, ...v] = part.trim().split('=');
-    if (k === name) return decodeURIComponent(v.join('='));
+    if (k === name) return decodificaSenzaCadere(v.join('='));
   }
   return null;
 }
@@ -67,12 +68,27 @@ function readCookie(header: string | null, name: string): string | null {
  */
 function geoFromHeaders(req: Request): { country: string | null; city: string | null } {
   const h = req.headers;
-  const country = h.get('cf-ipcountry') || h.get('x-vercel-ip-country') || null;
-  const city = h.get('cf-ipcity') || h.get('x-vercel-ip-city') || null;
+  // 5/11/2026 — Le righe `cf-*` le può scrivere chiunque chiami la rotta
+  // direttamente, se davanti non c'è Cloudflare. Valgono solo quando la regola
+  // di bordo ha messo il segreto condiviso, come per l'indirizzo in
+  // `getClientIp`; altrimenti si legge solo quello che scrive Vercel.
+  const segretoDiBordo = process.env.EDGE_TRUST_SECRET;
+  const daCloudflare = !!segretoDiBordo && segretiCombaciano(h.get('x-edge-token'), segretoDiBordo);
+  const country = (daCloudflare ? h.get('cf-ipcountry') : null) || h.get('x-vercel-ip-country') || null;
+  const city = (daCloudflare ? h.get('cf-ipcity') : null) || h.get('x-vercel-ip-city') || null;
   return {
     country: country && country !== 'XX' ? country.slice(0, 8) : null,
-    city: city ? decodeURIComponent(city).slice(0, 80) : null,
+    city: city ? decodificaSenzaCadere(city)?.slice(0, 80) ?? null : null,
   };
+}
+
+/** Un valore con un `%` malformato non deve far cadere la rotta: si scarta. */
+function decodificaSenzaCadere(valore: string): string | null {
+  try {
+    return decodeURIComponent(valore);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -193,6 +209,12 @@ export async function POST(request: Request) {
    * telefono, un altro browser: sessione diversa, accesso diverso, riga nuova —
    * ed è esattamente quello che serve guardare quando un account viene rubato.
    */
+  // 5/11/2026 — Un «accesso effettuato» senza nessuno collegato non è un
+  // accesso: è una riga dettata da chi chiama, che finiva in «Accessi 24h».
+  // La disconnessione invece arriva per forza senza sessione (il browser la
+  // manda dopo l'uscita), quindi resta accettata.
+  if (eventType === 'login' && !userId) return noContent();
+
   const doppioneDiAccesso =
     eventType === 'login' && !!userId && (await accessoGiaRegistrato(userId, sessionId));
 
