@@ -36,6 +36,7 @@ import TermsPage from '@/app/terms/page';
 import {
   COSA_TORNA,
   esempioDelCarrello,
+  SE_IL_PANE_NON_SI_CONSEGNA,
   fraseDelCaso,
   type CasoDelCarrello,
 } from '@/lib/legal/promessa-cliente-assente';
@@ -111,7 +112,8 @@ describe('ogni caso che i Termini dicono, l annullo lo rende davvero', () => {
     };
     expect(vere.tornaCents).toBeLessThan(vere.pagatoCents);
     expect(s4).toContain(esempioDelCarrello(vere));
-    expect(s6).toContain(esempioDelCarrello(vere));
+    // 5/11/2026 (S08, scheda 2288) — nel §6 l'esempio parte dal pane che non si consegna, non dal forno che rifiuta: le cifre sono le stesse.
+    expect(s6).toContain(esempioDelCarrello(vere, SE_IL_PANE_NON_SI_CONSEGNA));
 
     // Coi contanti la frutta alla porta costa quello che l'esempio dice.
     const contanti = carrello(['pane', 'frutta'], [1500, 1200], 'cod');

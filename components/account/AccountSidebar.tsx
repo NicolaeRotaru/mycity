@@ -32,7 +32,7 @@ const NAV: NavGroup[] = [
   { group: 'Account', items: [
     { href: '/profile', icon: User, label: 'Profilo' },
     { href: '/orders', icon: Package, label: 'Ordini' },
-    { href: '/returns', icon: RotateCcw, label: 'Resi' },
+    { href: '/profile/returns', icon: RotateCcw, label: 'Resi' },
     { href: '/profile/addresses', icon: MapPin, label: 'Indirizzi' },
   ] },
   { group: 'Attività', items: [
