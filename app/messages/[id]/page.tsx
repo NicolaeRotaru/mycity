@@ -224,7 +224,8 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = text.trim();
-    if (!trimmed) return;
+    // Il doppio invio lo ferma questo controllo, non lo spegnimento del campo.
+    if (!trimmed || sendMutation.isPending) return;
     sendMutation.mutate(trimmed);
   };
 
@@ -378,8 +379,11 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
             placeholder="Scrivi un messaggio…"
             aria-label="Scrivi un messaggio"
             maxLength={4000}
-            disabled={sendMutation.isPending}
-            className="flex-1 border border-cream-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-700 disabled:opacity-60"
+            // 5/11/2026 (S05) — Il campo NON si spegne durante l'invio: un campo
+            // spento perde il fuoco e sul telefono la tastiera si chiudeva a ogni
+            // messaggio. Si spegne solo «Invia».
+            aria-busy={sendMutation.isPending || undefined}
+            className="flex-1 border border-cream-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-700"
           />
           <button
             type="submit"

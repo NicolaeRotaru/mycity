@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ordineContaNelFatturato, metricheVenditore, totaliDiSempre, type NumeriDalDatabase } from '@/lib/metriche-venditore';
+import { ordineContaNelFatturato, metricheVenditore, totaliDiSempre, pezziVenduti, type NumeriDalDatabase } from '@/lib/metriche-venditore';
 import {
   avvisoLettureFallite, lettureFallite, letturaRiuscita, targhettaArticoli, targhettaNetto,
   targhettaProdotti, targhettaValutazione, type Targhetta,
@@ -45,7 +45,7 @@ import { esitoRientroDaStripe, type EsitoRientro, type StatoConnect } from './es
 const TETTO_RIGHE = 1000;
 
 export default function SellerDashboard() {
-  const { profile, isSeller } = useProfile();
+  const { profile, isSeller, isAdmin } = useProfile();
   const queryClient = useQueryClient();
 
   /**
@@ -128,7 +128,7 @@ export default function SellerDashboard() {
         // sotto): questa e' rimasta com'era. `orders!inner` serve a far valere
         // la data sulle righe, non sull'ordine annidato.
         supabase.from('order_items')
-          .select('id, orders!inner(created_at, delivery_status, payment_status), products!inner(seller_id)')
+          .select('id, quantity, orders!inner(created_at, delivery_status, payment_status), products!inner(seller_id)')
           .eq('products.seller_id', user.id)
           .gte('orders.created_at', inizio30.toISOString())
           .limit(TETTO_RIGHE),
@@ -151,7 +151,7 @@ export default function SellerDashboard() {
         // qui non le arrivavano. Un ordine da 100 € rimborsato per 40 restava
         // 100 sul cruscotto del negoziante.
         supabase.from('orders')
-          .select('total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, refunded_amount_cents, wallet_applied_cents, created_at')
+          .select('total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, refunded_amount_cents, wallet_applied_cents, seller_payout_cents, seller_payout_reversed_cents, created_at')
           .eq('seller_id', user.id)
           .gte('created_at', inizio30.toISOString()),
         supabase.rpc('numeri_del_negozio', { p_seller: user.id, p_giorni: 30 }),
@@ -185,6 +185,7 @@ export default function SellerDashboard() {
       const trenta = metriche(inizio30);
 
       type OrderItem = {
+        quantity?: number | null;
         orders?: { delivery_status?: string | null; payment_status?: string | null } | null;
       };
       // Solo gli articoli di ordini pagati e non annullati.
@@ -245,7 +246,8 @@ export default function SellerDashboard() {
         // toccato. #218 — il denaro mostrato resta quello della definizione unica.
         articoli: targhettaArticoli({
           letta: letturaRiuscita(righeRes),
-          quanti: itemsArr.length,
+          // 5/11/2026 — i pezzi, non le righe: sei cornetti in un ordine sono sei.
+          quanti: pezziVenduti(itemsArr),
           troncato: articoliTroncati,
         }),
         avviso: avvisoLettureFallite(guasti),
@@ -266,6 +268,17 @@ export default function SellerDashboard() {
   // di riprovare. Stessa radice del difetto dei Guadagni, sintomo opposto: là il sito diceva una
   // cosa falsa, qui non diceva niente.
   const vista = vistaDaQuery(queryStats);
+  // 5/11/2026 — L'amministratore entra nell'area negozio, ma la lettura del
+  // cruscotto e' accesa solo per i negozi: spenta resta «in caricamento» per
+  // sempre. Gli si dice dove guardare invece dello scheletro senza fine.
+  if (isAdmin) {
+    return (
+      <ErrorState
+        title="Questo è il cruscotto di un negozio"
+        description="Sei entrato come amministratore: i numeri dei negozi li trovi nel pannello amministrazione."
+      />
+    );
+  }
   if (vista.mostraScheletro) return <LoadingState />;
   if (vista.mostraErrore) {
     return (
@@ -470,7 +483,7 @@ export default function SellerDashboard() {
                 con la lettura fallita `availableCount` e' null, e un consiglio
                 dato su un numero mai letto e' un consiglio inventato. */}
             {stats.availableCount !== null && stats.availableCount < 8 && (
-              <TipRow href="/seller/products/new" icon={Plus} title="Aggiungi prodotti" desc="I negozi con +10 articoli vendono il 70% in più." />
+              <TipRow href="/seller/products/new" icon={Plus} title="Aggiungi prodotti" desc="Più scelta in vetrina dà ai clienti più motivi per comprare da te." />
             )}
             <TipRow href="/seller/promotions" icon={Tag} title="Lancia una promo" desc="Uno sconto a tempo crea urgenza e fa salire le vendite." />
             <TipRow href="/seller/stories" icon={Camera} title="Pubblica una storia" desc="Le storie (24h) portano i clienti dentro al tuo negozio." />

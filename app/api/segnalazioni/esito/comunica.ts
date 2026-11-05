@@ -1,6 +1,7 @@
 import { sendEmail } from '@/lib/email/client';
 import { escapeHtml } from '@/lib/html-escape';
 import { logger } from '@/lib/logger';
+import { motivoLeggibile, COME_CONTESTARE } from '@/lib/admin/segnalazioni-testi';
 
 /**
  * Comunicare l'esito motivato di una segnalazione.
@@ -57,7 +58,12 @@ function linkOggetto(s: Segnalazione): string | null {
   return null;
 }
 
-async function venditoreDi(admin: ClientServizio, s: Segnalazione): Promise<string | null> {
+/**
+ * Il venditore da avvisare. `null` = lettura fallita; `'nessuno'` = il prodotto non
+ * c'è più (cancellato): non c'è nessuno da avvisare, e non è un guasto. Prima i due
+ * casi erano uguali e la rotta rispondeva 502 a ogni tentativo.
+ */
+async function venditoreDi(admin: ClientServizio, s: Segnalazione): Promise<string | null | 'nessuno'> {
   if (s.tipo === 'negozio') return s.oggetto_id; // la vetrina /store/<id> è il profilo del venditore
   if (s.tipo !== 'prodotto') return null;
   const { data, error }: Risposta<{ seller_id: string | null }> = await admin
@@ -66,7 +72,7 @@ async function venditoreDi(admin: ClientServizio, s: Segnalazione): Promise<stri
     logger.error(new Error(`[segnalazioni] venditore non letto: ${error.message}`), { segnalazione: s.id });
     return null;
   }
-  return data?.seller_id ?? null;
+  return data?.seller_id ?? 'nessuno';
 }
 
 async function notifica(admin: ClientServizio, userId: string, title: string, body: string, link: string | null, s: Segnalazione): Promise<Canale> {
@@ -105,10 +111,11 @@ export async function comunicaEsito(admin: ClientServizio, id: string): Promise<
       to: s.email_contatto,
       subject: 'Esito della tua segnalazione',
       html:
-        `<p>Abbiamo esaminato la tua segnalazione (motivo: ${escapeHtml(s.motivo)}).</p>` +
+        `<p>Abbiamo esaminato la tua segnalazione (motivo: ${escapeHtml(motivoLeggibile(s.motivo))}).</p>` +
         `<p><strong>Decisione:</strong> ${escapeHtml(decisione)}.</p>` +
-        `<p><strong>Motivazione:</strong> ${escapeHtml(motivazione)}</p>`,
-      text: `Decisione: ${decisione}.\nMotivazione: ${motivazione}`,
+        `<p><strong>Motivazione:</strong> ${escapeHtml(motivazione)}</p>` +
+        `<p>${escapeHtml(COME_CONTESTARE)}</p>`,
+      text: `Decisione: ${decisione}.\nMotivazione: ${motivazione}\n\n${COME_CONTESTARE}`,
       tipo: 'transazionale',
     });
     segnalanteEmail = r.ok ? 'inviata' : 'fallita';
@@ -116,20 +123,22 @@ export async function comunicaEsito(admin: ClientServizio, id: string): Promise<
   }
 
   const segnalanteNotifica: Canale = s.segnalante_id
-    ? await notifica(admin, s.segnalante_id, 'Esito della tua segnalazione', `Decisione ${decisione}. ${motivazione}`, link, s)
+    ? await notifica(admin, s.segnalante_id, 'Esito della tua segnalazione', `Decisione ${decisione}. ${motivazione}\n\n${COME_CONTESTARE}`, link, s)
     : 'nessun_recapito';
 
   let venditore: Canale = 'non_previsto';
   if (s.tipo === 'prodotto' || s.tipo === 'negozio') {
     const sellerId = await venditoreDi(admin, s);
-    venditore = sellerId
-      ? await notifica(
-          admin, sellerId,
-          s.tipo === 'prodotto' ? 'Decisione su una segnalazione di un tuo prodotto' : 'Decisione su una segnalazione del tuo negozio',
-          `Una segnalazione per «${s.motivo}» è stata ${decisione}. Motivazione: ${motivazione}`,
-          link, s,
-        )
-      : 'fallita';
+    venditore = sellerId === 'nessuno'
+      ? 'nessun_recapito'
+      : sellerId
+        ? await notifica(
+            admin, sellerId,
+            s.tipo === 'prodotto' ? 'Decisione su una segnalazione di un tuo prodotto' : 'Decisione su una segnalazione del tuo negozio',
+            `Una segnalazione per «${motivoLeggibile(s.motivo)}» è stata ${decisione}. Motivazione: ${motivazione}\n\n${COME_CONTESTARE}`,
+            link, s,
+          )
+        : 'fallita';
   }
 
   return { ok: true, segnalanteEmail, segnalanteNotifica, venditore };

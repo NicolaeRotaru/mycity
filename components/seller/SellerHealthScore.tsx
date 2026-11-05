@@ -1,5 +1,6 @@
 'use client';
 
+import { ETICHETTA_PAGAMENTI, pagamentiPronti, prodottiPubblicati } from '@/components/seller/pronto-a-incassare';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -49,11 +50,11 @@ export default function SellerHealthScore() {
 
       const { data: products, error: erroreProdotti } = await supabase
         .from('products')
-        .select('id, name, description, images, price')
+        .select('id, name, description, images, price, status')
         .eq('seller_id', userId!);
       if (erroreProdotti) throw erroreProdotti;
 
-      type ProductRow = { id: string; name: string; description: string | null; images: string[] | null; price: number };
+      type ProductRow = { id: string; name: string; description: string | null; images: string[] | null; price: number; status: string | null };
       const productsTyped = (products ?? []) as ProductRow[];
       const totalProducts = productsTyped.length;
       const productsWithPhotos = productsTyped.filter((p) => Array.isArray(p.images) && p.images.length > 0).length;
@@ -97,17 +98,17 @@ export default function SellerHealthScore() {
         },
         {
           id: 'billing-iban',
-          label: 'Pagamenti attivi (IBAN su Stripe)',
+          label: ETICHETTA_PAGAMENTI,
           points: 10,
-          // Fonte di verità: Stripe Connect (payouts_enabled), non il vecchio campo billing_iban.
-          passed: !!profile?.stripe_payouts_enabled || !!profile?.billing_iban,
+          // La stessa regola della lista «Completa il tuo negozio» (pronto-a-incassare.ts).
+          passed: pagamentiPronti(profile),
           fix: { href: '/seller/earnings', label: 'Attiva pagamenti' },
         },
         {
           id: 'min-3-products',
           label: 'Almeno 3 prodotti pubblicati',
           points: 15,
-          passed: totalProducts >= 3,
+          passed: prodottiPubblicati(productsTyped) >= 3,
           fix: { href: '/seller/products/new', label: 'Aggiungi prodotti' },
         },
         {

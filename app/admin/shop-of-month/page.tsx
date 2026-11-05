@@ -39,14 +39,18 @@ export default function AdminShopOfMonthPage() {
   const [story, setStory] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
 
-  const { data: existing } = useQuery({
+  // 5/11/2026 (S05) — Le tre letture lanciano l'errore. Prima, se cadeva quella del
+  // mese, il modulo si apriva vuoto con «Imposta pick del mese» e salvando si
+  // sovrascriveva il pick già scelto; se cadeva quella dei voti, «Nessun voto».
+  const { data: existing, isError: meseNonLetto, refetch: rileggiMese } = useQuery({
     queryKey: queryKeys.admin.shopOfMonth(firstOfMonth),
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('shop_of_month')
         .select('*')
         .eq('month', firstOfMonth)
         .maybeSingle();
+      if (error) throw error;
       return data;
     },
   });
@@ -60,30 +64,37 @@ export default function AdminShopOfMonthPage() {
     }
   }, [existing]);
 
-  const { data: sellers = [] } = useQuery({
+  const { data: sellers = [], isError: negoziNonLetti } = useQuery({
     queryKey: queryKeys.admin.approvedSellers,
     queryFn: async (): Promise<Seller[]> => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('id, store_name, store_logo')
         .eq('role', 'seller')
         .eq('is_approved', true)
         .order('store_name');
+      if (error) throw error;
       return (data ?? []) as Seller[];
     },
   });
 
-  const { data: leaderboard = [] } = useQuery({
+  const { data: classifica = [], isError: votiNonLetti } = useQuery({
     queryKey: queryKeys.admin.shopOfMonthLeaderboard,
     queryFn: async (): Promise<LB[]> => {
-      const { data } = await supabase.from('shop_of_month_leaderboard').select('*');
+      const { data, error } = await supabase.from('shop_of_month_leaderboard').select('*');
+      if (error) throw error;
       return (data ?? []) as LB[];
     },
   });
+  // La vista mette in fila TUTTI i negozi approvati, anche a zero voti: qui restano
+  // solo quelli votati, così «Nessun voto» compare quando è vero.
+  const leaderboard = classifica.filter((r) => Number(r.vote_count) > 0);
 
   const save = useMutation({
     mutationFn: async () => {
       if (!sellerId) throw new Error('Seleziona un negozio');
+      // Senza sapere se il mese ha già un pick, salvare potrebbe cancellarlo.
+      if (meseNonLetto) throw new Error('Non riesco a leggere il pick di questo mese: riprova prima di salvare');
       const { data: { user } } = await supabase.auth.getUser();
       const payload = {
         month: firstOfMonth,
@@ -115,6 +126,16 @@ export default function AdminShopOfMonthPage() {
         title="Negozio del mese"
         sub={`Mese: ${new Date(firstOfMonth).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}. Imposta un solo pick al mese; il voto degli utenti corre in parallelo.`}
       />
+
+      {meseNonLetto && (
+        <div role="alert" className="rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-3 text-sm text-secondary-800">
+          Non riesco a leggere il pick di questo mese: non so se ce n&apos;è già uno. Il salvataggio resta fermo finché non lo leggo.{' '}
+          <button type="button" onClick={() => { void rileggiMese(); }} className="font-semibold underline">Riprova</button>
+        </div>
+      )}
+      {negoziNonLetti && (
+        <p role="alert" className="text-sm text-secondary-700">Non riesco a leggere l&apos;elenco dei negozi approvati.</p>
+      )}
 
       <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="bg-white border border-cream-300 rounded-xl p-6 space-y-4">
         <div>
@@ -167,7 +188,7 @@ export default function AdminShopOfMonthPage() {
             annunciava e la cassa non lo conosceva. Tolto; salvando, uno vecchio si cancella. */}
         <p className="text-xs text-ink-500">Niente codice sconto del mese: un codice scritto qui non arrivava in cassa. Salvando, un codice già salvato per il mese viene tolto.</p>
 
-        <Button type="submit" loading={save.isPending}>
+        <Button type="submit" loading={save.isPending} disabled={meseNonLetto}>
           {existing ? 'Aggiorna pick' : 'Imposta pick del mese'}
         </Button>
       </form>
@@ -175,7 +196,9 @@ export default function AdminShopOfMonthPage() {
       {/* Leaderboard voti */}
       <section>
         <AdminSectionLabel icon={Trophy}>Voto utenti (live)</AdminSectionLabel>
-        {leaderboard.length === 0 ? (
+        {votiNonLetti ? (
+          <p role="alert" className="text-sm text-secondary-700">Non riesco a leggere i voti di questo mese.</p>
+        ) : leaderboard.length === 0 ? (
           <p className="text-sm text-ink-500">Nessun voto registrato per questo mese.</p>
         ) : (
           <ol className="grid grid-cols-1 sm:grid-cols-2 gap-2">

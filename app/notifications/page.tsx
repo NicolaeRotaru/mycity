@@ -13,6 +13,8 @@ import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
+import { toast } from 'sonner';
+import { friendlyError } from '@/lib/errors';
 
 type Notification = {
   id: string;
@@ -58,6 +60,12 @@ function toneFor(n: Notification): Tone {
   return TONES.default;
 }
 
+/** Un errore di sessione (non c'è, è scaduta): quello sì manda all'accesso. Gli altri no. */
+function sessioneMancante(e: unknown): boolean {
+  const x = e as { name?: string; status?: number } | null;
+  return x?.name === 'AuthSessionMissingError' || x?.status === 401 || x?.status === 403;
+}
+
 /** Il marcatore del non-autenticato: una costante, cosi' il confronto non e' su una frase libera. */
 const AUTH_RICHIESTA = 'AUTH_REQUIRED';
 
@@ -68,7 +76,11 @@ export default function NotificationsPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.notifications.list,
     queryFn: async (): Promise<Notification[]> => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: errUtente } = await supabase.auth.getUser();
+      // 5/11/2026 — Con la rete caduta getUser non lancia: risponde user null CON un errore. Quello
+      // non è «non sei collegato»: si mostra l'errore con «Riprova», non la pagina di accesso.
+      // All'accesso si va solo se la sessione manca davvero (nessun utente, o un errore di sessione).
+      if (!user && errUtente && !sessioneMancante(errUtente)) throw errUtente;
       // Un marcatore riconoscibile, non una frase: a valle i due casi vanno distinti, e
       // distinguerli su un testo libero e' come non distinguerli.
       if (!user) throw new Error(AUTH_RICHIESTA);
@@ -90,17 +102,35 @@ export default function NotificationsPage() {
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      await supabase
+      // 5/11/2026 — L'esito si legge: se la scrittura cade, i pallini restano e lo si dice.
+      const { error: errAggiorna } = await supabase
         .from('notifications')
         .update({ is_read: true })
         .eq('user_id', user.id)
         .eq('is_read', false);
+      if (errAggiorna) throw errAggiorna;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.notifications.count });
       qc.invalidateQueries({ queryKey: queryKeys.notifications.list });
     },
+    onError: (e) => toast.error(friendlyError(e)),
   });
+
+  // 5/11/2026 — Aprire una notifica la segna letta: prima il numerino sul campanello restava finché
+  // non si premeva «segna tutte». Best effort: se non riesce, la notifica si apre lo stesso.
+  const segnaLetta = (id: string) => {
+    void supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', id)
+      .then(({ error: e }) => {
+        if (!e) {
+          qc.invalidateQueries({ queryKey: queryKeys.notifications.count });
+          qc.invalidateQueries({ queryKey: queryKeys.notifications.list });
+        }
+      });
+  };
 
   // Qui la query lanciava in due casi — «non sei collegato» e «la lettura e' fallita» — e il render
   // li trattava uguali: qualunque errore buttava la persona sulla pagina di accesso. A un cliente
@@ -203,7 +233,7 @@ export default function NotificationsPage() {
             return (
               <li key={n.id}>
                 {n.link ? (
-                  <Link href={n.link} className="block">
+                  <Link href={n.link} className="block" onClick={() => { if (!n.is_read) segnaLetta(n.id); }}>
                     {inner}
                   </Link>
                 ) : (

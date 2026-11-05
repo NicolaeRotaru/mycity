@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { useQuery } from '@tanstack/react-query';
 import { Megaphone, Sparkles, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
-import { formatPrice, formatDate } from '@/lib/format';
+import { formatPrice } from '@/lib/format';
+import { dataDellaCampagna } from './data-campagna';
 import { sizedImage } from '@/lib/image-url';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -101,19 +102,26 @@ export default function SellerPromotePage() {
 
   const price = weeks * PER_WEEK_EUR;
 
+  // 5/11/2026 — La chiave del tentativo che la rotta aspetta contro il doppio
+  // pagamento: una per apertura del modulo, rigenerata dopo ogni esito (come i
+  // buoni regalo). Senza, la rotta ripiegava su una finestra di dieci minuti.
+  const chiaveTentativo = useRef<string>(crypto.randomUUID());
+
   const pay = async () => {
     if (!selected) { toast.error('Scegli un prodotto da sponsorizzare'); return; }
     setPaying(true);
     try {
       const res = await fetch('/api/sponsored/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': chiaveTentativo.current },
         body: JSON.stringify({ productId: selected, weeks }),
       });
       const json = await res.json();
       if (!res.ok || !json.url) throw new Error(apiErrorMessage(json, 'Errore nel pagamento'));
       window.location.href = json.url as string;
     } catch (e) {
+      // Un tentativo finito è finito: il prossimo è un'altra sponsorizzazione.
+      chiaveTentativo.current = crypto.randomUUID();
       toast.error(friendlyError(e));
       setPaying(false);
     }
@@ -255,7 +263,7 @@ export default function SellerPromotePage() {
               <div key={c.id} className="py-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-semibold text-ink-900 truncate">{c.product?.name ?? '—'}</p>
-                  <p className="text-xs text-ink-500">{formatDate(c.start_date)} → {formatDate(c.end_date)}</p>
+                  <p className="text-xs text-ink-500">{dataDellaCampagna(c.start_date)} → {dataDellaCampagna(c.end_date)}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-xs text-ink-500">{c.impressions.toLocaleString('it-IT')} viste · {c.clicks} click</p>

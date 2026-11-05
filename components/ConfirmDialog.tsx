@@ -33,7 +33,15 @@ export type ConfirmOptions = {
   icon?: LucideIcon | string;
 };
 
-type State = (ConfirmOptions & { resolve: (ok: boolean) => void; opener: HTMLElement | null }) | null;
+/**
+ * 5/11/2026 — TRE ESITI, NON DUE. Il pulsante secondario («Aggiungi») e la chiusura senza scelta
+ * (Esc, tocco fuori, un'altra conferma che prende il posto) davano lo stesso `false`: chi chiudeva
+ * la domanda del riordino si ritrovava i prodotti aggiunti. `confirmDialog` resta com'era (sì / no);
+ * `sceltaDialog` dice anche se la persona ha chiuso senza scegliere.
+ */
+export type EsitoDialog = 'conferma' | 'alternativa' | 'chiusa';
+
+type State = (ConfirmOptions & { resolve: (esito: EsitoDialog) => void; opener: HTMLElement | null }) | null;
 
 /*
  * 28/10/2026 — LA DICHIARAZIONE DI ACCESSIBILITÀ PROMETTEVA PIÙ DI QUESTO DIALOGO.
@@ -69,8 +77,12 @@ const subscribe = (cb: () => void) => {
 const notify = () => listeners.forEach((cb) => cb());
 
 export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
+  return sceltaDialog(opts).then((esito) => esito === 'conferma');
+}
+
+export function sceltaDialog(opts: ConfirmOptions): Promise<EsitoDialog> {
   return new Promise((resolve) => {
-    if (current) current.resolve(false); // chiudi silenziosamente la precedente
+    if (current) current.resolve('chiusa'); // chiudi silenziosamente la precedente
     const opener =
       typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
         ? document.activeElement
@@ -80,13 +92,13 @@ export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
   });
 }
 
-function closeWith(ok: boolean) {
+function closeWith(esito: EsitoDialog) {
   if (!current) return;
   const s = current;
   current = null;
   notify();
   if (s.opener && s.opener.isConnected) s.opener.focus?.();
-  s.resolve(ok);
+  s.resolve(esito);
 }
 
 export function ConfirmDialogHost() {
@@ -110,7 +122,7 @@ export function ConfirmDialogHost() {
   useEffect(() => {
     if (!state) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); closeWith(false); return; }
+      if (e.key === 'Escape') { e.preventDefault(); closeWith('chiusa'); return; }
       if (e.key === 'Tab' && boxRef.current) {
         const lista = Array.from(boxRef.current.querySelectorAll<HTMLElement>(FOCUSABILI));
         const prossimo = fuocoSuccessivo(lista, document.activeElement, e.shiftKey);
@@ -146,7 +158,7 @@ export function ConfirmDialogHost() {
   return (
     <div
       className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn"
-      onClick={(e) => { if (e.target === e.currentTarget) closeWith(false); }}
+      onClick={(e) => { if (e.target === e.currentTarget) closeWith('chiusa'); }}
       role="dialog"
       aria-modal="true"
       // #152 — Il messaggio («l'azione è irreversibile») non veniva annunciato
@@ -192,7 +204,7 @@ export function ConfirmDialogHost() {
         <div className="px-6 pb-6 sm:pb-7 grid grid-cols-2 gap-3">
           <button
             type="button"
-            onClick={() => closeWith(false)}
+            onClick={() => closeWith('alternativa')}
             autoFocus={isDanger}
             className="px-4 py-3 rounded-xl font-semibold text-ink-700 bg-white border-2 border-cream-300 hover:border-cream-300 hover:bg-cream-50 active:scale-[0.98] transition-all"
           >
@@ -200,7 +212,7 @@ export function ConfirmDialogHost() {
           </button>
           <button
             type="button"
-            onClick={() => closeWith(true)}
+            onClick={() => closeWith('conferma')}
             // Sul dialogo distruttivo il fuoco parte da «Annulla» (vedi sopra):
             // chi tira via le mani dalla tastiera non deve cancellare niente.
             autoFocus={!isDanger}

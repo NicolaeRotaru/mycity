@@ -97,10 +97,14 @@ class OnfidoProvider implements KycProvider {
  * VIES (VAT Information Exchange System) — endpoint UE pubblico per
  * verificare validita' e nome di una P.IVA. Restituisce { valid, name }.
  */
-async function viesVatLookup(vat: string): Promise<{ valid: boolean; name?: string }> {
+async function viesVatLookup(vat: string): Promise<{ valid: boolean; name?: string; irraggiungibile?: boolean }> {
   const cleaned = vat.replace(/\s+/g, '').toUpperCase();
+  // 5/11/2026 — La partita IVA salvata dal modulo del negozio è di sole 11 cifre
+  // (il prefisso IT viene tolto): senza paese davanti la regola qui sotto non
+  // combaciava e ogni negozio risultava «non valido». Undici cifre = Italia.
+  const conPaese = /^\d{11}$/.test(cleaned) ? `IT${cleaned}` : cleaned;
   // Estrai country code (2 lettere) e numero
-  const m = cleaned.match(/^([A-Z]{2})(\d+)$/);
+  const m = conPaese.match(/^([A-Z]{2})(\d+)$/);
   if (!m) return { valid: false };
   const [, country, number] = m;
 
@@ -109,11 +113,16 @@ async function viesVatLookup(vat: string): Promise<{ valid: boolean; name?: stri
       `https://ec.europa.eu/taxation_customs/vies/rest-api/ms/${country}/vat/${number}`,
       { cache: 'no-store', signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS) }, // 🟠-14
     );
-    if (!r.ok) return { valid: false };
+    // 5/11/2026 — Un VIES che non risponde non dice che la partita IVA è falsa.
+    if (!r.ok) return { valid: false, irraggiungibile: true };
     const data = await r.json();
+    // Il servizio risponde 200 anche quando lo Stato membro non è raggiungibile.
+    if (typeof data?.userError === 'string' && data.userError !== 'VALID' && data.userError !== 'INVALID') {
+      return { valid: false, irraggiungibile: true };
+    }
     return { valid: !!data.isValid, name: data.name ?? undefined };
   } catch {
-    return { valid: false };
+    return { valid: false, irraggiungibile: true };
   }
 }
 

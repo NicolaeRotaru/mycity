@@ -89,6 +89,8 @@ export default function AdminSupportPage() {
         {(['new', 'in_progress', 'resolved', 'spam', 'all'] as const).map((f) => (
           <button
             key={f}
+            type="button"
+            aria-pressed={filter === f}
             onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
               filter === f
@@ -199,7 +201,7 @@ export default function AdminSupportPage() {
                     key={s}
                     onClick={() => updateStatus.mutate({ id: openId, status: s, adminNotes: notes.trim() || undefined })}
                     disabled={updateStatus.isPending}
-                    className={`text-xs font-semibold px-3 py-2 rounded-lg disabled:opacity-50 ${
+                    className={`text-xs font-semibold px-3 py-2 rounded-lg disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-600 ${
                       meta.color === 'olive' ? 'bg-olive-600 hover:bg-olive-700 text-white' :
                       meta.color === 'primary' ? 'bg-primary-700 hover:bg-primary-800 text-white' :
                       meta.color === 'secondary' ? 'bg-secondary-600 hover:bg-secondary-700 text-white' :

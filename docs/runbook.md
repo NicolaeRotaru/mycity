@@ -223,9 +223,11 @@ git push origin main
 **Il freno della veloce** (`/api/cron/veloce-non-confermata`, ogni 5 minuti):
 un ordine «Adesso» che il negozio non conferma in 10 minuti passa da solo a
 una fascia, e l'euro della veloce non si paga. Se un cliente dice «il mio
-ordine è cambiato da solo», si guarda qui per primo. Risponde 500 finché c'è
-un carrello da sistemare a mano, e agli amministratori arriva l'avviso con
-cosa è già fatto (per esempio l'euro già reso sulla carta) e cosa resta. Il
+ordine è cambiato da solo», si guarda qui per primo. Risponde 500 nel giro in
+cui trova un carrello NUOVO da sistemare a mano, e agli amministratori arriva
+l'avviso con cosa è già fatto (per esempio l'euro già reso sulla carta) e cosa
+resta. Un carrello che non si può spostare e che è già stato segnalato non fa
+più rispondere 500 a ogni giro: è contato in `giaSegnalati`. Il
 sorvegliante lo dà per fermo dopo 30 minuti senza battito (`lib/cron-health.ts`).
 
 **Diagnosi**:
@@ -238,7 +240,11 @@ sorvegliante lo dà per fermo dopo 30 minuti senza battito (`lib/cron-health.ts`
    Environment Variables.
 3. Se 405 → la rotta non accetta il GET. Vercel bussa **solo** in GET: ogni
    rotta sotto `app/api/cron/` deve esportare un `GET`.
-4. Se 500 → bug nel codice. Sentry dovrebbe averlo catturato.
+4. Se 500 → prima si legge il corpo della risposta: diversi lavori rispondono 500
+   apposta per un caso da sistemare a mano (il freno della veloce col suo
+   `daSistemareAMano`, le cancellazioni con le loro sveglie, il sorvegliante con
+   `controlliSaltati`). Se il corpo non dice niente del genere → bug nel codice,
+   e Sentry dovrebbe averlo catturato.
 5. Se 504 → il lavoro ha sforato il tempo massimo. Il tetto è in `vercel.json`
    → `functions`; alzarlo è l'ultima spiaggia, prima si guarda perché ci mette
    tanto.

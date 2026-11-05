@@ -19,7 +19,7 @@ export default function CategorySelect({
   onChange: (v: string) => void;
   label?: string;
 }) {
-  const { data: cats = [] } = useQuery({
+  const { data: cats = [], isError, refetch } = useQuery({
     queryKey: queryKeys.categories.allList,
     queryFn: async (): Promise<Cat[]> => {
       const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id').order('name');
@@ -40,6 +40,16 @@ export default function CategorySelect({
       {c.name}
     </option>
   );
+
+  // Lettura caduta: lo si dice, invece del menu con il solo «Seleziona una categoria…».
+  if (isError && cats.length === 0) {
+    return (
+      <p role="alert" className="text-sm text-ink-600">
+        Non riesco a leggere le categorie.{' '}
+        <button type="button" onClick={() => { void refetch(); }} className="font-semibold text-primary-700 underline">Riprova</button>
+      </p>
+    );
+  }
 
   return (
     <Select label={label} value={value} onChange={(e) => onChange(e.target.value)}>

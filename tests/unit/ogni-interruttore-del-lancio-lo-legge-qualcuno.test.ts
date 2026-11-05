@@ -140,6 +140,38 @@ describe('ogni interruttore del lancio lo legge qualcuno', () => {
   }, 30000);
 });
 
+/**
+ * 5/11/2026 (S04, scheda 2534) — «Lo legge qualcuno» si accontentava di un lettore qualsiasi: un
+ * interruttore letto solo dalla pagina nasconde il pulsante, ma la rotta che fa la cosa resta
+ * aperta a chi la chiama a mano. Per gli interruttori che spengono un'azione del server, il lettore
+ * deve stare anche nella rotta di quell'azione.
+ */
+const PORTA_DEL_SERVER: Record<string, string> = {
+  BUONI_REGALO_IN_VENDITA: join('app', 'api', 'gift-cards'),
+  NEWSLETTER_ACCESA: join('app', 'api', 'newsletter'),
+  AI_NEGOZI_ACCESA: join('app', 'api', 'ai'),
+  TRADUCI_ACCESO: join('app', 'api', 'ai', 'translate'),
+  CARTA_ACCESA: join('app', 'api', 'stripe', 'checkout'),
+  ABBONAMENTO_NEGOZI_ACCESO: join('app', 'api', 'seller', 'subscription'),
+  CODICI_SCONTO_IN_CASSA: join('app', 'api', 'orders', 'cod'),
+  DROP_DEL_GIORNO_ACCESO: join('app', 'api', 'admin', 'daily-drops'),
+};
+
+describe('gli interruttori che spengono un’azione del server li legge anche la rotta', () => {
+  it('ogni interruttore con una porta sul server è letto dentro quella porta', () => {
+    const lettori = chiLegge();
+    const esportati = new Set(Object.keys(interruttori));
+    const scoperti: string[] = [];
+    for (const [nome, porta] of Object.entries(PORTA_DEL_SERVER)) {
+      expect(esportati.has(nome), `${nome} non è più fra gli interruttori: aggiorna questa lista`).toBe(true);
+      if (!(lettori.get(nome) ?? []).some((f) => f.startsWith(porta + '/') || f.startsWith(porta + '\\'))) {
+        scoperti.push(`${nome} → nessun lettore sotto ${porta}`);
+      }
+    }
+    expect(scoperti, 'la pagina nasconde il pulsante ma la rotta resta aperta').toEqual([]);
+  }, 30000);
+});
+
 describe('il lettore degli import riconosce le forme giuste e solo quelle', () => {
   const PAGINA = join(RADICE, 'app', 'prova', 'page.tsx');
   const letti = (testo: string, file = PAGINA) => [...interruttoriLetti(testo, file)].sort();

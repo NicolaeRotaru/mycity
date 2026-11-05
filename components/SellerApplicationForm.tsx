@@ -1,5 +1,6 @@
 'use client';
 
+import { ibanValido, normalizzaIban } from '@/app/sell/iban';
 import { useState } from 'react';
 import { useForm, type UseFormRegisterReturn } from 'react-hook-form';
 import { z } from 'zod';
@@ -74,7 +75,14 @@ const SellerSchema = z.object({
   storeDescription: z.string().max(500, 'Massimo 500 caratteri').optional().or(z.literal('')),
 
   // Pagamenti
-  billingIban: z.string().regex(/^[A-Z0-9]{15,34}$/i, 'IBAN non valido').optional().or(z.literal('')),
+  billingIban: z
+    .string()
+    .refine((v) => normalizzaIban(v) === '' || ibanValido(v), { message: 'IBAN non valido: controlla i caratteri' })
+    .optional(),
+
+  // Fattura elettronica: facoltativi.
+  businessPec: z.string().trim().email('PEC non valida').optional().or(z.literal('')),
+  businessSdi: z.string().trim().regex(/^[A-Z0-9]{7}$/i, 'Codice SDI non valido: sono 7 caratteri').optional().or(z.literal('')),
 
   // Consensi legali
   // boolean + refine (non literal(true)): permette default false nel form
@@ -158,6 +166,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
       storeName:         defaultValues?.storeName         ?? '',
       storeDescription:  defaultValues?.storeDescription  ?? '',
       billingIban:       defaultValues?.billingIban       ?? '',
+      businessPec:       defaultValues?.businessPec       ?? '',
+      businessSdi:       defaultValues?.businessSdi       ?? '',
       acceptTos:         false,
       acceptPrivacy:     false,
       acceptAccuracy:    false,
@@ -175,6 +185,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
   const [locationError, setLocationError] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(defaultValues?.storeLogo ?? null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  // Mentre sale una foto della copertina l'invio aspetta: partirebbe senza quella foto.
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   const [media, setMedia] = useState<StoreMediaItem[]>(defaultValues?.storeMedia ?? []);
 
   const storeName = watch('storeName');
@@ -347,6 +359,10 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           <Input label="Città della sede legale" required {...register('businessCity')} error={errors.businessCity?.message} />
           <Input label="CAP della sede legale" required inputMode="numeric" maxLength={5} {...register('businessZip')} error={errors.businessZip?.message} />
         </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Input label="PEC (facoltativa)" type="email" placeholder="negozio@pec.it" {...register('businessPec')} error={errors.businessPec?.message} hint="Per la fattura elettronica" />
+          <Input label="Codice destinatario SDI (facoltativo)" className="uppercase" maxLength={7} placeholder="ABC1234" {...register('businessSdi')} error={errors.businessSdi?.message} hint="7 caratteri, te lo dà il commercialista" />
+        </div>
       </Section>
 
       {/* STEP 4: Vetrina */}
@@ -374,7 +390,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           </div>
         </Field>
 
-        <StoreMediaManager value={media} onChange={setMedia} />
+        <StoreMediaManager value={media} onChange={setMedia} onUploadingChange={setUploadingMedia} />
 
         <Input
           label="Nome del negozio"
@@ -468,7 +484,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
 
       <button
         type="submit"
-        disabled={isLoading || uploadingLogo}
+        disabled={isLoading || uploadingLogo || uploadingMedia}
         className="w-full bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-base shadow-lg transition-all"
       >
         {isLoading ? (

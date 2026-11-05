@@ -18,6 +18,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const inviato: Array<{ url: string; corpo: Record<string, unknown> }> = [];
 const logger = { warn: vi.fn(), error: vi.fn(), info: vi.fn() };
 vi.mock('@/lib/logger', () => ({ logger }));
+// S10 (5/11/2026) — L'invio dal server a PostHog ora rispetta POSTHOG_ACCESO
+// (spento al lancio): qui si prova la strada accesa, come prima.
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
+  ...((await originale()) as Record<string, unknown>),
+  POSTHOG_ACCESO: true,
+}));
 
 beforeEach(() => {
   inviato.length = 0;

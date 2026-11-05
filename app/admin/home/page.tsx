@@ -11,7 +11,8 @@ import { queryKeys } from '@/lib/queries/keys';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { LoadError } from '@/components/admin/LoadError';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
-import { normalizeHomeSite, homeSiteSchema, type HomeSite } from '@/lib/home-site';
+import { leggiHomeSite, homeSiteSchema, type HomeSite, type SezioneScartata } from '@/lib/home-site';
+import { prepareForSave, erroreConIlPosto } from '@/lib/admin/editor-della-home';
 import HomeSectionsEditor from '@/components/admin/home/HomeSectionsEditor';
 
 /**
@@ -22,29 +23,21 @@ import HomeSectionsEditor from '@/components/admin/home/HomeSectionsEditor';
  * `beforeunload` avvisa se si esce con modifiche non salvate.
  */
 
-/** Rimuove elementi incompleti che la validazione rifiuterebbe (es. immagini galleria vuote). */
-function prepareForSave(site: HomeSite): HomeSite {
-  return {
-    ...site,
-    sections: site.sections.map((s) =>
-      s.type === 'gallery'
-        ? { ...s, config: { ...s.config, items: (s.config.items ?? []).filter((it) => it.url.trim()) } }
-        : s,
-    ),
-  };
-}
-
 export default function AdminHomePage() {
   const qc = useQueryClient();
 
-  const { data: initial, isLoading, error, refetch } = useQuery({
+  const { data: lettura, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.admin.home,
     queryFn: async () => {
       const { data, error } = await supabase.from('site_settings').select('home_site').eq('id', 1).maybeSingle();
       if (error) throw error;
-      return normalizeHomeSite((data as { home_site?: unknown } | null)?.home_site);
+      // 5/11/2026 (S05) — Si legge sezione per sezione e si tengono da parte le
+      // scartate: prima sparivano in silenzio e il primo salvataggio le perdeva.
+      return leggiHomeSite((data as { home_site?: unknown } | null)?.home_site);
     },
   });
+  const initial = lettura?.site;
+  const scartate: SezioneScartata[] = lettura?.scartate ?? [];
 
   const [draft, setDraft] = useState<HomeSite | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -70,7 +63,10 @@ export default function AdminHomePage() {
     mutationFn: async (next: HomeSite) => {
       const cleaned = prepareForSave(next);
       const parsed = homeSiteSchema.safeParse(cleaned);
-      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Home non valida');
+      if (!parsed.success) {
+        const primo = parsed.error.issues[0];
+        throw new Error(primo ? erroreConIlPosto(cleaned, primo) : 'Home non valida');
+      }
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/admin/home', {
         method: 'PUT',
@@ -115,6 +111,14 @@ export default function AdminHomePage() {
           </Link>
         }
       />
+
+      {scartate.length > 0 && (
+        <div role="alert" className="rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-3 text-sm text-secondary-800">
+          <strong>{scartate.length === 1 ? '1 sezione non valida è stata tolta' : `${scartate.length} sezioni non valide sono state tolte`}</strong>
+          {' '}dalla home salvata ({scartate.map((x) => `${x.posizione >= 0 ? `n. ${x.posizione + 1}` : 'home'}${x.type ? ` «${x.type}»` : ''}: ${x.motivo}`).join('; ')}).
+          Se salvi adesso, la home pubblica resterà senza.
+        </div>
+      )}
 
       <section className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
         <div className="flex items-start gap-3 mb-4">

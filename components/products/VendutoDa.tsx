@@ -37,7 +37,9 @@ export function VendutoDa({ sellerId, storeName }: { sellerId: string; storeName
       sellerId,
       storeName: storeName ?? null,
       codice: (error as { code?: string } | null)?.code ?? null,
-      motivo: error instanceof Error ? error.message : String(error),
+      // 5/11/2026 — L'errore di PostgREST è un oggetto semplice, non un Error: con String() nel
+      // registro usciva «[object Object]». Si prende il suo `message` quando c'è.
+      motivo: motivoDellErrore(error),
     });
   }, [error, sellerId, storeName]);
 
@@ -66,4 +68,16 @@ export function VendutoDa({ sellerId, storeName }: { sellerId: string; storeName
       </p>
     </section>
   );
+}
+
+/** Il testo dell'errore, che arrivi come Error o come oggetto di PostgREST ({ message, code }). */
+export function motivoDellErrore(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  const messaggio = (error as { message?: unknown } | null)?.message;
+  if (typeof messaggio === 'string' && messaggio) return messaggio;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
 }

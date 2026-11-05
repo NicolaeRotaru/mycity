@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept, regolaDelSecchio, tettoInMB } from '@/lib/storage/regole-secchi';
+import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
 
 type Props = {
   userId: string;
@@ -149,14 +150,17 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
 
         newUrls.push({ url: publicUrl, path: percorso });
       }
-
-      const next = [...files, ...newUrls];
-      setFiles(next);
-      onUploaded(next.map((f) => f.url));
       if (newUrls.length > 0) toast.success(`${newUrls.length} foto caricat${newUrls.length === 1 ? 'a' : 'e'}`);
     } catch (err) {
       toast.error(frasePerChiCarica(err));
     } finally {
+      // 5/11/2026 — Le foto già caricate entrano nella recensione anche se una delle successive
+      // fallisce: prima restavano nel magazzino ma sparivano dalle anteprime, senza la X per toglierle.
+      if (newUrls.length > 0) {
+        const next = [...files, ...newUrls];
+        setFiles(next);
+        onUploaded(next.map((f) => f.url));
+      }
       setUploading(false);
       // reset input
       e.target.value = '';
@@ -191,8 +195,18 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
           </div>
         ))}
         {files.length < max && (
-          <label className="inline-flex flex-col items-center justify-center w-20 h-20 rounded-lg border-2 border-dashed border-cream-300 hover:border-primary-300 cursor-pointer transition-colors">
-            <input type="file" accept={ACCEPT} multiple onChange={handleChange} className="hidden" disabled={uploading} />
+          <label className="inline-flex flex-col items-center justify-center w-20 h-20 rounded-lg border-2 border-dashed border-cream-300 hover:border-primary-300 cursor-pointer transition-colors focus-within:ring-2 focus-within:ring-primary-700 focus-within:ring-offset-2">
+            {/* 5/11/2026 — Era `hidden` (display:none): da tastiera il riquadro non esisteva.
+                `sr-only` lo lascia raggiungibile con Tab, e l'anello si vede sul riquadro. */}
+            <input
+              type="file"
+              accept={ACCEPT}
+              multiple
+              onChange={handleChange}
+              className="sr-only"
+              disabled={uploading}
+              aria-label={`Aggiungi foto alla recensione (massimo ${max})`}
+            />
             {uploading ? (
               <Upload size={20} className="text-ink-400 animate-pulse" />
             ) : (
@@ -205,7 +219,9 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
         )}
       </div>
       <p className="text-xs text-ink-400">
-        Aggiungi foto della tua esperienza ({max} max, {MAX_SIZE_MB}MB ciascuna). Le recensioni con foto guadagnano +20 punti loyalty.
+        Aggiungi foto della tua esperienza ({max} max, {MAX_SIZE_MB}MB ciascuna).
+        {/* 5/11/2026 — I punti sono spenti al lancio: la frase c'è solo se l'interruttore è acceso. */}
+        {INVITI_E_PUNTI_ACCESI && ' Le recensioni con foto guadagnano +20 punti loyalty.'}
       </p>
     </div>
   );

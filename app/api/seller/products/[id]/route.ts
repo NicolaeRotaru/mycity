@@ -3,6 +3,7 @@ import { withSellerAuth, type ClientDiChiChiama } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { writeAudit } from '@/lib/audit';
+import { logger } from '@/lib/logger';
 import {
   salvaProdottoTracciato,
   colonneAmmesse,
@@ -77,6 +78,12 @@ async function handler(
     if (errore instanceof DaCompletare) return ApiErrors.invalidRequest(errore.message, { mancanti: errore.mancanti });
     const esito = erroreDiSalvataggio(errore as { code?: string | null; message?: string | null } | null);
     if (esito.tipo === 'regola') return ApiErrors.invalidRequest(esito.messaggio);
+    // Un guasto vero: al negoziante «Riprova», ma nel registro l'errore com'è,
+    // altrimenti un 500 di questa porta non lascia niente da cui capire.
+    const e = errore as { code?: string | null; message?: string | null } | null;
+    logger.error('[seller-products] salvataggio del prodotto fallito', {
+      prodottoId, userId: user.id, code: e?.code ?? null, message: e?.message ?? String(errore),
+    });
     return ApiErrors.internal(esito.messaggio);
   }
 }

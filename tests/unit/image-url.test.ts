@@ -50,7 +50,9 @@ describe('sizedImage - Pexels URLs', () => {
   it('uses hero=1200 for hero size', () => {
     const url = sizedImage('https://images.pexels.com/photos/123/photo.jpg', 'hero');
     expect(url).toContain('w=1200');
-    expect(url).toContain('h=1200');
+    // S06 (933): la vista grande non si ritaglia a quadrato, come per le foto dei negozi.
+    expect(url).not.toContain('h=1200');
+    expect(url).not.toContain('fit=crop');
   });
 
   it('preserves existing query string', () => {

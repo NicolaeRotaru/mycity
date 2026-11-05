@@ -1,15 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { Trash2, CheckCircle2, Upload } from 'lucide-react';
-import { toast } from 'sonner';
+import { Trash2, CheckCircle2 } from 'lucide-react';
 import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import { ImageUrlField } from '@/components/ImageUrlField';
 import { CONSIGLIO_IMMAGINE_BANNER } from '@/lib/banner-vetrina';
-import { supabase } from '@/lib/supabase/client';
-import { friendlyError } from '@/lib/errors';
-import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { HomeSection } from '@/lib/home-site';
 import { chiaveDiRiga, conChiaveEreditata } from '@/lib/liste/chiave-di-riga';
 
@@ -33,7 +28,6 @@ function VideoField({ section, onChange }: { section: Extract<HomeSection, { typ
     : '';
   const [url, setUrl] = useState(initialUrl);
   const [err, setErr] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
   const set = (patch: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...patch } });
 
   const onInput = (v: string) => {
@@ -43,27 +37,6 @@ function VideoField({ section, onChange }: { section: Extract<HomeSection, { typ
     if (parsed) { onChange({ ...section, config: { ...c, provider: parsed.provider, videoId: parsed.id } }); setErr(null); }
     else setErr('Link non riconosciuto. Incolla un URL di YouTube o Vimeo.');
   };
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { 'video/mp4': ['.mp4'], 'video/webm': ['.webm'] },
-    maxFiles: 1,
-    multiple: false,
-    disabled: uploading,
-    onDrop: async (files) => {
-      const file = files[0];
-      if (!file) return;
-      setUploading(true);
-      try {
-        const { publicUrl } = await caricaImmagine(supabase, { file, staff: true, upsert: true });
-        onChange({ ...section, config: { ...c, provider: 'file', videoId: '', videoUrl: publicUrl } });
-        toast.success('Video caricato');
-      } catch (e) {
-        toast.error(friendlyError(e));
-      } finally {
-        setUploading(false);
-      }
-    },
-  });
 
   const switchMode = (mode: 'link' | 'file') => {
     if (mode === 'file') set({ provider: 'file', videoId: '' });
@@ -75,7 +48,7 @@ function VideoField({ section, onChange }: { section: Extract<HomeSection, { typ
       <Input label="Titolo (opzionale)" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
       <Select label="Sorgente video" value={isFile ? 'file' : 'link'} onChange={(e) => switchMode(e.target.value as 'link' | 'file')}>
         <option value="link">Link YouTube o Vimeo</option>
-        <option value="file">File MP4 (carica o URL)</option>
+        <option value="file">File MP4 (indirizzo)</option>
       </Select>
 
       {!isFile ? (
@@ -85,14 +58,10 @@ function VideoField({ section, onChange }: { section: Extract<HomeSection, { typ
         </>
       ) : (
         <>
-          <div
-            {...getRootProps()}
-            className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg px-3 py-3 text-sm cursor-pointer transition-colors ${isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 bg-cream-50 hover:border-primary-300'} ${uploading ? 'opacity-60 cursor-wait' : ''}`}
-          >
-            <input {...getInputProps()} />
-            <Upload size={16} strokeWidth={2.2} className="text-ink-500" aria-hidden />
-            <span className="text-ink-600">{uploading ? 'Caricamento…' : isDragActive ? 'Rilascia qui…' : 'Carica un MP4 da dispositivo'}</span>
-          </div>
+          {/* 5/11/2026 (S05) — Niente più caricamento dal dispositivo: il magazzino
+              'products' ammette solo immagini (migrations/070), e ogni MP4 falliva.
+              Resta l'indirizzo di un file video già pubblicato. */}
+          <p className="text-xs text-ink-500">Incolla l’indirizzo di un file MP4 o WebM già pubblicato (il caricamento di video dal dispositivo non è disponibile).</p>
           <Input label="URL del file video (https)" value={c.videoUrl ?? ''} onChange={(e) => set({ videoUrl: e.target.value })} placeholder="https://….mp4" />
           {c.videoUrl && <p className="text-xs text-olive-700 inline-flex items-center gap-1"><CheckCircle2 size={14} aria-hidden /> File video impostato.</p>}
         </>
@@ -206,7 +175,7 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       const set = (patch: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...patch } });
       return (
         <div className="space-y-3">
-          <Input label="Badge" value={c.badge ?? ''} maxLength={40} onChange={(e) => set({ badge: e.target.value })} placeholder="€5 in regalo" />
+          <Input label="Badge" value={c.badge ?? ''} maxLength={40} onChange={(e) => set({ badge: e.target.value })} placeholder="Novità dai negozi" />
           <Input label="Titolo" value={c.heading ?? ''} maxLength={160} onChange={(e) => set({ heading: e.target.value })} />
           <Textarea label="Testo" value={c.body ?? ''} rows={3} maxLength={400} onChange={(e) => set({ body: e.target.value })} />
         </div>
@@ -218,7 +187,7 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       return (
         <div className="space-y-3">
           <Input label="Titolo" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} placeholder="Hai un negozio a Piacenza?" />
-          <Input label="Sottotesto" value={c.subtext ?? ''} maxLength={200} onChange={(e) => set({ subtext: e.target.value })} placeholder="Vendi online con zero commissioni." />
+          <Input label="Sottotesto" value={c.subtext ?? ''} maxLength={200} onChange={(e) => set({ subtext: e.target.value })} placeholder="Porta il tuo negozio online a Piacenza." />
           <Input label="Testo pulsante" value={c.ctaLabel ?? ''} maxLength={40} onChange={(e) => set({ ctaLabel: e.target.value })} placeholder="Diventa venditore" />
           <Input label="Link pulsante" value={c.href ?? ''} onChange={(e) => set({ href: e.target.value })} placeholder="/sell" />
         </div>

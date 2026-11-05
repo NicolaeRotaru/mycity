@@ -14,9 +14,11 @@ import { Button } from '@/components/ui/Button';
 import { Input, PasswordInput } from '@/components/ui/Field';
 import { AuthShell, AuthAlternatives, SellerRiderRecruit } from '@/components/ui/AuthShell';
 import { trackSignedIn } from '@/lib/analytics/events';
+import { indirizzoContatto } from '@/lib/contatti-pubblici';
 import { avvisoAlRitornoSullAccesso, indirizzoSenzaLaSessione, type AvvisoDiAccesso } from '@/lib/auth/link-email';
 import {
   esitoDellaRispostaDiAccesso,
+  messaggioDellaRottaDiAccesso,
   memoriaDellaScheda,
   percorsoVerificaEmail,
   ricordaEmailDaConfermare,
@@ -86,6 +88,9 @@ const SignInForm = () => {
    * il server non lo vede, quindi lo si legge qui, dopo il montaggio.
    */
   const [avviso, setAvviso] = useState<AvvisoDiAccesso | null>(null);
+  // S10 (5/11/2026) — L'errore resta sotto il campo, non solo nell'avviso che
+  // sparisce dopo quattro secondi.
+  const [erroreAccesso, setErroreAccesso] = useState<string | undefined>();
   const erroreDelRitorno = searchParams.get('error');
 
   // Difesa lato client: se Supabase ha mandato l'utente qui invece che
@@ -124,10 +129,14 @@ const SignInForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (TURNSTILE_SITE_KEY && !captchaToken && !captchaRotto) {
-      toast.error('Completa il controllo anti-bot');
+    // S10 (5/11/2026) — Senza gettone il server rifiuta sempre («CAPTCHA
+    // mancante»): se il riquadro non si e' caricato non si promette «prova lo
+    // stesso», si dice cosa fare.
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      toast.error(captchaRotto ? 'Il controllo anti-robot non si è caricato: ricarica la pagina o entra con Google.' : 'Completa il controllo anti-bot');
       return;
     }
+    setErroreAccesso(undefined);
     setIsLoading(true);
     try {
       /**
@@ -166,7 +175,17 @@ const SignInForm = () => {
         vaiAllaVerifica();
         return;
       }
-      if (esito.tipo === 'errore') throw new Error(esito.messaggio);
+      if (esito.tipo === 'errore') {
+        const dallaRotta = messaggioDellaRottaDiAccesso(esito);
+        if (dallaRotta) {
+          rigeneraGettone();
+          setErroreAccesso(dallaRotta);
+          toast.error(dallaRotta);
+          requestAnimationFrame(() => document.getElementById('signin-password')?.focus());
+          return;
+        }
+        throw new Error(esito.messaggio);
+      }
       const data = corpo as { user?: { id: string; email_confirmed_at?: string | null }; session?: { access_token: string; refresh_token: string } } | null;
       // La sessione arriva dal server: qui si installa nel browser, cosi' tutto
       // il resto del sito la vede come prima.
@@ -208,7 +227,10 @@ const SignInForm = () => {
       router.refresh();
     } catch (error) {
       rigeneraGettone();
-      toast.error(translateAuthError(error instanceof Error ? error.message : ''));
+      const messaggio = translateAuthError(error instanceof Error ? error.message : '');
+      setErroreAccesso(messaggio);
+      toast.error(messaggio);
+      requestAnimationFrame(() => document.getElementById('signin-password')?.focus());
     } finally {
       setIsLoading(false);
     }
@@ -278,10 +300,11 @@ const SignInForm = () => {
           id="signin-password"
           label="Password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => { setPassword(e.target.value); setErroreAccesso(undefined); }}
           placeholder="••••••••"
           autoComplete="current-password"
           required
+          error={erroreAccesso}
           labelAction={
             <button
               type="button"
@@ -305,9 +328,10 @@ const SignInForm = () => {
           </div>
         )}
         {captchaRotto && (
-          <p className="text-center text-sm text-ink-600">
-            {captchaRotto} Puoi provare lo stesso ad accedere: se non funziona,
-            ricarica la pagina o scrivici da <Link className="underline" href="/contact">Contatti</Link>.
+          <p role="alert" className="text-center text-sm text-ink-600">
+            {captchaRotto} Senza questo controllo l&apos;accesso con email non può partire:
+            ricarica la pagina, oppure entra con Google qui sotto. Se non funziona, scrivici a{' '}
+            <a className="underline" href={`mailto:${indirizzoContatto('info')}`}>{indirizzoContatto('info')}</a>.
           </p>
         )}
         <Button type="submit" size="lg" loading={isLoading} iconRight={ArrowRight} fullWidth>

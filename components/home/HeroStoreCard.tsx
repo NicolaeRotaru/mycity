@@ -10,10 +10,11 @@ import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
-import { DAY_KEYS, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
+import { chiaveDiOggi, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { consegnaDellaVetrina, vetrinaChiedeLaVeloce } from '@/lib/promessa-consegna';
+import { scrittaApertura } from './orari-di-oggi';
 import { useOraDiPiacenza, useVeloceDelNegozio } from '@/components/ui/DeliveryCutoff';
 
 type StoreMediaItem = { type: 'image' | 'video'; url: string };
@@ -93,12 +94,11 @@ export default function HeroStoreCard() {
 
   const { store, products, reviews } = data;
 
-  // Stato apertura + "Consegna oggi": derivati dagli orari del negozio
-  // (store_hours) SOLO se affidabilmente interpretabili — il negozio ha orari
-  // configurati per oggi ed è aperto adesso. Se gli orari mancano o non sono
-  // parseabili, il badge "Consegna oggi" è omesso (niente promessa di consegna
-  // non supportata dai dati) e la pill mostra "Chiuso".
-  const todayKey = DAY_KEYS[new Date().getDay()];
+  // Stato apertura: dagli orari del negozio (store_hours). Se mancano o non si leggono la pill
+  // mostra «Chiuso». 5/11/2026 — Il badge «Consegna oggi» NON dipende più dall'«aperto adesso»
+  // (vedi sotto, consegnaDellaVetrina): può accendersi anche a negozio chiuso, e allora la pill
+  // dice quando riapre. Il giorno di oggi è quello di Piacenza (chiaveDiOggi).
+  const todayKey = chiaveDiOggi();
   const hours = (store.store_hours ?? null) as StoreHours | null;
   const todayIntervals = hours && typeof hours === 'object' ? hours[todayKey] : undefined;
   const openNow = Array.isArray(todayIntervals) && isOpenNow(todayIntervals);
@@ -126,7 +126,8 @@ export default function HeroStoreCard() {
               // c'è: il contenitore è `hidden md:flex`. Su un telefono faceva scegliere al
               // browser una foto a tutta larghezza per una cosa che non compare. La misura
               // vera è una sola: 384 punti, la larghezza della scheda (max-w-sm).
-              <Image src={sizedImage(cover, 'hero')} alt="" fill sizes="384px" loader={caricatoreFotoRemote} className="object-cover" />
+              // 5/11/2026 — È la foto più grande sopra la piega (su schermo largo): non pigra.
+              <Image src={sizedImage(cover, 'hero')} alt="" fill sizes="384px" priority loader={caricatoreFotoRemote} className="object-cover" />
             ) : (
               <div aria-hidden className="absolute inset-0 bg-gradient-to-br from-primary-500 via-primary-600 to-secondary-600">
                 <span className="absolute inset-0 flex items-center justify-center text-white/40">
@@ -136,7 +137,7 @@ export default function HeroStoreCard() {
             )}
             <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-ink-900/75 text-white backdrop-blur-sm">
               <span className={`w-1.5 h-1.5 rounded-full ${openNow ? 'bg-olive-400 animate-pulse-soft' : 'bg-ink-300'}`} />
-              {openNow ? 'Aperto ora' : 'Chiuso'}
+              {scrittaApertura(openNow, Array.isArray(todayIntervals) ? todayIntervals : undefined)}
             </span>
           </div>
 

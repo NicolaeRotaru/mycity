@@ -21,7 +21,7 @@
  */
 
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -271,4 +271,9 @@ export interface Database {
   console.log(`  ${tableNames.length} tables, ${tableNames.reduce((s, t) => s + Object.keys(tables[t]).length, 0)} columns total`);
 }
 
-generate();
+// 5/11/2026 — Si scrive il file solo quando lo script è lanciato da riga di comando
+// (`npm run db:types`). Prima bastava importarlo (la prova di `senzaCommenti` lo fa) perché
+// ogni giro della suite riscrivesse lib/database.types.ts.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  generate();
+}

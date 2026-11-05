@@ -29,15 +29,18 @@ const VELOCE = eur(SUPPLEMENTO_VELOCE_CENTS);
 // lo conta la stessa funzione della cassa, così se la regola cambia il pannello non resta indietro.
 const TRE_NEGOZI_PICCOLI_CENTS = vociDellaConsegna({
   pickupInStore: false,
-  negozi: [500, 600, 700].map((m) => ({ spesaCents: m, merceCents: m })),
+  // 5/11/2026 (S05) — Le tre spese stanno SEMPRE sotto la soglia (metà, sei e sette decimi): con
+  // 500/600/700 fissi, una soglia a 7 € o meno faceva contare meno supplementi di quanti ne dice la frase.
+  negozi: [5, 6, 7].map((d) => Math.floor((SPESA_SENZA_SUPPLEMENTO_CENTS * d) / 10)).map((m) => ({ spesaCents: m, merceCents: m })),
   consegnaVeloce: false,
 }).totaleCents;
-const COMPENSO = `${eur(COMPENSO_RIDER_CENTS)} il giro + ${eur(COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS)} a negozio in più`;
 // 30/10/2026 — Nel riquadro grande (26 pixel, interlinea 1, colonna di circa 200 pixel) la frase
 // intera andava a capo su tre o quattro righe che si toccavano: lì il valore è corto e la frase
 // sta nell'etichetta. Euro tondi senza «,00», con lo spazio che non va a capo prima del simbolo.
 const eurTondo = (cents: number) => (cents % 100 === 0 ? `${cents / 100}\u00a0€` : eur(cents));
 const COMPENSO_CORTO = `${eurTondo(COMPENSO_RIDER_CENTS)} + ${eurTondo(COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS)}`;
+// 5/11/2026 (S05) — Una grafia sola per il compenso in tutta la pagina («3 €», non «3,00 €» accanto a «3 €»).
+const COMPENSO = `${eurTondo(COMPENSO_RIDER_CENTS)} il giro + ${eurTondo(COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS)} a negozio in più`;
 // 30/10/2026 — La frase lunga stava nell'etichetta da 10 pixel in maiuscolo e andava a capo su
 // quattro righe: l'etichetta dice di cosa si parla, la spiegazione va sotto il valore.
 const COMPENSO_NOTA = `${eurTondo(COMPENSO_RIDER_CENTS)} il giro, più ${eurTondo(COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS)} per ogni negozio in più`;
@@ -116,14 +119,14 @@ export default function AdminDeliveryPage() {
             <Row
               icon={Truck}
               title="Consegna veloce"
-              desc="Una volta sola; compresa se c'è già almeno un euro di spesa piccola"
+              desc={`Una volta sola; compresa se c'è già il supplemento di spesa piccola (+ ${PICCOLA})`}
               value={`+ ${VELOCE}`}
             />
             <Row
               icon={Bike}
               title="Compenso del fattorino"
-              desc="Per il giro, non a distanza: la veloce e la spesa piccola restano a MyCity"
-              value={COMPENSO}
+              desc={`${COMPENSO_NOTA}. Per il giro, non a distanza: la veloce e la spesa piccola restano a MyCity`}
+              value={COMPENSO_CORTO}
             />
             <Row
               icon={MapPin}
@@ -183,16 +186,17 @@ function Row({
 }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-cream-200 px-3.5 py-3">
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
         <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-cream-100 text-primary-700">
           <Icon size={17} strokeWidth={2.2} aria-hidden />
         </span>
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-semibold text-ink-900">{title}</p>
           <p className="text-xs text-ink-500">{desc}</p>
         </div>
       </div>
-      <strong className="font-mono text-ink-900">{value}</strong>
+      {/* Va a capo la spiegazione, non il numero: «10 km» non si spezza più in «10» sopra «km». */}
+      <strong className="shrink-0 whitespace-nowrap font-mono text-ink-900">{value}</strong>
     </div>
   );
 }

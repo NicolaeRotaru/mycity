@@ -34,8 +34,10 @@ describe('«Come funziona, in 3 passi» promette quello che la consegna mantiene
     expect(testo).not.toMatch(/minut/i);
   });
 
-  it('dice la regola vera: in giornata, negli orari di apertura del negozio', () => {
+  // 5/11/2026 (S07, scheda 2390) — riletta con la regola del ritiro: la spesa arriva nella fascia
+  // scelta, anche dopo la chiusura del negozio.
+  it('dice la regola vera: in giornata, nella fascia oraria che scegli', () => {
     const testo = testoDeiTrePassi();
-    expect(testo).toMatch(/in giornata, negli orari di apertura del negozio/);
+    expect(testo).toMatch(/in giornata, nella fascia oraria che scegli/);
   });
 });

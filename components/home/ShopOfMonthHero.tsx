@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import { Crown, ArrowRight, Vote } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { sizedImage } from '@/lib/image-url';
+import { logoNegozio, sizedImage } from '@/lib/image-url';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { queryKeys } from '@/lib/queries/keys';
 import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
@@ -88,13 +88,17 @@ export default function ShopOfMonthHero() {
               />
             </div>
           ) : seller.store_logo ? (
-            <div className="w-44 h-44 rounded-full overflow-hidden ring-4 ring-white/40">
+            <div className="w-44 h-44 rounded-full overflow-hidden ring-4 ring-white/40 bg-white">
+              {/* 5/11/2026 — Era sizedImage(…, 'card'), che chiede il ritaglio quadrato, e
+                  object-cover: un logo con la scritta perdeva i lati. Come il resto del sito:
+                  logoNegozio (solo larghezza) e il logo intero dentro il cerchio. */}
               <Image
-                src={sizedImage(seller.store_logo, 'card')}
+                src={logoNegozio(seller.store_logo, 176)}
                 alt={seller.store_name ?? ''}
-                width={400}
-                height={400}
-                className="object-cover w-full h-full"
+                width={176}
+                height={176}
+                loader={caricatoreFotoRemote}
+                className="object-contain w-full h-full"
               />
             </div>
           ) : null}

@@ -33,9 +33,10 @@ function ambiente(o: { chiave: boolean; casella: boolean; posta: boolean }) {
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://esempio.supabase.co');
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', o.chiave ? 'chiave-di-prova' : '');
   vi.stubEnv('NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY', o.casella ? 'privacy@esempio.it' : '');
-  vi.stubEnv('SUPPORT_EMAIL', o.posta ? 'aiuto@esempio.it' : '');
+  // 5/11/2026 (S08, scheda 2058) — la posta del supporto vale solo sul dominio dei contatti.
+  vi.stubEnv('SUPPORT_EMAIL', o.posta ? 'aiuto@mycity-marketplace.com' : '');
   vi.stubEnv('RESEND_API_KEY', o.posta ? 're_prova' : '');
-  vi.stubEnv('RESEND_FROM', o.posta ? 'MyCity <noreply@esempio.it>' : '');
+  vi.stubEnv('RESEND_FROM', o.posta ? 'MyCity <noreply@mycity-marketplace.com>' : '');
 }
 
 afterEach(() => {

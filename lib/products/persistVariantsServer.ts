@@ -1,12 +1,14 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { type ProductVariant } from '@/lib/products/variants';
 import { DaCompletare } from '@/lib/products/salvataggio-tracciato';
+import { scortaCambiata } from '@/lib/products/schema';
 
 /**
- * Persistenza varianti lato server (client admin service-role). Identica nella
- * logica a `persistVariants.ts` ma accetta un SupabaseClient esplicito: serve
- * all'admin per gestire le varianti di prodotti di un seller arbitrario, cosa
- * che il client browser (RLS, seller-scoped) non può fare.
+ * Persistenza varianti con un SupabaseClient esplicito. La usano DUE porte:
+ * l'admin (client service-role, prodotti di qualunque negozio) e il browser del
+ * negoziante (il suo client, con le regole per riga) passando da
+ * `persistVariants.ts`. Quindi niente codice solo-server qui dentro: il file
+ * finisce anche nel pacchetto del browser.
  *
  * Il diff insert/update/delete mantiene stabili gli id delle varianti invariate
  * (riferimenti in order_items). Il trigger DB riallinea products.stock/has_variants.
@@ -30,8 +32,39 @@ import { DaCompletare } from '@/lib/products/salvataggio-tracciato';
  * (`.eq('stock', vista)`): una vendita arrivata fra la lettura e la scrittura
  * lascia la riga non trovata, e la scorta non si sovrascrive. Le righe gia'
  * scritte prima di quella non tornano indietro: per farle andare tutte o
- * nessuna serve una funzione del database (migrazione 169).
+ * nessuna serve una funzione del database, che non esiste ancora (nessuna
+ * migrazione la crea: va scritta e firmata a parte).
  */
+/**
+ * Il controllo delle scorte, prima di scrivere qualunque cosa: se una taglia
+ * cambiata a mano non ha più in banca dati la scorta vista all'apertura, lancia
+ * lo stesso `DaCompletare` del salvataggio. La pagina di modifica lo chiama
+ * PRIMA di salvare il prodotto: altrimenti nome e prezzo restavano scritti e le
+ * varianti no, con un messaggio che diceva di riaprire.
+ */
+export async function controllaScorteVarianti(
+  supabase: SupabaseClient,
+  productId: string,
+  variants: ProductVariant[],
+  scorteViste?: Record<string, number>,
+): Promise<void> {
+  if (!scorteViste) return;
+  const { data: existing, error } = await supabase
+    .from('product_variants')
+    .select('id, stock')
+    .eq('product_id', productId);
+  if (error) throw error;
+  const scortaInBanca = new Map((existing ?? []).map((r) => [r.id as string, (r as { stock?: unknown }).stock]));
+  for (const v of variants) {
+    if (!v.id || !scortaInBanca.has(v.id)) continue;
+    const vista = scorteViste[v.id];
+    const scritta = Math.max(0, Math.trunc(v.stock || 0));
+    if (vista === undefined || !scortaCambiata(scritta, vista)) continue;
+    const adesso = scortaInBanca.get(v.id);
+    if (typeof adesso === 'number' && adesso !== vista) throw scortaVarianteCambiata(v.label, vista, adesso);
+  }
+}
+
 export async function saveProductVariantsServer(
   supabase: SupabaseClient,
   productId: string,
@@ -61,7 +94,8 @@ export async function saveProductVariantsServer(
     if (v.id && existingIds.has(v.id)) {
       keepIds.add(v.id);
       const vista = scorteViste?.[v.id];
-      if (vista !== undefined && Math.max(0, Math.trunc(vista || 0)) === row.stock) delete row.stock;
+      // La stessa regola della scorta del prodotto (lib/products/schema.ts): una copia sola.
+      if (vista !== undefined && !scortaCambiata(row.stock, vista)) delete row.stock;
       const adesso = scortaInBanca.get(v.id);
       if ('stock' in row && vista !== undefined && typeof adesso === 'number' && adesso !== vista) {
         throw scortaVarianteCambiata(v.label, vista, adesso);

@@ -21,6 +21,17 @@
  * resto — anche la risposta che non si sa leggere — la tiene: con la stessa
  * chiave la rotta rilegge e non crea il doppione.
  *
+ * 5/11/2026 — COSA VUOL DIRE `inCorso` OGGI. Non vale più solo per l'invio gemello: la rotta dei
+ * contanti lo mette su quattro risposte diverse, e tutte vogliono la stessa cosa dal browser,
+ * «tieni la chiave»:
+ *   ① 409 `ordineGiaInCorso` — un invio gemello sta lavorando: aspetta fino a un minuto e riprova;
+ *   ② 503 `nonVedoSeLOrdineCe` — non si è potuto controllare se gli ordini ci sono: riprova;
+ *   ③ 503 `nonRiescoARegistrare` — la chiave non si è potuta registrare: riprova;
+ *   ④ 409 `ordineArrivatoInParte` / `ordineRimastoAMeta` — una parte c'è: NON riprovare, scrivi
+ *      all'assistenza (gli amministratori sono già avvisati).
+ * Il browser oggi non distingue ④ («fermati») da ①-③ («riprova»): il messaggio del server lo dice
+ * a parole. Un segnale col nome giusto va aggiunto qui e nella rotta insieme.
+ *
  * 🟢 Pura: decide su un oggetto, non tocca niente. Una prova la ESEGUE.
  */
 export function laChiaveVaButtata(rispostaDelServer: unknown): boolean {

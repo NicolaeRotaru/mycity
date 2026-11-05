@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { useProfile } from './hooks/useProfile';
 import { touchLoyaltyStreak } from '@/lib/loyalty';
 import { useLocalStorage } from '@/lib/hooks';
+import { giornoPiacenza } from '@/lib/tempo-piacenza';
+import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
 
 const LAST_CHECKIN_KEY = 'mc_last_checkin';
 
@@ -23,9 +25,15 @@ export default function DailyCheckIn() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
+    // 5/11/2026 — Punti spenti al lancio (INVITI_E_PUNTI_ACCESI): niente passaggio giornaliero che
+    // li assegna, e niente avviso «hai guadagnato +N punti».
+    if (!INVITI_E_PUNTI_ACCESI) return;
     if (!isAuthenticated || isLoading || done) return;
 
-    const today = new Date().toISOString().slice(0, 10);
+    // 5/11/2026 — Il giorno è quello di Piacenza, non quello di Greenwich: con
+    // toISOString() chi passava fra mezzanotte e l'una (le due d'estate) era
+    // ancora «ieri», il browser non chiamava il database e la serie si rompeva.
+    const today = giornoPiacenza();
     if (lastCheckin === today) {
       setDone(true);
       return;

@@ -7,6 +7,9 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { safeInternalPath } from '@/lib/safe-redirect';
+import { COSA_CAMBIA_NEI_TERMINI, TERMINI_IN_VIGORE_DAL, VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
+
+const VERSIONE_TERMINI = /terms-([\d.]+)/.exec(VERSIONE_TESTI_LEGALI)?.[1] ?? VERSIONE_TESTI_LEGALI;
 
 /**
  * Chiede Termini e Informativa a chi è entrato da una strada che non li
@@ -46,6 +49,18 @@ function Contenuto() {
         Per usare MyCity devi accettare i Termini e l&apos;Informativa privacy. Ci vuole un secondo, e
         ci serve per poterti dire con esattezza, un domani, che cosa avevi accettato e quando.
       </p>
+      {/* 5/11/2026 — Chi li aveva già accettati riaccettava senza sapere che erano cambiati, né cosa. */}
+      <div className="mt-4 rounded-xl border border-cream-300 bg-cream-50 p-4 text-[14px] leading-relaxed text-ink-700">
+        <p>
+          I Termini sono cambiati: versione {VERSIONE_TERMINI}, in vigore dal {TERMINI_IN_VIGORE_DAL}. Se li
+          avevi già accettati, ecco cosa cambia:
+        </p>
+        <ul className="mt-2 list-disc space-y-1 pl-5">
+          {COSA_CAMBIA_NEI_TERMINI.map((voce) => (
+            <li key={voce}>{voce}</li>
+          ))}
+        </ul>
+      </div>
 
       <label className="mt-6 flex items-start gap-2.5 text-[14px] leading-relaxed text-ink-800">
         <input

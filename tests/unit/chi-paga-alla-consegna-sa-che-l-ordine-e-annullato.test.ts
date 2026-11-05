@@ -44,7 +44,12 @@ function catena(risultato: unknown): unknown {
 
 const auth = {
   admin: {
-    getUserById: async (id: string) => ({ data: { user: { id, email: 'maria@example.it' } }, error: null }),
+    // 5/11/2026 (S04, scheda 1875) — Prima rispondeva maria@ a QUALUNQUE id: l'email mandata al
+    // negozio invece che alla cliente restava verde. Ogni persona ha la sua casella.
+    getUserById: async (id: string) => ({
+      data: { user: { id, email: ({ u1: 'maria@example.it', s1: 'forno@example.it' } as Record<string, string>)[id] ?? `${id}@sconosciuto.example` } },
+      error: null,
+    }),
   },
 };
 

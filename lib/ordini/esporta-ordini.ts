@@ -1,3 +1,4 @@
+import { ORDER_STATUS_LABEL, type OrderStatus } from '@/lib/order-status';
 import {
   raccogliAFinestre, righeCsvConAvviso, contenutoCsv, nomeFileCsv, pezzoNomeFile, fraseSenzaId,
 } from '@/lib/admin/esporta-csv';
@@ -39,14 +40,38 @@ export type OrdineDaEsportare = {
   delivery_city: string | null;
   delivery_status: string;
   total_price: number | string | null;
+  // 5/11/2026 — Per il commercialista: come si è pagato, se è pagato, il credito usato e i rimborsi.
+  payment_method?: string | null;
+  payment_status?: string | null;
+  wallet_applied_cents?: number | null;
+  refunded_amount_cents?: number | null;
   seller: { store_name: string | null } | null;
   rider: { full_name: string | null } | null;
 };
 
 /** Le colonne, nell'ordine in cui il commercialista se le aspetta. */
+/**
+ * 5/11/2026 — «Totale €» è total_price: sui contanti è la cifra alla porta, già senza il credito
+ * MyCity, e c'erano anche gli annullati con la cifra intera e lo stato in inglese. La somma da fare è
+ * su «Venduto lordo €»: totale più credito usato, zero sugli annullati. Lo stato si scrive in italiano.
+ */
 export const INTESTAZIONI_CSV_ORDINI = [
   'ID', 'Data', 'Cliente', 'Città', 'Negozio', 'Rider', 'Stato', 'Totale €',
+  'Venduto lordo €', 'Metodo', 'Stato pagamento', 'Rimborsato €',
 ] as const;
+
+const METODI: Record<string, string> = { cod: 'Contanti alla consegna', card: 'Carta' };
+const STATI_PAGAMENTO: Record<string, string> = {
+  PAID: 'Pagato', PENDING: 'Da incassare', FAILED: 'Non riuscito', REFUNDED: 'Rimborsato', PARTIALLY_REFUNDED: 'Rimborsato in parte',
+};
+
+/** Venduto lordo in euro: totale più il credito MyCity usato; zero se l'ordine è annullato. */
+export function vendutoLordo(o: OrdineDaEsportare): number {
+  if (o.delivery_status === 'CANCELED') return 0;
+  const totale = Number(o.total_price);
+  if (!Number.isFinite(totale)) return 0;
+  return totale + Math.max(0, Number(o.wallet_applied_cents ?? 0)) / 100;
+}
 
 /** Quanti ordini per lettura. Mille e' il tetto per richiesta di PostgREST. */
 export const ORDINI_PER_LETTURA = 1000;
@@ -81,17 +106,38 @@ export function importoPerExcel(valore: number | string | null): string {
   return numero.toFixed(2).replace('.', ',');
 }
 
+const DATA_PER_EXCEL = new Intl.DateTimeFormat('it-IT', {
+  timeZone: 'Europe/Rome',
+  day: '2-digit', month: '2-digit', year: 'numeric',
+  hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+});
+
+/**
+ * La data come la legge Excel in italiano, nell'ora di Piacenza: «06/09/2026 16:32».
+ * (5/11/2026 - prima usciva `2026-09-06T14:32:11.123Z`: ora di Greenwich, e una
+ * parola per Excel. Gli ordini fra mezzanotte e le 2 d'estate finivano nel giorno prima.)
+ */
+export function dataPerExcel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return DATA_PER_EXCEL.format(d).replace(',', '');
+}
+
 /** Una riga del file, nell'ordine delle intestazioni. */
 export function rigaCsvOrdine(o: OrdineDaEsportare): unknown[] {
   return [
     o.id,
-    o.created_at,
+    dataPerExcel(o.created_at),
     o.delivery_full_name ?? '',
     o.delivery_city ?? '',
     o.seller?.store_name ?? '',
     o.rider?.full_name ?? '',
-    o.delivery_status,
+    ORDER_STATUS_LABEL[o.delivery_status as OrderStatus] ?? o.delivery_status,
     importoPerExcel(o.total_price),
+    importoPerExcel(vendutoLordo(o)),
+    METODI[String(o.payment_method ?? '')] ?? (o.payment_method ?? ''),
+    STATI_PAGAMENTO[String(o.payment_status ?? '')] ?? (o.payment_status ?? ''),
+    importoPerExcel(Math.max(0, Number(o.refunded_amount_cents ?? 0)) / 100),
   ];
 }
 

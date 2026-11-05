@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 import { fraseComeArriva } from '@/lib/promesse-pubbliche';
+import { descrizioneDelNegozio } from '@/lib/queries/metadati-vetrina';
 import { HydrationBoundary } from '@tanstack/react-query';
 import { precaricaNegozio } from '@/lib/queries/precarico';
 
@@ -33,7 +34,7 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
   const params = await props.params;
   const store = await fetchStore(params.id);
   if (!store || store.role !== 'seller' || !store.is_approved) {
-    return { title: 'Negozio non trovato · MyCity', robots: { index: false } };
+    return { title: 'Negozio non trovato · MyCity', robots: { index: false }, alternates: { canonical: null } };
   }
   const name = store.store_name ?? 'Negozio';
   // 3/9/2026 — QUI SI PROMETTEVA IL RITIRO IN NEGOZIO, CHE ALLA CASSA NON C'E'.
@@ -42,7 +43,7 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
   // un'opzione spenta (`RITIRO_IN_NEGOZIO_ATTIVO`). Ora la frase nasce dall'interruttore, in
   // lib/promesse-pubbliche.ts, insieme ai minuti che stanno in lib/delivery.ts.
   const desc =
-    (store.store_description ?? `Compra online da ${name} su MyCity. ${fraseComeArriva()}`).slice(0, 160);
+    descrizioneDelNegozio(name, store.store_description, fraseComeArriva());
   const img = store.store_logo ? [store.store_logo] : undefined;
 
   const cityHint = store.store_address ? ' a Piacenza' : '';

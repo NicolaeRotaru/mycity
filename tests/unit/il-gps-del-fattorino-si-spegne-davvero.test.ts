@@ -136,12 +136,19 @@ describe('la posizione del fattorino', () => {
     expect(accese.size, 'ordine annullato e la posizione continua a scriversi').toBe(0);
   }, 60000);
 
-  it('si spegne davvero quando il GPS perde il segnale, e non resta accesa dopo un secondo «Attiva GPS»', async () => {
+  // 5/11/2026 (sessione S02, scheda 2665) — Un calo di segnale passeggero (codice 2 o 3) non spegne
+  // più la condivisione: il telefono riprova da solo. Si spegne col permesso negato (codice 1), e
+  // allora si spegne davvero, sorveglianza compresa: è quello che questa prova controlla.
+  it('si spegne davvero quando il GPS perde il permesso, e non resta accesa dopo un secondo «Attiva GPS»', async () => {
     const accese = gpsFinto();
     await accendiPagina();
     await premiAttivaGps();
     const [prima] = Array.from(accese.values());
     await act(async () => prima.ko({ code: 3, message: 'Timeout' }));
+    await attendi();
+    expect(radice.textContent, 'un segnale lento non spegne la condivisione').toContain('Posizione condivisa');
+    expect(accese.size).toBe(1);
+    await act(async () => prima.ko({ code: 1, message: 'User denied Geolocation' }));
     await attendi();
     expect(radice.textContent).toContain('Attiva il GPS per il cliente');
     expect(accese.size, 'la pagina dice «spenta» ma la sorveglianza manda ancora la posizione').toBe(0);

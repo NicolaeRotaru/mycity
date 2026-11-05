@@ -37,6 +37,7 @@ vi.mock('@/lib/supabase/client', () => ({
         const catena: Record<string, unknown> = {
           eq: vi.fn(() => catena),
           neq: vi.fn(() => catena),
+          or: vi.fn(() => catena),
           then: (risolvi: (v: unknown) => unknown) => ordersCountMock().then(risolvi),
         };
         return { select: vi.fn(() => catena) };

@@ -26,6 +26,7 @@ import { formatPriceFromCents } from '@/lib/format';
 import { PAUSA_RIMBORSO_DA_DIVIDERE, SENZA_LA_PAUSA_DEL_CARRELLO } from '@/lib/stripe/webhook/rimborsi-da-fuori';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { bonificoDellaChiave } from '@/lib/stripe/elenco-dei-rimborsi';
+import { scriviCampanella } from '@/lib/ordini/campanella';
 
 export const runtime = 'nodejs';
 
@@ -83,7 +84,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // 16/10 (riesame) — `internal_dispute_status`: se l'ordine è fermo per un rimborso dal cruscotto
   // da dividere, chiudere il reclamo non toglie la pausa (più sotto).
   const COLONNE_ORDINE =
-    'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status, internal_dispute_status, stripe_refund_id';
+    'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status, internal_dispute_status, stripe_refund_id, seller_id';
   let ord: OrdineDaRimborsare | null = null;
   if (dispute.order_id) {
     const { data } = await conRipiegoSchema(
@@ -201,14 +202,22 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * ripresa: li' il segno del bonifico resta sull'ordine, e il reclamo resta chiuso
    * finche' non si finisce.
    */
-  const riapri = async () => {
-    if (ripresa) return;
-    await admin
+  // 5/11/2026 — Il ritorno indietro puo' cadere: allora il reclamo resta
+  // risolto senza soldi usciti, e «riprova» porterebbe a «gia' risolto».
+  // Torna false se non e' riuscito: chi amministra legge com'e' andata.
+  const riapri = async (): Promise<boolean> => {
+    if (ripresa) return true;
+    const { error: errRiapri } = await admin
       .from('disputes')
       .update({ status: dispute.status, resolved_by: null, resolved_at: null, refund_cents: null })
       .eq('id', params.id)
       .eq('status', body.status);
+    if (!errRiapri) return true;
+    logger.error('[disputes] reclamo non riaperto dopo un rimborso non partito', { disputeId: params.id, message: errRiapri.message });
+    return false;
   };
+  const RECLAMO_BLOCCATO =
+    `Il rimborso non è partito e il reclamo non si è potuto riaprire: risulta risolto senza soldi usciti. Riportalo a «${dispute.status}» prima di riprovare.`;
 
   /** Vero solo se i soldi sono davvero usciti verso il cliente. */
   let rimborsoEmesso = false;
@@ -222,14 +231,17 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     // vale SOLO per gli ordini carta: un rimborso COD non usa Stripe.
     const isCard = !!ord?.stripe_payment_intent;
     if (isCard && !isStripeConfigured()) {
-      await riapri();
+      if (!(await riapri())) return ApiErrors.internal(RECLAMO_BLOCCATO);
       return ApiErrors.unavailable('Stripe non configurato');
     }
     try {
       const res = await refundOrder({
         orderId: dispute.order_id,
         amountCents: importo,
-        reason: body.notes,
+        // 5/11/2026 (S05) — Stripe rifiuta i valori dei metadata oltre i 500
+        // caratteri: con note più lunghe il rimborso falliva e il reclamo
+        // tornava aperto. Le note intere restano sul reclamo e negli avvisi.
+        reason: body.notes.slice(0, 500),
         metadata: { dispute_id: dispute.id },
         idempotencyKey: `dispute_${dispute.id}`,
         notifyBuyer: true,
@@ -241,7 +253,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       rimborsoPieno = res.pieno;
     } catch (err) {
       logger.error('[disputes] refund failed', err);
-      await riapri();
+      if (!(await riapri())) return ApiErrors.internal(RECLAMO_BLOCCATO);
       // 17/10/2026 — Come la decisione sul reso: i due casi che chi decide deve
       // conoscere, e per tutto il resto una frase sola. Mai il testo grezzo dell'errore.
       if (err instanceof AccreditoGiaUscitoConAltroImporto) return ApiErrors.conflict(err.message);
@@ -328,7 +340,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   }
 
   // Notifica chi ha aperto il reclamo.
-  await admin.from('notifications').insert({
+  await scriviCampanella(admin, {
         // #33 — la categoria decide se la persona vuole ancora ricevere
         // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
         category: 'order',
@@ -341,7 +353,33 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
           : '✕ Reclamo respinto',
     body: body.notes,
     link: `/orders/${dispute.order_id}`,
-  });
+  }, { dove: 'dispute-resolve', ordine: dispute.order_id });
+
+  // 5/11/2026 (S05) — Anche il negozio sa come si è chiuso il reclamo a suo carico,
+  // e quanto è stato rimborsato al cliente: prima l'avviso partiva solo al cliente.
+  // 5/11/2026 (unione, collaudo della 190) — L'avviso va al negozio DELL'ORDINE, letto dal database:
+  // `against_id` lo scrive il browser del cliente quando apre il reclamo, e nessuna regola lo lega
+  // all'ordine. Senza ordine letto si ripiega su `against_id`, come prima.
+  const negozioDellOrdine = (ord as { seller_id?: string | null } | null)?.seller_id ?? dispute.against_id ?? null;
+  if (negozioDellOrdine) {
+    const esitoPerIlNegozio =
+      body.status === 'resolved_buyer'
+        ? 'Reclamo chiuso a favore del cliente'
+        : body.status === 'resolved_seller'
+          ? '✓ Reclamo chiuso a tuo favore'
+          : 'Reclamo respinto';
+    const rimborso = body.status === 'resolved_buyer' && importo && rimborsoEmesso
+      ? `\nRimborso al cliente: ${formatPriceFromCents(importo)}.`
+      : '';
+    // 5/11/2026 (unione) — Dalla stessa porta delle altre campanelle (S02): se la scrittura cade, lo dice.
+    await scriviCampanella(admin, {
+      category: 'order',
+      user_id: negozioDellOrdine,
+      title: `${esitoPerIlNegozio} · ordine #${String(dispute.order_id).slice(0, 6).toUpperCase()}`,
+      body: `${body.notes}${rimborso}`,
+      link: `/seller/orders/${dispute.order_id}`,
+    }, { dove: 'dispute/resolve (negozio)', ordine: String(dispute.order_id) });
+  }
 
   await writeAudit({
     actorId: user.id,

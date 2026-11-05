@@ -36,6 +36,7 @@ import TermsPage from '@/app/terms/page';
 import {
   COSA_TORNA,
   esempioDelCarrello,
+  SE_IL_PANE_NON_SI_CONSEGNA,
   fraseDelCaso,
   type CasoDelCarrello,
 } from '@/lib/legal/promessa-cliente-assente';
@@ -95,6 +96,12 @@ describe('ogni caso che i Termini dicono, l annullo lo rende davvero', () => {
     expect(s4).toContain(fraseDelCaso('carrello-di-un-negozio'));
     expect(s4).toContain(fraseDelCaso('altri-da-consegnare'));
     expect(s4).not.toMatch(/rimborsat[oa] (integralmente|per intero)|rimborso (integrale|completo|totale)/i);
+    // 5/11/2026 (S04, scheda 2228) — Le frasi giuste c'erano, ma una frase in più dopo il paragrafo
+    // («In ogni caso ti torna tutto… anche con altri Venditori») restava verde: promette il rimborso
+    // pieno che il caso «altri da consegnare» non dà. «Ti torna tutto» si dice una volta sola, nel
+    // caso del carrello di un negozio solo.
+    expect((s4.match(/ti torna(no)? tutt/gi) ?? []).length, '§4 promette due volte «ti torna tutto»').toBe(1);
+    expect(s4).not.toMatch(/in ogni caso ti torna/i);
   });
 
   it('l esempio di §4 e §6 ha le cifre che il codice rende: pane 15 + frutta 12, il forno rifiuta', async () => {
@@ -111,7 +118,8 @@ describe('ogni caso che i Termini dicono, l annullo lo rende davvero', () => {
     };
     expect(vere.tornaCents).toBeLessThan(vere.pagatoCents);
     expect(s4).toContain(esempioDelCarrello(vere));
-    expect(s6).toContain(esempioDelCarrello(vere));
+    // 5/11/2026 (S08, scheda 2288) — nel §6 l'esempio parte dal pane che non si consegna, non dal forno che rifiuta: le cifre sono le stesse.
+    expect(s6).toContain(esempioDelCarrello(vere, SE_IL_PANE_NON_SI_CONSEGNA));
 
     // Coi contanti la frutta alla porta costa quello che l'esempio dice.
     const contanti = carrello(['pane', 'frutta'], [1500, 1200], 'cod');

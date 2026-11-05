@@ -1,3 +1,5 @@
+// 5/11/2026 (S05, scheda 2617) — I fattorini dei casi hanno patente e polizza con la
+// scadenza: ora il server la pretende (prima la guardava solo il pannello).
 import { describe, it, expect, vi } from 'vitest';
 
 const ADMIN = { id: 'admin-1', email: 'a@x.com' };
@@ -81,7 +83,7 @@ describe('ricollaudo: un sospeso mai approvato non torna attivo senza documenti'
 
   it('approvato, sospeso, riattivato: torna attivo senza rifare i documenti', async () => {
     profilo = { id: 'rider-8', role: 'rider', full_name: 'Già bravo', legal_birth_date: null, approval_status: 'pending', is_approved: false,
-      kyc_id_doc_front_url: 'f', kyc_selfie_url: 's', rider_license_url: 'p', rider_insurance_url: 'rc' };
+      kyc_id_doc_front_url: 'f', kyc_selfie_url: 's', rider_license_url: 'p', rider_insurance_url: 'rc', rider_license_expires_on: '2099-01-01', rider_insurance_expires_on: '2099-01-01' };
     idBersaglio = 'rider-8';
     expect((await MODERA(req('approve'))).status).toBe(200);
     expect((await MODERA(req('suspend'))).status).toBe(200);

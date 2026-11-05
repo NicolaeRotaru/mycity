@@ -290,3 +290,35 @@ describe('la rete resta giu dopo il salvataggio dell ordine', () => {
     expect(alForno()).toHaveLength(1);
   });
 });
+
+/**
+ * 5/11/2026 (S04, scheda 2507) — Le prove guardavano solo un carrello di un negozio. Con due negozi,
+ * se la funzione muore dopo il SECONDO ordine (il primo coi suoi articoli, il secondo senza), una
+ * cassa che controllasse solo «c'è almeno un ordine con articoli» direbbe «fatto». Deve dire 409.
+ */
+describe('carrello di due negozi, il secondo ordine resta senza articoli', () => {
+  it('al tocco dopo niente «fatto», e nessun doppione', async () => {
+    const AL_FIORAIO = { sellerId: FIORAIO, items: [{ productId: '22222222-2222-4222-8222-222222222222', quantity: 1 }] };
+    let ordiniScritti = 0;
+    const arma = () => {
+      ordiniScritti++;
+      if (ordiniScritti === 2) {
+        stato.muoreDopoLOrdine = true;
+        stato.primaDellOrdine = null;
+        return;
+      }
+      stato.primaDellOrdine = arma;
+    };
+    stato.primaDellOrdine = arma;
+    const b = browser('cod-due-negozi', [AL_FORNO, AL_FIORAIO]);
+    await b.tocca();
+    expect(stato.ordini, 'la prova deve far nascere due ordini prima di morire').toHaveLength(2);
+    invecchia('cod-due-negozi');
+    const secondo = await b.tocca();
+    expect(secondo?.res.ok, `«fatto» con un ordine senza articoli: ${JSON.stringify(secondo?.corpo)}`).toBe(false);
+    expect(secondo?.res.status).toBe(409);
+    expect(b.carrelloPieno).toBe(true);
+    expect(stato.ordini, 'doppione sullo stesso carrello').toHaveLength(2);
+  });
+});
+

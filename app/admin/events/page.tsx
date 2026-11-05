@@ -12,6 +12,25 @@ import { ImageUrlField } from '@/components/ImageUrlField';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { campoDataOraPiacenza, istanteDaCampoPiacenza } from '@/lib/admin/etichette';
+
+/**
+ * 5/11/2026 (S05) — Il link del pulsante: un percorso interno («/search?…») o un
+ * indirizzo https. Prima il campo era type="url", che rifiuta proprio il
+ * percorso interno suggerito, e il salvataggio non partiva.
+ */
+function linkValido(v: string): boolean {
+  if (!v) return true;
+  if (v.startsWith('/') && !v.startsWith('//')) return true;
+  return /^https:\/\/[^\s/]+\.[^\s]+$/i.test(v);
+}
+
+/** Da un campo «ora di Piacenza» all'istante ISO; null se il campo non è una data. */
+function isoDaCampo(campo: string | undefined): string | null {
+  const d = campo ? istanteDaCampoPiacenza(campo) : null;
+  return d ? d.toISOString() : null;
+}
 
 /**
  * Admin: gestione Eventi MyCity.
@@ -40,16 +59,17 @@ type EventRow = {
 };
 
 function emptyForm(): Partial<EventRow> {
-  const now = new Date();
-  const start = new Date(now.getTime() + 3 * 86400_000);
-  start.setHours(18, 0, 0, 0);
-  const end = new Date(start.getTime() + 4 * 3600_000);
+  // Fra tre giorni alle 18:00 di Piacenza, per quattro ore. I campi datetime-local
+  // si leggono e si scrivono nell'ora di Piacenza (prima: toISOString = Greenwich).
+  const fraTreGiorni = campoDataOraPiacenza(new Date(Date.now() + 3 * 86400_000)).slice(0, 10);
+  const startCampo = `${fraTreGiorni}T18:00`;
+  const startIstante = istanteDaCampoPiacenza(startCampo) ?? new Date(Date.now() + 3 * 86400_000);
   return {
     title: '',
     description: '',
     cover_image_url: '',
-    starts_at: start.toISOString().slice(0, 16),
-    ends_at: end.toISOString().slice(0, 16),
+    starts_at: startCampo,
+    ends_at: campoDataOraPiacenza(new Date(startIstante.getTime() + 4 * 3600_000)),
     discount_percent: null,
     cta_label: 'Partecipa',
     cta_url: '',
@@ -61,13 +81,15 @@ export default function AdminEventsPage() {
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Partial<EventRow> | null>(null);
 
-  const { data: events = [] } = useQuery({
+  const { data: events = [], isError, refetch } = useQuery({
     queryKey: queryKeys.admin.events,
     queryFn: async (): Promise<EventRow[]> => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('marketplace_events')
         .select('*')
         .order('starts_at', { ascending: false });
+      // Una lettura caduta non è «Nessun evento».
+      if (error) throw error;
       return (data ?? []) as EventRow[];
     },
   });
@@ -78,15 +100,17 @@ export default function AdminEventsPage() {
         title: form.title?.trim(),
         description: form.description?.trim(),
         cover_image_url: form.cover_image_url?.trim() || null,
-        starts_at: new Date(form.starts_at as string).toISOString(),
-        ends_at: new Date(form.ends_at as string).toISOString(),
+        starts_at: isoDaCampo(form.starts_at),
+        ends_at: isoDaCampo(form.ends_at),
         discount_percent: form.discount_percent ?? null,
         cta_label: form.cta_label?.trim() || 'Partecipa',
         cta_url: form.cta_url?.trim() || null,
         status: form.status ?? 'scheduled',
       };
       if (!payload.title || !payload.description) throw new Error('Titolo e descrizione sono obbligatori');
+      if (!payload.starts_at || !payload.ends_at) throw new Error('Inizio e fine devono essere date valide');
       if (new Date(payload.ends_at) <= new Date(payload.starts_at)) throw new Error('Fine deve essere dopo inizio');
+      if (!linkValido(payload.cta_url ?? '')) throw new Error('Il link deve iniziare con «/» (pagina del sito) o con https://');
 
       if (form.id) {
         const { error } = await supabase.from('marketplace_events').update(payload).eq('id', form.id);
@@ -144,6 +168,16 @@ export default function AdminEventsPage() {
         action={<Button onClick={() => setEditing(emptyForm())} icon={Plus}>Nuovo evento</Button>}
       />
 
+      {isError && (
+        <ErrorState
+          variant="compact"
+          title="Non riesco a leggere gli eventi"
+          description="Non vuol dire che non ce ne siano: la lettura non è andata."
+          retry={() => { void refetch(); }}
+          supportHref={null}
+        />
+      )}
+
       {/* DESKTOP: tabella */}
       <div className="hidden md:block bg-white border border-cream-300 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
@@ -158,7 +192,7 @@ export default function AdminEventsPage() {
           </thead>
           <tbody className="divide-y divide-cream-100">
             {events.length === 0 ? (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-ink-500">Nessun evento.</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-ink-500">{isError ? '—' : 'Nessun evento.'}</td></tr>
             ) : events.map((ev) => (
               <tr key={ev.id} className="hover:bg-cream-50">
                 <td className="px-4 py-3 font-semibold text-ink-900">{ev.title}</td>
@@ -180,8 +214,8 @@ export default function AdminEventsPage() {
                   )}
                   <button onClick={() => setEditing({
                     ...ev,
-                    starts_at: ev.starts_at.slice(0, 16),
-                    ends_at: ev.ends_at.slice(0, 16),
+                    starts_at: campoDataOraPiacenza(ev.starts_at),
+                    ends_at: campoDataOraPiacenza(ev.ends_at),
                   })} className="text-primary-700 hover:text-primary-800 text-xs font-semibold inline-flex items-center gap-1">
                     <Pencil size={12} strokeWidth={2.4} /> Modifica
                   </button>
@@ -189,7 +223,7 @@ export default function AdminEventsPage() {
                     onClick={async () => {
                       const ok = await confirmDialog({
                         title: 'Eliminare evento?',
-                        message: 'I partecipanti RSVP verranno notificati.',
+                        message: 'L’evento sparisce dal sito. Gli iscritti non ricevono nessun avviso.',
                         confirmLabel: 'Elimina',
                         danger: true,
                       });
@@ -209,7 +243,7 @@ export default function AdminEventsPage() {
       {/* MOBILE: card con azioni sempre visibili */}
       <div className="md:hidden space-y-3">
         {events.length === 0 ? (
-          <div className="bg-white border border-cream-300 rounded-xl p-8 text-center text-ink-500">Nessun evento.</div>
+          <div className="bg-white border border-cream-300 rounded-xl p-8 text-center text-ink-500">{isError ? '—' : 'Nessun evento.'}</div>
         ) : events.map((ev) => (
           <div key={ev.id} className="bg-white border border-cream-300 rounded-xl p-4">
             <div className="flex items-start justify-between gap-2">
@@ -232,8 +266,8 @@ export default function AdminEventsPage() {
               )}
               <button onClick={() => setEditing({
                 ...ev,
-                starts_at: ev.starts_at.slice(0, 16),
-                ends_at: ev.ends_at.slice(0, 16),
+                starts_at: campoDataOraPiacenza(ev.starts_at),
+                ends_at: campoDataOraPiacenza(ev.ends_at),
               })} className="flex-1 min-w-[90px] inline-flex items-center justify-center gap-1 bg-primary-50 text-primary-700 font-semibold py-2 rounded-lg text-sm">
                 <Pencil size={14} strokeWidth={2.4} /> Modifica
               </button>
@@ -241,7 +275,7 @@ export default function AdminEventsPage() {
                 onClick={async () => {
                   const ok = await confirmDialog({
                     title: 'Eliminare evento?',
-                    message: 'I partecipanti RSVP verranno notificati.',
+                    message: 'L’evento sparisce dal sito. Gli iscritti non ricevono nessun avviso.',
                     confirmLabel: 'Elimina',
                     danger: true,
                   });
@@ -312,7 +346,7 @@ export default function AdminEventsPage() {
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-1">CTA URL (link evento)</label>
-                <input value={editing.cta_url ?? ''} onChange={(e) => setEditing({ ...editing, cta_url: e.target.value })} type="url" className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm" placeholder="/search?event=…" />
+                <input value={editing.cta_url ?? ''} onChange={(e) => setEditing({ ...editing, cta_url: e.target.value })} type="text" inputMode="url" className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm" placeholder="/search?event=… oppure https://…" />
               </div>
           </form>
         )}

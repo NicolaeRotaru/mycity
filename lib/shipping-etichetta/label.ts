@@ -12,6 +12,7 @@
  * Output: Buffer PDF pronto per stampa o download.
  */
 
+import { testoPerEtichetta } from './testo-winansi';
 import PDFDocument from 'pdfkit';
 import { formatPriceFromCents } from '@/lib/format';
 
@@ -63,22 +64,23 @@ export async function buildShippingLabel(data: LabelData): Promise<Buffer> {
 
       // Mittente
       doc.fontSize(7).font('Helvetica-Bold').fillColor('#666666').text('DA:');
-      doc.fontSize(10).font('Helvetica').fillColor('#000000').text(data.sellerName);
+      doc.fontSize(10).font('Helvetica').fillColor('#000000').text(testoPerEtichetta(data.sellerName));
       doc.fontSize(7).fillColor('#888888').text('Piacenza, Italia');
       doc.moveDown(0.6);
 
       // Destinatario (grande, ben leggibile)
       doc.fontSize(9).font('Helvetica-Bold').fillColor('#666666').text('A:');
-      doc.fontSize(13).font('Helvetica-Bold').fillColor('#000000').text(data.recipientName);
-      doc.fontSize(11).font('Helvetica').text(data.street);
-      doc.fontSize(11).font('Helvetica-Bold').text(`${data.zip} ${data.city}`);
+      // 5/11/2026 — Testo libero del cliente ridotto a WinAnsi (lib/shipping-etichetta/testo-winansi.ts).
+      doc.fontSize(13).font('Helvetica-Bold').fillColor('#000000').text(testoPerEtichetta(data.recipientName));
+      doc.fontSize(11).font('Helvetica').text(testoPerEtichetta(data.street));
+      doc.fontSize(11).font('Helvetica-Bold').text(testoPerEtichetta(`${data.zip} ${data.city}`));
       doc.moveDown(0.3);
-      doc.fontSize(9).font('Helvetica').fillColor('#666666').text(`Tel: ${data.phone}`);
+      doc.fontSize(9).font('Helvetica').fillColor('#666666').text(`Tel: ${testoPerEtichetta(data.phone)}`);
 
       if (data.notes) {
         doc.moveDown(0.4);
         doc.fontSize(8).fillColor('#000000').font('Helvetica-Bold').text('NOTE:');
-        doc.fontSize(8).font('Helvetica').text(data.notes.slice(0, 200));
+        doc.fontSize(8).font('Helvetica').text(testoPerEtichetta(data.notes.slice(0, 200)));
       }
 
       doc.moveDown(0.6);
@@ -110,7 +112,7 @@ export async function buildShippingLabel(data: LabelData): Promise<Buffer> {
       // Footer
       doc.moveDown(0.5);
       doc.fontSize(7).font('Helvetica').fillColor('#888888')
-        .text(`Generato: ${new Date().toLocaleString('it-IT')}`, { align: 'center' });
+        .text(`Generato: ${new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}`, { align: 'center' });
       doc.fontSize(6).fillColor('#aaaaaa')
         .text('mycity-marketplace.com', { align: 'center' });
 

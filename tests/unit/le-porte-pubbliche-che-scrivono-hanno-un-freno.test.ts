@@ -46,7 +46,8 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 import { GET as CONFERMA } from '@/app/api/newsletter/confirm/route';
-import { GET as DISISCRIVI } from '@/app/api/unsubscribe/route';
+// 5/11/2026 — La disiscrizione vera è la POST (la GET chiede la conferma): il freno sta lì.
+import { POST as DISISCRIVI } from '@/app/api/unsubscribe/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 
 function bussa(chiamata: (r: Request) => Promise<Response>, indirizzo: string) {
@@ -93,7 +94,8 @@ describe('la disiscrizione con un clic', () => {
     const res = await bussa(DISISCRIVI, '203.0.113.20');
 
     expect(scritture.disiscrizioni).toBe(chiamatePrima);
-    expect(res.status).toBe(307);
+    // 303: dopo una POST si apre la pagina dell'esito con una GET.
+    expect(res.status).toBe(303);
   });
 
   it('la prima disiscrizione passa e va a buon fine', async () => {

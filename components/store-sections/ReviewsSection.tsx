@@ -5,10 +5,16 @@ import Image from 'next/image';
 import { Star, User, BadgeCheck, ThumbsUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
-import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
 import type { SectionContext, SectionReview } from './SectionContext';
 import { RatingStars } from '@/components/ui/RatingStars';
+import { useQuery } from '@tanstack/react-query';
+import { useUtente } from '@/components/hooks/useUtente';
+import { riepilogoRecensioni } from './riepilogo-recensioni';
+
+/** Quante recensioni si vedono subito; le altre lette con «Mostra altre recensioni». */
+const RECENSIONI_SUBITO = 6;
 
 /**
  * Recensione singola arricchita con dati reali (store_reviews + profilo autore):
@@ -21,7 +27,7 @@ import { RatingStars } from '@/components/ui/RatingStars';
  *   bottone ribalta subito stato e conteggio, con rollback in caso di errore.
  *   L'utente non autenticato che vota riceve un invito ad accedere.
  */
-function ReviewItem({ r, accent }: { r: SectionReview; accent: string }) {
+function ReviewItem({ r, accent, userId, giaVotata }: { r: SectionReview; accent: string; userId: string | null; giaVotata: boolean }) {
   const author = r.author ?? null;
   const verified = r.order_id != null;
   // Ogni foto diventa un collegamento cliccabile sulla vetrina pubblica, e
@@ -41,26 +47,15 @@ function ReviewItem({ r, accent }: { r: SectionReview; accent: string }) {
     setCount(r.helpful_count ?? 0);
   }, [r.helpful_count]);
 
-  // Risolve se l'utente corrente ha già votato questa recensione (own-row).
+  // 5/11/2026 — Se l'utente ha già votato lo dice la sezione, con UNA lettura per tutte le
+  // recensioni visibili: prima ogni recensione chiedeva da sola chi era collegato e poi i suoi voti.
   useEffect(() => {
-    let active = true;
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !active) return;
-      const { data } = await supabase
-        .from('review_helpful')
-        .select('review_id')
-        .eq('review_id', r.id)
-        .eq('user_id', user.id)
-        .maybeSingle();
-      if (active) setHasVoted(!!data);
-    })();
-    return () => { active = false; };
-  }, [r.id]);
+    setHasVoted(giaVotata);
+  }, [giaVotata]);
 
   const toggleHelpful = async () => {
     if (pending) return;
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = userId ? { id: userId } : null;
     if (!user) {
       toast.error('Accedi per segnalare una recensione utile');
       return;
@@ -132,10 +127,11 @@ function ReviewItem({ r, accent }: { r: SectionReview; accent: string }) {
               className="block h-[72px] w-[72px] overflow-hidden rounded-lg bg-cream-100 transition-opacity hover:opacity-80"
             >
               <Image
-                src={sizedImage(url, 'thumb')}
+                src={url}
                 alt={`Foto ${i + 1} della recensione`}
                 width={72}
                 height={72}
+                loader={caricatoreFotoRemote}
                 className="h-full w-full object-cover"
                 loading="lazy"
               />
@@ -183,9 +179,37 @@ function ReviewItem({ r, accent }: { r: SectionReview; accent: string }) {
 /** Recensioni clienti (ultime), con titolo serif, media voti e item arricchiti. */
 export default function ReviewsSection({ ctx }: { ctx: SectionContext }) {
   const { reviews, accent } = ctx;
-  if (reviews.length === 0) return null;
+  // 5/11/2026 — Si leggevano 20 recensioni e se ne mostravano 6, senza modo di vedere le altre.
+  const [tutte, setTutte] = useState(false);
+  const mostrate = tutte ? reviews : reviews.slice(0, RECENSIONI_SUBITO);
+  const { userId } = useUtente();
+  const ids = mostrate.map((r) => r.id);
+  const { data: votate } = useQuery({
+    queryKey: ['review-helpful', 'mie', userId ?? '', ids.join(',')],
+    enabled: !!userId && ids.length > 0,
+    staleTime: 60_000,
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await supabase
+        .from('review_helpful')
+        .select('review_id')
+        .eq('user_id', userId!)
+        .in('review_id', ids);
+      if (error) throw error;
+      return new Set(((data ?? []) as { review_id: string }[]).map((d) => d.review_id));
+    },
+  });
 
-  const avgRating = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+  if (reviews.length === 0) {
+    // Un guasto non è «nessuna recensione»: lo si dice, invece di far sparire la sezione.
+    return ctx.recensioniInErrore ? (
+      <p role="status" className="rounded-2xl border border-cream-300 bg-white p-4 text-sm text-ink-600">
+        Non riusciamo a caricare le recensioni in questo momento. Riprova fra poco.
+      </p>
+    ) : null;
+  }
+
+  const riepilogo = riepilogoRecensioni(ctx);
+  const avgRating = riepilogo?.media ?? 0;
 
   return (
     <div>
@@ -203,15 +227,24 @@ export default function ReviewsSection({ ctx }: { ctx: SectionContext }) {
               e vuote ink-400. Una sola casa per la regola. */}
           <RatingStars rating={avgRating} size={16} />
           <span className="text-sm font-medium text-ink-600">
-            {avgRating.toFixed(1).replace('.', ',')} ({reviews.length})
+            {avgRating.toFixed(1).replace('.', ',')} ({riepilogo?.totale ?? reviews.length})
           </span>
         </div>
       </div>
       <ul className="space-y-3">
-        {reviews.slice(0, 6).map((r) => (
-          <ReviewItem key={r.id} r={r} accent={accent} />
+        {mostrate.map((r) => (
+          <ReviewItem key={r.id} r={r} accent={accent} userId={userId} giaVotata={votate?.has(r.id) ?? false} />
         ))}
       </ul>
+      {!tutte && reviews.length > RECENSIONI_SUBITO && (
+        <button
+          type="button"
+          onClick={() => setTutte(true)}
+          className="mt-3 text-sm font-semibold text-primary-700 hover:text-primary-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 rounded"
+        >
+          Mostra altre recensioni ({reviews.length - RECENSIONI_SUBITO})
+        </button>
+      )}
     </div>
   );
 }

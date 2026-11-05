@@ -1,4 +1,5 @@
 import { Check, X } from 'lucide-react';
+import { etichettaPronto } from '@/lib/order-status';
 
 type Props = {
   status: string;
@@ -8,6 +9,8 @@ type Props = {
   pickedUpAt?: string | null;
   deliveredAt?: string | null;
   canceledAt?: string | null;
+  /** 5/11/2026 — L'ordine si ritira in negozio? Decide l'etichetta di READY, come la targhetta. */
+  ritiroInNegozio?: boolean | null;
   className?: string;
 };
 
@@ -36,7 +39,9 @@ export default function OrderTimeline(p: Props) {
   const steps: { label: string; at?: string | null }[] = [
     { label: 'Ordine ricevuto', at: p.createdAt },
     { label: 'Accettato dal negozio', at: p.acceptedAt },
-    { label: 'Pronto per il ritiro', at: p.readyAt },
+    // 5/11/2026 — Dalla fonte unica (`etichettaPronto`): era «Pronto per il ritiro» scritto a mano, e
+    // sulla stessa pagina la targhetta diceva «Pronto per il rider».
+    { label: etichettaPronto(!!p.ritiroInNegozio), at: p.readyAt },
     { label: 'Ritirato dal rider', at: p.pickedUpAt },
     { label: 'Consegnato', at: p.deliveredAt },
   ];

@@ -92,10 +92,13 @@ describe('POST /api/contact', () => {
     expect(blocked.status).toBe(429);
   });
 
-  it('returns 500 when DB insert fails', async () => {
+  // 5/11/2026 (S08, scheda 2017) — Col database che risponde con errore non si
+  // risponde più 500 «Errore interno»: si prova l'inoltro per email e, se non
+  // c'è dove inoltrare, 503 con la strada (come quando manca la chiave).
+  it('DB insert fallito e nessun inoltro possibile: 503 con la strada, non 500 muto', async () => {
     insertMock.mockResolvedValueOnce({ error: { message: 'DB down' } });
     const res = await POST(makeReq(validBody, '5.0.1.7'));
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(503);
   });
 
   it('email sending is best-effort (non blocca su throw)', async () => {

@@ -14,7 +14,7 @@ import { logger } from '@/lib/logger';
  * il tempo di arrivo non si poteva stimare. Il fattorino andava a naso.
  *
  * Qui il server se le calcola da sé. NON entrano nel prezzo — quello resta
- * come oggi, deciso dagli indirizzi salvati o dalla tariffa fissa: servono a
+ * deciso dalla consegna (che non dipende dalla distanza): servono a
  * far vedere dove va la spesa e quanto manca.
  *
  * Stessa fonte, stesse regole e stesso timeout della rotta /api/geocode: la

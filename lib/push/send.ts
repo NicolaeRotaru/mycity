@@ -84,6 +84,7 @@ export type PushSendResult = {
  * davvero, e sullo stesso database ci sono i clienti veri che navigano.
  *
  * Restituisce una mappa persona → sue iscrizioni. Chi non ne ha non compare.
+ * Se la lettura non riesce, lancia.
  */
 export async function iscrizioniPerUtenti(
   supa: SupabaseClient,
@@ -91,10 +92,13 @@ export async function iscrizioniPerUtenti(
 ): Promise<Map<string, SubRow[]>> {
   const mappa = new Map<string, SubRow[]>();
   if (userIds.length === 0) return mappa;
-  const { data } = await supa
+  const { data, error } = await supa
     .from('push_subscriptions')
     .select('id, user_id, endpoint, p256dh, auth')
     .in('user_id', userIds);
+  // 5/11/2026 — Una lettura caduta non è «nessuno iscritto»: con la mappa vuota il giro segnava
+  // come mandate tutte le notifiche del lotto. Si lancia, e chi chiama non segna niente.
+  if (error) throw new Error(`iscrizioni push non lette: ${error.message}`);
   for (const riga of (data ?? []) as Array<SubRow & { user_id: string }>) {
     const gia = mappa.get(riga.user_id);
     if (gia) gia.push(riga);

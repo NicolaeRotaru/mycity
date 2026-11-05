@@ -36,7 +36,8 @@ async function handler(req: NextRequest, admin_user: { id: string }, params: { i
 
   await writeAudit({
     actorId: admin_user.id,
-    action: 'kyc.approve', // l'elenco delle azioni non ha «lettura»: si usa la voce KYC con l'esito nei dettagli
+    // 5/11/2026 — Guardare codice fiscale e partita IVA non è approvarli: azione sua.
+    action: 'kyc.view',
     targetTable: 'profiles',
     targetId,
     metadata: { evento: 'lettura_dati_identita', campi: ['legal_fiscal_code', 'business_vat_number'] },

@@ -158,7 +158,9 @@ describe('POST /api/cron/process-deletions', () => {
     const json = await res.json();
     expect(json.processed).toBe(0);
     expect(json.failed).toBe(1);
-    expect(json.errors[0]).toContain('u1');
+    // 5/11/2026 — Nel corpo solo il conto: l'identificativo della persona resta nel registro.
+    expect(json.errors).toBe(1);
+    expect(JSON.stringify(json)).not.toContain('u1');
   });
 
   it('un azzeramento che non passa non ferma la cancellazione dell account', async () => {

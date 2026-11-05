@@ -179,7 +179,15 @@ describe('«Traduci» sul catalogo: un lotto di traduzione non riscrive l\'itali
         if (tabella === 'catalog_ai_jobs') {
           return {
             select: () => ({ eq: () => ({ single: async () => ({ data: lavoro, error: null }) }) }),
-            update: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }),
+            update: () => {
+              // S10 (5/11/2026) — la rotta prenota il lavoro con un update
+              // condizionato che restituisce le righe toccate (.select).
+              const c: Record<string, unknown> = {};
+              c.eq = () => c;
+              c.select = async () => ({ data: [{ id: 'job-1' }], error: null });
+              c.then = (ok: (x: unknown) => unknown) => Promise.resolve({ error: null }).then(ok);
+              return c;
+            },
           };
         }
         if (tabella === 'categories') {

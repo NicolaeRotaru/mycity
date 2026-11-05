@@ -95,12 +95,18 @@ export function fraseSulleDichiarazioni(etichette: readonly string[]): string | 
  * proposta lasciata fuori.
  */
 export function avvisoDopoLaDettatura(opts: {
-  esito: Pick<EsitoPatchModulo, 'cambiati' | 'inSospeso' | 'dichiarazioniDellaCategoria'>;
+  esito: Pick<EsitoPatchModulo, 'cambiati' | 'inSospeso' | 'dichiarazioniDellaCategoria' | 'senzaCategoria'>;
   dettato: string;
   risposta: unknown;
 }): AvvisoDellaDettatura {
   const { tono, testo } = avvisoDopoIlPatch(opts.esito, TESTI_DELLA_DETTATURA);
-  const dichiarazioni = fraseSulleDichiarazioni(opts.esito.dichiarazioniDellaCategoria);
+  // 1701 — Senza categoria non si sa quali dichiarazioni servono: si ricorda lo stesso
+  // che allergeni e ingredienti non li scrive l'assistente.
+  const dichiarazioni =
+    fraseSulleDichiarazioni(opts.esito.dichiarazioniDellaCategoria) ??
+    (opts.esito.senzaCategoria
+      ? "Se è un alimento, allergeni e ingredienti non li scrive l'assistente: li scrivi tu dopo aver scelto la categoria."
+      : null);
   const lasciatoFuori = opts.esito.inSospeso > 0;
   const risposta =
     !lasciatoFuori && typeof opts.risposta === 'string' ? opts.risposta.trim().slice(0, MAX_RISPOSTA) : '';

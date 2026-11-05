@@ -40,7 +40,11 @@ describe('i dati strutturati del prodotto stanno nel guscio, non nella pagina', 
     const guscio = readFileSync(GUSCIO, 'utf8');
     // Dichiarare «disponibile» un prodotto esaurito è una segnalazione a Google
     // che poi fa arrivare gente su una pagina che non può vendere.
-    expect(guscio).toContain('OutOfStock');
-    expect(guscio).toContain('stock');
+    // 5/11/2026 (S09, scheda 565) — la regola è passata in `disponibilitaPerGoogle`, condivisa
+    // e provata da sola (stock nullo = scorte illimitate = InStock): il guscio la usa.
+    const regola = readFileSync('lib/queries/metadati-vetrina.ts', 'utf8');
+    expect(guscio).toContain('disponibilitaPerGoogle(product)');
+    expect(regola).toContain('OutOfStock');
+    expect(regola).toContain('stock');
   });
 });

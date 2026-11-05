@@ -21,9 +21,9 @@ export type IngressiSpedizione = {
  * Qui c'erano la soglia dei 30 euro per negozio e la tariffa a distanza (2,50 € più 1,20 € al
  * chilometro, 4,90 € senza coordinate). Sotto i 30 euro il cliente pagava quella spedizione PIÙ i
  * 3 euro di consegna: 20 euro di spesa a 5 km facevano 11,50 € di consegna. Nicola ha firmato
- * un'altra promessa (scelta 8 della carta #209, 26/10): il cliente paga solo la consegna,
- * `PLATFORM_DELIVERY_FEE_CENTS` per negozio, sempre — la aggiunge `prezziDelCarrello` — e col
- * ritiro in negozio niente. La prova è tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx.
+ * un'altra promessa (scelta 8 della carta #209, 26/10): il cliente paga solo la consegna — dal
+ * 29/10 una sola per tutto il carrello, base `PLATFORM_DELIVERY_FEE_CENTS` più gli euro di
+ * `vociDellaConsegna`; la aggiunge `prezziDelCarrello` — e col ritiro in negozio niente. La prova è tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx.
  *
  * La funzione resta perché è il punto unico da cui passa la spedizione: la colonna
  * `shipping_cost` dell'ordine e la riga «Spedizione» di Stripe nascono da qui. Se un giorno
@@ -56,9 +56,10 @@ export function shippingCentsFor(opts: Parameters<typeof shippingForEuro>[0]): n
  * spedizione gratis l'unica cosa disponibile per pagarlo erano i 3 euro di fee
  * di consegna: oltre i 420 metri non bastavano più.
  *
- * Adesso il compenso è FISSO (Nicola, 20/8/2026). La distanza non c'entra più:
- * la fee di consegna che la piattaforma trattiene copre il compenso da sola,
- * su ogni ordine, anche quando il cliente non paga spedizione.
+ * Adesso il compenso è FISSO (Nicola, 20/8/2026). La distanza non c'entra più.
+ * 5/11/2026 — La consegna non lo copre sempre da sola: col codice «Spedizione
+ * gratuita» la consegna scende fino a zero e il compenso lo copre la commissione
+ * del negozio (`consegnaDaPagareCents` in lib/ordini/prezzi.ts).
  *
  * Con il ritiro in negozio non c'è consegna, quindi non c'è compenso.
  *
@@ -68,8 +69,12 @@ export function shippingCentsFor(opts: Parameters<typeof shippingForEuro>[0]): n
  */
 export function compensoRiderCents(opts: {
   pickupInStore: boolean;
-  /** Questo ordine è un negozio in più del giro, non quello che porta la base. */
-  negozioInPiu?: boolean;
+  /**
+   * Questo ordine è un negozio in più del giro, non quello che porta la base.
+   * 5/11/2026 — Obbligatorio, senza valore di comodo: dimenticarlo dava 3 € invece di 1 € e
+   * faceva superare l'addebito ai bonifici. Chi chiama lo dice sempre in chiaro.
+   */
+  negozioInPiu: boolean;
 }): number {
   if (opts.pickupInStore) return 0;
   return opts.negozioInPiu ? COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS : COMPENSO_RIDER_CENTS;

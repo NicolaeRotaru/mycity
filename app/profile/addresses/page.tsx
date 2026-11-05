@@ -79,14 +79,27 @@ export default function AddressesPage() {
 
       const payload = { ...form, lat, lng, user_id: user.id };
 
-      if (form.is_default) {
-        // togli default agli altri
-        await supabase.from('user_addresses').update({ is_default: false }).eq('user_id', user.id);
-      }
+      // 5/11/2026 — Le scritture non guardavano l'errore (supabase non lancia: restituisce
+      // { error }): il sito diceva «Indirizzo salvato» e svuotava il modulo anche quando
+      // non lo era. E il predefinito si toglieva agli altri PRIMA di salvare questo: se il
+      // salvataggio cadeva, il cliente restava senza nessun indirizzo predefinito.
+      let salvatoId: string | null = editing;
       if (editing) {
-        await supabase.from('user_addresses').update(payload).eq('id', editing);
+        const { error } = await supabase.from('user_addresses').update(payload).eq('id', editing);
+        if (error) throw error;
       } else {
-        await supabase.from('user_addresses').insert(payload);
+        const { data: nuovo, error } = await supabase.from('user_addresses').insert(payload).select('id').single();
+        if (error) throw error;
+        salvatoId = (nuovo as { id: string } | null)?.id ?? null;
+      }
+      if (form.is_default && salvatoId) {
+        // togli default agli altri, solo dopo che questo è salvato
+        const { error } = await supabase
+          .from('user_addresses')
+          .update({ is_default: false })
+          .eq('user_id', user.id)
+          .neq('id', salvatoId);
+        if (error) throw error;
       }
     },
     onSuccess: () => {
@@ -101,12 +114,15 @@ export default function AddressesPage() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      await supabase.from('user_addresses').delete().eq('id', id);
+      const { error } = await supabase.from('user_addresses').delete().eq('id', id);
+      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.addresses.all });
       toast.success('Indirizzo eliminato');
     },
+    // 5/11/2026 — Il verde compariva anche quando l'eliminazione non era riuscita.
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const startEdit = (a: Addr) => {

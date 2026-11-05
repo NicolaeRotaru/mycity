@@ -41,7 +41,8 @@ describe('i minuti della veloce non sono una promessa fissa', () => {
     expect(html).toMatch(/Ogni negozio in più/);
     expect(html).toMatch(/Spesa piccola/);
     expect(html).toMatch(/Consegna veloce/);
-    expect(html).toMatch(/3,00\s*€ il giro \+ 1,00\s*€ a negozio in più/);
+    // 5/11/2026 (S05, scheda 2264) — una grafia sola per il compenso nella pagina: «3 €», non «3,00 €».
+    expect(html).toMatch(/3\s*€ il giro \+ 1\s*€ a negozio in più/);
     expect(html).toMatch(/fanno\s*8,00\s*€/);
   });
 });

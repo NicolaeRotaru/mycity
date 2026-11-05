@@ -259,7 +259,8 @@ describe("l'email porta i collegamenti, non solo il testo del pannello", () => {
       'href="https://www.mycity-di-prova.it/contact"',
     );
     expect(lettere[0].html, 'manca la pagina dove vede lo stato della richiesta').toContain(
-      'href="https://www.mycity-di-prova.it/profile/settings"',
+      // 5/11/2026 (S08, scheda 2027) — la scheda dove stanno motivo e «Annulla eliminazione».
+      'href="https://www.mycity-di-prova.it/profile/settings?tab=danger"',
     );
     expect(lettere[0].html).toContain('Garante');
   });

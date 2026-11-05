@@ -84,7 +84,18 @@ function anelloDiSistema(): { colore: string; staccato: boolean } {
   const css = readFileSync('app/globals.css', 'utf8');
   const blocco = css.match(/:focus-visible\s*\{([^}]*)\}/);
   if (!blocco) throw new Error('In app/globals.css non c\'è più la regola del fuoco: questa prova non sa più cosa confrontare');
-  const colore = blocco[1].match(/outline:[^;]*?(#[0-9A-Fa-f]{6})/)?.[1];
+  // S10 (5/11/2026) — La regola ora usa il token (`var(--focus-outline)`):
+  // si seguono i var() fino al colore scritto per esteso, cosi' la prova
+  // continua a misurare lo stacco invece di spegnersi.
+  let regola = blocco[1];
+  for (let giri = 0; giri < 5 && /var\(--[\w-]+\)/.test(regola); giri++) {
+    regola = regola.replace(/var\((--[\w-]+)\)/g, (_t, nome: string) => {
+      const def = css.match(new RegExp(`${nome}\\s*:\\s*([^;]+);`));
+      if (!def) throw new Error(`Il token ${nome} non è definito in app/globals.css`);
+      return def[1].trim();
+    });
+  }
+  const colore = regola.match(/outline:[^;]*?(#[0-9A-Fa-f]{6})/)?.[1];
   if (!colore) throw new Error(`Non riconosco il colore del fuoco in: ${blocco[1].trim()}`);
   return { colore, staccato: /outline-offset:\s*[1-9]/.test(blocco[1]) };
 }

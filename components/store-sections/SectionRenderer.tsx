@@ -1,5 +1,6 @@
 'use client';
 
+import { riepilogoRecensioni } from './riepilogo-recensioni';
 import { useId, useRef, useState } from 'react';
 import type { SiteSection } from '@/lib/store-site';
 import type { SectionContext } from './SectionContext';
@@ -113,7 +114,7 @@ const TAB_ORDER: TabKey[] = ['prodotti', 'info', 'recensioni'];
  * "Info & orari" non ha un conteggio sensato → resta senza badge.
  */
 function tabLabel(t: TabKey, ctx: SectionContext, productCount: number | null): string {
-  if (t === 'recensioni') return `${TAB_LABEL.recensioni} · ${ctx.reviews.length}`;
+  if (t === 'recensioni') return `${TAB_LABEL.recensioni} · ${riepilogoRecensioni(ctx)?.totale ?? 0}`;
   if (t === 'prodotti' && productCount !== null) return `${TAB_LABEL.prodotti} · ${productCount}`;
   return TAB_LABEL[t];
 }

@@ -1,3 +1,5 @@
+// 5/11/2026 (S05, scheda 2617) — I fattorini dei casi hanno patente e polizza con la
+// scadenza: ora il server la pretende (prima la guardava solo il pannello).
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 /**
@@ -71,7 +73,7 @@ beforeEach(() => {
   erroreNotifica = null;
   idBersaglio = 'rider-1';
   // 1/11/2026: l'approvazione ora pretende i documenti del fattorino (regole-approvazione).
-  profiloBersaglio = { id: 'rider-1', role: 'rider', store_name: null, full_name: 'Luca', legal_birth_date: null, kyc_id_doc_front_url: 'f', kyc_selfie_url: 's', rider_license_url: 'p', rider_insurance_url: 'rc' };
+  profiloBersaglio = { id: 'rider-1', role: 'rider', store_name: null, full_name: 'Luca', legal_birth_date: null, kyc_id_doc_front_url: 'f', kyc_selfie_url: 's', rider_license_url: 'p', rider_insurance_url: 'rc', rider_license_expires_on: '2099-01-01', rider_insurance_expires_on: '2099-01-01' };
 });
 
 describe('il rifiuto fa partire l orologio dei 90 giorni', () => {
@@ -84,6 +86,35 @@ describe('il rifiuto fa partire l orologio dei 90 giorni', () => {
     expect(patch.approved_at, 'il rifiuto non scrive approved_at: i documenti del respinto non scadono mai').toBeTruthy();
     expect(Date.parse(String(patch.approved_at))).toBeGreaterThanOrEqual(prima - 1000);
   });
+});
+
+/**
+ * 5/11/2026 (S04, scheda 2102) — Due errori passavano: la prova del rifiuto rifiutava solo un
+ * fattorino (se approved_at si scrivesse solo per i fattorini, verde), e nessuna prova leggeva il
+ * testo della notifica (un fattorino che tornasse a ricevere «Il tuo negozio è stato approvato»,
+ * verde).
+ */
+describe('il rifiuto e gli avvisi valgono per negozi e fattorini, ognuno coi suoi testi', () => {
+  it('rifiutare un negozio scrive anche lì approved_at = adesso', async () => {
+    idBersaglio = 'seller-1';
+    profiloBersaglio = { id: 'seller-1', role: 'seller', store_name: 'Pane', full_name: null, legal_birth_date: null };
+    const prima = Date.now();
+    const r = await MODERA(richiesta('reject', 'documenti incompleti'));
+    expect(r.status).toBe(200);
+    expect(aggiornamenti[0].approval_status).toBe('rejected');
+    expect(Date.parse(String(aggiornamenti[0].approved_at))).toBeGreaterThanOrEqual(prima - 1000);
+  });
+
+  it('il fattorino approvato legge del suo profilo da fattorino, mai del «negozio»', async () => {
+    const r = await MODERA(richiesta('approve'));
+    expect(r.status).toBe(200);
+    expect(notifiche).toHaveLength(1);
+    const testo = `${notifiche[0].title} ${notifiche[0].body}`;
+    expect(testo).toMatch(/fattorino/i);
+    expect(testo).not.toMatch(/negozio/i);
+    expect(notifiche[0].link).toBe('/rider');
+  });
+
 });
 
 describe('il bersaglio si controlla', () => {

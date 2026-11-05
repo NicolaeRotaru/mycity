@@ -14,7 +14,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  * Qui si cercano le coordinate fra gli indirizzi SALVATI della persona,
  * confrontando via, città e CAP. Se l'indirizzo di consegna è uno dei suoi, le
  * coordinate sono quelle registrate nel database. Se non lo è, non si usa nulla:
- * si ricade sulla tariffa fissa, che non è manovrabile da fuori.
+ * si resta senza coordinate (la spedizione oggi vale zero comunque), e niente è manovrabile da fuori.
  */
 
 export type IndirizzoConsegna = {

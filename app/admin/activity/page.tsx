@@ -91,7 +91,7 @@ export default function AdminActivityPage() {
   const [hideBots, setHideBots] = useState(true);
 
   // ---- Feed principale (live) -------------------------------------------------
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: rows = [], isLoading, isError: feedCaduto } = useQuery({
     queryKey: queryKeys.admin.activity({ category, hideBots }),
     refetchInterval: 15_000,
     queryFn: async (): Promise<EventRow[]> => {
@@ -102,29 +102,52 @@ export default function AdminActivityPage() {
         .limit(300);
       if (category) q = q.eq('category', category);
       if (hideBots) q = q.eq('is_bot', false);
-      const { data } = await q;
+      const { data, error } = await q;
+      // Una lettura caduta non è «nessuna visita»: si dice che non si sa.
+      if (error) throw error;
       return (data ?? []) as unknown as EventRow[];
     },
   });
 
   // ---- Sintesi ultime 24h (aggregazione client-side) --------------------------
-  const { data: recent = [] } = useQuery({
+  const { data: recent = [], isError: sintesiCaduta } = useQuery({
     queryKey: queryKeys.admin.activitySummary,
     refetchInterval: 30_000,
     queryFn: async (): Promise<EventRow[]> => {
       const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('activity_events')
         .select(SELECT)
         .gte('created_at', since)
         .order('created_at', { ascending: false })
         .limit(3000);
+      if (error) throw error;
       // Il taglio a 3000 righe resta (è una pagina, non un rendiconto), ma va
       // detto: prima le 24 ore sembravano complete anche quando erano un
       // troncone. Chi legge deve sapere che sta guardando un campione.
       return (data ?? []) as unknown as EventRow[];
     },
   });
+
+  // Il registro sta salvando? Senza la chiave di servizio /api/track risponde
+  // ma non scrive niente: qui lo si dice, invece di mostrare zero visitatori.
+  const { data: registro } = useQuery({
+    queryKey: ['admin', 'registro-visite'],
+    staleTime: 60_000,
+    queryFn: async (): Promise<'acceso' | 'spento' | 'non_so'> => {
+      try {
+        const res = await fetch('/api/admin/registro-visite');
+        // 503 = la chiave di servizio manca: è proprio il registro spento.
+        if (res.status === 503) return 'spento';
+        if (!res.ok) return 'non_so';
+        const j = (await res.json()) as { data?: { acceso?: boolean } };
+        return j.data?.acceso === false ? 'spento' : j.data?.acceso === true ? 'acceso' : 'non_so';
+      } catch {
+        return 'non_so';
+      }
+    },
+  });
+  const numeriNonLetti = sintesiCaduta;
 
   const summary = useMemo(() => {
     const realtime = recent.filter((r) => !r.is_bot);
@@ -241,13 +264,24 @@ export default function AdminActivityPage() {
         sub="Flusso live degli eventi del marketplace: visite (anche anonime), accessi, ordini, modifiche. Aggiornamento automatico ogni 15s."
       />
 
+      {registro === 'spento' && (
+        <div role="alert" className="rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-3 text-sm text-secondary-800">
+          <strong>Registro visite spento:</strong> le visite e gli accessi non vengono salvati (manca la chiave di servizio sul server). Gli zeri qui sotto non vogliono dire che non entra nessuno.
+        </div>
+      )}
+      {(feedCaduto || sintesiCaduta) && (
+        <div role="alert" className="rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-3 text-sm text-secondary-800">
+          <strong>Non sono riuscito a leggere</strong> il registro delle attività: i numeri e l&apos;elenco qui sotto non sono affidabili. Riprovo da solo fra pochi secondi.
+        </div>
+      )}
+
       {/* KPI in tempo reale */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <Kpi icon={Radio} label="Online ora" value={summary.online} color="olive" hint="ultimi 5 min" />
-        <Kpi icon={Users} label="Visitatori 24h" value={summary.uniqueVisitors} color="primary" hint={recent.length >= 3000 ? 'unici — campione: ultime 3000 righe' : 'unici'} />
-        <Kpi icon={LogIn} label="Accessi 24h" value={summary.logins} color="accent" />
-        <Kpi icon={Globe} label="Viste anonime" value={summary.anonViews} color="primary" />
-        <Kpi icon={Activity} label="Viste loggati" value={summary.loggedInViews} color="secondary" />
+        <Kpi icon={Radio} label="Online ora" value={numeriNonLetti ? '—' : summary.online} color="olive" hint="ultimi 5 min" />
+        <Kpi icon={Users} label="Visitatori 24h" value={numeriNonLetti ? '—' : summary.uniqueVisitors} color="primary" hint={recent.length >= 3000 ? 'unici — campione: ultime 3000 righe' : 'unici'} />
+        <Kpi icon={LogIn} label="Accessi 24h" value={numeriNonLetti ? '—' : summary.logins} color="accent" />
+        <Kpi icon={Globe} label="Viste anonime" value={numeriNonLetti ? '—' : summary.anonViews} color="primary" />
+        <Kpi icon={Activity} label="Viste loggati" value={numeriNonLetti ? '—' : summary.loggedInViews} color="secondary" />
       </div>
 
       {/* Categorie (clic per filtrare) */}
@@ -353,6 +387,10 @@ export default function AdminActivityPage() {
       {tab === 'feed' ? (
         isLoading ? (
           <div className="space-y-2">{[...Array(8)].map((_, i) => <div key={i} className="h-14 rounded-xl skeleton" />)}</div>
+        ) : feedCaduto && rows.length === 0 ? (
+          <div className="bg-white border border-cream-300 rounded-2xl p-12 text-center">
+            <p className="text-ink-600 font-medium">Non sono riuscito a leggere gli eventi</p>
+          </div>
         ) : filteredRows.length === 0 ? (
           <div className="bg-white border border-cream-300 rounded-2xl p-12 text-center">
             <Clock size={36} className="mx-auto text-ink-300 mb-3" />
@@ -375,7 +413,7 @@ export default function AdminActivityPage() {
             <span className="col-span-2">Ultima</span>
           </div>
           <div className="divide-y divide-cream-200">
-            {visitors.length === 0 ? <div className="p-8 text-center text-ink-500 text-sm">Nessun visitatore.</div> :
+            {visitors.length === 0 ? <div className="p-8 text-center text-ink-500 text-sm">{sintesiCaduta ? 'Non sono riuscito a leggere i visitatori.' : 'Nessun visitatore.'}</div> :
               visitors.map((v) => (
                 <div key={v.key} className="px-4 py-3 grid md:grid-cols-12 gap-1 md:gap-2 text-sm items-center hover:bg-cream-50">
                   <div className="md:col-span-3 min-w-0">
@@ -404,7 +442,7 @@ export default function AdminActivityPage() {
   );
 }
 
-function Kpi({ icon: Icon, label, value, color, hint }: { icon: typeof Eye; label: string; value: number; color: Tone; hint?: string }) {
+function Kpi({ icon: Icon, label, value, color, hint }: { icon: typeof Eye; label: string; value: number | string; color: Tone; hint?: string }) {
   const t = TONE[color];
   return (
     <div className={`bg-white border-2 ${t.kpiBorder} rounded-xl p-4`}>

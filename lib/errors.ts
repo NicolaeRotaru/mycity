@@ -170,7 +170,7 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
       // wifi mentre il guasto era dall'altra parte. Sta prima apposta.
       if (/canceling statement|statement timeout/i.test(e.message)) {
         trackErrorShown('tempo_scaduto', e.message, context?.page);
-        return 'Ci ha messo troppo e si e\' fermato. Riprova fra qualche secondo.';
+        return 'Ci ha messo troppo e si è fermato. Riprova fra qualche secondo.';
       }
       if (/network|fetch|timeout|aborted/i.test(e.message)) {
         trackErrorShown('network', e.message, context?.page);
@@ -226,7 +226,7 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
       // sempre un numero con la virgola sbagliata o una data storta.
       if (/invalid input\b/i.test(e.message)) {
         trackErrorShown('valore_non_valido', e.message, context?.page);
-        return 'Uno dei dati inseriti non e\' nel formato giusto: controlla numeri e date, poi riprova.';
+        return 'Uno dei dati inseriti non è nel formato giusto: controlla numeri e date, poi riprova.';
       }
       trackErrorShown(e.code ?? 'unknown', e.message, context?.page);
       // Strip technical details
@@ -248,7 +248,11 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
         cleaned.length > 0 &&
         cleaned.length < 200 &&
         !cleaned.includes('\n') &&
-        /^[a-zA-ZÀ-ſ]/.test(cleaned) &&
+        // 5/11/2026 — Anche una cifra, le virgolette o l'apostrofo: i rifiuti in cassa cominciano col
+        // nome del negozio («3 Archi», «'L Furnè», «Da Mario» fra virgolette) e finivano nel generico.
+        /^[a-zA-ZÀ-ſ0-9«"'‘’“]/.test(cleaned) &&
+        // ...ma non un codice tecnico in testa («500 Internal Server Error», «23505 …»).
+        !/^\d{3,5}\b/.test(cleaned) &&
         // ...e non parla come un motore. Vedi PAROLE_DEL_MOTORE in cima al file.
         !PAROLE_DEL_MOTORE.test(cleaned)
       ) {

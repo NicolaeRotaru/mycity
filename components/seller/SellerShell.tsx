@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -147,7 +147,8 @@ function NotifPopover({
   const pannelloRef = useRef<HTMLDivElement>(null);
   // Il pannello esiste solo da aperto: il montaggio e' l'apertura, e lo
   // smontaggio riporta il fuoco sul campanello.
-  useBottomSheetA11y(true, pannelloRef, triggerRef, onClose);
+  // È una tendina, non un foglio a tutto schermo: la pagina sotto continua a scorrere.
+  useBottomSheetA11y(true, pannelloRef, triggerRef, onClose, { bloccaScorrimento: false });
 
   return (
     <>
@@ -198,6 +199,29 @@ export default function SellerShell({ children }: { children: React.ReactNode })
   const searchRef = useRef<HTMLInputElement>(null);
   const notifTriggerRef = useRef<HTMLButtonElement>(null);
   const topbarRef = useRef<HTMLElement>(null);
+  const menuRef = useRef<HTMLElement>(null);
+  const hamburgerRef = useRef<HTMLButtonElement>(null);
+  // Sotto lg il menu è un cassetto: chiuso, non si raggiunge con Tab né col lettore
+  // di schermo (inert), aperto prende il fuoco, Esc lo chiude e il fuoco torna su «Apri menu».
+  const [desktop, setDesktop] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const aggiorna = () => setDesktop(mq.matches);
+    aggiorna();
+    mq.addEventListener?.('change', aggiorna);
+    return () => mq.removeEventListener?.('change', aggiorna);
+  }, []);
+  const menuNascosto = !navOpen && !desktop;
+  // `inert` si scrive a mano: React 18 non conosce ancora l'attributo. Prima del hook
+  // (e in un layout effect): il fuoco che il hook mette nel menu non entra in un menu inert.
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!el) return;
+    if (menuNascosto) el.setAttribute('inert', '');
+    else el.removeAttribute('inert');
+  }, [menuNascosto]);
+  useBottomSheetA11y(navOpen && !desktop, menuRef, hamburgerRef, () => setNavOpen(false));
 
   // L'identità arriva dal profilo già condiviso: due chiamate di rete al minuto in meno (R075).
   const todo = useSellerTodoCount(profile?.id ?? null);
@@ -265,7 +289,9 @@ export default function SellerShell({ children }: { children: React.ReactNode })
 
       {/* SIDEBAR */}
       <aside
-        className={`fixed inset-y-0 left-0 z-modal flex h-screen w-[260px] max-w-[82vw] flex-col bg-ink-900 text-white transition-transform duration-200 ${
+        ref={menuRef}
+        aria-hidden={menuNascosto || undefined}
+        className={`fixed inset-y-0 left-0 z-modal flex h-dvh lg:h-screen w-[260px] max-w-[82vw] flex-col bg-ink-900 text-white transition-transform duration-200 ${
           navOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:sticky lg:top-0 lg:z-base lg:max-w-none lg:translate-x-0 ${asideWidth}`}
         aria-label="Menu venditore"
@@ -379,7 +405,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
         </nav>
 
         {/* Footer: marketplace + logout */}
-        <div className={`shrink-0 border-t border-white/10 p-3 ${collapsed ? 'lg:px-2' : ''}`}>
+        <div className={`shrink-0 border-t border-white/10 p-3 pb-safe ${collapsed ? 'lg:px-2' : ''}`}>
           <Link
             href="/?shop=1"
             title="Vai al marketplace"
@@ -413,6 +439,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
         >
           {/* Hamburger — mobile */}
           <button
+            ref={hamburgerRef}
             type="button"
             onClick={() => setNavOpen(true)}
             aria-label="Apri menu"
@@ -430,8 +457,8 @@ export default function SellerShell({ children }: { children: React.ReactNode })
               ref={searchRef}
               type="search"
               name="q"
-              aria-label="Cerca ordini, prodotti, clienti"
-              placeholder="Cerca ordini, prodotti, clienti…"
+              aria-label="Cerca fra i tuoi prodotti"
+              placeholder="Cerca fra i tuoi prodotti…"
               className="w-full rounded-full border border-cream-300 bg-cream-50 py-2.5 pl-10 pr-4 text-sm text-ink-900 outline-none placeholder:text-ink-400 focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
             />
           </form>

@@ -25,10 +25,16 @@ export const metadata: Metadata = {
     locale: 'it_IT',
     siteName: 'MyCity',
     url: '/accessibility',
+    // 5/11/2026 — Un openGraph proprio sostituisce quello del sito: senza `images` il link in chat usciva senza copertina.
+    images: ['/opengraph-image'],
   },
 };
 
-const LAST_UPDATED = '2026-08-20';
+// 5/11/2026 — Era ferma al 20/8, ma il testo è stato riscritto il 30/8 e l'8/9:
+// la data è quella dell'ultima revisione del contenuto, una sola, e si ripete
+// uguale nelle tre righe che la mostrano.
+const LAST_UPDATED = '2026-09-08';
+const LAST_UPDATED_IN_PAROLE = '8 settembre 2026';
 
 const TOC = [
   { id: 'impegno', label: 'Impegno per l’accessibilità' },
@@ -114,7 +120,7 @@ export default function AccessibilityStatementPage() {
           funzionarci, ma finché non l&apos;abbiamo provato non lo dichiariamo.</li>
         </ul>
         <p className="text-sm text-ink-500">
-          Ultima verifica: 20 agosto 2026. Le limitazioni qui sopra sono quelle
+          Ultima revisione: {LAST_UPDATED_IN_PAROLE}. Le limitazioni qui sopra sono quelle
           che conosciamo; l&apos;elenco cambia insieme al sito e viene aggiornato
           a ogni controllo.
         </p>
@@ -152,10 +158,10 @@ export default function AccessibilityStatementPage() {
         </p>
         <ul className="list-disc list-inside space-y-1">
           <li>
-            Email: <a href={mailtoContatto('accessibilita')} className="text-primary-700 hover:underline">{indirizzoContatto('accessibilita')}</a>
+            Email: <a href={mailtoContatto('accessibilita')} className="text-primary-700 underline underline-offset-2 hover:text-primary-800">{indirizzoContatto('accessibilita')}</a>
           </li>
           <li>
-            Modulo di contatto: <Link href="/contact" className="text-primary-700 hover:underline">/contact</Link>
+            Modulo di contatto: <Link href="/contact" className="text-primary-700 underline underline-offset-2 hover:text-primary-800">/contact</Link>
           </li>
         </ul>
         <p>
@@ -167,7 +173,7 @@ export default function AccessibilityStatementPage() {
         <p>
           In caso di risposta insoddisfacente, è possibile presentare reclamo all&apos;<strong>AgID
           (Agenzia per l&apos;Italia Digitale)</strong> attraverso il modulo presente sul sito
-          ufficiale <a href="https://www.agid.gov.it" target="_blank" rel="noopener noreferrer" className="text-primary-700 hover:underline">agid.gov.it</a>.
+          ufficiale <a href="https://www.agid.gov.it" target="_blank" rel="noopener noreferrer" className="text-primary-700 underline underline-offset-2 hover:text-primary-800">agid.gov.it</a>.
         </p>
       </LegalSection>
 

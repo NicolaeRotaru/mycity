@@ -7,6 +7,7 @@ import { contanteDaRimettereCents } from '@/lib/shipping';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
 import { aggiornaQuadratura } from '@/lib/cassa/quadratura';
+import { logger } from '@/lib/logger';
 import { formatPriceFromCents } from '@/lib/format';
 import { NOTA_SENZA_FOTO_MAX, valutaProvaIncasso } from '@/lib/cassa/prova-incasso';
 import {
@@ -19,6 +20,8 @@ import {
   type ChiRegistra,
   type OrdineDaIncassare,
 } from '@/lib/cassa/registra-incasso';
+
+import { percorsoDelFattorino, provaDelFattorino } from '@/lib/rider/prova-del-fattorino';
 
 export const runtime = 'nodejs';
 
@@ -74,7 +77,7 @@ const MISMATCH_TOLERANCE_CENTS = 50; // €0,50
  * tutti gli ordini COD delivered dal rider quel giorno.
  *
  * RLS-safe: il rider puo' aggiornare solo i propri ordini con
- * delivery_status PICKED_UP/OUT_FOR_DELIVERY/DELIVERED (controllo
+ * delivery_status OUT_FOR_DELIVERY/DELIVERED (dal 5/11 non piu' PICKED_UP; controllo
  * server-side).
  */
 // Rate limit: 60 conferme / ora per rider (anti-abuse, ma rider attivi ~30/giorno)
@@ -121,7 +124,7 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     case 'NON_TROVATO': return ApiErrors.notFound('Ordine non trovato');
     case 'DI_UN_ALTRO_FATTORINO': return ApiErrors.forbidden('Non autorizzato (ordine di altro rider)');
     case 'NON_IN_CONTANTI': return ApiErrors.conflict('Ordine non in cash on delivery');
-    case 'GIA_CONFERMATO': return ApiErrors.conflict("Incasso gia' confermato");
+    case 'GIA_CONFERMATO': return ApiErrors.conflict('Incasso già confermato');
     default: break;
   }
   if (!order || !order.rider_id) return ApiErrors.notFound('Ordine non trovato');
@@ -159,9 +162,14 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   // dei contanti o la firma — oppure, se la foto non si puo' fare, una nota sul
   // perche', che arriva agli amministratori qui sotto. Mai un vicolo cieco: dal
   // lotto R33 un incasso rifiutato e' una consegna che non si chiude.
+  // 5/11/2026 — Valgono solo le prove nella cartella di questo fattorino per questo ordine, e che
+  // il magazzino conferma (lib/rider/prova-del-fattorino.ts): un percorso inventato vale «senza foto».
+  const fotoContanti = await provaDelFattorino(admin, body.photoUrl, user.id, body.orderId);
+  const firma = await provaDelFattorino(admin, body.signatureUrl, user.id, body.orderId);
+  const fotoConsegna = percorsoDelFattorino(body.deliveryPhotoUrl, user.id, body.orderId);
   const prova = valutaProvaIncasso(expectedCents, {
-    foto: body.photoUrl,
-    firma: body.signatureUrl,
+    foto: fotoContanti,
+    firma,
     nota: body.nota,
   });
   if (!prova.ok) return ApiErrors.invalidRequest(prova.messaggio);
@@ -188,16 +196,16 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   // payout in lib/stripe/payout.ts.
   //
   // 056/172 — e nella stessa UPDATE sta la guardia sullo stato di consegna
-  // (PICKED_UP/OUT_FOR_DELIVERY/DELIVERED): un fattorino non puo' marcare
+  // (OUT_FOR_DELIVERY/DELIVERED, STATI_IN_CUI_SI_INCASSA): un fattorino non puo' marcare
   // PAGATO un ordine appena assegnato, mai ritirato e mai consegnato.
   const { data: claimed, error: updErr } = await scriviIncasso(
     admin,
     { id: order.id, rider_id: order.rider_id, payment_status: order.payment_status },
     campiDellIncasso(order, {
       incassatoCents: body.cashCollectedCents,
-      fotoContanti: body.photoUrl,
-      firma: body.signatureUrl,
-      fotoConsegna: body.deliveryPhotoUrl,
+      fotoContanti,
+      firma,
+      fotoConsegna,
       registratoDa: user.id,
       adesso: now,
     }),
@@ -206,12 +214,41 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
 
   if (updErr) return ApiErrors.internal('Update fallito');
   if (!claimed || claimed.length === 0) {
+    // 5/11/2026 — Zero righe non vuol dire sempre «già confermato»: l'ordine può essere stato
+    // annullato mentre il fattorino era in strada (e lui crederebbe di aver registrato i contanti).
+    // Si rilegge e si dice il motivo vero.
+    const { data: adesso } = await admin
+      .from('orders')
+      .select('delivery_status, cash_confirmed_at')
+      .eq('id', order.id)
+      .maybeSingle();
+    const ora = adesso as { delivery_status?: string; cash_confirmed_at?: string | null } | null;
+    if (ora?.delivery_status === 'CANCELED') {
+      return ApiErrors.conflict("Ordine annullato: l'incasso non è stato registrato. Non incassare e riporta la merce al negozio.");
+    }
+    if (ora?.delivery_status === 'PICKED_UP' && !ora.cash_confirmed_at) {
+      return ApiErrors.conflict("Prima premi «Sto andando dal cliente»: i contanti si dichiarano alla porta. L'incasso non è stato registrato.");
+    }
+    if (ora && !ora.cash_confirmed_at) {
+      return ApiErrors.conflict("L'ordine non è più in consegna: l'incasso non è stato registrato. Scrivi all'assistenza.");
+    }
+    if (!ora) {
+      // Rilettura caduta: non si sa se l'incasso c'è. Non si dice «già confermato».
+      return ApiErrors.unavailable("Non riesco a controllare se l'incasso è registrato: riprova fra un momento.");
+    }
     // Un'altra conferma concorrente ha già vinto la corsa.
-    return ApiErrors.conflict("Incasso gia' confermato");
+    return ApiErrors.conflict('Incasso già confermato');
   }
 
   // Aggiorna riconciliazione giornaliera (include i COD consegnati ma NON confermati).
-  await aggiornaQuadratura(admin, user.id, giornoDiCassa);
+  // 5/11/2026 — la quadratura ora lancia se non riesce a leggere o scrivere:
+  // l'incasso è già confermato, quindi lo si scrive nel log e si va avanti;
+  // il giro notturno riquadra-casse rifa' la giornata.
+  try {
+    await aggiornaQuadratura(admin, user.id, giornoDiCassa);
+  } catch (e) {
+    logger.error('[cash-confirm] quadratura della giornata non aggiornata', { riderId: user.id, giornoDiCassa, e });
+  }
 
   // 16/10/2026 — Sopra soglia senza foto: l'incasso passa, ma non in silenzio.
   // La nota resta nel registro delle attivita' (legato all'ordine) e arriva agli

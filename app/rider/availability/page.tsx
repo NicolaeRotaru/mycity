@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Calendar, MapPin, CheckCircle2, Circle, Plus, Save, TrendingUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Card } from '@/components/ui/Card';
 
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
@@ -53,6 +54,11 @@ export default function RiderAvailabilityPage() {
   const [avail, setAvail] = useState<Availability>(DEFAULT_AVAIL);
   const [zones, setZones] = useState<string[]>([]);
   const [customZone, setCustomZone] = useState('');
+  // 5/11/2026 — Se la lettura cade non si mostrano «offline» e gli orari predefiniti: al primo
+  // tocco si sarebbero scritti sul profilo al posto di quelli veri. Si dice l'errore e i controlli
+  // non compaiono finché la lettura non riesce.
+  const [letturaFallita, setLetturaFallita] = useState(false);
+  const [tentativo, setTentativo] = useState(0);
 
   // Carica la disponibilità persistita dal profilo del rider.
   useEffect(() => {
@@ -60,11 +66,17 @@ export default function RiderAvailabilityPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
       setUserId(user.id);
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('rider_is_online, rider_schedule, rider_zones')
         .eq('id', user.id)
         .single();
+      if (error) {
+        setLetturaFallita(true);
+        setLoading(false);
+        return;
+      }
+      setLetturaFallita(false);
       if (data) {
         setAvail({
           online: !!data.rider_is_online,
@@ -74,7 +86,7 @@ export default function RiderAvailabilityPage() {
       }
       setLoading(false);
     })();
-  }, []);
+  }, [tentativo]);
 
   const persist = async (patch: Record<string, unknown>) => {
     if (!userId) return;
@@ -115,6 +127,17 @@ export default function RiderAvailabilityPage() {
   };
 
   if (loading) return <LoadingState />;
+  if (letturaFallita) {
+    return (
+      <div className="px-4 py-10">
+        <ErrorState
+          title="Non riesco a leggere i tuoi turni"
+          description="Sembra un problema di collegamento: i tuoi dati non sono spariti. Riprova."
+          retry={() => { setLoading(true); setTentativo((t) => t + 1); }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="pb-5">
@@ -143,7 +166,7 @@ export default function RiderAvailabilityPage() {
               }`}
             >
               <span
-                className="absolute top-[3px] h-6 w-6 rounded-full bg-white shadow-sm transition-all"
+                className="absolute top-[3px] h-6 w-6 rounded-full bg-white shadow-sm-neutral transition-all"
                 style={{ left: avail.online ? '25px' : '3px' }}
               />
             </button>

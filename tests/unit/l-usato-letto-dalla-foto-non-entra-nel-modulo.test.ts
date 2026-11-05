@@ -50,7 +50,7 @@ beforeEach(() => {
   vi.stubGlobal('Image', ImmagineFinta);
   const tela = window.HTMLCanvasElement.prototype as unknown as Record<string, unknown>;
   vi.spyOn(window.HTMLCanvasElement.prototype, 'getContext').mockImplementation(
-    () => ({ drawImage: () => {} }) as unknown as CanvasRenderingContext2D,
+    () => ({ fillStyle: '', fillRect: () => {}, drawImage: () => {} }) as unknown as CanvasRenderingContext2D,
   );
   tela.toDataURL = () => 'data:image/jpeg;base64,QUJD';
   tela.toBlob = (cb: (b: Blob | null) => void) => cb(new Blob(['x'], { type: 'image/jpeg' }));

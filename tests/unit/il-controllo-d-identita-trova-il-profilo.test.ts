@@ -75,6 +75,21 @@ describe("il controllo d'identità legge il profilo che c'è", () => {
     expect(status).toBeGreaterThanOrEqual(500);
   });
 
+  // 5/11/2026 (S04, scheda 1794) — Un solo tipo di guasto (57014) era provato: la rete che cade
+  // arriva senza codice, e un controllo che trattasse «nessun codice» come «non trovato» restava
+  // verde. Anche lì: guasto, non «Profilo non trovato».
+  for (const guasto of [
+    { code: '', message: 'TypeError: fetch failed' },
+    { code: 'PGRST301', message: 'JWT expired' },
+  ]) {
+    it(`se la lettura cade con «${guasto.code || 'nessun codice'}» non dice «Profilo non trovato»`, async () => {
+      stato.client = databaseCheConosceLeColonne({ profiles: [PROFILO] }, { cade: guasto });
+      const { status, corpo } = await chiama();
+      expect(corpo).not.toContain('Profilo non trovato');
+      expect(status).toBeGreaterThanOrEqual(500);
+    });
+  }
+
   // ③ Il profilo che davvero non c'è: `.single()` risponde PGRST116, che è un «non trovato», non un
   //    guasto. Deve restare 404 «Profilo non trovato», non un 500 né un «Non trovato» senza soggetto.
   it('se il profilo non c’è davvero resta 404 «Profilo non trovato», non un guasto', async () => {

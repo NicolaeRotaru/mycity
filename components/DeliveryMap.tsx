@@ -1,7 +1,7 @@
 'use client';
 
 import 'leaflet/dist/leaflet.css';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export type MapPoint = {
   lat: number;
@@ -49,6 +49,14 @@ const DeliveryMap = ({ points, className = 'w-full h-72 rounded-lg border z-0', 
   const divRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  /**
+   * 5/11/2026 — SUL TELEFONO LA MAPPA SI MUOVE DOPO UN TOCCO, E LO DICE.
+   * Il trascinamento col dito era spento del tutto, per non rubare lo scorrimento della pagina: chi
+   * ingrandiva per leggere la via non poteva più ricentrare, e niente diceva perché. Adesso la mappa
+   * parte ferma con la scritta «Tocca la mappa per spostarla»; il tocco accende il trascinamento, e
+   * un tocco fuori dalla mappa lo rispegne (il dito torna a scorrere la pagina).
+   */
+  const [conIlDitoFerma, setConIlDitoFerma] = useState(false);
 
   // Init mappa una sola volta
   useEffect(() => {
@@ -88,6 +96,22 @@ const DeliveryMap = ({ points, className = 'w-full h-72 rounded-lg border z-0', 
         scrollWheelZoom: false,
         dragging: !conIlDito,
       }).setView([center.lat, center.lng], zoom);
+      let toglieTocco: (() => void) | undefined;
+      if (conIlDito) {
+        setConIlDitoFerma(true);
+        map.on('click', () => {
+          map.dragging.enable();
+          setConIlDitoFerma(false);
+        });
+        const fuori = (e: Event) => {
+          if (divRef.current && e.target instanceof Node && !divRef.current.contains(e.target)) {
+            map.dragging.disable();
+            setConIlDitoFerma(true);
+          }
+        };
+        document.addEventListener('touchstart', fuori, { passive: true });
+        toglieTocco = () => document.removeEventListener('touchstart', fuori);
+      }
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap',
         maxZoom: 19,
@@ -96,6 +120,7 @@ const DeliveryMap = ({ points, className = 'w-full h-72 rounded-lg border z-0', 
       mapRef.current = map;
 
       cleanup = () => {
+        toglieTocco?.();
         map.remove();
         mapRef.current = null;
         markersRef.current = [];
@@ -186,7 +211,16 @@ const DeliveryMap = ({ points, className = 'w-full h-72 rounded-lg border z-0', 
     ? `Mappa della consegna: ${descrizione.join(', ')}`
     : 'Mappa della consegna';
 
-  return <div ref={divRef} className={className} role="img" aria-label={nomeMappa} />;
+  return (
+    <div className="relative">
+      <div ref={divRef} className={className} role="img" aria-label={nomeMappa} />
+      {conIlDitoFerma && (
+        <p className="pointer-events-none absolute bottom-2 left-1/2 z-[400] -translate-x-1/2 rounded-full bg-ink-900/75 px-3 py-1 text-[11px] font-semibold text-white" aria-hidden>
+          Tocca la mappa per spostarla
+        </p>
+      )}
+    </div>
+  );
 };
 
 export default DeliveryMap;

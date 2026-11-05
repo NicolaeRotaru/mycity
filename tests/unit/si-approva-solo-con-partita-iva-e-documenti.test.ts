@@ -1,3 +1,5 @@
+// 5/11/2026 (S05, scheda 2617) — I fattorini dei casi hanno patente e polizza con la
+// scadenza: ora il server la pretende (prima la guardava solo il pannello).
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 /**
@@ -71,7 +73,7 @@ const NEGOZIO = { id: 'seller-1', role: 'seller', store_name: 'Pane', full_name:
 const FATTORINO = {
   id: 'rider-1', role: 'rider', store_name: null, full_name: 'Luca', legal_birth_date: null,
   kyc_id_doc_front_url: 'rider-1/fronte.jpg', kyc_selfie_url: 'rider-1/selfie.jpg',
-  rider_license_url: 'rider-1/patente.pdf', rider_insurance_url: 'rider-1/rc.pdf',
+  rider_license_url: 'rider-1/patente.pdf', rider_insurance_url: 'rider-1/rc.pdf', rider_license_expires_on: '2099-01-01', rider_insurance_expires_on: '2099-01-01',
 };
 
 function usa(p: Record<string, unknown>) {

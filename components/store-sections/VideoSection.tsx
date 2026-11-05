@@ -1,6 +1,7 @@
 'use client';
 
 import SectionHeading from './SectionHeading';
+import VideoAlClic from './VideoAlClic';
 import type { SectionConfig, SectionContext } from './SectionContext';
 
 /**
@@ -25,14 +26,10 @@ export default function VideoSection({
     <section>
       {config.heading && <SectionHeading accent={ctx.accent}>{config.heading}</SectionHeading>}
       <div className="relative w-full aspect-video overflow-hidden rounded-2xl border border-cream-300 bg-black">
-        <iframe
+        <VideoAlClic
+          provider={config.provider === 'youtube' ? 'youtube' : 'vimeo'}
           src={src}
-          title={config.heading || 'Video'}
-          className="absolute inset-0 w-full h-full"
-          loading="lazy"
-          referrerPolicy="strict-origin-when-cross-origin"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
+          titolo={config.heading || 'Video'}
         />
       </div>
     </section>

@@ -104,7 +104,9 @@ vi.mock('@/lib/supabase/server', () => ({
 
 import { POST as UPLOAD } from '@/app/api/kyc/upload-document/route';
 
-const MAGGIORENNE = { legal_birth_date: '1980-05-01' };
+// 5/11/2026 (S05, scheda 1614) — Il ruolo serve: carta d'identità e selfie li carica un
+// negozio o un fattorino, non un cliente. Il caso è un negoziante.
+const MAGGIORENNE = { legal_birth_date: '1980-05-01', role: 'seller' };
 const FRONTE_VECCHIO = 'negoziante-1/id_front-1700000000000.png';
 const SELFIE_VECCHIO = 'negoziante-1/selfie-1700000000000.png';
 

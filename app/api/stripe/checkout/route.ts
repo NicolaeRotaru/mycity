@@ -17,7 +17,7 @@ import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { romeNow } from '@/lib/store-hours';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
 import { contaFattoriniOnline, eConsegnaVeloce, veloceSiPuo } from '@/lib/ordini/consegna-veloce';
-import { fetchActiveDiscounts } from '@/lib/promotions';
+import { fetchActiveDiscounts, type MappaSconti } from '@/lib/promotions';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
 import { riusoDellaCassaAperta, type SessioneRiletta } from '@/lib/ordini/riuso-della-cassa-aperta';
@@ -325,6 +325,26 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
 
     if (riuso.esito === 'riusa') {
       /**
+       * 5/11/2026 — LA VELOCE SI CONTROLLA ANCHE SULLA PAGINA GIÀ APERTA.
+       * Questo ramo esce prima del controllo della veloce (8-21, negozi aperti,
+       * fattorino online): alle 21:30 la pagina delle 20:50 si restituiva, con
+       * l'euro della veloce, mentre una richiesta nuova prendeva 409. Stessa
+       * decisione, stesso messaggio.
+       */
+      if (eConsegnaVeloce({ fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore })) {
+        const veloceOra = veloceSiPuo({
+          adesso: romeNow(),
+          negozi: venditoriLetti.error || !venditoriLetti.data
+            ? null
+            : venditoriLetti.data.map((s) => ({
+                nome: (s as { store_name?: string | null }).store_name ?? 'Il negozio',
+                orari: (s as { store_hours?: unknown }).store_hours,
+              })),
+          fattoriniOnline: await contaFattoriniOnline(admin),
+        });
+        if (!veloceOra.possibile) return ApiErrors.conflict(veloceOra.perche);
+      }
+      /**
        * 3/9/2026 — CORREGGERE IL TELEFONO IN CASSA DEVE SERVIRE A QUALCOSA.
        *
        * L'impronta del carrello dice «stesso carrello» guardando solo quello
@@ -375,6 +395,10 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   }
 
   const { data: products, error: prodErr } = prodottiLetti;
+  // 5/11/2026 — Uno sconto non letto non e' «nessuno sconto»: niente prezzo pieno a sorpresa.
+  if ((discountMap as MappaSconti).scontiNonLetti === true) {
+    return ApiErrors.unavailable('Non riusciamo a leggere le promozioni in questo momento. Riprova fra poco.');
+  }
 
   if (prodErr || !products || products.length === 0) {
     return ApiErrors.notFound('Prodotti non trovati.');
@@ -564,7 +588,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // Coordinate della consegna prese dal database, non dal browser: il prezzo
   // della consegna dipende dalla distanza, e finora quel numero lo scriveva il
   // client. Se l'indirizzo non è fra quelli salvati dalla persona, si resta
-  // senza coordinate e vale la tariffa fissa.
+  // senza coordinate (la spedizione oggi vale zero comunque).
   const coordConsegna = await coordinateDaIndirizziSalvati(admin, user.id, {
     address: body.delivery.address,
     city: body.delivery.city,
@@ -630,7 +654,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const codiceSconto = await rivendicaIlCodiceSconto(
     riserveLiberate,
     { admin, lettura: supa },
-    { codice: body.couponCode, subtotaleCents: grandSubtotalCents, userId: user.id },
+    { codice: body.couponCode, subtotaleCents: grandSubtotalCents, userId: user.id, ritiroInNegozio: body.pickupInStore },
   );
   if (!codiceSconto.ok) {
     if (codiceSconto.motivo === 'pagamento_ancora_aperto') {
@@ -816,7 +840,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         // consegna restava vuota. Adesso, quando l'indirizzo non e' fra quelli
         // salvati, la destinazione se la calcola il server. NON entra nel
         // prezzo: quello e' gia' stato deciso qui sopra, sulle coordinate
-        // salvate o sulla tariffa fissa.
+        // salvate (o senza coordinate).
         lat: coordPerLaMappa?.lat ?? null,
         lng: coordPerLaMappa?.lng ?? null,
         // Fascia di consegna scelta dal buyer: il webhook la legge da qui e la
@@ -863,10 +887,43 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     });
 
     // Salva l'id session su pending_checkout per lookup nel webhook
-    await admin
+    // 5/11/2026 — Senza quell'id il riuso della cassa aperta e la pulizia delle
+    // riserve non la riconoscono: un secondo «Paga» riservava la merce di nuovo
+    // e apriva una seconda pagina pagabile. Se la scrittura cade, la pagina
+    // appena nata si chiude su Stripe e si passa dalla pulizia qui sotto.
+    const { error: errSessione } = await admin
       .from('pending_checkouts')
       .update({ stripe_session_id: session.id })
       .eq('id', pending.id);
+    if (errSessione) {
+      logger.error('[stripe] id della pagina di pagamento non salvato: la si chiude', {
+        pendingCheckoutId: pending.id, message: errSessione.message,
+      });
+      let chiusa = false;
+      try {
+        await getStripe().checkout.sessions.expire(session.id);
+        chiusa = true;
+      } catch (errChiusura) {
+        // Non chiusa: e' ancora pagabile, quindi la riserva NON si toglie (si
+        // venderebbe merce gia' pagata). Resta com'era ieri, col guasto nel log.
+        logger.error('[stripe] pagina di pagamento senza id non chiusa su Stripe', { sessionId: session.id, errChiusura });
+      }
+      if (chiusa) {
+        // La pulizia la fa chi prende il turno sul carrello: anche il webhook
+        // checkout.session.expired la fa, solo se il carrello e' ancora PENDING.
+        const { data: preso } = await admin
+          .from('pending_checkouts')
+          .update({ status: 'CANCELED' })
+          .eq('id', pending.id)
+          .eq('status', 'PENDING')
+          .select('id');
+        if (preso && preso.length > 0) {
+          await admin.rpc('restore_stock', { p_items: stockItems });
+          await rilasciaCoupon();
+        }
+        return ApiErrors.internal('Errore nella creazione del pagamento.');
+      }
+    }
 
     /**
      * 27/8/2026 (R159) — QUI PASSANO I COOKIE, NEL WEBHOOK NO.

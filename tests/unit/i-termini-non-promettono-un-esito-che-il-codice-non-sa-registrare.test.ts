@@ -49,9 +49,12 @@ describe('oggi il codice non sa gestire il cliente assente, e i Termini lo dicon
     expect(esitiDelFattorinoInConsegna().filter((a) => a !== 'DELIVERED')).toEqual([]);
   });
 
-  it('i tre fatti letti dal codice vero: nessun esito, nessun tentativo, rimborso intero', () => {
+  // 5/11/2026 (S08, scheda 2503) — L'esito c'è: la rotta «cliente assente» del fattorino. Non è
+  // un passaggio di stato, quindi i fatti lo leggono da ESITO_CLIENTE_ASSENTE_REGISTRATO. La
+  // trattenuta resta impossibile perché i tentativi non si registrano.
+  it('i tre fatti letti dal codice vero: l esito «cliente assente» c è, nessun tentativo, rimborso intero', () => {
     const fatti = fattiDellaConsegna();
-    expect(fatti.esitoDiMancataConsegna).toBe(false);
+    expect(fatti.esitoDiMancataConsegna).toBe(true);
     expect(fatti.tentativiRegistrati).toBe(false);
     expect(fatti.rimborso).toBe('integrale');
     expect(siPuoPromettereLaTrattenuta(fatti)).toBe(false);

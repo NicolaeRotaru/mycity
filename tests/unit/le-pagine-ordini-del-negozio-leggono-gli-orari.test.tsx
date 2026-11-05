@@ -9,7 +9,7 @@
  * su un database finto che porta il negozio dentro la riga solo se la lettura lo chiede
  * (`seller:profiles!orders_seller_id_fkey ( store_hours )`), poi disegna la pagina VERA con quei dati.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import QueryProvider from '@/components/providers/QueryProvider';
 import SellerOrdersPage from '@/app/seller/orders/page';
@@ -117,6 +117,15 @@ async function disegna(rendi: () => JSX.Element, infinita: boolean): Promise<str
 
 beforeEach(() => {
   stato.dati.clear();
+  // 5/11/2026 (S04, scheda 148) — La pagina prende come «adesso» il più recente fra l'orologio vero
+  // e l'ora della lettura. Dopo il 2/11 vinceva l'orologio vero e la prova diventava rossa da sola:
+  // l'orologio si ferma a NATO, come la lettura.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(NATO));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('le pagine ordini del negozio dicono l’ultimo ritiro, con gli orari letti dal database', () => {

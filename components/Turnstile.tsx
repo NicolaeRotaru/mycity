@@ -81,7 +81,7 @@ function TurnstileConReset(
           'error-callback': () => fallito('Il controllo anti-bot non ha risposto.'),
         });
       } catch {
-        fallito('Il controllo anti-bot non si e\' aperto.');
+        fallito('Il controllo anti-bot non si è aperto.');
       }
     };
 
@@ -101,14 +101,14 @@ function TurnstileConReset(
         };
         // #115 — Se lo script non arriva, si dice. Prima non succedeva niente:
         // silenzio, e il modulo bloccato per sempre.
-        s.onerror = () => fallito('Il controllo anti-bot non si e\' caricato.');
+        s.onerror = () => fallito('Il controllo anti-bot non si è caricato.');
         document.head.appendChild(s);
       } else {
         existing.addEventListener('load', () => {
           window.__turnstileLoaded = true;
           render();
         });
-        existing.addEventListener('error', () => fallito('Il controllo anti-bot non si e\' caricato.'));
+        existing.addEventListener('error', () => fallito('Il controllo anti-bot non si è caricato.'));
       }
       // Rete di sicurezza: se dopo dieci secondi non e' successo niente — script
       // fermo, richiesta appesa — vale come «non disponibile».

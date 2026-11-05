@@ -29,8 +29,9 @@ psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$HERE/00_shim_supabase.sql" >/dev/null
 echo "▶ migrazioni"
 failed=0
 applied=0
-# sort -V tiene l'ordine naturale e mette 108 prima di 108b
-for f in $(ls "$MIG"/*.sql | sort -V); do
+# 5/11/2026 — Byte per byte (LC_ALL=C), come lo script del rilascio e il generatore dei tipi:
+# 108_ prima di 108b_. Il commento di prima diceva cosi' di sort -V, che invece li invertiva.
+for f in $(ls "$MIG"/*.sql | LC_ALL=C sort); do
   name="$(basename "$f")"
   if out="$(psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$f" 2>&1)"; then
     applied=$((applied + 1))

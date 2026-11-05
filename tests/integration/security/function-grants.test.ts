@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { chiamataNegata } from './esito-dei-permessi';
 
 /**
  * Test d'INTEGRAZIONE (richiede un DB Supabase reale) sui grant EXECUTE delle
@@ -43,8 +44,11 @@ const ANON_DENIED_RPCS: Array<{ fn: string; args: Record<string, unknown> }> = [
 
 describe.skipIf(!hasEnv)('EXECUTE lockdown su SECURITY DEFINER (anon negato)', () => {
   let anon: SupabaseClient;
-  beforeAll(() => {
+  beforeAll(async () => {
     anon = createClient(URL!, ANON!, { auth: { persistSession: false } });
+    // 5/11/2026 — Il database deve rispondere, o ogni «errore» sembrerebbe un permesso negato.
+    const prova = await anon.from('categories').select('id').limit(1);
+    expect(prova.error, `il database non risponde: ${prova.error?.message}`).toBeNull();
   });
 
   for (const { fn, args } of ANON_DENIED_RPCS) {
@@ -54,6 +58,8 @@ describe.skipIf(!hasEnv)('EXECUTE lockdown su SECURITY DEFINER (anon negato)', (
       // fallisce, una RPC e' di nuovo chiamabile senza login: regressione (es.
       // migration di lockdown non applicata al DB).
       expect(error, `${fn} dovrebbe essere negata ad anon`).not.toBeNull();
+      // 5/11/2026 — E dev'essere un «non puoi» del database, non «ordine non trovato» o la rete.
+      expect(chiamataNegata(error), `${fn}: errore che non è un permesso negato: ${error?.code} ${error?.message}`).toBe(true);
     });
   }
 });

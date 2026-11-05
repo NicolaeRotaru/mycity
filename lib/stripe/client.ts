@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { MARKETPLACE_FEE_BPS, commissioneCents } from '@/lib/constants';
+import { VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
 
 let _stripe: Stripe | null = null;
 
@@ -37,6 +38,8 @@ export function getStripe(): Stripe {
   if (_stripe) return _stripe;
   const key = env.stripeSecretKey();
   if (!key) throw new Error('Stripe non configurato (STRIPE_SECRET_KEY mancante).');
+  const fuoriPosto = chiaveStripeFuoriPosto(key);
+  if (fuoriPosto) throw new Error(`Stripe non configurato: ${fuoriPosto}.`);
   _stripe = new Stripe(key, {
     apiVersion: '2024-06-20',
     typescript: true,
@@ -52,9 +55,38 @@ export function getStripe(): Stripe {
   return _stripe;
 }
 
-/** Verifica se Stripe e' attivabile (chiave presente). */
+/**
+ * 5/11/2026 — LA CHIAVE DEVE ESSERE DELL'AMBIENTE GIUSTO.
+ * La regola del lancio: le chiavi di prova solo nell'anteprima, mai sul sito
+ * vero. Prima qualunque chiave presente andava bene: il sito vero poteva girare
+ * con `sk_test_` (pagamenti finti, merce consegnata) e l'anteprima con
+ * `sk_live_` (soldi veri da un sito di prova). Torna il motivo, o null.
+ */
+export function chiaveStripeFuoriPosto(
+  chiave: string | undefined | null,
+  ambiente: string | undefined = process.env.VERCEL_ENV,
+): string | null {
+  if (!chiave) return null;
+  if (ambiente === 'production' && /^(sk|rk)_test_/.test(chiave)) return 'chiave di prova sul sito vero';
+  if (ambiente === 'preview' && /^(sk|rk)_live_/.test(chiave)) return 'chiave vera nell anteprima';
+  return null;
+}
+
+let avvisoChiaveDato = false;
+
+/** Verifica se Stripe e' attivabile (chiave presente, e dell'ambiente giusto). */
 export function isStripeConfigured(): boolean {
-  return !!env.stripeSecretKey();
+  const chiave = env.stripeSecretKey();
+  if (!chiave) return false;
+  const fuoriPosto = chiaveStripeFuoriPosto(chiave);
+  if (fuoriPosto) {
+    if (!avvisoChiaveDato) {
+      avvisoChiaveDato = true;
+      logger.error('[stripe] chiave Stripe rifiutata: ' + fuoriPosto, { ambiente: process.env.VERCEL_ENV });
+    }
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -191,7 +223,8 @@ export async function createMultiSellerCheckoutSession(
           currency: 'eur',
           unit_amount: deliveryFeeCents,
           product_data: {
-            name: `Costo di consegna — ${g.storeName}`,
+            // 5/11/2026 — Lo stesso nome della cassa e delle pagine (VOCE_CONSEGNA).
+            name: `${VOCE_CONSEGNA} — ${g.storeName}`,
             metadata: { seller_id: g.sellerId, kind: 'delivery_fee' },
           },
         },
@@ -308,10 +341,36 @@ export async function createConnectOnboardingLink(args: {
    * pesante: piu' attrito, piu' abbandoni, compenso fermo.
    */
   ruolo: 'venditore' | 'fattorino';
+  /**
+   * 5/11/2026 — Salva l'id del conto appena nato, PRIMA del link. Se lancia, il
+   * link non si crea. Prima l'id si salvava solo alla fine, senza guardare
+   * l'esito: un link fallito o una scrittura caduta lasciavano un conto su
+   * Stripe che il profilo non conosceva, e il tentativo dopo richiamava
+   * accounts.create con la stessa chiave e parametri diversi (email, ruolo):
+   * «Errore Stripe» per 24 ore.
+   */
+  salvaConto?: (accountId: string) => Promise<void>;
 }): Promise<{ accountId: string; url: string }> {
   const stripe = getStripe();
 
   let accountId = args.existingAccount;
+  // 5/11/2026 — UN CONTO CHE QUESTE CHIAVI NON CONOSCONO SI RIFA'.
+  // Un id nato con chiavi di prima (altro conto Stripe, o modalita' di prova)
+  // dava «No such account» a ogni tentativo, e dal sito non si ripartiva. Se
+  // Stripe dice che il conto non esiste, se ne crea uno nuovo (e lo si salva).
+  if (accountId) {
+    try {
+      await stripe.accounts.retrieve(accountId);
+    } catch (err) {
+      const codice = (err as { code?: string; statusCode?: number }).code;
+      const stato = (err as { statusCode?: number }).statusCode;
+      if (codice !== 'resource_missing' && codice !== 'account_invalid' && stato !== 404) throw err;
+      logger.warn('[stripe] conto Connect del profilo sconosciuto a queste chiavi: se ne crea uno nuovo', {
+        sellerId: args.sellerId, accountId, codice,
+      });
+      accountId = null;
+    }
+  }
   if (!accountId) {
     // 181 — Senza chiave di idempotenza, ogni errore di rete fra la creazione
     // del conto e il salvataggio dell'id lasciava un conto Connect orfano su
@@ -346,6 +405,7 @@ export async function createConnectOnboardingLink(args: {
       metadata: { seller_id: args.sellerId },
     }, { idempotencyKey: `connect_${args.sellerId}` });
     accountId = account.id;
+    if (args.salvaConto) await args.salvaConto(accountId);
   }
 
   const link = await stripe.accountLinks.create({
@@ -380,7 +440,8 @@ export async function createConnectLoginLink(accountId: string): Promise<{ url: 
 }
 
 /**
- * Aliquota commissione marketplace (10%, IVA esclusa — semplificazione MVP).
+ * Aliquota commissione marketplace (10%, IVA inclusa: la regola e la frase stanno in
+ * app/seller/earnings/commissione.ts, IVA_SULLA_COMMISSIONE).
  * Funzione PURA: applica solo la percentuale all'importo passato. La BASE
  * imponibile (SOLO il subtotale prodotti, MAI spedizione/consegna) è decisa da
  * computeOrderSplit. La costante è centralizzata in lib/constants (client-safe)

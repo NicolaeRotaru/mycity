@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AlertTriangle, ArrowLeft, MapPin, Store, Truck, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, MapPin, ShoppingCart, Store, Truck, Wallet } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -27,7 +27,7 @@ import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
 import { validateCouponFromBrowser, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
-import { Button } from '@/components/ui/Button';
+import EmptyState from '@/components/EmptyState';
 import { Card } from '@/components/ui/Card';
 import { Textarea } from '@/components/ui/Field';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
@@ -35,9 +35,11 @@ import { StepCard } from '@/components/checkout/StepCard';
 import { ScheletroCassa } from '@/components/checkout/ScheletroCassa';
 import { ShippingAddressForm, useCoordinateDellaZona } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector, raccogliMetodoScelto } from '@/components/checkout/PaymentMethodSelector';
-import { DeliverySlotPicker, RIGA_VELOCE_IN_ATTESA } from '@/components/checkout/DeliverySlotPicker';
+import { DeliverySlotPicker } from '@/components/checkout/DeliverySlotPicker';
+
 import { romeNow } from '@/lib/store-hours';
 import {
+  ETICHETTA_ADESSO,
   FASCE_DI_DOMANI,
   consegnaScelta,
   etichettaPerLOrdine,
@@ -61,6 +63,13 @@ import { merceCheTengoIo, problemiDiDisponibilita, type TentativoAperto } from '
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { leggiJson, messaggioDiRete } from '@/lib/api/leggi-json';
 import { queryKeys } from '@/lib/queries/keys';
+
+/**
+ * 5/11/2026 — Il motivo del blocco nel riepilogo mentre si aspetta la veloce. Era la stessa frase
+ * della riga del selettore (`RIGA_VELOCE_IN_ATTESA`), due volte sulla pagina; e non diceva che
+ * nel frattempo si può scegliere una fascia.
+ */
+const MOTIVO_VELOCE_IN_ATTESA = 'Aspetto la risposta sulla consegna veloce: se non vuoi aspettare, scegli Oggi o Domani.';
 
 type AddressForm = {
   fullName: string;
@@ -202,10 +211,13 @@ export default function CheckoutPage() {
       const variantStock = new Map<string, number>();
       const variantIds = cart.map((c) => c.variantId).filter(Boolean) as string[];
       if (variantIds.length > 0) {
-        const { data: vs } = await supabase
+        const { data: vs, error: erroreVarianti } = await supabase
           .from('product_variants')
           .select('id, stock')
           .in('id', variantIds);
+        // 5/11/2026 — Come la lettura dei prodotti: se cade, si dice che il carrello non si legge
+        // (e la domanda si riprova), invece di contare «disponibili 0» su merce che c'è.
+        if (erroreVarianti) throw erroreVarianti;
         for (const v of vs ?? []) variantStock.set(v.id as string, (v.stock as number) ?? 0);
       }
 
@@ -221,12 +233,12 @@ export default function CheckoutPage() {
        *
        * Qui si chiedeva `profiles`, con un ripiego sullo stesso `profiles` se mancava una colonna.
        * Dopo le migrazioni 110, 112 e 161 un cliente da `profiles` legge solo la propria riga: la
-       * risposta tornava vuota senza errore, la spedizione si mostrava a tariffa fissa e le due
+       * risposta tornava vuota senza errore, la spedizione si mostrava senza distanza e le due
        * rotte che creano l'ordine — che leggono `seller_public_profiles` — la addebitavano sulla
        * distanza. Il totale scritto sul pulsante non era quello pagato.
        *
        * Adesso la domanda e' la stessa delle rotte, sulla stessa vista: un negozio che la vista non
-       * restituisce resta senza coordinate qui come la', e vale la tariffa fissa per tutte e due.
+       * restituisce resta senza coordinate qui come la', per tutte e due (la spedizione oggi vale zero comunque).
        * Se la lettura cade non si indovina una spedizione: la domanda fallisce come quella dei
        * prodotti, e la cassa dice che non riesce a leggere il carrello.
        */
@@ -398,7 +410,11 @@ export default function CheckoutPage() {
   const { data: authUser, isPending: controlloAccessoInCorso } = useQuery({
     queryKey: queryKeys.checkout.authUser,
     queryFn: async () => (await supabase.auth.getUser()).data.user,
-    staleTime: 60_000,
+    // 5/11/2026 — Era 60 s, e nessuno svuotava la chiave: chi entrava dalla cassa e tornava entro
+    // un minuto riceveva il «nessuno» salvato da ospite e veniva rimandato all'accesso. Ora si
+    // rilegge a ogni apertura della cassa.
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   // Indirizzi salvati
@@ -411,7 +427,10 @@ export default function CheckoutPage() {
         .from('user_addresses')
         .select('*')
         .eq('user_id', authUser!.id)
-        .order('is_default', { ascending: false });
+        .order('is_default', { ascending: false })
+        // 5/11/2026 — Un secondo criterio fisso, lo stesso del carrello: senza predefinito due
+        // letture potevano restituire indirizzi in ordine diverso, e la cassa sceglierne un altro.
+        .order('id', { ascending: true });
       return (data ?? []) as SavedAddress[];
     },
   });
@@ -578,11 +597,24 @@ export default function CheckoutPage() {
   // «Adesso» scelta senza ancora il sì del server: non si ordina (la rotta la rifiuterebbe con un 409).
   const veloceDaAspettare =
     eConsegnaVeloce({ fascia: deliverySlot, ritiroInNegozio: pickupInStore }) && veloceDisponibile !== true;
+  // 5/11/2026 — Dopo un no della rotta sulla veloce (409) si richiede subito, invece di aspettare il
+  // battito del minuto: il selettore sposta la scelta e lo dice, come quando il no arriva col battito.
+  const [richiediVeloce, setRichiediVeloce] = useState(0);
+  const haGruppi = groups.length > 0;
   useEffect(() => {
-    if (!negoziDelCarrello) return;
+    // 5/11/2026 — Un carrello senza negozio letto non può avere la veloce: prima la domanda non
+    // partiva mai e la tessera «Adesso» diceva «Sto controllando…» per sempre.
+    if (!negoziDelCarrello) {
+      if (haGruppi) setEsitoVeloce({ negozi: '', possibile: false });
+      return;
+    }
     let vivo = true;
+    // 5/11/2026 — Con un tempo massimo: una richiesta appesa teneva «Adesso» in attesa senza fine.
     const chiedi = () =>
-      fetch(`/api/consegna/veloce?negozi=${negoziDelCarrello}`, { cache: 'no-store' })
+      fetch(`/api/consegna/veloce?negozi=${negoziDelCarrello}`, {
+        cache: 'no-store',
+        signal: typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(15_000) : undefined,
+      })
         .then((r) => (r.ok ? r.json() : null))
         .then((esito: unknown) => {
           if (!vivo) return;
@@ -603,7 +635,7 @@ export default function CheckoutPage() {
       vivo = false;
       clearInterval(battito);
     };
-  }, [negoziDelCarrello]);
+  }, [negoziDelCarrello, haGruppi, richiediVeloce]);
 
   // Usa il credito MyCity (opt-in, default sì): applicato solo agli ordini COD.
   const [useCredit, setUseCredit] = useState(true);
@@ -734,7 +766,7 @@ export default function CheckoutPage() {
 
   // La frase sulla consegna ha una casa sola: `promessaSpedizione` la fa nascere dal costo di
   // consegna vero. 27/10/2026 — La soglia dei 30 € per negozio non esiste più (si paga solo la
-  // consegna, per negozio, sempre): la barra «ti mancano X €» e il conto sul negozio più lontano
+  // consegna, una sola per tutto il carrello): la barra «ti mancano X €» e il conto sul negozio più lontano
   // dalla soglia (lib/ordini/promessa-del-carrello.ts) sono stati tolti.
   const promessaConsegna = promessaSpedizione();
 
@@ -911,7 +943,9 @@ export default function CheckoutPage() {
           },
           couponCode: appliedCoupon?.coupon.code ?? null,
           pickupInStore,
-          useCredit,
+          // 5/11/2026 — Il credito si manda solo se la cassa l'ha letto e mostrato: se la lettura
+          // cade il saldo vale 0, la casella non compare, e il server non deve spenderlo lo stesso.
+          useCredit: useCredit && (walletCents ?? 0) > 0,
           deliverySlot,
           // R163 — la chiave del checkout: il server la riattacca a `order_placed`,
           // cosi' l'avvio e gli acquisti che ne sono nati si ritrovano.
@@ -988,6 +1022,7 @@ export default function CheckoutPage() {
     onError: (err: unknown) => {
       if (err instanceof Error && err.message === 'REDIRECT_TO_SIGNIN') return;
       toast.error(friendlyError(err));
+      if (deliverySlot === ETICHETTA_ADESSO) setRichiediVeloce((n) => n + 1);
     },
   });
 
@@ -1092,6 +1127,7 @@ export default function CheckoutPage() {
     onError: (err: unknown) => {
       if (err instanceof Error && err.message === 'REDIRECT_TO_SIGNIN') return;
       toast.error(friendlyError(err));
+      if (deliverySlot === ETICHETTA_ADESSO) setRichiediVeloce((n) => n + 1);
     },
   });
 
@@ -1162,7 +1198,7 @@ export default function CheckoutPage() {
             : !consegnaConfermabile
               ? rigaQuandoArriva(consegna)
               : veloceDaAspettare
-                ? (veloceDisponibile === null ? RIGA_VELOCE_IN_ATTESA : 'La consegna veloce adesso non si può: scegli una fascia qui sopra.')
+                ? (veloceDisponibile === null ? MOTIVO_VELOCE_IN_ATTESA : 'La consegna veloce adesso non si può: scegli una fascia qui sopra.')
                 : null;
 
   const validateAddress = (): Partial<Record<keyof AddressForm, string>> => {
@@ -1234,7 +1270,7 @@ export default function CheckoutPage() {
     }
     // 30/10/2026 (ondata 18) — «Adesso» senza il sì del server non parte, comunque arrivi l'invio.
     if (veloceDaAspettare) {
-      toast.error(motivoDelBlocco ?? RIGA_VELOCE_IN_ATTESA);
+      toast.error(motivoDelBlocco ?? MOTIVO_VELOCE_IN_ATTESA);
       return;
     }
     trackCheckoutStep('address', { city: form.city });
@@ -1292,11 +1328,22 @@ export default function CheckoutPage() {
     );
   }
 
+  // 5/11/2026 — La cassa vuota era una riga grigia e un «Torna al negozio» che portava alla home:
+  // adesso è lo stesso stato vuoto del carrello, con i suoi ordini a un tocco (chi torna indietro
+  // dopo aver ordinato arriva spesso qui).
   if (vistaCarrello.mostraVuoto) {
     return (
-      <div className="container mx-auto p-12 text-center space-y-4">
-        <p className="text-ink-500 text-lg">Il tuo carrello è vuoto.</p>
-        <Button href="/">Torna al negozio</Button>
+      <div className="container mx-auto py-12 max-w-2xl">
+        <h1 className="sr-only">Conferma il tuo ordine</h1>
+        <EmptyState
+          icon={ShoppingCart}
+          title="Il tuo carrello è vuoto"
+          description="Se hai appena ordinato, lo trovi nei tuoi ordini. Altrimenti scegli qualcosa dai negozi della città."
+          ctaLabel="Esplora i prodotti"
+          ctaHref="/search"
+          secondaryLabel="I miei ordini"
+          secondaryHref="/orders"
+        />
       </div>
     );
   }
@@ -1495,7 +1542,7 @@ export default function CheckoutPage() {
           )}
 
           {orphans.length > 0 && (
-            <div role="alert" className="bg-secondary-50 border border-secondary-200 rounded-xl p-4 text-sm text-secondary-800 space-y-3">
+            <div role="alert" data-informativo className="bg-secondary-50 border border-secondary-200 rounded-xl p-4 text-sm text-secondary-800 space-y-3">
               <p className="flex items-start gap-2">
                 <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
                 <span><strong>{orphans.length} {orphans.length === 1 ? 'prodotto non è più disponibile' : 'prodotti non sono più disponibili'}</strong>: {orphans.map((o) => o.name).join(', ')}.</span>
@@ -1524,7 +1571,7 @@ export default function CheckoutPage() {
             <div role="alert" className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900 space-y-3">
               <p className="flex items-start gap-2">
                 <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
-                <span><strong>Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello, oppure togli l&apos;articolo da qui.</span>
+                <span><strong>Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name}${s.variantLabel ? ` · ${s.variantLabel}` : ''} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello, oppure togli l&apos;articolo da qui.</span>
               </p>
               {/* Il riquadro diceva solo «riduci le quantità nel carrello», cioè torna indietro e
                   fallo a mano. Chi ha davanti un articolo finito — disponibili zero — non ha niente
@@ -1533,7 +1580,8 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    stockIssues.forEach((s) => removeFromCart(s.id));
+                    // 5/11/2026 — Solo la riga senza scorta: con la variante, non tutte le varianti.
+                    stockIssues.forEach((s) => removeFromCart(s.id, s.variantId ?? undefined));
                     setCart(getCart());
                     toast.success(stockIssues.length === 1 ? 'Articolo rimosso' : 'Articoli rimossi');
                   }}
@@ -1550,7 +1598,7 @@ export default function CheckoutPage() {
               totale qui sotto e' gia' quello nuovo, cioe' quello che verra'
               addebitato davvero. */}
           {prezziCambiati.length > 0 && (
-            <div role="alert" className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900 flex items-start gap-2">
+            <div role="alert" data-informativo className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span>
                 <strong>Il prezzo è cambiato</strong> da quando avevi messo nel carrello:{' '}
@@ -1650,6 +1698,7 @@ export default function CheckoutPage() {
               paymentMethod={paymentMethod}
               disabled={ordineBloccato}
               motivoBlocco={motivoDelBlocco}
+              importiLetti={groups.length > 0}
             />
           </Card>
         </div>
@@ -1673,8 +1722,8 @@ export default function CheckoutPage() {
         style={{ bottom: fondoDellaBarra(['var(--altezza-banner-cookie, 0px)']) }}
       >
         <div className="leading-tight">
-          <div className="text-2xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
-          <div className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(finalTotal)}</div>
+          <div className="text-xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
+          <div className="font-serif text-xl font-extrabold text-ink-900">{groups.length > 0 ? formatPrice(finalTotal) : '—'}</div>
         </div>
         {/*
             6/9/2026 — SUL TELEFONO IL PULSANTE SI SPEGNEVA SENZA DIRE PERCHE'.

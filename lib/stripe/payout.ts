@@ -55,18 +55,25 @@ import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere'
  * `account.updated` sia dalla route di refresh manuale, così lo stato resta
  * corretto anche se il webhook non viene consegnato.
  */
-export async function applyConnectAccountStatus(acct: Stripe.Account): Promise<{ error: unknown }> {
+export async function applyConnectAccountStatus(
+  acct: Stripe.Account,
+): Promise<{ error: unknown; righe: number | null }> {
   const admin = getAdminSupabase();
   // R81 — l'esito torna a chi chiama: il webhook `account.updated` deve poter
   // far riprovare Stripe se la scrittura non passa.
-  return admin
+  // 5/11/2026 — e quante righe ha toccato: zero vuol dire che nessun profilo
+  // porta quel conto (l'id non era stato salvato), e il negozio resterebbe
+  // «non collegato» senza che nessuno lo sappia.
+  const { data, error } = await admin
     .from('profiles')
     .update({
       stripe_charges_enabled: !!acct.charges_enabled,
       stripe_payouts_enabled: !!acct.payouts_enabled,
       stripe_details_submitted: !!acct.details_submitted,
     })
-    .eq('stripe_account_id', acct.id);
+    .eq('stripe_account_id', acct.id)
+    .select('id');
+  return { error, righe: error ? null : Array.isArray(data) ? data.length : null };
 }
 
 export type PayoutResult =
@@ -839,8 +846,8 @@ async function notifyRefundBuyer(
   amountCents: number,
   opts: RefundOrderOpts,
   riparto: RipartoDelRimborso,
-): Promise<void> {
-  if (!opts.notifyBuyer || !buyerEmail) return;
+): Promise<'partita' | 'non-partita' | 'non-richiesta'> {
+  if (!opts.notifyBuyer || !buyerEmail) return 'non-richiesta';
   try {
     const t = refundIssuedTemplate({
       orderId,
@@ -850,15 +857,22 @@ async function notifyRefundBuyer(
       creditoEuro: riparto.creditoCents / 100,
       bonificoEuro: riparto.bonificoCents / 100,
     });
-    await sendEmail({
+    const res = await sendEmail({
       to: buyerEmail,
       subject: t.subject,
       html: t.html,
       text: t.text,
       ...(riparto.modo === 'carta' ? {} : { replyTo: indirizzoContatto('info') }),
     });
+    // 5/11/2026 — Con la posta spenta (o un rifiuto) `sendEmail` non lancia: risponde ok=false.
+    if (res && (res as { ok?: boolean }).ok === false) {
+      logger.warn('[refundOrder] email del rimborso al cliente non partita', { orderId });
+      return 'non-partita';
+    }
+    return 'partita';
   } catch (e) {
     logger.warn('[refundOrder] invio email buyer fallito', e);
+    return 'non-partita';
   }
 }
 
@@ -1710,7 +1724,10 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
           amount: safeAmountCents,
           metadata: {
             order_id: order.id,
-            ...(opts.reason ? { reason: opts.reason } : {}),
+            // 5/11/2026 — Stripe accetta al massimo 500 caratteri per valore:
+            // una nota del negozio piu' lunga faceva fallire il rimborso ogni volta.
+            // La nota intera resta sul reso.
+            ...(opts.reason ? { reason: opts.reason.slice(0, 500) } : {}),
             ...(opts.metadata ?? {}),
             ...(opts.idempotencyKey ? { [METADATO_DELLA_CHIAVE]: chiave } : {}),
           },
@@ -1946,6 +1963,19 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     logger.error('[refundOrder] stato del rimborso non scritto sull ordine', {
       orderId: order.id, message: errStato.message,
     });
+    // 5/11/2026 — I soldi sono gia' usciti: una riga nel log sola non la legge
+    // nessuno, e l'ordine resta «pagato» (o vivo) con un rimborso fatto.
+    try {
+      await notifyAdmins(
+        '⚠️ Rimborso uscito ma stato dell ordine non aggiornato',
+        `Il rimborso sull'ordine #${order.id.slice(0, 8)} è uscito, ma non sono riuscito a scrivere sull'ordine ` +
+          `${Object.keys(statoDaScrivere).join(', ')}: controlla stato e pagamento dell'ordine prima di toccarlo. Non rifare il rimborso.`,
+        '/admin/orders',
+        { unaVoltaPer: `stato-rimborso-non-scritto:${order.id}:${chiave}` },
+      );
+    } catch (e) {
+      logger.error('[refundOrder] avviso dello stato non scritto non inviato', { orderId: order.id, e });
+    }
   }
 
   // R043 — Il recupero mancato si scrive DOPO l'aggiornamento buono, e in una
@@ -2006,9 +2036,31 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     ordineDaChiudere,
     giaRimborsatoPrimaCents: alreadyRefunded,
     annullatoDaChiChiama: opts.annullatoDaChiChiama === true,
+    // 5/11/2026 — La merce torna in negozio solo col reso (o col fattorino,
+    // quando il cliente e' assente): un reclamo chiuso col rimborso pieno su un
+    // ordine consegnato non la rimette in vendita.
+    merceTornata:
+      opts.annullaLOrdine === true ||
+      (typeof opts.metadata?.return_id === 'string' && opts.metadata.return_id.length > 0) ||
+      (opts.idempotencyKey ?? '').startsWith('return_'),
   });
 
-  await notifyRefundBuyer(emailCliente, order.id, safeAmountCents, opts, ripartoVero);
+  const emailAlCliente = await notifyRefundBuyer(emailCliente, order.id, safeAmountCents, opts, ripartoVero);
+  // 5/11/2026 — L'IBAN si chiede solo con quell'email, e l'avviso del bonifico
+  // da fare dice a Nicola che e' partita. Se non e' partita, glielo si dice.
+  if (emailAlCliente === 'non-partita' && ripartoVero.bonificoCents > 0) {
+    try {
+      await notifyAdmins(
+        '⚠️ Email al cliente per l IBAN non partita',
+        `L'email che chiede l'IBAN al cliente dell'ordine #${order.id.slice(0, 8)} NON è partita: scrivigli tu per il bonifico di ` +
+          `${formatPriceFromCents(ripartoVero.bonificoCents)} (non aspettare la sua risposta).`,
+        '/admin/orders',
+        { unaVoltaPer: `iban-non-chiesto:${chiave}` },
+      );
+    } catch (e) {
+      logger.error('[refundOrder] avviso dell email per l IBAN non partita non inviato', { orderId: order.id, e });
+    }
+  }
 
   return {
     refundId,

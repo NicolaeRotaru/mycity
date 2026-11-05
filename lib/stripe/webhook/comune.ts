@@ -145,19 +145,28 @@ export async function notifyAdmins(
   if (errLettura && (chiave || opzioni.almenoUnDestinatario)) {
     throw new Error(`[stripe] amministratori non letti per l avviso «${title}»: ${errLettura.message}`);
   }
+  // 5/11/2026 — Anche quando non si lancia, un avviso sui soldi che non parte
+  // perche' la lettura degli amministratori e' caduta lascia una riga nel log,
+  // col testo dell'avviso: e' l'unica traccia del lavoro da fare.
+  if (errLettura) {
+    logger.error('[stripe] avviso agli amministratori NON mandato: amministratori non letti', {
+      title, body, link, message: errLettura.message,
+    });
+  }
   if (!admins || admins.length === 0) {
     if (opzioni.almenoUnDestinatario) throw new Error(`[stripe] nessun amministratore a cui mandare l avviso «${title}»`);
     return 'nessuno';
   }
   if (!chiave) {
     scritturaFacoltativa(
-      await admin.from('notifications').insert(admins.map((a) => ({ user_id: a.id, title, body, link }))),
+      // 5/11/2026 — 'system': gli avvisi di servizio non si spengono con «Aggiornamenti ordini».
+      await admin.from('notifications').insert(admins.map((a) => ({ category: 'system', user_id: a.id, title, body, link }))),
       `avviso agli amministratori: ${title}`,
     );
     return 'scritto';
   }
   const { error } = await admin.from('notifications').insert(
-    admins.map((a) => ({ id: idDellAvvisoAgliAmministratori(chiave, a.id), user_id: a.id, title, body, link })),
+    admins.map((a) => ({ id: idDellAvvisoAgliAmministratori(chiave, a.id), category: 'system', user_id: a.id, title, body, link })),
   );
   if (!error) return 'scritto';
   if ((error as { code?: string }).code === '23505') {
@@ -279,28 +288,43 @@ export async function provaAMandare(
  */
 export async function suonaLaCampanellaAiNegozi(
   admin: ReturnType<typeof getAdminSupabase>,
-  nuovi: { orderId: string; sellerId: string; totalCents: number; itemsCount: number }[],
+  ordini: { orderId: string; sellerId: string; totalCents: number; itemsCount: number; nuovo?: boolean }[],
   pendingCheckoutId: string,
-): Promise<void> {
-  if (nuovi.length === 0) return;
-  const { error } = await admin.from('notifications').insert(
-    nuovi.map((created) => ({
+): Promise<Set<string>> {
+  /**
+   * 5/11/2026 — UNA CAMPANELLA PER ORDINE, CON UN ID CHE DIPENDE DALL'ORDINE.
+   * Se il primo tentativo del webhook creava l'ordine A e cadeva su B, alla
+   * riconsegna A risultava «gia' esistente» e la sua campanella (e le email) non
+   * partivano mai: nel primo tentativo il codice degli avvisi non era stato
+   * raggiunto. Adesso si tenta la campanella per TUTTI gli ordini del carrello:
+   * l'id deterministico fa rispondere 23505 a quelle gia' scritte. Torna gli
+   * ordini la cui campanella e' nata adesso (o non si e' potuta scrivere per un
+   * altro guasto): sono quelli per cui partono le email.
+   */
+  const daAvvisare = new Set<string>();
+  for (const created of ordini) {
+    const { error } = await admin.from('notifications').insert([{
+      id: idDaChiave(`nuovo-ordine:${created.orderId}`),
       // #33 — la categoria decide se la persona vuole ancora ricevere questo
       // tipo di avviso: senza, gli interruttori non spegnevano niente.
       category: 'order',
       user_id: created.sellerId,
       title: '📦 Nuovo ordine ricevuto',
       // 6/9/2026 — LA CIFRA QUI SI SCRIVEVA A MANO, E CONTRADDICEVA L'EMAIL.
-      // C'era `€${(created.totalCents / 100).toFixed(2)}`: sul telefono del
-      // negoziante arrivava «€35.00» mentre l'email dello STESSO ordine, partita
-      // nello stesso minuto, diceva gia' «35,00 €». Si passa dalla casa dei formati.
       body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · ${formatPriceFromCents(created.totalCents)} · ${created.itemsCount} articoli`,
       link: `/seller/orders/${created.orderId}`,
-    })),
-  );
-  if (error) {
-    logger.error('[stripe] campanella al venditore non scritta: ordine pagato e nessuno avvisato', {
-      pendingCheckoutId, ordini: nuovi.map((c) => c.orderId), message: error.message,
-    });
+    }]);
+    if ((error as { code?: string } | null)?.code === '23505') continue;
+    if (error) {
+      logger.error('[stripe] campanella al venditore non scritta: ordine pagato e nessuno avvisato', {
+        pendingCheckoutId, orderId: created.orderId, message: error.message,
+      });
+      // Senza campanella non si sa se l'ordine era gia' stato avvisato: le
+      // email partono solo per quelli nati adesso, come prima.
+      if (created.nuovo !== false) daAvvisare.add(created.orderId);
+      continue;
+    }
+    daAvvisare.add(created.orderId);
   }
+  return daAvvisare;
 }

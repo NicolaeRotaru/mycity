@@ -39,7 +39,7 @@ const LIMITI = ['accept', 'maxSize', 'minSize', 'maxFiles', 'validator'];
  * in silenzio e' il difetto che questo file esiste per fermare.
  */
 const MUTI_NOTI = new Map<string, string>([
-  ['components/admin/home/HomeSectionConfigForm.tsx', 'caricamento video della home, solo staff — fuori territorio il 6/9/2026'],
+  // 5/11/2026 (S05, scheda 313) — tolto: il caricamento video della home non c'è più (il magazzino non accetta video).
   // 8/9/2026 — accorciata di due righe, come previsto. `GalleryFields.tsx` e `ImageUpload.tsx`
   // adesso hanno l'avviso: vedi
   // `tests/unit/la-foto-dell-iphone-entra-nella-vetrina-e-chi-resta-fuori-lo-sa.test.ts`.

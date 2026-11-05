@@ -1,5 +1,6 @@
 import { finestraDellaFascia } from '@/lib/quando-arriva';
-import { DAY_KEYS, isStoreClosedForOrder, leggiFinestraConsegna, romeNow, ultimoRitiroDellaFascia, type StoreHours } from '@/lib/store-hours';
+import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
+import { isStoreClosedForOrder, leggiFinestraConsegna, orariImpostati as orariDelNegozio, romeNow, ultimoRitiroDellaFascia, type StoreHours } from '@/lib/store-hours';
 import { giornoPiacenza, scartoFusoMinuti } from '@/lib/tempo-piacenza';
 
 /**
@@ -149,13 +150,15 @@ export function entroQuandoAccettare(ordine: OrdineDaScadere, orari?: unknown): 
   return ritiro ?? fineDellaFascia(ordine);
 }
 
-/** Gli orari scritti, se il negozio li ha impostati davvero (la stessa domanda di lib/store-hours.ts). */
+/**
+ * Gli orari scritti, se il negozio li ha impostati davvero: LA regola di lib/store-hours.ts.
+ * 5/11/2026 — Qui c'era una copia sua («basta un giorno con ore»): con le ferie (la settimana scritta
+ * tutta chiusa) diceva «orari mai impostati», e il giro notturno teneva vivo fino a fine fascia un
+ * ordine che nessuno poteva ritirare. La cassa e le rotte, con la regola vera, l'ordine non lo
+ * avrebbero preso.
+ */
 function orariImpostati(orari: unknown): orari is StoreHours {
-  if (!orari || typeof orari !== 'object') return false;
-  return DAY_KEYS.some((k) => {
-    const giorno = (orari as StoreHours)[k];
-    return Array.isArray(giorno) && giorno.length > 0;
-  });
+  return orariDelNegozio(orari) !== null;
 }
 
 /**
@@ -202,7 +205,8 @@ export function ancoraNeiTempi(
 }
 
 /**
- * 30/10/2026 — IL SECONDO FRENO DELLA VELOCE (carta #220, scelta di Nicola delle 16:13).
+ * 30/10/2026 — IL SECONDO FRENO DELLA VELOCE (carta #220 del 29/10; variante B scelta da Nicola il
+ * 30/10 fra le 14:49 e le 14:54 — le 16:13 sono del 29/10, il prezzo della veloce).
  *
  * La veloce promette 30-60 minuti DALLA CONFERMA del negozio. Se il negozio non conferma entro
  * questi minuti la promessa non si può più mantenere: il carrello passa alla prima fascia ancora
@@ -301,7 +305,10 @@ export function rigaScadenzaPerIlNegozio(
       // la domenica, il freno non trova nessuna fascia e l'ordine resta com'è (nonSiSposta).
       return (
         `È una consegna veloce: accettala entro le ${oraDaParete(freno)}. ` +
-        `Dopo ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti senza conferma la veloce cade: se c’è una fascia oraria libera la spesa passa lì da sola.`
+        // 5/11/2026 — Non «la veloce cade» come certo: se il freno non trova una fascia l'ordine resta
+        // veloce, con l'euro, e si può ancora confermare (nonSiSposta).
+        `Dopo ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti senza conferma, se c’è una fascia oraria libera la spesa passa lì da sola; ` +
+        'se non c’è, resta una consegna veloce finché non la accetti o non si annulla.'
       );
     }
     return (
@@ -309,13 +316,23 @@ export function rigaScadenzaPerIlNegozio(
       // Niente «il cliente non paga l'euro della veloce»: quando la veloce è compresa nella spesa
       // piccola non c'è nessun euro da togliere, e se il freno non trova una fascia l'euro resta.
       // Al negozio serve sapere cosa succede all'ordine, non il conto del cliente.
-      `oraria libera la spesa passa lì da sola. ${allAnnullo}`
+      `oraria libera la spesa passa lì da sola. ` +
+      // 5/11/2026 — Fra il decimo minuto e il giro del freno l'ordine è ancora «Adesso»: chi accetta in
+      // quel momento lo accetta veloce, e deve saperlo.
+      `Se lo accetti adesso resta una consegna veloce: va consegnato in ${EXPRESS_ETA_LABEL}. ${allAnnullo}`
     );
   }
   // Con gli orari del negozio `entro` è la stessa ora dell'annullo (l'ultimo ritiro): passata quella,
   // la riga l'ha già detto sopra. Senza orari resta la fine della fascia, e dopo le tre ore.
   const entro = entroQuandoAccettare(ordine, orari) ?? annullo;
-  if (adesso.getTime() < entro.getTime()) return `Accettalo o rifiutalo entro ${scadenzaLeggibile(entro, adesso)}.`;
+  if (adesso.getTime() < entro.getTime()) {
+    // 5/11/2026 — Senza gli orari del negozio `entro` è la FINE della fascia: nell'ultima ora la riga
+    // invitava ad accettare senza dire che la consegna rischia di non arrivare in tempo.
+    const ultimaOra = ultimoMomentoDelRitiro(ordine, orari) === null && entro.getTime() - adesso.getTime() <= 60 * 60_000;
+    return ultimaOra
+      ? `Accettalo o rifiutalo entro ${scadenzaLeggibile(entro, adesso)}: la fascia sta per finire, accettalo solo se la consegna arriva in tempo.`
+      : `Accettalo o rifiutalo entro ${scadenzaLeggibile(entro, adesso)}.`;
+  }
   return `La fascia di consegna è finita: accettalo solo se puoi consegnarlo subito, altrimenti rifiutalo. ${allAnnullo}`;
 }
 

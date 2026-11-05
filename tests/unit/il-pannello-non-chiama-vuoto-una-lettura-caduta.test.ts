@@ -28,7 +28,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import type { ComponentType } from 'react';
 import { monta } from './aiuti/monta-componente';
-import { accendi } from './aiuti/schermo';
+import { accendi, clicca } from './aiuti/schermo';
 import { databaseCheConosceLeColonne } from './aiuti/database-che-conosce-le-colonne';
 
 const G = globalThis as Record<string, unknown>;
@@ -90,6 +90,43 @@ describe.each(PAGINE)('pannello · $nome', (p) => {
     s.smonta();
   });
 
+  // 5/11/2026 (S04, scheda 1810) — Il caso dei dati vecchi in mano (un aggiornamento in sottofondo
+  // che cade, come i payout ogni 60 s) non era fissato; e «Riprova» si cercava ma non si premeva.
+  it('lettura caduta con dati vecchi in mano: lo dice, e «Riprova» rilegge davvero', async () => {
+    let riletture = 0;
+    G.__ESITO_QUERY__ = {
+      isError: true,
+      isSuccess: false,
+      error: new Error('statement timeout'),
+      data: [{ id: 'vecchia' }],
+      refetch: () => { riletture++; return Promise.resolve({}); },
+    };
+    const mod = await monta(p.file);
+    const s = accendi(mod.default as ComponentType);
+    expect(s.radice.textContent ?? '', 'con i dati vecchi in mano non dice che la lettura è caduta').toContain('Non riesco a leggere');
+    const riprova = s.radice.querySelector('[role="alert"] button') as HTMLButtonElement | null;
+    expect(riprova, 'nessun pulsante per riprovare').not.toBeNull();
+    s.agisci(() => clicca(riprova!));
+    expect(riletture, '«Riprova» non rilegge niente').toBeGreaterThan(0);
+    s.smonta();
+  });
+
+  // 5/11/2026 (S04, scheda 1809) — Si controllava solo la PRIMA lettura della pagina: una colonna
+  // sbagliata in una lettura secondaria (i reclami ne fanno una seconda) lasciava la prova verde.
+  it('anche le letture secondarie chiedono solo colonne che esistono', async () => {
+    const db = databaseCheConosceLeColonne({ [p.tabella]: [{ id: 'riga-1' }] });
+    G.__CLIENT_SUPABASE__ = db;
+    const opzioni: OpzioniQuery[] = [];
+    G.__OPZIONI_QUERY__ = opzioni;
+    const mod = await monta(p.file);
+    const s = accendi(mod.default as ComponentType);
+    s.smonta();
+    for (const o of opzioni) {
+      await o.queryFn(contesto(o)).catch(() => undefined);
+    }
+    expect(db.errori, `una lettura della pagina chiede una colonna che non esiste (${opzioni.length} letture)`).toEqual([]);
+  });
+
   it('la lettura che scade arriva a React Query come errore, non come elenco vuoto', async () => {
     G.__CLIENT_SUPABASE__ = databaseCheConosceLeColonne({}, { cade: true });
     const principale = await letturaPrincipale(p.file);
@@ -136,8 +173,11 @@ const RIGHE_TAGLIATE: Array<{ nome: string; file: string; riga: (i: number) => R
 ];
 
 describe.each(RIGHE_TAGLIATE)('pannello · $nome · elenco al tetto', (p) => {
+  // 5/11/2026 (S05, scheda 1801) — Le pagine chiedono TETTO+1 righe: «tagliato» è quando ne
+  // arriva una in più del tetto. Con TETTO esatte l'elenco è intero, e dirlo tagliato era falso.
   it.each([
-    ['al tetto', TETTO, true],
+    ['oltre il tetto', TETTO + 1, true],
+    ['al tetto esatto', TETTO, false],
     ['sotto il tetto', 3, false],
   ])('%s: dice se l’elenco è tagliato', async (_caso, quante, tagliato) => {
     G.__DATI_QUERY__ = Array.from({ length: quante as number }, (_, i) => p.riga(i));

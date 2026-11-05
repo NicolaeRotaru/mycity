@@ -49,6 +49,10 @@ export function readConsent(): ConsentState | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as ConsentState;
     if (parsed.version !== CONSENT_VERSION) return null;
+    // 5/11/2026 — Dopo 180 giorni il banner richiedeva il consenso, ma qui il «sì» scaduto
+    // valeva ancora: Google Analytics e gli eventi continuavano a partire finché la persona
+    // non rispondeva (e il cookie del server, intanto, era già scaduto). Scaduto = non dato.
+    if (typeof parsed.ts !== 'number' || Date.now() - parsed.ts > CONSENT_MAX_AGE_DAYS * 86_400_000) return null;
     return { ...DEFAULT_STATE, ...parsed, necessary: true };
   } catch {
     return null;

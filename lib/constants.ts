@@ -11,8 +11,8 @@ export const NEW_PRODUCT_DAYS = 14;
  * Qui vivevano `FREE_SHIPPING_THRESHOLD` (30 € per negozio), `SHIPPING_PER_ORDER` (4,90 € senza
  * coordinate) e le due tariffe a distanza `SPEDIZIONE_BASE_EUR` + `SPEDIZIONE_PER_KM_EUR` (2,50 €
  * più 1,20 € al km). Nicola ha firmato un'altra promessa (scelta 8 della carta #209, 26/10): il
- * cliente paga SOLO la consegna, `PLATFORM_DELIVERY_FEE_CENTS` per negozio, sempre, anche sotto i
- * 30 euro; col ritiro in negozio niente. Le costanti sono state tolte, non lasciate a zero: un
+ * cliente paga SOLO la consegna (dal 29/10 una sola per tutto il carrello: `PLATFORM_DELIVERY_FEE_CENTS`
+ * di base più gli euro di `vociDellaConsegna` in lib/ordini/prezzi.ts), anche sotto i 30 euro; col ritiro in negozio niente. Le costanti sono state tolte, non lasciate a zero: un
  * numero che resta esportato prima o poi qualcuno lo rimette in una frase o in un conto.
  */
 /**
@@ -105,9 +105,10 @@ export { RITIRO_IN_NEGOZIO_ATTIVO } from './ritiro-in-negozio';
  * di quell'ordine, quindi non falliva in silenzio — falliva e basta, e il cron
  * lo ritentava all'infinito.
  *
- * Con il compenso fisso a 3 euro il conto torna sempre: la fee di consegna che
- * la piattaforma trattiene e' 3 euro, quindi copre il compenso da sola anche
- * quando la spedizione pagata dal cliente e' zero.
+ * 5/11/2026 — Attenzione: la consegna NON copre sempre il compenso da sola. Col
+ * codice «Spedizione gratuita» la consegna scende fino a zero e il compenso lo
+ * copre la commissione del negozio (`consegnaDaPagareCents` in
+ * lib/ordini/prezzi.ts). Il conto vero dei bonifici sta lì, non in questa nota.
  */
 export const COMPENSO_RIDER_CENTS = 300;
 /**
@@ -120,9 +121,11 @@ export const COMPENSO_RIDER_CENTS = 300;
  */
 export const COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS = 100;
 /**
- * Fee di consegna trattenuta dalla piattaforma (in centesimi) su ogni ordine
- * con consegna a domicilio. NON si applica ai ritiri in negozio. La incassa
- * MyCity: non finisce nel payout del venditore né nel compenso del rider.
+ * La BASE della consegna (in centesimi): una volta sola per tutto il carrello,
+ * sull'ordine del primo negozio (regola del 29/10, `vociDellaConsegna` in
+ * lib/ordini/prezzi.ts). NON si applica ai ritiri in negozio. Non finisce nel
+ * payout del venditore; è da qui che si paga il compenso del fattorino
+ * (`COMPENSO_RIDER_CENTS`), il resto della consegna resta a MyCity.
  */
 export const PLATFORM_DELIVERY_FEE_CENTS = 300;
 
@@ -139,12 +142,7 @@ export const PLATFORM_DELIVERY_FEE_CENTS = 300;
 export const SUPPLEMENTO_CONSEGNA_CENTS = 100;
 /** Da quanta merce per negozio (dopo gli sconti) la consegna con la fascia torna a 3 €. */
 export const SPESA_SENZA_SUPPLEMENTO_CENTS = 1000;
-/**
- * La consegna più alta di un carrello con UN negozio solo: base più un euro. Con più negozi non c'è
- * più un massimo (regola del 29/10 alle 22:21): ogni negozio in più e ogni negozio sotto i 10 €
- * aggiungono il loro euro.
- */
-export const CONSEGNA_MASSIMA_CENTS = PLATFORM_DELIVERY_FEE_CENTS + SUPPLEMENTO_CONSEGNA_CENTS;
+/* 5/11/2026 — Tolta `CONSEGNA_MASSIMA_CENTS`: non la usava nessuno e non era un massimo (5+6+7 € pagano 8 €). */
 /** 29/10/2026 22:21 — Ogni negozio in più nel carrello: una fermata in più nello stesso giro. */
 export const CONSEGNA_NEGOZIO_IN_PIU_CENTS = 100;
 /** La consegna veloce («Adesso»): una volta sola per tutto il carrello, compresa se un negozio è sotto i 10 €. */

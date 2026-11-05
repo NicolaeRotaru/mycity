@@ -49,7 +49,7 @@ export type IngressiPrezzo = {
   gruppi: GruppoDaPrezzare[];
   /** Dove sta il negozio, per la distanza. */
   coordinateNegozio: (sellerId: string) => CoordinateNegozio;
-  /** Dove va la spesa. Null = tariffa fissa. */
+  /** Dove va la spesa. Null = senza coordinate (la spedizione oggi vale zero comunque). */
   consegnaLat: number | null;
   consegnaLng: number | null;
   pickupInStore: boolean;
@@ -251,7 +251,7 @@ function consegnaDaPagareCents(a: {
  * cui la commissione basta da sola a pagare il fattorino. Si ricava dai due numeri, non si scrive.
  */
 export function spesaPerConsegnaGratisColCodiceCents(): number {
-  return Math.ceil((compensoRiderCents({ pickupInStore: false }) * 10000) / MARKETPLACE_FEE_BPS);
+  return Math.ceil((compensoRiderCents({ pickupInStore: false, negozioInPiu: false }) * 10000) / MARKETPLACE_FEE_BPS);
 }
 
 export function prezziDelCarrello(ing: IngressiPrezzo): EsitoPrezzo {

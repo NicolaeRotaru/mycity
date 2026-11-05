@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Image from 'next/image';
 import { useDropzone } from 'react-dropzone';
 import { toast } from 'sonner';
@@ -39,6 +39,13 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
   const items = c.items ?? [];
   const set = (patch: Partial<Cfg>) => onChange({ ...section, config: { ...c, ...patch } });
   const [busy, setBusy] = useState(false);
+  // 342 — A caricamento finito si parte dalla sezione e dal `onChange` dell'ULTIMO
+  // disegno: quelli del momento del drop ricostruivano sezione, pagina e sito dalla
+  // copia vecchia, e cancellavano quello che il negoziante aveva scritto intanto.
+  const ultimaSezione = useRef(section);
+  ultimaSezione.current = section;
+  const ultimoOnChange = useRef(onChange);
+  ultimoOnChange.current = onChange;
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: ACCETTA,
@@ -67,7 +74,11 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
       setBusy(true);
       try {
         const urls = await Promise.all(toUpload.map(uploadSiteImage));
-        set({ items: [...items, ...urls.map((url) => ({ url, alt: '' }) as Item)] });
+        const ora = ultimaSezione.current;
+        ultimoOnChange.current({
+          ...ora,
+          config: { ...ora.config, items: [...(ora.config.items ?? []), ...urls.map((url) => ({ url, alt: '' }) as Item)] },
+        });
       } catch (e) {
         toast.error(friendlyError(e));
       } finally {

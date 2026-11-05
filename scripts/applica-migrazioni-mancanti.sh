@@ -166,7 +166,7 @@ fi
 # Non si ferma: su un database nuovo (registro vuoto -> si applica tutto da
 # capo) e su un database la cui storia e' tracciata dall'inizio (registro che
 # conosce la prima migrazione -> il salto per nome/numero funziona).
-PRIMA_MIGRAZIONE="$(basename "$(ls "$MIG"/*.sql | sort -V | head -1)")"
+PRIMA_MIGRAZIONE="$(basename "$(ls "$MIG"/*.sql | LC_ALL=C sort | head -1)")"
 PRIMA_VERSIONE="${PRIMA_MIGRAZIONE%%_*}"
 PRIMA_NOME="${PRIMA_MIGRAZIONE#*_}"; PRIMA_NOME="${PRIMA_NOME%.sql}"
 
@@ -203,7 +203,9 @@ fi
 # scrittura.
 saltate=0
 DA_APPLICARE=()
-for f in $(ls "$MIG"/*.sql | sort -V); do
+# 5/11/2026 — Lo stesso ordine della ricostruzione della CI e del generatore dei tipi: byte per
+# byte (LC_ALL=C), cosi' 108_ viene prima di 108b_ (sort -V faceva il contrario).
+for f in $(ls "$MIG"/*.sql | LC_ALL=C sort); do
   name="$(basename "$f")"
   versione="${name%%_*}"
   descrizione="${name#*_}"; descrizione="${descrizione%.sql}"

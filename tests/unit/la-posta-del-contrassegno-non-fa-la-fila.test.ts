@@ -219,13 +219,13 @@ describe('la posta dopo un ordine in contanti da tre negozi', () => {
     expect(postaInviata.filter((m) => m.to === 'cliente@test.it').length).toBe(3);
   });
 
-  it('e i giri verso i negozi partono insieme, non uno dopo l altro', async () => {
+  // 5/11/2026 (sessione S02, scheda 43) — Rovesciata: i giri insieme facevano 2N chiamate a
+  // Resend nello stesso istante, oltre il suo limite al secondo. Adesso si va in fila, come la
+  // strada della carta (resta una sola lettura dei profili per tutti, prova qui sopra).
+  it('e i giri verso i negozi partono in fila, uno dopo l altro', async () => {
     const { POST } = await import('@/app/api/orders/cod/route');
     await (POST as unknown as (req: never) => Promise<Response>)(richiesta());
     await new Promise((r) => setTimeout(r, 60));
-    expect(
-      utentiInVolo.picco,
-      'le letture dei venditori sono ancora una in fila all altra',
-    ).toBeGreaterThanOrEqual(2);
+    expect(utentiInVolo.picco, 'le letture dei venditori partono ancora insieme').toBe(1);
   });
 });

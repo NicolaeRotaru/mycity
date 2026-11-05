@@ -24,10 +24,17 @@ export function VerifiedBadge({ size = 'md', showLabel = false, className }: Pro
     <span
       className={cn('inline-flex items-center gap-1 text-olive-700', s.text, className)}
       title="Negozio verificato da MyCity"
-      aria-label="Negozio verificato"
     >
       <BadgeCheck size={s.icon} strokeWidth={2.4} className="fill-olive-100" aria-hidden />
-      {showLabel && <span className="font-semibold">Verificato</span>}
+      {/* S10 (5/11/2026) — Un aria-label su uno <span> senza ruolo i lettori di
+          schermo non lo leggono: il bollino era muto. Il nome adesso è testo. */}
+      {showLabel ? (
+        <span className="font-semibold">
+          Verificato<span className="sr-only"> da MyCity</span>
+        </span>
+      ) : (
+        <span className="sr-only">Negozio verificato</span>
+      )}
     </span>
   );
 }

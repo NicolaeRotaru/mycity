@@ -5,7 +5,8 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { X, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { sizedImage, logoNegozio } from '@/lib/image-url';
+import { sizedImage } from '@/lib/image-url';
+import { caricatoreLogoNegozio } from '@/components/StoreAvatar';
 import caricatoreFotoRemote from '@/lib/image-loader';
 
 /**
@@ -44,7 +45,9 @@ export default function StoryViewer({ stories, startIndex = 0, onClose }: Props)
    * visore (chi naviga da tastiera sta leggendo), e per chi ha chiesto al
    * sistema di ridurre le animazioni.
    */
-  const [inPausa, setInPausa] = useState(false);
+  // 5/11/2026 — La scelta fatta col pulsante vince su tutto: null = nessuna scelta, si segue il
+  // fuoco da tastiera e la preferenza di meno animazioni.
+  const [sceltaAMano, setSceltaAMano] = useState<boolean | null>(null);
   const [fuocoDentro, setFuocoDentro] = useState(false);
   const [menoAnimazioni, setMenoAnimazioni] = useState(false);
   const contenitoreRef = useRef<HTMLDivElement>(null);
@@ -67,7 +70,28 @@ export default function StoryViewer({ stories, startIndex = 0, onClose }: Props)
     };
   }, []);
 
-  const fermo = inPausa || fuocoDentro || menoAnimazioni;
+  const fermo = sceltaAMano ?? (fuocoDentro || menoAnimazioni);
+  // Da dove viene il fuoco: un tasto premuto (Tab, frecce) o un tocco/clic. Il fuoco che il codice
+  // mette su «Chiudi» all'apertura non è un gesto da tastiera.
+  const ultimoGestoDaTastiera = useRef(false);
+  useEffect(() => {
+    const tasto = () => { ultimoGestoDaTastiera.current = true; };
+    const tocco = () => { ultimoGestoDaTastiera.current = false; };
+    document.addEventListener('keydown', tasto, true);
+    document.addEventListener('pointerdown', tocco, true);
+    return () => {
+      document.removeEventListener('keydown', tasto, true);
+      document.removeEventListener('pointerdown', tocco, true);
+    };
+  }, []);
+  // Una visualizzazione per storia: prima si contava a ogni cambio di `fermo`.
+  const giaContate = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const story = stories[index];
+    if (!story || giaContate.current.has(story.id)) return;
+    giaContate.current.add(story.id);
+    supabase.rpc('track_story_view', { p_story: story.id }).then(() => {});
+  }, [index, stories]);
   const progressRef = useRef<HTMLDivElement | null>(null);
   // onClose può cambiare identità ad ogni render del parent: lo teniamo in un ref
   // così l'effetto non si ri-arma di continuo.
@@ -80,8 +104,6 @@ export default function StoryViewer({ stories, startIndex = 0, onClose }: Props)
       onCloseRef.current();
       return;
     }
-    supabase.rpc('track_story_view', { p_story: story.id }).then(() => {});
-
     // #136 — Ferma vuol dire ferma: niente avanzamento automatico e niente
     // barra che scorre.
     if (fermo) return;
@@ -126,7 +148,11 @@ export default function StoryViewer({ stories, startIndex = 0, onClose }: Props)
       role="dialog"
       aria-modal="true"
       aria-label="Storie dei negozi"
-      onFocus={() => setFuocoDentro(true)}
+      // 5/11/2026 — In pausa per il fuoco solo se arriva da tastiera: il fuoco che il codice mette
+      // su «Chiudi» all'apertura fermava il visore appena aperto, e «Riprendi» non lo sbloccava.
+      onFocus={() => {
+        if (ultimoGestoDaTastiera.current) setFuocoDentro(true);
+      }}
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setFuocoDentro(false); }}
       className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
     >
@@ -163,12 +189,12 @@ export default function StoryViewer({ stories, startIndex = 0, onClose }: Props)
       {/* #136 — Il comando che mancava. */}
       <button
         type="button"
-        onClick={() => setInPausa((p) => !p)}
+        onClick={() => setSceltaAMano(!fermo)}
         className="absolute top-4 right-16 text-white bg-black/40 rounded-full p-2 z-20"
-        aria-label={inPausa ? 'Riprendi le storie' : 'Metti in pausa le storie'}
-        aria-pressed={inPausa}
+        aria-label={fermo ? 'Riprendi le storie' : 'Metti in pausa le storie'}
+        aria-pressed={fermo}
       >
-        {inPausa ? <Play size={20} /> : <Pause size={20} />}
+        {fermo ? <Play size={20} /> : <Pause size={20} />}
       </button>
 
       {index > 0 && (
@@ -209,10 +235,12 @@ export default function StoryViewer({ stories, startIndex = 0, onClose }: Props)
             <div className="absolute top-6 left-4 flex items-center gap-2">
               {active.seller.store_logo && (
                 <Image
-                  src={logoNegozio(active.seller.store_logo, 36)}
+                  src={active.seller.store_logo}
                   alt=""
                   width={36}
                   height={36}
+                  // 5/11/2026 — la misura la fa Supabase (solo larghezza), non anche Vercel.
+                  loader={caricatoreLogoNegozio}
                   className="rounded-full ring-2 ring-white bg-white object-contain w-9 h-9"
                 />
               )}

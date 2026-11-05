@@ -18,6 +18,7 @@ import { Select } from '@/components/ui/Field';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
 import { AI_NEGOZI_ACCESA, TRADUCI_ACCESO } from '@/lib/funzioni-al-lancio';
+import { campiDellaModifica, lavoroRicordato, ricordaLavoro } from './anteprima';
 
 /**
  * AI Studio — tre modi per lavorare col catalogo con l'intelligenza artificiale:
@@ -217,7 +218,7 @@ function CreateTab() {
 
       <p className="text-xs text-ink-400">
         Gli strumenti AI per la singola scheda (voce, foto, import da link, ottimizza per la ricerca,
-        traduci, &laquo;perché non vende?&raquo;) sono disponibili nel form prodotto.
+        {TRADUCI_ACCESO ? ' traduci,' : ''} &laquo;perché non vende?&raquo;) sono disponibili nel form prodotto.
       </p>
     </div>
   );
@@ -335,8 +336,17 @@ function CatalogTab() {
     try {
       const data = (await authedFetch(`/api/ai/catalog-batch/status?jobId=${encodeURIComponent(jobId)}`)) as Job;
       setJob(data);
+      // Un lavoro chiuso non si ripropone alla prossima apertura.
+      if (data.status === 'applied' || data.status === 'canceled' || data.status === 'error') ricordaLavoro(null);
     } catch { /* riprova al prossimo tick */ }
   }, []);
+
+  // All'apertura si riparte dall'ultimo lavoro avviato da questo browser: il lotto
+  // è già pagato, e senza questo una pagina ricaricata lo perdeva di vista.
+  useEffect(() => {
+    const ricordato = lavoroRicordato();
+    if (ricordato) void poll(ricordato);
+  }, [poll]);
 
   // Polling mentre il job è in lavorazione.
   useEffect(() => {
@@ -353,7 +363,8 @@ function CatalogTab() {
         method: 'POST',
         body: JSON.stringify({ operation, ...(operation === 'translate' ? { targetLang: lang } : {}) }),
       });
-      toast.success(`Job avviato su ${data.total} prodotti. Può volerci qualche minuto.`);
+      toast.success(`Job avviato su ${data.total} prodotti. Può volerci qualche minuto: puoi chiudere la pagina, lo ritrovi qui.`);
+      ricordaLavoro(String(data.jobId));
       setJob({ id: data.jobId, operation, status: 'processing', total: data.total, targetLang: operation === 'translate' ? lang : null, results: [], counts: { total: 0, withChanges: 0 } });
     } catch (err) {
       toast.error(friendlyError(err));
@@ -368,7 +379,17 @@ function CatalogTab() {
     try {
       const data = await authedFetch('/api/ai/catalog-batch/apply', { method: 'POST', body: JSON.stringify({ jobId: job.id }) });
       toast.success(`Applicato a ${data.applied} prodotti.`);
-      setJob({ ...job, status: 'applied' });
+      // S10 (5/11/2026) — Chi è stato saltato si dice, col motivo.
+      const saltati = (Array.isArray(data.esiti) ? data.esiti : []).filter(
+        (e: { esito?: string }) => e.esito === 'saltato',
+      ) as { productId: string; motivo?: string }[];
+      if (saltati.length > 0) {
+        const motivi = Array.from(new Set(saltati.map((e) => e.motivo).filter(Boolean))).slice(0, 3).join('; ');
+        toast.error(`${saltati.length} prodotti saltati${motivi ? `: ${motivi}` : ''}.${data.ripetibile ? ' Puoi riprovare.' : ''}`);
+      }
+      setJob({ ...job, status: data.ripetibile ? 'ready' : 'applied' });
+      // 5/11/2026 (unione) — Il lavoro ricordato si dimentica solo quando è applicato davvero (S06).
+      if (!data.ripetibile) ricordaLavoro(null);
     } catch (err) {
       toast.error(friendlyError(err));
     } finally {
@@ -453,7 +474,7 @@ function CatalogTab() {
                     ? <span className="inline-flex items-center gap-1.5 text-secondary-600"><AlertTriangle size={14} aria-hidden /> {r.reason ?? 'Da rivedere'}</span>
                     : <span className="inline-flex items-center gap-1.5 text-olive-600"><Check size={14} strokeWidth={2.4} aria-hidden /> ok</span>
                 ) : (
-                  <span>{r.summary ?? (r.patch && Object.keys(r.patch).length ? 'Modifiche proposte' : 'Nessuna modifica')}</span>
+                  <AnteprimaDellaModifica r={r} />
                 )}
               </li>
             ))}
@@ -497,4 +518,20 @@ export default function CatalogAiBatchPage() {
     );
   }
   return <CatalogAiBatchPageAcceso />;
+}
+
+/** Cosa verrà scritto davvero su un prodotto: i campi della modifica ripulita, non la frase del modello. */
+function AnteprimaDellaModifica({ r }: { r: JobResult }) {
+  const campi = campiDellaModifica(r.patch);
+  if (campi.length === 0) return <span>Nessuna modifica</span>;
+  return (
+    <div className="min-w-0">
+      <ul className="space-y-0.5">
+        {campi.map((c) => (
+          <li key={c.chiave}><strong className="text-ink-800">{c.etichetta}:</strong> {c.valore}</li>
+        ))}
+      </ul>
+      {r.summary && <p className="text-xs text-ink-400">Nota dell&apos;assistente: {r.summary}</p>}
+    </div>
+  );
 }

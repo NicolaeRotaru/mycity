@@ -68,8 +68,10 @@ function frasiDi(html: string): string[] {
 /** Il codice senza i commenti: le spiegazioni per chi programma non le legge il cliente. */
 const senzaCommenti = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
+// 5/11/2026 (S07, schede 2031 e 2390) — riletta contro la cassa: le fasce di domani non sono sempre
+// servibili (sabato sera, forno chiuso la domenica) e a negozio chiuso si prenota anche per oggi.
 const NEGOZIO_CHIUSO =
-  'Se il negozio è chiuso puoi prenotare per domani, scegliendo una fascia oraria in cassa: la consegna subito, invece, parte solo negli orari di apertura.';
+  'Se il negozio è chiuso puoi prenotare una fascia oraria di oggi o di domani: la cassa ti propone solo quelle in cui il negozio fa in tempo a preparare la spesa. La consegna subito, invece, parte solo negli orari di apertura.';
 
 const PAGINA_SPEDIZIONI = [
   'Spedizioni e consegne',
@@ -88,7 +90,8 @@ const PAGINA_SPEDIZIONI = [
   // Lo spazio prima del punto è il grassetto della fascia che `testoDi` scioglie in uno spazio.
   "La consegna arriva nella fascia oraria che scegli in cassa . Se ti serve prima, c'è la consegna veloce in 30-60 minuti dalla conferma del negozio: si può dalle 8 alle 21, a negozi aperti, con un fattorino in servizio. Quando non si può, la cassa non te la propone.",
   'I minuti della veloce partono da quando il negozio conferma l’ordine, non da quando lo invii',
-  'Vale negli orari di apertura del negozio che hai scelto',
+  // 5/11/2026 (S07, scheda 2312) — al plurale: la veloce vuole aperti tutti i negozi del carrello.
+  'La veloce vale solo se tutti i negozi del carrello sono aperti',
   NEGOZIO_CHIUSO,
   'Quanto costa la consegna',
   // Lo spazio prima del punto è il grassetto della tariffa che `testoDi` scioglie in uno spazio.
@@ -101,14 +104,15 @@ const PAGINA_SPEDIZIONI = [
   'Da "I miei ordini" vedi in tempo reale:',
   'In attesa di conferma',
   'In preparazione presso il venditore',
-  'Pronto per il ritiro / la consegna',
+  // 5/11/2026 (S07, scheda 2032) — la stessa etichetta di «I miei ordini» (`etichettaPronto`).
+  'Pronto per il rider',
   'In consegna (con nome del rider)',
   'Consegnato',
   'Aree servite',
   // 28/10/2026 — riletta col confine a 5 km: via «e dintorni», che prometteva Podenzano, Rottofreno
   // e Gossolengo. Lo spazio prima della virgola è il grassetto di «Piacenza» che `testoDi` scioglie
   // in uno spazio, come in «vai ai contatti .» più sotto: sullo schermo non c'è.
-  `Consegniamo a Piacenza , fino a ${KM} km dal negozio in linea d'aria. Quando scrivi il tuo indirizzo, in cassa misuriamo la distanza e ti diciamo subito se ci arriviamo. Se l'indirizzo non si trova sulla mappa, la cassa non riesce a misurarla e l'ordine passa senza questo controllo.`,
+  `Consegniamo a Piacenza , fino a ${KM} km dal negozio in linea d'aria. Quando scrivi il tuo indirizzo, in cassa misuriamo la distanza e ti diciamo subito se ci arriviamo. Se l'indirizzo non si trova sulla mappa, la cassa non riesce a misurarla e l'ordine passa senza questo controllo; lo stesso succede se il negozio non ha ancora la sua posizione sulla mappa.`,
   'Problemi con la consegna?',
   'Se la consegna è in ritardo, il pacco è danneggiato o non è arrivato, scrivici appena puoi: vai ai contatti . Per i difetti dei prodotti vale comunque la garanzia legale di 24 mesi.',
 ];
@@ -138,6 +142,8 @@ describe('la pagina Spedizioni dice, frase per frase, quello che fa la cassa', (
         locale: 'it_IT',
         siteName: 'MyCity',
         url: '/shipping',
+        // 5/11/2026 (S08, scheda 373) — la copertina del sito anche per i link condivisi.
+        images: ['/opengraph-image'],
       },
     });
   });

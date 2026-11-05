@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { Bike, LifeBuoy, MessageCircle, Phone, Store, X, type LucideIcon } from 'lucide-react';
+import { Bike, LifeBuoy, Phone, Store, X, type LucideIcon } from 'lucide-react';
 
 /**
  * Bottom-sheet di contatto per la pagina tracking ordine.
@@ -34,6 +34,11 @@ export function ContactSheet({ target, onClose }: { target: ContactTarget; onClo
   const previouslyFocused = useRef<HTMLElement | null>(null);
   const Icon = KIND_ICON[target.kind];
   const tel = target.phone ? target.phone.replace(/\s/g, '') : null;
+  // 5/11/2026 — La chiusura in un ref: la pagina dell'ordine si rilegge a ogni posizione del
+  // fattorino (ogni 30 s) e passa ogni volta una funzione nuova. Con [onClose] fra le dipendenze
+  // l'effetto ripartiva e rimetteva il fuoco su «Chiudi»: chi usa il lettore perdeva il punto.
+  const chiudiRef = useRef(onClose);
+  chiudiRef.current = onClose;
 
   useEffect(() => {
     previouslyFocused.current = document.activeElement as HTMLElement | null;
@@ -47,7 +52,7 @@ export function ContactSheet({ target, onClose }: { target: ContactTarget; onClo
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        chiudiRef.current();
         return;
       }
       if (e.key !== 'Tab' || !node) return;
@@ -71,7 +76,7 @@ export function ContactSheet({ target, onClose }: { target: ContactTarget; onClo
       document.removeEventListener('keydown', onKeyDown);
       previouslyFocused.current?.focus?.();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div
@@ -117,15 +122,9 @@ export function ContactSheet({ target, onClose }: { target: ContactTarget; onClo
           </p>
         )}
 
-        {target.kind !== 'help' && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-full border border-cream-300 px-4 py-3 text-sm font-semibold text-ink-700 transition-colors hover:bg-cream-50"
-          >
-            <MessageCircle size={16} strokeWidth={2.2} aria-hidden /> Invia un messaggio
-          </button>
-        )}
+        {/* 5/11/2026 — Qui c'era «Invia un messaggio», che chiudeva il pannello e non mandava
+            niente: chi lo premeva aspettava una risposta che non poteva arrivare. Finché non c'è
+            una chat vera col fattorino e col negozio, il pannello offre solo la chiamata. */}
 
         {target.orderRef && (
           <p className="mt-3 text-center text-xs text-ink-400">

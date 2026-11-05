@@ -65,9 +65,9 @@ function dati(): DatiOrdini {
       { id: 'm1', conversation_id: CONV_MARIA, sender_id: MARIA, body: 'A che ora chiudete?', created_at: '2026-10-30T09:00:00Z', read_at: null },
     ],
     orders: [
-      { id: 'o1', user_id: MARIA, seller_id: PANE, total_price: 24, created_at: '2026-10-20T10:00:00Z', delivery_full_name: 'Maria Rossi' },
-      { id: 'o2', user_id: GIULIA, seller_id: PANE, total_price: 12, created_at: '2026-10-21T10:00:00Z', delivery_full_name: 'Giulia Bianchi' },
-      { id: 'o3', user_id: ESTRANEO, seller_id: SALUMI, total_price: 9, created_at: '2026-10-22T10:00:00Z', delivery_full_name: 'Carlo Estraneo' },
+      { id: 'o1', payment_status: 'PAID', delivery_status: 'DELIVERED', user_id: MARIA, seller_id: PANE, total_price: 24, created_at: '2026-10-20T10:00:00Z', delivery_full_name: 'Maria Rossi' },
+      { id: 'o2', payment_status: 'PAID', delivery_status: 'DELIVERED', user_id: GIULIA, seller_id: PANE, total_price: 12, created_at: '2026-10-21T10:00:00Z', delivery_full_name: 'Giulia Bianchi' },
+      { id: 'o3', payment_status: 'PAID', delivery_status: 'DELIVERED', user_id: ESTRANEO, seller_id: SALUMI, total_price: 9, created_at: '2026-10-22T10:00:00Z', delivery_full_name: 'Carlo Estraneo' },
     ],
     store_reviews: [
       {

@@ -44,10 +44,9 @@ export default function CookieBanner() {
   });
 
   useEffect(() => {
-    const s = readConsent();
-    // Mostra se mai espresso o se scaduto (ts > 6 mesi)
-    const sixMonthsAgo = Date.now() - 180 * 24 * 60 * 60 * 1000;
-    if (!s || s.ts < sixMonthsAgo) {
+    // Mostra se mai espresso o se scaduto: la scadenza (CONSENT_MAX_AGE_DAYS) la decide
+    // readConsent, la stessa regola che leggono gli strumenti di misura.
+    if (!readConsent()) {
       setShow(true);
     }
     const onReopen = () => setShow(true);
@@ -130,8 +129,8 @@ export default function CookieBanner() {
           <Cookie size={18} strokeWidth={2.2} aria-hidden /> Cookie e tecnologie simili
         </h2>
         <p id="cookie-banner-desc" className="mt-1 text-sm text-ink-600">
-          Usiamo cookie tecnici (sempre attivi) e, previo tuo consenso, cookie funzionali,
-          di analisi e di marketing per migliorare il servizio. Puoi accettare tutto,
+          Usiamo cookie tecnici (sempre attivi) e, previo tuo consenso, cookie di analisi
+          e di marketing per migliorare il servizio. Puoi accettare tutto,
           rifiutare tutto, o personalizzare le tue scelte. Leggi la nostra{' '}
           <Link href="/cookies" className="text-primary-700 underline hover:text-primary-800">
             cookie policy
@@ -143,13 +142,15 @@ export default function CookieBanner() {
             <Row label="Cookie necessari" desc="Sessione, sicurezza, anti-frode. Sempre attivi." checked disabled />
             <Row
               label="Funzionali"
-              desc="Preferenze (lingua, ultima ricerca, mappa salvata)."
+              desc="Oggi non ne usiamo: lingua e modalità negozio sono cookie tecnici."
               checked={!!draft.functional}
               onChange={(v) => setDraft((d) => ({ ...d, functional: v }))}
             />
             <Row
               label="Analytics"
-              desc="Statistiche aggregate anonime sull'uso del sito."
+              // 5/11/2026 — Diceva «statistiche aggregate anonime», ma il beacon salva indirizzo di
+              // rete, browser e un identificativo del dispositivo legato all'account (mc_vid).
+              desc="Statistiche sull'uso del sito con un identificativo del dispositivo (mc_vid, 12 mesi), collegato al tuo account quando accedi. Registriamo anche indirizzo di rete e browser."
               checked={!!draft.analytics}
               onChange={(v) => setDraft((d) => ({ ...d, analytics: v }))}
             />

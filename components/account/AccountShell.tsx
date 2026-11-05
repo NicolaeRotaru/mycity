@@ -27,7 +27,7 @@ type NavItem = { href: string; icon: LucideIcon; label: string; badge?: NavBadge
 const MOBILE_NAV: NavItem[] = [
   { href: '/profile', icon: User, label: 'Profilo' },
   { href: '/orders', icon: Package, label: 'Ordini' },
-  { href: '/returns', icon: RotateCcw, label: 'Resi' },
+  { href: '/profile/returns', icon: RotateCcw, label: 'Resi' },
   { href: '/profile/addresses', icon: MapPin, label: 'Indirizzi' },
   { href: '/favorites', icon: Heart, label: 'Preferiti' },
   { href: '/messages', icon: MessageCircle, label: 'Messaggi', badge: 'messages' },

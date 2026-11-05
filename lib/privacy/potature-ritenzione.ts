@@ -157,11 +157,20 @@ async function potaFileScaduti(
   const data = await esigiRpc(admin, funzione, argomenti);
   let tolti = 0;
   const rimasti: string[] = [];
-  for (const riga of (data ?? []) as Array<{ percorsi: string[] | null }>) {
+  for (const riga of (data ?? []) as Array<{ percorsi: string[] | null; user_id?: string | null }>) {
     const percorsi = (riga.percorsi ?? []).filter(Boolean);
     if (percorsi.length === 0) continue;
     const { error: errRimozione } = await admin.storage.from(secchio).remove(percorsi);
     if (errRimozione) {
+      // 5/11/2026 — La coda dei documenti d'identità si svuota PRIMA della rimozione
+      // (DELETE … RETURNING): se lo storage rifiuta, i percorsi tornano in coda, così la
+      // notte dopo ci si riprova invece di lasciarli solo nel registro (migrazione 215).
+      if (funzione === 'kyc_file_da_togliere_prendi' && riga.user_id) {
+        const { error: errRimessa } = await admin.rpc('kyc_file_da_togliere_rimetti', {
+          p_profilo: riga.user_id, p_percorsi: percorsi,
+        });
+        if (errRimessa) registro.warn('[cron-deletions] percorsi non rimessi in coda', { err: errRimessa.message, percorsi });
+      }
       // I percorsi finiscono nel registro apposta: la colonna che li teneva e'
       // gia' stata azzerata, quindi senza questa riga il file resterebbe nello
       // storage e nessuno saprebbe piu' dove cercarlo.
@@ -252,7 +261,11 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
       fai: (admin) => esigi(admin
         .from('activity_events')
         .update({ anon_id: null, path: null, referrer: null, city: null, country: null })
-        .lt('created_at', mesi(14))),
+        .lt('created_at', mesi(14))
+        // 5/11/2026 — Senza filtro riscriveva ogni notte tutte le righe già pulite più
+        // vecchie di 14 mesi (tuple morte, un UPDATE che cresce da solo dentro un lavoro
+        // da 300 secondi). Si toccano solo le righe con ancora qualcosa da togliere.
+        .or('anon_id.not.is.null,path.not.is.null,referrer.not.is.null,city.not.is.null,country.not.is.null')),
     },
     {
       cosa: 'audit_logs.ip',

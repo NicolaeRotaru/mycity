@@ -1,5 +1,6 @@
 'use client';
 
+import { riepilogoRecensioni } from './riepilogo-recensioni';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import type { LucideIcon } from 'lucide-react';
@@ -11,7 +12,7 @@ import { isVerifiedStore } from '@/lib/store-trust';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { fotoDelNegozio } from '@/lib/media/foto-del-negozio';
 import { coverClassName, socialLinks, badgeLabel } from '@/lib/store-customization';
-import { isOpenNow, streetFromAddress, DAY_KEYS, type StoreHours } from '@/lib/store-hours';
+import { isOpenNow, streetFromAddress, chiaveDiOggi, type StoreHours } from '@/lib/store-hours';
 import { consegnaDellaVetrina, vetrinaChiedeLaVeloce } from '@/lib/promessa-consegna';
 import { useOraDiPiacenza, useVeloceDelNegozio } from '@/components/ui/DeliveryCutoff';
 import type { SectionConfig, SectionContext } from './SectionContext';
@@ -49,11 +50,11 @@ function initials(name?: string | null): string {
  */
 export default function HeroSection({ config, ctx }: { config: SectionConfig<'hero'>; ctx: SectionContext }) {
   const router = useRouter();
-  const { store, customization: custom, accent, reviews } = ctx;
+  const { store, customization: custom, accent } = ctx;
   const media = (Array.isArray(store.store_media) ? store.store_media : []) as StoreMediaItem[];
   const street = streetFromAddress(store.store_address);
   const hours = (store.store_hours ?? {}) as StoreHours;
-  const todayKey = DAY_KEYS[new Date().getDay()];
+  const todayKey = chiaveDiOggi();
   const hasHours = HOUR_KEYS.some((k) => Array.isArray(hours[k]));
   const openNow = isOpenNow(hours[todayKey]);
   // 30/10/2026 — «Consegna oggi» guardava solo se oggi il negozio aveva un orario: giovedì 29/10
@@ -72,9 +73,10 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
   const showSocials = config.showSocials !== false;
   const showDescription = config.showDescription !== false;
 
-  const avgRating = reviews.length
-    ? reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length
-    : null;
+  // 5/11/2026 — media e numero veri (store_review_stats), non le ultime 20.
+  const riepilogo = riepilogoRecensioni(ctx);
+  const avgRating = riepilogo ? riepilogo.media : null;
+  const totaleRecensioni = riepilogo?.totale ?? 0;
 
   // "dal {anno}": dato reale da profiles.founded_year; renderizzato solo se valido.
   const foundedYear = typeof store.founded_year === 'number' && store.founded_year > 0
@@ -126,7 +128,14 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
         {/* Pill "Indietro" sulla cover */}
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={() => {
+            // 5/11/2026 — Chi apre il link del negozio in una scheda nuova (WhatsApp, Instagram)
+            // non ha niente dietro: router.back() non faceva niente, o nei browser delle app usciva
+            // dal sito. Con una sola voce di cronologia si va all'elenco dei negozi. (Il referrer
+            // non serve: dentro il sito non cambia a ogni pagina.)
+            if (window.history.length > 1) router.back();
+            else router.push('/stores');
+          }}
           className="absolute left-4 top-4 z-20 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3.5 py-2 text-sm font-semibold text-ink-800 shadow backdrop-blur-sm transition-colors hover:bg-white"
         >
           <ArrowLeft size={16} strokeWidth={2.2} aria-hidden /> Indietro
@@ -206,7 +215,7 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
                 <span className="inline-flex items-center gap-1">
                   <Star size={15} className="fill-accent-300 text-accent-300" aria-hidden />
                   <strong className="text-white">{avgRating.toFixed(1).replace('.', ',')}</strong>
-                  <span className="text-white/80">· {reviews.length} {reviews.length === 1 ? 'recensione' : 'recensioni'}</span>
+                  <span className="text-white/80">· {totaleRecensioni} {totaleRecensioni === 1 ? 'recensione' : 'recensioni'}</span>
                 </span>
               )}
               {category && (

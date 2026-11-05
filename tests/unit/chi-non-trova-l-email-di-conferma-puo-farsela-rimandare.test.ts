@@ -102,7 +102,8 @@ describe('① la porta dell’accesso', () => {
     expect(res.status).toBe(401);
     const corpo = await res.json();
     expect(corpo.error.message).toMatch(/Email o password non corretti/);
-    expect(esitoDellaRispostaDiAccesso(res.ok, corpo)).toEqual({ tipo: 'errore', messaggio: 'Email o password non corretti' });
+    // S10 (5/11/2026) — l'esito porta anche il codice della rotta, che la pagina usa per la frase giusta.
+    expect(esitoDellaRispostaDiAccesso(res.ok, corpo)).toEqual({ tipo: 'errore', messaggio: 'Email o password non corretti', codice: 'UNAUTHORIZED' });
   });
 
   it('la pagina di verifica riceve la strada di prima, solo se interna', () => {

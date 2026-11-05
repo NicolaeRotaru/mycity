@@ -193,6 +193,9 @@ export function rigaConsegnaDellaScheda(s: {
 }): string | null {
   if (s.esaurito) return null;
   if (s.consegnaEsterna) return `Consegna in ${s.consegnaEsterna}`;
+  // 5/11/2026 — Il sì della cassa vale solo nelle ore della veloce, come in `consegnaDellaVetrina`:
+  // la scheda aperta alle 20:50 scriveva ancora «oppure veloce in 30-60 minuti» alle 21:10.
+  const veloce = s.veloce === true && (!s.adesso || expressSiPuo(s.adesso.getHours()));
   if (s.adesso) {
     const p = promessaDiConsegna({ idoneoExpress: true, disponibile: true, orari: s.orari, adesso: s.adesso });
     // 31/10/2026 (ondata 3) — La cassa propone solo le fasce di oggi e di domani. Sabato alle 21:30,
@@ -209,12 +212,12 @@ export function rigaConsegnaDellaScheda(s: {
         : `${rigaNegozioChiuso(p.riapre)}: in cassa scegli l'ora della consegna`;
     }
     if (cassaSenzaFasce) {
-      if (s.veloce === true) return `Consegna ${VELOCE_IN_MINUTI}`;
+      if (veloce) return `Consegna ${VELOCE_IN_MINUTI}`;
       const riapre = quandoRiapre(s.orari, s.adesso);
       return riapre ? `Le consegne di oggi sono finite, il negozio riapre ${riapre}` : 'Le consegne di oggi sono finite';
     }
   }
-  return s.veloce === true ? CONSEGNA_O_VELOCE_ADESSO : CONSEGNA_ALL_ORA_CHE_SCEGLI;
+  return veloce ? CONSEGNA_O_VELOCE_ADESSO : CONSEGNA_ALL_ORA_CHE_SCEGLI;
 }
 
 /**

@@ -11,6 +11,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { domandaCategoriePiene, soloLePiene } from './CategoryShowcase';
 
 type Entry = { href: string; icon: LucideIcon; label: string };
 
@@ -24,7 +25,7 @@ const DESTINATIONS: Entry[] = [
   { href: '/novita',         icon: Sparkles,  label: 'Novità' },
   { href: '/regali',         icon: Gift,      label: 'Regali' },
   { href: '/near',           icon: MapPin,    label: 'Vicino a te' },
-  { href: '/piu-venduti',    icon: Flame,     label: 'Più venduti' },
+  { href: '/piu-venduti',    icon: Flame,     label: 'Più recensiti' },
   { href: '/piccoli-prezzi', icon: PiggyBank, label: 'Piccoli prezzi' },
 ];
 
@@ -107,7 +108,19 @@ const CategoryBar = () => {
    */
   useEffect(() => {
     if (!open) return;
-    pannelloRef.current?.querySelector<HTMLElement>('a[href]')?.focus({ preventScroll: true });
+    // 5/11/2026 — Il primo elemento raggiungibile E visibile: sul telefono è la X «Chiudi le
+    // categorie», che sta prima dei link; da `sm` in su la X è nascosta e si va al primo link.
+    const candidati = pannelloRef.current?.querySelectorAll<HTMLElement>('button, a[href]') ?? [];
+    // Visibile = né lui né un contenitore dentro il pannello sono display:none (la X sta in un
+    // div `sm:hidden`).
+    const visibile = (el: HTMLElement) => {
+      for (let n: HTMLElement | null = el; n && n !== pannelloRef.current; n = n.parentElement) {
+        if (window.getComputedStyle(n).display === 'none') return false;
+      }
+      return true;
+    };
+    const primo = Array.from(candidati).find(visibile);
+    primo?.focus({ preventScroll: true });
   }, [open]);
 
   const { data: cats = [] } = useQuery({
@@ -122,6 +135,10 @@ const CategoryBar = () => {
       return (data ?? []) as Cat[];
     },
   });
+  // 5/11/2026 — Come home e piè di pagina: solo le categorie con qualcosa dentro (stessa
+  // lettura e stessa chiave, quindi nessuna domanda in più). Se non si sa, si elencano tutte.
+  const piene = useQuery(domandaCategoriePiene(supabase));
+  const catVisibili = soloLePiene(cats, piene.isError ? null : piene.data);
 
   useEffect(() => {
     if (!open) return;
@@ -150,8 +167,8 @@ const CategoryBar = () => {
     };
   }, [open]);
 
-  const tops = cats.filter((c) => c.parent_id === null);
-  const childrenOf = (id: string) => cats.filter((c) => c.parent_id === id);
+  const tops = catVisibili.filter((c) => c.parent_id === null);
+  const childrenOf = (id: string) => catVisibili.filter((c) => c.parent_id === id);
 
   return (
     <div ref={rootRef} className="relative">
@@ -170,11 +187,10 @@ const CategoryBar = () => {
                riferimento a un elemento che non c'è è a sua volta un difetto. */
             aria-controls={open ? PANNELLO_ID : undefined}
             /* 27/8/2026 (R106) — diceva `menu`, e allora un lettore di schermo
-               promette la navigazione con le frecce e, dentro un `role="menu"`,
-               può arrivare a nascondere tutto ciò che non è una voce di menu.
-               Qui dentro ci sono link normali: si dice che si apre qualcosa, e
-               basta. */
-            aria-haspopup="true"
+               promette la navigazione con le frecce. 5/11/2026 — anche "true"
+               per ARIA 1.2 vuol dire «menu»: qui dentro ci sono link normali,
+               quindi aria-haspopup non c'è più; restano aria-expanded e
+               aria-controls. */
             className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 font-semibold transition-colors focus-visible:outline-white ${
               open
                 ? 'border-accent-400 text-accent-200'

@@ -22,10 +22,13 @@
 export default function RootLoading() {
   return (
     <div role="status" aria-live="polite" aria-busy="true" className="px-4 sm:px-6 pt-3">
-      <span className="sr-only">Stiamo caricando…</span>
       <div className="h-1 w-full overflow-hidden rounded-full bg-cream-200" aria-hidden>
         <div className="h-full w-1/3 animate-pulse rounded-full bg-primary-700" />
       </div>
+      {/* 5/11/2026 — La sola barretta da 4 pixel, su una rete lenta, lasciava una schermata quasi
+          bianca: sembrava un sito rotto. La scritta adesso si vede, sotto la barra, senza
+          assomigliare a nessuna pagina in particolare. */}
+      <p className="mt-6 text-center text-sm text-ink-500">Stiamo caricando…</p>
     </div>
   );
 }

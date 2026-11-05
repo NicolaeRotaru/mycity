@@ -103,6 +103,11 @@ export default function ActivityTracker() {
     const url = chiaveDellaPaginaVista(pathname ?? '/', searchParams);
     if (lastUrl.current === url) return;
     lastUrl.current = url;
+    // S10 (5/11/2026) — Senza consenso il beacon non parte (lo ferma `send`), e
+    // prima la pagina d'ingresso veniva «spesa» lo stesso: chi accettava i
+    // cookie dopo perdeva la pagina d'ingresso e il segno di sessione nuova.
+    // Adesso la prima pagina si consuma solo quando parte davvero.
+    if (serveIlConsensoStatistico('page_view') && !hasConsent('analytics')) return;
     const isFirst = firstView.current;
     firstView.current = false;
     send({
@@ -112,6 +117,23 @@ export default function ActivityTracker() {
       metadata: isFirst ? { new_session: true } : undefined,
     });
   }, [pathname, searchParams]);
+
+  // Alla prima accettazione dei cookie si registra la pagina in cui si e',
+  // come fanno PostHog e il contatore delle schede prodotto.
+  useEffect(() => {
+    const suConsenso = () => {
+      if (!firstView.current || !hasConsent('analytics') || !lastUrl.current) return;
+      firstView.current = false;
+      send({
+        event_type: 'page_view',
+        path: lastUrl.current,
+        referrer: document.referrer || undefined,
+        metadata: { new_session: true },
+      });
+    };
+    window.addEventListener('mc:consent-change', suConsenso);
+    return () => window.removeEventListener('mc:consent-change', suConsenso);
+  }, []);
 
   // login / logout — logghiamo solo le vere transizioni di sessione.
   // Supabase emette SIGNED_IN anche su refresh token / refocus tab: per non

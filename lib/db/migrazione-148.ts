@@ -72,10 +72,16 @@ export const COLONNE_148 = ['recovered_at'] as const;
  * alla 124. Qui si aggiunge solo il codice del traduttore davanti al database,
  * più il confronto sul testo come rete: i messaggi cambiano fra le versioni.
  */
-export function colonnaNonTrovata(errore: ErroreDatabase): boolean {
+export function colonnaNonTrovata(errore: ErroreDatabase, colonne?: readonly string[]): boolean {
   if (!errore) return false;
   if (eSchemaIndietro(errore)) return true;
-  if (errore.code === 'PGRST204') return true;
+  // 5/11/2026 — Con l'elenco delle colonne nuove, un PGRST204 vale solo se nomina una di quelle:
+  // un nome scritto male in una scrittura non deve passare per «schema indietro».
+  if (errore.code === 'PGRST204') {
+    if (!colonne || colonne.length === 0) return true;
+    const t = `${errore.message ?? ''} ${(errore as { details?: unknown }).details ?? ''}`;
+    return colonne.some((c) => new RegExp(`\\b${c}\\b`).test(t));
+  }
   const testo = (errore.message ?? '').toLowerCase();
   return testo.includes('column') && (testo.includes('does not exist') || testo.includes('could not find'));
 }
@@ -104,7 +110,7 @@ export async function scriviAncheSeMancaUnaColonnaNuova(
   const primo = await esegui(campi);
   if (!primo?.error) return { riuscita: true, avviso: null };
 
-  if (!colonnaNonTrovata(primo.error)) {
+  if (!colonnaNonTrovata(primo.error, colonneRecenti)) {
     return {
       riuscita: false,
       avviso: `${cosa}: il database ha rifiutato la scrittura — ${primo.error.message ?? 'senza motivo'}`,

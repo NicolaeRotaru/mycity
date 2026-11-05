@@ -1,10 +1,13 @@
 import { ImageResponse } from 'next/og';
+import { caratteriDelMarchio, MARCHIO_FONT_FAMILY, MARCHIO_FONT_WEIGHT } from '@/app/carattere-del-marchio';
 import { leggiNegozioPerAnteprima } from '@/lib/queries/metadati-vetrina';
 
 export const runtime = 'edge';
 export const alt = 'Negozio su MyCity';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
+
+const CACHE_ANTEPRIMA = 'public, max-age=300, s-maxage=300, stale-while-revalidate=86400';
 
 // 27/8/2026 (R010) — una sola fabbrica del collegamento, e nessun silenzio sulle variabili.
 // 15/10/2026 (R3) — dalla vista pubblica dei negozi, non da `profiles`: il robot di
@@ -35,8 +38,8 @@ export default async function StoreOG({ params }: { params: { id: string } }) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 36, fontWeight: 800, color: '#F4BC53' }}>My</span>
-          <span style={{ fontSize: 36, fontWeight: 800 }}>City</span>
+          <span style={{ fontSize: 36, fontFamily: MARCHIO_FONT_FAMILY, fontWeight: MARCHIO_FONT_WEIGHT, color: '#F4BC53' }}>My</span>
+          <span style={{ fontSize: 36, fontFamily: MARCHIO_FONT_FAMILY, fontWeight: MARCHIO_FONT_WEIGHT }}>City</span>
         </div>
 
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 40, marginTop: 30 }}>
@@ -60,12 +63,12 @@ export default async function StoreOG({ params }: { params: { id: string } }) {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={logo} alt="" width={220} height={220} style={{ objectFit: 'contain' }} />
             ) : (
-              <div style={{ fontSize: 130, fontWeight: 900, color: '#A03B25' }}>My</div>
+              <div style={{ fontSize: 130, fontFamily: MARCHIO_FONT_FAMILY, fontWeight: MARCHIO_FONT_WEIGHT, color: '#A03B25' }}>My</div>
             )}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flex: 1 }}>
-            <div style={{ fontSize: 60, fontWeight: 900, lineHeight: 1.05 }}>
+            <div style={{ fontSize: 60, fontWeight: 800, lineHeight: 1.05 }}>
               {name.length > 36 ? name.slice(0, 33) + '…' : name}
             </div>
             <div style={{ fontSize: 26, opacity: 0.95, lineHeight: 1.3 }}>
@@ -82,6 +85,9 @@ export default async function StoreOG({ params }: { params: { id: string } }) {
         </div>
       </div>
     ),
-    { ...size },
+    // 5/11/2026 — Next la servirebbe «immutable» per un anno: l'anteprima conteneva il prezzo
+    // vecchio (o l'immagine di ripiego, se la lettura era caduta) finché WhatsApp la teneva.
+    // Cinque minuti di memoria, poi si rifà; i caratteri sono quelli del marchio.
+    { ...size, fonts: await caratteriDelMarchio(), headers: { 'cache-control': CACHE_ANTEPRIMA } },
   );
 }

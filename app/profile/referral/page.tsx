@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { trackReferralSent } from '@/lib/analytics/events';
 import { CLASSIFICA_INVITI_ACCESA, INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
@@ -15,31 +16,35 @@ import { CLASSIFICA_INVITI_ACCESA, INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-
 export default function ReferralPage() {
   const [copied, setCopied] = useState(false);
 
-  const { data: profile, isLoading } = useQuery({
+  const { data: profile, isLoading, isError: profiloNonLetto, refetch: rileggiProfilo } = useQuery({
     queryKey: queryKeys.referrals.mine,
     enabled: INVITI_E_PUNTI_ACCESI,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
-      const { data } = await supabase
+      // 5/11/2026 — L'errore veniva buttato: profile restava null e la rotellina girava per sempre.
+      const { data, error } = await supabase
         .from('profiles')
         .select('referral_code, full_name')
         .eq('id', user.id)
         .single();
+      if (error) throw error;
       return data;
     },
   });
 
-  const { data: stats } = useQuery({
+  const { data: stats, isError: invitiNonLetti } = useQuery({
     queryKey: queryKeys.referrals.stats(profile?.referral_code ?? ''),
     enabled: !!profile?.referral_code,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return { total: 0, rewarded: 0, earned: 0 };
-      const { data: referrals } = await supabase
+      // 5/11/2026 — Una lettura caduta mostrava «0 invitati» e «€0,00 guadagnati».
+      const { data: referrals, error } = await supabase
         .from('referrals')
         .select('reward_amount, rewarded')
         .eq('referrer_id', user.id);
+      if (error) throw error;
       const list = referrals ?? [];
       return {
         total: list.length,
@@ -63,6 +68,15 @@ export default function ReferralPage() {
     );
   }
 
+  if (profiloNonLetto) {
+    return (
+      <ErrorState
+        title="Non riusciamo a caricare i tuoi inviti"
+        description="Controlla la connessione e riprova."
+        onRetry={() => void rileggiProfilo()}
+      />
+    );
+  }
   if (isLoading || !profile) return <LoadingState />;
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://mycity.it';
@@ -157,6 +171,11 @@ export default function ReferralPage() {
       </div>
 
       {/* STATS */}
+      {invitiNonLetti ? (
+        <p role="alert" className="bg-white border rounded-xl p-4 text-center text-sm text-ink-700">
+          Non riusciamo a leggere i tuoi inviti in questo momento: ricarica la pagina fra poco.
+        </p>
+      ) : (
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white border rounded-xl p-4 text-center">
           <p className="text-3xl font-bold font-serif text-primary-700">{stats?.total ?? 0}</p>
@@ -171,6 +190,7 @@ export default function ReferralPage() {
           <p className="text-xs text-ink-500 uppercase tracking-wide mt-1">Guadagnati</p>
         </div>
       </div>
+      )}
 
       <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900 flex items-start gap-2">
         <Lightbulb size={18} className="text-accent-500 shrink-0 mt-0.5" aria-hidden />

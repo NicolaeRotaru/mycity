@@ -18,6 +18,31 @@ export function apiSuccess<T>(data: T, init?: ResponseInit): NextResponse<ApiSuc
   return NextResponse.json({ ok: true, data }, init);
 }
 
+/**
+ * S10 (5/11/2026) — Molte rotte passano come `details` il messaggio intero
+ * dell'errore (`e instanceof Error ? e.message : undefined`). Con zod quel
+ * messaggio e' l'elenco grezzo in JSON di tutti i controlli falliti, coi nomi
+ * interni dei campi; con altre librerie e' il loro testo interno. Al browser
+ * arriva solo il primo problema leggibile, `{ campo, messaggio }`; un testo
+ * qualunque non arriva. Gli oggetti costruiti apposta dalla rotta passano.
+ */
+export function dettagliLeggibili(details: unknown): unknown {
+  if (typeof details !== 'string') return details;
+  try {
+    const elenco = JSON.parse(details) as unknown;
+    if (Array.isArray(elenco) && elenco.length > 0) {
+      const primo = elenco[0] as { path?: unknown; message?: unknown };
+      if (typeof primo?.message === 'string') {
+        const campo = Array.isArray(primo.path) ? primo.path.map(String).join('.') : '';
+        return { campo, messaggio: primo.message };
+      }
+    }
+  } catch {
+    // non e' un elenco di zod: e' un testo interno, e non esce.
+  }
+  return undefined;
+}
+
 export function apiError(
   status: number,
   message: string,
@@ -35,7 +60,7 @@ export const ApiErrors = {
   unauthorized:    (message = 'Autenticazione richiesta') => apiError(401, message, 'UNAUTHORIZED'),
   forbidden:       (message = 'Non hai i permessi per questa azione') => apiError(403, message, 'FORBIDDEN'),
   notFound:        (message = 'Non trovato') => apiError(404, message, 'NOT_FOUND'),
-  invalidRequest:  (message: string, details?: unknown) => apiError(400, message, 'INVALID_REQUEST', details),
+  invalidRequest:  (message: string, details?: unknown) => apiError(400, message, 'INVALID_REQUEST', dettagliLeggibili(details)),
   rateLimited:     (retryAfterSec: number, message?: string) =>
     NextResponse.json(
       { ok: false, error: { code: 'RATE_LIMITED', message: message ?? `Troppe richieste. Riprova tra ${retryAfterSec}s.` } },

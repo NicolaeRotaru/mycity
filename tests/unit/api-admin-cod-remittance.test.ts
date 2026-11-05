@@ -14,7 +14,7 @@ const state: { released: number; rpcError: null | { message: string } } = {
 const rpcMock = vi.fn(async () => ({ data: state.released, error: state.rpcError }));
 
 vi.mock('@/lib/api/middleware', () => ({
-  withAdminAuth: (h: (ctx: { req: unknown }) => unknown) => (req: unknown) => h({ req }),
+  withAdminAuth: (h: (ctx: { req: unknown; user: { id: string } }) => unknown) => (req: unknown) => h({ req, user: { id: 'admin-1' } }),
 }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/supabase/server', () => ({

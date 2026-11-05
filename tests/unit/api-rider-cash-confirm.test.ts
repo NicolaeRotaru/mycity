@@ -203,7 +203,8 @@ describe('POST /api/rider/cash-confirm', () => {
       (args) => args[0] === 'delivery_status',
     );
     expect(filtroStato).toBeTruthy();
-    expect(filtroStato?.[1]).toEqual(['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']);
+    // 5/11/2026 (sessione S02, scheda 173) — senza PICKED_UP: i contanti si dichiarano alla porta.
+    expect(filtroStato?.[1]).toEqual(['OUT_FOR_DELIVERY', 'DELIVERED']);
   });
 
   /**

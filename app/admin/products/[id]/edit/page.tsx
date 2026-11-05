@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -24,6 +24,10 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
   const { id } = use(props.params);
   const router = useRouter();
   const qc = useQueryClient();
+  // 5/11/2026 (S05) — Dopo «la scorta è cambiata» il modulo si rimonta coi dati
+  // riletti: la scorta vista all'apertura la tiene il modulo, e senza rimontarlo
+  // ogni nuovo «Salva» ridava lo stesso errore finché non si usciva.
+  const [versioneModulo, setVersioneModulo] = useState(0);
 
   const { data: product, isLoading, error, isFetching: prodottoInLettura, isFetchedAfterMount: prodottoRiletto } = useQuery({
     queryKey: queryKeys.admin.product(id),
@@ -83,7 +87,11 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
         body: JSON.stringify({ id, ...payload, variants: nextVariants, scorteViste }),
       });
       const body = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(body?.error?.message ?? 'Salvataggio non riuscito');
+      if (!res.ok) {
+        const errore = new Error(body?.error?.message ?? 'Salvataggio non riuscito') as Error & { conflitto?: boolean };
+        errore.conflitto = res.status === 409;
+        throw errore;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.products });
@@ -92,7 +100,16 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
       toast.success('Modifiche salvate');
       router.push('/admin/products');
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    onError: async (err: unknown) => {
+      if ((err as { conflitto?: boolean })?.conflitto) {
+        // La chiave del prodotto è anche il prefisso di quella delle varianti: si rileggono tutte e due.
+        await qc.invalidateQueries({ queryKey: queryKeys.admin.product(id) });
+        setVersioneModulo((v) => v + 1);
+        toast.error('Qualcosa è cambiato mentre la scheda era aperta (scorta o varianti): ho riletto il prodotto. Controlla i numeri e salva di nuovo.', { duration: 10_000 });
+        return;
+      }
+      toast.error(friendlyError(err));
+    },
   });
 
   const removeProduct = useMutation({
@@ -168,6 +185,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
       )}
 
       <ProductForm
+        key={versioneModulo}
         mode="edit"
         categories={categories}
         initialValues={initialValues}

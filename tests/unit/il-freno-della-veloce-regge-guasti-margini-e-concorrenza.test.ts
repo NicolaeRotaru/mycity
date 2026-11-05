@@ -4,7 +4,8 @@ import { rigaScadenzaPerIlNegozio, scadenzaAccettazione } from "@/lib/ordini/sca
 import { statoPagamento } from "@/lib/ordini/riepilogo-ordine";
 
 /**
- * IL SECONDO FRENO DELLA VELOCE (carta #220, scelta di Nicola del 30/10 alle 16:13).
+ * IL SECONDO FRENO DELLA VELOCE (carta #220 del 29/10; variante B scelta da Nicola il 30/10 fra le
+ * 14:49 e le 14:54 — le 16:13 sono del 29/10, il prezzo della veloce).
  *
  * La veloce promette 30-60 minuti dalla conferma del negozio e costa 1 € in più. Prima, se il
  * negozio non confermava, l ordine restava «Adesso» per tre ore e poi moriva: il cliente aspettava

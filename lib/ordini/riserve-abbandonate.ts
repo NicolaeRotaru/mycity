@@ -137,6 +137,15 @@ async function chiudiSuStripe(sessionId: string): Promise<EsitoChiusura> {
   }
 }
 
+/** Quanto può durare, al massimo, il giro verso Stripe che dà l'id alla riga appena nata. */
+export const MS_PER_NASCERE = 2 * 60_000;
+
+function rigaAppenaNata(creata: unknown, adesso: number = Date.now()): boolean {
+  if (typeof creata !== 'string') return false;
+  const t = Date.parse(creata);
+  return Number.isFinite(t) && adesso - t < MS_PER_NASCERE;
+}
+
 export async function liberaRiserveAbbandonate(
   admin: ClientRiserve,
   opzioni: {
@@ -229,6 +238,16 @@ export async function liberaRiserveAbbandonate(
     // già SCADUTA da sé. Stripe rifiuta `expire` anche su quella, ma quella non
     // incassa più niente — trattarla come viva bloccava un ordine in contanti
     // per mezz'ora, con un «riprova» che non poteva funzionare.
+    // 5/11/2026 — UNA RIGA SENZA ID DI SESSIONE PUÒ ESSERE UNA CASSA CHE STA NASCENDO.
+    // La rotta della carta scrive la riga, poi chiede la pagina a Stripe, poi scrive l'id: per tutto
+    // quel giro di rete l'id è vuoto. Scaderla lì rimetteva in vendita merce che un secondo dopo si
+    // poteva pagare (ordine pagato senza merce). Una riga così giovane non si tocca: vale come pagina
+    // ancora aperta. Più vecchia, la chiamata a Stripe è morta e la riga si libera come prima.
+    if (!riga.stripe_session_id && rigaAppenaNata(riga.created_at)) {
+      ancoraPagabili.push(`nascente:${riga.id}`);
+      continue;
+    }
+
     if (riga.stripe_session_id) {
       let esito: EsitoChiusura;
       try {

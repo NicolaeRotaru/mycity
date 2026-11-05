@@ -13,6 +13,7 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { MYCITY_SELLER_ID } from '@/lib/products/mycitySeller';
 import { type ProductVariant } from '@/lib/products/variants';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
 type SellerOption = { id: string; store_name: string | null; offers_express: boolean | null };
@@ -20,7 +21,10 @@ type SellerOption = { id: string; store_name: string | null; offers_express: boo
 export default function AdminNewProductPage() {
   const router = useRouter();
   const qc = useQueryClient();
-  const [sellerId, setSellerId] = useState<string>(MYCITY_SELLER_ID);
+  // 5/11/2026 (S05) — Si parte senza negozio e lo si sceglie: partendo dal negozio di
+  // sistema «MyCity», che c'è solo se è stato lanciato il seed, la tendina mostrava
+  // il primo negozio dell'elenco e il modulo ne inviava un altro.
+  const [sellerId, setSellerId] = useState<string>('');
   const [imported, setImported] = useState<ImportResult | null>(null);
   const [importNonce, setImportNonce] = useState(0);
 
@@ -71,6 +75,7 @@ export default function AdminNewProductPage() {
 
   const create = useMutation({
     mutationFn: async ({ payload, variants }: { payload: ProductPayload; variants: ProductVariant[] }) => {
+      if (!sellerId) throw new Error('Scegli il negozio di destinazione');
       const { data: { session } } = await supabase.auth.getSession();
       const external = imported
         ? {
@@ -122,7 +127,9 @@ export default function AdminNewProductPage() {
         value={sellerId}
         onChange={(e) => setSellerId(e.target.value)}
         disabled={sellersLoading}
+        required
       >
+        <option value="" disabled>— scegli il negozio —</option>
         {sellers.map((s) => (
           <option key={s.id} value={s.id}>
             {s.store_name || (s.id === MYCITY_SELLER_ID ? 'MyCity' : s.id.slice(0, 8))}
@@ -130,13 +137,17 @@ export default function AdminNewProductPage() {
         ))}
       </Select>
 
-      <ImportFromUrlBox
-        sellerId={sellerId}
-        onImported={(data) => {
-          setImported(data);
-          setImportNonce((n) => n + 1);
-        }}
-      />
+      {/* 5/11/2026 (S05) — L'importazione da link usa l'AI per i negozi, spenta al
+          lancio: la rotta risponde «non configurato». Si mostra solo se è accesa. */}
+      {AI_NEGOZI_ACCESA && (
+        <ImportFromUrlBox
+          sellerId={sellerId}
+          onImported={(data) => {
+            setImported(data);
+            setImportNonce((n) => n + 1);
+          }}
+        />
+      )}
 
       <ProductForm
         key={importNonce}

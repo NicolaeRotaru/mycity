@@ -8,11 +8,10 @@ import { cn } from '@/lib/cn';
 /**
  * Prova sociale specifica — "Ordinato N volte negli ultimi 7 giorni".
  *
- * La prova sociale specifica converte più delle stelle generiche. Conta i
- * pezzi venduti del prodotto nell'ultima settimana (order_items → orders).
+ * La prova sociale specifica converte più delle stelle generiche. Conta gli
+ * ordini del prodotto nell'ultima settimana (funzione del database, migrazione 245).
  * Best-effort: se i dati mancano o sono pochi non mostra nulla (no fake).
  */
-const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const MIN_TO_SHOW = 3; // sotto questa soglia, niente prova sociale
 
 export function SocialProof({
@@ -24,17 +23,16 @@ export function SocialProof({
 }) {
   const { data: count = 0 } = useQuery({
     queryKey: ['social-proof', productId],
+    // S10 (5/11/2026) — Prima si leggevano dal browser le righe d'ordine, che
+    // le regole del database mostrano solo a chi le possiede: ognuno contava i
+    // suoi ordini, e scaricava ogni riga per sommarla. Adesso un numero solo,
+    // dal database (migrazione 245): ordini distinti, non annullati, 7 giorni.
+    // Se la funzione non c'è ancora o non risponde, niente prova sociale.
     queryFn: async () => {
-      const since = new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
-      const { data } = await supabase
-        .from('order_items')
-        .select('quantity, orders!inner(created_at)')
-        .eq('product_id', productId)
-        .gte('orders.created_at', since);
-      return (data ?? []).reduce(
-        (sum, row: { quantity: number | null }) => sum + (row.quantity ?? 1),
-        0,
-      );
+      const { data, error } = await supabase.rpc('ordini_recenti_del_prodotto', { p_product_id: productId });
+      if (error) return 0;
+      const n = Number(data);
+      return Number.isFinite(n) ? n : 0;
     },
     staleTime: 5 * 60_000,
   });

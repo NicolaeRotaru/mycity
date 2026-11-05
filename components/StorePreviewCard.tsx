@@ -7,7 +7,7 @@ import StoreMediaCarousel, { type StoreMediaItem } from './StoreMediaCarousel';
 import { VerifiedBadge } from './ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { sizedImage } from '@/lib/image-url';
-import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
+import { chiaveDiOggi, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { consegnaDellaVetrina, vetrinaChiedeLaVeloce } from '@/lib/promessa-consegna';
 import { useOraDiPiacenza, useVeloceDelNegozio } from './ui/DeliveryCutoff';
 import type { PostoDellaFoto } from '@/lib/media/foto-del-negozio';
@@ -56,7 +56,7 @@ interface Props {
  */
 const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact = false, posto }: Props) => {
   const hours = (store.store_hours ?? {}) as StoreHours;
-  const todayKey = DAY_KEYS[new Date().getDay()];
+  const todayKey = chiaveDiOggi();
   const open = isOpenNow(hours[todayKey]);
   // 30/10/2026 — «consegna oggi» seguiva «aperto adesso»: alle 9 il forno aperto fino alle 13 lo
   // diceva anche senza fattorino, quando le fasce del pomeriggio cadono a forno chiuso. Ora lo decide
@@ -64,7 +64,10 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
   const adesso = useOraDiPiacenza();
   const veloce = useVeloceDelNegozio(store.id, vetrinaChiedeLaVeloce(store.store_hours, adesso));
   const consegna = consegnaDellaVetrina({ orari: store.store_hours, adesso, veloce });
-  const stato = consegna ? `${open ? 'Aperto' : 'Chiuso ora'} · consegna ${consegna}` : open ? 'Aperto ora' : 'Chiuso ora';
+  // 5/11/2026 — La pillola dice solo aperto/chiuso, uguale sul server e nel browser: prima
+  // passava da «Aperto ora» ad «Aperto · consegna oggi» dopo il caricamento e si allargava.
+  // La consegna sta in una riga sua, con l'altezza già tenuta.
+  const stato = open ? 'Aperto ora' : 'Chiuso ora';
   const media = Array.isArray(store.store_media) ? store.store_media : [];
   const storeHref = `/store/${store.id}`;
   const thumbs = products.slice(0, 3);
@@ -76,6 +79,7 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
         <StoreMediaCarousel
           media={media}
           posto={posto}
+          senzaPallini
           heightClass={compact ? 'h-24' : 'h-28'}
           fallbackClass="bg-gradient-to-br from-primary-500 via-primary-600 to-secondary-600"
         />
@@ -116,6 +120,9 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
         <span className={`mt-2 inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${open ? 'bg-olive-100 text-olive-700' : 'bg-ink-100 text-ink-500'}`}>
           <span className={`inline-block h-1.5 w-1.5 rounded-full ${open ? 'animate-pulse-soft bg-olive-600' : 'bg-ink-400'}`} />
           {stato}
+        </span>
+        <span className="mt-1 block min-h-[1rem] text-[11px] font-semibold text-olive-700">
+          {consegna ? `consegna ${consegna}` : ''}
         </span>
 
         {/* 3 anteprime prodotti ordinate */}

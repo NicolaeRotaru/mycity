@@ -40,6 +40,13 @@ vi.mock('@/lib/cart', () => ({
 
 vi.mock('@/components/ConfirmDialog', () => ({
   confirmDialog: () => Promise.resolve(stato.risposta === 'sostituisci'),
+  // 5/11/2026 (sessione S02, scheda 289) — il riordino chiede con tre esiti.
+  sceltaDialog: () => Promise.resolve(stato.risposta === 'sostituisci' ? 'conferma' : 'alternativa'),
+}));
+// 5/11/2026 (sessione S02, scheda 290) — il riordino legge anche le promozioni attive.
+vi.mock('@/lib/promotions', () => ({
+  fetchActiveDiscounts: async () => new Map(),
+  discountedUnitCents: (p: number, s: number) => Math.round(p * (1 - s / 100) * 100),
 }));
 
 vi.mock('sonner', () => ({

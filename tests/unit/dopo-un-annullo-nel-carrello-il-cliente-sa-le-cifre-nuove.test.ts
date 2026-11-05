@@ -30,9 +30,15 @@ import { sendEmail } from '@/lib/email/client';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 const riga = (id: string) => db.tabelle.orders.find((r) => r.id === id)!;
-const testiEmail = () => vi.mocked(sendEmail).mock.calls.map((c) => (c[0] as { text: string; html: string }));
+// 5/11/2026 — le cifre passano da formatPrice: «16,00 €» con lo spazio unificatore, qui riportato a spazio.
+const nb = (s: string) => s.replace(/\u00a0/g, ' ');
+const testiEmail = () =>
+  vi.mocked(sendEmail).mock.calls.map((c) => {
+    const e = c[0] as { text: string; html: string };
+    return { text: nb(e.text), html: nb(e.html) };
+  });
 const campanella = () =>
-  (db.tabelle.notifications ?? []).filter((n) => n.user_id === 'u1').map((n) => String(n.body));
+  (db.tabelle.notifications ?? []).filter((n) => n.user_id === 'u1').map((n) => nb(String(n.body)));
 /** Nessuna frase può promettere di rendere tutto quando torna una parte. */
 const PROMESSA_DI_TUTTO = /ti torna tutto|torna(no)? tutt|per intero|integral|rimborso (completo|totale)/i;
 const scaduto = '2026-10-20T08:00:00Z';
@@ -45,7 +51,7 @@ beforeEach(() => {
 });
 
 describe('il forno rifiuta in un carrello con la frutta: il cliente legge le cifre nuove', () => {
-  it('contanti: email e campanella dicono i 16 € che non paga e i 15 € (invece di 13) alla porta', async () => {
+  it('contanti: email e campanella dicono i 18,00 € della conferma, i 15,00 € (invece di 13,00) alla porta e il totale che scende', async () => {
     const ordini = carrello(['pane', 'frutta'], [1500, 1200], 'cod');
     db = finto({ orders: ordini, cod_checkout_attempts: tentativoDiCassa(['pane', 'frutta']) });
     const esito = await annullaERimborsa(db as never, { ...ordini[0] } as never, { reason: 'Rifiutato dal negozio' });
@@ -56,9 +62,10 @@ describe('il forno rifiuta in un carrello con la frutta: il cliente legge le cif
     expect(email).toHaveLength(1);
     for (const testo of [email[0].text, email[0].html.replace(/<[^>]+>/g, ' '), ...campanella()]) {
       const t = testo.replace(/&#x27;|&#39;/g, "'").replace(/\s+/g, ' ');
-      expect(t).toMatch(/16 €, cioè 15 € di spesa e 1 € di consegna/);
-      expect(t).toMatch(/#FRUTTA ora è 3 € invece di 1 €, perché ora il giro passa da un negozio solo/);
-      expect(t).toMatch(/alla porta paghi 15 € invece di 13 €/);
+      expect(t).toMatch(/non paghi i suoi 18,00 € della conferma\./);
+      expect(t).toMatch(/#FRUTTA ora è 3,00 € invece di 1,00 €, perché ora il giro passa da un negozio solo/);
+      expect(t).toMatch(/alla porta paghi 15,00 € invece di 13,00 €/);
+      expect(t).toMatch(/In tutto alla porta paghi 15,00 € invece di 31,00 €/);
       expect(t).not.toMatch(PROMESSA_DI_TUTTO);
     }
     expect(campanella().length).toBeGreaterThan(0);
@@ -73,9 +80,10 @@ describe('il forno rifiuta in un carrello con la frutta: il cliente legge le cif
     const email = testiEmail();
     expect(email).toHaveLength(1);
     for (const testo of [email[0].text, ...campanella()]) {
-      expect(testo).toMatch(/ti tornano 16 € sulla carta, cioè 15 € di spesa e 1 € di consegna/);
-      expect(testo).toMatch(/#FRUTTA ora è 3 € invece di 1 €/);
-      expect(testo).toMatch(/quell'ordine resta pagato, 15 €/);
+      expect(testo).toMatch(/ti tornano 16,00 € sulla carta, cioè 15,00 € di spesa e 1,00 € di consegna/);
+      expect(testo).toMatch(/#FRUTTA ora è 3,00 € invece di 1,00 €/);
+      expect(testo).toMatch(/quell'ordine resta pagato, 15,00 €/);
+      expect(testo).not.toMatch(/In tutto/);
       expect(testo).not.toMatch(PROMESSA_DI_TUTTO);
       expect(testo).not.toMatch(/alla porta/);
     }
@@ -101,11 +109,12 @@ describe('il forno rifiuta in un carrello con la frutta: il cliente legge le cif
     expect(riga('pane')).toMatchObject({ delivery_fee_cents: 300, total_price: 18 });
 
     const testo = testiEmail().map((e) => e.text).join('\n');
-    expect(testo).toMatch(/non paghi i suoi 21 €, cioè 20 € di spesa e 1 € di consegna/);
-    expect(testo).toMatch(/#PANE ora è 3 € invece di 1 €, perché ora il giro passa da 2 negozi: alla porta paghi 18 € invece di 16 €/);
-    expect(testo).toMatch(/#FRUTTA non cambia: alla porta paghi 13 €/);
+    expect(testo).toMatch(/non paghi i suoi 23,00 € della conferma\./);
+    expect(testo).toMatch(/#PANE ora è 3,00 € invece di 1,00 €, perché ora il giro passa da 2 negozi: alla porta paghi 18,00 € invece di 16,00 €/);
+    expect(testo).toMatch(/#FRUTTA non cambia: alla porta paghi 13,00 €/);
+    expect(testo).toMatch(/In tutto alla porta paghi 31,00 € invece di 52,00 €/);
     expect(testo).not.toMatch(PROMESSA_DI_TUTTO);
-    expect(campanella().join('\n')).toMatch(/alla porta paghi 18 € invece di 16 €/);
+    expect(campanella().join('\n')).toMatch(/alla porta paghi 18,00 € invece di 16,00 €/);
   });
 });
 
@@ -119,10 +128,10 @@ describe('il rimborso dopo un rifiuto non si può fare: chi chiude a mano sa che
     expect(riga('pane').delivery_status).toBe('CANCELED');
     expect(riga('frutta')).toMatchObject({ total_price: 15, delivery_fee_cents: 300 });
 
-    const avvisi = vi.mocked(notifyAdmins).mock.calls.map((c) => String(c[1]));
+    const avvisi = vi.mocked(notifyAdmins).mock.calls.map((c) => nb(String(c[1])));
     expect(avvisi).toHaveLength(1);
-    expect(avvisi[0]).toMatch(/conto nuovo è 16 € \(era 18 €\)/);
-    expect(avvisi[0]).toMatch(/#FRUTTA: consegna 3 € \(era 1 €\), totale 15 € \(era 13 €\)/);
+    expect(avvisi[0]).toMatch(/conto nuovo è 16,00 € \(era 18,00 €\)/);
+    expect(avvisi[0]).toMatch(/#FRUTTA: consegna 3,00 € \(era 1,00 €\), totale 15,00 € \(era 13,00 €\)/);
   });
 });
 

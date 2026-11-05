@@ -24,7 +24,7 @@ export default function StripeConnectButton() {
   const [refreshing, setRefreshing] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: status, isLoading } = useQuery({
+  const { data: status, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.seller.stripeStatus,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -103,6 +103,9 @@ export default function StripeConnectButton() {
     );
   }
 
+  // Una lettura caduta non diventa «completa prima la verifica».
+  if (isError && !status) return <StatoPagamentiNonLetto onRiprova={() => { void refetch(); }} />;
+
   const isActive = !!status?.stripe_charges_enabled && !!status?.stripe_payouts_enabled;
   const isPendingVerification = !!status?.stripe_account_id && !isActive;
   const kycApproved = status?.approval_status === 'approved';
@@ -148,6 +151,16 @@ export default function StripeConnectButton() {
           Aggiorna stato
         </button>
       )}
+    </div>
+  );
+}
+
+/** Lo stato dei pagamenti non si è letto: lo si dice, con «Riprova», invece di indovinarlo. */
+function StatoPagamentiNonLetto({ onRiprova }: { onRiprova: () => void }) {
+  return (
+    <div role="alert" className="inline-flex flex-wrap items-center gap-2 bg-cream-100 border border-cream-300 text-ink-700 px-4 py-2 rounded-lg text-sm">
+      Non riesco a leggere lo stato dei pagamenti.
+      <button type="button" onClick={onRiprova} className="font-semibold text-primary-700 underline">Riprova</button>
     </div>
   );
 }

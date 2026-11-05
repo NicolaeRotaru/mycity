@@ -152,6 +152,7 @@ class FintaQuery {
     return this;
   }
   limit(_n: number) { return this; }
+  order(_colonna: string, _opz?: unknown) { return this; }
   single() { this.una = 'single'; return this; }
   maybeSingle() { this.una = 'maybe'; return this; }
 

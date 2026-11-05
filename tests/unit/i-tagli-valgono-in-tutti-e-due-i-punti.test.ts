@@ -74,6 +74,9 @@ describe('la descrizione da migliorare', () => {
     const res = await POST_DESCRIZIONE(
       req('http://localhost/api/ai/description', {
         name: 'N'.repeat(500),
+        // S10 (5/11/2026) — il tetto della descrizione attuale e' ora quello della
+        // scheda (MAX_DESCRIZIONE_PRODOTTO, 4000): prima era 500 e i dettagli del
+        // negoziante oltre quel punto si perdevano.
         current: 'D'.repeat(5_000),
         category: 'C'.repeat(500),
       }),
@@ -86,16 +89,16 @@ describe('la descrizione da migliorare', () => {
         .content,
     );
     // Nessuno dei due vede piu' di quanto e' consentito.
-    expect(testoAlFiltro).not.toContain('D'.repeat(501));
-    expect(testoAlModello).not.toContain('D'.repeat(501));
+    expect(testoAlFiltro).not.toContain('D'.repeat(4_001));
+    expect(testoAlModello).not.toContain('D'.repeat(4_001));
     expect(testoAlFiltro).not.toContain('N'.repeat(201));
     expect(testoAlModello).not.toContain('N'.repeat(201));
     expect(testoAlFiltro).not.toContain('C'.repeat(101));
     expect(testoAlModello).not.toContain('C'.repeat(101));
     // E vedono lo stesso: se il filtro leggesse meno del modello, non starebbe
     // controllando cio' che esce.
-    expect(testoAlFiltro).toContain('D'.repeat(500));
-    expect(testoAlModello).toContain('D'.repeat(500));
+    expect(testoAlFiltro).toContain('D'.repeat(4_000));
+    expect(testoAlModello).toContain('D'.repeat(4_000));
   });
 });
 

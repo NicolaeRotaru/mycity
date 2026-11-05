@@ -92,10 +92,13 @@ export default function PWAInstallBanner() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (window.matchMedia('(display-mode: standalone)').matches) return;
-    if (dismissed) return;
-    setVisits(visits + 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // S10 (5/11/2026) — `visits` qui vale ancora lo 0 iniziale: il valore
+    // salvato useLocalStorage lo carica dopo il primo disegno. Con `visits + 1`
+    // il contatore restava fermo a 1 e il banner non compariva mai. Con
+    // l'aggiornamento a funzione si parte dal valore caricato. Il rifiuto lo
+    // guarda gia' `comeSiInstalla` (giaRifiutata).
+    setVisits((v) => v + 1);
+  }, [setVisits]);
 
   // Una decisione sola, presa da una funzione pura che si può provare senza browser.
   useEffect(() => {

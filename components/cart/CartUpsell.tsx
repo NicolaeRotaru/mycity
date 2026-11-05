@@ -11,6 +11,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { toast } from 'sonner';
 import { leggiSuggerimentiCarrello, type SuggerimentoCarrello } from '@/lib/queries/fasce-prodotti';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 
 /**
  * "Completa con" — carosello upsell del carrello.
@@ -44,7 +45,14 @@ export function CartUpsell({ items }: Props) {
     // 15/10/2026 (R3) — La lettura vive in lib/queries/fasce-prodotti.ts: agganciava il
     // negozio a `profiles`, che dopo la migrazione 161 un cliente non legge piu'. Le regole
     // su varianti, giacenza ed errori sono rimaste le stesse, e la' si mettono alla prova.
-    queryFn: (): Promise<SuggestItem[]> => leggiSuggerimentiCarrello(supabase, { sellerIds, excludeIds }),
+    // 5/11/2026 — Col prezzo di oggi, promozione compresa, come la cassa: mostrava e salvava il
+    // prezzo pieno, e il carrello poi scriveva «il prezzo è sceso» e la cassa «è cambiato».
+    queryFn: async (): Promise<SuggestItem[]> => {
+      const righe = await leggiSuggerimentiCarrello(supabase, { sellerIds, excludeIds });
+      if (righe.length === 0) return righe;
+      const sconti = await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>());
+      return righe.map((p) => ({ ...p, price: discountedUnitCents(p.price, sconti.get(p.id) ?? 0) / 100 }));
+    },
   });
 
   if (suggestions.length === 0) return null;
@@ -100,7 +108,7 @@ export function CartUpsell({ items }: Props) {
                     type="button"
                     onClick={() => handleAdd(p)}
                     aria-label={`Aggiungi ${p.name} al carrello`}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-1"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-1"
                   >
                     <Plus size={16} strokeWidth={2.6} aria-hidden />
                   </button>

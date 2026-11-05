@@ -129,6 +129,10 @@ export default function NearMePage() {
   // un 5 scritto a mano: col confine a 10 si apriva a metà, e se il confine scende sotto 5 si
   // aprirebbe oltre il massimo del cursore, con in lista negozi che la cassa poi rifiuta.
   const [radiusKm, setRadiusKm] = useState<number>(RAGGIO_CONSEGNA_KM);
+  // 5/11/2026 — Con un confine non intero (7,5 km) un passo da 1 non raggiungeva il valore
+  // d'apertura: il pallino si agganciava a 7 e l'etichetta diceva 7.5. Il passo segue il confine.
+  const passoRaggio = Number.isInteger(RAGGIO_CONSEGNA_KM) ? 1 : 0.5;
+  const raggioScritto = radiusKm.toLocaleString('it-IT');
 
   /**
    * 24/8/2026 — IL PERMESSO NON SI CHIEDE PIÙ A FREDDO, E LA PAGINA NON ASPETTA PIÙ.
@@ -197,6 +201,9 @@ export default function NearMePage() {
     () => (pos ? ranked.filter((x) => x.distance != null && x.distance <= radiusKm) : ranked),
     [ranked, pos, radiusKm],
   );
+  // 5/11/2026 — Con la posizione i negozi senza posizione sulla mappa uscivano dall'elenco senza
+  // una parola, e per tornare a tutti bisognava ricaricare la pagina.
+  const senzaPosizione = pos ? ranked.filter((x) => x.distance == null).length : 0;
 
   const mapStores: NearbyStore[] = useMemo(
     () =>
@@ -261,8 +268,26 @@ export default function NearMePage() {
 
       <p className="mb-4 text-ink-500">
         {filtered.length} {filtered.length === 1 ? 'negozio' : 'negozi'}
-        {pos ? ` entro ${radiusKm} km` : ' a Piacenza'}
+        {pos ? ` entro ${raggioScritto} km da dove sei adesso` : ' a Piacenza'}
       </p>
+
+      {pos && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-ink-600">
+          {/* 5/11/2026 — La distanza qui è dal telefono; la cassa misura dall'indirizzo di consegna. */}
+          <span className="min-w-0 flex-1">
+            In cassa la distanza si misura dall’indirizzo di consegna, non da qui.
+            {senzaPosizione > 0 &&
+              ` ${senzaPosizione === 1 ? '1 negozio non ha' : `${senzaPosizione} negozi non hanno`} ancora la posizione sulla mappa e non compare in questo elenco.`}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPos(null)}
+            className="rounded-lg bg-cream-100 px-3.5 py-2 text-sm font-bold text-ink-900 hover:bg-cream-200"
+          >
+            Mostra tutti i negozi
+          </button>
+        </div>
+      )}
 
       {/* L'invito, prima del permesso: si dice a cosa serve, e il riquadro di sistema arriva DOPO il
           gesto. Chi non lo tocca vede comunque tutti i negozi. */}
@@ -307,14 +332,14 @@ export default function NearMePage() {
 
         {pos && (
           <label className="flex items-center gap-3 text-sm text-ink-600">
-            <span className="whitespace-nowrap font-semibold">Raggio: {radiusKm} km</span>
+            <span className="whitespace-nowrap font-semibold">Raggio: {raggioScritto} km</span>
             <input
               type="range"
               min={1}
               // 27/10/2026 — Il cursore arrivava a 20 km e la cassa rifiuta oltre il confine: un negozio
               // a 15 km compariva qui e poi non si poteva ordinare. Il massimo è il confine della cassa.
               max={RAGGIO_CONSEGNA_KM}
-              step={1}
+              step={passoRaggio}
               value={radiusKm}
               onChange={(e) => setRadiusKm(Number(e.target.value))}
               className="h-2 w-40 cursor-pointer accent-primary-600 sm:w-56"
@@ -346,7 +371,9 @@ export default function NearMePage() {
         </div>
       ) : (
         <div className="rounded-2xl border border-surface-200 bg-cream-50 p-8 text-center text-ink-500">
-          {avvisoNessunNegozioVicino(radiusKm)}
+          {/* 5/11/2026 — Senza posizione il cursore non c'è e la lista non filtra: «aumenta il
+              raggio» non si poteva fare. */}
+          {pos ? avvisoNessunNegozioVicino(radiusKm) : 'Per ora a Piacenza non ci sono negozi da mostrare.'}
         </div>
       )}
     </div>

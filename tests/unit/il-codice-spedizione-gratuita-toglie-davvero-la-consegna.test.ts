@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { prezziDelCarrello, type IngressiPrezzo } from '@/lib/ordini/prezzi';
+import { prezziDelCarrello, spesaPerConsegnaGratisColCodiceCents, type IngressiPrezzo } from '@/lib/ordini/prezzi';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { COMPENSO_RIDER_CENTS, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
@@ -59,6 +59,29 @@ describe('il codice «Spedizione gratuita»', () => {
     // quello da 30 € porta l'euro del negozio in più, che il codice non toglie mai.
     expect(con.gruppi.map(consegnaPagata)).toEqual([100, 0]);
     expect(con.grandTotalCents).toBe(3000 + 4500 + 100);
+  });
+
+  // 5/11/2026 (S04, scheda 1946) — Si provavano solo carrelli da 20-30 € con le coordinate: un
+  // codice che rimettesse la consegna da 30 € in su, o che valesse solo con l'indirizzo sulla mappa,
+  // restava verde. Qui: spese da 10 a 120 €, con e senza coordinate della casa. Dalla soglia in su
+  // (dove la commissione paga da sola il fattorino) la consegna è zero; sotto, il codice toglie
+  // comunque qualcosa, e lo stesso con o senza coordinate.
+  it('a ogni spesa, con o senza coordinate della casa, il codice toglie la consegna (tutta dalla soglia in su)', () => {
+    const soglia = spesaPerConsegnaGratisColCodiceCents();
+    for (const cents of [1000, 1999, 2999, 3000, 3500, 5000, 12000]) {
+      const pagate: number[] = [];
+      for (const coordinate of [true, false]) {
+        const sopra = coordinate ? {} : { consegnaLat: null, consegnaLng: null };
+        const con = prezziDelCarrello(ingressi([cents], { couponSpedizioneGratis: true, ...sopra } as Partial<IngressiPrezzo>));
+        const senza = prezziDelCarrello(ingressi([cents], { ...sopra } as Partial<IngressiPrezzo>));
+        const caso = `${cents / 100} € ${coordinate ? 'con' : 'senza'} coordinate`;
+        expect(consegnaPagata(senza.gruppi[0]), `${caso}: senza codice la consegna si paga`).toBe(PLATFORM_DELIVERY_FEE_CENTS);
+        expect(consegnaPagata(con.gruppi[0]), `${caso}: il codice non toglie niente`).toBeLessThan(PLATFORM_DELIVERY_FEE_CENTS);
+        if (cents >= soglia) expect(consegnaPagata(con.gruppi[0]), `${caso}: dalla soglia la consegna è zero`).toBe(0);
+        pagate.push(consegnaPagata(con.gruppi[0]));
+      }
+      expect(pagate[0], `${cents / 100} €: col codice le coordinate cambiano il conto`).toBe(pagate[1]);
+    }
   });
 
   it('il fattorino resta pagato: il suo compenso non dipende dal codice del cliente', () => {

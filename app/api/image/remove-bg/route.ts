@@ -7,6 +7,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { verificaImmagineBase64 } from '@/lib/immagini-base64';
 import { jsonConTetto } from '@/lib/api/corpo';
 import { getBgRemovalProvider } from '@/lib/bg-removal';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import {
   BgRemovalConfigError,
   BgRemovalRateLimitError,
@@ -34,6 +35,14 @@ const BodySchema = z.object({
 });
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  // 0) Interruttore del lancio. La rimozione sfondo passa da un fornitore a
+  //    pagamento (remove.bg / Photoroom) che non tocca lib/ai/client.ts: senza
+  //    questo freno, una chiave messa su Vercel la accenderebbe per tutti i
+  //    negozi, fuori dal tetto di spesa. Spento = nessuna chiamata.
+  if (!AI_NEGOZI_ACCESA) {
+    return ApiErrors.unavailable('«Sfondo bianco» non è ancora attivo.');
+  }
+
   // 1) Config provider PRIMA del rate limit (come vision controlla anthropicKey).
   //    Provider non configurato (o 'mock' in prod) → 503, senza spendere un token.
   let provider: BgRemovalProvider;

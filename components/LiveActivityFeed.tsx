@@ -23,15 +23,22 @@ function chiHaOrdinato(citta: string | null | undefined): string {
   return citta ? `Qualcuno a ${citta}` : 'Qualcuno';
 }
 
-function timeAgo(date: string, now: number): string {
-  const diff = now - new Date(date).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'ora';
-  if (mins < 60) return `${mins} min fa`;
-  const h = Math.floor(mins / 60);
-  if (h < 24) return `${h}h fa`;
-  const d = Math.floor(h / 24);
-  return `${d}g fa`;
+/**
+ * 5/11/2026 — L'ORA ARRIVA ARROTONDATA ALL'INIZIO DELL'ORA (vista live_activity_public,
+ * `date_trunc('hour', …)`), quindi «X min fa» era falso: un ordine delle 14:55 visto alle 14:58
+ * risultava «58 min fa». Si dice la fascia oraria, che è quello che sappiamo davvero.
+ */
+const ORA_DI_ROMA = new Intl.DateTimeFormat('it-IT', { hour: 'numeric', timeZone: 'Europe/Rome' });
+
+export function quandoNellaFascia(inizioOra: string, now: number): { testo: string; inQuestOra: boolean } {
+  const inizio = new Date(inizioOra).getTime();
+  if (now - inizio < 60 * 60_000) return { testo: "nell'ultima ora", inQuestOra: true };
+  if (now - inizio < 24 * 60 * 60_000) {
+    const da = ORA_DI_ROMA.format(inizio);
+    const a = ORA_DI_ROMA.format(inizio + 60 * 60_000);
+    return { testo: `tra le ${da} e le ${a}`, inQuestOra: false };
+  }
+  return { testo: `${Math.floor((now - inizio) / (24 * 60 * 60_000))}g fa`, inQuestOra: false };
 }
 
 /**
@@ -148,9 +155,10 @@ const LiveActivityFeed = () => {
       </div>
       <ul className="space-y-1">
         {activities.map((a, i) => {
+          const quando = now !== null ? quandoNellaFascia(a.created_at, now) : null;
           const verb = a.delivery_status === 'DELIVERED'
             ? 'ha ricevuto un ordine da'
-            : 'ha appena ordinato da';
+            : quando?.inQuestOra ? 'ha appena ordinato da' : 'ha ordinato da';
           return (
             <li key={`${a.store_name ?? 'x'}-${a.created_at}-${i}`} className="flex items-center gap-3 text-sm py-2 border-b border-cream-200 last:border-0 hover:bg-cream-50 -mx-2 px-2 rounded transition-colors">
               <span className="shrink-0 text-ink-500">
@@ -165,7 +173,7 @@ const LiveActivityFeed = () => {
                   <span className="font-semibold text-ink-700">{a.store_name ?? 'un negozio'}</span>
                 </p>
               </div>
-              <span className="text-xs text-ink-400 shrink-0">{now !== null ? timeAgo(a.created_at, now) : ''}</span>
+              <span className="text-xs text-ink-400 shrink-0">{quando?.testo ?? ''}</span>
             </li>
           );
         })}

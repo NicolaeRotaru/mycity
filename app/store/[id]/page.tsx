@@ -19,6 +19,11 @@ import EmptyState from '@/components/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { useEffect } from 'react';
 import { trackStoreViewed } from '@/lib/analytics/events';
+import { riepilogoRecensioni } from '@/components/store-sections/riepilogo-recensioni';
+import { DOMINIO_MYCITY } from '@/lib/contatti-pubblici';
+
+/** Letto in modo statico, così Next lo scrive uguale nel pacchetto del server e del browser. */
+const INDIRIZZO_DEL_SITO = (process.env.NEXT_PUBLIC_APP_URL || `https://${DOMINIO_MYCITY}`).replace(/\/+$/, '');
 
 export default function StorePage(props: { params: Promise<{ id: string }> }) {
   const { id } = use(props.params);
@@ -66,7 +71,8 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
     );
   }
 
-  const { store, custom, accent, socials, reviews, site, ctx } = data;
+  const { store, custom, accent, socials, site, ctx } = data;
+  const riepilogo = riepilogoRecensioni(ctx);
   const isOwner = Boolean(viewerId && viewerId === store.id);
   const showAnnouncement = announcementActive(custom);
   const home = homePage(site);
@@ -94,12 +100,15 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
       longitude: store.store_lng,
     } : undefined,
     sameAs: socials.length > 0 ? socials.map((s) => s.href) : undefined,
-    aggregateRating: reviews.length > 0 ? {
+    // 5/11/2026 — Media e numero veri (store_review_stats), non le ultime 20 lette.
+    aggregateRating: riepilogo ? {
       '@type': 'AggregateRating',
-      ratingValue: (reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length).toFixed(1),
-      reviewCount: reviews.length,
+      ratingValue: riepilogo.media.toFixed(1),
+      reviewCount: riepilogo.totale,
     } : undefined,
-    url: typeof window !== 'undefined' ? window.location.href : undefined,
+    // 5/11/2026 — Dal dominio pubblico, uguale sul server e nel browser: `window.location.href`
+    // mancava nell'HTML del server e lo aggiungeva il browser, cioè due script diversi.
+    url: `${INDIRIZZO_DEL_SITO}/store/${id}`,
   };
 
   return (

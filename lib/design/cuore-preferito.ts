@@ -30,7 +30,9 @@ export const BOTTONE_ACCESO = 'bg-secondary-500 border-secondary-500 text-white 
 
 /** Lo stesso bottone quando non lo è: si accende al passaggio, con lo stesso colore. */
 export const BOTTONE_SPENTO =
-  'bg-white border-cream-300 text-ink-300 hover:scale-110 hover:text-secondary-400 hover:border-secondary-200';
+  // 5/11/2026 — era text-ink-300 (2,52:1 sul bianco, sotto il 3:1 di WCAG 1.4.11): ora ink-400
+  // come il cuore della card (4,87:1).
+  'bg-white border-cream-300 text-ink-400 hover:scale-110 hover:text-secondary-400 hover:border-secondary-200';
 
 /** L'anello di fuoco: quello usato ovunque nel sito, non una rampa a caso. */
 export const ANELLO = 'focus-visible:ring-secondary-400';

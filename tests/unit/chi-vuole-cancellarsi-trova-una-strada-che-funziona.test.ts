@@ -375,9 +375,11 @@ describe("senza la chiave di servizio nessuna porta è murata", () => {
   });
 
   it("se Cancella account manda al modulo, il modulo arriva davvero a una persona", async () => {
-    process.env.SUPPORT_EMAIL = "supporto@example.com";
+    // 5/11/2026 (S08, scheda 2058) — Le caselle stanno sul dominio dei contatti: su un
+    // dominio altrui il modulo «arriverebbe» dove nessuno legge, e la porta non ci manda.
+    process.env.SUPPORT_EMAIL = "supporto@mycity-marketplace.com";
     process.env.RESEND_API_KEY = "re_di_prova";
-    process.env.RESEND_FROM = "MyCity <no-reply@example.com>";
+    process.env.RESEND_FROM = "MyCity <no-reply@mycity-marketplace.com>";
     const testo = await corpo(await chiediCancellazione(conGettone("POST", "/api/account/delete") as never, CTX));
     expect(testo).toContain("/contact");
     expect(testo).not.toMatch(/[a-z0-9.]+@[a-z0-9.-]+\.[a-z]+/i);

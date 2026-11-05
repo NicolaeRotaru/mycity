@@ -1,5 +1,6 @@
 'use client';
 
+import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -98,7 +99,8 @@ export default function DropOfDay() {
 
   const img = Array.isArray(drop.product.images) && drop.product.images[0]
     ? drop.product.images[0]
-    : 'https://placehold.co/600x600/FBF7F0/C0492C?text=Drop';
+    // 5/11/2026 — il segnaposto è il nostro, non una richiesta a un sito esterno.
+    : FOTO_MANCANTE;
   const savings = Math.round(drop.original_price - drop.drop_price);
 
   return (
@@ -125,7 +127,8 @@ export default function DropOfDay() {
           </p>
 
           <div className="flex items-baseline gap-3 pt-2">
-            <span className="text-4xl md:text-5xl font-extrabold text-accent-300">
+            {/* 5/11/2026 — font-serif: i prezzi editoriali sono in Fraunces, come sulla scheda prodotto. */}
+            <span className="text-4xl md:text-5xl font-extrabold font-serif text-accent-300">
               {formatPrice(drop.drop_price)}
             </span>
             <span className="text-lg line-through opacity-60">

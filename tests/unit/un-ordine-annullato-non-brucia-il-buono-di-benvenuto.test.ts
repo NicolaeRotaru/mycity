@@ -70,6 +70,22 @@ function databaseCon(ordini: RigaOrdine[]) {
           righe = righe.filter((r) => r[colonna] !== valore);
           return catena;
         },
+        // 5/11/2026 (S07, scheda 2604) — la cassa ora filtra con `.or('col.is.null,col.neq.X')`, per
+        // contare anche gli ordini con lo stato vuoto: basta una delle due condizioni.
+        or: (espr: string) => {
+          const alternative = espr.split(',').map((pezzo) => {
+            const [col, op, ...resto] = pezzo.split('.');
+            const v = resto.join('.');
+            return (r: RigaOrdine) => {
+              const val = (r as Record<string, unknown>)[col];
+              if (op === 'is' && v === 'null') return val === null || val === undefined;
+              if (op === 'neq') return val !== null && val !== undefined && val !== v;
+              throw new Error(`filtro .or non riconosciuto: ${pezzo}`);
+            };
+          });
+          righe = righe.filter((r) => alternative.some((a) => a(r)));
+          return catena;
+        },
         then: (risolvi: (v: { count: number }) => unknown) => Promise.resolve(risolvi({ count: righe.length })),
       };
       return catena;

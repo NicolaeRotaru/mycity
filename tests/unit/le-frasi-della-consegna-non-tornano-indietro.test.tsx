@@ -298,7 +298,9 @@ describe('la home: il titolo dice il modo di pagare della cassa, e niente abbigl
       // 30/10/2026 — «paghi anche con Apple Pay» lasciava verde la prova: adesso vede anche i
       // portafogli del telefono, il pagamento «online» e il POS.
       expect(resto, `variante ${v}: «${resto}»`).not.toMatch(
-        /carta|come vuoi|bancomat|satispay|paypal|apple\s*pay|google\s*pay|\bonline\b|\bpos\b/i,
+        // 5/11/2026 (S04, scheda 2258) — `carta` non vedeva il plurale: «paghi con tutte le carte»
+        // restava verde.
+        /cart[ae]|come vuoi|bancomat|satispay|paypal|apple\s*pay|google\s*pay|\bonline\b|\bpos\b/i,
       );
     }
   });

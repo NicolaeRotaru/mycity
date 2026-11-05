@@ -66,14 +66,16 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
  * vivono nei token del design system, applicati via inline style.
  */
 export const ORDER_STATUS_COLOR: Record<OrderStatus, { color: string; bg: string }> = {
-  NEW:              { color: 'var(--status-new)',       bg: '#FFFBEB' },
-  ACCEPTED:         { color: 'var(--status-accepted)',  bg: '#EFF6FF' },
-  READY:            { color: 'var(--status-ready)',     bg: '#F5F3FF' },
-  ASSIGNED:         { color: 'var(--status-assigned)',  bg: '#EEF2FF' },
-  PICKED_UP:        { color: 'var(--status-pickedup)',  bg: '#ECFEFF' },
-  OUT_FOR_DELIVERY: { color: 'var(--status-delivery)',  bg: '#FAF5FF' },
-  DELIVERED:        { color: 'var(--status-delivered)', bg: '#ECFDF5' },
-  CANCELED:         { color: 'var(--status-canceled)',  bg: '#FFF1F2' },
+  // 5/11/2026 — Anche gli sfondi dai token (`--status-*-bg` in app/globals.css): prima erano otto hex
+  // scritti a mano, malgrado il commento qui sopra.
+  NEW:              { color: 'var(--status-new)',       bg: 'var(--status-new-bg)' },
+  ACCEPTED:         { color: 'var(--status-accepted)',  bg: 'var(--status-accepted-bg)' },
+  READY:            { color: 'var(--status-ready)',     bg: 'var(--status-ready-bg)' },
+  ASSIGNED:         { color: 'var(--status-assigned)',  bg: 'var(--status-assigned-bg)' },
+  PICKED_UP:        { color: 'var(--status-pickedup)',  bg: 'var(--status-pickedup-bg)' },
+  OUT_FOR_DELIVERY: { color: 'var(--status-delivery)',  bg: 'var(--status-delivery-bg)' },
+  DELIVERED:        { color: 'var(--status-delivered)', bg: 'var(--status-delivered-bg)' },
+  CANCELED:         { color: 'var(--status-canceled)',  bg: 'var(--status-canceled-bg)' },
 };
 
 // I 6 step principali mostrati nella timeline al buyer (NEW e CANCELED sono casi a parte)

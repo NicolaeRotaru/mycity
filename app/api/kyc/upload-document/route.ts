@@ -6,6 +6,8 @@ import { ApiErrors } from '@/lib/api/responses';
 import { richiestaConTetto } from '@/lib/api/corpo';
 import { tipoDaiPrimiByte, ESTENSIONE_PER_TIPO } from '@/lib/upload/firma-del-file';
 import { cancelloEtaServer } from '@/lib/maggiore-eta';
+import { rispostaPerErroreDatabase } from '@/lib/api/errore-database';
+import { writeAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
@@ -15,6 +17,30 @@ const ALLOWED_KINDS = new Set([
   'id_front', 'id_back', 'selfie',
   'rider_license', 'rider_insurance', 'rider_haccp',
 ]);
+
+/**
+ * 5/11/2026 — Chi può caricare cosa. Prima qualunque account caricava qualunque
+ * tipo: un cliente, che per comprare non deve identificarsi, poteva lasciarci
+ * carta d'identità e selfie; un negozio patente e polizza. Raccolta oltre lo scopo.
+ */
+const TIPI_PER_RUOLO: Record<string, ReadonlySet<string>> = {
+  rider: ALLOWED_KINDS,
+  seller: new Set(['id_front', 'id_back', 'selfie']),
+};
+
+/** I documenti d'identità: se se ne sostituisce uno già verificato, la verifica si riapre. */
+const TIPI_DELL_IDENTITA = new Set(['id_front', 'id_back', 'selfie']);
+
+/**
+ * Il percorso nel secchio da un valore salvato: un percorso, oppure un vecchio link
+ * firmato «…/object/sign/kyc-docs/<percorso>?token=…» (start-check li accetta ancora).
+ */
+function percorsoDaValore(valore: string): string {
+  if (!valore.startsWith('http')) return valore;
+  const m = /\/object\/(?:sign|public|authenticated)\/kyc-docs\/([^?#]+)/.exec(valore);
+  if (!m) return valore;
+  try { return decodeURIComponent(m[1]); } catch { return m[1]; }
+}
 
 /**
  * Quante volte si rilegge il profilo e si riprova lo scambio del percorso
@@ -91,11 +117,15 @@ export const POST = withAuthRateLimit({ name: 'kyc-upload', max: 20, windowMs: 1
    * profilo, poi i documenti. Il controllo sta **prima** della lettura del
    * corpo: di un minorenne non entra in memoria nemmeno il file.
    */
-  const { data: profiloEta } = await admin
+  const { data: profiloEta, error: erroreProfilo } = await admin
     .from('profiles')
-    .select('legal_birth_date')
+    .select('legal_birth_date, role')
     .eq('id', user.id)
     .single();
+  // 5/11/2026 (S05) — Un database che non risponde non è «manca la data di nascita».
+  if (erroreProfilo && erroreProfilo.code !== 'PGRST116') {
+    return rispostaPerErroreDatabase(erroreProfilo, 'kyc/upload-document', 'Non riesco a leggere il profilo, riprova tra poco');
+  }
   const cancello = cancelloEtaServer(profiloEta);
   if (!cancello.ok) {
     // Nel registro il motivo e chi, mai la data di nascita: è un dato di una persona.
@@ -125,6 +155,10 @@ export const POST = withAuthRateLimit({ name: 'kyc-upload', max: 20, windowMs: 1
   const kind = typeof kindRaw === 'string' ? kindRaw : '';
 
   if (!ALLOWED_KINDS.has(kind)) return ApiErrors.invalidRequest('Tipo documento non valido');
+  const ruolo = (profiloEta as { role?: string | null } | null)?.role ?? '';
+  if (!TIPI_PER_RUOLO[ruolo]?.has(kind)) {
+    return ApiErrors.forbidden('Questo documento non serve per il tuo tipo di account: non lo carichiamo.');
+  }
   if (!(file instanceof File)) return ApiErrors.invalidRequest('File mancante');
   if (file.size > MAX_BYTES) return ApiErrors.invalidRequest('File troppo grande (max 8 MB)');
   if (!ALLOWED_MIME.has(file.type)) return ApiErrors.invalidRequest('Formato non supportato (JPG/PNG/WEBP/PDF)');
@@ -235,9 +269,32 @@ export const POST = withAuthRateLimit({ name: 'kyc-upload', max: 20, windowMs: 1
   // Solo adesso, col profilo che punta alla copia nuova, la sostituita si toglie.
   // Solo dentro la cartella della persona: un valore di prima del cambio a
   // «percorso» (una URL firmata) o di un'altra cartella non si tocca.
-  if (sostituito !== null && sostituito !== path && sostituito.startsWith(`${user.id}/`)) {
-    await togliDalSecchio(admin, sostituito, { userId: user.id, kind, copia: 'vecchia' });
+  // 5/11/2026 (S05) — Anche un vecchio valore salvato come link firmato indica un
+  // file nel secchio: se ne ricava il percorso, così la copia di prima non resta.
+  const vecchioPercorso = sostituito !== null ? percorsoDaValore(sostituito) : null;
+  if (vecchioPercorso !== null && vecchioPercorso !== path && vecchioPercorso.startsWith(`${user.id}/`)) {
+    await togliDalSecchio(admin, vecchioPercorso, { userId: user.id, kind, copia: 'vecchia' });
   }
+
+  // 5/11/2026 (S05) — Il documento che era stato verificato non c'è più: la
+  // verifica non può restare «fatta» su un documento che nessuno ha guardato.
+  if (sostituito !== null && TIPI_DELL_IDENTITA.has(kind)) {
+    const { error: errRiapri } = await admin
+      .from('profiles')
+      .update({ kyc_provider_status: null, kyc_provider_check_id: null })
+      .eq('id', user.id);
+    if (errRiapri) logger.error('[kyc] verifica non riaperta dopo il documento nuovo', { userId: user.id, kind, err: errRiapri.message });
+  }
+
+  // 5/11/2026 (S05) — L'ingresso di un documento d'identità lascia la sua riga nel
+  // registro (chi, cosa, quando), come l'approvazione. Il percorso no: basta il tipo.
+  await writeAudit({
+    actorId: user.id,
+    action: 'kyc.upload',
+    targetTable: 'profiles',
+    targetId: user.id,
+    metadata: { tipo: kind, sostituisce: sostituito !== null },
+  });
 
   // URL breve (10 min) solo per l'anteprima immediata lato client, non persistita.
   const { data: signed } = await admin.storage

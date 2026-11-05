@@ -15,6 +15,8 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { friendlyError } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
 import EmptyState from '@/components/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { conAutoriPubblici, type AutorePubblico } from '@/lib/queries/profili-pubblici';
 
@@ -69,14 +71,17 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
     supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id ?? null));
   }, []);
 
-  const { data: list } = useQuery({
+  // 5/11/2026 — «Lista non trovata» si dice solo quando il database ha
+  // risposto che non c'è: non mentre carica, non quando la rete cade.
+  const { data: list, isLoading: caricoLista, isError: listaCaduta, refetch: rileggiLista } = useQuery({
     queryKey: queryKeys.lists.detail(params.id),
     queryFn: async (): Promise<ListData | null> => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('product_lists')
         .select('id, owner_id, title, description, cover_emoji, is_public, updated_at')
         .eq('id', params.id)
         .maybeSingle();
+      if (error) throw error;
       if (!data) return null;
       // 18/10/2026 — «@handle» dell'autore non si aggancia più alla tabella dei profili: dopo le
       // migrazioni 110 e 161 il browser ne legge solo la propria riga. Lo dà una rotta del
@@ -86,10 +91,10 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
     },
   });
 
-  const { data: items = [] } = useQuery({
+  const { data: items = [], isError: elementiCaduti, refetch: rileggiElementi } = useQuery({
     queryKey: queryKeys.lists.items(params.id),
     queryFn: async (): Promise<Item[]> => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('product_list_items')
         .select(`
           list_id, product_id, sort_order, note,
@@ -97,6 +102,7 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
         `)
         .eq('list_id', params.id)
         .order('sort_order', { ascending: true });
+      if (error) throw error;
       return (data ?? []) as unknown as Item[];
     },
   });
@@ -138,6 +144,10 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
       toast.success(list?.is_public ? 'Lista resa privata' : 'Lista resa pubblica');
       qc.invalidateQueries({ queryKey: queryKeys.lists.detail(params.id) });
     },
+    // 5/11/2026 — Una scrittura caduta si dice: prima non compariva niente, e chi
+    // voleva rendere privata la lista la lasciava pubblica credendo di averlo fatto.
+    onError: (err: unknown) =>
+      toast.error(`${list?.is_public ? 'La lista è ancora pubblica' : 'La lista è ancora privata'}: ${friendlyError(err)}`),
   });
 
   const removeItem = useMutation({
@@ -152,6 +162,7 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.lists.items(params.id) });
     },
+    onError: (err: unknown) => toast.error(`Prodotto non tolto: ${friendlyError(err)}`),
   });
 
   const updateNote = useMutation({
@@ -166,6 +177,7 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.lists.items(params.id) });
     },
+    onError: (err: unknown) => toast.error(`Nota non salvata: ${friendlyError(err)}`),
   });
 
   const deleteList = useMutation({
@@ -177,7 +189,25 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
       toast.success('Lista eliminata');
       router.push('/lists');
     },
+    onError: (err: unknown) => toast.error(`Lista non eliminata: ${friendlyError(err)}`),
   });
+
+  if (caricoLista) {
+    return <div className="container mx-auto py-12 max-w-2xl"><LoadingState /></div>;
+  }
+
+  if (listaCaduta) {
+    return (
+      <div className="container mx-auto py-12 max-w-2xl">
+        <ErrorState
+          title="Non riesco a leggere la lista"
+          description="Controlla la connessione e riprova: la lista non è stata cancellata."
+          retry={() => { void rileggiLista(); }}
+          backHref="/lists"
+        />
+      </div>
+    );
+  }
 
   if (!list) {
     return <div className="container mx-auto py-12 max-w-2xl"><EmptyState icon={ListChecks} title="Lista non trovata" description="Forse è stata cancellata o non è pubblica." ctaLabel="Tutte le liste" ctaHref="/lists" /></div>;
@@ -270,12 +300,21 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
         </div>
       </header>
 
-      {items.length === 0 ? (
+      {elementiCaduti ? (
+        <div role="alert" className="bg-white border border-cream-300 rounded-2xl p-6 text-center text-sm text-ink-600">
+          <p className="mb-2">Non riesco a leggere i prodotti della lista.</p>
+          <button type="button" onClick={() => { void rileggiElementi(); }} className="font-semibold text-primary-700 underline">
+            Riprova
+          </button>
+        </div>
+      ) : items.length === 0 ? (
         <div className="bg-white border border-cream-300 rounded-2xl p-8 text-center">
-          <p className="text-ink-500 mb-2">Lista vuota.</p>
-          <p className="text-xs text-ink-400">
-            Aggiungi prodotti dalla pagina di un prodotto (futuro: pulsante &quot;Aggiungi a lista&quot;).
-          </p>
+          <p className="text-ink-500 mb-2">Questa lista è ancora vuota.</p>
+          {isOwner && (
+            <p className="text-xs text-ink-500">
+              Apri la pagina di un prodotto e tocca «Aggiungi a lista» per metterlo qui.
+            </p>
+          )}
         </div>
       ) : (
         <ul className="space-y-3">

@@ -9,7 +9,7 @@ import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Field';
 import { Mail, MessageCircle, Phone, MapPin, Clock, Lightbulb } from 'lucide-react';
-import { nomePubblico, rigaIdentita, titolare } from '@/lib/legal/titolare';
+import { nomePubblico, recapitoDallaRisposta, rigaIdentita, titolare } from '@/lib/legal/titolare';
 import { linkWhatsApp } from '@/lib/contatto-whatsapp';
 import { indirizzoContatto, mailtoContatto } from '@/lib/contatti-pubblici';
 
@@ -24,6 +24,12 @@ export default function ContactPage() {
 
   const [form, setForm] = useState({ name: '', email: '', subject: 'Domanda generale', message: '' });
   const [sending, setSending] = useState(false);
+  // 5/11/2026 — Quando il modulo non arriva il server manda dove scrivere
+  // (details.recapito): stava solo in un messaggio a comparsa che sparisce.
+  const [stradaAMano, setStradaAMano] = useState<{ frase: string; recapito: { href: string; testo: string } } | null>(null);
+  // 5/11/2026 — Senza WhatsApp e senza telefono resta una scheda sola: niente
+  // «scegli il canale» né gli orari di un canale che non c'è.
+  const piuCanali = Boolean(whatsapp || telefono);
   const [captchaToken, setCaptchaToken] = useState(''); // 🟡-2
   /**
    * 22/8/2026 — IL GETTONE ANTI-BOT SI CONSUMA AL PRIMO TENTATIVO.
@@ -69,8 +75,11 @@ export default function ContactPage() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
+        const recapito = recapitoDallaRisposta(err);
+        if (recapito) setStradaAMano({ frase: apiErrorMessage(err, 'Invio non riuscito'), recapito });
         throw new Error(apiErrorMessage(err, 'Invio non riuscito'));
       }
+      setStradaAMano(null);
       toast.success('Messaggio inviato! Ti risponderemo entro 24 ore lavorative.');
       setForm({ name: '', email: '', subject: 'Domanda generale', message: '' });
     } catch (err) {
@@ -85,10 +94,14 @@ export default function ContactPage() {
     <div className="container mx-auto px-6 py-10 max-w-5xl">
       <div className="text-center mb-10">
         <h1 className="text-3xl md:text-4xl font-extrabold text-ink-900 mb-3">Contattaci</h1>
-        <p className="text-ink-600">Siamo qui per aiutarti. Scegli il canale più comodo o usa il form qui sotto.</p>
+        <p className="text-ink-600">
+          {piuCanali
+            ? 'Siamo qui per aiutarti. Scegli il canale più comodo o usa il form qui sotto.'
+            : 'Siamo qui per aiutarti. Scrivici un’email o usa il form qui sotto.'}
+        </p>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4 mb-10">
+      <div className={`grid gap-4 mb-10 ${piuCanali ? 'md:grid-cols-3' : 'max-w-md mx-auto'}`}>
         <a href={mailtoContatto('info')} className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
           <div className="mb-2"><Mail size={28} className="text-primary-600" aria-hidden /></div>
           <div className="font-bold">Email</div>
@@ -187,6 +200,14 @@ export default function ContactPage() {
                 ricarica la pagina o scrivici a {indirizzoContatto('info')}.
               </p>
             )}
+            {stradaAMano && (
+              <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                <p>{stradaAMano.frase}</p>
+                <a href={stradaAMano.recapito.href} className="mt-1 inline-block font-semibold underline">
+                  Scrivi a {stradaAMano.recapito.testo}
+                </a>
+              </div>
+            )}
             <Button type="submit" loading={sending} fullWidth size="lg">
               {sending ? 'Invio in corso...' : <span className="inline-flex items-center gap-2"><Mail size={18} aria-hidden /> Invia messaggio</span>}
             </Button>
@@ -216,6 +237,7 @@ export default function ContactPage() {
             )}
           </div>
 
+          {piuCanali && (
           <div className="bg-white border border-cream-300 rounded-2xl p-6">
             <h3 className="font-bold text-ink-900 mb-3 flex items-center gap-2"><Clock size={18} className="text-primary-600 shrink-0" aria-hidden /> Orari assistenza</h3>
             <ul className="text-sm text-ink-700 space-y-1">
@@ -224,6 +246,7 @@ export default function ContactPage() {
               <li className="flex justify-between text-ink-400"><span>Domenica</span><span>Chiuso</span></li>
             </ul>
           </div>
+          )}
 
           <Link href="/faq" className="block bg-accent-50 border border-accent-200 rounded-2xl p-5 hover:bg-accent-100 transition-colors">
             <div className="font-bold text-ink-900 mb-1 flex items-center gap-2"><Lightbulb size={18} className="text-accent-500 shrink-0" aria-hidden /> Forse trovi prima qui</div>

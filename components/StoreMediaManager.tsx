@@ -14,14 +14,20 @@ import { useTranslations } from 'next-intl';
 interface Props {
   value: StoreMediaItem[];
   onChange: (next: StoreMediaItem[]) => void;
+  /** Il modulo che lo contiene disattiva l'invio mentre una foto sale. */
+  onUploadingChange?: (uploading: boolean) => void;
 }
 
 const MAX_IMAGES = 3;
 const MAX_VIDEOS = 1;
 
-const StoreMediaManager = ({ value, onChange }: Props) => {
+const StoreMediaManager = ({ value, onChange, onUploadingChange }: Props) => {
   const tStates = useTranslations('states');
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploadingState] = useState(false);
+  const setUploading = (b: boolean) => {
+    setUploadingState(b);
+    onUploadingChange?.(b);
+  };
 
   const imageCount = value.filter((m) => m.type === 'image').length;
   const videoCount = value.filter((m) => m.type === 'video').length;
@@ -67,19 +73,23 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
         if (!user) throw new Error('Non autenticato');
 
         const next = [...value];
+        let entrati = 0;
+        let scartati = 0;
         for (const file of files) {
           const isVideo = file.type.startsWith('video/');
           const isImage = file.type.startsWith('image/');
-          if (!isVideo && !isImage) continue;
+          if (!isVideo && !isImage) { scartati++; continue; }
 
           const currentImages = next.filter((m) => m.type === 'image').length;
           const currentVideos = next.filter((m) => m.type === 'video').length;
           if (isVideo && currentVideos >= MAX_VIDEOS) {
             toast.error('Max 1 video per negozio');
+            scartati++;
             continue;
           }
           if (isImage && currentImages >= MAX_IMAGES) {
             toast.error('Max 3 immagini per negozio');
+            scartati++;
             continue;
           }
 
@@ -97,12 +107,21 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
             }));
           } catch (e) {
             toast.error(friendlyError(e));
+            scartati++;
             continue;
           }
           next.push({ type: isVideo ? 'video' : 'image', url: publicUrl });
+          entrati++;
         }
-        onChange(next);
-        toast.success('Media caricato');
+        // «Caricato» solo se qualcosa è entrato davvero, e con quante sono rimaste fuori.
+        if (entrati > 0) {
+          onChange(next);
+          toast.success(
+            scartati > 0
+              ? `${entrati} ${entrati === 1 ? 'foto caricata' : 'foto caricate'}, ${scartati} no`
+              : entrati === 1 ? 'Foto caricata' : `${entrati} foto caricate`,
+          );
+        }
       } catch (err) {
       toast.error(friendlyError(err));
     } finally {
@@ -131,7 +150,7 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
       <div>
         <label className="block text-sm font-medium text-ink-700 mb-1">Copertina negozio</label>
         <p className="text-xs text-ink-500">
-          Aggiungi fino a {MAX_IMAGES} foto (JPG, PNG o WEBP). Trascina per riordinare.
+          Aggiungi fino a {MAX_IMAGES} foto (JPG, PNG o WEBP). Usa le frecce per riordinare.
           Attualmente: {imageCount}/{MAX_IMAGES} foto
           {videoCount > 0 && ' · ' + videoCount + ' video caricato in passato'}.
         </p>

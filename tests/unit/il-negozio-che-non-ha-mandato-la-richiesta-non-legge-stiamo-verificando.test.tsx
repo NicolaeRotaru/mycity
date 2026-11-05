@@ -118,3 +118,19 @@ describe('la dashboard del negozio non approvato dice la verità sulla richiesta
     expect(html).toContain('contenuto');
   });
 });
+
+/**
+ * 5/11/2026 (S04, scheda 2125) — Il negozio sospeso: se il guscio della dashboard tornasse a
+ * considerarlo «non sospeso», le prove di prima restavano verdi. Deve vedere la sospensione, e non
+ * il cruscotto per vendere.
+ */
+describe('la dashboard del negozio sospeso', () => {
+  it('dice che il negozio è sospeso e non apre il cruscotto', () => {
+    profilo = { id: 'u-2', role: 'seller', is_approved: false, approval_status: 'suspended', approval_requested_at: '2026-10-01T10:00:00Z' };
+    lettura = { data: { approval_status: 'suspended', approval_requested_at: '2026-10-01T10:00:00Z' }, isLoading: false, isError: false };
+    const html = disegna();
+    expect(html).toContain('Negozio temporaneamente sospeso');
+    expect(html).not.toContain('data-prova="cruscotto"');
+    expect(html).not.toContain('Stiamo verificando i dati');
+  });
+});

@@ -74,7 +74,8 @@ test.describe('Auth flow', () => {
     // L'avviso che compare dopo l'invio, non la casella da spuntare: la parola «Termini» sta in
     // tutte e due, e un selettore largo ne pesca due e fallisce senza che ci sia niente di rotto.
     await expect(
-      page.getByText(/Devi accettare Termini e Privacy/i).first(),
+      // 5/11/2026 (unione) — S10 ha riscritto l'avviso, che ora resta anche accanto alla casella.
+      page.getByText(/Spunta la casella per accettare Termini e Privacy/i).first(),
     ).toBeVisible({ timeout: 3000 });
   });
 

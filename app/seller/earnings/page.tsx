@@ -13,6 +13,7 @@ import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
 import { riepilogoNegozio, riepilogoContanti } from '@/lib/guadagni/negozio';
 import { incassoPerGiorno } from '@/lib/guadagni/giorni';
+import { TETTO_ORDINI_LETTI, avvisoDelTettoOrdini } from '@/lib/guadagni/tetto-ordini';
 import { spiegazioneCommissione } from './commissione';
 import StripeConnectButton from '@/components/seller/StripeConnectButton';
 import StripeDashboardButton from '@/components/seller/StripeDashboardButton';
@@ -124,7 +125,7 @@ export default function SellerEarningsPage() {
         // il limite implicito di mille righe di PostgREST, che taglia in
         // silenzio e fa sembrare veri dei numeri che non lo sono.
         .order('created_at', { ascending: false })
-          .limit(500);
+          .limit(TETTO_ORDINI_LETTI);
       if (error) throw error;
       return (data ?? []) as unknown as OrderRow[];
     },
@@ -176,7 +177,9 @@ export default function SellerEarningsPage() {
   // prima, e lo stesso ordine compariva in due giorni diversi a seconda della
   // pagina che il negoziante apriva. Il conto adesso sta in un file suo, con la
   // sua prova, e usa l'orologio di Piacenza come tutte le altre pagine.
-  const daily = useMemo(() => incassoPerGiorno(cardOrders), [cardOrders]);
+  // 5/11/2026 — Solo gli ordini attivi, come il riquadro del lordo: un ordine
+  // annullato o rimborsato non e' incasso di nessun giorno.
+  const daily = useMemo(() => incassoPerGiorno(activeCard), [activeCard]);
   const maxDaily = Math.max(...daily.map(([, v]) => v), 1);
 
   const vista = vistaDaQuery(query);
@@ -197,6 +200,9 @@ export default function SellerEarningsPage() {
   return (
     <div>
       <SellerPageTitle eyebrow="Portafoglio" title="Guadagni" sub="Incassi reali dai tuoi ordini e stato dei bonifici" />
+      {avvisoDelTettoOrdini(orders.length) && (
+        <p role="note" className="mb-4 text-xs text-ink-500">{avvisoDelTettoOrdini(orders.length)}</p>
+      )}
 
       {/* Period switcher */}
       <div className="mb-5 flex flex-wrap gap-2">
@@ -235,7 +241,13 @@ export default function SellerEarningsPage() {
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1.3fr_1fr]">
         <Card variant="bordered" padding="lg">
           <h2 className="mb-4 font-serif text-lg font-bold text-ink-900">Andamento ultimi 7 giorni</h2>
-          <div className="flex h-32 items-end gap-2.5">
+          {/* Per chi non vede le barre: gli stessi valori, in testo. */}
+          <ul className="sr-only">
+            {daily.map(([day, val]) => (
+              <li key={day}>{new Date(day).toLocaleDateString('it', { weekday: 'long' })}: {formatPrice(val)}</li>
+            ))}
+          </ul>
+          <div className="flex h-32 items-end gap-2.5" aria-hidden="true">
             {daily.map(([day, val]) => {
               const pct = (val / maxDaily) * 100;
               return (

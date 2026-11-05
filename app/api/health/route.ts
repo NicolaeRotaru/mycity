@@ -264,7 +264,12 @@ export async function GET(request: Request) {
   // Il messaggio grezzo del database e' una mappa di dov'e' scoperto il sito:
   // esce solo con il segreto in mano.
   let dettaglioBattiti: string | undefined;
-  try {
+  // 5/11/2026 — Col database che non ha risposto entro il tetto, i battiti non si leggono: la seconda
+  // lettura sullo stesso database lento teneva appesa la risposta per altri venti secondi, invece di
+  // dire subito «rallentato». Come fa la gemella /api/health/ready.
+  if (!checks.db.ok) {
+    cron = battitiNonLetti(attesi, 'battiti non letti: il database non risponde');
+  } else try {
     const admin = getAdminSupabase();
     const { data, error } = await admin.from('cron_heartbeats').select('name, last_run_at');
     if (error) {

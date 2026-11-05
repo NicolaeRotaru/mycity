@@ -92,7 +92,10 @@ export const DESCRIZIONE_DEL_SITO =
 export function promessaSuperata(testo: string): string | null {
   const t = testo.toLowerCase();
   if (/\babbigliamento\b/.test(t)) return 'abbigliamento: al lancio non c\'è';
-  if (/\b30\s*[-–]\s*60\s*min/.test(t) && !/\bveloce\b/.test(t)) {
+  // 5/11/2026 — Riconosceva solo «30-60 min»: «da 30 a 60 minuti», «30/60 min»
+  // e «in mezz'ora» passavano. Stessa promessa, altre parole.
+  const trentaSessanta = /\b30\s*(?:[-–—/]|a)\s*60\s*min/.test(t) || /\bmezz['’ ]?\s*ora\b/.test(t);
+  if (trentaSessanta && !/\bveloce\b/.test(t)) {
     return '30-60 minuti promessi come certi, senza dire che sono la consegna veloce';
   }
   return null;

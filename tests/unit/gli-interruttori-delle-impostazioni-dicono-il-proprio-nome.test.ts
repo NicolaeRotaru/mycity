@@ -70,8 +70,11 @@ describe('gli interruttori delle impostazioni account', () => {
     const s = await schedaNotifiche();
     const trovati = interruttori(s.radice);
 
+    // 5/11/2026 (S08, scheda 2036) — Con la newsletter spenta al lancio, e la
+    // preferenza non accesa, il suo interruttore non c'è più: ne restano quattro.
+    const { NEWSLETTER_ACCESA } = await import('@/lib/funzioni-al-lancio');
     expect(trovati.length, 'nella scheda Notifiche non c è nessun interruttore: la prova non sta guardando niente')
-      .toBeGreaterThanOrEqual(5);
+      .toBeGreaterThanOrEqual(NEWSLETTER_ACCESA ? 5 : 4);
 
     const muti = trovati.filter((i) => !nomeAccessibile(i));
     expect(

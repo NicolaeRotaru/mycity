@@ -75,9 +75,13 @@ export function inizioGiornoPiacenza(giorno: string): Date {
 
 /** Le ultime `n` giornate a Piacenza, dalla più vecchia a oggi. */
 export function ultimiGiorniPiacenza(n: number, fine: Date = new Date()): string[] {
+  // Si conta per giorni di calendario, non per blocchi di 24 ore: nelle
+  // domeniche del cambio d'ora Piacenza ha giornate da 23 o 25 ore, e togliere
+  // 24 ore all'istante saltava un giorno o lo contava due volte.
+  const [a, m, g] = giornoPiacenza(fine).split('-').map(Number);
   const giorni: string[] = [];
   for (let i = n - 1; i >= 0; i--) {
-    giorni.push(giornoPiacenza(new Date(fine.getTime() - i * 86_400_000)));
+    giorni.push(new Date(Date.UTC(a, m - 1, g - i)).toISOString().slice(0, 10));
   }
   return giorni;
 }

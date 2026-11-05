@@ -99,7 +99,7 @@ export const CODICE_EMAIL_DA_CONFERMARE = 'EMAIL_NOT_VERIFIED';
 export type EsitoAccesso =
   | { tipo: 'ok' }
   | { tipo: 'email-da-confermare' }
-  | { tipo: 'errore'; messaggio: string };
+  | { tipo: 'errore'; messaggio: string; codice?: string };
 
 export function esitoDellaRispostaDiAccesso(ok: boolean, corpo: unknown): EsitoAccesso {
   if (ok) return { tipo: 'ok' };
@@ -113,7 +113,28 @@ export function esitoDellaRispostaDiAccesso(ok: boolean, corpo: unknown): EsitoA
       : undefined) ??
     (typeof errore === 'string' ? errore : undefined) ??
     'Accesso non riuscito';
-  return { tipo: 'errore', messaggio };
+  const codice =
+    errore && typeof errore === 'object' && typeof (errore as { code?: unknown }).code === 'string'
+      ? (errore as { code: string }).code
+      : undefined;
+  return { tipo: 'errore', messaggio, ...(codice ? { codice } : {}) };
+}
+
+/**
+ * S10 (5/11/2026) — La frase che la pagina di accesso mostra per un errore
+ * della rotta, quando la rotta ha gia' detto il motivo. Prima il messaggio
+ * italiano passava da una traduzione pensata per l'inglese di Supabase: «Email
+ * o password non corretti» diventava «Password non valida» (contiene la parola
+ * «password»), e «Troppi tentativi…» diventava «Accesso non riuscito. Riprova.».
+ * `null` = nessun codice noto: decide il ripiego della pagina.
+ */
+export function messaggioDellaRottaDiAccesso(esito: EsitoAccesso): string | null {
+  if (esito.tipo !== 'errore' || !esito.codice) return null;
+  if (esito.codice === 'UNAUTHORIZED') {
+    return "Email o password non corrette: controlla anche come hai scritto l'email.";
+  }
+  if (['RATE_LIMITED', 'INVALID_REQUEST', 'SERVICE_UNAVAILABLE'].includes(esito.codice)) return esito.messaggio;
+  return null;
 }
 
 /** Quello che la pagina di verifica sa di chi la sta guardando. */

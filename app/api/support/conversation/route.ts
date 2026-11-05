@@ -6,32 +6,13 @@ import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
+import { accountAssistenza } from '@/lib/admin/account-assistenza';
 
 export const runtime = 'nodejs';
 
 const Schema = z.object({
   firstMessage: z.string().trim().min(1, 'Messaggio vuoto').max(4000, 'Massimo 4000 caratteri'),
 });
-
-/**
- * L'account Assistenza: il primo admin (fonte di verità nel DB, no hardcode).
- * Una funzione sola per chi apre la chat (POST) e per chi deve riconoscerla (GET):
- * se un giorno la regola cambia, cambia per tutti e due.
- *
- * Un guasto del database LANCIA: «non sono riuscita a chiedere» non è «non c'è
- * nessun admin», e scambiarli faceva ricordare il guasto come una risposta.
- */
-async function accountAssistenza(admin: ReturnType<typeof getAdminSupabase>): Promise<{ id: string } | null> {
-  const { data, error } = await admin
-    .from('profiles')
-    .select('id')
-    .eq('role', 'admin')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw new Error(`account Assistenza non letto: ${error.code ?? ''} ${error.message}`, { cause: error });
-  return (data as { id: string } | null) ?? null;
-}
 
 /**
  * GET /api/support/conversation → `{ supportId }`
@@ -134,8 +115,20 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
       .insert({ buyer_id: user.id, seller_id: support.id })
       .select('id')
       .single();
-    if (error || !created) return ApiErrors.internal('Impossibile aprire la conversazione');
-    conversationId = created.id;
+    if (error?.code === '23505') {
+      // Due richieste insieme: l'altra l'ha appena creata. Si rilegge e si usa quella.
+      const { data: gia } = await admin
+        .from('conversations')
+        .select('id')
+        .eq('buyer_id', user.id)
+        .eq('seller_id', support.id)
+        .maybeSingle();
+      conversationId = (gia as { id: string } | null)?.id ?? null;
+      if (!conversationId) return ApiErrors.internal('Impossibile aprire la conversazione');
+    } else {
+      if (error || !created) return ApiErrors.internal('Impossibile aprire la conversazione');
+      conversationId = created.id;
+    }
   }
 
   const { error: msgErr } = await admin.from('messages').insert({
@@ -144,6 +137,19 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
     body: firstMessage,
   });
   if (msgErr) return ApiErrors.internal('Impossibile inviare il messaggio');
+
+  // 5/11/2026 (S05) — La campanella dell'Assistenza: prima la richiesta d'aiuto
+  // entrava muta, e restava muta anche ai messaggi dopo (l'avviso della chat
+  // suona solo al primo non letto). Il messaggio è già salvato: un guasto qui
+  // non fa fallire l'invio, si annota.
+  const { error: errAvviso } = await admin.from('notifications').insert({
+    category: 'system',
+    user_id: support.id,
+    title: 'Nuova richiesta di assistenza',
+    body: firstMessage.length > 140 ? `${firstMessage.slice(0, 139)}…` : firstMessage,
+    link: `/messages/${conversationId}`,
+  });
+  if (errAvviso) logger.error('[support] campanella dell assistenza non scritta', { conversationId, message: errAvviso.message });
 
   // supportId: la chat appena aperta si chiama «Assistenza MyCity» subito, senza aspettare la GET.
   return NextResponse.json({ conversationId, supportId: support.id }, { status: 200 });

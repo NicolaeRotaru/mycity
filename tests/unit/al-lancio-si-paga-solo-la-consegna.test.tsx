@@ -10,12 +10,11 @@ import {
 const regolaDelCarrello = (merciCents: number[]) =>
   PLATFORM_DELIVERY_FEE_CENTS + (merciCents.length - 1) * EURO_NEGOZIO_IN_PIU
   + merciCents.filter((m) => m < SOGLIA_SPESA).length * EURO_SPESA_PICCOLA;
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ShippingPage from '@/app/shipping/page';
 import { metadata as metadatiVicinoATe } from '@/app/near/layout';
-import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import {
   COMPENSO_RIDER_CENTS,
   PLATFORM_DELIVERY_FEE_CENTS,
@@ -205,7 +204,9 @@ describe('a ogni distanza dentro la zona si pagano solo i 3 euro', () => {
     }
   });
 
-  it('IL CASO DEL COLLAUDO — 20 euro di spesa a 9 km pagano 3 euro di consegna, non 16,30', () => {
+  // 5/11/2026 (S04, scheda 2095) — Il titolo diceva «dentro la zona» per una casa a 9 km, che col
+  // confine a 5 la cassa rifiuta. La prova protegge dalla tariffa a chilometri oltre i 6 km: lo dice.
+  it('IL CASO DEL COLLAUDO — una casa a 9 km (fuori zona: la cassa la rifiuta) non riporta la tariffa a chilometri: il conto resta 3 euro, non 16,30', () => {
     const casa = puntoA(9, 90);
     const esito = conto([{ sellerId: 'forno', euro: 20 }], { consegnaLat: casa.lat, consegnaLng: casa.lng });
     expect(
@@ -333,6 +334,10 @@ describe('a ogni distanza dentro la zona si pagano solo i 3 euro', () => {
     // numero viene dalle sue dimensioni, non da una soglia scritta a mano) ed è fatta solo di
     // carrelli che la cassa lascia nascere.
     expect(sbagliati.slice(0, 6), `${sbagliati.length} carrelli su ${verificati} non pagano la consegna della regola`).toEqual([]);
+    // 5/11/2026 (S04, scheda 2098) — Il conto dei verificati viene dalle stesse liste del ciclo: con
+    // DIREZIONI vuota faceva 0 = 0 e la prova passava senza guardare niente.
+    expect(DIREZIONI.length, 'la griglia ha perso le direzioni').toBeGreaterThanOrEqual(8);
+    expect(verificati, 'nessun carrello è stato verificato').toBeGreaterThan(0);
     expect(new Set(carrelli.map((c) => c.length)), 'mancano i carrelli da due o da tre negozi').toEqual(new Set([2, 3]));
     expect(verificati, 'la griglia dei carrelli con più negozi non è stata percorsa tutta').toBe(
       DIREZIONI.length * DISTANZE.length * carrelli.length,
@@ -460,12 +465,22 @@ describe('le altre promesse parlano della stessa consegna', () => {
     }
   });
 
-  it('la barra «ti mancano X €» non c’è più: resta la riga con la consegna', () => {
-    const html = renderToStaticMarkup(<FreeShippingProgress subtotal={12} />);
-    const t = testoDi(html);
-    expect(t).not.toMatch(/mancano|gratis/i);
-    expect(html).not.toContain('progressbar');
-    expect(t).toContain(TRE_EURO);
+  // S10 (5/11/2026, scheda 2083) — Qui si collaudava FreeShippingProgress, che
+  // nessuna pagina montava più: il componente è stato tolto. Che carrello,
+  // cassa e scheda non lo montino lo dicono le prove più sotto.
+  it('la barra «ti mancano X €» non esiste più nel codice', () => {
+    expect(existsSync('components/ui/FreeShippingProgress.tsx')).toBe(false);
+  });
+
+  // 5/11/2026 (S04, scheda 2052) — VALUE_PROPS non la mostra nessuna pagina: la home disegna il
+  // suo elenco, DEFAULT_TRUST_BULLETS in HomeSectionRenderer. Si guarda quello.
+  it('l’elenco «Perché scegliere MyCity» che la home disegna davvero non promette consegna gratis', () => {
+    const sorgente = readFileSync(join(process.cwd(), 'components/home-sections/HomeSectionRenderer.tsx'), 'utf8');
+    const inizio = sorgente.indexOf('const DEFAULT_TRUST_BULLETS');
+    expect(inizio, 'la home non ha più il suo elenco: la prova va spostata dove sta').toBeGreaterThan(-1);
+    const elenco = sorgente.slice(inizio, sorgente.indexOf('] as const;', inizio));
+    expect(elenco).toMatch(/Consegna/);
+    expect(elenco).not.toMatch(/gratuit|gratis|sopra i? ?\d+\s*(€|euro)/i);
   });
 
   it('le quattro promesse della home non dicono più «spedizione gratuita sopra 30 €»', () => {

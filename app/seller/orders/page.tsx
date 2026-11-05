@@ -18,6 +18,7 @@ import { Banknote, ChevronRight, ClipboardList, Clock } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
 import { eSchemaIndietro } from '@/lib/db/migrazione-124';
 import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
+import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
 import { LETTURA_ORDINI_DEL_NEGOZIO, rigaScadenzaPerIlNegozio } from '@/lib/ordini/scadenza-accettazione';
 import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
 
@@ -154,7 +155,10 @@ export default function SellerOrdersPage() {
 
   const vistaqueryOrders = vistaDaQuery(queryOrders, { quanti: orders.length });
   if (vistaqueryOrders.mostraScheletro) return <LoadingState />;
-  if (vistaqueryOrders.mostraErrore) {
+  // Un errore copre la pagina solo se non c'è niente da mostrare: allo sblocco del
+  // telefono, con la rete che si riaggancia, gli ordini già letti restano a schermo.
+  const aggiornamentoCaduto = vistaqueryOrders.mostraErrore && orders.length > 0;
+  if (vistaqueryOrders.mostraErrore && !aggiornamentoCaduto) {
     return (
       <ErrorState
         title="Non sono riuscito a leggere i tuoi ordini"
@@ -185,6 +189,13 @@ export default function SellerOrdersPage() {
         ))}
       />
 
+      {aggiornamentoCaduto && (
+        <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-secondary-200 bg-white px-4 py-3 text-sm text-ink-700">
+          <span>Non riesco ad aggiornare gli ordini: quelli che vedi sono dell&apos;ultima lettura riuscita.</span>
+          <button type="button" onClick={() => queryOrders.refetch()} className="font-semibold text-primary-700 underline">Riprova</button>
+        </div>
+      )}
+
       {orders.length === 0 ? (
         <div className="rounded-2xl border border-cream-300 bg-white">
           <EmptyState
@@ -205,12 +216,21 @@ export default function SellerOrdersPage() {
                   {group.orders.map((o) => {
                     const itemCount = o.order_items.reduce((s, i) => s + i.quantity, 0);
                     const cod = isCod(o.payment_method);
-                    const fascia = fasciaLeggibile(o);
+                    // «Adesso · arrivo in 30-60 min» su un ordine già chiuso sembra una promessa ancora in corso.
+                    const conclusa = o.delivery_status === 'DELIVERED' || o.delivery_status === 'CANCELED';
+                    const fasciaGrezza = fasciaLeggibile(o);
+                    const fascia = conclusa && fasciaGrezza === ETICHETTA_ADESSO ? null : fasciaGrezza;
+                    // La riga «entro quando accettare» sta sotto la scheda, fuori dai badge e fuori dal
+                    // nome del collegamento: sono 130 caratteri che il lettore di schermo leggeva come link.
+                    const scadenza = o.delivery_status === 'NEW' ? rigaScadenzaPerIlNegozio(o, lettoAlle, orariDelNegozio(o)) : null;
                     return (
-                      <Link
+                      <div
                         key={o.id}
+                        className="rounded-xl border border-cream-300 bg-white transition-all hover:border-primary-200 hover:shadow-warm"
+                      >
+                      <Link
                         href={`/seller/orders/${o.id}`}
-                        className="block rounded-xl border border-cream-300 bg-white px-5 py-4 transition-all hover:border-primary-200 hover:shadow-warm"
+                        className="block px-5 py-4"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div className="min-w-0">
@@ -222,10 +242,6 @@ export default function SellerOrdersPage() {
                                 <span className="inline-flex items-center gap-1 rounded-full bg-cream-100 px-2 py-0.5 text-[11px] font-semibold text-ink-700 ring-1 ring-inset ring-cream-300">
                                   <Clock size={12} aria-hidden /> Consegna: {fascia}
                                 </span>
-                              )}
-                              {/* 30/10/2026 — Entro quando accettare: la stessa riga dell'email «Nuovo ordine». */}
-                              {o.delivery_status === 'NEW' && rigaScadenzaPerIlNegozio(o, lettoAlle, orariDelNegozio(o)) && (
-                                <span className="text-[11px] font-semibold text-primary-700">{rigaScadenzaPerIlNegozio(o, lettoAlle, orariDelNegozio(o))}</span>
                               )}
                               {cod && (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-olive-50 px-2 py-0.5 text-[11px] font-semibold text-olive-700 ring-1 ring-inset ring-olive-200">
@@ -245,6 +261,11 @@ export default function SellerOrdersPage() {
                           </div>
                         </div>
                       </Link>
+                      {/* 30/10/2026 — Entro quando accettare: la stessa riga dell'email «Nuovo ordine». */}
+                      {scadenza && (
+                        <p className="-mt-2 px-5 pb-3 text-xs font-semibold text-primary-700">{scadenza}</p>
+                      )}
+                      </div>
                     );
                   })}
                 </div>

@@ -16,6 +16,8 @@ import {
 // 22/8/2026 — `apiErrorMessage` c'era una copia locale, riga per riga
 // identica a questa. Una copia non resta uguale: quella è sparita.
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
+import { trackErrorShown } from '@/lib/analytics/events';
+import { CODICI_SCONTO_IN_CASSA, NEWSLETTER_ACCESA } from '@/lib/funzioni-al-lancio';
 import { perchePasswordNonCambiabile, puoiProvareACambiare } from '@/lib/account/cambio-password';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
@@ -66,22 +68,76 @@ const DEFAULT_PREFS: Prefs = {
  */
 function mostraErroreConLaStrada(corpo: unknown, ripiego: string): void {
   const strada = recapitoDallaRisposta(corpo);
-  toast.error(apiErrorMessage(corpo, ripiego), {
+  const messaggio = apiErrorMessage(corpo, ripiego);
+  // 5/11/2026 — Questi errori non passavano più da friendlyError e sparivano dal
+  // conteggio degli errori mostrati: lo si segna qui.
+  const codice = (corpo as { error?: { code?: unknown } } | null)?.error?.code;
+  trackErrorShown(typeof codice === 'string' ? codice : 'account_diritti', messaggio, '/profile/settings');
+  toast.error(messaggio, {
     duration: 15_000,
     ...(strada
       ? {
           action: {
-            label: strada.href.startsWith('mailto:') ? `Scrivi a ${strada.testo}` : 'Apri il modulo dei contatti',
-            onClick: () => window.location.assign(strada.href),
+            // 5/11/2026 — L'indirizzo intero nel pulsante (che non si restringe)
+            // schiacciava il messaggio in una colonna stretta: l'indirizzo è già
+            // scritto nel messaggio, il pulsante dice solo cosa fa.
+            label: strada.href.startsWith('mailto:') ? "Scrivi un'email" : 'Apri il modulo dei contatti',
+            // 5/11/2026 — Il toast si chiudeva al tocco: se la posta non si apriva,
+            // spiegazione e indirizzo sparivano. preventDefault lo tiene aperto.
+            onClick: (evento: { preventDefault?: () => void }) => {
+              evento?.preventDefault?.();
+              window.location.assign(strada.href);
+            },
           },
         }
       : {}),
   });
 }
 
+/** Le schede che si possono aprire dall'indirizzo (`?tab=danger`). */
+function schedaDallIndirizzo(): Tab | null {
+  if (typeof window === 'undefined') return null;
+  const t = new URLSearchParams(window.location.search).get('tab');
+  return TABS.some((x) => x.id === t) ? (t as Tab) : null;
+}
+
+/**
+ * 5/11/2026 — Il motivo del rinvio dice «(pagina /contact)» e a volte un
+ * indirizzo email: nell'email sono collegamenti, qui erano testo nudo.
+ */
+function MotivoConCollegamenti({ testo }: { testo: string }) {
+  const pezzi = testo.split(/((?<![\w/.:])\/contact(?![\w/-])|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g);
+  return (
+    <>
+      {pezzi.map((pezzo, i) => {
+        if (pezzo === '/contact') {
+          return <Link key={i} href="/contact" className="underline font-semibold">/contact</Link>;
+        }
+        if (/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(pezzo)) {
+          return <a key={i} href={`mailto:${pezzo}`} className="underline font-semibold">{pezzo}</a>;
+        }
+        return <span key={i}>{pezzo}</span>;
+      })}
+    </>
+  );
+}
+
+/** I 7 giorni sono finiti (data passata o zero giorni) anche senza un avviso del giro notturno. */
+function terminePassato(p: { effectiveAt: string; daysRemaining: number }): boolean {
+  if (p.daysRemaining <= 0) return true;
+  const quando = new Date(p.effectiveAt).getTime();
+  return Number.isFinite(quando) && quando <= Date.now();
+}
+
 export default function SettingsPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('account');
+  // 5/11/2026 — L'avviso della cancellazione porta a ?tab=danger: motivo e
+  // «Annulla eliminazione» stanno lì, non nella scheda Account.
+  useEffect(() => {
+    const daAprire = schedaDallIndirizzo();
+    if (daAprire) setTab(daAprire);
+  }, []);
   const [email, setEmail] = useState('');
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,7 +159,11 @@ export default function SettingsPage() {
   // Delete account (cooldown 7gg)
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
-  const [pendingDeletion, setPendingDeletion] = useState<{ effectiveAt: string; daysRemaining: number; motivo?: string | null; rinviata?: boolean } | null>(null);
+  const [pendingDeletion, setPendingDeletion] = useState<{ effectiveAt: string; daysRemaining: number; motivo?: string | null; rinviata?: boolean; letturaFallita?: boolean } | null>(null);
+  // 5/11/2026 — Quando la lettura dello stato risponde con la strada a mano
+  // (senza chiave di servizio), la pagina lo dice subito invece di mostrare il
+  // modulo ELIMINA che fallirebbe solo dopo.
+  const [stradaDalServer, setStradaDalServer] = useState<{ frase: string; recapito: { href: string; testo: string } | null } | null>(null);
   // 27/10/2026 — La casella vera se c'è, il modulo dei contatti se no: mai il
   // ripiego scritto nel codice (lo stesso criterio della pagina privacy).
   const recapito = recapitoPrivacy();
@@ -147,6 +207,18 @@ export default function SettingsPage() {
                 daysRemaining: body.daysRemaining,
                 motivo: typeof body.motivo === 'string' ? body.motivo : null,
                 rinviata: body.rinviata === true,
+                letturaFallita: body.letturaFallita === true,
+              });
+            }
+          } else {
+            const body = await res.json().catch(() => null);
+            // Solo il 503 della strada a mano (porta `details.recapito`, anche null): un 503 del
+            // controllo d'accesso per un guasto passeggero non vuol dire «cancellazione spenta».
+            const dettagli = (body as { error?: { details?: Record<string, unknown> } } | null)?.error?.details;
+            if (res.status === 503 && dettagli && 'recapito' in dettagli) {
+              setStradaDalServer({
+                frase: apiErrorMessage(body, 'La cancellazione automatica non è disponibile in questo momento.'),
+                recapito: recapitoDallaRisposta(body),
               });
             }
           }
@@ -306,6 +378,21 @@ export default function SettingsPage() {
         return;
       }
 
+      // 5/11/2026 — La richiesta c'era già: si mostra lo stato vero (motivo del
+      // rinvio compreso) invece di un «tra 0 giorni» calcolato da una data passata.
+      if (body?.alreadyRequested) {
+        setPendingDeletion({
+          effectiveAt: body.effectiveAt ?? '',
+          daysRemaining: typeof body.daysRemaining === 'number' ? body.daysRemaining : 0,
+          motivo: typeof body.motivo === 'string' ? body.motivo : null,
+          rinviata: body.rinviata === true,
+          letturaFallita: body.letturaFallita === true,
+        });
+        setDeleteConfirm('');
+        toast.info('Avevi già chiesto la cancellazione: qui sotto trovi a che punto è.');
+        return;
+      }
+
       // L'account NON viene eliminato subito: c'è un cooldown di 7 giorni
       // durante il quale l'utente può annullare. NON facciamo signOut così
       // l'utente può vedere lo stato e cambiare idea.
@@ -333,7 +420,12 @@ export default function SettingsPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(apiErrorMessage(body, 'Annullamento non riuscito'));
+      if (!res.ok) {
+        // 5/11/2026 — Come Cancella account: la frase del server e la sua strada,
+        // non il generico «Riprova fra un momento» di friendlyError.
+        mostraErroreConLaStrada(body, 'Annullamento non riuscito');
+        return;
+      }
       setPendingDeletion(null);
       toast.success('Eliminazione annullata. Il tuo account resta attivo.');
     } catch (err) {
@@ -430,7 +522,11 @@ export default function SettingsPage() {
 
               <div>
                 <h2 className="text-lg font-bold mb-1">Dati personali</h2>
-                <p className="text-sm text-ink-500 mb-3">Per modificare nome, telefono, indirizzo principale:</p>
+                {/* 5/11/2026 — L'indirizzo del profilo la cassa non lo usa: si rimanda alla rubrica. */}
+                <p className="text-sm text-ink-500 mb-3">
+                  Per modificare nome e telefono (gli indirizzi di consegna stanno in{' '}
+                  <Link href="/profile/addresses" className="text-primary-700 underline">I tuoi indirizzi</Link>):
+                </p>
                 <Link href="/profile" className="inline-flex items-center gap-2 bg-cream-100 hover:bg-cream-200 px-4 py-2 rounded-lg font-semibold text-sm text-ink-900 transition-colors">
                   Modifica profilo →
                 </Link>
@@ -497,7 +593,8 @@ export default function SettingsPage() {
                 />
                 <Toggle
                   label="Promozioni e sconti"
-                  desc="Offerte dai tuoi negozi preferiti e coupon."
+                  // 5/11/2026 — I codici sconto sono spenti al lancio: niente «coupon».
+                  desc={CODICI_SCONTO_IN_CASSA ? 'Offerte dai tuoi negozi preferiti e coupon.' : 'Offerte dai tuoi negozi preferiti.'}
                   value={prefs.notif_promos}
                   onChange={(v) => updatePref('notif_promos', v)}
                 />
@@ -507,12 +604,19 @@ export default function SettingsPage() {
                   value={prefs.notif_groups}
                   onChange={(v) => updatePref('notif_groups', v)}
                 />
-                <Toggle
-                  label="Newsletter mensile"
-                  desc="Novità, nuovi negozi, articoli del blog."
-                  value={prefs.notif_newsletter}
-                  onChange={(v) => updatePref('notif_newsletter', v)}
-                />
+                {/* 5/11/2026 — La newsletter è spenta al lancio: accenderla salvava una
+                    scelta per email che non partono. Resta l'interruttore solo per
+                    chi l'aveva accesa e vuole spegnerla. */}
+                {NEWSLETTER_ACCESA || prefs.notif_newsletter ? (
+                  <Toggle
+                    label={NEWSLETTER_ACCESA ? 'Newsletter mensile' : 'Newsletter'}
+                    desc={NEWSLETTER_ACCESA ? 'Novità, nuovi negozi, articoli del blog.' : 'La newsletter non è ancora attiva.'}
+                    value={prefs.notif_newsletter}
+                    onChange={(v) => updatePref('notif_newsletter', v)}
+                  />
+                ) : (
+                  <p className="text-sm text-ink-500 px-3">La newsletter non è ancora attiva.</p>
+                )}
               </div>
 
               <hr />
@@ -599,6 +703,10 @@ export default function SettingsPage() {
                   <a href={recapito.href} className="text-primary-700 hover:underline text-sm">
                     {recapito.testo}
                   </a>
+                ) : stradaDalServer && !stradaDalServer.recapito ? (
+                  /* 5/11/2026 — Il server sa che nessun canale arriva a una persona:
+                     mandare al modulo dei contatti sarebbe un giro in tondo. */
+                  <p className="text-sm text-ink-600">{stradaDalServer.frase}</p>
                 ) : (
                   <p className="text-sm text-ink-600">
                     La casella email della privacy non è ancora attiva: scrivici dal{' '}
@@ -624,6 +732,14 @@ export default function SettingsPage() {
                     <Hourglass size={18} className="text-accent-900" aria-hidden />
                     Eliminazione programmata
                   </h3>
+                  {pendingDeletion.letturaFallita ? (
+                    /* 5/11/2026 — La rilettura del motivo è caduta: «non lo so» non è
+                       «nessun rinvio», quindi niente conto alla rovescia. */
+                    <p className="text-sm text-accent-900 mb-3 leading-relaxed" role="status">
+                      Non riusciamo a leggere lo stato della tua richiesta in questo momento. Ricarica la pagina fra
+                      qualche minuto. Finché l&apos;account non è eliminato puoi annullare la richiesta.
+                    </p>
+                  ) : null}
                   {pendingDeletion.rinviata || pendingDeletion.motivo ? (
                     /* 27/10/2026 — Il motivo del rinvio, come gliel'ha scritto il
                        giro notturno: senza, il conto alla rovescia arrivava a
@@ -631,15 +747,24 @@ export default function SettingsPage() {
                        Secondo giro: conta `rinviata`, non solo il testo. */
                     <p className="text-sm text-accent-900 mb-3 leading-relaxed" role="status">
                       <strong>La cancellazione è in attesa.</strong>{' '}
-                      {pendingDeletion.motivo ?? 'Il motivo ti è stato scritto nelle notifiche del tuo account.'}
+                      {pendingDeletion.motivo
+                        ? <MotivoConCollegamenti testo={pendingDeletion.motivo} />
+                        : 'Il motivo ti è stato scritto nelle notifiche del tuo account.'}
                     </p>
                   ) : null}
-                  {pendingDeletion.rinviata ? (
+                  {pendingDeletion.letturaFallita ? null : pendingDeletion.rinviata ? (
                     /* Rinviata: i 7 giorni sono passati. «Sarà eliminato tra 0
                        giorni» e «puoi annullare entro questa data» erano falsi. */
                     <p className="text-sm text-accent-700 mb-4">
                       I 7 giorni per ripensarci sono passati, ma l&apos;account non è ancora stato eliminato,
                       per il motivo scritto qui sopra. Finché non succede puoi ancora annullare la richiesta.
+                    </p>
+                  ) : terminePassato(pendingDeletion) ? (
+                    /* 5/11/2026 — Ferma senza un avviso (un guasto sotto il mese): la
+                       data è passata, «tra 0 giorni… entro questa data» era falso. */
+                    <p className="text-sm text-accent-700 mb-4" role="status">
+                      I 7 giorni per ripensarci sono passati, ma l&apos;account non è ancora stato eliminato.
+                      Finché non succede puoi ancora annullare la richiesta.
                     </p>
                   ) : (
                   <>
@@ -670,6 +795,25 @@ export default function SettingsPage() {
                       </>
                     )}
                   </button>
+                </div>
+              ) : stradaDalServer ? (
+                /* 5/11/2026 — Senza la chiave di servizio la lettura dello stato
+                   risponde con la strada a mano: si dice subito, invece del modulo
+                   ELIMINA che rispondeva «non partita» solo dopo. */
+                <div className="bg-red-50 border border-red-200 rounded-lg p-5" role="status">
+                  <h3 className="font-bold text-red-900 mb-2">La cancellazione automatica è spenta</h3>
+                  <p className="text-sm text-red-800 leading-relaxed">{stradaDalServer.frase}</p>
+                  {stradaDalServer.recapito ? (
+                    stradaDalServer.recapito.href.startsWith('mailto:') ? (
+                      <a href={stradaDalServer.recapito.href} className="mt-3 inline-block font-semibold text-primary-700 underline">
+                        Scrivi a {stradaDalServer.recapito.testo}
+                      </a>
+                    ) : (
+                      <Link href={stradaDalServer.recapito.href} className="mt-3 inline-block font-semibold text-primary-700 underline">
+                        Apri il modulo dei contatti
+                      </Link>
+                    )
+                  ) : null}
                 </div>
               ) : (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-5">

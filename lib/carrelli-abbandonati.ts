@@ -166,15 +166,26 @@ export async function potaCarrelliRecuperati(
   oraMs = Date.now(),
 ): Promise<number> {
   const limite = new Date(oraMs - GIORNI_DI_MEMORIA_CARRELLI * 86_400_000).toISOString();
-  const { data, error } = await admin
-    .from('abandoned_carts')
-    .delete()
-    .eq('recovered', true)
-    .lt('recovered_at', limite)
-    .select('user_id');
-  if (error) {
-    logger.warn('[carrelli] potatura non riuscita', { message: error.message });
-    return 0;
+  /*
+   * 5/11/2026 — Si potavano solo i carrelli recuperati CON la data: i carrelli mai comprati
+   * (recovered = false) e quelli recuperati senza `recovered_at` (scritti prima della 148 o dalla
+   * strada di ripiego) restavano per sempre. Adesso anche loro, quando la loro ultima attività ha
+   * più di `GIORNI_DI_MEMORIA_CARRELLI` giorni.
+   */
+  const tagli = [
+    () => admin.from('abandoned_carts').delete().eq('recovered', true).lt('recovered_at', limite).select('user_id'),
+    () => admin.from('abandoned_carts').delete().eq('recovered', false).lt('last_activity', limite).select('user_id'),
+    () =>
+      admin.from('abandoned_carts').delete().eq('recovered', true).is('recovered_at', null).lt('last_activity', limite).select('user_id'),
+  ];
+  let potate = 0;
+  for (const taglio of tagli) {
+    const { data, error } = await taglio();
+    if (error) {
+      logger.warn('[carrelli] potatura non riuscita', { message: error.message });
+      continue;
+    }
+    potate += (data ?? []).length;
   }
-  return (data ?? []).length;
+  return potate;
 }

@@ -9,18 +9,19 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
 
+// 5/11/2026 — Indirizzo, CAP e città stavano qui e la cassa non li leggeva mai (precompila
+// solo dalla rubrica `user_addresses`): si scrivevano dati che non servivano a niente.
+// Gli indirizzi di consegna stanno in «I tuoi indirizzi».
 type ProfileForm = {
   full_name: string;
   phone: string;
-  address: string;
-  city: string;
-  zip: string;
 };
 
 export default function ProfilePage() {
@@ -28,7 +29,7 @@ export default function ProfilePage() {
   const qc = useQueryClient();
   const { register, handleSubmit, reset } = useForm<ProfileForm>();
 
-  const { data: profile, isLoading, error } = useQuery({
+  const { data: profile, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.profile.mine,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -48,9 +49,6 @@ export default function ProfilePage() {
       reset({
         full_name: profile.full_name ?? '',
         phone:     profile.phone ?? '',
-        address:   profile.address ?? '',
-        city:      profile.city ?? '',
-        zip:       profile.zip ?? '',
       });
     }
   }, [profile, reset]);
@@ -70,9 +68,21 @@ export default function ProfilePage() {
   });
 
   if (isLoading) return <LoadingState />;
-  if (error || !profile) {
-    if (typeof window !== 'undefined') router.push('/sign-in');
+  // 5/11/2026 — Qualunque errore (anche una rete debole) mandava alla pagina di accesso,
+  // senza una parola. Si manda ad accedere solo chi non è entrato; una lettura caduta
+  // si dice, con «Riprova».
+  if (error instanceof Error && error.message === 'Non autenticato') {
+    if (typeof window !== 'undefined') router.push('/sign-in?returnTo=/profile');
     return null;
+  }
+  if (error || !profile) {
+    return (
+      <ErrorState
+        title="Non riusciamo a caricare il tuo profilo"
+        description="Controlla la connessione e riprova."
+        onRetry={() => void refetch()}
+      />
+    );
   }
 
   const displayName = (profile.full_name as string | null)?.trim() || 'Il mio account';
@@ -90,7 +100,10 @@ export default function ProfilePage() {
         <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
           Profilo
         </h1>
-        <p className="mt-1 text-sm text-ink-500">Gestisci i tuoi dati personali e di consegna.</p>
+        <p className="mt-1 text-sm text-ink-500">
+          Gestisci i tuoi dati personali. Gli indirizzi di consegna stanno in{' '}
+          <Link href="/profile/addresses" className="text-primary-700 underline">I tuoi indirizzi</Link>.
+        </p>
       </header>
 
       {/* Identità: avatar + "Cliente dal" */}
@@ -150,21 +163,6 @@ export default function ProfilePage() {
               label="Telefono"
               inputMode="tel"
               {...register('phone')}
-            />
-            <Input
-              label="CAP"
-              inputMode="numeric"
-              {...register('zip')}
-            />
-            <Input
-              label="Indirizzo"
-              containerClassName="sm:col-span-2"
-              {...register('address')}
-            />
-            <Input
-              label="Città"
-              containerClassName="sm:col-span-2"
-              {...register('city')}
             />
             <div className="sm:col-span-2 space-y-2">
               <Button type="submit" loading={update.isPending} fullWidth>

@@ -5,6 +5,10 @@ import { openConsentBanner } from '@/components/CookieBanner';
 import { Cookie } from 'lucide-react';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
 import { titolare, recapitoPrivacy } from '@/lib/legal/titolare';
+import { SHOPPING_MODE_MAX_AGE } from '@/lib/shopping-access';
+
+/** 5/11/2026 — La durata della modalità negozio letta dalla costante del middleware (era «Sessione»). */
+const DURATA_MODALITA_NEGOZIO = `${Math.round(SHOPPING_MODE_MAX_AGE / 3600)} ore`;
 
 const VERSION = '2.0';
 const EFFECTIVE_DATE = '1 novembre 2026';
@@ -65,12 +69,15 @@ export default function CookiesPage() {
           { name: 'mc_consent', purpose: 'Memorizza le tue scelte sui cookie (versione breve, leggibile dal server)', duration: '6 mesi', provider: 'Prima parte' },
           { name: 'mc_consent_v1', purpose: 'Le stesse scelte, salvate nel browser per mostrarti lo stato nel banner', duration: 'Finché non le cambi', provider: 'Prima parte (archivio locale)' },
           { name: 'NEXT_LOCALE', purpose: 'La lingua che hai scelto per il sito', duration: '1 anno', provider: 'Prima parte' },
-          { name: 'mycity_shopping_mode', purpose: 'Per i venditori: ricorda se stai navigando come negozio o come cliente', duration: 'Sessione', provider: 'Prima parte' },
+          { name: 'mycity_shopping_mode', purpose: 'Per i venditori: ricorda se stai navigando come negozio o come cliente', duration: DURATA_MODALITA_NEGOZIO, provider: 'Prima parte' },
           { name: 'mc_cid', purpose: 'Identificativo del registro dei consensi: serve solo a legare la scelta che hai fatto sui cookie a chi l\'ha fatta, quando non hai un account. Non è leggibile dal browser e non serve a profilare.', duration: '6 mesi', provider: 'Prima parte' },
           // 22/8/2026 — c'era e non era dichiarato. Un cookie tecnico non ha
           // bisogno del consenso, ma va scritto nell'informativa lo stesso:
           // quello che non si dichiara sembra nascosto.
-          { name: 'mc_ruolo', purpose: 'Ricorda per pochi minuti il tuo ruolo e se il tuo negozio è approvato, così non serve rileggere il profilo dal database a ogni pagina. È firmato, non è leggibile dal browser e non contiene dati personali.', duration: '10 minuti', provider: 'Prima parte' },
+          { name: 'mc_ruolo', purpose: 'Ricorda per pochi minuti il tuo ruolo e se il tuo negozio è approvato, così non serve rileggere il profilo dal database a ogni pagina. Contiene il tuo identificativo interno (un codice, non il nome né l\'email), è firmato e non è leggibile dal browser.', duration: '10 minuti', provider: 'Prima parte' },
+          // 5/11/2026 — mc_sid stava fra i cookie di analisi «che richiedono consenso», ma nasce
+          // anche senza: serve al registro degli accessi (components/ActivityTracker.tsx).
+          { name: 'mc_sid', purpose: 'Identificativo della singola visita, nell\'archivio della scheda: tiene insieme gli accessi e le uscite dal tuo account nel registro di sicurezza e, solo se accetti le statistiche, le pagine viste nella stessa visita. Si cancella chiudendo la scheda.', duration: 'Sessione', provider: 'Prima parte (archivio della scheda)' },
           // 1/11/2026 — Il segno del rientro col link di recupero (lib/auth/segno-recupero.ts).
           { name: 'mycity_recupero', purpose: 'Dopo che hai aperto il link per scegliere una nuova password, ricorda per un\'ora che vieni da quel link, così puoi cambiarla. È firmato, non è leggibile dal browser e non contiene dati personali.', duration: '1 ora', provider: 'Prima parte' },
           { name: '__cf_bm', purpose: 'Anti-bot Cloudflare (sicurezza)', duration: '30 minuti', provider: 'Cloudflare' },
@@ -79,12 +86,13 @@ export default function CookiesPage() {
         ]} />
 
         <h3 className="font-semibold text-ink-900 mt-4 mb-2">2.2 Cookie funzionali (richiede consenso)</h3>
-        <p>Memorizzano preferenze come lingua, ultima ricerca, mappa salvata.</p>
+        {/* 5/11/2026 — Diceva «memorizzano lingua, ultima ricerca, mappa salvata» e subito
+            dopo «non ne installiamo»: la lingua è un cookie tecnico, il resto non esiste. */}
         {/* #74 — `mc_pref_*` non esiste in questo sito: era rimasto scritto qui
             da una versione mai fatta. Le preferenze vere (lingua, modalita'
             negozio) sono cookie tecnici e stanno nella tabella sopra. */}
         <p className="text-sm text-ink-500">
-          Oggi non installiamo cookie funzionali oltre a quelli tecnici elencati sopra.
+          Oggi non ne installiamo. Lingua e modalità negozio sono cookie tecnici (tabella sopra).
         </p>
 
         <h3 className="font-semibold text-ink-900 mt-4 mb-2">2.3 Cookie di analisi (richiede consenso)</h3>
@@ -93,10 +101,11 @@ export default function CookiesPage() {
           I dati sono pseudonimizzati (non anonimi) e conservati per un massimo di 14 mesi.
         </p>
         <CookieTable rows={[
-          { name: '_ga / _ga_*', purpose: 'Statistiche di utilizzo (se attivato)', duration: '14 mesi', provider: 'Google Analytics 4' },
+          // 5/11/2026 — Diceva «14 mesi», che è la conservazione dei dati da Google: il sito non
+          // fissa la vita del cookie (cookie_expires), quindi vale quella predefinita di GA4.
+          { name: '_ga / _ga_*', purpose: 'Statistiche di utilizzo (se attivato)', duration: '2 anni, rinnovati a ogni visita', provider: 'Google Analytics 4' },
           { name: 'ph_* / ph_phc_*', purpose: 'PostHog: statistiche di utilizzo e registrazione della sessione di navigazione (session replay). Attivi solo con il consenso ai cookie analitici; i campi di inserimento vengono mascherati nella registrazione.', duration: '12 mesi', provider: 'PostHog Inc. (Stati Uniti)' },
           { name: 'mc_vid', purpose: 'Identificatore di visita MyCity: correla le sessioni ricorrenti dello stesso dispositivo e le collega all\'account al login (profilazione pseudonima cross-sessione). Base giuridica: consenso (art. 6.1.a GDPR).', duration: '12 mesi', provider: 'Prima parte' },
-          { name: 'mc_sid', purpose: 'Identificativo della singola sessione di navigazione: tiene insieme le pagine viste in una stessa visita. Si cancella chiudendo la scheda.', duration: 'Sessione', provider: 'Prima parte' },
           { name: 'mc_exp_*', purpose: 'A quale variante di una prova A/B sei stato assegnato, così la pagina non cambia sotto i tuoi occhi da una visita all\'altra.', duration: '90 giorni', provider: 'Prima parte' },
         ]} />
 
@@ -134,7 +143,7 @@ export default function CookiesPage() {
       <LegalSection id="extra-ue" heading="4. Trasferimenti extra-UE">
         <p>
           Alcuni provider hanno sede negli Stati Uniti (Cloudflare, Google, Stripe Inc.,
-          Anthropic, Resend). I trasferimenti sono coperti dalle Standard Contractual Clauses
+          Anthropic, Resend, PostHog Inc.). I trasferimenti sono coperti dalle Standard Contractual Clauses
           adottate dalla Commissione Europea con Decisione 2021/914.
         </p>
       </LegalSection>
@@ -146,10 +155,9 @@ export default function CookiesPage() {
           {recapito.eUnaCasella ? (
             <>a <a href={recapito.href} className="text-primary-700 underline">{recapito.testo}</a></>
           ) : (
-            <>
-              dal <Link href={recapito.href} className="text-primary-700 underline">modulo dei contatti</Link>{' '}
-              (la casella email della privacy non è ancora attiva)
-            </>
+            // 5/11/2026 — Togliere la parentesi «la casella non è ancora attiva»: con quella del
+            // referente faceva due parentesi di fila, e l'informativa privacy non lo dice.
+            <>dal <Link href={recapito.href} className="text-primary-700 underline">modulo dei contatti</Link></>
           )}
           {chiSiamo.referentePrivacy ? <> (referente: {chiSiamo.referentePrivacy})</> : null}.
         </p>
@@ -159,18 +167,25 @@ export default function CookiesPage() {
         </p>
       </LegalSection>
 
-      <div className="mt-10 p-4 bg-accent-50 border border-accent-200 rounded-lg text-xs text-accent-900">
-        <strong>Avviso legale:</strong> elenco e descrizione dei cookie vanno aggiornati ogni volta
-        che si integra o si rimuove un provider terzo. Auditare periodicamente con strumenti tipo
-        Cookie-Script o iubenda.
-      </div>
+      {/* 5/11/2026 — Qui c'era un riquadro pubblico «Avviso legale» con una nota interna:
+          elenco e descrizione dei cookie vanno aggiornati ogni volta che si integra o si
+          rimuove un provider terzo; auditare periodicamente (Cookie-Script, iubenda). La nota
+          resta qui, per chi lavora sul codice. */}
     </LegalLayout>
   );
 }
 
 function CookieTable({ rows }: { rows: Array<{ name: string; purpose: string; duration: string; provider: string }> }) {
   return (
-    <div className="overflow-x-auto">
+    // 5/11/2026 — Su schermo stretto la tabella scorre di lato: il contenitore deve
+    // ricevere il fuoco, se no da tastiera le colonne a destra non si leggono.
+    <div
+      className="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-700"
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- un contenitore che scorre deve ricevere il fuoco (WCAG 2.1.1, axe scrollable-region-focusable)
+      tabIndex={0}
+      role="region"
+      aria-label="Tabella dei cookie (scorre di lato)"
+    >
       <table className="min-w-full border border-cream-300 text-sm">
         <thead className="bg-cream-50">
           <tr>

@@ -21,6 +21,9 @@ import {
 } from '@/lib/rimborsi/regole-del-rimborso';
 import { avvisoDelRimborsoNonRegistrato, RIMBORSO_PARTITO_MA_NON_REGISTRATO } from '@/lib/rimborsi/bonifici-da-fare';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+import { sendEmail } from '@/lib/email/client';
+import { resoRifiutatoAlClienteTemplate } from '@/lib/rimborsi/email-dei-resi';
+import { scriviCampanella } from '@/lib/ordini/campanella';
 
 export const runtime = 'nodejs';
 
@@ -64,6 +67,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    */
   const comando = await chiComandaIlReso(ret.order_id, user.id);
   if (!comando.autorizzato) {
+    if (comando.motivo === 'guasto') return ApiErrors.unavailable('Non riusciamo a leggere il reso adesso: riprova fra poco.');
     return comando.motivo === 'ordine-mancante'
       ? ApiErrors.notFound('Ordine del reso non trovato')
       : ApiErrors.forbidden();
@@ -106,7 +110,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // R84 — Il tetto lo decide la stessa regola che usa chi muove i soldi: sui
   // contanti conta solo quello che e' stato incassato davvero.
   const COLONNE_ORDINE =
-    'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, cash_confirmed_at, payment_status, delivery_status';
+    'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, cash_confirmed_at, payment_status, delivery_status, discount_amount';
   let ordine: OrdineDaRimborsare | null = null;
 
   if (chiedeRimborso) {
@@ -151,7 +155,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       const nonBasta = percheIlRimborsoDelRecessoNonBasta({
         reso: ret,
         importoCents: body.refundAmountCents!,
-        interoCents: interoDelRecesso(residuoCent, rigaResaCents(righe, orderItemId)),
+        interoCents: interoDelRecesso(residuoCent, rigaResaCents(righe, orderItemId, Math.round(Number((ordine as { discount_amount?: number | string | null } | null)?.discount_amount ?? 0) * 100))),
         motivo: body.notes,
       });
       if (nonBasta) return ApiErrors.conflict(nonBasta);
@@ -200,14 +204,38 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     return ApiErrors.conflict("Reso già deciso da un'altra sessione");
   }
 
-  /** Rimette il reso in attesa: si usa solo quando i soldi non sono usciti. */
-  const rimettiInAttesa = async () => {
-    await admin
+  /**
+   * Rimette il reso in attesa: si usa solo quando i soldi non sono usciti.
+   * 5/11/2026 — Il ritorno indietro puo' cadere (lo stesso database che ha fatto
+   * fallire il rimborso): allora il reso resta «deciso» senza soldi usciti, e un
+   * «riprova» porterebbe solo a «gia' deciso». Si avvisa chi amministra e si
+   * risponde senza promettere che riprovare basti. Torna false se e' caduto.
+   */
+  const rimettiInAttesa = async (): Promise<boolean> => {
+    const { error: errRitorno } = await admin
       .from('returns')
       .update({ status: 'REQUESTED', decided_at: null, decided_by: null, refund_amount_cents: null })
       .eq('id', params.id)
       .eq('status', statoRivendicato);
+    if (!errRitorno) return true;
+    logger.error('[returns] reso non rimesso in attesa dopo un rimborso non partito', {
+      returnId: params.id, message: errRitorno.message,
+    });
+    try {
+      await notifyAdmins(
+        '⚠️ Reso bloccato: rimborso non partito',
+        `Il rimborso del reso ${params.id.slice(0, 6).toUpperCase()} non è partito e il reso non è tornato in attesa: ` +
+          'risulta deciso ma nessun soldo è uscito. Rimettilo in attesa dal pannello prima di rimborsarlo.',
+        '/admin/orders',
+        { unaVoltaPer: `reso-bloccato:${params.id}` },
+      );
+    } catch (e) {
+      logger.error('[returns] avviso del reso bloccato non inviato', { returnId: params.id, e });
+    }
+    return false;
   };
+  const RESO_BLOCCATO =
+    "Il rimborso non è partito e il reso non si è potuto rimettere in attesa: abbiamo avvisato l'amministrazione. Non riprovare per ora.";
 
   if (chiedeRimborso) {
     const isCard = !!ordine?.stripe_payment_intent;
@@ -215,7 +243,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 
     // Carta ma Stripe non configurato → NON marcare come rimborsato in silenzio.
     if (isCard && !isStripeConfigured()) {
-      await rimettiInAttesa();
+      if (!(await rimettiInAttesa())) return ApiErrors.internal(RESO_BLOCCATO);
       return ApiErrors.unavailable('Stripe non configurato: impossibile emettere il rimborso ora.');
     }
 
@@ -241,7 +269,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         logger.error('[returns] refund failed', err);
         // I soldi non sono usciti: il reso torna decidibile invece di restare
         // fermo su «approvato» senza rimborso.
-        await rimettiInAttesa();
+        if (!(await rimettiInAttesa())) return ApiErrors.internal(RESO_BLOCCATO);
         // Collaudo del 15/10, secondo giro (R82) — tranne una cosa, che il
         // negozio deve leggere com'e': un tentativo precedente ha GIA' dato al
         // cliente del credito, con una cifra diversa da questa. «Riprova» era
@@ -261,11 +289,17 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // rimborso. Se lo stato non e' cambiato (rifiuto, o approvazione senza
   // rimborso immediato) questa scrittura non tocca niente di nuovo.
   if (newStatus !== statoRivendicato || refundId) {
-    const { error: updErr } = await admin
+    const { data: scritte, error: errScrittura } = await admin
       .from('returns')
       .update({ status: newStatus, refund_id: refundId, refunded_at: refundedAt })
       .eq('id', params.id)
-      .eq('status', statoRivendicato);
+      .eq('status', statoRivendicato)
+      .select('id');
+    // 5/11/2026 — Zero righe toccate non e' una scrittura riuscita: un'altra
+    // scheda (o il cliente che ritira il reso) ha cambiato lo stato mentre il
+    // rimborso usciva. Senza questo la rotta diceva «rimborsato» su un reso
+    // che il rimborso non l'ha scritto.
+    const updErr = errScrittura ?? (!scritte || scritte.length === 0 ? { message: 'nessuna riga del reso aggiornata' } : null);
     /**
      * Riesame del 16/10, terzo giro — QUI I SOLDI SONO GIA' PARTITI.
      *
@@ -290,12 +324,28 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   }
 
   // Notifica buyer
-  await admin.from('notifications').insert({
+  await scriviCampanella(admin, {
     user_id: ret.buyer_id,
     title: body.decision === 'APPROVED' ? '✓ Reso approvato' : '✕ Reso rifiutato',
     body: body.notes ?? null,
     link: `/orders/${ret.order_id}`,
-  });
+  }, { dove: 'returns-decide', ordine: ret.order_id, reso: ret.id });
+
+  // 5/11/2026 — Al cliente a cui il reso viene rifiutato arriva anche un'email,
+  // col motivo del negozio o, se manca, con chi scrivere. Best-effort.
+  if (body.decision === 'REJECTED' && ret.buyer_id) {
+    try {
+      const { data: cliente } = await admin.auth.admin.getUserById(ret.buyer_id);
+      const email = cliente?.user?.email;
+      if (email) {
+        const t = resoRifiutatoAlClienteTemplate({ orderId: ret.order_id, nota: body.notes ?? null });
+        const res = await sendEmail({ to: email, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+        if (!res.ok) logger.warn('[returns] email del reso rifiutato non partita', { returnId: ret.id });
+      }
+    } catch (e) {
+      logger.warn('[returns] email del reso rifiutato non partita', { returnId: ret.id, e });
+    }
+  }
 
   // Email di rimborso: già inviata da refundOrder (notifyBuyer: true).
 

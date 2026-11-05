@@ -14,6 +14,7 @@ import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
 import type { StoreHours } from '@/lib/store-hours';
 import VendorForm, { type VendorFormData } from '@/components/VendorForm';
 import GestisciAbbonamento from '@/components/seller/GestisciAbbonamento';
+import PushNotificationOptIn from '@/components/PushNotificationOptIn';
 
 /**
  * Profilo negozio = dati di CONTATTO + impostazioni operative/private.
@@ -122,6 +123,17 @@ export default function SellerProfilePage() {
 
       <div className="bg-olive-50 border border-olive-200 rounded-lg p-4 text-olive-800 text-sm flex items-center gap-2">
         <CheckCircle2 size={16} aria-hidden className="shrink-0" /> Negozio attivo · I tuoi prodotti sono visibili nel marketplace
+      </div>
+
+      {/* 5/11/2026 (S08) — Le notifiche sul telefono si accendevano solo dalle impostazioni del
+          cliente, che dal pannello del negozio non si raggiungono: un nuovo ordine arrivava
+          senza avviso a schermo bloccato. */}
+      <div className="flex items-start justify-between gap-4 rounded-xl border border-cream-300 bg-white p-4">
+        <div>
+          <p className="font-semibold text-ink-900">Notifiche sul telefono</p>
+          <p className="text-xs text-ink-500">Un avviso per ogni nuovo ordine, anche a schermo bloccato.</p>
+        </div>
+        <PushNotificationOptIn />
       </div>
 
       {/* Contatti & orari */}

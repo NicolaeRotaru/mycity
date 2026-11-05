@@ -97,12 +97,15 @@ describe('il SOS apre il 112 prima di aspettare GPS e rete', () => {
     expect(navigazioni.length).toBe(1);
   });
 
-  it('con la rete appesa, l’avviso si arrende entro un tempo massimo e dice che MyCity NON è avvisata', async () => {
+  // 5/11/2026 (sessione S02, scheda 2612) — col tempo scaduto la scrittura può ancora arrivare: il
+  // messaggio dice «non sappiamo ancora», non «NON è stata avvisata».
+  it('con la rete appesa, l’avviso si arrende entro un tempo massimo e dice che non si sa ancora se MyCity è avvisata', async () => {
     vi.useFakeTimers();
     await confermaSOS();
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
     expect(stato.toastErr).toHaveBeenCalledTimes(1);
-    expect(String(stato.toastErr.mock.calls[0][0])).toMatch(/NON è stata avvisata/);
+    expect(String(stato.toastErr.mock.calls[0][0])).toMatch(/Non sappiamo ancora se MyCity è stata avvisata/);
+    expect(String(stato.toastErr.mock.calls[0][0])).toMatch(/premi subito CHIAMA/i);
     expect(stato.toastOk).not.toHaveBeenCalled();
     expect(navigazioni.length).toBe(1);
   });

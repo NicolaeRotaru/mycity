@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { formatPrice, formatDate } from '@/lib/format';
 import {
   COLONNA_ORARIO_DEL_PASSAGGIO,
+  etichettaPronto,
   passaggioLecito,
   type OrderStatus,
 } from '@/lib/order-status';
@@ -141,15 +142,16 @@ function RejectDialog({
   return (
     <div
       className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm animate-fadeIn sm:items-center"
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="reject-title"
     >
+      {/* Il velo: un tocco fuori chiude, come Esc (che lo fa già l'hook). È nascosto
+          al lettore di schermo, che chiude con Esc o con «Annulla». */}
+      <div aria-hidden="true" className="absolute inset-0" onClick={onCancel} />
       <div
         ref={boxRef}
-        className="w-full overflow-hidden rounded-t-3xl bg-white shadow-warm-xl animate-slideUp sm:w-auto sm:min-w-[440px] sm:max-w-md sm:rounded-2xl sm:animate-popIn"
-        onClick={(e) => e.stopPropagation()}
+        className="relative w-full overflow-hidden rounded-t-3xl bg-white shadow-warm-xl animate-slideUp sm:w-auto sm:min-w-[440px] sm:max-w-md sm:rounded-2xl sm:animate-popIn"
       >
         <div className="h-1.5 bg-gradient-to-r from-secondary-600 via-primary-600 to-accent-500" />
         <div className="px-6 pb-2 pt-6">
@@ -238,7 +240,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
   const lettoAlle = new Date(Math.max(adesso, dataUpdatedAt || 0, errorUpdatedAt || 0));
 
   // Codice ritiro: visibile solo al seller (RLS lo limita ai propri ordini)
-  const { data: pickupCode } = useQuery({
+  const letturaCodice = useQuery({
     queryKey: queryKeys.seller.pickupCode(id),
     enabled: !!order && ['ACCEPTED', 'READY', 'ASSIGNED'].includes(order.delivery_status),
     queryFn: async () => {
@@ -253,9 +255,10 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
       return data;
     },
   });
+  const pickupCode = letturaCodice.data;
 
   // Eventuale richiesta di reso collegata a quest'ordine (UI venditore).
-  const { data: returnRow } = useQuery({
+  const letturaReso = useQuery({
     queryKey: queryKeys.seller.returnForOrder(id),
     queryFn: async () => {
       const { data, error } = await supabase
@@ -271,6 +274,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
       return data;
     },
   });
+  const returnRow = letturaReso.data;
 
   // 28/8/2026 — IL RIFIUTO PASSA DAL SERVER, PERCHE' DEVE RESTITUIRE I SOLDI.
   //
@@ -402,7 +406,9 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
   // incassato, e non aveva nessun modo di riprovare: se non accetta in tempo, l'ordine scade.
   // Adesso il guasto di rete dice cos'e' successo e offre il «Riprova» — come la pagina gemella
   // del cliente (app/orders/[id]/page.tsx), riparata prima solo da un lato.
-  if (isError) {
+  // La pagina d'errore solo se l'ordine non è mai arrivato: se c'era già, resta a
+  // schermo con un avviso (la rilettura allo sblocco del telefono cade spesso).
+  if (isError && !order) {
     return (
       <ErrorState
         title="Non riesco a caricare l'ordine"
@@ -419,7 +425,12 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
   const cod = isCod(order.payment_method);
   const riepilogo = riepilogoOrdine(order, Math.round(subtotal * 100));
 
-  const showPickupCode = ['ACCEPTED', 'READY', 'ASSIGNED'].includes(order.delivery_status) && pickupCode?.code;
+  // Il codice «da mostrare al rider» serve solo alle consegne: su un ritiro in
+  // negozio il codice giusto è quello che il cliente legge al negoziante, e
+  // mostrare questo lo farebbe digitare nel riquadro sbagliato.
+  const vuoleIlCodice = ['ACCEPTED', 'READY', 'ASSIGNED'].includes(order.delivery_status) && !order.pickup_in_store;
+  const showPickupCode = vuoleIlCodice && pickupCode?.code;
+  const codiceIllegibile = vuoleIlCodice && letturaCodice.isError && !pickupCode;
 
   return (
     <div className="space-y-6">
@@ -458,8 +469,21 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         pickedUpAt={order.picked_up_at}
         deliveredAt={order.delivered_at}
         canceledAt={order.canceled_at}
+        ritiroInNegozio={order.pickup_in_store}
       />
+      {isError && (
+        <div role="status" className="bg-white border border-secondary-200 rounded-xl p-4 text-sm text-ink-700 flex flex-wrap items-center justify-between gap-2">
+          <span>Non riesco ad aggiornare l&apos;ordine: quello che vedi è dell&apos;ultima lettura riuscita.</span>
+          <Button variant="secondary" onClick={() => { void refetch(); }}>Riprova</Button>
+        </div>
+      )}
       {/* RICHIESTA DI RESO */}
+      {letturaReso.isError && !returnRow && (
+        <div role="alert" className="bg-white border border-secondary-200 rounded-xl p-4 text-sm text-ink-700 flex flex-wrap items-center justify-between gap-2">
+          <span>Non riesco a leggere se c&apos;è una richiesta di reso su questo ordine.</span>
+          <Button variant="secondary" onClick={() => { void letturaReso.refetch(); }}>Riprova</Button>
+        </div>
+      )}
       {returnRow && (
         <ReturnRequestCard
           ret={returnRow as unknown as ReturnRow}
@@ -502,8 +526,19 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
               onClick={() => transition.mutate({ newStatus: 'READY' })}
               loading={transition.isPending}
             >
-              {order.pickup_in_store ? 'Pronto per il ritiro' : 'Pronto per il rider'}
+              {etichettaPronto(!!order.pickup_in_store)}
             </Button>
+            {/* La rotta del rifiuto accetta anche un ordine già accettato (NEW e ACCEPTED). */}
+            {order.delivery_status === 'ACCEPTED' && (
+              <Button
+                variant="danger"
+                icon={X}
+                onClick={() => setRejectOpen(true)}
+                disabled={reject.isPending}
+              >
+                Non posso completarlo, annulla
+              </Button>
+            )}
             {/* Print thermal label — Operations Manager: 1 click vs scrivere a mano */}
             <a
               href={`/api/seller/orders/${order.id}/label`}
@@ -514,6 +549,12 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
               <Printer size={16} aria-hidden /> Stampa etichetta
             </a>
           </div>
+        </div>
+      )}
+      {codiceIllegibile && (
+        <div role="alert" className="bg-white border border-secondary-200 rounded-xl p-4 text-sm text-ink-700 flex flex-wrap items-center justify-between gap-2">
+          <span>Non riesco a leggere il codice di ritiro per il rider.</span>
+          <Button variant="secondary" onClick={() => { void letturaCodice.refetch(); }}>Riprova</Button>
         </div>
       )}
       {/* CODICE RITIRO (visibile dopo ACCEPTED) */}

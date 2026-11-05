@@ -40,6 +40,7 @@
 import type { AuditAction } from '@/lib/audit';
 import type { CategoryRow } from '@/lib/products/aiPatch';
 import {
+  cosaMancaPerVendere,
   daCompletareDopoLaModifica,
   messaggioDaCompletare,
   type ProdottoAttuale,
@@ -86,6 +87,15 @@ export type ColonnaDelVenditore = (typeof COLONNE_DEL_VENDITORE)[number];
 export const SCORTA_VISTA = 'stock_visto';
 
 /**
+ * Il negoziante ha riscritto la scorta, anche se uguale a quella vista
+ * all'apertura (sforna due focacce e rimette 5). Senza questo segno la porta
+ * butta via un numero uguale a quello visto e dice «salvato» mentre in banca
+ * dati resta quello abbassato dalle vendite: con il segno il numero si
+ * scrive, alla stessa condizione della scorta cambiata.
+ */
+export const SCORTA_CONFERMATA = 'stock_confermato';
+
+/**
  * 31/10/2026 — «ESCLUSO DAL RECESSO» (migrazione 180) SI SCRIVE, MA NON SI RILEGGE.
  *
  * Il fornaio segna la torta su ordinazione come esclusa dal recesso anche in
@@ -114,6 +124,7 @@ export function colonneAmmesse(corpo: unknown): Record<string, unknown> {
   }
   const vista = dentro[SCORTA_VISTA];
   if (typeof vista === 'number' && Number.isFinite(vista)) pulito[SCORTA_VISTA] = vista;
+  if (dentro[SCORTA_CONFERMATA] === true) pulito[SCORTA_CONFERMATA] = true;
   const recesso = dentro[COLONNA_DEL_RECESSO];
   if (typeof recesso === 'boolean') pulito[COLONNA_DEL_RECESSO] = recesso;
   return pulito;
@@ -332,6 +343,26 @@ export class DaCompletare extends Error {
  * sta scrivendo, se c'e': il modulo aggiunge la prima foto e pubblica nello
  * stesso salvataggio.
  */
+/** Le voci di `cosaMancaPerVendere` che dipendono da foto, nome e descrizione. */
+function vociDellaScheda(p: Record<string, unknown>): string[] {
+  const foto = Array.isArray(p.images) ? (p.images as unknown[]).length : 0;
+  return cosaMancaPerVendere({
+    name: String(p.name ?? ''),
+    description: String(p.description ?? ''),
+    price: 1,
+    haCategoria: true,
+    categoriaTop: null,
+    numeroFoto: foto,
+    attributes: {},
+  });
+}
+
+function cosaTogliereRendeIncompleto(prima: Record<string, unknown>, daScrivere: Record<string, unknown>): string[] {
+  if (!('images' in daScrivere) && !('name' in daScrivere) && !('description' in daScrivere)) return [];
+  const giaMancanti = new Set(vociDellaScheda(prima));
+  return vociDellaScheda({ ...prima, ...daScrivere }).filter((v) => !giaMancanti.has(v));
+}
+
 async function controllaCheSiPossaVendere(
   db: ClientDelCatalogo,
   prima: Record<string, unknown>,
@@ -340,7 +371,15 @@ async function controllaCheSiPossaVendere(
   const statoDopo = 'status' in daScrivere ? daScrivere.status : prima.status;
   if (statoDopo !== 'available') return;
   const cambiaCategoria = 'category_id' in daScrivere && daScrivere.category_id !== prima.category_id;
-  if (prima.status === 'available' && !cambiaCategoria) return;
+  if (prima.status === 'available' && !cambiaCategoria) {
+    // Già in vetrina, stessa categoria: la scheda intera non si ricontrolla (un
+    // alimento vecchio senza ingredienti deve poter cambiare prezzo), ma questa
+    // modifica non può TOGLIERE quello che c'era: le foto, il nome, la descrizione.
+    // Si ferma solo ciò che prima andava e dopo manca.
+    const tolti = cosaTogliereRendeIncompleto(prima, daScrivere);
+    if (tolti.length > 0) throw new DaCompletare(messaggioDaCompletare(tolti, null), tolti);
+    return;
+  }
 
   const { data: categorie, error } = await db.from('categories').select('id, name, slug, parent_id');
   if (error) throw error;
@@ -409,16 +448,24 @@ export async function salvaProdottoTracciato(opts: {
   campiDallAi?: string[];
   scriviTraccia: (voce: VoceDiTraccia) => void | Promise<void>;
 }): Promise<EsitoSalvataggio> {
-  const { [SCORTA_VISTA]: scortaVista, ...daScrivere } = colonneAmmesse(opts.payload);
+  const { [SCORTA_VISTA]: scortaVista, [SCORTA_CONFERMATA]: scortaConfermata, ...daScrivere } = colonneAmmesse(opts.payload);
   // Il confronta-e-scrivi: con la scorta vista accanto, la scorta non toccata
   // non parte (in banca dati resta quella vera) e quella cambiata si scrive
   // solo se nessuno l'ha mossa nel frattempo.
   let condizione: number | undefined;
   if ('stock' in daScrivere && typeof scortaVista === 'number') {
-    if (stessoValore(daScrivere.stock, scortaVista)) delete daScrivere.stock;
+    if (stessoValore(daScrivere.stock, scortaVista) && scortaConfermata !== true) delete daScrivere.stock;
     else condizione = scortaVista;
   }
   if (Object.keys(daScrivere).length === 0) return { campi: [], tracciato: false };
+  // Un prezzo si scrive solo se è un numero maggiore di zero, da qualunque porta
+  // arrivi: il database accetta 0 e la cassa non scarta una riga a zero euro.
+  if ('price' in daScrivere) {
+    const prezzo = Number(daScrivere.price);
+    if (!Number.isFinite(prezzo) || prezzo <= 0) {
+      throw new DaCompletare('Il prezzo deve essere un numero maggiore di zero.', ['prezzo']);
+    }
+  }
 
   const { data: prima, error: erroreLettura } = await opts.db
     .from('products')

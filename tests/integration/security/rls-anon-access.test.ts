@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { letturaNegata } from './esito-dei-permessi';
 
 /**
  * Test d'INTEGRAZIONE (richiede un DB Supabase reale): un client ANONIMO non
@@ -30,19 +31,30 @@ const PRIVATE_TABLES = [
   'order_items',
   'push_subscriptions',
   'contact_messages',
+  // 5/11/2026 — Le due tabelle che il seme della CI riempie: sulle altre, vuote, una tabella
+  // senza regole passerebbe lo stesso.
+  'orders',
+  'profiles',
 ];
 
 describe.skipIf(!hasEnv)('RLS: anon non legge tabelle private', () => {
   let anon: SupabaseClient;
-  beforeAll(() => {
+  beforeAll(async () => {
     anon = createClient(URL!, ANON!, { auth: { persistSession: false } });
+    // 5/11/2026 — Prima di dire «negato» bisogna sapere che il database risponde: una tabella
+    // pubblica deve leggersi. Con la rete giù o l'indirizzo sbagliato la prova cade qui.
+    const prova = await anon.from('categories').select('id').limit(1);
+    expect(prova.error, `il database non risponde: ${prova.error?.message}`).toBeNull();
+    expect((prova.data ?? []).length, 'le categorie pubbliche non si leggono: il database è vuoto o chiuso').toBeGreaterThan(0);
   });
 
   for (const table of PRIVATE_TABLES) {
     it(`anon NON legge righe da ${table}`, async () => {
       const { data, error } = await anon.from(table).select('*').limit(1);
-      const denied = error !== null || (data ?? []).length === 0;
-      expect(denied, `${table}: anon ha letto ${(data ?? []).length} righe`).toBe(true);
+      expect(
+        letturaNegata({ data, error }),
+        error ? `${table}: errore che non è un permesso negato: ${error.code} ${error.message}` : `${table}: anon ha letto ${(data ?? []).length} righe`,
+      ).toBe(true);
     });
   }
 });

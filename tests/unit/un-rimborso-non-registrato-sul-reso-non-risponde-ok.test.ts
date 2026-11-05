@@ -29,6 +29,7 @@ vi.mock('@/lib/supabase/server', () => {
           if (valori && typeof valori === 'object' && 'refund_id' in valori) {
             const caduta: Record<string, unknown> = {};
             caduta.eq = () => caduta;
+            caduta.select = () => caduta; // 5/11/2026 — la scrittura dell esito ora chiede anche le righe toccate
             caduta.then = (ok: (v: unknown) => unknown) =>
               Promise.resolve({ data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } }).then(ok);
             return caduta;

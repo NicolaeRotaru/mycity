@@ -32,7 +32,7 @@ import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
 import { fasciaAlGiornoDellOrdine } from '@/lib/ordini/fascia-leggibile';
-import { orariDeiNegozi, rimborsaLaFasciaPersa } from './fascia-al-pagamento';
+import { orariDeiNegozi, rimborsaLaFasciaPersa, diciAlClienteDelCarrelloRimborsato } from './fascia-al-pagamento';
 
 export type PendingGroup = {
   sellerId: string;
@@ -175,6 +175,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
       `Un pagamento è arrivato dopo la scadenza della riserva merce (${pendingCheckoutId}). Rimborsato automaticamente.`,
       '/admin/orders',
     );
+    if (pi && importoCents > 0) await diciAlClienteDelCarrelloRimborsato(admin, session, 'riserva-scaduta', pendingCheckoutId, pending.buyer_id as string | null, importoCents);
     return;
   }
 
@@ -235,6 +236,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     // Prima della migrazione 126 'MISMATCH' non è ammesso: si segna 'CANCELED'.
     // Se il segno non passa Stripe NON riprova: il perché in quadratura.ts (R81).
     await chiudiIlCarrelloPerQuadratura(admin, pendingCheckoutId);
+    if (pagamento && incassatoCents > 0) await diciAlClienteDelCarrelloRimborsato(admin, session, 'quadratura', pendingCheckoutId, pending.buyer_id as string | null, incassatoCents);
     return;
   }
 
@@ -487,15 +489,15 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
    *      piattaforma tiene viva la funzione finche' non finiscono, invece di
    *      spegnerla a meta'.
    */
-  const nuovi = createdOrderIds.filter((c) => c.nuovo);
-
-  if (nuovi.length > 0) {
+  // 5/11/2026 — Campanella per tutti gli ordini (id fisso): anche quelli di un tentativo morto prima degli avvisi.
+  if (createdOrderIds.some((c) => c.nuovo)) {
     // 30/8/2026 (R164) — Il carrello di questa persona e' tornato: e' diventato
     // un ordine. Lo marca anche il browser, ma il browser puo' chiudersi — chi
     // paga e chiude la scheda non passa mai di li'. Qui il fatto e' certo.
     await marcaCarrelloRecuperato(admin, buyerId);
-    await suonaLaCampanellaAiNegozi(admin, nuovi, pendingCheckoutId);
   }
+  const daAvvisare = await suonaLaCampanellaAiNegozi(admin, createdOrderIds, pendingCheckoutId);
+  const nuovi = createdOrderIds.filter((c) => daAvvisare.has(c.orderId));
 
   // #208 — L'acquisto si conta qui, dove il fatto è certo: gli ordini sono
   // appena stati scritti. Prima partiva solo dal browser, al rientro sulla

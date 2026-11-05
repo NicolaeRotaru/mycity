@@ -270,13 +270,13 @@ const FRASI_DI_TEMPO_CONOSCIUTE = [
   'Hai 14 giorni di tempo per ripensarci',
   '14 giorni di diritto di recesso',
   'Il venditore riceve la richiesta',
-  'hai 14 giorni dalla consegna per restituire qualsiasi prodotto',
-  'Spedisci il pacco entro 14 giorni dalla richiesta',
+  // 5/11/2026 (S01, scheda 91) — le due frasi della pagina Resi riscritte: tempo per recedere e per riportare, non scadenze del rimborso.
+  'hai 14 giorni dalla consegna per restituire un prodotto',
+  'Riportagli il prodotto entro 14 giorni dalla richiesta',
   'Al ricevimento, il venditore verifica il prodotto e procede al rimborso',
   "l'IBAN te lo chiediamo per email quando parte il rimborso",
   'richiesta inviata, ricevuta, approvata, rimborsata',
   'garanzia legale di 24 mesi',
-  'la garanzia è di 12 mesi',
 ];
 
 describe('i Termini, §7', () => {

@@ -220,7 +220,13 @@ describe('④ la riga che rassicura si legge intera, non «Paghi alla conse…»
   const nota = SCHEDA.match(/<StickyAddToCart[\s\S]*?note="([^"]+)"/)?.[1];
 
   /** Il corpo del testo della riga, letto dalle sue classi. */
-  const corpo = Number(BARRA.match(/text-\[(\d+)px\][^"]*text-olive-700/)?.[1]);
+  // 5/11/2026 (S07, scheda 859) — la riga è passata da text-[11px] a text-xs (12 px, il minimo del
+  // sito): si leggono tutte e due le forme.
+  const corpo = (() => {
+    const m = BARRA.match(/(text-\[(\d+)px\]|text-xs)[^"]*text-olive-700/);
+    if (!m) return NaN;
+    return m[1] === 'text-xs' ? 12 : Number(m[2]);
+  })();
 
   /** Le classi di quella riga: servono a sapere se può essere tagliata. */
   const classiDellaNota = BARRA.match(/<p className="([^"]*text-olive-700[^"]*)"/)?.[1] ?? '';

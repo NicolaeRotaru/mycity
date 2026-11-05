@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
-import { sizedImage } from '@/lib/image-url';
 import { NOTA_SENZA_FOTO_MAX, corpoDellaConferma, serveUnaProva } from '@/lib/cassa/prova-incasso';
 import { fraseDelCompenso } from '@/lib/rider/incasso-alla-consegna';
 import { useTranslations } from 'next-intl';
@@ -67,6 +66,27 @@ export default function CashConfirmDialog({
   const [amount, setAmount] = useState((expectedCents / 100).toFixed(2));
   const [cashPhoto, setCashPhoto] = useState<string | null>(null);
   const [deliveryPhoto, setDeliveryPhoto] = useState<string | null>(null);
+  // 5/11/2026 — L'anteprima si fa dal file sul telefono (URL.createObjectURL), non dal percorso
+  // salvato: il magazzino `cod-proof` è privato e il percorso, messo in <img>, dava un'immagine rotta.
+  const [anteprime, setAnteprime] = useState<{ cash: string | null; delivery: string | null }>({ cash: null, delivery: null });
+  const anteprimeRef = useRef(anteprime);
+  anteprimeRef.current = anteprime;
+  useEffect(() => () => {
+    for (const u of Object.values(anteprimeRef.current)) if (u) URL.revokeObjectURL(u);
+  }, []);
+  const scegliFoto = async (f: File, kind: 'cash' | 'delivery') => {
+    const vecchia = anteprimeRef.current[kind];
+    if (vecchia) URL.revokeObjectURL(vecchia);
+    const nuova = typeof URL.createObjectURL === 'function' ? URL.createObjectURL(f) : null;
+    setAnteprime((a) => ({ ...a, [kind]: nuova }));
+    const percorso = await upload(f, kind);
+    if (!percorso && nuova) {
+      URL.revokeObjectURL(nuova);
+      setAnteprime((a) => ({ ...a, [kind]: null }));
+    }
+    if (kind === 'cash') setCashPhoto(percorso);
+    else setDeliveryPhoto(percorso);
+  };
   // Da 50 € in su, per chi non riesce a fare la foto: il perche', che arriva agli amministratori.
   const [nota, setNota] = useState('');
   const serveLaFoto = serveUnaProva(expectedCents);
@@ -129,6 +149,7 @@ export default function CashConfirmDialog({
   }
 
   async function submit() {
+    if (uploading !== null) return;
     // 16/10/2026 — Il corpo lo scrive `corpoDellaConferma`: senza foto qui partiva
     // `"photoUrl": null`, la rotta rispondeva «Dati non validi» e — con l'incasso
     // prima del codice — la consegna non si chiudeva piu'.
@@ -200,13 +221,16 @@ export default function CashConfirmDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="titolo-conferma-contanti"
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-warm-xl"
       >
         <h2 id="titolo-conferma-contanti" className="text-lg font-semibold text-ink-900">Conferma incasso contanti</h2>
         <p className="mt-1 text-xs text-ink-500">
+          {/* 5/11/2026 — Il campo vuole il contante da RIMETTERE (totale incassato meno il compenso già
+              tenuto), non l'importo ricevuto: chi seguiva la frase scriveva 25 al posto di 22 e la
+              cassa della sera nasceva rossa per 3 euro che non mancavano. */}
           {serveLaFoto
-            ? 'Inserisci l’importo ricevuto. Da 50 € in su serve la foto dei contanti: se non riesci a farla, scrivi il perché nella nota.'
-            : 'Inserisci l’importo ricevuto. Le foto (contanti/scontrino e consegna) sono facoltative.'}
+            ? 'Scrivi quanti contanti rimetti in cassa: il totale incassato meno il tuo compenso, che ti sei già tenuto. Da 50 € in su serve la foto dei contanti: se non riesci a farla, scrivi il perché nella nota.'
+            : 'Scrivi quanti contanti rimetti in cassa: il totale incassato meno il tuo compenso, che ti sei già tenuto. Le foto (contanti/scontrino e consegna) sono facoltative.'}
         </p>
 
         <label className="mt-4 block text-sm font-medium text-ink-700" htmlFor="contante-da-rimettere">
@@ -228,16 +252,16 @@ export default function CashConfirmDialog({
           <PhotoSlot
             label="Foto contanti / scontrino"
             required={serveLaFoto}
-            url={cashPhoto}
+            url={cashPhoto ? anteprime.cash : null}
             uploading={uploading === 'cash'}
-            onChange={async (f) => setCashPhoto(await upload(f, 'cash'))}
+            onChange={(f) => { void scegliFoto(f, 'cash'); }}
           />
           <PhotoSlot
             label="Foto consegna pacco"
             required={false}
-            url={deliveryPhoto}
+            url={deliveryPhoto ? anteprime.delivery : null}
             uploading={uploading === 'delivery'}
-            onChange={async (f) => setDeliveryPhoto(await upload(f, 'delivery'))}
+            onChange={(f) => { void scegliFoto(f, 'delivery'); }}
           />
         </div>
 
@@ -267,12 +291,14 @@ export default function CashConfirmDialog({
           >
             {tActions('cancel')}
           </button>
+          {/* 5/11/2026 — Spento mentre la foto si carica: prima l'incasso partiva senza foto, o sopra i
+              50 € usciva «serve la foto» mentre la foto stava arrivando. */}
           <button
             onClick={submit}
-            disabled={submitting}
+            disabled={submitting || uploading !== null}
             className="flex-1 rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-ink-900 hover:bg-accent-600 disabled:opacity-50"
           >
-            {submitting ? tStates('sending') : tActions('confirm')}
+            {submitting ? tStates('sending') : uploading !== null ? 'Carico la foto…' : tActions('confirm')}
           </button>
         </div>
       </div>
@@ -296,7 +322,7 @@ function PhotoSlot({
       </div>
       <div className="mt-1 flex h-24 items-center justify-center rounded-lg border-2 border-dashed border-cream-300 bg-cream-50">
         {url ? (
-          <img src={sizedImage(url, 400)} alt="" loading="lazy" className="h-full w-full rounded-lg object-cover" />
+          <img src={url} alt={`Anteprima: ${label}`} className="h-full w-full rounded-lg object-cover" />
         ) : uploading ? (
           <span className="text-xl text-ink-400">…</span>
         ) : (

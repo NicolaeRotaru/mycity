@@ -1,12 +1,13 @@
 'use client';
 
+import { conLeMadri } from '@/lib/queries/categorie-dei-negozi';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Store as IconaNegozio } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import CollectionHeader from '@/components/CollectionHeader';
-import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
+import { chiaveDiOggi, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
@@ -84,10 +85,11 @@ const fetchStoresData = async () => {
   const [schedeRes, reviewsRes, categoriesRes, categoriePerNegozioRes] = await Promise.all([
     supabase.rpc('store_cards', { p_per_store: 4, p_limit: 500 }),
     supabase.rpc('store_review_stats', { p_store_ids: storeIds }),
+    // 5/11/2026 — Tutte le categorie, non solo le madri: servono le figlie per sapere di chi
+    // sono madri (filtro qui sotto). Le opzioni del filtro restano le sole principali.
     supabase
       .from('categories')
       .select('id, slug, name, parent_id, icon')
-      .is('parent_id', null)
       .order('name'),
     // Le categorie di ogni negozio le dice il database. Prima si deducevano
     // dal mucchio di prodotti scaricati, e siccome quel mucchio era capato a
@@ -137,7 +139,9 @@ const fetchStoresData = async () => {
 
   const products = (productsRes.data ?? []) as ProductLite[];
   const reviewRows = (reviewsRes.data ?? []) as { store_id: string; avg: number | string; count: number }[];
-  const categories = (categoriesRes.data ?? []) as Category[];
+  const tutteLeCategorie = (categoriesRes.data ?? []) as Category[];
+  const categories = tutteLeCategorie.filter((c) => c.parent_id === null);
+  const madreDi = new Map(tutteLeCategorie.map((c) => [c.id, c.parent_id] as const));
 
   const productsByStore: Record<string, ProductLite[]> = {};
   const countByStore: Record<string, number> = {};
@@ -167,6 +171,11 @@ const fetchStoresData = async () => {
         if (p.category_id) (categoriesByStore[sellerId] ??= new Set()).add(p.category_id);
       }
     }
+  }
+
+  // Un negozio coi prodotti solo in «Panificio» compare anche col filtro «Alimentari».
+  for (const id of Object.keys(categoriesByStore)) {
+    categoriesByStore[id] = conLeMadri(categoriesByStore[id], madreDi);
   }
 
   const reviewsByStore: Record<string, { avg: number; count: number }> = {};
@@ -201,7 +210,7 @@ export default function StoresPage() {
   const categories = data?.categories ?? [];
 
   const filtered = useMemo(() => {
-    const todayKey = DAY_KEYS[new Date().getDay()];
+    const todayKey = chiaveDiOggi();
     let result = stores.filter((s) => {
       if (search && !s.store_name?.toLowerCase().includes(search.toLowerCase())) return false;
       if (onlyOpen) {
@@ -241,8 +250,12 @@ export default function StoresPage() {
   // Adesso il numero grande e' quello che si vede davvero, e il totale resta scritto
   // accanto: cosi' si capisce anche quanto sta togliendo il filtro.
   const rigaDelConteggio = filtriAccesi
-    ? `${filtered.length} ${filtered.length === 1 ? 'negozio' : 'negozi'} su ${stores.length}`
-    : `${stores.length} ${stores.length === 1 ? 'negozio locale pronto' : 'negozi locali pronti'} a consegnarti a casa`;
+    ? `${filtered.length} ${filtered.length === 1 ? 'negozio' : 'negozi'} su ${stores.length >= TETTO_NEGOZI ? `almeno ${TETTO_NEGOZI}` : stores.length}`
+    // 5/11/2026 — Si leggono al massimo TETTO_NEGOZI negozi: arrivati lì il numero non è il
+    // totale, e scriverlo come tale sarebbe una bugia che scatta da sola.
+    : stores.length >= TETTO_NEGOZI
+      ? `Almeno ${TETTO_NEGOZI} negozi locali pronti a consegnarti a casa`
+      : `${stores.length} ${stores.length === 1 ? 'negozio locale pronto' : 'negozi locali pronti'} a consegnarti a casa`;
 
   // IL TITOLO DELLA PAGINA STA SOPRA I TRE STATI, NON DENTRO UNO SOLO.
   //
@@ -260,7 +273,7 @@ export default function StoresPage() {
         icon={IconaNegozio}
         eyebrow="Tutti i negozi"
         title="Negozi di Piacenza"
-        blurb="Le botteghe della citta', con consegna a casa tua."
+        blurb="Le botteghe della città, con consegna a casa tua."
         breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Negozi' }]}
       />
       {!isLoading && !isError && <p className="mb-6 text-ink-500">{rigaDelConteggio}</p>}

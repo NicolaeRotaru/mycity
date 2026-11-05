@@ -51,7 +51,9 @@ async function leggiPosizione(): Promise<{ lat: number; lng: number } | null> {
     const pos = await conTempoMassimo(
       new Promise<GeolocationPosition>((resolve, reject) => {
         if (typeof navigator === 'undefined' || !navigator.geolocation) return reject(new Error('No geo'));
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: TEMPO_MASSIMO_GPS_MS, enableHighAccuracy: true });
+        // 5/11/2026 — maximumAge: col 112 aperto la pagina va in secondo piano e un fix nuovo può non
+        // arrivare mai; una posizione di un minuto fa (quella che il telefono ha già) vale più di niente.
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: TEMPO_MASSIMO_GPS_MS, enableHighAccuracy: true, maximumAge: 60_000 });
       }),
       TEMPO_MASSIMO_GPS_MS + 500,
     );
@@ -112,9 +114,13 @@ export default function SOSButton({ orderId }: Props) {
     // 2. L'avviso a MyCity parte DOPO, e ha un tempo massimo: se la rete non risponde in
     //    tempo il fattorino lo legge, invece di restare su «Invio…» per sempre.
     let alertSent = false;
+    // 5/11/2026 — Il tempo massimo ferma solo l'attesa, non la scrittura: se l'avviso arriva dopo i 15
+    // secondi l'evento c'è. Si distingue «non è partito» (errore) da «non lo so ancora» (tempo scaduto).
+    let tempoScaduto = false;
     try {
       alertSent = await conTempoMassimo(inviaAvvisoSOS(orderId), TEMPO_MASSIMO_AVVISO_MS);
     } catch (e) {
+      tempoScaduto = e instanceof Error && e.message.startsWith('SOS: nessuna risposta');
       captureError(e, { context: 'SOSButton' });
     }
 
@@ -123,6 +129,10 @@ export default function SOSButton({ orderId }: Props) {
     if (alertSent) {
       toast.success('MyCity è stata avvisata. Ora premi CHIAMA sul telefono: il 112 è già composto.', {
         duration: 12_000,
+      });
+    } else if (tempoScaduto) {
+      toast.error('Non sappiamo ancora se MyCity è stata avvisata: la rete è lenta. Premi subito CHIAMA sul telefono per parlare col 112.', {
+        duration: 15_000,
       });
     } else {
       // Qui l'avviso a MyCity NON e' partito, e il fattorino deve saperlo: e' solo davanti a
@@ -153,7 +163,7 @@ export default function SOSButton({ orderId }: Props) {
         ref={pulsanteRef}
         onClick={() => setOpen(true)}
         aria-label="SOS emergenza"
-        className="fixed bottom-44 right-4 z-emergenza bg-rose-600 hover:bg-rose-700 text-white rounded-full w-14 h-14 shadow-2xl flex items-center justify-center ring-4 ring-rose-200 animate-pulse-slow"
+        className="fixed bottom-44 right-4 z-emergenza bg-rose-600 hover:bg-rose-700 text-white rounded-full w-14 h-14 shadow-warm-xl flex items-center justify-center ring-4 ring-rose-200 animate-pulse-slow"
       >
         <AlertTriangle size={22} strokeWidth={2.4} />
       </button>

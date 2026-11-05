@@ -55,3 +55,24 @@ describe('/sell distingue «mai inviata» da «inviata e in valutazione»', () =
     expect(html).not.toContain('modulo-venditore');
   });
 });
+
+/**
+ * 5/11/2026 (S04, scheda 2125) — Il negozio respinto: se /sell gli mostrasse «in valutazione», le
+ * prove di prima restavano verdi. Deve vedere il motivo del no e il modulo per riprovare.
+ */
+describe('/sell al negozio respinto', () => {
+  it('vede il no col motivo e il modulo per ripresentarsi, non «Richiesta in valutazione»', () => {
+    profilo = {
+      role: 'seller',
+      approval_status: 'rejected',
+      approval_requested_at: '2026-10-20T10:00:00Z',
+      rejection_reason: 'documento illeggibile',
+      email: 'a@b.it',
+    };
+    const html = renderToStaticMarkup(<SellPage />);
+    expect(html).not.toContain('Richiesta in valutazione');
+    expect(html).toContain('Richiesta precedente non approvata');
+    expect(html).toContain('documento illeggibile');
+    expect(html).toContain('modulo-venditore');
+  });
+});

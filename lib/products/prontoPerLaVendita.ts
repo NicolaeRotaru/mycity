@@ -1,6 +1,5 @@
 // lib/products/prontoPerLaVendita.ts
 import {
-  AI_ATTR_TO_FIELD,
   CATEGORY_ATTRIBUTES,
   findLabelForKey,
   formatAttributeValue,
@@ -248,9 +247,11 @@ export type DichiarazioneDaFoto = { chiave: string; etichetta: string; valore: s
  * («Senza glutine: false») non e' una dichiarazione: non si mostra.
  */
 function diceQualcosa(v: unknown): boolean {
-  if (v === false) return false;
-  const t = String(v ?? '').trim();
-  return t !== '' && !/^false$/i.test(t);
+  if (v === false || v === 0) return false;
+  const t = String(v ?? '').trim().toLowerCase();
+  // 2163 — Le stesse parole del «no» di attributoSpuntato (lib/category-attributes.ts):
+  // «Senza glutine: no» non è una dichiarazione da confermare.
+  return t !== '' && !['false', 'no', 'falso', '0'].includes(t);
 }
 
 export function valoreLeggibile(v: unknown): string {
@@ -551,12 +552,12 @@ function schedaDopoLaProposta(prodotto: SchedaDellaChat, proposta: AiProductPatc
   const daScrivere =
     patch.attributes && typeof patch.attributes === 'object' ? (patch.attributes as Record<string, unknown>) : {};
   for (const [k, v] of Object.entries(daScrivere)) {
-    if (typeof v === 'string' && v.trim()) attributes[AI_ATTR_TO_FIELD[k] ?? k] = v;
+    if (typeof v === 'string' && v.trim()) attributes[chiaveCampo(k)] = v;
   }
   const daTogliere: unknown[] = Array.isArray(patch.attributes_remove) ? patch.attributes_remove : [];
   for (const voce of daTogliere) {
     const k = voceComeTesto(voce);
-    if (k) delete attributes[AI_ATTR_TO_FIELD[k] ?? k];
+    if (k) delete attributes[chiaveCampo(k)];
   }
   const prezzoValido =
     typeof patch.price === 'number' && patch.price > 0 && !prezzoAiFuoriBanda(patch.price, prodotto.price);
@@ -627,6 +628,22 @@ export function avvisoSullaPubblicazione(
  * Allergeni e Ingredienti). `null` se nessuna. Il negoziante lo legge subito,
  * invece di scoprirlo quando prova a pubblicare.
  */
+/**
+ * 1683 — Dopo «Crea bozze» dalle foto: quali prodotti NON sono entrati, e
+ * perché. La rotta li restituisce in `scartati` ({ nome, motivo }); senza
+ * questa frase il negoziante leggeva «5 bozze create» e non sapeva quale
+ * mancava, né che il motivo gli diceva di riprovare.
+ */
+export function avvisoScartatiDalleFoto(scartati: unknown): string | null {
+  if (!Array.isArray(scartati) || scartati.length === 0) return null;
+  const righe = scartati
+    .map((x) => x as { nome?: unknown; motivo?: unknown })
+    .map((x) => `«${String(x.nome ?? 'senza nome')}»: ${String(x.motivo ?? 'motivo non indicato')}`);
+  return righe.length === 1
+    ? `Non è entrato ${righe[0]}.`
+    : `Non sono entrati ${righe.length} prodotti — ${righe.join('; ')}.`;
+}
+
 export function avvisoDopoLeBozze(prodotti: SchedaDellaChat[]): string | null {
   const daCompletare = prodotti
     .map((p) => ({ nome: p.name, manca: campiObbligatoriVuoti(p.categorySlug, p.attributes) }))
@@ -691,7 +708,8 @@ export function righeDellaProposta(
   }
   if ('compare_at_price' in patch) {
     if (patch.compare_at_price == null) out.push('Rimuovi prezzo pieno');
-    else if (typeof patch.compare_at_price === 'number') out.push(`Prezzo pieno → ${eur(patch.compare_at_price)}`);
+    // 2646 — Il server rifiuta sempre il prezzo pieno proposto dall'AI: la scheda non lo promette.
+    else if (typeof patch.compare_at_price === 'number') out.push(`Prezzo pieno ${eur(patch.compare_at_price)}: NON si applica, il prezzo barrato lo metti tu`);
   }
   if (testo(patch.unit) && patch.unit) out.push(`Unità → ${patch.unit}`);
   if ('condition' in patch && (patch.condition == null || testo(patch.condition))) {
@@ -725,7 +743,13 @@ export function righeDellaProposta(
     const v = typeof grezzo === 'string' ? grezzo.trim() : '';
     if (!v) continue;
     if (!eCampoDichiarativo(k)) {
-      out.push(`${k} → ${v}`);
+      // 1698 — Le stesse regole del server: un campo che la scheda non ha, o una scelta
+      // fuori elenco, non si promette. Senza categoria nota si mostra com'è.
+      const campo = campi.find((f) => f.key === chiaveCampo(k));
+      if (categoria && !campo) out.push(`${k} → ${v}: NON si applica, la scheda di questo prodotto non ha questo campo`);
+      else if (campo?.type === 'select' && !(campo.options ?? []).includes(v)) {
+        out.push(`${campo.label} → ${v}: NON si applica, non è fra i valori possibili`);
+      } else out.push(`${campo?.label ?? k} → ${v}`);
       continue;
     }
     const d = dichiarazione(k);
@@ -742,6 +766,8 @@ export function righeDellaProposta(
     const k = voceComeTesto(voce);
     if (!k) continue;
     if (!eCampoDichiarativo(k)) {
+      // 1698 — Togliere un campo che la scheda non ha non è una modifica.
+      if (categoria && !campi.some((f) => f.key === chiaveCampo(k))) continue;
       out.push(`Rimuovi ${k}`);
       continue;
     }

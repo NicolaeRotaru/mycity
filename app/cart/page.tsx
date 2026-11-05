@@ -14,6 +14,7 @@ import {
   VOCE_CONSEGNA,
   RESO_CARRELLO,
   RESO_CARRELLO_ESCLUSI,
+  RESO_CARRELLO_TUTTI_ESCLUSI,
 } from '@/lib/promesse-pubbliche';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { useEffect, useRef, useState } from 'react';
@@ -40,6 +41,7 @@ import { leggiEsitoDellaVeloce, rigaQuandoArrivaNelCarrello } from '@/lib/ordini
 import { prezziDelCarrello } from '@/lib/ordini/prezzi';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { expressSiPuo } from '@/lib/quando-arriva';
+import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { romeNow } from '@/lib/store-hours';
 
 /**
@@ -93,7 +95,16 @@ function quandoArrivaScrittoNelCarrello(ora: number | null, veloce: boolean | nu
   // 29/10/2026 — L'orologio non bastava: a negozio chiuso o senza un fattorino online il carrello
   // prometteva i minuti e il no arrivava all'ultimo tocco in cassa. Ora decide la stessa risposta
   // della cassa e delle rotte (`veloceSiPuo`, letta da /api/consegna/veloce): senza, niente minuti.
-  return rigaQuandoArrivaNelCarrello(ora, veloce);
+  //
+  // 5/11/2026 — Ma «Consegna in 30-60 min» da sola diceva una consegna che il carrello non conta: il
+  // totale qui sotto è quello con la fascia (la veloce costa un euro in più, e la cassa la mette
+  // solo se la scegli), e alle 20:30 la cassa apre su domani. La veloce si dice come possibilità
+  // accanto alla fascia, che è la consegna conteggiata.
+  const riga = rigaQuandoArrivaNelCarrello(ora, veloce);
+  if (riga && veloce && ora !== null && expressSiPuo(ora)) {
+    return `Consegna nella fascia che scegli, o veloce in ${EXPRESS_ETA_LABEL}`;
+  }
+  return riga;
 }
 
 export default function CartPage() {
@@ -280,6 +291,8 @@ export default function CartPage() {
               .select('lat, lng')
               .eq('user_id', idCliente)
               .order('is_default', { ascending: false })
+              // 5/11/2026 — Lo stesso secondo criterio della cassa: senza predefinito, lo stesso indirizzo.
+              .order('id', { ascending: true })
               .limit(1)
           : Promise.resolve({ data: [] as Array<{ lat: number | null; lng: number | null }> }),
       ]);
@@ -289,6 +302,13 @@ export default function CartPage() {
       );
       const mappa: Record<string, number | null> = {};
       const prezzi: Record<string, number> = {};
+      // 5/11/2026 — Un prodotto che la lettura non restituisce (segnato «Esaurito», tolto, o di un
+      // negozio sospeso: la regola di lettura mostra solo i prodotti in vendita) non è un «limite
+      // sconosciuto»: è merce che non si può comprare, come la vede la cassa. Solo se la lettura è
+      // andata a buon fine: senza risposta non si sa niente.
+      if (Array.isArray(prodottiRes.data) && !('error' in prodottiRes && prodottiRes.error)) {
+        for (const id of ids) mappa[id] = 0;
+      }
       for (const p of (prodottiRes.data ?? []) as Array<{ id: string; stock: number | null; price: number | string | null }>) {
         mappa[p.id] = p.stock;
         const pieno = Number(p.price ?? NaN);
@@ -296,6 +316,16 @@ export default function CartPage() {
         if (Number.isFinite(pieno)) prezzi[p.id] = discountedUnitCents(pieno, scontiRes.get(p.id) ?? 0) / 100;
       }
       setPrezzoDiOggi(prezzi);
+      // 5/11/2026 — Chi è escluso dal recesso si legge a parte e con `*`, come la scheda prodotto:
+      // se la colonna `non_recedibile` (migrazione 180) mancasse, chiederla per nome farebbe
+      // cadere tutta la lettura delle scorte. Se cade questa, il carrello dice la frase generale.
+      const { data: perIlReso } = await supabase.from('products').select('*').in('id', ids);
+      if (!vivo) return;
+      setEsclusiDalReso(
+        Object.fromEntries(
+          ((perIlReso ?? []) as Array<{ id: string; non_recedibile?: boolean | null }>).map((p) => [p.id, p.non_recedibile === true]),
+        ),
+      );
       setDovEIlNegozio(
         Object.fromEntries(
           [...negoziRes.values()].map((n) => [n.id, { lat: n.store_lat ?? null, lng: n.store_lng ?? null }]),
@@ -305,6 +335,9 @@ export default function CartPage() {
       setDoveConsegniamo({ lat: casa?.lat ?? null, lng: casa?.lng ?? null });
       // La variante si indicizza con la sua chiave di riga, così una riga con
       // variante non eredita la scorta del prodotto intero.
+      if (idVarianti.length > 0 && Array.isArray(variantiRes.data) && !('error' in variantiRes && variantiRes.error)) {
+        for (const id of idVarianti) mappa[`variante::${id}`] = 0;
+      }
       for (const v of (variantiRes.data ?? []) as Array<{ id: string; stock: number | null }>) {
         mappa[`variante::${v.id}`] = v.stock;
       }
@@ -339,6 +372,30 @@ export default function CartPage() {
    * dichiarato, non indovinato.
    */
   const barraRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * 5/11/2026 — TOGLIENDO UNA RIGA DA TASTIERA IL FUOCO FINIVA NEL VUOTO.
+   *
+   * La riga sparisce insieme al suo «Rimuovi», che aveva il fuoco: il fuoco cadeva sul corpo della
+   * pagina e il lettore non diceva quale prodotto era stato tolto. Adesso il fuoco va sul titolo del
+   * carrello (anche su quello del carrello vuoto) e una riga di stato dice cosa si è tolto.
+   */
+  const titoloRef = useRef<HTMLHeadingElement>(null);
+  // 5/11/2026 — Quali prodotti il negozio ha segnato come esclusi dal recesso (non_recedibile).
+  const [esclusiDalReso, setEsclusiDalReso] = useState<Record<string, boolean>>({});
+  const [tolto, setTolto] = useState<{ nome: string; volta: number } | null>(null);
+  const togliDalCarrello = (item: CartItem) => {
+    removeFromCart(item.id, item.variantId);
+    setTolto((t) => ({ nome: item.name, volta: (t?.volta ?? 0) + 1 }));
+  };
+  useEffect(() => {
+    if (tolto) titoloRef.current?.focus();
+  }, [tolto]);
+  const annuncioTolto = (
+    <p role="status" aria-live="polite" className="sr-only">
+      {tolto ? `${tolto.nome} tolto dal carrello` : ''}
+    </p>
+  );
   useEffect(
     () => seguiAltezza(barraRef.current, document.documentElement, osservatoreDelBrowser, CORSIA_DELLA_BARRA),
     [letto, items.length],
@@ -405,7 +462,8 @@ export default function CartPage() {
       <div className="container mx-auto py-12 max-w-2xl">
         {/* Anche il carrello vuoto ha il suo titolo: qui il disegno non lo mostra, ma chi
             naviga per intestazioni deve trovarlo lo stesso. */}
-        <h1 className="sr-only">Il tuo carrello</h1>
+        <h1 ref={titoloRef} tabIndex={-1} className="sr-only">Il tuo carrello</h1>
+        {annuncioTolto}
         <EmptyState
           icon={ShoppingCart}
           title="Il tuo carrello è vuoto"
@@ -481,12 +539,23 @@ export default function CartPage() {
    * Stessa regola della riga rossa qui sopra (`massimo(...) === 0`), così le due non possono
    * separarsi: finché non si sa quanto ce n'è, `massimo` risponde `null` e non blocca niente.
    */
-  const bloccanti = righe.filter((it) => massimo(it.id, it.variantId) === 0);
+  // 5/11/2026 — Anche chi ne chiede più di quanti ce ne sono: la cassa lo ferma col muro
+  // «Disponibilità insufficiente», quindi il carrello non lo manda avanti.
+  const esauriti = righe.filter((it) => massimo(it.id, it.variantId) === 0);
+  const troppi = righe.filter((it) => {
+    const m = massimo(it.id, it.variantId);
+    return m !== null && m > 0 && it.quantity > m;
+  });
+  const bloccanti = [...esauriti, ...troppi];
   /** Cosa c'è scritto sul pulsante quando l'ordine non può partire: dice il gesto, non il divieto. */
   const cosaFarePrima =
-    bloccanti.length === 1
-      ? 'Togli l’articolo esaurito per continuare'
-      : 'Togli gli articoli esauriti per continuare';
+    esauriti.length === 0
+      ? 'Abbassa la quantità per continuare'
+      : troppi.length > 0
+        ? 'Togli gli esauriti e abbassa le quantità per continuare'
+        : esauriti.length === 1
+          ? 'Togli l’articolo esaurito per continuare'
+          : 'Togli gli articoli esauriti per continuare';
 
   return (
     // Lo spazio in fondo è per la barra fissa del telefono: senza, copre l'ultima riga della pagina.
@@ -497,7 +566,7 @@ export default function CartPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* COLONNA SX: prodotti */}
         <div className="lg:col-span-2 space-y-4">
-          <h1 className="font-serif text-2xl font-bold text-ink-900">
+          <h1 ref={titoloRef} tabIndex={-1} className="font-serif text-2xl font-bold text-ink-900 focus:outline-none">
             Il tuo carrello <span className="text-ink-500 font-normal font-sans text-lg">({pluralize(count, 'articolo', 'articoli')})</span>
           </h1>
 
@@ -541,7 +610,7 @@ export default function CartPage() {
                   <p className="rounded-lg border border-cream-300 bg-cream-50 px-3 py-2 text-sm text-ink-700">{spesaPiccola}</p>
                 )}
                 {fuoriZona && (
-                  <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                  <p role="alert" data-informativo className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
                     {motivoFuoriZona(g.storeName)}
                   </p>
                 )}
@@ -600,7 +669,7 @@ export default function CartPage() {
                         }
                         if (rimasti !== null && rimasti < item.quantity) {
                           return (
-                            <p className="text-xs text-amber-700 font-semibold flex items-center gap-1">
+                            <p role="alert" className="text-xs text-amber-700 font-semibold flex items-center gap-1">
                               <AlertCircle size={13} strokeWidth={2.5} aria-hidden />
                               Ne restano {rimasti} · abbassa la quantità
                             </p>
@@ -621,7 +690,8 @@ export default function CartPage() {
                         );
                       })()}
                       <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
+                        {/* 5/11/2026 — A 360 px quantità e «Rimuovi» uscivano dal riquadro: vanno a capo. */}
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
                           <div className="flex flex-col">
                           <div className="flex items-center border border-cream-300 rounded-full">
                             <button
@@ -664,7 +734,7 @@ export default function CartPage() {
                           </div>
                           <button
                             type="button"
-                            onClick={() => removeFromCart(item.id, item.variantId)}
+                            onClick={() => togliDalCarrello(item)}
                             aria-label={`Rimuovi ${item.name} dal carrello`}
                             /* Il bersaglio era alto quanto la riga di testo (20px) e attaccato al «−»:
                                col pollice si toglieva il prodotto invece di scalare la quantita'. Il
@@ -718,7 +788,7 @@ export default function CartPage() {
             {/* Il totale cambia a ogni «+», «−» e rimozione: qui si dice anche
                 a chi non lo vede cambiare. */}
             <p className="sr-only" role="status" aria-live="polite">
-              Carrello aggiornato: {count} {count === 1 ? 'articolo' : 'articoli'}, consegna {formatPrice(consegnaDaPagare)}, totale {formatPrice(finalTotal)}
+              {tolto ? `${tolto.nome} tolto dal carrello. ` : ''}Carrello aggiornato: {count} {count === 1 ? 'articolo' : 'articoli'}, consegna {formatPrice(consegnaDaPagare)}, totale {formatPrice(finalTotal)}
             </p>
 
             <div className="border-t border-cream-300 pt-3 flex justify-between items-baseline">
@@ -794,12 +864,18 @@ export default function CartPage() {
                   decisione su quali categorie sono escluse: non è una scelta da prendere qui. */}
               <p className="flex items-start gap-2">
                 <RotateCcw size={14} className="text-olive-600 shrink-0 mt-0.5" aria-hidden />
+                {/* 5/11/2026 — Con dentro solo prodotti esclusi (la torta su ordinazione) «Reso entro 14
+                    giorni» era falso: lì si dice l'esclusione. */}
+                {items.length > 0 && items.every((it) => esclusiDalReso[it.id] === true) ? (
+                  <span>{RESO_CARRELLO_TUTTI_ESCLUSI}</span>
+                ) : (
                 <span>
                   {RESO_CARRELLO} ·{' '}
                   <Link href="/returns" className="font-semibold text-primary-700 underline hover:text-primary-800">
                     {RESO_CARRELLO_ESCLUSI}
                   </Link>
                 </span>
+                )}
               </p>
               <p className="flex items-center gap-2"><Store size={14} className="text-olive-600 shrink-0" aria-hidden /> Supporti il commercio locale</p>
             </div>

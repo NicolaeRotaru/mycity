@@ -218,6 +218,15 @@ export function esitoVariabili(
   // e' potuta misurare, la coppia non si giudica: la cecita' e' gia' detta
   // sopra, e inventare qui un guasto che non si e' visto sarebbe l'errore
   // opposto — un rosso finto, che si impara a ignorare come un verde finto.
+  // 5/11/2026 — Una coppia dichiarata con una meta' fuori dall'elenco delle attese non si giudica, e
+  // prima la si saltava in silenzio: il semaforo restava verde con la coppia mai guardata. Adesso
+  // la meta' fuori elenco conta come «non misurata», come una NEXT_PUBLIC_* che non si legge.
+  const fuoriElenco = attese.length === 0
+    ? []
+    : coppie.flatMap((c) =>
+      c.variabili.some((n) => attese.includes(n)) ? c.variabili.filter((n) => !attese.includes(n)) : [],
+    );
+  const nonGuardate = [...nonMisurate, ...fuoriElenco.filter((n) => !nonMisurate.includes(n))];
   const coppieRotte = coppie.filter((c) => {
     const dentro = c.variabili.filter((n) => attese.includes(n));
     if (dentro.length < 2) return false;
@@ -241,7 +250,7 @@ export function esitoVariabili(
   const giaDetti = new Set(coppieRotte.flatMap((c) => [...c.variabili]));
   const mancantiNonDetti = mancanti.filter((n) => !giaDetti.has(n));
   if (mancantiNonDetti.length > 0) lamentele.push(`mancano: ${mancantiNonDetti.join(', ')}`);
-  if (nonMisurate.length > 0) lamentele.push(`non misurate: ${nonMisurate.join(', ')}`);
+  if (nonGuardate.length > 0) lamentele.push(`non misurate: ${nonGuardate.join(', ')}`);
   if (attese.length === 0) lamentele.push('nessuna variabile da guardare: l elenco e vuoto');
 
   const stato: StatoVariabili =
@@ -251,7 +260,7 @@ export function esitoVariabili(
         ? 'coppia_rotta'
         : mancanti.length > 0
           ? 'mancanti'
-          : nonMisurate.length > 0
+          : nonGuardate.length > 0
             ? 'non_misurate'
             : 'ok';
 

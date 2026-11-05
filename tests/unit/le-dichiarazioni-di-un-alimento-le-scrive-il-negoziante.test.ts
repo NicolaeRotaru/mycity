@@ -114,7 +114,8 @@ vi.mock('@/lib/supabase/server', () => {
   const risolvi = (tabella: string, s: Stato, una: boolean) => {
     if (tabella === 'categories') return Promise.resolve({ data: db.categorie, error: null });
     if (tabella === 'catalog_ai_jobs') {
-      if (s.op === 'update') return Promise.resolve({ data: null, error: null });
+      // S10 (5/11/2026) — la prenotazione del lavoro restituisce le righe toccate.
+      if (s.op === 'update') return Promise.resolve({ data: [{ id: 'lavoro' }], error: null });
       return Promise.resolve({ data: db.lavoro, error: null });
     }
     // products

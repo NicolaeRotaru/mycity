@@ -60,7 +60,8 @@ describe('l\'indirizzo con cui si chiede un logo al server', () => {
  * scritto nella consegna come lavoro che resta aperto. L'elenco è chiuso apposta — se qualcuno ne
  * aggiunge un secondo, questa prova diventa rossa invece di lasciar passare la cosa in silenzio.
  */
-const FUORI_PORTATA = ['components/home/ShopOfMonthHero.tsx'];
+// 5/11/2026 (S09, scheda 374) — anche ShopOfMonthHero ora usa logoNegozio: l'eccezione è chiusa.
+const FUORI_PORTATA: string[] = [];
 
 function file(dir: string, dentro: string[] = []): string[] {
   for (const voce of readdirSync(dir)) {

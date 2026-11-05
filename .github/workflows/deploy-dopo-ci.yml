@@ -193,9 +193,11 @@ on:
 # `cancel-in-progress: false` e' voluto e va lasciato cosi': un rilascio fermato
 # a meta' migrazioni non «si annulla», lascia il database in uno stato che
 # nessuno ha previsto. Il secondo aspetta il suo turno.
-concurrency:
-  group: rilascio-produzione
-  cancel-in-progress: false
+#
+# 5/11/2026 — Il gruppo sta sul LAVORO `vercel`, non su tutto il file. A livello di file anche i
+# giri che il filtro del lavoro scarta (la CI di una richiesta di unione) entravano nel gruppo, e
+# GitHub cancella il giro IN ATTESA quando ne arriva uno nuovo: il rilascio vero dell'ultimo commit
+# di main poteva sparire. Un lavoro saltato dal suo `if` non entra nel gruppo.
 
 
 # #244 — Il minimo indispensabile. Senza questo blocco ogni lavoro parte col
@@ -227,6 +229,11 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
       github.event.workflow_run.head_branch == 'main')
+    concurrency:
+      # Il pulsante a mano su un ramo che non e' main ha un gruppo suo: resta rosso (lo ferma il
+      # passo «A mano si rilascia solo main»), ma non scalza il rilascio vero in attesa.
+      group: rilascio-produzione${{ github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main' && format('-{0}', github.run_id) || '' }}
+      cancel-in-progress: false
     timeout-minutes: 15
     steps:
       - name: Verifica di avere le chiavi
@@ -551,10 +558,17 @@ jobs:
         # `secrets` non si puo' leggere in una condizione di passo: si guarda
         # l'esito del passo qui sopra, che dice se le migrazioni sono girate.
         if: steps.migrazioni.outputs.applicate == 'true'
+        # 5/11/2026 — Le librerie si installano PRIMA e SENZA la password del database, e senza i loro
+        # script d'installazione (come nel pulsante delle migrazioni a mano): al controllo serve solo
+        # `pg`, che e' tutto JavaScript.
+        run: npm ci --legacy-peer-deps --ignore-scripts
+
+      - name: Il database e' allineato al codice (confronto)
+        if: steps.migrazioni.outputs.applicate == 'true'
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SALTO_E_ERRORE: "1"
-        run: npm ci --legacy-peer-deps && npm run db:check-drift
+        run: npm run db:check-drift
 
       - name: Rilascia in produzione
         id: rilascio

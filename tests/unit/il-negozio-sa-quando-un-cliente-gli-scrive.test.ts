@@ -44,8 +44,27 @@ vi.mock('@/lib/supabase/server', () => ({
       if (tabella === 'conversations') {
         return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: stato.conv, error: null }) }) }) };
       }
+      if (tabella === 'profiles') {
+        return { select: () => ({ in: async () => ({ data: [], error: null }) }) };
+      }
       if (tabella === 'notifications') {
+        // S10 (5/11/2026) — la rotta guarda se c'e' gia' una voce non letta per la
+        // conversazione (prima guardava il contatore riletto dopo l'invio).
+        const filtri: Record<string, unknown> = {};
+        const lettura = {
+          eq: (c: string, v: unknown) => {
+            filtri[c] = v;
+            return lettura;
+          },
+          limit: async () => ({
+            data: stato.notifiche.filter(
+              (n) => n.user_id === filtri.user_id && n.link === filtri.link && (n.is_read ?? false) === filtri.is_read,
+            ),
+            error: null,
+          }),
+        };
         return {
+          select: () => lettura,
           insert: async (riga: Record<string, unknown>) => {
             if (stato.erroreNotifica) return { error: stato.erroreNotifica };
             stato.notifiche.push(riga);
@@ -87,8 +106,9 @@ describe('il negozio sa quando un cliente gli scrive', () => {
 
   it('il secondo messaggio non letto non ripete la campanella', async () => {
     stato.conv = { ...stato.conv, seller_unread_count: 2 };
+    await invia('Avete ancora il pane di segale?');
     await invia('Ci siete?');
-    expect(stato.notifiche).toHaveLength(0);
+    expect(stato.notifiche).toHaveLength(1);
   });
 
   it('se la notifica non si scrive, il messaggio resta inviato', async () => {

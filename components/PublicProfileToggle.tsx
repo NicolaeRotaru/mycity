@@ -42,27 +42,50 @@ export default function PublicProfileToggle() {
   const [handle, setHandle] = useState('');
   const [bio, setBio] = useState('');
   const [appUrl, setAppUrl] = useState('');
+  // 5/11/2026 — Se la lettura cadeva, l'interruttore risultava spento coi campi vuoti, e
+  // Salva azzerava nome pubblico e bio veri (liberando l'handle per altri). Adesso la
+  // lettura fallita si dice, con Riprova, e il salvataggio resta bloccato.
+  const [letturaFallita, setLetturaFallita] = useState(false);
+  const [tentativo, setTentativo] = useState(0);
+  // L'indirizzo pubblico si mostra solo per l'handle già salvato, non per quello che si sta scrivendo.
+  const [handleSalvato, setHandleSalvato] = useState('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') setAppUrl(window.location.origin);
     (async () => {
+      setLetturaFallita(false);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { setLoading(false); return; }
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('public_profile_enabled, public_handle, public_bio')
         .eq('id', user.id)
         .single();
+      if (error) throw error;
       if (data) {
         setEnabled(!!data.public_profile_enabled);
         setHandle(data.public_handle ?? '');
+        setHandleSalvato(data.public_profile_enabled ? data.public_handle ?? '' : '');
         setBio(data.public_bio ?? '');
       }
       setLoading(false);
-    })().catch(() => setLoading(false));
-  }, []);
+    })().catch(() => {
+      setLetturaFallita(true);
+      setLoading(false);
+    });
+  }, [tentativo]);
+
+  const copia = async (testo: string) => {
+    try {
+      await navigator.clipboard.writeText(testo);
+      toast.success(tToasts('copied'));
+    } catch {
+      toast.error('Copia non riuscita: seleziona l’indirizzo e copialo a mano.');
+    }
+  };
 
   const save = async () => {
+    if (letturaFallita) return;
     if (enabled && !handle.trim()) {
       toast.error('Scegli un handle pubblico');
       return;
@@ -92,6 +115,7 @@ export default function PublicProfileToggle() {
         }
         return;
       }
+      setHandleSalvato(enabled ? handle.trim().toLowerCase() : '');
       toast.success(enabled ? 'Profilo pubblico attivato' : 'Profilo pubblico disattivato');
     } catch (err) {
       toast.error(friendlyError(err));
@@ -102,7 +126,19 @@ export default function PublicProfileToggle() {
 
   if (loading) return <LoadingState />;
 
-  const publicUrl = handle ? `${appUrl}/u/${handle}` : '';
+  if (letturaFallita) {
+    return (
+      <div className="border rounded-lg p-4 space-y-2" role="alert">
+        <h3 className="font-bold">Profilo pubblico</h3>
+        <p className="text-sm text-ink-600">Non riusciamo a leggere il tuo profilo pubblico in questo momento.</p>
+        <Button size="sm" variant="secondary" onClick={() => { setLoading(true); setTentativo((n) => n + 1); }}>
+          Riprova
+        </Button>
+      </div>
+    );
+  }
+
+  const publicUrl = handleSalvato && handleSalvato === handle ? `${appUrl}/u/${handleSalvato}` : '';
 
   return (
     <div className="border rounded-lg p-4 space-y-3">
@@ -111,7 +147,8 @@ export default function PublicProfileToggle() {
         Profilo pubblico
       </h3>
       <p className="text-sm text-ink-600">
-        Crea un profilo pubblico con un handle univoco. Altri utenti possono vedere i tuoi badge e bio.
+        {/* 5/11/2026 — Diceva «badge e bio», ma la pagina pubblica mostra anche nome e cognome. */}
+        Crea un profilo pubblico con un handle univoco. Altri utenti possono vedere il tuo nome e cognome, i tuoi badge e la bio.
         Default: <strong>disattivato</strong>. Nessun dato personale è esposto senza tuo consenso.
       </p>
 
@@ -145,8 +182,9 @@ export default function PublicProfileToggle() {
               <p className="text-xs text-ink-500 mt-1 inline-flex items-center gap-1">
                 <span>URL:</span>
                 <code className="bg-cream-100 px-1 rounded">{publicUrl}</code>
-                <button onClick={() => { navigator.clipboard.writeText(publicUrl); toast.success(tToasts('copied')); }} className="text-primary-700 hover:text-primary-800" aria-label="Copia">
-                  <Copy size={11} />
+                {/* 5/11/2026 — «Copiato» usciva senza aspettare gli appunti, e il tasto era alto 11 pixel. */}
+                <button type="button" onClick={() => void copia(publicUrl)} className="inline-flex h-6 w-6 items-center justify-center rounded text-primary-700 hover:text-primary-800" aria-label="Copia l’indirizzo del profilo">
+                  <Copy size={14} aria-hidden />
                 </button>
               </p>
             )}

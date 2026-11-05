@@ -31,7 +31,9 @@ function Block({ section }: { section: CmsSection }) {
       const c = section.config;
       if (!c.imageUrl) return null;
       const overlay = c.overlay ?? 'dark';
-      const overlayClass = overlay === 'dark' ? 'bg-black/40' : overlay === 'light' ? 'bg-white/30' : '';
+      // 5/11/2026 (S05) — Come la home: con il velo «nessuno» resta una sfumatura minima
+      // dal basso, altrimenti la scritta bianca sulla foto chiara non si legge.
+      const overlayClass = overlay === 'dark' ? 'bg-black/40' : overlay === 'light' ? 'bg-white/30' : 'bg-gradient-to-t from-black/45 via-black/10 to-transparent';
       const textClass = overlay === 'light' ? 'text-ink-900' : 'text-white';
       const href = c.cta ? homeCtaHref(c.cta.href) : null;
       const external = !!href && /^https?:\/\//i.test(href);
@@ -40,7 +42,9 @@ function Block({ section }: { section: CmsSection }) {
       // aveva la sua copia dell'altezza fissa, e con essa la stessa malattia.
       return (
         <section className={CLASSI_FASCIA_BANNER}>
-          <Image src={sizedImage(c.imageUrl, 'hero')} alt={c.heading ?? ''} fill sizes="(max-width: 768px) 100vw, 1024px" loader={caricatoreFotoRemote} className="object-cover" />
+          {/* Il testo alternativo è quello scritto nel pannello (vuoto = solo sfondo), non il
+              titolo che sta già scritto a video. */}
+          <Image src={sizedImage(c.imageUrl, 'hero')} alt={c.alt ?? ''} fill sizes="(max-width: 768px) 100vw, 1024px" loader={caricatoreFotoRemote} className="object-cover" />
           {overlayClass && <div className={`absolute inset-0 ${overlayClass}`} aria-hidden />}
           <div className={`${CLASSI_TESTO_FASCIA_BANNER} ${textClass}`}>
             {c.heading && <h2 className="text-2xl sm:text-3xl font-bold font-serif drop-shadow">{c.heading}</h2>}
@@ -73,7 +77,10 @@ function Block({ section }: { section: CmsSection }) {
     }
     case 'video': {
       const c = section.config;
-      if (!c.videoId) return null;
+      // 5/11/2026 (S05) — Il video «file» (indirizzo di un MP4) lo salva lo stesso modulo
+      // della home: qui il ramo mancava e il blocco spariva dalla pagina.
+      const isFile = c.provider === 'file';
+      if (isFile ? !c.videoUrl : !c.videoId) return null;
       const src = c.provider === 'youtube'
         ? `https://www.youtube-nocookie.com/embed/${c.videoId}`
         : `https://player.vimeo.com/video/${c.videoId}?dnt=1`;
@@ -81,7 +88,12 @@ function Block({ section }: { section: CmsSection }) {
         <section>
           {c.heading && <h2 className="text-2xl font-serif font-bold text-ink-900 mb-4">{c.heading}</h2>}
           <div className="relative w-full aspect-video overflow-hidden rounded-2xl border border-cream-300 bg-black">
+            {isFile ? (
+              // eslint-disable-next-line jsx-a11y/media-has-caption
+              <video src={c.videoUrl} controls playsInline preload="metadata" className="absolute inset-0 w-full h-full object-contain" aria-label={c.heading || 'Video'} />
+            ) : (
             <iframe src={src} title={c.heading || 'Video'} className="absolute inset-0 w-full h-full" loading="lazy" referrerPolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen />
+            )}
           </div>
         </section>
       );

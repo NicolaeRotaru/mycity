@@ -79,10 +79,77 @@ export async function handleTransferReversed(transfer: Stripe.Transfer) {
  */
 export async function handleAccountUpdated(acct: Stripe.Account) {
   const contoAdesso = await getStripe().accounts.retrieve(acct.id);
+  // 5/11/2026 — Lo stato di prima, per accorgersi se Stripe ha appena BLOCCATO
+  // incassi o versamenti: prima si riscrivevano i tre flag e basta, e ne'
+  // il negozio ne' Nicola lo sapevano fino all'allarme delle 24 ore.
+  const { data: prima, error: errPrima } = await getAdminSupabase()
+    .from('profiles')
+    .select('id, role, store_name, stripe_charges_enabled, stripe_payouts_enabled')
+    .eq('stripe_account_id', acct.id)
+    .limit(1);
+  if (errPrima) logger.warn('[stripe] account.updated: stato di prima non letto', { accountId: acct.id, message: errPrima.message });
   // R81 — Se Stripe blocca i versamenti di un negozio e il database non lo
   // registra, il giro dei bonifici continua a mandargli soldi che restano fermi
   // sul suo saldo: l'esito si legge, e su un errore Stripe riprova.
-  scritturaObbligatoria(await applyConnectAccountStatus(contoAdesso), 'stato del conto Stripe del negozio');
+  const esito = scritturaObbligatoria(await applyConnectAccountStatus(contoAdesso), 'stato del conto Stripe del negozio');
+  // 5/11/2026 — Zero righe: nessun profilo porta questo conto (l'id non era stato
+  // salvato). Non e' un errore da far ripetere a Stripe, ma va saputo.
+  if (esito.righe === 0) {
+    logger.error('[stripe] account.updated: nessun profilo con questo conto', { accountId: acct.id });
+  }
+  const profilo = (prima?.[0] ?? null) as {
+    id: string; role?: string | null; store_name?: string | null;
+    stripe_charges_enabled?: boolean | null; stripe_payouts_enabled?: boolean | null;
+  } | null;
+  if (profilo) await avvisaSeIlContoSiEBloccato(profilo, contoAdesso);
+}
+
+/**
+ * 5/11/2026 — Incassi o versamenti appena spenti da Stripe, o documenti scaduti
+ * (`requirements.past_due`): avviso 'system' a chi possiede il conto, con cosa
+ * fare, e agli amministratori una volta per cambio. Non lancia: un avviso non
+ * partito non deve far ritentare un evento che ha gia' scritto lo stato.
+ */
+async function avvisaSeIlContoSiEBloccato(
+  profilo: { id: string; role?: string | null; store_name?: string | null; stripe_charges_enabled?: boolean | null; stripe_payouts_enabled?: boolean | null },
+  conto: Stripe.Account,
+): Promise<void> {
+  const versamentiSpenti = profilo.stripe_payouts_enabled === true && !conto.payouts_enabled;
+  const incassiSpenti = profilo.stripe_charges_enabled === true && !conto.charges_enabled;
+  const scaduti = conto.requirements?.past_due ?? [];
+  if (!versamentiSpenti && !incassiSpenti && scaduti.length === 0) return;
+  const eFattorino = profilo.role === 'rider';
+  const cosa = [versamentiSpenti ? 'i versamenti' : null, incassiSpenti ? 'gli incassi' : null].filter(Boolean).join(' e ');
+  const testo =
+    (cosa ? `Stripe ha sospeso ${cosa} sul tuo conto. ` : '') +
+    (scaduti.length > 0 ? 'Mancano dei dati o dei documenti che Stripe chiede. ' : '') +
+    'Apri i dati di pagamento e completa quello che Stripe ti chiede: finché non è a posto i bonifici restano fermi.';
+  const admin = getAdminSupabase();
+  // A chi possiede il conto si scrive solo al cambio (vero → falso): Stripe manda
+  // account.updated spesso, e dei documenti scaduti a ogni evento sarebbero
+  // una campanella al giorno. Quelli arrivano agli amministratori, una volta.
+  if (versamentiSpenti || incassiSpenti) await provaAMandare('avviso di conto Stripe bloccato', { accountId: conto.id, profiloId: profilo.id }, async () => {
+    const { error } = await admin.from('notifications').insert({
+      user_id: profilo.id,
+      category: 'system',
+      title: '⚠️ Il tuo conto Stripe ha bisogno di te',
+      body: testo,
+      link: eFattorino ? '/rider/earnings' : '/seller/earnings',
+    });
+    if (error) throw new Error(error.message);
+  });
+  const chi = eFattorino ? `il fattorino ${profilo.id.slice(0, 8)}` : profilo.store_name?.trim() || `il negozio ${profilo.id.slice(0, 8)}`;
+  await provaAMandare('avviso di conto Stripe bloccato agli amministratori', { accountId: conto.id }, () =>
+    notifyAdmins(
+      '⚠️ Conto Stripe bloccato',
+      `Su ${chi} (conto ${conto.id}) ` +
+        (cosa ? `Stripe ha sospeso ${cosa}. ` : '') +
+        (scaduti.length > 0 ? `Dati scaduti: ${scaduti.slice(0, 5).join(', ')}. ` : '') +
+        'È stato avvisato: i bonifici restano fermi finché non completa.',
+      '/admin',
+      { unaVoltaPer: `conto-bloccato:${conto.id}:${versamentiSpenti ? 'v' : ''}${incassiSpenti ? 'i' : ''}${scaduti.length > 0 ? 's' : ''}` },
+    ),
+  );
 }
 
 /**
@@ -119,16 +186,25 @@ export async function handlePayoutFailed(payout: Stripe.Payout, accountId?: stri
 
   // Il conto Connect è l'unico filo che porta al negozio: l'evento non nomina
   // nessuno. `payout.destination` è il conto bancario, non il profilo.
-  let negozio: { id: string; store_name: string | null } | null = null;
+  type ProfiloDelConto = { id: string; store_name: string | null; role?: string | null; full_name?: string | null };
+  let negozio = null as ProfiloDelConto | null;
+  // 5/11/2026 — Una lettura caduta non e' «conto non nostro»: si dice com'e'.
+  let profiloNonLetto = false;
   if (accountId) {
     const { data, error } = await admin
       .from('profiles')
-      .select('id, store_name')
+      .select('id, store_name, role, full_name')
       .eq('stripe_account_id', accountId)
       .limit(1);
-    if (error) logger.error(error, { context: 'payout-failed-profilo', accountId });
-    negozio = (data?.[0] as { id: string; store_name: string | null } | undefined) ?? null;
+    if (error) {
+      profiloNonLetto = true;
+      logger.error(error, { context: 'payout-failed-profilo', accountId });
+    }
+    negozio = (data?.[0] as ProfiloDelConto | undefined) ?? null;
   }
+  // 5/11/2026 — Lo stesso conto Connect lo usano anche i fattorini: a loro
+  // l'avviso parla dei compensi e li porta nella loro pagina Guadagni.
+  const eFattorino = negozio?.role === 'rider';
 
   if (negozio) {
     const destinatario = negozio.id;
@@ -139,25 +215,35 @@ export async function handlePayoutFailed(payout: Stripe.Payout, accountId?: stri
         // delle notifiche, e questo è il tipo di cosa che si deve sapere.
         category: 'system',
         title: '⚠️ Il bonifico non è arrivato in banca',
-        body:
-          `La tua banca ha rifiutato il versamento di ${importo} €: ${motivo}. ` +
-          'Controlla l\'IBAN nei dati di pagamento del negozio: appena è corretto Stripe riprova da solo.',
-        link: '/seller/earnings',
+        body: eFattorino
+          ? `La tua banca ha rifiutato il bonifico dei tuoi compensi (${importo} €): ${motivo}. ` +
+            'Controlla l\'IBAN nei tuoi dati di pagamento: appena è corretto Stripe riprova da solo.'
+          : `La tua banca ha rifiutato il versamento di ${importo} €: ${motivo}. ` +
+            'Controlla l\'IBAN nei dati di pagamento del negozio: appena è corretto Stripe riprova da solo.',
+        link: eFattorino ? '/rider/earnings' : '/seller/earnings',
       });
       if (error) throw new Error(error.message);
     });
   }
 
   const chi = negozio
-    ? negozio.store_name?.trim() || `il negozio ${negozio.id.slice(0, 8)}`
-    : 'un negozio non riconosciuto';
+    ? eFattorino
+      ? `il fattorino ${negozio.full_name?.trim() || negozio.id.slice(0, 8)}`
+      : negozio.store_name?.trim() || `il negozio ${negozio.id.slice(0, 8)}`
+    : profiloNonLetto
+      ? 'un conto che non sono riuscito a leggere'
+      : 'un negozio non riconosciuto';
   await provaAMandare('avviso di bonifico rifiutato agli amministratori', { payoutId: payout.id }, () =>
     notifyAdmins(
-      '⚠️ Bonifico al negozio rifiutato dalla banca',
+      eFattorino ? '⚠️ Bonifico al fattorino rifiutato dalla banca' : '⚠️ Bonifico al negozio rifiutato dalla banca',
       `Il versamento di ${importo} € a ${chi} è stato rifiutato: ${motivo}. Bonifico ${payout.id}.` +
         (negozio
-          ? ' Il negoziante è stato avvisato di correggere l\'IBAN.'
-          : ' Il conto Connect non è riconosciuto qui: va cercato su Stripe, e il negoziante non sa niente.'),
+          ? eFattorino
+            ? ' Il fattorino è stato avvisato di correggere l\'IBAN.'
+            : ' Il negoziante è stato avvisato di correggere l\'IBAN.'
+          : profiloNonLetto
+            ? ` La lettura del profilo col conto ${accountId} è caduta: il conto potrebbe essere nostro, cercalo fra i profili. Chi lo possiede non è stato avvisato.`
+            : ' Il conto Connect non è riconosciuto qui: va cercato su Stripe, e il negoziante non sa niente.'),
       '/admin',
     ),
   );

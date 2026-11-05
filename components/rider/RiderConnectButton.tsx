@@ -101,7 +101,11 @@ export default function RiderConnectButton() {
     );
   }
 
-  const isActive = !!status?.stripe_charges_enabled && !!status?.stripe_payouts_enabled;
+  // 5/11/2026 — Per il fattorino conta solo stripe_payouts_enabled, la stessa condizione del server
+  // che gli manda i compensi (lib/stripe/payout.ts): il suo conto nasce con la sola capacità
+  // «transfers», e charges_enabled di norma resta falso. Prima il riquadro diceva «Completa
+  // configurazione IBAN» per sempre, anche coi bonifici che partivano.
+  const isActive = !!status?.stripe_payouts_enabled;
   const isPending = !!status?.stripe_account_id && !isActive;
 
   if (isActive) {

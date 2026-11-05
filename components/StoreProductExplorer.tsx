@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Filter, RotateCcw, Star, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -29,6 +29,13 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
   const idRicerca = `${idBase}-ricerca`;
 
   const [search, setSearch] = useState('');
+  // 5/11/2026 — La griglia riceve il termine dopo una breve pausa, come la barra di ricerca:
+  // prima partiva una lettura (e una «ricerca» nelle statistiche) a ogni lettera.
+  const [termine, setTermine] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => setTermine(search.trim()), 250);
+    return () => clearTimeout(id);
+  }, [search]);
   const [sort, setSort] = useState<SortOption>('relevance');
   const [categoryId, setCategoryId] = useState('');
   const [minPrice, setMinPrice] = useState(0);
@@ -100,8 +107,9 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
           onClick={() => setShowFilters((v) => !v)}
           className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:border-primary-300 rounded-full px-4 py-2.5 text-sm font-semibold shrink-0"
           aria-expanded={showFilters}
+          aria-label={activeFilters > 0 ? `Filtri, ${activeFilters} attivi` : 'Filtri'}
         >
-          <Filter size={16} strokeWidth={2.2} />
+          <Filter size={16} strokeWidth={2.2} aria-hidden />
           <span className="hidden sm:inline">Filtri</span>
           {activeFilters > 0 && (
             <span className="bg-primary-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none">
@@ -214,7 +222,7 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
 
       <ProductGrid
         sellerId={sellerId}
-        search={search || undefined}
+        search={termine || undefined}
         categoryId={categoryId || undefined}
         minPrice={minPrice > 0 ? minPrice : undefined}
         maxPrice={maxPrice < 500 ? maxPrice : undefined}
@@ -224,9 +232,9 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
         onCount={onCount}
         // Stato vuoto su misura: distingue "nessun risultato per la ricerca" dal
         // generico, e offre un'azione per azzerare ricerca + filtri.
-        emptyTitle={search ? `Nessun risultato per «${search}»` : undefined}
+        emptyTitle={termine ? `Nessun risultato per «${termine}»` : undefined}
         emptyDescription={
-          search
+          termine
             ? 'Prova con un altro termine o azzera la ricerca per vedere tutto il catalogo.'
             : undefined
         }
@@ -234,6 +242,7 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
           search || activeFilters > 0
             ? () => {
                 setSearch('');
+                setTermine('');
                 reset();
               }
             : undefined

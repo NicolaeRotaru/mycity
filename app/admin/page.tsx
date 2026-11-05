@@ -126,7 +126,7 @@ export default function AdminDashboard() {
    * riesce (la tabella nasce con la migrazione 124) la Panoramica si vede lo
    * stesso, con un trattino al posto della percentuale.
    */
-  const { data: pagamenti } = useQuery({
+  const { data: pagamenti, isError: pagamentiNonLetti, refetch: rileggiPagamenti } = useQuery({
     queryKey: ['admin', 'tasso-autorizzazione'],
     queryFn: async () => {
       const daQuando = new Date(Date.now() - 30 * 86_400_000).toISOString();
@@ -177,7 +177,11 @@ export default function AdminDashboard() {
   // «0,00 €» anche quando non c'era niente da contare, e da li' in poi nessuno
   // poteva piu' distinguere «non ho dati» da «e' andato tutto male».
   const aov = rapporto(gmv, delivered);
-  const closedOrders = stats.orders.total - (stats.orders.byStatus.NEW ?? 0) - (stats.orders.byStatus.ACCEPTED ?? 0);
+  // 5/11/2026 (S05) — «Chiusi» sono solo gli stati finali: consegnati e annullati.
+  // Prima si toglievano solo NEW e ACCEPTED, e gli ordini pronti, assegnati o in
+  // viaggio contavano come «non consegnati»: nelle ore di consegna il tasso
+  // scendeva e l'avviso «ordini bloccati» suonava senza niente di bloccato.
+  const closedOrders = delivered + canceled;
   const cancelRate = rapporto(canceled, stats.orders.total);
   // Il riquadro del tasso di consegna e il suo avviso li decide una funzione
   // sola, che una prova puo' eseguire. Qui la lettura e' gia' arrivata: sopra
@@ -214,12 +218,22 @@ export default function AdminDashboard() {
             label="Pagamenti riusciti (30 giorni)"
             value={tassoPagamenti === null ? '—' : `${(tassoPagamenti * 100).toFixed(1).replace('.', ',')}%`}
             hint={
-              pagamenti && pagamenti.tentativi > 0
-                ? `${pagamenti.riusciti} su ${pagamenti.tentativi} tentativi con carta${motivoPrincipale ? ` · piu frequente: ${motivoPrincipale.codice}` : ''}`
-                : 'nessun tentativo con carta registrato'
+              // 5/11/2026 (S05) — Una lettura caduta non è «nessun tentativo».
+              pagamentiNonLetti && !pagamenti
+                ? 'non riesco a leggere i tentativi'
+                : pagamenti && pagamenti.tentativi > 0
+                  ? `${pagamenti.riusciti} su ${pagamenti.tentativi} tentativi con carta${motivoPrincipale ? ` · piu frequente: ${motivoPrincipale.codice}` : ''}`
+                  : 'nessun tentativo con carta registrato'
             }
           />
         </div>
+        {pagamentiNonLetti && !pagamenti && (
+          <div role="alert" className="mt-2.5 flex items-center gap-2 rounded-md border border-accent-200 bg-accent-50 px-3.5 py-2.5 text-[13px] text-accent-900">
+            <Info size={15} className="shrink-0 text-accent-700" aria-hidden />
+            <span>Non riesco a leggere i tentativi di pagamento con carta.</span>
+            <button type="button" onClick={() => { void rileggiPagamenti(); }} className="ml-auto font-semibold underline">Riprova</button>
+          </div>
+        )}
         {pagamentiDaGuardare && (
           <div className="mt-2.5 flex items-center gap-2 rounded-md border border-accent-200 bg-accent-50 px-3.5 py-2.5 text-[13px] text-accent-900">
             <Info size={15} className="shrink-0 text-accent-700" aria-hidden />

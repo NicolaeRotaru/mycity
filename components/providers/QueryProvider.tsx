@@ -1,7 +1,8 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase/client';
 import '@/lib/zod-i18n'; // attiva Zod errorMap IT globalmente
 
 export default function QueryProvider({ children }: { children: React.ReactNode }) {
@@ -29,6 +30,26 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
         },
       })
   );
+
+  /**
+   * 5/11/2026 — CAMBIANDO ACCOUNT SULLO STESSO TELEFONO SI VEDEVANO I DATI DEL PRECEDENTE.
+   * Le letture del pannello negozio hanno chiavi senza l'utente (['seller','orders'], …) e l'uscita
+   * non svuotava la memoria: entro 30 secondi il nuovo negozio leggeva ordini e clienti dell'altro.
+   * Qui la memoria si svuota all'uscita e quando entra un account diverso da quello di prima.
+   */
+  useEffect(() => {
+    let ultimo: string | null = null;
+    // Difensivo: dove il client non ha l'ascolto dell'accesso (prove, ambienti ridotti) non si
+    // fa niente invece di far cadere tutta l'applicazione.
+    if (typeof supabase?.auth?.onAuthStateChange !== 'function') return;
+    const { data } = supabase.auth.onAuthStateChange((evento, sessione) => {
+      const chi = sessione?.user?.id ?? null;
+      if (evento === 'SIGNED_OUT' || (chi && ultimo && chi !== ultimo)) queryClient.clear();
+      if (chi) ultimo = chi;
+      if (evento === 'SIGNED_OUT') ultimo = null;
+    });
+    return () => data?.subscription?.unsubscribe();
+  }, [queryClient]);
 
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }

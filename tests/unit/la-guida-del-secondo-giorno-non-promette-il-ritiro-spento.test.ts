@@ -77,10 +77,19 @@ const DATI_DELLA_CODA = {
 /** Ogni modello di email che il file esporta, letto per intero (oggetto, HTML, testo semplice). */
 function tuttaLaPosta(): Array<{ chi: string; testo: string }> {
   const letti: Array<{ chi: string; testo: string }> = [];
+  // 5/11/2026 (S04, scheda 2072) — Prima si leggevano solo le funzioni il cui nome finisce in
+  // «Template»: un modello esportato con un altro nome sfuggiva. Ora si chiama ogni funzione del
+  // file (i modelli del ciclo di vita passano dalla loro porta, qui sotto); chi non sa che farsene
+  // degli argomenti e lancia non è un modello.
   for (const [nome, valore] of Object.entries(modelli)) {
-    if (typeof valore !== 'function' || !/Template$/.test(nome)) continue;
+    if (typeof valore !== 'function' || nome === 'preparaEmailCicloDiVita') continue;
     VARIANTI.forEach((argomenti, i) => {
-      const esito = (valore as (a: unknown) => unknown)(argomenti);
+      let esito: unknown;
+      try {
+        esito = (valore as (a: unknown) => unknown)(argomenti);
+      } catch {
+        return;
+      }
       letti.push({ chi: `${nome}#${i}`, testo: JSON.stringify(esito) });
     });
   }
@@ -134,8 +143,20 @@ function paroleDellHtml(html: string): string {
  * rete tiene gli altri modelli, dove la frase non e' fissata. «Un rider passa a prenderlo» resta
  * fuori di proposito: in negozio ci va il fattorino, non il cliente.
  */
+// 5/11/2026 (S04, schede 2072, 2076, 2075) — Mancava il modo più comune di dirlo, «passa a
+// prenderla (tu)», e «passa tu dal negozio»: un «Se preferisci, passa a prenderla tu» nel benvenuto
+// restava verde. «Un rider passa a prenderlo» resta fuori: lo esclude il «rider» davanti.
 const PAROLE_DEL_RITIRO =
-  /ritir|in negozio|al banco|in bottega|prendi tu|passi a prender|passare a prender|vieni a prender|venire a prender/i;
+  /ritir|in negozio|al banco|in bottega|prendi tu|passi a prender|passare a prender|vieni a prender|venire a prender|(?<!rider\s)passa (?:tu )?a prender|passa tu|dal negozio a prender/i;
+
+/**
+ * 5/11/2026 (S04, scheda 2075) — Le parole che stanno DENTRO i tag e che un lettore di schermo o un
+ * passaggio del mouse fanno leggere: alt, title, aria-label. La guida non ne ha: se ne compare uno,
+ * è un posto dove la frase intera della prova non arriva.
+ */
+function attributiCheSiLeggono(html: string): string[] {
+  return [...html.matchAll(/\b(alt|title|aria-label)\s*=\s*("[^"]*"|'[^']*')/gi)].map((m) => `${m[1]}=${m[2]}`);
+}
 
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://mycity.example');
@@ -154,12 +175,13 @@ describe('ritiro in negozio spento: la posta non lo promette', () => {
     // l'ordine) e quella su come arriva la spesa dice la consegna a casa e nient'altro: la frase
     // intera, nell'HTML e nel testo semplice, non una parola da cercare.
     expect(vociDellElenco(m!.html)).toEqual([
-      "Paghi alla consegna: la carta non e' obbligatoria",
+      // 5/11/2026 — a carta spenta si paga solo in contanti (la riga nasce dall'interruttore della cassa).
+      'Paghi in contanti alla consegna: tieni pronto l’importo',
       'La spesa te la portiamo a casa',
       'Ogni ordine e il suo stato li trovi in «I miei ordini»',
     ]);
     expect(m!.text).toBe(
-      'Tre cose da sapere: paghi alla consegna, la spesa te la portiamo a casa, ' +
+      'Tre cose da sapere: paghi in contanti alla consegna, la spesa te la portiamo a casa, ' +
         'e ogni ordine col suo stato lo trovi in «I miei ordini».',
     );
     expect(m!.subject).toBe('3 cose da sapere su MyCity');
@@ -170,7 +192,7 @@ describe('ritiro in negozio spento: la posta non lo promette', () => {
       '3 cose da sapere ' + // il titolo della scheda
         'MyCity ' + // l'intestazione
         '3 cose da sapere ' +
-        "Paghi alla consegna: la carta non e' obbligatoria " +
+        'Paghi in contanti alla consegna: tieni pronto l’importo ' +
         'La spesa te la portiamo a casa ' +
         'Ogni ordine e il suo stato li trovi in «I miei ordini» ' +
         'Vai su MyCity ' +
@@ -179,6 +201,41 @@ describe('ritiro in negozio spento: la posta non lo promette', () => {
     // La rete di parole resta come secondo strato: guarda anche dentro i tag (i link), dove il
     // testo qui sopra non arriva.
     expect(`${m!.subject} ${m!.html} ${m!.text}`).not.toMatch(PAROLE_DEL_RITIRO);
+    // Dentro i tag: nessun alt, title o aria-label (scheda 2075).
+    expect(attributiCheSiLeggono(m!.html)).toEqual([]);
+  });
+
+  it('la guida come parte davvero, col nome della persona, dice le stesse tre cose e niente di più (2079)', () => {
+    interruttore.ritiroAttivo = false;
+    // La coda la manda coi dati della persona: la prova esatta di sopra leggeva solo la guida senza dati.
+    const m = modelli.preparaEmailCicloDiVita('tutorial_day2', DATI_DELLA_CODA);
+    expect(m).not.toBeNull();
+    expect(vociDellElenco(m!.html)).toEqual([
+      'Paghi in contanti alla consegna: tieni pronto l’importo', // 5/11/2026 (unione): a carta spenta, la riga di S03
+      'La spesa te la portiamo a casa',
+      'Ogni ordine e il suo stato li trovi in «I miei ordini»',
+    ]);
+    expect(paroleDellHtml(m!.html)).toBe(
+      '3 cose da sapere MyCity 3 cose da sapere ' +
+        'Paghi in contanti alla consegna: tieni pronto l’importo ' +
+        'La spesa te la portiamo a casa ' +
+        'Ogni ordine e il suo stato li trovi in «I miei ordini» ' +
+        'Vai su MyCity ' +
+        'Hai ricevuto questa email perché hai un account su MyCity. Gestisci preferenze · Privacy · Cookie',
+    );
+    expect(m!.text).toBe(
+      'Tre cose da sapere: paghi in contanti alla consegna, la spesa te la portiamo a casa, ' +
+        'e ogni ordine col suo stato lo trovi in «I miei ordini».',
+    );
+    expect(attributiCheSiLeggono(m!.html)).toEqual([]);
+    expect(`${m!.subject} ${m!.html} ${m!.text}`).not.toMatch(PAROLE_DEL_RITIRO);
+  });
+
+  it('la rete riconosce i modi comuni di dire «vieni tu», e lascia stare il rider (2076)', () => {
+    for (const frase of ['Se preferisci, passa a prenderla tu.', 'passa tu dal negozio a prenderla', 'passa a prenderlo quando vuoi']) {
+      expect(frase).toMatch(PAROLE_DEL_RITIRO);
+    }
+    expect('un rider passa a prenderlo a breve').not.toMatch(PAROLE_DEL_RITIRO);
   });
 
   it('nessun modello di email del file, di servizio o commerciale, nomina il ritiro', () => {
@@ -217,5 +274,16 @@ describe('ritiro in negozio acceso: la guida lo dice, senza condizioni che nessu
     expect(m!.html).toMatch(/la ritiri tu in negozio/);
     expect(m!.text).toMatch(/la ritiri tu in negozio/);
     expect(`${m!.subject} ${m!.html} ${m!.text}`).not.toMatch(/se il negozio lo permette/i);
+    // 5/11/2026 (S04, scheda 2074) — Vietare una sola frase lasciava rientrare «se il negoziante lo
+    // consente». La voce si fissa intera: nessuna condizione, con qualunque parola.
+    expect(vociDellElenco(m!.html)).toEqual([
+      'Paghi in contanti alla consegna: tieni pronto l’importo', // 5/11/2026 (unione): a carta spenta, la riga di S03
+      'La spesa te la portiamo a casa, oppure la ritiri tu in negozio',
+      'Ogni ordine e il suo stato li trovi in «I miei ordini»',
+    ]);
+    expect(m!.text).toBe(
+      'Tre cose da sapere: paghi in contanti alla consegna, la spesa te la portiamo a casa (o la ritiri tu in negozio), ' +
+        'e ogni ordine col suo stato lo trovi in «I miei ordini».',
+    );
   });
 });

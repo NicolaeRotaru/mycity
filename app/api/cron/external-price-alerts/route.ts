@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { env } from '@/lib/env';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
@@ -40,6 +41,9 @@ type Row = {
 const handler = withCronAuth(async (req): Promise<NextResponse> => {
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
+  // 5/11/2026 — Con l'AI dei negozi spenta al lancio il giro non parte: con la chiave presente
+  // ogni prodotto finiva segnato «error» (il client AI lancia a interruttore spento).
+  if (!AI_NEGOZI_ACCESA) return NextResponse.json({ ok: true, skipped: 'AI spenta al lancio' });
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
   // 27/8/2026 (R009) — IL CLIENT AMMINISTRATIVO SI PRENDE DA UN POSTO SOLO.
   // Qui se ne costruiva uno a mano: cinque copie in giro per il progetto, e
@@ -92,7 +96,9 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
         await supa.from('notifications').insert({
         // #33 — la categoria decide se la persona vuole ancora ricevere
         // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
-        category: 'promo',
+        // 5/11/2026 — 'system', non 'promo': è un avviso di servizio sul listino del negozio, e le
+        // promozioni partono spente (migrazione 119), quindi sul telefono non arrivava mai.
+        category: 'system',
           user_id: r.seller_id,
           title,
           body,

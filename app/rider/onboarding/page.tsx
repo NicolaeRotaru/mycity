@@ -15,11 +15,11 @@ type DocKind = 'id_front' | 'id_back' | 'selfie' | 'rider_license' | 'rider_insu
 type DocDef = { kind: DocKind; label: string; required: boolean; hint: string };
 
 const DOCS: DocDef[] = [
-  { kind: 'id_front',       label: 'Documento identita\' — fronte',  required: true,  hint: 'Carta d\'identita\' o passaporto. JPG/PNG/PDF max 8 MB.' },
-  { kind: 'id_back',        label: 'Documento identita\' — retro',   required: false, hint: 'Necessario per carta d\'identita\' italiana.' },
+  { kind: 'id_front',       label: 'Documento d’identità — fronte',  required: true,  hint: 'Carta d’identità o passaporto. JPG/PNG/PDF max 8 MB.' },
+  { kind: 'id_back',        label: 'Documento d’identità — retro',   required: false, hint: 'Necessario per carta d’identità italiana.' },
   { kind: 'selfie',         label: 'Selfie con documento',           required: true,  hint: 'Foto del tuo viso tenendo il documento accanto, per face match.' },
   { kind: 'rider_license',  label: 'Patente di guida',               required: true,  hint: 'Obbligatoria per scooter/auto.' },
-  { kind: 'rider_insurance',label: 'Polizza RC',                     required: true,  hint: 'Assicurazione responsabilita\' civile valida.' },
+  { kind: 'rider_insurance',label: 'Polizza RC',                     required: true,  hint: 'Assicurazione responsabilità civile valida.' },
   { kind: 'rider_haccp',    label: 'Attestato HACCP (se food)',      required: false, hint: 'Solo se consegnerai alimenti.' },
 ];
 

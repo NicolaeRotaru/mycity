@@ -1,8 +1,11 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fintoGiroNotturno, type Tabelle } from './aiuti/finto-giro-notturno';
 import { chiamataDelCalendarioFerma } from '@/lib/cron/fermo-dei-lavori';
+// 5/11/2026 — Il giro dei carrelli abbandonati tace fuori dalle 8-21 di Piacenza: qui si prova il
+// fermo, quindi l'ora è mezzogiorno qualunque sia l'ora del computer che fa girare le prove.
+vi.mock('@/lib/tempo-piacenza', async (orig) => ({ ...(await orig<object>()), oraPiacenza: () => 12 }));
 
 /**
  * 31/10/2026 — I LAVORI A ORARIO SI FERMANO FINCHÉ NICOLA NON LI ACCENDE.
@@ -126,6 +129,29 @@ describe('il fermo copre tutti i lavori del calendario', () => {
   });
 });
 
+/**
+ * 5/11/2026 (S04, scheda 2436) — Due buchi: una dodicesima cartella in app/api/cron che non sta nel
+ * calendario (e quindi nemmeno qui) passava; e la chiave di Stripe impostata dal setup copriva una
+ * rotta che la controllasse PRIMA del fermo (senza chiave risponderebbe 500, non «fermo»).
+ */
+describe('il fermo non ha buchi', () => {
+  it('ogni cartella di app/api/cron è nel calendario e qui', () => {
+    const cartelle = readdirSync(path.resolve(__dirname, '../../app/api/cron'), { withFileTypes: true })
+      .filter((d) => d.isDirectory() && existsSync(path.resolve(__dirname, '../../app/api/cron', d.name, 'route.ts')))
+      .map((d) => d.name)
+      .sort();
+    expect(cartelle, 'una rotta del calendario sul disco non è provata dal fermo').toEqual([...NOMI].sort());
+  });
+
+  it.each(NOMI)('%s: anche senza la chiave di Stripe, il fermo risponde «fermo» prima di tutto', async (nome) => {
+    delete process.env.STRIPE_SECRET_KEY;
+    const esito = await chiama(nome);
+    expect(chiamateAlDatabase(), `${nome} ha toccato il database con il fermo acceso`).toBe(0);
+    expect(esito.stato, `${nome} controlla qualcos'altro prima del fermo`).toBe(200);
+    expect(esito.corpo).toMatchObject({ ok: true, fermo: true });
+  });
+});
+
 describe.each(NOMI)('%s', (nome) => {
   it('senza LAVORI_A_ORARIO la chiamata del calendario risponde «fermo» e non tocca il database', async () => {
     const esito = await chiama(nome);
@@ -184,8 +210,10 @@ describe('process-deletions: il primo giro conta e non cancella', () => {
   /** Righe oltre la finestra e righe dentro, su ogni tabella che la notte pota. */
   const tabelle = (): Tabelle => ({
     activity_events: [
-      { id: 'a', created_at: VECCHIO, ip: '1.2.3.4', category: 'visitor', metadata: { x: 1 }, summary: null },
-      { id: 'b', created_at: VECCHIO, ip: null, category: 'auth', metadata: null, summary: null },
+      // 5/11/2026 (S08, scheda 1584) — `path`: la potatura del profilo adesso tocca solo le
+      // righe con ancora qualcosa da togliere; queste due ce l'hanno.
+      { id: 'a', created_at: VECCHIO, ip: '1.2.3.4', category: 'visitor', metadata: { x: 1 }, summary: null, path: '/negozi' },
+      { id: 'b', created_at: VECCHIO, ip: null, category: 'auth', metadata: null, summary: null, path: '/accedi' },
       { id: 'c', created_at: ADESSO, ip: '5.6.7.8', category: 'visitor', metadata: { y: 2 }, summary: 's' },
     ],
     audit_logs: [

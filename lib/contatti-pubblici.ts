@@ -204,7 +204,10 @@ export function mittenteFuoriDominio(
 ): { mittente: string; atteso: string; riga: string } | null {
   const host = dominioDelMittente(mittente);
   if (host === null) return null;
-  if (host === dominio) return null;
+  // 5/11/2026 — Un sottodominio nostro (no-reply@send.<dominio>, la forma che
+  // Resend consiglia) e' lo stesso dominio per i filtri: l'allineamento DMARC
+  // rilassato lo accetta. Prima dava l'allarme ogni notte.
+  if (host === dominio || host.endsWith(`.${dominio}`)) return null;
   return {
     mittente: host,
     atteso: dominio,

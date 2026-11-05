@@ -35,6 +35,21 @@ export const AZIONI_AUDIT = [
   'coupon.delete',
   'kyc.approve',
   'kyc.reject',
+  // 5/11/2026 (S05) — guardare i dati personali non è approvarli: prima le letture
+  // di codice fiscale e documenti finivano come 'kyc.approve'.
+  'kyc.view',
+  'kyc.upload',
+  'kyc.submit',
+  // 5/11/2026 (S05) — vetrina e contenuti: prima cambiavano senza lasciare traccia.
+  'category.create',
+  'category.update',
+  'category.delete',
+  'home.update',
+  'branding.update',
+  'cms.update',
+  'daily_drop.create',
+  'daily_drop.delete',
+  'cod.remittance_confirm',
 ] as const;
 
 export type AuditAction = (typeof AZIONI_AUDIT)[number];
@@ -59,6 +74,18 @@ export const ETICHETTE_AZIONI_AUDIT: Record<AuditAction, string> = {
   'coupon.delete': 'Coupon eliminato',
   'kyc.approve': 'KYC approvato',
   'kyc.reject': 'KYC rifiutato',
+  'kyc.view': 'Dati personali o documenti consultati',
+  'kyc.upload': 'Documento d’identità caricato',
+  'kyc.submit': 'Verifica d’identità inviata',
+  'category.create': 'Categoria creata',
+  'category.update': 'Categoria modificata',
+  'category.delete': 'Categoria eliminata',
+  'home.update': 'Home modificata',
+  'branding.update': 'Aspetto del sito modificato',
+  'cms.update': 'Pagina pubblicata',
+  'daily_drop.create': 'Drop del giorno salvato',
+  'daily_drop.delete': 'Drop del giorno eliminato',
+  'cod.remittance_confirm': 'Rimessa contanti confermata',
 };
 
 /** L'etichetta di un'azione letta dal registro; un codice sconosciuto resta com'e'. */

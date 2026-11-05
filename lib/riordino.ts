@@ -1,7 +1,7 @@
 'use client';
 
 import { addToCart, clearCart, getCart, type CartItem } from '@/lib/cart';
-import { confirmDialog } from '@/components/ConfirmDialog';
+import { sceltaDialog } from '@/components/ConfirmDialog';
 import { toast } from 'sonner';
 
 /**
@@ -40,10 +40,16 @@ async function prezziDiAdesso(ids: string[]): Promise<Map<string, number>> {
   if (ids.length === 0) return mappa;
   try {
     const { supabase } = await import('@/lib/supabase/client');
-    const { data } = await supabase.from('products').select('id, price').in('id', Array.from(new Set(ids)));
+    const unici = Array.from(new Set(ids));
+    const { data } = await supabase.from('products').select('id, price').in('id', unici);
+    // 5/11/2026 — Il prezzo di adesso con la stessa regola di carrello e cassa: pieno meno la
+    // promozione attiva. Il prezzo storico è già scontato (unit_price), e confrontarlo col pieno
+    // faceva dire «un prezzo è cambiato» a ogni prodotto ancora in promozione.
+    const { fetchActiveDiscounts, discountedUnitCents } = await import('@/lib/promotions');
+    const sconti = await fetchActiveDiscounts(supabase as never, unici).catch(() => new Map<string, number>());
     for (const p of (data ?? []) as Array<{ id: string; price: number | string | null }>) {
       const n = Number(p.price);
-      if (Number.isFinite(n)) mappa.set(p.id, n);
+      if (Number.isFinite(n)) mappa.set(p.id, discountedUnitCents(n, sconti.get(p.id) ?? 0) / 100);
     }
   } catch {
     /* senza rete si usano i prezzi storici: meglio un riordino che niente */
@@ -129,6 +135,8 @@ export async function riordina(articoli: ArticoloDaRiordinare[]): Promise<number
     toast.error('Nessun prodotto di questo ordine è più disponibile.');
     return 0;
   }
+  // 5/11/2026 — Chi manca si dice, non si scarta in silenzio.
+  const mancanti = articoli.length - validi.length;
 
   // Il guardiano. Fra il controllo e il segno non c'è nessun `await`: nessun
   // secondo giro può infilarsi in mezzo.
@@ -137,25 +145,29 @@ export async function riordina(articoli: ArticoloDaRiordinare[]): Promise<number
   if (eUnDoppioTocco(impronta, ultimoRiuscito, Date.now())) return 0;
   inCorso = impronta;
   try {
-    return await eseguiRiordino(validi, impronta);
+    return await eseguiRiordino(validi, impronta, mancanti);
   } finally {
     inCorso = null;
   }
 }
 
-async function eseguiRiordino(validi: ArticoloDaRiordinare[], impronta: string): Promise<number> {
+async function eseguiRiordino(validi: ArticoloDaRiordinare[], impronta: string, mancanti = 0): Promise<number> {
   const carrelloAttuale: CartItem[] = getCart();
   let sostituisci = true;
 
   if (carrelloAttuale.length > 0) {
     // Due strade dette per nome. La conferma non è un «sei sicuro?»: dice cosa
     // succede al carrello che c'è adesso.
-    sostituisci = await confirmDialog({
+    // 5/11/2026 — Tre esiti: chi chiude la domanda (Esc, tocco fuori) non aggiunge niente.
+    // Prima la chiusura valeva «Aggiungi» e la spesa vecchia si sommava a quella nel carrello.
+    const esito = await sceltaDialog({
       title: 'Hai già qualcosa nel carrello',
       message: `Nel carrello ci sono ${carrelloAttuale.length} ${carrelloAttuale.length === 1 ? 'articolo' : 'articoli'}. Vuoi sostituirli con questo ordine, oppure aggiungerli?`,
       confirmLabel: 'Sostituisci',
       cancelLabel: 'Aggiungi',
     });
+    if (esito === 'chiusa') return 0;
+    sostituisci = esito === 'conferma';
   }
 
   if (sostituisci && carrelloAttuale.length > 0) clearCart();
@@ -189,10 +201,11 @@ async function eseguiRiordino(validi: ArticoloDaRiordinare[], impronta: string):
   // Da qui in poi lo stesso riordino, ripetuto subito, non aggiunge di nuovo.
   ultimoRiuscito = { impronta, quando: Date.now() };
 
+  const nonPiu = mancanti > 0 ? ` · ${mancanti === 1 ? '1 articolo non è più disponibile' : `${mancanti} articoli non sono più disponibili`}` : '';
   toast.success(
-    prezziCambiati > 0
+    (prezziCambiati > 0
       ? `${aggiunti} ${aggiunti === 1 ? 'articolo aggiunto' : 'articoli aggiunti'} · ${prezziCambiati === 1 ? 'un prezzo è cambiato' : `${prezziCambiati} prezzi sono cambiati`} dall'ultima volta`
-      : `${aggiunti} ${aggiunti === 1 ? 'articolo aggiunto' : 'articoli aggiunti'} al carrello!`,
+      : `${aggiunti} ${aggiunti === 1 ? 'articolo aggiunto' : 'articoli aggiunti'} al carrello!`) + nonPiu,
   );
   return aggiunti;
 }

@@ -32,6 +32,8 @@ const stato = vi.hoisted(() => ({
   invia: null as null | ((stock: number) => void),
   errori: [] as string[],
   successi: [] as string[],
+  /** 5/11/2026 (S04, scheda 2533) — Fuori da una prova gli avvisi tardivi non si contano. */
+  aperto: false,
 }));
 
 function bancaDati() {
@@ -113,8 +115,10 @@ vi.mock('next/image', async () => {
 });
 vi.mock('sonner', () => ({
   toast: Object.assign(() => undefined, {
-    success: (m: string) => stato.successi.push(String(m)),
-    error: (m: string) => stato.errori.push(String(m)),
+    // Una risposta arrivata in ritardo, dopo la fine della prova, non finisce negli avvisi della
+    // prova dopo (prima sporcava stato.errori del caso successivo).
+    success: (m: string) => (stato.aperto ? stato.successi.push(String(m)) : 0),
+    error: (m: string) => (stato.aperto ? stato.errori.push(String(m)) : 0),
     message: () => undefined,
     info: () => undefined,
   }),
@@ -124,6 +128,9 @@ vi.mock('@/lib/supabase/client', () => ({
     auth: {
       getUser: async () => ({ data: { user: { id: 'seller-1' } } }),
       getSession: async () => ({ data: { session: { access_token: 'gettone' } } }),
+      // S10 (5/11/2026) — QueryProvider ascolta le uscite per svuotare la cache,
+      // come il client vero.
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     },
     from: (t: string) => bancaDati().from(t),
     rpc: async () => ({ data: [], error: null }),
@@ -148,7 +155,12 @@ vi.mock('@/lib/products/salva-dal-browser', () => ({
     }
   },
 }));
-vi.mock('@/lib/products/persistVariants', () => ({ loadProductVariants: async () => [] }));
+vi.mock('@/lib/products/persistVariants', () => ({
+  loadProductVariants: async () => [],
+  // S06 (2113 · 2478): la pagina del negoziante salva le taglie da qui, dopo il controllo delle scorte.
+  saveProductVariants: async () => undefined,
+  controllaScorteVariantiDalBrowser: async () => undefined,
+}));
 vi.mock('@/lib/products/persistVariantsServer', () => ({ saveProductVariantsServer: async () => undefined }));
 vi.mock('@/lib/queries/consegna-veloce-del-negozio', () => ({
   useConsegnaVeloceDelNegozio: () => ({ offre: false, inLettura: false, nonLetta: false }),
@@ -200,8 +212,12 @@ function prodotto(id: string, name: string, stock: number): Riga {
 let root: Root | null = null;
 let radice: HTMLElement | null = null;
 
+// 5/11/2026 (S04, scheda 2533) — Si aspettava per 60 giri da 5 ms: sotto carico i giri durano di più
+// del previsto ma sono comunque 60, e la prova cadeva una volta su tre. Ora si aspetta per un tempo
+// (fino a 4 secondi), quanti che siano i giri.
 async function finche(condizione: () => boolean, cosa: string) {
-  for (let i = 0; i < 60; i++) {
+  const fine = Date.now() + 4000;
+  while (Date.now() < fine) {
     if (condizione()) return;
     await act(async () => {
       await new Promise((r) => setTimeout(r, 5));
@@ -235,18 +251,21 @@ beforeEach(() => {
   stato.invia = null;
   stato.errori = [];
   stato.successi = [];
+  stato.aperto = true;
   radice = document.createElement('div');
   document.body.appendChild(radice);
   root = createRoot(radice);
 });
 
 afterEach(() => {
+  stato.aperto = false;
   act(() => root?.unmount());
   radice?.remove();
   vi.unstubAllGlobals();
 });
 
-describe('la modifica in blocco dopo un conflitto di scorta', () => {
+// Le attese sono a tempo (fino a 4 s l'una): la prova ha il tempo di farle sotto carico.
+describe('la modifica in blocco dopo un conflitto di scorta', { timeout: 20000 }, () => {
   it('IL CASO CHE ROMPEVA — il primo si salva, il secondo e\' stato venduto: al nuovo «Salva» passa', async () => {
     const { default: SellerProductsPage } = await import('@/app/seller/products/page');
     stato.tabelle.products = [prodotto('a', 'Focaccia', 5), prodotto('b', 'Pizza al taglio', 5)];

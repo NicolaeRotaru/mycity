@@ -1,11 +1,13 @@
 'use client';
 
+import PushNotificationOptIn from '@/components/PushNotificationOptIn';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
@@ -34,7 +36,8 @@ export default function RiderProfilePage() {
   const tStates = useTranslations('states');
   const tActions = useTranslations('actions');
 
-  const { data: profile, isLoading } = useQuery({
+  // 5/11/2026 — Con la lettura caduta i documenti risultavano tutti «Mancante»: si dice l'errore.
+  const { data: profile, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.rider.profile,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -59,8 +62,8 @@ export default function RiderProfilePage() {
       if (!user) return { avg: 0, ratingCount: 0, deliveries: 0 };
       const [reviewsRes, deliveriesRes] = await Promise.all([
         supabase.from('rider_reviews').select('rating').eq('rider_id', user.id),
-        supabase.from('orders').select('id', { count: 'exact', head: true })
-          .eq('rider_id', user.id).eq('delivery_status', 'DELIVERED'),
+        // 5/11/2026 — Dalla vista dello storico: `orders` tiene le consegne fatte solo 7 giorni.
+        supabase.from('rider_consegne_storico').select('id', { count: 'exact', head: true }),
       ]);
       const ratings = (reviewsRes.data ?? []) as { rating: number }[];
       const avg = ratings.length > 0
@@ -98,6 +101,17 @@ export default function RiderProfilePage() {
   };
 
   if (isLoading) return <LoadingState />;
+  if (isError) {
+    return (
+      <div className="px-4 py-10">
+        <ErrorState
+          title="Non riesco a leggere il tuo profilo"
+          description="Sembra un problema di collegamento: i tuoi dati non sono spariti. Riprova."
+          retry={() => { void refetch(); }}
+        />
+      </div>
+    );
+  }
 
   // Dati mezzo/zona/compliance (cast difensivo: indipendente dalla completezza dei tipi DB generati).
   const p = profile as Record<string, unknown> | undefined;
@@ -178,6 +192,18 @@ export default function RiderProfilePage() {
           <MapPin size={18} className="text-primary-600" aria-hidden />
           <p className="mt-2 text-[11px] font-bold uppercase text-ink-400">Zone base</p>
           <p className="mt-0.5 text-sm font-semibold text-ink-900">{riderZones.length > 0 ? riderZones.join(' · ') : 'Tutta la città'}</p>
+        </div>
+      </div>
+
+      {/* 5/11/2026 (S08) — Le notifiche sul telefono si accendevano solo dalle impostazioni del
+          cliente, che dal pannello del fattorino non si raggiungono. */}
+      <div className="px-4 pb-4">
+        <div className="flex items-start justify-between gap-4 rounded-xl border border-cream-300 bg-surface-0 p-4">
+          <div>
+            <p className="text-sm font-semibold text-ink-900">Notifiche sul telefono</p>
+            <p className="text-xs text-ink-500">Un avviso quando c&apos;è una consegna per te, anche a schermo bloccato.</p>
+          </div>
+          <PushNotificationOptIn />
         </div>
       </div>
 

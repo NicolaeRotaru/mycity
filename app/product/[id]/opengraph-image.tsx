@@ -1,4 +1,5 @@
 import { ImageResponse } from 'next/og';
+import { caratteriDelMarchio, MARCHIO_FONT_FAMILY, MARCHIO_FONT_WEIGHT } from '@/app/carattere-del-marchio';
 import { leggiProdottoPerMetadati } from '@/lib/queries/metadati-vetrina';
 import { sizedImage } from '@/lib/image-url';
 
@@ -6,6 +7,8 @@ export const runtime = 'edge';
 export const alt = 'Prodotto su MyCity';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
+
+const CACHE_ANTEPRIMA = 'public, max-age=300, s-maxage=300, stale-while-revalidate=86400';
 
 // 27/8/2026 (R010) — una sola fabbrica del collegamento, e nessun silenzio sulle variabili.
 // 15/10/2026 (R3) — il nome del negozio dalla vista pubblica: il robot di WhatsApp e' un
@@ -66,7 +69,7 @@ export default async function ProductOG({ params }: { params: { id: string } }) 
               style={{ objectFit: 'contain', maxWidth: '100%', maxHeight: '100%' }}
             />
           ) : (
-            <div style={{ display: 'flex', fontSize: 96, fontWeight: 900 }}>
+            <div style={{ display: 'flex', fontSize: 96, fontFamily: MARCHIO_FONT_FAMILY, fontWeight: MARCHIO_FONT_WEIGHT }}>
               <span style={{ color: '#E8A33D' }}>My</span>
               <span style={{ color: '#A03B25' }}>City</span>
             </div>
@@ -82,8 +85,8 @@ export default async function ProductOG({ params }: { params: { id: string } }) 
           padding: '50px 50px 40px 50px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 36, fontWeight: 800, color: '#F4BC53' }}>My</span>
-            <span style={{ fontSize: 36, fontWeight: 800 }}>City</span>
+            <span style={{ fontSize: 36, fontFamily: MARCHIO_FONT_FAMILY, fontWeight: MARCHIO_FONT_WEIGHT, color: '#F4BC53' }}>My</span>
+            <span style={{ fontSize: 36, fontFamily: MARCHIO_FONT_FAMILY, fontWeight: MARCHIO_FONT_WEIGHT }}>City</span>
             <span style={{ fontSize: 18, opacity: 0.7, marginLeft: 8 }}>Piacenza</span>
           </div>
 
@@ -94,7 +97,7 @@ export default async function ProductOG({ params }: { params: { id: string } }) 
             {price && (
               <div style={{
                 fontSize: 64,
-                fontWeight: 900,
+                fontWeight: 800,
                 color: '#F4BC53',
               }}>{price}</div>
             )}
@@ -107,6 +110,9 @@ export default async function ProductOG({ params }: { params: { id: string } }) 
         </div>
       </div>
     ),
-    { ...size },
+    // 5/11/2026 — Next la servirebbe «immutable» per un anno: l'anteprima conteneva il prezzo
+    // vecchio (o l'immagine di ripiego, se la lettura era caduta) finché WhatsApp la teneva.
+    // Cinque minuti di memoria, poi si rifà; i caratteri sono quelli del marchio.
+    { ...size, fonts: await caratteriDelMarchio(), headers: { 'cache-control': CACHE_ANTEPRIMA } },
   );
 }

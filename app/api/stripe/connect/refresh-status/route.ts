@@ -39,7 +39,15 @@ export const POST = withAuthRateLimit({ name: 'stripe-connect-refresh', max: 20,
 
   try {
     const acct = await getStripe().accounts.retrieve(profile.stripe_account_id);
-    await applyConnectAccountStatus(acct);
+    // 5/11/2026 — Se la scrittura cade (o nessun profilo porta quel conto) non
+    // si risponde coi valori di Stripe come se fosse tutto registrato.
+    const scritto = await applyConnectAccountStatus(acct);
+    if (scritto.error || scritto.righe === 0) {
+      logger.error('[stripe] stato del conto non registrato sul profilo', {
+        accountId: acct.id, message: (scritto.error as { message?: string } | null)?.message ?? 'nessuna riga aggiornata',
+      });
+      return ApiErrors.unavailable('Non sono riuscito a registrare lo stato del collegamento: riprova fra poco.');
+    }
     return NextResponse.json(
       {
         connected: true,

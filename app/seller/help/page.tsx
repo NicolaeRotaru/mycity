@@ -60,7 +60,7 @@ export default function SellerHelpPage() {
 
       <div className="bg-accent-50 border border-accent-200 rounded-xl p-5 text-sm text-accent-900">
         <p className="font-bold mb-1 flex items-center gap-2"><BookOpen size={18} className="text-accent-500" aria-hidden /> Guide approfondite (prossimamente)</p>
-        <p>Stiamo preparando una academy con video tutorial per ogni funzionalità. Iscriviti alla newsletter per essere avvisato.</p>
+        <p>Stiamo preparando una academy con video tutorial per ogni funzionalità. Nel frattempo, per qualunque dubbio scrivi all&apos;assistenza.</p>
       </div>
     </div>
   );

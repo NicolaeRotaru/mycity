@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { preparaEmailCicloDiVita, TEMPLATE_DI_SERVIZIO } from '@/lib/email/templates';
+// 5/11/2026 — Il giro del calendario tace fuori dalle 8-21 di Piacenza: queste prove girano a
+// mezzogiorno, qualunque sia l'ora del computer che le fa girare.
+vi.mock('@/lib/tempo-piacenza', async (orig) => ({ ...(await orig<object>()), oraPiacenza: () => 12 }));
 
 /**
  * 27/10/2026 — LA POSTA AUTOMATICA DICEVA COSE FALSE, E SE NON PARTIVA SI BUTTAVA.
@@ -109,6 +112,16 @@ describe('il «3 cose da sapere» parte senza consenso, quindi non porta incenti
     const tutto = `${spedite[0].subject} ${spedite[0].html} ${spedite[0].text}`;
     expect(tutto).not.toMatch(/€|credito|invita|amico|gratis|sconto/i);
     expect(TEMPLATE_DI_SERVIZIO.has('tutorial_day2')).toBe(true);
+    // 5/11/2026 (S04, scheda 1898) — Un elenco di parole vietate lascia passare un incentivo detto
+    // con altre parole («Porta un'amica: al suo primo ordine ti regaliamo un buono da 5 euro»). Le
+    // tre cose da sapere si fissano intere: una voce in più, con qualunque parola, e la prova cade.
+    const voci = (spedite[0].html.match(/<ul[^>]*>([\s\S]*?)<\/ul>/)?.[1].match(/<li[^>]*>[\s\S]*?<\/li>/g) ?? [])
+      .map((v) => v.replace(/<[^>]*>/g, '').trim());
+    expect(voci).toEqual([
+      'Paghi in contanti alla consegna: tieni pronto l’importo', // 5/11/2026 (unione): a carta spenta, la riga di S03
+      'La spesa te la portiamo a casa',
+      'Ogni ordine e il suo stato li trovi in «I miei ordini»',
+    ]);
   });
 });
 

@@ -62,6 +62,8 @@ const FUNZIONI_PUBBLICHE_VOLUTE: Record<string, string> = {
   categorie_per_negozio: 'quali categorie tocca ogni negozio, per i filtri di app/stores',
   event_rsvp_counts: 'quante persone vanno a ogni evento, un conteggio per tutti',
   negozi_aperti_adesso: 'quali negozi sono aperti in questo momento, filtro del catalogo',
+  // S10 (5/11/2026, migrazione 245) — «Ordinato N volte negli ultimi 7 giorni» sulla scheda prodotto.
+  ordini_recenti_del_prodotto: 'quanti ordini ha avuto un prodotto in vendita in 7 giorni: un numero, nessuna riga',
   prodotti_con_voto_almeno: 'i prodotti col voto medio minimo, filtro del catalogo',
   product_active_discounts: 'i prezzi scontati mostrati in vetrina',
   store_cards: 'le schede negozio della home e di app/near',

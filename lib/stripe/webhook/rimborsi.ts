@@ -25,6 +25,7 @@ import { logger } from '@/lib/logger';
 import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 import { refundIssuedTemplate } from '@/lib/email/templates';
 import { notifyAdmins } from './comune';
+import { formatPriceFromCents } from '@/lib/format';
 import { PAUSA_RIMBORSO_DA_DIVIDERE, registraRimborsoParzialeDaFuori } from './rimborsi-da-fuori';
 import { elencoDaScrivere, rimborsiGiaScritti } from '@/lib/stripe/elenco-dei-rimborsi';
 import { pianoDelRimborsoRespinto, type OrdineDelRimborsoRespinto } from '@/lib/stripe/rimborso-respinto';
@@ -91,7 +92,6 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
     return;
   }
 
-  const refundAmount = (charge.amount_refunded ?? 0) / 100;
   // 🟢-1: charge.refunds non è sempre espanso nel payload → fallback via API per
   // non perdere stripe_refund_id (tracciabilità del rimborso).
   let refund: Stripe.Refund | null = charge.refunds?.data?.[0] ?? null;
@@ -250,6 +250,9 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   const scaffaleNonRiuscito: string[] = [];
   for (const o of orders) {
     if (o.payment_status === 'REFUNDED') continue;
+    // 5/11/2026 — Un ordine gia' consegnato: la merce ce l'ha il cliente in casa,
+    // non torna in vendita (come la contestazione persa, dispute.ts).
+    if (o.delivery_status === 'DELIVERED') continue;
     const { error: errScaffale } = await admin.rpc('restore_stock_for_order', { p_order_id: o.id });
     if (errScaffale) {
       logger.error('[stripe] merce non rimessa a scaffale dopo il rimborso dal cruscotto', { orderId: o.id, message: errScaffale.message });
@@ -289,7 +292,8 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
    *
    * La chiave per ordine (`p_order_id`) è la cintura: la funzione del
    * database scala l'uso solo se `orders.coupon_released_at` è ancora vuoto.
-   * Finché quella migrazione non è firmata si ripiega sulla firma vecchia,
+   * La colonna e la firma nascono con la migrazione 200 (5/11/2026, da
+   * applicare a mano). Finché non è applicata si ripiega sulla firma vecchia,
    * ma SOLO su PGRST202 («funzione inesistente»), che è un errore di forma e
    * non può aver scritto niente — su un errore di rete riprovare scalerebbe
    * due volte (stessa regola di lib/ordini/annulla.ts).
@@ -318,13 +322,22 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   }
 
   // Email buyer (una sola email anche se sono N ordini — è la stessa charge)
-  const firstOrder = orders[0];
-  const { data: ua } = await admin.auth.admin.getUserById(firstOrder.user_id);
+  //
+  // 5/11/2026 — SOLO PER QUELLO CHE NON ABBIAMO GIA' DETTO NOI.
+  // `refundOrder` manda gia' «Rimborso emesso» per i rimborsi fatti dal sito:
+  // qui il cliente ne riceveva un secondo, identico. Se tutti gli ordini della
+  // carica erano gia' REFUNDED questo evento e' solo l'eco: niente email. Se no
+  // (un rimborso dal cruscotto) l'email dice la parte non ancora scritta da noi.
+  const giaScrittoCents = orders.reduce((somma, o) => somma + Number(o.refunded_amount_cents ?? 0), 0);
+  const nonScrittoCents = Math.max(0, (charge.amount_refunded ?? 0) - giaScrittoCents);
+  const eco = orders.every((o) => o.payment_status === 'REFUNDED') || nonScrittoCents === 0;
+  const firstOrder = orders.find((o) => o.payment_status !== 'REFUNDED') ?? orders[0];
+  const { data: ua } = eco ? { data: null } : await admin.auth.admin.getUserById(firstOrder.user_id);
   const buyerEmail = ua?.user?.email;
   if (buyerEmail) {
     const t = refundIssuedTemplate({
       orderId: firstOrder.id,
-      amount: refundAmount,
+      amount: nonScrittoCents / 100,
       reason: refundReason,
     });
     await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
@@ -395,6 +408,29 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
   const ordini = (ordiniLetti ?? []) as unknown as OrdineDelRimborsoRespinto[];
   if (ordini.length === 0) {
     logger.warn('[stripe] rimborso fallito: nessun ordine trovato', { refundId: refund.id, paymentIntent });
+    // 5/11/2026 — Il webhook stesso rimborsa pagamenti senza ordine (riserva
+    // scaduta, conto che non torna, fascia persa: portano pending_checkout_id o
+    // motivo), e cosi' i buoni regalo. Se la banca li respinge, i soldi tornano
+    // a MyCity e il cliente resta senza: lo si dice, una volta per rimborso.
+    const m = (refund.metadata ?? {}) as Record<string, string>;
+    if (m.pending_checkout_id || m.motivo || m.kind) {
+      const carrello = m.pending_checkout_id?.trim() || null;
+      let cliente: string | null = null;
+      if (carrello) {
+        const { data: pc } = await admin.from('pending_checkouts').select('buyer_id').eq('id', carrello).maybeSingle();
+        cliente = (pc as { buyer_id?: string | null } | null)?.buyer_id ?? null;
+      }
+      await notifyAdmins(
+        '⚠️ Rimborso senza ordine respinto dalla banca',
+        `La banca ha respinto il rimborso ${refund.id} da ${((refund.amount ?? 0) / 100).toFixed(2)} € su un pagamento senza ordine` +
+          (m.motivo ? ` (${m.motivo})` : '') +
+          (carrello ? `, carrello ${carrello}` : '') +
+          (cliente ? `, cliente ${cliente}` : '') +
+          '. I soldi sono tornati a MyCity: il cliente va rimborsato in un altro modo.',
+        '/admin/orders',
+        { unaVoltaPer: `rimborso-respinto:${refund.id}` },
+      );
+    }
     return;
   }
 
@@ -412,10 +448,20 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
   // scritti, l'avviso si saltava: se il primo si era fermato fra la scrittura e
   // l'avviso (una risposta del database persa, il processo morto), il cliente
   // restava senza rimborso e nessuno lo sapeva.
+  // 5/11/2026 — L'avviso dice quello che e' successo davvero al bonifico del
+  // negozio: rimesso in coda solo se questo passaggio l'ha rimesso; se non
+  // c'era niente da rimettere (bonifico in corso, o mai chiuso) non lo promette.
+  const rimessiInCoda = piano.scritture.filter((p) => p.valori.payout_status === 'HELD').length;
+  const fraseDelBonifico =
+    piano.scritture.length === 0
+      ? "Questo rimborso respinto era già stato registrato: controlla sull'ordine lo stato del bonifico al negozio."
+      : rimessiInCoda > 0
+        ? "Il bonifico al negozio e' stato rimesso in coda."
+        : "Il bonifico al negozio non era da rimettere in coda (non era stato chiuso dal rimborso).";
   const avvisaGliAmministratori = () =>
     notifyAdmins(
       '⚠️ Rimborso rifiutato dalla banca',
-      `Il rimborso di €${(tornatoIndietro / 100).toFixed(2)} su ${ordini.length === 1 ? `l'ordine ${ordini[0].id}` : `${ordini.length} ordini dello stesso pagamento`} non e' arrivato al cliente (${refund.status}). I soldi sono rientrati: va rimborsato in un altro modo. Il bonifico al negozio e' stato rimesso in coda; se il rimborso era pieno, la merce era stata rimessa a scaffale e la giacenza va ricontrollata a mano.`,
+      `Il rimborso di ${formatPriceFromCents(tornatoIndietro)} su ${ordini.length === 1 ? `l'ordine ${ordini[0].id}` : `${ordini.length} ordini dello stesso pagamento`} non e' arrivato al cliente (${refund.status}). I soldi sono rientrati: va rimborsato in un altro modo. ${fraseDelBonifico} Se il rimborso era pieno e l'ordine non era ancora consegnato, la merce era stata rimessa a scaffale e la giacenza va ricontrollata a mano.`,
       '/admin/orders',
       refund.id ? { unaVoltaPer: `rimborso-respinto:${refund.id}` } : {},
     );

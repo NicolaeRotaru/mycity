@@ -9,6 +9,13 @@ import { useTranslations } from 'next-intl';
 /** Opzioni di ordinamento della toolbar collezione (allineate a novita/search). */
 const COLLECTION_SORTS: SortOption[] = ['rating', 'relevance', 'newest', 'price_asc', 'price_desc', 'discount_desc'];
 
+/**
+ * 5/11/2026 — La pagina si chiamava «I più venduti · Quello che va forte questa
+ * settimana», ma nessun dato di vendita la ordina: la griglia mette in testa i
+ * prodotti con più recensioni. Il titolo ora dice quello che la griglia fa. Il
+ * giorno che ci saranno vendite vere da contare, la classifica per venduto
+ * della settimana è una funzione nuova, e il titolo potrà tornare.
+ */
 export default function PiuVendutiPage() {
   const t = useTranslations('search');
   const [sort, setSort] = useState<SortOption>('rating');
@@ -18,10 +25,10 @@ export default function PiuVendutiPage() {
     <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <CollectionHeader
         icon={Flame}
-        eyebrow="I best seller"
-        title="I più venduti"
-        blurb="Quello che va forte questa settimana in città."
-        breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Più venduti' }]}
+        eyebrow="Scelti dai clienti"
+        title="I più recensiti"
+        blurb="I prodotti ordinati per numero di recensioni dei clienti."
+        breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Più recensiti' }]}
       >
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm text-ink-500">
