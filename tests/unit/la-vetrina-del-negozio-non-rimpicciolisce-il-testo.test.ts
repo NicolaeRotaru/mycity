@@ -29,8 +29,8 @@
  * variabile morta senza darle un lettore.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 const leggi = (p: string) => readFileSync(p, 'utf8');
 
@@ -93,13 +93,26 @@ describe('① il testo che il negoziante scrive nella sua vetrina si legge', () 
 
 describe('② nella vetrina non restano variabili di colore che nessuno legge', () => {
   /** Ogni riga del progetto che nomina --store-accent, cercata come farebbe una persona. */
+  // 5/11/2026 (S04, scheda 487) — Prima era `git grep`: su una copia del codice senza la
+  // cartella .git (un archivio, un ambiente di build che non clona) la prova cadeva qualunque
+  // cosa contenesse il codice. Ora si leggono i file, con lo stesso risultato `file:riga:testo`.
   function dove(): string[] {
-    const fuori = execFileSync(
-      'git',
-      ['grep', '-n', '--', 'store-accent', '--', 'app', 'components', 'lib'],
-      { encoding: 'utf8' },
-    ).trim();
-    return fuori === '' ? [] : fuori.split('\n');
+    const righe: string[] = [];
+    const cammina = (cartella: string) => {
+      for (const voce of readdirSync(cartella, { withFileTypes: true })) {
+        const percorso = join(cartella, voce.name);
+        if (voce.isDirectory()) {
+          if (voce.name !== 'node_modules' && !voce.name.startsWith('.')) cammina(percorso);
+          continue;
+        }
+        if (!/\.(tsx?|jsx?|mjs|css)$/.test(voce.name)) continue;
+        leggi(percorso).split('\n').forEach((testo, i) => {
+          if (testo.includes('store-accent')) righe.push(`${percorso}:${i + 1}:${testo}`);
+        });
+      }
+    };
+    for (const radice of ['app', 'components', 'lib']) cammina(radice);
+    return righe;
   }
 
   it('la variabile morta non è più scritta dalle due pagine della vetrina', () => {

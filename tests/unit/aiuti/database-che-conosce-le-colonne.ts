@@ -14,14 +14,57 @@
  * Limite dichiarato: i filtri si applicano solo a `.single()` / `.maybeSingle()`. Le prove che lo
  * usano guardano QUALI colonne si chiedono e SE l'errore arriva, non quali righe si filtrano.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 const TIPI = readFileSync(path.resolve(__dirname, '../../../lib/database.types.ts'), 'utf8');
 
+/**
+ * 5/11/2026 (S04, schede 1807 e 1808) — LE CHIAVI ESTERNE, LETTE DALLE MIGRAZIONI.
+ *
+ * I tipi generati non portano i legami fra tabelle (`Relationships: []`): l'aiuto accettava
+ * qualunque `!nome_fkey`, anche inventato, che PostgREST vero rifiuta con PGRST200; e non sapeva
+ * risolvere un aggancio per colonna (`seller:seller_id ( … )`). Qui i legami si leggono dalle
+ * migrazioni: il nome esplicito (`CONSTRAINT x FOREIGN KEY (col) REFERENCES t`) o quello che
+ * Postgres dà da solo a un `col … REFERENCES t` scritto nella tabella (`<tabella>_<col>_fkey`).
+ */
+type Legame = { tabella: string; colonna: string; verso: string };
+const LEGAMI: Map<string, Legame> = (() => {
+  const mappa = new Map<string, Legame>();
+  const cartella = path.resolve(__dirname, '../../../migrations');
+  const nomeTabella = (t: string) => t.replace(/^public\./, '').replace(/"/g, '');
+  for (const file of readdirSync(cartella).filter((f) => f.endsWith('.sql'))) {
+    const sql = readFileSync(path.join(cartella, file), 'utf8').replace(/--[^\n]*/g, '');
+    // Colonne scritte con REFERENCES dentro CREATE TABLE.
+    for (const m of sql.matchAll(/CREATE TABLE(?: IF NOT EXISTS)?\s+([\w."]+)\s*\(([\s\S]*?)\n\);/gi)) {
+      const tabella = nomeTabella(m[1]);
+      for (const r of m[2].matchAll(/^\s*"?([a-z_][a-z0-9_]*)"?\s+[^,\n]*?REFERENCES\s+([\w."]+)/gim)) {
+        const verso = nomeTabella(r[2]).replace(/^auth\./, 'auth.');
+        mappa.set(`${tabella}_${r[1]}_fkey`, { tabella, colonna: r[1], verso });
+      }
+    }
+    // Colonne aggiunte dopo: ALTER TABLE t ADD COLUMN [IF NOT EXISTS] col … REFERENCES x.
+    for (const m of sql.matchAll(/ALTER TABLE(?: IF EXISTS)?(?: ONLY)?\s+([\w."]+)([\s\S]*?);/gi)) {
+      const tabella = nomeTabella(m[1]);
+      for (const r of m[2].matchAll(/ADD COLUMN(?: IF NOT EXISTS)?\s+"?([a-z_][a-z0-9_]*)"?\s+[^,]*?REFERENCES\s+([\w."]+)/gi)) {
+        mappa.set(`${tabella}_${r[1]}_fkey`, { tabella, colonna: r[1], verso: nomeTabella(r[2]) });
+      }
+      for (const r of m[2].matchAll(/ADD CONSTRAINT\s+"?([a-z_][a-z0-9_]*)"?\s+FOREIGN KEY\s*\(\s*"?([a-z_][a-z0-9_]*)"?\s*\)\s*REFERENCES\s+([\w."]+)/gi)) {
+        mappa.set(r[1], { tabella, colonna: r[2], verso: nomeTabella(r[3]) });
+      }
+    }
+  }
+  return mappa;
+})();
+
+/** Il legame con quel nome, se una migrazione l'ha creato. */
+export function legame(nome: string): Legame | null {
+  return LEGAMI.get(nome) ?? null;
+}
+
 export type Guasto = { code: string; message: string };
 type Riga = Record<string, unknown>;
-type Voce = { colonna: string } | { tabella: string; voci: Voce[] };
+type Voce = { colonna: string } | { tabella: string; voci: Voce[]; suggerimento?: string };
 
 /** Le colonne della riga di una tabella, lette dai tipi generati. `null` se la tabella non c'è. */
 export function colonneDellaTabella(tabella: string): string[] | null {
@@ -57,24 +100,46 @@ export function leggiSelect(select: string): Voce[] {
     if (aperta < 0) {
       const senzaCast = pezzo.split('::')[0];
       const nome = senzaCast.includes(':') ? senzaCast.split(':').pop() ?? '' : senzaCast;
-      return { colonna: nome.trim() };
+      // Un percorso JSON (`metadata->>foo`, `dati->a->b`) legge la colonna prima della freccia.
+      return { colonna: nome.split('->')[0].trim() };
     }
     const testa = pezzo.slice(0, aperta).trim();
     const dentro = pezzo.slice(aperta + 1, pezzo.lastIndexOf(')'));
-    const tabella = (testa.includes(':') ? testa.split(':').pop() ?? '' : testa).split('!')[0].trim();
-    return { tabella, voci: leggiSelect(dentro) };
+    const [tabella, suggerimento] = (testa.includes(':') ? testa.split(':').pop() ?? '' : testa).split('!').map((x) => x.trim());
+    return { tabella, voci: leggiSelect(dentro), ...(suggerimento ? { suggerimento } : {}) };
   });
 }
 
-function mancanti(tabella: string, voci: Voce[]): string[] {
+function mancanti(tabella: string, voci: Voce[], dentroUnAggancio = false): string[] {
   const note = colonneDellaTabella(tabella);
   if (!note) return [`${tabella} (tabella che i tipi non conoscono)`];
   const fuori: string[] = [];
   for (const v of voci) {
     if ('colonna' in v) {
+      // `count` dentro un aggancio è il conteggio di PostgREST (`items:order_items ( count )`).
+      if (dentroUnAggancio && v.colonna === 'count') continue;
       if (v.colonna !== '*' && !note.includes(v.colonna)) fuori.push(`${tabella}.${v.colonna}`);
     } else {
-      fuori.push(...mancanti(v.tabella, v.voci));
+      // Aggancio per colonna: `seller:seller_id ( … )` va alla tabella a cui punta la colonna.
+      let figlia = v.tabella;
+      if (note.includes(v.tabella)) {
+        const perColonna = [...LEGAMI.values()].find((l) => l.tabella === tabella && l.colonna === v.tabella);
+        if (!perColonna) {
+          fuori.push(`${tabella}.${v.tabella} (colonna senza chiave esterna nelle migrazioni)`);
+          continue;
+        }
+        figlia = perColonna.verso;
+      }
+      // Il suggerimento `!nome_fkey` deve esistere e legare proprio queste due tabelle.
+      if (v.suggerimento && !/^(inner|left)$/.test(v.suggerimento)) {
+        const l = legame(v.suggerimento);
+        const lega = l && ((l.tabella === tabella && l.verso === figlia) || (l.tabella === figlia && l.verso === tabella));
+        if (!lega) {
+          fuori.push(`${tabella}→${figlia}!${v.suggerimento} (chiave esterna che non esiste fra le due tabelle)`);
+          continue;
+        }
+      }
+      fuori.push(...mancanti(figlia, v.voci, true));
     }
   }
   return fuori;
@@ -97,7 +162,11 @@ export function databaseCheConosceLeColonne(dati: Record<string, Riga[]>, opzion
       if (opzioni.cade) {
         return { data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } };
       }
-      const fuori = colonneMancanti(tabella, colonne);
+      const note = colonneDellaTabella(tabella) ?? [];
+      const fuori = [
+        ...colonneMancanti(tabella, colonne),
+        ...colonneDeiFiltri.filter((c) => !note.includes(c)).map((c) => `${tabella}.${c} (in un filtro)`),
+      ];
       if (fuori.length > 0) {
         const e = { code: '42703', message: `column ${fuori[0]} does not exist` };
         errori.push(e);
@@ -107,14 +176,23 @@ export function databaseCheConosceLeColonne(dati: Record<string, Riga[]>, opzion
     };
     const b: Record<string, unknown> = {};
     const passa = () => b;
-    for (const m of ['order', 'limit', 'range', 'in', 'neq', 'not', 'is', 'gte', 'lte', 'gt', 'lt', 'or', 'ilike', 'filter', 'match']) b[m] = passa;
+    // 5/11/2026 (S04, scheda 1795) — Anche i filtri e l'ordinamento nominano colonne: una colonna
+    // sbagliata in `.eq()`, `.not()` o `.order()` fa rispondere 42703 al database vero, e qui
+    // passava. Si controllano le colonne della tabella principale (un `a.b` punta a un aggancio).
+    const colonneDeiFiltri: string[] = [];
+    const filtra = (c: unknown) => {
+      if (typeof c === 'string' && !c.includes('.')) colonneDeiFiltri.push(c.split('->')[0].trim());
+      return b;
+    };
+    for (const m of ['limit', 'range', 'or', 'filter', 'match']) b[m] = passa;
+    for (const m of ['order', 'in', 'neq', 'not', 'is', 'gte', 'lte', 'gt', 'lt', 'ilike', 'like']) b[m] = filtra;
     b.select = (c?: string) => {
       colonne = c ?? '*';
       return b;
     };
     b.eq = (c: string, v: unknown) => {
       filtri.push([c, v]);
-      return b;
+      return filtra(c);
     };
     const una = () => {
       const r = esito();
