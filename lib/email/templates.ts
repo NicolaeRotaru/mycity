@@ -913,3 +913,33 @@ export const TEMPLATE_DI_SERVIZIO: ReadonlySet<string> = new Set([
   'order_ready',
   'order_delivered',
 ]);
+
+/**
+ * 5/11/2026 (S08) — LA RICHIESTA DI CANCELLAZIONE NON AVVISAVA NESSUNO.
+ *
+ * Bastava una sessione aperta (un telefono sbloccato, un computer condiviso)
+ * per chiedere la cancellazione dell'account, e il titolare non riceveva
+ * niente: dopo 7 giorni l'account spariva. Adesso parte subito questa email,
+ * con il giorno in cui la cancellazione diventa definitiva e la strada per
+ * annullarla. È un avviso di servizio: niente piede «annulla l'iscrizione».
+ */
+export function richiestaCancellazioneTemplate(args: { effectiveAt: string }): EmailPronta {
+  const giorno = new Date(args.effectiveAt).toLocaleDateString('it-IT', {
+    day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Rome',
+  });
+  const link = `${appUrl()}/profile/settings?tab=danger`;
+  const subject = `Hai chiesto di cancellare il tuo account ${BRAND}`;
+  const html = shell(subject, `
+    <p style="margin:0 0 16px">Ciao,</p>
+    <p style="margin:0 0 16px">abbiamo ricevuto la richiesta di cancellare il tuo account ${BRAND}.
+    Se non la annulli, la cancellazione diventa definitiva dal <strong>${escapeHtml(giorno)}</strong>.</p>
+    <p style="margin:0 0 24px">Hai cambiato idea, o non sei stato tu? Annulla la richiesta dalla pagina del tuo
+    account entro quella data. Se non sei stato tu, cambia anche la password.</p>
+    <p style="margin:0">${btn(link, 'Annulla la cancellazione')}</p>`);
+  const text =
+    `Ciao,\n\nabbiamo ricevuto la richiesta di cancellare il tuo account ${BRAND}. ` +
+    `Se non la annulli, la cancellazione diventa definitiva dal ${giorno}.\n\n` +
+    `Hai cambiato idea, o non sei stato tu? Annulla la richiesta entro quella data: ${link}\n` +
+    'Se non sei stato tu, cambia anche la password.';
+  return { subject, html, text };
+}

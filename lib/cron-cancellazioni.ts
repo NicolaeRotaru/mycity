@@ -220,8 +220,12 @@ function riga(fallite: number, scadute: number): string | null {
  * non devono produrre due chiavi diverse.
  * ──────────────────────────────────────────────────────────────────────────── */
 
-/** Dove mandiamo la persona: la pagina in cui ha chiesto la cancellazione. */
-export const PAGINA_DELLE_IMPOSTAZIONI = '/profile/settings';
+/**
+ * Dove mandiamo la persona: la pagina in cui ha chiesto la cancellazione.
+ * 5/11/2026 (S08) — Sulla scheda «Zona pericolosa», dove stanno il motivo e
+ * «Annulla eliminazione»: senza, si apriva la scheda Account.
+ */
+export const PAGINA_DELLE_IMPOSTAZIONI = '/profile/settings?tab=danger';
 
 /**
  * Le due cose che a una persona in attesa dobbiamo dire, e non sono la stessa:

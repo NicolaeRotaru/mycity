@@ -463,6 +463,12 @@ export type AttesaDichiarata = {
   tappa: TappaAvviso | null;
   /** Quando gliel'abbiamo detto. */
   dettoIl: string | null;
+  /**
+   * 5/11/2026 — `true` quando la rilettura è caduta: «non lo so», che non è
+   * «nessun rinvio». Prima i due casi uscivano uguali e la pagina tornava a
+   * contare «tra 0 giorni».
+   */
+  letturaFallita?: boolean;
 };
 
 const NIENTE_DA_DIRE: AttesaDichiarata = {
@@ -504,7 +510,7 @@ export async function attesaDichiarata(
       registro.warn('[avvisi-cancellazione] non si e potuto rileggere l avviso', {
         userId, tappa, errore: e instanceof Error ? e.message : 'errore',
       });
-      return NIENTE_DA_DIRE;
+      return { ...NIENTE_DA_DIRE, letturaFallita: true };
     }
   }
   return NIENTE_DA_DIRE;

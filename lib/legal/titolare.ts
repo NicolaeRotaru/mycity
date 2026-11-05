@@ -17,7 +17,7 @@
  * torna a comparire.
  */
 
-import { indirizzoContatto } from '../contatti-pubblici';
+import { dominioDeiContatti, indirizzoContatto, mittenteFuoriDominio, ripulisciDominio } from '../contatti-pubblici';
 import { env } from '../env';
 
 export type Titolare = {
@@ -282,18 +282,27 @@ export type StradaAMano = {
 /** L'oggetto già scritto nella email, così la richiesta si riconosce subito. */
 const OGGETTO_DELLA_RICHIESTA = 'Richiesta sui miei dati personali';
 
+/**
+ * 5/11/2026 — La porta «Annulla eliminazione» non è una richiesta come le
+ * altre: chi la usa ha 7 giorni, non un mese, e chi legge la casella deve
+ * capire subito che è urgente. Qui si cambiano l'oggetto e la chiusa.
+ */
+export type ModoDellaStrada = { oggetto?: string; chiusa?: string };
+
 export function stradaAManoPerIDiritti(
   cosa: string,
   moduloArriva: boolean = ilModuloArrivaSenzaDatabase(),
   t: Titolare = titolare(),
+  modo: ModoDellaStrada = {},
 ): StradaAMano {
   const nonDisponibile = `${cosa} in automatico non è disponibile in questo momento.`;
-  const entroUnMese = 'Ti rispondiamo entro un mese, come prevede la legge.';
+  const entroUnMese = modo.chiusa ?? 'Ti rispondiamo entro un mese, come prevede la legge.';
+  const oggetto = modo.oggetto ?? OGGETTO_DELLA_RICHIESTA;
   const r = recapitoPrivacy(t);
   if (r.eUnaCasella) {
     return {
       frase: `${nonDisponibile} Puoi fare la richiesta lo stesso: scrivi a ${r.testo}. ${entroUnMese}`,
-      recapito: { href: `${r.href}?subject=${encodeURIComponent(OGGETTO_DELLA_RICHIESTA)}`, testo: r.testo },
+      recapito: { href: `${r.href}?subject=${encodeURIComponent(oggetto)}`, testo: r.testo },
     };
   }
   if (moduloArriva) {
@@ -303,9 +312,13 @@ export function stradaAManoPerIDiritti(
     };
   }
   return {
+    // 5/11/2026 — Diceva solo «la tua richiesta non è partita» e dava la colpa
+    // alla casella (la causa vera è il servizio giù), senza un passo successivo
+    // né il reclamo al Garante che l'art. 12.4 GDPR chiede di indicare.
     frase:
-      `${nonDisponibile} Non abbiamo ancora una casella email attiva per le richieste sulla privacy, ` +
-      'quindi la tua richiesta non è partita. È un guasto nostro, non tuo.',
+      `${nonDisponibile} In questo momento non abbiamo un canale attivo per le richieste sulla privacy: ` +
+      'la tua richiesta non è partita. È un guasto nostro, non tuo: l\'abbiamo annotata insieme al tuo account. ' +
+      'Puoi anche presentare reclamo al Garante per la protezione dei dati personali (garanteprivacy.it).',
     recapito: null,
   };
 }
@@ -317,9 +330,21 @@ export function stradaAManoPerIDiritti(
  * produzione). Sono variabili del server: in una pagina del browser vale false.
  */
 export function ilModuloArrivaSenzaDatabase(): boolean {
-  return [process.env.SUPPORT_EMAIL, process.env.RESEND_API_KEY, process.env.RESEND_FROM].every(
-    (v) => typeof v === 'string' && v.trim() !== '',
-  );
+  // 5/11/2026 — Il mittente si chiede a `env.resendFrom()`, la stessa regola di
+  // `sendEmail` (fuori rete ripiega e spedisce): prima qui si rileggeva
+  // process.env e le due copie potevano dire cose diverse.
+  const supporto = process.env.SUPPORT_EMAIL?.trim() ?? '';
+  const chiave = process.env.RESEND_API_KEY?.trim() ?? '';
+  const mittente = env.resendFrom()?.trim() ?? '';
+  if (!supporto || !chiave || !mittente) return false;
+  // 5/11/2026 — Non basta che le variabili ci siano: con SUPPORT_EMAIL su un
+  // dominio che non è il nostro (support@mycity.it, quello dell'esempio) la
+  // richiesta va dove nessuno legge. Il supporto deve stare sul dominio dei
+  // contatti (o un suo sottodominio) e il mittente non deve esserne fuori.
+  const dominio = dominioDeiContatti();
+  const dominioSupporto = ripulisciDominio(supporto);
+  if (!dominioSupporto || (dominioSupporto !== dominio && !dominioSupporto.endsWith(`.${dominio}`))) return false;
+  return mittenteFuoriDominio(mittente, dominio) === null;
 }
 
 /**
@@ -380,5 +405,8 @@ export function frameTitolare(t: Titolare = titolare()): string {
   const pezzi: string[] = [];
   if (t.indirizzo) pezzi.push(`con sede in ${t.indirizzo}`);
   if (t.partitaIva) pezzi.push(`P.IVA ${t.partitaIva}`);
-  return pezzi.length > 0 ? `${t.denominazione}, ${pezzi.join(', ')}.` : `${t.denominazione}.`;
+  // 5/11/2026 — Senza variabili diceva solo «MyCity.»: un marchio, non chi
+  // risponde. Si nomina chi gestisce, come nei Termini (nomePubblico).
+  const nome = nomePubblico(t);
+  return pezzi.length > 0 ? `${nome}, ${pezzi.join(', ')}.` : `${nome}.`;
 }
