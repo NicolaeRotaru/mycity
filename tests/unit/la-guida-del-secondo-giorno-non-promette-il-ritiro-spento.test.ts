@@ -211,20 +211,20 @@ describe('ritiro in negozio spento: la posta non lo promette', () => {
     const m = modelli.preparaEmailCicloDiVita('tutorial_day2', DATI_DELLA_CODA);
     expect(m).not.toBeNull();
     expect(vociDellElenco(m!.html)).toEqual([
-      "Paghi alla consegna: la carta non e' obbligatoria",
+      'Paghi in contanti alla consegna: tieni pronto l’importo', // 5/11/2026 (unione): a carta spenta, la riga di S03
       'La spesa te la portiamo a casa',
       'Ogni ordine e il suo stato li trovi in «I miei ordini»',
     ]);
     expect(paroleDellHtml(m!.html)).toBe(
       '3 cose da sapere MyCity 3 cose da sapere ' +
-        "Paghi alla consegna: la carta non e' obbligatoria " +
+        'Paghi in contanti alla consegna: tieni pronto l’importo ' +
         'La spesa te la portiamo a casa ' +
         'Ogni ordine e il suo stato li trovi in «I miei ordini» ' +
         'Vai su MyCity ' +
         'Hai ricevuto questa email perché hai un account su MyCity. Gestisci preferenze · Privacy · Cookie',
     );
     expect(m!.text).toBe(
-      'Tre cose da sapere: paghi alla consegna, la spesa te la portiamo a casa, ' +
+      'Tre cose da sapere: paghi in contanti alla consegna, la spesa te la portiamo a casa, ' +
         'e ogni ordine col suo stato lo trovi in «I miei ordini».',
     );
     expect(attributiCheSiLeggono(m!.html)).toEqual([]);
@@ -277,12 +277,12 @@ describe('ritiro in negozio acceso: la guida lo dice, senza condizioni che nessu
     // 5/11/2026 (S04, scheda 2074) — Vietare una sola frase lasciava rientrare «se il negoziante lo
     // consente». La voce si fissa intera: nessuna condizione, con qualunque parola.
     expect(vociDellElenco(m!.html)).toEqual([
-      "Paghi alla consegna: la carta non e' obbligatoria",
+      'Paghi in contanti alla consegna: tieni pronto l’importo', // 5/11/2026 (unione): a carta spenta, la riga di S03
       'La spesa te la portiamo a casa, oppure la ritiri tu in negozio',
       'Ogni ordine e il suo stato li trovi in «I miei ordini»',
     ]);
     expect(m!.text).toBe(
-      'Tre cose da sapere: paghi alla consegna, la spesa te la portiamo a casa (o la ritiri tu in negozio), ' +
+      'Tre cose da sapere: paghi in contanti alla consegna, la spesa te la portiamo a casa (o la ritiri tu in negozio), ' +
         'e ogni ordine col suo stato lo trovi in «I miei ordini».',
     );
   });

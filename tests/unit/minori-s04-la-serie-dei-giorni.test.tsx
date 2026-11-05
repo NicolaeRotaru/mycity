@@ -21,7 +21,11 @@ afterEach(() => {
 });
 
 describe('il controllo giornaliero', () => {
-  it('a mezzanotte e mezza di Piacenza è già il giorno nuovo: chiama il database', async () => {
+  // 5/11/2026 (unione delle dieci sessioni) — Al lancio inviti e punti sono spenti
+  // (INVITI_E_PUNTI_ACCESI = false, S07 scheda 2429): il controllo giornaliero non chiama il
+  // database. La correzione del giorno di Piacenza resta nel codice per quando si riaccendono,
+  // e si prova sulla funzione che il componente usa.
+  it('coi punti spenti al lancio non chiama il database, nemmeno a giorno nuovo', async () => {
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
     vi.setSystemTime(new Date('2026-11-05T23:30:00Z')); // venerdì 6/11, 00:30 a Piacenza
     localStorage.setItem('mc_last_checkin', JSON.stringify('2026-11-05')); // giovedì sera
@@ -36,7 +40,17 @@ describe('il controllo giornaliero', () => {
     await attendi();
     await attendi();
     await vi.advanceTimersByTimeAsync(2000);
-    expect(chiamate).toEqual(['touch_loyalty_streak']);
+    expect(chiamate).toEqual([]);
+  });
+
+  it('a mezzanotte e mezza di Piacenza è già il giorno nuovo, e il componente conta così', async () => {
+    const { giornoPiacenza } = await import('@/lib/tempo-piacenza');
+    expect(giornoPiacenza(new Date('2026-11-05T23:30:00Z'))).toBe('2026-11-06');
+    expect(giornoPiacenza(new Date('2026-07-05T22:30:00Z'))).toBe('2026-07-06'); // d'estate, UTC+2
+    const { readFileSync } = await import('node:fs');
+    const sorgente = readFileSync('components/DailyCheckIn.tsx', 'utf8');
+    expect(sorgente).toMatch(/const today = giornoPiacenza\(\)/);
+    expect(sorgente).not.toMatch(/toISOString\(\)\.slice\(0, 10\)/);
   });
 
   it('nello stesso giorno di Piacenza non richiama il database', async () => {

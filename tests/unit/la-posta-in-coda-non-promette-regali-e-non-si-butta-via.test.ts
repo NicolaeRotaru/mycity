@@ -118,7 +118,7 @@ describe('il «3 cose da sapere» parte senza consenso, quindi non porta incenti
     const voci = (spedite[0].html.match(/<ul[^>]*>([\s\S]*?)<\/ul>/)?.[1].match(/<li[^>]*>[\s\S]*?<\/li>/g) ?? [])
       .map((v) => v.replace(/<[^>]*>/g, '').trim());
     expect(voci).toEqual([
-      "Paghi alla consegna: la carta non e' obbligatoria",
+      'Paghi in contanti alla consegna: tieni pronto l’importo', // 5/11/2026 (unione): a carta spenta, la riga di S03
       'La spesa te la portiamo a casa',
       'Ogni ordine e il suo stato li trovi in «I miei ordini»',
     ]);

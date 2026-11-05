@@ -213,7 +213,7 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
 
   // Aggiorna riconciliazione giornaliera (include i COD consegnati ma NON confermati).
   // 5/11/2026 — la quadratura ora lancia se non riesce a leggere o scrivere:
-  // l'incasso e' gia' confermato, quindi lo si scrive nel log e si va avanti;
+  // l'incasso è già confermato, quindi lo si scrive nel log e si va avanti;
   // il giro notturno riquadra-casse rifa' la giornata.
   try {
     await aggiornaQuadratura(admin, user.id, giornoDiCassa);

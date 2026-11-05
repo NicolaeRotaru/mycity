@@ -138,8 +138,9 @@ describe('2224 — carta con rimborso parziale già fatto: l email dice il rimbo
     expect(esito.ok).toBe(true);
     expect(refundOrder.mock.calls[0][0]).toMatchObject({ orderId: 'pane', amountCents: 1100 });
     const testi = posta.spedite.map((m) => String(m.text)).join('\n');
-    expect(testi).toMatch(/ti tornano 11 €/);
-    expect(testi).not.toMatch(/ti tornano 16 €/);
+    // 5/11/2026 (unione) — S03 scrive le cifre dell'email con i centesimi («11,00 €»).
+    expect(testi).toMatch(/ti tornano 11(,00)?\s€/);
+    expect(testi).not.toMatch(/ti tornano 16(,00)?\s€/);
   });
 });
 
@@ -153,6 +154,6 @@ describe('2229 — la sonda P3: giro notturno, carta, scade il pane', () => {
     await (POST as unknown as () => Promise<unknown>)();
     expect(refundOrder.mock.calls.map((c) => [c[0].orderId, c[0].amountCents])).toEqual([['pane', 1600]]);
     const testi = posta.spedite.map((m) => String(m.text)).join('\n');
-    expect(testi).toMatch(/ti tornano 16 € sulla carta/);
+    expect(testi).toMatch(/ti tornano 16(,00)?\s€ sulla carta/);
   });
 });

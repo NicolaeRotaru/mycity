@@ -28,7 +28,8 @@ describe('§6, il cliente non reperibile', () => {
     expect(fraseDelCaso('altri-da-consegnare')).toMatch(/nessuno è ancora stato consegnato/);
     // La regola del codice: basta un ordine consegnato nel carrello per rendere tutto.
     const annulla = readFileSync(path.join(RADICE, 'lib/ordini/annulla.ts'), 'utf8');
-    expect(annulla).toContain("!c.some((r) => r.delivery_status === 'DELIVERED')");
+    // 5/11/2026 (unione) — S01 ha aggiunto all'eccezione anche l'ordine in contanti già incassato: la regola resta «basta un ordine consegnato».
+    expect(annulla).toContain("!c.some((r) => r.delivery_status === 'DELIVERED'");
   });
 
   it('scheda 2503 — i fatti vedono la rotta «cliente assente», e la trattenuta resta esclusa', () => {
