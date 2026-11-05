@@ -23,13 +23,15 @@ function anonName(full: string | null, store: string | null): string {
 }
 
 function ClassificaInviti() {
-  const { data: entries = [], isLoading } = useQuery({
+  const { data: entries = [], isLoading, isError } = useQuery({
     queryKey: queryKeys.referrals.leaderboard,
     queryFn: async (): Promise<Entry[]> => {
-      const { data } = await supabase
+      // 5/11/2026 — Una lettura caduta diventava «Classifica vuota · Sii il primo».
+      const { data, error } = await supabase
         .from('referral_leaderboard')
         .select('user_id, full_name, store_name, total_referrals, converted_referrals')
         .limit(50);
+      if (error) throw error;
       return (data ?? []) as Entry[];
     },
   });
@@ -52,6 +54,10 @@ function ClassificaInviti() {
       {/* Classifica */}
       {isLoading ? (
         <div className="space-y-2">{[...Array(5)].map((_, i) => <div key={i} className="h-16 rounded-xl skeleton" />)}</div>
+      ) : isError ? (
+        <div role="alert" className="bg-white border border-cream-300 rounded-2xl p-12 text-center">
+          <p className="text-ink-600 font-medium">Non riusciamo a leggere la classifica in questo momento.</p>
+        </div>
       ) : entries.length === 0 ? (
         <div className="bg-white border border-cream-300 rounded-2xl p-12 text-center">
           <Trophy size={36} className="mx-auto text-ink-300 mb-3" />
@@ -114,7 +120,9 @@ function ClassificaSpenta() {
       </Link>
       <h1 className="text-3xl font-serif font-bold text-ink-900">Classifica inviti</h1>
       <p className="text-sm text-ink-700">
-        La classifica degli inviti non è attiva. Il credito per ogni amico che inviti resta quello scritto nella pagina «Invita un amico».
+        {/* 5/11/2026 — Parlava di «un credito per ogni amico», mentre la pagina inviti dice che
+            al lancio il premio non c'è: si rimanda a quella pagina senza promettere niente. */}
+        La classifica degli inviti non è attiva. Come funzionano gli inviti oggi lo trovi nella pagina «Invita un amico».
       </p>
     </div>
   );

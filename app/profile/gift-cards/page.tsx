@@ -91,15 +91,17 @@ export default function GiftCardsPage() {
     },
   });
 
-  const { data: cards = [] } = useQuery({
+  // 5/11/2026 — Come il saldo: una lettura caduta non è «nessuna gift card».
+  const { data: cards = [], isError: carteNonLette, refetch: rileggiCarte } = useQuery({
     queryKey: queryKeys.giftCards.byUser(userId ?? ''),
     enabled: !!userId,
     queryFn: async (): Promise<GiftCard[]> => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('gift_cards')
         .select('*')
         .or(`buyer_id.eq.${userId},redeemed_by.eq.${userId}`)
         .order('created_at', { ascending: false });
+      if (error) throw error;
       return (data ?? []) as GiftCard[];
     },
   });
@@ -159,8 +161,13 @@ export default function GiftCardsPage() {
 
   if (!userId) return <LoadingState />;
 
+  // 5/11/2026 — Lo stato attivo si vedeva solo dal colore del bordo: ora il lettore di
+  // schermo sente «scheda, selezionata».
   const TabBtn = ({ id, label }: { id: typeof tab; label: string }) => (
     <button
+      type="button"
+      role="tab"
+      aria-selected={tab === id}
       onClick={() => setTab(id)}
       className={`px-4 py-2 font-semibold text-sm border-b-2 -mb-px ${
         tab === id ? 'border-primary-600 text-primary-700' : 'border-transparent text-ink-500'
@@ -216,10 +223,10 @@ export default function GiftCardsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-cream-300">
+      <div role="tablist" aria-label="Gift card" className="flex gap-2 border-b border-cream-300">
         {BUONI_REGALO_IN_VENDITA && <TabBtn id="buy" label="Regala" />}
         <TabBtn id="redeem" label="Riscatta" />
-        <TabBtn id="mine" label={`Le mie gift card (${cards.length})`} />
+        <TabBtn id="mine" label={carteNonLette ? 'Le mie gift card' : `Le mie gift card (${cards.length})`} />
       </div>
 
       {BUONI_REGALO_IN_VENDITA && tab === 'buy' && (
@@ -315,7 +322,14 @@ export default function GiftCardsPage() {
       )}
 
       {tab === 'mine' && (
-        cards.length === 0 ? (
+        carteNonLette ? (
+          <div role="alert" className="bg-white border border-cream-300 rounded-2xl p-8 text-center">
+            <p className="text-ink-700 font-medium">Non riusciamo a leggere le tue gift card in questo momento.</p>
+            <button type="button" onClick={() => void rileggiCarte()} className="mt-3 text-primary-700 hover:underline font-semibold text-sm">
+              Riprova
+            </button>
+          </div>
+        ) : cards.length === 0 ? (
           <div className="bg-white border border-cream-300 rounded-2xl p-12 text-center">
             <Gift size={36} className="mx-auto text-ink-300 mb-3" />
             <p className="text-ink-600 font-medium">Nessuna gift card ancora</p>

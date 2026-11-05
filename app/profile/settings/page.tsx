@@ -519,7 +519,11 @@ export default function SettingsPage() {
 
               <div>
                 <h2 className="text-lg font-bold mb-1">Dati personali</h2>
-                <p className="text-sm text-ink-500 mb-3">Per modificare nome, telefono, indirizzo principale:</p>
+                {/* 5/11/2026 — L'indirizzo del profilo la cassa non lo usa: si rimanda alla rubrica. */}
+                <p className="text-sm text-ink-500 mb-3">
+                  Per modificare nome e telefono (gli indirizzi di consegna stanno in{' '}
+                  <Link href="/profile/addresses" className="text-primary-700 underline">I tuoi indirizzi</Link>):
+                </p>
                 <Link href="/profile" className="inline-flex items-center gap-2 bg-cream-100 hover:bg-cream-200 px-4 py-2 rounded-lg font-semibold text-sm text-ink-900 transition-colors">
                   Modifica profilo →
                 </Link>
