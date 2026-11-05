@@ -11,6 +11,9 @@ import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi, leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { CODICI_SCONTO_IN_CASSA } from '@/lib/funzioni-al-lancio';
+import { speseDistinte } from '@/lib/admin/spese-del-cliente';
 
 /**
  * Admin: Funnel signup → first order + Cohort retention.
@@ -60,10 +63,19 @@ type FunnelData = {
   }[];
 };
 
+/** Il primo del mese, a Piacenza, `mesiFa` mesi prima di `oggi`. Niente aritmetica su date locali. */
+function primoDelMeseIndietroDa(oggi: Date, mesiFa: number): Date {
+  const [anno, mese] = giornoPiacenza(oggi).split('-').map(Number);
+  const totale = anno * 12 + (mese - 1) - mesiFa;
+  const a = Math.floor(totale / 12);
+  const m = (totale % 12) + 1;
+  return inizioGiornoPiacenza(`${a}-${String(m).padStart(2, '0')}-01`);
+}
+
 export default function AdminFunnelPage() {
   const [periodDays, setPeriodDays] = useState(90);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.funnel(periodDays),
     queryFn: async (): Promise<FunnelData> => {
       const since = new Date(Date.now() - periodDays * 86_400_000).toISOString();
@@ -75,10 +87,10 @@ export default function AdminFunnelPage() {
       // ultimi quattro mesi. Le coorti fuori finestra risultavano vuote o
       // dimezzate, e le percentuali di ritorno erano numeri inventati — nel
       // senso letterale: calcolati su gente che la query non aveva caricato.
-      const inizioCoorti = new Date();
-      inizioCoorti.setMonth(inizioCoorti.getMonth() - 3);
-      inizioCoorti.setDate(1);
-      inizioCoorti.setHours(0, 0, 0, 0);
+      // 5/11/2026 (S05) — L'inizio della lettura si calcola con la STESSA funzione
+      // delle coorti: con setMonth(−3) il 31/12 diventava il 1/10 e la coorte di
+      // settembre restava vuota.
+      const inizioCoorti = primoDelMeseIndietroDa(new Date(), 3);
       const daQuando = new Date(since) < inizioCoorti ? since : inizioCoorti.toISOString();
 
       // #217 — L'errore non si butta piu': un cruscotto che dice zero perche'
@@ -123,11 +135,11 @@ export default function AdminFunnelPage() {
        * (`ordineContaNelFatturato`): non annullato E pagato. E' la stessa che
        * usano la pagina Guadagni e i numeri del venditore. Tre pagine, un conto.
        */
-      type RigaOrdine = { user_id: string; created_at: string; delivery_status: string; payment_status: string | null };
+      type RigaOrdine = { user_id: string; created_at: string; delivery_status: string; payment_status: string | null; stripe_session_id: string | null };
       const { data: ordiniGrezzi, error: erroreOrdini } = await leggiInBlocchi<RigaOrdine>(userIds, (blocco) =>
         supabase
           .from('orders')
-          .select('user_id, created_at, delivery_status, payment_status')
+          .select('user_id, created_at, delivery_status, payment_status, stripe_session_id')
           .in('user_id', blocco)
           .neq('delivery_status', 'CANCELED') as unknown as PromiseLike<{ data: RigaOrdine[] | null; error: { message?: string } | null }>,
       );
@@ -136,12 +148,16 @@ export default function AdminFunnelPage() {
       );
       if (erroreOrdini) throw erroreOrdini;
 
-      const orderMap = new Map<string, Date[]>();
+      // 5/11/2026 (S05) — Si contano le SPESE, non le righe: un carrello da due
+      // negozi fa due ordini, ma è un acquisto solo (lib/admin/spese-del-cliente).
+      const righePerCliente = new Map<string, RigaOrdine[]>();
       for (const o of (orders ?? [])) {
-        const arr = orderMap.get(o.user_id) ?? [];
-        arr.push(new Date(o.created_at));
-        orderMap.set(o.user_id, arr);
+        const arr = righePerCliente.get(o.user_id) ?? [];
+        arr.push(o);
+        righePerCliente.set(o.user_id, arr);
       }
+      const orderMap = new Map<string, Date[]>();
+      for (const [cliente, righe] of righePerCliente) orderMap.set(cliente, speseDistinte(righe));
 
       let firstOrderWithin7d = 0;
       let firstOrderEver = 0;
@@ -178,13 +194,7 @@ export default function AdminFunnelPage() {
       const now = new Date();
 
       // Il primo del mese, a Piacenza, i mesi fa.
-      const primoDelMeseIndietro = (mesiFa: number): Date => {
-        const [anno, mese] = giornoPiacenza(now).split('-').map(Number);
-        const totale = anno * 12 + (mese - 1) - mesiFa;
-        const a = Math.floor(totale / 12);
-        const m = (totale % 12) + 1;
-        return inizioGiornoPiacenza(`${a}-${String(m).padStart(2, '0')}-01`);
-      };
+      const primoDelMeseIndietro = (mesiFa: number): Date => primoDelMeseIndietroDa(now, mesiFa);
 
       type RigaCoorte = {
         month: string;
@@ -259,7 +269,18 @@ export default function AdminFunnelPage() {
     },
   });
 
-  if (isLoading || !data) return <LoadingState />;
+  if (isLoading) return <LoadingState />;
+  // Una lettura caduta non resta sullo scheletro per sempre: si dice e si offre «Riprova».
+  if (isError || !data) {
+    return (
+      <ErrorState
+        title="Non riesco a leggere il funnel"
+        description="Iscritti o ordini non sono arrivati. Non vuol dire zero: riprova."
+        retry={() => { void refetch(); }}
+        supportHref={null}
+      />
+    );
+  }
 
   const activation7d = data.signups > 0 ? (data.firstOrderWithin7d / data.signups) * 100 : 0;
   const activationEver = data.signups > 0 ? (data.firstOrderEver / data.signups) * 100 : 0;
@@ -362,16 +383,18 @@ export default function AdminFunnelPage() {
       )}
 
       {/* Alert churn — buyer con un solo ordine, a rischio abbandono */}
-      {oneTime > 0 && (
+      {data.aRischioChurn > 0 && (
         <div className="flex items-start gap-3 rounded-xl border border-secondary-200 bg-secondary-50 p-4">
           <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary-600 text-white">
             <UserX size={18} strokeWidth={2.2} aria-hidden />
           </span>
           <div className="flex-1">
-            <p className="font-bold text-secondary-700">Alert churn · {oneTime} buyer a rischio</p>
+            <p className="font-bold text-secondary-700">Alert churn · {data.aRischioChurn} buyer a rischio</p>
             <p className="mt-0.5 text-sm leading-normal text-ink-700">
-              Hanno fatto un solo ordine e non hanno mai riordinato nel periodo. Un coupon di
-              richiamo può riportarli prima che diventino inattivi.
+              Hanno fatto un solo ordine e non ne fanno da più di 60 giorni.
+              {CODICI_SCONTO_IN_CASSA
+                ? ' Un coupon di richiamo può riportarli prima che diventino inattivi.'
+                : ' Un messaggio o una novità del negozio può riportarli prima che diventino inattivi.'}
             </p>
           </div>
         </div>
