@@ -202,7 +202,8 @@ export function ancoraNeiTempi(
 }
 
 /**
- * 30/10/2026 — IL SECONDO FRENO DELLA VELOCE (carta #220, scelta di Nicola delle 16:13).
+ * 30/10/2026 — IL SECONDO FRENO DELLA VELOCE (carta #220 del 29/10; variante B scelta da Nicola il
+ * 30/10 fra le 14:49 e le 14:54 — le 16:13 sono del 29/10, il prezzo della veloce).
  *
  * La veloce promette 30-60 minuti DALLA CONFERMA del negozio. Se il negozio non conferma entro
  * questi minuti la promessa non si può più mantenere: il carrello passa alla prima fascia ancora
