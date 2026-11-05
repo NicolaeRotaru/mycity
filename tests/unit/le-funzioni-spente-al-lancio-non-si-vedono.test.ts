@@ -52,7 +52,11 @@ describe.skipIf(interruttori.CLASSIFICA_INVITI_ACCESA)('classifica inviti spenta
     ];
     const s = await aSchermo('app/profile/referral/leaderboard/page.tsx');
     const testo = testoVisibile(s.radice);
-    expect(testo, 'la pagina promette premi che nessuno paga').not.toMatch(/€\s?\d|premi|vincono/i);
+    // 5/11/2026 (S04, scheda 1768) — L'espressione vedeva «€ 100» ma non «100,00 €» né «100 euro»,
+    // né «buono» o «regal…»: un premio scritto all'italiana restava verde.
+    expect(testo, 'la pagina promette premi che nessuno paga').not.toMatch(
+      /€\s?\d|\d(?:[.,]\d+)?\s?(?:€|euro)|premi|vincono|buon[oi]\b|regal/i,
+    );
     expect(testo).toMatch(/non è attiva/i);
     s.smonta();
   }, 60000);

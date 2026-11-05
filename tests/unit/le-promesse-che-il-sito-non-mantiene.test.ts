@@ -206,6 +206,9 @@ describe('il riquadro «Lo sapevi?»: la frase regge i numeri che le stanno sopr
   it('il carrello usa la frase, non una sua copia', () => {
     const src = readFileSync(join(process.cwd(), 'app/cart/page.tsx'), 'utf8');
     expect(src).toContain('RIQUADRO_LO_SAPEVI');
+    // 5/11/2026 (S04, scheda 2154) — `toContain` trovava la riga dell'import: con la frase vecchia
+    // scritta a mano al posto di {RIQUADRO_LO_SAPEVI} restava verde. Si cerca l'USO nel disegno.
+    expect(src, 'il carrello importa la frase ma non la mostra').toMatch(/\{\s*RIQUADRO_LO_SAPEVI\s*\}/);
     expect(src).not.toMatch(/Niente intermediari/);
   });
 });

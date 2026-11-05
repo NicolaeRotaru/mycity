@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readdirSync, existsSync } from 'node:fs';
+import { readdirSync, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CRON_MAX_STALENESS_MIN } from '@/lib/cron-health';
 
@@ -32,6 +32,20 @@ const CARTELLA_CRON = join(process.cwd(), 'app/api/cron');
  * copre il monitor esterno su /api/health, non questo elenco.
  */
 const NON_PUO_AUTOSORVEGLIARSI = new Set(['operational-alerts']);
+
+/** Ogni quanti minuti gira un lavoro, dalla riga del calendario (minuto ora giorno mese settimana). */
+function cadenzaInMinuti(riga: string): number | null {
+  const [minuto, ora, giorno, mese, settimana] = riga.trim().split(/\s+/);
+  if ([minuto, ora, giorno, mese, settimana].some((c) => c === undefined)) return null;
+  const ogni = (campo: string) => (/^\*\/(\d+)$/.exec(campo) ? Number(/^\*\/(\d+)$/.exec(campo)![1]) : null);
+  if (ogni(minuto) !== null && ora === '*') return ogni(minuto);
+  if (/^\d+$/.test(minuto) && ora === '*') return 60;
+  if (/^\d+$/.test(minuto) && ogni(ora) !== null) return 60 * ogni(ora)!;
+  if (/^\d+$/.test(minuto) && /^\d+$/.test(ora) && giorno === '*' && mese === '*') {
+    return settimana === '*' ? 1440 : 10080;
+  }
+  return null;
+}
 
 function rotteSulDisco(): string[] {
   return readdirSync(CARTELLA_CRON, { withFileTypes: true })
@@ -66,5 +80,30 @@ describe('ogni lavoro periodico ha qualcuno che lo guarda', () => {
     for (const [nome, soglia] of Object.entries(CRON_MAX_STALENESS_MIN)) {
       expect(soglia, `soglia non plausibile per ${nome}`).toBeGreaterThan(0);
     }
+    // 5/11/2026 (S04, scheda 2344) — «più di zero» accettava qualunque soglia: 3 minuti su un
+    // lavoro che gira ogni 5 avrebbero fatto suonare l'allarme a ogni giro. La soglia si lega alla
+    // cadenza vera, letta da vercel.json: dev'essere più larga di un giro.
+    const calendario = JSON.parse(readFileSync(join(process.cwd(), 'vercel.json'), 'utf8')) as {
+      crons?: Array<{ path: string; schedule: string }>;
+    };
+    const confrontati: string[] = [];
+    for (const { path, schedule } of calendario.crons ?? []) {
+      const nome = path.replace(/^\/api\/cron\//, '');
+      const soglia = CRON_MAX_STALENESS_MIN[nome];
+      if (soglia === undefined) continue;
+      const cadenza = cadenzaInMinuti(schedule);
+      expect(cadenza, `non so leggere la cadenza di ${nome} («${schedule}»)`).not.toBeNull();
+      expect(soglia, `${nome}: soglia ${soglia} min su una cadenza di ${cadenza} min, suonerebbe a ogni giro`).toBeGreaterThan(cadenza!);
+      confrontati.push(nome);
+    }
+    expect(confrontati.length, 'nessun lavoro del calendario confrontato con la sua soglia').toBeGreaterThan(0);
+  });
+
+  it('il metro della cadenza legge le forme del calendario', () => {
+    expect(cadenzaInMinuti('*/5 * * * *')).toBe(5);
+    expect(cadenzaInMinuti('0 * * * *')).toBe(60);
+    expect(cadenzaInMinuti('0 */6 * * *')).toBe(360);
+    expect(cadenzaInMinuti('15 1 * * *')).toBe(1440);
+    expect(cadenzaInMinuti('0 4 * * 1')).toBe(10080);
   });
 });
