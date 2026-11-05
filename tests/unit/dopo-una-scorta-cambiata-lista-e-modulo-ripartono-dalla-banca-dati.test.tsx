@@ -152,7 +152,12 @@ vi.mock('@/lib/products/salva-dal-browser', () => ({
     }
   },
 }));
-vi.mock('@/lib/products/persistVariants', () => ({ loadProductVariants: async () => [] }));
+vi.mock('@/lib/products/persistVariants', () => ({
+  loadProductVariants: async () => [],
+  // S06 (2113 · 2478): la pagina del negoziante salva le taglie da qui, dopo il controllo delle scorte.
+  saveProductVariants: async () => undefined,
+  controllaScorteVariantiDalBrowser: async () => undefined,
+}));
 vi.mock('@/lib/products/persistVariantsServer', () => ({ saveProductVariantsServer: async () => undefined }));
 vi.mock('@/lib/queries/consegna-veloce-del-negozio', () => ({
   useConsegnaVeloceDelNegozio: () => ({ offre: false, inLettura: false, nonLetta: false }),

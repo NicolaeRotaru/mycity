@@ -139,7 +139,8 @@ describe('nel pannello venditore non si cancella piu un prodotto', () => {
         /from\('products'\)\s*\.?\s*\n?\s*\.delete\(\)/.test(testo.replace(/\s+/g, ' ')),
         `${p} cancella ancora davvero il prodotto`,
       ).toBe(false);
-      expect(testo.includes('nascondiProdotto('), `${p} non passa dal «nascondi» condiviso`).toBe(true);
+      // S06 (2635): le pagine nascondono dalla porta che scrive il registro, nascondiProdottoTracciato.
+      expect(/nascondiProdotto(Tracciato)?\(/.test(testo), `${p} non passa dal «nascondi» condiviso`).toBe(true);
     }
   });
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { ETICHETTA_PAGAMENTI, pagamentiPronti } from '@/components/seller/pronto-a-incassare';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Check, Circle, ArrowRight, Sparkles } from 'lucide-react';
@@ -48,7 +49,7 @@ export default function SellerOnboardingChecklist() {
         .from('profiles')
         .select(`
           store_name, store_logo, store_address, store_lat, store_lng,
-          store_hours, stripe_charges_enabled
+          store_hours, stripe_charges_enabled, stripe_payouts_enabled, billing_iban
         `)
         .eq('id', user.id)
         .single();
@@ -100,8 +101,8 @@ export default function SellerOnboardingChecklist() {
         },
         {
           id: 'payouts',
-          label: 'Attiva pagamenti (Stripe Connect)',
-          done: !!p?.stripe_charges_enabled,
+          label: ETICHETTA_PAGAMENTI,
+          done: pagamentiPronti(p),
           href: '/seller/earnings',
         },
       ];
@@ -147,7 +148,7 @@ export default function SellerOnboardingChecklist() {
             Completa il tuo negozio
           </h2>
           <p className="text-sm text-ink-600">
-            Mancano {total - completed} passi. Negozi completi vendono <strong>3x di più</strong>.
+            Mancano {total - completed} passi. Un negozio completo, con foto e orari, si fa trovare più facilmente.
           </p>
         </div>
         <div className="text-right flex-shrink-0">

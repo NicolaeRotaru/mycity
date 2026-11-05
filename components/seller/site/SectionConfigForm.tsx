@@ -63,12 +63,25 @@ function VideoField({ section, onChange }: { section: VideoSec; onChange: (s: Si
   );
 }
 
+/**
+ * 323 — Il testo della vetrina va a capo davvero: l'a-capo scritto diventa
+ * <br> (permesso da lib/sanitize-html.ts), e nel campo torna a-capo. Prima la
+ * pagina vera faceva del testo un blocco unico, mentre l'aiuto prometteva
+ * a-capo e grassetto (che senza una barra di formattazione non si può fare).
+ */
+export function aCapoInHtml(testo: string): string {
+  return testo.replace(/\r?\n/g, '<br>');
+}
+export function htmlInACapo(html: string): string {
+  return html.replace(/<br\s*\/?>/gi, '\n');
+}
+
 function StructuralNote({ type }: { type: string }) {
   const notes: Record<string, string> = {
     contact: 'Mostra telefono e indirizzo del tuo negozio.',
-    hours: 'Mostra gli orari di apertura (si modificano da Profilo negozio).',
+    hours: 'Mostra gli orari di apertura (si modificano nei Dettagli negozio).',
     reviews: 'Mostra le recensioni dei clienti.',
-    featured: 'Mostra i prodotti in evidenza (si scelgono da Profilo negozio).',
+    featured: 'Mostra i prodotti in evidenza (si scelgono nei Dettagli negozio).',
     promotions: 'Mostra le promozioni attive (si creano nella sezione Promozioni).',
     productGrid: 'Mostra tutti i tuoi prodotti con ricerca e filtri.',
   };
@@ -87,8 +100,8 @@ export default function SectionConfigForm({ section, onChange }: { section: Site
           <Checkbox label="Mostra badge (punti di forza)" checked={c.showBadges !== false} onChange={(e) => set({ showBadges: e.target.checked })} />
           <Checkbox label="Mostra link social" checked={c.showSocials !== false} onChange={(e) => set({ showSocials: e.target.checked })} />
           <p className="text-xs text-ink-500 pt-1">
-            Logo, copertina, nome e slogan si modificano da{' '}
-            <Link href="/seller/profile" className="text-primary-700 underline">Profilo negozio</Link>.
+            Logo, copertina, nome e slogan si modificano nei{' '}
+            <Link href="/seller/site?details=1" className="text-primary-700 underline">Dettagli negozio</Link>.
           </p>
         </div>
       );
@@ -101,11 +114,11 @@ export default function SectionConfigForm({ section, onChange }: { section: Site
           <Input label="Titolo (opzionale)" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
           <Textarea
             label="Testo"
-            value={c.body ?? ''}
+            value={htmlInACapo(c.body ?? '')}
             rows={5}
             maxLength={4000}
-            onChange={(e) => set({ body: e.target.value })}
-            hint="Gli a-capo vengono mantenuti. Puoi usare grassetto, corsivo, elenchi e link."
+            onChange={(e) => set({ body: aCapoInHtml(e.target.value) })}
+            hint="Gli a-capo vengono mantenuti."
           />
         </div>
       );

@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase/client';
 import { resizeImageToFile } from '@/lib/image-resize';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
+import { regolaDelSecchio, TIPI_IMMAGINE } from '@/lib/storage/regole-secchi';
 
 /**
  * Upload condiviso delle immagini prodotto sul bucket pubblico `products`.
@@ -12,8 +13,23 @@ import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
  * non vengono piu' rifiutate: le ricomprimiamo lato client prima dell'upload.
  */
 
-export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-const MAX_BYTES = 5 * 1024 * 1024;
+/**
+ * 1529 — I formati delle foto prodotto nascono dalla lista unica del magazzino
+ * (lib/storage/regole-secchi.ts), non da una copia a mano. Se ne tolgono di
+ * proposito HEIC/HEIF: il magazzino li accetta, ma Chrome e Firefox non li
+ * mostrano, e una foto prodotto che metà dei clienti non vede è peggio di un
+ * rifiuto. GIF e AVIF invece si vedono ovunque e passano.
+ */
+const NON_MOSTRATI_DAI_BROWSER = new Set(['image/heic', 'image/heif']);
+export const ALLOWED_IMAGE_TYPES: string[] = TIPI_IMMAGINE.filter((t) => !NON_MOSTRATI_DAI_BROWSER.has(t));
+
+/**
+ * 1593 — La soglia oltre la quale una foto si ricomprime è il tetto vero del
+ * magazzino `products` (10 MiB), letto dalla porta unica. Prima era una terza
+ * copia da 5 MiB che si diceva «il limite del bucket»: le foto fra 5 e 10 MB
+ * venivano degradate senza motivo.
+ */
+const MAX_BYTES = regolaDelSecchio('products').maxByte;
 
 /**
  * LA FOTO TROPPO PICCOLA, DETTA PRIMA CHE LA VEDA IL CLIENTE.
@@ -64,8 +80,8 @@ export async function uploadProductImages(files: File[]): Promise<string[]> {
       throw new Error(`Formato non valido per "${original.name}"`);
     }
 
-    // Le foto da smartphone superano spesso i 5 MB: invece di rifiutarle,
-    // le ricomprimiamo (JPEG) finche' rientrano nel limite del bucket.
+    // Le foto da smartphone superano spesso il tetto del magazzino: invece di
+    // rifiutarle, le ricomprimiamo (JPEG) finche' ci rientrano.
     let file = original;
     if (file.size > MAX_BYTES) {
       file = await resizeImageToFile(original, 1600, 0.85);

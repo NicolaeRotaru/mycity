@@ -76,10 +76,9 @@ const QUALITY = 75;
 function buildPexelsUrl(url: URL, sizePx: number, ritaglia: boolean): string {
   // Pexels accetta w, h, auto=compress, cs=tinysrgb, fit=crop
   url.searchParams.set('w', String(sizePx));
-  // Il ritaglio quadrato resta l'impostazione di fabbrica — su Pexels ci sono
-  // foto, e una foto si può tagliare. Si spegne solo se chi chiama DICHIARA
-  // `quadrato: false`, cioè quando sa che quella non è una foto ma un marchio
-  // con dentro una scritta: `logoNegozio` è l'unico posto che lo fa.
+  // Il ritaglio quadrato segue la stessa regola delle foto dei negozi (`square`
+  // di sizedImage): miniature e schede sì, viste grandi no, e mai sui marchi
+  // con la scritta (`logoNegozio` passa `quadrato: false`).
   if (ritaglia) {
     url.searchParams.set('h', String(sizePx));
     url.searchParams.set('fit', 'crop');
@@ -145,7 +144,9 @@ export function sizedImage(
     const host = url.hostname;
 
     if (host === 'images.pexels.com') {
-      return buildPexelsUrl(url, sizePx, opzioni.quadrato !== false);
+      // 933 — La stessa regola delle foto dei negozi: le viste grandi (detail, hero) non si
+      // ritagliano a quadrato, così nella scheda e nell'ingrandimento si vede il prodotto intero.
+      return buildPexelsUrl(url, sizePx, square);
     }
     if (host.endsWith('.supabase.co')) {
       return buildSupabaseStorageUrl(url, sizePx, square);

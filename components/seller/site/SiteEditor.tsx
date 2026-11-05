@@ -18,6 +18,7 @@ import PageListEditor from './PageListEditor';
 import PageEditor from './PageEditor';
 import StoreDetailsEditor from './StoreDetailsEditor';
 import MenuEditor from './MenuEditor';
+import { clicDaFermare, doveEilProblema } from './dove-e-l-errore';
 
 /**
  * Editor del sito vetrina a SCHERMATE separate:
@@ -43,7 +44,7 @@ export default function SiteEditor() {
   // select('*'): servono store_site + le colonne vetrina (logo, nome, contatti, orari,
   // personalizzazione) per la schermata "Dettagli negozio". Stessa shape e stessa
   // queryKey della pagina /seller/profile, così la cache resta coerente.
-  const { data: profile, isLoading } = useQuery({
+  const { data: profile, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.seller.profile,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -78,10 +79,28 @@ export default function SiteEditor() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
+  // 324 — beforeunload non vede i collegamenti interni (il menu del pannello): con
+  // la bozza non salvata un clic su un'altra voce la perdeva senza avviso.
+  useEffect(() => {
+    if (!dirty) return;
+    const alClic = (e: MouseEvent) => {
+      if (clicDaFermare(e, dirty, pathname, (m) => window.confirm(m))) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    document.addEventListener('click', alClic, true);
+    return () => document.removeEventListener('click', alClic, true);
+  }, [dirty, pathname]);
+
   const save = useMutation({
     mutationFn: async (next: StoreSite) => {
       const parsed = storeSiteSchema.safeParse(next);
-      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Sito non valido');
+      if (!parsed.success) {
+        const problema = parsed.error.issues[0];
+        const dove = problema ? doveEilProblema(problema.path, next) : '';
+        throw new Error(`${dove ? `${dove}: ` : ''}${problema?.message ?? 'Sito non valido'}`);
+      }
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/seller/site', {
         method: 'PUT',
@@ -107,7 +126,18 @@ export default function SiteEditor() {
     onError: (e: unknown) => toast.error(friendlyError(e)),
   });
 
-  if (isLoading || !site) return <LoadingState />;
+  if (isLoading) return <LoadingState />;
+  // Prima una lettura caduta lasciava lo scheletro per sempre.
+  if (isError && !site) {
+    return (
+      <div role="alert" className="rounded-xl border border-secondary-200 bg-white p-6 text-sm text-ink-700">
+        <p className="font-semibold text-ink-900">Non riesco a leggere la tua vetrina</p>
+        <p className="mt-1">La lettura non è riuscita: la vetrina c&apos;è, riprova fra un momento.</p>
+        <button type="button" onClick={() => { void refetch(); }} className="mt-3 font-semibold text-primary-700 underline">Riprova</button>
+      </div>
+    );
+  }
+  if (!site) return <LoadingState />;
 
   const openPage = (id: string) => router.push(`${pathname}?page=${encodeURIComponent(id)}`);
   const openDetails = () => router.push(`${pathname}?details=1`);
@@ -220,7 +250,9 @@ export default function SiteEditor() {
       {/* Tema */}
       <section className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
         <PanelHeader icon={Palette} tintBg="bg-accent-100" tintFg="text-accent-700" title="Tema del sito" desc="Lo stile generale della tua vetrina." />
-        <ThemePicker value={site.theme} onChange={(theme) => commit({ ...site, theme })} accent={accent} />
+        {/* 322 — Senza `accent`: il colore si cambia in un posto solo (Dettagli negozio). Qui
+            ThemePicker lo salvava subito, mentre la pagina dice che serve «Salva sito». */}
+        <ThemePicker value={site.theme} onChange={(theme) => commit({ ...site, theme })} />
         {/* Colore del negozio (accent): vive in store_customization, si modifica nei
             Dettagli negozio. Qui lo mostriamo per dare il quadro completo del look. */}
         <button

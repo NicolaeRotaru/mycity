@@ -126,7 +126,7 @@ function NewProductInner() {
       if (!user) throw new Error('Non autenticato');
       const { data, error } = await supabase
         .from('products')
-        .select('name, description, price, compare_at_price, unit, condition, stock, category_id, images, attributes, tags, express_enabled, seller_id')
+        .select('*') // con `*` arriva anche non_recedibile, quando la colonna c'è (migrazione 180)
         .eq('id', fromId)
         .single();
       if (error) throw error;
@@ -138,7 +138,8 @@ function NewProductInner() {
   });
 
   // Duplica: carica anche le varianti del prodotto sorgente (id azzerati → nuove).
-  const { data: sourceVariants = [] } = useQuery({
+  // Senza le taglie lette la copia non si apre: nascerebbe senza, e nessuno lo direbbe.
+  const { data: sourceVariants = [], isLoading: loadingVariants, isError: variantiNonLette, refetch: rileggiVarianti } = useQuery({
     queryKey: ['duplicate-variants', fromId],
     enabled: !!fromId,
     queryFn: () => loadProductVariants(fromId!),
@@ -179,6 +180,8 @@ function NewProductInner() {
         expressEnabled: (s.express_enabled as boolean | null) ?? null,
         status: 'draft',
         variants: sourceVariants.map((v) => ({ ...v, id: undefined })),
+        // «Escluso dal recesso» si copia: la copia di un pane non diventa recedibile.
+        nonRecedibile: s.non_recedibile === true,
       };
     }
     return snapshotToInitial(loadAutosave<Snapshot>(AUTOSAVE_KEY) ?? {});
@@ -211,7 +214,14 @@ function NewProductInner() {
         .select('id')
         .single();
       if (error) throw error;
-      if (variants.length > 0) await saveProductVariants(data.id as string, variants);
+      if (variants.length > 0) {
+        try {
+          await saveProductVariants(data.id as string, variants);
+        } catch (errore) {
+          // Il prodotto esiste già: un secondo «Salva» ne creerebbe un altro.
+          throw new TaglieNonSalvate(data.id as string, errore);
+        }
+      }
       return { id: data.id as string, sellerId: user.id, status: payload.status };
     },
     onSuccess: ({ id, sellerId, status }) => {
@@ -220,7 +230,15 @@ function NewProductInner() {
       toast.success(status === 'draft' ? 'Bozza salvata' : 'Prodotto pubblicato!');
       router.push('/seller/products');
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => {
+      if (err instanceof TaglieNonSalvate) {
+        clearAutosave(AUTOSAVE_KEY);
+        toast.error(`Il prodotto è stato creato, ma le taglie no (${friendlyError(err.causa)}). Aggiungile qui dalla modifica.`);
+        router.push(`/seller/products/${err.prodottoId}/edit`);
+        return;
+      }
+      toast.error(friendlyError(err));
+    },
   });
 
   return (
@@ -249,8 +267,14 @@ function NewProductInner() {
         </>
       )}
 
-      {(fromId && loadingSource) || consegnaInLettura ? (
+      {(fromId && (loadingSource || loadingVariants)) || consegnaInLettura ? (
         <LoadingState />
+      ) : fromId && variantiNonLette ? (
+        <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900">
+          <p className="font-bold mb-1">Non riesco a leggere le taglie del prodotto da duplicare</p>
+          <p className="text-sm mb-3">La copia nascerebbe senza taglie. Riprova fra un momento.</p>
+          <button type="button" onClick={() => { void rileggiVarianti(); }} className="text-sm font-semibold text-rose-700 underline">Riprova</button>
+        </div>
       ) : (
         <ProductForm
           key={importNonce}
@@ -279,6 +303,14 @@ function NewProductInner() {
       )}
     </div>
   );
+}
+
+/** L'inserimento è riuscito, le taglie no: si va alla modifica del prodotto creato. */
+class TaglieNonSalvate extends Error {
+  constructor(readonly prodottoId: string, readonly causa: unknown) {
+    super('Taglie non salvate');
+    this.name = 'TaglieNonSalvate';
+  }
 }
 
 export default function NewProductPage() {

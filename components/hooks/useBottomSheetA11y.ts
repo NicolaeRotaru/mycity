@@ -21,10 +21,13 @@ import { useEffect, type RefObject } from 'react';
 // trigger alla chiusura (WCAG 2.1.2 / 2.4.3). Condiviso tra pannello filtri e ordina.
 export function useBottomSheetA11y(
   open: boolean,
-  sheetRef: RefObject<HTMLDivElement | null>,
+  sheetRef: RefObject<HTMLElement | null>,
   triggerRef: RefObject<HTMLButtonElement | null>,
   onClose: () => void,
+  /** Un menu a tendina (le notifiche del negozio) non blocca lo scorrimento della pagina. */
+  opzioni: { bloccaScorrimento?: boolean } = {},
 ) {
+  const blocca = opzioni.bloccaScorrimento !== false;
   useEffect(() => {
     if (!open) return;
     const trigger = triggerRef.current;
@@ -49,10 +52,10 @@ export function useBottomSheetA11y(
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     };
     document.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
+    if (blocca) document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
+      if (blocca) document.body.style.overflow = '';
       trigger?.focus();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

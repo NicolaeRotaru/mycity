@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { resizeImageToBase64 } from '@/lib/image-resize';
 import { uploadProductImages } from '@/lib/products/uploadImages';
-import { avvisoDopoLeBozze, bozzaDaCreare, riquadroDichiarazioni } from '@/lib/products/prontoPerLaVendita';
+import { avvisoDopoLeBozze, avvisoScartatiDalleFoto, bozzaDaCreare, riquadroDichiarazioni } from '@/lib/products/prontoPerLaVendita';
 import type { ProductSnapshot } from '@/lib/products/aiSnapshot';
 
 /**
@@ -199,6 +199,8 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
       // R36 — Quali bozze non si possono ancora pubblicare, e perche'.
       const daCompletare = avvisoDopoLeBozze(Array.isArray(data.products) ? (data.products as ProductSnapshot[]) : []);
       if (daCompletare) toast.warning(daCompletare, { duration: 20_000 });
+      const saltati = avvisoScartatiDalleFoto(data.scartati);
+      if (saltati) toast.warning(saltati, { duration: 30_000 });
       reset();
       onCreated?.(count);
     } catch (err) {

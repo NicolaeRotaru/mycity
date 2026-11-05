@@ -241,7 +241,13 @@ export default function SellerEarningsPage() {
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1.3fr_1fr]">
         <Card variant="bordered" padding="lg">
           <h2 className="mb-4 font-serif text-lg font-bold text-ink-900">Andamento ultimi 7 giorni</h2>
-          <div className="flex h-32 items-end gap-2.5">
+          {/* Per chi non vede le barre: gli stessi valori, in testo. */}
+          <ul className="sr-only">
+            {daily.map(([day, val]) => (
+              <li key={day}>{new Date(day).toLocaleDateString('it', { weekday: 'long' })}: {formatPrice(val)}</li>
+            ))}
+          </ul>
+          <div className="flex h-32 items-end gap-2.5" aria-hidden="true">
             {daily.map(([day, val]) => {
               const pct = (val / maxDaily) * 100;
               return (

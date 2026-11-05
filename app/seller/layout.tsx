@@ -59,7 +59,10 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   const rejectionReason = statoRichiesta?.rejection_reason ?? profileExt?.rejection_reason ?? null;
   const richiestaInviata = !!(statoRichiesta?.approval_requested_at ?? profileExt?.approval_requested_at);
   // Lato severo: se lo stato non si legge, non si promette nessuna verifica.
-  const statoIllegibile = daLeggereLaRichiesta && richiesta.isError && !statoRichiesta;
+  // «Non ancora riuscita» vale come illeggibile: senza rete la lettura resta in
+  // pausa (né in caricamento né in errore) e il dato è vuoto, e la frase
+  // definitiva «non ci è ancora arrivata» sarebbe una notizia falsa.
+  const statoIllegibile = daLeggereLaRichiesta && richiesta.status !== 'success' && !statoRichiesta;
   const isPending   = isSeller && approvalStatus === 'pending';
   const isSuspended = isSeller && approvalStatus === 'suspended';
   const isRejected  = isSeller && approvalStatus === 'rejected';
@@ -76,7 +79,11 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
     // Niente più redirect silenzioso per wrong-role: mostriamo schermata
   }, [isAuthenticated, isLoading, router]);
 
-  if (isLoading || !isAuthenticated || (daLeggereLaRichiesta && richiesta.isLoading)) {
+  // Con in memoria un dato che dice «richiesta non mandata» e una rilettura in
+  // corso (es. appena inviata da /sell), si aspetta la rilettura invece di
+  // mostrare il dato vecchio.
+  const rileggeUnNonInviata = daLeggereLaRichiesta && richiesta.isFetching && !richiestaInviata;
+  if (isLoading || !isAuthenticated || (daLeggereLaRichiesta && richiesta.isLoading) || rileggeUnNonInviata) {
     return <LoadingState />;
   }
 

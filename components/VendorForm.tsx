@@ -18,7 +18,7 @@ import { Input, Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { StoreHours } from '@/lib/store-hours';
-import { storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
+import { campoDellErrore, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
 import CustomizationSection from './seller/CustomizationSection';
 import AccentPicker from './seller/AccentPicker';
 import CoverPicker from './seller/CoverPicker';
@@ -26,9 +26,22 @@ import SocialLinksFields from './seller/SocialLinksFields';
 import AnnouncementEditor from './seller/AnnouncementEditor';
 import BadgePicker from './seller/BadgePicker';
 import StoreHoursEditor from './seller/StoreHoursEditor';
+import { erroreDegliOrari } from './seller/orari-validi';
 import FeaturedProductsPicker from './seller/FeaturedProductsPicker';
 
 type SchemaData = { storeName: string; storePhone: string };
+
+/**
+ * Il telefono come lo scrive una persona: «0523 456789», «+39 333 123 4567».
+ * Si tolgono spazi, punti, trattini, barre e il prefisso +39/0039, poi si
+ * contano le cifre: i numeri italiani vanno da 6 a 11 cifre, non sempre 10.
+ */
+export function normalizzaTelefonoNegozio(v: string): string {
+  return v.replace(/[\s./()-]+/g, '').replace(/^(\+39|0039)/, '');
+}
+export function telefonoNegozioValido(v: string): boolean {
+  return /^[0-9]{6,11}$/.test(normalizzaTelefonoNegozio(v));
+}
 
 export type VendorFormData = SchemaData & {
   storeAddress: string;
@@ -77,8 +90,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
           if (showBranding && d.storeName.trim().length < 3) {
             ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['storeName'], message: 'Il nome deve essere di almeno 3 caratteri' });
           }
-          if (showContact && d.storePhone.length !== 10) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['storePhone'], message: 'Il numero di telefono deve essere di 10 cifre' });
+          if (showContact && !telefonoNegozioValido(d.storePhone)) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['storePhone'], message: 'Scrivi il numero del negozio, es. 0523 456789' });
           }
         }),
     [showBranding, showContact],
@@ -102,6 +115,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
   const [locationError, setLocationError] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(defaultValues?.storeLogo ?? null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  // Mentre sale una foto della copertina l'invio aspetta: partirebbe senza quella foto.
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   const [media, setMedia] = useState<StoreMediaItem[]>(defaultValues?.storeMedia ?? []);
   const [description, setDescription] = useState<string>(defaultValues?.storeDescription ?? '');
   const [hours, setHours] = useState<StoreHours>(defaultValues?.storeHours ?? {});
@@ -158,6 +173,12 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
 
   const handleFormSubmit = (data: SchemaData) => {
     if (showContact) {
+      // Un orario sbagliato non si salva: quel giorno il negozio risulterebbe chiuso agli ordini.
+      const erroreOrari = erroreDegliOrari(hours);
+      if (erroreOrari) {
+        toast.error(`Orari di apertura — ${erroreOrari}`);
+        return;
+      }
       if (!location.address.trim()) {
         setLocationError("Inserisci l'indirizzo del negozio");
         return;
@@ -179,9 +200,15 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
     }
     let customData: StoreCustomization = custom;
     if (showBranding) {
-      const parsed = storeCustomizationSchema.safeParse(custom);
+      // Link incollati, @, sito senza https e WhatsApp senza +39 si correggono da soli.
+      const corretta: StoreCustomization = { ...custom, socials: normalizzaSocials(custom.socials) };
+      setCustom(corretta);
+      const parsed = storeCustomizationSchema.safeParse(corretta);
       if (!parsed.success) {
-        setCustomError(parsed.error.issues[0]?.message ?? 'Personalizzazione non valida');
+        const problema = parsed.error.issues[0];
+        const campo = problema ? campoDellErrore(problema.path) : null;
+        // Il messaggio dice quale campo: prima arrivava «Handle non valido» e basta.
+        setCustomError(`${campo ? `${campo}: ` : ''}${problema?.message ?? 'Personalizzazione non valida'}`);
         return;
       }
       customData = parsed.data;
@@ -189,7 +216,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
     setCustomError(null);
     onSubmit({
       storeName: data.storeName,
-      storePhone: data.storePhone,
+      storePhone: normalizzaTelefonoNegozio(data.storePhone),
       storeAddress: location.address,
       storeLat: location.lat,
       storeLng: location.lng,
@@ -242,7 +269,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
           </div>
 
           {/* Cover media gallery */}
-          <StoreMediaManager value={media} onChange={setMedia} />
+          <StoreMediaManager value={media} onChange={setMedia} onUploadingChange={setUploadingMedia} />
 
           <Input
             label="Nome del negozio"
@@ -269,8 +296,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
             label="Telefono"
             {...register('storePhone')}
             type="text"
-            inputMode="numeric"
-            placeholder="3331234567 (10 cifre)"
+            inputMode="tel"
+            placeholder="Es. 0523 456789"
             error={typeof errors.storePhone?.message === 'string' ? errors.storePhone.message : undefined}
           />
 
@@ -358,7 +385,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
 
       <button
         type="submit"
-        disabled={isLoading || uploadingLogo}
+        disabled={isLoading || uploadingLogo || uploadingMedia}
         className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-semibold transition-colors shadow-warm-sm"
       >
         {isLoading ? tStates('saving') : tForms('saveStore')}

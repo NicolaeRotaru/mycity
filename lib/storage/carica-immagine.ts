@@ -161,7 +161,8 @@ export async function caricaImmagine(
   // applicata.
   const tipoDichiarato = String(contentType || file.type || '').toLowerCase();
   if (tipoDichiarato.startsWith('image/') && !regola.tipiAmmessi.includes(tipoDichiarato)) {
-    throw new Error('Formato non accettato: usa una foto JPG, PNG o WEBP.');
+    // 1605 — La frase nasce dalla stessa lista che rifiuta: prima nominava tre formati su sette.
+    throw new Error(`Formato non accettato: usa una foto ${formatiLeggibili(regola.tipiAmmessi)}.`);
   }
   const peso = pesoDi(file);
   if (peso !== null && peso > regola.maxByte) {
@@ -217,4 +218,11 @@ export async function caricaImmagine(
     : '';
 
   return { percorso, publicUrl };
+}
+
+/** «JPG, PNG, WEBP, GIF, AVIF, HEIC o HEIF» dalla lista dei tipi ammessi. */
+export function formatiLeggibili(tipi: readonly string[]): string {
+  const nomi = [...new Set(tipi.map((t) => t.replace(/^image\//, '').replace('jpeg', 'jpg').toUpperCase()))];
+  if (nomi.length <= 1) return nomi.join('');
+  return `${nomi.slice(0, -1).join(', ')} o ${nomi[nomi.length - 1]}`;
 }

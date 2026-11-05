@@ -23,8 +23,10 @@ interface Props {
 export default function FeaturedProductsPicker({ value = [], onChange }: Props) {
   const [q, setQ] = useState('');
 
-  const { data: products = [], isLoading } = useQuery({
-    queryKey: queryKeys.seller.products,
+  const { data: products = [], isLoading, isError, refetch } = useQuery({
+    // Una chiave sua: l'elenco Prodotti tiene sotto queryKeys.seller.products una lettura a
+    // pagine, con un'altra forma. L'invalidazione per prefisso le rinfresca tutte e due.
+    queryKey: [...queryKeys.seller.products, 'in-evidenza'],
     queryFn: async (): Promise<Row[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
@@ -44,6 +46,14 @@ export default function FeaturedProductsPicker({ value = [], onChange }: Props) 
   };
 
   if (isLoading) return <LoadingState variant="inline" />;
+  if (isError && products.length === 0) {
+    return (
+      <p role="alert" className="text-sm text-ink-600">
+        Non riesco a leggere i tuoi prodotti.{' '}
+        <button type="button" onClick={() => { void refetch(); }} className="font-semibold text-primary-700 underline">Riprova</button>
+      </p>
+    );
+  }
   if (products.length === 0) {
     return <p className="text-sm text-ink-500">Pubblica dei prodotti per poterli mettere in evidenza.</p>;
   }

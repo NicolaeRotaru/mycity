@@ -40,9 +40,13 @@ export default function PageEditor({
   // Sezione "in modifica": evidenziata nell'anteprima (lifted da PageSectionsEditor).
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const setPage = (patch: Partial<SitePage>) => onChange({ ...page, ...patch });
+  // 327 — Mentre si scrive si tiene il testo com'è (il trattino in fondo resta):
+  // slugify lo toglieva a ogni tasto, e «chi-siamo» diventava «chisiamo».
+  const [slugInScrittura, setSlugInScrittura] = useState<string | null>(null);
 
   const slugError = (): string | undefined => {
-    if (isHome || page.slug === '') return undefined;
+    if (isHome) return undefined;
+    if (page.slug === '') return 'Scrivi un indirizzo per la pagina, per esempio chi-siamo';
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(page.slug)) return 'Solo minuscole, numeri e trattini';
     if (RESERVED_SLUGS.has(page.slug)) return 'Slug riservato';
     if (site.pages.some((q) => q.id !== page.id && q.slug === page.slug)) return 'Slug già usato';
@@ -87,8 +91,12 @@ export default function PageEditor({
                   <>
                     <Input
                       label="Indirizzo pagina (slug)"
-                      value={page.slug}
-                      onChange={(e) => setPage({ slug: slugify(e.target.value) })}
+                      value={slugInScrittura ?? page.slug}
+                      onChange={(e) => {
+                        setSlugInScrittura(e.target.value);
+                        setPage({ slug: slugify(e.target.value) });
+                      }}
+                      onBlur={() => setSlugInScrittura(null)}
                       error={slugError()}
                       hint={`La pagina sarà su /store/…/${page.slug || '…'}`}
                     />

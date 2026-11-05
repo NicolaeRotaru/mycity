@@ -153,21 +153,21 @@ const handleSchema = z
   .string()
   .trim()
   .max(64, 'Troppo lungo')
-  .regex(/^@?[A-Za-z0-9._-]+$/, 'Handle non valido')
+  .regex(/^@?[A-Za-z0-9._-]+$/, 'Scrivi solo il nome del profilo, per esempio panequotidiano')
   .optional()
   .or(z.literal(''));
 
 const whatsappSchema = z
   .string()
   .trim()
-  .regex(/^[0-9+\s]{6,20}$/, 'Numero non valido')
+  .regex(/^[0-9+\s]{6,20}$/, 'Scrivi il numero, per esempio 333 1234567')
   .optional()
   .or(z.literal(''));
 
 const websiteSchema = z
   .string()
   .trim()
-  .url('URL non valido')
+  .url("Scrivi l'indirizzo del sito, per esempio www.panequotidiano.it")
   .max(200)
   .optional()
   .or(z.literal(''));
@@ -249,6 +249,63 @@ export function announcementActive(c?: StoreCustomization | null, now: Date = ne
 
 export type SocialLink = { key: string; label: string; href: string };
 
+/**
+ * 295 — Il negoziante incolla il link del profilo, non il nome: da
+ * «https://www.instagram.com/panequotidiano/» si tiene «panequotidiano».
+ */
+function handleDaLink(v: string | undefined, dominio: RegExp): string | undefined {
+  if (v === undefined) return v;
+  const t = v.trim();
+  const m = t.match(new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${dominio.source}\\/@?([A-Za-z0-9._-]+)`, 'i'));
+  // «profile.php?id=…», «/p/…», «/reel/…», «/share/…» non sono il nome del profilo: si lascia
+  // il valore com'è, e il controllo lo ferma invece di salvare un link sbagliato.
+  if (m && (/^(profile\.php|p|reel|reels|share|groups|pages|watch)$/i.test(m[1]) || /\?/.test(t))) return t;
+  return (m ? m[1] : t).replace(/^@+/, '');
+}
+
+/**
+ * 580 — Il numero WhatsApp all'italiana: «333 1234567» diventa 393331234567,
+ * «0523 123456» 390523123456; 0039 e +39 restano 39. wa.me legge le prime
+ * cifre come prefisso: senza il 39 un cellulare italiano diventava francese (+33).
+ */
+export function numeroWhatsappItaliano(v: string | undefined | null): string {
+  let d = String(v ?? '').trim();
+  const conPiu = d.startsWith('+');
+  d = d.replace(/[^0-9]/g, '');
+  if (d.startsWith('00')) return d.slice(2);
+  if (conPiu) return d;
+  if (d.startsWith('39') && d.length >= 11) return d;
+  if (/^3\d{8,9}$/.test(d) || d.startsWith('0')) return `39${d}`;
+  return d;
+}
+
+/** I campi social come li salva il sito, dopo aver corretto quello che si corregge da solo. */
+export function normalizzaSocials(s: StoreCustomization['socials']): StoreCustomization['socials'] {
+  if (!s) return s;
+  const out = { ...s };
+  out.instagram = handleDaLink(s.instagram, /instagram\.com/);
+  out.facebook = handleDaLink(s.facebook, /(?:facebook|fb)\.com/);
+  out.tiktok = handleDaLink(s.tiktok, /tiktok\.com/);
+  if (s.website !== undefined) {
+    const w = s.website.trim();
+    out.website = w && !/^https?:\/\//i.test(w) && /\./.test(w) ? `https://${w}` : w;
+  }
+  if (s.whatsapp !== undefined) {
+    const n = numeroWhatsappItaliano(s.whatsapp);
+    out.whatsapp = s.whatsapp.trim() ? (n ? `+${n}` : s.whatsapp.trim()) : '';
+  }
+  return out;
+}
+
+/** Il campo della personalizzazione a cui si riferisce un errore, detto in parole. */
+export function campoDellErrore(path: ReadonlyArray<PropertyKey>): string | null {
+  const nomi: Record<string, string> = {
+    instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', whatsapp: 'WhatsApp', website: 'Sito web',
+  };
+  if (path[0] === 'socials' && typeof path[1] === 'string') return nomi[path[1]] ?? path[1];
+  return null;
+}
+
 function cleanHandle(v?: string): string | null {
   if (!v) return null;
   const h = v.trim().replace(/^@+/, '');
@@ -270,7 +327,7 @@ export function socialLinks(c?: StoreCustomization | null): SocialLink[] {
   const tk = cleanHandle(s.tiktok);
   if (tk) out.push({ key: 'tiktok', label: 'TikTok', href: `https://www.tiktok.com/@${tk}` });
 
-  const wa = (s.whatsapp ?? '').replace(/[^0-9]/g, '');
+  const wa = numeroWhatsappItaliano(s.whatsapp);
   if (wa.length >= 6) out.push({ key: 'whatsapp', label: 'WhatsApp', href: `https://wa.me/${wa}` });
 
   const web = (s.website ?? '').trim();

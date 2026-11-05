@@ -1,6 +1,8 @@
 import { Package, ShoppingBag, Euro, Star, Rocket, type LucideIcon } from 'lucide-react';
 import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
 import { FRASE_PREZZO_NEGOZI, spiegazioneCommissione } from '@/app/seller/earnings/commissione';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
+import { ORDER_STATUS_LABEL, etichettaPronto } from '@/lib/order-status';
 
 // 31/10/2026 (ondata 4) — Qui c'era «Bonifico mensile il giorno 5»: una terza
 // versione dei tempi, diversa dalla pagina Guadagni e da quello che facciamo
@@ -42,11 +44,12 @@ export const TOPICS: ArgomentoAiuto[] = [
     title: 'Gestione ordini',
     items: [
       { q: 'Come accetto un ordine?',
-        a: 'Da "Ordini ricevuti" clicca sull\'ordine "Nuovo" e premi "Accetta". Riceverai una notifica quando un rider lo prenderà in carico.' },
+        // Le etichette sono quelle dei pulsanti veri (lib/order-status.ts e la pagina dell'ordine).
+        a: `Da "Ordini" apri l'ordine "${ORDER_STATUS_LABEL.NEW}" e premi "Accetta ordine". Riceverai una notifica quando un rider lo prenderà in carico.` },
       { q: 'Posso rifiutare un ordine?',
         a: 'Sì, se non puoi evaderlo. Fornisci sempre un motivo (es. prodotto esaurito). Il cliente riceve rimborso automatico.' },
       { q: 'Come segnalo l\'ordine pronto?',
-        a: 'Dalla pagina dell\'ordine premi "Pronto per la consegna". Verrà notificato il primo rider disponibile in zona.' },
+        a: `Dalla pagina dell'ordine premi "${etichettaPronto(false)}" (oppure "${etichettaPronto(true)}" se il cliente passa in negozio). Il rider o il cliente vengono avvisati.` },
     ],
   },
   {
@@ -56,9 +59,12 @@ export const TOPICS: ArgomentoAiuto[] = [
       { q: 'Quante foto per prodotto?',
         a: 'Da 3 a 5 foto sono l\'ideale. La prima è la copertina: scegli la più chiara e luminosa.' },
       { q: 'Posso aggiornare prezzo o disponibilità?',
-        a: 'Sì, da "I miei prodotti" → menu del prodotto → "Modifica" o switch "Disponibile/Esaurito".' },
-      { q: 'Come uso l\'AI per compilare la scheda?',
-        a: 'Quando crei un prodotto, carica la foto: l\'assistente AI estrae nome, descrizione e categoria. Tu controlli e correggi.' },
+        a: 'Sì, da "Prodotti": "Modifica" per prezzo e scorta, "Nascondi" per toglierlo dalla vetrina.' },
+      // L'assistente AI per i negozi è spento al lancio: la risposta compare solo se è acceso.
+      ...(AI_NEGOZI_ACCESA
+        ? [{ q: 'Come uso l\'AI per compilare la scheda?',
+            a: 'Quando crei un prodotto, carica la foto: l\'assistente AI estrae nome, descrizione e categoria. Tu controlli e correggi.' }]
+        : []),
     ],
   },
   {
@@ -79,11 +85,11 @@ export const TOPICS: ArgomentoAiuto[] = [
     title: 'Recensioni e clienti',
     items: [
       { q: 'Posso rispondere alle recensioni?',
-        a: 'Sì, da "Recensioni" → "Rispondi". Una risposta pubblica ben fatta mostra ai clienti che ci tieni.' },
+        a: 'Sì, da "Recensioni" → "Rispondi". La risposta è pubblica: chi legge la recensione legge anche te.' },
       { q: 'Vedo i dati dei clienti?',
-        a: 'Solo nome e indirizzo per la consegna. Telefono ed email restano privati per GDPR.' },
+        a: 'Nome, indirizzo e telefono di chi ha ordinato, per preparare e consegnare quell\'ordine: usali solo per quello. L\'email resta privata. Per mandare pubblicità serve il consenso della persona.' },
       { q: 'Come gestisco un cliente VIP?',
-        a: 'Da "I miei clienti" filtra per "VIP (5+ ordini)". Considera un piccolo omaggio o sconto dedicato.' },
+        a: 'Da "Clienti" filtra per "VIP (5+ ordini)": vedi chi torna più spesso e quanto ha speso.' },
     ],
   },
   {
@@ -92,10 +98,9 @@ export const TOPICS: ArgomentoAiuto[] = [
     items: [
       { q: 'Cosa rende un negozio attraente?',
         a: 'Logo + copertina + 10+ prodotti con foto pulite e descrizioni complete (peso, materiali, provenienza).' },
-      { q: 'Conviene partecipare ai gruppi d\'acquisto?',
-        a: 'Sì per prodotti con buon margine: sconti dal 10-30% portano traffico massiccio in giornate specifiche.' },
       { q: 'Come miglioro il posizionamento?',
-        a: 'Rispondi velocemente agli ordini, mantieni rating alto, pubblica regolarmente. L\'algoritmo premia i negozi attivi.' },
+        // Gli stessi criteri dei Termini (app/terms, «come ordiniamo i risultati»).
+        a: 'I risultati si ordinano per pertinenza con la ricerca, distanza, voto delle recensioni e disponibilità; i prodotti sponsorizzati sono segnalati. Schede complete e prodotti disponibili aiutano.' },
     ],
   },
 ];

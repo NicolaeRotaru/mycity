@@ -125,7 +125,7 @@ export default function SellerReviewsPage() {
               <Stars rating={stats.avg} />
               <p className="text-sm text-ink-500 mt-1">{stats.count} recensioni</p>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" role="group" aria-label="Filtra le recensioni per stelle">
               {stats.distribution.map((count, i) => {
                 const star = 5 - i;
                 const pct = stats.count > 0 ? (count / stats.count) * 100 : 0;
@@ -134,6 +134,8 @@ export default function SellerReviewsPage() {
                     key={star}
                     type="button"
                     onClick={() => setFilter(filter === star ? 'all' : (star as 5 | 4 | 3 | 2 | 1))}
+                    aria-pressed={filter === star}
+                    aria-label={`Mostra solo le recensioni da ${star} stelle: ${count}`}
                     className={`w-full flex items-center gap-3 px-2 py-1 rounded hover:bg-cream-50 transition-colors ${
                       filter === star ? 'bg-accent-50' : ''
                     }`}
@@ -251,6 +253,7 @@ function ReviewCard({ review }: { review: Review }) {
             onChange={(e) => setReply(e.target.value)}
             rows={3}
             maxLength={500}
+            aria-label="La tua risposta pubblica alla recensione"
             placeholder="Ringrazia il cliente o spiega cosa farete di diverso…"
             className="w-full border border-cream-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
           />

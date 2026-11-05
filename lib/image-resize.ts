@@ -40,6 +40,10 @@ async function drawToCanvas(file: Blob, maxDimension: number): Promise<HTMLCanva
   canvas.height = h;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas non supportato');
+  // L'uscita è JPEG, che non ha trasparenza: senza fondo i pixel trasparenti di
+  // un PNG diventano neri. Si riempie di bianco prima di disegnare.
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, w, h);
   ctx.drawImage(img, 0, 0, w, h);
   return canvas;
 }

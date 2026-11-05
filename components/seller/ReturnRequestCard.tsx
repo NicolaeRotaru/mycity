@@ -83,8 +83,26 @@ const TAPPE: Record<string, Array<{ stato: string; etichetta: string; icona: typ
  * successive (POST /api/returns/[id]/avanza), fino alla chiusura che libera il
  * bonifico. Negli stati finali è in sola lettura.
  */
+/**
+ * 2577 — La rotta dei resi aggiunge alla nota del cliente una riga sua,
+ * «Esclusi dal recesso (art. 59 Cod. Cons.)…» (lib/ordini/recesso.ts,
+ * notaDegliEsclusi). Qui si separano le due cose: la nota del cliente resta del
+ * cliente, e l'esclusione diventa un avviso per il negozio.
+ */
+export const INIZIO_NOTA_ESCLUSI = 'Esclusi dal recesso (art. 59';
+export function separaNotaDelReso(notes: string | null | undefined): { cliente: string | null; esclusi: string | null } {
+  if (!notes) return { cliente: null, esclusi: null };
+  const pezzi = notes.split(/\n\n/);
+  const esclusi = pezzi.filter((p) => p.startsWith(INIZIO_NOTA_ESCLUSI));
+  const cliente = pezzi.filter((p) => !p.startsWith(INIZIO_NOTA_ESCLUSI)).join('\n\n').trim();
+  return { cliente: cliente || null, esclusi: esclusi.length ? esclusi.join(' ') : null };
+}
+
 export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props) {
-  const [amount, setAmount] = useState(orderTotal ? orderTotal.toFixed(2) : '');
+  const nota = separaNotaDelReso(ret.notes);
+  // Con prodotti esclusi dal recesso nell'ordine, il totale non si propone: rimborsarlo
+  // tutto con un tocco rimborserebbe anche quello che la legge esclude.
+  const [amount, setAmount] = useState(orderTotal && !nota.esclusi ? orderTotal.toFixed(2) : '');
   const [notes, setNotes] = useState('');
   const meta = STATUS_META[ret.status] ?? { label: ret.status, cls: 'bg-cream-200 text-ink-600' };
   const isPending = ret.status === 'REQUESTED';
@@ -176,9 +194,14 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
           <p><span className="text-ink-500">Richiesto il:</span> <span className="font-medium text-ink-900">{formatDate(ret.created_at)}</span></p>
         </div>
 
-        {ret.notes && (
+        {nota.cliente && (
           <p className="text-ink-700 bg-cream-50 border border-cream-200 rounded-lg px-3 py-2">
-            <span className="text-ink-500">Nota del cliente: </span>{ret.notes}
+            <span className="text-ink-500">Nota del cliente: </span>{nota.cliente}
+          </p>
+        )}
+        {nota.esclusi && (
+          <p role="note" className="text-secondary-800 bg-secondary-50 border border-secondary-200 rounded-lg px-3 py-2">
+            <span className="font-semibold">Da sapere: </span>{nota.esclusi} Scrivi l&apos;importo da rimborsare senza quei prodotti.
           </p>
         )}
 

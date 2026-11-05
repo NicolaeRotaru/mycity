@@ -459,7 +459,7 @@ describe('«Crea più prodotti dalle foto»: le dichiarazioni si vedono e parton
       }
     }
     window.Image = ImmagineFinta as unknown as typeof Image;
-    HTMLCanvasElement.prototype.getContext = (() => ({ drawImage() {} })) as unknown as typeof contestoVero;
+    HTMLCanvasElement.prototype.getContext = (() => ({ fillStyle: '', fillRect() {}, drawImage() {} })) as unknown as typeof contestoVero;
     HTMLCanvasElement.prototype.toDataURL = () => 'data:image/jpeg;base64,QUJD';
   });
 

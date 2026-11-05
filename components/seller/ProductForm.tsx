@@ -24,7 +24,7 @@ import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import { getAttributesForCategory, AI_ATTR_TO_FIELD, attributoSpuntato } from '@/lib/category-attributes';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase/client';
-import { friendlyError } from '@/lib/errors';
+import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { uploadProductImages } from '@/lib/products/uploadImages';
 import {
@@ -245,6 +245,8 @@ export default function ProductForm({
    * si ricarica mentre resta aperto, e questo e' il numero che il negoziante
    * ha davanti — non quello del database, che le vendite abbassano.
    */
+  // Il negoziante ha scritto nel campo della scorta (anche lo stesso numero).
+  const scortaToccata = useRef(false);
   const scortaAllApertura = useRef({
     prodotto: initialValues?.stock,
     varianti: Object.fromEntries(
@@ -408,6 +410,8 @@ export default function ProductForm({
         // Come il menu: «usato» e «ricondizionato» letti dalla foto non entrano.
         const norm = condizioneDalSuggerimento(cond);
         if (norm) setCondition(norm);
+        // Come per il prezzo scartato: il negoziante deve sapere perché la condizione è vuota.
+        else if (cond.trim()) toast.warning(`La foto dice «${cond.trim()}»: la condizione la scegli tu dal menu (su MyCity si vendono solo prodotti nuovi).`);
       }
       if (data.category_id) {
         const { fields } = getAttributesForCategory(categories, data.category_id);
@@ -515,8 +519,10 @@ export default function ProductForm({
           setUnit(s.valore);
           break;
         case 'condition':
-          // Il suggerimento non può rimettere fra le scelte una condizione che il modulo non offre.
-          if (condizioneDaScegliere(s.valore)) setCondition(s.valore);
+          // Il suggerimento non può rimettere fra le scelte una condizione che il modulo non offre;
+          // può però toglierla («togli la condizione», 2284), come fa il server.
+          if (s.valore === '') setCondition('');
+          else if (condizioneDaScegliere(s.valore)) setCondition(s.valore);
           break;
         case 'stock':
           if (s.valore === null) {
@@ -577,7 +583,9 @@ export default function ProductForm({
         }),
       });
       const json = await res.json();
-      if (res.ok && json.found && json.patch) {
+      // Un errore del server (AI spenta, troppe richieste, guasto) non è «non trovato».
+      if (!res.ok) { toast.error(apiErrorMessage(json, 'Il codice EAN è salvato, ma la ricerca online non è riuscita.'), { id: tid }); return; }
+      if (json.found && json.patch) {
         const esito = applyPatch(json.patch as ProductEditPatch);
         dilloDopoIlPatch(
           esito,
@@ -616,7 +624,8 @@ export default function ProductForm({
         }),
       });
       const json = await res.json();
-      if (res.ok && Array.isArray(json.axes) && json.axes.length > 0) {
+      if (!res.ok) { toast.error(apiErrorMessage(json, 'Non sono riuscito a proporre le varianti.'), { id: tid }); return; }
+      if (Array.isArray(json.axes) && json.axes.length > 0) {
         const next = { ...variantAxes };
         for (const a of json.axes as { key: string; values: string[] }[]) next[a.key] = a.values;
         applyAxes(next);
@@ -647,7 +656,8 @@ export default function ProductForm({
         body: JSON.stringify({ imageUrls }),
       });
       const json = await res.json();
-      if (res.ok && Array.isArray(json.order)) {
+      if (!res.ok) { toast.error(apiErrorMessage(json, 'Non sono riuscito a ordinare le foto.'), { id: tid }); return; }
+      if (Array.isArray(json.order)) {
         const reordered = (json.order as number[]).map((i) => imageUrls[i]).filter((u): u is string => !!u);
         if (reordered.length === imageUrls.length) setImageUrls(reordered);
         const tip = Array.isArray(json.tips) && json.tips.length ? ` Consiglio: ${json.tips[0]}` : '';
@@ -730,7 +740,10 @@ export default function ProductForm({
        * riscrive la banca dati, e un modulo aperto prima della migrazione 180
        * continua a salvare.
        */
-      if (recessoSegnabile && nonRecedibile !== recedibileAllApertura) payload.non_recedibile = nonRecedibile;
+      // In creazione (anche «Duplica», che parte con la spunta del prodotto copiato) il
+      // confronto è col default della banca dati (false): una spunta già messa deve partire.
+      const recessoDiPartenza = mode === 'create' ? false : recedibileAllApertura;
+      if (recessoSegnabile && nonRecedibile !== recessoDiPartenza) payload.non_recedibile = nonRecedibile;
       /**
        * 28/10/2026 — CHI CORREGGE LA DESCRIZIONE NON RIMETTE IN MAGAZZINO LA
        * MERCE VENDUTA. La scorta partiva sempre, col numero visto all'apertura:
@@ -741,7 +754,11 @@ export default function ProductForm({
        *
        * LA PROVA: tests/unit/chi-corregge-la-descrizione-non-rimette-in-magazzino-la-merce-venduta.test.ts
        */
-      if (mode === 'edit' && !scortaCambiata(payload.stock, scortaAllApertura.current.prodotto)) {
+      // Riscritta uguale a quella vista (es. ha sfornato e rimesso 5): parte, e la
+      // porta la scrive solo se in banca dati c'è ancora quel numero; se le vendite
+      // l'hanno mossa lo dice, invece di rispondere «salvato» senza salvare.
+      const scortaRiscritta = mode === 'edit' && scortaToccata.current && !unlimitedStock && 'stock' in payload;
+      if (mode === 'edit' && !scortaRiscritta && !scortaCambiata(payload.stock, scortaAllApertura.current.prodotto)) {
         delete (payload as Partial<ProductPayload>).stock;
       }
       /**
@@ -757,6 +774,7 @@ export default function ProductForm({
       if (mode === 'edit' && 'stock' in payload && typeof scortaAllApertura.current.prodotto === 'number') {
         // La chiave e' `SCORTA_VISTA` di lib/products/salvataggio-tracciato.
         (payload as unknown as Record<string, unknown>).stock_visto = scortaAllApertura.current.prodotto;
+        if (scortaRiscritta) (payload as unknown as Record<string, unknown>).stock_confermato = true;
       }
       /**
        * 6/9/2026 — UN SALVATAGGIO SCRIVE SOLO QUELLO CHE L'UTENTE HA CHIESTO.
@@ -955,7 +973,7 @@ export default function ProductForm({
               type="number"
               inputMode="numeric"
               disabled={unlimitedStock}
-              {...register('stock')}
+              {...register('stock', { onChange: () => { scortaToccata.current = true; } })}
               error={typeof errors.stock?.message === 'string' ? errors.stock.message : undefined}
             />
             <div className="pt-7">
@@ -1137,18 +1155,17 @@ export default function ProductForm({
             consegna, e la {VELOCE_IN_MINUTI} gliela proponiamo solo {QUANDO_SI_PUO_LA_VELOCE}.
           </p>
           {consegnaDelNegozioNonLetta ? (
-            <p className="text-xs text-amber-700 mt-1.5">
+            <p className="text-xs text-accent-700 mt-1.5">
               Non riesco a leggere le impostazioni di consegna del tuo negozio. Il resto lo salvi
               tranquillo: il tempo di consegna di questo prodotto resta com&apos;è, a meno che tu non
               scelga qui sopra. Per vederlo giusto, ricarica la pagina.
             </p>
           ) : (
-            fastDelivery && !sellerOffersExpress && (
-              <p className="text-xs text-ink-400 mt-1.5">
-                La consegna veloce richiede l&apos;Express attivo per il negozio: attivalo dal{' '}
-                <Link href="/seller/profile" className="text-primary-700 hover:underline">profilo negozio</Link>.
-              </p>
-            )
+            // 2291 — Qui c'era «la veloce richiede l'Express attivo: attivalo dal profilo»,
+            // subito sotto «questa scelta non cambia cosa vede il cliente». Oggi la veloce
+            // la decide il sito (ora, negozi aperti, fattorino libero), non l'interruttore:
+            // la frase chiedeva di fare una cosa che non serve.
+            null
           )}
         </div>
 
@@ -1162,6 +1179,7 @@ export default function ProductForm({
           dropzoneHint="Trascina qui le foto o clicca per selezionarle"
           hint="Luce naturale, sfondo pulito, prodotto centrato — è la prima cosa che convince chi compra."
           showCoverBadge
+          sfondoBiancoAcceso={aiAccesa}
         />
 
         {aiAccesa && imageUrls.length >= 2 && (

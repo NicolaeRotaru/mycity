@@ -21,15 +21,21 @@ export const POST = withAuthRateLimit(
     // 31/10/2026 — L'abbonamento e le sponsorizzate sono sospesi al lancio
     // (ABBONAMENTO_NEGOZI_ACCESO): niente pagamenti chiesti al negozio, anche con
     // le chiavi Stripe presenti.
-    if (!ABBONAMENTO_NEGOZI_ACCESO) return ApiErrors.unavailable('L’abbonamento dei negozi non è attivo al momento.');
+    // Lo spento blocca le richieste di soldi nuove, non la porta per uscire: chi
+    // ha già un abbonamento in corso deve poterlo disdire anche adesso.
     if (!isStripeConfigured()) return ApiErrors.unavailable('Pagamenti non disponibili al momento.');
 
     const supa = await getServerSupabase();
     const { data: profile } = await supa
       .from('profiles')
-      .select('stripe_customer_id')
+      .select('stripe_customer_id, subscription_status')
       .eq('id', user.id)
       .single();
+
+    const inCorso = ['active', 'past_due', 'trialing', 'unpaid'].includes(String(profile?.subscription_status ?? ''));
+    if (!ABBONAMENTO_NEGOZI_ACCESO && !inCorso) {
+      return ApiErrors.unavailable('L’abbonamento dei negozi non è attivo al momento.');
+    }
 
     if (!profile?.stripe_customer_id) {
       return ApiErrors.invalidRequest('Nessun abbonamento da gestire.');

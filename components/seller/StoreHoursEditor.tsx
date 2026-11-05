@@ -1,17 +1,11 @@
 'use client';
 
 import { Plus, X } from 'lucide-react';
-import type { StoreHours, HoursInterval } from '@/lib/store-hours';
+import { orariImpostati, type StoreHours, type HoursInterval } from '@/lib/store-hours';
+import { DAYS, erroreDelleFasce, prossimaFascia } from './orari-validi';
 
-const DAYS: { key: keyof StoreHours; label: string }[] = [
-  { key: 'mon', label: 'Lunedì' },
-  { key: 'tue', label: 'Martedì' },
-  { key: 'wed', label: 'Mercoledì' },
-  { key: 'thu', label: 'Giovedì' },
-  { key: 'fri', label: 'Venerdì' },
-  { key: 'sat', label: 'Sabato' },
-  { key: 'sun', label: 'Domenica' },
-];
+export { erroreDegliOrari, erroreDelleFasce, prossimaFascia } from './orari-validi';
+
 
 interface Props {
   value: StoreHours;
@@ -29,7 +23,7 @@ export default function StoreHoursEditor({ value, onChange }: Props) {
     onChange({ ...value, ...settimana, [key]: intervals });
   };
   const addInterval = (key: keyof StoreHours) => {
-    setDay(key, [...(value[key] ?? []), ['09:00', '13:00']]);
+    setDay(key, [...(value[key] ?? []), prossimaFascia(value[key])]);
   };
   const removeInterval = (key: keyof StoreHours, idx: number) => {
     setDay(key, (value[key] ?? []).filter((_, i) => i !== idx));
@@ -41,16 +35,25 @@ export default function StoreHoursEditor({ value, onChange }: Props) {
     setDay(key, cur);
   };
 
+  // 2459 — Orari mai impostati: il sito accetta ordini a ogni ora, quindi i giorni non
+  // si chiamano «Chiuso» (sarebbe il contrario di quello che vede il cliente).
+  const maiImpostati = orariImpostati(value) === null;
   return (
     <div className="space-y-1">
+      {maiImpostati && (
+        <p role="note" className="mb-2 rounded-lg border border-accent-200 bg-accent-50 px-3 py-2 text-xs text-accent-900">
+          Orari non ancora impostati: per ora il negozio riceve ordini a qualunque ora. Aggiungi le fasce di apertura qui sotto.
+        </p>
+      )}
       {DAYS.map((d) => {
         const intervals = value[d.key] ?? [];
         const closed = intervals.length === 0;
+        const errore = erroreDelleFasce(intervals);
         return (
           <div key={d.key} className="flex flex-wrap items-center gap-2 py-2 border-b border-cream-100 last:border-0">
             <span className="w-24 text-sm font-medium text-ink-700 shrink-0">{d.label}</span>
             {closed ? (
-              <span className="text-sm text-ink-400 flex-1">Chiuso</span>
+              <span className="text-sm text-ink-400 flex-1">{maiImpostati ? 'Non impostato' : 'Chiuso'}</span>
             ) : (
               <div className="flex flex-wrap items-center gap-2 flex-1">
                 {intervals.map((iv, idx) => (
@@ -100,6 +103,7 @@ export default function StoreHoursEditor({ value, onChange }: Props) {
                 </button>
               )}
             </div>
+            {errore && <p role="alert" className="w-full text-xs font-medium text-secondary-600">{errore}</p>}
           </div>
         );
       })}
