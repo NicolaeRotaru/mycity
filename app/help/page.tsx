@@ -76,7 +76,7 @@ export default function HelpPage() {
         <div className="text-center">
           <div className="mb-2 flex justify-center"><Search size={32} className="text-white" aria-hidden /></div>
           <h2 className="text-2xl font-bold mb-1">Cerca tra le domande frequenti</h2>
-          <p className="text-primary-100">Più di 25 risposte alle domande più comuni →</p>
+          <p className="text-primary-100">Le risposte alle domande più comuni →</p>
         </div>
       </Link>
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronUp, ChevronDown, Eye, EyeOff, Trash2, Plus, RotateCcw } from 'lucide-react';
 import {
   homeSectionLabel,
@@ -16,22 +16,42 @@ type GroupKey = 'struttura' | 'contenuto';
 
 function AddSectionMenu({ onAdd, disabled, allowed }: { onAdd: (t: HomeSectionType) => void; disabled: boolean; allowed: GroupKey[] }) {
   const [open, setOpen] = useState(false);
+  const menuId = useId();
+  const pulsante = useRef<HTMLButtonElement>(null);
+  const contenitore = useRef<HTMLDivElement>(null);
+  // 5/11/2026 (S05) — Esc chiude e riporta il fuoco al pulsante; un clic fuori chiude.
+  useEffect(() => {
+    if (!open) return;
+    const tasto = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setOpen(false); pulsante.current?.focus(); }
+    };
+    const clic = (e: MouseEvent) => {
+      if (contenitore.current && !contenitore.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener('keydown', tasto);
+    document.addEventListener('mousedown', clic);
+    return () => { window.removeEventListener('keydown', tasto); document.removeEventListener('mousedown', clic); };
+  }, [open]);
   const groups = [
     { key: 'struttura' as const, label: 'Struttura', items: HOME_SECTION_CATALOG.filter((s) => s.group === 'struttura') },
     { key: 'contenuto' as const, label: 'Contenuto', items: HOME_SECTION_CATALOG.filter((s) => s.group === 'contenuto') },
   ].filter((g) => allowed.includes(g.key));
   return (
-    <div className="relative">
+    <div className="relative" ref={contenitore}>
       <button
+        ref={pulsante}
         type="button"
         disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open && !disabled}
+        aria-controls={open && !disabled ? menuId : undefined}
         onClick={() => setOpen((o) => !o)}
         className="inline-flex items-center gap-2 bg-primary-50 text-primary-800 hover:bg-primary-100 disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-semibold"
       >
         <Plus size={16} aria-hidden /> Aggiungi sezione
       </button>
       {open && !disabled && (
-        <div className="absolute z-40 bottom-full mb-2 w-72 max-h-80 overflow-y-auto rounded-xl border border-cream-300 bg-white shadow-warm-lg p-2">
+        <div id={menuId} role="menu" className="absolute z-40 bottom-full mb-2 w-72 max-h-80 overflow-y-auto rounded-xl border border-cream-300 bg-white shadow-warm-lg p-2">
           {groups.map((g) => (
             <div key={g.label}>
               <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-ink-400">{g.label}</p>
@@ -39,7 +59,8 @@ function AddSectionMenu({ onAdd, disabled, allowed }: { onAdd: (t: HomeSectionTy
                 <button
                   key={it.type}
                   type="button"
-                  onClick={() => { onAdd(it.type); setOpen(false); }}
+                  role="menuitem"
+                  onClick={() => { onAdd(it.type); setOpen(false); pulsante.current?.focus(); }}
                   className="w-full text-left rounded-lg px-2 py-2 hover:bg-cream-50"
                 >
                   <span className="block text-sm font-medium text-ink-800">{it.label}</span>
@@ -108,14 +129,14 @@ export default function HomeSectionsEditor({
                   <ChevronDown size={16} aria-hidden />
                 </button>
               </div>
-              <button type="button" onClick={() => setOpenId(isOpen ? null : s.id)} className="flex-1 min-w-0 text-left">
+              <button type="button" onClick={() => setOpenId(isOpen ? null : s.id)} aria-expanded={isOpen} aria-controls={`sezione-${s.id}`} className="flex-1 min-w-0 text-left">
                 <span className="font-medium text-ink-900">{homeSectionLabel(s.type)}</span>
                 {!s.enabled && <span className="ml-2 text-xs text-ink-400">nascosta</span>}
               </button>
               <button type="button" onClick={() => toggle(i)} aria-label={s.enabled ? 'Nascondi sezione' : 'Mostra sezione'} title={s.enabled ? 'Nascondi' : 'Mostra'} className="p-1.5 text-ink-500 hover:text-ink-800">
                 {s.enabled ? <Eye size={16} aria-hidden /> : <EyeOff size={16} aria-hidden />}
               </button>
-              <button type="button" onClick={() => setOpenId(isOpen ? null : s.id)} className="px-2 py-1 text-xs font-semibold text-primary-700 hover:underline">
+              <button type="button" onClick={() => setOpenId(isOpen ? null : s.id)} aria-expanded={isOpen} aria-controls={`sezione-${s.id}`} className="px-2 py-1 text-xs font-semibold text-primary-700 hover:underline">
                 {isOpen ? 'Chiudi' : 'Modifica'}
               </button>
               <button
@@ -129,7 +150,7 @@ export default function HomeSectionsEditor({
               </button>
             </div>
             {isOpen && (
-              <div className="border-t border-cream-200 px-4 py-4 space-y-4">
+              <div id={`sezione-${s.id}`} className="border-t border-cream-200 px-4 py-4 space-y-4">
                 <HomeSectionConfigForm section={s} onChange={(ns) => setSection(i, ns)} />
                 <button
                   type="button"
