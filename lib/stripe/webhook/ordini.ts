@@ -22,7 +22,6 @@ import { marcaCarrelloRecuperato } from '@/lib/carrelli-abbandonati';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { logger } from '@/lib/logger';
-import { formatPriceFromCents } from '@/lib/format';
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
 import { clientIdGaValido } from '@/lib/analytics/ga-client-id';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
@@ -33,7 +32,7 @@ import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
 import { fasciaAlGiornoDellOrdine } from '@/lib/ordini/fascia-leggibile';
-import { orariDeiNegozi, rimborsaLaFasciaPersa, avvisaIlClienteDelRimborsoAutomatico } from './fascia-al-pagamento';
+import { orariDeiNegozi, rimborsaLaFasciaPersa, diciAlClienteDelCarrelloRimborsato } from './fascia-al-pagamento';
 
 export type PendingGroup = {
   sellerId: string;
@@ -176,17 +175,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
       `Un pagamento è arrivato dopo la scadenza della riserva merce (${pendingCheckoutId}). Rimborsato automaticamente.`,
       '/admin/orders',
     );
-    // 5/11/2026 — Anche il cliente lo sa: ha pagato e l'ordine non c'è.
-    await avvisaIlClienteDelRimborsoAutomatico(admin, session, {
-      chiave: `riserva-scaduta-cliente:${pendingCheckoutId}`,
-      buyerId: (pending.buyer_id as string | null) ?? null,
-      frase: `Hai pagato ${formatPriceFromCents(importoCents)}, ma il pagamento è arrivato quando la merce non era più tenuta da parte per te. ` +
-        'Ti abbiamo rimborsato tutto e nessun ordine è stato creato.',
-      invito: "Puoi rifare l'ordine dal carrello.",
-      oggetto: `💶 Rimborso di ${formatPriceFromCents(importoCents)}: il pagamento è arrivato tardi`,
-      motivo: 'il tempo per pagare era scaduto.',
-      traccia: { pendingCheckoutId },
-    });
+    await diciAlClienteDelCarrelloRimborsato(admin, session, 'riserva-scaduta', pendingCheckoutId, pending.buyer_id as string | null, importoCents);
     return;
   }
 
@@ -247,17 +236,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     // Prima della migrazione 126 'MISMATCH' non è ammesso: si segna 'CANCELED'.
     // Se il segno non passa Stripe NON riprova: il perché in quadratura.ts (R81).
     await chiudiIlCarrelloPerQuadratura(admin, pendingCheckoutId);
-    // 5/11/2026 — Anche il cliente lo sa: ha pagato e l'ordine non c'è.
-    await avvisaIlClienteDelRimborsoAutomatico(admin, session, {
-      chiave: `quadratura-cliente:${pendingCheckoutId}`,
-      buyerId: (pending.buyer_id as string | null) ?? null,
-      frase: `Hai pagato ${formatPriceFromCents(incassatoCents)}, ma il conto del carrello non tornava con quello che ti avevamo mostrato. ` +
-        'Per non addebitarti una cifra sbagliata ti abbiamo rimborsato tutto e nessun ordine è stato creato.',
-      invito: "Puoi rifare l'ordine dal carrello.",
-      oggetto: `💶 Rimborso di ${formatPriceFromCents(incassatoCents)}: il tuo ordine non è stato creato`,
-      motivo: 'il totale non corrispondeva al preventivo.',
-      traccia: { pendingCheckoutId },
-    });
+    await diciAlClienteDelCarrelloRimborsato(admin, session, 'quadratura', pendingCheckoutId, pending.buyer_id as string | null, incassatoCents);
     return;
   }
 
@@ -510,9 +489,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
    *      piattaforma tiene viva la funzione finche' non finiscono, invece di
    *      spegnerla a meta'.
    */
-  // 5/11/2026 — La campanella si tenta per tutti gli ordini del carrello (id
-  // deterministico): un ordine nato in un tentativo morto prima degli avvisi
-  // riceve qui la sua campanella e le sue email; quelli gia' avvisati no.
+  // 5/11/2026 — Campanella per tutti gli ordini (id fisso): anche quelli di un tentativo morto prima degli avvisi.
   if (createdOrderIds.some((c) => c.nuovo)) {
     // 30/8/2026 (R164) — Il carrello di questa persona e' tornato: e' diventato
     // un ordine. Lo marca anche il browser, ma il browser puo' chiudersi — chi

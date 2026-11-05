@@ -172,3 +172,27 @@ export async function avvisaIlClienteDelRimborsoAutomatico(
     text: testo,
   }));
 }
+
+/** 5/11/2026 — Le due frasi dei rimborsi automatici di lib/stripe/webhook/ordini.ts (carrello scaduto, conto che non torna). */
+export async function diciAlClienteDelCarrelloRimborsato(
+  admin: Admin,
+  session: Stripe.Checkout.Session,
+  tipo: 'riserva-scaduta' | 'quadratura',
+  pendingCheckoutId: string,
+  buyerId: string | null,
+  importoCents: number,
+): Promise<void> {
+  const importo = formatPriceFromCents(importoCents);
+  const scaduta = tipo === 'riserva-scaduta';
+  await avvisaIlClienteDelRimborsoAutomatico(admin, session, {
+    chiave: `${tipo}-cliente:${pendingCheckoutId}`,
+    buyerId,
+    frase: scaduta
+      ? `Hai pagato ${importo}, ma il pagamento è arrivato quando la merce non era più tenuta da parte per te. Ti abbiamo rimborsato tutto e nessun ordine è stato creato.`
+      : `Hai pagato ${importo}, ma il conto del carrello non tornava con quello che ti avevamo mostrato. Per non addebitarti una cifra sbagliata ti abbiamo rimborsato tutto e nessun ordine è stato creato.`,
+    invito: "Puoi rifare l'ordine dal carrello.",
+    oggetto: scaduta ? `💶 Rimborso di ${importo}: il pagamento è arrivato tardi` : `💶 Rimborso di ${importo}: il tuo ordine non è stato creato`,
+    motivo: scaduta ? 'il tempo per pagare era scaduto.' : 'il totale non corrispondeva al preventivo.',
+    traccia: { pendingCheckoutId },
+  });
+}
