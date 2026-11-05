@@ -42,7 +42,13 @@ jobs:
   backup:
     name: Copia notturna
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 5/11/2026 — Il tetto del lavoro sta SOPRA la somma dei tetti dei passi lunghi (copia 20 +
+    # foto 15): cosi' un passo appeso FALLISCE per il suo tetto e l'allarme (if: failure()) parte.
+    # Un lavoro fermato dal suo tetto e' «annullato», e failure() li' non scatta.
+    timeout-minutes: 45
+    # 5/11/2026 — Il primo del mese la corsa delle 03:41 e' solo la prova di ripristino: la copia
+    # notturna di quel giorno l'ha gia' fatta la corsa delle 02:17.
+    if: github.event.schedule != '41 3 1 * *'
     # 31/10/2026 — `issues: write` serve SOLO al passo dell'allarme in fondo:
     # apre (o aggiorna) una segnalazione quando la copia non riesce. Qui si
     # ripete `contents: read`, perche' i permessi di un lavoro sostituiscono
@@ -239,10 +245,14 @@ jobs:
         # lavoro resta rosso per le foto). Non parte solo se manca l indirizzo del
         # database o la passphrase: niente copia in chiaro.
         if: ${{ !cancelled() && steps.verifica.outcome == 'success' }}
+        timeout-minutes: 20
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
           BACKUP_DIR: ${{ github.workspace }}/backup
+          # 5/11/2026 — Foto configurate a meta': lo script lo dice, invece di «rclone non e'
+          # installato» o «mancano il secchio e le chiavi».
+          FOTO_A_META: ${{ steps.foto.outcome == 'failure' && 'si' || '' }}
           STORAGE_SYNC_SOURCE: ${{ vars.STORAGE_SYNC_SOURCE }}
           STORAGE_SYNC_DEST: ${{ vars.STORAGE_SYNC_DEST }}
           STORAGE_SYNC_BUCKETS: ${{ vars.STORAGE_SYNC_BUCKETS }}
@@ -415,10 +425,18 @@ jobs:
   prova-di-ripristino:
     name: La copia si riapre davvero (mensile)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 5/11/2026 — Sopra la somma dei passi lunghi (copia 20 + foto 15 + riapertura 20): un passo
+    # appeso fallisce per il suo tetto e l'allarme parte.
+    timeout-minutes: 60
+    # 5/11/2026 — Avviata a mano, la prova aspetta la copia notturna invece di girarle accanto:
+    # due pg_dump insieme sul pooler e due rclone sulla stessa destinazione erano quello che il
+    # blocco `concurrency` voleva evitare (ma lui mette in fila le corse, non i lavori).
+    needs: backup
     # Gira il primo del mese, e a mano quando serve. Non ogni notte: e' una
     # verifica, non una copia.
-    if: github.event.schedule == '41 3 1 * *' || github.event_name == 'workflow_dispatch'
+    # `!cancelled()`: con `needs` la prova partirebbe solo se la copia e' riuscita; il primo del
+    # mese la copia e' saltata apposta, e a mano la prova serve anche quando la copia e' rossa.
+    if: ${{ !cancelled() && (github.event.schedule == '41 3 1 * *' || github.event_name == 'workflow_dispatch') }}
     # 1/11/2026 — `issues: write` serve solo all'allarme in fondo (come nella
     # copia notturna); `contents: read` si ripete perche' i permessi di un
     # lavoro sostituiscono quelli del file.
@@ -562,10 +580,12 @@ jobs:
         id: fresca
         # Come nella copia notturna: le foto non fermano la prova di ripristino.
         if: ${{ !cancelled() && steps.segreti.outcome == 'success' }}
+        timeout-minutes: 20
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
           BACKUP_DIR: ${{ github.workspace }}/backup
+          FOTO_A_META: ${{ steps.foto.outcome == 'failure' && 'si' || '' }}
           STORAGE_SYNC_SOURCE: ${{ vars.STORAGE_SYNC_SOURCE }}
           STORAGE_SYNC_DEST: ${{ vars.STORAGE_SYNC_DEST }}
           STORAGE_SYNC_BUCKETS: ${{ vars.STORAGE_SYNC_BUCKETS }}
@@ -594,6 +614,7 @@ jobs:
       - name: Riaprila su un database vuoto, e cronometra
         id: riapri-db
         if: ${{ !cancelled() && steps.segreti.outcome == 'success' }}
+        timeout-minutes: 20
         env:
           BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
           PGHOST: localhost

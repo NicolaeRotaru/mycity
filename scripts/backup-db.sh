@@ -359,7 +359,13 @@ riapri_una_foto() {
   return 0
 }
 
-if [[ -z "$SORGENTE_FOTO" || -z "$DESTINAZIONE_FOTO" ]]; then
+if [[ "${FOTO_A_META:-}" == "si" ]]; then
+  # 5/11/2026 — La configurazione delle foto e' a meta' (il passo «Le foto vanno in copia?» e'
+  # rosso): non e' «rclone non installato» ne' «mancano il secchio e le chiavi». Il lavoro e' gia'
+  # rosso per quel passo; qui si dice la causa vera e il database resta copiato.
+  echo "[backup] esito-foto: fallita — la copia delle foto e' configurata a meta' (vedi il passo «Le foto vanno in copia?»): nessun file e' stato copiato." >&2
+  riepilogo_lavoro "❌ **Le foto non sono state copiate** — la configurazione e' a meta': manca una fra STORAGE_SYNC_SOURCE, STORAGE_SYNC_DEST e RCLONE_CONFIG_BASE64 (il passo «Le foto vanno in copia?» dice quale). Database, utenti ed elenco delle foto sono copiati regolarmente."
+elif [[ -z "$SORGENTE_FOTO" || -z "$DESTINAZIONE_FOTO" ]]; then
   echo "[backup] esito-foto: non-configurato — l'elenco delle immagini e' nella copia, i FILE no." >&2
   echo "[backup] Per accenderla: STORAGE_SYNC_SOURCE (es. \"supabase:\"), STORAGE_SYNC_DEST (es. \"b2:mycity-foto\") e rclone installato. Vedi docs/backup-restore.md §3." >&2
   echo "::warning::Le foto dei negozi non hanno nessuna copia nostra: se il fornitore le perde, si rifanno una per una." >&2
