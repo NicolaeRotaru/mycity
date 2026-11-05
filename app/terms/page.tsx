@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { CANONE_NEGOZI, COMMISSIONE_DEL_PERCENTO, IVA_SULLA_COMMISSIONE } from '@/app/seller/earnings/commissione';
 import { indirizzoContatto } from '@/lib/contatti-pubblici';
-import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
+import { TERMINI_IN_VIGORE_DAL, VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 import { metodiAlCheckout } from '@/lib/promesse-pubbliche';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
 import { nomePubblico, rigaIdentita, segnalaDatiMancanti, titolare } from '@/lib/legal/titolare';
@@ -18,12 +18,14 @@ export const metadata = {
     locale: 'it_IT',
     siteName: 'MyCity',
     url: '/terms',
+    // 5/11/2026 — Un openGraph proprio sostituisce quello del sito: senza `images` il link in chat usciva senza copertina.
+    images: ['/opengraph-image'],
   },
 };
 
 // 31/10/2026 (ondata 6) — Il numero che si accetta e quello che si legge sono lo stesso.
 const VERSION = /terms-([\d.]+)/.exec(VERSIONE_TESTI_LEGALI)?.[1] ?? VERSIONE_TESTI_LEGALI;
-const EFFECTIVE_DATE = '1 novembre 2026';
+const EFFECTIVE_DATE = TERMINI_IN_VIGORE_DAL;
 
 const TOC = [
   { id: 'premesse', label: '1 · Premesse e definizioni' },

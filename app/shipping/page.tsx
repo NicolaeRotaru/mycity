@@ -28,6 +28,8 @@ export const metadata = {
     locale: 'it_IT',
     siteName: 'MyCity',
     url: '/shipping',
+    // 5/11/2026 — Un openGraph proprio sostituisce quello del sito: senza `images` il link in chat usciva senza copertina.
+    images: ['/opengraph-image'],
   },
 };
 

@@ -38,6 +38,13 @@ const Corpo = z.object({
   nuovaPassword: z.string().min(LUNGHEZZA_MINIMA).max(200),
 });
 
+/** I fornitori con cui l'account accede (`email`, `google`…), da app_metadata o dalle identità. */
+function fornitoriDiAccesso(user: { app_metadata?: { providers?: unknown }; identities?: Array<{ provider?: string }> | null }): string[] {
+  const daiMetadati = user.app_metadata?.providers;
+  if (Array.isArray(daiMetadati)) return daiMetadati.filter((p): p is string => typeof p === 'string');
+  return (user.identities ?? []).map((i) => i.provider).filter((p): p is string => typeof p === 'string');
+}
+
 export const POST = withAuthRateLimit(
   // Cinque tentativi ogni quarto d'ora: chi cambia la password lo fa una volta,
   // e questa rotta è anche un modo per PROVARE password (la risposta dice se
@@ -54,7 +61,12 @@ export const POST = withAuthRateLimit(
     }
 
     const email = user.email?.trim();
-    if (!email) {
+    // 5/11/2026 — Chi entra con Google HA un'email: il controllo sulla sola email
+    // non scattava mai, si provava la password e la risposta era «Password
+    // attuale non corretta». Si guarda con che cosa accede l'account: se fra i
+    // fornitori non c'è 'email', una password da cambiare non esiste.
+    const fornitori = fornitoriDiAccesso(user);
+    if (!email || (fornitori.length > 0 && !fornitori.includes('email'))) {
       // Chi è entrato solo con Google non ha una password da cambiare: mandarlo
       // avanti gli scriverebbe una password che non ha mai chiesto.
       return ApiErrors.conflict('Questo account accede senza password: usa il tuo fornitore di accesso.');

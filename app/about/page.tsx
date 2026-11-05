@@ -19,6 +19,8 @@ export const metadata = {
     locale: 'it_IT',
     siteName: 'MyCity',
     url: '/about',
+    // 5/11/2026 — Un openGraph proprio sostituisce quello del sito: senza `images` il link in chat usciva senza copertina.
+    images: ['/opengraph-image'],
   },
 };
 
@@ -30,7 +32,8 @@ const STATS = [
   { value: '100%', label: 'venditori locali verificati' },
   // 31/10/2026 (ondata 6) — Era «0€ commissioni mensili»: il negozio paga il 10% sul venduto tramite MyCity.
   { value: `${COMMISSIONE_PERCENTO}%`, label: 'per i negozi, solo su quello che vendono tramite MyCity' },
-  { value: 'Pay-on-delivery', label: 'paghi alla consegna, anche in contanti' },
+  // 5/11/2026 — Era «Pay-on-delivery», in inglese in una pagina tutta italiana.
+  { value: 'Alla consegna', label: 'paghi alla consegna, anche in contanti' },
 ];
 
 /**
@@ -196,9 +199,9 @@ export default async function AboutPage() {
               salumiere di fronte?</em>
             </p>
             <p className="text-[17px] leading-relaxed text-ink-700 max-w-[64ch] mt-3.5">
-              Abbiamo messo insieme i primi negozi del centro storico, una flotta di rider in bici e
-              un’app pensata per chi non ha tempo da perdere. Oggi MyCity cresce quartiere dopo
-              quartiere, sempre con la stessa bussola: la prossimità.
+              Partiamo dal centro di Piacenza, con i primi negozi, le consegne in bici e
+              un’app pensata per chi non ha tempo da perdere. Siamo all’inizio: cresceremo un
+              quartiere alla volta, sempre con la stessa bussola: la prossimità.
             </p>
           </div>
         </section>
