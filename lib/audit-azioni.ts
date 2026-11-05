@@ -48,6 +48,7 @@ export const AZIONI_AUDIT = [
   'cms.update',
   'daily_drop.create',
   'daily_drop.delete',
+  'cod.remittance_confirm',
 ] as const;
 
 export type AuditAction = (typeof AZIONI_AUDIT)[number];
@@ -82,6 +83,7 @@ export const ETICHETTE_AZIONI_AUDIT: Record<AuditAction, string> = {
   'cms.update': 'Pagina pubblicata',
   'daily_drop.create': 'Drop del giorno salvato',
   'daily_drop.delete': 'Drop del giorno eliminato',
+  'cod.remittance_confirm': 'Rimessa contanti confermata',
 };
 
 /** L'etichetta di un'azione letta dal registro; un codice sconosciuto resta com'e'. */
