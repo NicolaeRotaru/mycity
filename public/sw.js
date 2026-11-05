@@ -97,7 +97,7 @@ async function trimCache(cacheName, maxEntries) {
 }
 
 // Stale-while-revalidate per immagini: serve subito da cache, aggiorna in background.
-async function staleWhileRevalidate(req, cacheName, maxEntries, freschezzaMs = 0) {
+async function staleWhileRevalidate(req, cacheName, maxEntries, freschezzaMs = 0, accettaOpache = false) {
   const cache = await caches.open(cacheName);
   const cached = await cache.match(req);
 
@@ -119,6 +119,16 @@ async function staleWhileRevalidate(req, cacheName, maxEntries, freschezzaMs = 0
       // lo stesso. Prima l'errore restava senza padrone; adesso e' raccolto.
       conMarcaTemporale(res)
         .then((copia) => cache.put(req, copia))
+        .then(() => trimCache(cacheName, maxEntries))
+        .catch(() => {});
+    } else if (accettaOpache && res.type === 'opaque') {
+      // S10 (5/11/2026) — Le foto di Supabase arrivano da un <img> senza
+      // crossorigin: la risposta e' «opaca» (ok=false, stato 0) e prima non se
+      // ne salvava nessuna. Si salvano cosi' come sono: senza marca temporale
+      // (una risposta opaca non si legge), quindi si ricontrollano in
+      // sottofondo, ma la foto gia' vista arriva subito e anche senza rete.
+      cache
+        .put(req, res.clone())
         .then(() => trimCache(cacheName, maxEntries))
         .catch(() => {});
     }
@@ -254,7 +264,7 @@ self.addEventListener('fetch', (event) => {
   // 2. Immagini Supabase storage → stale-while-revalidate
   if (url.hostname.endsWith('.supabase.co') && url.pathname.startsWith('/storage/')) {
     event.respondWith(
-      staleWhileRevalidate(req, IMAGE_CACHE, MAX_IMAGE_ENTRIES, FRESCHEZZA_IMMAGINI_MS),
+      staleWhileRevalidate(req, IMAGE_CACHE, MAX_IMAGE_ENTRIES, FRESCHEZZA_IMMAGINI_MS, true),
     );
     return;
   }
