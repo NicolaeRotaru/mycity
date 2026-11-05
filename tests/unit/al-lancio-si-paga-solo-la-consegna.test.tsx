@@ -10,12 +10,11 @@ import {
 const regolaDelCarrello = (merciCents: number[]) =>
   PLATFORM_DELIVERY_FEE_CENTS + (merciCents.length - 1) * EURO_NEGOZIO_IN_PIU
   + merciCents.filter((m) => m < SOGLIA_SPESA).length * EURO_SPESA_PICCOLA;
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ShippingPage from '@/app/shipping/page';
 import { metadata as metadatiVicinoATe } from '@/app/near/layout';
-import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import {
   COMPENSO_RIDER_CENTS,
   PLATFORM_DELIVERY_FEE_CENTS,
@@ -460,12 +459,11 @@ describe('le altre promesse parlano della stessa consegna', () => {
     }
   });
 
-  it('la barra «ti mancano X €» non c’è più: resta la riga con la consegna', () => {
-    const html = renderToStaticMarkup(<FreeShippingProgress subtotal={12} />);
-    const t = testoDi(html);
-    expect(t).not.toMatch(/mancano|gratis/i);
-    expect(html).not.toContain('progressbar');
-    expect(t).toContain(TRE_EURO);
+  // S10 (5/11/2026, scheda 2083) — Qui si collaudava FreeShippingProgress, che
+  // nessuna pagina montava più: il componente è stato tolto. Che carrello,
+  // cassa e scheda non lo montino lo dicono le prove più sotto.
+  it('la barra «ti mancano X €» non esiste più nel codice', () => {
+    expect(existsSync('components/ui/FreeShippingProgress.tsx')).toBe(false);
   });
 
   it('le quattro promesse della home non dicono più «spedizione gratuita sopra 30 €»', () => {

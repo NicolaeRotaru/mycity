@@ -129,16 +129,6 @@ function SignUpInner() {
     }
     setIsLoading(true);
     try {
-      let referrerId: string | null = null;
-      if (refCode) {
-        const { data: ref } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('referral_code', refCode)
-          .maybeSingle();
-        referrerId = ref?.id ?? null;
-      }
-
       /**
        * 27/8/2026 (R160) — L'INTENZIONE VIAGGIA COL LINK DI CONFERMA.
        *
@@ -153,7 +143,7 @@ function SignUpInner() {
        */
       const base = APP_URL || window.location.origin;
       const emailRedirectTo = ritornoDopoLaConferma(base, returnTo, 'email');
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -174,13 +164,11 @@ function SignUpInner() {
       });
       if (error) throw error;
 
-      if (referrerId && data.user?.id && data.user.id !== referrerId) {
-        await supabase.from('referrals').insert({
-          referrer_id: referrerId,
-          referred_id: data.user.id,
-          reward_amount: 5,
-        });
-      }
+      // S10 (5/11/2026) — Qui l'invito si scriveva dal browser nella tabella
+      // `referrals`, senza nessuna rotta a controllarlo. Dalla migrazione 186 il
+      // database quella scrittura la rifiuta: era codice che non poteva più
+      // riuscire. Chi riaccende gli inviti (INVITI_E_PUNTI_ACCESI) deve farlo
+      // scrivere a una rotta del server, che controlla il codice prima.
 
       // #214 — Qui l'evento NON si emette piu'. Chi compila il modulo non e'
       // ancora iscritto: deve confermare l'email. Contandolo qui, la stessa

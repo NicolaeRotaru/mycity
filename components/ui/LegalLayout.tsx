@@ -119,7 +119,7 @@ export function LegalSection({
   children: ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-24">
+    <section id={id} className="scroll-mt-24 md:scroll-mt-[calc(var(--header-height)+0.5rem)]">
       <h2 className="text-xl font-bold text-ink-900 mb-2">{heading}</h2>
       <div className="space-y-4">{children}</div>
     </section>

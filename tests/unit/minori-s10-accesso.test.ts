@@ -109,3 +109,11 @@ describe('dall\'iscrizione «Accedi» tiene la strada dell\'ordine (1680)', () =
     expect(src).toMatch(/`\/sign-in\?returnTo=\$\{encodeURIComponent\(returnTo\)\}`/);
   });
 });
+
+describe('l\'invito non si scrive più dal browser (2414)', () => {
+  it('la pagina di iscrizione non scrive referrals né legge il codice invito dai profili', () => {
+    const src = readFileSync('app/sign-up/page.tsx', 'utf8');
+    expect(src).not.toMatch(/from\('referrals'\)/);
+    expect(src).not.toMatch(/\.eq\('referral_code'/);
+  });
+});

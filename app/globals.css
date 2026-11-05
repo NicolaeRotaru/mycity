@@ -181,6 +181,16 @@ html {
   background-color: var(--surface-page); /* cream-100 */
   scroll-behavior: smooth;
 }
+/* S10 (5/11/2026) — Tornando indietro con Maiusc+Tab il browser porta il campo
+ * col fuoco in cima allo schermo, sotto la testata fissa (da md in su, ~144px):
+ * il link restava coperto (WCAG 2.4.11). Sul telefono la testata non e' fissa,
+ * ma in fondo c'e' la barra a schede. */
+@media (min-width: 768px) {
+  html { scroll-padding-top: calc(var(--header-height) + 0.5rem); }
+}
+@media (max-width: 767px) {
+  html { scroll-padding-bottom: calc(var(--tabbar-height) + 1rem); }
+}
 
 body {
   font-family: var(--font-sans);
@@ -268,15 +278,11 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
 :where([class*="text-white"]) :is(h1, h2, h3) { color: inherit; }
 
 /* Default focus ring più visibile e on-brand.
-   6/9/2026 — QUESTO COLORE E' LA COPIA A MANO DI --focus-outline (riga 105), E
-   PER ORA RESTA COSI'. tests/unit/la-barra-in-alto-si-vede-anche-navigando-col-tasto-tab.test.ts
-   apre questo blocco e ci cerca un colore scritto per esteso, per rifare il
-   conto dello stacco sui fondi della barra in alto: una var() non la sa
-   risolvere e la prova si spegne invece di diventare piu' severa. Si sblocca
-   insegnando a quella prova a seguire il token — che sta in un file non di
-   questo pacchetto. */
+   S10 (5/11/2026) — Era la copia a mano di --focus-outline (#C0492C). Adesso
+   usa il token, e tests/unit/la-barra-in-alto-si-vede-anche-navigando-col-tasto-tab.test.ts
+   segue i var() fino al colore per rifare il conto dello stacco. */
 :focus-visible {
-  outline: 2px solid #C0492C;
+  outline: var(--focus-outline);
   outline-offset: 2px;
 }
 
