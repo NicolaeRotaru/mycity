@@ -68,3 +68,23 @@ describe('70 — rimborso automatico respinto dalla banca', () => {
     expect(avvisi.some((n) => String(n.title).includes('respinto'))).toBe(true);
   });
 });
+
+describe('1663 — l avviso del rimborso respinto dice cosa è successo al bonifico del negozio', () => {
+  const ordine = (payout: string) => ({
+    id: 'o1', refunded_amount_cents: 3000, gross_total_cents: 3000, total_price: 30, payment_status: 'REFUNDED',
+    payout_status: payout, seller_payout_cents: 2700, seller_payout_reversed_cents: 0, payout_tentativo: 0, stripe_refund_id: null,
+  });
+  const respinto = { id: 're_r', status: 'failed', amount: 3000, payment_intent: 'pi_1', metadata: { order_id: 'o1' } } as never;
+  const avviso = () => String((stato.db.tabelle.notifications ?? []).find((n) => n.user_id === 'admin1')?.body ?? '');
+  it('bonifico in corso (PROCESSING): non dice «rimesso in coda», e l importo è in euro all italiana', async () => {
+    stato.db.tabelle.orders = [ordine('PROCESSING')];
+    await handleRefundUpdated(respinto);
+    expect(avviso()).not.toContain('rimesso in coda.');
+    expect(avviso()).toMatch(/30,00\s€/u);
+  });
+  it('bonifico chiuso dal rimborso (REFUNDED): dice «rimesso in coda»', async () => {
+    stato.db.tabelle.orders = [ordine('REFUNDED')];
+    await handleRefundUpdated(respinto);
+    expect(avviso()).toContain('rimesso in coda.');
+  });
+});

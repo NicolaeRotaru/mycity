@@ -25,6 +25,7 @@ import { logger } from '@/lib/logger';
 import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 import { refundIssuedTemplate } from '@/lib/email/templates';
 import { notifyAdmins } from './comune';
+import { formatPriceFromCents } from '@/lib/format';
 import { PAUSA_RIMBORSO_DA_DIVIDERE, registraRimborsoParzialeDaFuori } from './rimborsi-da-fuori';
 import { elencoDaScrivere, rimborsiGiaScritti } from '@/lib/stripe/elenco-dei-rimborsi';
 import { pianoDelRimborsoRespinto, type OrdineDelRimborsoRespinto } from '@/lib/stripe/rimborso-respinto';
@@ -447,10 +448,20 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
   // scritti, l'avviso si saltava: se il primo si era fermato fra la scrittura e
   // l'avviso (una risposta del database persa, il processo morto), il cliente
   // restava senza rimborso e nessuno lo sapeva.
+  // 5/11/2026 — L'avviso dice quello che e' successo davvero al bonifico del
+  // negozio: rimesso in coda solo se questo passaggio l'ha rimesso; se non
+  // c'era niente da rimettere (bonifico in corso, o mai chiuso) non lo promette.
+  const rimessiInCoda = piano.scritture.filter((p) => p.valori.payout_status === 'HELD').length;
+  const fraseDelBonifico =
+    piano.scritture.length === 0
+      ? "Questo rimborso respinto era già stato registrato: controlla sull'ordine lo stato del bonifico al negozio."
+      : rimessiInCoda > 0
+        ? "Il bonifico al negozio e' stato rimesso in coda."
+        : "Il bonifico al negozio non era da rimettere in coda (non era stato chiuso dal rimborso).";
   const avvisaGliAmministratori = () =>
     notifyAdmins(
       '⚠️ Rimborso rifiutato dalla banca',
-      `Il rimborso di €${(tornatoIndietro / 100).toFixed(2)} su ${ordini.length === 1 ? `l'ordine ${ordini[0].id}` : `${ordini.length} ordini dello stesso pagamento`} non e' arrivato al cliente (${refund.status}). I soldi sono rientrati: va rimborsato in un altro modo. Il bonifico al negozio e' stato rimesso in coda; se il rimborso era pieno, la merce era stata rimessa a scaffale e la giacenza va ricontrollata a mano.`,
+      `Il rimborso di ${formatPriceFromCents(tornatoIndietro)} su ${ordini.length === 1 ? `l'ordine ${ordini[0].id}` : `${ordini.length} ordini dello stesso pagamento`} non e' arrivato al cliente (${refund.status}). I soldi sono rientrati: va rimborsato in un altro modo. ${fraseDelBonifico} Se il rimborso era pieno, la merce era stata rimessa a scaffale e la giacenza va ricontrollata a mano.`,
       '/admin/orders',
       refund.id ? { unaVoltaPer: `rimborso-respinto:${refund.id}` } : {},
     );
