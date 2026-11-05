@@ -24,7 +24,7 @@ const DESTINATIONS: Entry[] = [
   { href: '/novita',         icon: Sparkles,  label: 'Novità' },
   { href: '/regali',         icon: Gift,      label: 'Regali' },
   { href: '/near',           icon: MapPin,    label: 'Vicino a te' },
-  { href: '/piu-venduti',    icon: Flame,     label: 'Più venduti' },
+  { href: '/piu-venduti',    icon: Flame,     label: 'Più recensiti' },
   { href: '/piccoli-prezzi', icon: PiggyBank, label: 'Piccoli prezzi' },
 ];
 

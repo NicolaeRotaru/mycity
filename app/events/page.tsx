@@ -11,6 +11,7 @@ import { sizedImage } from '@/lib/image-url';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import CollectionHeader from '@/components/CollectionHeader';
 import { Badge } from '@/components/ui/Badge';
 import { queryKeys } from '@/lib/queries/keys';
@@ -76,17 +77,23 @@ export default function EventsPage() {
     })();
   }, []);
 
-  const { data: events = [], isLoading } = useQuery({
+  const { data: tuttiGliEventi = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.events.public,
     queryFn: async (): Promise<EventRow[]> => {
-      const { data } = await supabase
+      // 5/11/2026 — Una lettura caduta non è «nessun evento»: l'errore va
+      // alla query, che riprova e fa vedere «Riprova» invece dello stato vuoto.
+      // E un evento già finito non si chiede nemmeno: lo stato lo cambia
+      // l'admin a mano, la data di fine no.
+      const { data, error } = await supabase
         .from('marketplace_events')
         .select(`
           id, title, description, cover_image_url, starts_at, ends_at,
           discount_percent, cta_label, cta_url, status, sponsor_seller_id
         `)
         .in('status', ['scheduled', 'live'])
+        .gt('ends_at', new Date().toISOString())
         .order('starts_at', { ascending: true });
+      if (error) throw error;
       const eventi = (data ?? []) as Omit<EventRow, 'sponsor'>[];
       // 18/10/2026 — Il negozio sponsor arriva dalla vista pubblica dei negozi,
       // non dalla tabella dei profili: dopo le migrazioni 110, 112 e 161 la
@@ -109,6 +116,11 @@ export default function EventsPage() {
     refetchInterval: 60_000,
   });
 
+  // Un evento finito mentre la pagina è aperta sparisce al prossimo disegno,
+  // senza aspettare la rilettura: «LIVE ORA · Termina 2 giorni fa» non esce più.
+  const adesso = Date.now();
+  const events = tuttiGliEventi.filter((ev) => Date.parse(ev.ends_at) > adesso);
+
   const rsvp = useMutation({
     mutationFn: async (eventId: string) => {
       if (!userId) throw new Error('Devi accedere per partecipare');
@@ -126,8 +138,11 @@ export default function EventsPage() {
       }
     },
     onSuccess: (going) => {
-      toast.success(going ? 'Ci sei! Ti ricorderemo l\'evento.' : 'Cancellazione confermata');
+      toast.success(going ? 'Ci sei! Trovi l\'evento qui, in Eventi.' : 'Cancellazione confermata');
       qc.invalidateQueries({ queryKey: queryKeys.events.public });
+      // Anche il numero dei partecipanti: ha una chiave sua, e senza questa
+      // riga «Ci sei» restava sopra «0 partecipanti» fino a un minuto.
+      qc.invalidateQueries({ queryKey: queryKeys.events.rsvpCounts });
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -140,7 +155,9 @@ export default function EventsPage() {
       // serviva poter leggere CHI si e' iscritto, evento per evento, nome per
       // nome — ed e' quello che la migrazione 119 ha chiuso. Chiedere il numero
       // invece dell'elenco e' la stessa informazione senza le persone dentro.
-      const { data } = await supabase.rpc('event_rsvp_counts');
+      const { data, error } = await supabase.rpc('event_rsvp_counts');
+      // Un conto non letto non è «0 partecipanti»: l'errore va alla query, che riprova.
+      if (error) throw error;
       const counts: Record<string, number> = {};
       for (const r of ((data ?? []) as { event_id: string; partecipanti: number }[])) {
         counts[r.event_id] = r.partecipanti;
@@ -156,12 +173,19 @@ export default function EventsPage() {
         icon={CalendarDays}
         eyebrow="Eventi MyCity"
         title="Cosa succede in città"
-        blurb="Mercatini virtuali, flash sale, lanci. Partecipa e ricevi una notifica quando inizia."
+        blurb="Mercatini virtuali, flash sale, lanci. Tocca «Partecipa» per dire che ci sarai."
         breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Eventi' }]}
       />
 
       {isLoading ? (
         <LoadingState />
+      ) : isError ? (
+        <ErrorState
+          variant="compact"
+          title="Non riesco a leggere gli eventi"
+          description="Controlla la connessione e riprova: gli eventi non sono spariti."
+          retry={() => { void refetch(); }}
+        />
       ) : events.length === 0 ? (
         <div className="text-center text-ink-500 py-12">
           <CalendarDays size={48} className="mx-auto mb-3 text-ink-300" strokeWidth={1.5} />
@@ -172,7 +196,9 @@ export default function EventsPage() {
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {events.map((ev) => {
             const isGoing = myRsvps.has(ev.id);
-            const isLive = ev.status === 'live';
+            // In corso è chi è «live» o chi è già cominciato: lo stato lo
+            // cambia l'admin a mano, e «Inizia 3h fa» non lo deve leggere nessuno.
+            const isLive = ev.status === 'live' || Date.parse(ev.starts_at) <= adesso;
             const count = rsvpCounts[ev.id] ?? 0;
             return (
               <li key={ev.id} className="bg-white border border-cream-300 rounded-2xl overflow-hidden shadow-warm flex flex-col">

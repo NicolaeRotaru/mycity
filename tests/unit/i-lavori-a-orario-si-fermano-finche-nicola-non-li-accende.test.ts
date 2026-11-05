@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fintoGiroNotturno, type Tabelle } from './aiuti/finto-giro-notturno';
@@ -123,6 +123,29 @@ describe('il fermo copre tutti i lavori del calendario', () => {
       delCalendario,
       'un lavoro nuovo in vercel.json va aggiunto qui: senza la riga del fermo partirebbe da solo',
     ).toEqual([...NOMI].sort());
+  });
+});
+
+/**
+ * 5/11/2026 (S04, scheda 2436) — Due buchi: una dodicesima cartella in app/api/cron che non sta nel
+ * calendario (e quindi nemmeno qui) passava; e la chiave di Stripe impostata dal setup copriva una
+ * rotta che la controllasse PRIMA del fermo (senza chiave risponderebbe 500, non «fermo»).
+ */
+describe('il fermo non ha buchi', () => {
+  it('ogni cartella di app/api/cron è nel calendario e qui', () => {
+    const cartelle = readdirSync(path.resolve(__dirname, '../../app/api/cron'), { withFileTypes: true })
+      .filter((d) => d.isDirectory() && existsSync(path.resolve(__dirname, '../../app/api/cron', d.name, 'route.ts')))
+      .map((d) => d.name)
+      .sort();
+    expect(cartelle, 'una rotta del calendario sul disco non è provata dal fermo').toEqual([...NOMI].sort());
+  });
+
+  it.each(NOMI)('%s: anche senza la chiave di Stripe, il fermo risponde «fermo» prima di tutto', async (nome) => {
+    delete process.env.STRIPE_SECRET_KEY;
+    const esito = await chiama(nome);
+    expect(chiamateAlDatabase(), `${nome} ha toccato il database con il fermo acceso`).toBe(0);
+    expect(esito.stato, `${nome} controlla qualcos'altro prima del fermo`).toBe(200);
+    expect(esito.corpo).toMatchObject({ ok: true, fermo: true });
   });
 });
 

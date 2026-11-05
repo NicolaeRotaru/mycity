@@ -563,7 +563,12 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
   textarea.text-xs,
   textarea.text-sm,
   select.text-xs,
-  select.text-sm {
+  select.text-sm,
+  /* 5/11/2026 — i campi scritti a 13 pixel (ordinamenti delle collezioni, filtri del negozio):
+     la prova prima non li vedeva, e su iPhone zoomavano. */
+  input.text-\[13px\],
+  textarea.text-\[13px\],
+  select.text-\[13px\] {
     font-size: var(--text-base);
   }
 }

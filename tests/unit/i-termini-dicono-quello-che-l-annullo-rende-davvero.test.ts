@@ -95,6 +95,12 @@ describe('ogni caso che i Termini dicono, l annullo lo rende davvero', () => {
     expect(s4).toContain(fraseDelCaso('carrello-di-un-negozio'));
     expect(s4).toContain(fraseDelCaso('altri-da-consegnare'));
     expect(s4).not.toMatch(/rimborsat[oa] (integralmente|per intero)|rimborso (integrale|completo|totale)/i);
+    // 5/11/2026 (S04, scheda 2228) — Le frasi giuste c'erano, ma una frase in più dopo il paragrafo
+    // («In ogni caso ti torna tutto… anche con altri Venditori») restava verde: promette il rimborso
+    // pieno che il caso «altri da consegnare» non dà. «Ti torna tutto» si dice una volta sola, nel
+    // caso del carrello di un negozio solo.
+    expect((s4.match(/ti torna(no)? tutt/gi) ?? []).length, '§4 promette due volte «ti torna tutto»').toBe(1);
+    expect(s4).not.toMatch(/in ogni caso ti torna/i);
   });
 
   it('l esempio di §4 e §6 ha le cifre che il codice rende: pane 15 + frutta 12, il forno rifiuta', async () => {

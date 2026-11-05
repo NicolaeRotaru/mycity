@@ -86,6 +86,35 @@ describe('il rifiuto fa partire l orologio dei 90 giorni', () => {
   });
 });
 
+/**
+ * 5/11/2026 (S04, scheda 2102) — Due errori passavano: la prova del rifiuto rifiutava solo un
+ * fattorino (se approved_at si scrivesse solo per i fattorini, verde), e nessuna prova leggeva il
+ * testo della notifica (un fattorino che tornasse a ricevere «Il tuo negozio è stato approvato»,
+ * verde).
+ */
+describe('il rifiuto e gli avvisi valgono per negozi e fattorini, ognuno coi suoi testi', () => {
+  it('rifiutare un negozio scrive anche lì approved_at = adesso', async () => {
+    idBersaglio = 'seller-1';
+    profiloBersaglio = { id: 'seller-1', role: 'seller', store_name: 'Pane', full_name: null, legal_birth_date: null };
+    const prima = Date.now();
+    const r = await MODERA(richiesta('reject', 'documenti incompleti'));
+    expect(r.status).toBe(200);
+    expect(aggiornamenti[0].approval_status).toBe('rejected');
+    expect(Date.parse(String(aggiornamenti[0].approved_at))).toBeGreaterThanOrEqual(prima - 1000);
+  });
+
+  it('il fattorino approvato legge del suo profilo da fattorino, mai del «negozio»', async () => {
+    const r = await MODERA(richiesta('approve'));
+    expect(r.status).toBe(200);
+    expect(notifiche).toHaveLength(1);
+    const testo = `${notifiche[0].title} ${notifiche[0].body}`;
+    expect(testo).toMatch(/fattorino/i);
+    expect(testo).not.toMatch(/negozio/i);
+    expect(notifiche[0].link).toBe('/rider');
+  });
+
+});
+
 describe('il bersaglio si controlla', () => {
   it('non si modera sé stessi', async () => {
     idBersaglio = ADMIN.id;

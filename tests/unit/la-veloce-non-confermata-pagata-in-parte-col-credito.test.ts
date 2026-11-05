@@ -388,7 +388,14 @@ describe("collaudo A: l euro della veloce pagato in parte col credito", () => {
     const r = o("o1");
     const pagaInTutto = Number(r.wallet_applied_cents) + Math.round(Number(r.total_price) * 100);
     const corpo = String(db.notifications.find((n) => n.user_id === "maria")?.body);
-    console.log("COLLAUDO", JSON.stringify({ slot: r.delivery_slot, gross: r.gross_total_cents, total: r.total_price, wallet: r.wallet_applied_cents, pagaInTutto, corpo, admin: notifyAdminsMock.mock.calls.length }));
-    if (corpo.includes("non lo paghi")) expect(pagaInTutto).toBe(Number(r.gross_total_cents));
+    // 5/11/2026 (S04, scheda 2336) — Il controllo del conto era dentro un «if» sulla frase: con la
+    // frase cambiata non scattava mai, e la prova restava verde senza guardare niente (qui il
+    // database finto non accredita il credito, quindi la frase è quella del rimborso «a mano»).
+    // Ora il conto si controlla sempre, e la frase deve essere una delle due vere: credito tornato
+    // («non lo paghi») o rimborso a mano. Il caso col credito che torna davvero lo prova
+    // freno-non-prenota-due-volte.test.ts.
+    expect(pagaInTutto).toBe(Number(r.gross_total_cents));
+    expect(corpo).toMatch(/non lo paghi|te lo rendiamo a mano/);
+    expect(corpo).toContain("Oggi · 18:00–19:30");
   });
 });

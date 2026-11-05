@@ -157,11 +157,20 @@ async function potaFileScaduti(
   const data = await esigiRpc(admin, funzione, argomenti);
   let tolti = 0;
   const rimasti: string[] = [];
-  for (const riga of (data ?? []) as Array<{ percorsi: string[] | null }>) {
+  for (const riga of (data ?? []) as Array<{ percorsi: string[] | null; user_id?: string | null }>) {
     const percorsi = (riga.percorsi ?? []).filter(Boolean);
     if (percorsi.length === 0) continue;
     const { error: errRimozione } = await admin.storage.from(secchio).remove(percorsi);
     if (errRimozione) {
+      // 5/11/2026 — La coda dei documenti d'identità si svuota PRIMA della rimozione
+      // (DELETE … RETURNING): se lo storage rifiuta, i percorsi tornano in coda, così la
+      // notte dopo ci si riprova invece di lasciarli solo nel registro (migrazione 215).
+      if (funzione === 'kyc_file_da_togliere_prendi' && riga.user_id) {
+        const { error: errRimessa } = await admin.rpc('kyc_file_da_togliere_rimetti', {
+          p_profilo: riga.user_id, p_percorsi: percorsi,
+        });
+        if (errRimessa) registro.warn('[cron-deletions] percorsi non rimessi in coda', { err: errRimessa.message, percorsi });
+      }
       // I percorsi finiscono nel registro apposta: la colonna che li teneva e'
       // gia' stata azzerata, quindi senza questa riga il file resterebbe nello
       // storage e nessuno saprebbe piu' dove cercarlo.

@@ -154,6 +154,46 @@ describe.each(SCHEDE)('%s e la consegna di oggi', (_nome, scheda) => {
   });
 });
 
+/**
+ * 5/11/2026 (S04, schede 2259 e 2265) — Le prove delle schede guardavano solo se compare «consegna
+ * oggi»: un bollino «consegna domani» scritto anche senza consegna possibile, o «Chiuso ora ·
+ * consegna oggi», restavano verdi. E l'attesa e la caduta della risposta della cassa si provavano
+ * solo sulla vetrina, non sulle tre schede che usano lo stesso aggancio.
+ */
+// Le due schede che ricevono il negozio da chi le disegna (il negozio in evidenza della home se lo
+// legge da solo, e mostra un'altra cosa a negozio chiuso).
+describe.each(SCHEDE.slice(0, 2))('%s: domani e nessun bollino', (_nome, scheda) => {
+  it('giovedì alle 20:15, forno chiuso fino a domani mattina: «consegna domani», e mai «oggi»', async () => {
+    orologioA('2026-10-29T19:15:00Z');
+    cassaDice(true);
+    const testo = await nelBrowser(await scheda());
+    expect(testo).toMatch(/consegna domani/i);
+    expect(testo).not.toMatch(/consegna oggi/i);
+  });
+
+  it('un forno senza orari non mostra nessun bollino di consegna', async () => {
+    orologioA('2026-10-29T08:00:00Z');
+    cassaDice(true);
+    const negozioSenzaOrari = { ...NEGOZIO, store_hours: null };
+    const el = await scheda();
+    const senzaOrari = createElement(el.type as never, { ...(el.props as object), store: negozioSenzaOrari });
+    const testo = await nelBrowser(senzaOrari);
+    expect(testo).not.toMatch(/consegna (oggi|domani)/i);
+  });
+});
+
+describe.each(SCHEDE)('%s e la cassa che non risponde', (_nome, scheda) => {
+  for (const come of ['aspetta', 'cade'] as const) {
+    it(`giovedì alle 9:00 con la cassa che ${come === 'aspetta' ? 'non ha ancora risposto' : 'non risponde'}: niente «domani» per un giorno che è oggi`, async () => {
+      orologioA('2026-10-29T08:00:00Z');
+      cassaDice(come);
+      const testo = await nelBrowser(await scheda());
+      expect(testo).not.toMatch(/consegna domani/i);
+      expect(testo).not.toMatch(/chiuso ora\s*·\s*consegna oggi/i);
+    });
+  }
+});
+
 async function vetrina(): Promise<string> {
   const { default: HeroSection } = await import('@/components/store-sections/HeroSection');
   const ctx = {

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useId, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ListChecks, Plus, X, Check, Star } from 'lucide-react';
@@ -32,34 +33,44 @@ export default function AddToListButton({ productId }: { productId: string }) {
   useBottomSheetA11y(open, pannelloRef, avvioRef, () => setOpen(false));
   const [newListTitle, setNewListTitle] = useState('');
 
-  const { data: lists = [], isLoading: caricoListe } = useQuery({
+  // 5/11/2026 — `null` = chi guarda non ha fatto l'accesso. Prima era `[]`: il
+  // pannello diceva «Non hai ancora liste. Creane una qui sotto», faceva scrivere
+  // il nome e poi rispondeva solo «Accedi», senza strada per farlo.
+  const { data: leListe, isLoading: caricoListe, isError: listeCadute } = useQuery({
     queryKey: queryKeys.lists.mineMin,
     enabled: open,
-    queryFn: async (): Promise<List[]> => {
+    queryFn: async (): Promise<List[] | null> => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return [];
-      const { data } = await supabase
+      if (!user) return null;
+      const { data, error } = await supabase
         .from('product_lists')
         .select('id, title, cover_emoji')
         .eq('owner_id', user.id)
         .order('updated_at', { ascending: false });
+      // Una lettura caduta non è «non hai liste».
+      if (error) throw error;
       return (data ?? []) as List[];
     },
   });
+  const ospite = leListe === null;
+  const lists = leListe ?? [];
 
-  const { data: inLists = [] } = useQuery({
+  const { data: inLists = [], isError: appartenenzeCadute } = useQuery({
     queryKey: queryKeys.lists.containing(productId),
     enabled: open,
     queryFn: async (): Promise<string[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
-      const { data: myLists } = await supabase.from('product_lists').select('id').eq('owner_id', user.id);
+      const { data: myLists, error: e1 } = await supabase.from('product_lists').select('id').eq('owner_id', user.id);
+      if (e1) throw e1;
       if (!myLists?.length) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('product_list_items')
         .select('list_id')
         .in('list_id', myLists.map((l: { id: string }) => l.id))
         .eq('product_id', productId);
+      // Se non so in quali liste è, un tocco potrebbe reinserirlo invece di toglierlo.
+      if (error) throw error;
       return ((data ?? []) as Array<{ list_id: string }>).map((r) => r.list_id);
     },
   });
@@ -152,6 +163,20 @@ export default function AddToListButton({ productId }: { productId: string }) {
                 <ul className="space-y-2" aria-busy="true" aria-hidden>
                   {[0, 1].map((i) => <li key={i} className="h-[60px] rounded-lg skeleton" />)}
                 </ul>
+              ) : listeCadute || appartenenzeCadute ? (
+                <p role="alert" className="text-sm text-ink-600">
+                  Non riesco a leggere le tue liste. Chiudi e riapri tra poco.
+                </p>
+              ) : ospite ? (
+                <div className="text-sm text-ink-600 space-y-3">
+                  <p>Accedi per salvare questo prodotto nelle tue liste.</p>
+                  <Link
+                    href={`/sign-in?returnTo=${encodeURIComponent(`/product/${productId}`)}`}
+                    className="inline-flex items-center bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-semibold"
+                  >
+                    Accedi
+                  </Link>
+                </div>
               ) : lists.length === 0 ? (
                 <p className="text-sm text-ink-500">Non hai ancora liste. Creane una qui sotto.</p>
               ) : (
@@ -163,13 +188,17 @@ export default function AddToListButton({ productId }: { productId: string }) {
                         <button
                           onClick={() => toggle.mutate(l.id)}
                           disabled={toggle.isPending}
+                          // 5/11/2026 — «già dentro» si vedeva solo dal colore e da
+                          // una spunta muta: chi ascolta non sapeva se toccando
+                          // aggiunge o toglie.
+                          aria-pressed={inIt}
                           className={`w-full flex items-center gap-3 p-3 rounded-lg border disabled:opacity-60 disabled:cursor-not-allowed ${
                             inIt ? 'bg-olive-50 border-olive-200' : 'bg-cream-50 border-cream-200 hover:bg-cream-100'
                           }`}
                         >
                           <span className="text-2xl flex-shrink-0">{l.cover_emoji ?? <Star size={24} strokeWidth={2.2} className="text-accent-500" aria-hidden />}</span>
                           <span className="flex-1 text-left font-semibold text-sm text-ink-900">{l.title}</span>
-                          {inIt && <Check size={16} className="text-olive-700 flex-shrink-0" />}
+                          {inIt && <Check size={16} className="text-olive-700 flex-shrink-0" aria-hidden />}
                         </button>
                       </li>
                     );
@@ -177,6 +206,7 @@ export default function AddToListButton({ productId }: { productId: string }) {
                 </ul>
               )}
 
+              {!ospite && (
               <div className="pt-3 border-t border-cream-200">
                 <label htmlFor={idNuovaLista} className="block text-sm font-semibold mb-1">+ Crea nuova lista</label>
                 <div className="flex gap-2">
@@ -197,6 +227,7 @@ export default function AddToListButton({ productId }: { productId: string }) {
                   </button>
                 </div>
               </div>
+              )}
             </div>
           </div>
         </div>

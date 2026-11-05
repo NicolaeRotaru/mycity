@@ -63,9 +63,24 @@ export const useQueries = (o) => (o?.queries ?? []).map((q) => useQuery(q));
  * non si segna». Se la prova mette un array in `globalThis.__MUTAZIONI__`, ogni `mutate` ci
  * finisce dentro con le sue variabili; chi non lo mette non si accorge di niente.
  */
-export const useMutation = () => {
+export const useMutation = (opzioni) => {
   const annota = (variabili) => {
     if (Array.isArray(globalThis.__MUTAZIONI__)) globalThis.__MUTAZIONI__.push(variabili);
+    // 5/11/2026 (S04) — Se la prova accende `globalThis.__MUTAZIONI_VERE__`, la scrittura gira
+    // davvero: `mutationFn`, poi `onSuccess` o `onError`, come farebbe react-query. Così una prova
+    // vede cosa la pagina rilegge e cosa dice dopo un errore. Le promesse in volo finiscono in
+    // `__MUTAZIONI_IN_VOLO__` (se è un array), da aspettare. Chi non la accende non vede niente.
+    if (globalThis.__MUTAZIONI_VERE__ && opzioni?.mutationFn) {
+      const volo = (async () => {
+        try {
+          const esito = await opzioni.mutationFn(variabili);
+          await opzioni.onSuccess?.(esito, variabili);
+        } catch (e) {
+          await opzioni.onError?.(e, variabili);
+        }
+      })();
+      if (Array.isArray(globalThis.__MUTAZIONI_IN_VOLO__)) globalThis.__MUTAZIONI_IN_VOLO__.push(volo);
+    }
   };
   return {
     mutate: (variabili) => annota(variabili),
@@ -82,7 +97,11 @@ export const useMutation = () => {
  * finisce come `['annulla', chiave]`, così una prova vede anche l'ORDINE fra le due.
  */
 export const useQueryClient = () => ({
-  invalidateQueries: () => {},
+  // 5/11/2026 (S04) — Se la prova mette un array in `globalThis.__RILETTURE__`, ogni chiave
+  // che la pagina chiede di rileggere ci finisce dentro. Chi non lo mette non vede niente.
+  invalidateQueries: (filtro) => {
+    if (Array.isArray(globalThis.__RILETTURE__)) globalThis.__RILETTURE__.push(filtro?.queryKey);
+  },
   setQueryData: (chiave, valore) => {
     if (Array.isArray(globalThis.__CACHE_SCRITTA__)) globalThis.__CACHE_SCRITTA__.push([chiave, valore]);
   },

@@ -64,7 +64,10 @@ export function tagJsx(testo: string, inizio: number): string | null {
 }
 
 /** Le classi Tailwind che portano il testo sotto i 16px. */
-export const CLASSI_PICCOLE = /\btext-(xs|sm|\[1[0-5](?:\.\d+)?px\])\b/g;
+// 5/11/2026 (S04, scheda 380) — Finiva con `\b`: fra «]» e lo spazio non c'è confine di parola,
+// quindi `text-[13px]` non veniva mai riconosciuta e nove campi a 13 pixel passavano. Ora la fine
+// della classe è «nessun altro carattere di classe dopo».
+export const CLASSI_PICCOLE = /\btext-(?:xs|sm|\[1[0-5](?:\.\d+)?px\])(?![\w\-[\]])/g;
 
 /** Toglie i commenti: un file che SPIEGA la forma malata non la commette. */
 export const senzaCommenti = (src: string): string =>
@@ -157,7 +160,8 @@ const CSS = readFileSync(join(RADICE, 'app/globals.css'), 'utf8');
  * La lista si legge da `globals.css` e non si ricopia: le due non possono divergere in silenzio.
  */
 export function coperturaDelPavimento(css: string): Set<string> {
-  const blocco = css.match(/@media\s*\(pointer:\s*coarse\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
+  // Nel CSS le parentesi quadre si scrivono con la barra (`.text-\[13px\]`): si leggono senza.
+  const blocco = (css.match(/@media\s*\(pointer:\s*coarse\)\s*\{([\s\S]*?)\n\}/)?.[1] ?? '').replace(/\\/g, '');
   return new Set(
     [...blocco.matchAll(/\b(input|textarea|select)\.([\w[\]().-]+)/g)].map((m) => `${m[1]}:${m[2]}`),
   );

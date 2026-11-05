@@ -28,7 +28,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import type { ComponentType } from 'react';
 import { monta } from './aiuti/monta-componente';
-import { accendi } from './aiuti/schermo';
+import { accendi, clicca } from './aiuti/schermo';
 import { databaseCheConosceLeColonne } from './aiuti/database-che-conosce-le-colonne';
 
 const G = globalThis as Record<string, unknown>;
@@ -88,6 +88,43 @@ describe.each(PAGINE)('pannello · $nome', (p) => {
     expect(testo, 'deve dire che non è riuscita a leggere').toContain('Non riesco a leggere');
     expect(s.radice.querySelector('[role="alert"] button'), 'e offrire di riprovare').not.toBeNull();
     s.smonta();
+  });
+
+  // 5/11/2026 (S04, scheda 1810) — Il caso dei dati vecchi in mano (un aggiornamento in sottofondo
+  // che cade, come i payout ogni 60 s) non era fissato; e «Riprova» si cercava ma non si premeva.
+  it('lettura caduta con dati vecchi in mano: lo dice, e «Riprova» rilegge davvero', async () => {
+    let riletture = 0;
+    G.__ESITO_QUERY__ = {
+      isError: true,
+      isSuccess: false,
+      error: new Error('statement timeout'),
+      data: [{ id: 'vecchia' }],
+      refetch: () => { riletture++; return Promise.resolve({}); },
+    };
+    const mod = await monta(p.file);
+    const s = accendi(mod.default as ComponentType);
+    expect(s.radice.textContent ?? '', 'con i dati vecchi in mano non dice che la lettura è caduta').toContain('Non riesco a leggere');
+    const riprova = s.radice.querySelector('[role="alert"] button') as HTMLButtonElement | null;
+    expect(riprova, 'nessun pulsante per riprovare').not.toBeNull();
+    s.agisci(() => clicca(riprova!));
+    expect(riletture, '«Riprova» non rilegge niente').toBeGreaterThan(0);
+    s.smonta();
+  });
+
+  // 5/11/2026 (S04, scheda 1809) — Si controllava solo la PRIMA lettura della pagina: una colonna
+  // sbagliata in una lettura secondaria (i reclami ne fanno una seconda) lasciava la prova verde.
+  it('anche le letture secondarie chiedono solo colonne che esistono', async () => {
+    const db = databaseCheConosceLeColonne({ [p.tabella]: [{ id: 'riga-1' }] });
+    G.__CLIENT_SUPABASE__ = db;
+    const opzioni: OpzioniQuery[] = [];
+    G.__OPZIONI_QUERY__ = opzioni;
+    const mod = await monta(p.file);
+    const s = accendi(mod.default as ComponentType);
+    s.smonta();
+    for (const o of opzioni) {
+      await o.queryFn(contesto(o)).catch(() => undefined);
+    }
+    expect(db.errori, `una lettura della pagina chiede una colonna che non esiste (${opzioni.length} letture)`).toEqual([]);
   });
 
   it('la lettura che scade arriva a React Query come errore, non come elenco vuoto', async () => {
