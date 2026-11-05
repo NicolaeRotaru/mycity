@@ -27,7 +27,7 @@ beforeEach(async () => {
   await act(async () =>
     root.render(
       createElement('div', null, [
-        createElement(Modal, { key: 'm', open: true, onClose: chiudiSotto, title: 'Modifica utente', children: createElement('input') }),
+        createElement(Modal as never, { key: 'm', open: true, onClose: chiudiSotto, title: 'Modifica utente' }, createElement('input')),
         createElement(ConfirmDialogHost, { key: 'c' }),
       ]),
     ),
