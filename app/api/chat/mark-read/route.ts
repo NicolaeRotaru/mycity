@@ -41,12 +41,14 @@ export const POST = withAuthRateLimit({ name: 'chat-mark-read', max: 300, window
     .update({ [counterField]: 0 })
     .eq('id', parsed.data.conversationId);
 
-  await supa
-    .from('messages')
-    .update({ read_at: new Date().toISOString() })
-    .eq('conversation_id', parsed.data.conversationId)
-    .is('read_at', null)
-    .neq('sender_id', user.id);
+  // S10 (5/11/2026) — Dalla migrazione 115 la sessione della persona puo'
+  // aggiornare solo i PROPRI messaggi: l'update diretto sui messaggi dell'altro
+  // veniva scartato senza dire niente. «Letto il» passa dalla funzione del
+  // database fatta per questo, e l'esito si legge.
+  const { error: erroreLettura } = await supa.rpc('mark_conversation_read', {
+    p_conversation_id: parsed.data.conversationId,
+  });
+  if (erroreLettura) return ApiErrors.internal('Non sono riuscito a segnare i messaggi come letti.');
 
   return NextResponse.json({ ok: true });
 });

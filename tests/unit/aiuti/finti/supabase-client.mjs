@@ -88,6 +88,9 @@ export const supabase = {
       }
       return { data: { subscription: { unsubscribe() {} } } };
     },
+    // S10 (5/11/2026) — Come il client vero: l'esito dello scambio del `code`
+    // all'avvio. La pagina della nuova password lo legge.
+    initialize: async () => ({ error: null }),
     signOut: portaAuth('signOut', { error: null }),
     signUp: portaAuth('signUp', NESSUNO),
     signInWithPassword: portaAuth('signInWithPassword', NESSUNO),

@@ -87,13 +87,43 @@ async function avvisaChiRiceve(conversationId: string, mittente: string, testo: 
     const destinatario = scriveIlCliente ? conv.seller_id : conv.buyer_id;
     const nonLetti = scriveIlCliente ? conv.seller_unread_count : conv.buyer_unread_count;
     if (!destinatario || destinatario === mittente) return;
-    if (typeof nonLetti === 'number' && nonLetti > 1) return;
+    // S10 (5/11/2026) — Il contatore riletto qui dopo l'insert vale 2 per tutte
+    // e due le richieste quando due messaggi arrivano quasi insieme, e allora
+    // nessuna scriveva la campanella. Adesso si salta solo se una voce non letta
+    // per questa conversazione c'e' gia'. Se non si riesce a guardare, il
+    // contatore resta il ripiego di prima.
+    const link = `/messages/${conversationId}`;
+    const { data: giaAvvisato, error: errGia } = await admin
+      .from('notifications')
+      .select('id')
+      .eq('user_id', destinatario)
+      .eq('link', link)
+      .eq('is_read', false)
+      .limit(1);
+    if (errGia) {
+      if (typeof nonLetti === 'number' && nonLetti > 1) return;
+    } else if (Array.isArray(giaAvvisato) && giaAvvisato.length > 0) {
+      return;
+    }
+    // S10 (5/11/2026) — Nella chat con l'account Assistenza le due parti non
+    // sono cliente e negozio: il titolo lo dice col ruolo vero.
+    const { data: ruoli } = await admin.from('profiles').select('id, role').in('id', [mittente, destinatario]);
+    const ruoloDi = (id: string) =>
+      ((ruoli ?? []) as { id: string; role?: string | null }[]).find((r) => r.id === id)?.role ?? null;
+    const titolo =
+      ruoloDi(mittente) === 'admin'
+        ? 'L’Assistenza MyCity ti ha risposto'
+        : ruoloDi(destinatario) === 'admin'
+          ? 'Nuovo messaggio per l’Assistenza'
+          : scriveIlCliente
+            ? 'Nuovo messaggio da un cliente'
+            : 'Il negozio ti ha risposto';
     const { error: errN } = await admin.from('notifications').insert({
       category: 'system',
       user_id: destinatario,
-      title: scriveIlCliente ? 'Nuovo messaggio da un cliente' : 'Il negozio ti ha risposto',
+      title: titolo,
       body: testo.length > 140 ? `${testo.slice(0, 139)}…` : testo,
-      link: `/messages/${conversationId}`,
+      link,
     });
     if (errN) logger.error('[chat/messages] campanella non scritta', { conversationId, message: errN.message });
   } catch (e) {
