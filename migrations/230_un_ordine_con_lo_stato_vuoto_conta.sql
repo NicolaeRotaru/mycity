@@ -17,11 +17,6 @@
 -- della migrazione 185. Nessun dato viene toccato: è solo la funzione.
 -- =============================================================================
 
-CREATE OR REPLACE FUNCTION
--- public.check_coupon della migrazione 114 (righe 315-379), che rimette il
--- conteggio di tutti gli ordini. Nessun dato viene toccato: è solo la funzione.
--- =============================================================================
-
 CREATE OR REPLACE FUNCTION public.check_coupon(p_code text, p_subtotal numeric)
 RETURNS jsonb
 LANGUAGE plpgsql
