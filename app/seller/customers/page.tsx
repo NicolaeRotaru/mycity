@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Star, Moon, Lightbulb } from 'lucide-react';
+import { Star, Moon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice, formatDate } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -11,16 +11,8 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
+import { clientiDagliOrdini, ordineMedio, type OrdineDelCliente } from './clienti';
 
-type CustomerRow = {
-  userId: string;
-  fullName: string | null;
-  totalSpent: number;
-  ordersCount: number;
-  lastOrderAt: string;
-  lastOrderId: string;
-  firstOrderAt: string;
-};
 
 const filters = [
   { key: 'all',      label: 'Tutti' },
@@ -42,7 +34,8 @@ export default function SellerCustomersPage() {
       const { data: orders, error: ordersError } = await supabase
         .from('orders')
         .select(`
-          id, user_id, total_price, created_at, delivery_full_name
+          id, user_id, total_price, created_at, delivery_full_name,
+          delivery_status, payment_status, refunded_amount_cents, wallet_applied_cents
         `)
         .eq('seller_id', user.id)
         // #90 — Un tetto esplicito. Queste pagine leggevano la tabella intera:
@@ -58,35 +51,9 @@ export default function SellerCustomersPage() {
       // perché una lettura riuscita non si riprova.
       if (ordersError) throw ordersError;
 
-      const byUser = new Map<string, CustomerRow>();
-      // 31/10/2026 — Il nome arrivava da `profiles!orders_user_id_fkey`: dopo la 161 il
-      // negozio non legge più il profilo del cliente, l'aggancio tornava vuoto senza errore e
-      // la pagina diceva «Cliente» a ogni riga — e la ricerca per nome non trovava nessuno.
-      // Il nome di consegna sta sull'ordine, che il negozio legge già: si usa il più recente
-      // che c'è (gli ordini arrivano dal più nuovo).
-      type OrderRow = { id: string; user_id: string | null; total_price: number; created_at: string; delivery_full_name: string | null };
-      for (const o of (orders ?? []) as unknown as OrderRow[]) {
-        if (!o.user_id) continue;
-        const nome = o.delivery_full_name?.trim() || null;
-        const existing = byUser.get(o.user_id);
-        if (existing) {
-          existing.fullName = existing.fullName ?? nome;
-          existing.totalSpent += Number(o.total_price);
-          existing.ordersCount += 1;
-          existing.firstOrderAt = o.created_at;
-        } else {
-          byUser.set(o.user_id, {
-            userId:     o.user_id,
-            fullName:   nome,
-            totalSpent: Number(o.total_price),
-            ordersCount: 1,
-            lastOrderAt: o.created_at,
-            lastOrderId: o.id,
-            firstOrderAt: o.created_at,
-          });
-        }
-      }
-      return Array.from(byUser.values()).sort((a, b) => b.totalSpent - a.totalSpent);
+      // 31/10/2026 — Il nome di consegna sta sull'ordine, che il negozio legge già (dopo la 161
+      // il negozio non legge più il profilo del cliente). Il conto sta in ./clienti.ts.
+      return clientiDagliOrdini((orders ?? []) as unknown as OrdineDelCliente[]);
     },
   });
   const customers = queryCustomers.data ?? [];
@@ -104,9 +71,7 @@ export default function SellerCustomersPage() {
   });
 
   const totalRevenue = customers.reduce((s, c) => s + c.totalSpent, 0);
-  const avgOrderValue = customers.length > 0
-    ? customers.reduce((s, c) => s + c.totalSpent / c.ordersCount, 0) / customers.length
-    : 0;
+  const avgOrderValue = ordineMedio(customers);
 
   const vistaqueryCustomers = vistaDaQuery(queryCustomers);
   if (vistaqueryCustomers.mostraScheletro) return <LoadingState />;
@@ -125,7 +90,7 @@ export default function SellerCustomersPage() {
       <SellerPageTitle
         eyebrow="Relazioni"
         title="Clienti"
-        sub={`${customers.length} clienti totali · ${formatPrice(totalRevenue)} di ricavi`}
+        sub={`${customers.length} clienti totali · ${formatPrice(totalRevenue)} spesi dai clienti`}
         className="mb-0"
       />
 
@@ -150,7 +115,9 @@ export default function SellerCustomersPage() {
         {filters.map((f) => (
           <button
             key={f.key}
+            type="button"
             onClick={() => setFilter(f.key)}
+            aria-pressed={filter === f.key}
             className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${
               filter === f.key ? 'bg-primary-700 text-white' : 'bg-cream-100 text-ink-600 hover:bg-cream-200'
             }`}
@@ -214,16 +181,13 @@ export default function SellerCustomersPage() {
         </table>
       </div>
 
-      <div className="flex items-start gap-2 bg-primary-50 border border-primary-200 rounded-xl p-4 text-sm text-primary-900">
-        <Lightbulb size={16} className="text-primary-600 shrink-0 mt-0.5" aria-hidden />
-        <span><strong>Suggerimento</strong>: i clienti VIP valgono in media 4× di più. Considera di mandare loro un'offerta esclusiva.</span>
-      </div>
-
       {/* 6/9/2026 — Il promemoria va dove nasce la tentazione. Questa e' la
           schermata in cui il negoziante vede nome e storico dei suoi clienti,
           e il riquadro qui sopra lo invita a mandare offerte: l'impegno che ha
           accettato sta al punto 9 delle condizioni, e finora non era scritto
-          da nessuna parte che lui potesse leggere. */}
+          da nessuna parte che lui potesse leggere. Il riquadro «i VIP valgono
+          4× di più, manda loro un'offerta» è stato tolto: il numero era
+          inventato e l'offerta non si può mandare da qui. */}
       <p className="text-xs text-ink-500">
         Questi nomi ti arrivano per gestire gli ordini: puoi usarli per preparare,
         consegnare e assistere chi ha comprato da te. Per mandare pubblicità serve il

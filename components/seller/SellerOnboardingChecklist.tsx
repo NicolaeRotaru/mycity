@@ -147,7 +147,7 @@ export default function SellerOnboardingChecklist() {
             Completa il tuo negozio
           </h2>
           <p className="text-sm text-ink-600">
-            Mancano {total - completed} passi. Negozi completi vendono <strong>3x di più</strong>.
+            Mancano {total - completed} passi. Un negozio completo, con foto e orari, si fa trovare più facilmente.
           </p>
         </div>
         <div className="text-right flex-shrink-0">
