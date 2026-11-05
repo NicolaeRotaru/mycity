@@ -419,7 +419,7 @@ export default function RiderDashboardPage() {
             }`}
           >
             <span
-              className="absolute top-[3px] h-[26px] w-[26px] rounded-full bg-white shadow-sm transition-all"
+              className="absolute top-[3px] h-[26px] w-[26px] rounded-full bg-white shadow-sm-neutral transition-all"
               style={{ left: online ? '29px' : '3px' }}
             />
           </button>

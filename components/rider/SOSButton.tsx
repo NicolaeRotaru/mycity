@@ -153,7 +153,7 @@ export default function SOSButton({ orderId }: Props) {
         ref={pulsanteRef}
         onClick={() => setOpen(true)}
         aria-label="SOS emergenza"
-        className="fixed bottom-44 right-4 z-emergenza bg-rose-600 hover:bg-rose-700 text-white rounded-full w-14 h-14 shadow-2xl flex items-center justify-center ring-4 ring-rose-200 animate-pulse-slow"
+        className="fixed bottom-44 right-4 z-emergenza bg-rose-600 hover:bg-rose-700 text-white rounded-full w-14 h-14 shadow-warm-xl flex items-center justify-center ring-4 ring-rose-200 animate-pulse-slow"
       >
         <AlertTriangle size={22} strokeWidth={2.4} />
       </button>

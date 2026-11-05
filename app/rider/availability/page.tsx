@@ -143,7 +143,7 @@ export default function RiderAvailabilityPage() {
               }`}
             >
               <span
-                className="absolute top-[3px] h-6 w-6 rounded-full bg-white shadow-sm transition-all"
+                className="absolute top-[3px] h-6 w-6 rounded-full bg-white shadow-sm-neutral transition-all"
                 style={{ left: avail.online ? '25px' : '3px' }}
               />
             </button>

@@ -200,7 +200,7 @@ export default function CashConfirmDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="titolo-conferma-contanti"
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-warm-xl"
       >
         <h2 id="titolo-conferma-contanti" className="text-lg font-semibold text-ink-900">Conferma incasso contanti</h2>
         <p className="mt-1 text-xs text-ink-500">

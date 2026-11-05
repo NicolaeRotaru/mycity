@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { useCallback, useEffect, useState, use } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -98,6 +98,9 @@ type OrderRow = {
     // il prodotto puo' cambiare nome o sparire, la ricevuta no.
     product_name: string | null;
     product_image: string | null;
+    // 5/11/2026 — la variante comprata: serve al riepilogo e a «Ripeti ordine».
+    variant_id?: string | null;
+    variant_label?: string | null;
     products: { name: string; images: string[] | null } | null;
   }[];
 };
@@ -114,7 +117,7 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
       rider_lat, rider_lng, rider_position_updated_at, rider_id,
       seller_id,
       order_items (
-        id, quantity, unit_price, product_id, product_name, product_image,
+        id, quantity, unit_price, product_id, product_name, product_image, variant_id, variant_label,
         products ( name, images )
       )
     `)
@@ -177,6 +180,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
 
   // Bottom-sheet di contatto (rider / negozio / assistenza).
   const [contact, setContact] = useState<ContactTarget | null>(null);
+  const chiudiContatto = useCallback(() => setContact(null), []);
 
   // Il pulsante «Ripeti ordine» mentre lavora: cortesia, non diga. La diga che
   // impedisce il doppio carrello sta dentro `riordina` (lib/riordino.ts).
@@ -201,15 +205,23 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   const status = order?.delivery_status;
   const showDeliveryCode = status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY';
 
-  const { data: deliveryCode } = useQuery({
+  // 5/11/2026 — Se la lettura del codice cade lo si dice («Riprova») invece di farlo sparire, e
+  // finché il fattorino è in strada e il codice non c'è si riprova da soli ogni 20 secondi.
+  const {
+    data: deliveryCode,
+    isError: codiceNonLetto,
+    refetch: rileggiCodice,
+  } = useQuery({
     queryKey: queryKeys.orders.deliveryCode(id),
     enabled: showDeliveryCode,
+    refetchInterval: (q) => (showDeliveryCode && !q.state.data?.code ? 20_000 : false),
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('order_delivery_codes')
         .select('code, verified_at')
         .eq('order_id', id)
         .maybeSingle();
+      if (error) throw error;
       return data;
     },
   });
@@ -269,7 +281,9 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
 
   if (isLoading) return <LoadingState />;
   // 110 — Errore di rete: si dice cos'è successo e si offre di riprovare.
-  if (isError) {
+  // 5/11/2026 — Solo se a schermo non c'è ancora niente: una rilettura caduta durante la consegna
+  // (una ogni posizione del fattorino) non butta via l'ordine e il codice già mostrati.
+  if (isError && !order) {
     return (
       <div className="container mx-auto py-12 max-w-2xl">
         <ErrorState
@@ -343,7 +357,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
     : isCancelled
     ? 'Ordine annullato'
     : status === 'NEW'
-    ? 'Ordine confermato!'
+    ? 'Ordine inviato al negozio'
     : 'Ordine in corso';
 
   // Sottotitolo per-stato (frase, non solo la label del badge): comunica cosa
@@ -388,13 +402,17 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
     // Niente stima perché la posizione è vecchia: al posto del numero si dice
     // da quanto è ferma. È l'unica cosa vera che sappiamo.
     if (status === 'OUT_FOR_DELIVERY' && posizioneRider.testo) return posizioneRider.testo;
+    // 5/11/2026 — Con una fascia programmata le frasi della consegna immediata mentivano
+    // («pronto entro ~30 min» sotto «sab 31/10 · 9:00–12:00»): vale la fascia.
     if (status === 'READY' || status === 'ASSIGNED' || status === 'PICKED_UP') {
       const m = minutesSince(order.ready_at);
-      return m != null ? 'Pronto, in consegna a breve' : null;
+      if (m == null) return null;
+      return fasciaProgrammata ? 'Pronto in negozio · arriva nella tua fascia' : 'Pronto, in consegna a breve';
     }
     if (status === 'ACCEPTED') {
       const m = minutesSince(order.accepted_at);
-      return m != null ? 'In preparazione · pronto entro ~30 min' : null;
+      if (m == null) return null;
+      return fasciaProgrammata ? 'Il negozio lo prepara per la tua fascia' : 'In preparazione · pronto entro ~30 min';
     }
     return null;
   })();
@@ -408,6 +426,8 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
         order.order_items.map((it) => ({
           productId: it.product_id ?? '',
           name: nomeDellaRigaOrdine(it),
+          variantId: it.variant_id ?? undefined,
+          variantLabel: it.variant_label ?? undefined,
           prezzoStorico: Number(it.unit_price),
           image: fotoDellaRigaOrdine(it),
           quantity: it.quantity,
@@ -430,6 +450,23 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
       <Link href="/orders" className="inline-flex items-center gap-1.5 py-2 text-sm font-medium text-ink-600 hover:text-ink-900">
         <ArrowLeft size={17} strokeWidth={2.2} aria-hidden /> Tutti gli ordini
       </Link>
+
+      {/* 5/11/2026 — Chi usa il lettore di schermo sente quando cambia lo stato e quando compare
+          il codice di consegna. Il testo cambia solo con lo stato e col codice, non con la
+          posizione del fattorino: niente annunci ogni 30 secondi. */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {`Stato dell'ordine: ${heroTitle}. ${heroSub}.`}
+        {showDeliveryCode && deliveryCode?.code ? ` Codice di consegna: ${deliveryCode.code.split('').join(' ')}.` : ''}
+      </p>
+
+      {isError && (
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-accent-200 bg-accent-50 px-4 py-2 text-sm text-accent-900">
+          <span>Non riesco ad aggiornare l&apos;ordine: quello che vedi può essere di qualche minuto fa.</span>
+          <button type="button" onClick={() => { void refetch(); }} className="font-semibold underline">
+            Riprova
+          </button>
+        </div>
+      )}
 
       {/* HERO STATUS */}
       <Card variant="elevated" padding="lg" className="mt-1">
@@ -556,6 +593,17 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
           piene erano gia' state corrette, le sfumature no — nessuno guardava le
           fermate `from-`/`to-`. Adesso la fermata piu' chiara e' olive-600
           (4,78), e la prova il conto lo rifa' sui colori veri. */}
+      {showDeliveryCode && !deliveryCode?.code && codiceNonLetto && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-accent-200 bg-accent-50 p-4 text-sm text-accent-900">
+          <span>
+            <strong>Non riesco a mostrarti il codice di consegna.</strong> Il rider ne ha bisogno per chiudere la consegna.
+          </span>
+          <button type="button" onClick={() => { void rileggiCodice(); }} className="rounded-lg bg-white px-3 py-1.5 font-semibold">
+            Riprova
+          </button>
+        </div>
+      )}
+
       {showDeliveryCode && deliveryCode?.code && (
         <div className="mt-4 rounded-2xl bg-gradient-to-br from-olive-600 to-olive-700 p-6 text-white shadow-warm-lg">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -719,6 +767,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="line-clamp-2 break-words text-[13px] font-semibold text-ink-900">{nomeDellaRigaOrdine(it)}</p>
+                      {it.variant_label && <p className="text-xs text-ink-600">{it.variant_label}</p>}
                       <p className="text-xs text-ink-500">× {it.quantity}</p>
                     </div>
                     <span className="text-[13px] font-bold text-ink-900">{formatPrice(Number(it.unit_price) * it.quantity)}</span>
@@ -849,7 +898,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
         </div>
       </div>
 
-      {contact && <ContactSheet target={contact} onClose={() => setContact(null)} />}
+      {contact && <ContactSheet target={contact} onClose={chiudiContatto} />}
     </div>
   );
 }

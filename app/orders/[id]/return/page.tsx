@@ -210,7 +210,7 @@ export default function NewReturnPage() {
         <Link href={`/orders/${params.id}`} className="text-sm text-primary-700 hover:underline">
           ← Torna all&apos;ordine
         </Link>
-        <div className="mt-4 rounded-2xl bg-white p-6 shadow ring-1 ring-cream-300">
+        <div className="mt-4 rounded-2xl bg-white p-6 shadow-sm-neutral ring-1 ring-cream-300">
           <h1 className="text-2xl font-bold text-ink-900">Hai già una richiesta di reso aperta</h1>
           {ritirabile ? (
             <>
@@ -260,7 +260,7 @@ export default function NewReturnPage() {
         <Link href={`/orders/${params.id}`} className="text-sm text-primary-700 hover:underline">
           ← Torna all&apos;ordine
         </Link>
-        <div className="mt-4 rounded-2xl bg-white p-6 shadow ring-1 ring-cream-300">
+        <div className="mt-4 rounded-2xl bg-white p-6 shadow-sm-neutral ring-1 ring-cream-300">
           <h1 className="text-2xl font-bold text-ink-900">Qui il reso non si può chiedere</h1>
           {!consegnato ? (
             <>
@@ -316,7 +316,7 @@ export default function NewReturnPage() {
         Hai 14 giorni dalla consegna per richiedere il reso (recesso legale).
       </p>
 
-      <div className="mt-6 rounded-2xl bg-white p-6 shadow ring-1 ring-cream-300">
+      <div className="mt-6 rounded-2xl bg-white p-6 shadow-sm-neutral ring-1 ring-cream-300">
         <fieldset>
         <legend className="block text-sm font-medium text-ink-700">Motivo del reso</legend>
         <div className="mt-2 space-y-2">
@@ -365,7 +365,7 @@ export default function NewReturnPage() {
                 type="button"
                 onClick={() => setPhotos((tutte) => tutte.filter((x) => x !== p))}
                 aria-label={`Togli la foto ${i + 1}`}
-                className="absolute -right-2 -top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-ink-900 text-xs font-bold text-white shadow"
+                className="absolute -right-2 -top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-ink-900 text-xs font-bold text-white shadow-sm-neutral"
               >
                 ×
               </button>
