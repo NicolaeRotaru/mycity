@@ -583,7 +583,7 @@ export default function CartPage() {
                   <p className="rounded-lg border border-cream-300 bg-cream-50 px-3 py-2 text-sm text-ink-700">{spesaPiccola}</p>
                 )}
                 {fuoriZona && (
-                  <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                  <p role="alert" data-informativo className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
                     {motivoFuoriZona(g.storeName)}
                   </p>
                 )}

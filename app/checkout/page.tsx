@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AlertTriangle, ArrowLeft, MapPin, Store, Truck, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, MapPin, ShoppingCart, Store, Truck, Wallet } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -27,7 +27,7 @@ import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
 import { validateCouponFromBrowser, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
-import { Button } from '@/components/ui/Button';
+import EmptyState from '@/components/EmptyState';
 import { Card } from '@/components/ui/Card';
 import { Textarea } from '@/components/ui/Field';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
@@ -211,10 +211,13 @@ export default function CheckoutPage() {
       const variantStock = new Map<string, number>();
       const variantIds = cart.map((c) => c.variantId).filter(Boolean) as string[];
       if (variantIds.length > 0) {
-        const { data: vs } = await supabase
+        const { data: vs, error: erroreVarianti } = await supabase
           .from('product_variants')
           .select('id, stock')
           .in('id', variantIds);
+        // 5/11/2026 — Come la lettura dei prodotti: se cade, si dice che il carrello non si legge
+        // (e la domanda si riprova), invece di contare «disponibili 0» su merce che c'è.
+        if (erroreVarianti) throw erroreVarianti;
         for (const v of vs ?? []) variantStock.set(v.id as string, (v.stock as number) ?? 0);
       }
 
@@ -1316,11 +1319,22 @@ export default function CheckoutPage() {
     );
   }
 
+  // 5/11/2026 — La cassa vuota era una riga grigia e un «Torna al negozio» che portava alla home:
+  // adesso è lo stesso stato vuoto del carrello, con i suoi ordini a un tocco (chi torna indietro
+  // dopo aver ordinato arriva spesso qui).
   if (vistaCarrello.mostraVuoto) {
     return (
-      <div className="container mx-auto p-12 text-center space-y-4">
-        <p className="text-ink-500 text-lg">Il tuo carrello è vuoto.</p>
-        <Button href="/">Torna al negozio</Button>
+      <div className="container mx-auto py-12 max-w-2xl">
+        <h1 className="sr-only">Conferma il tuo ordine</h1>
+        <EmptyState
+          icon={ShoppingCart}
+          title="Il tuo carrello è vuoto"
+          description="Se hai appena ordinato, lo trovi nei tuoi ordini. Altrimenti scegli qualcosa dai negozi della città."
+          ctaLabel="Esplora i prodotti"
+          ctaHref="/search"
+          secondaryLabel="I miei ordini"
+          secondaryHref="/orders"
+        />
       </div>
     );
   }
@@ -1519,7 +1533,7 @@ export default function CheckoutPage() {
           )}
 
           {orphans.length > 0 && (
-            <div role="alert" className="bg-secondary-50 border border-secondary-200 rounded-xl p-4 text-sm text-secondary-800 space-y-3">
+            <div role="alert" data-informativo className="bg-secondary-50 border border-secondary-200 rounded-xl p-4 text-sm text-secondary-800 space-y-3">
               <p className="flex items-start gap-2">
                 <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
                 <span><strong>{orphans.length} {orphans.length === 1 ? 'prodotto non è più disponibile' : 'prodotti non sono più disponibili'}</strong>: {orphans.map((o) => o.name).join(', ')}.</span>
@@ -1548,7 +1562,7 @@ export default function CheckoutPage() {
             <div role="alert" className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900 space-y-3">
               <p className="flex items-start gap-2">
                 <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
-                <span><strong>Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello, oppure togli l&apos;articolo da qui.</span>
+                <span><strong>Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name}${s.variantLabel ? ` · ${s.variantLabel}` : ''} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello, oppure togli l&apos;articolo da qui.</span>
               </p>
               {/* Il riquadro diceva solo «riduci le quantità nel carrello», cioè torna indietro e
                   fallo a mano. Chi ha davanti un articolo finito — disponibili zero — non ha niente
@@ -1557,7 +1571,8 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    stockIssues.forEach((s) => removeFromCart(s.id));
+                    // 5/11/2026 — Solo la riga senza scorta: con la variante, non tutte le varianti.
+                    stockIssues.forEach((s) => removeFromCart(s.id, s.variantId ?? undefined));
                     setCart(getCart());
                     toast.success(stockIssues.length === 1 ? 'Articolo rimosso' : 'Articoli rimossi');
                   }}
@@ -1574,7 +1589,7 @@ export default function CheckoutPage() {
               totale qui sotto e' gia' quello nuovo, cioe' quello che verra'
               addebitato davvero. */}
           {prezziCambiati.length > 0 && (
-            <div role="alert" className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900 flex items-start gap-2">
+            <div role="alert" data-informativo className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span>
                 <strong>Il prezzo è cambiato</strong> da quando avevi messo nel carrello:{' '}
@@ -1674,6 +1689,7 @@ export default function CheckoutPage() {
               paymentMethod={paymentMethod}
               disabled={ordineBloccato}
               motivoBlocco={motivoDelBlocco}
+              importiLetti={groups.length > 0}
             />
           </Card>
         </div>
@@ -1698,7 +1714,7 @@ export default function CheckoutPage() {
       >
         <div className="leading-tight">
           <div className="text-xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
-          <div className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(finalTotal)}</div>
+          <div className="font-serif text-xl font-extrabold text-ink-900">{groups.length > 0 ? formatPrice(finalTotal) : '—'}</div>
         </div>
         {/*
             6/9/2026 — SUL TELEFONO IL PULSANTE SI SPEGNEVA SENZA DIRE PERCHE'.

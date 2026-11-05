@@ -57,7 +57,7 @@ describe('la disponibilità dipende da chi guarda', () => {
     // blocco è giusto e deve restare — altrimenti la riparazione sarebbe solo
     // un controllo spento, e si venderebbe merce che non c'è.
     const problemi = problemiDiDisponibilita(CARRELLO, scaffaleVuoto, merceCheTengoIo([]));
-    expect(problemi).toEqual([{ id: TORTA, name: 'Torta', requested: 1, available: 0 }]);
+    expect(problemi).toEqual([{ id: TORTA, name: 'Torta', variantId: null, variantLabel: null, requested: 1, available: 0 }]);
   });
 
   it('tengo un pezzo ma ne voglio due: manca ancora quello che manca davvero', () => {
@@ -66,7 +66,7 @@ describe('la disponibilità dipende da chi guarda', () => {
       scaffaleVuoto,
       merceCheTengoIo([MIO_TENTATIVO]),
     );
-    expect(problemi).toEqual([{ id: TORTA, name: 'Torta', requested: 2, available: 1 }]);
+    expect(problemi).toEqual([{ id: TORTA, name: 'Torta', variantId: null, variantLabel: null, requested: 2, available: 1 }]);
   });
 
   it('la riserva di una variante non si somma alla riga senza variante', () => {
