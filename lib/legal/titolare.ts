@@ -323,7 +323,7 @@ export function stradaAManoPerIDiritti(
     // né il reclamo al Garante che l'art. 12.4 GDPR chiede di indicare.
     frase:
       `${nonDisponibile} In questo momento non abbiamo un canale attivo per le richieste sulla privacy: ` +
-      'la tua richiesta non è partita. È un guasto nostro, non tuo: l\'abbiamo annotata insieme al tuo account. ' +
+      'la tua richiesta non è partita. È un guasto nostro, non tuo. ' +
       'Puoi anche presentare reclamo al Garante per la protezione dei dati personali (garanteprivacy.it).',
     recapito: null,
   };

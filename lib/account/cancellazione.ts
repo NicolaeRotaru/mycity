@@ -726,13 +726,13 @@ async function propagaLaCancellazioneAStripe(
   const clienteStripe = riga?.stripe_customer_id;
 
   // 5/11/2026 — IL CONTO COLLEGATO (Stripe Connect) DI NEGOZI E FATTORINI.
-  // Si leggeva solo il cliente dell'abbonamento: il conto collegato restava aperto e il suo
-  // codice, che vive solo sul profilo, spariva con lui. Se ha ancora soldi (disponibili o in
-  // arrivo) la cancellazione si rinvia, come per la cassa contanti; se è a zero si chiude.
+  // Si leggeva solo il cliente dell'abbonamento: il codice del conto collegato, che vive solo
+  // sul profilo, spariva con lui. Adesso si annota prima del passo irreversibile (se non si
+  // riesce ad annotarlo ci si ferma); la chiusura resta a mano (vedi annotaIlContoCollegato).
   const contoCollegato = riga?.stripe_account_id;
   if (contoCollegato) {
-    const chiusura = await chiudiIlContoCollegato(userId, contoCollegato);
-    if (!chiusura.ok) return chiusura;
+    const annotato = await annotaIlContoCollegato(admin, userId, contoCollegato);
+    if (!annotato.ok) return annotato;
   }
 
   if (!clienteStripe) return { ok: true };
@@ -756,31 +756,30 @@ async function propagaLaCancellazioneAStripe(
   }
 }
 
-async function chiudiIlContoCollegato(
+async function annotaIlContoCollegato(
+  admin: Admin,
   userId: string,
   conto: string,
 ): Promise<{ ok: true } | { ok: false; errore: string }> {
-  if (!isStripeConfigured()) {
-    logger.error('[cancellazione] conto Stripe collegato da chiudere ma Stripe non è configurato', { userId, conto });
-    return { ok: false, errore: 'Stripe non è configurato e il conto collegato non può essere chiuso' };
+  // Non si chiude da qui: il saldo del conto non vede i pagamenti al negozio ancora trattenuti
+  // dalla piattaforma (payout HELD), e chiuderlo prima di deleteUser renderebbe irreversibile un
+  // passo che dopo può ancora fallire. Si scrive il codice dove resta anche dopo la cancellazione,
+  // così chi gestisce i pagamenti lo chiude a mano quando i conti col negozio sono chiusi.
+  const { error } = await (admin.from('audit_logs') as unknown as {
+    insert(r: Record<string, unknown>[]): PromiseLike<{ error: { message: string } | null }>;
+  }).insert([{
+    actor_id: null,
+    action: 'account.cancellazione.conto_stripe_da_chiudere',
+    target_table: 'profiles',
+    target_id: userId,
+    metadata: { conto },
+  }]);
+  if (error) {
+    logger.error('[cancellazione] codice del conto Stripe collegato non annotato', { userId, err: error.message });
+    return { ok: false, errore: `il codice del conto Stripe collegato non è stato annotato (${error.message})` };
   }
-  try {
-    const saldo = await getStripe().balance.retrieve({}, { stripeAccount: conto });
-    const ancoraSoldi = [...(saldo.available ?? []), ...(saldo.pending ?? [])].some((v) => (v.amount ?? 0) !== 0);
-    if (ancoraSoldi) {
-      logger.error('[cancellazione] rinviata: il conto Stripe collegato ha ancora un saldo', { userId, conto });
-      return { ok: false, errore: 'il conto Stripe collegato ha ancora un saldo da pagare o da ricevere' };
-    }
-    await getStripe().accounts.del(conto);
-    logger.info('[cancellazione] conto Stripe collegato chiuso', { userId, conto });
-    return { ok: true };
-  } catch (err) {
-    const codice = (err as { code?: string })?.code;
-    if (codice === 'resource_missing' || codice === 'account_invalid') return { ok: true };
-    const messaggio = err instanceof Error ? err.message : 'errore sconosciuto';
-    logger.error('[cancellazione] conto Stripe collegato non chiuso', { userId, conto, err: messaggio });
-    return { ok: false, errore: `il conto Stripe collegato non è stato chiuso (${messaggio})` };
-  }
+  logger.warn('[cancellazione] conto Stripe collegato da chiudere a mano', { userId, conto });
+  return { ok: true };
 }
 
 export type EsitoCancellazione = {

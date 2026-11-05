@@ -314,7 +314,8 @@ const scarica = withAuthRateLimit(
           ? `ATTENZIONE: questo file NON è completo. Le sezioni in «sezioni_al_tetto» hanno più di ${TETTO_PER_SEZIONE} righe e qui trovi solo le prime ${TETTO_PER_SEZIONE}. Scrivici: hai diritto a riceverle tutte.`
           : letture_fallite.length === 0
           ? 'Questo file contiene tutti i dati personali associati al tuo account. Conservato in formato JSON strutturato e leggibile come previsto dall\'art. 20 GDPR.'
-          : 'ATTENZIONE: questo file NON è completo. Alcune sezioni non siamo riusciti a leggerle: le trovi in «letture_fallite», e nel file valgono null. Null non vuol dire «non hai niente»: vuol dire «non lo sappiamo». Riprova più tardi o scrivici, hai diritto a riceverle.',
+          : 'ATTENZIONE: questo file NON è completo. Alcune sezioni non siamo riusciti a leggerle: le trovi in «letture_fallite», e nel file valgono null. Null non vuol dire «non hai niente»: vuol dire «non lo sappiamo». Riprova più tardi o scrivici, hai diritto a riceverle.' +
+            (sezioni_al_tetto.length > 0 ? ` Inoltre le sezioni in «sezioni_al_tetto» contengono solo le prime ${TETTO_PER_SEZIONE} righe.` : ''),
     },
     letture_fallite,
     sezioni_al_tetto,

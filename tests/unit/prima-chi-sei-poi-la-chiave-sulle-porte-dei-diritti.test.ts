@@ -33,6 +33,7 @@ function adminFinto() {
       q.eq = () => q;
       // 5/11/2026 (S08) — la richiesta scrive la data solo se è ancora vuota.
       q.is = () => q;
+      q.in = () => q;
       q.update = (valori: Record<string, unknown>) => {
         Object.assign(stato.profilo, valori);
         return q;

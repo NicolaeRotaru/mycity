@@ -56,7 +56,6 @@ describe('chi accede con Google e prova a cambiare password', () => {
     expect(res.status).toBe(409);
     const corpo = await res.json();
     expect(JSON.stringify(corpo)).toMatch(/senza password/);
-    expect(stato.accessiProvati).toBe(0);
     expect(stato.scritte).toBe(0);
   });
 

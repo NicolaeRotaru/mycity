@@ -3,7 +3,7 @@ import Image from 'next/image';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { notFound } from 'next/navigation';
 import { logger } from '@/lib/logger';
-import { handleEsatto } from './handle';
+import { handleEsatto, handleValido } from './handle';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { Trophy, Sparkles, MapPin } from 'lucide-react';
 
@@ -35,6 +35,7 @@ type Profile = {
  * (pagina d'errore con «Riprova»); «non trovato» solo quando la lettura riesce e non c'è niente.
  */
 async function fetchProfileByHandle(handle: string) {
+  if (!handleValido(handle)) return null;
   let supabase;
   try {
     supabase = getAdminSupabase();

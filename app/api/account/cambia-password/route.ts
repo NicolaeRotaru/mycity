@@ -66,7 +66,8 @@ export const POST = withAuthRateLimit(
     // attuale non corretta». Si guarda con che cosa accede l'account: se fra i
     // fornitori non c'è 'email', una password da cambiare non esiste.
     const fornitori = fornitoriDiAccesso(user);
-    if (!email || (fornitori.length > 0 && !fornitori.includes('email'))) {
+    const senzaFornitoreEmail = fornitori.length > 0 && !fornitori.includes('email');
+    if (!email) {
       // Chi è entrato solo con Google non ha una password da cambiare: mandarlo
       // avanti gli scriverebbe una password che non ha mai chiesto.
       return ApiErrors.conflict('Questo account accede senza password: usa il tuo fornitore di accesso.');
@@ -80,6 +81,12 @@ export const POST = withAuthRateLimit(
       password: corpo.passwordAttuale,
     });
     if (erroreVerifica) {
+      // Si prova comunque la password (chi è entrato con Google può averne impostata una col
+      // recupero): solo se non combacia e l'account non ha l'email fra i fornitori, la risposta
+      // giusta è «accedi senza password», non «password non corretta».
+      if (senzaFornitoreEmail) {
+        return ApiErrors.conflict('Questo account accede senza password: usa il tuo fornitore di accesso.');
+      }
       return ApiErrors.unauthorized('Password attuale non corretta');
     }
 

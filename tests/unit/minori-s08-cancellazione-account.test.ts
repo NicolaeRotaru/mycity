@@ -25,7 +25,7 @@ import { cancellaAccount, CAMPI_KYC_DA_AZZERARE } from '@/lib/account/cancellazi
 
 const UTENTE = '11111111-1111-4111-8111-111111111111';
 
-function fintoMondo(o: { contoCollegato?: string | null; storageRotto?: boolean } = {}) {
+function fintoMondo(o: { contoCollegato?: string | null; storageRotto?: boolean; annotazioneRotta?: boolean } = {}) {
   const diario: string[] = [];
   const admin = {
     from(tabella: string) {
@@ -44,6 +44,11 @@ function fintoMondo(o: { contoCollegato?: string | null; storageRotto?: boolean 
         },
         delete() {
           return { ilike: async () => ({ error: null }) };
+        },
+        insert: async (righe: Array<{ metadata?: { conto?: string } }>) => {
+          if (o.annotazioneRotta) return { error: { message: 'registro giù' } };
+          diario.push(`annotato:${righe[0]?.metadata?.conto}`);
+          return { error: null };
         },
       };
     },
@@ -86,20 +91,20 @@ describe('cancellare un account', () => {
     expect(esito.erroriFile.length).toBeGreaterThan(0);
   });
 
-  it('scheda 123 — il conto Stripe collegato a zero si chiude prima del passo irreversibile', async () => {
+  it('scheda 123 — il codice del conto Stripe collegato si annota prima del passo irreversibile, e non si chiude da qui', async () => {
     const { admin, diario } = fintoMondo({ contoCollegato: 'acct_forno' });
     const esito = await cancellaAccount(admin as never, UTENTE);
     expect(esito.ok).toBe(true);
-    expect(stripe.chiusi).toEqual(['acct_forno']);
-    expect(diario).toContain('cancella-account');
+    expect(stripe.chiusi).toEqual([]);
+    const annotato = diario.indexOf('annotato:acct_forno');
+    expect(annotato, 'il codice del conto si perde con il profilo').toBeGreaterThanOrEqual(0);
+    expect(annotato).toBeLessThan(diario.indexOf('cancella-account'));
   });
 
-  it('scheda 123 — col saldo non a zero la cancellazione si rinvia e il codice del conto resta', async () => {
-    stripe.saldo = { available: [{ amount: 0 }], pending: [{ amount: 1250 }] };
-    const { admin, diario } = fintoMondo({ contoCollegato: 'acct_forno' });
+  it('scheda 123 — se il codice non si annota, l account non si cancella', async () => {
+    const { admin, diario } = fintoMondo({ contoCollegato: 'acct_forno', annotazioneRotta: true });
     const esito = await cancellaAccount(admin as never, UTENTE);
     expect(esito.ok).toBe(false);
-    expect(stripe.chiusi).toEqual([]);
     expect(diario).not.toContain('cancella-account');
   });
 });

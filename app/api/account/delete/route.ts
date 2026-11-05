@@ -7,7 +7,7 @@ import { stradaAManoPerIDiritti } from '@/lib/legal/titolare';
 import { motivoDellAttesa } from '@/lib/privacy/avvisi-a-chi-aspetta';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { sendEmail } from '@/lib/email/client';
-import { richiestaCancellazioneTemplate } from '@/lib/email/templates';
+import { NOMI_TEMPLATE_CICLO_DI_VITA, TEMPLATE_DI_SERVIZIO, richiestaCancellazioneTemplate } from '@/lib/email/templates';
 
 /**
  * 27/10/2026 — Senza la chiave di servizio le tre porte rispondevano
@@ -158,6 +158,8 @@ async function smettiDiScrivergli(admin: ReturnType<typeof getAdminSupabase>, us
       .from('email_queue')
       .update({ cancelled_at: adesso })
       .eq('user_id', userId)
+      // Solo guida e promozioni: «ordine pronto» e «consegnato» sono avvisi di servizio e restano.
+      .in('template', NOMI_TEMPLATE_CICLO_DI_VITA.filter((n) => !TEMPLATE_DI_SERVIZIO.has(n)))
       .is('sent_at', null)
       .is('cancelled_at', null);
     if (erroreCoda) logger.warn('[account-delete] coda email non chiusa', { userId, message: erroreCoda.message });

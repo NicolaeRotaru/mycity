@@ -48,6 +48,7 @@ function adminFinto() {
       q.select = () => q;
       q.eq = (c: string, v: unknown) => { filtri.push(['eq', c, v]); return q; };
       q.is = (c: string, v: unknown) => { filtri.push(['is', c, v]); return q; };
+      q.in = (c: string, v: unknown) => { filtri.push(['in', c, v]); return q; };
       q.update = (v: Record<string, unknown>) => { valori = v; return q; };
       q.single = async () => ({ data: stato.erroreProfilo ? null : stato.profilo, error: stato.erroreProfilo });
       q.then = (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => {
@@ -131,6 +132,11 @@ describe('chiedere la cancellazione', () => {
     expect(coda?.valori).toHaveProperty('cancelled_at');
     expect(coda?.filtri).toContainEqual(['eq', 'user_id', UTENTE.id]);
     expect(coda?.filtri).toContainEqual(['is', 'sent_at', null]);
+    // Solo guida e promozioni: «ordine pronto» e «consegnato» restano.
+    const soloQuesti = coda?.filtri.find((f) => f[0] === 'in' && f[1] === 'template')?.[2] as string[];
+    expect(soloQuesti).toContain('first_order_promo');
+    expect(soloQuesti).not.toContain('order_ready');
+    expect(soloQuesti).not.toContain('order_delivered');
     const carrello = stato.scritture.find((s) => s.tabella === 'abandoned_carts');
     expect(carrello?.valori).toHaveProperty('recovery_email_sent_at');
   });

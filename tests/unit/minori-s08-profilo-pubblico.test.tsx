@@ -87,6 +87,12 @@ describe('la pagina pubblica', () => {
     expect(stato.ilike).toEqual(['maria\\_pc']);
   });
 
+  it('scheda 1739 — un handle con «*» o altri caratteri non arriva al database: «non trovato», non un errore', async () => {
+    await expect(apri('*')).rejects.toThrow('NEXT_NOT_FOUND');
+    await expect(apri('a%')).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(stato.ilike).toEqual([]);
+  });
+
   it('scheda 1723 — un guasto della lettura non diventa «non trovato», e si scrive nei registri', async () => {
     stato.profilo = { data: null, error: { message: 'più righe' } };
     await expect(apri('maria_pc')).rejects.not.toThrow('NEXT_NOT_FOUND');

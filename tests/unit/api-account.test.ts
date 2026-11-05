@@ -22,7 +22,7 @@ const fromResults: Record<string, unknown> = {};
 function makeChain(table: string) {
   const chain: Record<string, unknown> = {};
   // 5/11/2026 (S08) — `is`: la richiesta di cancellazione scrive la data solo se è ancora vuota.
-  const methods = ['select', 'eq', 'or', 'is', 'single', 'update', 'insert', 'order', 'limit'];
+  const methods = ['select', 'eq', 'or', 'is', 'in', 'single', 'update', 'insert', 'order', 'limit'];
   for (const m of methods) {
     chain[m] = vi.fn(() => {
       // single() / update().eq() risolvono la promise; gli altri sono chainable

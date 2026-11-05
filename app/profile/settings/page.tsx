@@ -106,7 +106,7 @@ function schedaDallIndirizzo(): Tab | null {
  * indirizzo email: nell'email sono collegamenti, qui erano testo nudo.
  */
 function MotivoConCollegamenti({ testo }: { testo: string }) {
-  const pezzi = testo.split(/(\/contact\b|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g);
+  const pezzi = testo.split(/((?<![\w/.:])\/contact(?![\w/-])|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})/g);
   return (
     <>
       {pezzi.map((pezzo, i) => {
@@ -212,7 +212,10 @@ export default function SettingsPage() {
             }
           } else {
             const body = await res.json().catch(() => null);
-            if (res.status === 503) {
+            // Solo il 503 della strada a mano (porta `details.recapito`, anche null): un 503 del
+            // controllo d'accesso per un guasto passeggero non vuol dire «cancellazione spenta».
+            const dettagli = (body as { error?: { details?: Record<string, unknown> } } | null)?.error?.details;
+            if (res.status === 503 && dettagli && 'recapito' in dettagli) {
               setStradaDalServer({
                 frase: apiErrorMessage(body, 'La cancellazione automatica non è disponibile in questo momento.'),
                 recapito: recapitoDallaRisposta(body),
