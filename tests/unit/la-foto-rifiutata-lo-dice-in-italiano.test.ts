@@ -95,7 +95,8 @@ describe('② la porta rifiuta prima di spedire quello che il deposito rifiutere
     const svg = new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' }) as never;
     await expect(
       caricaImmagine(d.client, { file: svg, userId: UID, cartella: 'logos' }),
-    ).rejects.toThrow(/JPG, PNG o WEBP/);
+      // S06 (1605): la frase elenca tutti i formati che la porta accetta, non tre su sette.
+    ).rejects.toThrow(/JPG, PNG, WEBP, GIF, AVIF, HEIC o HEIF/);
     expect(
       d.chiamate,
       'il file partiva, saliva, e veniva respinto alla fine: il negoziante aspettava per niente',

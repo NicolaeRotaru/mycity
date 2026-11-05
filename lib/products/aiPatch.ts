@@ -654,6 +654,8 @@ export type PianoPatchModulo = {
    * prima. Vuoto = la scheda non ha dichiarazioni (un vaso, un libro).
    */
   dichiarazioniDellaCategoria: string[];
+  /** 1701 — Dopo il suggerimento la scheda non ha ancora una categoria. */
+  senzaCategoria?: boolean;
 };
 
 /**
@@ -865,6 +867,8 @@ export function pianoPatchPerIlModulo(
     daControllare,
     daRivedere: dichiarazioniDaRivedere(proposta),
     dichiarazioniDellaCategoria,
+    // 1701 — La scheda resta senza categoria anche dopo il suggerimento.
+    senzaCategoria: campi === null,
   };
 }
 
@@ -888,6 +892,8 @@ export type EsitoPatchModulo = {
   daRivedere: AiProductPatch;
   /** Vedi `PianoPatchModulo.dichiarazioniDellaCategoria`. */
   dichiarazioniDellaCategoria: string[];
+  /** 1701 — Dopo il suggerimento la scheda non ha ancora una categoria. */
+  senzaCategoria?: boolean;
 };
 
 /** L'esito di un piano, per chi chiama il modulo. */
@@ -898,6 +904,7 @@ export function esitoDelPiano(piano: PianoPatchModulo): EsitoPatchModulo {
     daControllare: piano.daControllare,
     daRivedere: piano.daRivedere,
     dichiarazioniDellaCategoria: piano.dichiarazioniDellaCategoria,
+    senzaCategoria: piano.senzaCategoria,
   };
 }
 

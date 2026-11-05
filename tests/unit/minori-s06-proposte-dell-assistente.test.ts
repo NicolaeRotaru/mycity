@@ -27,7 +27,7 @@ describe('1673 — nome lungo', () => {
 describe('2165 — casella mandata come booleano', () => {
   it('true e false entrano, nel modulo e sul server', () => {
     const p = pianoPatchPerIlModulo({ attributes: { montaggio: true } } as never, ctx);
-    expect(p.scritture.find((s) => s.chiave === 'montaggio')?.valore).toBe(true);
+    expect(p.scritture.find((s) => (s as { chiave?: string }).chiave === 'montaggio')?.valore).toBe(true);
     expect(server({ attributes: { montaggio: false } }).update.attributes).toMatchObject({ montaggio: false });
   });
 });
@@ -37,7 +37,7 @@ describe('1687 — chiavi scritte con la maiuscola o lo spazio', () => {
     const r = server({ attributes: { Colore: 'Rosso', 'tipo prodotto': 'Sedia' } });
     expect(r.update.attributes).toMatchObject({ colore: 'Rosso', tipo_prodotto: 'Sedia' });
     const p = pianoPatchPerIlModulo({ attributes: { Colore: 'Rosso' } } as never, ctx);
-    expect(p.scritture.find((s) => s.chiave === 'colore')?.valore).toBe('Rosso');
+    expect(p.scritture.find((s) => (s as { chiave?: string }).chiave === 'colore')?.valore).toBe('Rosso');
   });
   it('se non entra niente, attributes non va in update', () => {
     const r = server({ attributes: { stile: 'Astronave' } });

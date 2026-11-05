@@ -30,7 +30,11 @@ export type SellerEconomics = {
   netToSeller: number;
   /** Aliquota commissione applicata (frazione). */
   feeRate: number;
-  /** Fee di consegna a domicilio pagata dall'acquirente (euro). */
+  /**
+   * Consegna di un carrello che contiene SOLO un pezzo di questo prodotto (euro).
+   * Non è la consegna «del prodotto»: si paga sul carrello intero (tre pagnotte da
+   * 3,50 € pagano 3 €, non 3 × 4 €). 0 se il prezzo non è valido, come le altre voci.
+   */
   deliveryFee: number;
 };
 
@@ -52,7 +56,10 @@ export function sellerEconomics(price: number | null | undefined): SellerEconomi
     netToSeller: round2(p - commission),
     feeRate: MARKETPLACE_FEE_RATE,
     // 29/10/2026 — la consegna con la fascia per questa spesa: 4 € sotto i 10 €, 3 € da 10 € in su.
-    deliveryFee: tariffaConsegnaCents({ pickupInStore: false, merceCents: Math.round(p * 100), consegnaVeloce: false }) / 100,
+    // 2282 — Con un prezzo non valido la consegna è 0 come tutto il resto (prima usciva 4 €).
+    deliveryFee: p > 0
+      ? tariffaConsegnaCents({ pickupInStore: false, merceCents: Math.round(p * 100), consegnaVeloce: false }) / 100
+      : 0,
   };
 }
 
