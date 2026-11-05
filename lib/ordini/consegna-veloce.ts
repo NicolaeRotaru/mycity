@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { formatPrice } from '@/lib/format';
-import { ETICHETTA_ADESSO, expressSiPuo } from '@/lib/quando-arriva';
+import { APERTURA_EXPRESS, CHIUSURA_EXPRESS, ETICHETTA_ADESSO, MINUTI_PER_IL_RITIRO, expressSiPuo } from '@/lib/quando-arriva';
 import { negozioPuoServire } from '@/lib/store-hours';
 
 /**
@@ -38,12 +38,19 @@ export function veloceSiPuo(s: {
   fattoriniOnline: number | null;
 }): EsitoVeloce {
   if (!expressSiPuo(s.adesso.getHours())) {
-    return { possibile: false, perche: `La consegna veloce si fa dalle 8 alle 21. ${SCEGLI_UNA_FASCIA}` };
+    // 5/11/2026 — Le ore dalle costanti di lib/quando-arriva, come ORE_DELLA_VELOCE: prima erano scritte a mano.
+    return { possibile: false, perche: `La consegna veloce si fa dalle ${APERTURA_EXPRESS} alle ${CHIUSURA_EXPRESS}. ${SCEGLI_UNA_FASCIA}` };
   }
   if (s.negozi === null || s.fattoriniOnline === null) {
     return { possibile: false, perche: `Adesso non riesco a confermare la consegna veloce. ${SCEGLI_UNA_FASCIA}` };
   }
-  const chiuso = s.negozi.find((n) => !negozioPuoServire(n.orari, ETICHETTA_ADESSO, s.adesso));
+  // 5/11/2026 — Aperto adesso E ancora fra un quarto d'ora (MINUTI_PER_IL_RITIRO, la stessa regola delle
+  // fasce: «il tempo di accettare e preparare la busta»). Prima la veloce si vendeva anche due minuti
+  // prima della chiusura, e il fattorino arrivava a negozio chiuso.
+  const fraUnQuarto = new Date(s.adesso.getTime() + MINUTI_PER_IL_RITIRO * 60_000);
+  const chiuso = s.negozi.find(
+    (n) => !negozioPuoServire(n.orari, ETICHETTA_ADESSO, s.adesso) || !negozioPuoServire(n.orari, ETICHETTA_ADESSO, fraUnQuarto),
+  );
   if (chiuso) {
     return { possibile: false, perche: `${chiuso.nome} adesso è chiuso: la consegna veloce non si può. ${SCEGLI_UNA_FASCIA}` };
   }

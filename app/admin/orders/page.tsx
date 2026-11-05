@@ -58,6 +58,7 @@ const FILTERS = ['all', 'NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OU
 const COLONNE_ORDINE = `
   id, total_price, delivery_status, created_at,
   delivery_full_name, delivery_city,
+  payment_method, payment_status, wallet_applied_cents, refunded_amount_cents,
   seller:profiles!orders_seller_id_fkey ( store_name ),
   rider:profiles!orders_rider_id_fkey   ( full_name )
 `;
