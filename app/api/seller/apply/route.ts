@@ -7,6 +7,10 @@ import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
 import { controlloEta } from '@/lib/maggiore-eta';
 import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
+import { getClientIp } from '@/lib/rate-limit';
+import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+import { ibanValido, normalizzaIban } from '@/app/sell/iban';
 
 export const runtime = 'nodejs';
 
@@ -86,7 +90,22 @@ const RichiestaNegozio = z.object({
   storeAddress: z.string().trim().min(3, "Inserisci l'indirizzo del negozio"),
   storeLat: z.number().finite(),
   storeLng: z.number().finite(),
-  billingIban: z.string().regex(/^[A-Z0-9]{15,34}$/i, 'IBAN non valido').optional().or(z.literal('')).nullable(),
+  // Spazi e minuscole si tolgono prima del controllo; poi la cifra mod 97.
+  billingIban: z
+    .string()
+    .transform(normalizzaIban)
+    .refine((v) => v === '' || ibanValido(v), { message: "IBAN non valido: controlla i caratteri" })
+    .optional()
+    .nullable(),
+  // Per la fattura elettronica: PEC o codice destinatario (SDI). Facoltativi.
+  businessPec: z.string().trim().email('PEC non valida').max(200).optional().or(z.literal('')).nullable(),
+  businessSdi: z
+    .string()
+    .trim()
+    .regex(/^[A-Z0-9]{7}$/i, 'Codice SDI non valido: sono 7 caratteri')
+    .optional()
+    .or(z.literal(''))
+    .nullable(),
   acceptTos: vero('Devi accettare i Termini di servizio'),
   acceptPrivacy: vero('Devi accettare la Privacy policy'),
   acceptAccuracy: vero('Devi confermare i dati'),
@@ -160,6 +179,8 @@ export const POST = withAuthRateLimit(
         business_address: f.businessAddress,
         business_city: f.businessCity,
         business_zip: f.businessZip,
+        business_pec: f.businessPec || null,
+        business_sdi: f.businessSdi ? f.businessSdi.toUpperCase() : null,
         store_name: f.storeName,
         store_phone: f.contactPhone,
         store_description: f.storeDescription || null,
@@ -168,7 +189,7 @@ export const POST = withAuthRateLimit(
         store_address: f.storeAddress,
         store_lat: f.storeLat,
         store_lng: f.storeLng,
-        billing_iban: f.billingIban ? f.billingIban.toUpperCase() : null,
+        billing_iban: f.billingIban ? f.billingIban : null,
         role: 'seller',
         is_approved: false,
         approval_status: 'pending',
@@ -190,6 +211,38 @@ export const POST = withAuthRateLimit(
     if (!scritti || scritti.length === 0) {
       // Lo stato è cambiato fra la lettura e la scrittura (es. sospeso dallo staff).
       return ApiErrors.conflict('Lo stato del tuo account è appena cambiato: ricarica la pagina.');
+    }
+
+    // L'accettazione dei Termini va a verbale con la versione del testo, come
+    // alla registrazione: senza la riga, appena approvato il negozio si vedeva
+    // chiedere di nuovo le condizioni (/accetta-condizioni).
+    // La richiesta è già salvata: un verbale che non entra si scrive nei log, e
+    // la pagina /accetta-condizioni lo richiederà.
+    try {
+      const { error: errConsenso } = await admin.from('consent_log').insert({
+        user_id: user.id,
+        categoria: 'privacy_terms',
+        valore: true,
+        versione_testo: VERSIONE_TESTI_LEGALI.slice(0, 60),
+        ip: getClientIp(req),
+        user_agent: req.headers.get('user-agent')?.slice(0, 300) ?? null,
+      });
+      if (errConsenso) {
+        logger.error('[seller-apply] consenso non messo a verbale', { userId: user.id, message: errConsenso.message });
+      }
+    } catch (errore) {
+      logger.error('[seller-apply] consenso non messo a verbale', { userId: user.id, errore });
+    }
+
+    // Nicola deve saperlo subito: la coda dei negozi da approvare non avvisa da sola.
+    try {
+      await notifyAdmins(
+        'Nuovo negozio da approvare',
+        `${f.storeName} ha chiesto di entrare su MyCity: approva da Utenti.`,
+        '/admin/users',
+      );
+    } catch (errore) {
+      logger.error('[seller-apply] avviso agli amministratori non partito', { userId: user.id, errore });
     }
 
     return NextResponse.json({ ok: true }, { status: 200 });

@@ -1162,6 +1162,7 @@ export default function ProductForm({
           dropzoneHint="Trascina qui le foto o clicca per selezionarle"
           hint="Luce naturale, sfondo pulito, prodotto centrato — è la prima cosa che convince chi compra."
           showCoverBadge
+          sfondoBiancoAcceso={aiAccesa}
         />
 
         {aiAccesa && imageUrls.length >= 2 && (

@@ -106,11 +106,19 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // La restituzione ha un padrone solo: `annullaERimborsa`.
   // La prova: tests/unit/il-buono-torna-una-volta-sola-quando-il-negozio-rifiuta.test.ts.
 
-  const creditoCents = Number(order.wallet_applied_cents ?? 0);
+  // Si dice «tornato» solo per il credito tornato davvero: se lo storno è
+  // caduto anche dopo i ritentativi, annullaERimborsa lo dice in
+  // creditoNonTornatoCents e gli amministratori sono già avvisati.
+  const creditoSpesoCents = Number(order.wallet_applied_cents ?? 0);
+  const creditoMancanteCents = Math.min(creditoSpesoCents, Number(esito.creditoNonTornatoCents ?? 0));
+  const creditoCents = creditoSpesoCents - creditoMancanteCents;
   const pezzi = [
     motivo ? `Motivo: ${motivo}` : 'Il negozio non può completare il tuo ordine.',
     esito.refundId ? 'Il pagamento è stato rimborsato sulla tua carta.' : 'Nessun addebito è andato a buon fine.',
     creditoCents > 0 ? `Il credito MyCity che avevi usato (€${(creditoCents / 100).toFixed(2)}) è tornato sul tuo saldo.` : '',
+    creditoMancanteCents > 0
+      ? `Il credito MyCity di €${(creditoMancanteCents / 100).toFixed(2)} non è ancora tornato sul tuo saldo: lo stiamo sistemando noi, non devi fare niente.`
+      : '',
     order.coupon_code ? `Il codice sconto ${order.coupon_code} torna utilizzabile.` : '',
   ].filter(Boolean);
 

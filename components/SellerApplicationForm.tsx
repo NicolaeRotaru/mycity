@@ -1,5 +1,6 @@
 'use client';
 
+import { ibanValido, normalizzaIban } from '@/app/sell/iban';
 import { useState } from 'react';
 import { useForm, type UseFormRegisterReturn } from 'react-hook-form';
 import { z } from 'zod';
@@ -74,7 +75,14 @@ const SellerSchema = z.object({
   storeDescription: z.string().max(500, 'Massimo 500 caratteri').optional().or(z.literal('')),
 
   // Pagamenti
-  billingIban: z.string().regex(/^[A-Z0-9]{15,34}$/i, 'IBAN non valido').optional().or(z.literal('')),
+  billingIban: z
+    .string()
+    .refine((v) => normalizzaIban(v) === '' || ibanValido(v), { message: 'IBAN non valido: controlla i caratteri' })
+    .optional(),
+
+  // Fattura elettronica: facoltativi.
+  businessPec: z.string().trim().email('PEC non valida').optional().or(z.literal('')),
+  businessSdi: z.string().trim().regex(/^[A-Z0-9]{7}$/i, 'Codice SDI non valido: sono 7 caratteri').optional().or(z.literal('')),
 
   // Consensi legali
   // boolean + refine (non literal(true)): permette default false nel form
@@ -158,6 +166,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
       storeName:         defaultValues?.storeName         ?? '',
       storeDescription:  defaultValues?.storeDescription  ?? '',
       billingIban:       defaultValues?.billingIban       ?? '',
+      businessPec:       defaultValues?.businessPec       ?? '',
+      businessSdi:       defaultValues?.businessSdi       ?? '',
       acceptTos:         false,
       acceptPrivacy:     false,
       acceptAccuracy:    false,
@@ -346,6 +356,10 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         <div className="grid sm:grid-cols-2 gap-4">
           <Input label="Città della sede legale" required {...register('businessCity')} error={errors.businessCity?.message} />
           <Input label="CAP della sede legale" required inputMode="numeric" maxLength={5} {...register('businessZip')} error={errors.businessZip?.message} />
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <Input label="PEC (facoltativa)" type="email" placeholder="negozio@pec.it" {...register('businessPec')} error={errors.businessPec?.message} hint="Per la fattura elettronica" />
+          <Input label="Codice destinatario SDI (facoltativo)" className="uppercase" maxLength={7} placeholder="ABC1234" {...register('businessSdi')} error={errors.businessSdi?.message} hint="7 caratteri, te lo dà il commercialista" />
         </div>
       </Section>
 

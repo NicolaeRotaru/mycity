@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Camera, Sparkles, Star, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,6 +9,7 @@ import { fotoTroppoPiccole, uploadProductImages } from '@/lib/products/uploadIma
 import { LoadingState } from '@/components/ui/LoadingState';
 import CameraCapture from '@/components/seller/CameraCapture';
 import BackgroundRemovalPreview from '@/components/seller/BackgroundRemovalPreview';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 
 /**
  * Campo foto prodotto condiviso (nuovo + modifica annuncio).
@@ -34,6 +35,9 @@ interface Props {
   hint?: string;
   showCoverBadge?: boolean;
   maxFiles?: number;
+  /** «Sfondo bianco» chiama un servizio a pagamento: segue l'interruttore
+   *  degli strumenti AI dei negozi (lib/funzioni-al-lancio.ts). */
+  sfondoBiancoAcceso?: boolean;
 }
 
 export default function ProductImagesField({
@@ -47,10 +51,19 @@ export default function ProductImagesField({
   hint,
   showCoverBadge = true,
   maxFiles = 8,
+  sfondoBiancoAcceso = AI_NEGOZI_ACCESA,
 }: Props) {
   const [uploading, setUploadingState] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [bgIndex, setBgIndex] = useState<number | null>(null);
+
+  // L'elenco delle foto sempre aggiornato: un secondo caricamento partito
+  // mentre il primo sale non deve ripartire dall'elenco di prima e cancellare
+  // le foto entrate nel frattempo.
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  // Quanti caricamenti sono in corso: «caricamento finito» solo a zero.
+  const inCorso = useRef(0);
 
   const setUploading = useCallback(
     (b: boolean) => {
@@ -64,6 +77,7 @@ export default function ProductImagesField({
   const uploadFiles = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
+      inCorso.current += 1;
       setUploading(true);
       // Le misuriamo mentre l'upload parte: l'avviso arriva dopo, senza far
       // aspettare nessuno. Vedi `fotoTroppoPiccole` per il perche' e' un avviso
@@ -71,7 +85,9 @@ export default function ProductImagesField({
       const misura = fotoTroppoPiccole(files).catch((): string[] => []);
       try {
         const uploaded = await uploadProductImages(files);
-        onChange([...value, ...uploaded]);
+        const next = [...valueRef.current, ...uploaded];
+        valueRef.current = next;
+        onChange(next);
         onUploadSuccess?.();
         toast.success('Immagini caricate');
         const piccole = await misura;
@@ -87,10 +103,11 @@ export default function ProductImagesField({
       } catch (err) {
         toast.error(friendlyError(err));
       } finally {
-        setUploading(false);
+        inCorso.current -= 1;
+        if (inCorso.current === 0) setUploading(false);
       }
     },
-    [value, onChange, onUploadSuccess, setUploading],
+    [onChange, onUploadSuccess, setUploading],
   );
 
   // Riordino: la prima posizione è la copertina mostrata nelle liste.
@@ -164,7 +181,7 @@ export default function ProductImagesField({
               Trascina o usa le frecce per riordinare. La <strong>prima foto è la copertina</strong>.
             </p>
           )}
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-2">
             {value.map((url, i) => (
               <div
                 key={url}
@@ -185,7 +202,7 @@ export default function ProductImagesField({
                     type="button"
                     onClick={() => onChange(value.filter((_, j) => j !== i))}
                     aria-label="Rimuovi immagine"
-                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 text-xs leading-none"
+                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-10 h-10 text-lg leading-none"
                   >
                     ×
                   </button>
@@ -203,9 +220,9 @@ export default function ProductImagesField({
                     onClick={() => move(i, i - 1)}
                     disabled={i === 0}
                     aria-label="Sposta a sinistra"
-                    className="rounded p-1 text-ink-500 hover:bg-cream-100 disabled:opacity-30"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded text-ink-500 hover:bg-cream-100 disabled:opacity-30"
                   >
-                    <ChevronLeft size={14} strokeWidth={2.4} aria-hidden />
+                    <ChevronLeft size={18} strokeWidth={2.4} aria-hidden />
                   </button>
                   <button
                     type="button"
@@ -213,27 +230,29 @@ export default function ProductImagesField({
                     disabled={i === 0}
                     aria-label="Imposta come copertina"
                     title="Imposta come copertina"
-                    className="rounded p-1 text-ink-500 hover:bg-cream-100 disabled:opacity-30"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded text-ink-500 hover:bg-cream-100 disabled:opacity-30"
                   >
-                    <Star size={14} strokeWidth={2.4} className={i === 0 ? 'fill-amber-400 text-amber-500' : ''} aria-hidden />
+                    <Star size={18} strokeWidth={2.4} className={i === 0 ? 'fill-amber-400 text-amber-500' : ''} aria-hidden />
                   </button>
                   <button
                     type="button"
                     onClick={() => move(i, i + 1)}
                     disabled={i === value.length - 1}
                     aria-label="Sposta a destra"
-                    className="rounded p-1 text-ink-500 hover:bg-cream-100 disabled:opacity-30"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded text-ink-500 hover:bg-cream-100 disabled:opacity-30"
                   >
-                    <ChevronRight size={14} strokeWidth={2.4} aria-hidden />
+                    <ChevronRight size={18} strokeWidth={2.4} aria-hidden />
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setBgIndex(i)}
-                  className="mt-1 w-full inline-flex items-center justify-center gap-1 rounded bg-black/70 px-1.5 py-1 text-[10px] font-semibold text-white hover:bg-black/85"
-                >
-                  <Sparkles size={11} strokeWidth={2.4} aria-hidden /> Sfondo bianco
-                </button>
+                {sfondoBiancoAcceso && (
+                  <button
+                    type="button"
+                    onClick={() => setBgIndex(i)}
+                    className="mt-1 w-full min-h-[44px] inline-flex items-center justify-center gap-1 rounded bg-black/70 px-2 py-2 text-xs font-semibold text-white hover:bg-black/85"
+                  >
+                    <Sparkles size={14} strokeWidth={2.4} aria-hidden /> Sfondo bianco
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -246,6 +265,7 @@ export default function ProductImagesField({
         onCapture={(file) => { void uploadFiles([file]); }}
       />
 
+      {sfondoBiancoAcceso && (
       <BackgroundRemovalPreview
         open={bgIndex !== null}
         url={bgIndex !== null ? (value[bgIndex] ?? null) : null}
@@ -255,6 +275,7 @@ export default function ProductImagesField({
           onChange(value.map((u, j) => (j === bgIndex ? newUrl : u)));
         }}
       />
+      )}
     </div>
   );
 }

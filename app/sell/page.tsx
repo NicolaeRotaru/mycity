@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,7 +13,7 @@ import { controlloEta } from '@/lib/maggiore-eta';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
-import { X, Hourglass, Home, Mail } from 'lucide-react';
+import { X, Hourglass, Home, Mail, Pencil } from 'lucide-react';
 
 /**
  * QUANTO CI METTIAMO A RISPONDERE A CHI CHIEDE DI VENDERE — scritto una volta sola.
@@ -49,6 +49,10 @@ export default function SellPage() {
   const { isAuthenticated, isLoading: profileLoading, isSeller } = useProfile();
 
   const { data: profile, isLoading } = useQuery({ queryKey: queryKeys.profile.me, queryFn: fetchProfile, enabled: isAuthenticated });
+  // «Modifica la richiesta»: chi l'ha già mandata può correggerla finché è in attesa
+  // (la rotta accetta lo stato pending). Prima il pulsante portava qui e qui non
+  // c'era nessun campo da modificare.
+  const [modifica, setModifica] = useState(false);
 
   // Se sei già seller approvato, /sell non ha senso → vai al profilo negozio
   useEffect(() => {
@@ -99,6 +103,7 @@ export default function SellPage() {
       }
     },
     onSuccess: () => {
+      setModifica(false);
       invalidaProfiloDiChiEntrato(qc);
       toast.success(`Richiesta inviata! Ti contatteremo entro ${TEMPO_RISPOSTA_NEGOZI}.`);
     },
@@ -124,10 +129,10 @@ export default function SellPage() {
   // il profilo fa nascere OGNI profilo in 'pending', anche chi non ha mai
   // mandato niente. La richiesta vera è quella con approval_requested_at
   // (lo scrive l'invio del modulo qui sotto): senza, si mostra il modulo.
-  if (profile?.approval_status === 'pending' && profile?.role === 'seller' && profile?.approval_requested_at) {
+  if (profile?.approval_status === 'pending' && profile?.role === 'seller' && profile?.approval_requested_at && !modifica) {
     return (
       <div className="container mx-auto p-6 max-w-2xl">
-        <PendingNotice requestedAt={profile.approval_requested_at} />
+        <PendingNotice requestedAt={profile.approval_requested_at} onModifica={() => setModifica(true)} />
       </div>
     );
   }
@@ -176,6 +181,8 @@ export default function SellPage() {
           storeName:         profile?.store_name ?? '',
           storeDescription:  profile?.store_description ?? '',
           billingIban:       profile?.billing_iban ?? '',
+          businessPec:       profile?.business_pec ?? '',
+          businessSdi:       profile?.business_sdi ?? '',
           storeLogo:         profile?.store_logo ?? null,
           storeMedia:        Array.isArray(profile?.store_media) ? profile.store_media : [],
           storeAddress:      profile?.store_address ?? '',
@@ -202,7 +209,7 @@ function SuspendedNotice() {
   );
 }
 
-function PendingNotice({ requestedAt }: { requestedAt: string | null }) {
+function PendingNotice({ requestedAt, onModifica }: { requestedAt: string | null; onModifica: () => void }) {
   return (
     <div className="bg-white border-2 border-accent-200 rounded-2xl p-8 text-center">
       <div className="w-20 h-20 mx-auto rounded-2xl bg-accent-100 flex items-center justify-center mb-4">
@@ -220,7 +227,11 @@ function PendingNotice({ requestedAt }: { requestedAt: string | null }) {
         Nel frattempo puoi continuare a comprare normalmente.
       </p>
       <div className="flex flex-wrap gap-2 justify-center text-sm">
-        <Button href="/"><span className="inline-flex items-center gap-2"><Home size={18} aria-hidden /> Continua a comprare</span></Button>
+        {/* ?shop=1: un account negozio senza la modalità acquisto verrebbe rimandato alla dashboard. */}
+        <Button href="/?shop=1"><span className="inline-flex items-center gap-2"><Home size={18} aria-hidden /> Continua a comprare</span></Button>
+        <button type="button" onClick={onModifica} className="inline-flex items-center gap-2 bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
+          <Pencil size={18} aria-hidden /> Modifica la richiesta
+        </button>
         <Link href="/contact" className="inline-flex items-center gap-2 bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
           <Mail size={18} aria-hidden /> Contatta il supporto
         </Link>
