@@ -39,17 +39,30 @@ export const runtime = 'nodejs';
  */
 export async function GET(request: Request) {
   const token = new URL(request.url).searchParams.get('token') ?? '';
-  const base = env.appUrl();
+  const base = stessoIndirizzo(request);
   if (!verificaDisiscrizione(token)) {
     return NextResponse.redirect(`${base}/disiscrizione?disiscrizione=link-non-valido`);
   }
   return NextResponse.redirect(`${base}/disiscrizione?token=${encodeURIComponent(token)}`);
 }
 
+/**
+ * L'indirizzo da cui è arrivata la richiesta: la pagina dell'esito si apre sullo stesso (anteprime,
+ * www o no). Un rinvio verso un altro indirizzo, dopo la POST del modulo, lo blocca `form-action 'self'`.
+ * Se la richiesta non porta un indirizzo leggibile, quello pubblico del sito.
+ */
+function stessoIndirizzo(request: Request): string {
+  try {
+    return new URL(request.url).origin;
+  } catch {
+    return env.appUrl();
+  }
+}
+
 /** La disiscrizione vera: il pulsante della pagina, o il «con un clic» dei client di posta. */
 export async function POST(request: Request) {
   const token = new URL(request.url).searchParams.get('token') ?? '';
-  const base = env.appUrl();
+  const base = stessoIndirizzo(request);
   // 303: dopo una POST il browser apre la pagina dell'esito con una GET.
   const vaiA = (esito: string) => NextResponse.redirect(`${base}/disiscrizione?disiscrizione=${esito}`, 303);
 

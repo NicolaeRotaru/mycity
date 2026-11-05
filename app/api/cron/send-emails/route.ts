@@ -143,6 +143,14 @@ async function rilasciaRiga(
  * chiude col motivo, senza spedire. Una riga senza `scade_at` (la funzione del
  * database non ancora aggiornata) ha la scadenza calcolata in `processBatch` (5/11/2026).
  */
+/** Il ritardo con cui la migrazione 033 mette in coda i modelli programmati (gli altri partono subito). */
+const RITARDO_PREVISTO_GIORNI: Record<string, number> = {
+  tutorial_day2: 2,
+  first_order_promo: 5,
+  reengagement_14d: 14,
+  winback_60d: 60,
+};
+
 function scaduta(row: { scade_at?: string | null }): boolean {
   if (!row.scade_at) return false;
   const quando = Date.parse(row.scade_at);
@@ -314,8 +322,14 @@ async function processBatch(
       }
       for (const row of batch) {
         const r = row.scade_at ? undefined : perId.get(row.id);
-        const base = r ? (r.last_error ? r.created_at : r.send_at) : null;
-        const quando = base ? Date.parse(base) : NaN;
+        // Riga già rinviata: send_at si è spostato, quindi si parte dalla nascita PIÙ il ritardo
+        // previsto per quel modello (migrazione 033: la guida a 2 giorni, il «ci manchi» a 60…), non
+        // dalla nascita nuda, che chiuderebbe le email programmate più avanti al primo intoppo.
+        const quando = r
+          ? r.last_error
+            ? Date.parse(String(r.created_at)) + (RITARDO_PREVISTO_GIORNI[row.template] ?? 0) * 86_400_000
+            : Date.parse(String(r.send_at))
+          : NaN;
         if (Number.isFinite(quando)) row.scade_at = new Date(quando + 3 * 86_400_000).toISOString();
       }
     } catch (e) {

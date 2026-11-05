@@ -142,8 +142,10 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     .eq('payment_method', 'cod')
     .eq('delivery_status', 'DELIVERED')
     .is('cash_confirmed_at', null)
-    .lt('delivered_at', unOraFaConsegna)
-    .order('delivered_at', { ascending: true })
+    // Consegnati da più di un'ora; un ordine consegnato senza la data della consegna conta dalla
+    // nascita. I più RECENTI per primi: con più di venti arretrati, i vecchi hanno già suonato.
+    .or(`delivered_at.lt.${unOraFaConsegna},and(delivered_at.is.null,created_at.lt.${unOraFaConsegna})`)
+    .order('delivered_at', { ascending: false, nullsFirst: false })
     .limit(20);
   if (err_codMissing) controlliSaltati.push('incassi in contanti mancanti');
 
@@ -341,7 +343,7 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
       detail:
         `Cron "${c.name}" fermo da ${c.staleMin} min (soglia ${c.thresholdMin}): scheduler o deploy down?` +
         // 5/11/2026 — Col fermo acceso i lavori non scrivono il battito, di proposito: si dice.
-        (process.env[VARIABILE_DEL_FERMO]?.trim() !== VALORE_CHE_ACCENDE
+        (process.env[VARIABILE_DEL_FERMO] !== VALORE_CHE_ACCENDE
           ? ` Attenzione: ${VARIABILE_DEL_FERMO} non è «${VALORE_CHE_ACCENDE}», i lavori a orario sono fermi di proposito e il battito vecchio è atteso.`
           : ''),
       url: '/admin/today',

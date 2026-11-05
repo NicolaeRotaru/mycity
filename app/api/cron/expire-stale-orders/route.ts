@@ -291,8 +291,8 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
             daChiudereAMano++;
           } else {
             logger.warn('[cron] expire-stale-orders: rimborso fallito, ordine rimesso in coda', { id: o.id });
+            failed++;
           }
-          failed++;
           continue;
         }
       } else {

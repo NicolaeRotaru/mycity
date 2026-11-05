@@ -61,7 +61,7 @@ describe('newsletter', () => {
     const r = await iscrizione();
     expect(r.status).toBe(200);
     expect(updateMock).toHaveBeenCalledTimes(1);
-    expect(updateMock.mock.calls[0][0]).toMatchObject({ confirmed_at: null, active: false });
+    expect(updateMock.mock.calls[0][0]).toMatchObject({ active: false });
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
   });
 

@@ -30,6 +30,11 @@ describe('disiscrizione', () => {
     expect(r.status).toBe(303);
   });
 
+  it('503 (revisore) — la pagina dell esito si apre sullo stesso indirizzo della richiesta (form-action self)', async () => {
+    const r = await POST(new Request(`https://anteprima.example.test/api/unsubscribe?token=${encodeURIComponent(TOKEN)}`, { method: 'POST', headers: { 'x-forwarded-for': '198.51.100.4' } }));
+    expect(r.headers.get('location')).toMatch(/^https:\/\/anteprima\.example\.test\/disiscrizione\?/);
+  });
+
   it('421 — l esito porta a una pagina che lo legge, non alla home', async () => {
     const r = await POST(new Request(url, { method: 'POST', headers: { 'x-forwarded-for': '198.51.100.3' } }));
     expect(r.headers.get('location')).toMatch(/\/disiscrizione\?disiscrizione=fatta$/);

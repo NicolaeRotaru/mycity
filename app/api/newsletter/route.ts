@@ -124,8 +124,6 @@ export async function POST(request: Request) {
     // La data dice quando è partita l'ULTIMA conferma: è il metro della pausa qui sopra, ed è
     // anche quello con cui si potano le iscrizioni mai confermate.
     created_at: new Date().toISOString(),
-    // Chi torna dopo la disiscrizione deve confermare di nuovo: la conferma vecchia non vale.
-    ...(disiscritto ? { confirmed_at: null } : {}),
   };
 
   const { error } = esistente

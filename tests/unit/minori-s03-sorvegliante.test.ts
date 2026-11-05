@@ -99,8 +99,9 @@ describe('il sorvegliante', () => {
   it('1637 — i contanti non confermati si cercano per consegna, non per giorno di nascita', async () => {
     await giro();
     const cod = catene.find((x) => x.t === 'orders' && x.c.some((y) => y.m === 'eq' && y.a[1] === 'cod'))!;
-    expect(cod.c.some((y) => y.m === 'lt' && y.a[0] === 'delivered_at')).toBe(true);
-    expect(cod.c.some((y) => y.a[0] === 'created_at')).toBe(false);
+    const filtro = String(cod.c.find((y) => y.m === 'or')?.a[0] ?? '');
+    expect(filtro).toMatch(/^delivered_at\.lt\./);
+    expect(cod.c.some((y) => y.m === 'gte' && y.a[0] === 'created_at')).toBe(false);
   });
 
   it('1638 — la coda email che non si legge non è «nessuna anomalia»', async () => {

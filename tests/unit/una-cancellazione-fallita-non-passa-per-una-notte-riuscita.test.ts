@@ -180,7 +180,7 @@ describe('la notte che non riesce a cancellare un account', () => {
     ]);
     expect(http, 'una persona aspetta da un mese e mezzo e nessuno se ne accorge').toBe(500);
     expect(corpo.scadute).toBe(1);
-    expect(String(mondo.notifiche()[0].body)).toContain('più di 30 giorni');
+    expect(String(mondo.notifiche()[0].body)).toContain('più di un mese'); // 5/11/2026 — il termine è un mese di calendario, non 30 giorni
   });
 });
 

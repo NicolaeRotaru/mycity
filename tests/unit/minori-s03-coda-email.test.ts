@@ -103,6 +103,14 @@ describe('la coda delle email', () => {
     expect(spedite).toHaveLength(1);
   });
 
+  it('20 (revisore) — il «ci manchi» dei 14 giorni rinviato una volta non si chiude: conta il suo ritardo previsto', async () => {
+    profili = [{ id: 'u1', full_name: 'Giulia', email_marketing: true }];
+    coda = [{ id: 'q1', user_id: 'u1', template: 'reengagement_14d' }];
+    righeCoda = [{ id: 'q1', created_at: fa(15 * GIORNO), send_at: fa(10 * 60_000), last_error: 'Resend 429' }];
+    await giroDellaPosta();
+    expect(annullata('q1')).toBe(false);
+  });
+
   it('1877 — se la lettura dell indirizzo LANCIA, la riga si rilascia e non si butta', async () => {
     profili = [{ id: 'u1', full_name: 'Giulia', email_marketing: true }];
     coda = [{ id: 'q1', user_id: 'u1', template: 'welcome', scade_at: fra(GIORNO) }];

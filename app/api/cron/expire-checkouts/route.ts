@@ -160,9 +160,10 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
       } else {
         try {
           const adesso = new Date().toISOString();
-          await admin
+          const { error: errMemoria } = await admin
             .from('operational_alert_log')
             .upsert(daAvvisare.map((c) => ({ alert_key: chiaveCarrello(c.id as string), last_sent_at: adesso })));
+          if (errMemoria) logger.warn('[cron] expire-checkouts: memoria degli avvisi non scritta', { message: errMemoria.message });
         } catch (e) {
           logger.warn('[cron] expire-checkouts: memoria degli avvisi non scritta', { e });
         }

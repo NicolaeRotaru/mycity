@@ -193,8 +193,8 @@ function riga(fallite: number, scadute: number): string | null {
   if (scadute > 0) {
     pezzi.push(
       scadute === 1
-        ? `1 persona aspetta la cancellazione da più di ${GIORNI_MASSIMI_DI_ATTESA} giorni: il termine di legge è passato.`
-        : `${scadute} persone aspettano la cancellazione da più di ${GIORNI_MASSIMI_DI_ATTESA} giorni: il termine di legge è passato.`,
+        ? `1 persona aspetta la cancellazione da più di un mese: il termine di legge è passato.`
+        : `${scadute} persone aspettano la cancellazione da più di un mese: il termine di legge è passato.`,
     );
   }
   if (pezzi.length === 0) return null;
@@ -314,7 +314,7 @@ function avviso(
     tappa === 'rinviata'
       ? "Hai chiesto di cancellare il tuo account e non l'abbiamo ancora fatto. " +
         `Ti diciamo perché. ${spiegazione ?? "Una nostra regola la sta trattenendo."} ${diritti}`
-      : `Hai chiesto di cancellare il tuo account più di ${GIORNI_MASSIMI_DI_ATTESA} giorni fa ` +
+      : `Hai chiesto di cancellare il tuo account più di un mese fa ` +
         'e non è ancora stato fatto. ' +
         `${spiegazione ?? "Si è fermata per un problema nostro e ci riproviamo ogni notte."} ` +
         'La legge ci dà un mese per risponderti e quel mese è passato. ' +
