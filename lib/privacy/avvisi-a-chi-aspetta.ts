@@ -42,6 +42,8 @@ import { createHash } from 'node:crypto';
 import { sendEmail } from '@/lib/email/client';
 import { escapeHtml } from '@/lib/html-escape';
 import { indirizzoPubblico } from '@/lib/env';
+import { PAGINA_DEI_CONTATTI } from '@/lib/legal/titolare';
+import { avvisoCancellazioneTemplate } from '@/lib/email/templates';
 
 export type Risposta = { data: unknown; error: { message: string } | null };
 
@@ -164,10 +166,15 @@ export async function recapitaAvvisi(
     emailPartiteAvvisi: [], emailRimandate: 0, esiti: [],
   };
 
-  for (const a of avvisi) {
+  for (const avviso of avvisi) {
+    let a = avviso;
     const id = identificativoAvviso(a.chiave);
     try {
-      if (await giaNelPannello(admin, id)) {
+      const nelPannello = await giaNelPannello(admin, id);
+      if (nelPannello) {
+        // 5/11/2026 — L'email porta il testo SALVATO nel pannello, quello che la pagina
+        // dell'account rilegge: ricalcolato ogni notte poteva dire una cifra diversa.
+        if (nelPannello.corpo !== null) a = { ...a, corpo: nelPannello.corpo };
         rapporto.giaDetti++;
         rapporto.esiti.push({ chiave: a.chiave, esito: 'gia-detto' });
       } else if (await scrittoOraNelPannello(admin, a, id)) {
@@ -191,7 +198,9 @@ export async function recapitaAvvisi(
       registro.error('[avvisi-cancellazione] la persona non e stata avvisata', {
         userId: a.userId, tappa: a.tappa, errore,
       });
-      continue;
+      // 5/11/2026 — Qui c'era `continue`: se il pannello non si scriveva, l'email non si
+      // tentava nemmeno. Ma l'email è il canale per chi non rientra nel sito: non deve
+      // dipendere da quello interno. Ha il suo lucchetto (`emailDovuta`), si tenta lo stesso.
     }
 
     // 27/10/2026 (terzo giro) — L'EMAIL È DOVUTA FINCHÉ NON RISULTA PARTITA.
@@ -207,7 +216,9 @@ export async function recapitaAvvisi(
         // Con la persona: l'allarme deve dire a chi scrivere.
         rapporto.emailBloccateAvvisi.push({ id, userId: a.userId });
       }
-      if (email === 'partita') rapporto.emailPartiteAvvisi.push(id);
+      // 5/11/2026 — Anche 'gia-partita': se la notte in cui è partita la chiusura
+      // dell'allarme «scrivile tu» non è riuscita, così si ritenta le notti dopo.
+      if (email === 'partita' || email === 'gia-partita') rapporto.emailPartiteAvvisi.push(id);
       if (email === 'in-corso') rapporto.emailRimandate++;
     }
   }
@@ -215,11 +226,16 @@ export async function recapitaAvvisi(
   return rapporto;
 }
 
-/** Vero se l'avviso è già nel pannello della persona. Lancia se non si legge. */
-async function giaNelPannello(admin: ClienteAvvisi, id: string): Promise<boolean> {
-  const gia = await admin.from('notifications').select('id').eq('id', id);
+/**
+ * L'avviso se è già nel pannello della persona (col testo salvato), `null` se non c'è.
+ * Lancia se non si legge.
+ */
+async function giaNelPannello(admin: ClienteAvvisi, id: string): Promise<{ corpo: string | null } | null> {
+  const gia = await admin.from('notifications').select('id, body').eq('id', id);
   if (gia.error) throw new Error(gia.error.message);
-  return Array.isArray(gia.data) && gia.data.length > 0;
+  const riga = Array.isArray(gia.data) ? (gia.data[0] as { body?: unknown } | undefined) : undefined;
+  if (!riga) return null;
+  return { corpo: typeof riga.body === 'string' ? riga.body : null };
 }
 
 /**
@@ -257,7 +273,7 @@ async function scrittoOraNelPannello(
  */
 export type PostaAvvisi = {
   indirizzoDi(userId: string): Promise<string | null>;
-  invia(lettera: { to: string; subject: string; html: string }): Promise<{ ok: boolean }>;
+  invia(lettera: { to: string; subject: string; html: string; text?: string }): Promise<{ ok: boolean }>;
 };
 
 /**
@@ -310,6 +326,16 @@ type EsitoEmail = 'partita' | 'gia-partita' | 'in-corso' | 'non-partita' | 'bloc
  * più di qualunque distanza tra i due giri della stessa notte.
  */
 export const ORE_TRA_DUE_TENTATIVI = 20;
+
+/**
+ * 5/11/2026 — Con la posta spenta ogni avviso fermo scriveva una riga nel registro delle
+ * azioni e un errore ogni notte, senza fine (365 righe l'anno per persona). Si ritenta per
+ * tutto il mese che la legge dà per rispondere, e un giorno in più; dopo l'email resta
+ * «bloccata» (l'allarme per scriverle a mano c'è già dal secondo tentativo) senza nuove
+ * righe né nuovi errori. E dal terzo tentativo il guasto della posta si scrive come avviso,
+ * non come errore: l'errore (Sentry) l'hanno già dato le prime due notti.
+ */
+export const TENTATIVI_EMAIL_MASSIMI = 31;
 const ORA_MS = 3_600_000;
 
 /** Quando è stato preso un tentativo; -Infinity se la riga non lo dice. */
@@ -368,6 +394,7 @@ async function emailDovuta(
     // finito male): non si rispedisce e non si conta come un no in più.
     const ultimo = Math.max(-Infinity, ...presi.map((r) => presoIl(r.metadata)));
     if (adesso - ultimo < ORE_TRA_DUE_TENTATIVI * ORA_MS) return 'in-corso';
+    if (presi.length >= TENTATIVI_EMAIL_MASSIMI) return 'bloccata';
     tentativo = presi.length + 1;
 
     const turno = await admin
@@ -412,20 +439,31 @@ async function emailDovuta(
  * diventa l'indirizzo intero e cliccabile, e in fondo c'è la pagina
  * dell'account (`a.link`), dove si vede lo stato della richiesta.
  */
-const PAGINA_DEI_CONTATTI = '/contact';
+// 5/11/2026 — La pagina viene da lib/legal/titolare.ts (la stessa costante delle frasi), e si
+// cerca come percorso a sé: non dentro «/contacts» né dentro un indirizzo intero già scritto.
+const PERCORSO_DEI_CONTATTI = new RegExp(
+  `(?<![\\w/.:])${PAGINA_DEI_CONTATTI.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}(?![\\w/-])`,
+);
 
-function corpoDellEmail(a: AvvisoAllInteressato): string {
+export function corpoDellEmail(a: AvvisoAllInteressato): string {
   const sito = indirizzoPubblico().url.replace(/\/+$/, '');
   const collegamento = (percorso: string) => {
     const url = escapeHtml(`${sito}${percorso}`);
     return `<a href="${url}">${url}</a>`;
   };
   const testo = a.corpo
-    .split(PAGINA_DEI_CONTATTI)
+    .split(PERCORSO_DEI_CONTATTI)
     .map((pezzo) => escapeHtml(pezzo).replace(/\n/g, '<br>'))
     .join(collegamento(PAGINA_DEI_CONTATTI));
   const pagina = a.link ? `<p>La tua richiesta, sul sito: ${collegamento(a.link)}</p>` : '';
   return `<p>${testo}</p>${pagina}`;
+}
+
+/** Il testo semplice della stessa email: corpo e indirizzo della pagina, interi. */
+function testoDellEmail(a: AvvisoAllInteressato): string {
+  const sito = indirizzoPubblico().url.replace(/\/+$/, '');
+  const corpo = a.corpo.split(PERCORSO_DEI_CONTATTI).join(`${sito}${PAGINA_DEI_CONTATTI}`);
+  return a.link ? `${corpo}\n\nLa tua richiesta, sul sito: ${sito}${a.link}` : corpo;
 }
 
 /** Vero se l'email è partita. Non lancia: un'email persa si conta, non ferma la notte. */
@@ -438,17 +476,21 @@ async function speditaAncheTramitePosta(
   try {
     const to = await posta.indirizzoDi(a.userId);
     if (!to) throw new Error('nessun indirizzo email per questa persona');
+    // 5/11/2026 — Con la veste del sito (intestazione e piede) e il testo semplice.
+    const lettera = avvisoCancellazioneTemplate({ titolo: a.titolo, corpoHtml: corpoDellEmail(a), testo: testoDellEmail(a) });
     const esito = await posta.invia({
       to,
-      subject: a.titolo,
-      html: corpoDellEmail(a),
+      subject: lettera.subject,
+      html: lettera.html,
+      text: lettera.text,
     });
     if (esito.ok !== true) throw new Error('invio non riuscito o posta non configurata');
     return true;
   } catch (e) {
-    registro.error('[avvisi-cancellazione] la spiegazione e nel pannello ma non e partita per email', {
-      userId: a.userId, tappa: a.tappa, tentativo, errore: e instanceof Error ? e.message : 'errore',
-    });
+    const dati = { userId: a.userId, tappa: a.tappa, tentativo, errore: e instanceof Error ? e.message : 'errore' };
+    const messaggio = '[avvisi-cancellazione] la spiegazione e nel pannello ma non e partita per email';
+    if (tentativo <= 2) registro.error(messaggio, dati);
+    else registro.warn(messaggio, dati);
     return false;
   }
 }

@@ -252,7 +252,11 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
       fai: (admin) => esigi(admin
         .from('activity_events')
         .update({ anon_id: null, path: null, referrer: null, city: null, country: null })
-        .lt('created_at', mesi(14))),
+        .lt('created_at', mesi(14))
+        // 5/11/2026 — Senza filtro riscriveva ogni notte tutte le righe già pulite più
+        // vecchie di 14 mesi (tuple morte, un UPDATE che cresce da solo dentro un lavoro
+        // da 300 secondi). Si toccano solo le righe con ancora qualcosa da togliere.
+        .or('anon_id.not.is.null,path.not.is.null,referrer.not.is.null,city.not.is.null,country.not.is.null')),
     },
     {
       cosa: 'audit_logs.ip',

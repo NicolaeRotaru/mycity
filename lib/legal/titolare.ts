@@ -227,6 +227,12 @@ export function rigaIdentita(t: Titolare = titolare()): string {
  * Finche' la casella vera non c'e', si manda al modulo dei contatti: scrive nel
  * database, arriva a qualcuno, e non promette un indirizzo che non esiste.
  */
+/**
+ * 5/11/2026 — La pagina del modulo dei contatti, scritta una volta sola: la usano le frasi
+ * qui sotto e l'email degli avvisi di cancellazione, che la trasforma in collegamento.
+ */
+export const PAGINA_DEI_CONTATTI = '/contact';
+
 export function recapitoPrivacy(t: Titolare = titolare()): {
   href: string;
   testo: string;
@@ -235,7 +241,7 @@ export function recapitoPrivacy(t: Titolare = titolare()): {
   if (t.emailPrivacyConfigurata) {
     return { href: `mailto:${t.emailPrivacy}`, testo: t.emailPrivacy, eUnaCasella: true };
   }
-  return { href: '/contact', testo: 'il modulo dei contatti', eUnaCasella: false };
+  return { href: PAGINA_DEI_CONTATTI, testo: 'il modulo dei contatti', eUnaCasella: false };
 }
 
 /**
@@ -249,7 +255,7 @@ export function recapitoPrivacy(t: Titolare = titolare()): {
  */
 export function recapitoInUnaFrase(t: Titolare = titolare()): string {
   const r = recapitoPrivacy(t);
-  return r.eUnaCasella ? r.testo : 'noi con il modulo dei contatti del sito (pagina /contact)';
+  return r.eUnaCasella ? r.testo : `noi con il modulo dei contatti del sito (pagina ${PAGINA_DEI_CONTATTI})`;
 }
 
 /**
@@ -393,7 +399,7 @@ export function recapitoDallaRisposta(corpo: unknown): { href: string; testo: st
   const r = dettagli?.recapito as { href?: unknown; testo?: unknown } | null | undefined;
   if (!r || typeof r.href !== 'string' || typeof r.testo !== 'string') return null;
   const eUnaCasella = /^mailto:[^\s@?]+@[^\s@?]+\.[^\s@?]+(\?[^\s]*)?$/.test(r.href);
-  if (!eUnaCasella && r.href !== '/contact') return null;
+  if (!eUnaCasella && r.href !== PAGINA_DEI_CONTATTI) return null;
   return { href: r.href, testo: r.testo };
 }
 

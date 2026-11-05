@@ -943,3 +943,18 @@ export function richiestaCancellazioneTemplate(args: { effectiveAt: string }): E
     'Se non sei stato tu, cambia anche la password.';
   return { subject, html, text };
 }
+
+/**
+ * 5/11/2026 (S08) — LA SPIEGAZIONE A CHI ASPETTA LA CANCELLAZIONE, CON LA VESTE DEL SITO.
+ *
+ * Partiva nuda da lib/privacy/avvisi-a-chi-aspetta.ts: due paragrafi senza intestazione
+ * MyCity né piede con Privacy, e senza testo semplice. Il corpo (già con i collegamenti)
+ * lo prepara chi spedisce; qui si veste come tutte le altre email del sito.
+ */
+export function avvisoCancellazioneTemplate(args: { titolo: string; corpoHtml: string; testo: string }): EmailPronta {
+  return {
+    subject: args.titolo,
+    html: shell(args.titolo, `<div style="font-size:15px;line-height:1.6">${args.corpoHtml}</div>`),
+    text: args.testo,
+  };
+}

@@ -7,6 +7,14 @@ import { stradaAManoPerIDiritti } from '@/lib/legal/titolare';
 
 export const runtime = 'nodejs';
 
+/**
+ * 5/11/2026 — Trentatré tabelle si leggevano intere, senza nessun tetto: su un cliente
+ * storico (o un negozio con anni di ordini) la richiesta poteva non finire dentro il tempo
+ * della funzione. Ogni sezione si legge fino a questo numero di righe; se ci arriva, il file
+ * lo dice in «sezioni_al_tetto» e si dichiara incompleto, invece di spacciarsi per intero.
+ */
+const TETTO_PER_SEZIONE = 5000;
+
 function senzaChiave(cosa: string, e: unknown): NextResponse {
   // 27/10/2026 — «Servizio non configurato» lasciava la persona davanti a un
   // muro: il diritto alla portabilità resta, cambia solo la strada.
@@ -100,35 +108,35 @@ const scarica = withAuthRateLimit(
     consents,
   ] = await Promise.all([
     admin.from('profiles').select('*').eq('id', userId).single(),
-    admin.from('user_addresses').select('*').eq('user_id', userId),
-    admin.from('orders').select('*, order_items(*)').eq('user_id', userId),
-    admin.from('orders').select('id, created_at, total_price, delivery_status').eq('seller_id', userId),
-    admin.from('orders').select('id, created_at, delivered_at, shipping_cost').eq('rider_id', userId),
-    admin.from('reviews').select('*').eq('user_id', userId),
+    admin.from('user_addresses').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    admin.from('orders').select('*, order_items(*)').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    admin.from('orders').select('id, created_at, total_price, delivery_status').eq('seller_id', userId).limit(TETTO_PER_SEZIONE),
+    admin.from('orders').select('id, created_at, delivered_at, shipping_cost').eq('rider_id', userId).limit(TETTO_PER_SEZIONE),
+    admin.from('reviews').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
     // 🟡-13: store_reviews/rider_reviews usano user_id (non reviewer_id): prima
     // l'export interrogava una colonna inesistente e ometteva queste recensioni.
-    admin.from('store_reviews').select('*').eq('user_id', userId),
-    admin.from('rider_reviews').select('*').eq('user_id', userId),
-    admin.from('favorites').select('*').eq('user_id', userId),
-    admin.from('referrals').select('*').eq('referrer_id', userId),
-    admin.from('referrals').select('*').eq('referred_id', userId),
-    admin.from('notifications').select('*').eq('user_id', userId),
+    admin.from('store_reviews').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    admin.from('rider_reviews').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    admin.from('favorites').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    admin.from('referrals').select('*').eq('referrer_id', userId).limit(TETTO_PER_SEZIONE),
+    admin.from('referrals').select('*').eq('referred_id', userId).limit(TETTO_PER_SEZIONE),
+    admin.from('notifications').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
     // 🟡-13: chat e contact form fanno parte dei dati personali (Art. 15/20).
-    admin.from('conversations').select('*').or(`buyer_id.eq.${userId},seller_id.eq.${userId}`),
-    admin.from('messages').select('*').eq('sender_id', userId),
-    admin.from('contact_messages').select('*').eq('user_id', userId),
+    admin.from('conversations').select('*').or(`buyer_id.eq.${userId},seller_id.eq.${userId}`).limit(TETTO_PER_SEZIONE),
+    admin.from('messages').select('*').eq('sender_id', userId).limit(TETTO_PER_SEZIONE),
+    admin.from('contact_messages').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
     // Mancavano all'appello, e sono i dati con cui una persona viene profilata:
     // il registro delle azioni (con indirizzo di rete e browser), le cose
     // guardate, i dispositivi registrati per le notifiche, l'iscrizione alle
     // novità, i resi, le contestazioni e lo storico dei consensi.
-    admin.from('activity_events').select('*').or(`user_id.eq.${userId},actor_id.eq.${userId}`).limit(5000),
-    admin.from('recently_viewed').select('*').eq('user_id', userId),
-    admin.from('product_views').select('*').eq('user_id', userId).limit(5000),
-    admin.from('push_subscriptions').select('*').eq('user_id', userId),
-    admin.from('newsletter_subscribers').select('*').eq('email', userEmail ?? ''),
-    admin.from('returns').select('*').eq('buyer_id', userId),
-    admin.from('disputes').select('*').or(`opener_id.eq.${userId},against_id.eq.${userId}`),
-    admin.from('consent_log').select('*').eq('user_id', userId),
+    admin.from('activity_events').select('*').or(`user_id.eq.${userId},actor_id.eq.${userId}`).limit(TETTO_PER_SEZIONE),
+    admin.from('recently_viewed').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    admin.from('product_views').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    admin.from('push_subscriptions').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    admin.from('newsletter_subscribers').select('*').eq('email', userEmail ?? '').limit(TETTO_PER_SEZIONE),
+    admin.from('returns').select('*').eq('buyer_id', userId).limit(TETTO_PER_SEZIONE),
+    admin.from('disputes').select('*').or(`opener_id.eq.${userId},against_id.eq.${userId}`).limit(TETTO_PER_SEZIONE),
+    admin.from('consent_log').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
   ]);
 
   /**
@@ -151,40 +159,40 @@ const scarica = withAuthRateLimit(
    * prossima tabella nuova non può più nascere fuori dall'export in silenzio.
    */
   const altreTabelle = {
-    portafoglio: admin.from('wallet_ledger').select('*').eq('user_id', userId),
-    punti_fedelta: admin.from('loyalty_accounts').select('*').eq('user_id', userId),
-    punti_movimenti: admin.from('loyalty_transactions').select('*').eq('user_id', userId),
-    buoni_regalo: admin.from('gift_cards').select('*').or(`buyer_id.eq.${userId},redeemed_by.eq.${userId}`),
+    portafoglio: admin.from('wallet_ledger').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    punti_fedelta: admin.from('loyalty_accounts').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    punti_movimenti: admin.from('loyalty_transactions').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    buoni_regalo: admin.from('gift_cards').select('*').or(`buyer_id.eq.${userId},redeemed_by.eq.${userId}`).limit(TETTO_PER_SEZIONE),
     domande_sui_prodotti: admin
       .from('product_questions')
       .select('*')
-      .or(`author_id.eq.${userId},answered_by.eq.${userId}`),
-    sos_del_fattorino: admin.from('rider_sos_events').select('*').eq('rider_id', userId),
-    carrello_salvato: admin.from('user_carts').select('*').eq('user_id', userId),
-    carrelli_abbandonati: admin.from('abandoned_carts').select('*').eq('user_id', userId),
-    iscrizioni_agli_eventi: admin.from('event_rsvps').select('*').eq('user_id', userId),
-    negozi_seguiti: admin.from('follows').select('*').eq('user_id', userId),
-    liste_di_prodotti: admin.from('product_lists').select('*').eq('owner_id', userId),
+      .or(`author_id.eq.${userId},answered_by.eq.${userId}`).limit(TETTO_PER_SEZIONE),
+    sos_del_fattorino: admin.from('rider_sos_events').select('*').eq('rider_id', userId).limit(TETTO_PER_SEZIONE),
+    carrello_salvato: admin.from('user_carts').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    carrelli_abbandonati: admin.from('abandoned_carts').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    iscrizioni_agli_eventi: admin.from('event_rsvps').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    negozi_seguiti: admin.from('follows').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    liste_di_prodotti: admin.from('product_lists').select('*').eq('owner_id', userId).limit(TETTO_PER_SEZIONE),
     ordini_di_gruppo: admin
       .from('group_orders')
       .select('*')
-      .or(`organizer_id.eq.${userId},seller_id.eq.${userId}`),
-    partecipazioni_di_gruppo: admin.from('group_participants').select('*').eq('user_id', userId),
+      .or(`organizer_id.eq.${userId},seller_id.eq.${userId}`).limit(TETTO_PER_SEZIONE),
+    partecipazioni_di_gruppo: admin.from('group_participants').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
     ordini_ricorrenti: admin
       .from('subscription_orders')
       .select('*')
-      .or(`user_id.eq.${userId},seller_id.eq.${userId}`),
-    tentativi_di_pagamento: admin.from('payment_attempts').select('*').eq('user_id', userId),
-    casse_aperte: admin.from('pending_checkouts').select('*').eq('buyer_id', userId),
-    casse_contanti: admin.from('cod_checkout_attempts').select('*').eq('user_id', userId),
-    email_in_coda: admin.from('email_queue').select('*').eq('user_id', userId),
-    segnalazioni_fatte: admin.from('segnalazioni').select('*').eq('segnalante_id', userId),
-    cashback_riscosso: admin.from('cashback_redemptions').select('*').eq('user_id', userId),
-    codici_di_zona_usati: admin.from('zone_code_uses').select('*').eq('user_id', userId),
-    recensioni_votate_utili: admin.from('review_helpful').select('*').eq('user_id', userId),
-    storie_guardate: admin.from('seller_story_views').select('*').eq('user_id', userId),
-    voti_negozio_del_mese: admin.from('shop_of_month_votes').select('*').eq('voter_id', userId),
-    traguardi: admin.from('user_achievements').select('*').eq('user_id', userId),
+      .or(`user_id.eq.${userId},seller_id.eq.${userId}`).limit(TETTO_PER_SEZIONE),
+    tentativi_di_pagamento: admin.from('payment_attempts').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    casse_aperte: admin.from('pending_checkouts').select('*').eq('buyer_id', userId).limit(TETTO_PER_SEZIONE),
+    casse_contanti: admin.from('cod_checkout_attempts').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    email_in_coda: admin.from('email_queue').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    segnalazioni_fatte: admin.from('segnalazioni').select('*').eq('segnalante_id', userId).limit(TETTO_PER_SEZIONE),
+    cashback_riscosso: admin.from('cashback_redemptions').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    codici_di_zona_usati: admin.from('zone_code_uses').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    recensioni_votate_utili: admin.from('review_helpful').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    storie_guardate: admin.from('seller_story_views').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    voti_negozio_del_mese: admin.from('shop_of_month_votes').select('*').eq('voter_id', userId).limit(TETTO_PER_SEZIONE),
+    traguardi: admin.from('user_achievements').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
   };
 
   /**
@@ -202,6 +210,8 @@ const scarica = withAuthRateLimit(
    * incompleto in testa e perfino il nome del file lo dice.
    */
   const letture_fallite: { sezione: string; motivo: string }[] = [];
+  // 5/11/2026 — Le sezioni arrivate al tetto: il file lo dice, non le spaccia per intere.
+  const sezioni_al_tetto: string[] = [];
 
   /** Una risposta di Supabase ridotta all'osso: i dati e l'eventuale guasto. */
   type Lettura = { data: unknown; error: unknown };
@@ -223,7 +233,9 @@ const scarica = withAuthRateLimit(
       });
       return null;
     }
-    return (esito.data as unknown[] | null) ?? [];
+    const righe = (esito.data as unknown[] | null) ?? [];
+    if (Array.isArray(righe) && righe.length >= TETTO_PER_SEZIONE) sezioni_al_tetto.push(nome);
+    return righe;
   }
 
   const altre: Record<string, unknown[] | null> = {};
@@ -254,19 +266,10 @@ const scarica = withAuthRateLimit(
     // Non esportare hash password (non c'è qui, ma per principio nessun secret)
   } : null;
 
-  const payload = {
-    export_metadata: {
-      generated_at: new Date().toISOString(),
-      gdpr_article: 20,
-      user_id: userId,
-      email: userEmail,
-      export_completo: letture_fallite.length === 0,
-      note:
-        letture_fallite.length === 0
-          ? 'Questo file contiene tutti i dati personali associati al tuo account. Conservato in formato JSON strutturato e leggibile come previsto dall\'art. 20 GDPR.'
-          : 'ATTENZIONE: questo file NON è completo. Alcune sezioni non siamo riusciti a leggerle: le trovi in «letture_fallite», e nel file valgono null. Null non vuol dire «non hai niente»: vuol dire «non lo sappiamo». Riprova più tardi o scrivici, hai diritto a riceverle.',
-    },
-    letture_fallite,
+  // 5/11/2026 — Le sezioni si leggono PRIMA di scrivere la testata: «export_completo» e
+  // il nome del file guardano letture_fallite e sezioni_al_tetto, che si riempiono qui.
+  // Prima la testata si calcolava per prima e non vedeva i guasti delle sezioni principali.
+  const sezioni = {
     profile: profileClean,
     addresses: sezione('addresses', addresses),
     orders_as_buyer: sezione('orders_as_buyer', ordersAsBuyer),
@@ -299,10 +302,29 @@ const scarica = withAuthRateLimit(
     ...altre,
   };
 
+  const payload = {
+    export_metadata: {
+      generated_at: new Date().toISOString(),
+      gdpr_article: 20,
+      user_id: userId,
+      email: userEmail,
+      export_completo: letture_fallite.length === 0 && sezioni_al_tetto.length === 0,
+      note:
+        sezioni_al_tetto.length > 0 && letture_fallite.length === 0
+          ? `ATTENZIONE: questo file NON è completo. Le sezioni in «sezioni_al_tetto» hanno più di ${TETTO_PER_SEZIONE} righe e qui trovi solo le prime ${TETTO_PER_SEZIONE}. Scrivici: hai diritto a riceverle tutte.`
+          : letture_fallite.length === 0
+          ? 'Questo file contiene tutti i dati personali associati al tuo account. Conservato in formato JSON strutturato e leggibile come previsto dall\'art. 20 GDPR.'
+          : 'ATTENZIONE: questo file NON è completo. Alcune sezioni non siamo riusciti a leggerle: le trovi in «letture_fallite», e nel file valgono null. Null non vuol dire «non hai niente»: vuol dire «non lo sappiamo». Riprova più tardi o scrivici, hai diritto a riceverle.',
+    },
+    letture_fallite,
+    sezioni_al_tetto,
+    ...sezioni,
+  };
+
   const today = new Date().toISOString().slice(0, 10);
   // Il nome del file lo dice prima ancora che tu lo apra.
   const filename =
-    letture_fallite.length === 0
+    letture_fallite.length === 0 && sezioni_al_tetto.length === 0
       ? `mycity-data-${userId}-${today}.json`
       : `mycity-data-${userId}-${today}-INCOMPLETO.json`;
 

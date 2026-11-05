@@ -184,8 +184,10 @@ describe('process-deletions: il primo giro conta e non cancella', () => {
   /** Righe oltre la finestra e righe dentro, su ogni tabella che la notte pota. */
   const tabelle = (): Tabelle => ({
     activity_events: [
-      { id: 'a', created_at: VECCHIO, ip: '1.2.3.4', category: 'visitor', metadata: { x: 1 }, summary: null },
-      { id: 'b', created_at: VECCHIO, ip: null, category: 'auth', metadata: null, summary: null },
+      // 5/11/2026 (S08, scheda 1584) — `path`: la potatura del profilo adesso tocca solo le
+      // righe con ancora qualcosa da togliere; queste due ce l'hanno.
+      { id: 'a', created_at: VECCHIO, ip: '1.2.3.4', category: 'visitor', metadata: { x: 1 }, summary: null, path: '/negozi' },
+      { id: 'b', created_at: VECCHIO, ip: null, category: 'auth', metadata: null, summary: null, path: '/accedi' },
       { id: 'c', created_at: ADESSO, ip: '5.6.7.8', category: 'visitor', metadata: { y: 2 }, summary: 's' },
     ],
     audit_logs: [
