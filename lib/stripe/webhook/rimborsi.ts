@@ -249,6 +249,9 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   const scaffaleNonRiuscito: string[] = [];
   for (const o of orders) {
     if (o.payment_status === 'REFUNDED') continue;
+    // 5/11/2026 — Un ordine gia' consegnato: la merce ce l'ha il cliente in casa,
+    // non torna in vendita (come la contestazione persa, dispute.ts).
+    if (o.delivery_status === 'DELIVERED') continue;
     const { error: errScaffale } = await admin.rpc('restore_stock_for_order', { p_order_id: o.id });
     if (errScaffale) {
       logger.error('[stripe] merce non rimessa a scaffale dopo il rimborso dal cruscotto', { orderId: o.id, message: errScaffale.message });

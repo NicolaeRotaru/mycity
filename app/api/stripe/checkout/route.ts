@@ -867,10 +867,29 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     });
 
     // Salva l'id session su pending_checkout per lookup nel webhook
-    await admin
+    // 5/11/2026 — Senza quell'id il riuso della cassa aperta e la pulizia delle
+    // riserve non la riconoscono: un secondo «Paga» riservava la merce di nuovo
+    // e apriva una seconda pagina pagabile. Se la scrittura cade, la pagina
+    // appena nata si chiude su Stripe e si passa dalla pulizia qui sotto.
+    const { error: errSessione } = await admin
       .from('pending_checkouts')
       .update({ stripe_session_id: session.id })
       .eq('id', pending.id);
+    if (errSessione) {
+      logger.error('[stripe] id della pagina di pagamento non salvato: la si chiude', {
+        pendingCheckoutId: pending.id, message: errSessione.message,
+      });
+      let chiusa = false;
+      try {
+        await getStripe().checkout.sessions.expire(session.id);
+        chiusa = true;
+      } catch (errChiusura) {
+        // Non chiusa: e' ancora pagabile, quindi la riserva NON si toglie (si
+        // venderebbe merce gia' pagata). Resta com'era ieri, col guasto nel log.
+        logger.error('[stripe] pagina di pagamento senza id non chiusa su Stripe', { sessionId: session.id, errChiusura });
+      }
+      if (chiusa) throw new Error('pending_checkouts.stripe_session_id non scritto');
+    }
 
     /**
      * 27/8/2026 (R159) — QUI PASSANO I COOKIE, NEL WEBHOOK NO.

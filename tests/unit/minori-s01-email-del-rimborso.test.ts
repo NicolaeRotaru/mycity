@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * «Rimborso emesso» (una da refundOrder, una dal webhook charge.refunded).
  * Un rimborso dal cruscotto Stripe la manda, con la parte non ancora scritta.
  */
-const st = vi.hoisted(() => ({ ordini: [] as Array<Record<string, unknown>>, email: [] as Array<Record<string, unknown>> }));
+const st = vi.hoisted(() => ({ ordini: [] as Array<Record<string, unknown>>, email: [] as Array<Record<string, unknown>>, rpc: [] as string[] }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async (m: Record<string, unknown>) => (st.email.push(m), { ok: true })) }));
 vi.mock('@/lib/stripe/client', () => ({ getStripe: () => ({ refunds: { list: async () => ({ data: [] }) } }) }));
@@ -29,7 +29,7 @@ function catena(risultato: () => unknown): unknown {
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({
     from: (t: string) => (t === 'orders' ? catena(() => ({ data: st.ordini.map((o) => ({ ...o })), error: null })) : catena(() => ({ data: [], error: null }))),
-    rpc: async () => ({ data: null, error: null }),
+    rpc: async (nome: string) => (st.rpc.push(nome), { data: null, error: null }),
     auth: { admin: { getUserById: async () => ({ data: { user: { email: 'maria@esempio.it' } }, error: null }) } },
   }),
 }));
@@ -47,6 +47,7 @@ const carica = { id: 'ch_1', payment_intent: 'pi_1', amount: 1800, amount_refund
 
 beforeEach(() => {
   st.email = [];
+  st.rpc = [];
 });
 
 describe('61 — una sola email «Rimborso emesso»', () => {
@@ -60,5 +61,25 @@ describe('61 — una sola email «Rimborso emesso»', () => {
     await handleChargeRefunded(carica);
     expect(st.email).toHaveLength(1);
     expect(String(st.email[0].text)).toMatch(/18[,.]00/);
+  });
+});
+
+import { decidiRimessaAScaffale } from '@/lib/ordini/rimessa-a-scaffale';
+
+describe('58 — la merce che il cliente ha già in casa non torna in vendita', () => {
+  it('rimborso pieno dal cruscotto su un ordine consegnato: niente restore_stock_for_order', async () => {
+    st.ordini = [ordine({ delivery_status: 'DELIVERED' })];
+    await handleChargeRefunded(carica);
+    expect(st.rpc).not.toContain('restore_stock_for_order');
+  });
+  it('controprova: ordine non ancora consegnato, la merce torna', async () => {
+    st.ordini = [ordine()];
+    await handleChargeRefunded(carica);
+    expect(st.rpc).toContain('restore_stock_for_order');
+  });
+  it('la regola: consegnato e chiuso dal rimborso → non si rimette, salvo merce tornata col reso', () => {
+    const ordineConsegnato = { delivery_status: 'DELIVERED' } as never;
+    expect(decidiRimessaAScaffale({ ordineDaChiudere: true, ordine: ordineConsegnato, giaRimborsatoPrimaCents: 0 })).toMatchObject({ rimetti: false });
+    expect(decidiRimessaAScaffale({ ordineDaChiudere: true, ordine: ordineConsegnato, giaRimborsatoPrimaCents: 0, merceTornata: true })).toEqual({ rimetti: true });
   });
 });

@@ -2036,6 +2036,13 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
     ordineDaChiudere,
     giaRimborsatoPrimaCents: alreadyRefunded,
     annullatoDaChiChiama: opts.annullatoDaChiChiama === true,
+    // 5/11/2026 — La merce torna in negozio solo col reso (o col fattorino,
+    // quando il cliente e' assente): un reclamo chiuso col rimborso pieno su un
+    // ordine consegnato non la rimette in vendita.
+    merceTornata:
+      opts.annullaLOrdine === true ||
+      (typeof opts.metadata?.return_id === 'string' && opts.metadata.return_id.length > 0) ||
+      (opts.idempotencyKey ?? '').startsWith('return_'),
   });
 
   const emailAlCliente = await notifyRefundBuyer(emailCliente, order.id, safeAmountCents, opts, ripartoVero);

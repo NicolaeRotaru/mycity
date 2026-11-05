@@ -80,11 +80,17 @@ export interface DomandaScaffale {
    * rimborso parziale dal cruscotto non chiude l'ordine e non tocca il magazzino.
    */
   annullatoDaChiChiama?: boolean;
+  /**
+   * 5/11/2026 — La merce e' tornata davvero in negozio (lo dice solo il reso).
+   * Su un ordine gia' CONSEGNATO senza questo segno la merce ce l'ha il cliente
+   * in casa: un reclamo chiuso col rimborso pieno non la rimette in vendita.
+   */
+  merceTornata?: boolean;
 }
 
 export type DecisioneScaffale =
   | { rimetti: true }
-  | { rimetti: false; perche: 'ordine-aperto' | 'gia-chiuso-da-un-rimborso' };
+  | { rimetti: false; perche: 'ordine-aperto' | 'gia-chiuso-da-un-rimborso' | 'merce-dal-cliente' };
 
 /**
  * La merce di questo ordine va rimessa a scaffale ADESSO?
@@ -116,6 +122,10 @@ export function decidiRimessaAScaffale(domanda: DomandaScaffale): DecisioneScaff
   if (domanda.annullatoDaChiChiama) return { rimetti: true };
 
   if (!domanda.ordineDaChiudere) return { rimetti: false, perche: 'ordine-aperto' };
+
+  if (domanda.ordine.delivery_status === 'DELIVERED' && !domanda.merceTornata) {
+    return { rimetti: false, perche: 'merce-dal-cliente' };
+  }
 
   if (domanda.giaRimborsatoPrimaCents > 0 && domanda.ordine.delivery_status === 'CANCELED') {
     return { rimetti: false, perche: 'gia-chiuso-da-un-rimborso' };
