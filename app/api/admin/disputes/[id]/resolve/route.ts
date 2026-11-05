@@ -367,14 +367,14 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     const rimborso = body.status === 'resolved_buyer' && importo && rimborsoEmesso
       ? `\nRimborso al cliente: ${formatPriceFromCents(importo)}.`
       : '';
-    const { error: eAvviso } = await admin.from('notifications').insert({
+    // 5/11/2026 (unione) — Dalla stessa porta delle altre campanelle (S02): se la scrittura cade, lo dice.
+    await scriviCampanella(admin, {
       category: 'order',
       user_id: dispute.against_id,
       title: `${esitoPerIlNegozio} · ordine #${String(dispute.order_id).slice(0, 6).toUpperCase()}`,
       body: `${body.notes}${rimborso}`,
       link: `/seller/orders/${dispute.order_id}`,
-    });
-    if (eAvviso) logger.error('[dispute] avviso al negozio non scritto', { disputeId: dispute.id, err: eAvviso.message });
+    }, { dove: 'dispute/resolve (negozio)', ordine: String(dispute.order_id) });
   }
 
   await writeAudit({

@@ -6,7 +6,6 @@ import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
-import { logger } from '@/lib/logger';
 import { scriviCampanella } from '@/lib/ordini/campanella';
 
 export const runtime = 'nodejs';
@@ -110,7 +109,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     order.rider_id ? { user_id: order.rider_id, link: `/rider/orders/${order.id}` } : null,
   ].filter((x): x is { user_id: string; link: string } => x !== null);
   for (const a of altri) {
-    const { error: eAvviso } = await admin.from('notifications').insert({
+    // 5/11/2026 (unione) — Dalla stessa porta delle altre campanelle (S02): se la scrittura cade, lo dice.
+    await scriviCampanella(admin, {
       category: 'order',
       user_id: a.user_id,
       title: `✕ Ordine ${numero} annullato`,
@@ -118,8 +118,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         ? 'L’amministrazione ha annullato l’ordine già consegnato e ha rimborsato il cliente.'
         : 'L’amministrazione ha annullato l’ordine: non va più preparato né consegnato.',
       link: a.link,
-    });
-    if (eAvviso) logger.error('[admin/cancel] avviso non scritto', { orderId: order.id, userId: a.user_id, err: eAvviso.message });
+    }, { dove: 'admin/cancel (negozio e fattorino)', ordine: order.id });
   }
 
   await writeAudit({
