@@ -97,7 +97,9 @@ export const IVA_SULLA_COMMISSIONE = 'IVA inclusa';
 
 function fraseCanone(abbonamentoAcceso: boolean): string {
   return abbonamentoAcceso
-    ? `Abbonamento ${PREZZO_ABBONAMENTO_MESE}/mese, attivo dopo l'approvazione del negozio.`
+    // 5/11/2026 — La regola firmata (pricing.abbonamento): sospeso finché il
+    // negozio non incassa con MyCity, non «dopo l'approvazione».
+    ? `Abbonamento ${PREZZO_ABBONAMENTO_MESE}/mese, che parte solo dopo il tuo primo incasso con MyCity.`
     : 'Nessun canone finché non incassi con MyCity.';
 }
 

@@ -177,3 +177,32 @@ describe('67 — rimborso fallito e ritorno indietro caduto', () => {
     expect(notificheConTitolo(finto.db, 'Reso bloccato')).toHaveLength(1);
   });
 });
+
+import { sendEmail } from '@/lib/email/client';
+
+describe('184 — i resi arrivano anche per email', () => {
+  const oggetti = () => (sendEmail as unknown as { mock: { calls: Array<[{ subject: string; text: string; to: string }]> } }).mock.calls.map((c) => c[0]);
+  it('la richiesta di reso arriva al negozio per email, e chi amministra riceve un avviso', async () => {
+    (sendEmail as unknown as { mockClear: () => void }).mockClear();
+    await resoAperto();
+    expect(oggetti().some((m) => m.subject.includes('Nuova richiesta di reso') && m.to === 'negozio@esempio.it')).toBe(true);
+    expect(notificheConTitolo(finto.db, 'Nuova richiesta di reso').length).toBeGreaterThan(0);
+  });
+  it('il reso rifiutato arriva al cliente per email, col motivo del negozio', async () => {
+    // Un recesso non si rifiuta: qui il motivo è «danneggiato».
+    finto.utente = 'giulia';
+    const aperto = await (apriReso as unknown as (r: Request, c: unknown) => Promise<Response>)(
+      new Request('http://localhost/api/returns/create', json({ orderId: ORDINE, reason: 'DAMAGED', notes: 'arrivato strappato' })),
+      undefined,
+    );
+    expect(aperto.status).toBe(201);
+    const id = (await aperto.json()).id as string;
+    (sendEmail as unknown as { mockClear: () => void }).mockClear();
+    finto.utente = 'negozio';
+    const r = await chiama(decidi, { decision: 'REJECTED', notes: 'Il maglione è stato lavato' }, id);
+    expect(r.status).toBe(200);
+    const m = oggetti().find((x) => x.subject.includes('Reso rifiutato'));
+    expect(m?.to).toBe('giulia@esempio.it');
+    expect(m?.text).toContain('Il maglione è stato lavato');
+  });
+});

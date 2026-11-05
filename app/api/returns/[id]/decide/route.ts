@@ -21,6 +21,8 @@ import {
 } from '@/lib/rimborsi/regole-del-rimborso';
 import { avvisoDelRimborsoNonRegistrato, RIMBORSO_PARTITO_MA_NON_REGISTRATO } from '@/lib/rimborsi/bonifici-da-fare';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+import { sendEmail } from '@/lib/email/client';
+import { resoRifiutatoAlClienteTemplate } from '@/lib/rimborsi/email-dei-resi';
 
 export const runtime = 'nodejs';
 
@@ -327,6 +329,22 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     body: body.notes ?? null,
     link: `/orders/${ret.order_id}`,
   });
+
+  // 5/11/2026 — Al cliente a cui il reso viene rifiutato arriva anche un'email,
+  // col motivo del negozio o, se manca, con chi scrivere. Best-effort.
+  if (body.decision === 'REJECTED' && ret.buyer_id) {
+    try {
+      const { data: cliente } = await admin.auth.admin.getUserById(ret.buyer_id);
+      const email = cliente?.user?.email;
+      if (email) {
+        const t = resoRifiutatoAlClienteTemplate({ orderId: ret.order_id, nota: body.notes ?? null });
+        const res = await sendEmail({ to: email, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+        if (!res.ok) logger.warn('[returns] email del reso rifiutato non partita', { returnId: ret.id });
+      }
+    } catch (e) {
+      logger.warn('[returns] email del reso rifiutato non partita', { returnId: ret.id, e });
+    }
+  }
 
   // Email di rimborso: già inviata da refundOrder (notifyBuyer: true).
 

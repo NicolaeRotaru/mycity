@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { sendEmail } from '@/lib/email/client';
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+import { resoRichiestoAlNegozioTemplate } from '@/lib/rimborsi/email-dei-resi';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -208,6 +211,30 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
     body: `Il cliente ha richiesto il reso per l'ordine #${order.id.slice(0, 8)}`,
     link: `/seller/orders/${order.id}`,
   });
+
+  // 5/11/2026 — Il negozio lo sa anche per email, e chi amministra con un avviso:
+  // il reso ferma il bonifico dell'ordine. Best-effort: il reso e' gia' scritto.
+  try {
+    const { data: venditore } = await admin.auth.admin.getUserById(order.seller_id);
+    const email = venditore?.user?.email;
+    if (email) {
+      const t = resoRichiestoAlNegozioTemplate({ orderId: order.id, motivo: body.reason });
+      const res = await sendEmail({ to: email, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+      if (!res.ok) logger.warn('[returns] email della richiesta di reso al negozio non partita', { orderId: order.id });
+    }
+  } catch (e) {
+    logger.warn('[returns] email della richiesta di reso al negozio non partita', { orderId: order.id, e });
+  }
+  try {
+    await notifyAdmins(
+      '↩️ Nuova richiesta di reso',
+      `Reso chiesto sull'ordine #${order.id.slice(0, 8)}: il bonifico di quell'ordine resta fermo finché il negozio non decide.`,
+      `/admin/orders`,
+      { unaVoltaPer: `reso-nuovo:${ret.id}` },
+    );
+  } catch (e) {
+    logger.warn('[returns] avviso agli amministratori della richiesta di reso non partito', { orderId: order.id, e });
+  }
 
   return NextResponse.json({ id: ret.id, status: 'REQUESTED' }, { status: 201 });
 });
