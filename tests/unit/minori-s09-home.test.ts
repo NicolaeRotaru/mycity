@@ -92,3 +92,44 @@ describe('1740 — il carosello taglia a 30 dopo aver tolto le storie dei non-ne
     expect(src).toMatch(/conNegozioApprovato\(supabase, storie, 'id, store_name, store_logo'\)\)\.slice\(0, STORIE_MOSTRATE\)/);
   });
 });
+
+describe('sezioni della home (components/home-sections/HomeSectionRenderer.tsx)', () => {
+  const src = leggi('components/home-sections/HomeSectionRenderer.tsx');
+  it('294 — la fila senza ordinamento non si chiama «più amati / vanno forte / più visti»', () => {
+    expect(src).not.toMatch(/'I più amati'|'Prodotti che vanno forte'|prodotti più visti del momento/);
+    expect(src).toContain("c.heading || 'Ultimi arrivati dai negozi'");
+  });
+  it('2034 — la newsletter non promette un giorno né una cadenza', () => {
+    expect(src).not.toMatch(/una volta a settimana|Ogni venerdì/);
+  });
+  it('2444 — la fascia di tendenza sta in un contenitore che sparisce quando è vuota', () => {
+    expect(src).toMatch(/<MaybeSection className=\{`container mx-auto px-4 sm:px-6 \$\{SPAZIO_SEZIONE\}`\}><TrendingNow \/><\/MaybeSection>/);
+  });
+  it('2453 — mentre carica, «di tendenza» non tiene dodici riquadri che poi spariscono', () => {
+    expect(leggi('components/home/TrendingNow.tsx')).toMatch(/if \(isLoading\) return null;/);
+  });
+});
+
+describe('1629 — «Ultimi visti»', () => {
+  it('legge la lista intera e toglie il prodotto aperto al momento di disegnare', () => {
+    const src = leggi('components/RecentlyViewed.tsx');
+    expect(src).toContain('leggiVistiDiRecente(supabase, { userId: userId! })');
+    expect(src).toContain('const visibili = items.filter((it) => it.product.id !== excludeId);');
+    expect(src).toContain('visibili.map((it) =>');
+  });
+});
+
+describe('128/652 — visite e «Ultimi visti»', () => {
+  it('128 — senza consenso statistico «Ultimi visti» non si legge, non si mostra e si cancella', () => {
+    const src = leggi('components/RecentlyViewed.tsx');
+    expect(src).toContain("setConsenso(hasConsent('analytics'))");
+    expect(src).toContain("enabled: !!userId && consenso !== false");
+    expect(src).toMatch(/if \(consenso !== false \|\| !userId\) return;\s*void supabase\.from\('recently_viewed'\)\.delete\(\)\.eq\('user_id', userId\)/);
+    expect(src).toContain('consenso === false ||');
+  });
+  it('652 — il negoziante che apre il suo prodotto non conta come visita', () => {
+    const src = leggi('components/ProductViewTracker.tsx');
+    const registra = src.slice(src.indexOf('registra: async () => {'), src.indexOf(".from('product_views')"));
+    expect(registra).toMatch(/if \(userId && sellerId && userId === sellerId\) return;/);
+  });
+});

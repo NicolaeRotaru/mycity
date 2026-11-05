@@ -78,6 +78,9 @@ export default function ProductViewTracker({ productId, price, category, sellerI
           // #88 — Il token gia' in memoria basta: qui serve solo distinguere una visita anonima da
           // una con account.
           const userId = await idUtenteInMemoria();
+          // 5/11/2026 — Il negoziante che apre il proprio prodotto non è un cliente: la sua visita
+          // finiva in «visite», nel tasso di conversione e nei più visti della home.
+          if (userId && sellerId && userId === sellerId) return;
 
           // 041 — L'impronta di sessione serve a contare le visite anonime PER VISITATORE invece
           // che per prodotto. Prima il tetto era globale sul prodotto, e chi voleva azzerare le

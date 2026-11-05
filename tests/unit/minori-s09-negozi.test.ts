@@ -64,3 +64,18 @@ describe('2308 — la descrizione di un negozio dal nome lungo tiene la condizio
     expect(readFileSync('app/store/[id]/layout.tsx', 'utf8')).toContain('descrizioneDelNegozio(name, store.store_description, fraseComeArriva())');
   });
 });
+
+describe('scheda negozio in home (components/StorePreviewCard.tsx)', () => {
+  const src = readFileSync('components/StorePreviewCard.tsx', 'utf8');
+  it('2270 — la pillola dice solo aperto/chiuso, la consegna sta in una riga con l\'altezza tenuta', () => {
+    expect(src).toMatch(/const stato = open \? 'Aperto ora' : 'Chiuso ora';/);
+    expect(src).toMatch(/min-h-\[1rem\][^>]*>\s*\{consegna \? `consegna \$\{consegna\}` : ''\}/);
+  });
+  it('237 — niente pallini (pulsanti) dentro il link della scheda; etichette «Foto N di M»', () => {
+    expect(src).toMatch(/<StoreMediaCarousel\s+media=\{media\}\s+posto=\{posto\}\s+senzaPallini/);
+    const carosello = readFileSync('components/StoreMediaCarousel.tsx', 'utf8');
+    expect(carosello).toContain('media.length > 1 && !senzaPallini');
+    expect(carosello).not.toContain('`Slide ${i + 1}`');
+    expect(carosello).toContain('`Foto ${i + 1} di ${media.length}`');
+  });
+});

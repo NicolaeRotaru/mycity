@@ -18,7 +18,7 @@ import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
  * "Ordina di nuovo" — rail di riordino rapido nella home, derivata dagli ordini
  * reali del buyer autenticato (nessuna colonna nuova). Mostra:
  *  - un'eyebrow "Bentornato/a, {nome}" + titolo serif;
- *  - una card "La tua spesa della settimana" con i prodotti più frequenti negli
+ *  - una card "Quello che compri spesso" con i prodotti presi in almeno due
  *    ordini recenti (staple), ricomprabili in un click;
  *  - gli ultimi 3 ordini NON annullati, con thumb dei prodotti e azioni
  *    "Riordina" (carica il carrello) / "Dettagli".
@@ -29,6 +29,8 @@ import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 
 type OrderLine = {
   product_id: string | null;
+  variant_id?: string | null;
+  variant_label?: string | null;
   quantity: number;
   unit_price: number | string;
   products: { name: string | null; images: string[] | null } | null;
@@ -68,7 +70,7 @@ export default function ReorderRail() {
           .from('orders')
           .select(`
             id, created_at, total_price, seller_id,
-            order_items ( product_id, quantity, unit_price, products ( name, images ) )
+            order_items ( product_id, variant_id, variant_label, quantity, unit_price, products ( name, images ) )
           `)
           .eq('user_id', user.id)
           .neq('delivery_status', 'CANCELED')
@@ -88,35 +90,50 @@ export default function ReorderRail() {
     },
   });
 
-  // "La tua spesa della settimana": articoli più frequenti negli ordini recenti.
+  /**
+   * 5/11/2026 — «PRODOTTI CHE COMPRI SPESSO» VUOL DIRE COMPRATI PIÙ DI UNA VOLTA.
+   * Prima entrava tutto quello degli ultimi sei ordini, anche una cosa sola comprata una volta,
+   * col titolo «La tua spesa della settimana» e un totale ai prezzi di allora (poi il carrello,
+   * che rilegge i prezzi di oggi, diceva un'altra cifra). Adesso conta in quanti ORDINI compare
+   * (stessa variante), tiene solo quelli presenti in almeno due, e la cifra non c'è più.
+   */
   const staples = useMemo(() => {
     if (!data) return [];
-    const byProduct = new Map<string, { id: string; name: string; image: string | null; price: number; freq: number }>();
+    const byProduct = new Map<string, {
+      id: string; name: string; image: string | null; price: number; freq: number;
+      sellerId: string | null; variantId: string | null; variantLabel: string | null;
+    }>();
     for (const o of data.orders) {
+      const visti = new Set<string>();
       for (const it of o.order_items ?? []) {
         if (!it.product_id || !it.products?.name) continue;
-        const prev = byProduct.get(it.product_id);
+        const chiave = `${it.product_id}|${it.variant_id ?? ''}`;
+        if (visti.has(chiave)) continue;
+        visti.add(chiave);
+        const prev = byProduct.get(chiave);
         if (prev) {
           prev.freq += 1;
         } else {
-          byProduct.set(it.product_id, {
+          byProduct.set(chiave, {
             id: it.product_id,
             name: it.products.name,
             image: it.products.images?.[0] ?? null,
             price: Number(it.unit_price),
             freq: 1,
+            sellerId: o.seller_id,
+            variantId: it.variant_id ?? null,
+            variantLabel: it.variant_label ?? null,
           });
         }
       }
     }
-    return [...byProduct.values()].sort((a, b) => b.freq - a.freq).slice(0, 6);
+    return [...byProduct.values()].filter((p) => p.freq >= 2).sort((a, b) => b.freq - a.freq).slice(0, 6);
   }, [data]);
 
   if (!data) return null;
 
   const recent = data.orders.slice(0, 3);
   const greeting = data.firstName ? `Bentornato/a, ${data.firstName}` : 'Bentornato/a';
-  const staplesTotal = staples.reduce((t, p) => t + p.price, 0);
 
   // #113 — Stessa funzione degli altri due punti: chiede prima di svuotare il
   // carrello e rilegge i prezzi di adesso.
@@ -128,7 +145,12 @@ export default function ReorderRail() {
         prezzoStorico: Number(it.unit_price),
         image: it.products?.images?.[0],
         quantity: it.quantity,
+        // 5/11/2026 — Il negozio e la variante, come gli altri due «Riordina»: senza il negozio
+        // il carrello raggruppava per nome, senza la variante la cassa bloccava l'ordine.
+        sellerId: order.seller_id ?? undefined,
         storeName: order.seller?.store_name ?? undefined,
+        variantId: it.variant_id ?? undefined,
+        variantLabel: it.variant_label ?? undefined,
       })),
     );
     if (aggiunti > 0) router.push('/cart');
@@ -142,6 +164,9 @@ export default function ReorderRail() {
         prezzoStorico: p.price,
         image: p.image ?? undefined,
         quantity: 1,
+        sellerId: p.sellerId ?? undefined,
+        variantId: p.variantId ?? undefined,
+        variantLabel: p.variantLabel ?? undefined,
       })),
     );
     if (aggiunti > 0) router.push('/cart');
@@ -158,16 +183,16 @@ export default function ReorderRail() {
           <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mt-1">Ordina di nuovo</h2>
         </div>
 
-        {/* La tua spesa della settimana (staple): visibile solo con >= 3 prodotti ricorrenti */}
+        {/* Quello che compri spesso: visibile solo con >= 3 prodotti presi in almeno due ordini */}
         {staples.length >= 3 && (
           <div className="mb-4 flex flex-wrap items-center gap-4 rounded-2xl border border-primary-200 bg-white p-4 shadow-warm">
             <div className="min-w-[180px] flex-1">
               <p className="inline-flex items-center gap-2 font-bold text-ink-900">
                 <ShoppingBasket size={18} strokeWidth={2.2} className="text-primary-700" aria-hidden />
-                La tua spesa della settimana
+                Quello che compri spesso
               </p>
               <p className="mt-1 text-[13px] text-ink-500">
-                {staples.length} prodotti che compri spesso · {formatPrice(staplesTotal)}
+                {staples.length} prodotti che hai preso in più di un ordine
               </p>
             </div>
             <div className="flex gap-1.5">
@@ -180,7 +205,7 @@ export default function ReorderRail() {
               ))}
             </div>
             <Button size="sm" icon={RotateCcw} onClick={reorderStaples}>
-              Ricompra tutta la spesa
+              Ricomprali tutti
             </Button>
           </div>
         )}
