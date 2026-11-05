@@ -289,7 +289,8 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
    *
    * La chiave per ordine (`p_order_id`) è la cintura: la funzione del
    * database scala l'uso solo se `orders.coupon_released_at` è ancora vuoto.
-   * Finché quella migrazione non è firmata si ripiega sulla firma vecchia,
+   * La colonna e la firma nascono con la migrazione 200 (5/11/2026, da
+   * applicare a mano). Finché non è applicata si ripiega sulla firma vecchia,
    * ma SOLO su PGRST202 («funzione inesistente»), che è un errore di forma e
    * non può aver scritto niente — su un errore di rete riprovare scalerebbe
    * due volte (stessa regola di lib/ordini/annulla.ts).

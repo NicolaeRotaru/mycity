@@ -3,6 +3,7 @@ import { refundOrder } from '@/lib/stripe/payout';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
 import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
+import { contantiIncassati } from '@/lib/rimborsi/regole-del-rimborso';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { sendEmail } from '@/lib/email/client';
@@ -223,6 +224,10 @@ export async function annullaERimborsa(
    * scala l'uso solo se `orders.coupon_released_at` è ancora vuoto, e lo marca
    * nella stessa istruzione (lo stesso schema di `claim_coupon`). La seconda
    * chiamata, da qualunque strada arrivi, non scala più niente.
+   *
+   * 5/11/2026 — Quella funzione e quella colonna nelle migrazioni non c'erano:
+   * le crea la 200 (da applicare a mano). Finché non è applicata, il ripiego
+   * qui sotto su PGRST202 scala come prima.
    */
   /**
    * 6/9/2026 — IL CODICE TORNAVA IN CIRCOLO MENTRE UN ALTRO ORDINE LO USAVA ANCORA.
@@ -309,7 +314,9 @@ export async function annullaERimborsa(
   // Contanti già incassati dal fattorino: la restituzione è un fatto fisico e la
   // decide una persona. Annullare in silenzio lascerebbe il cliente senza merce
   // e senza soldi.
-  if (order.payment_method === 'cod' && !!order.cash_confirmed_at) {
+  // 5/11/2026 — La regola comune (`contantiIncassati`): anche il ritiro pagato
+  // al banco (DELIVERED + PAID, senza cash_confirmed_at) e' un incasso vero.
+  if (order.payment_method === 'cod' && contantiIncassati(order)) {
     return { ok: false, motivo: 'CONTANTI_INCASSATI' };
   }
 
@@ -366,7 +373,9 @@ export async function annullaERimborsa(
       // 30/10/2026 — `refundOrder` manda «Rimborso emesso» con l'importo e basta: se la consegna del
       // carrello si è rifatta, il cliente riceve anche il perché dei 16 € su 18 e il conto della frutta.
       if (giro?.avviso) {
-        await avvisaIlClienteDellAnnullo(admin, conIlCreditoTornato(creditoNonTornato), opts.reason, { avviso: giro.avviso, come: 'carta' });
+        await avvisaIlClienteDellAnnullo(admin, conIlCreditoTornato(creditoNonTornato), opts.reason, { avviso: giro.avviso, come: 'carta' }, {
+          annullatoDalCliente: opts.metadata?.source === 'buyer_cancel',
+        });
         await avvisaLaCampanellaDelCarrello(admin, order.user_id, giro.avviso, 'carta');
       }
       return {
@@ -409,11 +418,35 @@ export async function annullaERimborsa(
     })
     .eq('id', order.id)
     .neq('delivery_status', 'CANCELED')
+    // 5/11/2026 — Il turno si prende sullo stato che il chiamante ha
+    // controllato, non su «qualunque stato non annullato»: fra il controllo
+    // della rotta e questa scrittura l'ordine puo' essere partito o consegnato.
+    // Se e' cambiato, zero righe e nessun soldo toccato.
+    .eq('delivery_status', order.delivery_status ?? '')
     .select('id');
   if (updErr) return { ok: false, motivo: 'ANNULLAMENTO_FALLITO', dettaglio: updErr.message };
   if (!preso || preso.length === 0) return { ok: false, motivo: 'GIA_ANNULLATO' };
 
-  await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
+  // 5/11/2026 — La merce che non torna a scaffale non deve passare in silenzio:
+  // l'ordine e' gia' annullato, un secondo annullo non ci riprova.
+  try {
+    const { error: errScaffale } = await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
+    if (errScaffale) throw new Error(errScaffale.message);
+  } catch (err) {
+    logger.error('[annullaERimborsa] merce non rimessa a scaffale dopo l annullo', {
+      orderId: order.id, err: err instanceof Error ? err.message : err,
+    });
+    try {
+      await notifyAdmins(
+        '⚠️ Merce non rimessa a scaffale dopo un annullo',
+        `L'ordine #${order.id.slice(0, 6).toUpperCase()} è annullato, ma i suoi prodotti non sono tornati in magazzino: ` +
+          'le quantità in vendita sono più basse del vero. Vanno sistemate a mano dal pannello prodotti del negozio.',
+        '/admin/orders',
+      );
+    } catch (e) {
+      logger.error('[annullaERimborsa] avviso agli amministratori non partito', { orderId: order.id, err: e });
+    }
+  }
 
   // 30/10/2026 — Coi contanti la consegna dei negozi rimasti si rifà: cambia quanto si paga alla porta.
   const giro = await ricalcolaLaConsegnaDelGiro(admin, order.id);
@@ -431,6 +464,8 @@ export async function annullaERimborsa(
     conIlCreditoTornato(creditoNonTornato),
     opts.reason,
     giro?.avviso ? { avviso: giro.avviso, come } : null,
+    // 5/11/2026 — chi annulla da solo non legge «Motivo: annullato dal cliente».
+    { annullatoDalCliente: opts.metadata?.source === 'buyer_cancel' },
   );
   if (giro?.avviso) await avvisaLaCampanellaDelCarrello(admin, order.user_id, giro.avviso, come);
 
@@ -456,6 +491,7 @@ export async function avvisaIlClienteDellAnnullo(
   ordine: { id: string; user_id: string | null; wallet_applied_cents?: number | null },
   motivo: string | null | undefined,
   carrello?: { avviso: AvvisoDelCarrello; come: ComeHaPagato } | null,
+  opzioni?: { annullatoDalCliente?: boolean },
 ): Promise<boolean> {
   try {
     if (!ordine.user_id) return false;
@@ -467,18 +503,24 @@ export async function avvisaIlClienteDellAnnullo(
       });
       return false;
     }
+    // 30/10/2026 — Il carrello rifatto: le righe con le cifre nuove.
+    // 5/11/2026 — Dentro il riquadro, prima del pulsante (non piu' sotto il piè
+    // di pagina), e con la frase sui soldi giusta per come si era pagato.
     const t = ordineAnnullatoTemplate({
       orderId: ordine.id,
       motivo,
       creditoRestituitoEuro: Number(ordine.wallet_applied_cents ?? 0) / 100,
+      come: carrello?.come,
+      carrello: carrello
+        ? {
+            html: htmlDelCarrello(carrello.avviso, carrello.come),
+            text: righeDelCarrello(carrello.avviso, carrello.come).join('\n'),
+          }
+        : null,
+      annullatoDalCliente: opzioni?.annullatoDalCliente,
     });
-    // 30/10/2026 — Il carrello rifatto: le righe con le cifre nuove, sotto il testo di sempre.
-    const html = carrello
-      ? t.html.includes('</body>')
-        ? t.html.replace('</body>', `${htmlDelCarrello(carrello.avviso, carrello.come)}</body>`)
-        : t.html + htmlDelCarrello(carrello.avviso, carrello.come)
-      : t.html;
-    const text = carrello ? `${t.text}\n\n${righeDelCarrello(carrello.avviso, carrello.come).join('\n')}` : t.text;
+    const html = t.html;
+    const text = t.text;
     const res = await sendEmail({
       to: email,
       subject: t.subject,

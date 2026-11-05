@@ -384,31 +384,53 @@ export function ordineAnnullatoTemplate(args: {
   motivo?: string | null;
   /** Il credito MyCity speso sull'ordine e restituito con l'annullo, in euro. */
   creditoRestituitoEuro?: number;
+  /**
+   * 5/11/2026 — Come aveva pagato: con la carta il rimborso torna sulla carta,
+   * e «non devi pagare niente» (nato per i contanti) non e' la frase giusta.
+   */
+  come?: 'carta' | 'contanti' | 'da-pagare';
+  /** 5/11/2026 — Le cifre nuove del carrello, DENTRO il riquadro e prima del pulsante. */
+  carrello?: { html: string; text: string } | null;
+  /** 5/11/2026 — Ha annullato il cliente stesso: niente «motivo» e niente «cerca in un altro negozio». */
+  annullatoDalCliente?: boolean;
 }) {
   const ordine = `#${args.orderId.slice(0, 6).toUpperCase()}`;
-  const motivo = motivoDelRimborsoInChiaro(args.motivo);
+  const motivo = args.annullatoDalCliente ? null : motivoDelRimborsoInChiaro(args.motivo);
   const credito = Number(args.creditoRestituitoEuro ?? 0);
   const negozi = `${appUrl()}/search`;
   const p = (testo: string) => `<p style="margin:0 0 12px;line-height:1.6">${testo}</p>`;
   const rigaCredito = credito > 0
     ? `Il credito MyCity che avevi usato (${formatPrice(credito)}) ti è stato restituito.`
     : '';
+  const conCarta = args.come === 'carta';
+  // Con la carta i soldi tornano sulla carta; con un carrello rifatto in contanti
+  // gli altri ordini si pagano ancora alla porta: «non devi pagare niente» vale
+  // solo per questo ordine, e lo si dice cosi'.
+  const rigaSoldi = conCarta
+    ? 'Il rimborso torna sulla carta con cui hai pagato.'
+    : args.carrello
+      ? 'Per questo ordine non devi pagare niente.'
+      : 'Non devi pagare niente.';
+  const titolo = args.annullatoDalCliente ? 'Hai annullato il tuo ordine' : 'Il tuo ordine è stato annullato';
+  const bottone = args.annullatoDalCliente ? 'Torna ai negozi' : 'Cerca in un altro negozio';
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Il tuo ordine è stato annullato</h1>
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">${titolo}</h1>
     ${p(`L'ordine <strong>${ordine}</strong> è stato annullato e non verrà preparato né consegnato.`)}
     ${motivo ? `<p style="margin:0 0 12px;color:${COLORI.tenue}">Motivo: ${escapeHtml(motivo)}</p>` : ''}
-    ${p('<strong>Non devi pagare niente.</strong>')}
+    ${p(`<strong>${rigaSoldi}</strong>`)}
     ${rigaCredito ? p(rigaCredito) : ''}
-    <p style="margin:24px 0">${btn(negozi, 'Cerca in un altro negozio')}</p>
+    ${args.carrello ? args.carrello.html : ''}
+    <p style="margin:24px 0">${btn(negozi, bottone)}</p>
   `;
   return {
-    subject: `Ordine ${ordine} annullato — non devi pagare niente`,
+    subject: conCarta || args.carrello ? `Ordine ${ordine} annullato` : `Ordine ${ordine} annullato — non devi pagare niente`,
     html: shell('Ordine annullato', body),
     text:
       `L'ordine ${ordine} è stato annullato e non verrà preparato né consegnato.` +
       (motivo ? ` Motivo: ${motivo}.` : '') +
-      ' Non devi pagare niente.' +
+      ` ${rigaSoldi}` +
       (rigaCredito ? ` ${rigaCredito}` : '') +
+      (args.carrello ? `\n\n${args.carrello.text}` : '') +
       ` Altri negozi: ${negozi}`,
   };
 }
