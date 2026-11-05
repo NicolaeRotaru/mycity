@@ -210,7 +210,9 @@ async function avvisaIlCliente(admin: SupabaseClient, o: RigaVeloce, frase: stri
   }
 }
 
-type EsitoDelCarrello = 'spostato' | 'accettato' | 'a-mano';
+// 5/11/2026 — 'gia-segnalato': il carrello che non si sposta, già detto agli amministratori a un giro
+// di prima. Non è un problema nuovo: il giro non risponde 500 a ogni passaggio fino all'annullo.
+type EsitoDelCarrello = 'spostato' | 'accettato' | 'a-mano' | 'gia-segnalato';
 
 const codiceDi = (id: string) => `#${id.slice(0, 6).toUpperCase()}`;
 
@@ -230,7 +232,7 @@ async function nonSiSposta(admin: SupabaseClient, o: RigaVeloce, adesso: Date, p
     .eq('title', TITOLO_NON_SPOSTATO)
     .limit(1);
   if (error) throw new Error(`ordine ${o.id}: avvisi già spediti non letti: ${error.message}`);
-  if (Array.isArray(gia) && gia.length > 0) return 'a-mano';
+  if (Array.isArray(gia) && gia.length > 0) return 'gia-segnalato';
   const scadenza = scadenzaAccettazione(o, undefined, orari) ?? new Date(adesso.getTime() + 3 * 3_600_000);
   await notifyAdmins(
     '⚠️ Veloce non confermata: il carrello non si è potuto spostare',
@@ -556,7 +558,7 @@ async function spostaIlCarrello(
 
 export type EsitoDelFreno =
   /** `guasti`: carrelli in cui una scrittura è caduta a metà (sono anche fra quelli da sistemare a mano). */
-  | { ok: true; spostati: number; accettatiNelFrattempo: number; daSistemareAMano: number; guasti: number }
+  | { ok: true; spostati: number; accettatiNelFrattempo: number; daSistemareAMano: number; giaSegnalati?: number; guasti: number }
   | { ok: false; error: string };
 
 /** Il giro del freno: lo chiama app/api/cron/veloce-non-confermata ogni cinque minuti. */
@@ -578,6 +580,7 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
   let spostati = 0;
   let accettatiNelFrattempo = 0;
   let daSistemareAMano = 0;
+  let giaSegnalati = 0;
   let guasti = 0;
   const visti = new Set<string>();
   for (const o of (data ?? []) as unknown as RigaVeloce[]) {
@@ -590,6 +593,7 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
       const esito = await spostaIlCarrello(admin, lui, carrello, adesso, fatto);
       if (esito === 'spostato') spostati++;
       else if (esito === 'accettato') accettatiNelFrattempo++;
+      else if (esito === 'gia-segnalato') giaSegnalati++;
       else daSistemareAMano++;
     } catch (err) {
       // Una scrittura è caduta a metà. Prima il carrello si contava «da sistemare a mano» e la cosa
@@ -612,5 +616,5 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
       ).catch((e) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err: e }));
     }
   }
-  return { ok: true, spostati, accettatiNelFrattempo, daSistemareAMano, guasti };
+  return { ok: true, spostati, accettatiNelFrattempo, daSistemareAMano, giaSegnalati, guasti };
 }
