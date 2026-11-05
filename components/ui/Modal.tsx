@@ -103,7 +103,11 @@ export function Modal({
   useEffect(() => {
     if (!open || !closeOnEsc) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      // S10 (5/11/2026) — Una finestra aperta sopra questa (la conferma di
+      // ConfirmDialog ascolta su `document`, che arriva prima di `window`) ha
+      // gia' usato l'Esc e lo segna: allora non si chiude anche quella sotto,
+      // con dentro la modifica dell'amministratore.
+      if (e.key === 'Escape' && !e.defaultPrevented) {
         e.stopPropagation();
         onClose();
       }

@@ -10,10 +10,15 @@ import { useProfile } from './hooks/useProfile';
 import { useCartCount } from './hooks/useCartCount';
 import { useMessagesUnread } from './hooks/useMessagesUnread';
 import MobileAccountSheet from './MobileAccountSheet';
-import SupportChatModal from './SupportChatModal';
+import dynamic from 'next/dynamic';
 import type { MenuRole } from '@/lib/account-menu';
 import { useShoppingMode } from './hooks/useShoppingMode';
 import { schedeInFondo, serveIlPulsanteAccount, type Scheda } from '@/lib/ui/schede-in-fondo';
+
+// S10 (5/11/2026) — Importata in modo statico, l'assistenza (con l'assistente
+// AI dentro) viaggiava nel pacchetto di OGNI pagina, anche se nessuna scheda la
+// apre oggi. Adesso si scarica solo se la si apre, come in SupportChatButton.
+const SupportChatModal = dynamic(() => import('./SupportChatModal'), { ssr: false });
 
 /**
  * L'elenco delle schede e la decisione sul pulsante «Tu» vivono in
@@ -229,7 +234,7 @@ export default function MobileTabBar() {
       />
 
       {/* Assistenza per il buyer: aperta dalla tab "Assistenza" nella barra. */}
-      {isBuyer && (
+      {isBuyer && supportOpen && (
         // `role` qui è una proprietà del componente (compratore/venditore), non
         // un ruolo ARIA: la regola di lint non può distinguerlo.
         // eslint-disable-next-line jsx-a11y/aria-role

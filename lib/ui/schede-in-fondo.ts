@@ -85,12 +85,15 @@ export function schedeInFondo(chi: ChiGuarda, t: Etichette, conti: ContiInFondo 
       { href: '/rider/profile',      icon: User,          label: t('me'), isAccount: true },
     ];
   }
+  // S10 (5/11/2026) — Le stesse cinque porte per ospite e cliente: dopo
+  // l'accesso «Negozi» spariva dal suo posto. «I miei ordini» resta nel
+  // foglio «Io» (lib/account-menu.ts).
   if (chi.isAuthenticated) {
     return [
       { href: '/',        icon: Home,         label: t('home') },
       { href: '/search',  icon: Search,       label: t('search') },
+      { href: '/stores',  icon: Package,      label: t('stores') },
       { href: '/cart',    icon: ShoppingCart, label: t('cart'), badge: carrello, badgeUnita: 'articoli' },
-      { href: '/orders',  icon: Package,      label: t('orders') },
       { href: '/profile', icon: User,         label: t('me'), isAccount: true },
     ];
   }
