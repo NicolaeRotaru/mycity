@@ -75,7 +75,7 @@ async function contaSenzaCancellare(admin: Admin, dalCalendario: boolean): Promi
   const { data, error } = await admin.rpc('process_expired_deletions');
   if (error) {
     logger.error('[cron-deletions] conto: RPC fallita', error);
-    return segnaGiroNonFatto(ApiErrors.internal(error.message), 'solo_conta');
+    return segnaGiroNonFatto(ApiErrors.internal(), 'solo_conta');
   }
   const scadute = (data ?? []) as Array<{ user_id: string; deleted_at: string | null }>;
   // 1/11/2026 — Nel conto entrano anche i documenti d'identita' orfani che la
@@ -92,6 +92,9 @@ async function contaSenzaCancellare(admin: Admin, dalCalendario: boolean): Promi
       ...(dalCalendario ? { motivo: 'CANCELLAZIONI_A_ORARIO non è «accese»: la notte conta e non cancella' } : {}),
       account: {
         quanti: scadute.length,
+        // 5/11/2026 — È un tetto, non una promessa: la notte vera salta chi ha ancora contanti
+        // incassati da versare (o un guasto), quindi può cancellarne meno di così.
+        nota: 'Al massimo questi: la notte salta chi ha ancora contanti da versare o incontra un guasto, e quelli restano in attesa.',
         elenco: scadute.map((r) => ({ userId: r.user_id, chiestaIl: r.deleted_at })),
       },
       potature,
@@ -133,8 +136,8 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   // senza tirarsi dietro `next/server` e mezzo Next.
   // 1/11/2026 — La notte vera pota anche le copie orfane dei documenti
   // d'identita' (lib/privacy/orfani-kyc.ts): l'elenco di prima piu' quel passo.
-  // Il conto senza cancellare resta sull'elenco di prima: quel passo elenca lo
-  // storage, e il client che conta non lo sa fare.
+  // Il conto senza cancellare conta anche quelle copie (`contaOrfaniKyc`, nella voce
+  // «fileDaTogliere» del conto).
   const adesso = Date.now();
   const potature = await eseguiPotature(
     admin as unknown as ClientePotature,
@@ -161,7 +164,8 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   const { data: expired, error: rpcErr } = await admin.rpc('process_expired_deletions');
   if (rpcErr) {
     logger.error('[cron-deletions] RPC failed', rpcErr);
-    return ApiErrors.internal(rpcErr.message);
+    // 5/11/2026 — Il testo grezzo del database resta nel registro, non nel corpo per chi chiama.
+    return ApiErrors.internal();
   }
 
   const scadute = (expired ?? []) as Array<{ user_id: string; deleted_at: string | null }>;
@@ -176,6 +180,7 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
   }
 
   const results = { ok: 0, errors: [] as string[] };
+  let annullateNelFrattempo = 0;
   const tentativi: TentativoCancellazione[] = [];
 
   for (const riga of scadute) {
@@ -185,6 +190,14 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
     // identita', anonimizza il testo libero, toglie dalla newsletter, cancella
     // i file dallo storage e infine l'account. Prima erano due elenchi di passi
     // scritti in due file, e uno dei due era piu' corto.
+    // 5/11/2026 — La lista si legge una volta a inizio notte: chi intanto ha annullato la richiesta
+    // (deletion_requested_at tornato vuoto) non si cancella. Se la rilettura non riesce si va avanti
+    // come prima: la richiesta letta dalla RPC era valida.
+    if (await haAnnullatoNelFrattempo(admin, userId)) {
+      annullateNelFrattempo++;
+      logger.info('[cron-deletions] richiesta annullata durante il giro: account saltato', { userId });
+      continue;
+    }
     const esito = await cancellaAccount(admin, userId);
     tentativi.push({
       userId,
@@ -200,7 +213,10 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
       logger.error('[cron-deletions] cancellazione fallita', {
         userId, errore: esito.errore, motivo: esito.motivo ?? null,
       });
-      results.errors.push(`${userId}: ${esito.errore ?? 'errore'}`);
+      // 5/11/2026 — Nel corpo della risposta (lo legge chi chiama, anche il cron esterno) solo il
+      // conto: niente identificativi delle persone né motivi (importi dei contanti, messaggi di
+      // Stripe). Il dettaglio sta nel logger.error qui sopra.
+      results.errors.push('cancellazione non riuscita');
       continue;
     }
 
@@ -261,8 +277,9 @@ export const POST = withCronAuth(async (req: NextRequest): Promise<NextResponse>
       // cancellato», rinvii compresi: chi leggeva la risposta vedeva un
       // fallimento dove c'era una regola che stava funzionando.
       failed: verdetto.fallite,
-      errors: results.errors,
+      errors: results.errors.length,
       total: userIds.length,
+      annullateNelFrattempo,
       // R169 — Quante pulizie di ritenzione non sono riuscite: senza questo numero
       // il lavoro rispondeva «fatto» anche quando non aveva pulito niente.
       retentionFallite: potature.fallite,
@@ -360,19 +377,6 @@ async function svegliaPerLaRitenzione(admin: Admin, rapporto: RapportoPotature):
 }
 
 /**
- * Scrive l'avviso nel pannello degli amministratori.
- *
- * Best-effort di proposito: se la notifica non riesce, la notte resta rossa lo
- * stesso (il 500 non dipende da questa funzione) — un allarme che non parte non
- * deve poter cancellare il guasto che doveva annunciare.
- *
- * Perche' la notifica in-app e non l'email: la posta ce l'ha gia' in mano il
- * sorvegliante (`operational-alerts`), che manda un messaggio solo ogni sei ore
- * per la stessa cosa. Qui si scrive nel pannello, che e' il posto dove un
- * amministratore guarda comunque, e nel registro degli errori, che arriva a
- * Sentry.
- */
-/**
  * 27/10/2026 (quarto giro) — L'allarme per una spiegazione ferma, uno per
  * avviso e per amministratore: l'identificativo si ricava dall'avviso, quindi
  * la seconda notte trova la riga e non ne scrive un'altra (e due giri insieme
@@ -380,6 +384,17 @@ async function svegliaPerLaRitenzione(admin: Admin, rapporto: RapportoPotature):
  * è rossa. `nonScritti`: allarme che non si riesce a scrivere, la notte resta
  * rossa perché nessuno lo sa.
  */
+/** Chi ha annullato la richiesta dopo la lettura della lista: la riga del profilo non la porta più. */
+async function haAnnullatoNelFrattempo(admin: Admin, userId: string): Promise<boolean> {
+  try {
+    const { data, error } = await admin.from('profiles').select('deletion_requested_at').eq('id', userId).maybeSingle();
+    if (error || !data || typeof data !== 'object') return false;
+    return !(data as { deletion_requested_at?: string | null }).deletion_requested_at;
+  } catch {
+    return false;
+  }
+}
+
 async function avvisaUnaVoltaPerAvviso(
   admin: Admin,
   avvisiFermi: Array<{ id: string; userId: string }>,
@@ -466,6 +481,19 @@ async function chiudiGliAllarmiDelleEmailPartite(admin: Admin, partite: string[]
   }
 }
 
+/**
+ * Scrive l'avviso nel pannello degli amministratori.
+ *
+ * Best-effort di proposito: se la notifica non riesce, la notte resta rossa lo
+ * stesso (il 500 non dipende da questa funzione) — un allarme che non parte non
+ * deve poter cancellare il guasto che doveva annunciare.
+ *
+ * Perche' la notifica in-app e non l'email: la posta ce l'ha gia' in mano il
+ * sorvegliante (`operational-alerts`), che manda un messaggio solo ogni sei ore
+ * per la stessa cosa. Qui si scrive nel pannello, che e' il posto dove un
+ * amministratore guarda comunque, e nel registro degli errori, che arriva a
+ * Sentry.
+ */
 async function avvisaAmministratori(admin: Admin, titolo: string, riga: string): Promise<void> {
   try {
     const { data: amministratori } = await admin
