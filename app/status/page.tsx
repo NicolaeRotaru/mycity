@@ -68,7 +68,7 @@ export default async function StatusPage() {
           <div>
             <p className={`text-2xl font-serif font-bold ${meta.color}`}>{OVERALL_HEADLINE[health.overall]}</p>
             <p className="text-sm text-ink-600 mt-1">
-              Verificato: {new Date(health.checkedAt).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}
+              Verificato: {new Date(health.checkedAt).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Rome' })}
             </p>
           </div>
         </div>
