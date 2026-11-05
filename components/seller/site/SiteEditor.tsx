@@ -18,6 +18,7 @@ import PageListEditor from './PageListEditor';
 import PageEditor from './PageEditor';
 import StoreDetailsEditor from './StoreDetailsEditor';
 import MenuEditor from './MenuEditor';
+import { clicDaFermare, doveEilProblema } from './dove-e-l-errore';
 
 /**
  * Editor del sito vetrina a SCHERMATE separate:
@@ -78,10 +79,28 @@ export default function SiteEditor() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
+  // 324 — beforeunload non vede i collegamenti interni (il menu del pannello): con
+  // la bozza non salvata un clic su un'altra voce la perdeva senza avviso.
+  useEffect(() => {
+    if (!dirty) return;
+    const alClic = (e: MouseEvent) => {
+      if (clicDaFermare(e, dirty, pathname, (m) => window.confirm(m))) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    document.addEventListener('click', alClic, true);
+    return () => document.removeEventListener('click', alClic, true);
+  }, [dirty, pathname]);
+
   const save = useMutation({
     mutationFn: async (next: StoreSite) => {
       const parsed = storeSiteSchema.safeParse(next);
-      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Sito non valido');
+      if (!parsed.success) {
+        const problema = parsed.error.issues[0];
+        const dove = problema ? doveEilProblema(problema.path, next) : '';
+        throw new Error(`${dove ? `${dove}: ` : ''}${problema?.message ?? 'Sito non valido'}`);
+      }
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/seller/site', {
         method: 'PUT',

@@ -29,14 +29,14 @@ export default function SitePreview({
   theme,
   accent,
   storeName,
-  storeSlug,
+  storeSlug: _storeSlug,
   selectedId,
 }: {
   page: SitePage;
   theme: ThemeKey;
   accent: string;
   storeName: string;
-  /** Slug/percorso mostrato nella barra del browser finta (solo estetica). */
+  /** Non si mostra più (363): la barra finta non inventa un indirizzo. Resta per chi la passa. */
   storeSlug: string;
   /** id della sezione attualmente in modifica: la evidenzia nell'anteprima. */
   selectedId?: string | null;
@@ -72,7 +72,8 @@ export default function SitePreview({
           <span className="h-2.5 w-2.5 rounded-full bg-olive-400" />
         </span>
         <span className="min-w-0 flex-1 truncate text-center font-mono text-[11px] text-ink-400">
-          mycity.it/negozio/{storeSlug}
+          {/* 363 — Niente indirizzo inventato: quello vero è /store/<id>, sul dominio del sito. */}
+          Anteprima · la tua vetrina
         </span>
         <div className="inline-flex shrink-0 rounded-full border border-cream-300 bg-white p-0.5">
           {([['desktop', Monitor], ['mobile', Smartphone]] as const).map(([k, Icon]) => {
@@ -346,7 +347,8 @@ function BlockBody({ section, accent, storeName }: { section: SiteSection; accen
       return (
         <div className="px-4 py-4">
           <Heading accent={accent} icon={Clock}>Orari</Heading>
-          <p className="text-sm leading-relaxed text-ink-600">Lun–Sab 8:00–19:30 · Domenica chiuso</p>
+          {/* 363 — Niente orari inventati: sulla pagina vera ci sono quelli dei Dettagli negozio. */}
+          <p className="text-sm leading-relaxed text-ink-600">Qui compaiono i tuoi orari di apertura, quelli scritti nei Dettagli negozio.</p>
         </div>
       );
 
