@@ -54,6 +54,11 @@ const createReversal = vi.fn(async () => ({ id: 'trr_1' }));
 vi.mock('@/lib/stripe/client', () => ({
   getStripe: () => ({ refunds: { create: refundsCreate }, transfers: { createReversal } }),
 }));
+const avvisi = vi.hoisted(() => ({ titoli: [] as string[], statoCade: false }));
+vi.mock('@/lib/stripe/webhook/comune', async (o) => ({
+  ...((await o()) as object),
+  notifyAdmins: vi.fn(async (t: string) => (avvisi.titoli.push(t), 'scritto')),
+}));
 vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
 vi.mock('@/lib/email/templates', () => ({ refundIssuedTemplate: () => ({ subject: 's', html: 'h', text: 't' }) }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
@@ -64,7 +69,9 @@ vi.mock('@/lib/supabase/server', () => ({
         return {
           select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: state.order, error: null }) }) }),
           update: (u: Record<string, unknown>) =>
-            scritturaSuUnaRiga(() => state.order as unknown as Record<string, unknown>, () => {
+            avvisi.statoCade && 'payment_status' in u
+              ? { eq: () => Promise.resolve({ error: { message: 'timeout' } }) }
+              : scritturaSuUnaRiga(() => state.order as unknown as Record<string, unknown>, () => {
               state.updates.push(u);
               Object.assign(state.order, u);
             }),
@@ -103,6 +110,8 @@ beforeEach(() => {
   state.stripeRifiuta = false;
   refundsCreate.mockClear();
   createReversal.mockClear();
+  avvisi.titoli = [];
+  avvisi.statoCade = false;
 });
 
 describe('1650 — la nota lunga del negozio non fa fallire il rimborso', () => {
@@ -111,5 +120,18 @@ describe('1650 — la nota lunga del negozio non fa fallire il rimborso', () => 
     const arg = (refundsCreate.mock.calls[0] as unknown[])[0] as { metadata: Record<string, string> };
     expect(arg.metadata.reason.length).toBe(500);
     for (const v of Object.values(arg.metadata)) expect(String(v).length).toBeLessThanOrEqual(500);
+  });
+});
+
+describe('2666 — lo stato dell ordine che non si scrive dopo il rimborso', () => {
+  it('avviso agli amministratori, non solo una riga nel log', async () => {
+    avvisi.statoCade = true;
+    await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r9' });
+    expect(refundsCreate).toHaveBeenCalledTimes(1);
+    expect(avvisi.titoli.some((t) => t.includes('stato dell ordine non aggiornato'))).toBe(true);
+  });
+  it('controprova: senza guasto nessun avviso', async () => {
+    await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r10' });
+    expect(avvisi.titoli.some((t) => t.includes('stato dell ordine non aggiornato'))).toBe(false);
   });
 });

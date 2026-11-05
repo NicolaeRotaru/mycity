@@ -91,7 +91,6 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
     return;
   }
 
-  const refundAmount = (charge.amount_refunded ?? 0) / 100;
   // 🟢-1: charge.refunds non è sempre espanso nel payload → fallback via API per
   // non perdere stripe_refund_id (tracciabilità del rimborso).
   let refund: Stripe.Refund | null = charge.refunds?.data?.[0] ?? null;
@@ -319,13 +318,22 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   }
 
   // Email buyer (una sola email anche se sono N ordini — è la stessa charge)
-  const firstOrder = orders[0];
-  const { data: ua } = await admin.auth.admin.getUserById(firstOrder.user_id);
+  //
+  // 5/11/2026 — SOLO PER QUELLO CHE NON ABBIAMO GIA' DETTO NOI.
+  // `refundOrder` manda gia' «Rimborso emesso» per i rimborsi fatti dal sito:
+  // qui il cliente ne riceveva un secondo, identico. Se tutti gli ordini della
+  // carica erano gia' REFUNDED questo evento e' solo l'eco: niente email. Se no
+  // (un rimborso dal cruscotto) l'email dice la parte non ancora scritta da noi.
+  const giaScrittoCents = orders.reduce((somma, o) => somma + Number(o.refunded_amount_cents ?? 0), 0);
+  const nonScrittoCents = Math.max(0, (charge.amount_refunded ?? 0) - giaScrittoCents);
+  const eco = orders.every((o) => o.payment_status === 'REFUNDED') || nonScrittoCents === 0;
+  const firstOrder = orders.find((o) => o.payment_status !== 'REFUNDED') ?? orders[0];
+  const { data: ua } = eco ? { data: null } : await admin.auth.admin.getUserById(firstOrder.user_id);
   const buyerEmail = ua?.user?.email;
   if (buyerEmail) {
     const t = refundIssuedTemplate({
       orderId: firstOrder.id,
-      amount: refundAmount,
+      amount: nonScrittoCents / 100,
       reason: refundReason,
     });
     await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
