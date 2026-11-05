@@ -36,6 +36,19 @@ function getLocalUpdatedAt(): number {
   }
 }
 
+/**
+ * 5/11/2026 — L'ultima volta che QUESTO carrello locale è stato allineato col cloud (salvato su o
+ * scaricato giù). Serve a distinguere «il locale è vecchio» (non cambiato dopo l'ultimo
+ * allineamento) da «il locale ha roba nuova mai salita» (l'ospite che riempie e poi accede).
+ */
+const SYNCED_AT_KEY = 'mc_cart_synced_at';
+function getSyncedAt(): number {
+  try { return Number(localStorage.getItem(SYNCED_AT_KEY) ?? 0) || 0; } catch { return 0; }
+}
+function setSyncedAt(ts: number) {
+  try { localStorage.setItem(SYNCED_AT_KEY, String(ts)); } catch { /* noop */ }
+}
+
 function setLocalUpdatedAt(ts: number) {
   if (typeof window === 'undefined') return;
   try { localStorage.setItem(LAST_UPDATED_KEY, String(ts)); } catch { /* noop */ }
@@ -64,9 +77,13 @@ export default function CartCrossDeviceSync() {
         // 5/11/2026 — Il cloud vuoto PIÙ RECENTE del locale vuol dire che un altro dispositivo l'ha
         // svuotato dopo (ha comprato, o ha tolto tutto): il locale è vecchio e non si rimanda su.
         // Prima la spesa appena pagata tornava nel cloud e poi, con la fusione, sul telefono.
-        if (data && cloudUpdated > localUpdated) {
+        // Solo se il locale non è cambiato dopo l'ultimo allineamento riuscito: un carrello
+        // riempito da ospite (mai salito) non si butta.
+        const allineatoIl = getSyncedAt();
+        if (data && allineatoIl > 0 && localUpdated <= allineatoIl && cloudUpdated > allineatoIl) {
           saveCart([], { dallAltroDispositivo: true });
           setLocalUpdatedAt(cloudUpdated);
+          setSyncedAt(cloudUpdated);
           return;
         }
         // Carrello locale ma cloud vuoto (o mai scritto): spingi locale
@@ -85,7 +102,7 @@ export default function CartCrossDeviceSync() {
         const cloudEraGiaCosi =
           fuso.length === cloudItems.length &&
           fuso.every((r, i) => r.id === cloudItems[i].id && r.quantity === cloudItems[i].quantity);
-        if (cloudEraGiaCosi) setLocalUpdatedAt(cloudUpdated);
+        if (cloudEraGiaCosi) { setLocalUpdatedAt(cloudUpdated); setSyncedAt(cloudUpdated); }
         else await syncUp(uid, fuso);
       }
     };
@@ -104,6 +121,7 @@ export default function CartCrossDeviceSync() {
           );
         if (error) return;
         setLocalUpdatedAt(now);
+        setSyncedAt(now);
       } catch {
         // Rete caduta: la data locale non avanza, al prossimo giro si riprova.
       }
@@ -135,7 +153,7 @@ export default function CartCrossDeviceSync() {
       // sito non devono ricordarsene, e nemmeno il settimo che nascerà.
       if (precedente) {
         clearCart();
-        try { localStorage.removeItem(LAST_UPDATED_KEY); } catch { /* noop */ }
+        try { localStorage.removeItem(LAST_UPDATED_KEY); localStorage.removeItem(SYNCED_AT_KEY); } catch { /* noop */ }
       }
     });
 

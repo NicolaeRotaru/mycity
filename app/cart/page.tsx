@@ -264,7 +264,7 @@ export default function CartPage() {
       const idCliente = (await supabase.auth.getSession()).data.session?.user?.id ?? null;
       const [prodottiRes, variantiRes, tentativiRes, scontiRes, negoziRes, indirizzoRes] = await Promise.all([
         // Il prezzo si legge insieme alla scorta: e' la stessa riga di tabella, non costa un viaggio in piu'.
-        supabase.from('products').select('id, stock, price, non_recedibile').in('id', ids),
+        supabase.from('products').select('id, stock, price').in('id', ids),
         idVarianti.length > 0
           ? supabase.from('product_variants').select('id, stock').in('id', idVarianti)
           : Promise.resolve({ data: [] as Array<{ id: string; stock: number | null }> }),
@@ -309,16 +309,23 @@ export default function CartPage() {
       if (Array.isArray(prodottiRes.data) && !('error' in prodottiRes && prodottiRes.error)) {
         for (const id of ids) mappa[id] = 0;
       }
-      const esclusi: Record<string, boolean> = {};
-      for (const p of (prodottiRes.data ?? []) as Array<{ id: string; stock: number | null; price: number | string | null; non_recedibile?: boolean | null }>) {
+      for (const p of (prodottiRes.data ?? []) as Array<{ id: string; stock: number | null; price: number | string | null }>) {
         mappa[p.id] = p.stock;
-        esclusi[p.id] = p.non_recedibile === true;
         const pieno = Number(p.price ?? NaN);
         // Il prezzo che si mostra e' quello che il server fara' pagare: pieno meno la promozione attiva.
         if (Number.isFinite(pieno)) prezzi[p.id] = discountedUnitCents(pieno, scontiRes.get(p.id) ?? 0) / 100;
       }
       setPrezzoDiOggi(prezzi);
-      setEsclusiDalReso(esclusi);
+      // 5/11/2026 — Chi è escluso dal recesso si legge a parte e con `*`, come la scheda prodotto:
+      // se la colonna `non_recedibile` (migrazione 180) mancasse, chiederla per nome farebbe
+      // cadere tutta la lettura delle scorte. Se cade questa, il carrello dice la frase generale.
+      const { data: perIlReso } = await supabase.from('products').select('*').in('id', ids);
+      if (!vivo) return;
+      setEsclusiDalReso(
+        Object.fromEntries(
+          ((perIlReso ?? []) as Array<{ id: string; non_recedibile?: boolean | null }>).map((p) => [p.id, p.non_recedibile === true]),
+        ),
+      );
       setDovEIlNegozio(
         Object.fromEntries(
           [...negoziRes.values()].map((n) => [n.id, { lat: n.store_lat ?? null, lng: n.store_lng ?? null }]),
@@ -544,9 +551,11 @@ export default function CartPage() {
   const cosaFarePrima =
     esauriti.length === 0
       ? 'Abbassa la quantità per continuare'
-      : esauriti.length === 1
-        ? 'Togli l’articolo esaurito per continuare'
-        : 'Togli gli articoli esauriti per continuare';
+      : troppi.length > 0
+        ? 'Togli gli esauriti e abbassa le quantità per continuare'
+        : esauriti.length === 1
+          ? 'Togli l’articolo esaurito per continuare'
+          : 'Togli gli articoli esauriti per continuare';
 
   return (
     // Lo spazio in fondo è per la barra fissa del telefono: senza, copre l'ultima riga della pagina.

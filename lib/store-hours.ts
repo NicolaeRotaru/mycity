@@ -30,13 +30,16 @@ function toMinutes(hhmm: string): number {
  *
  * Per dire «aperto fino a mezzanotte» il negoziante scrive 18:00–00:00, e 00:00 è il primo minuto
  * della giornata: l'intervallo andava da 1080 a 0 minuti e non conteneva niente, così la pizzeria
- * serale risultava chiusa tutta la sera. Una chiusura che non viene dopo l'apertura (00:00, o una
- * fascia che passa la mezzanotte come 19:00–01:00) vale «fino a mezzanotte» di quel giorno.
+ * serale risultava chiusa tutta la sera. La chiusura «00:00» (o «24:00», che vale 1440 già da sé)
+ * vale «fino a mezzanotte» di quel giorno.
  */
 function intervalloInMinuti([open, close]: HoursInterval): [number, number] {
   const o = toMinutes(open);
   const c = toMinutes(close);
-  return [o, c <= o ? 24 * 60 : c];
+  // Solo «00:00» (o «24:00») vuol dire mezzanotte: un orario invertito per errore (13:00–09:00) o
+  // «00:00–00:00» restano vuoti, come prima, e non diventano un negozio aperto la notte.
+  // Gemella in SQL: migrations/231 (negozi_aperti_adesso).
+  return [o, c === 0 && o > 0 ? 24 * 60 : c];
 }
 
 /**

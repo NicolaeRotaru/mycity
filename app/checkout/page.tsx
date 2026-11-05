@@ -918,17 +918,10 @@ export default function CheckoutPage() {
       // Vive quanto il carrello: cambia solo quando cambia cosa si sta comprando.
       // 31/10/2026 — la chiave e' legata a QUESTO carrello: se e' cambiato da
       // una risposta persa, nasce nuova (lib/ordini/tentativo.ts).
-      // 5/11/2026 — Nell'impronta anche la fascia, il ritiro e l'indirizzo: lo stesso carrello
-      // rimandato con un'altra fascia o un altro indirizzo è un ordine diverso, non il doppione di
-      // quello di prima (la rotta rispondeva «fatto» con la fascia vecchia).
-      const improntaCarrello = [
-        ...groups
-          .map((g) => `${g.sellerId}=${g.items.map((it) => `${it.id}:${it.variantId ?? ''}:${it.quantity}`).sort().join(',')}`)
-          .sort(),
-        `fascia=${deliverySlot ?? ''}`,
-        `ritiro=${pickupInStore ? 1 : 0}`,
-        `ind=${[form.address, form.zip, form.city].map((x) => x.trim().toLowerCase()).join(',')}`,
-      ].join('|');
+      const improntaCarrello = groups
+        .map((g) => `${g.sellerId}=${g.items.map((it) => `${it.id}:${it.variantId ?? ''}:${it.quantity}`).sort().join(',')}`)
+        .sort()
+        .join('|');
       const chiaveTentativo = `cod-${nuovaChiaveTentativo(improntaCarrello)}`;
       const res = await fetch('/api/orders/cod', {
         method: 'POST',

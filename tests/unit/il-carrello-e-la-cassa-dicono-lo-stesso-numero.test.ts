@@ -281,8 +281,7 @@ describe('② la consegna: il carrello fa il conto della cassa, sugli stessi ing
 
 describe('③ il prezzo mostrato è quello che verrà addebitato', () => {
   it('il carrello rilegge il prezzo dal database, non solo la scorta', () => {
-    // 5/11/2026 (S07, scheda 2579) — la stessa lettura chiede anche `non_recedibile`.
-    expect(CARRELLO, 'la lettura chiedeva soltanto `id, stock`').toMatch(/select\('id, stock, price(, [a-z_]+)*'\)/);
+    expect(CARRELLO, 'la lettura chiedeva soltanto `id, stock`').toContain("select('id, stock, price')");
   });
 
   it('e ci applica le promozioni attive con la stessa funzione della cassa', () => {

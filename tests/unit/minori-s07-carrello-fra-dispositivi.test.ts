@@ -42,11 +42,24 @@ describe('S07 · il carrello fra due dispositivi', () => {
   it('il cloud svuotato DOPO (spesa pagata altrove) non si riempie col carrello vecchio di questo computer', async () => {
     localStorage.setItem('cart', JSON.stringify([PANE]));
     localStorage.setItem(CART_UPDATED_AT_KEY, String(Date.parse('2026-11-04T20:00:00Z')));
+    // Il carrello di questo computer era salito sul cloud alle 20:00 e non è cambiato dopo.
+    localStorage.setItem('mc_cart_synced_at', String(Date.parse('2026-11-04T20:00:00Z')));
     db.riga = { items: [], updated_at: '2026-11-05T08:00:00Z' };
     const s = accendi(CartCrossDeviceSync);
     await gira();
     expect(getCart()).toEqual([]);
     expect(db.scritture, 'il carrello vecchio è stato rimandato su').toBe(0);
+    s.smonta();
+  });
+
+  it('un carrello riempito da ospite, mai salito sul cloud, non si butta anche se il cloud vuoto è più recente', async () => {
+    localStorage.setItem('cart', JSON.stringify([PANE]));
+    localStorage.setItem(CART_UPDATED_AT_KEY, String(Date.parse('2026-11-05T17:50:00Z')));
+    db.riga = { items: [], updated_at: '2026-11-05T18:00:00Z' };
+    const s = accendi(CartCrossDeviceSync);
+    await gira();
+    expect(getCart().map((r) => r.id)).toEqual(['pane']);
+    expect(db.scritture, 'il carrello dell’ospite va rimandato su').toBe(1);
     s.smonta();
   });
 

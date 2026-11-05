@@ -29,8 +29,13 @@ describe('S07 · il negozio che chiude a mezzanotte', () => {
     );
     expect(negozioPuoServire(sera, undefined, ora(2026, 11, 2, 20, 30))).toBe(true);
   });
-  it('una fascia che passa la mezzanotte (19:00–01:00) vale almeno fino a mezzanotte', () => {
-    expect(isOpenNow([['19:00', '01:00']], ora(2026, 11, 2, 22, 0))).toBe(true);
+  it('un orario invertito per errore o «00:00–00:00» non diventa un negozio aperto la notte', () => {
+    expect(isOpenNow([['13:00', '09:00']], ora(2026, 11, 2, 23, 0))).toBe(false);
+    expect(isOpenNow([['00:00', '00:00']], ora(2026, 11, 2, 3, 0))).toBe(false);
+  });
+  it('la funzione del filtro «Aperti ora» (migrazione 231) legge la mezzanotte allo stesso modo', () => {
+    const sql = readFileSync('migrations/231_aperti_ora_fino_a_mezzanotte.sql', 'utf8');
+    expect(sql).toMatch(/OR \(fascia ->> 1\) IN \('00:00', '0:00', '24:00'\)/);
   });
 });
 
