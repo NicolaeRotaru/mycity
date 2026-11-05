@@ -61,7 +61,15 @@ export default function CartCrossDeviceSync() {
       const localUpdated = getLocalUpdatedAt();
 
       if (cloudItems.length === 0 && localItems.length > 0) {
-        // Carrello locale ma cloud vuoto: spingi locale
+        // 5/11/2026 — Il cloud vuoto PIÙ RECENTE del locale vuol dire che un altro dispositivo l'ha
+        // svuotato dopo (ha comprato, o ha tolto tutto): il locale è vecchio e non si rimanda su.
+        // Prima la spesa appena pagata tornava nel cloud e poi, con la fusione, sul telefono.
+        if (data && cloudUpdated > localUpdated) {
+          saveCart([], { dallAltroDispositivo: true });
+          setLocalUpdatedAt(cloudUpdated);
+          return;
+        }
+        // Carrello locale ma cloud vuoto (o mai scritto): spingi locale
         await syncUp(uid, localItems);
         return;
       }
@@ -70,7 +78,7 @@ export default function CartCrossDeviceSync() {
         // DISPOSITIVO SPARIVA SENZA UN AVVISO. Adesso si fondono: tutte e due le liste, e per la
         // stessa riga la quantità più alta.
         const fuso = fondiCarrelli(localItems, cloudItems);
-        saveCart(fuso);
+        saveCart(fuso, { dallAltroDispositivo: true });
         // Se dalla fusione è uscito qualcosa che il cloud non aveva, il cloud adesso è quello
         // vecchio: si rimanda su, altrimenti al prossimo accesso da un altro dispositivo la roba
         // sparirebbe di nuovo.
@@ -85,15 +93,19 @@ export default function CartCrossDeviceSync() {
     const syncUp = async (uid: string, items: CartItem[]) => {
       const now = Date.now();
       try {
-        await supabase
+        // 5/11/2026 — Il client non lancia sugli errori del database o della rete: li restituisce.
+        // Prima la data locale avanzava anche quando il server aveva rifiutato, e il telefono
+        // credeva di aver salvato.
+        const { error } = await supabase
           .from('user_carts')
           .upsert(
             { user_id: uid, items: items as unknown as Record<string, unknown>[], updated_at: new Date(now).toISOString() },
             { onConflict: 'user_id' },
           );
+        if (error) return;
         setLocalUpdatedAt(now);
       } catch {
-        // Migration 032 non applicata: ignora silenziosamente
+        // Rete caduta: la data locale non avanza, al prossimo giro si riprova.
       }
     };
 

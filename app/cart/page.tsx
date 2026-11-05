@@ -14,6 +14,7 @@ import {
   VOCE_CONSEGNA,
   RESO_CARRELLO,
   RESO_CARRELLO_ESCLUSI,
+  RESO_CARRELLO_TUTTI_ESCLUSI,
 } from '@/lib/promesse-pubbliche';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { useEffect, useRef, useState } from 'react';
@@ -253,7 +254,7 @@ export default function CartPage() {
       const idCliente = (await supabase.auth.getSession()).data.session?.user?.id ?? null;
       const [prodottiRes, variantiRes, tentativiRes, scontiRes, negoziRes, indirizzoRes] = await Promise.all([
         // Il prezzo si legge insieme alla scorta: e' la stessa riga di tabella, non costa un viaggio in piu'.
-        supabase.from('products').select('id, stock, price').in('id', ids),
+        supabase.from('products').select('id, stock, price, non_recedibile').in('id', ids),
         idVarianti.length > 0
           ? supabase.from('product_variants').select('id, stock').in('id', idVarianti)
           : Promise.resolve({ data: [] as Array<{ id: string; stock: number | null }> }),
@@ -298,13 +299,16 @@ export default function CartPage() {
       if (Array.isArray(prodottiRes.data) && !('error' in prodottiRes && prodottiRes.error)) {
         for (const id of ids) mappa[id] = 0;
       }
-      for (const p of (prodottiRes.data ?? []) as Array<{ id: string; stock: number | null; price: number | string | null }>) {
+      const esclusi: Record<string, boolean> = {};
+      for (const p of (prodottiRes.data ?? []) as Array<{ id: string; stock: number | null; price: number | string | null; non_recedibile?: boolean | null }>) {
         mappa[p.id] = p.stock;
+        esclusi[p.id] = p.non_recedibile === true;
         const pieno = Number(p.price ?? NaN);
         // Il prezzo che si mostra e' quello che il server fara' pagare: pieno meno la promozione attiva.
         if (Number.isFinite(pieno)) prezzi[p.id] = discountedUnitCents(pieno, scontiRes.get(p.id) ?? 0) / 100;
       }
       setPrezzoDiOggi(prezzi);
+      setEsclusiDalReso(esclusi);
       setDovEIlNegozio(
         Object.fromEntries(
           [...negoziRes.values()].map((n) => [n.id, { lat: n.store_lat ?? null, lng: n.store_lng ?? null }]),
@@ -360,6 +364,8 @@ export default function CartPage() {
    * carrello (anche su quello del carrello vuoto) e una riga di stato dice cosa si è tolto.
    */
   const titoloRef = useRef<HTMLHeadingElement>(null);
+  // 5/11/2026 — Quali prodotti il negozio ha segnato come esclusi dal recesso (non_recedibile).
+  const [esclusiDalReso, setEsclusiDalReso] = useState<Record<string, boolean>>({});
   const [tolto, setTolto] = useState<{ nome: string; volta: number } | null>(null);
   const togliDalCarrello = (item: CartItem) => {
     removeFromCart(item.id, item.variantId);
@@ -665,7 +671,8 @@ export default function CartPage() {
                         );
                       })()}
                       <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
+                        {/* 5/11/2026 — A 360 px quantità e «Rimuovi» uscivano dal riquadro: vanno a capo. */}
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
                           <div className="flex flex-col">
                           <div className="flex items-center border border-cream-300 rounded-full">
                             <button
@@ -838,12 +845,18 @@ export default function CartPage() {
                   decisione su quali categorie sono escluse: non è una scelta da prendere qui. */}
               <p className="flex items-start gap-2">
                 <RotateCcw size={14} className="text-olive-600 shrink-0 mt-0.5" aria-hidden />
+                {/* 5/11/2026 — Con dentro solo prodotti esclusi (la torta su ordinazione) «Reso entro 14
+                    giorni» era falso: lì si dice l'esclusione. */}
+                {items.length > 0 && items.every((it) => esclusiDalReso[it.id] === true) ? (
+                  <span>{RESO_CARRELLO_TUTTI_ESCLUSI}</span>
+                ) : (
                 <span>
                   {RESO_CARRELLO} ·{' '}
                   <Link href="/returns" className="font-semibold text-primary-700 underline hover:text-primary-800">
                     {RESO_CARRELLO_ESCLUSI}
                   </Link>
                 </span>
+                )}
               </p>
               <p className="flex items-center gap-2"><Store size={14} className="text-olive-600 shrink-0" aria-hidden /> Supporti il commercio locale</p>
             </div>

@@ -351,6 +351,8 @@ export function fraseResoDelProdotto(prodotto: { non_recedibile?: unknown } | nu
 /** Il carrello mescola prodotti: dice il termine e rimanda ai resi per gli esclusi. */
 export const RESO_CARRELLO = 'Reso entro 14 giorni';
 export const RESO_CARRELLO_ESCLUSI = 'alcuni prodotti sono esclusi';
+/** 5/11/2026 — Quando nel carrello ci sono SOLO prodotti esclusi: «Reso entro 14 giorni» lì è falso. */
+export const RESO_CARRELLO_TUTTI_ESCLUSI = 'Esclusi dal recesso: freschi o fatti su ordinazione. Resta la garanzia';
 
 /** La spiegazione breve, dove c'è una riga in più (home, «Come funziona»). Niente «senza domande». */
 export const SPIEGAZIONE_RESO =

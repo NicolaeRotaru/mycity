@@ -96,3 +96,27 @@ describe('S07 · il carrello non dice «Disponibile» su merce che non si può c
     expect(stato).toContain('Pane di Altamura tolto dal carrello');
   });
 });
+
+describe('S07 · il reso nel carrello', () => {
+  it('con dentro solo prodotti esclusi dal recesso non promette «Reso entro 14 giorni»', async () => {
+    const s = await carrello([{ id: 'torta', name: 'Torta su ordinazione', quantity: 1 }], [{ id: 'torta', stock: 5, price: 4, non_recedibile: true }]);
+    const t = s.radice.textContent ?? '';
+    expect(t).not.toContain('Reso entro 14 giorni');
+    expect(t).toContain('Esclusi dal recesso');
+  });
+  it('con un prodotto che il reso lo ha, resta «Reso entro 14 giorni · alcuni prodotti sono esclusi»', async () => {
+    const s = await carrello(
+      [{ id: 'torta', name: 'Torta', quantity: 1 }, { id: 'tazza', name: 'Tazza', quantity: 1 }],
+      [{ id: 'torta', stock: 5, price: 4, non_recedibile: true }, { id: 'tazza', stock: 5, price: 4, non_recedibile: false }],
+    );
+    expect(s.radice.textContent).toContain('Reso entro 14 giorni');
+  });
+});
+
+describe('S07 · la riga del carrello a 360 px', () => {
+  it('quantità e «Rimuovi» possono andare a capo invece di uscire dal riquadro', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync('app/cart/page.tsx', 'utf8');
+    expect(src).toMatch(/<div className="flex items-center justify-between mt-2 flex-wrap gap-2">[\s\S]{0,200}<div className="flex flex-wrap items-center gap-2 min-w-0">/);
+  });
+});

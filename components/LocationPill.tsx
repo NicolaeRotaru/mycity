@@ -91,7 +91,9 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
         onClick={() => { setOpen((v) => !v); dismissHint(); }}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 rounded-full text-xs font-medium ring-1 ring-white/15 transition-colors focus-visible:outline-white"
+        // 5/11/2026 — La pillola è alta 28 px: un'area di tocco invisibile (before:) la porta a 44 senza
+        // alzare la barra.
+        className="relative inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 rounded-full text-xs font-medium ring-1 ring-white/15 transition-colors focus-visible:outline-white before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
         title="Cambia indirizzo di consegna"
       >
         <MapPin size={14} strokeWidth={2.2} className="text-accent-300" />
