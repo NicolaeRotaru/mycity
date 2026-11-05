@@ -9,7 +9,7 @@
 -- ogni riga d'ordine del prodotto per sommarle a mano.
 --
 -- COSA FA. Una funzione SECURITY DEFINER che restituisce SOLO il numero di
--- ordini distinti, non annullati, degli ultimi 7 giorni per quel prodotto, e
+-- ordini distinti, non annullati e non falliti nel pagamento, degli ultimi 7 giorni per quel prodotto, e
 -- solo se il prodotto e' in vendita. Nessuna riga, nessun dato del cliente.
 -- L'indice order_items(product_id) esiste gia' (036).
 --
@@ -33,7 +33,8 @@ AS $$
    WHERE oi.product_id = p_product_id
      AND p.status = 'available'
      AND o.created_at >= now() - interval '7 days'
-     AND COALESCE(o.delivery_status, '') <> 'CANCELED';
+     AND COALESCE(o.delivery_status, '') <> 'CANCELED'
+     AND COALESCE(o.payment_status, '') <> 'FAILED';
 $$;
 
 REVOKE ALL ON FUNCTION public.ordini_recenti_del_prodotto(uuid) FROM public;

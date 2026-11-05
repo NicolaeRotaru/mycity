@@ -19,6 +19,11 @@ describe('un guasto non è «non trovato» (571)', () => {
       leggiPerMetadati('products', 'id', { id: 'p-1' }, finto({ data: null, error: { code: '57014', message: 'timeout' } })),
     ).rejects.toBeTruthy();
   });
+  it('un id che non è un UUID (22P02) → null, cioè «non trovato», non un 5xx', async () => {
+    await expect(
+      leggiPerMetadati('products', 'id', { id: 'abc' }, finto({ data: null, error: { code: '22P02', message: 'invalid input syntax for type uuid' } })),
+    ).resolves.toBeNull();
+  });
   it('nessuna riga (PGRST116) → null', async () => {
     await expect(
       leggiPerMetadati('products', 'id', { id: 'p-2' }, finto({ data: null, error: { code: 'PGRST116' } })),

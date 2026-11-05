@@ -100,11 +100,11 @@ async function avvisaChiRiceve(conversationId: string, mittente: string, testo: 
       .eq('link', link)
       .eq('is_read', false)
       .limit(1);
-    if (errGia) {
-      if (typeof nonLetti === 'number' && nonLetti > 1) return;
-    } else if (Array.isArray(giaAvvisato) && giaAvvisato.length > 0) {
-      return;
-    }
+    // Revisione S10 — si salta solo se TUTTE E DUE le cose dicono «gia' avvisato»:
+    // il contatore e' oltre 1 e c'e' una voce non letta. Le voci si segnano
+    // lette solo da /notifications: da sole non bastano a dire «giro vecchio».
+    const vocePendente = !errGia && Array.isArray(giaAvvisato) && giaAvvisato.length > 0;
+    if (typeof nonLetti === 'number' && nonLetti > 1 && (errGia || vocePendente)) return;
     // S10 (5/11/2026) — Nella chat con l'account Assistenza le due parti non
     // sono cliente e negozio: il titolo lo dice col ruolo vero.
     const { data: ruoli } = await admin.from('profiles').select('id, role').in('id', [mittente, destinatario]);

@@ -97,6 +97,27 @@ export function ripulisciEvento(event: any): any {
       }
     }
   }
+  // Revisione S10 — Le misure portano anche gli span (chiamate di rete della
+  // pagina): descrizione e dati possono contenere l'indirizzo con la ricerca.
+  if (Array.isArray(event.spans)) {
+    for (const span of event.spans) {
+      if (typeof span?.description === 'string' && /[/?]/.test(span.description)) {
+        const [metodo, ...resto] = span.description.split(' ');
+        const indirizzo = resto.length ? resto.join(' ') : metodo;
+        const pulito = indirizzoSenzaDatiPersonali(indirizzo);
+        span.description = pulito ? (resto.length ? `${metodo} ${pulito}` : pulito) : '[nascosto]';
+      }
+      const dati = span?.data;
+      if (dati && typeof dati === 'object') {
+        for (const campo of ['url', 'http.url', 'http.query', 'http.fragment'] as const) {
+          if (typeof dati[campo] !== 'string') continue;
+          const pulito = campo === 'url' || campo === 'http.url' ? indirizzoSenzaDatiPersonali(dati[campo]) : null;
+          if (pulito) dati[campo] = pulito;
+          else delete dati[campo];
+        }
+      }
+    }
+  }
   if (event.user) {
     delete event.user.email;
     delete event.user.ip_address;

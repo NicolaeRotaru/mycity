@@ -15,6 +15,7 @@ const stato = {
   erroreProfilo: null as null | { code: string; message: string },
 };
 const erroreLog = vi.fn();
+const avvisoLog = vi.fn();
 
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => {
@@ -38,7 +39,7 @@ vi.mock('@/lib/supabase/anonimo', () => ({
   }),
 }));
 vi.mock('@/lib/logger', () => ({
-  logger: { error: (...a: unknown[]) => erroreLog(...a), warn: vi.fn(), info: vi.fn(), debug: vi.fn(), spesa: vi.fn() },
+  logger: { error: (...a: unknown[]) => erroreLog(...a), warn: (...a: unknown[]) => avvisoLog(...a), info: vi.fn(), debug: vi.fn(), spesa: vi.fn() },
 }));
 
 import { POST as chiediCancellazione } from '@/app/api/account/delete/route';
@@ -55,6 +56,7 @@ beforeEach(() => {
   stato.senzaChiave = true;
   stato.erroreProfilo = null;
   erroreLog.mockClear();
+  avvisoLog.mockClear();
   __resetRateLimitBuckets();
 });
 
@@ -114,11 +116,11 @@ describe('i lavori automatici rifiutati lasciano una riga (601)', () => {
     expect(r.status).toBe(503);
     expect(erroreLog).toHaveBeenCalledWith(expect.stringMatching(/CRON_SECRET assente/), expect.anything());
   });
-  it('segreto diverso → riga d\'errore, senza il segreto', async () => {
+  it('segreto diverso → riga di avviso (chiunque può bussare), senza il segreto', async () => {
     vi.stubEnv('CRON_SECRET', 'segreto-vero');
     const r = await lavoro(new Request('http://localhost/api/cron/prova', { headers: { authorization: 'Bearer altro' } }) as never);
     expect(r.status).toBe(401);
-    expect(erroreLog).toHaveBeenCalledWith(expect.stringMatching(/segreto diverso/), expect.anything());
-    expect(JSON.stringify(erroreLog.mock.calls)).not.toContain('segreto-vero');
+    expect(avvisoLog).toHaveBeenCalledWith(expect.stringMatching(/segreto diverso/), expect.anything());
+    expect(JSON.stringify([...erroreLog.mock.calls, ...avvisoLog.mock.calls])).not.toContain('segreto-vero');
   });
 });

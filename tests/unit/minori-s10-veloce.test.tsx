@@ -46,7 +46,7 @@ describe('la veloce della scheda (2260, 2298)', () => {
     expect(visti.includes(true)).toBe(false);
   });
 
-  it('quando la scheda torna visibile si richiede', async () => {
+  it('quando la scheda torna visibile dopo più di 5 minuti si richiede, prima no', async () => {
     const f = vi.fn(() => Promise.resolve(new Response(JSON.stringify({ possibile: true }))));
     vi.stubGlobal('fetch', f);
     const c = document.createElement('div');
@@ -55,7 +55,12 @@ describe('la veloce della scheda (2260, 2298)', () => {
     await act(async () => root.render(createElement(Sonda, { chiedi: true })));
     expect(f).toHaveBeenCalledTimes(1);
     await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    expect(f, 'subito dopo non si richiede: niente raffiche sulla lista dei negozi').toHaveBeenCalledTimes(1);
+    const adesso = Date.now();
+    const orologio = vi.spyOn(Date, 'now').mockReturnValue(adesso + 6 * 60_000);
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
     expect(f).toHaveBeenCalledTimes(2);
+    orologio.mockRestore();
   });
 });
 

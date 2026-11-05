@@ -36,6 +36,13 @@ const SIZES = {
   xl: 'sm:max-w-2xl',
 };
 
+/**
+ * Revisione S10 — Le finestre aperte, dalla piu' vecchia alla piu' recente.
+ * Esc chiude solo quella in cima: due Modal sovrapposti ascoltano tutti e due
+ * su window, e stopPropagation non ferma l'altro ascoltatore.
+ */
+const pilaDelleFinestre: symbol[] = [];
+
 export function Modal({
   open,
   onClose,
@@ -50,6 +57,7 @@ export function Modal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const autoId = useId();
   const previousActiveElement = useRef<HTMLElement | null>(null);
+  const identita = useRef<symbol | null>(null);
 
   // Body scroll lock + return focus
   useEffect(() => {
@@ -101,8 +109,20 @@ export function Modal({
 
   // La chiusura con Esc, invece, si può disattivare: è una scelta di prodotto.
   useEffect(() => {
+    if (!open) return;
+    const io = Symbol('modal');
+    pilaDelleFinestre.push(io);
+    identita.current = io;
+    return () => {
+      const i = pilaDelleFinestre.indexOf(io);
+      if (i >= 0) pilaDelleFinestre.splice(i, 1);
+    };
+  }, [open]);
+
+  useEffect(() => {
     if (!open || !closeOnEsc) return;
     const handler = (e: KeyboardEvent) => {
+      if (pilaDelleFinestre[pilaDelleFinestre.length - 1] !== identita.current) return;
       // S10 (5/11/2026) — Una finestra aperta sopra questa (la conferma di
       // ConfirmDialog ascolta su `document`, che arriva prima di `window`) ha
       // gia' usato l'Esc e lo segna: allora non si chiude anche quella sotto,

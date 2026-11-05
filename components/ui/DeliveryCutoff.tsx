@@ -50,7 +50,7 @@ export function useOraDiPiacenza(): Date | null {
  * (/api/consegna/veloce → `veloceSiPuo`). `null` se non si chiede, se la risposta non arriva o cade:
  * allora niente minuti.
  */
-/** Ogni quanto si richiede alla cassa se la veloce si può, a scheda aperta. */
+/** Dopo quanto una risposta sulla veloce si richiede, al ritorno sulla scheda. */
 const RICHIEDI_VELOCE_MS = 5 * 60_000;
 
 export function useVeloceDelNegozio(negozioId: string | undefined, chiedi: boolean): boolean | null {
@@ -61,7 +61,9 @@ export function useVeloceDelNegozio(negozioId: string | undefined, chiedi: boole
     setVeloce(null);
     if (!negozioId || !chiedi) return;
     let vivo = true;
+    let ultimaDomanda = 0;
     const domanda = () => {
+      ultimaDomanda = Date.now();
       fetch(`/api/consegna/veloce?negozi=${encodeURIComponent(negozioId)}`, { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
         .then((esito: { possibile?: boolean } | null) => {
@@ -74,16 +76,16 @@ export function useVeloceDelNegozio(negozioId: string | undefined, chiedi: boole
     domanda();
     // S10 (5/11/2026, 2298) — La risposta si chiedeva una volta sola: se il
     // fattorino smetteva il servizio, la scheda rimasta aperta continuava a
-    // dire «oggi». Si richiede quando la scheda torna visibile e ogni 5 minuti.
+    // dire «oggi». Si richiede quando la scheda torna visibile, se la risposta
+    // ha piu' di 5 minuti (revisione S10: niente raffiche sulla lista dei
+    // negozi, dove ogni riga chiede per conto suo e la rotta ha un freno).
     const suVisibilita = () => {
-      if (document.visibilityState === 'visible') domanda();
+      if (document.visibilityState === 'visible' && Date.now() - ultimaDomanda >= RICHIEDI_VELOCE_MS) domanda();
     };
     document.addEventListener('visibilitychange', suVisibilita);
-    const giro = setInterval(domanda, RICHIEDI_VELOCE_MS);
     return () => {
       vivo = false;
       document.removeEventListener('visibilitychange', suVisibilita);
-      clearInterval(giro);
     };
   }, [negozioId, chiedi]);
   return negozioId && chiedi ? veloce : null;

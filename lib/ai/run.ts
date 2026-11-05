@@ -191,16 +191,25 @@ export async function controllaTettoSpesaAi(feature: string): Promise<void> {
  * chiamata entrava con almeno un centesimo: il filtro anti-contenuti, che costa
  * circa 0,0006 €, veniva contato quindici volte tanto e il tetto si
  * consumava prima del dovuto. Adesso le frazioni si accumulano in questa copia
- * e al conto vanno solo i centesimi interi.
+ * e al conto vanno solo centesimi interi, arrotondati per eccesso.
  */
-let _restoCents = 0;
+let _creditoCents = 0;
 
 export async function registraSpesaAi(costEur: number): Promise<void> {
   if (!Number.isFinite(costEur) || costEur <= 0) return;
-  const cents = costEur * 100 + _restoCents;
-  const interi = Math.floor(cents);
-  _restoCents = cents - interi;
-  if (interi > 0) await aggiungiSpesaCents(interi);
+  // Revisione S10 — Si arrotonda per ECCESSO e il di piu' resta come credito di
+  // questa copia: le chiamate piccole che seguono lo consumano. Cosi' il conto
+  // condiviso non scende mai sotto la spesa vera (una copia che muore perde al
+  // massimo meno di un centesimo gia' contato, non uno non contato).
+  const cents = costEur * 100;
+  if (cents <= _creditoCents) {
+    _creditoCents -= cents;
+    return;
+  }
+  const mancano = cents - _creditoCents;
+  const interi = Math.ceil(mancano);
+  _creditoCents = interi - mancano;
+  await aggiungiSpesaCents(interi);
 }
 
 /** Errore lanciato quando l'SDK fallisce; porta lo status per il mapping. */

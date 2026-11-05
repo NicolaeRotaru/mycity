@@ -59,3 +59,22 @@ describe('Esc sulla conferma (2152)', () => {
     expect(chiudiSotto).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('Esc fra due finestre comuni sovrapposte (revisione)', () => {
+  it('chiude solo quella in cima', async () => {
+    const chiudiSopra = vi.fn();
+    await act(async () =>
+      root.render(
+        createElement('div', null, [
+          createElement(Modal as never, { key: 'a', open: true, onClose: chiudiSotto, title: 'Sotto' }, createElement('input')),
+          createElement(Modal as never, { key: 'b', open: true, onClose: chiudiSopra, title: 'Sopra' }, createElement('input')),
+        ]),
+      ),
+    );
+    await act(async () => {
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    });
+    expect(chiudiSopra).toHaveBeenCalledTimes(1);
+    expect(chiudiSotto).not.toHaveBeenCalled();
+  });
+});

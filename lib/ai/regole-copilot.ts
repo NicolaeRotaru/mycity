@@ -16,5 +16,7 @@ export const REGOLA_PREZZO_AI = `Un prezzo si può cambiare da qui al massimo de
 
 /** Il tetto della risposta del Copilot, in proporzione ai prodotti che vede (circa 60 token l'uno). */
 export function tettoTokenCopilot(prodotti: number): number {
-  return Math.min(16_000, 1024 + 60 * Math.max(0, prodotti));
+  // Revisione S10 — non oltre 6000: il client ha un tetto di 60 s per chiamata
+  // (lib/ai/client.ts) e oltre quella misura la risposta non arriverebbe in tempo.
+  return Math.min(6_000, 1024 + 60 * Math.max(0, prodotti));
 }

@@ -53,6 +53,7 @@ describe('la prova sociale chiede un numero al database (256, 732)', () => {
     expect(sql).toMatch(/SECURITY DEFINER/);
     expect(sql).toMatch(/COUNT\(DISTINCT oi\.order_id\)/);
     expect(sql).toMatch(/<> 'CANCELED'/);
+    expect(sql).toMatch(/payment_status, ''\) <> 'FAILED'/);
     expect(sql).toMatch(/interval '7 days'/);
   });
 });

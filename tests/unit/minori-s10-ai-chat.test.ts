@@ -22,7 +22,9 @@ vi.mock('@/lib/ai/run', async (importActual) => {
 const assertSafeTextMock = vi.fn(async (_t: string, _f?: string) => undefined as unknown);
 vi.mock('@/lib/ai/moderation', () => ({
   assertSafeText: (...a: [string, string]) => assertSafeTextMock(...a),
-  UnsafeContentError: class extends Error {},
+  UnsafeContentError: class UnsafeContentError extends Error {
+    verdict = { allowed: false, reason: 'vietato' };
+  },
 }));
 
 import { POST } from '@/app/api/ai/product-chat/route';
@@ -88,5 +90,37 @@ describe('la condizione del prodotto ha una fonte sola, senza «usato» (2262, 2
     expect(condizione.enum).not.toContain('usato');
     expect(condizione.description).toMatch(/Ometti/);
     expect(PRODUCT_PATCH_PROPERTIES.condition).toBe(condizione);
+  });
+});
+
+describe('un messaggio rifiutato non blocca la chat per sempre (revisione 1684)', () => {
+  it('se il rifiuto viene da un messaggio vecchio, l\'ultimo passa e al modello va solo lui', async () => {
+    const { UnsafeContentError } = await import('@/lib/ai/moderation');
+    assertSafeTextMock.mockImplementation(async (t: string) => {
+      if (t.includes('VIETATO')) throw new (UnsafeContentError as unknown as new () => Error)();
+      return undefined;
+    });
+    const res = await POST(
+      makeReq({
+        product: {},
+        history: [
+          { role: 'user', content: 'VIETATO' },
+          { role: 'assistant', content: 'Ops' },
+          { role: 'user', content: 'migliora il titolo' },
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(runMessageMock.mock.calls[0][0].messages)).not.toContain('VIETATO');
+  });
+  it('se è l\'ultimo a essere vietato, resta 400', async () => {
+    const { UnsafeContentError } = await import('@/lib/ai/moderation');
+    assertSafeTextMock.mockImplementation(async (t: string) => {
+      if (t.includes('VIETATO')) throw new (UnsafeContentError as unknown as new () => Error)();
+      return undefined;
+    });
+    const res = await POST(makeReq({ product: {}, history: [{ role: 'user', content: 'ciao' }, { role: 'assistant', content: 'ok' }, { role: 'user', content: 'VIETATO' }] }));
+    expect(res.status).toBe(400);
+    expect(runMessageMock).not.toHaveBeenCalled();
   });
 });

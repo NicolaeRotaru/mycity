@@ -330,6 +330,8 @@ export function motivoLinkPasswordSenzaSessione(
   if (query.get('code')) {
     const verificatoreMancante =
       !erroreDelloScambio ||
+      // Una rete caduta non dice niente sul link: resta la spiegazione di prima.
+      erroreDelloScambio.name === 'AuthRetryableFetchError' ||
       erroreDelloScambio.name === 'AuthPKCECodeVerifierMissingError' ||
       erroreDelloScambio.code === 'pkce_code_verifier_not_found';
     return verificatoreMancante ? 'altro-browser' : 'link-scaduto';

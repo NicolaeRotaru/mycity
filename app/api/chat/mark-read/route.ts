@@ -36,11 +36,6 @@ export const POST = withAuthRateLimit({ name: 'chat-mark-read', max: 300, window
 
   const counterField = isBuyer ? 'buyer_unread_count' : 'seller_unread_count';
 
-  await supa
-    .from('conversations')
-    .update({ [counterField]: 0 })
-    .eq('id', parsed.data.conversationId);
-
   // S10 (5/11/2026) — Dalla migrazione 115 la sessione della persona puo'
   // aggiornare solo i PROPRI messaggi: l'update diretto sui messaggi dell'altro
   // veniva scartato senza dire niente. «Letto il» passa dalla funzione del
@@ -49,6 +44,11 @@ export const POST = withAuthRateLimit({ name: 'chat-mark-read', max: 300, window
     p_conversation_id: parsed.data.conversationId,
   });
   if (erroreLettura) return ApiErrors.internal('Non sono riuscito a segnare i messaggi come letti.');
+
+  await supa
+    .from('conversations')
+    .update({ [counterField]: 0 })
+    .eq('id', parsed.data.conversationId);
 
   return NextResponse.json({ ok: true });
 });

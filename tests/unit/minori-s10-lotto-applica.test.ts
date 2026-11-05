@@ -13,6 +13,7 @@ const db = vi.hoisted(() => ({
   lavoro: null as Record<string, unknown> | null,
   prodotti: [] as Record<string, unknown>[],
   scritture: [] as { id: unknown; valori: Record<string, unknown> }[],
+  prodottiRotti: false,
   categorie: [
     { id: 'alim', name: 'Alimentari', slug: 'alimentari', parent_id: null },
     { id: 'casa', name: 'Casa', slug: 'casa', parent_id: null },
@@ -64,6 +65,7 @@ vi.mock('@/lib/supabase/server', () => {
       db.scritture.push({ id: d.filtri.id, valori: d.valori ?? {} });
       return { data: null, error: null };
     }
+    if (db.prodottiRotti) return { data: null, error: { message: 'timeout' } };
     return { data: una ? null : db.prodotti, error: null };
   };
   const tabella = (nome: string) => {
@@ -114,6 +116,7 @@ beforeEach(() => {
   filtro.massimo = 0;
   filtro.cadeSu.clear();
   filtro.negaSu.clear();
+  db.prodottiRotti = false;
 });
 
 describe('il lavoro massivo dice chi ha saltato e perché (1858, 1667)', () => {
@@ -192,5 +195,20 @@ describe('«Traduci» resta fermo anche sulla selezione (1770)', () => {
     const { status } = await applica({ jobId: 'l1', productIds: ['p1'] });
     expect(status).toBe(400);
     expect(db.scritture).toHaveLength(0);
+  });
+});
+
+describe('una lettura caduta non brucia il lavoro (revisione)', () => {
+  it('catalogo illeggibile: 503, nessuna scrittura, il lavoro resta «pronto»', async () => {
+    db.prodotti = [prodotto('p1')];
+    db.prodottiRotti = true;
+    db.lavoro = {
+      id: 'l1', seller_id: 'negozio-1', operation: 'improve', status: 'ready',
+      results: [{ product_id: 'p1', patch: { name: 'Nuovo' } }],
+    };
+    const { status } = await applica();
+    expect(status).toBe(503);
+    expect(db.scritture).toHaveLength(0);
+    expect(db.lavoro?.status).toBe('ready');
   });
 });

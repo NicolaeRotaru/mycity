@@ -15,6 +15,14 @@ describe('le misure verso Sentry sono ripulite (102)', () => {
     expect(JSON.stringify(e)).not.toMatch(/mario\.rossi|gmail|cookie|mario@x\.it|1\.2\.3\.4/);
     expect(e.user.id).toBe('u-1');
   });
+  it('anche gli span delle chiamate di rete perdono la ricerca', () => {
+    const o = opzioniSentry() as unknown as { beforeSendTransaction: (e: unknown) => Record<string, any> };
+    const e = o.beforeSendTransaction({
+      spans: [{ description: 'GET https://x.supabase.co/rest/v1/products?name=ilike.*mario.rossi@gmail.com*', data: { url: 'https://x.supabase.co/rest/v1/products?name=ilike.*mario*', 'http.query': 'name=ilike.*mario*' } }],
+    });
+    expect(JSON.stringify(e)).not.toMatch(/mario/);
+    expect(e.spans[0].description).toMatch(/^GET /);
+  });
   it('senza consenso (fuori dal browser) niente misure di velocità', () => {
     expect((opzioniSentry() as { tracesSampleRate: number }).tracesSampleRate).toBe(0);
   });

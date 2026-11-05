@@ -25,15 +25,24 @@ beforeEach(() => {
 });
 
 describe('le chiamate piccole non contano un centesimo intero ciascuna (252)', () => {
-  it('dieci chiamate da 0,0006 € registrano al massimo un centesimo', async () => {
+  it('dieci chiamate da 0,0006 € registrano un centesimo, non dieci', async () => {
     const { registraSpesaAi } = await import('@/lib/ai/run');
     for (let i = 0; i < 10; i++) await registraSpesaAi(0.0006);
-    expect(centesimiRegistrati()).toBeLessThanOrEqual(1);
+    expect(centesimiRegistrati()).toBe(1);
   });
-  it('una chiamata da 2,5 centesimi più una da 0,6 ne registrano 3', async () => {
+  it('2,5 centesimi più 0,4 ne registrano 3 (per eccesso, mai sotto la spesa vera)', async () => {
     const { registraSpesaAi } = await import('@/lib/ai/run');
     await registraSpesaAi(0.025);
-    await registraSpesaAi(0.006);
+    await registraSpesaAi(0.004);
     expect(centesimiRegistrati()).toBe(3);
+  });
+  it('una spesa non arriva mai al conto per difetto', async () => {
+    const { registraSpesaAi } = await import('@/lib/ai/run');
+    let vero = 0;
+    for (const eur of [0.0003, 0.0151, 0.0009, 0.0422, 0.0001]) {
+      vero += eur * 100;
+      await registraSpesaAi(eur);
+      expect(centesimiRegistrati()).toBeGreaterThanOrEqual(vero - 1e-9);
+    }
   });
 });

@@ -579,7 +579,8 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
       ? authHeader.slice(7).trim()
       : null;
     if (!secretsMatch(bearer, expected)) {
-      logger.error('[cron] rifiutato: segreto diverso', { lavoro: nomeDelLavoro(req), conIntestazione: !!authHeader });
+      // warn, non error: chiunque puo' bussare a /api/cron con un segreto a caso.
+      logger.warn('[cron] rifiutato: segreto diverso', { lavoro: nomeDelLavoro(req), conIntestazione: !!authHeader });
       return ApiErrors.unauthorized();
     }
 

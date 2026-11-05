@@ -205,11 +205,17 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // modello col giro dopo. Adesso passano dal filtro tutti i turni utente
   // (al massimo 20 da 2000 caratteri), in una chiamata sola.
   try {
-    const testiUtente = history
-      .filter((m) => m.role === 'user')
-      .map((m) => m.content)
-      .join('\n\n');
-    await assertSafeText(testiUtente, 'ai-product-chat-policy');
+    const turniUtente = history.filter((m) => m.role === 'user');
+    try {
+      await assertSafeText(turniUtente.map((m) => m.content).join('\n\n'), 'ai-product-chat-policy');
+    } catch (errStoria) {
+      // Revisione S10 — Se il rifiuto viene da un messaggio VECCHIO (la chat lo
+      // lascia nella storia), la conversazione non deve restare bloccata per
+      // sempre: si controlla l'ultimo da solo e, se passa, al modello va solo lui.
+      if (!(errStoria instanceof UnsafeContentError) || turniUtente.length < 2) throw errStoria;
+      await assertSafeText(history[history.length - 1].content, 'ai-product-chat-policy');
+      history.splice(0, history.length - 1);
+    }
   } catch (err) {
     if (err instanceof UnsafeContentError) {
       return ApiErrors.invalidRequest(`Questo messaggio non si puo' usare: ${err.verdict.reason}`);

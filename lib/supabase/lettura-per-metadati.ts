@@ -59,7 +59,9 @@ export async function leggiPerMetadati<T>(
     // guasto lancia, la pagina va in errore e non si scrive niente di falso.
     const { data, error } = await q.single();
     // PGRST116 = nessuna riga: quello si' che e' «non trovato».
-    if (error && (error as { code?: string }).code !== 'PGRST116') {
+    // 22P02 = valore non valido per il tipo (un id che non e' un UUID): non esiste.
+    const codice = (error as { code?: string } | null)?.code;
+    if (error && codice !== 'PGRST116' && codice !== '22P02') {
       logger.warn('[metadati] lettura non riuscita: non la tratto come «non trovato»', { tabella, code: error.code });
       throw error;
     }

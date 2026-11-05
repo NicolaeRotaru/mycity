@@ -25,8 +25,9 @@ describe('l\'anello del fuoco usa il token (854)', () => {
 });
 
 describe('i paragrafi legali si fermano sotto la testata (232)', () => {
-  it('scroll-mt alto quanto la testata da md in su', () => {
+  it('da md in su il margine lo dà lo scroll-padding della pagina, senza sommarne un altro', () => {
     const src = readFileSync('components/ui/LegalLayout.tsx', 'utf8');
-    expect(src).toMatch(/md:scroll-mt-\[calc\(var\(--header-height\)\+0\.5rem\)\]/);
+    expect(src).toMatch(/className="scroll-mt-24 md:scroll-mt-0"/);
+    expect(css).toMatch(/scroll-padding-top: calc\(var\(--header-height\) \+ 0\.5rem\)/);
   });
 });

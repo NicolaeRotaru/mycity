@@ -18,6 +18,9 @@ describe('link scaduto nello stesso browser (2647)', () => {
       motivoLinkPasswordSenzaSessione(q, '', { name: 'AuthPKCECodeVerifierMissingError', code: 'pkce_code_verifier_not_found' }),
     ).toBe('altro-browser');
   });
+  it('una rete caduta non è «link scaduto»', () => {
+    expect(motivoLinkPasswordSenzaSessione(q, '', { name: 'AuthRetryableFetchError', code: undefined })).toBe('altro-browser');
+  });
   it('nessun errore noto → come prima, altro browser', () => {
     expect(motivoLinkPasswordSenzaSessione(q, '')).toBe('altro-browser');
   });

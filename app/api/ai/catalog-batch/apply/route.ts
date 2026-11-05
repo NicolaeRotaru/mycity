@@ -114,10 +114,22 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     return ApiErrors.invalidRequest('Questo lavoro si sta già applicando o è già stato applicato.');
   }
 
-  const { data: categoriesData } = await admin
+  const { data: categoriesData, error: erroreCategorie } = await admin
     .from('categories')
     .select('id, name, slug, parent_id')
     .order('name');
+  // Revisione S10 — Una lettura caduta non deve chiudere il lavoro: si rimette
+  // «pronto» e si dice di riprovare (come in catalog-apply-bulk).
+  const rimettiPronto = () =>
+    admin
+      .from('catalog_ai_jobs')
+      .update({ status: 'ready', updated_at: new Date().toISOString() })
+      .eq('id', job.id)
+      .eq('seller_id', user.id);
+  if (erroreCategorie) {
+    await rimettiPronto();
+    return ApiErrors.unavailable('Non riesco a leggere le categorie in questo momento. Riprova fra poco: non ho cambiato niente.');
+  }
   const categories = (categoriesData ?? []) as CategoryRow[];
 
   let applied = 0;
@@ -132,13 +144,15 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     // "Applica" = metti in bozza i prodotti segnalati (de-pubblica).
     const flaggedIds = results.filter((r) => r.flagged).map((r) => r.product_id);
     if (flaggedIds.length > 0) {
-      const { data: updated, error: erroreBozza } = await admin
+      const { data: updated } = await admin
         .from('products')
         .update({ status: 'draft' })
         .eq('seller_id', user.id)
         .in('id', flaggedIds)
         .select('id');
-      if (erroreBozza) ripetibile = true;
+      // Qui NON si rimette «pronto»: ripetere rimetterebbe in bozza anche un
+      // prodotto che nel frattempo il negoziante ha ripubblicato a mano. Si
+      // dice chi e' saltato, e basta.
       applied = (updated ?? []).length;
       const messiInBozza = new Set(((updated ?? []) as Array<{ id: string }>).map((r) => r.id));
       for (const id of flaggedIds) {
@@ -164,11 +178,15 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     // Patch: carica i prodotti correnti del venditore e applica uno per uno.
     const ids = results.filter((r) => r.patch && Object.keys(r.patch).length > 0).map((r) => r.product_id);
     if (ids.length > 0) {
-      const { data: rows } = await admin
+      const { data: rows, error: erroreProdotti } = await admin
         .from('products')
         .select(`${PRODUCT_SNAPSHOT_COLS}, seller_id`)
         .eq('seller_id', user.id)
         .in('id', ids);
+      if (erroreProdotti) {
+        await rimettiPronto();
+        return ApiErrors.unavailable('Non riesco a leggere il catalogo in questo momento. Riprova fra poco: non ho cambiato niente.');
+      }
       const current = new Map((rows ?? []).map((r) => [(r as { id: string }).id, r as unknown as ProductRow]));
 
       // 22/8/2026 — IL LOTTO SCRIVEVA NOME E DESCRIZIONE SENZA IL FILTRO.
@@ -316,15 +334,11 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
 
   // Il lavoro e' gia' segnato «applicato» dalla prenotazione. Se qualcosa e'
-  // saltato per un guasto di passaggio torna «pronto», cosi' si puo' ripetere
-  // (riscrivere lo stesso patch su chi e' gia' entrato non cambia niente).
-  if (ripetibile) {
-    await admin
-      .from('catalog_ai_jobs')
-      .update({ status: 'ready', updated_at: new Date().toISOString() })
-      .eq('id', job.id)
-      .eq('seller_id', user.id);
-  }
+  // saltato per un guasto di passaggio torna «pronto», cosi' si puo' ripetere.
+  // Ripetere riscrive anche i prodotti gia' entrati con lo stesso testo (una
+  // riga di audit in piu' e il filtro rifatto): e' il prezzo per non buttare il
+  // lavoro pagato.
+  if (ripetibile) await rimettiPronto();
 
   const saltati = esiti.filter((e) => e.esito === 'saltato').length;
   if (saltati > 0) {

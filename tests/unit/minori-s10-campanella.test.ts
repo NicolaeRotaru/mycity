@@ -89,7 +89,7 @@ beforeEach(() => {
 });
 
 describe('due messaggi quasi insieme accendono la campanella (2640)', () => {
-  it('col contatore già a 2 per tutte e due le richieste, la campanella si scrive una volta', async () => {
+  it('col contatore già a 2 per tutte e due le richieste, la campanella si scrive almeno una volta', async () => {
     stato.conv = { ...stato.conv, seller_unread_count: 2 };
     await Promise.all([invia('Primo'), invia('Secondo')]);
     expect(stato.notifiche.length).toBeGreaterThanOrEqual(1);
