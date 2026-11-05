@@ -82,8 +82,11 @@ describe('pannello utenti (lettura del sorgente)', () => {
     expect(src).not.toContain("'Motivo del rifiuto (visibile al venditore):'");
     expect(src).toMatch(/al fattorino/);
   });
-  it('2608: a scheda aperta i link dei documenti si rileggono prima dei 120 secondi', () => {
-    expect(src).toMatch(/refetchInterval: 90_000/);
+  it('2608: tornando sulla scheda dopo 100 secondi i link si rileggono, senza rilettura a orologio', () => {
+    const q = src.slice(src.indexOf("'documenti-rider', detailId]"), src.indexOf("'documenti-rider', detailId]") + 900);
+    expect(q).toMatch(/staleTime: 100_000/);
+    expect(q).toMatch(/refetchOnWindowFocus: true/);
+    expect(q).not.toMatch(/refetchInterval/);
   });
   it('299: le schede mobili usano la stessa regola della tabella (anche i fattorini)', () => {
     expect(src).not.toMatch(/const isSeller\s+= p\.role === 'seller';\s*\n\s*const isPending\s+= isSeller/);

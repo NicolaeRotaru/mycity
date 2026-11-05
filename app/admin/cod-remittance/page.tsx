@@ -170,6 +170,10 @@ export default function AdminCodRemittancePage() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  // Con l'elenco tagliato il gruppo del giorno più vecchio letto può essere a metà, ma la
+  // conferma rilascia TUTTI gli ordini di quel fattorino in quel giorno: lì non si conferma.
+  const giornoAlConfine = tagliato && rows[TETTO_RIMESSE - 1]?.delivered_at
+    ? giornoLocale(new Date(rows[TETTO_RIMESSE - 1].delivered_at)) : null;
   const totalToRemit = groups.reduce((s, g) => s + g.toRemitCents, 0);
 
   return (
@@ -221,7 +225,9 @@ export default function AdminCodRemittancePage() {
                   </p>
                   <p className="text-lg font-bold text-ink-900 mt-1">{formatPrice(g.toRemitCents / 100)}</p>
                 </div>
-                {aperta !== `${g.riderId}|${g.date}` ? (
+                {g.date === giornoAlConfine || (giornoAlConfine !== null && g.date < giornoAlConfine) ? (
+                  <p className="text-xs font-semibold text-secondary-700">Gruppo forse incompleto (elenco tagliato): non si conferma da qui.</p>
+                ) : aperta !== `${g.riderId}|${g.date}` ? (
                   <Button
                     size="sm"
                     icon={Check}

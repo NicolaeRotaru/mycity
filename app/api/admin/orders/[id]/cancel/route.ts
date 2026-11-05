@@ -113,7 +113,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       category: 'order',
       user_id: a.user_id,
       title: `✕ Ordine ${numero} annullato`,
-      body: 'L’amministrazione ha annullato l’ordine: non va più preparato né consegnato.',
+      body: order.delivery_status === 'DELIVERED'
+        ? 'L’amministrazione ha annullato l’ordine già consegnato e ha rimborsato il cliente.'
+        : 'L’amministrazione ha annullato l’ordine: non va più preparato né consegnato.',
       link: a.link,
     });
     if (eAvviso) logger.error('[admin/cancel] avviso non scritto', { orderId: order.id, userId: a.user_id, err: eAvviso.message });

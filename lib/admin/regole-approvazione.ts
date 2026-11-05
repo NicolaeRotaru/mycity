@@ -123,9 +123,8 @@ export function motivoPerNonApprovare(
   // amministratore (`approved_by` scritto) torna attivo senza rifare il
   // controllo. In produzione c'era un fattorino sospeso mai approvato e senza
   // nessun documento: un clic su «Riattiva» lo avrebbe mandato a consegnare.
-  if (azione === 'reactivate' && p.approval_status === 'suspended' && presente(p.approved_by)) return null;
-
-  // 5/11/2026 — Patente e polizza: una data di scadenza e non scadute.
+  // 5/11/2026 — Patente e polizza: una data di scadenza e non scadute. Vale anche per
+  // chi torna da sospeso: tornerebbe a consegnare con una polizza scaduta.
   if (p.role === 'rider' && presente(p.rider_license_url) && presente(p.rider_insurance_url)) {
     const scadenze = scadenzeNonValide(p, oggi);
     if (scadenze.length > 0) {
@@ -133,6 +132,7 @@ export function motivoPerNonApprovare(
       return `${v}: ${scadenze.join(', ')}. Chiedi di caricare il documento aggiornato con la sua scadenza.`;
     }
   }
+  if (azione === 'reactivate' && p.approval_status === 'suspended' && presente(p.approved_by)) return null;
 
   const verbo = azione === 'reactivate' ? 'Non si riattiva' : 'Non si approva';
   const prima = azione === 'reactivate' ? 'prima di riattivare' : 'prima di approvare';

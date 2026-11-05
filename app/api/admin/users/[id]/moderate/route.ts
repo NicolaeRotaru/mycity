@@ -111,7 +111,11 @@ async function mandaEmailDellEsito(
   note: { title: string; body: string; link: string },
 ): Promise<boolean | null> {
   try {
-    const { data } = await admin.auth.admin.getUserById(userId);
+    const { data, error } = await admin.auth.admin.getUserById(userId);
+    if (error) {
+      logger.error('[moderate] indirizzo per l email non letto', { target: userId, err: error.message });
+      return false;
+    }
     const to = data?.user?.email;
     if (!to) return null;
     const url = `${DOMINIO_PUBBLICO}${note.link}`;
@@ -258,11 +262,12 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   let consegneInCorso = 0;
   if (body.action === 'suspend' && target.role === 'rider') {
     try {
-      const { count } = await admin
+      const { count, error: eConta } = await admin
         .from('orders')
         .select('id', { count: 'exact', head: true })
         .eq('rider_id', params.id)
         .in('delivery_status', ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY']);
+      if (eConta) logger.error('[moderate] consegne in corso non contate', { target: params.id, err: eConta.message });
       consegneInCorso = count ?? 0;
     } catch (e) {
       // Best-effort: la sospensione è già fatta, il conteggio serve solo all'avviso.

@@ -154,13 +154,21 @@ describe('avvio della verifica', () => {
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'kyc.submit' }));
   });
 
-  it('1864: con una verifica già in attesa non se ne apre un’altra dal fornitore', async () => {
+  it('1864: con una verifica già in attesa presso un fornitore esterno non se ne apre un’altra', async () => {
     const { POST } = await import('@/app/api/kyc/start-check/route');
-    stato.profilo = { ...VENDITORE, kyc_provider_status: 'PENDING', kyc_provider_check_id: 'manual_0' };
+    stato.profilo = { ...VENDITORE, kyc_provider_status: 'PENDING', kyc_provider_check_id: 'chk_onfido_0' };
     startCheck.mockClear();
     const r = await (POST as unknown as H)(new Request('http://x', { method: 'POST' }));
     expect(r.status).toBe(200);
     expect(startCheck).not.toHaveBeenCalled();
     expect(stato.aggiornamenti).toEqual([]);
+  });
+
+  it('1864 (revisione): con la verifica manuale in attesa si può rilanciare, così i dati corretti si ricontrollano', async () => {
+    const { POST } = await import('@/app/api/kyc/start-check/route');
+    stato.profilo = { ...VENDITORE, kyc_provider_status: 'PENDING', kyc_provider_check_id: 'manual_0' };
+    startCheck.mockClear();
+    expect((await (POST as unknown as H)(new Request('http://x', { method: 'POST' }))).status).toBe(200);
+    expect(startCheck).toHaveBeenCalledTimes(1);
   });
 });

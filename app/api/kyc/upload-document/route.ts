@@ -38,7 +38,8 @@ const TIPI_DELL_IDENTITA = new Set(['id_front', 'id_back', 'selfie']);
 function percorsoDaValore(valore: string): string {
   if (!valore.startsWith('http')) return valore;
   const m = /\/object\/(?:sign|public|authenticated)\/kyc-docs\/([^?#]+)/.exec(valore);
-  return m ? decodeURIComponent(m[1]) : valore;
+  if (!m) return valore;
+  try { return decodeURIComponent(m[1]); } catch { return m[1]; }
 }
 
 /**

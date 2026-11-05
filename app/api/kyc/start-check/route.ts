@@ -88,7 +88,10 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
   // fornitore vero ogni chiamata apriva una nuova scheda con nome, email e data di
   // nascita, senza documenti, che nessuno cancellava.
   const giaInAttesa = (profile as { kyc_provider_status?: string | null; kyc_provider_check_id?: string | null });
-  if (giaInAttesa.kyc_provider_status === 'PENDING' && giaInAttesa.kyc_provider_check_id) {
+  // La verifica manuale (id «manual_…») non apre schede fuori: lì si rilancia, così una
+  // P.IVA o un nome corretti si ricontrollano.
+  if (giaInAttesa.kyc_provider_status === 'PENDING' && giaInAttesa.kyc_provider_check_id
+      && !giaInAttesa.kyc_provider_check_id.startsWith('manual_')) {
     return NextResponse.json({ status: 'PENDING', providerCheckId: giaInAttesa.kyc_provider_check_id, vatCheck: null }, { status: 200 });
   }
 

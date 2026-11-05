@@ -48,7 +48,7 @@ const NEGOZIO = { id: 'bersaglio-1', role: 'seller', store_name: 'Forno Rossi', 
   approval_status: 'approved', approved_by: 'admin-0', business_vat_number: '01234567897' };
 const FATTORINO = { id: 'bersaglio-1', role: 'rider', store_name: null, full_name: 'Luca', legal_birth_date: '1990-01-01',
   approval_status: 'pending', approved_by: null, kyc_id_doc_front_url: 'f', kyc_selfie_url: 's',
-  rider_license_url: 'p', rider_insurance_url: 'rc', rider_license_expires_on: '2030-01-01', rider_insurance_expires_on: '2025-01-01' };
+  rider_license_url: 'p', rider_insurance_url: 'rc', rider_license_expires_on: '2099-01-01', rider_insurance_expires_on: '2025-01-01' };
 
 function modera(azione: string, motivo?: string, ruolo = 'admin') {
   return (MODERA as unknown as (r: Request) => Promise<Response>)(new Request('http://x', {
@@ -82,7 +82,7 @@ describe('moderazione', () => {
     const r = await modera('approve');
     expect(r.status).toBe(400);
     expect(JSON.stringify(await r.json())).toMatch(/polizza RC scaduta/);
-    expect(motivoPerNonApprovare({ ...FATTORINO, rider_insurance_expires_on: '2030-01-01' }, 'approve', '2026-11-05')).toBeNull();
+    expect(motivoPerNonApprovare({ ...FATTORINO, rider_insurance_expires_on: '2099-01-01' }, 'approve', '2026-11-05')).toBeNull();
     expect(motivoPerNonApprovare({ ...FATTORINO, rider_insurance_expires_on: null }, 'approve', '2026-11-05')).toMatch(/senza data di scadenza/);
   });
 
@@ -97,7 +97,7 @@ describe('moderazione', () => {
   });
 
   it('543: anche l’approvazione arriva per email', async () => {
-    stato.profilo = { ...FATTORINO, rider_insurance_expires_on: '2030-01-01' };
+    stato.profilo = { ...FATTORINO, rider_insurance_expires_on: '2099-01-01' };
     expect((await modera('approve')).status).toBe(200);
     expect(stato.email).toHaveLength(1);
   });
@@ -110,8 +110,14 @@ describe('moderazione', () => {
     expect(JSON.stringify(meta)).not.toMatch(/Rossi/);
   });
 
+  it('2617: un fattorino sospeso con la polizza scaduta non torna attivo con «Riattiva»', async () => {
+    stato.profilo = { ...FATTORINO, approval_status: 'suspended', approved_by: 'admin-0' };
+    expect((await modera('reactivate')).status).toBe(400);
+    expect(stato.aggiornamenti).toEqual([]);
+  });
+
   it('226: sospendere un fattorino con consegne in corso lo dice all’amministratore', async () => {
-    stato.profilo = { ...FATTORINO, approval_status: 'approved', approved_by: 'admin-0', rider_insurance_expires_on: '2030-01-01' };
+    stato.profilo = { ...FATTORINO, approval_status: 'approved', approved_by: 'admin-0', rider_insurance_expires_on: '2099-01-01' };
     stato.consegne = 2;
     const r = await modera('suspend', 'Reclami ripetuti');
     const j = (await r.json()) as { consegne_in_corso: number; avviso?: string };

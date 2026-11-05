@@ -486,11 +486,12 @@ function AdminUsersPageInner() {
   const { data: documentiRider, isLoading: documentiRiderInArrivo } = useQuery({
     queryKey: [...queryKeys.admin.users(), 'documenti-rider', detailId],
     enabled: !!detailId && detail?.role === 'rider',
-    staleTime: 0,
     gcTime: 0,
-    // 5/11/2026 (S05) — I link firmati valgono 120 secondi: a scheda aperta si
-    // rileggono prima che scadano, così «Apri polizza» funziona anche dopo minuti.
-    refetchInterval: 90_000,
+    // 5/11/2026 (S05) — I link firmati valgono 120 secondi: quando si torna sulla
+    // scheda dopo più di 100 secondi si rileggono. Niente rilettura a orologio: ogni
+    // lettura lascia una riga nel registro degli accessi ai documenti.
+    staleTime: 100_000,
+    refetchOnWindowFocus: true,
     queryFn: async (): Promise<DatiEsameRider | null> => {
       const res = await fetch(`/api/kyc/documenti-rider/${detailId}`);
       if (!res.ok) return null;
