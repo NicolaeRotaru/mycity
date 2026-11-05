@@ -150,7 +150,12 @@ export function colonneMancanti(tabella: string, select: string): string[] {
   return mancanti(tabella, leggiSelect(select));
 }
 
-export function databaseCheConosceLeColonne(dati: Record<string, Riga[]>, opzioni: { cade?: boolean } = {}) {
+export function databaseCheConosceLeColonne(
+  dati: Record<string, Riga[]>,
+  // 5/11/2026 (S04, scheda 1794) — `cade` può essere anche il guasto preciso: la rete che cade
+  // arriva senza codice (`{ code: '' }`), e una prova deve poterlo dire.
+  opzioni: { cade?: boolean | Guasto } = {},
+) {
   const errori: Guasto[] = [];
   const domande: Array<{ tabella: string; colonne: string }> = [];
 
@@ -160,7 +165,8 @@ export function databaseCheConosceLeColonne(dati: Record<string, Riga[]>, opzion
     const esito = (): { data: Riga[] | null; error: Guasto | null } => {
       domande.push({ tabella, colonne });
       if (opzioni.cade) {
-        return { data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } };
+        const guasto = opzioni.cade === true ? { code: '57014', message: 'canceling statement due to statement timeout' } : opzioni.cade;
+        return { data: null, error: guasto };
       }
       const note = colonneDellaTabella(tabella) ?? [];
       const fuori = [

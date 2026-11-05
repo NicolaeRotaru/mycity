@@ -30,15 +30,21 @@ describe('il database che conosce le colonne', () => {
   });
 
   it('una colonna sbagliata in un filtro o nell’ordinamento fa rispondere errore (1795)', async () => {
-    const db = databaseCheConosceLeColonne({ orders: [] });
-    const giusto = await (db.from('orders').select('id').eq('payment_method', 'cod').order('created_at') as unknown as Promise<{ error: unknown }>);
+    type Q = PromiseLike<{ error: { code: string } | null }> & {
+      select(c: string): Q;
+      eq(c: string, v: unknown): Q;
+      not(c: string, op: string, v: unknown): Q;
+      order(c: string): Q;
+    };
+    const db = databaseCheConosceLeColonne({ orders: [] }) as unknown as { from: (t: string) => Q };
+    const giusto = await db.from('orders').select('id').eq('payment_method', 'cod').order('created_at');
     expect(giusto.error).toBeNull();
     for (const sbagliata of [
       () => db.from('orders').select('id').eq('payment_mode', 'cod'),
       () => db.from('orders').select('id').not('seller_payout', 'is', null),
       () => db.from('orders').select('id').order('creato_il'),
     ]) {
-      const r = await (sbagliata() as unknown as Promise<{ error: { code: string } | null }>);
+      const r = await sbagliata();
       expect(r.error?.code).toBe('42703');
     }
   });
@@ -46,7 +52,7 @@ describe('il database che conosce le colonne', () => {
 
 describe('il client Supabase finto delle pagine montate', () => {
   it('il canale finto si concatena come quello vero (2446)', () => {
-    const canale = supabase.channel('x') as { on: (...a: unknown[]) => unknown };
+    const canale = (supabase.channel as unknown as (nome: string) => { on: (...a: unknown[]) => unknown })('x');
     expect(() =>
       (canale.on('postgres_changes', {}, () => {}) as { on: (...a: unknown[]) => { subscribe: () => unknown } })
         .on('postgres_changes', {}, () => {})

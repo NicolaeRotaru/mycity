@@ -23,46 +23,10 @@ vi.mock('@/lib/supabase/server', () => ({ getAdminSupabase: () => db }));
 
 import { prezziDelCarrello, type IngressiPrezzo } from '@/lib/ordini/prezzi';
 import { annullaERimborsa } from '@/lib/ordini/annulla';
+import { finto } from './carrello-finto';
 
-type Riga = Record<string, unknown>;
-function finto(tabelle: Record<string, Riga[]>) {
-  const from = (t: string) => {
-    const righe = (tabelle[t] ??= []);
-    const filtri: Array<(r: Riga) => boolean> = [];
-    let valori: Riga | null = null;
-    let lim = Infinity;
-    let unico = false;
-    const q: Record<string, unknown> = {};
-    Object.assign(q, {
-      select: () => q,
-      order: () => q,
-      update: (v: Riga) => ((valori = v), q),
-      insert: (v: Riga | Riga[]) => (righe.push(...(Array.isArray(v) ? v : [v])), q),
-      eq: (c: string, v: unknown) => (filtri.push((r) => r[c] === v), q),
-      neq: (c: string, v: unknown) => (filtri.push((r) => r[c] !== v), q),
-      lt: (c: string, v: unknown) => (filtri.push((r) => String(r[c]) < String(v)), q),
-      in: (c: string, vs: unknown[]) => (filtri.push((r) => vs.includes(r[c])), q),
-      contains: (c: string, v: string) => {
-        const voluti = JSON.parse(v) as Riga[];
-        filtri.push((r) =>
-          voluti.every((w) => ((r[c] as Riga[]) ?? []).some((x) => Object.entries(w).every(([k, val]) => x[k] === val))),
-        );
-        return q;
-      },
-      limit: (n: number) => ((lim = n), q),
-      maybeSingle: () => ((unico = true), q),
-      single: () => ((unico = true), q),
-      then: (ok: (x: unknown) => unknown, ko: (e: unknown) => unknown) => {
-        const prese = righe.filter((r) => filtri.every((f) => f(r)));
-        if (valori) for (const r of prese) Object.assign(r, valori);
-        const data = prese.slice(0, lim).map((r) => ({ ...r }));
-        return Promise.resolve({ data: unico ? (data[0] ?? null) : data, error: null }).then(ok, ko);
-      },
-    });
-    return q;
-  };
-  return { from, rpc: async () => ({ data: null, error: null }), tabelle };
-}
+// 5/11/2026 (S04, scheda 2226) — Qui c'era una copia del database finto: la stessa di
+// tests/unit/carrello-finto.ts, senza la simulazione della 124 e del cliente. Se ne tiene una sola.
 
 const ingressi = (merci: number[], veloce = false): IngressiPrezzo => ({
   gruppi: merci.map((s, i) => ({ sellerId: `s${i}`, subtotalCents: s })),
@@ -146,7 +110,7 @@ describe('il rimborso fallisce dopo che la consegna è stata riscritta', () => {
     const ordini = carrello(['pane', 'frutta'], [1500, 1200], 'card');
     db = finto({ orders: ordini });
     refundOrder.mockImplementationOnce(async () => { throw new Error('Stripe 503'); });
-    const esito = await annullaERimborsa(db as never, riga('pane') as never, { reason: 'rifiutato' } as never);
+    await annullaERimborsa(db as never, riga('pane') as never, { reason: 'rifiutato' } as never);
     expect(riga('pane').delivery_status).not.toBe('CANCELED');
     expect(riga('pane')).toMatchObject({ rider_fee_cents: 300, delivery_fee_cents: 300, total_price: 18 });
   });
