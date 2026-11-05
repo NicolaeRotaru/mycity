@@ -374,5 +374,6 @@ function BlockBody({ section, accent, storeName }: { section: SiteSection; accen
 
 /** Rimuove i tag HTML per l'anteprima testuale leggera (il render reale li sanitizza). */
 function stripTags(html: string): string {
-  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  // Gli a-capo (<br>) restano a-capo anche nell'anteprima.
+  return html.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, ' ').replace(/[ \t]+/g, ' ').trim();
 }

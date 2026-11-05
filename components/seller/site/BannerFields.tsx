@@ -27,21 +27,21 @@ export default function BannerFields({ section, onChange }: { section: BannerSec
   };
   const setTarget = (target: Target) => set({ cta: { label: c.cta?.label || 'Scopri', target } });
 
-  const { data: products = [] } = useQuery({
+  const { data: products = [], isError: prodottiNonLetti, refetch: rileggiProdotti } = useQuery({
     queryKey: ['seller', 'products', 'min'],
     enabled: targetKind === 'product',
-    queryFn: async (): Promise<{ id: string; name: string }[]> => {
+    queryFn: async (): Promise<{ id: string; name: string; status: string | null }[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
       const { data, error } = await supabase
         .from('products')
-        .select('id, name')
+        .select('id, name, status')
         .eq('seller_id', user.id)
         .order('created_at', { ascending: false });
       // Senza questa riga la lettura non FALLISCE mai: torna «riuscita» con la lista vuota, e chi
       // sceglie il prodotto da mettere in banner vede «nessun prodotto» pur avendone quaranta.
       if (error) throw error;
-      return (data ?? []) as { id: string; name: string }[];
+      return (data ?? []) as { id: string; name: string; status: string | null }[];
     },
   });
 
@@ -105,16 +105,28 @@ export default function BannerFields({ section, onChange }: { section: BannerSec
                 onChange={(slug) => setTarget({ kind: 'category', categorySlug: slug })}
               />
             )}
-            {c.cta.target.kind === 'product' && (
+            {c.cta.target.kind === 'product' && prodottiNonLetti && products.length === 0 && (
+              <p role="alert" className="text-sm text-ink-600">
+                Non riesco a leggere i tuoi prodotti.{' '}
+                <button type="button" onClick={() => { void rileggiProdotti(); }} className="font-semibold text-primary-700 underline">Riprova</button>
+              </p>
+            )}
+            {c.cta.target.kind === 'product' && !(prodottiNonLetti && products.length === 0) && (
               <Select
                 label="Prodotto"
                 value={c.cta.target.productId}
                 onChange={(e) => setTarget({ kind: 'product', productId: e.target.value })}
               >
                 <option value="">Seleziona…</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
+                {/* Il cliente apre solo i prodotti in vendita: gli altri non si scelgono. */}
+                {products.map((p) => {
+                  const inVendita = p.status === 'available';
+                  return (
+                    <option key={p.id} value={p.id} disabled={!inVendita && !(c.cta?.target.kind === 'product' && p.id === c.cta.target.productId)}>
+                      {p.name}{inVendita ? '' : ' (non visibile ai clienti)'}
+                    </option>
+                  );
+                })}
               </Select>
             )}
           </>
