@@ -1710,7 +1710,10 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
           amount: safeAmountCents,
           metadata: {
             order_id: order.id,
-            ...(opts.reason ? { reason: opts.reason } : {}),
+            // 5/11/2026 — Stripe accetta al massimo 500 caratteri per valore:
+            // una nota del negozio piu' lunga faceva fallire il rimborso ogni volta.
+            // La nota intera resta sul reso.
+            ...(opts.reason ? { reason: opts.reason.slice(0, 500) } : {}),
             ...(opts.metadata ?? {}),
             ...(opts.idempotencyKey ? { [METADATO_DELLA_CHIAVE]: chiave } : {}),
           },

@@ -152,6 +152,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const comando = await chiComandaIlReso(ret.order_id, user.id);
   let ritiro: { sellerId: string | null } | null = null;
   if (!comando.autorizzato) {
+    if (comando.motivo === 'guasto') return ApiErrors.unavailable('Non riusciamo a leggere il reso adesso: riprova fra poco.');
     if (comando.motivo === 'ordine-mancante') return ApiErrors.notFound('Ordine del reso non trovato');
     if (body.stato === 'CANCELED') ritiro = await eIlClienteDellOrdine(ret.order_id, user.id);
     if (!ritiro) return ApiErrors.forbidden();
@@ -347,11 +348,34 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       logger.error('[returns/avanza] rimborso fallito', err);
       // I soldi non sono usciti: il reso torna dov'era, così resta lavorabile
       // invece di restare fermo su «rimborsato» senza rimborso.
-      await admin
-        .from('returns')
-        .update({ status: statoPrecedente })
-        .eq('id', params.id)
-        .eq('status', 'REFUNDED');
+      // 5/11/2026 — Se anche il ritorno indietro cade, il reso resta «rimborsato»
+      // senza soldi: si avvisa chi amministra e non si dice «riprova».
+      const { error: errRitorno } = ripresa
+        ? { error: null }
+        : await admin
+            .from('returns')
+            .update({ status: statoPrecedente })
+            .eq('id', params.id)
+            .eq('status', 'REFUNDED');
+      if (errRitorno) {
+        logger.error('[returns/avanza] reso non rimesso com era dopo un rimborso non partito', {
+          returnId: params.id, message: errRitorno.message,
+        });
+        try {
+          await notifyAdmins(
+            '⚠️ Reso bloccato: rimborso non partito',
+            `Il rimborso del reso ${params.id.slice(0, 6).toUpperCase()} non è partito e il reso è rimasto «rimborsato»: ` +
+              `nessun soldo è uscito. Riportalo a ${statoPrecedente} dal pannello prima di rimborsarlo.`,
+            '/admin/orders',
+            { unaVoltaPer: `reso-bloccato:${params.id}` },
+          );
+        } catch (e) {
+          logger.error('[returns/avanza] avviso del reso bloccato non inviato', { returnId: params.id, e });
+        }
+        return ApiErrors.internal(
+          "Il rimborso non è partito e il reso non si è potuto rimettere com'era: abbiamo avvisato l'amministrazione. Non riprovare per ora.",
+        );
+      }
       // 17/10/2026 — Come `decide`: il negozio legge i due casi che deve
       // conoscere, e per tutto il resto una frase sola. Mai il testo grezzo
       // dell'errore (R138: niente messaggi interni).

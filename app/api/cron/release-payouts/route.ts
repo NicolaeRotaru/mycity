@@ -287,7 +287,14 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   let riderReleased = 0;
   let riderSkipped = 0;
   let riderFailed = 0;
-  const { data: riderCands } = await admin
+  /**
+   * 5/11/2026 — Una ricerca caduta non e' «niente da pagare». Prima solo la
+   * ricerca dei negozi con carta leggeva l'errore: le altre tre davano un
+   * elenco vuoto e il giro rispondeva 200 «tutto a posto». Ora l'errore si
+   * scrive nel log, si conta qui, e il giro risponde 500 a fine lavoro.
+   */
+  const ricercheCadute: string[] = [];
+  const { data: riderCands, error: errRiderCands } = await admin
     .from('orders')
     .select('id')
     .eq('payment_method', 'card')
@@ -327,7 +334,11 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
    * il contante bastava», e tirarlo dentro riempirebbe il giro di ordini da
    * scartare uno per uno.
    */
-  const { data: riderCandsContanti } = await admin
+  if (errRiderCands) {
+    logger.error('[cron] compensi fattorino con carta non cercati', { message: errRiderCands.message });
+    ricercheCadute.push('compensi_fattorino_carta');
+  }
+  const { data: riderCandsContanti, error: errRiderContanti } = await admin
     .from('orders')
     .select('id')
     .eq('payment_method', 'cod')
@@ -338,6 +349,10 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     .lte('delivered_at', cutoffIso)
     .limit(BATCH_LIMIT);
 
+  if (errRiderContanti) {
+    logger.error('[cron] compensi fattorino in contanti non cercati', { message: errRiderContanti.message });
+    ricercheCadute.push('compensi_fattorino_contanti');
+  }
   // R141 — il passaggio dei fattorini ha il suo tempo, non gli avanzi del primo.
   const tempoFinitoRider = cronometroDelPasso();
   for (const o of [...(riderCands ?? []), ...(riderCandsContanti ?? [])]) {
@@ -386,7 +401,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   const dalContanti = process.env[VAR_CONTANTI_DA_STRIPE];
   const inizioContantiMs = inizioContantiDaStripe(dalContanti);
   const inizioContanti = inizioContantiMs === null ? null : new Date(inizioContantiMs).toISOString();
-  const { data: codTrovati } = !inizioContanti ? { data: [] } : await admin
+  const { data: codTrovati, error: errCod } = !inizioContanti ? { data: [], error: null } : await admin
     .from('orders')
     .select('id, seller_payout_cents, seller_payout_reversed_cents, delivered_at')
     // «Non prima del giorno d'inizio»: come gte, e una consegna senza data resta fuori.
@@ -402,6 +417,10 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     // regola che non torna diventa una discussione col negoziante.
     .or('internal_dispute_status.is.null,internal_dispute_status.eq.RESOLVED')
     .limit(BATCH_LIMIT);
+  if (errCod) {
+    logger.error('[cron] bonifici dei contanti non cercati', { message: errCod.message });
+    ricercheCadute.push('bonifici_contanti');
+  }
   const codCands = (codTrovati ?? []).filter((o) =>
     contantiPagabiliDaStripe((o as { delivered_at?: string | null }).delivered_at, dalContanti),
   );
@@ -508,7 +527,8 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
 
   return NextResponse.json(
     {
-      ok: true,
+      ok: ricercheCadute.length === 0,
+      ...(ricercheCadute.length > 0 ? { error: 'ricerche non riuscite', ricercheCadute } : {}),
       released, skipped, failed,
       riderReleased, riderSkipped, riderFailed,
       codReleased, codSkipped, codFailed, codSaldoInsufficiente,
@@ -516,7 +536,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
       riderAppesiRimessiInCoda,
       fermatoPerTempo,
     },
-    { status: 200 },
+    { status: ricercheCadute.length > 0 ? 500 : 200 },
   );
 });
 

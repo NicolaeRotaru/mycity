@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
@@ -24,6 +25,11 @@ export const runtime = 'nodejs';
  * Rate limit: 10 / 10 min per utente.
  */
 const ALLOWED_AMOUNTS = [10, 25, 50, 100]; // euro
+
+/** Impronta corta e stabile di un'email: stessa email, stessa impronta. */
+function impronta(testo: string): string {
+  return createHash('sha256').update(testo.trim().toLowerCase()).digest('hex').slice(0, 24);
+}
 
 const Body = z.object({
   amountEuro: z.number().int().refine((v) => ALLOWED_AMOUNTS.includes(v), 'Importo non valido'),
@@ -70,7 +76,8 @@ export const POST = withAuthRateLimit(
                 unit_amount: amountCents,
                 product_data: {
                   name: `Gift Card MyCity €${body.amountEuro}`,
-                  description: `Buono regalo per ${body.recipientName}`,
+                  // 5/11/2026 — Il nome del destinatario non va sulla ricevuta di Stripe.
+                  description: `Buono regalo MyCity €${body.amountEuro}`,
                 },
               },
             },
@@ -105,7 +112,10 @@ export const POST = withAuthRateLimit(
         // di niente.
         { idempotencyKey: chiaveTentativo
             ? `giftcard_${user.id}_${chiaveTentativo}`
-            : `giftcard_${user.id}_${amountCents}_${body.recipientEmail}_${Math.floor(Date.now() / 600_000)}` },
+            // 5/11/2026 — L'email non entra in chiaro nella chiave: con un'email
+            // lunga superava i 255 caratteri ammessi da Stripe, e restava
+            // scritta su Stripe per sempre. Al suo posto un'impronta corta.
+            : `giftcard_${user.id}_${amountCents}_${impronta(body.recipientEmail)}_${Math.floor(Date.now() / 600_000)}` },
       );
 
       return NextResponse.json({ url: session.url }, { status: 200 });

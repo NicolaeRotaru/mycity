@@ -29,17 +29,24 @@ import { getAdminSupabase } from '@/lib/supabase/server';
  */
 export type ComandoSulReso =
   | { autorizzato: true; sellerOrdine: string | null }
-  | { autorizzato: false; motivo: 'ordine-mancante' | 'non-tuo' };
+  | { autorizzato: false; motivo: 'ordine-mancante' | 'non-tuo' | 'guasto' };
+
+/** PGRST116 = «nessuna riga»: e' la sola risposta che vuol dire davvero «non c'e'». */
+function eUnGuasto(error: { code?: string } | null): boolean {
+  return !!error && error.code !== 'PGRST116';
+}
 
 export async function chiComandaIlReso(orderId: string, utenteId: string): Promise<ComandoSulReso> {
   const admin = getAdminSupabase();
 
-  const { data: ordine } = await admin
+  const { data: ordine, error: errOrdine } = await admin
     .from('orders')
     .select('seller_id')
     .eq('id', orderId)
     .single();
 
+  // 5/11/2026 — Un database che non risponde non e' un ordine che non c'e'.
+  if (eUnGuasto(errOrdine)) return { autorizzato: false, motivo: 'guasto' };
   if (!ordine) return { autorizzato: false, motivo: 'ordine-mancante' };
 
   const sellerOrdine = (ordine.seller_id as string | null) ?? null;
@@ -47,11 +54,13 @@ export async function chiComandaIlReso(orderId: string, utenteId: string): Promi
     return { autorizzato: true, sellerOrdine };
   }
 
-  const { data: profilo } = await admin
+  const { data: profilo, error: errProfilo } = await admin
     .from('profiles')
     .select('role')
     .eq('id', utenteId)
     .single();
+
+  if (eUnGuasto(errProfilo)) return { autorizzato: false, motivo: 'guasto' };
 
   if (profilo?.role === 'admin') return { autorizzato: true, sellerOrdine };
 
