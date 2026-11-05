@@ -203,7 +203,13 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
 
   // Tutti gli hook DEVONO stare prima degli early return (Rules of Hooks)
   const status = order?.delivery_status;
-  const showDeliveryCode = status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY';
+  // 5/11/2026 (scheda 474, lato cliente) — Col ritiro in negozio il codice è quello che il negozio
+  // verifica al bancone (confirm_pickup_by_seller legge order_delivery_codes), e un ritiro non passa
+  // mai da PICKED_UP né da OUT_FOR_DELIVERY: il cliente lo vede da quando il negozio accetta.
+  const ritiroInNegozio = !!order?.pickup_in_store;
+  const showDeliveryCode = ritiroInNegozio
+    ? status === 'ACCEPTED' || status === 'READY'
+    : status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY';
 
   // 5/11/2026 — Se la lettura del codice cade lo si dice («Riprova») invece di farlo sparire, e
   // finché il fattorino è in strada e il codice non c'è si riprova da soli ogni 20 secondi.
@@ -596,7 +602,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
       {showDeliveryCode && !deliveryCode?.code && codiceNonLetto && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-accent-200 bg-accent-50 p-4 text-sm text-accent-900">
           <span>
-            <strong>Non riesco a mostrarti il codice di consegna.</strong> Il rider ne ha bisogno per chiudere la consegna.
+            <strong>Non riesco a mostrarti il codice di consegna.</strong> {ritiroInNegozio ? 'Il negozio ne ha bisogno per darti la spesa.' : 'Il rider ne ha bisogno per chiudere la consegna.'}
           </span>
           <button type="button" onClick={() => { void rileggiCodice(); }} className="rounded-lg bg-white px-3 py-1.5 font-semibold">
             Riprova
@@ -608,7 +614,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
         <div className="mt-4 rounded-2xl bg-gradient-to-br from-olive-600 to-olive-700 p-6 text-white shadow-warm-lg">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold uppercase tracking-widest text-olive-100">Codice consegna</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-olive-100">{ritiroInNegozio ? 'Codice da mostrare in negozio' : 'Codice consegna'}</p>
               {/* Il design system ammette due caratteri, Inter e Fraunces: `font-mono` ne portava
                   dentro un terzo, mai dichiarato, proprio sull'elemento piu' grande della pagina.
                   `tabular-nums` da' alle cifre la stessa larghezza — che e' il motivo per cui qui
@@ -620,7 +626,9 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                 {deliveryCode.verified_at ? (
                   <span className="inline-flex items-center gap-1.5"><Check size={14} strokeWidth={3} aria-hidden /> Consegna confermata.</span>
                 ) : (
-                  'Mostra questo codice (o il QR) al rider quando arriva. Senza questo codice, il rider non può chiudere la consegna.'
+                  ritiroInNegozio
+                    ? 'Mostra questo codice (o il QR) al negozio quando ritiri. Senza questo codice, il negozio non può darti la spesa.'
+                    : 'Mostra questo codice (o il QR) al rider quando arriva. Senza questo codice, il rider non può chiudere la consegna.'
                 )}
               </p>
             </div>

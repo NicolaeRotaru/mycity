@@ -90,6 +90,7 @@ async function testoDellaPagina(Pagina: unknown, ordine: Riga): Promise<{ tutto:
   risposte.clear();
   const g = globalThis as Record<string, unknown>;
   g.__RISPOSTA_SUPABASE__ = ({ tavola, colonne }: { tavola: string; colonne: string }) => {
+    if (tavola === 'order_delivery_codes') return { data: { code: '482913', verified_at: null }, error: null };
     if (tavola !== 'orders') return { data: null, error: null };
     const solo = Object.fromEntries(colonneChieste(colonne).map((c) => [c, ordine[c] ?? null]));
     return { data: { ...solo, seller: ordine.seller, rider: ordine.rider, order_items: ordine.order_items }, error: null };
@@ -210,6 +211,26 @@ describe('2078 · 2355 · la pagina vera con la carta', () => {
     const o = { ...ordineDallaCassa(1500, 'card'), payment_status: 'PARTIALLY_REFUNDED', refunded_amount_cents: 100 };
     const p = await testoDellaPagina(Cliente, o);
     expect(p.tutto).toContain('già tornati sulla carta');
+    p.smonta();
+  });
+});
+
+describe('474 · col ritiro in negozio il cliente vede il suo codice', () => {
+  it('pronto (READY) e accettato (ACCEPTED): «Codice da mostrare in negozio» col codice', async () => {
+    for (const stato of ['READY', 'ACCEPTED']) {
+      const o = { ...ordineDallaCassa(2000, 'cod'), pickup_in_store: true, delivery_status: stato, accepted_at: new Date().toISOString(), ready_at: new Date().toISOString() };
+      const p = await testoDellaPagina(Cliente, o);
+      expect(p.tutto, stato).toContain('Codice da mostrare in negozio');
+      expect(p.tutto, stato).toContain('482913');
+      expect(p.tutto, stato).not.toContain('al rider quando arriva');
+      p.smonta();
+    }
+  });
+
+  it('a domicilio, pronto: il codice non si mostra ancora (si mostra quando il rider ha ritirato)', async () => {
+    const o = { ...ordineDallaCassa(2000, 'cod'), delivery_status: 'READY', accepted_at: new Date().toISOString(), ready_at: new Date().toISOString() };
+    const p = await testoDellaPagina(Cliente, o);
+    expect(p.tutto).not.toContain('482913');
     p.smonta();
   });
 });
