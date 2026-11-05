@@ -124,6 +124,9 @@ vi.mock('@/lib/supabase/client', () => ({
     auth: {
       getUser: async () => ({ data: { user: { id: 'seller-1' } } }),
       getSession: async () => ({ data: { session: { access_token: 'gettone' } } }),
+      // S10 (5/11/2026) — QueryProvider ascolta le uscite per svuotare la cache,
+      // come il client vero.
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     },
     from: (t: string) => bancaDati().from(t),
     rpc: async () => ({ data: [], error: null }),

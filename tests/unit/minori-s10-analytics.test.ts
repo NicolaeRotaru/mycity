@@ -67,3 +67,19 @@ describe('l\'email cercata non arriva a Google dentro l\'indirizzo (92)', () => 
     expect(referrerSenzaCoda('')).toBeUndefined();
   });
 });
+
+describe('un link copiato dall\'app installata non porta il marcatore (1535)', () => {
+  it('source=pwa si toglie, il resto resta', async () => {
+    const { indirizzoSenzaSorgentePwa } = await import('@/lib/analytics/posthog');
+    expect(indirizzoSenzaSorgentePwa('https://mycity.test/?source=pwa')).toBe('/');
+    expect(indirizzoSenzaSorgentePwa('https://mycity.test/store/forno?source=pwa&utm_source=wa#x')).toBe('/store/forno?utm_source=wa#x');
+    expect(indirizzoSenzaSorgentePwa('https://mycity.test/store/forno')).toBeNull();
+  });
+  it('il componente lo toglie dall\'indirizzo dopo averlo letto', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync('lib/analytics/posthog.tsx', 'utf8');
+    const lettura = src.indexOf("new URLSearchParams(window.location.search).get('source')");
+    const pulizia = src.indexOf('window.history.replaceState(window.history.state, \'\', pulito)');
+    expect(pulizia).toBeGreaterThan(lettura);
+  });
+});

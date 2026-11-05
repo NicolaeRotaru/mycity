@@ -10,6 +10,7 @@ import HomeSectionRenderer, { type HeroDefaults } from '@/components/home-sectio
 import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { normalizeHomeSite, homeEnabledSections } from '@/lib/home-site';
 import { EXPERIMENTS, expHeaderName, resolveVariant } from '@/lib/experiments';
+import type { Metadata } from 'next';
 
 /**
  * Contenuti dell'hero per variante (A/B test `home_hero`).
@@ -130,6 +131,10 @@ const precaricoDellaHome = unstable_cache(
   ['home-precarico'],
   { revalidate: SECONDI_CATALOGO_FRESCO, tags: ['home-precarico'] },
 );
+
+// S10 (5/11/2026) — Il canonical della home sta qui, non nel layout radice:
+// lì valeva per ogni pagina senza un canonical suo.
+export const metadata: Metadata = { alternates: { canonical: '/' } };
 
 export default async function Home() {
   // Home del marketplace, visibile a TUTTI — inclusi admin/seller/rider, che

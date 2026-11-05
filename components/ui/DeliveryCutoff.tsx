@@ -50,21 +50,40 @@ export function useOraDiPiacenza(): Date | null {
  * (/api/consegna/veloce → `veloceSiPuo`). `null` se non si chiede, se la risposta non arriva o cade:
  * allora niente minuti.
  */
+/** Ogni quanto si richiede alla cassa se la veloce si può, a scheda aperta. */
+const RICHIEDI_VELOCE_MS = 5 * 60_000;
+
 export function useVeloceDelNegozio(negozioId: string | undefined, chiedi: boolean): boolean | null {
   const [veloce, setVeloce] = useState<boolean | null>(null);
   useEffect(() => {
+    // S10 (5/11/2026, 2260) — Il sì di stamattina non si rivede mentre arriva
+    // la risposta nuova: si riparte da «non so».
+    setVeloce(null);
     if (!negozioId || !chiedi) return;
     let vivo = true;
-    fetch(`/api/consegna/veloce?negozi=${encodeURIComponent(negozioId)}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((esito: { possibile?: boolean } | null) => {
-        if (vivo) setVeloce(esito ? esito.possibile === true : null);
-      })
-      .catch(() => {
-        if (vivo) setVeloce(null);
-      });
+    const domanda = () => {
+      fetch(`/api/consegna/veloce?negozi=${encodeURIComponent(negozioId)}`, { cache: 'no-store' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((esito: { possibile?: boolean } | null) => {
+          if (vivo) setVeloce(esito ? esito.possibile === true : null);
+        })
+        .catch(() => {
+          if (vivo) setVeloce(null);
+        });
+    };
+    domanda();
+    // S10 (5/11/2026, 2298) — La risposta si chiedeva una volta sola: se il
+    // fattorino smetteva il servizio, la scheda rimasta aperta continuava a
+    // dire «oggi». Si richiede quando la scheda torna visibile e ogni 5 minuti.
+    const suVisibilita = () => {
+      if (document.visibilityState === 'visible') domanda();
+    };
+    document.addEventListener('visibilitychange', suVisibilita);
+    const giro = setInterval(domanda, RICHIEDI_VELOCE_MS);
     return () => {
       vivo = false;
+      document.removeEventListener('visibilitychange', suVisibilita);
+      clearInterval(giro);
     };
   }, [negozioId, chiedi]);
   return negozioId && chiedi ? veloce : null;
@@ -135,7 +154,11 @@ export function DeliveryCutoff({
   }
 
   return (
-    <span className={cn('inline-flex items-center gap-1.5 text-sm text-olive-700 font-medium', className)}>
+    // S10 (5/11/2026, 2299) — Come il banner, anche la riga riserva lo spazio di
+    // due righe sul telefono: dopo la risposta della cassa la frase si allunga
+    // («…oppure veloce in 30-60 minuti») e spingeva giù il riquadro mentre si
+    // leggeva. Da sm in su ci sta in una riga.
+    <span className={cn('inline-flex items-start gap-1.5 text-sm text-olive-700 font-medium min-h-[2.5rem] sm:min-h-0 sm:items-center', className)}>
       <Bike size={15} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
       <span>{riga}</span>
     </span>

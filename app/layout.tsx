@@ -113,7 +113,11 @@ export const metadata: Metadata = {
     ],
     apple: '/apple-touch-icon.png',
   },
-  alternates: { canonical: '/' },
+  // S10 (5/11/2026) — Il canonical «/» stava qui, e Next lo passa a ogni pagina
+  // che non ne scrive uno suo: Categorie, Novità, Più venduti, Piccoli prezzi e
+  // Promozioni dicevano a Google di essere una copia della home. Adesso il
+  // canonical della home lo dichiara app/page.tsx; le altre pagine, se non lo
+  // dichiarano, non ne hanno uno falso. Per lo stesso motivo og:url non e' qui.
   openGraph: {
     title: 'MyCity Piacenza — Marketplace dei negozi della tua città',
     // 30/10/2026 (ondata 18) — Diceva «Consegna rapida, pagamento alla consegna.», mentre la descrizione
@@ -122,7 +126,6 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'it_IT',
     siteName: 'MyCity',
-    url: '/',
   },
   twitter: {
     card: 'summary_large_image',

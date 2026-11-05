@@ -114,6 +114,18 @@ export function laPaginaSiPuoFilmare(pathname: string | null | undefined): boole
  * l'app. Il manifesto dichiara `start_url: "/?source=pwa"`, quindi la prima pagina di ogni
  * sessione partita dall'icona porta quel marcatore. Se uno dei due dice «Home», è Home.
  */
+/** L'indirizzo senza `source=pwa` (relativo: percorso, query, cancelletto), o `null` se non c'era. */
+export function indirizzoSenzaSorgentePwa(href: string): string | null {
+  try {
+    const u = new URL(href);
+    if (u.searchParams.get('source') !== 'pwa') return null;
+    u.searchParams.delete('source');
+    return u.pathname + (u.search === '?' ? '' : u.search) + u.hash;
+  } catch {
+    return null;
+  }
+}
+
 export function comeSiApre(standalone: boolean, sorgente: string | null | undefined): 'standalone' | 'browser' {
   return standalone || sorgente === 'pwa' ? 'standalone' : 'browser';
 }
@@ -559,6 +571,11 @@ export default function PostHogProvider() {
       window.matchMedia('(display-mode: standalone)').matches,
       new URLSearchParams(window.location.search).get('source'),
     );
+    // S10 (5/11/2026) — Il marcatore «?source=pwa» restava nell'indirizzo: un
+    // link copiato dall'app installata faceva risultare installato anche chi
+    // lo riceveva. Letto una volta, si toglie dall'indirizzo.
+    const pulito = indirizzoSenzaSorgentePwa(window.location.href);
+    if (pulito) window.history.replaceState(window.history.state, '', pulito);
     const dichiara = () => { void registraProprietaPersistenti({ display_mode: modo }); };
     dichiara();
     // Il momento esatto in cui l'installazione va a buon fine: è il numeratore del tasso di

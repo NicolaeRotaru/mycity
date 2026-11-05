@@ -1,7 +1,8 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase/client';
 import '@/lib/zod-i18n'; // attiva Zod errorMap IT globalmente
 
 export default function QueryProvider({ children }: { children: React.ReactNode }) {
@@ -29,6 +30,24 @@ export default function QueryProvider({ children }: { children: React.ReactNode 
         },
       })
   );
+
+  // S10 (5/11/2026) — I dati gia' scaricati (nome, ultimi acquisti, ordini)
+  // restavano in memoria dopo «Esci»: le uscite sono navigazioni interne e il
+  // QueryClient sopravvive, quindi la home mostrava a chi veniva dopo i dati di
+  // chi era appena uscito. Si svuota all'uscita e quando entra un'altra persona.
+  useEffect(() => {
+    let ultimo: string | null | undefined;
+    const { data } = supabase.auth.onAuthStateChange((evento, sessione) => {
+      const id = sessione?.user?.id ?? null;
+      if (evento === 'SIGNED_OUT' || (evento === 'SIGNED_IN' && ultimo !== undefined && ultimo !== id)) {
+        queryClient.clear();
+      }
+      if (evento === 'SIGNED_OUT') ultimo = null;
+      else if (id) ultimo = id;
+      else if (ultimo === undefined) ultimo = null;
+    });
+    return () => data.subscription.unsubscribe();
+  }, [queryClient]);
 
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 }
