@@ -62,7 +62,7 @@ export async function aggiornaQuadratura(
   // quelli consegnati quel giorno (per delivered_at). Includere i COD
   // consegnati ANCHE se mai confermati fa emergere come ammanco un fattorino
   // che non conferma, invece di farlo sparire.
-  const { data: deliveredRows } = await admin
+  const { data: deliveredRows, error: errLettura } = await admin
     .from('orders')
     .select('total_price, cash_collected_cents, rider_fee_cents, shipping_cost, pickup_in_store')
     .eq('rider_id', riderId)
@@ -70,6 +70,11 @@ export async function aggiornaQuadratura(
     .eq('delivery_status', 'DELIVERED')
     .gte('delivered_at', start)
     .lt('delivered_at', end);
+
+  // 5/11/2026 — Una lettura caduta non e' una giornata senza consegne: scrivere
+  // «atteso 0, incassato 0, OK» cancellerebbe un ammanco vero. Non si scrive
+  // niente e si lancia: chi chiama lo conta come fallito.
+  if (errLettura) throw new Error(`quadratura: ordini non letti (${errLettura.message})`);
 
   const rows = (deliveredRows ?? []) as unknown as RigaQuadratura[];
   // 155 — L'atteso è il contante MENO il compenso che il fattorino si tiene:
@@ -79,7 +84,7 @@ export async function aggiornaQuadratura(
 
   const status = Math.abs(expected - collected) <= 50 ? 'OK' : 'MISMATCH';
 
-  await admin.from('cod_reconciliations').upsert(
+  const { error: errScrittura } = await admin.from('cod_reconciliations').upsert(
     {
       rider_id: riderId,
       for_date: isoDate,
@@ -89,4 +94,5 @@ export async function aggiornaQuadratura(
     },
     { onConflict: 'rider_id,for_date' },
   );
+  if (errScrittura) throw new Error(`quadratura: riga della giornata non scritta (${errScrittura.message})`);
 }

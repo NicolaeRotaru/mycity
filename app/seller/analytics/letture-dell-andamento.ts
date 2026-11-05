@@ -52,3 +52,20 @@ export function tassoDiConversione(ordini: number, visite: number | null): numbe
 export function numeroOTrattino(n: number | null): string {
   return n == null ? '—' : String(n);
 }
+
+/**
+ * 5/11/2026 — LE ORE DI PUNTA CONTANO SOLO GLI ORDINI VALIDI.
+ * Prima il grafico sommava tutte le righe lette, annullati, rifiutati e mai
+ * pagati compresi: tre ordini rifiutati alle 19 facevano delle 19 l'ora di
+ * punta di un negozio che a quell'ora non aveva venduto niente. Si usa la
+ * stessa regola di «Ordini (30gg)» e dell'incasso: `ordineContaNelFatturato`.
+ */
+export function ordiniPerOra<T extends { created_at: string }>(
+  ordini: readonly T[],
+  contaNelFatturato: (o: T) => boolean,
+  oraDi: (iso: string) => number,
+): number[] {
+  const conti = new Array(24).fill(0) as number[];
+  for (const o of ordini) if (contaNelFatturato(o)) conti[oraDi(o.created_at)] += 1;
+  return conti;
+}

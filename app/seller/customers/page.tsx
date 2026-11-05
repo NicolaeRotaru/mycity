@@ -10,6 +10,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
+import { TETTO_ORDINI_LETTI, avvisoDelTettoOrdini } from '@/lib/guadagni/tetto-ordini';
 import { queryKeys } from '@/lib/queries/keys';
 
 type CustomerRow = {
@@ -52,7 +53,7 @@ export default function SellerCustomersPage() {
         // il limite implicito di mille righe di PostgREST, che taglia in
         // silenzio e fa sembrare veri dei numeri che non lo sono.
         .order('created_at', { ascending: false })
-          .limit(500);
+          .limit(TETTO_ORDINI_LETTI);
       // Con l'errore ingoiato la pagina Clienti dice «nessun cliente» a chi ne ha trecento: la
       // lettura non fallisce mai, torna «riuscita» con la lista vuota, e React Query non riprova
       // perché una lettura riuscita non si riprova.
@@ -86,10 +87,15 @@ export default function SellerCustomersPage() {
           });
         }
       }
-      return Array.from(byUser.values()).sort((a, b) => b.totalSpent - a.totalSpent);
+      return {
+        clienti: Array.from(byUser.values()).sort((a, b) => b.totalSpent - a.totalSpent),
+        // 5/11/2026 — quanti ordini sono stati letti: se tocca il tetto, la pagina lo dice.
+        ordiniLetti: (orders ?? []).length,
+      };
     },
   });
-  const customers = queryCustomers.data ?? [];
+  const customers = queryCustomers.data?.clienti ?? [];
+  const avvisoTetto = avvisoDelTettoOrdini(queryCustomers.data?.ordiniLetti ?? 0);
 
   const filtered = customers.filter((c) => {
     if (search) {
@@ -128,6 +134,7 @@ export default function SellerCustomersPage() {
         sub={`${customers.length} clienti totali · ${formatPrice(totalRevenue)} di ricavi`}
         className="mb-0"
       />
+      {avvisoTetto && <p role="note" className="text-xs text-ink-500">{avvisoTetto}</p>}
 
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white border border-cream-300 rounded-xl p-4 text-center">

@@ -16,7 +16,8 @@ import { Card } from '@/components/ui/Card';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
 import { numeriDellAndamento, type RigaAndamento } from '@/lib/seller/andamento-negozio';
-import { letturaDellAndamento, tassoDiConversione, numeroOTrattino } from './letture-dell-andamento';
+import { letturaDellAndamento, tassoDiConversione, numeroOTrattino, ordiniPerOra } from './letture-dell-andamento';
+import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 
@@ -91,7 +92,7 @@ export default function SellerAnalyticsPage() {
           // 3/9/2026 — senza `refunded_amount_cents` la definizione unica del
           // fatturato non puo' togliere i rimborsi: la pagina Andamento
           // mostrava l'ordine rimborsato per intero.
-          .select('id, total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, refunded_amount_cents, wallet_applied_cents, created_at')
+          .select('id, total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, refunded_amount_cents, wallet_applied_cents, seller_payout_cents, seller_payout_reversed_cents, created_at')
           .eq('seller_id', userId!)
           .gte('created_at', since30),
       ]);
@@ -216,10 +217,10 @@ export default function SellerAnalyticsPage() {
       const revenueSeries = dayBuckets.map((b) => ({ label: b.label, value: b.value }));
 
       // Ore di punta: distribuzione oraria reale degli ordini (30gg).
-      const hourCounts = new Array(24).fill(0) as number[];
       // #221 — L'ora di punta e' l'ora del negozio, non quella del browser di
       // chi guarda: chi apre la pagina da un fuso diverso vedeva altre fasce.
-      for (const o of orders) hourCounts[oraPiacenza(o.created_at)] += 1;
+      // 5/11/2026 — e conta solo gli ordini pagati e non annullati (ordiniPerOra).
+      const hourCounts = ordiniPerOra(orders as never[], ordineContaNelFatturato, oraPiacenza);
       const maxHour = Math.max(...hourCounts, 0);
       let peakHours: Array<{ label: string; value: number; pct: number }> = [];
       let peakLabel: string | null = null;
@@ -267,7 +268,9 @@ export default function SellerAnalyticsPage() {
   // "Consigli per te" — prescrittivi, derivati dai dati reali (top/slow products).
   const insights: Insight[] = [];
   const best = analytics.topProducts[0];
-  if (best) {
+  // 5/11/2026 — Le sponsorizzazioni sono spente al lancio: niente consiglio
+  // che porta a una pagina che dice «non disponibile».
+  if (best && ABBONAMENTO_NEGOZI_ACCESO) {
     insights.push({
       icon: TrendingUp, tone: 'olive',
       title: `Spingi "${best.name ?? 'il tuo best-seller'}"`,
@@ -279,15 +282,17 @@ export default function SellerAnalyticsPage() {
   if (slow) {
     insights.push({
       icon: TrendingDown, tone: 'accent',
-      title: `"${slow.name ?? 'Un prodotto'}" vende poco`,
-      body: `Solo ${slow.views} ${slow.views === 1 ? 'visita' : 'visite'} in 30gg. Prova uno sconto, una foto migliore o una descrizione più ricca.`,
+      // 5/11/2026 — Il dato sono le visite, non le vendite: si dice quello.
+      title: `"${slow.name ?? 'Un prodotto'}" è poco visto`,
+      body: `Solo ${slow.views} ${slow.views === 1 ? 'visita' : 'visite'} in 30gg (contate solo per chi accetta i cookie). Prova uno sconto, una foto migliore o una descrizione più ricca.`,
       ctaLabel: 'Modifica prodotto', ctaHref: slow.id ? `/seller/products/${slow.id}/edit` : '/seller/products',
     });
   }
   if (analytics.conversionRate != null && analytics.conversionRate > 0 && analytics.conversionRate < 1) {
     insights.push({
       icon: PackageX, tone: 'secondary',
-      title: 'Conversione sotto la media',
+      // 5/11/2026 — Nessuna media dei negozi viene misurata: non la si nomina.
+      title: 'Conversione bassa',
       body: `Tante visite ma pochi ordini (${analytics.conversionRate.toFixed(1).replace('.', ',')}%). Una promo a tempo può creare urgenza.`,
       ctaLabel: 'Crea una promo', ctaHref: '/seller/promotions',
     });
@@ -374,7 +379,7 @@ export default function SellerAnalyticsPage() {
 
       {/* Revenue grande */}
       <div className="mb-5 overflow-hidden rounded-2xl bg-gradient-to-br from-primary-700 to-secondary-700 p-6 text-white shadow-warm-lg">
-        <p className="text-xs uppercase tracking-wider opacity-80">Fatturato 30 giorni</p>
+        <p className="text-xs uppercase tracking-wider opacity-80">Il tuo netto (30 giorni)</p>
         <p className="mt-2 font-serif text-4xl font-extrabold sm:text-5xl">{formatPrice(analytics.revenue30)}</p>
         <p className="mt-2 text-sm opacity-90">Ultimi 7 giorni: <strong>{formatPrice(analytics.revenue7)}</strong></p>
       </div>
@@ -382,7 +387,7 @@ export default function SellerAnalyticsPage() {
       {/* Grafico 7gg + top prodotti */}
       <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1.4fr_1fr]">
         <Card variant="bordered" padding="lg">
-          <h2 className="mb-4 font-serif text-lg font-bold text-ink-900">Fatturato · ultimi 7 giorni</h2>
+          <h2 className="mb-4 font-serif text-lg font-bold text-ink-900">Il tuo netto · ultimi 7 giorni</h2>
           <div className="flex h-44 items-end gap-3">
             {analytics.revenueSeries.map((d, i) => (
               <div key={i} className="flex h-full flex-1 flex-col items-center gap-2">

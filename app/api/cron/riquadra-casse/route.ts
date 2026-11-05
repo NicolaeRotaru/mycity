@@ -72,7 +72,9 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   }
 
   logger.info('[cron] riquadra-casse', { rifatte, falliti, giornate: daRifare.size });
-  return NextResponse.json({ ok: true, rifatte, falliti });
+  // 5/11/2026 — Una giornata non rifatta e' un conto che puo' essere sbagliato:
+  // il pannello dei lavori lo deve vedere.
+  return NextResponse.json({ ok: falliti === 0, rifatte, falliti }, { status: falliti > 0 ? 500 : 200 });
 });
 
 export const GET = handler;
