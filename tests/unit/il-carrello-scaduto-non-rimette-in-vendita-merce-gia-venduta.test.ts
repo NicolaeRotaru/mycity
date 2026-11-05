@@ -225,8 +225,10 @@ describe('il giro periodico, quando trova un carrello pagato a metà', () => {
     const res = await giroDelleScadenze();
 
     expect(state.avvisiScritti).toEqual([]);
-    expect(res.status).toBe(500);
-    expect(await res.json()).toMatchObject({ ok: false });
+    // 5/11/2026 — Non più 500: ritentare non fa comparire un amministratore, e il giro restava
+    // rosso per sempre. Il buco lo dice la risposta (e il registro degli errori).
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ avvisoSenzaDestinatario: true, saltati: 1 });
   });
 
   it('quando l’avviso parte davvero, il giro resta verde e la merce non si tocca', async () => {

@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { logger } from '@/lib/logger';
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+
+/** Ore di silenzio fra due avvisi sullo stesso carrello pagato a metà: il giro passa ogni mezz'ora. */
+const ORE_SILENZIO_CARRELLO = 24;
+const chiaveCarrello = (id: string) => `CARRELLO_PAGATO_A_META|${id}`;
 
 export const runtime = 'nodejs';
 
@@ -26,7 +32,12 @@ export const runtime = 'nodejs';
 export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
-  const admin = getAdminSupabase();
+  let admin: ReturnType<typeof getAdminSupabase>;
+  try {
+    admin = getAdminSupabase();
+  } catch (e) {
+    return ApiErrors.unavailable(e instanceof Error ? e.message : 'config error');
+  }
 
   // 162 — PRIMA DI RIMETTERE IN VENDITA, GUARDA SE E' GIA' STATO VENDUTO.
   //
@@ -82,11 +93,33 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
 
   /** Perche' l'avviso agli amministratori non e' partito: `null` = e' partito, o non serviva. */
   let avvisoNonPartito: string | null = null;
+  /** Nessun amministratore in tabella: riprovare non lo fa comparire, quindi non si ritenta. */
+  let avvisoSenzaDestinatario = false;
   const daSalvare = (candidati ?? []).filter((c) => {
     const sid = (c as { stripe_session_id?: string | null }).stripe_session_id;
     return !!sid && conOrdini.has(sid);
   });
+  // 5/11/2026 — Lo stesso carrello pagato a metà restava fra i candidati e ogni mezz'ora scriveva un
+  // avviso nuovo a ogni amministratore. Si avvisa una volta ogni 24 ore per carrello, con la memoria
+  // del sorvegliante operativo (`operational_alert_log`). Se la memoria non si legge, si avvisa.
+  let daAvvisare = daSalvare;
   if (daSalvare.length > 0) {
+    try {
+      const soglia = new Date(Date.now() - ORE_SILENZIO_CARRELLO * 3_600_000).toISOString();
+      const { data: gia, error: errGia } = await admin
+        .from('operational_alert_log')
+        .select('alert_key')
+        .in('alert_key', daSalvare.map((c) => chiaveCarrello(c.id as string)))
+        .gte('last_sent_at', soglia);
+      if (!errGia) {
+        const giaAvvisati = new Set((gia ?? []).map((r) => (r as { alert_key: string }).alert_key));
+        daAvvisare = daSalvare.filter((c) => !giaAvvisati.has(chiaveCarrello(c.id as string)));
+      }
+    } catch (e) {
+      logger.warn('[cron] expire-checkouts: memoria degli avvisi non letta, si avvisa', { e });
+    }
+  }
+  if (daAvvisare.length > 0) {
     // Non si tocca niente e si avvisa: un carrello pagato a meta' e' un caso
     // da guardare a mano, non da chiudere in silenzio.
     logger.error('[cron] carrelli scaduti ma con ordini gia creati: non toccati', {
@@ -106,7 +139,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
       category: 'system',
       user_id: a.id,
       title: '⚠️ Carrello scaduto con ordini gia creati',
-      body: `${daSalvare.length} carrello/i sono scaduti ma hanno gia' degli ordini: la merce NON e' stata rimessa in vendita. Vanno chiusi a mano.`,
+      body: `${daAvvisare.length} carrello/i sono scaduti ma hanno gia' degli ordini: la merce NON e' stata rimessa in vendita. Vanno chiusi a mano.`,
       link: '/admin/orders',
     }));
     if (errAdmins) {
@@ -116,12 +149,23 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
       // Nessun amministratore in tabella: riprovare non lo fa comparire, ma
       // nemmeno questo puo' restare una riga di log che non guarda nessuno.
       logger.error('[cron] nessun amministratore da avvisare: carrello pagato a meta senza destinatario');
-      avvisoNonPartito = 'nessun amministratore a cui scrivere';
+      // 5/11/2026 — Non si risponde 500: il giro sarebbe rosso e ritentato per sempre, e nessun
+      // tentativo fa comparire un amministratore. Lo dice la risposta (`avvisoSenzaDestinatario`).
+      avvisoSenzaDestinatario = true;
     } else {
       const { error: errAvviso } = await admin.from('notifications').insert(righe);
       if (errAvviso) {
         logger.error('[cron] avviso agli amministratori non scritto', errAvviso);
         avvisoNonPartito = errAvviso.message;
+      } else {
+        try {
+          const adesso = new Date().toISOString();
+          await admin
+            .from('operational_alert_log')
+            .upsert(daAvvisare.map((c) => ({ alert_key: chiaveCarrello(c.id as string), last_sent_at: adesso })));
+        } catch (e) {
+          logger.warn('[cron] expire-checkouts: memoria degli avvisi non scritta', { e });
+        }
       }
     }
   }
@@ -186,7 +230,16 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     );
     if (items.length > 0) {
       const { error: rErr } = await admin.rpc('restore_stock', { p_items: items });
-      if (rErr) logger.warn('[cron] restore_stock on expire fallita', { id: pc.id, message: rErr.message });
+      if (rErr) {
+        // 5/11/2026 — Come il gemello nel webhook (lib/stripe/webhook/carrello-scaduto.ts): il carrello
+        // è già EXPIRED e nessun giro lo riprende, quindi lo deve sapere una persona.
+        logger.error('[cron] restore_stock on expire fallita', { id: pc.id, message: rErr.message });
+        await notifyAdmins(
+          '⚠️ Merce non rimessa in vendita',
+          `Il carrello ${pc.id} è scaduto ma la sua merce (${items.length} articolo/i) non è tornata in vendita: la giacenza va sistemata a mano.`,
+          '/admin/orders',
+        ).catch((e) => logger.error('[cron] expire-checkouts: avviso merce non partito', { id: pc.id, e }));
+      }
     }
 
     // Come per lo stock, anche il codice sconto torna disponibile: era stato
@@ -213,7 +266,10 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     );
   }
 
-  return NextResponse.json({ ok: true, expired: count, saltati: daSalvare.length }, { status: 200 });
+  return NextResponse.json(
+    { ok: true, expired: count, saltati: daSalvare.length, ...(avvisoSenzaDestinatario ? { avvisoSenzaDestinatario } : {}) },
+    { status: 200 },
+  );
 });
 
 // I lavori periodici di Vercel bussano in GET, sempre — non c'è modo di
