@@ -126,24 +126,34 @@ describe('il webhook della carta marca il carrello come recuperato', () => {
 describe('la potatura delle righe gia recuperate', () => {
   type Filtro = { colonna: string; valore: unknown };
 
-  function finto(righe: Array<{ user_id: string; recovered: boolean; recovered_at: string | null }>) {
-    const eq: Filtro[] = [];
-    const lt: Filtro[] = [];
-    const c: Record<string, unknown> = {
-      delete: () => c,
-      eq: (colonna: string, valore: unknown) => { eq.push({ colonna, valore }); return c; },
-      lt: (colonna: string, valore: unknown) => { lt.push({ colonna, valore }); return c; },
-      select: () => c,
-      then: (risolvi: (v: unknown) => unknown) => {
-        const restano = righe.filter(
-          (r) =>
-            eq.every((f) => (r as unknown as Record<string, unknown>)[f.colonna] === f.valore) &&
-            lt.every((f) => r.recovered_at != null && r.recovered_at < (f.valore as string)),
-        );
-        return Promise.resolve({ data: restano, error: null }).then(risolvi);
-      },
+  // 5/11/2026 — Una catena nuova per ogni taglio (la potatura ne fa tre) e il filtro `is`: la
+  // potatura prende anche i carrelli mai comprati e quelli recuperati senza data, fermi da 90 giorni.
+  type RigaCarrello = { user_id: string; recovered: boolean; recovered_at: string | null; last_activity?: string | null };
+  function finto(righe: RigaCarrello[]) {
+    const from = () => {
+      const eq: Filtro[] = [];
+      const lt: Filtro[] = [];
+      const is: Filtro[] = [];
+      const c: Record<string, unknown> = {
+        delete: () => c,
+        eq: (colonna: string, valore: unknown) => { eq.push({ colonna, valore }); return c; },
+        lt: (colonna: string, valore: unknown) => { lt.push({ colonna, valore }); return c; },
+        is: (colonna: string, valore: unknown) => { is.push({ colonna, valore }); return c; },
+        select: () => c,
+        then: (risolvi: (v: unknown) => unknown) => {
+          const campo = (r: RigaCarrello, k: string) => (r as unknown as Record<string, unknown>)[k];
+          const restano = righe.filter(
+            (r) =>
+              eq.every((f) => campo(r, f.colonna) === f.valore) &&
+              is.every((f) => (campo(r, f.colonna) ?? null) === f.valore) &&
+              lt.every((f) => campo(r, f.colonna) != null && String(campo(r, f.colonna)) < (f.valore as string)),
+          );
+          return Promise.resolve({ data: restano, error: null }).then(risolvi);
+        },
+      };
+      return c;
     };
-    return { from: () => c };
+    return { from };
   }
 
   it('taglia solo le recuperate vecchie, e lascia stare tutte le altre', async () => {
@@ -154,8 +164,8 @@ describe('la potatura delle righe gia recuperate', () => {
     const righe = [
       { user_id: 'vecchia', recovered: true, recovered_at: giorniFa(GIORNI_DI_MEMORIA_CARRELLI + 1) },
       { user_id: 'fresca', recovered: true, recovered_at: giorniFa(2) },
-      // Un carrello ancora abbandonato: quello serve, non si tocca mai.
-      { user_id: 'in-attesa', recovered: false, recovered_at: null },
+      // Un carrello ancora abbandonato e toccato di recente: quello serve, non si tocca.
+      { user_id: 'in-attesa', recovered: false, recovered_at: null, last_activity: giorniFa(3) },
     ];
 
     const quante = await potaCarrelliRecuperati(

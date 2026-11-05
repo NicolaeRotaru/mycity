@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { preparaEmailCicloDiVita, TEMPLATE_DI_SERVIZIO } from '@/lib/email/templates';
+// 5/11/2026 — Il giro del calendario tace fuori dalle 8-21 di Piacenza: queste prove girano a
+// mezzogiorno, qualunque sia l'ora del computer che le fa girare.
+vi.mock('@/lib/tempo-piacenza', async (orig) => ({ ...(await orig<object>()), oraPiacenza: () => 12 }));
 
 /**
  * 27/10/2026 — LA POSTA AUTOMATICA DICEVA COSE FALSE, E SE NON PARTIVA SI BUTTAVA.

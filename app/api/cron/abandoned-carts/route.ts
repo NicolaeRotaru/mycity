@@ -3,7 +3,8 @@ import { sendEmail } from '@/lib/email/client';
 import { preparaEmailCicloDiVita } from '@/lib/email/templates';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
-import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
+import { chiamataDelCalendario, chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
+import { oraPiacenza } from '@/lib/tempo-piacenza';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { potaCarrelliRecuperati } from '@/lib/carrelli-abbandonati';
@@ -45,9 +46,26 @@ function troppoVecchio(ultimaAttivita: unknown): boolean {
   return Number.isFinite(quando) && Date.now() - quando > ETA_MASSIMA_PROMEMORIA_ORE * 3_600_000;
 }
 
+/**
+ * 5/11/2026 — IL PROMEMORIA NON PARTE DI NOTTE.
+ *
+ * Il calendario fa girare questo lavoro ogni ora, giorno e notte: un carrello lasciato alle 22:40
+ * diventava idoneo alle 02:40 e l'email commerciale partiva alle tre. Fuori dalle 8-21 di Piacenza
+ * il giro del calendario esce senza toccare niente: i carrelli restano idonei per il primo giro del
+ * mattino (il tetto delle 48 ore resta). Un giro a mano parte quando lo si chiede.
+ */
+const ORA_PRIMA = 8;
+const ORA_ULTIMA = 21;
+function oraDiSilenzio(ora: number): boolean {
+  return ora < ORA_PRIMA || ora >= ORA_ULTIMA;
+}
+
 const handler = withCronAuth(async (req): Promise<NextResponse> => {
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
+  if (chiamataDelCalendario(req) && oraDiSilenzio(oraPiacenza())) {
+    return NextResponse.json({ ok: true, skipped: 'ore di silenzio (8-21 a Piacenza)', sent: 0 });
+  }
   // 27/8/2026 (R009) — IL CLIENT AMMINISTRATIVO SI PRENDE DA UN POSTO SOLO.
   // Qui se ne costruiva uno a mano: cinque copie in giro per il progetto, e
   // ognuna e' un posto in piu' da ricordare il giorno in cui la chiave di
