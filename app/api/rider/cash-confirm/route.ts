@@ -7,6 +7,7 @@ import { contanteDaRimettereCents } from '@/lib/shipping';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
 import { aggiornaQuadratura } from '@/lib/cassa/quadratura';
+import { logger } from '@/lib/logger';
 import { formatPriceFromCents } from '@/lib/format';
 import { NOTA_SENZA_FOTO_MAX, valutaProvaIncasso } from '@/lib/cassa/prova-incasso';
 import {
