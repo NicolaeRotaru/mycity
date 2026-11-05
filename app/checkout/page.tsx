@@ -35,9 +35,11 @@ import { StepCard } from '@/components/checkout/StepCard';
 import { ScheletroCassa } from '@/components/checkout/ScheletroCassa';
 import { ShippingAddressForm, useCoordinateDellaZona } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector, raccogliMetodoScelto } from '@/components/checkout/PaymentMethodSelector';
-import { DeliverySlotPicker, RIGA_VELOCE_IN_ATTESA } from '@/components/checkout/DeliverySlotPicker';
+import { DeliverySlotPicker } from '@/components/checkout/DeliverySlotPicker';
+
 import { romeNow } from '@/lib/store-hours';
 import {
+  ETICHETTA_ADESSO,
   FASCE_DI_DOMANI,
   consegnaScelta,
   etichettaPerLOrdine,
@@ -61,6 +63,13 @@ import { merceCheTengoIo, problemiDiDisponibilita, type TentativoAperto } from '
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { leggiJson, messaggioDiRete } from '@/lib/api/leggi-json';
 import { queryKeys } from '@/lib/queries/keys';
+
+/**
+ * 5/11/2026 — Il motivo del blocco nel riepilogo mentre si aspetta la veloce. Era la stessa frase
+ * della riga del selettore (`RIGA_VELOCE_IN_ATTESA`), due volte sulla pagina; e non diceva che
+ * nel frattempo si può scegliere una fascia.
+ */
+const MOTIVO_VELOCE_IN_ATTESA = 'Aspetto la risposta sulla consegna veloce: se non vuoi aspettare, scegli Oggi o Domani.';
 
 type AddressForm = {
   fullName: string;
@@ -578,11 +587,24 @@ export default function CheckoutPage() {
   // «Adesso» scelta senza ancora il sì del server: non si ordina (la rotta la rifiuterebbe con un 409).
   const veloceDaAspettare =
     eConsegnaVeloce({ fascia: deliverySlot, ritiroInNegozio: pickupInStore }) && veloceDisponibile !== true;
+  // 5/11/2026 — Dopo un no della rotta sulla veloce (409) si richiede subito, invece di aspettare il
+  // battito del minuto: il selettore sposta la scelta e lo dice, come quando il no arriva col battito.
+  const [richiediVeloce, setRichiediVeloce] = useState(0);
+  const haGruppi = groups.length > 0;
   useEffect(() => {
-    if (!negoziDelCarrello) return;
+    // 5/11/2026 — Un carrello senza negozio letto non può avere la veloce: prima la domanda non
+    // partiva mai e la tessera «Adesso» diceva «Sto controllando…» per sempre.
+    if (!negoziDelCarrello) {
+      if (haGruppi) setEsitoVeloce({ negozi: '', possibile: false });
+      return;
+    }
     let vivo = true;
+    // 5/11/2026 — Con un tempo massimo: una richiesta appesa teneva «Adesso» in attesa senza fine.
     const chiedi = () =>
-      fetch(`/api/consegna/veloce?negozi=${negoziDelCarrello}`, { cache: 'no-store' })
+      fetch(`/api/consegna/veloce?negozi=${negoziDelCarrello}`, {
+        cache: 'no-store',
+        signal: typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal ? AbortSignal.timeout(15_000) : undefined,
+      })
         .then((r) => (r.ok ? r.json() : null))
         .then((esito: unknown) => {
           if (!vivo) return;
@@ -603,7 +625,7 @@ export default function CheckoutPage() {
       vivo = false;
       clearInterval(battito);
     };
-  }, [negoziDelCarrello]);
+  }, [negoziDelCarrello, haGruppi, richiediVeloce]);
 
   // Usa il credito MyCity (opt-in, default sì): applicato solo agli ordini COD.
   const [useCredit, setUseCredit] = useState(true);
@@ -988,6 +1010,7 @@ export default function CheckoutPage() {
     onError: (err: unknown) => {
       if (err instanceof Error && err.message === 'REDIRECT_TO_SIGNIN') return;
       toast.error(friendlyError(err));
+      if (deliverySlot === ETICHETTA_ADESSO) setRichiediVeloce((n) => n + 1);
     },
   });
 
@@ -1092,6 +1115,7 @@ export default function CheckoutPage() {
     onError: (err: unknown) => {
       if (err instanceof Error && err.message === 'REDIRECT_TO_SIGNIN') return;
       toast.error(friendlyError(err));
+      if (deliverySlot === ETICHETTA_ADESSO) setRichiediVeloce((n) => n + 1);
     },
   });
 
@@ -1162,7 +1186,7 @@ export default function CheckoutPage() {
             : !consegnaConfermabile
               ? rigaQuandoArriva(consegna)
               : veloceDaAspettare
-                ? (veloceDisponibile === null ? RIGA_VELOCE_IN_ATTESA : 'La consegna veloce adesso non si può: scegli una fascia qui sopra.')
+                ? (veloceDisponibile === null ? MOTIVO_VELOCE_IN_ATTESA : 'La consegna veloce adesso non si può: scegli una fascia qui sopra.')
                 : null;
 
   const validateAddress = (): Partial<Record<keyof AddressForm, string>> => {
@@ -1234,7 +1258,7 @@ export default function CheckoutPage() {
     }
     // 30/10/2026 (ondata 18) — «Adesso» senza il sì del server non parte, comunque arrivi l'invio.
     if (veloceDaAspettare) {
-      toast.error(motivoDelBlocco ?? RIGA_VELOCE_IN_ATTESA);
+      toast.error(motivoDelBlocco ?? MOTIVO_VELOCE_IN_ATTESA);
       return;
     }
     trackCheckoutStep('address', { city: form.city });

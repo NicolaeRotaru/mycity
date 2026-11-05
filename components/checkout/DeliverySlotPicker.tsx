@@ -121,11 +121,21 @@ export function quandoLaVeloceCade(a: {
   /** 30/10/2026 (ondata 21) — L'orologio di Roma e gli orari dei negozi: si cade su una fascia servibile. */
   adesso?: Date;
   orari?: readonly unknown[];
+  /** 5/11/2026 — Le fasce che il cliente aveva già segnato per oggi e per domani: se si possono, restano. */
+  sceltaOggi?: string;
+  sceltaDomani?: string;
 }): { day: Giorno; fascia: string | null; avviso: string } | null {
   if (a.day !== 'now' || a.expressAvailable || a.inAttesa) return null;
   const day = a.adesso ? giornoDiPartenza(a.adesso, a.orari) : giornoDiPartenza(a.ora);
-  const oggi = a.adesso ? fasciaDiPartenzaOggi(a.adesso, a.orari) : fasciaDiPartenzaOggi(a.ora);
-  const domani = (a.adesso ? fasceDiDomaniPossibili(a.adesso, a.orari) : FASCE_DI_DOMANI)[0] ?? null;
+  const oggiPossibili = a.adesso ? fasceAncoraPossibili(a.adesso, a.orari) : [];
+  const oggi =
+    a.sceltaOggi && oggiPossibili.includes(a.sceltaOggi)
+      ? a.sceltaOggi
+      : a.adesso ? fasciaDiPartenzaOggi(a.adesso, a.orari) : fasciaDiPartenzaOggi(a.ora);
+  // 5/11/2026 — Prima si cadeva sempre sulla prima fascia di domani (7:30–9:00, la più rifiutata
+  // dai negozi chiusi il mattino), perdendo l'ora che il cliente aveva già segnato.
+  const domaniPossibili = a.adesso ? fasceDiDomaniPossibili(a.adesso, a.orari) : FASCE_DI_DOMANI;
+  const domani = a.sceltaDomani && domaniPossibili.includes(a.sceltaDomani) ? a.sceltaDomani : (domaniPossibili[0] ?? null);
   // `giornoDiPartenza` dà «oggi» solo se per oggi resta una fascia: il ripiego non scatta mai.
   const fascia = day === 'today' ? (oggi ?? domani) : domani;
   // Nessuna fascia servibile: non se ne nomina una finta, si dice che per ora non si può.
@@ -163,6 +173,10 @@ export function DeliverySlotPicker({
   const todayTimes = fasceAncoraPossibili(adesso, orariNegozi);
   const oggiPossibile = todayTimes.length > 0;
   const tomorrowTimes = fasceDiDomaniPossibili(adesso, orariNegozi);
+  // 5/11/2026 — «Oggi» e «Domani» col giorno e la data: all'una di notte «domani» per il sito è il
+  // giorno dopo quello appena cominciato, e chi è sveglio pensa alla mattina che arriva.
+  const dataOggi = dataBreve(adesso);
+  const dataDomani = dataBreve(new Date(adesso.getFullYear(), adesso.getMonth(), adesso.getDate() + 1));
   const domaniPossibile = tomorrowTimes.length > 0;
   const expressAvailable = expressSiPuo(ora) && veloceDisponibile === true;
   // Il server non ha ancora risposto e l'orologio non dice già di no: la veloce è «non so ancora».
@@ -175,7 +189,10 @@ export function DeliverySlotPicker({
   // fascia, senza che nessuno lo dicesse. Adesso una riga lo dice finché il cliente non sceglie.
   const [avvisoSpostata, setAvvisoSpostata] = useState<string | null>(null);
   useEffect(() => {
-    const caduta = quandoLaVeloceCade({ day, expressAvailable, ora, inAttesa: veloceInAttesa, adesso, orari: orariNegozi });
+    const caduta = quandoLaVeloceCade({
+      day, expressAvailable, ora, inAttesa: veloceInAttesa, adesso, orari: orariNegozi,
+      sceltaOggi: todayTime, sceltaDomani: tomorrowTime,
+    });
     if (!caduta) return;
     setAvvisoSpostata(caduta.avviso);
     // La fascia nominata nell'avviso è quella che resta segnata: si mette prima di cambiare giorno.
@@ -186,6 +203,11 @@ export function DeliverySlotPicker({
     onDayChange(caduta.day);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [day, expressAvailable, veloceInAttesa]);
+  // 5/11/2026 — Se al controllo dopo la veloce torna possibile, l'avviso «non si può più» non è più
+  // vero: si toglie (resta solo un avviso sulla fascia scaduta, che parla d'altro).
+  useEffect(() => {
+    if (expressAvailable) setAvvisoSpostata((a) => (a && a.startsWith('La consegna veloce adesso non si può più') ? null : a));
+  }, [expressAvailable]);
   const scegliGiorno = (g: Giorno) => {
     setAvvisoSpostata(null);
     onDayChange(g);
@@ -257,6 +279,7 @@ export function DeliverySlotPicker({
           onClick={() => oggiPossibile && scegliGiorno('today')}
           disabled={!oggiPossibile}
           title="Oggi"
+          data={dataOggi}
           // 30/10/2026 (ondata 22) — Il motivo vero, come «Domani»: domenica alle 10 il negozio è
           // chiuso, non è «troppo tardi».
           subtitle={oggiPossibile ? "Scegli l'ora" : sottotitoloOggiSpento(adesso, orariNegozi)}
@@ -266,6 +289,7 @@ export function DeliverySlotPicker({
           onClick={() => domaniPossibile && scegliGiorno('tomorrow')}
           disabled={!domaniPossibile}
           title="Domani"
+          data={dataDomani}
           subtitle={domaniPossibile ? "Scegli l'ora" : 'Negozio chiuso'}
         />
       </div>
@@ -277,7 +301,8 @@ export function DeliverySlotPicker({
       )}
       {/* 31/10/2026 — Il perché resta anche sotto l'avviso: «il negozio è chiuso» è l'unica notizia sugli
           orari che arriva alla cassa, e serviva proprio quando la veloce cade. */}
-      {!expressAvailable && motivoVeloce && (
+      {/* 5/11/2026 — Non mentre si aspetta la risposta: il motivo sarebbe quello del carrello di prima. */}
+      {!expressAvailable && !veloceInAttesa && motivoVeloce && (
         <p className="text-xs text-ink-500">{motivoVeloce}</p>
       )}
 
@@ -334,11 +359,18 @@ export function DeliverySlotPicker({
   );
 }
 
+const GIORNI_BREVI = ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab'];
+/** «mer 11/11»: lo stesso formato della pagina dell'ordine. `d` è l'orologio da parete di Roma. */
+export function dataBreve(d: Date): string {
+  return `${GIORNI_BREVI[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}`;
+}
+
 function DayTile({
   active,
   onClick,
   disabled,
   title,
+  data,
   subtitle,
   badge,
 }: {
@@ -346,6 +378,7 @@ function DayTile({
   onClick: () => void;
   disabled?: boolean;
   title: string;
+  data?: string;
   subtitle: string;
   badge?: { text: string; cls: string };
 }) {
@@ -357,7 +390,7 @@ function DayTile({
       onClick={onClick}
       disabled={disabled}
       aria-pressed={active}
-      aria-label={`${title}, ${subtitle}`}
+      aria-label={data ? `${title}, ${data}, ${subtitle}` : `${title}, ${subtitle}`}
       className={`relative rounded-xl border-[1.5px] px-3 py-3 text-left transition-colors ${
         disabled
           ? 'border-cream-200 bg-cream-50 cursor-not-allowed opacity-50'
@@ -371,7 +404,10 @@ function DayTile({
           {badge.text}
         </span>
       )}
-      <p className="font-bold text-ink-900 text-sm">{title}</p>
+      <p className="font-bold text-ink-900 text-sm">
+        {title}
+        {data && <span className="font-normal text-ink-600"> · {data}</span>}
+      </p>
       <p className="text-xs text-ink-600 mt-0.5">{subtitle}</p>
     </button>
   );
