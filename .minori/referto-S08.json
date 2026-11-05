@@ -1,0 +1,1569 @@
+{
+  "sessione": "S08",
+  "ramo": "claude/youthful-gates-blkxmk-m08",
+  "commit_finale": "e382fa08e319b21f6306fd7fcc49bd4616b744d7",
+  "verify": {
+    "typecheck": "verde",
+    "lint": "verde",
+    "test": "rosso",
+    "note": "7629 prove verdi, 2 rosse: tests/unit/le-pagine-ordini-del-negozio-leggono-gli-orari.test.tsx (caso 1, lista e dettaglio), già rosse su origin/main prima di me (provato in un worktree pulito), non toccate. Lint: solo avvisi già presenti."
+  },
+  "revisore": "Un agente revisore sul diff ha trovato: conto Stripe collegato chiuso col saldo zero anche con pagamenti trattenuti (CORRETTO: ora si annota il codice e non si chiude, scheda 123 diventa parziale); handle con «*» che per PostgREST vale «%» e faceva 500 (CORRETTO: handleValido); frase «l abbiamo annotata» non vera (TOLTA); qualunque 503 letto come «cancellazione spenta» (CORRETTO: solo col details.recapito); chiusura in coda anche delle email di servizio order_ready/order_delivered (CORRETTO: solo ciclo di vita); utenti Google con password impostata bloccati (CORRETTO: si prova prima la password); «/contact-us» reso collegamento (CORRETTO); nota dell export che taceva le sezioni al tetto con letture fallite (CORRETTO). Lasciati e scritti in nuovi_difetti_visti/nota: returnTo che perde ?tab (middleware, non mio), SUPPORT_EMAIL giudicata in due modi, doppia email su due POST insieme, rettifica di indirizzo/CAP/città, «mezz ora» che può scartare frasi innocue del branding, prove leggere sul sorgente (schede 2004, 2619, 2231, 353, 2503 hanno anche o solo prove sul sorgente).",
+  "riepilogo": {
+    "riparato": 90,
+    "parziale": 10,
+    "gia_riparato": 5,
+    "non_codice": 4,
+    "scelta_di_nicola": 9,
+    "non_fatto": 4
+  },
+  "migrazioni_nuove": [],
+  "testi_legali_cambiati": [
+    "app/terms/page.tsx §2 ordine dei risultati (scheda 514); §4 proposta annullabile finché il negozio non accetta (127) e spese di consegna secondo la pagina Spedizioni (2293); modulo di recesso con puntini più corti (440); §16-bis punto di contatto sempre stampato (520); tolto il riquadro «Avviso legale» (523); data in vigore letta da lib/legal/versione.ts (2590)",
+    "lib/legal/promessa-cliente-assente.ts (§4 e §6 dei Termini): esempio del §6 «se l ordine del pane non si può consegnare perché non sei reperibile» (2288); frasi «almeno uno degli altri… già consegnato» / «nessuno è ancora stato consegnato» (2231); fatti: esito cliente assente registrato (2503)",
+    "app/privacy/page.tsx: riassunto senza «solo» (506); negozio e rider fra i destinatari (506); Supabase «dati ospitati nell UE, a Parigi» (506); selfie fra i dati KYC (1811); conservazione dei documenti d identità come il codice (105); riga Assistenza clienti 24 mesi (121); Upstash da un minuto a 24 ore con email e account (109); «scrivendoci dal modulo dei contatti» (2020); tabella che scorre da tastiera (664); tolto il riquadro «Avviso legale» (523)",
+    "app/cookies/page.tsx: PostHog nel §4 (2060); parentesi della casella tolta (2018); modalità negozio 8 ore, mc_ruolo con identificativo, mc_sid fra i tecnici (99); §2.2 senza cookie funzionali descritti (2062); _ga «2 anni, rinnovati a ogni visita» (2061); tolto il riquadro «Avviso legale» (523)",
+    "components/CookieBanner.tsx: voce Analytics con mc_vid, indirizzo di rete e browser (85); voce Funzionali e primo livello senza cookie funzionali (2062)",
+    "app/accetta-condizioni/page.tsx + lib/legal/versione.ts COSA_CAMBIA_NEI_TERMINI: riassunto di cosa cambia nei Termini 3.0 (2590)",
+    "app/accessibility/page.tsx: data dell ultima revisione 2026-09-08 (1579)",
+    "app/faq/page.tsx: compenso del rider (2327), consegna unica (2326), codice sconto spento (288), freschi esclusi dal recesso (2460)",
+    "lib/legal/titolare.ts: frase della strada a mano senza canali (cita il Garante) (2057); frase della porta «Annulla» senza «entro un mese» e con oggetto «Fermate la cancellazione del mio account» (2056); frameTitolare con la persona (2535)",
+    "lib/email/templates.ts (di S03): email nuova «Hai chiesto di cancellare il tuo account» (222) e veste dell avviso di cancellazione (2054)",
+    "ATTENZIONE versione: Privacy e Cookie sono cambiate oggi ma VERSIONE_TESTI_LEGALI resta privacy-2.0 (vedi scheda 522): alzarla chiede a tutti di riaccettare, la decide Nicola."
+  ],
+  "prove_vecchie_aggiornate": [
+    "tests/unit/api-account.test.ts (finto con .is/.in)",
+    "tests/unit/prima-chi-sei-poi-la-chiave-sulle-porte-dei-diritti.test.ts (finto con .is/.in)",
+    "tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts (caselle sul dominio dei contatti, scheda 2058)",
+    "tests/unit/l-informativa-dice-la-strada-dei-diritti-che-funziona-davvero.test.ts (idem)",
+    "tests/unit/gli-interruttori-delle-impostazioni-dicono-il-proprio-nome.test.ts (4 interruttori con la newsletter spenta, scheda 2036)",
+    "tests/unit/la-spiegazione-per-email-che-non-parte-si-riprova-la-notte-dopo.test.ts (link ?tab=danger, scheda 2027)",
+    "tests/unit/api-contact.test.ts (503 invece di 500, scheda 2017)",
+    "tests/unit/i-lavori-a-orario-si-fermano-finche-nicola-non-li-accende.test.ts (righe con path, scheda 1584)",
+    "tests/unit/i-termini-dicono-quello-che-l-annullo-rende-davvero.test.ts (evento del §6, scheda 2288)",
+    "tests/unit/i-termini-non-promettono-un-esito-che-il-codice-non-sa-registrare.test.ts (esito cliente assente true, scheda 2503)",
+    "tests/unit/le-promesse-della-consegna-cambiano-solo-di-proposito.test.tsx (images della pagina Spedizioni, scheda 373)",
+    "tests/unit/aiuti/database-della-vetrina.ts (ilike con la barra rovesciata, scheda 1739)"
+  ],
+  "schede": [
+    {
+      "id": 373,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Aggiunto images: [\"/opengraph-image\"] al blocco openGraph delle dieci pagine: un openGraph proprio sostituiva quello del sito e perdeva la copertina.",
+      "prova": "tests/unit/minori-s08-pagine-pubbliche.test.tsx › i link condivisi in chat hanno la copertina (10 prove)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/about/page.tsx",
+        "app/come-funziona/page.tsx",
+        "app/terms/page.tsx",
+        "app/privacy/page.tsx",
+        "app/accessibility/page.tsx"
+      ],
+      "file_altrui_toccati": [
+        "app/lavora-con-noi/page.tsx",
+        "app/help/page.tsx",
+        "app/shipping/page.tsx",
+        "app/returns/page.tsx",
+        "app/status/page.tsx"
+      ],
+      "nota": "Una riga per file, nel blocco metadata."
+    },
+    {
+      "id": 510,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Chi siamo: tolti «flotta di rider» e «cresce quartiere dopo quartiere», il paragrafo ora dice che siamo all inizio dal centro di Piacenza.",
+      "prova": "tests/unit/minori-s08-pagine-pubbliche.test.tsx › non racconta una flotta di rider…",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/about/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Manca Lavora con noi (S06): le quattro «Posizioni aperte» restano. Domanda per Nicola: stai assumendo davvero per Account negozi, Coordinatore flotta, Product Designer e Supporto? Se no, si tiene solo la candidatura spontanea."
+    },
+    {
+      "id": 365,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il quarto riquadro di Chi siamo dice «Alla consegna» invece di «Pay-on-delivery».",
+      "prova": "tests/unit/minori-s08-pagine-pubbliche.test.tsx › non scrive «Pay-on-delivery» in grande",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/about/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 416,
+      "esito": "riparato",
+      "cosa_ho_fatto": "I tre link (email, /contact, agid.gov.it) sono sempre sottolineati (underline underline-offset-2), non solo al passaggio del mouse.",
+      "prova": "tests/unit/minori-s08-pagine-pubbliche.test.tsx › i link per segnalare un problema sono sottolineati sempre",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/accessibility/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1579,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La data della Dichiarazione passa al 2026-09-08 (ultima riscrittura del contenuto) e le tre righe la leggono da una costante sola; «Ultima verifica: 20 agosto» diventa «Ultima revisione: 8 settembre 2026».",
+      "prova": "tests/unit/minori-s08-pagine-pubbliche.test.tsx › le tre date dicono la stessa revisione",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/accessibility/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Testo di un documento obbligatorio per legge (EAA): Nicola lo rilegga."
+    },
+    {
+      "id": 2590,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La pagina di riaccettazione dice che i Termini sono cambiati (versione 3.0, in vigore dal 1 novembre 2026) ed elenca cosa cambia, preso dalle voci di terms-3.0 scritte in lib/legal/versione.ts. La data in vigore dei Termini ora sta in una costante sola.",
+      "prova": "tests/unit/minori-s08-pagine-pubbliche.test.tsx › nomina la versione, la data e le voci che cambiano",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/accetta-condizioni/page.tsx",
+        "lib/legal/versione.ts",
+        "app/terms/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Testo legale nuovo (riassunto dei cambiamenti, non una clausola): Nicola lo rilegga."
+    },
+    {
+      "id": 687,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La rotta di accettazione rifiuta con 403 una richiesta che arriva da un altro sito (arrivaDaUnAltroSito), prima di aprire la sessione. Il freno per utente c era già.",
+      "prova": "tests/unit/minori-s08-condizioni.test.ts › una pagina di un altro sito non mette a verbale un «accetto»",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/account/accetta-condizioni/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Non ho riscritto la rotta con withAuthRateLimit (avrebbe chiesto anche il profilo e cambiato le prove vecchie): aggiunto solo il controllo mancante. Il freno di rete per percorso resta quello per utente."
+    },
+    {
+      "id": 176,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La rotta prova sempre la password; se non combacia e fra i fornitori dell account (app_metadata.providers o identità) non c è «email», risponde 409 «accede senza password» invece di 401 «password attuale non corretta».",
+      "prova": "tests/unit/minori-s08-cambia-password.test.ts › riceve «accede senza password» (409)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/account/cambia-password/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Dopo la revisione: chi entra con Google ma ha impostato una password col recupero la può ancora cambiare. Il modulo nella scheda Password resta visibile a tutti."
+    },
+    {
+      "id": 2016,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La lettura dello stato espone anche `tappa` ('rinviata' o 'termine-scaduto'): ora si distingue un rinvio motivato da un ritardo oltre il termine.",
+      "prova": "tests/unit/minori-s08-cancellazione.test.ts › scheda 2016",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/account/delete/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 505,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Alla richiesta di cancellazione la rotta chiude in email_queue solo le righe di guida e promozioni non ancora spedite (ciclo di vita meno i template di servizio: «ordine pronto» e «consegnato» restano) e segna il carrello abbandonato come già gestito.",
+      "prova": "tests/unit/minori-s08-cancellazione.test.ts › scheda 505",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/account/delete/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Le righe e i carrelli nati durante i 7 giorni non si fermano (i giri notturni sono di S03: andrebbe escluso deletion_requested_at in send-emails e list_abandoned_carts_to_recover). «Annulla eliminazione» non rimette in coda le email chiuse."
+    },
+    {
+      "id": 222,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Alla richiesta parte subito un avviso transazionale al titolare dell account col giorno della cancellazione definitiva e il collegamento per annullarla (template nuovo richiestaCancellazioneTemplate).",
+      "prova": "tests/unit/minori-s08-cancellazione.test.ts › scheda 222",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/account/delete/route.ts"
+      ],
+      "file_altrui_toccati": [
+        "lib/email/templates.ts"
+      ],
+      "nota": "Non ho aggiunto la richiesta della password (la scheda la mette «in aggiunta»): con l avviso subito e i 7 giorni per annullare, una sessione rubata non cancella più in silenzio. Testo dell email nuovo: Nicola lo rilegga."
+    },
+    {
+      "id": 2040,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nel POST l errore della lettura del profilo si guarda: se c è, 503 «riprova» senza scrivere; la data si scrive solo se è vuota (.is('deletion_requested_at', null)).",
+      "prova": "tests/unit/minori-s08-cancellazione.test.ts › scheda 2040 (due prove)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/account/delete/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2041,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il ramo alreadyRequested restituisce gli stessi campi del GET (giorni, rinviata, motivo, tappa); la pagina, se alreadyRequested, mostra lo stato vero e «Avevi già chiesto la cancellazione».",
+      "prova": "tests/unit/minori-s08-cancellazione.test.ts › scheda 2041 · tests/unit/minori-s08-impostazioni.test.tsx › scheda 2041",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/account/delete/route.ts",
+        "app/profile/settings/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1523,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Ogni sezione dell export si legge con .limit(5000) (TETTO_PER_SEZIONE); una sezione arrivata al tetto finisce in «sezioni_al_tetto», il file si dichiara incompleto e il nome dice INCOMPLETO. Le sezioni si leggono prima della testata, così export_completo vede anche i guasti delle sezioni principali (prima no).",
+      "prova": "tests/unit/minori-s08-esporta.test.ts",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/account/export/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il tetto di 5000 è una mia scelta tecnica (era già quello di activity_events e product_views). Correggendo ho trovato e chiuso un difetto vicino: export_completo e il nome del file si calcolavano prima delle sezioni principali, quindi una loro lettura caduta non rendeva il file «incompleto»."
+    },
+    {
+      "id": 2015,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La pagina Contattaci legge details.recapito del 503 e lo lascia scritto sotto il modulo (riquadro role=alert con il collegamento), oltre al messaggio a comparsa.",
+      "prova": "tests/unit/minori-s08-contatti-pagina.test.tsx › scheda 2015",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/contact/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1995,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Prova nuova sul testo del 503 senza casella; la frase ora vive in moduloNonArrivato(). Col mutante «recapito.testo ?» la prova diventa rossa.",
+      "prova": "tests/unit/minori-s08-contatti.test.ts › scheda 1995",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/contact/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Difetto delle prove: provato col mutante."
+    },
+    {
+      "id": 2014,
+      "esito": "riparato",
+      "cosa_ho_fatto": "L inoltro senza database porta l id dell account di chi ha scritto (riga «Account» nell email) e lascia una riga nel registro.",
+      "prova": "tests/unit/minori-s08-contatti.test.ts › scheda 2014",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/contact/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2017,
+      "esito": "riparato",
+      "cosa_ho_fatto": "getCurrentUser sta in un try: se l accesso non risponde il messaggio si accetta senza account. Se l inserimento nel database fallisce si prova l inoltro per email e, se non c è dove inoltrare, 503 con la strada invece del 500 muto.",
+      "prova": "tests/unit/minori-s08-contatti.test.ts › scheda 2017 (due prove)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/contact/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Aggiornata la prova vecchia tests/unit/api-contact.test.ts (si aspettava 500 su database guasto)."
+    },
+    {
+      "id": 408,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Il modulo contatti dà un messaggio italiano per ogni limite (nome 120, oggetto 200, messaggio 5000).",
+      "prova": "tests/unit/minori-s08-contatti.test.ts › scheda 408 (due prove)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/contact/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Manca: le altre 14 rotte con lo stesso schema, il traduttore lib/zod-i18n acceso anche sul server (instrumentation.ts è di S03, lib/zod-i18n.ts non ha padrone) e le tre frasi sbagliate del traduttore; il filtro in lib/errors.ts (S03)."
+    },
+    {
+      "id": 545,
+      "esito": "riparato",
+      "cosa_ho_fatto": "L avviso al supporto passa da dopoLaRisposta (after()) invece di partire senza essere aspettato, e annota se non è partito.",
+      "prova": "tests/unit/minori-s08-contatti.test.ts › scheda 545",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/contact/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La ricevuta automatica a chi scrive (suggerita) non l ho aggiunta."
+    },
+    {
+      "id": 2155,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Nessuna modifica: nelle pagine citate i «30-60 min» non ci sono più.",
+      "prova": "grep -rn \"30-60\" app/come-funziona/page.tsx components/home/HowItWorks.tsx components/home/HeroStoreCard.tsx components/Footer.tsx app/layout.tsx app/page.tsx → nessun risultato (resta solo il freno in lib/site-branding.ts)",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "In app/page.tsx:35 la variante A del titolo dice ancora «Consegna in giornata.» senza «negli orari del negozio»: file non mio, lo segnalo."
+    },
+    {
+      "id": 2620,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Il riquadro «Chi gestisce» usa già nomePubblico(chiSiamo).",
+      "prova": "app/contact/page.tsx: «{nomePubblico(chiSiamo)}» nel riquadro Chi gestisce MyCity",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2159,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Senza WhatsApp e telefono la pagina non dice «Scegli il canale più comodo», la scheda email non sta in una griglia a tre colonne e il riquadro «Orari assistenza» non compare.",
+      "prova": "tests/unit/minori-s08-contatti-pagina.test.tsx › scheda 2159",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/contact/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2060,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Aggiunto PostHog Inc. all elenco dei fornitori negli Stati Uniti del §4 della cookie policy. La prova legge le righe «(Stati Uniti)» delle tabelle e pretende ognuno nel §4.",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 2060",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/cookies/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Testo legale: Nicola lo rilegga."
+    },
+    {
+      "id": 2018,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tolta la parentesi «la casella email della privacy non è ancora attiva» al §5 della cookie policy: niente più due parentesi di fila, come l informativa.",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › schede 2018 e 2019",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/cookies/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Testo legale: Nicola lo rilegga."
+    },
+    {
+      "id": 2019,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Prova nuova sulla cookie policy montata senza casella: nessun href mailto (il vecchio mailto del ripiego la fa diventare rossa).",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › schede 2018 e 2019",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s08-testi-legali.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 99,
+      "esito": "riparato",
+      "cosa_ho_fatto": "mycity_shopping_mode: durata letta da SHOPPING_MODE_MAX_AGE (8 ore); mc_ruolo: dice che contiene l identificativo interno, firmato; mc_sid spostato fra i tecnici, con lo scopo vero (registro accessi, e pagine viste solo col consenso).",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 99",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/cookies/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Testo legale: Nicola lo rilegga."
+    },
+    {
+      "id": 2062,
+      "esito": "riparato",
+      "cosa_ho_fatto": "§2.2: tolta la frase su lingua, ultima ricerca e mappa salvata; ora «Oggi non ne installiamo. Lingua e modalità negozio sono cookie tecnici». Nel banner la voce Funzionali dice lo stesso e il primo livello non li nomina più.",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 2062",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/cookies/page.tsx",
+        "components/CookieBanner.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Testo legale: Nicola lo rilegga."
+    },
+    {
+      "id": 2061,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La durata di _ga nella tabella dice «2 anni, rinnovati a ogni visita» (il predefinito di GA4, perché il sito non fissa cookie_expires) invece di 14 mesi.",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 2061",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/cookies/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Ho corretto la policy invece di impostare cookie_expires (lib/analytics è di S10). Se Nicola preferisce 14 mesi, basta cookie_expires: 36806400 in lib/analytics/gtag-avvio.ts e la prova si adegua da sola."
+    },
+    {
+      "id": 1675,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Nessuna modifica: la risposta «Come elimino il mio account?» dice già cosa va via e cosa resta (riga dei conti 10 anni, avviso del bonifico).",
+      "prova": "app/faq/page.tsx: «Togliamo il profilo, gli indirizzi e le preferenze. Resta la riga dei conti dei tuoi ordini, senza il tuo nome, per i 10 anni…»",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2327,
+      "esito": "riparato",
+      "cosa_ho_fatto": "«Quanto guadagna un rider?» nasce da COMPENSO_RIDER_CENTS e COMPENSO_RIDER_NEGOZIO_IN_PIU_CENTS: 3 € per giro più 1 € per ogni negozio in più, non cambia coi chilometri.",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 2327",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/faq/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2326,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La risposta sui più negozi dice che la consegna è una sola per tutto il carrello e rimanda alla risposta sulle spese, non più «ognuno con la propria spedizione».",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 2326",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/faq/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 288,
+      "esito": "parziale",
+      "cosa_ho_fatto": "La risposta della FAQ sul codice sconto nasce da CODICI_SCONTO_IN_CASSA: spento, dice «Al momento no».",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 288",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/faq/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Mancano, fuori territorio: la frase sul codice in spiegazioneDellaConsegna (lib/promesse-pubbliche.ts:587, S07) e in app/help/page.tsx «modifica» dell ordine e «Più di 25 risposte» (S05)."
+    },
+    {
+      "id": 2460,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La risposta sul reso aggiunge RESO_ESCLUSI («esclusi i prodotti freschi e deperibili») e quelli fatti su ordinazione.",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 2460",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/faq/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1707,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "app/privacy/page.tsx e app/profile/settings/page.tsx: l avviso del bonifico con l email resta «finché non lo cancelliamo»; nessuna potatura",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda per Nicola: dopo quanti mesi dal bonifico pagato si cancella l avviso «Bonifico di rimborso da fare» con l email del cliente? Con la risposta: una potatura in lib/privacy/potature-ritenzione.ts e la durata nell informativa."
+    },
+    {
+      "id": 2627,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "app/privacy/page.tsx, ramo senza pulsanti attivi: «ti rispondiamo entro un mese, come prevede la legge»",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda per Nicola: approvi la frase «ti rispondiamo entro un mese» (art. 12.3 GDPR)? Se no, si toglie."
+    },
+    {
+      "id": 664,
+      "esito": "riparato",
+      "cosa_ho_fatto": "I contenitori delle tabelle di privacy e cookie hanno tabIndex=0, role=region, un nome e il contorno al fuoco.",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › le tabelle si scorrono da tastiera",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/privacy/page.tsx",
+        "app/cookies/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 718,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "grep -rli 'dac7|agenzia delle entrate' app lib → 0",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda per Nicola (col fiscalista): MyCity è «gestore di piattaforma» DAC7 (D.Lgs. 32/2023)? Se sì, servono una riga nella tabella delle finalità, l Agenzia delle Entrate fra i destinatari e due righe nel contratto del negozio."
+    },
+    {
+      "id": 121,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Aggiunta la riga «Assistenza clienti (messaggi dal modulo Contatti) — legittimo interesse — 24 mesi», col numero preso da MESI_DEI_MESSAGGI_DEI_CONTATTI.",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 121",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/privacy/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Mancano due scelte di Nicola: quanto teniamo la chat col negozio (non c è nessuna potatura) e un termine per l email con l IBAN (oggi «finché non la cancelliamo»; la scheda propone 90 giorni dal bonifico)."
+    },
+    {
+      "id": 105,
+      "esito": "parziale",
+      "cosa_ho_fatto": "La conservazione dei documenti d identità dice quello che fa il codice: fino alla cancellazione dell account (lì subito), respinti 90 giorni, iscrizione a metà 30 giorni (letto dalla costante).",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 105",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/privacy/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Manca la parte da legale: finalità «antiriciclaggio» e base «obbligo di legge» restano scritte; la scheda propone di toglierle, ma è un giudizio giuridico. Domanda per Nicola (col legale): MyCity è soggetto obbligato antiriciclaggio? Se no, la riga diventa «Verifica dell identità di Venditori e Rider — contratto e legittimo interesse»."
+    },
+    {
+      "id": 109,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La riga Upstash dice: da un minuto fino a 24 ore, contatori legati a indirizzo IP, email usata per accedere o identificativo dell account.",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 109",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/privacy/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Testo legale: Nicola lo rilegga. L alternativa (impronta con sale di email e id prima di Upstash) sta in lib/rate-limit.ts, fuori territorio."
+    },
+    {
+      "id": 2020,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Senza casella l informativa dice «scrivendoci dal modulo dei contatti» (collegamento) invece di «scrivendo a il modulo dei contatti», nei due punti (diritti e versioni precedenti).",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 2020",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/privacy/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 506,
+      "esito": "riparato",
+      "cosa_ho_fatto": "§4: in testa negozio da cui compri e Rider che consegna, coi dati che ricevono; Supabase ora «dati ospitati nell UE, a Parigi; eventuali accessi dagli USA coperti da SCC»; il riassunto non dice più «solo».",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 506",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/privacy/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Testo legale: Nicola lo rilegga. Non ho scritto i ruoli giuridici (titolare autonomo / per conto di MyCity): li decide un legale. La sede del database (eu-west-3) l ho presa dalle prove della copia notturna, non da una variabile."
+    },
+    {
+      "id": 1811,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Fra i dati KYC c è «un selfie da confrontare col documento».",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 1811",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/privacy/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Testo legale: Nicola lo rilegga."
+    },
+    {
+      "id": 424,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Le quattro scritture leggono { error } e lo lanciano: niente «Indirizzo salvato» né modulo svuotato su un salvataggio fallito; il predefinito si toglie agli altri solo dopo aver salvato questo (.neq('id', salvato)); l eliminazione fallita mostra l errore.",
+      "prova": "tests/unit/minori-s08-profilo.test.tsx › rubrica indirizzi (due prove)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/addresses/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Non è una funzione unica nel database: se la seconda scrittura (togli il predefinito agli altri) cade, possono restare due predefiniti, e l errore si vede."
+    },
+    {
+      "id": 1835,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Le schede Riscatta / Le mie gift card hanno role=tab e aria-selected dentro un role=tablist.",
+      "prova": "tests/unit/minori-s08-profilo.test.tsx › le schede dicono al lettore di schermo quale è attiva",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/gift-cards/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Non ho aggiunto la navigazione con le frecce fra le schede."
+    },
+    {
+      "id": 425,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La lettura delle gift card guarda l errore: con isError la linguetta non mostra il conteggio e il riquadro dice «Non riusciamo a leggere le tue gift card» con Riprova.",
+      "prova": "tests/unit/minori-s08-profilo.test.tsx › se la lettura cade non dice «Nessuna gift card ancora»",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/gift-cards/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 312,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il profilo manda a /sign-in?returnTo=/profile solo quando manca l utente; su un errore di lettura mostra ErrorState con «Riprova».",
+      "prova": "tests/unit/minori-s08-profilo.test.tsx › una lettura caduta non manda alla pagina di accesso",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 178,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tolti dal Profilo indirizzo, CAP e città (la cassa non li legge mai) con un rimando a «I tuoi indirizzi»; la frase delle Impostazioni non parla più di «indirizzo principale».",
+      "prova": "tests/unit/minori-s08-profilo.test.tsx › il profilo non chiede indirizzo, CAP e città…",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/page.tsx",
+        "app/profile/settings/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "I valori già salvati in profiles.address/city/zip restano nel database, non più mostrati."
+    },
+    {
+      "id": 2426,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La classifica spenta non parla più di «un credito per ogni amico»: rimanda alla pagina Invita un amico.",
+      "prova": "tests/unit/minori-s08-profilo.test.tsx › classifica spenta: non promette un credito",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/referral/leaderboard/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1825,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Classifica inviti: la lettura guarda l errore e dice «Non riusciamo a leggere la classifica» invece di «Classifica vuota · Sii il primo».",
+      "prova": "tests/unit/minori-s08-profilo.test.tsx › classifica non letta",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/referral/leaderboard/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Manca la parte del Drop del giorno (app/admin/daily-drops/page.tsx, fuori territorio): lettura senza errore e giorno di Greenwich."
+    },
+    {
+      "id": 1833,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Inviti: la lettura del profilo e quella degli inviti guardano l errore; profilo non letto → ErrorState con Riprova invece della rotellina infinita; inviti non letti → messaggio invece di «0 invitati» e «€0,00».",
+      "prova": "tests/unit/minori-s08-profilo.test.tsx › profilo non letto / inviti non letti",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/referral/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Funzione spenta al lancio (INVITI_E_PUNTI_ACCESI): la prova la accende nel finto."
+    },
+    {
+      "id": 1999,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Prova nuova: rinviata:true con motivo:null deve mostrare il riquadro del rinvio. Col mutante `{pendingDeletion.motivo ? (` diventa rossa.",
+      "prova": "tests/unit/minori-s08-impostazioni.test.tsx › scheda 1999",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s08-impostazioni.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Difetto delle prove: provato col mutante (rosso) e col codice vero (verde)."
+    },
+    {
+      "id": 2026,
+      "esito": "riparato",
+      "cosa_ho_fatto": "In Zona pericolosa, anche senza «rinviata», se i giorni sono 0 o la data è passata la pagina dice «I 7 giorni per ripensarci sono passati, ma l account non è ancora stato eliminato» invece di «tra 0 giorni… entro questa data».",
+      "prova": "tests/unit/minori-s08-impostazioni.test.tsx › scheda 2026",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/settings/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2025,
+      "esito": "riparato",
+      "cosa_ho_fatto": "mostraErroreConLaStrada chiama trackErrorShown: gli errori di Cancella account, Esporta e Annulla tornano nel conteggio degli errori mostrati.",
+      "prova": "tests/unit/minori-s08-impostazioni.test.tsx › schede 2022, 2023, 2025",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/settings/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2022,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il pulsante del messaggio dice «Scrivi un email» (l indirizzo è già nel testo) invece di «Scrivi a <indirizzo intero>», che non si restringeva.",
+      "prova": "tests/unit/minori-s08-impostazioni.test.tsx › schede 2022, 2023, 2025",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/settings/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Larghezza non misurata in un browser vero: la prova controlla che l etichetta sia corta e senza indirizzo."
+    },
+    {
+      "id": 2023,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il clic sul pulsante del messaggio chiama event.preventDefault(): sonner non chiude più il messaggio, spiegazione e indirizzo restano.",
+      "prova": "tests/unit/minori-s08-impostazioni.test.tsx › schede 2022, 2023, 2025",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/settings/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2024,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il motivo del rinvio passa da un piccolo componente che rende cliccabili «/contact» e gli indirizzi email.",
+      "prova": "tests/unit/minori-s08-impostazioni.test.tsx › scheda 2024",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/settings/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2028,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Se la lettura dello stato ha risposto 503 senza recapito (nessun canale), la scheda Privacy mostra la frase del server invece di mandare al modulo dei contatti.",
+      "prova": "tests/unit/minori-s08-impostazioni.test.tsx › scheda 2028",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/settings/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2027,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La pagina apre la scheda indicata da ?tab= e il collegamento degli avvisi di cancellazione porta a /profile/settings?tab=danger.",
+      "prova": "tests/unit/minori-s08-impostazioni.test.tsx › scheda 2027",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/settings/page.tsx"
+      ],
+      "file_altrui_toccati": [
+        "lib/cron-cancellazioni.ts"
+      ],
+      "nota": "Aggiornata una prova vecchia che pretendeva il collegamento senza ?tab: tests/unit/la-spiegazione-per-email-che-non-parte-si-riprova-la-notte-dopo.test.ts."
+    },
+    {
+      "id": 2035,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Se la GET dello stato risponde 503 con la strada a mano, la Zona pericolosa mostra «La cancellazione automatica è spenta» con la frase e il recapito, al posto del modulo ELIMINA.",
+      "prova": "tests/unit/minori-s08-impostazioni.test.tsx › scheda 2035",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/settings/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Solo il 503 che porta details.recapito (la strada a mano) fa mostrare il riquadro: un 503 del controllo d accesso per un guasto passeggero no (correzione dopo la revisione). «Esporta dati» resta col messaggio dopo il clic."
+    },
+    {
+      "id": 2056,
+      "esito": "riparato",
+      "cosa_ho_fatto": "«Annulla eliminazione» passa da mostraErroreConLaStrada (frase del server e pulsante) invece di friendlyError; la porta Annulla ha una frase sua senza «entro un mese», con «la cancellazione definitiva parte 7 giorni dopo la richiesta» e l oggetto «Fermate la cancellazione del mio account». La GET in errore ora si mostra (scheda 2035).",
+      "prova": "tests/unit/minori-s08-impostazioni.test.tsx › scheda 2056 · tests/unit/minori-s08-cancellazione.test.ts › scheda 2056",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/settings/page.tsx",
+        "app/api/account/delete/route.ts",
+        "lib/legal/titolare.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Frase nuova: Nicola la rilegga."
+    },
+    {
+      "id": 980,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "app/notifications/page.tsx legge tutte le notifiche senza guardare la categoria; vuole_notifica la chiama solo send-push",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Fuori dal mio territorio: le due strade sono un filtro per categoria nella campanella e nel conteggio del pallino (app/notifications e components/hooks/useNotificationsCount.ts, S03) oppure un trigger sul database che non scrive le notifiche che la persona ha spento (migrazione nuova). Lo segnalo all AD."
+    },
+    {
+      "id": 2036,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Con NEWSLETTER_ACCESA=false la scheda Notifiche dice «La newsletter non è ancora attiva» e mostra l interruttore solo a chi l aveva accesa, per spegnerla; «Promozioni e sconti» non nomina i coupon con CODICI_SCONTO_IN_CASSA=false.",
+      "prova": "tests/unit/minori-s08-impostazioni.test.tsx › scheda 2036",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/profile/settings/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Aggiornata la prova vecchia tests/unit/gli-interruttori-delle-impostazioni-dicono-il-proprio-nome.test.ts: con la newsletter spenta gli interruttori sono 4, non 5. La cadenza del riquadro newsletter della home non l ho toccata (fuori territorio)."
+    },
+    {
+      "id": 353,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nel profilo del negozio e nel profilo del fattorino c è un riquadro «Notifiche sul telefono» col pulsante PushNotificationOptIn.",
+      "prova": "tests/unit/minori-s08-notifiche-pannelli.test.ts (prova leggera sul sorgente)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [],
+      "file_altrui_toccati": [
+        "app/seller/profile/page.tsx",
+        "app/rider/profile/page.tsx"
+      ],
+      "nota": "Non lo chiede al primo accesso (la scheda lo suggeriva in più)."
+    },
+    {
+      "id": 2584,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "La scheda non dice quale sia il buco: cita solo «cB6/riacc 2/2 e cB6r 2/2» e un comando su file del collaudo che non esistono più",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Senza sapere quale prova manca non si può scriverla senza inventare. Le prove sulla riaccettazione aggiunte oggi (minori-s08-condizioni, ordine del verbale) coprono un buco vicino (scheda 2586)."
+    },
+    {
+      "id": 2219,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "lib/legal/promessa-cliente-assente.ts QUANDO['altri-da-consegnare'] «come se avessi ordinato solo da loro» contro lib/ordini/prezzi.ts consegnaDopoLAnnullo (tetto)",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Riguarda solo i codici sconto, spenti al lancio. Domanda per Nicola, prima di riaccenderli: col codice e il tetto la consegna dei rimasti può restare più bassa della regola; nei Termini scriviamo «come se avessi ordinato solo da loro, o meno se avevi un codice sconto»?"
+    },
+    {
+      "id": 127,
+      "esito": "riparato",
+      "cosa_ho_fatto": "§4: l ordine è una proposta che si può annullare dal dettaglio finché il Venditore non l ha accettata; il contratto si perfeziona con l accettazione.",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 127",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/terms/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Clausola di contratto cambiata per dire quello che il sito fa: Nicola la rilegga col legale."
+    },
+    {
+      "id": 2293,
+      "esito": "riparato",
+      "cosa_ho_fatto": "§4: le spese di consegna sono mostrate al checkout e seguono la pagina Spedizioni (collegamento), non più «in base a peso, distanza».",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 2293",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/terms/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Clausola di contratto: Nicola la rilegga."
+    },
+    {
+      "id": 522,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Nessuna modifica: Termini 3.0 in vigore dal 1 novembre 2026 (versione letta da lib/legal/versione.ts), date di Privacy e Cookie aggiornate, e la riaccettazione esiste (rotta accetta-condizioni guarda la versione dell ultima riga a verbale).",
+      "prova": "lib/legal/versione.ts:15 VERSIONE_TESTI_LEGALI = 'privacy-2.0+terms-3.0'; app/api/account/accetta-condizioni/route.ts: eLaVersioneInVigore(await ultimaVersioneAVerbale(...))",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "ATTENZIONE: oggi (S08) ho cambiato Privacy e Cookie in diversi punti (destinatari, conservazione, cookie). Nicola decide se alzare la versione (privacy-2.1, nuova data): alzarla chiede a tutti di riaccettare. Manca ancora la prova «se il testo cambia e la versione no, rosso»."
+    },
+    {
+      "id": 440,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nel modulo di recesso le righe di puntini sono al massimo 28 caratteri e il <pre> va a capo anche dentro una parola lunga ([overflow-wrap:anywhere]).",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 440",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/terms/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Larghezza non misurata in un browser: la prova controlla che nessun pezzo senza spazi superi 30 caratteri."
+    },
+    {
+      "id": 634,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Nessuna modifica: il §9 dei Termini dice già «IVA inclusa», letto dalla stessa costante delle pagine del negozio.",
+      "prova": "app/terms/page.tsx §9: «{COMMISSIONE_DEL_PERCENTO} del subtotale … {IVA_SULLA_COMMISSIONE}» con IVA_SULLA_COMMISSIONE = 'IVA inclusa' (app/seller/earnings/commissione.ts:96)",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Il resto della scheda (prezzo della consegna 3 € IVA inclusa contro 3 € al fattorino, modello di pareggio) è una scelta di Nicola col commercialista."
+    },
+    {
+      "id": 512,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica: la parte «IVA esclusa» è già chiusa (vedi scheda 634).",
+      "prova": "app/terms/page.tsx §9 «IVA inclusa»; nessuna fattura al negozio nel codice",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda per Nicola (col commercialista): chi emette ogni mese la fattura elettronica di commissioni (e, quando si accende, dell abbonamento) al negozio, e con quale strumento?"
+    },
+    {
+      "id": 100,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "app/terms/page.tsx §15 promette 30 giorni di preavviso via email; nessun modello né giro che lo mandi",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda per Nicola (col legale): costruiamo l email «I Termini cambiano dal …» con l entrata in vigore 30 giorni dopo l invio, oppure riscriviamo il §15 com è oggi (riaccettazione al primo accesso)? Per i negozi il P2B fa preferire la prima."
+    },
+    {
+      "id": 520,
+      "esito": "riparato",
+      "cosa_ho_fatto": "§16-bis: il punto di contatto per utenti e autorità si stampa sempre; senza NEXT_PUBLIC_TITOLARE_EMAIL_SEGNALAZIONI è la pagina contatti, così il «qui sopra» del riesame porta a qualcosa.",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 520",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/terms/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Resta per Nicola (non codice): impostare su Vercel NEXT_PUBLIC_TITOLARE_EMAIL_SEGNALAZIONI con una casella letta davvero."
+    },
+    {
+      "id": 523,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tolti i tre riquadri pubblici «Avviso legale» da Termini, Privacy e Cookie; la nota resta come commento nel codice.",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › niente note interne sulle pagine pubbliche",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/terms/page.tsx",
+        "app/privacy/page.tsx",
+        "app/cookies/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Resta il passo di Nicola: far validare i tre testi da un legale prima del lancio."
+    },
+    {
+      "id": 514,
+      "esito": "parziale",
+      "cosa_ho_fatto": "§2: l ordine dei risultati è descritto come lo fa il codice (con ricerca: rilevanza del testo; senza: i più recenti; ordinamento per prezzo; spazi pagati separati e segnalati).",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 514",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/terms/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Manca l etichetta «Sponsored» in components/SponsoredCarousel.tsx (fuori territorio). Per il P2B la modifica dei Termini va comunicata ai negozi con 15 giorni di preavviso: Nicola deve mandarla."
+    },
+    {
+      "id": 1720,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La scritta sotto il profilo pubblico dice «Su MyCity Piacenza», non «Buyer su MyCity Piacenza».",
+      "prova": "tests/unit/minori-s08-profilo-pubblico.test.tsx › schede 1737 e 1720",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/u/[handle]/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1723,
+      "esito": "riparato",
+      "cosa_ho_fatto": "fetchProfileByHandle guarda l errore e il client mancante: li scrive con logger.error e lancia (pagina d errore con Riprova); notFound solo quando la lettura riesce e non trova nessuno.",
+      "prova": "tests/unit/minori-s08-profilo-pubblico.test.tsx › scheda 1723 (due prove)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/u/[handle]/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1737,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Gli achievement si leggono sul server col client di servizio, dopo aver trovato il profilo con public_profile_enabled=true: chi guarda il profilo di un altro li vede.",
+      "prova": "tests/unit/minori-s08-profilo-pubblico.test.tsx › schede 1737 e 1720",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/u/[handle]/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Vale solo con la chiave di servizio impostata in produzione (scheda 1746)."
+    },
+    {
+      "id": 1739,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Un handle che non è fatto solo di lettere, cifre e «_» non arriva al database (handleValido → «non trovato»); «_» si protegge prima di ilike (handleEsatto). File nuovo app/u/[handle]/handle.ts.",
+      "prova": "tests/unit/minori-s08-profilo-pubblico.test.tsx › scheda 1739 (due prove)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/u/[handle]/page.tsx",
+        "app/u/[handle]/handle.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il revisore ha trovato che «*» per PostgREST vale come «%»: ora gli handle con caratteri diversi non si cercano proprio. Aggiornato il finto tests/unit/aiuti/database-della-vetrina.ts perché legga la barra rovesciata come Postgres."
+    },
+    {
+      "id": 1746,
+      "esito": "non_codice",
+      "cosa_ho_fatto": "Nessuna modifica: il codice usa già il client di servizio; manca la chiave in produzione.",
+      "prova": "app/u/[handle]/page.tsx: getAdminSupabase() in fetchProfileByHandle",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Nicola: impostare SUPABASE_SERVICE_ROLE_KEY su Vercel (carta #154, dopo la rotazione #203). Da oggi, senza chiave, la pagina mostra un errore e lo scrive nei registri invece di dire «non trovato» (scheda 1723)."
+    },
+    {
+      "id": 85,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nel pannello «Personalizza» la voce Analytics dice: identificativo del dispositivo (mc_vid, 12 mesi) collegato all account, indirizzo di rete e browser; non più «statistiche aggregate anonime».",
+      "prova": "tests/unit/minori-s08-testi-legali.test.tsx › scheda 85",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/CookieBanner.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Testo rivolto al consenso: Nicola lo rilegga."
+    },
+    {
+      "id": 2248,
+      "esito": "non_codice",
+      "cosa_ho_fatto": "Nessuna modifica: dopo la lettura il piede mostra solo le categorie con prodotti (soloLePiene); «Abbigliamento» compare solo se nel database è una categoria madre attiva.",
+      "prova": "components/Footer.tsx: const madri = soloLePiene(madriTutte, piene.isError ? null : piene.data)",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Nicola: eseguire select slug from categories where slug='abbigliamento' and parent_id is null; se c è, disattivarla nel database (al lancio non c è). Fra la lettura delle categorie e quella delle «piene» può comparire per un attimo."
+    },
+    {
+      "id": 439,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Tolti dal piede «Negozio del mese», «Eventi MyCity» e «Liste curate».",
+      "prova": "tests/unit/minori-s08-piede.test.tsx › scheda 439",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/Footer.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Lasciato «Vicino a te»: con un negozio vero mostra quel negozio, non è vuota. Le sezioni della home (se accese dal costruttore) sono fuori territorio."
+    },
+    {
+      "id": 306,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "components/Footer.tsx: i sei href scritti a mano su «mycitypiacenza»",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda per Nicola: quali dei sei profili social (Facebook, Instagram, TikTok, X, LinkedIn, YouTube) esistono davvero, e il nome è «mycitypiacenza» o «mycity.piacenza»? Con la risposta il piede li legge da una costante e mostra solo quelli veri."
+    },
+    {
+      "id": 1827,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La fascia della newsletter nel piede si disegna solo con NEWSLETTER_ACCESA: niente più fascia crema vuota con doppio bordo.",
+      "prova": "tests/unit/minori-s08-piede.test.tsx › scheda 1827",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/Footer.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 333,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La voce telefono del piede si mostra solo con NEXT_PUBLIC_SUPPORT_PHONE, come link tel: col numero e gli orari.",
+      "prova": "tests/unit/minori-s08-piede.test.tsx › scheda 333 (due prove)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/Footer.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1738,
+      "esito": "riparato",
+      "cosa_ho_fatto": "L interruttore dice che gli altri vedono «il tuo nome e cognome, i tuoi badge e la bio».",
+      "prova": "tests/unit/minori-s08-profilo-pubblico.test.tsx › scheda 1738",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/PublicProfileToggle.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 329,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Se la lettura del profilo pubblico cade, l interruttore mostra «Non riusciamo a leggere…» con Riprova e niente Salva (nessuna scrittura che azzeri handle e bio). Il tasto copia aspetta gli appunti, è 24 px, e l indirizzo si mostra solo per l handle già salvato.",
+      "prova": "tests/unit/minori-s08-profilo-pubblico.test.tsx › scheda 329 (due prove)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/PublicProfileToggle.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2619,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Pagina nuova /profile/returns («I miei resi»): le richieste di reso con la stessa frase di stato della pagina dell ordine e il collegamento all ordine; in fondo il rimando alle regole. La voce «Resi» del menu dell account (barra e striscia) porta lì.",
+      "prova": "tests/unit/minori-s08-resi.test.tsx",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/account/AccountShell.tsx",
+        "components/account/AccountSidebar.tsx",
+        "app/profile/returns/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1863,
+      "esito": "riparato",
+      "cosa_ho_fatto": "CAMPI_KYC_DA_AZZERARE comprende kyc_provider_check_id, kyc_provider_status e kyc_provider_checked_at.",
+      "prova": "tests/unit/minori-s08-cancellazione-account.test.ts › scheda 1863",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/account/cancellazione.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 82,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "lib/account/cancellazione.ts: CAMPI_KYC_DA_AZZERARE azzera business_vat_number, business_legal_name, legal_fiscal_code, billing_iban anche per chi ha venduto",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda per Nicola (col commercialista): per quanto teniamo i dati fiscali di un negozio che ha venduto e cancella l account (10 anni?), e in un archivio separato leggibile solo dall admin? Serve una tabella nuova (migrazione 235-239) e la copia di ragione sociale e P.IVA sull ordine."
+    },
+    {
+      "id": 123,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Prima del passo irreversibile si legge anche stripe_account_id e se c è si annota in audit_logs (azione account.cancellazione.conto_stripe_da_chiudere, metadata.conto); se l annotazione non riesce la cancellazione si ferma. Il conto NON si chiude da qui.",
+      "prova": "tests/unit/minori-s08-cancellazione-account.test.ts › scheda 123 (due prove)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/account/cancellazione.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Prima versione chiudeva il conto se il saldo era zero: il revisore ha mostrato che il saldo non vede i pagamenti ancora trattenuti (payout HELD) e che chiuderlo prima di deleteUser è irreversibile. Manca la chiusura vera: Nicola la fa a mano leggendo il registro, o si decide un giro che chiude il conto quando i pagamenti del negozio sono tutti rilasciati."
+    },
+    {
+      "id": 1693,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Se i file personali o le prove di consegna non si tolgono, cancellaAccount si ferma prima di deleteUser (ok:false, il giro notturno lo conta fra i guasti e riprova la notte dopo).",
+      "prova": "tests/unit/minori-s08-cancellazione-account.test.ts › scheda 1693",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/account/cancellazione.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Un file che non si toglie mai (es. permesso sbagliato sul secchio) ferma quella cancellazione finché qualcuno non guarda: è voluto, la notte diventa rossa."
+    },
+    {
+      "id": 86,
+      "esito": "riparato",
+      "cosa_ho_fatto": "readConsent restituisce null quando il consenso è più vecchio di CONSENT_MAX_AGE_DAYS: GA, PostHog ed eventi smettono di partire col sì scaduto; il banner usa la stessa regola invece del 180 scritto a mano.",
+      "prova": "tests/unit/minori-s08-consenso.test.ts",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/consent.ts",
+        "components/CookieBanner.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 5,
+      "esito": "riparato",
+      "cosa_ho_fatto": "mittenteFuoriDominio accetta anche i sottodomini nostri (host.endsWith('.'+dominio)); .env.example propone mittente, risposta e supporto su mycity-marketplace.com.",
+      "prova": "tests/unit/minori-s08-titolare.test.ts › scheda 5",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/contatti-pubblici.ts"
+      ],
+      "file_altrui_toccati": [
+        ".env.example"
+      ],
+      "nota": ""
+    },
+    {
+      "id": 2231,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Le due frasi del carrello si dividono i casi senza buchi, come il codice (basta un ordine consegnato per rendere tutto): «almeno uno degli altri… è già stato consegnato» e «…e nessuno è ancora stato consegnato».",
+      "prova": "tests/unit/minori-s08-termini-carrello.test.ts › scheda 2231",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/legal/promessa-cliente-assente.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Testo dei Termini (§4 e §6): Nicola lo rilegga."
+    },
+    {
+      "id": 2503,
+      "esito": "riparato",
+      "cosa_ho_fatto": "fattiDellaConsegna vede l esito «cliente assente» (rotta del fattorino, che non passa dalla macchina degli stati): esitoDiMancataConsegna ora è true; la trattenuta resta esclusa perché i tentativi non si registrano. Il §6 non cambia.",
+      "prova": "tests/unit/minori-s08-termini-carrello.test.ts › scheda 2503",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/legal/promessa-cliente-assente.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Aggiornata la prova vecchia tests/unit/i-termini-non-promettono-un-esito-che-il-codice-non-sa-registrare.test.ts, che pretendeva false."
+    },
+    {
+      "id": 2239,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "lib/legal/promessa-cliente-assente.ts esempioDelCarrello: la frutta passa da 13 a 15 € dopo che il forno rifiuta",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda per Nicola (col legale): con la carta i 2 € di consegna in più si tolgono dal rimborso del pane dopo l accettazione: si tiene questa regola (rischio di clausola vessatoria, art. 33 c.2 lett. o Cod. Cons.) o la consegna dei rimasti non sale?"
+    },
+    {
+      "id": 2288,
+      "esito": "riparato",
+      "cosa_ho_fatto": "esempioDelCarrello prende il fatto che apre l esempio: nel §6 dice «se l ordine del pane non si può consegnare perché non sei reperibile», nel §4 resta «se il forno rifiuta». Cifre invariate.",
+      "prova": "tests/unit/minori-s08-termini-carrello.test.ts › scheda 2288",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/legal/promessa-cliente-assente.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Aggiornata la prova vecchia tests/unit/i-termini-dicono-quello-che-l-annullo-rende-davvero.test.ts (il §6 ha il suo evento). Testo dei Termini: Nicola lo rilegga."
+    },
+    {
+      "id": 2535,
+      "esito": "riparato",
+      "cosa_ho_fatto": "frameTitolare usa nomePubblico: senza variabili dice «<gestore> (MyCity).» invece di «MyCity.».",
+      "prova": "tests/unit/minori-s08-titolare.test.ts › scheda 2535",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/legal/titolare.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Oggi nessuna pagina chiama frameTitolare."
+    },
+    {
+      "id": 2021,
+      "esito": "non_codice",
+      "cosa_ho_fatto": "Nessuna modifica: senza la casella il recapito è il modulo dei contatti, come previsto.",
+      "prova": "lib/legal/titolare.ts recapitoPrivacy: href '/contact' quando manca NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Nicola: creare la casella privacy (sul dominio mycity-marketplace.com) e impostare NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY su Vercel."
+    },
+    {
+      "id": 2057,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La riga di registro di senzaChiave (porta Cancella account) porta l id dell utente e il diritto chiesto; la frase del ramo «nessun canale» toglie il «quindi» sulla casella e cita il reclamo al Garante.",
+      "prova": "tests/unit/minori-s08-cancellazione.test.ts › scheda 2057 (due prove)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/account/delete/route.ts",
+        "lib/legal/titolare.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Testo rivolto all utente su un diritto GDPR: Nicola lo rilegga. Tolta dopo la revisione la frase «l abbiamo annotata insieme al tuo account» (la porta Esporta non annota l utente, e annotare è solo una riga di log)."
+    },
+    {
+      "id": 2004,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il mittente nel controllo si chiede a env.resendFrom(), la stessa regola di sendEmail, invece di rileggere process.env.RESEND_FROM.",
+      "prova": "tests/unit/minori-s08-titolare.test.ts › il mittente si chiede alla stessa regola di sendEmail",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/legal/titolare.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "SUPPORT_EMAIL e RESEND_API_KEY non hanno un lettore in lib/env: restano lette da process.env. Prova leggera (lettura del sorgente)."
+    },
+    {
+      "id": 2058,
+      "esito": "riparato",
+      "cosa_ho_fatto": "ilModuloArrivaSenzaDatabase risponde sì solo se SUPPORT_EMAIL sta sul dominio dei contatti (o un suo sottodominio) e il mittente non è fuori dominio.",
+      "prova": "tests/unit/minori-s08-titolare.test.ts › schede 2058 e 2004",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/legal/titolare.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Aggiornata la prova vecchia tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts, che usava caselle @example.com."
+    },
+    {
+      "id": 2586,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Prova nuova con un finto database che ordina davvero le righe: con ascending:true diventa rossa.",
+      "prova": "tests/unit/minori-s08-condizioni.test.ts › ordina per data di creazione dalla più nuova alla più vecchia",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s08-condizioni.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Difetto delle prove, non del sito: provato mettendo ascending:true in lib/legal/versione.ts (rossa) e rimettendo false (verde)."
+    },
+    {
+      "id": 2008,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Se il pannello di una persona non si scrive, l email si tenta lo stesso (tolto il continue): il canale per chi non rientra nel sito non dipende più da quello interno.",
+      "prova": "tests/unit/minori-s08-avvisi.test.ts › schede 2008 e 1994",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/privacy/avvisi-a-chi-aspetta.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Manca la parte di struttura: il file tiene ancora insieme pannello, lucchetto, indirizzo, HTML e invio (l HTML ora sta in lib/email/templates.ts). Spezzarlo è un rifacimento, non un difetto minore."
+    },
+    {
+      "id": 1963,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tetto ai tentativi dell email (TENTATIVI_EMAIL_MASSIMI = 31, il mese di legge più un giorno): dopo, «bloccata» senza nuove righe nel registro; dal terzo tentativo il guasto della posta si scrive come avviso, non come errore.",
+      "prova": "tests/unit/minori-s08-avvisi.test.ts › scheda 1963",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/privacy/avvisi-a-chi-aspetta.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il tetto è 31 e non più basso perché due prove esistenti chiedono, apposta, che si ritenti per tutto il mese di legge."
+    },
+    {
+      "id": 2003,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "lib/privacy/avvisi-a-chi-aspetta.ts, emailDovuta: se la scrittura di EMAIL_PARTITA fallisce si restituisce «partita» senza segno",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Per non dire «non partita» di un email già arrivata serve un secondo posto dove segnare l invio quando il registro non risponde (o segnare anche gli invii falliti, per distinguere «fallito» da «partito ma non segnato»). È una scelta di disegno del lucchetto, non una riga."
+    },
+    {
+      "id": 1996,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Prova nuova sul terzo tentativo rifiutato dal registro (errore che non è un doppione): deve dare «bloccata», non «in corso». Col mutante «|| tentativo > 2» diventa rossa.",
+      "prova": "tests/unit/minori-s08-avvisi.test.ts › scheda 1996",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s08-avvisi.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Difetto delle prove: provato col mutante."
+    },
+    {
+      "id": 1998,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Prova nuova: rispondiAChiAspetta spedisce con tipo «transazionale». Col mutante «marketing» in postaVera diventa rossa.",
+      "prova": "tests/unit/minori-s08-avvisi.test.ts › scheda 1998",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s08-avvisi.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Difetto delle prove: provato col mutante."
+    },
+    {
+      "id": 1994,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Prova nuova con due persone: pannello fallito per la prima, email partite per tutte e due.",
+      "prova": "tests/unit/minori-s08-avvisi.test.ts › schede 2008 e 1994",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s08-avvisi.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2001,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Anche l esito «gia-partita» mette l avviso in emailPartiteAvvisi: se la chiusura dell allarme «scrivile tu» fallisce la notte dell invio, si ritenta le notti dopo.",
+      "prova": "tests/unit/minori-s08-avvisi.test.ts › scheda 2001",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/privacy/avvisi-a-chi-aspetta.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La chiusura (chiudiGliAllarmiDelleEmailPartite, S03) riceve ogni notte gli avvisi ancora in attesa: deve restare idempotente, come oggi."
+    },
+    {
+      "id": 2006,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "lib/privacy/avvisi-a-chi-aspetta.ts: REGISTRO_INVII = 'audit_logs', azioni privacy.avviso_cancellazione.email_* fuori da AZIONI_AUDIT",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "La cura vera è una tabella apposta per il lucchetto delle email (migrazione nuova), non il registro delle azioni amministrative; aggiungere le due azioni al catalogo (lib/audit-azioni.ts, senza padrone) le renderebbe solo leggibili. Con il tetto della scheda 1963 le righe per avviso ora sono al massimo 31."
+    },
+    {
+      "id": 2007,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La pagina dei contatti è una costante sola (PAGINA_DEI_CONTATTI in lib/legal/titolare.ts) usata dalle frasi e dall email; l email la cerca con confini di parola: «/contacts» e un indirizzo intero non si spezzano più.",
+      "prova": "tests/unit/minori-s08-avvisi.test.ts › scheda 2007",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/privacy/avvisi-a-chi-aspetta.ts",
+        "lib/legal/titolare.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2054,
+      "esito": "riparato",
+      "cosa_ho_fatto": "L email dell avviso passa da avvisoCancellazioneTemplate (nuovo, in lib/email/templates.ts, costruito con shell()): intestazione MyCity, piede con Privacy e Preferenze, e una versione di testo semplice (PostaAvvisi.invia ha il campo text).",
+      "prova": "tests/unit/minori-s08-avvisi.test.ts › scheda 2054",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/privacy/avvisi-a-chi-aspetta.ts"
+      ],
+      "file_altrui_toccati": [
+        "lib/email/templates.ts"
+      ],
+      "nota": ""
+    },
+    {
+      "id": 2053,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Se l avviso è già nel pannello, l email si costruisce dal body salvato lì (letto insieme all id), non dal testo ricalcolato quella notte: email e pagina dell account dicono la stessa cifra.",
+      "prova": "tests/unit/minori-s08-avvisi.test.ts › scheda 2053",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/privacy/avvisi-a-chi-aspetta.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il registro degli invii non salva ancora un impronta del testo partito (suggerita dalla scheda)."
+    },
+    {
+      "id": 2042,
+      "esito": "riparato",
+      "cosa_ho_fatto": "attesaDichiarata restituisce letturaFallita:true quando la rilettura cade; il GET risponde rinviata:null e letturaFallita:true; la pagina scrive «Non riusciamo a leggere lo stato…» al posto del conto alla rovescia.",
+      "prova": "tests/unit/minori-s08-cancellazione.test.ts › scheda 2042 · tests/unit/minori-s08-impostazioni.test.tsx › scheda 2042",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/privacy/avvisi-a-chi-aspetta.ts",
+        "app/api/account/delete/route.ts",
+        "app/profile/settings/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1584,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La potatura activity_events.profilo tocca solo le righe con ancora anon_id, path, referrer, city o country (.or(…not.is.null)), come le sorelle.",
+      "prova": "tests/unit/minori-s08-potature.test.ts",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/privacy/potature-ritenzione.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 122,
+      "esito": "non_codice",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "lib/privacy/potature-ritenzione.ts:380-391 usa la vista documenti_iscrizione_a_meta e kyc_file_da_togliere_prendi (migrazione 171)",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Nicola: applicare la migrazione 171 nel database vero insieme alla chiave di servizio (carta #154)."
+    },
+    {
+      "id": 2636,
+      "esito": "riparato",
+      "cosa_ho_fatto": "promessaSuperata riconosce anche «da 30 a 60 minuti», «30/60 min» e «in mezz ora», sempre lasciando passare la frase che dice «veloce».",
+      "prova": "tests/unit/minori-s08-promesse.test.ts",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/site-branding.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "La prova sugli orari del negozio è già rossa su main",
+      "file": "tests/unit/le-pagine-ordini-del-negozio-leggono-gli-orari.test.tsx",
+      "gravita": "minore",
+      "descrizione": "Due casi «lunedì 12:00 → entro le 12:45» falliscono anche su origin/main (provato in un worktree pulito). Non toccata."
+    },
+    {
+      "titolo": "La variante A del titolo della home dice «Consegna in giornata.» senza gli orari del negozio",
+      "file": "app/page.tsx:35",
+      "gravita": "minore",
+      "descrizione": "Resta dalla scheda 2155: i 30-60 minuti sono spariti, ma «in giornata» non dice «negli orari del negozio»."
+    },
+    {
+      "titolo": "La campanella del sito mostra le promozioni anche a chi le ha spente",
+      "file": "app/notifications/page.tsx:67-80",
+      "gravita": "minore",
+      "descrizione": "Scheda 980 non fatta: vuole_notifica la usa solo send-push; serve un filtro per categoria nella lista e nel conteggio del pallino (components/hooks/useNotificationsCount.ts) o un trigger sul database."
+    },
+    {
+      "titolo": "«Sponsored» in inglese nel carosello pagato",
+      "file": "components/SponsoredCarousel.tsx:98",
+      "gravita": "minore",
+      "descrizione": "Resta dalla scheda 514: l etichetta dovrebbe essere «Sponsorizzato», leggibile e vicina al titolo."
+    },
+    {
+      "titolo": "Il ritorno dopo l accesso perde ?tab=",
+      "file": "middleware.ts:408 e 546",
+      "gravita": "minore",
+      "descrizione": "returnTo salva solo il percorso: chi apre l email «Annulla la cancellazione» senza sessione arriva sulla scheda Account invece che su Zona pericolosa."
+    },
+    {
+      "titolo": "Il modulo contatti e la porta Cancella account giudicano SUPPORT_EMAIL in due modi",
+      "file": "app/api/contact/route.ts (inoltraSenzaDatabase) contro lib/legal/titolare.ts (ilModuloArrivaSenzaDatabase)",
+      "gravita": "minore",
+      "descrizione": "Dalla scheda 2058 la porta pretende SUPPORT_EMAIL sul dominio dei contatti, il modulo inoltra comunque a qualunque indirizzo. Se su Vercel SUPPORT_EMAIL sta su un altro dominio letto davvero, la porta dice «nessun canale» mentre il modulo arriverebbe: va controllato il valore vero."
+    },
+    {
+      "titolo": "Indirizzo, CAP e città del profilo non si correggono più",
+      "file": "app/profile/page.tsx · app/sell/page.tsx:168-170",
+      "gravita": "minore",
+      "descrizione": "Tolti dal Profilo (scheda 178) perché la cassa non li usa, ma /sell li legge ancora per precompilare la residenza: chi vuole rettificarli non ha più il campo."
+    },
+    {
+      "titolo": "Due richieste di cancellazione quasi insieme mandano due email",
+      "file": "app/api/account/delete/route.ts (POST)",
+      "gravita": "minore",
+      "descrizione": "Il secondo POST aggiorna 0 righe (.is(null)) ma risponde ok e spedisce l avviso con date non vere."
+    },
+    {
+      "titolo": "Traduttore degli errori di Zod: tre frasi sbagliate e acceso solo nel browser",
+      "file": "lib/zod-i18n.ts:21,33,52",
+      "gravita": "minore",
+      "descrizione": "Resta dalla scheda 408: «Atteso number», «Seleziona almeno 1 elementi», chiavi interne nelle frasi; il file non ha padrone."
+    },
+    {
+      "titolo": "Il Drop del giorno legge senza guardare l errore e usa il giorno di Greenwich",
+      "file": "app/admin/daily-drops/page.tsx:28,53-78",
+      "gravita": "minore",
+      "descrizione": "Resta dalla scheda 1825 (funzione spenta)."
+    }
+  ]
+}
