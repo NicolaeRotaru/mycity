@@ -14,9 +14,12 @@ test.describe('Product detail page', () => {
     // 5/11/2026 (unione) — La pagina dice «Prodotto non disponibile» quando il prodotto non c'è, e
     // «Impossibile caricare il prodotto» quando non ha potuto guardare (in queste prove il database non c'è).
     // «Prodotto non trovato» esiste solo nel titolo della scheda del browser, non come titolo in pagina.
-    await expect(
-      page.getByRole('main').getByRole('heading', { name: /Prodotto non disponibile|Impossibile caricare il prodotto/i }),
-    ).toBeVisible({ timeout: 10000 });
+    // Senza il database di prova il sito non può guardare e mostra la sua pagina d'errore («Qualcosa è
+    // andato storto»): errore onesto nel contenuto, non pagina bianca. Con il database: «non disponibile».
+    const titoloAtteso = process.env.E2E_DATI_DI_PROVA
+      ? /Prodotto non disponibile/i
+      : /Prodotto non disponibile|Impossibile caricare il prodotto|Qualcosa è andato storto/i;
+    await expect(page.getByRole('main').getByRole('heading', { name: titoloAtteso }).first()).toBeVisible({ timeout: 10000 });
   });
 
   test('search results link to product detail', async ({ page }) => {

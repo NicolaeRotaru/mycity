@@ -34,9 +34,13 @@ test.describe('Cart and Search', () => {
     // 5/11/2026 (unione) — In queste prove il database non c'è: la pagina mostra il suo errore onesto
     // («Non riesco a caricare questa categoria», con «Riprova»). Con il database, il nome della categoria
     // o «non trovata». Resta escluso il titolo del piede di pagina: si cerca dentro il contenuto.
-    await expect(
-      page.getByRole('main').getByRole('heading', { name: /alimentari|non trovata|non riesco a caricare questa categoria/i }).first(),
-    ).toBeVisible({ timeout: 5000 });
+    // Con il database di prova (E2E_DATI_DI_PROVA) il titolo è la categoria, o «non trovata». Senza,
+    // il sito non può guardare e mostra la sua pagina d'errore («Qualcosa è andato storto»): va bene
+    // un errore onesto dentro il contenuto, non va bene una pagina vuota o solo il piede.
+    const titoloAtteso = process.env.E2E_DATI_DI_PROVA
+      ? /alimentari|non trovata/i
+      : /alimentari|non trovata|non riesco a caricare questa categoria|qualcosa è andato storto/i;
+    await expect(page.getByRole('main').getByRole('heading', { name: titoloAtteso }).first()).toBeVisible({ timeout: 5000 });
   });
 
   test('stores page renders list', async ({ page, request }) => {
