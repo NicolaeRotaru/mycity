@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { monta } from './aiuti/monta-componente';
 import { databaseDellaVetrina, OGGI, DOPO, type Dati, type MondoVetrina } from './aiuti/database-della-vetrina';
 
@@ -92,6 +92,14 @@ afterEach(() => {
 });
 
 describe('«Chi siamo» conta i negozi attivi', () => {
+  // 5/11/2026 (S04, scheda 1957) — La compilazione del componente (esbuild in un processo a parte)
+  // la pagava il primo caso, dentro i suoi 5 secondi: con la suite intera in parallelo li superava.
+  // Si compila qui, prima dei casi, con un tempo suo.
+  beforeAll(async () => {
+    await monta('app/about/page.tsx');
+    await monta('app/u/[handle]/page.tsx');
+  }, 60000);
+
   it.each(CASI)('due negozi approvati con insegna, per chiunque guardi — %s', async (_n, mondo, chi) => {
     const db = databaseDellaVetrina(dati(), mondo, chi);
     clientDellaPagina.cookie = db.client;
