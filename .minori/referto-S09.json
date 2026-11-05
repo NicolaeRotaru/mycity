@@ -1,12 +1,12 @@
 {
   "sessione": "S09",
   "ramo": "claude/youthful-gates-blkxmk-m09",
-  "commit_finale": "0bd8bbb (codice: e44cf40)",
+  "commit_finale": "e44cf40",
   "verify": {
     "typecheck": "verde",
     "lint": "verde",
     "test": "rosso",
-    "note": "7638 prove verdi, 2 rosse: tests/unit/le-pagine-ordini-del-negozio-leggono-gli-orari.test.tsx (caso 1, lista e dettaglio), già rosse su origin/main (provato in una copia pulita, stessa uscita): non toccate. Lint: solo avvisi preesistenti. Il commit finale è quello che contiene questo referto; il codice verificato è al commit e44cf40."
+    "note": "7638 prove verdi, 2 rosse: tests/unit/le-pagine-ordini-del-negozio-leggono-gli-orari.test.tsx (caso 1, lista e dettaglio), già rosse su origin/main (provato in una copia pulita, stessa uscita): non toccate. Lint: solo avvisi preesistenti. Il commit finale è quello che contiene questo referto; il codice verificato è al commit e44cf40. commit_finale = ultimo commit di codice; il referto sta nel commit successivo."
   },
   "revisore": "Il revisore (subagent) ha trovato 12 punti. Corretti: (1) «Ultimi visti» cancellava lo storico anche a chi non aveva mai scelto sui cookie → ora si cancella solo alla revoca; (2) «Indietro» usava document.referrer, che dentro il sito non cambia → ora basta la cronologia; (3) il fuoco del pannello categorie su desktop andava sulla X nascosta nel suo contenitore → controllo dei contenitori e prova nuova con la regola sm:hidden vera; (4) nella ricerca in vetrina «Carica altri» non arrivava oltre la prima pagina dei risultati per nome → corretto il tetto, prova nuova; (5) due file temporanei di una prova finiti in un commit → tolti. Respinto (7): la scritta sulle recensioni è vera, la regola «Verified buyers can write reviews» (migrazioni 061 e 093) accetta solo chi ha un ordine DELIVERED con quel prodotto, e order_items si legge per le proprie righe (002). Lasciati e annotati: (6) JSON-LD del prodotto col prezzo pieno quando c'è una promo (serve leggere lo sconto nel guscio server); (8) «Compra ora» porta la riga alla quantità scelta anche se ce n'erano di più (è il comportamento chiesto dalla scheda 572); (9) seller_public_profiles letta con limit 2000 ma max_rows 1000, come già in sitemap; (10) la griglia mostra lo scheletro mentre arrivano le letture dei filtri (meglio del falso «nessun prodotto»); (11) guardia difensiva in QueryProvider; (12) molte prove sono letture del sorgente: dove si poteva ho montato i componenti.",
   "riepilogo": {
