@@ -58,3 +58,6 @@ storybook-static/
 *.dump
 *.dump.gpg
 /backups/
+
+# 5/11/2026 — I file che tests/unit/aiuti/monta-componente.ts crea mentre le prove girano: non sono codice.
+tests/unit/.montati/
