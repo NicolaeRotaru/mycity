@@ -14,6 +14,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { toast } from 'sonner';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 
 /**
  * /shared-cart — pagina destinazione del ShareCartButton.
@@ -54,18 +55,19 @@ const MAX_ITEMS = 50;
 
 function parseCartParam(raw: string | null): ParsedItem[] {
   if (!raw) return [];
-  return raw
-    .split(',')
-    .slice(0, MAX_ITEMS)
-    .map((entry) => {
-      const [id, qty] = entry.split(':');
-      const q = Number(qty);
-      if (!id || !Number.isFinite(q) || q < 1 || q > 99) return null;
-      // UUID basic validation
-      if (!/^[a-f0-9-]{30,40}$/i.test(id)) return null;
-      return { id, quantity: q };
-    })
-    .filter((x): x is ParsedItem => x !== null);
+  // 5/11/2026 — Solo quantità intere (la rotta degli ordini accetta solo interi: «1.5» passava qui e
+  // la cassa rifiutava l'ordine), e lo stesso prodotto ripetuto si somma in una riga sola: prima la
+  // lista mostrava la prima quantità e «Aggiungi tutto» le aggiungeva tutte.
+  const righe = new Map<string, number>();
+  for (const entry of raw.split(',').slice(0, MAX_ITEMS)) {
+    const [id, qty] = entry.split(':');
+    const q = Number(qty);
+    if (!id || !Number.isInteger(q) || q < 1 || q > 99) continue;
+    // UUID basic validation
+    if (!/^[a-f0-9-]{30,40}$/i.test(id)) continue;
+    righe.set(id, Math.min(99, (righe.get(id) ?? 0) + q));
+  }
+  return [...righe].map(([id, quantity]) => ({ id, quantity }));
 }
 
 function SharedCartInner() {
@@ -83,6 +85,9 @@ function SharedCartInner() {
    * capire che bastava riprovare.
    */
   const [nonLetta, setNonLetta] = useState(false);
+  // 5/11/2026 — Le promozioni attive, come le legge la cassa: la lista mostrava e metteva nel
+  // carrello il prezzo pieno, e la cassa poi avvisava «il prezzo è cambiato».
+  const [sconti, setSconti] = useState<Map<string, number>>(new Map());
   const [tentativo, setTentativo] = useState(0);
 
   const parsed = parseCartParam(cartParam);
@@ -122,6 +127,9 @@ function SharedCartInner() {
           caduta = true;
         }
       }
+      if (!caduta && righe.length > 0) {
+        setSconti(await fetchActiveDiscounts(supabase, righe.map((p) => p.id)).catch(() => new Map<string, number>()));
+      }
       setNonLetta(caduta);
       setProducts(caduta ? [] : righe);
       setLoading(false);
@@ -148,7 +156,7 @@ function SharedCartInner() {
         <ShoppingCart size={48} className="mx-auto text-ink-300 mb-4" strokeWidth={1.5} />
         <h1 className="text-2xl font-serif font-bold text-ink-900 mb-2">Link non valido</h1>
         <p className="text-ink-600 mb-6">
-          Il link condiviso e' scaduto o malformato. Apri il marketplace per scoprire i prodotti.
+          Questo link non si riesce a leggere: forse è stato copiato a metà. Apri il marketplace per scoprire i prodotti.
         </p>
         <Button href="/">Vai al marketplace</Button>
       </div>
@@ -162,8 +170,14 @@ function SharedCartInner() {
    * «non disponibile»: è disponibile eccome, va solo scelto. Perciò ha un riquadro suo, col link.
    */
   const daScegliere = inVendita.filter((p) => p.has_variants === true);
-  const available = inVendita.filter((p) => p.has_variants !== true);
-  const unavailable = parsed.filter((p) => !inVendita.find((a) => a.id === p.id));
+  // 5/11/2026 — Un prodotto finito (scorta a zero, lo stato resta «in vendita») non si mostra con
+  // prezzo e quantità: va fra i non disponibili. E la quantità che si mostra è quella che entra.
+  const available = inVendita.filter((p) => p.has_variants !== true && p.stock !== 0);
+  const quantitaVera = (p: Product) => Math.min(parsed.find((x) => x.id === p.id)?.quantity ?? 1, p.stock ?? Infinity);
+  const prezzoDiOggi = (p: Product) => discountedUnitCents(Number(p.price), sconti.get(p.id) ?? 0) / 100;
+  const unavailable = parsed.filter(
+    (p) => !available.find((a) => a.id === p.id) && !daScegliere.find((a) => a.id === p.id),
+  );
 
   const addAll = () => {
     let count = 0;
@@ -176,7 +190,7 @@ function SharedCartInner() {
       addToCart({
         id: product.id,
         name: product.name,
-        price: Number(product.price),
+        price: prezzoDiOggi(product),
         image: Array.isArray(product.images) ? product.images[0] : undefined,
         quantity: qty,
         // R088 — il negozio viaggia con la riga: senza, il carrello raggruppa tutto sotto un
@@ -215,8 +229,8 @@ function SharedCartInner() {
 
       <ul className="space-y-3 mb-6">
         {available.map((p) => {
-          const item = parsed.find((x) => x.id === p.id);
-          const qty = item?.quantity ?? 1;
+          const chiesti = parsed.find((x) => x.id === p.id)?.quantity ?? 1;
+          const qty = quantitaVera(p);
           const img = Array.isArray(p.images) && p.images[0] ? p.images[0] : null;
           return (
             <li
@@ -243,10 +257,11 @@ function SharedCartInner() {
                 </Link>
                 <p className="text-xs text-ink-500 mt-0.5">
                   {p.profiles?.store_name ?? 'Negozio'} · ×{qty}
+                  {qty < chiesti && ` (ne restano solo ${qty} dei ${chiesti} suggeriti)`}
                 </p>
               </div>
               <span className="font-bold text-ink-900 shrink-0">
-                {formatPrice(Number(p.price) * qty)}
+                {formatPrice(prezzoDiOggi(p) * qty)}
               </span>
             </li>
           );
@@ -275,7 +290,9 @@ function SharedCartInner() {
 
       {unavailable.length > 0 && (
         <div className="bg-cream-50 border border-cream-300 rounded-xl p-4 text-sm text-ink-600 mb-6 flex items-center gap-1.5">
-          <AlertTriangle size={16} strokeWidth={2.2} className="text-accent-500 shrink-0" aria-hidden /> {unavailable.length} {unavailable.length === 1 ? 'prodotto non disponibile' : 'prodotti non disponibili'} sono stati esclusi dalla lista.
+          <AlertTriangle size={16} strokeWidth={2.2} className="text-accent-500 shrink-0" aria-hidden /> {unavailable.length === 1
+            ? '1 prodotto non disponibile è stato escluso dalla lista.'
+            : `${unavailable.length} prodotti non disponibili sono stati esclusi dalla lista.`}
         </div>
       )}
 

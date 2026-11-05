@@ -116,7 +116,10 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
       </button>
 
       {hint && !open && (
-        <div className="fixed left-0 right-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white p-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] text-ink-900 shadow-warm-lg ring-1 ring-cream-300 md:absolute md:right-auto md:bottom-auto md:top-full md:mt-2 md:w-64 md:rounded-xl md:pb-3">
+        // 5/11/2026 — Dai 768 px in su il fumetto si apriva sotto la pillola, sopra la riga delle
+        // categorie e il titolo della pagina, e restava lì su ogni pagina. Lì la pillola si vede già
+        // bene in testata: il fumetto resta solo sul telefono, dove sale dal basso.
+        <div className="fixed left-0 right-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white p-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] text-ink-900 shadow-warm-lg ring-1 ring-cream-300 md:hidden">
           {/* 27/8/2026 (R110) — la «×» era `text-ink-300` su bianco: 2,52:1,
               sotto il 3:1 che WCAG chiede alle parti grafiche di un comando, e
               il bersaglio erano 14 pixel senza margine. */}
@@ -162,14 +165,17 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
             className="fixed left-0 right-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-warm-lg ring-1 ring-ink-100 text-ink-900 md:absolute md:right-auto md:bottom-auto md:top-full md:mt-2 md:w-72 md:rounded-xl md:pb-4"
           >
             <p id={idTitolo} className="text-sm font-semibold mb-1">Dove vuoi ricevere?</p>
+            {/* 5/11/2026 — Diceva «Mostriamo i negozi che consegnano al tuo CAP», ma il CAP salvato non
+                lo legge nessuna pagina: se arriviamo lo decide la cassa, dall'indirizzo di consegna. */}
             <p className="text-xs text-ink-500 mb-3">
-              Mostriamo i negozi che consegnano al tuo CAP.
+              Il CAP resta su questo dispositivo. Se arriviamo da te te lo dice la cassa, dall&apos;indirizzo di consegna.
             </p>
             <input
               ref={capRef}
               type="text"
               value={zip}
               onChange={(e) => { setZip(e.target.value); setErroreCap(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } }}
               maxLength={5}
               inputMode="numeric"
               pattern="[0-9]{5}"
@@ -184,9 +190,11 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
                 {erroreCap}
               </p>
             )}
+            {/* 5/11/2026 — Il pulsante era spento finché le cifre non erano cinque: il messaggio
+                d'errore di save() non compariva mai, e il grigio non diceva perché. */}
             <button
+              type="button"
               onClick={save}
-              disabled={zip.replace(/\D/g, '').length !== 5}
               className="mt-3 w-full bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white px-3 py-2 rounded-lg text-sm font-semibold transition-colors"
             >
               Aggiorna posizione
