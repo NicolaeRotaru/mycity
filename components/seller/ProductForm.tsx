@@ -519,8 +519,10 @@ export default function ProductForm({
           setUnit(s.valore);
           break;
         case 'condition':
-          // Il suggerimento non può rimettere fra le scelte una condizione che il modulo non offre.
-          if (condizioneDaScegliere(s.valore)) setCondition(s.valore);
+          // Il suggerimento non può rimettere fra le scelte una condizione che il modulo non offre;
+          // può però toglierla («togli la condizione», 2284), come fa il server.
+          if (s.valore === '') setCondition('');
+          else if (condizioneDaScegliere(s.valore)) setCondition(s.valore);
           break;
         case 'stock':
           if (s.valore === null) {

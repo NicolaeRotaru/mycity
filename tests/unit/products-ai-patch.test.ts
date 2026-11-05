@@ -87,8 +87,9 @@ describe('resolveAiPatch', () => {
       current: base,
       categories,
     });
-    // confezione è un select: valore fuori opzioni → ignorato (resta lo stato attuale)
-    expect(update.attributes).toEqual({ marca: 'Vecchia' });
+    // confezione è un select: valore fuori opzioni → ignorato. S06 (1687): se nessuna
+    // caratteristica entra, attributes non va proprio in update (resta lo stato attuale).
+    expect(update.attributes).toBeUndefined();
   });
 
   it('non scrive nulla per un patch vuoto', () => {

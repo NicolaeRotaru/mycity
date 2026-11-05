@@ -68,9 +68,16 @@ export function condizioneDaScegliere(c: unknown): c is ProductCondition {
  */
 export function normalizeCondition(s: string): ProductCondition | '' {
   const t = s.toLowerCase();
-  if (t.includes('ricond')) return 'ricondizionato';
-  if (t.includes('usat')) return 'usato';
-  if (t.includes('nuov')) return 'nuovo';
+  if (t.includes('ricond') || t.includes('refurb')) return 'ricondizionato';
+  // 2289 — «Nuovo, mai usato»: la negazione dell'uso dice nuovo (prima vinceva «usat»).
+  if (/\b(mai|non)\s+usat/.test(t)) return 'nuovo';
+  // 2261 — «Seminuovo», «come nuovo», «quasi nuovo», «non nuovo» non sono nuovi: prima
+  // bastava la sillaba «nuov» e un oggetto usato entrava in vetrina come nuovo.
+  // 2268 — Anche «used», «second hand», «di seconda mano» si riconoscono come usato.
+  if (
+    /seminuov|semi-nuov|semi nuov|\bcome\s+nuov|\bquasi\s+nuov|\bnon\s+nuov|usat|second[\s-]?hand|seconda mano|\bused\b|pre-?owned/.test(t)
+  ) return 'usato';
+  if (t.includes('nuov') || /\bnew\b|\bbrand new\b/.test(t)) return 'nuovo';
   return '';
 }
 

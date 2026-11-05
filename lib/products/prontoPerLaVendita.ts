@@ -1,6 +1,5 @@
 // lib/products/prontoPerLaVendita.ts
 import {
-  AI_ATTR_TO_FIELD,
   CATEGORY_ATTRIBUTES,
   findLabelForKey,
   formatAttributeValue,
@@ -551,12 +550,12 @@ function schedaDopoLaProposta(prodotto: SchedaDellaChat, proposta: AiProductPatc
   const daScrivere =
     patch.attributes && typeof patch.attributes === 'object' ? (patch.attributes as Record<string, unknown>) : {};
   for (const [k, v] of Object.entries(daScrivere)) {
-    if (typeof v === 'string' && v.trim()) attributes[AI_ATTR_TO_FIELD[k] ?? k] = v;
+    if (typeof v === 'string' && v.trim()) attributes[chiaveCampo(k)] = v;
   }
   const daTogliere: unknown[] = Array.isArray(patch.attributes_remove) ? patch.attributes_remove : [];
   for (const voce of daTogliere) {
     const k = voceComeTesto(voce);
-    if (k) delete attributes[AI_ATTR_TO_FIELD[k] ?? k];
+    if (k) delete attributes[chiaveCampo(k)];
   }
   const prezzoValido =
     typeof patch.price === 'number' && patch.price > 0 && !prezzoAiFuoriBanda(patch.price, prodotto.price);

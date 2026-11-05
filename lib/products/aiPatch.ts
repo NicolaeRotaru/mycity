@@ -86,6 +86,11 @@ export type ResolvedPatch = {
 
 export type CampoRifiutato = { campo: string; motivo: string };
 
+/** La condizione proposta che MyCity non vende: il perché, detto al negoziante. */
+export function motivoCondizioneScartata(testo: string): string {
+  return `La condizione «${testo}» non è entrata: su MyCity si vendono solo prodotti nuovi.`;
+}
+
 /**
  * 1/11/2026 — «MODIFICHE SALVATE», E IL PREZZO ERA QUELLO VECCHIO.
  *
@@ -151,6 +156,18 @@ export const CAMPI_DICHIARATIVI = [
  * letture diverse facevano dire al riquadro «entrate» per allergeni che la
  * porta aveva scartato (16/10/2026).
  */
+/**
+ * 2165 — Il valore di una caratteristica proposta, come testo: un vero/falso
+ * mandato come booleano (o un numero) non si perde più. Prima diventava '' e la
+ * casella veniva saltata in silenzio.
+ */
+export function valoreAttributoDalPatch(v: unknown): string {
+  if (typeof v === 'string') return v.trim();
+  if (typeof v === 'boolean') return String(v);
+  if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+  return '';
+}
+
 export function chiaveCampo(chiaveAi: string): string {
   const norm = String(chiaveAi).trim().toLowerCase().replace(/[\s-]+/g, '_');
   return AI_ATTR_TO_FIELD[norm] ?? norm;
@@ -498,6 +515,17 @@ export const MOTIVO_PREZZO_PIENO_RIFIUTATO =
 export const MAX_NOME_PRODOTTO = 120;
 export const MAX_DESCRIZIONE_PRODOTTO = 4000;
 
+/**
+ * 1673 · 1651 — Nome e descrizione proposti, letti UNA volta per server e modulo:
+ * puliti e tagliati alla misura del database. Prima il modulo li scriveva interi
+ * (un nome da 179 caratteri entrava nel campo) e il server li tagliava.
+ */
+export function testoDelPatch(v: unknown, massimo: number): string | null {
+  if (typeof v !== 'string') return null;
+  const t = v.trim();
+  return t ? t.slice(0, massimo) : null;
+}
+
 /** Vero se il prezzo proposto si scosta dall'attuale piu' della banda. */
 export function prezzoAiFuoriBanda(
   proposto: number,
@@ -726,12 +754,10 @@ export function pianoPatchPerIlModulo(
   const avvisi = rifiutati.filter((m) => !motiviConProposta.has(m));
   const scritture: ScritturaModulo[] = [];
 
-  if (typeof patch.name === 'string' && patch.name.trim()) {
-    scritture.push({ campo: 'name', valore: patch.name.trim(), etichetta: 'nome' });
-  }
-  if (typeof patch.description === 'string' && patch.description.trim()) {
-    scritture.push({ campo: 'description', valore: patch.description.trim(), etichetta: 'descrizione' });
-  }
+  const nomeProposto = testoDelPatch(patch.name, MAX_NOME_PRODOTTO);
+  if (nomeProposto) scritture.push({ campo: 'name', valore: nomeProposto, etichetta: 'nome' });
+  const descrizioneProposta = testoDelPatch(patch.description, MAX_DESCRIZIONE_PRODOTTO);
+  if (descrizioneProposta) scritture.push({ campo: 'description', valore: descrizioneProposta, etichetta: 'descrizione' });
   if (typeof patch.price === 'number' && patch.price > 0) {
     scritture.push({ campo: 'price', valore: patch.price, etichetta: 'prezzo' });
   }
@@ -747,9 +773,18 @@ export function pianoPatchPerIlModulo(
     scritture.push({ campo: 'unit', valore: patch.unit as ProductUnit, etichetta: 'unità' });
   }
   if ('condition' in patch) {
-    // «usato» e «ricondizionato» non si scrivono: il menu non li offre e MyCity non vende l'usato.
-    const valore = patch.condition == null ? '' : condizioneDalSuggerimento(String(patch.condition));
-    if (valore !== null) scritture.push({ campo: 'condition', valore, etichetta: 'condizione' });
+    if (patch.condition == null) {
+      // «Togli la condizione»: si svuota, come sul server.
+      scritture.push({ campo: 'condition', valore: '', etichetta: 'condizione' });
+    } else {
+      const testo = String(patch.condition).trim();
+      const valore = condizioneDalSuggerimento(testo);
+      // «usato» e «ricondizionato» non si scrivono (il menu non li offre e MyCity non vende
+      // l'usato), ma il negoziante lo sa (2266). Un testo non riconosciuto si ignora: non
+      // cancella quella già scritta (2268).
+      if (valore === null) avvisi.push(motivoCondizioneScartata(testo));
+      else if (valore !== '') scritture.push({ campo: 'condition', valore, etichetta: 'condizione' });
+    }
   }
   if (patch.unlimited_stock === true) {
     scritture.push({ campo: 'stock', valore: null, etichetta: 'disponibilità' });
@@ -774,9 +809,10 @@ export function pianoPatchPerIlModulo(
 
   if (patch.attributes && typeof patch.attributes === 'object') {
     for (const [aiKey, rawValue] of Object.entries(patch.attributes)) {
-      const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+      const value = valoreAttributoDalPatch(rawValue);
       if (!value) continue;
-      const targetKey = AI_ATTR_TO_FIELD[aiKey] ?? aiKey;
+      // 1687 — «Colore», «tipo prodotto»: la stessa lettura della chiave di ogni altra strada.
+      const targetKey = chiaveCampo(aiKey);
       const field = fields.find((f) => f.key === targetKey);
       if (!field) continue;
       if (field.type === 'select' && !(field.options ?? []).includes(value)) continue;
@@ -787,7 +823,7 @@ export function pianoPatchPerIlModulo(
   }
   if (Array.isArray(patch.attributes_remove)) {
     for (const key of patch.attributes_remove) {
-      const targetKey = AI_ATTR_TO_FIELD[key] ?? key;
+      const targetKey = chiaveCampo(String(key));
       scritture.push({ campo: 'attributo', chiave: targetKey, valore: '', etichetta: `rimosso ${targetKey}` });
     }
   }
@@ -1020,11 +1056,11 @@ export function resolveAiPatch(opts: {
 
   if (typeof patch.name === 'string' && patch.name.trim()) {
     // R158 — Il taglio e' lo stesso che fa chi crea il prodotto dalle foto.
-    update.name = patch.name.trim().slice(0, MAX_NOME_PRODOTTO);
+    update.name = testoDelPatch(patch.name, MAX_NOME_PRODOTTO);
     changed.push('nome');
   }
   if (typeof patch.description === 'string' && patch.description.trim()) {
-    update.description = patch.description.trim().slice(0, MAX_DESCRIZIONE_PRODOTTO);
+    update.description = testoDelPatch(patch.description, MAX_DESCRIZIONE_PRODOTTO);
     changed.push('descrizione');
   }
   if (typeof patch.price === 'number' && patch.price > 0) {
@@ -1062,10 +1098,14 @@ export function resolveAiPatch(opts: {
       changed.push('condizione');
     } else {
       // «usato» e «ricondizionato» si scartano senza scrivere: un prodotto vecchio che li ha già
-      // non perde il valore, e uno nuovo non li prende dall'assistente.
-      const norm = condizioneDalSuggerimento(String(patch.condition));
-      if (norm !== null) {
-        update.condition = norm || null;
+      // non perde il valore, e uno nuovo non li prende dall'assistente. Lo si dice (2266);
+      // un testo non riconosciuto si ignora invece di svuotare la condizione (2268).
+      const testo = String(patch.condition).trim();
+      const norm = condizioneDalSuggerimento(testo);
+      if (norm === null) {
+        rifiutati.push({ campo: 'condition', motivo: motivoCondizioneScartata(testo) });
+      } else if (norm !== '') {
+        update.condition = norm;
         changed.push('condizione');
       }
     }
@@ -1109,11 +1149,13 @@ export function resolveAiPatch(opts: {
   const hasAttrRemove = Array.isArray(patch.attributes_remove) && patch.attributes_remove.length > 0;
   if (hasAttrSet || hasAttrRemove) {
     const merged: Record<string, unknown> = { ...(current.attributes ?? {}) };
+    const primaDegliAttributi = changed.length;
     if (hasAttrSet) {
       for (const [aiKey, rawValue] of Object.entries(patch.attributes!)) {
-        const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+        const value = valoreAttributoDalPatch(rawValue);
         if (!value) continue;
-        const targetKey = AI_ATTR_TO_FIELD[aiKey] ?? aiKey;
+        // 1687 — «Colore», «tipo prodotto»: la stessa lettura della chiave di ogni altra strada.
+      const targetKey = chiaveCampo(aiKey);
         const field = fields.find((f) => f.key === targetKey);
         if (!field) continue;
         if (field.type === 'select' && !(field.options ?? []).includes(value)) continue;
@@ -1124,14 +1166,16 @@ export function resolveAiPatch(opts: {
     }
     if (hasAttrRemove) {
       for (const key of patch.attributes_remove!) {
-        const targetKey = AI_ATTR_TO_FIELD[key] ?? key;
+        const targetKey = chiaveCampo(String(key));
         if (targetKey in merged) {
           delete merged[targetKey];
           changed.push(`rimosso ${targetKey}`);
         }
       }
     }
-    update.attributes = merged;
+    // 1687 — Senza nessuna caratteristica entrata, attributes non va in update:
+    // altrimenti la chat diceva «Modifiche salvate» senza aver cambiato niente.
+    if (changed.length > primaDegliAttributi) update.attributes = merged;
   }
 
   if (patch.status && (SELLER_STATUSES as readonly string[]).includes(patch.status)) {
