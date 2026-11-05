@@ -51,11 +51,11 @@ describe('e non si puo chiedere lo stesso da fuori', () => {
 
 describe('il compenso del fattorino, col ritiro', () => {
   it('col ritiro non c e consegna, quindi non c e compenso', () => {
-    expect(compensoRiderCents({ pickupInStore: true })).toBe(0);
+    expect(compensoRiderCents({ pickupInStore: true, negozioInPiu: false })).toBe(0);
   });
 
   it('con la consegna vera il compenso c e', () => {
-    expect(compensoRiderCents({ pickupInStore: false })).toBeGreaterThan(0);
+    expect(compensoRiderCents({ pickupInStore: false, negozioInPiu: false })).toBeGreaterThan(0);
   });
 });
 

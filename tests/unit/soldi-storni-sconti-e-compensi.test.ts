@@ -110,12 +110,12 @@ describe('il compenso del fattorino', () => {
   // pagarlo ci siano SEMPRE.
 
   it('e sempre la stessa cifra, comunque sia lontana la consegna', () => {
-    expect(compensoRiderCents({ pickupInStore: false })).toBe(COMPENSO_RIDER_CENTS);
+    expect(compensoRiderCents({ pickupInStore: false, negozioInPiu: false })).toBe(COMPENSO_RIDER_CENTS);
     expect(COMPENSO_RIDER_CENTS).toBeGreaterThan(0);
   });
 
   it('col ritiro in negozio non c e consegna, quindi non c e compenso', () => {
-    expect(compensoRiderCents({ pickupInStore: true })).toBe(0);
+    expect(compensoRiderCents({ pickupInStore: true, negozioInPiu: false })).toBe(0);
   });
 
   // LA PROVA CHE CONTA, ed e' quella che il compenso a distanza faceva fallire.
@@ -143,7 +143,7 @@ describe('il compenso del fattorino', () => {
           pickupInStore: false,
         });
         const disponibile = spedizione + PLATFORM_DELIVERY_FEE_CENTS;
-        const dovuto = compensoRiderCents({ pickupInStore: false });
+        const dovuto = compensoRiderCents({ pickupInStore: false, negozioInPiu: false });
         if (disponibile < dovuto) {
           casiScoperti.push(
             `subtotale ${subtotal} euro a ${dove.deliveryLat}: disponibili ${disponibile}, dovuti ${dovuto}`,
@@ -180,7 +180,7 @@ describe('il compenso del fattorino', () => {
     });
     expect(spedizione).toBe(0);
     expect(PLATFORM_DELIVERY_FEE_CENTS).toBeGreaterThanOrEqual(
-      compensoRiderCents({ pickupInStore: false }),
+      compensoRiderCents({ pickupInStore: false, negozioInPiu: false }),
     );
   });
 });

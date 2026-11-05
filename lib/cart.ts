@@ -103,7 +103,13 @@ export type EsitoSalvataggio = { salvato: boolean; motivo?: string };
 
 let ultimoAvviso = 0;
 
-export const saveCart = (items: CartItem[]): EsitoSalvataggio => {
+/**
+ * 5/11/2026 — `dallAltroDispositivo`: il carrello arriva dalla copia sul server (CartCrossDeviceSync),
+ * non da un gesto di chi compra. Non si riscrive la riga del carrello abbandonato: prima ogni
+ * apertura su un altro dispositivo azzerava «email di recupero già mandata», e il giro notturno
+ * mandava una seconda email per lo stesso carrello.
+ */
+export const saveCart = (items: CartItem[], opzioni: { dallAltroDispositivo?: boolean } = {}): EsitoSalvataggio => {
   if (typeof window === 'undefined') return { salvato: false };
 
   let salvato = true;
@@ -125,7 +131,7 @@ export const saveCart = (items: CartItem[]): EsitoSalvataggio => {
 
   bumpUpdatedAt();
   window.dispatchEvent(new Event('cart:updated'));
-  void syncAbandonedCart(items, { totale: cartTotal(items) });
+  if (!opzioni.dallAltroDispositivo) void syncAbandonedCart(items, { totale: cartTotal(items) });
   return { salvato, motivo };
 };
 

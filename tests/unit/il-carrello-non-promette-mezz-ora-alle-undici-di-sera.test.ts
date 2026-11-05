@@ -40,6 +40,11 @@ import { readFileSync } from 'node:fs';
 import { act, createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
+
+// 5/11/2026 (S07, schede 2173 e 1574) — Col sì della cassa la riga non dice più «Consegna in 30-60
+// min» da sola (il totale conta la fascia, e alle 20:30 la cassa apre su domani): dice la fascia e
+// la veloce come possibilità.
+const CON_LA_VELOCE = `Consegna nella fascia che scegli, o veloce in ${EXPRESS_ETA_LABEL}`;
 import { rigaQuandoArrivaNelCarrello } from '@/lib/ordini/consegna-veloce';
 import { romeNow } from '@/lib/store-hours';
 import {
@@ -210,7 +215,7 @@ describe('alle undici di sera la consegna in mezz\'ora non esiste', () => {
 describe('il carrello montato dice quello che la cassa offrirà davvero', () => {
   it('alle 14, con un fattorino online, promette la mezz\'ora: la prova non passa per pigrizia', async () => {
     const c = await carrelloAlle(14, 0, 'si');
-    expect(c.riga()).toBe(`Disponibile · Consegna in ${EXPRESS_ETA_LABEL}`);
+    expect(c.riga()).toBe(`Disponibile · ${CON_LA_VELOCE}`);
   });
 
   it('alle 23 non promette nessuna mezz\'ora, in nessuna riga della pagina', async () => {
@@ -252,7 +257,7 @@ describe('il carrello montato dice quello che la cassa offrirà davvero', () => 
 
   it('un carrello lasciato aperto attraversa le 21: l\'ora si rilegge da sola', async () => {
     const c = await carrelloAlle(20, 59, 'si');
-    expect(c.riga()).toBe(`Disponibile · Consegna in ${EXPRESS_ETA_LABEL}`);
+    expect(c.riga()).toBe(`Disponibile · ${CON_LA_VELOCE}`);
     // Passano due minuti. La cassa risponde ancora sì (risposta vecchia): conta l'orologio.
     vi.setSystemTime(aRomaAlle(21, 1));
     await act(async () => {
@@ -276,9 +281,9 @@ describe('la riga «Ne restano solo N» dice lo stesso tempo della riga «Dispon
     // Come i casi qui sotto: la scorta arriva da una lettura asincrona, si aspetta la riga.
     // Questo caso era rimasto ai giri fissi, e con 7.128 prove insieme è caduto (31/10/2026).
     await vi.waitFor(() => expect(c.rigaDellaScorta()).toBeDefined());
-    expect(c.riga()).toBe(`Disponibile · Consegna in ${EXPRESS_ETA_LABEL}`);
+    expect(c.riga()).toBe(`Disponibile · ${CON_LA_VELOCE}`);
     expect(c.rigaDellaScorta(), 'la riga della scorta bassa non dice il tempo della cassa').toBe(
-      `Ne restano solo 2 · Consegna in ${EXPRESS_ETA_LABEL}`,
+      `Ne restano solo 2 · ${CON_LA_VELOCE}`,
     );
   });
 
@@ -333,7 +338,7 @@ describe('il primo disegno, quello che arriva dal server, non sa che ore sono', 
 
   it("nel browser, letta l'ora, la frase della consegna arriva", async () => {
     const c = await carrelloAlle(14, 0, 'si');
-    expect(c.riga()).toBe(`Disponibile · Consegna in ${EXPRESS_ETA_LABEL}`);
+    expect(c.riga()).toBe(`Disponibile · ${CON_LA_VELOCE}`);
   });
 });
 

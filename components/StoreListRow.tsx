@@ -6,7 +6,7 @@ import StoreAvatar from './StoreAvatar';
 import { VerifiedBadge } from './ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { sizedImage } from '@/lib/image-url';
-import { DAY_KEYS, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
+import { chiaveDiOggi, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 import { consegnaDellaVetrina, vetrinaChiedeLaVeloce } from '@/lib/promessa-consegna';
 import { useOraDiPiacenza, useVeloceDelNegozio } from '@/components/ui/DeliveryCutoff';
 import type { StoreCardData, ProductPreview } from './StorePreviewCard';
@@ -25,7 +25,7 @@ interface Props {
  */
 const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
   const hours = (store.store_hours ?? {}) as StoreHours;
-  const open = isOpenNow(hours[DAY_KEYS[new Date().getDay()]]);
+  const open = isOpenNow(hours[chiaveDiOggi()]);
   const street = streetFromAddress(store.store_address);
   // 30/10/2026 — Qui c'era «consegna oggi» scritto fisso, per ogni negozio a ogni ora: giovedì 29/10
   // alle 20:15 l'elenco lo diceva di Pane Quotidiano, chiuso dalle 13. Ora lo decide la stessa regola

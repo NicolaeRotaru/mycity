@@ -39,6 +39,8 @@ type Props = {
    */
   motivoBlocco?: string | null;
   couponSection?: React.ReactNode;
+  /** 5/11/2026 — `false` quando il carrello non si è letto: niente cifre a zero. */
+  importiLetti?: boolean;
 };
 
 /**
@@ -54,7 +56,11 @@ type Props = {
  * chi usa un lettore di schermo se lo sente leggere.
  */
 export function vaiAlPrimoBlocco(): boolean {
-  const primoBlocco = document.querySelector<HTMLElement>('[role="alert"]');
+  // 5/11/2026 — Solo gli avvisi che bloccano davvero: «il prezzo è cambiato», i prodotti tolti e,
+  // nel carrello, il «fuori zona» sono avvisi che informano (`data-informativo`). Prima si andava sul
+  // primo `role="alert"` della pagina, e col prezzo cambiato a schermo si finiva lì invece che sul
+  // motivo vero del blocco.
+  const primoBlocco = document.querySelector<HTMLElement>('[role="alert"]:not([data-informativo])');
   // Nessun riquadro a schermo vuol dire pulsante muto: chi chiama lo deve
   // sapere, invece di credere di aver spiegato qualcosa.
   if (!primoBlocco) return false;
@@ -77,12 +83,20 @@ export function OrderSummary({
   disabled = false,
   motivoBlocco = null,
   couponSection,
+  importiLetti = true,
 }: Props) {
   const consegna = shipping + platformDeliveryFee;
   return (
     <>
       {couponSection}
 
+      {/* 5/11/2026 — Se il carrello non si è letto non ci sono cifre da mostrare: prima uscivano
+          «Subtotale 0,00 € · Gratis · Totale 0,00 €» sotto un pulsante spento. */}
+      {!importiLetti ? (
+        <p className="px-5 py-4 border-t border-cream-300 bg-cream-50/50 text-sm text-ink-600">
+          Il riepilogo con le cifre compare appena riesco a leggere il carrello.
+        </p>
+      ) : (
       <div className="px-5 py-4 space-y-2 border-t border-cream-300 bg-cream-50/50 text-sm">
         <div className="flex justify-between">
           <span className="text-ink-600">Subtotale</span>
@@ -122,6 +136,7 @@ export function OrderSummary({
           <span className="font-serif text-xl font-extrabold text-primary-800">{formatPrice(total)}</span>
         </div>
       </div>
+      )}
 
       {/* 6/9/2026 — UN PULSANTE SPENTO SENZA UNA RIGA CHE DICA PERCHE'.
           Il pulsante sbiadito rimandava al «primo riquadro con role=alert»
@@ -185,8 +200,8 @@ export function OrderSummary({
                 soldi. Il Codice del Consumo chiede che il pulsante finale
                 riporti una formula inequivocabile. */}
             {paymentMethod === 'card'
-              ? `Paga con carta · ${formatPrice(total)}`
-              : `Ordina e paga alla consegna · ${formatPrice(total)}`}
+              ? `Paga con carta${importiLetti ? ` · ${formatPrice(total)}` : ''}`
+              : `Ordina e paga alla consegna${importiLetti ? ` · ${formatPrice(total)}` : ''}`}
           </span>
         )}
       </button>

@@ -66,11 +66,15 @@ export type RigaDaControllare = {
   name: string;
   quantity: number;
   variantId?: string | null;
+  variantLabel?: string | null;
 };
 
 export type ProblemaDiDisponibilita = {
   id: string;
   name: string;
+  /** 5/11/2026 — La variante della riga: senza, «Togli dal carrello» toglieva tutte le varianti. */
+  variantId?: string | null;
+  variantLabel?: string | null;
   requested: number;
   /** Quello che questa persona può davvero avere: lo scaffale più ciò che tiene lei. */
   available: number;
@@ -93,7 +97,14 @@ export function problemiDiDisponibilita<T extends RigaDaControllare>(
     const mia = tengoIo.get(chiaveDellaRiga(riga.id, riga.variantId)) ?? 0;
     const disponibile = disponibileAScaffale(riga) + mia;
     if (riga.quantity > disponibile) {
-      problemi.push({ id: riga.id, name: riga.name, requested: riga.quantity, available: disponibile });
+      problemi.push({
+        id: riga.id,
+        name: riga.name,
+        variantId: riga.variantId ?? null,
+        variantLabel: riga.variantLabel ?? null,
+        requested: riga.quantity,
+        available: disponibile,
+      });
     }
   }
   return problemi;

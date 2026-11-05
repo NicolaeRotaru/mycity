@@ -191,7 +191,11 @@ describe('la veloce scelta da ospite resta scelta dopo l’accesso', () => {
     expect(c.bloccato(), 'col sì del server si deve poter ordinare').toBe(false);
   }, 30_000);
 
-  it('solo un no vero sposta la scelta: e l’avviso dice quale fascia ha messo, la prima di domani', async () => {
+  // 5/11/2026 (S07, scheda 2315) — Non più «la prima di domani» (7:30–9:00, la fascia più rifiutata
+  // dai negozi chiusi il mattino): resta la fascia di domani che la cassa aveva già segnata, se si può.
+  // Qui la bozza porta una fascia di prima che non si rimette, quindi resta quella di partenza della
+  // cassa (FASCE_DI_DOMANI[2]).
+  it('solo un no vero sposta la scelta: e l’avviso dice quale fascia ha messo, quella di domani già segnata', async () => {
     // Venerdì 30/10/2026 alle 20:30 di Roma: per oggi non c'è più nessuna fascia.
     const c = await cassaDopoLAccesso('Europe/Rome', '2026-10-30T19:30:00Z');
     expect(c.adesso()!.getAttribute('aria-pressed')).toBe('true');
@@ -200,9 +204,9 @@ describe('la veloce scelta da ospite resta scelta dopo l’accesso', () => {
     expect(c.adesso()!.getAttribute('aria-pressed'), 'col no del server «Adesso» non può restare scelta').toBe('false');
     expect(c.adesso()!.disabled, 'col no del server «Adesso» non si offre').toBe(true);
     expect(c.domani()!.getAttribute('aria-pressed')).toBe('true');
-    expect(c.fascia(), 'la fascia messa al posto della veloce non è la prima di domani').toBe(FASCE_DI_DOMANI[0]);
+    expect(c.fascia(), 'la fascia messa al posto della veloce non è quella di domani già segnata').toBe(FASCE_DI_DOMANI[2]);
     expect(c.avviso(), 'lo spostamento deve dirlo').toMatch(/non si può più/);
-    expect(c.avviso(), 'l’avviso deve dire quale fascia ha messo').toContain(FASCE_DI_DOMANI[0]);
+    expect(c.avviso(), 'l’avviso deve dire quale fascia ha messo').toContain(FASCE_DI_DOMANI[2]);
     expect(c.avviso(), 'il selettore non sa se la fascia è libera: non può dirlo').not.toMatch(/prima fascia libera/);
     expect(c.consegna(), '15 € di pane con la fascia: 3 €').toBe(formatPrice(3));
     expect(c.bloccato()).toBe(false);

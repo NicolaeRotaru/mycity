@@ -1,0 +1,1599 @@
+{
+  "sessione": "S07",
+  "ramo": "claude/youthful-gates-blkxmk-m07",
+  "commit_finale": "9e7e6df51f0e0073f915893f74bb5c432f7b89bb",
+  "verify": {
+    "typecheck": "verde",
+    "lint": "verde",
+    "test": "rosso",
+    "note": "7609 prove verdi, 2 rosse: tests/unit/le-pagine-ordini-del-negozio-leggono-gli-orari.test.tsx (caso 1, lista e dettaglio). Erano già rosse su origin/main prima di questo ramo (verificato con un worktree di main: stesse 2 rosse, 7490 verdi): la prova usa l'orologio vero e un ordine del 2/11, quindi oggi la fascia risulta passata. Non toccata (territorio di altra sessione). Lint: 0 errori, solo avvisi già presenti."
+  },
+  "revisore": "Un agente revisore indipendente ha letto tutto il diff (git diff origin/main...HEAD) col mandato di distruggerlo. Ha trovato e io ho corretto: (1) lo svuotamento del carrello locale quando il cloud vuoto è più recente poteva buttare un carrello riempito da ospite e mai salito: ora si svuota solo se il locale non è cambiato dopo l'ultimo allineamento riuscito (nuovo segno mc_cart_synced_at), con una prova per il caso dell'ospite; (2) mettere fascia e indirizzo nell'impronta del tentativo (scheda 2514) apriva un doppio ordine dopo una risposta persa: tolto, la scheda torna non_fatto con la correzione giusta da fare nella rotta; (3) la lettura di non_recedibile per nome poteva far cadere tutta la lettura delle scorte se la migrazione 180 mancasse: ora è una lettura separata con select('*'); (4) «chiusura ≤ apertura = mezzanotte» trasformava orari invertiti per errore in negozi aperti la notte e non valeva nel filtro SQL «Aperti ora»: ora solo «00:00» vale mezzanotte, e la nuova migrazione 231 fa lo stesso in negozi_aperti_adesso; (5) il pulsante bloccato con esauriti e quantità troppo alte insieme ora dice tutte e due le cose. Ha verificato che reggono: romeNow (identica alla vecchia ogni 7 minuti per tutto il 2026, cambi d'ora compresi), chiaveDiOggi, ultimiGiorniPiacenza, migrazione 230 (identica alla 185 tranne IS DISTINCT FROM), le date su Oggi/Domani dopo mezzanotte, nessuna regola fissa toccata (costi, soglie, fasce, capienza, commissione), build Next (i layout nuovi esportano solo metadata). Osservazioni non corrette, scritte qui: il rifiuto di «Spedizione gratuita» col ritiro vale solo lato server (check_coupon del carrello non sa del ritiro; oggi dormiente); il doppio .or() di supabase-js dovrebbe andare in AND ma non è stato provato contro un database vero; 19 dei 29 file di prova minori-s07 sono in tutto o in parte letture del sorgente (prove leggere, ammesse per testi e stili, più deboli per la cassa: cassa-veloce, varianti-in-cassa, cassa-invio, ordini-di-lettura); in minori-s07-orologio il caso del cambio di mese e in minori-s07-coupon il caso «con la consegna resta valido» restano verdi anche senza correzione (sono guardie).",
+  "riepilogo": {
+    "riparato": 79,
+    "parziale": 2,
+    "gia_riparato": 9,
+    "non_codice": 2,
+    "scelta_di_nicola": 6,
+    "non_fatto": 24
+  },
+  "migrazioni_nuove": [
+    "migrations/230_un_ordine_con_lo_stato_vuoto_conta.sql",
+    "migrations/231_aperti_ora_fino_a_mezzanotte.sql"
+  ],
+  "schede": [
+    {
+      "id": 2252,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Il file di collaudo citato (zz-collaudo-a.test.ts) sta nello scratchpad di un'altra sessione e non è nel deposito: senza sapere quali mutanti M1-M5 restano verdi non si scrive la prova giusta. Le mutanti sulla quantità (2274) e sulla consegna fissa sono già rosse per tests/unit/il-carrello-e-la-cassa-dicono-lo-stesso-numero.test.ts."
+    },
+    {
+      "id": 2594,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Il carrello non sa se il cliente sceglierà il ritiro: la scelta si fa in cassa. A ritiro acceso motivoFuoriZona dice già «Puoi ritirare in negozio», quindi l'avviso nel carrello è un'informazione giusta per tutti e due; a ritiro spento (lancio) il caso non esiste."
+    },
+    {
+      "id": 655,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Un layout.tsx con il titolo proprio per le otto pagine 'use client' (carrello, cassa, accesso, iscrizione, nuova password, categorie, promozioni, novità).",
+      "prova": "tests/unit/minori-s07-titoli.test.ts › /cart → «Il tuo carrello · MyCity» (e le altre sette)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/cart/layout.tsx",
+        "app/checkout/layout.tsx",
+        "app/promozioni/layout.tsx",
+        "tests/unit/minori-s07-titoli.test.ts"
+      ],
+      "file_altrui_toccati": [
+        "app/sign-in/layout.tsx",
+        "app/sign-up/layout.tsx",
+        "app/reset-password/layout.tsx",
+        "app/categorie/layout.tsx",
+        "app/novita/layout.tsx"
+      ],
+      "nota": "File nuovi nelle cartelle di altre sessioni (S09, S10): nessuna riga esistente toccata."
+    },
+    {
+      "id": 1576,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Carrello e cassa leggono gli indirizzi salvati con lo stesso secondo criterio fisso (.order('id')) dopo il predefinito: senza predefinito prendono lo stesso indirizzo.",
+      "prova": "tests/unit/minori-s07-ordini-di-lettura.test.ts › tutte e due ordinano per predefinito e poi per id",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/cart/page.tsx",
+        "app/checkout/page.tsx",
+        "tests/unit/minori-s07-ordini-di-lettura.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Prova sul sorgente."
+    },
+    {
+      "id": 739,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Diciassette file con unoptimized, quasi tutti di altre sessioni; nel carrello la foto usa già il loader (app/cart/page.tsx: loader={caricatoreFotoRemote}). Restano CartGroupsList e shared-cart nel mio territorio: da fare insieme agli altri per non lasciare metà del lavoro."
+    },
+    {
+      "id": 419,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Se la lettura dei prodotti va a buon fine, un prodotto (o una variante) che non torna vale scorta 0: la riga dice «Non più disponibile · toglilo per continuare» e il pulsante si ferma, come la cassa.",
+      "prova": "tests/unit/minori-s07-carrello.test.tsx › il prodotto segnato «Esaurito» non torna dalla lettura",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/cart/page.tsx",
+        "tests/unit/minori-s07-carrello.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Se la lettura cade del tutto il carrello resta «limite sconosciuto» (non blocca): lì decide la cassa."
+    },
+    {
+      "id": 2173,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Col sì della veloce la riga del carrello dice «Consegna nella fascia che scegli, o veloce in 30-60 min»: la consegna conteggiata nel totale (la fascia) e la veloce come possibilità, non i 30-60 minuti da soli.",
+      "prova": "tests/unit/il-carrello-non-promette-mezz-ora-alle-undici-di-sera.test.ts › alle 14, con un fattorino online… (frase aggiornata, CON_LA_VELOCE)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/cart/page.tsx",
+        "tests/unit/il-carrello-non-promette-mezz-ora-alle-undici-di-sera.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Aggiornata la prova esistente il-carrello-non-promette-mezz-ora…: fissava «Consegna in 30-60 min» da sola."
+    },
+    {
+      "id": 1575,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Chi ha più pezzi di quelli disponibili è un blocco come l'esaurito: il pulsante dice «Abbassa la quantità per continuare» e porta alla riga (che ora è role=alert). Con esauriti e quantità troppo alte insieme il pulsante dice tutte e due le cose.",
+      "prova": "tests/unit/minori-s07-carrello.test.tsx › 3 pezzi nel carrello e 2 disponibili",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/cart/page.tsx",
+        "tests/unit/minori-s07-carrello.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2274,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Come la 2252: la prova killer è in uno scratchpad non disponibile. Da verificare: tests/unit/il-carrello-e-la-cassa-dicono-lo-stesso-numero.test.ts monta il carrello con 2 × 5 € e 4 × 4 €, ma non legge la riga «ti mancano X»."
+    },
+    {
+      "id": 443,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il blocco quantità + «Rimuovi» della riga del carrello può andare a capo (flex-wrap, min-w-0): a 360 px non esce più dal riquadro.",
+      "prova": "tests/unit/minori-s07-carrello.test.tsx › quantità e «Rimuovi» possono andare a capo",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/cart/page.tsx",
+        "tests/unit/minori-s07-carrello.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Prova sul sorgente; da misurare a schermo a 360 px."
+    },
+    {
+      "id": 665,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Togliendo una riga il fuoco va sul titolo del carrello (anche del carrello vuoto) e la riga di stato dice «<prodotto> tolto dal carrello».",
+      "prova": "tests/unit/minori-s07-carrello.test.tsx › togliendo una riga il fuoco va sul titolo e si dice cosa è stato tolto",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/cart/page.tsx",
+        "tests/unit/minori-s07-carrello.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2579,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il carrello legge a parte, con select('*') come la scheda prodotto, quali prodotti sono non_recedibile: se dentro ci sono solo esclusi scrive «Esclusi dal recesso: freschi o fatti su ordinazione. Resta la garanzia» invece di «Reso entro 14 giorni».",
+      "prova": "tests/unit/minori-s07-carrello.test.tsx › con dentro solo prodotti esclusi dal recesso non promette «Reso entro 14 giorni»",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/cart/page.tsx",
+        "lib/promesse-pubbliche.ts",
+        "tests/unit/minori-s07-carrello.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Lettura separata per non far cadere le scorte se la migrazione 180 non fosse applicata (osservazione del revisore)."
+    },
+    {
+      "id": 1574,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Alle 20:30 il carrello non promette più la mezz'ora da sola: dice prima la fascia (la cassa apre su domani) e la veloce solo come possibilità finché il server dice sì.",
+      "prova": "tests/unit/il-carrello-non-promette-mezz-ora-alle-undici-di-sera.test.ts (frase aggiornata)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/cart/page.tsx",
+        "tests/unit/il-carrello-non-promette-mezz-ora-alle-undici-di-sera.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Stessa correzione della 2173."
+    },
+    {
+      "id": 1729,
+      "esito": "riparato",
+      "cosa_ho_fatto": "problemiDiDisponibilita porta con sé variantId e variantLabel della riga; in cassa «Togli dal carrello» toglie solo la riga di quella variante e il testo la nomina («Torta della nonna · grande»).",
+      "prova": "tests/unit/minori-s07-varianti-in-cassa.test.ts › il problema di disponibilità dice quale variante è finita / «Togli dal carrello» toglie solo quella riga",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/checkout/page.tsx",
+        "tests/unit/minori-s07-varianti-in-cassa.test.ts",
+        "tests/unit/chi-annulla-il-pagamento-puo-ricomprare-il-suo-pezzo.test.ts"
+      ],
+      "file_altrui_toccati": [
+        "lib/ordini/merce-che-tengo-io.ts"
+      ],
+      "nota": "Aggiornata la prova esistente chi-annulla-il-pagamento…: i problemi ora hanno anche variantId e variantLabel (null senza variante)."
+    },
+    {
+      "id": 1730,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La cassa manda useCredit solo se il saldo letto è sopra zero (cioè se la casella era a schermo): se la lettura del credito cade, il server non lo spende.",
+      "prova": "tests/unit/minori-s07-cassa-invio.test.ts › il credito si manda solo se la cassa l'ha letto",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/checkout/page.tsx",
+        "tests/unit/minori-s07-cassa-invio.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Prova sul sorgente."
+    },
+    {
+      "id": 1734,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Se il carrello non si è letto (nessun gruppo) il riepilogo non mostra cifre a zero ma «Il riepilogo con le cifre compare appena riesco a leggere il carrello», e il pulsante e la barra del telefono non scrivono 0,00 €.",
+      "prova": "tests/unit/minori-s07-cassa-vuota.test.tsx › senza importi letti: niente «Subtotale 0,00 €»…",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/checkout/OrderSummary.tsx",
+        "app/checkout/page.tsx",
+        "tests/unit/minori-s07-cassa-vuota.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2663,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "L'avviso fuori zona accanto all'indirizzo sul telefono: va messo sotto ShippingAddressForm usando gruppoFuoriZona; non fatto per tempo."
+    },
+    {
+      "id": 2387,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "L'effetto della bozza gira al montaggio con orari vuoti; va fatto ripartire quando arrivano gli orari (cartData). Oggi il selettore corregge subito dopo: niente ordine sbagliato."
+    },
+    {
+      "id": 2514,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Provato e tolto: mettere fascia e indirizzo nell'impronta del tentativo apriva un doppio ordine quando la risposta si perde e il selettore sposta la fascia da solo (lo ha trovato il revisore).",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "La correzione giusta è nella rotta dei contanti (altra sessione): se la chiave c'è già ma fascia o indirizzo sono diversi, rispondere 409 «hai già un ordine aperto con un'altra fascia» invece di «fatto» con l'ordine vecchio."
+    },
+    {
+      "id": 2314,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Con gruppi letti ma nessun negozio, l'effetto della veloce risponde subito «no» (esito per negozi vuoti) invece di non partire: la tessera non resta su «Sto controllando…».",
+      "prova": "tests/unit/minori-s07-cassa-veloce.test.ts › un carrello senza negozio letto ha una risposta (no)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/checkout/page.tsx",
+        "tests/unit/minori-s07-cassa-veloce.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Prova sul sorgente: la pagina della cassa montata non ha una finta per i gruppi senza negozio."
+    },
+    {
+      "id": 507,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "La scadenza della bozza (lib/bozza-checkout.ts) e la cancellazione all'uscita (components/Navbar.tsx) sono fuori dal mio territorio; e la Cookie policy va aggiornata (pagina legale)."
+    },
+    {
+      "id": 420,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La cassa vuota usa lo stesso EmptyState del carrello (icona, titolo, «Esplora i prodotti») con «I miei ordini» al posto del «Torna al negozio» che portava alla home.",
+      "prova": "tests/unit/minori-s07-cassa-vuota.test.tsx › usa EmptyState con l'icona, il titolo e un rimando ai propri ordini",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/checkout/page.tsx",
+        "tests/unit/minori-s07-cassa-vuota.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Prova sul sorgente."
+    },
+    {
+      "id": 573,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "«Ho già un account» va fatto salvare la bozza come handleSubmit prima di andare all'accesso; non fatto per tempo."
+    },
+    {
+      "id": 2300,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Serve una prova montata della cassa con la carta accesa e due negozi (chiave Stripe finta): il file di collaudo citato non è nel deposito. Lo lascio all'AD."
+    },
+    {
+      "id": 164,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La lettura delle scorte per variante guarda l'errore e lo lancia, come la lettura dei prodotti: la domanda si riprova e la cassa dice che non riesce a leggere il carrello invece di «disponibili 0».",
+      "prova": "tests/unit/minori-s07-varianti-in-cassa.test.ts › se la lettura delle taglie cade, la cassa non conta «disponibili 0»",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/checkout/page.tsx",
+        "tests/unit/minori-s07-varianti-in-cassa.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Prova sul sorgente."
+    },
+    {
+      "id": 147,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La domanda «chi è entrato» della cassa non tiene più per 60 s il «nessuno» da ospite: staleTime 0 e refetchOnMount 'always', si rilegge a ogni apertura della cassa.",
+      "prova": "tests/unit/minori-s07-cassa-invio.test.ts › chi entra dalla cassa e torna non riceve il «nessuno» salvato da ospite",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/checkout/page.tsx",
+        "tests/unit/minori-s07-cassa-invio.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Prova sul sorgente."
+    },
+    {
+      "id": 338,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda: dopo il primo ordine la cassa deve salvare l'indirizzo nella rubrica del cliente da sola, o chiedere con una casella «salva questo indirizzo»? (dati personali: serve dirlo nell'informativa)."
+    },
+    {
+      "id": 965,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda: chi sceglie il ritiro in negozio deve dire a che ora passa (fasce come la consegna) o basta «entro l'orario di chiusura di oggi/domani»? Oggi il ritiro è spento in codice (RITIRO_IN_NEGOZIO_ATTIVO = false)."
+    },
+    {
+      "id": 2302,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nuova prova che fissa la scelta del giorno di partenza senza bozza con l'ora di Roma (const oraDiApertura = romeNow() → giornoDiPartenza).",
+      "prova": "tests/unit/minori-s07-cassa-veloce.test.ts › senza bozza il giorno di partenza si sceglie con l'ora di Roma",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s07-cassa-veloce.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Prova sul sorgente: il mutante «new Date().getHours()» la fa diventare rossa; una prova montata col telefono a Bucarest resta da fare."
+    },
+    {
+      "id": 2304,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La domanda a /api/consegna/veloce ha un tempo massimo di 15 s (AbortSignal.timeout): appesa diventa un no; e il motivo del blocco dice «se non vuoi aspettare, scegli Oggi o Domani».",
+      "prova": "tests/unit/minori-s07-cassa-veloce.test.ts › la richiesta ha un tempo massimo / il riepilogo … dice che si può scegliere un'altra fascia",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/checkout/page.tsx",
+        "tests/unit/minori-s07-cassa-veloce.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Prova sul sorgente."
+    },
+    {
+      "id": 2064,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Serve una prova montata della cassa con un codice FREE_SHIPPING applicato; i codici sono spenti (CODICI_SCONTO_IN_CASSA = false), quindi la riga oggi non si vede e la prova va scritta col codice acceso finto."
+    },
+    {
+      "id": 2324,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Dopo un errore dell'ordine con «Adesso» scelta (contanti e carta), la cassa richiede subito la veloce invece di aspettare il battito del minuto: col no il selettore sposta la scelta e lo dice.",
+      "prova": "tests/unit/minori-s07-cassa-veloce.test.ts › dopo un no della rotta con «Adesso» si richiede subito",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/checkout/page.tsx",
+        "tests/unit/minori-s07-cassa-veloce.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Prova sul sorgente: la finta di react-query non fa girare onError (lo dice la scheda)."
+    },
+    {
+      "id": 1984,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "tests/unit/vicino-a-te-montata-al-confine-non-invita-a-cercare-oltre.test.tsx › «IL CASO DEL COLLAUDO — col cursore in fondo…»: monta la pagina, porta il cursore in fondo e fissa ogni frase; la frase «Sposta il cursore…» la fa diventare rossa",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2092,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il passo del cursore è 0,5 se il confine non è intero, così il valore d'apertura si raggiunge; l'etichetta scrive il raggio con la virgola (toLocaleString it-IT).",
+      "prova": "tests/unit/minori-s07-vicino-a-te-confine.test.tsx › il cursore può stare sul valore d'apertura",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/near/page.tsx",
+        "tests/unit/minori-s07-vicino-a-te-confine.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1973,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nuova prova che controlla che setRadiusKm si chiami solo dal cursore (nessun cambio di raggio all'arrivo della posizione).",
+      "prova": "tests/unit/minori-s07-vicino-a-te.test.tsx › arrivata la posizione il raggio non cambia da solo",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s07-vicino-a-te.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Scheda di buco nelle prove: chiusa con la prova; il codice della pagina era già giusto."
+    },
+    {
+      "id": 2094,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Con la posizione il conteggio dice «entro N km da dove sei adesso» e una riga avvisa che in cassa la distanza si misura dall'indirizzo di consegna.",
+      "prova": "tests/unit/minori-s07-vicino-a-te.test.tsx › con la posizione dice … dall'indirizzo di consegna",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/near/page.tsx",
+        "tests/unit/minori-s07-vicino-a-te.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il filtro resta sulla posizione del telefono (non c'è un indirizzo da cui misurare prima della cassa): la pagina ora lo dice."
+    },
+    {
+      "id": 2033,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Con la posizione la pagina dice quanti negozi non hanno la posizione sulla mappa e non sono in elenco, e il pulsante «Mostra tutti i negozi» torna all'elenco intero.",
+      "prova": "tests/unit/minori-s07-vicino-a-te.test.tsx › con la posizione dice dei negozi senza posizione e si torna all'elenco intero",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/near/page.tsx",
+        "tests/unit/minori-s07-vicino-a-te.test.tsx",
+        "tests/unit/vicino-a-te-montata-al-confine-non-invita-a-cercare-oltre.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Aggiornate le frasi fissate in vicino-a-te-montata-al-confine… (la riga nuova e il conteggio «da dove sei adesso»)."
+    },
+    {
+      "id": 1977,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Senza posizione la lista vuota dice «Per ora a Piacenza non ci sono negozi da mostrare» invece di «entro 5 km, aumenta il raggio» (il cursore lì non c'è).",
+      "prova": "tests/unit/minori-s07-vicino-a-te.test.tsx › senza posizione e con la lista vuota non invita ad «aumentare il raggio»",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/near/page.tsx",
+        "tests/unit/minori-s07-vicino-a-te.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 354,
+      "esito": "riparato",
+      "cosa_ho_fatto": "«Promozioni» ordina per prezzo sul prezzo scontato (discountedUnitCents con discount_percent della riga), quello che la scheda mostra.",
+      "prova": "tests/unit/minori-s07-ordini-di-lettura.test.ts › il confronto usa il prezzo con lo sconto, non il pieno",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/promozioni/page.tsx",
+        "tests/unit/minori-s07-ordini-di-lettura.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Prova sul sorgente (la pagina dipende da next-intl e react-query)."
+    },
+    {
+      "id": 1718,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il prodotto con scorta a zero va fra i non disponibili; per gli altri la lista mostra la quantità che entra davvero (min fra suggerita e scorta), il prezzo su quella quantità e «ne restano solo N dei M suggeriti».",
+      "prova": "tests/unit/minori-s07-lista-condivisa.test.ts › merce finita o scarsa: la lista mostra le quantità e i prezzi che entrano davvero",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/shared-cart/page.tsx",
+        "tests/unit/minori-s07-lista-condivisa.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1719,
+      "esito": "riparato",
+      "cosa_ho_fatto": "«1 prodotto non disponibile è stato escluso dalla lista» al singolare; il link non valido dice «Questo link non si riesce a leggere: forse è stato copiato a metà» (niente «e'», «malformato», «scaduto»).",
+      "prova": "tests/unit/minori-s07-lista-condivisa.test.ts › una quantità con la virgola non entra (controlla la frase) / merce finita o scarsa (controlla il singolare)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/shared-cart/page.tsx",
+        "tests/unit/minori-s07-lista-condivisa.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1742,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Il nome dell'insegna per il negoziante non approvato vuol dire leggere anche il proprio profilo quando il negozio è chi guarda: due letture in più in lista condivisa e cassa per un caso che al lancio non c'è (Pane Quotidiano è approvato)."
+    },
+    {
+      "id": 153,
+      "esito": "riparato",
+      "cosa_ho_fatto": "parseCartParam accetta solo quantità intere e somma lo stesso prodotto ripetuto in una riga sola (massimo 99): la lista mostra quello che «Aggiungi tutto» mette nel carrello.",
+      "prova": "tests/unit/minori-s07-lista-condivisa.test.ts › una quantità con la virgola non entra / lo stesso prodotto ripetuto si somma",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/shared-cart/page.tsx",
+        "tests/unit/minori-s07-lista-condivisa.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1983,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "tests/unit/le-promesse-della-consegna-cambiano-solo-di-proposito.test.tsx › «IL CASO DEL COLLAUDO — la scheda per Google e per le condivisioni è quella riletta, campo per campo» fissa description e openGraph.description di /shipping",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1942,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "app/shipping/page.tsx: la lista sotto il costo dice «Se ordini da più negozi la consegna resta una: il fattorino passa da tutti in un giro solo» — non c'è più «paghi due consegne»",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1941,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Con il ritiro acceso la griglia delle card di /shipping passa a due colonne (quattro card in 2×2), con il ritiro spento resta a tre.",
+      "prova": "tests/unit/minori-s07-spedizioni.test.tsx › le quattro card stanno in una griglia da due",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/shipping/page.tsx",
+        "tests/unit/minori-s07-spedizioni.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1972,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "È un buco di metodo nelle prove (elenchi di parole). /shipping è già coperta frase per frase (le-promesse-della-consegna-cambiano-solo-di-proposito); per le altre (near/layout, category/layout, admin/delivery) serve lo stesso tipo di prova: lavoro di prove, non un difetto del sito."
+    },
+    {
+      "id": 2312,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La riga sotto «Tempi di consegna» dice «La veloce vale solo se tutti i negozi del carrello sono aperti» invece di «del negozio che hai scelto».",
+      "prova": "tests/unit/le-promesse-della-consegna-cambiano-solo-di-proposito.test.tsx › nessuna frase aggiunta, tolta o riscritta (lista aggiornata)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/shipping/page.tsx",
+        "tests/unit/le-promesse-della-consegna-cambiano-solo-di-proposito.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2032,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nel tracciamento di /shipping lo stato pronto usa etichettaPronto() di lib/order-status.ts, la stessa di «I miei ordini» («Pronto per il rider» a ritiro spento).",
+      "prova": "tests/unit/minori-s07-spedizioni.test.tsx › il tracciamento usa l'etichetta di «I miei ordini»",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/shipping/page.tsx",
+        "tests/unit/minori-s07-spedizioni.test.tsx",
+        "tests/unit/le-promesse-della-consegna-cambiano-solo-di-proposito.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2050,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "app/checkout/page.tsx:1123-1134: useCoordinateDellaZona(form, …) + fuoriZonaDiConsegna sul modulo mentre si scrive, e fuoriZona blocca «Ordina» con motivoFuoriZona: la cassa ora dice il fuori zona prima del clic finale",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Resta il caso del telefono (avviso solo nel riepilogo): è la scheda 2663."
+    },
+    {
+      "id": 1974,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La sezione «Aree servite» dice che anche col negozio senza posizione sulla mappa la cassa non misura e l'ordine passa senza il controllo.",
+      "prova": "tests/unit/le-promesse-della-consegna-cambiano-solo-di-proposito.test.tsx › nessuna frase aggiunta, tolta o riscritta (lista aggiornata)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/shipping/page.tsx",
+        "tests/unit/le-promesse-della-consegna-cambiano-solo-di-proposito.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1975,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Il segno sull'ordine non misurato va messo nelle due rotte (app/api/orders/cod, app/api/stripe/checkout, altre sessioni): un log e un campo sull'ordine. La pagina Spedizioni ora dice il caso (scheda 1974)."
+    },
+    {
+      "id": 2096,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La FAQ sui tempi dice «fino a N km dal negozio» (dal confine vero) invece di «nei comuni serviti».",
+      "prova": "tests/unit/minori-s07-promesse.test.ts › la FAQ dice il confine in km",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/promesse-pubbliche.ts",
+        "tests/unit/minori-s07-promesse.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La pagina Spedizioni non dice più «comuni serviti»: era solo nella FAQ."
+    },
+    {
+      "id": 471,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Il carrello locale si svuota solo se non è cambiato dopo l'ultimo allineamento riuscito col cloud (nuovo segno mc_cart_synced_at) e il cloud vuoto è più recente: la spesa già pagata altrove non torna su; un carrello riempito da ospite e mai salito resta.",
+      "prova": "tests/unit/minori-s07-carrello-fra-dispositivi.test.ts › il cloud svuotato DOPO… / un carrello riempito da ospite, mai salito sul cloud, non si butta",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/CartCrossDeviceSync.tsx",
+        "tests/unit/minori-s07-carrello-fra-dispositivi.test.ts"
+      ],
+      "file_altrui_toccati": [
+        "lib/cart.ts"
+      ],
+      "nota": "Manca il caso della carta senza rientro da Stripe (scheda chiusa, app della banca): lì nessuno svuota user_carts. Serve che la rotta contanti e il webhook della carta svuotino user_carts sul server (app/api/orders/cod, lib/stripe/webhook: altre sessioni)."
+    },
+    {
+      "id": 162,
+      "esito": "riparato",
+      "cosa_ho_fatto": "syncUp guarda l'{ error } restituito dall'upsert: se il server rifiuta, la data locale non avanza e al giro dopo si riprova.",
+      "prova": "tests/unit/minori-s07-carrello-fra-dispositivi.test.ts › se il server rifiuta il salvataggio, la data locale non avanza",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/CartCrossDeviceSync.tsx",
+        "tests/unit/minori-s07-carrello-fra-dispositivi.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2099,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La riga sotto il titolo della tendina non promette più «i negozi che consegnano al tuo CAP»: dice che il CAP resta sul dispositivo e che se arriviamo lo dice la cassa, dall'indirizzo.",
+      "prova": "tests/unit/minori-s07-tendina-del-cap.test.ts › non promette di mostrare «i negozi che consegnano al tuo CAP»",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/LocationPill.tsx",
+        "tests/unit/minori-s07-tendina-del-cap.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 311,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il pulsante «Aggiorna posizione» non è più spento sotto le cinque cifre e Invio nel campo salva: il messaggio «Il CAP ha cinque cifre…» ora compare.",
+      "prova": "tests/unit/minori-s07-tendina-del-cap.test.ts › con un CAP di tre cifre il pulsante si può premere e dice perché non va / Invio nel campo prova a salvare",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/LocationPill.tsx",
+        "tests/unit/minori-s07-tendina-del-cap.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 441,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il fumetto «Dove ti consegniamo?» resta solo sul telefono (sale dal basso); da 768 px in su non si apre più sopra le categorie e i titoli.",
+      "prova": "tests/unit/minori-s07-tendina-del-cap.test.ts › il fumetto «Dove ti consegniamo?» non si apre sopra i titoli da tablet in su",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/LocationPill.tsx",
+        "tests/unit/minori-s07-tendina-del-cap.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Sul telefono resta insieme al banner dei cookie al primo ingresso: per uno solo alla volta servirebbe leggere il consenso dei cookie (componente di un'altra sessione)."
+    },
+    {
+      "id": 2101,
+      "esito": "parziale",
+      "cosa_ho_fatto": "La pausa della striscia passa a 44 px di larghezza; la pillola del CAP ha un'area di tocco invisibile alta 44 px.",
+      "prova": "tests/unit/minori-s07-bersagli-della-testata.test.ts",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/PromoTicker.tsx",
+        "components/LocationPill.tsx",
+        "tests/unit/minori-s07-bersagli-della-testata.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Restano il logo (components/Navbar.tsx) e le tre voci delle categorie (components/CategoryBar.tsx), di altre sessioni; e la pausa resta alta quanto la striscia (32 px): alzarla vuol dire alzare la striscia su ogni pagina. Va misurato a schermo."
+    },
+    {
+      "id": 956,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "components/PromoTicker.tsx: pulsante visibile «Metti in pausa la striscia degli annunci» (aria-pressed, animationPlayState: 'paused'), oltre a prefers-reduced-motion",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 346,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il pulsante «Condividi» mette la variante nel testo («Torta · grande × 1») e, come terzo pezzo, nel link; la lista condivisa la legge e accanto a «scegli le opzioni» scrive «nella lista: grande × 1».",
+      "prova": "tests/unit/minori-s07-lista-condivisa.test.ts › chi riceve vede quale variante aveva scelto chi ha condiviso",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ShareCartButton.tsx",
+        "app/shared-cart/page.tsx",
+        "tests/unit/minori-s07-lista-condivisa.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La variante va comunque scelta sulla scheda (il prodotto con varianti non entra dal link, regola R088): ora si sa quale."
+    },
+    {
+      "id": 280,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "La barra fissa riceve il prezzo dalla scheda prodotto (app/product/[id]/page.tsx:423, altra sessione), che passa il prezzo pieno anche a addToCart e al prezzo grande; lo stesso SimilarProducts, RecentlyViewed, SponsoredCarousel e SearchBar. La correzione vera è nella scheda prodotto (leggere lo sconto attivo e passare il prezzo scontato): fuori dal mio territorio, la segnalo in nuovi_difetti_visti."
+    },
+    {
+      "id": 859,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nella barra fissa «2 × prezzo» e la riga della consegna passano da 11 px a 12 px (text-xs) e il grigio da ink-400 a ink-600; l'etichetta «Totale» della barra della cassa da 10 a 12 px.",
+      "prova": "tests/unit/minori-s07-cassa-leggibile.test.tsx › nessuna scritta sotto i 12 px nella barra d'acquisto e sul «Totale» della cassa",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/StickyAddToCart.tsx",
+        "app/checkout/page.tsx",
+        "tests/unit/minori-s07-cassa-leggibile.test.tsx",
+        "tests/unit/da-ogni-larghezza-si-riesce-a-comprare.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "«IVA inclusa» nel carrello era già a text-xs (app/cart/page.tsx:770). Aggiornata la prova esistente da-ogni-larghezza-si-riesce-a-comprare: legge anche text-xs (12 px) e la riga ci sta ancora a 360 px."
+    },
+    {
+      "id": 2575,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La striscia del benvenuto non scrive più «scade tra N giorni»: nel database il bonus non scade; i 7 giorni restano solo come durata della striscia, detti come tali nel commento.",
+      "prova": "tests/unit/minori-s07-striscia-benvenuto.test.ts › non scrive «scade tra N giorni»",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/WelcomeCreditBanner.tsx",
+        "tests/unit/minori-s07-striscia-benvenuto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 240,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il «+» di «Completa con» passa da 32 a 44 px (h-11 w-11), come i − e + delle quantità.",
+      "prova": "tests/unit/minori-s07-completa-con.test.ts › il «+» è grande quanto gli altri pulsanti",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/cart/CartUpsell.tsx",
+        "tests/unit/minori-s07-completa-con.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 281,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La lista condivisa e «Completa con» leggono le promozioni attive (fetchActiveDiscounts, come la cassa) e mostrano e salvano nel carrello il prezzo scontato.",
+      "prova": "tests/unit/minori-s07-lista-condivisa.test.ts › con una promozione attiva mostra e mette nel carrello il prezzo scontato; tests/unit/minori-s07-completa-con.test.ts › mostra e salva il prezzo con la promozione",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/shared-cart/page.tsx",
+        "components/cart/CartUpsell.tsx",
+        "tests/unit/minori-s07-lista-condivisa.test.ts",
+        "tests/unit/minori-s07-completa-con.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Per «Completa con» la prova è sul sorgente (il componente legge via react-query, finto nelle prove); per la lista condivisa è di comportamento."
+    },
+    {
+      "id": 241,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il riquadro scorrevole dei prodotti del riepilogo ha tabIndex=0, role=region e un nome, con l'anello del fuoco: si scorre da tastiera anche su Safari.",
+      "prova": "tests/unit/minori-s07-cassa-leggibile.test.tsx › l'elenco dei prodotti che scorre si raggiunge col Tab e ha un nome",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/checkout/CartGroupsList.tsx",
+        "tests/unit/minori-s07-cassa-leggibile.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2316,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il riepilogo non ripete RIGA_VELOCE_IN_ATTESA del selettore: ha una frase sua (MOTIVO_VELOCE_IN_ATTESA) che dice anche che si può scegliere Oggi o Domani.",
+      "prova": "tests/unit/minori-s07-cassa-veloce.test.ts › il riepilogo non ripete la frase del selettore",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/checkout/page.tsx",
+        "tests/unit/minori-s07-cassa-veloce.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2319,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Quando al controllo dopo la veloce torna possibile, l'avviso «la consegna veloce adesso non si può più» si toglie (resta solo un eventuale avviso sulla fascia scaduta).",
+      "prova": "tests/unit/minori-s07-selettore.test.tsx › sparisce quando al controllo dopo «Adesso» torna disponibile",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/checkout/DeliverySlotPicker.tsx",
+        "tests/unit/minori-s07-selettore.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2317,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il motivo del no della veloce non si mostra mentre si aspetta la risposta (veloceInAttesa): era quello del carrello di prima.",
+      "prova": "tests/unit/minori-s07-selettore.test.tsx › mentre aspetta la risposta non mostra il motivo del no di prima",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/checkout/DeliverySlotPicker.tsx",
+        "tests/unit/minori-s07-selettore.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2315,
+      "esito": "riparato",
+      "cosa_ho_fatto": "quandoLaVeloceCade riceve le fasce già segnate per oggi e per domani e le tiene se si possono; solo altrimenti prende la prima possibile.",
+      "prova": "tests/unit/minori-s07-selettore.test.tsx › la sera resta la fascia di domani già scelta, non la prima del mattino",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/checkout/DeliverySlotPicker.tsx",
+        "tests/unit/minori-s07-selettore.test.tsx",
+        "tests/unit/la-veloce-resta-scelta-dopo-l-accesso.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Aggiornata la prova esistente la-veloce-resta-scelta-dopo-l-accesso: voleva proprio la prima fascia di domani (il difetto); ora vuole quella già segnata."
+    },
+    {
+      "id": 2323,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "components/checkout/DeliverySlotPicker.tsx: l'effetto delle fasce di oggi scrive avvisoFasciaScaduta(todayTime, …) quando la fascia scelta era fra le possibili e scade (anche il passaggio a domani)",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Coperto da tests/unit/la-fascia-scaduta-in-cassa-lo-dice.test.tsx."
+    },
+    {
+      "id": 2303,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "components/checkout/DeliverySlotPicker.tsx: il radio delle fasce fa onChange={() => { setAvvisoSpostata(null); onTimeChange(t); }}",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 303,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Le tessere «Oggi» e «Domani» portano il giorno e la data («Oggi · mar 10/11», «Domani · mer 11/11»), anche nel nome letto dal lettore di schermo; la data è quella dell'orologio di Roma.",
+      "prova": "tests/unit/minori-s07-selettore.test.tsx › martedì 10/11 alle 00:40 / le tessere dicono il giorno della settimana e la data",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/checkout/DeliverySlotPicker.tsx",
+        "tests/unit/minori-s07-selettore.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La riga del riepilogo «Consegna a domicilio» dice ancora l'etichetta senza data (lib/quando-arriva.ts rigaQuandoArriva): le tessere bastano a scegliere il giorno giusto."
+    },
+    {
+      "id": 2301,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nuova prova sul ramo di giorno di quandoLaVeloceCade (Roma 14:00, resta Oggi): l'avviso deve nominare la fascia di oggi segnata; il mutante «FASCE_DI_DOMANI[0]» la fa diventare rossa.",
+      "prova": "tests/unit/minori-s07-selettore.test.tsx › di giorno (Roma 14:00) resta Oggi e l'avviso nomina la fascia di oggi che resta segnata",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s07-selettore.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 286,
+      "esito": "riparato",
+      "cosa_ho_fatto": "vaiAlPrimoBlocco va al primo role=alert che non è segnato data-informativo; sono informativi «il prezzo è cambiato» e i prodotti tolti in cassa, e il «fuori zona» nel carrello.",
+      "prova": "tests/unit/minori-s07-primo-blocco.test.ts › salta l'avviso «il prezzo è cambiato» (informativo) e va sul blocco",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/checkout/OrderSummary.tsx",
+        "app/checkout/page.tsx",
+        "app/cart/page.tsx",
+        "tests/unit/minori-s07-primo-blocco.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2082,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Il nome «Spedizione GRATUITA» sta in lib/ordini/riepilogo-ordine.ts e nelle pagine dell'ordine (altre sessioni), fissato da una prova; dormiente (codici e ritiro spenti)."
+    },
+    {
+      "id": 229,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Lo scheletro della cassa ha dentro la regione viva un testo sr-only «Sto preparando il riepilogo dell'ordine…» (prima solo l'aria-label, che una regione viva non annuncia).",
+      "prova": "tests/unit/minori-s07-cassa-leggibile.test.tsx › mentre la cassa si prepara la regione viva ha un testo da annunciare",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/checkout/ScheletroCassa.tsx",
+        "tests/unit/minori-s07-cassa-leggibile.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Lo stesso schema in components/ui/LoadingState.tsx:73 (altra sessione) non è toccato: va in nuovi_difetti_visti."
+    },
+    {
+      "id": 2597,
+      "esito": "riparato",
+      "cosa_ho_fatto": "domandaDellaZona della cassa costruisce la frase esattamente come coordinateDiUnIndirizzo del server (trim della frase intera, non dei singoli campi).",
+      "prova": "tests/unit/minori-s07-domanda-della-zona.test.ts › esegue la frase del server presa da lib/geocodifica.ts e la confronta con quella della cassa",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/checkout/ShippingAddressForm.tsx",
+        "tests/unit/minori-s07-domanda-della-zona.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2596,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Serve uno stato «sto cercando l'indirizzo» esposto da useCoordinateDellaZona e letto da ordineBloccato; il server rifiuta comunque il fuori zona. Lo lascio come lavoro successivo."
+    },
+    {
+      "id": 2097,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "È una proposta di architettura (una sola frase della zona letta da RAGGIO_CONSEGNA_KM): oggi le frasi sono allineate e una prova le tiene insieme."
+    },
+    {
+      "id": 297,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Il modulo nascosto con la bozza va riaperto quando l'indirizzo della bozza non coincide con nessun salvato: tocca la logica di editing di ShippingAddressForm e l'ordine degli effetti in cassa; non l'ho chiuso in sicurezza in questa sessione."
+    },
+    {
+      "id": 435,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Gli esempi dei campi indirizzo e telefono diventano «Es. Via Roma 1» e «Es. 333 123 4567», come quello del nome.",
+      "prova": "tests/unit/minori-s07-cassa-leggibile.test.tsx › gli esempi di indirizzo e telefono cominciano con «Es.»",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/checkout/ShippingAddressForm.tsx",
+        "tests/unit/minori-s07-cassa-leggibile.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 669,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Togliere useTotaliCarrello vuol dire riscrivere tre prove (lo-schermo-e-il-server…, la-consegna-costa-3-o-4-euro…, la-consegna-e-una-sola…) contro riepilogoDaMostrare: lavoro da fare con calma, non in fondo a questa sessione."
+    },
+    {
+      "id": 640,
+      "esito": "riparato",
+      "cosa_ho_fatto": "saveCart ha l'opzione dallAltroDispositivo: il carrello che arriva dal cloud (fusione o svuotamento) non riscrive la riga abandoned_carts, quindi non azzera più «email di recupero mandata».",
+      "prova": "tests/unit/minori-s07-carrello-fra-dispositivi.test.ts › il carrello che arriva dal cloud non riscrive la riga del carrello abbandonato",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/CartCrossDeviceSync.tsx",
+        "tests/unit/minori-s07-carrello-fra-dispositivi.test.ts"
+      ],
+      "file_altrui_toccati": [
+        "lib/cart.ts"
+      ],
+      "nota": "Una riga in lib/cart.ts (altra sessione): parametro facoltativo, i chiamanti di prima non cambiano."
+    },
+    {
+      "id": 2313,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "VALUE_PROPS è usato solo da cinque prove (al-lancio-si-paga-solo-la-consegna, le-condizioni-della-veloce…, le-promesse-che-il-sito-non-mantiene, i-minuti-della-veloce…, la-vetrina-non-promette…). Toglierlo vuol dire togliere quelle prove; mostrarlo vuol dire aggiungere una sezione alla home (altra sessione). Lascio la scelta all'AD: io lo toglierei insieme alle cinque asserzioni."
+    },
+    {
+      "id": 2073,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La nota dell'interruttore del ritiro (ora in lib/ritiro-in-negozio.ts) dice che la via del venditore esiste (confirm_pickup_by_seller, migrazioni 124 e 179) invece di «solo il fattorino chiude l'ordine».",
+      "prova": "tests/unit/minori-s07-note-dei-conti.test.ts › la nota dell'interruttore non dice più che manca la via del venditore",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s07-note-dei-conti.test.ts"
+      ],
+      "file_altrui_toccati": [
+        "lib/ritiro-in-negozio.ts"
+      ],
+      "nota": "La nota è stata spostata da lib/constants.ts a lib/ritiro-in-negozio.ts (fuori dal mio territorio): corretta lì. Da verificare se 124 e 179 sono applicate in produzione."
+    },
+    {
+      "id": 2051,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Riscritte le note: constants e shipping non dicono più che la consegna «copre il compenso da sola» e rimandano a consegnaDaPagareCents; le «tariffa fissa» nelle note di prezzi, geocodifica, shipping-coordinate, delle due rotte e della cassa dicono che si resta senza coordinate.",
+      "prova": "tests/unit/minori-s07-note-dei-conti.test.ts › nessuna nota parla più di «tariffa fissa»…",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/constants.ts",
+        "lib/shipping.ts",
+        "app/checkout/page.tsx",
+        "lib/promesse-pubbliche.ts",
+        "tests/unit/minori-s07-note-dei-conti.test.ts"
+      ],
+      "file_altrui_toccati": [
+        "lib/ordini/prezzi.ts",
+        "lib/geocodifica.ts",
+        "lib/shipping-coordinate.ts",
+        "app/api/orders/cod/route.ts",
+        "app/api/stripe/checkout/route.ts"
+      ],
+      "nota": "Solo commenti, nessun conto cambiato."
+    },
+    {
+      "id": 2604,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La cassa conta anche gli ordini con stato vuoto (filtro .or con is.null) e la funzione check_coupon del carrello usa IS DISTINCT FROM nella nuova migrazione 230: le due copie restano uguali.",
+      "prova": "tests/unit/il-carrello-conta-il-primo-ordine-come-la-cassa.test.ts › un ordine con lo stato di consegna/pagamento vuoto conta",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/coupons.ts",
+        "migrations/230_un_ordine_con_lo_stato_vuoto_conta.sql",
+        "tests/unit/il-carrello-conta-il-primo-ordine-come-la-cassa.test.ts",
+        "tests/unit/un-ordine-annullato-non-brucia-il-buono-di-benvenuto.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Migrazione nuova 230 (solo la funzione check_coupon): Nicola la applica a mano. Aggiornata la prova esistente: il suo client finto ora capisce .or e ci sono due casi nuovi con stato NULL. Aggiornato anche il client finto di un-ordine-annullato-non-brucia-il-buono-di-benvenuto.test.ts (capisce .or)."
+    },
+    {
+      "id": 31,
+      "esito": "riparato",
+      "cosa_ho_fatto": "validateCoupon legge anche l'errore del conteggio ordini: se la lettura cade o il conteggio è null, il codice «solo primo ordine» viene rifiutato con «riprova tra poco».",
+      "prova": "tests/unit/minori-s07-coupon.test.ts › senza risposta sugli ordini il codice non si accetta",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/coupons.ts",
+        "tests/unit/minori-s07-coupon.test.ts",
+        "tests/unit/coupons.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Aggiornato il finto client di tests/unit/coupons.test.ts perché capisca .or (la query ora lo usa)."
+    },
+    {
+      "id": 1947,
+      "esito": "riparato",
+      "cosa_ho_fatto": "validateCoupon riceve dalla rotta se l'ordine è un ritiro e rifiuta il codice «Spedizione gratuita» prima della rivendicazione: non si consuma più senza togliere niente.",
+      "prova": "tests/unit/minori-s07-coupon.test.ts › col ritiro il codice non si accetta",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/coupons.ts",
+        "tests/unit/minori-s07-coupon.test.ts"
+      ],
+      "file_altrui_toccati": [
+        "lib/ordini/rivendica-il-codice-sconto.ts",
+        "app/api/orders/cod/route.ts",
+        "app/api/stripe/checkout/route.ts"
+      ],
+      "nota": "Una riga per file altrui: le rotte passano pickupInStore. Oggi dormiente (ritiro e codici spenti). Il controllo vale lato server; check_coupon (carrello) accetta ancora il codice col ritiro: il carrello non sa del ritiro, decide la cassa."
+    },
+    {
+      "id": 2422,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La voce «Punti & Livello» del menu cliente esiste solo con INVITI_E_PUNTI_ACCESI acceso; la pagina /profile/loyalty legge già l'interruttore.",
+      "prova": "tests/unit/minori-s07-interruttori.test.ts › il menu del cliente non mostra «Punti & Livello»",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/funzioni-al-lancio.ts",
+        "tests/unit/minori-s07-interruttori.test.ts"
+      ],
+      "file_altrui_toccati": [
+        "lib/account-menu.ts"
+      ],
+      "nota": "La pagina dei punti resta raggiungibile dall'indirizzo, con i testi neutri che legge già dall'interruttore."
+    },
+    {
+      "id": 2429,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il passaggio giornaliero (DailyCheckIn), che chiama il database e assegna i punti dei giorni di fila, non parte con l'interruttore spento; il menu lo legge (vedi 2422).",
+      "prova": "tests/unit/minori-s07-interruttori.test.ts › il passaggio giornaliero che assegna i punti legge l'interruttore prima di chiamare il database",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/funzioni-al-lancio.ts",
+        "tests/unit/minori-s07-interruttori.test.ts"
+      ],
+      "file_altrui_toccati": [
+        "components/DailyCheckIn.tsx",
+        "lib/account-menu.ts"
+      ],
+      "nota": "Coi punti spenti i «giorni di fila» mostrati su /profile/loyalty non avanzano più: coerente con «punti spenti al lancio»."
+    },
+    {
+      "id": 2546,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il commento degli interruttori elenca tutte le eccezioni senza rotta: classifica inviti, caricamento da file, inviti e punti, app installabile, PostHog.",
+      "prova": "tests/unit/minori-s07-interruttori.test.ts › il commento degli interruttori nomina tutte le eccezioni senza rotta",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/funzioni-al-lancio.ts",
+        "tests/unit/minori-s07-interruttori.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2474,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda: al confine dei 5 km in linea d'aria la strada è 6-7 km e in bici, con l'andata al negozio, sono circa 61 minuti: la veloce «30-60 minuti» va offerta fino a 5 km, solo fino a 4 km, o la promessa diventa 30-70?"
+    },
+    {
+      "id": 2294,
+      "esito": "riparato",
+      "cosa_ho_fatto": "rigaConsegnaDellaScheda considera il sì della veloce solo dentro le ore della veloce (expressSiPuo), come consegnaDellaVetrina.",
+      "prova": "tests/unit/minori-s07-veloce.test.ts › venerdì 30/10 alle 21:10…",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/promessa-consegna.ts",
+        "tests/unit/minori-s07-veloce.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Resta il caso del fattorino che si spegne a scheda aperta: la scheda chiede alla cassa una volta sola (components/ui/DeliveryCutoff.tsx, altra sessione)."
+    },
+    {
+      "id": 2310,
+      "esito": "riparato",
+      "cosa_ho_fatto": "fraseComeArriva dice «Consegna a fascia scelta» (la fascia la sceglie il cliente) e resta lunga come prima (110 caratteri, sta nella descrizione dei negozi); la descrizione Google degli alimentari scende a 151 caratteri accorciando il suo inizio.",
+      "prova": "tests/unit/minori-s07-promesse.test.ts › dice che la fascia la sceglie il cliente / la descrizione Google degli alimentari sta nei 160 caratteri",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/promesse-pubbliche.ts",
+        "tests/unit/minori-s07-promesse.test.ts"
+      ],
+      "file_altrui_toccati": [
+        "app/category/[slug]/layout.tsx"
+      ],
+      "nota": ""
+    },
+    {
+      "id": 2311,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Con la base a zero la FAQ dice «La consegna all'ora che scegli non ha un costo di base», il riquadro «Consegna senza costo di base» e la frase della tariffa «nessun costo di base», mai «0,00 €».",
+      "prova": "tests/unit/minori-s07-promesse.test.ts › la FAQ non scrive «0,00 € all'ora che scegli» / il riquadro di Spedizioni non scrive «Consegna da 0,00 €»",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/promesse-pubbliche.ts",
+        "tests/unit/minori-s07-promesse.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Latente: oggi la base è 3 €."
+    },
+    {
+      "id": 2031,
+      "esito": "riparato",
+      "cosa_ho_fatto": "NEGOZIO_CHIUSO_COSA_SUCCEDE non promette più «domani» senza condizioni: dice che la cassa propone solo le fasce di oggi o di domani che il negozio fa in tempo a servire (è quello che fa il selettore).",
+      "prova": "tests/unit/minori-s07-promesse.test.ts › sabato 31/10 alle 21:30, forno chiuso la domenica",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/promesse-pubbliche.ts",
+        "tests/unit/minori-s07-promesse.test.ts",
+        "tests/unit/le-promesse-della-consegna-cambiano-solo-di-proposito.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Aggiornata la frase fissata in le-promesse-della-consegna-cambiano-solo-di-proposito (è la prova che vuole i cambi di proposito)."
+    },
+    {
+      "id": 2390,
+      "esito": "riparato",
+      "cosa_ho_fatto": "QUANDO_ARRIVA_SENZA_NEGOZIO diventa «in giornata, nella fascia oraria che scegli» (via «negli orari di apertura del negozio», falso con la regola del ritiro); la frase del negozio chiuso dice anche «oggi».",
+      "prova": "tests/unit/minori-s07-promesse.test.ts › senza un negozio davanti non promette «negli orari di apertura» / lunedì alle 14…",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/promesse-pubbliche.ts",
+        "tests/unit/minori-s07-promesse.test.ts",
+        "tests/unit/la-home-non-promette-minuti-nei-tre-passi.test.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "«in giornata» è la parola firmata da Nicola il 26/10 e resta; aggiornata la prova della home che fissava la frase vecchia."
+    },
+    {
+      "id": 2309,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La FAQ sul costo dice «Quando hai messo qualcosa nel carrello, gli esempi li trovi lì», invece di mandare a una sezione che col carrello vuoto non c'è.",
+      "prova": "tests/unit/minori-s07-promesse.test.ts › dice che gli esempi compaiono quando il carrello ha qualcosa",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/promesse-pubbliche.ts",
+        "tests/unit/minori-s07-promesse.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 87,
+      "esito": "riparato",
+      "cosa_ho_fatto": "RESO_ESCLUSI e SPIEGAZIONE_RESO nominano anche i prodotti fatti su ordinazione, come il fatto legale.recesso-esclusi.",
+      "prova": "tests/unit/minori-s07-promesse.test.ts › freschi e prodotti su ordinazione",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/promesse-pubbliche.ts",
+        "tests/unit/minori-s07-promesse.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2307,
+      "esito": "riparato",
+      "cosa_ho_fatto": "promessaSpedizione decide «si paga?» come la FAQ e il riquadro (siPagaConLaBase): con la base a zero e gli euro in più accesi non dice più «Consegna gratuita».",
+      "prova": "tests/unit/minori-s07-promesse.test.ts › la scheda prodotto e la card non dicono «Consegna gratuita»",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/promesse-pubbliche.ts",
+        "tests/unit/minori-s07-promesse.test.ts",
+        "tests/unit/in-cassa-i-riquadri-e-le-pastiglie-si-leggono-e-parlano-la-stessa-lingua.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Aggiornata una riga della prova esistente in-cassa-i-riquadri…: con base 0 ma euro in più accesi la riga della consegna resta (prima la prova voleva null, cioè il difetto). Oggi latente: la base è 3 €."
+    },
+    {
+      "id": 2392,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda: da che giorno le rotte smettono di accettare le sei fasce di prima (FASCE_DI_PRIMA)? Servono solo alle schede della cassa aperte prima del 30/10: una data di fine (es. 15/11, giorno del lancio) e si tolgono."
+    },
+    {
+      "id": 2383,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "lib/ordini/veloce-non-confermata.ts:101-102: «Qui c'era una seconda copia dei 60 minuti (MINUTI_MINIMI_DI_FASCIA): tolta»; resta solo MINUTI_PRIMA_DELLA_FINE in lib/quando-arriva.ts:161",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Resta l'import reciproco quando-arriva ↔ store-hours: oggi innocuo (simboli usati solo dentro le funzioni); scioglierlo vuol dire spostare le fasce in un terzo modulo, non è un difetto minore da chiudere qui."
+    },
+    {
+      "id": 2391,
+      "esito": "riparato",
+      "cosa_ho_fatto": "sottotitoloOggiSpento riceve gli orari dei negozi del carrello: dice «Negozio chiuso» solo se un negozio è chiuso adesso, altrimenti «Non più oggi».",
+      "prova": "tests/unit/minori-s07-fasce.test.ts › lunedì 2/11 alle 19:20",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/quando-arriva.ts",
+        "components/checkout/DeliverySlotPicker.tsx",
+        "tests/unit/minori-s07-fasce.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 156,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "È la regola decisa (5 ordini per fascia) ma manca del tutto: serve un conteggio atomico per negozio+giorno+fascia nel database (una migrazione con un vincolo o una funzione) e il controllo nelle due rotte che creano l'ordine (altre sessioni). È un lavoro nuovo, già in LAVORO-APERTO, non un difetto minore da chiudere con una riga."
+    },
+    {
+      "id": 2280,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Corrette le note «per negozio, sempre» (constants, shipping, cassa, promesse) e quella di PLATFORM_DELIVERY_FEE_CENTS («su ogni ordine», «né nel compenso del rider»); tolta CONSEGNA_MASSIMA_CENTS, che non usava nessuno.",
+      "prova": "tests/unit/minori-s07-note-dei-conti.test.ts › la costante «massima» che non era un massimo non esiste più",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/constants.ts",
+        "lib/shipping.ts",
+        "app/checkout/page.tsx",
+        "lib/promesse-pubbliche.ts",
+        "tests/unit/minori-s07-note-dei-conti.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Non toccati lib/products/economics.ts e la sua prova (altra sessione): chiamano PLATFORM_DELIVERY_FEE_EUR «fee di consegna», che resta la base vera; e la nota storica di app/admin/delivery/page.tsx:56 («per negozio, sempre»)."
+    },
+    {
+      "id": 1530,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "lib/shipping.ts:1 importa solo './constants': lib/shipping.ts non dipende più da lib/ordini/zona-di-consegna.ts",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1938,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Togliere gli ingressi morti di shippingForEuro e promessaSpedizione tocca ProductCard, la scheda prodotto e FreeShippingProgress (altre sessioni) senza cambiare niente per chi usa il sito."
+    },
+    {
+      "id": 2281,
+      "esito": "riparato",
+      "cosa_ho_fatto": "In compensoRiderCents l'argomento negozioInPiu è obbligatorio; l'unico chiamante che contava sul valore di comodo (spesaPerConsegnaGratisColCodiceCents) passa negozioInPiu: false in chiaro.",
+      "prova": "tests/unit/minori-s07-compenso.test.ts › @ts-expect-error: senza la correzione la direttiva è inutile e il typecheck è rosso",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/shipping.ts",
+        "tests/unit/minori-s07-compenso.test.ts",
+        "tests/unit/il-compenso-del-fattorino-ha-una-casa-sola.test.ts",
+        "tests/unit/soldi-storni-sconti-e-compensi.test.ts",
+        "tests/unit/ritiro-in-negozio-messo-da-parte.test.ts"
+      ],
+      "file_altrui_toccati": [
+        "lib/ordini/prezzi.ts"
+      ],
+      "nota": "Aggiornate tre prove esistenti: chiamano compensoRiderCents con negozioInPiu: false (stesso valore di prima, ora detto in chiaro)."
+    },
+    {
+      "id": 476,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nuova lettura degli intervalli: la chiusura «00:00» (o «24:00») vale «fino a mezzanotte» in isOpenNow, nella regola del ritiro e in formatToday; la stessa regola nel filtro «Aperti ora» del database con la nuova migrazione 231 (negozi_aperti_adesso).",
+      "prova": "tests/unit/minori-s07-orari.test.ts › il negozio che chiude a mezzanotte (4 prove)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/store-hours.ts",
+        "tests/unit/minori-s07-orari.test.ts",
+        "migrations/231_aperti_ora_fino_a_mezzanotte.sql"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Un orario invertito per errore (13:00–09:00) e «00:00–00:00» restano chiusi come prima. Le fasce che passano la mezzanotte (19:00–01:00) non sono gestite; l'editor degli orari (components/seller/StoreHoursEditor.tsx, altra sessione) non avvisa: va in nuovi_difetti_visti. Migrazione 231 da applicare a mano."
+    },
+    {
+      "id": 2394,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda: un ordine che il negozio deve accettare nello stesso minuto in cui nasce (lunedì 19:15, fascia 19:30–21:00) va ancora accettato? Il tuo caso 7 dice di sì; serve un margine (es. 5 minuti) prima dell'ultimo ritiro?"
+    },
+    {
+      "id": 2393,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Domanda: la merce ritirata oggi e tenuta da parte la notte può servire una fascia di domani mattina (lunedì 17:00 → «Domani · 7:30–9:00»)? Il codice oggi dice di no, per prudenza."
+    },
+    {
+      "id": 2384,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Nessuna modifica.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Per chiuderlo la cassa deve mandare alla rotta il giorno di calendario della fascia (oggi le manda solo l'etichetta «Domani · …»), e le due rotte devono leggerlo: è un cambio di contratto fra cassa e rotte, fuori dal minimo. Caso raro (invio alle 23:59)."
+    },
+    {
+      "id": 2512,
+      "esito": "non_codice",
+      "cosa_ho_fatto": "Nessuna modifica: è un controllo sui dati veri.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Nicola (o l'AD) esegue in sola lettura su Supabase: select id, store_name from profiles where store_hours ?& array['sun','mon','tue','wed','thu','fri','sat'] and not jsonb_path_exists(store_hours,'$.*[*]'); deve tornare vuoto o solo negozi davvero in ferie."
+    },
+    {
+      "id": 2395,
+      "esito": "riparato",
+      "cosa_ho_fatto": "ultimoRitiroDellaFascia segue la catena degli intervalli che si toccano per dire «aperto fino alla fine della fascia».",
+      "prova": "tests/unit/minori-s07-orari.test.ts › 9-13, 13-17:30 e 17:30-19:30",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/store-hours.ts",
+        "tests/unit/minori-s07-orari.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Con due soli intervalli (9-13 e 13-19:30) come nella scheda il risultato era già giusto; il caso vero serve tre intervalli o un ritiro che cade prima del cambio."
+    },
+    {
+      "id": 2515,
+      "esito": "non_codice",
+      "cosa_ho_fatto": "Nessuna modifica: riguarda solo dati scritti dal vecchio editor.",
+      "prova": "",
+      "rossa_senza_correzione": false,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Abbassare la soglia di 4 giorni renderebbe «chiuso sempre» un negozio con uno o due giorni vuoti per sbaglio. Prima va guardato nel database se esistono negozi con 1-3 giorni scritti e tutti vuoti (select id, store_name, store_hours from profiles where store_hours is not null): se non ce ne sono, il caso non esiste."
+    },
+    {
+      "id": 2389,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il 409 per una fascia di oggi o di domani dice «non fa in tempo a preparare l'ordine per quella fascia: è chiuso, o apre troppo tardi», vero in tutti e due i casi; stessa frase nel motivo della cassa (lib/quando-arriva.ts).",
+      "prova": "tests/unit/minori-s07-orari.test.ts › il no della fascia dice il motivo vero",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/store-hours.ts",
+        "lib/quando-arriva.ts",
+        "tests/unit/minori-s07-orari.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1525,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nuova chiaveDiOggi() in lib/store-hours.ts, con lo stesso orologio di Roma di isOpenNow; i sette punti che sceglievano il giorno con new Date().getDay() la usano.",
+      "prova": "tests/unit/minori-s07-orari.test.ts › server in UTC, 23:30 di martedì = 00:30 di mercoledì / nessuna pagina sceglie più il giorno con l'orologio della macchina",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/store-hours.ts",
+        "tests/unit/minori-s07-orari.test.ts"
+      ],
+      "file_altrui_toccati": [
+        "app/stores/page.tsx",
+        "components/StoreListRow.tsx",
+        "components/store-sections/HeroSection.tsx",
+        "components/store-sections/HoursSection.tsx",
+        "components/home/HeroStoreCard.tsx",
+        "components/ProductGrid.tsx",
+        "components/StorePreviewCard.tsx"
+      ],
+      "nota": "Una riga per file altrui (la chiamata e l'import)."
+    },
+    {
+      "id": 1526,
+      "esito": "riparato",
+      "cosa_ho_fatto": "romeNow usa un Intl.DateTimeFormat costruito una volta sola e formatToParts, invece di toLocaleString a ogni chiamata.",
+      "prova": "tests/unit/minori-s07-orari.test.ts › romeNow segue il cambio d'ora / romeNow non costruisce un formattatore a ogni chiamata",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/store-hours.ts",
+        "tests/unit/minori-s07-orari.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La prova del costo è sul sorgente (una prova a tempo sarebbe instabile); quella di comportamento controlla inverno, estate e cambio di giorno."
+    },
+    {
+      "id": 254,
+      "esito": "riparato",
+      "cosa_ho_fatto": "ultimiGiorniPiacenza conta per giorni di calendario partendo dalla data di Piacenza, non togliendo blocchi di 24 ore.",
+      "prova": "tests/unit/minori-s07-orologio.test.ts › lunedì 30/3 alle 00:30 / domenica 25/10 alle 23:30",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/tempo-piacenza.ts",
+        "tests/unit/minori-s07-orologio.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "L'editor degli orari accetta chiusure prima dell'apertura senza dire niente",
+      "file": "components/seller/StoreHoursEditor.tsx:53-66",
+      "gravita": "minore",
+      "descrizione": "Due campi orario liberi: 18:00–00:00 ora vale «fino a mezzanotte» (lib/store-hours.ts), ma un orario invertito per errore (13:00–09:00) viene letto allo stesso modo. L'editor dovrebbe avvisare quando la chiusura non viene dopo l'apertura."
+    },
+    {
+      "titolo": "La scheda prodotto passa il prezzo pieno alla barra d'acquisto e al carrello con una promozione attiva",
+      "file": "app/product/[id]/page.tsx:423",
+      "gravita": "minore",
+      "descrizione": "È la scheda 280 (non fatta qui): la correzione sta nella scheda prodotto, che deve leggere lo sconto attivo (fetchActiveDiscounts) e passare il prezzo scontato a StickyAddToCart, addToCart, prezzo grande; lo stesso SimilarProducts, RecentlyViewed, SponsoredCarousel, SearchBar."
+    },
+    {
+      "titolo": "LoadingState annuncia solo il suo aria-label in una regione viva",
+      "file": "components/ui/LoadingState.tsx:73",
+      "gravita": "minore",
+      "descrizione": "Stesso schema corretto qui in ScheletroCassa: una regione role=status annuncia il contenuto, non il nome. Serve un testo sr-only dentro."
+    },
+    {
+      "titolo": "Nessuno svuota user_carts dopo un ordine pagato con la carta senza rientro",
+      "file": "app/api/stripe/webhook + app/api/orders/cod/route.ts",
+      "gravita": "minore",
+      "descrizione": "Parte che resta della scheda 471: il carrello sul server va svuotato dalla rotta contanti e dal webhook della carta, così un dispositivo vecchio non ripropone la spesa già pagata."
+    },
+    {
+      "titolo": "Prova rossa su main che dipende dalla data di oggi",
+      "file": "tests/unit/le-pagine-ordini-del-negozio-leggono-gli-orari.test.tsx:125,134",
+      "gravita": "minore",
+      "descrizione": "Rossa anche su origin/main prima di questo ramo: l'ordine di prova è di lunedì 2/11 alle 11:00 e la pagina usa l'orologio vero; oggi (5/11) la fascia «Oggi · 13:00–16:30» risulta passata e la pagina scrive «Il ritiro per questa fascia non è più possibile». Va fermato l'orologio nella prova (vi.setSystemTime)."
+    },
+    {
+      "titolo": "Lo stesso carrello rimandato con un'altra fascia riceve «fatto» con l'ordine vecchio",
+      "file": "app/api/orders/cod/route.ts (ramo dell'ordine ripetuto)",
+      "gravita": "minore",
+      "descrizione": "Scheda 2514: la rotta, quando trova la chiave del tentativo con fascia o indirizzo diversi, dovrebbe rispondere 409 invece di restituire l'ordine di prima. Non si corregge dal lato della cassa senza rischiare un doppio ordine."
+    }
+  ]
+}

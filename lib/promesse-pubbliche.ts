@@ -118,9 +118,10 @@ export function fraseComeArriva(attivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO): str
   // 30/10/2026 (ondata 18) — Diceva solo «con un fattorino in servizio»: le tre condizioni vengono
   // da QUANDO_SI_PUO_LA_VELOCE, e per starci la parte sulla fascia si è accorciata.
   const veloce = `veloce in ${EXPRESS_ETA_LABEL}, ${QUANDO_SI_PUO_LA_VELOCE}`;
+  // 5/11/2026 — «in fascia oraria» aveva perso il «che scegli» che il resto del sito dice.
   return attivo
-    ? `Consegna in fascia oraria o ritiro in negozio; ${veloce}.`
-    : `Consegna in fascia oraria; ${veloce}.`;
+    ? `Consegna a fascia scelta o ritiro in negozio; ${veloce}.`
+    : `Consegna a fascia scelta; ${veloce}.`;
 }
 
 /** La prima risposta delle FAQ: i passi per ordinare, senza quello che non si può fare. */
@@ -171,16 +172,23 @@ export function riquadroRitiroInNegozio(
  * che alle 19:50 non si mantiene. Sta qui, puro, perché lo leggono anche i componenti server
  * (quello di `components/ui/DeliveryCutoff.tsx` vive in un modulo client).
  */
-export const QUANDO_ARRIVA_SENZA_NEGOZIO = 'in giornata, negli orari di apertura del negozio';
+// 5/11/2026 — Era «in giornata, negli orari di apertura del negozio»: con la regola del ritiro la
+// merce si ritira a negozio aperto e arriva nella fascia scelta, anche dopo la chiusura (Pane
+// Quotidiano chiude alle 19:30 e la cassa propone «Oggi · 19:30–21:00»).
+export const QUANDO_ARRIVA_SENZA_NEGOZIO = 'in giornata, nella fascia oraria che scegli';
 
+// 5/11/2026 — Era «Se il negozio è chiuso puoi prenotare per domani»: senza condizioni, ma il sabato
+// sera di un forno chiuso la domenica la cassa rifiuta tutte le fasce di domani, e lunedì alle 14 a
+// forno chiuso si prenota ancora per oggi. Adesso dice la regola della cassa: propone solo le fasce
+// che il negozio fa in tempo a servire.
 export const NEGOZIO_CHIUSO_COSA_SUCCEDE =
-  'Se il negozio è chiuso puoi prenotare per domani, scegliendo una fascia oraria in cassa: la consegna subito, invece, parte solo negli orari di apertura.';
+  'Se il negozio è chiuso puoi prenotare una fascia oraria di oggi o di domani: la cassa ti propone solo quelle in cui il negozio fa in tempo a preparare la spesa. La consegna subito, invece, parte solo negli orari di apertura.';
 
 /** La risposta sui tempi di consegna, col numero preso da dove è deciso. */
 export function rispostaTempiDiConsegna(): DomandaRisposta {
   return {
     q: "In quanto tempo arriva l'ordine?",
-    a: `Nella fascia oraria che scegli in cassa, nei comuni serviti. La consegna veloce, in ${EXPRESS_ETA_LABEL} dalla conferma del negozio, si può ${QUANDO_SI_PUO_LA_VELOCE}: la cassa te la propone solo allora. ${NEGOZIO_CHIUSO_COSA_SUCCEDE}`,
+    a: `Nella fascia oraria che scegli in cassa, fino a ${RAGGIO_CONSEGNA_KM} km dal negozio. La consegna veloce, in ${EXPRESS_ETA_LABEL} dalla conferma del negozio, si può ${QUANDO_SI_PUO_LA_VELOCE}: la cassa te la propone solo allora. ${NEGOZIO_CHIUSO_COSA_SUCCEDE}`,
   };
 }
 
@@ -206,12 +214,14 @@ export function rispostaCostoSpedizione(): DomandaRisposta {
   const quanto =
     !siPaga
       ? 'La consegna è gratuita, qualunque sia la spesa.'
-      : `Paghi la consegna una volta sola, per tutto il carrello: ${euro(fasciaCents)} all’ora che scegli. `
+      : (fasciaCents > 0
+        ? `Paghi la consegna una volta sola, per tutto il carrello: ${euro(fasciaCents)} all’ora che scegli. `
+        : 'La consegna all’ora che scegli non ha un costo di base. ')
         + `Si aggiunge ${euro(CONSEGNA_NEGOZIO_IN_PIU_CENTS)} per ogni negozio in più e ${euro(SUPPLEMENTO_CONSEGNA_CENTS)} per ogni negozio dove spendi meno di ${euro(SPESA_SENZA_SUPPLEMENTO_CENTS)}. `
         + `La consegna veloce, in ${EXPRESS_ETA_LABEL}, costa ${euro(SUPPLEMENTO_VELOCE_CENTS)} in più, una volta sola; se hai già un negozio sotto i ${euro(SPESA_SENZA_SUPPLEMENTO_CENTS)}, è compresa.`;
   return {
     q: 'Quanto costa la consegna?',
-    a: `${quanto} Non c’è un costo a chilometro: consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio. Gli esempi con le cifre li trovi nel carrello, sotto «${RIGA_COME_SI_CALCOLA}».`,
+    a: `${quanto} Non c’è un costo a chilometro: consegniamo fino a ${RAGGIO_CONSEGNA_KM} km dal negozio. Quando hai messo qualcosa nel carrello, gli esempi con le cifre li trovi lì, sotto «${RIGA_COME_SI_CALCOLA}».`,
   };
 }
 
@@ -317,7 +327,9 @@ export function fraseComeSiPaga(metodi: readonly MetodoPagamento[] = metodiAlChe
  * tests/unit/il-reso-dice-quali-prodotti-sono-esclusi.test.tsx
  */
 /** Chi resta fuori dal ripensamento (art. 59 lett. d Cod. Cons.), detto in parole semplici. */
-export const RESO_ESCLUSI = 'esclusi i prodotti freschi e deperibili';
+// 5/11/2026 — Il fatto `legale.recesso-esclusi` esclude anche i prodotti fatti su ordinazione: la
+// frase generale nominava solo i freschi.
+export const RESO_ESCLUSI = 'esclusi i prodotti freschi, deperibili o fatti su ordinazione';
 export const FRASE_RESO = `Reso entro 14 giorni, ${RESO_ESCLUSI}`;
 /*
  * 31/10/2026 (ondata 6) — IL PRODOTTO CHE IL NEGOZIO HA SEGNATO COME ESCLUSO.
@@ -339,10 +351,12 @@ export function fraseResoDelProdotto(prodotto: { non_recedibile?: unknown } | nu
 /** Il carrello mescola prodotti: dice il termine e rimanda ai resi per gli esclusi. */
 export const RESO_CARRELLO = 'Reso entro 14 giorni';
 export const RESO_CARRELLO_ESCLUSI = 'alcuni prodotti sono esclusi';
+/** 5/11/2026 — Quando nel carrello ci sono SOLO prodotti esclusi: «Reso entro 14 giorni» lì è falso. */
+export const RESO_CARRELLO_TUTTI_ESCLUSI = 'Esclusi dal recesso: freschi o fatti su ordinazione. Resta la garanzia';
 
 /** La spiegazione breve, dove c'è una riga in più (home, «Come funziona»). Niente «senza domande». */
 export const SPIEGAZIONE_RESO =
-  'Cambi idea? Hai 14 giorni per il recesso, ma non su pane, freschi e prodotti che si deteriorano in fretta. Se un prodotto arriva difettoso, vale sempre la garanzia legale.';
+  'Cambi idea? Hai 14 giorni per il recesso, ma non su pane, freschi, prodotti che si deteriorano in fretta e prodotti fatti su ordinazione. Se un prodotto arriva difettoso, vale sempre la garanzia legale.';
 
 /**
  * IL RIQUADRO «LO SAPEVI?» DEL CARRELLO — la frase che non reggeva i numeri sopra di sé.
@@ -427,7 +441,7 @@ export interface PromessaSpedizione {
 
 /**
  * 27/10/2026 — LA SOGLIA DEI 30 EURO NON ESISTE PIÙ. Scelta 8 della carta #209: il cliente paga
- * solo la consegna, per negozio, sempre. Le frasi «Spedizione gratis · 3,00 € di consegna» e «Ti
+ * solo la consegna (dal 29/10 una sola per tutto il carrello). Le frasi «Spedizione gratis · 3,00 € di consegna» e «Ti
  * mancano X € alla spedizione gratis» promettevano un traguardo che la cassa non dà più.
  *
  * Il primo argomento (il sottototale) non cambia più la risposta: resta perché la scheda prodotto
@@ -438,13 +452,21 @@ export function promessaSpedizione(
   consegnaCents: number = PLATFORM_DELIVERY_FEE_CENTS,
 ): PromessaSpedizione {
   const costoConsegna = Math.max(0, consegnaCents) / 100;
-  const siPaga = costoConsegna > 0;
+  // 5/11/2026 — «Si paga?» si decide come la FAQ e il riquadro di Spedizioni (`siPagaConLaBase`):
+  // con la base a zero e gli euro in più accesi, 8 € di pane pagano 1 €, e la scheda prodotto non
+  // può dire «Consegna gratuita».
+  const siPaga = siPagaConLaBase(consegnaCents);
+  const conBase = costoConsegna > 0;
   return {
     sopraSoglia: false,
     mancano: 0,
     costoConsegna,
-    titolo: siPaga ? `${VOCE_CONSEGNA} da ${formatPrice(costoConsegna)} per tutto il carrello` : 'Consegna a casa gratuita',
-    breve: siPaga ? `Consegna da ${formatPrice(costoConsegna)}` : 'Consegna gratuita',
+    titolo: !siPaga
+      ? 'Consegna a casa gratuita'
+      : conBase
+        ? `${VOCE_CONSEGNA} da ${formatPrice(costoConsegna)} per tutto il carrello`
+        : `${VOCE_CONSEGNA} senza costo di base: paghi solo gli euro in più, li vedi in cassa`,
+    breve: !siPaga ? 'Consegna gratuita' : conBase ? `Consegna da ${formatPrice(costoConsegna)}` : 'Consegna: il costo in cassa',
     dettaglioConsegna: siPaga ? `${VOCE_CONSEGNA} ${fraseTariffaConsegna(consegnaCents)}` : null,
   };
 }
@@ -461,8 +483,12 @@ export function promessaSpedizione(
  */
 export function fraseTariffaConsegna(baseCents: number = PLATFORM_DELIVERY_FEE_CENTS): string {
   const soglia = euro(SPESA_SENZA_SUPPLEMENTO_CENTS);
+  // 5/11/2026 — Con la base a zero non si scrive «0,00 € una volta sola».
+  const base = baseCents > 0
+    ? `${euro(baseCents)} una volta sola per tutto il carrello, all’ora che scegli in cassa; `
+    : 'nessun costo di base all’ora che scegli in cassa; ';
   return (
-    `${euro(baseCents)} una volta sola per tutto il carrello, all’ora che scegli in cassa; `
+    base
     + `${euro(CONSEGNA_NEGOZIO_IN_PIU_CENTS)} in più per ogni negozio in più e ${euro(SUPPLEMENTO_CONSEGNA_CENTS)} in più per ogni negozio dove spendi meno di ${soglia}; `
     + `la consegna veloce ${euro(SUPPLEMENTO_VELOCE_CENTS)} in più, compresa se un negozio è sotto i ${soglia}`
   ).trim();
@@ -484,6 +510,16 @@ function tariffeDellaCassa(): { fasciaCents: number; pienaCents: number; siPaga:
 }
 
 /**
+ * 5/11/2026 — La stessa domanda («la consegna si paga?») per una base data: si paga se la base è
+ * sopra zero o se resta acceso anche uno solo degli euro in più. Con la base della cassa la
+ * risposta è quella di `tariffeDellaCassa().siPaga`.
+ */
+function siPagaConLaBase(baseCents: number): boolean {
+  if (baseCents === PLATFORM_DELIVERY_FEE_CENTS) return tariffeDellaCassa().siPaga;
+  return baseCents > 0 || SUPPLEMENTO_CONSEGNA_CENTS > 0 || SUPPLEMENTO_VELOCE_CENTS > 0 || CONSEGNA_NEGOZIO_IN_PIU_CENTS > 0;
+}
+
+/**
  * 29/10/2026 22:21 — IL RIQUADRO DEL PREZZO IN CIMA ALLA PAGINA SPEDIZIONI.
  *
  * Scriveva «Consegna 3,00 € o 4,00 € · Per ogni negozio»: dalla regola firmata la consegna è una
@@ -493,6 +529,10 @@ export function riquadroTariffaConsegna(): { siPaga: boolean; titolo: string; so
   const { fasciaCents, siPaga } = tariffeDellaCassa();
   if (!siPaga) {
     return { siPaga: false, titolo: 'Consegna senza costi', sottotitolo: 'Una sola per tutto il carrello' };
+  }
+  // 5/11/2026 — Con la base a zero «Consegna da 0,00 €» non diceva niente di vero.
+  if (fasciaCents === 0) {
+    return { siPaga: true, titolo: 'Consegna senza costo di base', sottotitolo: 'Una sola per tutto il carrello; gli euro in più li vedi in cassa' };
   }
   return { siPaga: true, titolo: `Consegna da ${euro(fasciaCents)}`, sottotitolo: 'Una sola per tutto il carrello' };
 }

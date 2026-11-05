@@ -112,7 +112,7 @@ export function laStradaELibera(riserve: RiserveLiberate | null | undefined): {
 export async function rivendicaIlCodiceSconto(
   riserveLiberate: RiserveLiberate,
   clienti: { admin: ClientRivendica; lettura: ClientLetturaCoupon },
-  richiesta: { codice?: string | null; subtotaleCents: number; userId: string | null },
+  richiesta: { codice?: string | null; subtotaleCents: number; userId: string | null; ritiroInNegozio?: boolean },
 ): Promise<EsitoRivendicazione> {
   // ① Una pagina di pagamento rimasta viva ferma tutto, codice o non codice.
   const strada = laStradaELibera(riserveLiberate);
@@ -135,6 +135,7 @@ export async function rivendicaIlCodiceSconto(
     richiesta.subtotaleCents / 100,
     richiesta.userId,
     clienti.lettura,
+    { ritiroInNegozio: richiesta.ritiroInNegozio },
   );
   if (!esito.ok) {
     return {

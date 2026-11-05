@@ -19,7 +19,7 @@ const DISMISS_KEY = 'mc_welcome_dismissed';
  * Sparisce per sempre dopo il primo ordine completato o quando viene
  * chiuso con la X.
  */
-// Welcome credit scade 7 giorni dopo il signup → leva urgenza CRO
+// La striscia si mostra per 7 giorni dopo l'iscrizione (il bonus non scade: vedi sotto).
 // Esperti: Behavioral Scientist: "Senza countdown, urgenza zero → conversion -25%"
 const WELCOME_VALID_DAYS = 7;
 
@@ -27,7 +27,6 @@ export default function WelcomeCreditBanner() {
   const { isAuthenticated, isBuyer, profile } = useProfile();
   const [dismissed, setDismissed] = useLocalStorage<boolean>(DISMISS_KEY, false);
   const [show, setShow] = useState(false);
-  const [daysLeft, setDaysLeft] = useState<number | null>(null);
 
   useEffect(() => {
     // 31/10/2026 — coi punti spenti (INVITI_E_PUNTI_ACCESI = false, migrazione
@@ -55,12 +54,12 @@ export default function WelcomeCreditBanner() {
         .eq('user_id', profile.id);
       if ((count ?? 0) > 0) return;
 
-      // Calcola giorni rimanenti
+      // Per quanto mostrare la striscia (7 giorni dall'iscrizione). Non è una scadenza del bonus:
+      // nel database non ce n'è, e la striscia non ne promette una.
       const signupTs = bonus.created_at ? new Date(bonus.created_at).getTime() : Date.now();
       const expiresAt = signupTs + WELCOME_VALID_DAYS * 86_400_000;
       const remaining = Math.ceil((expiresAt - Date.now()) / 86_400_000);
-      if (remaining <= 0) return; // expired
-      setDaysLeft(remaining);
+      if (remaining <= 0) return;
 
       // 30/8/2026 (R013) — QUI SI LEGGEVA IL SALDO PUNTI E NON LO MOSTRAVA
       // NESSUNO.
@@ -91,11 +90,9 @@ export default function WelcomeCreditBanner() {
         <Gift size={20} strokeWidth={2.4} className="shrink-0 text-accent-300" />
         <p className="text-center">
           <strong>Benvenuto!</strong> Hai <strong>€5 di sconto</strong>{' '}
-          {daysLeft !== null && (
-            <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-bold">
-              scade tra {daysLeft} {daysLeft === 1 ? 'giorno' : 'giorni'}
-            </span>
-          )}
+          {/* 5/11/2026 — Qui c'era «scade tra N giorni»: nel database il bonus non ha nessuna
+              scadenza, i 7 giorni vivono solo in questo componente (per quanto mostrare la
+              striscia). Una scadenza che non esiste non si promette. */}
           {' '}— usali al primo ordine.{' '}
           <Link href="/search" className="underline font-semibold hover:text-accent-300">Inizia ora →</Link>
         </p>

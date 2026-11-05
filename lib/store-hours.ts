@@ -26,6 +26,23 @@ function toMinutes(hhmm: string): number {
 }
 
 /**
+ * 5/11/2026 — Un intervallo in minuti, con la chiusura «a mezzanotte» letta bene.
+ *
+ * Per dire «aperto fino a mezzanotte» il negoziante scrive 18:00–00:00, e 00:00 è il primo minuto
+ * della giornata: l'intervallo andava da 1080 a 0 minuti e non conteneva niente, così la pizzeria
+ * serale risultava chiusa tutta la sera. La chiusura «00:00» (o «24:00», che vale 1440 già da sé)
+ * vale «fino a mezzanotte» di quel giorno.
+ */
+function intervalloInMinuti([open, close]: HoursInterval): [number, number] {
+  const o = toMinutes(open);
+  const c = toMinutes(close);
+  // Solo «00:00» (o «24:00») vuol dire mezzanotte: un orario invertito per errore (13:00–09:00) o
+  // «00:00–00:00» restano vuoti, come prima, e non diventano un negozio aperto la notte.
+  // Gemella in SQL: migrations/231 (negozi_aperti_adesso).
+  return [o, c === 0 && o > 0 ? 24 * 60 : c];
+}
+
+/**
  * APERTO ADESSO? — l'orologio è quello italiano, non quello di chi esegue.
  *
  * Gli orari del negozio sono scritti in ora locale italiana. Chi chiama questa
@@ -39,9 +56,8 @@ function toMinutes(hhmm: string): number {
 export function isOpenNow(intervals?: HoursInterval[], now: Date = romeNow()): boolean {
   if (!intervals || intervals.length === 0) return false;
   const minutes = now.getHours() * 60 + now.getMinutes();
-  return intervals.some(([open, close]) => {
-    const o = toMinutes(open);
-    const c = toMinutes(close);
+  return intervals.some((intervallo) => {
+    const [o, c] = intervalloInMinuti(intervallo);
     return minutes >= o && minutes < c;
   });
 }
@@ -52,8 +68,37 @@ export function isOpenNow(intervals?: HoursInterval[], now: Date = romeNow()): b
  * riportare l'istante all'orologio da parete italiano (così l'enforcement al
  * checkout coincide con ciò che l'utente vede nel filtro "aperti ora").
  */
+// 5/11/2026 — Il formattatore si costruisce una volta sola. Prima ogni chiamata rifaceva
+// `toLocaleString` col fuso (un formattatore nuovo più un'analisi di testo): circa 77 volte il
+// costo di `new Date()`, pagato una volta per prodotto nei filtri «aperti ora».
+const FORMATO_ROMA = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Europe/Rome',
+  hourCycle: 'h23',
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: 'numeric',
+  second: 'numeric',
+});
+
 export function romeNow(base: Date = new Date()): Date {
-  return new Date(base.toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+  const p: Record<string, number> = {};
+  for (const parte of FORMATO_ROMA.formatToParts(base)) {
+    if (parte.type !== 'literal') p[parte.type] = Number(parte.value);
+  }
+  return new Date(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second, base.getMilliseconds());
+}
+
+/**
+ * 5/11/2026 — La casella del giorno di oggi, letta con lo stesso orologio dell'ora.
+ *
+ * I chiamanti sceglievano il giorno con `DAY_KEYS[new Date().getDay()]` (l'orologio della
+ * macchina) e poi chiedevano l'ora a `isOpenNow` (l'orologio italiano): due orologi nella stessa
+ * decisione. Sul server in UTC, fra mezzanotte e le due italiane, il giorno era ancora ieri.
+ */
+export function chiaveDiOggi(now: Date = romeNow()): keyof StoreHours {
+  return DAY_KEYS[now.getDay()];
 }
 
 /**
@@ -171,9 +216,10 @@ function ritiroPossibileFra(intervals: HoursInterval[] | undefined, da: number, 
 function ultimoInizioDelRitiro(intervals: HoursInterval[] | undefined, da: number, a: number): number | null {
   if (!intervals || intervals.length === 0 || a < da) return null;
   let ultimo: number | null = null;
-  for (const [open, close] of intervals) {
-    const inizio = Math.max(da, toMinutes(open));
-    const fine = Math.min(a, toMinutes(close) - MINUTI_PER_IL_RITIRO);
+  for (const intervallo of intervals) {
+    const [apre, chiude] = intervalloInMinuti(intervallo);
+    const inizio = Math.max(da, apre);
+    const fine = Math.min(a, chiude - MINUTI_PER_IL_RITIRO);
     if (inizio <= fine && (ultimo === null || fine > ultimo)) ultimo = fine;
   }
   return ultimo;
@@ -304,9 +350,21 @@ export function ultimoRitiroDellaFascia(
   if (ultimo === null) return null;
   const minuto: number = ultimo;
   const fineFascia = scelta.aMinuti;
-  const apertoFinoAllaFine = (ritiro.intervals ?? []).some(
-    ([open, close]) => toMinutes(open) <= minuto && toMinutes(close) >= fineFascia,
-  );
+  // 5/11/2026 — Due intervalli attaccati (9-13 e 13-19:30) sono un negozio aperto di fila: si
+  // segue la catena degli intervalli che si toccano, non se ne cerca uno solo che copra tutto.
+  const intervalli = (ritiro.intervals ?? []).map(intervalloInMinuti);
+  let copertoFino = minuto;
+  let avanza = true;
+  while (avanza && copertoFino < fineFascia) {
+    avanza = false;
+    for (const [o, c] of intervalli) {
+      if (o <= copertoFino && c > copertoFino) {
+        copertoFino = c;
+        avanza = true;
+      }
+    }
+  }
+  const apertoFinoAllaFine = intervalli.some(([o]) => o <= minuto) && copertoFino >= fineFascia;
   return { giorno: scelta.giorno, minuto, apertoFinoAllaFine };
 }
 
@@ -331,14 +389,17 @@ export function motivoNegozioChiuso(
   now: Date = romeNow(),
 ): string {
   const scelta = leggiFinestraConsegna(fascia);
+  // 5/11/2026 — «è chiuso in quella fascia» era falso per il negozio aperto nella fascia ma che
+  // apre dopo il limite del ritiro (bar 10:30-19:00, «Domani · 9:00–11:00»): la frase ora dice
+  // tutti e due i casi.
   if (scelta?.giorno === 'domani') {
-    return `${nomeNegozio} domani è chiuso in quella fascia. Scegli un altro orario${OPPURE_RITIRA}.`;
+    return `${nomeNegozio} domani non fa in tempo a preparare l'ordine per quella fascia: è chiuso, o apre troppo tardi. Scegli un altro orario${OPPURE_RITIRA}.`;
   }
   if (scelta?.giorno === 'oggi') {
     if (scelta.aMinuti <= minutiDelGiorno(now)) {
       return 'La fascia che hai scelto è già passata. Scegline una ancora disponibile, oppure ordina per domani.';
     }
-    return `${nomeNegozio} oggi è chiuso in quella fascia. Scegli un altro orario${OPPURE_RITIRA}.`;
+    return `${nomeNegozio} oggi non fa in tempo a preparare l'ordine per quella fascia: è chiuso, o apre troppo tardi. Scegli un altro orario${OPPURE_RITIRA}.`;
   }
   return `${nomeNegozio} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`;
 }
@@ -349,7 +410,10 @@ export function formatToday(intervals?: HoursInterval[], now: Date = romeNow()):
 
   if (isOpenNow(intervals, now)) {
     const minutes = now.getHours() * 60 + now.getMinutes();
-    const active = intervals.find(([o, c]) => minutes >= toMinutes(o) && minutes < toMinutes(c));
+    const active = intervals.find((iv) => {
+      const [o, c] = intervalloInMinuti(iv);
+      return minutes >= o && minutes < c;
+    });
     return active ? `Aperto fino alle ${active[1]}` : 'Aperto';
   }
 

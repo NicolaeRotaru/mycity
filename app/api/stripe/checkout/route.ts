@@ -564,7 +564,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // Coordinate della consegna prese dal database, non dal browser: il prezzo
   // della consegna dipende dalla distanza, e finora quel numero lo scriveva il
   // client. Se l'indirizzo non è fra quelli salvati dalla persona, si resta
-  // senza coordinate e vale la tariffa fissa.
+  // senza coordinate (la spedizione oggi vale zero comunque).
   const coordConsegna = await coordinateDaIndirizziSalvati(admin, user.id, {
     address: body.delivery.address,
     city: body.delivery.city,
@@ -630,7 +630,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const codiceSconto = await rivendicaIlCodiceSconto(
     riserveLiberate,
     { admin, lettura: supa },
-    { codice: body.couponCode, subtotaleCents: grandSubtotalCents, userId: user.id },
+    { codice: body.couponCode, subtotaleCents: grandSubtotalCents, userId: user.id, ritiroInNegozio: body.pickupInStore },
   );
   if (!codiceSconto.ok) {
     if (codiceSconto.motivo === 'pagamento_ancora_aperto') {
@@ -816,7 +816,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         // consegna restava vuota. Adesso, quando l'indirizzo non e' fra quelli
         // salvati, la destinazione se la calcola il server. NON entra nel
         // prezzo: quello e' gia' stato deciso qui sopra, sulle coordinate
-        // salvate o sulla tariffa fissa.
+        // salvate (o senza coordinate).
         lat: coordPerLaMappa?.lat ?? null,
         lng: coordPerLaMappa?.lng ?? null,
         // Fascia di consegna scelta dal buyer: il webhook la legge da qui e la

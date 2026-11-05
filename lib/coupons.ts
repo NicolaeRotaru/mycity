@@ -55,6 +55,10 @@ export async function validateCoupon(
   // Adesso il quarto argomento è obbligatorio: chi lo dimentica lo scopre dal
   // controllo dei tipi, non da un buono applicato alla persona sbagliata.
   client: CouponDbClient,
+  // 5/11/2026 — Col ritiro in negozio non c'è consegna da togliere: il codice
+  // «Spedizione gratuita» si accettava e si consumava senza togliere un
+  // centesimo. Chi crea l'ordine dice qui se è un ritiro.
+  opzioni: { ritiroInNegozio?: boolean } = {},
 ): Promise<CouponValidation> {
   const trimmed = code.trim().toUpperCase();
   if (!trimmed) return { ok: false, reason: 'Inserisci un codice' };
@@ -107,13 +111,23 @@ export async function validateCoupon(
     // vanno cambiate insieme: la prova
     // tests/unit/il-carrello-conta-il-primo-ordine-come-la-cassa.test.ts
     // diventa rossa se divergono.
-    const { count } = await client
+    //
+    // 5/11/2026 — Due buchi chiusi. 1) Se la lettura degli ordini non
+    // risponde, il conteggio valeva null e il codice passava come «primo
+    // ordine» a chiunque: adesso, senza risposta, il codice non si accetta.
+    // 2) `.neq` è il `<>` di SQL e scarta le righe con lo stato vuoto (NULL):
+    // un ordine con lo stato vuoto non contava. Ora lo stato vuoto conta come
+    // ordine (è IS DISTINCT FROM). Gemella: migrations/230.
+    const { count, error: erroreOrdini } = await client
       .from('orders')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .neq('delivery_status', 'CANCELED')
-      .neq('payment_status', 'FAILED');
-    if ((count ?? 0) > 0) {
+      .or('delivery_status.is.null,delivery_status.neq.CANCELED')
+      .or('payment_status.is.null,payment_status.neq.FAILED');
+    if (erroreOrdini || count == null) {
+      return { ok: false, reason: 'Non riesco a controllare i tuoi ordini: riprova tra poco' };
+    }
+    if (count > 0) {
       return { ok: false, reason: 'Codice valido solo al primo ordine' };
     }
   }
@@ -125,6 +139,9 @@ export async function validateCoupon(
   } else if (coupon.type === 'FIXED') {
     discount = Math.min(subtotal, Number(coupon.value));
   } else if (coupon.type === 'FREE_SHIPPING') {
+    if (opzioni.ritiroInNegozio) {
+      return { ok: false, reason: 'Col ritiro in negozio la consegna non si paga: questo codice non serve' };
+    }
     freeShipping = true;
   }
 

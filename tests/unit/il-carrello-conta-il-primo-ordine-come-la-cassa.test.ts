@@ -105,6 +105,22 @@ function clientCassa(ordini: Ordine[]) {
           });
           return q;
         },
+        // .or('col.is.null,col.neq.X') di PostgREST: basta una delle due.
+        or: (espr: string) => {
+          const alternative = espr.split(',').map((pezzo) => {
+            const [col, op, ...resto] = pezzo.split('.');
+            const v = resto.join('.');
+            return (o: Ordine) => {
+              const val = (o as Record<string, unknown>)[col];
+              if (op === 'is' && v === 'null') return val === null;
+              if (op === 'neq') return val !== null && val !== v;
+              if (op === 'eq') return val === v;
+              throw new Error(`filtro .or non riconosciuto: ${pezzo}`);
+            };
+          });
+          filtri.push((o) => alternative.some((a) => a(o)));
+          return q;
+        },
         maybeSingle: async () => ({ data: tabella === 'coupons' ? coupon : null, error: null }),
         then: (res: (r: { count: number }) => unknown) =>
           Promise.resolve({ count: ordini.filter((o) => filtri.every((f) => f(o))).length }).then(res),
@@ -147,6 +163,16 @@ const casi: Array<{ nome: string; ordini: Ordine[]; primoOrdine: boolean }> = [
   {
     nome: 'ordine in contanti ancora in preparazione',
     ordini: [{ user_id: MARIA, delivery_status: 'PREPARATION', payment_status: 'PENDING' }],
+    primoOrdine: false,
+  },
+  {
+    nome: 'un ordine con lo stato di consegna vuoto conta',
+    ordini: [{ user_id: MARIA, delivery_status: null, payment_status: 'PAID' }],
+    primoOrdine: false,
+  },
+  {
+    nome: 'un ordine con lo stato del pagamento vuoto conta',
+    ordini: [{ user_id: MARIA, delivery_status: 'DELIVERED', payment_status: null }],
     primoOrdine: false,
   },
   {

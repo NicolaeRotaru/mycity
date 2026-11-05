@@ -113,7 +113,9 @@ export default function PromoTicker() {
         onClick={() => setInPausa((p) => !p)}
         aria-label={inPausa ? 'Riprendi la striscia degli annunci' : 'Metti in pausa la striscia degli annunci'}
         aria-pressed={inPausa}
-        className="absolute right-0 top-0 flex h-full shrink-0 items-center bg-ink-900 px-2 text-ink-300 hover:text-ink-100"
+        // 5/11/2026 — Era largo 30 px: col pollice si prendeva il link che scorre lì accanto. Largo
+        // 44 px (w-11), alto quanto la striscia.
+        className="absolute right-0 top-0 flex h-full w-11 shrink-0 items-center justify-center bg-ink-900 text-ink-300 hover:text-ink-100"
       >
         {inPausa ? <Play size={14} strokeWidth={2.4} aria-hidden /> : <Pause size={14} strokeWidth={2.4} aria-hidden />}
       </button>

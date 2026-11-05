@@ -19,7 +19,10 @@ import { Card } from '@/components/ui/Card';
  */
 export function ScheletroCassa() {
   return (
-    <div role="status" aria-live="polite" aria-label="Sto preparando il riepilogo dell'ordine" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div role="status" aria-live="polite" className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* 5/11/2026 — Una regione viva annuncia il suo contenuto, non il suo nome: con solo
+          l'aria-label e i blocchi grigi nascosti il lettore di schermo non diceva niente. */}
+      <span className="sr-only">Sto preparando il riepilogo dell&apos;ordine…</span>
       <div className="lg:col-span-2 space-y-4">
         {[0, 1, 2].map((i) => (
           <Card key={i} variant="funnel" padding="lg">

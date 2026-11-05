@@ -113,7 +113,7 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
           <div className="flex items-center gap-3">
             <div className="min-w-0">
               {hasStepper && (
-                <p className="truncate text-[11px] text-ink-400 leading-tight">{qty} × {formatPrice(price)}</p>
+                <p className="truncate text-xs text-ink-600 leading-tight">{qty} × {formatPrice(price)}</p>
               )}
               <p className="truncate text-lg font-bold text-primary-700 leading-tight">{formatPrice(total)}</p>
             </div>
@@ -186,7 +186,7 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
               Adesso la riga sta SOTTO, sulla larghezza intera della card: 312 pixel invece di 93.
               Non compete più con i due comandi, e non ha bisogno di essere tagliata per stare al
               suo posto. La prova rifà il conto con il testo vero che la scheda prodotto passa. */}
-          <p className="mt-1 text-[11px] text-olive-700 font-medium leading-tight">
+          <p className="mt-1 text-xs text-olive-700 font-medium leading-tight">
             {note ?? 'Totale'}
           </p>
         </div>

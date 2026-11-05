@@ -7,13 +7,16 @@
 /**
  * Il ritiro in negozio si puo' scegliere in cassa?
  *
- * No, per adesso. Stesso motivo dello sconto qui sopra: coi negozi non se n'e'
- * ancora parlato. Tenerlo acceso senza sconto non basterebbe, perche' un ordine
- * ritirato in negozio oggi non arriva mai a «consegnato»: il solo modo di
- * chiudere un ordine e' il bottone del fattorino, e su un ritiro il fattorino
- * non c'e'. Il negoziante consegnerebbe a mano e resterebbe senza incasso.
+ * No, per adesso: coi negozi non se n'e' ancora parlato (lo sconto per il ritiro,
+ * `PICKUP_DISCOUNT_PERCENT` in lib/constants.ts, e' a zero per lo stesso motivo).
  *
- * Si riaccende cambiando questa riga in `true` — ma prima va data al venditore
- * una via per confermare il ritiro.
+ * 5/11/2026 — Come si chiude un ritiro: la via del venditore ESISTE. La funzione
+ * `confirm_pickup_by_seller` (migrazione 124, rifatta nella 179) porta l'ordine
+ * da «pronto» a «consegnato» col codice del ritiro e fa pagare il negozio; la
+ * usa app/seller/orders/[id]/page.tsx. Prima qui c'era scritto che il solo modo
+ * di chiudere un ordine era il bottone del fattorino: non e' piu' vero.
+ *
+ * Si riaccende cambiando questa riga in `true`, dopo aver controllato che le
+ * migrazioni 124 e 179 siano applicate in produzione.
  */
 export const RITIRO_IN_NEGOZIO_ATTIVO = false;

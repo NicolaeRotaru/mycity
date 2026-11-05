@@ -10,6 +10,11 @@ import ProductGrid, { type SortOption } from '@/components/ProductGrid';
 import CollectionHeader from '@/components/CollectionHeader';
 import { SkeletonGrid } from '@/components/SkeletonCard';
 import { classiGriglia } from '@/lib/griglia-prodotti';
+import { discountedUnitCents } from '@/lib/promotions';
+
+/** Il prezzo che la scheda mostra: quello scontato (la riga porta il prezzo pieno). */
+const prezzoMostrato = (p: { price: unknown; discount_percent?: number | null }) =>
+  discountedUnitCents(Number(p.price), p.discount_percent ?? 0);
 import { queryKeys } from '@/lib/queries/keys';
 import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
 
@@ -58,8 +63,9 @@ export default function PromozioniPage() {
   const sorted = useMemo(() => {
     const arr = [...items];
     switch (sort) {
-      case 'price_asc':     return arr.sort((a, b) => Number(a.price) - Number(b.price));
-      case 'price_desc':    return arr.sort((a, b) => Number(b.price) - Number(a.price));
+      // 5/11/2026 — Si ordina sul prezzo che la scheda mostra, cioè scontato: `price` è il pieno.
+      case 'price_asc':     return arr.sort((a, b) => prezzoMostrato(a) - prezzoMostrato(b));
+      case 'price_desc':    return arr.sort((a, b) => prezzoMostrato(b) - prezzoMostrato(a));
       case 'discount_desc': return arr.sort((a, b) => (b.discount_percent || 0) - (a.discount_percent || 0));
       default:              return arr;
     }
