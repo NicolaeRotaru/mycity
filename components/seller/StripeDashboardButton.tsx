@@ -24,7 +24,7 @@ import { queryKeys } from '@/lib/queries/keys';
 export default function StripeDashboardButton() {
   const [redirecting, setRedirecting] = useState(false);
 
-  const { data: status } = useQuery({
+  const { data: status, isError, refetch } = useQuery({
     queryKey: queryKeys.seller.stripeStatus,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -67,6 +67,8 @@ export default function StripeDashboardButton() {
   };
 
   // Mostra solo a pagamenti attivi: prima non c'è una dashboard da aprire.
+  // Una lettura caduta non fa sparire il pulsante in silenzio.
+  if (isError && !status) return <StatoPagamentiNonLetto onRiprova={() => { void refetch(); }} />;
   const isActive = !!status?.stripe_charges_enabled && !!status?.stripe_payouts_enabled;
   if (!isActive) return null;
 
@@ -80,5 +82,15 @@ export default function StripeDashboardButton() {
       {redirecting ? <Loader2 size={16} className="animate-spin" /> : <ExternalLink size={16} />}
       Gestisci pagamenti e IBAN su Stripe
     </button>
+  );
+}
+
+/** Lo stato dei pagamenti non si è letto: lo si dice, con «Riprova», invece di indovinarlo. */
+function StatoPagamentiNonLetto({ onRiprova }: { onRiprova: () => void }) {
+  return (
+    <div role="alert" className="inline-flex flex-wrap items-center gap-2 bg-cream-100 border border-cream-300 text-ink-700 px-4 py-2 rounded-lg text-sm">
+      Non riesco a leggere lo stato dei pagamenti.
+      <button type="button" onClick={onRiprova} className="font-semibold text-primary-700 underline">Riprova</button>
+    </div>
   );
 }

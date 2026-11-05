@@ -18,7 +18,7 @@ import { Input, Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { StoreHours } from '@/lib/store-hours';
-import { storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
+import { campoDellErrore, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
 import CustomizationSection from './seller/CustomizationSection';
 import AccentPicker from './seller/AccentPicker';
 import CoverPicker from './seller/CoverPicker';
@@ -26,6 +26,7 @@ import SocialLinksFields from './seller/SocialLinksFields';
 import AnnouncementEditor from './seller/AnnouncementEditor';
 import BadgePicker from './seller/BadgePicker';
 import StoreHoursEditor from './seller/StoreHoursEditor';
+import { erroreDegliOrari } from './seller/orari-validi';
 import FeaturedProductsPicker from './seller/FeaturedProductsPicker';
 
 type SchemaData = { storeName: string; storePhone: string };
@@ -172,6 +173,12 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
 
   const handleFormSubmit = (data: SchemaData) => {
     if (showContact) {
+      // Un orario sbagliato non si salva: quel giorno il negozio risulterebbe chiuso agli ordini.
+      const erroreOrari = erroreDegliOrari(hours);
+      if (erroreOrari) {
+        toast.error(`Orari di apertura — ${erroreOrari}`);
+        return;
+      }
       if (!location.address.trim()) {
         setLocationError("Inserisci l'indirizzo del negozio");
         return;
@@ -193,9 +200,15 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
     }
     let customData: StoreCustomization = custom;
     if (showBranding) {
-      const parsed = storeCustomizationSchema.safeParse(custom);
+      // Link incollati, @, sito senza https e WhatsApp senza +39 si correggono da soli.
+      const corretta: StoreCustomization = { ...custom, socials: normalizzaSocials(custom.socials) };
+      setCustom(corretta);
+      const parsed = storeCustomizationSchema.safeParse(corretta);
       if (!parsed.success) {
-        setCustomError(parsed.error.issues[0]?.message ?? 'Personalizzazione non valida');
+        const problema = parsed.error.issues[0];
+        const campo = problema ? campoDellErrore(problema.path) : null;
+        // Il messaggio dice quale campo: prima arrivava «Handle non valido» e basta.
+        setCustomError(`${campo ? `${campo}: ` : ''}${problema?.message ?? 'Personalizzazione non valida'}`);
         return;
       }
       customData = parsed.data;
