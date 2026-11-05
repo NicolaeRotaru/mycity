@@ -627,6 +627,22 @@ export function avvisoSullaPubblicazione(
  * Allergeni e Ingredienti). `null` se nessuna. Il negoziante lo legge subito,
  * invece di scoprirlo quando prova a pubblicare.
  */
+/**
+ * 1683 — Dopo «Crea bozze» dalle foto: quali prodotti NON sono entrati, e
+ * perché. La rotta li restituisce in `scartati` ({ nome, motivo }); senza
+ * questa frase il negoziante leggeva «5 bozze create» e non sapeva quale
+ * mancava, né che il motivo gli diceva di riprovare.
+ */
+export function avvisoScartatiDalleFoto(scartati: unknown): string | null {
+  if (!Array.isArray(scartati) || scartati.length === 0) return null;
+  const righe = scartati
+    .map((x) => x as { nome?: unknown; motivo?: unknown })
+    .map((x) => `«${String(x.nome ?? 'senza nome')}»: ${String(x.motivo ?? 'motivo non indicato')}`);
+  return righe.length === 1
+    ? `Non è entrato ${righe[0]}.`
+    : `Non sono entrati ${righe.length} prodotti — ${righe.join('; ')}.`;
+}
+
 export function avvisoDopoLeBozze(prodotti: SchedaDellaChat[]): string | null {
   const daCompletare = prodotti
     .map((p) => ({ nome: p.name, manca: campiObbligatoriVuoti(p.categorySlug, p.attributes) }))

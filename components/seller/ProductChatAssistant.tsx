@@ -130,7 +130,7 @@ export default function ProductChatAssistant({
       const esito = Object.keys(patch).length > 0 ? onApplyPatch(patch) : NIENTE;
       // Cosa dire lo decide quello che il modulo ha fatto, non il modello: se
       // una parte della proposta non e' entrata, le sue parole non si mostrano.
-      const msg = messaggioDellaChatDopoIlPatch(json.reply ?? 'Fatto.', esito);
+      const msg = messaggioDellaChatDopoIlPatch(json.reply ?? 'Fatto.', esito, Object.keys(patch).length > 0);
       setMessages((prev) => [
         ...prev,
         { role: 'assistant', content: msg.testo, applied: msg.aggiornato, nonScritto: msg.nonScritto },

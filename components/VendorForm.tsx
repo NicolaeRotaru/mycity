@@ -30,6 +30,18 @@ import FeaturedProductsPicker from './seller/FeaturedProductsPicker';
 
 type SchemaData = { storeName: string; storePhone: string };
 
+/**
+ * Il telefono come lo scrive una persona: «0523 456789», «+39 333 123 4567».
+ * Si tolgono spazi, punti, trattini, barre e il prefisso +39/0039, poi si
+ * contano le cifre: i numeri italiani vanno da 6 a 11 cifre, non sempre 10.
+ */
+export function normalizzaTelefonoNegozio(v: string): string {
+  return v.replace(/[\s./()-]+/g, '').replace(/^(\+39|0039)/, '');
+}
+export function telefonoNegozioValido(v: string): boolean {
+  return /^[0-9]{6,11}$/.test(normalizzaTelefonoNegozio(v));
+}
+
 export type VendorFormData = SchemaData & {
   storeAddress: string;
   storeLat: number;
@@ -77,8 +89,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
           if (showBranding && d.storeName.trim().length < 3) {
             ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['storeName'], message: 'Il nome deve essere di almeno 3 caratteri' });
           }
-          if (showContact && d.storePhone.length !== 10) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['storePhone'], message: 'Il numero di telefono deve essere di 10 cifre' });
+          if (showContact && !telefonoNegozioValido(d.storePhone)) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['storePhone'], message: 'Scrivi il numero del negozio, es. 0523 456789' });
           }
         }),
     [showBranding, showContact],
@@ -102,6 +114,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
   const [locationError, setLocationError] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(defaultValues?.storeLogo ?? null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  // Mentre sale una foto della copertina l'invio aspetta: partirebbe senza quella foto.
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   const [media, setMedia] = useState<StoreMediaItem[]>(defaultValues?.storeMedia ?? []);
   const [description, setDescription] = useState<string>(defaultValues?.storeDescription ?? '');
   const [hours, setHours] = useState<StoreHours>(defaultValues?.storeHours ?? {});
@@ -189,7 +203,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
     setCustomError(null);
     onSubmit({
       storeName: data.storeName,
-      storePhone: data.storePhone,
+      storePhone: normalizzaTelefonoNegozio(data.storePhone),
       storeAddress: location.address,
       storeLat: location.lat,
       storeLng: location.lng,
@@ -242,7 +256,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
           </div>
 
           {/* Cover media gallery */}
-          <StoreMediaManager value={media} onChange={setMedia} />
+          <StoreMediaManager value={media} onChange={setMedia} onUploadingChange={setUploadingMedia} />
 
           <Input
             label="Nome del negozio"
@@ -269,8 +283,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
             label="Telefono"
             {...register('storePhone')}
             type="text"
-            inputMode="numeric"
-            placeholder="3331234567 (10 cifre)"
+            inputMode="tel"
+            placeholder="Es. 0523 456789"
             error={typeof errors.storePhone?.message === 'string' ? errors.storePhone.message : undefined}
           />
 
@@ -358,7 +372,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
 
       <button
         type="submit"
-        disabled={isLoading || uploadingLogo}
+        disabled={isLoading || uploadingLogo || uploadingMedia}
         className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-semibold transition-colors shadow-warm-sm"
       >
         {isLoading ? tStates('saving') : tForms('saveStore')}

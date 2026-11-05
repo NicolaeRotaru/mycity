@@ -1,5 +1,6 @@
 'use client';
 
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, RefreshCw, ImageOff } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
@@ -35,7 +36,12 @@ export default function CameraCapture({ open, onClose, onCapture }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
+  // Ogni accensione ha il suo numero: chiudere o riaccendere lo fa avanzare, e
+  // uno stream che arriva per una richiesta superata si spegne subito invece di
+  // restare acceso a finestra chiusa.
+  const richiestaRef = useRef(0);
   const stopStream = useCallback(() => {
+    richiestaRef.current += 1;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
   }, []);
@@ -44,6 +50,7 @@ export default function CameraCapture({ open, onClose, onCapture }: Props) {
     setReady(false);
     setError(null);
     stopStream(); // ferma l'eventuale stream precedente prima di ri-acquisire
+    const questa = richiestaRef.current;
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
       setError('La fotocamera non è disponibile su questo dispositivo o browser.');
       return;
@@ -53,6 +60,10 @@ export default function CameraCapture({ open, onClose, onCapture }: Props) {
         video: { facingMode: { ideal: mode }, width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false,
       });
+      if (questa !== richiestaRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       streamRef.current = stream;
       const v = videoRef.current;
       if (v) {
@@ -166,13 +177,14 @@ export default function CameraCapture({ open, onClose, onCapture }: Props) {
             )}
           </div>
           <p className="text-center text-xs text-ink-500">
-            Buona luce, prodotto centrato. Lo sfondo lo puoi pulire dopo con “Sfondo bianco”.
+            Buona luce, prodotto centrato.{AI_NEGOZI_ACCESA ? ' Lo sfondo lo puoi pulire dopo con “Sfondo bianco”.' : ' Meglio uno sfondo chiaro e pulito.'}
           </p>
           <div className="flex items-center justify-center gap-3">
             <button
               type="button"
               onClick={switchCamera}
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-ink-700 ring-1 ring-cream-300 hover:bg-cream-50"
+              disabled={!ready}
+              className="disabled:opacity-50 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-ink-700 ring-1 ring-cream-300 hover:bg-cream-50"
             >
               <RefreshCw size={16} strokeWidth={2.2} aria-hidden /> Cambia
             </button>

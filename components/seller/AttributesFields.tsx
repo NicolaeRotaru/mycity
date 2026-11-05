@@ -134,6 +134,7 @@ const AttributesFields = ({
       return (
         <textarea
           id={id}
+          aria-required={f.required || undefined}
           rows={2}
           value={(value as string) ?? ''}
           onChange={(e) => onChange(f.key, e.target.value)}
@@ -146,6 +147,7 @@ const AttributesFields = ({
       return (
         <input
           id={id}
+          aria-required={f.required || undefined}
           type="number"
           value={(value as number | string) ?? ''}
           onChange={(e) => onChange(f.key, e.target.value === '' ? undefined : Number(e.target.value))}
@@ -158,6 +160,7 @@ const AttributesFields = ({
       return (
         <select
           id={id}
+          aria-required={f.required || undefined}
           value={(value as string) ?? ''}
           onChange={(e) => onChange(f.key, e.target.value || undefined)}
           className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-primary-700"
@@ -173,6 +176,7 @@ const AttributesFields = ({
       return (
         <input
           id={id}
+          aria-required={f.required || undefined}
           type="date"
           value={(value as string) ?? ''}
           onChange={(e) => onChange(f.key, e.target.value || undefined)}
@@ -184,6 +188,7 @@ const AttributesFields = ({
     return (
       <input
         id={id}
+        aria-required={f.required || undefined}
         type="text"
         value={(value as string) ?? ''}
         onChange={(e) => onChange(f.key, e.target.value)}
@@ -199,7 +204,9 @@ const AttributesFields = ({
         <h3 className="font-bold text-ink-800">
           Caratteristiche{categoryLabel ? ` · ${categoryLabel}` : ''}
         </h3>
-        <span className="text-xs text-ink-500">Tutti i campi sono opzionali</span>
+        <span className="text-xs text-ink-500">
+          {fields.some((f) => f.required) ? 'I campi con * sono obbligatori per pubblicare' : 'Tutti i campi sono opzionali'}
+        </span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

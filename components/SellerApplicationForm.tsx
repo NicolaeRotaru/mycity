@@ -185,6 +185,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
   const [locationError, setLocationError] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(defaultValues?.storeLogo ?? null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  // Mentre sale una foto della copertina l'invio aspetta: partirebbe senza quella foto.
+  const [uploadingMedia, setUploadingMedia] = useState(false);
   const [media, setMedia] = useState<StoreMediaItem[]>(defaultValues?.storeMedia ?? []);
 
   const storeName = watch('storeName');
@@ -388,7 +390,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           </div>
         </Field>
 
-        <StoreMediaManager value={media} onChange={setMedia} />
+        <StoreMediaManager value={media} onChange={setMedia} onUploadingChange={setUploadingMedia} />
 
         <Input
           label="Nome del negozio"
@@ -482,7 +484,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
 
       <button
         type="submit"
-        disabled={isLoading || uploadingLogo}
+        disabled={isLoading || uploadingLogo || uploadingMedia}
         className="w-full bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-base shadow-lg transition-all"
       >
         {isLoading ? (

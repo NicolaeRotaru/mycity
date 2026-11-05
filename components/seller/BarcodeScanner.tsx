@@ -30,7 +30,10 @@ export default function BarcodeScanner({ open, onClose, onDetected }: Props) {
   const [unsupported, setUnsupported] = useState(false);
   const [manual, setManual] = useState('');
 
+  // Come in CameraCapture: uno stream arrivato dopo la chiusura si spegne subito.
+  const richiestaRef = useRef(0);
   const stop = useCallback(() => {
+    richiestaRef.current += 1;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -53,12 +56,17 @@ export default function BarcodeScanner({ open, onClose, onDetected }: Props) {
       setUnsupported(true);
       return;
     }
+    const questa = richiestaRef.current;
     try {
       detectorRef.current = new Ctor({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128'] });
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' } },
         audio: false,
       });
+      if (questa !== richiestaRef.current) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       streamRef.current = stream;
       const v = videoRef.current;
       if (v) {

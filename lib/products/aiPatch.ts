@@ -967,8 +967,20 @@ export type MessaggioDellaChat = {
 export function messaggioDellaChatDopoIlPatch(
   risposta: string,
   esito: Pick<EsitoPatchModulo, 'cambiati' | 'daControllare'>,
+  /** La proposta conteneva qualcosa da scrivere. */
+  proponeva = false,
 ): MessaggioDellaChat {
   const aggiornato = esito.cambiati.length > 0;
+  // 1676 — Proposta piena, scheda intatta, niente da controllare: il modulo ha
+  // scartato tutto in silenzio (un'opzione fuori elenco, una categoria che non
+  // c'è). Il «Fatto!» del modello direbbe il falso.
+  if (proponeva && !aggiornato && esito.daControllare.length === 0) {
+    return {
+      testo: 'Nella scheda non è cambiato niente: la proposta non si poteva scrivere (per esempio un valore che non è fra quelli possibili). Scrivilo tu nel campo.',
+      nonScritto: [],
+      aggiornato: false,
+    };
+  }
   if (esito.daControllare.length === 0) return { testo: risposta, nonScritto: [], aggiornato };
   return {
     testo: aggiornato

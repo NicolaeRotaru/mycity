@@ -24,7 +24,7 @@ import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import { getAttributesForCategory, AI_ATTR_TO_FIELD, attributoSpuntato } from '@/lib/category-attributes';
 import { cn } from '@/lib/cn';
 import { supabase } from '@/lib/supabase/client';
-import { friendlyError } from '@/lib/errors';
+import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { uploadProductImages } from '@/lib/products/uploadImages';
 import {
@@ -410,6 +410,8 @@ export default function ProductForm({
         // Come il menu: «usato» e «ricondizionato» letti dalla foto non entrano.
         const norm = condizioneDalSuggerimento(cond);
         if (norm) setCondition(norm);
+        // Come per il prezzo scartato: il negoziante deve sapere perché la condizione è vuota.
+        else if (cond.trim()) toast.warning(`La foto dice «${cond.trim()}»: la condizione la scegli tu dal menu (su MyCity si vendono solo prodotti nuovi).`);
       }
       if (data.category_id) {
         const { fields } = getAttributesForCategory(categories, data.category_id);
@@ -579,7 +581,9 @@ export default function ProductForm({
         }),
       });
       const json = await res.json();
-      if (res.ok && json.found && json.patch) {
+      // Un errore del server (AI spenta, troppe richieste, guasto) non è «non trovato».
+      if (!res.ok) { toast.error(apiErrorMessage(json, 'Il codice EAN è salvato, ma la ricerca online non è riuscita.'), { id: tid }); return; }
+      if (json.found && json.patch) {
         const esito = applyPatch(json.patch as ProductEditPatch);
         dilloDopoIlPatch(
           esito,
@@ -618,7 +622,8 @@ export default function ProductForm({
         }),
       });
       const json = await res.json();
-      if (res.ok && Array.isArray(json.axes) && json.axes.length > 0) {
+      if (!res.ok) { toast.error(apiErrorMessage(json, 'Non sono riuscito a proporre le varianti.'), { id: tid }); return; }
+      if (Array.isArray(json.axes) && json.axes.length > 0) {
         const next = { ...variantAxes };
         for (const a of json.axes as { key: string; values: string[] }[]) next[a.key] = a.values;
         applyAxes(next);
@@ -649,7 +654,8 @@ export default function ProductForm({
         body: JSON.stringify({ imageUrls }),
       });
       const json = await res.json();
-      if (res.ok && Array.isArray(json.order)) {
+      if (!res.ok) { toast.error(apiErrorMessage(json, 'Non sono riuscito a ordinare le foto.'), { id: tid }); return; }
+      if (Array.isArray(json.order)) {
         const reordered = (json.order as number[]).map((i) => imageUrls[i]).filter((u): u is string => !!u);
         if (reordered.length === imageUrls.length) setImageUrls(reordered);
         const tip = Array.isArray(json.tips) && json.tips.length ? ` Consiglio: ${json.tips[0]}` : '';
@@ -1144,18 +1150,17 @@ export default function ProductForm({
             consegna, e la {VELOCE_IN_MINUTI} gliela proponiamo solo {QUANDO_SI_PUO_LA_VELOCE}.
           </p>
           {consegnaDelNegozioNonLetta ? (
-            <p className="text-xs text-amber-700 mt-1.5">
+            <p className="text-xs text-accent-700 mt-1.5">
               Non riesco a leggere le impostazioni di consegna del tuo negozio. Il resto lo salvi
               tranquillo: il tempo di consegna di questo prodotto resta com&apos;è, a meno che tu non
               scelga qui sopra. Per vederlo giusto, ricarica la pagina.
             </p>
           ) : (
-            fastDelivery && !sellerOffersExpress && (
-              <p className="text-xs text-ink-400 mt-1.5">
-                La consegna veloce richiede l&apos;Express attivo per il negozio: attivalo dal{' '}
-                <Link href="/seller/profile" className="text-primary-700 hover:underline">profilo negozio</Link>.
-              </p>
-            )
+            // 2291 — Qui c'era «la veloce richiede l'Express attivo: attivalo dal profilo»,
+            // subito sotto «questa scelta non cambia cosa vede il cliente». Oggi la veloce
+            // la decide il sito (ora, negozi aperti, fattorino libero), non l'interruttore:
+            // la frase chiedeva di fare una cosa che non serve.
+            null
           )}
         </div>
 
