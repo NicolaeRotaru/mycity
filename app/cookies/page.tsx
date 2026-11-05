@@ -181,6 +181,7 @@ function CookieTable({ rows }: { rows: Array<{ name: string; purpose: string; du
     // ricevere il fuoco, se no da tastiera le colonne a destra non si leggono.
     <div
       className="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-700"
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- un contenitore che scorre deve ricevere il fuoco (WCAG 2.1.1, axe scrollable-region-focusable)
       tabIndex={0}
       role="region"
       aria-label="Tabella dei cookie (scorre di lato)"
