@@ -248,7 +248,11 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
         cleaned.length > 0 &&
         cleaned.length < 200 &&
         !cleaned.includes('\n') &&
-        /^[a-zA-ZÀ-ſ]/.test(cleaned) &&
+        // 5/11/2026 — Anche una cifra, le virgolette o l'apostrofo: i rifiuti in cassa cominciano col
+        // nome del negozio («3 Archi», «'L Furnè», «Da Mario» fra virgolette) e finivano nel generico.
+        /^[a-zA-ZÀ-ſ0-9«"'‘’“]/.test(cleaned) &&
+        // ...ma non un codice tecnico in testa («500 Internal Server Error», «23505 …»).
+        !/^\d{3,5}\b/.test(cleaned) &&
         // ...e non parla come un motore. Vedi PAROLE_DEL_MOTORE in cima al file.
         !PAROLE_DEL_MOTORE.test(cleaned)
       ) {
