@@ -325,6 +325,26 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
 
     if (riuso.esito === 'riusa') {
       /**
+       * 5/11/2026 — LA VELOCE SI CONTROLLA ANCHE SULLA PAGINA GIÀ APERTA.
+       * Questo ramo esce prima del controllo della veloce (8-21, negozi aperti,
+       * fattorino online): alle 21:30 la pagina delle 20:50 si restituiva, con
+       * l'euro della veloce, mentre una richiesta nuova prendeva 409. Stessa
+       * decisione, stesso messaggio.
+       */
+      if (eConsegnaVeloce({ fascia: body.deliverySlot, ritiroInNegozio: body.pickupInStore })) {
+        const veloceOra = veloceSiPuo({
+          adesso: romeNow(),
+          negozi: venditoriLetti.error || !venditoriLetti.data
+            ? null
+            : venditoriLetti.data.map((s) => ({
+                nome: (s as { store_name?: string | null }).store_name ?? 'Il negozio',
+                orari: (s as { store_hours?: unknown }).store_hours,
+              })),
+          fattoriniOnline: await contaFattoriniOnline(admin),
+        });
+        if (!veloceOra.possibile) return ApiErrors.conflict(veloceOra.perche);
+      }
+      /**
        * 3/9/2026 — CORREGGERE IL TELEFONO IN CASSA DEVE SERVIRE A QUALCOSA.
        *
        * L'impronta del carrello dice «stesso carrello» guardando solo quello
