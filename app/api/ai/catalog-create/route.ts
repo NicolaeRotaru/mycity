@@ -11,11 +11,8 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { writeAudit } from '@/lib/audit';
-import {
-  buildDraftProductInsert,
-  MAX_ALT_TEXT,
-  MAX_VALORE_ATTRIBUTO,
-} from '@/lib/products/draftFromVision';
+import { buildDraftProductInsert, MAX_ALT_TEXT } from '@/lib/products/draftFromVision';
+import { campoOltreIlTetto, rimettiIValoriLunghi } from '@/lib/ai/tetti-bozza';
 import {
   MAX_NOME_PRODOTTO,
   MAX_DESCRIZIONE_PRODOTTO,
@@ -56,7 +53,10 @@ const DraftSchema = z.object({
   subcategory_id: z.string().uuid().nullable().optional(),
   category_slug: z.string().max(200).optional(),
   suggested_price: z.number().nullable().optional(),
-  attributes: z.record(z.string().max(MAX_VALORE_ATTRIBUTO)).optional(),
+  // S10 (5/11/2026) — Il tetto per campo si controlla dopo, con un messaggio che
+  // dice quale campo: qui 500 caratteri per tutti respingevano una lista
+  // ingredienti vera con «Dati prodotto non validi.».
+  attributes: z.record(z.string()).optional(),
   tags: z.array(z.string().max(60)).max(50).optional(),
   alt_text: z.string().max(MAX_ALT_TEXT).nullable().optional(),
   // R36 — Solo con questa spunta allergeni e ingredienti letti dalle foto
@@ -90,6 +90,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const imageUrls = parsed.data.imageUrls.filter((u) => fotoDaHostAmmesso(u)).slice(0, 4);
   if (imageUrls.length === 0) return ApiErrors.invalidRequest('Le foto devono essere caricate su MyCity.');
   const draft = parsed.data.draft;
+  const oltre = campoOltreIlTetto(draft.attributes, { dichiarazioniConfermate: draft.dichiarazioni_confermate === true });
+  if (oltre) {
+    return ApiErrors.invalidRequest(`Il campo «${oltre.campo}» supera ${oltre.tetto} caratteri: accorcialo e riprova.`);
+  }
 
   // #197 — Il controllo sui prodotti vietati stava sull'endpoint che NON
   // scrive (vision/extract-product) e mancava proprio qui, dove il prodotto
@@ -128,6 +132,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // sorgente unica condivisa con la creazione multi-prodotto. Mai fidarsi
   // ciecamente del client.
   const payload = buildDraftProductInsert({ draft, imageUrls, categories, sellerId: user.id });
+  rimettiIValoriLunghi(payload.attributes, draft.attributes);
 
   const { data: created, error } = await admin
     .from('products')

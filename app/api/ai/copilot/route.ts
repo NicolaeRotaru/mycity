@@ -11,6 +11,7 @@ import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import { productSnapshot, PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import { REGOLA_CAMPI_DICHIARATIVI, type AiProductPatch, type CategoryRow } from '@/lib/products/aiPatch';
+import { REGOLA_PREZZO_AI, tettoTokenCopilot } from '@/lib/ai/regole-copilot';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
 
@@ -36,6 +37,7 @@ Hai l'elenco dei suoi prodotti (id, nome, prezzo, stato, categoria, stock). In b
 - Individua i prodotti coinvolti (per categoria, stato, nome, ecc.).
 - Per ognuno costruisci una voce in "changes" con il suo "product_id" (preso ESATTAMENTE dall'elenco) e un "patch" con SOLO i campi da cambiare.
 - Per le variazioni di prezzo calcola TU il nuovo prezzo numerico per ciascun prodotto (es. -10% su €20 → 18.0), non scrivere percentuali.
+- ${REGOLA_PREZZO_AI}
 - "tags" è la lista COMPLETA desiderata del prodotto (ricostruiscila da quella attuale per aggiungere/togliere).
 - Usa "status" tra: available, draft, sold.
 - Se l'istruzione è ambigua o pericolosa (es. "cancella tutto"), NON proporre modifiche: spiega e chiedi conferma in "reply".
@@ -142,6 +144,20 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   if (products.length === 0) {
     return NextResponse.json({ reply: 'Non hai ancora prodotti nel catalogo.', changes: [] });
   }
+  // S10 (5/11/2026) — Si leggono solo i 200 prodotti piu' recenti: se il
+  // catalogo e' piu' lungo, il modello e il negoziante lo devono sapere.
+  let totaleCatalogo = products.length;
+  if (products.length >= MAX_CATALOG) {
+    const { count } = await admin
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .eq('seller_id', user.id);
+    if (typeof count === 'number') totaleCatalogo = Math.max(count, products.length);
+  }
+  const avvisoCatalogoTagliato =
+    totaleCatalogo > products.length
+      ? `Ho guardato solo i ${products.length} prodotti più recenti su ${totaleCatalogo}: i più vecchi non sono inclusi.`
+      : '';
 
   const list = products
     .map((p) => {
@@ -150,7 +166,11 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     })
     .join('\n');
 
-  const contextText = `Catalogo del venditore (${products.length} prodotti):
+  const contextText = `${
+    avvisoCatalogoTagliato
+      ? `Catalogo del venditore: solo i ${products.length} prodotti più recenti su ${totaleCatalogo}. Nel riepilogo di' che le modifiche valgono solo per questi.`
+      : `Catalogo del venditore (${products.length} prodotti):`
+  }
 ${list}`;
 
   // #206 — Due difetti nella stessa manciata di righe, ora allineati alle
@@ -221,7 +241,10 @@ ${list}`;
     const { toolInput } = await runMessage<BulkInput>({
       feature: 'ai-copilot',
       model: MODELS.smart,
-      max_tokens: 4096,
+      // S10 (5/11/2026) — Ogni voce {product_id, patch} costa 35-55 token: con
+      // 4096 ne entravano un centinaio e il piano su tutto il catalogo si
+      // tagliava sempre. Circa 60 token per prodotto, piu' il riepilogo.
+      max_tokens: tettoTokenCopilot(products.length),
       system: SYSTEM,
       messages,
       tools: [TOOL],
@@ -240,12 +263,13 @@ ${list}`;
         return { product_id: c.product_id, name: snap.name, patch: c.patch };
       });
 
+    const reply = typeof toolInput?.reply === 'string' ? toolInput.reply : '';
     return NextResponse.json({
-      reply: typeof toolInput?.reply === 'string' ? toolInput.reply : '',
+      reply: avvisoCatalogoTagliato ? `${reply}${reply ? ' ' : ''}${avvisoCatalogoTagliato}` : reply,
       changes,
     });
   } catch (err) {
-    if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
+    if (err instanceof AiConfigError) return ApiErrors.unavailable(err.message);
     if (err instanceof AiCallError) return mapAiError(err, 'ai-copilot');
     return ApiErrors.internal('Errore AI.');
   }

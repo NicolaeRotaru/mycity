@@ -11,6 +11,7 @@ import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
 import { REGOLA_CAMPI_DICHIARATIVI, rigaAttributoPerIlModello } from '@/lib/products/aiPatch';
+import { voceCorta } from '@/lib/ai/tetti-testo';
 
 /**
  * Voce → prodotto: il venditore detta a parole un prodotto ("ho tre magliette
@@ -113,8 +114,16 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // paghiamo noi e il contenuto che conta viene spinto fuori dalla finestra.
   // Stesse soglie di `buildProductContext`, che gli elenchi equivalenti li
   // taglia da agosto.
-  const attributeSchema = (Array.isArray(body.attributeSchema) ? body.attributeSchema : []).slice(0, 40);
-  const topCategories = (Array.isArray(body.topCategories) ? body.topCategories : []).slice(0, 30);
+  // S10 (5/11/2026) — Tagliati gli elenchi, ogni voce entrava ancora intera
+  // (un'opzione da un megabyte), e un elemento null faceva cadere la rotta.
+  // Adesso si tengono solo gli oggetti, e ogni testo ha il suo tetto
+  // (lib/ai/tetti-testo.ts, usato anche da rigaAttributoPerIlModello).
+  const attributeSchema = (Array.isArray(body.attributeSchema) ? body.attributeSchema : [])
+    .filter((f): f is NonNullable<typeof f> => !!f && typeof f === 'object' && typeof f.key === 'string')
+    .slice(0, 40);
+  const topCategories = (Array.isArray(body.topCategories) ? body.topCategories : [])
+    .filter((c): c is NonNullable<typeof c> => !!c && typeof c === 'object')
+    .slice(0, 30);
   // (16/10/2026) Le dichiarazioni restano nell'elenco ma segnate in sola lettura.
   const attrLines = attributeSchema.map(rigaAttributoPerIlModello).join('\n');
 
@@ -122,7 +131,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 ${recinta('dettato', transcript, 2000)}
 
 Categorie di primo livello disponibili (slug):
-${topCategories.map((c) => `- ${c.slug} (${c.name})`).join('\n') || '- (nessuna)'}
+${topCategories.map((c) => `- ${voceCorta(c.slug)} (${voceCorta(c.name)})`).join('\n') || '- (nessuna)'}
 
 Attributi validi per la categoria attuale (se già scelta):
 ${attrLines || '- (compila in base alla categoria che sceglierai)'}
