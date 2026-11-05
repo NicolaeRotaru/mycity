@@ -20,7 +20,11 @@ export const PRODUCT_PATCH_PROPERTIES: Record<string, unknown> = {
     type: ['string', 'null'],
     // Solo le condizioni che il menu offre: MyCity non vende l'usato (30/10/2026).
     enum: [...CONDIZIONI_DA_SCEGLIERE, null],
-    description: 'null per "non specificata".',
+    // S10 (5/11/2026) — null CANCELLA la condizione salvata (anche l'«usato» di
+    // un prodotto vecchio): il modello lo deve mandare solo se gli si chiede di
+    // toglierla. Se non la cambia, il campo non c'e'.
+    description:
+      'Ometti il campo se non cambi la condizione. null solo se il venditore chiede di togliere la condizione.',
   },
   stock: { type: 'number', description: 'Disponibilità in pezzi.' },
   unlimited_stock: { type: 'boolean', description: 'true per disponibilità illimitata.' },

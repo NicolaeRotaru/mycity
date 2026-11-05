@@ -13,6 +13,7 @@ import {
   type ProductCondition,
   type ProductUnit,
 } from '@/lib/products/schema';
+import { opzioniCorte, voceCorta } from '@/lib/ai/tetti-testo';
 
 /**
  * Risoluzione server-side del patch proposto dall'assistente AI in un payload
@@ -326,9 +327,10 @@ export const REGOLA_CAMPI_DICHIARATIVI = `CAMPI CHE NON TOCCHI MAI: ${CAMPI_DICH
  * «queste sono le chiavi da usare», allergeni compresi.
  */
 export function rigaAttributoPerIlModello(f: { key: string; type?: string; options?: string[] }): string {
-  const opts = f.options && f.options.length ? ` [opzioni: ${f.options.join(', ')}]` : '';
+  const opzioni = opzioniCorte(f.options);
+  const opts = opzioni.length ? ` [opzioni: ${opzioni.join(', ')}]` : '';
   const sola = eCampoDichiarativo(f.key) ? ' [SOLO LETTURA: lo dichiara il venditore]' : '';
-  return `- ${f.key} (${f.type ?? 'text'})${opts}${sola}`;
+  return `- ${voceCorta(f.key)} (${voceCorta(f.type ?? 'text')})${opts}${sola}`;
 }
 
 /** Una voce di un elenco come testo, come la legge `String`, ma senza mai cadere. */

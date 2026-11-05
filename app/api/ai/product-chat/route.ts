@@ -1,6 +1,6 @@
 import { sanitizeImageUrls } from '@/lib/ai/productContext';
 import { NextResponse } from 'next/server';
-import { CONDIZIONI_DA_SCEGLIERE } from '@/lib/products/schema';
+import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import type Anthropic from '@anthropic-ai/sdk';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { withSellerAuth } from '@/lib/api/middleware';
@@ -11,6 +11,7 @@ import { runMessage, AiCallError, mapAiError, conCacheDelContesto } from '@/lib/
 import { assertSafeText, UnsafeContentError } from '@/lib/ai/moderation';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 import { REGOLA_CAMPI_DICHIARATIVI, rigaAttributoPerIlModello } from '@/lib/products/aiPatch';
+import { filtroSullaScheda } from '@/lib/ai/schedaSicura';
 
 /**
  * Assistente AI agentico per la scheda prodotto.
@@ -80,12 +81,8 @@ const EDIT_TOOL: Anthropic.Tool = {
             type: 'string',
             enum: ['pezzo', 'kg', 'g', 'l', 'ml', 'confezione', 'paio', 'm'],
           },
-          condition: {
-            type: ['string', 'null'],
-            // Solo le condizioni che il menu offre: MyCity non vende l'usato (30/10/2026).
-            enum: [...CONDIZIONI_DA_SCEGLIERE, null],
-            description: 'null per "non specificata".',
-          },
+          // Una fonte sola (lib/ai/patchSchema.ts): niente «usato», e null solo per togliere.
+          condition: PRODUCT_PATCH_PROPERTIES.condition,
           stock: { type: 'number', description: 'Disponibilità in pezzi.' },
           unlimited_stock: {
             type: 'boolean',
@@ -203,17 +200,37 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // scrive all'assistente: è una delle due porte scoperte. Si controlla
   // l'ultimo messaggio, quello appena arrivato — la storia è già passata di
   // qui ai giri precedenti.
+  // S10 (5/11/2026) — Non era vero: la chat mette il messaggio nella storia
+  // PRIMA di chiamare la rotta, e uno rifiutato restava lì e arrivava al
+  // modello col giro dopo. Adesso passano dal filtro tutti i turni utente
+  // (al massimo 20 da 2000 caratteri), in una chiamata sola.
   try {
-    await assertSafeText(history[history.length - 1].content, 'ai-product-chat-policy');
+    const turniUtente = history.filter((m) => m.role === 'user');
+    try {
+      await assertSafeText(turniUtente.map((m) => m.content).join('\n\n'), 'ai-product-chat-policy');
+    } catch (errStoria) {
+      // Revisione S10 — Se il rifiuto viene da un messaggio VECCHIO (la chat lo
+      // lascia nella storia), la conversazione non deve restare bloccata per
+      // sempre: si controlla l'ultimo da solo e, se passa, al modello va solo lui.
+      if (!(errStoria instanceof UnsafeContentError) || turniUtente.length < 2) throw errStoria;
+      await assertSafeText(history[history.length - 1].content, 'ai-product-chat-policy');
+      history.splice(0, history.length - 1);
+    }
   } catch (err) {
     if (err instanceof UnsafeContentError) {
       return ApiErrors.invalidRequest(`Questo messaggio non si puo' usare: ${err.verdict.reason}`);
     }
+    // Con l'AI spenta (o senza chiave) il filtro lancia AiConfigError: si dice
+    // quello, non «Errore AI».
+    if (err instanceof AiConfigError) return ApiErrors.unavailable(err.message);
     if (err instanceof AiCallError) return mapAiError(err, 'ai-product-chat-policy');
     return ApiErrors.internal('Errore AI.');
   }
 
   const product = body.product && typeof body.product === 'object' ? body.product : {};
+  // Anche il testo libero della scheda passa dal filtro, come nelle altre rotte.
+  const nonAmmessa = await filtroSullaScheda(product, 'ai-product-chat-policy');
+  if (nonAmmessa) return nonAmmessa;
   /**
    * 22/8/2026 — QUESTA ROTTA SI RISCRIVEVA IL CONTESTO A MANO, E PERDEVA I TAGLI.
    *
@@ -320,7 +337,7 @@ ${attrLines || '- (nessuno)'}`;
 
     return NextResponse.json({ reply, patch });
   } catch (err) {
-    if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
+    if (err instanceof AiConfigError) return ApiErrors.unavailable(err.message);
     if (err instanceof AiCallError) return mapAiError(err, 'ai-product-chat');
     return ApiErrors.internal('Errore AI.');
   }

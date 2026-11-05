@@ -13,9 +13,7 @@ import {
   Truck,
   BadgeCheck,
   RotateCcw,
-  Smartphone,
   Chrome,
-  MessageSquareText,
   Store,
   Bike,
   type LucideIcon,
@@ -108,7 +106,16 @@ export function AuthShell({
  * SMS restano visibili come "presto" finché non si collegano i rispettivi
  * provider (nessun handler fittizio).
  */
-export function AuthAlternatives() {
+export function AuthAlternatives({
+  condizioniDalModulo,
+}: {
+  /**
+   * S10 (5/11/2026) — Nell'iscrizione la spunta dei Termini c'e' gia' nel
+   * modulo: passandola qui ne vale una sola, per il modulo e per Google.
+   * Senza (pagina di accesso), resta la spunta di questo riquadro.
+   */
+  condizioniDalModulo?: boolean;
+} = {}) {
   const [googleLoading, setGoogleLoading] = useState(false);
   /**
    * 22/8/2026 — CHI ENTRAVA CON GOOGLE NON ACCETTAVA MAI NIENTE.
@@ -125,7 +132,8 @@ export function AuthAlternatives() {
    * Adesso la spunta c'e' anche qui, e la versione dei testi viaggia
    * nell'indirizzo di ritorno: la callback la trova e la mette a verbale.
    */
-  const [condizioniAccettate, setCondizioniAccettate] = useState(false);
+  const [spuntaQui, setCondizioniAccettate] = useState(false);
+  const condizioniAccettate = condizioniDalModulo ?? spuntaQui;
 
   const handleGoogle = async () => {
     if (!condizioniAccettate) {
@@ -155,6 +163,7 @@ export function AuthAlternatives() {
         <span className="text-xs text-ink-400">oppure</span>
         <span className="h-px flex-1 bg-cream-300" />
       </div>
+      {condizioniDalModulo === undefined && (
       <label className="mb-3 flex items-start gap-2.5 text-[13px] leading-relaxed text-ink-700">
         <input
           type="checkbox"
@@ -168,10 +177,12 @@ export function AuthAlternatives() {
           <Link href="/privacy" className="font-semibold text-primary-700 underline">Informativa privacy</Link>.
         </span>
       </label>
+      )}
+      {/* S10 (5/11/2026) — Tolti «SPID» e «Accedi con codice via SMS»: erano
+          pulsanti spenti per sempre, col motivo solo nel title (che sul
+          telefono non si vede), e sembravano identici a «Google». Tornano
+          quando i due accessi sono collegati davvero. */}
       <div className="flex gap-2.5">
-        <Button variant="secondary" icon={Smartphone} fullWidth disabled title="SPID — presto disponibile">
-          SPID
-        </Button>
         <Button
           variant="secondary"
           icon={Chrome}
@@ -182,15 +193,6 @@ export function AuthAlternatives() {
           {googleLoading ? 'Apertura…' : 'Google'}
         </Button>
       </div>
-      <button
-        type="button"
-        disabled
-        title="Accesso via SMS — presto disponibile"
-        className="mt-2.5 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-cream-300 bg-white px-3 py-3 text-sm font-bold text-ink-900 transition-colors hover:bg-cream-50 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        <MessageSquareText size={18} className="text-primary-700" aria-hidden />
-        Accedi con codice via SMS
-      </button>
     </>
   );
 }

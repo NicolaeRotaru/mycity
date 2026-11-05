@@ -13,6 +13,7 @@ import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 // migliorare e' un DATO e non un ordine: molte le hanno scritte altri
 // marketplace, non il venditore.
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
+import { MAX_DESCRIZIONE_PRODOTTO } from '@/lib/products/aiPatch';
 
 /**
  * AI Description Writer per seller.
@@ -34,8 +35,10 @@ Stile:
 - Italiano vivo, no anglicismi.
 - Massimo 3 frasi.
 - Prima frase = che cos'è il prodotto in modo concreto.
-- Ultima frase può menzionare provenienza locale o consigli d'uso.
+- Ultima frase può dare un consiglio d'uso.
 - NIENTE emoji, niente hashtag, niente prezzi.
+
+Non inventare: niente ingredienti, materiali, origine, provenienza o lavorazioni che non sono nei dati che ricevi. Se mancano, resta generico. Se c'è già una descrizione del venditore, tieni i fatti che contiene.
 
 Rispondi SOLO con la descrizione, niente preambolo, niente virgolette.
 
@@ -75,7 +78,9 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // Adesso si taglia una volta sola, subito dopo il parse, e si usano queste
   // tre variabili in tutti e due i posti.
   const name = body.name?.trim().slice(0, 200);
-  const attuale = (body.current ?? '').slice(0, 500);
+  // S10 (5/11/2026) — Prima si tagliava a 500 caratteri: i dettagli scritti
+  // dal negoziante oltre quel punto non arrivavano nemmeno al modello.
+  const attuale = (body.current ?? '').slice(0, MAX_DESCRIZIONE_PRODOTTO);
   const categoria = (body.category ?? '').slice(0, 100);
   if (!name || name.length < 2) {
     return ApiErrors.invalidRequest('Specifica il nome del prodotto');
@@ -123,7 +128,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const userBlock = `Negozio: ${storeName}
 Categoria: ${categoria || '—'}
 Nome prodotto: ${recinta('nome', name, 200)}
-${attuale ? `Descrizione attuale (da migliorare): ${recinta('descrizione', attuale, 500)}` : ''}`;
+${attuale ? `Descrizione attuale (da migliorare): ${recinta('descrizione', attuale, MAX_DESCRIZIONE_PRODOTTO)}` : ''}`;
 
   try {
     // `seTagliata: 'accetta'` e' voluto: con 300 token il taglio qui e' la normalita', e per il

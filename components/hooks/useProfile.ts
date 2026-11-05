@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { identify, resetUser } from '@/lib/analytics/posthog';
@@ -79,18 +79,29 @@ function chiediChiSono(): Promise<void> {
   return primaDomanda;
 }
 
+/**
+ * S10 (5/11/2026) — LO STATO DI PARTENZA ERA UNA VARIABILE CHE CAMBIA.
+ *
+ * `useState(statoCondiviso)` partiva dal valore del modulo, che sul server resta
+ * «non pronto» e nel browser, a risposta arrivata, e' «pronto»: il server
+ * mandava il caricamento, il browser disegnava un'altra pagina, e React buttava
+ * via tutto (su /sell, a ogni apertura). `useSyncExternalStore` legge il valore
+ * del server durante l'idratazione e quello vero subito dopo; nelle navigazioni
+ * interne parte gia' da quello vero, senza lampi.
+ */
+const STATO_DEL_SERVER: StatoAuth = { userId: null, userEmail: null, pronto: false };
+function iscriviti(avvisa: () => void): () => void {
+  const f = () => avvisa();
+  iscritti.add(f);
+  return () => { iscritti.delete(f); };
+}
+
 export const useProfile = () => {
-  const [stato, setStato] = useState<StatoAuth>(statoCondiviso);
+  const stato = useSyncExternalStore(iscriviti, () => statoCondiviso, () => STATO_DEL_SERVER);
 
   useEffect(() => {
-    const avvisa = (s: StatoAuth) => setStato(s);
-    iscritti.add(avvisa);
     apriAscolto();
     void chiediChiSono();
-    // Se la risposta era gia' arrivata prima che questa scheda si montasse,
-    // qui la si prende senza chiedere niente a nessuno.
-    if (statoCondiviso.pronto) setStato(statoCondiviso);
-    return () => { iscritti.delete(avvisa); };
   }, []);
 
   const userId = stato.userId;

@@ -63,9 +63,14 @@ export function arrivaDaUnAltroSito(req: RichiestaDaGuardare): boolean {
 
   if ((req.headers.get('sec-fetch-site') ?? '').toLowerCase() === 'cross-site') return true;
 
-  const origine = host(req.headers.get('origin'));
+  const grezza = req.headers.get('origin');
   // Niente Origin: non è un browser che manda una richiesta da un'altra pagina.
-  if (!origine) return false;
+  if (grezza === null || grezza.trim() === '') return false;
+  const origine = host(grezza);
+  // S10 (5/11/2026) — Un Origin presente ma illeggibile — «null», che i browser
+  // mandano da un iframe sandbox, da una pagina data: o dopo certi rimandi —
+  // non e' «nessun Origin»: su un metodo che scrive vale come un altro sito.
+  if (!origine) return true;
 
   const nostri = new Set(
     [host(req.url), req.headers.get('host')?.toLowerCase() ?? null, host(env.appUrl())].filter(

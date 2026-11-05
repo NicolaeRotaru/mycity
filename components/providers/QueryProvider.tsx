@@ -2,8 +2,8 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import '@/lib/zod-i18n'; // attiva Zod errorMap IT globalmente
 import { supabase } from '@/lib/supabase/client';
+import '@/lib/zod-i18n'; // attiva Zod errorMap IT globalmente
 
 export default function QueryProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(

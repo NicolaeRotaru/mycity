@@ -224,7 +224,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     const result = await runMessage<ExtractInput>({
       feature: 'vision-extract-multi',
       model: MODELS.vision,
-      max_tokens: 4096,
+      // S10 (5/11/2026) — Con piu' prodotti e le etichette complete 4096 token si
+      // finivano a meta' risposta. Si paga solo quello che il modello scrive.
+      // Non oltre 6000: il client chiude ogni chiamata a 60 s (lib/ai/client.ts).
+      max_tokens: 6000,
       tools: [EXTRACT_TOOL],
       tool_choice: { type: 'tool', name: 'extract_products' },
       messages: [{ role: 'user', content }],
@@ -235,7 +238,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     }
     products = result.toolInput.products.slice(0, MAX_PRODUCTS);
   } catch (err) {
-    if (err instanceof AiConfigError) return ApiErrors.unavailable('API key Anthropic non valida.');
+    if (err instanceof AiConfigError) return ApiErrors.unavailable(err.message);
     // 6/9/2026 — LA MAPPA SCRITTA A MANO NON CONOSCEVA IL FRENO DI SPESA.
     //
     // A budget del giorno finito questa rotta rispondeva «Errore nel servizio

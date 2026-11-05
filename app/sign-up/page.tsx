@@ -108,11 +108,19 @@ function SignUpInner() {
   // comunque sul server, quindi non si apre nessun buco.
   const [captchaRotto, setCaptchaRotto] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  // S10 (5/11/2026) — Gli errori restano accanto al campo (con aria-invalid e
+  // role=alert dal componente), non solo nell'avviso che sparisce in 4 secondi.
+  const [erroreConsenso, setErroreConsenso] = useState<string | undefined>();
+  const [erroreIscrizione, setErroreIscrizione] = useState<string | undefined>();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErroreIscrizione(undefined);
     if (!acceptTos) {
-      toast.error('Devi accettare Termini e Privacy per registrarti');
+      const msg = 'Spunta la casella per accettare Termini e Privacy';
+      setErroreConsenso(msg);
+      toast.error(msg);
+      requestAnimationFrame(() => document.getElementById('signup-consenso')?.focus());
       return;
     }
     if (TURNSTILE_SITE_KEY && !captchaToken && !captchaRotto) {
@@ -121,16 +129,6 @@ function SignUpInner() {
     }
     setIsLoading(true);
     try {
-      let referrerId: string | null = null;
-      if (refCode) {
-        const { data: ref } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('referral_code', refCode)
-          .maybeSingle();
-        referrerId = ref?.id ?? null;
-      }
-
       /**
        * 27/8/2026 (R160) — L'INTENZIONE VIAGGIA COL LINK DI CONFERMA.
        *
@@ -145,7 +143,7 @@ function SignUpInner() {
        */
       const base = APP_URL || window.location.origin;
       const emailRedirectTo = ritornoDopoLaConferma(base, returnTo, 'email');
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -166,13 +164,11 @@ function SignUpInner() {
       });
       if (error) throw error;
 
-      if (referrerId && data.user?.id && data.user.id !== referrerId) {
-        await supabase.from('referrals').insert({
-          referrer_id: referrerId,
-          referred_id: data.user.id,
-          reward_amount: 5,
-        });
-      }
+      // S10 (5/11/2026) — Qui l'invito si scriveva dal browser nella tabella
+      // `referrals`, senza nessuna rotta a controllarlo. Dalla migrazione 186 il
+      // database quella scrittura la rifiuta: era codice che non poteva più
+      // riuscire. Chi riaccende gli inviti (INVITI_E_PUNTI_ACCESI) deve farlo
+      // scrivere a una rotta del server, che controlla il codice prima.
 
       // #214 — Qui l'evento NON si emette piu'. Chi compila il modulo non e'
       // ancora iscritto: deve confermare l'email. Contandolo qui, la stessa
@@ -189,7 +185,9 @@ function SignUpInner() {
       router.push(percorsoVerificaEmail(returnTo));
     } catch (error) {
       rigeneraGettone();
-      toast.error(friendlyError(error));
+      const msg = friendlyError(error);
+      setErroreIscrizione(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -282,7 +280,7 @@ function SignUpInner() {
           id="signup-password"
           label="Password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => { setPassword(e.target.value); setErroreIscrizione(undefined); }}
           hint="Almeno 8 caratteri"
           required
           minLength={8}
@@ -290,8 +288,10 @@ function SignUpInner() {
         />
 
         <Checkbox
+          id="signup-consenso"
           checked={acceptTos}
-          onChange={(e) => setAcceptTos(e.target.checked)}
+          onChange={(e) => { setAcceptTos(e.target.checked); if (e.target.checked) setErroreConsenso(undefined); }}
+          error={erroreConsenso}
           label={
             <>
               Ho letto e accetto i{' '}
@@ -319,6 +319,11 @@ function SignUpInner() {
           </p>
         )}
 
+        {erroreIscrizione && (
+          <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">
+            {erroreIscrizione}
+          </p>
+        )}
         <Button type="submit" size="lg" loading={isLoading} iconRight={ArrowRight} fullWidth>
           {isLoading
             ? 'Registrazione in corso…'
@@ -328,21 +333,37 @@ function SignUpInner() {
         </Button>
       </form>
 
-      <AuthAlternatives />
+      <AuthAlternatives condizioniDalModulo={acceptTos} />
 
       <p className="mt-6 text-[14px] text-ink-600">
         Hai già un account?{' '}
-        <Link href="/sign-in" className="font-bold text-primary-700 hover:underline">Accedi</Link>
+        <Link href={accediHref(returnTo)} className="font-bold text-primary-700 hover:underline">Accedi</Link>
       </p>
     </>
   );
 }
 
-const SignUp = () => (
-  <Suspense fallback={<LoadingState variant="inline" />}>
-    <AuthShell back={{ href: '/sign-in', label: 'Torna al login' }}>
+/**
+ * S10 (5/11/2026) — «Accedi» e «Torna al login» portano con se' la strada
+ * dell'ordine, come fa gia' sign-in → sign-up: dopo l'accesso si torna al
+ * carrello, non in home.
+ */
+function accediHref(returnTo: string): string {
+  return returnTo && returnTo !== '/' ? `/sign-in?returnTo=${encodeURIComponent(returnTo)}` : '/sign-in';
+}
+
+function SignUpShell() {
+  const returnTo = useSearchParams().get('returnTo') ?? '';
+  return (
+    <AuthShell back={{ href: accediHref(returnTo), label: 'Torna al login' }}>
       <SignUpInner />
     </AuthShell>
+  );
+}
+
+const SignUp = () => (
+  <Suspense fallback={<LoadingState variant="inline" />}>
+    <SignUpShell />
   </Suspense>
 );
 

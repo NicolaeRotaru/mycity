@@ -61,7 +61,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       confidence: extract.confidence,
     });
   } catch (err) {
-    if (err instanceof AiConfigError) return ApiErrors.unavailable('API key Anthropic non valida.');
+    if (err instanceof AiConfigError) return ApiErrors.unavailable(err.message);
     // 6/9/2026 — LA MAPPA SCRITTA A MANO NON CONOSCEVA IL FRENO DI SPESA.
     //
     // A budget del giorno finito questa rotta rispondeva «Errore nel servizio

@@ -309,8 +309,9 @@ export async function spesaDiOggiCents(quando?: Date): Promise<number> {
   }
   // Il ripiego non si butta: se il database torna a tacere piu' avanti, si
   // riparte dall'ultimo numero noto invece che da zero.
-  _ripiego.giorno = giorno;
-  _ripiego.cents = Math.max(_ripiego.cents, condiviso);
+  // ripiegoCents azzera il numero se il giorno e' cambiato: la spesa di ieri
+  // non deve diventare quella di oggi.
+  _ripiego.cents = Math.max(ripiegoCents(giorno), condiviso);
   return condiviso;
 }
 
@@ -325,8 +326,7 @@ export async function aggiungiSpesaCents(cents: number, quando?: Date): Promise<
     _ripiego.cents = ripiegoCents(giorno) + arrotondati;
     return;
   }
-  _ripiego.giorno = giorno;
-  _ripiego.cents = Math.max(_ripiego.cents, totale);
+  _ripiego.cents = Math.max(ripiegoCents(giorno), totale);
 }
 
 /**

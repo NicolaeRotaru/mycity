@@ -2,7 +2,8 @@ import { assertSafeText, UnsafeContentError } from '@/lib/ai/moderation';
 import { sanitizeImageUrls } from '@/lib/ai/productContext';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 import { NextResponse } from 'next/server';
-import { CONDIZIONI_DA_SCEGLIERE } from '@/lib/products/schema';
+import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
+import { REGOLA_PREZZO_AI } from '@/lib/ai/regole-copilot';
 import type Anthropic from '@anthropic-ai/sdk';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { withSellerAuth } from '@/lib/api/middleware';
@@ -63,6 +64,7 @@ Hai a disposizione:
 Come lavori:
 - Prima IDENTIFICA il prodotto. Se la foto o la descrizione combaciano con un solo prodotto, dillo e imposta "product_id". Se ci sono più candidati o non sei sicuro, NON indovinare: elenca i candidati e chiedi al venditore quale.
 - Quando "product_id" è noto, puoi mostrare i dettagli, dare consigli, rispondere a domande.
+- ${REGOLA_PREZZO_AI}
 - Proponi modifiche (campo "patch") SOLO quando il venditore chiede ESPLICITAMENTE di cambiare qualcosa ("metti il prezzo a…", "segna esaurito", "aggiungi il tag…"). Se chiede solo informazioni, NON mettere "patch": mostra i dettagli e basta.
 - Se la richiesta è ambigua, chiedi chiarimenti a parole senza modificare nulla.
 
@@ -108,12 +110,8 @@ const MANAGE_TOOL: Anthropic.Tool = {
             type: 'string',
             enum: ['pezzo', 'kg', 'g', 'l', 'ml', 'confezione', 'paio', 'm'],
           },
-          condition: {
-            type: ['string', 'null'],
-            // Solo le condizioni che il menu offre: MyCity non vende l'usato (30/10/2026).
-            enum: [...CONDIZIONI_DA_SCEGLIERE, null],
-            description: 'null per "non specificata".',
-          },
+          // Una fonte sola (lib/ai/patchSchema.ts): niente «usato», e null solo per togliere.
+          condition: PRODUCT_PATCH_PROPERTIES.condition,
           stock: { type: 'number', description: 'Disponibilità in pezzi.' },
           unlimited_stock: {
             type: 'boolean',
@@ -226,13 +224,26 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
    * il pezzo che ci difende dal far generare — col nostro nome e il nostro
    * conto — cose che non vogliamo generare: se vale, vale su tutte le porte.
    */
+  // S10 (5/11/2026) — Tutti i turni utente, non solo l'ultimo: la chat mette il
+  // messaggio nella storia prima di chiamare la rotta, e uno rifiutato restava
+  // li' e arrivava al modello col messaggio dopo.
   try {
-    await assertSafeText(history[history.length - 1].content, 'ai-catalog-chat-policy');
+    const turniUtente = history.filter((m) => m.role === 'user');
+    try {
+      await assertSafeText(turniUtente.map((m) => m.content).join('\n\n'), 'ai-catalog-chat-policy');
+    } catch (errStoria) {
+      // Revisione S10 — Se il rifiuto viene da un messaggio VECCHIO (la chat lo
+      // lascia nella storia), la conversazione non deve restare bloccata per
+      // sempre: si controlla l'ultimo da solo e, se passa, al modello va solo lui.
+      if (!(errStoria instanceof UnsafeContentError) || turniUtente.length < 2) throw errStoria;
+      await assertSafeText(history[history.length - 1].content, 'ai-catalog-chat-policy');
+      history.splice(0, history.length - 1);
+    }
   } catch (err) {
     if (err instanceof UnsafeContentError) {
       return ApiErrors.invalidRequest(`Questo messaggio non si puo' usare: ${err.verdict.reason}`);
     }
-    if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
+    if (err instanceof AiConfigError) return ApiErrors.unavailable(err.message);
     if (err instanceof AiCallError) return mapAiError(err, 'ai-catalog-chat-policy');
     return ApiErrors.internal('Errore AI.');
   }
@@ -260,6 +271,32 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const products = (productsData ?? []) as ProductRow[];
   const categories = (categoriesData ?? []) as CategoryRow[];
   const topCategories = categories.filter((c) => !c.parent_id);
+
+  // S10 (5/11/2026) — Si leggono solo i 100 prodotti piu' recenti. Un prodotto
+  // aperto piu' vecchio si carica per id, e quando il catalogo e' piu' lungo il
+  // modello lo sa e lo dice, invece di rispondere come se li vedesse tutti.
+  if (
+    typeof body.focusProductId === 'string' &&
+    body.focusProductId &&
+    !products.some((p) => p.id === body.focusProductId)
+  ) {
+    const { data: aperto } = await admin
+      .from('products')
+      .select(PRODUCT_SNAPSHOT_COLS)
+      .eq('seller_id', user.id)
+      .eq('id', body.focusProductId)
+      .limit(1);
+    const riga = ((aperto ?? []) as ProductRow[])[0];
+    if (riga) products.push(riga);
+  }
+  let totaleCatalogo = products.length;
+  if (products.length >= MAX_CATALOG) {
+    const { count } = await admin
+      .from('products')
+      .select('id', { count: 'exact', head: true })
+      .eq('seller_id', user.id);
+    if (typeof count === 'number') totaleCatalogo = Math.max(count, products.length);
+  }
 
   if (products.length === 0) {
     return NextResponse.json({
@@ -354,7 +391,11 @@ ${attrLines || '- (nessuno)'}`;
       .join('\n');
     blocks.push({
       type: 'text',
-      text: `Catalogo completo del venditore (${products.length} prodotti):
+      text: `${
+        totaleCatalogo > products.length
+          ? `Catalogo del venditore: vedi solo i ${products.length} prodotti più recenti su ${totaleCatalogo}. Se il venditore chiede una modifica su tutto il catalogo o su un prodotto che non è in elenco, digli che vedi solo questi e che può aprire il prodotto dalla sua scheda.`
+          : `Catalogo completo del venditore (${products.length} prodotti):`
+      }
 ${list}
 
 Categorie di primo livello disponibili (slug):
@@ -405,7 +446,9 @@ Identifica di quale prodotto parla il venditore e imposta "product_id". Se non s
     // del catalogo solo id, nome, prezzo, stato e categoria: tag, descrizione e
     // caratteristiche non li ha letti. Una proposta che li riscrive e' alla
     // cieca, quindi qui non esce: si propone dal giro dopo, a scheda aperta.
-    const patch = focused ? proposta : senzaCampiNonVisti(proposta);
+    // S10 (5/11/2026) — Con una scheda aperta il modello ha letto SOLO quella:
+    // se indica un altro prodotto, di quello vale la stessa regola.
+    const patch = focused && matched?.id === focused.id ? proposta : senzaCampiNonVisti(proposta);
 
     return NextResponse.json({
       reply,
@@ -414,7 +457,7 @@ Identifica di quale prodotto parla il venditore e imposta "product_id". Se non s
       product: matched ? snapshot(matched, categories) : null,
     });
   } catch (err) {
-    if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
+    if (err instanceof AiConfigError) return ApiErrors.unavailable(err.message);
     if (err instanceof AiCallError) return mapAiError(err, 'ai-catalog-chat');
     return ApiErrors.internal('Errore AI.');
   }

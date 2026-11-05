@@ -120,10 +120,10 @@ describe('le vetrine prendono le parole da lì, invece di riscriverle', () => {
     }
   });
 
-  it('la barra «ti manca poco» chiama la funzione', () => {
-    const src = leggi('components/ui/FreeShippingProgress.tsx');
-    expect(src).toContain('promessaSpedizione');
-    expect(righeVive(src).filter((r) => PROMETTE_GRATIS.test(r) && !nominaLaConsegna(r))).toEqual([]);
+  // S10 (5/11/2026, scheda 2083) — FreeShippingProgress non c'è più: nessuna
+  // pagina lo montava. La barra «ti manca poco» non può tornare senza rifare il file.
+  it('la barra «ti manca poco» non esiste più', () => {
+    expect(() => leggi('components/ui/FreeShippingProgress.tsx')).toThrow();
   });
 
   it('le quattro promesse del sito nominano la consegna finché si paga', () => {

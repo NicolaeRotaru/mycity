@@ -181,6 +181,9 @@ function ResetPasswordInner() {
   const [linkSent, setLinkSent] = useState(false);
   // Perche' il link aperto non ha dato una sessione: si dice, non si tace.
   const [motivo, setMotivo] = useState<MotivoResetSenzaSessione | null>(null);
+  // S10 (5/11/2026) — Di chi e' la password che si sta cambiando: sul telefono
+  // puo' essere aperto un altro account, e va detto prima di scrivere.
+  const [emailDellaSessione, setEmailDellaSessione] = useState<string | null>(null);
 
   // Ascolta gli eventi di Supabase: PASSWORD_RECOVERY ci dice che il magic
   // link è stato consumato e la sessione di recovery è attiva.
@@ -191,6 +194,7 @@ function ResetPasswordInner() {
       if (event === 'PASSWORD_RECOVERY') recuperoAnnunciato.current = true;
       if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && nataDalLinkDiRecupero(session))) {
         setRecoveryReady(true);
+        setEmailDellaSessione(session?.user?.email ?? null);
         setCheckingSession(false);
       }
     });
@@ -199,9 +203,22 @@ function ResetPasswordInner() {
     // dispositivo e poi è venuto qui a mano), comunque controlliamo dopo
     // un breve delay se c'è una sessione di recovery.
     const t = setTimeout(async () => {
+      // L'esito dello scambio del `code` dice se il link e' scaduto qui o e'
+      // stato aperto altrove (lib/auth/link-email.ts).
+      const { error: erroreDelloScambio } = await supabase.auth.initialize();
       const { data } = await supabase.auth.getSession();
-      if (await sessioneDiRecupero(recuperoAnnunciato.current, data.session)) setRecoveryReady(true);
-      else setMotivo(motivoLinkPasswordSenzaSessione(new URLSearchParams(window.location.search), window.location.hash));
+      if (await sessioneDiRecupero(recuperoAnnunciato.current, data.session)) {
+        setRecoveryReady(true);
+        setEmailDellaSessione(data.session?.user?.email ?? null);
+      } else {
+        setMotivo(
+          motivoLinkPasswordSenzaSessione(
+            new URLSearchParams(window.location.search),
+            window.location.hash,
+            erroreDelloScambio as { name?: unknown; code?: unknown } | null,
+          ),
+        );
+      }
       setCheckingSession(false);
     }, 800);
 
@@ -372,6 +389,11 @@ function ResetPasswordInner() {
       <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
         Scegli una password sicura, di almeno 8 caratteri.
       </p>
+      {emailDellaSessione && (
+        <p className="-mt-4 mb-6 rounded-lg border border-cream-300 bg-cream-50 p-3 text-sm text-ink-700">
+          Stai cambiando la password di <strong>{emailDellaSessione}</strong>. Se non è il tuo account, non continuare.
+        </p>
+      )}
       <form onSubmit={submit} className="space-y-4">
         <PasswordInput
           label="Nuova password"

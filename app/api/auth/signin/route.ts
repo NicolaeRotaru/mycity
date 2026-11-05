@@ -8,6 +8,7 @@ import { CODICE_EMAIL_DA_CONFERMARE, eEmailNonConfermata } from '@/lib/auth/conf
 import { verbalizzaSenzaTrattenere, versioneAccettata } from '@/lib/auth/accettazione-testi';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { esitoErroreDiAccesso } from '@/lib/auth/errore-di-accesso';
 
 export const runtime = 'nodejs';
 
@@ -81,6 +82,13 @@ export async function POST(request: Request) {
        * password, quindi chi tira a indovinare non scopre niente di nuovo.
        */
       if (eEmailNonConfermata(error)) return rispostaEmailDaConfermare();
+      const esito = esitoErroreDiAccesso(error);
+      if (esito === 'troppi_tentativi') {
+        return ApiErrors.rateLimited(60, 'Troppi tentativi di accesso. Riprova tra qualche minuto.');
+      }
+      if (esito === 'servizio_giu') {
+        return ApiErrors.unavailable("Il servizio di accesso non risponde in questo momento. Riprova fra poco: la password non c'entra.");
+      }
       return ApiErrors.unauthorized('Email o password non corretti');
     }
 

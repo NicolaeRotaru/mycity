@@ -23,6 +23,7 @@ import { getAccountMenuItems } from '@/lib/account-menu';
 import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
 import { trackSignedOut } from '@/lib/analytics/events';
 import { scollegaQuestoDispositivo } from '@/lib/push/dispositivo';
+import { hrefDiAccesso } from '@/lib/auth/href-di-accesso';
 import caricatoreFotoRemote from '@/lib/image-loader';
 
 type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
@@ -48,6 +49,16 @@ export default function Navbar() {
   const { favorites } = useFavorites();
   const favCount = favorites.size;
   const branding = useBranding();
+
+  // S10 (5/11/2026) — «Accedi» portava sempre a /sign-in senza returnTo, e dopo
+  // l'accesso si finiva in home: chi stava nel carrello doveva ritrovarlo. La
+  // query si legge dopo il disegno (useSearchParams qui vorrebbe un Suspense
+  // attorno a tutta la barra).
+  const [query, setQuery] = useState('');
+  useEffect(() => {
+    setQuery(typeof window === 'undefined' ? '' : window.location.search);
+  }, [pathname]);
+  const accediHref = hrefDiAccesso(pathname, query);
 
   // Header: sticky su desktop (resta in cima allo scroll, come nel mockup
   // buyer), statico su mobile dove la navigazione persistente è affidata alla
@@ -141,7 +152,7 @@ export default function Navbar() {
                     {/* 27/8/2026 (R110) — era `accent-300`: sul terracotta
                         della barra stacca 3,87 volte, sotto il 4,5 richiesto a
                         un testo. `accent-200` arriva a 4,87. */}
-                    <Link href="/sign-in" className="px-3 py-2 text-white hover:text-accent-200 font-medium focus-visible:outline-white">Accedi</Link>
+                    <Link href={accediHref} className="px-3 py-2 text-white hover:text-accent-200 font-medium focus-visible:outline-white">Accedi</Link>
                     {/*
                       6/9/2026 — DUE PILLOLE GIALLE IDENTICHE, UNA ACCANTO ALL'ALTRA.
                       Il carrello e «Registrati» avevano lo stesso riempimento giallo,
@@ -154,7 +165,7 @@ export default function Navbar() {
                       (il bianco su quel fondo stacca 6,7 volte, ne bastano 4,5) ma non
                       compete più col carrello.
                     */}
-                    <Link href="/sign-up" className="border border-white/70 hover:border-white hover:bg-white/10 text-white px-4 py-2 rounded-full font-semibold transition-colors focus-visible:outline-white">
+                    <Link href="/sign-up" className="border border-white/70 hover:border-white hover:bg-white/10 text-white hover:text-white px-4 py-2 rounded-full font-semibold transition-colors focus-visible:outline-white">
                       Registrati
                     </Link>
                   </>
@@ -221,7 +232,7 @@ export default function Navbar() {
                 <LocationPill compact />
               </div>
               {isAuthenticated && canPurchase && (
-                <Link href="/cart" className="relative shrink-0 inline-flex p-2 text-white focus-visible:outline-white">
+                <Link href="/cart" className="relative shrink-0 inline-flex p-2 text-white hover:text-white focus-visible:outline-white">
                   <ShoppingCart size={22} strokeWidth={2} aria-hidden />
                   <span className="sr-only">Carrello{cartCount > 0 ? `, ${cartCount} ${cartCount === 1 ? 'articolo' : 'articoli'}` : ''}</span>
                   {cartCount > 0 && (
@@ -234,7 +245,7 @@ export default function Navbar() {
               {!isAuthenticated && !isLoading && (
                 <>
                   {cartCount > 0 ? (
-                    <Link href="/cart" className="relative shrink-0 inline-flex p-2 text-white focus-visible:outline-white">
+                    <Link href="/cart" className="relative shrink-0 inline-flex p-2 text-white hover:text-white focus-visible:outline-white">
                       <ShoppingCart size={22} strokeWidth={2} aria-hidden />
                       <span className="sr-only">Carrello, {cartCount} {cartCount === 1 ? 'articolo' : 'articoli'}</span>
                       <span aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
@@ -242,7 +253,7 @@ export default function Navbar() {
                       </span>
                     </Link>
                   ) : (
-                    <Link href="/sign-in" className="shrink-0 text-sm text-white font-medium hover:text-accent-200 focus-visible:outline-white">Accedi</Link>
+                    <Link href={accediHref} className="shrink-0 text-sm text-white font-medium hover:text-accent-200 focus-visible:outline-white">Accedi</Link>
                   )}
                 </>
               )}

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { AlertTriangle, RotateCcw, ArrowLeft, LifeBuoy } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
@@ -26,9 +27,15 @@ import { Button } from './Button';
 type Props = {
   title?: string;
   description?: string;
-  retry?: () => void;
+  /**
+   * S10 (5/11/2026) — Se restituisce una promessa (per esempio `() => refetch()`)
+   * il pulsante gira finche' la rilettura non finisce, e se fallisce ancora lo
+   * dice: prima lo schermo restava identico, e sembrava che il pulsante non
+   * facesse niente.
+   */
+  retry?: () => void | Promise<unknown>;
   /** Sinonimo di `retry`: era il nome usato dall'altro componente. */
-  onRetry?: () => void;
+  onRetry?: () => void | Promise<unknown>;
   backHref?: string;
   backLabel?: string;
   /** Versione ridotta, per le liste dentro una pagina. */
@@ -58,6 +65,22 @@ export function ErrorState({
   codiceErrore,
 }: Props) {
   const riprova = retry ?? onRetry;
+  const [riprovando, setRiprovando] = useState(false);
+  const [tentativi, setTentativi] = useState(0);
+  const premiRiprova = async () => {
+    if (!riprova || riprovando) return;
+    const esito = riprova();
+    if (!esito || typeof (esito as Promise<unknown>).then !== 'function') return;
+    setRiprovando(true);
+    try {
+      await esito;
+    } catch {
+      /* l'errore lo mostra chi ci monta: qui conta solo che e' finita */
+    } finally {
+      setRiprovando(false);
+      setTentativi((n) => n + 1);
+    }
+  };
   const compatto = variant === 'compact';
   const tErrors = useTranslations('errors');
   const tActions = useTranslations('actions');
@@ -71,9 +94,14 @@ export function ErrorState({
       </div>
       <h2 className={`font-serif font-bold text-ink-900 ${compatto ? 'text-base' : 'text-2xl'}`}>{_title}</h2>
       <p className={`text-ink-600 mt-2.5 max-w-md mx-auto leading-relaxed ${compatto ? 'text-xs' : 'text-base'}`}>{_desc}</p>
+      {tentativi > 0 && !riprovando && (
+        <p className={`text-ink-600 mt-2 ${compatto ? 'text-xs' : 'text-sm'}`}>
+          Ho riprovato ma non ci sono ancora riuscito. Riprova fra qualche istante.
+        </p>
+      )}
       <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
         {riprova && (
-          <Button onClick={riprova} icon={RotateCcw} variant="primary">{tActions('retry')}</Button>
+          <Button onClick={() => { void premiRiprova(); }} icon={RotateCcw} variant="primary" loading={riprovando}>{tActions('retry')}</Button>
         )}
         {backHref && (
           <Link

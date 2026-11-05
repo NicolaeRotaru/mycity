@@ -379,8 +379,17 @@ function CatalogTab() {
     try {
       const data = await authedFetch('/api/ai/catalog-batch/apply', { method: 'POST', body: JSON.stringify({ jobId: job.id }) });
       toast.success(`Applicato a ${data.applied} prodotti.`);
-      setJob({ ...job, status: 'applied' });
-      ricordaLavoro(null);
+      // S10 (5/11/2026) — Chi è stato saltato si dice, col motivo.
+      const saltati = (Array.isArray(data.esiti) ? data.esiti : []).filter(
+        (e: { esito?: string }) => e.esito === 'saltato',
+      ) as { productId: string; motivo?: string }[];
+      if (saltati.length > 0) {
+        const motivi = Array.from(new Set(saltati.map((e) => e.motivo).filter(Boolean))).slice(0, 3).join('; ');
+        toast.error(`${saltati.length} prodotti saltati${motivi ? `: ${motivi}` : ''}.${data.ripetibile ? ' Puoi riprovare.' : ''}`);
+      }
+      setJob({ ...job, status: data.ripetibile ? 'ready' : 'applied' });
+      // 5/11/2026 (unione) — Il lavoro ricordato si dimentica solo quando è applicato davvero (S06).
+      if (!data.ripetibile) ricordaLavoro(null);
     } catch (err) {
       toast.error(friendlyError(err));
     } finally {

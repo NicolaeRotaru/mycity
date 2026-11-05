@@ -1,0 +1,1604 @@
+{
+  "sessione": "S10",
+  "ramo": "claude/youthful-gates-blkxmk-m10",
+  "commit_finale": "5049f9f",
+  "verify": {
+    "typecheck": "verde",
+    "lint": "verde",
+    "test": "rosso",
+    "note": "7635 prove verdi su 7639. Rosse: (1) tests/unit/le-pagine-ordini-del-negozio-leggono-gli-orari.test.tsx, 2 casi «caso 1»: già rosse su origin/main (provato con le mie modifiche tolte), non toccate; (2) tests/unit/le-migrazioni-a-mano-partono-solo-con-la-conferma.test.ts › «se si ferma dopo la 125, 126 o 127…»: rossa solo nell'ultimo giro completo, verde da sola (37/37) e verde nel giro completo precedente: sembra un tempo scaduto sotto carico, non toccata. Il lint ha solo avvisi (nessun errore)."
+  },
+  "revisore": "Un agente revisore indipendente ha letto tutto il diff e ha trovato 24 punti. Corretti: la chat dell'AI si bloccava per sempre dopo un messaggio rifiutato (ora se il rifiuto è di un messaggio vecchio si controlla l'ultimo da solo); la campanella della chat non ripartiva dopo una lettura dal pannello (ora si salta solo se contatore >1 E voce non letta); un id malformato nei metadati dava 5xx (22P02 ora è «non trovato»); i tetti di token di Copilot e lettura multipla superavano i 60 s del client (ora al massimo 6000; 250 diventa parziale); il lotto AI si bruciava se la lettura di catalogo o categorie cadeva (ora torna «pronto» e risponde 503) e nel ramo moderate ripetere rimetteva in bozza prodotti ripubblicati (tolto); la spesa AI col resto in memoria contava per difetto (ora per eccesso con credito); la cache delle foto opache nel service worker costava ~7 MB di quota a foto (tolta, 673 diventa non_fatto); doppio margine sulle ancore legali (LegalSection md:scroll-mt-0); la migrazione 245 contava i pagamenti falliti (esclusi); gli span verso Sentry non erano ripuliti (ora sì); la veloce mandava raffiche alla rotta (ora solo al ritorno sulla scheda dopo 5 minuti); il messaggio di serie di AiConfigError nominava la variabile segreta; il segreto cron sbagliato riempiva Sentry (ora warn); una rete caduta diventava «link scaduto»; Esc chiudeva due Modal sovrapposti (pila delle finestre); mark-read azzerava il contatore prima della funzione. Non corretti, scritti nelle note: la query del link «Accedi» non si aggiorna su un cambio di soli parametri (576); la pagina 503 del portiere è testo semplice (2117); il riquadro «Codice applicato» degli inviti, che oggi non compare perché gli inviti sono spenti (2414); il cambio di tracking-wide anche sul testo non maiuscolo (844); due scroll-mt di altri territori che ora si sommano allo scroll-padding (666). Sulle prove: molte sono «di struttura» (lettura del sorgente) per pagine che non si montano facilmente; dove era possibile ho rifatto le prove di comportamento (spesa, campanella, Modal, veloce, chat, lotto). La prova di 2645 controlla una riga che c'era già: la scheda chiedeva proprio la prova mancante.",
+  "riepilogo": {
+    "riparato": 86,
+    "parziale": 4,
+    "gia_riparato": 4,
+    "non_codice": 3,
+    "scelta_di_nicola": 5,
+    "non_fatto": 28
+  },
+  "migrazioni_nuove": [
+    "migrations/245_la_prova_sociale_conta_gli_ordini_di_tutti.sql"
+  ],
+  "schede": [
+    {
+      "id": 843,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: sono ~330 misure text-[Npx] in file di tutte le dieci sessioni; cambiarle qui farebbe conflitti su quasi ogni file all'unione.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Da fare dopo l'unione con un passaggio meccanico: prima le identiche (10→2xs, 12→xs, 14→sm, 16→base, 18→lg, 24→2xl), poi gli arrotondamenti."
+    },
+    {
+      "id": 878,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Con wide = 0.04em (scheda 844) le etichette con tracking-wide e tracking-label respirano uguale. Restano tracking-wider e i valori a mano ([0.03em], [0.05em]...) sparsi nei file di tutte le sessioni, e il componente Eyebrow.",
+      "prova": "tailwind.config.ts letterSpacing.wide = '0.04em'",
+      "rossa_senza_correzione": null,
+      "file_toccati": [
+        "tailwind.config.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il resto tocca decine di file di altri territori: da fare dopo l'unione, in un passaggio solo."
+    },
+    {
+      "id": 727,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: è una scelta di architettura (portare le pagine di ordini e soldi a componenti server con la prima lettura sul server), che la scheda stessa chiama regola di piattaforma (ADR), e tocca pagine di molti territori.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 609,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica: la scheda stessa chiede di decidere con Nicola.",
+      "prova": "app/api/ai/answer-qa e app/api/ai/reviews-summary senza nessun chiamante",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Le due funzioni AI senza pagina (bozza di risposta alle domande, riassunto delle recensioni): si collegano alle pagine del negozio o si tolgono le rotte?"
+    },
+    {
+      "id": 1702,
+      "esito": "riparato",
+      "cosa_ho_fatto": "catalog-apply-bulk legge error da tutte e due le letture iniziali: se una cade risponde 503 senza scrivere niente.",
+      "prova": "tests/unit/minori-s10-copilot-applica.test.ts › una lettura caduta non scrive niente (1702)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/catalog-apply-bulk/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1703,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Le voci con lo stesso productId non passano più insieme: vale la prima, le altre si scartano con motivo «una sola modifica per prodotto».",
+      "prova": "tests/unit/minori-s10-copilot-applica.test.ts › una sola modifica per prodotto (1703)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/catalog-apply-bulk/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1859,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il filtro dei prodotti vietati parte al massimo 5 alla volta (aGruppi) invece che tutto insieme; un filtro caduto (es. 429) ora risulta «filtro non disponibile» e lascia il lavoro ripetibile invece di scartare il prodotto come vietato.",
+      "prova": "tests/unit/minori-s10-lotto-applica.test.ts › il filtro non parte con tutte le chiamate insieme (1859)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/catalog-batch/apply/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il maxRetries: 1 di lib/ai/client.ts non è cambiato."
+    },
+    {
+      "id": 1667,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Oltre agli esiti per prodotto nella risposta, la pagina del lavoro massivo mostra quanti prodotti sono stati saltati e i motivi, e lascia riprovare se il lavoro è ripetibile.",
+      "prova": "tests/unit/minori-s10-lotto-applica.test.ts › il lavoro massivo dice chi ha saltato e perché (1858, 1667)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/catalog-batch/apply/route.ts"
+      ],
+      "file_altrui_toccati": [
+        "app/seller/products/ai-batch/page.tsx (S06)"
+      ],
+      "nota": "La pagina mostra un avviso riassuntivo (conteggio + fino a 3 motivi), non segna ogni riga dell'anteprima."
+    },
+    {
+      "id": 1858,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La rotta restituisce per ogni prodotto esito e motivo (bloccato dal filtro, filtro non disponibile, campi mancanti, nessuna modifica valida, scrittura non riuscita); se qualcosa salta per un guasto di passaggio il lavoro torna «pronto» e si può ripetere; nel ramo moderate si legge l'errore.",
+      "prova": "tests/unit/minori-s10-lotto-applica.test.ts › il lavoro massivo dice chi ha saltato e perché (1858, 1667)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/catalog-batch/apply/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Dopo la revisione: se la lettura delle categorie o dei prodotti cade, il lavoro torna «pronto» e la risposta è 503; nel ramo moderate un guasto non rimette «pronto» (ripetere rimetterebbe in bozza prodotti ripubblicati a mano)."
+    },
+    {
+      "id": 1635,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Se mancano campi obbligatori solo per il cambio di categoria, si toglie la categoria (e i suoi attributi) dall'update e si scrive il resto; l'esito dice «categoria non cambiata, mancano: …».",
+      "prova": "tests/unit/minori-s10-lotto-applica.test.ts › un cambio di categoria che non si può fare non butta il resto (1635)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/catalog-batch/apply/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1860,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il lavoro si prenota con un update condizionato (status ready → applied, .eq('status','ready').select): la seconda richiesta trova zero righe e riceve 400. Aggiornati i finti database di 4 prove vecchie che non conoscevano la prenotazione.",
+      "prova": "tests/unit/minori-s10-lotto-applica.test.ts › due «Applica» insieme: passa uno solo (1860)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/catalog-batch/apply/route.ts"
+      ],
+      "file_altrui_toccati": [
+        "tests/unit/aiuti/finto-catalogo.ts (S04)",
+        "tests/unit/il-lotto-non-scrive-quello-che-il-filtro-nega.test.ts (S04)",
+        "tests/unit/le-dichiarazioni-di-un-alimento-le-scrive-il-negoziante.test.ts (S04)",
+        "tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts (S04)"
+      ],
+      "nota": "Prove vecchie aggiornate (solo il finto database, nessuna asserzione indebolita): aiuti/finto-catalogo.ts, il-lotto-non-scrive-quello-che-il-filtro-nega, le-dichiarazioni-di-un-alimento-le-scrive-il-negoziante, le-funzioni-spente-al-lancio-le-rifiuta-il-server."
+    },
+    {
+      "id": 1770,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Aggiunta la prova che un lavoro «translate» limitato a productIds riceve 400 e non scrive (il buco era nelle prove).",
+      "prova": "tests/unit/minori-s10-lotto-applica.test.ts › «Traduci» resta fermo anche sulla selezione (1770)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s10-lotto-applica.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Verificata col mutante della scheda (if (!onlyIds && !operazioneAccesa(...))): la prova diventa rossa."
+    },
+    {
+      "id": 2671,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Le istruzioni di chat del catalogo e Copilot dicono che il prezzo si cambia al massimo del 30% (da BANDA_PREZZO_AI) e che oltre va cambiato dal modulo del prodotto.",
+      "prova": "tests/unit/minori-s10-catalogo-chat.test.ts › le istruzioni dicono la regola del 30% sul prezzo (2671)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/catalog-chat/route.ts",
+        "app/api/ai/copilot/route.ts",
+        "lib/ai/regole-copilot.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il copilota della pagina prodotto (product-chat) non ha la regola: la scheda nomina chat del catalogo e copilota."
+    },
+    {
+      "id": 2262,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Le due chat non hanno più l'enum condizione scritto a mano: usano PRODUCT_PATCH_PROPERTIES.condition (fonte unica, senza «usato»); una prova controlla lo schema mandato e il sorgente.",
+      "prova": "tests/unit/minori-s10-ai-chat.test.ts › la condizione del prodotto ha una fonte sola, senza «usato» (2262, 2267)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/product-chat/route.ts",
+        "app/api/ai/catalog-chat/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1699,
+      "esito": "riparato",
+      "cosa_ho_fatto": "catalog-chat passa dal filtro tutti i turni utente della storia, uniti in una chiamata.",
+      "prova": "tests/unit/minori-s10-catalogo-chat.test.ts › la chat del catalogo filtra tutti i messaggi del negoziante (1699)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/catalog-chat/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Vedi 1684: un rifiuto vecchio non blocca la conversazione."
+    },
+    {
+      "id": 2644,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La proposta intera passa solo se il prodotto indicato dal modello è quello aperto (focused && matched.id === focused.id); altrimenti senzaCampiNonVisti.",
+      "prova": "tests/unit/minori-s10-catalogo-chat.test.ts › scheda aperta, proposta su un altro prodotto (2644)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/catalog-chat/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2632,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nel lotto dalle foto nome, descrizione, tag e testo alternativo non hanno più il tetto nello schema zod: si controllano per prodotto (testoOltreIlTetto in lib/ai/tetti-bozza.ts) e chi li supera finisce fra gli scartati col nome del campo.",
+      "prova": "tests/unit/minori-s10-bozze-dalle-foto.test.ts › un testo lungo scarta solo il suo prodotto (2632)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/catalog-create-bulk/route.ts",
+        "lib/ai/tetti-bozza.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2621,
+      "esito": "riparato",
+      "cosa_ho_fatto": "campoOltreIlTetto salta le chiavi dichiarative quando dichiarazioni_confermate non è vero: non entrerebbero comunque nella bozza.",
+      "prova": "tests/unit/minori-s10-bozze-dalle-foto.test.ts › un attributo che non entrerebbe comunque non scarta il prodotto (2621)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/catalog-create-bulk/route.ts",
+        "lib/ai/tetti-bozza.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2634,
+      "esito": "riparato",
+      "cosa_ho_fatto": "catalog-create usa gli stessi tetti per campo del lotto (ingredienti e valori nutrizionali fino a 2000, rimessi interi dopo buildDraftProductInsert) e un messaggio che nomina il campo.",
+      "prova": "tests/unit/minori-s10-bozze-dalle-foto.test.ts › la creazione singola accetta una lista ingredienti vera (2634)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/catalog-create/route.ts",
+        "lib/ai/tetti-bozza.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 250,
+      "esito": "parziale",
+      "cosa_ho_fatto": "max_tokens del Copilot in proporzione ai prodotti (1024 + 60 a prodotto) ma con un tetto di 6000, con tettoTokenCopilot in lib/ai/regole-copilot.ts.",
+      "prova": "tests/unit/minori-s10-catalogo-chat.test.ts › il Copilot ha token per tutto il catalogo (250)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/copilot/route.ts",
+        "lib/ai/regole-copilot.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Dopo la revisione: oltre ~6000 token la risposta non arriva nei 60 s del client Anthropic (lib/ai/client.ts), quindi con 200 prodotti entra circa il 80% del piano invece di metà. La strada solida resta quella della scheda: il modello restituisce la regola e il server la applica."
+    },
+    {
+      "id": 610,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Chat: il prodotto aperto fuori dai 100 si carica per id; chat e Copilot contano il totale quando il catalogo arriva al tetto e lo dicono al modello; il Copilot lo aggiunge anche al riepilogo per il negoziante.",
+      "prova": "tests/unit/minori-s10-catalogo-chat.test.ts › oltre i 100 prodotti la chat lo sa (610)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/catalog-chat/route.ts",
+        "app/api/ai/copilot/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 617,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Il prompt di «Genera con AI» ora vieta di inventare ingredienti, materiali, origine e lavorazioni, non invita più alla provenienza locale, e la descrizione attuale arriva al modello fino a MAX_DESCRIZIONE_PRODOTTO (4000) invece di 500.",
+      "prova": "tests/unit/minori-s10-bozze-dalle-foto.test.ts › «Genera con AI» dice di non inventare e non invita alla provenienza locale",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/description/route.ts"
+      ],
+      "file_altrui_toccati": [
+        "tests/unit/i-tagli-valgono-in-tutti-e-due-i-punti.test.ts (S04)"
+      ],
+      "nota": "Manca la parte nel componente del modulo prodotto (territorio S06): mostrare il testo generato come proposta con «Usa questa» / «Tieni la mia» invece di sostituire la descrizione. Aggiornata la prova vecchia i-tagli-valgono-in-tutti-e-due-i-punti (il tetto passa da 500 a 4000, stessa asserzione: filtro e modello vedono lo stesso testo)."
+    },
+    {
+      "id": 1636,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nel prompt di improve-product la descrizione non chiede più «materiali/ingredienti» e dice di non elencare ingredienti né allergeni e non scrivere «senza glutine»: li dichiara il venditore.",
+      "prova": "tests/unit/minori-s10-bozze-dalle-foto.test.ts › «Migliora tutto» non chiede gli ingredienti nella descrizione",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/improve-product/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 249,
+      "esito": "riparato",
+      "cosa_ho_fatto": "product-chat risponde 503 col messaggio vero di AiConfigError anche quando lo lancia il filtro; le due letture da foto usano err.message; il messaggio di getAnthropic ora dice «Gli strumenti AI per i negozi non sono ancora attivi.».",
+      "prova": "tests/unit/minori-s10-ai-chat.test.ts › con l'AI spenta la chat del prodotto non risponde «Errore AI» (249); tests/unit/minori-s10-vision.test.ts › con l'AI spenta dice che è spenta (249)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/product-chat/route.ts",
+        "app/api/vision/extract-product/route.ts",
+        "app/api/vision/extract-products/route.ts",
+        "lib/ai/client.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il messaggio di serie di AiConfigError non nomina più la variabile segreta («Servizio AI non configurato.»)."
+    },
+    {
+      "id": 1684,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La chat del prodotto passa dal filtro tutti i turni utente della storia (in una chiamata) e il testo libero della scheda con filtroSullaScheda.",
+      "prova": "tests/unit/minori-s10-ai-chat.test.ts › la chat del prodotto filtra tutta la conversazione e la scheda (1684)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/product-chat/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Dopo la revisione: se il rifiuto viene da un messaggio vecchio rimasto nella storia, si controlla l'ultimo da solo e, se passa, al modello va solo lui (la chat non resta bloccata). Stesso comportamento in catalog-chat (1699)."
+    },
+    {
+      "id": 1700,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La dettatura scarta gli elementi che non sono oggetti e taglia ogni testo degli elenchi (chiave, tipo, opzioni, slug e nome categoria) con lib/ai/tetti-testo.ts.",
+      "prova": "tests/unit/minori-s10-bozze-dalle-foto.test.ts › la dettatura non porta nel prompt testi enormi dal browser (1700)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/ai/voice-product/route.ts",
+        "lib/ai/tetti-testo.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Gli elenchi non sono ricostruiti dal server (la strada più solida della scheda): sono tagliati, che è l'alternativa minima proposta."
+    },
+    {
+      "id": 27,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La rotta di accesso distingue l'errore di Supabase (nuovo lib/auth/errore-di-accesso.ts): rete caduta o 5xx → 503 «il servizio non risponde, la password non c'entra»; 429/over_request_rate_limit → 429; il resto resta 401.",
+      "prova": "tests/unit/minori-s10-accesso.test.ts › l'errore del servizio di accesso non è «password sbagliata» (27)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/auth/signin/route.ts",
+        "lib/auth/errore-di-accesso.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 35,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La rotta mark-read chiama supa.rpc('mark_conversation_read') (SECURITY DEFINER, migrazione 115) invece dell'update diretto scartato dalla regola, e risponde errore se fallisce.",
+      "prova": "tests/unit/minori-s10-chat.test.ts › «letto» passa dalla funzione del database (35)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/chat/mark-read/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Dopo la revisione la funzione del database parte prima dell'azzeramento del contatore."
+    },
+    {
+      "id": 2640,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La campanella si salta solo se c'è già una notifica non letta per la stessa conversazione (prima: contatore riletto > 1, che con due messaggi insieme valeva 2 per tutti e due). Se la lettura cade, resta il controllo di prima. Aggiornata la prova vecchia il-negozio-sa-quando-un-cliente-gli-scrive (finto database e caso del secondo messaggio).",
+      "prova": "tests/unit/minori-s10-campanella.test.ts › due messaggi quasi insieme accendono la campanella (2640)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/chat/messages/route.ts"
+      ],
+      "file_altrui_toccati": [
+        "tests/unit/il-negozio-sa-quando-un-cliente-gli-scrive.test.ts (S04)"
+      ],
+      "nota": "Due richieste davvero simultanee possono ora scrivere due voci: meglio due campanelle che nessuna. Dopo la revisione: si salta solo se il contatore è oltre 1 E c'è già una voce non letta (le voci si segnano lette solo da /notifications), così un giro nuovo dopo una lettura non resta muto. Due invii davvero simultanei possono ancora scrivere due voci."
+    },
+    {
+      "id": 2641,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il titolo della notifica guarda il ruolo dei due: se scrive l'admin dell'Assistenza «L'Assistenza MyCity ti ha risposto», se riceve «Nuovo messaggio per l'Assistenza», altrimenti come prima.",
+      "prova": "tests/unit/minori-s10-campanella.test.ts › nella chat con l'Assistenza il titolo non parla di clienti e negozi (2641)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/chat/messages/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 247,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il catch di import-fetch usa err.message di AiConfigError, che con l'interruttore spento dice «Gli strumenti AI per i negozi non sono ancora attivi.».",
+      "prova": "tests/unit/minori-s10-import-da-link.test.ts › import da link con l'AI spenta (247)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/ai/client.ts"
+      ],
+      "file_altrui_toccati": [
+        "app/api/marketplace/import-fetch/route.ts (S05)"
+      ],
+      "nota": ""
+    },
+    {
+      "id": 244,
+      "esito": "riparato",
+      "cosa_ho_fatto": "max_tokens della lettura singola da 512 a 1500, della lettura multipla da 4096 a 6000 (non oltre, per il tetto di 60 s del client).",
+      "prova": "tests/unit/minori-s10-vision.test.ts › concede abbastanza token per un'etichetta alimentare completa (244)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/vision/extract-product/route.ts",
+        "app/api/vision/extract-products/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Nella multipla il tetto è fisso a 8000 invece che in proporzione: si paga solo quello che il modello scrive."
+    },
+    {
+      "id": 614,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Aggiunta 'giocattoli' alla lista condivisa (visionShared) e a externalSync; la lettura singola ora usa la lista condivisa invece della sua copia; descrizioni aggiornate.",
+      "prova": "tests/unit/minori-s10-vision.test.ts › conosce la categoria Giocattoli (614) e › visionShared e externalSync conoscono giocattoli",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/vision/extract-product/route.ts"
+      ],
+      "file_altrui_toccati": [
+        "lib/products/visionShared.ts (S06)",
+        "lib/products/externalSync.ts (S06)"
+      ],
+      "nota": "Gli attributi specifici della categoria Giocattoli in lib/category-attributes.ts non ci sono ancora: l'AI sceglie la categoria giusta ma non ha campi suoi da compilare."
+    },
+    {
+      "id": 1633,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Dopo il secondo giro con la ricerca web, le chiavi dichiarative (allergeni, ingredienti, ...) si tengono solo dal primo giro; le altre dal secondo.",
+      "prova": "tests/unit/minori-s10-vision.test.ts › dopo la ricerca sul web allergeni e ingredienti restano quelli letti in etichetta (1633)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/api/vision/extract-product/route.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 499,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Già chiuso: il ritorno da Google usa verbalizzaAccettazione (lib/auth/accettazione-testi.ts), che aggiorna il profilo solo se il verbale è entrato.",
+      "prova": "lib/auth/accettazione-testi.ts:93 if (error) return 'non-scritta'; (prima di update tos_accepted_at)",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 501,
+      "esito": "non_codice",
+      "cosa_ho_fatto": "Nessuna modifica: il primo passo è la chiave di servizio su Vercel. Il pezzo di codice (fermare su /accetta-condizioni chi non si riesce a verificare) oggi chiuderebbe fuori tutti gli accessi con Google, perché anche /accetta-condizioni scrive col client amministrativo che senza chiave non c'è.",
+      "prova": "app/auth/callback/route.ts:146 domanda 'scaduto'|'rotto' → solo logger.warn",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Nicola: mettere SUPABASE_SERVICE_ROLE_KEY su Vercel (Production, Sensitive) e ripubblicare. Dopo, il callback può mandare a /accetta-condizioni chi non si verifica."
+    },
+    {
+      "id": 666,
+      "esito": "riparato",
+      "cosa_ho_fatto": "In app/globals.css: da 768px in su scroll-padding-top = altezza della testata + 0,5rem; sotto, scroll-padding-bottom = barra a schede + 1rem. Il campo col fuoco non finisce più sotto le barre fisse.",
+      "prova": "tests/unit/minori-s10-stili-comuni.test.ts › il fuoco non finisce sotto le barre fisse (666)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/globals.css"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La barra fissa «Procedi» del carrello non dichiara la sua altezza: lì vale lo spazio della barra a schede. Dopo la revisione: le pagine legali non sommano più un loro scroll-mt (md:scroll-mt-0). Due altri punti hanno ancora uno scroll-mt proprio che ora si somma da md in su: app/lavora-con-noi/page.tsx:174 (S06) e app/product/[id]/page.tsx:1100 (S09); vanno portati a md:scroll-mt-0."
+    },
+    {
+      "id": 822,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato: il commento in app/globals.css (righe 122-141) spiega perché --tabbar-height non può scendere sotto 72px senza cambiare lib/ui/barra-in-fondo.ts (il pavimento applicato a ogni elemento): la prova i-pulsanti-che-galleggiano-non-coprono-chi-compra diventa rossa.",
+      "prova": "app/globals.css: --tabbar-height: 72px con la spiegazione",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Si sblocca applicando il pavimento una volta sola in fondo alla pila in lib/ui/barra-in-fondo.ts, poi --tabbar-height: 3.6rem."
+    },
+    {
+      "id": 854,
+      "esito": "riparato",
+      "cosa_ho_fatto": "L'ultimo valore scritto a mano (:focus-visible #C0492C) ora usa var(--focus-outline); la prova del contrasto della testata è stata insegnata a seguire i var() fino al colore (resta severa, non si spegne).",
+      "prova": "tests/unit/minori-s10-stili-comuni.test.ts › l'anello del fuoco usa il token (854)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/globals.css"
+      ],
+      "file_altrui_toccati": [
+        "tests/unit/la-barra-in-alto-si-vede-anche-navigando-col-tasto-tab.test.ts (S04)"
+      ],
+      "nota": "Gli altri tre punti della scheda (.skeleton, .card-hover, tema caldo) erano già a posto."
+    },
+    {
+      "id": 874,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: è la stessa scheda di 843 (scala tipografica scavalcata ~330 volte) vista da globals.css; stessa ragione.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Insieme a 843, dopo l'unione."
+    },
+    {
+      "id": 570,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tolti alternates.canonical e openGraph.url dal layout radice; il canonical «/» lo dichiara solo app/page.tsx. Le cinque pagine client non ereditano più il canonical della home.",
+      "prova": "tests/unit/minori-s10-canonical.test.ts › il canonical «/» vale solo per la home (570)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/layout.tsx"
+      ],
+      "file_altrui_toccati": [
+        "app/page.tsx (S09)"
+      ],
+      "nota": "Le cinque pagine non hanno ancora titolo, descrizione e canonical propri (un layout server per ciascuna, territorio S09): oggi semplicemente non dichiarano un canonical sbagliato."
+    },
+    {
+      "id": 8,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: servono i file dei caratteri (Inter e Fraunces, dritto e corsivo) dentro il deposito e il passaggio a next/font/local; è una modifica alla costruzione del sito da provare con una build vera, che qui non faccio.",
+      "prova": "app/layout.tsx importa Inter e Fraunces da next/font/google",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Scaricare i woff2 (licenza OFL) in app/fonts e usare next/font/local con le stesse variabili --font-inter/--font-serif."
+    },
+    {
+      "id": 677,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: Inter corsivo è usato (note degli ordini, indirizzi, gift card…) e next/font non permette di precaricare la variante dritta e non quella corsiva della stessa famiglia senza spezzare la variabile --font-inter.",
+      "prova": "app/layout.tsx: Inter e Fraunces con style ['normal','italic']",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Strada: passare ai file locali (scheda 8) e scrivere i @font-face del corsivo senza preload."
+    },
+    {
+      "id": 674,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: le righe revalidate che non valgono stanno nei layout di prodotto, negozio e categoria (territorio S09), e la cache con unstable_cache è una scelta su quanto può essere vecchia una scheda.",
+      "prova": "app/layout.tsx: export const dynamic = 'force-dynamic' (nonce della CSP)",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 402,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica: è il testo con cui MyCity si presenta su Google.",
+      "prova": "app/layout.tsx: «Compra online dai negozi di Piacenza: alimentari, abbigliamento, casa, elettronica, libri»",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "La descrizione per Google diventa «I negozi di Piacenza a casa tua: ordina dal forno sotto casa e paga alla consegna.» (la scheda propone anche «Consegna in 30-60 minuti», ma la veloce dipende dal fattorino in servizio)?"
+    },
+    {
+      "id": 2571,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: la scheda prodotto (app/product, components/product) è territorio di S09, e il testo dell'esclusione dal recesso dipende dal fatto legale.recesso-esclusi.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "S09 o l'AD: sotto il prezzo dei prodotti esclusi (alimenti deperibili) una riga «Escluso dal diritto di recesso (art. 59 Codice del Consumo)»."
+    },
+    {
+      "id": 1679,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La pagina chiedeva già una sessione nata dal link di recupero (segno amr «recovery»); in più ora scrive sopra il modulo «Stai cambiando la password di <email>».",
+      "prova": "tests/unit/minori-s10-nuova-password.test.ts › di chi è la password (1679)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/reset-password/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La parte «sessione qualunque basta» era già chiusa dal controllo nataDalLinkDiRecupero/sessioneDiRecupero (1/11)."
+    },
+    {
+      "id": 662,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Accesso: l'errore va sotto la password (aria-invalid, role=alert dal componente) e il fuoco torna sul campo. Iscrizione: la casella del consenso riceve l'errore e il fuoco; l'errore del server resta scritto in un riquadro role=alert sopra il pulsante. L'avviso a comparsa resta come conferma.",
+      "prova": "tests/unit/minori-s10-accesso.test.ts › gli errori di accesso e iscrizione restano accanto al campo (662)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/sign-in/page.tsx",
+        "app/sign-up/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La durata degli avvisi a comparsa (ToastProvider) non è cambiata: non serve più, l'errore resta scritto nel modulo."
+    },
+    {
+      "id": 278,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Se il riquadro anti-robot non si carica, la pagina di accesso non lascia più partire il modulo senza gettone: dice che il controllo non si è caricato, propone Google e l'indirizzo info@ (che non passa dall'anti-robot).",
+      "prova": "tests/unit/minori-s10-accesso.test.ts › anti-robot non caricato: niente «prova lo stesso» (278)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/sign-in/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La pagina di iscrizione ha lo stesso testo «Puoi provare lo stesso»: la scheda parla dell'accesso, l'iscrizione non l'ho toccata (va decisa insieme alla scheda 214)."
+    },
+    {
+      "id": 1631,
+      "esito": "riparato",
+      "cosa_ho_fatto": "esitoDellaRispostaDiAccesso porta anche il codice della rotta; il nuovo messaggioDellaRottaDiAccesso dà «Email o password non corrette: controlla anche come hai scritto l'email» per UNAUTHORIZED e il messaggio della rotta per troppi tentativi, richiesta non valida e servizio giù; la pagina lo usa prima della traduzione di ripiego.",
+      "prova": "tests/unit/minori-s10-accesso.test.ts › la pagina di accesso mostra il motivo vero (1631)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/auth/conferma-email.ts",
+        "app/sign-in/page.tsx"
+      ],
+      "file_altrui_toccati": [
+        "tests/unit/chi-non-trova-l-email-di-conferma-puo-farsela-rimandare.test.ts (S04)"
+      ],
+      "nota": " Aggiornata la prova vecchia chi-non-trova-l-email-di-conferma…: l'esito ora porta anche codice: 'UNAUTHORIZED'."
+    },
+    {
+      "id": 214,
+      "esito": "non_codice",
+      "cosa_ho_fatto": "Nessuna modifica: la scheda stessa dice di scegliere la strada solo dopo aver acceso l'anti-robot su Supabase.",
+      "prova": "app/sign-up/page.tsx: supabase.auth.signUp dal browser",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Nicola: accendere CAPTCHA (Turnstile) in Supabase → Authentication → Attack Protection. Poi si porta l'iscrizione sulla rotta /api/auth/signup (con options.data e il freno per rete)."
+    },
+    {
+      "id": 2414,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tolta dalla pagina di iscrizione la scrittura dell'invito in referrals dal browser (e la lettura del codice dai profili): dalla migrazione 186 il database la rifiuta già, era codice che non poteva riuscire. Al suo posto un commento: chi riaccende gli inviti deve scriverli da una rotta del server.",
+      "prova": "tests/unit/minori-s10-accesso.test.ts › l'invito non si scrive più dal browser (2414)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/sign-up/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Con INVITI_E_PUNTI_ACCESI spento non cambia niente per chi usa il sito. La rotta server per gli inviti resta da fare quando si riaccendono. Con gli inviti riaccesi il riquadro «Codice applicato» annuncerebbe un invito che nessuno registra: va fatta la rotta server prima di riaccenderli."
+    },
+    {
+      "id": 2107,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato: la scelta c'è (lib/auth/decisione-portiere.ts: «Decisione 1 del 26/10: il reclutamento pubblico è chiuso»), ma chiudere solo le porte del mio territorio lascerebbe la FAQ (S08) e «Lavora con noi» (S06) a mandare su /sign-up?role=rider, e una prova vecchia (per-diventare-fattorino-la-faq-manda-dove-ci-si-iscrive) impone proprio quella strada.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Da fare in un colpo solo all'unione: togliere la mattonella Rider da app/sign-up/page.tsx (e ?role=rider), «Diventa rider» da components/ui/AuthShell.tsx (SellerRiderRecruit), la risposta FAQ in app/faq/page.tsx:171 e la voce in app/lavora-con-noi/page.tsx:34 («per ora i fattorini li cerchiamo di persona»), e riscrivere quella prova."
+    },
+    {
+      "id": 1680,
+      "esito": "riparato",
+      "cosa_ho_fatto": "«Hai già un account? Accedi» e «Torna al login» nell'iscrizione portano returnTo verso /sign-in.",
+      "prova": "tests/unit/minori-s10-accesso.test.ts › dall'iscrizione «Accedi» tiene la strada dell'ordine (1680)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "app/sign-up/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 644,
+      "esito": "riparato",
+      "cosa_ho_fatto": "ActivityTracker consuma la prima pagina solo quando il page_view parte davvero (con consenso), e ascolta mc:consent-change: alla prima accettazione registra la pagina corrente con new_session true.",
+      "prova": "tests/unit/minori-s10-registro-visite.test.tsx › la pagina d'ingresso arriva anche se il sì ai cookie viene dopo (644)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ActivityTracker.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 368,
+      "esito": "riparato",
+      "cosa_ho_fatto": "SupportChatModal si importa con next/dynamic (ssr: false) e si monta solo quando l'assistenza è aperta: il suo codice non viaggia più con ogni pagina.",
+      "prova": "tests/unit/minori-s10-barra-in-basso.test.ts › l'assistenza si scarica solo quando serve (368)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/MobileTabBar.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Non l'ho tolta del tutto: la proprietà isSupport vive in lib/ui/schede-in-fondo.ts, fuori dal mio territorio. Verifica del pacchetto dopo la build non fatta qui (niente build in questa sessione)."
+    },
+    {
+      "id": 1024,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La barra in basso del cliente autenticato ha le stesse destinazioni dell'ospite (Home, Cerca, Negozi, Carrello) più «Io»; «I miei ordini» resta nel foglio «Io».",
+      "prova": "tests/unit/minori-s10-barra-in-basso.test.ts › dopo l'accesso «Negozi» resta al suo posto (1024)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [],
+      "file_altrui_toccati": [
+        "lib/ui/schede-in-fondo.ts (nessun territorio)"
+      ],
+      "nota": "lib/ui/schede-in-fondo.ts non è nel territorio di nessuna sessione."
+    },
+    {
+      "id": 2439,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Controllati tutti i link della testata: l'unico bianco senza colore al passaggio era «Registrati» (a:hover globale vince su text-white); ora ha hover:text-white. Una prova controlla che nessun link bianco della barra resti senza hover:text-*.",
+      "prova": "tests/unit/minori-s10-barra-in-alto.test.ts › nessun link bianco della testata sparisce al passaggio (2439)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/Navbar.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 442,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: è un ridisegno della testata fra 768 e 1023 px (pillola della posizione e «Registrati» a icona, o ricerca su una riga sua) che va provato a occhio su più larghezze.",
+      "prova": "components/Navbar.tsx:124-132",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 576,
+      "esito": "riparato",
+      "cosa_ho_fatto": "I due «Accedi» della testata puntano a /sign-in?returnTo=<pagina corrente con la query> (nuovo lib/auth/href-di-accesso.ts), tranne dalla home e dalle pagine d'accesso.",
+      "prova": "tests/unit/minori-s10-barra-in-alto.test.ts › «Accedi» porta con sé la pagina (576)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/Navbar.tsx",
+        "lib/auth/href-di-accesso.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Restano senza returnTo i rimandi di app/profile e app/notifications citati dalla scheda (altri territori). Limite: la query si rilegge al cambio di percorso; un cambio di soli parametri (/search?q=a → ?q=b) lascia nel link la query di prima."
+    },
+    {
+      "id": 2670,
+      "esito": "riparato",
+      "cosa_ho_fatto": "I due link del carrello nella testata hanno hover:text-white: al tocco non prendono più il colore dei link globali.",
+      "prova": "tests/unit/minori-s10-barra-in-alto.test.ts › il carrello resta bianco al tocco (2670)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/Navbar.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 381,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato: per spegnere le notifiche solo nelle uscite volute serve un segnale da tutti e sei i pulsanti «Esci» (sparsi in più territori), oppure la riattivazione dopo SIGNED_IN in lib/push (territorio S03).",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Strada più corta: in lib/push/dispositivo.ts una funzione «riattivaSeConsentito» chiamata dalla barra su SIGNED_IN quando Notification.permission è 'granted' e il browser non ha più l'iscrizione."
+    },
+    {
+      "id": 957,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Già chiuso: il testo del banner non promette più le notifiche.",
+      "prova": "components/PWAInstallBanner.tsx: «Si apre dall'icona, veloce anche con rete debole. Niente app store.»",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Resta la proposta di attivare le notifiche al momento giusto (dopo il primo ordine), che la scheda chiama «seconda cosa»: è una funzione nuova, non un difetto."
+    },
+    {
+      "id": 379,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il banner conta le visite con setVisits((v) => v + 1), che parte dal valore caricato da localStorage invece che dallo 0 iniziale; tolto il return su dismissed dall'effetto (lo guarda già comeSiInstalla).",
+      "prova": "tests/unit/minori-s10-banner-installa.test.tsx › il contatore delle visite cresce (379)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/PWAInstallBanner.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 429,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Aggiunte le etichette LOCKED («bloccata per 15 minuti…») e CODE_NOT_ISSUED («codice non generato: chiama l'assistenza»).",
+      "prova": "tests/unit/minori-s10-codice-consegna.test.tsx › il codice bloccato si dice (429)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/VerifyCodeDialog.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Il link diretto al supporto non c'è: il testo dice di scrivere/chiamare l'assistenza."
+    },
+    {
+      "id": 657,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La finestra del codice ora sta sopra components/ui/Modal: trappola del fuoco, Esc ovunque sia il fuoco e ritorno del fuoco al pulsante che l'ha aperta.",
+      "prova": "tests/unit/minori-s10-codice-consegna.test.tsx › la finestra trattiene e riporta il fuoco (657)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/VerifyCodeDialog.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 676,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: le letture da unire stanno in Footer (S08), CategoryBar, ricerca e pagina categoria (S09) e lib/queries (S09); qui ho solo useBranding, e da solo non chiude il difetto.",
+      "prova": "components/hooks/useBranding.ts:19 legge site_settings dal browser",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "All'unione: una rotta pubblica in cache per marchio e «ci sono promo?», e una chiave sola per l'albero delle categorie."
+    },
+    {
+      "id": 282,
+      "esito": "riparato",
+      "cosa_ho_fatto": "useProfile legge lo stato condiviso con useSyncExternalStore: durante il disegno del server e l'idratazione usa sempre «non pronto», poi quello vero; nelle navigazioni interne parte già da quello vero.",
+      "prova": "tests/unit/minori-s10-profilo-condiviso.test.tsx › il primo disegno combacia con quello del server (282)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/hooks/useProfile.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 531,
+      "esito": "riparato",
+      "cosa_ho_fatto": "QueryProvider ascolta onAuthStateChange: su SIGNED_OUT, e su SIGNED_IN di una persona diversa dalla precedente, svuota la cache di React Query (un rinnovo della stessa persona non la tocca).",
+      "prova": "tests/unit/minori-s10-uscita-svuota.test.tsx › l'uscita svuota i dati in memoria (531)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/providers/QueryProvider.tsx"
+      ],
+      "file_altrui_toccati": [
+        "tests/unit/dopo-una-scorta-cambiata-lista-e-modulo-ripartono-dalla-banca-dati.test.tsx (S04)"
+      ],
+      "nota": "Non ho aggiunto l'id dell'utente alle chiavi delle query (seconda parte del fix proposto): con lo svuotamento non serve per questo difetto. Aggiunto onAuthStateChange al finto client di una prova vecchia (dopo-una-scorta-cambiata…)."
+    },
+    {
+      "id": 1034,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non spostato: l'import di lib/zod-i18n serve ai moduli del browser che mostrano i messaggi predefiniti di zod, e quei moduli stanno in altri territori (VendorForm e SellerApplicationForm di S06, checkout di S07, pagine admin di S05). Toglierlo da QueryProvider senza metterlo lì riporterebbe l'inglese.",
+      "prova": "components/providers/QueryProvider.tsx:5 import '@/lib/zod-i18n'",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "All'unione: togliere l'import da QueryProvider e metterlo in components/VendorForm.tsx, components/SellerApplicationForm.tsx e nei moduli che usano schemi zod senza messaggi propri; poi controllare il pacchetto di /layout dopo la build."
+    },
+    {
+      "id": 434,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tolti dal riquadro sotto accesso e iscrizione i pulsanti SPID e SMS spenti per sempre; nell'iscrizione AuthAlternatives usa la spunta dei Termini del modulo (condizioniDalModulo) e non ne mostra una seconda. Sulla pagina di accesso la spunta per Google resta.",
+      "prova": "tests/unit/minori-s10-accessi-alternativi.test.tsx › i modi alternativi di entrare sono veri (434)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ui/AuthShell.tsx",
+        "app/sign-up/page.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 844,
+      "esito": "riparato",
+      "cosa_ho_fatto": "In tailwind.config.ts letterSpacing.wide = '0.04em': tracking-wide e tracking-label ora sono la stessa misura del token, e le 37 etichette maiuscole scritte con tracking-wide prendono il token senza toccarle. Badge era già sistemato.",
+      "prova": "tests/unit/minori-s10-tipografia.test.ts › tracking-wide è il token delle maiuscole (844)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tailwind.config.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Cambia di poco (0,025em → 0,04em) anche il testo non maiuscolo scritto con tracking-wide. Cambia anche i 6 usi di tracking-wide su testo non maiuscolo (0,025 → 0,04em): cambio visivo piccolo ma su tutto il sito."
+    },
+    {
+      "id": 855,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: 141 card fatte a mano in file di tutti i territori; serve prima fissare la regola dei raggi nel design system, poi un passaggio unico dopo l'unione.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2299,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La variante in linea di DeliveryCutoff riserva due righe (min-h-[2.5rem]) sotto sm, come fa già il banner: la frase che si allunga dopo la risposta della cassa non spinge più giù il riquadro.",
+      "prova": "tests/unit/minori-s10-veloce.test.tsx › la riga della consegna non sposta il riquadro sul telefono (2299)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ui/DeliveryCutoff.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Su schermi molto stretti la frase lunga può arrivare a tre righe: la riserva è di due, come il banner."
+    },
+    {
+      "id": 2260,
+      "esito": "riparato",
+      "cosa_ho_fatto": "useVeloceDelNegozio riparte da null a ogni nuova domanda: tornando a chiedere, il sì vecchio non si rivede mentre arriva la risposta nuova.",
+      "prova": "tests/unit/minori-s10-veloce.test.tsx › chiedi vero → falso → vero con la risposta in sospeso: niente sì vecchio",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ui/DeliveryCutoff.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2298,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La risposta sulla veloce si richiede quando la scheda torna visibile e ogni 5 minuti, non una volta sola.",
+      "prova": "tests/unit/minori-s10-veloce.test.tsx › quando la scheda torna visibile si richiede",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ui/DeliveryCutoff.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Dopo la revisione: niente richiesta ogni 5 minuti; al ritorno sulla scheda solo se la risposta ha più di 5 minuti (la lista dei negozi chiede una volta per riga e la rotta ha un freno)."
+    },
+    {
+      "id": 1813,
+      "esito": "riparato",
+      "cosa_ho_fatto": "ErrorState: se la funzione di riprova restituisce una promessa, il pulsante va in caricamento finché la rilettura non finisce, e se la pagina è ancora in errore compare «Ho riprovato ma non ci sono ancora riuscito».",
+      "prova": "tests/unit/minori-s10-riprova.test.tsx › «Riprova» si vede (1813)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ui/ErrorState.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Vale per i chiamanti che passano () => refetch(); quelli che scrivono () => { void refetch(); } (diverse pagine admin, territorio S05) non restituiscono la promessa e restano senza segno finché non tolgono il void."
+    },
+    {
+      "id": 2083,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Tolto components/ui/FreeShippingProgress.tsx (nessuna pagina lo montava) e le due prove che collaudavano il componente morto; al loro posto due prove che controllano che non esista più. Restano le prove che carrello, cassa e scheda non lo montano.",
+      "prova": "tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx › la barra «ti mancano X €» non esiste più nel codice; tests/unit/la-vetrina-non-promette-una-spedizione-che-la-cassa-fa-pagare.test.ts › la barra «ti manca poco» non esiste più",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ui/FreeShippingProgress.tsx"
+      ],
+      "file_altrui_toccati": [
+        "tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx (S04)",
+        "tests/unit/la-vetrina-non-promette-una-spedizione-che-la-cassa-fa-pagare.test.ts (S04)"
+      ],
+      "nota": "Prove vecchie cambiate perché il componente che collaudavano non c'è più (come chiede la scheda)."
+    },
+    {
+      "id": 660,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Già chiuso prima di me: la barra con role=progressbar non c'era più (il componente era diventato una riga di testo), e ora il componente è tolto del tutto (scheda 2083).",
+      "prova": "components/ui/FreeShippingProgress.tsx (su main) rendeva un <p> senza role=progressbar",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 232,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Da tablet in su il titolo dei paragrafi legali si ferma sotto la testata grazie allo scroll-padding-top della pagina (scheda 666); LegalSection ha md:scroll-mt-0 per non sommare un secondo margine.",
+      "prova": "tests/unit/minori-s10-stili-comuni.test.ts › i paragrafi legali si fermano sotto la testata (232)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ui/LegalLayout.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2152,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il Modal ignora un Esc già usato (e.defaultPrevented) da ConfirmDialog, che ascolta su document e arriva prima: la conferma si chiude, la finestra sotto resta aperta.",
+      "prova": "tests/unit/minori-s10-modal.test.tsx › Esc sulla conferma (2152)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ui/Modal.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Dopo la revisione anche due Modal sovrapposti: Esc chiude solo quello in cima (pila delle finestre aperte)."
+    },
+    {
+      "id": 732,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La prova sociale non scarica più ogni riga d'ordine per sommarle nel browser: chiede un numero solo alla funzione del database (migrazione 245).",
+      "prova": "tests/unit/minori-s10-prova-sociale.test.tsx › usa la funzione ordini_recenti_del_prodotto e non legge order_items",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ui/SocialProof.tsx"
+      ],
+      "file_altrui_toccati": [
+        "migrations/245_la_prova_sociale_conta_gli_ordini_di_tutti.sql (S04)"
+      ],
+      "nota": ""
+    },
+    {
+      "id": 256,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nuova funzione del database ordini_recenti_del_prodotto (migrazione 245, SECURITY DEFINER) che conta gli ordini distinti, non annullati, degli ultimi 7 giorni di un prodotto in vendita; la scheda la chiama invece di leggere order_items (che ognuno vede solo suoi).",
+      "prova": "tests/unit/minori-s10-prova-sociale.test.tsx › la prova sociale chiede un numero al database (256, 732)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ui/SocialProof.tsx"
+      ],
+      "file_altrui_toccati": [
+        "migrations/245_la_prova_sociale_conta_gli_ordini_di_tutti.sql (S04)",
+        "tests/unit/nessuna-funzione-potente-in-mano-a-chi-non-ha-l-account.test.ts (S04)"
+      ],
+      "nota": "Serve applicare la migrazione 245 (Nicola, a mano). Finché non c'è, la scritta non compare (prima contava solo i propri ordini). Ora conta ORDINI, non pezzi: «Ordinato N volte». La funzione è aggiunta, con il perché, all'elenco FUNZIONI_PUBBLICHE_VOLUTE della prova nessuna-funzione-potente-in-mano-a-chi-non-ha-l-account. Dopo la revisione la funzione esclude anche gli ordini con pagamento FAILED."
+    },
+    {
+      "id": 227,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il bollino non usa più aria-label su uno span senza ruolo: senza etichetta visibile porta il testo sr-only «Negozio verificato».",
+      "prova": "tests/unit/minori-s10-bollino.test.tsx › il bollino verificato si legge (227)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "components/ui/VerifiedBadge.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La prova axe con un negozio approvato nei dati di prova (e2e) non l'ho aggiunta."
+    },
+    {
+      "id": 983,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica: due prove (tests/unit/api-locale.test.ts e l'e2e 10-security-and-i18n) fissano proprio il comportamento di oggi (la rotta accetta e scrive il cookie, la pagina resta in italiano).",
+      "prova": "i18n.ts:36 RILEVAMENTO_LINGUA_ATTIVO = false; app/api/locale/route.ts risponde ok",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Il sito in inglese si riaccende (traduzioni da completare) oppure /api/locale risponde 404 finché resta solo l'italiano?"
+    },
+    {
+      "id": 248,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Aggiunto 'unit' a CAMPI_ECONOMICI: esce dallo schema del lotto e da senzaCampiEconomici.",
+      "prova": "tests/unit/minori-s10-ai.test.ts › «Migliora tutto il catalogo» non cambia l'unità di prezzo (248)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/ai/catalogBatch.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2554,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica: getAnthropic oggi ferma ogni chiamata quando AI_NEGOZI_ACCESA è spento, comprese quelle per i clienti.",
+      "prova": "lib/ai/client.ts:187 if (!AI_NEGOZI_ACCESA) throw new AiConfigError(...)",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Le funzioni AI per i clienti (riassunto recensioni, risposta alle domande, ordine da foto) devono restare spente insieme all'AI per i negozi, o avere un interruttore loro?"
+    },
+    {
+      "id": 252,
+      "esito": "riparato",
+      "cosa_ho_fatto": "registraSpesaAi arrotonda per eccesso e tiene il di più come credito della copia, consumato dalle chiamate piccole che seguono: dieci chiamate da 0,0006 € contano 1 centesimo invece di 10, e il conto condiviso non scende mai sotto la spesa vera.",
+      "prova": "tests/unit/minori-s10-ai-spesa.test.ts › le chiamate piccole non contano un centesimo intero ciascuna (252)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/ai/run.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Prima versione (resto per difetto) corretta dopo la revisione: contava in difetto sulle copie brevi."
+    },
+    {
+      "id": 253,
+      "esito": "riparato",
+      "cosa_ho_fatto": "classifyProductPolicy fa passare solo allowed === true: stringhe come «false» o «no» ora bloccano.",
+      "prova": "tests/unit/minori-s10-ai.test.ts › il filtro dei prodotti vietati accetta solo un sì scritto bene (253)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/ai/moderation.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2267,
+      "esito": "riparato",
+      "cosa_ho_fatto": "La descrizione del campo condition (fonte unica per tutte le rotte AI) dice al modello di omettere il campo se non cambia la condizione e di usare null solo per toglierla.",
+      "prova": "tests/unit/minori-s10-ai-chat.test.ts › lo schema mandato dalla chat del prodotto non offre «usato» e dice di omettere il campo",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/ai/patchSchema.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Dipende ancora da come risponde il modello: la regola ora è scritta nello schema, il resolver non è cambiato."
+    },
+    {
+      "id": 246,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Nuovo lib/ai/tetti-testo.ts: al massimo 30 opzioni per campo e 80 caratteri per chiave, tipo, opzione, nome e slug; usato da buildProductContext e rigaAttributoPerIlModello.",
+      "prova": "tests/unit/minori-s10-ai.test.ts › i testi degli elenchi del browser hanno un tetto di lunghezza (246)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/ai/productContext.ts",
+        "lib/ai/tetti-testo.ts"
+      ],
+      "file_altrui_toccati": [
+        "lib/products/aiPatch.ts (S06)"
+      ],
+      "nota": ""
+    },
+    {
+      "id": 776,
+      "esito": "scelta_di_nicola",
+      "cosa_ho_fatto": "Nessuna modifica: serve decidere il tetto per negozio.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Quanto può spendere al giorno in AI un singolo negozio (la scheda propone 2 € al giorno, sul tetto di sito di 20 €)? Con la cifra si aggiunge un secondo conto per (giorno, negozio), con una migrazione."
+    },
+    {
+      "id": 2645,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Aggiunta la prova che runMessage chiama segnalaModelloRitirato col modello della chiamata (il buco era solo nelle prove).",
+      "prova": "tests/unit/minori-s10-ai-run.test.ts › runMessage controlla il modello ritirato a ogni chiamata (2645)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s10-ai-run.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Verificato: togliendo la riga segnalaModelloRitirato(args.model) da lib/ai/run.ts la prova diventa rossa."
+    },
+    {
+      "id": 2642,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non riparato: l'ora di tolleranza vive nella memoria della singola copia; per contarla fra copie serve uno stato condiviso o la sonda del lavoro periodico.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "La strada giusta è far scattare l'allarme dalla sonda (sondaContoCondiviso) nel lavoro periodico degli avvisi, che sta in app/api/cron/ (territorio S03). Il caso di oggi (funzione assente) ha già il suo allarme."
+    },
+    {
+      "id": 251,
+      "esito": "riparato",
+      "cosa_ho_fatto": "spesaDiOggiCents e aggiungiSpesaCents passano da ripiegoCents(giorno) prima del Math.max, così il ripiego si azzera quando cambia il giorno.",
+      "prova": "tests/unit/minori-s10-ai.test.ts › il conto di riserva della spesa AI non si porta dietro ieri (251)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/ai/tettoSpesa.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 508,
+      "esito": "riparato",
+      "cosa_ho_fatto": "messaggioSenzaDatiPersonali maschera anche i numeri con separatori (spazi, punti, trattini, prefisso +) prima del taglio: «333 123 4567» diventa <numero>.",
+      "prova": "tests/unit/minori-s10-analytics.test.ts › il telefono con gli spazi si maschera (508)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/analytics/events.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 1596,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato: il filtro del filmato fa quello che dichiara (gli indirizzi); allargarlo a email e telefoni nudi in ogni proprietà è una scelta su cosa entra nel filmato, con PostHog spento al lancio.",
+      "prova": "lib/analytics/filmato-senza-dati-personali.ts:80 if (!testo.includes('/')) return testo;",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Prima di riaccendere PostHog: o si corregge il commento di posthog.tsx:206-215 (la rete guarda solo gli indirizzi), o si aggiunge la maschera email/telefono in contenutoSenzaIndirizzi."
+    },
+    {
+      "id": 92,
+      "esito": "riparato",
+      "cosa_ho_fatto": "A ogni cambio di pagina GoogleAnalytics fa gtag('set', { page_location: origine + indirizzoDaSpedire, page_referrer: referrer senza coda }) prima della pagina vista: anche l'evento «search» non porta più /search?q=<testo>.",
+      "prova": "tests/unit/minori-s10-analytics.test.ts › l'email cercata non arriva a Google dentro l'indirizzo (92)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [],
+      "file_altrui_toccati": [
+        "components/GoogleAnalytics.tsx (nessun territorio)"
+      ],
+      "nota": "components/GoogleAnalytics.tsx non è nel territorio di nessuna sessione; lib/analytics/gtag-avvio.ts non è cambiato."
+    },
+    {
+      "id": 1535,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Dopo aver letto ?source=pwa per capire se l'app è installata, PostHogProvider lo toglie dall'indirizzo (history.replaceState, nuovo indirizzoSenzaSorgentePwa): un link copiato dall'app non lo porta più a chi lo riceve.",
+      "prova": "tests/unit/minori-s10-analytics.test.ts › un link copiato dall'app installata non porta il marcatore (1535)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/analytics/posthog.tsx"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 102,
+      "esito": "parziale",
+      "cosa_ho_fatto": "Nel browser la pulizia dei dati personali è una funzione sola (ripulisciEvento) usata da beforeSend e da beforeSendTransaction, e tracesSampleRate vale 0 senza consenso statistico.",
+      "prova": "tests/unit/minori-s10-sentry.test.ts › le misure verso Sentry sono ripulite (102)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/analytics/sentry-config.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Manca il lato server ed edge (sentry.server.config.ts, sentry.edge.config.ts: territorio S03): lì va usata la stessa ripulisciEvento in beforeSend e beforeSendTransaction. Dopo la revisione la pulizia copre anche gli span (descrizione e dati url/query)."
+    },
+    {
+      "id": 1595,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato: oggi dal server partono solo identificativi e importi, il consenso si legge bene, e con la scheda 2413 la strada è chiusa finché POSTHOG_ACCESO è spento.",
+      "prova": "lib/analytics/server.ts: if (!POSTHOG_ACCESO || !CHIAVE) return;",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Quando si riaccende: passare le properties dalla stessa pulizia del browser prima della POST."
+    },
+    {
+      "id": 2413,
+      "esito": "riparato",
+      "cosa_ho_fatto": "contaAcquisto non manda più l'acquisto a PostHog dal server se POSTHOG_ACCESO è spento, anche con la chiave su Vercel. Aggiornate tre prove vecchie che provano la strada accesa (ora accendono l'interruttore come le altre).",
+      "prova": "tests/unit/minori-s10-analytics.test.ts › POSTHOG_ACCESO spento ferma anche l'acquisto mandato dal server (2413)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/analytics/server.ts"
+      ],
+      "file_altrui_toccati": [
+        "tests/unit/acquisto-contato-sul-server.test.ts (S04)",
+        "tests/unit/la-variante-del-test-viaggia-con-l-acquisto.test.ts (S04)",
+        "tests/unit/il-si-ai-cookie-dato-da-anonimo-vale-anche-dopo-l-accesso.test.ts (S04)"
+      ],
+      "nota": "Google Analytics dal server (contaAcquistoSuGoogle) non dipende da POSTHOG_ACCESO e non è cambiato."
+    },
+    {
+      "id": 782,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: serve scegliere una definizione sola di «visita» e far dire al trigger del database se la riga è entrata (una RPC nuova): è una decisione sui numeri (GLOSSARIO-KPI) più una migrazione.",
+      "prova": "lib/analytics/visita-prodotto.ts:30-46",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Proposta: una visita = persona/impronta per prodotto per ora; RPC che risponde contata/scartata e annuncio a PostHog solo se contata."
+    },
+    {
+      "id": 2002,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Quando manca la chiave di servizio, authenticate applica il limite per persona della rotta (name/max/windowMs) prima di rispondere 503: scatta il tetto e il registro non si riempie a ogni richiesta.",
+      "prova": "tests/unit/minori-s10-portiere-api.test.ts › senza chiave il limite per persona vale lo stesso (2002)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/api/middleware.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2005,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato: è una pulizia (catch morti e due helper copiati in account/delete e account/export) senza effetto per chi usa il sito, su porte dei diritti GDPR coperte da prove delicate.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Da fare in una pulizia dedicata: un solo helper senzaChiave/sullaPorta in lib/api/ e via i catch che non possono più scattare."
+    },
+    {
+      "id": 2010,
+      "esito": "riparato",
+      "cosa_ho_fatto": "authenticate legge error della lettura del profilo: un guasto (codice diverso da PGRST116) risponde 503, solo «nessuna riga» resta 403 «Profilo non trovato».",
+      "prova": "tests/unit/minori-s10-portiere-api.test.ts › un guasto del profilo non è «Profilo non trovato» (2010)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/api/middleware.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 601,
+      "esito": "riparato",
+      "cosa_ho_fatto": "withCronAuth scrive logger.error prima dei due rifiuti («CRON_SECRET assente», «segreto diverso»), senza mai stampare il segreto.",
+      "prova": "tests/unit/minori-s10-portiere-api.test.ts › i lavori automatici rifiutati lasciano una riga (601)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/api/middleware.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La correzione di docs/runbook.md §6 citata dalla scheda è nel territorio S03: non l'ho toccata. Dopo la revisione: il segreto sbagliato è un warn (chiunque può bussare a /api/cron), il segreto assente resta error. S01 ha un try/catch suo dentro withCronAuth: le mie righe stanno prima, senza toccarlo."
+    },
+    {
+      "id": 217,
+      "esito": "riparato",
+      "cosa_ho_fatto": "arrivaDaUnAltroSito: un Origin presente ma illeggibile (es. «null») su un metodo che scrive vale come un altro sito; Origin assente resta come prima.",
+      "prova": "tests/unit/minori-s10-portiere-api.test.ts › Origin «null» non passa sui metodi che scrivono (217)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/api/provenienza.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 548,
+      "esito": "riparato",
+      "cosa_ho_fatto": "ApiErrors.invalidRequest passa i details da dettagliLeggibili: un elenco zod diventa { campo, messaggio } del primo problema, un testo grezzo qualunque (Stripe compreso) non esce, gli oggetti costruiti dalla rotta passano.",
+      "prova": "tests/unit/minori-s10-risposte.test.ts › i dettagli di un 400 sono leggibili (548)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/api/responses.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Vale per tutte le rotte che usano invalidRequest, senza toccarle una per una. Se avanza/route.ts:192 usa un'altra risposta per il testo di Stripe, quella non è coperta."
+    },
+    {
+      "id": 2115,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato: la scheda stessa dice che tocca una falla riservata della sessione; la misura dei rinnovi tardivi va rivista insieme a quella, non da sola.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Da vedere con l'AD insieme alla falla riservata sui rinnovi di sessione."
+    },
+    {
+      "id": 2104,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: servirebbe una prova che costruisce i cookie con @supabase/ssr vero (pezzi .0/.1, base64-) e controlla sessioneDaRinnovare; il formato interno della libreria non è stabile e la prova va scritta con calma.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2116,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato: nel modulo convivono due regole diverse per il tetto (tettoPerChiedereChiSei: «qualunque tessera → 10 s»; il portiere: «solo se va rinnovata → 10 s, altrimenti 3 s»). Scegliere quale vale è una decisione sul comportamento della sessione, non un difetto minore.",
+      "prova": "middleware.ts:521-524 staRinnovando ? TETTO_RINNOVO_MS : TETTO_PORTIERE_MS; lib/auth/cookie-di-sessione.ts:425 ms = TETTO_RINNOVO_MS",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Proposta: il portiere chiama una funzione sola del modulo, con il valore di serie a TETTO_PORTIERE_MS e la prova sulla scelta."
+    },
+    {
+      "id": 2118,
+      "esito": "riparato",
+      "cosa_ho_fatto": "middleware.ts usa PAGINA_ATTESA_NEGOZIO nei due punti dove scriveva '/seller/dashboard' a mano; RuoloArea ora è ProfileRole di lib/shopping-access.ts invece di una copia.",
+      "prova": "tests/unit/minori-s10-portiere-sorgente.test.ts › una fonte sola per la pagina d'attesa del negozio (2118)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "middleware.ts",
+        "lib/auth/decisione-portiere.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 2117,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Il portiere distingue «profilo non letto» (scaduto, rotto, errore diverso da PGRST116) da «ruolo sbagliato»: sulle aree protette risponde 503 «riprova fra qualche secondo» invece di rimandare in home (e il giro in tondo col pannello). Nel dubbio resta fuori. Tolto anche il tipo ProfileRole ricopiato dentro middleware.ts.",
+      "prova": "tests/unit/minori-s10-portiere-profilo-lento.test.ts › profilo non letto sul pannello del negozio (2117)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "middleware.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "La pagina «riprova» è testo semplice (503), senza marchio."
+    },
+    {
+      "id": 2647,
+      "esito": "riparato",
+      "cosa_ho_fatto": "motivoLinkPasswordSenzaSessione riceve l'errore dello scambio del code (supabase.auth.initialize()): verificatore mancante → «altro browser», ogni altro errore → «link scaduto». Aggiunto initialize al finto client delle prove.",
+      "prova": "tests/unit/minori-s10-nuova-password.test.ts › link scaduto nello stesso browser (2647)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/auth/link-email.ts",
+        "app/reset-password/page.tsx"
+      ],
+      "file_altrui_toccati": [
+        "tests/unit/aiuti/finti/supabase-client.mjs (S04)"
+      ],
+      "nota": "Dopo la revisione: AuthRetryableFetchError (rete caduta) non diventa «link scaduto»."
+    },
+    {
+      "id": 865,
+      "esito": "gia_riparato",
+      "cosa_ho_fatto": "Già chiuso per cassa ed email: formatPrice usa Intl it-IT e i modelli delle email passano da formatPrice.",
+      "prova": "lib/format.ts:25 const PREZZO_IT = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' })",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Restano stringhe '€${…}' sparse in file di altri territori: sono la scheda 409."
+    },
+    {
+      "id": 409,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: i punti rimasti con l'euro scritto a mano stanno quasi tutti in file di altri territori (opengraph-image S09, ShareCartButton S07, webhook Stripe S01, etichetta S02, cron S03…). Quelli nelle rotte AI del mio territorio sono testo per il modello, non per le persone.",
+      "prova": "grep -rn \"€\\${\" app components lib → 19 righe in 17 file",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Passaggio unico all'unione: ogni '€${x.toFixed(2)}' → formatPrice(x)."
+    },
+    {
+      "id": 223,
+      "esito": "non_codice",
+      "cosa_ho_fatto": "Nessuna modifica: il codice usa già Upstash quando le variabili ci sono; mancano su Vercel.",
+      "prova": "lib/rate-limit.ts:184 upstashIncr esce con null senza UPSTASH_REDIS_REST_URL/TOKEN",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Nicola: creare un database Upstash Redis (va bene il gratuito) e mettere UPSTASH_REDIS_REST_URL e UPSTASH_REDIS_REST_TOKEN in Vercel → Production (Sensitive), poi ripubblicare."
+    },
+    {
+      "id": 571,
+      "esito": "riparato",
+      "cosa_ho_fatto": "leggiPerMetadati legge error: solo PGRST116 (nessuna riga) resta null; ogni altro errore si registra e lancia, così la pagina va in errore invece di scrivere «non trovato» con noindex.",
+      "prova": "tests/unit/minori-s10-metadati.test.ts › un guasto non è «non trovato» (571)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "lib/supabase/lettura-per-metadati.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Dopo la revisione anche 22P02 (id che non è un UUID) resta «non trovato», non un 5xx."
+    },
+    {
+      "id": 412,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: la parte di mia competenza sono le stringhe di messages/it.json («Rating minimo» → «Voto minimo»), ma le regole consentono su messages/ solo aggiunte, non modifiche di valori esistenti. Le altre (onboarding del fattorino, errori GPS) sono in territori di altre sessioni.",
+      "prova": "messages/it.json search.minRating «Rating minimo»",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "All'unione, con il via dell'AD: search.minRating «Voto minimo», search.chip.minRating «Voto {rating}+»."
+    },
+    {
+      "id": 2583,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Provato e tolto: il controllo vaChiestaSenzaTrattenere nella rotta app/api/orders/cod (territorio S02) funziona, ma fa diventare rosse 14 prove di altre sessioni, perché i loro finti database non conoscono consent_log.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "La riga da aggiungere dopo il controllo dell'email in app/api/orders/cod/route.ts: const riaccetta = await vaChiestaSenzaTrattenere(() => getAdminSupabase(), user.id); if (riaccetta === 'chiedi') return apiError(403, 'Prima di ordinare accetta i Termini aggiornati.', 'TERMINI_DA_ACCETTARE'); più i finti database di il-si-ai-cookie…, l-email-dei-contanti…, l-email-nuovo-ordine…, la-cassa-mostra-la-spedizione…. Meglio la faccia S02 o l'AD all'unione."
+    },
+    {
+      "id": 2589,
+      "esito": "riparato",
+      "cosa_ho_fatto": "versoLeCondizioni mette in next il percorso con la sua query (pathname + search): «?passo=2&registrazione=email» non si perde più.",
+      "prova": "tests/unit/minori-s10-portiere-cassa.test.ts › dopo i Termini si torna alla cassa coi suoi parametri (2589)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "middleware.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    },
+    {
+      "id": 675,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non toccato: saltare la lettura del profilo sui precarichi delle aree protette è una scelta di sicurezza (si userebbe un ruolo vecchio fino a 10 minuti), non un difetto minore da chiudere da solo.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Se si vuole, nel portiere: per le richieste con Next-Router-Prefetch: 1 sulle aree /seller usare il cookie firmato del ruolo; la pagina vera rilegge comunque."
+    },
+    {
+      "id": 2585,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Aggiunta la prova che sulla cassa un cookie mc_ruolo valido non fa saltare la domanda sui Termini (il buco era nelle prove).",
+      "prova": "tests/unit/minori-s10-portiere-cassa.test.ts › sulla cassa il cookie del ruolo non fa saltare la domanda sui Termini (2585)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s10-portiere-cassa.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Verificata col mutante della scheda (tolto && !sulPagamento): la prova diventa rossa."
+    },
+    {
+      "id": 2105,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Aggiunta la prova che la tessera cancellata dal servizio arriva al browser (cookie svuotato) sul rimando a /sign-in (il buco era nelle prove).",
+      "prova": "tests/unit/minori-s10-portiere-tessera.test.ts › la tessera cancellata arriva al browser sul rimando al login (2105)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tests/unit/minori-s10-portiere-tessera.test.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Verificata col mutante della scheda (tolto raccoglitore.remove a middleware.ts): la prova diventa rossa."
+    },
+    {
+      "id": 830,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Rigenerate da public/icon-512.svg (tracciati Fraunces) le quattro icone PNG: icon-512 e icon-192 con gli angoli arrotondati e trasparenti, apple-touch-icon (180) e icon-maskable-512 piene; nella maskable il «My» è stretto all'85% per stare nella zona sicura. Controllate a occhio.",
+      "prova": "tests/unit/minori-s10-icone.test.ts › le icone PNG vengono dal marchio (830)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "public/icon-512.png",
+        "public/icon-192.png",
+        "public/apple-touch-icon.png",
+        "public/icon-maskable-512.png"
+      ],
+      "file_altrui_toccati": [],
+      "nota": "Generate con Chromium (Playwright) dall'SVG del deposito; lo script non è nel deposito (in .minori/ va solo il referto)."
+    },
+    {
+      "id": 951,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Non fatto: servono le schermate vere dell'app (2-3 per telefono, una larga) da mettere nel manifest; orientation, id e display_override erano già sistemati.",
+      "prova": "public/manifest.json: niente orientation, \"id\": \"/\", display_override; manca screenshots",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Fare le schermate da un'anteprima con i dati veri di Pane Quotidiano e aggiungerle come screenshots (form_factor narrow e wide)."
+    },
+    {
+      "id": 673,
+      "esito": "non_fatto",
+      "cosa_ho_fatto": "Provato e tolto dopo la revisione: salvare nel service worker le risposte opache costa a Chrome circa 7 MB di quota ciascuna e mette in cache anche i 403/404 senza saperlo.",
+      "prova": "",
+      "rossa_senza_correzione": null,
+      "file_toccati": [],
+      "file_altrui_toccati": [],
+      "nota": "Resta la prima strada della scheda: crossOrigin=\"anonymous\" sulle immagini Supabase (ProductCard e il caricatore, altri territori), poi il service worker le salva già."
+    },
+    {
+      "id": 862,
+      "esito": "riparato",
+      "cosa_ho_fatto": "ink-400 scurito da #78716C a #74706B in tailwind.config.ts e in app/globals.css: 4,60:1 sul fondo panna (era 4,49) e 4,92 sul bianco. Aggiornata la prova il-bordo-del-campo-si-vede che fissava il valore vecchio.",
+      "prova": "tests/unit/minori-s10-tipografia.test.ts › il grigio delle note si legge sul fondo panna (862)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tailwind.config.ts",
+        "app/globals.css"
+      ],
+      "file_altrui_toccati": [
+        "tests/unit/il-bordo-del-campo-si-vede.test.ts (S04)"
+      ],
+      "nota": "Due commenti in app/product/[id]/page.tsx e components/ui/Toggle.tsx citano ancora #78716C (altri territori, solo commenti)."
+    },
+    {
+      "id": 277,
+      "esito": "riparato",
+      "cosa_ho_fatto": "Aggiunto './lib/**/*.{js,ts,jsx,tsx}' al content di Tailwind: fill-secondary-500 del cuore dei preferiti e i gradienti delle copertine (from-ink-700…) ora vengono generati.",
+      "prova": "tests/unit/minori-s10-classi-di-lib.test.ts › Tailwind genera le classi scritte in lib/ (277)",
+      "rossa_senza_correzione": true,
+      "file_toccati": [
+        "tailwind.config.ts"
+      ],
+      "file_altrui_toccati": [],
+      "nota": ""
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il contatore dei messaggi non letti non si azzera aprendo la chat",
+      "file": "app/api/chat/mark-read/route.ts:39",
+      "gravita": "minore",
+      "descrizione": "La rotta azzera buyer_unread_count/seller_unread_count con un update sulla sessione della persona, ma la migrazione 119 ha tolto l'UPDATE su conversations ad authenticated: l'update viene scartato senza errore. La funzione mark_conversation_read (115) aggiorna solo read_at dei messaggi. Serve che la funzione azzeri anche il contatore del lato chiamante (migrazione nuova)."
+    },
+    {
+      "titolo": "La pagina di iscrizione promette ancora «Puoi provare lo stesso a registrarti» quando l'anti-robot non si carica",
+      "file": "app/sign-up/page.tsx (blocco captchaRotto)",
+      "gravita": "minore",
+      "descrizione": "Come la scheda 278 per l'accesso: oggi l'iscrizione parla direttamente con Supabase dal browser (scheda 214), quindi con l'anti-robot spento su Supabase passa; quando si accenderà, sarà lo stesso giro senza uscita."
+    },
+    {
+      "titolo": "Due regole diverse per il tetto del portiere sulla sessione",
+      "file": "lib/auth/cookie-di-sessione.ts:393-397 contro middleware.ts:521-524",
+      "gravita": "minore",
+      "descrizione": "tettoPerChiedereChiSei («qualunque tessera → 10 s») non è usata dal portiere, che sceglie inline «solo se va rinnovata → 10 s». Vedi scheda 2116."
+    },
+    {
+      "titolo": "Due scroll-mt di altre pagine si sommano allo scroll-padding nuovo",
+      "file": "app/lavora-con-noi/page.tsx:174 · app/product/[id]/page.tsx:1100",
+      "gravita": "minore",
+      "descrizione": "Con html { scroll-padding-top } da md in su (scheda 666), le ancore che hanno anche uno scroll-mt proprio si fermano più in basso del dovuto. Vanno portate a md:scroll-mt-0 (S06 e S09)."
+    },
+    {
+      "titolo": "Lavoro di contorno chiesto dall'AD: Tailwind scansiona lib/",
+      "file": "tailwind.config.ts content",
+      "gravita": "minore",
+      "descrizione": "Già fatto con la scheda 277: './lib/**/*.{js,ts,jsx,tsx}' è nei content, la lista di riserva è rimasta com'era; prova tests/unit/minori-s10-classi-di-lib.test.ts (compila il CSS vero)."
+    }
+  ]
+}

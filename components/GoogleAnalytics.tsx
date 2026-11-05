@@ -58,6 +58,15 @@ export default function GoogleAnalytics() {
   const indirizzoCampagna = indirizzoDaSpedire(pathname ?? '/', searchParams);
   useEffect(() => {
     if (!analyticsOn || !GA_ID || !window.gtag) return;
+    // S10 (5/11/2026) — gtag allega page_location a OGNI evento, e se non e'
+    // impostata usa l'indirizzo vero della scheda: l'evento «search» partiva
+    // con /search?q=<email scritta nella ricerca>. Si imposta una volta per
+    // pagina, ripulita, e vale per tutti gli eventi che seguono. Il referrer
+    // perde la sua coda per la stessa ragione.
+    window.gtag('set', {
+      page_location: window.location.origin + indirizzoCampagna,
+      page_referrer: referrerSenzaCoda(document.referrer),
+    });
     window.gtag('event', 'page_view', {
       page_path: paginaVista,
       page_location: window.location.origin + indirizzoCampagna,
@@ -116,3 +125,14 @@ export default function GoogleAnalytics() {
  * legge davvero. Due porte per la stessa cosa sono il modo in cui il difetto
  * torna.
  */
+
+/** Il referrer senza parametri né cancelletto: la sua coda puo' contenere quello che si e' cercato. */
+export function referrerSenzaCoda(referrer: string): string | undefined {
+  if (!referrer) return undefined;
+  try {
+    const u = new URL(referrer);
+    return u.origin + u.pathname;
+  } catch {
+    return undefined;
+  }
+}

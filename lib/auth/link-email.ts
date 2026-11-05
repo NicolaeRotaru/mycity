@@ -305,7 +305,18 @@ export type MotivoResetSenzaSessione = 'altro-browser' | 'link-scaduto' | 'link-
  * poteva funzionare qui (e va detto), o e' venuto a chiederne uno (e basta il
  * modulo)? `null` = nessun link, nessuna spiegazione da dare.
  */
-export function motivoLinkPasswordSenzaSessione(query: Parametri, frammento?: string | null): MotivoResetSenzaSessione | null {
+export function motivoLinkPasswordSenzaSessione(
+  query: Parametri,
+  frammento?: string | null,
+  /**
+   * S10 (5/11/2026) — L'errore dello scambio del `code` fatto dal browser
+   * (`supabase.auth.initialize()`). Se manca il verificatore, il link e' stato
+   * aperto altrove; se c'e' un altro errore, nello STESSO browser, il link e'
+   * scaduto o gia' usato. Prima ogni `code` senza segno d'errore diventava
+   * «aprilo dove l'hai chiesto», anche quando lo si era aperto proprio li'.
+   */
+  erroreDelloScambio?: { name?: unknown; code?: unknown } | null,
+): MotivoResetSenzaSessione | null {
   const f = parametriDelFrammento(frammento);
   const errore = query.get('errore');
   if (errore === 'link_non_valido') return 'link-non-valido';
@@ -316,7 +327,15 @@ export function motivoLinkPasswordSenzaSessione(query: Parametri, frammento?: st
   ) {
     return 'link-scaduto';
   }
-  if (query.get('code')) return 'altro-browser';
+  if (query.get('code')) {
+    const verificatoreMancante =
+      !erroreDelloScambio ||
+      // Una rete caduta non dice niente sul link: resta la spiegazione di prima.
+      erroreDelloScambio.name === 'AuthRetryableFetchError' ||
+      erroreDelloScambio.name === 'AuthPKCECodeVerifierMissingError' ||
+      erroreDelloScambio.code === 'pkce_code_verifier_not_found';
+    return verificatoreMancante ? 'altro-browser' : 'link-scaduto';
+  }
   return null;
 }
 
