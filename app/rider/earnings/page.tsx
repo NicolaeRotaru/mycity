@@ -40,13 +40,14 @@ export default function RiderEarningsPage() {
         // mentre il compenso c'e' eccome. La pagina mostrava quindi consegne da
         // 0,00 € e un totale piu' basso del dovuto — sul numero grosso in base
         // al quale il fattorino decide se continuare a lavorare con noi.
-        .select('id, shipping_cost, rider_fee_cents, delivered_at, rider_payout_status, payment_method, delivery_city, delivery_address')
+        .select('id, shipping_cost, rider_fee_cents, total_price, delivered_at, rider_payout_status, payment_method, delivery_city, delivery_address')
         .eq('rider_id', user.id)
         .eq('delivery_status', 'DELIVERED')
         .order('delivered_at', { ascending: false });
       if (error) throw error;
       type EarningOrder = {
         id: string; shipping_cost: number | null; rider_fee_cents: number | null;
+        total_price: number | null;
         delivered_at: string | null;
         rider_payout_status: string | null; payment_method: string | null;
         delivery_city: string | null; delivery_address: string | null;

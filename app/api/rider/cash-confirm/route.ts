@@ -7,6 +7,7 @@ import { contanteDaRimettereCents } from '@/lib/shipping';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
 import { aggiornaQuadratura } from '@/lib/cassa/quadratura';
+import { logger } from '@/lib/logger';
 import { formatPriceFromCents } from '@/lib/format';
 import { NOTA_SENZA_FOTO_MAX, valutaProvaIncasso } from '@/lib/cassa/prova-incasso';
 import {
@@ -211,7 +212,14 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   }
 
   // Aggiorna riconciliazione giornaliera (include i COD consegnati ma NON confermati).
-  await aggiornaQuadratura(admin, user.id, giornoDiCassa);
+  // 5/11/2026 — la quadratura ora lancia se non riesce a leggere o scrivere:
+  // l'incasso e' gia' confermato, quindi lo si scrive nel log e si va avanti;
+  // il giro notturno riquadra-casse rifa' la giornata.
+  try {
+    await aggiornaQuadratura(admin, user.id, giornoDiCassa);
+  } catch (e) {
+    logger.error('[cash-confirm] quadratura della giornata non aggiornata', { riderId: user.id, giornoDiCassa, e });
+  }
 
   // 16/10/2026 — Sopra soglia senza foto: l'incasso passa, ma non in silenzio.
   // La nota resta nel registro delle attivita' (legato all'ordine) e arriva agli

@@ -79,7 +79,7 @@ export const TOPICS: ArgomentoAiuto[] = [
     title: 'Recensioni e clienti',
     items: [
       { q: 'Posso rispondere alle recensioni?',
-        a: 'Sì, da "Recensioni" → "Rispondi". Una risposta pubblica ben fatta migliora la fiducia del 30%.' },
+        a: 'Sì, da "Recensioni" → "Rispondi". Una risposta pubblica ben fatta mostra ai clienti che ci tieni.' },
       { q: 'Vedo i dati dei clienti?',
         a: 'Solo nome e indirizzo per la consegna. Telefono ed email restano privati per GDPR.' },
       { q: 'Come gestisco un cliente VIP?',

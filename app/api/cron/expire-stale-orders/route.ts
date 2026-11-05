@@ -259,6 +259,9 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
 
       // Storno del credito wallet eventualmente speso (entrambi i percorsi).
       const walletCents = Number(o.wallet_applied_cents ?? 0);
+      // 5/11/2026 — se lo storno cade, l'email non deve dire «il credito ti è
+      // stato restituito»: riceve 0 come credito tornato (vedi sotto).
+      let creditoNonTornato = false;
       if (walletCents > 0) {
         const { error: wErr } = await admin.rpc('wallet_credit', {
           p_user: o.user_id,
@@ -266,7 +269,10 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
           p_reason: 'order_auto_canceled',
           p_ref: o.id,
         });
-        if (wErr) logger.warn('[cron] expire-stale-orders: storno wallet fallito', { id: o.id, message: wErr.message });
+        if (wErr) {
+          creditoNonTornato = true;
+          logger.warn('[cron] expire-stale-orders: storno wallet fallito', { id: o.id, message: wErr.message });
+        }
       }
 
       // 27/8/2026 (R121) — Il codice sconto torna disponibile. Il turno
@@ -296,7 +302,12 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
       const come: ComeHaPagato = isCardPaid ? 'carta' : o.payment_method === 'cod' ? 'contanti' : 'da-pagare';
       const carrello = giro?.avviso ? { avviso: giro.avviso, come } : null;
       if (!isCardPaid || carrello) {
-        await avvisaIlClienteDellAnnullo(admin, o, "Il negozio non ha accettato l'ordine in tempo", carrello);
+        await avvisaIlClienteDellAnnullo(
+          admin,
+          creditoNonTornato ? { ...o, wallet_applied_cents: 0 } : o,
+          "Il negozio non ha accettato l'ordine in tempo",
+          carrello,
+        );
       }
       await avvisaLaCampanellaDelCarrello(admin, o.user_id, giro?.avviso, come);
 

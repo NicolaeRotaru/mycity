@@ -111,7 +111,12 @@ export const POST = withAdminAuthRateLimit(
 
     // La giornata di cassa e' quella della consegna: e' quella che la rimessa guarda.
     if (ordine.delivered_at) {
-      await aggiornaQuadratura(admin, ordine.rider_id, giornoLocale(new Date(ordine.delivered_at)));
+      // 5/11/2026 — la quadratura ora lancia se cade: l'incasso e' gia' scritto.
+      try {
+        await aggiornaQuadratura(admin, ordine.rider_id, giornoLocale(new Date(ordine.delivered_at)));
+      } catch (e) {
+        logger.error('[admin] quadratura della giornata non aggiornata', { orderId: ordine.id, e });
+      }
     }
 
     return NextResponse.json({ ok: true }, { status: 200 });

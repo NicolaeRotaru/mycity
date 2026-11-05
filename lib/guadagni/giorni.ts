@@ -1,4 +1,5 @@
 import { giornoPiacenza, ultimiGiorniPiacenza } from '@/lib/tempo-piacenza';
+import { incassatoDellOrdineCents } from '@/lib/metriche-venditore';
 
 /**
  * L'INCASSO GIORNO PER GIORNO, CON I GIORNI DI PIACENZA.
@@ -21,6 +22,8 @@ import { giornoPiacenza, ultimiGiorniPiacenza } from '@/lib/tempo-piacenza';
 export type OrdineDelGrafico = {
   created_at: string;
   total_price: number | string;
+  refunded_amount_cents?: number | null;
+  wallet_applied_cents?: number | null;
 };
 
 /**
@@ -37,7 +40,9 @@ export function incassoPerGiorno(
   for (const g of ultimiGiorniPiacenza(quantiGiorni, adesso)) giorni[g] = 0;
   for (const o of ordini) {
     const g = giornoPiacenza(o.created_at);
-    if (g in giorni) giorni[g] += Number(o.total_price);
+    // 5/11/2026 — Come il riquadro «Fatturato lordo»: l'incassato al netto dei
+    // rimborsi (incassatoDellOrdineCents), non il totale pieno dell'ordine.
+    if (g in giorni) giorni[g] += incassatoDellOrdineCents(o) / 100;
   }
   return Object.entries(giorni);
 }

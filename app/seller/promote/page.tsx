@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { useQuery } from '@tanstack/react-query';
@@ -101,19 +101,26 @@ export default function SellerPromotePage() {
 
   const price = weeks * PER_WEEK_EUR;
 
+  // 5/11/2026 — La chiave del tentativo che la rotta aspetta contro il doppio
+  // pagamento: una per apertura del modulo, rigenerata dopo ogni esito (come i
+  // buoni regalo). Senza, la rotta ripiegava su una finestra di dieci minuti.
+  const chiaveTentativo = useRef<string>(crypto.randomUUID());
+
   const pay = async () => {
     if (!selected) { toast.error('Scegli un prodotto da sponsorizzare'); return; }
     setPaying(true);
     try {
       const res = await fetch('/api/sponsored/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Idempotency-Key': chiaveTentativo.current },
         body: JSON.stringify({ productId: selected, weeks }),
       });
       const json = await res.json();
       if (!res.ok || !json.url) throw new Error(apiErrorMessage(json, 'Errore nel pagamento'));
       window.location.href = json.url as string;
     } catch (e) {
+      // Un tentativo finito è finito: il prossimo è un'altra sponsorizzazione.
+      chiaveTentativo.current = crypto.randomUUID();
       toast.error(friendlyError(e));
       setPaying(false);
     }

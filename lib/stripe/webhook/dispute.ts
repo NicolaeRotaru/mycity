@@ -208,10 +208,8 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
    */
   //
   // 'OPEN' letto PRIMA di scrivere non vuol dire con certezza «questo avviso è
-  // già passato di qui». Lo scrive anche il reclamo che il cliente apre
-  // dall'app: il trigger `trg_dispute_block_payout` (migrazione 063, mai tolto)
-  // mette 'OPEN' sull'ordine a ogni riga nuova in `disputes`. Per questo 'OPEN'
-  // fa solo da primo filtro, e la prova vera la dà Stripe
+  // già passato di qui». Fino alla 184 lo scriveva anche il reclamo dall'app (trigger 063): gli
+  // ordini di prima possono portarlo ancora. Per questo 'OPEN' fa solo da primo filtro, e la prova vera la dà Stripe
   // (`stornoGiaFattoPerLaContestazione`): uno storno nato dopo la contestazione.
   // Se c'era solo il reclamo, Stripe non ne ha nessuno e lo storno si fa.
   const giaPassati = new Set(orders.filter((o) => o.dispute_status === 'OPEN').map((o) => o.id));
@@ -263,9 +261,12 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     }
     // Anche il compenso del fattorino torna indietro: senza questo la
     // piattaforma restituisce l'incasso al cliente e paga la consegna da se'.
-    let stornatoFattorino = 0;
+    let stornatoFattorino = 0; // 5/11/2026 — Contestazione di una parte: al fattorino la stessa fetta, non tutto (mai rifatta se ripetuta).
+    const r = o as { rider_fee_cents?: number | null; shipping_cost?: number | string | null; rider_payout_reversed_cents?: number | null };
+    const quotaFattorino = fettaContestata >= 1 ? undefined : Math.round(fettaContestata * (r.rider_fee_cents ?? Math.round(Number(r.shipping_cost ?? 0) * 100)));
+    const fattorinoGiaStornato = quotaFattorino !== undefined && giaPassati.has(o.id) && Number(r.rider_payout_reversed_cents ?? 0) > 0;
     try {
-      const esito = await reverseRiderTransfer(o);
+      const esito = fattorinoGiaStornato ? { reversedCents: 0 } : await reverseRiderTransfer(o, quotaFattorino);
       stornatoFattorino = esito.reversedCents;
     } catch (e) {
       logger.error('[stripe] recupero compenso rider su contestazione fallito', { orderId: o.id, e });

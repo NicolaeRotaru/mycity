@@ -32,6 +32,14 @@
 
 export type OrdinePerMetriche = {
   total_price: number | string | null;
+  /**
+   * 5/11/2026 — Il netto del negozio scritto sull'ordine e quanto gliene e'
+   * stato ripreso. Se ci sono, il netto si legge da qui (la stessa regola della
+   * pagina Guadagni, `nettoDopoStorni`): un rimborso toglie al negozio solo la
+   * sua quota, e l'euro della veloce reso non gli toglie niente.
+   */
+  seller_payout_cents?: number | null;
+  seller_payout_reversed_cents?: number | null;
   delivery_status?: string | null;
   payment_status?: string | null;
   application_fee_cents?: number | null;
@@ -105,6 +113,27 @@ export type MetricheVenditore = {
 };
 
 /**
+ * Quanto resta al negozio su un ordine.
+ *
+ * 5/11/2026 — Prima si toglievano commissione e consegna piene da un incasso
+ * gia' scontato del rimborso intero: dopo un rimborso parziale il cruscotto
+ * mostrava meno di quello che il negozio riceve (la quota di commissione e di
+ * consegna del rimborso la assorbe MyCity), e l'euro della veloce reso dal
+ * freno si toglieva due volte. Il netto scritto sull'ordine meno gli storni e'
+ * quello che arriva sull'IBAN. Gli ordini senza netto scritto usano la regola
+ * di prima.
+ */
+function nettoDelNegozioCents(o: OrdinePerMetriche): number {
+  if (o.seller_payout_cents != null) {
+    return Math.max(0, o.seller_payout_cents - (o.seller_payout_reversed_cents ?? 0));
+  }
+  // Spedizione e quota di consegna non sono soldi del negozio: la prima va al
+  // fattorino, la seconda alla piattaforma.
+  const nonDelNegozio = cent(o.shipping_cost) + (o.delivery_fee_cents ?? 0);
+  return incassatoDellOrdineCents(o) - (o.application_fee_cents ?? 0) - nonDelNegozio;
+}
+
+/**
  * Calcola le metriche su un insieme di ordini del venditore.
  * `da` e `a` (opzionali) filtrano per data di creazione.
  */
@@ -115,7 +144,7 @@ export function metricheVenditore(
 ): MetricheVenditore {
   let incassatoCents = 0;
   let commissioneCents = 0;
-  let nonDelNegozioCents = 0;
+  let tuoNettoCents = 0;
   let contati = 0;
 
   for (const o of ordini) {
@@ -129,16 +158,14 @@ export function metricheVenditore(
     contati += 1;
     incassatoCents += incassatoDellOrdineCents(o);
     commissioneCents += o.application_fee_cents ?? 0;
-    // Spedizione e quota di consegna non sono soldi del negozio: la prima va al
-    // fattorino, la seconda alla piattaforma.
-    nonDelNegozioCents += cent(o.shipping_cost) + (o.delivery_fee_cents ?? 0);
+    tuoNettoCents += nettoDelNegozioCents(o);
   }
 
   return {
     ordini: contati,
     incassatoCents,
     commissioneCents,
-    tuoNettoCents: Math.max(0, incassatoCents - commissioneCents - nonDelNegozioCents),
+    tuoNettoCents: Math.max(0, tuoNettoCents),
   };
 }
 
@@ -228,4 +255,18 @@ export function totaliDiSempre(
     ),
     finestra,
   };
+}
+
+/**
+ * 5/11/2026 — QUANTI PEZZI, NON QUANTE RIGHE.
+ * «Articoli venduti» contava le righe d'ordine: sei cornetti in una riga
+ * valevano uno. Una riga senza quantita' letta vale uno, com'era prima.
+ */
+export function pezziVenduti(righe: ReadonlyArray<{ quantity?: number | null }>): number {
+  let pezzi = 0;
+  for (const r of righe) {
+    const q = Number(r.quantity ?? 1);
+    pezzi += Number.isFinite(q) && q > 0 ? q : 1;
+  }
+  return pezzi;
 }

@@ -8,6 +8,7 @@ import CollectionHeader from '@/components/CollectionHeader';
 import { useTranslations } from 'next-intl';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
+import { categorieRegalabili, type CategoriaDellaTassonomia } from './categorie-regalabili';
 
 /** Opzioni di ordinamento della toolbar collezione (allineate a search/category). */
 const COLLECTION_SORTS: SortOption[] = ['relevance', 'newest', 'price_asc', 'price_desc', 'discount_desc'];
@@ -44,14 +45,9 @@ export default function RegaliClient() {
     queryKey: [...queryKeys.categories.all, 'regali'],
     staleTime: 30 * 60 * 1000,
     queryFn: async (): Promise<string[]> => {
-      const { data } = await supabase.from('categories').select('id, slug, name');
-      const rows = (data ?? []) as { id: string; slug: string | null; name: string | null }[];
-      const matched = rows.filter((c) => {
-        const slug = (c.slug ?? '').toLowerCase();
-        const name = (c.name ?? '').toLowerCase();
-        return GIFT_CATEGORY_SLUGS.has(slug) || GIFT_NAME_HINTS.some((h) => name.includes(h));
-      });
-      return matched.map((c) => c.id);
+      // 5/11/2026 — anche parent_id: le figlie delle categorie scelte entrano anche loro.
+      const { data } = await supabase.from('categories').select('id, slug, name, parent_id');
+      return categorieRegalabili((data ?? []) as CategoriaDellaTassonomia[], GIFT_CATEGORY_SLUGS, GIFT_NAME_HINTS);
     },
   });
 

@@ -201,14 +201,22 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * ripresa: li' il segno del bonifico resta sull'ordine, e il reclamo resta chiuso
    * finche' non si finisce.
    */
-  const riapri = async () => {
-    if (ripresa) return;
-    await admin
+  // 5/11/2026 — Il ritorno indietro puo' cadere: allora il reclamo resta
+  // risolto senza soldi usciti, e «riprova» porterebbe a «gia' risolto».
+  // Torna false se non e' riuscito: chi amministra legge com'e' andata.
+  const riapri = async (): Promise<boolean> => {
+    if (ripresa) return true;
+    const { error: errRiapri } = await admin
       .from('disputes')
       .update({ status: dispute.status, resolved_by: null, resolved_at: null, refund_cents: null })
       .eq('id', params.id)
       .eq('status', body.status);
+    if (!errRiapri) return true;
+    logger.error('[disputes] reclamo non riaperto dopo un rimborso non partito', { disputeId: params.id, message: errRiapri.message });
+    return false;
   };
+  const RECLAMO_BLOCCATO =
+    `Il rimborso non è partito e il reclamo non si è potuto riaprire: risulta risolto senza soldi usciti. Riportalo a «${dispute.status}» prima di riprovare.`;
 
   /** Vero solo se i soldi sono davvero usciti verso il cliente. */
   let rimborsoEmesso = false;
@@ -222,7 +230,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     // vale SOLO per gli ordini carta: un rimborso COD non usa Stripe.
     const isCard = !!ord?.stripe_payment_intent;
     if (isCard && !isStripeConfigured()) {
-      await riapri();
+      if (!(await riapri())) return ApiErrors.internal(RECLAMO_BLOCCATO);
       return ApiErrors.unavailable('Stripe non configurato');
     }
     try {
@@ -244,7 +252,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       rimborsoPieno = res.pieno;
     } catch (err) {
       logger.error('[disputes] refund failed', err);
-      await riapri();
+      if (!(await riapri())) return ApiErrors.internal(RECLAMO_BLOCCATO);
       // 17/10/2026 — Come la decisione sul reso: i due casi che chi decide deve
       // conoscere, e per tutto il resto una frase sola. Mai il testo grezzo dell'errore.
       if (err instanceof AccreditoGiaUscitoConAltroImporto) return ApiErrors.conflict(err.message);

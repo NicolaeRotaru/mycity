@@ -42,8 +42,8 @@ export default function ReturnsPage() {
           <div>
             <h2 className="mb-1 font-serif text-lg font-bold text-ink-900">14 giorni di diritto di recesso</h2>
             <p className="text-sm text-ink-700">
-              Per legge (D.Lgs. 206/2005 - Codice del Consumo) hai 14 giorni dalla consegna per restituire qualsiasi
-              prodotto senza dover fornire una motivazione.
+              Per legge (D.Lgs. 206/2005 - Codice del Consumo) hai 14 giorni dalla consegna per restituire un
+              prodotto senza dover fornire una motivazione, esclusi i freschi e quelli fatti su ordinazione.
             </p>
           </div>
         </div>
@@ -56,18 +56,17 @@ export default function ReturnsPage() {
             <li>Vai su <Link href="/orders" className="font-semibold text-primary-700 hover:text-primary-800">&quot;I miei ordini&quot;</Link> e apri l&apos;ordine interessato.</li>
             <li>Clicca su <strong>&quot;Richiedi reso&quot;</strong> e seleziona i prodotti da restituire.</li>
             <li>Specifica il motivo (cambio idea, taglia errata, prodotto difettoso…) e conferma.</li>
-            <li>Il venditore riceve la richiesta e ti indica le modalità di spedizione del reso.</li>
-            <li>Spedisci il pacco entro 14 giorni dalla richiesta.</li>
+            <li>Il venditore riceve la richiesta e si accorda con te su come fargli riavere il prodotto.</li>
+            <li>Riportagli il prodotto entro 14 giorni dalla richiesta.</li>
             <li>Al ricevimento, il venditore verifica il prodotto e procede al rimborso.</li>
           </ol>
         </section>
 
         <section className="rounded-2xl border border-cream-300 bg-white p-6">
           <h2 className="mb-3 font-serif text-xl font-bold text-ink-900">Condizioni del prodotto restituito</h2>
-          <p className="mb-2 leading-relaxed">Il prodotto deve essere:</p>
           <ul className="list-disc space-y-1 pl-5 leading-relaxed">
-            <li>Integro, non danneggiato e non usato (è ammessa la prova come faresti in negozio).</li>
-            <li>Completo di etichette, accessori e confezione originale.</li>
+            <li>Puoi provarlo come faresti in negozio. Se torna rovinato o usato oltre la prova, il rimborso può
+            essere ridotto: te lo diciamo per iscritto, con il motivo.</li>
             <li>Non si applica a: prodotti deperibili (alimentari freschi), prodotti igienici sigillati aperti,
             beni personalizzati, contenuti digitali, riviste, biglietti per eventi.</li>
           </ul>
@@ -102,7 +101,7 @@ export default function ReturnsPage() {
           <h2 className="mb-3 font-serif text-xl font-bold text-ink-900">Chi paga la spedizione del reso?</h2>
           <ul className="list-disc space-y-1 pl-5 leading-relaxed">
             <li><strong>Cambio idea:</strong> le spese di restituzione sono a tuo carico.</li>
-            <li><strong>Prodotto difettoso o non conforme:</strong> il reso è gratuito e organizzato da noi.</li>
+            <li><strong>Prodotto difettoso o non conforme:</strong> il reso non ti costa niente: ci accordiamo con te su come riaverlo.</li>
             <li><strong>Errore del venditore</strong> (prodotto sbagliato, taglia diversa da quella ordinata): reso gratuito.</li>
           </ul>
         </section>
@@ -110,7 +109,7 @@ export default function ReturnsPage() {
         <section className="rounded-2xl border border-cream-300 bg-white p-6">
           <h2 className="mb-3 font-serif text-xl font-bold text-ink-900">Garanzia legale di conformità</h2>
           <p className="leading-relaxed">Tutti i prodotti acquistati su MyCity sono coperti dalla garanzia legale di <strong>24 mesi</strong> contro
-          i difetti di conformità (art. 128 e seguenti del Codice del Consumo). Per beni usati la garanzia è di 12 mesi.</p>
+          i difetti di conformità (art. 128 e seguenti del Codice del Consumo).</p>
         </section>
 
         <section className="rounded-2xl border border-cream-300 bg-white p-6">

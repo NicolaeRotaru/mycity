@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
+import { getServerSupabase } from '@/lib/supabase/server';
 import { createConnectOnboardingLink, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
+import { ContoNonSalvato, salvaIlConto } from '@/lib/stripe/salva-conto';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
@@ -32,7 +33,7 @@ export const POST = withAuthRateLimit(
     if (pErr || !prof) return ApiErrors.notFound('Profilo non trovato.');
 
     try {
-      const { accountId, url } = await createConnectOnboardingLink({
+      const { url } = await createConnectOnboardingLink({
         sellerEmail: user.email,
         sellerId: user.id,
         existingAccount: prof.stripe_account_id ?? null,
@@ -41,15 +42,13 @@ export const POST = withAuthRateLimit(
         // R048 — al fattorino non si chiede di poter incassare carte: non lo
         // fara' mai, e quella capacita' gli impone una verifica molto piu' pesante.
         ruolo: 'fattorino',
+        salvaConto: (id) => salvaIlConto(user.id, id),
       });
-
-      if (accountId !== prof.stripe_account_id) {
-        const admin = getAdminSupabase();
-        await admin.from('profiles').update({ stripe_account_id: accountId }).eq('id', user.id);
-      }
 
       return NextResponse.json({ url }, { status: 200 });
     } catch (err) {
+      // 5/11/2026 — l'id del conto non si e' salvato: non si manda a Stripe.
+      if (err instanceof ContoNonSalvato) return ApiErrors.unavailable(err.message);
       logger.error('[stripe] rider connect onboarding failed', err);
       return ApiErrors.internal('Errore Stripe');
     }

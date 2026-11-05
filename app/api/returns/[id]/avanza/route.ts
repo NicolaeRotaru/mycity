@@ -152,6 +152,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const comando = await chiComandaIlReso(ret.order_id, user.id);
   let ritiro: { sellerId: string | null } | null = null;
   if (!comando.autorizzato) {
+    if (comando.motivo === 'guasto') return ApiErrors.unavailable('Non riusciamo a leggere il reso adesso: riprova fra poco.');
     if (comando.motivo === 'ordine-mancante') return ApiErrors.notFound('Ordine del reso non trovato');
     if (body.stato === 'CANCELED') ritiro = await eIlClienteDellOrdine(ret.order_id, user.id);
     if (!ritiro) return ApiErrors.forbidden();
@@ -182,7 +183,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // R84 — Il tetto lo decide la stessa regola che usa chi muove i soldi: sui
   // contanti conta solo quello che e' stato incassato davvero.
   const COLONNE_ORDINE =
-    'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, cash_confirmed_at, payment_status, delivery_status, stripe_refund_id';
+    'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, cash_confirmed_at, payment_status, delivery_status, stripe_refund_id, discount_amount';
   let ordine: OrdineDaRimborsare | null = null;
   let importoRimborso = 0;
   /**
@@ -290,7 +291,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       const nonBasta = percheIlRimborsoDelRecessoNonBasta({
         reso: ret,
         importoCents: importoRimborso,
-        interoCents: interoDelRecesso(residuoCent, rigaResaCents(righe, ret.order_item_id ?? null)),
+        interoCents: interoDelRecesso(residuoCent, rigaResaCents(righe, ret.order_item_id ?? null, Math.round(Number((ordine as { discount_amount?: number | string | null } | null)?.discount_amount ?? 0) * 100))),
         motivo: body.note,
       });
       if (nonBasta) return ApiErrors.conflict(nonBasta);
@@ -347,11 +348,34 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       logger.error('[returns/avanza] rimborso fallito', err);
       // I soldi non sono usciti: il reso torna dov'era, così resta lavorabile
       // invece di restare fermo su «rimborsato» senza rimborso.
-      await admin
-        .from('returns')
-        .update({ status: statoPrecedente })
-        .eq('id', params.id)
-        .eq('status', 'REFUNDED');
+      // 5/11/2026 — Se anche il ritorno indietro cade, il reso resta «rimborsato»
+      // senza soldi: si avvisa chi amministra e non si dice «riprova».
+      const { error: errRitorno } = ripresa
+        ? { error: null }
+        : await admin
+            .from('returns')
+            .update({ status: statoPrecedente })
+            .eq('id', params.id)
+            .eq('status', 'REFUNDED');
+      if (errRitorno) {
+        logger.error('[returns/avanza] reso non rimesso com era dopo un rimborso non partito', {
+          returnId: params.id, message: errRitorno.message,
+        });
+        try {
+          await notifyAdmins(
+            '⚠️ Reso bloccato: rimborso non partito',
+            `Il rimborso del reso ${params.id.slice(0, 6).toUpperCase()} non è partito e il reso è rimasto «rimborsato»: ` +
+              `nessun soldo è uscito. Riportalo a ${statoPrecedente} dal pannello prima di rimborsarlo.`,
+            '/admin/orders',
+            { unaVoltaPer: `reso-bloccato:${params.id}` },
+          );
+        } catch (e) {
+          logger.error('[returns/avanza] avviso del reso bloccato non inviato', { returnId: params.id, e });
+        }
+        return ApiErrors.internal(
+          "Il rimborso non è partito e il reso non si è potuto rimettere com'era: abbiamo avvisato l'amministrazione. Non riprovare per ora.",
+        );
+      }
       // 17/10/2026 — Come `decide`: il negozio legge i due casi che deve
       // conoscere, e per tutto il resto una frase sola. Mai il testo grezzo
       // dell'errore (R138: niente messaggi interni).

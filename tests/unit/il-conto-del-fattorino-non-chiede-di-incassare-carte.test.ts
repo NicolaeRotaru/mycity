@@ -37,6 +37,8 @@ vi.mock('stripe', () => ({
         contiCreati.push(corpo);
         return { id: 'acct_nuovo' };
       },
+      // 5/11/2026 — il conto gia' scritto sul profilo si controlla prima di riusarlo.
+      retrieve: async (id: string) => ({ id }),
     };
     accountLinks = {
       create: async () => ({ url: 'https://connect.stripe.test/onboarding' }),

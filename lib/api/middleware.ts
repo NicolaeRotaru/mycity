@@ -560,7 +560,19 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
       : null;
     if (!secretsMatch(bearer, expected)) return ApiErrors.unauthorized();
 
-    const risposta = await handler(req);
+    // 5/11/2026 — Una chiave mancante (p.es. SUPABASE_SERVICE_ROLE_KEY) lancia
+    // dentro getAdminSupabase(): sei lavori la chiamavano fuori da ogni try e
+    // finivano in un errore non gestito. Qui si dice cosa manca, con un 503.
+    let risposta: NextResponse;
+    try {
+      risposta = await handler(req);
+    } catch (e) {
+      if (e instanceof Error && /non configurat/i.test(e.message)) {
+        logger.error('[cron] lavoro non configurato', { lavoro: nomeDelLavoro(req), message: e.message });
+        return ApiErrors.unavailable(e.message);
+      }
+      throw e;
+    }
 
     // 8/9/2026 — IL BATTITO DICE «SONO PASSATO DI QUI», NON «È ANDATO TUTTO BENE».
     //

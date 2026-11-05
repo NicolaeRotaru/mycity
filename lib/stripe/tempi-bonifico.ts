@@ -11,10 +11,14 @@
  *
  * Il tempo del bonifico è la promessa su cui un negozio decide se restare.
  * Averla scritta in quattro modi vuol dire che nessuno sa quale sia quella
- * vera — e la versione VERA è anche la migliore delle quattro: paghiamo entro
- * un'ora dalla consegna, non in tre giorni e non il 5 del mese. Era il
- * vantaggio più forte che abbiamo verso i negozi, ed era l'unico che non
- * dicevamo.
+ * vera — e la versione VERA è anche la migliore delle quattro: il bonifico
+ * PARTE un'ora dopo la consegna, non in tre giorni e non il 5 del mese.
+ *
+ * 5/11/2026 — Attenzione a cosa vuol dire «un'ora»: è il passaggio dei soldi
+ * sul conto Stripe del negozio (il trasferimento). Dal conto Stripe alla sua
+ * banca il versamento segue il calendario dei pagamenti di Stripe, e ci
+ * vogliono giorni lavorativi in più. «Paghiamo entro un'ora» non va scritto
+ * a nessuno come «soldi in banca entro un'ora».
  *
  * Da qui in avanti il numero è uno: chi paga e chi lo racconta leggono la
  * stessa riga.
