@@ -142,8 +142,8 @@ export default function AdminTodayPage() {
         <AdminSectionLabel icon={TrendingUp}>Oggi</AdminSectionLabel>
         {stats.campione && (
           <p className="mb-2 text-xs font-semibold text-secondary-700">
-            Oggi ci sono più ordini di quanti se ne possano leggere in una volta: ordini e incasso
-            qui sotto sono un campione, non il totale della giornata.
+            Oggi ci sono più ordini di quanti se ne possano leggere in una volta: ordini, incasso
+            e consegnati qui sotto sono un campione, non il totale della giornata.
           </p>
         )}
         <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
@@ -159,7 +159,7 @@ export default function AdminTodayPage() {
         <AdminSectionLabel icon={Clock}>In attesa</AdminSectionLabel>
         <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
           <KpiCard icon={Clock} label="Ordini NEW" value={stats.ordersPendingCount} href="/admin/orders" color="primary" />
-          <KpiCard icon={UserCheck} label="Seller pending" value={stats.sellersPendingCount} href="/admin/users?role=seller" color="accent" />
+          <KpiCard icon={UserCheck} label="Seller pending" value={stats.sellersPendingCount} href="/admin/users?role=pending" color="accent" />
           <KpiCard icon={Gavel} label="Reclami aperti" value={stats.disputesOpenCount} href="/admin/disputes" color="secondary" alert />
           <KpiCard icon={Siren} label="SOS attivi" value={stats.sosActiveCount} href="/admin/sos" color="secondary" alert />
         </div>
