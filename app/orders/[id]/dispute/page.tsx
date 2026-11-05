@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Textarea } from '@/components/ui/Field';
 import { useTranslations } from 'next-intl';
 import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
@@ -30,19 +31,29 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
   const [reason, setReason] = useState<string>('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // 5/11/2026 — Una lettura caduta non è «ordine non trovato»: si resta qui con «Riprova».
+  const [letturaFallita, setLetturaFallita] = useState(false);
+  const [tentativo, setTentativo] = useState(0);
+  // 5/11/2026 — Il database tiene un solo reclamo aperto per ordine: se c'è già, lo si dice.
+  const [reclamoAperto, setReclamoAperto] = useState<{ created_at: string; status: string } | null>(null);
 
   useEffect(() => {
     (async () => {
+      setLetturaFallita(false);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.push(`/sign-in?returnTo=/orders/${params.id}/dispute`);
         return;
       }
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('orders')
         .select('id, total_price, delivery_status, seller_id, created_at')
         .eq('id', params.id)
-        .single();
+        .maybeSingle();
+      if (error) {
+        setLetturaFallita(true);
+        return;
+      }
       if (!data) {
         toast.error('Ordine non trovato');
         router.push('/orders');
@@ -55,9 +66,18 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
       const riga = data as { seller_id: string };
       const [conNegozio] = await conNegozioDellOrdine(supabase, [riga], 'id, store_name')
         .catch(() => [{ ...riga, seller: null }]);
+      // Se questa lettura cade si mostra il modulo: il database rifiuta comunque il doppione,
+      // e il messaggio qui sotto (submit) lo dice con parole vere.
+      const { data: aperti } = await supabase
+        .from('disputes')
+        .select('created_at, status')
+        .eq('order_id', params.id)
+        .in('status', ['open', 'under_review'])
+        .limit(1);
+      setReclamoAperto(((aperti as Array<{ created_at: string; status: string }> | null) ?? [])[0] ?? null);
       setOrder(conNegozio as unknown as typeof order);
     })();
-  }, [params.id, router]);
+  }, [params.id, router, tentativo]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,7 +96,13 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
         reason,
         description: description.trim(),
       });
-      if (error) throw error;
+      if (error) {
+        if ((error as { code?: string }).code === '23505' || /disputes_one_open_per_order/.test(error.message ?? '')) {
+          toast.error('Hai già un reclamo aperto su questo ordine: lo stiamo esaminando, ti scriviamo noi.');
+          return;
+        }
+        throw error;
+      }
       toast.success('Reclamo aperto. Il nostro team lo prenderà in carico entro 48h.');
       router.push('/orders');
     } catch (err) {
@@ -86,7 +112,34 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
     }
   };
 
+  if (letturaFallita) {
+    return (
+      <div className="container mx-auto px-4 sm:px-6 py-12 max-w-2xl">
+        <ErrorState
+          title="Non riesco a caricare l'ordine"
+          description="Sembra un problema di collegamento. L'ordine c'è: riprova."
+          retry={() => setTentativo((t) => t + 1)}
+        />
+      </div>
+    );
+  }
   if (!order) return <LoadingState />;
+  if (reclamoAperto) {
+    return (
+      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-2xl">
+        <Link href={`/orders/${params.id}`} className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-800 mb-2">
+          <ArrowLeft size={14} /> Torna all'ordine
+        </Link>
+        <div className="bg-accent-50 border border-accent-200 rounded-2xl p-5 mt-5 text-sm text-ink-700">
+          <p className="font-semibold mb-1">Hai già un reclamo aperto su questo ordine</p>
+          <p>
+            L&apos;hai aperto il {new Date(reclamoAperto.created_at).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })} ·
+            stato: {reclamoAperto.status === 'under_review' ? 'in esame' : 'aperto'}. Ti scriviamo noi appena c&apos;è una decisione.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const selectedReason = REASONS.find((r) => r.value === reason);
 
@@ -110,8 +163,8 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
       </div>
 
       <form onSubmit={submit} className="bg-white border border-cream-300 rounded-2xl p-6 mt-5 space-y-5 shadow-warm">
-        <div>
-          <label className="block text-sm font-semibold text-ink-900 mb-2">Motivo del reclamo *</label>
+        <fieldset>
+          <legend className="block text-sm font-semibold text-ink-900 mb-2">Motivo del reclamo *</legend>
           <div className="space-y-2">
             {REASONS.map((r) => (
               <label key={r.value} className={`flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
@@ -132,7 +185,7 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
               </label>
             ))}
           </div>
-        </div>
+        </fieldset>
 
         <div>
           <Textarea

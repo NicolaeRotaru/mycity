@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import EmptyState from '@/components/EmptyState';
 import { Textarea } from '@/components/ui/Field';
 import { haUnaParteInContanti } from '@/lib/rimborsi/regole-del-rimborso';
@@ -41,7 +42,9 @@ export default function NewReturnPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const tStates = useTranslations('states');
-  const [reason, setReason] = useState<string>('DAMAGED');
+  // 5/11/2026 — Nessun motivo già scelto: «Prodotto danneggiato» è un'accusa al negozio, e col
+  // motivo preselezionato il controllo dei freschi (solo su «Ho cambiato idea») non scattava.
+  const [reason, setReason] = useState<string>('');
   const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -50,10 +53,14 @@ export default function NewReturnPage() {
   const [loaded, setLoaded] = useState(false);
   const [resoAperto, setResoAperto] = useState<{ id: string; status: string } | null>(null);
   const [ritiroInCorso, setRitiroInCorso] = useState(false);
+  // 5/11/2026 — Una lettura caduta non è «ordine non trovato»: si offre «Riprova».
+  const [letturaFallita, setLetturaFallita] = useState(false);
+  const [tentativo, setTentativo] = useState(0);
 
   useEffect(() => {
     (async () => {
-      const [{ data }, { data: aperti }] = await Promise.all([
+      setLetturaFallita(false);
+      const [{ data, error }, { data: aperti }] = await Promise.all([
         supabase
           .from('orders')
           .select('id, total_price, delivered_at, delivery_status, payment_method, stripe_payment_intent, wallet_applied_cents')
@@ -61,11 +68,17 @@ export default function NewReturnPage() {
           .single(),
         supabase.from('returns').select('id, status').eq('order_id', params.id).in('status', STATI_APERTI).limit(1),
       ]);
+      // PGRST116 = nessuna riga (id inesistente o ordine non tuo): quello sì è «non trovato».
+      if (error && (error as { code?: string }).code !== 'PGRST116') {
+        setLetturaFallita(true);
+        setLoaded(true);
+        return;
+      }
       setOrder(data);
       setResoAperto((aperti as Array<{ id: string; status: string }> | null)?.[0] ?? null);
       setLoaded(true);
     })();
-  }, [params.id]);
+  }, [params.id, tentativo]);
 
   async function ritira() {
     if (!resoAperto) return;
@@ -125,6 +138,9 @@ export default function NewReturnPage() {
   }
 
   async function submit() {
+    // 5/11/2026 — Con la foto ancora in caricamento il reso partiva senza, e dopo non si poteva
+    // più aggiungere. Senza motivo non parte niente.
+    if (uploading || !reason) return;
     setSubmitting(true);
     try {
       const r = await fetch('/api/returns/create', {
@@ -159,6 +175,19 @@ export default function NewReturnPage() {
   // audit 🟠-20: distinguere "in caricamento" da "non trovato" (prima: spinner
   // infinito su id inesistente o ordine altrui bloccato da RLS).
   if (!loaded) return <LoadingState />;
+  if (letturaFallita)
+    return (
+      <div className="container mx-auto max-w-xl px-4 py-12">
+        <ErrorState
+          title="Non riesco a caricare l'ordine"
+          description="Sembra un problema di collegamento. L'ordine c'è: riprova."
+          retry={() => {
+            setLoaded(false);
+            setTentativo((t) => t + 1);
+          }}
+        />
+      </div>
+    );
   if (!order)
     return (
       <div className="container mx-auto max-w-xl px-4 py-12">
@@ -288,7 +317,8 @@ export default function NewReturnPage() {
       </p>
 
       <div className="mt-6 rounded-2xl bg-white p-6 shadow ring-1 ring-cream-300">
-        <label className="block text-sm font-medium text-ink-700">Motivo del reso</label>
+        <fieldset>
+        <legend className="block text-sm font-medium text-ink-700">Motivo del reso</legend>
         <div className="mt-2 space-y-2">
           {REASONS.map((r) => (
             <label key={r.value} className="flex cursor-pointer items-center gap-3 rounded-lg border border-cream-300 p-3 hover:bg-cream-50">
@@ -304,6 +334,7 @@ export default function NewReturnPage() {
             </label>
           ))}
         </div>
+        </fieldset>
 
         <Textarea
           label="Dettagli aggiuntivi (opzionale)"
@@ -322,13 +353,23 @@ export default function NewReturnPage() {
           {/* 27/8/2026 (R117) — ogni foto allegata al reso si chiamava «prova»:
               otto foto, otto volte la stessa parola. Almeno si numerano. */}
           {photos.map((p, i) => (
-            <img
-              key={p}
-              src={p}
-              alt={`Foto ${i + 1} allegata alla richiesta di reso`}
-              loading="lazy"
-              className="h-20 w-20 rounded-lg object-cover ring-1 ring-cream-300"
-            />
+            <div key={p} className="relative">
+              <img
+                src={p}
+                alt={`Foto ${i + 1} allegata alla richiesta di reso`}
+                loading="lazy"
+                className="h-20 w-20 rounded-lg object-cover ring-1 ring-cream-300"
+              />
+              {/* 5/11/2026 — La foto sbagliata si stacca: prima l'elenco cresceva e basta. */}
+              <button
+                type="button"
+                onClick={() => setPhotos((tutte) => tutte.filter((x) => x !== p))}
+                aria-label={`Togli la foto ${i + 1}`}
+                className="absolute -right-2 -top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-ink-900 text-xs font-bold text-white shadow"
+              >
+                ×
+              </button>
+            </div>
           ))}
           {photos.length < 8 && (
             <label className="inline-flex h-20 w-20 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-cream-300 text-2xl text-ink-400 hover:bg-cream-50">
@@ -344,6 +385,9 @@ export default function NewReturnPage() {
                 className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
+                  // 5/11/2026 — Si azzera il campo: dopo un errore la stessa foto si può riscegliere
+                  // (il browser fa scattare change solo se il valore cambia).
+                  e.currentTarget.value = '';
                   if (f) uploadPhoto(f);
                 }}
               />
@@ -365,10 +409,10 @@ export default function NewReturnPage() {
 
         <button
           onClick={submit}
-          disabled={submitting}
+          disabled={submitting || uploading || !reason}
           className="mt-6 w-full rounded-lg bg-primary-700 px-4 py-3 text-sm font-semibold text-white hover:bg-primary-800 disabled:opacity-50"
         >
-          {submitting ? tStates('sending') : 'Invia richiesta di reso'}
+          {submitting ? tStates('sending') : uploading ? 'Attendi la foto…' : !reason ? 'Scegli il motivo del reso' : 'Invia richiesta di reso'}
         </button>
       </div>
     </div>
