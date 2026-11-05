@@ -26,6 +26,7 @@ import { formatPriceFromCents } from '@/lib/format';
 import { PAUSA_RIMBORSO_DA_DIVIDERE, SENZA_LA_PAUSA_DEL_CARRELLO } from '@/lib/stripe/webhook/rimborsi-da-fuori';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { bonificoDellaChiave } from '@/lib/stripe/elenco-dei-rimborsi';
+import { scriviCampanella } from '@/lib/ordini/campanella';
 
 export const runtime = 'nodejs';
 
@@ -339,7 +340,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   }
 
   // Notifica chi ha aperto il reclamo.
-  await admin.from('notifications').insert({
+  await scriviCampanella(admin, {
         // #33 — la categoria decide se la persona vuole ancora ricevere
         // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
         category: 'order',
@@ -352,7 +353,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
           : '✕ Reclamo respinto',
     body: body.notes,
     link: `/orders/${dispute.order_id}`,
-  });
+  }, { dove: 'dispute-resolve', ordine: dispute.order_id });
 
   // 5/11/2026 (S05) — Anche il negozio sa come si è chiuso il reclamo a suo carico,
   // e quanto è stato rimborsato al cliente: prima l'avviso partiva solo al cliente.

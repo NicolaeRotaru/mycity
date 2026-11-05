@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { riordina } from '@/lib/riordino';
+import { fotoDellaRigaOrdine, nomeDellaRigaOrdine } from '@/lib/ordini/riga-ordine';
 import { Package, Store, MapPin, RotateCcw } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
@@ -32,6 +33,12 @@ type OrderItem = {
   quantity: number;
   unit_price: number;
   product_id: string | null;
+  // 5/11/2026 — la copia del giorno dell'ordine (nome, foto) e la variante comprata: il prodotto
+  // esaurito o il negozio sospeso non si leggono più, la riga dell'ordine sì.
+  product_name?: string | null;
+  product_image?: string | null;
+  variant_id?: string | null;
+  variant_label?: string | null;
   products: { name: string; images: string[] | null } | null;
 };
 
@@ -55,7 +62,7 @@ const fetchOrders = async (): Promise<Order[]> => {
     .select(`
       id, total_price, payment_status, delivery_status, created_at, seller_id,
       order_items (
-        id, quantity, unit_price, product_id,
+        id, quantity, unit_price, product_id, product_name, product_image, variant_id, variant_label,
         products ( name, images )
       )
     `)
@@ -86,7 +93,10 @@ function StripeReturnHandler() {
   const qc = useQueryClient();
   useEffect(() => {
     if (searchParams.get('stripe') === 'success') {
-      toast.success('Pagamento completato! Il tuo ordine è confermato.');
+      // 5/11/2026 — Al ritorno da Stripe l'ordine può non esserci ancora (lo crea il webhook), e in
+      // due casi rari non nascerà affatto (riserva scaduta, incasso diverso): «confermato» era una
+      // promessa. Si dice quello che sappiamo: il pagamento è arrivato, l'ordine si sta confermando.
+      toast.success('Pagamento ricevuto: stiamo confermando il tuo ordine.');
       // Il carrello si svuota anche sul percorso con la carta. Prima lo faceva
       // solo il contrassegno: chi pagava con la carta tornava e ritrovava tutto
       // dentro, con lo stesso ordine pronto a essere rifatto per sbaglio.
@@ -200,9 +210,11 @@ export default function OrdersPage() {
     const aggiunti = await riordina(
       order.order_items.map((it) => ({
         productId: it.product_id ?? '',
-        name: it.products?.name ?? '',
+        name: nomeDellaRigaOrdine(it),
+        variantId: it.variant_id ?? undefined,
+        variantLabel: it.variant_label ?? undefined,
         prezzoStorico: Number(it.unit_price),
-        image: it.products?.images?.[0],
+        image: fotoDellaRigaOrdine(it),
         quantity: it.quantity,
         sellerId: order.seller_id ?? undefined,
         storeName: order.seller?.store_name ?? undefined,
@@ -230,10 +242,20 @@ export default function OrdersPage() {
             ctaHref="/sign-in?returnTo=/orders"
           />
         ) : (
-          <ErrorState
-            title="Impossibile caricare gli ordini"
-            onRetry={() => refetch()}
-          />
+          <>
+            {/* 5/11/2026 — Anche qui chi torna dal pagamento con la carta deve sapere che il
+                pagamento è arrivato (e il carrello si svuota): non deve pagare di nuovo. */}
+            <Suspense fallback={null}><StripeReturnHandler /></Suspense>
+            <ErrorState
+              title="Impossibile caricare gli ordini"
+              description={
+                stripeInCorso
+                  ? "Il pagamento è arrivato: non pagare di nuovo. L'ordine compare qui appena la pagina si ricarica."
+                  : undefined
+              }
+              onRetry={() => refetch()}
+            />
+          </>
         )}
       </div>
     );
@@ -259,9 +281,23 @@ export default function OrdersPage() {
   }
 
   if (orders.length === 0) {
+    // 5/11/2026 — Passati i 30 secondi dopo un pagamento con la carta senza nessun ordine, «Non hai
+    // ancora ordini» è falso: il pagamento c'è stato e, se l'ordine non è nato, il rimborso parte da
+    // solo. Lo si dice, con la strada per l'assistenza.
+    const tornatoDalPagamento =
+      typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('stripe') === 'success';
     return (
       <div className="py-8">
         <Suspense fallback={null}><StripeReturnHandler /></Suspense>
+        {tornatoDalPagamento ? (
+          <EmptyState
+            icon={Package}
+            title="Il tuo ordine non è ancora comparso"
+            description="Non pagare di nuovo. Se l'ordine non è riuscito a partire, il pagamento ti viene restituito in automatico e te lo scriviamo nella campanella e per email."
+            ctaLabel="Scrivi all'assistenza"
+            ctaHref="/contact"
+          />
+        ) : (
         <EmptyState
           icon={Package}
           title="Non hai ancora ordini"
@@ -269,6 +305,7 @@ export default function OrdersPage() {
           ctaLabel="Inizia a esplorare"
           ctaHref="/search"
         />
+        )}
         {/* 31/10/2026 — qui c'era un secondo invito, «€5 di benvenuto», verso la
             pagina dei punti. La migrazione 168 ha tolto il regalo di benvenuto e
             spento i punti (carta #209: nessun regalo in euro al lancio): chi non ha
@@ -333,12 +370,12 @@ export default function OrdersPage() {
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <div className="flex gap-1.5">
                   {thumbs.map((it) => {
-                    const img = it.products?.images?.[0];
+                    const img = fotoDellaRigaOrdine(it);
                     return (
                       <div
                         key={it.id}
                         className="relative shrink-0"
-                        title={`${it.products?.name ?? 'Prodotto'} ×${it.quantity}`}
+                        title={`${nomeDellaRigaOrdine(it)}${it.variant_label ? ` · ${it.variant_label}` : ''} ×${it.quantity}`}
                       >
                         <div className="h-12 w-12 overflow-hidden rounded-lg bg-cream-100 flex items-center justify-center">
                           {img ? (

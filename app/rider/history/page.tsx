@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Check } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { compensoConsegnaEuro } from '@/lib/shipping';
 
@@ -34,7 +35,8 @@ function dayLabel(iso: string): string {
 }
 
 export default function RiderHistoryPage() {
-  const { data: orders = [], isLoading } = useQuery({
+  // 5/11/2026 — Una lettura caduta non è «Non hai ancora completato consegne».
+  const { data: orders = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.rider.history,
     queryFn: async (): Promise<RiderOrderRow[]> => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -83,6 +85,17 @@ export default function RiderHistoryPage() {
   }, [orders]);
 
   if (isLoading) return <LoadingState />;
+  if (isError) {
+    return (
+      <div className="px-4 py-10">
+        <ErrorState
+          title="Non riesco a leggere il tuo storico"
+          description="Sembra un problema di collegamento: i tuoi dati non sono spariti. Riprova."
+          retry={() => { void refetch(); }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="pb-5">

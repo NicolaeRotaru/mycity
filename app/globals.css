@@ -81,6 +81,9 @@
   /* Order-status palette (badge) */
   --status-new:#B45309; --status-accepted:#1D4ED8; --status-ready:#6D28D9; --status-assigned:#4338CA;
   --status-pickedup:#0E7490; --status-delivery:#7E22CE; --status-delivered:#047857; --status-canceled:#BE123C;
+  /* 5/11/2026 — Gli sfondi dei bollini di stato, prima scritti a mano in lib/order-status.ts. */
+  --status-new-bg:#FFFBEB; --status-accepted-bg:#EFF6FF; --status-ready-bg:#F5F3FF; --status-assigned-bg:#EEF2FF;
+  --status-pickedup-bg:#ECFEFF; --status-delivery-bg:#FAF5FF; --status-delivered-bg:#ECFDF5; --status-canceled-bg:#FFF1F2;
 
   /* ---- Back-compat: previous --color-* prefixed semantic names ----------- */
   --color-surface:          var(--surface);

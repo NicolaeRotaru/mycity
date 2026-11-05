@@ -2,10 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Landmark, TrendingUp, Zap, Check, Banknote } from 'lucide-react';
+import { Landmark, TrendingUp, Check, Banknote } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { leggiConsegneDelFattorino } from '@/lib/rider/consegne-del-fattorino';
 import { Card } from '@/components/ui/Card';
 import { queryKeys } from '@/lib/queries/keys';
 import RiderConnectButton from '@/components/rider/RiderConnectButton';
@@ -20,39 +22,23 @@ const PERIODS: { key: PeriodKey; label: string; days: number | null }[] = [
   { key: 'all',   label: 'Tutto',      days: null },
 ];
 
-const DAILY_GOAL = 5; // consegne/giorno per il bonus
-
+// 5/11/2026 — Qui c'era un premio di 2 euro alla quinta consegna del giorno: nessuno lo calcola
+// né lo paga (lib/guadagni/fattorino.ts, il bonifico). Tolto finché Nicola non decide un bonus vero,
+// che andrà calcolato e pagato dal server, non mostrato dal browser.
 
 export default function RiderEarningsPage() {
   const [period, setPeriod] = useState<PeriodKey>('7d');
 
-  const { data: orders = [], isLoading } = useQuery({
+  // 5/11/2026 — Dalla vista dello storico, non da `orders`: la regola su `orders` tiene le consegne
+  // fatte solo 7 giorni, e «30 giorni» o «Tutto» contavano l'ultima settimana. E una lettura caduta
+  // non è «0,00 €»: si guarda isError prima di qualunque numero.
+  const { data: orders = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.rider.earnings,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
-      const { data, error } = await supabase
-        .from('orders')
-        // 163 — `shipping_cost` e' quanto ha pagato il CLIENTE per la
-        // spedizione. Il compenso del fattorino e' `rider_fee_cents`, che e'
-        // un'altra cosa da quando la migrazione 111 le ha separate: sopra i 30
-        // euro di spesa la spedizione e' gratis e `shipping_cost` vale zero,
-        // mentre il compenso c'e' eccome. La pagina mostrava quindi consegne da
-        // 0,00 € e un totale piu' basso del dovuto — sul numero grosso in base
-        // al quale il fattorino decide se continuare a lavorare con noi.
-        .select('id, shipping_cost, rider_fee_cents, total_price, delivered_at, rider_payout_status, payment_method, delivery_city, delivery_address')
-        .eq('rider_id', user.id)
-        .eq('delivery_status', 'DELIVERED')
-        .order('delivered_at', { ascending: false });
-      if (error) throw error;
-      type EarningOrder = {
-        id: string; shipping_cost: number | null; rider_fee_cents: number | null;
-        total_price: number | null;
-        delivered_at: string | null;
-        rider_payout_status: string | null; payment_method: string | null;
-        delivery_city: string | null; delivery_address: string | null;
-      };
-      return (data ?? []) as EarningOrder[];
+      // 163 — il compenso del fattorino è `rider_fee_cents`, non `shipping_cost` (vedi compensoConsegnaEuro).
+      return leggiConsegneDelFattorino(supabase, user.id);
     },
   });
 
@@ -77,16 +63,6 @@ export default function RiderEarningsPage() {
   const pending = riepilogo.inArrivo;
   const inContanti = riepilogo.inContanti;
 
-  // Consegne di oggi per il bonus giornaliero.
-  const todayCount = useMemo(() => {
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-    return orders.filter((o) => o.delivered_at && new Date(o.delivered_at) >= startOfToday).length;
-  }, [orders]);
-  const bonusPct = Math.min(100, (todayCount / DAILY_GOAL) * 100);
-  const bonusLeft = Math.max(0, DAILY_GOAL - todayCount);
-  const bonusReached = todayCount >= DAILY_GOAL;
-
   // Mini-grafico ultimi 7 giorni
   const daily = useMemo(() => {
     const days: Record<string, { total: number; count: number }> = {};
@@ -108,6 +84,17 @@ export default function RiderEarningsPage() {
   const maxDaily = Math.max(...daily.map(([, v]) => v.total), 1);
 
   if (isLoading) return <LoadingState />;
+  if (isError) {
+    return (
+      <div className="px-4 py-10">
+        <ErrorState
+          title="Non riesco a leggere i tuoi guadagni"
+          description="Sembra un problema di collegamento: i tuoi compensi non sono spariti. Riprova."
+          retry={() => { void refetch(); }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="pb-5">
@@ -151,35 +138,6 @@ export default function RiderEarningsPage() {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Bonus giornaliero */}
-      <div className="px-4 pb-4">
-        <Card variant="bordered" padding="md">
-          <div className="mb-2.5 flex items-center gap-2">
-            <span className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${bonusReached ? 'bg-olive-100' : 'bg-accent-100'}`}>
-              {bonusReached
-                ? <Check size={16} className="text-olive-700" strokeWidth={2.4} aria-hidden />
-                : <Zap size={16} className="text-accent-700" aria-hidden />}
-            </span>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-ink-900">Bonus giornaliero</p>
-              <p className="text-xs text-ink-500">
-                {bonusReached
-                  ? 'Obiettivo raggiunto: +2,00 € sbloccati!'
-                  : `Ancora ${bonusLeft} ${bonusLeft === 1 ? 'consegna' : 'consegne'} per +2,00 €`}
-              </p>
-            </div>
-            <span className={`text-base font-extrabold ${bonusReached ? 'text-olive-700' : 'text-accent-800'}`}>+{formatPrice(2)}</span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-cream-200">
-            <div
-              className={`h-full rounded-full transition-all ${bonusReached ? 'bg-olive-500' : 'bg-gradient-to-r from-accent-400 to-accent-600'}`}
-              style={{ width: `${bonusPct}%` }}
-            />
-          </div>
-          <p className="mt-1.5 text-right text-[11px] text-ink-400">{todayCount}/{DAILY_GOAL} consegne oggi</p>
-        </Card>
       </div>
 
       {/* Proiezione */}
@@ -257,7 +215,9 @@ export default function RiderEarningsPage() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13px] font-semibold text-ink-900">
-                    {o.delivery_address}{o.delivery_city ? `, ${o.delivery_city}` : ''}
+                    {o.delivery_address
+                      ? `${o.delivery_address}${o.delivery_city ? `, ${o.delivery_city}` : ''}`
+                      : `Consegna${o.delivery_city ? ` a ${o.delivery_city}` : ''}`}
                   </p>
                   <p className="text-[11px] text-ink-400">
                     {o.delivered_at ? new Date(o.delivered_at).toLocaleDateString('it-IT') : '—'} · {o.payment_method === 'cod' ? 'Contanti' : 'Carta'}

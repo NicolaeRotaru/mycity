@@ -1,3 +1,4 @@
+import { SESSIONE_NON_GUARDATA } from '@/lib/ordini/tentativi-aperti-da-liberare';
 /**
  * IL CANCELLO FRA I CONTANTI E LA CARTA.
  *
@@ -48,7 +49,20 @@ export type RiserveLiberate = {
 
 export type EsitoCancello =
   | { puoNascere: true }
-  | { puoNascere: false; motivo: string; sessioni: string[] };
+  | {
+      puoNascere: false;
+      motivo: string;
+      sessioni: string[];
+      /** 5/11/2026 — Vero quando non si è riusciti a guardare (database giù): è un guasto, non una carta aperta. */
+      nonGuardato?: boolean;
+    };
+
+/**
+ * 5/11/2026 — Quando la lettura dei tentativi con la carta (o degli ordini) cade, non c'è nessuna
+ * pagina di pagamento da chiudere: al lancio la carta è spenta e quella pagina non può esistere.
+ * Si dice il guasto, e chi chiama risponde 503.
+ */
+export const MOTIVO_NON_GUARDATO = 'Non riusciamo a controllare il tuo ordine in questo momento. Riprova fra poco.';
 
 /**
  * Il messaggio che legge chi sta comprando. Dice cosa fare, non cosa è successo
@@ -73,5 +87,8 @@ export function ordineInContantiPuoNascere(riserve: RiserveLiberate): EsitoCance
     ),
   ];
   if (sessioni.length === 0) return { puoNascere: true };
+  if (sessioni.includes(SESSIONE_NON_GUARDATA)) {
+    return { puoNascere: false, motivo: MOTIVO_NON_GUARDATO, sessioni, nonGuardato: true };
+  }
   return { puoNascere: false, motivo: MOTIVO_CARTA_ANCORA_APERTA, sessioni };
 }

@@ -236,12 +236,13 @@ export default function GiftCardsPage() {
         >
           {/* Importo */}
           <div>
-            <label className="block text-sm font-semibold text-ink-900 mb-2">Importo</label>
-            <div className="grid grid-cols-4 gap-2">
+            <p id="importo-label" className="block text-sm font-semibold text-ink-900 mb-2">Importo</p>
+            <div role="group" aria-labelledby="importo-label" className="grid grid-cols-4 gap-2">
               {AMOUNTS.map((a) => (
                 <button
                   key={a}
                   type="button"
+                  aria-pressed={amount === a}
                   onClick={() => setAmount(a)}
                   className={`py-3 rounded-xl font-bold border-2 transition-colors ${
                     amount === a

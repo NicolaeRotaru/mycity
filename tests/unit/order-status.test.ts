@@ -29,7 +29,8 @@ describe('OrderStatus constants', () => {
       expect(ORDER_STATUS_COLOR[s]).toBeDefined();
       // Colore semantico via token del design system (--status-*) + tinta bg.
       expect(ORDER_STATUS_COLOR[s].color).toContain('var(--status-');
-      expect(ORDER_STATUS_COLOR[s].bg).toMatch(/^#/);
+      // 5/11/2026 (sessione S02, scheda 850) — anche lo sfondo viene da un token, non da un hex a mano.
+      expect(ORDER_STATUS_COLOR[s].bg).toMatch(/^var\(--status-[a-z]+-bg\)$/);
     }
   });
 

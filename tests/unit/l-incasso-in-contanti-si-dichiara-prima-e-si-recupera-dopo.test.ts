@@ -191,7 +191,8 @@ describe('le regole: prima i contanti, poi il codice', () => {
 
   it('in contanti senza incasso il passo della consegna sono i contanti', () => {
     expect(passoDellaConsegna(inStrada)).toBe('incasso');
-    expect(passoDellaConsegna({ ...inStrada, delivery_status: 'PICKED_UP' })).toBe('incasso');
+    // 5/11/2026 (sessione S02, scheda 173) — appena ritirato non si dichiara ancora: si dichiara alla porta.
+    expect(passoDellaConsegna({ ...inStrada, delivery_status: 'PICKED_UP' })).toBe('codice');
   });
 
   it('con l incasso dichiarato, o con la carta, si chiude col codice', () => {
@@ -231,7 +232,8 @@ describe('chi puo registrare quale incasso', () => {
     expect(motivoPerNonRegistrare(base, fattorino)).toBeNull();
     expect(motivoPerNonRegistrare({ ...base, delivery_status: 'OUT_FOR_DELIVERY' }, fattorino)).toBeNull();
     expect(motivoPerNonRegistrare(base, { chi: 'fattorino', userId: 'fattorino-2' })).toBe('DI_UN_ALTRO_FATTORINO');
-    expect(statiAmmessi(fattorino)).toEqual(['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']);
+    // 5/11/2026 (sessione S02, scheda 173) — senza PICKED_UP: i contanti si dichiarano alla porta.
+    expect(statiAmmessi(fattorino)).toEqual(['OUT_FOR_DELIVERY', 'DELIVERED']);
   });
 
   it('l amministratore: solo a consegna chiusa, perche in strada i contanti li ha il fattorino', () => {

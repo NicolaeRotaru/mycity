@@ -277,7 +277,8 @@ describe('da 50 euro in su: la foto, oppure il perche non c e', () => {
     const res = await POST(new Request('http://localhost/api/rider/cash-confirm', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ orderId: ID, cashCollectedCents: 6200, photoUrl: 'fattorino-1/ordine/cash-1.jpg' }),
+      // 5/11/2026 (sessione S02, scheda 1649) — la foto vale solo nella cartella <fattorino>/<ordine>/.
+      body: JSON.stringify({ orderId: ID, cashCollectedCents: 6200, photoUrl: `fattorino-1/${ID}/cash-1.jpg` }),
     }));
     expect(res.status).toBe(200);
     expect(stato.avvisi.filter((a) => String(a.title).toLowerCase().includes('senza foto'))).toHaveLength(0);

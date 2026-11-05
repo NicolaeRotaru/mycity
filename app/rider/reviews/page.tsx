@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Star, Bike, Trophy, Lightbulb } from 'lucide-react';
+import { Star, Bike, Lightbulb } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Review = {
@@ -36,7 +37,8 @@ const Stars = ({ rating, size = 14 }: { rating: number; size?: number }) => {
 export default function RiderReviewsPage() {
   const [filter, setFilter] = useState<'all' | 5 | 4 | 3 | 2 | 1>('all');
 
-  const { data: reviews = [], isLoading } = useQuery<Review[]>({
+  // 5/11/2026 — Una lettura caduta non è «Nessuna recensione ancora».
+  const { data: reviews = [], isLoading, isError, refetch } = useQuery<Review[]>({
     queryKey: queryKeys.rider.reviews,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -83,6 +85,12 @@ export default function RiderReviewsPage() {
       <div className="px-4">
         {isLoading ? (
           <LoadingState />
+        ) : isError ? (
+          <ErrorState
+            title="Non riesco a leggere le tue recensioni"
+            description="Sembra un problema di collegamento: le recensioni non sono sparite. Riprova."
+            retry={() => { void refetch(); }}
+          />
         ) : reviews.length === 0 ? (
           <div className="rounded-xl border border-cream-300 bg-surface-0 p-10 text-center">
             <Bike size={44} strokeWidth={1.5} className="mx-auto mb-3 text-ink-300" aria-hidden />
@@ -103,11 +111,8 @@ export default function RiderReviewsPage() {
                 <div className="min-w-0 flex-1">
                   <p className="font-bold text-ink-900">{stats.avg >= 4.5 ? 'Ottimo lavoro!' : 'Continua così'}</p>
                   <p className="mt-0.5 text-[13px] text-ink-600">Su {stats.count} {stats.count === 1 ? 'recensione' : 'recensioni'}.</p>
-                  {stats.avg >= 4.5 && (
-                    <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-accent-500 px-3 py-1 text-xs font-bold text-ink-900">
-                      <Trophy size={14} strokeWidth={2.2} aria-hidden /> Top rider
-                    </span>
-                  )}
+                  {/* 5/11/2026 — Qui c'era il bollino del miglior fattorino con la media di sempre, anche su una
+                      recensione sola: un titolo che non dà nessuna priorità vera. */}
                 </div>
               </div>
               <div className="mt-3 space-y-1.5">

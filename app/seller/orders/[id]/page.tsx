@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { formatPrice, formatDate } from '@/lib/format';
 import {
   COLONNA_ORARIO_DEL_PASSAGGIO,
+  etichettaPronto,
   passaggioLecito,
   type OrderStatus,
 } from '@/lib/order-status';
@@ -468,6 +469,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         pickedUpAt={order.picked_up_at}
         deliveredAt={order.delivered_at}
         canceledAt={order.canceled_at}
+        ritiroInNegozio={order.pickup_in_store}
       />
       {isError && (
         <div role="status" className="bg-white border border-secondary-200 rounded-xl p-4 text-sm text-ink-700 flex flex-wrap items-center justify-between gap-2">
@@ -524,7 +526,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
               onClick={() => transition.mutate({ newStatus: 'READY' })}
               loading={transition.isPending}
             >
-              {order.pickup_in_store ? 'Pronto per il ritiro' : 'Pronto per il rider'}
+              {etichettaPronto(!!order.pickup_in_store)}
             </Button>
             {/* La rotta del rifiuto accetta anche un ordine già accettato (NEW e ACCEPTED). */}
             {order.delivery_status === 'ACCEPTED' && (

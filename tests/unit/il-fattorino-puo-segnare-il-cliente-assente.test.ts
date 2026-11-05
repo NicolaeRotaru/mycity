@@ -171,7 +171,9 @@ describe('il fattorino segna «cliente assente»', () => {
     expect(refundOrderMock).not.toHaveBeenCalled();
   });
 
-  it.each(['ASSIGNED', 'PICKED_UP', 'DELIVERED'])('con l ordine %s si rifiuta: si segna solo mentre è in consegna', async (stato) => {
+  // 5/11/2026 (sessione S02, scheda 317) — PICKED_UP è ammesso: chi va dritto dal cliente senza
+  // «Sto andando» deve poter dire che non c'è nessuno (prova in minori-s02-consegna-del-fattorino).
+  it.each(['ASSIGNED', 'DELIVERED'])('con l ordine %s si rifiuta: si segna solo mentre porta la merce al cliente', async (stato) => {
     db.ordine = carta({ delivery_status: stato });
     const { status } = await tocca();
     expect(status).toBe(409);

@@ -1,0 +1,1682 @@
+{
+ "sessione": "S02",
+ "ramo": "claude/youthful-gates-blkxmk-m02",
+ "commit_finale": "a0d6412",
+ "verify": {
+  "typecheck": "verde",
+  "lint": "verde",
+  "test": "rosso",
+  "note": "7625 passate, 1 saltata già prima; rosse solo 2 prove già rosse su origin/main (verificato con un worktree): tests/unit/le-pagine-ordini-del-negozio-leggono-gli-orari.test.tsx › «caso 1 — la lista» e «caso 1 — il dettaglio», dipendono dall orologio. Non toccate."
+ },
+ "revisore": "Il revisore indipendente (subagent su git diff origin/main...HEAD) ha trovato 11 punti. Corretti 8: il messaggio sopra il tetto dei contanti non invita più a dividere la spesa; il codice sconto si libera quando si rifiuta per il tetto; un ordine in contanti annullato senza articoli avvisa gli amministratori; cash-confirm con ordine ancora PICKED_UP dice di premere «Sto andando dal cliente» e se la rilettura cade risponde 503 invece di «già confermato»; la veloce con un negozio non approvato è un «no» col motivo e non un 503; l avviso del freno si manda una volta per ora; testo «sta per chiudere»; «Torna alle consegne» dopo l annullo. Respinto 1: cancellare la riga della chiave quando tutti gli ordini sono annullati (gli id degli ordini derivano dalla chiave, riusarla darebbe id doppi; spiegato in un commento). Lasciati 2 nei nuovi difetti visti (consegna ricavata nel riepilogo, maxDuration) più il motivo della veloce che la cassa di S07 non mostra.",
+ "riepilogo": {
+  "riparato": 95,
+  "parziale": 9,
+  "gia_riparato": 4,
+  "non_codice": 0,
+  "scelta_di_nicola": 11,
+  "non_fatto": 14
+ },
+ "migrazioni_nuove": [
+  "migrations/205_i_guadagni_del_fattorino_oltre_i_sette_giorni.sql"
+ ],
+ "note": {
+  "commit_finale": "È l'ultimo commit di codice; il commit che aggiunge questo referto viene subito dopo.",
+  "scheda_474": "Fuori dal piano, chiesta dall'AD: fatta lato cliente; il lato negozio è nel ramo di S06.",
+  "istruzioni_AD": "Dopo il messaggio dell'AD sono rimasto nei miei prefissi. Le modifiche già spinte su file altrui (le 6 rotte della scheda 185 in app/api/admin, app/api/cron/expire-stale-orders, i file dei resi e gli altri elencati in file_altrui_toccati) restano: l'AD le ricuce all'unione. tests/unit/.montati/ non è nel commit e .gitignore non è toccato.",
+  "prove_vecchie_aggiornate": "Aggiornate perché il comportamento è cambiato (mai saltate né indebolite): la-posta-del-contrassegno-non-fa-la-fila, il-modulo-di-reso-parte-dal-bonifico, due-tocchi-su-ripeti-ordine, la-barra-del-fattorino, l-incasso-in-contanti, api-rider-cash-confirm, il-fattorino-puo-segnare-il-cliente-assente, il-gps-del-fattorino, la-consegna-in-contanti-si-chiude-anche-senza-foto, la-veloce-non-confermata-in-10-minuti, zz-collaudo-a-credito, order-status, il-sos-apre-il-112, il-testo-dice-quello-che-succede-davvero; solo commenti in il-freno-della-veloce-regge.",
+  "migrazione_205": "Da applicare a mano da Nicola: aggiunge rider_payout_status in coda alla vista rider_consegne_storico (security_barrier, revoke anon, grant authenticated). Senza di essa la pagina guadagni ripiega sulla tabella orders (errore 42703 gestito).",
+  "falle_nuove": "Nessuna falla di sicurezza nuova trovata."
+ },
+ "schede": [
+  {
+   "id": 2272,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Se la lettura dei negozi o dei fattorini cade (o la verifica lancia), la rotta risponde 503 invece di 200 «non possibile»: i lettori che guardano solo le risposte riuscite (vetrina, carrello) restano su «non so» e non scrivono «consegna domani».",
+   "prova": "tests/unit/minori-s02-veloce-non-so.test.ts › con il database giù risponde 503",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/consegna/veloce/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "La cassa (app/checkout) tratta ancora una risposta non riuscita come «no»: lì è il comportamento prudente voluto. lib/promessa-consegna.ts (S07) non toccato."
+  },
+  {
+   "id": 46,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Se PostgreSQL rifiuta l id perché non è un UUID (22P02), la rotta risponde 404 «Ordine non trovato» invece di 500 e non scrive un errore nel registro.",
+   "prova": "tests/unit/minori-s02-annullo-del-cliente.test.ts › ① un id inventato risponde 404",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/[id]/cancel/route.ts",
+    "lib/ordini/annullo-del-cliente.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2370,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il 409 dice il motivo vero: già consegnato (con la strada del reso/reclamo), già in consegna, oppure accettato dal negozio. REJECTED non esiste nel database (vedi 2374), CANCELED aveva già il suo messaggio.",
+   "prova": "tests/unit/minori-s02-annullo-del-cliente.test.ts › ② su un ordine consegnato…; ② in consegna…",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/[id]/cancel/route.ts",
+    "lib/ordini/annullo-del-cliente.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 185,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nuovo scriviCampanella (lib/ordini/campanella.ts): legge { error }, lo scrive con logger.error insieme a ordine/reso e, per gli avvisi al negozio (annullo del cliente, nuovo reso), ripiega su notifyAdmins. Usato nelle sette rotte della scheda.",
+   "prova": "tests/unit/minori-s02-annullo-del-cliente.test.ts › ③ (comportamento sulla rotta di annullo e sul modulo) + lettura delle sette rotte",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/campanella.ts",
+    "app/api/orders/[id]/cancel/route.ts"
+   ],
+   "file_altrui_toccati": [
+    "app/api/admin/orders/[id]/cancel/route.ts",
+    "app/api/returns/create/route.ts",
+    "app/api/returns/[id]/decide/route.ts",
+    "app/api/returns/[id]/avanza/route.ts",
+    "app/api/admin/disputes/[id]/resolve/route.ts",
+    "app/api/cron/expire-stale-orders/route.ts"
+   ],
+   "nota": "Modifica minima nelle sei rotte altrui: solo la chiamata della campanella sostituita, più l'import."
+  },
+  {
+   "id": 2667,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Quando l'annullamento dopo un errore non riesce e l'ordine resta in piedi, oltre alla riga nel registro parte la campanella agli amministratori (allarmeAgliAmministratori → notifyAdmins), come promette il commento. Lo stesso nel ramo «non so se l'ordine è nato».",
+   "prova": "tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts › 2667/2139 · l annullamento dopo un errore non riesce…",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/cod/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2588,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Il controllo (vaChiestaSenzaTrattenere nella rotta dei contanti) è di poche righe, ma legge profiles e il registro dei testi accettati: una quarantina di prove esistenti della rotta hanno database finti senza quelle righe e diventerebbero rosse tutte insieme, e la rotta della carta è di S01. Va fatto come lavoro a sé, aggiornando i banchi di prova; intanto resta il cancello del middleware su /checkout."
+  },
+  {
+   "id": 2475,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nel ramo «chiave già piena di ordini» la rotta rilegge lo stato: se tutti gli ordini della chiave sono annullati risponde 409 «il tuo ordine di prima è stato annullato, tocca di nuovo Ordina» con chiaveLiberata, e il tocco dopo (chiave nuova) fa l'ordine vero. Se sono vivi resta «fatto».",
+   "prova": "tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts › 2475 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/cod/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Carrello di più negozi con solo una parte annullata: resta «fatto» con gli ordini (quelli vivi esistono); se la rilettura dello stato cade si resta al comportamento di prima."
+  },
+  {
+   "id": 2177,
+   "esito": "scelta_di_nicola",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Domanda per Nicola: vuoi che il sito rifiuti gli ordini a domicilio con fascia oraria quando non esiste nessun fattorino approvato (anche offline), come già fa la veloce con il fattorino online?"
+  },
+  {
+   "id": 2513,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nei rami «ordine fermo a metà» e «nato solo in parte», dove al cliente si dice «ti aiutiamo noi», parte la campanella agli amministratori con ordini e cifra.",
+   "prova": "tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts › 2513 · ordine della chiave senza articoli…",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/cod/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Le 12 ore di blocco sulla stessa chiave restano: sono la scelta di Nicola del 26/10 («coi soldi il sito si ferma»), adesso con l'avviso che serve a sbloccarle a mano."
+  },
+  {
+   "id": 2398,
+   "esito": "riparato",
+   "cosa_ho_fatto": "L'inserimento dell'ordine (e la rilettura del ripreso) chiede anche created_at; l'email «Nuovo ordine» calcola la scadenza da quello, non da new Date() della rotta.",
+   "prova": "tests/unit/minori-s02-coda-della-rotta-dei-contanti.test.ts › 2398",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/cod/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "La stessa riga in lib/stripe/webhook/ordini.ts:532 (strada della carta, S01) non l'ho toccata: va in nuovi_difetti_visti."
+  },
+  {
+   "id": 2142,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La riga finale della chiave si scrive con count:'exact': zero righe toccate valgono come prova non scritta (si riprova con una pausa breve, poi scatta l'allarme).",
+   "prova": "tests/unit/minori-s02-coda-della-rotta-dei-contanti.test.ts › 2142",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/cod/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 43,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Le email del nuovo ordine in contanti partono in fila, un negozio e un'email alla volta, come la strada della carta; ogni invio ha il suo try.",
+   "prova": "tests/unit/minori-s02-coda-della-rotta-dei-contanti.test.ts › 43 · con due negozi le email partono una alla volta",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/cod/route.ts",
+    "tests/unit/la-posta-del-contrassegno-non-fa-la-fila.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Aggiornata (rovesciata) la prova vecchia la-posta-del-contrassegno-non-fa-la-fila › «i giri partono insieme», che fissava proprio il parallelismo che causa il difetto. Resta una sola lettura dei profili per tutti."
+  },
+  {
+   "id": 2138,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il 409 «ordine già in corso» ora nasce da ABBANDONATO_DOPO_MS e dice «aspetta fino a 60 secondi e riprova»; una prova fissa l attesa massima (59 s aspetta, 61 s chiave abbandonata).",
+   "prova": "tests/unit/minori-s02-ordine-in-corso.test.ts",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/cod/route.ts",
+    "lib/ordini/tentativo.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 683,
+   "esito": "gia_riparato",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "grep 'json({ error' app/api → solo app/api/stripe/webhook/route.ts (contratto con Stripe, escluso dalla scheda); app/api/orders/cod/route.ts usa ovunque { ok:false, error:{ code, message } } (ordineGiaInCorso, nonRiescoARegistrare…).",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 4,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "È una funzione nuova, non un ritocco: colonna in site_settings (migrazione), tasto con traccia in /admin (S05), lettura nelle rotte dei contanti e della carta (S01). Da costruire come lavoro dedicato; oggi resta «Sospendi» negozio per negozio."
+  },
+  {
+   "id": 2135,
+   "esito": "gia_riparato",
+   "cosa_ho_fatto": "Nessuna modifica: il caso non può più presentarsi.",
+   "prova": "app/api/orders/cod/route.ts: tentativoScaduto() con RIPETUTO_ENTRO_MS = 12 ore. Le chiavi nate prima del rilascio degli id ricavati dalla chiave (29/10) hanno ormai più di 12 ore: non si riusano più, si passa alla generazione dopo (chiave~1) con id nuovi.",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "La scheda stessa lo dava «rarissimo, solo nei minuti del rilascio»: la finestra si è chiusa da sola."
+  },
+  {
+   "id": 2143,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Sulla chiave abbandonata la rilettura chiede anche delivery_status: ordini ritrovati tutti annullati → stessa risposta 409 con chiave liberata, niente «Ordine effettuato!» e niente carrello svuotato.",
+   "prova": "tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts › 2143",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/cod/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2137,
+   "esito": "riparato",
+   "cosa_ho_fatto": "«Una parte» solo se manca davvero un negozio del carrello: se il cliente ha tolto un negozio dopo un ordine arrivato per intero, gli ordini della chiave si restituiscono come invio ripetuto.",
+   "prova": "tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts › 2137 · il cliente ha tolto il fioraio…",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/cod/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2133,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Portate nel sito le prove che uccidono i due mutanti: rilettura limitata ai negozi del carrello di adesso (prova 2137) e confronto del solo numero dei negozi (prova 2133). Verificato col mutante «size >=»: la prova diventa rossa.",
+   "prova": "tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts › 2133 · stessi NUMERI di negozi ma negozi diversi…",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Era un buco nelle prove su un sito che già faceva giusto: «rossa senza correzione» qui vuol dire rossa col mutante."
+  },
+  {
+   "id": 642,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "La rotta dei contanti fa giusto (PENDING finché il fattorino non conferma l incasso). La correzione sta tutta in file di S01 (lib/metriche-venditore.ts, app/seller/dashboard, app/seller/analytics): conteggio «ordini ricevuti» separato dal fatturato incassato. Da passare a S01."
+  },
+  {
+   "id": 2139,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Le cancellazioni del rollback leggevano già l'errore (1/11); restavano senza esito letto restore_stock e wallet_credit dopo l'inserimento fallito e nel rendi-la-nostra-parte del gemello: ora finiscono nel registro. E l'ordine fantasma fa partire l'allarme agli amministratori.",
+   "prova": "tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts › 2139 · se la merce… e › 2667/2139",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/cod/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 37,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nuovo lib/ordini/tetto-dei-contanti.ts (TETTO_CONTANTI_CENTS = 499.999, la soglia di legge art. 49 D.Lgs. 231/2007): la rotta dei contanti, sul lordo prima del credito, risponde 409 «Sopra 4.999,99 € non si può pagare in contanti: scegli la carta».",
+   "prova": "tests/unit/minori-s02-coda-della-rotta-dei-contanti.test.ts › 37 · 99 pezzi da 60 €… e › 37 · sotto il tetto…",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/cod/route.ts",
+    "lib/ordini/tetto-dei-contanti.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "La costante sta in lib/ordini/ e non in lib/constants.ts (S07). La cassa (S07) mostra ancora l opzione contanti sopra la soglia: la rotta la rifiuta con un messaggio chiaro; nasconderla in cassa è un ritocco per S07. La soglia è quella di legge, non una scelta di prezzo."
+  },
+  {
+   "id": 2136,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Portata nel sito la prova che fa fallire la scrittura dell'ordine col credito usato e controlla che wallet_credit renda la stessa cifra con lo stesso riferimento del prelievo. Verificata col mutante «riferimento sbagliato nello storno»: rossa.",
+   "prova": "tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts › 2136 · scrittura dell ordine fallita col credito usato…",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "tests/unit/minori-s02-la-cassa-avvisa-chi-sistema.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Buco nelle prove su un sito che già faceva giusto: «rossa» col mutante."
+  },
+  {
+   "id": 641,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Serve un evento nuovo di misura (GA4 refund, PostHog order_refunded) in lib/analytics/server.ts (S10) chiamato da lib/ordini/annulla.ts e dal webhook dei rimborsi (S01): nessun pezzo nel mio territorio. Le chiavi di GA e PostHog al lancio sono spente, quindi oggi non sporca niente."
+  },
+  {
+   "id": 1649,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nuovo lib/rider/prova-del-fattorino.ts: la rotta dei contanti accetta foto, firma e foto di consegna solo nella cartella <fattorino>/<ordine>/, e per foto e firma chiede al magazzino cod-proof se il file c'è; altrimenti vale «senza foto» (serve la nota e parte l'avviso). Se il magazzino non risponde la foto nella cartella giusta si tiene, per non creare un vicolo cieco alla porta.",
+   "prova": "tests/unit/minori-s02-contanti-del-fattorino.test.ts › 1649 (quattro prove sulla rotta vera)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/rider/prova-del-fattorino.ts",
+    "app/api/rider/cash-confirm/route.ts",
+    "tests/unit/la-consegna-in-contanti-si-chiude-anche-senza-foto.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Aggiornata la prova vecchia la-consegna-in-contanti-si-chiude-anche-senza-foto › «con la foto…»: il percorso finto ora sta nella cartella giusta. Chiude anche l'effetto secondario (un percorso piantato a mano non entra più nella riga dell'ordine)."
+  },
+  {
+   "id": 396,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il pannello dei contanti diceva già la regola dei 50 € (la firma non è più proposta); restava la pagina della consegna con «La foto è facoltativa» sempre: ora da 50 € in su dice «serve la foto dei contanti» (stessa serveUnaProva della rotta).",
+   "prova": "tests/unit/minori-s02-consegna-del-fattorino.test.ts › 396",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/rider/orders/[id]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2510,
+   "esito": "scelta_di_nicola",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "La prima metà è la scelta di Nicola del 31/10 (nessuna traccia dei tentativi di telefonata): domanda per Nicola, vuoi che «Cliente assente» registri almeno l'ora della chiamata o un numero di tentativi? La seconda metà (la UPDATE in lib/ordini/annulla.ts con neq CANCELED invece di eq sullo stato letto) è in un file di S01. Con la 173 il caso «contanti già dichiarati e poi cliente assente» non si presenta più da PICKED_UP."
+  },
+  {
+   "id": 1727,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La pagina del reclamo legge anche l'errore (maybeSingle): con una lettura caduta mostra «Non riesco a caricare l'ordine · Riprova» e resta lì; «Ordine non trovato» con rinvio solo quando non ci sono né dati né errore.",
+   "prova": "tests/unit/minori-s02-reclamo.test.tsx › 1727 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/dispute/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1728,
+   "esito": "riparato",
+   "cosa_ho_fatto": "All'apertura la pagina legge i reclami aperti dell'ordine (open, under_review): se ce n'è uno mostra «Hai già un reclamo aperto · data · stato» al posto del modulo. Il 23505 di disputes_one_open_per_order si traduce con «Hai già un reclamo aperto su questo ordine».",
+   "prova": "tests/unit/minori-s02-reclamo.test.tsx › 1728 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/dispute/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 659,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Reclamo e reso: «Motivo del…» è la legend di un fieldset con i radio. Buono regalo: la scritta «Importo» nomina un role=group e ogni importo ha aria-pressed.",
+   "prova": "tests/unit/minori-s02-reclamo.test.tsx › 659 (render del reclamo) e › 659 · reso e buono regalo (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/dispute/page.tsx",
+    "app/orders/[id]/return/page.tsx"
+   ],
+   "file_altrui_toccati": [
+    "app/profile/gift-cards/page.tsx"
+   ],
+   "nota": ""
+  },
+  {
+   "id": 1724,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La schermata d'errore della pagina dell'ordine compare solo se non c'è ancora un ordine a schermo (isError && !order); con l'ordine già mostrato resta la pagina, con un avviso piccolo «non riesco ad aggiornare · Riprova».",
+   "prova": "tests/unit/minori-s02-pagina-dell-ordine.test.ts › 1724 · 431 (lettura del sorgente: il banco di montaggio non sa simulare un errore di React Query)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1731,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Le due pagine (dettaglio e lista) leggono variant_id e variant_label, li passano a riordina, e il riepilogo dell'ordine mostra l'etichetta della variante sotto il nome.",
+   "prova": "tests/unit/minori-s02-pagina-dell-ordine.test.ts › 1731 (pagina montata) e tests/unit/minori-s02-riordino.test.ts › 1731 + lettura delle select",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/page.tsx",
+    "app/orders/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 661,
+   "esito": "riparato",
+   "cosa_ho_fatto": "ContactSheet tiene onClose in un ref con effetto a dipendenze vuote (il fuoco non torna su «Chiudi» a ogni rilettura) e la pagina passa una chiusura stabile (useCallback). Una regione live sr-only annuncia stato e codice di consegna, e cambia solo con loro, non con la posizione.",
+   "prova": "tests/unit/minori-s02-pannello-contatto.test.ts › 661 (render, fuoco) e tests/unit/minori-s02-pagina-dell-ordine.test.ts › 661 (regione live)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/orders/ContactSheet.tsx",
+    "app/orders/[id]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 475,
+   "esito": "scelta_di_nicola",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Domanda per Nicola: quando il cliente non ha il codice di consegna, vuoi un'uscita per l'amministratore («segna consegnato» con motivo e traccia) e/o il codice mandato anche per SMS/email al recapito di consegna? (Il sorvegliante sui «ritirato» fermi è del cron, S03.) Intanto il codice che non si riesce a leggere ora si dice, con Riprova (scheda 431)."
+  },
+  {
+   "id": 431,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La lettura del codice di consegna lancia l'errore; con lo stato in strada e il codice non letto compare «Non riesco a mostrarti il codice di consegna · Riprova», e finché il codice non arriva si riprova da soli ogni 20 secondi.",
+   "prova": "tests/unit/minori-s02-pagina-dell-ordine.test.ts › 1724 · 431 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 355,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Con l'ordine NEW il titolo è «Ordine inviato al negozio», non «Ordine confermato!».",
+   "prova": "tests/unit/minori-s02-pagina-dell-ordine.test.ts › 355 (pagina vera montata)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2279,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Con una fascia programmata la riga piccola dice «Il negozio lo prepara per la tua fascia» / «Pronto in negozio · arriva nella tua fascia», non «pronto entro ~30 min» né «in consegna a breve».",
+   "prova": "tests/unit/minori-s02-pagina-dell-ordine.test.ts › 2279 (due prove, pagina vera montata)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2178,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Portate nel sito le tre prove che mancavano: la pagina dell'ordine con una fascia per domani non dice «30-60 min dalla conferma» in cima (pagina montata), la bacheca mette la fascia anche sugli ordini in preparazione, e fasciaLeggibile conta «Domani» dal giorno di Piacenza di nascita anche a cavallo della mezzanotte e del mese.",
+   "prova": "tests/unit/minori-s02-pagina-dell-ordine.test.ts › 2279 (con le righe 2178) e tests/unit/minori-s02-bacheca-del-fattorino.test.ts › 2178 (due prove)",
+   "rossa_senza_correzione": false,
+   "file_toccati": [
+    "tests/unit/minori-s02-pagina-dell-ordine.test.ts",
+    "tests/unit/minori-s02-bacheca-del-fattorino.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Buco nelle prove su un sito che già faceva giusto: le prove diventano rosse coi mutanti descritti dalla scheda, non c'era codice da correggere."
+  },
+  {
+   "id": 848,
+   "esito": "parziale",
+   "cosa_ho_fatto": "Nel territorio ordini e fattorino (app/orders, app/rider, components/rider, components/orders) le ombre nere della scala Tailwind sono passate ai token (shadow-sm-neutral su bianco, shadow-warm-xl per i pannelli), e una prova lo tiene.",
+   "prova": "tests/unit/minori-s02-pagina-dell-ordine.test.ts › 848",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/return/page.tsx",
+    "app/rider/page.tsx",
+    "app/rider/availability/page.tsx",
+    "components/rider/SOSButton.tsx",
+    "components/rider/CashConfirmDialog.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Restano le occorrenze fuori dal mio territorio (components/ProductCard.tsx e altre, S09/S10)."
+  },
+  {
+   "id": 2570,
+   "esito": "gia_riparato",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "app/orders/[id]/page.tsx: con un reso aperto compare «Vedi la richiesta» (reso?.aperto) e «Richiedi reso» solo se (!reso || reso.sePuoChiederne); statoDelReso (app/orders/[id]/stato-del-reso.ts:40) dà sePuoChiederne:false sui resi aperti.",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2069,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Portata nel sito la prova che legge la pagina INTERA dell'ordine montata (contanti e carta, 20/35/60 €) contro le parole del regalo, non solo il riquadro del riepilogo.",
+   "prova": "tests/unit/minori-s02-pagina-dell-ordine.test.ts › 2069",
+   "rossa_senza_correzione": false,
+   "file_toccati": [
+    "tests/unit/minori-s02-pagina-dell-ordine.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Buco nelle prove su una pagina che già faceva giusto: la prova diventa rossa col mutante della scheda («te la regaliamo noi» sopra il riepilogo), non c'era codice da correggere."
+  },
+  {
+   "id": 1621,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Ogni foto allegata al reso ha una «×» («Togli la foto N») che la toglie dall'elenco.",
+   "prova": "tests/unit/minori-s02-reso.test.tsx › 1621",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/return/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Il file resta nel deposito delle immagini: la potatura degli orfani è un lavoro a parte."
+  },
+  {
+   "id": 1654,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nell'onChange del campo file il valore si azzera: dopo un errore la stessa foto si può riscegliere.",
+   "prova": "tests/unit/minori-s02-reso.test.tsx › 1654",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/return/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1653,
+   "esito": "riparato",
+   "cosa_ho_fatto": "«Invia» è spento durante il caricamento della foto («Attendi la foto…») e submit() esce subito se uploading è vero.",
+   "prova": "tests/unit/minori-s02-reso.test.tsx › 1653",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/return/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1620,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La lettura dell'ordine nel modulo del reso legge l'errore: PGRST116 (nessuna riga) resta «Ordine non trovato», ogni altro errore mostra «Non riesco a caricare l'ordine · Riprova».",
+   "prova": "tests/unit/minori-s02-reso.test.tsx › 1620 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/return/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 177,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il motivo del reso parte vuoto e «Invia» resta spento («Scegli il motivo del reso») finché non se ne sceglie uno.",
+   "prova": "tests/unit/minori-s02-reso.test.tsx › 177",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/return/page.tsx",
+    "tests/unit/il-modulo-di-reso-parte-dal-bonifico.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Aggiornata la prova vecchia il-modulo-di-reso-parte-dal-bonifico › «chi preme Invia…»: adesso sceglie il motivo prima di inviare."
+  },
+  {
+   "id": 489,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Il pezzo che cambia i soldi sta dal negozio: components/seller/ReturnRequestCard.tsx e app/seller/orders/[id] (S06) propongono il totale e non leggono order_item_id. Far scegliere l articolo solo al cliente senza cambiare la scheda del negozio non chiuderebbe il rischio (il negozio vedrebbe ancora il totale). Va fatto insieme a S06, con la scelta di Nicola su «rimborso immediato» come valore non preimpostato."
+  },
+  {
+   "id": 1735,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La pagina della recensione guarda isError (con «Non riesco a caricare l'ordine · Riprova») prima di «Ordine non trovato», che resta per l'ordine che non c'è (maybeSingle → null).",
+   "prova": "tests/unit/minori-s02-recensione.test.tsx › 1735",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/review/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 575,
+   "esito": "parziale",
+   "cosa_ho_fatto": "Nella recensione dopo la consegna le stelle partono vuote e «Invia» resta spento («Tocca le stelle per votare») finché non si vota; una recensione già lasciata si dice al posto del modulo, e il 23505 non si spaccia più per «Grazie».",
+   "prova": "tests/unit/minori-s02-recensione.test.tsx › 575 (tre prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/review/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Restano fuori dal mio territorio: le stelle a 5 della recensione del prodotto (app/product/[id]/page.tsx, S09) e il link dell'email di consegna verso /orders/<id>/review (lib/email, S03). Il riquadro «Lascia recensione» sulla pagina dell'ordine porta ora a una pagina che dice «già recensito»."
+  },
+  {
+   "id": 1726,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nel ramo d'errore della lista ordini si monta anche StripeReturnHandler (avviso, carrello svuotato, nuovi tentativi) e, nella finestra del pagamento, l'errore dice «Il pagamento è arrivato: non pagare di nuovo».",
+   "prova": "tests/unit/minori-s02-riordino.test.ts › 1726 · 630 · 2531 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2531,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Passata la finestra di 30 secondi dopo un pagamento con la carta senza ordini, la pagina non dice «Non hai ancora ordini» ma «Il tuo ordine non è ancora comparso: non pagare di nuovo, se non è partito il pagamento torna in automatico e te lo scriviamo», con il link all'assistenza.",
+   "prova": "tests/unit/minori-s02-riordino.test.ts › 1726 · 630 · 2531",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 165,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La lista degli ordini legge product_name e product_image della riga e usa nomeDellaRigaOrdine/fotoDellaRigaOrdine come il dettaglio; riordina dice quanti articoli non sono più disponibili invece di scartarli in silenzio.",
+   "prova": "tests/unit/minori-s02-riordino.test.ts › 165 (comportamento) e › le due pagine leggono la copia della riga",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/page.tsx",
+    "lib/riordino.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 630,
+   "esito": "parziale",
+   "cosa_ho_fatto": "Al ritorno da Stripe la pagina dice «Pagamento ricevuto: stiamo confermando il tuo ordine», non più «Il tuo ordine è confermato» prima che l'ordine esista.",
+   "prova": "tests/unit/minori-s02-riordino.test.ts › 1726 · 630 · 2531",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Manca la seconda metà: nei due rami del webhook che rimborsano in automatico (lib/stripe/webhook/ordini.ts, S01) il cliente non riceve campanella né email. Da passare a S01."
+  },
+  {
+   "id": 649,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nuovo lib/rider/consegne-del-fattorino.ts: Guadagni legge la vista rider_consegne_storico (niente taglio dei 7 giorni), con ripiego su orders solo se manca la colonna del bonifico (42703); il contatore del profilo conta dalla vista. Migrazione 205 aggiunge rider_payout_status in coda alla vista, con le stesse scelte di sicurezza della 127/152.",
+   "prova": "tests/unit/minori-s02-pagine-del-fattorino.test.ts › 649 (quattro prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/rider/consegne-del-fattorino.ts",
+    "app/rider/earnings/page.tsx",
+    "app/rider/profile/page.tsx",
+    "migrations/205_i_guadagni_del_fattorino_oltre_i_sette_giorni.sql"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Migrazione 205 da applicare a mano. Prima della 205 la pagina resta come oggi (ripiego su orders). I link dello storico verso consegne più vecchie di 7 giorni aprono ancora «Ordine non trovato» (parte secondaria della scheda, non toccata)."
+  },
+  {
+   "id": 404,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Tolta dalla pagina Guadagni la scheda «Bonus giornaliero» con «+2,00 € sbloccati», che nessun calcolo né bonifico paga.",
+   "prova": "tests/unit/minori-s02-pagine-del-fattorino.test.ts › 404",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/rider/earnings/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Se Nicola decide un bonus vero va calcolato e pagato dal server."
+  },
+  {
+   "id": 298,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Guadagni, Storico, Recensioni e Profilo guardano isError e mostrano «Non riesco a leggere… · Riprova» prima di qualunque zero o vuoto; Turni con la lettura caduta non mostra «offline» né gli orari predefiniti (che al primo tocco si scrivevano sul profilo) ma l'errore con Riprova.",
+   "prova": "tests/unit/minori-s02-pagine-del-fattorino.test.ts › 298 (lettura del sorgente delle cinque pagine)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/rider/earnings/page.tsx",
+    "app/rider/history/page.tsx",
+    "app/rider/reviews/page.tsx",
+    "app/rider/profile/page.tsx",
+    "app/rider/availability/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2442,
+   "esito": "gia_riparato",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "app/rider/help/page.tsx, «Cosa succede se un cliente è aggressivo?»: «Poi avvisa il supporto MyCity, che decide cosa fare della consegna e del cliente. Il compenso oggi arriva solo per le consegne completate.» — niente più consegna pagata come fatta né ban promesso.",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 150,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Aiuto fattorini: la risposta «nessuno risponde» descrive i pulsanti veri («Chiama», «Cliente assente — annulla la consegna», cosa succede a rimborso e merce, «Contatta l'assistenza»); tolti «Top rider», gli avvisi sul voto e «una alla volta»; tolto anche il bollino «Top rider» dalla pagina recensioni del fattorino.",
+   "prova": "tests/unit/minori-s02-aiuto-fattorini.test.tsx › 150 (due prove, render della pagina)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/rider/help/page.tsx",
+    "app/rider/reviews/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2613,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La risposta sul compenso in contrassegno dice anche il caso col credito MyCity: si tiene quello che c'è e il resto arriva col bonifico (come fa compensoDalContante).",
+   "prova": "tests/unit/minori-s02-aiuto-fattorini.test.tsx › 2613",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/rider/help/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 106,
+   "esito": "parziale",
+   "cosa_ho_fatto": "«Sono assicurato?» dice che prima della prima consegna serve anche la copertura INAIL contro gli infortuni.",
+   "prova": "tests/unit/minori-s02-aiuto-fattorini.test.tsx › 106",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/rider/help/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Manca il controllo nell'approvazione del fattorino (app/api/admin/users/[id]/moderate, S05) e il documento INAIL fra quelli dell'iscrizione: va deciso con Nicola come si prova la posizione (vedi 2443)."
+  },
+  {
+   "id": 2443,
+   "esito": "scelta_di_nicola",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Domanda per Nicola: per il fattorino in bici la polizza RC propria resta obbligatoria all'iscrizione (app/rider/onboarding, rider_insurance required), oppure basta la copertura INAIL / una polizza di MyCity?"
+  },
+  {
+   "id": 1710,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Senza coordinate «Naviga» c'è comunque e apre Google Maps con l'indirizzo scritto (negozio o cliente), come promette il testo della mappa vuota.",
+   "prova": "tests/unit/minori-s02-consegna-del-fattorino.test.ts › 1710 (pagina montata)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/rider/orders/[id]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1711,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il pulsante che apre sms: si chiama «SMS», non «Chat».",
+   "prova": "tests/unit/minori-s02-consegna-del-fattorino.test.ts › 1711",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/rider/orders/[id]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2521,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nuova prova sulla pagina montata: «Cliente assente» chiede conferma, parte la sua azione, e l'azione chiama POST /api/rider/orders/<id>/cliente-assente.",
+   "prova": "tests/unit/minori-s02-consegna-del-fattorino.test.ts › 2521",
+   "rossa_senza_correzione": false,
+   "file_toccati": [
+    "tests/unit/minori-s02-consegna-del-fattorino.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Buco nelle prove: il pulsante c'era già. Il banco finge useMutation, quindi l'indirizzo della rotta si controlla nel sorgente dell'azione."
+  },
+  {
+   "id": 2668,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La pagina della consegna si iscrive agli aggiornamenti in tempo reale dell'ordine e si rilegge: annullato da negozio o amministrazione, il GPS si spegne (effetto già esistente sugli stati) senza dover riaprire la pagina.",
+   "prova": "lettura del sorgente: app/rider/orders/[id]/page.tsx, canale rider-order:<id> con refetch su UPDATE",
+   "rossa_senza_correzione": false,
+   "file_toccati": [
+    "app/rider/orders/[id]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Il banco di montaggio non simula il tempo reale di Supabase: nessuna prova di comportamento. Lo spegnimento del GPS all'arrivo dello stato CANCELED è già provato da il-gps-del-fattorino-si-spegne-davvero."
+  },
+  {
+   "id": 269,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La durata mandata con rider_delivery_completed parte da picked_up_at (il ritiro), non da accepted_at (l'accettazione del negozio).",
+   "prova": "lettura del sorgente: app/rider/orders/[id]/page.tsx, «order?.picked_up_at ? Date.now() - new Date(order.picked_up_at)»",
+   "rossa_senza_correzione": false,
+   "file_toccati": [
+    "app/rider/orders/[id]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2665,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nuovo messaggioErroreGps (lib/rider/errore-gps.ts): messaggi in italiano; un calo di segnale (codici 2 e 3) lascia la condivisione accesa («riprovo da solo»), solo il permesso negato (1) la spegne.",
+   "prova": "tests/unit/minori-s02-consegna-del-fattorino.test.ts › 2665 e tests/unit/il-gps-del-fattorino-si-spegne-davvero.test.ts (aggiornata)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/rider/errore-gps.ts",
+    "app/rider/orders/[id]/page.tsx",
+    "tests/unit/il-gps-del-fattorino-si-spegne-davvero.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Aggiornata la prova vecchia il-gps-del-fattorino-si-spegne-davvero: col timeout la condivisione resta accesa, si spegne davvero col permesso negato."
+  },
+  {
+   "id": 149,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Con l'ordine annullato la pagina del fattorino nasconde la scheda «Consegna al cliente» e la riga «Incassa», e mostra «Ordine annullato: non consegnare e non incassare, riporta la merce al negozio». La rotta dei contanti, con zero righe toccate, rilegge l'ordine e dice il motivo vero (annullato / non più in consegna / già confermato).",
+   "prova": "tests/unit/minori-s02-consegna-del-fattorino.test.ts › 149 e tests/unit/minori-s02-contanti-del-fattorino.test.ts › 149",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/rider/orders/[id]/page.tsx",
+    "app/api/rider/cash-confirm/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 317,
+   "esito": "riparato",
+   "cosa_ho_fatto": "«Cliente assente» compare e la rotta lo accetta anche da PICKED_UP (merce ritirata, «Sto andando dal cliente» non premuto); resta rifiutato da ASSIGNED e DELIVERED. Coerente con la 173: in PICKED_UP i contanti non possono essere già dichiarati.",
+   "prova": "tests/unit/minori-s02-cliente-assente.test.ts › 317 (rotta vera) e tests/unit/minori-s02-consegna-del-fattorino.test.ts › 317 (pagina montata)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/rider/orders/[id]/page.tsx",
+    "app/api/rider/orders/[id]/cliente-assente/route.ts",
+    "tests/unit/il-fattorino-puo-segnare-il-cliente-assente.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Aggiornata la prova vecchia il-fattorino-puo-segnare-il-cliente-assente: PICKED_UP tolto dai casi rifiutati."
+  },
+  {
+   "id": 1709,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Tolto dalla bacheca il riquadro «Giro intelligente · 2 consegne · +15% efficienza», che prendeva i primi due ordini senza guardare nessuna distanza.",
+   "prova": "tests/unit/minori-s02-bacheca-del-fattorino.test.ts › 1709",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/rider/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 423,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La lettura degli ordini liberi caduta è segnata come lettura parziale (bachecaGuasta): sopra la bacheca compare «Non riesco a leggere gli ordini disponibili · Riprova» al posto di «Nessun ordine pronto», e le consegne del fattorino restano visibili. Tolto il ripiego legato alla migrazione 122.",
+   "prova": "tests/unit/minori-s02-bacheca-del-fattorino.test.ts › 423 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/rider/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1741,
+   "esito": "riparato",
+   "cosa_ho_fatto": "«I miei ordini» della bacheca si leggono solo negli stati aperti (non consegnati né annullati): non più tutta la storia del fattorino ogni minuto.",
+   "prova": "tests/unit/minori-s02-bacheca-del-fattorino.test.ts › 1741",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/rider/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 326,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La bacheca mostra tutte le consegne attive del fattorino («Le tue consegne (N)»), non solo la prima.",
+   "prova": "tests/unit/minori-s02-bacheca-del-fattorino.test.ts › 326",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/rider/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 174,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Raggruppare la bacheca per carrello e far prendere il giro intero chiede una chiave di carrello nella vista ordini_disponibili_rider e una prendi_ordine che assegni insieme (migrazione), più la regola del compenso: lavoro a sé. Al lancio il fattorino è solo Nicola, quindi oggi non succede."
+  },
+  {
+   "id": 1551,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Sul telefono la mappa parte ferma con la scritta «Tocca la mappa per spostarla»: il tocco accende il trascinamento, un tocco fuori lo rispegne e il dito torna a scorrere la pagina.",
+   "prova": "tests/unit/minori-s02-varie.test.ts › 1551 (lettura del sorgente: Leaflet non si monta in jsdom)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/DeliveryMap.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 124,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "La correzione è tutta nel testo dell'informativa (app/privacy, S08): dichiarare i riquadri di OpenStreetMap (IP e zona visualizzata) e la navigazione con Google Maps dal telefono del fattorino. Nel mio territorio non c'è niente da cambiare: va a S08."
+  },
+  {
+   "id": 1619,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Tolto dal pannello di contatto il pulsante «Invia un messaggio», che chiudeva e non mandava niente: resta la chiamata finché non c'è una chat vera.",
+   "prova": "tests/unit/minori-s02-pannello-contatto.test.ts › 1619",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/orders/ContactSheet.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1646,
+   "esito": "riparato",
+   "cosa_ho_fatto": "L'anteprima delle foto nel pannello si fa dal file scelto (URL.createObjectURL, liberato al cambio e alla chiusura), non dal percorso del magazzino privato che dava un'immagine rotta; il percorso resta quello che si salva.",
+   "prova": "tests/unit/minori-s02-contanti-del-fattorino.test.ts › 1647 · 1646 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/rider/CashConfirmDialog.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 114,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Il secchio cod-proof non ha una regola di cancellazione per il fattorino (migrazione 114: solo insert e read), quindi dal pannello non si può togliere la foto rifatta. Serve una potatura degli orfani lato server sul modello di lib/privacy/orfani-kyc.ts (S08) o una rotta di servizio: lavoro a parte."
+  },
+  {
+   "id": 348,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La frase in cima al pannello dei contanti dice «Scrivi quanti contanti rimetti in cassa: il totale incassato meno il tuo compenso, che ti sei già tenuto», come il campo.",
+   "prova": "tests/unit/minori-s02-contanti-del-fattorino.test.ts › 348 (pannello montato)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/rider/CashConfirmDialog.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1647,
+   "esito": "riparato",
+   "cosa_ho_fatto": "«Conferma» è spento mentre la foto si carica («Carico la foto…») e submit() esce subito se c'è un caricamento in corso.",
+   "prova": "tests/unit/minori-s02-contanti-del-fattorino.test.ts › 1647 · 1646 (lettura del sorgente: il banco non controlla il caricamento)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/rider/CashConfirmDialog.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 74,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il riquadro dell'IBAN del fattorino è «attivo» con stripe_payouts_enabled, la stessa condizione del server che manda i compensi; charges_enabled non conta più per il fattorino.",
+   "prova": "tests/unit/minori-s02-varie.test.ts › 74 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/rider/RiderConnectButton.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2669,
+   "esito": "parziale",
+   "cosa_ho_fatto": "La lettura della posizione dell'SOS accetta una posizione fino a un minuto fa (maximumAge 60 s): col 112 già aperto e la pagina in secondo piano arriva quella che il telefono ha già.",
+   "prova": "tests/unit/minori-s02-varie.test.ts › 2612 · 2669 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/rider/SOSButton.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Chiedere la posizione PRIMA del 112 non si può senza far perdere al browser il gesto che apre il tastierino. Va provato su un telefono vero, come dice la scheda."
+  },
+  {
+   "id": 2612,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Col tempo massimo scaduto (la scrittura può ancora arrivare) il messaggio dice «Non sappiamo ancora se MyCity è stata avvisata», non «MyCity NON è stata avvisata»; il «NON» resta per l'errore vero. In tutti e tre i rami resta «premi subito CHIAMA».",
+   "prova": "tests/unit/il-sos-apre-il-112-prima-di-aspettare-gps-e-rete.test.tsx (aggiornata) e tests/unit/minori-s02-varie.test.ts › 2612 · 2669",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/rider/SOSButton.tsx",
+    "tests/unit/il-sos-apre-il-112-prima-di-aspettare-gps-e-rete.test.tsx",
+    "tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Aggiornate due prove vecchie: il ramo del tempo scaduto ora ha il suo messaggio (tre messaggi col 112 invece di due)."
+  },
+  {
+   "id": 1528,
+   "esito": "riparato",
+   "cosa_ho_fatto": "OrderTimeline prende l'etichetta di READY da etichettaPronto (nuova prop ritiroInNegozio), e la pagina dell'ordine del negozio la passa e usa etichettaPronto al posto del suo ternario: targhetta e timeline dicono la stessa cosa.",
+   "prova": "tests/unit/minori-s02-varie.test.ts › 1528 (render della timeline)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/OrderTimeline.tsx"
+   ],
+   "file_altrui_toccati": [
+    "app/seller/orders/[id]/page.tsx"
+   ],
+   "nota": "components/OrderTimeline.tsx non sta in nessun territorio. Nella pagina del negozio (S06) solo la prop e l'etichetta."
+  },
+  {
+   "id": 850,
+   "esito": "parziale",
+   "cosa_ho_fatto": "Aggiunti in app/globals.css gli otto token --status-*-bg con gli stessi valori, e ORDER_STATUS_COLOR usa var(--status-*-bg) al posto degli hex.",
+   "prova": "tests/unit/minori-s02-varie.test.ts › 850 e tests/unit/order-status.test.ts (aggiornata)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/order-status.ts",
+    "tests/unit/order-status.test.ts"
+   ],
+   "file_altrui_toccati": [
+    "app/globals.css"
+   ],
+   "nota": "Aggiornata la prova vecchia order-status.test.ts che pretendeva un hex nello sfondo. Restano da allineare docs/mockup/tokens/colors.css e docs/mockup/guidelines/cards/color-status.html (S03)."
+  },
+  {
+   "id": 2145,
+   "esito": "parziale",
+   "cosa_ho_fatto": "La regola in testa a lib/ordini/chiave-dopo-l-errore.ts ora dice le quattro risposte che portano inCorso (gemello in corso, ordini non controllati, chiave non registrata, ordine nato in parte o a metà) e che il browser non distingue «riprova» da «fermati».",
+   "prova": "lettura del sorgente: lib/ordini/chiave-dopo-l-errore.ts, commento del 5/11/2026",
+   "rossa_senza_correzione": false,
+   "file_toccati": [
+    "lib/ordini/chiave-dopo-l-errore.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Manca il segnale col nome giusto («fermati» contro «riprova») fra la rotta e la cassa (app/checkout, S07): va fatto nei due posti insieme."
+  },
+  {
+   "id": 2325,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il no della veloce fuori orario nasce da APERTURA_EXPRESS e CHIUSURA_EXPRESS di lib/quando-arriva (le stesse di ORE_DELLA_VELOCE), non più scritto a mano.",
+   "prova": "tests/unit/minori-s02-varie.test.ts › 2325",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/consegna-veloce.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 163,
+   "esito": "riparato",
+   "cosa_ho_fatto": "veloceSiPuo chiede a ogni negozio di essere aperto adesso E fra MINUTI_PER_IL_RITIRO (15) minuti, la stessa regola delle fasce: lunedì 19:16 col forno che chiude alle 19:30 la veloce non si vende più (né alle 12:50 con la pausa dalle 13).",
+   "prova": "tests/unit/minori-s02-varie.test.ts › 163 (tre prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/consegna-veloce.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 166,
+   "esito": "scelta_di_nicola",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Domanda per Nicola: dopo quante ore l'interruttore «online» del fattorino deve spegnersi da solo (o a che ora la sera), perché la veloce non si venda la mattina dopo con nessuno in servizio? Serve anche una colonna con l'ora dell'accensione (migrazione) e un giro a orario (S03)."
+  },
+  {
+   "id": 262,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il file degli ordini ha in più «Venduto lordo €» (totale più credito usato, zero sugli annullati: la colonna da sommare), «Metodo», «Stato pagamento» e «Rimborsato €», e lo stato in italiano. La pagina admin legge le quattro colonne in più.",
+   "prova": "tests/unit/minori-s02-varie.test.ts › 262",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/esporta-ordini.ts"
+   ],
+   "file_altrui_toccati": [
+    "app/admin/orders/page.tsx"
+   ],
+   "nota": "Nella pagina admin (S05) solo quattro colonne aggiunte alla select. Il lordo si calcola da total_price + wallet_applied_cents per non dipendere da gross_total_cents (migrazione 124)."
+  },
+  {
+   "id": 2355,
+   "esito": "riparato",
+   "cosa_ho_fatto": "statoPagamento con la carta rimborsata in parte riporta anche quanto è già tornato (refunded_amount_cents), e la pagina dell'ordine dice «Già pagato con carta · 19,00 € · 1,00 € già tornati sulla carta»; la pagina legge refunded_amount_cents.",
+   "prova": "tests/unit/minori-s02-riepilogo.test.ts › 2355 e tests/unit/minori-s02-pagina-dell-ordine.test.ts › 2078 · 2355 (pagina montata)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/riepilogo-ordine.ts",
+    "app/orders/[id]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "La voce «Consegna MyCity» resta quella addebitata (4 €): la riga del rimborso spiega la differenza."
+  },
+  {
+   "id": 1970,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nel riepilogo la consegna non letta (null) non vale più zero: si ricava da quello che il totale non spiega, quindi niente «Spedizione GRATUITA» sopra un totale coi 3 €, e il totale torna. Gratis resta solo se davvero non si è pagato niente.",
+   "prova": "tests/unit/minori-s02-riepilogo.test.ts › 1970 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/riepilogo-ordine.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2078,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Portate nel sito le prove che mancavano: riepilogo sopra i 50 € (50/60/120 €) senza «GRATUITA», e pagina vera con la carta a 35 e 60 € senza «la paghiamo noi». Nel farlo ho trovato che il banco della pagina riusava le risposte del primo ordine dentro la stessa prova: ora si azzera a ogni ordine.",
+   "prova": "tests/unit/minori-s02-riepilogo.test.ts › 2078 e tests/unit/minori-s02-pagina-dell-ordine.test.ts › 2078 · 2355",
+   "rossa_senza_correzione": false,
+   "file_toccati": [
+    "tests/unit/minori-s02-riepilogo.test.ts",
+    "tests/unit/minori-s02-pagina-dell-ordine.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Buco nelle prove su un sito che già faceva giusto."
+  },
+  {
+   "id": 1611,
+   "esito": "riparato",
+   "cosa_ho_fatto": "liberaRiserveAbbandonate non fa scadere una riga d'intento senza stripe_session_id nata da meno di 2 minuti (la cassa con la carta sta chiedendo la pagina a Stripe): vale come pagina ancora aperta («nascente:<id>») e la merce resta riservata. Più vecchia, si libera come prima.",
+   "prova": "tests/unit/minori-s02-riserve-della-carta.test.ts › 1611 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/riserve-abbandonate.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "La stessa funzione la usa la rotta della carta (S01): un secondo checkout sugli stessi prodotti nei 2 minuti in cui il primo sta nascendo viene fermato come «pagamento ancora aperto», che è il comportamento prudente."
+  },
+  {
+   "id": 30,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il cancello dei contanti distingue il guasto (SESSIONE_NON_GUARDATA: tentativi o ordini non letti) dalla pagina della carta ancora aperta: col guasto il motivo è «Non riusciamo a controllare il tuo ordine, riprova fra poco» e la rotta risponde 503, con la riga giusta nel registro.",
+   "prova": "tests/unit/minori-s02-riserve-della-carta.test.ts › 30 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/ordine-in-contanti-puo-nascere.ts",
+    "app/api/orders/cod/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1589,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La rotta dei contanti rivendica il codice sconto con rivendicaIlCodiceSconto(riserveLiberate, …), la stessa porta della carta: non si compila più chiederlo prima di aver liberato i tentativi abbandonati, e niente più validateCoupon + claim_coupon a mano.",
+   "prova": "tests/unit/minori-s02-varie.test.ts › 1589 (lettura del sorgente) e le prove esistenti dei codici sconto in contanti, verdi",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/cod/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Al lancio i codici sconto sono spenti (CODICI_SCONTO_IN_CASSA)."
+  },
+  {
+   "id": 2378,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Corretti i cinque commenti che attribuivano a Nicola «la scelta delle 16:13 del 30/10»: carta #220 del 29/10, variante B scelta il 30/10 fra le 14:49 e le 14:54, le 16:13 sono del 29/10 (il prezzo della veloce).",
+   "prova": "grep «16:13» in lib/ordini e tests/unit: nessun commento del freno attribuisce più la scelta alle 16:13 del 30/10",
+   "rossa_senza_correzione": false,
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts",
+    "lib/ordini/scadenza-accettazione.ts",
+    "tests/unit/zz-collaudo-a-credito.test.ts",
+    "tests/unit/il-freno-della-veloce-regge-guasti-margini-e-concorrenza.test.ts",
+    "tests/unit/la-veloce-non-confermata-in-10-minuti-passa-a-una-fascia.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Solo commenti: nessuna prova di comportamento."
+  },
+  {
+   "id": 2399,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "La riga si scrive con l'ora del telefono del negozio (lettoAlle nelle pagine di app/seller/orders, S06): per non dipendere da un orologio indietro serve l'ora del server nella risposta e passarla alla riga. Dura quanto lo scarto dell'orologio e il giro notturno annulla comunque."
+  },
+  {
+   "id": 2511,
+   "esito": "riparato",
+   "cosa_ho_fatto": "scadenza-accettazione usa la regola unica orariImpostati di lib/store-hours (la settimana scritta tutta chiusa è «impostati», ferie comprese) al posto della sua copia: in ferie il ritiro è impossibile e l'ordine scade subito, non a fine fascia.",
+   "prova": "tests/unit/minori-s02-scadenza.test.ts › 2511",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/scadenza-accettazione.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2363,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Prima dei 10 minuti la riga (pagine del negozio ed email «Nuovo ordine») non dice più «la veloce cade» come cosa certa: se c'è una fascia libera la spesa passa lì, altrimenti resta una consegna veloce finché non la accetti o non si annulla.",
+   "prova": "tests/unit/minori-s02-scadenza.test.ts › 2363",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/scadenza-accettazione.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2377,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Fra il decimo minuto e il giro del freno la riga aggiunge «Se lo accetti adesso resta una consegna veloce: va consegnato in 30-60 min».",
+   "prova": "tests/unit/minori-s02-scadenza.test.ts › 2377",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/scadenza-accettazione.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2359,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Con gli orari del negozio la scadenza è già l'ultimo ritiro utile (ondata 24); senza orari resta la fine della fascia, e nell'ultima ora la riga ora avvisa «la fascia sta per finire, accettalo solo se la consegna arriva in tempo».",
+   "prova": "tests/unit/minori-s02-scadenza.test.ts › 2359",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/scadenza-accettazione.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2368,
+   "esito": "parziale",
+   "cosa_ho_fatto": "Se la scrittura del secondo ordine cade dopo lo spostamento del primo, l'avviso agli amministratori ora dice che cliente, negozi e fattorino non sono stati avvisati e che gli ordini rimasti vanno messi nella stessa fascia (vedi 2367).",
+   "prova": "tests/unit/minori-s02-freno-della-veloce.test.ts › 2367",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Manca il riallineamento automatico: il giro dopo può ancora scegliere una fascia diversa per il secondo ordine (servirebbe ricordare la fascia del carrello)."
+  },
+  {
+   "id": 2331,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La rotta dei contanti, senza chiave del browser e con due o più negozi, scrive la riga del carrello in cod_checkout_attempts con la chiave generata (cod-<uuid>): il freno ritrova tutti gli ordini del carrello invece di trattarli uno per uno.",
+   "prova": "tests/unit/minori-s02-coda-della-rotta-dei-contanti.test.ts › 2331",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/orders/cod/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Vale per gli ordini nuovi: i carrelli già nati senza chiave restano come sono."
+  },
+  {
+   "id": 2369,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Con zero righe scritte sul primo ordine si rilegge lo stato anche senza euro reso: un ordine annullato in gara torna 'annullato' (nuovo conteggio annullatiNelFrattempo), non «accettato nel frattempo».",
+   "prova": "tests/unit/minori-s02-freno-della-veloce.test.ts › 2369",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2332,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Portata nel sito la prova del credito che non torna: con il wallet_credit che cade l'euro resta nel conto, il cliente non legge «non lo paghi» e gli amministratori lo sanno. Verificata col mutante «ignora rendiSulCredito»: rossa.",
+   "prova": "tests/unit/minori-s02-freno-della-veloce.test.ts › 2332",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "tests/unit/minori-s02-freno-della-veloce.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Buco nelle prove: «rossa» col mutante."
+  },
+  {
+   "id": 2334,
+   "esito": "scelta_di_nicola",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Stessa corsa della 2342 sul credito MyCity (l'euro torna sul credito prima della scrittura della fascia; se il negozio accetta in quell'istante e poi l'ordine si annulla, al cliente torna 1 € in più). Domanda per Nicola: accetti questo euro di rischio per corsa, o vuoi che il credito torni solo dopo la scrittura (con il rischio opposto, l'euro non reso se la scrittura riesce e l'accredito cade)?"
+  },
+  {
+   "id": 2339,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Al giro dopo consegnaSenzaLaVeloce non riconosce più il conto del carrello già riscritto a metà e il cliente legge «te lo rendiamo a mano»: chiudere davvero chiede di ricordare sul carrello che l'euro è già stato tolto (un segno persistente o una colonna), che oggi non c'è. Con la 2367 almeno gli amministratori sanno cosa è già fatto."
+  },
+  {
+   "id": 2367,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Se il guasto arriva dopo che un ordine è già passato alla fascia, l'avviso dice che cliente, negozi e fattorino NON sono stati avvisati e che gli altri ordini del carrello vanno messi nella stessa fascia.",
+   "prova": "tests/unit/minori-s02-freno-della-veloce.test.ts › 2367 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2342,
+   "esito": "scelta_di_nicola",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "È una scelta dichiarata nel codice, con l'avviso agli amministratori «Veloce confermata dopo il rimborso dell'euro». Domanda per Nicola: va bene che, nella corsa di millisecondi fra il rimborso e la conferma del negozio, MyCity perda l'euro della veloce?"
+  },
+  {
+   "id": 2366,
+   "esito": "riparato",
+   "cosa_ho_fatto": "I guasti che non hanno fatto niente su un ordine finiscono in UN avviso per giro con l'elenco degli ordini, non uno per ordine; gli avvisi per ordine restano quando qualcosa è già stato fatto.",
+   "prova": "tests/unit/minori-s02-freno-della-veloce.test.ts › 2366",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2360,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Nessuna modifica: superata dalla 2374.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Il mutante della scheda usa lo stato REJECTED, che nel database non esiste: il rifiuto del negozio scrive CANCELED, lo stesso stato dell'annullo del cliente che la prova ③ copre già. Con FUORI_DAL_GIRO = ['CANCELED'] non c'è un ramo distinto da provare."
+  },
+  {
+   "id": 2371,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Zero righe scritte con l'ordine ancora NEW e «Adesso»: avviso agli amministratori «la fascia non si scrive» (una volta per ordine, unaVoltaPer) e conteggio a parte (daRiprovare), non più «accettato nel frattempo» in silenzio.",
+   "prova": "tests/unit/minori-s02-freno-della-veloce.test.ts › 2371",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2338,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Due giri sovrapposti sullo stesso ordine con la carta: serve un lucchetto (advisory lock o una riga di turno per ordine) o una chiave su accumula_rimborso (lib/stripe, S01, e una migrazione). Il giro dura di norma pochi secondi e parte ogni 5 minuti."
+  },
+  {
+   "id": 2341,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Con la carta quasi tutta coperta dal credito l'euro andrebbe reso sul credito invece che sulla carta: cambia la regola del rimborso e la frase al cliente insieme (oggi va a mano, e gli amministratori lo sanno). Da fare con S01 che tiene refundOrder."
+  },
+  {
+   "id": 2373,
+   "esito": "riparato",
+   "cosa_ho_fatto": "avvisaIlCliente dice se campanella o email sono arrivate; se nessuna delle due, gli amministratori ricevono «Veloce spostata ma il cliente non è stato avvisato» e il carrello conta come da sistemare a mano (la rotta del giro non risponde più 200 pulito).",
+   "prova": "tests/unit/minori-s02-freno-della-veloce.test.ts › 2373",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2329,
+   "esito": "riparato",
+   "cosa_ho_fatto": "avvisaNegoziEFattorino non salta più il negozio dell'ordine non confermato: anche lui riceve «Il carrello ha cambiato fascia» (con la frase per lui: se lo accetti, va consegnato nella fascia). L'avviso al cliente parte prima, poi negozi e fattorino.",
+   "prova": "tests/unit/minori-s02-freno-della-veloce.test.ts › 2329",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts",
+    "tests/unit/la-veloce-non-confermata-in-10-minuti-passa-a-una-fascia.test.ts",
+    "tests/unit/zz-collaudo-a-credito.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Aggiornate due prove vecchie che contavano un solo avviso (al cliente): ora contano il cliente e il negozio separatamente."
+  },
+  {
+   "id": 2372,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nuova fasciaDalGiornoDellOrdine: l'etichetta scelta col giorno del giro si riporta al giorno di nascita dell'ordine (dopo mezzanotte «Oggi» del giro diventa «Domani»); un giorno senza nome dalla nascita (dopodomani) dà null e il carrello non si sposta su una fascia che scadenza, pagine e fattorino leggerebbero in un altro giorno.",
+   "prova": "tests/unit/minori-s02-freno-della-veloce.test.ts › 2372",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2333,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Portata nel sito la prova del rimborso prenotato senza stripe_refund_id: non vale «ti torna sulla carta» e non se ne prenota un altro; con lo stripe_refund_id dello stesso euro è già reso. Verificata col mutante «togli la condizione su stripe_refund_id»: rossa.",
+   "prova": "tests/unit/minori-s02-freno-della-veloce.test.ts › 2333 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "tests/unit/minori-s02-freno-della-veloce.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Buco nelle prove: «rossa» col mutante."
+  },
+  {
+   "id": 2365,
+   "esito": "parziale",
+   "cosa_ho_fatto": "Un rimborso precedente di un'altra causa non si scrive più fra il «già fatto» come «già reso sulla carta», ma come «c'era già un rimborso che non è l'euro della veloce». E l'avviso dei guasti senza effetti dice che un giro di prima può aver già reso l'euro.",
+   "prova": "tests/unit/minori-s02-freno-della-veloce.test.ts › 2365 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "L'avviso elenca ancora quello che ha fatto il giro, non lo stato vero rilevato dal database: per dirlo servirebbe rileggere rimborsi e credito nel catch."
+  },
+  {
+   "id": 2354,
+   "esito": "riparato",
+   "cosa_ho_fatto": "ordiniDelCarrello lancia su una lettura caduta (sessione, tentativi, ordini) invece di tornare null: il ripiego «carrello di un ordine» resta solo per il carrello di un negozio o senza tentativo. Il giro non sposta niente e riprova.",
+   "prova": "tests/unit/minori-s02-freno-della-veloce.test.ts › 2354",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2374,
+   "esito": "riparato",
+   "cosa_ho_fatto": "FUORI_DAL_GIRO vale solo CANCELED (lo stato REJECTED nel database non esiste, come in lib/ordini/annulla.ts); il titolo dell'avviso non distingue più un «rifiutato» che non può esistere e dice «annullato, dal cliente o dal negozio».",
+   "prova": "tests/unit/minori-s02-freno-della-veloce.test.ts › 2374",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/veloce-non-confermata.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1939,
+   "esito": "scelta_di_nicola",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Domanda per Nicola: un ordine con l'indirizzo (o il negozio) senza coordinate deve passare come oggi (scelta documentata in lib/ordini/zona-di-consegna.ts), o essere rifiutato finché l'indirizzo non si geolocalizza? Intanto: verificare che Pane Quotidiano abbia lat/lng."
+  },
+  {
+   "id": 2470,
+   "esito": "scelta_di_nicola",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Stessa domanda della 1939 per la veloce: senza coordinate il confine dei 5 km non si controlla e la veloce 30-60 min si vende a qualunque distanza. Rifiutare la veloce (solo lei) senza coordinate?"
+  },
+  {
+   "id": 1886,
+   "esito": "scelta_di_nicola",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Domanda per Nicola: il raggio di consegna in bici è in linea d'aria (oggi, haversine) o in chilometri di strada?"
+  },
+  {
+   "id": 173,
+   "esito": "riparato",
+   "cosa_ho_fatto": "STATI_IN_CUI_SI_INCASSA senza PICKED_UP (vale anche per la UPDATE della rotta, che usa la stessa lista): i contanti si dichiarano alla porta. Da «ritirato» la barra dei contanti offre solo «Sto andando dal cliente» (il codice senza incasso il database lo rifiuta).",
+   "prova": "tests/unit/minori-s02-cliente-assente.test.ts › 173",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/rider/incasso-alla-consegna.ts",
+    "app/rider/orders/[id]/page.tsx",
+    "tests/unit/la-barra-del-fattorino-chiede-prima-i-contanti.test.ts",
+    "tests/unit/l-incasso-in-contanti-si-dichiara-prima-e-si-recupera-dopo.test.ts",
+    "tests/unit/api-rider-cash-confirm.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Cambia uno stato in cui si incassa: aggiornate tre prove vecchie che fissavano PICKED_UP fra gli stati dell'incasso (la barra da «ritirato», passoDellaConsegna, il filtro della UPDATE). lib/cassa/registra-incasso.ts (S01) non toccato: legge la lista da lib/rider."
+  },
+  {
+   "id": 289,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nuovo sceltaDialog con tre esiti (conferma, alternativa, chiusa) accanto a confirmDialog, che resta sì/no per tutti gli altri. Il riordino con la domanda chiusa (Esc, tocco fuori, un'altra conferma) non tocca il carrello; solo «Aggiungi» aggiunge.",
+   "prova": "tests/unit/minori-s02-riordino.test.ts › 289 (due prove) e › la finestra di conferma distingue «Aggiungi» dalla chiusura",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/riordino.ts",
+    "tests/unit/due-tocchi-su-ripeti-ordine-non-raddoppiano-il-carrello.test.ts"
+   ],
+   "file_altrui_toccati": [
+    "components/ConfirmDialog.tsx"
+   ],
+   "nota": "components/ConfirmDialog.tsx non sta in nessun territorio: modifica additiva (confirmDialog invariato per chi lo usa). Aggiornato il finto ConfirmDialog della prova vecchia due-tocchi-su-ripeti-ordine con sceltaDialog."
+  },
+  {
+   "id": 290,
+   "esito": "riparato",
+   "cosa_ho_fatto": "prezziDiAdesso usa la stessa regola di carrello e cassa: fetchActiveDiscounts + discountedUnitCents. Un prodotto ancora in promozione non fa più dire «un prezzo è cambiato» ed entra al prezzo scontato.",
+   "prova": "tests/unit/minori-s02-riordino.test.ts › 290",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/riordino.ts",
+    "tests/unit/due-tocchi-su-ripeti-ordine-non-raddoppiano-il-carrello.test.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 146,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "La scelta di Nicola c'è (ritiro acceso dal lancio), ma accendere RITIRO_IN_NEGOZIO_ATTIVO da qui senza il resto sarebbe a metà: la commissione del 10% sui ritiri pagati al banco non la conta nessuno (bonifico del lunedì, S01), la scheda dice di chiudere prima il #30, e la pagina admin delle consegne (S05) dà ancora il motivo vecchio. Da accendere insieme a quei pezzi."
+  },
+  {
+   "id": 157,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nuovo testoPerEtichetta (lib/shipping-etichetta/testo-winansi.ts): nome, via, città, telefono e note si riducono a WinAnsi prima della stampa («Ionuț» → «Ionut», emoji tolte, accentate italiane intatte).",
+   "prova": "tests/unit/minori-s02-varie.test.ts › 157",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/shipping-etichetta/testo-winansi.ts",
+    "lib/shipping-etichetta/label.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Il nome del negozio passa dalla stessa riduzione. Un font Unicode incorporato resta l'alternativa che conserva i segni diacritici."
+  },
+  {
+   "id": 763,
+   "esito": "scelta_di_nicola",
+   "cosa_ho_fatto": "Nessuna modifica.",
+   "prova": "",
+   "rossa_senza_correzione": false,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Domanda per Nicola: fra «il negozio ha accettato» e «consegnato» vuoi un «annulla col consenso del negozio» (il cliente chiede, il negozio conferma con un tocco) o una finestra di ripensamento di 2 minuti dopo l'accettazione? Intanto il no dell'annullo dice il motivo vero e la strada (scheda 2370)."
+  },
+  {
+   "id": 474,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Sulla pagina dell ordine del cliente, con pickup_in_store, il codice (quello che confirm_pickup_by_seller verifica) si mostra in ACCEPTED e READY con l etichetta «Codice da mostrare in negozio» e il testo per il negozio; a domicilio resta da PICKED_UP/OUT_FOR_DELIVERY.",
+   "prova": "tests/unit/minori-s02-pagina-dell-ordine.test.ts › 474 (pagina vera montata, due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/orders/[id]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "lato cliente; il lato negozio è nel ramo di S06. Scheda aggiunta su richiesta dell AD, fuori dal piano di S02. Altre frasi della pagina (sottotitolo di READY, «Paghi al rider») parlano ancora del rider sugli ordini da ritirare: da rivedere quando il ritiro si accende."
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "La strada della carta calcola la scadenza dell'email «Nuovo ordine» da new Date() e non dal created_at",
+   "file": "lib/stripe/webhook/ordini.ts:532",
+   "gravita": "minore",
+   "descrizione": "Stesso difetto della scheda 2398, che ho chiuso solo sulla rotta dei contanti: sul confine dei secondi email e pagina possono dire due scadenze diverse. File di S01."
+  },
+  {
+   "titolo": "Nei due rimborsi automatici del webhook il cliente non riceve né campanella né email",
+   "file": "lib/stripe/webhook/ordini.ts (rami carrello scaduto e incasso diverso dal preventivo)",
+   "gravita": "minore",
+   "descrizione": "Seconda metà della scheda 630: la pagina ordini ora non dice più «confermato» prima dell'ordine, ma il cliente il cui pagamento torna indietro in automatico non viene avvisato. File di S01."
+  },
+  {
+   "titolo": "La cassa propone i contanti anche sopra il tetto di legge",
+   "file": "app/checkout/page.tsx",
+   "gravita": "minore",
+   "descrizione": "La rotta dei contanti ora rifiuta sopra 4.999,99 € con un messaggio chiaro (scheda 37); nascondere l'opzione in cassa sopra la soglia è un ritocco per S07 (costante in lib/ordini/tetto-dei-contanti.ts)."
+  },
+  {
+   "titolo": "Prova rossa già su main: «caso 1» delle pagine ordini del negozio",
+   "file": "tests/unit/le-pagine-ordini-del-negozio-leggono-gli-orari.test.tsx",
+   "gravita": "minore",
+   "descrizione": "Due casi («caso 1 — la lista» e «caso 1 — il dettaglio») falliscono anche su origin/main senza le mie modifiche (verificato con git stash): dipendono dall'orologio. Non toccata."
+  },
+  {
+   "titolo": "Nel riepilogo dell'ordine la consegna ricavata fa sempre «torna» il totale",
+   "file": "lib/ordini/riepilogo-ordine.ts",
+   "gravita": "minore",
+   "descrizione": "Dal revisore: quando delivery_fee_cents è nullo la consegna si ricava per differenza, quindi il controllo che i conti tornino non può più fallire su quegli ordini vecchi. Da decidere se mostrare la riga come «stimata»."
+  },
+  {
+   "titolo": "La rotta dei contanti non dichiara maxDuration con le email in fila",
+   "file": "app/api/orders/cod/route.ts",
+   "gravita": "minore",
+   "descrizione": "Dal revisore: con le email ora mandate una alla volta, un carrello con più negozi allunga la risposta; un maxDuration esplicito eviterebbe tagli della funzione. Con un negozio solo al lancio non pesa."
+  },
+  {
+   "titolo": "La cassa perde il motivo del «no» della veloce",
+   "file": "app/checkout/page.tsx",
+   "gravita": "minore",
+   "descrizione": "Dal revisore: la rotta della veloce ora risponde 200 «no» col perché (negozio non approvato), ma la cassa legge solo possibile/non possibile e non mostra il motivo. File di S07."
+  }
+ ]
+}

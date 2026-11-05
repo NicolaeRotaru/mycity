@@ -13,6 +13,7 @@ import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere'
 import { avvisaIlClienteDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro, restituisciIlCodiceDellOrdine } from '@/lib/ordini/annulla';
 import { ApiErrors } from '@/lib/api/responses';
 import { righePerChiChiudeAMano, type ComeHaPagato } from '@/lib/email/annullo-nel-carrello';
+import { scriviCampanella } from '@/lib/ordini/campanella';
 
 /**
  * 6/9/2026 — QUALI RIMBORSI FALLITI HA SENSO RITENTARE.
@@ -344,7 +345,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
       await restituisciIlCodiceDellOrdine(admin, o as { id: string; coupon_code?: string | null; stripe_session_id?: string | null });
 
       // Notifica in-app al buyer (best-effort: non deve far fallire l'annullo).
-      await admin.from('notifications').insert({
+      await scriviCampanella(admin, {
         // #33 — la categoria decide se la persona vuole ancora ricevere
         // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
         category: 'order',
@@ -352,18 +353,17 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
         title: 'Ordine annullato',
         body: `L'ordine #${o.id.slice(0, 6).toUpperCase()} è stato annullato: il negozio non lo ha accettato in tempo.${isCardPaid ? ' Il rimborso è in corso.' : ''}`,
         link: '/orders',
-      });
+      }, { dove: 'expire-stale-orders', ordine: o.id });
       // 5/11/2026 — Anche il negozio lo sa: l'ordine sparisce dalla sua lista «da fare».
       const sellerId = (o as { seller_id?: string | null }).seller_id;
       if (sellerId) {
-        const { error: nErr } = await admin.from('notifications').insert({
+        await scriviCampanella(admin, {
           category: 'order',
           user_id: sellerId,
           title: 'Ordine annullato',
           body: `L'ordine #${o.id.slice(0, 6).toUpperCase()} è stato annullato: non è stato accettato in tempo.`,
           link: `/seller/orders/${o.id}`,
-        });
-        if (nErr) logger.warn('[cron] expire-stale-orders: campanella al negozio non scritta', { id: o.id, message: nErr.message });
+        }, { dove: 'expire-stale-orders (negozio)', ordine: o.id });
       }
 
       // 27/10/2026 — La campanella si vede solo riaprendo il sito. Chi paga alla

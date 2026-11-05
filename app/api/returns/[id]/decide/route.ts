@@ -23,6 +23,7 @@ import { avvisoDelRimborsoNonRegistrato, RIMBORSO_PARTITO_MA_NON_REGISTRATO } fr
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { sendEmail } from '@/lib/email/client';
 import { resoRifiutatoAlClienteTemplate } from '@/lib/rimborsi/email-dei-resi';
+import { scriviCampanella } from '@/lib/ordini/campanella';
 
 export const runtime = 'nodejs';
 
@@ -323,12 +324,12 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   }
 
   // Notifica buyer
-  await admin.from('notifications').insert({
+  await scriviCampanella(admin, {
     user_id: ret.buyer_id,
     title: body.decision === 'APPROVED' ? '✓ Reso approvato' : '✕ Reso rifiutato',
     body: body.notes ?? null,
     link: `/orders/${ret.order_id}`,
-  });
+  }, { dove: 'returns-decide', ordine: ret.order_id, reso: ret.id });
 
   // 5/11/2026 — Al cliente a cui il reso viene rifiutato arriva anche un'email,
   // col motivo del negozio o, se manca, con chi scrivere. Best-effort.

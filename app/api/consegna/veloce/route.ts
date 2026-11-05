@@ -59,18 +59,24 @@ export async function GET(req: Request) {
         .eq('role', 'seller')
         .eq('is_approved', true)
         .in('id', ids);
-      if (error || !data || data.length !== ids.length) {
+      if (error || !data) {
         logger.error('consegna veloce: orari dei negozi non letti', { error: error?.message, chiesti: ids.length });
         negozi = null;
+      } else if (data.length !== ids.length) {
+        // Un negozio del carrello non è più fra quelli approvati: è un «no» col suo motivo, non un guasto.
+        return rispondi({ possibile: false, perche: 'Un negozio del carrello non accetta ordini in questo momento: la consegna veloce non si può. Scegli una fascia oraria.' });
       } else {
         negozi = data.map((p) => ({ nome: p.store_name ?? 'Il negozio', orari: p.store_hours }));
       }
     }
     const fattoriniOnline = await contaFattoriniOnline(admin);
     if (fattoriniOnline === null) logger.error('consegna veloce: fattorini online non letti');
+    // 5/11/2026 — Se una lettura è caduta la risposta non è «no», è «non so»: 503, così la vetrina
+    // e il carrello (che leggono solo le risposte riuscite) non scrivono «consegna domani» su un guasto.
+    if (negozi === null || fattoriniOnline === null) return rispondi(NON_RIESCO, 503);
     return rispondi(veloceSiPuo({ adesso: romeNow(), negozi, fattoriniOnline }));
   } catch (e) {
     logger.error('consegna veloce: verifica non riuscita', { error: e instanceof Error ? e.message : String(e) });
-    return rispondi(NON_RIESCO);
+    return rispondi(NON_RIESCO, 503);
   }
 }

@@ -65,10 +65,14 @@ export type Riepilogo = {
  */
 export function riepilogoOrdine(ordine: OrdinePerRiepilogo, subtotaleCentesimi: number): Riepilogo {
   const spedizione = inCentesimi(ordine.shipping_cost);
-  const consegna = Math.round(Number(ordine.delivery_fee_cents ?? 0)) || 0;
   const sconto = inCentesimi(ordine.discount_amount);
   const credito = Math.round(Number(ordine.wallet_applied_cents ?? 0)) || 0;
   const totale = inCentesimi(ordine.total_price);
+  // 5/11/2026 — La consegna non letta (null: la select di riserva senza delivery_fee_cents) non è
+  // «zero»: contata come zero, il riepilogo scriveva «Spedizione GRATUITA» sopra un totale che i 3 €
+  // li conteneva. Se manca si ricava da quello che il totale non spiega.
+  const consegnaLetta = ordine.delivery_fee_cents == null ? null : Math.round(Number(ordine.delivery_fee_cents)) || 0;
+  const consegna = consegnaLetta ?? Math.max(0, totale - (subtotaleCentesimi + spedizione - sconto - credito));
 
   const voci: VoceRiepilogo[] = [{ etichetta: 'Subtotale', centesimi: subtotaleCentesimi, segno: 'piu' }];
   // 27/10/2026 (terzo giro) — LA RIGA «SPEDIZIONE» A ZERO SCRIVEVA «GRATUITA» SOPRA I 3 EURO DI
@@ -113,7 +117,7 @@ export function cifraDellaVoce(v: VoceRiepilogo, euro: (centesimi: number) => st
 
 export type StatoPagamento =
   | { tipo: 'contanti-da-pagare'; centesimi: number }
-  | { tipo: 'gia-pagato-con-carta'; centesimi: number }
+  | { tipo: 'gia-pagato-con-carta'; centesimi: number; rimborsatoCentesimi?: number }
   | { tipo: 'rimborsato' }
   | { tipo: 'bonifico-a-mano'; centesimi: number }
   | { tipo: 'non-lo-so' };
@@ -125,6 +129,8 @@ export type OrdinePerIlPagamento = {
   delivery_status?: string | null;
   /** L'elenco dei rimborsi scritti dal server (migrazione 061: il cliente lo legge, non lo scrive). */
   stripe_refund_id?: string | null;
+  /** 5/11/2026 — Quanto è già tornato al cliente (per esempio l'euro della veloce reso dal freno). */
+  refunded_amount_cents?: number | null;
 };
 
 /**
@@ -183,7 +189,7 @@ export function fraseDelBonificoAMano(centesimi: number, euro: (centesimi: numbe
  *    contanti al rider». Prima bastava «non PAID»: un ordine annullato (FAILED), uno consegnato con
  *    l'incasso non ancora registrato, uno rimborsato in parte senza bonifico dicevano tutti di
  *    pagare di nuovo l'intero al rider.
- * La carta resta com'era.
+ * La carta: pagata (anche rimborsata in parte, con quanto è già tornato) o rimborsata.
  */
 export function statoPagamento(ordine: OrdinePerIlPagamento, totaleCentesimi: number): StatoPagamento {
   const metodo = (ordine.payment_method ?? '').toLowerCase();
@@ -204,7 +210,13 @@ export function statoPagamento(ordine: OrdinePerIlPagamento, totaleCentesimi: nu
   // ogni veloce carta non confermata, e con «non lo so» il cliente non leggeva più «al rider non devi
   // niente» proprio mentre la sua spesa cambiava fascia. La cifra è quella addebitata.
   if (metodo === 'card' && (stato === 'PAID' || stato === 'PARTIALLY_REFUNDED')) {
-    return { tipo: 'gia-pagato-con-carta', centesimi: totaleCentesimi };
+    // 5/11/2026 — Rimborsata in parte: si dice anche quanto è già tornato sulla carta. Dopo il freno
+    // della veloce la pagina diceva «Consegna 4,00 € · Già pagato 19,00 €» mentre la campanella
+    // diceva «l'euro della veloce ti torna sulla carta».
+    const reso = Math.max(0, Math.round(Number(ordine.refunded_amount_cents ?? 0)) || 0);
+    return stato === 'PARTIALLY_REFUNDED' && reso > 0
+      ? { tipo: 'gia-pagato-con-carta', centesimi: totaleCentesimi, rimborsatoCentesimi: reso }
+      : { tipo: 'gia-pagato-con-carta', centesimi: totaleCentesimi };
   }
   return { tipo: 'non-lo-so' };
 }

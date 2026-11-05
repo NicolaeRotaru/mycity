@@ -7,6 +7,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
@@ -53,9 +54,11 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
   const params = use(props.params);
   const { id } = params;
   const router = useRouter();
-  const [storeRating, setStoreRating] = useState(5);
+  // 5/11/2026 — Le stelle partono vuote: un voto di 5 già scelto lo lasciava anche chi non le
+  // toccava. «Invia» resta spento finché non si sceglie un voto (vedi sotto).
+  const [storeRating, setStoreRating] = useState(0);
   const [storeComment, setStoreComment] = useState('');
-  const [riderRating, setRiderRating] = useState(5);
+  const [riderRating, setRiderRating] = useState(0);
   const [riderComment, setRiderComment] = useState('');
 
   type OrderForReview = {
@@ -65,18 +68,23 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
     rider_id: string | null;
     seller: { store_name: string | null } | null;
     rider: { full_name: string | null } | null;
+    /** 5/11/2026 — La recensione già lasciata su questo ordine, se c'è. */
+    giaRecensito?: boolean;
   };
-  const { data: order, isLoading } = useQuery({
+  // 5/11/2026 — Un guasto di rete non è «Ordine non trovato»: si guarda isError (con Riprova),
+  // e «non trovato» resta per l'ordine che non c'è (maybeSingle → null).
+  const { data: order, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.orders.forReview(id),
-    queryFn: async (): Promise<OrderForReview> => {
+    queryFn: async (): Promise<OrderForReview | null> => {
       const { data, error } = await supabase
         .from('orders')
         .select(`
           id, delivery_status, seller_id, rider_id
         `)
         .eq('id', id)
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!data) return null;
       // 18/10/2026 — Il nome del negozio da valutare viene dalla vetrina pubblica,
       // non da `profiles` (lib/queries/negozio-dell-ordine.ts).
       const [conNegozio] = await conNegozioDellOrdine(
@@ -87,7 +95,10 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
       // 31/10/2026 (migrazione 164) — Il nome del fattorino da valutare viene dalla vista
       // `nomi_pubblici`, non da `profiles`: dopo la 161 qui c'era sempre «Il tuo rider».
       const [conFattorino] = await conFattorinoDellOrdine(supabase, [conNegozio]);
-      return conFattorino as OrderForReview;
+      // 5/11/2026 — Una seconda recensione urta il vincolo (order_id, user_id) e veniva buttata
+      // dicendo «Grazie». Se c'è già, la pagina lo dice al posto del modulo.
+      const { data: gia } = await supabase.from('store_reviews').select('id').eq('order_id', id).limit(1);
+      return { ...(conFattorino as OrderForReview), giaRecensito: ((gia as unknown[] | null) ?? []).length > 0 };
     },
   });
 
@@ -96,6 +107,8 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
       if (!order || order.delivery_status !== 'DELIVERED') throw new Error('Ordine non consegnato');
+      if (storeRating < 1 || (order.rider_id && riderRating < 1)) throw new Error('Tocca le stelle per votare');
+      let doppione = false;
 
       if (order.seller_id) {
         const { error: e1 } = await supabase.from('store_reviews').insert({
@@ -105,7 +118,8 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
           rating: storeRating,
           comment: storeComment.trim() || null,
         });
-        if (e1 && e1.code !== '23505') throw e1; // ignora duplicato
+        if (e1 && e1.code !== '23505') throw e1;
+        if (e1) doppione = true;
       }
       if (order.rider_id) {
         const { error: e2 } = await supabase.from('rider_reviews').insert({
@@ -116,16 +130,30 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
           comment: riderComment.trim() || null,
         });
         if (e2 && e2.code !== '23505') throw e2;
+        if (e2) doppione = true;
       }
+      return { doppione };
     },
-    onSuccess: () => {
-      toast.success('Grazie per la recensione!');
+    onSuccess: ({ doppione }) => {
+      if (doppione) toast.info('Avevi già recensito questo ordine: la recensione di prima resta quella valida.');
+      else toast.success('Grazie per la recensione!');
       router.push(`/orders/${id}`);
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;
+  if (isError) {
+    return (
+      <div className="container mx-auto py-12 max-w-2xl">
+        <ErrorState
+          title="Non riesco a caricare l'ordine"
+          description="Sembra un problema di collegamento. L'ordine c'è: riprova."
+          retry={() => { void refetch(); }}
+        />
+      </div>
+    );
+  }
   if (!order) return <div className="container mx-auto py-12 max-w-2xl"><EmptyState icon={Package} title="Ordine non trovato" ctaLabel="Tutti gli ordini" ctaHref="/orders" /></div>;
   if (order.delivery_status !== 'DELIVERED') {
     return (
@@ -135,6 +163,17 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
       </div>
     );
   }
+
+  if (order.giaRecensito) {
+    return (
+      <div className="container mx-auto p-8 text-center space-y-3">
+        <p className="text-ink-700">Hai già lasciato una recensione per questo ordine. Grazie!</p>
+        <Link href={`/orders/${id}`} className="text-primary-700 hover:underline">← Torna all&apos;ordine</Link>
+      </div>
+    );
+  }
+
+  const manca = storeRating < 1 || (!!order.rider_id && riderRating < 1);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-xl space-y-6">
@@ -178,9 +217,11 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
         </div>
       )}
 
+      {manca && <p className="text-center text-sm text-ink-500">Tocca le stelle per votare.</p>}
       <Button
         onClick={() => submit.mutate()}
         loading={submit.isPending}
+        disabled={manca}
         fullWidth
         size="lg"
       >

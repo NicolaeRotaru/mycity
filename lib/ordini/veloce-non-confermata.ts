@@ -1,3 +1,4 @@
+import { giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email/client';
@@ -11,8 +12,9 @@ import { romeNow } from '@/lib/store-hours';
 import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 
 /**
- * 30/10/2026 — IL SECONDO FRENO DELLA VELOCE (carta #220, scelta di Nicola delle 16:13: «il
- * secondo propone una fascia senza l'euro se il negozio non conferma entro 10 minuti»).
+ * 30/10/2026 — IL SECONDO FRENO DELLA VELOCE (carta #220 approvata il 29/10; la variante B,
+ * «il secondo propone una fascia senza l'euro se il negozio non conferma entro 10 minuti», scelta da
+ * Nicola il 30/10 fra le 14:49 e le 14:54. Le 16:13 sono del 29/10: il prezzo della veloce).
  *
  * ── Il difetto ──────────────────────────────────────────────────────────────────────────────
  * La veloce promette 30-60 minuti dalla conferma del negozio e costa 1 € in più. Se il negozio non
@@ -62,7 +64,9 @@ const leggi = (dove: string, q: (colonne: string) => PromiseLike<Risposta>) =>
 /** Gli stati di un ordine che il fattorino non ha ancora portato via dal negozio. */
 const NON_ANCORA_PARTITI = ['NEW', 'ACCEPTED', 'READY', 'ASSIGNED'];
 /** Gli stati di un ordine uscito dal carrello prima della consegna: non pesano sulla decisione. */
-const FUORI_DAL_GIRO = ['CANCELED', 'REJECTED'];
+// 5/11/2026 — Solo CANCELED: lo stato REJECTED nel database non esiste (il vincolo della 011 non
+// lo ammette, e il rifiuto del negozio scrive CANCELED), come in lib/ordini/annulla.ts.
+const FUORI_DAL_GIRO = ['CANCELED'];
 
 type RigaVeloce = {
   id: string;
@@ -107,6 +111,29 @@ export function fasciaDopoLaVeloce(oraDiPiacenza: Date, orari: unknown[]): strin
   return fasceAncoraPossibili(oraDiPiacenza, orari)[0] ?? fasceDiDomaniPossibili(oraDiPiacenza, orari)[0] ?? null;
 }
 
+/**
+ * 5/11/2026 — «OGGI» E «DOMANI» SI CONTANO DAL GIORNO IN CUI L'ORDINE È NATO.
+ *
+ * Tutti i lettori (la scadenza, il giro degli scaduti, le pagine di cliente, negozio e fattorino)
+ * contano l'etichetta dal giorno di `created_at`. Il freno la sceglieva col giorno del giro: dopo
+ * mezzanotte «Domani» voleva dire lunedì per il cliente e domenica per tutti gli altri. Qui
+ * l'etichetta scelta col giorno del giro si riporta al giorno di nascita: «Oggi» del giro diventa
+ * «Domani» se il giro è il giorno dopo; un giorno che dalla nascita non ha nome (dopodomani) dà
+ * `null`, e il carrello non si sposta su una fascia che nessuno saprebbe leggere.
+ */
+export function fasciaDalGiornoDellOrdine(fascia: string, giro: Date, natoIl: string | null | undefined): string | null {
+  const m = /^(Oggi|Domani)( · .+)$/.exec(fascia);
+  if (!m || !natoIl) return fascia;
+  const nato = giornoDiPiacenza(natoIl);
+  const oggi = giornoDiPiacenza(giro);
+  if (!nato || !oggi) return fascia;
+  const dopo = Math.round((Date.parse(`${oggi}T00:00:00Z`) - Date.parse(`${nato}T00:00:00Z`)) / 86_400_000);
+  const giorni = (m[1] === 'Domani' ? 1 : 0) + dopo;
+  if (giorni === 0) return `Oggi${m[2]}`;
+  if (giorni === 1) return `Domani${m[2]}`;
+  return null;
+}
+
 const TITOLO_NON_SPOSTATO = 'Il negozio non ha ancora confermato la consegna veloce';
 
 /**
@@ -148,7 +175,9 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<
   const sessione = o.stripe_session_id?.trim();
   if (sessione) {
     const { data, error } = await leggi('sessione', (c) => admin.from('orders').select(c).eq('stripe_session_id', sessione));
-    if (error || !Array.isArray(data)) return null;
+    // 5/11/2026 — Una lettura caduta non è «carrello di un negozio»: si lancia, e il giro dopo riprova.
+    if (error) throw new Error(`carrello dell'ordine ${o.id} non letto: ${error.message}`);
+    if (!Array.isArray(data)) return null;
     righe = data as unknown as RigaVeloce[];
   } else {
     const { data: tentativi, error: errT } = await admin
@@ -157,22 +186,26 @@ async function ordiniDelCarrello(admin: SupabaseClient, o: RigaVeloce): Promise<
       .eq('user_id', o.user_id)
       .contains('order_ids', JSON.stringify([{ id: o.id }]))
       .limit(1);
-    if (errT || !Array.isArray(tentativi) || tentativi.length === 0) return null;
+    if (errT) throw new Error(`carrello dell'ordine ${o.id} non letto: ${errT.message}`);
+    if (!Array.isArray(tentativi) || tentativi.length === 0) return null;
     const elenco = (tentativi[0] as { order_ids: unknown }).order_ids;
     const ids = Array.isArray(elenco)
       ? elenco.map((x) => (x && typeof x === 'object' ? String((x as { id?: unknown }).id ?? '') : String(x))).filter(Boolean)
       : [];
     if (ids.length < 2) return null;
     const { data, error } = await leggi('carrello', (c) => admin.from('orders').select(c).in('id', ids));
-    if (error || !Array.isArray(data)) return null;
+    if (error) throw new Error(`carrello dell'ordine ${o.id} non letto: ${error.message}`);
+    if (!Array.isArray(data)) return null;
     righe = data as unknown as RigaVeloce[];
   }
   if (!righe.some((r) => r.id === o.id)) return null;
   return righe.sort((x, y) => String(x.created_at ?? '').localeCompare(String(y.created_at ?? '')) || x.id.localeCompare(y.id));
 }
 
-async function avvisaIlCliente(admin: SupabaseClient, o: RigaVeloce, frase: string, nonSpostato = false): Promise<void> {
-  if (!o.user_id) return;
+/** 5/11/2026 — Dice se almeno campanella o email sono arrivate: chi sposta il carrello lo deve sapere. */
+async function avvisaIlCliente(admin: SupabaseClient, o: RigaVeloce, frase: string, nonSpostato = false): Promise<boolean> {
+  if (!o.user_id) return false;
+  let arrivato = false;
   const { error } = await admin.from('notifications').insert({
     category: 'order',
     user_id: o.user_id,
@@ -180,20 +213,21 @@ async function avvisaIlCliente(admin: SupabaseClient, o: RigaVeloce, frase: stri
     body: frase,
     link: `/orders/${o.id}`,
   });
+  if (!error) arrivato = true;
   if (error) {
     logger.error('[veloce-non-confermata] campanella al cliente NON scritta', { orderId: o.id, message: error.message });
     // Quando il carrello non si sposta, la campanella è l'unico segno che al cliente se n'è già parlato
     // (nonSiSposta la rilegge a ogni giro). Senza, l'email ripartiva ogni 5 minuti fino all'annullo.
     // Si aspetta il giro in cui la campanella si scrive: l'email parte una volta sola. Gli
     // amministratori lo sanno già, nonSiSposta li avvisa prima, una volta per ordine.
-    if (nonSpostato) return;
+    if (nonSpostato) return false;
   }
   try {
     const { data, error: errU } = await admin.auth.admin.getUserById(o.user_id);
     const email = data?.user?.email;
     if (errU || !email) {
       logger.error('[veloce-non-confermata] email al cliente non spedita: indirizzo non letto', { orderId: o.id });
-      return;
+      return arrivato;
     }
     const t = veloceNonConfermataTemplate({ orderId: o.id, frase, senzaFascia: nonSpostato });
     const res = await sendEmail({
@@ -205,14 +239,19 @@ async function avvisaIlCliente(admin: SupabaseClient, o: RigaVeloce, frase: stri
       tags: [{ name: 'template', value: 'veloce_non_confermata' }],
     });
     if (!res.ok) logger.error('[veloce-non-confermata] email al cliente NON partita', { orderId: o.id });
+    else arrivato = true;
   } catch (err) {
     logger.error('[veloce-non-confermata] email al cliente NON partita', { orderId: o.id, err });
   }
+  return arrivato;
 }
 
 // 5/11/2026 — 'gia-segnalato': il carrello che non si sposta, già detto agli amministratori a un giro
 // di prima. Non è un problema nuovo: il giro non risponde 500 a ogni passaggio fino all'annullo.
-type EsitoDelCarrello = 'spostato' | 'accettato' | 'a-mano' | 'gia-segnalato';
+// 5/11/2026 — 'annullato': l'ordine è uscito dal giro (annullato) mentre il freno lavorava, senza
+// euro reso: non è «accettato nel frattempo». 'riprova': la fascia non si è scritta su un ordine
+// ancora NEW e «Adesso»: il giro dopo riprova, e se succede gli amministratori lo sanno (una volta).
+type EsitoDelCarrello = 'spostato' | 'accettato' | 'annullato' | 'riprova' | 'a-mano' | 'gia-segnalato';
 
 const codiceDi = (id: string) => `#${id.slice(0, 6).toUpperCase()}`;
 
@@ -249,12 +288,16 @@ async function nonSiSposta(admin: SupabaseClient, o: RigaVeloce, adesso: Date, p
 async function avvisaNegoziEFattorino(admin: SupabaseClient, o: RigaVeloce, spostati: RigaVeloce[], fascia: string): Promise<void> {
   const righe: Record<string, unknown>[] = [];
   for (const c of spostati) {
-    if (c.id === o.id || !c.seller_id) continue;
+    if (!c.seller_id) continue;
+    // 5/11/2026 — Anche il negozio che non ha confermato: prima saltava proprio lui, e se accettava
+    // dopo leggeva ancora «Adesso» senza sapere che la consegna era passata alla fascia.
     righe.push({
       category: 'order',
       user_id: c.seller_id,
       title: 'Il carrello ha cambiato fascia',
-      body: `L'ordine ${codiceDi(c.id)} non è più una consegna veloce: un altro negozio dello stesso carrello non l'ha confermata. Va consegnato nella fascia ${fascia}.`,
+      body: c.id === o.id
+        ? `L'ordine ${codiceDi(c.id)} non è stato confermato in ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti: non è più una consegna veloce. Se lo accetti, va consegnato nella fascia ${fascia}.`
+        : `L'ordine ${codiceDi(c.id)} non è più una consegna veloce: un altro negozio dello stesso carrello non l'ha confermata. Va consegnato nella fascia ${fascia}.`,
       link: `/seller/orders/${c.id}`,
     });
   }
@@ -340,7 +383,8 @@ async function spostaIlCarrello(
     }
     orari = venditori.map((v) => letti.find((n) => n.id === v)?.store_hours ?? null);
   }
-  const fascia = fasciaDopoLaVeloce(romeNow(adesso), orari);
+  const fasciaDelGiro = fasciaDopoLaVeloce(romeNow(adesso), orari);
+  const fascia = fasciaDelGiro ? fasciaDalGiornoDellOrdine(fasciaDelGiro, adesso, o.created_at) : null;
   if (!fascia) return nonSiSposta(admin, o, adesso, 'né oggi né domani c’è una fascia in cui tutti i negozi del carrello siano aperti', o.seller_id ? orari[venditori.indexOf(o.seller_id)] : undefined);
 
   const conto = consegnaSenzaLaVeloce(carrello.map((r) => {
@@ -389,8 +433,9 @@ async function spostaIlCarrello(
         logger.error('[veloce-non-confermata] sull ordine c è già un rimborso che non è l euro della veloce: non se ne prenota un altro', {
           orderId: r.id, giaResi, chiesti: -r.deltaCents,
         });
-        // Stessa frase del giro che l'ha reso: se poi una scrittura cade, l'avviso non si ripete.
-        fatto.push(`${formatPriceFromCents(giaResi)} già reso sulla carta per l’ordine ${codiceDi(r.id)}`);
+        // 5/11/2026 — Non «già reso sulla carta» come se l'avesse reso il freno: è un rimborso di
+        // un'altra causa, e l'avviso lo dice così (la frase dipende dallo stato: una volta sola).
+        fatto.push(`sull’ordine ${codiceDi(r.id)} c’era già un rimborso di ${formatPriceFromCents(giaResi)} che non è l’euro della veloce: il freno non ne ha prenotato un altro`);
         rimborsoNonFatto.push(r);
         continue;
       }
@@ -468,6 +513,26 @@ async function spostaIlCarrello(
         // Con la carta l'euro è già tornato: se l'ordine è ancora «Adesso» l'ha confermato il negozio
         // in quell'istante e la veloce resta. Al cliente va bene, ma il conto va saputo. Se invece l'ha
         // già spostato un altro giro, era lo stesso rimborso (stessa chiave) e non c'è niente da dire.
+        if (resiCents + creditoResoCents === 0) {
+          // 5/11/2026 — Anche senza euro reso si rilegge lo stato: un annullo in gara non è
+          // «accettato nel frattempo», e una fascia che non si scrive su un ordine ancora NEW e
+          // «Adesso» non si conta come accettata in silenzio a ogni giro.
+          const { data: ora, error: errOra } = await admin
+            .from('orders').select('delivery_slot, delivery_status').eq('id', c.id).maybeSingle();
+          const vero = ora as { delivery_slot?: string | null; delivery_status?: string | null } | null;
+          if (!errOra && vero) {
+            if (FUORI_DAL_GIRO.includes(String(vero.delivery_status ?? ''))) return 'annullato';
+            if (vero.delivery_slot === ETICHETTA_ADESSO && vero.delivery_status === 'NEW') {
+              await notifyAdmins(
+                '⚠️ Veloce: la fascia non si scrive',
+                `L'ordine ${codiceDi(o.id)} non è stato confermato in ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti, ma la fascia ${fascia} non si è potuta scrivere: è ancora «Adesso» e nuovo. Il freno riprova da solo ogni 5 minuti; se resta così, senti il negozio e metti tu la fascia col cliente.`,
+                '/admin/orders',
+                { unaVoltaPer: `veloce-non-scritta-${o.id}` },
+              ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
+              return 'riprova';
+            }
+          }
+        }
         if (resiCents + creditoResoCents > 0) {
           // «Zero righe scritte» ha tre cause: il negozio ha accettato, il cliente ha annullato (o il
           // negozio ha rifiutato), oppure un altro negozio del carrello ha cambiato la consegna. Si
@@ -489,8 +554,8 @@ async function spostaIlCarrello(
           }
           if (FUORI_DAL_GIRO.includes(stato)) {
             await notifyAdmins(
-              stato === 'CANCELED' ? '⚠️ Ordine annullato mentre il freno rendeva l’euro' : '⚠️ Ordine rifiutato mentre il freno rendeva l’euro',
-              `L'ordine ${codiceDi(o.id)} risulta ${stato === 'CANCELED' ? 'annullato' : 'rifiutato dal negozio'} (stato riletto adesso: ${stato}) mentre il freno della veloce rendeva al cliente ${reso} (sulla carta o sul credito MyCity). Il negozio non l'ha confermato e la fascia non è cambiata. Controlla che in tutto al cliente sia tornato quello che ha pagato, non di più e non di meno: l'euro della veloce è già fra quello che gli è tornato.`,
+              '⚠️ Ordine annullato mentre il freno rendeva l’euro',
+              `L'ordine ${codiceDi(o.id)} risulta annullato, dal cliente o dal negozio che l'ha rifiutato (stato riletto adesso: ${stato}) mentre il freno della veloce rendeva al cliente ${reso} (sulla carta o sul credito MyCity). Il negozio non l'ha confermato e la fascia non è cambiata. Controlla che in tutto al cliente sia tornato quello che ha pagato, non di più e non di meno: l'euro della veloce è già fra quello che gli è tornato.`,
               '/admin/orders',
               { unaVoltaPer: `veloce-resa-annullato-${o.id}` },
             ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
@@ -550,15 +615,36 @@ async function spostaIlCarrello(
     ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
   }
 
+  const clienteAvvisato = await avvisaIlCliente(admin, o, fraseDelFreno({ fascia, euro: euroFinale, totaleCents, sulCreditoCents }));
   await avvisaNegoziEFattorino(admin, o, scritti, fascia);
-  await avvisaIlCliente(admin, o, fraseDelFreno({ fascia, euro: euroFinale, totaleCents, sulCreditoCents }));
   logger.info('[veloce-non-confermata] carrello passato in fascia', { orderId: o.id, fascia, euro: euroFinale, ordini: deltaScritti.size });
+  // 5/11/2026 — La promessa al cliente è cambiata (da 30-60 minuti a una fascia): se né campanella né
+  // email gli sono arrivate, non è un giro pulito. Gli amministratori lo avvisano a voce.
+  if (!clienteAvvisato) {
+    await notifyAdmins(
+      '⚠️ Veloce spostata ma il cliente non è stato avvisato',
+      `L'ordine ${codiceDi(o.id)} è passato alla fascia ${fascia}, ma né la campanella né l'email al cliente sono partite. Avvisalo tu: la consegna non arriva più in 30-60 minuti.`,
+      '/admin/orders',
+      { unaVoltaPer: `veloce-cliente-non-avvisato-${o.id}` },
+    ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
+    return 'a-mano';
+  }
   return aMeta || euroFinale === 'a-mano' ? 'a-mano' : 'spostato';
 }
 
 export type EsitoDelFreno =
   /** `guasti`: carrelli in cui una scrittura è caduta a metà (sono anche fra quelli da sistemare a mano). */
-  | { ok: true; spostati: number; accettatiNelFrattempo: number; daSistemareAMano: number; giaSegnalati?: number; guasti: number }
+  | {
+      ok: true;
+      spostati: number;
+      accettatiNelFrattempo: number;
+      daSistemareAMano: number;
+      giaSegnalati?: number;
+      guasti: number;
+      /** 5/11/2026 — Annullati mentre il freno lavorava, e fasce non scritte su ordini ancora «Adesso». */
+      annullatiNelFrattempo?: number;
+      daRiprovare?: number;
+    }
   | { ok: false; error: string };
 
 /** Il giro del freno: lo chiama app/api/cron/veloce-non-confermata ogni cinque minuti. */
@@ -582,6 +668,11 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
   let daSistemareAMano = 0;
   let giaSegnalati = 0;
   let guasti = 0;
+  let annullatiNelFrattempo = 0;
+  let daRiprovare = 0;
+  // 5/11/2026 — I guasti che non hanno fatto niente (per esempio il database giù alla prima lettura)
+  // vanno in UN avviso per giro, non uno per ordine: un guasto passeggero ne mandava fino a 100.
+  const fermiSenzaNiente: Array<{ id: string; perche: string }> = [];
   const visti = new Set<string>();
   for (const o of (data ?? []) as unknown as RigaVeloce[]) {
     if (visti.has(o.id) || o.pickup_in_store) continue;
@@ -594,6 +685,8 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
       if (esito === 'spostato') spostati++;
       else if (esito === 'accettato') accettatiNelFrattempo++;
       else if (esito === 'gia-segnalato') giaSegnalati++;
+      else if (esito === 'annullato') annullatiNelFrattempo++;
+      else if (esito === 'riprova') daRiprovare++;
       else daSistemareAMano++;
     } catch (err) {
       // Una scrittura è caduta a metà. Prima il carrello si contava «da sistemare a mano» e la cosa
@@ -605,16 +698,37 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
       daSistemareAMano++;
       const perche = err instanceof Error ? err.message : String(err);
       logger.error('[veloce-non-confermata] carrello NON spostato', { orderId: o.id, err, fatto });
+      if (fatto.length === 0) {
+        fermiSenzaNiente.push({ id: o.id, perche });
+        continue;
+      }
+      // 5/11/2026 — Se un ordine è già passato alla fascia, cliente e negozi NON sono stati avvisati
+      // (gli avvisi partono alla fine): l'avviso lo dice, invece di parlare solo dell'ordine «Adesso».
+      const unoGiaSpostato = fatto.some((f) => f.includes('già passato alla fascia'));
       await notifyAdmins(
         '⚠️ Freno della veloce fermo a metà',
         `Il freno della veloce non è riuscito a finire il carrello dell'ordine ${codiceDi(o.id)}: ${perche}. ` +
-          `Già fatto: ${fatto.length > 0 ? fatto.join('; ') : 'niente'}. ` +
+          `Già fatto in questo giro: ${fatto.join('; ')}. ` +
+          (unoGiaSpostato
+            ? 'Cliente, negozi e fattorino NON sono stati avvisati del cambio di fascia: avvisali tu, e metti nella stessa fascia gli ordini del carrello rimasti «Adesso». '
+            : '') +
           'Il freno riprova da solo ogni 5 minuti e non rende due volte quello che è già reso. Se l’ordine resta «Adesso», ' +
           'senti il negozio e mettilo tu in una fascia col cliente, avvisandolo.',
         '/admin/orders',
-        { unaVoltaPer: `veloce-guasto-${o.id}:${fatto.join('|') || 'niente'}` },
+        { unaVoltaPer: `veloce-guasto-${o.id}:${fatto.join('|')}` },
       ).catch((e) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err: e }));
     }
   }
-  return { ok: true, spostati, accettatiNelFrattempo, daSistemareAMano, giaSegnalati, guasti };
+  if (fermiSenzaNiente.length > 0) {
+    const codici = fermiSenzaNiente.map((f) => codiceDi(f.id));
+    await notifyAdmins(
+      '⚠️ Freno della veloce fermo prima di cominciare',
+      `In questo giro il freno della veloce non ha potuto lavorare ${fermiSenzaNiente.length === 1 ? "sull'ordine" : 'sugli ordini'} ${codici.join(', ')}: ${fermiSenzaNiente[0].perche}. ` +
+        'In questo giro non ha fatto niente su quegli ordini (un giro di prima può aver già reso l’euro: guarda l’ordine). Riprova da solo ogni 5 minuti; se gli ordini restano «Adesso», senti i negozi.',
+      '/admin/orders',
+      // Una volta l'ora: con un guasto che dura e ordini nuovi che entrano, l'insieme degli id cambia a ogni giro.
+      { unaVoltaPer: `veloce-fermo-${adesso.toISOString().slice(0, 13)}` },
+    ).catch((e) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { err: e }));
+  }
+  return { ok: true, spostati, accettatiNelFrattempo, daSistemareAMano, giaSegnalati, guasti, annullatiNelFrattempo, daRiprovare };
 }

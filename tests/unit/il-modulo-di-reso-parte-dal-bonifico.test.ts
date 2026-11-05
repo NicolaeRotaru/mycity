@@ -93,6 +93,10 @@ describe('il modulo di reso di chi ha pagato in contanti', () => {
   it('chi preme «Invia» manda solo il reso: nessun campo «rimborso» nel corpo', async () => {
     rispondeCon(ORDINE);
     const s = await apriIlModulo();
+    // 5/11/2026 (sessione S02, scheda 177) — Il motivo non parte più già scelto: lo si sceglie.
+    const motivo = s.radice.querySelector('input[type=radio][value=DAMAGED]') as HTMLInputElement;
+    s.agisci(() => clicca(motivo));
+    await attendi();
     const invia = Array.from(s.radice.querySelectorAll('button')).find((b) =>
       (b.textContent ?? '').includes('Invia richiesta di reso'),
     );

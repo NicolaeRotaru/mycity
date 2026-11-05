@@ -4,7 +4,8 @@ import { ETICHETTA_ADESSO } from "@/lib/quando-arriva";
 import { rigaScadenzaPerIlNegozio, scadenzaAccettazione } from "@/lib/ordini/scadenza-accettazione";
 
 /**
- * IL SECONDO FRENO DELLA VELOCE (carta #220, scelta di Nicola del 30/10 alle 16:13).
+ * IL SECONDO FRENO DELLA VELOCE (carta #220 del 29/10; variante B scelta da Nicola il 30/10 fra le
+ * 14:49 e le 14:54 — le 16:13 sono del 29/10, il prezzo della veloce).
  *
  * La veloce promette 30-60 minuti dalla conferma del negozio e costa 1 € in più. Prima, se il
  * negozio non confermava, l ordine restava «Adesso» per tre ore e poi moriva: il cliente aspettava
@@ -123,7 +124,9 @@ describe("il secondo freno della veloce", () => {
       delivery_slot: "Oggi · 18:00–19:30", delivery_status: "NEW",
       delivery_fee_cents: 300, rider_fee_cents: 300, gross_total_cents: 1800, total_price: 18,
     });
-    expect(db.notifications).toHaveLength(1);
+    // 5/11/2026 (sessione S02, scheda 2329) — anche il negozio che non ha confermato riceve l'avviso.
+    expect(db.notifications.filter((n) => n.user_id === "maria")).toHaveLength(1);
+    expect(db.notifications.filter((n) => n.user_id === "forno")).toHaveLength(1);
     expect(db.notifications[0]).toMatchObject({ user_id: "maria", link: "/orders/o1" });
     expect(String(db.notifications[0].body)).toContain("Oggi · 18:00–19:30");
     expect(String(db.notifications[0].body)).toContain("non lo paghi");
@@ -158,7 +161,9 @@ describe("il secondo freno della veloce", () => {
     db.orders = [ordine({ total_price: 12, gross_total_cents: 1200 })];
     await giro("2026-10-30T17:16:00.000Z");
     expect(o("o1")).toMatchObject({ delivery_slot: "Oggi · 18:00–19:30", delivery_fee_cents: 400, total_price: 12, gross_total_cents: 1200 });
-    expect(db.notifications).toHaveLength(1);
+    // 5/11/2026 (sessione S02, scheda 2329) — anche il negozio che non ha confermato riceve l'avviso.
+    expect(db.notifications.filter((n) => n.user_id === "maria")).toHaveLength(1);
+    expect(db.notifications.filter((n) => n.user_id === "forno")).toHaveLength(1);
   });
 
   it("carrello di due negozi: il forno non conferma, anche la frutta già accettata cambia fascia e l euro si toglie una volta", async () => {
@@ -186,7 +191,9 @@ describe("il secondo freno della veloce", () => {
     await giro("2026-10-30T17:16:00.000Z");
     await giro("2026-10-30T17:21:00.000Z");
     expect(o("o1")).toMatchObject({ delivery_fee_cents: 300, total_price: 18 });
-    expect(db.notifications).toHaveLength(1);
+    // 5/11/2026 (sessione S02, scheda 2329) — anche il negozio che non ha confermato riceve l'avviso.
+    expect(db.notifications.filter((n) => n.user_id === "maria")).toHaveLength(1);
+    expect(db.notifications.filter((n) => n.user_id === "forno")).toHaveLength(1);
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
   });
 
