@@ -201,7 +201,10 @@ describe('la coda della rotta dei contanti', () => {
   it('37 · 99 pezzi da 60 € (5.940 €) non si pagano in contanti: 409 «scegli la carta», nessun ordine', async () => {
     banco.prezzoPane = 60;
     const res = await ordina('2026-10-30T20:15:00.000Z', 'Domani · 9:00–12:00', { dueNegozi: true, quantita: 99 }, 409);
-    expect(JSON.stringify(await res.json())).toContain('non si può pagare in contanti');
+    const testo = JSON.stringify(await res.json());
+    expect(testo).toContain('non si può pagare in contanti');
+    // Revisione: niente invito a «dividere la spesa» (il frazionamento ad arte è vietato anch'esso).
+    expect(testo).not.toContain('dividi');
     expect(banco.ordini).toBe(0);
   });
 

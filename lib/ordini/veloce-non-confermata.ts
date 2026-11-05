@@ -721,7 +721,8 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
       `In questo giro il freno della veloce non ha potuto lavorare ${fermiSenzaNiente.length === 1 ? "sull'ordine" : 'sugli ordini'} ${codici.join(', ')}: ${fermiSenzaNiente[0].perche}. ` +
         'In questo giro non ha fatto niente su quegli ordini (un giro di prima può aver già reso l’euro: guarda l’ordine). Riprova da solo ogni 5 minuti; se gli ordini restano «Adesso», senti i negozi.',
       '/admin/orders',
-      { unaVoltaPer: `veloce-fermo-${fermiSenzaNiente.map((f) => f.id).sort().join('|')}` },
+      // Una volta l'ora: con un guasto che dura e ordini nuovi che entrano, l'insieme degli id cambia a ogni giro.
+      { unaVoltaPer: `veloce-fermo-${adesso.toISOString().slice(0, 13)}` },
     ).catch((e) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { err: e }));
   }
   return { ok: true, spostati, accettatiNelFrattempo, daSistemareAMano, guasti, annullatiNelFrattempo, daRiprovare };

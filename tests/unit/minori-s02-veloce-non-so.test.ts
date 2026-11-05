@@ -42,3 +42,13 @@ describe('la rotta della veloce distingue «no» da «non so»', () => {
     expect(letto).toBeNull();
   });
 });
+
+describe('revisione · un negozio non più approvato è un «no» col motivo, non un guasto', () => {
+  it('risponde 200 possibile:false con il perché', async () => {
+    const r = await GET(new Request(`https://mycity.test/api/consegna/veloce?negozi=${NEGOZIO}`));
+    expect(r.status).toBe(200);
+    const corpo = (await r.json()) as { possibile?: boolean; perche?: string };
+    expect(corpo.possibile).toBe(false);
+    expect(corpo.perche ?? '').toContain('non accetta ordini');
+  });
+});

@@ -76,7 +76,7 @@ const MISMATCH_TOLERANCE_CENTS = 50; // €0,50
  * tutti gli ordini COD delivered dal rider quel giorno.
  *
  * RLS-safe: il rider puo' aggiornare solo i propri ordini con
- * delivery_status PICKED_UP/OUT_FOR_DELIVERY/DELIVERED (controllo
+ * delivery_status OUT_FOR_DELIVERY/DELIVERED (dal 5/11 non piu' PICKED_UP; controllo
  * server-side).
  */
 // Rate limit: 60 conferme / ora per rider (anti-abuse, ma rider attivi ~30/giorno)
@@ -195,7 +195,7 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   // payout in lib/stripe/payout.ts.
   //
   // 056/172 — e nella stessa UPDATE sta la guardia sullo stato di consegna
-  // (PICKED_UP/OUT_FOR_DELIVERY/DELIVERED): un fattorino non puo' marcare
+  // (OUT_FOR_DELIVERY/DELIVERED, STATI_IN_CUI_SI_INCASSA): un fattorino non puo' marcare
   // PAGATO un ordine appena assegnato, mai ritirato e mai consegnato.
   const { data: claimed, error: updErr } = await scriviIncasso(
     admin,
@@ -225,8 +225,15 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     if (ora?.delivery_status === 'CANCELED') {
       return ApiErrors.conflict("Ordine annullato: l'incasso non è stato registrato. Non incassare e riporta la merce al negozio.");
     }
+    if (ora?.delivery_status === 'PICKED_UP' && !ora.cash_confirmed_at) {
+      return ApiErrors.conflict("Prima premi «Sto andando dal cliente»: i contanti si dichiarano alla porta. L'incasso non è stato registrato.");
+    }
     if (ora && !ora.cash_confirmed_at) {
       return ApiErrors.conflict("L'ordine non è più in consegna: l'incasso non è stato registrato. Scrivi all'assistenza.");
+    }
+    if (!ora) {
+      // Rilettura caduta: non si sa se l'incasso c'è. Non si dice «già confermato».
+      return ApiErrors.unavailable("Non riesco a controllare se l'incasso è registrato: riprova fra un momento.");
     }
     // Un'altra conferma concorrente ha già vinto la corsa.
     return ApiErrors.conflict("Incasso gia' confermato");

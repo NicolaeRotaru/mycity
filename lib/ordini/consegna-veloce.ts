@@ -52,7 +52,13 @@ export function veloceSiPuo(s: {
     (n) => !negozioPuoServire(n.orari, ETICHETTA_ADESSO, s.adesso) || !negozioPuoServire(n.orari, ETICHETTA_ADESSO, fraUnQuarto),
   );
   if (chiuso) {
-    return { possibile: false, perche: `${chiuso.nome} adesso è chiuso: la consegna veloce non si può. ${SCEGLI_UNA_FASCIA}` };
+    const apertoAdesso = negozioPuoServire(chiuso.orari, ETICHETTA_ADESSO, s.adesso);
+    return {
+      possibile: false,
+      perche: apertoAdesso
+        ? `${chiuso.nome} sta per chiudere: la consegna veloce non si può. ${SCEGLI_UNA_FASCIA}`
+        : `${chiuso.nome} adesso è chiuso: la consegna veloce non si può. ${SCEGLI_UNA_FASCIA}`,
+    };
   }
   if (s.fattoriniOnline < 1) {
     return { possibile: false, perche: `Adesso non c'è un fattorino libero per la consegna veloce. ${SCEGLI_UNA_FASCIA}` };

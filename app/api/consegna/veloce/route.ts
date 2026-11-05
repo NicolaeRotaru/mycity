@@ -59,9 +59,12 @@ export async function GET(req: Request) {
         .eq('role', 'seller')
         .eq('is_approved', true)
         .in('id', ids);
-      if (error || !data || data.length !== ids.length) {
+      if (error || !data) {
         logger.error('consegna veloce: orari dei negozi non letti', { error: error?.message, chiesti: ids.length });
         negozi = null;
+      } else if (data.length !== ids.length) {
+        // Un negozio del carrello non è più fra quelli approvati: è un «no» col suo motivo, non un guasto.
+        return rispondi({ possibile: false, perche: 'Un negozio del carrello non accetta ordini in questo momento: la consegna veloce non si può. Scegli una fascia oraria.' });
       } else {
         negozi = data.map((p) => ({ nome: p.store_name ?? 'Il negozio', orari: p.store_hours }));
       }

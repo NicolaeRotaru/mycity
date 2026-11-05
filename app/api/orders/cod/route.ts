@@ -157,6 +157,12 @@ async function allarmeAgliAmministratori(titolo: string, corpo: string): Promise
  * un invio da ripetere: si dice com'è andata e si libera la chiave, così il tocco dopo (con una
  * chiave nuova, quindi identificativi nuovi) fa un ordine vero. Nessun doppione: di quella chiave
  * non resta in piedi niente.
+ *
+ * Eccezione voluta al patto di `conLaChiaveLiberata` («lo mette solo chi ha tolto la riga»): qui la
+ * riga NON si toglie. Gli identificativi degli ordini nascono dalla chiave: con la riga tolta, un
+ * client che riusa la stessa chiave ricreerebbe gli stessi id, già presi dagli ordini annullati, e
+ * resterebbe su «ordine già in corso». Con la riga al suo posto riceve di nuovo questo 409, e dopo
+ * RIPETUTO_ENTRO_MS passa alla generazione dopo (`chiave~1`).
  */
 function tuttiAnnullati(ordini: Array<{ delivery_status?: unknown }> | null | undefined): boolean {
   return !!ordini && ordini.length > 0 && ordini.every((o) => o.delivery_status === 'CANCELED');
@@ -522,6 +528,21 @@ export const POST = withAuthRateLimit(
             return nonVedoSeLOrdineCe();
           }
           if (tuttiAnnullati(ordiniDopo as Array<{ delivery_status?: unknown }> | null)) {
+            // Revisione: un ordine annullato SENZA articoli è un invio morto fra la riserva della merce
+            // e gli articoli: l'annullo non ha rimesso niente a scaffale. Si avvisano gli amministratori.
+            const annullati = (ordiniDopo ?? []) as Array<{ id: string }>;
+            const { data: conArticoliA } = await admin
+              .from('order_items')
+              .select('order_id')
+              .in('order_id', annullati.map((o) => o.id));
+            const conArt = new Set(((conArticoliA as Array<{ order_id: string }> | null) ?? []).map((a) => a.order_id));
+            const senzaArticoli = annullati.filter((o) => !conArt.has(o.id));
+            if (conArticoliA && senzaArticoli.length > 0) {
+              await allarmeAgliAmministratori(
+                'Ordine in contanti annullato senza articoli: la merce può essere rimasta scalata',
+                `Gli ordini ${senzaArticoli.map((o) => o.id.slice(0, 8)).join(', ')} sono annullati ma non hanno articoli: la merce riservata per loro può non essere tornata a scaffale. Controlla le scorte.`,
+              );
+            }
             logger.info('[cod] chiave abbandonata con gli ordini gia annullati: libero la chiave', { chiave: chiaveTentativo });
             return ordineDiPrimaAnnullato();
           }
@@ -1061,6 +1082,11 @@ export const POST = withAuthRateLimit(
     const shippingPerGroupCents = prezzi.gruppi.map((g) => g.shippingCents);
     // 5/11/2026 — Il tetto della legge sui contanti (lib/ordini/tetto-dei-contanti.ts), sul lordo.
     if (sopraIlTettoDeiContanti(prezzi.grandTotalCents)) {
+      // Il codice sconto è già stato rivendicato qui sopra: torna disponibile, nessun ordine è nato.
+      if (validatedCouponCode) {
+        const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
+        if (relErr) logger.warn('[cod] codice sconto non restituito (tetto dei contanti)', { code: validatedCouponCode, message: relErr.message });
+      }
       return esciERilascia(ApiErrors.conflict(MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI));
     }
 

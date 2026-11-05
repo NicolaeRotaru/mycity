@@ -758,6 +758,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
           className="fixed bottom-0 left-1/2 z-sticky w-full max-w-[480px] -translate-x-1/2 border-t border-cream-200 bg-surface-0 px-4 py-3"
           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
         >
+          {annullato && <Button href="/rider" variant="primary" size="lg" fullWidth>Torna alle consegne</Button>}
           {order.delivery_status === 'ASSIGNED' && (
             <Button onClick={() => setVerifyOpen('pickup')} variant="primary" size="lg" icon={PackageCheck} fullWidth>
               Conferma ritiro al negozio

@@ -226,3 +226,15 @@ describe('il pannello dei contanti', () => {
     expect(src).not.toContain('sizedImage(url, 400)');
   });
 });
+
+describe('revisione · ordine ancora «ritirato» (PICKED_UP) alla porta', () => {
+  it('il no dice di premere «Sto andando dal cliente», non «scrivi all assistenza»', async () => {
+    stato.ordine = { ...inStrada(25), delivery_status: 'PICKED_UP' };
+    magazzino.file = [];
+    const res = await conferma({ cashCollectedCents: 2200 });
+    expect(res.status).toBe(409);
+    const corpo = await res.json();
+    expect(corpo.error?.message ?? '').toContain('Sto andando dal cliente');
+    expect(stato.ordine?.cash_confirmed_at).toBeNull();
+  });
+});

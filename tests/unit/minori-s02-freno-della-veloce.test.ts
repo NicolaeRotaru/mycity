@@ -247,3 +247,11 @@ describe("2332 · 2333 · le prove dei soldi che mancavano", () => {
     expect(String(db.notifications.find((n) => n.user_id === "maria")?.body)).toContain("ti torna sulla carta");
   });
 });
+
+describe("2372 · il giro vero dopo mezzanotte scrive la fascia col giorno di nascita", () => {
+  it("ordine di sabato 20:45, giro di domenica 00:05: la fascia scritta è «Domani · …», non «Oggi · …»", async () => {
+    db.orders = [ordine({ created_at: "2026-10-31T19:45:00.000Z" })];
+    await giro("2026-10-31T23:05:00.000Z");
+    expect(String(o("o1").delivery_slot)).toMatch(/^Domani · /);
+  });
+});

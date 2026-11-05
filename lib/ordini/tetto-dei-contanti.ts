@@ -9,7 +9,8 @@
 export const TETTO_CONTANTI_CENTS = 499_999;
 
 export const MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI =
-  'Sopra 4.999,99 € non si può pagare in contanti: scegli la carta oppure dividi la spesa.';
+  // Revisione: niente «dividi la spesa» — la legge vieta anche i pagamenti frazionati ad arte.
+  'Sopra 4.999,99 € non si può pagare in contanti: paga con la carta.';
 
 export function sopraIlTettoDeiContanti(lordoCents: number): boolean {
   return lordoCents > TETTO_CONTANTI_CENTS;
