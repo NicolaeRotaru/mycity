@@ -98,18 +98,22 @@ export default function TermsPage() {
           e Venditore</strong>; MyCity non è parte di tale contratto e non è proprietario dei beni
           venduti.
         </p>
+        {/* 5/11/2026 — Dichiarava quattro criteri (rilevanza, distanza, voto del Venditore,
+            disponibilità e orari): il codice ne usa uno. Con una ricerca ordina per pertinenza
+            del testo (search_products_smart), senza ricerca mostra i più recenti
+            (lib/queries/griglia-prodotti.ts). Distanza, voto e orari sono filtri scelti da chi
+            cerca, non l'ordine predefinito. */}
         <p>
-          <strong>Ranking dei risultati di ricerca</strong> e visibilità dei prodotti dipendono da:
-          (a) rilevanza testuale rispetto alla query; (b) distanza geografica dal punto di consegna
-          dell&apos;Acquirente; (c) rating medio del Venditore; (d) disponibilità in stock e orari
-          di apertura; (e) eventuale acquisto di posizionamento sponsorizzato (chiaramente etichettato
-          come &quot;Sponsorizzato&quot;).
+          <strong>Ranking dei risultati di ricerca</strong> e visibilità dei prodotti: (a) quando
+          cerchi una parola, i prodotti sono ordinati per rilevanza del testo rispetto alla ricerca;
+          (b) senza una ricerca, compaiono prima i prodotti pubblicati più di recente; (c) puoi
+          ordinare i risultati anche per prezzo, e restringerli con i filtri; (d) gli eventuali spazi
+          a pagamento sono separati dai risultati e segnalati come &quot;Sponsorizzato&quot;.
         </p>
         <p>
           <strong>Importanza relativa dei parametri</strong> (art. 5 P2B): per i risultati
-          <em>organici</em> il fattore prevalente è la rilevanza rispetto alla query, seguita dalla
-          distanza geografica (un marketplace locale privilegia la prossimità per tempi e costi di
-          consegna), poi dal rating del Venditore e dalla disponibilità/orari. I contenuti
+          <em>organici</em> conta la rilevanza rispetto alla ricerca e, senza ricerca, la data di
+          pubblicazione. I contenuti
           <em>sponsorizzati</em> NON alterano l&apos;ordine dei risultati organici: appaiono in spazi
           separati ed etichettati &quot;Sponsorizzato&quot;, e il pagamento influenza solo quegli
           spazi dedicati, mai il posizionamento organico. Nessun parametro consente a un Venditore di
@@ -142,7 +146,10 @@ export default function TermsPage() {
 
       <LegalSection id="ordini" heading="4. Ordini e formazione del contratto">
         <p>
-          L&apos;invio dell&apos;ordine costituisce proposta di acquisto irrevocabile; il contratto
+          {/* 5/11/2026 — Diceva «proposta di acquisto irrevocabile», ma il sito lascia annullare
+              l'ordine finché il Venditore non lo accetta (dettaglio dell'ordine, stato «nuovo»). */}
+          L&apos;invio dell&apos;ordine costituisce proposta di acquisto: finché il Venditore non
+          l&apos;ha accettata puoi annullarla dal dettaglio dell&apos;ordine. Il contratto
           si perfeziona con l&apos;accettazione del Venditore (che può rifiutare per indisponibilità
           o motivi giustificati). Se il Venditore rifiuta, o non conferma l&apos;ordine in tempo,
           l&apos;ordine è annullato. {paragrafoDelRifiuto()}
@@ -155,8 +162,11 @@ export default function TermsPage() {
             Il testo lo genera `paragrafoDelRifiuto()` (lib/legal/promessa-cliente-assente.ts), e
             i-termini-dicono-quello-che-l-annullo-rende-davvero.test.ts lo confronta coi rimborsi veri. */}
         <p>
-          I prezzi sono comprensivi di IVA. Le spese di spedizione sono calcolate al checkout in
-          base a peso, distanza e modalità di consegna scelta.
+          {/* 5/11/2026 — Diceva «in base a peso, distanza e modalità»: il peso il conto non lo
+              conosce e la distanza non cambia il prezzo. Le regole stanno nella pagina Spedizioni. */}
+          I prezzi sono comprensivi di IVA. Le spese di consegna sono mostrate al checkout prima
+          della conferma e seguono le regole della pagina{' '}
+          <Link href="/shipping" className="text-primary-700 underline">Spedizioni</Link>.
         </p>
       </LegalSection>
 
@@ -256,24 +266,29 @@ export default function TermsPage() {
             Non sei obbligato a usarlo: il modo più veloce resta il pulsante &quot;Richiedi
             reso&quot; nel dettaglio dell&apos;ordine. Se preferisci scrivere, copia questo testo.
           </p>
-          <pre className="whitespace-pre-wrap text-sm text-ink-800 font-mono leading-relaxed">
+          {/* 5/11/2026 — Le righe di puntini (59 caratteri senza spazi) allargavano tutta la pagina
+              sul telefono: puntini più corti, e si va a capo anche dentro una riga lunga. */}
+          <pre className="whitespace-pre-wrap [overflow-wrap:anywhere] max-w-full text-sm text-ink-800 font-mono leading-relaxed">
 {`Destinatario: ${destinatarioRecesso}${chiSiamo.indirizzo ? `, ${chiSiamo.indirizzo}` : ''}
 Email: ${emailRecesso}
 
 Con la presente notifico il recesso dal mio contratto di vendita
 dei seguenti beni:
 
-  ...........................................................
+  ..........................
 
-Ordine n. ..................................................
-Ordinato il ................ / Ricevuto il ................
+Ordine n. ..................
+Ordinato il ................ / Ricevuto il ........
 
-Nome del consumatore: ......................................
-Indirizzo del consumatore: .................................
+Nome del consumatore:
+..........................
+Indirizzo del consumatore:
+..........................
 
-Firma (solo se il modulo è inviato su carta): ..............
+Firma (solo se il modulo è inviato su carta):
+..........................
 
-Data: ......................................................`}
+Data: ..................`}
           </pre>
         </div>
       </LegalSection>
@@ -486,13 +501,18 @@ Data: ......................................................`}
           Ogni segnalazione viene esaminata da una persona: se lasci un recapito ti scriviamo{' '}
           <strong>com&apos;è andata e perché</strong>, anche quando decidiamo di non intervenire.
         </p>
-        {chiSiamo.emailSegnalazioni && (
-          <p>
-            Punto di contatto per utenti e autorità:{' '}
-            <a href={`mailto:${chiSiamo.emailSegnalazioni}`} className="text-primary-700 underline">{chiSiamo.emailSegnalazioni}</a>.
-            La lingua di comunicazione è l&apos;italiano.
-          </p>
-        )}
+        {/* 5/11/2026 — Senza la variabile NEXT_PUBLIC_TITOLARE_EMAIL_SEGNALAZIONI la riga non si
+            stampava, e il riesame più sotto mandava a un punto di contatto «qui sopra» che non
+            c'era. Senza casella dedicata il punto di contatto è la pagina contatti. */}
+        <p>
+          Punto di contatto per utenti e autorità:{' '}
+          {chiSiamo.emailSegnalazioni ? (
+            <a href={`mailto:${chiSiamo.emailSegnalazioni}`} className="text-primary-700 underline">{chiSiamo.emailSegnalazioni}</a>
+          ) : (
+            <Link href="/contact" className="text-primary-700 underline">la pagina contatti</Link>
+          )}
+          . La lingua di comunicazione è l&apos;italiano.
+        </p>
         <p>
           <strong>Cosa rimuoviamo.</strong> Prodotti contraffatti o che violano un marchio, prodotti
           vietati o pericolosi, descrizioni ingannevoli su prezzo, origine o disponibilità, contenuti
@@ -532,12 +552,10 @@ Data: ......................................................`}
         </p>
       </LegalSection>
 
-      <div className="mt-10 p-4 bg-accent-50 border border-accent-200 rounded-lg text-xs text-accent-900">
-        <strong>Avviso legale:</strong> questo documento è un modello di partenza ispirato alla
-        normativa italiana ed europea (Cod. Cons., GDPR, P2B Regulation, D.Lgs. 170/2021).
-        Prima del lancio in produzione DEVE essere validato da un avvocato esperto in diritto
-        del consumo e marketplace digitali.
-      </div>
+      {/* 5/11/2026 — Qui c'era un riquadro pubblico «Avviso legale» con una nota interna: il
+          documento è un modello di partenza (Cod. Cons., GDPR, P2B Regulation, D.Lgs. 170/2021) e
+          prima del lancio va validato da un avvocato esperto in diritto del consumo e marketplace
+          digitali. La nota resta qui; la validazione è un passo di Nicola. */}
     </LegalLayout>
   );
 }
