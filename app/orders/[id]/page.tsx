@@ -351,7 +351,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   const HERO_SUBTITLE: Partial<Record<OrderStatus, string>> = {
     NEW: 'Il negozio sta confermando il tuo ordine',
     ACCEPTED: 'Il negozio sta preparando il tuo ordine',
-    READY: 'Pronto in negozio · un rider sta per ritirarlo',
+    READY: 'Pronto in negozio · un rider passa a prenderlo a breve',
     ASSIGNED: 'Un rider sta arrivando in negozio',
     PICKED_UP: 'Il rider ha ritirato il tuo ordine',
     OUT_FOR_DELIVERY: 'Il rider è in viaggio verso di te',
