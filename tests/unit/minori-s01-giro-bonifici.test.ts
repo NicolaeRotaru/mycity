@@ -31,6 +31,8 @@ function builder() {
     else if (testo.includes('in:rider_payout_status')) nome = 'rider_contanti';
     else if (testo.includes('eq:payment_method,cod') && testo.includes('eq:payout_status,HELD')) nome = 'contanti';
     if (nome && stato.cadute.has(nome)) return resolve({ data: null, error: { message: 'giu' } });
+    if (stato.cadute.has('resi') && f[0]?.startsWith('select:order_id')) return resolve({ data: null, error: { message: 'giu' } });
+    if (f[0]?.startsWith('select:id') && testo.includes('in:payout_status')) return resolve({ data: [{ id: 'o1' }], error: null });
     return resolve({ data: [], error: null });
   };
   return b;
@@ -92,5 +94,13 @@ describe('i lavori a orario senza chiave di servizio dicono cosa manca', () => {
     const { POST } = await import('@/app/api/cron/riquadra-casse/route');
     const r = await (POST as unknown as (r: Request) => Promise<Response>)(richiesta());
     expect(r.status).toBe(503);
+  });
+});
+
+describe('72 / revisore — lettura di resi e reclami caduta', () => {
+  it('bonifici fermati e risposta 500, non 200 ok:true', async () => {
+    stato.cadute.add('resi');
+    const r = await giro();
+    expect(r.status).toBe(500);
   });
 });

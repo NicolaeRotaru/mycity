@@ -15,6 +15,7 @@ const st = vi.hoisted(() => ({
   linkCade: false,
   profilo: { approval_status: 'approved', stripe_account_id: null as string | null, store_name: 'Forno' },
   salvati: [] as string[],
+  flag: null as Record<string, unknown> | null,
 }));
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
@@ -49,7 +50,7 @@ vi.mock('@/lib/supabase/server', () => {
     q.eq = () => q;
     q.select = async () => {
       if (st.scritturaCade) return { data: null, error: { message: 'timeout' } };
-      if (v.stripe_account_id) st.salvati.push(String(v.stripe_account_id));
+      if (v.stripe_account_id) { st.salvati.push(String(v.stripe_account_id)); st.flag = v; }
       return { data: Array.from({ length: st.righe }, () => ({ id: 'forno' })), error: null };
     };
     return q;
@@ -119,5 +120,13 @@ describe('633 — un conto che le chiavi nuove non conoscono si rifà', () => {
     const r = await chiama(collegaNegozio);
     expect(r.status).toBe(200);
     expect(st.creati).toBe(0);
+  });
+});
+
+describe('633 / revisore — il conto rifatto parte non verificato', () => {
+  it('salvando il conto nuovo i tre flag tornano falsi', async () => {
+    st.profilo = { ...st.profilo, stripe_account_id: 'acct_vecchio' };
+    await chiama(collegaNegozio);
+    expect(st.flag).toMatchObject({ stripe_account_id: 'acct_nuovo', stripe_charges_enabled: false, stripe_payouts_enabled: false, stripe_details_submitted: false });
   });
 });

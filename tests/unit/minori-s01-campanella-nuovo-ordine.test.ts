@@ -47,3 +47,11 @@ describe('155 — la campanella di ogni ordine del carrello, una volta sola', ()
     expect(s).toContain('createdOrderIds.filter((c) => daAvvisare.has(c.orderId))');
   });
 });
+
+describe('155 / revisore — campanella caduta per un altro guasto', () => {
+  it('ordine già esistente: niente email ripetute; ordine nuovo: le email partono', async () => {
+    const admin = { from: () => ({ insert: async () => ({ error: { code: '57014', message: 'timeout' } }) }) } as never;
+    const avvisati = await suonaLaCampanellaAiNegozi(admin, [{ ...A, nuovo: false }, { ...B, nuovo: true }], 'pc_1');
+    expect([...avvisati]).toEqual(['ordine-b']);
+  });
+});

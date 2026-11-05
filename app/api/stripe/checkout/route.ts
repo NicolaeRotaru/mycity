@@ -908,7 +908,21 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         // venderebbe merce gia' pagata). Resta com'era ieri, col guasto nel log.
         logger.error('[stripe] pagina di pagamento senza id non chiusa su Stripe', { sessionId: session.id, errChiusura });
       }
-      if (chiusa) throw new Error('pending_checkouts.stripe_session_id non scritto');
+      if (chiusa) {
+        // La pulizia la fa chi prende il turno sul carrello: anche il webhook
+        // checkout.session.expired la fa, solo se il carrello e' ancora PENDING.
+        const { data: preso } = await admin
+          .from('pending_checkouts')
+          .update({ status: 'CANCELED' })
+          .eq('id', pending.id)
+          .eq('status', 'PENDING')
+          .select('id');
+        if (preso && preso.length > 0) {
+          await admin.rpc('restore_stock', { p_items: stockItems });
+          await rilasciaCoupon();
+        }
+        return ApiErrors.internal('Errore nella creazione del pagamento.');
+      }
     }
 
     /**

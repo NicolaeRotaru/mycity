@@ -288,7 +288,7 @@ export async function provaAMandare(
  */
 export async function suonaLaCampanellaAiNegozi(
   admin: ReturnType<typeof getAdminSupabase>,
-  ordini: { orderId: string; sellerId: string; totalCents: number; itemsCount: number }[],
+  ordini: { orderId: string; sellerId: string; totalCents: number; itemsCount: number; nuovo?: boolean }[],
   pendingCheckoutId: string,
 ): Promise<Set<string>> {
   /**
@@ -319,6 +319,10 @@ export async function suonaLaCampanellaAiNegozi(
       logger.error('[stripe] campanella al venditore non scritta: ordine pagato e nessuno avvisato', {
         pendingCheckoutId, orderId: created.orderId, message: error.message,
       });
+      // Senza campanella non si sa se l'ordine era gia' stato avvisato: le
+      // email partono solo per quelli nati adesso, come prima.
+      if (created.nuovo !== false) daAvvisare.add(created.orderId);
+      continue;
     }
     daAvvisare.add(created.orderId);
   }

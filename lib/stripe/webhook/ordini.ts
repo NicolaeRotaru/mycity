@@ -175,7 +175,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
       `Un pagamento è arrivato dopo la scadenza della riserva merce (${pendingCheckoutId}). Rimborsato automaticamente.`,
       '/admin/orders',
     );
-    await diciAlClienteDelCarrelloRimborsato(admin, session, 'riserva-scaduta', pendingCheckoutId, pending.buyer_id as string | null, importoCents);
+    if (pi && importoCents > 0) await diciAlClienteDelCarrelloRimborsato(admin, session, 'riserva-scaduta', pendingCheckoutId, pending.buyer_id as string | null, importoCents);
     return;
   }
 
@@ -236,7 +236,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     // Prima della migrazione 126 'MISMATCH' non è ammesso: si segna 'CANCELED'.
     // Se il segno non passa Stripe NON riprova: il perché in quadratura.ts (R81).
     await chiudiIlCarrelloPerQuadratura(admin, pendingCheckoutId);
-    await diciAlClienteDelCarrelloRimborsato(admin, session, 'quadratura', pendingCheckoutId, pending.buyer_id as string | null, incassatoCents);
+    if (pagamento && incassatoCents > 0) await diciAlClienteDelCarrelloRimborsato(admin, session, 'quadratura', pendingCheckoutId, pending.buyer_id as string | null, incassatoCents);
     return;
   }
 

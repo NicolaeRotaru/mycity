@@ -21,7 +21,14 @@ export class ContoNonSalvato extends Error {
 export async function salvaIlConto(utenteId: string, accountId: string): Promise<void> {
   const { data, error } = await getAdminSupabase()
     .from('profiles')
-    .update({ stripe_account_id: accountId })
+    .update({
+      stripe_account_id: accountId,
+      // Il conto e' appena nato: non e' ancora verificato, qualunque cosa dicesse
+      // il profilo del conto di prima (per esempio quello delle chiavi di prova).
+      stripe_charges_enabled: false,
+      stripe_payouts_enabled: false,
+      stripe_details_submitted: false,
+    })
     .eq('id', utenteId)
     .select('id');
   if (error || !Array.isArray(data) || data.length === 0) {

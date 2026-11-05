@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * (banco preso da con-la-carta-lo-stesso-carrello-non-apre-due-pagamenti)
  */
 
-const guasto = { scritturaIdCade: false, chiusuraCade: false, chiuse: [] as string[] };
+const guasto = { scritturaIdCade: false, chiusuraCade: false, chiuse: [] as string[], vecchiaStrada: false, webhookPrima: false };
 const P1 = '11111111-1111-1111-1111-111111111111';
 const S1 = 'aaaaaaaa-0000-0000-0000-000000000001';
 
@@ -51,6 +51,8 @@ vi.mock('@/lib/stripe/client', () => ({
         expire: async (id: string) => {
           if (guasto.chiusuraCade) throw new Error('stripe giu');
           guasto.chiuse.push(id);
+          // il webhook checkout.session.expired fa la pulizia lui e chiude il carrello
+          if (guasto.webhookPrima) for (const r of intenti) if (r.status === 'PENDING') r.status = 'EXPIRED';
           return { id, status: 'expired' };
         },
       },
@@ -128,6 +130,20 @@ vi.mock('@/lib/supabase/server', () => {
     }),
     update: (valori: Record<string, unknown>) => ({
       eq: (_c: string, id: string) => {
+        // 5/11/2026 — la chiusura con turno: .eq('status','PENDING').select('id')
+        if (valori.status === 'CANCELED' && !guasto.vecchiaStrada) {
+          const riga = intenti.find((r) => r.id === id);
+          const chain = {
+            eq: (_c2: string, st: string) => ({
+              select: async () => {
+                if (riga && riga.status === st) { riga.status = 'CANCELED'; return { data: [{ id }], error: null }; }
+                return { data: [], error: null };
+              },
+            }),
+            then: (ok: (v: unknown) => unknown) => { if (riga) riga.status = 'CANCELED'; return Promise.resolve({ error: null }).then(ok); },
+          };
+          return chain as never;
+        }
         const riga = intenti.find((r) => r.id === id);
         if (typeof valori.stripe_session_id === 'string' && guasto.scritturaIdCade) return Promise.resolve({ error: { message: 'timeout' } });
         if (riga && typeof valori.stripe_session_id === 'string') riga.stripe_session_id = valori.stripe_session_id;
@@ -181,6 +197,7 @@ beforeEach(() => {
   guasto.scritturaIdCade = false;
   guasto.chiusuraCade = false;
   guasto.chiuse = [];
+  guasto.webhookPrima = false;
   intenti.length = 0;
   rpcChiamate.length = 0;
   sessioniCreate.length = 0;
@@ -201,6 +218,17 @@ describe('68 — l id della pagina di pagamento che non si scrive', () => {
     guasto.chiusuraCade = true;
     const r = await paga();
     expect(r.stato).toBe(200);
+    expect(rpcChiamate).not.toContain('restore_stock');
+  });
+});
+
+describe('68 / revisore — il webhook «expired» arriva prima: la merce non torna due volte', () => {
+  it('carrello già preso dal webhook (non più PENDING): la rotta non rifà restore_stock', async () => {
+    guasto.scritturaIdCade = true;
+    guasto.webhookPrima = true;
+    const r = await paga();
+    expect(r.stato).toBe(500);
+    expect(guasto.chiuse).toEqual(['cs_1']);
     expect(rpcChiamate).not.toContain('restore_stock');
   });
 });

@@ -461,7 +461,7 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
   const avvisaGliAmministratori = () =>
     notifyAdmins(
       '⚠️ Rimborso rifiutato dalla banca',
-      `Il rimborso di ${formatPriceFromCents(tornatoIndietro)} su ${ordini.length === 1 ? `l'ordine ${ordini[0].id}` : `${ordini.length} ordini dello stesso pagamento`} non e' arrivato al cliente (${refund.status}). I soldi sono rientrati: va rimborsato in un altro modo. ${fraseDelBonifico} Se il rimborso era pieno, la merce era stata rimessa a scaffale e la giacenza va ricontrollata a mano.`,
+      `Il rimborso di ${formatPriceFromCents(tornatoIndietro)} su ${ordini.length === 1 ? `l'ordine ${ordini[0].id}` : `${ordini.length} ordini dello stesso pagamento`} non e' arrivato al cliente (${refund.status}). I soldi sono rientrati: va rimborsato in un altro modo. ${fraseDelBonifico} Se il rimborso era pieno e l'ordine non era ancora consegnato, la merce era stata rimessa a scaffale e la giacenza va ricontrollata a mano.`,
       '/admin/orders',
       refund.id ? { unaVoltaPer: `rimborso-respinto:${refund.id}` } : {},
     );

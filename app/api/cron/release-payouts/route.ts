@@ -197,6 +197,11 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     }
   }
 
+  /**
+   * 5/11/2026 — Una ricerca caduta non e' «niente da pagare»: si scrive nel log,
+   * si conta qui, e il giro risponde 500 a fine lavoro.
+   */
+  const ricercheCadute: string[] = [];
   const { data: candidates, error } = await admin
     .from('orders')
     .select('id')
@@ -239,6 +244,8 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
         reclami: openDisputes.error?.message,
       });
       for (const id of ids) blocked.add(id);
+      // 5/11/2026 — Anche questa e' una ricerca caduta: niente «tutto a posto».
+      ricercheCadute.push('resi_o_reclami_carta');
     }
   }
 
@@ -293,7 +300,6 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
    * elenco vuoto e il giro rispondeva 200 «tutto a posto». Ora l'errore si
    * scrive nel log, si conta qui, e il giro risponde 500 a fine lavoro.
    */
-  const ricercheCadute: string[] = [];
   const { data: riderCands, error: errRiderCands } = await admin
     .from('orders')
     .select('id')
@@ -494,6 +500,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
         reclami: codDisputes.error?.message,
       });
       for (const id of codIds) codBlocked.add(id);
+      ricercheCadute.push('resi_o_reclami_contanti');
     }
 
     const tempoFinitoCod = cronometroDelPasso();
