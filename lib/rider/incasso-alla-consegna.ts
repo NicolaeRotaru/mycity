@@ -32,11 +32,16 @@ export type OrdinePerIncasso = {
 };
 
 /**
- * Gli stati in cui il fattorino ha in mano la merce o l'ha appena lasciata: e'
+ * Gli stati in cui il fattorino e' alla porta del cliente o ha appena lasciato la merce: e'
  * li' che l'incasso si dichiara. La stessa lista guarda la rotta che lo
- * registra (`app/api/rider/cash-confirm`), dentro la sua UPDATE.
+ * registra (`app/api/rider/cash-confirm`, via lib/cassa/registra-incasso), dentro la sua UPDATE.
+ *
+ * 5/11/2026 — Senza PICKED_UP: appena ritirato al negozio il fattorino poteva gia' dichiarare i
+ * contanti, e se poi il cliente non c'era «Cliente assente» veniva rifiutato (CONTANTI_INCASSATI):
+ * ordine bloccato in consegna e segnato come pagato senza esserlo. I contanti si dichiarano alla
+ * porta (OUT_FOR_DELIVERY), o dopo la consegna per i casi vecchi (DELIVERED).
  */
-export const STATI_IN_CUI_SI_INCASSA = ['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'] as const;
+export const STATI_IN_CUI_SI_INCASSA = ['OUT_FOR_DELIVERY', 'DELIVERED'] as const;
 
 /** Vero quando su questo ordine il fattorino deve ancora dichiarare i contanti. */
 export function incassoDaDichiarare(o: OrdinePerIncasso): boolean {

@@ -25,6 +25,8 @@ import {
   StickyNote, Banknote, Check, ChevronLeft, Store, MessageSquare, Clock,
 } from 'lucide-react';
 import { haversineKm, deliveryEtaMinutes } from '@/lib/geo';
+import { serveUnaProva } from '@/lib/cassa/prova-incasso';
+import { messaggioErroreGps } from '@/lib/rider/errore-gps';
 import { trackRiderDeliveryCompleted } from '@/lib/analytics/events';
 import { queryKeys } from '@/lib/queries/keys';
 import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
@@ -131,6 +133,21 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
       return conNegozio as OrderRow;
     },
   });
+
+  // 5/11/2026 — La pagina si rilegge da sola quando l'ordine cambia (per esempio annullato dal
+  // negozio o dall'amministrazione): prima restava «in consegna» finché non la si riapriva, col GPS
+  // del telefono acceso e «Posizione condivisa» a schermo.
+  useEffect(() => {
+    const canale = supabase
+      .channel(`rider-order:${id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${id}` }, () => {
+        void refetch();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(canale);
+    };
+  }, [id, refetch]);
 
   // Transizione semplice (es. PICKED_UP → OUT_FOR_DELIVERY senza codice)
   const transition = useMutation({
@@ -260,8 +277,9 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
       toast.success('Consegna confermata!');
       stopSharing();
       setVerifyOpen(null);
-      // Calcola durata dalla presa in carico (accepted_at) alla consegna.
-      const durationMs = order?.accepted_at ? Date.now() - new Date(order.accepted_at).getTime() : 0;
+      // 5/11/2026 — La durata del lavoro del fattorino parte dal ritiro (picked_up_at), non
+      // dall'accettazione del negozio, che comprende preparazione e attesa in bacheca.
+      const durationMs = order?.picked_up_at ? Date.now() - new Date(order.picked_up_at).getTime() : 0;
       trackRiderDeliveryCompleted(id, Math.round(durationMs / 60_000));
       // R33 — Prima si tornava SEMPRE in bacheca dopo un secondo, anche con i
       // contanti ancora da dichiarare: l'ordine spariva dagli occhi del
@@ -314,8 +332,16 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
       (err) => {
         // 1/11/2026 — Prima qui si spegneva solo la scritta: la pagina diceva «Attiva il GPS»
         // e intanto la sorveglianza restava accesa e continuava a mandare la posizione.
-        toast.error('Errore GPS: ' + err.message);
-        stopSharing();
+        // 5/11/2026 — Il messaggio è in italiano (err.message arriva in inglese o vuoto), e un calo
+        // di segnale passeggero non spegne la condivisione: il telefono riprova da solo. Si spegne
+        // solo se il permesso è negato.
+        const msg = messaggioErroreGps(err.code);
+        if (err.code === 1) {
+          toast.error(msg);
+          stopSharing();
+        } else {
+          toast.warning(msg);
+        }
       },
       // maximumAge 30s + low-accuracy = ~10x battery improvement
       { enableHighAccuracy: false, maximumAge: 30_000, timeout: 30_000 },
@@ -412,6 +438,19 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
     ? { lat: order.seller?.store_lat, lng: order.seller?.store_lng }
     : { lat: order.delivery_lat, lng: order.delivery_lng };
   const callPhone = targetIsStore ? order.seller?.store_phone : order.delivery_phone;
+  // 5/11/2026 — Senza coordinate «Naviga» apre le mappe con l'indirizzo scritto: la mappa vuota dice
+  // di toccare «Naviga», e il pulsante prima in quel caso non c'era mai.
+  const navIndirizzo = targetIsStore
+    ? order.seller?.store_address ?? null
+    : [order.delivery_address, order.delivery_zip, order.delivery_city].filter(Boolean).join(' ') || null;
+  const navHref =
+    navTarget.lat && navTarget.lng
+      ? `https://www.google.com/maps/dir/?api=1&destination=${navTarget.lat},${navTarget.lng}`
+      : navIndirizzo
+        ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(navIndirizzo)}`
+        : null;
+  // 5/11/2026 — Annullato mentre era in strada: niente scheda «consegna al cliente» né «incassa».
+  const annullato = order.delivery_status === 'CANCELED';
 
   // Distanza·ETA della tratta negozio → cliente (entrambe le coordinate note):
   // stima la lunghezza della consegna per la pill sulla mappa. Senza prep time.
@@ -475,8 +514,15 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
           ))}
         </div>
 
+        {annullato && (
+          <div role="alert" className="mb-3.5 rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm text-red-900">
+            <p className="font-bold">Ordine annullato: non consegnare e non incassare.</p>
+            <p className="mt-0.5">Riporta la merce al negozio. Se hai già preso dei contanti, scrivi subito all&apos;assistenza.</p>
+          </div>
+        )}
+
         {/* Card target unica con azioni Naviga / Chiama */}
-        {!done && (
+        {!done && !annullato && (
           <div className="mb-3.5 rounded-xl border border-cream-300 bg-surface-0 p-4 shadow-warm">
             <p className="mb-1 text-[12px] font-bold uppercase tracking-[0.03em] text-ink-400">
               {targetIsStore ? 'Ritira al negozio' : 'Consegna al cliente'}
@@ -514,9 +560,9 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
               </div>
             )}
             <div className="flex gap-2">
-              {navTarget.lat && navTarget.lng && (
+              {navHref && (
                 <Button
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${navTarget.lat},${navTarget.lng}`}
+                  href={navHref}
                   target="_blank"
                   rel="noopener noreferrer"
                   variant="secondary"
@@ -540,7 +586,8 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
                   icon={MessageSquare}
                   fullWidth
                 >
-                  Chat
+                  {/* 5/11/2026 — Apre gli SMS del telefono (col numero del fattorino), non una chat. */}
+                  SMS
                 </Button>
               )}
             </div>
@@ -608,7 +655,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
             <span className="text-ink-500">Il tuo compenso</span>
             <span className="font-bold text-olive-700">{formatPrice(compensoConsegnaEuro(order))}</span>
           </div>
-          {order.payment_method === 'cod' && (
+          {order.payment_method === 'cod' && !annullato && (
             <div className="mt-2.5 flex items-center gap-2 rounded-md bg-accent-100 px-3 py-2.5">
               <Banknote size={18} className="text-accent-800" aria-hidden />
               <span className="text-[13px] text-accent-900">
@@ -633,7 +680,9 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
             <p className="text-sm text-accent-800">
               {done
                 ? 'La consegna è chiusa ma i contanti non sono ancora confermati: finché non li confermi, il negozio non viene pagato.'
-                : 'Prima di chiedere il codice al cliente, conferma i contanti ricevuti con il pulsante in basso. La foto è facoltativa.'}
+                : `Prima di chiedere il codice al cliente, conferma i contanti ricevuti con il pulsante in basso. ${
+                    serveUnaProva(cifreDellIncasso(order).expectedCents) ? 'Da 50 € in su serve la foto dei contanti.' : 'La foto è facoltativa.'
+                  }`}
             </p>
           </div>
         )}
@@ -666,8 +715,10 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
           </button>
         )}
 
-        {/* 31/10/2026 — Cliente assente: solo in consegna, e solo dopo aver provato a telefonare. */}
-        {order.delivery_status === 'OUT_FOR_DELIVERY' && (
+        {/* 31/10/2026 — Cliente assente: solo in consegna, e solo dopo aver provato a telefonare.
+            5/11/2026 — Anche da «ritirato»: chi va dritto dal cliente senza premere «Sto andando dal
+            cliente» davanti alla porta chiusa aveva solo «Conferma consegna», che chiede un codice. */}
+        {(order.delivery_status === 'OUT_FOR_DELIVERY' || order.delivery_status === 'PICKED_UP') && (
           <button
             onClick={() => {
               if (confirm(
@@ -726,7 +777,9 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
               >
                 Sto andando dal cliente
               </Button>
-              {passo === 'incasso' ? bottoneIncasso : (
+              {/* 5/11/2026 — Sui contanti da «ritirato» si passa da «Sto andando dal cliente»: i
+                  contanti si dichiarano alla porta, e il codice senza incasso il database lo rifiuta. */}
+              {passo === 'incasso' ? bottoneIncasso : order.payment_method === 'cod' && !order.cash_confirmed_at ? null : (
                 <Button onClick={() => setVerifyOpen('delivery')} variant="success" size="lg" icon={CircleCheck} fullWidth>
                   Conferma consegna
                 </Button>

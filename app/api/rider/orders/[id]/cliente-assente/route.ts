@@ -54,8 +54,11 @@ async function handler(user: { id: string }, idGrezzo: string): Promise<NextResp
   const order = data as unknown as OrdineDaAnnullare & { rider_id: string | null };
   if (order.rider_id !== user.id) return ApiErrors.forbidden('Non autorizzato (ordine di altro rider)');
   if (order.delivery_status === 'CANCELED') return ApiErrors.conflict('Ordine già annullato');
-  if (order.delivery_status !== 'OUT_FOR_DELIVERY') {
-    return ApiErrors.conflict('Puoi segnare «cliente assente» solo mentre l’ordine è in consegna.');
+  // 5/11/2026 — Anche da «ritirato» (PICKED_UP): il fattorino che va dritto dal cliente senza
+  // premere «Sto andando dal cliente» deve poter dire che non c'è nessuno. I contanti a quel punto
+  // non possono essere già dichiarati (si dichiarano solo da OUT_FOR_DELIVERY in poi).
+  if (order.delivery_status !== 'OUT_FOR_DELIVERY' && order.delivery_status !== 'PICKED_UP') {
+    return ApiErrors.conflict('Puoi segnare «cliente assente» solo dopo aver ritirato la merce, mentre la porti al cliente.');
   }
 
   const esito = await annullaERimborsa(admin, order, {

@@ -93,11 +93,13 @@ describe('la barra in fondo alla consegna in contanti', () => {
     s.smonta();
   }, 60000);
 
-  it('appena ritirato (prima di partire) vale la stessa regola', async () => {
+  // 5/11/2026 (sessione S02, scheda 173) — Appena ritirato i contanti non si dichiarano più: si
+  // dichiarano alla porta. Da «ritirato» c'è «Sto andando dal cliente», e niente codice senza incasso.
+  it('appena ritirato (prima di partire): si va dal cliente, i contanti si dichiarano alla porta', async () => {
     const s = await paginaDellaConsegna(ordine({ delivery_status: 'PICKED_UP' }));
     const visti = pulsanti(s.radice);
     expect(visti).toContain('Sto andando dal cliente');
-    expect(visti).toContain('Conferma incasso contanti');
+    expect(visti).not.toContain('Conferma incasso contanti');
     expect(visti.some((t) => /^Conferma consegna/.test(t))).toBe(false);
     s.smonta();
   }, 60000);

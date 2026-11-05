@@ -20,6 +20,8 @@ import {
   type OrdineDaIncassare,
 } from '@/lib/cassa/registra-incasso';
 
+import { percorsoDelFattorino, provaDelFattorino } from '@/lib/rider/prova-del-fattorino';
+
 export const runtime = 'nodejs';
 
 /**
@@ -159,9 +161,14 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   // dei contanti o la firma — oppure, se la foto non si puo' fare, una nota sul
   // perche', che arriva agli amministratori qui sotto. Mai un vicolo cieco: dal
   // lotto R33 un incasso rifiutato e' una consegna che non si chiude.
+  // 5/11/2026 — Valgono solo le prove nella cartella di questo fattorino per questo ordine, e che
+  // il magazzino conferma (lib/rider/prova-del-fattorino.ts): un percorso inventato vale «senza foto».
+  const fotoContanti = await provaDelFattorino(admin, body.photoUrl, user.id, body.orderId);
+  const firma = await provaDelFattorino(admin, body.signatureUrl, user.id, body.orderId);
+  const fotoConsegna = percorsoDelFattorino(body.deliveryPhotoUrl, user.id, body.orderId);
   const prova = valutaProvaIncasso(expectedCents, {
-    foto: body.photoUrl,
-    firma: body.signatureUrl,
+    foto: fotoContanti,
+    firma,
     nota: body.nota,
   });
   if (!prova.ok) return ApiErrors.invalidRequest(prova.messaggio);
@@ -195,9 +202,9 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     { id: order.id, rider_id: order.rider_id, payment_status: order.payment_status },
     campiDellIncasso(order, {
       incassatoCents: body.cashCollectedCents,
-      fotoContanti: body.photoUrl,
-      firma: body.signatureUrl,
-      fotoConsegna: body.deliveryPhotoUrl,
+      fotoContanti,
+      firma,
+      fotoConsegna,
       registratoDa: user.id,
       adesso: now,
     }),
@@ -206,6 +213,21 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
 
   if (updErr) return ApiErrors.internal('Update fallito');
   if (!claimed || claimed.length === 0) {
+    // 5/11/2026 — Zero righe non vuol dire sempre «già confermato»: l'ordine può essere stato
+    // annullato mentre il fattorino era in strada (e lui crederebbe di aver registrato i contanti).
+    // Si rilegge e si dice il motivo vero.
+    const { data: adesso } = await admin
+      .from('orders')
+      .select('delivery_status, cash_confirmed_at')
+      .eq('id', order.id)
+      .maybeSingle();
+    const ora = adesso as { delivery_status?: string; cash_confirmed_at?: string | null } | null;
+    if (ora?.delivery_status === 'CANCELED') {
+      return ApiErrors.conflict("Ordine annullato: l'incasso non è stato registrato. Non incassare e riporta la merce al negozio.");
+    }
+    if (ora && !ora.cash_confirmed_at) {
+      return ApiErrors.conflict("L'ordine non è più in consegna: l'incasso non è stato registrato. Scrivi all'assistenza.");
+    }
     // Un'altra conferma concorrente ha già vinto la corsa.
     return ApiErrors.conflict("Incasso gia' confermato");
   }
