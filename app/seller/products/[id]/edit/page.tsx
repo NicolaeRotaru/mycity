@@ -14,8 +14,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { useConsegnaVeloceDelNegozio } from '@/lib/queries/consegna-veloce-del-negozio';
 import { normalizeCondition, type ProductCondition, type ProductUnit } from '@/lib/products/schema';
 import { type ProductVariant } from '@/lib/products/variants';
-import { loadProductVariants } from '@/lib/products/persistVariants';
-import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
+import { controllaScorteVariantiDalBrowser, loadProductVariants, saveProductVariants } from '@/lib/products/persistVariants';
 import { AlertTriangle, EyeOff } from 'lucide-react';
 import { nascondiProdotto } from '@/lib/products/nascondi';
 import { salvaProdottoDalBrowser } from '@/lib/products/salva-dal-browser';
@@ -81,7 +80,10 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     refetchOnMount: 'always',
   });
 
-  const { data: categories = [] } = useQuery({
+  // Il ripiego `= []` faceva passare una lettura caduta per «non ci sono
+  // categorie»: il prodotto sembrava averla persa. Senza categorie il modulo
+  // non si apre, e la pagina lo dice con «Riprova».
+  const { data: categories = [], isError: categorieNonLette, isLoading: categorieInLettura, refetch: rileggiCategorie } = useQuery({
     queryKey: queryKeys.categories.form,
     queryFn: async (): Promise<Category[]> => {
       const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id').order('name');
@@ -139,6 +141,10 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       campiDallAi: string[];
       scorteViste: Record<string, number>;
     }) => {
+      // Prima il controllo delle scorte delle taglie: se una è cambiata mentre il
+      // modulo era aperto, non si scrive niente (prima nome e prezzo restavano
+      // salvati e le varianti no).
+      await controllaScorteVariantiDalBrowser(id, nextVariants, scorteViste);
       await salvaProdottoDalBrowser({
         prodottoId: id,
         payload: payload as unknown as Record<string, unknown>,
@@ -148,7 +154,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       // Sincronizza le varianti (insert/update/delete); il trigger DB riallinea
       // products.stock e has_variants. Con le scorte viste all'apertura: una
       // variante venduta mentre il modulo era aperto non torna in magazzino.
-      await saveProductVariantsServer(supabase, id, nextVariants, scorteViste);
+      await saveProductVariants(id, nextVariants, scorteViste);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.seller.products });
@@ -182,7 +188,20 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette) || consegnaInLettura) return <LoadingState />;
+  if (isLoading || variantsLoading || (prodottoInLettura && !prodottoRiletto) || (varianteInLettura && !variantiRilette) || consegnaInLettura || categorieInLettura) return <LoadingState />;
+  if (categorieNonLette && categories.length === 0) {
+    return (
+      <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
+        <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Non riesco a leggere le categorie</p>
+        <p className="text-sm mb-3">
+          Senza l&apos;elenco delle categorie il prodotto sembrerebbe senza categoria. Non l&apos;ha persa: riprova fra un momento.
+        </p>
+        <button type="button" onClick={() => { void rileggiCategorie(); }} className="text-sm font-semibold text-rose-700 underline">
+          Riprova
+        </button>
+      </div>
+    );
+  }
   /**
    * 31/10/2026 — SENZA LE VARIANTI LETTE IL MODULO NON SI APRE.
    * Il ripiego `variants = []` apriva il modulo come se il prodotto non avesse

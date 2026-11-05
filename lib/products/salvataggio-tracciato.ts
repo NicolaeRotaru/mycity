@@ -86,6 +86,15 @@ export type ColonnaDelVenditore = (typeof COLONNE_DEL_VENDITORE)[number];
 export const SCORTA_VISTA = 'stock_visto';
 
 /**
+ * Il negoziante ha riscritto la scorta, anche se uguale a quella vista
+ * all'apertura (sforna due focacce e rimette 5). Senza questo segno la porta
+ * butta via un numero uguale a quello visto e dice «salvato» mentre in banca
+ * dati resta quello abbassato dalle vendite: con il segno il numero si
+ * scrive, alla stessa condizione della scorta cambiata.
+ */
+export const SCORTA_CONFERMATA = 'stock_confermato';
+
+/**
  * 31/10/2026 — «ESCLUSO DAL RECESSO» (migrazione 180) SI SCRIVE, MA NON SI RILEGGE.
  *
  * Il fornaio segna la torta su ordinazione come esclusa dal recesso anche in
@@ -114,6 +123,7 @@ export function colonneAmmesse(corpo: unknown): Record<string, unknown> {
   }
   const vista = dentro[SCORTA_VISTA];
   if (typeof vista === 'number' && Number.isFinite(vista)) pulito[SCORTA_VISTA] = vista;
+  if (dentro[SCORTA_CONFERMATA] === true) pulito[SCORTA_CONFERMATA] = true;
   const recesso = dentro[COLONNA_DEL_RECESSO];
   if (typeof recesso === 'boolean') pulito[COLONNA_DEL_RECESSO] = recesso;
   return pulito;
@@ -409,13 +419,13 @@ export async function salvaProdottoTracciato(opts: {
   campiDallAi?: string[];
   scriviTraccia: (voce: VoceDiTraccia) => void | Promise<void>;
 }): Promise<EsitoSalvataggio> {
-  const { [SCORTA_VISTA]: scortaVista, ...daScrivere } = colonneAmmesse(opts.payload);
+  const { [SCORTA_VISTA]: scortaVista, [SCORTA_CONFERMATA]: scortaConfermata, ...daScrivere } = colonneAmmesse(opts.payload);
   // Il confronta-e-scrivi: con la scorta vista accanto, la scorta non toccata
   // non parte (in banca dati resta quella vera) e quella cambiata si scrive
   // solo se nessuno l'ha mossa nel frattempo.
   let condizione: number | undefined;
   if ('stock' in daScrivere && typeof scortaVista === 'number') {
-    if (stessoValore(daScrivere.stock, scortaVista)) delete daScrivere.stock;
+    if (stessoValore(daScrivere.stock, scortaVista) && scortaConfermata !== true) delete daScrivere.stock;
     else condizione = scortaVista;
   }
   if (Object.keys(daScrivere).length === 0) return { campi: [], tracciato: false };

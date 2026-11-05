@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 import { type ProductVariant, normalizeVariants } from '@/lib/products/variants';
-import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
+import { controllaScorteVarianti, saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
 
 /**
  * Persistenza varianti lato venditore (RLS: il seller gestisce le varianti dei
@@ -31,6 +31,16 @@ export async function loadProductVariants(productId: string): Promise<ProductVar
 export async function saveProductVariants(
   productId: string,
   variants: ProductVariant[],
+  scorteViste?: Record<string, number>,
 ): Promise<void> {
-  return saveProductVariantsServer(supabase, productId, variants);
+  return saveProductVariantsServer(supabase, productId, variants, scorteViste);
+}
+
+/** Il controllo delle scorte prima di salvare il prodotto (vedi persistVariantsServer). */
+export async function controllaScorteVariantiDalBrowser(
+  productId: string,
+  variants: ProductVariant[],
+  scorteViste?: Record<string, number>,
+): Promise<void> {
+  return controllaScorteVarianti(supabase, productId, variants, scorteViste);
 }

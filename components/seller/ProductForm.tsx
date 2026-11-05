@@ -245,6 +245,8 @@ export default function ProductForm({
    * si ricarica mentre resta aperto, e questo e' il numero che il negoziante
    * ha davanti — non quello del database, che le vendite abbassano.
    */
+  // Il negoziante ha scritto nel campo della scorta (anche lo stesso numero).
+  const scortaToccata = useRef(false);
   const scortaAllApertura = useRef({
     prodotto: initialValues?.stock,
     varianti: Object.fromEntries(
@@ -741,7 +743,11 @@ export default function ProductForm({
        *
        * LA PROVA: tests/unit/chi-corregge-la-descrizione-non-rimette-in-magazzino-la-merce-venduta.test.ts
        */
-      if (mode === 'edit' && !scortaCambiata(payload.stock, scortaAllApertura.current.prodotto)) {
+      // Riscritta uguale a quella vista (es. ha sfornato e rimesso 5): parte, e la
+      // porta la scrive solo se in banca dati c'è ancora quel numero; se le vendite
+      // l'hanno mossa lo dice, invece di rispondere «salvato» senza salvare.
+      const scortaRiscritta = mode === 'edit' && scortaToccata.current && !unlimitedStock && 'stock' in payload;
+      if (mode === 'edit' && !scortaRiscritta && !scortaCambiata(payload.stock, scortaAllApertura.current.prodotto)) {
         delete (payload as Partial<ProductPayload>).stock;
       }
       /**
@@ -757,6 +763,7 @@ export default function ProductForm({
       if (mode === 'edit' && 'stock' in payload && typeof scortaAllApertura.current.prodotto === 'number') {
         // La chiave e' `SCORTA_VISTA` di lib/products/salvataggio-tracciato.
         (payload as unknown as Record<string, unknown>).stock_visto = scortaAllApertura.current.prodotto;
+        if (scortaRiscritta) (payload as unknown as Record<string, unknown>).stock_confermato = true;
       }
       /**
        * 6/9/2026 — UN SALVATAGGIO SCRIVE SOLO QUELLO CHE L'UTENTE HA CHIESTO.
@@ -955,7 +962,7 @@ export default function ProductForm({
               type="number"
               inputMode="numeric"
               disabled={unlimitedStock}
-              {...register('stock')}
+              {...register('stock', { onChange: () => { scortaToccata.current = true; } })}
               error={typeof errors.stock?.message === 'string' ? errors.stock.message : undefined}
             />
             <div className="pt-7">
