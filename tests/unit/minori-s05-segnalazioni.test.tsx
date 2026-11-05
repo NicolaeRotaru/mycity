@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { motivoLeggibile, oggettoConArticolo } from '@/lib/admin/segnalazioni-testi';
 
 /**
- * S05 · schede 339, 88, 2626, 97, 188, 656, 243 — segnalazioni e assistenza.
+ * S05 · schede 339, 88, 2626, 24, 188, 656, 243 — segnalazioni e assistenza.
  */
 
 const stato = vi.hoisted(() => ({
@@ -69,7 +69,7 @@ describe('testi delle segnalazioni', () => {
     expect(r2.ok && r2.venditore).toBe('nessun_recapito');
   });
 
-  it('97: segnalare un prodotto che non esiste risponde 404 e non scrive niente', async () => {
+  it('24: segnalare un prodotto che non esiste risponde 404 e non scrive niente', async () => {
     stato.prodotto = null;
     const { POST } = await import('@/app/api/segnalazioni/route');
     const r = await POST(new Request('http://x', {

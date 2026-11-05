@@ -52,7 +52,7 @@ describe('menu «Aggiungi sezione» (242)', () => {
     box = document.createElement('div');
     document.body.appendChild(box);
     root = createRoot(box);
-    await act(async () => { root!.render(createElement(Editor as (p: unknown) => ReactNode, { sections: [], onChange: () => {} })); });
+    await act(async () => { root!.render(createElement(Editor as unknown as (p: { sections: unknown[]; onChange: () => void }) => ReactNode, { sections: [], onChange: () => {} })); });
     const pulsante = [...box.querySelectorAll('button')].find((b) => b.textContent?.includes('Aggiungi sezione'))!;
     expect(pulsante.getAttribute('aria-expanded')).toBe('false');
     expect(pulsante.getAttribute('aria-haspopup')).toBe('menu');

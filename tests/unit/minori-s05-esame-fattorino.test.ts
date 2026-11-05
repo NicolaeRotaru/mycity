@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { esameRider } from '@/lib/kyc/esame-rider';
 
 /**
- * S05 · schede 80, 2607, 532, 2664, 2608, 2614, 299 — l'esame di un fattorino.
+ * S05 · schede 170, 2607, 532, 2664, 2608, 2614, 299 — l'esame di un fattorino.
  */
 
 const stato = vi.hoisted(() => ({ profilo: null as Record<string, unknown> | null }));
@@ -47,7 +47,7 @@ describe('documenti del fattorino per l’amministratore', () => {
     expect(audit).not.toHaveBeenCalled();
   });
 
-  it('80: l’attestato HACCP arriva al pannello, firmato; 2664: arriva anche il veicolo', async () => {
+  it('170: l’attestato HACCP arriva al pannello, firmato; 2664: arriva anche il veicolo', async () => {
     const { GET } = await import('@/app/api/kyc/documenti-rider/[id]/route');
     const j = (await (await (GET as unknown as H)(req('admin'))).json()) as {
       documenti: Array<{ chiave: string; url: string | null }>; veicolo: { tipo: string };

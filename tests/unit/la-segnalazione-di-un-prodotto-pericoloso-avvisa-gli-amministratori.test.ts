@@ -41,7 +41,7 @@ vi.mock('@/lib/supabase/server', () => ({
   }),
   getAdminSupabase: () => ({
     from: (tabella: string) => {
-      // 5/11/2026 (S05, scheda 97) — la rotta controlla che il prodotto segnalato esista.
+      // 5/11/2026 (S05, scheda 24) — la rotta controlla che il prodotto segnalato esista.
       if (tabella === 'products' || tabella === 'seller_public_profiles') {
         return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: 'esiste' }, error: null }) }) }) };
       }
