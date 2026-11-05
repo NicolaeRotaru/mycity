@@ -337,7 +337,7 @@ export function consegnaScelta(s: {
       const fuori = fasciaFuoriTempo(s.fasciaOggi, s.adesso ?? s.ora);
       return {
         tipo: 'non-valida',
-        perche: fuori ?? 'In quella fascia il negozio è chiuso. Scegline una ancora disponibile.',
+        perche: fuori ?? 'In quella fascia il negozio non fa in tempo a preparare l’ordine: è chiuso, o apre troppo tardi. Scegline una ancora disponibile.',
       };
     }
     return { tipo: 'scelta', etichetta: s.fasciaOggi };

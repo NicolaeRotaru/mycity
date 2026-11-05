@@ -942,7 +942,9 @@ export const POST = withAuthRateLimit(
       if (!CODICI_SCONTO_IN_CASSA) {
         return esciERilascia(ApiErrors.invalidRequest('I codici sconto non sono attivi: togli il codice e riprova.'));
       }
-      const couponRes = await validateCoupon(body.couponCode, grandSubtotalCents / 100, user.id, supa);
+      const couponRes = await validateCoupon(body.couponCode, grandSubtotalCents / 100, user.id, supa, {
+        ritiroInNegozio: body.pickupInStore,
+      });
       if (!couponRes.ok) return esciERilascia(ApiErrors.invalidRequest(`Coupon non valido: ${couponRes.reason}`));
       couponDiscountCents = Math.max(0, Math.round(couponRes.discount * 100));
       couponFreeShipping = couponRes.freeShipping;

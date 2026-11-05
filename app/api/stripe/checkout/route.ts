@@ -630,7 +630,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const codiceSconto = await rivendicaIlCodiceSconto(
     riserveLiberate,
     { admin, lettura: supa },
-    { codice: body.couponCode, subtotaleCents: grandSubtotalCents, userId: user.id },
+    { codice: body.couponCode, subtotaleCents: grandSubtotalCents, userId: user.id, ritiroInNegozio: body.pickupInStore },
   );
   if (!codiceSconto.ok) {
     if (codiceSconto.motivo === 'pagamento_ancora_aperto') {
