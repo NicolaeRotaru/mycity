@@ -35,6 +35,7 @@ function qb(result: unknown) {
     select: chain,
     eq: chain,
     lt: chain,
+    order: chain,
     limit: chain,
     update: chain,
     then: (resolve: (v: unknown) => unknown) => resolve(result),
