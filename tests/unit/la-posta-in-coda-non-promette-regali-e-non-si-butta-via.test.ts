@@ -109,6 +109,16 @@ describe('il «3 cose da sapere» parte senza consenso, quindi non porta incenti
     const tutto = `${spedite[0].subject} ${spedite[0].html} ${spedite[0].text}`;
     expect(tutto).not.toMatch(/€|credito|invita|amico|gratis|sconto/i);
     expect(TEMPLATE_DI_SERVIZIO.has('tutorial_day2')).toBe(true);
+    // 5/11/2026 (S04, scheda 1898) — Un elenco di parole vietate lascia passare un incentivo detto
+    // con altre parole («Porta un'amica: al suo primo ordine ti regaliamo un buono da 5 euro»). Le
+    // tre cose da sapere si fissano intere: una voce in più, con qualunque parola, e la prova cade.
+    const voci = (spedite[0].html.match(/<ul[^>]*>([\s\S]*?)<\/ul>/)?.[1].match(/<li[^>]*>[\s\S]*?<\/li>/g) ?? [])
+      .map((v) => v.replace(/<[^>]*>/g, '').trim());
+    expect(voci).toEqual([
+      "Paghi alla consegna: la carta non e' obbligatoria",
+      'La spesa te la portiamo a casa',
+      'Ogni ordine e il suo stato li trovi in «I miei ordini»',
+    ]);
   });
 });
 
