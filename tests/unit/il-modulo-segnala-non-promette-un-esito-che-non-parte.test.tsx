@@ -39,9 +39,11 @@ describe('il modulo Segnala', () => {
     expect(apri).toBeTruthy();
     await act(async () => { apri!.click(); });
 
-    expect(box.textContent ?? '').not.toMatch(PROMESSA);
+    // 5/11/2026 (S05, scheda 656) — il modulo ora vive nel Modal del sito, che si
+    // disegna in fondo alla pagina (portal): si guarda tutta la pagina, non solo il riquadro.
+    expect(document.body.textContent ?? '').not.toMatch(PROMESSA);
 
-    const invia = [...box.querySelectorAll('button')].find((b) => b.textContent?.includes('Invia segnalazione'));
+    const invia = [...document.body.querySelectorAll('button')].find((b) => b.textContent?.includes('Invia segnalazione'));
     expect(invia).toBeTruthy();
     await act(async () => { invia!.click(); });
 

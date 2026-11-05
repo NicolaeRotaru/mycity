@@ -7,6 +7,7 @@ import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { comunicaEsito, MOTIVAZIONE_MINIMA } from './esito/comunica';
+import { motivoLeggibile, oggettoConArticolo } from '@/lib/admin/segnalazioni-testi';
 
 export const runtime = 'nodejs';
 
@@ -63,6 +64,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     const admin = getAdminSupabase();
+
+    // 5/11/2026 (S05) — Si segnala qualcosa che esiste: prima un codice qualunque
+    // (anche di prodotti o negozi inventati) creava la riga e un avviso per ogni
+    // amministratore.
+    const TABELLA_DELL_OGGETTO: Record<string, string> = { prodotto: 'products', negozio: 'seller_public_profiles' };
+    const tabellaOggetto = TABELLA_DELL_OGGETTO[corpo.tipo];
+    if (tabellaOggetto) {
+      const { data: oggetto, error: erroreOggetto } = await admin
+        .from(tabellaOggetto)
+        .select('id')
+        .eq('id', corpo.oggettoId)
+        .maybeSingle();
+      if (erroreOggetto) {
+        logger.error('[segnalazioni] oggetto non controllato', { message: erroreOggetto.message });
+        return ApiErrors.internal('Segnalazione non registrata: riprova');
+      }
+      if (!oggetto) return ApiErrors.notFound('Il contenuto segnalato non esiste più.');
+    }
+
     const { data, error } = await admin
       .from('segnalazioni')
       .insert({
@@ -107,7 +127,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const righe = (capi ?? []).map((c) => ({
         user_id: c.id as string,
         title: '🚩 Nuova segnalazione',
-        body: `Segnalato un ${corpo.tipo} per «${corpo.motivo}». Va esaminata e chiusa con un esito motivato.`,
+        body: `Segnalato ${oggettoConArticolo(corpo.tipo)} per «${motivoLeggibile(corpo.motivo)}». Va esaminata e chiusa con un esito motivato.`,
         link: '/admin/segnalazioni',
         category: 'system',
       }));
