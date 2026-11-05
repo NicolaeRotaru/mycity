@@ -373,10 +373,16 @@ export async function annullaERimborsa(
       // 30/10/2026 — `refundOrder` manda «Rimborso emesso» con l'importo e basta: se la consegna del
       // carrello si è rifatta, il cliente riceve anche il perché dei 16 € su 18 e il conto della frutta.
       if (giro?.avviso) {
-        await avvisaIlClienteDellAnnullo(admin, conIlCreditoTornato(creditoNonTornato), opts.reason, { avviso: giro.avviso, come: 'carta' }, {
+        // 5/11/2026 — Sulla carta torna il residuo (totale nuovo meno quanto era gia'
+        // stato rimborsato), lo stesso importo di «Rimborso emesso»: l'email del
+        // carrello diceva il totale nuovo («ti tornano 16 €» su un rimborso di 11).
+        const avvisoVero = giaRimborsato > 0
+          ? { ...giro.avviso, tornaCents: residuoCent, spesaCents: null }
+          : giro.avviso;
+        await avvisaLaCampanellaDelCarrello(admin, order.user_id, avvisoVero, 'carta');
+        await avvisaIlClienteDellAnnullo(admin, conIlCreditoTornato(creditoNonTornato), opts.reason, { avviso: avvisoVero, come: 'carta' }, {
           annullatoDalCliente: opts.metadata?.source === 'buyer_cancel',
         });
-        await avvisaLaCampanellaDelCarrello(admin, order.user_id, giro.avviso, 'carta');
       }
       return {
         ok: true,
@@ -612,7 +618,7 @@ export async function avvisaLaCampanellaDelCarrello(
 const COLONNE_GIRO =
   'id, user_id, delivery_status, total_price, gross_total_cents, wallet_applied_cents, shipping_cost, ' +
   'delivery_fee_cents, rider_fee_cents, discount_amount, delivery_slot, pickup_in_store, stripe_session_id, created_at, ' +
-  'refunded_amount_cents';
+  'refunded_amount_cents, cash_confirmed_at';
 
 type RigaDelGiro = {
   id: string;
@@ -630,6 +636,7 @@ type RigaDelGiro = {
   stripe_session_id: string | null;
   created_at: string | null;
   refunded_amount_cents: number | null;
+  cash_confirmed_at?: string | null;
 };
 
 /** Le stesse colonne senza quelle della 124: prima della migrazione `lordoDi` rifà il lordo da totale e credito. */
@@ -734,8 +741,13 @@ async function rifaiIlGiro(admin: SupabaseClient, orderId: string): Promise<Giro
   // Niente da rifare: si rende il totale letto adesso, non quello che il chiamante aveva in mano.
   const comE: GiroDelCarrello = { totaleCents: centesimi(ordine.total_price), differenzaCents: 0, rimetti: async () => true, avviso: null };
   if (ordine.pickup_in_store || ordine.delivery_status === 'DELIVERED') return comE;
+  // 5/11/2026 — Chiuso vuol dire anche «contanti gia' incassati»: il fattorino
+  // dichiara l'incasso gia' in strada, e il suo compenso trattenuto e l'atteso
+  // della cassa si fissano li'. Riscrivere il totale di quell'ordine dopo
+  // l'incasso mandava la cassa del fattorino in ammanco.
   const nelCarrello = (c: RigaDelGiro[] | null): c is RigaDelGiro[] =>
-    !!c && c.length >= 2 && c.some((r) => r.id === orderId) && !c.some((r) => r.delivery_status === 'DELIVERED');
+    !!c && c.length >= 2 && c.some((r) => r.id === orderId) &&
+    !c.some((r) => r.delivery_status === 'DELIVERED' || (r.id !== orderId && !!r.cash_confirmed_at));
   if (!nelCarrello(await ordiniDelCarrello(admin, ordine))) return comE;
 
   const scritte: Array<{ r: RigaDelGiro; prima: ConsegnaScritta; dopo: ConsegnaScritta }> = [];
