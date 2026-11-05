@@ -123,6 +123,19 @@ describe('la pagina Eventi', () => {
     await expect(lettura.queryFn()).rejects.toBeTruthy();
   });
 
+  it('il conto dei partecipanti non letto non diventa «0 partecipanti» (1714)', async () => {
+    const opzioni: Array<{ queryKey: unknown[]; queryFn: () => Promise<unknown> }> = [];
+    g.__OPZIONI_QUERY__ = opzioni;
+    datiDellaPagina([]);
+    await pagina();
+    g.__CLIENT_SUPABASE__ = { from: () => ({}), rpc: async () => ({ data: null, error: { message: 'rete caduta' } }) };
+    try {
+      await expect(opzioni.find((o) => o.queryKey[1] === 'rsvp-counts')!.queryFn()).rejects.toBeTruthy();
+    } finally {
+      delete g.__CLIENT_SUPABASE__;
+    }
+  });
+
   it('dopo «Partecipa» rilegge anche il numero dei partecipanti, e non promette promemoria (1714, 1712)', async () => {
     g.__UTENTE__ = { id: 'u-anna' };
     g.__MUTAZIONI_VERE__ = true;

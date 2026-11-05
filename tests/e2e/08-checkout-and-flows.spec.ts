@@ -33,7 +33,7 @@ test.describe('Checkout page renders', () => {
     await expect(emptyMsg).toBeVisible({ timeout: 5000 });
   });
 
-  test('step indicator visible', async ({ page, request }) => {
+  test('a carrello vuoto la cassa si ferma sul «carrello vuoto» e non lascia la barra dei passi a metà', async ({ page, request }) => {
     await servePaginaViva(request, '/checkout');
     await page.goto('/checkout');
     // 5/11/2026 (S04, scheda 2029) — Prima si guardava «Carrello» con isVisible, che non aspetta:

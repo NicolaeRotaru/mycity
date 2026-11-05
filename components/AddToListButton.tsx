@@ -36,36 +36,41 @@ export default function AddToListButton({ productId }: { productId: string }) {
   // 5/11/2026 — `null` = chi guarda non ha fatto l'accesso. Prima era `[]`: il
   // pannello diceva «Non hai ancora liste. Creane una qui sotto», faceva scrivere
   // il nome e poi rispondeva solo «Accedi», senza strada per farlo.
-  const { data: leListe, isLoading: caricoListe } = useQuery({
+  const { data: leListe, isLoading: caricoListe, isError: listeCadute } = useQuery({
     queryKey: queryKeys.lists.mineMin,
     enabled: open,
     queryFn: async (): Promise<List[] | null> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('product_lists')
         .select('id, title, cover_emoji')
         .eq('owner_id', user.id)
         .order('updated_at', { ascending: false });
+      // Una lettura caduta non è «non hai liste».
+      if (error) throw error;
       return (data ?? []) as List[];
     },
   });
   const ospite = leListe === null;
   const lists = leListe ?? [];
 
-  const { data: inLists = [] } = useQuery({
+  const { data: inLists = [], isError: appartenenzeCadute } = useQuery({
     queryKey: queryKeys.lists.containing(productId),
     enabled: open,
     queryFn: async (): Promise<string[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
-      const { data: myLists } = await supabase.from('product_lists').select('id').eq('owner_id', user.id);
+      const { data: myLists, error: e1 } = await supabase.from('product_lists').select('id').eq('owner_id', user.id);
+      if (e1) throw e1;
       if (!myLists?.length) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('product_list_items')
         .select('list_id')
         .in('list_id', myLists.map((l: { id: string }) => l.id))
         .eq('product_id', productId);
+      // Se non so in quali liste è, un tocco potrebbe reinserirlo invece di toglierlo.
+      if (error) throw error;
       return ((data ?? []) as Array<{ list_id: string }>).map((r) => r.list_id);
     },
   });
@@ -158,6 +163,10 @@ export default function AddToListButton({ productId }: { productId: string }) {
                 <ul className="space-y-2" aria-busy="true" aria-hidden>
                   {[0, 1].map((i) => <li key={i} className="h-[60px] rounded-lg skeleton" />)}
                 </ul>
+              ) : listeCadute || appartenenzeCadute ? (
+                <p role="alert" className="text-sm text-ink-600">
+                  Non riesco a leggere le tue liste. Chiudi e riapri tra poco.
+                </p>
               ) : ospite ? (
                 <div className="text-sm text-ink-600 space-y-3">
                   <p>Accedi per salvare questo prodotto nelle tue liste.</p>

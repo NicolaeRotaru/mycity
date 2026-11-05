@@ -20,6 +20,8 @@ describe('la pagina /piu-venduti', () => {
     const testata = testoVisibile(s.radice.querySelector('h1')?.closest('header, section, div') ?? s.radice);
     expect(testata).not.toMatch(/vendut|best seller|questa settimana|va forte/i);
     expect(s.radice.querySelector('h1')?.textContent).toMatch(/recensit/i);
+    // Anche il percorso in cima (la briciola) e il resto della pagina.
+    expect(testoVisibile(s.radice)).not.toMatch(/vendut|best seller/i);
   });
 
   it('la voce della barra che porta lì non si chiama «Più venduti»', async () => {

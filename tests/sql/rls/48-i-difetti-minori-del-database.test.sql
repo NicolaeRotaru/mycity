@@ -23,7 +23,7 @@ CREATE OR REPLACE FUNCTION public.punti_fedelta_accesi() RETURNS boolean LANGUAG
 INSERT INTO auth.users (id, email, raw_user_meta_data, email_confirmed_at) VALUES
   ('d4800000-0000-0000-0000-000000000001', 'forno-48@test.it',     '{"role":"seller"}', now()),
   ('d4800000-0000-0000-0000-000000000002', 'rider-on-48@test.it',  '{"role":"rider"}',  now()),
-  ('d4800000-0000-0000-0000-000000000003', 'maria-48@test.it',     '{"role":"buyer","full_name":"Maria Rossi"}', now()),
+  ('d4800000-0000-0000-0000-000000000003', 'maria-48@test.it',     '{"role":"buyer"}', now()),
   ('d4800000-0000-0000-0000-000000000004', 'capo-48@test.it',      '{"role":"admin"}',  now()),
   ('d4800000-0000-0000-0000-000000000005', 'rider-off-48@test.it', '{"role":"rider"}',  now()),
   ('d4800000-0000-0000-0000-000000000006', 'giulia-48@test.it',    '{"role":"buyer"}',  now()),
@@ -38,12 +38,6 @@ UPDATE public.profiles SET is_approved = true, approval_status = 'approved', rid
 UPDATE public.profiles SET is_approved = true, approval_status = 'approved', rider_is_online = false
  WHERE id = 'd4800000-0000-0000-0000-000000000005';
 UPDATE public.profiles SET role = 'admin' WHERE id = 'd4800000-0000-0000-0000-000000000004';
-
--- ── ㉗ Il nome scritto alla registrazione (183) ─────────────────────────────
-INSERT INTO esiti
-SELECT 'il nome scritto alla registrazione arriva nel profilo (183)',
-       full_name = 'Maria Rossi', coalesce(full_name, '(vuoto)')
-  FROM public.profiles WHERE id = 'd4800000-0000-0000-0000-000000000003';
 
 -- ── ㉚ Benvenuto solo a email confermata (542) ─────────────────────────────
 INSERT INTO esiti
@@ -339,7 +333,9 @@ SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claims = '{"sub":"d4800000-0000-0000-0000-000000000008","role":"authenticated"}';
 INSERT INTO esiti
 SELECT 'i ricavi dell admin tolgono i rimborsi e contano il credito usato (654)',
-       (public.admin_kpi()->>'incassato_cents')::bigint = (SELECT atteso FROM kpi_prima),
+       -- Gli unici consegnati fin qui sono C (30 € + 5 € di credito) e D (rimborsato per intero):
+       -- 3500 centesimi, scritto a mano e non ricalcolato con la stessa formula della 215.
+       (public.admin_kpi()->>'incassato_cents')::bigint = 3500,
        (public.admin_kpi()->>'incassato_cents') || ' contro ' || (SELECT atteso FROM kpi_prima);
 RESET ROLE;
 RESET request.jwt.claims;
@@ -348,16 +344,6 @@ SELECT 'i due ordini della prova pesano 35 € e 0 € (654)',
        (SELECT atteso FROM kpi_prima) >= 3500
        AND NOT EXISTS (SELECT 1 FROM public.orders WHERE id = 'd4800000-0000-0000-0000-0000000000d1'
                         AND round(total_price * 100) + wallet_applied_cents - refunded_amount_cents > 0), '';
-
--- ── ⑨ Il giro notturno (756) ───────────────────────────────────────────────────
-UPDATE public.profiles SET deletion_requested_at = now() - interval '10 days'
- WHERE id IN ('d4800000-0000-0000-0000-000000000001', 'd4800000-0000-0000-0000-000000000005');
-INSERT INTO esiti
-SELECT 'il giro notturno non cancella un negozio con ordini aperti (756)',
-       NOT EXISTS (SELECT 1 FROM public.process_expired_deletions() d WHERE d.user_id = 'd4800000-0000-0000-0000-000000000001'), '';
-INSERT INTO esiti
-SELECT 'il giro notturno cancella chi non ha conti aperti (756)',
-       EXISTS (SELECT 1 FROM public.process_expired_deletions() d WHERE d.user_id = 'd4800000-0000-0000-0000-000000000005'), '';
 
 -- ── ⑭ Il premio invito (2573, 2574) ────────────────────────────────────────────
 INSERT INTO auth.users (id, email, raw_user_meta_data, email_confirmed_at) VALUES
@@ -407,10 +393,11 @@ SELECT 'i carrelli da recuperare escono dal più vecchio (2412)',
        pg_get_functiondef('public.list_abandoned_carts_to_recover'::regproc) ~* 'ORDER BY ac\.last_activity', '';
 
 -- ── ⑱ Il riassunto delle visite (258) ───────────────────────────────────────────
+-- Una visita alle 00:30 di Piacenza è ancora il 7/8 a Greenwich: deve finire nell'8/8.
 INSERT INTO public.product_views_daily (product_id, giorno, visite)
 VALUES ('d4800000-0000-0000-0000-0000000000f1', DATE '2026-08-08', 4);
 INSERT INTO public.product_views (product_id, viewed_at)
-VALUES ('d4800000-0000-0000-0000-0000000000f1', TIMESTAMPTZ '2026-08-08 10:00:00+02'),
+VALUES ('d4800000-0000-0000-0000-0000000000f1', TIMESTAMPTZ '2026-08-08 00:30:00+02'),
        ('d4800000-0000-0000-0000-0000000000f1', TIMESTAMPTZ '2026-08-08 23:30:00+02');
 SELECT * FROM public.consolida_visite_prodotto(1);
 INSERT INTO esiti

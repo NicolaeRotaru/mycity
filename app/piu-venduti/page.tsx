@@ -27,8 +27,8 @@ export default function PiuVendutiPage() {
         icon={Flame}
         eyebrow="Scelti dai clienti"
         title="I più recensiti"
-        blurb="I prodotti con più recensioni dei clienti, in città."
-        breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Più venduti' }]}
+        blurb="I prodotti ordinati per numero di recensioni dei clienti."
+        breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Più recensiti' }]}
       >
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm text-ink-500">

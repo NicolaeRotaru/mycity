@@ -17,7 +17,7 @@ const g = globalThis as Record<string, unknown>;
 type Opzioni = { queryKey: unknown[]; queryFn: () => Promise<unknown> };
 
 afterEach(() => {
-  for (const k of ['__DATI_QUERY__', '__OPZIONI_QUERY__', '__UTENTE__']) delete g[k];
+  for (const k of ['__DATI_QUERY__', '__OPZIONI_QUERY__', '__UTENTE__', '__ESITO_QUERY__', '__RISPOSTA_SUPABASE__']) delete g[k];
   document.body.innerHTML = '';
 });
 
@@ -60,5 +60,21 @@ describe('Aggiungi a lista', () => {
     const voce = (t: string) => [...s.radice.querySelectorAll('li button')].find((b) => (b.textContent ?? '').includes(t))!;
     expect(voce('Colazione').getAttribute('aria-pressed')).toBe('true');
     expect(voce('Regali').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('con la lettura delle liste caduta non dice «non hai liste» e non lascia toccare a caso', async () => {
+    g.__UTENTE__ = { id: 'u-maria' };
+    const opzioni: Opzioni[] = [];
+    g.__OPZIONI_QUERY__ = opzioni;
+    g.__ESITO_QUERY__ = { data: undefined, isError: true, isSuccess: false };
+    const s = await apri();
+    const testo = testoVisibile(s.radice);
+    expect(testo).not.toMatch(/Non hai ancora liste/);
+    expect(testo).toMatch(/Non riesco a leggere le tue liste/);
+    expect(s.radice.querySelector('li button')).toBeNull();
+    delete g.__ESITO_QUERY__;
+    g.__RISPOSTA_SUPABASE__ = { data: null, error: { message: 'rete caduta' } };
+    for (const o of opzioni) await expect(o.queryFn()).rejects.toBeTruthy();
+    delete g.__RISPOSTA_SUPABASE__;
   });
 });

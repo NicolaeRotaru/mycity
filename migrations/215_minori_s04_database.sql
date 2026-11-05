@@ -20,8 +20,6 @@
 --   ⑥  La notifica di benvenuto che prometteva «€5 di sconto» (2580).
 --   ⑦  I carrelli da recuperare escono in ordine, dal più vecchio (2412).
 --   ⑧  Il «Ci manchi» dei 60 giorni non parte a chi ha ordinato (544).
---   ⑨  Il giro notturno non cancella chi ha ancora ordini aperti o soldi in
---       sospeso (756).
 --   ⑩  Un reclamo nasce solo «aperto», senza esito né rimborso scritti dal
 --       cliente (1660).
 --   ⑪  Il rilascio di una consegna avvisa il negozio e non rimanda «ordine
@@ -47,7 +45,6 @@
 --   ㉔  Le scritture rimaste aperte al ruolo anonimo (699).
 --   ㉕  La coda delle email «pronto/consegnato» lascia traccia di un guasto (758).
 --   ㉖  Il magazzino dei documenti d'identità ha un tetto di peso e di tipi (1622).
---   ㉗  Il nome scritto alla registrazione arriva nel profilo (183).
 --   ㉘  Il fattorino non chiude come consegnato un ordine annullato nello stesso
 --       istante (201).
 --   ㉙  La serie dei giorni dei punti conta il giorno di Piacenza (260).
@@ -270,38 +267,6 @@ BEGIN
       AND sent_at IS NULL
       AND cancelled_at IS NULL;
     RETURN NEW;
-END;
-$function$;
-
--- ⑨ IL GIRO NOTTURNO NON CANCELLA CHI HA CONTI APERTI (756) ---------------------
--- Prima (040): restituiva chiunque avesse chiesto la cancellazione da 7 giorni.
--- Ora resta fuori chi ha un ordine non chiuso (come cliente, negozio o
--- fattorino) o un ordine consegnato col bonifico al negozio non ancora partito.
--- Resta in attesa: lo si vede nel pannello e lo si chiude a mano.
-CREATE OR REPLACE FUNCTION public.process_expired_deletions()
- RETURNS TABLE(user_id uuid, deleted_at timestamp with time zone)
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-DECLARE
-    cutoff timestamptz := now() - interval '7 days';
-BEGIN
-    RETURN QUERY
-        SELECT p.id, p.deletion_requested_at
-        FROM public.profiles p
-        WHERE p.deletion_requested_at IS NOT NULL
-          AND p.deletion_requested_at < cutoff
-          AND NOT EXISTS (
-                SELECT 1 FROM public.orders o
-                 WHERE (o.user_id = p.id OR o.seller_id = p.id OR o.rider_id = p.id)
-                   AND o.delivery_status NOT IN ('DELIVERED', 'CANCELED'))
-          AND NOT EXISTS (
-                SELECT 1 FROM public.orders o
-                 WHERE o.seller_id = p.id
-                   AND o.delivery_status = 'DELIVERED'
-                   AND o.payout_status IN ('PENDING', 'HELD', 'PROCESSING', 'AWAITING_REMITTANCE',
-                                           'PENDING_SELLER_ONBOARDING', 'FAILED'));
 END;
 $function$;
 
@@ -795,6 +760,7 @@ CREATE TRIGGER trg_anteprima_chat_dopo_cancellazione
 DROP POLICY IF EXISTS "Riders can view available and own orders" ON public.orders;
 CREATE POLICY "Riders can view available and own orders" ON public.orders
   FOR SELECT
+  TO authenticated
   USING (
     rider_id = (SELECT auth.uid())
     AND (
@@ -858,38 +824,6 @@ UPDATE storage.buckets
    SET file_size_limit = 10485760,
        allowed_mime_types = ARRAY['application/pdf']
  WHERE id = 'invoices';
-
--- ㉗ IL NOME SCRITTO ALLA REGISTRAZIONE (183) --------------------------------------------
--- Prima (161): il profilo nasceva senza nome, e il nome scritto nel modulo
--- restava solo nei dati dell'account.
-CREATE OR REPLACE FUNCTION public.handle_new_user()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-DECLARE
-  role_choice text;
-  nome text;
-BEGIN
-  role_choice := COALESCE(new.raw_user_meta_data ->> 'role', 'buyer');
-  nome := nullif(left(btrim(coalesce(new.raw_user_meta_data ->> 'full_name', '')), 120), '');
-  INSERT INTO public.profiles (id, role, is_approved, approval_status, referral_code, full_name)
-  VALUES (
-    new.id,
-    CASE
-      WHEN role_choice = 'seller' THEN 'seller'
-      WHEN role_choice = 'rider'  THEN 'rider'
-      ELSE 'buyer'
-    END,
-    false,
-    'pending',
-    upper(substr(md5(new.id::text), 1, 8)),
-    nome
-  );
-  RETURN new;
-END;
-$function$;
 
 -- ㉘ LA CONSEGNA NON PASSA SOPRA UN ANNULLO (201) ---------------------------------------
 -- Prima (163): stato letto senza lucchetto e UPDATE con il solo id. Ora la riga

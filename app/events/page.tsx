@@ -155,7 +155,9 @@ export default function EventsPage() {
       // serviva poter leggere CHI si e' iscritto, evento per evento, nome per
       // nome — ed e' quello che la migrazione 119 ha chiuso. Chiedere il numero
       // invece dell'elenco e' la stessa informazione senza le persone dentro.
-      const { data } = await supabase.rpc('event_rsvp_counts');
+      const { data, error } = await supabase.rpc('event_rsvp_counts');
+      // Un conto non letto non è «0 partecipanti»: l'errore va alla query, che riprova.
+      if (error) throw error;
       const counts: Record<string, number> = {};
       for (const r of ((data ?? []) as { event_id: string; partecipanti: number }[])) {
         counts[r.event_id] = r.partecipanti;
