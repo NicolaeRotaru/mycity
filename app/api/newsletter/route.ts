@@ -86,20 +86,29 @@ export async function POST(request: Request) {
 
   // Se l'indirizzo c'è già ed è confermato non si fa nulla e non si dice nulla:
   // rispondere «esiste» direbbe a un estraneo chi è iscritto.
-  const { data: esistente } = await admin
+  const { data: esistente, error: errLettura } = await admin
     .from('newsletter_subscribers')
-    .select('id, confirmed_at, created_at')
+    .select('id, confirmed_at, created_at, active')
     .eq('email', email)
     .maybeSingle();
+  // 5/11/2026 — Una lettura caduta non è «indirizzo nuovo»: prima si andava all'insert e un
+  // indirizzo già confermato sbatteva sul vincolo UNIQUE con un 500 senza traccia.
+  if (errLettura) {
+    logger.error('newsletter: lettura dell iscrizione non riuscita', { message: errLettura.message });
+    return ApiErrors.unavailable('Iscrizione momentaneamente non disponibile. Riprova più tardi.');
+  }
 
-  if (esistente?.confirmed_at) {
+  // 5/11/2026 — Confermato E attivo: già dentro. Chi si era disiscritto (active = false, la
+  // conferma resta scritta) invece riparte con una conferma nuova, come un indirizzo nuovo.
+  const disiscritto = !!esistente?.confirmed_at && (esistente as { active?: boolean | null }).active === false;
+  if (esistente?.confirmed_at && !disiscritto) {
     return NextResponse.json({ ok: true });
   }
 
   // Una conferma in attesa scritta pochi minuti fa: il gettone di prima è ancora valido e una
   // seconda email non serve a nessuno. La risposta resta identica a quella del caso normale —
   // dire «ne è già partita una» racconterebbe a un estraneo chi si sta iscrivendo.
-  const ultimoTentativo = esistente?.created_at ? Date.parse(String(esistente.created_at)) : NaN;
+  const ultimoTentativo = esistente?.created_at && !disiscritto ? Date.parse(String(esistente.created_at)) : NaN;
   if (Number.isFinite(ultimoTentativo) && Date.now() - ultimoTentativo < RIPETIZIONE_CONFERMA_MS) {
     return NextResponse.json({ ok: true });
   }
@@ -122,6 +131,10 @@ export async function POST(request: Request) {
     : await admin.from('newsletter_subscribers').insert(riga);
 
   if (error) {
+    // 5/11/2026 — Due richieste insieme per lo stesso indirizzo nuovo: la seconda trova la riga
+    // della prima (vincolo UNIQUE). Non è un guasto: la conferma è già in partenza.
+    if ((error as { code?: string }).code === '23505') return NextResponse.json({ ok: true });
+    logger.error('newsletter: scrittura dell iscrizione non riuscita', { message: error.message });
     return ApiErrors.internal('Iscrizione non riuscita');
   }
 

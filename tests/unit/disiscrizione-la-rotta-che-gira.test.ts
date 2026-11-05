@@ -34,11 +34,15 @@ vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() },
 }));
 
-import { GET } from '@/app/api/unsubscribe/route';
+import { GET, POST } from '@/app/api/unsubscribe/route';
 import { firmaDisiscrizione, linkDisiscrizione } from '@/lib/email/unsubscribe';
 
 const TOKEN = firmaDisiscrizione('maria@example.it', 'newsletter');
-const chiama = (token: string) => GET(new Request(`https://qualsiasi.test/api/unsubscribe?token=${encodeURIComponent(token)}`));
+// 5/11/2026 — La disiscrizione la fa la POST (il pulsante «Conferma», o il «con un clic» dei client
+// di posta); la GET porta solo alla pagina di conferma.
+const chiama = (token: string) =>
+  POST(new Request(`https://qualsiasi.test/api/unsubscribe?token=${encodeURIComponent(token)}`, { method: 'POST' }));
+void GET;
 
 describe('la rotta che disiscrive davvero', () => {
   beforeEach(() => {

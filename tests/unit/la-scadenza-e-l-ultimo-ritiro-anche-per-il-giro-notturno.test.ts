@@ -70,6 +70,7 @@ function lettura(colonne: string) {
   const b: Record<string, unknown> = {
     eq: () => b,
     limit: () => b,
+    order: () => b,
     lt: (campo: string, valore: string) => {
       righe = righe.filter((r) => String(r[campo]) < valore);
       return b;

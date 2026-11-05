@@ -73,7 +73,10 @@ describe('i colori che escono dalla posta sono quelli del sito', () => {
 
   for (const { nome, html } of MESSAGGI) {
     it(`«${nome}»: nessun colore fuori tavolozza`, () => {
-      const fuori = [...new Set(esadecimaliIn(html))].filter((hex) => !COLORI_DEL_SITO.has(hex));
+      // 5/11/2026 — Si guardano gli stili, non il testo: il numero d'ordine «#7F3A1C» (sei cifre
+      // esadecimali, come nella pagina «I miei ordini») non è un colore.
+      const stili = [...html.matchAll(/style="([^"]*)"/g)].map((m) => m[1]).join(' ');
+      const fuori = [...new Set(esadecimaliIn(stili))].filter((hex) => !COLORI_DEL_SITO.has(hex));
       expect(
         fuori,
         `«${nome}» esce con colori che nel sito non esistono: ${fuori.join(' ')}`,

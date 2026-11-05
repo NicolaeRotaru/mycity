@@ -1507,6 +1507,9 @@ export const POST = withAuthRateLimit(
               orderId: c.orderId,
               total: c.totalCents / 100,
               storeName: nomiNegozio.get(c.sellerId) ?? 'il negozio',
+              deliverySlot: body.pickupInStore ? null : (body.deliverySlot ?? null),
+              pickupInStore: body.pickupInStore,
+              paymentMethod: 'cod',
             });
             // R24 — avviso di servizio: senza il tasto «annulla l'iscrizione».
             await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });

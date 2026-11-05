@@ -40,9 +40,19 @@ const CONSEGNA_PER_CATEGORIA: Record<string, PushDeliveryOptions> = {
  * Se il collegamento e' generico ('/' o assente) si torna all'identificativo:
  * altrimenti due promozioni diverse si mangerebbero a vicenda.
  */
+/*
+ * 5/11/2026 — Il link fa da contrassegno solo se porta un id (un ordine, un reclamo). I link di
+ * sezione ('/rider', '/admin/sos') valgono per tanti avvisi diversi: col link come contrassegno
+ * «Ordine pronto» di un ordine cancellava sul telefono del fattorino quello di un altro ordine.
+ */
+// Un id è un pezzo del percorso, dopo il primo, che contiene una cifra (un uuid, un numero).
+const ID_NEL_LINK = /^\/[^/?#]+\/[^?#]*\d/;
 function contrassegno(n: { id: string; link: string | null }): string {
-  return n.link && n.link !== '/' ? n.link : n.id;
+  return n.link && ID_NEL_LINK.test(n.link) ? n.link : n.id;
 }
+
+/** Le categorie che possono aspettare: senza la preferenza letta non partono. */
+const CATEGORIE_CHE_ASPETTANO = new Set(['promo', 'group', 'newsletter']);
 
 /**
  * Cron: invia le web push per le notifiche non ancora inviate (pushed_at NULL)
@@ -78,13 +88,18 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   }
 
   const sinceIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { data: pending } = await supa
+  const { data: pending, error: erroreLettura } = await supa
     .from('notifications')
     .select('id, user_id, title, body, link, category')
     .is('pushed_at', null)
     .gte('created_at', sinceIso)
     .order('created_at', { ascending: true })
     .limit(100);
+  // 5/11/2026 — Una lettura caduta non è «niente da mandare»: il giro risponde 503, come send-emails.
+  if (erroreLettura) {
+    logger.error('[cron] notifiche push non leggibili', { message: erroreLettura.message });
+    return ApiErrors.unavailable('notifiche non leggibili');
+  }
 
   if (!pending?.length) return NextResponse.json({ ok: true, sent: 0, processed: 0 });
 
@@ -109,6 +124,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   let sent = 0;
   let retried = 0;
   let saltate = 0;
+  let rimandate = 0;
   const nowIso = new Date().toISOString();
 
   // ① Le preferenze, una volta per persona+categoria invece che per notifica.
@@ -118,6 +134,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     chiavi.set(`${n.user_id}|${categoria}`, { user: n.user_id, categoria });
   }
   const vuoleDavvero = new Map<string, boolean>();
+  const nonLette = new Set<string>();
   /**
    * 30/8/2026 (R076) — QUESTE ANDAVANO A GRUPPI DI CENTO, CIOE' SENZA TETTO.
    *
@@ -133,7 +150,16 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   for (let i = 0; i < daChiedere.length; i += GRUPPO) {
     await Promise.all(
       daChiedere.slice(i, i + GRUPPO).map(async ([chiave, v]) => {
-        const { data } = await supa.rpc('vuole_notifica', { p_user_id: v.user, p_category: v.categoria });
+        const { data, error } = await supa.rpc('vuole_notifica', { p_user_id: v.user, p_category: v.categoria });
+        // 5/11/2026 — Preferenza non letta: le categorie che possono aspettare restano in coda
+        // (pushed_at resta vuoto, riprova il giro dopo); ordini e avvisi di servizio partono.
+        if (error) {
+          logger.warn('[cron] preferenza push non letta', { categoria: v.categoria, message: error.message });
+          if (CATEGORIE_CHE_ASPETTANO.has(v.categoria)) {
+            nonLette.add(chiave);
+            return;
+          }
+        }
         vuoleDavvero.set(chiave, data !== false);
       }),
     );
@@ -142,6 +168,10 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   const daSegnare: string[] = [];
   const daMandare = notifiche.filter((n) => {
     const chiave = `${n.user_id}|${n.category ?? 'order'}`;
+    if (nonLette.has(chiave)) {
+      rimandate++;
+      return false;
+    }
     if (vuoleDavvero.get(chiave) === false) {
       // Segnata come gestita: non e' un errore, e' una scelta di chi la riceve.
       daSegnare.push(n.id);
@@ -159,7 +189,17 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
    * letture della stessa tabella dove ne basta una. Il commento in cima
    * dichiarava risolte le PREFERENZE, non le iscrizioni: quelle erano rimaste.
    */
-  const iscrizioni = await iscrizioniPerUtenti(supa, [...new Set(daMandare.map((n) => n.user_id))]);
+  // 5/11/2026 — Se la lettura delle iscrizioni cade non si manda e non si segna niente: riprova il
+  // giro dopo. Prima la mappa vuota diceva «nessuno iscritto» e il lotto risultava mandato.
+  let iscrizioni: Awaited<ReturnType<typeof iscrizioniPerUtenti>>;
+  try {
+    iscrizioni = await iscrizioniPerUtenti(supa, [...new Set(daMandare.map((n) => n.user_id))]);
+  } catch (e) {
+    logger.error('[cron] iscrizioni push non lette: il giro dopo riprova', { message: e instanceof Error ? e.message : String(e) });
+    rimandate += daMandare.length;
+    daMandare.length = 0;
+    iscrizioni = new Map();
+  }
 
   // ③ Gli invii, a gruppi di dieci in parallelo invece che uno per volta.
   for (let i = 0; i < daMandare.length; i += GRUPPO) {
@@ -203,7 +243,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     }
   }
 
-  return NextResponse.json({ ok: true, sent, processed: pending.length, retried, saltate });
+  return NextResponse.json({ ok: true, sent, processed: pending.length, retried, saltate, rimandate });
 });
 
 export const GET = handler;

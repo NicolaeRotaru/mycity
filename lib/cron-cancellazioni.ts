@@ -68,7 +68,9 @@ const MOTIVI_DI_RINVIO: readonly string[] = ['cassa_da_versare'];
 /**
  * Oltre questo, un rinvio smette di essere una regola che funziona e diventa
  * una richiesta di legge scaduta. Il Regolamento dà un mese per rispondere
- * (art. 12.3): trenta giorni dalla richiesta, non dal primo tentativo.
+ * (art. 12.3), dalla richiesta e non dal primo tentativo. Il conto vero è un
+ * mese di calendario (`terminePassato`): questo numero resta come misura
+ * indicativa per chi scrive le prove e i testi.
  */
 export const GIORNI_MASSIMI_DI_ATTESA = 30;
 
@@ -119,8 +121,7 @@ export function verdettoDelGiro(
       fatte++;
       continue;
     }
-    const giorni = giorniDaLaRichiesta(t.chiestaIl, adessoMs);
-    const fuoriTermine = giorni !== null && giorni > GIORNI_MASSIMI_DI_ATTESA;
+    const fuoriTermine = terminePassato(t.chiestaIl, adessoMs);
 
     // Guasto è il caso predefinito: si finisce fra i rinvii solo con un motivo
     // che questo file conosce e ha deciso di tollerare.
@@ -155,12 +156,29 @@ export function verdettoDelGiro(
   };
 }
 
-/** Da quanti giorni una persona sta aspettando. `null` se la data non c'è o non si legge. */
-function giorniDaLaRichiesta(chiestaIl: string | null | undefined, adessoMs: number): number | null {
-  if (!chiestaIl) return null;
+/** Il giorno di calendario di Piacenza di un istante, come «AAAA-MM-GG». */
+function giornoDiPiacenza(ms: number): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(new Date(ms));
+}
+
+/**
+ * 5/11/2026 — IL TERMINE È UN MESE DI CALENDARIO, NON TRENTUNO GIORNI PIENI.
+ *
+ * Prima si contava `giorni > 30`, cioè almeno 31 giorni pieni: una richiesta del 30/01 risultava
+ * scaduta solo la notte del 03/03, mentre il mese (regolamento 1182/71) finisce il 28/02. Adesso il
+ * termine è lo stesso giorno del mese dopo, sull'orologio di Piacenza, con il riporto all'ultimo
+ * giorno del mese quando quel giorno non esiste; è passato dal giorno dopo. `false` se la data non
+ * c'è o non si legge (come prima).
+ */
+export function terminePassato(chiestaIl: string | null | undefined, adessoMs: number): boolean {
+  if (!chiestaIl) return false;
   const quando = new Date(chiestaIl).getTime();
-  if (!Number.isFinite(quando)) return null;
-  return Math.floor((adessoMs - quando) / 86_400_000);
+  if (!Number.isFinite(quando)) return false;
+  const [a, m, g] = giornoDiPiacenza(quando).split('-').map(Number);
+  const ultimoDelMeseDopo = new Date(Date.UTC(a, m + 1, 0)).getUTCDate();
+  const termine = new Date(Date.UTC(a, m, Math.min(g, ultimoDelMeseDopo)));
+  const termineIso = termine.toISOString().slice(0, 10);
+  return giornoDiPiacenza(adessoMs) > termineIso;
 }
 
 function riga(fallite: number, scadute: number): string | null {
@@ -175,8 +193,8 @@ function riga(fallite: number, scadute: number): string | null {
   if (scadute > 0) {
     pezzi.push(
       scadute === 1
-        ? `1 persona aspetta la cancellazione da più di ${GIORNI_MASSIMI_DI_ATTESA} giorni: il termine di legge è passato.`
-        : `${scadute} persone aspettano la cancellazione da più di ${GIORNI_MASSIMI_DI_ATTESA} giorni: il termine di legge è passato.`,
+        ? `1 persona aspetta la cancellazione da più di un mese: il termine di legge è passato.`
+        : `${scadute} persone aspettano la cancellazione da più di un mese: il termine di legge è passato.`,
     );
   }
   if (pezzi.length === 0) return null;
@@ -300,7 +318,7 @@ function avviso(
     tappa === 'rinviata'
       ? "Hai chiesto di cancellare il tuo account e non l'abbiamo ancora fatto. " +
         `Ti diciamo perché. ${spiegazione ?? "Una nostra regola la sta trattenendo."} ${diritti}`
-      : `Hai chiesto di cancellare il tuo account più di ${GIORNI_MASSIMI_DI_ATTESA} giorni fa ` +
+      : `Hai chiesto di cancellare il tuo account più di un mese fa ` +
         'e non è ancora stato fatto. ' +
         `${spiegazione ?? "Si è fermata per un problema nostro e ci riproviamo ogni notte."} ` +
         'La legge ci dà un mese per risponderti e quel mese è passato. ' +

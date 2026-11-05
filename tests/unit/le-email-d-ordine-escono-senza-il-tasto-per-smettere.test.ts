@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+// 5/11/2026 — Il giro del calendario tace fuori dalle 8-21 di Piacenza: queste prove girano a
+// mezzogiorno, qualunque sia l'ora del computer che le fa girare.
+vi.mock('@/lib/tempo-piacenza', async (orig) => ({ ...(await orig<object>()), oraPiacenza: () => 12 }));
 
 /**
  * 15/10/2026 (R24) — LE EMAIL D'ORDINE USCIVANO COME PUBBLICITA'.

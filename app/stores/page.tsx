@@ -260,7 +260,7 @@ export default function StoresPage() {
         icon={IconaNegozio}
         eyebrow="Tutti i negozi"
         title="Negozi di Piacenza"
-        blurb="Le botteghe della citta', con consegna a casa tua."
+        blurb="Le botteghe della città, con consegna a casa tua."
         breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Negozi' }]}
       />
       {!isLoading && !isError && <p className="mb-6 text-ink-500">{rigaDelConteggio}</p>}

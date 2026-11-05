@@ -16,7 +16,11 @@ const securityHeaders = [
   { key: 'X-DNS-Prefetch-Control', value: 'on' },
   {
     key: 'Permissions-Policy',
-    value: 'camera=(self), microphone=(), geolocation=(self), payment=(), usb=(), interest-cohort=()',
+    // 5/11/2026 — microphone=(self), come camera: con microphone=() la dettatura del prodotto a voce
+    // (components/seller/VoiceProductButton.tsx, Web Speech API) era vietata dal sito stesso, e il
+    // negoziante leggeva «Permesso microfono negato» senza aver negato niente. Resta vietato ai
+    // siti di altri incorporati.
+    value: 'camera=(self), microphone=(self), geolocation=(self), payment=(), usb=(), interest-cohort=()',
   },
   {
     key: 'Strict-Transport-Security',

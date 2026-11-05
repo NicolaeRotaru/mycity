@@ -175,12 +175,13 @@ describe('ritiro in negozio spento: la posta non lo promette', () => {
     // l'ordine) e quella su come arriva la spesa dice la consegna a casa e nient'altro: la frase
     // intera, nell'HTML e nel testo semplice, non una parola da cercare.
     expect(vociDellElenco(m!.html)).toEqual([
-      "Paghi alla consegna: la carta non e' obbligatoria",
+      // 5/11/2026 — a carta spenta si paga solo in contanti (la riga nasce dall'interruttore della cassa).
+      'Paghi in contanti alla consegna: tieni pronto l’importo',
       'La spesa te la portiamo a casa',
       'Ogni ordine e il suo stato li trovi in «I miei ordini»',
     ]);
     expect(m!.text).toBe(
-      'Tre cose da sapere: paghi alla consegna, la spesa te la portiamo a casa, ' +
+      'Tre cose da sapere: paghi in contanti alla consegna, la spesa te la portiamo a casa, ' +
         'e ogni ordine col suo stato lo trovi in «I miei ordini».',
     );
     expect(m!.subject).toBe('3 cose da sapere su MyCity');
@@ -191,7 +192,7 @@ describe('ritiro in negozio spento: la posta non lo promette', () => {
       '3 cose da sapere ' + // il titolo della scheda
         'MyCity ' + // l'intestazione
         '3 cose da sapere ' +
-        "Paghi alla consegna: la carta non e' obbligatoria " +
+        'Paghi in contanti alla consegna: tieni pronto l’importo ' +
         'La spesa te la portiamo a casa ' +
         'Ogni ordine e il suo stato li trovi in «I miei ordini» ' +
         'Vai su MyCity ' +

@@ -219,6 +219,13 @@ export function spiegaIlCollegamentoFallito(errore, url) {
         '   (aws-0 o aws-1) cambiano da progetto a progetto.',
       );
     }
+  } else if (sessionPooler && codici.includes('ECONNREFUSED')) {
+    // 5/11/2026 — Il pooler ha RIFIUTATO il collegamento: la rete ci arriva, la porta no. Non e' la
+    // password (quella la direbbe il ramo dell'accesso rifiutato), e la riga e' gia' quella giusta.
+    righe.push(
+      '   Perche\': il pooler di Supabase ha rifiutato il collegamento su quella porta. La password non c\'entra.',
+      '   Controlla la porta (5432 per il «Session pooler») e se Supabase ha un disservizio in corso (status.supabase.com).',
+    );
   } else if (sessionPooler) {
     righe.push(
       '   L\'indirizzo e\' gia\' quello del pooler. Se l\'errore parla di utente o «tenant»: l\'utente e\' postgres.<progetto>',
@@ -284,6 +291,24 @@ export function esitoDelConfronto(repo, applicate) {
   return { codice: USCITA.DERIVA, mancanti: missing.map((m) => m.file), righe, errore: true };
 }
 
+/**
+ * 5/11/2026 — Le righe da stampare quando il collegamento riesce ma il registro delle migrazioni non
+ * si legge. Funzione pura. Mai l'oggetto d'errore intero: solo codice e messaggio.
+ */
+export function spiegaIlRegistroIlleggibile(errore) {
+  const codice = String(errore?.code ?? '');
+  const messaggio = String(errore?.message ?? errore ?? 'errore sconosciuto');
+  const righe = [`❌ check-migration-drift: collegato al database, ma non riesco a leggere il registro delle migrazioni (${codice || 'senza codice'}: ${messaggio}).`];
+  if (codice === '42P01' || codice === '3F000') {
+    righe.push('   Perche\': questo database non ha il registro delle migrazioni di Supabase (supabase_migrations.schema_migrations). SUPABASE_DB_URL punta al database giusto?');
+  } else if (codice === '42501') {
+    righe.push('   Perche\': l\'utente in SUPABASE_DB_URL non puo\' leggere supabase_migrations.schema_migrations: usa l\'utente postgres del progetto.');
+  } else {
+    righe.push('   Controlla che SUPABASE_DB_URL punti al database del progetto e che l\'utente possa leggere supabase_migrations.');
+  }
+  return righe;
+}
+
 function repoMigrationNames() {
   return fs
     .readdirSync(MIGRATIONS_DIR)
@@ -346,6 +371,10 @@ async function main() {
     // tutti e due per riconoscere una migrazione (#46).
     const res = await client.query('SELECT version, name FROM supabase_migrations.schema_migrations');
     applicate = res.rows.map((r) => ({ version: String(r.version ?? ''), name: String(r.name ?? '') }));
+  } catch (err) {
+    // 5/11/2026 — Collegati, ma il registro non si legge: si dice cosa fare, non la traccia nuda.
+    for (const riga of spiegaIlRegistroIlleggibile(err)) console.error(riga);
+    process.exit(USCITA.NON_HO_CONTROLLATO);
   } finally {
     await client.end();
   }
@@ -374,7 +403,8 @@ function lanciatoDaRigaDiComando() {
 
 if (lanciatoDaRigaDiComando()) {
   main().catch((err) => {
-    console.error('check-migration-drift: errore', err);
+    // 5/11/2026 — Solo il messaggio: l'oggetto d'errore intero di pg porta dettagli che non servono.
+    console.error('check-migration-drift: errore', err instanceof Error ? err.message : String(err));
     process.exit(1);
   });
 }

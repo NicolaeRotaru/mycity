@@ -203,8 +203,10 @@ fi
 # rileggerlo.
 if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
   for f in "${DA_CIFRARE[@]}"; do
+    # 5/11/2026 — La passphrase arriva a gpg da un descrittore (3), non dalla riga di comando: un
+    # argomento si legge in /proc/<pid>/cmdline da ogni altro processo della stessa macchina.
     gpg --batch --yes --symmetric --cipher-algo AES256 \
-      --passphrase "$BACKUP_PASSPHRASE" --output "$f.gpg" "$f"
+      --pinentry-mode loopback --passphrase-fd 3 --output "$f.gpg" "$f" 3<<<"$BACKUP_PASSPHRASE"
     rm -f "$f"
     echo "[backup] Cifrato: $f.gpg"
   done
@@ -359,7 +361,13 @@ riapri_una_foto() {
   return 0
 }
 
-if [[ -z "$SORGENTE_FOTO" || -z "$DESTINAZIONE_FOTO" ]]; then
+if [[ "${FOTO_A_META:-}" == "si" ]]; then
+  # 5/11/2026 — La configurazione delle foto e' a meta' (il passo «Le foto vanno in copia?» e'
+  # rosso): non e' «rclone non installato» ne' «mancano il secchio e le chiavi». Il lavoro e' gia'
+  # rosso per quel passo; qui si dice la causa vera e il database resta copiato.
+  echo "[backup] esito-foto: fallita — la copia delle foto e' configurata a meta' (vedi il passo «Le foto vanno in copia?»): nessun file e' stato copiato." >&2
+  riepilogo_lavoro "❌ **Le foto non sono state copiate** — la configurazione e' a meta': manca una fra STORAGE_SYNC_SOURCE, STORAGE_SYNC_DEST e RCLONE_CONFIG_BASE64 (il passo «Le foto vanno in copia?» dice quale). Database, utenti ed elenco delle foto sono copiati regolarmente."
+elif [[ -z "$SORGENTE_FOTO" || -z "$DESTINAZIONE_FOTO" ]]; then
   echo "[backup] esito-foto: non-configurato — l'elenco delle immagini e' nella copia, i FILE no." >&2
   echo "[backup] Per accenderla: STORAGE_SYNC_SOURCE (es. \"supabase:\"), STORAGE_SYNC_DEST (es. \"b2:mycity-foto\") e rclone installato. Vedi docs/backup-restore.md §3." >&2
   echo "::warning::Le foto dei negozi non hanno nessuna copia nostra: se il fornitore le perde, si rifanno una per una." >&2

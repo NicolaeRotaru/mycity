@@ -110,7 +110,7 @@ export async function buildShippingLabel(data: LabelData): Promise<Buffer> {
       // Footer
       doc.moveDown(0.5);
       doc.fontSize(7).font('Helvetica').fillColor('#888888')
-        .text(`Generato: ${new Date().toLocaleString('it-IT')}`, { align: 'center' });
+        .text(`Generato: ${new Date().toLocaleString('it-IT', { timeZone: 'Europe/Rome' })}`, { align: 'center' });
       doc.fontSize(6).fillColor('#aaaaaa')
         .text('mycity-marketplace.com', { align: 'center' });
 

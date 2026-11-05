@@ -3,6 +3,9 @@ import path from 'node:path';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fintoGiroNotturno, type Tabelle } from './aiuti/finto-giro-notturno';
 import { chiamataDelCalendarioFerma } from '@/lib/cron/fermo-dei-lavori';
+// 5/11/2026 — Il giro dei carrelli abbandonati tace fuori dalle 8-21 di Piacenza: qui si prova il
+// fermo, quindi l'ora è mezzogiorno qualunque sia l'ora del computer che fa girare le prove.
+vi.mock('@/lib/tempo-piacenza', async (orig) => ({ ...(await orig<object>()), oraPiacenza: () => 12 }));
 
 /**
  * 31/10/2026 — I LAVORI A ORARIO SI FERMANO FINCHÉ NICOLA NON LI ACCENDE.

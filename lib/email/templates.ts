@@ -24,6 +24,7 @@ import { env } from '@/lib/env';
 import { escapeHtml } from '@/lib/html-escape';
 import { recapitoPrivacy } from '@/lib/legal/titolare';
 import { formatPrice } from '@/lib/format';
+import { cartaAlCheckoutDisponibile } from '@/lib/promesse-pubbliche';
 // 27/10/2026 — Il ritiro in negozio si nomina in una email solo se c'e' davvero (`comeArrivaLaSpesa`).
 import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 
@@ -60,7 +61,7 @@ const COLORI = {
   piede: '#F5EDD9',     // cream-200 — la fascia in fondo
   citazione: '#3C3835', // ink-700 — il messaggio scritto da chi regala
   buono: '#5A7C42',     // olive-600 — «consegnato»
-  attenzione: '#B82A28',// secondary-600 — la scadenza dei 15 minuti al negozio
+  attenzione: '#B82A28',// secondary-600 — la riga della scadenza per accettare, nell'email al negozio
 } as const;
 
 /** Il carattere del sito e' Inter: in posta arriva solo a chi ce l'ha, gli altri scendono la lista. */
@@ -125,25 +126,77 @@ function saluto(nome?: string | null): string {
   return n ? `Ciao ${escapeHtml(n)},` : 'Ciao,';
 }
 
+/**
+ * 5/11/2026 — Il numero d'ordine si scrive in un modo solo, come nella pagina «I miei ordini»:
+ * «#3F9A12». La conferma scriveva «#3f9a12bc» e l'annullo «#3F9A12»: lo stesso ordine sembrava due.
+ */
+export const numeroOrdine = (id: string) => `#${id.slice(0, 6).toUpperCase()}`;
+
 // ---------- Template specifici ----------
 
-export function orderConfirmedBuyerTemplate(args: { name?: string | null; orderId: string; total: number; storeName: string }) {
+export function orderConfirmedBuyerTemplate(args: {
+  name?: string | null;
+  orderId: string;
+  total: number;
+  storeName: string;
+  /** 5/11/2026 — La fascia scelta, il ritiro e il modo di pagare: la conferma dice quando e quanto. */
+  deliverySlot?: string | null;
+  pickupInStore?: boolean;
+  paymentMethod?: 'cod' | 'card' | null;
+}) {
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
+  const fascia = args.deliverySlot?.trim() || null;
+  const quando = args.pickupInStore
+    ? `Ritiro in negozio${fascia ? `, ${fascia}` : ''}`
+    : fascia;
+  const pagamento =
+    args.paymentMethod === 'cod'
+      ? args.pickupInStore
+        ? `In contanti al ritiro: tieni pronti ${formatPrice(args.total)}`
+        : `In contanti alla consegna: tieni pronti ${formatPrice(args.total)}`
+      : args.paymentMethod === 'card'
+        ? 'Pagato con la carta'
+        : null;
+  const riga = (etichetta: string, valore: string) =>
+    `<tr><td style="padding:8px 0;color:${COLORI.tenue}">${etichetta}</td><td style="padding:8px 0;text-align:right">${escapeHtml(valore)}</td></tr>`;
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Ordine ricevuto</h1>
     <p style="margin:0 0 12px;line-height:1.6">${saluto(args.name)} abbiamo ricevuto il tuo ordine da <strong>${escapeHtml(args.storeName)}</strong>.</p>
     <table cellpadding="0" cellspacing="0" style="width:100%;margin:16px 0">
-      <tr><td style="padding:8px 0;color:${COLORI.tenue}">Ordine</td><td style="padding:8px 0;text-align:right;font-family:monospace">#${escapeHtml(args.orderId.slice(0, 8))}</td></tr>
+      <tr><td style="padding:8px 0;color:${COLORI.tenue}">Ordine</td><td style="padding:8px 0;text-align:right;font-family:monospace">${escapeHtml(numeroOrdine(args.orderId))}</td></tr>
       <tr><td style="padding:8px 0;color:${COLORI.tenue}">Totale</td><td style="padding:8px 0;text-align:right;font-weight:600">${formatPrice(args.total)}</td></tr>
+      ${quando ? riga(args.pickupInStore ? 'Ritiro' : 'Consegna', quando) : ''}
+      ${pagamento ? riga('Pagamento', pagamento) : ''}
     </table>
     <p style="margin:24px 0">${btn(orderUrl, 'Vedi ordine')}</p>
     <p style="margin:0;font-size:13px;color:${COLORI.tenue}">Se il negozio non può accettarlo ti scriviamo qui. Lo stato aggiornato lo trovi sempre in «I miei ordini».</p>
   `;
   return {
-    subject: `Ordine #${args.orderId.slice(0, 8)} ricevuto — ${BRAND}`,
+    subject: `Ordine ${numeroOrdine(args.orderId)} ricevuto — ${BRAND}`,
     html: shell('Ordine ricevuto', body),
-    text: `Ordine ricevuto. Totale ${formatPrice(args.total)}. Dettaglio: ${orderUrl}`,
+    text:
+      `Ordine ricevuto. Totale ${formatPrice(args.total)}.` +
+      (quando ? ` ${args.pickupInStore ? '' : 'Consegna: '}${quando}.` : '') +
+      (pagamento ? ` ${pagamento}.` : '') +
+      ` Dettaglio: ${orderUrl}`,
   };
+}
+
+/**
+ * 5/11/2026 — «oggi» e «domani» valgono solo il giorno in cui l'email parte: chi la legge la mattina
+ * dopo capiva un giorno sbagliato. Qui accanto alla parola si scrive il giorno vero, contato
+ * sull'orologio di Piacenza a partire da `rispettoA` (quando l'ordine è nato).
+ */
+export function conLaData(testo: string, rispettoA: Date): string {
+  if (Number.isNaN(rispettoA.getTime())) return testo;
+  // Il giorno di Piacenza di `rispettoA`, poi +1 a mezzogiorno UTC: niente scivoloni col cambio d'ora.
+  const [a, m, g] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome' }).format(rispettoA).split('-').map(Number);
+  const giorno = (piu: number) => {
+    const d = new Date(Date.UTC(a, m - 1, g + piu, 12));
+    const nome = d.toLocaleDateString('it-IT', { timeZone: 'UTC', weekday: 'long' });
+    return `${nome} ${d.getUTCDate()}/${d.getUTCMonth() + 1}`;
+  };
+  return testo.replace(/\b(oggi|domani)\b/gi, (w) => `${w} (${giorno(w.toLowerCase() === 'domani' ? 1 : 0)})`);
 }
 
 export function newOrderSellerTemplate(args: {
@@ -177,16 +230,21 @@ export function newOrderSellerTemplate(args: {
       logger.error('[email] scadenza per il negozio non calcolata', { orderId: args.orderId, err });
     }
   }
+  // 5/11/2026 — L'email si legge anche il giorno dopo: «oggi» e «domani» portano la data
+  // (rispetto a quando l'ordine è nato), e la fascia da servire è scritta, non solo la scadenza.
+  scadenza = conLaData(scadenza, nato);
+  const fascia = args.deliverySlot?.trim() ? conLaData(args.deliverySlot.trim(), nato) : null;
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">🛒 Nuovo ordine</h1>
     <p style="margin:0 0 12px;line-height:1.6">Hai ricevuto un nuovo ordine di ${args.itemsCount} articol${args.itemsCount === 1 ? 'o' : 'i'} per <strong>${formatPrice(args.total)}</strong>.</p>
+    ${fascia ? `<p style="margin:0 0 12px;line-height:1.6">Consegna: <strong>${escapeHtml(fascia)}</strong></p>` : ''}
     <p style="margin:0 0 12px;line-height:1.6;color:${COLORI.attenzione};font-weight:600">${escapeHtml(scadenza)}</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Gestisci ordine')}</p>
   `;
   return {
     subject: `🛒 Nuovo ordine — ${formatPrice(args.total)}`,
     html: shell('Nuovo ordine', body),
-    text: `Nuovo ordine per ${formatPrice(args.total)}. ${scadenza} Gestiscilo qui: ${orderUrl}`,
+    text: `Nuovo ordine per ${formatPrice(args.total)}.${fascia ? ` Consegna: ${fascia}.` : ''} ${scadenza} Gestiscilo qui: ${orderUrl}`,
   };
 }
 
@@ -224,9 +282,12 @@ export function veloceNonConfermataTemplate(args: { orderId: string; frase: stri
   // Senza una fascia possibile (sabato sera, negozio chiuso la domenica) il titolo non ne promette una,
   // e non promette nemmeno un contatto: la frase dice l'ora vera in cui l'ordine si annulla.
   const titolo = args.senzaFascia ? 'Il negozio non ha ancora confermato' : 'La tua spesa arriva in una fascia oraria';
+  // 5/11/2026 — Senza fascia la frase apre con le stesse parole del titolo: nel corpo dell'email non
+  // si ripetono (nel testo semplice restano, lì il titolo non c'è).
+  const corpo = frase.startsWith(`${titolo}. `) ? frase.slice(titolo.length + 2) : frase;
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">${titolo}</h1>
-    <p style="margin:0 0 12px;line-height:1.6">${escapeHtml(frase)}</p>
+    <p style="margin:0 0 12px;line-height:1.6">${escapeHtml(corpo)}</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Vedi il tuo ordine')}</p>
   `;
   return {
@@ -291,7 +352,7 @@ export function orderReadyTemplate(args: {
   const codice = args.pickupCode?.trim();
 
   const corpoRitiro = `
-    <p style="margin:0 0 12px;line-height:1.6">Il tuo ordine e&#39; pronto: puoi passare a ritirarlo${negozio ? ` da <strong>${escapeHtml(negozio)}</strong>` : ''}.</p>
+    <p style="margin:0 0 12px;line-height:1.6">Il tuo ordine è pronto: puoi passare a ritirarlo${negozio ? ` da <strong>${escapeHtml(negozio)}</strong>` : ''}.</p>
     ${dove ? `<p style="margin:0 0 12px;line-height:1.6">Indirizzo: <strong>${escapeHtml(dove)}</strong></p>` : ''}
     ${codice ? `<p style="margin:0 0 12px;line-height:1.6">Mostra questo codice al negozio: <span style="font-family:monospace;font-size:18px;font-weight:700">${escapeHtml(codice)}</span></p>` : ''}
   `;
@@ -299,23 +360,23 @@ export function orderReadyTemplate(args: {
   // confonde col ritiro in negozio, che al lancio e' spento. Finche' e' spento nessuna email
   // nomina il ritiro (la prova scorre tutti i modelli di questo file).
   const corpoConsegna = `
-    <p style="margin:0 0 12px;line-height:1.6">Il tuo ordine e&#39; pronto${negozio ? ` da <strong>${escapeHtml(negozio)}</strong>` : ''}: un rider passa a prenderlo a breve e te lo porta a casa.</p>
-    <p style="margin:0 0 12px;line-height:1.6">Ti avvisiamo appena parte. Il codice che il fattorino ti chiedera&#39; alla consegna lo trovi nella pagina dell&#39;ordine.</p>
+    <p style="margin:0 0 12px;line-height:1.6">Il tuo ordine è pronto${negozio ? ` da <strong>${escapeHtml(negozio)}</strong>` : ''}: un rider passa a prenderlo e te lo porta a casa nella fascia che hai scelto.</p>
+    <p style="margin:0 0 12px;line-height:1.6">La fascia e lo stato della consegna li trovi nella pagina dell’ordine, insieme al codice che il fattorino ti chiederà alla consegna.</p>
   `;
 
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">📦 Il tuo ordine e&#39; pronto</h1>
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">📦 Il tuo ordine è pronto</h1>
     ${args.pickupInStore ? corpoRitiro : corpoConsegna}
-    <p style="margin:24px 0">${btn(orderUrl, 'Vedi l&#39;ordine')}</p>
+    <p style="margin:24px 0">${btn(orderUrl, 'Vedi l’ordine')}</p>
   `;
   return {
     subject: args.pickupInStore
       ? '📦 Il tuo ordine ti aspetta in negozio'
-      : '📦 Il tuo ordine e\' pronto',
+      : '📦 Il tuo ordine è pronto',
     html: shell('Ordine pronto', body),
     text: args.pickupInStore
-      ? `Il tuo ordine e' pronto${dove ? ` da ritirare in ${dove}` : ''}.${codice ? ` Mostra il codice ${codice}.` : ''} ${orderUrl}`
-      : `Il tuo ordine e' pronto: un rider passa a prenderlo a breve. ${orderUrl}`,
+      ? `Il tuo ordine è pronto${dove ? ` da ritirare in ${dove}` : ''}.${codice ? ` Mostra il codice ${codice}.` : ''} ${orderUrl}`
+      : `Il tuo ordine è pronto: un rider passa a prenderlo e te lo porta a casa nella fascia che hai scelto. ${orderUrl}`,
   };
 }
 
@@ -393,8 +454,11 @@ export function ordineAnnullatoTemplate(args: {
   carrello?: { html: string; text: string } | null;
   /** 5/11/2026 — Ha annullato il cliente stesso: niente «motivo» e niente «cerca in un altro negozio». */
   annullatoDalCliente?: boolean;
+  /** Il negozio dell'ordine: in un carrello con più negozi dice QUALE ordine se ne va. */
+  storeName?: string | null;
 }) {
-  const ordine = `#${args.orderId.slice(0, 6).toUpperCase()}`;
+  const ordine = numeroOrdine(args.orderId);
+  const negozio = args.storeName?.trim() || null;
   const motivo = args.annullatoDalCliente ? null : motivoDelRimborsoInChiaro(args.motivo);
   const credito = Number(args.creditoRestituitoEuro ?? 0);
   const negozi = `${appUrl()}/search`;
@@ -415,7 +479,7 @@ export function ordineAnnullatoTemplate(args: {
   const bottone = args.annullatoDalCliente ? 'Torna ai negozi' : 'Cerca in un altro negozio';
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">${titolo}</h1>
-    ${p(`L'ordine <strong>${ordine}</strong> è stato annullato e non verrà preparato né consegnato.`)}
+    ${p(`L'ordine <strong>${ordine}</strong>${negozio ? ` da <strong>${escapeHtml(negozio)}</strong>` : ''} è stato annullato e non verrà preparato né consegnato.`)}
     ${motivo ? `<p style="margin:0 0 12px;color:${COLORI.tenue}">Motivo: ${escapeHtml(motivo)}</p>` : ''}
     ${p(`<strong>${rigaSoldi}</strong>`)}
     ${rigaCredito ? p(rigaCredito) : ''}
@@ -423,10 +487,12 @@ export function ordineAnnullatoTemplate(args: {
     <p style="margin:24px 0">${btn(negozi, bottone)}</p>
   `;
   return {
-    subject: conCarta || args.carrello ? `Ordine ${ordine} annullato` : `Ordine ${ordine} annullato — non devi pagare niente`,
+    subject: conCarta || args.carrello
+      ? `Ordine ${ordine}${negozio ? ` da ${negozio}` : ''} annullato`
+      : `Ordine ${ordine}${negozio ? ` da ${negozio}` : ''} annullato — non devi pagare niente`,
     html: shell('Ordine annullato', body),
     text:
-      `L'ordine ${ordine} è stato annullato e non verrà preparato né consegnato.` +
+      `L'ordine ${ordine}${negozio ? ` da ${negozio}` : ''} è stato annullato e non verrà preparato né consegnato.` +
       (motivo ? ` Motivo: ${motivo}.` : '') +
       ` ${rigaSoldi}` +
       (rigaCredito ? ` ${rigaCredito}` : '') +
@@ -596,7 +662,10 @@ function piedeDelDestinatarioDelRegalo(mittente: string): string {
 
 export function giftCardRecipientTemplate(args: { code: string; amountEuro: number; senderName?: string | null; message?: string | null }) {
   const redeemUrl = `${appUrl()}/profile/gift-cards`;
-  const from = args.senderName?.trim() ? escapeHtml(args.senderName.trim()) : 'Qualcuno';
+  // 5/11/2026 — Il nome grezzo (una riga sola) per oggetto e testo semplice, filtrato solo nell'HTML:
+  // «Maria D'Angelo», non «Maria D&#39;Angelo», nell'oggetto.
+  const fromGrezzo = args.senderName?.trim() ? args.senderName.trim().replace(/[\r\n]+/g, ' ') : 'Qualcuno';
+  const from = escapeHtml(fromGrezzo);
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">🎁 Hai ricevuto una gift card</h1>
     <p style="margin:0 0 12px;line-height:1.6"><strong>${from}</strong> ti ha regalato una gift card MyCity da <strong>${formatPrice(args.amountEuro)}</strong>, spendibile nei negozi di Piacenza.</p>
@@ -610,12 +679,12 @@ export function giftCardRecipientTemplate(args: { code: string; amountEuro: numb
   const dove = recapitoPrivacy();
   const doveTesto = dove.eUnaCasella ? dove.testo : `${appUrl()}${dove.href}`;
   return {
-    subject: `🎁 ${from} ti ha regalato ${formatPrice(args.amountEuro)} su ${BRAND}`,
+    subject: `🎁 ${fromGrezzo} ti ha regalato ${formatPrice(args.amountEuro)} su ${BRAND}`,
     html: shell('Hai ricevuto una gift card', body, piedeDelDestinatarioDelRegalo(from)),
     text:
-      `${from} ti ha regalato una gift card MyCity da ${formatPrice(args.amountEuro)}. Codice: ${args.code}. ` +
+      `${fromGrezzo} ti ha regalato una gift card MyCity da ${formatPrice(args.amountEuro)}. Codice: ${args.code}. ` +
       `Riscattalo su ${redeemUrl}\n\n` +
-      `Hai ricevuto questa email perché ${from} ha comprato un buono regalo per te e ci ha lasciato il tuo indirizzo: ` +
+      `Hai ricevuto questa email perché ${fromGrezzo} ha comprato un buono regalo per te e ci ha lasciato il tuo indirizzo: ` +
       `non hai un account ${BRAND} e non ti abbiamo iscritto a nulla. Conserviamo nome, email e messaggio solo per ` +
       `recapitarti il regalo (${appUrl()}/privacy). Per farli cancellare subito: ${doveTesto}`,
   };
@@ -623,7 +692,8 @@ export function giftCardRecipientTemplate(args: { code: string; amountEuro: numb
 
 export function giftCardBuyerTemplate(args: { code: string; amountEuro: number; recipientName?: string | null }) {
   const url = `${appUrl()}/profile/gift-cards`;
-  const to = args.recipientName?.trim() ? escapeHtml(args.recipientName.trim()) : 'il destinatario';
+  const toGrezzo = args.recipientName?.trim() ? args.recipientName.trim().replace(/[\r\n]+/g, ' ') : 'il destinatario';
+  const to = escapeHtml(toGrezzo);
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Gift card acquistata ✓</h1>
     <p style="margin:0 0 12px;line-height:1.6">Grazie! La tua gift card da <strong>${formatPrice(args.amountEuro)}</strong> per <strong>${to}</strong> è pronta e gli abbiamo inviato il codice via email.</p>
@@ -634,7 +704,7 @@ export function giftCardBuyerTemplate(args: { code: string; amountEuro: number; 
   return {
     subject: `Gift card da ${formatPrice(args.amountEuro)} acquistata — ${BRAND}`,
     html: shell('Gift card acquistata', body),
-    text: `Gift card da ${formatPrice(args.amountEuro)} acquistata per ${to}. Codice: ${args.code}.`,
+    text: `Gift card da ${formatPrice(args.amountEuro)} acquistata per ${toGrezzo}. Codice: ${args.code}.`,
   };
 }
 
@@ -739,10 +809,15 @@ const TEMPLATE_CICLO_DI_VITA = {
    */
   tutorial_day2: (): EmailPronta => {
     const comeArriva = comeArrivaLaSpesa();
+    // 5/11/2026 — «la carta non è obbligatoria» faceva pensare alla carta alla porta, che non esiste.
+    // La riga nasce dall'interruttore della cassa: a carta spenta si paga solo in contanti.
+    const comePaghi = cartaAlCheckoutDisponibile()
+      ? { riga: 'Paghi con la carta quando ordini, oppure in contanti alla consegna', inBreve: 'paghi con la carta o in contanti alla consegna' }
+      : { riga: 'Paghi in contanti alla consegna: tieni pronto l’importo', inBreve: 'paghi in contanti alla consegna' };
     const body = `
       <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">3 cose da sapere</h1>
       <ul style="margin:0 0 16px;padding-left:20px;line-height:1.8">
-        <li>Paghi alla consegna: la carta non e' obbligatoria</li>
+        <li>${comePaghi.riga}</li>
         <li>${comeArriva.riga}</li>
         <li>Ogni ordine e il suo stato li trovi in «I miei ordini»</li>
       </ul>
@@ -752,7 +827,7 @@ const TEMPLATE_CICLO_DI_VITA = {
       subject: `3 cose da sapere su ${BRAND}`,
       html: shell('3 cose da sapere', body),
       text:
-        `Tre cose da sapere: paghi alla consegna, ${comeArriva.inBreve}, ` +
+        `Tre cose da sapere: ${comePaghi.inBreve}, ${comeArriva.inBreve}, ` +
         'e ogni ordine col suo stato lo trovi in «I miei ordini».',
     };
   },
@@ -780,13 +855,13 @@ const TEMPLATE_CICLO_DI_VITA = {
 
   reengagement_14d: (): EmailPronta => {
     const body = `
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Cosa succede in citta</h1>
-      <p style="margin:0 0 16px;line-height:1.6">Eventi, novita dai negozi e gli sconti del momento.</p>
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Cosa succede in città</h1>
+      <p style="margin:0 0 16px;line-height:1.6">Eventi e novità dai negozi di Piacenza.</p>
       <p style="margin:24px 0">${btn(`${appUrl()}/events`, 'Vedi gli eventi')}</p>
     `;
     return {
       subject: 'Cosa succede in città questa settimana',
-      html: shell('Cosa succede in citta', body),
+      html: shell('Cosa succede in città', body),
       text: `Eventi della settimana su ${BRAND}.`,
     };
   },
@@ -879,10 +954,10 @@ const TEMPLATE_CICLO_DI_VITA = {
     const body = `
       <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Il tuo carrello ti aspetta</h1>
       <p style="margin:0 0 16px;line-height:1.6">${saluto(d.name)}</p>
-      <p style="margin:0 0 16px;line-height:1.6">Hai lasciato qualcosa nel carrello: e' ancora li'.</p>
+      <p style="margin:0 0 16px;line-height:1.6">Hai lasciato qualcosa nel carrello: è ancora lì.</p>
       ${righe ? `<ul style="margin:0 0 16px;padding-left:20px;line-height:1.8">${righe}</ul>` : ''}
       <p style="margin:24px 0">${btn(`${appUrl()}/cart`, 'Vai al carrello')}</p>
-      <p style="margin:0;line-height:1.6;color:${COLORI.tenue}">Se hai cambiato idea, ignora questa email: non ti scriveremo piu' per questo carrello.</p>
+      <p style="margin:0;line-height:1.6;color:${COLORI.tenue}">Se hai cambiato idea, ignora questa email: non ti scriveremo più per questo carrello.</p>
     `;
     return {
       subject: 'Hai dimenticato qualcosa nel carrello',

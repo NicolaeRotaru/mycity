@@ -37,6 +37,14 @@ type Status = 'unsupported' | 'denied' | 'unsubscribed' | 'subscribed' | 'checki
  *
  * Disabilitato (mostra messaggio info) se VAPID public key non è configurata.
  */
+/** Perché l'attivazione non è riuscita, in italiano: il browser lo dice in inglese. */
+export function perchéNonSiAttiva(err: unknown): string {
+  const nome = err && typeof err === 'object' && 'name' in err ? String((err as { name: unknown }).name) : '';
+  if (nome === 'NotAllowedError') return 'Il permesso per le notifiche è stato negato: puoi riattivarlo dalle impostazioni del browser.';
+  // Qualunque altro errore del browser o del servizio push: il testo grezzo non si mostra.
+  return 'Non sono riuscito ad attivare le notifiche su questo dispositivo: il servizio del browser non ha risposto. Riprova fra qualche minuto.';
+}
+
 export default function PushNotificationOptIn({ compact = false }: { compact?: boolean }) {
   const [status, setStatus] = useState<Status>('checking');
   const [working, setWorking] = useState(false);
@@ -152,7 +160,9 @@ export default function PushNotificationOptIn({ compact = false }: { compact?: b
       setStatus('subscribed');
       toast.success('Notifiche attivate!');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Impossibile attivare');
+      // 5/11/2026 — Gli errori del browser (DOMException) arrivano in inglese, «Registration failed -
+      // push service error»: qui si dice in italiano cosa è successo.
+      toast.error(perchéNonSiAttiva(err));
     } finally {
       setWorking(false);
     }
@@ -222,16 +232,26 @@ export default function PushNotificationOptIn({ compact = false }: { compact?: b
   }
 
   if (status === 'subscribed') {
+    // 5/11/2026 — Prima un pulsante «Notifiche attive» le spegneva al primo tocco, senza dirlo: lo
+    // stato è un testo, e spegnere è un'azione col suo nome e una conferma.
     return (
-      <button
-        type="button"
-        onClick={unsubscribe}
-        disabled={working}
-        className="inline-flex items-center gap-2 bg-olive-100 hover:bg-olive-200 text-olive-800 px-4 py-2 rounded-full text-sm font-semibold transition-colors disabled:opacity-50"
-      >
-        <BellOff size={16} />
-        {working ? '…' : 'Notifiche attive'}
-      </button>
+      <div className="inline-flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-2 text-olive-800 text-sm font-semibold">
+          <Bell size={16} aria-hidden />
+          Notifiche attive su questo dispositivo
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm('Vuoi disattivare le notifiche su questo dispositivo?')) void unsubscribe();
+          }}
+          disabled={working}
+          className="inline-flex items-center gap-2 bg-olive-100 hover:bg-olive-200 text-olive-800 px-4 py-2 rounded-full text-sm font-semibold transition-colors disabled:opacity-50"
+        >
+          <BellOff size={16} aria-hidden />
+          {working ? '…' : 'Disattiva'}
+        </button>
+      </div>
     );
   }
 

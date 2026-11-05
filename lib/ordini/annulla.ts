@@ -251,65 +251,10 @@ export async function annullaERimborsa(
    * chiusura completa vuole una colonna «carrello» sugli ordini: e' una
    * migrazione, quindi si firma a parte.
    */
-  async function unAltroOrdineDelCarrelloTieneIlCodice(codice: string): Promise<boolean> {
-    const carrello = order.stripe_session_id?.trim();
-    if (!carrello) return false;
-    try {
-      const { data, error } = await admin
-        .from('orders')
-        .select('id')
-        .eq('stripe_session_id', carrello)
-        .eq('coupon_code', codice)
-        .neq('id', order.id)
-        .neq('delivery_status', 'CANCELED')
-        .limit(1);
-      if (error) {
-        // Non si sa: si restituisce come prima. Un uso in piu' e' un costo
-        // nostro, un buono perso e' un cliente che non ricompra.
-        logger.warn('[annullaERimborsa] fratelli del carrello non letti', { orderId: order.id, err: error.message });
-        return false;
-      }
-      return (data ?? []).length > 0;
-    } catch (err) {
-      logger.warn('[annullaERimborsa] fratelli del carrello non letti', { orderId: order.id, err });
-      return false;
-    }
-  }
-
-  async function restituisciCoupon(): Promise<void> {
-    const codice = order.coupon_code?.trim();
-    if (!codice) return;
-    if (await unAltroOrdineDelCarrelloTieneIlCodice(codice)) {
-      logger.info('[annullaERimborsa] codice sconto non restituito: un altro ordine dello stesso carrello lo tiene', {
-        orderId: order.id,
-      });
-      return;
-    }
-    try {
-      const { error: cErr } = await admin.rpc('release_coupon', { p_code: codice, p_order_id: order.id });
-      if (!cErr) return;
-
-      // La versione con la chiave per ordine non c'è ancora (migrazione non
-      // applicata): si restituisce comunque, una volta sola, con la firma
-      // vecchia. Perdere il buono senza aver comprato niente è il difetto R121,
-      // e non deve tornare mentre si aspetta la firma sulla migrazione.
-      //
-      // Solo su PGRST202 («funzione inesistente»): è un errore di FORMA della
-      // chiamata, quindi non può aver scritto niente. Su ogni altro errore non
-      // si ritenta — un errore di rete può aver scalato l'uso davvero, e
-      // riprovare lo scalerebbe due volte: esattamente il danno di cui sopra.
-      if ((cErr as { code?: string }).code !== 'PGRST202') {
-        logger.warn('[annullaERimborsa] codice sconto non restituito', { orderId: order.id, err: cErr.message });
-        return;
-      }
-      const { error: senzaChiave } = await admin.rpc('release_coupon', { p_code: codice });
-      if (senzaChiave) {
-        logger.warn('[annullaERimborsa] codice sconto non restituito', { orderId: order.id, err: senzaChiave.message });
-      }
-    } catch (err) {
-      logger.warn('[annullaERimborsa] codice sconto non restituito', { orderId: order.id, err });
-    }
-  }
+  // 5/11/2026 — La restituzione del codice sta fuori (`restituisciIlCodiceDellOrdine`, più sotto in
+  // questo file): la usa anche il giro degli ordini scaduti, che prima chiamava release_coupon col
+  // solo codice e rimetteva in circolo un codice monouso ancora tenuto da un altro ordine del carrello.
+  const restituisciCoupon = () => restituisciIlCodiceDellOrdine(admin, order);
 
   // Contanti già incassati dal fattorino: la restituzione è un fatto fisico e la
   // decide una persona. Annullare in silenzio lascerebbe il cliente senza merce
@@ -494,7 +439,7 @@ export async function annullaERimborsa(
  */
 export async function avvisaIlClienteDellAnnullo(
   admin: SupabaseClient,
-  ordine: { id: string; user_id: string | null; wallet_applied_cents?: number | null },
+  ordine: { id: string; user_id: string | null; seller_id?: string | null; wallet_applied_cents?: number | null },
   motivo: string | null | undefined,
   carrello?: { avviso: AvvisoDelCarrello; come: ComeHaPagato } | null,
   opzioni?: { annullatoDalCliente?: boolean },
@@ -508,6 +453,17 @@ export async function avvisaIlClienteDellAnnullo(
         orderId: ordine.id, message: error?.message ?? 'nessun indirizzo',
       });
       return false;
+    }
+    // 5/11/2026 — Il nome del negozio: in un carrello con più negozi dice quale ordine se ne va.
+    // Se la lettura non riesce l'email parte lo stesso, senza nome.
+    let storeName: string | null = null;
+    if (ordine.seller_id) {
+      try {
+        const { data: negozio } = await admin.from('profiles').select('store_name').eq('id', ordine.seller_id).maybeSingle();
+        storeName = (negozio as { store_name?: string | null } | null)?.store_name ?? null;
+      } catch {
+        storeName = null;
+      }
     }
     // 30/10/2026 — Il carrello rifatto: le righe con le cifre nuove.
     // 5/11/2026 — Dentro il riquadro, prima del pulsante (non piu' sotto il piè
@@ -524,6 +480,7 @@ export async function avvisaIlClienteDellAnnullo(
           }
         : null,
       annullatoDalCliente: opzioni?.annullatoDalCliente,
+      storeName,
     });
     const html = t.html;
     const text = t.text;
@@ -897,5 +854,74 @@ export async function ricalcolaLaConsegnaDelGiro(admin: SupabaseClient, orderId:
   } catch (err) {
     logger.error('[ricalcolaLaConsegnaDelGiro] consegna del carrello NON rifatta: rimborso pieno', { orderId, err });
     return null;
+  }
+}
+
+/** Il codice sconto dell'ordine torna disponibile, una volta sola e solo se nessun altro ordine del carrello lo tiene. */
+async function tieneIlCodice(
+  admin: SupabaseClient,
+  order: { id: string; stripe_session_id?: string | null },
+  codice: string,
+): Promise<boolean> {
+  const carrello = order.stripe_session_id?.trim();
+  if (!carrello) return false;
+  try {
+    const { data, error } = await admin
+      .from('orders')
+      .select('id')
+      .eq('stripe_session_id', carrello)
+      .eq('coupon_code', codice)
+      .neq('id', order.id)
+      .neq('delivery_status', 'CANCELED')
+      .limit(1);
+    if (error) {
+      // Non si sa: si restituisce come prima. Un uso in piu' e' un costo
+      // nostro, un buono perso e' un cliente che non ricompra.
+      logger.warn('[annullaERimborsa] fratelli del carrello non letti', { orderId: order.id, err: error.message });
+      return false;
+    }
+    return (data ?? []).length > 0;
+  } catch (err) {
+    logger.warn('[annullaERimborsa] fratelli del carrello non letti', { orderId: order.id, err });
+    return false;
+  }
+}
+
+export async function restituisciIlCodiceDellOrdine(
+  admin: SupabaseClient,
+  order: { id: string; coupon_code?: string | null; stripe_session_id?: string | null },
+): Promise<void> {
+  const unAltroOrdineDelCarrelloTieneIlCodice = (codice: string) => tieneIlCodice(admin, order, codice);
+  const codice = order.coupon_code?.trim();
+  if (!codice) return;
+  if (await unAltroOrdineDelCarrelloTieneIlCodice(codice)) {
+    logger.info('[annullaERimborsa] codice sconto non restituito: un altro ordine dello stesso carrello lo tiene', {
+      orderId: order.id,
+    });
+    return;
+  }
+  try {
+    const { error: cErr } = await admin.rpc('release_coupon', { p_code: codice, p_order_id: order.id });
+    if (!cErr) return;
+
+    // La versione con la chiave per ordine non c'è ancora (migrazione non
+    // applicata): si restituisce comunque, una volta sola, con la firma
+    // vecchia. Perdere il buono senza aver comprato niente è il difetto R121,
+    // e non deve tornare mentre si aspetta la firma sulla migrazione.
+    //
+    // Solo su PGRST202 («funzione inesistente»): è un errore di FORMA della
+    // chiamata, quindi non può aver scritto niente. Su ogni altro errore non
+    // si ritenta — un errore di rete può aver scalato l'uso davvero, e
+    // riprovare lo scalerebbe due volte: esattamente il danno di cui sopra.
+    if ((cErr as { code?: string }).code !== 'PGRST202') {
+      logger.warn('[annullaERimborsa] codice sconto non restituito', { orderId: order.id, err: cErr.message });
+      return;
+    }
+    const { error: senzaChiave } = await admin.rpc('release_coupon', { p_code: codice });
+    if (senzaChiave) {
+      logger.warn('[annullaERimborsa] codice sconto non restituito', { orderId: order.id, err: senzaChiave.message });
+    }
+  } catch (err) {
+    logger.warn('[annullaERimborsa] codice sconto non restituito', { orderId: order.id, err });
   }
 }

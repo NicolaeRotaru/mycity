@@ -110,7 +110,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   for (const c of changes) {
     const row = miei.get(c.productId);
     if (!row) {
-      esiti.push({ productId: c.productId, ok: false, motivo: 'non e un tuo prodotto' });
+      esiti.push({ productId: c.productId, ok: false, motivo: 'non è un tuo prodotto' });
       continue;
     }
     const { update, protetti, rifiutati } = resolveAiPatch({

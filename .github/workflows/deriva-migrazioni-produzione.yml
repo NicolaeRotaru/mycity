@@ -69,6 +69,9 @@ jobs:
       - name: Confronta il repository con il database vero
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          # 5/11/2026 — «Saltato» non e' «passato»: senza `pg` lo script usciva 0 e il lavoro era
+          # verde senza aver confrontato niente.
+          SALTO_E_ERRORE: "1"
         # 1/11/2026 (ondata 9) — Il colore rosso da solo non diceva QUALE dei
         # due guasti: «non mi collego» e «mancano migrazioni» uscivano tutti e
         # due con 1. Adesso lo script li separa (1 = non ho controllato,

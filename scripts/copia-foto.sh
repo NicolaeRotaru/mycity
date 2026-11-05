@@ -54,8 +54,9 @@ if [[ "$MESTIERE" == "copia" ]]; then
     riepilogo "❌ **Le foto non sono in copia stanotte** — guarda la riga «esito-file-foto» nel registro del passo."
     exit "$uscita"
   fi
+  # 5/11/2026 — La passphrase da un descrittore (3), non dalla riga di comando (si legge in /proc).
   tar -C "$CHIARO" -cf - . | gpg --batch --yes --symmetric --cipher-algo AES256 \
-    --passphrase "$BACKUP_PASSPHRASE" --output "$PACCO"
+    --pinentry-mode loopback --passphrase-fd 3 --output "$PACCO" 3<<<"$BACKUP_PASSPHRASE"
   riuscito=1
   DIMENSIONE=$(du -h "$PACCO" | cut -f1)
   echo "[foto] Pacco cifrato: $PACCO ($DIMENSIONE)"
@@ -75,7 +76,7 @@ if [[ "$MESTIERE" == "riapri" ]]; then
   fi
   PROVA="$(mktemp -d)"
   trap 'rm -rf "$PROVA"' EXIT
-  gpg --batch --yes --quiet --decrypt --passphrase "$BACKUP_PASSPHRASE" --output "$PROVA/pacco.tar" "$ultimo"
+  gpg --batch --yes --quiet --decrypt --pinentry-mode loopback --passphrase-fd 3 --output "$PROVA/pacco.tar" "$ultimo" 3<<<"$BACKUP_PASSPHRASE"
   # Il primo file vero del pacco (non una cartella).
   primo="$(tar -tf "$PROVA/pacco.tar" | grep -v '/$' | head -n 1 || true)"
   if [[ -z "$primo" ]]; then

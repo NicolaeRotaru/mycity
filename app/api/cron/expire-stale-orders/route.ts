@@ -10,7 +10,8 @@ import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
 import { restaDaRimborsareSullaCarta } from '@/lib/ordini/soldi-sulla-carta';
 import { ilCarrelloAspettaLaDivisione } from '@/lib/stripe/rimborsi-da-dividere';
-import { avvisaIlClienteDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro } from '@/lib/ordini/annulla';
+import { avvisaIlClienteDellAnnullo, avvisaLaCampanellaDelCarrello, ricalcolaLaConsegnaDelGiro, restituisciIlCodiceDellOrdine } from '@/lib/ordini/annulla';
+import { ApiErrors } from '@/lib/api/responses';
 import { righePerChiChiudeAMano, type ComeHaPagato } from '@/lib/email/annullo-nel-carrello';
 
 /**
@@ -78,7 +79,13 @@ function orariDelNegozio(riga: unknown): unknown {
 export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   // 31/10/2026 — Il fermo dei lavori a orario: dopo il segreto, prima di tutto il resto (lib/cron/fermo-dei-lavori.ts).
   if (chiamataDelCalendarioFerma(req)) return rispostaDelFermo();
-  const admin = getAdminSupabase();
+  // 5/11/2026 — Senza la chiave di servizio il giro risponde 503 «non configurato», non un 500 muto.
+  let admin: ReturnType<typeof getAdminSupabase>;
+  try {
+    admin = getAdminSupabase();
+  } catch (e) {
+    return ApiErrors.unavailable(e instanceof Error ? e.message : 'config error');
+  }
   const cutoff = new Date().toISOString();
 
   const { data: candidates, error } = await admin
@@ -91,9 +98,13 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     // l'ordine della sera per domani mattina moriva alle 00:15.
     // 16/10/2026 — `internal_dispute_status`: la pausa del carrello, se c'è un
     // rimborso dal cruscotto ancora da dividere (più sotto).
-    .select('id, user_id, payment_method, payment_status, stripe_payment_intent, total_price, wallet_applied_cents, coupon_code, created_at, delivery_slot, internal_dispute_status, seller:profiles!orders_seller_id_fkey ( store_hours )')
+    // 5/11/2026 — `stripe_session_id`: il carrello, per non restituire un codice sconto che un
+    // altro ordine dello stesso carrello tiene ancora. E i più vecchi prima: senza un ordine, con
+    // più di cento ordini fermi, il database poteva rendere sempre gli stessi cento.
+    .select('id, user_id, seller_id, payment_method, payment_status, stripe_payment_intent, stripe_session_id, total_price, wallet_applied_cents, coupon_code, created_at, delivery_slot, internal_dispute_status, seller:profiles!orders_seller_id_fkey ( store_hours )')
     .eq('delivery_status', 'NEW')
     .lt('created_at', cutoff)
+    .order('created_at', { ascending: true })
     .limit(100);
 
   if (error) {
@@ -109,6 +120,8 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   let daChiudereAMano = 0;
   /** Lasciati in coda: sul loro pagamento c'è un rimborso dal cruscotto da dividere. */
   let inAttesaDellaDivisione = 0;
+  /** Annullati, ma la merce o il credito non sono tornati: lo sanno gli amministratori. */
+  let ripristiniFalliti = 0;
 
   for (const o of candidates ?? []) {
     // 3/9/2026 — L'ORDINE DELLA SERA PER DOMANI MORIVA NELLA NOTTE.
@@ -179,12 +192,31 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     // dello stesso carrello si rifà (consegna.negozio-che-rifiuta), e il rimborso rende il totale nuovo.
     const giro = await ricalcolaLaConsegnaDelGiro(admin, o.id);
 
+    // 5/11/2026 — Senza il giro rifatto il totale si rilegge adesso: un altro ordine dello stesso
+    // carrello scaduto poco prima in questo giro può averlo già cambiato (13 € → 15 €).
+    let totaleCents = Math.round(Number(o.total_price) * 100);
+    if (!giro && isCardPaid) {
+      try {
+        const { data: righe, error: errFresco } = await admin.from('orders').select('id, total_price').eq('id', o.id).limit(1);
+        const fresco = ((righe ?? []) as Array<{ id: string; total_price?: unknown }>).find((r) => r.id === o.id);
+        if (errFresco) throw new Error(errFresco.message);
+        if (fresco && fresco.total_price != null && Number.isFinite(Number(fresco.total_price))) {
+          totaleCents = Math.round(Number(fresco.total_price) * 100);
+        }
+      } catch (e) {
+        logger.error('[cron] expire-stale-orders: totale non riletto, si rende quello letto a inizio giro', {
+          id: o.id, message: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
+    const nonTornato: string[] = [];
     try {
       if (isCardPaid) {
         try {
           await refundOrder({
             orderId: o.id,
-            amountCents: giro ? giro.totaleCents : Math.round(Number(o.total_price) * 100),
+            amountCents: giro ? giro.totaleCents : totaleCents,
             reason: 'Ordine annullato: il venditore non lo ha accettato in tempo',
             notifyBuyer: true,
             // L'ordine l'ha annullato questo giro, qui sopra, e la merce non
@@ -245,23 +277,36 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
             logger.error('[cron] expire-stale-orders: ordine annullato e NON rimborsato, fuori dalla coda', {
               id: o.id, message: errRipristino.message,
             });
+            // 5/11/2026 — Annullato, pagato e fuori dalla coda: senza un avviso nessuno lo riprende.
+            await notifyAdmins(
+              'Ordine annullato e NON rimborsato',
+              `L'ordine #${o.id.slice(0, 6).toUpperCase()} è stato annullato perché il negozio non lo ha accettato, il rimborso non è riuscito e non è tornato in coda. ` +
+                'Il giro non lo riprende: rimborsalo a mano e controlla su Stripe.',
+              '/admin/orders',
+            ).catch((errAvviso) =>
+              logger.error('[cron] expire-stale-orders: avviso agli amministratori non partito', {
+                id: o.id, message: errAvviso instanceof Error ? errAvviso.message : String(errAvviso),
+              }),
+            );
+            daChiudereAMano++;
           } else {
             logger.warn('[cron] expire-stale-orders: rimborso fallito, ordine rimesso in coda', { id: o.id });
+            failed++;
           }
-          failed++;
           continue;
         }
       } else {
         // COD o non pagato: niente da rimborsare, solo il ripristino della merce.
         const { error: rErr } = await admin.rpc('restore_stock_for_order', { p_order_id: o.id });
-        if (rErr) logger.warn('[cron] expire-stale-orders: restore_stock fallito', { id: o.id, message: rErr.message });
+        if (rErr) {
+          logger.warn('[cron] expire-stale-orders: restore_stock fallito', { id: o.id, message: rErr.message });
+          nonTornato.push('la merce non è tornata a scaffale');
+        }
       }
 
       // Storno del credito wallet eventualmente speso (entrambi i percorsi).
       const walletCents = Number(o.wallet_applied_cents ?? 0);
-      // 5/11/2026 — se lo storno cade, l'email non deve dire «il credito ti è
-      // stato restituito»: riceve 0 come credito tornato (vedi sotto).
-      let creditoNonTornato = false;
+      let creditoTornato = true;
       if (walletCents > 0) {
         const { error: wErr } = await admin.rpc('wallet_credit', {
           p_user: o.user_id,
@@ -270,19 +315,33 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
           p_ref: o.id,
         });
         if (wErr) {
-          creditoNonTornato = true;
           logger.warn('[cron] expire-stale-orders: storno wallet fallito', { id: o.id, message: wErr.message });
+          creditoTornato = false;
+          nonTornato.push(`il credito MyCity speso (${(walletCents / 100).toFixed(2).replace('.', ',')} €) non è tornato al cliente`);
         }
+      }
+
+      // 5/11/2026 — Merce o credito non tornati: l'ordine è già annullato e il giro non lo riprende.
+      // Un avviso agli amministratori, una volta per ordine, e il conto nella risposta.
+      if (nonTornato.length > 0) {
+        ripristiniFalliti++;
+        await notifyAdmins(
+          'Ordine annullato: qualcosa non è tornato',
+          `L'ordine #${o.id.slice(0, 6).toUpperCase()} è stato annullato perché il negozio non lo ha accettato, ma ${nonTornato.join(' e ')}. Va sistemato a mano.`,
+          '/admin/orders',
+        ).catch((errAvviso) =>
+          logger.error('[cron] expire-stale-orders: avviso agli amministratori non partito', {
+            id: o.id, message: errAvviso instanceof Error ? errAvviso.message : String(errAvviso),
+          }),
+        );
       }
 
       // 27/8/2026 (R121) — Il codice sconto torna disponibile. Il turno
       // sull'ordine e' gia' stato preso qui sopra, quindi la restituzione
       // avviene una volta sola; `release_coupon` non scende comunque sotto zero.
-      const codice = (o as { coupon_code?: string | null }).coupon_code?.trim();
-      if (codice) {
-        const { error: cErr } = await admin.rpc('release_coupon', { p_code: codice });
-        if (cErr) logger.warn('[cron] expire-stale-orders: codice sconto non restituito', { id: o.id, message: cErr.message });
-      }
+      // 5/11/2026 — Passa dalla stessa restituzione dell'annullo (lib/ordini/annulla.ts): legata
+      // all'ordine, e niente restituzione se un altro ordine dello stesso carrello tiene il codice.
+      await restituisciIlCodiceDellOrdine(admin, o as { id: string; coupon_code?: string | null; stripe_session_id?: string | null });
 
       // Notifica in-app al buyer (best-effort: non deve far fallire l'annullo).
       await admin.from('notifications').insert({
@@ -294,20 +353,32 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
         body: `L'ordine #${o.id.slice(0, 6).toUpperCase()} è stato annullato: il negozio non lo ha accettato in tempo.${isCardPaid ? ' Il rimborso è in corso.' : ''}`,
         link: '/orders',
       });
+      // 5/11/2026 — Anche il negozio lo sa: l'ordine sparisce dalla sua lista «da fare».
+      const sellerId = (o as { seller_id?: string | null }).seller_id;
+      if (sellerId) {
+        const { error: nErr } = await admin.from('notifications').insert({
+          category: 'order',
+          user_id: sellerId,
+          title: 'Ordine annullato',
+          body: `L'ordine #${o.id.slice(0, 6).toUpperCase()} è stato annullato: non è stato accettato in tempo.`,
+          link: `/seller/orders/${o.id}`,
+        });
+        if (nErr) logger.warn('[cron] expire-stale-orders: campanella al negozio non scritta', { id: o.id, message: nErr.message });
+      }
 
       // 27/10/2026 — La campanella si vede solo riaprendo il sito. Chi paga alla
       // consegna riceve anche la email; sulla carta l'ha gia' mandata refundOrder.
       // 30/10/2026 — Se la consegna del carrello si è rifatta, il cliente legge il conto nuovo degli
       // ordini rimasti: nell'email (sulla carta un'email in più, oltre al «Rimborso emesso») e nella campanella.
-      const come: ComeHaPagato = isCardPaid ? 'carta' : o.payment_method === 'cod' ? 'contanti' : 'da-pagare';
+      // 5/11/2026 — Pagato con la carta e già rimborsato tutto resta «carta», non «da pagare».
+      const pagatoConLaCarta =
+        isCardPaid || (o.payment_method === 'card' && ['PAID', 'PARTIALLY_REFUNDED', 'REFUNDED'].includes(String(o.payment_status)));
+      const come: ComeHaPagato = pagatoConLaCarta ? 'carta' : o.payment_method === 'cod' ? 'contanti' : 'da-pagare';
       const carrello = giro?.avviso ? { avviso: giro.avviso, come } : null;
       if (!isCardPaid || carrello) {
-        await avvisaIlClienteDellAnnullo(
-          admin,
-          creditoNonTornato ? { ...o, wallet_applied_cents: 0 } : o,
-          "Il negozio non ha accettato l'ordine in tempo",
-          carrello,
-        );
+        // 5/11/2026 — Se lo storno del credito è fallito l'email non dice «credito restituito».
+        const perLEmail = creditoTornato ? o : { ...o, wallet_applied_cents: 0 };
+        await avvisaIlClienteDellAnnullo(admin, perLEmail, "Il negozio non ha accettato l'ordine in tempo", carrello);
       }
       await avvisaLaCampanellaDelCarrello(admin, o.user_id, giro?.avviso, come);
 
@@ -329,7 +400,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   }
 
   return NextResponse.json(
-    { ok: true, canceled, refunded, failed, rinviati, daChiudereAMano, inAttesaDellaDivisione },
+    { ok: true, canceled, refunded, failed, rinviati, daChiudereAMano, inAttesaDellaDivisione, ripristiniFalliti },
     { status: 200 },
   );
 });

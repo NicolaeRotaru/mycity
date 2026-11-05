@@ -122,7 +122,7 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     case 'NON_TROVATO': return ApiErrors.notFound('Ordine non trovato');
     case 'DI_UN_ALTRO_FATTORINO': return ApiErrors.forbidden('Non autorizzato (ordine di altro rider)');
     case 'NON_IN_CONTANTI': return ApiErrors.conflict('Ordine non in cash on delivery');
-    case 'GIA_CONFERMATO': return ApiErrors.conflict("Incasso gia' confermato");
+    case 'GIA_CONFERMATO': return ApiErrors.conflict('Incasso già confermato');
     default: break;
   }
   if (!order || !order.rider_id) return ApiErrors.notFound('Ordine non trovato');
@@ -208,7 +208,7 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   if (updErr) return ApiErrors.internal('Update fallito');
   if (!claimed || claimed.length === 0) {
     // Un'altra conferma concorrente ha già vinto la corsa.
-    return ApiErrors.conflict("Incasso gia' confermato");
+    return ApiErrors.conflict('Incasso già confermato');
   }
 
   // Aggiorna riconciliazione giornaliera (include i COD consegnati ma NON confermati).

@@ -141,8 +141,16 @@ async function rilasciaRiga(
  * migrazione 165: l'ora prevista piu' tre giorni) e non si sposta quando la
  * riga viene rinviata. Qui si guarda soltanto: passata la scadenza la riga si
  * chiude col motivo, senza spedire. Una riga senza `scade_at` (la funzione del
- * database non ancora aggiornata) si comporta come prima.
+ * database non ancora aggiornata) ha la scadenza calcolata in `processBatch` (5/11/2026).
  */
+/** Il ritardo con cui la migrazione 033 mette in coda i modelli programmati (gli altri partono subito). */
+const RITARDO_PREVISTO_GIORNI: Record<string, number> = {
+  tutorial_day2: 2,
+  first_order_promo: 5,
+  reengagement_14d: 14,
+  winback_60d: 60,
+};
+
 function scaduta(row: { scade_at?: string | null }): boolean {
   if (!row.scade_at) return false;
   const quando = Date.parse(row.scade_at);
@@ -251,7 +259,7 @@ async function processBatch(
   }[],
   extra: Record<string, unknown> = {},
 ): Promise<NextResponse> {
-  let sent = 0, skipped = 0, errors = 0, rinviate = 0, scadute = 0;
+  let sent = 0, skipped = 0, errors = 0, rinviate = 0, scadute = 0, tentativiNonScritti = 0;
 
   /**
    * 22/8/2026 — QUATTRO VIAGGI AL DATABASE PER OGNI EMAIL SPEDITA.
@@ -287,6 +295,47 @@ async function processBatch(
     }
     for (const p of (righeProfilo ?? []) as Array<{ id: string; full_name: string | null; email_marketing: boolean | null }>) {
       profili.set(p.id, p);
+    }
+  }
+
+  /**
+   * 5/11/2026 — SENZA LA 165 LA SCADENZA SI CALCOLA QUI.
+   *
+   * Nel database vero la colonna `scade_at` non c'e' ancora (la migrazione 165 non e' applicata) e
+   * `claim_pending_emails` e' quella vecchia: ogni riga arrivava senza scadenza e «si comportava
+   * come prima», cioe' partiva. Il giorno dell'accensione della posta sarebbero partite insieme le
+   * email ferme da mesi. Per le righe senza `scade_at` la scadenza si ricava con la stessa regola
+   * della 165 (riga mai rinviata: send_at + 3 giorni; riga gia' rinviata: created_at + 3 giorni).
+   * Se nemmeno questo si legge, la riga si comporta come prima (e il registro lo dice).
+   */
+  const senzaScadenza = batch.filter((r) => !r.scade_at).map((r) => r.id);
+  if (senzaScadenza.length > 0) {
+    try {
+      const { data: righeCoda, error: errCoda } = await supa
+        .from('email_queue')
+        .select('id, created_at, send_at, last_error')
+        .in('id', senzaScadenza);
+      if (errCoda) throw new Error(String((errCoda as { message?: unknown }).message ?? errCoda));
+      const perId = new Map<string, { created_at?: string | null; send_at?: string | null; last_error?: string | null }>();
+      for (const r of (righeCoda ?? []) as Array<{ id: string; created_at?: string | null; send_at?: string | null; last_error?: string | null }>) {
+        perId.set(r.id, r);
+      }
+      for (const row of batch) {
+        const r = row.scade_at ? undefined : perId.get(row.id);
+        // Riga già rinviata: send_at si è spostato, quindi si parte dalla nascita PIÙ il ritardo
+        // previsto per quel modello (migrazione 033: la guida a 2 giorni, il «ci manchi» a 60…), non
+        // dalla nascita nuda, che chiuderebbe le email programmate più avanti al primo intoppo.
+        const quando = r
+          ? r.last_error
+            ? Date.parse(String(r.created_at)) + (RITARDO_PREVISTO_GIORNI[row.template] ?? 0) * 86_400_000
+            : Date.parse(String(r.send_at))
+          : NaN;
+        if (Number.isFinite(quando)) row.scade_at = new Date(quando + 3 * 86_400_000).toISOString();
+      }
+    } catch (e) {
+      logger.warn('[cron] scadenza delle righe non calcolata: si comportano come prima', {
+        message: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
@@ -421,24 +470,33 @@ async function processBatch(
       const tentativi = (typeof row.attempts === 'number' ? row.attempts : 0) + 1;
       const motivo = 'error' in res && res.error ? String(res.error).slice(0, 500) : 'invio fallito';
       const MASSIMO = 5;
-      if (tentativi >= MASSIMO) {
-        await supa.from('email_queue').update({
+      // 5/11/2026 — L'esito della scrittura si legge: se cade, il tentativo non è contato e la
+      // riga torna fra 15 minuti (prenotazione) senza attesa crescente. Lo si dice.
+      const { error: errTentativo } = tentativi >= MASSIMO
+        ? await supa.from('email_queue').update({
           claimed_at: null,
           attempts: tentativi,
           last_error: motivo,
           cancelled_at: new Date().toISOString(),
-        }).eq('id', row.id);
-      } else {
+        }).eq('id', row.id)
         // Attesa crescente: 5, 25, 125, 625 minuti.
-        const rinvioMin = 5 ** tentativi;
-        await supa.from('email_queue').update({
+        : await supa.from('email_queue').update({
           claimed_at: null,
           attempts: tentativi,
           last_error: motivo,
-          send_at: new Date(Date.now() + rinvioMin * 60_000).toISOString(),
+          send_at: new Date(Date.now() + 5 ** tentativi * 60_000).toISOString(),
         }).eq('id', row.id);
+      if (errTentativo) {
+        tentativiNonScritti++;
+        logger.error('[cron] tentativo di invio non registrato: la riga non conta il tentativo', {
+          id: row.id, message: String((errTentativo as { message?: unknown }).message ?? errTentativo),
+        });
       }
     }
   }
-  return NextResponse.json({ ok: true, sent, skipped, errors, rinviate, scadute, total: batch.length, ...extra });
+  return NextResponse.json({
+    ok: true, sent, skipped, errors, rinviate, scadute, total: batch.length,
+    ...(tentativiNonScritti > 0 ? { tentativiNonScritti } : {}),
+    ...extra,
+  });
 }
