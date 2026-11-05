@@ -309,6 +309,10 @@ function AdminUsersPageInner() {
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(apiErrorMessage(body, 'Operazione fallita'));
+    // 5/11/2026 (S05) — Notifica o email non partite, consegne ancora in mano al
+    // fattorino sospeso: la rotta lo dice, la pagina lo deve mostrare.
+    const avviso = (body as { avviso?: string })?.avviso;
+    if (avviso) toast.warning(avviso, { duration: 10_000 });
   };
 
   const approve = useMutation({
@@ -362,7 +366,13 @@ function AdminUsersPageInner() {
   });
 
   const suspend = useMutation({
-    mutationFn: (id: string) => moderateUser(id, 'suspend'),
+    // 5/11/2026 (S05) — Il motivo si chiede anche per la sospensione: arriva al
+    // negozio o al fattorino, che altrimenti spariva dal sito senza sapere perché.
+    mutationFn: async (id: string) => {
+      const motivo = window.prompt('Motivo della sospensione (lo riceve l’utente):');
+      if (!motivo?.trim()) throw new Error('Specifica un motivo per la sospensione.');
+      return moderateUser(id, 'suspend', motivo.trim());
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
       toast.success(tAdmin('storeSuspended'));

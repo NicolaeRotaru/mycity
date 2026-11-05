@@ -8,6 +8,10 @@ import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { risultaMinorenne, anniCompiuti, ETA_MINIMA_RIDER } from '@/lib/maggiore-eta';
 import { giornoPiacenza } from '@/lib/tempo-piacenza';
 import { COLONNE_PER_APPROVARE, motivoPerNonApprovare } from '@/lib/admin/regole-approvazione';
+import { sendEmail } from '@/lib/email/client';
+import { escapeHtml } from '@/lib/html-escape';
+import { DOMINIO_PUBBLICO } from '@/lib/env';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -62,7 +66,8 @@ function buildModeration(action: Action, reason: string | undefined, adminId: st
   const scheda = testi[action];
   const note = {
     title: scheda.titolo,
-    body: action === 'reject' && reason ? `${scheda.corpo} Motivo: ${reason}` : scheda.corpo,
+    // 5/11/2026 (S05) — Anche chi è sospeso riceve il motivo (prima solo il rifiuto lo portava).
+    body: (action === 'reject' || action === 'suspend') && reason ? `${scheda.corpo} Motivo: ${reason}` : scheda.corpo,
     link: scheda.link,
   };
 
@@ -96,6 +101,32 @@ function buildModeration(action: Action, reason: string | undefined, adminId: st
         note,
         audit: 'user.suspend',
       };
+  }
+}
+
+/** L'email dell'esito. `true` inviata, `false` fallita, `null` niente indirizzo o email spenta. */
+async function mandaEmailDellEsito(
+  admin: ReturnType<typeof getAdminSupabase>,
+  userId: string,
+  note: { title: string; body: string; link: string },
+): Promise<boolean | null> {
+  try {
+    const { data } = await admin.auth.admin.getUserById(userId);
+    const to = data?.user?.email;
+    if (!to) return null;
+    const url = `${DOMINIO_PUBBLICO}${note.link}`;
+    const r = await sendEmail({
+      to,
+      subject: note.title.replace(/^[^\p{L}]+/u, '').trim() || 'Aggiornamento dal tuo account MyCity',
+      html: `<p>${escapeHtml(note.body)}</p><p><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p>`,
+      text: `${note.body}\n\n${url}`,
+      tipo: 'transazionale',
+    });
+    if (r.ok) return true;
+    return 'skipped' in r && r.skipped ? null : false;
+  } catch (e) {
+    logger.error('[moderate] email dell esito non partita', { target: userId, err: e instanceof Error ? e.message : String(e) });
+    return false;
   }
 }
 
@@ -186,8 +217,15 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     );
   }
 
+  // 5/11/2026 (S05) — «Riattiva» vale solo per chi è sospeso. Prima portava ad
+  // «approvato» anche chi era in attesa o respinto, con la notifica «di nuovo
+  // operativo» e una riga 'user.reactivate' per chi non era mai stato approvato.
+  if (body.action === 'reactivate' && target.approval_status !== 'suspended') {
+    return ApiErrors.invalidRequest('Si riattiva solo un profilo sospeso: chi è in attesa o respinto si esamina dalla sua scheda («Esamina»).');
+  }
+
   if (approva) {
-    const motivo = motivoPerNonApprovare(target, body.action === 'reactivate' ? 'reactivate' : 'approve');
+    const motivo = motivoPerNonApprovare(target, body.action === 'reactivate' ? 'reactivate' : 'approve', giornoPiacenza());
     if (motivo) return ApiErrors.invalidRequest(motivo);
   }
 
@@ -199,20 +237,52 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // L'esito della notifica si guarda: chi e' rifiutato deve ricevere il motivo,
   // e se non parte chi ha premuto il pulsante lo deve sapere.
   const { error: notErr } = await admin.from('notifications').insert({ category: 'system', user_id: params.id, ...note });
-  if (notErr) console.error('[moderate] notifica non inviata', { target: params.id, action: body.action, error: notErr.message });
+  if (notErr) logger.error('[moderate] notifica non inviata', { target: params.id, action: body.action, error: notErr.message });
 
+  // 5/11/2026 (S05) — Anche per email: chi non è collegato non vede la campanella,
+  // e il negozio approvato giovedì sera lo scopriva giorni dopo.
+  const emailInviata = await mandaEmailDellEsito(admin, params.id, note);
+
+  // 5/11/2026 (S05) — Il registro tiene ruolo e id, non il nome: il nome restava
+  // scritto anche dopo la cancellazione dell'account.
   await writeAudit({
     actorId: user.id,
     action: audit,
     targetTable: 'profiles',
     targetId: params.id,
-    metadata: { role: target.role, name: target.store_name ?? target.full_name, reason: body.reason ?? null },
+    metadata: { role: target.role, reason: body.reason ?? null },
   });
 
+  // 5/11/2026 (S05) — Sospendere un fattorino non gli toglie le consegne già sue:
+  // l'amministratore lo deve sapere per riassegnarle.
+  let consegneInCorso = 0;
+  if (body.action === 'suspend' && target.role === 'rider') {
+    try {
+      const { count } = await admin
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .eq('rider_id', params.id)
+        .in('delivery_status', ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY']);
+      consegneInCorso = count ?? 0;
+    } catch (e) {
+      // Best-effort: la sospensione è già fatta, il conteggio serve solo all'avviso.
+      logger.error('[moderate] consegne in corso non contate', { target: params.id, err: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  const avvisi = [
+    notErr ? 'la notifica all\'utente non e\' partita' : null,
+    emailInviata === false ? 'l\'email all\'utente non e\' partita' : null,
+    consegneInCorso > 0 ? `il fattorino ha ancora ${consegneInCorso} consegne in corso: riassegnale dalla pagina Ordini` : null,
+  ].filter(Boolean);
   return NextResponse.json(
-    notErr
-      ? { ok: true, notifica_inviata: false, avviso: 'Stato aggiornato, ma la notifica all\'utente non e\' partita: avvisalo a mano.' }
-      : { ok: true, notifica_inviata: true },
+    {
+      ok: true,
+      notifica_inviata: !notErr,
+      email_inviata: emailInviata,
+      consegne_in_corso: consegneInCorso,
+      ...(avvisi.length > 0 ? { avviso: `Stato aggiornato, ma ${avvisi.join('; ')}.` } : {}),
+    },
     { status: 200 },
   );
 }

@@ -16,7 +16,8 @@
 
 /** Le colonne che la rotta deve leggere per poter decidere. */
 export const COLONNE_PER_APPROVARE =
-  'approval_status, approved_by, business_vat_number, kyc_id_doc_front_url, kyc_selfie_url, rider_license_url, rider_insurance_url';
+  'approval_status, approved_by, business_vat_number, kyc_id_doc_front_url, kyc_selfie_url, rider_license_url, rider_insurance_url, ' +
+  'rider_license_expires_on, rider_insurance_expires_on';
 
 type ColonnaDocumento = 'kyc_id_doc_front_url' | 'kyc_selfie_url' | 'rider_license_url' | 'rider_insurance_url';
 
@@ -46,7 +47,30 @@ export type ProfiloDaApprovare = {
   approval_status?: string | null;
   approved_by?: string | null;
   business_vat_number?: string | null;
+  rider_license_expires_on?: string | null;
+  rider_insurance_expires_on?: string | null;
 } & Partial<Record<ColonnaDocumento, string | null>>;
+
+/**
+ * 5/11/2026 — Patente e polizza del fattorino devono avere una scadenza e non
+ * essere scadute: prima il freno c'era solo nel pulsante del pannello, e una
+ * richiesta che non passava dal pannello approvava una polizza già scaduta.
+ * Stessa regola di lib/kyc/esame-rider.ts: senza data «non sappiamo quando scade».
+ */
+const SCADENZE_RIDER: ReadonlyArray<{ colonna: 'rider_license_expires_on' | 'rider_insurance_expires_on'; nome: string }> = [
+  { colonna: 'rider_license_expires_on', nome: 'patente' },
+  { colonna: 'rider_insurance_expires_on', nome: 'polizza RC' },
+];
+
+function scadenzeNonValide(p: ProfiloDaApprovare, oggi: string): string[] {
+  const problemi: string[] = [];
+  for (const d of SCADENZE_RIDER) {
+    const v = p[d.colonna];
+    if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}/.test(v)) problemi.push(`${d.nome} senza data di scadenza`);
+    else if (v.slice(0, 10) < oggi) problemi.push(`${d.nome} scaduta il ${v.slice(8, 10)}/${v.slice(5, 7)}/${v.slice(0, 4)}`);
+  }
+  return problemi;
+}
 
 /** Toglie spazi e il prefisso «IT», come fa il modulo di iscrizione del negozio. */
 export function normalizzaPartitaIva(v: string): string {
@@ -89,13 +113,26 @@ export type AzioneCheApprova = 'approve' | 'reactivate';
  * sospeso per sempre. Il controllo resta per `approve` e per `reactivate` da
  * rifiutato o in attesa, che portano ad «approvato» chi non lo è mai stato.
  */
-export function motivoPerNonApprovare(p: ProfiloDaApprovare, azione: AzioneCheApprova = 'approve'): string | null {
+export function motivoPerNonApprovare(
+  p: ProfiloDaApprovare,
+  azione: AzioneCheApprova = 'approve',
+  oggi: string = new Date().toISOString().slice(0, 10),
+): string | null {
   if (p.role !== 'seller' && p.role !== 'rider') return null;
   // 1/11/2026 (ricollaudo) — solo chi e' stato davvero approvato da un
   // amministratore (`approved_by` scritto) torna attivo senza rifare il
   // controllo. In produzione c'era un fattorino sospeso mai approvato e senza
   // nessun documento: un clic su «Riattiva» lo avrebbe mandato a consegnare.
   if (azione === 'reactivate' && p.approval_status === 'suspended' && presente(p.approved_by)) return null;
+
+  // 5/11/2026 — Patente e polizza: una data di scadenza e non scadute.
+  if (p.role === 'rider' && presente(p.rider_license_url) && presente(p.rider_insurance_url)) {
+    const scadenze = scadenzeNonValide(p, oggi);
+    if (scadenze.length > 0) {
+      const v = azione === 'reactivate' ? 'Non si riattiva' : 'Non si approva';
+      return `${v}: ${scadenze.join(', ')}. Chiedi di caricare il documento aggiornato con la sua scadenza.`;
+    }
+  }
 
   const verbo = azione === 'reactivate' ? 'Non si riattiva' : 'Non si approva';
   const prima = azione === 'reactivate' ? 'prima di riattivare' : 'prima di approvare';
