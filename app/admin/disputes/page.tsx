@@ -38,6 +38,13 @@ const STATUS_META: Record<Dispute['status'], { label: string; color: string; ico
   rejected:          { label: 'Rifiutato',                       color: 'secondary', icon: X },
 };
 
+/** Il nome del cliente; senza nome, un pezzo dell'id, così due clienti non si confondono. */
+function nomeDelCliente(d: Pick<Dispute, 'opener_id' | 'opener'>): string {
+  const nome = d.opener?.full_name?.trim();
+  if (nome) return nome;
+  return d.opener_id ? `Cliente senza nome (${d.opener_id.slice(0, 8)}…)` : 'Cliente';
+}
+
 const REASON_LABEL: Record<string, string> = {
   not_received:        'Non ricevuto',
   damaged:             'Danneggiato',
@@ -79,7 +86,7 @@ export default function AdminDisputesPage() {
   // e un ordine mai pagato chiuso con «24» diventava credito dal nulla. La
   // tabella dei reclami non ha un legame con gli ordini, quindi si leggono a parte.
   const idOrdini = [...new Set(disputes.map((d) => d.order_id))].sort();
-  const { data: ordiniDeiReclami = {} } = useQuery({
+  const { data: ordiniDeiReclami = {}, isError: pagamentiNonLetti } = useQuery({
     queryKey: ['admin', 'disputes-ordini', idOrdini.join(',')],
     enabled: idOrdini.length > 0,
     queryFn: async (): Promise<Record<string, OrdineDaRimborsare>> => {
@@ -91,8 +98,10 @@ export default function AdminDisputesPage() {
         () => leggi(COLONNE),
         () => leggi(senzaColonne(COLONNE, COLONNE_124)),
       );
-      // Senza questi dati il pannello resta com'era: il controllo vero lo fa il server.
-      if (error) return {};
+      // 5/11/2026 (S05) — Prima qui c'era `return {}`: il riquadro «Rimborsabile al
+      // massimo» spariva senza dire perché. Il tetto lo controlla il server, ma
+      // chi decide deve sapere che non lo sta vedendo.
+      if (error) throw error;
       const righe = (data ?? []) as unknown as Array<OrdineDaRimborsare & { id: string }>;
       return Object.fromEntries(righe.map((o) => [o.id, o]));
     },
@@ -141,6 +150,9 @@ export default function AdminDisputesPage() {
   // venditori con più reclami e clienti che aprono reclami ripetuti.
   const riskSignals = useMemo(() => {
     const byStore = new Map<string, { name: string; count: number }>();
+    // 5/11/2026 (S05) — Il cliente si riconosce dall'id, non dal nome: due omonimi
+    // diventavano un solo «possibile abuso». E si contano solo i reclami ancora
+    // aperti, perché è quello che il segnale dice.
     const byOpener = new Map<string, { name: string; count: number }>();
     for (const d of disputes) {
       const storeName = d.against?.store_name ?? d.against?.full_name;
@@ -149,11 +161,10 @@ export default function AdminDisputesPage() {
         e.count += 1;
         byStore.set(storeName, e);
       }
-      const openerName = d.opener?.full_name;
-      if (openerName) {
-        const e = byOpener.get(openerName) ?? { name: openerName, count: 0 };
+      if (d.opener_id && (d.status === 'open' || d.status === 'under_review')) {
+        const e = byOpener.get(d.opener_id) ?? { name: nomeDelCliente(d), count: 0 };
         e.count += 1;
-        byOpener.set(openerName, e);
+        byOpener.set(d.opener_id, e);
       }
     }
     type Signal = { icon: LucideIcon; high: boolean; title: string; body: string };
@@ -173,7 +184,7 @@ export default function AdminDisputesPage() {
         icon: Repeat,
         high: topOpener.count >= 4,
         title: `Cliente · ${topOpener.name}`,
-        body: `${topOpener.count} reclami aperti. Pattern da verificare per possibili abusi.`,
+        body: `${topOpener.count} reclami ancora aperti. Pattern da verificare per possibili abusi.`,
       });
     }
     const openCount = disputes.filter((d) => d.status === 'open').length;
@@ -196,7 +207,8 @@ export default function AdminDisputesPage() {
         sub="Gestisci le controversie tra clienti e venditori."
       />
 
-      {riskSignals.length > 0 && (
+      {/* Con la lettura caduta i numeri sarebbero quelli vecchi: non si mostrano. */}
+      {!isError && riskSignals.length > 0 && (
         <section className="rounded-xl border-2 border-cream-300 bg-white p-4">
           <div className="mb-3 flex items-center gap-2">
             <ShieldAlert size={17} className="text-secondary-600" strokeWidth={2.2} aria-hidden />
@@ -227,6 +239,8 @@ export default function AdminDisputesPage() {
         {(['open', 'under_review', 'resolved_buyer', 'resolved_seller', 'rejected', 'all'] as const).map((f) => (
           <button
             key={f}
+            type="button"
+            aria-pressed={filter === f}
             onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
               filter === f
@@ -277,7 +291,7 @@ export default function AdminDisputesPage() {
                       </span>
                     </div>
                     <p className="text-sm text-ink-900 mt-2">
-                      <strong>{d.opener?.full_name ?? 'Cliente'}</strong>
+                      <strong>{nomeDelCliente(d)}</strong>
                       {' vs '}
                       <strong>{d.against?.store_name ?? d.against?.full_name ?? 'Venditore'}</strong>
                     </p>
@@ -307,11 +321,13 @@ export default function AdminDisputesPage() {
                       onClick={() => { setOpenId(d.id); setResolution(''); setRefundEur(''); }}
                       size="sm"
                     >Decidi</Button>
+                    {/* Prima portava a /messages, la casella dell'admin, dove le conversazioni
+                        fra cliente e negozio non ci sono. L'ordine ha i recapiti. */}
                     <Link
-                      href={`/messages`}
+                      href={`/admin/orders/${d.order_id}`}
                       className="text-xs font-semibold text-primary-700 hover:underline py-2"
                     >
-                      Contatta le parti
+                      Apri l’ordine e i recapiti
                     </Link>
                   </div>
                 )}
@@ -334,10 +350,18 @@ export default function AdminDisputesPage() {
               value={resolution}
               onChange={(e) => setResolution(e.target.value)}
               rows={4}
-              placeholder="Spiega la decisione presa (verrà mostrato alle parti)…"
+              placeholder="Spiega la decisione presa (la ricevono il cliente e il negozio)…"
+              aria-label="Motivazione della decisione"
+              maxLength={1000}
               className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
             />
 
+            {pagamentiNonLetti && !pagamento && (
+              <p role="alert" className="rounded-lg border border-secondary-200 bg-secondary-50 p-3 text-sm text-secondary-800">
+                Non riesco a leggere come ha pagato il cliente né quanto si può rimborsare. Il server controlla
+                comunque il tetto, ma riprova prima di decidere un rimborso.
+              </p>
+            )}
             {pagamento && (
               <div className="rounded-lg border border-cream-300 bg-cream-50 p-3 text-sm text-ink-800">
                 <p><strong>Pagamento:</strong> {pagamento.comeHaPagato}</p>
@@ -370,7 +394,7 @@ export default function AdminDisputesPage() {
                   refund: refundEur ? Math.round(Number(refundEur) * 100) : undefined,
                 })}
                 disabled={decide.isPending || resolution.trim().length < 10}
-                className="bg-olive-600 hover:bg-olive-700 disabled:opacity-50 text-white text-sm font-semibold px-3 py-2 rounded-lg flex items-center justify-center gap-1"
+                className="bg-olive-600 hover:bg-olive-700 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-600 text-white text-sm font-semibold px-3 py-2 rounded-lg flex items-center justify-center gap-1"
               >
                 <Check size={14} /> A favore buyer
               </button>
@@ -392,7 +416,7 @@ export default function AdminDisputesPage() {
                   notes: resolution.trim(),
                 })}
                 disabled={decide.isPending || resolution.trim().length < 10}
-                className="bg-secondary-600 hover:bg-secondary-700 disabled:opacity-50 text-white text-sm font-semibold px-3 py-2 rounded-lg flex items-center justify-center gap-1"
+                className="bg-secondary-600 hover:bg-secondary-700 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-600 text-white text-sm font-semibold px-3 py-2 rounded-lg flex items-center justify-center gap-1"
               >
                 <X size={14} /> Rifiuta
               </button>
