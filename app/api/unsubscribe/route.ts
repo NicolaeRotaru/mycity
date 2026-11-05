@@ -28,9 +28,30 @@ export const runtime = 'nodejs';
  *    Ora il collegamento email→profilo lo fa la funzione `disiscrivi` nel
  *    database, dove auth.users e profiles vivono insieme, e l'esito si legge.
  */
+/**
+ * 5/11/2026 — APRIRE IL LINK NON DISISCRIVE PIÙ: SERVE LA CONFERMA.
+ *
+ * La GET disiscriveva subito: i sistemi che aprono in anticipo i link delle email (Outlook Safe
+ * Links, antivirus aziendali, anteprime) toglievano il consenso a persone che non avevano fatto
+ * niente. Adesso la GET porta alla pagina /disiscrizione, che chiede la conferma con un pulsante
+ * (una POST); la POST — anche quella «con un clic» dei client di posta, RFC 8058 — disiscrive e
+ * porta alla stessa pagina con l'esito, che prima nessuna pagina leggeva.
+ */
 export async function GET(request: Request) {
   const token = new URL(request.url).searchParams.get('token') ?? '';
   const base = env.appUrl();
+  if (!verificaDisiscrizione(token)) {
+    return NextResponse.redirect(`${base}/disiscrizione?disiscrizione=link-non-valido`);
+  }
+  return NextResponse.redirect(`${base}/disiscrizione?token=${encodeURIComponent(token)}`);
+}
+
+/** La disiscrizione vera: il pulsante della pagina, o il «con un clic» dei client di posta. */
+export async function POST(request: Request) {
+  const token = new URL(request.url).searchParams.get('token') ?? '';
+  const base = env.appUrl();
+  // 303: dopo una POST il browser apre la pagina dell'esito con una GET.
+  const vaiA = (esito: string) => NextResponse.redirect(`${base}/disiscrizione?disiscrizione=${esito}`, 303);
 
   // 27/8/2026 (R140) — GET PUBBLICO NUDO CHE CHIAMA UNA FUNZIONE DEL DATABASE
   // a ogni richiesta. La firma del gettone protegge il DATO, non la macchina:
@@ -43,13 +64,13 @@ export async function GET(request: Request) {
     windowMs: 10 * 60_000,
   });
   if (!freno.allowed) {
-    return NextResponse.redirect(`${base}/?disiscrizione=non-riuscita`);
+    return vaiA('non-riuscita');
   }
 
   const dati = verificaDisiscrizione(token);
 
   if (!dati) {
-    return NextResponse.redirect(`${base}/?disiscrizione=link-non-valido`);
+    return vaiA('link-non-valido');
   }
 
   const admin = getAdminSupabase();
@@ -62,7 +83,7 @@ export async function GET(request: Request) {
   // smettere e non è stata tolta da niente. Va detto a lei, non solo al log.
   if (error) {
     logger.error('[disiscrizione] non riuscita', { message: error.message, ambito: dati.ambito });
-    return NextResponse.redirect(`${base}/?disiscrizione=non-riuscita`);
+    return vaiA('non-riuscita');
   }
 
   const esito = data as { ok?: boolean; newsletter?: number; profilo?: number } | null;
@@ -71,13 +92,8 @@ export async function GET(request: Request) {
   // account. Non è un errore del sito, ma neanche un «fatto»: chi ha cliccato
   // deve sapere che non c'era niente da spegnere.
   if (!esito?.ok) {
-    return NextResponse.redirect(`${base}/?disiscrizione=non-trovato`);
+    return vaiA('non-trovato');
   }
 
-  return NextResponse.redirect(`${base}/?disiscrizione=fatta`);
-}
-
-/** Alcuni client di posta chiamano il link in POST (List-Unsubscribe-Post). */
-export async function POST(request: Request) {
-  return GET(request);
+  return vaiA('fatta');
 }

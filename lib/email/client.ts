@@ -163,6 +163,16 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   };
   let lastErr = 'unknown';
   for (let attempt = 0; attempt < 2; attempt++) {
+    /**
+     * 5/11/2026 — SI RITENTA SOLO QUANDO RESEND HA DETTO «NON L'HO PRESA».
+     *
+     * Dopo il tetto dei dieci secondi la chiamata a Resend non si annulla e può ancora riuscire:
+     * il secondo tentativo, con lo stesso messaggio e senza chiave di idempotenza (resend 3.5 non
+     * la ha), faceva arrivare la stessa email due volte. Ora dopo un timeout non si ritenta, e su
+     * una risposta d'errore si ritenta solo se è passeggera (429 o 5xx): un 422 non cambia al
+     * secondo giro.
+     */
+    let ritentabile = false;
     try {
       // #176 — Un tetto di dieci secondi per tentativo. Senza, una chiamata
       // appesa teneva ferma la risposta di chi la stava aspettando — nel caso
@@ -171,18 +181,24 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       const { data, error } = await Promise.race([
         resend.emails.send(payload),
         new Promise<never>((_, rifiuta) =>
-          setTimeout(() => rifiuta(new Error('invio email oltre i 10 secondi')), 10_000)),
+          setTimeout(() => rifiuta(new Error(TIMEOUT_INVIO)), 10_000)),
       ]);
       if (!error) return { ok: true, id: data?.id ?? '' };
       lastErr = error.message ?? 'resend error';
+      ritentabile = ['rate_limit_exceeded', 'internal_server_error', 'application_error'].includes(String(error.name));
     } catch (err) {
       lastErr = err instanceof Error ? err.message : 'unknown';
+      // Il nostro tetto dei dieci secondi: la richiesta può essere arrivata, non si rimanda.
+      ritentabile = !(err instanceof Error && err.message === TIMEOUT_INVIO);
     }
+    if (!ritentabile) break;
     if (attempt === 0) await new Promise((r) => setTimeout(r, 300)); // breve backoff
   }
   logger.error('[email] invio fallito dopo retry', { message: lastErr });
   return { ok: false, error: lastErr };
 }
+
+const TIMEOUT_INVIO = 'invio email oltre i 10 secondi';
 
 /**
  * Aggiunge la riga di disiscrizione in fondo al corpo HTML, una volta sola.
