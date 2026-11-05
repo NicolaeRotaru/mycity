@@ -952,9 +952,10 @@ export function richiestaCancellazioneTemplate(args: { effectiveAt: string }): E
  * lo prepara chi spedisce; qui si veste come tutte le altre email del sito.
  */
 export function avvisoCancellazioneTemplate(args: { titolo: string; corpoHtml: string; testo: string }): EmailPronta {
+  const titolo = args.titolo ?? `La tua richiesta di cancellazione su ${BRAND}`;
   return {
-    subject: args.titolo,
-    html: shell(args.titolo, `<div style="font-size:15px;line-height:1.6">${args.corpoHtml}</div>`),
-    text: args.testo,
+    subject: titolo,
+    html: shell(titolo, `<div style="font-size:15px;line-height:1.6">${args.corpoHtml ?? ''}</div>`),
+    text: args.testo ?? '',
   };
 }

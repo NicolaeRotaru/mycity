@@ -138,6 +138,8 @@ describe('la pagina Spedizioni dice, frase per frase, quello che fa la cassa', (
         locale: 'it_IT',
         siteName: 'MyCity',
         url: '/shipping',
+        // 5/11/2026 (S08, scheda 373) — la copertina del sito anche per i link condivisi.
+        images: ['/opengraph-image'],
       },
     });
   });
