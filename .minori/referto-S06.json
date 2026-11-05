@@ -1,7 +1,7 @@
 {
   "sessione": "S06",
   "ramo": "claude/youthful-gates-blkxmk-m06",
-  "commit_finale": "(vedi l'ultimo commit del ramo: questo referto è nel commit che segue 1e63120)",
+  "commit_finale": "1e63120 (ultimo commit di codice; il referto è nei commit 343aab8 e seguente)",
   "verify": {
     "typecheck": "verde",
     "lint": "verde",
