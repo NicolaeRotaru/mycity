@@ -68,9 +68,12 @@ export async function GET(req: Request) {
     }
     const fattoriniOnline = await contaFattoriniOnline(admin);
     if (fattoriniOnline === null) logger.error('consegna veloce: fattorini online non letti');
+    // 5/11/2026 — Se una lettura è caduta la risposta non è «no», è «non so»: 503, così la vetrina
+    // e il carrello (che leggono solo le risposte riuscite) non scrivono «consegna domani» su un guasto.
+    if (negozi === null || fattoriniOnline === null) return rispondi(NON_RIESCO, 503);
     return rispondi(veloceSiPuo({ adesso: romeNow(), negozi, fattoriniOnline }));
   } catch (e) {
     logger.error('consegna veloce: verifica non riuscita', { error: e instanceof Error ? e.message : String(e) });
-    return rispondi(NON_RIESCO);
+    return rispondi(NON_RIESCO, 503);
   }
 }

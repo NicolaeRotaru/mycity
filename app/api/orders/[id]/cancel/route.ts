@@ -4,6 +4,8 @@ import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { annullaERimborsa, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
+import { scriviCampanella } from '@/lib/ordini/campanella';
+import { idDiOrdineNonValido, percheNonSiAnnulla } from '@/lib/ordini/annullo-del-cliente';
 
 export const runtime = 'nodejs';
 
@@ -35,6 +37,8 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
     .select(COLONNE_ANNULLO)
     .eq('id', params.id)
     .maybeSingle();
+  // 5/11/2026 — Un id che non è un UUID non è un ordine: «non trovato», non un guasto.
+  if (error && idDiOrdineNonValido(error)) return ApiErrors.notFound('Ordine non trovato');
   if (error) {
     logger.error('[cancel] lettura ordine fallita', { orderId: params.id, message: error.message });
     return ApiErrors.internal("Impossibile leggere l'ordine");
@@ -47,7 +51,7 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
   if (order.user_id !== user.id) return ApiErrors.notFound('Ordine non trovato');
   if (order.delivery_status === 'CANCELED') return ApiErrors.conflict('Ordine già annullato');
   if (order.delivery_status !== 'NEW') {
-    return ApiErrors.conflict("Il negozio ha già accettato l'ordine, non puoi più annullarlo.");
+    return ApiErrors.conflict(percheNonSiAnnulla(String(order.delivery_status)));
   }
 
   const esito = await annullaERimborsa(admin, order, {
@@ -76,7 +80,7 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
     return ApiErrors.internal('Annullamento fallito');
   }
 
-  await admin.from('notifications').insert([
+  await scriviCampanella(admin, [
     {
       category: 'order',
       user_id: order.user_id,
@@ -93,7 +97,17 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
           link: `/seller/orders/${order.id}`,
         }]
       : []),
-  ]);
+  ], {
+    dove: 'cancel',
+    ordine: order.id,
+    ripiego: order.seller_id
+      ? {
+          titolo: '❌ Ordine annullato dal cliente (avviso al negozio non scritto)',
+          corpo: `Il cliente ha annullato l'ordine #${order.id.slice(0, 6)}, ma l'avviso al negozio non è partito: avvisalo tu.`,
+          link: `/admin/orders`,
+        }
+      : undefined,
+  });
 
   return NextResponse.json({ ok: true, refundId: esito.refundId }, { status: 200 });
 }

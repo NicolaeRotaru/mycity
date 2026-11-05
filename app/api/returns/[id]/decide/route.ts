@@ -21,6 +21,7 @@ import {
 } from '@/lib/rimborsi/regole-del-rimborso';
 import { avvisoDelRimborsoNonRegistrato, RIMBORSO_PARTITO_MA_NON_REGISTRATO } from '@/lib/rimborsi/bonifici-da-fare';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+import { scriviCampanella } from '@/lib/ordini/campanella';
 
 export const runtime = 'nodejs';
 
@@ -290,12 +291,12 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   }
 
   // Notifica buyer
-  await admin.from('notifications').insert({
+  await scriviCampanella(admin, {
     user_id: ret.buyer_id,
     title: body.decision === 'APPROVED' ? '✓ Reso approvato' : '✕ Reso rifiutato',
     body: body.notes ?? null,
     link: `/orders/${ret.order_id}`,
-  });
+  }, { dove: 'returns-decide', ordine: ret.order_id, reso: ret.id });
 
   // Email di rimborso: già inviata da refundOrder (notifyBuyer: true).
 

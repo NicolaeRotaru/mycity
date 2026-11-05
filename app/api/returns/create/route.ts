@@ -14,6 +14,7 @@ import {
   type ProdottoPerIlRecesso,
   type RigaPerIlRecesso,
 } from '@/lib/ordini/recesso';
+import { scriviCampanella } from '@/lib/ordini/campanella';
 
 export const runtime = 'nodejs';
 
@@ -191,7 +192,7 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
   }
 
   // Notifica seller (best-effort)
-  await admin.from('notifications').insert({
+  await scriviCampanella(admin, {
     user_id: order.seller_id,
     /**
      * 30/8/2026 (R127) — La categoria, scritta invece che ereditata.
@@ -207,6 +208,15 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
     title: '↩️ Nuova richiesta di reso',
     body: `Il cliente ha richiesto il reso per l'ordine #${order.id.slice(0, 8)}`,
     link: `/seller/orders/${order.id}`,
+  }, {
+    dove: 'returns-create',
+    ordine: order.id,
+    reso: ret.id,
+    ripiego: {
+      titolo: '↩️ Nuova richiesta di reso (avviso al negozio non scritto)',
+      corpo: `Reso richiesto per l'ordine #${order.id.slice(0, 8)}, ma l'avviso al negozio non è partito: avvisalo tu.`,
+      link: '/admin/orders',
+    },
   });
 
   return NextResponse.json({ id: ret.id, status: 'REQUESTED' }, { status: 201 });

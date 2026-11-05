@@ -33,6 +33,7 @@ import {
 } from '@/lib/rimborsi/bonifici-da-fare';
 import { bonificoDellaChiave } from '@/lib/stripe/elenco-dei-rimborsi';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+import { scriviCampanella } from '@/lib/ordini/campanella';
 
 export const runtime = 'nodejs';
 
@@ -394,7 +395,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     RECEIVED: '📥 Reso: merce ricevuta dal negozio',
     CANCELED: '✕ Reso chiuso senza rimborso',
   };
-  await admin.from('notifications').insert({
+  await scriviCampanella(admin, {
     // #33 — la categoria decide se la persona vuole ancora ricevere questo
     // tipo di avviso: senza, gli interruttori non spegnevano niente.
     category: 'order',
@@ -410,7 +411,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
           : TITOLO[body.stato],
     body: body.note ?? null,
     link: ritiro ? `/seller/orders/${ret.order_id}` : `/orders/${ret.order_id}`,
-  });
+  }, { dove: 'returns-avanza', ordine: ret.order_id, reso: ret.id });
 
   return NextResponse.json({ ok: true, status: body.stato, refundId }, { status: 200 });
 }

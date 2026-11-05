@@ -34,6 +34,7 @@ import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
 import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { formatPriceFromCents } from '@/lib/format';
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
 // tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`
@@ -129,6 +130,22 @@ const SCRITTURE_DELLA_PROVA = 3;
 const RIPETUTO_ENTRO_MS = 12 * 60 * 60_000;
 /** Quante generazioni della stessa chiave si attraversano al massimo (ognuna e' una risposta persa a giorni di distanza). */
 const GENERAZIONI_DELLA_CHIAVE = 10;
+
+/**
+ * 5/11/2026 — L'ALLARME CHE I COMMENTI PROMETTONO ARRIVA DAVVERO.
+ *
+ * Nei rami «serve una correzione a mano» (ordine nato in parte, ordine senza
+ * articoli, annullamento non riuscito) partiva solo una riga nel registro, mentre
+ * al cliente si diceva «ti aiutiamo noi». Adesso parte anche la campanella agli
+ * amministratori, con la cifra. Non lancia mai: la risposta al cliente non cambia.
+ */
+async function allarmeAgliAmministratori(titolo: string, corpo: string): Promise<void> {
+  try {
+    await notifyAdmins(titolo, corpo, '/admin/orders');
+  } catch (e) {
+    logger.error('[cod] allarme agli amministratori non partito', { titolo, message: e instanceof Error ? e.message : String(e) });
+  }
+}
 
 function tentativoScaduto(natoIl: unknown): boolean {
   if (typeof natoIl !== 'string') return false;
@@ -489,10 +506,10 @@ export const POST = withAuthRateLimit(
             }));
             const negoziDelCarrello = new Set(body.groups.map((g) => g.sellerId));
             const negoziTrovati = new Set(ordiniTrovati.map((o) => o.sellerId));
-            const tuttiINegozi =
-              ordiniTrovati.length === body.groups.length &&
-              negoziTrovati.size === negoziDelCarrello.size &&
-              [...negoziDelCarrello].every((s) => negoziTrovati.has(s));
+            // 5/11/2026 — «Una parte» solo se manca davvero un negozio del carrello. Se il cliente
+            // ha tolto un negozio dopo un ordine arrivato per intero, gli ordini della chiave sono
+            // tutti lì (anche quello del negozio tolto): è lo stesso invio, si restituiscono.
+            const tuttiINegozi = [...negoziDelCarrello].every((s) => negoziTrovati.has(s));
             if (!tuttiINegozi) {
               logger.error('[cod] chiave abbandonata con l\'ordine nato solo in parte: fermo, serve una correzione a mano', {
                 chiave: chiaveTentativo,
@@ -501,6 +518,11 @@ export const POST = withAuthRateLimit(
                 negoziDelCarrello: [...negoziDelCarrello],
                 totaleCents: ordiniTrovati.reduce((s, o) => s + o.totalCents, 0),
               });
+              await allarmeAgliAmministratori(
+                'Ordine in contanti nato solo in parte',
+                `Un cliente ha un carrello arrivato solo a una parte dei negozi (ordini ${ordiniTrovati.map((o) => o.id.slice(0, 8)).join(', ')}, ` +
+                  `${formatPriceFromCents(ordiniTrovati.reduce((s, o) => s + o.totalCents, 0))}). Gli abbiamo detto «ti aiutiamo noi»: va sistemato a mano.`,
+              );
               return ordineArrivatoInParte();
             }
             /**
@@ -536,6 +558,11 @@ export const POST = withAuthRateLimit(
                 ordini: aMeta.map((o) => o.id),
                 totaleCents: aMeta.reduce((s, o) => s + o.totalCents, 0),
               });
+              await allarmeAgliAmministratori(
+                'Ordine in contanti fermo a metà',
+                `Ordine senza articoli (${aMeta.map((o) => o.id.slice(0, 8)).join(', ')}, ${formatPriceFromCents(aMeta.reduce((s, o) => s + o.totalCents, 0))}): ` +
+                  'il negozio non l’ha ricevuto e il cliente aspetta il nostro aiuto. Va sistemato a mano.',
+              );
               return ordineRimastoAMeta();
             }
             logger.error('[cod] chiave abbandonata ma con ordini gia nati: NON ricreo, li restituisco', {
@@ -1017,7 +1044,14 @@ export const POST = withAuthRateLimit(
     // #159 — Gli avvisi da mandare a fine giro, non uno per volta dentro il
     // ciclo: se un negozio successivo fallisce non deve restare in giro la
     // posta di un ordine che poi viene cancellato.
-    const comunicazioni: Array<{ orderId: string; sellerId: string; totalCents: number; itemsCount: number }> = [];
+    const comunicazioni: Array<{
+      orderId: string;
+      sellerId: string;
+      totalCents: number;
+      itemsCount: number;
+      /** 5/11/2026 — L'ora di nascita scritta dal database: la scadenza dell'email si conta da lì. */
+      creatoIl?: string | null;
+    }> = [];
 
     /**
      * 1/11/2026 — SE L'ANNULLAMENTO CADE, L'ORDINE E LA CHIAVE RESTANO.
@@ -1080,6 +1114,10 @@ export const POST = withAuthRateLimit(
         walletAppliedPerGroup.splice(0, walletAppliedPerGroup.length, ...crediti);
         ordiniCreati.length = 0;
         comunicazioni.length = 0;
+        await allarmeAgliAmministratori(
+          'Ordine in contanti rimasto in piedi dopo un errore',
+          `L'annullamento non è riuscito: ${ids.map((id) => id.slice(0, 8)).join(', ')} resta al negozio senza che il cliente l'abbia ricevuto come fatto. Serve un controllo a mano.`,
+        );
         return;
       }
       // #171 — Anche il codice sconto torna disponibile. Era «consumato» col
@@ -1233,8 +1271,8 @@ export const POST = withAuthRateLimit(
 
       const { data: ordineInserito, error: orderErr } = await conRipiegoSchema(
         'orders.insert (cod)',
-        () => admin.from('orders').insert(rigaOrdine).select('id').single(),
-        () => admin.from('orders').insert(senzaCampi(rigaOrdine, CAMPI_124)).select('id').single(),
+        () => admin.from('orders').insert(rigaOrdine).select('id, created_at').single(),
+        () => admin.from('orders').insert(senzaCampi(rigaOrdine, CAMPI_124)).select('id, created_at').single(),
       );
       let order = ordineInserito;
       let ripreso = false;
@@ -1259,14 +1297,25 @@ export const POST = withAuthRateLimit(
         const idAtteso = idDiQuestoInvio[i];
         const rendiLaNostraParte = async () => {
           await rollbackCreatedCodOrders();
-          await admin.rpc('restore_stock', { p_items: groupStockItems });
+          // 5/11/2026 — Gli esiti si leggono: merce o credito che non tornano vanno nel registro.
+          const { error: errMerce } = await admin.rpc('restore_stock', { p_items: groupStockItems });
+          if (errMerce) {
+            logger.error('[cod] merce del gemello non tornata: va rimessa a mano', {
+              chiave: chiaveTentativo, merce: groupStockItems, message: errMerce.message,
+            });
+          }
           if (walletAppliedCents > 0) {
-            await admin.rpc('wallet_credit', {
+            const { error: errCredito } = await admin.rpc('wallet_credit', {
               p_user: user.id,
               p_cents: walletAppliedCents,
               p_reason: 'order_cod_refund',
               p_ref: walletRef,
             });
+            if (errCredito) {
+              logger.error('[cod] credito del gemello non tornato: va ridato a mano', {
+                chiave: chiaveTentativo, creditoCents: walletAppliedCents, ref: walletRef, message: errCredito.message,
+              });
+            }
           }
         };
         if ((orderErr as { code?: string }).code === '23505') {
@@ -1278,7 +1327,7 @@ export const POST = withAuthRateLimit(
         }
         const { data: giaNato, error: errRilettura } = await admin
           .from('orders')
-          .select('id')
+          .select('id, created_at')
           .eq('id', idAtteso)
           .eq('user_id', user.id)
           .maybeSingle();
@@ -1286,7 +1335,7 @@ export const POST = withAuthRateLimit(
           logger.warn('[cod] inserimento dell ordine tornato con errore ma la riga c e: vado avanti con quella', {
             chiave: chiaveTentativo, orderId: idAtteso, message: orderErr.message,
           });
-          order = giaNato as { id: string };
+          order = giaNato as { id: string; created_at: string | null };
           ripreso = true;
         } else if (errRilettura) {
           const { error: errTogli } = await admin.from('orders').delete().eq('id', idAtteso).eq('user_id', user.id);
@@ -1306,6 +1355,10 @@ export const POST = withAuthRateLimit(
               chiave: chiaveTentativo, userId: user.id, orderId: idAtteso, message: errTogli.message,
               merce: groupStockItems, creditoCents: walletAppliedCents,
             });
+            await allarmeAgliAmministratori(
+              'Ordine in contanti forse rimasto a metà',
+              `Non so se l'ordine ${idAtteso.slice(0, 8)} è nato e non sono riuscito a toglierlo: merce e credito restano legati a lui. Serve un controllo a mano.`,
+            );
             return nonVedoSeLOrdineCe();
           }
         }
@@ -1313,14 +1366,25 @@ export const POST = withAuthRateLimit(
 
       if ((orderErr && !ripreso) || !order) {
         await rollbackCreatedCodOrders();
-        await admin.rpc('restore_stock', { p_items: groupStockItems });
+        // 5/11/2026 — Anche qui l'esito si legge: merce o credito che non tornano vanno nel registro.
+        const { error: errMerceGruppo } = await admin.rpc('restore_stock', { p_items: groupStockItems });
+        if (errMerceGruppo) {
+          logger.error('[cod] ordine non nato ma la merce non e tornata: va rimessa a mano', {
+            userId: user.id, sellerId: g.sellerId, merce: groupStockItems, message: errMerceGruppo.message,
+          });
+        }
         if (walletAppliedCents > 0) {
-          await admin.rpc('wallet_credit', {
+          const { error: errCreditoGruppo } = await admin.rpc('wallet_credit', {
             p_user: user.id,
             p_cents: walletAppliedCents,
             p_reason: 'order_cod_refund',
             p_ref: walletRef,
           });
+          if (errCreditoGruppo) {
+            logger.error('[cod] ordine non nato ma il credito non e tornato: va ridato a mano', {
+              userId: user.id, creditoCents: walletAppliedCents, ref: walletRef, message: errCreditoGruppo.message,
+            });
+          }
         }
         logger.error(orderErr ?? new Error('cod-order-insert-null'), { context: 'cod-order-insert', sellerId: g.sellerId });
         return esciERilascia(ApiErrors.internal('Errore nella creazione ordine.'));
@@ -1368,6 +1432,7 @@ export const POST = withAuthRateLimit(
         sellerId: g.sellerId,
         totalCents,
         itemsCount: g.items.reduce((sum, it) => sum + it.quantity, 0),
+        creatoIl: (order as { created_at?: string | null }).created_at ?? null,
       });
 
       createdOrderIds.push(order.id);
@@ -1466,10 +1531,14 @@ export const POST = withAuthRateLimit(
         logger.warn('[cod] nomi dei negozi non letti per la posta', { e });
       }
 
-      await Promise.allSettled(comunicazioni.map(async (c) => {
+      // 5/11/2026 — In fila, un negozio alla volta e un'email alla volta, come la strada della
+      // carta: 2N chiamate a Resend nello stesso istante sforavano il limite di richieste al
+      // secondo e un negozio poteva restare senza «nuovo ordine». Ogni invio ha il suo try:
+      // se uno cade, gli altri partono lo stesso.
+      for (const c of comunicazioni) {
         // Email al venditore (oltre alla notifica) — per la carta parte dal webhook,
         // per il COD va inviata qui. Best-effort.
-        const alVenditore = (async () => {
+        const alVenditore = async () => {
           try {
             const { data: sellerAuth } = await admin.auth.admin.getUserById(c.sellerId);
             const sellerEmail = sellerAuth?.user?.email;
@@ -1482,18 +1551,20 @@ export const POST = withAuthRateLimit(
               // 30/10/2026 — La fascia e la nascita dell'ordine: senza, l'email diceva sempre
               // «appena puoi» invece della scadenza vera (i 10 minuti della veloce, la fine della fascia).
               deliverySlot: body.pickupInStore ? null : (body.deliverySlot ?? null),
-              createdAt: new Date(),
+              // 5/11/2026 — Dal created_at del database, non dall'orologio della rotta: sul confine
+              // dei secondi l'email e la pagina dicevano due scadenze diverse.
+              createdAt: c.creatoIl ? new Date(c.creatoIl) : new Date(),
               storeHours: orariNegozio.get(c.sellerId),
             });
             await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
           } catch (e) {
             logger.warn('[cod] email nuovo ordine al venditore fallita', { orderId: c.orderId, e });
           }
-        })();
+        };
 
         // Conferma al cliente. Per gli ordini con carta parte dal webhook Stripe;
         // per il contrassegno va inviata qui.
-        const alCliente = (async () => {
+        const alCliente = async () => {
           try {
             if (!emailCliente) return;
             const t = orderConfirmedBuyerTemplate({
@@ -1507,10 +1578,11 @@ export const POST = withAuthRateLimit(
           } catch (e) {
             logger.warn('[cod] email conferma ordine al buyer fallita', { orderId: c.orderId, e });
           }
-        })();
+        };
 
-        await Promise.all([alVenditore, alCliente]);
-      }));
+        await alVenditore();
+        await alCliente();
+      }
     }, 'email del nuovo ordine in contanti');
 
     // #208 — L'acquisto si conta qui, dove il fatto è certo. Prima partiva
@@ -1597,13 +1669,16 @@ export const POST = withAuthRateLimit(
       // nel ramo della chiave abbandonata.
       let errChiave: { message: string } | null = null;
       for (let prova = 0; prova < SCRITTURE_DELLA_PROVA; prova++) {
-        const { error } = await admin
+        // 5/11/2026 — Un update che non trova la riga risponde senza errore: le righe si fanno
+        // contare, e zero righe toccate valgono come una prova non scritta (scatta l'allarme).
+        const { count: toccate, error } = await admin
           .from('cod_checkout_attempts')
-          .update({ order_ids: ordiniCreati })
+          .update({ order_ids: ordiniCreati }, { count: 'exact' })
           .eq('chiave', chiaveTentativo)
           .eq('user_id', user.id);
-        errChiave = error;
-        if (!error) break;
+        errChiave = error ?? (toccate === 0 ? { message: 'nessuna riga del tentativo toccata' } : null);
+        if (!errChiave) break;
+        if (prova < SCRITTURE_DELLA_PROVA - 1) await new Promise((r) => setTimeout(r, 150));
       }
       if (errChiave) {
         logger.error('[cod] prova del tentativo NON scritta: ordini nati senza la riga che ferma il doppione', {

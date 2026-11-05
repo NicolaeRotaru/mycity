@@ -6,6 +6,7 @@ import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { scriviCampanella } from '@/lib/ordini/campanella';
 
 export const runtime = 'nodejs';
 
@@ -78,7 +79,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const refundId = esito.refundId;
 
   // Notifica in-app al buyer.
-  await admin.from('notifications').insert({
+  await scriviCampanella(admin, {
         // #33 — la categoria decide se la persona vuole ancora ricevere
         // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
         category: 'order',
@@ -86,7 +87,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     title: '✕ Ordine annullato',
     body: refundId ? `${reason} · rimborso emesso` : reason,
     link: `/orders/${order.id}`,
-  });
+  }, { dove: 'admin-cancel', ordine: order.id });
 
   await writeAudit({
     actorId: user.id,
