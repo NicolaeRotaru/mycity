@@ -1,7 +1,7 @@
 'use client';
 
 import { Clock } from 'lucide-react';
-import { formatToday, isOpenNow, romeNow, DAY_KEYS, type StoreHours } from '@/lib/store-hours';
+import { formatToday, isOpenNow, DAY_KEYS, type StoreHours } from '@/lib/store-hours';
 import type { SectionContext } from './SectionContext';
 
 const DAYS: { key: keyof StoreHours; label: string }[] = [
@@ -24,7 +24,7 @@ export default function HoursSection({ ctx }: { ctx: SectionContext }) {
   const hasHours = DAYS.some((d) => Array.isArray(hours[d.key]));
   if (!hasHours) return null;
 
-  const todayKey = DAY_KEYS[romeNow().getDay()];
+  const todayKey = DAY_KEYS[new Date().getDay()];
   const todayIntervals = hours[todayKey] ?? [];
   const openNow = isOpenNow(todayIntervals);
   const todayLabel = formatToday(todayIntervals);

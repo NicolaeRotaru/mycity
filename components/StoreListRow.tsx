@@ -1,13 +1,13 @@
 'use client';
 
-import { scrittaApertura } from '@/components/home/orari-di-oggi';
+import { scrittaChiusoDaOrari } from '@/components/home/orari-di-oggi';
 import Link from 'next/link';
 import { Star, ChevronRight, Package } from 'lucide-react';
 import StoreAvatar from './StoreAvatar';
 import { VerifiedBadge } from './ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { sizedImage } from '@/lib/image-url';
-import { DAY_KEYS, isOpenNow, romeNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
+import { DAY_KEYS, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 import { consegnaDellaVetrina, vetrinaChiedeLaVeloce } from '@/lib/promessa-consegna';
 import { useOraDiPiacenza, useVeloceDelNegozio } from '@/components/ui/DeliveryCutoff';
 import type { StoreCardData, ProductPreview } from './StorePreviewCard';
@@ -26,7 +26,7 @@ interface Props {
  */
 const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
   const hours = (store.store_hours ?? {}) as StoreHours;
-  const open = isOpenNow(hours[DAY_KEYS[romeNow().getDay()]]);
+  const open = isOpenNow(hours[DAY_KEYS[new Date().getDay()]]);
   const street = streetFromAddress(store.store_address);
   // 30/10/2026 — Qui c'era «consegna oggi» scritto fisso, per ogni negozio a ogni ora: giovedì 29/10
   // alle 20:15 l'elenco lo diceva di Pane Quotidiano, chiuso dalle 13. Ora lo decide la stessa regola
@@ -69,7 +69,7 @@ const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
             <span className={`inline-block h-1.5 w-1.5 rounded-full ${open ? 'bg-olive-600' : 'bg-ink-300'}`} />
             {/* 5/11/2026 — «Chiuso» accanto a «consegna oggi» senza dire quando riapre si leggeva
                 come una contraddizione: si dice l'ora. */}
-            {open ? 'Aperto' : scrittaApertura(false, hours[DAY_KEYS[romeNow().getDay()]])}
+            {open ? 'Aperto' : scrittaChiusoDaOrari(hours)}
           </span>
         </div>
       </div>

@@ -27,7 +27,7 @@ describe('2269 — «Chiuso» accanto a «Consegna oggi» dice quando riapre', (
   });
   it('la scheda della home e la riga dell\'elenco usano questa scritta', () => {
     expect(leggi('components/home/HeroStoreCard.tsx')).toContain('scrittaApertura(openNow,');
-    expect(leggi('components/StoreListRow.tsx')).toContain("scrittaApertura(false, hours[DAY_KEYS[romeNow().getDay()]])");
+    expect(leggi('components/StoreListRow.tsx')).toContain("scrittaChiusoDaOrari(hours)");
   });
 });
 

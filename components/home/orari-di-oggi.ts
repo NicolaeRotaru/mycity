@@ -1,4 +1,4 @@
-import { romeNow, type HoursInterval } from '@/lib/store-hours';
+import { DAY_KEYS, romeNow, type HoursInterval, type StoreHours } from '@/lib/store-hours';
 
 type Intervallo = HoursInterval;
 
@@ -28,4 +28,9 @@ export function scrittaApertura(aperto: boolean, intervalliDiOggi: Intervallo[] 
   if (aperto) return 'Aperto ora';
   const riapre = riapreOggiAlle(intervalliDiOggi, adesso);
   return riapre ? `Chiuso · riapre alle ${riapre}` : 'Chiuso';
+}
+
+/** Come sopra, per chi ha gli orari della settimana: il giorno è quello di Piacenza. */
+export function scrittaChiusoDaOrari(orari: StoreHours, adesso: Date = romeNow()): string {
+  return scrittaApertura(false, orari[DAY_KEYS[adesso.getDay()]], adesso);
 }

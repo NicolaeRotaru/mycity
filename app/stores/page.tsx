@@ -7,7 +7,7 @@ import { Search, Store as IconaNegozio } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import CollectionHeader from '@/components/CollectionHeader';
-import { DAY_KEYS, isOpenNow, romeNow, type StoreHours } from '@/lib/store-hours';
+import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
@@ -210,7 +210,7 @@ export default function StoresPage() {
   const categories = data?.categories ?? [];
 
   const filtered = useMemo(() => {
-    const todayKey = DAY_KEYS[romeNow().getDay()];
+    const todayKey = DAY_KEYS[new Date().getDay()];
     let result = stores.filter((s) => {
       if (search && !s.store_name?.toLowerCase().includes(search.toLowerCase())) return false;
       if (onlyOpen) {

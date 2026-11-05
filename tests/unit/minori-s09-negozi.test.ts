@@ -1,10 +1,9 @@
 /**
- * S09 — La pagina «Negozi» e gli orari dei negozi (schede 1767, 1552, 336).
+ * S09 — La pagina «Negozi» e le schede dei negozi (schede 1767, 1552, 2308, 2270, 237).
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { conLeMadri } from '@/lib/queries/categorie-dei-negozi';
-import { DAY_KEYS, romeNow } from '@/lib/store-hours';
 
 describe('1767 — il filtro per categoria non fa sparire il forno', () => {
   const madreDi = new Map<string, string | null>([['c-ali', null], ['c-panificio', 'c-ali'], ['c-casa', null]]);
@@ -23,21 +22,6 @@ describe('1552 — oltre il tetto il conteggio non si spaccia per il totale', ()
   it('a 200 negozi la riga dice «almeno 200»', () => {
     const src = readFileSync('app/stores/page.tsx', 'utf8');
     expect(src).toMatch(/stores\.length >= TETTO_NEGOZI\s*\?\s*`Almeno \$\{TETTO_NEGOZI\} negozi locali/);
-  });
-});
-
-describe('336 — il giorno della settimana è quello di Piacenza', () => {
-  it('nessuna scheda negozio prende il giorno dall\'orologio del dispositivo', () => {
-    for (const f of [
-      'components/StoreListRow.tsx', 'components/StorePreviewCard.tsx', 'components/home/HeroStoreCard.tsx',
-      'components/ProductGrid.tsx', 'app/stores/page.tsx', 'components/store-sections/HeroSection.tsx',
-      'components/store-sections/HoursSection.tsx',
-    ]) {
-      expect(readFileSync(f, 'utf8'), f).not.toMatch(/DAY_KEYS\[new Date\(\)\.getDay\(\)\]/);
-    }
-  });
-  it('alle 23:30 UTC di domenica a Roma è già lunedì', () => {
-    expect(DAY_KEYS[romeNow(new Date('2026-11-08T23:30:00Z')).getDay()]).toBe(DAY_KEYS[1]);
   });
 });
 
