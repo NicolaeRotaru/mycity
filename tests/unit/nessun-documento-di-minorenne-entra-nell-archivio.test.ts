@@ -173,7 +173,8 @@ describe('il documento di un minorenne non entra nel secchio kyc-docs', () => {
   });
 
   it('a diciotto anni compiuti il documento passa: il cancello non dice no a tutti', async () => {
-    profiloInArchivio = { legal_birth_date: nataAnniFa(30) };
+    // 5/11/2026 (S05, scheda 1614) — chi carica i documenti ha un ruolo che li chiede.
+    profiloInArchivio = { legal_birth_date: nataAnniFa(30), role: 'rider' };
 
     const r = await UPLOAD(richiestaDiCaricamento());
 

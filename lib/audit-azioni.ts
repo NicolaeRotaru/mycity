@@ -39,6 +39,7 @@ export const AZIONI_AUDIT = [
   // di codice fiscale e documenti finivano come 'kyc.approve'.
   'kyc.view',
   'kyc.upload',
+  'kyc.submit',
   // 5/11/2026 (S05) — vetrina e contenuti: prima cambiavano senza lasciare traccia.
   'category.create',
   'category.update',
@@ -75,6 +76,7 @@ export const ETICHETTE_AZIONI_AUDIT: Record<AuditAction, string> = {
   'kyc.reject': 'KYC rifiutato',
   'kyc.view': 'Dati personali o documenti consultati',
   'kyc.upload': 'Documento d’identità caricato',
+  'kyc.submit': 'Verifica d’identità inviata',
   'category.create': 'Categoria creata',
   'category.update': 'Categoria modificata',
   'category.delete': 'Categoria eliminata',

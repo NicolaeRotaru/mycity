@@ -35,7 +35,8 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
       legal_first_name, legal_last_name, legal_fiscal_code, legal_birth_date,
       business_vat_number,
       kyc_id_doc_front_url, kyc_id_doc_back_url, kyc_selfie_url,
-      rider_license_url, rider_insurance_url
+      rider_license_url, rider_insurance_url,
+      kyc_provider_check_id, kyc_provider_status
     `)
     .eq('id', user.id)
     .single();
@@ -83,10 +84,22 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
     }
   }
 
+  // 5/11/2026 (S05) — Una verifica già in attesa non se ne crea un'altra: con un
+  // fornitore vero ogni chiamata apriva una nuova scheda con nome, email e data di
+  // nascita, senza documenti, che nessuno cancellava.
+  const giaInAttesa = (profile as { kyc_provider_status?: string | null; kyc_provider_check_id?: string | null });
+  if (giaInAttesa.kyc_provider_status === 'PENDING' && giaInAttesa.kyc_provider_check_id) {
+    return NextResponse.json({ status: 'PENDING', providerCheckId: giaInAttesa.kyc_provider_check_id, vatCheck: null }, { status: 200 });
+  }
+
   // Verifica VAT se seller
-  let vatCheck: { valid: boolean; name?: string } | null = null;
+  let vatCheck: { valid: boolean; name?: string; irraggiungibile?: boolean } | null = null;
   if (profile.role === 'seller' && profile.business_vat_number) {
     vatCheck = await viesVatLookup(profile.business_vat_number);
+    // 5/11/2026 (S05) — VIES irraggiungibile non è «P.IVA non valida».
+    if (vatCheck.irraggiungibile) {
+      return ApiErrors.unavailable('Il servizio europeo VIES non risponde: non posso controllare la partita IVA. Riprova tra poco.');
+    }
     if (!vatCheck.valid) {
       return NextResponse.json({
         error: 'P.IVA non valida o non attiva al VIES. Controlla i dati.',
@@ -135,7 +148,7 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
     return ApiErrors.badGateway(result.error ?? 'KYC provider error');
   }
 
-  await admin
+  const { error: erroreSalvataggio } = await admin
     .from('profiles')
     .update({
       kyc_provider_check_id: result.providerCheckId,
@@ -143,19 +156,22 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
       kyc_provider_checked_at: new Date().toISOString(),
     })
     .eq('id', user.id);
-
-  // 🟠-23: traccia in audit_logs la decisione KYC terminale. A questo stadio il
-  // provider può rispondere solo PENDING o APPROVED (il rifiuto arriverebbe via
-  // webhook provider, non ancora implementato): audit sull'approvazione.
-  if (result.status === 'APPROVED') {
-    await writeAudit({
-      actorId: user.id,
-      action: 'kyc.approve',
-      targetTable: 'profiles',
-      targetId: user.id,
-      metadata: { role: profile.role, providerCheckId: result.providerCheckId ?? null, via: 'start-check' },
-    });
+  // 5/11/2026 (S05) — Se lo stato non si salva, non si dice «verifica in corso»:
+  // nel profilo non resterebbe traccia della richiesta.
+  if (erroreSalvataggio) {
+    return rispostaPerErroreDatabase(erroreSalvataggio, 'kyc/start-check', 'Non sono riuscito a registrare la verifica: riprova tra poco');
   }
+
+  // 🟠-23: traccia in audit_logs la decisione KYC terminale. 5/11/2026 (S05): anche
+  // l'INVIO (PENDING) lascia la sua riga, con l'ora: kyc_provider_checked_at si
+  // sovrascrive a ogni tentativo, il registro no.
+  await writeAudit({
+    actorId: user.id,
+    action: result.status === 'APPROVED' ? 'kyc.approve' : 'kyc.submit',
+    targetTable: 'profiles',
+    targetId: user.id,
+    metadata: { role: profile.role, providerCheckId: result.providerCheckId ?? null, stato: result.status, via: 'start-check' },
+  });
 
   return NextResponse.json({ status: result.status, providerCheckId: result.providerCheckId, vatCheck }, { status: 200 });
 });
