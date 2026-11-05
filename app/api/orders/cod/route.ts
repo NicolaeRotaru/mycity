@@ -6,7 +6,7 @@ import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
-import { validateCoupon } from '@/lib/coupons';
+import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
 import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
@@ -734,6 +734,12 @@ export const POST = withAuthRateLimit(
      */
     const cancelloContanti = ordineInContantiPuoNascere(riserveLiberate);
     if (!cancelloContanti.puoNascere) {
+      // 5/11/2026 — Il guasto (tentativi o ordini non letti) è un 503 col suo motivo, non «chiudi la
+      // pagina della carta»: chi legge il registro insegue il guasto vero.
+      if (cancelloContanti.nonGuardato) {
+        logger.error('[cod] ordine in contanti fermato: tentativi con la carta non letti', { userId: user.id });
+        return esciERilascia(ApiErrors.unavailable(cancelloContanti.motivo));
+      }
       logger.error('[cod] ordine in contanti rifiutato: pagamento con la carta ancora pagabile', {
         userId: user.id,
         sessioni: cancelloContanti.sessioni.length,
@@ -1008,17 +1014,25 @@ export const POST = withAuthRateLimit(
       if (!CODICI_SCONTO_IN_CASSA) {
         return esciERilascia(ApiErrors.invalidRequest('I codici sconto non sono attivi: togli il codice e riprova.'));
       }
-      const couponRes = await validateCoupon(body.couponCode, grandSubtotalCents / 100, user.id, supa);
-      if (!couponRes.ok) return esciERilascia(ApiErrors.invalidRequest(`Coupon non valido: ${couponRes.reason}`));
-      couponDiscountCents = Math.max(0, Math.round(couponRes.discount * 100));
-      couponFreeShipping = couponRes.freeShipping;
-      validatedCouponCode = couponRes.coupon.code;
-      // Claim atomico: check + increment in un'unica operazione — previene la race condition (fix #36).
-      // Se due richieste parallele arrivano con lo stesso coupon, solo una ottiene il claim.
-      const { data: claimed, error: claimErr } = await admin.rpc('claim_coupon', { p_code: validatedCouponCode });
-      if (claimErr || !claimed) {
-        return esciERilascia(ApiErrors.invalidRequest('Coupon non disponibile: potrebbe essere esaurito nel frattempo.'));
+      // 5/11/2026 — Dalla stessa porta della carta (lib/ordini/rivendica-il-codice-sconto.ts): il
+      // codice si rivendica solo passando `riserveLiberate`, cioè dopo aver liberato i tentativi
+      // abbandonati. Prima qui si rifacevano validateCoupon + claim_coupon a mano, e l'ordine giusto lo
+      // teneva solo la posizione delle righe.
+      const rivendicato = await rivendicaIlCodiceSconto(
+        riserveLiberate,
+        { admin, lettura: supa },
+        { codice: body.couponCode, subtotaleCents: grandSubtotalCents, userId: user.id },
+      );
+      if (!rivendicato.ok) {
+        return esciERilascia(
+          rivendicato.motivo === 'pagamento_ancora_aperto'
+            ? ApiErrors.conflict(rivendicato.messaggio)
+            : ApiErrors.invalidRequest(rivendicato.messaggio),
+        );
       }
+      couponDiscountCents = rivendicato.scontoCents;
+      couponFreeShipping = rivendicato.spedizioneGratis;
+      validatedCouponCode = rivendicato.codice;
     }
 
     /**

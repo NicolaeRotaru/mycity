@@ -87,3 +87,41 @@ describe('262 · il file degli ordini per il commercialista', () => {
     expect(conCredito[col('Rimborsato €')]).toBe('0,00');
   });
 });
+
+describe('157 · l etichetta di spedizione e i nomi con lettere rumene', () => {
+  it('riduce a WinAnsi il testo libero: «ț» diventa «t», l emoji sparisce, le accentate italiane restano', async () => {
+    const { testoPerEtichetta } = await import('@/lib/shipping-etichetta/testo-winansi');
+    expect(testoPerEtichetta('Ionuț Popescu')).toBe('Ionut Popescu');
+    expect(testoPerEtichetta('Ștefan Țurcanu')).toBe('Stefan Turcanu');
+    expect(testoPerEtichetta('citofono 🔔')).toBe('citofono');
+    expect(testoPerEtichetta('Perché è là, città — 3°')).toBe('Perché è là, città — 3°');
+    const src = readFileSync('lib/shipping-etichetta/label.ts', 'utf8');
+    for (const campo of ['data.recipientName', 'data.street', 'data.notes.slice(0, 200)']) expect(src).toContain(`testoPerEtichetta(${campo})`);
+  });
+});
+
+describe('2612 · 2669 · il pulsante SOS', () => {
+  it('distingue «non avvisata» da «non si sa ancora», e accetta una posizione recente', () => {
+    const src = readFileSync('components/rider/SOSButton.tsx', 'utf8');
+    expect(src).toContain('Non sappiamo ancora se MyCity è stata avvisata');
+    expect(src).toContain('maximumAge: 60_000');
+  });
+});
+
+describe('1551 · la mappa sul telefono', () => {
+  it('col dito la mappa si accende con un tocco e lo dice; un tocco fuori la rispegne', () => {
+    const src = readFileSync('components/DeliveryMap.tsx', 'utf8');
+    expect(src).toContain('Tocca la mappa per spostarla');
+    expect(src).toContain('map.dragging.enable();');
+    expect(src).toContain('map.dragging.disable();');
+  });
+});
+
+describe('1589 · il codice sconto nei contanti passa dalla stessa porta della carta', () => {
+  it('la rotta dei contanti usa rivendicaIlCodiceSconto(riserveLiberate, …) e non chiama più claim_coupon a mano', () => {
+    const src = readFileSync('app/api/orders/cod/route.ts', 'utf8');
+    expect(src).toContain('await rivendicaIlCodiceSconto(\n        riserveLiberate,');
+    expect(src).not.toContain("rpc('claim_coupon'");
+    expect(src).not.toMatch(/validateCoupon\(/);
+  });
+});

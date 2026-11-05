@@ -52,7 +52,8 @@ describe('① il SOS non promette una chiamata che nessuno ha fatto partire', ()
     // Il ramo buono e il ramo di ripiego: in tutti e due il tastierino è aperto
     // e la chiamata dipende da un gesto suo.
     const sulSos = messaggiToast.filter((t) => /112/.test(t));
-    expect(sulSos.length).toBe(2);
+    // 5/11/2026 (sessione S02, scheda 2612) — tre rami: avvisata, non avvisata, non si sa ancora (rete lenta).
+    expect(sulSos.length).toBe(3);
     for (const t of sulSos) expect(t).toMatch(/premi\s+(subito\s+)?CHIAMA/i);
   });
 
