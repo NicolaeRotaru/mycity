@@ -134,10 +134,6 @@ export default function AdminDashboard() {
         .from('payment_attempts')
         .select('status, decline_code, error_code')
         .gte('created_at', daQuando)
-        // 5/11/2026 — Solo la cassa clienti (i tentativi con un carrello): gli
-        // abbonamenti dei negozi, le sponsorizzazioni e i buoni regalo passano
-        // dallo stesso conto e coprivano un checkout che non funziona.
-        .not('pending_checkout_id', 'is', null)
         .limit(5000);
       if (error) throw error;
       return tassoAutorizzazione((data ?? []) as TentativoPagamento[]);
