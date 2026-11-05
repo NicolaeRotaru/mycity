@@ -120,8 +120,8 @@ export function fraseComeArriva(attivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO): str
   const veloce = `veloce in ${EXPRESS_ETA_LABEL}, ${QUANDO_SI_PUO_LA_VELOCE}`;
   // 5/11/2026 — «in fascia oraria» aveva perso il «che scegli» che il resto del sito dice.
   return attivo
-    ? `Consegna nella fascia che scegli o ritiro in negozio; ${veloce}.`
-    : `Consegna nella fascia che scegli; ${veloce}.`;
+    ? `Consegna a fascia scelta o ritiro in negozio; ${veloce}.`
+    : `Consegna a fascia scelta; ${veloce}.`;
 }
 
 /** La prima risposta delle FAQ: i passi per ordinare, senza quello che non si può fare. */

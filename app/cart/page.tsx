@@ -289,6 +289,13 @@ export default function CartPage() {
       );
       const mappa: Record<string, number | null> = {};
       const prezzi: Record<string, number> = {};
+      // 5/11/2026 — Un prodotto che la lettura non restituisce (segnato «Esaurito», tolto, o di un
+      // negozio sospeso: la regola di lettura mostra solo i prodotti in vendita) non è un «limite
+      // sconosciuto»: è merce che non si può comprare, come la vede la cassa. Solo se la lettura è
+      // andata a buon fine: senza risposta non si sa niente.
+      if (Array.isArray(prodottiRes.data) && !('error' in prodottiRes && prodottiRes.error)) {
+        for (const id of ids) mappa[id] = 0;
+      }
       for (const p of (prodottiRes.data ?? []) as Array<{ id: string; stock: number | null; price: number | string | null }>) {
         mappa[p.id] = p.stock;
         const pieno = Number(p.price ?? NaN);
@@ -305,6 +312,9 @@ export default function CartPage() {
       setDoveConsegniamo({ lat: casa?.lat ?? null, lng: casa?.lng ?? null });
       // La variante si indicizza con la sua chiave di riga, così una riga con
       // variante non eredita la scorta del prodotto intero.
+      if (idVarianti.length > 0 && Array.isArray(variantiRes.data) && !('error' in variantiRes && variantiRes.error)) {
+        for (const id of idVarianti) mappa[`variante::${id}`] = 0;
+      }
       for (const v of (variantiRes.data ?? []) as Array<{ id: string; stock: number | null }>) {
         mappa[`variante::${v.id}`] = v.stock;
       }
@@ -339,6 +349,28 @@ export default function CartPage() {
    * dichiarato, non indovinato.
    */
   const barraRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * 5/11/2026 — TOGLIENDO UNA RIGA DA TASTIERA IL FUOCO FINIVA NEL VUOTO.
+   *
+   * La riga sparisce insieme al suo «Rimuovi», che aveva il fuoco: il fuoco cadeva sul corpo della
+   * pagina e il lettore non diceva quale prodotto era stato tolto. Adesso il fuoco va sul titolo del
+   * carrello (anche su quello del carrello vuoto) e una riga di stato dice cosa si è tolto.
+   */
+  const titoloRef = useRef<HTMLHeadingElement>(null);
+  const [tolto, setTolto] = useState<{ nome: string; volta: number } | null>(null);
+  const togliDalCarrello = (item: CartItem) => {
+    removeFromCart(item.id, item.variantId);
+    setTolto((t) => ({ nome: item.name, volta: (t?.volta ?? 0) + 1 }));
+  };
+  useEffect(() => {
+    if (tolto) titoloRef.current?.focus();
+  }, [tolto]);
+  const annuncioTolto = (
+    <p role="status" aria-live="polite" className="sr-only">
+      {tolto ? `${tolto.nome} tolto dal carrello` : ''}
+    </p>
+  );
   useEffect(
     () => seguiAltezza(barraRef.current, document.documentElement, osservatoreDelBrowser, CORSIA_DELLA_BARRA),
     [letto, items.length],
@@ -405,7 +437,8 @@ export default function CartPage() {
       <div className="container mx-auto py-12 max-w-2xl">
         {/* Anche il carrello vuoto ha il suo titolo: qui il disegno non lo mostra, ma chi
             naviga per intestazioni deve trovarlo lo stesso. */}
-        <h1 className="sr-only">Il tuo carrello</h1>
+        <h1 ref={titoloRef} tabIndex={-1} className="sr-only">Il tuo carrello</h1>
+        {annuncioTolto}
         <EmptyState
           icon={ShoppingCart}
           title="Il tuo carrello è vuoto"
@@ -481,12 +514,21 @@ export default function CartPage() {
    * Stessa regola della riga rossa qui sopra (`massimo(...) === 0`), così le due non possono
    * separarsi: finché non si sa quanto ce n'è, `massimo` risponde `null` e non blocca niente.
    */
-  const bloccanti = righe.filter((it) => massimo(it.id, it.variantId) === 0);
+  // 5/11/2026 — Anche chi ne chiede più di quanti ce ne sono: la cassa lo ferma col muro
+  // «Disponibilità insufficiente», quindi il carrello non lo manda avanti.
+  const esauriti = righe.filter((it) => massimo(it.id, it.variantId) === 0);
+  const troppi = righe.filter((it) => {
+    const m = massimo(it.id, it.variantId);
+    return m !== null && m > 0 && it.quantity > m;
+  });
+  const bloccanti = [...esauriti, ...troppi];
   /** Cosa c'è scritto sul pulsante quando l'ordine non può partire: dice il gesto, non il divieto. */
   const cosaFarePrima =
-    bloccanti.length === 1
-      ? 'Togli l’articolo esaurito per continuare'
-      : 'Togli gli articoli esauriti per continuare';
+    esauriti.length === 0
+      ? 'Abbassa la quantità per continuare'
+      : esauriti.length === 1
+        ? 'Togli l’articolo esaurito per continuare'
+        : 'Togli gli articoli esauriti per continuare';
 
   return (
     // Lo spazio in fondo è per la barra fissa del telefono: senza, copre l'ultima riga della pagina.
@@ -497,7 +539,7 @@ export default function CartPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* COLONNA SX: prodotti */}
         <div className="lg:col-span-2 space-y-4">
-          <h1 className="font-serif text-2xl font-bold text-ink-900">
+          <h1 ref={titoloRef} tabIndex={-1} className="font-serif text-2xl font-bold text-ink-900 focus:outline-none">
             Il tuo carrello <span className="text-ink-500 font-normal font-sans text-lg">({pluralize(count, 'articolo', 'articoli')})</span>
           </h1>
 
@@ -600,7 +642,7 @@ export default function CartPage() {
                         }
                         if (rimasti !== null && rimasti < item.quantity) {
                           return (
-                            <p className="text-xs text-amber-700 font-semibold flex items-center gap-1">
+                            <p role="alert" className="text-xs text-amber-700 font-semibold flex items-center gap-1">
                               <AlertCircle size={13} strokeWidth={2.5} aria-hidden />
                               Ne restano {rimasti} · abbassa la quantità
                             </p>
@@ -664,7 +706,7 @@ export default function CartPage() {
                           </div>
                           <button
                             type="button"
-                            onClick={() => removeFromCart(item.id, item.variantId)}
+                            onClick={() => togliDalCarrello(item)}
                             aria-label={`Rimuovi ${item.name} dal carrello`}
                             /* Il bersaglio era alto quanto la riga di testo (20px) e attaccato al «−»:
                                col pollice si toglieva il prodotto invece di scalare la quantita'. Il
@@ -718,7 +760,7 @@ export default function CartPage() {
             {/* Il totale cambia a ogni «+», «−» e rimozione: qui si dice anche
                 a chi non lo vede cambiare. */}
             <p className="sr-only" role="status" aria-live="polite">
-              Carrello aggiornato: {count} {count === 1 ? 'articolo' : 'articoli'}, consegna {formatPrice(consegnaDaPagare)}, totale {formatPrice(finalTotal)}
+              {tolto ? `${tolto.nome} tolto dal carrello. ` : ''}Carrello aggiornato: {count} {count === 1 ? 'articolo' : 'articoli'}, consegna {formatPrice(consegnaDaPagare)}, totale {formatPrice(finalTotal)}
             </p>
 
             <div className="border-t border-cream-300 pt-3 flex justify-between items-baseline">

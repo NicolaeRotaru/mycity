@@ -54,8 +54,8 @@ describe('S07 · a negozio chiuso la frase pubblica dice la regola della cassa',
 describe('S07 · la frase di come arriva la spesa', async () => {
   const { fraseComeArriva } = await import('@/lib/promesse-pubbliche');
   it('dice che l\'ora la sceglie il cliente', () => {
-    expect(fraseComeArriva(false)).toMatch(/che scegli/);
-    expect(fraseComeArriva(true)).toMatch(/che scegli/);
+    expect(fraseComeArriva(false)).toMatch(/fascia scelta/);
+    expect(fraseComeArriva(true)).toMatch(/fascia scelta/);
   });
   it('la descrizione Google degli alimentari sta nei 160 caratteri', async () => {
     const { readFileSync } = await import('node:fs');
