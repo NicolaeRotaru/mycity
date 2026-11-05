@@ -22,7 +22,21 @@ const STATIC_PATHS: Array<{ path: string; priority: number; changeFrequency: 'da
   { path: '/events',        priority: 0.6, changeFrequency: 'weekly'  },
   { path: '/shop-of-month', priority: 0.6, changeFrequency: 'monthly' },
   { path: '/lists',         priority: 0.5, changeFrequency: 'weekly'  },
+  // 5/11/2026 — Pagine pubbliche utili che mancavano.
+  { path: '/categorie',     priority: 0.7, changeFrequency: 'weekly'  },
+  { path: '/come-funziona', priority: 0.5, changeFrequency: 'monthly' },
+  { path: '/terms',         priority: 0.3, changeFrequency: 'monthly' },
+  { path: '/returns',       priority: 0.3, changeFrequency: 'monthly' },
 ];
+
+/**
+ * 5/11/2026 — NIENTE DATE FINTE.
+ *
+ * Qui le statiche e le categorie dicevano «cambiate adesso» a ogni rigenerazione, cioè ogni ora;
+ * prodotti e negozi davano la data di CREAZIONE come se fosse quella di modifica. Google impara
+ * che il campo non è affidabile e smette di usarlo. Le tabelle non hanno una colonna di ultima
+ * modifica, quindi `lastModified` non si scrive: meglio niente che una data inventata.
+ */
 
 /**
  * Sitemap dinamica: statiche + tutte le categorie + tutti i prodotti
@@ -54,10 +68,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // che ripiegava su localhost, ogni riga della sitemap indicava a Google una
   // pagina irraggiungibile: nessuna di quelle pagine poteva essere indicizzata.
   const APP_URL = env.appUrl();
-  const now = new Date();
   const staticEntries: MetadataRoute.Sitemap = STATIC_PATHS.map((s) => ({
     url: `${APP_URL}${s.path}`,
-    lastModified: now,
     priority: s.priority,
     changeFrequency: s.changeFrequency,
   }));
@@ -110,14 +122,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .slice(0, 5000)
     .map((p) => ({
       url: `${APP_URL}/product/${p.id}`,
-      lastModified: p.created_at ? new Date(p.created_at) : now,
       priority: 0.7,
       changeFrequency: 'weekly' as const,
     }));
 
   const storeEntries: MetadataRoute.Sitemap = ((stores.data ?? []) as StoreSlug[]).map((s) => ({
     url: `${APP_URL}/store/${s.id}`,
-    lastModified: s.created_at ? new Date(s.created_at) : now,
     priority: 0.8,
     changeFrequency: 'weekly' as const,
   }));
@@ -128,12 +138,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // di una sua sottocategoria. Se la lettura dei prodotti fallisce si tengono tutte, come prima:
   // un errore di rete non deve togliere da Google le categorie vere.
   const tutteLeCategorie = (categories.data ?? []) as CategorySlug[];
-  const conProdotti = products.error ? null : categorieConProdotti(tutteLeCategorie, (products.data ?? []) as ProductSlug[]);
+  // 5/11/2026 — Anche se cade la lettura dei NEGOZI si tengono tutte: senza negozi l'elenco dei
+  // prodotti esce vuoto «senza errore», e prima la mappa toglieva a Google ogni categoria.
+  const conProdotti = products.error || stores.error ? null : categorieConProdotti(tutteLeCategorie, (products.data ?? []) as ProductSlug[]);
   const categorieDaMandare = conProdotti ? tutteLeCategorie.filter((c) => conProdotti.has(c.id)) : tutteLeCategorie;
 
   const categoryEntries: MetadataRoute.Sitemap = categorieDaMandare.map((c) => ({
     url: `${APP_URL}/category/${c.slug}`,
-    lastModified: now,
     priority: 0.6,
     changeFrequency: 'weekly' as const,
   }));

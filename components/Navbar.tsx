@@ -397,7 +397,6 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 hover:bg-white/10 px-2 py-1.5 rounded-full transition-colors focus-visible:outline-white"
         aria-label="Menu account"
-        aria-haspopup="true"
         aria-expanded={open}
       >
         {isSeller && storeLogo ? (

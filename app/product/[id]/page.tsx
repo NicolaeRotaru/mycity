@@ -10,7 +10,7 @@ import { Heart, Banknote, Bike, RotateCcw, Store, ShoppingCart, Ban, Check, Flam
 import { supabase } from '@/lib/supabase/client';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
 import { domandaProdotto, negozioDellaSchedaOperativo } from '@/lib/queries/catalogo';
-import { addToCart, cartTotal, getCart } from '@/lib/cart';
+import { addToCart, cartTotal, getCart, updateQuantity } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { LARGHEZZA_MASSIMA, sizedImage } from '@/lib/image-url';
@@ -57,6 +57,7 @@ import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { trackReviewSubmitted } from '@/lib/analytics/events';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { FOTO_MANCANTE } from '@/lib/foto-mancante';
+import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
 
 // Chiavi attributo gestite dall'accordion "Ingredienti e allergeni": vengono
 // escluse dalla griglia generica "Caratteristiche" per non duplicarle.
@@ -74,6 +75,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const router = useRouter();
   const qc = useQueryClient();
   const [quantity, setQuantity] = useState(1);
+  // 5/11/2026 — Dopo il primo tocco su «Compra ora» il pulsante si spegne fino al cambio pagina.
+  const [inPartenza, setInPartenza] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [activeImg, setActiveImg] = useState(0);
   const [lightbox, setLightbox] = useState(false);
@@ -264,13 +267,38 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       setReviewRating(5);
       setReviewPhotos([]);
       toast.success(
-        reviewPhotos.length > 0
+        // 5/11/2026 — I punti sono spenti al lancio: si promettono solo se l'interruttore è acceso.
+        reviewPhotos.length > 0 && INVITI_E_PUNTI_ACCESI
           ? `Grazie! Recensione pubblicata · +20 punti loyalty per le foto`
           : 'Grazie per la recensione!'
       );
     },
     onError: (err: unknown) => {
       if (err instanceof Error && err.message !== 'REDIRECT') toast.error(friendlyError(err));
+    },
+  });
+
+  /**
+   * 5/11/2026 — IL MODULO SI APRIVA A CHI NON PUÒ RECENSIRE.
+   * Il database accetta la recensione solo da chi ha un ordine consegnato con questo prodotto;
+   * agli altri, dopo stelle, commento e foto caricate, arrivava solo «non hai i permessi».
+   * Qui si chiede prima, con la stessa domanda della verifica d'acquisto. Finché non si sa (o se
+   * la lettura cade) il modulo resta: decide comunque il database.
+   */
+  const { data: haRicevutoIlProdotto } = useQuery({
+    queryKey: ['reviews', 'puo-recensire', id, profile?.id ?? ''],
+    enabled: !!profile?.id,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabase
+        .from('order_items')
+        .select('id, orders!inner(user_id, delivery_status)')
+        .eq('product_id', id)
+        .eq('orders.user_id', profile!.id)
+        .eq('orders.delivery_status', 'DELIVERED')
+        .limit(1);
+      if (error) throw error;
+      return (data?.length ?? 0) > 0;
     },
   });
 
@@ -516,6 +544,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   };
 
   const handleBuyNow = () => {
+    if (inPartenza) return;
     if (!mayPurchase) {
       toast.error(purchaseBlockedMessage);
       return;
@@ -524,17 +553,27 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di continuare`);
       return;
     }
-    addToCart({
-      id: product.id,
-      name: product.name,
-      price,
-      image: images[0],
-      quantity: qty,
-      sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
-      storeName: sellerProfile?.store_name ?? undefined,
-      variantId: selectedVariant?.id,
-      variantLabel: selectedVariant?.label,
-    });
+    setInPartenza(true);
+    // 5/11/2026 — «Compra ora» compra QUESTA quantità: se la riga c'è già si porta alla
+    // quantità scelta invece di sommarla (prima chi aveva già un filone ne trovava due).
+    const giaNelCarrello = getCart().some(
+      (c) => c.id === product.id && (c.variantId ?? null) === (selectedVariant?.id ?? null),
+    );
+    if (giaNelCarrello) {
+      updateQuantity(product.id, qty, selectedVariant?.id);
+    } else {
+      addToCart({
+        id: product.id,
+        name: product.name,
+        price,
+        image: images[0],
+        quantity: qty,
+        sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
+        storeName: sellerProfile?.store_name ?? undefined,
+        variantId: selectedVariant?.id,
+        variantLabel: selectedVariant?.label,
+      });
+    }
     // Il pulsante promette «paghi alla consegna»: la promessa viaggia fino alla
     // cassa, che senza questa riga si apriva sempre con la carta selezionata.
     ricordaMetodoScelto('cod');
@@ -892,6 +931,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   </div>
                 </div>
               ))}
+              {/* 5/11/2026 — Regione sempre montata: il cambio di disponibilità della variante
+                  si annuncia a chi usa il lettore di schermo. */}
+              <div role="status" aria-live="polite">
               {needsVariantChoice ? (
                 <p className="text-xs text-ink-500">
                   Scegli {optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} per vedere la disponibilità.
@@ -903,6 +945,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   {selectedVariant.stock === 1 ? 'Ultimo pezzo' : `Solo ${selectedVariant.stock} rimasti`} per «{selectedVariant.label}».
                 </p>
               ) : null}
+              </div>
             </div>
           )}
 
@@ -1050,10 +1093,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <button
               type="button"
               onClick={handleBuyNow}
-              disabled={!canAdd}
+              disabled={!canAdd || inPartenza}
+              aria-busy={inPartenza || undefined}
               className="block w-full text-center bg-ink-900 hover:bg-ink-800 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-lg font-bold"
             >
-              Compra ora · paghi alla consegna
+              {inPartenza ? 'Apro la cassa…' : 'Compra ora · paghi alla consegna'}
             </button>
 
             {(sellerProfile?.id ?? product.seller_id) && (
@@ -1065,7 +1109,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             )}
 
             <div className="pt-3 border-t border-surface-200 space-y-1.5 text-xs text-ink-500">
-              <p className="flex items-center gap-1.5"><Package size={13} className="shrink-0" aria-hidden /> Venduto e consegnato da <strong className="text-ink-700">{product.profiles?.store_name}</strong></p>
+              <p className="flex items-center gap-1.5"><Package size={13} className="shrink-0" aria-hidden /> Venduto da <strong className="text-ink-700">{product.profiles?.store_name}</strong> · consegna MyCity</p>
               <p className="flex items-center gap-1.5"><ShieldCheck size={13} className="shrink-0" aria-hidden /> Compri sicuro: paghi solo quando arriva.</p>
             </div>
           </div>
@@ -1145,7 +1189,13 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
           {/* h3 senza classe di misura usciva a 20px in Fraunces per la regola di
               globals.css, cioe' piu' grande dei titoli di pari grado. Qui il grado e'
               giusto — sta dentro la sezione «Recensioni» — e la misura e' dichiarata. */}
-          <h3 className="font-serif text-lg font-bold text-ink-900 mb-3">Lascia la tua recensione</h3>
+          <h3 className="font-serif text-lg font-bold text-ink-900 mb-1">Lascia la tua recensione</h3>
+          {/* 5/11/2026 — Come verifichiamo le recensioni (art. 22 c.4-bis Codice del Consumo):
+              è la regola che il database applica davvero. */}
+          <p className="mb-3 text-xs text-ink-500">
+            Pubblicano recensioni solo i clienti con un ordine consegnato di questo prodotto.
+            {INVITI_E_PUNTI_ACCESI && ' Chi aggiunge una foto riceve 20 punti fedeltà.'}
+          </p>
           {!isAuthenticated ? (
             <p className="text-sm text-ink-600">
               <Link href={`/sign-in?returnTo=/product/${id}`} className="text-primary-700 font-semibold hover:underline">
@@ -1153,6 +1203,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               </Link>{' '}
               per recensire questo prodotto.
             </p>
+          ) : haRicevutoIlProdotto === false ? (
+            <p className="text-sm text-ink-600">Puoi recensire questo prodotto dopo averlo ricevuto.</p>
           ) : (
             <form
               onSubmit={(e) => { e.preventDefault(); submitReview.mutate(); }}
@@ -1187,7 +1239,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 placeholder="Scrivi un commento (opzionale)…"
                 className="w-full border border-cream-300 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-700 resize-none"
               />
-              {/* Foto recensione: +20 punti, +35% credibilità (CRO Specialist) */}
+              {/* Foto recensione (i +20 punti valgono solo con i punti accesi). */}
               {profile?.id && (
                 <PhotoReviewUpload
                   userId={profile.id}

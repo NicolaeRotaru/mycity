@@ -57,3 +57,83 @@ describe('pagina di una categoria (app/category/[slug]/page.tsx)', () => {
     expect(src).toContain('href="/search"');
   });
 });
+
+describe('924 — le foto sotto la piega non sono «urgenti»', () => {
+  it('la fila delle promo in home non chiede priority', () => {
+    expect(leggi('components/home/PromoDeals.tsx')).not.toMatch(/priority=\{i < \d\}/);
+  });
+  it('le collezioni del negozio non la chiedono', () => {
+    expect(leggi('components/store-sections/CollectionSection.tsx')).toContain('prioritaPrimeFoto={false}');
+  });
+});
+
+describe('barra delle categorie (components/CategoryBar.tsx)', () => {
+  const src = leggi('components/CategoryBar.tsx');
+  it('309 — il pannello elenca solo le categorie piene, come home e piede', () => {
+    expect(src).toContain('useQuery(domandaCategoriePiene(supabase))');
+    expect(src).toMatch(/const tops = catVisibili\.filter/);
+    expect(src).toMatch(/const childrenOf = \(id: string\) => catVisibili\.filter/);
+  });
+  it('234 — né «Tutte le categorie» né «Menu account» si annunciano come menu', () => {
+    expect(src).not.toMatch(/aria-haspopup=/);
+    const nav = leggi('components/Navbar.tsx');
+    const account = nav.slice(nav.indexOf('aria-label="Menu account"') - 400, nav.indexOf('aria-label="Menu account"') + 200);
+    expect(account).not.toMatch(/aria-haspopup="(true|menu)"/);
+  });
+  it('1558 — il fuoco va al primo elemento visibile, X compresa', () => {
+    expect(src).toContain("querySelectorAll<HTMLElement>('button, a[href]')");
+    expect(src).toMatch(/getComputedStyle\(el\)\.display !== 'none'/);
+  });
+});
+
+describe('1604 — tessere delle categorie senza foto', () => {
+  it('il velo scuro pieno c\'è solo sopra una foto', () => {
+    const src = leggi('components/CategoryShowcase.tsx');
+    expect(src).toMatch(/foto\.src \? 'from-black\/70 via-black\/15 to-black\/25' : 'from-black\/35 via-transparent to-transparent'/);
+    expect(src).not.toMatch(/<div className="absolute inset-0 bg-gradient-to-t from-black\/70 via-black\/15 to-black\/25" \/>/);
+  });
+});
+
+describe('scheda prodotto — recensioni (app/product/[id]/page.tsx)', () => {
+  const src = leggi('app/product/[id]/page.tsx');
+  it('287 — il messaggio dei +20 punti dipende dall\'interruttore dei punti', () => {
+    expect(src).toMatch(/reviewPhotos\.length > 0 && INVITI_E_PUNTI_ACCESI\s*\n?\s*\? `Grazie! Recensione pubblicata · \+20 punti/);
+  });
+  it('158 — chi non ha ricevuto il prodotto legge «dopo averlo ricevuto» invece del modulo', () => {
+    expect(src).toMatch(/haRicevutoIlProdotto === false \? \(\s*<p[^>]*>Puoi recensire questo prodotto dopo averlo ricevuto\.<\/p>/);
+    expect(src).toMatch(/queryKey: \['reviews', 'puo-recensire', id, profile\?\.id \?\? ''\]/);
+  });
+  it('516 — la scheda dice come verifichiamo le recensioni', () => {
+    expect(src).toContain('Pubblicano recensioni solo i clienti con un ordine consegnato di questo prodotto.');
+    expect(src).toMatch(/INVITI_E_PUNTI_ACCESI && ' Chi aggiunge una foto riceve 20 punti fedeltà\.'/);
+  });
+});
+
+describe('894 — il cuore «non nei preferiti» della scheda prodotto si vede', () => {
+  it('usa ink-400 come la card, non ink-300', async () => {
+    const { classiBottoneCuore } = await import('@/lib/design/cuore-preferito');
+    expect(classiBottoneCuore(false)).toContain('text-ink-400');
+    expect(classiBottoneCuore(false)).not.toContain('text-ink-300');
+  });
+});
+
+describe('scheda prodotto — acquisto (app/product/[id]/page.tsx)', () => {
+  const src = leggi('app/product/[id]/page.tsx');
+  const compraOra = src.slice(src.indexOf('const handleBuyNow = () => {'), src.indexOf("router.push('/checkout');"));
+  it('572 — un secondo tocco su «Compra ora» non aggiunge di nuovo', () => {
+    expect(compraOra).toMatch(/if \(inPartenza\) return;/);
+    expect(compraOra).toMatch(/setInPartenza\(true\)/);
+    expect(src).toMatch(/disabled=\{!canAdd \|\| inPartenza\}/);
+  });
+  it('572 — «Compra ora» porta la riga alla quantità scelta invece di sommarla', () => {
+    expect(compraOra).toMatch(/if \(giaNelCarrello\) \{\s*updateQuantity\(product\.id, qty, selectedVariant\?\.id\);/);
+  });
+  it('663 — i messaggi delle varianti stanno in una regione che si annuncia', () => {
+    const blocco = src.slice(src.indexOf('SELETTORE VARIANTI'), src.indexOf('Variante esaurita'));
+    expect(blocco).toMatch(/<div role="status" aria-live="polite">/);
+  });
+  it('405 — la scheda non dice più che consegna il negozio', () => {
+    expect(src).not.toContain('Venduto e consegnato da');
+    expect(src).toMatch(/Venduto da <strong[^>]*>\{product\.profiles\?\.store_name\}<\/strong> · consegna MyCity/);
+  });
+});
