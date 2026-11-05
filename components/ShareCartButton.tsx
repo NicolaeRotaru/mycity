@@ -28,11 +28,18 @@ export default function ShareCartButton({ items }: Props) {
     ? window.location.origin
     : (process.env.NEXT_PUBLIC_APP_URL ?? 'https://mycity-marketplace.com');
 
-  const cartParam = items.map((i) => `${i.id}:${i.quantity}`).join(',');
+  // 5/11/2026 — La variante viaggia con la riga: nel testo («Torta · grande × 1») e nel link, come
+  // terzo pezzo, così chi riceve la lista sa quale aveva scelto chi l'ha mandata.
+  const cartParam = items
+    .map((i) => `${i.id}:${i.quantity}${i.variantLabel ? `:${encodeURIComponent(i.variantLabel)}` : ''}`)
+    .join(',');
   const shareUrl = `${baseUrl}/shared-cart?cart=${encodeURIComponent(cartParam)}`;
 
   const total = items.reduce((s, i) => s + i.price * i.quantity, 0);
-  const itemList = items.slice(0, 8).map((i) => `· ${i.name} × ${i.quantity}`).join('\n');
+  const itemList = items
+    .slice(0, 8)
+    .map((i) => `· ${i.name}${i.variantLabel ? ` · ${i.variantLabel}` : ''} × ${i.quantity}`)
+    .join('\n');
   const text = `Ciao! Ho preparato una lista della spesa su MyCity:\n\n${itemList}${items.length > 8 ? `\n... e altri ${items.length - 8}` : ''}\n\nTotale: €${total.toFixed(2)}\n\nApri il link per vederla:\n${shareUrl}`;
 
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;

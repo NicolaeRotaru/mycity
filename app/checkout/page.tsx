@@ -1673,7 +1673,7 @@ export default function CheckoutPage() {
         style={{ bottom: fondoDellaBarra(['var(--altezza-banner-cookie, 0px)']) }}
       >
         <div className="leading-tight">
-          <div className="text-2xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
+          <div className="text-xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
           <div className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(finalTotal)}</div>
         </div>
         {/*

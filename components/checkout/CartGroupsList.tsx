@@ -25,7 +25,9 @@ type Props = {
 
 export function CartGroupsList({ groups }: Props) {
   return (
-    <div className="divide-y max-h-72 overflow-y-auto">
+    // 5/11/2026 — Il riquadro scorre ma dentro non c'è niente che il Tab raggiunga: senza tabIndex
+    // Safari non lo fa scorrere da tastiera. Raggiungibile e con un nome, come chiede WCAG 2.1.1.
+    <div className="divide-y max-h-72 overflow-y-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700" tabIndex={0} role="region" aria-label="Prodotti dell'ordine">
       {groups.map((g) => (
         <div key={g.sellerId} className="px-5 py-3">
           <p className="text-xs font-semibold text-primary-800 mb-2 flex items-center gap-1"><Store size={13} aria-hidden /> {g.storeName}</p>

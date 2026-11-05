@@ -272,7 +272,7 @@ export function ShippingAddressForm({
           name="address"
           value={form.address}
           onChange={onChange}
-          placeholder="Via Roma 1"
+          placeholder="Es. Via Roma 1"
           autoComplete="street-address"
           required
           error={errors.address}
@@ -313,7 +313,7 @@ export function ShippingAddressForm({
           type="tel"
           value={form.phone}
           onChange={onChange}
-          placeholder="3331234567"
+          placeholder="Es. 333 123 4567"
           autoComplete="tel"
           inputMode="tel"
           required

@@ -49,7 +49,8 @@ type Product = {
   profiles: { store_name: string | null } | null;
 };
 
-type ParsedItem = { id: string; quantity: number };
+/** `scelte`: le varianti che aveva scelto chi ha condiviso la lista («grande × 1»). */
+type ParsedItem = { id: string; quantity: number; scelte: string[] };
 
 const MAX_ITEMS = 50;
 
@@ -58,16 +59,25 @@ function parseCartParam(raw: string | null): ParsedItem[] {
   // 5/11/2026 — Solo quantità intere (la rotta degli ordini accetta solo interi: «1.5» passava qui e
   // la cassa rifiutava l'ordine), e lo stesso prodotto ripetuto si somma in una riga sola: prima la
   // lista mostrava la prima quantità e «Aggiungi tutto» le aggiungeva tutte.
-  const righe = new Map<string, number>();
+  const righe = new Map<string, ParsedItem>();
   for (const entry of raw.split(',').slice(0, MAX_ITEMS)) {
-    const [id, qty] = entry.split(':');
+    const [id, qty, variante] = entry.split(':');
     const q = Number(qty);
     if (!id || !Number.isInteger(q) || q < 1 || q > 99) continue;
     // UUID basic validation
     if (!/^[a-f0-9-]{30,40}$/i.test(id)) continue;
-    righe.set(id, Math.min(99, (righe.get(id) ?? 0) + q));
+    const riga = righe.get(id) ?? { id, quantity: 0, scelte: [] };
+    riga.quantity = Math.min(99, riga.quantity + q);
+    if (variante) {
+      try {
+        riga.scelte.push(`${decodeURIComponent(variante).slice(0, 60)} × ${q}`);
+      } catch {
+        /* una variante scritta male non ferma la lista */
+      }
+    }
+    righe.set(id, riga);
   }
-  return [...righe].map(([id, quantity]) => ({ id, quantity }));
+  return [...righe.values()];
 }
 
 function SharedCartInner() {
@@ -282,6 +292,11 @@ function SharedCartInner() {
                 <Link href={`/product/${p.id}`} className="font-semibold text-primary-700 hover:underline">
                   {p.name} — scegli le opzioni
                 </Link>
+                {(parsed.find((x) => x.id === p.id)?.scelte.length ?? 0) > 0 && (
+                  <span className="text-ink-600">
+                    {' '}(nella lista: {parsed.find((x) => x.id === p.id)!.scelte.join(', ')})
+                  </span>
+                )}
               </li>
             ))}
           </ul>

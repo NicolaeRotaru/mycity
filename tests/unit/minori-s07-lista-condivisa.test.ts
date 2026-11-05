@@ -91,3 +91,25 @@ describe('S07 · la lista condivisa', () => {
     s.smonta();
   }, 60000);
 });
+
+describe('S07 · la variante viaggia con la lista', () => {
+  afterEach(() => {
+    globali.__CLIENT_SUPABASE__ = undefined;
+    globali.__QUERY_FINTA__ = undefined;
+  });
+  it('chi riceve vede quale variante aveva scelto chi ha condiviso', async () => {
+    const TORTA = 'cccccccc-3333-4333-8333-cccccccccccc';
+    globali.__CLIENT_SUPABASE__ = database([{ ...base(TORTA, 'Torta della nonna', 20, null), has_variants: true }]);
+    const s = await apri(`${TORTA}:1:${encodeURIComponent('grande')},${TORTA}:2:${encodeURIComponent('piccola')}`);
+    expect(s.radice.textContent).toContain('Torta della nonna — scegli le opzioni');
+    expect(s.radice.textContent).toContain('nella lista: grande × 1, piccola × 2');
+    s.smonta();
+  }, 60000);
+
+  it('il pulsante «Condividi» mette la variante nel testo e nel link', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync('components/ShareCartButton.tsx', 'utf8');
+    expect(src).toMatch(/i\.variantLabel \? `:\$\{encodeURIComponent\(i\.variantLabel\)\}`/);
+    expect(src).toMatch(/i\.variantLabel \? ` · \$\{i\.variantLabel\}`/);
+  });
+});
