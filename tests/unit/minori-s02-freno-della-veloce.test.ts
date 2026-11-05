@@ -205,3 +205,45 @@ describe("il freno della veloce dice il vero a negozio, cliente e amministratori
     expect(src).toContain("Cliente, negozi e fattorino NON sono stati avvisati del cambio di fascia");
   });
 });
+
+describe("2372 · dopo mezzanotte «Domani» si conta dal giorno di nascita dell ordine", () => {
+  it("l etichetta scelta col giorno del giro si riporta al giorno di nascita", async () => {
+    const { fasciaDalGiornoDellOrdine } = await import("@/lib/ordini/veloce-non-confermata");
+    const nato = "2026-10-31T19:45:00.000Z"; // sabato 20:45 a Piacenza
+    const giro = new Date("2026-10-31T23:05:00.000Z"); // domenica 00:05 a Piacenza
+    expect(fasciaDalGiornoDellOrdine("Oggi · 7:30–9:00", giro, nato)).toBe("Domani · 7:30–9:00");
+    expect(fasciaDalGiornoDellOrdine("Domani · 9:00–12:00", giro, nato)).toBeNull();
+    const stessoGiorno = new Date("2026-10-31T20:00:00.000Z");
+    expect(fasciaDalGiornoDellOrdine("Domani · 9:00–12:00", stessoGiorno, nato)).toBe("Domani · 9:00–12:00");
+    expect(fasciaDalGiornoDellOrdine(ETICHETTA_ADESSO, giro, nato)).toBe(ETICHETTA_ADESSO);
+  });
+});
+
+describe("2332 · 2333 · le prove dei soldi che mancavano", () => {
+  it("2332 · se il credito MyCity non torna, l euro della veloce resta nel conto e il cliente non legge «non lo paghi»", async () => {
+    // Quasi tutto pagato col credito: dei 19 € alla porta ne restano 0,50, l'euro va reso sul credito.
+    // Il banco non ha `rpc`: il wallet_credit cade, quindi il credito NON torna.
+    db.orders = [ordine({ total_price: 0.5, wallet_applied_cents: 1850 })];
+    await giro("2026-10-30T17:16:00.000Z");
+    expect(o("o1")).toMatchObject({ delivery_slot: "Oggi · 18:00–19:30", delivery_fee_cents: 400, wallet_applied_cents: 1850 });
+    const alCliente = db.notifications.find((n) => n.user_id === "maria");
+    expect(String(alCliente?.body)).not.toContain("non lo paghi");
+    expect(titoli()).toContain("⚠️ Veloce non confermata da sistemare");
+  });
+
+  it("2333 · un rimborso prenotato che non è mai arrivato a Stripe (niente stripe_refund_id) non vale «ti torna sulla carta»", async () => {
+    db.orders = [ordine({ payment_method: "card", payment_status: "PAID", stripe_session_id: "cs_1", refunded_amount_cents: 100, stripe_refund_id: null })];
+    await giro("2026-10-30T17:16:00.000Z");
+    expect(refundOrderMock).not.toHaveBeenCalled();
+    const alCliente = db.notifications.find((n) => n.user_id === "maria");
+    expect(String(alCliente?.body)).not.toContain("ti torna sulla carta");
+    expect(String(alCliente?.body)).toContain("a mano");
+  });
+
+  it("2333 · con lo stripe_refund_id dello stesso euro, invece, è già reso", async () => {
+    db.orders = [ordine({ payment_method: "card", payment_status: "PAID", stripe_session_id: "cs_1", refunded_amount_cents: 100, stripe_refund_id: "re_1" })];
+    await giro("2026-10-30T17:16:00.000Z");
+    expect(refundOrderMock).not.toHaveBeenCalled();
+    expect(String(db.notifications.find((n) => n.user_id === "maria")?.body)).toContain("ti torna sulla carta");
+  });
+});

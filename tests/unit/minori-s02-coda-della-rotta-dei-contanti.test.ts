@@ -22,7 +22,7 @@ import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
 const NEGOZIO = 'aaaaaaaa-0000-0000-0000-000000000001';
 const NEGOZIO2 = 'aaaaaaaa-0000-0000-0000-000000000002';
 const PRODOTTO2 = '22222222-2222-2222-2222-222222222222';
-const banco = vi.hoisted(() => ({ creatoIl: null as string | null, inVolo: 0, massimo: 0, ordini: 0, prezzoPane: 15 }));
+const banco = vi.hoisted(() => ({ creatoIl: null as string | null, inVolo: 0, massimo: 0, ordini: 0, prezzoPane: 15, righeCarrello: [] as Array<Record<string, unknown>> }));
 const logger = vi.hoisted(() => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() }));
 const PRODOTTO = '11111111-1111-1111-1111-111111111111';
 const posta: Array<{ to: string; html: string; text?: string }> = [];
@@ -112,7 +112,11 @@ vi.mock('@/lib/supabase/server', () => {
     if (table === 'order_items') return { insert: () => Promise.resolve({ error: null }) };
     if (table === 'notifications') return { insert: () => Promise.resolve({ error: null }) };
     // La riga della chiave esiste ma l'update non la trova: zero righe contate.
-    if (table === 'cod_checkout_attempts') return risolvibile({ data: [], count: 0, error: null });
+    if (table === 'cod_checkout_attempts') {
+      const r = risolvibile({ data: [], count: 0, error: null });
+      r.insert = (riga: Record<string, unknown>) => { banco.righeCarrello.push(riga); return r; };
+      return r;
+    }
     return risolvibile({ data: [], error: null });
   };
   return {
@@ -163,6 +167,7 @@ beforeEach(() => {
   banco.massimo = 0;
   banco.ordini = 0;
   banco.prezzoPane = 15;
+  banco.righeCarrello = [];
   logger.error.mockClear();
   vi.resetModules();
 });
@@ -204,5 +209,13 @@ describe('la coda della rotta dei contanti', () => {
     banco.prezzoPane = 50;
     await ordina('2026-10-30T20:15:00.000Z', 'Domani · 9:00–12:00', { dueNegozi: true, quantita: 99 });
     expect(banco.ordini).toBe(2);
+  });
+
+  it('2331 · senza chiave del browser, con due negozi, la riga del carrello lega gli ordini per il freno', async () => {
+    await ordina('2026-10-30T20:15:00.000Z', 'Domani · 9:00–12:00', { dueNegozi: true });
+    expect(banco.righeCarrello).toHaveLength(1);
+    const riga = banco.righeCarrello[0] as { chiave: string; order_ids: Array<{ id: string }> };
+    expect(riga.chiave).toMatch(/^cod-/);
+    expect(riga.order_ids.map((o) => o.id)).toEqual(['ord-1', 'ord-2']);
   });
 });

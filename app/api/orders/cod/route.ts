@@ -1734,6 +1734,22 @@ export const POST = withAuthRateLimit(
       }
     }
 
+    // 5/11/2026 — Senza chiave del browser (app vecchie) nessuna riga legava gli ordini dello stesso
+    // carrello: il freno della veloce (lib/ordini/veloce-non-confermata.ts, ordiniDelCarrello) li
+    // trattava uno per uno, spostava solo il negozio che non aveva confermato e diceva al cliente un
+    // «alla porta paghi» con una parte sola. Con due o più negozi si scrive la riga del carrello con la
+    // chiave generata qui: serve solo a ritrovare il carrello, non a riconoscere un secondo invio.
+    if (!chiaveTentativo && createdOrderIds.length > 1) {
+      const { error: errCarrello } = await admin
+        .from('cod_checkout_attempts')
+        .insert({ chiave: chiaveCarrello, user_id: user.id, order_ids: ordiniCreati });
+      if (errCarrello) {
+        logger.warn('[cod] riga del carrello senza chiave non scritta: il freno vedrà gli ordini uno per uno', {
+          chiave: chiaveCarrello, ordini: createdOrderIds, message: errCarrello.message,
+        });
+      }
+    }
+
     // 22/8/2026 — al contratto: `{ ok: true, data: { … } }`, come ogni altra
     // rotta. Qui rispondeva un oggetto nudo, senza `ok` e senza `data`.
     return apiSuccess({ orderIds: createdOrderIds, ordini: ordiniCreati });

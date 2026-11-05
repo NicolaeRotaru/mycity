@@ -1,3 +1,4 @@
+import { giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email/client';
@@ -108,6 +109,29 @@ const lordoDi = (r: RigaVeloce) =>
  */
 export function fasciaDopoLaVeloce(oraDiPiacenza: Date, orari: unknown[]): string | null {
   return fasceAncoraPossibili(oraDiPiacenza, orari)[0] ?? fasceDiDomaniPossibili(oraDiPiacenza, orari)[0] ?? null;
+}
+
+/**
+ * 5/11/2026 — «OGGI» E «DOMANI» SI CONTANO DAL GIORNO IN CUI L'ORDINE È NATO.
+ *
+ * Tutti i lettori (la scadenza, il giro degli scaduti, le pagine di cliente, negozio e fattorino)
+ * contano l'etichetta dal giorno di `created_at`. Il freno la sceglieva col giorno del giro: dopo
+ * mezzanotte «Domani» voleva dire lunedì per il cliente e domenica per tutti gli altri. Qui
+ * l'etichetta scelta col giorno del giro si riporta al giorno di nascita: «Oggi» del giro diventa
+ * «Domani» se il giro è il giorno dopo; un giorno che dalla nascita non ha nome (dopodomani) dà
+ * `null`, e il carrello non si sposta su una fascia che nessuno saprebbe leggere.
+ */
+export function fasciaDalGiornoDellOrdine(fascia: string, giro: Date, natoIl: string | null | undefined): string | null {
+  const m = /^(Oggi|Domani)( · .+)$/.exec(fascia);
+  if (!m || !natoIl) return fascia;
+  const nato = giornoDiPiacenza(natoIl);
+  const oggi = giornoDiPiacenza(giro);
+  if (!nato || !oggi) return fascia;
+  const dopo = Math.round((Date.parse(`${oggi}T00:00:00Z`) - Date.parse(`${nato}T00:00:00Z`)) / 86_400_000);
+  const giorni = (m[1] === 'Domani' ? 1 : 0) + dopo;
+  if (giorni === 0) return `Oggi${m[2]}`;
+  if (giorni === 1) return `Domani${m[2]}`;
+  return null;
 }
 
 const TITOLO_NON_SPOSTATO = 'Il negozio non ha ancora confermato la consegna veloce';
@@ -357,7 +381,8 @@ async function spostaIlCarrello(
     }
     orari = venditori.map((v) => letti.find((n) => n.id === v)?.store_hours ?? null);
   }
-  const fascia = fasciaDopoLaVeloce(romeNow(adesso), orari);
+  const fasciaDelGiro = fasciaDopoLaVeloce(romeNow(adesso), orari);
+  const fascia = fasciaDelGiro ? fasciaDalGiornoDellOrdine(fasciaDelGiro, adesso, o.created_at) : null;
   if (!fascia) return nonSiSposta(admin, o, adesso, 'né oggi né domani c’è una fascia in cui tutti i negozi del carrello siano aperti', o.seller_id ? orari[venditori.indexOf(o.seller_id)] : undefined);
 
   const conto = consegnaSenzaLaVeloce(carrello.map((r) => {
