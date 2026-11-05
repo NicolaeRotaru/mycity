@@ -510,15 +510,17 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
    *      piattaforma tiene viva la funzione finche' non finiscono, invece di
    *      spegnerla a meta'.
    */
-  const nuovi = createdOrderIds.filter((c) => c.nuovo);
-
-  if (nuovi.length > 0) {
+  // 5/11/2026 — La campanella si tenta per tutti gli ordini del carrello (id
+  // deterministico): un ordine nato in un tentativo morto prima degli avvisi
+  // riceve qui la sua campanella e le sue email; quelli gia' avvisati no.
+  if (createdOrderIds.some((c) => c.nuovo)) {
     // 30/8/2026 (R164) — Il carrello di questa persona e' tornato: e' diventato
     // un ordine. Lo marca anche il browser, ma il browser puo' chiudersi — chi
     // paga e chiude la scheda non passa mai di li'. Qui il fatto e' certo.
     await marcaCarrelloRecuperato(admin, buyerId);
-    await suonaLaCampanellaAiNegozi(admin, nuovi, pendingCheckoutId);
   }
+  const daAvvisare = await suonaLaCampanellaAiNegozi(admin, createdOrderIds, pendingCheckoutId);
+  const nuovi = createdOrderIds.filter((c) => daAvvisare.has(c.orderId));
 
   // #208 — L'acquisto si conta qui, dove il fatto è certo: gli ordini sono
   // appena stati scritti. Prima partiva solo dal browser, al rientro sulla
