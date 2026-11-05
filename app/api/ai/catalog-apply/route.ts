@@ -143,7 +143,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         'catalog-apply-policy',
       );
       if (!verdetto.allowed) {
-        return conIlPrezzo(`Questa modifica non si puo' pubblicare: ${verdetto.reason}`);
+        return conIlPrezzo(`Questa modifica non si può pubblicare: ${verdetto.reason}`);
       }
     }
   } catch (err) {

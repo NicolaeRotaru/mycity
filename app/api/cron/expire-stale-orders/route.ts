@@ -91,7 +91,7 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
     // l'ordine della sera per domani mattina moriva alle 00:15.
     // 16/10/2026 — `internal_dispute_status`: la pausa del carrello, se c'è un
     // rimborso dal cruscotto ancora da dividere (più sotto).
-    .select('id, user_id, payment_method, payment_status, stripe_payment_intent, total_price, wallet_applied_cents, coupon_code, created_at, delivery_slot, internal_dispute_status, seller:profiles!orders_seller_id_fkey ( store_hours )')
+    .select('id, user_id, seller_id, payment_method, payment_status, stripe_payment_intent, total_price, wallet_applied_cents, coupon_code, created_at, delivery_slot, internal_dispute_status, seller:profiles!orders_seller_id_fkey ( store_hours )')
     .eq('delivery_status', 'NEW')
     .lt('created_at', cutoff)
     .limit(100);

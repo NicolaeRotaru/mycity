@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
-import { newOrderSellerTemplate } from "@/lib/email/templates";
+import { newOrderSellerTemplate, conLaData } from "@/lib/email/templates";
 import { rigaScadenzaPerIlNegozio } from "@/lib/ordini/scadenza-accettazione";
 import { ETICHETTA_ADESSO } from "@/lib/quando-arriva";
 
@@ -22,8 +22,10 @@ describe("l email al negozio dice la scadenza vera", () => {
       const t = newOrderSellerTemplate({ orderId: "o1", total: 15, itemsCount: 2, createdAt: c.createdAt, deliverySlot: c.deliverySlot });
       const riga = rigaScadenzaPerIlNegozio({ created_at: c.createdAt, delivery_slot: c.deliverySlot }, new Date(c.createdAt));
       expect(riga).toContain(c.attesa);
-      expect(t.html).toContain(riga);
-      expect(t.text).toContain(riga);
+      // 5/11/2026 — nell'email «oggi» e «domani» portano anche il giorno (l'email si legge dopo).
+      const nellEmail = conLaData(riga!, new Date(c.createdAt));
+      expect(t.html).toContain(nellEmail);
+      expect(t.text).toContain(nellEmail);
       expect(t.html).not.toContain("15 minuti");
     });
   }

@@ -16,6 +16,8 @@
  * scritte nel database, non un secondo conto che potrebbe divergere.
  */
 
+import { formatPriceFromCents } from '@/lib/format';
+
 /** Un ordine del carrello che resta, con la consegna e il totale prima e dopo il ricalcolo. */
 export type OrdineRimasto = {
   ordineId: string;
@@ -44,23 +46,34 @@ export type AvvisoDelCarrello = {
 /** Come stanno i soldi del carrello: rimborsati sulla carta, da pagare alla porta, o mai pagati. */
 export type ComeHaPagato = 'carta' | 'contanti' | 'da-pagare';
 
+/**
+ * 5/11/2026 — Le cifre del carrello passano dalla casa dei formati (lib/format.ts), come la riga del
+ * credito nella stessa email: «16,00 €» e «1.234,56 €», non «16 €» e «1234,56 €».
+ */
 export function euro(cents: number): string {
-  const v = Math.round(cents) / 100;
-  return `${Number.isInteger(v) ? String(v) : v.toFixed(2).replace('.', ',')} €`;
+  return formatPriceFromCents(Math.round(cents));
 }
 
 const numero = (id: string) => `#${id.slice(0, 6).toUpperCase()}`;
 
 /** Le righe per il cliente: una per l'ordine che se ne va, una per ogni ordine che resta. */
 export function righeDelCarrello(a: AvvisoDelCarrello, come: ComeHaPagato): string[] {
+  // 5/11/2026 — Con i contanti (o da pagare) la cifra che conta è quella della conferma: «non
+  // paghi i suoi 16 €» quando la conferma diceva 18 confondeva. La parte di consegna che resta su
+  // di lui si vede negli ordini rimasti, e in fondo c'è il totale del carrello prima e dopo.
   const quanto =
-    come === 'carta' ? `ti tornano ${euro(a.tornaCents)} sulla carta` : `non paghi i suoi ${euro(a.tornaCents)}`;
-  const cioe = a.spesaCents != null ? `, cioè ${euro(a.spesaCents)} di spesa e ${euro(a.consegnaCents)} di consegna` : '';
+    come === 'carta'
+      ? `ti tornano ${euro(a.tornaCents)} sulla carta`
+      : `non paghi i suoi ${euro(a.pagatoCents)} della conferma`;
+  const cioe =
+    come === 'carta' && a.spesaCents != null
+      ? `, cioè ${euro(a.spesaCents)} di spesa e ${euro(a.consegnaCents)} di consegna`
+      : '';
   const perche =
     a.negoziRimasti === 1 ? 'perché ora il giro passa da un negozio solo' : `perché ora il giro passa da ${a.negoziRimasti} negozi`;
   const righe = [`L'ordine ${numero(a.ordineId)} è annullato: ${quanto}${cioe}.`];
   for (const r of a.rimasti) {
-    const cambia = r.totaleCents !== r.totalePrimaCents || r.consegnaCents !== r.consegnaPrimaCents;
+    const cambiaConsegna = r.consegnaCents !== r.consegnaPrimaCents;
     const invece = r.totaleCents !== r.totalePrimaCents ? ` invece di ${euro(r.totalePrimaCents)}` : '';
     const paga =
       come === 'carta'
@@ -69,9 +82,20 @@ export function righeDelCarrello(a: AvvisoDelCarrello, come: ComeHaPagato): stri
           ? `alla porta paghi ${euro(r.totaleCents)}${invece}`
           : `il suo totale è ${euro(r.totaleCents)}${invece}`;
     righe.push(
-      cambia
+      cambiaConsegna
         ? `La consegna dell'ordine ${numero(r.ordineId)} ora è ${euro(r.consegnaCents)} invece di ${euro(r.consegnaPrimaCents)}, ${perche}: ${paga}.`
-        : `L'ordine ${numero(r.ordineId)} non cambia: ${paga}.`,
+        : invece
+          ? `Il totale dell'ordine ${numero(r.ordineId)} cambia: ${paga}.`
+          : `L'ordine ${numero(r.ordineId)} non cambia: ${paga}.`,
+    );
+  }
+  if (come !== 'carta' && a.rimasti.length > 0) {
+    const dopo = a.rimasti.reduce((s, r) => s + r.totaleCents, 0);
+    const prima = a.pagatoCents + a.rimasti.reduce((s, r) => s + r.totalePrimaCents, 0);
+    righe.push(
+      come === 'contanti'
+        ? `In tutto alla porta paghi ${euro(dopo)} invece di ${euro(prima)}.`
+        : `In tutto il carrello ora costa ${euro(dopo)} invece di ${euro(prima)}.`,
     );
   }
   return righe;

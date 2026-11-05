@@ -453,7 +453,7 @@ export async function annullaERimborsa(
  */
 export async function avvisaIlClienteDellAnnullo(
   admin: SupabaseClient,
-  ordine: { id: string; user_id: string | null; wallet_applied_cents?: number | null },
+  ordine: { id: string; user_id: string | null; seller_id?: string | null; wallet_applied_cents?: number | null },
   motivo: string | null | undefined,
   carrello?: { avviso: AvvisoDelCarrello; come: ComeHaPagato } | null,
 ): Promise<boolean> {
@@ -467,10 +467,22 @@ export async function avvisaIlClienteDellAnnullo(
       });
       return false;
     }
+    // 5/11/2026 — Il nome del negozio: in un carrello con più negozi dice quale ordine se ne va.
+    // Se la lettura non riesce l'email parte lo stesso, senza nome.
+    let storeName: string | null = null;
+    if (ordine.seller_id) {
+      try {
+        const { data: negozio } = await admin.from('profiles').select('store_name').eq('id', ordine.seller_id).maybeSingle();
+        storeName = (negozio as { store_name?: string | null } | null)?.store_name ?? null;
+      } catch {
+        storeName = null;
+      }
+    }
     const t = ordineAnnullatoTemplate({
       orderId: ordine.id,
       motivo,
       creditoRestituitoEuro: Number(ordine.wallet_applied_cents ?? 0) / 100,
+      storeName,
     });
     // 30/10/2026 — Il carrello rifatto: le righe con le cifre nuove, sotto il testo di sempre.
     const html = carrello
