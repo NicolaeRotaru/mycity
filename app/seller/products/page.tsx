@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Copy, EyeOff, Sparkles, Download, Plus, Pencil, SlidersHorizontal, X, Check, Package } from 'lucide-react';
@@ -51,9 +52,27 @@ const TABS: { key: string; label: string; match: (s: string) => boolean }[] = [
   { key: 'draft',     label: 'Bozze',      match: (s) => s === 'draft' },
 ];
 
+/**
+ * 361 — La ricerca in cima al pannello porta qui con ?q=…: la pagina la legge e
+ * filtra per nome. In un pezzo a parte dentro <Suspense>, come vuole Next per
+ * useSearchParams in una pagina del browser.
+ */
+function LeggiLaRicerca({ onRicerca }: { onRicerca: (q: string) => void }) {
+  const parametri = useSearchParams();
+  const q = parametri?.get('q')?.trim() ?? '';
+  useEffect(() => { onRicerca(q); }, [q, onRicerca]);
+  return null;
+}
+
+/** Un testo per `ilike`: % e _ valgono come lettere, non come jolly. */
+function perIlike(q: string): string {
+  return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
+
 export default function SellerProductsPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState('all');
+  const [ricerca, setRicerca] = useState('');
 
   /**
    * 27/8/2026 (R070) — QUESTO ELENCO SI FERMAVA AI PRIMI MILLE ARTICOLI.
@@ -68,16 +87,18 @@ export default function SellerProductsPage() {
    * prodotti fra una pagina e l'altra.
    */
   const queryProducts = useInfiniteQuery({
-    queryKey: queryKeys.seller.products,
+    queryKey: [...queryKeys.seller.products, ricerca],
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
       const [da, a] = finestraDellaPagina(pageParam as number);
-      const { data, error, count } = await supabase
+      let domanda = supabase
         .from('products')
         .select('id, name, price, status, images, stock, has_variants, categories(name)', { count: 'exact' })
-        .eq('seller_id', user.id)
+        .eq('seller_id', user.id);
+      if (ricerca) domanda = domanda.ilike('name', perIlike(ricerca));
+      const { data, error, count } = await domanda
         .order('created_at', { ascending: false })
         .order('id', { ascending: false })
         .range(da, a);
@@ -301,6 +322,13 @@ export default function SellerProductsPage() {
 
   return (
     <div className={bulk ? 'pb-24' : undefined}>
+      <Suspense fallback={null}><LeggiLaRicerca onRicerca={setRicerca} /></Suspense>
+      {ricerca && (
+        <p className="mb-3 text-sm text-ink-600">
+          Prodotti che contengono «{ricerca}» ·{' '}
+          <Link href="/seller/products" className="font-semibold text-primary-700 underline">mostra tutti</Link>
+        </p>
+      )}
       <SellerPageTitle
         eyebrow="Catalogo"
         title="Prodotti"
