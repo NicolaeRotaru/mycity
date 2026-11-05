@@ -19,6 +19,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { formatPrice, formatDate } from '@/lib/format';
+import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
+import { dataEOraPiacenza, etichettaMetodo, etichettaStatoPagamento, etichettaStatoBonifico, etichettaContestazione } from '@/lib/admin/etichette';
 import type { OrderStatus } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -194,7 +196,7 @@ export default function AdminOrderDetailPage() {
             <Riga etichetta="Indirizzo">
               {[o.delivery_address, o.delivery_zip, o.delivery_city].filter(Boolean).join(', ') || '—'}
             </Riga>
-            <Riga etichetta="Fascia">{o.delivery_slot ?? '—'}</Riga>
+            <Riga etichetta="Fascia">{fasciaLeggibile(o) ?? '—'}</Riga>
             <Riga etichetta="Note">{o.delivery_notes ?? '—'}</Riga>
           </dl>
         </section>
@@ -207,12 +209,12 @@ export default function AdminOrderDetailPage() {
             <Riga etichetta="Sconto">
               {o.discount_amount ? `${formatPrice(o.discount_amount)}${o.coupon_code ? ` (${o.coupon_code})` : ''}` : '—'}
             </Riga>
-            <Riga etichetta="Pagamento">{o.payment_method ?? '—'} · {o.payment_status ?? '—'}</Riga>
+            <Riga etichetta="Pagamento">{etichettaMetodo(o.payment_method)} · {etichettaStatoPagamento(o.payment_status)}</Riga>
             <Riga etichetta="Rimborsato">
               {o.refunded_amount_cents ? formatPrice(o.refunded_amount_cents / 100) : '—'}
             </Riga>
-            <Riga etichetta="Bonifico al negozio">{o.payout_status ?? '—'}</Riga>
-            <Riga etichetta="Contestazione">{o.dispute_status ?? '—'}</Riga>
+            <Riga etichetta="Bonifico al negozio">{etichettaStatoBonifico(o.payout_status)}</Riga>
+            <Riga etichetta="Contestazione">{etichettaContestazione(o.dispute_status)}</Riga>
           </dl>
         </section>
 
@@ -220,7 +222,7 @@ export default function AdminOrderDetailPage() {
           <h2 className="mb-2 text-sm font-bold text-ink-800">Tappe</h2>
           <dl>
             {tappe.map(([nome, quando]) => (
-              <Riga key={nome} etichetta={nome}>{quando ? formatDate(quando) : '—'}</Riga>
+              <Riga key={nome} etichetta={nome}>{quando ? dataEOraPiacenza(quando) : '—'}</Riga>
             ))}
           </dl>
         </section>

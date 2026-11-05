@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, Select, Checkbox } from '@/components/ui/Field';
 import { slugify } from '@/lib/store-site';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 /**
  * Admin: gestione categorie. SELECT pubblica; scrittura via /api/admin/categories
@@ -37,7 +38,7 @@ async function authedFetch(method: string, body: unknown) {
   return json;
 }
 
-function CatRow({ cat, tops, onDone }: { cat: Cat; tops: Cat[]; onDone: () => void }) {
+function CatRow({ cat, tops, figli = 0, onDone }: { cat: Cat; tops: Cat[]; figli?: number; onDone: () => void }) {
   const [name, setName] = useState(cat.name);
   const [slug, setSlug] = useState(cat.slug);
   const [icon, setIcon] = useState(cat.icon ?? '');
@@ -66,12 +67,20 @@ function CatRow({ cat, tops, onDone }: { cat: Cat; tops: Cat[]; onDone: () => vo
         <Input label="Icona" containerClassName="w-20" value={icon} maxLength={8} placeholder="Emoji" onChange={(e) => setIcon(e.target.value)} />
         <Select label="Genitore" containerClassName="w-44" value={parentId} onChange={(e) => setParentId(e.target.value)}>
           <option value="">— Principale —</option>
-          {tops.filter((t) => t.id !== cat.id).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          {/* Una principale con sottocategorie non può diventare figlia: le sue
+              sottocategorie diventerebbero nipoti, che il pannello non disegna. */}
+          {figli === 0 && tops.filter((t) => t.id !== cat.id).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
         </Select>
         <Input label="Ordine" containerClassName="w-20" type="number" min={0} value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value) || 0)} />
         <Checkbox containerClassName="mb-2.5" label="In evidenza" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />
         <Button className="mb-0.5" size="sm" type="button" loading={save.isPending} onClick={() => save.mutate()}>Salva</Button>
-        <button type="button" onClick={() => { if (window.confirm(`Eliminare "${cat.name}"?`)) del.mutate(); }} aria-label="Elimina" className="mb-2 p-2 text-ink-400 hover:text-secondary-600">
+        <button type="button" onClick={() => {
+            if (figli > 0) {
+              toast.error(`«${cat.name}» ha ${figli} sottocategori${figli === 1 ? 'a' : 'e'}: spostale o eliminale prima.`);
+              return;
+            }
+            if (window.confirm(`Eliminare «${cat.name}»? Se ci sono prodotti in questa categoria l'eliminazione verrà rifiutata.`)) del.mutate();
+          }} aria-label="Elimina" className="mb-2 p-2 text-ink-400 hover:text-secondary-600">
           <Trash2 size={16} aria-hidden />
         </button>
       </div>
@@ -85,7 +94,7 @@ export default function AdminCategoriesPage() {
   const [newIcon, setNewIcon] = useState('');
   const [newParent, setNewParent] = useState('');
 
-  const { data: cats = [], isLoading } = useQuery({
+  const { data: cats = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.categories,
     queryFn: async (): Promise<Cat[]> => {
       const { data, error } = await supabase.from('categories').select('*');
@@ -137,11 +146,19 @@ export default function AdminCategoriesPage() {
 
       {isLoading ? (
         <p className="text-sm text-ink-500">Caricamento…</p>
+      ) : isError ? (
+        <ErrorState
+          variant="compact"
+          title="Non riesco a leggere le categorie"
+          description="Non vuol dire che non ce ne siano: la lettura non è andata. Riprova."
+          retry={() => { void refetch(); }}
+          supportHref={null}
+        />
       ) : (
         <div className="space-y-2">
           {tops.map((t) => (
             <div key={t.id} className="space-y-2">
-              <CatRow cat={t} tops={tops} onDone={invalidate} />
+              <CatRow cat={t} tops={tops} figli={childrenOf(t.id).length} onDone={invalidate} />
               {childrenOf(t.id).map((c) => <CatRow key={c.id} cat={c} tops={tops} onDone={invalidate} />)}
             </div>
           ))}

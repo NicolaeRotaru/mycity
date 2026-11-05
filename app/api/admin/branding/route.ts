@@ -1,5 +1,6 @@
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
+import { writeAudit } from '@/lib/audit';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { brandingSchema, normalizeBranding } from '@/lib/site-branding';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -40,5 +41,6 @@ export const PUT = withAdminAuth(async ({ user, req }) => {
     .upsert({ id: 1, branding: parsed.data, updated_by: user.id, updated_at: new Date().toISOString() });
   if (error) return ApiErrors.internal('Impossibile salvare il branding');
 
+  await writeAudit({ actorId: user.id, action: 'branding.update', targetTable: 'site_settings', targetId: '1' });
   return apiSuccess({ branding: parsed.data });
 });

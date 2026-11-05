@@ -12,7 +12,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { LoadError } from '@/components/admin/LoadError';
 import { Input, Select } from '@/components/ui/Field';
 import HomeSectionsEditor from '@/components/admin/home/HomeSectionsEditor';
-import { cmsPageSchema, cmsPageLabel, CMS_PAGES, type CmsPage } from '@/lib/cms-page';
+import { cmsPageSchema, cmsPageLabel, CMS_PAGES, type CmsPage, type BloccoScartato } from '@/lib/cms-page';
 import type { HomeSection } from '@/lib/home-site';
 
 /** Editor di una pagina statica (CMS) a blocchi di contenuto. */
@@ -21,19 +21,21 @@ export default function AdminCmsPageEditor() {
   const known = CMS_PAGES.find((p) => p.slug === slug);
   const qc = useQueryClient();
 
-  const { data: initial, isLoading, error, refetch } = useQuery({
+  const { data: letta, isLoading, error, refetch } = useQuery({
     queryKey: ['admin', 'cms', slug],
     enabled: !!slug,
-    queryFn: async (): Promise<CmsPage> => {
+    queryFn: async (): Promise<{ page: CmsPage; scartati: BloccoScartato[] }> => {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`/api/admin/cms/${slug}`, {
         headers: { ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}) },
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || !json?.ok) throw new Error(json?.error?.message ?? 'Errore di caricamento');
-      return json.data.page as CmsPage;
+      return { page: json.data.page as CmsPage, scartati: (json.data.scartati ?? []) as BloccoScartato[] };
     },
   });
+  const initial = letta?.page;
+  const scartati = letta?.scartati ?? [];
 
   const [draft, setDraft] = useState<CmsPage | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -97,6 +99,14 @@ export default function AdminCmsPageEditor() {
           <ExternalLink size={16} aria-hidden /> Vedi pagina
         </Link>
       </header>
+
+      {scartati.length > 0 && (
+        <div role="alert" className="rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-3 text-sm text-secondary-800">
+          <strong>{scartati.length === 1 ? '1 blocco non valido è stato tolto' : `${scartati.length} blocchi non validi sono stati tolti`}</strong>
+          {' '}dalla pagina salvata ({scartati.map((b) => `n. ${b.posizione + 1}${b.type ? ` «${b.type}»` : ''}: ${b.motivo}`).join('; ')}).
+          Se salvi adesso, la pagina pubblicata resterà senza.
+        </div>
+      )}
 
       <section className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-3">

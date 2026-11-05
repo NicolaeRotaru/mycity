@@ -1,7 +1,8 @@
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
-import { cmsPageSchema, emptyCmsPage, type CmsPage } from '@/lib/cms-page';
+import { cmsPageSchema, emptyCmsPage, leggiCmsPage, type CmsPage } from '@/lib/cms-page';
+import { writeAudit } from '@/lib/audit';
 import { siteByteSize, MAX_SITE_BYTES } from '@/lib/home-site';
 import { sanitizeRichText } from '@/lib/sanitize-html';
 
@@ -27,8 +28,10 @@ export const GET = withAdminAuth(async ({ params }) => {
     const admin = getAdminSupabase();
     const { data, error } = await admin.from('cms_pages').select('title, sections, status').eq('slug', slug).maybeSingle();
     if (error) return ApiErrors.internal('Impossibile caricare la pagina');
-    const parsed = data ? cmsPageSchema.safeParse(data) : null;
-    return apiSuccess({ page: parsed?.success ? parsed.data : emptyCmsPage() });
+    // Blocco per blocco: un blocco non più valido si toglie e si segnala,
+    // il resto della pagina resta (prima tornava tutta vuota).
+    const letta = leggiCmsPage(data as { title?: unknown; sections?: unknown; status?: unknown } | null);
+    return apiSuccess({ page: letta?.page ?? emptyCmsPage(), scartati: letta?.scartati ?? [] });
 });
 
 export const PUT = withAdminAuth(async ({ user, req: r, params }) => {
@@ -56,5 +59,6 @@ export const PUT = withAdminAuth(async ({ user, req: r, params }) => {
     });
     if (error) return ApiErrors.internal('Impossibile salvare la pagina');
 
+    await writeAudit({ actorId: user.id, action: 'cms.update', targetTable: 'cms_pages', targetId: slug, metadata: { status: page.status, blocchi: page.sections.length } });
     return apiSuccess({ page });
 });
