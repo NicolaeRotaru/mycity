@@ -7,12 +7,15 @@
  * solo, pure: nessuna rete, nessun React, una prova le esegue.
  */
 
-/** Chi ha fatto un'azione del registro. Ogni riga ha un autore umano (lib/audit.ts). */
+/** Chi ha fatto un'azione del registro: una persona (lib/audit.ts) o, senza autore, un lavoro automatico. */
 export function autoreDellaRiga(r: { actor_id: string | null; actor: { full_name: string | null } | null }): string {
   const nome = r.actor?.full_name?.trim();
   if (nome) return nome;
-  // actor_id è NULL solo se l'account è stato cancellato (ON DELETE SET NULL).
-  if (!r.actor_id) return 'account cancellato';
+  // actor_id è NULL in due casi: l'autore ha cancellato l'account (ON DELETE SET NULL), oppure la
+  // riga l'ha scritta un lavoro automatico senza autore (avvisi della privacy, cancellazione con
+  // conto Stripe da chiudere). 5/11/2026 (unione, collaudo della 1814): la pagina non sa quale dei
+  // due, quindi li nomina tutti e due invece di dirne uno solo, a volte falso.
+  if (!r.actor_id) return 'sistema o account cancellato';
   return `utente senza nome (${r.actor_id.slice(0, 8)}…)`;
 }
 

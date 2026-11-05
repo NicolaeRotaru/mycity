@@ -84,7 +84,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // 16/10 (riesame) — `internal_dispute_status`: se l'ordine è fermo per un rimborso dal cruscotto
   // da dividere, chiudere il reclamo non toglie la pausa (più sotto).
   const COLONNE_ORDINE =
-    'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status, internal_dispute_status, stripe_refund_id';
+    'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status, internal_dispute_status, stripe_refund_id, seller_id';
   let ord: OrdineDaRimborsare | null = null;
   if (dispute.order_id) {
     const { data } = await conRipiegoSchema(
@@ -357,7 +357,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 
   // 5/11/2026 (S05) — Anche il negozio sa come si è chiuso il reclamo a suo carico,
   // e quanto è stato rimborsato al cliente: prima l'avviso partiva solo al cliente.
-  if (dispute.against_id) {
+  // 5/11/2026 (unione, collaudo della 190) — L'avviso va al negozio DELL'ORDINE, letto dal database:
+  // `against_id` lo scrive il browser del cliente quando apre il reclamo, e nessuna regola lo lega
+  // all'ordine. Senza ordine letto si ripiega su `against_id`, come prima.
+  const negozioDellOrdine = (ord as { seller_id?: string | null } | null)?.seller_id ?? dispute.against_id ?? null;
+  if (negozioDellOrdine) {
     const esitoPerIlNegozio =
       body.status === 'resolved_buyer'
         ? 'Reclamo chiuso a favore del cliente'
@@ -370,7 +374,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     // 5/11/2026 (unione) — Dalla stessa porta delle altre campanelle (S02): se la scrittura cade, lo dice.
     await scriviCampanella(admin, {
       category: 'order',
-      user_id: dispute.against_id,
+      user_id: negozioDellOrdine,
       title: `${esitoPerIlNegozio} · ordine #${String(dispute.order_id).slice(0, 6).toUpperCase()}`,
       body: `${body.notes}${rimborso}`,
       link: `/seller/orders/${dispute.order_id}`,

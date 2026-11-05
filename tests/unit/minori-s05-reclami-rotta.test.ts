@@ -45,7 +45,7 @@ vi.mock('@/lib/supabase/server', () => ({
       if (tabella === 'orders') {
         return {
           select: () => ({ eq: () => ({ single: async () => ({
-            data: { stripe_payment_intent: 'pi_1', payment_method: 'card', total_price: 30 }, error: null,
+            data: { stripe_payment_intent: 'pi_1', payment_method: 'card', total_price: 30, seller_id: (globalThis as Record<string, unknown>).__NEGOZIO_DELL_ORDINE__ ?? 'negozio-1' }, error: null,
           }) }) }),
           update: () => catena,
         };
@@ -64,7 +64,7 @@ function risolvi(body: unknown, ruolo = 'admin') {
   return POST(req as never, { params: Promise.resolve({ id: 'd1' }) });
 }
 
-beforeEach(() => { avvisi.length = 0; refundOrder.mockClear(); });
+beforeEach(() => { avvisi.length = 0; refundOrder.mockClear(); delete (globalThis as Record<string, unknown>).__NEGOZIO_DELL_ORDINE__; });
 
 describe('chiudere un reclamo', () => {
   it('chi non è admin riceve ancora 403 e non parte nessun rimborso', async () => {
@@ -94,5 +94,13 @@ describe('chiudere un reclamo', () => {
   it('190: a favore del negozio, il negozio lo sa', async () => {
     await risolvi({ status: 'resolved_seller', notes: 'Il prodotto era conforme alla descrizione.' });
     expect(String(avvisi.find((a) => a.user_id === 'negozio-1')?.title)).toMatch(/a tuo favore/);
+  });
+  // 5/11/2026 (unione, collaudo della 190) — `against_id` lo scrive il browser del cliente: l'esito va
+  // al negozio dell'ordine letto dal database, non a chi il cliente ha scritto nel reclamo.
+  it('190: l’esito va al negozio vero dell’ordine, anche se il reclamo nomina un altro', async () => {
+    (globalThis as Record<string, unknown>).__NEGOZIO_DELL_ORDINE__ = 'forno-vero';
+    await risolvi({ status: 'resolved_seller', notes: 'Il prodotto era conforme alla descrizione.' });
+    expect(avvisi.find((a) => a.user_id === 'forno-vero'), 'il negozio dell’ordine non è stato avvisato').toBeDefined();
+    expect(avvisi.find((a) => a.user_id === 'negozio-1'), 'l’estraneo scritto nel reclamo ha ricevuto le note').toBeUndefined();
   });
 });

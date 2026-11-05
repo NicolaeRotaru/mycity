@@ -31,8 +31,11 @@ describe('registro delle azioni: chi l’ha fatta', () => {
     expect(r.host.textContent).toContain('utente senza nome (abcdef12…)');
   });
 
-  it('autore cancellato (actor_id null) → «account cancellato»', () => {
-    expect(autoreDellaRiga({ actor_id: null, actor: null })).toBe('account cancellato');
+  // 5/11/2026 (unione, collaudo della 1814) — Senza autore può essere un account cancellato OPPURE un
+  // lavoro automatico (lib/privacy/avvisi-a-chi-aspetta.ts, lib/account/cancellazione.ts scrivono
+  // actor_id null apposta): la pagina li nomina tutti e due.
+  it('senza autore (actor_id null) → «sistema o account cancellato»', () => {
+    expect(autoreDellaRiga({ actor_id: null, actor: null })).toBe('sistema o account cancellato');
     expect(autoreDellaRiga({ actor_id: 'x', actor: { full_name: 'Nicola' } })).toBe('Nicola');
   });
 });
