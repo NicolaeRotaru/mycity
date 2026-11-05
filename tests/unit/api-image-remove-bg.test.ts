@@ -12,6 +12,13 @@ vi.mock('@/lib/api/middleware', () => ({
     (req: Request) => handler({ user: FAKE_USER, req }),
 }));
 
+// S06 (245): la rotta ora segue AI_NEGOZI_ACCESA (spenta al lancio). Queste prove
+// controllano il comportamento da accesa; lo spento è in minori-s06-foto-del-prodotto.
+vi.mock('@/lib/funzioni-al-lancio', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  AI_NEGOZI_ACCESA: true,
+}));
+
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));

@@ -125,7 +125,7 @@ export default function SellerReviewsPage() {
               <Stars rating={stats.avg} />
               <p className="text-sm text-ink-500 mt-1">{stats.count} recensioni</p>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5" role="group" aria-label="Filtra le recensioni per stelle">
               {stats.distribution.map((count, i) => {
                 const star = 5 - i;
                 const pct = stats.count > 0 ? (count / stats.count) * 100 : 0;
