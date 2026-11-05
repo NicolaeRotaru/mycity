@@ -53,7 +53,7 @@ export default function ListsPage() {
   const { data: featuredLists = [] } = useQuery({
     queryKey: queryKeys.lists.inVetrina,
     queryFn: async (): Promise<List[]> => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('product_lists')
         .select(`
           id, owner_id, title, description, cover_emoji, is_public, is_featured, updated_at,
@@ -63,6 +63,7 @@ export default function ListsPage() {
         .eq('is_featured', true)
         .order('updated_at', { ascending: false })
         .limit(8);
+      if (error) throw error;
       // 18/10/2026 — «@handle» di chi ha creato la lista non si aggancia più alla tabella dei
       // profili: dopo le migrazioni 110 e 161 il browser ne legge solo la propria riga, e le liste
       // avrebbero perso l'autore. Lo dà una rotta del server, solo per chi ha acceso il profilo
@@ -71,10 +72,12 @@ export default function ListsPage() {
     },
   });
 
-  const { data: publicLists = [], isLoading: caricoPubbliche } = useQuery({
+  // 5/11/2026 — Una lettura caduta non è «nessuna lista»: l'errore va alla
+  // query, che riprova, e la pagina offre «Riprova» invece dello stato vuoto.
+  const { data: publicLists = [], isLoading: caricoPubbliche, isError: pubblicheCadute, refetch: rileggiPubbliche } = useQuery({
     queryKey: queryKeys.lists.public,
     queryFn: async (): Promise<List[]> => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('product_lists')
         .select(`
           id, owner_id, title, description, cover_emoji, is_public, is_featured, updated_at,
@@ -83,16 +86,18 @@ export default function ListsPage() {
         .eq('is_public', true)
         .order('updated_at', { ascending: false })
         .limit(24);
+      if (error) throw error;
       return conAutoriPubblici((data ?? []) as unknown as Omit<List, 'owner'>[]);
     },
   });
 
-  const { data: myLists = [], isLoading: caricoMie } = useQuery({
+  // `null` = chi guarda non ha fatto l'accesso: non ha «zero liste», non le può avere.
+  const { data: leMie, isLoading: caricoMie, isError: mieCadute, refetch: rileggiMie } = useQuery({
     queryKey: queryKeys.lists.mine,
-    queryFn: async (): Promise<List[]> => {
+    queryFn: async (): Promise<List[] | null> => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return [];
-      const { data } = await supabase
+      if (!user) return null;
+      const { data, error } = await supabase
         .from('product_lists')
         .select(`
           id, owner_id, title, description, cover_emoji, is_public, is_featured, updated_at,
@@ -100,9 +105,12 @@ export default function ListsPage() {
         `)
         .eq('owner_id', user.id)
         .order('updated_at', { ascending: false });
+      if (error) throw error;
       return (data ?? []) as unknown as List[];
     },
   });
+  const ospite = leMie === null;
+  const myLists = leMie ?? [];
 
   const create = useMutation({
     mutationFn: async () => {
@@ -205,7 +213,27 @@ export default function ListsPage() {
         </section>
       )}
 
-      {!caricoMie && myLists.length === 0 && (
+      {!caricoMie && mieCadute && (
+        <section role="alert" className="bg-cream-50 border border-cream-300 rounded-2xl p-6 text-center">
+          <p className="text-ink-700 mb-3">Non riesco a leggere le tue liste.</p>
+          <Button onClick={() => { void rileggiMie(); }} size="sm" variant="secondary">Riprova</Button>
+        </section>
+      )}
+
+      {!caricoMie && !mieCadute && ospite && (
+        <section className="bg-cream-50 border border-cream-300 rounded-2xl p-8 text-center">
+          <ListChecks size={32} className="mx-auto text-ink-300 mb-3" strokeWidth={1.5} />
+          <p className="text-ink-700 mb-3">Accedi per creare le tue liste e ritrovarle qui.</p>
+          <Link
+            href="/sign-in?returnTo=/lists"
+            className="inline-flex items-center gap-1.5 bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-semibold text-sm"
+          >
+            Accedi
+          </Link>
+        </section>
+      )}
+
+      {!caricoMie && !mieCadute && !ospite && myLists.length === 0 && (
         <section className="bg-cream-50 border border-cream-300 rounded-2xl p-8 text-center">
           <ListChecks size={32} className="mx-auto text-ink-300 mb-3" strokeWidth={1.5} />
           <p className="text-ink-700 mb-3">Non hai ancora liste. Inizia a crearne una.</p>
@@ -231,6 +259,13 @@ export default function ListsPage() {
         <h2 className="font-bold text-ink-900 mb-3">Liste della community</h2>
         {caricoPubbliche ? (
           <Scheletri quanti={4} />
+        ) : pubblicheCadute ? (
+          <div role="alert" className="text-sm text-ink-600 flex flex-wrap items-center gap-2">
+            <span>Non riesco a leggere le liste della community.</span>
+            <button type="button" onClick={() => { void rileggiPubbliche(); }} className="font-semibold text-primary-700 underline">
+              Riprova
+            </button>
+          </div>
         ) : publicLists.length === 0 ? (
           <p className="text-sm text-ink-500">Nessuna lista pubblica per ora.</p>
         ) : (

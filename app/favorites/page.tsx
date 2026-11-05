@@ -8,19 +8,35 @@ import EmptyState from '@/components/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
-import { leggiPreferiti } from '@/lib/queries/preferiti';
+import { leggiPreferiti, type Preferito } from '@/lib/queries/preferiti';
+
+/**
+ * 5/11/2026 — `null` = chi guarda non ha fatto l'accesso: non ha «nessun
+ * preferito», non ne può avere. `salvati` è quanti cuoricini ha toccato, anche
+ * su prodotti che oggi non si vedono (finiti per oggi, tolti dal negozio): la
+ * regola di lettura dei prodotti li nasconde, ma non sono spariti.
+ */
+type Lettura = { prodotti: Preferito[]; salvati: number } | null;
 
 export default function FavoritesPage() {
-  const { data: products = [], isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: [...queryKeys.favorites.all, 'products'],
-    queryFn: async () => {
+    queryFn: async (): Promise<Lettura> => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return [];
+      if (!user) return null;
       // 15/10/2026 (R3) — La lettura vive in lib/queries/preferiti.ts: agganciava il
       // negozio a `profiles`, e dopo la migrazione 161 la pagina si svuotava per ogni cliente.
-      return leggiPreferiti(supabase, user.id);
+      const prodotti = await leggiPreferiti(supabase, user.id);
+      const { count, error } = await supabase
+        .from('favorites')
+        .select('product_id', { count: 'exact', head: true })
+        .eq('user_id', user.id);
+      if (error) throw error;
+      return { prodotti, salvati: Math.max(count ?? 0, prodotti.length) };
     },
   });
+  const products = data?.prodotti ?? [];
+  const nascosti = data ? data.salvati - products.length : 0;
 
   if (isLoading) return <LoadingState />;
 
@@ -30,6 +46,38 @@ export default function FavoritesPage() {
         <ErrorState
           title="Impossibile caricare i preferiti"
           onRetry={() => refetch()}
+        />
+      </div>
+    );
+  }
+
+  if (data === null) {
+    return (
+      <div className="py-8">
+        <EmptyState
+          icon={Heart}
+          title="Accedi per vedere i tuoi preferiti"
+          description="I prodotti che salvi col cuoricino restano legati al tuo account."
+          ctaLabel="Accedi"
+          ctaHref="/sign-in?returnTo=/favorites"
+          secondaryLabel="Esplora i prodotti"
+          secondaryHref="/search"
+        />
+      </div>
+    );
+  }
+
+  if (products.length === 0 && nascosti > 0) {
+    return (
+      <div className="py-8">
+        <EmptyState
+          icon={Heart}
+          title="I tuoi preferiti non sono disponibili in questo momento"
+          description={nascosti === 1
+            ? 'Il prodotto che hai salvato è finito per oggi o il negozio l’ha tolto: torna qui appena è di nuovo in vendita.'
+            : `I ${nascosti} prodotti che hai salvato sono finiti per oggi o il negozio li ha tolti: tornano qui appena sono di nuovo in vendita.`}
+          ctaLabel="Esplora i prodotti"
+          ctaHref="/search"
         />
       </div>
     );
@@ -60,6 +108,7 @@ export default function FavoritesPage() {
         </h1>
         <p className="mt-1 text-sm text-ink-500">
           {products.length === 1 ? '1 prodotto salvato' : `${products.length} prodotti salvati`}
+          {nascosti > 0 && ` · ${nascosti === 1 ? '1 non disponibile ora' : `${nascosti} non disponibili ora`}`}
         </p>
       </header>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">

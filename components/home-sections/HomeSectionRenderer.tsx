@@ -5,7 +5,7 @@ import { FRASE_PREZZO_NEGOZI } from '@/app/seller/earnings/commissione';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
-  Store, Check, ShieldCheck, ArrowRight, Heart, Sparkles, Gift,
+  Store, Check, ShieldCheck, ArrowRight, Heart, Sparkles, Mail,
   Banknote, Home as HomeIcon, Truck, RotateCcw,
 } from 'lucide-react';
 import { sizedImage } from '@/lib/image-url';
@@ -353,7 +353,7 @@ function HomeBlock({
           <div className={`container mx-auto px-4 sm:px-6 ${SPAZIO_FASCIA} grid grid-cols-1 md:grid-cols-2 gap-8 items-center`}>
             <div>
               <span className="inline-flex items-center gap-1.5 bg-white/80 text-primary-800 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ring-1 ring-primary-200">
-                <Gift size={14} strokeWidth={2.4} />
+                <Mail size={14} strokeWidth={2.4} aria-hidden />
                 {/* 27/10/2026 — Qui si promettevano soldi all'iscrizione, senza nessun meccanismo dietro: via. */}
                 {c.badge || 'Newsletter'}
               </span>

@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage, logoNegozio } from '@/lib/image-url';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
@@ -40,6 +41,7 @@ type LeaderboardRow = {
 
 export default function ShopOfMonthPage() {
   const qc = useQueryClient();
+  const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [myVoteSeller, setMyVoteSeller] = useState<string | null>(null);
 
@@ -72,12 +74,15 @@ export default function ShopOfMonthPage() {
     queryFn: (): Promise<Pick | null> => leggiNegozioDelMese(supabase, firstOfMonth),
   });
 
-  const { data: leaderboard = [] } = useQuery({
+  const { data: leaderboard = [], isError: classificaCaduta, refetch: rileggiClassifica } = useQuery({
     queryKey: queryKeys.shopOfMonth.leaderboard,
     queryFn: async (): Promise<LeaderboardRow[]> => {
-      const { data } = await supabase
+      // 5/11/2026 — Una lettura caduta non è «nessun negozio in classifica»:
+      // l'errore va alla query, che riprova e fa vedere «Riprova».
+      const { data, error } = await supabase
         .from('shop_of_month_leaderboard')
         .select('*');
+      if (error) throw error;
       return (data as LeaderboardRow[]) ?? [];
     },
     refetchInterval: 60_000,
@@ -163,7 +168,18 @@ export default function ShopOfMonthPage() {
           )}
         </div>
 
-        {leaderboard.length === 0 ? (
+        {classificaCaduta ? (
+          <div role="alert" className="text-sm text-ink-600 flex flex-wrap items-center gap-2">
+            <span>Non riesco a leggere la classifica.</span>
+            <button
+              type="button"
+              onClick={() => { void rileggiClassifica(); }}
+              className="font-semibold text-primary-700 underline"
+            >
+              Riprova
+            </button>
+          </div>
+        ) : leaderboard.length === 0 ? (
           <p className="text-ink-500 text-sm">Nessun negozio in classifica per ora.</p>
         ) : (
           <ol className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -194,7 +210,11 @@ export default function ShopOfMonthPage() {
                     </div>
                   </Link>
                   <button
-                    onClick={() => userId ? vote.mutate(row.seller_id) : toast.error('Accedi per votare')}
+                    onClick={() => userId
+                      ? vote.mutate(row.seller_id)
+                      : toast.error('Accedi per votare', {
+                          action: { label: 'Accedi', onClick: () => router.push('/sign-in?returnTo=/shop-of-month') },
+                        })}
                     disabled={vote.isPending || isVoted}
                     className={`flex-shrink-0 px-3 py-1.5 rounded-full font-bold text-xs transition-colors ${
                       isVoted

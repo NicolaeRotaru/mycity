@@ -4,7 +4,7 @@ import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { useRef, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { X, MapPin, ShoppingCart, Gift, ArrowRight } from 'lucide-react';
+import { X, MapPin, ShoppingCart, Store, ArrowRight } from 'lucide-react';
 import { fraseComeSiPaga } from '@/lib/promesse-pubbliche';
 import { useProfile } from './hooks/useProfile';
 import { useLocalStorage } from '@/lib/hooks';
@@ -26,11 +26,15 @@ const KEY = 'mc_buyer_onboarded';
 
 const STEPS = [
   {
-    icon: Gift,
+    // 5/11/2026 — Il pacco regalo restava qui anche dopo che il regalo era stato tolto.
+    icon: Store,
     title: 'Benvenuto su MyCity',
     // 27/10/2026 — Qui si prometteva uno sconto di benvenuto «applicato in automatico
     // al checkout»: la cassa non lo applicava, e al lancio non c'e' nessun regalo in euro.
-    body: 'Qui ordini dai negozi veri di Piacenza e paghi alla consegna.',
+    // 5/11/2026 — E «paghi alla consegna» era scritto a mano, mentre il terzo passo prende
+    // il modo di pagare dalla cassa: con la carta accesa i due passi si contraddicevano.
+    // Il modo di pagare lo dice solo il terzo passo.
+    body: 'Qui ordini dai negozi veri di Piacenza e te lo portiamo a casa.',
     cta: 'Vai avanti',
   },
   {

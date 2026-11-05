@@ -97,7 +97,13 @@ export const supabase = {
     updateUser: portaAuth('updateUser', NESSUNO),
     exchangeCodeForSession: portaAuth('exchangeCodeForSession', NESSUNO),
   },
-  channel: () => ({ on: () => ({ subscribe: () => ({}) }), subscribe: () => ({}), unsubscribe: () => {} }),
+  // 5/11/2026 (S04) — Un canale vero si concatena: `.on(...).on(...).subscribe()`. Prima il
+  // secondo `.on` non c'era, e ogni pagina che ascolta due eventi registrava un TypeError a ogni
+  // giro, che chi legge i log prendeva per un guasto della pagina.
+  channel: () => {
+    const canale = { on: () => canale, subscribe: () => canale, unsubscribe: () => {} };
+    return canale;
+  },
   removeChannel: () => {},
   storage: {
     // L'indirizzo pubblico di una foto caricata lo decide la prova con
