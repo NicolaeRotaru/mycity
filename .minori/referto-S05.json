@@ -1,0 +1,1547 @@
+{
+ "sessione": "S05",
+ "ramo": "claude/youthful-gates-blkxmk-m05",
+ "commit_finale": "VEDI_ULTIMO_COMMIT",
+ "verify": {
+  "typecheck": "verde",
+  "lint": "verde (solo avvisi già presenti)",
+  "test": "rosso",
+  "note": "7625 prove verdi, 2 rosse: tests/unit/le-pagine-ordini-del-negozio-leggono-gli-orari.test.tsx › «caso 1 — la lista» e «caso 1 — il dettaglio». Erano già rosse su origin/main (provato in una copia pulita del ramo principale): non toccate."
+ },
+ "revisore": "Un agente revisore ha letto tutto il diff (tsc verde, 43 file di prova verdi, export di page/route ammessi, rotte admin e KYC ancora dentro withAdminAuth/withAuth, colonne e azioni di registro esistenti). Ha trovato 16 punti. Corretti: (1) un fattorino sospeso con la polizza scaduta tornava attivo con «Riattiva» → il controllo delle scadenze ora viene prima del ritorno anticipato, con una prova nuova; (2) con la verifica manuale sempre PENDING, start-check non si poteva più rilanciare → il blocco vale solo per fornitori esterni, prova nuova; (3) la rilettura dei documenti ogni 90 s scriveva una riga 'kyc.view' a ogni giro → si rilegge solo al ritorno sulla scheda; (5) con l'elenco rimesse tagliato si poteva confermare un gruppo rider·giorno a metà → quel gruppo non si conferma; (8) decodeURIComponent senza try su un vecchio link; (9) errori di conteggio consegne e di lettura email ignorati; (10) avviso sbagliato annullando un ordine con carta già consegnato; (13) date di scadenza vere (2030) nelle prove → 2099. Non corretti, scritti qui: (4) l'importo atteso delle rimesse lo manda il browser e la rotta non lo ricalcola; (6) le righe 'kyc.upload'/'kyc.submit' finiscono nello specchio activity_events con l'etichetta «Azione admin» (lib/audit.ts, fuori territorio); (7) un admin non può caricare documenti da /rider/onboarding, e il ruolo si controlla dopo aver letto il file; (11) nel ramo «ripresa» dei reclami il negozio non riceve l'avviso; (12) un drop già salvato per una data passata non si può sostituire dalla pagina; (13) le prove «chi non è admin riceve 403» usano un withAdminAuth finto che guarda un'intestazione: provano che la rotta passa dall'involucro, non l'involucro; (16) segnalare un negozio appena sospeso dà 404, e la differenza 200/404 dice a un anonimo se un id di prodotto esiste.",
+ "riepilogo": {
+  "riparato": 95,
+  "parziale": 12,
+  "gia_riparato": 2,
+  "non_codice": 0,
+  "scelta_di_nicola": 2,
+  "non_fatto": 7
+ },
+ "migrazioni_nuove": [],
+ "schede": [
+  {
+   "id": 647,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Le due letture della pagina Attività ora lanciano l'errore: avviso «Non sono riuscito a leggere» e trattini al posto degli zeri. Nuova rotta admin /api/admin/registro-visite che dice se il registro è configurato; con registro spento compare l'avviso fisso «Registro visite spento».",
+   "prova": "tests/unit/minori-s05-attivita.test.tsx › lettura caduta…, registro spento…, chi non è admin riceve ancora il rifiuto",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/activity/page.tsx",
+    "app/api/admin/registro-visite/route.ts",
+    "tests/unit/minori-s05-attivita.test.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "La rotta nuova risponde anche 503 se manca la chiave (withAdminAuth la richiede): la pagina tratta il 503 come registro spento."
+  },
+  {
+   "id": 1814,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il registro delle azioni non scrive più «da sistema»: nome dell'autore, altrimenti «utente senza nome (id…)» o «account cancellato» (actor_id NULL per ON DELETE SET NULL).",
+   "prova": "tests/unit/minori-s05-registro-azioni.test.tsx › autore con id ma senza nome → non «sistema»",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/audit/page.tsx",
+    "lib/admin/etichette.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 334,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La rotta PATCH (e POST) rifiuta un genitore che non è una principale e una categoria con figli che diventa figlia; nel pannello il menu «Genitore» non offre principali alle categorie che hanno sottocategorie.",
+   "prova": "tests/unit/minori-s05-categorie.test.ts › 334: una principale con sottocategorie non diventa figlia",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/categories/route.ts",
+    "app/admin/categories/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 582,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Prima di cancellare la rotta conta sottocategorie e prodotti collegati e rifiuta con il numero («usata da 1 sottocategoria e 3 prodotti»); il pannello blocca subito l'eliminazione di una principale con figli e la conferma avvisa dei prodotti.",
+   "prova": "tests/unit/minori-s05-categorie.test.ts › 582: non si elimina una categoria con sottocategorie o prodotti",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/categories/route.ts",
+    "app/admin/categories/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Resta da fare (azione rossa, firma di Nicola): migrazione che porti parent_id e products.category_id a ON DELETE RESTRICT."
+  },
+  {
+   "id": 586,
+   "esito": "riparato",
+   "cosa_ho_fatto": "«Conferma rimessa» non chiama più il server al primo tocco: apre un passo con fattorino, giorno, numero di ordini e importo atteso, il campo «Contanti contati» e, se l'importo è diverso, avviso e nota obbligatoria. La rotta rifiuta (400) un importo diverso senza nota e scrive contati/attesi/nota nel registro delle azioni ('cod.remittance_confirm').",
+   "prova": "tests/unit/minori-s05-rimesse.test.tsx › 586…; POST … la nota è obbligatoria",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/cod-remittance/page.tsx",
+    "app/api/admin/cod-remittance/route.ts",
+    "lib/audit-azioni.ts",
+    "tests/unit/api-admin-cod-remittance.test.ts"
+   ],
+   "file_altrui_toccati": [
+    "lib/audit-azioni.ts",
+    "tests/unit/api-admin-cod-remittance.test.ts"
+   ],
+   "nota": "La prova vecchia api-admin-cod-remittance passava un contesto senza user: aggiornato il finto withAdminAuth perché ora la rotta scrive nel registro con user.id. Nessuna asserzione indebolita. Limite: l'importo atteso lo manda il browser e la rotta non lo ricalcola (la nota si salta mandando i due numeri uguali); il controllo vero sui contanti resta l'occhio dell'admin."
+  },
+  {
+   "id": 65,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Non toccato.",
+   "prova": "",
+   "rossa_senza_correzione": null,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Le due strade della scheda passano da lib/stripe/payout.ts (S01, soldi) o dalla funzione SQL confirm_cod_remittance (migrazione): la pagina admin da sola non può dire quali contanti di ordini rimborsati il fattorino ha ancora, perché lo stato «rimesso» è per fattorino·giorno (cod_reconciliations)."
+  },
+  {
+   "id": 1799,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La lettura chiede TETTO+1 righe: oltre 1000 compare «Elenco tagliato» (con le più vecchie che mancano) e il totale diventa «almeno …»; con 1000 esatte nessun falso avviso. Con l'elenco tagliato il gruppo rider·giorno al confine (e i più vecchi) non si conferma dalla pagina: la conferma rilascia tutti gli ordini di quel giorno, anche quelli non letti.",
+   "prova": "tests/unit/minori-s05-rimesse.test.tsx › 1799 (due casi)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/cod-remittance/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 331,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La pagina coupon legge CODICI_SCONTO_IN_CASSA: se spento mostra la striscia «I codici sono spenti in cassa…» e il badge diventa «Attivo (spento in cassa)».",
+   "prova": "tests/unit/minori-s05-coupon.test.tsx › 331",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/coupons/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1951,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Scegliendo «Spedizione gratuita» il modulo dice da quanta spesa per negozio il codice toglie tutta la consegna (spesaPerConsegnaGratisColCodiceCents, calcolata dalla regola vera) e che sotto il cliente paga una parte.",
+   "prova": "tests/unit/minori-s05-coupon.test.tsx › 1951",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/coupons/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Solo avviso in admin; la scheda chiede anche un parere legale-privacy sul nome del tipo: resta a Nicola."
+  },
+  {
+   "id": 1816,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Con il Drop spento il sottotitolo non dice più «mostrate in home», la nota sta in cima, i campi sono in un fieldset disattivato, «Salva drop» ha aria-describedby verso la nota e sotto «Drop programmati» si dice che non usciranno.",
+   "prova": "tests/unit/minori-s05-drop.test.tsx › 1816",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/daily-drops/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1943,
+   "esito": "gia_riparato",
+   "cosa_ho_fatto": "Nella pagina admin la riga «Confine della consegna» dice già che senza posizione del negozio o indirizzo non geocodificato la cassa non può misurare e accetta.",
+   "prova": "app/admin/delivery/page.tsx, Row «Confine della consegna»: «…la cassa non può misurare e lo accetta: la distanza va guardata a mano»",
+   "rossa_senza_correzione": null,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "La parte su app/shipping/page.tsx («ti diciamo subito») è di S07: non toccata. Resta da verificare in DB se il negozio vero ha store_lat/lng (non codice)."
+  },
+  {
+   "id": 2318,
+   "esito": "riparato",
+   "cosa_ho_fatto": "L'esempio dei tre negozi piccoli usa spese pari a 5, 6 e 7 decimi della soglia: restano sempre sotto, qualunque soglia.",
+   "prova": "tests/unit/minori-s05-consegne-admin.test.tsx › 2318",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/delivery/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2264,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il compenso del fattorino usa eurTondo ovunque nella pagina («3 € il giro + 1 €…»).",
+   "prova": "tests/unit/minori-s05-consegne-admin.test.tsx › 2264/2292",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/delivery/page.tsx",
+    "tests/unit/i-minuti-della-veloce-non-sono-una-promessa-fissa.test.tsx"
+   ],
+   "file_altrui_toccati": [
+    "tests/unit/i-minuti-della-veloce-non-sono-una-promessa-fissa.test.tsx"
+   ],
+   "nota": "Aggiornata la prova vecchia che fissava «3,00 € il giro + 1,00 €»: ora chiede «3 € il giro + 1 €», stessa regola."
+  },
+  {
+   "id": 2292,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nei Costi base il valore del compenso è quello corto («3 € + 1 €») e la frase va nella descrizione; la riga della veloce dice «compresa se c'è già il supplemento di spesa piccola (+ X)» leggendo la costante.",
+   "prova": "tests/unit/minori-s05-consegne-admin.test.tsx › 2264/2292, 2292",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/delivery/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2086,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nel componente Row il blocco di sinistra ha min-w-0 flex-1 e il valore shrink-0 whitespace-nowrap: va a capo la descrizione, non «10 km».",
+   "prova": "tests/unit/minori-s05-consegne-admin.test.tsx › 2086 (classi lette dal markup)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/delivery/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Prova leggera sulle classi: non misurato in un browser vero."
+  },
+  {
+   "id": 1812,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Con la lettura caduta la sezione «Segnali di rischio» non si mostra più (restavano i numeri vecchi sopra l'avviso).",
+   "prova": "tests/unit/minori-s05-reclami-pagina.test.tsx › 1812",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/disputes/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1815,
+   "esito": "riparato",
+   "cosa_ho_fatto": "I reclami del cliente si raggruppano per opener_id, il nome è solo l'etichetta; senza nome si legge «Cliente senza nome (id…)».",
+   "prova": "tests/unit/minori-s05-reclami-pagina.test.tsx › 1815 (due casi)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/disputes/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1820,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il segnale sul cliente conta solo i reclami open/under_review e dice «N reclami ancora aperti».",
+   "prova": "tests/unit/minori-s05-reclami-pagina.test.tsx › 1820",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/disputes/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 337,
+   "esito": "riparato",
+   "cosa_ho_fatto": "«Contatta le parti» (che apriva la casella vuota dell'admin) diventa «Apri l’ordine e i recapiti» verso /admin/orders/<id>; la motivazione ora arriva davvero a cliente e negozio (vedi 190) e il segnaposto lo dice.",
+   "prova": "tests/unit/minori-s05-reclami-pagina.test.tsx › 337; tests/unit/minori-s05-reclami-rotta.test.ts › 190",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/disputes/page.tsx",
+    "app/api/admin/disputes/[id]/resolve/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1819,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La lettura dei pagamenti dei reclami lancia l'errore invece di restituire {}: nella finestra di decisione compare «Non riesco a leggere come ha pagato il cliente…».",
+   "prova": "tests/unit/minori-s05-reclami-pagina.test.tsx › 1819",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/disputes/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 152,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Modifica ed emptyForm costruiscono il valore del campo datetime-local nell'ora di Piacenza (campoDataOraPiacenza); il salvataggio lo rilegge come ora di Piacenza (istanteDaCampoPiacenza), quindi database → campo → salvato dà lo stesso istante d'inverno e d'estate, anche da un browser in un altro fuso.",
+   "prova": "tests/unit/minori-s05-eventi.test.tsx › 152 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/events/page.tsx",
+    "lib/admin/etichette.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 350,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La conferma di eliminazione non promette più «I partecipanti RSVP verranno notificati»: dice che gli iscritti non ricevono avvisi.",
+   "prova": "tests/unit/minori-s05-eventi.test.tsx › 350 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/events/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 364,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il campo CTA URL è type=text con una validazione propria: percorso interno che inizia con «/» oppure https://; il suggerimento lo dice.",
+   "prova": "tests/unit/minori-s05-eventi.test.tsx › 364",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/events/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 296,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Eventi (if error throw + ErrorState), categorie (ErrorState con Riprova invece di elenco vuoto), chat assistenza (ErrorState invece di «Nessuna richiesta») e funnel (ErrorState invece dello scheletro per sempre).",
+   "prova": "tests/unit/minori-s05-eventi.test.tsx › 296; tests/unit/minori-s05-assistenza.test.tsx › 296; tests/unit/minori-s05-funnel.test.tsx › 296",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/events/page.tsx",
+    "app/admin/categories/page.tsx",
+    "app/admin/support-chat/page.tsx",
+    "app/admin/funnel/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "La parte categorie non ha una prova sua (ramo isError identico alle altre)."
+  },
+  {
+   "id": 643,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il funnel conta le spese, non le righe di orders: gli ordini con la stessa stripe_session_id, o in contanti creati a meno di 2 minuti l'uno dall'altro, sono una spesa sola (lib/admin/spese-del-cliente.ts).",
+   "prova": "tests/unit/minori-s05-funnel.test.tsx › 643 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/funnel/page.tsx",
+    "lib/admin/spese-del-cliente.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Per i contanti la chiave vera del tentativo sta solo in cod_checkout_attempts.order_ids: uso la vicinanza nel tempo (2 minuti). Una colonna checkout_id sugli ordini sarebbe più esatta (migrazione, S02)."
+  },
+  {
+   "id": 266,
+   "esito": "riparato",
+   "cosa_ho_fatto": "L'«Alert churn» usa aRischioChurn (un ordine e nessun ordine da 60 giorni) come il chip, e il consiglio del coupon compare solo se CODICI_SCONTO_IN_CASSA è acceso.",
+   "prova": "tests/unit/minori-s05-funnel.test.tsx › 643/266",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/funnel/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 261,
+   "esito": "riparato",
+   "cosa_ho_fatto": "L'inizio della lettura degli iscritti usa la stessa funzione delle coorti (primo del mese a Piacenza, 3 mesi fa): niente più setMonth(−3) che il 31/12 saltava a ottobre.",
+   "prova": "tests/unit/minori-s05-funnel.test.tsx › 261 (orologio al 31/12/2026)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/funnel/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2454,
+   "esito": "riparato",
+   "cosa_ho_fatto": "L'editor della home legge con leggiHomeSite e mostra in cima «N sezioni non valide sono state tolte (…). Se salvi adesso, la home pubblica resterà senza.»",
+   "prova": "tests/unit/minori-s05-editor-home.test.tsx › 2454 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/home/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 332,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La riga «Fascia» del dettaglio ordine admin usa fasciaLeggibile (giorno vero da created_at) come le altre pagine.",
+   "prova": "tests/unit/minori-s05-ordine-admin.test.tsx › la fascia è il giorno vero…",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/orders/[id]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 360,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Tappe con data e ora di Piacenza; pagamento, bonifico al negozio e contestazione con etichette italiane (lib/admin/etichette.ts, valori presi dai CHECK delle migrazioni).",
+   "prova": "tests/unit/minori-s05-ordine-admin.test.tsx › pagamento, bonifico e contestazione in italiano; le tappe hanno anche l’ora di Piacenza",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/orders/[id]/page.tsx",
+    "lib/admin/etichette.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1546,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La colonna «Data» del file ordini esce come «07/09/2026 01:32», nell'ora di Piacenza, invece dell'ISO UTC.",
+   "prova": "tests/unit/minori-s05-annullo-admin.test.ts › 1546",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/ordini/esporta-ordini.ts"
+   ],
+   "file_altrui_toccati": [
+    "lib/ordini/esporta-ordini.ts"
+   ],
+   "nota": "Il file è nel territorio S02 (lib/ordini/): la composizione del CSV si è spostata lì dalla pagina admin. Modifica minima: solo la cella Data."
+  },
+  {
+   "id": 349,
+   "esito": "riparato",
+   "cosa_ho_fatto": "placeholderData: keepPreviousData nella lettura dell'elenco ordini: «Carica altri 50» e il cambio di filtro tengono a schermo la lista finché arriva la nuova.",
+   "prova": "tests/unit/minori-s05-elenco-ordini.test.tsx › 349",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/orders/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 477,
+   "esito": "parziale",
+   "cosa_ho_fatto": "La rotta di annullo admin rifiuta (409) un ordine in contanti già consegnato e avvisa anche negozio e fattorino assegnato; nell'elenco il pulsante «Annulla» non compare sugli ordini in contanti consegnati. Su un ordine con carta già consegnato l'avviso a negozio e fattorino dice che è stato annullato e rimborsato.",
+   "prova": "tests/unit/minori-s05-annullo-admin.test.ts › 477 (due prove); tests/unit/minori-s05-elenco-ordini.test.tsx › 477",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/orders/[id]/cancel/route.ts",
+    "app/admin/orders/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Manca: su un ordine già ritirato (PICKED_UP/OUT_FOR_DELIVERY) annullaERimborsa rimette comunque la merce a scaffale: è in lib/ordini/annulla.ts (S01). Sugli ordini con carta consegnati l'annullo resta la strada del rimborso (una prova esistente lo usa), quindi lì «Annulla» resta."
+  },
+  {
+   "id": 646,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il tasso di consegna usa come «chiusi» solo gli stati finali (DELIVERED + CANCELED): ordini pronti, assegnati o in viaggio non contano più come non consegnati e l'avviso non suona.",
+   "prova": "tests/unit/minori-s05-panoramica.test.tsx › 646",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 271,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Se la lettura di payment_attempts cade, il riquadro dice «non riesco a leggere i tentativi» e sotto compare un avviso con «Riprova», invece di «nessun tentativo con carta registrato».",
+   "prova": "tests/unit/minori-s05-panoramica.test.tsx › 271",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1801,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Bonifici e prodotti chiedono TETTO+1 righe e avvisano «Elenco tagliato» / «1000+» solo se ne arriva una in più.",
+   "prova": "tests/unit/minori-s05-bonifici-prodotti.test.tsx › 1801 (bonifici e prodotti)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/payouts/page.tsx",
+    "app/admin/products/page.tsx",
+    "tests/unit/il-pannello-non-chiama-vuoto-una-lettura-caduta.test.ts"
+   ],
+   "file_altrui_toccati": [
+    "tests/unit/il-pannello-non-chiama-vuoto-una-lettura-caduta.test.ts"
+   ],
+   "nota": "Aggiornata la prova vecchia il-pannello-non-chiama-vuoto-una-lettura-caduta: «al tetto» ora è TETTO+1 righe (tagliato) e c'è un caso nuovo con TETTO esatte (non tagliato). Nessuna asserzione tolta."
+  },
+  {
+   "id": 1802,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Con l'elenco tagliato l'avviso sta sopra i riquadri e le cifre «Da pagare / In sospeso / Già pagato» portano «almeno».",
+   "prova": "tests/unit/minori-s05-bonifici-prodotti.test.tsx › 1802/1800/1817",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/payouts/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1800,
+   "esito": "riparato",
+   "cosa_ho_fatto": "L'avviso dice che mancano proprio gli ordini più vecchi, cioè quelli da pagare da più tempo.",
+   "prova": "tests/unit/minori-s05-bonifici-prodotti.test.tsx › 1802/1800/1817",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/payouts/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Non ho cambiato l'ordinamento della lettura (scelta di che cosa mostrare: i più recenti)."
+  },
+  {
+   "id": 1817,
+   "esito": "riparato",
+   "cosa_ho_fatto": "L'avviso parla dei totali di tutta la pagina, «anche quelli dei singoli negozi», e il «Da liquidare» per negozio porta «almeno» quando l'elenco è tagliato.",
+   "prova": "tests/unit/minori-s05-bonifici-prodotti.test.tsx › 1802/1800/1817",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/payouts/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1821,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La colonna «Consegnato» legge delivered_at (aggiunto alla lettura), con «—» se manca, invece di payout_at ?? created_at.",
+   "prova": "tests/unit/minori-s05-bonifici-prodotti.test.tsx › 1821",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/payouts/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2519,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Dopo un 409 («la scorta è cambiata») la pagina admin rilegge il prodotto e rimonta il modulo (key) coi dati nuovi, così la scorta vista all'apertura è quella riletta e il «Salva» successivo passa.",
+   "prova": "tests/unit/minori-s05-prodotto-admin.test.tsx › 2519",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/products/[id]/edit/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Le modifiche non salvate si perdono col rimontaggio (come prima uscendo e rientrando): il messaggio lo dice. Il caso delle varianti salvate dopo il prodotto nel modulo del negozio (S06) non l'ho toccato."
+  },
+  {
+   "id": 2484,
+   "esito": "riparato",
+   "cosa_ho_fatto": "ImportFromUrlBox si monta solo se AI_NEGOZI_ACCESA.",
+   "prova": "tests/unit/minori-s05-nuovo-prodotto.test.ts › 2484 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/products/new/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 583,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La tendina parte vuota con l'opzione obbligatoria «— scegli il negozio —» e la creazione si rifiuta senza negozio; assertSeller controlla che anche il negozio MyCity esista come seller.",
+   "prova": "tests/unit/minori-s05-nuovo-prodotto.test.ts › 583 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/products/new/page.tsx",
+    "app/api/admin/products/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1824,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Lo stato del prodotto in admin usa etichette italiane (in vendita, venduto, bozza, esaurito…) prese dal CHECK products_status_check.",
+   "prova": "tests/unit/minori-s05-bonifici-prodotti.test.tsx › 1824",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/products/page.tsx",
+    "lib/admin/etichette.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1818,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Le tre letture (pick del mese, negozi, voti) lanciano l'errore: con il mese non letto compare l'avviso, il salvataggio è disattivato e la mutazione si rifiuta; con i voti non letti si dice «Non riesco a leggere i voti» invece di «Nessun voto».",
+   "prova": "tests/unit/minori-s05-negozio-del-mese.test.tsx › 1818 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/shop-of-month/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 264,
+   "esito": "parziale",
+   "cosa_ho_fatto": "La classifica mostra solo i negozi con vote_count > 0, quindi «Nessun voto registrato» compare quando è vero.",
+   "prova": "tests/unit/minori-s05-negozio-del-mese.test.tsx › 264",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/shop-of-month/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Resta il mese: la vista shop_of_month_leaderboard usa DATE_TRUNC('month', now()) nel fuso del database, la pagina il mese di Piacenza. Serve una migrazione della vista (firma di Nicola)."
+  },
+  {
+   "id": 1603,
+   "esito": "riparato",
+   "cosa_ho_fatto": "«Elimina» delle campagne sponsorizzate chiede conferma con confirmDialog (danger, come i coupon) e il bersaglio ha min-h 44px e un margine da «Pausa/Riprendi».",
+   "prova": "tests/unit/minori-s05-sponsorizzati.test.tsx › 1603",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/sponsored/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 344,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nuova rotta /api/admin/assistenza (solo admin) che legge col client di servizio le chat dell'account Assistenza, con la stessa regola della rotta del cliente (spostata in lib/admin/account-assistenza.ts). La pagina la usa: ogni admin vede le richieste; chi non è l'account Assistenza legge una nota che per rispondere bisogna entrare con quell'account.",
+   "prova": "tests/unit/minori-s05-assistenza.test.tsx › 344 (rotta e pagina)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/assistenza/route.ts",
+    "app/admin/support-chat/page.tsx",
+    "lib/admin/account-assistenza.ts",
+    "app/api/support/conversation/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Rispondere da un altro admin resta impossibile: le regole per riga di conversations/messages mostrano la chat solo ai partecipanti (servirebbe una migrazione, firma di Nicola)."
+  },
+  {
+   "id": 1823,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Filtri di Assistenza e Reclami con type=button e aria-pressed; i pulsanti colorati usano lo stato spento del Button (bg-cream-200 text-ink-600) invece di disabled:opacity-50.",
+   "prova": "tests/unit/minori-s05-reclami-pagina.test.tsx › 1823 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/disputes/page.tsx",
+    "app/admin/support/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1545,
+   "esito": "riparato",
+   "cosa_ho_fatto": "L'avviso del campione dice «ordini, incasso e consegnati qui sotto sono un campione».",
+   "prova": "tests/unit/minori-s05-oggi.test.tsx",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/today/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 191,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il riquadro «Seller pending» porta a /admin/users?role=pending.",
+   "prova": "tests/unit/minori-s05-oggi.test.tsx",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/today/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Il filtro «In attesa» della pagina utenti mostra anche i fattorini in attesa; il numero del riquadro conta solo i negozi."
+  },
+  {
+   "id": 2614,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il prompt del rifiuto dice «visibile al fattorino» o «visibile al negozio» secondo il ruolo.",
+   "prova": "tests/unit/minori-s05-esame-fattorino.test.ts › 2614 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/users/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2664,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La rotta documenti-rider restituisce veicolo e targa dichiarati; il pannello «Richiesta fattorino» mostra «Veicolo» (in italiano) e «Targa».",
+   "prova": "tests/unit/minori-s05-esame-fattorino.test.ts › 80/2664",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/kyc/documenti-rider/[id]/route.ts",
+    "lib/kyc/esame-rider.ts",
+    "app/admin/users/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 299,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Le schede mobili usano siPuoModerare come la tabella desktop: un fattorino in attesa ha «Esamina», «Sospendi», «Riattiva» e il suo badge di stato.",
+   "prova": "tests/unit/minori-s05-esame-fattorino.test.ts › 299 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/users/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Prova leggera sul sorgente: il render della pagina utenti in jsdom richiede troppe letture finte."
+  },
+  {
+   "id": 34,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La rotta rifiuta parent_id uguale all'id, un genitore che è a sua volta figlio e una categoria con figli che diventa figlia: il cerchio A→B→A non si chiude più dal pannello né da una chiamata diretta.",
+   "prova": "tests/unit/minori-s05-categorie.test.ts › 34: una categoria non diventa genitore di se stessa, né figlia di una sottocategoria",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/categories/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Non fatti: trigger nel database (migrazione, firma di Nicola) e tetto di passi in lib/category-attributes.ts (fuori territorio). Un cerchio già presente nel database resterebbe."
+  },
+  {
+   "id": 40,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il GET delle pagine CMS e normalizeCmsPage leggono i blocchi uno per uno (leggiCmsPage): i validi restano, gli scartati tornano all'editor che mostra l'avviso «N blocchi non validi tolti».",
+   "prova": "tests/unit/minori-s05-pagine-cms.test.ts › 40: un blocco rotto si toglie, i buoni restano, e lo si dice",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/cms/[slug]/route.ts",
+    "lib/cms-page.ts",
+    "app/admin/pages/[slug]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1839,
+   "esito": "riparato",
+   "cosa_ho_fatto": "POST e DELETE del Drop scrivono writeAudit ('daily_drop.create' / 'daily_drop.delete') con prodotto, sconto e data.",
+   "prova": "tests/unit/minori-s05-drop.test.tsx › 1839",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/daily-drops/route.ts",
+    "lib/audit-azioni.ts"
+   ],
+   "file_altrui_toccati": [
+    "lib/audit-azioni.ts"
+   ],
+   "nota": ""
+  },
+  {
+   "id": 1840,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il DELETE risponde 404 se per quella data non c'era nessun drop; il POST rifiuta (409) di sostituire un drop già salvato senza sovrascrivi:true, e la pagina chiede conferma prima di sostituirlo.",
+   "prova": "tests/unit/minori-s05-drop.test.tsx › 1840 (due casi)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/daily-drops/route.ts",
+    "app/admin/daily-drops/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1837,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il server legge il prezzo vero del prodotto e calcola lui prezzo pieno e prezzo del drop dallo sconto; i prezzi mandati dal browser non si usano più.",
+   "prova": "tests/unit/minori-s05-drop.test.tsx › 1837",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/daily-drops/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1836,
+   "esito": "parziale",
+   "cosa_ho_fatto": "Corretto il commento della rotta: senza chiave di servizio la risposta è il 503 di withAdminAuth, il freno 409 non si raggiunge.",
+   "prova": "lettura: app/api/admin/daily-drops/route.ts, commento sopra il freno DROP_DEL_GIORNO_ACCESO",
+   "rossa_senza_correzione": false,
+   "file_toccati": [
+    "app/api/admin/daily-drops/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "La prova tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts (righe 137-148, territorio S04) ha ancora il nome che promette «409 anche senza chiave di servizio»: non l'ho toccata, va rinominata da S04/AD."
+  },
+  {
+   "id": 1838,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il POST rifiuta un prodotto non 'available' o di un negozio non approvato (stessa regola di prodotto_in_vetrina).",
+   "prova": "tests/unit/minori-s05-drop.test.tsx › 1838",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/daily-drops/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1648,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il motivo passato a refundOrder (metadata Stripe) è tagliato a 500 caratteri; le note intere restano sul reclamo, nell'avviso e nel registro.",
+   "prova": "tests/unit/minori-s05-reclami-rotta.test.ts › 1648",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/disputes/[id]/resolve/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1706,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Non toccato.",
+   "prova": "",
+   "rossa_senza_correzione": null,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Il verdetto «pieno» nasce in refundOrder (lib/stripe/payout.ts, S01) e lo storno di un rimborso fallito sta nei webhook Stripe (S01): la correzione è lì, sui soldi, fuori dal mio territorio."
+  },
+  {
+   "id": 190,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Dopo l'avviso al cliente la rotta scrive un avviso anche al negozio (against_id): esito, motivazione e, se c'è, l'importo rimborsato al cliente, con link a /seller/orders/<id>.",
+   "prova": "tests/unit/minori-s05-reclami-rotta.test.ts › 190 (due casi)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/disputes/[id]/resolve/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 225,
+   "esito": "riparato",
+   "cosa_ho_fatto": "writeAudit nelle rotte admin di home, aspetto del sito, pagine CMS e categorie (crea/modifica/elimina con nome e slug); azioni nuove in lib/audit-azioni.ts.",
+   "prova": "tests/unit/minori-s05-categorie.test.ts › 225…; tests/unit/minori-s05-pagine-cms.test.ts › 225: …",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/home/route.ts",
+    "app/api/admin/branding/route.ts",
+    "app/api/admin/cms/[slug]/route.ts",
+    "app/api/admin/categories/route.ts",
+    "lib/audit-azioni.ts"
+   ],
+   "file_altrui_toccati": [
+    "lib/audit-azioni.ts"
+   ],
+   "nota": "lib/audit-azioni.ts non è nel territorio di nessuna sessione: toccato con sole aggiunte."
+  },
+  {
+   "id": 1883,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il motivo che arriva al cliente (email del rimborso e notifica) è sempre la frase fissa «Ordine annullato dall’amministrazione»; la nota libera dell'admin va solo nel registro (metadata.nota).",
+   "prova": "tests/unit/minori-s05-annullo-admin.test.ts › 1883",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/orders/[id]/cancel/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1692,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il messaggio CONTANTI_INCASSATI non ha più la parentesi che friendlyError tagliava né il passo inesistente «Registra la scelta»: dice di aprire un reclamo, col bonifico fatto a mano (regola del lancio).",
+   "prova": "tests/unit/minori-s05-annullo-admin.test.ts › 1692",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/orders/[id]/cancel/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 161,
+   "esito": "scelta_di_nicola",
+   "cosa_ho_fatto": "Non toccato.",
+   "prova": "",
+   "rossa_senza_correzione": null,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Domanda: i prodotti che carichi tu dal pannello per un negozio vero devono nascere in bozza finché il negoziante non conferma prezzo e allergeni (come dice il fatto negozi.prima-ondata), anche al lancio per Pane Quotidiano?"
+  },
+  {
+   "id": 125,
+   "esito": "parziale",
+   "cosa_ho_fatto": "La rotta di cancellazione non scrive più il nome della persona nei metadati di 'user.delete'.",
+   "prova": "tests/unit/minori-s05-moderazione.test.ts › 125",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/users/[id]/delete/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Manca la pulizia di metadata.name nelle righe vecchie di audit_logs/activity_events dentro lib/account/cancellazione.ts (S08)."
+  },
+  {
+   "id": 532,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La lettura di codice fiscale e P.IVA dalla scheda utente usa 'kyc.view': il filtro «KYC approvato» non mescola più le letture con le approvazioni.",
+   "prova": "tests/unit/minori-s05-esame-fattorino.test.ts › 532",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/users/[id]/kyc/route.ts",
+    "lib/audit-azioni.ts"
+   ],
+   "file_altrui_toccati": [
+    "lib/audit-azioni.ts"
+   ],
+   "nota": ""
+  },
+  {
+   "id": 2119,
+   "esito": "riparato",
+   "cosa_ho_fatto": "«Riattiva» vale solo per un profilo sospeso: su un negozio o fattorino in attesa o respinto la rotta risponde 400 e non scrive niente. «Sospendi» su un respinto era già rifiutato.",
+   "prova": "tests/unit/minori-s05-moderazione.test.ts › 2119",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/users/[id]/moderate/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1627,
+   "esito": "parziale",
+   "cosa_ho_fatto": "La notifica non partita era già segnalata nella risposta; ora la rotta segnala anche l'email non partita, e il pannello mostra l'avviso (prima lo ignorava).",
+   "prova": "tests/unit/minori-s05-moderazione.test.ts › 89/543 (email_inviata); app/admin/users/page.tsx mostra body.avviso",
+   "rossa_senza_correzione": false,
+   "file_toccati": [
+    "app/api/admin/users/[id]/moderate/route.ts",
+    "app/admin/users/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "I tre passi (stato, notifica, registro) restano scritture separate: legarli richiede una funzione SQL in transazione (migrazione)."
+  },
+  {
+   "id": 2617,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La regola di approvazione (lib/admin/regole-approvazione.ts) legge le scadenze di patente e polizza: senza data o scadute, «Non si approva». Vale anche per riattivare chi non era stato approvato da un admin. Dopo la revisione il controllo vale anche per un fattorino sospeso che torna attivo.",
+   "prova": "tests/unit/minori-s05-moderazione.test.ts › 2617",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/admin/regole-approvazione.ts",
+    "app/api/admin/users/[id]/moderate/route.ts",
+    "tests/unit/la-moderazione-dice-il-vero.test.ts",
+    "tests/unit/nessuno-approva-un-fattorino-minorenne.test.ts",
+    "tests/unit/si-approva-solo-con-partita-iva-e-documenti.test.ts",
+    "tests/unit/sospendere-e-riattivare-non-scavalca-l-approvazione.test.ts"
+   ],
+   "file_altrui_toccati": [
+    "tests/unit/la-moderazione-dice-il-vero.test.ts",
+    "tests/unit/nessuno-approva-un-fattorino-minorenne.test.ts",
+    "tests/unit/si-approva-solo-con-partita-iva-e-documenti.test.ts",
+    "tests/unit/sospendere-e-riattivare-non-scavalca-l-approvazione.test.ts"
+   ],
+   "nota": "Aggiornate quattro prove vecchie: i loro fattorini «con tutti i documenti» ora hanno anche le scadenze (2099). Il sospeso approvato che torna attivo resta senza controllo dei documenti, come vuole la prova riattivare-un-sospeso."
+  },
+  {
+   "id": 113,
+   "esito": "parziale",
+   "cosa_ho_fatto": "La rotta di moderazione non scrive più il nome nei metadati del registro, solo ruolo e motivo.",
+   "prova": "tests/unit/minori-s05-moderazione.test.ts › 113/125",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/users/[id]/moderate/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Le 20 righe già nel database con metadata.name (16 persone cancellate) vanno ripulite a mano (non_codice, Nicola) e l'informativa sul tempo di conservazione è di S08; la pulizia nella pipeline di cancellazione è in lib/account/ (S08)."
+  },
+  {
+   "id": 89,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il pannello chiede il motivo anche per «Sospendi» e la rotta lo mette nella notifica («Motivo: …») e nell'email; resta nel registro.",
+   "prova": "tests/unit/minori-s05-moderazione.test.ts › 89",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/users/[id]/moderate/route.ts",
+    "app/admin/users/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Il server non rende obbligatorio il motivo (diverse prove vecchie sospendono senza motivo) e non c'è una colonna suspension_reason (servirebbe una migrazione): il motivo sta nella notifica, nell'email e nel registro."
+  },
+  {
+   "id": 543,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Approva, rifiuta, sospendi e riattiva mandano anche un'email transazionale con lo stesso testo della notifica e il link; la risposta dice email_inviata e l'avviso se non parte (mostrato dal pannello).",
+   "prova": "tests/unit/minori-s05-moderazione.test.ts › 89/543, 543",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/users/[id]/moderate/route.ts",
+    "app/admin/users/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2103,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Non toccato.",
+   "prova": "",
+   "rossa_senza_correzione": null,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Separare l'ora del rifiuto da approved_at richiede una colonna nuova (migrazione) e il cambio delle potature in migrations/119 e 135: sono database, non solo codice."
+  },
+  {
+   "id": 1625,
+   "esito": "gia_riparato",
+   "cosa_ho_fatto": "Niente da cambiare.",
+   "prova": "app/api/admin/users/[id]/moderate/route.ts: «if (target.role !== 'seller' && target.role !== 'rider') return ApiErrors.invalidRequest(…)» — un amministratore non si sospende più con un falso ok.",
+   "rossa_senza_correzione": null,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 226,
+   "esito": "parziale",
+   "cosa_ho_fatto": "Sospendendo un fattorino la rotta conta le sue consegne ASSIGNED/PICKED_UP/OUT_FOR_DELIVERY e lo dice nell'avviso al pannello, perché l'admin le riassegni.",
+   "prova": "tests/unit/minori-s05-moderazione.test.ts › 226",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/admin/users/[id]/moderate/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Non fatto: rimettere in bacheca gli ASSIGNED e aggiungere is_rider_approvato() a verify_pickup_code/verify_delivery_code e alla regola di lettura: sono funzioni SQL (migrazione, firma di Nicola) e rotte rider (S02)."
+  },
+  {
+   "id": 2608,
+   "esito": "parziale",
+   "cosa_ho_fatto": "La lettura dei documenti del fattorino si rifà quando si torna sulla scheda dopo più di 100 secondi (staleTime + refetchOnWindowFocus), prima che scadano i link da 120.",
+   "prova": "tests/unit/minori-s05-esame-fattorino.test.ts › 2608 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/users/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Niente rilettura a orologio (il revisore ha notato che ogni lettura scrive una riga 'kyc.view'). Se si resta sulla scheda senza cambiare finestra per più di 2 minuti, il link scade ancora: servirebbe firmare il link al clic (rotta nuova)."
+  },
+  {
+   "id": 170,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La rotta documenti-rider firma anche rider_haccp_url con la sua scadenza; esame-rider ha la voce 'haccp' non obbligatoria, quindi il pannello la mostra senza bloccare l'approvazione.",
+   "prova": "tests/unit/minori-s05-esame-fattorino.test.ts › 80",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/kyc/documenti-rider/[id]/route.ts",
+    "lib/kyc/esame-rider.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2607,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Aprire i documenti del fattorino scrive nel registro l'azione nuova 'kyc.view' («Dati personali o documenti consultati») invece di 'kyc.approve'.",
+   "prova": "tests/unit/minori-s05-esame-fattorino.test.ts › 2607",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/kyc/documenti-rider/[id]/route.ts",
+    "lib/audit-azioni.ts"
+   ],
+   "file_altrui_toccati": [
+    "lib/audit-azioni.ts"
+   ],
+   "nota": ""
+  },
+  {
+   "id": 1862,
+   "esito": "riparato",
+   "cosa_ho_fatto": "start-check legge l'errore dell'update dello stato KYC e risponde con rispostaPerErroreDatabase invece di 200 PENDING.",
+   "prova": "tests/unit/minori-s05-kyc.test.ts › 1862",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/kyc/start-check/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1865,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Anche l'invio in attesa scrive nel registro ('kyc.submit', con stato e id della verifica): ogni tentativo resta, anche se kyc_provider_checked_at si sovrascrive.",
+   "prova": "tests/unit/minori-s05-kyc.test.ts › 1865",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/kyc/start-check/route.ts",
+    "lib/audit-azioni.ts"
+   ],
+   "file_altrui_toccati": [
+    "lib/audit-azioni.ts"
+   ],
+   "nota": ""
+  },
+  {
+   "id": 1861,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Non toccato.",
+   "prova": "",
+   "rossa_senza_correzione": null,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Chiudere lo stato PENDING richiede il webhook /api/kyc/webhook del fornitore (non esiste) e l'allarme in app/api/cron/operational-alerts (S03, filtra solo role=seller): è una funzione da progettare, non un difetto minore da una riga."
+  },
+  {
+   "id": 1866,
+   "esito": "riparato",
+   "cosa_ho_fatto": "viesVatLookup distingue «irraggiungibile» (rete, timeout, risposta non ok, userError di servizio) da «non valida»; start-check risponde 503 «VIES non risponde, riprova» invece di 400.",
+   "prova": "tests/unit/minori-s05-kyc.test.ts › 1866",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/kyc/providers.ts",
+    "app/api/kyc/start-check/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 36,
+   "esito": "riparato",
+   "cosa_ho_fatto": "viesVatLookup tratta un numero di sole 11 cifre come italiano (IT + numero).",
+   "prova": "tests/unit/minori-s05-kyc.test.ts › 36",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/kyc/providers.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2501,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Se il valore vecchio è un link firmato «…/object/sign/kyc-docs/<percorso>?…», se ne ricava il percorso e la copia di prima si toglie (sempre solo dentro la cartella della persona).",
+   "prova": "tests/unit/minori-s05-kyc.test.ts › 2501",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/kyc/upload-document/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2494,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Lo scambio condizionato contro i caricamenti paralleli c'era già; ora sostituire documento o selfie azzera kyc_provider_status e kyc_provider_check_id, così la verifica si riapre.",
+   "prova": "tests/unit/minori-s05-kyc.test.ts › 2494",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/kyc/upload-document/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1615,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Ogni documento caricato scrive writeAudit 'kyc.upload' con tipo e se sostituisce (senza percorso).",
+   "prova": "tests/unit/minori-s05-kyc.test.ts › 1615",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/kyc/upload-document/route.ts",
+    "lib/audit-azioni.ts"
+   ],
+   "file_altrui_toccati": [
+    "lib/audit-azioni.ts"
+   ],
+   "nota": ""
+  },
+  {
+   "id": 1614,
+   "esito": "riparato",
+   "cosa_ho_fatto": "I tipi di documento dipendono dal ruolo: fattorino tutti, negozio solo documento e selfie, cliente nessuno (403).",
+   "prova": "tests/unit/minori-s05-kyc.test.ts › 1614",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/kyc/upload-document/route.ts",
+    "tests/unit/il-documento-ricaricato-non-lascia-la-copia-vecchia.test.ts",
+    "tests/unit/nessun-documento-di-minorenne-entra-nell-archivio.test.ts"
+   ],
+   "file_altrui_toccati": [
+    "tests/unit/il-documento-ricaricato-non-lascia-la-copia-vecchia.test.ts",
+    "tests/unit/nessun-documento-di-minorenne-entra-nell-archivio.test.ts"
+   ],
+   "nota": "Aggiornati i profili finti di due prove vecchie (aggiunto role: seller/rider): senza ruolo ora il caricamento è rifiutato."
+  },
+  {
+   "id": 49,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La lettura di legal_birth_date guarda l'errore: un guasto (non PGRST116) risponde con rispostaPerErroreDatabase («riprova tra poco»), non «salva la data di nascita».",
+   "prova": "tests/unit/minori-s05-kyc.test.ts › 49",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/kyc/upload-document/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2625,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Non toccato.",
+   "prova": "",
+   "rossa_senza_correzione": null,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Una guardia «esito già comunicato» richiede una colonna (es. esito_comunicato_at) sulla tabella segnalazioni: migrazione. Senza, non so distinguere un ritentativo da un primo invio per l'email."
+  },
+  {
+   "id": 2626,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Se il prodotto segnalato non c'è più, il venditore risulta «nessun_recapito» invece di «fallita»: la rotta non risponde più 502 a ogni tentativo.",
+   "prova": "tests/unit/minori-s05-segnalazioni.test.tsx › 339/88/2626",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/segnalazioni/esito/comunica.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 339,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Etichette leggibili per motivo e tipo (lib/admin/segnalazioni-testi.ts): l'email, la notifica al venditore e l'avviso agli admin dicono «violazione di marchio o diritto d’autore», «Segnalato una recensione».",
+   "prova": "tests/unit/minori-s05-segnalazioni.test.tsx › 339 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/segnalazioni/esito/comunica.ts",
+    "app/api/segnalazioni/route.ts",
+    "lib/admin/segnalazioni-testi.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 88,
+   "esito": "parziale",
+   "cosa_ho_fatto": "Ai tre testi dell'esito (email e notifica a chi ha segnalato, notifica al venditore) si aggiunge il paragrafo fisso: come contestare (da /contact entro sei mesi, riesame da un'altra persona), la via giudiziaria e la base (Termini di servizio).",
+   "prova": "tests/unit/minori-s05-segnalazioni.test.tsx › 339/88",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/segnalazioni/esito/comunica.ts",
+    "lib/admin/segnalazioni-testi.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Manca: far scegliere all'admin la misura esatta (tolto, corretto, negozio sospeso) e il punto preciso dei Termini; il testo «entro sei mesi» e il riesame da un'altra persona vanno confermati da Nicola/legale."
+  },
+  {
+   "id": 722,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Non toccato.",
+   "prova": "",
+   "rossa_senza_correzione": null,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Tutto fuori dal mio territorio: informativa (app/privacy, S08), potatura notturna (app/api/cron/process-deletions, S03), anonimizzazione nella cancellazione (lib/account/cancellazione.ts, S08). Serve anche la scelta di Nicola sul tempo di conservazione (la scheda propone 12 mesi)."
+  },
+  {
+   "id": 24,
+   "esito": "parziale",
+   "cosa_ho_fatto": "Prima dell'inserimento la rotta controlla che il prodotto (products) o il negozio (seller_public_profiles) esista: se no 404, nessuna riga e nessun avviso agli admin.",
+   "prova": "tests/unit/minori-s05-segnalazioni.test.tsx › 97",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/segnalazioni/route.ts",
+    "tests/unit/la-segnalazione-di-un-prodotto-pericoloso-avvisa-gli-amministratori.test.ts"
+   ],
+   "file_altrui_toccati": [
+    "tests/unit/la-segnalazione-di-un-prodotto-pericoloso-avvisa-gli-amministratori.test.ts"
+   ],
+   "nota": "Aggiornato il finto database della prova vecchia (risponde che il prodotto esiste). Manca: Turnstile nel modulo (chiavi e componente) e togliere INSERT ad anon/authenticated sulla tabella (migrazione)."
+  },
+  {
+   "id": 23,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Dopo il primo messaggio la rotta dell'assistenza scrive la notifica all'account Assistenza («Nuova richiesta di assistenza»); sul 23505 rilegge la conversazione invece di dare 500.",
+   "prova": "tests/unit/minori-s05-assistenza.test.tsx › 23",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/support/conversation/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Non spostata avvisaChiRiceve (app/api/chat/, S10): la campanella si scrive direttamente qui. Con la prima campanella scritta, i messaggi dopo seguono la regola della chat (un avviso finché non si legge)."
+  },
+  {
+   "id": 362,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Ogni sezione della FAQ ha un id stabile (ordini, spedizioni, pagamenti, resi, account, vendere, rider) con scroll-mt-24; il link «/faq#ordini» del Centro assistenza ora trova la sezione.",
+   "prova": "tests/unit/minori-s05-centro-assistenza.test.ts › 362",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/faq/page.tsx"
+   ],
+   "file_altrui_toccati": [
+    "app/faq/page.tsx"
+   ],
+   "nota": "app/faq/page.tsx è di S08: aggiunti solo il campo id alle sezioni e l'attributo sulla <section>."
+  },
+  {
+   "id": 347,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il riquadro dice «Le risposte alle domande più comuni →» senza il numero sbagliato.",
+   "prova": "tests/unit/minori-s05-centro-assistenza.test.ts › 347",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/help/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1722,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il campo della chat non è più disabled durante l'invio (perdeva il fuoco e chiudeva la tastiera): il doppio invio lo ferma handleSend, si spegne solo «Invia».",
+   "prova": "tests/unit/minori-s05-editor-home.test.tsx › 1722 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/messages/[id]/page.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 188,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il modulo controlla l'email prima dell'invio con un errore sotto il campo (aria-invalid, aria-describedby); per 400/404 mostra il messaggio del server, per 429 dice di aspettare.",
+   "prova": "tests/unit/minori-s05-segnalazioni.test.tsx › 188 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/Segnala.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 656,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il modulo Segnala vive nel Modal del sito (trappola del Tab, Esc, fuoco che torna); il pulsante resta sempre montato con aria-haspopup/aria-expanded.",
+   "prova": "tests/unit/minori-s05-segnalazioni.test.tsx › 656",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/Segnala.tsx",
+    "tests/unit/il-modulo-segnala-non-promette-un-esito-che-non-parte.test.tsx"
+   ],
+   "file_altrui_toccati": [
+    "tests/unit/il-modulo-segnala-non-promette-un-esito-che-non-parte.test.tsx"
+   ],
+   "nota": "La prova vecchia cercava il pulsante «Invia» dentro il riquadro: il Modal si disegna in fondo alla pagina, ora cerca in document.body. Il dialogo «Rifiutare l’ordine?» del negozio (app/seller/orders/[id], S06) non l'ho toccato."
+  },
+  {
+   "id": 243,
+   "esito": "riparato",
+   "cosa_ho_fatto": "La textarea della richiesta libera ha aria-label «La tua richiesta all’assistenza».",
+   "prova": "tests/unit/minori-s05-segnalazioni.test.tsx › 243 (lettura del sorgente)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/SupportChatModal.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 291,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Nel menu del pannello ci sono «Prodotti» (Operatività) e «Segnalazioni» (Trust & Safety) col contatore di quelle da esaminare.",
+   "prova": "tests/unit/minori-s05-editor-home.test.tsx › 291",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/admin/AdminSidebar.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 305,
+   "esito": "riparato",
+   "cosa_ho_fatto": "prepareForSave toglie i vantaggi del tutto vuoti; per quelli a metà il messaggio dice il posto («Sezione 4 (Attività live + Trust), vantaggio 1: manca la descrizione»). Le due funzioni stanno in lib/admin/editor-della-home.ts.",
+   "prova": "tests/unit/minori-s05-editor-home.test.tsx › 305 (due prove)",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/admin/home/page.tsx",
+    "lib/admin/editor-della-home.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 341,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il segnaposto del Badge della newsletter è «Novità dai negozi», senza importi.",
+   "prova": "tests/unit/minori-s05-editor-home.test.tsx › 341/2537",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/admin/home/HomeSectionConfigForm.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 2537,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il segnaposto del sottotesto della fascia venditori è «Porta il tuo negozio online a Piacenza.», senza «zero commissioni».",
+   "prova": "tests/unit/minori-s05-editor-home.test.tsx › 341/2537",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/admin/home/HomeSectionConfigForm.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Da controllare i sottotesti già salvati nel database (non_codice): se uno dice «zero commissioni» va cambiato dal pannello."
+  },
+  {
+   "id": 313,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Tolta la zona di caricamento dei video (il magazzino 'products' ammette solo immagini): resta l'indirizzo di un file video già pubblicato, con una riga che lo spiega.",
+   "prova": "tests/unit/minori-s05-editor-home.test.tsx › 313",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/admin/home/HomeSectionConfigForm.tsx",
+    "tests/unit/un-riquadro-che-scarta-un-file-lo-dice.test.ts"
+   ],
+   "file_altrui_toccati": [
+    "tests/unit/un-riquadro-che-scarta-un-file-lo-dice.test.ts"
+   ],
+   "nota": "La prova vecchia elenca i riquadri «muti» noti e chiede di togliere la riga quando il riquadro cambia: tolta la riga di HomeSectionConfigForm."
+  },
+  {
+   "id": 242,
+   "esito": "riparato",
+   "cosa_ho_fatto": "«Aggiungi sezione» ha aria-haspopup/aria-expanded/aria-controls, il menu role=menu; Esc chiude e riporta il fuoco, il clic fuori chiude; i due pulsanti che aprono una sezione hanno aria-expanded e aria-controls.",
+   "prova": "tests/unit/minori-s05-editor-home.test.tsx › 242",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/admin/home/HomeSectionsEditor.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 228,
+   "esito": "parziale",
+   "cosa_ho_fatto": "Nel renderer delle pagine CMS il banner usa alt dal campo del pannello (vuoto = sfondo) e con il velo «nessuno» mette la stessa sfumatura minima della home.",
+   "prova": "tests/unit/minori-s05-blocchi-cms.test.tsx › 228",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/cms/CmsBlockRenderer.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Manca la vetrina del negozio: components/store-sections/BannerSection.tsx (S09) e lo schema del banner del negozio senza alt (lib/store-site.ts). Il componente unico per i tre banner non l'ho fatto."
+  },
+  {
+   "id": 293,
+   "esito": "riparato",
+   "cosa_ho_fatto": "Il blocco video delle pagine CMS gestisce provider 'file' con un tag <video>, come la home.",
+   "prova": "tests/unit/minori-s05-blocchi-cms.test.tsx › 293",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "components/cms/CmsBlockRenderer.tsx"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 1804,
+   "esito": "non_fatto",
+   "cosa_ho_fatto": "Non toccato.",
+   "prova": "",
+   "rossa_senza_correzione": null,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "È una rifattorizzazione di sei pagine che oggi si comportano già bene (ognuna ha la sua prova): portarle su vistaDaQuery cambia codice senza chiudere un difetto visibile e rischia regressioni a dieci giorni dal lancio. Meglio farla dopo, con calma."
+  },
+  {
+   "id": 2652,
+   "esito": "scelta_di_nicola",
+   "cosa_ho_fatto": "Non toccato.",
+   "prova": "",
+   "rossa_senza_correzione": null,
+   "file_toccati": [],
+   "file_altrui_toccati": [],
+   "nota": "Domanda: un negozio storico sospeso senza «approvato da» e senza partita IVA lo lasciamo riattivare senza partita IVA, o resta fermo finché non esiste una pagina dove inserirla?"
+  },
+  {
+   "id": 1592,
+   "esito": "riparato",
+   "cosa_ho_fatto": "vista-delle-campagne riesporta AvvisoLettura da vista-dei-coupon (dichiarato una volta) e SEGNO_NON_SO è NON_LETTO di lib/letture-cruscotto.",
+   "prova": "tests/unit/minori-s05-blocchi-cms.test.tsx › 1592",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/admin/vista-delle-campagne.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": ""
+  },
+  {
+   "id": 574,
+   "esito": "riparato",
+   "cosa_ho_fatto": "CMS_PAGES tiene solo «Chi siamo» (l'unica pagina pubblica che legge il pannello); la rotta PUT rifiuta gli altri slug; il sottotitolo della lista dice che Termini, Privacy e FAQ si cambiano nel codice.",
+   "prova": "tests/unit/minori-s05-blocchi-cms.test.tsx › 574",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "lib/cms-page.ts",
+    "app/admin/pages/page.tsx",
+    "app/api/admin/cms/[slug]/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Eventuali righe già salvate in cms_pages per terms/privacy/faq restano nel database (innocue: nessuno le legge)."
+  },
+  {
+   "id": 1864,
+   "esito": "parziale",
+   "cosa_ho_fatto": "Con una verifica già PENDING e il suo id, start-check risponde con quella e non chiama di nuovo il fornitore: niente nuove schede Onfido con dati personali a ogni tentativo. Vale solo per i fornitori esterni: con la verifica manuale (id «manual_…») si può rilanciare, così nome e P.IVA corretti si ricontrollano.",
+   "prova": "tests/unit/minori-s05-kyc.test.ts › 1864",
+   "rossa_senza_correzione": true,
+   "file_toccati": [
+    "app/api/kyc/start-check/route.ts"
+   ],
+   "file_altrui_toccati": [],
+   "nota": "Manca la cancellazione della scheda presso Onfido alla cancellazione dell'account (lib/account/, S08), e una scheda creata senza documenti resta comunque una."
+  }
+ ],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "Le pagine ordini del negozio non leggono gli orari: prova già rossa su main",
+   "file": "tests/unit/le-pagine-ordini-del-negozio-leggono-gli-orari.test.tsx",
+   "gravita": "minore",
+   "descrizione": "I due casi «lunedì 12:00, «Oggi · 13:00–16:30» → entro le 12:45» falliscono anche su origin/main (provato in una copia pulita): non toccati, sono del territorio S02/S06."
+  },
+  {
+   "titolo": "La risalita dei genitori delle categorie non ha un tetto",
+   "file": "lib/category-attributes.ts:262",
+   "gravita": "minore",
+   "descrizione": "La rotta ora impedisce i cerchi, ma un cerchio già presente nel database bloccherebbe ancora il modulo prodotto. Serve un tetto di passi (fuori territorio) o un trigger (migrazione)."
+  },
+  {
+   "titolo": "Il filtro «In attesa» aperto da «Seller pending» mostra anche i fattorini",
+   "file": "app/admin/users/page.tsx:413",
+   "gravita": "minore",
+   "descrizione": "Il riquadro di Oggi conta solo i negozi in attesa, il filtro della pagina utenti mostra negozi e fattorini."
+  },
+  {
+   "titolo": "Lo specchio activity_events chiama «Azione admin» anche le azioni degli utenti",
+   "file": "lib/audit.ts:68-73",
+   "gravita": "minore",
+   "descrizione": "writeAudit scrive sempre action 'admin' e summary 'Azione admin: …': con kyc.upload/kyc.submit ci finiscono anche caricamenti di fattorini e negozi."
+  },
+  {
+   "titolo": "Prova con un nome che promette il contrario",
+   "file": "tests/unit/le-funzioni-spente-al-lancio-le-rifiuta-il-server.test.ts:137-148",
+   "gravita": "minore",
+   "descrizione": "Dice «409 anche senza chiave di servizio», ma la rotta vera senza chiave risponde 503 da withAdminAuth (scheda 1836): da rinominare (S04)."
+  }
+ ],
+ "note": "Numeri di scheda sbagliati nei messaggi di due commit (non si riscrive la storia): nel commit «Segnalazioni: testi in parole vere…» la scheda 97 è la 24; nel commit «Bonifici, prodotti, negozio del mese e fattorini…» la scheda 80 è la 170. Il referto usa gli id giusti. L'AD ha chiesto di non toccare più app/faq/: l'ho toccato prima del messaggio solo per la scheda 362 (id delle sezioni), da ricucire con S08. File fuori territorio toccati con modifica minima: lib/audit-azioni.ts (nessun proprietario, sole aggiunte), lib/ordini/esporta-ordini.ts (S02, cella Data), app/faq/page.tsx (S08), prove vecchie in tests/unit (S04) elencate scheda per scheda. Nessuna migrazione nuova. Scelte per Nicola: schede 161 e 2652."
+}
