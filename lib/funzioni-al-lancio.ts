@@ -93,7 +93,11 @@ export const CARICAMENTO_DA_FILE_ACCESO: boolean = false;
  *  dalla cassa e dalle frasi del pagamento (`cartaAlCheckoutDisponibile` in
  *  lib/promesse-pubbliche.ts). Per riaccendere: chiavi Stripe in produzione,
  *  webhook collegato e un pagamento vero provato fino al payout del negozio. */
-export const CARTA_ACCESA: boolean = false;
+// PALESTRA (7/11/2026, firma di Nicola sulla carta 232): su questo ramo l'interruttore si legge da
+// NEXT_PUBLIC_PALESTRA_CARTA_ACCESA, che esiste solo nelle anteprime del progetto Vercel della
+// palestra (Stripe in modalità test). Senza la variabile resta spento, come su main.
+// QUESTO RAMO NON SI UNISCE MAI: vedi PALESTRA-NON-UNIRE.md.
+export const CARTA_ACCESA: boolean = process.env.NEXT_PUBLIC_PALESTRA_CARTA_ACCESA === '1';
 
 /** Abbonamento da 50 € al mese dei negozi e campagne sponsorizzate: soldi che
  *  Stripe chiederebbe al negozio. Letto da app/api/seller/subscription/checkout,
