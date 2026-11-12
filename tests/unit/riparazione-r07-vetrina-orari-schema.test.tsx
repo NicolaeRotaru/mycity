@@ -64,4 +64,15 @@ describe('R07-022 · gli orari del negozio arrivano a Google nella prima lettura
     expect(orariPerLoSchema(null)).toBeUndefined();
     expect(orariPerLoSchema({ mon: [] })).toBeUndefined();
   });
+
+  it('orari scritti male non diventano orari falsi per Google, come per l app', () => {
+    const giorno = (fasce: unknown) => orariPerLoSchema({ mon: fasce, tue: [], wed: [], thu: [], fri: [], sat: [], sun: [] });
+    expect(giorno([['13:00', '09:00']])).toBeUndefined();
+    expect(giorno([['00:00', '00:00']])).toBeUndefined();
+    expect(giorno([['25:99', '99:00']])).toBeUndefined();
+    expect(giorno([['8:00', '12:30']])?.[0]).toMatchObject({ opens: '08:00', closes: '12:30' });
+    expect(giorno([['08:00:00', '12:30:00']])?.[0]).toMatchObject({ opens: '08:00', closes: '12:30' });
+    expect(giorno([['18:00', '00:00']])?.[0]).toMatchObject({ opens: '18:00', closes: '00:00' });
+    expect(giorno([['18:00', '24:00']])?.[0]).toMatchObject({ opens: '18:00', closes: '00:00' });
+  });
 });

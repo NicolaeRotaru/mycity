@@ -19,7 +19,22 @@ const GIORNO_SCHEMA: Record<string, string> = {
   sun: 'https://schema.org/Sunday',
 };
 
-const ORA = /^\d{1,2}:\d{2}$/;
+/**
+ * Un orario scritto dal negozio, ripulito: «8:00» → «08:00», «08:00:00» → «08:00».
+ * `null` se non è un'ora vera (25:99, testo). «24:00» vale solo come chiusura, e diventa «00:00».
+ */
+function minuti(ora: unknown, chiusura: boolean): number | null {
+  if (typeof ora !== 'string') return null;
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(ora.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (min > 59) return null;
+  if (h === 24 && min === 0 && chiusura) return 24 * 60;
+  if (h > 23) return null;
+  return h * 60 + min;
+}
+const testo = (n: number) => `${String(Math.floor(n / 60) % 24).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
 
 export type SpecificaOrario = {
   '@type': 'OpeningHoursSpecification';
@@ -37,8 +52,15 @@ export function orariPerLoSchema(storeHours: unknown): SpecificaOrario[] | undef
     if (!Array.isArray(fasce)) continue;
     for (const fascia of fasce as HoursInterval[]) {
       const [apre, chiude] = Array.isArray(fascia) ? fascia : [];
-      if (typeof apre !== 'string' || typeof chiude !== 'string' || !ORA.test(apre) || !ORA.test(chiude)) continue;
-      specifiche.push({ '@type': 'OpeningHoursSpecification', dayOfWeek: GIORNO_SCHEMA[giorno], opens: apre, closes: chiude });
+      const o = minuti(apre, false);
+      let c = minuti(chiude, true);
+      if (o === null || c === null) continue;
+      // Come l'app (lib/store-hours.ts, intervalloInMinuti): «00:00» in chiusura vuol dire
+      // mezzanotte; una fascia invertita per errore (13:00–09:00) o «00:00–00:00» è vuota, e
+      // per Google non deve diventare un negozio aperto la notte.
+      if (c === 0 && o > 0) c = 24 * 60;
+      if (c <= o) continue;
+      specifiche.push({ '@type': 'OpeningHoursSpecification', dayOfWeek: GIORNO_SCHEMA[giorno], opens: testo(o), closes: testo(c) });
     }
   }
   return specifiche.length > 0 ? specifiche : undefined;
