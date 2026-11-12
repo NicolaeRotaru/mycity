@@ -24,4 +24,9 @@ describe('R02-022 · le impostazioni non scorrono di lato al telefono', () => {
     expect(pagina).toMatch(/<section className="min-w-0 bg-white border-2 border-red-200 rounded-xl p-4 sm:p-6">/);
     expect(pagina).toMatch(/w-full sm:w-auto justify-center items-center gap-2 bg-red-600/);
   });
+
+  it('dopo il qa: anche la scheda Account, la prima che si apre, e l email lunga va a capo', () => {
+    expect(pagina).toMatch(/<section className="min-w-0 bg-white border rounded-xl p-4 sm:p-6 space-y-6">/);
+    expect(pagina).toMatch(/font-mono text-ink-900 break-all">\{email\}/);
+  });
 });

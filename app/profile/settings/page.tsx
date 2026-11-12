@@ -508,11 +508,11 @@ export default function SettingsPage() {
         {/* Content */}
         <div className="space-y-6">
           {tab === 'account' && (
-            <section className="bg-white border rounded-xl p-6 space-y-6">
+            <section className="min-w-0 bg-white border rounded-xl p-4 sm:p-6 space-y-6">
               <div>
                 <h2 className="text-lg font-bold mb-1">Email di accesso</h2>
                 <p className="text-sm text-ink-500 mb-4">
-                  Email attuale: <span className="font-mono text-ink-900">{email}</span>
+                  Email attuale: <span className="font-mono text-ink-900 break-all">{email}</span>
                 </p>
                 <form onSubmit={handleChangeEmail} className="flex flex-col sm:flex-row gap-2">
                   <Input
