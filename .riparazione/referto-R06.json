@@ -1,0 +1,258 @@
+{
+  "sessione": "R06",
+  "aggiornato": "2026-11-12 15:02",
+  "finita": false,
+  "testa": "12202bd61fac42b4e592eaf5561c172d16284aa0",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R06-001",
+      "chiave": "dati-analytics|il funnel conta molti meno clienti che comprano di quelli veri, perché per ogni cento clienti legge al massimo mille ordini e non lo dice",
+      "esito": "riparato",
+      "commit": "a95c1eebf95f8eb85630ce6d9cf745d83b33768a",
+      "file_toccati": [
+        "lib/supabase/blocchi.ts",
+        "app/admin/funnel/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-funnel-ordini-oltre-mille.test.ts",
+        "tests/unit/aiuti/riparazione-r06-postgrest-col-tetto.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-funnel-ordini-oltre-mille.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a95c1eebf95f8eb85630ce6d9cf745d83b33768a^ --file app/admin/funnel/page.tsx --prove tests/unit/riparazione-r06-funnel-ordini-oltre-mille.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuova leggiInBlocchiTutte in blocchi.ts: dentro ogni blocco di cento clienti legge a finestre di mille (leggiTutteLeRighe) e restituisce troncato. Il funnel la usa per gli ordini (order+range) e accende campione se gli ordini sono troncati. Senza correzione la prova conta 34 clienti che comprano invece di 100. Rimessa con il solo file della pagina: togliendo blocchi.ts la prova cade per un nome mancante (uscita 3), non per il comportamento."
+    },
+    {
+      "id": "R06-002",
+      "chiave": "dati-analytics|l'indirizzo d'ingresso intero esce dalla porta dei flag, dove il filtro nuovo non arriva",
+      "esito": "gia_riparato_prima",
+      "prova": "lib/analytics/posthog.tsx:419 posthog.init riceve ...opzioniIndirizzoIngressoMascherato() (mask_personal_data_properties: true + custom_personal_data_properties con tutti i parametri dell'indirizzo d'ingresso), e nel loaded ripulisciIndirizzoIngressoSalvato (:376) ripulisce $initial_person_info salvato prima. Prova esistente verde: npx vitest run tests/unit/posthog-l-indirizzo-d-ingresso-non-esce-dalla-porta-dei-flag.test.ts (2 passate)."
+    },
+    {
+      "id": "R06-006",
+      "chiave": "architettura|oltre i mille prodotti la mappa per google perde i più vecchi senza dirlo",
+      "esito": "riparato",
+      "commit": "bfcdbb29fc2ab5572e51044c4c48ea0168d8c46e",
+      "file_toccati": [
+        "app/sitemap.ts",
+        "tests/unit/minori-s09-mappa-del-sito.test.ts",
+        "tests/unit/la-mappa-del-sito-non-manda-a-google-categorie-vuote.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-sitemap-oltre-mille.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-sitemap-oltre-mille.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bfcdbb29fc2ab5572e51044c4c48ea0168d8c46e^ --file app/sitemap.ts --prove tests/unit/riparazione-r06-sitemap-oltre-mille.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prodotti letti con leggiInBlocchiTutte (finestre da mille dentro ogni blocco di negozi), negozi con leggiTutteLeRighe al posto di .limit(2000). Il tetto dei 5000 indirizzi di prodotto resta, con un logger.warn quando scatta. Due prove esistenti che importano app/sitemap.ts avevano un finto senza .range: ho aggiunto solo 'range' all'elenco dei metodi, senza indebolirle."
+    },
+    {
+      "id": "R06-011",
+      "chiave": "dati-analytics|il funnel senza iscritti mostra zero virgola zero per cento in rosso invece di dire che non c'è niente da misurare",
+      "esito": "riparato",
+      "commit": "cfc0ba0024532b20cd7440815ffc473be1988214",
+      "file_toccati": [
+        "app/admin/funnel/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-funnel-senza-iscritti.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-funnel-senza-iscritti.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cfc0ba0024532b20cd7440815ffc473be1988214^ --file app/admin/funnel/page.tsx --prove tests/unit/riparazione-r06-funnel-senza-iscritti.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Con denominatore zero le percentuali del funnel sono null: le righe scrivono «(n.d.)», i tre riquadri «n.d.» in grigio (text-ink-400) senza colore contro il bersaglio. La funzione pura sta dentro la pagina (piano: file nuovo, non e' servito); la prova monta la pagina."
+    },
+    {
+      "id": "R06-012",
+      "chiave": "dati-analytics|la percentuale dei pagamenti con carta nel cruscotto si calcola su mille tentativi qualsiasi, non sugli ultimi trenta giorni",
+      "esito": "riparato",
+      "commit": "571d12fc3f1664a0f1085fa3a0ecfbcc8fe835f1",
+      "file_toccati": [
+        "app/admin/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-tasso-pagamenti-30-giorni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-tasso-pagamenti-30-giorni.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 571d12fc3f1664a0f1085fa3a0ecfbcc8fe835f1^ --file app/admin/page.tsx --prove tests/unit/riparazione-r06-tasso-pagamenti-30-giorni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La lettura di payment_attempts degli ultimi trenta giorni passa da .limit(5000) senza ordine a leggiTutteLeRighe con order(created_at, id) e range: il tasso si calcola su tutti i tentativi del periodo. Il calcolo resta nella pagina (piano: un file nuovo, non e' servito); la prova esegue la lettura vera della pagina."
+    },
+    {
+      "id": "R06-013",
+      "chiave": "dati-analytics|un solo ordine senza stato spegne tutta la panoramica dell'amministrazione",
+      "esito": "riparato",
+      "commit": "c8b55fa4291acaff98964d8f0e6d227fb2dec907",
+      "file_toccati": [
+        "migrations/300_admin_kpi_regge_le_chiavi_vuote.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r06-admin-kpi.test.sql"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh mycity_r06 && psql -q -X -d mycity_r06 -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r06-admin-kpi.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c8b55fa4291acaff98964d8f0e6d227fb2dec907^ --file migrations/300_admin_kpi_regge_le_chiavi_vuote.sql --prove tests/sql/rls/riparazione-r06-admin-kpi.test.sql --comando \"tests/sql/harness/apply.sh mycity_r06 >/dev/null 2>&1 && psql -q -X -d mycity_r06 -v ON_ERROR_STOP=1 -f {prove}\" --json",
+        "nota": "La migrazione e' un file nuovo, quindi la macchina non decide (uscita 3). Il log della rimessa mostra che senza la 300 la prova e' rossa sul comportamento: 'ROTTO admin_kpi risponde con un ordine senza stato — field name must not be null'. Con la 300: verde."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuova migrazione 300 (non applicata): admin_kpi identica alla 215, con coalesce(role,'senza_ruolo') e coalesce(delivery_status,'SENZA_STATO'). La pagina non cambia: mostra solo gli stati noti e ignora la chiave nuova. Prova SQL sul database ricostruito dalle migrazioni (Postgres 16 locale)."
+    },
+    {
+      "id": "R06-014",
+      "chiave": "dati-analytics|negozio del mese: la classifica dei voti mostra tutti i negozi a zero voti in fila, e",
+      "esito": "riparato",
+      "commit": "586d5fe25e9e72f349ece5602d5f83d173ff61ee",
+      "file_toccati": [
+        "migrations/301_negozio_del_mese_col_mese_di_piacenza.sql"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r06-negozio-del-mese.test.sql"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh mycity_r06 && psql -q -X -d mycity_r06 -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r06-negozio-del-mese.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 586d5fe25e9e72f349ece5602d5f83d173ff61ee^ --file migrations/301_negozio_del_mese_col_mese_di_piacenza.sql --prove tests/sql/rls/riparazione-r06-negozio-del-mese.test.sql --comando \"tests/sql/harness/apply.sh mycity_r06 >/dev/null 2>&1 && psql -q -X -d mycity_r06 -v ON_ERROR_STOP=1 -f {prove}\" --json",
+        "nota": "La migrazione e' un file nuovo: la macchina non decide (uscita 3). Nel log, senza la 301: 'ROTTO la vista prende il mese nel fuso di Piacenza' (date_trunc su now() in UTC). Con la 301: verde. Prova leggera, come approvato dalla regista: now() non si puo' fingere."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La meta' sui negozi a zero voti era gia' sistemata nella pagina (shop-of-month/page.tsx:91, «Nessun voto» quando e' vero). Per il mese: nuova migrazione 301 (non applicata) che ridefinisce shop_of_month_leaderboard come nella 034 con DATE_TRUNC('month', now() AT TIME ZONE 'Europe/Rome'), e ripete le opzioni security_invoker=off e security_barrier=true (121, 152, 161)."
+    },
+    {
+      "id": "R06-015",
+      "chiave": "dati-analytics|nello storico consegne compaiono due gruppi",
+      "esito": "riparato",
+      "commit": "940d692ea4f3adcbe05affa702555c91204db64b",
+      "file_toccati": [
+        "app/rider/history/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-storico-fattorino.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-storico-fattorino.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 940d692ea4f3adcbe05affa702555c91204db64b^ --file app/rider/history/page.tsx --prove tests/unit/riparazione-r06-storico-fattorino.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La chiave del gruppo e' giornoPiacenza(delivered_at), l'etichetta Oggi/Ieri/data lunga si calcola sullo stesso giorno di Piacenza (timeZone Europe/Rome), e key={g.key} al posto dell'etichetta ripetuta. Prova con orologio finto: tre consegne fra 00:10 e 01:10 di Piacenza, un solo gruppo «Oggi» da 9 euro. Raggruppamento lasciato nella pagina (nel piano c'era un file nuovo, non e' servito)."
+    },
+    {
+      "id": "R06-016",
+      "chiave": "dati-analytics|storico e recensioni del fattorino si caricano tutti in una volta, senza pagine, e le consegne vecchie aprono",
+      "esito": "riparato",
+      "commit": "12202bd61fac42b4e592eaf5561c172d16284aa0",
+      "file_toccati": [
+        "app/rider/history/page.tsx",
+        "app/rider/reviews/page.tsx",
+        "tests/unit/lo-storico-del-fattorino-mostra-il-suo-compenso.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-storico-fattorino.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-storico-fattorino.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 12202bd61fac42b4e592eaf5561c172d16284aa0^ --file app/rider/history/page.tsx,app/rider/reviews/page.tsx --prove tests/unit/riparazione-r06-storico-fattorino.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Storico e recensioni si leggono con leggiTutteLeRighe (order + range, finestre da mille), con un avviso a schermo se si arriva al tetto duro. Nello storico le consegne con piu' di 7 giorni non sono piu' un link (la pagina del dettaglio direbbe «Ordine non trovato»). La prova esistente lo-storico-del-fattorino-mostra-il-suo-compenso importa la pagina: adeguato solo il finto (order concatenabile, range, dato nella forma nuova), con le stesse asserzioni."
+    },
+    {
+      "id": "R06-017",
+      "chiave": "dati-analytics|in analisi il voto medio guarda solo le recensioni ai prodotti: un negozio con tre recensioni legge",
+      "esito": "riparato",
+      "commit": "289d683889d9ec4452bcc15757ca1537f6cd6f26",
+      "file_toccati": [
+        "migrations/302_l_analisi_conta_le_recensioni_del_negozio.sql",
+        "app/seller/analytics/page.tsx"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r06-analisi-recensioni.test.sql",
+        "tests/unit/riparazione-r06-analisi-in-italiano.test.ts"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh mycity_r06 && psql -q -X -d mycity_r06 -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r06-analisi-recensioni.test.sql ; npx vitest run tests/unit/riparazione-r06-analisi-in-italiano.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 289d683889d9ec4452bcc15757ca1537f6cd6f26^ --file app/seller/analytics/page.tsx --prove tests/unit/riparazione-r06-analisi-in-italiano.test.ts --json",
+        "nota": "Per la migrazione 302 (file nuovo) la rimessa SQL esce 3, rosso_strutturale. Nel log, senza la 302: 'ROTTO recensioni=0' e 'ROTTO voto_medio=null'; con la 302: 3 e 3.67."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Migrazione 302 (non applicata): andamento_del_negozio prende voto medio e recensioni da store_reviews con store_id = auth.uid(), come la pagina Recensioni; le visite restano come nella 141. Pagina: «Voto medio», «Consigli», «30 giorni» (5 punti), «la merce pronta». «Conversion rate» non toccato: la voce dice che si ripara nella sua voce."
+    },
+    {
+      "id": "R06-021",
+      "chiave": "dati-analytics|quando un cruscotto legge un campione invece del totale, lo dice solo alla console",
+      "esito": "riparato",
+      "commit": "9d7bb4974ee7edb36b4196e1be1d917080333e02",
+      "file_toccati": [
+        "app/admin/activity/page.tsx",
+        "app/admin/funnel/page.tsx",
+        "lib/supabase/blocchi.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-attivita-campione.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-attivita-campione.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9d7bb4974ee7edb36b4196e1be1d917080333e02^ --file app/admin/activity/page.tsx,lib/supabase/blocchi.ts --prove tests/unit/riparazione-r06-attivita-campione.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "leggiTutteLeRighe accetta un tetto (di serie 20.000). La sintesi delle 24 ore di Attivita' legge a finestre fino a 3000 righe e mostra «campione: ultime N righe» quando il tetto scatta (prima il database ne dava 1000 e l'avviso non compariva mai). Nel funnel l'avviso a schermo copre ora anche gli ordini troncati (con R06-001)."
+    }
+  ],
+  "nuovi_difetti_visti": [],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 0,
+    "nota": ""
+  }
+}
