@@ -6,6 +6,7 @@ import { CreditCard, ExternalLink } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
+import { portaleApribile } from '@/lib/abbonamento-portale';
 
 /**
  * 22/8/2026 — IL PEZZO MANCANTE ERA IL BOTTONE, NON L'ENDPOINT.
@@ -26,7 +27,9 @@ export default function GestisciAbbonamento({ stato }: { stato: string | null | 
   // Senza un abbonamento mai attivato non c'è niente da gestire: la rotta
   // risponderebbe «Nessun abbonamento da gestire», e un bottone che porta a un
   // errore è peggio di un bottone che non c'è.
-  if (!stato || stato === 'none' || stato === 'inactive') return null;
+  // R10-021 — E a funzione spenta un abbonamento disdetto non ha piu' un portale: la rotta
+  // risponderebbe «non attivo». La regola e' la stessa della rotta (lib/abbonamento-portale.ts).
+  if (!portaleApribile(stato)) return null;
 
   const apriPortale = async () => {
     setApertura(true);

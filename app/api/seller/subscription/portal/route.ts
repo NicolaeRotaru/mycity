@@ -6,6 +6,7 @@ import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { ABBONAMENTO_NEGOZI_ACCESO } from '@/lib/funzioni-al-lancio';
+import { abbonamentoInCorso } from '@/lib/abbonamento-portale';
 
 export const runtime = 'nodejs';
 
@@ -32,8 +33,8 @@ export const POST = withAuthRateLimit(
       .eq('id', user.id)
       .single();
 
-    const inCorso = ['active', 'past_due', 'trialing', 'unpaid'].includes(String(profile?.subscription_status ?? ''));
-    if (!ABBONAMENTO_NEGOZI_ACCESO && !inCorso) {
+    // R10-021 — La regola sta in lib/abbonamento-portale.ts: la legge anche il bottone.
+    if (!ABBONAMENTO_NEGOZI_ACCESO && !abbonamentoInCorso(profile?.subscription_status)) {
       return ApiErrors.unavailable('L’abbonamento dei negozi non è attivo al momento.');
     }
 
