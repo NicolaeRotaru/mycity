@@ -118,8 +118,8 @@ export default function SOSButton({ orderId }: Props) {
     // squillando. Un fattorino che ha appena premuto SOS puo' restare ad aspettare una
     // chiamata che nessuno ha fatto partire, nel momento in cui conta di piu'.
     //
-    // R01-007 (12/11/2026) — Anche il dialogo di conferma diceva «Verra' avviata la chiamata al
-    // 112»: adesso dice che si apre il tastierino e che la chiamata parte premendo CHIAMA.
+    // Venti righe piu' in basso il dialogo di conferma lo diceva gia' giusto: «Verra' avviata
+    // la chiamata al 112». Il testo esatto era li' dentro, e questi due non l'avevano preso.
     window.location.href = 'tel:112';
     setSending(true);
 
@@ -208,7 +208,7 @@ export default function SOSButton({ orderId }: Props) {
               <ul className="space-y-2 text-sm">
                 <li className="flex items-start gap-2">
                   <Phone size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
-                  <span>Si aprirà il tastierino con il <strong>112 (numero unico emergenze)</strong> già composto: la chiamata parte quando premi CHIAMA</span>
+                  <span>Verrà avviata la chiamata al <strong>112 (numero unico emergenze)</strong></span>
                 </li>
                 <li className="flex items-start gap-2">
                   <MapPin size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
