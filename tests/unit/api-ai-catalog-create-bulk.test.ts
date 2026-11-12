@@ -8,6 +8,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const FAKE_USER = { id: 'seller-1', email: 's@x.com' };
 
+// 12/11/2026 (R04-006) — La rotta ora legge l'interruttore spento al lancio:
+// qui si prova la funzione accesa, come prima.
+vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
+  ...((await originale()) as Record<string, unknown>),
+  AI_NEGOZI_ACCESA: true,
+}));
 vi.mock('@/lib/api/middleware', () => ({
   withSellerAuth: (handler: (ctx: { user: typeof FAKE_USER; req: Request }) => unknown) =>
     (req: Request) => handler({ user: FAKE_USER, req }),
