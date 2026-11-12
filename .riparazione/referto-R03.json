@@ -1,0 +1,261 @@
+{
+  "sessione": "R03",
+  "aggiornato": "2026-11-12 15:13",
+  "finita": false,
+  "testa": "",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R03-001",
+      "esito": "riparato",
+      "commit": "e3bd7a388c2763c12710564f10bda608358d1def",
+      "file_toccati": [
+        "lib/geocodifica.ts",
+        "app/api/geocode/route.ts",
+        "components/checkout/ShippingAddressForm.tsx",
+        "app/profile/addresses/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-via-roma-in-centro.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-via-roma-in-centro.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente (prova-rimessa.mjs di ad-mycity bloccato dal permesso della sessione): file corretti riportati a e3bd7a388c2763c12710564f10bda608358d1def^ → 4/4 rosse; a HEAD → 4/4 verdi"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "coordinateDiUnIndirizzo cerca in forma strutturata (street/city/postalcode), chiusa nel riquadro di Piacenza (viewbox+bounded), con 5 risultati, e tiene solo quello del comune scritto (CAP confrontato sulle prime 4 cifre quando OSM lo conosce); nessun risultato affidabile → null. /api/geocode, la cassa e la rubrica mandano via/città/CAP e usano la stessa funzione; il controllo dei 5 km è invariato.",
+      "verificato_da": "",
+      "chiave": "qa-flussi|la cassa dice «troppo lontano» a chi abita in via roma o in via cavour, in pieno centro, e l'ordine non parte"
+    },
+    {
+      "id": "R03-003",
+      "esito": "riparato",
+      "commit": "260658c7a696062497df0f26b8f6c1a7cba42abd",
+      "file_toccati": [
+        "lib/stripe/webhook/comune.ts",
+        "lib/stripe/webhook/posta-non-partita.ts",
+        "lib/stripe/webhook/ordini.ts",
+        "lib/stripe/webhook/rimborsi.ts",
+        "lib/stripe/webhook/giftcard.ts",
+        "app/api/orders/cod/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-email-rifiutata-si-vede.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-email-rifiutata-si-vede.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: comune.ts a 260658c7a696062497df0f26b8f6c1a7cba42abd^ e posta-non-partita.ts tolto → 2 rosse; a HEAD → verdi"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuova avvisaSeLaPostaNonParte (lib/stripe/webhook/posta-non-partita.ts): su {ok:false} non skipped scrive logger.error con orderId/sellerId e manda notifyAdmins una volta per invio (unaVoltaPer posta-non-partita:<cosa>:<ordine>). provaAMandare legge l'esito; l'avviso al negozio della carta ora restituisce l'esito di sendEmail; la cassa in contanti (negozio e cliente), l'email di rimborso dal cruscotto (rimborsi.ts) e i buoni regalo leggono l'esito. L'email per l'IBAN in payout.ts era già coperta dal 5/11 (avviso «Email al cliente per l IBAN non partita»). La posta spenta per configurazione (skipped) resta al semaforo /api/health (voce R03-004). Il modulo è separato da comune.ts perché molte prove esistenti fanno il mock di comune.ts senza la funzione nuova.",
+      "verificato_da": "",
+      "chiave": "api-backend|se l'email «nuovo ordine» al negozio non parte, nessuno se ne accorge e nessuno la rimanda"
+    },
+    {
+      "id": "R03-005",
+      "esito": "riparato",
+      "commit": "b0cb2f4fa7806c23678cf6b816196466ddb4ef18",
+      "file_toccati": [
+        "lib/stripe/payout.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-reso-ripreso-non-rimborsa-due-volte.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-reso-ripreso-non-rimborsa-due-volte.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente (prova-rimessa.mjs bloccato dal permesso della sessione): lib/stripe/payout.ts riportato a b0cb2f4fa7806c23678cf6b816196466ddb4ef18^ → rossa «expected 4000 to be 2000»; a HEAD → verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In refundOrder, sui contanti con rimborso tutto in credito: se a diario c'è già il credito della chiave (stessa cifra) e l'ordine conta già almeno quella cifra, si restituisce il rimborso di prima senza prenotare né togliere di nuovo la quota al negozio. Scenario della voce rifatto con le rotte vere (decide 500 per scrittura del reso caduta, poi avanza): ordine 2000 e quota 1800, non 4000/3600. Il ramo carta lo copre già ilRimborsoDellaChiaveGiaUscito, il bonifico bonificoDellaChiave. Decide resta 500 con l'avviso agli admin e la frase «non ripetere il rimborso»: la prova esistente un-rimborso-non-registrato-sul-reso-non-risponde-ok pretende proprio quello, quindi non l'ho cambiato.",
+      "verificato_da": "",
+      "chiave": "pagamenti-stripe|dopo un guasto, chiudere il reso con i passi normali registra due volte lo stesso rimborso, e al negozio la sua parte viene tolta due volte"
+    },
+    {
+      "id": "R03-006",
+      "esito": "riparato",
+      "commit": "90bb88ad5c1a08d27fe9361e8676dc69265482b5",
+      "file_toccati": [
+        "lib/stripe/payout.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-reso-carta-dopo-rimborso-diviso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-reso-carta-dopo-rimborso-diviso.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: lib/stripe/payout.ts a 90bb88ad5c1a08d27fe9361e8676dc69265482b5^ → rossa «expected 3150 to be 1800»; a HEAD → verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "ilRimborsoDellaChiaveGiaUscito non conta più per intero i rimborsi senza order_id: per quelli scritti da una divisione dal cruscotto (registro audit_logs, origine divisione_del_rimborso_dal_cruscotto, stesso pagamento) conta solo la parte di questo ordine; quelli mai divisi restano contati per intero. Scenario della voce (40/60 €, 30 € divisi 5/25, reso 20 € ripreso): storni 1800 una volta, o1 a 2500. lib/stripe/rimborsi-da-dividere.ts non è servito toccarlo.",
+      "verificato_da": "",
+      "chiave": "pagamenti-stripe|reso con la carta in un carrello di due negozi: se un rimborso dal cruscotto è già stato diviso fra i due ordini, il reso ripreso dopo un guasto toglie di nuovo la quota al negozio"
+    },
+    {
+      "id": "R03-007",
+      "esito": "parziale",
+      "commit": "c1d01145575a20efbfb559c87a3bdb98cf3fde3a",
+      "file_toccati": [
+        "lib/stripe/payout.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-quota-dopo-il-bonifico-a-mano.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-quota-dopo-il-bonifico-a-mano.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: lib/stripe/payout.ts a c1d01145575a20efbfb559c87a3bdb98cf3fde3a^ → 2 rosse (nessun avviso); a HEAD → verdi"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Su un ordine in contanti con la rimessa confermata (HELD, cioè contanti già da Nicola e bonifico del lunedì a mano) refundOrder manda agli amministratori, una volta per chiave, l'avviso «💶 Togli 18,00 € dal prossimo bonifico a Pane Quotidiano» con ordine e cifra. La quota resta anche sull'ordine come prima.",
+      "cosa_resta": "Nel codice non esiste né un segno «pagato a mano» sull'ordine né una pagina «Da versare lunedì» (app/admin/payouts dice «niente azioni manuali»): il registro dei debiti del negozio sottratto in automatico al bonifico successivo, chiesto dalla voce, ha bisogno di quella pagina, che non è fra i miei file. Serve una decisione su come Nicola registra i bonifici a mano (pagina admin + colonna/registro), poi una migrazione e la sottrazione.",
+      "verificato_da": "",
+      "chiave": "pagamenti-stripe|un rimborso arrivato dopo il bonifico del lunedì non viene mai ripreso al negozio"
+    },
+    {
+      "id": "R03-008",
+      "esito": "riparato",
+      "commit": "d022b765221810e4e147d3abcd33e0bbf4954478",
+      "file_toccati": [
+        "lib/stripe/webhook/ordini.ts",
+        "lib/stripe/webhook/carta-gia-tornata.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-carta-tornata-prima-dell-ordine.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-carta-tornata-prima-dell-ordine.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: ordini.ts a d022b765221810e4e147d3abcd33e0bbf4954478^ e file nuovo tolto → 3 rosse (ordine PAID/HELD, carrelli CANCELED/MISMATCH lavorati); a HEAD → 4 verdi"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "handleCheckoutCompleted rilegge la carica (latest_charge) e, se è rimborsata o contestata, fa nascere gli ordini CANCELED con payout_status REFUNDED (il giro dei bonifici prende solo HELD), payment_status REFUNDED se il rimborso è pieno, senza campanella né email al negozio; avvisa gli admin una volta per carrello e chiude il carrello. CANCELED e MISMATCH sono finali come COMPLETED. Strada unica come chiesto dalla regista (l'ordine nasce annullato, non «non nasce»). La lettura del pagamento è passata nel file nuovo lib/stripe/webhook/carta-gia-tornata.ts per restare sotto il tetto delle 600 righe di ordini.ts (prova webhook-diviso-per-mestiere). rimborsi.ts non l'ho toccato: col controllo alla nascita l'ordine che arriva dopo il rimborso nasce comunque annullato, quindi il segno sul carrello non serve più.",
+      "verificato_da": "",
+      "chiave": "pagamenti-stripe|se il cliente viene rimborsato prima che il suo ordine nasca, l'ordine nasce lo stesso come pagato e il negozio viene pagato"
+    },
+    {
+      "id": "R03-011",
+      "esito": "riparato",
+      "commit": "0620a2ac8c5c922061d8f2f788c4e320567b2bc5",
+      "file_toccati": [
+        "app/api/orders/cod/route.ts",
+        "app/checkout/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-prezzo-cambiato-in-cassa.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-prezzo-cambiato-in-cassa.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: route.ts a 0620a2ac8c5c922061d8f2f788c4e320567b2bc5^ → rossa (200 invece di 409); a HEAD → verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La cassa manda subtotaliVistiCents (il sottototale prodotti di ogni negozio come l'ha mostrato); la rotta, ricalcolati i prezzi, se un sottototale è diverso risponde 409 PREZZI_CAMBIATI con le cifre nuove senza creare l'ordine (prima di rivendicare il codice sconto); la cassa a quel codice rilegge i prezzi e mostra l'avviso «prezzo cambiato» già esistente. Confronto sui prodotti e non sul totale con la consegna, perché la consegna dipende da coordinate che il browser può non avere (rischio di fermare ordini buoni). Campo facoltativo per le pagine vecchie.",
+      "verificato_da": "",
+      "chiave": "qa-flussi|se il negozio alza un prezzo mentre il cliente è in cassa, l'ordine in contanti nasce col prezzo nuovo senza che nessuno glielo dica"
+    },
+    {
+      "id": "R03-012",
+      "esito": "riparato",
+      "commit": "88ca1ff541144eaf7a53057825ec04841a18f80f",
+      "file_toccati": [
+        "app/checkout/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-cassa-rilegge-il-carrello-cambiato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-cassa-rilegge-il-carrello-cambiato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: page.tsx a 88ca1ff541144eaf7a53057825ec04841a18f80f^ → 2 rosse (stessa chiave con quantità/variante diverse); a HEAD → verdi"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Correzione minima indicata dalla voce: la chiave di checkout-groups è id:variantId:quantity:sellerId. Prova montata: la cassa montata due volte con un carrello cambiato chiede una chiave diversa (quindi React Query non riusa la copia vecchia); stesso carrello, stessa chiave.",
+      "verificato_da": "",
+      "chiave": "qa-flussi|la cassa può ordinare la quantità o la taglia vecchia se torni al carrello, la cambi e rientri entro mezzo minuto"
+    },
+    {
+      "id": "R03-014",
+      "esito": "riparato",
+      "commit": "83837299aa37dcd0edc36a7a230d0a7ee00ba60d",
+      "file_toccati": [
+        "app/profile/addresses/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-rubrica-via-nuova.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-rubrica-via-nuova.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: page.tsx a 83837299aa37dcd0edc36a7a230d0a7ee00ba60d^ → rossa (lat 45.0517 salvata con la via nuova); a HEAD → verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In modifica le coordinate di partenza restano solo se via, città e CAP sono identici a quelli salvati; altrimenti partono vuote, e se la ricerca non trova la via (o non risponde) si salva null. Il cliente legge, oltre a «Indirizzo salvato», che la posizione non è stata trovata e che può ordinare lo stesso. Con coordinate null coordinateDaIndirizziSalvati salta la riga e le rotte d'ordine cercano la posizione da sé (lib/shipping-coordinate.ts non è servito toccarlo).",
+      "verificato_da": "",
+      "chiave": "qa-flussi|cambiando la via di un indirizzo salvato, se la ricerca della posizione non risponde restano le coordinate della via vecchia"
+    },
+    {
+      "id": "R03-025",
+      "esito": "riparato",
+      "commit": "e344a745b5821adbd8a59d21b9c7f38f56dd24c2",
+      "file_toccati": [
+        "lib/bozza-checkout.ts",
+        "app/checkout/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-bozza-della-sera-per-domani.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-bozza-della-sera-per-domani.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: lib/bozza-checkout.ts a e344a745b5821adbd8a59d21b9c7f38f56dd24c2^ → 3 rosse (giorno «tomorrow» rimesso martedì); a HEAD → verdi"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La bozza salva sceltaIl (istante della scelta). bozzaLetta(grezza, adesso) la riporta al giorno di adesso con fasciaAlGiornoDellOrdine: «Domani · 9:00–11:00» salvato lunedì sera diventa «Oggi · 9:00–11:00» martedì, una fascia di un giorno passato non torna, una bozza senza data non rimette giorno e fasce (resta «Adesso», che la cassa ricontrolla da sé). Orologio fisso nella prova. La scadenza di poche ore della bozza (noto 63) non l'ho aggiunta: la voce la propone «anche», e l'indirizzo salvato resta utile; giorno e fasce sono comunque riportati al giorno giusto.",
+      "verificato_da": "",
+      "chiave": "qa-flussi|chi ordina la sera per domani e conferma l'email la mattina dopo si ritrova la consegna spostata di un giorno"
+    }
+  ],
+  "nuovi_difetti_visti": [],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 0,
+    "nota": ""
+  }
+}
