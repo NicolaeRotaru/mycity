@@ -73,20 +73,34 @@ export default function RiderProfilePage() {
     },
   });
 
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
+  // 12/11/2026 (R03-017) — `null` = campo non toccato. I campi a video partono dal profilo
+  // (defaultValue), ma gli stati partivano da '' e il salvataggio li scriveva sempre tutti e due:
+  // chi correggeva il telefono cancellava il nome (e viceversa), e «Salva» senza toccare niente
+  // li svuotava entrambi. Ora si scrive solo quello che è cambiato, e il nome non resta vuoto.
+  const [fullName, setFullName] = useState<string | null>(null);
+  const [phone, setPhone] = useState<string | null>(null);
 
   const update = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
+      const patch: { full_name?: string; phone?: string } = {};
+      if (fullName !== null && fullName.trim() !== (profile?.full_name ?? '')) patch.full_name = fullName.trim();
+      if (phone !== null && phone.trim() !== (profile?.phone ?? '')) patch.phone = phone.trim();
+      if (patch.full_name === '') throw new Error('Il nome e cognome non può restare vuoto.');
+      if (Object.keys(patch).length === 0) return false;
       const { error } = await supabase
         .from('profiles')
-        .update({ full_name: fullName, phone })
+        .update(patch)
         .eq('id', user.id);
       if (error) throw error;
+      return true;
     },
-    onSuccess: () => {
+    onSuccess: (cambiato) => {
+      if (!cambiato) {
+        toast.info('Nessuna modifica da salvare');
+        return;
+      }
       qc.invalidateQueries({ queryKey: queryKeys.rider.profile });
       invalidaProfiloDiChiEntrato(qc);
       toast.success('Profilo aggiornato');
