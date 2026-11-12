@@ -187,7 +187,7 @@
         "tests/unit/riparazione-r02-variante-esaurita-a11y.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r02-variante-esaurita-a11y.test.ts",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -279,9 +279,11 @@
     },
     {
       "id": "R02-012",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "f217d4dcc5fed3e5793223d9ad11ae4b9c89f4c1",
-      "file_toccati": [],
+      "file_toccati": [
+        "tests/unit/riparazione-r02-cambio-password-pagina.test.tsx"
+      ],
       "prova_file": [
         "tests/unit/riparazione-r02-cambio-password-pagina.test.tsx"
       ],
@@ -293,11 +295,18 @@
         "uscita": null,
         "comando": "(voce di sola prova: nessun file di codice corretto) mutazione a mano: nella pagina il blocco getSession+fetch sostituito da supabase.auth.updateUser({password: newPassword}) col vecchio percorso in un commento → la prova nuova è ROSSA; pagina rimessa → verde"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Prova di comportamento nuova: monta la pagina delle impostazioni con un Supabase finto, compila e invia il modulo, pretende una sola POST a /api/account/cambia-password con passwordAttuale e nessuna auth.updateUser con password. Verde sul codice vero, rossa sulla mutazione descritta nella voce.",
       "nota": "La regola di lint in più (no-restricted-syntax contro auth.updateUser con password in app/profile/settings/page.tsx) va nella configurazione eslint, che non è un mio file: è un rinforzo, non serve a chiudere la voce.",
       "verificato_da": "qa (agente 4): regge su tre mutazioni diverse della pagina.",
-      "chiave": "architettura|la prova del cambio password legge la pagina come testo: se la pagina tornasse a cambiarla senza chiedere quella vecchia, tutte le prove resterebbero verdi"
+      "chiave": "architettura|la prova del cambio password legge la pagina come testo: se la pagina tornasse a cambiarla senza chiedere quella vecchia, tutte le prove resterebbero verdi",
+      "cosa_resta": "La regola di lint no-restricted-syntax contro auth.updateUser con password in app/profile/settings/page.tsx va nella configurazione eslint, che non è un mio file. La prova di comportamento c'è; essendo una voce di sola prova, la prova rimessa non si applica: la mutazione della voce è stata rimessa a mano (rossa) e verificata da tre varianti del qa.",
+      "serve_file_altrui": [
+        {
+          "file": "eslint.config (configurazione eslint del deposito)",
+          "modifica": "regola no-restricted-syntax limitata a app/profile/settings/page.tsx contro CallExpression[callee.property.name='updateUser'] con un oggetto che ha la chiave password"
+        }
+      ]
     },
     {
       "id": "R02-013",
@@ -352,9 +361,10 @@
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
-        "esito": "rosso_strutturale",
-        "uscita": 3,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4dc0c86de3a224d2baa598847f433269e80cb064^ --file lib/analytics/visita-prodotto.ts,components/ProductViewTracker.tsx --prove tests/unit/riparazione-r02-visita-una-all-ora.test.ts --json  → 3 (nomi nuovi). Difetto rimesso a mano com'è nella voce (freno per scheda senza ora, impronta senza scadenza): 2 casi su 3 ROSSI; il terzo è rosso sulla base perché il tracciatore usava sessionStorage. Codice rimesso: verde."
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 05b4058e6478c361e720f5e0884c6b92794b1f4e^ --file lib/analytics/visita-prodotto.ts --prove tests/unit/riparazione-r02-visita-una-all-ora.test.ts --json",
+        "nota": "sul primo commit (4dc0c86) l'uscita era 3, nomi nuovi: difetto rimesso a mano → rosso. Sul commit del seguito regge (uscita 0)."
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Una definizione sola: una visita per prodotto all'ora, come il trigger product_views_dedup. Il freno del browser (frenoOrario) passa da sessionStorage per scheda a localStorage con l'ora, condiviso fra le schede; l'impronta degli anonimi (improntaOraria) è la stessa per un'ora in tutte le schede, poi cambia. PostHog e product_views contano con la stessa regola sullo stesso browser.",
@@ -463,7 +473,7 @@
         "tests/unit/riparazione-r02-eventi-stati-e-titoli.test.tsx"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r02-eventi-stati-e-titoli.test.tsx",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -487,7 +497,7 @@
         "tests/unit/riparazione-r02-segnalazione-link-lungo.test.tsx"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r02-segnalazione-link-lungo.test.tsx",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -511,7 +521,7 @@
         "tests/unit/riparazione-r02-impostazioni-larghezza.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r02-impostazioni-larghezza.test.ts",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -541,7 +551,7 @@
         "tests/unit/riparazione-r02-vetrina-negozio.test.tsx"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r02-vetrina-negozio.test.tsx",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
