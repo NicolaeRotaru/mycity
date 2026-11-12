@@ -61,3 +61,18 @@ export function quotaDelRimborsoSulNetto(o: {
   if (lordo <= 0 || o.refunded_amount_cents == null) return undefined;
   return Math.round((Math.min(o.refunded_amount_cents, lordo) / lordo) * (o.seller_payout_cents ?? 0));
 }
+
+/**
+ * R11-023 — La contestazione riguarda solo una parte del pagamento? Si confronta
+ * l'importo contestato col lordo degli ordini del pagamento (come all'apertura).
+ * Senza il lordo non si indovina: si tratta come contestazione intera, come prima.
+ */
+export function contestazioneDiUnaParte(
+  dispute: Pick<Stripe.Dispute, 'amount'>,
+  orders: ReadonlyArray<object>,
+): boolean {
+  const righe = orders as ReadonlyArray<{ gross_total_cents?: number | null; total_price?: number | string | null }>;
+  const lordo = righe.reduce((s, o) => s + (o.gross_total_cents ?? Math.round(Number(o.total_price ?? 0) * 100)), 0);
+  const contestato = dispute.amount ?? 0;
+  return lordo > 0 && contestato > 0 && contestato < lordo;
+}

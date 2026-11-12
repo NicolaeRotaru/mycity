@@ -27,7 +27,9 @@ import { findOrdersForDispute, notifyAdmins } from './comune';
 import { scritturaObbligatoria } from './esito';
 import { restituisciLeQuoteParziali } from './contestazione-parziale-vinta';
 import { buonoDaRiattivareDopoLaVittoria, richiestaSulBuonoSoloAvviso } from './contestazione-buoni';
-import { eUnaRichiestaDiInformazioni, promemoriaOTotale, quotaDelRimborsoSulNetto, stornatoDaQuestaContestazione } from './quanto-restituire';
+import {
+  contestazioneDiUnaParte, eUnaRichiestaDiInformazioni, promemoriaOTotale, quotaDelRimborsoSulNetto, stornatoDaQuestaContestazione,
+} from './quanto-restituire';
 
 export { promemoriaOTotale };
 
@@ -339,7 +341,7 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
   // vinta: il negozio si faceva ripagare 32,40 € invece di 27,40. Il database
   // finto delle prove restituiva la riga intera, e il difetto non si vedeva.
   // Sono colonne della 126: dove non c'è, `findOrdersForDispute` le toglie.
-  const orders = await findOrdersForDispute(dispute, 'id, seller_id, stripe_charge_id, stripe_transfer_group, gross_total_cents, refunded_amount_cents, dispute_status, delivery_status, payment_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, dispute_seller_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, dispute_rider_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
+  const orders = await findOrdersForDispute(dispute, 'id, seller_id, stripe_charge_id, stripe_transfer_group, gross_total_cents, total_price, refunded_amount_cents, dispute_status, delivery_status, payment_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, dispute_seller_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, dispute_rider_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
   if (orders.length === 0) return buonoDaRiattivareDopoLaVittoria(dispute); // R11-022
   const admin = getAdminSupabase();
   const ids = orders.map((o) => o.id);
@@ -476,6 +478,18 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
     }
 
     await notifyAdmins('✓ Chargeback vinto', `Contestazione vinta su ordine ${ids[0]}. Payout rimesso in coda.`, '/admin/disputes');
+  } else if (dispute.status === 'lost' && contestazioneDiUnaParte(dispute, orders)) {
+    // R11-023 — persa su una PARTE del carrello: niente annulli, merce a scaffale o «rimborsato per
+    // intero» sugli ordini degli altri negozi. Bonifici fermi (LOST), la perdita la divide Nicola.
+    scritturaObbligatoria(
+      await admin.from('orders').update({ dispute_status: 'LOST', payment_status: 'PARTIALLY_REFUNDED' }).in('id', ids),
+      'contestazione persa su una parte del carrello',
+    );
+    await notifyAdmins(
+      '✕ Chargeback perso su una parte del carrello',
+      `Contestazione ${dispute.id} persa per ${formatPriceFromCents(dispute.amount ?? 0)} su un pagamento di ${ids.length} ordine/i (${ids.map((id) => id.slice(0, 8)).join(', ')}). Nessun ordine annullato: i bonifici di questi ordini sono fermi finché non dividi la perdita fra i negozi.`,
+      '/admin/disputes',
+    );
   } else if (dispute.status === 'lost') {
     // 22/8/2026 — UNA CONSEGNA AVVENUTA NON TORNA «ANNULLATA», E LA MERCE NON
     // TORNA A MAGAZZINO.
