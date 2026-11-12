@@ -499,7 +499,8 @@ export default function CheckoutPage() {
       // comunque appena viene ripresa, come prima.
       const raw = localStorage.getItem('mc_checkout_draft') ?? sessionStorage.getItem('mc_checkout_draft');
       if (!raw) return;
-      const bozza = bozzaLetta(JSON.parse(raw));
+      // R03-025 — con l'orologio: «Domani» salvato ieri sera è «Oggi», una fascia passata non torna.
+      const bozza = bozzaLetta(JSON.parse(raw), new Date());
       if (!bozza) return;
       setForm((prev) => ({ ...prev, ...(bozza.form as Partial<typeof form>) }));
 
@@ -1295,6 +1296,7 @@ export default function CheckoutPage() {
           giorno: slotDay,
           fasciaOggi: slotTodayTime,
           fasciaDomani: slotTomorrowTime,
+          adesso: new Date(),
         })));
       } catch { /* noop */ }
       router.push('/sign-in?returnTo=/checkout');
