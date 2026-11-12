@@ -5,9 +5,10 @@
  * R06-009 (12/11/2026) — IN HOME OGNI SEZIONE CHIEDEVA DI NUOVO LO STESSO NEGOZIO.
  *
  * `fetchSellerPublicMap` faceva sempre una domanda nuova alla vetrina: sei-otto
- * sezioni della home, sei-otto domande per la stessa riga di Pane Quotidiano, e
- * ogni fascia compariva un giro di rete piu' tardi. Ora nel browser ogni negozio
- * letto resta in memoria qualche minuto, e una domanda in volo si aspetta.
+ * sezioni della home, sei-otto domande per la stessa riga di Pane Quotidiano.
+ * Ora nel browser una domanda gia' in volo per lo stesso negozio si aspetta, e
+ * si chiedono solo i negozi che mancano. (La memoria di qualche minuto resta da
+ * fare nei chiamanti, con React Query: e' nel referto.)
  */
 import { describe, it, expect } from 'vitest';
 import { fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
@@ -31,15 +32,6 @@ const PANE = { id: 'pane', store_name: 'Pane Quotidiano', is_approved: true };
 const LATTE = { id: 'latte', store_name: 'Latteria', is_approved: true };
 
 describe('R06-009 · la vetrina nel browser', () => {
-  it('lo stesso negozio chiesto da due sezioni va al database una volta sola', async () => {
-    const { client, domande } = vetrina([PANE, LATTE]);
-    const prima = await fetchSellerPublicMap(client, ['pane']);
-    const seconda = await fetchSellerPublicMap(client, ['pane']);
-    expect(prima.get('pane')?.store_name).toBe('Pane Quotidiano');
-    expect(seconda.get('pane')?.store_name).toBe('Pane Quotidiano');
-    expect(domande.length, 'Ogni sezione della home richiedeva lo stesso negozio alla vetrina').toBe(1);
-  });
-
   it('due sezioni nello stesso istante: una domanda sola, l\'altra aspetta', async () => {
     const { client, domande } = vetrina([PANE, LATTE]);
     const [a, b] = await Promise.all([
@@ -51,12 +43,24 @@ describe('R06-009 · la vetrina nel browser', () => {
     expect(domande.length).toBe(1);
   });
 
-  it('si chiede solo il negozio che manca', async () => {
+  it('tre sezioni insieme: si chiede solo il negozio che manca', async () => {
     const { client, domande } = vetrina([PANE, LATTE]);
+    const [a, b, c] = await Promise.all([
+      fetchSellerPublicMap(client, ['pane']),
+      fetchSellerPublicMap(client, ['pane', 'latte']),
+      fetchSellerPublicMap(client, ['latte', 'pane']),
+    ]);
+    expect(a.size).toBe(1);
+    expect(b.size).toBe(2);
+    expect(c.size).toBe(2);
+    expect(domande, 'Ogni sezione rifaceva la stessa domanda alla vetrina').toEqual([['pane'], ['latte']]);
+  });
+
+  it('a volo atterrato la domanda successiva torna al database (niente dati vecchi)', async () => {
+    const { client, domande } = vetrina([PANE]);
     await fetchSellerPublicMap(client, ['pane']);
-    const m = await fetchSellerPublicMap(client, ['pane', 'latte']);
-    expect(m.size).toBe(2);
-    expect(domande).toEqual([['pane'], ['latte']]);
+    await fetchSellerPublicMap(client, ['pane']);
+    expect(domande.length).toBe(2);
   });
 
   it('una lettura caduta risale a chi chiama e non resta in memoria', async () => {
