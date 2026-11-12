@@ -147,7 +147,8 @@ describe('① Maria si iscrive dal checkout', () => {
       window.sessionStorage.getItem(CHIAVE_EMAIL_DA_CONFERMARE),
       'la registrazione non lascia l’email: la pagina di verifica non sa a chi rimandare il link e «Reinvia» resta grigio',
     ).toBe('maria.rossi@esempio.it');
-    expect(g.__NAVIGAZIONI__).toContainEqual({ tipo: 'push', dove: '/auth/verify-email?returnTo=%2Fcheckout' });
+    // 12/11/2026 (R12-011) — dalla registrazione la pagina sa che l'account potrebbe esserci già.
+    expect(g.__NAVIGAZIONI__).toContainEqual({ tipo: 'push', dove: '/auth/verify-email?returnTo=%2Fcheckout&da=registrazione' });
   }, 30000);
 });
 

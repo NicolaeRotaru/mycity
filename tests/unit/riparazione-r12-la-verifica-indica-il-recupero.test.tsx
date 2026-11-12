@@ -12,7 +12,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
-vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams('') }));
+const indirizzo = vi.hoisted(() => ({ cerca: 'da=registrazione' }));
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(indirizzo.cerca) }));
 vi.mock('next-intl', () => ({ useTranslations: () => (k: string) => k }));
 vi.mock('@/lib/supabase/client', () => ({
   supabase: { auth: { getUser: async () => ({ data: { user: null } }), resend: async () => ({ error: null }) } },
@@ -26,14 +27,19 @@ import VerifyEmailPage from '@/app/auth/verify-email/page';
 let radice: Root;
 let c: HTMLDivElement;
 
-beforeEach(async () => {
-  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  sessionStorage.clear();
-  ricordaEmailDaConfermare(memoriaDellaScheda(), 'cliente.uno@esempio.it');
+async function monta(cerca: string) {
+  indirizzo.cerca = cerca;
   c = document.createElement('div');
   document.body.appendChild(c);
   radice = createRoot(c);
   await act(async () => { radice.render(createElement(VerifyEmailPage)); });
+}
+
+beforeEach(async () => {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  sessionStorage.clear();
+  ricordaEmailDaConfermare(memoriaDellaScheda(), 'cliente.uno@esempio.it');
+  await monta('da=registrazione');
 });
 afterEach(() => {
   act(() => radice.unmount());
@@ -53,5 +59,13 @@ describe('R12-011 chi ha già un account trova la sua strada', () => {
 
   it('il tetto email del progetto non parla di «questo indirizzo»', () => {
     expect(traduciErroreAuth('email rate limit exceeded')).not.toMatch(/questo indirizzo/);
+  });
+
+  it('chi arriva dall accesso con l email non confermata l account ce l ha: per lui il link è partito', async () => {
+    act(() => radice.unmount());
+    c.remove();
+    await monta('returnTo=%2Fcheckout');
+    expect(c.textContent).toMatch(/Ti abbiamo inviato un link di conferma a/);
+    expect(c.textContent).not.toMatch(/Se hai già un account/);
   });
 });

@@ -184,7 +184,7 @@ function SignUpInner() {
       // dall'indirizzo (che finisce nei registri).
       ricordaEmailDaConfermare(memoriaDellaScheda(), email);
       // #112 — La pagina di verifica sa dove si stava andando, e lo dice.
-      router.push(percorsoVerificaEmail(returnTo));
+      router.push(percorsoVerificaEmail(returnTo, { daRegistrazione: true }));
     } catch (error) {
       rigeneraGettone();
       const msg = friendlyError(error);

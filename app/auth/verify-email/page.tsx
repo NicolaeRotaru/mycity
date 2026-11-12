@@ -32,6 +32,8 @@ function VerifyEmailInner() {
   // filtro dei percorsi interni: nessun indirizzo esterno.
   const searchParams = useSearchParams();
   const returnTo = safeInternalPath(searchParams.get('returnTo') ?? '/', '/');
+  // R12-011 — Solo chi arriva dalla registrazione può avere già un account senza saperlo.
+  const daRegistrazione = searchParams.get('da') === 'registrazione';
   const [emailDellaSessione, setEmailDellaSessione] = useState<string | null>(null);
   const [emailRicordata, setEmailRicordata] = useState<string | null>(null);
   const [emailScritta, setEmailScritta] = useState('');
@@ -95,6 +97,12 @@ function VerifyEmailInner() {
           {verified ? (
             <p className="mt-2 text-sm text-ink-600">
               Tutto a posto. Puoi continuare e usare l&apos;account.
+            </p>
+          ) : emailDaMostrare && (!daRegistrazione || emailDellaSessione) ? (
+            <p className="mt-2 text-sm text-ink-600">
+              Ti abbiamo inviato un link di conferma a{' '}
+              <span className="font-medium text-ink-900">{emailDaMostrare}</span>.
+              Cliccalo per attivare l&apos;account.
             </p>
           ) : emailDaMostrare ? (
             // 12/11/2026 (R12-011) — Diceva «Ti abbiamo inviato un link» anche a chi si

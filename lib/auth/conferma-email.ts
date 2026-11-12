@@ -74,10 +74,22 @@ export function leggiEmailDaConfermare(memoria: MemoriaLeggibile | null | undefi
   }
 }
 
-/** La pagina di verifica, con la strada da cui si veniva (es. il checkout). */
-export function percorsoVerificaEmail(returnTo?: string | null): string {
+/**
+ * La pagina di verifica, con la strada da cui si veniva (es. il checkout).
+ *
+ * 12/11/2026 (R12-011, collaudo) — `daRegistrazione`: chi arriva dal modulo di
+ * registrazione può avere già un account (Supabase risponde «ok» lo stesso, e
+ * l'email non parte), e la pagina gli dice tutti e due i casi. Chi arriva
+ * dall'accesso con l'email non confermata l'account ce l'ha di sicuro: per lui
+ * il testo resta «ti abbiamo inviato un link».
+ */
+export function percorsoVerificaEmail(returnTo?: string | null, opzioni?: { daRegistrazione?: boolean }): string {
   const dove = safeInternalPath(returnTo ?? '/', '/');
-  return dove !== '/' ? `/auth/verify-email?returnTo=${encodeURIComponent(dove)}` : '/auth/verify-email';
+  const parametri = new URLSearchParams();
+  if (dove !== '/') parametri.set('returnTo', dove);
+  if (opzioni?.daRegistrazione) parametri.set('da', 'registrazione');
+  const q = parametri.toString();
+  return q ? `/auth/verify-email?${q}` : '/auth/verify-email';
 }
 
 /**
