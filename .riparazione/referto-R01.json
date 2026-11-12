@@ -1,12 +1,12 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-12 15:27",
+  "aggiornato": "2026-11-12 15:28",
   "finita": true,
-  "testa": "90da623b9876c0bad7e0fdb1063bbf6a08c4fb1f",
+  "testa": "dda495dd3959d417ca76e106d09b7796a8707a98",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "verde",
-    "nota": "typecheck + lint + 1214 file di prova, 8929 prove passate (con il servizio PostgreSQL locale acceso, come la CI dopo R01-011). Dopo i commit senza skipIf: tsc, eslint sui file di prova R01 e le 42 prove R01 verdi."
+    "esito": "rosso",
+    "nota": "Un solo rosso: tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts (prova non mia rimessa com'era alla base, pretende la frase che R01-007 toglie; modifica in serve_file_altrui di R01-007). Tutto il resto verde: tsc, lint, le altre prove (8929 al giro precedente)."
   },
   "voci": [
     {
@@ -127,13 +127,17 @@
       "cosa_ho_fatto": "I due toast erano gia' corretti prima della campagna; restava il dialogo di conferma («Verrà avviata la chiamata al 112»), ora dice che si apre il tastierino col 112 gia' composto e la chiamata parte premendo CHIAMA.",
       "chiave": "microcopy|il sos del fattorino dice «stiamo chiamando il 112», ma l'app apre solo il tastierino",
       "commit_seguito": [
-        "80db80ae83ea5edab3aadeb4147d2a99c86bb686"
+        "80db80ae83ea5edab3aadeb4147d2a99c86bb686",
+        "dda495dd3959d417ca76e106d09b7796a8707a98"
       ],
       "verificato_da": "qa (subagente): grep di tutto il flusso SOS, nessun testo che prometta ancora una chiamata automatica; ha trovato rossa tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts:67 (pretendeva la frase vecchia) e un commento superato: corretti nel commit 80db80ae.",
-      "prova_esistente_modificata": {
-        "file": "tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts",
-        "perche": "legge il testo di components/rider/SOSButton.tsx (mio file) e pretendeva «Verrà avviata la chiamata al», cioe' il difetto stesso della voce. L'asserzione ora pretende il testo nuovo e che il vecchio non ci sia: non e' indebolita."
-      }
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts",
+          "modifica": "riga 65-68: l'it «il dialogo di conferma resta al futuro, com'era giusto» pretende `expect(sos).toContain('Verrà avviata la chiamata al')`, cioe' il difetto stesso di R01-007. Va sostituito con: `expect(sos).not.toContain('Verrà avviata la chiamata al'); expect(sos).toContain('Si aprirà il tastierino con il'); expect(sos).toContain('la chiamata parte quando premi CHIAMA');` (titolo: «il dialogo di conferma dice che si apre il tastierino, non che parte la chiamata»)."
+        }
+      ],
+      "nota_conflitto": "Su richiesta della regista il file e' tornato com'era alla base (commit dda495dd). Finche' la modifica sopra non e' applicata, quella prova e' rossa su questo ramo: e' l'unico rosso di npm run verify."
     },
     {
       "id": "R01-008",
