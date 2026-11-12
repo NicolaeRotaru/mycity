@@ -53,7 +53,10 @@ vi.mock('@/lib/stripe/client', () => ({
   getStripe: () => ({
     webhooks: { constructEvent: () => stato.evento },
     subscriptions: {
-      retrieve: async (id: string) => ({ id, status: stato.suStripe[id] ?? 'canceled', current_period_end: 1_802_000_000 }),
+      retrieve: async (id: string) => {
+        if (stato.suStripe[id] === 'introvabile') throw new Error(`No such subscription: ${id}`);
+        return { id, status: stato.suStripe[id] ?? 'canceled', current_period_end: 1_802_000_000 };
+      },
       cancel: async (id: string) => {
         stato.annullati.push(id);
         stato.suStripe[id] = 'canceled';
@@ -141,6 +144,14 @@ describe('R10-019 — due schede non fanno due abbonamenti', () => {
     expect(await consegna(pagato('sub_2'))).toBe(200);
     expect(profilo().stripe_subscription_id).toBe('sub_2');
     expect(stato.annullati, 'si annulla l’abbonamento appena pagato').toEqual(['sub_1']);
+  });
+
+  it('collaudo K03 — Stripe non trova il precedente: il nuovo abbonamento pagato si attiva lo stesso', async () => {
+    stato.suStripe = { sub_1: 'introvabile', sub_2: 'active' };
+    expect(await consegna(pagato('sub_2')), 'a ogni ritentativo 500: l’abbonamento pagato non si attiva mai').toBe(200);
+    expect(profilo().stripe_subscription_id).toBe('sub_2');
+    expect(profilo().subscription_status).toBe('active');
+    expect(stato.annullati).toEqual([]);
   });
 
   it('dopo una disdetta vera il nuovo abbonamento si scrive come prima', async () => {

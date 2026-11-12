@@ -138,8 +138,18 @@ export async function handleSellerSubscription(session: Stripe.Checkout.Session)
   if (erroreLettura) throw new Error(`[stripe] abbonamento del negozio non letto: ${erroreLettura.message}`);
   const precedente = (giaSalvato as { stripe_subscription_id?: string | null } | null)?.stripe_subscription_id ?? null;
   if (precedente && precedente !== subscriptionId) {
-    const statoPrecedente = (await statoDaStripe(precedente)).subscription_status;
-    if (statoPrecedente !== 'canceled') {
+    // Collaudo K03: se Stripe non sa dire com'e' il precedente (cancellato, id di prova, rete),
+    // lanciare faceva rispondere 500 a ogni ritentativo e l'abbonamento appena PAGATO non si
+    // attivava mai. Meglio scrivere il nuovo e far guardare il precedente all'admin.
+    let statoPrecedente: 'active' | 'past_due' | 'canceled' | null = null;
+    try {
+      statoPrecedente = (await statoDaStripe(precedente)).subscription_status;
+    } catch (err) {
+      logger.error('[stripe] abbonamento precedente non letto: si attiva il nuovo, controlla a mano il precedente', {
+        sellerId, precedente, nuovo: subscriptionId, sessionId: session.id, err,
+      });
+    }
+    if (statoPrecedente !== null && statoPrecedente !== 'canceled') {
       if (statoPrecedente === 'past_due' && stato === 'active') {
         // Il nuovo e' pagato, il vecchio no: resta il nuovo (si scrive qui sotto).
         await getStripe().subscriptions.cancel(precedente);
