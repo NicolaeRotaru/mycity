@@ -37,6 +37,8 @@ export default function ActivePromoBadge({ productId, basePrice }: Props) {
       return Number(data) || 0;
     },
     staleTime: 60_000,
+    // R02-011 (dopo il collaudo) — Stessa chiave della scheda: gli stessi nuovi tentativi.
+    retry: 3,
   });
 
   if (!discount || discount <= 0) return null;

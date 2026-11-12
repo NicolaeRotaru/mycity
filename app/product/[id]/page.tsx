@@ -311,8 +311,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
    * prezzo pieno, e quello vero solo nel riquadrino della promo. Stessa chiave e stessa lettura di
    * ActivePromoBadge: una domanda sola.
    */
-  const { data: scontoPromo = 0 } = useQuery({
+  // R02-011 (dopo il collaudo) — Se la lettura cade anche dopo i nuovi tentativi, lo zero di
+  // ripiego NON vuol dire «nessuno sconto»: la scheda lo dice (scontoNonVerificato) invece di
+  // presentare il prezzo pieno come quello che si paga.
+  const { data: scontoPromo = 0, isError: scontoNonVerificato } = useQuery({
     queryKey: queryKeys.products.activeDiscount(id),
+    retry: 3,
     queryFn: async () => {
       const { data, error } = await supabase.rpc('product_active_discount', { p_product: id });
       // 12/11/2026 (R02-011) — Una lettura caduta non è «nessuno sconto»: con `return 0` lo zero
@@ -900,6 +904,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             )}
             {/* Promo attiva del negozio (prezzo barrato + nuovo prezzo) */}
             <ActivePromoBadge productId={id} basePrice={prezzoPieno} />
+            {scontoNonVerificato && (
+              <p role="status" className="text-xs text-ink-600">
+                Non riusciamo a verificare le promozioni del negozio: il prezzo finale, con gli eventuali
+                sconti, lo vedi nel carrello.
+              </p>
+            )}
 
             {/* Card rassicurazione consolidata (mockup 50-product): ETA consegna +
                 pagamento alla consegna + reso, in un unico riquadro olive. Le righe
