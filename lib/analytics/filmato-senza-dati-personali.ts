@@ -83,11 +83,35 @@ export function testoSenzaIndirizzi(testo: string): string {
   if (!testo) return testo;
   // Un testo cosi' lungo non e' un indirizzo ne' un messaggio: si chiude a chiave.
   if (testo.length > TESTO_TROPPO_LUNGO) return VALORE_NASCOSTO;
-  if (!testo.includes('/')) return testo; // nessun indirizzo possibile: niente da fare
-  return testo.replace(
-    UN_INDIRIZZO_DENTRO_IL_TESTO,
-    (indirizzo) => indirizzoSenzaDatiPersonali(indirizzo) ?? VALORE_NASCOSTO,
-  );
+  const senzaIndirizzi = testo.includes('/')
+    ? testo.replace(
+        UN_INDIRIZZO_DENTRO_IL_TESTO,
+        (indirizzo) => indirizzoSenzaDatiPersonali(indirizzo) ?? VALORE_NASCOSTO,
+      )
+    : testo;
+  return testoSenzaRecapiti(senzaIndirizzi);
+}
+
+/**
+ * 12/11/2026 (R06-019) — UN DATO PERSONALE NUDO, FUORI DA UN INDIRIZZO.
+ *
+ * La rete usciva subito se il testo non conteneva una barra: un'email o un
+ * telefono in una proprieta' qualunque passavano intatti, mentre il commento in
+ * posthog.tsx promette che «tutto il resto viene guardato per quello che
+ * contiene». Due firme lasciano la porta aperta (`trackCheckoutStep(step,
+ * ...props)`, `trackHomeCtaClicked(ctaId, ...props)`).
+ *
+ * L'email e' la stessa espressione di `messaggioSenzaDatiPersonali`. Il telefono
+ * e' quello italiano (cellulare 3xx o fisso 0xx, con +39 e spazi facoltativi),
+ * con confini che non toccano gli identificativi (uuid, codici con lettere o
+ * trattini attaccati), le date e gli importi.
+ */
+const UN_EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
+const UN_TELEFONO = /(?<![\w-])(?:\+39[\s.-]?)?(?:3\d{2}|0\d{1,3})(?:[\s.-]?\d){5,8}(?![\w-])/g;
+
+export function testoSenzaRecapiti(testo: string): string {
+  if (!testo) return testo;
+  return testo.replace(UN_EMAIL, VALORE_NASCOSTO).replace(UN_TELEFONO, VALORE_NASCOSTO);
 }
 
 type Conteggio = { pezzi: number };
