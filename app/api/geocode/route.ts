@@ -3,7 +3,6 @@ import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
-import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 
 export const runtime = 'nodejs';
 
@@ -25,26 +24,11 @@ export async function POST(req: Request) {
   if (!rl.allowed) return NextResponse.json({ lat: null, lng: null, error: 'rate_limited' }, { status: 429 });
 
   let q = '';
-  let strutturato: { address: string; city: string; zip: string } | null = null;
   try {
-    const body = (await jsonRichiesta(req, TETTO_JSON)) as { q?: unknown; address?: unknown; city?: unknown; zip?: unknown };
+    const body = (await jsonRichiesta(req, TETTO_JSON)) as { q?: unknown };
     q = typeof body.q === 'string' ? body.q.trim().slice(0, 300) : '';
-    // 12/11/2026 (R03-001) — Un indirizzo di consegna (via, città, CAP) si cerca con la
-    // stessa funzione delle rotte d'ordine: ricerca strutturata, chiusa su Piacenza, e
-    // solo risultati del comune scritto. Il testo libero resta per chi cerca un luogo.
-    if (typeof body.address === 'string' && typeof body.city === 'string') {
-      strutturato = {
-        address: body.address.slice(0, 200),
-        city: body.city.slice(0, 100),
-        zip: typeof body.zip === 'string' ? body.zip.slice(0, 10) : '',
-      };
-    }
   } catch {
     return NextResponse.json({ lat: null, lng: null }, { status: 400 });
-  }
-  if (strutturato) {
-    const trovate = await coordinateDiUnIndirizzo(strutturato);
-    return NextResponse.json({ lat: trovate?.lat ?? null, lng: trovate?.lng ?? null });
   }
   if (q.length < 3) return NextResponse.json({ lat: null, lng: null });
 

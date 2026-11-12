@@ -76,13 +76,7 @@ export default function AddressesPage() {
         const res = await fetch('/api/geocode', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            q: `${form.address}, ${form.zip} ${form.city}, Italia`,
-            // R03-001 — la ricerca strutturata, chiusa sul comune scritto.
-            address: form.address,
-            city: form.city,
-            zip: form.zip,
-          }),
+          body: JSON.stringify({ q: `${form.address}, ${form.zip} ${form.city}, Italia` }),
         });
         const json = await res.json();
         if (json && json.lat != null && json.lng != null) {

@@ -72,8 +72,7 @@ export function useCoordinateDellaZona(
         const res = await fetch('/api/geocode', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          // R03-001 — via, città e CAP separati: il server li cerca solo nel comune scritto.
-          body: JSON.stringify({ q: domanda, address: ind.address, city: ind.city, zip: ind.zip }),
+          body: JSON.stringify({ q: domanda }),
         });
         if (!res.ok) return;
         const j = (await res.json()) as { lat?: unknown; lng?: unknown };
@@ -88,7 +87,7 @@ export function useCoordinateDellaZona(
       vale = false;
       clearTimeout(timer);
     };
-  }, [domanda, ind.address, ind.city, ind.zip]);
+  }, [domanda]);
 
   if (spento) return null;
   if (conosciute) return { lat: ind.lat as number, lng: ind.lng as number };

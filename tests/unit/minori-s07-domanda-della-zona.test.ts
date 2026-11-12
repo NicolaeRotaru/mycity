@@ -1,17 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { domandaDellaZona } from '@/components/checkout/ShippingAddressForm';
-import { urlDellaRicerca } from '@/lib/geocodifica';
 
-/**
- * S07 · cassa e server fanno alle mappe la stessa domanda.
- *
- * 12/11/2026 (R03-001) — Prima la domanda era una frase sola a testo libero, scritta uguale nei
- * due posti, e la prova la confrontava leggendola dal sorgente del server. Ora il server cerca in
- * forma strutturata (via, città, CAP: lib/geocodifica.ts) e la cassa gli manda proprio quei tre
- * campi (/api/geocode li passa alla stessa funzione). Qui si controlla che la ricerca che parte
- * dai campi della cassa porti la stessa via, la stessa città e lo stesso CAP che la cassa ha
- * scritto nella sua domanda.
- */
+/** La frase del server, presa dal sorgente di lib/geocodifica.ts ed eseguita sugli stessi campi. */
+function domandaDelServer(ind: { address: string; city: string; zip: string }): string {
+  const src = readFileSync('lib/geocodifica.ts', 'utf8');
+  const m = src.match(/const q = (`[^`]*`[^;]*);/);
+  if (!m) throw new Error('la frase del server non si trova più in lib/geocodifica.ts');
+  // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  return new Function('indirizzo', `return ${m[1]};`)(ind) as string;
+}
+
 describe('S07 · cassa e server fanno alle mappe la stessa domanda', () => {
   for (const ind of [
     { address: 'Via Roma 1', city: 'Piacenza', zip: '29121' },
@@ -19,12 +18,7 @@ describe('S07 · cassa e server fanno alle mappe la stessa domanda', () => {
     { address: '  Corso Vittorio Emanuele II, 5', city: 'Piacenza  ', zip: '' },
   ]) {
     it(JSON.stringify(ind), () => {
-      const domanda = domandaDellaZona(ind);
-      const p = new URL(urlDellaRicerca(ind)).searchParams;
-      expect(domanda).toContain(p.get('street')!);
-      expect(domanda).toContain(p.get('city')!);
-      if (ind.zip.trim()) expect(domanda).toContain(p.get('postalcode')!);
-      else expect(p.get('postalcode')).toBeNull();
+      expect(domandaDellaZona(ind)).toBe(domandaDelServer(ind));
     });
   }
 });
