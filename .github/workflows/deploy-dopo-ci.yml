@@ -546,6 +546,14 @@ jobs:
               echo "**Cosa fare:** il riallineamento si fa a mano, una volta, seguendo \`docs/migrazioni-baseline-produzione.md\` (con la firma di Nicola). Dopo, questo lavoro riparte da solo alla prossima unione su \`main\`."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
+          # R01-022 — Gli avvisi sulle migrazioni (COMMIT dentro il file) nel riepilogo, dove si guarda.
+          if grep -q '^::warning::' "$DIARIO"; then
+            {
+              echo "## ⚠️ Avvisi sulle migrazioni applicate"
+              echo ""
+              grep '^::warning::' "$DIARIO" | sed 's/^::warning::/- /'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ "$USCITA" != "0" ]; then exit "$USCITA"; fi
           QUANTE="$(grep -c '^▶ applico ' "$DIARIO" || true)"
           ELENCO="$(grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico //' | tr '\n' ' ' || true)"

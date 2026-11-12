@@ -202,6 +202,17 @@ fi
 # Il primo giro guarda soltanto: quali file il registro non conosce. Il secondo
 # applica. In mezzo c'e' il tetto qui sotto, che decide prima di qualsiasi
 # scrittura.
+# R01-022 (12/11/2026) — L'AVVISO USCIVA DA UNA PORTA CHE NESSUNO LEGGEVA.
+#
+# Gli avvisi sulle migrazioni andavano solo sullo standard error, e il rilascio
+# (deploy-dopo-ci.yml) tiene e riassume solo lo standard output: nel riepilogo
+# del rilascio non comparivano mai. Adesso escono da tutte e due le porte, e su
+# quella d'uscita con la forma «::warning::», che GitHub mostra in cima al lavoro.
+avviso_migrazione() {
+  echo "  $1" >&2
+  echo "::warning::$1"
+}
+
 saltate=0
 DA_APPLICARE=()
 # R01-024 (12/11/2026) — UN NOME UGUALE NON VUOL DIRE «GIA' APPLICATA».
@@ -332,9 +343,9 @@ for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
     dopo="$(awk 'trovato && NF && $0 !~ /^[[:space:]]*--/ && toupper($0) !~ /^[[:space:]]*(NOTIFY|COMMIT)[[:space:];]/ { print; exit }
                  toupper($0) ~ /^[[:space:]]*COMMIT[[:space:]]*;/ { trovato = 1 }' "$f")"
     if [ -n "$dopo" ]; then
-      echo "  ⚠⚠ $name dopo il suo COMMIT fa altro lavoro («$(printf '%s' "$dopo" | head -c 60)»): se si rompe li', la prima parte resta applicata e la migrazione non si registra. Controlla lo schema a mano se questo passo fallisce." >&2
+      avviso_migrazione "⚠⚠ $name dopo il suo COMMIT fa altro lavoro («$(printf '%s' "$dopo" | head -c 60)»): se si rompe li', la prima parte resta applicata e la migrazione non si registra. Controlla lo schema a mano se questo passo fallisce."
     else
-      echo "  ⚠ $name contiene un COMMIT suo: dopo resta solo NOTIFY, quindi una rottura a meta' non lascia lavoro a meta'." >&2
+      avviso_migrazione "⚠ $name contiene un COMMIT suo: dopo resta solo NOTIFY, quindi una rottura a meta' non lascia lavoro a meta'."
     fi
   fi
   psql "$DB" -q -v ON_ERROR_STOP=1 --single-transaction -f "$f"
