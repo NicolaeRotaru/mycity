@@ -46,23 +46,28 @@ export default function AdminProductsPage() {
   const tConfirm = useTranslations('confirm');
   const [search, setSearch] = useState('');
 
+  // R11-011 — La riga in più (TETTO + 1) non arrivava mai: il server ne restituisce al massimo
+  // mille. L'avviso non scattava e si leggeva «1000 di 1000» con 1.233 prodotti veri. Adesso il
+  // totale lo conta il database (count exact), e la ricerca va al database quando l'elenco è tagliato.
   const { data: letti = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.admin.products,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error, count } = await supabase
         .from('products')
         .select(`
           id, name, price, stock, status, images, external_marketplace, external_synced_at,
           seller:profiles!products_seller_id_fkey ( store_name ),
           categories ( name )
-        `)
+        `, { count: 'exact' })
         .order('created_at', { ascending: false })
-        // Una riga in più: se arriva, l'elenco è tagliato davvero (con 1000 esatte no).
         .limit(TETTO_PRODOTTI + 1);
       if (error) throw error;
-      return (data ?? []) as unknown as Row[];
+      // L'elenco resta un elenco; il totale contato dal database gli viaggia attaccato.
+      const righe = (data ?? []) as unknown as Row[];
+      return Object.assign(righe, { totale: typeof count === 'number' ? count : righe.length });
     },
   });
+  const totale = (letti as Row[] & { totale?: number }).totale ?? letti.length;
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
@@ -77,9 +82,28 @@ export default function AdminProductsPage() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  const tagliato = letti.length > TETTO_PRODOTTI;
+  const tagliato = Math.max(totale, letti.length) > TETTO_PRODOTTI;
   const products = letti.slice(0, TETTO_PRODOTTI);
-  const filtered = products.filter((p) => {
+  const cercaNelDatabase = tagliato && search.trim().length >= 2;
+  const { data: trovatiNelDatabase } = useQuery({
+    queryKey: [...queryKeys.admin.products, 'ricerca', search.trim()],
+    enabled: cercaNelDatabase,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          id, name, price, stock, status, images, external_marketplace, external_synced_at,
+          seller:profiles!products_seller_id_fkey ( store_name ),
+          categories ( name )
+        `)
+        .ilike('name', `%${search.trim().replace(/[%_]/g, '')}%`)
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []) as unknown as Row[];
+    },
+  });
+  const filtered = (cercaNelDatabase && trovatiNelDatabase ? trovatiNelDatabase : products).filter((p) => {
     if (!search) return true;
     const s = search.toLowerCase();
     return p.name.toLowerCase().includes(s) || p.seller?.store_name?.toLowerCase().includes(s);
@@ -108,7 +132,7 @@ export default function AdminProductsPage() {
       <AdminPageTitle
         eyebrow="Catalogo"
         title="Prodotti"
-        sub={`${filtered.length} di ${products.length}${tagliato ? '+' : ''}`}
+        sub={`${filtered.length} di ${tagliato ? totale : products.length}`}
         action={
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <input
@@ -116,7 +140,7 @@ export default function AdminProductsPage() {
               placeholder="Cerca prodotto o negozio…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="border border-cream-300 rounded-lg px-3 py-1.5 text-sm flex-1 sm:w-64"
+              className="border border-cream-300 rounded-lg px-3 py-1.5 text-sm flex-1 min-w-0 sm:w-64"
             />
             <Link
               href="/admin/products/new"
@@ -132,7 +156,7 @@ export default function AdminProductsPage() {
         <div role="status" className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden />
           <p>
-            <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PRODOTTI} prodotti inseriti. Il catalogo può essere più lungo, e la ricerca guarda solo questi.
+            <strong>Elenco tagliato:</strong> mostro solo gli ultimi {TETTO_PRODOTTI} prodotti inseriti su {totale}. La ricerca per nome li cerca tutti nel database.
           </p>
         </div>
       )}

@@ -161,13 +161,15 @@ export default function AdminPayoutsPage() {
   const { data: letti = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['admin', 'payouts'],
     refetchInterval: 60_000,
-    queryFn: async (): Promise<PayoutOrder[]> => {
+    queryFn: async (): Promise<PayoutOrder[] & { totale?: number }> => {
       // Solo ordini consegnati con un netto venditore calcolato: sono gli unici
       // rilevanti per la riconciliazione payout. Esclude carrelli/annullati.
-      const { data, error } = await supabase
+      const { data, error, count } = await supabase
         .from('orders')
         .select(
           'id, seller_id, total_price, seller_payout_cents, seller_payout_reversed_cents, payout_status, payout_at, stripe_transfer_id, delivery_status, payment_method, created_at, delivered_at, seller:profiles!orders_seller_id_fkey ( store_name, billing_iban )',
+          // R11-011 — il server restituisce al massimo mille righe: la riga in più non arriva mai.
+          { count: 'exact' },
         )
         .eq('delivery_status', 'DELIVERED')
         .not('seller_payout_cents', 'is', null)
@@ -175,11 +177,13 @@ export default function AdminPayoutsPage() {
         // Una riga in più: se arriva, l'elenco è tagliato davvero (con 1000 esatte no).
         .limit(TETTO_PAYOUT + 1);
       if (error) throw error;
-      return (data ?? []) as unknown as PayoutOrder[];
+      // L'elenco resta un elenco; il totale contato dal database gli viaggia attaccato.
+      const righe = (data ?? []) as unknown as PayoutOrder[];
+      return Object.assign(righe, { totale: typeof count === 'number' ? count : righe.length });
     },
   });
 
-  const tagliato = letti.length > TETTO_PAYOUT;
+  const tagliato = Math.max((letti as { totale?: number }).totale ?? 0, letti.length) > TETTO_PAYOUT;
   const orders = useMemo(() => letti.slice(0, TETTO_PAYOUT), [letti]);
   // Con l'elenco tagliato ogni somma è un minimo, non il totale.
   const almeno = tagliato ? 'almeno ' : '';
