@@ -31,6 +31,7 @@ vi.mock('@/lib/supabase/server', () => ({
         const filtri: Array<(r: Riga) => boolean> = [];
         const b: Record<string, unknown> = {
           eq: (c: string, v: unknown) => { filtri.push((r) => r[c] === v); return b; },
+          in: (c: string, vs: unknown[]) => { filtri.push((r) => vs.includes(r[c])); return b; },
           or: (espr: string) => {
             // l'unica forma usata: «colonna.is.null,colonna.eq.» → vuota
             const col = espr.split('.')[0];
@@ -106,6 +107,14 @@ describe('R08-002 — la partita IVA di chi è già approvato', () => {
   it('un negozio in attesa usa il modulo /sell: 409', async () => {
     db.profilo = { ...STORICO, approval_status: 'pending' };
     expect((await invia(VALIDA)).status).toBe(409);
+  });
+
+  it('se il negozio viene respinto fra la lettura e la scrittura, la scrittura non passa', async () => {
+    db.profilo = { ...STORICO };
+    const r = invia(VALIDA);
+    db.profilo = { ...STORICO, approval_status: 'rejected' };
+    expect((await r).status).toBe(409);
+    expect(db.scritture).toBe(0);
   });
 
   it('due invii insieme ne scrivono uno solo', async () => {

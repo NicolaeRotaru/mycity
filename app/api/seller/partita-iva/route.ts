@@ -77,6 +77,7 @@ export const POST = withAuthRateLimit(
       .update({ business_vat_number: piva }, { count: 'exact' })
       .eq('id', user.id)
       .eq('role', 'seller')
+      .in('approval_status', [...STATI_AMMESSI])
       .or('business_vat_number.is.null,business_vat_number.eq.');
     if (error) {
       logger.error('[seller-partita-iva] scrittura fallita', { userId: user.id, message: error.message });

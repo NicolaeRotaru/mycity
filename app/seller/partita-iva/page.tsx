@@ -65,7 +65,8 @@ export default function PartitaIvaPage() {
           <Input
             label="Partita IVA"
             name="partitaIva"
-            inputMode="numeric"
+            inputMode="text"
+            autoCapitalize="characters"
             autoComplete="off"
             required
             maxLength={16}
