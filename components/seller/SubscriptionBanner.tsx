@@ -33,7 +33,10 @@ export function SubscriptionBanner({ status }: { status: string | null | undefin
   const start = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/seller/subscription/checkout', { method: 'POST' });
+      // 12/11/2026 (R10-022) — Con il pagamento non riuscito l'abbonamento c'e' gia': la cassa
+      // risponde «risulta già un abbonamento» (409). La carta si aggiorna nel portale Stripe.
+      const porta = isPastDue ? '/api/seller/subscription/portal' : '/api/seller/subscription/checkout';
+      const res = await fetch(porta, { method: 'POST' });
       const json = await res.json();
       if (!res.ok || !json.url) throw new Error(apiErrorMessage(json, 'Errore nell’attivazione'));
       window.location.href = json.url as string;
