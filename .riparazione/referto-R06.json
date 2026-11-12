@@ -2,11 +2,11 @@
   "sessione": "R06",
   "aggiornato": "2026-11-12 15:28",
   "finita": true,
-  "testa": "0476e1c74b51317a9f29a13c1831b477ab2cc4af",
+  "testa": "a3c7915fa11d80537f5fef6a68e955a352846b3c",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "nota": "typecheck, lint (0 errori, 30 avvisi no-explicit-any) e 1218 file / 8989 prove verdi; in piu' tests/sql/harness/apply.sh + run.sh: tutti i controlli SQL verdi (Postgres 16 locale)"
+    "nota": "typecheck, lint e 1219 file di prove: 8996 passate, 1 saltata (tests/unit/r83-corsa.test.ts si salta da sola secondo il Postgres della macchina, riga 34; non tocca file di R06). Prove SQL: apply.sh + run.sh tutte verdi."
   },
   "voci": [
     {
@@ -107,7 +107,7 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "@typescript-eslint/no-explicit-any acceso a «warn» nell'override dei file .ts/.tsx (next lint resta verde: 30 avvisi, nessun errore; non c'e' --max-warnings). Con la regola accesa le direttive su no-explicit-any tornano utili. tsconfig.json non toccato: strict e' gia' true.",
-      "cosa_resta": "Le 28 direttive eslint-disable che non spengono niente stanno in file non miei: elenco esatto in serve_file_altrui. Poi si puo' aggiungere --report-unused-disable-directives al lint. Gli any espliciti restano come avvisi.",
+      "cosa_resta": "Conti a oggi (npx eslint --report-unused-disable-directives app components lib middleware.ts): 29 direttive eslint-disable che non spengono niente, tutte in file non miei, elencate una per una in serve_file_altrui (24 su no-img-element, gia' spenta in .eslintrc.json; 2 su jsx-a11y/media-has-caption; 1 su no-head-element; 1 vuota in app/api/cron/send-emails/route.ts:242; 1 su no-explicit-any messa una riga troppo in alto in lib/email/avviso-messaggio-negozio.ts:64). Gli any espliciti sono 29 avvisi per next lint (32 contando tutta la repo, prove comprese), non i 46 della voce: restano come avvisi, da togliere file per file. Dopo, si puo' aggiungere --report-unused-disable-directives al lint.",
       "serve_file_altrui": [
         {
           "file": "app/admin/products/page.tsx",
@@ -220,9 +220,13 @@
         {
           "file": "components/seller/site/SitePreview.tsx",
           "modifica": "riga 267: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/seller/site/SitePreview.tsx"
+        },
+        {
+          "file": "lib/email/avviso-messaggio-negozio.ts",
+          "modifica": "riga 64: la direttiva «eslint-disable-next-line @typescript-eslint/no-explicit-any» sta una riga troppo in alto (sopra `export async function`), quindi non copre l'any di riga 66 (`admin: any`) e risulta inutile: spostarla subito sopra la riga 66, o tipizzare il parametro. Era cosi' gia' alla base."
         }
       ],
-      "nota": "La prova e' stata ritoccata nel commit c5eaa0f7d2ca5bfec2d26a17e9f74e5e6568ccdc (carica eslint con require: il pacchetto non porta i tipi e il typecheck la rifiutava). Stesse asserzioni.",
+      "nota": "La prova e' stata ritoccata nel commit c5eaa0f7d2ca5bfec2d26a17e9f74e5e6568ccdc (carica eslint con require: il pacchetto non porta i tipi e il typecheck la rifiutava). Stesse asserzioni. Collaudo K03: nell'elenco mancava la 29a direttiva (lib/email/avviso-messaggio-negozio.ts:64), aggiunta; conteggi scritti nel cosa_resta.",
       "verificato_da": "qa: regge come parziale dichiarato. next lint esce 0 con 29 avvisi no-explicit-any."
     },
     {
@@ -541,8 +545,8 @@
     {
       "id": "R06-019",
       "chiave": "dati-analytics|la rete guarda gli indirizzi, non un dato personale nudo",
-      "esito": "riparato",
-      "commit": "055f4cae6c5ccb41d122d7f41c34c49ef24a2d50",
+      "esito": "parziale",
+      "commit": "78348d4dffcddf1be25101dc8b14df66c9d06083",
       "file_toccati": [
         "lib/analytics/filmato-senza-dati-personali.ts"
       ],
@@ -555,11 +559,12 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 055f4cae6c5ccb41d122d7f41c34c49ef24a2d50^ --file lib/analytics/filmato-senza-dati-personali.ts --prove tests/unit/riparazione-r06-rete-sui-recapiti.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 78348d4dffcddf1be25101dc8b14df66c9d06083^ --file lib/analytics/filmato-senza-dati-personali.ts --prove tests/unit/riparazione-r06-rete-sui-recapiti.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "testoSenzaIndirizzi non esce piu' sui testi senza barra: dopo gli indirizzi passa da testoSenzaRecapiti, che nasconde le email (stessa espressione di messaggioSenzaDatiPersonali) e i telefoni italiani (3xx/0xx, +39 e spazi facoltativi) con confini che lasciano stare uuid, date, importi e codici. Vale per before_send (proprieta', $set) e per il filmato fuori dal DOM. Prova: casi da nascondere, casi da lasciare, un evento con proprieta' in piu'.",
-      "verificato_da": "qa: parziale alla prima verifica: telefoni con barra, parentesi e 0039 sfuggivano; falsi positivi su date gg.mm.aaaa, decimali, react@18.3.1, percorsi con numeri lunghi. Sistemati nel commit successivo, con i casi nella prova. Restano accettati: logo@2x.png nascosto, stringhe di 8-11 cifre che iniziano con 0 o 3 precedute da # nascoste (non ne partono negli eventi)."
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "testoSenzaIndirizzi non esce piu' sui testi senza barra: dopo gli indirizzi passa da testoSenzaRecapiti, che nasconde le email (dominio che finisce in lettere, ammesso il punto di fine frase: «mario.rossi@gmail.com.» ora si nasconde) e i telefoni italiani (3xx/0xx, +39 o 0039, spazi, punti, trattini, barre, parentesi, anche dopo uno spazio codificato «%20»), senza toccare uuid, date, decimali, importi, percorsi e versioni («react@18.3.1»). Vale per before_send (proprieta', $set, quindi anche cta_label) e per il filmato fuori dal DOM. Collaudo K03: l'email seguita da un punto e il telefono dopo «%20» uscivano in chiaro; corretti nel commit 78348d4dffcddf1be25101dc8b14df66c9d06083, con i casi nella prova; il commento che diceva «stessa espressione» di events.ts e' corretto.",
+      "verificato_da": "qa: parziale alla prima verifica: telefoni con barra, parentesi e 0039 sfuggivano; falsi positivi su date gg.mm.aaaa, decimali, react@18.3.1, percorsi con numeri lunghi. Sistemati nel commit successivo, con i casi nella prova. Restano accettati: logo@2x.png nascosto, stringhe di 8-11 cifre che iniziano con 0 o 3 precedute da # nascoste (non ne partono negli eventi).",
+      "cosa_resta": "Una rete fatta di espressioni non vede tutte le forme: restano scoperti, per esempio, «+39 (0)2 12345678», numeri esteri senza +39, email scritte «mario [at] gmail.com», e le stringhe di 8-11 cifre che cominciano con 0 o 3 precedute da «#» vengono nascoste anche se non sono telefoni. Oggi PostHog e' spento (POSTHOG_ACCESO = false). La cura completa e' a monte: non mettere testi liberi nelle proprieta' (le firme trackCheckoutStep(step, ...props) e trackHomeCtaClicked(ctaId, ...props) in lib/analytics/events.ts, non mio)."
     },
     {
       "id": "R06-020",
@@ -618,31 +623,28 @@
     {
       "id": "R06-023",
       "chiave": "deploy-sre|la pagina pubblica «stato servizi» annuncia a tutti un guasto del database e dell'accesso che non c'è",
-      "esito": "parziale",
-      "commit": "c1d514af5c5bf5d30cbae9a620f6ce4fb8c73095",
+      "esito": "riparato",
+      "commit": "a3c7915fa11d80537f5fef6a68e955a352846b3c",
       "file_toccati": [
-        "lib/health/checks.ts"
+        "lib/health/checks.ts",
+        "app/admin/page.tsx",
+        "app/api/admin/configurazione/route.ts"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r06-salute-dei-servizi.test.ts"
+        "tests/unit/riparazione-r06-salute-dei-servizi.test.ts",
+        "tests/unit/riparazione-r06-configurazione-admin.test.tsx"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r06-salute-dei-servizi.test.ts",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-salute-dei-servizi.test.ts tests/unit/riparazione-r06-configurazione-admin.test.tsx",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c1d514af5c5bf5d30cbae9a620f6ce4fb8c73095^ --file lib/health/checks.ts --prove tests/unit/riparazione-r06-salute-dei-servizi.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a3c7915fa11d80537f5fef6a68e955a352846b3c^ --file app/admin/page.tsx --prove tests/unit/riparazione-r06-configurazione-admin.test.tsx --json",
+        "nota": "E per la parte di lib/health/checks.ts: node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c1d514af5c5bf5d30cbae9a620f6ce4fb8c73095^ --file lib/health/checks.ts --prove tests/unit/riparazione-r06-salute-dei-servizi.test.ts --json → regge, uscita 0."
       },
-      "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "checkDb legge le categorie con creaClientAnonimo (la chiave pubblica del catalogo) al posto del client amministrativo: senza chiave di servizio il database e la chat risultano operativi. L'accesso fa due tentativi: se risponde il secondo e' «rallentato», solo due cadute di fila danno «non disponibile» (con logger.warn del motivo). Sulla pagina pubblica la riga del titolare dice «In completamento» invece dell'elenco delle variabili «da mettere prima di ricompilare»; checkTitolare() resta com'e' con il dettaglio completo (la sua prova esistente lo pretende). titolare-check.ts, app/status/page.tsx (l'ora e' gia' in Europe/Rome), lib/supabase/server.ts e lib/env.ts: nessuna modifica servita.",
-      "cosa_resta": "La voce chiede che la chiave di servizio mancante diventi una riga «non configurato» visibile solo nel pannello admin, insieme al dettaglio del titolare: nessuna pagina admin legge oggi la salute dei servizi, e le pagine admin non sono mie.",
-      "serve_file_altrui": [
-        {
-          "file": "app/admin/page.tsx (o una pagina admin dedicata)",
-          "modifica": "Aggiungere un riquadro «Configurazione» letto dal server: chiave di servizio presente (env.supabaseServiceRoleKey() non vuota) e checkTitolare().detail con l'elenco delle variabili mancanti. Da una rotta o un componente server riservato all'admin, non dalla pagina pubblica /status."
-        }
-      ],
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Pagina pubblica /status: database controllato con la chiave pubblica (creaClientAnonimo, come il catalogo), un errore del database e' «non disponibile» e va nei log; accesso con due tentativi (secondo riuscito = «rallentato», due cadute = «non disponibile», al massimo 7 s); chat che segue il database, compreso «non configurato»; motivi brevi in italiano; la riga del titolare dice «In completamento». Il dettaglio va a chi amministra: nuova rotta GET /api/admin/configurazione (solo admin, withAdminAuth; dice solo «c'e'/manca» e i nomi dei dati, mai un valore) e un riquadro «Configurazione da completare» nella Panoramica (app/admin/page.tsx, file mio: nel primo referto avevo scritto per errore che non lo era). Collaudo K03: il mutante «checkDb ignora l'errore» sopravviveva; ora una prova lo prende. titolare-check.ts, lib/supabase/server.ts e lib/env.ts: nessuna modifica servita (l'ora della pagina era gia' in Europe/Rome).",
       "verificato_da": "qa: parziale. Rossa senza correzione; attesa massima dell'accesso 7 s (due tentativi da 3,5). Trovato: senza variabili pubbliche la chat risultava operativa (regressione), dettaglio del titolare sparito ovunque, checkDb senza log: sistemati nel commit successivo (chat «non configurato», titolare e db nei log), con prove. Resta la riga per l'admin (file non mio)."
     },
     {
