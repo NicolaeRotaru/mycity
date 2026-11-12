@@ -2,6 +2,7 @@ import { QueryClient, dehydrate, type DehydratedState } from '@tanstack/react-qu
 import { logger } from '@/lib/logger';
 import { domandaCategorie, domandaNegozio, type ClientDiLettura } from '@/lib/queries/catalogo';
 import { domandaVendutoDa } from '@/lib/queries/venduto-da';
+import { domandaRiepilogoRecensioni, type ClientConFunzioni } from '@/lib/queries/riepilogo-recensioni-negozio';
 import { leggiSchedaPerIlGuscio } from '@/lib/queries/scheda-con-venduto-da';
 
 /**
@@ -105,5 +106,13 @@ export function precaricaProdotto(id: string): Promise<DehydratedState> {
 export function precaricaNegozio(id: string): Promise<DehydratedState> {
   // 15/10/2026 (R55) — anche «Venduto da», che la vetrina mostra in fondo: letto
   // qui, l'avviso sulla migrazione 126 finisce nei registri del server.
-  return precarica((supa, qc) => insieme(qc, [domandaNegozio(supa, id), domandaVendutoDa(supa, id)]));
+  // 12/11/2026 (R07-021) — e le stelle del negozio: senza, lo schema per Google usciva dal
+  // server senza `aggregateRating` e il browser lo riscriveva con, due script diversi.
+  return precarica((supa, qc) =>
+    insieme(qc, [
+      domandaNegozio(supa, id),
+      domandaVendutoDa(supa, id),
+      domandaRiepilogoRecensioni(supa as unknown as ClientConFunzioni, id),
+    ]),
+  );
 }
