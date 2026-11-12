@@ -131,6 +131,9 @@ export default function AdminActivityPage() {
             .select(SELECT)
             .gte('created_at', since)
             .order('created_at', { ascending: false })
+            // Seconda chiave: la tabella riceve scritture di continuo e i pareggi
+            // su created_at farebbero doppiare o saltare righe fra le finestre.
+            .order('id', { ascending: true })
             .range(da, a) as unknown as PromiseLike<{ data: EventRow[] | null; error: { message?: string } | null }>,
         3000,
       );

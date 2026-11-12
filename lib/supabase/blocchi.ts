@@ -86,7 +86,12 @@ export async function leggiTutteLeRighe<T>(
     tutte.push(...righe);
     if (righe.length < Math.min(FINESTRA, tetto - da)) return { data: tutte, error: null, troncato: false };
   }
-  return { data: tutte, error: null, troncato: true };
+  // 12/11/2026 (R06-021) — Arrivati al tetto con l'ultima finestra piena non si sa
+  // ancora se ci sono altre righe: con esattamente `tetto` righe la lettura e'
+  // completa, e dire «campione» sarebbe un falso allarme. Si chiede una riga in piu'.
+  const oltre = await chiedi(tetto, tetto);
+  if (oltre.error) return { data: tutte, error: oltre.error, troncato: false };
+  return { data: tutte, error: null, troncato: (oltre.data ?? []).length > 0 };
 }
 
 /**

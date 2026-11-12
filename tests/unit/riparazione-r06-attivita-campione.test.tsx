@@ -13,7 +13,7 @@ import { createElement, type ReactNode } from 'react';
 import { disegna } from './aiuti/cabina-admin';
 import { creaPostgrestColTetto, type Riga } from './aiuti/riparazione-r06-postgrest-col-tetto';
 
-const stato: { client: ReturnType<typeof creaPostgrestColTetto>['client'] | null } = { client: null };
+const stato: { client: ReturnType<typeof creaPostgrestColTetto>['client'] | null; db: ReturnType<typeof creaPostgrestColTetto> | null } = { client: null, db: null };
 
 vi.mock('@/lib/supabase/client', () => ({
   supabase: {
@@ -42,7 +42,8 @@ function visite(n: number): Riga[] {
 }
 
 async function apri(righe: number) {
-  stato.client = creaPostgrestColTetto({ activity_events: visite(righe) }).client;
+  stato.db = creaPostgrestColTetto({ activity_events: visite(righe) });
+  stato.client = stato.db.client;
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ data: { acceso: true } }), { status: 200 })));
   const mod = (await import('@/app/admin/activity/page')) as { default: () => ReactNode };
   const r = await disegna(createElement(mod.default));
@@ -68,5 +69,19 @@ describe('R06-021 · Attività: visitatori delle 24 ore oltre le mille righe', (
     const v = kpi(host, 'Visitatori 24h');
     expect(v.valore).toBe('40');
     expect(v.riquadro.toLowerCase()).not.toContain('campione');
+  });
+
+  it('con esattamente 3000 righe la lettura e\' completa: niente falso «campione»', async () => {
+    const host = await apri(3000);
+    const v = kpi(host, 'Visitatori 24h');
+    expect(v.valore).toBe('3000');
+    expect(v.riquadro.toLowerCase(), 'Con tutte le righe in mano la pagina diceva «campione»').not.toContain('campione');
+  });
+
+  it('le finestre sono ordinate per created_at e poi per id', async () => {
+    await apri(2500);
+    const finestre = stato.db!.richieste.filter((r) => r.tabella === 'activity_events' && r.finestra);
+    expect(finestre.length).toBeGreaterThan(1);
+    for (const r of finestre) expect(r.ordini).toEqual(['created_at', 'id']);
   });
 });

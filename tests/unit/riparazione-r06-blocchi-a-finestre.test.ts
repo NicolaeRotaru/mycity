@@ -44,3 +44,20 @@ describe('R06-001 · leggiInBlocchiTutte', () => {
     expect(r.troncato).toBe(true);
   });
 });
+
+describe('R06-021 · leggiTutteLeRighe al tetto', () => {
+  it('esattamente tante righe quante il tetto: completa, non troncata', async () => {
+    const { leggiTutteLeRighe } = await import('@/lib/supabase/blocchi');
+    const tutte = Array.from({ length: 3000 }, (_, i) => ({ id: i }));
+    const r = await leggiTutteLeRighe((da, a) => Promise.resolve({ data: tutte.slice(da, a + 1), error: null }), 3000);
+    expect(r.data.length).toBe(3000);
+    expect(r.troncato).toBe(false);
+  });
+  it('una riga oltre il tetto: troncata', async () => {
+    const { leggiTutteLeRighe } = await import('@/lib/supabase/blocchi');
+    const tutte = Array.from({ length: 3001 }, (_, i) => ({ id: i }));
+    const r = await leggiTutteLeRighe((da, a) => Promise.resolve({ data: tutte.slice(da, a + 1), error: null }), 3000);
+    expect(r.data.length).toBe(3000);
+    expect(r.troncato).toBe(true);
+  });
+});
