@@ -33,6 +33,7 @@ vi.mock('@/lib/supabase/server', () => ({
       c.select = () => c;
       c.eq = (col: string, v: unknown) => { stato.filtri.push(`${col}=${String(v)}`); return c; };
       c.neq = (col: string, v: unknown) => { stato.filtri.push(`${col}!=${String(v)}`); return c; };
+      c.or = (f: string) => { stato.filtri.push(`or:${f}`); return c; };
       c.maybeSingle = async () => ({ data: stato.profilo, error: null });
       c.update = (valori: Record<string, unknown>) => { scrive = true; stato.scritture.push(valori); return c; };
       (c as { then: unknown }).then = (ok: (v: unknown) => void) =>
@@ -104,7 +105,7 @@ describe('R11-003 — dati per i bonifici di un negozio approvato', () => {
   it('un IBAN nuovo o cambiato lo sanno subito gli amministratori', async () => {
     await salva(dati);
     expect(stato.avvisi).toContain('IBAN del negozio inserito');
-    stato.profilo = { role: 'seller', approval_status: 'approved', billing_iban: 'IT60X0542811101000000123456', store_name: 'P' };
+    stato.profilo = { role: 'seller', approval_status: 'approved', billing_iban: 'IT60X0542811101000000123456', store_name: 'P', business_vat_number: '01234567897', business_legal_name: 'Pane Quotidiano snc', business_address: 'Via Calzolai 1', business_city: 'Piacenza', business_zip: '29121' };
     stato.avvisi = [];
     await salva(dati);
     expect(stato.avvisi).toHaveLength(0);

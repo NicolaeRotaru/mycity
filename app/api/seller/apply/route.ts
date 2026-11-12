@@ -309,7 +309,7 @@ export const PATCH = withAuthRateLimit(
     const admin = getAdminSupabase();
     const { data: attuale, error: errLettura } = await admin
       .from('profiles')
-      .select('role, approval_status, billing_iban, store_name')
+      .select('role, approval_status, billing_iban, store_name, business_legal_name, business_vat_number, business_address, business_city, business_zip, business_pec, business_sdi')
       .eq('id', user.id)
       .maybeSingle();
     if (errLettura) {
@@ -320,6 +320,14 @@ export const PATCH = withAuthRateLimit(
     if (attuale.role !== 'seller') return ApiErrors.forbidden('Solo un negozio può salvare i dati per i bonifici.');
     if (attuale.approval_status === 'suspended') {
       return ApiErrors.forbidden("Il tuo negozio è sospeso: per i dati dei bonifici scrivi all'assistenza.");
+    }
+
+    // La partita IVA controllata all'approvazione non si cambia da qui: come in
+    // /api/seller/partita-iva, per cambiarla si scrive all'assistenza.
+    const att = attuale as Record<string, string | null | undefined>;
+    const ivaPrima = att.business_vat_number ? normalizzaPiva(String(att.business_vat_number)) : '';
+    if (ivaPrima && ivaPrima !== normalizzaPiva(f.businessVatNumber)) {
+      return ApiErrors.conflict("La partita IVA c'è già: per cambiarla scrivi all'assistenza.");
     }
 
     const { data: scritti, error } = await admin
@@ -337,6 +345,11 @@ export const PATCH = withAuthRateLimit(
       .eq('id', user.id)
       .eq('role', 'seller')
       .neq('approval_status', 'suspended')
+      // Due salvataggi insieme partiti dal campo vuoto: scrive solo chi trova
+      // ancora vuota (o uguale) la partita IVA letta sopra.
+      .or(ivaPrima
+        ? `business_vat_number.eq.${att.business_vat_number}`
+        : 'business_vat_number.is.null,business_vat_number.eq.')
       .select('id');
     if (error) {
       logger.error('[seller-billing] dati non salvati', { userId: user.id, code: error.code, message: error.message });
@@ -358,6 +371,32 @@ export const PATCH = withAuthRateLimit(
         );
       } catch (errore) {
         logger.error('[seller-billing] avviso del cambio IBAN non partito', { userId: user.id, errore });
+      }
+    }
+
+    // I dati fiscali sono quelli che il cliente legge in «Venduto da»: ogni
+    // cambio lo sa subito chi approva i negozi.
+    const nuovi: Record<string, string | null> = {
+      business_legal_name: f.businessLegalName,
+      business_address: f.businessAddress,
+      business_city: f.businessCity,
+      business_zip: f.businessZip,
+      business_pec: f.businessPec || null,
+      business_sdi: f.businessSdi ? f.businessSdi.toUpperCase() : null,
+    };
+    const cambiati = Object.keys(nuovi).filter(
+      (k) => String(att[k] ?? '').trim() !== String(nuovi[k] ?? '').trim() && String(att[k] ?? '').trim() !== '',
+    );
+    if (!ivaPrima) cambiati.push('business_vat_number (prima volta)');
+    if (cambiati.length > 0) {
+      try {
+        await notifyAdmins(
+          'Dati fiscali del negozio cambiati',
+          `${(attuale as { store_name?: string | null }).store_name ?? 'Un negozio'} ha cambiato: ${cambiati.join(', ')}. Controlla che siano ancora quelli verificati all'approvazione.`,
+          '/admin/users',
+        );
+      } catch (errore) {
+        logger.error('[seller-billing] avviso del cambio dei dati fiscali non partito', { userId: user.id, errore });
       }
     }
 
