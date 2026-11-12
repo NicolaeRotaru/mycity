@@ -1704,30 +1704,33 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   // (decide risponde 500, il reso resta APPROVED). Coi passi normali avanza ripropone 20 € con
   // la stessa chiave: si prenotava di nuovo, il portafoglio trovava il doppione e taceva, e il
   // rimborso si registrava due volte (40 € sull'ordine, 36 € tolti al negozio invece di 18).
-  // Una riga a diario di questa chiave con la stessa cifra, su un ordine che conta gia' almeno
-  // quella cifra, e' il rimborso di prima finito: si restituisce quello, senza toccare niente.
-  // Se l'ordine non lo conta (il tentativo di prima e' stato stornato) si va avanti come sempre.
+  // Il rimborso di prima e' finito quando sull'ordine c'e' il suo segno `wallet:<chiave>`, che si
+  // scrive a rimborso concluso (quota del negozio compresa, piu' sotto): si restituisce quello,
+  // senza toccare niente. Collaudo del 12/11 — prima si guardava il totale rimborsato
+  // dell'ordine, che puo' contenere ALTRI rimborsi: un reso stornato dopo un guasto doppio,
+  // su un ordine con un rimborso precedente, risultava «gia' contato» e non si registrava mai.
+  // Senza il segno (tentativo stornato, o morto prima della fine) si va avanti come sempre.
   if (
     tipo === 'contanti' && opts.idempotencyKey && !bonificoDiPrima &&
-    ripartoVero.bonificoCents === 0 && ripartoVero.creditoCents > 0
+    ripartoVero.bonificoCents === 0 && ripartoVero.creditoCents > 0 &&
+    rimborsiGiaScritti({ stripe_refund_id: (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null })
+      .has(`wallet:${opts.idempotencyKey}`)
   ) {
     const giaADiario = await accreditoADiario(admin, opts.idempotencyKey);
     if (giaADiario != null) {
       controllaLaCifraGiaAccreditata(giaADiario, ripartoVero.creditoCents);
-      if (Number(order.refunded_amount_cents ?? 0) >= safeAmountCents) {
-        logger.warn('[refundOrder] credito di questa chiave gia uscito e contato: non si registra di nuovo', {
-          orderId: order.id, chiave: opts.idempotencyKey,
-        });
-        return {
-          refundId: `wallet:${opts.idempotencyKey}`,
-          reversedCents: 0,
-          pieno: Number(order.refunded_amount_cents ?? 0) >= grossCents,
-          modo,
-          importoCents: safeAmountCents,
-          creditoCents: ripartoVero.creditoCents,
-          bonificoCents: 0,
-        };
-      }
+      logger.warn('[refundOrder] credito di questa chiave gia uscito e contato: non si registra di nuovo', {
+        orderId: order.id, chiave: opts.idempotencyKey,
+      });
+      return {
+        refundId: `wallet:${opts.idempotencyKey}`,
+        reversedCents: 0,
+        pieno: Number(order.refunded_amount_cents ?? 0) >= grossCents,
+        modo,
+        importoCents: safeAmountCents,
+        creditoCents: ripartoVero.creditoCents,
+        bonificoCents: 0,
+      };
     }
   }
 
@@ -2037,6 +2040,19 @@ export async function refundOrder(opts: RefundOrderOpts): Promise<EsitoRimborso>
   const reversedCents = await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, stornatoAlNegozio);
   if (tipo === 'contanti' && order.payout_status === 'HELD' && sellerShare > 0) {
     await avvisaDellaQuotaDaTrattenere(admin, order.id, sellerShare, chiave);
+  }
+  // R03-005 — il segno del rimborso in credito finito (vedi sopra, `wallet:<chiave>`): si scrive
+  // dopo la quota del negozio, cosi' una ripresa che lo trova sa che non manca niente.
+  if (tipo === 'contanti' && opts.idempotencyKey && ripartoVero.bonificoCents === 0 && ripartoVero.creditoCents > 0) {
+    const errSegno = await aggiungiAllElencoDeiRimborsi(
+      admin,
+      order.id,
+      (order as { stripe_refund_id?: string | null }).stripe_refund_id ?? null,
+      `wallet:${opts.idempotencyKey}`,
+    );
+    if (errSegno) {
+      logger.error('[refundOrder] segno del rimborso in credito non scritto sull ordine', { orderId: order.id, message: errSegno.message });
+    }
   }
 
   // Rimborso totale: si recupera anche il compenso del fattorino, altrimenti la

@@ -46,6 +46,7 @@ vi.mock('@/lib/api/middleware', () => {
 import { POST as apriReso } from '@/app/api/returns/create/route';
 import { POST as decidi } from '@/app/api/returns/[id]/decide/route';
 import { POST as avanza } from '@/app/api/returns/[id]/avanza/route';
+import { refundOrder } from '@/lib/stripe/payout';
 
 const ORDINE = 'a1b2c3d4-5555-4555-8555-555555555555';
 type Rotta = (r: Request, c: unknown) => Promise<Response>;
@@ -143,4 +144,22 @@ describe('R03-005 — il reso ripreso dopo un guasto non registra due volte lo s
     expect(crediti.reduce((s, r) => s + r.cents, 0), 'il credito esce una volta sola').toBe(2000);
     expect(finto.db.tabelle.returns[0].status).toBe('REFUNDED');
   }, 60000);
+
+  it('collaudo: un altro rimborso già sull ordine non fa saltare il reso ripreso dopo un guasto doppio', async () => {
+    // Ordine da 60 € tutto col credito; il reso A da 20 € è già registrato. Il reso B da 20 €
+    // è finito nel guasto doppio: il credito è uscito (riga a diario) ma la prenotazione è stata
+    // stornata. Alla ripresa l'ordine dice già 20 € (quelli di A): non deve sembrare «già contato».
+    finto.db = creaFintoDatabase({
+      orders: [{ ...coiCrediti(ORDINE), gross_total_cents: 6000, wallet_applied_cents: 6000, seller_payout_cents: 5400, refunded_amount_cents: 2000, payment_status: 'PARTIALLY_REFUNDED' }],
+      profiles: [{ id: 'admin-1', role: 'admin' }, { id: 'negozio', role: 'seller' }, { id: 'giulia', role: 'buyer' }],
+      notifications: [],
+    });
+    finto.db.email.giulia = 'giulia.bianchi@example.it';
+    finto.db.diarioCredito.push({ user: 'giulia', cents: 2000, reason: 'cod_refund', ref: 'return_rB' });
+    finto.db.tabelle.wallet_ledger = [{ id: 'wl-b', user_id: 'giulia', delta_cents: 2000, reason: 'cod_refund', ref: 'return_rB' }];
+    await refundOrder({ orderId: ORDINE, amountCents: 2000, reason: 'reso', metadata: { return_id: 'rB' }, idempotencyKey: 'return_rB' });
+    expect(Number(finto.db.tabelle.orders[0].refunded_amount_cents), 'il reso B non si registra mai').toBe(4000);
+    expect(Number(finto.db.tabelle.orders[0].seller_payout_reversed_cents), 'al negozio non si toglie la quota di B').toBe(1800);
+    expect(finto.db.diarioCredito.filter((m) => m.ref === 'return_rB'), 'il credito di B esce due volte').toHaveLength(1);
+  });
 });
