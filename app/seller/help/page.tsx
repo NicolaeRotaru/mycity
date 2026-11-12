@@ -58,9 +58,10 @@ export default function SellerHelpPage() {
         ))}
       </div>
 
+      {/* 12/11/2026 (R09-022) — Prometteva corsi video «in arrivo» che nessun piano prevede. */}
       <div className="bg-accent-50 border border-accent-200 rounded-xl p-5 text-sm text-accent-900">
-        <p className="font-bold mb-1 flex items-center gap-2"><BookOpen size={18} className="text-accent-500" aria-hidden /> Guide approfondite (prossimamente)</p>
-        <p>Stiamo preparando una academy con video tutorial per ogni funzionalità. Nel frattempo, per qualunque dubbio scrivi all&apos;assistenza.</p>
+        <p className="font-bold mb-1 flex items-center gap-2"><BookOpen size={18} className="text-accent-500" aria-hidden /> Non trovi la risposta?</p>
+        <p>Per qualunque dubbio scrivi all&apos;assistenza.</p>
       </div>
     </div>
   );
