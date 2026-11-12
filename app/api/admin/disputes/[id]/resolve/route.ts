@@ -379,7 +379,21 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     // pannello offriva i soldi da dividere solo all'altro negozio, che pagava
     // un rimborso non suo. La pausa la toglie solo la divisione; fino ad allora
     // l'esito del reclamo resta scritto sul reclamo.
-    await scriviIlReclamoSullOrdine({ rimborsoEmesso, rimborsoPieno });
+    // R11-017 — «Pieno» lo dice refundOrder sul totale rimborsato, che comprende la prenotazione
+    // di un reso ancora in corso sullo stesso ordine. Se quel reso poi fallisce e si storna, nessuno
+    // riscrive 'LOST' e il negozio non viene piu' pagato del resto. Con un reso aperto si scrive
+    // 'RESOLVED': il giro dei bonifici aspetta comunque il reso, e un ordine davvero rimborsato
+    // per intero non lo paga (releaseOrderPayout lo salta).
+    let pienoPerIlReclamo = rimborsoPieno;
+    if (rimborsoPieno) {
+      const { data: resiAperti, error: errResi } = await admin
+        .from('returns')
+        .select('id')
+        .eq('order_id', dispute.order_id)
+        .in('status', ['REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED']);
+      if (errResi || (resiAperti ?? []).length > 0) pienoPerIlReclamo = false;
+    }
+    await scriviIlReclamoSullOrdine({ rimborsoEmesso, rimborsoPieno: pienoPerIlReclamo });
     const fermoPerLaDivisione =
       (ord as { internal_dispute_status?: string | null } | null)?.internal_dispute_status === PAUSA_RIMBORSO_DA_DIVIDERE;
     if (fermoPerLaDivisione) {
