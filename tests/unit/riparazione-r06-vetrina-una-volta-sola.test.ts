@@ -81,4 +81,24 @@ describe('R06-009 · la vetrina nel browser', () => {
     const m = await fetchSellerPublicMap(client, ['pane']);
     expect(m.get('pane')?.store_name).toBe('Pane Quotidiano');
   });
+
+  it('colonne diverse non si mescolano: due select, due domande', async () => {
+    const { client, domande } = vetrina([PANE]);
+    await Promise.all([
+      fetchSellerPublicMap(client, ['pane']),
+      fetchSellerPublicMap(client, ['pane'], 'id, store_name, is_approved'),
+    ]);
+    expect(domande.length).toBe(2);
+  });
+
+  it('client diversi non si mescolano', async () => {
+    const a = vetrina([PANE]);
+    const b = vetrina([{ ...PANE, store_name: 'Altro forno' }]);
+    const [ma, mb] = await Promise.all([
+      fetchSellerPublicMap(a.client, ['pane']),
+      fetchSellerPublicMap(b.client, ['pane']),
+    ]);
+    expect(ma.get('pane')?.store_name).toBe('Pane Quotidiano');
+    expect(mb.get('pane')?.store_name).toBe('Altro forno');
+  });
 });
