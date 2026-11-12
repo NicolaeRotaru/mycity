@@ -26,7 +26,7 @@ function costruttore(tabella: string) {
   const op: Op = { tabella, azione: 'select', filtri: [] };
   const esito = () => (stato.esiti[tabella] ?? (() => ({ data: [], error: null })))(op);
   const q: Record<string, unknown> = {};
-  for (const m of ['select', 'order', 'limit', 'or']) q[m] = () => q;
+  for (const m of ['select', 'order', 'limit', 'or', 'in']) q[m] = () => q;
   q.eq = (c: string, v: unknown) => { op.filtri.push([`eq:${c}`, v]); return q; };
   q.neq = (c: string, v: unknown) => { op.filtri.push([`neq:${c}`, v]); return q; };
   q.insert = (v: unknown) => { op.azione = 'insert'; op.valori = v; return q; };
@@ -89,6 +89,7 @@ beforeEach(() => {
   stato.ops = [];
   stato.toast = [];
   stato.esiti.seller_promotions = (op) => (op.azione === 'select' ? { data: [], error: null } : { data: null, error: null });
+  stato.esiti.products = () => ({ data: [{ category_id: 'cat-dolci' }, { category_id: 'cat-pane' }], error: null });
   stato.esiti.categories = () => ({ data: [{ id: 'cat-dolci', name: 'Dolci' }, { id: 'cat-pane', name: 'Pane' }], error: null });
 });
 

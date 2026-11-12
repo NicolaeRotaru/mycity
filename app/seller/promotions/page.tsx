@@ -96,11 +96,22 @@ export default function SellerPromotionsPage() {
   });
   const promos = queryPromos.data ?? [];
 
+  // Collaudo del 12/11 — una chiave sua (quella delle categorie della vetrina ha un'altra forma:
+  // condividerla rompeva i link della home), e solo le categorie dove il negozio ha prodotti: lo
+  // sconto confronta la categoria ESATTA del prodotto, e una promo sulla categoria madre o su una
+  // categoria vuota annuncerebbe uno sconto che non c'è.
   const queryCategorie = useQuery({
-    queryKey: queryKeys.categories.all,
-    enabled: showWizard && scope === 'category',
+    queryKey: ['seller', 'promo-categorie', userId ?? ''] as const,
+    enabled: !!userId && showWizard && scope === 'category',
     queryFn: async (): Promise<Array<{ id: string; name: string }>> => {
-      const { data, error } = await supabase.from('categories').select('id, name').order('name');
+      const { data: prodotti, error: errProdotti } = await supabase
+        .from('products')
+        .select('category_id')
+        .eq('seller_id', userId!);
+      if (errProdotti) throw errProdotti;
+      const ids = [...new Set(((prodotti ?? []) as Array<{ category_id: string | null }>).map((p) => p.category_id).filter((x): x is string => !!x))];
+      if (ids.length === 0) return [];
+      const { data, error } = await supabase.from('categories').select('id, name').in('id', ids).order('name');
       if (error) throw error;
       return (data ?? []) as Array<{ id: string; name: string }>;
     },
@@ -296,7 +307,7 @@ export default function SellerPromotionsPage() {
                     onChange={(e) => setCategoriaId(e.target.value)}
                     className="bg-cream-50"
                   >
-                    <option value="">— scegli la categoria</option>
+                    <option value="">{queryCategorie.isError ? '— categorie non lette, riprova' : categorie.length === 0 && !queryCategorie.isLoading ? '— nessun tuo prodotto ha una categoria' : '— scegli la categoria'}</option>
                     {categorie.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
