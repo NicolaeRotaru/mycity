@@ -1,6 +1,6 @@
 {
   "sessione": "R11",
-  "aggiornato": "2026-11-12 15:53",
+  "aggiornato": "2026-11-12 16:14",
   "finita": false,
   "testa": "",
   "verifica": {
@@ -172,6 +172,176 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Alla vittoria, gli ordini TRANSFERRED con dispute_seller_reversed_cents>0 (contestazione parziale) ricevono un bonifico Stripe pari al promemoria, con chiave dispute_won_seller_<dispute>_<ordine>_t<n>; poi lo stornato scende del promemoria, il promemoria va a zero e il tentativo sale. Niente ritorno in HELD. Senza conto Stripe del negozio: avviso agli admin. Logica in un file nuovo (contestazione-parziale-vinta.ts) per il tetto di righe di dispute.ts; prova rimessa su dispute.ts (il file che la collega).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-008",
+      "chiave": "api-backend|se la domanda per diventare negozio parte due volte insieme, viene registrata due volte e gli amministratori ricevono l'avviso due volte",
+      "esito": "riparato",
+      "commit": "f2596486c946b4636db6e9ba4094a9e65b9a5f3c",
+      "file_toccati": [
+        "app/api/seller/apply/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-domanda-negozio-doppia.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-domanda-negozio-doppia.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f2596486c946b4636db6e9ba4094a9e65b9a5f3c^ --file app/api/seller/apply/route.ts --prove tests/unit/riparazione-r11-domanda-negozio-doppia.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La scrittura della domanda vale solo se approval_requested_at è ancora quello letto (eq sul valore, oppure is.null): il secondo invio partito insieme non scrive niente; rilette le righe, se la domanda risulta già in attesa con una data nuova risponde 200 senza scrivere un secondo consenso né mandare un secondo avviso. Senza la condizione (stato cambiato davvero) resta il 409 di prima.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-011",
+      "chiave": "dati-analytics|l'elenco prodotti dell'amministratore si ferma a mille senza dirlo, e la ricerca non trova i prodotti più vecchi",
+      "esito": "riparato",
+      "commit": "e5c2ea183070698fb11b495f8c4c4462fe61f13a",
+      "file_toccati": [
+        "app/admin/products/page.tsx",
+        "app/admin/payouts/page.tsx",
+        "tests/unit/il-pannello-non-chiama-vuoto-una-lettura-caduta.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-elenchi-admin-oltre-mille.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-elenchi-admin-oltre-mille.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e5c2ea183070698fb11b495f8c4c4462fe61f13a^ --file app/admin/products/page.tsx,app/admin/payouts/page.tsx --prove tests/unit/riparazione-r11-elenchi-admin-oltre-mille.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prodotti e bonifici chiedono il conteggio esatto (count: exact) insieme alle righe: «tagliato» quando il totale supera il tetto, non più quando arriva la riga in più (il server ne dà al massimo mille). Prodotti: il sottotitolo dice «N di <totale>», l avviso dice il totale, e con l elenco tagliato la ricerca per nome va al database (ilike, 200 righe). L input di ricerca ha min-w-0 (la testata non sporge a 360 px). Prova esistente il-pannello-non-chiama-vuoto-una-lettura-caduta (importa le due pagine) aggiornata solo sull etichetta del riquadro rinominato da R11-001. Non fatto: la ricerca per nome del negozio sui prodotti più vecchi (solo per nome prodotto).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-012",
+      "chiave": "frontend-ux|payout: i riquadri «da pagare / già pagato» mostrano un totale parziale come cifra esatta, e l'avviso sta sotto",
+      "esito": "gia_riparato_prima",
+      "prova": "Sulla base db5164c5 app/admin/payouts/page.tsx:186-195 l avviso «Elenco tagliato» (role=status) sta PRIMA dei riquadri (:200-202), e :121 fa portare «almeno » a tutte le cifre quando l elenco è tagliato (limit TETTO_PAYOUT+1). Lo prova già tests/unit/minori-s05-bonifici-prodotti.test.tsx (1802/1800/1817): npx vitest run tests/unit/minori-s05-bonifici-prodotti.test.tsx → verde."
+    },
+    {
+      "id": "R11-013",
+      "chiave": "frontend-ux|in guadagni le barre del grafico dei sette giorni restano a zero, e sul telefono lo stato del bonifico esce dallo schermo o compare come codice",
+      "esito": "riparato",
+      "commit": "068e36664d0b923fef13db694b21417ea052f137",
+      "file_toccati": [
+        "app/seller/earnings/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-guadagni-grafico-e-stati.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-guadagni-grafico-e-stati.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 068e36664d0b923fef13db694b21417ea052f137^ --file app/seller/earnings/page.tsx --prove tests/unit/riparazione-r11-guadagni-grafico-e-stati.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Grafico: la colonna di ogni giorno ha h-full, così l altezza in % della barra ha un riferimento. Targhette: REVERSAL_FAILED → «Storno da sistemare: ci pensiamo noi», PROCESSING → «Bonifico in corso», «Completa onboarding» → «Collega il conto», ripiego «Da verificare» invece del codice. Storico pagamenti: sotto sm la colonna Data sparisce e la data va sotto il numero d ordine, padding ridotto: la colonna Stato resta nello schermo. Parole: «Commissione MyCity», «Contanti alla consegna», «il tuo conto Stripe». Il layout a 360 px è provato sulle classi, non misurato in un browser vero.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-017",
+      "chiave": "pagamenti-stripe|un reclamo chiuso mentre un reso sullo stesso ordine sta per tornare indietro segna l'ordine come perso, e il negozio non riceve più il resto che gli spetta",
+      "esito": "riparato",
+      "commit": "7caff9982f2941ca09d0fabbecf9d74d23ec94dd",
+      "file_toccati": [
+        "app/api/admin/disputes/[id]/resolve/route.ts",
+        "tests/unit/il-negozio-viene-pagato-anche-dopo-un-reclamo.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-reclamo-con-reso-aperto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-reclamo-con-reso-aperto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7caff9982f2941ca09d0fabbecf9d74d23ec94dd^ --file app/api/admin/disputes/[id]/resolve/route.ts --prove tests/unit/riparazione-r11-reclamo-con-reso-aperto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Se refundOrder dice «pieno» ma sullo stesso ordine c è un reso ancora aperto (REQUESTED/APPROVED/SHIPPED_BACK/RECEIVED), o la lettura dei resi cade, sull ordine si scrive RESOLVED invece di LOST: il giro aspetta comunque il reso e un ordine rimborsato per intero non lo paga. Prova esistente il-negozio-viene-pagato-anche-dopo-un-reclamo (importa la rotta) aggiornata solo nel finto database: risponde anche alla tabella returns (vuota).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-018",
+      "chiave": "pagamenti-stripe|un buono regalo annullato o scaduto si legge «disponibile», col codice in chiaro",
+      "esito": "riparato",
+      "commit": "b366a5e5db635820cab9cd617904f64f20f58013",
+      "file_toccati": [
+        "app/profile/gift-cards/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-buono-annullato-non-disponibile.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-buono-annullato-non-disponibile.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b366a5e5db635820cab9cd617904f64f20f58013^ --file app/profile/gift-cards/page.tsx --prove tests/unit/riparazione-r11-buono-annullato-non-disponibile.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Lo stato del buono si legge da voided_at (178) ed expires_at: Annullata / Scaduta / Riscattata / Disponibile. Per un buono annullato o scaduto il codice si mostra mascherato e il tasto Copia sparisce.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-019",
+      "chiave": "pagamenti-stripe|il fattorino preme «aggiorna stato», il server risponde errore e lui legge «stato aggiornato»",
+      "esito": "riparato",
+      "commit": "3122836c44f73c6a21e972e21b0218b8257afeef",
+      "file_toccati": [
+        "components/rider/RiderConnectButton.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-fattorino-aggiorna-stato.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-fattorino-aggiorna-stato.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3122836c44f73c6a21e972e21b0218b8257afeef^ --file components/rider/RiderConnectButton.tsx --prove tests/unit/riparazione-r11-fattorino-aggiorna-stato.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "refreshStatus controlla res.ok: con il server in errore mostra un toast d errore col motivo (apiErrorMessage) invece di «Stato aggiornato»; anche una risposta non leggibile non fa più saltare il messaggio.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R11-020",
+      "chiave": "pagamenti-stripe|se il primo collegamento a stripe si interrompe e poi cambiano email o ruolo, negozio e fattorino leggono «errore stripe» a ogni nuovo tentativo per 24 ore",
+      "esito": "riparato",
+      "commit": "d7f6b8befcdb56616eac9811802c476dd81af159",
+      "file_toccati": [
+        "lib/stripe/client.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r11-chiave-del-conto-connect.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r11-chiave-del-conto-connect.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d7f6b8befcdb56616eac9811802c476dd81af159^ --file lib/stripe/client.ts --prove tests/unit/riparazione-r11-chiave-del-conto-connect.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La chiave di idempotenza di accounts.create passa da connect_<id> a connect_<id>_<ruolo>_<impronta sha256 dell email>: lo stesso tentativo ripetuto resta lo stesso conto, un tentativo con email o ruolo cambiati è una richiesta nuova e non prende più l errore di Stripe. Il salvataggio dell id prima del link (onboarding e rider-onboarding, salvaConto) c era già sulla base dal 5/11: quella metà della voce non serviva toccarla.",
       "verificato_da": ""
     },
     {
