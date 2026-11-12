@@ -237,7 +237,8 @@ function ResetPasswordInner() {
     } catch (err) {
       // R10-016 — L'errore resta sotto il campo, non solo in un avviso che sparisce.
       const testo = translateError(err);
-      setErroreDellaPassword(testo);
+      // Sotto il campo solo cio' che riguarda la password; «sessione scaduta» resta nell'avviso.
+      if (/^(Questa password|La password|La nuova password)/.test(testo)) setErroreDellaPassword(testo);
       toast.error(testo);
     } finally {
       setSubmitting(false);

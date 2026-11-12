@@ -17,6 +17,9 @@ export type ErroreDiSupabase = { message?: unknown; code?: unknown; reasons?: un
 export const PASSWORD_RUBATA =
   'Questa password compare negli elenchi di password rubate in rete: scegline un’altra, che non usi già da nessuna parte.';
 export const PASSWORD_CORTA = 'La password è troppo corta: usane una di almeno 8 caratteri.';
+/** Revisione qa: il minimo lo dice il server nel messaggio; 8 e' solo il ripiego. */
+const passwordCorta = (minimo: number | null) =>
+  minimo && minimo !== 8 ? `La password è troppo corta: usane una di almeno ${minimo} caratteri.` : PASSWORD_CORTA;
 export const PASSWORD_SEMPLICE = 'La password è troppo semplice: aggiungi maiuscole, numeri o simboli.';
 
 export function traduciErroreNuovaPassword(errore: ErroreDiSupabase): string {
@@ -29,16 +32,24 @@ export function traduciErroreNuovaPassword(errore: ErroreDiSupabase): string {
   // Prima i motivi (li manda Supabase con l'errore), poi le parole del messaggio.
   if (motivi.includes('pwned') || m.includes('pwned') || m.includes('known to be weak') || m.includes('leaked'))
     return PASSWORD_RUBATA;
-  if (motivi.includes('length') || (m.includes('at least') && m.includes('characters') && !m.includes('one character')))
-    return PASSWORD_CORTA;
+  if (motivi.includes('length') || (m.includes('at least') && m.includes('characters') && !m.includes('one character'))) {
+    const minimo = Number(m.match(/at least (\d+) characters/)?.[1] ?? NaN);
+    return passwordCorta(Number.isFinite(minimo) ? minimo : null);
+  }
   if (motivi.includes('characters') || m.includes('weak') || m.includes('should contain'))
     return PASSWORD_SEMPLICE;
   if (m.includes('expired') || m.includes('jwt'))
     return 'Sessione scaduta. Richiedi un nuovo link di reset qui sotto.';
   if (m.includes('invalid') && m.includes('token'))
     return 'Link di reset non valido. Richiedine uno nuovo qui sotto.';
-  if (m.includes('rate') || m.includes('too many'))
+  // Revisione qa: «For security purposes, you can only request this after 42 seconds» è la
+  // risposta più comune a chi chiede di nuovo il link; e `includes('rate')` prendeva anche «generate».
+  const secondi = m.match(/after (\d+) seconds?/)?.[1];
+  if (secondi) return `Hai appena chiesto un link: puoi chiederne un altro fra ${secondi} secondi.`;
+  if (/\brate limit|\btoo many\b|for security purposes/.test(m))
     return 'Troppi tentativi. Riprova fra qualche minuto.';
+  if (m.includes('invalid') && m.includes('email'))
+    return 'L’indirizzo email non sembra valido: controllalo e riprova.';
   if (m.includes('not authenticated') || m.includes('no session'))
     return 'Sessione persa. Apri di nuovo il link dall\'email.';
   /*

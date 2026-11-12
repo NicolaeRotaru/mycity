@@ -98,4 +98,11 @@ describe('R10-016 — una password rubata riceve il consiglio giusto, e resta sc
     ).toBe(PASSWORD_SEMPLICE);
     expect(traduciErroreNuovaPassword({ message: 'New password should be different from the old password.' })).toMatch(/diversa/);
   });
+
+  it('③ il minimo lo dice il server, e chi richiede il link troppo presto legge quando può', () => {
+    expect(traduciErroreNuovaPassword({ message: 'Password should be at least 10 characters.', reasons: ['length'] })).toMatch(/almeno 10 caratteri/);
+    expect(traduciErroreNuovaPassword({ message: 'For security purposes, you can only request this after 42 seconds.' }))
+      .toBe('Hai appena chiesto un link: puoi chiederne un altro fra 42 secondi.');
+    expect(traduciErroreNuovaPassword({ message: 'Unable to validate email address: invalid format' })).toMatch(/email non sembra valido/);
+  });
 });
