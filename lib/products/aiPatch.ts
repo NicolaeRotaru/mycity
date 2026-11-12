@@ -384,7 +384,18 @@ const TIPI_DEI_CAMPI: Record<string, (v: unknown) => boolean> = {
  *    il server lascerebbe il prodotto dov'e', e la scheda della proposta
  *    leggerebbe i campi di una categoria sbagliata.
  */
-export function propostaPerLaChat(proposta: unknown, categorie: CategoryRow[]): AiProductPatch {
+export function propostaPerLaChat(
+  proposta: unknown,
+  categorie: CategoryRow[],
+  /**
+   * 12/11/2026 (R04-019) — La categoria del prodotto ADESSO. Quando c'e', le
+   * caratteristiche si tengono con le stesse regole del server: solo i campi
+   * della categoria che il prodotto avra' dopo la proposta e, per le scelte,
+   * solo i valori ammessi. Prima la scheda prometteva «colore → dorato» su un
+   * alimento, il server lo buttava e la chat diceva «Modifiche salvate».
+   */
+  categoriaAttuale?: string | null,
+): AiProductPatch {
   if (!proposta || typeof proposta !== 'object' || Array.isArray(proposta)) return {};
   const fuori: Record<string, unknown> = { ...propostaLeggibile(proposta as AiProductPatch) };
   if ('category_slug' in fuori) {
@@ -402,6 +413,31 @@ export function propostaPerLaChat(proposta: unknown, categorie: CategoryRow[]): 
     }
     if (Object.keys(testi).length > 0) fuori.attributes = testi;
     else delete fuori.attributes;
+  }
+  if (categoriaAttuale !== undefined) {
+    const campi = campiDopoLaProposta(categorie, fuori as AiProductPatch, categoriaAttuale) ?? [];
+    // Le dichiarazioni (allergeni, ingredienti…) restano: la scheda le mostra
+    // come «NON compilato dall'assistente» e il server le toglie (R41).
+    if (fuori.attributes) {
+      const entrano: Record<string, string> = {};
+      for (const [k, v] of Object.entries(fuori.attributes as Record<string, string>)) {
+        if (eCampoDichiarativo(k)) { entrano[k] = v; continue; }
+        const campo = campi.find((f) => f.key === chiaveCampo(k));
+        if (!campo) continue;
+        if (campo.type === 'select' && !(campo.options ?? []).includes(valoreAttributoDalPatch(v))) continue;
+        entrano[k] = v;
+      }
+      if (Object.keys(entrano).length > 0) fuori.attributes = entrano;
+      else delete fuori.attributes;
+    }
+    if (Array.isArray(fuori.attributes_remove)) {
+      const daTogliere = (fuori.attributes_remove as unknown[]).filter(
+        (k): k is string =>
+          typeof k === 'string' && (eCampoDichiarativo(k) || campi.some((f) => f.key === chiaveCampo(k))),
+      );
+      if (daTogliere.length > 0) fuori.attributes_remove = daTogliere;
+      else delete fuori.attributes_remove;
+    }
   }
   return fuori as AiProductPatch;
 }
