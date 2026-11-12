@@ -120,8 +120,19 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
      * freno doveva fermarlo — e la sua spesa non veniva contata, quindi il
      * tetto restava fermo mentre i soldi uscivano.
      */
-    await controllaTettoSpesaAi('ai-catalog-batch-start');
-    const handle = await submitBatch(requests);
+    // R04-017 — Il confronto e' «speso + stima del lotto», non solo «speso»:
+    // un lotto da duecento richieste partiva anche a un centesimo dal tetto.
+    const impegnato = stimaCostoLottoEur(operation, requests.length);
+    const liberaPrenotazione = await controllaTettoSpesaAi('ai-catalog-batch-start', impegnato * 100);
+    let handle: Awaited<ReturnType<typeof submitBatch>>;
+    try {
+      handle = await submitBatch(requests);
+      // La spesa si registra PRIMA di togliere la prenotazione: in mezzo non
+      // deve esserci un istante in cui il lotto non e' contato da nessuna parte.
+      await registraSpesaAi(impegnato);
+    } finally {
+      liberaPrenotazione?.();
+    }
     /**
      * 27/8/2026 (R143) — SI CONTROLLAVA IL TETTO E NON SI REGISTRAVA NIENTE.
      *
@@ -135,8 +146,6 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
      * risultati arrivano, `status` aggiunge solo la differenza fra il costo
      * vero e questa stima: i soldi si contano una volta sola, ma subito.
      */
-    const impegnato = stimaCostoLottoEur(operation, requests.length);
-    await registraSpesaAi(impegnato);
     logger.info('[ai] spesa del lotto impegnata alla partenza', {
       jobId: job.id, richieste: requests.length, stimaEur: impegnato.toFixed(4),
     });

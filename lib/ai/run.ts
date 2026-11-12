@@ -151,10 +151,34 @@ export function conCacheDelContesto(
  * ganci sono le stesse di prima tranne che ora sono asincrone: leggere e
  * scrivere un numero condiviso e' un giro di rete, non un'assegnazione.
  */
-export async function controllaTettoSpesaAi(feature: string): Promise<void> {
+/**
+ * 12/11/2026 (R04-017) — LE CHIAMATE PARTITE INSIEME LEGGEVANO TUTTE LO STESSO
+ * «SPESO».
+ *
+ * Il controllo guardava solo quanto era gia' registrato, e la spesa si
+ * registrava a risposta arrivata: dieci chiamate partite nello stesso secondo
+ * vedevano tutte lo stesso numero e passavano tutte, anche se insieme
+ * sforavano il tetto. Adesso chi passa il controllo PRENOTA la sua stima
+ * (`_inVoloCents`) nello stesso istante in cui decide, senza un `await` in
+ * mezzo: la chiamata dopo la vede gia'. La prenotazione si toglie quando la
+ * chiamata finisce (e la spesa vera e' registrata), anche se fallisce.
+ * Il confronto e' «speso + in volo + questa stima», non solo «speso».
+ */
+let _inVoloCents = 0;
+
+/** Solo per le prove. */
+export function __inVoloSpesaAiCents(): number {
+  return _inVoloCents;
+}
+
+export async function controllaTettoSpesaAi(feature: string, stimaCents: number = 0): Promise<() => void> {
   const limitEur = Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0);
-  if (!(limitEur > 0)) return; // nessun tetto configurato: niente giro di rete
-  const spesiCents = await spesaDiOggiCents();
+  if (!(limitEur > 0)) return () => undefined; // nessun tetto configurato: niente giro di rete
+  const stima = Number.isFinite(stimaCents) && stimaCents > 0 ? Math.ceil(stimaCents) : 0;
+  const giaSpesiCents = await spesaDiOggiCents();
+  // Da qui alla prenotazione nessun await: e' quello che rende il controllo
+  // e la prenotazione un passo solo dentro questa copia.
+  const spesiCents = giaSpesiCents + _inVoloCents + Math.max(0, stima - 1);
   /**
    * 8/9/2026 (lotto gravi, corsia 11) — QUI C'ERA UN CONFRONTO SOLO, E VALEVA
    * DUE COSE OPPOSTE.
@@ -184,6 +208,44 @@ export async function controllaTettoSpesaAi(feature: string): Promise<void> {
     });
     throw AiCallError.perTettoSpesa(feature);
   }
+  _inVoloCents += stima;
+  let liberata = false;
+  return () => {
+    if (liberata) return;
+    liberata = true;
+    _inVoloCents = Math.max(0, _inVoloCents - stima);
+  };
+}
+
+/**
+ * Quanto puo' costare al massimo una chiamata, prima di farla: l'ingresso
+ * stimato dal testo (circa 4 caratteri a token; un'immagine conta 1600 token,
+ * non i byte del suo base64) e l'uscita al massimo concesso (`max_tokens`).
+ */
+export function stimaCostoChiamataCents(args: Pick<RunMessageArgs, 'model' | 'max_tokens' | 'system' | 'messages' | 'tools'>): number {
+  let caratteri = 0;
+  let immagini = 0;
+  const conta = (v: unknown): void => {
+    if (typeof v === 'string') { caratteri += v.length; return; }
+    if (Array.isArray(v)) { for (const x of v) conta(x); return; }
+    if (v && typeof v === 'object') {
+      const o = v as Record<string, unknown>;
+      if (o.type === 'image' || o.type === 'document') { immagini++; return; }
+      if (typeof o.text === 'string') { caratteri += o.text.length; return; }
+      if ('content' in o) { conta(o.content); return; }
+      caratteri += JSON.stringify(o).length;
+    }
+  };
+  conta(args.system ?? '');
+  conta(args.messages);
+  if (args.tools) caratteri += JSON.stringify(args.tools).length;
+  const eur = estimateCostEur(args.model, {
+    inputTokens: Math.ceil(caratteri / 4) + immagini * 1600,
+    outputTokens: Math.max(0, args.max_tokens),
+    cacheWriteTokens: 0,
+    cacheReadTokens: 0,
+  });
+  return Number.isFinite(eur) && eur > 0 ? Math.ceil(eur * 100) : 0;
 }
 
 /**
@@ -350,8 +412,17 @@ export function mapAiError(err: unknown, feature: string): NextResponse {
 export async function runMessage<TInput = unknown>(
   args: RunMessageArgs,
 ): Promise<RunMessageResult<TInput>> {
-  // Circuit breaker: blocca se si è già superato il budget giornaliero.
-  await controllaTettoSpesaAi(args.feature);
+  // Circuit breaker: blocca se si è già superato il budget giornaliero, e
+  // prenota la stima di questa chiamata (R04-017) finche' non e' finita.
+  const liberaPrenotazione = await controllaTettoSpesaAi(args.feature, stimaCostoChiamataCents(args));
+  try {
+    return await eseguiMessaggio<TInput>(args);
+  } finally {
+    liberaPrenotazione();
+  }
+}
+
+async function eseguiMessaggio<TInput>(args: RunMessageArgs): Promise<RunMessageResult<TInput>> {
   const client = getAnthropic(); // può lanciare AiConfigError (gestito a monte)
   // Dal 30/11/2026 un modello ritirato ancora in uso si vede nei log d.errore.
   segnalaModelloRitirato(args.model);
