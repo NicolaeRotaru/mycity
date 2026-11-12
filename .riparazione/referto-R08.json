@@ -416,7 +416,19 @@
       "migrazione_da_applicare": "migrations/321_l_ordine_pronto_dice_la_fascia.sql",
       "cosa_ho_fatto": "Nuova migrazione 321 che ridefinisce notify_buyer_on_order_status dall'ultima versione (215) e cambia solo il ramo READY a domicilio. Con una fascia scelta (delivery_slot non vuoto e non «Adesso · …») la campanella dice «… te lo porta a casa nella fascia che hai scelto (11:00–13:00).», con le parole dell'email e solo l'orario («Oggi»/«Domani» sarebbero sbagliati il giorno dopo). Veloce e ordini senza fascia restano «a breve». La notifica push nasce da quella riga, quindi cambia con lei.",
       "verificato_da": "qa (subagente indipendente): diff con la 215 (cambiano solo DECLARE, il calcolo di fascia e orario e il ramo nuovo); permessi e trigger invariati; provate le fasce vecchie a testo libero («oggi-18-20» → senza orario, «In giornata · 15:00–18:00» → con orario), la veloce, NULL e spazi; il ritorno ASSIGNED→READY resta senza notifica. Tutta tests/sql/harness/run.sh verde.",
-      "cosa_resta": "Il comportamento è riparato tutto e provato su Postgres (prova SQL eseguita, mutazione a mano che la fa cadere, collaudo qa che conferma). Manca solo la prova rimessa della macchina con uscita 0: la cura è una migrazione NUOVA, e su un file che alla base non c'era cervello/prova-rimessa.mjs esce 3 («decide il collaudo»). La regista decida se contarla come riparata. Resta anche da applicare la migrazione (Nicola)."
+      "cosa_resta": "applicare la migrazione; prova rimessa automatica impossibile per una migrazione nuova",
+      "log_prova_sql": {
+        "comando": "bash tests/sql/harness/apply.sh mycity_ci && psql -X -d mycity_ci -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r08-l-ordine-pronto-dice-la-fascia.test.sql",
+        "esito": "verde",
+        "righe": [
+          "ok    una campanella per ordine  — 4 avvisi",
+          "ok    ① con la fascia 11:00–13:00 la campanella non dice «a breve»  — Il tuo ordin",
+          "ok    ① e dice la fascia scelta, con l orario  — Il tuo ordine #E32100 è pronto: un r",
+          "ok    ② la consegna veloce resta «a breve»  — Il tuo ordine #E32100 è pronto: un ri",
+          "ok    ③ senza fascia resta «a breve»  — Il tuo ordine #E32100 è pronto: un rider pa",
+          "ok    ④ il ritiro in negozio resta «passare a ritirarlo in negozio»  — Il tuo ordine"
+        ]
+      }
     },
     {
       "id": "R08-017",
@@ -572,7 +584,22 @@
       "migrazione_da_applicare": "migrations/322_la_classifica_conta_il_mese_di_piacenza.sql",
       "cosa_ho_fatto": "Migrazione 322: funzione public.mese_di_piacenza(istante default now()) = date_trunc('month', istante AT TIME ZONE 'Europe/Rome'). La vista shop_of_month_leaderboard la usa nella colonna month e nel filtro dei voti. Per il resto è identica (colonne, ordine, LIMIT 50), con le opzioni della 161 riscritte uguali (security_invoker off, security_barrier on). I permessi restano, verificati sul database ricostruito. La pagina app/shop-of-month non cambia: scriveva già col mese di Piacenza.",
       "verificato_da": "qa (subagente indipendente): mese_di_piacenza giusta anche con l'ora legale e senza dipendere dal fuso della sessione; vista con colonne, tipi, filtro, ordine, LIMIT, opzioni e permessi uguali; le pagine (pubblica e admin) leggono colonne che esistono. Ha segnalato che la prova leggeva la vista solo da superutente: aggiunto il controllo da anonimo (⑤).",
-      "cosa_resta": "Il comportamento è riparato tutto e provato su Postgres (prova SQL eseguita, mutazione a mano che la fa cadere, collaudo qa che conferma). Manca solo la prova rimessa della macchina con uscita 0: la cura è una migrazione NUOVA, e su un file che alla base non c'era cervello/prova-rimessa.mjs esce 3 («decide il collaudo»). La regista decida se contarla come riparata. Resta anche da applicare la migrazione (Nicola)."
+      "cosa_resta": "applicare la migrazione; prova rimessa automatica impossibile per una migrazione nuova",
+      "log_prova_sql": {
+        "comando": "bash tests/sql/harness/apply.sh mycity_ci && psql -X -d mycity_ci -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r08-la-classifica-conta-il-mese-di-piacenza.test.sql",
+        "esito": "verde",
+        "righe": [
+          "ok    ① 00:30 del 1/12 a Piacenza è dicembre  — 2026-12-01",
+          "ok    ① 00:30 del 1/7 a Piacenza (ora legale) è luglio  — 2026-07-01",
+          "ok    ① 23:30 del 30/11 a Piacenza è ancora novembre  — 2026-11-01",
+          "ok    ② la colonna month della vista è il mese di Piacenza  — ",
+          "ok    ② la vista conta il voto scritto col mese di Piacenza  — ",
+          "ok    ③ con la sessione a UTC+14 il mese resta quello di Piacenza  — ",
+          "ok    ③ con la sessione a UTC-11 il mese resta quello di Piacenza  — ",
+          "ok    ④ la vista conta il mese con mese_di_piacenza (colonna e filtro dei voti)  —  SE",
+          "ok    ⑤ l anonimo legge il voto contato dalla vista  — "
+        ]
+      }
     }
   ],
   "nuovi_difetti_visti": [
