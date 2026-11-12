@@ -42,7 +42,9 @@ export default function PiccoliPrezziPage() {
         </div>
       </CollectionHeader>
 
-      <ProductGrid limit={40} maxPrice={10} sort={sort} maxColumns={4} onCount={setCount} />
+      {/* 12/11/2026 (R07-016) — «Sotto i 10 €» vuol dire il prezzo che si paga, promozione
+          compresa, e 10,00 € escluso: maxPrice guardava il prezzo pieno e comprendeva il 10. */}
+      <ProductGrid limit={40} prezzoSotto={10} sort={sort} maxColumns={4} onCount={setCount} />
     </div>
   );
 }

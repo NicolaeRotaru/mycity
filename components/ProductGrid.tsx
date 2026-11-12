@@ -21,7 +21,10 @@ import { chiaveDiOggi, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { leggiProdottiDellaGriglia, type OrdineGriglia } from '@/lib/queries/griglia-prodotti';
 import { cEUnAltraPagina, finestraDellaPagina, pagineSuccessiva, unisciPagine } from '@/lib/paginazione';
 import { trackSearchPerformed } from '@/lib/analytics/events';
-import { fetchActiveDiscounts } from '@/lib/promotions';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
+
+/** La promozione più forte che un negozio può fare (CHECK di seller_promotions, migrazione 031). */
+const SCONTO_PROMO_MASSIMO = 70;
 
 /**
  * L'ordinamento della griglia. Vive con la lettura, in `lib/queries/griglia-prodotti.ts`: chi
@@ -80,6 +83,11 @@ interface Props {
   limit?: number;
   maxPrice?: number;
   minPrice?: number;
+  /**
+   * 12/11/2026 (R07-016) — «Sotto i N €»: il prezzo che si PAGA (promozione compresa) deve
+   * stare sotto la soglia, soglia esclusa. `maxPrice` guarda il prezzo pieno e la comprende.
+   */
+  prezzoSotto?: number;
   onlyOpenStores?: boolean;
   /** Mostra solo prodotti in promo (promozione attiva del negozio) o scontati
    *  (prezzo pieno barrato > prezzo attuale). */
@@ -128,7 +136,7 @@ interface Props {
   maxColumns?: GridMaxColumns;
 }
 
-const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, prioritaPrimeFoto = true, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
+const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice: maxPricePieno, minPrice, prezzoSotto, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, prioritaPrimeFoto = true, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
   /**
    * #127 — Il catalogo si fermava a 96 prodotti e non lo diceva.
    *
@@ -212,6 +220,13 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // quasi vuota si chiede il doppio, ma resta una finestra, non un tetto che
   // cresce.
   const righePerPagina = onlyPromo ? Math.min(dimensionePagina * 2, 300) : dimensionePagina;
+  // 12/11/2026 (R07-016) — Con «sotto la soglia» il database legge anche i prodotti che a
+  // prezzo pieno la superano ma in promozione ci stanno sotto: la promozione di un negozio
+  // arriva al massimo al 70% (migrazione 031, seller_promotions). Il taglio vero, sul prezzo
+  // che si paga e a soglia esclusa, lo fa il filtro qui sotto.
+  const maxPrice = prezzoSotto !== undefined
+    ? Math.min(maxPricePieno ?? Infinity, prezzoSotto / (1 - SCONTO_PROMO_MASSIMO / 100))
+    : maxPricePieno;
 
   const domanda = useInfiniteQuery({
     placeholderData: keepPreviousData,
@@ -375,6 +390,11 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
         return promoIds.has(p.id) || discounted;
       });
     }
+    if (prezzoSotto !== undefined) {
+      // Il prezzo che si paga, calcolato come lo calcola la cassa. Finché gli sconti non
+      // sono arrivati, un prodotto che a prezzo pieno supera la soglia non si mostra.
+      arr = arr.filter((p) => discountedUnitCents(Number(p.price), scontiPromo?.get(p.id) ?? 0) < Math.round(prezzoSotto * 100));
+    }
     if (onlyInStock) {
       // Ridondante ma innocuo: il filtro vero ora e' nella query (#91).
       arr = arr.filter((p) => p.stock == null || p.stock > 0);
@@ -404,7 +424,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     }
     return arr;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prods, onlyOpenStores, ratings, sort, onlyPromo, onlyInStock, promoIds, scontiPromo]);
+  }, [prods, onlyOpenStores, ratings, sort, onlyPromo, onlyInStock, promoIds, scontiPromo, prezzoSotto]);
 
   // Notifica il conteggio visibile (post-filtro) al chiamante, per la riga
   // "N prodotti …" renderizzata fuori dalla griglia (SRP / categoria).
