@@ -61,9 +61,7 @@ const COLONNE: Record<string, string[]> = {
   products: [
     'id', 'name', 'description', 'price', 'images', 'seller_id', 'status', 'created_at', 'category_id',
     'stock', 'attributes', 'unit', 'compare_at_price', 'condition', 'express_enabled', 'has_variants',
-    // 12/11/2026 (R07-025) — `tags` c'e' dalla migrazione 071 e le pagine di modifica la leggono
-    // gia'; adesso la legge anche la scheda prodotto (i marchi «Km 0», «Artigianale»).
-    'external_source_url', 'tags',
+    'external_source_url',
   ],
   categories: ['id', 'slug', 'name', 'parent_id', 'icon'],
   sponsored_active_public: ['id', 'product_id', 'placement', 'start_date', 'end_date', 'category_slug'],
