@@ -5,6 +5,7 @@ import { DROP_DEL_GIORNO_ACCESO, NEWSLETTER_ACCESA } from './funzioni-al-lancio'
 import { logger } from './logger';
 import { promessaSuperata } from './site-branding';
 import { lunghezzaDelTesto } from './testo-visibile';
+import { sanitizeRichText } from './sanitize-html';
 
 /**
  * Home del marketplace componibile a blocchi — tipi, validazione (zod), catalogo
@@ -170,10 +171,14 @@ const richTextConfig = z.object({
   heading: shortText(120),
   // HTML vincolato; va sanitizzato prima di salvare/renderizzare (lib/sanitize-html.ts).
   // R10-014 — Oltre il limite il salvataggio dice quale e' il limite, non un messaggio generico.
+  // Collaudo K03: i due controlli si fanno sull'HTML come verra' salvato (sanitizzato), cosi' un
+  // blocco accettato qui non viene scartato quando si rilegge. Il primo .max sul testo grezzo
+  // e' solo il freno contro i corpi enormi, prima di sanitizzare.
   body: z
     .string()
-    .max(RICHTEXT_MAX_HTML, `Il testo è troppo lungo: al massimo ${RICHTEXT_MAX.toLocaleString('it-IT')} caratteri. Accorcialo o dividilo in due blocchi.`)
+    .max(RICHTEXT_MAX_HTML * 2, `Il testo è troppo lungo: al massimo ${RICHTEXT_MAX.toLocaleString('it-IT')} caratteri. Accorcialo o dividilo in due blocchi.`)
     .refine((b) => lunghezzaDelTesto(b) <= RICHTEXT_MAX, `Il testo è troppo lungo: al massimo ${RICHTEXT_MAX.toLocaleString('it-IT')} caratteri. Accorcialo o dividilo in due blocchi.`)
+    .refine((b) => sanitizeRichText(b).length <= RICHTEXT_MAX_HTML, 'Il testo ha troppi link o formattazioni per un blocco solo: dividilo in due blocchi.')
     .default(''),
 });
 

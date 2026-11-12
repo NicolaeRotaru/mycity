@@ -7,6 +7,7 @@ import { ImageUrlField } from '@/components/ImageUrlField';
 import { CONSIGLIO_IMMAGINE_BANNER } from '@/lib/banner-vetrina';
 import { RICHTEXT_MAX, type HomeSection } from '@/lib/home-site';
 import { lunghezzaDelTesto } from '@/lib/testo-visibile';
+import { sanitizeRichText } from '@/lib/sanitize-html';
 import { chiaveDiRiga, conChiaveEreditata } from '@/lib/liste/chiave-di-riga';
 
 /** Estrae provider + id da un URL YouTube/Vimeo (o da un id grezzo). */
@@ -204,6 +205,8 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       // Contato come lo conta lo schema: il testo che si legge, non i tag (revisione qa).
       const lunghezza = lunghezzaDelTesto(c.body);
       const troppoLungo = lunghezza > RICHTEXT_MAX;
+      // Collaudo K03: anche il tetto sull'HTML salvato (tanti link), detto prima di salvare.
+      const troppoHtml = !troppoLungo && sanitizeRichText(c.body).length > RICHTEXT_MAX * 4;
       return (
         <div className="space-y-3">
           <Input label="Titolo (opzionale)" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
@@ -213,7 +216,7 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
             rows={5}
             onChange={(e) => set({ body: e.target.value })}
             hint={`Gli a-capo vengono mantenuti. Puoi usare grassetto, corsivo, elenchi e link. ${lunghezza.toLocaleString('it-IT')}/${RICHTEXT_MAX.toLocaleString('it-IT')} caratteri.`}
-            error={troppoLungo ? `Il testo è troppo lungo: ${lunghezza.toLocaleString('it-IT')} caratteri su ${RICHTEXT_MAX.toLocaleString('it-IT')}. Accorcialo o dividilo in due blocchi di testo: così non si salva.` : undefined}
+            error={troppoLungo ? `Il testo è troppo lungo: ${lunghezza.toLocaleString('it-IT')} caratteri su ${RICHTEXT_MAX.toLocaleString('it-IT')}. Accorcialo o dividilo in due blocchi di testo: così non si salva.` : troppoHtml ? 'Il testo ha troppi link o formattazioni per un blocco solo: dividilo in due blocchi, così non si salva.' : undefined}
           />
         </div>
       );

@@ -64,4 +64,27 @@ describe('R10-014 — un testo lungo non si taglia in silenzio', () => {
     expect(scartate, 'il blocco salvato sparisce alla rilettura').toEqual([]);
     expect(site.sections).toHaveLength(1);
   });
+
+  it('collaudo K03 — un testo con «<» e «>» scritti a mano conta tutti i suoi caratteri', () => {
+    const body = 'a < b e c > d. '.repeat(330).slice(0, 4892);
+    expect(disegna(body), 'il contatore conta i simboli come un tag').toMatch(/Il testo è troppo lungo/);
+    const base = newHomeSection('richText');
+    const r = homeSectionSchema.safeParse({ ...base, config: { ...(base.config as object), body } });
+    expect(r.success, 'lo schema accetta un testo che alla rilettura verrà scartato').toBe(false);
+  });
+
+  it('collaudo K03 — quello che lo schema accetta, salvato e riletto, resta', () => {
+    const casi = [
+      'x < y > z '.repeat(390),
+      '<a href="https://example.com/una-pagina-molto-lunga-con-un-indirizzo">l</a> '.repeat(260),
+    ];
+    for (const body of casi) {
+      const base = newHomeSection('richText');
+      const sezione = { ...base, config: { ...(base.config as object), body } };
+      if (!homeSectionSchema.safeParse(sezione).success) continue;
+      const salvata = { ...sezione, config: { ...sezione.config, body: sanitizeRichText(body) } };
+      const { scartate } = leggiHomeSite({ version: 1, sections: [salvata] });
+      expect(scartate, `accettato al salvataggio, scartato alla rilettura (${body.slice(0, 20)}…)`).toEqual([]);
+    }
+  });
 });
