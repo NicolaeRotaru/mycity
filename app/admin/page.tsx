@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
+import { leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import Link from 'next/link';
 import {
   Users, ShoppingCart, Store, Bike, Shield, Package, TrendingUp,
@@ -130,13 +131,21 @@ export default function AdminDashboard() {
     queryKey: ['admin', 'tasso-autorizzazione'],
     queryFn: async () => {
       const daQuando = new Date(Date.now() - 30 * 86_400_000).toISOString();
-      const { data, error } = await supabase
-        .from('payment_attempts')
-        .select('status, decline_code, error_code')
-        .gte('created_at', daQuando)
-        .limit(5000);
+      // 12/11/2026 (R06-012) — `.limit(5000)` senza ordine tornava al massimo mille
+      // tentativi scelti a caso dal database (il suo tetto per richiesta), e la
+      // percentuale si presentava come quella dei trenta giorni. Ora si leggono
+      // TUTTI i tentativi del periodo, a finestre ordinate.
+      const { data, error } = await leggiTutteLeRighe<TentativoPagamento>((da, a) =>
+        supabase
+          .from('payment_attempts')
+          .select('status, decline_code, error_code')
+          .gte('created_at', daQuando)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(da, a) as unknown as PromiseLike<{ data: TentativoPagamento[] | null; error: { message?: string } | null }>,
+      );
       if (error) throw error;
-      return tassoAutorizzazione((data ?? []) as TentativoPagamento[]);
+      return tassoAutorizzazione(data);
     },
     refetchInterval: 60_000,
     retry: false,
