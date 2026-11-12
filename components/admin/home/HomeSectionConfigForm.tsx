@@ -6,6 +6,7 @@ import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import { ImageUrlField } from '@/components/ImageUrlField';
 import { CONSIGLIO_IMMAGINE_BANNER } from '@/lib/banner-vetrina';
 import { RICHTEXT_MAX, type HomeSection } from '@/lib/home-site';
+import { lunghezzaDelTesto } from '@/lib/testo-visibile';
 import { chiaveDiRiga, conChiaveEreditata } from '@/lib/liste/chiave-di-riga';
 
 /** Estrae provider + id da un URL YouTube/Vimeo (o da un id grezzo). */
@@ -200,7 +201,8 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       // quello che si incollava oltre i 4.000 caratteri, e la pagina pubblicata restava monca
       // senza che nessuno se ne accorgesse. Adesso il testo resta intero, il contatore dice
       // quanto manca e, oltre il limite, l'errore dice cosa fare (il salvataggio lo rifiuta).
-      const lunghezza = (c.body ?? '').length;
+      // Contato come lo conta lo schema: il testo che si legge, non i tag (revisione qa).
+      const lunghezza = lunghezzaDelTesto(c.body);
       const troppoLungo = lunghezza > RICHTEXT_MAX;
       return (
         <div className="space-y-3">

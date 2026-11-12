@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { newHomeSection, homeSectionSchema, RICHTEXT_MAX } from '@/lib/home-site';
+import { newHomeSection, homeSectionSchema, RICHTEXT_MAX, leggiHomeSite } from '@/lib/home-site';
+import { sanitizeRichText } from '@/lib/sanitize-html';
 
 /**
  * R10-014 — Nel blocco di testo di una pagina del sito (home o pagine CMS) il
@@ -39,10 +40,28 @@ describe('R10-014 — un testo lungo non si taglia in silenzio', () => {
     expect(html).not.toMatch(/troppo lungo/);
   });
 
+  it('il contatore conta il testo come lo schema, non i tag di un link', () => {
+    const html = disegna('<a href="https://example.com/pagina">ciao</a>');
+    expect(html, 'il contatore conta anche i tag: diverso dal limite che applica il salvataggio').toMatch(/4\/4\.?000 caratteri/);
+  });
+
   it('il salvataggio rifiuta con un messaggio che dice il limite', () => {
     const base = newHomeSection('richText');
     const r = homeSectionSchema.safeParse({ ...base, config: { ...(base.config as object), body: 'a'.repeat(RICHTEXT_MAX + 1) } });
     expect(r.success).toBe(false);
     if (!r.success) expect(r.error.issues[0]?.message).toMatch(/al massimo 4\.?000 caratteri/);
+  });
+
+  it('un testo dentro il limite, con link e «<», sopravvive alla sanitizzazione e alla rilettura', () => {
+    const link = '<a href="https://example.com/una-pagina">vedi qui</a> ';
+    const body = (link + 'a < b e c > d. ').repeat(80).slice(0, 3900);
+    const base = newHomeSection('richText');
+    const sezione = { ...base, config: { ...(base.config as object), body } };
+    expect(homeSectionSchema.safeParse(sezione).success, 'controprova: il testo scritto passa').toBe(true);
+    const salvata = { ...sezione, config: { ...sezione.config, body: sanitizeRichText(body) } };
+    expect(salvata.config.body.length, 'controprova: la sanitizzazione allunga davvero').toBeGreaterThan(RICHTEXT_MAX);
+    const { site, scartate } = leggiHomeSite({ version: 1, sections: [salvata] });
+    expect(scartate, 'il blocco salvato sparisce alla rilettura').toEqual([]);
+    expect(site.sections).toHaveLength(1);
   });
 });
