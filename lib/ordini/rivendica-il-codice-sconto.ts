@@ -55,7 +55,10 @@ import {
 
 /** Il poco che serve del client di servizio: così la prova può eseguire davvero il claim. */
 export type ClientRivendica = {
-  rpc: (nome: string, args: Record<string, unknown>) => PromiseLike<{ data?: unknown; error?: { message: string } | null }>;
+  rpc: (
+    nome: string,
+    args: Record<string, unknown>,
+  ) => PromiseLike<{ data?: unknown; error?: { message: string; code?: string } | null }>;
 };
 
 /** Il client di sola lettura con cui si rilegge il coupon (la sessione del cliente). */
@@ -148,7 +151,20 @@ export async function rivendicaIlCodiceSconto(
 
   // ③ Rivendicazione atomica (fix #36): due richieste in parallelo non possono
   //    consumare lo stesso uso. Chi perde la corsa legge un messaggio chiaro.
-  const { data: preso, error } = await clienti.admin.rpc('claim_coupon', { p_code: esito.coupon.code });
+  //
+  // 12/11/2026 (R12-004) — e sa CHI rivendica: con due schede aperte lo stesso
+  // cliente rivendicava due volte il codice «solo primo ordine» (il primo
+  // ordine non era ancora nato quando la seconda scheda lo contava). La
+  // funzione a due argomenti (migrazione 361) blocca la seconda rivendicazione
+  // dello stesso cliente. Finché la 361 non è applicata, PostgREST risponde
+  // PGRST202 («funzione inesistente») e si torna alla firma di prima.
+  let { data: preso, error } = await clienti.admin.rpc('claim_coupon', {
+    p_code: esito.coupon.code,
+    p_user_id: richiesta.userId,
+  });
+  if (error && (error as { code?: string }).code === 'PGRST202') {
+    ({ data: preso, error } = await clienti.admin.rpc('claim_coupon', { p_code: esito.coupon.code }));
+  }
   if (error || !preso) {
     return {
       ok: false,
