@@ -32,6 +32,7 @@ import { logger } from '@/lib/logger';
 
 import { clientIdGaValido } from '@/lib/analytics/ga-client-id';
 import { POSTHOG_ACCESO } from '@/lib/funzioni-al-lancio';
+import { strutturaSenzaIndirizzi } from '@/lib/analytics/filmato-senza-dati-personali';
 
 const CHIAVE = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 const HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
@@ -236,7 +237,12 @@ export async function contaAcquisto(a: AcquistoDaContare): Promise<void> {
         api_key: CHIAVE,
         event: 'order_placed',
         distinct_id: a.buyerId,
-        properties: {
+        // 12/11/2026 (R06-020) — Questa e' una seconda porta verso PostHog, e
+        // `before_send` qui non c'e' (e' un cancello del browser). Le proprieta'
+        // passano dalla stessa rete pura del browser: indirizzi ripuliti, email e
+        // telefoni nascosti. Oggi partono solo identificativi e importi; il giorno
+        // che qualcuno aggiunge l'indirizzo di consegna, la rete lo ferma qui.
+        properties: strutturaSenzaIndirizzi({
           order_id: a.orderId,
           total_cents: a.totalCents,
           payment_method: a.paymentMethod,
@@ -264,7 +270,7 @@ export async function contaAcquisto(a: AcquistoDaContare): Promise<void> {
               variante,
             ]),
           ),
-        },
+        }),
       }),
       // La misura non tiene in ostaggio la risposta a Stripe: se PostHog è
       // lento si molla, l'ordine è già fatto.
