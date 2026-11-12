@@ -26,11 +26,12 @@ vi.mock('@/lib/stripe/client', () => ({
     transfers: { createReversal: vi.fn(async () => ({ id: 'trr_1' })) },
   }),
 }));
-vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true })) }));
+const posta = vi.hoisted(() => ({ a: [] as Array<{ to: string; subject: string }> }));
+vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async (m: { to: string; subject: string }) => { posta.a.push(m); return { ok: true }; }) }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/audit', () => ({ writeAudit: vi.fn(async () => {}) }));
 
-import { refundOrder } from '@/lib/stripe/payout';
+import { refundOrder, VAR_CONTANTI_DA_STRIPE } from '@/lib/stripe/payout';
 
 const ORDINE = 'b2c3d4e5-7777-4777-8777-777777777777';
 
@@ -70,7 +71,11 @@ const daTrattenere = () =>
 const reclamo = () =>
   refundOrder({ orderId: ORDINE, amountCents: 2300, reason: 'reclamo', idempotencyKey: 'dispute_d1', notifyBuyer: true });
 
-beforeEach(() => preparaDatabase(pagatoAMano()));
+beforeEach(() => {
+  posta.a = [];
+  delete process.env[VAR_CONTANTI_DA_STRIPE];
+  preparaDatabase(pagatoAMano());
+});
 
 describe('R03-007 — la quota del negozio già pagato a mano non si perde', () => {
   it('rimborso pieno su un ordine HELD: Nicola riceve «togli 18,00 € dal prossimo bonifico a Pane Quotidiano»', async () => {
@@ -93,5 +98,39 @@ describe('R03-007 — la quota del negozio già pagato a mano non si perde', () 
     preparaDatabase(pagatoAMano({ payout_status: 'AWAITING_REMITTANCE' }));
     await reclamo();
     expect(daTrattenere()).toHaveLength(0);
+  });
+
+  it('collaudo K04: se i contanti di quell ordine li paga Stripe, niente avviso (il bonifico automatico scala già la quota)', async () => {
+    process.env[VAR_CONTANTI_DA_STRIPE] = '2026-01-01';
+    await reclamo();
+    expect(daTrattenere(), 'la quota si toglierebbe due volte').toHaveLength(0);
+    expect(posta.a.filter((m) => m.subject.includes('Togli'))).toHaveLength(0);
+  });
+
+  it('collaudo K04: se l avviso agli admin non parte, arriva per email alla casella dei bonifici', async () => {
+    // Solo la scrittura di QUESTO avviso cade (le altre, come il bonifico di rimborso, passano).
+    const from = finto.db.client.from.bind(finto.db.client) as unknown as (t: string) => Record<string, unknown>;
+    (finto.db.client as unknown as { from: (t: string) => unknown }).from = (t: string) => {
+      const q = from(t);
+      if (t !== 'notifications') return q;
+      return new Proxy(q, {
+        get(obj, prop, recv) {
+          const v = Reflect.get(obj, prop, recv);
+          if (prop !== 'insert' && prop !== 'upsert') return v;
+          return (righe: unknown) => {
+            const elenco = (Array.isArray(righe) ? righe : [righe]) as Array<{ title?: string }>;
+            if (elenco.some((r) => String(r.title ?? '').includes('Togli'))) {
+              const caduta: Record<string, unknown> = {};
+              for (const m of ['select', 'eq', 'single', 'maybeSingle']) caduta[m] = () => caduta;
+              caduta.then = (r: (x: unknown) => unknown) => Promise.resolve({ data: null, error: { code: '08006', message: 'connessione persa' } }).then(r);
+              return caduta;
+            }
+            return (v as (x: unknown) => unknown).call(obj, righe);
+          };
+        },
+      });
+    };
+    await reclamo();
+    expect(posta.a.some((m) => m.subject.includes('Togli') && m.subject.includes('Pane Quotidiano')), 'resta solo un log').toBe(true);
   });
 });

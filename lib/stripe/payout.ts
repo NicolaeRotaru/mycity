@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email/client';
 import { bonificoDaFareTemplate, refundIssuedTemplate } from '@/lib/email/templates';
 import { indirizzoContatto } from '@/lib/contatti-pubblici';
+import { escapeHtml } from '@/lib/html-escape';
 import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 import { compensoDalContante } from '@/lib/shipping';
 import { formatPriceFromCents } from '@/lib/format';
@@ -1460,7 +1461,11 @@ async function avvisaDellaQuotaDaTrattenere(
 ): Promise<void> {
   let negozio = 'il negozio';
   try {
-    const { data: o } = await admin.from('orders').select('seller_id').eq('id', orderId).maybeSingle();
+    const { data: o } = await admin.from('orders').select('seller_id, delivered_at').eq('id', orderId).maybeSingle();
+    // Collaudo K04 — se i contanti di quell'ordine li paga Stripe (contantiPagabiliDaStripe), il
+    // bonifico automatico scala già la quota scritta sull'ordine: l'avviso la farebbe togliere due
+    // volte. L'avviso serve solo al bonifico fatto a mano.
+    if (o && contantiPagabiliDaStripe((o as { delivered_at?: string | null }).delivered_at)) return;
     const sellerId = (o as { seller_id?: string | null } | null)?.seller_id ?? null;
     if (sellerId) {
       const { data: p } = await admin.from('profiles').select('store_name').eq('id', sellerId).maybeSingle();
@@ -1476,12 +1481,23 @@ async function avvisaDellaQuotaDaTrattenere(
     `Sull'ordine in contanti #${orderId.slice(0, 8)} è partito un rimborso: la parte del negozio è ${cifra}. ` +
     `Se il bonifico di quell'ordine a ${negozio} è già partito, togli ${cifra} dal prossimo; ` +
     'se non è ancora partito, versa solo il resto.';
+  let arrivato = false;
   try {
-    await notifyAdmins(titolo, testo, '/admin/cod-remittance', { unaVoltaPer: `quota-da-trattenere:${chiave}` });
+    arrivato = (await notifyAdmins(titolo, testo, '/admin/cod-remittance', { unaVoltaPer: `quota-da-trattenere:${chiave}` })) !== 'nessuno';
   } catch (err) {
     logger.error('[refundOrder] avviso della quota da trattenere al negozio non partito', {
       orderId, quotaCents, titolo, err,
     });
+  }
+  // Collaudo K04 — un avviso caduto non resta solo nel log: è l'unico promemoria di soldi da
+  // trattenere a mano. Si manda per email alla casella di chi paga i bonifici.
+  if (!arrivato) {
+    try {
+      const res = await sendEmail({ to: indirizzoContatto('info'), subject: titolo, html: `<p>${escapeHtml(testo)}</p>`, text: testo });
+      if (res && (res as { ok?: boolean }).ok === false) throw new Error('email non partita');
+    } catch (err) {
+      logger.error('[refundOrder] QUOTA DA TRATTENERE: né avviso né email sono partiti', { orderId, quotaCents, titolo, testo, err });
+    }
   }
 }
 
