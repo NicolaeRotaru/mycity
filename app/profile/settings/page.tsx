@@ -462,7 +462,9 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="container mx-auto px-6 py-8 max-w-5xl">
+    <div className="mx-auto py-8 max-w-5xl">
+      {/* 12/11/2026 (R02-022) — La cornice laterale la dà già AccountShell (px-4 sm:px-6): con un
+          altro px-6 qui, al telefono coi caratteri grandi Notifiche e Zona pericolosa uscivano di lato. */}
       <div className="mb-6">
         <Link href="/profile" className="text-sm text-primary-700 hover:underline">← Il tuo account</Link>
         <h1 className="text-2xl md:text-3xl font-extrabold text-ink-900 mt-2 flex items-center gap-2">
@@ -597,7 +599,7 @@ export default function SettingsPage() {
           )}
 
           {tab === 'notifications' && (
-            <section className="bg-white border rounded-xl p-6 space-y-5">
+            <section className="min-w-0 bg-white border rounded-xl p-4 sm:p-6 space-y-5">
               <div>
                 <h2 className="text-lg font-bold mb-1 flex items-center gap-2">
                   <Bell size={20} className="text-ink-500" aria-hidden />
@@ -668,7 +670,7 @@ export default function SettingsPage() {
           )}
 
           {tab === 'privacy' && (
-            <section className="bg-white border rounded-xl p-6 space-y-5">
+            <section className="min-w-0 bg-white border rounded-xl p-4 sm:p-6 space-y-5">
               <div>
                 <h2 className="text-lg font-bold mb-1 flex items-center gap-2">
                   <Shield size={20} className="text-ink-500" aria-hidden />
@@ -742,7 +744,7 @@ export default function SettingsPage() {
           )}
 
           {tab === 'danger' && (
-            <section className="bg-white border-2 border-red-200 rounded-xl p-6">
+            <section className="min-w-0 bg-white border-2 border-red-200 rounded-xl p-4 sm:p-6">
               <h2 className="text-lg font-bold text-red-700 mb-1 flex items-center gap-2">
                 <AlertTriangle size={20} className="text-red-700" aria-hidden />
                 Zona pericolosa
@@ -840,7 +842,7 @@ export default function SettingsPage() {
                   ) : null}
                 </div>
               ) : (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-5">
+                <div className="min-w-0 break-words bg-red-50 border border-red-200 rounded-lg p-4 sm:p-5">
                   <h3 className="font-bold text-red-900 mb-2">Elimina il tuo account</h3>
                   {/*
                     3/9/2026 — QUI C'ERA SCRITTO «ANONIMIZZATI» E NON ERA VERO.
@@ -893,7 +895,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={handleDeleteAccount}
                     disabled={deleting || deleteConfirm !== 'ELIMINA'}
-                    className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-bold transition-colors"
+                    className="inline-flex w-full sm:w-auto justify-center items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-bold transition-colors"
                   >
                     {deleting ? (
                       'Invio richiesta…'
