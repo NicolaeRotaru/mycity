@@ -88,16 +88,22 @@ function NewProductInner() {
    * spunta non si salvava (PostgREST rifiuta la colonna, PGRST204). Si guarda
    * una riga qualsiasi letta con `*` (i tipi del database non conoscono ancora
    * la colonna): se c'e' `non_recedibile` la spunta compare, se no resta nascosta
-   * e il prodotto si salva come sempre. Una lettura caduta vale «no».
+   * e il prodotto si salva come sempre.
+   *
+   * 12/11/2026 (R10-004) — Una lettura caduta NON vale piu' «no»: prima `return false` con
+   * `staleTime: Infinity` teneva il «no» in memoria per tutta la sessione, e la spunta
+   * spariva fino al ricaricamento. Ora l'errore si lancia: React Query riprova, la spunta
+   * resta nascosta solo finche' non si sa (il ripiego `= false` qui sotto), e la risposta
+   * vera si rilegge dopo qualche minuto.
    */
   const { data: recessoSegnabile = false } = useQuery({
     queryKey: ['products', 'colonna-del-recesso'],
     queryFn: async (): Promise<boolean> => {
       const { data, error } = await supabase.from('products').select('*').limit(1).maybeSingle();
-      if (error) return false;
+      if (error) throw error;
       return colonnaDelRecessoPresente(data);
     },
-    staleTime: Infinity,
+    staleTime: 5 * 60_000,
   });
 
   /**
