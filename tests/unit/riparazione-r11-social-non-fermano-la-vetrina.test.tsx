@@ -84,3 +84,15 @@ describe('R11-016 — dal controllo qa', () => {
     expect(salvati[0].storeCustomization?.socials?.facebook, 'il Facebook salvato prima sparisce dal database').toBe('panequotidiano');
   });
 });
+
+describe('R11-016 — collaudo K04', () => {
+  it.each([
+    ['facebook', 'https://www.facebook.com/panequotidiano/about', 'panequotidiano'],
+    ['facebook', 'https://m.facebook.com/panequotidiano/photos', 'panequotidiano'],
+    ['instagram', 'https://www.instagram.com/panequotidiano/reels/', 'panequotidiano'],
+  ])('%s: %s si salva come %s, come prima', async (campo, link, atteso) => {
+    const { salvati } = await salvaConSocial({ [campo]: link });
+    expect(salvati).toHaveLength(1);
+    expect((salvati[0].storeCustomization?.socials as Record<string, string> | undefined)?.[campo], 'un link che prima si correggeva da solo ora viene scartato').toBe(atteso);
+  });
+});

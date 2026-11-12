@@ -259,11 +259,13 @@ function handleDaLink(v: string | undefined, dominio: RegExp): string | undefine
   // R11-016 — Il link copiato dall'app («…/panequotidiano?igsh=…») porta dietro un pezzo dopo il
   // «?»: prima bloccava tutto. Per un link di profilo il pezzo dopo «?» o «#» non serve.
   const senzaCoda = t.replace(/[?#].*$/, '');
-  const m = senzaCoda.match(new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${dominio.source}\\/@?([A-Za-z0-9._-]+)\\/?$`, 'i'));
+  const m = senzaCoda.match(new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${dominio.source}\\/@?([A-Za-z0-9._-]+)(?:\\/|$)`, 'i'));
   // «profile.php?id=…», «/p/…», «/reel/…», «/share/…» non sono il nome del profilo: si lascia
   // il valore com'è, e il controllo lo ferma invece di salvare un link sbagliato.
   if (m && /^(profile\.php|p|reel|reels|share|groups|pages|watch)$/i.test(m[1])) return t;
-  if (!m && dominio.test(t)) return t; // un link con altro dopo il nome (/p/…, /reel/…): lo ferma il controllo
+  // Collaudo K04 — dopo il nome del profilo può venire altro (/about, /photos, /reels/): il nome resta
+  // quello. Restano fuori solo i link che non hanno un profilo come primo pezzo (/p/…, /share/…).
+  if (!m && dominio.test(t)) return t;
   return (m ? m[1] : t).replace(/^@+/, '');
 }
 
