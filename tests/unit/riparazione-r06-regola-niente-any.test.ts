@@ -8,8 +8,14 @@
  * referto R06, non qui.)
  */
 import { describe, it, expect } from 'vitest';
-import { ESLint } from 'eslint';
 import path from 'node:path';
+import { createRequire } from 'node:module';
+
+// eslint non porta i suoi tipi in questa casa: si carica con require.
+type Configurazione = { rules?: Record<string, unknown> };
+const { ESLint } = createRequire(import.meta.url)('eslint') as {
+  ESLint: new (o: { cwd: string }) => { calculateConfigForFile(f: string): Promise<Configurazione> };
+};
 
 const RADICE = path.resolve(__dirname, '../..');
 
