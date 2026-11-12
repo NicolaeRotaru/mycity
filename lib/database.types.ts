@@ -325,6 +325,7 @@ export interface Database {
           sort_order: number;
           featured: boolean;
           image_url: string | null;
+          richiede_dichiarazioni_alimentari: boolean;
         };
         Insert: {
           id?: string;
@@ -336,6 +337,7 @@ export interface Database {
           sort_order?: number;
           featured?: boolean;
           image_url?: string | null;
+          richiede_dichiarazioni_alimentari?: boolean;
         };
         Update: {
           id?: string;
@@ -347,6 +349,7 @@ export interface Database {
           sort_order?: number;
           featured?: boolean;
           image_url?: string | null;
+          richiede_dichiarazioni_alimentari?: boolean;
         };
         Relationships: [];
       };
