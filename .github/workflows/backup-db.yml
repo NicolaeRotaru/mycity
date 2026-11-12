@@ -651,16 +651,34 @@ jobs:
           psql -q -d postgres -c "CREATE DATABASE prova_ripristino;"
           inizio=$(date +%s)
           # I ruoli e gli schemi di sistema del fornitore qui non esistono: gli
-          # errori su quelli non sono il fallimento che stiamo cercando. Il `||
-          # true` resta solo su questa riga, e non copre piu' niente: le
-          # asserzioni qui sotto sono la vera sentenza.
-          pg_restore --no-owner --no-acl --dbname=prova_ripristino /tmp/copia.dump || true
+          # errori su quelli non sono il fallimento che stiamo cercando, quindi
+          # pg_restore non ferma il passo. Le asserzioni qui sotto sono la vera
+          # sentenza.
+          #
+          # R01-012 (12/11/2026) — MA GLI ERRORI NON SI BUTTANO PIU'. Prima il
+          # `|| true` li ingoiava interi: nessuno sapeva quanti erano ne' quali.
+          # Adesso finiscono in un file, si contano e i primi si scrivono nel
+          # riepilogo, cosi' chi legge «si riapre» vede anche cosa non e' tornato.
+          ERRORI_RIPRISTINO="$(mktemp)"
+          pg_restore --no-owner --no-acl --dbname=prova_ripristino /tmp/copia.dump 2>> "$ERRORI_RIPRISTINO" || true
           # #234 — Gli utenti stanno in un dump a parte: senza, il database
           # ripristinato non ha nessuno a cui appartengano gli ordini.
           psql -q -d prova_ripristino -c "CREATE SCHEMA IF NOT EXISTS auth;"
-          pg_restore --no-owner --no-acl --dbname=prova_ripristino /tmp/copia_utenti.dump || true
+          pg_restore --no-owner --no-acl --dbname=prova_ripristino /tmp/copia_utenti.dump 2>> "$ERRORI_RIPRISTINO" || true
           fine=$(date +%s)
           echo "⏱  ripristino in $((fine - inizio)) secondi"
+          N_ERRORI="$(grep -c 'error:' "$ERRORI_RIPRISTINO" || true)"
+          if [ "${N_ERRORI:-0}" -gt 0 ]; then
+            echo "::warning::pg_restore ha segnalato $N_ERRORI errori durante il ripristino: elenco nel riepilogo."
+            {
+              echo "### Errori di pg_restore durante la prova ($N_ERRORI)"
+              echo ""
+              echo '```'
+              grep 'error:' "$ERRORI_RIPRISTINO" | head -n 20
+              echo '```'
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
           # LA PROVA VERA. Prima qui si contava e si stampava, e basta: un
           # conteggio a zero passava identico a uno pieno. Un ripristino che
@@ -690,6 +708,23 @@ jobs:
             exit 1
           fi
           if [ -n "$vuote" ]; then echo "::warning::Tabelle vuote dopo il ripristino:$vuote"; fi
+
+          # R01-012 — LE REGOLE DI ACCESSO TORNANO CON I DATI. Contare le righe non
+          # basta: una copia che riapre le tabelle senza le loro regole (RLS)
+          # riaprirebbe un database dove ognuno legge gli ordini di tutti. Sullo
+          # schema ricostruito dalle migrazioni ogni tabella di `public` ha la
+          # RLS accesa (76 su 76 il 12/11/2026) e le regole sono piu' di cento.
+          senza_rls="$(psql -tA -d prova_ripristino -c "SELECT string_agg(c.relname, ' ' ORDER BY c.relname) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind IN ('r','p') AND NOT c.relrowsecurity;")"
+          regole="$(psql -tA -d prova_ripristino -c "SELECT count(*) FROM pg_policies WHERE schemaname = 'public';")"
+          echo "   regole di accesso in public: $regole"
+          if [ -n "$senza_rls" ]; then
+            echo "::error::La copia si e' riaperta ma queste tabelle tornano SENZA regole di accesso (RLS spenta):$senza_rls"
+            exit 1
+          fi
+          if [ "${regole:-0}" -eq 0 ]; then
+            echo "::error::La copia si e' riaperta senza nessuna regola di accesso (pg_policies vuota): un ripristino cosi' esporrebbe tutti i dati."
+            exit 1
+          fi
 
           echo "### Prova di ripristino" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
