@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Bell, MessageCircle, ShoppingCart, Heart, Bike, Shield, Store, LogOut,
-  Package, ChevronDown,
+  Package, ChevronDown, UserPlus,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
@@ -134,12 +134,14 @@ export default function Navbar() {
         {/* DESKTOP */}
         <div className="hidden md:block">
           <div className="container mx-auto px-4 py-3">
-            <div className="flex items-center gap-4">
+            {/* 12/11/2026 (R09-016) — Fra 768 e 1023 px alla ricerca restavano 152 px («Ce»): lì la pillola
+                dell'indirizzo mostra solo il CAP, «Registrati» diventa un'icona e lo spazio va al campo. */}
+            <div className="flex items-center gap-3 lg:gap-4">
               <Link href="/" className="text-white hover:text-white text-2xl font-serif font-extrabold tracking-tight whitespace-nowrap leading-none focus-visible:outline-white">
                 <span className="text-accent-300">{branding.wordmark.accent}</span>{branding.wordmark.rest}
               </Link>
               <LocationPill />
-              <div className="flex-1 max-w-2xl">
+              <div className="min-w-0 flex-1 max-w-2xl">
                 <SearchBar />
               </div>
 
@@ -165,8 +167,9 @@ export default function Navbar() {
                       (il bianco su quel fondo stacca 6,7 volte, ne bastano 4,5) ma non
                       compete più col carrello.
                     */}
-                    <Link href="/sign-up" className="border border-white/70 hover:border-white hover:bg-white/10 text-white hover:text-white px-4 py-2 rounded-full font-semibold transition-colors focus-visible:outline-white">
-                      Registrati
+                    <Link href="/sign-up" className="inline-flex items-center gap-1.5 border border-white/70 hover:border-white hover:bg-white/10 text-white hover:text-white px-2.5 lg:px-4 py-2 rounded-full font-semibold transition-colors focus-visible:outline-white">
+                      <UserPlus size={16} strokeWidth={2.2} aria-hidden className="lg:hidden" />
+                      <span className="sr-only lg:not-sr-only">Registrati</span>
                     </Link>
                   </>
                 )}
@@ -189,20 +192,20 @@ export default function Navbar() {
                     )}
                     {isSeller && (
                       <Link href="/seller/orders" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
-                        <Package size={16} strokeWidth={2.2} />
-                        Ordini
+                        <Package size={16} strokeWidth={2.2} aria-hidden />
+                        <span className="sr-only lg:not-sr-only">Ordini</span>
                       </Link>
                     )}
                     {isRider && (
                       <Link href="/rider" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
-                        <Bike size={16} strokeWidth={2.2} />
-                        Consegne
+                        <Bike size={16} strokeWidth={2.2} aria-hidden />
+                        <span className="sr-only lg:not-sr-only">Consegne</span>
                       </Link>
                     )}
                     {isAdmin && (
                       <Link href="/admin" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white hover:text-white px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
-                        <Shield size={16} strokeWidth={2.2} />
-                        Admin
+                        <Shield size={16} strokeWidth={2.2} aria-hidden />
+                        <span className="sr-only lg:not-sr-only">Admin</span>
                       </Link>
                     )}
                     <UserMenu

@@ -109,8 +109,9 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
               gerarchia fra «Consegna a» e la citta' la tiene il grassetto,
               che non costa contrasto.
             */}
-            <span className="hidden sm:inline">Consegna a</span>
-            <span className="font-semibold">{loc.city}</span>
+            {/* 12/11/2026 (R09-016) — Sotto i 1024 px la testata del computer non ha spazio: resta il CAP. */}
+            <span className="hidden lg:inline">Consegna a</span>
+            <span className="hidden lg:inline font-semibold">{loc.city}</span>
             <span>{loc.zip}</span>
           </>
         )}
