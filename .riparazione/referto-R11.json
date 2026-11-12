@@ -647,7 +647,7 @@
     },
     {
       "riservato": true,
-      "titolo": "Falla di sicurezza da chiudere (dati per i bonifici dei negozi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "titolo": "Falla di sicurezza da chiudere (pagamenti): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
       "dimensione": "sicurezza",
       "severita": "grave",
       "file": "(nel referto privato)"
