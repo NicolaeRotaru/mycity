@@ -780,7 +780,24 @@ jobs:
               echo "**Attenzione: il database e' avanti di $QUANTE migrazioni rispetto al sito che e' online adesso.**"
               echo "Applicate prima di pubblicare: ${MIGRAZIONI_ELENCO:-non so quali}."
               echo "Il ritorno indietro rimette il CODICE di prima, non lo schema. Se una di quelle migrazioni TOGLIE qualcosa (DROP COLUMN, DROP TABLE, RENAME), il sito online puo' chiedere una colonna che non c'e' piu' — e il sito resta rotto anche se qui sopra e' scritto che si e' tornati indietro."
-              echo "Prima di considerare chiusa la cosa: apri quelle migrazioni e guarda se contengono DROP o RENAME."
+              # R01-015 (12/11/2026) — Prima qui si chiedeva a una persona di aprire i file e cercare
+              # DROP o RENAME. Lo si fa da qui, e si nominano i file e le righe.
+              DISTRUTTIVE=""
+              for m in ${MIGRAZIONI_ELENCO:-}; do
+                [ -f "migrations/$m" ] || continue
+                RIGHE="$(grep -niE 'DROP[[:space:]]+(COLUMN|TABLE)|RENAME[[:space:]]' "migrations/$m" | grep -vE '^[0-9]+:[[:space:]]*--' | head -n 3 | sed 's/^\([0-9]*\):[[:space:]]*/riga \1: /' | tr '\n' ';' || true)"
+                if [ -n "$RIGHE" ]; then
+                  DISTRUTTIVE="${DISTRUTTIVE}"$'\n'"- \`$m\`: ${RIGHE}"
+                fi
+              done
+              if [ -n "$DISTRUTTIVE" ]; then
+                echo ""
+                echo "**⛔ Queste migrazioni TOLGONO o RINOMINANO qualcosa: il sito tornato indietro puo' essere rotto adesso.**${DISTRUTTIVE}"
+                echo ""
+                echo "Controlla subito il sito. Se e' rotto, la strada e' andare AVANTI con una correzione, non tornare piu' indietro."
+              else
+                echo "Ho guardato quelle migrazioni: nessuna contiene DROP COLUMN, DROP TABLE o RENAME, quindi il codice di prima dovrebbe trovare ancora tutto quello che gli serve."
+              fi
             fi
           }
 
