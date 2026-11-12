@@ -1,12 +1,12 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-12 15:35",
+  "aggiornato": "2026-11-12 16:00",
   "finita": true,
-  "testa": "5d829f316e3ca25263d8b626a1e56a1b9abb840c",
+  "testa": "8781907018ebaa1cc1b1654b236bdf74d78b9c42",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "nota": "tsc + lint + 8928 prove passate sulla punta (con il servizio PostgreSQL locale acceso, come la CI dopo R01-011)."
+    "nota": "tsc + lint + tutte le prove verdi sulla punta, dopo il giro del collaudo K01 (servizio PostgreSQL locale acceso, come la CI dopo R01-011)."
   },
   "voci": [
     {
@@ -51,10 +51,11 @@
         "nota": "Lanciata da HEAD: il pulsante e il guscio alla base sono rossi sul comportamento. La rotta nuova app/api/rider/sos/avvisa/route.ts non c'era alla base, quindi da sola esce 3 (rimessa_rotta_nuova): il difetto com'e' scritto e' proprio che quella strada non esisteva."
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nuova rotta /api/rider/sos/avvisa: rilegge l'ultimo SOS aperto di chi chiama (solo fattorini) e manda subito un push ad alta urgenza a ogni admin. SOSButton la chiama dopo l'insert senza bloccare il 112; RiderShell passa l'orderId della consegna in corso; il dialogo dice che gli admin ricevono l'avviso sul telefono. Il testo «alert immediato» era gia' stato tolto prima. Se VAPID non e' configurato la rotta risponde 503 e lo scrive nel registro (resta il pannello). Dopo il controllo qa: se la riga con l'ordine viene rifiutata (id non valido, ordine cancellato) l'SOS si riscrive senza ordine; triggered_at lo decide il database (DEFAULT now()), non l'orologio del telefono; il dialogo dice «se hanno le notifiche attive».",
+      "cosa_ho_fatto": "Nuova rotta /api/rider/sos/avvisa: rilegge l'ultimo SOS aperto di chi chiama (solo fattorini) e manda subito un push ad alta urgenza a ogni admin. SOSButton la chiama dopo l'insert senza bloccare il 112; RiderShell passa l'orderId della consegna in corso; il dialogo dice che gli admin ricevono l'avviso sul telefono. Il testo «alert immediato» era gia' stato tolto prima. Se VAPID non e' configurato la rotta risponde 503 e lo scrive nel registro (resta il pannello). Dopo il controllo qa: se la riga con l'ordine viene rifiutata (id non valido, ordine cancellato) l'SOS si riscrive senza ordine; triggered_at lo decide il database (DEFAULT now()), non l'orologio del telefono; il dialogo dice «se hanno le notifiche attive». Dopo il collaudo K01: la rotta dell'avviso SOS controlla l'approvazione e avvisa una volta per SOS (segno atomico in operational_alert_log).",
       "chiave": "api-backend|l'sos del fattorino non arriva davvero a nessuno: solo una notifica nel pannello, mentre a lui diciamo «alert immediato»",
       "commit_seguito": [
-        "a782c6c43141498012622394ec3cd06917a2e46c"
+        "a782c6c43141498012622394ec3cd06917a2e46c",
+        "8781907018ebaa1cc1b1654b236bdf74d78b9c42"
       ],
       "verificato_da": "qa (subagente): rilanciate le 3 prove + 5 file vicini; ruolo, limite 5/min, id SOS mai dal client, 503/0 admin/500 gestiti, 112 sincrono per primo, regex RiderShell. Riserve (orologio del telefono, order_id non valido che faceva perdere l'SOS, testo troppo sicuro) chiuse nel commit a782c6c4.",
       "rimessa_seguito": {
@@ -67,6 +68,11 @@
         "uscita": 3,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2bc80f4858e1776ebca229f38de770f03ffb5148^ --file app/api/rider/sos/avvisa/route.ts,components/rider/SOSButton.tsx,components/rider/RiderShell.tsx --prove tests/unit/riparazione-r01-sos-avviso.test.tsx,tests/unit/riparazione-r01-sos-guscio.test.tsx --json",
         "nota": "SOSButton e RiderShell alla base: rosse sul comportamento. La rotta e' un file nuovo (alla base non esiste, cioe' il difetto com'e' scritto: nessun push immediato), quindi la sua parte e' rossa solo per struttura."
+      },
+      "rimessa_collaudo": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8781907018ebaa1cc1b1654b236bdf74d78b9c42^ --file app/api/rider/sos/avvisa/route.ts --prove tests/unit/riparazione-r01-sos-avviso.test.tsx --json"
       }
     },
     {
@@ -77,7 +83,7 @@
     },
     {
       "id": "R01-006",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "efe6604723ad686d71da243057a95a015a9116fe",
       "file_toccati": [
         "app/admin/sos/page.tsx",
@@ -100,10 +106,11 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base efe6604723ad686d71da243057a95a015a9116fe^ --file app/admin/sos/page.tsx --prove tests/unit/riparazione-r01-sos-consegna.test.tsx --json",
         "nota": "Con anche lettura-degli-sos.ts in --file esce 3: quel file da solo alla base toglie la funzione nuova consegnaDellSOS (rossa per struttura). La pagina alla base e' rossa sul comportamento. La parte RiderShell (orderId passato al pulsante) sta nel commit di R01-004, provata da riparazione-r01-sos-guscio."
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "La scheda dell'SOS attivo mostra «Consegna #xxxxxxxx» con link a /admin/orders/<id> (o «Fuori da una consegna»), e lo storico mostra la consegna. Il guscio del fattorino ora passa l'orderId (commit di R01-004).",
       "chiave": "frontend-ux|la consolle sos non mostra da quale consegna parte l'allarme: l'order_id ora scritto non si vede da nessuna parte",
-      "verificato_da": "qa (subagente): /admin/orders/[id] esiste e accetta uuid; null/vuoto/spazi gestiti; encodeURIComponent + escape React; link negli attivi e nello storico; la policy di inserimento di rider_sos_events (037) accetta order_id. Rischio order_id non valido chiuso nel seguito di R01-004."
+      "verificato_da": "qa (subagente): /admin/orders/[id] esiste e accetta uuid; null/vuoto/spazi gestiti; encodeURIComponent + escape React; link negli attivi e nello storico; la policy di inserimento di rider_sos_events (037) accetta order_id. Rischio order_id non valido chiuso nel seguito di R01-004.",
+      "cosa_resta": "Il guscio ricava l'ordine solo dall'indirizzo /rider/orders/<id>: se il fattorino preme l'SOS da /rider (o da Guadagni, Turni, Profilo) mentre ha una consegna in corso, l'SOS parte senza order_id e la consolle dice «Fuori da una consegna» anche se una consegna c'e'. Serve ricavare la consegna in corso dal database (ordine assegnato a lui e non chiuso), non dall'indirizzo."
     },
     {
       "id": "R01-007",
@@ -129,9 +136,10 @@
     },
     {
       "id": "R01-008",
-      "esito": "gia_riparato_prima",
-      "prova": "tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts:182-205: dal 26/10 le tre prove si saltano SEMPRE con il motivo scritto («la prova non e scritta»), non possono piu diventare verdi a vuoto; ci.yml:450-455 lo dichiara nel riepilogo anche con E2E_DATI_DI_PROVA acceso. Scrivere il corpo vero richiede un database di prova con negozio/prodotto/cliente e chiavi Stripe di prova (non codice) e il file spec, che non e nel mio territorio.",
-      "chiave": "qa-flussi|le tre prove automatiche dell'acquisto vero sono vuote: passano in tre millesimi senza aprire niente"
+      "esito": "non_fatto",
+      "chiave": "qa-flussi|le tre prove automatiche dell'acquisto vero sono vuote: passano in tre millesimi senza aprire niente",
+      "nota": "Correzione del collaudo K01: alla base le tre prove e2e dell'acquisto vero (tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts) sono ancora gusci senza corpo. Oggi si saltano sempre col motivo scritto invece di passare a vuoto, ma nessun ordine nasce davvero in CI. Non l'ho fatto: il file spec non e' nel mio territorio e serve un ambiente di prova.",
+      "cosa_resta": "Scrivere il corpo vero delle tre prove (cassa → ordine con contrassegno, pagamento con carta in modalita' prova, ordine visto dal negozio) nel file spec, non mio. In ci.yml serve un ambiente con E2E_DATI_DI_PROVA: database di prova con negozio approvato, prodotto e cliente, e chiavi Stripe di prova. Poi va aggiornata tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts."
     },
     {
       "id": "R01-009",
