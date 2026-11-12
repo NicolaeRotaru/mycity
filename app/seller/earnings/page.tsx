@@ -42,6 +42,7 @@ type OrderRow = {
   application_fee_cents: number | null;
   stripe_transfer_id: string | null;
   stripe_reversal_id: string | null;
+  pickup_in_store: boolean | null;
 };
 
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
@@ -60,6 +61,8 @@ function payoutBadge(o: OrderRow): { label: string; cls: string } {
         return { label: o.payout_at ? `Pagato ${fmtDate(o.payout_at)}` : 'Pagato', cls: 'bg-olive-100 text-olive-800' };
       case 'AWAITING_REMITTANCE':
         return { label: 'Attesa cassa fattorino', cls: 'bg-accent-100 text-accent-800' };
+      case 'CASH_IN_STORE': // R11-005 — ritiro pagato al banco: nessun bonifico
+        return { label: 'Incassato al banco', cls: 'bg-cream-200 text-ink-700' };
       case 'HELD':
       case 'PROCESSING':
         return { label: 'In liquidazione', cls: 'bg-accent-100 text-accent-800' };
@@ -116,7 +119,7 @@ export default function SellerEarningsPage() {
           // lo confrontava con la sua dashboard Stripe i conti non tornavano.
           // E' la telefonata «dove sono i miei soldi», che sul payout erode la
           // fiducia piu' di qualunque altra cosa.
-          'id, total_price, created_at, delivery_status, payment_method, payment_status, payout_status, payout_at, seller_payout_cents, seller_payout_reversed_cents, refunded_amount_cents, application_fee_cents, stripe_transfer_id, stripe_reversal_id',
+          'id, total_price, created_at, delivery_status, payment_method, payment_status, payout_status, payout_at, seller_payout_cents, seller_payout_reversed_cents, refunded_amount_cents, application_fee_cents, stripe_transfer_id, stripe_reversal_id, pickup_in_store',
         )
         .eq('seller_id', user.id)
         // #90 — Un tetto esplicito. Queste pagine leggevano la tabella intera:
@@ -289,6 +292,14 @@ export default function SellerEarningsPage() {
               <> · già versato: <strong>{formatPrice(contanti.giaVersatoCents / 100)}</strong></>
             )}
           </p>
+          {/* R11-005 — Il ritiro pagato al banco: i soldi li hai già tu, la commissione la devi a MyCity. */}
+          {contanti.incassatoAlBancoCents > 0 && (
+            <p className="mt-2 text-xs text-olive-700">
+              Incassati da te al banco (ritiro in negozio): <strong>{formatPrice(contanti.incassatoAlBancoCents / 100)}</strong>
+              {' '}· nessun bonifico per questi: la commissione MyCity di{' '}
+              <strong>{formatPrice(contanti.commissioneDovutaCents / 100)}</strong> si scala dal bonifico del lunedì.
+            </p>
+          )}
         </Card>
       </div>
 

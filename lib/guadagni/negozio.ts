@@ -32,6 +32,8 @@ export type OrdineNegozio = {
   seller_payout_reversed_cents: number | null;
   refunded_amount_cents: number | null;
   application_fee_cents: number | null;
+  /** Ritiro in negozio: col contante il cliente paga al banco, non al fattorino. */
+  pickup_in_store?: boolean | null;
 };
 
 export type RiepilogoNegozio = {
@@ -113,7 +115,22 @@ export type RiepilogoContanti = {
   nettoAlNegozioCents: number;
   /** Quanto di quel netto e' gia' stato versato. */
   giaVersatoCents: number;
+  /** R11-005 — Il contante che il negozio ha gia' in cassa: ritiri pagati al banco. */
+  incassatoAlBancoCents: number;
+  /** R11-005 — La commissione MyCity su quei ritiri: la deve il negozio, si scala dal bonifico del lunedi'. */
+  commissioneDovutaCents: number;
 };
+
+/**
+ * R11-005 — Il ritiro in negozio pagato al banco non passa dal fattorino e non
+ * fa partire nessun bonifico: il negozio ha gia' tutto in cassa (stato
+ * CASH_IN_STORE, migrazione 179). Contarlo fra il netto «che arriva a te» e il
+ * «contante raccolto dal fattorino» era il contrario del vero: il negozio
+ * aspettava 18 € che non arrivano, invece di sapere che ne deve 2.
+ */
+function pagatoAlBanco(o: OrdineNegozio): boolean {
+  return o.payout_status === 'CASH_IN_STORE' || o.pickup_in_store === true;
+}
 
 /**
  * Il contante che il cliente consegna e il netto che arriva al negozio sono due
@@ -122,8 +139,12 @@ export type RiepilogoContanti = {
  * commissione: soldi che al negozio non arrivano. Qui si separano.
  */
 export function riepilogoContanti(ordini: OrdineNegozio[], consegnato: (o: OrdineNegozio) => boolean): RiepilogoContanti {
-  const contanti = ordini.filter((o) => o.payment_method === 'cod' && consegnato(o));
+  const tutti = ordini.filter((o) => o.payment_method === 'cod' && consegnato(o));
+  const alBanco = tutti.filter(pagatoAlBanco);
+  const contanti = tutti.filter((o) => !pagatoAlBanco(o));
   return {
+    incassatoAlBancoCents: alBanco.reduce((s, o) => s + Math.round(Number(o.total_price || 0) * 100), 0),
+    commissioneDovutaCents: alBanco.reduce((s, o) => s + (o.application_fee_cents ?? 0), 0),
     incassatoDalFattorinoCents: contanti.reduce((s, o) => s + Math.round(Number(o.total_price || 0) * 100), 0),
     nettoAlNegozioCents: contanti.reduce((s, o) => s + nettoDopoStorni(o), 0),
     giaVersatoCents: contanti
