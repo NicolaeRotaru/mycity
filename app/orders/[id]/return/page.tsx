@@ -15,6 +15,7 @@ import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
 import { recessoAperto, ultimoGiornoDelRecesso } from '@/lib/ordini/termine-del-recesso';
+import { MOTIVO_RIPENSAMENTO, prodottiDelleRighe, rifiutoDelRecesso, type ProdottoPerIlRecesso, type RigaPerIlRecesso } from '@/lib/ordini/recesso';
 import { useTranslations } from 'next-intl';
 import { Package, RefreshCw, AlertTriangle, MessageSquare, Clock, Pencil, type LucideIcon } from 'lucide-react';
 
@@ -80,6 +81,36 @@ export default function NewReturnPage() {
       setLoaded(true);
     })();
   }, [params.id, tentativo]);
+
+  // 12/11/2026 (R07-002) — «Ho cambiato idea» si spegne quando tutti i prodotti
+  // dell'ordine sono esclusi dal recesso (pane, freschi, su ordinazione). Il server
+  // lo rifiutava già: la pagina lo offriva comunque, e il cliente lo scopriva solo
+  // dopo aver compilato tutto. Stessa regola del server (lib/ordini/recesso.ts),
+  // prodotti letti con `*` come carrello e scheda. Se la lettura cade, la pagina
+  // non decide al buio: lascia la scelta e il server risponde.
+  const [rifiutoRipensamento, setRifiutoRipensamento] = useState<string | null>(null);
+  useEffect(() => {
+    if (!order?.id) return;
+    let vivo = true;
+    (async () => {
+      try {
+        const { data: righe } = await supabase.from('order_items').select('product_id, product_name').eq('order_id', order.id);
+        const righeOrdine = (Array.isArray(righe) ? righe : []) as RigaPerIlRecesso[];
+        const ids = [...new Set(righeOrdine.map((r) => r.product_id).filter((x): x is string => typeof x === 'string'))];
+        if (ids.length === 0) return;
+        const { data: prodotti, error } = await supabase.from('products').select('*').in('id', ids);
+        if (error || !vivo) return;
+        const perRiga = prodottiDelleRighe(righeOrdine, (prodotti ?? []) as Array<ProdottoPerIlRecesso & { id?: string }>);
+        setRifiutoRipensamento(rifiutoDelRecesso(MOTIVO_RIPENSAMENTO, perRiga));
+      } catch {
+        /* lettura non riuscita: decide il server */
+      }
+    })();
+    return () => { vivo = false; };
+  }, [order?.id]);
+  useEffect(() => {
+    if (rifiutoRipensamento && reason === MOTIVO_RIPENSAMENTO) setReason('');
+  }, [rifiutoRipensamento, reason]);
 
   async function ritira() {
     if (!resoAperto) return;
@@ -324,19 +355,27 @@ export default function NewReturnPage() {
         <fieldset>
         <legend className="block text-sm font-medium text-ink-700">Motivo del reso</legend>
         <div className="mt-2 space-y-2">
-          {REASONS.map((r) => (
-            <label key={r.value} className="flex cursor-pointer items-center gap-3 rounded-lg border border-cream-300 p-3 hover:bg-cream-50">
+          {REASONS.map((r) => {
+            const spento = r.value === MOTIVO_RIPENSAMENTO && rifiutoRipensamento !== null;
+            return (
+            <label key={r.value} className={`flex items-center gap-3 rounded-lg border border-cream-300 p-3 ${spento ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-cream-50'}`}>
               <input
                 type="radio"
                 name="reason"
                 value={r.value}
                 checked={reason === r.value}
+                disabled={spento}
+                aria-describedby={spento ? 'ripensamento-escluso' : undefined}
                 onChange={(e) => setReason(e.target.value)}
                 className="h-4 w-4 text-primary-700"
               />
               <span className="text-sm inline-flex items-center gap-2"><r.icon size={15} strokeWidth={2.2} className="text-ink-500" aria-hidden /> {r.label}</span>
             </label>
-          ))}
+            );
+          })}
+          {rifiutoRipensamento && (
+            <p id="ripensamento-escluso" className="text-sm text-ink-600">{rifiutoRipensamento}</p>
+          )}
         </div>
         </fieldset>
 
