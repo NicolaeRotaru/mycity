@@ -36,3 +36,19 @@ describe('R12-012 il motivo del rifiuto arriva al cliente, qualunque sia il nome
     expect(friendlyError(new Error('Bistrot La Table adesso è chiuso'))).toMatch(GENERICO);
   });
 });
+
+describe('R12-012 collaudo K03: numeri in testa e parole inglesi minuscole', () => {
+  for (const nome of ['1950 Pizzeria', '100 Montaditos', 'la table di nonna', 'Osteria 2000']) {
+    it(`«${nome}»`, () => {
+      const motivo = `${nome} adesso è chiuso: la consegna veloce non si può. Scegli una fascia oraria.`;
+      expect(comeLaCassa(motivo)).toBe(motivo);
+    });
+  }
+
+  it('un errore del motore dalla stessa strada resta nascosto, anche con le parentesi', () => {
+    expect(comeLaCassa('Errore interno (SQLSTATE 23505)')).toMatch(GENERICO);
+    expect(comeLaCassa('duplicate key value violates unique constraint "orders_pkey"')).not.toMatch(/duplicate|constraint|orders_pkey/);
+    expect(comeLaCassa('Could not find the function public.claim_coupon(p_code, p_user_id) in the schema cache')).toMatch(GENERICO);
+    expect(comeLaCassa('500 Internal Server Error')).toMatch(GENERICO);
+  });
+});

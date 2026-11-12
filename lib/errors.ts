@@ -48,17 +48,21 @@ const PAROLE_DEL_MOTORE =
   /\b(syntax|constraint|relation|column|table|row|query|statement|varchar|varying|violates|null value|does not exist|out of range|deadlock|serializ|unrecognized|operator|integer|numeric|boolean|timestamp|jsonb|uuid|regclass)\b/i;
 
 /**
- * 12/11/2026 (R12-012) — LO STESSO VOCABOLARIO, MA SCRITTO COME LO SCRIVE IL MOTORE.
+ * 12/11/2026 (R12-012) — I RIFIUTI DELLA CASSA COMINCIANO COL NOME DEL NEGOZIO.
  *
- * Il motore scrive in minuscolo («relation "orders" does not exist», «null value
- * in column …»). Un nome di negozio scritto da una persona ha la maiuscola
- * («Bistrot La Table», «Caffè Row & Co»): col confronto senza maiuscole il
- * rifiuto della cassa che comincia col nome del negozio finiva nel generico, e
- * il cliente riprovava lo stesso ordine all'infinito. Vale SOLO per i messaggi
- * che una nostra rotta ha messo nel corpo della risposta (vedi
- * `MESSAGGI_DELLE_ROTTE`): un errore grezzo resta filtrato come prima.
+ * «Bistrot La Table», «Caffè Row & Co», «1950 Pizzeria»: col filtro per parole il
+ * rifiuto finiva nel generico, e il cliente riprovava lo stesso ordine all'infinito.
+ * Vale SOLO per i messaggi che una nostra rotta ha messo nel corpo della risposta
+ * (vedi `MESSAGGI_DELLE_ROTTE`): un errore grezzo resta filtrato come prima.
  */
-const PAROLE_DEL_MOTORE_COME_LE_SCRIVE = new RegExp(PAROLE_DEL_MOTORE.source);
+/**
+ * Collaudo K03 (12/11) — anche in minuscolo una parola sola sbagliava: «la table di
+ * nonna» è un nome di negozio. Per i messaggi delle nostre rotte si cercano le FRASI
+ * del motore, che un nome di negozio non scrive: «relation "…"», «column "…"»,
+ * «violates», «duplicate key», «SQLSTATE»…
+ */
+const FRASI_DEL_MOTORE =
+  /(relation\s+"|column\s+"|\bviolates\b|does not exist|syntax error|null value in|duplicate key|sqlstate|deadlock detected|out of range|invalid input syntax|permission denied for|could not find the function|schema cache|pgrst\d|\b\d{5}\b.*\berror\b)/i;
 
 /**
  * I testi che `apiErrorMessage` ha letto dal corpo di una nostra risposta. La
@@ -282,9 +286,11 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
         // nome del negozio («3 Archi», «'L Furnè», «Da Mario» fra virgolette) e finivano nel generico.
         /^[a-zA-ZÀ-ſ0-9«"'‘’“]/.test(cleaned) &&
         // ...ma non un codice tecnico in testa («500 Internal Server Error», «23505 …»).
-        !/^\d{3,5}\b/.test(cleaned) &&
+        // Collaudo K03 — tranne nei messaggi delle nostre rotte: «1950 Pizzeria adesso è
+        // chiuso» e «100 Montaditos…» sono nomi di negozio.
+        (dallaRotta ? !/^\d{3}\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s*$/.test(cleaned) : !/^\d{3,5}\b/.test(cleaned)) &&
         // ...e non parla come un motore. Vedi PAROLE_DEL_MOTORE in cima al file.
-        !(dallaRotta ? PAROLE_DEL_MOTORE_COME_LE_SCRIVE : PAROLE_DEL_MOTORE).test(cleaned)
+        !(dallaRotta ? FRASI_DEL_MOTORE : PAROLE_DEL_MOTORE).test(cleaned)
       ) {
         return cleaned;
       }
