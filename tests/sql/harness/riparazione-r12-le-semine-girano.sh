@@ -6,7 +6,8 @@
 # Ricostruisce il database dalle migrazioni (apply.sh), aggiunge le colonne di
 # GoTrue che l'impalcatura minima non ha (le semine creano utenti come fa
 # Supabase), poi applica tutte le semine DUE volte (sono rieseguibili) e guarda
-# che i negozi demo siano approvati e gli alimenti in vendita con le dichiarazioni.
+# che i negozi demo siano approvati e che nessun alimento sia in vendita senza le
+# dichiarazioni (gli alimenti della semina restano bozze: la semina non le conosce).
 # Prima del 12/11/2026 si fermava su 001 («approvazione riservata allo staff»)
 # e su 005-007 (chk_approvazione_coerente).
 # =============================================================================
@@ -52,12 +53,12 @@ BEGIN
   SELECT count(*) INTO negozi FROM public.profiles p JOIN auth.users u ON u.id = p.id
    WHERE u.email LIKE '%@piacenza-demo.local' AND p.role = 'seller' AND p.is_approved AND p.approval_status = 'approved';
   SELECT count(*) INTO alimenti FROM public.products
-   WHERE seller_id IN ('11111111-1111-1111-1111-aaaaaaaa0001','11111111-1111-1111-1111-aaaaaaaa0002') AND status = 'available';
+   WHERE seller_id IN ('11111111-1111-1111-1111-aaaaaaaa0001','11111111-1111-1111-1111-aaaaaaaa0002') AND status = 'draft';
   SELECT count(*) INTO senza FROM public.products
    WHERE seller_id IN ('11111111-1111-1111-1111-aaaaaaaa0001','11111111-1111-1111-1111-aaaaaaaa0002')
      AND status = 'available' AND (coalesce(attributes->>'allergeni','') = '' OR coalesce(attributes->>'ingredienti','') = '');
   IF negozi <> 16 THEN RAISE EXCEPTION 'negozi demo approvati: % (attesi 16)', negozi; END IF;
-  IF alimenti <> 30 THEN RAISE EXCEPTION 'alimenti in vendita: % (attesi 30)', alimenti; END IF;
+  IF alimenti <> 30 THEN RAISE EXCEPTION 'alimenti in bozza: % (attesi 30)', alimenti; END IF;
   IF senza <> 0 THEN RAISE EXCEPTION '% alimenti in vendita senza dichiarazioni', senza; END IF;
 END $$;
 SQL

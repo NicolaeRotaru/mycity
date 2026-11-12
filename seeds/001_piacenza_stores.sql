@@ -416,16 +416,12 @@ BEGIN
 
   ----------------------------------------------------------------
   -- 5) 12/11/2026 (R12-009) — Gli alimenti si pubblicano solo con allergeni e
-  --    ingredienti (Reg. UE 1169/2011, guardiano della 195): sono nati bozza
-  --    qui sopra e si mettono in vendita adesso, con le dichiarazioni. Sono
-  --    dati dimostrativi: lo dicono.
+  --    ingredienti veri (Reg. UE 1169/2011, guardiano della 195). Una semina
+  --    non li conosce, e scrivere testi segnaposto vorrebbe dire mettere in
+  --    vendita cibo senza dichiarazione se la semina girasse su un database
+  --    vero (collaudo del 12/11). Restano BOZZE: il negozio di prova li
+  --    completa e li pubblica dal modulo, come farebbe un negozio vero.
   ----------------------------------------------------------------
-  UPDATE products
-     SET attributes = coalesce(attributes, '{}'::jsonb) || jsonb_build_object(
-           'allergeni', 'Dato dimostrativo: vedi etichetta (latte, glutine possibili)',
-           'ingredienti', 'Dato dimostrativo del negozio di prova'),
-         status = 'available'
-   WHERE seller_id IN (s_aliment1, s_aliment2) AND status = 'draft';
 
 END $$;
 
