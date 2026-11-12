@@ -313,11 +313,13 @@ for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
   # 1) --single-transaction avvolge il file in una transazione, ma se il file ne
   #    apre una sua con BEGIN e la chiude con COMMIT, quel COMMIT chiude la
   #    transazione del wrapper: tutto quello che segue viene eseguito e
-  #    confermato per conto suo. Oggi succede in 23 migrazioni sulle 149 in cartella (fra cui
-  #    153 e 154) e il danno e' nullo, perche' dopo il loro COMMIT resta solo
-  #    NOTIFY. La prima che mettera' del lavoro vero dopo il proprio COMMIT si
-  #    applichera' a meta', in silenzio. Per questo sotto c'e' un avviso: dice
-  #    quali file non godono della garanzia, prima di applicarli.
+  #    confermato per conto suo. Succede in una ventina di migrazioni. In quasi
+  #    tutte dopo il COMMIT resta solo NOTIFY, e li' il danno e' nullo; ma non
+  #    in tutte: la 115 e la 117 (contate il 12/11/2026, R01-023) dopo il COMMIT
+  #    aprono un altro BEGIN e fanno lavoro vero, e se quel pezzo si rompe la
+  #    prima meta' resta applicata e la migrazione non si registra. Per questo
+  #    sotto ci sono due avvisi diversi: uno leggero quando dopo il COMMIT c'e'
+  #    solo NOTIFY, uno forte quando c'e' altro.
   # 2) L'applicazione e la registrazione sono due comandi psql, cioe' due
   #    connessioni. Un intoppo di rete fra le due lascia la migrazione applicata
   #    ma non registrata, e al rilascio dopo viene riapplicata. Unirle in un
@@ -325,7 +327,15 @@ for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
   #    produzione: e' una modifica che va decisa e firmata a parte, non
   #    infilata in una riparazione minore.
   if grep -qE '^[[:space:]]*COMMIT[[:space:]]*;' "$f"; then
-    echo "  ⚠ $name contiene un COMMIT suo: da quel punto in giu' la garanzia della transazione unica non vale." >&2
+    # R01-023 — Cosa c'e' DOPO il primo COMMIT: righe vuote, commenti, NOTIFY e altri COMMIT non
+    # fanno danni; qualunque altra istruzione si applica fuori dalla transazione del wrapper.
+    dopo="$(awk 'trovato && NF && $0 !~ /^[[:space:]]*--/ && toupper($0) !~ /^[[:space:]]*(NOTIFY|COMMIT)[[:space:];]/ { print; exit }
+                 toupper($0) ~ /^[[:space:]]*COMMIT[[:space:]]*;/ { trovato = 1 }' "$f")"
+    if [ -n "$dopo" ]; then
+      echo "  ⚠⚠ $name dopo il suo COMMIT fa altro lavoro («$(printf '%s' "$dopo" | head -c 60)»): se si rompe li', la prima parte resta applicata e la migrazione non si registra. Controlla lo schema a mano se questo passo fallisce." >&2
+    else
+      echo "  ⚠ $name contiene un COMMIT suo: dopo resta solo NOTIFY, quindi una rottura a meta' non lascia lavoro a meta'." >&2
+    fi
   fi
   psql "$DB" -q -v ON_ERROR_STOP=1 --single-transaction -f "$f"
   psql "$DB" -q -v ON_ERROR_STOP=1 \
