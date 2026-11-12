@@ -15,6 +15,12 @@
 --   ② lascia all'amministratore leggere e nascondere (is_public = false) una
 --      domanda, con la regola esplicita (il guardiano 'domanda_non_si_riscrive'
 --      lo lascia gia' passare, ma senza una policy l'UPDATE non toccava niente).
+--   ③ (collaudo K03) chi fa una domanda la fa e basta: non può inserirla con
+--      una risposta già scritta, che il sito mostrerebbe come «risposta del
+--      negozio». La regola d'inserimento guardava solo l'autore.
+-- Resta una scelta di Nicola: le domande nascono visibili (is_public = true,
+-- 027). Moderarle prima vuol dire che nessuna domanda si vede finché il negozio
+-- o l'amministratore non la approva.
 -- Il pulsante «Segnala» sulla domanda e il comando nel pannello stanno nei
 -- file del sito (components/Segnala.tsx, app/api/segnalazioni, la pagina
 -- admin): vedi il referto R12.
@@ -38,3 +44,13 @@ CREATE POLICY qa_admin_nasconde ON public.product_questions
 
 COMMENT ON POLICY qa_admin_nasconde ON public.product_questions IS
   'R12-021: l amministratore nasconde una domanda segnalata (is_public = false). Il testo non lo riscrive nessuno: lo vieta gia il guardiano, tranne a lui.';
+
+DROP POLICY IF EXISTS qa_insert_auth ON public.product_questions;
+CREATE POLICY qa_insert_auth ON public.product_questions
+  FOR INSERT
+  WITH CHECK (
+    (SELECT auth.uid()) = author_id
+    AND answer IS NULL
+    AND answered_by IS NULL
+    AND answered_at IS NULL
+  );

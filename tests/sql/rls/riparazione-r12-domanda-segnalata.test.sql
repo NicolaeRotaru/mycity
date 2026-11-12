@@ -68,6 +68,30 @@ INSERT INTO esiti SELECT '4 nascosta, il pubblico non la legge', count(*) = 0, c
   FROM public.product_questions WHERE id = 'e1210000-0000-0000-0000-0000000000d1';
 RESET ROLE;
 
+-- ⑤ (collaudo K03) un cliente non inserisce una domanda con una «risposta del negozio» già scritta
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"e1210000-0000-0000-0000-000000000003","role":"authenticated"}';
+DO $$
+DECLARE passata boolean;
+BEGIN
+  BEGIN
+    INSERT INTO public.product_questions (product_id, author_id, question, answer, answered_by, answered_at)
+    VALUES ('e1210000-0000-0000-0000-0000000000b1', 'e1210000-0000-0000-0000-000000000003',
+            'È buono?', 'Sì, il migliore della città!', 'e1210000-0000-0000-0000-000000000001', now());
+    passata := true;
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN passata := false;
+  END;
+  INSERT INTO esiti VALUES ('5 una domanda non nasce con una risposta finta del negozio', NOT passata, '');
+  BEGIN
+    INSERT INTO public.product_questions (product_id, author_id, question)
+    VALUES ('e1210000-0000-0000-0000-0000000000b1', 'e1210000-0000-0000-0000-000000000003', 'Quanto pesa?');
+    passata := true;
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN passata := false;
+  END;
+  INSERT INTO esiti VALUES ('5b una domanda normale si fa ancora', passata, '');
+END $$;
+RESET ROLE;
+
 SELECT nome, CASE WHEN ok THEN 'ok' ELSE 'ROTTO' END AS esito, dettaglio FROM esiti ORDER BY nome;
 DO $$
 DECLARE rossi int; elenco text;
