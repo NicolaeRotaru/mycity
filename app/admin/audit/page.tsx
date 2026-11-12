@@ -121,7 +121,8 @@ export default function AuditLogPage() {
         <>
         {tagliato && (
           <p role="status" className="text-sm text-ink-600">
-            Mostro le {rows.length} azioni più recenti di {totale}: per le altre filtra per azione.
+            Mostro le {rows.length} azioni più recenti di {totale}
+            {filterAction ? '.' : ': per le altre filtra per azione.'}
           </p>
         )}
         <div className="bg-white border-2 border-cream-300 rounded-xl divide-y divide-cream-200 overflow-hidden">
