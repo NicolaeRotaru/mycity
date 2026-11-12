@@ -200,6 +200,27 @@ export default function SellerProductsPage() {
         const nomi = prezziSbagliati.map((id) => products.find((x) => x.id === id)?.name ?? id);
         throw new Error(`Prezzo non valido per ${nomi.map((n) => `«${n}»`).join(', ')}: scrivi un numero maggiore di zero, per esempio 4,50.`);
       }
+      /**
+       * 12/11/2026 (R03-019) — UN PREZZO CHE CROLLA SI CONFERMA.
+       * Sotto il 30% di quello di prima quasi sempre è un errore di battitura (un punto o uno
+       * zero di troppo): si chiede prima di scrivere, col nome del prodotto e le due cifre.
+       */
+      const crolli = ids.flatMap((id) => {
+        const grezzo = edits[id].price;
+        const prima = Number(products.find((x) => x.id === id)?.price ?? 0);
+        if (grezzo == null || grezzo === '' || !(prima > 0)) return [];
+        const adesso = leggiPrezzo(grezzo);
+        return adesso < prima * 0.3 ? [`«${products.find((x) => x.id === id)?.name ?? id}» da ${formatPrice(prima)} a ${formatPrice(adesso)}`] : [];
+      });
+      if (crolli.length > 0) {
+        const ok = await confirmDialog({
+          title: 'Prezzo molto più basso: confermi?',
+          message: `${crolli.join('; ')}. Se volevi scrivere un prezzo sopra i mille euro, scrivilo senza punti (per esempio 1500).`,
+          confirmLabel: 'Sì, salva questi prezzi',
+          danger: true,
+        });
+        if (!ok) throw new Error('Nessun prezzo salvato: controlla le cifre e salva di nuovo.');
+      }
       let salvati = 0;
       for (const id of ids) {
         const e = edits[id];

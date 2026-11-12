@@ -20,17 +20,107 @@ import { logger } from '@/lib/logger';
  * Stessa fonte, stesse regole e stesso timeout della rotta /api/geocode: la
  * logica sta qui una volta sola.
  */
+/**
+ * 12/11/2026 (R03-001) — «VIA ROMA 10, PIACENZA» NON E' PIU' UNA VIA ROMA QUALUNQUE.
+ *
+ * La ricerca era a testo libero, con un risultato solo e nessun confine: per le vie dal
+ * nome comune (Via Roma, Via Cavour, Via Garibaldi…) il primo risultato era una via
+ * omonima di un altro comune, a 10-20 km, e la cassa rifiutava l'ordine con «troppo
+ * lontano». Ora la ricerca è strutturata (via, città, CAP), chiusa nel riquadro di
+ * Piacenza e dintorni, chiede cinque risultati e tiene solo quello del comune scritto
+ * (e del CAP scritto, quando OpenStreetMap lo conosce). Se nessuno è affidabile la
+ * risposta è null: l'ordine passa senza coordinate, come il codice prevede già, invece
+ * di essere fermato con un'accusa sbagliata all'indirizzo del cliente.
+ */
+
+/** Piacenza e dintorni: lon min, lat max, lon max, lat min (formato viewbox di Nominatim). */
+export const RIQUADRO_PIACENZA = '9.30,45.25,10.05,44.80';
+
+/** Il testo di un comune, per confrontarlo: minuscolo, senza accenti e senza spazi doppi. */
+export function nomeDelComune(s: string | null | undefined): string {
+  return (s ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    // «Piacenza PC», «Piacenza (PC)»: la sigla della provincia non fa parte del comune.
+    .replace(/ pc$/, '')
+    // «S. Nicolò», «S Nicolò» = «San Nicolò».
+    .replace(/^s /, 'san ');
+}
+
+type RisultatoNominatim = {
+  lat?: string;
+  lon?: string;
+  address?: {
+    city?: string;
+    town?: string;
+    village?: string;
+    municipality?: string;
+    hamlet?: string;
+    suburb?: string;
+    quarter?: string;
+    neighbourhood?: string;
+    city_district?: string;
+    postcode?: string;
+  };
+};
+
+/**
+ * Il risultato è del comune e del CAP che il cliente ha scritto? Il comune deve
+ * combaciare; il CAP si confronta solo se OpenStreetMap lo conosce (molte vie non
+ * l'hanno), sulle prime quattro cifre, perché Piacenza città ha più CAP (29121, 29122).
+ */
+export function risultatoAffidabile(r: RisultatoNominatim, citta: string, cap: string): boolean {
+  const voluto = nomeDelComune(citta);
+  if (!voluto) return false;
+  const a = r.address ?? {};
+  const comuni = [a.city, a.town, a.village, a.municipality].map(nomeDelComune).filter(Boolean);
+  // Collaudo K04 — chi scrive come città la sua frazione («Montale», «Borgotrebbia»,
+  // «S. Nicolò») trova un risultato che OSM intesta al comune (city=Piacenza) e mette la
+  // frazione in suburb/hamlet/quarter: vale anche quella. Il CAP, qui sotto, resta il controllo.
+  const frazioni = [a.suburb, a.hamlet, a.quarter, a.neighbourhood, a.city_district].map(nomeDelComune).filter(Boolean);
+  if (!comuni.includes(voluto) && !frazioni.includes(voluto)) return false;
+  const capScritto = cap.replace(/\D/g, '');
+  const capTrovato = (a.postcode ?? '').replace(/\D/g, '');
+  // Un CAP che finisce in «00» è quello generico di una città (29100 per Piacenza): vale per
+  // tutti i CAP della città, quindi si confrontano solo le prime tre cifre.
+  const cifre = capScritto.endsWith('00') ? 3 : 4;
+  if (capScritto.length === 5 && capTrovato.length === 5 && capScritto.slice(0, cifre) !== capTrovato.slice(0, cifre)) {
+    return false;
+  }
+  return true;
+}
+
+/** L'indirizzo di ricerca strutturata di Nominatim per questo indirizzo. */
+export function urlDellaRicerca(indirizzo: { address: string; city: string; zip: string }): string {
+  const p = new URLSearchParams({
+    street: indirizzo.address.trim().slice(0, 200),
+    city: indirizzo.city.trim().slice(0, 100),
+    format: 'json',
+    addressdetails: '1',
+    limit: '5',
+    countrycodes: 'it',
+    // Il riquadro è una preferenza, non un confine (12/11, collaudo): con bounded=1 un indirizzo
+    // fuori zona (Milano, Bobbio) tornava null e l'ordine passava il controllo dei 5 km. Il
+    // filtro sul comune scritto (`risultatoAffidabile`) basta a scartare le vie omonime.
+    viewbox: RIQUADRO_PIACENZA,
+  });
+  const cap = indirizzo.zip.trim();
+  if (cap) p.set('postalcode', cap.slice(0, 10));
+  return `https://nominatim.openstreetmap.org/search?${p.toString()}`;
+}
+
 export async function coordinateDiUnIndirizzo(indirizzo: {
   address: string;
   city: string;
   zip: string;
 }): Promise<{ lat: number; lng: number } | null> {
-  const q = `${indirizzo.address}, ${indirizzo.zip} ${indirizzo.city}, Italia`.trim().slice(0, 300);
-  if (q.length < 3) return null;
+  if (indirizzo.address.trim().length < 3 || indirizzo.city.trim().length < 2) return null;
 
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=it`;
-    const res = await fetch(url, {
+    const res = await fetch(urlDellaRicerca(indirizzo), {
       headers: {
         // Nominatim Usage Policy: User-Agent identificativo obbligatorio.
         'User-Agent': `MyCity/1.0 (${env.appUrl()})`,
@@ -39,16 +129,19 @@ export async function coordinateDiUnIndirizzo(indirizzo: {
       signal: AbortSignal.timeout(5_000),
     });
     if (!res.ok) return null;
-    const json = (await res.json()) as Array<{ lat?: string; lon?: string }>;
-    const primo = Array.isArray(json) ? json[0] : undefined;
-    const lat = primo?.lat != null ? parseFloat(primo.lat) : NaN;
-    const lng = primo?.lon != null ? parseFloat(primo.lon) : NaN;
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-    return { lat, lng };
+    const json = (await res.json()) as RisultatoNominatim[];
+    const risultati = Array.isArray(json) ? json : [];
+    for (const r of risultati) {
+      if (!risultatoAffidabile(r, indirizzo.city, indirizzo.zip)) continue;
+      const lat = r.lat != null ? parseFloat(r.lat) : NaN;
+      const lng = r.lon != null ? parseFloat(r.lon) : NaN;
+      if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+    }
+    return null;
   } catch {
     // Un indirizzo che non si trova non è un ordine da bloccare: si prosegue
     // senza la mappa, come si faceva prima.
-    logger.warn('[geocodifica] indirizzo non risolto', { lunghezza: q.length });
+    logger.warn('[geocodifica] indirizzo non risolto', { lunghezza: indirizzo.address.length });
     return null;
   }
 }

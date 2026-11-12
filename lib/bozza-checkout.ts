@@ -37,6 +37,8 @@
  * Prova: tests/unit/il-muro-dell-accesso-faceva-salire-il-totale.test.ts
  */
 import { fasceAncoraPossibili, fasceDiDomaniPossibili, FASCE_DI_DOMANI, type Giorno } from '@/lib/quando-arriva';
+import { fasciaAlGiornoDellOrdine } from '@/lib/ordini/fascia-leggibile';
+import { giornoPiacenza } from '@/lib/tempo-piacenza';
 
 /** L'ora intera (le vecchie chiamate) oppure l'orologio di Roma coi minuti, e gli orari dei negozi. */
 function fasceDi(giorno: 'today' | 'tomorrow', adesso: number | Date, orari: readonly unknown[]): string[] {
@@ -55,6 +57,11 @@ export type Bozza = {
   giorno?: Giorno;
   fasciaOggi?: string;
   fasciaDomani?: string;
+  /**
+   * 12/11/2026 (R03-025) — Quando è stata scelta la fascia (millisecondi): «Domani» vuol dire
+   * domani rispetto a QUEL giorno, non a quello in cui si torna (vedi `bozzaRiportataAOggi`).
+   */
+  sceltaIl?: number;
 };
 
 /** Quello che si mette da parte prima di mandare qualcuno a fare l'accesso. */
@@ -65,6 +72,8 @@ export function bozzaDaSalvare(s: {
   giorno: Giorno;
   fasciaOggi: string;
   fasciaDomani: string;
+  /** L'istante in cui si salva: chi chiama passa l'orologio (di norma `new Date()`). */
+  adesso?: Date;
 }): Bozza {
   const bozza: Bozza = {
     form: s.form,
@@ -72,6 +81,7 @@ export function bozzaDaSalvare(s: {
     giorno: s.giorno,
     fasciaOggi: s.fasciaOggi,
     fasciaDomani: s.fasciaDomani,
+    sceltaIl: (s.adesso ?? new Date()).getTime(),
   };
   const codice = (s.couponCode ?? '').trim();
   if (codice) bozza.couponCode = codice;
@@ -84,7 +94,7 @@ export function bozzaDaSalvare(s: {
  * Torna solo campi che sappiamo leggere. Tutto il resto viene lasciato fuori: la bozza arriva dal
  * browser, e un oggetto arrivato dal browser non è un oggetto di cui fidarsi.
  */
-export function bozzaLetta(grezza: unknown): Bozza | null {
+export function bozzaLetta(grezza: unknown, adesso?: Date): Bozza | null {
   if (!grezza || typeof grezza !== 'object') return null;
   const g = grezza as Record<string, unknown>;
   // Le bozze vecchie erano il form e basta, senza il campo `form`: si leggono lo stesso.
@@ -95,7 +105,39 @@ export function bozzaLetta(grezza: unknown): Bozza | null {
   if (g.giorno === 'now' || g.giorno === 'today' || g.giorno === 'tomorrow') bozza.giorno = g.giorno;
   if (typeof g.fasciaOggi === 'string') bozza.fasciaOggi = g.fasciaOggi;
   if (typeof g.fasciaDomani === 'string') bozza.fasciaDomani = g.fasciaDomani;
-  return bozza;
+  if (typeof g.sceltaIl === 'number' && Number.isFinite(g.sceltaIl)) bozza.sceltaIl = g.sceltaIl;
+  // R03-025 — con l'orologio, la bozza si riporta al giorno di adesso (`bozzaRiportataAOggi`).
+  return adesso ? bozzaRiportataAOggi(bozza, adesso) : bozza;
+}
+
+/**
+ * 12/11/2026 (R03-025) — «DOMANI» SALVATO IERI SERA E' «OGGI».
+ *
+ * La bozza sta in `localStorage`, che resta anche nei giorni dopo, e conteneva il giorno
+ * («tomorrow») e l'etichetta («Domani · 9:00–11:00») ma nessuna data. Lunedì alle 22:30 il
+ * cliente sceglie domani mattina, si registra e apre il link di conferma martedì alle 08:15: la
+ * cassa ripartiva con «Domani · 9:00–11:00» già premuto, e l'ordine nasceva per mercoledì.
+ *
+ * Qui la bozza si riporta al giorno di adesso con la regola che usa già la carta pagata dopo
+ * mezzanotte (`fasciaAlGiornoDellOrdine`): «Domani» di ieri diventa «Oggi», una fascia di un
+ * giorno passato si toglie. Una bozza senza data (scritta prima di questa riparazione) non dice
+ * di che giorno parla: giorno e fasce non si rimettono, il resto sì. Poi `fasciaDaRimettere`
+ * controlla, come sempre, che la fascia sia ancora proponibile adesso.
+ */
+export function bozzaRiportataAOggi(bozza: Bozza, adesso: Date): Bozza {
+  // «Adesso» (la veloce) non è un giorno del calendario: resta, e la cassa lo ricontrolla da sé.
+  const { giorno, fasciaOggi: _fasciaDiQuelGiorno, fasciaDomani, sceltaIl, ...resto } = bozza;
+  const soloAdesso: Bozza = giorno === 'now' ? { ...resto, giorno } : resto;
+  if (typeof sceltaIl !== 'number') return soloAdesso;
+  if (giornoPiacenza(sceltaIl) === giornoPiacenza(adesso)) return bozza;
+  const daDomaniAOggi = fasciaDomani ? fasciaAlGiornoDellOrdine(fasciaDomani, sceltaIl, adesso) : null;
+  const oggi = daDomaniAOggi && daDomaniAOggi.startsWith('Oggi') ? daDomaniAOggi : null;
+  const riportata: Bozza = { ...soloAdesso, sceltaIl };
+  if (oggi) {
+    riportata.fasciaOggi = oggi;
+    if (giorno === 'tomorrow') riportata.giorno = 'today';
+  }
+  return riportata;
 }
 
 /** Il form non deve poter portare dentro oggetti annidati arrivati dal browser. */
@@ -103,7 +145,7 @@ function soloCampiSemplici(form: CampiIndirizzo): CampiIndirizzo {
   const fuori: CampiIndirizzo = {};
   for (const [k, v] of Object.entries(form ?? {})) {
     if (k === 'form' || k === 'couponCode' || k === 'metodoPagamento') continue;
-    if (k === 'giorno' || k === 'fasciaOggi' || k === 'fasciaDomani') continue;
+    if (k === 'giorno' || k === 'fasciaOggi' || k === 'fasciaDomani' || k === 'sceltaIl') continue;
     if (v === null || typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') fuori[k] = v;
   }
   return fuori;

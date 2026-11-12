@@ -17,10 +17,14 @@ type Activity = {
 // Chi ha ordinato non si dice. Prima questa riga leggeva delivery_full_name
 // dalla tabella orders e lo accorciava qui nel browser ("Mario R."): il nome
 // intero, col resto dell'ordine, arrivava comunque a ogni visitatore. Ora la
-// vista live_activity_public non lo contiene affatto, e al suo posto c'e' la
-// citta', che e' prova sociale senza essere un dato personale.
-function chiHaOrdinato(citta: string | null | undefined): string {
-  return citta ? `Qualcuno a ${citta}` : 'Qualcuno';
+// vista live_activity_public non lo contiene affatto.
+//
+// 12/11/2026 (R03-009) — E NEMMENO LA «CITTA'». Al suo posto c'era delivery_city, che non è una
+// città: è il testo libero del campo «Città» della cassa. «Quarto, via Verdi 10 citofono Rossi»
+// accanto a «Farmacia del Corso» si leggeva in home da chiunque. Si scrive sempre Piacenza (la
+// vista, dalla migrazione 271, non dà altro), qualunque cosa arrivi.
+export function chiHaOrdinato(_citta?: string | null): string {
+  return 'Qualcuno a Piacenza';
 }
 
 /**

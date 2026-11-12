@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
-import { ApiErrors, apiSuccess } from '@/lib/api/responses';
+import { ApiErrors, apiError, apiSuccess } from '@/lib/api/responses';
 import { rivendicaIlCodiceSconto } from '@/lib/ordini/rivendica-il-codice-sconto';
 import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
@@ -35,6 +35,7 @@ import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/or
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { formatPriceFromCents } from '@/lib/format';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
+import { avvisaSeLaPostaNonParte } from '@/lib/stripe/webhook/posta-non-partita';
 import { MOTIVO_SOPRA_IL_TETTO_DEI_CONTANTI, sopraIlTettoDeiContanti } from '@/lib/ordini/tetto-dei-contanti';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
@@ -94,6 +95,13 @@ const Body = z.object({
    * l'anti-doppione, che resta l'intestazione `idempotency-key`.
    */
   checkoutId: z.string().max(80).optional().nullable(),
+  /**
+   * 12/11/2026 (R03-011) — Il sottototale di ogni negozio come la cassa l'ha mostrato, in
+   * centesimi e nello stesso ordine di `groups`. Non decide nessun importo (li ricalcola sempre
+   * il server): serve solo a fermare l'ordine se i prezzi sono cambiati mentre il cliente era in
+   * cassa. Facoltativo, per i browser con la pagina vecchia.
+   */
+  subtotaliVistiCents: z.array(z.number().int().nonnegative()).max(NEGOZI_PER_CARRELLO).optional().nullable(),
 });
 
 /**
@@ -960,6 +968,27 @@ export const POST = withAuthRateLimit(
     const grandSubtotalCents = subtotalPerGroupCents.reduce((s, x) => s + x, 0);
     if (grandSubtotalCents <= 0) return esciERilascia(ApiErrors.invalidRequest('Importo non valido.'));
 
+    /**
+     * 12/11/2026 (R03-011) — IL PREZZO CAMBIATO MENTRE IL CLIENTE ERA IN CASSA NON PASSA IN SILENZIO.
+     *
+     * Il browser mandava solo prodotti e quantità; qui si ricalcola coi prezzi e le promozioni
+     * di adesso. L'avviso «prezzo cambiato» della cassa scatta solo all'apertura della pagina:
+     * se la promozione scadeva mentre il cliente scriveva l'indirizzo, in cassa leggeva 14 €,
+     * l'ordine nasceva a 20 € e alla porta gli chiedevano 20 €. Adesso, se il sottototale di un
+     * negozio non è quello che la cassa ha mostrato, l'ordine non nasce: 409 con le cifre nuove,
+     * e la cassa rilegge i prezzi e li mostra. Si confrontano i prodotti, non la consegna: la
+     * consegna dipende da coordinate che il browser può non avere.
+     */
+    const visti = body.subtotaliVistiCents;
+    if (visti && visti.length === subtotalPerGroupCents.length && visti.some((v, i) => v !== subtotalPerGroupCents[i])) {
+      return esciERilascia(apiError(
+        409,
+        'I prezzi sono cambiati mentre eri in cassa: controlla il nuovo totale e conferma di nuovo.',
+        'PREZZI_CAMBIATI',
+        { visti, adesso: subtotalPerGroupCents },
+      ));
+    }
+
     // Coordinate della consegna prese dal database, non dal browser: il prezzo
     // della consegna dipende dalla distanza, e finora quel numero lo scriveva il
     // client. Se l'indirizzo non è fra quelli salvati dalla persona, si resta
@@ -1644,7 +1673,9 @@ export const POST = withAuthRateLimit(
               createdAt: c.creatoIl ? new Date(c.creatoIl) : new Date(),
               storeHours: orariNegozio.get(c.sellerId),
             });
-            await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+            // R03-003 — un rifiuto di Resend non lancia: si legge l'esito (lib/stripe/webhook/posta-non-partita.ts).
+            const esito = await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+            await avvisaSeLaPostaNonParte('email «Nuovo ordine» al negozio', { orderId: c.orderId, sellerId: c.sellerId }, esito);
           } catch (e) {
             logger.warn('[cod] email nuovo ordine al venditore fallita', { orderId: c.orderId, e });
           }
@@ -1665,7 +1696,8 @@ export const POST = withAuthRateLimit(
               paymentMethod: 'cod',
             });
             // R24 — avviso di servizio: senza il tasto «annulla l'iscrizione».
-            await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+            const esito = await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text, tipo: 'transazionale' });
+            await avvisaSeLaPostaNonParte('conferma dell ordine al cliente', { orderId: c.orderId }, esito);
           } catch (e) {
             logger.warn('[cod] email conferma ordine al buyer fallita', { orderId: c.orderId, e });
           }

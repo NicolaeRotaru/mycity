@@ -64,6 +64,10 @@ export default function SellerPromotionsPage() {
   const [title, setTitle] = useState('Saldi del weekend');
   const [percent, setPercent] = useState(15);
   const [scope, setScope] = useState<'store' | 'category'>('store');
+  // 12/11/2026 (R03-020) — «Una categoria specifica» non faceva scegliere QUALE: la promo nasceva
+  // senza category_id, il database non scontava niente (il confronto con NULL non è mai vero) e
+  // intanto la vetrina annunciava «-15%». Ora la categoria si sceglie ed è obbligatoria.
+  const [categoriaId, setCategoriaId] = useState('');
   const [duration, setDuration] = useState('7d');
 
   useEffect(() => {
@@ -92,14 +96,39 @@ export default function SellerPromotionsPage() {
   });
   const promos = queryPromos.data ?? [];
 
+  // Collaudo del 12/11 — una chiave sua (quella delle categorie della vetrina ha un'altra forma:
+  // condividerla rompeva i link della home), e solo le categorie dove il negozio ha prodotti: lo
+  // sconto confronta la categoria ESATTA del prodotto, e una promo sulla categoria madre o su una
+  // categoria vuota annuncerebbe uno sconto che non c'è.
+  const queryCategorie = useQuery({
+    queryKey: ['seller', 'promo-categorie', userId ?? ''] as const,
+    enabled: !!userId && showWizard && scope === 'category',
+    queryFn: async (): Promise<Array<{ id: string; name: string }>> => {
+      const { data: prodotti, error: errProdotti } = await supabase
+        .from('products')
+        .select('category_id')
+        .eq('seller_id', userId!);
+      if (errProdotti) throw errProdotti;
+      const ids = [...new Set(((prodotti ?? []) as Array<{ category_id: string | null }>).map((p) => p.category_id).filter((x): x is string => !!x))];
+      if (ids.length === 0) return [];
+      const { data, error } = await supabase.from('categories').select('id, name').in('id', ids).order('name');
+      if (error) throw error;
+      return (data ?? []) as Array<{ id: string; name: string }>;
+    },
+  });
+  const categorie = queryCategorie.data ?? [];
+  const nomeCategoria = categorie.find((c) => c.id === categoriaId)?.name ?? null;
+
   const create = useMutation({
     mutationFn: async () => {
       const ends = endDateFor(duration);
+      if (scope === 'category' && !categoriaId) throw new Error('Scegli la categoria da scontare.');
       const { error } = await supabase.from('seller_promotions').insert({
         seller_id: userId,
         title: title.trim() || `Sconto ${percent}%`,
         discount_percent: percent,
         scope,
+        ...(scope === 'category' ? { category_id: categoriaId } : {}),
         ends_at: ends.toISOString(),
       });
       if (error) throw error;
@@ -271,6 +300,19 @@ export default function SellerPromotionsPage() {
                   <input type="radio" name="scope" checked={scope === 'category'} onChange={() => setScope('category')} />
                   <span className="text-sm font-semibold">Una categoria specifica</span>
                 </label>
+                {scope === 'category' && (
+                  <Select
+                    label="Quale categoria"
+                    value={categoriaId}
+                    onChange={(e) => setCategoriaId(e.target.value)}
+                    className="bg-cream-50"
+                  >
+                    <option value="">{queryCategorie.isError ? '— categorie non lette, riprova' : categorie.length === 0 && !queryCategorie.isLoading ? '— nessun tuo prodotto ha una categoria' : '— scegli la categoria'}</option>
+                    {categorie.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </Select>
+                )}
               </div>
             </div>
 
@@ -289,12 +331,13 @@ export default function SellerPromotionsPage() {
             {/* Preview */}
             <div className="bg-accent-50 border border-accent-200 rounded-lg p-3 text-sm text-ink-700">
               <p className="font-semibold">Anteprima:</p>
-              <p>«{title || `Sconto ${percent}%`}» — sconto del <strong>{percent}%</strong> su {scope === 'store' ? 'tutti i tuoi prodotti' : 'la categoria selezionata'} fino al {endDateFor(duration).toLocaleDateString('it-IT')}.</p>
+              <p>«{title || `Sconto ${percent}%`}» — sconto del <strong>{percent}%</strong> su {scope === 'store' ? 'tutti i tuoi prodotti' : nomeCategoria ? `la categoria «${nomeCategoria}»` : 'la categoria che scegli qui sopra'} fino al {endDateFor(duration).toLocaleDateString('it-IT')}.</p>
             </div>
 
             <Button
               onClick={() => create.mutate()}
               loading={create.isPending}
+              disabled={scope === 'category' && !categoriaId}
               fullWidth
               size="lg"
             >

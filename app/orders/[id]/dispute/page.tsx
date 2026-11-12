@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { AlertCircle, ArrowLeft, ClipboardList } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { friendlyError } from '@/lib/errors';
+import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Textarea } from '@/components/ui/Field';
@@ -86,24 +86,20 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
 
     setSubmitting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { error } = await supabase.from('disputes').insert({
-        order_id: params.id,
-        opener_id: user.id,
-        against_id: order?.seller_id ?? null,
-        reason,
-        description: description.trim(),
+      // 12/11/2026 (R03-013) — Il reclamo lo apre il server (/api/disputes): controlla che
+      // l'ordine sia tuo, avvisa gli amministratori e il negozio, e ti manda la ricevuta. Prima la
+      // riga si scriveva da qui e nessuno ne sapeva niente, mentre il bonifico del negozio si fermava.
+      const res = await fetch('/api/disputes', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ orderId: params.id, reason, description: description.trim() }),
       });
-      if (error) {
-        if ((error as { code?: string }).code === '23505' || /disputes_one_open_per_order/.test(error.message ?? '')) {
-          toast.error('Hai già un reclamo aperto su questo ordine: lo stiamo esaminando, ti scriviamo noi.');
-          return;
-        }
-        throw error;
+      if (!res.ok) {
+        const corpo = await res.json().catch(() => ({}));
+        toast.error(apiErrorMessage(corpo, 'Non sono riuscito ad aprire il reclamo: riprova fra poco.'));
+        return;
       }
-      toast.success('Reclamo aperto. Il nostro team lo prenderà in carico entro 48h.');
+      toast.success('Reclamo aperto: ti abbiamo mandato una ricevuta per email e ti scriviamo noi con la decisione.');
       router.push('/orders');
     } catch (err) {
       toast.error(friendlyError(err));
@@ -204,9 +200,9 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
         <div className="bg-cream-100 rounded-lg p-3 text-xs text-ink-600">
           <p className="flex items-center gap-1.5"><ClipboardList size={14} strokeWidth={2.2} aria-hidden /> <strong>Cosa succede dopo:</strong></p>
           <ul className="list-disc list-inside mt-1 space-y-0.5">
-            <li>Il team riceve il reclamo entro pochi minuti</li>
+            <li>Il team riceve subito un avviso col tuo reclamo, e tu una ricevuta per email</li>
             <li>Contattiamo il venditore per la sua versione</li>
-            <li>Decisione entro 48h lavorative</li>
+            <li>Ti scriviamo con la decisione</li>
             <li>Se ti diamo ragione → rimborso completo o parziale</li>
           </ul>
         </div>

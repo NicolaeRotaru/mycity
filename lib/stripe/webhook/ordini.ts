@@ -33,6 +33,7 @@ import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
 import { fasciaAlGiornoDellOrdine } from '@/lib/ordini/fascia-leggibile';
 import { orariDeiNegozi, rimborsaLaFasciaPersa, diciAlClienteDelCarrelloRimborsato } from './fascia-al-pagamento';
+import { avvisaDelRimborsoDaDividere, campiSeLaCartaETornata, chiudiIlCarrelloDellaCartaTornata, leggiIlPagamento } from './carta-gia-tornata';
 
 export type PendingGroup = {
   sellerId: string;
@@ -117,9 +118,9 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     throw new Error(`pending_checkout non trovato: ${pendingCheckoutId}`);
   }
 
-  // Idempotenza checkout-level: se già processato, no-op.
-  if (pending.status === 'COMPLETED') {
-    logger.info('[stripe] pending_checkout già COMPLETED, skip', { pendingCheckoutId });
+  // Idempotenza checkout-level: se già processato, no-op. R03-008 — anche annullato o chiuso per quadratura.
+  if (pending.status === 'COMPLETED' || pending.status === 'CANCELED' || pending.status === 'MISMATCH') {
+    logger.info('[stripe] pending_checkout già chiuso, skip', { pendingCheckoutId, status: pending.status });
     return;
   }
 
@@ -254,28 +255,8 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
   const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : null;
   const transferGroup = `mc_${pendingCheckoutId}`;
 
-  // Recupera la latest_charge dal PaymentIntent per popolare stripe_charge_id
-  // (serve a /api/stripe/payout per usare source_transaction).
-  let stripeChargeId: string | null = null;
-  if (paymentIntent) {
-    try {
-      const pi = await stripe.paymentIntents.retrieve(paymentIntent, { expand: ['latest_charge'] });
-      const lc = pi.latest_charge;
-      stripeChargeId = typeof lc === 'string' ? lc : (lc?.id ?? null);
-    } catch (e) {
-      // 052 — Questo NON è un dettaglio best-effort. Senza `stripe_charge_id` il
-      // pagamento al negozio parte senza `source_transaction`: Stripe lo prende
-      // dal saldo della piattaforma, che sui conti nuovi è vuoto, e il
-      // trasferimento resta bloccato per sempre. Il negozio non viene pagato e
-      // nessuno sa perché.
-      // Meglio far fallire l'evento: Stripe lo riconsegna, e la creazione degli
-      // ordini è già protetta dall'indice unico su (sessione, negozio).
-      logger.error('[stripe] retrieve PI per charge_id fallita: evento respinto per riconsegna', {
-        sessionId: session.id, paymentIntent, e,
-      });
-      throw e;
-    }
-  }
+  // stripe_charge_id (052) e la carta già tornata al cliente (R03-008): lib/stripe/webhook/carta-gia-tornata.ts.
+  const { stripeChargeId, cartaTornata } = await leggiIlPagamento(stripe, paymentIntent, session.id, pendingCheckoutId);
 
   // 31/10/2026 — LA FASCIA SI GUARDA QUANDO SI PAGA, E SI SCRIVE DAL GIORNO DELL'ORDINE.
   // La rotta la controlla quando apre la pagina di Stripe, che resta pagabile per ore; l'ordine
@@ -354,6 +335,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
       delivery_notes: delivery.notes,
       delivery_lat: delivery.lat,
       delivery_lng: delivery.lng,
+      ...campiSeLaCartaETornata(cartaTornata, g.totalCents),
     };
 
     const { data: order, error: orderErr } = await conRipiegoSchema(
@@ -456,6 +438,8 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     });
     throw new Error(`partial checkout: ${createdOrderIds.length}/${groups.length} orders created`);
   }
+  if (cartaTornata?.azione === 'annulla') return chiudiIlCarrelloDellaCartaTornata(admin, pendingCheckoutId, paymentIntent, createdOrderIds, cartaTornata);
+  if (cartaTornata) await avvisaDelRimborsoDaDividere(admin, pendingCheckoutId, createdOrderIds, cartaTornata);
 
   // NB: il coupon è già stato claimato atomicamente in /api/stripe/checkout (claim_coupon, fix #36).
   // Non richiamiamo increment_coupon_usage qui per evitare doppio conteggio.
@@ -575,7 +559,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           createdAt: new Date(),
           storeHours: orari,
         });
-        await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
+        return sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
       });
     }
   }, 'avvisi post-ordine');

@@ -25,6 +25,7 @@ import { logger } from '@/lib/logger';
 import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 import { refundIssuedTemplate } from '@/lib/email/templates';
 import { notifyAdmins } from './comune';
+import { avvisaSeLaPostaNonParte } from './posta-non-partita';
 import { formatPriceFromCents } from '@/lib/format';
 import { PAUSA_RIMBORSO_DA_DIVIDERE, registraRimborsoParzialeDaFuori } from './rimborsi-da-fuori';
 import { elencoDaScrivere, rimborsiGiaScritti } from '@/lib/stripe/elenco-dei-rimborsi';
@@ -340,7 +341,9 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
       amount: nonScrittoCents / 100,
       reason: refundReason,
     });
-    await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
+    // R03-003 — un rifiuto della posta non lancia: si legge l'esito.
+    await avvisaSeLaPostaNonParte('email di rimborso al cliente', { orderId: firstOrder.id },
+      await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text }));
   }
 }
 

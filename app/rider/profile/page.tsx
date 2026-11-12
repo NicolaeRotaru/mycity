@@ -12,6 +12,7 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/Field';
+import { giornoPiacenza } from '@/lib/tempo-piacenza';
 import Link from 'next/link';
 import {
   Bike, Car, MapPin, ChevronRight, Star, Clock, FileText, HelpCircle, Package,
@@ -44,7 +45,7 @@ export default function RiderProfilePage() {
       if (!user) throw new Error('Non autenticato');
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, phone, rider_vehicle_type, rider_vehicle_plate, rider_zones, rider_haccp_expires_on, rider_license_expires_on, rider_insurance_expires_on, kyc_id_doc_front_url')
+        .select('id, full_name, phone, is_approved, rider_vehicle_type, rider_vehicle_plate, rider_zones, rider_haccp_expires_on, rider_license_expires_on, rider_insurance_expires_on, kyc_id_doc_front_url')
         .eq('id', user.id)
         .single();
       if (error) throw error;
@@ -73,20 +74,34 @@ export default function RiderProfilePage() {
     },
   });
 
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
+  // 12/11/2026 (R03-017) — `null` = campo non toccato. I campi a video partono dal profilo
+  // (defaultValue), ma gli stati partivano da '' e il salvataggio li scriveva sempre tutti e due:
+  // chi correggeva il telefono cancellava il nome (e viceversa), e «Salva» senza toccare niente
+  // li svuotava entrambi. Ora si scrive solo quello che è cambiato, e il nome non resta vuoto.
+  const [fullName, setFullName] = useState<string | null>(null);
+  const [phone, setPhone] = useState<string | null>(null);
 
   const update = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
+      const patch: { full_name?: string; phone?: string } = {};
+      if (fullName !== null && fullName.trim() !== (profile?.full_name ?? '')) patch.full_name = fullName.trim();
+      if (phone !== null && phone.trim() !== (profile?.phone ?? '')) patch.phone = phone.trim();
+      if (patch.full_name === '') throw new Error('Il nome e cognome non può restare vuoto.');
+      if (Object.keys(patch).length === 0) return false;
       const { error } = await supabase
         .from('profiles')
-        .update({ full_name: fullName, phone })
+        .update(patch)
         .eq('id', user.id);
       if (error) throw error;
+      return true;
     },
-    onSuccess: () => {
+    onSuccess: (cambiato) => {
+      if (!cambiato) {
+        toast.info('Nessuna modifica da salvare');
+        return;
+      }
       qc.invalidateQueries({ queryKey: queryKeys.rider.profile });
       invalidaProfiloDiChiEntrato(qc);
       toast.success('Profilo aggiornato');
@@ -130,33 +145,51 @@ export default function RiderProfilePage() {
 
   // Compliance / documenti: stato calcolato dalle scadenze reali.
   const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('it-IT') : null);
+  /**
+   * 12/11/2026 (R03-018) — UN DOCUMENTO SCADUTO E' «SCADUTO», NON «IN SCADENZA».
+   * «In scadenza» valeva per tutto quello che scadeva entro 60 giorni, comprese le date già
+   * passate: la polizza scaduta il 31/10 diceva «Scade 31/10/2026 · In scadenza» in giallo. Ora
+   * una data passata (giorno di Piacenza) è «Scaduto» in rosso, e il fattorino legge che non può
+   * prendere consegne finché non carica il documento nuovo (il database lo ferma: migrazione 270).
+   * E il documento d'identità appena caricato non è «Verificato» finché l'esame non è fatto.
+   */
+  const oggi = giornoPiacenza();
+  const scaduto = (d: string | null) => !!d && d.slice(0, 10) < oggi;
   const soon = (d: string | null) => !!d && (new Date(d).getTime() - Date.now()) < 60 * 86400000; // <60gg
-  type DocStatus = 'ok' | 'soon' | 'missing';
+  type DocStatus = 'ok' | 'soon' | 'expired' | 'missing';
+  const statoDellaScadenza = (d: string | null): DocStatus => (!d ? 'missing' : scaduto(d) ? 'expired' : soon(d) ? 'soon' : 'ok');
+  // Solo patente e polizza fermano le consegne (migrazione 270); l'HACCP è facoltativo.
+  const testoDellaScadenza = (d: string, ferma = true) =>
+    scaduto(d) ? `Scaduta il ${fmtDate(d)}${ferma ? ' · non puoi prendere consegne' : ''}` : `Scade ${fmtDate(d)}`;
+  const approvato = (p?.is_approved as boolean | null) === true;
+  // In bici patente e polizza non servono (lib/admin/regole-approvazione.ts): niente «Mancante» rosso.
+  const inBici = vehicleType === 'BIKE' || vehicleType === 'EBIKE';
   const docs: { Icon: LucideIcon; label: string; sub: string; status: DocStatus }[] = [
     {
       Icon: IdCard, label: 'Patente di guida',
-      sub: licenseExpires ? `Scade ${fmtDate(licenseExpires)}` : 'Da caricare',
-      status: !licenseExpires ? 'missing' : soon(licenseExpires) ? 'soon' : 'ok',
+      sub: licenseExpires ? testoDellaScadenza(licenseExpires) : inBici ? 'Non serve in bici' : 'Da caricare',
+      status: !licenseExpires && inBici ? 'ok' : statoDellaScadenza(licenseExpires),
     },
     {
       Icon: ShieldCheck, label: 'Assicurazione RC',
-      sub: insuranceExpires ? `Scade ${fmtDate(insuranceExpires)}` : 'Da caricare',
-      status: !insuranceExpires ? 'missing' : soon(insuranceExpires) ? 'soon' : 'ok',
+      sub: insuranceExpires ? testoDellaScadenza(insuranceExpires) : inBici ? 'Non obbligatoria in bici per ora' : 'Da caricare',
+      status: !insuranceExpires && inBici ? 'ok' : statoDellaScadenza(insuranceExpires),
     },
     {
       Icon: FileCheck, label: 'Documento identità',
-      sub: idUploaded ? 'Verificato' : 'Da caricare',
-      status: idUploaded ? 'ok' : 'missing',
+      sub: idUploaded ? (approvato ? 'Verificato' : 'In attesa di verifica') : 'Da caricare',
+      status: idUploaded ? (approvato ? 'ok' : 'soon') : 'missing',
     },
     {
       Icon: ShieldCheck, label: 'Attestato HACCP',
-      sub: haccpExpires ? `Scade ${fmtDate(haccpExpires)}` : 'Facoltativo (food)',
-      status: haccpExpires ? (soon(haccpExpires) ? 'soon' : 'ok') : 'missing',
+      sub: haccpExpires ? testoDellaScadenza(haccpExpires, false) : 'Facoltativo (food)',
+      status: statoDellaScadenza(haccpExpires),
     },
   ];
   const STATUS_META: Record<DocStatus, { bg: string; text: string; label: string; Icon: LucideIcon }> = {
     ok:      { bg: 'bg-olive-50',     text: 'text-olive-700',     label: 'OK',          Icon: CircleCheck },
     soon:    { bg: 'bg-accent-50',    text: 'text-accent-700',    label: 'In scadenza', Icon: Clock },
+    expired: { bg: 'bg-secondary-50', text: 'text-secondary-700', label: 'Scaduto',     Icon: CircleAlert },
     missing: { bg: 'bg-secondary-50', text: 'text-secondary-600', label: 'Mancante',    Icon: CircleAlert },
   };
 
@@ -252,10 +285,10 @@ export default function RiderProfilePage() {
                   <p className="text-sm font-bold text-ink-900">{d.label}</p>
                   <p className="text-xs text-ink-500">{d.sub}</p>
                 </div>
-                {d.status === 'missing' ? (
+                {d.status === 'missing' || d.status === 'expired' ? (
                   <Link
                     href="/rider/onboarding"
-                    className={`shrink-0 rounded-full px-3 py-[7px] text-xs font-bold text-white ${d.status === 'missing' ? 'bg-secondary-600 hover:bg-secondary-700' : ''}`}
+                    className={`shrink-0 rounded-full px-3 py-[7px] text-xs font-bold text-white ${d.status === 'missing' || d.status === 'expired' ? 'bg-secondary-600 hover:bg-secondary-700' : ''}`}
                   >
                     Carica
                   </Link>

@@ -24,6 +24,7 @@ import { COLONNE_124 } from '@/lib/db/migrazione-124';
 import { leggiAGradini } from '@/lib/db/ripiego-a-gradini';
 import { formatPriceFromCents } from '@/lib/format';
 import { scritturaFacoltativa } from './esito';
+import { avvisaSeLaPostaNonParte } from './posta-non-partita';
 
 export type DisputeOrderRow = {
   id: string;
@@ -262,7 +263,7 @@ export async function provaAMandare(
   invio: () => Promise<unknown>,
 ): Promise<void> {
   try {
-    await invio();
+    await avvisaSeLaPostaNonParte(cosa, dati, await invio());
   } catch (e) {
     logger.error(`[stripe] ${cosa} non partita: ordine pagato e destinatario non avvisato`, {
       ...dati,
