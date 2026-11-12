@@ -2,11 +2,11 @@
   "sessione": "R08",
   "aggiornato": "2026-11-12 16:19",
   "finita": true,
-  "testa": "9772976332a181fab2eac10b36bd29f88112914d",
+  "testa": "e157fa563196b3d226bbc70a802f46e58d950c32",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "nota": "typecheck, lint e 1208 file / 8942 prove verdi sul commit di testa. In più: database ricostruito da zero con tutte le 182 migrazioni (comprese 320-323) e tests/sql/harness/run.sh tutto verde."
+    "nota": "typecheck, lint e 1208 file (1207 verdi, 1 saltato da sé: il-corsivo-del-sito-e-un-corsivo-vero quando l'ambiente non ha il catalogo dei caratteri, file non toccato) / 8941 prove verdi sul commit di testa. Database ricostruito da zero con le 182 migrazioni e tests/sql/harness/run.sh tutto verde."
   },
   "voci": [
     {
@@ -203,14 +203,15 @@
       "id": "R08-008",
       "chiave": "architettura|il salvataggio delle varianti non è tutto-o-niente: cancellazioni e aggiornamenti già fatti restano se una riga dopo fallisce",
       "esito": "riparato",
-      "commit": "26c478fdd25502a18887f449129974706b64215d",
+      "commit": "e157fa563196b3d226bbc70a802f46e58d950c32",
       "file_toccati": [
         "lib/products/persistVariantsServer.ts",
         "migrations/323_le_varianti_si_salvano_tutte_o_nessuna.sql"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts",
-        "tests/sql/rls/riparazione-r08-le-varianti-tutte-o-nessuna.test.sql"
+        "tests/sql/rls/riparazione-r08-le-varianti-tutte-o-nessuna.test.sql",
+        "tests/unit/aiuti/salva-varianti-finta.ts",
+        "tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts && bash tests/sql/harness/apply.sh mycity_ci && psql -X -d mycity_ci -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r08-le-varianti-tutte-o-nessuna.test.sql",
       "prova_tipo": "comando",
@@ -224,10 +225,19 @@
       "copre_tutta_la_voce": true,
       "migrazione_da_applicare": "migrations/323_le_varianti_si_salvano_tutte_o_nessuna.sql",
       "prove_esistenti_modificate": [
-        "tests/unit/chi-corregge-la-descrizione-non-rimette-in-magazzino-la-merce-venduta.test.ts, la-porta-del-catalogo-non-scrive-una-scorta-che-nel-frattempo-e-cambiata, la-scorta-si-confronta-con-quella-vista-non-con-quella-scritta, la-variante-mai-vista-non-si-cancella, minori-s06-scorta-in-modifica: importano persistVariantsServer; ai loro finti client ho aggiunto solo rpc() che risponde PGRST202 (funzione mancante), così provano la stessa logica sul ripiego in tre giri. Nessuna attesa cambiata. Anche tests/unit/la-pagina-di-modifica-salva-le-varianti-senza-rimettere-in-magazzino-il-venduto.test.ts (monta la pagina che arriva a persistVariantsServer): stesso rpc() PGRST202, trovata rossa dal verify."
+        "Collaudo K02, un giro di correzione: le sei prove esistenti delle varianti (la-pagina-di-modifica-salva-le-varianti-senza-rimettere-in-magazzino-il-venduto, chi-corregge-la-descrizione-non-rimette-in-magazzino-la-merce-venduta, la-porta-del-catalogo-non-scrive-una-scorta-che-nel-frattempo-e-cambiata, la-scorta-si-confronta-con-quella-vista-non-con-quella-scritta, la-variante-mai-vista-non-si-cancella, minori-s06-scorta-in-modifica) rispondevano PGRST202 e provavano solo il ripiego. Ora la loro rpc è la salva_varianti finta (tests/unit/aiuti/salva-varianti-finta.ts, file nuovo): esegue il carico ricevuto sulla loro banca dati, con le stesse scritture della funzione vera, quindi sorvegliano di nuovo la strada vera. Nessuna attesa cambiata."
       ],
-      "cosa_ho_fatto": "Migrazione 323: funzione salva_varianti(product, delete[], update jsonb, insert jsonb), SECURITY INVOKER (valgono le regole per riga di chi chiama), con un update condizionato alla scorta vista. Al primo conflitto alza scorta_cambiata (DETAIL = id) e il database torna indietro su tutto. persistVariantsServer prepara gli stessi tre elenchi di prima e chiama la funzione; traduce scorta_cambiata nel DaCompletare per il negoziante, con la taglia giusta. Se la funzione manca (PGRST202/42883), ripiega sui tre giri di prima (provato a parte, come ha chiesto la regista). Gli altri errori escono senza scritture a pezzi. Il controllo preventivo delle scorte resta. Dopo il collaudo: il ripiego scatta col 42883 solo se l'errore nomina salva_varianti (una funzione mancante DENTRO non fa ripiegare in silenzio); options nullo non diventa una jsonb null (nullif nella 323). Prove in più, unitaria e SQL (8 verdi).",
-      "verificato_da": "qa (subagente indipendente): su Postgres col token del negozio: trigger di riallineamento regge (cancella-inserisci, aggiorna-inserisci, cancella-tutto); regole per riga (inserimento su prodotto altrui → errore RLS, id altrui in p_delete ignorato); service_role passa, anon no; nomi dei parametri, message/details combaciano; le prove adattate aggiungono solo rpc(). Trovati i due minori sopra (corretti) e la prova della pagina rotta al primo commit (sistemata nel commit dopo). Nota: un falso «scorta_cambiata» su una variante di un ALTRO negozio, come già faceva il codice di prima; non succede nella pagina del negozio."
+      "cosa_ho_fatto": "Migrazione 323: funzione salva_varianti(product, delete[], update jsonb, insert jsonb), SECURITY INVOKER (valgono le regole per riga di chi chiama), con un update condizionato alla scorta vista. Al primo conflitto alza scorta_cambiata (DETAIL = id) e il database torna indietro su tutto. persistVariantsServer prepara gli stessi tre elenchi di prima e chiama la funzione; traduce scorta_cambiata nel DaCompletare per il negoziante, con la taglia giusta. Se la funzione manca (PGRST202/42883), ripiega sui tre giri di prima (provato a parte, come ha chiesto la regista). Gli altri errori escono senza scritture a pezzi. Il controllo preventivo delle scorte resta. Dopo il collaudo: il ripiego scatta col 42883 solo se l'errore nomina salva_varianti (una funzione mancante DENTRO non fa ripiegare in silenzio); options nullo non diventa una jsonb null (nullif nella 323). Prove in più, unitaria e SQL (8 verdi). Collaudo K02: le prove esistenti tornano a provare la strada vera con una salva_varianti finta che esegue il carico; il ripiego PGRST202 resta provato a parte (tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts, caso «ripiego»).",
+      "verificato_da": "qa (subagente indipendente): su Postgres col token del negozio: trigger di riallineamento regge (cancella-inserisci, aggiorna-inserisci, cancella-tutto); regole per riga (inserimento su prodotto altrui → errore RLS, id altrui in p_delete ignorato); service_role passa, anon no; nomi dei parametri, message/details combaciano; le prove adattate aggiungono solo rpc(). Trovati i due minori sopra (corretti) e la prova della pagina rotta al primo commit (sistemata nel commit dopo). Nota: un falso «scorta_cambiata» su una variante di un ALTRO negozio, come già faceva il codice di prima; non succede nella pagina del negozio.",
+      "verifica_k02": {
+        "comando": "mutazioni a mano in lib/products/persistVariantsServer.ts sul carico della rpc, poi npx vitest run sulle 6 prove + tests/unit/riparazione-r08-le-varianti-tutte-o-nessuna.test.ts",
+        "esito": "mordono",
+        "dettaglio": [
+          "p_delete con anche la variante mai vista ([...existingIds].filter(!keepIds)) → 2 rossi in la-variante-mai-vista-non-si-cancella",
+          "stock sempre riscritto (anche se uguale a quello visto) → 3 rossi (chi-corregge…, la-pagina-di-modifica…, la-porta-del-catalogo…)",
+          "file rimesso com'era → 44 verdi"
+        ]
+      }
     },
     {
       "id": "R08-009",
