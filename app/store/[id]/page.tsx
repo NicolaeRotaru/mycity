@@ -20,6 +20,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { useEffect } from 'react';
 import { trackStoreViewed } from '@/lib/analytics/events';
 import { riepilogoRecensioni } from '@/components/store-sections/riepilogo-recensioni';
+import { orariPerLoSchema } from '@/components/store-sections/orari-schema';
 import { DOMINIO_MYCITY } from '@/lib/contatti-pubblici';
 
 /** Letto in modo statico, così Next lo scrive uguale nel pacchetto del server e del browser. */
@@ -100,6 +101,8 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
       longitude: store.store_lng,
     } : undefined,
     sameAs: socials.length > 0 ? socials.map((s) => s.href) : undefined,
+    // 12/11/2026 (R07-022) — gli orari, già nella prima lettura (store_hours col negozio).
+    openingHoursSpecification: orariPerLoSchema(store.store_hours),
     // 5/11/2026 — Media e numero veri (store_review_stats), non le ultime 20 lette.
     aggregateRating: riepilogo ? {
       '@type': 'AggregateRating',
