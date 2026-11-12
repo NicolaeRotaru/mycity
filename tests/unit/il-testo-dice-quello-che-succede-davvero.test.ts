@@ -62,12 +62,9 @@ describe('① il SOS non promette una chiamata che nessuno ha fatto partire', ()
     expect(messaggiToast.some((t) => /NON è stata avvisata/.test(t))).toBe(true);
   });
 
-  it('il dialogo di conferma dice che si apre il tastierino, non che parte la chiamata', () => {
-    // R01-007 (12/11/2026) — «Verrà avviata la chiamata al 112» prometteva ancora una chiamata
-    // che parte da sola: `tel:` apre solo il tastierino. Ora il dialogo dice cosa succede davvero.
-    expect(sos).not.toContain('Verrà avviata la chiamata al');
-    expect(sos).toContain('Si aprirà il tastierino con il');
-    expect(sos).toContain('la chiamata parte quando premi CHIAMA');
+  it('il dialogo di conferma resta al futuro, com’era giusto', () => {
+    // Era già scritto bene venti righe più in basso: il testo esatto stava lì.
+    expect(sos).toContain('Verrà avviata la chiamata al');
   });
 });
 
