@@ -412,6 +412,24 @@ function CatalogTab() {
     }
   };
 
+  // R04-025 (revisione) — Un lavoro pronto che non si vuole si scarta: prima
+  // l'unica uscita era applicarlo, e il secondo avvio restava bloccato.
+  const [scartando, setScartando] = useState(false);
+  const scarta = async () => {
+    if (!job) return;
+    setScartando(true);
+    try {
+      await authedFetch('/api/ai/catalog-batch/cancel', { method: 'POST', body: JSON.stringify({ jobId: job.id }) });
+      ricordaLavoro(null);
+      setJob({ ...job, status: 'canceled' });
+      toast.success('Lavoro scartato: nessuna modifica applicata.');
+    } catch (err) {
+      toast.error(friendlyError(err));
+    } finally {
+      setScartando(false);
+    }
+  };
+
   const apply = async () => {
     if (!job) return;
     setApplying(true);
@@ -527,9 +545,14 @@ function CatalogTab() {
           </ul>
 
           {job.status === 'ready' && (
-            <Button className="mt-3" icon={Check} loading={applying} onClick={() => void apply()}>
-              {actionLabel}
-            </Button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button icon={Check} loading={applying} onClick={() => void apply()}>
+                {actionLabel}
+              </Button>
+              <Button variant="secondary" loading={scartando} disabled={applying} onClick={() => void scarta()}>
+                Scarta
+              </Button>
+            </div>
           )}
           {job.status === 'applied' && (
             <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-olive-600">
