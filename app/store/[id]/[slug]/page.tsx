@@ -42,6 +42,7 @@ export default function StoreCustomPage(props: { params: Promise<{ id: string; s
       <EmptyState
         icon={FileQuestion}
         title="Pagina non trovata"
+        titoloCome="h1"
         description="Questa pagina non esiste o non è più disponibile."
         ctaLabel="Vedi tutti i negozi"
         ctaHref="/stores"
@@ -90,6 +91,12 @@ export default function StoreCustomPage(props: { params: Promise<{ id: string; s
       ]} />
 
       <StoreNav site={site} storeId={ctx.storeId} />
+
+      {/* 12/11/2026 (R08-003) — Il titolo principale della pagina. Prima non c'era: il
+          primo titolo era quello del primo blocco (un h2), e il nome della pagina stava
+          solo nelle briciole. Chi salta di titolo in titolo col lettore di schermo, e
+          Google, non trovavano l'h1 di «Chi siamo», «Orari», «Contatti». */}
+      <h1 className="font-serif text-2xl md:text-3xl font-bold text-ink-900">{page.title}</h1>
 
       {hidden && (
         <div className="flex items-center gap-2 rounded-xl bg-accent-50 border border-accent-200 px-4 py-2.5 text-sm text-accent-800">
