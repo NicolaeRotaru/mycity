@@ -15,6 +15,11 @@ describe('R06-019 · email e telefoni nudi', () => {
     ['cellulare con spazi', 'chiama 333 123 4567', '333 123 4567'],
     ['cellulare con +39', '+39 333 123 45 67', '333 123 45 67'],
     ['fisso', 'negozio 0523 000000', '0523 000000'],
+    ['fisso con la barra', 'tel 0532/123456', '0532/123456'],
+    ['cellulare con la barra', 'tel 333/1234567', '333/1234567'],
+    ['cellulare fra parentesi', '(333) 1234567', '1234567'],
+    ['prefisso 0039 attaccato', '0039333123456', '333123456'],
+    ['prefisso 0039 con spazi', '0039 333 1234567', '1234567'],
   ] as const) {
     it(`${nome}: nascosto`, () => {
       const pulito = testoSenzaIndirizzi(testo);
@@ -29,6 +34,12 @@ describe('R06-019 · email e telefoni nudi', () => {
     ['percorso', '/product/abc'],
     ['passo della cassa', 'indirizzo'],
     ['codice ordine', '#A1B2C3'],
+    ['data con i punti', '05.11.2026'],
+    ['data con i trattini', '05-11-2026'],
+    ['decimale', '314.15926'],
+    ['pacchetto con versione', 'react@18.3.1'],
+    ['percorso con un numero lungo', '/negozio/3331234567'],
+    ['uuid tutto numerico', '33312345-6789-4123-8123-456789012345'],
   ] as const) {
     it(`${nome}: resta com'e'`, () => {
       expect(testoSenzaIndirizzi(testo)).toBe(testo);

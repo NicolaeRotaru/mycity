@@ -106,12 +106,21 @@ export function testoSenzaIndirizzi(testo: string): string {
  * con confini che non toccano gli identificativi (uuid, codici con lettere o
  * trattini attaccati), le date e gli importi.
  */
-const UN_EMAIL = /[\w.+-]+@[\w-]+\.[\w.-]+/g;
-const UN_TELEFONO = /(?<![\w-])(?:\+39[\s.-]?)?(?:3\d{2}|0\d{1,3})(?:[\s.-]?\d){5,8}(?![\w-])/g;
+// Il dominio finisce con lettere: `react@18.3.1` non e' un'email.
+const UN_EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?![\w.-])/gi;
+// Prefisso +39 / 0039 facoltativo, poi un cellulare (3xx) o un fisso (0x…), anche
+// fra parentesi, con spazi, punti, trattini o barre fra le cifre («0532/123456»).
+// Prima e dopo non ci devono essere lettere, cifre, trattini o barre: cosi' un
+// percorso («/negozio/3331234567») o un uuid non vengono toccati.
+const UN_TELEFONO = /(?<![\w\-/])(?:(?:\+|00)39[\s.-]?)?\(?(?:3\d{2}|0\d{1,3})\)?(?:[\s.\-/]?\d){5,8}(?![\w\-/])/g;
+// Quello che ha la forma di un telefono ma non lo e': date («05.11.2026») e decimali («314.15926»).
+const SEMBRA_UNA_DATA_O_UN_DECIMALE = /^(?:\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}|\d+\.\d+)$/;
 
 export function testoSenzaRecapiti(testo: string): string {
   if (!testo) return testo;
-  return testo.replace(UN_EMAIL, VALORE_NASCOSTO).replace(UN_TELEFONO, VALORE_NASCOSTO);
+  return testo
+    .replace(UN_EMAIL, VALORE_NASCOSTO)
+    .replace(UN_TELEFONO, (trovato) => (SEMBRA_UNA_DATA_O_UN_DECIMALE.test(trovato) ? trovato : VALORE_NASCOSTO));
 }
 
 type Conteggio = { pezzi: number };
