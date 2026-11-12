@@ -399,8 +399,13 @@ async function spostaIlCarrello(
     }
     orari = venditori.map((v) => letti.find((n) => n.id === v)?.store_hours ?? null);
   }
-  const fasciaDelGiro = fasciaDopoLaVeloce(romeNow(adesso), orari);
-  const fascia = fasciaDelGiro ? fasciaDalGiornoDellOrdine(fasciaDelGiro, adesso, o.created_at) : null;
+  // 12/11/2026 (R09-008) — Un giro di prima ha già spostato una parte del carrello e poi è caduto: il
+  // resto va nella STESSA fascia, non in quella che si ricalcolerebbe con l'ora nuova. Il carrello
+  // nasce con una fascia sola («Adesso» per tutti), quindi un ordine fratello in fascia l'ha messo il freno.
+  const fasciaDelCarrello = vivi.find((c) => c.id !== o.id && !c.pickup_in_store
+    && /^(Oggi|Domani) · /.test(String(c.delivery_slot ?? '')))?.delivery_slot ?? null;
+  const fasciaDelGiro = fasciaDelCarrello ? null : fasciaDopoLaVeloce(romeNow(adesso), orari);
+  const fascia = fasciaDelCarrello ?? (fasciaDelGiro ? fasciaDalGiornoDellOrdine(fasciaDelGiro, adesso, o.created_at) : null);
   if (!fascia) return nonSiSposta(admin, o, adesso, 'né oggi né domani c’è una fascia in cui tutti i negozi del carrello siano aperti', o.seller_id ? orari[venditori.indexOf(o.seller_id)] : undefined);
 
   const conto = consegnaSenzaLaVeloce(carrello.map((r) => {
@@ -521,7 +526,12 @@ async function spostaIlCarrello(
     // Prima della 124 il lordo non si scrive (la colonna non c'è): fascia, consegna e totale sì.
     const { data: righeScritte, error } = await conRipiegoSchema<Risposta>(
       'veloce-non-confermata.sposta', () => scrivi(valori), () => scrivi(senzaCampi(valori, CAMPI_124)));
-    if (error) throw new Error(`ordine ${c.id}: ${error.message}`);
+    if (error) {
+      // 12/11/2026 (R09-008) — Gli ordini già passati alla fascia restano lì: i loro negozi e il
+      // fattorino lo sanno subito, invece di leggere «Adesso» finché qualcuno non li chiama.
+      if (scritti.length > 0) await avvisaNegoziEFattorino(admin, o, scritti, fascia);
+      throw new Error(`ordine ${c.id}: ${error.message}`);
+    }
     if (!Array.isArray(righeScritte) || righeScritte.length === 0) {
       // Il primo è l'ordine non confermato: se non si scrive, il negozio l'ha accettato adesso
       // (o un altro giro l'ha già spostato). Vince lui, e non si avvisa nessuno.
@@ -734,7 +744,7 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
           // prima), non solo cosa ha fatto questo giro: «in questo giro» era falso.
           `Lo stato adesso: ${fatto.join('; ')}. ` +
           (unoGiaSpostato
-            ? 'Cliente, negozi e fattorino NON sono stati avvisati del cambio di fascia: avvisali tu, e metti nella stessa fascia gli ordini del carrello rimasti «Adesso». '
+            ? 'I negozi e il fattorino degli ordini già spostati sono stati avvisati; il cliente NON ancora: lo avvisa il freno quando sposta il resto del carrello, al giro dopo, nella stessa fascia. Un ordine rimasto «Adesso» e già confermato dal suo negozio il freno non lo tocca: mettilo tu nella stessa fascia. '
             : '') +
           'Il freno riprova da solo ogni 5 minuti e non rende due volte quello che è già reso. Se l’ordine resta «Adesso», ' +
           'senti il negozio e mettilo tu in una fascia col cliente, avvisandolo.',
