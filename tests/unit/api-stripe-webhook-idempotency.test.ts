@@ -85,7 +85,7 @@ vi.mock('@/lib/supabase/server', () => ({
             state.insertPayload = payload;
             return Promise.resolve(state.insertResult);
           },
-          select: () => ({ eq: () => ({ single: () => Promise.resolve(state.existing) }) }),
+          select: () => ({ eq: () => ({ single: () => Promise.resolve(state.existing), maybeSingle: () => Promise.resolve({ ...state.existing, error: null }) }) }),
           update: updateChain,
         };
       }
@@ -140,14 +140,16 @@ describe('POST /api/stripe/webhook — idempotenza', () => {
 
   // 062 — Il caso che prima passava due volte: stesso evento, due consegne
   // insieme, nessuna delle due ancora completata. Chi non rivendica se ne va.
-  it('due consegne concorrenti dello stesso evento: la seconda non riprocessa', async () => {
+  // 12/11/2026 (R12-018) — Era 200 «duplicated»: ma se l'altra consegna era morta col turno in
+  // mano, Stripe smetteva di riprovare e l'avviso si perdeva. Ora 409: Stripe riprova più tardi.
+  it('due consegne concorrenti dello stesso evento: la seconda non riprocessa, e Stripe riproverà', async () => {
     state.insertResult = { error: { code: '23505' } };
     state.existing = { data: { processed: false } };
     state.rivendicate = []; // l'altra consegna l'ha già in mano
     const res = await POST(makeReq());
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(409);
     const json = await res.json();
-    expect(json.duplicated).toBe(true);
+    expect(json.duplicated).toBeUndefined();
     expect(eventLogUpdate).not.toHaveBeenCalled();
   });
 
