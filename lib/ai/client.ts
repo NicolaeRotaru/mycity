@@ -45,7 +45,11 @@ export type ModelId = keyof typeof PRICE_PER_MTOK;
  * prezzi: un nome sconosciuto renderebbe il costo NaN e il freno di spesa
  * cieco, quindi resta il default e lo si dice nel log.
  */
-export const MODELLO_PREDEFINITO: ModelId = 'claude-sonnet-4-5';
+// 12/11/2026 (R04-002) — Il predefinito e' claude-sonnet-4-6: stesso prezzo di
+// claude-sonnet-4-5, che il 30/11/2026 si spegne. Senza variabile su Vercel le
+// funzioni foto/ragionamento sarebbero morte quel giorno. CAMBIA IL MODELLO IN
+// PRODUZIONE (a parita' di prezzo); le variabili restano per sceglierne un altro.
+export const MODELLO_PREDEFINITO: ModelId = 'claude-sonnet-4-6';
 
 /** Modelli che Anthropic ritira, con il giorno dello spegnimento (AAAA-MM-GG). */
 export const MODELLI_RITIRATI: Partial<Record<ModelId, string>> = {

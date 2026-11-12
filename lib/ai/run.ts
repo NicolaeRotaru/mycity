@@ -332,6 +332,12 @@ export function mapAiError(err: unknown, feature: string): NextResponse {
     return ApiErrors.unavailable('Budget AI giornaliero esaurito. Riprova domani.');
   }
   if (status === 503) return ApiErrors.unavailable('Servizio AI non disponibile in questo momento. Riprova fra qualche minuto.');
+  // 12/11/2026 (R04-002) — Un 404 dal fornitore vuol dire «questo modello non
+  // c'e' (piu')»: riprovare non serve. Si dice onestamente e si alza un allarme.
+  if (status === 404) {
+    logger.error('[ai] il fornitore non trova il modello: controllare AI_MODELLO_VISION / AI_MODELLO_SMART', { feature });
+    return ApiErrors.unavailable('Funzione AI momentaneamente non disponibile.');
+  }
   return ApiErrors.badGateway('Errore nel servizio AI. Riprova.');
 }
 
