@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useQuery } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
 import { Landmark, Info, Banknote } from 'lucide-react';
@@ -134,6 +136,20 @@ export default function SellerEarningsPage() {
       return (data ?? []) as unknown as OrderRow[];
     },
   });
+  // R11-003 — Senza IBAN il bonifico non può partire: lo si dice qui, con la strada per scriverlo.
+  const queryIban = useQuery({
+    queryKey: ['seller', 'iban-per-i-bonifici'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      const { data, error } = await supabase.from('profiles').select('billing_iban').eq('id', user.id).maybeSingle();
+      // Una lettura caduta non è «IBAN mancante»: niente avviso, la query resta in errore.
+      if (error) throw error;
+      return (data as { billing_iban?: string | null } | null)?.billing_iban ?? null;
+    },
+  });
+  const ibanMancante = queryIban.isSuccess && !queryIban.data;
+
   // Per i calcoli serve una lista: qui il ripiego è innocuo, perché a decidere COSA disegnare non è
   // più questa riga ma il verdetto qui sotto.
   const orders = query.data ?? [];
@@ -206,6 +222,13 @@ export default function SellerEarningsPage() {
       <SellerPageTitle eyebrow="Portafoglio" title="Guadagni" sub="Incassi reali dai tuoi ordini e stato dei bonifici" />
       {avvisoDelTettoOrdini(orders.length) && (
         <p role="note" className="mb-4 text-xs text-ink-500">{avvisoDelTettoOrdini(orders.length)}</p>
+      )}
+
+      {ibanMancante && (
+        <div role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <strong>Manca il tuo IBAN:</strong> senza, i bonifici dei tuoi ordini non possono partire.{' '}
+          <Link href="/seller/profile#bonifici" className="font-semibold underline">Scrivilo nel profilo</Link>.
+        </div>
       )}
 
       {/* Period switcher */}

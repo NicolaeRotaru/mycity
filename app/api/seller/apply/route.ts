@@ -250,3 +250,101 @@ export const POST = withAuthRateLimit(
     return NextResponse.json({ ok: true }, { status: 200 });
   },
 );
+
+/**
+ * R11-003 — I DATI PER I BONIFICI DI UN NEGOZIO GIÀ ISCRITTO.
+ *
+ * IBAN, ragione sociale, partita IVA, sede, PEC e SDI si scrivevano solo dal
+ * modulo d'iscrizione: chi era gia' approvato veniva rimandato a
+ * /seller/profile (che quei campi non li aveva) e il POST qui sopra gli
+ * rispondeva «già approvato». Un negozio approvato prima del modulo nuovo, o
+ * che cambia banca, non poteva scrivere l'IBAN: Nicola il lunedi' non sapeva
+ * dove mandare il bonifico. Qui si aggiornano SOLO quei dati, con gli stessi
+ * controlli dell'iscrizione, senza toccare ruolo e stato del negozio.
+ */
+const DatiPerIBonifici = z.object({
+  billingIban: z
+    .string()
+    .transform(normalizzaIban)
+    .refine((v) => ibanValido(v), { message: 'IBAN non valido: controlla i caratteri' }),
+  businessLegalName: RichiestaNegozio.shape.businessLegalName,
+  businessVatNumber: RichiestaNegozio.shape.businessVatNumber,
+  businessAddress: RichiestaNegozio.shape.businessAddress,
+  businessCity: RichiestaNegozio.shape.businessCity,
+  businessZip: RichiestaNegozio.shape.businessZip,
+  businessPec: RichiestaNegozio.shape.businessPec,
+  businessSdi: RichiestaNegozio.shape.businessSdi,
+});
+
+export const PATCH = withAuthRateLimit(
+  { name: 'seller-billing', max: 10, windowMs: 60_000 },
+  async ({ user, req }) => {
+    let corpo: unknown;
+    try {
+      corpo = await jsonRichiesta(req, TETTO_JSON);
+    } catch (errore) {
+      if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
+      return ApiErrors.invalidRequest('Richiesta non leggibile');
+    }
+    const esito = DatiPerIBonifici.safeParse(corpo);
+    if (!esito.success) return ApiErrors.invalidRequest(esito.error.issues[0]?.message ?? 'Dati non validi');
+    const f = esito.data;
+
+    const admin = getAdminSupabase();
+    const { data: attuale, error: errLettura } = await admin
+      .from('profiles')
+      .select('role, approval_status, billing_iban, store_name')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (errLettura) {
+      logger.error('[seller-billing] profilo non leggibile', { userId: user.id, message: errLettura.message });
+      return ApiErrors.internal('Non è stato possibile salvare i dati');
+    }
+    if (!attuale) return ApiErrors.notFound('Profilo non trovato');
+    if (attuale.role !== 'seller') return ApiErrors.forbidden('Solo un negozio può salvare i dati per i bonifici.');
+    if (attuale.approval_status === 'suspended') {
+      return ApiErrors.forbidden("Il tuo negozio è sospeso: per i dati dei bonifici scrivi all'assistenza.");
+    }
+
+    const { data: scritti, error } = await admin
+      .from('profiles')
+      .update({
+        billing_iban: f.billingIban,
+        business_legal_name: f.businessLegalName,
+        business_vat_number: f.businessVatNumber,
+        business_address: f.businessAddress,
+        business_city: f.businessCity,
+        business_zip: f.businessZip,
+        business_pec: f.businessPec || null,
+        business_sdi: f.businessSdi ? f.businessSdi.toUpperCase() : null,
+      })
+      .eq('id', user.id)
+      .eq('role', 'seller')
+      .neq('approval_status', 'suspended')
+      .select('id');
+    if (error) {
+      logger.error('[seller-billing] dati non salvati', { userId: user.id, code: error.code, message: error.message });
+      return ApiErrors.internal('Non è stato possibile salvare i dati');
+    }
+    if (!scritti || scritti.length === 0) {
+      return ApiErrors.conflict('Lo stato del tuo account è appena cambiato: ricarica la pagina.');
+    }
+
+    // Un IBAN cambiato e' la mossa di chi vuole dirottare un bonifico: lo sa
+    // subito chi paga, prima del lunedi'.
+    const prima = normalizzaIban(String((attuale as { billing_iban?: string | null }).billing_iban ?? ''));
+    if (prima !== f.billingIban) {
+      try {
+        await notifyAdmins(
+          prima ? 'IBAN del negozio cambiato' : 'IBAN del negozio inserito',
+          `${(attuale as { store_name?: string | null }).store_name ?? 'Un negozio'} ha ${prima ? 'cambiato' : 'inserito'} l'IBAN per i bonifici (finisce con ${f.billingIban.slice(-4)}). Controlla prima del prossimo bonifico.`,
+          '/admin/payouts',
+        );
+      } catch (errore) {
+        logger.error('[seller-billing] avviso del cambio IBAN non partito', { userId: user.id, errore });
+      }
+    }
+
+    return NextResponse.json({ ok: true }, { status: 200 });
+  },
+);
