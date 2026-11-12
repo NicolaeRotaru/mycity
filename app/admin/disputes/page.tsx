@@ -230,7 +230,7 @@ export default function AdminDisputesPage() {
           <div className="mb-3 flex items-center gap-2">
             <ShieldAlert size={17} className="text-secondary-600" strokeWidth={2.2} aria-hidden />
             <h2 className="font-serif text-base font-bold text-ink-900">Segnali di rischio</h2>
-            <span className="rounded-full bg-secondary-50 px-2 py-0.5 text-[11px] font-bold text-secondary-700">auto</span>
+            <span className="rounded-full bg-secondary-50 px-2 py-0.5 text-[11px] font-bold text-secondary-700">automatici</span>
           </div>
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
             {riskSignals.map((r) => {
@@ -309,11 +309,11 @@ export default function AdminDisputesPage() {
                     </div>
                     <p className="text-sm text-ink-900 mt-2">
                       <strong>{nomeDelCliente(d)}</strong>
-                      {' vs '}
+                      {' contro '}
                       <strong>{d.against?.store_name ?? d.against?.full_name ?? 'Venditore'}</strong>
                     </p>
                     <p className="text-xs text-ink-400 mt-0.5">
-                      Ordine #{d.order_id.slice(0, 8)} · {new Date(d.created_at).toLocaleDateString('it-IT')}
+                      Ordine #{d.order_id.slice(0, 8)} · {new Date(d.created_at).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })}
                     </p>
                   </div>
                 </div>
@@ -438,7 +438,7 @@ export default function AdminDisputesPage() {
                 <X size={14} /> Rifiuta
               </button>
             </div>
-            <p className="text-xs text-ink-400 text-center">Min 10 caratteri di motivazione richiesti.</p>
+            <p className="text-xs text-ink-400 text-center">Scrivi una motivazione di almeno 10 caratteri.</p>
           </div>
         )}
       </Modal>

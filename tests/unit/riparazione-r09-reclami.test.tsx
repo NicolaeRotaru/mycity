@@ -78,6 +78,10 @@ describe('R09-015 · la pagina dei reclami sul telefono e oltre i 100', () => {
     expect(host.textContent).not.toMatch(/\bbuyer\b|\bseller\b/i);
     const s = readFileSync('app/admin/disputes/page.tsx', 'utf8');
     expect(s).not.toMatch(/A favore (buyer|seller)/);
+    expect(host.textContent).not.toMatch(/\bvs\b|\bauto\b/);
+    expect(s).not.toContain('Min 10 caratteri');
+    // La data del reclamo è quella di Piacenza, come le altre ore del sito.
+    expect(s).toContain("toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' })");
   });
 });
 
