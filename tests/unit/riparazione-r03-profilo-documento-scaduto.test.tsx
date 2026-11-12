@@ -127,4 +127,16 @@ describe('R03-018 — il profilo dice il vero sui documenti', () => {
     expect(t).not.toContain('Verificato');
     expect(t).toContain('In attesa di verifica');
   });
+
+  it('in bici senza patente: «Non serve in bici», non «Mancante»', async () => {
+    const t = await riga({ ...BASE, rider_vehicle_type: 'BIKE', rider_license_expires_on: null, is_approved: true }, 'Patente di guida');
+    expect(t).toContain('Non serve in bici');
+    expect(t).not.toContain('Mancante');
+  });
+
+  it('HACCP scaduto: «Scaduta» ma senza dire che ferma le consegne (è facoltativo)', async () => {
+    const t = await riga({ ...BASE, is_approved: true, rider_haccp_expires_on: '2026-10-01' }, 'Attestato HACCP');
+    expect(t).toContain('Scadut');
+    expect(t).not.toContain('non puoi prendere consegne');
+  });
 });

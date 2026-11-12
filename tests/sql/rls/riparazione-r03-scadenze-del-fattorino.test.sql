@@ -3,11 +3,11 @@
 -- =============================================================================
 --   tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test
 --
--- ① con la polizza scaduta ieri is_rider_approvato() è falso e prendi_ordine non passa
--- ② con le scadenze nel futuro (o vuote: la bici) è vero
--- ③ approvato, non può riscriversi da solo la scadenza della polizza
--- ④ non ancora approvato, il modulo d'iscrizione la scrive ancora
--- Senza la 270 i passi ① e ③ sono rossi. Tutto con ROLLBACK.
+-- ① con la polizza scaduta ieri prendi_ordine non passa
+-- ② in regola, e in bici senza patente né polizza, prende l'ordine
+-- ③ le consegne già prese si finiscono anche a polizza scaduta
+-- ④ approvato in bici che si cambia il mezzo in «auto»: senza patente non prende ordini
+-- Senza la 270 i passi ① e ④ sono rossi. Tutto con ROLLBACK.
 -- =============================================================================
 
 BEGIN;
@@ -48,6 +48,18 @@ INSERT INTO public.orders (
   'a0000000-0000-0000-0000-00000000000a', '33333333-3333-3333-3333-333333333333',
   '11111111-1111-1111-1111-111111111111', 42.00, 'PAID', 'READY',
   'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121', 450
+), (
+  'a0000000-0000-0000-0000-00000000000b', '33333333-3333-3333-3333-333333333333',
+  '11111111-1111-1111-1111-111111111111', 30.00, 'PAID', 'READY',
+  'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121', 450
+), (
+  'a0000000-0000-0000-0000-00000000000c', '33333333-3333-3333-3333-333333333333',
+  '11111111-1111-1111-1111-111111111111', 12.00, 'PAID', 'READY',
+  'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121', 450
+), (
+  'a0000000-0000-0000-0000-00000000000d', '33333333-3333-3333-3333-333333333333',
+  '11111111-1111-1111-1111-111111111111', 9.00, 'PAID', 'READY',
+  'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121', 450
 );
 
 -- Da qui in poi scrive la persona, coi suoi permessi: niente porte di servizio.
@@ -57,35 +69,30 @@ SET LOCAL mycity.allow_order_write   = '0';
 -- ① Polizza scaduta ieri.
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claims = '{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}';
-INSERT INTO esiti SELECT 'polizza scaduta: non risulta fattorino in regola', NOT public.is_rider_approvato(), 'is_rider_approvato=' || public.is_rider_approvato();
 INSERT INTO esiti
 SELECT 'polizza scaduta: non prende l''ordine', (r ->> 'ok') = 'false', r::text
   FROM (SELECT public.prendi_ordine('a0000000-0000-0000-0000-00000000000a') AS r) x;
 
--- ③ Approvato: non si riscrive la scadenza da solo.
-DO $$
-BEGIN
-  UPDATE public.profiles SET rider_insurance_expires_on = '2027-10-31' WHERE id = '22222222-2222-2222-2222-222222222222';
-  INSERT INTO esiti VALUES ('approvato: la scadenza non si cambia dal browser', false, 'la scrittura è passata');
-EXCEPTION WHEN insufficient_privilege THEN
-  INSERT INTO esiti VALUES ('approvato: la scadenza non si cambia dal browser', true, SQLERRM);
-END $$;
+-- ③ La consegna già presa si finisce: is_rider_approvato (usata dalle regole che fanno avanzare
+--    un ordine già suo) resta vera, così la polizza scaduta a metà non lascia la spesa in mano.
+INSERT INTO esiti SELECT 'polizza scaduta: le consegne già prese si possono finire', public.is_rider_approvato(), '';
 
--- ② In regola, e in bici senza scadenze.
+-- ② In regola, e in bici senza scadenze: prendono il loro ordine.
 SET LOCAL request.jwt.claims = '{"sub":"44444444-4444-4444-4444-444444444444","role":"authenticated"}';
-INSERT INTO esiti SELECT 'scadenze nel futuro: fattorino in regola', public.is_rider_approvato(), '';
+INSERT INTO esiti
+SELECT 'scadenze nel futuro: prende l''ordine', (r ->> 'ok') = 'true', r::text
+  FROM (SELECT public.prendi_ordine('a0000000-0000-0000-0000-00000000000b') AS r) x;
 SET LOCAL request.jwt.claims = '{"sub":"55555555-5555-5555-5555-555555555555","role":"authenticated"}';
-INSERT INTO esiti SELECT 'in bici senza patente né polizza: in regola', public.is_rider_approvato(), '';
+INSERT INTO esiti
+SELECT 'in bici senza patente né polizza: prende l''ordine', (r ->> 'ok') = 'true', r::text
+  FROM (SELECT public.prendi_ordine('a0000000-0000-0000-0000-00000000000c') AS r) x;
 
--- ④ Non ancora approvato: il modulo scrive le scadenze.
-SET LOCAL request.jwt.claims = '{"sub":"66666666-6666-6666-6666-666666666666","role":"authenticated"}';
-DO $$
-BEGIN
-  UPDATE public.profiles SET rider_insurance_expires_on = '2027-10-31' WHERE id = '66666666-6666-6666-6666-666666666666';
-  INSERT INTO esiti VALUES ('non approvato: il modulo scrive la scadenza', true, '');
-EXCEPTION WHEN OTHERS THEN
-  INSERT INTO esiti VALUES ('non approvato: il modulo scrive la scadenza', false, SQLERRM);
-END $$;
+-- ④ Approvato in bici che si cambia il mezzo in «auto» dal browser, senza patente né polizza.
+SET LOCAL request.jwt.claims = '{"sub":"55555555-5555-5555-5555-555555555555","role":"authenticated"}';
+UPDATE public.profiles SET rider_vehicle_type = 'CAR' WHERE id = '55555555-5555-5555-5555-555555555555';
+INSERT INTO esiti
+SELECT 'passato in auto senza patente: prendi_ordine rifiuta', (r ->> 'ok') = 'false', r::text
+  FROM (SELECT public.prendi_ordine('a0000000-0000-0000-0000-00000000000d') AS r) x;
 
 RESET ROLE;
 DO $$

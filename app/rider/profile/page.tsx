@@ -158,19 +158,22 @@ export default function RiderProfilePage() {
   const soon = (d: string | null) => !!d && (new Date(d).getTime() - Date.now()) < 60 * 86400000; // <60gg
   type DocStatus = 'ok' | 'soon' | 'expired' | 'missing';
   const statoDellaScadenza = (d: string | null): DocStatus => (!d ? 'missing' : scaduto(d) ? 'expired' : soon(d) ? 'soon' : 'ok');
-  const testoDellaScadenza = (d: string) =>
-    scaduto(d) ? `Scaduta il ${fmtDate(d)} · non puoi prendere consegne` : `Scade ${fmtDate(d)}`;
+  // Solo patente e polizza fermano le consegne (migrazione 270); l'HACCP è facoltativo.
+  const testoDellaScadenza = (d: string, ferma = true) =>
+    scaduto(d) ? `Scaduta il ${fmtDate(d)}${ferma ? ' · non puoi prendere consegne' : ''}` : `Scade ${fmtDate(d)}`;
   const approvato = (p?.is_approved as boolean | null) === true;
+  // In bici patente e polizza non servono (lib/admin/regole-approvazione.ts): niente «Mancante» rosso.
+  const inBici = vehicleType === 'BIKE' || vehicleType === 'EBIKE';
   const docs: { Icon: LucideIcon; label: string; sub: string; status: DocStatus }[] = [
     {
       Icon: IdCard, label: 'Patente di guida',
-      sub: licenseExpires ? testoDellaScadenza(licenseExpires) : 'Da caricare',
-      status: statoDellaScadenza(licenseExpires),
+      sub: licenseExpires ? testoDellaScadenza(licenseExpires) : inBici ? 'Non serve in bici' : 'Da caricare',
+      status: !licenseExpires && inBici ? 'ok' : statoDellaScadenza(licenseExpires),
     },
     {
       Icon: ShieldCheck, label: 'Assicurazione RC',
-      sub: insuranceExpires ? testoDellaScadenza(insuranceExpires) : 'Da caricare',
-      status: statoDellaScadenza(insuranceExpires),
+      sub: insuranceExpires ? testoDellaScadenza(insuranceExpires) : inBici ? 'Non obbligatoria in bici per ora' : 'Da caricare',
+      status: !insuranceExpires && inBici ? 'ok' : statoDellaScadenza(insuranceExpires),
     },
     {
       Icon: FileCheck, label: 'Documento identità',
@@ -179,7 +182,7 @@ export default function RiderProfilePage() {
     },
     {
       Icon: ShieldCheck, label: 'Attestato HACCP',
-      sub: haccpExpires ? testoDellaScadenza(haccpExpires) : 'Facoltativo (food)',
+      sub: haccpExpires ? testoDellaScadenza(haccpExpires, false) : 'Facoltativo (food)',
       status: statoDellaScadenza(haccpExpires),
     },
   ];
