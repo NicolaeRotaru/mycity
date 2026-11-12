@@ -3,6 +3,7 @@ import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { MARKETPLACE_FEE_BPS, commissioneCents } from '@/lib/constants';
 import { VOCE_CONSEGNA } from '@/lib/promesse-pubbliche';
+import { createHash } from 'node:crypto';
 
 let _stripe: Stripe | null = null;
 
@@ -319,6 +320,22 @@ export async function createMultiSellerCheckoutSession(
 }
 
 /**
+ * R11-020 — LA CHIAVE DEL CONTO CONNECT CAMBIA CON QUELLO CHE SI CHIEDE A STRIPE.
+ *
+ * Era `connect_${sellerId}`, fissa per persona, mentre email e capacita'
+ * cambiano con l'account e col ruolo. Se il primo tentativo si interrompeva e
+ * poi cambiavano email o ruolo, Stripe riceveva la stessa chiave con parametri
+ * diversi e rispondeva errore per 24 ore: negozio e fattorino leggevano «Errore
+ * Stripe» a ogni nuovo tentativo. Ora la chiave porta anche ruolo ed email (in
+ * forma di impronta, non in chiaro): lo stesso tentativo ripetuto resta lo
+ * stesso conto, un tentativo con parametri nuovi e' una richiesta nuova.
+ */
+export function chiaveDelContoConnect(personaId: string, email: string, ruolo: 'venditore' | 'fattorino'): string {
+  const impronta = createHash('sha256').update(email.trim().toLowerCase()).digest('hex').slice(0, 16);
+  return `connect_${personaId}_${ruolo}_${impronta}`;
+}
+
+/**
  * Crea un Connect Account "Express" e ritorna l'URL di onboarding (KYC, IBAN,
  * accordo TOS Stripe). La usano sia i negozi sia i fattorini: da chiamare
  * quando la verifica su MyCity e' completa e prima del primo pagamento.
@@ -403,7 +420,7 @@ export async function createConnectOnboardingLink(args: {
         transfers: { requested: true },
       },
       metadata: { seller_id: args.sellerId },
-    }, { idempotencyKey: `connect_${args.sellerId}` });
+    }, { idempotencyKey: chiaveDelContoConnect(args.sellerId, args.sellerEmail, args.ruolo) });
     accountId = account.id;
     if (args.salvaConto) await args.salvaConto(accountId);
   }
