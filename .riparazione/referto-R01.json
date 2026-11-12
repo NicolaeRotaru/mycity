@@ -1,12 +1,12 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-12 15:25",
+  "aggiornato": "2026-11-12 15:27",
   "finita": true,
-  "testa": "111a5ac82ac304acd9515731da88bad84d9ad9ee",
+  "testa": "90da623b9876c0bad7e0fdb1063bbf6a08c4fb1f",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "nota": "typecheck + lint + 1214 file di prova, 8929 prove passate (con il servizio PostgreSQL locale acceso, come la CI dopo R01-011)."
+    "nota": "typecheck + lint + 1214 file di prova, 8929 prove passate (con il servizio PostgreSQL locale acceso, come la CI dopo R01-011). Dopo i commit senza skipIf: tsc, eslint sui file di prova R01 e le 42 prove R01 verdi."
   },
   "voci": [
     {
@@ -221,7 +221,11 @@
         }
       ],
       "chiave": "architettura|se sulla macchina delle prove manca postgres, sette file di prova si saltano in silenzio e la verifica esce verde lo stesso",
-      "verificato_da": "qa (subagente): YAML valido, 118/118 prove che leggono ci.yml, 19 file col database con l'ambiente della CI 171/171 senza salti; PGHOST/PGUSER non rompono niente. Conferma il parziale: PROVE_POSTGRES_OBBLIGATORIE non lo legge ancora nessun file (serve_file_altrui)."
+      "verificato_da": "qa (subagente): YAML valido, 118/118 prove che leggono ci.yml, 19 file col database con l'ambiente della CI 171/171 senza salti; PGHOST/PGUSER non rompono niente. Conferma il parziale: PROVE_POSTGRES_OBBLIGATORIE non lo legge ancora nessun file (serve_file_altrui).",
+      "commit_seguito": [
+        "90da623b9876c0bad7e0fdb1063bbf6a08c4fb1f"
+      ],
+      "nota_skip": "Le prove col database vero non usano piu' skipIf: senza PostgreSQL falliscono con un messaggio chiaro (richiesta della regista, sorveglianza 16:13)."
     },
     {
       "id": "R01-012",
@@ -282,7 +286,11 @@
       "cosa_ho_fatto": "Nel passo delle migrazioni del rilascio, se lo script esce con errore dopo aver iniziato ad applicare (non per il tetto, uscita 4), il riepilogo dice che il database e' avanti: elenca le migrazioni applicate prima del guasto e quella rotta, e scrive fermo=migrazioni-a-meta. Prova: il passo vero gira contro un Postgres usa e getta con la seconda di tre migrazioni rotta.",
       "chiave": "deploy-sre|il database avanti si scopre solo se cade la prova di fumo, non se cadono le migrazioni",
       "verificato_da": "qa (subagente): logica corretta sotto bash -e/pipefail, escape giusto, YAML valido. Caso limite: se cade la domanda «gia' applicata?» per la N+1, il riepilogo nomina come rotta la N (applicata davvero) e la toglie dall'elenco.",
-      "cosa_resta_minore": "il caso limite della domanda al registro che cade fra due migrazioni (vedi verificato_da)."
+      "cosa_resta_minore": "il caso limite della domanda al registro che cade fra due migrazioni (vedi verificato_da).",
+      "commit_seguito": [
+        "81c9cee96d6e7196cd7c94e90b0bc4189fc54cc3"
+      ],
+      "nota_skip": "Le prove col database vero non usano piu' skipIf: senza PostgreSQL falliscono con un messaggio chiaro (richiesta della regista, sorveglianza 16:13)."
     },
     {
       "id": "R01-015",
@@ -387,7 +395,11 @@
       "cosa_ho_fatto": "Nuova migrazione 250 (non applicata: lo decide Nicola, la applica il rilascio controllato) che semina in cron_heartbeats la riga iniziale di external-price-alerts, riquadra-casse e veloce-non-confermata, come la 095 per i lavori di allora, senza sovrascrivere un battito vero (ON CONFLICT DO NOTHING). lib/cron-health.ts non toccato: con le righe seminate il ramo «mai partito» non scatta piu' dopo il rilascio. Prova anche su un Postgres usa e getta.",
       "chiave": "deploy-sre|dopo il deploy il freno della veloce può risultare «mai partito» per un attimo, con un falso allarme agli amministratori",
       "verificato_da": "qa (subagente): ricostruzione completa con apply.sh su PG16 «applicate 179 · fallite 0», cron_heartbeats con 11 righe; nessuna prova conta le migrazioni. Un lavoro nuovo senza riga di seme fa diventare rossa riparazione-r01-battiti-iniziali.",
-      "cosa_resta": "La radice sta in lib/cron-health.ts (lavoriFermi): la finestra di prima accensione si misura dal battito piu' vecchio, non dalla nascita del lavoro, e nei dati non c'e' una data di nascita da usare. Quindi ogni lavoro nuovo ha bisogno della sua riga di seme in una migrazione. Questo lo pretende riparazione-r01-battiti-iniziali (un lavoro con una soglia senza seme fa diventare rossa la prova). La cura e' tutta in una migrazione nuova (250): la prova rimessa esce 3 perche' la macchina non decide su un file nuovo, e decide il collaudo."
+      "cosa_resta": "La radice sta in lib/cron-health.ts (lavoriFermi): la finestra di prima accensione si misura dal battito piu' vecchio, non dalla nascita del lavoro, e nei dati non c'e' una data di nascita da usare. Quindi ogni lavoro nuovo ha bisogno della sua riga di seme in una migrazione. Questo lo pretende riparazione-r01-battiti-iniziali (un lavoro con una soglia senza seme fa diventare rossa la prova). La cura e' tutta in una migrazione nuova (250): la prova rimessa esce 3 perche' la macchina non decide su un file nuovo, e decide il collaudo.",
+      "commit_seguito": [
+        "64c8a5c4ef46072009e72aaddeadd5cad05afa9b"
+      ],
+      "nota_skip": "Le prove col database vero non usano piu' skipIf: senza PostgreSQL falliscono con un messaggio chiaro (richiesta della regista, sorveglianza 16:13)."
     },
     {
       "id": "R01-020",
@@ -424,7 +436,11 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Gli avvisi sulle migrazioni escono sia su stderr sia su stdout come ::warning:: (annotazione GitHub); il passo delle migrazioni del rilascio copia le righe ::warning:: del diario nel riepilogo, prima di uscire anche quando lo script fallisce.",
       "chiave": "deploy-sre|l'avviso sul commit esce da una porta che il riepilogo del rilascio non legge",
-      "verificato_da": "qa (subagente): ::warning:: su stdout passa per tee nel DIARIO e il blocco nuovo lo copia nel riepilogo prima dell'uscita."
+      "verificato_da": "qa (subagente): ::warning:: su stdout passa per tee nel DIARIO e il blocco nuovo lo copia nel riepilogo prima dell'uscita.",
+      "commit_seguito": [
+        "a0eaa3e3a2cf2c1e57bcace8c6e09747d5ea4b99"
+      ],
+      "nota_skip": "Le prove col database vero non usano piu' skipIf: senza PostgreSQL falliscono con un messaggio chiaro (richiesta della regista, sorveglianza 16:13)."
     },
     {
       "id": "R01-023",
@@ -447,7 +463,11 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il commento non promette piu' «danno nullo» per tutti: nomina la 115 e la 117. L'avviso guarda cosa c'e' dopo il primo COMMIT: se e' solo NOTIFY/commenti avviso leggero, se c'e' altro lavoro avviso forte (⚠⚠) con la prima istruzione. Sulla cartella vera l'avviso forte tocca solo 115 e 117 (31 file con COMMIT).",
       "chiave": "deploy-sre|lo script delle migrazioni promette che il danno e' nullo, e in due file su ventitre' non lo e'",
-      "verificato_da": "qa (subagente): awk lanciato sulle 31 migrazioni con COMMIT: avviso forte solo per 115 e 117, leggero per le altre 29. Minori: cita «BEGIN;» come lavoro; head -c 60 puo' tagliare un carattere multibyte."
+      "verificato_da": "qa (subagente): awk lanciato sulle 31 migrazioni con COMMIT: avviso forte solo per 115 e 117, leggero per le altre 29. Minori: cita «BEGIN;» come lavoro; head -c 60 puo' tagliare un carattere multibyte.",
+      "commit_seguito": [
+        "189e62074478953db70712918576a3d7beb1f700"
+      ],
+      "nota_skip": "Le prove col database vero non usano piu' skipIf: senza PostgreSQL falliscono con un messaggio chiaro (richiesta della regista, sorveglianza 16:13)."
     },
     {
       "id": "R01-024",
@@ -472,7 +492,11 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Nello script del rilascio (le due interrogazioni del registro) e in esitoDelConfronto il nome conta come «gia' applicata» solo se il numero di quella riga NON e' il prefisso di un altro file del deposito (rinumerazione vera, non omonimo). conta-migrazioni-mancanti.sh usa lo script e si sistema da solo. Nuova prova: nessun nome doppio in migrations/, e lo script, su un Postgres usa e getta, applica davvero 250_minori dopo 127_minori. Lo script accetta CARTELLA_MIGRAZIONI solo per le prove. Rischio da guardare: se in produzione una riga storica ha il numero di un altro file con lo stesso nome, il controllo della deriva ora la segnala come mancante (rumore, non un buco). tests/unit/migrations-integrity.test.ts non toccato (non importa file miei).",
       "chiave": "deploy-sre|una migrazione nuova con lo stesso nome di una vecchia non arriva mai in produzione, e tutti e tre i controlli dicono verde",
-      "verificato_da": "qa (subagente): su un database ricostruito per intero, un omonimo (251_…) risulta mancante, una rinumerazione con versione a timestamp resta applicata, la deriva dice «tutte le 179». Una rinumerazione il cui numero vecchio e' ora di un altro file sarebbe segnalata come mancante: nel deposito non ce n'e'."
+      "verificato_da": "qa (subagente): su un database ricostruito per intero, un omonimo (251_…) risulta mancante, una rinumerazione con versione a timestamp resta applicata, la deriva dice «tutte le 179». Una rinumerazione il cui numero vecchio e' ora di un altro file sarebbe segnalata come mancante: nel deposito non ce n'e'.",
+      "commit_seguito": [
+        "b91e13dfe8dfbe4612c29a97a21497cbc5e866c3"
+      ],
+      "nota_skip": "Le prove col database vero non usano piu' skipIf: senza PostgreSQL falliscono con un messaggio chiaro (richiesta della regista, sorveglianza 16:13)."
     },
     {
       "id": "R01-025",
