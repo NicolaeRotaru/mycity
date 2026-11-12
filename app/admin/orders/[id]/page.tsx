@@ -62,7 +62,9 @@ function Riga({ etichetta, children }: { etichetta: string; children: React.Reac
   return (
     <div className="flex justify-between gap-4 py-1.5 text-sm">
       <dt className="text-ink-500">{etichetta}</dt>
-      <dd className="text-right text-ink-800">{children}</dd>
+      {/* R10-015 — Un link incollato nelle note di consegna non va a capo da solo: senza
+          min-w-0 e il ritorno a capo ovunque, la pagina si allargava oltre lo schermo. */}
+      <dd className="min-w-0 break-words text-right text-ink-800 [overflow-wrap:anywhere]">{children}</dd>
     </div>
   );
 }
