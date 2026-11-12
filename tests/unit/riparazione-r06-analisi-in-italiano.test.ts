@@ -42,7 +42,7 @@ describe('R06-017 · l\'Analisi del negozio parla italiano', () => {
     expect(testo).toContain('Consigli');
     expect(testo).toContain('30 giorni');
     expect(testo).toContain('la merce pronta');
-    for (const inglese of ['Rating medio', 'Insight', '30gg', 'stock pronto']) {
+    for (const inglese of ['Rating medio', 'Insight', '30gg', '7gg', 'stock pronto']) {
       expect(testo, `La pagina scrive ancora «${inglese}»`).not.toContain(inglese);
     }
     s.smonta();

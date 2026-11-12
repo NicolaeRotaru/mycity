@@ -337,11 +337,11 @@ export default function SellerAnalyticsPage() {
           delta={
             analytics.visiteIgnote
               ? 'Non sono riuscito a leggere le visite'
-              : `${analytics.viewsToday} oggi · ${analytics.views7} ultimi 7gg`
+              : `${analytics.viewsToday} oggi · ${analytics.views7} negli ultimi 7 giorni`
           }
           color="primary"
         />
-        <KpiCard icon={ShoppingCart} label="Ordini (30 giorni)" value={analytics.orders30.toString()} delta={`${analytics.orders7} ultimi 7gg`} color="olive" />
+        <KpiCard icon={ShoppingCart} label="Ordini (30 giorni)" value={analytics.orders30.toString()} delta={`${analytics.orders7} negli ultimi 7 giorni`} color="olive" />
         <KpiCard
           icon={TrendingUp}
           label="Conversion rate"
