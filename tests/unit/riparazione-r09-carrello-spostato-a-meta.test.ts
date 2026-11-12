@@ -125,18 +125,34 @@ const chiusoDomenica = { mon: lunSab, tue: lunSab, wed: lunSab, thu: lunSab, fri
 describe("R09-008 · il carrello spostato a metà resta in una fascia sola", () => {
   it("il negozio del primo ordine è avvisato subito, e al giro dopo il secondo ordine va nella stessa fascia", async () => {
     db.profiles = [{ id: "forno", store_hours: chiusoDomenica }, { id: "frutta", store_hours: chiusoDomenica }];
+    // Venerdì 30/10 alle 20:40 di Piacenza: la fascia del freno è di domani mattina.
+    db.orders = [ordine({ created_at: "2026-10-30T19:40:00.000Z" }), ordine({ id: "o2", seller_id: "frutta", created_at: "2026-10-30T19:40:01.000Z" })];
+    db.cod_checkout_attempts = [{ user_id: "maria", order_ids: [{ id: "o1" }, { id: "o2" }] }];
+    guasto.ordine = "o2";
+    await giro("2026-10-30T19:51:00.000Z");
+    const fascia = String(o("o1").delivery_slot);
+    expect(fascia).toMatch(/^Domani · /);
+    expect(o("o2").delivery_slot).toBe(ETICHETTA_ADESSO);
+    expect(db.notifications.some((n) => n.user_id === "forno" && String(n.body).includes(fascia))).toBe(true);
+
+    // Il guasto passa; il giro dopo arriva sabato alle 7:30, quando la fascia «del momento» è un'altra
+    // ma quella del carrello è ancora davanti.
+    guasto.ordine = null;
+    await giro("2026-10-31T06:30:00.000Z");
+    expect(o("o2").delivery_slot).toBe(fascia);
+  });
+
+  it("se il guasto dura finché la fascia del carrello è finita, il resto non va in una fascia già passata", async () => {
+    db.profiles = [{ id: "forno", store_hours: chiusoDomenica }, { id: "frutta", store_hours: chiusoDomenica }];
     db.orders = [ordine(), ordine({ id: "o2", seller_id: "frutta", created_at: "2026-10-30T17:05:01.000Z" })];
     db.cod_checkout_attempts = [{ user_id: "maria", order_ids: [{ id: "o1" }, { id: "o2" }] }];
     guasto.ordine = "o2";
     await giro("2026-10-30T17:16:00.000Z");
     const fascia = String(o("o1").delivery_slot);
-    expect(fascia).not.toBe(ETICHETTA_ADESSO);
-    expect(o("o2").delivery_slot).toBe(ETICHETTA_ADESSO);
-    expect(db.notifications.some((n) => n.user_id === "forno" && String(n.body).includes(fascia))).toBe(true);
-
-    // Il guasto passa; il giro dopo arriva più di un'ora dopo, quando la fascia «del momento» è un'altra.
+    expect(fascia).toMatch(/^Oggi · /);
     guasto.ordine = null;
-    await giro("2026-10-30T18:40:00.000Z");
-    expect(o("o2").delivery_slot).toBe(fascia);
+    // Le 21:30 di Piacenza: la fascia di oggi è finita.
+    await giro("2026-10-30T20:30:00.000Z");
+    expect(o("o2").delivery_slot).not.toBe(fascia);
   });
 });

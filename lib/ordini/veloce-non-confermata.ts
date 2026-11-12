@@ -1,4 +1,4 @@
-import { giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
+import { fasciaAlGiornoDellOrdine, giornoDiPiacenza } from '@/lib/ordini/fascia-leggibile';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email/client';
@@ -7,7 +7,7 @@ import { formatPriceFromCents } from '@/lib/format';
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { consegnaSenzaLaVeloce } from '@/lib/ordini/prezzi';
 import { MINUTI_PER_CONFERMARE_LA_VELOCE, scadenzaAccettazione, scadenzaLeggibile } from '@/lib/ordini/scadenza-accettazione';
-import { ETICHETTA_ADESSO, fasceAncoraPossibili, fasceDiDomaniPossibili } from '@/lib/quando-arriva';
+import { ETICHETTA_ADESSO, fasceAncoraPossibili, fasceDiDomaniPossibili, fasciaFuoriTempo } from '@/lib/quando-arriva';
 import { romeNow } from '@/lib/store-hours';
 import { CAMPI_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 
@@ -402,8 +402,12 @@ async function spostaIlCarrello(
   // 12/11/2026 (R09-008) — Un giro di prima ha già spostato una parte del carrello e poi è caduto: il
   // resto va nella STESSA fascia, non in quella che si ricalcolerebbe con l'ora nuova. Il carrello
   // nasce con una fascia sola («Adesso» per tutti), quindi un ordine fratello in fascia l'ha messo il freno.
-  const fasciaDelCarrello = vivi.find((c) => c.id !== o.id && !c.pickup_in_store
+  // Solo se è ancora in tempo (collaudo del 12/11): dopo un guasto lungo la fascia del carrello può
+  // essere finita, o a meno di un'ora dalla fine; allora si sceglie da capo, come prima.
+  const scrittaSulFratello = vivi.find((c) => c.id !== o.id && !c.pickup_in_store
     && /^(Oggi|Domani) · /.test(String(c.delivery_slot ?? '')))?.delivery_slot ?? null;
+  const vistaDaOggi = scrittaSulFratello && o.created_at ? fasciaAlGiornoDellOrdine(scrittaSulFratello, o.created_at, adesso) : null;
+  const fasciaDelCarrello = vistaDaOggi && fasciaFuoriTempo(vistaDaOggi, romeNow(adesso)) === null ? scrittaSulFratello : null;
   const fasciaDelGiro = fasciaDelCarrello ? null : fasciaDopoLaVeloce(romeNow(adesso), orari);
   const fascia = fasciaDelCarrello ?? (fasciaDelGiro ? fasciaDalGiornoDellOrdine(fasciaDelGiro, adesso, o.created_at) : null);
   if (!fascia) return nonSiSposta(admin, o, adesso, 'né oggi né domani c’è una fascia in cui tutti i negozi del carrello siano aperti', o.seller_id ? orari[venditori.indexOf(o.seller_id)] : undefined);
