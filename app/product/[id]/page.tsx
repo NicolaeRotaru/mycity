@@ -1427,6 +1427,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     ))}
                   </div>
                 )}
+                {/* 12/11/2026 (R02-005) — Ogni recensione si può segnalare: i Termini promettono
+                    di togliere quelle non genuine. */}
+                <div className="mt-2">
+                  <Segnala tipo="recensione" oggettoId={r.id} />
+                </div>
               </div>
             ))}
           </div>

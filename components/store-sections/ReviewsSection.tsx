@@ -12,6 +12,7 @@ import { RatingStars } from '@/components/ui/RatingStars';
 import { useQuery } from '@tanstack/react-query';
 import { useUtente } from '@/components/hooks/useUtente';
 import { riepilogoRecensioni } from './riepilogo-recensioni';
+import { Segnala } from '@/components/Segnala';
 
 /** Quante recensioni si vedono subito; le altre lette con «Mostra altre recensioni». */
 const RECENSIONI_SUBITO = 6;
@@ -172,6 +173,11 @@ function ReviewItem({ r, accent, userId, giaVotata }: { r: SectionReview; accent
       >
         <ThumbsUp size={13} aria-hidden /> Utile{count > 0 ? ` · ${count}` : ''}
       </button>
+      {/* 12/11/2026 (R02-005) — I Termini promettono di togliere le recensioni non genuine:
+          serve un modo per dircelo, su ognuna. */}
+      <div className="mt-2">
+        <Segnala tipo="recensione" oggettoId={r.id} />
+      </div>
     </li>
   );
 }
