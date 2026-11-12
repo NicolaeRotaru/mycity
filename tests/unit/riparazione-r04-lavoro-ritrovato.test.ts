@@ -72,4 +72,13 @@ describe('il lavoro aperto si ritrova da qualunque dispositivo', () => {
     expect(src).toContain("authedFetch('/api/ai/catalog-batch/status')");
     expect(src).toMatch(/else void riprendiUltimo\(\)/);
   });
+
+  it('un lavoro ricordato che il server non riconosce (403/404) si dimentica e si riprende quello aperto', () => {
+    const src = readFileSync('app/seller/products/ai-batch/page.tsx', 'utf8');
+    const ramo = src.slice(src.indexOf('const poll = useCallback'), src.indexOf('const riprendiRef'));
+    expect(ramo).toMatch(/stato === 403 \|\| stato === 404/);
+    expect(ramo).toMatch(/ricordaLavoro\(null\)/);
+    expect(ramo).toMatch(/riprendiRef\.current/);
+    expect(src).toMatch(/Object\.assign\(new Error\(apiErrorMessage\(json, 'Errore'\)\), \{ status: res\.status \}\)/);
+  });
 });

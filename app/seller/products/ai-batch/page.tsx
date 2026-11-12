@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
@@ -110,7 +110,7 @@ async function authedFetch(path: string, init?: RequestInit) {
     headers: { 'content-type': 'application/json', authorization: `Bearer ${session.access_token}`, ...(init?.headers ?? {}) },
   });
   const json = await res.json();
-  if (!res.ok) throw new Error(apiErrorMessage(json, 'Errore'));
+  if (!res.ok) throw Object.assign(new Error(apiErrorMessage(json, 'Errore')), { status: res.status });
   return json;
 }
 
@@ -346,8 +346,20 @@ function CatalogTab() {
       setJob(data);
       // Un lavoro chiuso non si ripropone alla prossima apertura (anche «fallito»: R04-005).
       if (lavoroChiuso(data.status)) ricordaLavoro(null);
-    } catch { /* riprova al prossimo tick */ }
+    } catch (err) {
+      // R04-013 (revisione) — Un lavoro ricordato che il server non riconosce
+      // (cancellato, o di un altro account su questo browser) si dimentica, e
+      // si chiede al server l'ultimo lavoro aperto di chi c'e' adesso.
+      const stato = (err as { status?: number } | null)?.status;
+      if (stato === 403 || stato === 404) {
+        ricordaLavoro(null);
+        setJob(null);
+        void riprendiRef.current?.();
+      }
+      /* altrimenti riprova al prossimo tick */
+    }
   }, []);
+  const riprendiRef = useRef<(() => Promise<void>) | null>(null);
 
   // R04-013 — Senza un lavoro ricordato da questo browser si chiede al server
   // l'ultimo lavoro ancora aperto: da un altro telefono o dopo una pulizia della
@@ -362,6 +374,7 @@ function CatalogTab() {
       }
     } catch { /* niente da riprendere adesso */ }
   }, []);
+  riprendiRef.current = riprendiUltimo;
 
   // All'apertura si riparte dall'ultimo lavoro avviato da questo browser: il lotto
   // è già pagato, e senza questo una pagina ricaricata lo perdeva di vista.
