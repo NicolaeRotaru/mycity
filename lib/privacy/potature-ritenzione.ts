@@ -390,18 +390,13 @@ export function potatureDiRitenzione(adessoMs: number): Potatura[] {
     // riga, ricontrollando la regola); `poi` prende la coda e toglie i file.
     // Essendo una `delete` filtrata, il conto senza cancellare la conta come
     // le altre: stessa vista, stesso filtro.
-    {
-      cosa: 'documenti-kyc-iscrizione-a-meta',
-      fai: (admin) =>
-        esigi(
-          admin
-            .from('documenti_iscrizione_a_meta')
-            .delete()
-            .lt('caricati_at', giorni(GIORNI_DOCUMENTI_ISCRIZIONE_A_META)),
-        ),
-      poi: (admin, registro) =>
-        potaFileScaduti(admin, registro, 'kyc_file_da_togliere_prendi', 'kyc-docs', {}),
-    },
+    //
+    // 12/11/2026 (R02-007) — Nel database vero la 171 non c'è ancora: vista, coda e funzione
+    // mancano, il passo lanciava ogni notte e la rotta rispondeva 500 (fallite > 0) anche se
+    // tutto il resto era andato. Senza la migrazione non c'è niente da potare qui: il passo lo
+    // scrive nel registro come avviso e si salta, invece di far fallire la notte. Il giorno in
+    // cui la 171 è applicata, il passo torna a lavorare senza toccare niente.
+    potaturaKycIscrizioneAMeta(giorni(GIORNI_DOCUMENTI_ISCRIZIONE_A_META)),
     // 27/8/2026 (R058) — LE FOTO DELLA CONSEGNA IN CONTANTI.
     // I contanti, la firma e «il pacco lasciato» — cioe' quasi sempre la porta
     // di casa del cliente. Stanno nella cartella del FATTORINO, quindi quando
@@ -495,6 +490,44 @@ export async function contaOrfaniKyc(admin: ClienteOrfani, adessoMs: number = Da
   } catch (e) {
     return { cosa, file: null, nonContata: e instanceof Error ? e.message : 'errore' };
   }
+}
+
+/**
+ * 12/11/2026 (R02-007) — «Questa tabella o funzione non esiste»: PostgREST lo dice con PGRST205
+ * (tabella o vista) o PGRST202 (funzione), Postgres con 42P01. Vuol dire migrazione non applicata,
+ * non un guasto della notte.
+ */
+export function mancaLaMigrazione(errore: { message?: string; code?: string } | null | undefined): boolean {
+  if (!errore) return false;
+  if (errore.code === 'PGRST205' || errore.code === 'PGRST202' || errore.code === '42P01' || errore.code === '42883') return true;
+  return /schema cache|does not exist/i.test(errore.message ?? '');
+}
+
+/** I documenti di chi si ferma a metà iscrizione (migrazione 171), saltati se la 171 manca. */
+function potaturaKycIscrizioneAMeta(prima: string): Potatura {
+  let saltato = false;
+  const salta = (registro: Registro, dove: string, errore: { message: string }) => {
+    saltato = true;
+    registro.warn('[cron-deletions] passo saltato: manca la migrazione 171 nel database', {
+      cosa: 'documenti-kyc-iscrizione-a-meta',
+      dove,
+      message: errore.message,
+    });
+  };
+  return {
+    cosa: 'documenti-kyc-iscrizione-a-meta',
+    fai: async (admin, registro) => {
+      saltato = false;
+      const { error } = await admin.from('documenti_iscrizione_a_meta').delete().lt('caricati_at', prima);
+      if (!error) return;
+      if (mancaLaMigrazione(error)) return salta(registro, 'documenti_iscrizione_a_meta', error);
+      throw new Error(error.message);
+    },
+    poi: async (admin, registro) => {
+      if (saltato) return;
+      await potaFileScaduti(admin, registro, 'kyc_file_da_togliere_prendi', 'kyc-docs', {});
+    },
+  };
 }
 
 /** Tutto quello che la notte deve potare: le finestre dichiarate e gli orfani di kyc-docs. */
