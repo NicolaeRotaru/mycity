@@ -9,6 +9,8 @@ import { useRouter } from 'next/navigation';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
+import { TIER_META } from '@/lib/loyalty';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 type Achievement = {
   id: string;
@@ -46,31 +48,50 @@ export default function AchievementsPage() {
     });
   }, [router]);
 
-  const { data: achievements = [] } = useQuery({
+  const elenco = useQuery({
     queryKey: queryKeys.achievements.allList,
     queryFn: async (): Promise<Achievement[]> => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('achievements')
         .select('*')
         .in('target_role', ['buyer', 'all'])
         .order('sort_order');
+      if (error) throw error;
       return (data ?? []) as Achievement[];
     },
   });
 
-  const { data: unlocked = new Set<string>() } = useQuery({
+  const sbloccati = useQuery({
     queryKey: queryKeys.achievements.byUser(userId ?? ''),
     enabled: !!userId,
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('user_achievements')
         .select('achievement_id')
         .eq('user_id', userId!);
+      if (error) throw error;
       return new Set((data ?? []).map((r: { achievement_id: string }) => r.achievement_id));
     },
   });
 
   if (!userId) return <LoadingState />;
+  // 12/11/2026 (R09-019) — Una lettura caduta diceva «0 / 0 sbloccati · 0% completato»: chi guarda
+  // credeva di non aver sbloccato niente. Adesso si dice che non si è letto, e si può riprovare.
+  if (elenco.isError || sbloccati.isError) {
+    return (
+      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-4xl">
+        <ErrorState
+          title="Non riesco a leggere i tuoi badge"
+          description="Non vuol dire che non ne hai: la lettura non è riuscita. Riprova fra un momento."
+          retry={() => { void elenco.refetch(); void sbloccati.refetch(); }}
+          supportHref={null}
+        />
+      </div>
+    );
+  }
+  if (elenco.isPending || (sbloccati.isPending && sbloccati.fetchStatus !== 'idle')) return <LoadingState />;
+  const achievements = elenco.data ?? [];
+  const unlocked = sbloccati.data ?? new Set<string>();
 
   const unlockedCount = unlocked.size;
   const totalCount = achievements.length;
@@ -132,7 +153,7 @@ export default function AchievementsPage() {
                 {!isUnlocked && <Lock size={16} className="text-ink-400 shrink-0" />}
               </div>
               <p className={`text-[10px] uppercase font-bold tracking-wider mt-3 ${TIER_TEXT[a.tier]}`}>
-                {a.tier}
+                {TIER_META[a.tier]?.label ?? a.tier}
               </p>
             </div>
           );

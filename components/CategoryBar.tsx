@@ -176,6 +176,7 @@ const CategoryBar = () => {
         {/* Tab underline-style: divider sottile sotto la barra, voce attiva con
             underline + colore accent (per mockup navbar). */}
         <div className="relative">
+        {/* 12/11/2026 (R09-003) — Le voci erano alte 42 px: min-h-11 le porta a 44. */}
         <div ref={rigaRef} className="flex items-center gap-1 overflow-x-auto scrollbar-hide border-b border-white/10 text-sm">
           {/* Mega-menu trigger — stessa riga delle tab, attivo quando aperto */}
           <button
@@ -191,7 +192,7 @@ const CategoryBar = () => {
                per ARIA 1.2 vuol dire «menu»: qui dentro ci sono link normali,
                quindi aria-haspopup non c'è più; restano aria-expanded e
                aria-controls. */
-            className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 font-semibold transition-colors focus-visible:outline-white ${
+            className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 min-h-11 font-semibold transition-colors focus-visible:outline-white ${
               open
                 ? 'border-accent-400 text-accent-200'
                 : 'border-transparent text-white/90 hover:text-white'
@@ -210,7 +211,7 @@ const CategoryBar = () => {
                 key={e.href}
                 href={e.href}
                 aria-current={active ? 'page' : undefined}
-                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 transition-colors focus-visible:outline-white ${
+                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 min-h-11 transition-colors focus-visible:outline-white ${
                   active
                     ? 'border-accent-400 font-semibold text-accent-200'
                     : 'border-transparent font-medium text-white/90 hover:text-white'

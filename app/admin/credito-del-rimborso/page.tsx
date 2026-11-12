@@ -7,7 +7,11 @@ import { supabase } from '@/lib/supabase/client';
 import { formatDate, formatPriceFromCents } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
+import { ErrorState } from '@/components/ui/ErrorState';
 import type { EsitoDelControllo } from '@/lib/rimborsi/credito-da-controllare';
+
+/** 12/11/2026 (R09-017) — Con la rete caduta il browser dice «Failed to fetch»: a schermo va in italiano. */
+const FRASE_SENZA_RETE = 'Non riesco a collegarmi: controlla la connessione e riprova.';
 
 /**
  * IL CONTROLLO DEL CREDITO DI UN RIMBORSO (riesame del 16/10, quarto giro).
@@ -32,16 +36,21 @@ function Controllo() {
   const ref = parametri.get('ref') ?? '';
   const atteso = parametri.get('atteso') ?? '';
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['admin', 'credito-del-rimborso', ref, atteso],
     enabled: ref.length > 0,
     queryFn: async (): Promise<Risposta> => {
       const { data: { session } } = await supabase.auth.getSession();
       const q = new URLSearchParams({ ref, ...(atteso ? { atteso } : {}) });
-      const res = await fetch(`/api/admin/credito-del-rimborso?${q.toString()}`, {
-        headers: session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {},
-      });
-      const corpo = await res.json();
+      let res: Response;
+      try {
+        res = await fetch(`/api/admin/credito-del-rimborso?${q.toString()}`, {
+          headers: session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {},
+        });
+      } catch {
+        throw new Error(FRASE_SENZA_RETE);
+      }
+      const corpo = await res.json().catch(() => null);
       if (!res.ok) throw new Error(corpo?.error?.message ?? 'Controllo non disponibile');
       return corpo as Risposta;
     },
@@ -57,7 +66,15 @@ function Controllo() {
   }
   if (isLoading) return <LoadingState />;
   if (error || !data) {
-    return <p className="text-sm text-secondary-700">{error instanceof Error ? error.message : 'Controllo non disponibile'}</p>;
+    return (
+      <ErrorState
+        variant="compact"
+        title="Controllo non disponibile"
+        description={error instanceof Error ? error.message : 'Controllo non disponibile'}
+        retry={() => void refetch()}
+        supportHref={null}
+      />
+    );
   }
 
   const colore =

@@ -95,6 +95,9 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
         // alzare la barra.
         className="relative inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 rounded-full text-xs font-medium ring-1 ring-white/15 transition-colors focus-visible:outline-white before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
         title="Cambia indirizzo di consegna"
+        // 12/11/2026 (R09-016, collaudo) — Fra 768 e 1023 px si vede solo il CAP, e il lettore di schermo
+        // leggeva «29121». Il nome dice tutto, a ogni larghezza.
+        aria-label={`Consegna a ${loc.city} ${loc.zip}: cambia indirizzo`}
       >
         <MapPin size={14} strokeWidth={2.2} className="text-accent-300" />
         {compact ? (
@@ -109,8 +112,9 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
               gerarchia fra «Consegna a» e la citta' la tiene il grassetto,
               che non costa contrasto.
             */}
-            <span className="hidden sm:inline">Consegna a</span>
-            <span className="font-semibold">{loc.city}</span>
+            {/* 12/11/2026 (R09-016) — Sotto i 1024 px la testata del computer non ha spazio: resta il CAP. */}
+            <span className="hidden lg:inline">Consegna a</span>
+            <span className="hidden lg:inline font-semibold">{loc.city}</span>
             <span>{loc.zip}</span>
           </>
         )}

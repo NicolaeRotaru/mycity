@@ -10,8 +10,7 @@ import { formatPrice } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
-import { getAttributesForCategory } from '@/lib/category-attributes';
-import { cosaMancaPerVendere } from '@/lib/products/prontoPerLaVendita';
+import { statoDellaRiga, type CategoriaDelFile } from '@/lib/products/righe-dal-file';
 import { CARICAMENTO_DA_FILE_ACCESO } from '@/lib/funzioni-al-lancio';
 import { colonneDiTroppo, leggiFile, leggiPrezzo, normalizzaIntestazioni, parseCsv } from './csv';
 
@@ -27,7 +26,20 @@ type ParsedRow = {
   errors: string[];
 };
 
-type CategoriaDelFile = { id: string; slug: string; parent_id: string | null };
+/** Manda le righe alla rotta del server, col gettone della sessione. */
+async function caricaSulServer(righe: unknown[]): Promise<void> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error('Sessione scaduta: rientra e riprova.');
+  const res = await fetch('/api/seller/products/import', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({ righe }),
+  });
+  if (!res.ok) {
+    const json = (await res.json().catch(() => null)) as { error?: { message?: string } } | null;
+    throw new Error(json?.error?.message ?? 'Non sono riuscito a caricare i prodotti. Riprova.');
+  }
+}
 
 /**
  * 01/11/2026 — ondata 6. Il modello usa il punto e virgola: e' il separatore
@@ -153,34 +165,21 @@ function CaricamentoDaFile() {
         // bozza: un prodotto senza foto ne' descrizione andava in vetrina.
         // Il file non porta foto, quindi chi arriva da qui nasce bozza e la
         // foto si aggiunge dalla scheda.
-        const mancanti = cosaMancaPerVendere({
-          name: r.name,
-          description: r.description,
-          price: r.price,
-          haCategoria: Boolean(categoryId),
-          categoriaTop: getAttributesForCategory(categoryRows, categoryId).topSlug,
-          numeroFoto: 0,
-          attributes,
-        });
-        const status: 'available' | 'draft' = mancanti.length > 0 ? 'draft' : 'available';
+        // 12/11/2026 (R09-006) — La regola sta in lib/products/righe-dal-file.ts, la stessa che la
+        // rotta rifà sul server: qui serve solo a dire subito al negoziante cosa nasce bozza.
+        const riga = { name: r.name, description: r.description, price: r.price, stock: r.stock, category_id: categoryId, attributes };
+        const { status, mancanti } = statoDellaRiga(riga, categoryRows);
         if (status === 'draft') {
           bozze++;
           for (const m of mancanti) perMotivo.set(m, (perMotivo.get(m) ?? 0) + 1);
         }
-        return {
-          seller_id: userId,
-          name: r.name,
-          description: r.description,
-          price: r.price,
-          stock: r.stock,
-          category_id: categoryId,
-          attributes,
-          status,
-        };
+        return { ...riga, status };
       });
-      // Batch insert
-      const { error } = await supabase.from('products').insert(payload);
-      if (error) throw error;
+      // 12/11/2026 (R09-006) — Prima l'inserimento nel catalogo partiva dal browser, senza una
+      // rotta in cui mettere il freno. Adesso passa da POST /api/seller/products/import, che ha
+      // l'interruttore, ricontrolla ogni riga e lascia la traccia. (La regola di scrittura dei prodotti nel
+      // database resta larga finché non si chiude la voce R09-002: il freno vale per questa porta.)
+      await caricaSulServer(payload);
       toast.success(
         bozze > 0
           ? `${valid.length} prodotti importati · ${bozze} in bozza, non ancora in vendita. Manca: ${[...perMotivo]

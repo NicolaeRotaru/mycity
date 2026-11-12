@@ -99,14 +99,18 @@ export default function PromoTicker() {
   );
 
   return (
-    <div className="relative flex items-center overflow-hidden border-b border-ink-800 bg-ink-900 text-xs text-ink-100 sm:text-sm">
-      <div
-        data-striscia
-        className="animate-marquee flex w-max items-center whitespace-nowrap py-2"
-        style={inPausa ? { animationPlayState: 'paused' } : undefined}
-      >
-        <Track />
-        <Track ariaHidden />
+    // 12/11/2026 (R09-003) — Il taglio della striscia che scorre sta sul suo contenitore, non su tutta la
+    // barra: così l'area di tocco della pausa può scendere sotto la striscia senza essere tagliata.
+    <div className="relative flex items-center border-b border-ink-800 bg-ink-900 text-xs text-ink-100 sm:text-sm">
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <div
+          data-striscia
+          className="animate-marquee flex w-max items-center whitespace-nowrap py-2"
+          style={inPausa ? { animationPlayState: 'paused' } : undefined}
+        >
+          <Track />
+          <Track ariaHidden />
+        </div>
       </div>
       <button
         type="button"
@@ -114,8 +118,9 @@ export default function PromoTicker() {
         aria-label={inPausa ? 'Riprendi la striscia degli annunci' : 'Metti in pausa la striscia degli annunci'}
         aria-pressed={inPausa}
         // 5/11/2026 — Era largo 30 px: col pollice si prendeva il link che scorre lì accanto. Largo
-        // 44 px (w-11), alto quanto la striscia.
-        className="absolute right-0 top-0 flex h-full w-11 shrink-0 items-center justify-center bg-ink-900 text-ink-300 hover:text-ink-100"
+        // 44 px (w-11), alto quanto la striscia. 12/11/2026 (R09-003) — La striscia è alta 32 px: un'area
+        // di tocco invisibile (before:) scende di 12 px sotto, così il bersaglio arriva a 44 senza alzarla.
+        className="absolute right-0 top-0 z-10 flex h-full w-11 shrink-0 items-center justify-center bg-ink-900 text-ink-300 hover:text-ink-100 before:absolute before:inset-x-0 before:top-0 before:-bottom-3 before:content-['']"
       >
         {inPausa ? <Play size={14} strokeWidth={2.4} aria-hidden /> : <Pause size={14} strokeWidth={2.4} aria-hidden />}
       </button>

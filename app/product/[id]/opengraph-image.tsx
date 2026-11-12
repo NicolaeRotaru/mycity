@@ -2,6 +2,7 @@ import { ImageResponse } from 'next/og';
 import { caratteriDelMarchio, MARCHIO_FONT_FAMILY, MARCHIO_FONT_WEIGHT } from '@/app/carattere-del-marchio';
 import { leggiProdottoPerMetadati } from '@/lib/queries/metadati-vetrina';
 import { sizedImage } from '@/lib/image-url';
+import { formatPrice } from '@/lib/format';
 
 export const runtime = 'edge';
 export const alt = 'Prodotto su MyCity';
@@ -26,7 +27,8 @@ export default async function ProductOG({ params }: { params: { id: string } }) 
   const p = await fetchProduct(params.id);
   const name = p?.name ?? 'Prodotto su MyCity';
   const store = p?.profiles?.store_name ?? 'MyCity Piacenza';
-  const price = typeof p?.price === 'number' ? `€${p.price.toFixed(2)}` : '';
+  // 12/11/2026 (R09-024) — L'anteprima su WhatsApp scriveva «€12.50»: il prezzo si scrive come nella scheda, «12,50 €».
+  const price = typeof p?.price === 'number' ? formatPrice(p.price) : '';
   // 6/9/2026 — QUI SI SCARICAVA LA FOTO ORIGINALE PER UN RIQUADRO DA 460 PIXEL.
   // Questa immagine si genera su runtime edge, che ha un tempo massimo stretto, e
   // prendeva la foto com'e' stata caricata dal telefono del negoziante — fino a

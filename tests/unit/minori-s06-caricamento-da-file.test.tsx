@@ -7,13 +7,22 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 
 const insert = vi.fn(async (_rows: unknown) => ({ error: null }));
+// 12/11/2026 (R09-006) — Le righe non vanno più al database dal browser: la pagina le manda a
+// POST /api/seller/products/import. Qui si guarda quello che la pagina manda alla rotta.
+vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: { body?: unknown }) => {
+  await insert((JSON.parse(String(init?.body ?? '{}')) as { righe?: unknown }).righe);
+  return new Response(JSON.stringify({ ok: true, data: {} }), { status: 200 });
+}));
 const CATEGORIE = [
   { id: 'c-al', slug: 'alimentari', parent_id: null },
   { id: 'c-casa', slug: 'casa', parent_id: null },
 ];
 vi.mock('@/lib/supabase/client', () => ({
   supabase: {
-    auth: { getUser: async () => ({ data: { user: { id: 'u-1' } } }) },
+    auth: {
+      getUser: async () => ({ data: { user: { id: 'u-1' } } }),
+      getSession: async () => ({ data: { session: { access_token: 'gettone' } } }),
+    },
     from: (t: string) =>
       t === 'categories'
         ? { select: () => Promise.resolve({ data: CATEGORIE }) }
