@@ -9,7 +9,7 @@ import { act } from 'react';
 import { accendi } from './aiuti/schermo';
 
 const UTENTE = { id: 'u-1', email: 'anna@example.com' };
-const stato: { erroreSalvataggio: unknown; scritture: unknown[] } = { erroreSalvataggio: null, scritture: [] };
+const stato: { erroreSalvataggio: unknown; scritture: unknown[]; cancello: Promise<void> } = { erroreSalvataggio: null, scritture: [], cancello: Promise.resolve() };
 
 vi.mock('@/lib/supabase/client', () => ({
   supabase: {
@@ -26,7 +26,7 @@ vi.mock('@/lib/supabase/client', () => ({
           }),
         }),
       }),
-      update: (v: unknown) => { stato.scritture.push(v); return { eq: async () => ({ error: stato.erroreSalvataggio }) }; },
+      update: (v: unknown) => { stato.scritture.push(v); return { eq: async () => { await stato.cancello; return { error: stato.erroreSalvataggio }; } }; },
     }),
   },
 }));
@@ -84,5 +84,23 @@ describe('R02-017 · l interruttore delle notifiche e il salvataggio', () => {
   it('salvataggio riuscito: l interruttore resta spento', async () => {
     stato.erroreSalvataggio = null;
     expect(await premiIlPrimoInterruttore()).toBe('false');
+  });
+
+  it('dopo il qa: due tocchi rapidi falliti tutti e due tornano al valore del database', async () => {
+    stato.erroreSalvataggio = { message: 'permesso negato' };
+    const s = accendi(SettingsPage);
+    await aspetta();
+    const interruttore = s.radice.querySelector('[role="switch"]') as HTMLButtonElement;
+    expect(interruttore.getAttribute('aria-checked')).toBe('true');
+    let apri!: () => void;
+    stato.cancello = new Promise<void>((r) => { apri = r; });
+    // Due tocchi con la pagina ridisegnata in mezzo, e i due salvataggi ancora in volo.
+    await act(async () => { interruttore.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    await act(async () => { interruttore.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+    apri();
+    await aspetta();
+    stato.cancello = Promise.resolve();
+    expect(interruttore.getAttribute('aria-checked')).toBe('true');
+    s.smonta();
   });
 });

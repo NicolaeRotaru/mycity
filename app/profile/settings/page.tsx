@@ -155,6 +155,8 @@ export default function SettingsPage() {
   // Prefs — le 5 notifiche sono persistite su profiles (load nel useEffect, save
   // in updatePref). push_enabled/language restano locali (non funzionali sul DB).
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
+  // R02-017 — Quello che il database ha davvero: letto all'apertura, aggiornato a ogni salvataggio riuscito.
+  const prefsSalvate = useRef<Prefs>(DEFAULT_PREFS);
 
   // Delete account (cooldown 7gg)
   const [deleteConfirm, setDeleteConfirm] = useState('');
@@ -187,14 +189,15 @@ export default function SettingsPage() {
         .eq('id', data.user.id)
         .single();
       if (prof) {
-        setPrefs((prev) => ({
-          ...prev,
+        const dalDatabase = {
           notif_order_updates: !!prof.notif_order_updates,
           notif_promos: !!prof.notif_promos,
           notif_groups: !!prof.notif_groups,
           notif_newsletter: !!prof.notif_newsletter,
           email_marketing: !!prof.email_marketing,
-        }));
+        };
+        prefsSalvate.current = { ...prefsSalvate.current, ...dalDatabase };
+        setPrefs((prev) => ({ ...prev, ...dalDatabase }));
       }
       // Verifica se c'è una richiesta di eliminazione pendente (cooldown 7gg)
       try {
@@ -232,18 +235,21 @@ export default function SettingsPage() {
   }, [router]);
 
   const updatePref = <K extends keyof Prefs>(key: K, value: Prefs[K]) => {
-    // 12/11/2026 (R02-017) — Il valore di prima, per rimetterlo se il salvataggio non riesce:
-    // l'interruttore restava nella posizione nuova mentre nel database c'era ancora la vecchia.
-    const prima = prefs[key];
+    // 12/11/2026 (R02-017) — Se il salvataggio non riesce si rimette l'ultimo valore che il database
+    // ha davvero (prefsSalvate), non quello della chiusura: con due tocchi rapidi falliti tutti e
+    // due, «quello di prima» del secondo era il primo, mai salvato.
     setPrefs((prev) => ({ ...prev, [key]: value }));
     const dbCols = ['notif_order_updates', 'notif_promos', 'notif_groups', 'notif_newsletter', 'email_marketing'];
     if (userId && dbCols.includes(key as string)) {
       void (async () => {
         const { error } = await supabase.from('profiles').update({ [key]: value }).eq('id', userId);
         if (error) {
-          setPrefs((prev) => (prev[key] === value ? { ...prev, [key]: prima } : prev));
+          setPrefs((prev) => (prev[key] === value ? { ...prev, [key]: prefsSalvate.current[key] } : prev));
           toast.error('Errore nel salvataggio: la preferenza è tornata com\'era');
-        } else toast.success('Preferenza salvata');
+        } else {
+          prefsSalvate.current = { ...prefsSalvate.current, [key]: value };
+          toast.success('Preferenza salvata');
+        }
       })();
     } else {
       toast.success('Preferenza salvata');
