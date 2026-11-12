@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { isStripeConfigured } from '@/lib/stripe/client';
+import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import {
   AccreditoGiaUscitoConAltroImporto,
   cosaMancaAlBonifico,
@@ -29,6 +29,43 @@ import { bonificoDellaChiave } from '@/lib/stripe/elenco-dei-rimborsi';
 import { scriviCampanella } from '@/lib/ordini/campanella';
 
 export const runtime = 'nodejs';
+
+/**
+ * R11-002 — IL RECLAMO CHIUSO NON DEVE LASCIARE IL SEGNO DELLA BANCA SULL'ORDINE.
+ *
+ * In produzione il trigger `trg_dispute_block_payout` gira ancora col testo
+ * della 063: a ogni reclamo interno aperto scrive `orders.dispute_status='OPEN'`,
+ * la colonna del CHARGEBACK BANCARIO. La 184 lo corregge, ma finche' non e'
+ * applicata quel segno resta: questa rotta scrive solo `internal_dispute_status`
+ * e il giro dei bonifici paga solo gli ordini con `dispute_status` vuoto o
+ * 'WON'. Reclamo chiuso a favore del negozio, bonifico fermo per sempre.
+ *
+ * Il segno si toglie quando il reclamo si chiude, ma SOLO se in banca non c'e'
+ * davvero una contestazione aperta: coi contanti non puo' esserci; con la carta
+ * lo si chiede a Stripe. Se Stripe non risponde il segno resta (meglio un
+ * bonifico fermo che uno pagato con soldi che la banca ha ripreso) e lo si
+ * dice agli amministratori.
+ */
+const STATI_STRIPE_ANCORA_APERTI = ['needs_response', 'under_review', 'warning_needs_response', 'warning_under_review'];
+
+type EsitoDelSegno = 'niente_da_togliere' | 'da_togliere' | 'contestazione_vera' | 'non_verificato';
+
+async function cosaFareDelSegno(ordine: {
+  dispute_status?: string | null;
+  payment_method?: string | null;
+  stripe_payment_intent?: string | null;
+}): Promise<EsitoDelSegno> {
+  if (ordine.dispute_status !== 'OPEN') return 'niente_da_togliere';
+  if (ordine.payment_method !== 'card' || !ordine.stripe_payment_intent) return 'da_togliere';
+  try {
+    const { data } = await getStripe().disputes.list({ payment_intent: ordine.stripe_payment_intent, limit: 20 });
+    return data.some((d) => STATI_STRIPE_ANCORA_APERTI.includes(String(d.status ?? '')))
+      ? 'contestazione_vera'
+      : 'da_togliere';
+  } catch {
+    return 'non_verificato';
+  }
+}
 
 const Body = z.object({
   status: z.enum(['resolved_buyer', 'resolved_seller', 'rejected']),
@@ -84,7 +121,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // 16/10 (riesame) — `internal_dispute_status`: se l'ordine è fermo per un rimborso dal cruscotto
   // da dividere, chiudere il reclamo non toglie la pausa (più sotto).
   const COLONNE_ORDINE =
-    'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status, internal_dispute_status, stripe_refund_id, seller_id';
+    'stripe_payment_intent, payment_method, total_price, gross_total_cents, wallet_applied_cents, refunded_amount_cents, cash_confirmed_at, payment_status, delivery_status, internal_dispute_status, stripe_refund_id, seller_id, dispute_status';
   let ord: OrdineDaRimborsare | null = null;
   if (dispute.order_id) {
     const { data } = await conRipiegoSchema(
@@ -104,6 +141,30 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       .or(SENZA_LA_PAUSA_DEL_CARRELLO);
     // Non blocca la risoluzione, ma deve essere visibile: il venditore resta in attesa di essere pagato.
     if (errOrdine) logger.error('[dispute] stato dell ordine non sbloccato', { orderId: dispute.order_id, message: errOrdine.message });
+
+    // R11-002 — il segno 'OPEN' lasciato dal trigger vecchio (vedi in cima).
+    const segno = await cosaFareDelSegno((ord ?? {}) as Parameters<typeof cosaFareDelSegno>[0]);
+    if (segno === 'da_togliere') {
+      const { error: errSegno } = await admin
+        .from('orders')
+        .update({ dispute_status: null, disputed_at: null })
+        .eq('id', dispute.order_id)
+        .eq('dispute_status', 'OPEN');
+      if (errSegno) logger.error('[dispute] segno del trigger vecchio non tolto', { orderId: dispute.order_id, message: errSegno.message });
+    } else if (segno === 'non_verificato') {
+      logger.warn('[dispute] reclamo chiuso, contestazione bancaria non verificabile: il bonifico resta fermo', {
+        orderId: dispute.order_id,
+      });
+      try {
+        await notifyAdmins(
+          'Reclamo chiuso, bonifico ancora fermo',
+          `Ordine ${String(dispute.order_id).slice(0, 8)}: il reclamo è chiuso ma l'ordine porta ancora il segno di una contestazione in banca e Stripe non ha risposto. Controlla su Stripe: se non c'è nessuna contestazione aperta, il segno va tolto.`,
+          '/admin/payouts',
+        );
+      } catch {
+        /* l'avviso non blocca la chiusura */
+      }
+    }
   };
 
   /**
