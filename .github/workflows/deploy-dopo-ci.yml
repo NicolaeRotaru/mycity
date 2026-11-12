@@ -554,6 +554,25 @@ jobs:
               grep '^::warning::' "$DIARIO" | sed 's/^::warning::/- /'
             } >> "$GITHUB_STEP_SUMMARY"
           fi
+          # R01-014 (12/11/2026) — IL DATABASE AVANTI SI DICE ANCHE QUANDO CADONO LE MIGRAZIONI.
+          # Il conto delle migrazioni applicate si scriveva solo se lo script finiva bene, e lo
+          # leggeva solo il passo del ritorno indietro (dopo una prova di fumo caduta). Se lo
+          # script si ferma a meta', le migrazioni prima di quella rotta restano applicate e
+          # registrate, e il sito online non le conosce: qui lo si scrive nel riepilogo.
+          if [ "$USCITA" != "0" ] && [ "$USCITA" != "4" ] && grep -q '^▶ applico ' "$DIARIO"; then
+            ROTTA="$(grep '^▶ applico ' "$DIARIO" | tail -n 1 | sed 's/^▶ applico //')"
+            PRIMA="$(grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico //' | sed '$d' | tr '\n' ' ')"
+            echo "fermo=migrazioni-a-meta" >> "$GITHUB_OUTPUT"
+            {
+              echo "## ⛔ Le migrazioni si sono fermate a meta': il database e' avanti rispetto al sito online"
+              echo ""
+              echo "Non ho pubblicato niente, ma il database e' gia' cambiato."
+              echo "- Applicate e registrate prima del guasto: ${PRIMA:-nessuna}"
+              echo "- Quella che si e' rotta: \`$ROTTA\` (se contiene un COMMIT suo puo' essere rimasta a meta': guarda gli avvisi qui sopra)"
+              echo ""
+              echo "**Cosa fare:** il sito online gira sul codice di prima con queste migrazioni gia' dentro. Se una di quelle applicate TOGLIE qualcosa (DROP, RENAME), il sito puo' gia' essere rotto: controllalo subito. Poi correggi la migrazione rotta e unisci la correzione: il rilascio riparte dalla prima che manca."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ "$USCITA" != "0" ]; then exit "$USCITA"; fi
           QUANTE="$(grep -c '^▶ applico ' "$DIARIO" || true)"
           ELENCO="$(grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico //' | tr '\n' ' ' || true)"
