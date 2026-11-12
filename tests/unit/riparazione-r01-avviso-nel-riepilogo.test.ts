@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { avviaPostgresConIndirizzo, BIN_POSTGRES, type PostgresConIndirizzo } from './riparazione-r01-pg';
+import { avviaPostgresConIndirizzo, type PostgresConIndirizzo } from './riparazione-r01-pg';
 
 /**
  * R01-022 — L'avviso sul COMMIT dentro una migrazione usciva solo sullo standard error, e il
@@ -12,7 +12,7 @@ import { avviaPostgresConIndirizzo, BIN_POSTGRES, type PostgresConIndirizzo } fr
  */
 const ROOT = process.cwd();
 
-describe.skipIf(!BIN_POSTGRES)('R01-022 · l\'avviso esce dalla porta che il rilascio legge', () => {
+describe('R01-022 · l\'avviso esce dalla porta che il rilascio legge', () => {
   let pg: PostgresConIndirizzo;
   let cartella: string;
   beforeAll(() => {
