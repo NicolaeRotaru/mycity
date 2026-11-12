@@ -563,6 +563,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di aggiungere`);
       return;
     }
+    // R02-008 — Il pulsante resta raggiungibile da tastiera anche quando non si può comprare
+    // (aria-disabled): premuto, dice perché invece di aggiungere.
+    if (isOutOfStock) {
+      toast.error(selectedVariant ? 'Questa combinazione è esaurita: prova un\'altra opzione.' : 'Prodotto esaurito.');
+      return;
+    }
     // R02-016 — Il secondo tocco dello stesso gesto (scheda o barra in fondo) non aggiunge un altro
     // pezzo: addToCart somma alla riga che c'è.
     if (!frenoAggiunta.current()) return;
@@ -973,12 +979,17 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   <div className="flex flex-wrap gap-2" role="group" aria-labelledby={`opt-${g.name}`}>
                     {g.values.map((val) => {
                       const active = selectedOptions[g.name] === val;
+                      // R02-008 — Un valore che porta solo a combinazioni esaurite lo si dice prima
+                      // di sceglierlo, anche a chi usa il lettore di schermo.
+                      const conQuestoValore = variants.filter((v) => v.options?.[g.name] === val);
+                      const esaurito = conQuestoValore.length > 0 && conQuestoValore.every((v) => v.stock === 0);
                       return (
                         <button
                           key={val}
                           type="button"
                           onClick={() => setSelectedOptions((prev) => ({ ...prev, [g.name]: val }))}
                           aria-pressed={active}
+                          aria-label={esaurito ? `${val}, esaurito` : undefined}
                           className={`min-w-[2.5rem] rounded-lg border-2 px-3 py-1.5 text-sm font-semibold transition ${
                             active
                               ? 'border-primary-600 bg-primary-50 text-primary-800'
@@ -994,6 +1005,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               ))}
               {/* 5/11/2026 — Regione sempre montata: il cambio di disponibilità della variante
                   si annuncia a chi usa il lettore di schermo. */}
+              <div id="disponibilita-variante">
               <div role="status" aria-live="polite">
               {needsVariantChoice ? (
                 <p className="text-xs text-ink-500">
@@ -1006,6 +1018,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   {selectedVariant.stock === 1 ? 'Ultimo pezzo' : `Solo ${selectedVariant.stock} rimasti`} per «{selectedVariant.label}».
                 </p>
               ) : null}
+              </div>
               </div>
             </div>
           )}
@@ -1146,7 +1159,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               size="lg"
               fullWidth
               onClick={handleAdd}
-              disabled={!canAdd}
+              // R02-008 — Con `disabled` il pulsante usciva dal giro del Tab: chi non vede premeva
+              // Tab e finiva su «Contatta il venditore» senza sapere perché. Resta raggiungibile,
+              // dice di non essere disponibile e punta al messaggio della disponibilità.
+              aria-disabled={!canAdd || undefined}
+              aria-describedby="disponibilita-variante"
+              className={!canAdd ? 'opacity-50 cursor-not-allowed' : undefined}
               icon={canAdd ? ShoppingCart : undefined}
             >
               {needsVariantChoice ? 'Scegli le opzioni' : isOutOfStock ? 'Non disponibile' : 'Aggiungi al carrello'}
