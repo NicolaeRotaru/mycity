@@ -134,10 +134,11 @@ export default function Navbar() {
         {/* DESKTOP */}
         <div className="hidden md:block">
           <div className="container mx-auto px-4 py-3">
+            {/* 12/11/2026 (R09-003) — Il logo è alto 20-24 px: un'area di tocco invisibile (before:) lo porta a 44+. */}
             {/* 12/11/2026 (R09-016) — Fra 768 e 1023 px alla ricerca restavano 152 px («Ce»): lì la pillola
                 dell'indirizzo mostra solo il CAP, «Registrati» diventa un'icona e lo spazio va al campo. */}
             <div className="flex items-center gap-3 lg:gap-4">
-              <Link href="/" className="text-white hover:text-white text-2xl font-serif font-extrabold tracking-tight whitespace-nowrap leading-none focus-visible:outline-white">
+              <Link href="/" className="relative before:absolute before:inset-x-0 before:-inset-y-3 before:content-[''] text-white hover:text-white text-2xl font-serif font-extrabold tracking-tight whitespace-nowrap leading-none focus-visible:outline-white">
                 <span className="text-accent-300">{branding.wordmark.accent}</span>{branding.wordmark.rest}
               </Link>
               <LocationPill />
@@ -228,7 +229,7 @@ export default function Navbar() {
         <div className="md:hidden">
           <div className="container mx-auto px-3 py-2.5">
             <div className="flex items-center gap-2">
-              <Link href="/" className="shrink-0 text-white hover:text-white text-xl font-serif font-extrabold whitespace-nowrap leading-none focus-visible:outline-white">
+              <Link href="/" className="relative before:absolute before:inset-x-0 before:-inset-y-3 before:content-[''] shrink-0 text-white hover:text-white text-xl font-serif font-extrabold whitespace-nowrap leading-none focus-visible:outline-white">
                 <span className="text-accent-300">{branding.wordmark.accent}</span>{branding.wordmark.rest}
               </Link>
               <div className="min-w-0 flex-1 flex justify-center">
