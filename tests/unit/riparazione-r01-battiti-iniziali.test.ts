@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { CRON_MAX_STALENESS_MIN, lavoriFermi } from '@/lib/cron-health';
-import { avviaPostgresConIndirizzo, BIN_POSTGRES, type PostgresConIndirizzo } from './riparazione-r01-pg';
+import { avviaPostgresConIndirizzo, type PostgresConIndirizzo } from './riparazione-r01-pg';
 
 /**
  * R01-019 — Dopo il rilascio il freno della veloce poteva risultare «mai partito», con un falso
@@ -45,7 +45,7 @@ describe('R01-019 · ogni lavoro sorvegliato ha la sua riga iniziale', () => {
   });
 });
 
-describe.skipIf(!BIN_POSTGRES)('R01-019 · la migrazione semina senza toccare un battito vero', () => {
+describe('R01-019 · la migrazione semina senza toccare un battito vero', () => {
   let pg: PostgresConIndirizzo;
   beforeAll(() => { pg = avviaPostgresConIndirizzo(); });
   afterAll(() => { pg?.ferma(); });
