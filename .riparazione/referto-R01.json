@@ -1,12 +1,12 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-12 15:28",
+  "aggiornato": "2026-11-12 15:35",
   "finita": true,
-  "testa": "dda495dd3959d417ca76e106d09b7796a8707a98",
+  "testa": "5d829f316e3ca25263d8b626a1e56a1b9abb840c",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "rosso",
-    "nota": "Un solo rosso: tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts (prova non mia rimessa com'era alla base, pretende la frase che R01-007 toglie; modifica in serve_file_altrui di R01-007). Tutto il resto verde: tsc, lint, le altre prove (8929 al giro precedente)."
+    "esito": "verde",
+    "nota": "tsc + lint + 8928 prove passate sulla punta (con il servizio PostgreSQL locale acceso, come la CI dopo R01-011)."
   },
   "voci": [
     {
@@ -107,37 +107,25 @@
     },
     {
       "id": "R01-007",
-      "esito": "riparato",
-      "commit": "b43aa4742969b23f33014e183229733346e79472",
-      "file_toccati": [
-        "components/rider/SOSButton.tsx"
-      ],
-      "prova_file": [
-        "tests/unit/riparazione-r01-sos-testo-112.test.tsx"
-      ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r01-sos-testo-112.test.tsx",
-      "prova_tipo": "comando",
-      "prova_eseguita": true,
-      "rimessa": {
-        "esito": "regge",
-        "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b43aa4742969b23f33014e183229733346e79472^ --file components/rider/SOSButton.tsx --prove tests/unit/riparazione-r01-sos-testo-112.test.tsx --json"
-      },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "I due toast erano gia' corretti prima della campagna; restava il dialogo di conferma («Verrà avviata la chiamata al 112»), ora dice che si apre il tastierino col 112 gia' composto e la chiamata parte premendo CHIAMA.",
       "chiave": "microcopy|il sos del fattorino dice «stiamo chiamando il 112», ma l'app apre solo il tastierino",
-      "commit_seguito": [
-        "80db80ae83ea5edab3aadeb4147d2a99c86bb686",
-        "dda495dd3959d417ca76e106d09b7796a8707a98"
-      ],
-      "verificato_da": "qa (subagente): grep di tutto il flusso SOS, nessun testo che prometta ancora una chiamata automatica; ha trovato rossa tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts:67 (pretendeva la frase vecchia) e un commento superato: corretti nel commit 80db80ae.",
+      "esito": "serve_file_altrui",
       "serve_file_altrui": [
         {
+          "file": "components/rider/SOSButton.tsx",
+          "modifica": "nel dialogo di conferma (riga ~205) sostituire `<span>Verrà avviata la chiamata al <strong>112 (numero unico emergenze)</strong></span>` con `<span>Si aprirà il tastierino con il <strong>112 (numero unico emergenze)</strong> già composto: la chiamata parte quando premi CHIAMA</span>`; e nel commento sopra `window.location.href = 'tel:112'` (righe ~113-114) sostituire le due righe «Venti righe piu' in basso il dialogo di conferma lo diceva gia' giusto: «Verra' avviata la chiamata al 112». Il testo esatto era li' dentro, e questi due non l'avevano preso.» con «Anche il dialogo di conferma diceva «Verra' avviata la chiamata al 112»: va detto che si apre il tastierino e che la chiamata parte premendo CHIAMA.»"
+        },
+        {
           "file": "tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts",
-          "modifica": "riga 65-68: l'it «il dialogo di conferma resta al futuro, com'era giusto» pretende `expect(sos).toContain('Verrà avviata la chiamata al')`, cioe' il difetto stesso di R01-007. Va sostituito con: `expect(sos).not.toContain('Verrà avviata la chiamata al'); expect(sos).toContain('Si aprirà il tastierino con il'); expect(sos).toContain('la chiamata parte quando premi CHIAMA');` (titolo: «il dialogo di conferma dice che si apre il tastierino, non che parte la chiamata»)."
+          "modifica": "righe 65-68: sostituire l'it «il dialogo di conferma resta al futuro, com'era giusto» (che pretende `expect(sos).toContain('Verrà avviata la chiamata al')`, cioe' il difetto) con: `it('il dialogo di conferma dice che si apre il tastierino, non che parte la chiamata', () => { expect(sos).not.toContain('Verrà avviata la chiamata al'); expect(sos).toContain('Si aprirà il tastierino con il'); expect(sos).toContain('la chiamata parte quando premi CHIAMA'); });`. Le due modifiche vanno insieme: da sola la prima fa diventare rossa questa prova."
         }
       ],
-      "nota_conflitto": "Su richiesta della regista il file e' tornato com'era alla base (commit dda495dd). Finche' la modifica sopra non e' applicata, quella prova e' rossa su questo ramo: e' l'unico rosso di npm run verify."
+      "nota": "Decisione della regista (B): la frase e la prova esistente cambiano insieme nell'onda 2, dove la prova avra' un padrone. Su questo ramo il dialogo e' tornato alla frase della base (commit 5d829f31) e la mia prova riparazione-r01-sos-testo-112 e' tolta. I due toast erano gia' corretti prima della campagna. Una versione gia' provata della modifica c'e' nella storia del ramo (b43aa474 + 80db80ae), verificata dal qa con un grep di tutto il flusso SOS.",
+      "commit": [
+        "b43aa4742969b23f33014e183229733346e79472",
+        "80db80ae83ea5edab3aadeb4147d2a99c86bb686",
+        "dda495dd3959d417ca76e106d09b7796a8707a98",
+        "5d829f316e3ca25263d8b626a1e56a1b9abb840c"
+      ]
     },
     {
       "id": "R01-008",
