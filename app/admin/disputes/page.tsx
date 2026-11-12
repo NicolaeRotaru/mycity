@@ -15,6 +15,10 @@ import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { comeSiDivideIlReclamo, pagamentoPerChiDecide, type OrdineDaRimborsare } from '@/lib/rimborsi/regole-del-rimborso';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
+import { vistaDaQuery } from '@/lib/vista-query';
+
+/** Quanti reclami legge la pagina. Se ne tornano tanti, la pagina lo dice: oltre, i conti sono per difetto. */
+const LIMITE_RECLAMI = 100;
 
 type Dispute = {
   id: string;
@@ -33,7 +37,7 @@ type Dispute = {
 const STATUS_META: Record<Dispute['status'], { label: string; color: string; icon: LucideIcon }> = {
   open:              { label: 'Aperto',                          color: 'accent',    icon: Sparkles },
   under_review:      { label: 'In valutazione',                  color: 'primary',   icon: Search },
-  resolved_buyer:    { label: 'Risolto a favore del buyer',      color: 'olive',     icon: CheckCircle2 },
+  resolved_buyer:    { label: 'Risolto a favore del cliente',    color: 'olive',     icon: CheckCircle2 },
   resolved_seller:   { label: 'Risolto a favore del venditore',  color: 'olive',     icon: CheckCircle2 },
   rejected:          { label: 'Rifiutato',                       color: 'secondary', icon: X },
 };
@@ -61,7 +65,7 @@ export default function AdminDisputesPage() {
   const [resolution, setResolution] = useState('');
   const [refundEur, setRefundEur] = useState('');
 
-  const { data: disputes = [], isLoading, isError, refetch } = useQuery({
+  const query = useQuery({
     queryKey: queryKeys.admin.disputes(filter),
     queryFn: async (): Promise<Dispute[]> => {
       let q = supabase
@@ -73,7 +77,7 @@ export default function AdminDisputesPage() {
           against:profiles!disputes_against_id_fkey ( store_name, full_name )
         `)
         .order('created_at', { ascending: false })
-        .limit(100);
+        .limit(LIMITE_RECLAMI);
       if (filter !== 'all') q = q.eq('status', filter);
       const { data, error } = await q;
       if (error) throw error;
@@ -85,6 +89,13 @@ export default function AdminDisputesPage() {
   // sono arrivati e quanto si puo' restituire: prima c'era solo un campo libero,
   // e un ordine mai pagato chiuso con «24» diventava credito dal nulla. La
   // tabella dei reclami non ha un legame con gli ordini, quindi si leggono a parte.
+  // 12/11/2026 (R09-005) — Scheletro, errore e vuoto li decide il presidio comune (lib/vista-query.ts),
+  // come nel cruscotto di oggi, invece dei rami scritti a mano.
+  const vista = vistaDaQuery(query);
+  const disputes = useMemo(() => query.data ?? [], [query.data]);
+  const isError = vista.mostraErrore;
+  // 12/11/2026 (R09-015) — Oltre il limite il numero e i segnali sarebbero per difetto, senza dirlo.
+  const tagliato = !isError && disputes.length >= LIMITE_RECLAMI;
   const idOrdini = [...new Set(disputes.map((d) => d.order_id))].sort();
   const { data: ordiniDeiReclami = {}, isError: pagamentiNonLetti } = useQuery({
     queryKey: ['admin', 'disputes-ordini', idOrdini.join(',')],
@@ -207,6 +218,12 @@ export default function AdminDisputesPage() {
         sub="Gestisci le controversie tra clienti e venditori."
       />
 
+      {tagliato && (
+        <p role="status" className="rounded-lg border border-accent-200 bg-accent-50 px-3 py-2 text-sm text-accent-900">
+          Vedi i {LIMITE_RECLAMI} reclami più recenti: ce ne sono altri più vecchi, e i numeri qui sotto contano solo questi.
+        </p>
+      )}
+
       {/* Con la lettura caduta i numeri sarebbero quelli vecchi: non si mostrano. */}
       {!isError && riskSignals.length > 0 && (
         <section className="rounded-xl border-2 border-cream-300 bg-white p-4">
@@ -253,17 +270,17 @@ export default function AdminDisputesPage() {
         ))}
       </div>
 
-      {isLoading ? (
+      {vista.mostraScheletro ? (
         <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-32 rounded-xl skeleton" />)}</div>
       ) : isError ? (
         <ErrorState
           variant="compact"
           title="Non riesco a leggere i reclami"
           description="Non so se ci sono reclami da gestire. Riprova tra poco."
-          retry={() => void refetch()}
+          retry={() => void query.refetch()}
           supportHref={null}
         />
-      ) : disputes.length === 0 ? (
+      ) : vista.mostraVuoto ? (
         <div className="bg-white border-2 border-cream-300 rounded-xl p-12 text-center">
           <PartyPopper size={40} strokeWidth={2} className="mx-auto text-olive-500 mb-2" aria-hidden />
           <p className="text-ink-600 font-medium">Nessun reclamo in questo stato</p>
@@ -301,14 +318,14 @@ export default function AdminDisputesPage() {
                   </div>
                 </div>
 
-                <p className="text-sm text-ink-700 bg-cream-50 rounded-lg p-3 whitespace-pre-line">
+                <p className="text-sm text-ink-700 bg-cream-50 rounded-lg p-3 whitespace-pre-line break-words [overflow-wrap:anywhere]">
                   {d.description}
                 </p>
 
                 {d.resolution_notes && (
                   <div className="mt-3 p-3 bg-olive-50 rounded-lg border border-olive-200">
                     <p className="text-xs font-bold text-olive-800 uppercase tracking-wider mb-1">Risoluzione</p>
-                    <p className="text-sm text-olive-900">{d.resolution_notes}</p>
+                    <p className="text-sm text-olive-900 whitespace-pre-line break-words [overflow-wrap:anywhere]">{d.resolution_notes}</p>
                     {d.refund_cents && (
                       <p className="text-sm font-bold text-olive-900 mt-1">Rimborso: {formatPrice(d.refund_cents / 100)}</p>
                     )}
@@ -396,7 +413,7 @@ export default function AdminDisputesPage() {
                 disabled={decide.isPending || resolution.trim().length < 10}
                 className="bg-olive-600 hover:bg-olive-700 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-600 text-white text-sm font-semibold px-3 py-2 rounded-lg flex items-center justify-center gap-1"
               >
-                <Check size={14} /> A favore buyer
+                <Check size={14} /> A favore del cliente
               </button>
               <Button
                 onClick={() => decide.mutate({
@@ -408,7 +425,7 @@ export default function AdminDisputesPage() {
                 disabled={resolution.trim().length < 10}
                 size="sm"
                 icon={Check}
-              >A favore seller</Button>
+              >A favore del venditore</Button>
               <button
                 onClick={() => decide.mutate({
                   id: openId,
