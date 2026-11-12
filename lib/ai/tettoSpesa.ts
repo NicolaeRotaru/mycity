@@ -1,7 +1,12 @@
 // lib/ai/tettoSpesa.ts
 import { logger } from '@/lib/logger';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { RIPIEGO_TOLLERATO_MINUTI as TOLLERANZA_RIPIEGO_MINUTI } from '@/lib/ai/decisioneTettoSpesa';
+import {
+  RIPIEGO_TOLLERATO_MINUTI as TOLLERANZA_RIPIEGO_MINUTI,
+  allarmiTettoSpesaAi as allarmiDelTetto,
+  leggiCopieAttese as copieDaAmbiente,
+  type AllarmeTetto,
+} from '@/lib/ai/decisioneTettoSpesa';
 
 /**
  * 8/9/2026 (lotto gravi, corsia 11) — QUI STA DOVE IL NUMERO E' CONSERVATO.
@@ -384,4 +389,52 @@ export async function sondaContoCondiviso(
     segnalaRipiego('sonda del conto condiviso non riuscita', giorno, adesso);
   }
   return statoContoCondiviso();
+}
+
+/**
+ * 12/11/2026 (R04-018, revisione K02) — L'ALLARME DEL TETTO PRONTO PER IL CRON.
+ *
+ * L'ora di tolleranza si contava dalla memoria della copia che serve le
+ * richieste AI: su Vercel le copie vivono poco e l'allarme poteva non arrivare
+ * mai. Qui l'inizio del guasto si ricorda nel database, nella tabella che il
+ * cron degli avvisi usa gia' (`operational_alert_log`, colonne `alert_key` e
+ * `last_sent_at`): una riga dedicata, scritta solo la PRIMA volta che il conto
+ * non risponde (upsert che ignora i doppioni) e tolta quando risponde di nuovo.
+ * Il cron deve solo fare `alerts.push(...(await allarmiTettoSpesaAiPerIlCron()))`.
+ */
+export const CHIAVE_RIPIEGO_DA = 'ai-tetto-condiviso:ripiego-da';
+
+export async function allarmiTettoSpesaAiPerIlCron(opzioni: {
+  tettoEur?: number;
+  copieAttese?: number;
+  quando?: Date;
+} = {}): Promise<AllarmeTetto[]> {
+  const allarmi = allarmiDelTetto;
+  const copie = copieDaAmbiente;
+  const tettoEur = opzioni.tettoEur ?? Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0);
+  const copieAttese = opzioni.copieAttese ?? copie(process.env.AI_COPIE_ATTESE);
+  const primo = await sondaContoCondiviso(opzioni.quando);
+  try {
+    const admin = getAdminSupabase();
+    if (primo.condiviso) {
+      await admin.from('operational_alert_log').delete().eq('alert_key', CHIAVE_RIPIEGO_DA);
+      return allarmi(primo, { tettoEur, copieAttese });
+    }
+    await admin
+      .from('operational_alert_log')
+      .upsert({ alert_key: CHIAVE_RIPIEGO_DA, last_sent_at: new Date().toISOString() }, { onConflict: 'alert_key', ignoreDuplicates: true });
+    const { data } = await admin
+      .from('operational_alert_log')
+      .select('last_sent_at')
+      .eq('alert_key', CHIAVE_RIPIEGO_DA)
+      .maybeSingle();
+    const da = data && typeof (data as { last_sent_at?: unknown }).last_sent_at === 'string'
+      ? Date.parse((data as { last_sent_at: string }).last_sent_at)
+      : NaN;
+    const conto = Number.isFinite(da) ? await sondaContoCondiviso(opzioni.quando, da) : primo;
+    return allarmi(conto, { tettoEur, copieAttese });
+  } catch {
+    // Se anche questa tabella non risponde, vale quello che sa la copia.
+    return allarmi(primo, { tettoEur, copieAttese });
+  }
 }
