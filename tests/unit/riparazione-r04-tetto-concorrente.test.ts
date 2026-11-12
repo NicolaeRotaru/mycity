@@ -77,3 +77,37 @@ describe('il tetto regge anche con chiamate partite insieme', () => {
     expect(src).toMatch(/controllaTettoSpesaAi\('ai-catalog-batch-start',\s*impegnato \* 100\)/);
   });
 });
+
+describe('una lettura vecchia del conto non fa sforare il tetto (revisione K02)', () => {
+  beforeEach(() => {
+    __azzeraRipiegoSpesaAi();
+    createMock.mockReset();
+    rpcMock.mockReset();
+    vi.stubEnv('AI_GLOBAL_DAILY_BUDGET_EUR', '0.10'); // 10 centesimi
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('A legge 5 lentamente, B intanto spende e il conto va a 12: A non passa', async () => {
+    let letture = 0;
+    rpcMock.mockImplementation(async (nome: string) => {
+      if (nome === 'spesa_ai_di_oggi') {
+        letture++;
+        if (letture === 1) await attesa(60); // la lettura di A arriva tardi, col numero di prima
+        return { data: 5, error: null };
+      }
+      return { data: 12, error: null }; // registra_spesa_ai: dopo B il conto e' a 12
+    });
+    createMock.mockResolvedValue({
+      content: [{ type: 'text', text: 'ok' }],
+      stop_reason: 'end_turn',
+      // B costa ~7 centesimi: abbastanza da superare il credito di frazioni e arrivare al conto.
+      usage: { input_tokens: 0, output_tokens: 15_000, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 },
+    });
+    const chiama = () =>
+      runMessage({ feature: 'prova', model: 'claude-haiku-4-5-20251001', max_tokens: 100, messages: [{ role: 'user', content: 'x' }] });
+    const a = chiama();
+    await attesa(5);
+    await chiama(); // B: passa (5 + ~1 < 10) e registra, il conto condiviso dice 12
+    await expect(a).rejects.toMatchObject({ motivo: 'tetto_spesa' });
+  });
+});

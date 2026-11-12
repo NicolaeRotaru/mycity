@@ -315,6 +315,17 @@ export async function spesaDiOggiCents(quando?: Date): Promise<number> {
   return condiviso;
 }
 
+/**
+ * 12/11/2026 (R04-017, revisione K02) — L'ULTIMO TOTALE CHE QUESTA COPIA CONOSCE.
+ *
+ * Una lettura del conto partita prima puo' arrivare dopo che un'altra chiamata
+ * ha gia' speso e registrato: il numero letto e' vecchio. Chi decide prende il
+ * piu' alto fra la lettura e questo, che sale a ogni registrazione e lettura.
+ */
+export function ultimaSpesaNotaCents(quando?: Date): number {
+  return ripiegoCents(giornoDiSpesa(quando));
+}
+
 /** Aggiunge una spesa al conto del giorno. Non lancia mai. */
 export async function aggiungiSpesaCents(cents: number, quando?: Date): Promise<void> {
   if (!Number.isFinite(cents) || cents <= 0) return;

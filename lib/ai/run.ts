@@ -4,7 +4,7 @@ import type { NextResponse } from 'next/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { getAnthropic, estimateCostEur, segnalaModelloRitirato, type ModelId } from '@/lib/ai/client';
-import { aggiungiSpesaCents, spesaDiOggiCents, statoContoCondiviso } from '@/lib/ai/tettoSpesa';
+import { aggiungiSpesaCents, spesaDiOggiCents, statoContoCondiviso, ultimaSpesaNotaCents } from '@/lib/ai/tettoSpesa';
 import { decidiSpesaAi, leggiCopieAttese } from '@/lib/ai/decisioneTettoSpesa';
 
 /**
@@ -175,7 +175,10 @@ export async function controllaTettoSpesaAi(feature: string, stimaCents: number 
   const limitEur = Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0);
   if (!(limitEur > 0)) return () => undefined; // nessun tetto configurato: niente giro di rete
   const stima = Number.isFinite(stimaCents) && stimaCents > 0 ? Math.ceil(stimaCents) : 0;
-  const giaSpesiCents = await spesaDiOggiCents();
+  const letti = await spesaDiOggiCents();
+  // R04-017 (revisione) — Una lettura vecchia non abbassa lo speso: vale il
+  // piu' alto fra quello letto e l'ultimo totale noto a questa copia.
+  const giaSpesiCents = Math.max(letti, ultimaSpesaNotaCents());
   // Da qui alla prenotazione nessun await: e' quello che rende il controllo
   // e la prenotazione un passo solo dentro questa copia.
   const spesiCents = giaSpesiCents + _inVoloCents + Math.max(0, stima - 1);
