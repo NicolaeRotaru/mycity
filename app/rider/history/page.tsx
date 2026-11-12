@@ -10,6 +10,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { compensoConsegnaEuro } from '@/lib/shipping';
+import { giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
 
 type RiderOrderRow = {
   id: string;
@@ -23,15 +24,23 @@ type RiderOrderRow = {
   payment_method: string | null;
 };
 
-/** Etichetta giorno: Oggi / Ieri / data lunga. */
-function dayLabel(iso: string): string {
-  const d = new Date(iso);
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const that = new Date(d); that.setHours(0, 0, 0, 0);
-  const diff = Math.round((today.getTime() - that.getTime()) / 86400000);
-  if (diff === 0) return 'Oggi';
-  if (diff === 1) return 'Ieri';
-  return d.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long' });
+/**
+ * Etichetta giorno: Oggi / Ieri / data lunga.
+ *
+ * 12/11/2026 (R06-015) — Il giorno e' quello di Piacenza, per la chiave del
+ * gruppo e per l'etichetta. Prima la chiave era la data di Greenwich
+ * (`delivered_at.slice(0, 10)`) e l'etichetta l'ora del telefono: fra mezzanotte
+ * e l'una (le due d'estate) le consegne finivano in un secondo gruppo «Oggi» e
+ * il totale del giorno si spezzava.
+ */
+function dayLabel(giorno: string): string {
+  const oggi = giornoPiacenza();
+  if (giorno === oggi) return 'Oggi';
+  const ieri = giornoPiacenza(new Date(inizioGiornoPiacenza(oggi).getTime() - 12 * 3600_000));
+  if (giorno === ieri) return 'Ieri';
+  // Mezzogiorno di quel giorno a Piacenza: lontano da ogni cambio di data.
+  const mezzogiorno = new Date(inizioGiornoPiacenza(giorno).getTime() + 12 * 3600_000);
+  return mezzogiorno.toLocaleDateString('it-IT', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'Europe/Rome' });
 }
 
 export default function RiderHistoryPage() {
@@ -72,11 +81,11 @@ export default function RiderHistoryPage() {
 
   // Raggruppa per giorno mantenendo l'ordine (già desc per delivered_at).
   const groups = useMemo(() => {
-    const map = new Map<string, { label: string; total: number; items: RiderOrderRow[] }>();
+    const map = new Map<string, { key: string; label: string; total: number; items: RiderOrderRow[] }>();
     for (const o of orders) {
-      const key = (o.delivered_at ?? '').slice(0, 10) || 'senza-data';
-      const label = o.delivered_at ? dayLabel(o.delivered_at) : 'Senza data';
-      if (!map.has(key)) map.set(key, { label, total: 0, items: [] });
+      const key = o.delivered_at ? giornoPiacenza(o.delivered_at) : 'senza-data';
+      const label = o.delivered_at ? dayLabel(key) : 'Senza data';
+      if (!map.has(key)) map.set(key, { key, label, total: 0, items: [] });
       const g = map.get(key)!;
       g.total += compensoConsegnaEuro(o);
       g.items.push(o);
@@ -113,7 +122,7 @@ export default function RiderHistoryPage() {
           </div>
         ) : (
           groups.map((g) => (
-            <div key={g.label} className="mb-[18px]">
+            <div key={g.key} className="mb-[18px]">
               <div className="mb-2 flex items-baseline justify-between">
                 <span className="text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">{g.label}</span>
                 <span className="text-[13px] font-bold text-olive-700">{formatPrice(g.total)}</span>
