@@ -27,7 +27,8 @@ const SELLER_SUBSCRIPTION_CENTS = ABBONAMENTO_CENTESIMI_MESE;
 /** R10-019 — Le richieste dello stesso negozio dentro questa finestra ricevono la stessa cassa. */
 const FINESTRA_CASSA_MS = 10 * 60_000;
 /** R10-020 — Un ordine incassato: pagato (carta o contanti registrati), o in contanti e consegnato. */
-const PRIMO_INCASSO = 'payment_status.eq.PAID,and(payment_method.eq.cod,delivery_status.eq.DELIVERED)';
+// Revisione qa: un ordine pagato e poi rimborsato in parte e' un incasso, come in migrations/215.
+const PRIMO_INCASSO = 'payment_status.in.(PAID,PARTIALLY_REFUNDED),and(payment_method.eq.cod,delivery_status.eq.DELIVERED)';
 
 export const POST = withAuthRateLimit(
   { name: 'seller-subscription-checkout', max: 10, windowMs: 10 * 60_000 },

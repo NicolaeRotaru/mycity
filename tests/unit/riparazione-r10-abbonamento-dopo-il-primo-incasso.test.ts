@@ -74,7 +74,13 @@ describe('R10-020 — il canone parte dopo il primo incasso', () => {
     stato.incassi = [{ id: 'o1' }];
     expect((await apri()).status).toBe(200);
     expect(stato.sessioni).toBe(1);
-    expect(stato.filtro).toBe('s1|payment_status.eq.PAID,and(payment_method.eq.cod,delivery_status.eq.DELIVERED)');
+    expect(stato.filtro).toBe('s1|payment_status.in.(PAID,PARTIALLY_REFUNDED),and(payment_method.eq.cod,delivery_status.eq.DELIVERED)');
+  });
+
+  it('un ordine pagato e poi rimborsato in parte conta come incasso', async () => {
+    stato.incassi = [{ id: 'o1' }];
+    await apri();
+    expect(stato.filtro, 'il rimborso parziale cancella l’incasso').toContain('PARTIALLY_REFUNDED');
   });
 
   it('incassi non letti: non si chiede di pagare alla cieca', async () => {
