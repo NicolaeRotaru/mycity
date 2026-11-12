@@ -358,6 +358,17 @@ async function rendiSulCredito(admin: SupabaseClient, c: RigaVeloce, cents: numb
 }
 
 /**
+ * 12/11/2026 (R09-001, collaudo K01) — Gli ordini del carrello già confermati da un negozio e passati
+ * alla fascia: quelli spostati in questo giro, e quelli spostati da un giro di prima caduto a metà
+ * (sono già in fascia, e il cliente non era stato avvisato). Non si annullano più: la frase lo dice.
+ */
+function confermatiSpostati(o: RigaVeloce, scritti: RigaVeloce[], vivi: RigaVeloce[]): number {
+  const idScritti = new Set(scritti.map((c) => c.id));
+  return vivi.filter((c) => c.id !== o.id && String(c.delivery_status) !== 'NEW'
+    && (idScritti.has(c.id) || /^(Oggi|Domani) · /.test(String(c.delivery_slot ?? '')))).length;
+}
+
+/**
  * `fatto`: quello che il giro ha già fatto sul carrello e non si disfa (l'euro reso sulla carta o sul
  * credito, un ordine già spostato). Se dopo una scrittura cade, il giro lo legge agli amministratori.
  * Le frasi dipendono dallo stato, non dal giro: lo stesso stato dà lo stesso avviso, una volta sola.
@@ -645,7 +656,7 @@ async function spostaIlCarrello(
     ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
   }
 
-  const clienteAvvisato = await avvisaIlCliente(admin, o, fraseDelFreno({ fascia, euro: euroFinale, totaleCents, sulCreditoCents, giaConfermati: scritti.filter((c) => c.id !== o.id && String(c.delivery_status) !== 'NEW').length }));
+  const clienteAvvisato = await avvisaIlCliente(admin, o, fraseDelFreno({ fascia, euro: euroFinale, totaleCents, sulCreditoCents, giaConfermati: confermatiSpostati(o, scritti, vivi) }));
   await avvisaNegoziEFattorino(admin, o, scritti, fascia);
   logger.info('[veloce-non-confermata] carrello passato in fascia', { orderId: o.id, fascia, euro: euroFinale, ordini: deltaScritti.size });
   // 5/11/2026 — La promessa al cliente è cambiata (da 30-60 minuti a una fascia): se né campanella né
