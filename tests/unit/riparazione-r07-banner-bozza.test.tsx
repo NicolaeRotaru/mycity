@@ -52,6 +52,20 @@ describe('R07-023 · la vetrina: niente pulsante verso un prodotto che non è pi
   });
 });
 
+describe('R07-023 · l HTML del server non porta il link prima della risposta', () => {
+  it('risposta non ancora arrivata (come sul server): niente pulsante verso il prodotto', () => {
+    stato.lettura = { data: undefined, isError: false, isPending: true };
+    const html = renderToStaticMarkup(createElement(BannerSection, { config: config('p-bozza'), ctx }));
+    expect(html).not.toContain('/product/p-bozza');
+  });
+
+  it('un pulsante verso una categoria non aspetta nessuna risposta', () => {
+    stato.lettura = { data: undefined, isError: false, isPending: true };
+    const cfg = { imageUrl: 'https://x/y.jpg', cta: { label: 'Scopri', target: { kind: 'category', categorySlug: 'pane' } } } as never;
+    expect(renderToStaticMarkup(createElement(BannerSection, { config: cfg, ctx }))).toContain('Scopri');
+  });
+});
+
 describe('R07-023 · il costruttore avvisa il negozio', () => {
   it('il prodotto scelto è passato in bozza: il negozio lo legge', () => {
     stato.lettura = { data: [{ id: 'p2', name: 'Torta', status: 'draft' }], isLoading: false, isError: false, refetch: vi.fn() };

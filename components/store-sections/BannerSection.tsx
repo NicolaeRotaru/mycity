@@ -14,7 +14,10 @@ export default function BannerSection({ config, ctx }: { config: SectionConfig<'
   // 12/11/2026 (R07-023) — Il pulsante può puntare a un prodotto scelto quando era in vendita
   // e poi messo in bozza: il cliente arrivava su una scheda che non si apre. Si chiede al
   // database se il prodotto è ancora in vetrina (`prodotto_in_vetrina`, migrazione 129, aperta
-  // ad anon) e, se non lo è, il pulsante non c'è. Se la domanda non riesce si lascia com'era.
+  // ad anon): il pulsante verso un prodotto compare solo quando la risposta è sì. Finché la
+  // risposta non c'è (anche nell'HTML del server, letto da Google e da chi non ha JavaScript)
+  // il pulsante non si disegna; se la domanda cade, si lascia com'era prima.
+  // (Il precarico della vetrina non lo porta: lib/queries/precarico.ts legge solo il negozio.)
   const prodottoDelPulsante = config.cta?.target.kind === 'product' ? config.cta.target.productId || null : null;
   const inVetrina = useQuery({
     queryKey: ['prodotto-in-vetrina', prodottoDelPulsante],
@@ -26,7 +29,7 @@ export default function BannerSection({ config, ctx }: { config: SectionConfig<'
       return data === true;
     },
   });
-  const prodottoFuoriVetrina = !!prodottoDelPulsante && inVetrina.data === false;
+  const prodottoFuoriVetrina = !!prodottoDelPulsante && inVetrina.data !== true && !inVetrina.isError;
 
   if (!config.imageUrl) return null;
 
