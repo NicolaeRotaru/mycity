@@ -27,6 +27,7 @@ import { conNegozioDellOrdine } from '@/lib/queries/negozio-dell-ordine';
 import { trackOrderPlaced } from '@/lib/analytics/events';
 // #92 — le miniature si chiedono gia' piccole al server
 import { sizedImage, logoNegozio } from '@/lib/image-url';
+import { TETTO_ORDINI, quantiOrdini, avvisoOrdiniOltreIlTetto } from '@/lib/ordini/tetto-ordini';
 
 type OrderItem = {
   id: string;
@@ -74,7 +75,8 @@ const fetchOrders = async (): Promise<Order[]> => {
     // il limite implicito di mille righe di PostgREST, che taglia in
     // silenzio e fa sembrare veri dei numeri che non lo sono.
     .order('created_at', { ascending: false })
-      .limit(100);
+      // R10-013 — Il tetto e le parole che lo dicono stanno in lib/ordini/tetto-ordini.ts.
+      .limit(TETTO_ORDINI);
 
   if (error) throw error;
   // 18/10/2026 — Nome e logo del negozio dalla vetrina pubblica, non da `profiles`
@@ -325,7 +327,7 @@ export default function OrdersPage() {
           I tuoi ordini
         </h1>
         <p className="mt-1 text-sm text-ink-500">
-          {orders.length === 1 ? '1 ordine' : `${orders.length} ordini`}
+          {quantiOrdini(orders.length)}
         </p>
       </header>
 
@@ -418,6 +420,13 @@ export default function OrdersPage() {
           </div>
         );
       })}
+
+      {avvisoOrdiniOltreIlTetto(orders.length) && (
+        <p className="rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 text-sm text-ink-700">
+          {avvisoOrdiniOltreIlTetto(orders.length)}{' '}
+          <Link href="/help" className="font-semibold text-primary-700 underline">Vai all’assistenza</Link>
+        </p>
+      )}
     </div>
   );
 }
