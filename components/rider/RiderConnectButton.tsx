@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Banknote, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { friendlyError } from '@/lib/errors';
+import { apiErrorMessage, friendlyError } from '@/lib/errors';
 
 const RIDER_STRIPE_STATUS = ['rider', 'stripe-status'] as const;
 
@@ -52,8 +52,13 @@ export default function RiderConnectButton() {
         method: 'POST',
         headers: token ? { authorization: `Bearer ${token}` } : {},
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => null);
       await qc.invalidateQueries({ queryKey: RIDER_STRIPE_STATUS });
+      // R11-019 — Il server ha risposto errore: mai «stato aggiornato».
+      if (!res.ok) {
+        if (!silent) toast.error(apiErrorMessage(data, 'Non sono riuscito ad aggiornare lo stato: riprova fra poco.'));
+        return;
+      }
       if (!silent) {
         if (data?.payouts_enabled) toast.success('IBAN attivo: riceverai i compensi.');
         else toast('Stato aggiornato. Se risulta in attesa, completa la verifica.', { icon: <RefreshCw size={16} /> });
