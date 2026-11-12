@@ -74,6 +74,29 @@ interface Props {
   mode?: VendorFormMode;
 }
 
+/**
+ * Collaudo K04 — la fotografia del modulo non deve dipendere dall'ordine dei campi: lo stato li tiene
+ * nell'ordine in cui la persona li scrive, i dati controllati da zod nell'ordine dello schema. Con
+ * JSON.stringify semplice, dopo un salvataggio riuscito l'avviso «non salvate» restava acceso.
+ * Chiavi in ordine, valori vuoti (undefined, '') trattati come assenti.
+ */
+function fotografiaStabile(valore: unknown): string {
+  const pulisci = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(pulisci);
+    if (v && typeof v === 'object') {
+      const fuori: Record<string, unknown> = {};
+      for (const k of Object.keys(v as Record<string, unknown>).sort()) {
+        const x = (v as Record<string, unknown>)[k];
+        if (x === undefined || x === '') continue;
+        fuori[k] = pulisci(x);
+      }
+      return fuori;
+    }
+    return v;
+  };
+  return JSON.stringify(pulisci(valore));
+}
+
 const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', onSporcoChange }: Props) => {
   const tStates = useTranslations('states');
   const tForms = useTranslations('forms');
@@ -185,7 +208,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
     // Dal controllo qa: la posizione conta solo dopo che la persona l'ha toccata. All'apertura la mappa
     // rimanda al modulo il suo punto di partenza (anche quello di Roma o le coordinate non valide):
     // non è una modifica, e l'avviso d'uscita non deve comparire senza che nessuno abbia scritto niente.
-    JSON.stringify({ logoUrl, media, description, hours, custom: personalizzazione,
+    fotografiaStabile({ logoUrl, media, description, hours, custom: personalizzazione,
       ...(posizioneToccata ? { a: location.address, la: location.lat, lo: location.lng } : {}) });
   const fotografia = fotografiaDi(custom);
   const [fotografiaSalvata, setFotografiaSalvata] = useState(fotografia);

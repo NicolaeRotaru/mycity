@@ -79,3 +79,22 @@ describe('R11-015 — dal controllo qa', () => {
     expect(lasciaLaPagina()).toBe(false);
   });
 });
+
+describe('R11-015 — collaudo K04', () => {
+  it('scritti prima il Sito e poi Instagram, dopo il salvataggio riuscito si esce senza domande', async () => {
+    const r = await disegna(
+      createElement(VendorForm, { mode: 'branding', onSubmit: () => Promise.resolve(), defaultValues: { storeName: 'Pane Quotidiano' } }),
+    );
+    chiudi = r.chiudi;
+    const sito = r.host.querySelector('#social-website') as HTMLInputElement;
+    const insta = r.host.querySelector('#social-instagram') as HTMLInputElement;
+    await act(async () => { scrivi(sito, 'https://panequotidiano.it'); await new Promise((ok) => setTimeout(ok, 5)); });
+    await act(async () => { scrivi(insta, 'panequotidiano'); await new Promise((ok) => setTimeout(ok, 5)); });
+    expect(lasciaLaPagina()).toBe(true);
+    await act(async () => {
+      (r.host.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise((ok) => setTimeout(ok, 30));
+    });
+    expect(lasciaLaPagina(), 'salvato davvero, ma l avviso «non salvate» resta acceso').toBe(false);
+  });
+});
