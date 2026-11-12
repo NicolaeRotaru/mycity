@@ -139,15 +139,29 @@ fi
 #
 # Senza gli utenti la copia non si ripristina (vedi sopra): si tolgono tutti e
 # due e si esce rossi, come per il primo.
+#
+# R01-025 (12/11/2026) — I SEMI DELLA DOPPIA VERIFICA NON ESCONO MAI IN CHIARO.
+#
+# In `auth.mfa_factors` c'e' il segreto da cui il telefono genera i codici a sei
+# cifre: chi lo legge genera gli stessi codici, cioe' la doppia verifica non vale
+# piu' niente. Senza BACKUP_PASSPHRASE la copia resta in chiaro (vedi sotto),
+# quindi quella tabella NON si copia: dopo un ripristino chi aveva la doppia
+# verifica la riaccende, che e' meglio di un segreto in giro per trenta giorni.
+# L'alternativa «senza passphrase niente copia» e' una scelta di Nicola.
+TABELLE_UTENTI=(--table=auth.users --table=auth.identities)
+if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
+  TABELLE_UTENTI+=(--table=auth.mfa_factors)
+else
+  echo "[backup] ATTENZIONE: senza BACKUP_PASSPHRASE la copia resta in chiaro, quindi auth.mfa_factors (i segreti della doppia verifica) NON viene copiata." >&2
+  riepilogo_lavoro "⚠️ Copia senza passphrase: i segreti della doppia verifica (auth.mfa_factors) non sono stati copiati. Metti BACKUP_PASSPHRASE nei segreti per averli, cifrati."
+fi
 UTENTI="$BACKUP_DIR/mycity_${TS}_utenti.dump"
-echo "[backup] Dump degli utenti (auth.users, auth.identities, auth.mfa_factors) → $UTENTI"
+echo "[backup] Dump degli utenti (${TABELLE_UTENTI[*]}) → $UTENTI"
 if ! pg_dump \
   --format=custom \
   --no-owner \
   --no-acl \
-  --table=auth.users \
-  --table=auth.identities \
-  --table=auth.mfa_factors \
+  "${TABELLE_UTENTI[@]}" \
   --file="$UTENTI" \
   "$DB_URL"; then
   rm -f "$OUT" "$UTENTI"
