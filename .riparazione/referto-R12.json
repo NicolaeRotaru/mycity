@@ -143,7 +143,7 @@
     "tests/unit/riparazione-r12-decisioni-superate.test.ts"
    ],
    "prova_comando": "npx vitest run tests/unit/riparazione-r12-decisioni-superate.test.ts",
-   "prova_tipo": "leggera",
+   "prova_tipo": "comando",
    "prova_eseguita": true,
    "rimessa": {
     "esito": "regge",
@@ -171,7 +171,7 @@
     "tests/unit/riparazione-r12-value-props-tolte.test.ts"
    ],
    "prova_comando": "npx vitest run tests/unit/riparazione-r12-value-props-tolte.test.ts",
-   "prova_tipo": "leggera",
+   "prova_tipo": "comando",
    "prova_eseguita": true,
    "rimessa": {
     "esito": "regge",
@@ -209,7 +209,7 @@
   {
    "id": "R12-009",
    "chiave": "architettura|i dati demo del sito non si caricano più sul database di oggi: tutte e quattro le semine si fermano",
-   "esito": "riparato",
+   "esito": "parziale",
    "commit": "f33fe35f9f7810284aa2578eb2ee11a6f604a917",
    "file_toccati": [
     "seeds/001_piacenza_stores.sql",
@@ -254,7 +254,7 @@
     "tests/unit/riparazione-r12-il-design-system-e-completo.test.ts"
    ],
    "prova_comando": "npx vitest run tests/unit/riparazione-r12-il-design-system-e-completo.test.ts",
-   "prova_tipo": "leggera",
+   "prova_tipo": "comando",
    "prova_eseguita": true,
    "rimessa": {
     "esito": "strutturale",
@@ -391,7 +391,7 @@
     "tests/unit/riparazione-r12-nome-lungo-nel-profilo.test.ts"
    ],
    "prova_comando": "npx vitest run tests/unit/riparazione-r12-nome-lungo-nel-profilo.test.ts",
-   "prova_tipo": "leggera",
+   "prova_tipo": "comando",
    "prova_eseguita": true,
    "rimessa": {
     "esito": "regge",
@@ -515,7 +515,7 @@
     "tests/unit/riparazione-r12-come-funziona-su-google.test.ts"
    ],
    "prova_comando": "npx vitest run tests/unit/riparazione-r12-come-funziona-su-google.test.ts",
-   "prova_tipo": "leggera",
+   "prova_tipo": "comando",
    "prova_eseguita": true,
    "rimessa": {
     "esito": "regge",
