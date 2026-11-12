@@ -446,7 +446,7 @@ Identifica di quale prodotto parla il venditore e imposta "product_id". Se non s
     // (16/10/2026) La proposta torna alla chat nella forma in cui il server la
     // applicherebbe: una voce scritta fuori schema (`[["allergeni"]]`) faceva
     // cadere la chat mentre disegnava la scheda. Vedi `propostaPerLaChat`.
-    const proposta = matched ? propostaPerLaChat(toolInput?.patch, categories, matched.category_id ?? null) : {};
+    const proposta = matched ? propostaPerLaChat(toolInput?.patch, categories, matched.category_id ?? null, (matched.attributes ?? null) as Record<string, unknown> | null) : {};
     // 1/11/2026 — In identificazione (nessun prodotto aperto) il modello vede
     // del catalogo solo id, nome, prezzo, stato e categoria: tag, descrizione e
     // caratteristiche non li ha letti. Una proposta che li riscrive e' alla

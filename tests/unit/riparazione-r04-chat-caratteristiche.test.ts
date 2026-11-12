@@ -87,6 +87,18 @@ describe('la chat non promette caratteristiche che il server butta', () => {
     expect(p).not.toHaveProperty('attributes_remove');
   });
 
+  it('togliere un attributo rimasto da una categoria di prima, che c\'e\' davvero: si propone come fa il server', async () => {
+    FOCACCIA.attributes = { ...FOCACCIA.attributes, colore: 'rosso' } as typeof FOCACCIA.attributes;
+    const p = await proposta({ attributes_remove: ['colore'] });
+    expect(p.attributes_remove).toEqual(['colore']);
+    FOCACCIA.attributes = { allergeni: 'glutine' };
+  });
+
+  it('un valore di soli spazi non si promette (il server lo scarta)', async () => {
+    const p = await proposta({ attributes: { marca: '   ' } });
+    expect(p).not.toHaveProperty('attributes');
+  });
+
   it('le dichiarazioni restano nella proposta: la scheda dice che le scrive il venditore', async () => {
     const p = await proposta({ attributes: { allergeni: 'latte' } });
     expect(p.attributes).toEqual({ allergeni: 'latte' });

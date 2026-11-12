@@ -395,6 +395,8 @@ export function propostaPerLaChat(
    * alimento, il server lo buttava e la chat diceva «Modifiche salvate».
    */
   categoriaAttuale?: string | null,
+  /** R04-019 (revisione) — Gli attributi del prodotto adesso: si toglie, come sul server, cio' che c'e'. */
+  attributiAttuali?: Record<string, unknown> | null,
 ): AiProductPatch {
   if (!proposta || typeof proposta !== 'object' || Array.isArray(proposta)) return {};
   const fuori: Record<string, unknown> = { ...propostaLeggibile(proposta as AiProductPatch) };
@@ -424,6 +426,8 @@ export function propostaPerLaChat(
         if (eCampoDichiarativo(k)) { entrano[k] = v; continue; }
         const campo = campi.find((f) => f.key === chiaveCampo(k));
         if (!campo) continue;
+        // Un valore vuoto o di soli spazi il server lo scarta: non si promette.
+        if (!valoreAttributoDalPatch(v)) continue;
         if (campo.type === 'select' && !(campo.options ?? []).includes(valoreAttributoDalPatch(v))) continue;
         entrano[k] = v;
       }
@@ -433,7 +437,12 @@ export function propostaPerLaChat(
     if (Array.isArray(fuori.attributes_remove)) {
       const daTogliere = (fuori.attributes_remove as unknown[]).filter(
         (k): k is string =>
-          typeof k === 'string' && (eCampoDichiarativo(k) || campi.some((f) => f.key === chiaveCampo(k))),
+          typeof k === 'string' &&
+          (eCampoDichiarativo(k) ||
+            campi.some((f) => f.key === chiaveCampo(k)) ||
+            // Come il server: si toglie anche un attributo rimasto da una
+            // categoria di prima, se c'e' davvero nel prodotto.
+            (!!attributiAttuali && chiaveCampo(k) in attributiAttuali)),
       );
       if (daTogliere.length > 0) fuori.attributes_remove = daTogliere;
       else delete fuori.attributes_remove;
@@ -797,6 +806,12 @@ export function disponibilitaDalPatch(
 export function attributiDaTogliere(
   patch: AiProductPatch,
   attuali: Record<string, unknown> | null | undefined,
+  /**
+   * Il modulo conta solo un campo pieno (un campo vuoto del form non e'
+   * «qualcosa da togliere»); il server toglie anche una chiave vuota rimasta
+   * nel JSON, come faceva prima.
+   */
+  opzioni: { soloPieni?: boolean } = { soloPieni: true },
 ): string[] {
   if (!Array.isArray(patch.attributes_remove)) return [];
   const fuori: string[] = [];
@@ -805,7 +820,8 @@ export function attributiDaTogliere(
     if (fuori.includes(targetKey)) continue;
     if (attuali === undefined) { fuori.push(targetKey); continue; }
     const v = attuali?.[targetKey];
-    if (attuali && targetKey in attuali && v !== '' && v !== null && v !== undefined) fuori.push(targetKey);
+    const presente = !!attuali && targetKey in attuali;
+    if (presente && (!opzioni.soloPieni || (v !== '' && v !== null && v !== undefined))) fuori.push(targetKey);
   }
   return fuori;
 }
@@ -1241,7 +1257,7 @@ export function resolveAiPatch(opts: {
       }
     }
     if (hasAttrRemove) {
-      for (const targetKey of attributiDaTogliere(patch, merged)) {
+      for (const targetKey of attributiDaTogliere(patch, merged, { soloPieni: false })) {
         delete merged[targetKey];
         changed.push(`rimosso ${targetKey}`);
       }

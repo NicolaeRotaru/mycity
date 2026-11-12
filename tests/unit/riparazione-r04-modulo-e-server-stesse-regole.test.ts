@@ -40,4 +40,8 @@ describe('modulo e server, stesse regole', () => {
     expect(piano.cambiati).toEqual(['rimosso colore']);
     expect(server({ attributes_remove: ['colore'] }, { attributes: { colore: 'rosso' } }).changed).toEqual(['rimosso colore']);
   });
+
+  it('il server toglie anche una chiave rimasta vuota nel JSON, come prima', () => {
+    expect(server({ attributes_remove: ['colore'] }, { attributes: { colore: '' } }).changed).toEqual(['rimosso colore']);
+  });
 });
