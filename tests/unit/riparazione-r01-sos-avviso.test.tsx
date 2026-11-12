@@ -146,4 +146,47 @@ describe('R01-004 · il pulsante e il guscio del fattorino', () => {
     expect(stato.insert.mock.calls[0][0]).toMatchObject({ order_id: 'ordine-1' });
     expect(fetchFinto).toHaveBeenCalledWith('/api/rider/sos/avvisa', expect.objectContaining({ method: 'POST' }));
   });
+  it('se la riga con l\'ordine viene rifiutata, l\'SOS si scrive lo stesso senza ordine', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}')));
+    stato.getSession.mockResolvedValue({ data: { session: { user: { id: 'rider-1' } } } });
+    stato.insert.mockReset();
+    stato.insert
+      .mockResolvedValueOnce({ error: { message: 'insert or update violates foreign key constraint' } })
+      .mockResolvedValueOnce({ error: null });
+    vi.spyOn(process.stderr, 'write').mockImplementation((() => true) as never);
+    (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+    const radice = document.createElement('div');
+    document.body.appendChild(radice);
+    const root = createRoot(radice);
+    accesi.push(root);
+    await act(async () => { root.render(createElement(SOSButton, { orderId: 'ordine-sparito' })); });
+    await act(async () => { radice.querySelector<HTMLButtonElement>('button[aria-label="SOS emergenza"]')!.click(); });
+    const conferma = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((b) => /Conferma SOS/.test(b.textContent ?? ''));
+    await act(async () => { conferma!.click(); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(stato.insert).toHaveBeenCalledTimes(2);
+    expect(stato.insert.mock.calls[1][0]).toMatchObject({ rider_id: 'rider-1', order_id: null });
+  });
+});
+
+describe('R01-004 · l\'ora dell\'SOS la decide il database', () => {
+  it('il pulsante non manda triggered_at: vale l\'orologio del server, non quello del telefono', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}')));
+    stato.getSession.mockResolvedValue({ data: { session: { user: { id: 'rider-1' } } } });
+    stato.insert.mockReset();
+    stato.insert.mockResolvedValue({ error: null });
+    vi.spyOn(process.stderr, 'write').mockImplementation((() => true) as never);
+    (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+    const radice = document.createElement('div');
+    document.body.appendChild(radice);
+    const root = createRoot(radice);
+    accesi.push(root);
+    await act(async () => { root.render(createElement(SOSButton, {})); });
+    await act(async () => { radice.querySelector<HTMLButtonElement>('button[aria-label="SOS emergenza"]')!.click(); });
+    const conferma = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((b) => /Conferma SOS/.test(b.textContent ?? ''));
+    await act(async () => { conferma!.click(); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 30)); });
+    expect(stato.insert).toHaveBeenCalledTimes(1);
+    expect(stato.insert.mock.calls[0][0]).not.toHaveProperty('triggered_at');
+  });
 });
