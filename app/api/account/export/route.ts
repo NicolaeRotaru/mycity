@@ -15,6 +15,40 @@ export const runtime = 'nodejs';
  */
 const TETTO_PER_SEZIONE = 5000;
 
+/**
+ * 12/11/2026 (R02-004) — IL DATABASE NE DÀ MILLE PER VOLTA.
+ * Ogni sezione chiedeva `.limit(5000)`, ma l'interfaccia del database restituisce al massimo
+ * `max_rows` righe (1000, supabase/config.toml): il file si fermava a mille e si diceva completo,
+ * perché il controllo «righe ≥ 5000» non scattava mai. Adesso si legge a finestre di mille fino
+ * al tetto, e «al tetto» vuol dire che dopo il tetto c'è davvero almeno un'altra riga.
+ */
+const FINESTRA = 1000;
+// Le finestre sono richieste separate (OFFSET): senza un ordine stabile Postgres può restituire le
+// righe in un ordine diverso da una richiesta all'altra, con doppioni o buchi fra un blocco e
+// l'altro. Ogni sezione si legge quindi ordinata per la sua chiave (id, o la chiave vera della
+// tabella quando non ha un id).
+
+/** Una risposta di Supabase ridotta all'osso: i dati, l'eventuale guasto e se si è fermata al tetto. */
+type Lettura = { data: unknown; error: unknown; alTetto?: boolean };
+
+async function tutta(
+  chiedi: (da: number, a: number) => PromiseLike<{ data: unknown; error: unknown }>,
+): Promise<Lettura> {
+  const righe: unknown[] = [];
+  for (let da = 0; da < TETTO_PER_SEZIONE; da += FINESTRA) {
+    const a = Math.min(da + FINESTRA, TETTO_PER_SEZIONE) - 1;
+    const { data, error } = await chiedi(da, a);
+    if (error) return { data: null, error };
+    const blocco = Array.isArray(data) ? data : [];
+    righe.push(...blocco);
+    if (blocco.length < a - da + 1) return { data: righe, error: null, alTetto: false };
+  }
+  // Mille per mille fino al tetto: c'è qualcosa dopo?
+  const dopo = await chiedi(TETTO_PER_SEZIONE, TETTO_PER_SEZIONE);
+  if (dopo.error) return { data: righe, error: null, alTetto: true };
+  return { data: righe, error: null, alTetto: Array.isArray(dopo.data) && dopo.data.length > 0 };
+}
+
 function senzaChiave(cosa: string, e: unknown): NextResponse {
   // 27/10/2026 — «Servizio non configurato» lasciava la persona davanti a un
   // muro: il diritto alla portabilità resta, cambia solo la strada.
@@ -108,35 +142,35 @@ const scarica = withAuthRateLimit(
     consents,
   ] = await Promise.all([
     admin.from('profiles').select('*').eq('id', userId).single(),
-    admin.from('user_addresses').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    admin.from('orders').select('*, order_items(*)').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    admin.from('orders').select('id, created_at, total_price, delivery_status').eq('seller_id', userId).limit(TETTO_PER_SEZIONE),
-    admin.from('orders').select('id, created_at, delivered_at, shipping_cost').eq('rider_id', userId).limit(TETTO_PER_SEZIONE),
-    admin.from('reviews').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    tutta((da, a) => admin.from('user_addresses').select('*').eq('user_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('orders').select('*, order_items(*)').eq('user_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('orders').select('id, created_at, total_price, delivery_status').eq('seller_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('orders').select('id, created_at, delivered_at, shipping_cost').eq('rider_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('reviews').select('*').eq('user_id', userId).order('id').range(da, a)),
     // 🟡-13: store_reviews/rider_reviews usano user_id (non reviewer_id): prima
     // l'export interrogava una colonna inesistente e ometteva queste recensioni.
-    admin.from('store_reviews').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    admin.from('rider_reviews').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    admin.from('favorites').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    admin.from('referrals').select('*').eq('referrer_id', userId).limit(TETTO_PER_SEZIONE),
-    admin.from('referrals').select('*').eq('referred_id', userId).limit(TETTO_PER_SEZIONE),
-    admin.from('notifications').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    tutta((da, a) => admin.from('store_reviews').select('*').eq('user_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('rider_reviews').select('*').eq('user_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('favorites').select('*').eq('user_id', userId).order('product_id').range(da, a)),
+    tutta((da, a) => admin.from('referrals').select('*').eq('referrer_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('referrals').select('*').eq('referred_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('notifications').select('*').eq('user_id', userId).order('id').range(da, a)),
     // 🟡-13: chat e contact form fanno parte dei dati personali (Art. 15/20).
-    admin.from('conversations').select('*').or(`buyer_id.eq.${userId},seller_id.eq.${userId}`).limit(TETTO_PER_SEZIONE),
-    admin.from('messages').select('*').eq('sender_id', userId).limit(TETTO_PER_SEZIONE),
-    admin.from('contact_messages').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    tutta((da, a) => admin.from('conversations').select('*').or(`buyer_id.eq.${userId},seller_id.eq.${userId}`).order('id').range(da, a)),
+    tutta((da, a) => admin.from('messages').select('*').eq('sender_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('contact_messages').select('*').eq('user_id', userId).order('id').range(da, a)),
     // Mancavano all'appello, e sono i dati con cui una persona viene profilata:
     // il registro delle azioni (con indirizzo di rete e browser), le cose
     // guardate, i dispositivi registrati per le notifiche, l'iscrizione alle
     // novità, i resi, le contestazioni e lo storico dei consensi.
-    admin.from('activity_events').select('*').or(`user_id.eq.${userId},actor_id.eq.${userId}`).limit(TETTO_PER_SEZIONE),
-    admin.from('recently_viewed').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    admin.from('product_views').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    admin.from('push_subscriptions').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    admin.from('newsletter_subscribers').select('*').eq('email', userEmail ?? '').limit(TETTO_PER_SEZIONE),
-    admin.from('returns').select('*').eq('buyer_id', userId).limit(TETTO_PER_SEZIONE),
-    admin.from('disputes').select('*').or(`opener_id.eq.${userId},against_id.eq.${userId}`).limit(TETTO_PER_SEZIONE),
-    admin.from('consent_log').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+    tutta((da, a) => admin.from('activity_events').select('*').or(`user_id.eq.${userId},actor_id.eq.${userId}`).order('id').range(da, a)),
+    tutta((da, a) => admin.from('recently_viewed').select('*').eq('user_id', userId).order('product_id').range(da, a)),
+    tutta((da, a) => admin.from('product_views').select('*').eq('user_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('push_subscriptions').select('*').eq('user_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('newsletter_subscribers').select('*').eq('email', userEmail ?? '').order('id').range(da, a)),
+    tutta((da, a) => admin.from('returns').select('*').eq('buyer_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('disputes').select('*').or(`opener_id.eq.${userId},against_id.eq.${userId}`).order('id').range(da, a)),
+    tutta((da, a) => admin.from('consent_log').select('*').eq('user_id', userId).order('id').range(da, a)),
   ]);
 
   /**
@@ -159,40 +193,46 @@ const scarica = withAuthRateLimit(
    * prossima tabella nuova non può più nascere fuori dall'export in silenzio.
    */
   const altreTabelle = {
-    portafoglio: admin.from('wallet_ledger').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    punti_fedelta: admin.from('loyalty_accounts').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    punti_movimenti: admin.from('loyalty_transactions').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    buoni_regalo: admin.from('gift_cards').select('*').or(`buyer_id.eq.${userId},redeemed_by.eq.${userId}`).limit(TETTO_PER_SEZIONE),
-    domande_sui_prodotti: admin
+    portafoglio: tutta((da, a) => admin.from('wallet_ledger').select('*').eq('user_id', userId).order('id').range(da, a)),
+    punti_fedelta: tutta((da, a) => admin.from('loyalty_accounts').select('*').eq('user_id', userId).order('user_id').range(da, a)),
+    punti_movimenti: tutta((da, a) => admin.from('loyalty_transactions').select('*').eq('user_id', userId).order('id').range(da, a)),
+    buoni_regalo: tutta((da, a) => admin.from('gift_cards').select('*').or(`buyer_id.eq.${userId},redeemed_by.eq.${userId}`).order('code').range(da, a)),
+    domande_sui_prodotti: tutta((da, a) => admin
       .from('product_questions')
       .select('*')
-      .or(`author_id.eq.${userId},answered_by.eq.${userId}`).limit(TETTO_PER_SEZIONE),
-    sos_del_fattorino: admin.from('rider_sos_events').select('*').eq('rider_id', userId).limit(TETTO_PER_SEZIONE),
-    carrello_salvato: admin.from('user_carts').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    carrelli_abbandonati: admin.from('abandoned_carts').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    iscrizioni_agli_eventi: admin.from('event_rsvps').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    negozi_seguiti: admin.from('follows').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    liste_di_prodotti: admin.from('product_lists').select('*').eq('owner_id', userId).limit(TETTO_PER_SEZIONE),
-    ordini_di_gruppo: admin
+      .or(`author_id.eq.${userId},answered_by.eq.${userId}`).order('id').range(da, a)),
+    sos_del_fattorino: tutta((da, a) => admin.from('rider_sos_events').select('*').eq('rider_id', userId).order('id').range(da, a)),
+    carrello_salvato: tutta((da, a) => admin.from('user_carts').select('*').eq('user_id', userId).order('user_id').range(da, a)),
+    carrelli_abbandonati: tutta((da, a) => admin.from('abandoned_carts').select('*').eq('user_id', userId).order('user_id').range(da, a)),
+    iscrizioni_agli_eventi: tutta((da, a) => admin.from('event_rsvps').select('*').eq('user_id', userId).order('event_id').range(da, a)),
+    negozi_seguiti: tutta((da, a) => admin.from('follows').select('*').eq('user_id', userId).order('store_id').range(da, a)),
+    liste_di_prodotti: tutta((da, a) => admin.from('product_lists').select('*').eq('owner_id', userId).order('id').range(da, a)),
+    ordini_di_gruppo: tutta((da, a) => admin
       .from('group_orders')
       .select('*')
-      .or(`organizer_id.eq.${userId},seller_id.eq.${userId}`).limit(TETTO_PER_SEZIONE),
-    partecipazioni_di_gruppo: admin.from('group_participants').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    ordini_ricorrenti: admin
+      .or(`organizer_id.eq.${userId},seller_id.eq.${userId}`).order('id').range(da, a)),
+    partecipazioni_di_gruppo: tutta((da, a) => admin.from('group_participants').select('*').eq('user_id', userId).order('id').range(da, a)),
+    ordini_ricorrenti: tutta((da, a) => admin
       .from('subscription_orders')
       .select('*')
-      .or(`user_id.eq.${userId},seller_id.eq.${userId}`).limit(TETTO_PER_SEZIONE),
-    tentativi_di_pagamento: admin.from('payment_attempts').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    casse_aperte: admin.from('pending_checkouts').select('*').eq('buyer_id', userId).limit(TETTO_PER_SEZIONE),
-    casse_contanti: admin.from('cod_checkout_attempts').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    email_in_coda: admin.from('email_queue').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    segnalazioni_fatte: admin.from('segnalazioni').select('*').eq('segnalante_id', userId).limit(TETTO_PER_SEZIONE),
-    cashback_riscosso: admin.from('cashback_redemptions').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    codici_di_zona_usati: admin.from('zone_code_uses').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    recensioni_votate_utili: admin.from('review_helpful').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    storie_guardate: admin.from('seller_story_views').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
-    voti_negozio_del_mese: admin.from('shop_of_month_votes').select('*').eq('voter_id', userId).limit(TETTO_PER_SEZIONE),
-    traguardi: admin.from('user_achievements').select('*').eq('user_id', userId).limit(TETTO_PER_SEZIONE),
+      .or(`user_id.eq.${userId},seller_id.eq.${userId}`).order('id').range(da, a)),
+    tentativi_di_pagamento: tutta((da, a) => admin.from('payment_attempts').select('*').eq('user_id', userId).order('id').range(da, a)),
+    casse_aperte: tutta((da, a) => admin.from('pending_checkouts').select('*').eq('buyer_id', userId).order('id').range(da, a)),
+    casse_contanti: tutta((da, a) => admin.from('cod_checkout_attempts').select('*').eq('user_id', userId).order('chiave').range(da, a)),
+    email_in_coda: tutta((da, a) => admin.from('email_queue').select('*').eq('user_id', userId).order('id').range(da, a)),
+    segnalazioni_fatte: tutta((da, a) => admin.from('segnalazioni').select('*').eq('segnalante_id', userId).order('id').range(da, a)),
+    cashback_riscosso: tutta((da, a) => admin.from('cashback_redemptions').select('*').eq('user_id', userId).order('campaign_id').order('order_id').range(da, a)),
+    codici_di_zona_usati: tutta((da, a) => admin.from('zone_code_uses').select('*').eq('user_id', userId).order('id').range(da, a)),
+    recensioni_votate_utili: tutta((da, a) => admin.from('review_helpful').select('*').eq('user_id', userId).order('review_id').range(da, a)),
+    storie_guardate: tutta((da, a) => admin.from('seller_story_views').select('*').eq('user_id', userId).order('story_id').order('viewed_at').range(da, a)),
+    voti_negozio_del_mese: tutta((da, a) => admin.from('shop_of_month_votes').select('*').eq('voter_id', userId).order('id').range(da, a)),
+    traguardi: tutta((da, a) => admin.from('user_achievements').select('*').eq('user_id', userId).order('achievement_id').range(da, a)),
+    // 12/11/2026 (R02-025) — IL FATTORINO. Le recensioni che RICEVE stanno su rider_id (quelle
+    // che scrive su user_id, già in «reviews.riders»), e le sue giornate di cassa sono dati suoi:
+    // chi ha consegnato, quanto contante, quando l'ha rimesso. Delle recensioni ricevute non esce
+    // chi le ha scritte (user_id): è un dato di un'altra persona (art. 15.4 GDPR).
+    recensioni_ricevute_come_fattorino: tutta((da, a) => admin.from('rider_reviews').select('id, rider_id, order_id, rating, comment, created_at').eq('rider_id', userId).order('id').range(da, a)),
+    giornate_di_cassa_del_fattorino: tutta((da, a) => admin.from('cod_reconciliations').select('*').eq('rider_id', userId).order('id').range(da, a)),
   };
 
   /**
@@ -213,9 +253,6 @@ const scarica = withAuthRateLimit(
   // 5/11/2026 — Le sezioni arrivate al tetto: il file lo dice, non le spaccia per intere.
   const sezioni_al_tetto: string[] = [];
 
-  /** Una risposta di Supabase ridotta all'osso: i dati e l'eventuale guasto. */
-  type Lettura = { data: unknown; error: unknown };
-
   /**
    * Traduce una lettura in una sezione dell'export. Elenco se è andata bene,
    * `null` + riga in `letture_fallite` se è caduta. Mai `[]` per un guasto.
@@ -234,7 +271,7 @@ const scarica = withAuthRateLimit(
       return null;
     }
     const righe = (esito.data as unknown[] | null) ?? [];
-    if (Array.isArray(righe) && righe.length >= TETTO_PER_SEZIONE) sezioni_al_tetto.push(nome);
+    if (esito.alTetto) sezioni_al_tetto.push(nome);
     return righe;
   }
 

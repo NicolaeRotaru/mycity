@@ -123,7 +123,9 @@ describe('scheda prodotto — acquisto (app/product/[id]/page.tsx)', () => {
   it('572 — un secondo tocco su «Compra ora» non aggiunge di nuovo', () => {
     expect(compraOra).toMatch(/if \(inPartenza\) return;/);
     expect(compraOra).toMatch(/setInPartenza\(true\)/);
-    expect(src).toMatch(/disabled=\{!canAdd \|\| inPartenza\}/);
+    // R02-008 (12/11/2026) — Il pulsante non usa più `disabled` (usciva dal giro del Tab): è
+    // aria-disabled sulla stessa condizione, e il freno vero resta `if (inPartenza) return;` qui sopra.
+    expect(src).toMatch(/aria-disabled=\{!canAdd \|\| inPartenza \|\| undefined\}/);
   });
   it('572 — «Compra ora» porta la riga alla quantità scelta invece di sommarla', () => {
     expect(compraOra).toMatch(/if \(giaNelCarrello\) \{\s*updateQuantity\(product\.id, qty, selectedVariant\?\.id\);/);

@@ -59,6 +59,7 @@ import { trackReviewSubmitted } from '@/lib/analytics/events';
 import caricatoreFotoRemote from '@/lib/image-loader';
 import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 import { INVITI_E_PUNTI_ACCESI } from '@/lib/funzioni-al-lancio';
+import { creaFrenoDoppioTocco } from '@/lib/ui/freno-doppio-tocco';
 
 // Chiavi attributo gestite dall'accordion "Ingredienti e allergeni": vengono
 // escluse dalla griglia generica "Caratteristiche" per non duplicarle.
@@ -76,6 +77,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const router = useRouter();
   const qc = useQueryClient();
   const [quantity, setQuantity] = useState(1);
+  const frenoAggiunta = useRef(creaFrenoDoppioTocco());
   // 5/11/2026 — Dopo il primo tocco su «Compra ora» il pulsante si spegne fino al cambio pagina.
   const [inPartenza, setInPartenza] = useState(false);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -309,11 +311,18 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
    * prezzo pieno, e quello vero solo nel riquadrino della promo. Stessa chiave e stessa lettura di
    * ActivePromoBadge: una domanda sola.
    */
-  const { data: scontoPromo = 0 } = useQuery({
+  // R02-011 (dopo il collaudo) — Se la lettura cade anche dopo i nuovi tentativi, lo zero di
+  // ripiego NON vuol dire «nessuno sconto»: la scheda lo dice (scontoNonVerificato) invece di
+  // presentare il prezzo pieno come quello che si paga.
+  const { data: scontoPromo = 0, isError: scontoNonVerificato } = useQuery({
     queryKey: queryKeys.products.activeDiscount(id),
+    retry: 3,
     queryFn: async () => {
       const { data, error } = await supabase.rpc('product_active_discount', { p_product: id });
-      if (error) return 0;
+      // 12/11/2026 (R02-011) — Una lettura caduta non è «nessuno sconto»: con `return 0` lo zero
+      // restava in memoria per un minuto (stessa chiave della scheda) e si mostrava il prezzo pieno,
+      // mentre la cassa applica lo sconto. Si lancia: React Query riprova, e non si salva lo zero.
+      if (error) throw error;
       return Number(data) || 0;
     },
     staleTime: 60_000,
@@ -558,6 +567,15 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di aggiungere`);
       return;
     }
+    // R02-008 — Il pulsante resta raggiungibile da tastiera anche quando non si può comprare
+    // (aria-disabled): premuto, dice perché invece di aggiungere.
+    if (isOutOfStock) {
+      toast.error(selectedVariant ? 'Questa combinazione è esaurita: prova un\'altra opzione.' : 'Prodotto esaurito.');
+      return;
+    }
+    // R02-016 — Il secondo tocco dello stesso gesto (scheda o barra in fondo) non aggiunge un altro
+    // pezzo: addToCart somma alla riga che c'è.
+    if (!frenoAggiunta.current()) return;
     addToCart({
       id: product.id,
       name: product.name,
@@ -584,6 +602,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     }
     if (needsVariantChoice) {
       toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di continuare`);
+      return;
+    }
+    // R02-008 (dopo il collaudo) — Anche «Compra ora» resta nel giro del Tab quando non si può
+    // comprare: premuto su un esaurito, lo dice invece di aprire la cassa.
+    if (isOutOfStock) {
+      toast.error(selectedVariant ? 'Questa combinazione è esaurita: prova un\'altra opzione.' : 'Prodotto esaurito.');
       return;
     }
     setInPartenza(true);
@@ -880,6 +904,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             )}
             {/* Promo attiva del negozio (prezzo barrato + nuovo prezzo) */}
             <ActivePromoBadge productId={id} basePrice={prezzoPieno} />
+            {scontoNonVerificato && (
+              <p role="status" className="text-xs text-ink-600">
+                Non riusciamo a verificare le promozioni del negozio: il prezzo finale, con gli eventuali
+                sconti, lo vedi nel carrello.
+              </p>
+            )}
 
             {/* Card rassicurazione consolidata (mockup 50-product): ETA consegna +
                 pagamento alla consegna + reso, in un unico riquadro olive. Le righe
@@ -965,12 +995,17 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   <div className="flex flex-wrap gap-2" role="group" aria-labelledby={`opt-${g.name}`}>
                     {g.values.map((val) => {
                       const active = selectedOptions[g.name] === val;
+                      // R02-008 — Un valore che porta solo a combinazioni esaurite lo si dice prima
+                      // di sceglierlo, anche a chi usa il lettore di schermo.
+                      const conQuestoValore = variants.filter((v) => v.options?.[g.name] === val);
+                      const esaurito = conQuestoValore.length > 0 && conQuestoValore.every((v) => v.stock === 0);
                       return (
                         <button
                           key={val}
                           type="button"
                           onClick={() => setSelectedOptions((prev) => ({ ...prev, [g.name]: val }))}
                           aria-pressed={active}
+                          aria-label={esaurito ? `${val}, esaurito` : undefined}
                           className={`min-w-[2.5rem] rounded-lg border-2 px-3 py-1.5 text-sm font-semibold transition ${
                             active
                               ? 'border-primary-600 bg-primary-50 text-primary-800'
@@ -986,6 +1021,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               ))}
               {/* 5/11/2026 — Regione sempre montata: il cambio di disponibilità della variante
                   si annuncia a chi usa il lettore di schermo. */}
+              <div id="disponibilita-variante">
               <div role="status" aria-live="polite">
               {needsVariantChoice ? (
                 <p className="text-xs text-ink-500">
@@ -998,6 +1034,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   {selectedVariant.stock === 1 ? 'Ultimo pezzo' : `Solo ${selectedVariant.stock} rimasti`} per «{selectedVariant.label}».
                 </p>
               ) : null}
+              </div>
               </div>
             </div>
           )}
@@ -1133,11 +1170,19 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             </div>
 
             <Button
+              id="acquisto-principale"
               variant="accent"
               size="lg"
               fullWidth
               onClick={handleAdd}
-              disabled={!canAdd}
+              // R02-008 — Con `disabled` il pulsante usciva dal giro del Tab: chi non vede premeva
+              // Tab e finiva su «Contatta il venditore» senza sapere perché. Resta raggiungibile,
+              // dice di non essere disponibile e punta al messaggio della disponibilità.
+              aria-disabled={!canAdd || undefined}
+              aria-describedby={hasVariants && optionGroups.length > 0 ? 'disponibilita-variante' : undefined}
+              // Lo stesso aspetto «spento» del Button (fondo e testo espliciti, 8,80:1), non
+              // l'opacità al 50%, che il Button vieta perché porta il contrasto a 1,62:1.
+              className="aria-disabled:bg-cream-200 aria-disabled:text-ink-600 aria-disabled:shadow-none aria-disabled:cursor-not-allowed aria-disabled:hover:bg-cream-200 aria-disabled:hover:shadow-none"
               icon={canAdd ? ShoppingCart : undefined}
             >
               {needsVariantChoice ? 'Scegli le opzioni' : isOutOfStock ? 'Non disponibile' : 'Aggiungi al carrello'}
@@ -1146,9 +1191,16 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <button
               type="button"
               onClick={handleBuyNow}
-              disabled={!canAdd || inPartenza}
+              // R02-008 (dopo il collaudo) — aria-disabled e non disabled: resta raggiungibile da
+              // tastiera e dice di non essere disponibile; handleBuyNow non apre la cassa.
+              aria-disabled={!canAdd || inPartenza || undefined}
+              aria-describedby={hasVariants && optionGroups.length > 0 ? 'disponibilita-variante' : undefined}
               aria-busy={inPartenza || undefined}
-              className="block w-full text-center bg-ink-900 hover:bg-ink-800 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-lg font-bold"
+              className={`block w-full text-center py-3 rounded-lg font-bold ${
+                !canAdd || inPartenza
+                  ? 'bg-cream-200 text-ink-600 cursor-not-allowed'
+                  : 'bg-ink-900 hover:bg-ink-800 text-white'
+              }`}
             >
               {inPartenza ? 'Apro la cassa…' : 'Compra ora · paghi alla consegna'}
             </button>
@@ -1427,6 +1479,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     ))}
                   </div>
                 )}
+                {/* 12/11/2026 (R02-005) — Ogni recensione si può segnalare: i Termini promettono
+                    di togliere quelle non genuine. */}
+                <div className="mt-2">
+                  <Segnala tipo="recensione" oggettoId={r.id} />
+                </div>
               </div>
             ))}
           </div>
@@ -1464,6 +1521,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       {/* Sticky CTA mobile — con stepper quantità, "{qty}×{price}" e totale */}
       <StickyAddToCart
         price={price}
+        bersaglio="acquisto-principale"
         available={canAdd}
         onAdd={handleAdd}
         note="Paghi alla consegna"
@@ -1480,6 +1538,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         price={price}
         category={product.categories?.slug ?? undefined}
         sellerId={sellerProfile?.id ?? product.seller_id ?? undefined}
+        chiGuardaEAdmin={isAdmin}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import { recapitoDallaRisposta, recapitoPrivacy } from '@/lib/legal/titolare';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
@@ -155,6 +155,8 @@ export default function SettingsPage() {
   // Prefs — le 5 notifiche sono persistite su profiles (load nel useEffect, save
   // in updatePref). push_enabled/language restano locali (non funzionali sul DB).
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
+  // R02-017 — Quello che il database ha davvero: letto all'apertura, aggiornato a ogni salvataggio riuscito.
+  const prefsSalvate = useRef<Prefs>(DEFAULT_PREFS);
 
   // Delete account (cooldown 7gg)
   const [deleteConfirm, setDeleteConfirm] = useState('');
@@ -168,6 +170,9 @@ export default function SettingsPage() {
   // ripiego scritto nel codice (lo stesso criterio della pagina privacy).
   const recapito = recapitoPrivacy();
   const [cancelingDeletion, setCancelingDeletion] = useState(false);
+  // R02-004 — Lo scarico vale una delle tre richieste del giorno: un doppio clic non ne brucia due.
+  const [scaricando, setScaricando] = useState(false);
+  const scaricoInCorso = useRef(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -184,14 +189,15 @@ export default function SettingsPage() {
         .eq('id', data.user.id)
         .single();
       if (prof) {
-        setPrefs((prev) => ({
-          ...prev,
+        const dalDatabase = {
           notif_order_updates: !!prof.notif_order_updates,
           notif_promos: !!prof.notif_promos,
           notif_groups: !!prof.notif_groups,
           notif_newsletter: !!prof.notif_newsletter,
           email_marketing: !!prof.email_marketing,
-        }));
+        };
+        prefsSalvate.current = { ...prefsSalvate.current, ...dalDatabase };
+        setPrefs((prev) => ({ ...prev, ...dalDatabase }));
       }
       // Verifica se c'è una richiesta di eliminazione pendente (cooldown 7gg)
       try {
@@ -229,13 +235,21 @@ export default function SettingsPage() {
   }, [router]);
 
   const updatePref = <K extends keyof Prefs>(key: K, value: Prefs[K]) => {
+    // 12/11/2026 (R02-017) — Se il salvataggio non riesce si rimette l'ultimo valore che il database
+    // ha davvero (prefsSalvate), non quello della chiusura: con due tocchi rapidi falliti tutti e
+    // due, «quello di prima» del secondo era il primo, mai salvato.
     setPrefs((prev) => ({ ...prev, [key]: value }));
     const dbCols = ['notif_order_updates', 'notif_promos', 'notif_groups', 'notif_newsletter', 'email_marketing'];
     if (userId && dbCols.includes(key as string)) {
       void (async () => {
         const { error } = await supabase.from('profiles').update({ [key]: value }).eq('id', userId);
-        if (error) toast.error('Errore nel salvataggio');
-        else toast.success('Preferenza salvata');
+        if (error) {
+          setPrefs((prev) => (prev[key] === value ? { ...prev, [key]: prefsSalvate.current[key] } : prev));
+          toast.error('Errore nel salvataggio: la preferenza è tornata com\'era');
+        } else {
+          prefsSalvate.current = { ...prefsSalvate.current, [key]: value };
+          toast.success('Preferenza salvata');
+        }
       })();
     } else {
       toast.success('Preferenza salvata');
@@ -277,7 +291,9 @@ export default function SettingsPage() {
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        toast.error(apiErrorMessage(j, 'Password attuale non corretta'));
+        // R02-009 — Senza un messaggio del server (risposta non JSON, proxy, rete) non si sa se la
+        // password era sbagliata: non lo si dice.
+        toast.error(apiErrorMessage(j, 'Non è stato possibile cambiare la password. Riprova fra poco.'));
         return;
       }
     } catch (err) {
@@ -326,7 +342,9 @@ export default function SettingsPage() {
    * di li': una strada sola, quella gia' scritta e gia' coperta dalle prove.
    */
   const handleDownloadData = async () => {
-    if (!userId) return;
+    if (!userId || scaricoInCorso.current) return;
+    scaricoInCorso.current = true;
+    setScaricando(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
@@ -343,15 +361,25 @@ export default function SettingsPage() {
         return;
       }
       const blob = await res.blob();
+      // R02-004 — Il nome lo decide il server, che sa se il file è INCOMPLETO: non si riscrive.
+      const dalServer = /filename="?([^";]+)"?/.exec(res.headers.get('content-disposition') ?? '')?.[1];
+      const nome = dalServer ?? `mycity-export-${new Date().toISOString().split('T')[0]}.json`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `mycity-export-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = nome;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success('Esportazione dati scaricata');
+      if (nome.includes('INCOMPLETO')) {
+        toast.error('File parziale: alcune sezioni non sono complete. Scrivici e ti mandiamo il resto.');
+      } else {
+        toast.success('Esportazione dati scaricata');
+      }
     } catch {
       toast.error('Esportazione non riuscita. Riprova più tardi.');
+    } finally {
+      scaricoInCorso.current = false;
+      setScaricando(false);
     }
   };
 
@@ -440,7 +468,9 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="container mx-auto px-6 py-8 max-w-5xl">
+    <div className="mx-auto py-8 max-w-5xl">
+      {/* 12/11/2026 (R02-022) — La cornice laterale la dà già AccountShell (px-4 sm:px-6): con un
+          altro px-6 qui, al telefono coi caratteri grandi Notifiche e Zona pericolosa uscivano di lato. */}
       <div className="mb-6">
         <Link href="/profile" className="text-sm text-primary-700 hover:underline">← Il tuo account</Link>
         <h1 className="text-2xl md:text-3xl font-extrabold text-ink-900 mt-2 flex items-center gap-2">
@@ -478,11 +508,11 @@ export default function SettingsPage() {
         {/* Content */}
         <div className="space-y-6">
           {tab === 'account' && (
-            <section className="bg-white border rounded-xl p-6 space-y-6">
+            <section className="min-w-0 bg-white border rounded-xl p-4 sm:p-6 space-y-6">
               <div>
                 <h2 className="text-lg font-bold mb-1">Email di accesso</h2>
                 <p className="text-sm text-ink-500 mb-4">
-                  Email attuale: <span className="font-mono text-ink-900">{email}</span>
+                  Email attuale: <span className="font-mono text-ink-900 break-all">{email}</span>
                 </p>
                 <form onSubmit={handleChangeEmail} className="flex flex-col sm:flex-row gap-2">
                   <Input
@@ -575,7 +605,7 @@ export default function SettingsPage() {
           )}
 
           {tab === 'notifications' && (
-            <section className="bg-white border rounded-xl p-6 space-y-5">
+            <section className="min-w-0 bg-white border rounded-xl p-4 sm:p-6 space-y-5">
               <div>
                 <h2 className="text-lg font-bold mb-1 flex items-center gap-2">
                   <Bell size={20} className="text-ink-500" aria-hidden />
@@ -646,7 +676,7 @@ export default function SettingsPage() {
           )}
 
           {tab === 'privacy' && (
-            <section className="bg-white border rounded-xl p-6 space-y-5">
+            <section className="min-w-0 bg-white border rounded-xl p-4 sm:p-6 space-y-5">
               <div>
                 <h2 className="text-lg font-bold mb-1 flex items-center gap-2">
                   <Shield size={20} className="text-ink-500" aria-hidden />
@@ -666,9 +696,11 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={handleDownloadData}
-                  className="bg-cream-100 hover:bg-cream-200 px-4 py-2 rounded-lg text-sm font-semibold text-ink-900"
+                  disabled={scaricando}
+                  aria-busy={scaricando || undefined}
+                  className="bg-cream-100 hover:bg-cream-200 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-sm font-semibold text-ink-900"
                 >
-                  Esporta dati (JSON)
+                  {scaricando ? 'Preparo il file…' : 'Esporta dati (JSON)'}
                 </button>
               </div>
 
@@ -718,7 +750,7 @@ export default function SettingsPage() {
           )}
 
           {tab === 'danger' && (
-            <section className="bg-white border-2 border-red-200 rounded-xl p-6">
+            <section className="min-w-0 bg-white border-2 border-red-200 rounded-xl p-4 sm:p-6">
               <h2 className="text-lg font-bold text-red-700 mb-1 flex items-center gap-2">
                 <AlertTriangle size={20} className="text-red-700" aria-hidden />
                 Zona pericolosa
@@ -816,7 +848,7 @@ export default function SettingsPage() {
                   ) : null}
                 </div>
               ) : (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-5">
+                <div className="min-w-0 break-words bg-red-50 border border-red-200 rounded-lg p-4 sm:p-5">
                   <h3 className="font-bold text-red-900 mb-2">Elimina il tuo account</h3>
                   {/*
                     3/9/2026 — QUI C'ERA SCRITTO «ANONIMIZZATI» E NON ERA VERO.
@@ -869,7 +901,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={handleDeleteAccount}
                     disabled={deleting || deleteConfirm !== 'ELIMINA'}
-                    className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-bold transition-colors"
+                    className="inline-flex w-full sm:w-auto justify-center items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-bold transition-colors"
                   >
                     {deleting ? (
                       'Invio richiesta…'

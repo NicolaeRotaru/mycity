@@ -107,6 +107,9 @@ export default function CookiesPage() {
           { name: 'ph_* / ph_phc_*', purpose: 'PostHog: statistiche di utilizzo e registrazione della sessione di navigazione (session replay). Attivi solo con il consenso ai cookie analitici; i campi di inserimento vengono mascherati nella registrazione.', duration: '12 mesi', provider: 'PostHog Inc. (Stati Uniti)' },
           { name: 'mc_vid', purpose: 'Identificatore di visita MyCity: correla le sessioni ricorrenti dello stesso dispositivo e le collega all\'account al login (profilazione pseudonima cross-sessione). Base giuridica: consenso (art. 6.1.a GDPR).', duration: '12 mesi', provider: 'Prima parte' },
           { name: 'mc_exp_*', purpose: 'A quale variante di una prova A/B sei stato assegnato, così la pagina non cambia sotto i tuoi occhi da una visita all\'altra.', duration: '90 giorni', provider: 'Prima parte' },
+          // 12/11/2026 (R02-015) — Il freno «visita già contata» e l'impronta delle visite anonime
+          // stanno nell'archivio del browser; si scrivono solo col consenso alle statistiche.
+          { name: 'mc_viewed_* / mc_impronta_visite', purpose: 'Contano una sola visita all\'ora per ogni scheda prodotto (anche con più schede aperte) e, se non hai un account, distinguono una persona da duecento visite automatiche. Un codice casuale, non dice chi sei; scaduta l\'ora si cancella alla visita successiva.', duration: '1 ora', provider: 'Prima parte (archivio locale)' },
         ]} />
 
         <h3 className="font-semibold text-ink-900 mt-4 mb-2">2.4 Cookie di marketing (richiede consenso)</h3>

@@ -26,6 +26,9 @@ export type CampiPassword = {
 
 export const LUNGHEZZA_MINIMA = 8;
 
+/** Il messaggio, uguale nella pagina e nella rotta, per una nuova password identica all'attuale. */
+export const PASSWORD_UGUALE = 'La nuova password deve essere diversa da quella attuale';
+
 /**
  * Il motivo per cui il cambio NON può partire, o `null` se può.
  *
@@ -40,6 +43,9 @@ export function perchePasswordNonCambiabile(campi: CampiPassword): string | null
     return `La password deve essere di almeno ${LUNGHEZZA_MINIMA} caratteri`;
   }
   if (campi.newPassword !== campi.confirmPassword) return 'Le password non coincidono';
+  // 12/11/2026 (R02-010) — «Cambiarla» con la stessa di prima non cambia niente, e il sito
+  // rispondeva «aggiornata».
+  if (campi.newPassword === campi.currentPassword) return PASSWORD_UGUALE;
   return null;
 }
 

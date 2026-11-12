@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { trackProductViewed } from '@/lib/analytics/events';
 import { hasConsent } from '@/lib/consent';
 import { idUtenteInMemoria } from '@/components/hooks/useUtente';
-import { contaLaVisita } from '@/lib/analytics/visita-prodotto';
+import { contaLaVisita, frenoOrario, improntaOraria } from '@/lib/analytics/visita-prodotto';
 
 type Props = {
   productId: string;
@@ -13,6 +13,8 @@ type Props = {
   price?: number;
   category?: string;
   sellerId?: string;
+  /** R02-014 — Chi guarda è un amministratore: controlla la scheda, non è un cliente. */
+  chiGuardaEAdmin?: boolean;
 };
 
 /**
@@ -20,28 +22,34 @@ type Props = {
  *  1. `product_views` (anche guest) — alimenta TrendingNow
  *  2. `recently_viewed` (solo se loggato) — alimenta carousel "Ultimi visti"
  *
- * Componente invisibile, side effect only. Usa sessionStorage per dedupare:
- * lo stesso prodotto viene contato 1x per sessione (no inflation da F5 ripetuti).
+ * Componente invisibile, side effect only. Una visita per prodotto all'ora, come
+ * il database (R02-015): niente doppioni da F5 o da due schede aperte.
  */
+function archivioDelleVisite(): Storage | null {
+  try { return window.localStorage; } catch { return null; }
+}
+
 /**
- * Un identificativo casuale che vive quanto la scheda del browser. Non dice chi
- * sei e non ti segue: serve solo a distinguere «duecento visite da uno» da
- * «duecento visite da duecento persone».
+ * Un identificativo casuale che vive un'ora. Non dice chi sei e non ti segue:
+ * serve solo a distinguere «duecento visite da uno» da «duecento visite da
+ * duecento persone».
+ *
+ * 12/11/2026 (R02-015) — Prima viveva quanto la scheda del browser; adesso un'ora,
+ * condiviso fra le schede: la stessa regola del database (una visita per impronta
+ * all'ora), invece di una per scheda.
  */
 function improntaSessione(): string {
-  const CHIAVE = 'mc_impronta_visite';
   try {
-    const gia = sessionStorage.getItem(CHIAVE);
-    if (gia) return gia;
-    const nuova = crypto.randomUUID();
-    sessionStorage.setItem(CHIAVE, nuova);
-    return nuova;
+    return improntaOraria(archivioDelleVisite());
   } catch {
     return crypto.randomUUID();
   }
 }
 
-export default function ProductViewTracker({ productId, price, category, sellerId }: Props) {
+export default function ProductViewTracker({ productId, price, category, sellerId, chiGuardaEAdmin }: Props) {
+  // Letto al momento di scrivere, non a quello di montare: il profilo arriva dopo la pagina.
+  const eAdmin = useRef(chiGuardaEAdmin);
+  eAdmin.current = chiGuardaEAdmin;
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -57,15 +65,16 @@ export default function ProductViewTracker({ productId, price, category, sellerI
     let vivo = true;
 
     const prova = () => {
+      // R02-014 (dopo il qa) — Se chi guarda è il negoziante o un admin, la riga non si scrive E
+      // l'evento non parte: prima `registra` usciva senza errore e PostHog la contava lo stesso.
+      let nonEUnCliente = false;
       void contaLaVisita(productId, {
         consenso: () => hasConsent('analytics'),
-        giaContata: (chiave) => {
-          try { return !!sessionStorage.getItem(chiave); } catch { return false; }
-        },
-        segnaContata: (chiave) => {
-          try { sessionStorage.setItem(chiave, '1'); } catch { /* sessione non disponibile */ }
-        },
+        // R02-015 — Il freno è quello del database: una visita per prodotto all'ora, in tutte le
+        // schede. PostHog e product_views contano con la stessa regola.
+        ...frenoOrario(archivioDelleVisite()),
         annuncia: () => {
+          if (nonEUnCliente) return;
           trackProductViewed(productId, {
             // In centesimi, come gli altri eventi che portano un prezzo.
             priceCents: price != null ? Math.round(price * 100) : undefined,
@@ -80,7 +89,12 @@ export default function ProductViewTracker({ productId, price, category, sellerI
           const userId = await idUtenteInMemoria();
           // 5/11/2026 — Il negoziante che apre il proprio prodotto non è un cliente: la sua visita
           // finiva in «visite», nel tasso di conversione e nei più visti della home.
+          nonEUnCliente = Boolean((userId && sellerId && userId === sellerId) || eAdmin.current);
           if (userId && sellerId && userId === sellerId) return;
+          // 12/11/2026 (R02-014) — Nemmeno l'amministratore che controlla le schede. Le righe che
+          // arrivano lo stesso (profilo non ancora letto, pagina vecchia) le scarta il conto nel
+          // database (migrazione 260).
+          if (eAdmin.current) return;
 
           // 041 — L'impronta di sessione serve a contare le visite anonime PER VISITATORE invece
           // che per prodotto. Prima il tetto era globale sul prodotto, e chi voleva azzerare le
