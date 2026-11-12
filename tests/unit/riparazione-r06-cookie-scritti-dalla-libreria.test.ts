@@ -46,7 +46,7 @@ async function cookieScrittiDallaLibreria(
     ...(opzioni.cookieEncoding ? { cookieEncoding: opzioni.cookieEncoding } : {}),
     cookies: {
       getAll: () => [...barattolo].map(([name, value]) => ({ name, value })),
-      setAll: (lista) => {
+      setAll: (lista: Cookie[]) => {
         for (const { name, value } of lista) {
           if (value) barattolo.set(name, value);
           else barattolo.delete(name);
