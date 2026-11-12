@@ -40,4 +40,11 @@ describe('R06-018 · il filtro guarda oltre le parentesi', () => {
   it('un percorso senza parametri resta com\'e\'', () => {
     expect(testoSenzaIndirizzi('/product/abc')).toBe('/product/abc');
   });
+
+  it('un nome dopo l\'apostrofo non esce in chiaro (senza numeri che la rete dei telefoni prenderebbe)', () => {
+    for (const q of ["Orto'Mario Bianchi", 'pane!Giulia', 'torta*Verdi', 'pane~Rossi']) {
+      const pulito = testoSenzaIndirizzi(ricerca(q));
+      expect(pulito, `uscito in chiaro: ${pulito}`).not.toMatch(/Mario|Giulia|Verdi|Rossi/);
+    }
+  });
 });
