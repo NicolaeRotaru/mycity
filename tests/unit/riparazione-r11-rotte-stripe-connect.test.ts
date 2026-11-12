@@ -113,8 +113,8 @@ describe('onboarding del fattorino', () => {
     expect((await chiama(R)).status).toBe(200);
     expect(stato.creaLink).toHaveBeenCalledWith(expect.objectContaining({ ruolo: 'fattorino' }));
   });
-  it('un negozio o un cliente non passano', async () => {
-    stato.ruolo = 'buyer';
+  it.each(['buyer', 'seller'])('%s: non passa', async (ruolo) => {
+    stato.ruolo = ruolo;
     expect((await chiama(R)).status).toBe(403);
     expect(stato.creaLink).not.toHaveBeenCalled();
   });
@@ -161,6 +161,19 @@ describe('bonifico a mano (rotta interna)', () => {
     expect((await chiama(R, { orderId: ID })).status).toBe(409);
     stato.resi = [];
     stato.ordine = { dispute_status: 'OPEN', internal_dispute_status: null, delivered_at: '2026-01-01T00:00:00Z' };
+    expect((await chiama(R, { orderId: ID })).status).toBe(409);
+    expect(stato.rilascio).not.toHaveBeenCalled();
+  });
+  it('con un reclamo aperto (tabella o colonna sull ordine): 409', async () => {
+    stato.reclami = [{ id: 'reclamo' }];
+    expect((await chiama(R, { orderId: ID })).status).toBe(409);
+    stato.reclami = [];
+    stato.ordine = { dispute_status: null, internal_dispute_status: 'OPEN', delivered_at: '2026-01-01T00:00:00Z' };
+    expect((await chiama(R, { orderId: ID })).status).toBe(409);
+    expect(stato.rilascio).not.toHaveBeenCalled();
+  });
+  it('consegnato da pochi minuti: 409, il bonifico aspetta', async () => {
+    stato.ordine = { dispute_status: null, internal_dispute_status: null, delivered_at: new Date().toISOString() };
     expect((await chiama(R, { orderId: ID })).status).toBe(409);
     expect(stato.rilascio).not.toHaveBeenCalled();
   });
