@@ -1,0 +1,265 @@
+{
+ "sessione": "R12",
+ "aggiornato": "2026-11-12 15:10",
+ "finita": false,
+ "testa": "a5634f24cc070579dbe13584dbffbe7527e86f09",
+ "verifica": {
+  "comando": "npm run verify",
+  "esito": "",
+  "nota": ""
+ },
+ "voci": [
+  {
+   "id": "R12-001",
+   "chiave": "qa-flussi|se il fattorino sparisce senza dichiarare i contanti, l'ordine resta in consegna per sempre e l'amministratore non può chiuderlo",
+   "esito": "parziale",
+   "commit": "43c286984100646a4fb25a27179049f534415947",
+   "file_toccati": [
+    "lib/cassa/registra-incasso.ts",
+    "migrations/360_l_amministratore_chiude_la_consegna.sql",
+    "tests/unit/l-incasso-in-contanti-si-dichiara-prima-e-si-recupera-dopo.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-incasso-admin.test.ts",
+    "tests/sql/rls/riparazione-r12-chiudi-consegna.test.sql"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-incasso-admin.test.ts && tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base 43c286984100646a4fb25a27179049f534415947^ --file lib/cassa/registra-incasso.ts --prove tests/unit/riparazione-r12-incasso-admin.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Per l'amministratore motivoPerNonRegistrare e statiAmmessi accettano PICKED_UP, OUT_FOR_DELIVERY e DELIVERED (prima solo DELIVERED). Migrazione 360 (non applicata): RPC admin_chiudi_consegna con is_admin(), motivo obbligatorio, incasso prima per il contante (regola della 163), DELIVERED, delivered_at e riga in audit_logs. Prova SQL 9/9 verde su PG16 con il harness. Aggiornata, dichiarandolo, la prova l-incasso-in-contanti... che importa registra-incasso.ts e controllava la regola vecchia.",
+   "cosa_resta": "La rotta e il pulsante non stanno nei miei file: la prova nessuna-rotta-che-non-chiama-nessuno rifiuta una rotta che nessuna pagina chiama. Vedi serve_file_altrui.",
+   "serve_file_altrui": [
+    {
+     "file": "app/api/admin/chiudi-consegna/route.ts (nuovo)",
+     "modifica": "POST con withAdminAuthRateLimit, body {orderId uuid, motivo 10-300 car.}; chiama con getServerSupabase() rpc('admin_chiudi_consegna',{p_order_id,p_motivo}); mappa reason NOT_ADMIN→403, MOTIVO_MANCANTE→400, ORDER_NOT_FOUND→404, WRONG_STATUS/SENZA_FATTORINO/CASH_NOT_CONFIRMED→409 ('Prima registra i contanti dichiarati dal fattorino, poi chiudi la consegna'); poi, se cod, aggiornaQuadratura(admin, rider_id, giornoLocale(delivered_at)). Bozza pronta nel messaggio finale alla regista."
+    },
+    {
+     "file": "app/admin/orders/[id]/page.tsx",
+     "modifica": "Per un ordine PICKED_UP/OUT_FOR_DELIVERY con fattorino: pulsante 'Registra i contanti dichiarati' (POST /api/admin/cod-incasso-dichiarato, già esistente) e poi 'Chiudi la consegna' con campo motivo (POST /api/admin/chiudi-consegna)."
+    },
+    {
+     "file": "app/admin/cod-remittance/page.tsx:82",
+     "modifica": "Elencare anche gli ordini cod in PICKED_UP/OUT_FOR_DELIVERY da più di 3 ore senza cash_confirmed_at, con il collegamento all'ordine."
+    }
+   ]
+  },
+  {
+   "id": "R12-002",
+   "chiave": "accessibilita|nella pagina che chiede di accettare i termini, il bottone «continua» è spento senza dire che bisogna spuntare la casella",
+   "esito": "riparato",
+   "commit": "a5634f24cc070579dbe13584dbffbe7527e86f09",
+   "file_toccati": [
+    "app/accetta-condizioni/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-termini-il-bottone-spiega.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-termini-il-bottone-spiega.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base a5634f24cc070579dbe13584dbffbe7527e86f09^ --file app/accetta-condizioni/page.tsx --prove tests/unit/riparazione-r12-termini-il-bottone-spiega.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "«Continua» non è più disabled (solo aria-disabled senza spunta, disabled solo durante l'invio): premuto senza spunta mostra «Spunta la casella per continuare» con role=alert, collegato con aria-describedby a bottone e casella, e porta il fuoco sulla casella. Termini e Informativa si aprono in una nuova scheda (con l'avviso per il lettore di schermo), così la spunta non si perde."
+  },
+  {
+   "id": "R12-004",
+   "chiave": "api-backend|lo stesso cliente può usare il codice «solo primo ordine» due volte, aprendo la cassa in due schede",
+   "esito": "riparato",
+   "commit": "2ceb7da74ef4cd8c320977f35850bfb9181c946e",
+   "file_toccati": [
+    "lib/ordini/rivendica-il-codice-sconto.ts",
+    "migrations/361_il_benvenuto_si_rivendica_una_volta_per_cliente.sql"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-benvenuto-due-schede.test.ts",
+    "tests/sql/rls/riparazione-r12-benvenuto-una-volta.test.sql"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-benvenuto-due-schede.test.ts && tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2ceb7da74ef4cd8c320977f35850bfb9181c946e^ --file lib/ordini/rivendica-il-codice-sconto.ts --prove tests/unit/riparazione-r12-benvenuto-due-schede.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Migrazione 361 (non applicata): tabella coupon_redemptions (RLS, nessun accesso dall'esterno), claim_coupon(p_code, p_user_id) che blocca la riga del codice (FOR UPDATE) e rifiuta se lo stesso cliente ha una rivendicazione aperta da meno di 2 ore; release_coupon(p_code, p_order_id) chiude anche la rivendicazione del cliente dell'ordine. lib passa p_user_id, ripiego sulla firma vecchia su PGRST202. Prova SQL 11/11 (anche: vecchia di 3 ore passa, appena fatta blocca, dopo l'annullo torna), suite SQL intera verde. Copre anche lib/coupons.ts senza modificarlo: il controllo primo ordine lì resta, la gara la chiude il database."
+  },
+  {
+   "id": "R12-012",
+   "chiave": "frontend-ux|se il nome del negozio comincia con un numero, un apostrofo, le virgolette o contiene una parola inglese come «table», il cliente in cassa legge «qualcosa non ha funzionato» invece del motivo vero",
+   "esito": "riparato",
+   "commit": "73fa9291156e370cf8518645477ddc596761fc07",
+   "file_toccati": [
+    "lib/errors.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-nome-del-negozio-in-cassa.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-nome-del-negozio-in-cassa.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base 73fa9291156e370cf8518645477ddc596761fc07^ --file lib/errors.ts --prove tests/unit/riparazione-r12-nome-del-negozio-in-cassa.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Sulla base il primo carattere (cifra, virgolette, apostrofo) era già accettato; restava la parola inglese («Bistrot La Table») e le parentesi tolte. apiErrorMessage ricorda i testi letti dal corpo di una nostra risposta; per quelli friendlyError confronta le parole del motore come le scrive il motore (minuscole) e non toglie le parentesi. Gli errori grezzi restano filtrati come prima (provato: relation … does not exist e null value … restano generici)."
+  },
+  {
+   "id": "R12-016",
+   "chiave": "microcopy|chi arriva alla pagina dei termini senza essere entrato legge «registrazione non riuscita» e non trova la strada per accedere",
+   "esito": "riparato",
+   "commit": "4d31437255613f1502e250bcc41469df22984489",
+   "file_toccati": [
+    "app/accetta-condizioni/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-termini-senza-sessione.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-termini-senza-sessione.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4d31437255613f1502e250bcc41469df22984489^ --file app/accetta-condizioni/page.tsx --prove tests/unit/riparazione-r12-termini-senza-sessione.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La pagina legge lo stato: 401 → «La sessione è scaduta: accedi di nuovo» e porta a /sign-in?returnTo=/accetta-condizioni?next=<dove>; 429 → «Troppi tentativi… riprova fra un minuto»; il resto → apiErrorMessage del corpo, con un ripiego che non parla di registrazione. La rotta non cambia: i suoi stati erano già giusti."
+  },
+  {
+   "id": "R12-018",
+   "chiave": "pagamenti-stripe|un avviso di stripe mai lavorato, col turno preso da una consegna morta da meno di cinque minuti, riceve «già visto» e si perde",
+   "esito": "riparato",
+   "commit": "32772148c8655faeb34e2c90fbef38ec6bab5a8f",
+   "file_toccati": [
+    "lib/stripe/webhook/registro-eventi.ts",
+    "app/api/stripe/webhook/route.ts",
+    "tests/unit/api-stripe-webhook-idempotency.test.ts",
+    "tests/unit/dopo-un-errore-stripe-riprende-il-turno.test.ts",
+    "tests/unit/stripe-webhook-idempotenza.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-turno-in-corso.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-turno-in-corso.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base 32772148c8655faeb34e2c90fbef38ec6bab5a8f^ --file app/api/stripe/webhook/route.ts --prove tests/unit/riparazione-r12-turno-in-corso.test.ts --json",
+    "nota": "con anche registro-eventi.ts esce 3 (strutturale: la rotta alla base non importa la funzione nuova); la rotta da sola alla base è rossa sul comportamento"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Quando la presa del turno è 'occupato', la rotta legge processed (statoDellAvvisoOccupato): già lavorato → 200 duplicated come prima; in corso o lettura fallita → 409, così Stripe riprova e trova il turno chiuso o scaduto. Aggiornate dichiarandolo tre prove che importano la rotta e si aspettavano 200 sul turno fresco non lavorato (scelta 062 ora superata)."
+  },
+  {
+   "id": "R12-019",
+   "chiave": "pagamenti-stripe|la vetrina sponsorizzata di una settimana resta in vetrina 8 giorni",
+   "esito": "riparato",
+   "commit": "396f55a49d5076d1c81a57850e02ee9d2fc704f2",
+   "file_toccati": [
+    "lib/stripe/webhook/sponsorizzati.ts",
+    "tests/unit/la-vetrina-comprata-di-notte-parte-dal-giorno-giusto.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-sponsorizzata-sette-giorni.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-sponsorizzata-sette-giorni.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base 396f55a49d5076d1c81a57850e02ee9d2fc704f2^ --file lib/stripe/webhook/sponsorizzati.ts --prove tests/unit/riparazione-r12-sponsorizzata-sette-giorni.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Fine = oggi + (giorni − 1): la vetrina (estremi compresi, fasce-prodotti.ts lasciato com'è) dura 7 giorni per 1 settimana e 28 per 4; l'avviso «fino al …» usa la stessa data. Orologio finto 16/11 10:00 → 16-22. Aggiornata dichiarandolo la prova notturna che importa il file e si aspettava l'11/9 (ottavo giorno)."
+  },
+  {
+   "id": "R12-023",
+   "chiave": "privacy-legale|l'obbligo di dichiarare allergeni e ingredienti vale solo finché la categoria principale si chiama esattamente «alimentari», e dal pannello quel nome si può cambiare",
+   "esito": "parziale",
+   "commit": "0738e871f38161531f0b38d963522d3d3485ab40",
+   "file_toccati": [
+    "lib/category-attributes.ts",
+    "migrations/363_l_obbligo_degli_allergeni_e_una_proprieta_della_categoria.sql"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-allergeni-per-proprieta.test.ts",
+    "tests/sql/rls/riparazione-r12-allergeni-per-proprieta.test.sql"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-allergeni-per-proprieta.test.ts && tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0738e871f38161531f0b38d963522d3d3485ab40^ --file lib/category-attributes.ts --prove tests/unit/riparazione-r12-allergeni-per-proprieta.test.ts --json"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Migrazione 363 (non applicata): colonna categories.richiede_dichiarazioni_alimentari (vera per la radice alimentari), il guardiano 195 la legge (il nome resta rete), trigger che impedisce di cambiare slug o togliere l'obbligo a una categoria che ce l'ha. Prova SQL 6/6 e suite SQL intera verde. getAttributesForCategory usa la proprietà della radice, col nome come ripiego.",
+   "cosa_resta": "Il modulo del negozio riceve le categorie senza la colonna: finché le select non la leggono, una radice nuova con l'obbligo è protetta dal database ma il modulo non mostra i campi.",
+   "serve_file_altrui": [
+    {
+     "file": "app/seller/products/new/page.tsx:78, app/seller/products/[id]/edit/page.tsx:88, app/seller/products/import/page.tsx:66, app/api/ai/catalog-chat/route.ts:268",
+     "modifica": "Aggiungere richiede_dichiarazioni_alimentari alla select delle categorie DOPO che Nicola ha applicato la 363 (prima la colonna non esiste e la select fallisce); oppure select('*')."
+    },
+    {
+     "file": "app/api/admin/categories/route.ts e la pagina admin delle categorie",
+     "modifica": "Nel modulo di creazione di una radice: casella «Richiede allergeni e ingredienti (alimenti)» che scrive richiede_dichiarazioni_alimentari, e un avviso che una radice nuova nasce senza obbligo."
+    }
+   ]
+  },
+  {
+   "id": "R12-024",
+   "chiave": "qa-flussi|due richieste di cancellazione quasi insieme mandano due email",
+   "esito": "riparato",
+   "commit": "b795adeda16852457b55a1afa8c7b3d95a196bbd",
+   "file_toccati": [
+    "app/api/account/delete/route.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-cancellazione-una-email.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-cancellazione-una-email.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base b795adeda16852457b55a1afa8c7b3d95a196bbd^ --file app/api/account/delete/route.ts --prove tests/unit/riparazione-r12-cancellazione-una-email.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La scrittura con .is(null) ora restituisce le righe (.select('id')); con zero righe la richiesta c'era già: si rilegge la data e si risponde alreadyRequested con lo stato vero, senza spedire l'email."
+  },
+  {
+   "id": "R12-025",
+   "chiave": "qa-flussi|il contatore dei messaggi non letti non si azzera aprendo la chat",
+   "esito": "gia_riparato_prima",
+   "prova": "migrations/154_la_chat_non_si_intesta_a_un_altro.sql:76-79 (REVOKE UPDATE sulla tabella, poi GRANT UPDATE (buyer_unread_count, seller_unread_count) ON conversations TO authenticated) + la policy conversations_update_participants: l'update della rotta (app/api/chat/mark-read/route.ts:48-51) passa. Eseguito sul database ricostruito con tests/sql/harness/apply.sh (tutte le migrazioni fino alla 245): da compratore, dopo mark_conversation_read, UPDATE conversations SET buyer_unread_count=0 → il contatore passa da 1 a 0. Se in produzione la 154 non risultasse applicata, è lì il rimedio (non_codice).",
+   "nota": "La descrizione del registro si ferma alla 119; la 154 ha ridato il permesso di colonna."
+  }
+ ],
+ "nuovi_difetti_visti": [],
+ "domande_per_nicola": [
+  "R12-004: una rivendicazione del codice «solo primo ordine» smette di bloccare dopo 2 ore. Motivo: è la vita di una cassa con la carta aperta (pending_checkouts.expires_at); oltre, o l'ordine è nato (e allora lo conta già validateCoupon) o la cassa è scaduta. Serve per i rilasci che non conoscono l'ordine (carrello scaduto, riserve abbandonate). Va bene 2 ore?"
+ ],
+ "conto": {
+  "agenti": 0,
+  "nota": ""
+ }
+}
