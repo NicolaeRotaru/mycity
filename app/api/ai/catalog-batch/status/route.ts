@@ -6,7 +6,7 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { ApiErrors } from '@/lib/api/responses';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { pollBatch, streamBatchResults } from '@/lib/ai/batch';
+import { INVIO_SENZA_RISPOSTA, pollBatch, streamBatchResults } from '@/lib/ai/batch';
 import { parseCatalogBatchEntry, stimaCostoLottoEur, type CatalogJobResult, type CatalogOperation } from '@/lib/ai/catalogBatch';
 
 /**
@@ -74,7 +74,9 @@ export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> =
  * la pagina non mostrava ne' rotella ne' pulsante. Oltre questa soglia lo si
  * chiude come fallito, con il motivo, e il negoziante puo' ripartire.
  */
-export const INVIO_SCADUTO_MS = 15 * 60_000;
+const INVIO_SCADUTO_MS = 15 * 60_000;
+/** Un invio senza risposta (forse partito) resta aperto quanto dura al massimo un lotto. */
+const INVIO_INCERTO_SCADUTO_MS = 24 * 60 * 60_000;
 
 const COLONNE = 'id, seller_id, operation, status, batch_id, target_lang, total, results, created_at, error';
 
@@ -85,10 +87,18 @@ async function rispondiPerLavoro(
 ): Promise<NextResponse> {
   if (job.status === 'submitting' && !job.batch_id) {
     const nato = job.created_at ? Date.parse(job.created_at) : NaN;
-    if (Number.isFinite(nato) && Date.now() - nato > INVIO_SCADUTO_MS) {
-      const motivo = job.error
-        ? `${job.error} — chiuso dopo ${INVIO_SCADUTO_MS / 60_000} minuti senza lotto agganciato`
-        : `invio non confermato: nessun lotto agganciato dopo ${INVIO_SCADUTO_MS / 60_000} minuti`;
+    // R04-014 (revisione) — Un invio rimasto SENZA RISPOSTA puo' essere partito:
+    // chiuderlo dopo 15 minuti riapriva la porta a un secondo lotto pagato.
+    // Quello resta aperto quanto puo' durare un lotto (24 ore); poi si chiude
+    // dicendo di controllare prima di ripartire.
+    const incerto = job.error === INVIO_SENZA_RISPOSTA;
+    const scadenza = incerto ? INVIO_INCERTO_SCADUTO_MS : INVIO_SCADUTO_MS;
+    if (Number.isFinite(nato) && Date.now() - nato > scadenza) {
+      const motivo = incerto
+        ? 'invio senza risposta da 24 ore: il lotto potrebbe essere partito ed essere stato pagato; chiedi all\'assistenza prima di avviarne un altro'
+        : job.error
+          ? `${job.error} — chiuso dopo ${INVIO_SCADUTO_MS / 60_000} minuti senza lotto agganciato`
+          : `invio non confermato: nessun lotto agganciato dopo ${INVIO_SCADUTO_MS / 60_000} minuti`;
       await admin
         .from('catalog_ai_jobs')
         .update({ status: 'failed', error: motivo, updated_at: new Date().toISOString() })

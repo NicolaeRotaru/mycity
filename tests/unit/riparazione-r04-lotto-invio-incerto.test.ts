@@ -72,6 +72,8 @@ describe('invio del lotto senza risposta', () => {
     expect(aggiornamenti.some((a) => a.status === 'failed')).toBe(false);
     expect(JSON.stringify(await res.json())).toMatch(/potrebbe essere partito/);
     expect(submitBatchMock).toHaveBeenCalledTimes(1);
+    // Forse partito, quindi forse pagato: la stima entra nel conto (revisione).
+    expect(registraSpesaMock).toHaveBeenCalledTimes(1);
   });
 
   it('un rifiuto vero del fornitore resta «failed»', async () => {
@@ -79,5 +81,6 @@ describe('invio del lotto senza risposta', () => {
     const res = await POST(richiesta());
     expect(res.status).toBe(502);
     expect(aggiornamenti.some((a) => a.status === 'failed')).toBe(true);
+    expect(registraSpesaMock).not.toHaveBeenCalled();
   });
 });

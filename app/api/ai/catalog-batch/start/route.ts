@@ -8,7 +8,7 @@ import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { AiConfigError } from '@/lib/ai/client';
-import { invioIncerto, submitBatch } from '@/lib/ai/batch';
+import { INVIO_SENZA_RISPOSTA, invioIncerto, submitBatch } from '@/lib/ai/batch';
 import {
   buildCatalogBatchRequests,
   isCatalogOperation,
@@ -156,7 +156,15 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     const liberaPrenotazione = await controllaTettoSpesaAi('ai-catalog-batch-start', impegnato * 100);
     let handle: Awaited<ReturnType<typeof submitBatch>>;
     try {
-      handle = await submitBatch(requests);
+      try {
+        handle = await submitBatch(requests);
+      } catch (errInvio) {
+        // R04-014 (revisione) — Un invio senza risposta puo' essere partito, e
+        // allora e' pagato: la stima si conta lo stesso (meglio un tetto un
+        // po' prudente che una spesa che nessuno vede).
+        if (invioIncerto(errInvio)) await registraSpesaAi(impegnato);
+        throw errInvio;
+      }
       // La spesa si registra PRIMA di togliere la prenotazione: in mezzo non
       // deve esserci un istante in cui il lotto non e' contato da nessuna parte.
       await registraSpesaAi(impegnato);
@@ -203,7 +211,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     if (invioIncerto(err)) {
       await admin
         .from('catalog_ai_jobs')
-        .update({ error: 'invio senza risposta: il lotto potrebbe essere partito, da verificare' })
+        .update({ error: INVIO_SENZA_RISPOSTA })
         .eq('id', job.id);
       logger.error('catalog-batch start: invio del lotto senza risposta, da verificare', { sellerId: user.id, jobId: job.id });
       return ApiErrors.unavailable(

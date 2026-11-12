@@ -134,6 +134,9 @@ export async function* streamBatchResults<TInput = unknown>(
  * L'invio e' rimasto senza risposta (timeout, connessione caduta): il lotto
  * puo' essere partito oppure no. Non e' un «fallito» — se e' partito e' pagato.
  */
+/** Il motivo scritto sulla riga di un invio incerto: lo stato lo riconosce da qui. */
+export const INVIO_SENZA_RISPOSTA = 'invio senza risposta: il lotto potrebbe essere partito, da verificare';
+
 export function invioIncerto(err: unknown): boolean {
   return err instanceof APIConnectionError;
 }

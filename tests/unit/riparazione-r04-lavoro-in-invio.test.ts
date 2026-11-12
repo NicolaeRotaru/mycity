@@ -41,6 +41,7 @@ vi.mock('@/lib/ai/batch', async (importActual) => {
 });
 
 import { GET } from '@/app/api/ai/catalog-batch/status/route';
+import { INVIO_SENZA_RISPOSTA } from '@/lib/ai/batch';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 import { puoAvviareLavoro, lavoroInCorso, lavoroChiuso, testoStatoLavoro } from '@/lib/ai/statoLavoroCatalogo';
 
@@ -73,6 +74,21 @@ describe('un lavoro «in invio» non resta cosi\' per sempre', () => {
     const corpo = (await (await chiedi()).json()) as { status: string };
     expect(corpo.status).toBe('submitting');
     expect(aggiornamenti).toHaveLength(0);
+  });
+
+  it('invio SENZA RISPOSTA da un\'ora: resta aperto (potrebbe essere partito), non si chiude', async () => {
+    riga = { ...riga, batch_id: null, created_at: '2026-11-12T11:00:00Z', error: INVIO_SENZA_RISPOSTA };
+    const corpo = (await (await chiedi()).json()) as { status: string };
+    expect(corpo.status).toBe('submitting');
+    expect(aggiornamenti).toHaveLength(0);
+  });
+
+  it('invio senza risposta da 25 ore: chiuso, dicendo di controllare prima di ripartire', async () => {
+    riga = { ...riga, batch_id: null, created_at: '2026-11-11T11:00:00Z', error: INVIO_SENZA_RISPOSTA };
+    const corpo = (await (await chiedi()).json()) as { status: string; error: string };
+    expect(corpo.status).toBe('failed');
+    expect(corpo.error).toMatch(/assistenza/);
+    riga = { ...riga, error: null };
   });
 
   it('in invio ma con il lotto agganciato: si interroga Anthropic come uno in corso', async () => {
