@@ -128,4 +128,12 @@ describe('R03-008 — la carta tornata prima dell ordine', () => {
       expect(ordini(), `carrello ${s}`).toHaveLength(0);
     }
   });
+
+  it('collaudo: l ordine nato in un tentativo di prima (ancora HELD) si allinea anche lui', async () => {
+    stato.carica = { id: 'ch_1', refunded: true, amount_refunded: 3000, disputed: false };
+    await handleCheckoutCompleted(sessione);
+    const allineati = stato.aggiornati.filter((a) => a.tabella === 'orders' && a.valori.payout_status === 'REFUNDED');
+    expect(allineati.length, 'gli ordini già nati restano pagabili al negozio').toBeGreaterThan(0);
+    expect(allineati[0].valori.delivery_status).toBe('CANCELED');
+  });
 });

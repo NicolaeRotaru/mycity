@@ -88,6 +88,16 @@ export async function chiudiIlCarrelloDellaCartaTornata(
   ordini: ReadonlyArray<{ orderId: string; totalCents: number }>,
   carta: CartaTornata,
 ): Promise<void> {
+  // Collaudo del 12/11 — gli ordini nati in un tentativo di prima (prima che la carta tornasse)
+  // sono ancora PAID/HELD: si allineano anche loro, se il loro bonifico non è partito.
+  const { error: errAllinea } = await admin
+    .from('orders')
+    .update({ delivery_status: 'CANCELED', canceled_at: new Date().toISOString(), payout_status: 'REFUNDED', ...(carta.pieno ? { payment_status: 'REFUNDED' } : {}) })
+    .in('id', ordini.map((o) => o.orderId))
+    .eq('payout_status', 'HELD');
+  if (errAllinea) {
+    logger.error('[stripe] ordini di un tentativo precedente non allineati alla carta tornata', { pendingCheckoutId, message: errAllinea.message });
+  }
   const totale = ordini.reduce((s, o) => s + o.totalCents, 0);
   const come = carta.contestata
     ? 'contestato dal cliente con la banca'
