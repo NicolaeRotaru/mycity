@@ -311,7 +311,7 @@ export default function NewReturnPage() {
             <>
               <p className="mt-3 text-ink-700">
                 Il termine per il recesso è scaduto: valeva fino a tutto il{' '}
-                <strong>{new Date(`${ultimoGiornoDelRecesso(baseRecesso!)}T12:00:00Z`).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}</strong>,
+                <strong>{new Date(`${ultimoGiornoDelRecesso(baseRecesso!)}T12:00:00Z`).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', timeZone: 'Europe/Rome' })}</strong>,
                 quattordici giorni dopo la consegna.
               </p>
               <p className="mt-2 text-ink-700">

@@ -77,4 +77,17 @@ describe('R07-006 · la pagina del reso dice scaduto quando il server lo direbbe
     expect(chiuso()).toBe(true);
     expect(modulo()).toBe(false);
   });
+
+  it('la data dell ultimo giorno è quella di Piacenza anche per chi ha il browser a +13 ore', async () => {
+    const fuso = process.env.TZ;
+    process.env.TZ = 'Pacific/Kiritimati';
+    try {
+      // Consegna 1/3 alle 10 di Roma: l'ultimo giorno è il 15 marzo.
+      await monta('2026-03-16T12:00:00Z', '2026-03-01T09:00:00Z');
+      expect(c.textContent).toMatch(/15 marzo/);
+      expect(c.textContent).not.toMatch(/16 marzo/);
+    } finally {
+      process.env.TZ = fuso;
+    }
+  });
 });
