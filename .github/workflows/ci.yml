@@ -90,7 +90,8 @@ jobs:
   unit-tests:
     name: Unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # R01-011 — 15 e non 10: adesso girano anche le prove che accendono un PostgreSQL usa e getta.
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,8 +105,40 @@ jobs:
       - name: Install deps
         run: npm ci --legacy-peer-deps
 
-      # Unit test puri (niente DB/network) + guardia integrita' file migration.
+      # R01-011 (12/11/2026) — SETTE FILE DI PROVA SI SALTAVANO IN SILENZIO.
+      #
+      # Le prove che girano su un database vero (tests/unit/postgres-usa-e-getta.ts
+      # e un-invito-scritto-a-mano-non-paga.test.ts) si saltano se sulla macchina
+      # non c'e' PostgreSQL: giusto sul computer di chi sviluppa, sbagliato qui,
+      # dove la verifica usciva verde senza averle mai eseguite. Qui PostgreSQL
+      # si installa e si accende, e il passo dopo si ferma ROSSO se non risponde.
+      - name: Installa e accendi PostgreSQL per le prove col database vero
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql
+          sudo service postgresql start
+          sudo -u postgres createuser --superuser "$(whoami)" || true
+          echo "PGHOST=/var/run/postgresql" >> "$GITHUB_ENV"
+          echo "PGUSER=$(whoami)" >> "$GITHUB_ENV"
+
+      - name: Le prove col database vero non si possono saltare
+        run: |
+          set -uo pipefail
+          if ! ls /usr/lib/postgresql/*/bin/initdb >/dev/null 2>&1; then
+            echo "::error::initdb non c'e': le prove che accendono un PostgreSQL usa e getta si salterebbero in silenzio."
+            exit 1
+          fi
+          if ! psql -X -d postgres -Atc 'select 1' >/dev/null; then
+            echo "::error::PostgreSQL non risponde su $PGHOST: le prove col database vero si salterebbero in silenzio."
+            exit 1
+          fi
+          echo "PostgreSQL c'e' e risponde: le prove col database vero girano."
+
+      # Unit test + guardia integrita' file migration + le prove col database vero.
       - name: Test
+        env:
+          # Per i file di prova che lo leggono: qui saltare per mancanza di PostgreSQL e' un errore.
+          PROVE_POSTGRES_OBBLIGATORIE: "1"
         run: npm run test
 
   integration-tests:
