@@ -5,6 +5,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * mano non avevano nessuna prova. Qui le cinque rotte, con Stripe e database
  * finti: chi non deve passare non passa, gli errori non diventano «tutto ok», e
  * il percorso giusto risponde quello che la pagina si aspetta.
+ *
+ * COSA NON PROVA (collaudo K04, detto chiaro): gli involucri di autenticazione
+ * (withSellerAuthRateLimit, withAuthRateLimit, withInternalAuth) qui sono finti e
+ * fanno entrare tutti. Quindi il 401 senza sessione, il 403 di chi non è un negozio
+ * sull'involucro e il 401 senza x-internal-secret NON sono provati da questo file:
+ * le prove guardano solo i controlli scritti DENTRO le rotte.
  */
 
 const stato = vi.hoisted(() => ({
@@ -176,6 +182,17 @@ describe('bonifico a mano (rotta interna)', () => {
     stato.ordine = { dispute_status: null, internal_dispute_status: null, delivered_at: new Date().toISOString() };
     expect((await chiama(R, { orderId: ID })).status).toBe(409);
     expect(stato.rilascio).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['NOT_FOUND', 404],
+    ['INVALID_AMOUNT', 400],
+    ['NOT_DELIVERED', 409],
+    ['BAD_STATE', 409],
+    ['SELLER_NOT_READY', 409],
+    ['TRANSFER_FAILED', 500],
+  ])('esito %s del bonifico → %i, mai 200', async (code, atteso) => {
+    stato.rilascio = vi.fn(async () => ({ ok: false, code, reason: 'motivo' }));
+    expect((await chiama(R, { orderId: ID })).status).toBe(atteso);
   });
   it('tutto a posto: parte il bonifico', async () => {
     const r = await chiama(R, { orderId: ID });
