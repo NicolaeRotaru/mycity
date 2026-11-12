@@ -62,7 +62,8 @@ describe('R10-005 — un prezzo solo, anche per l’addebito', () => {
 
   it('il banner dice il prezzo della fonte unica', async () => {
     const { SubscriptionBanner } = await import('@/components/seller/SubscriptionBanner');
-    const html = renderToStaticMarkup(createElement(SubscriptionBanner, { status: 'none' }));
+    // past_due: l'avviso si disegna subito (l'invito ad attivare aspetta di sapere se il negozio ha incassato).
+    const html = renderToStaticMarkup(createElement(SubscriptionBanner, { status: 'past_due' }));
     expect(html).toContain('€60/mese');
     expect(html).not.toContain('€50');
   });

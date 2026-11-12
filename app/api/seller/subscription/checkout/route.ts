@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { FILTRO_PRIMO_INCASSO } from '@/lib/abbonamento-primo-incasso';
 import { ABBONAMENTO_CENTESIMI_MESE, PREZZO_ABBONAMENTO_MESE } from '@/app/seller/earnings/commissione';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
@@ -27,8 +28,8 @@ const SELLER_SUBSCRIPTION_CENTS = ABBONAMENTO_CENTESIMI_MESE;
 /** R10-019 — Le richieste dello stesso negozio dentro questa finestra ricevono la stessa cassa. */
 const FINESTRA_CASSA_MS = 10 * 60_000;
 /** R10-020 — Un ordine incassato: pagato (carta o contanti registrati), o in contanti e consegnato. */
-// Revisione qa: un ordine pagato e poi rimborsato in parte e' un incasso, come in migrations/215.
-const PRIMO_INCASSO = 'payment_status.in.(PAID,PARTIALLY_REFUNDED),and(payment_method.eq.cod,delivery_status.eq.DELIVERED)';
+// La regola sta in lib/abbonamento-primo-incasso.ts: la legge anche il banner (collaudo K03).
+const PRIMO_INCASSO = FILTRO_PRIMO_INCASSO;
 
 export const POST = withAuthRateLimit(
   { name: 'seller-subscription-checkout', max: 10, windowMs: 10 * 60_000 },

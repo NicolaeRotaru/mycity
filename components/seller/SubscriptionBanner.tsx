@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase/client';
+import { FILTRO_PRIMO_INCASSO } from '@/lib/abbonamento-primo-incasso';
 import { CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
@@ -24,11 +26,38 @@ import { COMMISSIONE_DEL_PERCENTO, PREZZO_ABBONAMENTO_MESE } from '@/app/seller/
  */
 export function SubscriptionBanner({ status }: { status: string | null | undefined }) {
   const [loading, setLoading] = useState(false);
+  const isPastDue = status === 'past_due';
+  // Collaudo K03 (R10-020) — L'invito ad attivare segue la regola della cassa: solo dopo il primo
+  // incasso. Prima il banner lo mostrava al negozio appena approvato, e il tasto rispondeva 403.
+  // Finché non si sa (lettura in corso o caduta) l'invito non si mostra. Chi è in ritardo di
+  // pagamento ha già un abbonamento: per lui l'avviso resta.
+  const chiedeIncasso = ABBONAMENTO_NEGOZI_ACCESO && status !== 'active' && !isPastDue;
+  const [haIncassato, setHaIncassato] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!chiedeIncasso) return;
+    let vivo = true;
+    void (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data, error } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('seller_id', user.id)
+          .or(FILTRO_PRIMO_INCASSO)
+          .limit(1);
+        if (vivo && !error) setHaIncassato(Array.isArray(data) && data.length > 0);
+      } catch {
+        // Non si sa: l'invito resta nascosto.
+      }
+    })();
+    return () => { vivo = false; };
+  }, [chiedeIncasso]);
+
   // 31/10/2026 — Abbonamento sospeso al lancio (ABBONAMENTO_NEGOZI_ACCESO): nessun
   // invito a pagare 50 € al mese che la rotta poi rifiuterebbe.
   if (!ABBONAMENTO_NEGOZI_ACCESO || status === 'active') return null;
-
-  const isPastDue = status === 'past_due';
+  if (!isPastDue && haIncassato !== true) return null;
 
   const start = async () => {
     setLoading(true);
