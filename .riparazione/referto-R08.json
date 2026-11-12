@@ -277,7 +277,7 @@
         "tests/unit/riparazione-r08-la-mappa-usa-i-colori-del-marchio.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r08-la-mappa-usa-i-colori-del-marchio.test.ts",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -395,7 +395,7 @@
     {
       "id": "R08-016",
       "chiave": "microcopy|la campanella «ordine pronto» promette il fattorino «a breve» anche quando la consegna è fissata ore dopo",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "d745c0036bf369953866b26384f5427ab2b7fc70",
       "file_toccati": [
         "migrations/321_l_ordine_pronto_dice_la_fascia.sql"
@@ -407,15 +407,16 @@
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
-        "esito": "a_mano",
-        "uscita": null,
-        "comando": "psql -d mycity_ci -f <funzione della 215> && psql -d mycity_ci -f tests/sql/rls/riparazione-r08-l-ordine-pronto-dice-la-fascia.test.sql",
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base <commit>^ --file migrations/321_l_ordine_pronto_dice_la_fascia.sql --prove tests/sql/rls/riparazione-r08-l-ordine-pronto-dice-la-fascia.test.sql --comando \"bash tests/sql/harness/apply.sh mycity_r08 >/dev/null 2>&1 && psql -q -X -d mycity_r08 -v ON_ERROR_STOP=1 -f {prove}\" --json",
         "nota": "File nuovo, quindi la prova rimessa della macchina non decide (uscita 3, come per la 320). Mutazione a mano sul database ricostruito: rimessa la funzione della migrazione 215 → 2 controlli ROTTI (① niente «a breve», ① fascia scritta); con la 321 di nuovo → 6 verdi. La prova esistente 48-i-difetti-minori-del-database resta verde (47 ok)."
       },
       "copre_tutta_la_voce": true,
       "migrazione_da_applicare": "migrations/321_l_ordine_pronto_dice_la_fascia.sql",
       "cosa_ho_fatto": "Nuova migrazione 321 che ridefinisce notify_buyer_on_order_status dall'ultima versione (215) e cambia solo il ramo READY a domicilio. Con una fascia scelta (delivery_slot non vuoto e non «Adesso · …») la campanella dice «… te lo porta a casa nella fascia che hai scelto (11:00–13:00).», con le parole dell'email e solo l'orario («Oggi»/«Domani» sarebbero sbagliati il giorno dopo). Veloce e ordini senza fascia restano «a breve». La notifica push nasce da quella riga, quindi cambia con lei.",
-      "verificato_da": "qa (subagente indipendente): diff con la 215 (cambiano solo DECLARE, il calcolo di fascia e orario e il ramo nuovo); permessi e trigger invariati; provate le fasce vecchie a testo libero («oggi-18-20» → senza orario, «In giornata · 15:00–18:00» → con orario), la veloce, NULL e spazi; il ritorno ASSIGNED→READY resta senza notifica. Tutta tests/sql/harness/run.sh verde."
+      "verificato_da": "qa (subagente indipendente): diff con la 215 (cambiano solo DECLARE, il calcolo di fascia e orario e il ramo nuovo); permessi e trigger invariati; provate le fasce vecchie a testo libero («oggi-18-20» → senza orario, «In giornata · 15:00–18:00» → con orario), la veloce, NULL e spazi; il ritorno ASSIGNED→READY resta senza notifica. Tutta tests/sql/harness/run.sh verde.",
+      "cosa_resta": "Il comportamento è riparato tutto e provato su Postgres (prova SQL eseguita, mutazione a mano che la fa cadere, collaudo qa che conferma). Manca solo la prova rimessa della macchina con uscita 0: la cura è una migrazione NUOVA, e su un file che alla base non c'era cervello/prova-rimessa.mjs esce 3 («decide il collaudo»). La regista decida se contarla come riparata. Resta anche da applicare la migrazione (Nicola)."
     },
     {
       "id": "R08-017",
@@ -550,7 +551,7 @@
     {
       "id": "R08-025",
       "chiave": "qa-flussi|il voto per il negozio del mese dato nelle prime ore del primo giorno non entra nella classifica che si vede",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "f52ea4165380f474420dccc18b51b263523e14de",
       "file_toccati": [
         "migrations/322_la_classifica_conta_il_mese_di_piacenza.sql"
@@ -562,21 +563,22 @@
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
-        "esito": "a_mano",
-        "uscita": null,
-        "comando": "CREATE OR REPLACE VIEW con la definizione vecchia (date_trunc('month', now())) e poi la prova",
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base <commit>^ --file migrations/322_la_classifica_conta_il_mese_di_piacenza.sql --prove tests/sql/rls/riparazione-r08-la-classifica-conta-il-mese-di-piacenza.test.sql --comando \"bash tests/sql/harness/apply.sh mycity_r08 >/dev/null 2>&1 && psql -q -X -d mycity_r08 -v ON_ERROR_STOP=1 -f {prove}\" --json",
         "nota": "File nuovo: la macchina non decide. Mutazione a mano: rimessa la vista vecchia tenendo la funzione → ④ ROTTO; con la 322 → 8 verdi. Limite dichiarato: l'orologio del database non si può fingere, quindi il comportamento al confine è provato sulla funzione mese_di_piacenza(istante) (① tre istanti, ora solare e legale), e ④ pretende che la vista conti proprio con quella funzione."
       },
       "copre_tutta_la_voce": true,
       "migrazione_da_applicare": "migrations/322_la_classifica_conta_il_mese_di_piacenza.sql",
       "cosa_ho_fatto": "Migrazione 322: funzione public.mese_di_piacenza(istante default now()) = date_trunc('month', istante AT TIME ZONE 'Europe/Rome'). La vista shop_of_month_leaderboard la usa nella colonna month e nel filtro dei voti. Per il resto è identica (colonne, ordine, LIMIT 50), con le opzioni della 161 riscritte uguali (security_invoker off, security_barrier on). I permessi restano, verificati sul database ricostruito. La pagina app/shop-of-month non cambia: scriveva già col mese di Piacenza.",
-      "verificato_da": "qa (subagente indipendente): mese_di_piacenza giusta anche con l'ora legale e senza dipendere dal fuso della sessione; vista con colonne, tipi, filtro, ordine, LIMIT, opzioni e permessi uguali; le pagine (pubblica e admin) leggono colonne che esistono. Ha segnalato che la prova leggeva la vista solo da superutente: aggiunto il controllo da anonimo (⑤)."
+      "verificato_da": "qa (subagente indipendente): mese_di_piacenza giusta anche con l'ora legale e senza dipendere dal fuso della sessione; vista con colonne, tipi, filtro, ordine, LIMIT, opzioni e permessi uguali; le pagine (pubblica e admin) leggono colonne che esistono. Ha segnalato che la prova leggeva la vista solo da superutente: aggiunto il controllo da anonimo (⑤).",
+      "cosa_resta": "Il comportamento è riparato tutto e provato su Postgres (prova SQL eseguita, mutazione a mano che la fa cadere, collaudo qa che conferma). Manca solo la prova rimessa della macchina con uscita 0: la cura è una migrazione NUOVA, e su un file che alla base non c'era cervello/prova-rimessa.mjs esce 3 («decide il collaudo»). La regista decida se contarla come riparata. Resta anche da applicare la migrazione (Nicola)."
     }
   ],
   "nuovi_difetti_visti": [
     {
       "riservato": true,
-      "titolo": "Falla di sicurezza da chiudere (dati del profilo del negozio): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
+      "titolo": "Falla di sicurezza da chiudere (permessi): i dettagli restano fuori dal deposito pubblico finché non è chiusa",
       "dimensione": "rls-database",
       "severita": "minore",
       "file": "(nel referto privato)"
