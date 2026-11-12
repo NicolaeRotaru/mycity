@@ -288,9 +288,13 @@ export default function AdminFunnelPage() {
     );
   }
 
-  const activation7d = data.signups > 0 ? (data.firstOrderWithin7d / data.signups) * 100 : 0;
-  const activationEver = data.signups > 0 ? (data.firstOrderEver / data.signups) * 100 : 0;
-  const repeatBuyer = data.firstOrderEver > 0 ? (data.multipleOrders / data.firstOrderEver) * 100 : 0;
+  // 12/11/2026 (R06-011) — Con denominatore zero non c'e' niente da misurare:
+  // `null` diventa «n.d.» in grigio, non «0.0%» in rosso contro il bersaglio.
+  const percentuale = (n: number, d: number): number | null => (d > 0 ? (n / d) * 100 : null);
+  const testoPercentuale = (p: number | null, cifre = 1) => (p == null ? 'n.d.' : `${p.toFixed(cifre)}%`);
+  const activation7d = percentuale(data.firstOrderWithin7d, data.signups);
+  const activationEver = percentuale(data.firstOrderEver, data.signups);
+  const repeatBuyer = percentuale(data.multipleOrders, data.firstOrderEver);
 
   // Segmenti derivati dal funnel già calcolato (nessuna API nuova).
   const newSignups = data.firstOrderWithin7d;          // attivati entro 7gg
@@ -330,7 +334,7 @@ export default function AdminFunnelPage() {
     total: number;
     color: FunnelTone;
   }) => {
-    const pct = total > 0 ? (value / total) * 100 : 0;
+    const pct = percentuale(value, total);
     const tone = FUNNEL_TONE[color];
     return (
       <div>
@@ -339,10 +343,10 @@ export default function AdminFunnelPage() {
             <Icon size={16} strokeWidth={2.2} />
           </div>
           <span className="font-semibold text-ink-900 flex-1">{label}</span>
-          <span className="text-sm font-bold">{value} <span className="text-ink-500 font-normal">/ {total} ({pct.toFixed(1)}%)</span></span>
+          <span className="text-sm font-bold">{value} <span className="text-ink-500 font-normal">/ {total} ({testoPercentuale(pct)})</span></span>
         </div>
         <div className="w-full h-2 bg-cream-100 rounded-full overflow-hidden">
-          <div className={`h-full ${tone.bar}`} style={{ width: `${pct}%` }} />
+          <div className={`h-full ${tone.bar}`} style={{ width: `${pct ?? 0}%` }} />
         </div>
       </div>
     );
@@ -434,18 +438,18 @@ export default function AdminFunnelPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-cream-200">
           <div>
             <p className="text-xs uppercase tracking-wider text-ink-500">Activation 7gg</p>
-            <p className={`text-3xl font-bold ${activation7d >= 30 ? 'text-olive-700' : activation7d >= 15 ? 'text-accent-700' : 'text-secondary-700'}`}>
-              {activation7d.toFixed(1)}%
+            <p className={`text-3xl font-bold ${activation7d == null ? 'text-ink-400' : activation7d >= 30 ? 'text-olive-700' : activation7d >= 15 ? 'text-accent-700' : 'text-secondary-700'}`}>
+              {testoPercentuale(activation7d)}
             </p>
             <p className="text-xs text-ink-500">target Glovo: 35-40%</p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-wider text-ink-500">Activation totale</p>
-            <p className="text-3xl font-bold text-ink-900">{activationEver.toFixed(1)}%</p>
+            <p className={`text-3xl font-bold ${activationEver == null ? 'text-ink-400' : 'text-ink-900'}`}>{testoPercentuale(activationEver)}</p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-wider text-ink-500">% buyer ricorrente</p>
-            <p className="text-3xl font-bold text-ink-900">{repeatBuyer.toFixed(1)}%</p>
+            <p className={`text-3xl font-bold ${repeatBuyer == null ? 'text-ink-400' : 'text-ink-900'}`}>{testoPercentuale(repeatBuyer)}</p>
             <p className="text-xs text-ink-500">target sano: &gt;40%</p>
           </div>
         </div>
