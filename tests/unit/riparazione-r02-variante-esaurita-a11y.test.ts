@@ -17,7 +17,10 @@ describe('R02-008 · la variante esaurita e il lettore di schermo', () => {
   it('il pulsante d acquisto resta raggiungibile da tastiera e dice perché', () => {
     expect(pulsante).toMatch(/aria-disabled=\{!canAdd \|\| undefined\}/);
     expect(pulsante).not.toMatch(/\bdisabled=\{!canAdd\}/);
-    expect(pulsante).toMatch(/aria-describedby="disponibilita-variante"/);
+    expect(pulsante).toMatch(/aria-describedby=\{hasVariants && optionGroups\.length > 0 \? 'disponibilita-variante' : undefined\}/);
+    // Il contrasto: niente opacity-50 (1,62:1), l'aspetto spento esplicito del Button.
+    expect(pulsante).not.toMatch(/opacity-50/);
+    expect(pulsante).toMatch(/aria-disabled:bg-cream-200 aria-disabled:text-ink-600/);
     expect(src).toMatch(/<div id="disponibilita-variante">\s*<div role="status" aria-live="polite">/);
   });
 

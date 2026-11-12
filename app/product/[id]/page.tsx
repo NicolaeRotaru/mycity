@@ -1163,8 +1163,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               // Tab e finiva su «Contatta il venditore» senza sapere perché. Resta raggiungibile,
               // dice di non essere disponibile e punta al messaggio della disponibilità.
               aria-disabled={!canAdd || undefined}
-              aria-describedby="disponibilita-variante"
-              className={!canAdd ? 'opacity-50 cursor-not-allowed' : undefined}
+              aria-describedby={hasVariants && optionGroups.length > 0 ? 'disponibilita-variante' : undefined}
+              // Lo stesso aspetto «spento» del Button (fondo e testo espliciti, 8,80:1), non
+              // l'opacità al 50%, che il Button vieta perché porta il contrasto a 1,62:1.
+              className="aria-disabled:bg-cream-200 aria-disabled:text-ink-600 aria-disabled:shadow-none aria-disabled:cursor-not-allowed aria-disabled:hover:bg-cream-200 aria-disabled:hover:shadow-none"
               icon={canAdd ? ShoppingCart : undefined}
             >
               {needsVariantChoice ? 'Scegli le opzioni' : isOutOfStock ? 'Non disponibile' : 'Aggiungi al carrello'}
