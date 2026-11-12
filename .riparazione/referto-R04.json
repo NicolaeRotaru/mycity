@@ -1,0 +1,356 @@
+{
+  "sessione": "R04",
+  "aggiornato": "2026-11-12 15:03",
+  "finita": false,
+  "testa": "20e01611358c91d7f6c9319b8b2a485a94dd4db0",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R04-001",
+      "chiave": "ai-endpoints|nella chat assistenza il negoziante approva una descrizione nuova senza poterla leggere, e al primo messaggio l'assistente riscrive tag e descrizione senza aver visto quelli che ci sono",
+      "esito": "parziale",
+      "commit": "307fd9a4619cfaaf9344bb187a3ddbfce0150980",
+      "file_toccati": [
+        "app/api/ai/catalog-chat/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-chat-non-inventa.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-chat-non-inventa.test.ts tests/unit/al-primo-messaggio-la-chat-non-propone-quello-che-non-ha-letto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/catalog-chat/route.ts -> prova rossa; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Punto 2 del fix era gia' sulla base (in identificazione la rotta toglie tag/descrizione/caratteristiche dalla proposta, prova al-primo-messaggio-...). Aggiunto il punto 3: regola «NON INVENTARE» nel prompt della chat (niente ingredienti, allergeni, origine, diciture «senza…» non scritte dal venditore).",
+      "cosa_resta": "Punto 1: la scheda della proposta deve mostrare il testo della descrizione nuova e i tag tolti. Sta in lib/products/prontoPerLaVendita.ts (righeDellaProposta), non e' di R04.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/products/prontoPerLaVendita.ts",
+          "modifica": "in righeDellaProposta aggiungere un terzo parametro opzionale al prodotto { tags?: string[] | null }; sostituire 'Descrizione aggiornata' con 'Descrizione nuova: «' + (patch.description.length > 200 ? patch.description.slice(0,200) + '…' : patch.description) + '»' (il componente puo' aggiungere «leggi tutto» col testo intero); per i tag, calcolare tolti = (prodotto.tags ?? []).filter(t => !patch.tags.includes(t)) e, se non vuoto, aggiungere la riga 'Tag tolti: ' + tolti.join(', '). Il chiamante in components/... (SupportProductAssistant.tsx) deve passare tags del prodotto aperto."
+        }
+      ],
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-002",
+      "chiave": "ai-endpoints|il modello ai che legge le foto e scrive le schede si spegne il 30 novembre: dodici funzioni smetteranno di rispondere",
+      "esito": "riparato",
+      "commit": "b51060dd2a66603818c0a93f28decc3fbbb46062",
+      "file_toccati": [
+        "lib/ai/client.ts",
+        "lib/ai/run.ts",
+        "tests/unit/il-modello-grande-si-cambia-senza-rilascio.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-modello-ritirato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-modello-ritirato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano (prova-rimessa.mjs bloccato dal classificatore): git checkout HEAD^ -- lib/ai/client.ts lib/ai/run.ts; npx vitest run tests/unit/riparazione-r04-modello-ritirato.test.ts -> 2 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "MODELLO_PREDEFINITO passa da claude-sonnet-4-5 (spento il 30/11) a claude-sonnet-4-6, stesso prezzo: CAMBIA IL MODELLO IN PRODUZIONE. mapAiError trasforma un 404 del fornitore in 503 «Funzione AI momentaneamente non disponibile» con logger.error. Aggiornata la prova esistente il-modello-grande-si-cambia-senza-rilascio (importa lib/ai/client.ts) al nuovo default.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-003",
+      "chiave": "ai-endpoints|il tetto giornaliero di spesa ai in produzione non è condiviso: ogni copia del sito conta per sé",
+      "esito": "non_codice",
+      "nota": "Sulla base il codice fa gia' quello che puo': con il conto condiviso assente (PGRST202/42883) decidiSpesaAi stringe subito la quota di ogni copia a tetto/AI_COPIE_ATTESE (lib/ai/decisioneTettoSpesa.ts:92-98, prova tests/unit/il-tetto-di-spesa-ai-non-si-moltiplica-per-le-copie.test.ts verde). Il tetto torna condiviso solo con il database: Nicola deve applicare in produzione migrations/158_il_conto_della_spesa_ai_esiste_anche_in_produzione.sql (idempotente, stessa casa della 131) e impostare su Vercel AI_COPIE_ATTESE al numero vero di copie. L'allarme rosso nel cron degli avvisi non e' cablato: sondaContoCondiviso/allarmiTettoSpesaAi non sono chiamati da nessuna parte (grep su app/ e lib/).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/operational-alerts/route.ts",
+          "modifica": "a ogni passata: const conto = await sondaContoCondiviso(undefined, <primo_visto in ms dell'ultima riga operational_alert_log con type TIPO_ALLARME_TETTO_AI, se c'e'>); alerts.push(...allarmiTettoSpesaAi(conto, { tettoEur: Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0), copieAttese: leggiCopieAttese(process.env.AI_COPIE_ATTESE) })) — import da '@/lib/ai/tettoSpesa'. Il secondo argomento della sonda arriva con R04-018."
+        }
+      ]
+    },
+    {
+      "id": "R04-005",
+      "chiave": "ai-endpoints|un lotto ai partito ma non agganciato resta «in invio» per sempre, e la pagina del negozio non mostra né rotella né pulsante",
+      "esito": "riparato",
+      "commit": "f9dca2800e589b277c41b131a8016ea0eed739e9",
+      "insieme_a": [
+        "R04-013"
+      ],
+      "file_toccati": [
+        "app/api/ai/catalog-batch/status/route.ts",
+        "app/api/ai/catalog-batch/start/route.ts",
+        "app/seller/products/ai-batch/page.tsx",
+        "lib/ai/statoLavoroCatalogo.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-lavoro-in-invio.test.ts",
+        "tests/unit/riparazione-r04-lavoro-aggancio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-lavoro-in-invio.test.ts tests/unit/riparazione-r04-lavoro-aggancio.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- status/route.ts start/route.ts ai-batch/page.tsx -> 4 rosse su queste prove; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "start ritenta l'aggancio del lotto e, se non riesce, risponde status 'submitting' (lo stato vero). status: un 'submitting' senza lotto oltre 15 minuti diventa 'failed' col motivo; uno con batch_id si interroga come 'processing'; la risposta porta error. Pagina: tipo Job con tutti gli stati, rotella e testo per 'submitting', riquadro con testo e pulsante «Avvia» per failed/error/canceled, e il lavoro fallito si dimentica (lib/ai/statoLavoroCatalogo.ts, file nuovo). La ricerca del lotto presso Anthropic per un invio scaduto non c'e' (vedi R04-014).",
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-006",
+      "chiave": "ai-endpoints|con l'intelligenza artificiale spenta, la creazione di prodotti in blocco risponde «riprova fra poco» invece di dire che il servizio è spento",
+      "esito": "riparato",
+      "commit": "4c5d5bf31271f37f76844455ec92de5a928e4da5",
+      "file_toccati": [
+        "app/api/ai/catalog-create-bulk/route.ts",
+        "tests/unit/api-ai-catalog-create-bulk.test.ts",
+        "tests/unit/minori-s10-bozze-dalle-foto.test.ts",
+        "tests/unit/i-dodici-controlli-partono-insieme.test.ts",
+        "tests/unit/dalla-chat-un-alimento-non-va-in-vendita-senza-i-controlli-del-modulo.test.ts",
+        "tests/unit/il-lotto-dalle-foto-non-cade-per-una-lista-ingredienti-lunga.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-bulk-ai-spenta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-bulk-ai-spenta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/catalog-create-bulk/route.ts -> 2 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In testa alla rotta, prima del freno e del corpo, 503 «Gli strumenti AI per i negozi non sono ancora attivi.» con AI_NEGOZI_ACCESA spento. Nel ciclo un AiConfigError del filtro rende 503 tutta la richiesta; «riprova fra poco» resta solo per i guasti passeggeri. Le cinque prove esistenti che importano la rotta ora simulano la funzione accesa (come le sorelle di catalog-batch). Il «meglio ancora» della voce (catalog-apply e catalog-apply-bulk) e' fuori dai miei file: vedi nuovi_difetti_visti.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-008",
+      "chiave": "ai-endpoints|l'assistente ai del negozio controlla solo l'ultima richiesta: il testo messo nella conversazione precedente arriva al modello senza filtro",
+      "esito": "riparato",
+      "commit": "b709670f2ea874ab2a456ce991170e276d73f2cf",
+      "file_toccati": [
+        "app/api/ai/copilot/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-copilot-cronologia.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-copilot-cronologia.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/copilot/route.ts -> rossa; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Come dice il fix: tolto history dalla rotta (nessuna pagina lo manda, CatalogCopilot.tsx invia solo instruction). Al modello arrivano il catalogo e l'istruzione recintata, che e' l'unico testo del venditore ed e' gia' passato da assertSafeText. CatalogCopilot.tsx non serviva toccarlo.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-009",
+      "chiave": "ai-endpoints|nelle due chat ai del negozio una risposta del modello scritta a mano nella richiesta arriva al modello senza filtro",
+      "esito": "riparato",
+      "commit": "20e01611358c91d7f6c9319b8b2a485a94dd4db0",
+      "file_toccati": [
+        "app/api/ai/product-chat/route.ts",
+        "app/api/ai/catalog-chat/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-chat-turni-assistente.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-chat-turni-assistente.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- product-chat/route.ts catalog-chat/route.ts -> 2 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In entrambe le chat il filtro anti-contenuti riceve tutta la cronologia che va al modello (turni user e assistant), non solo i turni user. Se il rifiuto viene da un turno vecchio (anche un assistant inventato), resta il ripiego gia' esistente: si controlla l'ultimo messaggio e al modello va solo lui.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-011",
+      "chiave": "ai-endpoints|con l'ai spenta, chi guarda un prodotto importato da un altro sito lo fa segnare come «aggiornato adesso» anche se nessun dato è arrivato",
+      "esito": "riparato",
+      "commit": "988f306fab2f312a10394ad7b8218981dd717d3c",
+      "file_toccati": [
+        "app/api/products/[id]/external-refresh/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-prezzo-esterno-ai-spenta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-prezzo-esterno-ai-spenta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/products/[id]/external-refresh/route.ts -> 2 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel GET, con AI_NEGOZI_ACCESA spento, si restituiscono i dati salvati (con stale vero) senza scrivere 'pending' ne' lanciare il refresh. Nel catch di doRefresh si scrive solo external_sync_status='error', non external_synced_at=adesso; il freno resta il cancello di 30 minuti per prodotto. Il cron external-price-alerts legge gia' l'interruttore: non toccato.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-013",
+      "chiave": "ai-endpoints|se il negoziante esce dalla pagina mentre «migliora tutto il catalogo» lavora, il lavoro è pagato e non si ritrova più",
+      "esito": "riparato",
+      "commit": "f9dca2800e589b277c41b131a8016ea0eed739e9",
+      "insieme_a": [
+        "R04-005"
+      ],
+      "file_toccati": [
+        "app/api/ai/catalog-batch/status/route.ts",
+        "app/seller/products/ai-batch/page.tsx",
+        "app/api/ai/catalog-batch/start/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-lavoro-ritrovato.test.ts",
+        "tests/unit/riparazione-r04-lotto-aperto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-lavoro-ritrovato.test.ts tests/unit/riparazione-r04-lotto-aperto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- status/route.ts ai-batch/page.tsx -> 3 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La rotta dello stato chiamata senza jobId restituisce l'ultimo lavoro aperto del venditore (submitting/processing/ready) o null; la pagina, se questo browser non ricorda un lavoro, lo chiede al server all'apertura, e lo riprende anche dopo un avvio rifiutato. Il secondo avvio con un lavoro aperto e' rifiutato (R04-025, commit precedente), quindi non si paga di nuovo.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-014",
+      "chiave": "ai-endpoints|se l'invio di un lotto ai resta senza risposta, il sito lo rimanda e anthropic ne esegue due, uno pagato e mai visto",
+      "esito": "parziale",
+      "commit": "81e1507e7cb40f3d960d37ece5c94d5aa1bea555",
+      "file_toccati": [
+        "lib/ai/batch.ts",
+        "app/api/ai/catalog-batch/start/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-lotto-senza-doppione.test.ts",
+        "tests/unit/riparazione-r04-lotto-invio-incerto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-lotto-senza-doppione.test.ts tests/unit/riparazione-r04-lotto-invio-incerto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano, un file per volta: lib/ai/batch.ts -> rossa (maxRetries assente); app/api/ai/catalog-batch/start/route.ts -> rossa (502 invece di 503, riga failed)"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "submitBatch crea il lotto con { maxRetries: 0 }: niente secondo invio automatico, quindi niente lotto doppio. Un errore di connessione/timeout (invioIncerto) non segna la riga 'failed': resta 'submitting' con error «da verificare», blocca un secondo avvio (R04-025) e il negoziante legge di non riavviare.",
+      "cosa_resta": "La ricerca del lotto con batches.list dopo un timeout non l'ho fatta: l'elenco dei lotti e' di tutto l'account Anthropic, e agganciare per ora e numero di richieste puo' prendere il lotto di un altro negozio (risultati di prodotti altrui). Serve un legame sicuro (per esempio il primo custom_id = id prodotto controllato sui risultati) prima di farlo.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-017",
+      "chiave": "ai-endpoints|il tetto di spesa ai del giorno si sfora quando più chiamate partono insieme",
+      "esito": "parziale",
+      "commit": "8474b61860ad9f4008ebc8ee75e1234aca5de93a",
+      "file_toccati": [
+        "lib/ai/run.ts",
+        "app/api/ai/catalog-batch/start/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-tetto-concorrente.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-tetto-concorrente.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- lib/ai/run.ts app/api/ai/catalog-batch/start/route.ts -> 3 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "controllaTettoSpesaAi(feature, stimaCents) decide su speso + in volo + stima e prenota la stima nello stesso passo sincrono (nessun await fra decisione e prenotazione); runMessage stima il costo massimo (ingresso dal testo, immagini a 1600 token, uscita = max_tokens) e libera la prenotazione a spesa registrata, anche se la chiamata fallisce. Il lotto passa la sua stima al controllo e registra la spesa prima di liberare la prenotazione.",
+      "cosa_resta": "La prenotazione vale dentro una copia. Fra copie diverse serve un'istruzione SQL atomica (prenota se speso + stima <= tetto, poi conguaglio anche negativo): una migrazione nuova 280 con due funzioni. Non l'ho scritta perche' in produzione manca ancora il conto condiviso stesso (158, R04-003): finche' non c'e', l'atomicita' SQL non verrebbe usata. Va fatta dopo la 158, se Nicola la vuole.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-018",
+      "chiave": "ai-endpoints|l'allarme del tetto di spesa ai scatta solo se la stessa copia del sito resta accesa per un'ora, e su vercel può non arrivare mai",
+      "esito": "parziale",
+      "commit": "8d78281fd3d3d509cc7ef9f49cb18d9574207b37",
+      "file_toccati": [
+        "lib/ai/tettoSpesa.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-allarme-ripiego.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-allarme-ripiego.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- lib/ai/tettoSpesa.ts -> prova rossa; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "sondaContoCondiviso(quando, ripiegoNotoDaMs) accetta da quando il guasto e' noto fuori dalla copia: una copia nuova vede subito che il ripiego dura da piu' di un'ora e allarmiTettoSpesaAi diventa rosso.",
+      "cosa_resta": "Il cron degli avvisi deve chiamare la sonda a ogni passata passando il primo istante salvato in operational_alert_log (oggi la sonda non e' chiamata da nessuno).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/operational-alerts/route.ts",
+          "modifica": "leggere da operational_alert_log la riga piu' vecchia ancora aperta con type = TIPO_ALLARME_TETTO_AI (created_at/primo invio) e chiamare sondaContoCondiviso(undefined, Date.parse(primoVisto)); poi alerts.push(...allarmiTettoSpesaAi(conto, { tettoEur, copieAttese })). Stesso innesto di R04-003."
+        }
+      ],
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-025",
+      "chiave": "qa-flussi|la rotta del lavoro ai sul catalogo non rifiuta un secondo lavoro",
+      "esito": "riparato",
+      "commit": "da6634791cce5ce48d00756e04fd98599918e15a",
+      "file_toccati": [
+        "app/api/ai/catalog-batch/start/route.ts",
+        "tests/unit/la-spesa-del-lotto-si-conta-quando-parte.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-lotto-aperto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-lotto-aperto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/catalog-batch/start/route.ts -> 2 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prima di aprire un lavoro la rotta cerca un lavoro del venditore in submitting/processing/ready: se c'e' risponde 409 CONFLICT con details {jobId,status}, senza lotto, spesa o riga nuova. Aggiornato il database finto della prova esistente la-spesa-del-lotto-si-conta-quando-parte (importa la rotta).",
+      "verificato_da": ""
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "le rotte catalog-apply e catalog-apply-bulk non leggono l'interruttore AI_NEGOZI_ACCESA",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/ai/catalog-apply/route.ts · app/api/ai/catalog-apply-bulk/route.ts",
+      "descrizione": "Segnalato nel fix della voce R04-006: a interruttore spento le due rotte di applicazione scrivono ancora sul catalogo. Fuori dai file di R04: non toccate, non verificate a fondo."
+    }
+  ],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 0,
+    "nota": ""
+  }
+}
