@@ -14,6 +14,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
+import { recessoAperto, ultimoGiornoDelRecesso } from '@/lib/ordini/termine-del-recesso';
 import { useTranslations } from 'next-intl';
 import { Package, RefreshCw, AlertTriangle, MessageSquare, Clock, Pencil, type LucideIcon } from 'lucide-react';
 
@@ -63,7 +64,7 @@ export default function NewReturnPage() {
       const [{ data, error }, { data: aperti }] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, total_price, delivered_at, delivery_status, payment_method, stripe_payment_intent, wallet_applied_cents')
+          .select('id, total_price, delivered_at, created_at, delivery_status, payment_method, stripe_payment_intent, wallet_applied_cents')
           .eq('id', params.id)
           .single(),
         supabase.from('returns').select('id, status').eq('order_id', params.id).in('status', STATI_APERTI).limit(1),
@@ -249,10 +250,12 @@ export default function NewReturnPage() {
    * I due campi erano già letti, riga 40. Bastava guardarli.
    */
   const consegnato = order.delivery_status === 'DELIVERED';
-  const giorniDallaConsegna = order.delivered_at
-    ? Math.floor((Date.now() - new Date(order.delivered_at).getTime()) / 86_400_000)
-    : null;
-  const fuoriTempo = giorniDallaConsegna !== null && giorniDallaConsegna > 14;
+  // 12/11/2026 (R07-006) — la stessa regola del server: giorni di calendario a
+  // Piacenza, e senza data di consegna si conta dalla data dell'ordine. Prima la
+  // pagina arrotondava per difetto e lasciava compilare il reso, IBAN compreso,
+  // anche quando il server lo avrebbe rifiutato come scaduto.
+  const baseRecesso = order.delivered_at ?? order.created_at ?? null;
+  const fuoriTempo = baseRecesso !== null && !recessoAperto(baseRecesso);
 
   if (!consegnato || fuoriTempo) {
     return (
@@ -277,8 +280,9 @@ export default function NewReturnPage() {
           ) : (
             <>
               <p className="mt-3 text-ink-700">
-                Sono passati <strong>{giorniDallaConsegna} giorni</strong> dalla
-                consegna, e i giorni per il recesso sono quattordici.
+                Il termine per il recesso è scaduto: valeva fino a tutto il{' '}
+                <strong>{new Date(`${ultimoGiornoDelRecesso(baseRecesso!)}T12:00:00Z`).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}</strong>,
+                quattordici giorni dopo la consegna.
               </p>
               <p className="mt-2 text-ink-700">
                 Questo non chiude tutte le strade: se il prodotto è difettoso o
