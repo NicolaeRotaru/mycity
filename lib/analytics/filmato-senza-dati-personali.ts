@@ -101,18 +101,23 @@ export function testoSenzaIndirizzi(testo: string): string {
  * contiene». Due firme lasciano la porta aperta (`trackCheckoutStep(step,
  * ...props)`, `trackHomeCtaClicked(ctaId, ...props)`).
  *
- * L'email e' la stessa espressione di `messaggioSenzaDatiPersonali`. Il telefono
+ * L'email ha la stessa forma di quella di `messaggioSenzaDatiPersonali` (con il
+ * dominio che finisce in lettere e il punto di fine frase ammesso). Il telefono
  * e' quello italiano (cellulare 3xx o fisso 0xx, con +39 e spazi facoltativi),
  * con confini che non toccano gli identificativi (uuid, codici con lettere o
  * trattini attaccati), le date e gli importi.
  */
-// Il dominio finisce con lettere: `react@18.3.1` non e' un'email.
-const UN_EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?![\w.-])/gi;
+// Il dominio finisce con lettere: `react@18.3.1` non e' un'email. Dopo puo'
+// venire un punto di fine frase («scrivimi a mario.rossi@gmail.com.»), ma non
+// un altro pezzo di dominio.
+const UN_EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?![\w-])(?!\.[\w-])/gi;
 // Prefisso +39 / 0039 facoltativo, poi un cellulare (3xx) o un fisso (0x…), anche
 // fra parentesi, con spazi, punti, trattini o barre fra le cifre («0532/123456»).
 // Prima e dopo non ci devono essere lettere, cifre, trattini o barre: cosi' un
 // percorso («/negozio/3331234567») o un uuid non vengono toccati.
-const UN_TELEFONO = /(?<![\w\-/])(?:(?:\+|00)39[\s.-]?)?\(?(?:3\d{2}|0\d{1,3})\)?(?:[\s.\-/]?\d){5,8}(?![\w\-/])/g;
+// Unica eccezione: uno spazio codificato («Mario%20Rossi%203331234567») conta
+// come spazio.
+const UN_TELEFONO = /(?:(?<![\w\-/])|(?<=%20))(?:(?:\+|00)39[\s.-]?)?\(?(?:3\d{2}|0\d{1,3})\)?(?:[\s.\-/]?\d){5,8}(?![\w\-/])/g;
 // Quello che ha la forma di un telefono ma non lo e': date («05.11.2026») e decimali («314.15926»).
 const SEMBRA_UNA_DATA_O_UN_DECIMALE = /^(?:\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}|\d+\.\d+)$/;
 

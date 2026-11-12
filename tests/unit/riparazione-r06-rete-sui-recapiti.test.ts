@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { testoSenzaIndirizzi, strutturaSenzaIndirizzi } from '@/lib/analytics/filmato-senza-dati-personali';
-import { eventoSenzaDatiPersonali } from '@/lib/analytics/posthog';
+import { eventoSenzaDatiPersonali, proprietaSenzaDatiPersonali } from '@/lib/analytics/posthog';
 
 describe('R06-019 · email e telefoni nudi', () => {
   for (const [nome, testo, dato] of [
@@ -20,6 +20,8 @@ describe('R06-019 · email e telefoni nudi', () => {
     ['cellulare fra parentesi', '(333) 1234567', '1234567'],
     ['prefisso 0039 attaccato', '0039333123456', '333123456'],
     ['prefisso 0039 con spazi', '0039 333 1234567', '1234567'],
+    ['email a fine frase', 'scrivimi a mario.rossi@gmail.com.', 'mario.rossi@gmail.com'],
+    ['telefono dopo uno spazio codificato', 'Mario%20Rossi%203331234567', '3331234567'],
   ] as const) {
     it(`${nome}: nascosto`, () => {
       const pulito = testoSenzaIndirizzi(testo);
@@ -60,5 +62,10 @@ describe('R06-019 · email e telefoni nudi', () => {
 
   it('dentro una struttura annidata', () => {
     expect(JSON.stringify(strutturaSenzaIndirizzi({ a: [{ b: 'tel 3331234567' }] }))).not.toContain('3331234567');
+  });
+
+  it('in una proprieta\' qualunque (cta_label) l\'email a fine frase non parte', () => {
+    const pulite = proprietaSenzaDatiPersonali({ cta_label: 'scrivimi a mario.rossi@gmail.com.' });
+    expect(JSON.stringify(pulite)).not.toContain('mario.rossi');
   });
 });
