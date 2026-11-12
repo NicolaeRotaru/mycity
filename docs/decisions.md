@@ -163,13 +163,17 @@ Per ogni decisione:
 - **Stato**: superseded (12/11/2026)
 - **Decisore**: Founder
 
-> **Superata.** Il prezzo per i negozi firmato il 26/10/2026 (registro dei fatti,
-> `pricing.commissione` e `pricing.abbonamento`) è: commissione del **10% IVA inclusa, solo sul
-> venduto tramite MyCity** (nel codice `MARKETPLACE_FEE_BPS = 1000` in `lib/constants.ts`), più un
-> **abbonamento di listino di 50 € al mese, sospeso finché il negozio non incassa con MyCity**
-> (`app/seller/earnings/commissione.ts`, interruttore `ABBONAMENTO_NEGOZI_ACCESO` in `lib/funzioni-al-lancio.ts`). Il piano PRO
-> a 15 €/mese non è mai nato. Il testo qui sotto resta com'era perché un ADR non si riscrive: è
-> la storia di come si è arrivati alla scelta, non la scelta.
+> **Superata.** Il prezzo per i negozi sta nel registro dei fatti, non qui:
+> - `pricing.commissione` (aggiornato l'1/11/2026): **10% su tutti gli ordini** passati dalla
+>   piattaforma, anche quelli dei clienti che il negozio aveva già e anche il ritiro in negozio
+>   (nel codice `MARKETPLACE_FEE_BPS = 1000` in `lib/constants.ts`). La dicitura «IVA inclusa» è
+>   sospesa finché il commercialista non conferma il regime.
+> - `pricing.abbonamento` (26/10/2026): **50 € al mese di listino, sospeso finché il negozio non
+>   incassa** con MyCity (interruttore `ABBONAMENTO_NEGOZI_ACCESO` in `lib/funzioni-al-lancio.ts`).
+>
+> Il piano PRO a 15 €/mese non è mai nato. Il testo qui sotto resta com'era perché un ADR non si
+> riscrive: è la storia di come si è arrivati alla scelta, non la scelta. Se il registro cambia,
+> vale il registro.
 
 **Contesto**: Devo decidere commissione marketplace.
 

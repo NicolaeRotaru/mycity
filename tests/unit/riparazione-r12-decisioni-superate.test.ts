@@ -27,9 +27,12 @@ describe('R12-006 le decisioni superate lo dicono', () => {
 });
 
 describe('R12-006 la nota dice il prezzo intero firmato il 26/10', () => {
-  it('nomina anche l abbonamento sospeso e l IVA inclusa', () => {
+  // Collaudo K03: il registro (pricing.commissione, 1/11) mette il 10% su tutti gli ordini e
+  // sospende la dicitura «IVA inclusa»: la nota non deve affermarla.
+  it('nomina l abbonamento sospeso, il 10% su tutti gli ordini e rimanda al registro', () => {
     const s = sezione('## ADR-006');
     expect(s).toMatch(/50 € al mese/);
-    expect(s).toMatch(/IVA inclusa/);
+    expect(s).toMatch(/10% su tutti gli ordini/);
+    expect(s).toMatch(/«IVA inclusa» è\s*>?\s*sospesa/);
   });
 });
