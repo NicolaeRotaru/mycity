@@ -1,0 +1,351 @@
+{
+  "sessione": "R01",
+  "aggiornato": "2026-11-12 14:59",
+  "finita": false,
+  "testa": "eb3797f67afd83100d30f3f1342f1f7dd0547bba",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "da_fare",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R01-001",
+      "esito": "non_codice",
+      "nota": "Il codice che applica le migrazioni prima di pubblicare c e gia: deploy-dopo-ci.yml, passo «Applica le migrazioni al database, prima di pubblicare» (scripts/applica-migrazioni-mancanti.sh, si ferma se manca SUPABASE_DB_URL o se mancano piu di 20 migrazioni). Non gira perche mancano le chiavi Vercel (vedi R01-002) e Vercel pubblica da solo. render.yaml non esiste piu. Cosa fa Nicola: i segreti VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID e SUPABASE_DB_URL (Session pooler) su GitHub, poi R01-002.",
+      "chiave": "deploy-sre|il rilascio non applica le migrazioni: il codice nuovo arriva su un database vecchio"
+    },
+    {
+      "id": "R01-002",
+      "esito": "non_codice",
+      "nota": "Letta l ultima esecuzione di «Rilascio dopo CI verde»: id 42126074803 (commit db5164c5, 5/11/2026 22:59), conclusione failure, nel log PRONTO: false e il verdetto «Mancano le chiavi di Vercel, quindi da qui non e uscito nessun rilascio». Le esecuzioni 53 e 52 sono skipped. Quindi il rilascio controllato non ha mai pubblicato: vercel.json NON e stato toccato (con main:false oggi il sito smetterebbe di aggiornarsi). Cosa fa Nicola: 1) i tre segreti Vercel e SUPABASE_DB_URL su GitHub; 2) un rilascio di prova da questo lavoro; 3) solo dopo, in vercel.json git.deploymentEnabled.main da true a false.",
+      "prova": "run 42126074803: PRONTO=false, PASSO_RILASCIO=skipped",
+      "chiave": "deploy-sre|ogni unione su main pubblica in produzione senza aspettare la ci"
+    },
+    {
+      "id": "R01-003",
+      "esito": "non_codice",
+      "nota": "Il codice gestisce gia la chiave mancante (lib/api/middleware.ts:247-262, opzione seMancaLaChiave, e la rotta risponde 503 invece di rompersi). Cosa fa Nicola: Vercel → progetto mycity → Settings → Environment Variables → SUPABASE_SERVICE_ROLE_KEY per Production (Supabase → Project Settings → API → service_role), poi un nuovo rilascio.",
+      "chiave": "deploy-sre|oggi nessun cliente può ordinare: al sito vero manca la chiave di servizio del database"
+    },
+    {
+      "id": "R01-004",
+      "esito": "riparato",
+      "commit": "2bc80f4858e1776ebca229f38de770f03ffb5148",
+      "file_toccati": [
+        "app/api/rider/sos/avvisa/route.ts",
+        "components/rider/SOSButton.tsx",
+        "components/rider/RiderShell.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-sos-avviso.test.tsx",
+        "tests/unit/riparazione-r01-sos-guscio.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-sos-avviso.test.tsx tests/unit/riparazione-r01-sos-guscio.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2bc80f4858e1776ebca229f38de770f03ffb5148^ --file app/api/rider/sos/avvisa/route.ts,components/rider/SOSButton.tsx,components/rider/RiderShell.tsx --prove tests/unit/riparazione-r01-sos-avviso.test.tsx,tests/unit/riparazione-r01-sos-guscio.test.tsx --json",
+        "nota": "SOSButton e RiderShell alla base: rosse sul comportamento. La rotta e' un file nuovo (alla base non esiste, cioe' il difetto com'e' scritto: nessun push immediato), quindi la sua parte e' rossa solo per struttura."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuova rotta /api/rider/sos/avvisa: rilegge l'ultimo SOS aperto di chi chiama (solo fattorini) e manda subito un push ad alta urgenza a ogni admin. SOSButton la chiama dopo l'insert senza bloccare il 112; RiderShell passa l'orderId della consegna in corso; il dialogo dice che gli admin ricevono l'avviso sul telefono. Il testo «alert immediato» era gia' stato tolto prima. Se VAPID non e' configurato la rotta risponde 503 e lo scrive nel registro (resta il pannello).",
+      "chiave": "api-backend|l'sos del fattorino non arriva davvero a nessuno: solo una notifica nel pannello, mentre a lui diciamo «alert immediato»"
+    },
+    {
+      "id": "R01-005",
+      "esito": "non_codice",
+      "nota": "E un impostazione di GitHub, non codice: ruleset «Main» (id 16879481). Il controllo «Main» esiste gia (ultimo lavoro di ci.yml, cancello-main). Cosa fa Nicola, passi gia scritti in deploy-dopo-ci.yml:105-123: Target branches → Include default branch; Require status checks → «Main»; Enforcement → Active; poi gh api repos/NicolaeRotaru/mycity/rulesets/16879481 | node scripts/controlla-regola-main.mjs deve dire ✅.",
+      "chiave": "deploy-sre|la regola che dovrebbe fermare il codice rosso esiste su github ma è spenta, non guarda nessun ramo e aspetta un controllo che non esiste"
+    },
+    {
+      "id": "R01-006",
+      "esito": "riparato",
+      "commit": "efe6604723ad686d71da243057a95a015a9116fe",
+      "file_toccati": [
+        "app/admin/sos/page.tsx",
+        "app/admin/sos/lettura-degli-sos.ts",
+        "components/rider/RiderShell.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-sos-consegna.test.tsx",
+        "tests/unit/riparazione-r01-sos-guscio.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-sos-consegna.test.tsx tests/unit/riparazione-r01-sos-guscio.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "insieme_a": [
+        "R01-004"
+      ],
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base efe6604723ad686d71da243057a95a015a9116fe^ --file app/admin/sos/page.tsx --prove tests/unit/riparazione-r01-sos-consegna.test.tsx --json",
+        "nota": "Con anche lettura-degli-sos.ts in --file esce 3: quel file da solo alla base toglie la funzione nuova consegnaDellSOS (rossa per struttura). La pagina alla base e' rossa sul comportamento. La parte RiderShell (orderId passato al pulsante) sta nel commit di R01-004, provata da riparazione-r01-sos-guscio."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La scheda dell'SOS attivo mostra «Consegna #xxxxxxxx» con link a /admin/orders/<id> (o «Fuori da una consegna»), e lo storico mostra la consegna. Il guscio del fattorino ora passa l'orderId (commit di R01-004).",
+      "chiave": "frontend-ux|la consolle sos non mostra da quale consegna parte l'allarme: l'order_id ora scritto non si vede da nessuna parte"
+    },
+    {
+      "id": "R01-007",
+      "esito": "riparato",
+      "commit": "b43aa4742969b23f33014e183229733346e79472",
+      "file_toccati": [
+        "components/rider/SOSButton.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-sos-testo-112.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-sos-testo-112.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b43aa4742969b23f33014e183229733346e79472^ --file components/rider/SOSButton.tsx --prove tests/unit/riparazione-r01-sos-testo-112.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "I due toast erano gia' corretti prima della campagna; restava il dialogo di conferma («Verrà avviata la chiamata al 112»), ora dice che si apre il tastierino col 112 gia' composto e la chiamata parte premendo CHIAMA.",
+      "chiave": "microcopy|il sos del fattorino dice «stiamo chiamando il 112», ma l'app apre solo il tastierino"
+    },
+    {
+      "id": "R01-008",
+      "esito": "gia_riparato_prima",
+      "prova": "tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts:182-205: dal 26/10 le tre prove si saltano SEMPRE con il motivo scritto («la prova non e scritta»), non possono piu diventare verdi a vuoto; ci.yml:450-455 lo dichiara nel riepilogo anche con E2E_DATI_DI_PROVA acceso. Scrivere il corpo vero richiede un database di prova con negozio/prodotto/cliente e chiavi Stripe di prova (non codice) e il file spec, che non e nel mio territorio.",
+      "chiave": "qa-flussi|le tre prove automatiche dell'acquisto vero sono vuote: passano in tre millesimi senza aprire niente"
+    },
+    {
+      "id": "R01-009",
+      "esito": "riparato",
+      "commit": "e1f9ea9929319df487e5b6f984375ac4d78b7b07",
+      "file_toccati": [
+        "app/admin/sos/page.tsx",
+        "app/admin/sos/lettura-degli-sos.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-sos-consolle.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-sos-consolle.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e1f9ea9929319df487e5b6f984375ac4d78b7b07^ --file app/admin/sos/page.tsx --prove tests/unit/riparazione-r01-sos-consolle.test.tsx --json",
+        "nota": "lettura-degli-sos.ts aggiunge solo la funzione nuova unisciGliAperti (da sola alla base sarebbe rossa per struttura)."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La consolle legge gli ultimi 50 per lo storico e a parte tutti gli SOS aperti (resolved_at null, tetto 500), uniti senza doppioni: un SOS aperto vecchio non esce piu' dagli attivi e il «tutto tranquillo» non compare con un'emergenza aperta.",
+      "chiave": "api-backend|la consolle degli sos può dire «tutto tranquillo» con un'emergenza ancora aperta"
+    },
+    {
+      "id": "R01-010",
+      "esito": "riparato",
+      "commit": "cdcf31591e550a43cbd9f0da896481f0ed294677",
+      "file_toccati": [
+        "lib/api/middleware.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-battito-rifiutato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-battito-rifiutato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cdcf31591e550a43cbd9f0da896481f0ed294677^ --file lib/api/middleware.ts --prove tests/unit/riparazione-r01-battito-rifiutato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "recordCronHeartbeat legge l'{error} dell'upsert (supabase-js non lancia) e scrive logger.warn con il nome del lavoro e il messaggio: «battito non registrato … ma il lavoro e' partito», cosi' l'allarme successivo ha la diagnosi giusta.",
+      "chiave": "api-backend|se il battito di un lavoro non si scrive, nessuna riga lo dice, e l'allarme che segue ha la diagnosi sbagliata"
+    },
+    {
+      "id": "R01-013",
+      "esito": "non_codice",
+      "nota": "Il passo della copia foto (backup-db.yml, copia-foto) esce rosso e lo dice quando manca SUPABASE_SERVICE_ROLE_KEY. Cosa fa Nicola: GitHub → Settings → Secrets and variables → Actions → New secret SUPABASE_SERVICE_ROLE_KEY (la chiave service_role di Supabase), piu le variabili STORAGE_SYNC_SOURCE/DEST se non ci sono.",
+      "chiave": "deploy-sre|le foto dei negozi non sono ancora in nessuna copia di sicurezza: manca una chiave nei segreti"
+    },
+    {
+      "id": "R01-016",
+      "esito": "riparato",
+      "commit": "f3d113d88870cd157e91a35826f7a371906646c5",
+      "file_toccati": [
+        "app/api/cron/expire-checkouts/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-carrelli-scaduti.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-carrelli-scaduti.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f3d113d88870cd157e91a35826f7a371906646c5^ --file app/api/cron/expire-checkouts/route.ts --prove tests/unit/riparazione-r01-carrelli-scaduti.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il giro legge i candidati a pagine di 200 ordinate per scadenza (dalla piu' recente indietro, cursore su expires_at): se una pagina e' piena solo di carrelli pagati a meta' passa alla successiva, fino a 5 pagine. Il controllo ordini si fa pagina per pagina. Limite noto: carrelli con expires_at identico al bordo di pagina li prende il giro dopo.",
+      "chiave": "deploy-sre|duecento carrelli pagati a metà bastano a fermare per sempre la pulizia dei carrelli scaduti"
+    },
+    {
+      "id": "R01-017",
+      "esito": "riparato",
+      "commit": "cf6a3851d9ef4dc955329d31658eb57f1e0eda44",
+      "file_toccati": [
+        "app/robots.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-robots-anteprime.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-robots-anteprime.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cf6a3851d9ef4dc955329d31658eb57f1e0eda44^ --file app/robots.ts --prove tests/unit/riparazione-r01-robots-anteprime.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Con VERCEL_ENV (o NEXT_PUBLIC_VERCEL_ENV) uguale a preview o development, robots.txt risponde disallow: '/' per tutti; in produzione resta com'era.",
+      "chiave": "deploy-sre|sulle anteprime il file per i motori di ricerca apre tutto il sito invece di chiuderlo"
+    },
+    {
+      "id": "R01-018",
+      "esito": "non_codice",
+      "nota": "Il codice distingue gia il guasto dal «non trovato»: app/u/[handle]/page.tsx:35-55 scrive l errore e lancia (pagina d errore con Riprova), app/api/profili-pubblici/route.ts risponde 500 con messaggio. La cura e la stessa di R01-003: SUPABASE_SERVICE_ROLE_KEY su Vercel Production.",
+      "chiave": "deploy-sre|senza la chiave di servizio del database in produzione, il profilo pubblico dice «non trovato» e le liste non mostrano chi le ha create"
+    },
+    {
+      "id": "R01-019",
+      "esito": "riparato",
+      "commit": "a09271244dccfc22319d44d5a095f9890de69202",
+      "file_toccati": [
+        "migrations/250_battiti_iniziali_dei_lavori_nuovi.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-battiti-iniziali.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-battiti-iniziali.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a09271244dccfc22319d44d5a095f9890de69202^ --file migrations/250_battiti_iniziali_dei_lavori_nuovi.sql --prove tests/unit/riparazione-r01-battiti-iniziali.test.ts --json",
+        "nota": "La cura e' un file nuovo (migrazione 250), quindi la macchina non decide. Nel log, senza il file le prove cadono su asserzioni di comportamento: «expected ['external-price-alerts', …(2)] to deeply equal []» (lavori senza riga iniziale) e lavoriFermi segnala veloce-non-confermata come mai partito."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuova migrazione 250 (non applicata: lo decide Nicola, la applica il rilascio controllato) che semina in cron_heartbeats la riga iniziale di external-price-alerts, riquadra-casse e veloce-non-confermata, come la 095 per i lavori di allora, senza sovrascrivere un battito vero (ON CONFLICT DO NOTHING). lib/cron-health.ts non toccato: con le righe seminate il ramo «mai partito» non scatta piu' dopo il rilascio. Prova anche su un Postgres usa e getta.",
+      "chiave": "deploy-sre|dopo il deploy il freno della veloce può risultare «mai partito» per un attimo, con un falso allarme agli amministratori"
+    },
+    {
+      "id": "R01-021",
+      "esito": "non_codice",
+      "nota": "Il rilascio controllato applica gia la 191 prima di pubblicare (deploy-dopo-ci.yml, passo migrazioni), ma oggi non gira (R01-002). Cosa fa Nicola: applicare la 191 in produzione insieme al rilascio che la usa: o accendendo il rilascio controllato (R01-002), o a mano con il lavoro «migrazioni-a-mano» prima di unire. Vedi anche R01-020.",
+      "chiave": "deploy-sre|la nuova regola del database sulla posizione va applicata insieme al rilascio: senza, un fattorino con la pagina vecchia aperta può ancora scrivere la posizione su un ordine annullato"
+    },
+    {
+      "id": "R01-022",
+      "esito": "riparato",
+      "commit": "ec36250925b93dc2b6e769ab7543573d07197bba",
+      "file_toccati": [
+        "scripts/applica-migrazioni-mancanti.sh",
+        ".github/workflows/deploy-dopo-ci.yml"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-avviso-nel-riepilogo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-avviso-nel-riepilogo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ec36250925b93dc2b6e769ab7543573d07197bba^ --file scripts/applica-migrazioni-mancanti.sh,.github/workflows/deploy-dopo-ci.yml --prove tests/unit/riparazione-r01-avviso-nel-riepilogo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Gli avvisi sulle migrazioni escono sia su stderr sia su stdout come ::warning:: (annotazione GitHub); il passo delle migrazioni del rilascio copia le righe ::warning:: del diario nel riepilogo, prima di uscire anche quando lo script fallisce.",
+      "chiave": "deploy-sre|l'avviso sul commit esce da una porta che il riepilogo del rilascio non legge"
+    },
+    {
+      "id": "R01-023",
+      "esito": "riparato",
+      "commit": "7af86e7832b3d64b73a7e8924de85ead600cb9de",
+      "file_toccati": [
+        "scripts/applica-migrazioni-mancanti.sh"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-commit-nelle-migrazioni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-commit-nelle-migrazioni.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7af86e7832b3d64b73a7e8924de85ead600cb9de^ --file scripts/applica-migrazioni-mancanti.sh --prove tests/unit/riparazione-r01-commit-nelle-migrazioni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il commento non promette piu' «danno nullo» per tutti: nomina la 115 e la 117. L'avviso guarda cosa c'e' dopo il primo COMMIT: se e' solo NOTIFY/commenti avviso leggero, se c'e' altro lavoro avviso forte (⚠⚠) con la prima istruzione. Sulla cartella vera l'avviso forte tocca solo 115 e 117 (31 file con COMMIT).",
+      "chiave": "deploy-sre|lo script delle migrazioni promette che il danno e' nullo, e in due file su ventitre' non lo e'"
+    },
+    {
+      "id": "R01-024",
+      "esito": "riparato",
+      "commit": "909c4b0f3062eb9d517c42cea0a7a2b979c829d8",
+      "file_toccati": [
+        "scripts/applica-migrazioni-mancanti.sh",
+        "scripts/check-migration-drift.mjs"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-nomi-migrazioni.test.ts",
+        "tests/unit/riparazione-r01-pg.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-nomi-migrazioni.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 909c4b0f3062eb9d517c42cea0a7a2b979c829d8^ --file scripts/applica-migrazioni-mancanti.sh,scripts/check-migration-drift.mjs --prove tests/unit/riparazione-r01-nomi-migrazioni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nello script del rilascio (le due interrogazioni del registro) e in esitoDelConfronto il nome conta come «gia' applicata» solo se il numero di quella riga NON e' il prefisso di un altro file del deposito (rinumerazione vera, non omonimo). conta-migrazioni-mancanti.sh usa lo script e si sistema da solo. Nuova prova: nessun nome doppio in migrations/, e lo script, su un Postgres usa e getta, applica davvero 250_minori dopo 127_minori. Lo script accetta CARTELLA_MIGRAZIONI solo per le prove. Rischio da guardare: se in produzione una riga storica ha il numero di un altro file con lo stesso nome, il controllo della deriva ora la segnala come mancante (rumore, non un buco). tests/unit/migrations-integrity.test.ts non toccato (non importa file miei).",
+      "chiave": "deploy-sre|una migrazione nuova con lo stesso nome di una vecchia non arriva mai in produzione, e tutti e tre i controlli dicono verde"
+    },
+    {
+      "id": "R01-025",
+      "esito": "riparato",
+      "commit": "eb3797f67afd83100d30f3f1342f1f7dd0547bba",
+      "file_toccati": [
+        "scripts/backup-db.sh"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-backup-senza-passphrase.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-backup-senza-passphrase.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base eb3797f67afd83100d30f3f1342f1f7dd0547bba^ --file scripts/backup-db.sh --prove tests/unit/riparazione-r01-backup-senza-passphrase.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Senza BACKUP_PASSPHRASE il dump degli utenti copia solo auth.users e auth.identities, non auth.mfa_factors, e lo scrive nel log e nel riepilogo del lavoro; con la passphrase copia anche mfa_factors e cifra come prima. Scelta approvata dalla regista. Resta una scelta di Nicola l'alternativa piu' severa: «senza passphrase niente backup».",
+      "chiave": "deploy-sre|il backup adesso porta con se' i semi della doppia verifica, e senza passphrase resta in chiaro"
+    }
+  ],
+  "nuovi_difetti_visti": [],
+  "domande_per_nicola": [
+    "R01-025: oggi senza BACKUP_PASSPHRASE il backup esce in chiaro ma senza auth.mfa_factors. Preferisci invece che senza passphrase il backup non parta proprio (piu' sicuro, ma niente copia finche' la passphrase non c'e')?"
+  ],
+  "conto": {
+    "agenti": 0,
+    "nota": ""
+  }
+}
