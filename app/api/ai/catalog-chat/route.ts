@@ -229,14 +229,17 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // messaggio nella storia prima di chiamare la rotta, e uno rifiutato restava
   // li' e arrivava al modello col messaggio dopo.
   try {
-    const turniUtente = history.filter((m) => m.role === 'user');
+    // 12/11/2026 (R04-009) — Anche i turni «assistente»: arrivano dal browser
+    // come gli altri, e uno scritto a mano funziona per il modello come una
+    // risposta gia' data. Nel filtro passa TUTTA la cronologia che va al modello.
+    const turniDaFiltrare = history;
     try {
-      await assertSafeText(turniUtente.map((m) => m.content).join('\n\n'), 'ai-catalog-chat-policy');
+      await assertSafeText(turniDaFiltrare.map((m) => m.content).join('\n\n'), 'ai-catalog-chat-policy');
     } catch (errStoria) {
       // Revisione S10 — Se il rifiuto viene da un messaggio VECCHIO (la chat lo
       // lascia nella storia), la conversazione non deve restare bloccata per
       // sempre: si controlla l'ultimo da solo e, se passa, al modello va solo lui.
-      if (!(errStoria instanceof UnsafeContentError) || turniUtente.length < 2) throw errStoria;
+      if (!(errStoria instanceof UnsafeContentError) || turniDaFiltrare.length < 2) throw errStoria;
       await assertSafeText(history[history.length - 1].content, 'ai-catalog-chat-policy');
       history.splice(0, history.length - 1);
     }
