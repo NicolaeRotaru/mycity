@@ -11,6 +11,7 @@ import {
   isStale,
   type Marketplace,
   type ExternalData,
+  ritentoDopoErroreConsentito,
 } from '@/lib/products/externalSync';
 
 /**
@@ -113,7 +114,10 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
   // Gate in-memory (cheap) + lock in Postgres (cross-instance) per il debounce.
   const gate = await rateLimitAsync({ key: `ext-refresh:${id}`, max: 1, windowMs: 30 * 60_000 });
-  if (gate.allowed) {
+  // R04-011 (revisione) — Un prodotto in errore si ritenta al massimo ogni sei
+  // ore, come quando il freno era scrivere «aggiornato adesso».
+  const ritentoOk = row.external_sync_status !== 'error' || (gate.allowed && (await ritentoDopoErroreConsentito(id)));
+  if (gate.allowed && ritentoOk) {
     const admin = getAdminSupabase();
     const { data: claimed } = await admin
       .from('products')

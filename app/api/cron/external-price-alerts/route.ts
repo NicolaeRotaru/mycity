@@ -6,7 +6,7 @@ import { withCronAuth } from '@/lib/api/middleware';
 import { chiamataDelCalendarioFerma, rispostaDelFermo } from '@/lib/cron/fermo-dei-lavori';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
-import { fetchExternalSnapshot } from '@/lib/products/externalSync';
+import { fetchExternalSnapshot, ritentoDopoErroreConsentito } from '@/lib/products/externalSync';
 import { isStale, type ExternalData, type Marketplace } from '@/lib/products/externalSyncShared';
 import { detectExternalChange, changeMessage } from '@/lib/products/externalAlert';
 
@@ -36,6 +36,7 @@ type Row = {
   external_data: ExternalData | null;
   external_source_url: string | null;
   external_synced_at: string | null;
+  external_sync_status?: string | null;
 };
 
 const handler = withCronAuth(async (req): Promise<NextResponse> => {
@@ -62,7 +63,7 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   // Candidati: prodotti importati, dal meno recente. Filtro "stale" in codice.
   const { data, error } = await supa
     .from('products')
-    .select('id, name, seller_id, external_marketplace, external_data, external_source_url, external_synced_at')
+    .select('id, name, seller_id, external_marketplace, external_data, external_source_url, external_synced_at, external_sync_status')
     .not('external_source_url', 'is', null)
     .order('external_synced_at', { ascending: true, nullsFirst: true })
     .limit(BATCH * 3);
@@ -74,6 +75,8 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   const now = new Date().toISOString();
 
   for (const r of rows) {
+    // R04-011 — Un prodotto in errore si ritenta al massimo ogni sei ore.
+    if (r.external_sync_status === 'error' && !(await ritentoDopoErroreConsentito(r.id))) continue;
     const prev = r.external_data;
     const query = prev?.source_title || r.name || '';
     if (!query) continue;
@@ -109,8 +112,9 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
     } catch {
       errors += 1;
       logger.warn('external-price-alerts: check failed', { productId: r.id });
-      // Marca come errore per non ritentare in loop stretto.
-      await supa.from('products').update({ external_sync_status: 'error', external_synced_at: now }).eq('id', r.id);
+      // Marca come errore. R04-011 — external_synced_at NON si tocca (non e'
+      // arrivato niente): il freno e' ritentoDopoErroreConsentito, qui sopra.
+      await supa.from('products').update({ external_sync_status: 'error' }).eq('id', r.id);
     }
   }
 

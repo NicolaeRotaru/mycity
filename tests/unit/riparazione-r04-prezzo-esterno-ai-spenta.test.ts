@@ -13,7 +13,7 @@ vi.mock('@/lib/funzioni-al-lancio', async (originale) => {
   return { ...vero, get AI_NEGOZI_ACCESA() { return stato.accesa; } };
 });
 
-const RIGA = {
+const RIGA: Record<string, unknown> = {
   external_source_url: 'https://www.amazon.it/dp/B000000000',
   external_marketplace: 'amazon',
   external_data: { price: 10 },
@@ -41,9 +41,11 @@ vi.mock('@/lib/supabase/server', () => ({
   getServerSupabase: async () => client(),
 }));
 const fetchMock = vi.fn();
+const ritentoMock = vi.fn(async () => true);
 vi.mock('@/lib/products/externalSync', () => ({
   isStale: () => true,
   fetchExternalSnapshot: (...a: unknown[]) => fetchMock(...a),
+  ritentoDopoErroreConsentito: () => ritentoMock(),
 }));
 
 import { GET } from '@/app/api/products/[id]/external-refresh/route';
@@ -77,5 +79,16 @@ describe('prezzo esterno con l\'AI spenta', () => {
     const errore = scritture.find((w) => w.external_sync_status === 'error');
     expect(errore).toBeDefined();
     expect(errore).not.toHaveProperty('external_synced_at');
+  });
+
+  it('prodotto gia\' in errore: si ritenta solo se il freno delle sei ore lo consente', async () => {
+    stato.accesa = true;
+    RIGA.external_sync_status = 'error';
+    ritentoMock.mockResolvedValueOnce(false);
+    await chiedi();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(scritture).toHaveLength(0);
+    RIGA.external_sync_status = 'idle';
   });
 });
