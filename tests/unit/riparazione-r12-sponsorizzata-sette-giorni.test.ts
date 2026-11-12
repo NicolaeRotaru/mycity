@@ -56,4 +56,14 @@ describe('R12-019 una settimana di vetrina dura sette giorni', () => {
     const riga = scritte.find((s) => s.tabella === 'sponsored_listings')!;
     expect(giorniInVetrina(String(riga.start_date), String(riga.end_date))).toBe(28);
   });
+
+  it('a cavallo del cambio d ora restano sette giorni (ottobre e marzo)', async () => {
+    for (const quando of ['2026-10-21T22:30:00.000Z', '2027-03-26T22:30:00.000Z']) {
+      scritte.length = 0;
+      vi.setSystemTime(new Date(quando));
+      await handleSponsoredPurchase(sessione('7'));
+      const riga = scritte.find((s) => s.tabella === 'sponsored_listings')!;
+      expect(giorniInVetrina(String(riga.start_date), String(riga.end_date)), quando).toBe(7);
+    }
+  });
 });
