@@ -258,7 +258,7 @@ async function avvisaIlCliente(admin: SupabaseClient, o: RigaVeloce, frase: stri
 // 5/11/2026 — 'annullato': l'ordine è uscito dal giro (annullato) mentre il freno lavorava, senza
 // euro reso: non è «accettato nel frattempo». 'riprova': la fascia non si è scritta su un ordine
 // ancora NEW e «Adesso»: il giro dopo riprova, e se succede gli amministratori lo sanno (una volta).
-type EsitoDelCarrello = 'spostato' | 'accettato' | 'annullato' | 'riprova' | 'a-mano' | 'gia-segnalato';
+type EsitoDelCarrello = 'spostato' | 'accettato' | 'annullato' | 'riprova' | 'a-mano' | 'gia-segnalato' | 'scaduto';
 
 const codiceDi = (id: string) => `#${id.slice(0, 6).toUpperCase()}`;
 
@@ -271,6 +271,15 @@ const codiceDi = (id: string) => `#${id.slice(0, 6).toUpperCase()}`;
 // 31/10/2026 (ondata 5) — `orari` = gli orari del negozio dell'ordine: con quelli l'ora detta è la chiusura,
 // la stessa del giro notturno (scadenza-accettazione.ts), non le tre ore.
 async function nonSiSposta(admin: SupabaseClient, o: RigaVeloce, adesso: Date, perche: string, orari?: unknown): Promise<EsitoDelCarrello> {
+  // 12/11/2026 (R09-013) — Il giorno che i lavori si riaccendono il freno trova ordini «Adesso» nati
+  // giorni prima: la loro scadenza è già passata, e la frase «se non conferma entro le 13:00 di
+  // venerdì 30/10…» arrivava al cliente il 20/11. Un ordine già scaduto non si scrive a nessuno:
+  // lo annulla expire-stale-orders, che avvisa lui.
+  const scadutaGia = scadenzaAccettazione(o, undefined, orari);
+  if (scadutaGia && scadutaGia.getTime() <= adesso.getTime()) {
+    logger.info('[veloce-non-confermata] ordine già scaduto: lo lascio a expire-stale-orders', { orderId: o.id });
+    return 'scaduto';
+  }
   const { data: gia, error } = await admin
     .from('notifications')
     .select('id')
@@ -651,6 +660,8 @@ export type EsitoDelFreno =
       /** 5/11/2026 — Annullati mentre il freno lavorava, e fasce non scritte su ordini ancora «Adesso». */
       annullatiNelFrattempo?: number;
       daRiprovare?: number;
+      /** 12/11/2026 — Ordini già oltre la scadenza: li annulla expire-stale-orders, il freno non scrive. */
+      giaScaduti?: number;
     }
   | { ok: false; error: string };
 
@@ -677,6 +688,7 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
   let guasti = 0;
   let annullatiNelFrattempo = 0;
   let daRiprovare = 0;
+  let giaScaduti = 0;
   // 5/11/2026 — I guasti che non hanno fatto niente (per esempio il database giù alla prima lettura)
   // vanno in UN avviso per giro, non uno per ordine: un guasto passeggero ne mandava fino a 100.
   const fermiSenzaNiente: Array<{ id: string; perche: string }> = [];
@@ -694,6 +706,7 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
       else if (esito === 'gia-segnalato') giaSegnalati++;
       else if (esito === 'annullato') annullatiNelFrattempo++;
       else if (esito === 'riprova') daRiprovare++;
+      else if (esito === 'scaduto') giaScaduti++;
       else daSistemareAMano++;
     } catch (err) {
       // Una scrittura è caduta a metà. Prima il carrello si contava «da sistemare a mano» e la cosa
@@ -737,5 +750,5 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
       { unaVoltaPer: `veloce-fermo-${adesso.toISOString().slice(0, 13)}` },
     ).catch((e) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { err: e }));
   }
-  return { ok: true, spostati, accettatiNelFrattempo, daSistemareAMano, giaSegnalati, guasti, annullatiNelFrattempo, daRiprovare };
+  return { ok: true, spostati, accettatiNelFrattempo, daSistemareAMano, giaSegnalati, guasti, annullatiNelFrattempo, daRiprovare, giaScaduti };
 }
