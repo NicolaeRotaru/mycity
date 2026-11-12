@@ -669,6 +669,10 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   return (
     <>
       <BarraSiAggiorna acceso={stoAggiornando} />
+      {/* 12/11/2026 (R07-009) — nelle pagine collezione (Regali, Novità, I più recensiti)
+          dall'h1 della testata si saltava all'h3 del nome di ogni prodotto: il lettore di
+          schermo perdeva un livello. La griglia porta il suo h2, invisibile. */}
+      <h2 className="sr-only">{title ?? 'Prodotti'}</h2>
       <div
         className={classiDellaGriglia}
         aria-busy={stoAggiornando}
