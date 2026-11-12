@@ -1,8 +1,8 @@
 {
  "sessione": "R12",
- "aggiornato": "2026-11-12 15:52",
+ "aggiornato": "2026-11-12 15:55",
  "finita": true,
- "testa": "1b1567a59b48bb2275823e9b439b4ee340e0eb12",
+ "testa": "36037ba9088305bb7ffc29107d99bd734de85fc3",
  "verifica": {
   "comando": "npm run verify",
   "esito": "verde",
