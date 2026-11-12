@@ -3,14 +3,14 @@ import { mkdtempSync, mkdirSync, writeFileSync, chmodSync, rmSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { esegui, passo } from './_lavoro-di-rilascio';
-import { avviaPostgresConIndirizzo, BIN_POSTGRES, type PostgresConIndirizzo } from './riparazione-r01-pg';
+import { avviaPostgresConIndirizzo, type PostgresConIndirizzo } from './riparazione-r01-pg';
 
 /**
  * R01-014 — Il database avanti si scopriva solo se cadeva la prova di fumo, non se cadevano le
  * migrazioni. Qui il passo vero del rilascio gira contro un Postgres usa e getta, con tre
  * migrazioni di cui la seconda rotta: la prima resta applicata, e il riepilogo lo deve dire.
  */
-describe.skipIf(!BIN_POSTGRES)('R01-014 · migrazioni cadute a meta\': il riepilogo dice che il database e\' avanti', () => {
+describe('R01-014 · migrazioni cadute a meta\': il riepilogo dice che il database e\' avanti', () => {
   let pg: PostgresConIndirizzo;
   let scena: string;
   beforeAll(() => {
