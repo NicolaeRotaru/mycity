@@ -49,8 +49,13 @@ SELECT v.id::uuid, 'e1200000-0000-0000-0000-000000000003', 'e1200000-0000-0000-0
     ('e1200000-0000-0000-0000-0000000000c3', 'card', 'PAID',    'OUT_FOR_DELIVERY', false),
     ('e1200000-0000-0000-0000-0000000000c4', 'cod',  'PENDING', 'OUT_FOR_DELIVERY', true),
     ('e1200000-0000-0000-0000-0000000000c5', 'cod',  'PENDING', 'PICKED_UP',        false),
-    ('e1200000-0000-0000-0000-0000000000c6', 'cod',  'PENDING', 'OUT_FOR_DELIVERY', false)
+    ('e1200000-0000-0000-0000-0000000000c6', 'cod',  'PENDING', 'OUT_FOR_DELIVERY', false),
+    ('e1200000-0000-0000-0000-0000000000c7', 'cod',  'REFUNDED', 'OUT_FOR_DELIVERY', false),
+    ('e1200000-0000-0000-0000-0000000000c8', 'cod',  'PENDING', 'OUT_FOR_DELIVERY', false)
   ) AS v(id, metodo, pagamento, stato, ritiro);
+
+-- c8: una consegna da 2 euro con un compenso del fattorino di 3: il contante non basta.
+UPDATE public.orders SET total_price = 2.00, gross_total_cents = 200, seller_payout_cents = 180 WHERE id = 'e1200000-0000-0000-0000-0000000000c8';
 
 UPDATE public.orders SET cash_confirmed_at = now() - interval '1 hour', cash_collected_cents = 2200,
        cash_collected_by = 'e1200000-0000-0000-0000-000000000002', payment_status = 'PAID',
@@ -84,6 +89,8 @@ INSERT INTO r SELECT 'inesistente',       public.admin_chiudi_consegna('e1200000
 INSERT INTO r SELECT 'chiude con incasso', public.admin_chiudi_consegna('e1200000-0000-0000-0000-0000000000c1', 2200, 'Fattorino irraggiungibile da tre giorni');
 INSERT INTO r SELECT 'seconda volta',      public.admin_chiudi_consegna('e1200000-0000-0000-0000-0000000000c1', 2200, 'Fattorino irraggiungibile da tre giorni');
 INSERT INTO r SELECT 'incasso gia fatto',  public.admin_chiudi_consegna('e1200000-0000-0000-0000-0000000000c6', 9999, 'Fattorino irraggiungibile da tre giorni');
+INSERT INTO r SELECT 'rimborsato',         public.admin_chiudi_consegna('e1200000-0000-0000-0000-0000000000c7', 2200, 'Fattorino irraggiungibile da tre giorni');
+INSERT INTO r SELECT 'contante corto',     public.admin_chiudi_consegna('e1200000-0000-0000-0000-0000000000c8', 200, 'Fattorino irraggiungibile da tre giorni');
 RESET ROLE;
 
 INSERT INTO esiti
@@ -117,6 +124,18 @@ INSERT INTO esiti SELECT 'incasso gia dichiarato dal fattorino: chiude e non lo 
   AND o.cash_collected_by = 'e1200000-0000-0000-0000-000000000002' AND (r.risposta ->> 'incasso_registrato')::boolean = false,
   format('%s %s %s', o.delivery_status, o.cash_collected_cents, r.risposta)
   FROM public.orders o, r WHERE o.id = 'e1200000-0000-0000-0000-0000000000c6' AND r.caso = 'incasso gia fatto';
+-- Collaudo K03: tre mutanti sui soldi sopravvivevano. Questi li fanno cadere.
+INSERT INTO esiti SELECT 'un ordine gia rimborsato resta rimborsato: non torna pagato',
+  delivery_status = 'DELIVERED' AND payment_status = 'REFUNDED', delivery_status || ' ' || payment_status
+  FROM public.orders WHERE id = 'e1200000-0000-0000-0000-0000000000c7';
+INSERT INTO esiti SELECT 'contante che non basta per il compenso: il resto resta dovuto al fattorino (HELD)',
+  rider_payout_status = 'HELD' AND rider_payout_at IS NULL AND payment_status = 'PAID',
+  format('%s %s %s', rider_payout_status, rider_payout_at, payment_status)
+  FROM public.orders WHERE id = 'e1200000-0000-0000-0000-0000000000c8';
+INSERT INTO esiti SELECT 'la chiusura blocca la riga dell ordine (FOR UPDATE: niente gara col fattorino che ricompare)',
+  pg_get_functiondef('public.admin_chiudi_consegna(uuid, integer, text)'::regprocedure)
+    ~* 'from\s+public\.orders\s+where\s+id\s*=\s*p_order_id\s+for\s+update', '';
+
 INSERT INTO esiti SELECT 'i rifiutati restano come erano', bool_and(delivery_status <> 'DELIVERED' AND cash_confirmed_at IS NULL),
   string_agg(delivery_status, ',')
   FROM public.orders WHERE id IN ('e1200000-0000-0000-0000-0000000000c2', 'e1200000-0000-0000-0000-0000000000c4', 'e1200000-0000-0000-0000-0000000000c5');
@@ -133,7 +152,7 @@ BEGIN
   SELECT count(*) INTO quanti FROM esiti;
   SELECT count(*), coalesce(string_agg(format('%s → %s', e.nome, e.dettaglio), E'\n  '), '')
     INTO rossi, elenco FROM esiti e WHERE e.ok IS NOT TRUE;
-  IF quanti < 20 THEN RAISE EXCEPTION 'solo % controlli: ne manca qualcuno', quanti; END IF;
+  IF quanti < 23 THEN RAISE EXCEPTION 'solo % controlli: ne manca qualcuno', quanti; END IF;
   IF rossi > 0 THEN
     RAISE EXCEPTION E'% controllo/i rosso/i sulla chiusura della consegna:\n  %', rossi, elenco;
   END IF;
