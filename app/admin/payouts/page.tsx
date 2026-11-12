@@ -333,13 +333,14 @@ export default function AdminPayoutsPage() {
                   <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-400">Da versare lunedì</p>
                   <p className="font-mono text-lg font-extrabold text-olive-700">{almeno}{formatPrice(g.lunediCents / 100)}</p>
                   {g.dueCents > g.lunediCents && (
-                    <p className="text-xs text-ink-500">+ {formatPrice((g.dueCents - g.lunediCents) / 100)} di questa settimana</p>
+                    <p className="text-xs text-ink-500">+ {almeno}{formatPrice((g.dueCents - g.lunediCents) / 100)} di questa settimana</p>
                   )}
                   {g.holdCents > 0 && (
-                    <p className="text-xs text-ink-500">{formatPrice(g.holdCents / 100)} in sospeso</p>
+                    <p className="text-xs text-ink-500">{almeno}{formatPrice(g.holdCents / 100)} in sospeso</p>
                   )}
+                  {/* R11-012 (collaudo K04) — anche le cifre del singolo negozio sono un minimo, con l'elenco tagliato. */}
                   {g.paidCents > 0 && (
-                    <p className="text-xs text-ink-500">{formatPrice(g.paidCents / 100)} già pagati</p>
+                    <p className="text-xs text-ink-500">{almeno}{formatPrice(g.paidCents / 100)} già pagati</p>
                   )}
                   <BonificoFatto sellerId={g.sellerId} storeName={g.storeName} ordini={g.orders} quandoFatto={() => void refetch()} />
                 </div>

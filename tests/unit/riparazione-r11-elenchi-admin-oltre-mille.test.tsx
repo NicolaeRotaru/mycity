@@ -62,3 +62,17 @@ describe('R11-011 — elenchi admin oltre le mille righe', () => {
     expect(host.textContent).toMatch(/almeno /);
   });
 });
+
+describe('R11-012 — collaudo K04: oltre il tetto ogni cifra è un minimo', () => {
+  it('anche «già pagati» del singolo negozio porta «almeno»', async () => {
+    stato.totale = 1500;
+    stato.righe = Array.from({ length: 1500 }, (_, i) => ({
+      id: `o${i}`, seller_id: 'forno', total_price: 10, seller_payout_cents: 900, seller_payout_reversed_cents: 0,
+      payout_status: 'TRANSFERRED', payout_at: '2026-11-04T10:00:00Z', stripe_transfer_id: 'tr_x', delivery_status: 'DELIVERED',
+      payment_method: 'card', created_at: '2026-11-01T09:00:00Z', delivered_at: '2026-11-03T15:00:00Z',
+      seller: { store_name: 'Forno', billing_iban: null },
+    }));
+    const host = await apri('@/app/admin/payouts/page');
+    expect(host.textContent, 'la cifra parziale del negozio si legge come esatta').toMatch(/almeno [^a-z]*già pagati/);
+  });
+});
