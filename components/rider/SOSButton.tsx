@@ -23,7 +23,7 @@ import { captureError } from '@/lib/analytics/sentry';
  *   2. Conferma → subito il tastierino col 112 (tel:), sincrono, senza attese
  *   3. Poi, con un tempo massimo: insert in rider_sos_events con posizione GPS
  *      → il trigger del database crea una notifica nel pannello per gli admin
- *      (nessun push/SMS immediato: il push parte dal lavoro periodico send-push)
+ *      e /api/rider/sos/avvisa manda subito un push agli admin (R01-004)
  */
 
 type Props = {
@@ -80,6 +80,10 @@ async function inviaAvvisoSOS(orderId: string | undefined): Promise<boolean> {
     triggered_at: new Date().toISOString(),
   });
   if (error) throw error;
+  // R01-004 — Il trigger crea solo la notifica nel pannello, e il push periodico parte ogni cinque
+  // minuti. Questa chiamata fa suonare SUBITO il telefono degli amministratori. Non si aspetta:
+  // l'evento e' gia' scritto, e se la chiamata cade restano il pannello e il giro periodico.
+  void fetch('/api/rider/sos/avvisa', { method: 'POST' }).catch((e) => captureError(e, { context: 'SOSButton.avvisa' }));
   return true;
 }
 
@@ -204,7 +208,7 @@ export default function SOSButton({ orderId }: Props) {
                 </li>
                 <li className="flex items-start gap-2">
                   <AlertTriangle size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
-                  <span>Gli amministratori MyCity vedranno l&apos;avviso nel loro pannello, se il telefono è connesso. Non aspettare loro: per l&apos;aiuto subito c&apos;è il 112</span>
+                  <span>Gli amministratori MyCity ricevono subito un avviso sul telefono e nel pannello, se il tuo telefono è connesso. Non aspettare loro: per l&apos;aiuto subito c&apos;è il 112</span>
                 </li>
               </ul>
               <p className="text-xs text-ink-500">
