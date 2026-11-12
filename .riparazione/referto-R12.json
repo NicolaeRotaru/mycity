@@ -1,8 +1,8 @@
 {
  "sessione": "R12",
- "aggiornato": "2026-11-12 15:10",
+ "aggiornato": "2026-11-12 15:27",
  "finita": false,
- "testa": "a5634f24cc070579dbe13584dbffbe7527e86f09",
+ "testa": "865b2f12b36ad19206923945b31eecc32cc8578b",
  "verifica": {
   "comando": "npm run verify",
   "esito": "",
@@ -72,6 +72,28 @@
    "cosa_ho_fatto": "«Continua» non è più disabled (solo aria-disabled senza spunta, disabled solo durante l'invio): premuto senza spunta mostra «Spunta la casella per continuare» con role=alert, collegato con aria-describedby a bottone e casella, e porta il fuoco sulla casella. Termini e Informativa si aprono in una nuova scheda (con l'avviso per il lettore di schermo), così la spunta non si perde."
   },
   {
+   "id": "R12-003",
+   "chiave": "accessibilita|i messaggi di errore del sito spariscono da soli dopo 4 secondi e non hanno la x per chiuderli",
+   "esito": "riparato",
+   "commit": "85cdaad0d5b38afcf8fdd5a027a9a89222628d01",
+   "file_toccati": [
+    "components/providers/ToastProvider.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-gli-avvisi-restano-e-si-chiudono.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-gli-avvisi-restano-e-si-chiudono.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base 85cdaad0d5b38afcf8fdd5a027a9a89222628d01^ --file components/providers/ToastProvider.tsx --prove tests/unit/riparazione-r12-gli-avvisi-restano-e-si-chiudono.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Toaster con closeButton e duration 8000 per tutti gli avvisi (prima 4000 di sonner, senza X). Una durata separata di 10 s per gli errori non si può dare da toastOptions: è una sola per tutti."
+  },
+  {
    "id": "R12-004",
    "chiave": "api-backend|lo stesso cliente può usare il codice «solo primo ordine» due volte, aprendo la cassa in due schede",
    "esito": "riparato",
@@ -96,6 +118,136 @@
    "cosa_ho_fatto": "Migrazione 361 (non applicata): tabella coupon_redemptions (RLS, nessun accesso dall'esterno), claim_coupon(p_code, p_user_id) che blocca la riga del codice (FOR UPDATE) e rifiuta se lo stesso cliente ha una rivendicazione aperta da meno di 2 ore; release_coupon(p_code, p_order_id) chiude anche la rivendicazione del cliente dell'ordine. lib passa p_user_id, ripiego sulla firma vecchia su PGRST202. Prova SQL 11/11 (anche: vecchia di 3 ore passa, appena fatta blocca, dopo l'annullo torna), suite SQL intera verde. Copre anche lib/coupons.ts senza modificarlo: il controllo primo ordine lì resta, la gara la chiude il database."
   },
   {
+   "id": "R12-006",
+   "chiave": "architettura|il documento delle decisioni del sito dice ancora commissione all'8% più 15 euro al mese, «da decidere»",
+   "esito": "riparato",
+   "commit": "5c3ed729f046fe74fad258d44837373acfc91730",
+   "file_toccati": [
+    "docs/decisions.md"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-decisioni-superate.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-decisioni-superate.test.ts",
+   "prova_tipo": "leggera",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5c3ed729f046fe74fad258d44837373acfc91730^ --file docs/decisions.md --prove tests/unit/riparazione-r12-decisioni-superate.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "ADR-006 e ADR-007 segnati «superseded (12/11/2026)» con una nota in testa: il 10% firmato il 26/10 (pricing.commissione, MARKETPLACE_FEE_BPS) e il benvenuto come codice first_order_only, spento al lancio (CODICI_SCONTO_IN_CASSA). Il testo storico resta. lib/constants.ts non è servito toccarlo."
+  },
+  {
+   "id": "R12-007",
+   "chiave": "architettura|value_props non lo mostra nessuna pagina: una delle «cinque case» corrette non arriva a nessun utente",
+   "esito": "riparato",
+   "commit": "f2f59ad6b152c81291e8893355229ee0daeecee7",
+   "file_toccati": [
+    "lib/constants.ts",
+    "tests/unit/al-lancio-si-paga-solo-la-consegna.test.tsx",
+    "tests/unit/le-condizioni-della-veloce-hanno-una-casa-sola.test.tsx",
+    "tests/unit/le-promesse-che-il-sito-non-mantiene.test.ts",
+    "tests/unit/i-minuti-della-veloce-non-sono-una-promessa-fissa.test.tsx",
+    "tests/unit/la-vetrina-non-promette-una-spedizione-che-la-cassa-fa-pagare.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-value-props-tolte.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-value-props-tolte.test.ts",
+   "prova_tipo": "leggera",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base f2f59ad6b152c81291e8893355229ee0daeecee7^ --file lib/constants.ts --prove tests/unit/riparazione-r12-value-props-tolte.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Tolto VALUE_PROPS da lib/constants.ts (e i tre import che servivano solo a lui), come deciso dalla regista. Nelle cinque prove che importano lib/constants (dichiarato) tolte solo le asserzioni su VALUE_PROPS; le altre restano. Le frasi che il cliente vede davvero restano provate (DEFAULT_TRUST_BULLETS della home, promesse-pubbliche)."
+  },
+  {
+   "id": "R12-008",
+   "chiave": "architettura|il ripiego della lettura delle tendenze carica gli ultimi 8 prodotti, che ora non vengono mai mostrati",
+   "esito": "riparato",
+   "commit": "8cefec81936223d4a9ebda9d34022d9a8e332269",
+   "file_toccati": [
+    "lib/queries/fasce-prodotti.ts",
+    "tests/unit/il-catalogo-regge-con-i-profili-chiusi.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-tendenze-senza-ripiego.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-tendenze-senza-ripiego.test.ts",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8cefec81936223d4a9ebda9d34022d9a8e332269^ --file lib/queries/fasce-prodotti.ts --prove tests/unit/riparazione-r12-tendenze-senza-ripiego.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "leggiTendenze senza visite ritorna [] senza leggere prodotti né negozi (TrendingNow scartava comunque chi ha meno di VISITE_MINIME_PER_LA_CLASSIFICA visite). In il-catalogo-regge-con-i-profili-chiusi (importa il mio file, dichiarato) il caso «si riempie anche senza visite» diventa «senza visite è vuoto», e il caso dei due negozi legge le tendenze con le visite. Le altre prove su fasce/TrendingNow restano verdi (201)."
+  },
+  {
+   "id": "R12-009",
+   "chiave": "architettura|i dati demo del sito non si caricano più sul database di oggi: tutte e quattro le semine si fermano",
+   "esito": "riparato",
+   "commit": "865b2f12b36ad19206923945b31eecc32cc8578b",
+   "file_toccati": [
+    "seeds/001_piacenza_stores.sql",
+    "seeds/005_admin_and_rider.sql",
+    "seeds/006_admin_swap.sql",
+    "seeds/007_mycity_seller.sql"
+   ],
+   "prova_file": [
+    "tests/sql/harness/riparazione-r12-le-semine-girano.sh"
+   ],
+   "prova_comando": "bash tests/sql/harness/riparazione-r12-le-semine-girano.sh mycity_semine",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "a mano (lo script non è una prova vitest): con le semine della base (git stash seeds/) lo script esce 1 su 001 «profiles: approvazione riservata allo staff»; con la correzione esce 0"
+   },
+   "copre_tutta_la_voce": false,
+   "cosa_ho_fatto": "Ogni semina scrive con set_config('mycity.allow_profile_write','1',true) come le prove SQL; is_approved e approval_status coerenti (approved / NULL per il buyer di 006); i 30 alimenti di 001 nascono bozza e si pubblicano con allergeni e ingredienti dichiarati come dati dimostrativi. Script nuovo che ricostruisce il database, aggiunge le colonne GoTrue che l'impalcatura minima non ha, applica le semine due volte e controlla 16 negozi approvati e 30 alimenti in vendita con le dichiarazioni: verde su PG16.",
+   "cosa_resta": "Il passo in CI dopo apply.sh non sta nei miei file.",
+   "serve_file_altrui": [
+    {
+     "file": ".github/workflows (il job delle prove SQL)",
+     "modifica": "Dopo apply.sh e run.sh, eseguire bash tests/sql/harness/riparazione-r12-le-semine-girano.sh mycity_semine, così le semine si rompono il giorno in cui cambia lo schema."
+    }
+   ]
+  },
+  {
+   "id": "R12-011",
+   "chiave": "flussi-conversione|chi si registra con un'email che ha già un account legge che gli è arrivato un link che non arriverà mai, e nessuno gli indica il recupero della password",
+   "esito": "riparato",
+   "commit": "f000ebc70dd8cae226faa487670b152c5569755b",
+   "file_toccati": [
+    "app/auth/verify-email/page.tsx",
+    "app/sign-up/page.tsx",
+    "lib/errors.ts",
+    "tests/unit/le-pagine-vere-dell-accesso-non-chiudono-fuori-nessuno.test.ts",
+    "tests/unit/gli-errori-di-accesso-parlano-italiano.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-la-verifica-indica-il-recupero.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-la-verifica-indica-il-recupero.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base f000ebc70dd8cae226faa487670b152c5569755b^ --file app/auth/verify-email/page.tsx,lib/errors.ts --prove tests/unit/riparazione-r12-la-verifica-indica-il-recupero.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "La pagina di verifica dice «Se <email> è un indirizzo nuovo ti abbiamo inviato un link… se hai già un account non ti arriverà nulla: accedi, oppure recupera la password», uguale in tutti e due i casi (non rivela chi è iscritto), con i link Accedi e «Password dimenticata?» (/reset-password). Il toast della registrazione non dice più «Registrazione completata!». traduciErroreAuth: il tetto email del progetto non parla più di «questo indirizzo». Il link al recupero non porta l'email già scritta: la pagina /reset-password non legge un parametro (non è mio file). Aggiornate dichiarandolo due prove che importano i miei file e controllavano le frasi vecchie."
+  },
+  {
    "id": "R12-012",
    "chiave": "frontend-ux|se il nome del negozio comincia con un numero, un apostrofo, le virgolette o contiene una parola inglese come «table», il cliente in cassa legge «qualcosa non ha funzionato» invece del motivo vero",
    "esito": "riparato",
@@ -118,6 +270,50 @@
    "cosa_ho_fatto": "Sulla base il primo carattere (cifra, virgolette, apostrofo) era già accettato; restava la parola inglese («Bistrot La Table») e le parentesi tolte. apiErrorMessage ricorda i testi letti dal corpo di una nostra risposta; per quelli friendlyError confronta le parole del motore come le scrive il motore (minuscole) e non toglie le parentesi. Gli errori grezzi restano filtrati come prima (provato: relation … does not exist e null value … restano generici)."
   },
   {
+   "id": "R12-014",
+   "chiave": "layout-responsive|sul telefono piccolo la pagina del registro delle azioni scorre di lato, e l'elenco si ferma a 200 righe senza dirlo",
+   "esito": "riparato",
+   "commit": "26c9448ccdae4dc3651d60c5f46a3490d85effb5",
+   "file_toccati": [
+    "app/admin/audit/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-registro-azioni-dice-quante.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-registro-azioni-dice-quante.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base 26c9448ccdae4dc3651d60c5f46a3490d85effb5^ --file app/admin/audit/page.tsx --prove tests/unit/riparazione-r12-registro-azioni-dice-quante.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il select del filtro ha w-full max-w-full (sm:w-auto); una seconda lettura conta il totale (count exact, head) con lo stesso filtro e, quando l'elenco è tagliato a 200, sopra compare «Mostro le 200 azioni più recenti di N: per le altre filtra per azione». La lettura principale non cambia forma. Lo scorrimento a 360 px non l'ho misurato in un browser: la prova controlla la classe."
+  },
+  {
+   "id": "R12-015",
+   "chiave": "layout-responsive|un nome lungo senza spazi allarga la pagina del profilo sul telefono e la fa scorrere di lato",
+   "esito": "riparato",
+   "commit": "1b56ae7cfa2539876b762e32452881d82625159e",
+   "file_toccati": [
+    "app/profile/page.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-nome-lungo-nel-profilo.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-nome-lungo-nel-profilo.test.ts",
+   "prova_tipo": "leggera",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1b56ae7cfa2539876b762e32452881d82625159e^ --file app/profile/page.tsx --prove tests/unit/riparazione-r12-nome-lungo-nel-profilo.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "Il nome nel profilo ha [overflow-wrap:anywhere] e line-clamp-2, con title={displayName}; il contenitore aveva già min-w-0. Prova leggera sulle classi (è uno stile)."
+  },
+  {
    "id": "R12-016",
    "chiave": "microcopy|chi arriva alla pagina dei termini senza essere entrato legge «registrazione non riuscita» e non trova la strada per accedere",
    "esito": "riparato",
@@ -138,6 +334,30 @@
    },
    "copre_tutta_la_voce": true,
    "cosa_ho_fatto": "La pagina legge lo stato: 401 → «La sessione è scaduta: accedi di nuovo» e porta a /sign-in?returnTo=/accetta-condizioni?next=<dove>; 429 → «Troppi tentativi… riprova fra un minuto»; il resto → apiErrorMessage del corpo, con un ripiego che non parla di registrazione. La rotta non cambia: i suoi stati erano già giusti."
+  },
+  {
+   "id": "R12-017",
+   "chiave": "microcopy|il reinvio dell'email di conferma dà messaggi che si contraddicono e non dice quanto aspettare",
+   "esito": "riparato",
+   "commit": "f8f94c04447876d2e249c11fd3342379d1e3c52b",
+   "file_toccati": [
+    "lib/auth/conferma-email.ts",
+    "app/auth/verify-email/page.tsx",
+    "tests/unit/chi-non-trova-l-email-di-conferma-puo-farsela-rimandare.test.ts"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-reinvio-dice-quanto-aspettare.test.tsx"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-reinvio-dice-quanto-aspettare.test.tsx",
+   "prova_tipo": "comando",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base f8f94c04447876d2e249c11fd3342379d1e3c52b^ --file lib/auth/conferma-email.ts,app/auth/verify-email/page.tsx --prove tests/unit/riparazione-r12-reinvio-dice-quanto-aspettare.test.tsx --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "rimandaLinkDiConferma guarda codice e testo: «after N seconds» → «puoi chiederne un altro fra N secondi» (esito attendi, attesaSecondi N); over_email_send_rate_limit / email rate limit exceeded → «Il servizio email è al limite… riprova fra qualche minuto» senza «questo indirizzo»; dopo un invio riuscito attesa 60 s. La pagina spegne «Reinvia» con il conto alla rovescia. lib/errors.ts non è servito qui (la frase sul tetto per la registrazione la cambia R12-011). Aggiornata dichiarandolo una prova che importa conferma-email.ts e voleva «troppe email»."
   },
   {
    "id": "R12-018",
@@ -188,6 +408,29 @@
    },
    "copre_tutta_la_voce": true,
    "cosa_ho_fatto": "Fine = oggi + (giorni − 1): la vetrina (estremi compresi, fasce-prodotti.ts lasciato com'è) dura 7 giorni per 1 settimana e 28 per 4; l'avviso «fino al …» usa la stessa data. Orologio finto 16/11 10:00 → 16-22. Aggiornata dichiarandolo la prova notturna che importa il file e si aspettava l'11/9 (ottavo giorno)."
+  },
+  {
+   "id": "R12-020",
+   "chiave": "privacy-legale|la descrizione di «come funziona» che esce su google promette il reso senza escludere i prodotti fatti su ordinazione",
+   "esito": "riparato",
+   "commit": "c730bc05117271b809d23e80154106cd7a86d43f",
+   "file_toccati": [
+    "app/come-funziona/page.tsx",
+    "tests/unit/il-reso-dice-quali-prodotti-sono-esclusi.test.tsx"
+   ],
+   "prova_file": [
+    "tests/unit/riparazione-r12-come-funziona-su-google.test.ts"
+   ],
+   "prova_comando": "npx vitest run tests/unit/riparazione-r12-come-funziona-su-google.test.ts",
+   "prova_tipo": "leggera",
+   "prova_eseguita": true,
+   "rimessa": {
+    "esito": "regge",
+    "uscita": 0,
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base c730bc05117271b809d23e80154106cd7a86d43f^ --file app/come-funziona/page.tsx --prove tests/unit/riparazione-r12-come-funziona-su-google.test.ts --json"
+   },
+   "copre_tutta_la_voce": true,
+   "cosa_ho_fatto": "metadata.description = «Scegli dai negozi di Piacenza, ordini in pochi tap e paghi alla consegna. <FRASE_RESO>.», sotto i 160 caratteri così gli esclusi (anche «fatti su ordinazione») si vedono nel riquadro di Google. Aggiornata dichiarandolo la prova che importa la pagina e controllava la frase vecchia."
   },
   {
    "id": "R12-023",
@@ -254,7 +497,15 @@
    "nota": "La descrizione del registro si ferma alla 119; la 154 ha ridato il permesso di colonna."
   }
  ],
- "nuovi_difetti_visti": [],
+ "nuovi_difetti_visti": [
+  {
+   "titolo": "Le semine 005 e 006 scrivono nel codice l'email personale del titolare per promuoverlo o retrocederlo, e il deposito è pubblico",
+   "dimensione": "privacy-legale",
+   "severita": "minore",
+   "file": "seeds/005_admin_and_rider.sql:14-16 · seeds/006_admin_swap.sql:15-17",
+   "descrizione": "L'indirizzo è in chiaro in due file del deposito. Meglio un parametro psql (-v email_admin=...) o un'email demo. Non l'ho cambiato: cambia il comportamento della semina e la voce non lo chiede."
+  }
+ ],
  "domande_per_nicola": [
   "R12-004: una rivendicazione del codice «solo primo ordine» smette di bloccare dopo 2 ore. Motivo: è la vita di una cassa con la carta aperta (pending_checkouts.expires_at); oltre, o l'ordine è nato (e allora lo conta già validateCoupon) o la cassa è scaduta. Serve per i rilasci che non conoscono l'ordine (carrello scaduto, riserve abbandonate). Va bene 2 ore?"
  ],
