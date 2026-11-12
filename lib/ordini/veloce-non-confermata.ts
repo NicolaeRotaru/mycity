@@ -150,12 +150,19 @@ export function fraseNonSpostato(scadenza: Date, adesso: Date, carta = false): s
 export type ComeVaLEuro = 'tolto-contanti' | 'tolto-carta' | 'compresa' | 'a-mano';
 
 /** La frase per il cliente: la stessa nella campanella e nell'email. «Non lo paghi» solo se è tolto davvero. */
-export function fraseDelFreno(a: { fascia: string; euro: ComeVaLEuro; totaleCents: number; sulCreditoCents?: number }): string {
+export function fraseDelFreno(a: { fascia: string; euro: ComeVaLEuro; totaleCents: number; sulCreditoCents?: number; giaConfermati?: number }): string {
   const inizio = `Il negozio non ha confermato in ${MINUTI_PER_CONFERMARE_LA_VELOCE} minuti: la tua spesa arriva nella fascia ${a.fascia}`;
   // Il limite è quello della rotta di annullo (app/api/orders/[id]/cancel): il cliente annulla solo
   // un ordine NEW. Prima la frase lo prometteva senza condizioni: alle 12:58 il forno accettava la
   // fascia nuova e alle 13:10 il tasto Annulla non c'era più, mentre la campanella diceva di sì.
-  const fine = 'Se non ti va bene, puoi annullarlo senza costi dalla sua pagina finché il negozio non lo conferma.';
+  // 12/11/2026 (R09-001) — Con più negozi nel carrello, gli ordini che un negozio aveva già accettato
+  // passano alla fascia nuova ma non si annullano: la frase lo dice prima della chiusura (che resta
+  // l'ultima frase: l'email la sostituisce con la sua).
+  const confermati = a.giaConfermati ?? 0;
+  const giaFermi = confermati > 0
+    ? `${confermati === 1 ? 'L’ordine che un negozio ha già confermato non si annulla più' : `I ${confermati} ordini che i negozi hanno già confermato non si annullano più`}: arrivano anche loro nella fascia ${a.fascia}. `
+    : '';
+  const fine = `${giaFermi}Se non ti va bene, puoi annullarlo senza costi dalla sua pagina finché il negozio non lo conferma.`;
   if (a.euro === 'compresa') return `${inizio}. La consegna veloce era già compresa nel prezzo, quindi il totale non cambia. ${fine}`;
   if (a.euro === 'tolto-contanti') {
     // L'euro pagato col credito MyCity torna sul credito: alla porta non si toglie quello che non c'era.
@@ -615,7 +622,7 @@ async function spostaIlCarrello(
     ).catch((err) => logger.error('[veloce-non-confermata] avviso agli amministratori non partito', { orderId: o.id, err }));
   }
 
-  const clienteAvvisato = await avvisaIlCliente(admin, o, fraseDelFreno({ fascia, euro: euroFinale, totaleCents, sulCreditoCents }));
+  const clienteAvvisato = await avvisaIlCliente(admin, o, fraseDelFreno({ fascia, euro: euroFinale, totaleCents, sulCreditoCents, giaConfermati: scritti.filter((c) => c.id !== o.id && String(c.delivery_status) !== 'NEW').length }));
   await avvisaNegoziEFattorino(admin, o, scritti, fascia);
   logger.info('[veloce-non-confermata] carrello passato in fascia', { orderId: o.id, fascia, euro: euroFinale, ordini: deltaScritti.size });
   // 5/11/2026 — La promessa al cliente è cambiata (da 30-60 minuti a una fascia): se né campanella né
