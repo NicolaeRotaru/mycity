@@ -40,7 +40,8 @@ fi
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
-MIG="$ROOT/migrations"
+# La cartella si puo' cambiare solo per le prove (CARTELLA_MIGRAZIONI): il rilascio non la imposta.
+MIG="${CARTELLA_MIGRAZIONI:-$ROOT/migrations}"
 
 # 15/10/2026 (R53) — Il primo contatto col database. Se non va, si dice dove
 # guardare: dalla CI il segreto SUPABASE_DB_URL e' rimasto per due mesi sulla
@@ -203,6 +204,16 @@ fi
 # scrittura.
 saltate=0
 DA_APPLICARE=()
+# R01-024 (12/11/2026) — UN NOME UGUALE NON VUOL DIRE «GIA' APPLICATA».
+#
+# Il registro si interroga per numero OPPURE per nome, perche' i due elenchi storici non sono
+# allineati al 100% (migrazioni rinumerate). Ma una migrazione NUOVA con lo stesso nome di una
+# vecchia (per esempio 250_minori.sql dopo 127_minori.sql) trovava la riga della vecchia e si
+# saltava per sempre, con tutti i controlli verdi. Adesso il nome conta solo se il numero di
+# quella riga NON e' il numero di un altro file della cartella: cioe' solo per una rinumerazione
+# vera, mai per un omonimo.
+PREFISSI_DEL_DEPOSITO="$(for g in "$MIG"/*.sql; do b="$(basename "$g")"; printf "'%s'," "${b%%_*}"; done)"
+PREFISSI_DEL_DEPOSITO="${PREFISSI_DEL_DEPOSITO%,}"
 # 5/11/2026 — Lo stesso ordine della ricostruzione della CI e del generatore dei tipi: byte per
 # byte (LC_ALL=C), cosi' 108_ viene prima di 108b_ (sort -V faceva il contrario).
 for f in $(ls "$MIG"/*.sql | LC_ALL=C sort); do
@@ -212,7 +223,8 @@ for f in $(ls "$MIG"/*.sql | LC_ALL=C sort); do
 
   gia="$(psql "$DB" -X -A -t -v ON_ERROR_STOP=1 \
     -c "SELECT 1 FROM supabase_migrations.schema_migrations
-         WHERE version = '$versione' OR name = '$descrizione' LIMIT 1")"
+         WHERE version = '$versione'
+            OR (name = '$descrizione' AND version NOT IN ($PREFISSI_DEL_DEPOSITO)) LIMIT 1")"
   if [ -n "$gia" ]; then
     saltate=$((saltate + 1))
     continue
@@ -284,7 +296,8 @@ for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
   # diverso), lo si salta invece di riapplicarlo.
   gia="$(psql "$DB" -X -A -t -v ON_ERROR_STOP=1 \
     -c "SELECT 1 FROM supabase_migrations.schema_migrations
-         WHERE version = '$versione' OR name = '$descrizione' LIMIT 1")"
+         WHERE version = '$versione'
+            OR (name = '$descrizione' AND version NOT IN ($PREFISSI_DEL_DEPOSITO)) LIMIT 1")"
   if [ -n "$gia" ]; then
     saltate=$((saltate + 1))
     continue

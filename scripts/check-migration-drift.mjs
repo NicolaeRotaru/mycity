@@ -261,7 +261,14 @@ export const USCITA = Object.freeze({ ALLINEATO: 0, NON_HO_CONTROLLATO: 1, DERIV
  * @returns {{ codice: number, mancanti: string[], righe: string[], errore: boolean }}
  */
 export function esitoDelConfronto(repo, applicate) {
-  const perNome = new Set(applicate.map((a) => String(a.name ?? '')));
+  // R01-024 (12/11/2026) — Il nome vale solo per una rinumerazione vera: se la riga con quel nome
+  // ha il numero di UN ALTRO file del deposito, e' la migrazione omonima vecchia, non questa.
+  const prefissiDelDeposito = new Set(repo.map((m) => String(m.prefix)));
+  const perNome = new Set(
+    applicate
+      .filter((a) => !prefissiDelDeposito.has(String(a.version ?? '')))
+      .map((a) => String(a.name ?? '')),
+  );
   const perVersione = new Set(applicate.map((a) => String(a.version ?? '')));
 
   // Una migrazione risulta applicata se il database conosce il suo numero
