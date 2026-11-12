@@ -1,6 +1,6 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-12 15:45",
+  "aggiornato": "2026-11-12 15:47",
   "finita": true,
   "testa": "a8bb0383f1859b1216e805927eaf14661114dca3",
   "verifica": {
@@ -95,7 +95,7 @@
         "tests/unit/riparazione-r04-faq-fuoco.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r04-faq-fuoco.test.ts",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -596,7 +596,7 @@
         "tests/unit/riparazione-r04-fondo-pagina-mobile.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r04-fondo-pagina-mobile.test.ts",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
@@ -615,6 +615,13 @@
       "verificato_da": "qa (subagente g6): verificato che nessuno dipendeva dal padding del body; trovata la classe della pagina corta ancora a 72, corretta nella revisione.",
       "commit_revisione": [
         "e0a88afffc2c1fc3c4676cd1c3109330f9278cdd"
+      ],
+      "prova_esistente_modificata": [
+        {
+          "file": "tests/unit/una-pagina-corta-non-scorre-a-vuoto.test.ts",
+          "perche": "La prova non importa moduli di R04, ma legge con readFileSync app/globals.css (file di R04) e ne inchioda la variabile: controlla che .contenuto-almeno-una-schermata tolga dall'altezza dello schermo la barra in alto e la barra a schede, e che quelle variabili esistano. Con la revisione di R04-022 la classe toglie --tabbar-altezza-vera (l'altezza vera della barra, la stessa che il body riserva in fondo), non piu' --tabbar-height (72px, che lasciava il pie' di pagina 14px sopra la barra).",
+          "non_indebolita": "Stesse asserzioni, stesso numero (2 test): cambia solo il nome della variabile attesa, da --tabbar-height a --tabbar-altezza-vera, sia nella regola calc sia nel controllo che la variabile sia dichiarata. Nessuna asserzione tolta o allentata; in piu' la prova nuova riparazione-r04-fondo-pagina-mobile controlla che il valore dichiarato coincida (±1px) con l'altezza calcolata dalle classi della barra."
+        }
       ]
     },
     {
@@ -630,7 +637,7 @@
         "tests/unit/riparazione-r04-documenti-numeri.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r04-documenti-numeri.test.ts",
-      "prova_tipo": "leggera",
+      "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
