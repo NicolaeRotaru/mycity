@@ -91,7 +91,7 @@ describe('1604 — tessere delle categorie senza foto', () => {
     const src = leggi('components/CategoryShowcase.tsx');
     // R08-013 (12/11/2026): il velo pieno dipende dalla foto caricata (non solo dall'indirizzo) e
     // le classi stanno in due costanti; l'ombra senza foto è più scura (55→30→0) per il contrasto.
-    expect(src).toMatch(/foto\.src && !fotoRotte\.has\(c\.slug\) \? VELO_SULLA_FOTO : VELO_SENZA_FOTO/);
+    expect(src).toMatch(/foto\.src && !fotoRotte\.has\(chiaveFoto\(c\.slug, foto\.src\)\) \? VELO_SULLA_FOTO : VELO_SENZA_FOTO/);
     expect(src).toMatch(/const VELO_SULLA_FOTO = 'from-black\/70 via-black\/15 to-black\/25'/);
     expect(src).not.toMatch(/<div className="absolute inset-0 bg-gradient-to-t from-black\/70 via-black\/15 to-black\/25" \/>/);
   });

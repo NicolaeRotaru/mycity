@@ -38,9 +38,15 @@ vi.mock('@/lib/logger', () => ({ logger: { warn: () => {}, error: () => {}, info
 
 const { default: CategoryShowcase } = await import('@/components/CategoryShowcase');
 
+// jsdom non scarica le immagini: le dà tutte «complete» e larghe zero, cioè rotte. Nel browser una
+// foto che sta arrivando non è ancora completa: qui si finge quello, salvo dove la prova dice altro.
+let fotoGiaFallita = false;
+Object.defineProperty(HTMLImageElement.prototype, 'complete', { configurable: true, get: () => fotoGiaFallita });
+
 let radice: Root;
 let contenitore: HTMLDivElement;
 beforeEach(() => {
+  fotoGiaFallita = false;
   (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
   contenitore = document.createElement('div');
   document.body.appendChild(contenitore);
@@ -73,6 +79,14 @@ describe('R08-013 ① — il velo pieno solo sopra una foto che c’è davvero',
     act(() => { img.dispatchEvent(new Event('error')); });
     expect(velo(tessera)).not.toContain('from-black/70');
     expect(velo(tessera)).toBe(veloSenzaFoto());
+  });
+
+  it('foto già fallita prima dell’idratazione (onError non scatta più): al montaggio torna il velo leggero', () => {
+    fotoGiaFallita = true;
+    act(() => radice.render(createElement(CategoryShowcase)));
+    const tessera = contenitore.querySelector('a[href="/category/casa-cucina"]')!;
+    expect(velo(tessera)).not.toContain('from-black/70');
+    expect((tessera.querySelector('img') as HTMLImageElement).style.display).toBe('none');
   });
 
   it('senza foto nel dato il velo è quello leggero fin da subito', () => {

@@ -161,6 +161,8 @@ const iconFor = (slug: string): LucideIcon => ICON_MAP[slug] ?? Tag;
 const VELO_SULLA_FOTO = 'from-black/70 via-black/15 to-black/25';
 const VELO_SENZA_FOTO = 'from-black/55 via-black/30 to-transparent';
 
+const chiaveFoto = (slug: string, src: string | null) => `${slug}|${src ?? ''}`;
+
 const gradFor = (slug: string): string => GRAD_MAP[slug] ?? 'from-primary-500 to-primary-700';
 
 /**
@@ -238,8 +240,9 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
 
   // Le foto che non si sono caricate: per loro la tessera torna gradiente, velo compreso.
   const [fotoRotte, setFotoRotte] = useState<ReadonlySet<string>>(() => new Set());
-  const segnaRotta = (slug: string) =>
-    setFotoRotte((prima) => (prima.has(slug) ? prima : new Set(prima).add(slug)));
+  // La chiave è categoria + indirizzo: una foto nuova messa al posto di una rotta riparte da zero.
+  const segnaRotta = (chiave: string) =>
+    setFotoRotte((prima) => (prima.has(chiave) ? prima : new Set(prima).add(chiave)));
 
   // Tre esiti. Prima il componente leggeva solo `data` e disegnava comunque la griglia: finché la
   // risposta non arrivava restava un vuoto sotto il titolo «Cosa cerchi oggi?», e se la lettura
@@ -306,6 +309,17 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
             {foto.src && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
+                // La chiave è l'indirizzo: se la foto cambia nel pannello, l'elemento rinasce pulito
+                // (senza il display:none della foto rotta di prima).
+                key={foto.src}
+                // Una foto fallita PRIMA dell'idratazione: React 18 non ripete quell'errore, e onError
+                // non scatta. Al montaggio un'immagine «completa» con larghezza zero è una foto rotta.
+                ref={(el) => {
+                  if (el && el.complete && el.naturalWidth === 0) {
+                    el.style.display = 'none';
+                    segnaRotta(chiaveFoto(c.slug, foto.src));
+                  }
+                }}
                 src={sizedImage(foto.src, 'card')}
                 alt=""
                 aria-hidden
@@ -319,7 +333,7 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
                   // invisibile anche a noi, e la home perdeva un'immagine senza
                   // che nessuno lo sapesse.
                   e.currentTarget.style.display = 'none';
-                  segnaRotta(c.slug);
+                  segnaRotta(chiaveFoto(c.slug, foto.src));
                   logger.warn('[categorie] la foto della tessera non si è caricata', { slug: c.slug, src: foto.src });
                 }}
               />
@@ -332,7 +346,7 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
                 4:1 sulla senape: ora VELO_SENZA_FOTO, che regge 4,5:1 e sale senza bande. */}
             <div
               className={`absolute inset-0 bg-gradient-to-t ${
-                foto.src && !fotoRotte.has(c.slug) ? VELO_SULLA_FOTO : VELO_SENZA_FOTO
+                foto.src && !fotoRotte.has(chiaveFoto(c.slug, foto.src)) ? VELO_SULLA_FOTO : VELO_SENZA_FOTO
               }`}
             />
             {/* L'icona sta su un cerchio scuro suo, così il gradiente in alto resta pulito e
