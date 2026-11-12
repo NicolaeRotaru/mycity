@@ -21,7 +21,8 @@ import { chiaveDiOggi, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { leggiProdottiDellaGriglia, type OrdineGriglia } from '@/lib/queries/griglia-prodotti';
 import { cEUnAltraPagina, finestraDellaPagina, pagineSuccessiva, unisciPagine } from '@/lib/paginazione';
 import { trackSearchPerformed } from '@/lib/analytics/events';
-import { fetchActiveDiscounts } from '@/lib/promotions';
+import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
+
 
 /**
  * L'ordinamento della griglia. Vive con la lettura, in `lib/queries/griglia-prodotti.ts`: chi
@@ -80,6 +81,13 @@ interface Props {
   limit?: number;
   maxPrice?: number;
   minPrice?: number;
+  /**
+   * 12/11/2026 (R07-016) — «Sotto i N €»: il prezzo che si PAGA (promozione compresa) deve
+   * stare sotto la soglia, soglia esclusa. `maxPrice` guarda il prezzo pieno e la comprende.
+   */
+  prezzoSotto?: number;
+  /** 12/11/2026 (R07-009) — l'h2 invisibile per le pagine che non ne hanno uno sopra la griglia. */
+  titoloNascosto?: string;
   onlyOpenStores?: boolean;
   /** Mostra solo prodotti in promo (promozione attiva del negozio) o scontati
    *  (prezzo pieno barrato > prezzo attuale). */
@@ -128,7 +136,7 @@ interface Props {
   maxColumns?: GridMaxColumns;
 }
 
-const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, prioritaPrimeFoto = true, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
+const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice: maxPricePieno, minPrice, prezzoSotto, titoloNascosto, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, prioritaPrimeFoto = true, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
   /**
    * #127 — Il catalogo si fermava a 96 prodotti e non lo diceva.
    *
@@ -212,6 +220,14 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // quasi vuota si chiede il doppio, ma resta una finestra, non un tetto che
   // cresce.
   const righePerPagina = onlyPromo ? Math.min(dimensionePagina * 2, 300) : dimensionePagina;
+  // 12/11/2026 (R07-016) — Con «sotto la soglia» il database taglia già sul prezzo pieno,
+  // soglia esclusa (il prezzo è in euro con due decimali: mezzo centesimo sotto basta).
+  // Allargare la lettura ai prezzi pieni che solo in promozione scendono sotto la soglia
+  // riempiva la finestra di righe da scartare: con «prezzo decrescente» la pagina restava
+  // vuota. Quei prodotti restano fuori (vedi il referto di R07-016).
+  const maxPrice = prezzoSotto !== undefined
+    ? Math.min(maxPricePieno ?? Infinity, prezzoSotto - 0.005)
+    : maxPricePieno;
 
   const domanda = useInfiniteQuery({
     placeholderData: keepPreviousData,
@@ -375,6 +391,11 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
         return promoIds.has(p.id) || discounted;
       });
     }
+    if (prezzoSotto !== undefined) {
+      // Il prezzo che si paga, calcolato come lo calcola la cassa (rete di sicurezza: il
+      // database ha già tagliato sul prezzo pieno, e uno sconto lo abbassa soltanto).
+      arr = arr.filter((p) => discountedUnitCents(Number(p.price), scontiPromo?.get(p.id) ?? 0) < Math.round(prezzoSotto * 100));
+    }
     if (onlyInStock) {
       // Ridondante ma innocuo: il filtro vero ora e' nella query (#91).
       arr = arr.filter((p) => p.stock == null || p.stock > 0);
@@ -404,7 +425,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     }
     return arr;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prods, onlyOpenStores, ratings, sort, onlyPromo, onlyInStock, promoIds, scontiPromo]);
+  }, [prods, onlyOpenStores, ratings, sort, onlyPromo, onlyInStock, promoIds, scontiPromo, prezzoSotto]);
 
   // Notifica il conteggio visibile (post-filtro) al chiamante, per la riga
   // "N prodotti …" renderizzata fuori dalla griglia (SRP / categoria).
@@ -669,6 +690,12 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   return (
     <>
       <BarraSiAggiorna acceso={stoAggiornando} />
+      {/* 12/11/2026 (R07-009) — nelle pagine collezione (Regali, Novità, I più recensiti)
+          dall'h1 della testata si saltava all'h3 del nome di ogni prodotto: il lettore di
+          schermo perdeva un livello. Chi non ha già un h2 sopra la griglia (le pagine
+          collezione) le dà il suo, invisibile; la vetrina del negozio e le collezioni hanno
+          già il loro, e un secondo h2 lì staccherebbe i prodotti dal loro titolo. */}
+      {titoloNascosto && <h2 className="sr-only">{titoloNascosto}</h2>}
       <div
         className={classiDellaGriglia}
         aria-busy={stoAggiornando}

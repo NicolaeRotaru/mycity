@@ -45,7 +45,7 @@ export default function NovitaPage() {
         </div>
       </CollectionHeader>
 
-      <ProductGrid sort={sort} maxColumns={4} onCount={setCount} />
+      <ProductGrid sort={sort} maxColumns={4} onCount={setCount} titoloNascosto="I prodotti nuovi" />
     </div>
   );
 }

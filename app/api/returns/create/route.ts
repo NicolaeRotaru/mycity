@@ -18,6 +18,7 @@ import {
   type RigaPerIlRecesso,
 } from '@/lib/ordini/recesso';
 import { scriviCampanella } from '@/lib/ordini/campanella';
+import { recessoAperto } from '@/lib/ordini/termine-del-recesso';
 
 export const runtime = 'nodejs';
 
@@ -97,9 +98,10 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
    * spettano, e il termine non sparisce.
    */
   const baseRecesso = order.delivered_at ?? order.created_at;
-  if (baseRecesso) {
-    const days = (Date.now() - new Date(baseRecesso).getTime()) / (1000 * 60 * 60 * 24);
-    if (days > 14) return ApiErrors.invalidRequest('Termine per il recesso scaduto (14 giorni dalla consegna).');
+  // 12/11/2026 (R07-005) — a giorni di calendario di Piacenza, non a blocchi di 24 ore:
+  // il quattordicesimo giorno il reso si chiedeva solo fino all'ora della consegna.
+  if (baseRecesso && !recessoAperto(baseRecesso)) {
+    return ApiErrors.invalidRequest('Termine per il recesso scaduto (14 giorni dalla consegna).');
   }
 
   // 186 — L'articolo indicato non veniva verificato: si poteva chiedere il reso

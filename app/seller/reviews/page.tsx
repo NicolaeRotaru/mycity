@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileText, MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/format';
@@ -176,6 +176,7 @@ export default function SellerReviewsPage() {
 }
 
 function ReviewCard({ review }: { review: Review }) {
+  const qc = useQueryClient();
   const [showReply, setShowReply] = useState(false);
   const [reply, setReply] = useState(review.seller_reply ?? '');
   const [savedReply, setSavedReply] = useState<string | null>(review.seller_reply);
@@ -195,6 +196,14 @@ function ReviewCard({ review }: { review: Review }) {
       if (!res.ok || !json.ok) throw new Error(json?.error?.message ?? 'Errore durante il salvataggio');
       setSavedReply(text);
       setShowReply(false);
+      // 12/11/2026 (R07-020) — La risposta restava solo nello stato della scheda: tornando
+      // sulla pagina (le recensioni restano «fresche» 30 secondi in memoria) la scheda
+      // ripartiva dal dato vecchio e il negozio rivedeva la risposta di prima. Si
+      // aggiorna la memoria subito, e la si rilegge.
+      qc.setQueryData<Review[]>(queryKeys.seller.reviews, (righe) =>
+        righe?.map((r) => (r.id === review.id ? { ...r, seller_reply: text, seller_reply_at: new Date().toISOString() } : r)),
+      );
+      void qc.invalidateQueries({ queryKey: queryKeys.seller.reviews });
       toast.success('Risposta pubblicata');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Impossibile pubblicare la risposta');

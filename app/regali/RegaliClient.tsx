@@ -84,6 +84,7 @@ export default function RegaliClient() {
         sort={sort}
         maxColumns={4}
         onCount={setCount}
+        titoloNascosto="Le idee regalo"
         minPrice={GIFT_MIN_PRICE}
         categoryIds={giftCategoryIds.length > 0 ? giftCategoryIds : undefined}
       />

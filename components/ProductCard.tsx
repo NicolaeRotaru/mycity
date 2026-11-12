@@ -157,7 +157,7 @@ const ProductCard = ({
         tabIndex={0}
       />
       {/* Badge in alto a sinistra */}
-      <div className="absolute top-2 left-2 z-10 flex flex-col gap-1" aria-hidden>
+      <div className="pointer-events-none absolute top-2 left-2 z-10 flex flex-col gap-1" aria-hidden>
         {showStrike && <Badge variant="discount">-{badgePct}%</Badge>}
         {isNew && <Badge variant="new">Nuovo</Badge>}
         {isOutOfStock && <Badge variant="soldout">Esaurito</Badge>}
@@ -165,7 +165,7 @@ const ProductCard = ({
 
       {/* FOTO dominante (~3/5) — object-cover su sfondo bianco: la foto riempie
           il riquadro quadrato (come le demo), niente bande beige sulle foto dei negozi. */}
-      <div className="relative aspect-square w-full overflow-hidden bg-white">
+      <div className="relative aspect-square w-full overflow-hidden bg-white pointer-events-none">
         <Image
           src={img}
           /* 27/8/2026 (R117) — qui c'era `alt={name}`, e il nome del prodotto
@@ -187,7 +187,7 @@ const ProductCard = ({
           disabled={!cuorePremibile}
           aria-label={!cuorePremibile ? 'Non sono riuscito a leggere i tuoi preferiti' : isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
           title={!cuorePremibile ? 'Non sono riuscito a leggere i tuoi preferiti: riprova fra un momento' : undefined}
-          className={`absolute top-2 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow-sm-neutral transition-transform ${cuorePremibile ? 'hover:scale-110 hover:bg-white' : 'cursor-not-allowed opacity-60'}`}
+          className={`pointer-events-auto absolute top-2 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow-sm-neutral transition-transform ${cuorePremibile ? 'hover:scale-110 hover:bg-white' : 'cursor-not-allowed opacity-60'}`}
         >
           <Heart
             size={16}
@@ -197,8 +197,11 @@ const ProductCard = ({
         </button>
       </div>
 
-      {/* Corpo compatto — z-10 per stare sopra il link overlay */}
-      <div className="relative z-10 flex flex-1 flex-col gap-1 p-2.5">
+      {/* Corpo compatto — z-10 per stare sopra il link overlay.
+          12/11/2026 (R07-004) — Foto e corpo coprivano il link che apre la scheda:
+          toccando la card in home e nella ricerca non si apriva niente. Ora sono
+          trasparenti al tocco (pointer-events-none) e solo cuore e «+» lo prendono. */}
+      <div className="relative z-10 flex flex-1 flex-col gap-1 p-2.5" style={{ pointerEvents: 'none' }}>
         {storeName && (
           <div className="flex items-center gap-1.5">
             {/*
@@ -278,7 +281,7 @@ const ProductCard = ({
               onClick={handleAdd}
               disabled={isOutOfStock}
               aria-label={hasVariants ? `Scegli le opzioni di ${name}` : `Aggiungi ${name} al carrello`}
-              className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm-neutral transition-all hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
+              className="pointer-events-auto ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm-neutral transition-all hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
             >
               <Plus size={18} strokeWidth={2.6} aria-hidden />
             </button>

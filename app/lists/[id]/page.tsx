@@ -320,7 +320,30 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
         <ul className="space-y-3">
           {items.map((it) => {
             const p = it.product;
-            if (!p) return null;
+            // 12/11/2026 (R07-014) — un prodotto che il negozio ha tolto dalla vetrina
+            // non si legge più (product null): la riga spariva, ma il conteggio della
+            // lista lo contava ancora e non c'era modo di toglierlo. Ora si vede, e chi
+            // ha la lista lo può togliere.
+            if (!p) {
+              return (
+                <li key={it.product_id} className="bg-white border border-cream-300 rounded-xl p-4 flex gap-3 items-center">
+                  <div className="w-[72px] h-[72px] flex-shrink-0 rounded-lg bg-cream-100 flex items-center justify-center"><Package size={24} strokeWidth={2.2} className="text-ink-400" aria-hidden /></div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-ink-600">Non più disponibile</p>
+                    <p className="text-xs text-ink-500">Il negozio l&apos;ha tolto dalla vetrina.</p>
+                  </div>
+                  {isOwner && (
+                    <button
+                      onClick={() => removeItem.mutate(it.product_id)}
+                      aria-label="Rimuovi"
+                      className="flex-shrink-0 text-rose-500 hover:text-rose-700"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </li>
+              );
+            }
             const img = p.images?.[0];
             return (
               <li key={p.id} className="bg-white border border-cream-300 rounded-xl p-4 flex gap-3 items-start">

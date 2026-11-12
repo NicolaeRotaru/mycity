@@ -14,6 +14,8 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
+import { recessoAperto, ultimoGiornoDelRecesso } from '@/lib/ordini/termine-del-recesso';
+import { MOTIVO_RIPENSAMENTO } from '@/lib/ordini/recesso';
 import { useTranslations } from 'next-intl';
 import { Package, RefreshCw, AlertTriangle, MessageSquare, Clock, Pencil, type LucideIcon } from 'lucide-react';
 
@@ -63,7 +65,7 @@ export default function NewReturnPage() {
       const [{ data, error }, { data: aperti }] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, total_price, delivered_at, delivery_status, payment_method, stripe_payment_intent, wallet_applied_cents')
+          .select('id, total_price, delivered_at, created_at, delivery_status, payment_method, stripe_payment_intent, wallet_applied_cents')
           .eq('id', params.id)
           .single(),
         supabase.from('returns').select('id, status').eq('order_id', params.id).in('status', STATI_APERTI).limit(1),
@@ -79,6 +81,35 @@ export default function NewReturnPage() {
       setLoaded(true);
     })();
   }, [params.id, tentativo]);
+
+  // 12/11/2026 (R07-002) — «Ho cambiato idea» non vale quando tutti i prodotti
+  // dell'ordine sono esclusi dal recesso (pane, freschi, su ordinazione). Il server
+  // lo rifiutava già: la pagina lo accettava, e il cliente lo scopriva solo dopo aver
+  // compilato tutto. Appena il cliente sceglie quel motivo, la pagina chiede l'esito
+  // al server (/api/returns/ripensamento), che legge come returns/create: il client
+  // del cliente non vede i prodotti tolti dalla vetrina dopo l'ordine (il pane segnato
+  // esaurito la sera) e li avrebbe contati come recedibili. Se c'è un rifiuto la scelta
+  // si toglie, si spegne e la pagina dice perché. Se la domanda cade, la pagina non
+  // decide al buio: lascia la scelta e il server risponde all'invio.
+  const [rifiutoRipensamento, setRifiutoRipensamento] = useState<string | null>(null);
+  const [ripensamentoChiesto, setRipensamentoChiesto] = useState(false);
+  useEffect(() => {
+    if (!order?.id || reason !== MOTIVO_RIPENSAMENTO || ripensamentoChiesto) return;
+    setRipensamentoChiesto(true);
+    (async () => {
+      try {
+        const r = await fetch(`/api/returns/ripensamento?orderId=${encodeURIComponent(order.id)}`);
+        if (!r.ok) return;
+        const json = (await r.json()) as { rifiuto?: string | null };
+        setRifiutoRipensamento(typeof json.rifiuto === 'string' ? json.rifiuto : null);
+      } catch {
+        /* domanda non riuscita: decide il server all'invio */
+      }
+    })();
+  }, [order?.id, reason, ripensamentoChiesto]);
+  useEffect(() => {
+    if (rifiutoRipensamento && reason === MOTIVO_RIPENSAMENTO) setReason('');
+  }, [rifiutoRipensamento, reason]);
 
   async function ritira() {
     if (!resoAperto) return;
@@ -249,10 +280,12 @@ export default function NewReturnPage() {
    * I due campi erano già letti, riga 40. Bastava guardarli.
    */
   const consegnato = order.delivery_status === 'DELIVERED';
-  const giorniDallaConsegna = order.delivered_at
-    ? Math.floor((Date.now() - new Date(order.delivered_at).getTime()) / 86_400_000)
-    : null;
-  const fuoriTempo = giorniDallaConsegna !== null && giorniDallaConsegna > 14;
+  // 12/11/2026 (R07-006) — la stessa regola del server: giorni di calendario a
+  // Piacenza, e senza data di consegna si conta dalla data dell'ordine. Prima la
+  // pagina arrotondava per difetto e lasciava compilare il reso, IBAN compreso,
+  // anche quando il server lo avrebbe rifiutato come scaduto.
+  const baseRecesso = order.delivered_at ?? order.created_at ?? null;
+  const fuoriTempo = baseRecesso !== null && !recessoAperto(baseRecesso);
 
   if (!consegnato || fuoriTempo) {
     return (
@@ -277,8 +310,9 @@ export default function NewReturnPage() {
           ) : (
             <>
               <p className="mt-3 text-ink-700">
-                Sono passati <strong>{giorniDallaConsegna} giorni</strong> dalla
-                consegna, e i giorni per il recesso sono quattordici.
+                Il termine per il recesso è scaduto: valeva fino a tutto il{' '}
+                <strong>{new Date(`${ultimoGiornoDelRecesso(baseRecesso!)}T12:00:00Z`).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', timeZone: 'Europe/Rome' })}</strong>,
+                quattordici giorni dopo la consegna.
               </p>
               <p className="mt-2 text-ink-700">
                 Questo non chiude tutte le strade: se il prodotto è difettoso o
@@ -320,19 +354,27 @@ export default function NewReturnPage() {
         <fieldset>
         <legend className="block text-sm font-medium text-ink-700">Motivo del reso</legend>
         <div className="mt-2 space-y-2">
-          {REASONS.map((r) => (
-            <label key={r.value} className="flex cursor-pointer items-center gap-3 rounded-lg border border-cream-300 p-3 hover:bg-cream-50">
+          {REASONS.map((r) => {
+            const spento = r.value === MOTIVO_RIPENSAMENTO && rifiutoRipensamento !== null;
+            return (
+            <label key={r.value} className={`flex items-center gap-3 rounded-lg border border-cream-300 p-3 ${spento ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-cream-50'}`}>
               <input
                 type="radio"
                 name="reason"
                 value={r.value}
                 checked={reason === r.value}
+                disabled={spento}
+                aria-describedby={spento ? 'ripensamento-escluso' : undefined}
                 onChange={(e) => setReason(e.target.value)}
                 className="h-4 w-4 text-primary-700"
               />
               <span className="text-sm inline-flex items-center gap-2"><r.icon size={15} strokeWidth={2.2} className="text-ink-500" aria-hidden /> {r.label}</span>
             </label>
-          ))}
+            );
+          })}
+          {rifiutoRipensamento && (
+            <p id="ripensamento-escluso" className="text-sm text-ink-600">{rifiutoRipensamento}</p>
+          )}
         </div>
         </fieldset>
 
@@ -365,9 +407,14 @@ export default function NewReturnPage() {
                 type="button"
                 onClick={() => setPhotos((tutte) => tutte.filter((x) => x !== p))}
                 aria-label={`Togli la foto ${i + 1}`}
-                className="absolute -right-2 -top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-ink-900 text-xs font-bold text-white shadow-sm-neutral"
+                // 12/11/2026 (R07-008) — il tasto era 24 px, la metà dei 44 minimi: ora l'area
+                // che si tocca è 44 px e dentro resta il pallino visibile da 24. Sporge di 8 px,
+                // quanto lo spazio fra le miniature: non copre la foto accanto né il «+».
+                className="absolute -right-2 -top-2 inline-flex h-11 w-11 items-center justify-center rounded-full"
               >
-                ×
+                <span aria-hidden="true" className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-ink-900 text-xs font-bold text-white shadow-sm-neutral">
+                  ×
+                </span>
               </button>
             </div>
           ))}

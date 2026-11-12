@@ -12,6 +12,8 @@ import { Input, Select, Textarea } from '@/components/ui/Field';
 import { formatPrice } from '@/lib/format';
 import { AdminPageTitle, AdminSectionLabel } from '@/components/admin/AdminUI';
 import { DROP_DEL_GIORNO_ACCESO } from '@/lib/funzioni-al-lancio';
+import { giornoPiacenza } from '@/lib/tempo-piacenza';
+import { ErrorState } from '@/components/ui/ErrorState';
 
 /**
  * Admin: Drop del giorno. La tabella daily_drops esisteva senza interfaccia: qui
@@ -25,7 +27,9 @@ type Drop = {
   drop_price: number; headline: string | null; product: { id: string; name: string } | null;
 };
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+// 12/11/2026 (R07-017) — il giorno di Piacenza, non di Greenwich: fra mezzanotte e
+// l'una-due di notte la data minima e l'elenco dei drop erano ancora su ieri.
+const todayIso = () => giornoPiacenza();
 
 async function authedFetch(url: string, method: string, body: unknown) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -64,7 +68,7 @@ export default function AdminDailyDropsPage() {
     },
   });
 
-  const { data: drops = [] } = useQuery({
+  const { data: drops = [], isError: dropsCaduti, refetch: rileggiDrops } = useQuery({
     queryKey: queryKeys.admin.dailyDrops,
     queryFn: async (): Promise<Drop[]> => {
       const { data, error } = await supabase
@@ -166,7 +170,14 @@ export default function AdminDailyDropsPage() {
         {!DROP_DEL_GIORNO_ACCESO && drops.length > 0 && (
           <p className="text-xs text-ink-500 mb-2">Salvati ma non usciranno in home finché il Drop del giorno resta spento.</p>
         )}
-        {drops.length === 0 ? (
+        {/* 12/11/2026 (R07-017) — una lettura caduta non è «nessun drop». */}
+        {dropsCaduti ? (
+          <ErrorState
+            title="Non riesco a leggere i drop programmati"
+            description="Non vuol dire che non ce ne siano: riprova."
+            retry={() => { void rileggiDrops(); }}
+          />
+        ) : drops.length === 0 ? (
           <p className="text-sm text-ink-500">Nessun drop per oggi o per i prossimi giorni.</p>
         ) : (
           <ul className="space-y-2">
