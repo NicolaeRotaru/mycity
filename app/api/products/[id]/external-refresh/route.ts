@@ -5,6 +5,7 @@ import { withAdminAuth } from '@/lib/api/middleware';
 import { apiSuccess, ApiErrors } from '@/lib/api/responses';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import {
   fetchExternalSnapshot,
   isStale,
@@ -63,11 +64,14 @@ async function doRefresh(id: string, sourceUrl: string, marketplace: string | nu
       .eq('id', id);
     return data;
   } catch (err) {
-    // Segna l'errore e fai backoff (synced_at=now) per non martellare l'AI.
+    // Segna l'errore. 12/11/2026 (R04-011) — external_synced_at NON si tocca:
+    // vuol dire «dati arrivati a quest'ora», e qui non e' arrivato niente. Il
+    // freno contro i tentativi a raffica resta il cancello di 30 minuti per
+    // prodotto nel GET.
     logger.warn('external-refresh fallito', { id, status: err instanceof Error ? err.message : 'err' });
     await admin
       .from('products')
-      .update({ external_synced_at: new Date().toISOString(), external_sync_status: 'error' })
+      .update({ external_sync_status: 'error' })
       .eq('id', id);
     return null;
   }
@@ -95,6 +99,12 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
   const stale = isStale(row.external_synced_at);
   const pending = row.external_sync_status === 'pending';
+
+  // R04-011 — Con gli strumenti AI spenti non si scrive niente: si restituisce
+  // quello che c'e', com'e', come fa il giro a orario (external-price-alerts).
+  if (!AI_NEGOZI_ACCESA) {
+    return apiSuccess({ external: row.external_data ?? null, synced_at: row.external_synced_at, stale });
+  }
 
   // Path comune: dati freschi o refresh già in corso → nessuna chiamata AI.
   if (!stale || pending) {
