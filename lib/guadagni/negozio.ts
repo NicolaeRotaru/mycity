@@ -152,3 +152,84 @@ export function riepilogoContanti(ordini: OrdineNegozio[], consegnato: (o: Ordin
       .reduce((s, o) => s + nettoDopoStorni(o), 0),
   };
 }
+
+/**
+ * R11-001 — IL PANNELLO DEI BONIFICI DICE QUANTO VERSARE A OGNI NEGOZIO IL LUNEDÌ.
+ *
+ * Al lancio Nicola versa a mano i contanti, ogni lunedì, per le consegne della
+ * settimana prima (registro dei fatti: pagamenti.bonifico-contanti-al-negozio).
+ * /admin/payouts dava numeri sbagliati per questo lavoro:
+ *  · AWAITING_REMITTANCE (contanti ancora in mano al fattorino), REVERSAL_FAILED
+ *    e CASH_IN_STORE (ritiro pagato al banco) cadevano nel ramo «Pronto» e
+ *    finivano nei «Da pagare»;
+ *  · i contanti con la rimessa confermata (HELD), cioe' proprio quelli da
+ *    versare, stavano negli «In sospeso»;
+ *  · gli importi erano il netto pieno, senza togliere gli storni.
+ * Qui c'e' la regola, provata fuori dalla pagina.
+ */
+export type GruppoDelPannello = 'da_versare' | 'in_sospeso' | 'pagato' | 'fuori';
+
+export type OrdineDelPannello = {
+  payment_method: string | null;
+  payout_status: string | null;
+  seller_payout_cents: number | null;
+  seller_payout_reversed_cents?: number | null;
+  delivered_at?: string | null;
+};
+
+export function gruppoDelPannello(o: OrdineDelPannello): { gruppo: GruppoDelPannello; etichetta: string } {
+  const contanti = o.payment_method === 'cod';
+  switch (o.payout_status) {
+    case 'TRANSFERRED':
+      return { gruppo: 'pagato', etichetta: 'Pagato' };
+    case 'PAID_MANUALLY':
+      return { gruppo: 'pagato', etichetta: 'Bonifico fatto' };
+    case 'HELD':
+      // Contanti con la rimessa confermata: li versa Nicola a mano. Carta: li paga il giro.
+      return contanti ? { gruppo: 'da_versare', etichetta: 'Da versare' } : { gruppo: 'in_sospeso', etichetta: 'In sospeso' };
+    case 'PENDING_SELLER_ONBOARDING':
+    case 'PROCESSING':
+      return { gruppo: 'in_sospeso', etichetta: 'In sospeso' };
+    case 'AWAITING_REMITTANCE':
+      return { gruppo: 'in_sospeso', etichetta: 'Contanti dal fattorino' };
+    case 'FAILED':
+      return { gruppo: 'in_sospeso', etichetta: 'Verifica IBAN' };
+    case 'CASH_IN_STORE':
+      return { gruppo: 'fuori', etichetta: 'Incassato al banco' };
+    case 'REVERSAL_FAILED':
+      return { gruppo: 'fuori', etichetta: 'Storno non riuscito' };
+    case 'REVERSED':
+      return { gruppo: 'fuori', etichetta: 'Stornato' };
+    case 'REFUNDED':
+      return { gruppo: 'fuori', etichetta: 'Rimborsato' };
+    default:
+      // Consegnato con la carta, netto calcolato, il giro non l'ha ancora preso.
+      return contanti ? { gruppo: 'in_sospeso', etichetta: 'In sospeso' } : { gruppo: 'in_sospeso', etichetta: 'In attesa del giro' };
+  }
+}
+
+/** Il lunedì e la domenica (AAAA-MM-GG, ora di Piacenza) della settimana prima di `adesso`. */
+export function settimanaPrima(adesso: Date): { dal: string; al: string } {
+  const oggi = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(adesso);
+  const giorno = new Date(`${oggi}T12:00:00Z`);
+  const daLunedi = (giorno.getUTCDay() + 6) % 7;
+  const lunediQuesto = new Date(giorno.getTime() - daLunedi * 86_400_000);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return { dal: iso(new Date(lunediQuesto.getTime() - 7 * 86_400_000)), al: iso(new Date(lunediQuesto.getTime() - 86_400_000)) };
+}
+
+/** I contanti da versare il lunedì: HELD consegnati entro la domenica scorsa (arretrati compresi). */
+export function ordiniDaVersareLunedi<T extends OrdineDelPannello>(ordini: T[], adesso: Date): T[] {
+  const { al } = settimanaPrima(adesso);
+  const giornoDi = (iso: string) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+  return ordini.filter(
+    (o) => gruppoDelPannello(o).gruppo === 'da_versare' && !!o.delivered_at && giornoDi(o.delivered_at) <= al,
+  );
+}
+
+/** Quanto versare il lunedì, al netto degli storni. */
+export function daVersareLunedi(ordini: OrdineDelPannello[], adesso: Date): { cents: number; ordini: number } {
+  const righe = ordiniDaVersareLunedi(ordini, adesso);
+  return { cents: righe.reduce((s, o) => s + nettoDopoStorni(o as OrdineNegozio), 0), ordini: righe.length };
+}
