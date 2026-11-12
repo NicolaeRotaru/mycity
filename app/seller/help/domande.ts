@@ -47,7 +47,9 @@ export const TOPICS: ArgomentoAiuto[] = [
         // Le etichette sono quelle dei pulsanti veri (lib/order-status.ts e la pagina dell'ordine).
         a: `Da "Ordini" apri l'ordine "${ORDER_STATUS_LABEL.NEW}" e premi "Accetta ordine". Riceverai una notifica quando un fattorino lo prenderà in carico.` },
       { q: 'Posso rifiutare un ordine?',
-        a: 'Sì, se non puoi prepararlo. Fornisci sempre un motivo (es. prodotto esaurito). Il cliente riceve rimborso automatico.' },
+        // 12/11/2026 (R09-021, collaudo) — «riceve rimborso automatico» valeva solo per la carta: coi contanti
+        // non ha pagato niente, e lo si dice.
+        a: 'Sì, se non puoi prepararlo. Fornisci sempre un motivo (es. prodotto esaurito). Il cliente viene avvisato: se paga alla consegna non ha pagato niente, se aveva pagato con carta gli torna tutto in automatico.' },
       { q: 'Come segnalo l\'ordine pronto?',
         a: `Dalla pagina dell'ordine premi "${etichettaPronto(false)}" (oppure "${etichettaPronto(true)}" se il cliente passa in negozio). Il fattorino o il cliente vengono avvisati.` },
     ],

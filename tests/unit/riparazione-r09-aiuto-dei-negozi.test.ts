@@ -16,6 +16,10 @@ describe('R09-021 · l’aiuto dei negozi parla come il negoziante', () => {
     expect(senzaEtichette).not.toMatch(/payout|evader|\brider\b/i);
     expect(risposte).toContain('prossimo pagamento che ti facciamo');
   });
+  it('il rifiuto non promette un rimborso a chi paga alla consegna', () => {
+    expect(risposte).not.toMatch(/Il cliente riceve rimborso automatico/);
+    expect(risposte).toMatch(/se paga alla consegna non ha pagato niente/);
+  });
   it('le sponsorizzate compaiono solo quando sono accese', () => {
     expect(/sponsorizzat/i.test(risposte)).toBe(ABBONAMENTO_NEGOZI_ACCESO);
   });
