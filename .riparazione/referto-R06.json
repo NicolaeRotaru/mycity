@@ -1,8 +1,8 @@
 {
   "sessione": "R06",
-  "aggiornato": "2026-11-12 15:02",
+  "aggiornato": "2026-11-12 15:28",
   "finita": false,
-  "testa": "12202bd61fac42b4e592eaf5561c172d16284aa0",
+  "testa": "2769d8dc6fb5ba43ede97866e1b162327fc9b38a",
   "verifica": {
     "comando": "npm run verify",
     "esito": "",
@@ -40,6 +40,188 @@
       "prova": "lib/analytics/posthog.tsx:419 posthog.init riceve ...opzioniIndirizzoIngressoMascherato() (mask_personal_data_properties: true + custom_personal_data_properties con tutti i parametri dell'indirizzo d'ingresso), e nel loaded ripulisciIndirizzoIngressoSalvato (:376) ripulisce $initial_person_info salvato prima. Prova esistente verde: npx vitest run tests/unit/posthog-l-indirizzo-d-ingresso-non-esce-dalla-porta-dei-flag.test.ts (2 passate)."
     },
     {
+      "id": "R06-003",
+      "chiave": "accessibilita|nella chat col negozio i messaggi nuovi arrivano in silenzio per chi usa il lettore di schermo",
+      "esito": "riparato",
+      "commit": "2530a711b7800e36059ed315f09e7b07312f661b",
+      "file_toccati": [
+        "app/messages/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-chat-si-annuncia.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-chat-si-annuncia.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2530a711b7800e36059ed315f09e7b07312f661b^ --file app/messages/[id]/page.tsx --prove tests/unit/riparazione-r06-chat-si-annuncia.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il contenitore del filo ha role=log, aria-live=polite, aria-relevant=additions e aria-label «Messaggi della conversazione»; ogni bolla comincia con uno span sr-only col mittente («Tu:» o il nome dell'interlocutore). Prova che monta la pagina e legge gli attributi e i testi."
+    },
+    {
+      "id": "R06-004",
+      "chiave": "accessibilita-visiva|nella pagina",
+      "esito": "riparato",
+      "commit": "4c6a8221d3a6b509cc986c8b7cc4eed5f07fb69c",
+      "file_toccati": [
+        "app/status/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-pagina-stato.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-pagina-stato.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4c6a8221d3a6b509cc986c8b7cc4eed5f07fb69c^ --file app/status/page.tsx --prove tests/unit/riparazione-r06-pagina-stato.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il link «Contattaci» ha underline underline-offset-2 sempre (prima solo hover:underline). Prova leggera: la pagina si disegna con getSystemHealth finto e si legge la classe del link."
+    },
+    {
+      "id": "R06-005",
+      "chiave": "architettura|la regola che vieta i tipi",
+      "esito": "parziale",
+      "commit": "7edd7aec015b8d4ad3348ed81c24d0df212d0a4b",
+      "file_toccati": [
+        ".eslintrc.json"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-regola-niente-any.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-regola-niente-any.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7edd7aec015b8d4ad3348ed81c24d0df212d0a4b^ --file .eslintrc.json --prove tests/unit/riparazione-r06-regola-niente-any.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "@typescript-eslint/no-explicit-any acceso a «warn» nell'override dei file .ts/.tsx (next lint resta verde: 30 avvisi, nessun errore; non c'e' --max-warnings). Con la regola accesa le direttive su no-explicit-any tornano utili. tsconfig.json non toccato: strict e' gia' true.",
+      "cosa_resta": "Le 28 direttive eslint-disable che non spengono niente stanno in file non miei: elenco esatto in serve_file_altrui. Poi si puo' aggiungere --report-unused-disable-directives al lint. Gli any espliciti restano come avvisi.",
+      "serve_file_altrui": [
+        {
+          "file": "app/admin/products/page.tsx",
+          "modifica": "riga 162: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives app/admin/products/page.tsx"
+        },
+        {
+          "file": "app/api/cron/send-emails/route.ts",
+          "modifica": "riga 242: togliere la direttiva eslint-disable vuota: non spegne niente (nessun problema segnalato). Controllo: npx eslint --report-unused-disable-directives app/api/cron/send-emails/route.ts"
+        },
+        {
+          "file": "app/product/[id]/layout.tsx",
+          "modifica": "riga 140: togliere la direttiva eslint-disable per @next/next/no-head-element: non spegne niente (nessun problema segnalato). Controllo: npx eslint --report-unused-disable-directives app/product/[id]/layout.tsx"
+        },
+        {
+          "file": "app/product/[id]/opengraph-image.tsx",
+          "modifica": "riga 63: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives app/product/[id]/opengraph-image.tsx"
+        },
+        {
+          "file": "app/product/[id]/page.tsx",
+          "modifica": "riga 760: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives app/product/[id]/page.tsx"
+        },
+        {
+          "file": "app/seller/orders/[id]/page.tsx",
+          "modifica": "riga 656: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives app/seller/orders/[id]/page.tsx"
+        },
+        {
+          "file": "app/seller/products/ai-batch/page.tsx",
+          "modifica": "riga 293: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives app/seller/products/ai-batch/page.tsx"
+        },
+        {
+          "file": "app/store/[id]/opengraph-image.tsx",
+          "modifica": "riga 63: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives app/store/[id]/opengraph-image.tsx"
+        },
+        {
+          "file": "components/CategoryShowcase.tsx",
+          "modifica": "riga 289: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/CategoryShowcase.tsx"
+        },
+        {
+          "file": "components/ImageUrlField.tsx",
+          "modifica": "riga 112: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/ImageUrlField.tsx"
+        },
+        {
+          "file": "components/StoreListRow.tsx",
+          "modifica": "riga 82: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/StoreListRow.tsx"
+        },
+        {
+          "file": "components/StoreMediaManager.tsx",
+          "modifica": "riga 168: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/StoreMediaManager.tsx"
+        },
+        {
+          "file": "components/StorePreviewCard.tsx",
+          "modifica": "riga 134: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/StorePreviewCard.tsx"
+        },
+        {
+          "file": "components/SupportProductAssistant.tsx",
+          "modifica": "riga 361: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/SupportProductAssistant.tsx"
+        },
+        {
+          "file": "components/SupportProductAssistant.tsx",
+          "modifica": "riga 408: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/SupportProductAssistant.tsx"
+        },
+        {
+          "file": "components/SupportProductAssistant.tsx",
+          "modifica": "riga 421: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/SupportProductAssistant.tsx"
+        },
+        {
+          "file": "components/SupportProductAssistant.tsx",
+          "modifica": "riga 516: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/SupportProductAssistant.tsx"
+        },
+        {
+          "file": "components/SupportProductAssistant.tsx",
+          "modifica": "riga 660: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/SupportProductAssistant.tsx"
+        },
+        {
+          "file": "components/account/AccountSidebar.tsx",
+          "modifica": "riga 116: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/account/AccountSidebar.tsx"
+        },
+        {
+          "file": "components/seller/BackgroundRemovalPreview.tsx",
+          "modifica": "riga 147: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/seller/BackgroundRemovalPreview.tsx"
+        },
+        {
+          "file": "components/seller/BackgroundRemovalPreview.tsx",
+          "modifica": "riga 161: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/seller/BackgroundRemovalPreview.tsx"
+        },
+        {
+          "file": "components/seller/BarcodeScanner.tsx",
+          "modifica": "riga 130: togliere la direttiva eslint-disable per jsx-a11y/media-has-caption: non spegne niente (nessun problema segnalato). Controllo: npx eslint --report-unused-disable-directives components/seller/BarcodeScanner.tsx"
+        },
+        {
+          "file": "components/seller/BulkPhotoCreate.tsx",
+          "modifica": "riga 287: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/seller/BulkPhotoCreate.tsx"
+        },
+        {
+          "file": "components/seller/CameraCapture.tsx",
+          "modifica": "riga 161: togliere la direttiva eslint-disable per jsx-a11y/media-has-caption: non spegne niente (nessun problema segnalato). Controllo: npx eslint --report-unused-disable-directives components/seller/CameraCapture.tsx"
+        },
+        {
+          "file": "components/seller/ProductForm.tsx",
+          "modifica": "riga 1205: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/seller/ProductForm.tsx"
+        },
+        {
+          "file": "components/seller/ProductImagesField.tsx",
+          "modifica": "riga 199: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/seller/ProductImagesField.tsx"
+        },
+        {
+          "file": "components/seller/ReturnRequestCard.tsx",
+          "modifica": "riga 219: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/seller/ReturnRequestCard.tsx"
+        },
+        {
+          "file": "components/seller/site/SitePreview.tsx",
+          "modifica": "riga 267: togliere la direttiva eslint-disable per @next/next/no-img-element: non spegne niente (regola gia spenta in .eslintrc.json). Controllo: npx eslint --report-unused-disable-directives components/seller/site/SitePreview.tsx"
+        }
+      ],
+      "nota": "La prova e' stata ritoccata nel commit c5eaa0f7d2ca5bfec2d26a17e9f74e5e6568ccdc (carica eslint con require: il pacchetto non porta i tipi e il typecheck la rifiutava). Stesse asserzioni."
+    },
+    {
       "id": "R06-006",
       "chiave": "architettura|oltre i mille prodotti la mappa per google perde i più vecchi senza dirlo",
       "esito": "riparato",
@@ -62,6 +244,95 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Prodotti letti con leggiInBlocchiTutte (finestre da mille dentro ogni blocco di negozi), negozi con leggiTutteLeRighe al posto di .limit(2000). Il tetto dei 5000 indirizzi di prodotto resta, con un logger.warn quando scatta. Due prove esistenti che importano app/sitemap.ts avevano un finto senza .range: ho aggiunto solo 'range' all'elenco dei metodi, senza indebolirle."
+    },
+    {
+      "id": "R06-007",
+      "chiave": "architettura|il controllo",
+      "esito": "gia_riparato_prima",
+      "commit": "677632f390603b1ab788b2a6b1887a584fdf2222",
+      "prova": "Il comportamento era gia' giusto: aggiunta solo la prova che mancava, senza difetto trovato (come chiesto dalla regista). npx vitest run tests/unit/riparazione-r06-cookie-scritti-dalla-libreria.test.ts → 9 passate. I cookie li scrive @supabase/ssr 0.5.2 vera (createServerClient + _saveSession + evento TOKEN_REFRESHED): tessera corta, tessera spezzata in .0/.1/.2, JSON grezzo senza base64- (cookieEncoding raw), tessera intera accanto ai pezzi, due progetti sullo stesso dominio. Controllo a mano: il mutante «JSON grezzo → false» fa cadere la prova del JSON grezzo (1 rossa su 9).",
+      "prova_file": [
+        "tests/unit/riparazione-r06-cookie-scritti-dalla-libreria.test.ts"
+      ],
+      "file_toccati": []
+    },
+    {
+      "id": "R06-008",
+      "chiave": "architettura|il tetto di 10 secondi è diventato quello di serie per tutte le chiamate, e la scelta fra 3 e 10 secondi sta fuori dal modulo provabile",
+      "esito": "riparato",
+      "commit": "a58ce9bbfd68705527581c3399e544d5386fbb64",
+      "file_toccati": [
+        "lib/auth/cookie-di-sessione.ts",
+        "middleware.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-tetto-di-serie-tre-secondi.test.ts",
+        "tests/unit/riparazione-r06-tetto-per-getuser.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-tetto-di-serie-tre-secondi.test.ts tests/unit/riparazione-r06-tetto-per-getuser.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a58ce9bbfd68705527581c3399e544d5386fbb64^ --file lib/auth/cookie-di-sessione.ts --prove tests/unit/riparazione-r06-tetto-di-serie-tre-secondi.test.ts --json",
+        "nota": "Rimessa sul file del modulo con la prova del tetto di serie. La prova di tettoPerGetUser cadrebbe per la struttura (funzione nuova); il middleware chiama la funzione con lo stesso comportamento di prima, quindi sul middleware non c'e' un comportamento da far mordere."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuova funzione pura tettoPerGetUser(cookie, adesso) nel modulo (10 s solo se sessioneDaRinnovare, altrimenti 3 s), chiamata dal middleware al posto della scelta in linea. Il valore di serie di chiediConTettoSuScritturaDiSessione torna TETTO_PORTIERE_MS (tutti i chiamanti, middleware e prove, passano gia' ms). Comportamento del portiere identico; la convivenza con tettoPerChiedereChiSei e' in domande_per_nicola."
+    },
+    {
+      "id": "R06-009",
+      "chiave": "architettura|in home ogni sezione chiede di nuovo alla vetrina lo stesso negozio, e ogni fascia compare un giro di rete più tardi",
+      "esito": "parziale",
+      "commit": "5422f4f9f61c893786d7a08c161be5665e3581e3",
+      "file_toccati": [
+        "lib/queries/seller-public-profiles.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-vetrina-una-volta-sola.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-vetrina-una-volta-sola.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 46a4511edacaea4d77db442769b7b23e8919c776^ --file lib/queries/seller-public-profiles.ts --prove tests/unit/riparazione-r06-vetrina-una-volta-sola.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nel browser fetchSellerPublicMap unisce le domande gia' in volo per lo stesso negozio (stesso client, stesse colonne) e chiede solo i negozi che mancano; atterrato il volo, la domanda dopo torna al database. Sul server niente. Un primo tentativo con una memoria di tre minuti nel modulo (commit 46a4511edacaea4d77db442769b7b23e8919c776) e' stato tolto nel commit 5422f4f9f61c893786d7a08c161be5665e3581e3: il modulo non sa quando i dati invecchiano, e una prova esistente (la-cassa-mostra-la-spedizione-che-addebita-coi-profili-chiusi: «se la vista non risponde la lista si dichiara non letta») diventava rossa perche' la memoria serviva il negozio letto prima.",
+      "cosa_resta": "La memoria di qualche minuto per negozio va messa dove si sa quando i dati invecchiano: nella cache di React Query dei chiamanti (queryClient.fetchQuery con chiave per negozio e staleTime), cioe' nei componenti che chiamano fetchSellerPublicMap, che non sono miei.",
+      "serve_file_altrui": [
+        {
+          "file": "components/home/DropOfDay.tsx, components/home/StoriesCarousel.tsx, components/home-sections/ReorderRail.tsx, lib/queries/griglia-prodotti.ts, lib/queries/fasce-prodotti.ts, lib/queries/negozio-del-mese.ts",
+          "modifica": "Leggere le vetrine con queryClient.fetchQuery({ queryKey: ['vetrina-negozio', id], queryFn: () => fetchSellerPublicMap(supabase, [id]), staleTime: 3 * 60_000 }) per ogni negozio (o una funzione comune che lo fa per un elenco), cosi' la home chiede ogni negozio una volta sola e le sezioni dopo la prima lo trovano gia' pronto."
+        }
+      ]
+    },
+    {
+      "id": "R06-010",
+      "chiave": "architettura|il finto clienteavvisi è riscritto in quattro posti e la prova da 1033 righe mescola rotte, notte e una scansione del sorgente",
+      "esito": "serve_file_altrui",
+      "nota": "Riordino di prove, senza difetto del sito. Nessuno dei file da toccare e' mio e nessuno importa file miei, quindi non li tocco. Controllato sulla base: la prova lunga ha ancora 1035 righe e adminDiProva (:70), la scansione readdirSync del sorgente (:567), letturaVuota in chi-aspetta…(:293); finto-giro-notturno.ts esporta fintoGiroNotturno (:166).",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/aiuti/finto-giro-notturno.ts",
+          "modifica": "Esportare un finto ClienteAvvisi unico (from('…').select().eq() concatenabile come in adminDiProva, con le risposte decise dallo scenario), da usare al posto delle copie scritte a mano."
+        },
+        {
+          "file": "tests/unit/chi-vuole-cancellarsi-trova-una-strada-che-funziona.test.ts",
+          "modifica": "Usare il finto unico al posto di adminDiProva (:70); spezzare il file da 1035 righe in tre (rotte, giro notturno, testi delle pagine); togliere la scansione readdirSync+regex su app/**/*.tsx (:560-576), che vede solo `mailto:${…emailPrivacy}` e si aggira con una concatenazione o un componente: sostituirla con una prova che monta la pagina e legge il link."
+        },
+        {
+          "file": "tests/unit/la-spiegazione-per-email-che-non-parte-si-riprova-la-notte-dopo.test.ts",
+          "modifica": "Usare il finto unico al posto della copia del ClienteAvvisi (:26); tenere qui la prova «la posta dice di no la prima notte» e toglierla dall'altro file, dove e' ripetuta (:480 della prova lunga, :100 qui)."
+        },
+        {
+          "file": "tests/unit/chi-aspetta-la-cancellazione-sa-perche-aspetta.test.ts",
+          "modifica": "Usare il finto unico al posto di letturaVuota (:293) e delle catene .eq() scritte a mano (:225, :252)."
+        }
+      ]
     },
     {
       "id": "R06-011",
@@ -225,6 +496,72 @@
       "cosa_ho_fatto": "Migrazione 302 (non applicata): andamento_del_negozio prende voto medio e recensioni da store_reviews con store_id = auth.uid(), come la pagina Recensioni; le visite restano come nella 141. Pagina: «Voto medio», «Consigli», «30 giorni» (5 punti), «la merce pronta». «Conversion rate» non toccato: la voce dice che si ripara nella sua voce."
     },
     {
+      "id": "R06-018",
+      "chiave": "dati-analytics|il filtro del filmato si ferma alla prima parentesi: il resto della ricerca esce in chiaro verso posthog",
+      "esito": "riparato",
+      "commit": "368e75bd3c85faee26187d17f3de8c5a0c9b5c6c",
+      "file_toccati": [
+        "lib/analytics/filmato-senza-dati-personali.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-filmato-oltre-le-parentesi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-filmato-oltre-le-parentesi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 368e75bd3c85faee26187d17f3de8c5a0c9b5c6c^ --file lib/analytics/filmato-senza-dati-personali.ts --prove tests/unit/riparazione-r06-filmato-oltre-le-parentesi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nell'espressione UN_INDIRIZZO_DENTRO_IL_TESTO le parentesi e l'apostrofo non sono piu' un confine (encodeURIComponent lascia in chiaro ( ) ! * ~ '): l'indirizzo finisce a spazio, virgolette doppie, < > o barra rovescia. SearchBar.tsx non toccato: la cura sta nel filtro. Prova con «pane (mario.rossi@gmail.com)» intero e relativo, i segni ( ) ! * ~ ' e il link fra le ricerche recenti in $elements."
+    },
+    {
+      "id": "R06-019",
+      "chiave": "dati-analytics|la rete guarda gli indirizzi, non un dato personale nudo",
+      "esito": "riparato",
+      "commit": "055f4cae6c5ccb41d122d7f41c34c49ef24a2d50",
+      "file_toccati": [
+        "lib/analytics/filmato-senza-dati-personali.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-rete-sui-recapiti.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-rete-sui-recapiti.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 055f4cae6c5ccb41d122d7f41c34c49ef24a2d50^ --file lib/analytics/filmato-senza-dati-personali.ts --prove tests/unit/riparazione-r06-rete-sui-recapiti.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "testoSenzaIndirizzi non esce piu' sui testi senza barra: dopo gli indirizzi passa da testoSenzaRecapiti, che nasconde le email (stessa espressione di messaggioSenzaDatiPersonali) e i telefoni italiani (3xx/0xx, +39 e spazi facoltativi) con confini che lasciano stare uuid, date, importi e codici. Vale per before_send (proprieta', $set) e per il filmato fuori dal DOM. Prova: casi da nascondere, casi da lasciare, un evento con proprieta' in piu'."
+    },
+    {
+      "id": "R06-020",
+      "chiave": "dati-analytics|la misura che parte dal server e' una seconda porta verso lo stesso raccoglitore, senza nessuna rete",
+      "esito": "riparato",
+      "commit": "cceddf83237b54b79453574ba6317eed69aa8999",
+      "file_toccati": [
+        "lib/analytics/server.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-acquisto-dal-server-ripulito.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-acquisto-dal-server-ripulito.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cceddf83237b54b79453574ba6317eed69aa8999^ --file lib/analytics/server.ts --prove tests/unit/riparazione-r06-acquisto-dal-server-ripulito.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le proprieta' dell'evento order_placed spedito dal server passano da strutturaSenzaIndirizzi (filmato-senza-dati-personali.ts, modulo puro adatto al server): indirizzi con parametri ripuliti, email e telefoni nascosti (con R06-019). Identificativi, importi e $insert_id restano uguali. Non uso proprietaSenzaDatiPersonali perche' vive in posthog.tsx, un modulo del browser."
+    },
+    {
       "id": "R06-021",
       "chiave": "dati-analytics|quando un cruscotto legge un campione invece del totale, lo dice solo alla console",
       "esito": "riparato",
@@ -247,10 +584,94 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "leggiTutteLeRighe accetta un tetto (di serie 20.000). La sintesi delle 24 ore di Attivita' legge a finestre fino a 3000 righe e mostra «campione: ultime N righe» quando il tetto scatta (prima il database ne dava 1000 e l'avviso non compariva mai). Nel funnel l'avviso a schermo copre ora anche gli ordini troncati (con R06-001)."
+    },
+    {
+      "id": "R06-022",
+      "chiave": "deploy-sre|il negozio di prova è ancora pubblico: su google, nella mappa del sito e nel conteggio dei negozi",
+      "esito": "non_codice",
+      "nota": "Il negozio «Panificio Demo» (profiles id 44444444-4444-4444-4444-aaaaaaaa0001) e' approvato nel database vero: la vista pubblica dei negozi lo mostra, e da li' lo prendono da sole la sitemap (app/sitemap.ts legge seller_public_profiles) e il conteggio di «Chi siamo» (app/about/page.tsx conta seller_public_profiles). Cosa deve fare Nicola: togliere l'approvazione al negozio demo (is_approved = false) o cancellarlo, insieme ai suoi 4 prodotti senza foto. Dopo, sitemap e «Chi siamo» lo seguono da sole. Non ho scritto l'id nel codice: un filtro scritto a mano sarebbe un secondo posto da ricordare. Non ho letto il database vero."
+    },
+    {
+      "id": "R06-023",
+      "chiave": "deploy-sre|la pagina pubblica",
+      "esito": "parziale",
+      "commit": "c1d514af5c5bf5d30cbae9a620f6ce4fb8c73095",
+      "file_toccati": [
+        "lib/health/checks.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-salute-dei-servizi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-salute-dei-servizi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c1d514af5c5bf5d30cbae9a620f6ce4fb8c73095^ --file lib/health/checks.ts --prove tests/unit/riparazione-r06-salute-dei-servizi.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "checkDb legge le categorie con creaClientAnonimo (la chiave pubblica del catalogo) al posto del client amministrativo: senza chiave di servizio il database e la chat risultano operativi. L'accesso fa due tentativi: se risponde il secondo e' «rallentato», solo due cadute di fila danno «non disponibile» (con logger.warn del motivo). Sulla pagina pubblica la riga del titolare dice «In completamento» invece dell'elenco delle variabili «da mettere prima di ricompilare»; checkTitolare() resta com'e' con il dettaglio completo (la sua prova esistente lo pretende). titolare-check.ts, app/status/page.tsx (l'ora e' gia' in Europe/Rome), lib/supabase/server.ts e lib/env.ts: nessuna modifica servita.",
+      "cosa_resta": "La voce chiede che la chiave di servizio mancante diventi una riga «non configurato» visibile solo nel pannello admin, insieme al dettaglio del titolare: nessuna pagina admin legge oggi la salute dei servizi, e le pagine admin non sono mie.",
+      "serve_file_altrui": [
+        {
+          "file": "app/admin/page.tsx (o una pagina admin dedicata)",
+          "modifica": "Aggiungere un riquadro «Configurazione» letto dal server: chiave di servizio presente (env.supabaseServiceRoleKey() non vuota) e checkTitolare().detail con l'elenco delle variabili mancanti. Da una rotta o un componente server riservato all'admin, non dalla pagina pubblica /status."
+        }
+      ]
+    },
+    {
+      "id": "R06-024",
+      "chiave": "deploy-sre|la pagina pubblica",
+      "esito": "riparato",
+      "commit": "7d55294e414807d5abca6afbdd07178bb720cb82",
+      "file_toccati": [
+        "lib/health/checks.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-salute-dei-servizi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-salute-dei-servizi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7d55294e414807d5abca6afbdd07178bb720cb82^ --file lib/health/checks.ts --prove tests/unit/riparazione-r06-salute-dei-servizi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "checkEmail: un 401 con name restricted_api_key (chiave di solo invio) vale «operativo» («Chiave di solo invio: raggiungibile»); ogni altro errore scrive il motivo vero nella riga («API non raggiungibile (HTTP 500)») e in un logger.warn. Un 401 di chiave sbagliata resta un guasto.",
+      "nota": "La voce chiede anche «poi una email di prova vera»: e' un passo su produzione per Nicola, non codice."
+    },
+    {
+      "id": "R06-025",
+      "chiave": "deploy-sre|le violazioni delle regole di sicurezza del browser non le vede nessuno",
+      "esito": "riparato",
+      "commit": "2769d8dc6fb5ba43ede97866e1b162327fc9b38a",
+      "file_toccati": [
+        "middleware.ts",
+        "app/api/csp-report/route.ts",
+        "lib/sicurezza/segnalazioni-csp.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r06-csp-si-fa-sentire.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r06-csp-si-fa-sentire.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2769d8dc6fb5ba43ede97866e1b162327fc9b38a^ --file middleware.ts --prove tests/unit/riparazione-r06-csp-si-fa-sentire.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "buildCsp aggiunge report-uri /api/csp-report e report-to csp; ogni risposta che porta la politica porta anche Reporting-Endpoints (una funzione sola, conPoliticaDiSicurezza, al posto dei sei set). Nuova rotta app/api/csp-report (file nuovo): accetta i due formati, corpo massimo 10 KB, freno per indirizzo, scrive nei log regola, risorsa bloccata e pagina senza parametri (logger.warn, quindi Sentry quando e' acceso), risponde sempre 204. L'indirizzo sta in lib/sicurezza/segnalazioni-csp.ts (file nuovo), cosi' politica e rotta non si separano e la prova esistente nessuna-rotta-che-non-chiama-nessuno lo trova."
     }
   ],
   "nuovi_difetti_visti": [],
-  "domande_per_nicola": [],
+  "domande_per_nicola": [
+    "R06-008: nel modulo del portiere convivono due regole per il tetto di getUser: tettoPerChiedereChiSei («qualunque tessera → 10 s», usata dalle prove dell'ondata 8) e quella del middleware, ora tettoPerGetUser («10 s solo se la tessera sta per scadere, altrimenti 3 s»). Il sito oggi usa la seconda. Quale deve valere?"
+  ],
   "conto": {
     "agenti": 0,
     "nota": ""
