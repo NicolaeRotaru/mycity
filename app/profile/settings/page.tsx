@@ -1,7 +1,7 @@
 'use client';
 
 import { recapitoDallaRisposta, recapitoPrivacy } from '@/lib/legal/titolare';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
@@ -168,6 +168,9 @@ export default function SettingsPage() {
   // ripiego scritto nel codice (lo stesso criterio della pagina privacy).
   const recapito = recapitoPrivacy();
   const [cancelingDeletion, setCancelingDeletion] = useState(false);
+  // R02-004 — Lo scarico vale una delle tre richieste del giorno: un doppio clic non ne brucia due.
+  const [scaricando, setScaricando] = useState(false);
+  const scaricoInCorso = useRef(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
@@ -326,7 +329,9 @@ export default function SettingsPage() {
    * di li': una strada sola, quella gia' scritta e gia' coperta dalle prove.
    */
   const handleDownloadData = async () => {
-    if (!userId) return;
+    if (!userId || scaricoInCorso.current) return;
+    scaricoInCorso.current = true;
+    setScaricando(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
@@ -343,15 +348,25 @@ export default function SettingsPage() {
         return;
       }
       const blob = await res.blob();
+      // R02-004 — Il nome lo decide il server, che sa se il file è INCOMPLETO: non si riscrive.
+      const dalServer = /filename="?([^";]+)"?/.exec(res.headers.get('content-disposition') ?? '')?.[1];
+      const nome = dalServer ?? `mycity-export-${new Date().toISOString().split('T')[0]}.json`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `mycity-export-${new Date().toISOString().split('T')[0]}.json`;
+      a.download = nome;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success('Esportazione dati scaricata');
+      if (nome.includes('INCOMPLETO')) {
+        toast.error('File parziale: alcune sezioni non sono complete. Scrivici e ti mandiamo il resto.');
+      } else {
+        toast.success('Esportazione dati scaricata');
+      }
     } catch {
       toast.error('Esportazione non riuscita. Riprova più tardi.');
+    } finally {
+      scaricoInCorso.current = false;
+      setScaricando(false);
     }
   };
 
@@ -666,9 +681,11 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={handleDownloadData}
-                  className="bg-cream-100 hover:bg-cream-200 px-4 py-2 rounded-lg text-sm font-semibold text-ink-900"
+                  disabled={scaricando}
+                  aria-busy={scaricando || undefined}
+                  className="bg-cream-100 hover:bg-cream-200 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-sm font-semibold text-ink-900"
                 >
-                  Esporta dati (JSON)
+                  {scaricando ? 'Preparo il file…' : 'Esporta dati (JSON)'}
                 </button>
               </div>
 

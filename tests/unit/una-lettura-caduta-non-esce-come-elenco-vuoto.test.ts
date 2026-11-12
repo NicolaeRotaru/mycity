@@ -32,7 +32,7 @@ const ANDATA_BENE = { data: [], error: null };
 
 function catena(tabella: string) {
   const c: Record<string, unknown> = {};
-  for (const m of ['select', 'eq', 'or', 'single', 'update', 'insert', 'order', 'limit']) {
+  for (const m of ['select', 'eq', 'or', 'single', 'update', 'insert', 'order', 'limit', 'range']) {
     c[m] = vi.fn(() => {
       if (m === 'single') return Promise.resolve(risposte[tabella] ?? { data: null, error: null });
       return c;
