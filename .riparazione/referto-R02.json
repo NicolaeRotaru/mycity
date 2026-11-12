@@ -1,0 +1,213 @@
+{
+  "sessione": "R02",
+  "aggiornato": "2026-11-12 14:54",
+  "finita": false,
+  "testa": "31030bbd828366d0d5483cea1e2cdbb5ee58045d",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R02-001",
+      "esito": "scelta_di_nicola",
+      "domanda": "Con il commercialista: con quale posizione fiscale (ditta individuale o società, con P.IVA) incassa MyCity? Poi vanno messe su Vercel produzione NEXT_PUBLIC_TITOLARE_NOME, _INDIRIZZO, _PIVA, _PEC, _EMAIL_PRIVACY (più _REA e _CAPITALE se società). Vuoi anche che il deploy di produzione si fermi senza P.IVA? Oggi spegnerebbe il sito.",
+      "nota": "La regista ha confermato: nessun codice. lib/legal/titolare.ts:131-148 stampa già i dati se le variabili ci sono; il riquadro va validato da un legale.",
+      "chiave": "privacy-legale|il sito non dice chi c'è dietro: niente nome, sede, partita iva né pec, il titolare risulta solo «mycity»"
+    },
+    {
+      "id": "R02-002",
+      "esito": "parziale",
+      "commit": "e4776a179b2953d83f26e6dbfde6b55e3733087b",
+      "file_toccati": [
+        "app/admin/events/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-eventi-sconto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-eventi-sconto.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e4776a179b2953d83f26e6dbfde6b55e3733087b^ --file app/admin/events/page.tsx --prove tests/unit/riparazione-r02-eventi-sconto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Tolto il campo «Sconto %» dal modulo, con una nota che rimanda alle promozioni del negozio; il salvataggio scrive sempre discount_percent = null, così chi riapre un evento vecchio lo ripulisce.",
+      "cosa_resta": "I badge «-n%» delle pagine pubbliche leggono ancora discount_percent degli eventi già salvati: vedi serve_file_altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "app/events/page.tsx",
+          "modifica": "righe ~211-215: togliere il badge «-{discount_percent}%» sulla copertina (o mostrarlo solo dietro un interruttore in lib/funzioni-al-lancio.ts spento finché lib/ordini/prezzi.ts non applica uno sconto per evento)"
+        },
+        {
+          "file": "components/home/HomeEvents.tsx",
+          "modifica": "righe ~81-85: stessa cosa, togliere il badge «-{discount_percent}%»"
+        }
+      ],
+      "verificato_da": "",
+      "chiave": "privacy-legale|lo sconto scritto su un evento appare ai clienti come «-20%», ma la cassa non lo applica mai"
+    },
+    {
+      "id": "R02-003",
+      "esito": "riparato",
+      "commit": "d0e1e9d0b11d881e5b85bbc1201f8b2c27c3f7a1",
+      "file_toccati": [
+        "app/admin/segnalazioni/page.tsx",
+        "app/api/admin/segnalazioni/accogli/route.ts",
+        "tests/unit/i-link-della-cabina-admin-portano-a-una-pagina-vera.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-segnalazione-accolta-pagina.test.tsx",
+        "tests/unit/riparazione-r02-segnalazione-accolta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-segnalazione-accolta-pagina.test.tsx tests/unit/riparazione-r02-segnalazione-accolta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d0e1e9d0b11d881e5b85bbc1201f8b2c27c3f7a1^ --file app/admin/segnalazioni/page.tsx --prove tests/unit/riparazione-r02-segnalazione-accolta-pagina.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Rotta nuova solo admin (/api/admin/segnalazioni/accogli): con tipo prodotto lo mette in bozza (status draft, fuori vetrina) e scrive product.hide nel registro. La pagina la chiama PRIMA di salvare la decisione; su un negozio usa la sospensione esistente (/api/admin/users/[id]/moderate) con conferma; per recensioni e messaggi «Accolta» è spenta. Se togliere fallisce, niente decisione e niente esito. Etichette che dicono cosa succede. Nella prova esistente i-link-della-cabina-admin (importa la pagina) il caso «accolta» ora finge la rotta di rimozione riuscita: guarda la stessa cosa di prima.",
+      "verificato_da": "",
+      "chiave": "privacy-legale|accogliere una segnalazione non toglie il prodotto: resta online, e a chi ha segnalato si scrive che è stato rimosso"
+    },
+    {
+      "id": "R02-004",
+      "esito": "riparato",
+      "commit": "d83c721feb496f7261b4076ebc53092b62500b76",
+      "file_toccati": [
+        "app/api/account/export/route.ts",
+        "app/profile/settings/page.tsx",
+        "tests/unit/minori-s08-esporta.test.ts",
+        "tests/unit/api-account.test.ts",
+        "tests/unit/una-lettura-caduta-non-esce-come-elenco-vuoto.test.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-esporta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-esporta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d83c721feb496f7261b4076ebc53092b62500b76^ --file app/api/account/export/route.ts --prove tests/unit/riparazione-r02-esporta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Ogni sezione si legge a finestre di 1000 (range) fino al tetto di 5000; 'al tetto' solo se dopo il tetto c'è un'altra riga. La pagina usa il nome del file del server, avvisa se è INCOMPLETO e spegne il pulsante durante lo scarico. Prove esistenti che importano la rotta: aggiunto 'range' ai finti; minori-s08-esporta ora rispetta il tetto di 1000 per lettura (come chiede la voce), senza indebolirla.",
+      "verificato_da": "",
+      "chiave": "privacy-legale|lo scarico dei miei dati si ferma a mille righe per sezione e dice comunque che il file è completo"
+    },
+    {
+      "id": "R02-005",
+      "esito": "parziale",
+      "commit": "ef43d38f68307b894a1e509de35a1f896e95ddcd",
+      "file_toccati": [
+        "components/store-sections/ReviewsSection.tsx",
+        "app/product/[id]/page.tsx",
+        "components/Segnala.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-recensioni-segnalabili.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-recensioni-segnalabili.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ef43d38f68307b894a1e509de35a1f896e95ddcd^ --file components/store-sections/ReviewsSection.tsx --prove tests/unit/riparazione-r02-recensioni-segnalabili.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "<Segnala tipo=recensione> su ogni recensione della scheda prodotto e della vetrina; per le recensioni il modulo offre motivi adatti («Recensione non genuina o ingannevole»…).",
+      "cosa_resta": "Lo strumento admin per togliere una recensione accolta e avvisarne l'autore: non c'è una pagina admin per le recensioni e i file non sono miei (in /admin/segnalazioni «Accolta» resta spenta per le recensioni, R02-003). Inoltre oggetto_id di una recensione non dice se è di prodotto (reviews) o di negozio (store_reviews): chi la toglierà dovrà cercarla in tutte e due.",
+      "verificato_da": "",
+      "chiave": "privacy-legale|le recensioni dei clienti non si possono segnalare, mentre i termini promettono di togliere quelle non genuine"
+    },
+    {
+      "id": "R02-006",
+      "esito": "scelta_di_nicola",
+      "domanda": "Con il commercialista: chi documenta la quota di consegna (3 € più i supplementi), che è un incasso di MyCity? Va riscritto il §5 dei Termini (app/terms/page.tsx:196-200, dove oggi c è scritto «MyCity non emette fatture»), insieme a una pagina dei corrispettivi del giorno e a una riga «consegna MyCity» nell email.",
+      "nota": "La regista ha confermato: nessun codice e nessun testo dei termini scritto da me.",
+      "chiave": "privacy-legale|la consegna è un incasso di mycity, ma per quei soldi non nasce nessun documento fiscale e i termini mandano il cliente a chiedere la fattura al negozio"
+    },
+    {
+      "id": "R02-007",
+      "esito": "parziale",
+      "commit": "31030bbd828366d0d5483cea1e2cdbb5ee58045d",
+      "file_toccati": [
+        "lib/privacy/potature-ritenzione.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-potatura-kyc.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-potatura-kyc.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 31030bbd828366d0d5483cea1e2cdbb5ee58045d^ --file lib/privacy/potature-ritenzione.ts --prove tests/unit/riparazione-r02-potatura-kyc.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il passo documenti-kyc-iscrizione-a-meta riconosce la vista che manca (PGRST205/PGRST202/42P01) e si salta con un avviso nel registro, senza contare come fallito: /api/cron/process-deletions non risponde più 500 per questo. Un guasto vero resta un guasto; con la 171 applicata il passo lavora come prima, file compresi.",
+      "cosa_resta": "Non codice: per potare davvero quei documenti Nicola deve applicare la migrazione 171 (e mettere la chiave di servizio, senza la quale il lavoro è comunque fermo). Fino ad allora la notte non fallisce, ma i documenti delle iscrizioni a metà non vengono tolti (oggi il secchio kyc-docs è vuoto).",
+      "nota": "applicare migrations/171_i_documenti_d_identita_scadono.sql e la chiave di servizio",
+      "verificato_da": "",
+      "chiave": "privacy-legale|la pulizia notturna dei documenti d'identità lasciati a metà iscrizione fallisce ogni notte nel database vero"
+    },
+    {
+      "id": "R02-013",
+      "esito": "non_codice",
+      "nota": "Creare la casella email per la privacy e impostare NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY su Vercel produzione: lib/legal/titolare.ts:144-145 la usa già al posto del modulo /contact. Per un secondo canale, la posta, serve l indirizzo della sede (vedi R02-001).",
+      "chiave": "architettura|senza la casella vera, l'unico recapito del titolare nell'informativa e nella cookie policy è il modulo web"
+    },
+    {
+      "id": "R02-019",
+      "esito": "gia_riparato_prima",
+      "prova": "components/store-sections/ReviewsSection.tsx:190 (const mostrate = tutte ? reviews : reviews.slice(0, RECENSIONI_SUBITO)) e :239-245 («Mostra altre recensioni»); coperto da tests/unit/minori-s09-vetrina-recensioni.test.ts (caso 325). Il numero della linguetta usa il riepilogo vero (SectionRenderer.tsx:116, riepilogoRecensioni(ctx)?.totale).",
+      "chiave": "frontend-ux|la vetrina dice «recensioni · 20» ma ne fa leggere solo sei, senza modo di vedere le altre"
+    },
+    {
+      "id": "R02-024",
+      "esito": "gia_riparato_prima",
+      "prova": "components/Footer.tsx:178-181: const madri = soloLePiene(madriTutte, piene.isError ? null : piene.data). Il piede mostra solo le categorie con almeno un prodotto, quindi «abbigliamento» ricompare solo se nel database ha prodotti.",
+      "cosa_resta": "Dipende dal database vero, che non ho guardato: va controllato che la categoria abbigliamento (select slug from categories where slug=abbigliamento and parent_id is null) non abbia prodotti, oppure che sia giusto mostrarla se ne ha.",
+      "chiave": "microcopy|il piede rimette «abbigliamento» dopo la lettura se la categoria è attiva nel database (non verificato)"
+    },
+    {
+      "id": "R02-025",
+      "esito": "riparato",
+      "commit": "91722c9de0d8d170ba2f895d3114610ccbce2cdb",
+      "file_toccati": [
+        "app/api/account/export/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-esporta-fattorino.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-esporta-fattorino.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 91722c9de0d8d170ba2f895d3114610ccbce2cdb^ --file app/api/account/export/route.ts --prove tests/unit/riparazione-r02-esporta-fattorino.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Due sezioni nuove: recensioni_ricevute_come_fattorino (rider_reviews su rider_id) e giornate_di_cassa_del_fattorino (cod_reconciliations su rider_id). export_completo guarda già letture_fallite e sezioni_al_tetto delle sezioni lette.",
+      "verificato_da": "",
+      "chiave": "privacy-legale|lo scarico dei dati del fattorino si dichiara completo ma non contiene le sue giornate di cassa né le recensioni ricevute"
+    }
+  ],
+  "nuovi_difetti_visti": [],
+  "domande_per_nicola": [],
+  "conto": {
+    "agenti": 0,
+    "nota": ""
+  }
+}
