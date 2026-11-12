@@ -14,21 +14,26 @@
 --   · `coupon_redemptions` tiene una riga per (codice, cliente) a ogni
 --     rivendicazione di un codice first_order_only;
 --   · `claim_coupon(p_code, p_user_id)` blocca la riga del codice (FOR UPDATE:
---     due rivendicazioni dello stesso codice si mettono in fila) e rifiuta se
---     lo stesso cliente ha gia' una rivendicazione aperta e recente;
---   · `release_coupon(p_code, p_order_id)` — quella dei percorsi di
---     annullamento che conoscono l'ordine — chiude anche la rivendicazione del
---     cliente di quell'ordine: il buono torna davvero utilizzabile (la promessa
---     del 3/9).
+--     due rivendicazioni dello stesso codice si mettono in fila) e rifiuta se lo
+--     stesso cliente sta GIA' usando il codice. «Sta usando» vuol dire una di tre
+--     prove vive:
+--       1. una rivendicazione di meno di DUE MINUTI (il tempo fra la
+--          rivendicazione e la nascita della cassa o dell'ordine: e' la gara
+--          delle due schede);
+--       2. una cassa con la carta ancora aperta con quel codice
+--          (pending_checkouts PENDING e non scaduta);
+--       3. un ordine con quel codice non annullato, non fallito e col codice
+--          non restituito (coupon_released_at vuoto).
 --
--- PERCHE' DUE ORE. Una rivendicazione piu' vecchia di due ore non blocca piu'.
--- E' quanto vive una cassa con la carta aperta (`pending_checkouts.expires_at`):
--- oltre, o l'ordine e' nato — e allora lo conta gia' `validateCoupon` — o la
--- cassa e' scaduta. Serve da rete per i rilasci che non conoscono l'ordine
--- (carrello scaduto, riserve abbandonate chiamano `release_coupon(p_code)`):
--- senza, un cliente con la cassa scaduta resterebbe senza benvenuto per sempre.
--- E' una scelta, scritta nelle domande per Nicola.
---
+-- PERCHE' COSI' (collaudo del 12/11). La prima versione teneva il lucchetto due
+-- ore e lo apriva solo coi rilasci che conoscono l'ordine; poi il sito lo
+-- chiudeva quando liberava una cassa abbandonata qualsiasi, e con tre schede il
+-- benvenuto tornava doppio. Legare il lucchetto alle prove vive non chiede a
+-- nessun percorso di rilascio di ricordarsene: una cassa scaduta o annullata,
+-- un articolo esaurito, Stripe che rifiuta, un ordine annullato col codice
+-- restituito spengono la prova da soli, e il cliente riprova dopo al massimo
+-- due minuti.
+
 -- La firma vecchia `claim_coupon(p_code)` resta com'e': il sito la usa come
 -- ripiego finche' questa migrazione non e' applicata.
 -- Non si applica da sola: la applica Nicola.
@@ -55,7 +60,7 @@ ALTER TABLE public.coupon_redemptions ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON public.coupon_redemptions FROM anon, authenticated;
 
 COMMENT ON TABLE public.coupon_redemptions IS
-  'R12-004: chi ha rivendicato un codice first_order_only e quando. Una riga aperta da meno di 2 ore blocca la seconda rivendicazione dello stesso cliente.';
+  'R12-004: chi ha rivendicato un codice first_order_only e quando. Blocca la seconda rivendicazione dello stesso cliente per 2 minuti, poi finche c e una cassa aperta o un ordine valido col codice (claim_coupon).';
 
 CREATE OR REPLACE FUNCTION public.claim_coupon(p_code text, p_user_id uuid)
 RETURNS boolean
@@ -76,12 +81,29 @@ BEGIN
     RETURN false;
   END IF;
 
-  IF v_primo AND p_user_id IS NOT NULL AND EXISTS (
-    SELECT 1 FROM public.coupon_redemptions r
-     WHERE r.coupon_id = v_id
-       AND r.user_id = p_user_id
-       AND r.released_at IS NULL
-       AND r.claimed_at > now() - interval '2 hours'
+  IF v_primo AND p_user_id IS NOT NULL AND (
+    EXISTS (
+      SELECT 1 FROM public.coupon_redemptions r
+       WHERE r.coupon_id = v_id
+         AND r.user_id = p_user_id
+         AND r.released_at IS NULL
+         AND r.claimed_at > now() - interval '2 minutes'
+    )
+    OR EXISTS (
+      SELECT 1 FROM public.pending_checkouts pc
+       WHERE pc.buyer_id = p_user_id
+         AND upper(trim(pc.coupon_code)) = upper(trim(p_code))
+         AND pc.status = 'PENDING'
+         AND pc.expires_at > now()
+    )
+    OR EXISTS (
+      SELECT 1 FROM public.orders o
+       WHERE o.user_id = p_user_id
+         AND upper(trim(o.coupon_code)) = upper(trim(p_code))
+         AND o.coupon_released_at IS NULL
+         AND o.delivery_status IS DISTINCT FROM 'CANCELED'
+         AND o.payment_status IS DISTINCT FROM 'FAILED'
+    )
   ) THEN
     RETURN false;
   END IF;
@@ -148,37 +170,3 @@ BEGIN
   RETURN coalesce(nuovo, 0);
 END;
 $function$;
-
--- 12/11/2026 (collaudo R12-004) — I rilasci che non conoscono l'ordine
--- (`release_coupon(p_code)`: cassa con la carta abbandonata, tetto dei contanti,
--- carrello scaduto) scalano il contatore ma non sanno di chi era la
--- rivendicazione: chi tornava indietro dalla pagina di Stripe e riapriva la cassa
--- restava senza benvenuto per due ore. Il sito, quando ha appena liberato le
--- casse abbandonate DI QUEL CLIENTE, chiude le sue rivendicazioni aperte del
--- codice prima di rivendicarlo di nuovo.
-CREATE OR REPLACE FUNCTION public.chiudi_rivendicazioni_del_cliente(p_code text, p_user_id uuid)
-RETURNS integer
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $function$
-DECLARE chiuse int;
-BEGIN
-  IF p_code IS NULL OR p_user_id IS NULL THEN
-    RETURN 0;
-  END IF;
-  UPDATE public.coupon_redemptions r
-     SET released_at = now()
-    FROM public.coupons c
-   WHERE r.coupon_id = c.id
-     AND c.code = upper(trim(p_code))
-     AND r.user_id = p_user_id
-     AND r.released_at IS NULL;
-  GET DIAGNOSTICS chiuse = ROW_COUNT;
-  RETURN chiuse;
-END;
-$function$;
-
-REVOKE ALL ON FUNCTION public.chiudi_rivendicazioni_del_cliente(text, uuid) FROM public;
-REVOKE EXECUTE ON FUNCTION public.chiudi_rivendicazioni_del_cliente(text, uuid) FROM anon;
-REVOKE EXECUTE ON FUNCTION public.chiudi_rivendicazioni_del_cliente(text, uuid) FROM authenticated;
