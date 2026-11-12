@@ -128,7 +128,7 @@ export default function CheckoutPage() {
 
   // Raggruppa il carrello per seller. Usa il sellerId gia' presente nel CartItem
   // (formato nuovo). Per gli item vecchi senza sellerId, fa un lookup sui products.
-  const { data: cartData, isLoading: loadingGroups } = useQuery({
+  const { data: cartData, isLoading: loadingGroups, refetch: rileggiLaCassa } = useQuery({
     queryKey: queryKeys.checkout.groups(cart.map((c) => `${c.id}:${c.sellerId ?? ''}`).join(',')),
     enabled: cart.length > 0,
     queryFn: async () => {
@@ -950,6 +950,8 @@ export default function CheckoutPage() {
           // R163 — la chiave del checkout: il server la riattacca a `order_placed`,
           // cosi' l'avvio e gli acquisti che ne sono nati si ritrovano.
           checkoutId: idCheckout,
+          // R03-011 — i sottototali mostrati: se il server trova prezzi diversi non crea l'ordine.
+          subtotaliVistiCents: sottototaliPerNegozioCents,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -961,6 +963,8 @@ export default function CheckoutPage() {
         // proprio quel caso: se il gemello sta ancora lavorando la chiave e'
         // sua, e buttarla creerebbe il doppione.
         if (laChiaveVaButtata(body)) chiudiIlTentativo();
+        // R03-011 — prezzi cambiati mentre si era in cassa: si rileggono e si mostrano.
+        if ((body as { error?: { code?: unknown } }).error?.code === 'PREZZI_CAMBIATI') void rileggiLaCassa();
         throw new Error(apiErrorMessage(body, 'Creazione ordine fallita'));
       }
       // 22/8/2026 — la rotta adesso risponde al contratto del progetto,
