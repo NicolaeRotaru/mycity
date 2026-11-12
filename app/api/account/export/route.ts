@@ -223,6 +223,11 @@ const scarica = withAuthRateLimit(
     storie_guardate: tutta((da, a) => admin.from('seller_story_views').select('*').eq('user_id', userId).range(da, a)),
     voti_negozio_del_mese: tutta((da, a) => admin.from('shop_of_month_votes').select('*').eq('voter_id', userId).range(da, a)),
     traguardi: tutta((da, a) => admin.from('user_achievements').select('*').eq('user_id', userId).range(da, a)),
+    // 12/11/2026 (R02-025) — IL FATTORINO. Le recensioni che RICEVE stanno su rider_id (quelle
+    // che scrive su user_id, già in «reviews.riders»), e le sue giornate di cassa sono dati suoi:
+    // chi ha consegnato, quanto contante, quando l'ha rimesso.
+    recensioni_ricevute_come_fattorino: tutta((da, a) => admin.from('rider_reviews').select('*').eq('rider_id', userId).range(da, a)),
+    giornate_di_cassa_del_fattorino: tutta((da, a) => admin.from('cod_reconciliations').select('*').eq('rider_id', userId).range(da, a)),
   };
 
   /**
