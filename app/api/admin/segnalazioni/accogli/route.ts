@@ -46,7 +46,11 @@ export const POST = withAdminAuth(async ({ user, req }): Promise<NextResponse> =
     .eq('id', s.oggetto_id)
     .select('id');
   if (erroreScrittura) return ApiErrors.internal('Non sono riuscito a togliere il prodotto');
-  if (!tolti || tolti.length === 0) return ApiErrors.notFound('Il prodotto segnalato non esiste più');
+  // Il prodotto non c'è più (cancellato dal venditore): dalla vetrina è già fuori, quindi «tolto»
+  // è vero e la decisione si può registrare. Niente da scrivere nel registro.
+  if (!tolti || tolti.length === 0) {
+    return NextResponse.json({ ok: true, tolto: s.oggetto_id, giaAssente: true }, { status: 200 });
+  }
 
   await writeAudit({
     actorId: user.id,

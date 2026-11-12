@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const scritture: Array<{ tabella: string; patch: unknown; id?: unknown }> = [];
 const audit: unknown[] = [];
 let segnalazione: Record<string, unknown> | null = null;
+const stato = { prodottoSparito: false };
 
 vi.mock('@/lib/api/middleware', () => ({
   withAdminAuth: (handler: (ctx: { user: { id: string }; req: Request }) => unknown) =>
@@ -24,7 +25,7 @@ vi.mock('@/lib/supabase/server', () => ({
       q.update = (p: unknown) => { voce.patch = p; scritture.push(voce); return q; };
       q.maybeSingle = async () => ({ data: segnalazione, error: null });
       q.then = (ok: (v: unknown) => unknown) =>
-        Promise.resolve({ data: voce.patch ? [{ id: voce.id }] : [], error: null }).then(ok);
+        Promise.resolve({ data: voce.patch && !stato.prodottoSparito ? [{ id: voce.id }] : [], error: null }).then(ok);
       return q;
     },
   }),
@@ -44,7 +45,7 @@ const chiama = () =>
   );
 
 describe('R02-003 · accogliere una segnalazione su un prodotto', () => {
-  beforeEach(() => { scritture.length = 0; audit.length = 0; });
+  beforeEach(() => { scritture.length = 0; audit.length = 0; stato.prodottoSparito = false; });
 
   it('il prodotto esce dalla vetrina e l azione finisce nel registro', async () => {
     segnalazione = { id: ID, tipo: 'prodotto', oggetto_id: PRODOTTO };
@@ -60,5 +61,13 @@ describe('R02-003 · accogliere una segnalazione su un prodotto', () => {
     const res = await chiama();
     expect(res.status).toBe(409);
     expect(scritture).toEqual([]);
+  });
+
+  it('il prodotto non esiste più: è già fuori dalla vetrina, la decisione si può registrare', async () => {
+    segnalazione = { id: ID, tipo: 'prodotto', oggetto_id: PRODOTTO };
+    stato.prodottoSparito = true;
+    const res = await chiama();
+    expect(res.status).toBe(200);
+    expect(audit).toHaveLength(0);
   });
 });

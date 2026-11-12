@@ -167,6 +167,37 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
  */
 const CorpoEsito = z.object({ id: z.string().uuid() });
 
+/**
+ * 12/11/2026 (R02-003) — «ACCOLTA» DICE «RIMOSSO»: PRIMA SI GUARDA CHE SIA VERO.
+ *
+ * L'esito di una segnalazione accolta dice a chi ha segnalato e al venditore «il contenuto è stato
+ * rimosso». La pagina admin toglie il contenuto prima di registrare la decisione, ma la garanzia
+ * vera sta qui, dove l'esito parte: se il prodotto è ancora in vetrina, o il negozio ancora
+ * approvato, o il contenuto è di un tipo che da qui non si toglie, non parte niente.
+ * Restituisce il motivo per fermarsi, o null se si può comunicare.
+ */
+async function contenutoAncoraOnline(
+  admin: ReturnType<typeof getAdminSupabase>,
+  id: string,
+): Promise<string | null> {
+  const { data } = await admin.from('segnalazioni').select('stato, tipo, oggetto_id').eq('id', id).maybeSingle();
+  const s = data as { stato?: string; tipo?: string; oggetto_id?: string } | null;
+  if (!s || s.stato !== 'accolta') return null;
+  if (s.tipo === 'prodotto') {
+    const { data: p } = await admin.from('products').select('status').eq('id', s.oggetto_id).maybeSingle();
+    return (p as { status?: string } | null)?.status === 'available'
+      ? 'Il prodotto è ancora in vetrina: toglilo prima di comunicare «rimosso».'
+      : null;
+  }
+  if (s.tipo === 'negozio') {
+    const { data: n } = await admin.from('profiles').select('approval_status').eq('id', s.oggetto_id).maybeSingle();
+    return (n as { approval_status?: string } | null)?.approval_status === 'approved'
+      ? 'Il negozio è ancora attivo: sospendilo prima di comunicare «rimosso».'
+      : null;
+  }
+  return 'Questo tipo di contenuto non si toglie da qui: l\'esito «rimosso» non può partire.';
+}
+
 export const PATCH = withAdminAuth(async ({ req }) => {
   let corpo;
   try {
@@ -174,7 +205,10 @@ export const PATCH = withAdminAuth(async ({ req }) => {
   } catch (e) {
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
-  const r = await comunicaEsito(getAdminSupabase(), corpo.id);
+  const admin = getAdminSupabase();
+  const ancoraOnline = await contenutoAncoraOnline(admin, corpo.id);
+  if (ancoraOnline) return ApiErrors.conflict(ancoraOnline);
+  const r = await comunicaEsito(admin, corpo.id);
   if (!r.ok) {
     if (r.motivo === 'non_trovata') return ApiErrors.notFound('Segnalazione non trovata');
     if (r.motivo === 'non_decisa') {

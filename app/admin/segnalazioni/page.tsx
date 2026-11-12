@@ -88,15 +88,26 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
         if (!r.ok) throw new Error('Il prodotto non è stato tolto: decisione non registrata. Riprova.');
       }
       if (decisione === 'accolta' && s.tipo === 'negozio') {
-        if (!window.confirm('Accogliere la segnalazione sospende il negozio. Confermi?')) {
-          throw new Error('Decisione annullata: il negozio resta attivo.');
+        // Si sospende solo un negozio che è online (approvato). Già sospeso, in attesa o respinto
+        // vuol dire che dalla vetrina è già fuori: la decisione si registra senza risospenderlo
+        // (la rotta di moderazione risponderebbe 400 e la decisione non entrerebbe mai).
+        const { data: negozio } = await supabase
+          .from('profiles')
+          .select('approval_status')
+          .eq('id', s.oggetto_id)
+          .maybeSingle();
+        if ((negozio as { approval_status?: string } | null)?.approval_status === 'approved') {
+          if (!window.confirm('Accogliere la segnalazione sospende il negozio. Confermi?')) {
+            throw new Error('Decisione annullata: il negozio resta attivo.');
+          }
+          const r = await fetch(`/api/admin/users/${s.oggetto_id}/moderate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // La rotta di moderazione accetta un motivo di al massimo 500 caratteri.
+            body: JSON.stringify({ action: 'suspend', reason: motivazione.trim().slice(0, 500) }),
+          });
+          if (!r.ok) throw new Error('Il negozio non è stato sospeso: decisione non registrata. Riprova.');
         }
-        const r = await fetch(`/api/admin/users/${s.oggetto_id}/moderate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'suspend', reason: motivazione.trim() }),
-        });
-        if (!r.ok) throw new Error('Il negozio non è stato sospeso: decisione non registrata. Riprova.');
       }
       if (decisione === 'accolta' && !puoTogliere) {
         throw new Error('Per questo tipo di contenuto non c\'è ancora un modo di toglierlo da qui.');
