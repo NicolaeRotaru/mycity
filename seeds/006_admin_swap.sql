@@ -9,11 +9,15 @@ DECLARE
   admin_email text := 'admin@piacenza-demo.local';
   pwd text := crypt('PiacenzaDemo2025!', gen_salt('bf'));
 BEGIN
+  -- 12/11/2026 (R12-009) — La semina scrive con la stessa chiave delle prove SQL
+  -- (tests/sql/harness): il guardiano dei profili (119) lascia l'approvazione solo
+  -- allo staff, e qui chi scrive è la semina, non un utente. Vale per questa transazione.
+  PERFORM set_config('mycity.allow_profile_write', '1', true);
   ----------------------------------------------------------------
   -- 1) Demoziona l'attuale admin (nicolaflorea50@gmail.com) a buyer
   ----------------------------------------------------------------
   UPDATE public.profiles
-  SET role = 'buyer', is_approved = false
+  SET role = 'buyer', is_approved = false, approval_status = NULL
   WHERE id = (SELECT id FROM auth.users WHERE email = 'nicolaflorea50@gmail.com');
 
   ----------------------------------------------------------------
@@ -81,11 +85,12 @@ BEGIN
   ----------------------------------------------------------------
   -- 4) Profilo admin (in caso il trigger non l'abbia creato)
   ----------------------------------------------------------------
-  INSERT INTO public.profiles (id, role, is_approved, full_name)
-  VALUES (admin_uuid, 'admin', true, 'Admin MyCity')
+  INSERT INTO public.profiles (id, role, is_approved, approval_status, full_name)
+  VALUES (admin_uuid, 'admin', true, 'approved', 'Admin MyCity')
   ON CONFLICT (id) DO UPDATE
     SET role = 'admin',
         is_approved = true,
+        approval_status = 'approved',
         full_name = COALESCE(public.profiles.full_name, 'Admin MyCity');
 END $$;
 
