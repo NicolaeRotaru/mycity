@@ -1,8 +1,8 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-12 15:03",
+  "aggiornato": "2026-11-12 15:22",
   "finita": false,
-  "testa": "20e01611358c91d7f6c9319b8b2a485a94dd4db0",
+  "testa": "747a458b735134ff745c63b65e14bbd68ba2d3dc",
   "verifica": {
     "comando": "npm run verify",
     "esito": "",
@@ -77,6 +77,29 @@
       ]
     },
     {
+      "id": "R04-004",
+      "chiave": "accessibilita-visiva|in fondo alle domande frequenti, chi usa la tastiera non vede quando è sul bottone «contattaci»",
+      "esito": "riparato",
+      "commit": "baaf53bee2495467feeb62dc32a5c83c2479d46f",
+      "file_toccati": [
+        "app/faq/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-faq-fuoco.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-faq-fuoco.test.ts",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/faq/page.tsx -> rossa; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Aggiunto focus-visible:outline-white al Link «Contattaci» nel riquadro terracotta delle FAQ, come gia' fanno le barre in alto (Navbar). La regola unica in globals.css per tutti i fondi terracotta/vino (voce 1760) non l'ho fatta: fuori dalla voce.",
+      "verificato_da": ""
+    },
+    {
       "id": "R04-005",
       "chiave": "ai-endpoints|un lotto ai partito ma non agganciato resta «in invio» per sempre, e la pagina del negozio non mostra né rotella né pulsante",
       "esito": "riparato",
@@ -135,6 +158,30 @@
       "verificato_da": ""
     },
     {
+      "id": "R04-007",
+      "chiave": "ai-endpoints|il copilot non riesce a preparare una modifica su tutto il catalogo oltre circa cento prodotti: risponde «riprova» e fallisce ogni volta",
+      "esito": "riparato",
+      "commit": "3caab0b190dc8bc195ad659ed19651543215b0ac",
+      "file_toccati": [
+        "app/api/ai/copilot/route.ts",
+        "lib/ai/regolaCopilot.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-copilot-regola.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-copilot-regola.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/copilot/route.ts -> 4 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La «soluzione piu' solida» della voce: lo strumento bulk_edit accetta 'regola' {product_ids, prezzo_percentuale, aggiungi_tag, togli_tag, status}; il prompt dice di usarla quando la stessa operazione vale per piu' di 20 prodotti. Il server (lib/ai/regolaCopilot.ts, nuovo) espande la regola sui prodotti veri del venditore: prezzo con la percentuale arrotondato al centesimo, tag partendo da quelli attuali (che il modello non vede), stato fra quelli ammessi; le voci singole sullo stesso prodotto si sommano sopra. Un id ~20-25 token contro 35-55 di una voce: 200 prodotti stanno nel tetto di 6000. La banda del ±30% sul prezzo resta applicata da catalog-apply-bulk come prima.",
+      "verificato_da": ""
+    },
+    {
       "id": "R04-008",
       "chiave": "ai-endpoints|l'assistente ai del negozio controlla solo l'ultima richiesta: il testo messo nella conversazione precedente arriva al modello senza filtro",
       "esito": "riparato",
@@ -182,6 +229,29 @@
       "verificato_da": ""
     },
     {
+      "id": "R04-010",
+      "chiave": "ai-endpoints|la dettatura porta nel prompt, senza tetto e senza filtro, il testo degli elenchi che manda il browser",
+      "esito": "riparato",
+      "commit": "732ea170395a135afaed36d37bd70d6c729f711a",
+      "file_toccati": [
+        "app/api/ai/voice-product/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-dettatura-elenchi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-dettatura-elenchi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/voice-product/route.ts -> 3 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il tetto per elemento e lo scarto dei null c'erano gia' sulla base (S10: voceCorta/opzioniCorte, filtro sugli oggetti). Mancava il resto: le righe di categorie e caratteristiche ora passano da assertSafeText insieme al dettato (prima della chiamata al modello) e nel prompt stanno dentro i recinti <categorie> e <attributi>.",
+      "verificato_da": ""
+    },
+    {
       "id": "R04-011",
       "chiave": "ai-endpoints|con l'ai spenta, chi guarda un prodotto importato da un altro sito lo fa segnare come «aggiornato adesso» anche se nessun dato è arrivato",
       "esito": "riparato",
@@ -202,6 +272,29 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Nel GET, con AI_NEGOZI_ACCESA spento, si restituiscono i dati salvati (con stale vero) senza scrivere 'pending' ne' lanciare il refresh. Nel catch di doRefresh si scrive solo external_sync_status='error', non external_synced_at=adesso; il freno resta il cancello di 30 minuti per prodotto. Il cron external-price-alerts legge gia' l'interruttore: non toccato.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-012",
+      "chiave": "ai-endpoints|la lettura di un prodotto da una foto va in errore 500 se il modello scrive il motivo del rifiuto in un formato inatteso",
+      "esito": "riparato",
+      "commit": "61c6e995c2219d23eaf589652a6110a6f3b4415b",
+      "file_toccati": [
+        "app/api/vision/extract-product/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-foto-uscita-modello.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-foto-uscita-modello.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/vision/extract-product/route.ts -> 2 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "policy_reason si usa solo se e' una stringa (altrimenti il messaggio generico, 400 invece di 500); name, description e category_slug escono solo se stringhe, suggested_price solo se numero finito > 0 (altrimenti null), come in extract-products.",
       "verificato_da": ""
     },
     {
@@ -260,6 +353,56 @@
       "verificato_da": ""
     },
     {
+      "id": "R04-015",
+      "chiave": "ai-endpoints|i tagli contro i costi contano le voci degli elenchi ma non la loro lunghezza: una richiesta sotto il megabyte riempie la finestra del modello",
+      "esito": "riparato",
+      "commit": "7482bc60053bd1e7552e3182158acc8761d9da3a",
+      "file_toccati": [
+        "app/api/ai/improve-product/route.ts",
+        "app/api/ai/product-chat/route.ts",
+        "app/api/ai/barcode-lookup/route.ts",
+        "lib/ai/productContext.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-elenchi-con-tetto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-elenchi-con-tetto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- i quattro file -> 4 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sulla base buildProductContext e rigaAttributoPerIlModello avevano gia' il tetto per testo (30 opzioni, 80 caratteri, S10). Restavano: improve-product (righe degli attributi senza tetto), e le righe delle categorie in improve-product, product-chat e barcode-lookup; ora usano voceCorta/opzioniCorte. In piu' tutte e quattro tengono solo gli elementi oggetto (un null faceva cadere la rotta con 500). Non ho ricostruito gli attributi sul server dalla categoria (il «meglio ancora»): resta come miglioria.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-016",
+      "chiave": "ai-endpoints|se si riaccende «traduci», una descrizione lunga torna tradotta solo all'inizio e il modulo la presenta come intera",
+      "esito": "riparato",
+      "commit": "19162a9952d2064ef18a256f097ec61f60bbb507",
+      "file_toccati": [
+        "app/api/ai/translate/route.ts",
+        "lib/ai/productContext.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-traduzione-lunga.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-traduzione-lunga.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/translate/route.ts -> rossa; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "productContext espone MAX_PRODUCT_JSON e schedaTagliataNelContesto(). La rotta di traduzione, prima di chiamare il modello, rifiuta con 400 «Descrizione troppo lunga per la traduzione automatica: massimo 2500 caratteri fra nome e descrizione» se la scheda arriverebbe tagliata o il testo supera 2500 caratteri; max_tokens d'uscita da 1024 a 2048 perche' 2500 caratteri tradotti ci stiano larghi (un'uscita tagliata la rifiutava gia' runMessage). QuickAiTools non serve toccarlo: il 400 arriva come errore e la scritta «Annuncio tradotto» non compare. La traduzione resta spenta (TRADUCI_ACCESO=false).",
+      "verificato_da": ""
+    },
+    {
       "id": "R04-017",
       "chiave": "ai-endpoints|il tetto di spesa ai del giorno si sfora quando più chiamate partono insieme",
       "esito": "parziale",
@@ -310,6 +453,175 @@
         {
           "file": "app/api/cron/operational-alerts/route.ts",
           "modifica": "leggere da operational_alert_log la riga piu' vecchia ancora aperta con type = TIPO_ALLARME_TETTO_AI (created_at/primo invio) e chiamare sondaContoCondiviso(undefined, Date.parse(primoVisto)); poi alerts.push(...allarmiTettoSpesaAi(conto, { tettoEur, copieAttese })). Stesso innesto di R04-003."
+        }
+      ],
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-019",
+      "chiave": "ai-endpoints|nella chat assistenza la scheda della proposta promette caratteristiche che il server butta via, e dopo «applica» dice «modifiche salvate» senza aver cambiato niente",
+      "esito": "parziale",
+      "commit": "ba99a985246bd80778c31cdc2cc7b30ac38159c9",
+      "file_toccati": [
+        "lib/products/aiPatch.ts",
+        "app/api/ai/catalog-chat/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-chat-caratteristiche.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-chat-caratteristiche.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- lib/products/aiPatch.ts app/api/ai/catalog-chat/route.ts -> 3 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Punto 1: propostaPerLaChat riceve la categoria attuale (la rotta passa matched.category_id) e tiene una caratteristica solo se il campo esiste nella categoria che il prodotto avra' dopo la proposta e, per le scelte, se il valore e' ammesso; attributes_remove tiene solo testi che nominano un campo della scheda. Le dichiarazioni restano (la scheda le spiega, il server le toglie). Punto 3 era gia' sulla base: resolveAiPatch non mette attributes in update se nulla e' entrato (1687) e catalog-apply risponde «Nessuna modifica valida da applicare.» (route.ts:119).",
+      "cosa_resta": "Punto 2: righeDellaProposta in lib/products/prontoPerLaVendita.ts (non di R04) non filtra ancora le caratteristiche normali coi campi della categoria; con la proposta gia' pulita dalla rotta il caso della chat e' chiuso, ma la funzione resta permissiva per altri chiamanti.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/products/prontoPerLaVendita.ts",
+          "modifica": "in righeDellaProposta, per le caratteristiche non dichiarative, mostrare la riga solo se attributoCheEntra(campiDellaCategoriaDopoLaProposta, k, v) e' vero (altrimenti omettere o scrivere «NON si applica: la scheda non ha questo campo / valore non ammesso»); per attributes_remove mostrare solo chiavi che sono campi della categoria."
+        }
+      ],
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-020",
+      "chiave": "architettura|il modulo del prodotto applica le proposte dell'assistente con una seconda copia delle regole del server, e le due copie sono già diverse",
+      "esito": "parziale",
+      "commit": "3052345079a61b743a8397bc0a9ecca810dd3acf",
+      "file_toccati": [
+        "lib/products/aiPatch.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-modulo-e-server-stesse-regole.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-modulo-e-server-stesse-regole.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- lib/products/aiPatch.ts -> 2 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il taglio di nome e descrizione era gia' condiviso sulla base. Le due divergenze rimaste ora hanno una sola funzione usata da resolveAiPatch e da pianoPatchPerIlModulo: disponibilitaDalPatch (niente disponibilita' sui prodotti con varianti) e attributiDaTogliere (si toglie e si conta solo un attributo che c'e' davvero). pianoPatchPerIlModulo accetta ctx.haVarianti e ctx.attributiAttuali. Non ho rifatto tutta la funzione unica «che cosa scrive questo patch» proposta dal fix: le altre regole erano gia' allineate.",
+      "cosa_resta": "Il modulo vero deve passare i due dati nuovi: senza, pianoPatchPerIlModulo si comporta come prima (attributiAttuali assente = toglie tutto, haVarianti assente = senza varianti).",
+      "serve_file_altrui": [
+        {
+          "file": "components/seller/ProductForm.tsx",
+          "modifica": "nella chiamata pianoPatchPerIlModulo(proposta, {...}) (riga ~491) aggiungere haVarianti: hasVariants, attributiAttuali: attributes"
+        }
+      ],
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-021",
+      "chiave": "architettura|all'assistente ai si dice che la consegna di una pagnotta da 3,50 € costa 4 €, ma la consegna si paga sul carrello e non sul singolo prodotto",
+      "esito": "riparato",
+      "commit": "89a69345ac1270694410deeb42f8f5e7f076c645",
+      "file_toccati": [
+        "lib/products/economics.ts",
+        "app/api/ai/improve-product/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-consegna-nel-prompt.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-consegna-nel-prompt.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/improve-product/route.ts -> 2 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuova regolaConsegnaPerAi() in economics.ts, con le cifre prese da tariffaConsegnaCents (3 € da 10 € in su, 4 € sotto): il prompt di improve-product dice la regola del carrello invece di «Fee di consegna: €4.00» (o €0.00 senza prezzo) per il singolo prodotto. Il campo deliveryFee resta per la UI, con il commento che ha gia'.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-022",
+      "chiave": "layout-responsive|in fondo a ogni pagina mobile restano ~14px di vuoto: l'altezza della barra a schede e' dichiarata piu' alta di quella vera",
+      "esito": "parziale",
+      "commit": "90fe9ca18b47ac8d06dbdd7e1910f4714f0401ac",
+      "file_toccati": [
+        "app/globals.css"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-fondo-pagina-mobile.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-fondo-pagina-mobile.test.ts",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/globals.css -> rossa; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nuova variabile --tabbar-altezza-vera: 58px (57,5 dalle classi della barra), a 0 sopra i 768px e con body.senza-tabbar; il padding in fondo al body usa questa: la striscia vuota di ~14px sparisce. --tabbar-height resta 72 perche' il commento in globals.css (e la prova i-pulsanti-che-galleggiano-non-coprono-chi-compra) legano quel numero al pavimento di lib/ui/barra-in-fondo.ts.",
+      "cosa_resta": "La barra d'acquisto e gli altri elementi che galleggiano usano ancora --tabbar-height = 72, quindi stanno 14px sopra la barra a schede invece di appoggiarcisi. Per abbassarla serve prima cambiare il pavimento in lib/ui/barra-in-fondo.ts (non di R04).",
+      "serve_file_altrui": [
+        {
+          "file": "lib/ui/barra-in-fondo.ts",
+          "modifica": "in fondoDiChiGalleggia applicare il pavimento (--fondo-minimo) una volta sola in fondo alla pila delle corsie invece che con un max(...) per ogni elemento; dopo, in app/globals.css (file di R04) --tabbar-height si porta a 58px e --fondo-minimo si ritara, e la prova i-pulsanti-che-galleggiano-non-coprono-chi-compra va aggiornata al nuovo numero."
+        }
+      ],
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-023",
+      "chiave": "privacy-legale|il business plan e i conti unitari nei documenti del sito dicono ancora commissione all'8%, abbonamento a 15 €, piano gratis e mancia al fattorino",
+      "esito": "riparato",
+      "commit": "cea9551614225a4bfca4a5ad899493a299471218",
+      "file_toccati": [
+        "docs/business-plan.md",
+        "docs/unit-economics.md"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-documenti-numeri.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-documenti-numeri.test.ts",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- docs/business-plan.md docs/unit-economics.md -> 3 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Tutte e due le strade del fix: in testa ai due documenti l'avviso «superato in parte» con i numeri vivi e dove stanno nel codice (MARKETPLACE_FEE_BPS 10%, abbonamento 50 €/mese spento, nessun piano gratuito, mancia vietata), e corrette le righe indicate (business-plan 60-64 e 71-72, unit-economics 14-16). Le stime derivate (ricavi, margini, la riga di spedizione a 4,90 €) non le ho ricalcolate: l'avviso dice che vanno rifatte.",
+      "verificato_da": ""
+    },
+    {
+      "id": "R04-024",
+      "chiave": "privacy-legale|con il fornitore onfido acceso, ogni chiamata (fino a 5 l'ora) crea da onfido una nuova scheda con nome, email e data di nascita, ma senza caricare i documenti. restano schede orfane con dati personali, e alla cancellazione dell'account nessuno le toglie",
+      "esito": "parziale",
+      "commit": "747a458b735134ff745c63b65e14bbd68ba2d3dc",
+      "file_toccati": [
+        "lib/kyc/providers.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r04-onfido-niente-schede-orfane.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-onfido-niente-schede-orfane.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa a mano: git checkout HEAD^ -- lib/kyc/providers.ts -> 2 rosse; ripristino -> verde"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Sulla base start-check gia' non apre una seconda verifica mentre una e' PENDING (S05). In OnfidoProvider.startCheck: dopo la scheda (applicant) si caricano davvero il documento fronte/retro (POST /documents) e il selfie (POST /live_photos) dagli URL firmati, poi il controllo; se un passo dopo la scheda fallisce (o va in errore di rete) la scheda con nome, email e data di nascita si cancella con DELETE /applicants/{id}. Non verificato contro l'API vera di Onfido: il tipo documento e' fisso a national_identity_card.",
+      "cosa_resta": "Alla cancellazione dell'account la scheda Onfido di una verifica riuscita o in attesa non si toglie: serve in lib/account/cancellazione.ts (non di R04). Inoltre il KycCheckResult (lib/kyc/types.ts, non di R04) porta solo l'id del controllo, non quello della scheda.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/account/cancellazione.ts",
+          "modifica": "se profiles.kyc_provider_check_id esiste e non comincia con 'manual_'/'mock_' e KYC_PROVIDER=onfido: GET https://api.eu.onfido.com/v3.6/checks/{id} per leggere applicant_id, poi DELETE /v3.6/applicants/{applicant_id} (Authorization: Token token=KYC_API_KEY), con timeout 10 s e senza far fallire la cancellazione se Onfido non risponde (riga nel registro)."
         }
       ],
       "verificato_da": ""
