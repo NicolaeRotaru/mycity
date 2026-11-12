@@ -53,6 +53,8 @@ vi.mock('@/lib/supabase/server', () => ({
         return { select: () => ({ order: () => Promise.resolve({ data: CATEGORIES, error: null }) }) };
       }
       return {
+        // 12/11/2026 (R04-025) — la rotta ora cerca un lavoro gia' aperto: qui non ce n'e'.
+        select: () => ({ eq: () => ({ in: () => ({ order: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }) }) }) }),
         insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: { id: 'job-1' }, error: null }) }) }),
         update: (v: Record<string, unknown>) => {
           aggiornamenti.push(v);

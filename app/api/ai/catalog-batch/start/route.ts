@@ -1,14 +1,14 @@
 import { controllaTettoSpesaAi, registraSpesaAi } from '@/lib/ai/run';
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
-import { ApiErrors } from '@/lib/api/responses';
+import { ApiErrors, apiError } from '@/lib/api/responses';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { env } from '@/lib/env';
 import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { AiConfigError } from '@/lib/ai/client';
-import { submitBatch } from '@/lib/ai/batch';
+import { INVIO_SENZA_RISPOSTA, invioIncerto, submitBatch } from '@/lib/ai/batch';
 import {
   buildCatalogBatchRequests,
   isCatalogOperation,
@@ -31,6 +31,9 @@ import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api
 export const runtime = 'nodejs';
 
 const MAX_PRODUCTS = 200;
+
+/** Un lavoro in questi stati e' ancora aperto: pagato, e non ancora chiuso dal venditore. */
+const STATI_APERTI = ['submitting', 'processing', 'ready'];
 
 type Body = { operation?: string; targetLang?: string };
 
@@ -66,6 +69,33 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
 
   const admin = getAdminSupabase();
+
+  // 12/11/2026 (R04-025 · R04-013) — UN SECONDO LAVORO PAGAVA DI NUOVO.
+  // Con un lavoro ancora aperto (in invio, in corso o pronto da rivedere) un
+  // secondo avvio mandava un altro lotto e impegnava di nuovo la spesa, mentre
+  // il primo restava li', pagato. Adesso si rifiuta e si dice quale e' aperto:
+  // la pagina lo riprende invece di farne partire un altro.
+  const { data: aperti, error: errAperti } = await admin
+    .from('catalog_ai_jobs')
+    .select('id, status')
+    .eq('seller_id', user.id)
+    .in('status', STATI_APERTI)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (errAperti) {
+    logger.error('catalog-batch start: lettura dei lavori aperti fallita', { sellerId: user.id, status: errAperti.code });
+    return ApiErrors.badGateway('Non sono riuscito a controllare i lavori in corso. Riprova.');
+  }
+  const aperto = (aperti ?? [])[0] as { id: string; status: string } | undefined;
+  if (aperto) {
+    return apiError(
+      409,
+      'Hai già un lavoro sul catalogo aperto: lo trovi qui sotto. Applicalo o scartalo prima di avviarne un altro.',
+      'CONFLICT',
+      { jobId: aperto.id, status: aperto.status },
+    );
+  }
+
   const [{ data: productsData }, { data: categoriesData }] = await Promise.all([
     admin
       .from('products')
@@ -120,8 +150,27 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
      * freno doveva fermarlo — e la sua spesa non veniva contata, quindi il
      * tetto restava fermo mentre i soldi uscivano.
      */
-    await controllaTettoSpesaAi('ai-catalog-batch-start');
-    const handle = await submitBatch(requests);
+    // R04-017 — Il confronto e' «speso + stima del lotto», non solo «speso»:
+    // un lotto da duecento richieste partiva anche a un centesimo dal tetto.
+    const impegnato = stimaCostoLottoEur(operation, requests.length);
+    const liberaPrenotazione = await controllaTettoSpesaAi('ai-catalog-batch-start', impegnato * 100);
+    let handle: Awaited<ReturnType<typeof submitBatch>>;
+    try {
+      try {
+        handle = await submitBatch(requests);
+      } catch (errInvio) {
+        // R04-014 (revisione) — Un invio senza risposta puo' essere partito, e
+        // allora e' pagato: la stima si conta lo stesso (meglio un tetto un
+        // po' prudente che una spesa che nessuno vede).
+        if (invioIncerto(errInvio)) await registraSpesaAi(impegnato);
+        throw errInvio;
+      }
+      // La spesa si registra PRIMA di togliere la prenotazione: in mezzo non
+      // deve esserci un istante in cui il lotto non e' contato da nessuna parte.
+      await registraSpesaAi(impegnato);
+    } finally {
+      liberaPrenotazione?.();
+    }
     /**
      * 27/8/2026 (R143) — SI CONTROLLAVA IL TETTO E NON SI REGISTRAVA NIENTE.
      *
@@ -135,15 +184,15 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
      * risultati arrivano, `status` aggiunge solo la differenza fra il costo
      * vero e questa stima: i soldi si contano una volta sola, ma subito.
      */
-    const impegnato = stimaCostoLottoEur(operation, requests.length);
-    await registraSpesaAi(impegnato);
     logger.info('[ai] spesa del lotto impegnata alla partenza', {
       jobId: job.id, richieste: requests.length, stimaEur: impegnato.toFixed(4),
     });
-    const { error: errUpd } = await admin
-      .from('catalog_ai_jobs')
-      .update({ status: 'processing', batch_id: handle.id })
-      .eq('id', job.id);
+    // R04-005 — Agganciare il lotto alla riga si ritenta una volta: se non
+    // riesce, la risposta dice lo stato VERO («in invio»), non «in corso».
+    const aggancia = () =>
+      admin.from('catalog_ai_jobs').update({ status: 'processing', batch_id: handle.id }).eq('id', job.id);
+    let { error: errUpd } = await aggancia();
+    if (errUpd) ({ error: errUpd } = await aggancia());
 
     if (errUpd) {
       // Il lavoro è partito davvero: l'identificativo va nel log, così il lotto
@@ -151,10 +200,24 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       logger.error('catalog-batch start: batch avviato ma non agganciato', {
         sellerId: user.id, jobId: job.id, batchId: handle.id,
       });
+      return NextResponse.json({ jobId: job.id, total: products.length, status: 'submitting' });
     }
 
     return NextResponse.json({ jobId: job.id, total: products.length, status: 'processing' });
   } catch (err) {
+    // R04-014 — Un invio rimasto senza risposta puo' essere partito: non lo si
+    // dichiara fallito (e non si rimanda). La riga resta «in invio» con il
+    // motivo, cosi' il lavoro aperto blocca un secondo avvio e si verifica.
+    if (invioIncerto(err)) {
+      await admin
+        .from('catalog_ai_jobs')
+        .update({ error: INVIO_SENZA_RISPOSTA })
+        .eq('id', job.id);
+      logger.error('catalog-batch start: invio del lotto senza risposta, da verificare', { sellerId: user.id, jobId: job.id });
+      return ApiErrors.unavailable(
+        'L\'invio non ha avuto risposta: il lavoro potrebbe essere partito. Non riavviarlo: ricarica la pagina fra qualche minuto.',
+      );
+    }
     await admin.from('catalog_ai_jobs').update({ status: 'failed' }).eq('id', job.id);
     if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
     logger.error('catalog-batch start: submit failed', { sellerId: user.id, jobId: job.id });

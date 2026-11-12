@@ -12,6 +12,7 @@ import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import { productSnapshot, PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import { REGOLA_CAMPI_DICHIARATIVI, type AiProductPatch, type CategoryRow } from '@/lib/products/aiPatch';
 import { REGOLA_PREZZO_AI, tettoTokenCopilot } from '@/lib/ai/regole-copilot';
+import { espandiRegolaCopilot, type RegolaCopilot } from '@/lib/ai/regolaCopilot';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
 
@@ -40,6 +41,7 @@ Hai l'elenco dei suoi prodotti (id, nome, prezzo, stato, categoria, stock). In b
 - ${REGOLA_PREZZO_AI}
 - "tags" è la lista COMPLETA desiderata del prodotto (ricostruiscila da quella attuale per aggiungere/togliere).
 - Usa "status" tra: available, draft, sold.
+- Se la STESSA operazione vale per molti prodotti (più di 20: una percentuale di prezzo, aggiungere o togliere un tag, cambiare lo stato), NON scrivere una voce per prodotto: usa "regola" con l'elenco degli id ("product_ids") e l'operazione ("prezzo_percentuale", per esempio -10; "aggiungi_tag"/"togli_tag"; "status"). Il server calcola i nuovi valori dai dati veri. Usa "changes" solo per le modifiche diverse da prodotto a prodotto.
 - Se l'istruzione è ambigua o pericolosa (es. "cancella tutto"), NON proporre modifiche: spiega e chiedi conferma in "reply".
 - Non inventare prodotti non in elenco. Niente emoji.
 - ${REGOLA_CAMPI_DICHIARATIVI} Nel riepilogo non dire mai di averli scritti o cambiati.
@@ -67,14 +69,26 @@ const TOOL: Anthropic.Tool = {
           required: ['product_id', 'patch'],
         },
       },
+      regola: {
+        type: 'object',
+        description: 'La stessa operazione su molti prodotti: gli id e cosa fare. Il server calcola i valori.',
+        properties: {
+          product_ids: { type: 'array', items: { type: 'string' }, description: 'ID presi dall\'elenco del catalogo.' },
+          prezzo_percentuale: { type: 'number', description: 'Variazione del prezzo in percento, es. -10 per abbassare del 10%.' },
+          aggiungi_tag: { type: 'array', items: { type: 'string' } },
+          togli_tag: { type: 'array', items: { type: 'string' } },
+          status: { type: 'string', enum: ['available', 'draft', 'sold'] },
+        },
+        required: ['product_ids'],
+      },
     },
     required: ['reply'],
   },
 };
 
-type ChatMessage = { role: 'user' | 'assistant'; content: string };
-type Body = { instruction?: string; history?: ChatMessage[] };
-type BulkInput = { reply?: string; changes?: { product_id?: string; patch?: AiProductPatch }[] };
+// R04-008 — `history` non c'e' piu': la rotta lo ignora (vedi sotto).
+type Body = { instruction?: string };
+type BulkInput = { reply?: string; changes?: { product_id?: string; patch?: AiProductPatch }[]; regola?: RegolaCopilot };
 
 const MAX_CATALOG = 200;
 const MAX_CHANGES = 200;
@@ -173,33 +187,14 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
 ${list}`;
 
-  // #206 — Due difetti nella stessa manciata di righe, ora allineati alle
-  // altre due chat (catalog-chat, product-chat).
+  // 12/11/2026 (R04-008) — LA CRONOLOGIA DEL BROWSER NON ARRIVA PIU' AL MODELLO.
   //
-  // ① L'istruzione corrente veniva messa PRIMA della conversazione passata:
-  //    l'ultima cosa che il modello leggeva era un vecchio turno, non la
-  //    richiesta di adesso. Su una conversazione lunga l'istruzione vera
-  //    finiva sepolta, e le modifiche proposte rispondevano al messaggio
-  //    sbagliato — su un pulsante che modifica il catalogo.
-  //
-  // ② La cronologia arriva dal client: un turno «assistente» inventato dal
-  //    browser veniva accettato cosi' com'e', cioe' si potevano mettere in
-  //    bocca al modello parole che non aveva detto («certo, cambio tutti i
-  //    prezzi a 1 euro») e poi chiedergli di proseguire. Ora la cronologia
-  //    deve cominciare con un turno dell'utente e i turni si alternano.
-  const history = (Array.isArray(body.history) ? body.history : [])
-    .filter((m): m is ChatMessage => !!m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim().length > 0)
-    .slice(-10)
-    .map((m) => ({ role: m.role, content: m.content.slice(0, 1000) }));
-
-  while (history.length > 0 && history[0].role !== 'user') history.shift();
-  // Niente due turni dello stesso ruolo di fila: e' la forma che l'API accetta
-  // e insieme il modo piu' semplice di rifiutare una cronologia costruita a mano.
-  const cronologia: typeof history = [];
-  for (const m of history) {
-    if (cronologia.length > 0 && cronologia[cronologia.length - 1].role === m.role) continue;
-    cronologia.push(m);
-  }
+  // Il campo `history` del corpo (fino a dieci turni) passava solo un controllo
+  // di forma e finiva nel prompt senza il filtro anti-contenuti, turni
+  // «assistente» inventati compresi. Nessuna pagina lo manda
+  // (components/seller/CatalogCopilot.tsx invia solo `instruction`): serviva
+  // solo a chi costruisce la richiesta a mano. Si ignora: al modello arriva
+  // soltanto l'istruzione, che il filtro ha appena controllato.
 
   // 22/8/2026 — L'ISTRUZIONE STAVA FRA VIRGOLETTE, E BASTAVA CHIUDERLE.
   //
@@ -224,7 +219,6 @@ ${list}`;
   // uniscono in uno.
   const grezzi: Array<{ role: 'user' | 'assistant'; content: string }> = [
     { role: 'user', content: catalogo },
-    ...cronologia,
     { role: 'user', content: richiesta },
   ];
   const messages: Anthropic.MessageParam[] = [];
@@ -253,10 +247,16 @@ ${list}`;
 
     // Valida: solo product_id realmente del venditore e patch non vuoti.
     const owned = new Set(products.map((p) => p.id));
-    const changes = (Array.isArray(toolInput?.changes) ? toolInput!.changes! : [])
+    const singole = (Array.isArray(toolInput?.changes) ? toolInput!.changes! : [])
       .filter((c): c is { product_id: string; patch: AiProductPatch } =>
         !!c && typeof c.product_id === 'string' && owned.has(c.product_id) &&
-        !!c.patch && typeof c.patch === 'object' && Object.keys(c.patch).length > 0)
+        !!c.patch && typeof c.patch === 'object' && Object.keys(c.patch).length > 0);
+    // R04-007 — La regola si espande qui, sui dati veri; una voce singola sullo
+    // stesso prodotto si aggiunge sopra (vince lei sui campi che tocca).
+    const daRegola = espandiRegolaCopilot(toolInput?.regola, products, MAX_CHANGES);
+    const unite = new Map<string, AiProductPatch>();
+    for (const c of [...daRegola, ...singole]) unite.set(c.product_id, { ...(unite.get(c.product_id) ?? {}), ...c.patch });
+    const changes = Array.from(unite, ([product_id, patch]) => ({ product_id, patch }))
       .slice(0, MAX_CHANGES)
       .map((c) => {
         const snap = productSnapshot(products.find((p) => p.id === c.product_id)!, categories);

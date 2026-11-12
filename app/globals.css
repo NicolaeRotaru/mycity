@@ -144,6 +144,13 @@
      invece che a ogni elemento — cioe' in lib/ui/barra-in-fondo.ts, che non e'
      di questo pacchetto. */
   --tabbar-height: 72px;
+  /* 12/11/2026 (R04-022) — L'ALTEZZA VERA DELLA BARRA A SCHEDE, PER IL FONDO
+     DELLA PAGINA. --tabbar-height resta 72 (il motivo e' qui sopra: il
+     pavimento di lib/ui/barra-in-fondo.ts); ma il padding in fondo al body
+     non galleggia, deve solo far finire la pagina dove finisce la barra. Con 72
+     restava una striscia vuota di ~14px in fondo a ogni pagina del telefono.
+     57,5 pixel arrotondati per eccesso (conto qui sopra, components/MobileTabBar.tsx). */
+  --tabbar-altezza-vera: 58px;
   /* ---- Le corsie in fondo allo schermo -----------------------------------
      In fondo allo schermo si accatastano quattro cose scritte in file diversi.
      Ognuna dichiara qui quanto e' alta mentre e' a video; chi le sta sopra
@@ -335,8 +342,8 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
    divergere. Ora si usa la variabile — unica casa dell'altezza — e le pagine
    senza barra la mettono a zero. */
 @media (max-width: 767px) {
-  body { padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0)); }
-  body.senza-tabbar { --tabbar-height: 0px; }
+  body { padding-bottom: calc(var(--tabbar-altezza-vera) + env(safe-area-inset-bottom, 0)); }
+  body.senza-tabbar { --tabbar-height: 0px; --tabbar-altezza-vera: 0px; }
 }
 
 /* 3/9/2026 — DA 768px IN SU LA BARRA A SCHEDE NON C'E'.
@@ -347,7 +354,7 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
    che dice il falso fa sbagliare tutti quelli che la leggono: qui dice la
    verita' anche di sopra. */
 @media (min-width: 768px) {
-  :root { --tabbar-height: 0px; }
+  :root { --tabbar-height: 0px; --tabbar-altezza-vera: 0px; }
 }
 
 /* 3/9/2026 (secondo giro) — IL PAVIMENTO ARRIVA FIN DOVE ARRIVA LA BARRA CHE
@@ -399,7 +406,10 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
  * invece di sparire. Meglio piu' corta che com'era.
  * ───────────────────────────────────────────────────────────────────────────── */
 .contenuto-almeno-una-schermata {
-  min-height: calc(100vh - var(--header-height) - var(--tabbar-height));
+  /* R04-022 (revisione) — si toglie l'altezza VERA della barra a schede, la
+     stessa che il body riserva in fondo: con i 72px il piè di pagina spuntava
+     14px sopra la barra. */
+  min-height: calc(100vh - var(--header-height) - var(--tabbar-altezza-vera));
 }
 
 /* A11y: reduced motion override per utenti con vestibolare disorders */

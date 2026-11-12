@@ -8,6 +8,8 @@ import { fotoDaHostAmmesso } from '@/lib/ai/productContext';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { AiConfigError } from '@/lib/ai/client';
+import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { writeAudit } from '@/lib/audit';
 import { buildDraftProductInsert } from '@/lib/products/draftFromVision';
 import { campoOltreIlTetto, rimettiIValoriLunghi, testoOltreIlTetto } from '@/lib/ai/tetti-bozza';
@@ -86,6 +88,10 @@ const BodySchema = z.object({
 });
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  // 12/11/2026 (R04-006) — Con gli strumenti AI spenti ogni bozza cadeva sul
+  // filtro con «riprova fra poco», come un guasto passeggero. Lo spegnimento si
+  // dice subito, come fa catalog-batch/start, prima del freno e del corpo.
+  if (!AI_NEGOZI_ACCESA) return ApiErrors.unavailable('Gli strumenti AI per i negozi non sono ancora attivi.');
   // Ogni call crea fino a 12 prodotti: rate limit per evitare flood.
   const rl = await rateLimitAsync({ key: `ai-catalog-create-bulk:${user.id}`, max: 10, windowMs: 60 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
@@ -173,9 +179,16 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   );
 
   // L'ordine di `verdetti` e' quello di `daControllare`: allSettled lo tiene.
+  let servizioNonDisponibile = false;
   daControllare.forEach(({ item, imageUrls }, i) => {
     const esito = verdetti[i];
     if (esito.status === 'rejected') {
+      // Servizio spento o non configurato: non e' un guasto di passaggio, e
+      // vale per tutta la richiesta (R04-006).
+      if (esito.reason instanceof AiConfigError) {
+        servizioNonDisponibile = true;
+        return;
+      }
       scartati.push({
         nome: nomeDi(item),
         motivo: 'controllo non disponibile in questo momento: riprova fra poco',
@@ -190,6 +203,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     rimettiIValoriLunghi(payload.attributes, item.draft.attributes);
     payloads.push(payload);
   });
+
+  if (servizioNonDisponibile) {
+    return ApiErrors.unavailable('Il controllo AI dei prodotti non è disponibile: il servizio è spento o non configurato.');
+  }
 
   if (payloads.length === 0) {
     const motivi = scartati.map((s2) => `${s2.nome}: ${s2.motivo}`).join(' · ');

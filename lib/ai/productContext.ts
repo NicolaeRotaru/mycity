@@ -82,6 +82,22 @@ export function sanitizeImageUrls(urls: unknown, max = DEFAULT_MAX_IMAGES): stri
     .slice(0, max);
 }
 
+/** Oltre questa misura la scheda arriva al modello tagliata. */
+export const MAX_PRODUCT_JSON = 4000;
+
+/**
+ * 12/11/2026 (R04-016) — Il taglio lo sapeva solo il modello. Chi chiama
+ * (es. la traduzione, che riscrive la descrizione intera) deve poterlo sapere
+ * prima, invece di restituire come «intero» un testo fatto sull'inizio.
+ */
+export function schedaTagliataNelContesto(product: unknown): boolean {
+  try {
+    return JSON.stringify(product, null, 2).length > MAX_PRODUCT_JSON;
+  } catch {
+    return true;
+  }
+}
+
 export function buildProductContext(
   input: ProductContextInput,
   opts: { maxImages?: number; lead?: string } = {},
@@ -90,8 +106,13 @@ export function buildProductContext(
   // #201 — I tagli. Questi due elenchi arrivano dal client e finivano interi
   // dentro il prompt: un elenco gonfiato apposta faceva pagare a noi la
   // differenza, e spingeva fuori dalla finestra il contenuto che conta.
-  const attributeSchema = (Array.isArray(input.attributeSchema) ? input.attributeSchema : []).slice(0, 40);
-  const topCategories = (Array.isArray(input.topCategories) ? input.topCategories : []).slice(0, 30);
+  // R04-015 — Solo oggetti: un elemento null faceva cadere la rotta (f.options su null).
+  const attributeSchema = (Array.isArray(input.attributeSchema) ? input.attributeSchema : [])
+    .filter((f): f is NonNullable<typeof f> => !!f && typeof f === 'object')
+    .slice(0, 40);
+  const topCategories = (Array.isArray(input.topCategories) ? input.topCategories : [])
+    .filter((c): c is NonNullable<typeof c> => !!c && typeof c === 'object')
+    .slice(0, 30);
 
   const attrLines = attributeSchema
     .map((f) => {
@@ -107,7 +128,6 @@ export function buildProductContext(
   // 🟠-16: cap della serializzazione per evitare un blow-up di token (costo) se
   // il prodotto ha campi molto grandi (descrizioni lunghe, molte varianti).
   const productJson = JSON.stringify(input.product, null, 2);
-  const MAX_PRODUCT_JSON = 4000;
   const cappedProductJson =
     productJson.length > MAX_PRODUCT_JSON
       ? `${productJson.slice(0, MAX_PRODUCT_JSON)}\n…(troncato per limite di lunghezza)`

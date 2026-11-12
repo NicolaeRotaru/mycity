@@ -98,17 +98,6 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
    */
   if (transcript.length < 3) return ApiErrors.invalidRequest('Dimmi qualcosa sul prodotto.');
 
-  try {
-    await assertSafeText(transcript, 'ai-voice-product-policy');
-  } catch (err) {
-    if (err instanceof UnsafeContentError) {
-      return ApiErrors.invalidRequest(`Questo testo non si puo' usare: ${err.verdict.reason}`);
-    }
-    if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
-    if (err instanceof AiCallError) return mapAiError(err, 'ai-voice-product-policy');
-    return ApiErrors.internal('Errore AI.');
-  }
-
   // 27/8/2026 (R149) — Questi due elenchi arrivano dal browser e finivano
   // interi dentro il prompt: gonfiati apposta, la differenza in token la
   // paghiamo noi e il contenuto che conta viene spinto fuori dalla finestra.
@@ -126,15 +115,33 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     .slice(0, 30);
   // (16/10/2026) Le dichiarazioni restano nell'elenco ma segnate in sola lettura.
   const attrLines = attributeSchema.map(rigaAttributoPerIlModello).join('\n');
+  const catLines = topCategories.map((c) => `- ${voceCorta(c.slug)} (${voceCorta(c.name)})`).join('\n');
+
+  // 12/11/2026 (R04-010) — Gli elenchi arrivano dal browser come il dettato:
+  // un nome di categoria con un'istruzione dentro arrivava al modello mentre il
+  // filtro vedeva solo «una borsa nera». Adesso passano dal filtro insieme al
+  // dettato, e nel prompt stanno dentro il loro recinto.
+  const testoDaFiltrare = [transcript, catLines, attrLines].filter(Boolean).join('\n\n');
+
+  try {
+    await assertSafeText(testoDaFiltrare, 'ai-voice-product-policy');
+  } catch (err) {
+    if (err instanceof UnsafeContentError) {
+      return ApiErrors.invalidRequest(`Questo testo non si puo' usare: ${err.verdict.reason}`);
+    }
+    if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
+    if (err instanceof AiCallError) return mapAiError(err, 'ai-voice-product-policy');
+    return ApiErrors.internal('Errore AI.');
+  }
 
   const userText = `Il venditore ha detto:
 ${recinta('dettato', transcript, 2000)}
 
 Categorie di primo livello disponibili (slug):
-${topCategories.map((c) => `- ${voceCorta(c.slug)} (${voceCorta(c.name)})`).join('\n') || '- (nessuna)'}
+${catLines ? recinta('categorie', catLines, 4000) : '- (nessuna)'}
 
 Attributi validi per la categoria attuale (se già scelta):
-${attrLines || '- (compila in base alla categoria che sceglierai)'}
+${attrLines ? recinta('attributi', attrLines, 16000) : '- (compila in base alla categoria che sceglierai)'}
 
 Trasforma la descrizione in una scheda prodotto.`;
 

@@ -7,7 +7,7 @@ import { env } from '@/lib/env';
 import { TRADUCI_ACCESO } from '@/lib/funzioni-al-lancio';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
-import { buildProductContext, type ProductContextInput } from '@/lib/ai/productContext';
+import { buildProductContext, schedaTagliataNelContesto, type ProductContextInput } from '@/lib/ai/productContext';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 // 27/8/2026 (R150) — La riga che dice al modello che la scheda e' un DATO e
 // non un ordine. La chat prodotto, la chat catalogo, il codice a barre e il
@@ -56,6 +56,9 @@ const TRANSLATE_TOOL: Anthropic.Tool = {
   },
 };
 
+/** Quanto si traduce bene in una chiamata sola (ingresso e uscita). */
+const MAX_TESTO_TRADUCIBILE = 2500;
+
 type TranslateInput = { patch?: { name?: string; description?: string; tags?: string[] } };
 type Body = ProductContextInput & { targetLang?: string };
 
@@ -83,6 +86,29 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const langName = LANGS[langCode];
   if (!langName) return ApiErrors.invalidRequest('Lingua di destinazione non supportata.');
 
+  // 12/11/2026 (R04-016) — UNA DESCRIZIONE LUNGA TORNAVA TRADOTTA SOLO ALL'INIZIO.
+  // La scheda oltre i 4000 caratteri arriva al modello tagliata, e la risposta
+  // tornava come se fosse la traduzione dell'intero: il modulo la presentava
+  // come intera e, salvando, il resto dell'italiano spariva. Adesso si rifiuta
+  // con un messaggio chiaro prima di spendere. (Un'uscita che finisce i token
+  // la rifiuta gia' runMessage: AiRispostaTagliataError.)
+  const nome = typeof body.product.name === 'string' ? body.product.name : '';
+  const descrizione = typeof body.product.description === 'string' ? body.product.description : '';
+  // R04-016 (revisione) — Si traducono nome, descrizione e tag: al modello va
+  // solo questo, e il taglio si misura solo su questo. Prima contava tutta la
+  // scheda (ingredienti, valori nutrizionali…) e un alimento con descrizione
+  // corta veniva rifiutato come «troppo lunga».
+  const daTradurre = {
+    name: nome,
+    description: descrizione,
+    ...(Array.isArray(body.product.tags) ? { tags: body.product.tags } : {}),
+  };
+  if (schedaTagliataNelContesto(daTradurre) || nome.length + descrizione.length > MAX_TESTO_TRADUCIBILE) {
+    return ApiErrors.invalidRequest(
+      `Descrizione troppo lunga per la traduzione automatica: massimo ${MAX_TESTO_TRADUCIBILE} caratteri fra nome e descrizione.`,
+    );
+  }
+
   // 27/8/2026 (R148) — La scheda passa dal filtro anti-contenuti-vietati come
   // il testo libero delle altre rotte. Perche' qui e non altrove:
   // lib/ai/schedaSicura.ts.
@@ -91,7 +117,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   const system = `Sei un traduttore professionista per il marketplace "MyCity Piacenza". Traduci il contenuto di un annuncio prodotto in ${langName}, in modo naturale e fedele, mantenendo il significato e il tono commerciale. Non aggiungere né togliere informazioni, non inventare. Mantieni numeri, unità e nomi propri/marche invariati dove ha senso. I tag devono essere parole chiave nella lingua di destinazione (minuscole). Rispondi sempre e solo chiamando lo strumento "translate_product".\n\n${REGOLA_TESTO_DI_TERZI}`;
 
-  const content = buildProductContext(body, {
+  const content = buildProductContext({ ...body, product: daTradurre }, {
     lead: `Traduci questo annuncio in ${langName}.`,
   });
 
@@ -99,7 +125,8 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     const { toolInput } = await runMessage<TranslateInput>({
       feature: 'ai-translate',
       model: MODELS.fast,
-      max_tokens: 1024,
+      // R04-016 — 2500 caratteri tradotti stanno larghi in 2048 token d'uscita.
+      max_tokens: 2048,
       system,
       messages: [{ role: 'user', content }],
       tools: [TRANSLATE_TOOL],

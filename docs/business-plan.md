@@ -2,6 +2,13 @@
 
 > Versione 1.0 · maggio 2026 · ultima revisione: stadio MVP pre-launch
 
+> ⚠️ **Documento superato in parte (12/11/2026, R04-023).** I numeri vivi stanno nel codice:
+> commissione **10% su tutto** (`MARKETPLACE_FEE_BPS = 1000` in `lib/constants.ts`), abbonamento dei negozi
+> **50 € al mese, oggi spento** (`ABBONAMENTO_NEGOZI_ACCESO = false` in `lib/funzioni-al-lancio.ts`),
+> **nessun piano gratuito** con commissione diversa, **mancia al fattorino vietata** (compenso fisso per
+> consegna, `app/rider/help/page.tsx`). Corrette le righe con quei numeri (stream, pricing,
+> rischi, domande aperte); le stime di ricavo derivate erano calcolate sui numeri vecchi e vanno rifatte.
+
 ---
 
 ## 1. Vision & Mission
@@ -57,19 +64,19 @@ commercianti uno strumento di vendita digitale a basso costo e bassa friction.
 
 | Stream | Take rate / pricing | Stima anno 1 |
 |---|---|---|
-| Commissione transazione | 8% sul GMV venditore | €5-25k |
-| Abbonamento seller (PRO) | €15/mese (opzionale, sblocca analytics + AI + promo wizard) | €1-4k |
+| Commissione transazione | 10% sul GMV venditore | €5-25k |
+| Abbonamento negozi | €50/mese (oggi spento al lancio) | da rifare |
 | Sponsored listings | €0,50-2/giorno per placement | €0,5-2k |
 | Featured "Negozio del mese" | €100/mese (1 slot) | €1-2k |
-| Tip rider (opzionale) | 10% tip → rider, no take | €0 |
+| Mancia al fattorino | vietata: compenso fisso per consegna | €0 |
 
 **Stima revenue anno 1**: €7-33k (sostenibilità infrastruttura, no salario founder)
 **Stima revenue anno 2**: €30-100k (post-PMF se confermato)
 
 ### Pricing seller (decisione strategica)
 
-- **Free tier**: pubblicazione fino 50 prodotti, 8% commissione, no AI, no analytics avanzata
-- **PRO €15/mese**: prodotti illimitati, AI description, analytics, promo wizard, support prioritario
+- **Commissione unica**: 10% su tutto, nessun piano gratuito con una commissione diversa
+- **Abbonamento €50/mese**: previsto, oggi spento al lancio (`ABBONAMENTO_NEGOZI_ACCESO`)
 
 Razionale: subscription bassa = barriera basso → adoption ampia. Commissione moderata
 = sostenibilità senza spaventare seller. Hybrid model copre fisso (sub) + variabile (comm).
@@ -189,7 +196,7 @@ Vedi documento dedicato: [`unit-economics.md`](unit-economics.md)
 | Rischio | Probabilità | Impatto | Mitigazione |
 |---|---|---|---|
 | Cold start fallisce (no traction) | Alta | Critico | GTM door-to-door manuale primi 30 negozi |
-| Glovo/JustEat entra Piacenza non-food | Media | Alto | Defensive: relationship lock-in con seller via subscription PRO |
+| Glovo/JustEat entra Piacenza non-food | Media | Alto | Defensive: relazione stretta con i negozi (abbonamento 50 €/mese previsto, oggi spento) |
 | Founder burnout | Alta | Critico | Time-box features, focus su acquisition, weekly time-off |
 | Frodi pagamento | Bassa | Medio | Stripe Radar + COD limit + KYC seller |
 | Bug critico in prod | Media | Medio | Sentry + UptimeRobot + restore drill |
@@ -231,8 +238,8 @@ Vedi documento dedicato: [`unit-economics.md`](unit-economics.md)
 
 ## 10. Decisioni chiave da prendere (P0)
 
-1. **Take rate finale**: 8% vs 10% vs 12% → test con 3 seller pilota
-2. **Subscription seller PRO**: lanciare day 1 o aspettare €1k MRR?
+1. **Take rate finale**: oggi 10% su tutto (`MARKETPLACE_FEE_BPS`); eventuali prove a 12% con 3 negozi pilota
+2. **Abbonamento negozi (50 €/mese)**: oggi spento (`ABBONAMENTO_NEGOZI_ACCESO`); quando accenderlo?
 3. **Welcome credit €5**: ridurre a €3? Test A/B quando hai volumes.
 4. **COD limit**: massimo ordine COD €100? €200? Frode trade-off.
 5. **Founder = rider o ricerca rider day 1**: dipende dalla velocità di onboarding seller.

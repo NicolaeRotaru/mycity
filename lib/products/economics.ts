@@ -67,3 +67,21 @@ export function sellerEconomics(price: number | null | undefined): SellerEconomi
 export function netToSeller(price: number | null | undefined): number {
   return sellerEconomics(price).netToSeller;
 }
+
+/**
+ * 12/11/2026 (R04-021) — LA CONSEGNA SI DICE ALL'AI COME REGOLA DEL CARRELLO.
+ *
+ * Al modello di «Migliora» arrivava `deliveryFee` del singolo prodotto: per
+ * una pagnotta da 3,50 € «consegna 4 €», per un prodotto senza prezzo «0 €».
+ * Ma la consegna si paga sul carrello intero (tre pagnotte pagano 3 €). Qui la
+ * regola, con le cifre prese dalla stessa tariffa del carrello.
+ */
+export function regolaConsegnaPerAi(): string {
+  const sotto = tariffaConsegnaCents({ pickupInStore: false, merceCents: 999, consegnaVeloce: false }) / 100;
+  const sopra = tariffaConsegnaCents({ pickupInStore: false, merceCents: 1000, consegnaVeloce: false }) / 100;
+  return (
+    `la consegna a domicilio si paga sul CARRELLO intero, non sul singolo prodotto: ` +
+    `€${sopra.toFixed(2)} per una spesa da 10 € in su in questo negozio, €${sotto.toFixed(2)} sotto i 10 €; ` +
+    `la paga l'acquirente e non incide sul netto venditore`
+  );
+}
