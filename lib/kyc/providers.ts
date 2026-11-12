@@ -36,18 +36,73 @@ class MockKycProvider implements KycProvider {
  * Qui implementiamo i pezzi server-side base (applicant + check).
  * Per la parte UI servirebbe l'SDK frontend Onfido.
  */
+const ONFIDO = 'https://api.eu.onfido.com/v3.6';
+
 class OnfidoProvider implements KycProvider {
   constructor(private apiKey: string) {}
 
-  // I documenti qui non si toccano: li carica l'SDK di Onfido lato browser.
-  async startCheck(subject: KycSubject, _docs: KycDocs): Promise<KycCheckResult> {
+  private intestazioni(json = true): Record<string, string> {
+    return json
+      ? { Authorization: `Token token=${this.apiKey}`, 'Content-Type': 'application/json' }
+      : { Authorization: `Token token=${this.apiKey}` };
+  }
+
+  /**
+   * Carica un file (dall'URL firmato del nostro archivio) su Onfido.
+   * `percorso` e' /documents (documento d'identita') o /live_photos (selfie).
+   */
+  private async carica(
+    percorso: '/documents' | '/live_photos',
+    applicantId: string,
+    url: string,
+    campi: Record<string, string> = {},
+  ): Promise<string | null> {
+    const file = await fetch(url, { signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS) });
+    if (!file.ok) return `file non leggibile (HTTP ${file.status})`;
+    const corpo = new FormData();
+    corpo.append('applicant_id', applicantId);
+    for (const [k, v] of Object.entries(campi)) corpo.append(k, v);
+    corpo.append('file', await file.blob(), percorso === '/live_photos' ? 'selfie.jpg' : 'documento.jpg');
+    const res = await fetch(`${ONFIDO}${percorso}`, {
+      method: 'POST',
+      headers: this.intestazioni(false),
+      body: corpo,
+      signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS), // 🟠-14
+    });
+    if (res.ok) return null;
+    const errore = await res.json().catch(() => null);
+    return errore?.error?.message ?? `HTTP ${res.status}`;
+  }
+
+  /** Toglie da Onfido la scheda con i dati personali. Non lancia mai. */
+  private async togliScheda(applicantId: string): Promise<void> {
     try {
-      const applicantRes = await fetch('https://api.eu.onfido.com/v3.6/applicants', {
+      await fetch(`${ONFIDO}/applicants/${encodeURIComponent(applicantId)}`, {
+        method: 'DELETE',
+        headers: this.intestazioni(false),
+        signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS),
+      });
+    } catch {
+      /* best effort: il registro di start-check dice gia' che la verifica e' fallita */
+    }
+  }
+
+  /**
+   * 12/11/2026 (R04-024) — UNA SCHEDA CON NOME, EMAIL E DATA DI NASCITA PER
+   * OGNI TENTATIVO, E NESSUN DOCUMENTO.
+   *
+   * Si creava la scheda (applicant) e subito il controllo, senza caricare i
+   * documenti: il controllo falliva e la scheda restava su Onfido, orfana, a
+   * ogni tentativo. Adesso: scheda → documento fronte (e retro) → selfie →
+   * controllo; se uno qualunque dei passi dopo la scheda fallisce, la scheda si
+   * toglie. (Una verifica gia' in attesa non ne apre un'altra: start-check.)
+   */
+  async startCheck(subject: KycSubject, docs: KycDocs): Promise<KycCheckResult> {
+    let applicantId: string | null = null;
+    try {
+      const applicantRes = await fetch(`${ONFIDO}/applicants`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Token token=${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
+        headers: this.intestazioni(),
         body: JSON.stringify({
           first_name: subject.firstName ?? 'Unknown',
           last_name: subject.lastName ?? 'Unknown',
@@ -62,27 +117,41 @@ class OnfidoProvider implements KycProvider {
       if (!applicantRes.ok) {
         return { ok: false, error: applicant?.error?.message ?? `HTTP ${applicantRes.status}` };
       }
+      applicantId = typeof applicant?.id === 'string' ? applicant.id : null;
+      if (!applicantId) return { ok: false, error: 'Onfido: scheda senza id' };
 
-      const checkRes = await fetch('https://api.eu.onfido.com/v3.6/checks', {
+      const passi: Array<[string, () => Promise<string | null>]> = [
+        ['documento (fronte)', () => this.carica('/documents', applicantId!, docs.idFrontUrl, { type: 'national_identity_card', side: 'front' })],
+      ];
+      if (docs.idBackUrl) {
+        passi.push(['documento (retro)', () => this.carica('/documents', applicantId!, docs.idBackUrl!, { type: 'national_identity_card', side: 'back' })]);
+      }
+      if (docs.selfieUrl) passi.push(['selfie', () => this.carica('/live_photos', applicantId!, docs.selfieUrl!)]);
+      for (const [nome, passo] of passi) {
+        const errore = await passo();
+        if (errore) {
+          await this.togliScheda(applicantId);
+          return { ok: false, error: `Onfido: caricamento ${nome} non riuscito: ${errore}` };
+        }
+      }
+
+      const checkRes = await fetch(`${ONFIDO}/checks`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Token token=${this.apiKey}`,
-          'Content-Type': 'application/json',
-        },
+        headers: this.intestazioni(),
         body: JSON.stringify({
-          applicant_id: applicant.id,
-          report_names: ['document', 'facial_similarity_photo'],
-          // I documenti vanno caricati prima via POST /documents con file binari.
-          // In MVP qui assumiamo che il caricamento sia gia' avvenuto via SDK frontend.
+          applicant_id: applicantId,
+          report_names: docs.selfieUrl ? ['document', 'facial_similarity_photo'] : ['document'],
         }),
         signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS), // 🟠-14
       });
       const check = await checkRes.json();
       if (!checkRes.ok) {
+        await this.togliScheda(applicantId);
         return { ok: false, error: check?.error?.message ?? `HTTP ${checkRes.status}` };
       }
       return { ok: true, status: 'PENDING', providerCheckId: check.id };
     } catch (err) {
+      if (applicantId) await this.togliScheda(applicantId);
       return { ok: false, error: err instanceof Error ? err.message : 'network' };
     }
   }
