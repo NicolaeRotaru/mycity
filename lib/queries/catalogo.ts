@@ -58,6 +58,8 @@ export type SchedaProdotto = {
   express_enabled: boolean | null;
   has_variants: boolean | null;
   external_source_url: string | null;
+  /** 12/11/2026 (R07-025) — le parole chiave del negozio: da qui escono i marchi «Km 0», «Artigianale». */
+  tags: string[] | null;
   categories: { slug: string | null; name: string | null } | null;
   profiles: { id: string; store_name: string | null; is_approved: boolean | null; offers_express: boolean | null; store_hours: unknown } | null;
 };
@@ -70,11 +72,14 @@ export type SchedaProdotto = {
  * l'aggancio torna vuoto per ogni cliente: la scheda diceva «il negozio non e'
  * operativo» e non vendeva piu'. Il negozio adesso arriva da una seconda domanda
  * alla vista pubblica dei negozi, che regge con `profiles` aperta e chiusa.
+ *
+ * 12/11/2026 (R07-025) — Mancava `tags`: i marchi «Km 0» e «Artigianale» che
+ * `deriveQualityMarks` ricava dai tag non comparivano mai sulla scheda.
  */
 export const COLONNE_SCHEDA_PRODOTTO = `
         id, name, description, price, images, seller_id, status, created_at, category_id,
         stock, attributes, unit, compare_at_price, condition, express_enabled, has_variants,
-        external_source_url,
+        external_source_url, tags,
         categories ( slug, name )
       `;
 
