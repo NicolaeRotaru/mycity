@@ -157,8 +157,9 @@ export async function leggiCruscottoOggi(
       .gte('created_at', nonPrimaDi)
       .lt('created_at', fermoDa),
     // 12/11/2026 (R09-012) — «In attesa» vuol dire approval_status = 'pending', come nella pagina degli
-    // utenti a cui porta il riquadro: con is_approved = false contava anche i negozi sospesi.
-    supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'seller').eq('approval_status', 'pending'),
+    // utenti a cui porta il riquadro: con is_approved = false contava anche i negozi sospesi. E come lì
+    // (siPuoModerare in app/admin/users) contano negozi e fattorini, così i due numeri coincidono.
+    supabase.from('profiles').select('id', { count: 'exact', head: true }).in('role', ['seller', 'rider']).eq('approval_status', 'pending'),
     supabase.from('rider_sos_events').select('id', { count: 'exact', head: true }).is('resolved_at', null),
     supabase.from('disputes').select('id', { count: 'exact', head: true }).eq('status', 'open'),
     supabase.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', inizioOggi),

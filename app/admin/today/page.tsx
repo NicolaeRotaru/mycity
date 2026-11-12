@@ -159,7 +159,7 @@ export default function AdminTodayPage() {
         <AdminSectionLabel icon={Clock}>In attesa</AdminSectionLabel>
         <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
           <KpiCard icon={Clock} label="Ordini NEW" value={stats.ordersPendingCount} href="/admin/orders" color="primary" />
-          <KpiCard icon={UserCheck} label="Negozi in attesa" value={stats.sellersPendingCount} href="/admin/users?role=pending" color="accent" />
+          <KpiCard icon={UserCheck} label="Richieste in attesa" value={stats.sellersPendingCount} href="/admin/users?role=pending" color="accent" />
           <KpiCard icon={Gavel} label="Reclami aperti" value={stats.disputesOpenCount} href="/admin/disputes" color="secondary" alert />
           <KpiCard icon={Siren} label="SOS attivi" value={stats.sosActiveCount} href="/admin/sos" color="secondary" alert />
         </div>

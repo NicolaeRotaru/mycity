@@ -31,19 +31,22 @@ function fintoDatabase(tabelle: Record<string, Riga[]>): SupabaseClient {
 }
 
 describe('R09-012 · i negozi in attesa non comprendono i sospesi', () => {
-  it('16 in attesa e 9 sospesi: il riquadro dice 16', async () => {
+  it('16 negozi in attesa, 9 sospesi e un fattorino in attesa: il riquadro dice 17, come la lista', async () => {
     const profiles: Riga[] = [
       ...Array.from({ length: 16 }, (_, i) => ({ id: `p${i}`, role: 'seller', is_approved: false, approval_status: 'pending', created_at: '2026-01-01T00:00:00Z' })),
       ...Array.from({ length: 9 }, (_, i) => ({ id: `s${i}`, role: 'seller', is_approved: false, approval_status: 'suspended', created_at: '2026-01-01T00:00:00Z' })),
       { id: 'ok', role: 'seller', is_approved: true, approval_status: 'approved', created_at: '2026-01-01T00:00:00Z' },
+      // Un fattorino in attesa: la lista /admin/users?role=pending lo mostra, quindi il riquadro lo conta.
+      { id: 'r1', role: 'rider', is_approved: false, approval_status: 'pending', created_at: '2026-01-01T00:00:00Z' },
+      { id: 'b1', role: 'buyer', is_approved: false, approval_status: 'pending', created_at: '2026-01-01T00:00:00Z' },
     ];
     const c = await leggiCruscottoOggi(fintoDatabase({ profiles, orders: [], rider_sos_events: [], disputes: [] }), new Date('2026-11-12T10:00:00Z'));
-    expect(c.sellersPendingCount).toBe(16);
+    expect(c.sellersPendingCount).toBe(17);
   });
 
   it('l’etichetta del riquadro è in italiano', () => {
     const s = readFileSync('app/admin/today/page.tsx', 'utf8');
-    expect(s).toContain('label="Negozi in attesa"');
+    expect(s).toContain('label="Richieste in attesa"');
     expect(s).not.toContain('Seller pending');
   });
 });
