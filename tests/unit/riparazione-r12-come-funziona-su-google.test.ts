@@ -22,3 +22,9 @@ describe('R12-020 gli esclusi si vedono anche nel riquadro di Google', () => {
     expect(String(metadata.description).length).toBeLessThanOrEqual(160);
   });
 });
+
+describe('R12-020 anche l anteprima nei social dice gli esclusi', () => {
+  it('openGraph.description usa la frase del reso', () => {
+    expect((metadata.openGraph as { description?: string }).description).toContain(FRASE_RESO);
+  });
+});

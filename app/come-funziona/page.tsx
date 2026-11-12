@@ -17,7 +17,8 @@ export const metadata = {
   alternates: { canonical: '/come-funziona' },
   openGraph: {
     title: 'Come funziona · MyCity',
-    description: 'Scegli dai negozi locali, ordini e paghi alla consegna. Zero rischi.',
+    // Collaudo R12-020: anche l'anteprima di WhatsApp e dei social dice il reso con gli esclusi.
+    description: `Scegli dai negozi locali, ordini e paghi alla consegna. ${FRASE_RESO}.`,
     type: 'website',
     locale: 'it_IT',
     siteName: 'MyCity',
