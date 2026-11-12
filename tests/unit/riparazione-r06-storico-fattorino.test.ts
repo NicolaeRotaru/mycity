@@ -62,3 +62,55 @@ describe('R06-015 · un solo «Oggi» dopo mezzanotte', () => {
     s.smonta();
   }, 60000);
 });
+
+describe('R06-016 · storico lungo e consegne vecchie', () => {
+  it('con 1200 consegne il totale e\' la somma vera, non quella delle prime mille righe', async () => {
+    const adesso = Date.now();
+    const consegne = Array.from({ length: 1200 }, (_, i) =>
+      consegna(`k-${String(i).padStart(4, '0')}`, new Date(adesso - (i + 1) * 3600_000).toISOString(), 2));
+    const s = await disegnaCon(consegne);
+    const testo = s.radice.textContent ?? '';
+    expect(testo, 'Conto e totale si fermavano alle mille righe che il database consegna in una volta').toContain('1200 consegne completate');
+    expect(testo).toContain('2400,00');
+    s.smonta();
+  }, 60000);
+
+  it('una consegna di otto giorni fa non porta a «Ordine non trovato»', async () => {
+    const adesso = Date.now();
+    const s = await disegnaCon([
+      consegna('recente', new Date(adesso - 2 * 86_400_000).toISOString()),
+      consegna('vecchia', new Date(adesso - 8 * 86_400_000).toISOString()),
+    ]);
+    const link = [...s.radice.querySelectorAll('a')].map((a) => a.getAttribute('href'));
+    expect(link).toContain('/rider/orders/recente');
+    expect(link, 'Dopo sette giorni la consegna non si apre piu\': il link portava a «Ordine non trovato»').not.toContain('/rider/orders/vecchia');
+    expect(s.radice.textContent).toContain('#VECCHI');
+    s.smonta();
+  }, 60000);
+});
+
+describe('R06-016 · le recensioni del fattorino oltre le mille righe', () => {
+  it('media e conteggio su tutte le recensioni', async () => {
+    let lettura: Lettura | null = null;
+    globale.__DATI_QUERY__ = (o: Lettura) => { lettura = o; return undefined; };
+    const mod = await monta('app/rider/reviews/page.tsx');
+    accendi(mod.default as ComponentType).smonta();
+    globale.__UTENTE__ = { id: 'rider-1' };
+    const righe: Riga[] = Array.from({ length: 1500 }, (_, i) => ({
+      id: `r-${String(i).padStart(4, '0')}`,
+      // Le prime mille, le piu' recenti, tutte da 5 stelle; le altre 500 da 2.
+      rating: i < 1000 ? 5 : 2,
+      comment: null,
+      created_at: new Date(Date.UTC(2026, 10, 1) - i * 60_000).toISOString(),
+      autore_nome: 'Anna',
+    }));
+    globale.__CLIENT_SUPABASE__ = creaPostgrestColTetto({ rider_reviews_ricevute: righe }).client;
+    const dati = await (lettura as unknown as Lettura).queryFn!();
+    globale.__DATI_QUERY__ = dati;
+    const s = accendi(mod.default as ComponentType);
+    const testo = s.radice.textContent ?? '';
+    expect(testo, 'Il conteggio si fermava alle prime mille recensioni').toContain('Su 1500 recensioni');
+    expect(testo).toContain('4,0');
+    s.smonta();
+  }, 60000);
+});

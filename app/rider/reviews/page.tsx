@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Star, Bike, Lightbulb } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import { formatDate } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -38,7 +39,7 @@ export default function RiderReviewsPage() {
   const [filter, setFilter] = useState<'all' | 5 | 4 | 3 | 2 | 1>('all');
 
   // 5/11/2026 — Una lettura caduta non è «Nessuna recensione ancora».
-  const { data: reviews = [], isLoading, isError, refetch } = useQuery<Review[]>({
+  const { data: lettura, isLoading, isError, refetch } = useQuery<{ righe: Review[]; troncato: boolean }>({
     queryKey: queryKeys.rider.reviews,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -48,15 +49,21 @@ export default function RiderReviewsPage() {
       // cliente (che include codice fiscale, IBAN e documenti) attraverso un
       // collegamento che nemmeno esiste — `rider_reviews_reviewer_id_fkey`, la
       // colonna vera e' user_id — quindi la pagina andava comunque in errore.
-      const { data, error } = await supabase
-        .from('rider_reviews_ricevute')
-        .select('id, rating, comment, created_at, autore_nome')
-        .order('created_at', { ascending: false });
+      // 12/11/2026 (R06-016) — A finestre: oltre le mille righe di una richiesta
+      // media e conteggio sarebbero stati calcolati su un troncone, in silenzio.
+      const { data, error, troncato } = await leggiTutteLeRighe<Review>((da, a) =>
+        supabase
+          .from('rider_reviews_ricevute')
+          .select('id, rating, comment, created_at, autore_nome')
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(da, a) as unknown as PromiseLike<{ data: Review[] | null; error: { message?: string } | null }>,
+      );
       if (error) throw error;
-      type RiderReviewRow = { id: string; rating: number; comment: string | null; created_at: string; autore_nome: string | null };
-      return (data ?? []) as unknown as RiderReviewRow[];
+      return { righe: data, troncato };
     },
   });
+  const reviews = useMemo(() => lettura?.righe ?? [], [lettura]);
 
   const stats = useMemo(() => {
     if (reviews.length === 0) return { avg: 0, count: 0, distribution: [0, 0, 0, 0, 0] };
@@ -111,6 +118,9 @@ export default function RiderReviewsPage() {
                 <div className="min-w-0 flex-1">
                   <p className="font-bold text-ink-900">{stats.avg >= 4.5 ? 'Ottimo lavoro!' : 'Continua così'}</p>
                   <p className="mt-0.5 text-[13px] text-ink-600">Su {stats.count} {stats.count === 1 ? 'recensione' : 'recensioni'}.</p>
+                  {lettura?.troncato && (
+                    <p role="status" className="mt-0.5 text-[12px] font-semibold text-accent-800">Sono le tue ultime {stats.count} recensioni: le più vecchie non sono contate.</p>
+                  )}
                   {/* 5/11/2026 — Qui c'era il bollino del miglior fattorino con la media di sempre, anche su una
                       recensione sola: un titolo che non dà nessuna priorità vera. */}
                 </div>
