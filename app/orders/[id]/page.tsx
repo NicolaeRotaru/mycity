@@ -45,6 +45,7 @@ import { cifraDellaVoce, fraseDelBonificoAMano, riepilogoOrdine, statoPagamento 
 import { fasciaLeggibile } from '@/lib/ordini/fascia-leggibile';
 import { ETICHETTA_ADESSO } from '@/lib/quando-arriva';
 import { statoDelReso, type RigaReso } from './stato-del-reso';
+import { FUSO_PIACENZA } from '@/lib/tempo-piacenza';
 
 type OrderRow = {
   id: string;
@@ -149,6 +150,11 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
 };
 
 // Timestamp del singolo step della timeline (se registrato).
+/** L'ora di una tappa, sull'orologio di Piacenza: giorno, mese, ore e minuti (i secondi non servono). */
+const ORA_DELLA_TAPPA: Intl.DateTimeFormatOptions = {
+  timeZone: FUSO_PIACENZA, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+};
+
 const STEP_TIMESTAMP: Partial<Record<OrderStatus, keyof OrderRow>> = {
   ACCEPTED: 'accepted_at',
   READY: 'ready_at',
@@ -681,7 +687,8 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                       </p>
                       <p className="mt-0.5 text-[13px] text-ink-500">
                         {active ? (HERO_SUBTITLE[status] ?? 'In corso') : past ? 'Completato' : 'In attesa'}
-                        {ts && ` · ${new Date(ts).toLocaleString('it-IT')}`}
+                        {/* 12/11/2026 (R09-014) — L'ora di Piacenza, non quella del telefono: col fuso UTC le tappe uscivano un'ora indietro. */}
+                        {ts && ` · ${new Date(ts).toLocaleString('it-IT', ORA_DELLA_TAPPA)}`}
                       </p>
                     </div>
                   </li>
