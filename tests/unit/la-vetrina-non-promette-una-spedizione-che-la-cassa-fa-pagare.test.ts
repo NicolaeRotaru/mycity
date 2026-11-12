@@ -31,6 +31,7 @@ import { promessaSpedizione, rispostaCostoSpedizione } from '@/lib/promesse-pubb
 import { prezziDelCarrello } from '@/lib/ordini/prezzi';
 import { formatPrice } from '@/lib/format';
 import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
+import * as costantiR12 from '@/lib/constants';
 
 const RADICE = process.cwd();
 const leggi = (f: string) => readFileSync(join(RADICE, f), 'utf8');
@@ -126,8 +127,12 @@ describe('le vetrine prendono le parole da lì, invece di riscriverle', () => {
     expect(() => leggi('components/ui/FreeShippingProgress.tsx')).toThrow();
   });
 
-  // 12/11/2026 (R12-007) — «le quattro promesse del sito» erano VALUE_PROPS, che nessuna pagina
-  // mostrava: tolte. Le parole vere le controllano le prove qui sopra e sotto.
+  // 12/11/2026 (R12-007) — Al posto delle asserzioni su VALUE_PROPS (tolto: nessuna pagina lo
+  // mostrava) si controlla che non torni una «promessa che nessuno vede».
+  it('VALUE_PROPS non esiste più e nessuna pagina lo cerca', () => {
+    expect('VALUE_PROPS' in costantiR12).toBe(false);
+    expect(Object.keys(costantiR12).filter((k) => /VALUE_PROP/.test(k))).toEqual([]);
+  });
 
   it('e la risposta della FAQ dice lo stesso numero', () => {
     // Sta nello stesso file della funzione: se la fee cambia, cambia anche questa.

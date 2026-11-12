@@ -11,6 +11,7 @@ const regolaDelCarrello = (merciCents: number[]) =>
   PLATFORM_DELIVERY_FEE_CENTS + (merciCents.length - 1) * EURO_NEGOZIO_IN_PIU
   + merciCents.filter((m) => m < SOGLIA_SPESA).length * EURO_SPESA_PICCOLA;
 import { existsSync, readFileSync } from 'node:fs';
+import * as costantiR12 from '@/lib/constants';
 import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import ShippingPage from '@/app/shipping/page';
@@ -482,8 +483,13 @@ describe('le altre promesse parlano della stessa consegna', () => {
     expect(elenco).not.toMatch(/gratuit|gratis|sopra i? ?\d+\s*(€|euro)/i);
   });
 
-  // 12/11/2026 (R12-007) — Qui si guardavano anche le «quattro promesse» di VALUE_PROPS: nessuna
-  // pagina le mostrava, e sono state tolte. Resta l'elenco che la home disegna davvero, qui sopra.
+  // 12/11/2026 (R12-007) — Al posto delle asserzioni su VALUE_PROPS (tolto: nessuna pagina lo
+  // mostrava) si controlla che non torni una «promessa che nessuno vede».
+  it('VALUE_PROPS non esiste più e nessuna pagina lo cerca', () => {
+    expect('VALUE_PROPS' in costantiR12).toBe(false);
+    expect(Object.keys(costantiR12).filter((k) => /VALUE_PROP/.test(k))).toEqual([]);
+    expect(readFileSync(join(process.cwd(), 'components/home-sections/HomeSectionRenderer.tsx'), 'utf8')).not.toContain('VALUE_PROPS');
+  });
 });
 
 describe('«Vicino a te» non mostra negozi oltre il confine della consegna', () => {

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { fraseComeArriva, rispostaTempiDiConsegna } from '@/lib/promesse-pubbliche';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
+import * as costantiR12 from '@/lib/constants';
 import PaginaConsegne from '@/app/admin/delivery/page';
 
 /**
@@ -29,7 +30,11 @@ describe('i minuti della veloce non sono una promessa fissa', () => {
     expect(a).toMatch(/8 alle 21/);
   });
 
-  // 12/11/2026 (R12-007) — «le promesse in vetrina» erano VALUE_PROPS, che nessuna pagina mostrava: tolte.
+  // 12/11/2026 (R12-007) — Al posto delle asserzioni su VALUE_PROPS (tolto: nessuna pagina lo
+  // mostrava) si controlla che non torni una «promessa che nessuno vede».
+  it('VALUE_PROPS non esiste più e nessuna pagina lo cerca', () => {
+    expect('VALUE_PROPS' in costantiR12).toBe(false);
+  });
 
   it('la pagina consegne dell amministratore dice la regola, non «3,00 €–4,00 €» a consegna', () => {
     const html = renderToStaticMarkup(createElement(PaginaConsegne));

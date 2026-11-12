@@ -273,6 +273,16 @@ describe('le fasce di prodotti', () => {
     expect(fascia).toEqual([]);
   });
 
+  // R12-008 — le due asserzioni che guardavano il ripiego guardano adesso la strada vera: con le
+  // visite, il prodotto del negozio approvato c'è e porta il nome del negozio.
+  it.each(CASI)('«Trending ora» con una visita porta il prodotto col suo negozio — %s', async (_n, mondo, chi) => {
+    const fascia = await leggiTendenze(db(conFuga(mondo), chi, {
+      trending_product_ids_24h: () => [{ product_id: 'p-focaccia', view_count: 4 }],
+    }).client);
+    expect(fascia.map((t) => t.product.id)).toEqual(['p-focaccia']);
+    expect(fascia[0]?.product.profiles?.store_name).toBe('Pane Quotidiano');
+  });
+
   it.each(CASI)('«Trending ora» con le visite tiene l ordine e scarta il negozio non approvato — %s', async (_n, mondo, chi) => {
     const conVisite = db(conFuga(mondo), chi, {
       trending_product_ids_24h: () => [
