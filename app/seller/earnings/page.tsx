@@ -82,7 +82,11 @@ function payoutBadge(o: OrderRow): { label: string; cls: string } {
     case 'HELD':
       return { label: 'In attesa', cls: 'bg-accent-100 text-accent-800' };
     case 'PENDING_SELLER_ONBOARDING':
-      return { label: 'Completa onboarding', cls: 'bg-primary-100 text-primary-800' };
+      return { label: 'Collega il conto', cls: 'bg-primary-100 text-primary-800' };
+    case 'REVERSAL_FAILED': // R11-013 — prima usciva il codice grezzo
+      return { label: 'Storno da sistemare: ci pensiamo noi', cls: 'bg-secondary-100 text-secondary-700' };
+    case 'PROCESSING':
+      return { label: 'Bonifico in corso', cls: 'bg-accent-100 text-accent-800' };
     case 'REVERSED':
       return { label: 'Stornato', cls: 'bg-secondary-100 text-secondary-700' };
     case 'REFUNDED':
@@ -90,7 +94,8 @@ function payoutBadge(o: OrderRow): { label: string; cls: string } {
     case 'FAILED':
       return { label: 'Verifica IBAN', cls: 'bg-secondary-100 text-secondary-700' };
     default:
-      return { label: o.payout_status ?? '—', cls: 'bg-cream-200 text-ink-700' };
+      // R11-013 — mai il codice tecnico a video: una parola sola.
+      return { label: o.payout_status ? 'Da verificare' : '—', cls: 'bg-cream-200 text-ink-700' };
   }
 }
 
@@ -254,7 +259,7 @@ export default function SellerEarningsPage() {
       {/* KPI tower */}
       <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-3">
         <Stat label="Fatturato lordo (carta)" value={formatPrice(grossCents / 100)} hint={`${activeCard.length} ordini`} tone="primary" />
-        <Stat label="Commissione marketplace" value={'− ' + formatPrice(feeCents / 100)} hint="Trattenuta automaticamente" tone="secondary" />
+        <Stat label="Commissione MyCity" value={'− ' + formatPrice(feeCents / 100)} hint="Trattenuta automaticamente" tone="secondary" />
         <Stat
           label="Incassato"
           value={formatPrice(paidCents / 100)}
@@ -278,7 +283,8 @@ export default function SellerEarningsPage() {
             {daily.map(([day, val]) => {
               const pct = (val / maxDaily) * 100;
               return (
-                <div key={day} className="flex flex-1 flex-col items-center gap-1">
+                // R11-013 — h-full: senza un'altezza la colonna non dava riferimento al % della barra (0 px).
+                <div key={day} className="flex h-full flex-1 flex-col items-center gap-1">
                   <div className="flex w-full flex-1 items-end">
                     <div
                       className="w-full rounded-t bg-gradient-to-b from-primary-400 to-secondary-600"
@@ -297,7 +303,7 @@ export default function SellerEarningsPage() {
 
         <Card variant="flat" padding="lg" className="border border-olive-200 bg-olive-50">
           <h2 className="flex items-center gap-2 font-serif text-[17px] font-bold text-olive-900">
-            <Banknote size={19} className="text-olive-700" aria-hidden /> Contanti (COD)
+            <Banknote size={19} className="text-olive-700" aria-hidden /> Contanti alla consegna
           </h2>
           <p className="mb-3 mt-1 text-[13px] leading-relaxed text-olive-800">
             Gli ordini pagati alla consegna li incassa il fattorino. Il bonifico parte dopo la verifica
@@ -344,7 +350,7 @@ export default function SellerEarningsPage() {
                   Stripe del negozio, non in banca, e al lancio si paga in contanti col
                   bonifico del lunedì. La frase è la stessa della spiegazione qui sotto. */}
               {tempiBonifico && <>{tempiBonifico.prima}{tempiBonifico.forte}{tempiBonifico.dopo}{' '}</>}
-              Per saldo e bonifici reali apri la dashboard Stripe.
+              Per saldo e bonifici reali apri il tuo conto Stripe.
             </p>
           </div>
           <div className="flex flex-col items-stretch gap-2 sm:items-end">
@@ -367,10 +373,10 @@ export default function SellerEarningsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-cream-50 text-xs uppercase tracking-[0.03em] text-ink-500">
-                  <th className="px-5 py-3 text-left font-bold">Ordine</th>
-                  <th className="px-5 py-3 text-left font-bold">Data</th>
-                  <th className="px-5 py-3 text-right font-bold">Netto</th>
-                  <th className="px-5 py-3 text-right font-bold">Stato</th>
+                  <th className="px-3 py-3 text-left font-bold sm:px-5">Ordine</th>
+                  <th className="hidden px-5 py-3 text-left font-bold sm:table-cell">Data</th>
+                  <th className="px-3 py-3 text-right font-bold sm:px-5">Netto</th>
+                  <th className="px-3 py-3 text-right font-bold sm:px-5">Stato</th>
                 </tr>
               </thead>
               <tbody>
@@ -378,11 +384,15 @@ export default function SellerEarningsPage() {
                   const badge = payoutBadge(o);
                   return (
                     <tr key={o.id} className="border-t border-cream-200">
-                      <td className="px-5 py-3 font-mono text-[13px] text-ink-700">#{o.id.slice(0, 8)}</td>
-                      <td className="px-5 py-3 text-[13px] text-ink-500">{fmtDate(o.created_at)}</td>
-                      <td className="px-5 py-3 text-right font-serif text-[15px] font-bold text-olive-700">{formatPrice((o.seller_payout_cents ?? 0) / 100)}</td>
-                      <td className="px-5 py-3 text-right">
-                        <span className={`${badge.cls} rounded-full px-2.5 py-0.5 text-xs font-semibold`}>{badge.label}</span>
+                      {/* R11-013 — sul telefono la data va sotto il numero: la colonna Stato non esce più dallo schermo. */}
+                      <td className="px-3 py-3 font-mono text-[13px] text-ink-700 sm:px-5">
+                        #{o.id.slice(0, 8)}
+                        <span className="block font-sans text-[11px] text-ink-500 sm:hidden">{fmtDate(o.created_at)}</span>
+                      </td>
+                      <td className="hidden px-5 py-3 text-[13px] text-ink-500 sm:table-cell">{fmtDate(o.created_at)}</td>
+                      <td className="px-3 py-3 text-right font-serif text-[15px] font-bold text-olive-700 sm:px-5">{formatPrice((o.seller_payout_cents ?? 0) / 100)}</td>
+                      <td className="px-3 py-3 text-right sm:px-5">
+                        <span className={`${badge.cls} inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold`}>{badge.label}</span>
                       </td>
                     </tr>
                   );
