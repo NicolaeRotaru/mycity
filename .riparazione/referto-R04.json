@@ -1,12 +1,12 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-12 15:47",
+  "aggiornato": "2026-11-12 16:23",
   "finita": true,
-  "testa": "a8bb0383f1859b1216e805927eaf14661114dca3",
+  "testa": "6ffafba71361b1c8b503f02da53f94b8f4a35842",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "nota": "1224 file di prova passati (1 saltato gia' sulla base), 8977 test; typecheck e lint verdi. La prova rimessa e' stata fatta a mano per ogni voce (git checkout <commit>^ dei file corretti → prova rossa → ripristino → verde) perche' l'esecuzione di cervello/prova-rimessa.mjs dal clone di ad-mycity e' stata bloccata dal classificatore dei permessi di questa sessione."
+    "nota": "Dopo il giro di correzione K02: 1224 file di prova passati (1 saltato gia' sulla base), 8984 test; typecheck e lint verdi. Prova rimessa fatta a mano per ogni commit (git checkout <commit>^ dei file corretti → prova rossa → ripristino → verde): l'esecuzione degli script di ad-mycity e' bloccata dal classificatore dei permessi di questa sessione."
   },
   "voci": [
     {
@@ -78,7 +78,7 @@
       "serve_file_altrui": [
         {
           "file": "app/api/cron/operational-alerts/route.ts",
-          "modifica": "a ogni passata: const conto = await sondaContoCondiviso(undefined, <primo_visto in ms dell'ultima riga operational_alert_log con type TIPO_ALLARME_TETTO_AI, se c'e'>); alerts.push(...allarmiTettoSpesaAi(conto, { tettoEur: Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0), copieAttese: leggiCopieAttese(process.env.AI_COPIE_ATTESE) })) — import da '@/lib/ai/tettoSpesa'. Il secondo argomento della sonda arriva con R04-018."
+          "modifica": "stesso innesto di R04-018: alerts.push(...(await allarmiTettoSpesaAiPerIlCron())) — con il conto assente (migrazione non applicata) l'allarme e' rosso subito."
         }
       ],
       "verificato_da": "qa (subagente g2): verificata l'affermazione sul codice (eseguiRpc -> permanente, decidiSpesaAi divide per AI_COPIE_ATTESE), 21/21 prove del tetto verdi; segnalato il limite delle copie che si ricreano."
@@ -86,7 +86,7 @@
     {
       "id": "R04-004",
       "chiave": "accessibilita-visiva|in fondo alle domande frequenti, chi usa la tastiera non vede quando è sul bottone «contattaci»",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "baaf53bee2495467feeb62dc32a5c83c2479d46f",
       "file_toccati": [
         "app/faq/page.tsx"
@@ -102,9 +102,10 @@
         "uscita": 0,
         "comando": "rimessa a mano: git checkout HEAD^ -- app/faq/page.tsx -> rossa; ripristino -> verde"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Aggiunto focus-visible:outline-white al Link «Contattaci» nel riquadro terracotta delle FAQ, come gia' fanno le barre in alto (Navbar). La regola unica in globals.css per tutti i fondi terracotta/vino (voce 1760) non l'ho fatta: fuori dalla voce.",
-      "verificato_da": "qa (subagente g6): specificita' di .focus-visible:outline-white (0,2,0) sopra la regola globale (0,1,0) e white disponibile in Tailwind: regge."
+      "verificato_da": "qa (subagente g6): specificita' di .focus-visible:outline-white (0,2,0) sopra la regola globale (0,1,0) e white disponibile in Tailwind: regge.",
+      "cosa_resta": "Fatto l'anello bianco sul bottone delle FAQ; il fix chiede anche, «per una soluzione che duri», una regola sola in globals.css (o una classe di utilita') per tutti i comandi su fondi terracotta e vino, sfumature comprese (voce 1760): non fatta."
     },
     {
       "id": "R04-005",
@@ -168,7 +169,7 @@
     {
       "id": "R04-007",
       "chiave": "ai-endpoints|il copilot non riesce a preparare una modifica su tutto il catalogo oltre circa cento prodotti: risponde «riprova» e fallisce ogni volta",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "41cea089ea0b7307cb45caa59af649e22ccc6109",
       "file_toccati": [
         "app/api/ai/copilot/route.ts",
@@ -185,12 +186,13 @@
         "uscita": 0,
         "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/copilot/route.ts -> 4 rosse; ripristino -> verde · revisione 41cea089e: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "La «soluzione piu' solida» della voce: lo strumento bulk_edit accetta 'regola' {product_ids, prezzo_percentuale, aggiungi_tag, togli_tag, status}; il prompt dice di usarla quando la stessa operazione vale per piu' di 20 prodotti. Il server (lib/ai/regolaCopilot.ts, nuovo) espande la regola sui prodotti veri del venditore: prezzo con la percentuale arrotondato al centesimo, tag partendo da quelli attuali (che il modello non vede), stato fra quelli ammessi; le voci singole sullo stesso prodotto si sommano sopra. Un id ~20-25 token contro 35-55 di una voce: 200 prodotti stanno nel tetto di 6000. La banda del ±30% sul prezzo resta applicata da catalog-apply-bulk come prima. REVISIONE DOPO IL QA: una percentuale oltre la banda del ±30% (BANDA_PREZZO_AI) non diventa proposta; su un prodotto che passerebbe i 15 tag i tag non si propongono (il server taglierebbe proprio quelli aggiunti dicendo «applicato»). Resta una stima, non misurata: 200 id stanno vicini al tetto di 6000 token.",
       "verificato_da": "qa (subagente g4): provato regola -50% → rifiutata dalla banda in catalog-apply-bulk; trovati tag oltre 15 e percentuale senza limite, corretti nella revisione.",
       "commit_revisione": [
         "41cea089ea0b7307cb45caa59af649e22ccc6109"
-      ]
+      ],
+      "cosa_resta": "La regola riduce ogni prodotto a un id (~20-28 token) invece di una voce (35-55): 200 prodotti stanno in teoria nel tetto di 6000 token, ma non l'ho misurato su una risposta vera del modello, e una modifica diversa per ogni prodotto (non esprimibile come regola) oltre ~100 prodotti si tronca ancora. La divisione del piano in pezzi da 50 non e' fatta."
     },
     {
       "id": "R04-008",
@@ -266,11 +268,12 @@
       "id": "R04-011",
       "chiave": "ai-endpoints|con l'ai spenta, chi guarda un prodotto importato da un altro sito lo fa segnare come «aggiornato adesso» anche se nessun dato è arrivato",
       "esito": "riparato",
-      "commit": "dad5a6d38ba7d6890ec4478d81fbd720e5d18918",
+      "commit": "1c47190678edd11947966d3dd355dfff1388357c",
       "file_toccati": [
         "app/api/cron/external-price-alerts/route.ts",
         "app/api/products/[id]/external-refresh/route.ts",
-        "lib/products/externalSync.ts"
+        "lib/products/externalSync.ts",
+        "tests/unit/minori-s03-prezzi-esterni.test.ts"
       ],
       "prova_file": [
         "tests/unit/riparazione-r04-prezzo-esterno-ai-spenta.test.ts",
@@ -282,13 +285,14 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/products/[id]/external-refresh/route.ts -> 2 rosse; ripristino -> verde · revisione dad5a6d38: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/products/[id]/external-refresh/route.ts -> 2 rosse; ripristino -> verde · revisione dad5a6d38: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde · revisione 1c4719067: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nel GET, con AI_NEGOZI_ACCESA spento, si restituiscono i dati salvati (con stale vero) senza scrivere 'pending' ne' lanciare il refresh. Nel catch di doRefresh si scrive solo external_sync_status='error', non external_synced_at=adesso; il freno resta il cancello di 30 minuti per prodotto. Il cron external-price-alerts legge gia' l'interruttore: non toccato. REVISIONE DOPO IL QA: il freno contro i ritentativi non e' piu' external_synced_at=adesso ma ritentoDopoErroreConsentito (lib/products/externalSync.ts): un prodotto in errore si ritenta al massimo ogni 6 ore (il ritmo di prima), dalla vista e dal cron. Anche il cron external-price-alerts non scrive piu' external_synced_at su errore. Limite: il cancello usa rate-limit (Upstash, in memoria se Upstash manca).",
-      "verificato_da": "qa (subagente g4): 31 file/190 test vicini verdi; trovati il freno sceso da 6 h a 30 min e il cron che segnava ancora «aggiornato adesso», corretti nella revisione.",
+      "cosa_ho_fatto": "Nel GET, con AI_NEGOZI_ACCESA spento, si restituiscono i dati salvati (con stale vero) senza scrivere 'pending' ne' lanciare il refresh. Nel catch di doRefresh si scrive solo external_sync_status='error', non external_synced_at=adesso; il freno resta il cancello di 30 minuti per prodotto. Il cron external-price-alerts legge gia' l'interruttore: non toccato. REVISIONE DOPO IL QA: il freno contro i ritentativi non e' piu' external_synced_at=adesso ma ritentoDopoErroreConsentito (lib/products/externalSync.ts): un prodotto in errore si ritenta al massimo ogni 6 ore (il ritmo di prima), dalla vista e dal cron. Anche il cron external-price-alerts non scrive piu' external_synced_at su errore. Limite: il cancello usa rate-limit (Upstash, in memoria se Upstash manca). REVISIONE DOPO IL QA: (collaudo K02) senza spostare la data dei falliti, dieci prodotti sempre in errore restavano i piu' vecchi e riempivano ogni giro orario: ora il giro prende prima i prodotti non in errore (.or status null/neq error) e solo nei posti che restano i falliti, ciascuno se il suo freno di sei ore lo consente. Aggiornata la prova esistente minori-s03-prezzi-esterni (importa la rotta).",
+      "verificato_da": "collaudo K02 + revisione: scenario 10 falliti piu' vecchi + 5 sani → i 5 sani controllati (rossa senza la correzione).",
       "commit_revisione": [
-        "dad5a6d38ba7d6890ec4478d81fbd720e5d18918"
+        "dad5a6d38ba7d6890ec4478d81fbd720e5d18918",
+        "1c47190678edd11947966d3dd355dfff1388357c"
       ]
     },
     {
@@ -406,7 +410,7 @@
     {
       "id": "R04-016",
       "chiave": "ai-endpoints|se si riaccende «traduci», una descrizione lunga torna tradotta solo all'inizio e il modulo la presenta come intera",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "1ade5d90c99e4e7f52d5baf29cb4d7a4c6244e20",
       "file_toccati": [
         "app/api/ai/translate/route.ts",
@@ -423,21 +427,23 @@
         "uscita": 0,
         "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/translate/route.ts -> rossa; ripristino -> verde · revisione 1ade5d90c: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "productContext espone MAX_PRODUCT_JSON e schedaTagliataNelContesto(). La rotta di traduzione, prima di chiamare il modello, rifiuta con 400 «Descrizione troppo lunga per la traduzione automatica: massimo 2500 caratteri fra nome e descrizione» se la scheda arriverebbe tagliata o il testo supera 2500 caratteri; max_tokens d'uscita da 1024 a 2048 perche' 2500 caratteri tradotti ci stiano larghi (un'uscita tagliata la rifiutava gia' runMessage). QuickAiTools non serve toccarlo: il 400 arriva come errore e la scritta «Annuncio tradotto» non compare. La traduzione resta spenta (TRADUCI_ACCESO=false). REVISIONE DOPO IL QA: il taglio si misura e il contesto si costruisce solo su nome, descrizione e tag (prima tutta la scheda: un alimento con descrizione corta e ingredienti lunghi veniva rifiutato), e il rifiuto avviene prima del filtro sui contenuti, che e' una chiamata a pagamento.",
       "verificato_da": "qa (subagente g5): trovato il falso rifiuto per schede con attributi lunghi e il controllo dopo la moderazione; corretti nella revisione.",
       "commit_revisione": [
         "1ade5d90c99e4e7f52d5baf29cb4d7a4c6244e20"
-      ]
+      ],
+      "cosa_resta": "La traduzione rifiuta prima di spendere e sa del taglio (schedaTagliataNelContesto); ma buildProductContext non restituisce {content, troncato}: le altre rotte che lo usano (seo, varianti, diagnosi, risposte alle domande) tagliano ancora la scheda in silenzio, e QuickAiTools non ha un avviso di «tradotto solo in parte» (non serve finche' la rotta rifiuta)."
     },
     {
       "id": "R04-017",
       "chiave": "ai-endpoints|il tetto di spesa ai del giorno si sfora quando più chiamate partono insieme",
       "esito": "parziale",
-      "commit": "8474b61860ad9f4008ebc8ee75e1234aca5de93a",
+      "commit": "e539f75d4fa23533d94e6f8b266414e18599eb1d",
       "file_toccati": [
+        "app/api/ai/catalog-batch/start/route.ts",
         "lib/ai/run.ts",
-        "app/api/ai/catalog-batch/start/route.ts"
+        "lib/ai/tettoSpesa.ts"
       ],
       "prova_file": [
         "tests/unit/riparazione-r04-tetto-concorrente.test.ts"
@@ -448,18 +454,21 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- lib/ai/run.ts app/api/ai/catalog-batch/start/route.ts -> 3 rosse; ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- lib/ai/run.ts app/api/ai/catalog-batch/start/route.ts -> 3 rosse; ripristino -> verde · revisione e539f75d4: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "controllaTettoSpesaAi(feature, stimaCents) decide su speso + in volo + stima e prenota la stima nello stesso passo sincrono (nessun await fra decisione e prenotazione); runMessage stima il costo massimo (ingresso dal testo, immagini a 1600 token, uscita = max_tokens) e libera la prenotazione a spesa registrata, anche se la chiamata fallisce. Il lotto passa la sua stima al controllo e registra la spesa prima di liberare la prenotazione.",
-      "cosa_resta": "La prenotazione vale dentro una copia. Fra copie diverse serve un'istruzione SQL atomica (prenota se speso + stima <= tetto, poi conguaglio anche negativo): una migrazione nuova 280 con due funzioni. Non l'ho scritta perche' in produzione manca ancora il conto condiviso stesso (158, R04-003): finche' non c'e', l'atomicita' SQL non verrebbe usata. Va fatta dopo la 158, se Nicola la vuole.",
-      "verificato_da": "qa (subagente g3): prenotazione liberata sempre (try/finally, anche su errore 500 e su errore sincrono: __inVoloSpesaAiCents torna 0); stima massima reale ~9 cent: regge, parziale per il limite fra copie."
+      "cosa_ho_fatto": "controllaTettoSpesaAi(feature, stimaCents) decide su speso + in volo + stima e prenota la stima nello stesso passo sincrono (nessun await fra decisione e prenotazione); runMessage stima il costo massimo (ingresso dal testo, immagini a 1600 token, uscita = max_tokens) e libera la prenotazione a spesa registrata, anche se la chiamata fallisce. Il lotto passa la sua stima al controllo e registra la spesa prima di liberare la prenotazione. REVISIONE DOPO IL QA: (collaudo K02) una lettura del conto partita prima e arrivata dopo una spesa registrata da un'altra chiamata faceva passare oltre il tetto anche in una copia sola: ora la decisione usa max(speso letto, ultimaSpesaNotaCents()), l'ultimo totale noto a questa copia (sale a ogni lettura e registrazione).",
+      "cosa_resta": "Dentro una copia la prenotazione e la lettura vecchia sono chiuse. Fra copie diverse due chiamate possono ancora leggere lo stesso speso e passare insieme: serve un'istruzione SQL atomica (prenota se speso + stima <= tetto, poi conguaglio), cioe' una migrazione nuova nella fascia 280, sensata solo dopo che in produzione c'e' il conto condiviso (158). Domanda per Nicola.",
+      "verificato_da": "qa (subagente g3) + collaudo K02: riprodotta la lettura vecchia (tetto 10 cent, spesa 12), corretta e provata (rimessa: rossa senza la correzione).",
+      "commit_revisione": [
+        "e539f75d4fa23533d94e6f8b266414e18599eb1d"
+      ]
     },
     {
       "id": "R04-018",
       "chiave": "ai-endpoints|l'allarme del tetto di spesa ai scatta solo se la stessa copia del sito resta accesa per un'ora, e su vercel può non arrivare mai",
       "esito": "parziale",
-      "commit": "8d78281fd3d3d509cc7ef9f49cb18d9574207b37",
+      "commit": "ca67e8476a41ddb3695845c99bd7981cfd08c1b2",
       "file_toccati": [
         "lib/ai/tettoSpesa.ts"
       ],
@@ -472,18 +481,21 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- lib/ai/tettoSpesa.ts -> prova rossa; ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- lib/ai/tettoSpesa.ts -> prova rossa; ripristino -> verde · revisione ca67e8476: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde · mutazione comportamentale (la funzione resta ma usa solo la memoria della copia: `const conto = primo`) → rossa «expected [] to have a length of 1»; ripristino → verde"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "sondaContoCondiviso(quando, ripiegoNotoDaMs) accetta da quando il guasto e' noto fuori dalla copia: una copia nuova vede subito che il ripiego dura da piu' di un'ora e allarmiTettoSpesaAi diventa rosso.",
-      "cosa_resta": "Il cron degli avvisi deve chiamare la sonda a ogni passata passando il primo istante salvato in operational_alert_log (oggi la sonda non e' chiamata da nessuno).",
+      "cosa_ho_fatto": "sondaContoCondiviso(quando, ripiegoNotoDaMs) accetta da quando il guasto e' noto fuori dalla copia: una copia nuova vede subito che il ripiego dura da piu' di un'ora e allarmiTettoSpesaAi diventa rosso. REVISIONE DOPO IL QA: (collaudo K02) il parametro da solo non lo chiamava nessuno e il rimedio passato ad altri leggeva colonne che operational_alert_log non ha. Ora in lib/ai/tettoSpesa.ts c'e' allarmiTettoSpesaAiPerIlCron(): sonda il conto, scrive l'inizio del guasto in operational_alert_log (colonne vere: alert_key='ai-tetto-condiviso:ripiego-da', last_sent_at) solo la prima volta (upsert ignoreDuplicates), lo passa alla sonda come ripiegoNotoDaMs, toglie la riga quando il conto risponde e restituisce le righe d'allarme. Nota: la rimessa della revisione e' rossa anche per struttura (la funzione nuova non esiste prima).",
+      "cosa_resta": "Il cron degli avvisi (file non di R04) deve chiamare la funzione: finche' non lo fa, in produzione l'allarme non parte.",
       "serve_file_altrui": [
         {
           "file": "app/api/cron/operational-alerts/route.ts",
-          "modifica": "leggere da operational_alert_log la riga piu' vecchia ancora aperta con type = TIPO_ALLARME_TETTO_AI (created_at/primo invio) e chiamare sondaContoCondiviso(undefined, Date.parse(primoVisto)); poi alerts.push(...allarmiTettoSpesaAi(conto, { tettoEur, copieAttese })). Stesso innesto di R04-003."
+          "modifica": "import { allarmiTettoSpesaAiPerIlCron } from '@/lib/ai/tettoSpesa'; prima del dedup (dove si costruisce l'array alerts): alerts.push(...(await allarmiTettoSpesaAiPerIlCron())); la funzione legge AI_GLOBAL_DAILY_BUDGET_EUR e AI_COPIE_ATTESE da sola, usa operational_alert_log con alert_key='ai-tetto-condiviso:ripiego-da' e last_sent_at (colonne della migrazione 084) e restituisce righe {key,type,detail,url} nella forma degli altri allarmi; non lancia."
         }
       ],
-      "verificato_da": "qa (subagente g3): sonda con ripiegoNotoDaMs corretta, ma nessuno la chiama finche' il cron non viene cablato: parziale onesto."
+      "verificato_da": "collaudo K02 + revisione: provata con una operational_alert_log finta con le sole colonne vere: copia nuova due ore dopo → allarme rosso; conto tornato → riga tolta.",
+      "commit_revisione": [
+        "ca67e8476a41ddb3695845c99bd7981cfd08c1b2"
+      ]
     },
     {
       "id": "R04-019",
@@ -687,17 +699,19 @@
     {
       "id": "R04-025",
       "chiave": "qa-flussi|la rotta del lavoro ai sul catalogo non rifiuta un secondo lavoro",
-      "esito": "riparato",
-      "commit": "b66ab3f422d2a7d8b4df4570aea748fa65170edd",
+      "esito": "parziale",
+      "commit": "6ffafba71361b1c8b503f02da53f94b8f4a35842",
       "file_toccati": [
         "app/api/ai/catalog-batch/cancel/route.ts",
         "app/api/ai/catalog-batch/start/route.ts",
+        "app/api/ai/catalog-batch/status/route.ts",
         "app/seller/products/ai-batch/page.tsx",
         "tests/unit/la-spesa-del-lotto-si-conta-quando-parte.test.ts"
       ],
       "prova_file": [
         "tests/unit/riparazione-r04-lotto-aperto.test.ts",
-        "tests/unit/riparazione-r04-scarta-lavoro.test.ts"
+        "tests/unit/riparazione-r04-scarta-lavoro.test.ts",
+        "tests/unit/riparazione-r04-lavoro-in-invio.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r04-lotto-aperto.test.ts",
       "prova_tipo": "comando",
@@ -705,14 +719,16 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/catalog-batch/start/route.ts -> 2 rosse; ripristino -> verde · revisione b66ab3f42: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/catalog-batch/start/route.ts -> 2 rosse; ripristino -> verde · revisione b66ab3f42: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde · revisione 6ffafba71: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
-      "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Prima di aprire un lavoro la rotta cerca un lavoro del venditore in submitting/processing/ready: se c'e' risponde 409 CONFLICT con details {jobId,status}, senza lotto, spesa o riga nuova. Aggiornato il database finto della prova esistente la-spesa-del-lotto-si-conta-quando-parte (importa la rotta). REVISIONE DOPO IL QA: il 409 dice «applicalo o scartalo», ma scartare non si poteva: nuova rotta app/api/ai/catalog-batch/cancel/route.ts (file nuovo) che annulla solo un lavoro 'ready' del venditore, e pulsante «Scarta» accanto ad «Applica» nella pagina. Resta (vedi domande): due avvii simultanei possono passare entrambi, perche' manca un indice unico parziale sui lavori aperti; servirebbe una migrazione.",
-      "verificato_da": "qa (subagente g3): 409 verificato su avvii in sequenza; trovati il «scartalo» impossibile (corretto nella revisione) e la corsa fra due avvii simultanei (in domande_per_nicola).",
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Prima di aprire un lavoro la rotta cerca un lavoro del venditore in submitting/processing/ready: se c'e' risponde 409 CONFLICT con details {jobId,status}, senza lotto, spesa o riga nuova. Aggiornato il database finto della prova esistente la-spesa-del-lotto-si-conta-quando-parte (importa la rotta). REVISIONE DOPO IL QA: il 409 dice «applicalo o scartalo», ma scartare non si poteva: nuova rotta app/api/ai/catalog-batch/cancel/route.ts (file nuovo) che annulla solo un lavoro 'ready' del venditore, e pulsante «Scarta» accanto ad «Applica» nella pagina. Resta (vedi domande): due avvii simultanei possono passare entrambi, perche' manca un indice unico parziale sui lavori aperti; servirebbe una migrazione. REVISIONE DOPO IL QA: (collaudo K02) un lavoro 'processing' che non finiva piu' teneva il negozio bloccato per sempre: lo stato ora chiude come fallito, col motivo, un lavoro in corso da oltre 25 ore (un lotto dura al massimo 24) se il fornitore non lo da' finito o non risponde; poi l'avvio e' di nuovo libero.",
+      "verificato_da": "collaudo K02 + revisione: lavoro in corso da 30 ore (fornitore non finito / non raggiungibile) → failed e avvio libero; da 2 ore → resta in corso.",
       "commit_revisione": [
-        "b66ab3f422d2a7d8b4df4570aea748fa65170edd"
-      ]
+        "b66ab3f422d2a7d8b4df4570aea748fa65170edd",
+        "6ffafba71361b1c8b503f02da53f94b8f4a35842"
+      ],
+      "cosa_resta": "Due avvii nello stesso istante (doppio tocco, due schede) passano entrambi il controllo, che avviene prima dell'inserimento: servono un indice unico parziale su catalog_ai_jobs(seller_id) per gli stati aperti (submitting/processing/ready), cioe' una migrazione nuova nella fascia 280 (domanda per Nicola), e la gestione del conflitto nella rotta. Oggi resta il freno di 5 avvii all'ora."
     }
   ],
   "nuovi_difetti_visti": [
@@ -752,6 +768,6 @@
   ],
   "conto": {
     "agenti": 6,
-    "nota": "6 subagenti qa (gravi da soli: g1 R04-001, g2 R04-002/003; poi gruppi da 6 al massimo). Le loro obiezioni dentro i file di R04 sono state corrette nei commit di revisione (commit_revisione nelle voci)."
+    "nota": "6 subagenti qa (gravi da soli: g1 R04-001, g2 R04-002/003; poi gruppi da 6 al massimo). Le loro obiezioni dentro i file di R04 sono state corrette nei commit di revisione (commit_revisione nelle voci). Giro K02: corrette R04-017, R04-018, R04-011, R04-025 con commit nuovi; esiti dei minori riletti (R04-004, R04-007, R04-016, R04-025 a parziale)."
   }
 }
