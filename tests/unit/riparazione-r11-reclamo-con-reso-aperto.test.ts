@@ -13,7 +13,7 @@ const stato: {
   ordine: { stripe_payment_intent: string | null; payment_method: string; total_price: number };
   /** Quello che è stato scritto su `orders`. */
   scrittureOrdine: Record<string, unknown>[];
-  resiAperti: { id: string }[];
+  resiAperti: { id: string; status?: string; refund_id?: string | null }[];
 } = {
   resiAperti: [],
   ordine: { stripe_payment_intent: 'pi_1', payment_method: 'card', total_price: 30 },
@@ -90,7 +90,11 @@ vi.mock('@/lib/supabase/server', () => ({
         const catena: Record<string, unknown> = {
           select: () => catena,
           eq: () => catena,
-          in: async () => ({ data: stato.resiAperti, error: null }),
+          // Collaudo K04 — il finto database rispetta il filtro sugli stati.
+          in: async (_c: string, stati: string[]) => ({
+            data: stato.resiAperti.filter((r) => stati.includes(r.status ?? '')),
+            error: null,
+          }),
         };
         return catena;
       }
@@ -123,10 +127,22 @@ beforeEach(() => {
 
 describe('R11-017 — rimborso «pieno» con un reso ancora aperto', () => {
   it('con un reso aperto sullo stesso ordine non si scrive LOST', async () => {
-    stato.resiAperti = [{ id: 'reso-1' }];
+    stato.resiAperti = [{ id: 'reso-1', status: 'APPROVED' }];
     const res = await risolvi({ status: 'resolved_buyer', notes: NOTE, refundCents: 3000 });
     expect(res.status).toBe(200);
     expect(statoScrittoSullOrdine(), 'il reso può ancora fallire: LOST toglie al negozio il resto per sempre').toEqual(['RESOLVED']);
+  });
+
+  it('reso già REFUNDED ma col rimborso ancora in corso (senza refund_id): non si scrive LOST', async () => {
+    stato.resiAperti = [{ id: 'reso-2', status: 'REFUNDED', refund_id: null }];
+    await risolvi({ status: 'resolved_buyer', notes: NOTE, refundCents: 3000 });
+    expect(statoScrittoSullOrdine(), 'nella finestra di avanza il reso non si vede e si scrive LOST').toEqual(['RESOLVED']);
+  });
+
+  it('reso rimborsato e finito (refund_id scritto) o rifiutato: il rimborso pieno resta LOST', async () => {
+    stato.resiAperti = [{ id: 'reso-3', status: 'REFUNDED', refund_id: 're_1' }, { id: 'reso-4', status: 'REJECTED' }];
+    await risolvi({ status: 'resolved_buyer', notes: NOTE, refundCents: 3000 });
+    expect(statoScrittoSullOrdine()).toEqual(['LOST']);
   });
 
   it('senza resi aperti il rimborso pieno resta LOST', async () => {

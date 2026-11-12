@@ -392,12 +392,18 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     // per intero non lo paga (releaseOrderPayout lo salta).
     let pienoPerIlReclamo = rimborsoPieno;
     if (rimborsoPieno) {
-      const { data: resiAperti, error: errResi } = await admin
+      // Collaudo K04 — «avanza» segna il reso REFUNDED PRIMA di chiamare il rimborso: in quella finestra
+      // il reso è già REFUNDED ma senza refund_id (lo stesso segno che avanza usa per la ripresa).
+      const STATI_APERTI = ['REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED'];
+      const { data: resi, error: errResi } = await admin
         .from('returns')
-        .select('id')
+        .select('id, status, refund_id')
         .eq('order_id', dispute.order_id)
-        .in('status', ['REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED']);
-      if (errResi || (resiAperti ?? []).length > 0) pienoPerIlReclamo = false;
+        .in('status', [...STATI_APERTI, 'REFUNDED']);
+      const ancoraInCorso = ((resi ?? []) as { status: string; refund_id: string | null }[]).filter(
+        (r) => STATI_APERTI.includes(r.status) || (r.status === 'REFUNDED' && !r.refund_id),
+      );
+      if (errResi || ancoraInCorso.length > 0) pienoPerIlReclamo = false;
     }
     await scriviIlReclamoSullOrdine({ rimborsoEmesso, rimborsoPieno: pienoPerIlReclamo });
     const fermoPerLaDivisione =
