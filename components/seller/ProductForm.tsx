@@ -381,7 +381,7 @@ export default function ProductForm({
      */
     const { patch: dallaFoto, rifiutati: prezzoScartato } = patchAiPerIlForm(
       { price: data.suggested_price && data.suggested_price > 0 ? data.suggested_price : undefined },
-      { prezzoAttuale: getValues('price') },
+      { prezzoAttuale: prezzoDelCampo(getValues('price')) },
     );
     if (typeof dallaFoto.price === 'number') {
       setValue('price', dallaFoto.price as unknown as number, { shouldValidate: true });
@@ -497,7 +497,7 @@ export default function ProductForm({
      * compilato».
      */
     const piano = pianoPatchPerIlModulo(proposta, {
-      prezzoAttuale: getValues('price'),
+      prezzoAttuale: prezzoDelCampo(getValues('price')),
       categorie: categories,
       categoriaAttuale: currentCategoryId,
       modo: mode,
