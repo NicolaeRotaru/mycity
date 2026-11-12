@@ -207,11 +207,16 @@ export default function ReviewsSection({ ctx }: { ctx: SectionContext }) {
 
   if (reviews.length === 0) {
     // Un guasto non è «nessuna recensione»: lo si dice, invece di far sparire la sezione.
+    // 12/11/2026 (R02-023) — Con zero recensioni la scheda «Recensioni · 0» restava vuota: lo si dice.
     return ctx.recensioniInErrore ? (
       <p role="status" className="rounded-2xl border border-cream-300 bg-white p-4 text-sm text-ink-600">
         Non riusciamo a caricare le recensioni in questo momento. Riprova fra poco.
       </p>
-    ) : null;
+    ) : (
+      <p className="rounded-2xl border border-cream-300 bg-white p-4 text-sm text-ink-600">
+        Ancora nessuna recensione per questo negozio.
+      </p>
+    );
   }
 
   const riepilogo = riepilogoRecensioni(ctx);

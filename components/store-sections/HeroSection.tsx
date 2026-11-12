@@ -167,7 +167,11 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
         )}
 
         {/* Riga overlay in basso: logo-tile + nome serif + meta */}
-        <div className="absolute inset-x-0 bottom-0 z-10 flex flex-wrap items-end gap-4 px-5 pb-4 text-white sm:px-6 sm:pb-5">
+        {/* 12/11/2026 (R02-023) — Con `flex-wrap` e il nome largo almeno 200 px, al telefono la riga
+            andava a capo: il logo saliva sotto la pillola «Indietro», o usciva dalla copertina ad
+            altezza fissa. Logo e nome restano sulla stessa riga: il nome si stringe e va a capo
+            dentro la sua colonna, il logo resta in basso. */}
+        <div className="absolute inset-x-0 bottom-0 z-10 flex flex-nowrap items-end gap-3 px-4 pb-4 text-white sm:gap-4 sm:px-6 sm:pb-5">
           {/* Logo-tile gradiente arrotondato (con story ring se presente) */}
           <div
             className="shrink-0 rounded-2xl shadow-warm-lg"
@@ -185,7 +189,7 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
             )}
           </div>
 
-          <div className="min-w-[200px] flex-1">
+          <div className="min-w-0 flex-1">
             {/* 3/9/2026 — IL NOME DEL NEGOZIO SI TAGLIAVA INVECE DI ANDARE A CAPO.
                 Lo `span` col nome aveva `truncate`: una riga sola, il resto via
                 con tre puntini. Su un telefono da 375 punti allo `h1` restano
@@ -196,7 +200,7 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
                 pagina: si legge intero. `break-words` serve al nome tutto
                 attaccato, che senza andrebbe oltre il bordo. */}
             <h1 className="flex flex-wrap items-center gap-2 font-serif text-[24px] font-extrabold leading-tight text-white sm:text-[34px]">
-              <span className="break-words drop-shadow-sm">{store.store_name}</span>
+              <span className="min-w-0 break-words [overflow-wrap:anywhere] drop-shadow-sm">{store.store_name}</span>
               {isVerifiedStore(store) && (
                 <span className="text-white/90">
                   <VerifiedBadge size="md" />
