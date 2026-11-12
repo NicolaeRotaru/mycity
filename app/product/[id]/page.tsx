@@ -1196,7 +1196,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               aria-disabled={!canAdd || inPartenza || undefined}
               aria-describedby={hasVariants && optionGroups.length > 0 ? 'disponibilita-variante' : undefined}
               aria-busy={inPartenza || undefined}
-              className="block w-full text-center bg-ink-900 hover:bg-ink-800 aria-disabled:bg-cream-200 aria-disabled:text-ink-600 aria-disabled:hover:bg-cream-200 aria-disabled:cursor-not-allowed text-white py-3 rounded-lg font-bold"
+              className={`block w-full text-center py-3 rounded-lg font-bold ${
+                !canAdd || inPartenza
+                  ? 'bg-cream-200 text-ink-600 cursor-not-allowed'
+                  : 'bg-ink-900 hover:bg-ink-800 text-white'
+              }`}
             >
               {inPartenza ? 'Apro la cassa…' : 'Compra ora · paghi alla consegna'}
             </button>
