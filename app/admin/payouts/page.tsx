@@ -33,6 +33,7 @@ type PayoutOrder = {
   dispute_status?: string | null;
   internal_dispute_status?: string | null;
   payment_status?: string | null;
+  pratica_aperta?: boolean;
   payout_status: string | null;
   payout_at: string | null;
   stripe_transfer_id: string | null;
@@ -107,9 +108,10 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
   quandoFatto: () => void;
 }) {
   const [stato, setStato] = useState<'pronto' | 'invio' | 'errore'>('pronto');
+  const [esito, setEsito] = useState<string | null>(null);
   // R11-001 — si segnano gli stessi ordini di «Da versare lunedì»: quelli di questa settimana aspettano il prossimo.
   const daSegnare = ordiniDaVersareLunedi(ordini, new Date());
-  if (daSegnare.length === 0) return null;
+  if (daSegnare.length === 0) return esito ? <p role="status" className="mt-1.5 text-xs text-ink-600">{esito}</p> : null;
   const totale = daSegnare.reduce((s, o) => s + netto(o), 0);
   const segna = async () => {
     const riferimento = window.prompt(
@@ -117,7 +119,7 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
     );
     if (!riferimento || riferimento.trim().length < 3) return;
     setStato('invio');
-    const { error } = await supabase.rpc('segna_bonifico_manuale', {
+    const { data: segnati, error } = await supabase.rpc('segna_bonifico_manuale', {
       p_seller: sellerId,
       p_order_ids: daSegnare.map((o) => o.id),
       p_riferimento: riferimento.trim(),
@@ -126,6 +128,13 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
       setStato('errore');
       return;
     }
+    // Collaudo K04 — la funzione dice quanti ne ha segnati davvero: se sono meno, lo si dice.
+    const n = typeof segnati === 'number' ? segnati : 0;
+    setEsito(
+      n === daSegnare.length
+        ? `Segnati ${n} ordini come pagati.`
+        : `Attenzione: segnati ${n} ordini su ${daSegnare.length}. Gli altri nel frattempo hanno un reso, un reclamo o una contestazione e restano da versare: controlla il bonifico fatto.`,
+    );
     setStato('pronto');
     quandoFatto();
   };
@@ -139,6 +148,7 @@ function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
       >
         {stato === 'invio' ? 'Segno…' : `Bonifico fatto · ${formatPrice(totale / 100)}`}
       </button>
+      {esito && <p role="status" className="mt-1 text-xs text-ink-600">{esito}</p>}
       {stato === 'errore' && (
         <p role="alert" className="mt-1 text-xs text-secondary-700">Non sono riuscito a segnarlo: riprova.</p>
       )}
@@ -171,6 +181,24 @@ export default function AdminPayoutsPage() {
       if (error) throw error;
       // L'elenco resta un elenco; il totale contato dal database gli viaggia attaccato.
       const righe = (data ?? []) as unknown as PayoutOrder[];
+      // Collaudo K04 — resi e reclami aperti si leggono dalle loro tabelle, come fanno il giro e la
+      // funzione 350: senza, un contante con un reso aperto entrava nei «Da versare», la 350 lo saltava
+      // in silenzio e il lunedì dopo ricompariva, pagato due volte. Una lettura caduta li ferma tutti.
+      const contantiHeld = righe.filter((o) => o.payment_method === 'cod' && o.payout_status === 'HELD').map((o) => o.id);
+      const aperti = new Set<string>();
+      let letturaCaduta = false;
+      for (let i = 0; i < contantiHeld.length; i += 150) {
+        const pezzo = contantiHeld.slice(i, i + 150);
+        const [resi, reclami] = await Promise.all([
+          supabase.from('returns').select('order_id').in('order_id', pezzo).in('status', ['REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED']),
+          supabase.from('disputes').select('order_id').in('order_id', pezzo).in('status', ['open', 'under_review']),
+        ]);
+        if (resi.error || reclami.error) letturaCaduta = true;
+        for (const r of [...((resi.data ?? []) as { order_id: string }[]), ...((reclami.data ?? []) as { order_id: string }[])]) aperti.add(r.order_id);
+      }
+      for (const o of righe) {
+        if (letturaCaduta ? contantiHeld.includes(o.id) : aperti.has(o.id)) o.pratica_aperta = true;
+      }
       return Object.assign(righe, { totale: typeof count === 'number' ? count : righe.length });
     },
   });

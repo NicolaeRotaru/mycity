@@ -178,11 +178,18 @@ export type OrdineDelPannello = {
   dispute_status?: string | null;
   internal_dispute_status?: string | null;
   payment_status?: string | null;
+  /** Collaudo K04 — c'è un reso o un reclamo aperto nelle tabelle (la pagina lo legge a parte). */
+  pratica_aperta?: boolean;
 };
 
-/** Gli stessi cancelli del giro automatico: contestazione in banca, reclamo, rimborso pieno. */
+/**
+ * Gli stessi cancelli del giro automatico e della funzione 350: contestazione in banca, reclamo
+ * sull'ordine, rimborso pieno, e reso o reclamo aperto nelle loro tabelle. Il totale mostrato e gli
+ * ordini che «Bonifico fatto» segna devono essere lo stesso insieme.
+ */
 function fermoPerReclamo(o: OrdineDelPannello): boolean {
   return (
+    o.pratica_aperta === true ||
     (!!o.dispute_status && o.dispute_status !== 'WON') ||
     (!!o.internal_dispute_status && o.internal_dispute_status !== 'RESOLVED') ||
     o.payment_status === 'REFUNDED'
