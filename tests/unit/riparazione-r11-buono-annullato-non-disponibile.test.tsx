@@ -74,3 +74,18 @@ describe('R11-018 — dal controllo qa', () => {
     expect(r.host.textContent).not.toMatch(/Scaduta/);
   });
 });
+
+describe('R11-018 — collaudo K04', () => {
+  it('la data di scadenza si vede', async () => {
+    stato.buoni = [
+      buono('SCADUTO-1', { balance_cents: 2500, expires_at: '2026-01-15T10:00:00Z' }),
+      buono('VALIDO-2', { balance_cents: 2500, expires_at: '2099-03-01T10:00:00Z' }),
+    ];
+    const mod = (await import('@/app/profile/gift-cards/page')) as { default: () => ReactNode };
+    const r = await disegna(createElement(mod.default));
+    chiudi = r.chiudi;
+    await act(async () => { await new Promise((ok) => setTimeout(ok, 20)); });
+    expect(r.host.textContent, 'la data di scadenza non compare da nessuna parte').toMatch(/Scaduta il 15 gennaio 2026/);
+    expect(r.host.textContent).toMatch(/Scade il 1 marzo 2099/);
+  });
+});

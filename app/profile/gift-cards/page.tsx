@@ -392,6 +392,13 @@ export default function GiftCardsPage() {
                       <p className="text-xs text-ink-400">
                         di {formatPrice(c.amount_cents / 100)}
                         {` · ${ETICHETTA_STATO[statoBuono]}`}
+                        {/* Collaudo K04 — la data di scadenza si vede: «Scaduta il …», «Scade il …». */}
+                        {c.expires_at && (statoBuono === 'scaduto' || statoBuono === 'disponibile') && (
+                          <span className="block">
+                            {statoBuono === 'scaduto' ? 'Scaduta il ' : 'Scade il '}
+                            {new Date(c.expires_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
