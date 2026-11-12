@@ -58,7 +58,13 @@ export const TIPI_RRWEB_CHE_PORTANO_IL_DOM: ReadonlySet<number> = new Set([2, 3]
  * con dei parametri (`/search?q=…`). Un percorso senza parametri non si tocca:
  * della strada si tiene tutto, e' la regola comune di tutto il sito.
  */
-const UN_INDIRIZZO_DENTRO_IL_TESTO = /https?:\/\/[^\s"'<>()\\]+|\/[^\s"'<>()\\]*\?[^\s"'<>()\\]*/g;
+// 12/11/2026 (R06-018) — Le parentesi NON sono un confine: encodeURIComponent e il
+// browser le lasciano in chiaro dentro l'indirizzo (`/search?q=pane%20(mario…)`), e
+// fermarsi li' lasciava uscire in chiaro tutto quello che seguiva la parentesi.
+// Lo stesso vale per l'apostrofo: encodeURIComponent lascia in chiaro ( ) ! * ~ '.
+// L'indirizzo finisce a uno spazio, alle virgolette doppie, a < > o a una barra
+// rovescia: nel dubbio si nasconde un carattere in piu', non un dato in meno.
+const UN_INDIRIZZO_DENTRO_IL_TESTO = /https?:\/\/[^\s"<>\\]+|\/[^\s"<>\\]*\?[^\s"<>\\]*/g;
 
 /** Oltre questo un testo non arriva da una navigazione vera: si nasconde intero. */
 const TESTO_TROPPO_LUNGO = 50_000;
@@ -77,11 +83,49 @@ export function testoSenzaIndirizzi(testo: string): string {
   if (!testo) return testo;
   // Un testo cosi' lungo non e' un indirizzo ne' un messaggio: si chiude a chiave.
   if (testo.length > TESTO_TROPPO_LUNGO) return VALORE_NASCOSTO;
-  if (!testo.includes('/')) return testo; // nessun indirizzo possibile: niente da fare
-  return testo.replace(
-    UN_INDIRIZZO_DENTRO_IL_TESTO,
-    (indirizzo) => indirizzoSenzaDatiPersonali(indirizzo) ?? VALORE_NASCOSTO,
-  );
+  const senzaIndirizzi = testo.includes('/')
+    ? testo.replace(
+        UN_INDIRIZZO_DENTRO_IL_TESTO,
+        (indirizzo) => indirizzoSenzaDatiPersonali(indirizzo) ?? VALORE_NASCOSTO,
+      )
+    : testo;
+  return testoSenzaRecapiti(senzaIndirizzi);
+}
+
+/**
+ * 12/11/2026 (R06-019) — UN DATO PERSONALE NUDO, FUORI DA UN INDIRIZZO.
+ *
+ * La rete usciva subito se il testo non conteneva una barra: un'email o un
+ * telefono in una proprieta' qualunque passavano intatti, mentre il commento in
+ * posthog.tsx promette che «tutto il resto viene guardato per quello che
+ * contiene». Due firme lasciano la porta aperta (`trackCheckoutStep(step,
+ * ...props)`, `trackHomeCtaClicked(ctaId, ...props)`).
+ *
+ * L'email ha la stessa forma di quella di `messaggioSenzaDatiPersonali` (con il
+ * dominio che finisce in lettere e il punto di fine frase ammesso). Il telefono
+ * e' quello italiano (cellulare 3xx o fisso 0xx, con +39 e spazi facoltativi),
+ * con confini che non toccano gli identificativi (uuid, codici con lettere o
+ * trattini attaccati), le date e gli importi.
+ */
+// Il dominio finisce con lettere: `react@18.3.1` non e' un'email. Dopo puo'
+// venire un punto di fine frase («scrivimi a mario.rossi@gmail.com.»), ma non
+// un altro pezzo di dominio.
+const UN_EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?![\w-])(?!\.[\w-])/gi;
+// Prefisso +39 / 0039 facoltativo, poi un cellulare (3xx) o un fisso (0x…), anche
+// fra parentesi, con spazi, punti, trattini o barre fra le cifre («0532/123456»).
+// Prima e dopo non ci devono essere lettere, cifre, trattini o barre: cosi' un
+// percorso («/negozio/3331234567») o un uuid non vengono toccati.
+// Unica eccezione: uno spazio codificato («Mario%20Rossi%203331234567») conta
+// come spazio.
+const UN_TELEFONO = /(?:(?<![\w\-/])|(?<=%20))(?:(?:\+|00)39[\s.-]?)?\(?(?:3\d{2}|0\d{1,3})\)?(?:[\s.\-/]?\d){5,8}(?![\w\-/])/g;
+// Quello che ha la forma di un telefono ma non lo e': date («05.11.2026») e decimali («314.15926»).
+const SEMBRA_UNA_DATA_O_UN_DECIMALE = /^(?:\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}|\d+\.\d+)$/;
+
+export function testoSenzaRecapiti(testo: string): string {
+  if (!testo) return testo;
+  return testo
+    .replace(UN_EMAIL, VALORE_NASCOSTO)
+    .replace(UN_TELEFONO, (trovato) => (SEMBRA_UNA_DATA_O_UN_DECIMALE.test(trovato) ? trovato : VALORE_NASCOSTO));
 }
 
 type Conteggio = { pezzi: number };

@@ -396,6 +396,25 @@ export function tettoPerChiedereChiSei(
   return haTessera ? TETTO_RINNOVO_MS : TETTO_PORTIERE_MS;
 }
 
+/**
+ * 12/11/2026 (R06-008) — LA SCELTA FRA TRE E DIECI SECONDI DEL PORTIERE.
+ *
+ * Prima stava scritta in linea nel middleware (`staRinnovando ? 10 s : 3 s`),
+ * fuori da questo modulo e da ogni prova. Qui e' una funzione pura: dieci
+ * secondi solo se la tessera e' scaduta o sta per scadere (getUser la
+ * rinnovera', cioe' SCRIVE la sessione), altrimenti i tre di una lettura.
+ *
+ * Il comportamento e' identico a prima. Convive con `tettoPerChiedereChiSei`
+ * («qualunque tessera → 10 s»): quale delle due regole debba valere e' una
+ * scelta sul comportamento della sessione, lasciata a Nicola.
+ */
+export function tettoPerGetUser(
+  cookie: ReadonlyArray<{ name: string; value: string }>,
+  adessoMs: number,
+): number {
+  return sessioneDaRinnovare(cookie, adessoMs) ? TETTO_RINNOVO_MS : TETTO_PORTIERE_MS;
+}
+
 export type EsitoScritturaSessione<T> = {
   /** Com'è andata la chiamata: la stessa forma di sempre. */
   risposta: Risposta<T>;
@@ -422,7 +441,11 @@ export type EsitoScritturaSessione<T> = {
 export async function chiediConTettoSuScritturaDiSessione<T>(
   fai: () => PromiseLike<T>,
   raccoglitore: RaccoglitoreCookie,
-  ms: number = TETTO_RINNOVO_MS,
+  // 12/11/2026 (R06-008) — Di serie il tetto di una lettura, come dice il
+  // commento di TETTO_RINNOVO_MS: chi deve aspettare un rinnovo lo chiede
+  // (tettoPerGetUser, tettoPerChiedereChiSei). Era diventato dieci secondi per
+  // chiunque chiamasse senza `ms`, letture comprese.
+  ms: number = TETTO_PORTIERE_MS,
 ): Promise<EsitoScritturaSessione<T>> {
   const risposta = await chiediConTetto(fai, ms);
   // Il sigillo va messo QUI: nello stesso momento in cui la risposta è

@@ -31,15 +31,20 @@ import {
   PAGINA_ATTESA_NEGOZIO,
 } from '@/lib/auth/decisione-portiere';
 import {
-  TETTO_RINNOVO_MS,
   chiediConTettoSuScritturaDiSessione,
   creaRaccoglitoreCookie,
   eCookieDiSessione,
   sessioneDaRinnovare,
+  tettoPerGetUser,
   travasaCookie,
   conDurataMassima,
 } from '@/lib/auth/cookie-di-sessione';
 import { vaChiestaSenzaTrattenere } from '@/lib/auth/accettazione-testi';
+import {
+  GRUPPO_SEGNALAZIONI_CSP,
+  INDIRIZZO_SEGNALAZIONI_CSP,
+  reportingEndpoints,
+} from '@/lib/sicurezza/segnalazioni-csp';
 
 /**
  * Middleware strict: il client browser usa @supabase/ssr, la sessione
@@ -304,7 +309,19 @@ function buildCsp(nonce: string, isDev: boolean): string {
     "form-action 'self'",
     "object-src 'none'",
     "upgrade-insecure-requests",
+    // 12/11/2026 (R06-025) — La politica proteggeva ma taceva: uno script
+    // bloccato (un checkout che smette di funzionare, un'iniezione tentata) non
+    // lo veniva a sapere nessuno. Le segnalazioni vanno alla rotta del sito,
+    // che le scrive nei log (e quindi su Sentry, quando e' acceso).
+    `report-uri ${INDIRIZZO_SEGNALAZIONI_CSP}`,
+    `report-to ${GRUPPO_SEGNALAZIONI_CSP}`,
   ].join('; ');
+}
+
+/** La politica e il suo punto di raccolta viaggiano insieme, su ogni risposta. */
+function conPoliticaDiSicurezza(headers: Headers, csp: string): void {
+  headers.set('Content-Security-Policy', csp);
+  headers.set('Reporting-Endpoints', reportingEndpoints());
 }
 
 function generateNonce(): string {
@@ -363,7 +380,7 @@ export async function middleware(req: NextRequest) {
   }
 
   const res = NextResponse.next({ request: { headers: reqHeaders } });
-  res.headers.set('Content-Security-Policy', csp);
+  conPoliticaDiSicurezza(res.headers, csp);
   for (const a of newAssignments) {
     res.cookies.set({
       name: a.cookie,
@@ -380,7 +397,7 @@ export async function middleware(req: NextRequest) {
     url.pathname = PAGINA_ATTESA_NEGOZIO;
     url.searchParams.delete(EXIT_SHOPPING_QUERY);
     const exitRes = NextResponse.redirect(url);
-    exitRes.headers.set('Content-Security-Policy', csp);
+    conPoliticaDiSicurezza(exitRes.headers, csp);
     exitRes.cookies.set({
       name: SHOPPING_MODE_COOKIE,
       value: '',
@@ -409,7 +426,7 @@ export async function middleware(req: NextRequest) {
     url.pathname = '/sign-in';
     url.searchParams.set('returnTo', pathname);
     const r = NextResponse.redirect(url);
-    r.headers.set('Content-Security-Policy', csp);
+    conPoliticaDiSicurezza(r.headers, csp);
     return r;
   }
 
@@ -442,7 +459,7 @@ export async function middleware(req: NextRequest) {
       const url = req.nextUrl.clone();
       url.pathname = '/';
       const r = NextResponse.redirect(url);
-      r.headers.set('Content-Security-Policy', csp);
+      conPoliticaDiSicurezza(r.headers, csp);
       return r;
     }
     return res;
@@ -521,7 +538,8 @@ export async function middleware(req: NextRequest) {
   } = await chiediConTettoSuScritturaDiSessione(
     () => supabase.auth.getUser(),
     raccoglitore,
-    staRinnovando ? TETTO_RINNOVO_MS : TETTO_PORTIERE_MS,
+    // 12/11/2026 (R06-008) — La scelta 3/10 secondi sta nel modulo, provata.
+    tettoPerGetUser(req.cookies.getAll(), Date.now()),
   );
   if (staRinnovando && consegna.registra) {
     logger.warn(consegna.registra, { percorso: pathname, motivo: motivoLeggibile(rispostaUtente) });
@@ -538,7 +556,7 @@ export async function middleware(req: NextRequest) {
   // appena rinnovati (senza, il browser resta con la tessera bruciata).
   const withCsp = (r: NextResponse) => {
     travasaCookie(daConsegnare, r);
-    r.headers.set('Content-Security-Policy', csp);
+    conPoliticaDiSicurezza(r.headers, csp);
     return r;
   };
 

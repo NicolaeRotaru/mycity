@@ -71,14 +71,59 @@ const TETTO_DURO = 20_000;
 
 export async function leggiTutteLeRighe<T>(
   chiedi: (da: number, a: number) => PromiseLike<{ data: T[] | null; error: { message?: string } | null }>,
+  /**
+   * 12/11/2026 (R06-021) — Un tetto piu' basso per chi legge un campione voluto
+   * (per esempio le ultime 3000 righe dell'attivita'): si legge comunque a
+   * finestre, e `troncato` dice se il tetto e' scattato.
+   */
+  tetto: number = TETTO_DURO,
 ): Promise<{ data: T[]; error: { message?: string } | null; troncato: boolean }> {
   const tutte: T[] = [];
-  for (let da = 0; da < TETTO_DURO; da += FINESTRA) {
-    const { data, error } = await chiedi(da, da + FINESTRA - 1);
+  for (let da = 0; da < tetto; da += FINESTRA) {
+    const { data, error } = await chiedi(da, Math.min(da + FINESTRA, tetto) - 1);
     if (error) return { data: tutte, error, troncato: false };
     const righe = data ?? [];
     tutte.push(...righe);
-    if (righe.length < FINESTRA) return { data: tutte, error: null, troncato: false };
+    if (righe.length < Math.min(FINESTRA, tetto - da)) return { data: tutte, error: null, troncato: false };
   }
-  return { data: tutte, error: null, troncato: true };
+  // 12/11/2026 (R06-021) — Arrivati al tetto con l'ultima finestra piena non si sa
+  // ancora se ci sono altre righe: con esattamente `tetto` righe la lettura e'
+  // completa, e dire «campione» sarebbe un falso allarme. Si chiede una riga in piu'.
+  const oltre = await chiedi(tetto, tetto);
+  if (oltre.error) return { data: tutte, error: oltre.error, troncato: false };
+  return { data: tutte, error: null, troncato: (oltre.data ?? []).length > 0 };
+}
+
+/**
+ * 12/11/2026 (R06-001) — I BLOCCHI SPEZZAVANO GLI IDENTIFICATIVI, NON LE RIGHE.
+ *
+ * `leggiInBlocchi` fa UNA richiesta per blocco di cento identificativi. Ma
+ * cento clienti possono avere ben piu' di mille ordini, e il servizio dati ne
+ * restituisce al massimo mille per richiesta: il resto si perdeva senza errore.
+ * Il funnel contava cosi' meno clienti che comprano di quelli veri (la stessa
+ * funzione la usa ora anche la sitemap, R06-006).
+ *
+ * Chi la usa DEVE ordinare la lettura in modo stabile (per esempio
+ * `.order('created_at').order('id')`): senza ordine il database puo' restituire
+ * le righe in un ordine diverso a ogni finestra, con doppioni e righe perse.
+ *
+ * Qui ogni blocco si legge a finestre (`leggiTutteLeRighe`), finche' tornano
+ * finestre piene. Se un blocco sbatte contro il tetto duro, `troncato` lo dice
+ * a chi chiama, che deve scriverlo a schermo.
+ */
+export async function leggiInBlocchiTutte<R>(
+  identificativi: readonly string[],
+  leggi: (blocco: string[], da: number, a: number) => PromiseLike<Risposta<R>>,
+  dimensione = DIMENSIONE_BLOCCO,
+): Promise<{ data: R[]; error: { message?: string } | null; troncato: boolean }> {
+  if (identificativi.length === 0) return { data: [], error: null, troncato: false };
+  const righe: R[] = [];
+  let troncato = false;
+  for (const blocco of inBlocchi(identificativi, dimensione)) {
+    const r = await leggiTutteLeRighe<R>((da, a) => leggi(blocco, da, a));
+    righe.push(...r.data);
+    if (r.error) return { data: righe, error: r.error, troncato };
+    if (r.troncato) troncato = true;
+  }
+  return { data: righe, error: null, troncato };
 }

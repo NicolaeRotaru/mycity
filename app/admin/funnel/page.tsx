@@ -8,7 +8,7 @@ import { TrendingUp, Users, ShoppingCart, Package, UserX, AlertTriangle, type Lu
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
-import { leggiInBlocchi, leggiTutteLeRighe } from '@/lib/supabase/blocchi';
+import { leggiInBlocchiTutte, leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -136,12 +136,18 @@ export default function AdminFunnelPage() {
        * usano la pagina Guadagni e i numeri del venditore. Tre pagine, un conto.
        */
       type RigaOrdine = { user_id: string; created_at: string; delivery_status: string; payment_status: string | null; stripe_session_id: string | null };
-      const { data: ordiniGrezzi, error: erroreOrdini } = await leggiInBlocchi<RigaOrdine>(userIds, (blocco) =>
+      // 12/11/2026 (R06-001) — Cento clienti possono avere piu' di mille ordini, e il
+      // database ne restituisce al massimo mille per richiesta: dentro ogni blocco si
+      // legge a finestre, e se si sbatte contro il tetto duro la pagina lo dice.
+      const { data: ordiniGrezzi, error: erroreOrdini, troncato: ordiniTroncati } = await leggiInBlocchiTutte<RigaOrdine>(userIds, (blocco, da, a) =>
         supabase
           .from('orders')
           .select('user_id, created_at, delivery_status, payment_status, stripe_session_id')
           .in('user_id', blocco)
-          .neq('delivery_status', 'CANCELED') as unknown as PromiseLike<{ data: RigaOrdine[] | null; error: { message?: string } | null }>,
+          .neq('delivery_status', 'CANCELED')
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true })
+          .range(da, a) as unknown as PromiseLike<{ data: RigaOrdine[] | null; error: { message?: string } | null }>,
       );
       const orders = (ordiniGrezzi ?? []).filter((o) =>
         ordineContaNelFatturato(o as unknown as Parameters<typeof ordineContaNelFatturato>[0]),
@@ -263,7 +269,7 @@ export default function AdminFunnelPage() {
         multipleOrders,
         aRischioChurn,
         cohortRetention: cohortMonths,
-        campione: iscrittiTroncati,
+        campione: iscrittiTroncati || ordiniTroncati,
         iscrittiLetti: (signupsList ?? []).length,
       };
     },
@@ -282,9 +288,13 @@ export default function AdminFunnelPage() {
     );
   }
 
-  const activation7d = data.signups > 0 ? (data.firstOrderWithin7d / data.signups) * 100 : 0;
-  const activationEver = data.signups > 0 ? (data.firstOrderEver / data.signups) * 100 : 0;
-  const repeatBuyer = data.firstOrderEver > 0 ? (data.multipleOrders / data.firstOrderEver) * 100 : 0;
+  // 12/11/2026 (R06-011) — Con denominatore zero non c'e' niente da misurare:
+  // `null` diventa «n.d.» in grigio, non «0.0%» in rosso contro il bersaglio.
+  const percentuale = (n: number, d: number): number | null => (d > 0 ? (n / d) * 100 : null);
+  const testoPercentuale = (p: number | null, cifre = 1) => (p == null ? 'n.d.' : `${p.toFixed(cifre)}%`);
+  const activation7d = percentuale(data.firstOrderWithin7d, data.signups);
+  const activationEver = percentuale(data.firstOrderEver, data.signups);
+  const repeatBuyer = percentuale(data.multipleOrders, data.firstOrderEver);
 
   // Segmenti derivati dal funnel già calcolato (nessuna API nuova).
   const newSignups = data.firstOrderWithin7d;          // attivati entro 7gg
@@ -324,7 +334,7 @@ export default function AdminFunnelPage() {
     total: number;
     color: FunnelTone;
   }) => {
-    const pct = total > 0 ? (value / total) * 100 : 0;
+    const pct = percentuale(value, total);
     const tone = FUNNEL_TONE[color];
     return (
       <div>
@@ -333,10 +343,10 @@ export default function AdminFunnelPage() {
             <Icon size={16} strokeWidth={2.2} />
           </div>
           <span className="font-semibold text-ink-900 flex-1">{label}</span>
-          <span className="text-sm font-bold">{value} <span className="text-ink-500 font-normal">/ {total} ({pct.toFixed(1)}%)</span></span>
+          <span className="text-sm font-bold">{value} <span className="text-ink-500 font-normal">/ {total} ({testoPercentuale(pct)})</span></span>
         </div>
         <div className="w-full h-2 bg-cream-100 rounded-full overflow-hidden">
-          <div className={`h-full ${tone.bar}`} style={{ width: `${pct}%` }} />
+          <div className={`h-full ${tone.bar}`} style={{ width: `${pct ?? 0}%` }} />
         </div>
       </div>
     );
@@ -374,9 +384,10 @@ export default function AdminFunnelPage() {
               Attenzione: campione, non totale — lette le prime {data.iscrittiLetti} righe
             </p>
             <p className="mt-0.5 text-sm leading-normal text-ink-700">
-              Gli iscritti sono più di quanti se ne possano leggere in una volta sola. Le
-              percentuali e le coorti qui sotto sono calcolate su queste {data.iscrittiLetti}
-              {' '}righe: i numeri veri sono più alti, non più bassi.
+              Gli iscritti, o i loro ordini, sono più di quanti se ne possano leggere in una
+              volta sola. Le percentuali, i segmenti e le coorti qui sotto sono calcolati su una
+              parte dei dati ({data.iscrittiLetti} righe di iscritti e gli ordini letti fino al
+              tetto): i numeri veri possono essere diversi, in su o in giù.
             </p>
           </div>
         </div>
@@ -427,18 +438,18 @@ export default function AdminFunnelPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-cream-200">
           <div>
             <p className="text-xs uppercase tracking-wider text-ink-500">Activation 7gg</p>
-            <p className={`text-3xl font-bold ${activation7d >= 30 ? 'text-olive-700' : activation7d >= 15 ? 'text-accent-700' : 'text-secondary-700'}`}>
-              {activation7d.toFixed(1)}%
+            <p className={`text-3xl font-bold ${activation7d == null ? 'text-ink-400' : activation7d >= 30 ? 'text-olive-700' : activation7d >= 15 ? 'text-accent-700' : 'text-secondary-700'}`}>
+              {testoPercentuale(activation7d)}
             </p>
             <p className="text-xs text-ink-500">target Glovo: 35-40%</p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-wider text-ink-500">Activation totale</p>
-            <p className="text-3xl font-bold text-ink-900">{activationEver.toFixed(1)}%</p>
+            <p className={`text-3xl font-bold ${activationEver == null ? 'text-ink-400' : 'text-ink-900'}`}>{testoPercentuale(activationEver)}</p>
           </div>
           <div>
             <p className="text-xs uppercase tracking-wider text-ink-500">% buyer ricorrente</p>
-            <p className="text-3xl font-bold text-ink-900">{repeatBuyer.toFixed(1)}%</p>
+            <p className={`text-3xl font-bold ${repeatBuyer == null ? 'text-ink-400' : 'text-ink-900'}`}>{testoPercentuale(repeatBuyer)}</p>
             <p className="text-xs text-ink-500">target sano: &gt;40%</p>
           </div>
         </div>

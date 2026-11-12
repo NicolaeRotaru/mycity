@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
+import { leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import Link from 'next/link';
 import {
   Users, ShoppingCart, Store, Bike, Shield, Package, TrendingUp,
@@ -130,16 +131,52 @@ export default function AdminDashboard() {
     queryKey: ['admin', 'tasso-autorizzazione'],
     queryFn: async () => {
       const daQuando = new Date(Date.now() - 30 * 86_400_000).toISOString();
-      const { data, error } = await supabase
-        .from('payment_attempts')
-        .select('status, decline_code, error_code')
-        .gte('created_at', daQuando)
-        .limit(5000);
+      // 12/11/2026 (R06-012) — `.limit(5000)` senza ordine tornava al massimo mille
+      // tentativi scelti a caso dal database (il suo tetto per richiesta), e la
+      // percentuale si presentava come quella dei trenta giorni. Ora si leggono
+      // TUTTI i tentativi del periodo, a finestre ordinate.
+      const { data, error } = await leggiTutteLeRighe<TentativoPagamento>((da, a) =>
+        supabase
+          .from('payment_attempts')
+          .select('status, decline_code, error_code')
+          .gte('created_at', daQuando)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: true })
+          .range(da, a) as unknown as PromiseLike<{ data: TentativoPagamento[] | null; error: { message?: string } | null }>,
+      );
       if (error) throw error;
-      return tassoAutorizzazione((data ?? []) as TentativoPagamento[]);
+      return tassoAutorizzazione(data);
     },
     refetchInterval: 60_000,
     retry: false,
+  });
+
+  /**
+   * 12/11/2026 (R06-023) — LA CONFIGURAZIONE CHE MANCA, DETTA A CHI AMMINISTRA.
+   *
+   * La pagina pubblica «Stato servizi» non elenca piu' le variabili mancanti
+   * (era un messaggio per lo sviluppatore davanti ai clienti): il dettaglio sta
+   * qui, solo per l'admin. Una lettura caduta non mostra niente.
+   */
+  const { data: configurazione } = useQuery({
+    queryKey: ['admin', 'configurazione'],
+    staleTime: 60_000,
+    retry: false,
+    queryFn: async (): Promise<{ chiaveDiServizio: boolean; titolareCompleto: boolean; titolareMancanti: string | null } | null> => {
+      try {
+        const res = await fetch('/api/admin/configurazione');
+        if (!res.ok) return null;
+        const j = (await res.json()) as { data?: { chiaveDiServizio?: boolean; titolareCompleto?: boolean; titolareMancanti?: string | null } };
+        if (!j.data) return null;
+        return {
+          chiaveDiServizio: j.data.chiaveDiServizio === true,
+          titolareCompleto: j.data.titolareCompleto === true,
+          titolareMancanti: j.data.titolareMancanti ?? null,
+        };
+      } catch {
+        return null;
+      }
+    },
   });
 
   // 31/10/2026 — Qui c'era `if (isLoading || !stats) return <LoadingState />`. Quando `admin_kpi`
@@ -203,6 +240,20 @@ export default function AdminDashboard() {
         title="Panoramica"
         sub="Tutti i numeri del marketplace, in tempo reale."
       />
+
+      {configurazione && (!configurazione.chiaveDiServizio || !configurazione.titolareCompleto) && (
+        <section role="status" className="rounded-xl border-2 border-accent-200 bg-accent-50 p-4">
+          <p className="font-bold text-accent-800">Configurazione da completare</p>
+          <ul className="mt-1 list-disc pl-5 text-sm text-ink-700">
+            {!configurazione.chiaveDiServizio && (
+              <li>Chiave di servizio di Supabase non configurata: cancellazioni, registro visite e lavori notturni non possono scrivere.</li>
+            )}
+            {!configurazione.titolareCompleto && (
+              <li>Dati del titolare incompleti{configurazione.titolareMancanti ? `: ${configurazione.titolareMancanti}` : ''}</li>
+            )}
+          </ul>
+        </section>
+      )}
 
       {/* Salute del marketplace */}
       <section>
