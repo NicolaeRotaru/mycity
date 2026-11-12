@@ -1,19 +1,19 @@
 {
  "sessione": "R12",
- "aggiornato": "2026-11-12 15:55",
+ "aggiornato": "2026-11-12 16:30",
  "finita": true,
- "testa": "36037ba9088305bb7ffc29107d99bd734de85fc3",
+ "testa": "7b20df7572b551778dfdeeb62d0fc33018c8832c",
  "verifica": {
   "comando": "npm run verify",
   "esito": "verde",
-  "nota": "typecheck, lint e 1216 file di prova (8941) verdi; in più la suite SQL tests/sql/harness/run.sh verde su PG16 con le migrazioni 360-364"
+  "nota": "typecheck, lint e 1216 file di prova (8959) verdi; suite SQL tests/sql/harness/run.sh verde su PG16 con le migrazioni 360-364"
  },
  "voci": [
   {
    "id": "R12-001",
    "chiave": "qa-flussi|se il fattorino sparisce senza dichiarare i contanti, l'ordine resta in consegna per sempre e l'amministratore non può chiuderlo",
    "esito": "parziale",
-   "commit": "ebb89bf466344df6e16a04bcf30d0782fe658e7f",
+   "commit": "7bf8b38983ce1efaa4070ac68d713ede4b42a2d6",
    "file_toccati": [
     "migrations/360_l_amministratore_chiude_la_consegna.sql"
    ],
@@ -29,7 +29,7 @@
     "comando": "a mano: senza la 360 la funzione non esiste e il file SQL è rosso; con la 360 20/20 verdi. lib non è più toccato, quindi niente prova-rimessa vitest."
    },
    "copre_tutta_la_voce": false,
-   "cosa_ho_fatto": "Migrazione 360 (non applicata): admin_chiudi_consegna(ordine, incassato_cents, motivo) registra l'incasso dichiarato a voce E consegna nella stessa UPDATE (stesse regole di campiDellIncasso/importoFuoriMisura: compenso trattenuto, PAID solo se ancora da pagare), segna il codice alla porta come verificato, riga in audit_logs. Solo amministratore (is_admin), solo contanti a domicilio con fattorino in OUT_FOR_DELIVERY; se il fattorino aveva già dichiarato i contanti chiude senza riscriverli. Prova SQL 20/20 (rifiuti per fattorino, negozio, cliente, anon, carta, ritiro, PICKED_UP, ACCEPTED, senza motivo/importo, fuori misura, doppia chiamata). Il primo tentativo (aprire in lib l'incasso dell'admin su ordini in strada) l'ho tolto dopo il collaudo: lasciava un ordine pagato che non si chiude né si annulla, e riapriva PICKED_UP tolto il 5/11.",
+   "cosa_ho_fatto": "Migrazione 360 (non applicata): admin_chiudi_consegna(ordine, incassato_cents, motivo) registra l'incasso dichiarato a voce E consegna nella stessa UPDATE (stesse regole di campiDellIncasso/importoFuoriMisura: compenso trattenuto, PAID solo se ancora da pagare), segna il codice alla porta come verificato, riga in audit_logs. Solo amministratore (is_admin), solo contanti a domicilio con fattorino in OUT_FOR_DELIVERY; se il fattorino aveva già dichiarato i contanti chiude senza riscriverli. Prova SQL 20/20 (rifiuti per fattorino, negozio, cliente, anon, carta, ritiro, PICKED_UP, ACCEPTED, senza motivo/importo, fuori misura, doppia chiamata). Il primo tentativo (aprire in lib l'incasso dell'admin su ordini in strada) l'ho tolto dopo il collaudo: lasciava un ordine pagato che non si chiude né si annulla, e riapriva PICKED_UP tolto il 5/11. Collaudo K03 (regge): aggiunte le prove che fanno cadere i tre mutanti sui soldi rimasti vivi (PAID scritto su un ordine rimborsato, HELD → CASH_WITHHELD con contante che non basta, FOR UPDATE tolto): prova SQL 23/23, i tre mutanti provati a mano cadono.",
    "cosa_resta": "Rotta e pulsante sono in file altrui; la migrazione la applica Nicola. Finché non ci sono, in produzione il caso resta bloccato come prima (ma senza peggiorare).",
    "serve_file_altrui": [
     {
@@ -45,7 +45,7 @@
      "modifica": "Elencare anche gli ordini cod in OUT_FOR_DELIVERY da più di 3 ore senza cash_confirmed_at, col collegamento all'ordine."
     }
    ],
-   "verificato_da": "qa (due lenti, soldi e permessi): la prima versione non reggeva (PICKED_UP riaperto, vicolo cieco in lib, carta chiudibile, quadratura): rifatta. La seconda verificata da me con la prova SQL estesa ai casi segnalati (20/20); permessi: is_admin affidabile, chiave allow_order_write non sfruttabile (guardiano 179)."
+   "verificato_da": "qa (due lenti, soldi e permessi): la prima versione non reggeva (PICKED_UP riaperto, vicolo cieco in lib, carta chiudibile, quadratura): rifatta. La seconda verificata da me con la prova SQL estesa ai casi segnalati (20/20); permessi: is_admin affidabile, chiave allow_order_write non sfruttabile (guardiano 179). Collaudo K03: regge; prova rinforzata sui tre mutanti."
   },
   {
    "id": "R12-002",
@@ -97,7 +97,7 @@
    "id": "R12-004",
    "chiave": "api-backend|lo stesso cliente può usare il codice «solo primo ordine» due volte, aprendo la cassa in due schede",
    "esito": "riparato",
-   "commit": "4bb0124e47dad5f499874627376090b5e222f8e3",
+   "commit": "83f646b140e2a2b66269b36f9f95327698f333b0",
    "file_toccati": [
     "lib/ordini/rivendica-il-codice-sconto.ts",
     "migrations/361_il_benvenuto_si_rivendica_una_volta_per_cliente.sql"
@@ -115,8 +115,8 @@
     "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base db5164c52e856c0e3eab1c02197ae755fca76eb3 --file lib/ordini/rivendica-il-codice-sconto.ts --prove tests/unit/riparazione-r12-benvenuto-due-schede.test.ts --json"
    },
    "copre_tutta_la_voce": true,
-   "cosa_ho_fatto": "Migrazione 361 (non applicata): tabella coupon_redemptions (RLS, nessun accesso dall'esterno), claim_coupon(p_code, p_user_id) che blocca la riga del codice (FOR UPDATE) e rifiuta se lo stesso cliente ha una rivendicazione aperta da meno di 2 ore; release_coupon(p_code, p_order_id) chiude anche la rivendicazione del cliente dell'ordine. lib passa p_user_id, ripiego sulla firma vecchia su PGRST202. Prova SQL 11/11 (anche: vecchia di 3 ore passa, appena fatta blocca, dopo l'annullo torna), suite SQL intera verde. Copre anche lib/coupons.ts senza modificarlo: il controllo primo ordine lì resta, la gara la chiude il database. Dopo il collaudo: chi torna indietro dalla pagina di pagamento non resta bloccato (chiudi_rivendicazioni_del_cliente quando si liberano le sue casse abbandonate); la tabella non ha più la chiave verso auth.users (lucchetto tecnico, righe cancellate dopo un giorno: niente da esportare né da cancellare con l'account). Prova SQL 14/14; gara con 6 sessioni psql in parallelo: una sola rivendicazione (qa).",
-   "verificato_da": "qa: gara chiusa (6 sessioni parallele → 1); trovato il blocco di 2 ore dopo una cassa abbandonata → corretto; restano bloccanti fino a 2 ore i rilasci a un argomento del tetto contanti e del rollback COD (vedi nuovi_difetti)."
+   "cosa_ho_fatto": "Migrazione 361 (non applicata): coupon_redemptions (RLS, nessun accesso dall'esterno, righe cancellate dopo un giorno, nessuna chiave verso auth.users: è un lucchetto, non un dato da conservare). claim_coupon(p_code, p_user_id) blocca la riga del codice (FOR UPDATE) e, per un codice first_order_only, rifiuta se lo stesso cliente ha una prova viva che lo sta usando: una rivendicazione di meno di 2 minuti (la gara delle schede), una cassa con la carta PENDING non scaduta col codice, un ordine col codice non annullato, non fallito e col codice non restituito. Così nessun percorso di rilascio deve ricordarsi del lucchetto: cassa annullata, articolo esaurito, Stripe che rifiuta, carrello scaduto, rollback dei contanti spengono la prova da soli e il cliente riprova dopo al massimo 2 minuti. lib passa p_user_id, ripiego su PGRST202. Collaudo K03: tolta la chiusura del lucchetto dal sito (con tre schede tornava doppio). Prova SQL 16/16 (compreso il caso delle tre schede, cassa annullata, cassa scaduta, ordine annullato col codice restituito); ognuna delle tre prove vive ha il suo controllo.",
+   "verificato_da": "qa interno (gara con 6 sessioni psql: 1 rivendicazione) + collaudo K03 (rompe_altro: chiusura troppo larga e due ore di blocco dopo un rilascio senza ordine) → rifatto sulle prove vive, prova SQL estesa ai casi del collaudo."
   },
   {
    "id": "R12-005",
@@ -135,7 +135,7 @@
    "id": "R12-006",
    "chiave": "architettura|il documento delle decisioni del sito dice ancora commissione all'8% più 15 euro al mese, «da decidere»",
    "esito": "riparato",
-   "commit": "3d840a621b732d44e8c45594cb8690912130385e",
+   "commit": "992b5446cd58e3675369f2b912a74413c2aa8f12",
    "file_toccati": [
     "docs/decisions.md"
    ],
@@ -151,8 +151,8 @@
     "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base db5164c52e856c0e3eab1c02197ae755fca76eb3 --file docs/decisions.md --prove tests/unit/riparazione-r12-decisioni-superate.test.ts --json"
    },
    "copre_tutta_la_voce": true,
-   "cosa_ho_fatto": "ADR-006 e ADR-007 segnati «superseded (12/11/2026)». La nota dice il prezzo intero firmato il 26/10: 10% IVA inclusa solo sul venduto tramite MyCity più l'abbonamento di listino di 50 €/mese sospeso finché il negozio non incassa (ABBONAMENTO_NEGOZI_ACCESO); il benvenuto è un codice first_order_only spento al lancio. Il testo storico resta.",
-   "verificato_da": "qa: parziale per la nota che taceva abbonamento e IVA → completata."
+   "cosa_ho_fatto": "ADR-006 e ADR-007 segnati «superseded (12/11/2026)». La nota rimanda al registro dei fatti e dice quello che dice oggi: pricing.commissione (1/11) 10% su tutti gli ordini, anche clienti già del negozio e ritiro, «IVA inclusa» sospesa finché il commercialista non conferma; pricing.abbonamento (26/10) 50 €/mese sospeso finché il negozio non incassa. Il benvenuto è un codice first_order_only spento al lancio. Il testo storico resta.",
+   "verificato_da": "qa interno + collaudo K03 (parziale: la nota affermava «IVA inclusa, solo sul venduto tramite MyCity», superato dal registro dell'1/11) → riscritta sul registro, prova aggiornata."
   },
   {
    "id": "R12-007",
@@ -305,7 +305,7 @@
    "id": "R12-012",
    "chiave": "frontend-ux|se il nome del negozio comincia con un numero, un apostrofo, le virgolette o contiene una parola inglese come «table», il cliente in cassa legge «qualcosa non ha funzionato» invece del motivo vero",
    "esito": "riparato",
-   "commit": "73fa9291156e370cf8518645477ddc596761fc07",
+   "commit": "cb44a45f8653cb64bf476c3604152d03211284e7",
    "file_toccati": [
     "lib/errors.ts"
    ],
@@ -318,11 +318,11 @@
    "rimessa": {
     "esito": "regge",
     "uscita": 0,
-    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base 73fa9291156e370cf8518645477ddc596761fc07^ --file lib/errors.ts --prove tests/unit/riparazione-r12-nome-del-negozio-in-cassa.test.ts --json"
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base db5164c52e856c0e3eab1c02197ae755fca76eb3 --file lib/errors.ts --prove tests/unit/riparazione-r12-nome-del-negozio-in-cassa.test.ts --json"
    },
    "copre_tutta_la_voce": true,
-   "cosa_ho_fatto": "Sulla base il primo carattere (cifra, virgolette, apostrofo) era già accettato; restava la parola inglese («Bistrot La Table») e le parentesi tolte. apiErrorMessage ricorda i testi letti dal corpo di una nostra risposta; per quelli friendlyError confronta le parole del motore come le scrive il motore (minuscole) e non toglie le parentesi. Gli errori grezzi restano filtrati come prima (provato: relation … does not exist e null value … restano generici).",
-   "verificato_da": "qa: regge; nessuna rotta mette error.message grezzo del DB nel corpo. Note in nuovi_difetti."
+   "cosa_ho_fatto": "apiErrorMessage ricorda i testi letti dal corpo di una nostra risposta. Per quelli friendlyError: accetta anche un numero in testa («1950 Pizzeria», «100 Montaditos», resta escluso solo «500 Internal Server Error»), non toglie le parentesi e cerca le FRASI del motore (relation \"…\", column \"…\", violates, duplicate key, SQLSTATE, schema cache…) invece delle parole sciolte, così passano «Bistrot La Table» e «la table di nonna». Gli errori grezzi restano filtrati come prima. Nota: il ricordo dei testi è un insieme di modulo; un errore grezzo con lo stesso identico testo di un messaggio di rotta passerebbe (rischio basso, dichiarato).",
+   "verificato_da": "qa interno + collaudo K03 (non reggeva: numeri di 3-4 cifre in testa e parole inglesi minuscole) → corretto e provato coi casi del collaudo."
   },
   {
    "id": "R12-013",
@@ -429,7 +429,7 @@
    "id": "R12-017",
    "chiave": "microcopy|il reinvio dell'email di conferma dà messaggi che si contraddicono e non dice quanto aspettare",
    "esito": "riparato",
-   "commit": "d138c1a4cbfb5d7d0f09f1d9953c34fa5505a0c7",
+   "commit": "7b20df7572b551778dfdeeb62d0fc33018c8832c",
    "file_toccati": [
     "lib/auth/conferma-email.ts",
     "app/auth/verify-email/page.tsx",
@@ -447,8 +447,8 @@
     "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base db5164c52e856c0e3eab1c02197ae755fca76eb3 --file lib/auth/conferma-email.ts,app/auth/verify-email/page.tsx --prove tests/unit/riparazione-r12-reinvio-dice-quanto-aspettare.test.tsx --json"
    },
    "copre_tutta_la_voce": true,
-   "cosa_ho_fatto": "rimandaLinkDiConferma guarda codice e testo: «after N seconds» → «puoi chiederne un altro fra N secondi» (esito attendi, attesaSecondi N); over_email_send_rate_limit / email rate limit exceeded → «Il servizio email è al limite… riprova fra qualche minuto» senza «questo indirizzo»; dopo un invio riuscito attesa 60 s. La pagina spegne «Reinvia» con il conto alla rovescia. lib/errors.ts non è servito qui (la frase sul tetto per la registrazione la cambia R12-011). Aggiornata dichiarandolo una prova che importa conferma-email.ts e voleva «troppe email».",
-   "verificato_da": "qa: regge; corretto il singolare «fra 1 secondo». Restano dettagli minori (testo di stato che non si aggiorna a fine conto)."
+   "cosa_ho_fatto": "rimandaLinkDiConferma guarda codice e testo: «after N seconds» → «puoi chiederne un altro fra N secondi» (esito attendi, attesaSecondi N); over_email_send_rate_limit / email rate limit exceeded → «Il servizio email è al limite… riprova fra qualche minuto» senza «questo indirizzo»; dopo un invio riuscito attesa 60 s. La pagina spegne «Reinvia» con il conto alla rovescia. lib/errors.ts non è servito qui (la frase sul tetto per la registrazione la cambia R12-011). Aggiornata dichiarandolo una prova che importa conferma-email.ts e voleva «troppe email». Collaudo K03: la frase del freno ora conta insieme al bottone e sparisce a zero (prima restava «fra 55 secondi» col bottone già acceso); il tetto del progetto («fra qualche minuto») spegne il bottone 3 minuti.",
+   "verificato_da": "qa interno + collaudo K03 (parziale: frase ferma col bottone che contava) → corretto e provato."
   },
   {
    "id": "R12-018",
@@ -530,7 +530,7 @@
    "id": "R12-021",
    "chiave": "privacy-legale|le domande sotto i prodotti si pubblicano subito, non si possono segnalare una per una e nessuno può toglierle",
    "esito": "parziale",
-   "commit": "b68a10286aeca350651a2247e736a4d91054a9d1",
+   "commit": "8658b191e7bc0fff4bcff98f0699d2cb3127485e",
    "file_toccati": [
     "migrations/364_una_domanda_si_segnala_e_si_nasconde.sql"
    ],
@@ -546,8 +546,8 @@
     "comando": "a mano: la prova SQL sul database senza la 364 è rossa su 3 controlli (tipo domanda rifiutato, l'admin non nasconde, il pubblico la legge ancora); con la 364 è verde 5/5. Suite SQL intera verde."
    },
    "copre_tutta_la_voce": false,
-   "cosa_ho_fatto": "Migrazione 364 (non applicata): il CHECK di segnalazioni accetta il tipo 'domanda'; due policy su product_questions lasciano all'amministratore leggere e nascondere (is_public=false) una domanda. components/ProductQA.tsx non l'ho toccato: il pulsante Segnala per la domanda ha bisogno che Segnala accetti il tipo 'domanda' (file altrui), altrimenti il tipo non compila.",
-   "cosa_resta": "Il «Segnala» su ogni domanda e risposta, l'API e il comando admin per nascondere.",
+   "cosa_ho_fatto": "Migrazione 364 (non applicata): il CHECK di segnalazioni accetta 'domanda'; l'amministratore legge e nasconde una domanda (policy); collaudo K03: la regola d'inserimento non accetta più una domanda con una risposta del negozio già scritta (prima guardava solo l'autore). Prova SQL 7/7; senza la nuova regola il controllo 5 è rosso.",
+   "cosa_resta": "Le domande nascono ancora visibili (is_public DEFAULT true, 027): moderarle prima è una scelta di Nicola (domanda scritta). Il pulsante Segnala, l'API e il comando admin sono in file altrui.",
    "serve_file_altrui": [
     {
      "file": "components/Segnala.tsx:39",
@@ -566,7 +566,7 @@
      "modifica": "Per una segnalazione di tipo domanda: mostrare il testo e un pulsante «Nascondi la domanda» che fa update product_questions set is_public=false (con writeAudit)."
     }
    ],
-   "verificato_da": "qa: confermato (prova SQL 5/5; il negozio non ripubblica una domanda nascosta dall'admin)."
+   "verificato_da": "qa interno + collaudo K03 (non reggeva: «si pubblicano subito» non detto nel resto; risposta finta inseribile dal cliente) → risposta finta chiusa, il resto dichiarato."
   },
   {
    "id": "R12-022",
@@ -589,7 +589,7 @@
    "id": "R12-023",
    "chiave": "privacy-legale|l'obbligo di dichiarare allergeni e ingredienti vale solo finché la categoria principale si chiama esattamente «alimentari», e dal pannello quel nome si può cambiare",
    "esito": "parziale",
-   "commit": "f245d985b3c75b3c22e73b820bfb39d6c5bda838",
+   "commit": "a0f1ba8a2bfa58be05ce96593ce998dfddf26e88",
    "file_toccati": [
     "lib/category-attributes.ts",
     "migrations/363_l_obbligo_degli_allergeni_e_una_proprieta_della_categoria.sql"
@@ -604,10 +604,10 @@
    "rimessa": {
     "esito": "regge",
     "uscita": 0,
-    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0738e871f38161531f0b38d963522d3d3485ab40^ --file lib/category-attributes.ts --prove tests/unit/riparazione-r12-allergeni-per-proprieta.test.ts --json"
+    "comando": "node ad-mycity/cervello/prova-rimessa.mjs --repo . --base db5164c52e856c0e3eab1c02197ae755fca76eb3 --file lib/category-attributes.ts --prove tests/unit/riparazione-r12-allergeni-per-proprieta.test.ts --json"
    },
    "copre_tutta_la_voce": false,
-   "cosa_ho_fatto": "Migrazione 363 (non applicata): colonna categories.richiede_dichiarazioni_alimentari (vera per la radice alimentari), il guardiano 195 la legge (il nome resta rete), trigger che impedisce di cambiare slug o togliere l'obbligo a una categoria che ce l'ha. Prova SQL 6/6 e suite SQL intera verde. getAttributesForCategory usa la proprietà della radice, col nome come ripiego. Dopo il collaudo il trigger blocca anche lo spostamento fuori da una radice con l'obbligo e la cancellazione di una categoria con l'obbligo (prova SQL 9/9).",
+   "cosa_ho_fatto": "Migrazione 363 (non applicata): colonna categories.richiede_dichiarazioni_alimentari (vera per alimentari); il guardiano dei prodotti pretende allergeni e ingredienti se la colonna è vera sulla categoria o su uno qualunque dei padri (collaudo K03: alimentari spostata sotto un'altra radice non lo perde più), col nome come rete; trigger sulle categorie che blocca cambio di slug, perdita dell'obbligo, spostamento fuori da una radice con l'obbligo e cancellazione. getAttributesForCategory guarda tutta la catena dei padri. Prova SQL 10/10; il controllo 9 è rosso con la 363 di prima.",
    "cosa_resta": "Il modulo del negozio riceve le categorie senza la colonna: finché le select non la leggono, una radice nuova con l'obbligo è protetta dal database ma il modulo non mostra i campi.",
    "serve_file_altrui": [
     {
@@ -617,9 +617,13 @@
     {
      "file": "app/api/admin/categories/route.ts e la pagina admin delle categorie",
      "modifica": "Nel modulo di creazione di una radice: casella «Richiede allergeni e ingredienti (alimenti)» che scrive richiede_dichiarazioni_alimentari, e un avviso che una radice nuova nasce senza obbligo."
+    },
+    {
+     "file": "lib/products/prontoPerLaVendita.ts:64, :156, :302",
+     "modifica": "Decidere i campi obbligatori con getAttributesForCategory (che guarda richiede_dichiarazioni_alimentari su tutta la catena) invece di CATEGORY_ATTRIBUTES[categoriaTop], e non togliere la colonna dall'albero (:156). Lo usano gli strumenti AI e l'import (app/seller/products/import/page.tsx:161)."
     }
    ],
-   "verificato_da": "qa: non reggeva sullo spostamento e sulla cancellazione → corretto; resta vero che una radice nuova nasce senza obbligo e che il modulo non legge la colonna (serve_file_altrui)."
+   "verificato_da": "qa interno + collaudo K03 (non reggeva: prontoPerLaVendita decide ancora per nome, radice spostata in DB spegneva l'obbligo) → database corretto, prontoPerLaVendita in serve_file_altrui."
   },
   {
    "id": "R12-024",
@@ -698,9 +702,10 @@
   }
  ],
  "domande_per_nicola": [
-  "R12-004: una rivendicazione del codice «solo primo ordine» smette di bloccare dopo 2 ore. Motivo: è la vita di una cassa con la carta aperta (pending_checkouts.expires_at); oltre, o l'ordine è nato (e allora lo conta già validateCoupon) o la cassa è scaduta. Serve per i rilasci che non conoscono l'ordine (carrello scaduto, riserve abbandonate). Va bene 2 ore?",
   "R12-010: il 22/8 le copie di Button, Badge e Card in docs/mockup/components/core/ erano state cancellate apposta (docs/mockup/LEGGIMI.md), ma il manifesto e ProductCard.jsx le citavano ancora. Le ho ricostruite dal bundle, marcate come «non è il componente del sito». Le teniamo, o preferisci toglierle e ripulire manifesto e import?",
-  "R12-001: per chiudere una consegna in contanti col fattorino sparito l'amministratore dichiara i contanti «a voce» e chiude in un passo solo. Va bene che la giornata di cassa sia quella della chiusura (non quella in cui il fattorino aveva i soldi in mano)?"
+  "R12-001: per chiudere una consegna in contanti col fattorino sparito l'amministratore dichiara i contanti «a voce» e chiude in un passo solo. Va bene che la giornata di cassa sia quella della chiusura (non quella in cui il fattorino aveva i soldi in mano)?",
+  "R12-004: il lucchetto del benvenuto blocca il secondo uso dello stesso cliente per 2 minuti, poi finché c'è una cassa con la carta aperta o un ordine valido col codice. Va bene?",
+  "R12-021: le domande sotto i prodotti nascono visibili a tutti. Vuoi che si vedano solo dopo l'approvazione del negozio o dell'amministratore (moderazione prima), o resta così con la segnalazione e la rimozione dopo?"
  ],
  "conto": {
   "agenti": 5,
