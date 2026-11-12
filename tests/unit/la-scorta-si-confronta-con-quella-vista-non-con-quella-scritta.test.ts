@@ -34,6 +34,7 @@ type Riga = Record<string, unknown>;
 /** Una banca dati finta: ogni lettura e ogni scrittura rispettano i loro `.eq()`. */
 function bancaDati(tabelle: Record<string, Riga[]>) {
   return {
+    rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.salva_varianti' } }), // R08-008: la 323 non c'è, si prova il ripiego in tre giri
     from(tavola: string) {
       const righe = () => tabelle[tavola] ?? [];
       return {
@@ -172,6 +173,7 @@ describe('le varianti', () => {
     const tabelle = { product_variants: [{ id: S, product_id: PRODOTTO_ID, label: 'S', stock: 2 }] as Riga[] };
     const vera = bancaDati(tabelle);
     const db = {
+      rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.salva_varianti' } }), // R08-008: la 323 non c'è, si prova il ripiego in tre giri
       from(tavola: string) {
         const f = vera.from(tavola);
         return {

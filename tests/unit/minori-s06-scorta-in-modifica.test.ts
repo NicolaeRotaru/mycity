@@ -130,7 +130,10 @@ function dbVarianti(righe: { id: string; stock: number }[], scritture: string[])
     update: () => { scritture.push('update'); return c; },
     insert: async () => { scritture.push('insert'); return { error: null }; },
   });
-  return { from: () => c } as never;
+  return {
+    rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.salva_varianti' } }), // R08-008: la 323 non c'è, si prova il ripiego in tre giri
+    from: () => c,
+  } as never;
 }
 
 describe('2478 — taglia cambiata: si scopre prima di scrivere', () => {

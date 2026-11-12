@@ -131,6 +131,7 @@ describe('le varianti: si riscrive solo la scorta che il negoziante ha cambiato'
   function clientFinto(esistenti: string[]) {
     const aggiornamenti: Array<{ id: string; riga: Record<string, unknown> }> = [];
     const client = {
+      rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.salva_varianti' } }), // R08-008: la 323 non c'è, si prova il ripiego in tre giri
       from: () => ({
         select: () => ({ eq: async () => ({ data: esistenti.map((id) => ({ id })), error: null }) }),
         update: (riga: Record<string, unknown>) => ({

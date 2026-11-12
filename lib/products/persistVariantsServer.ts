@@ -30,10 +30,8 @@ import { scortaCambiata } from '@/lib/products/schema';
  * difettosa e' un conflitto (la vera e' 0), anche se in banca dati c'e' gia'
  * il numero che chiede. E la condizione sta anche nella scrittura
  * (`.eq('stock', vista)`): una vendita arrivata fra la lettura e la scrittura
- * lascia la riga non trovata, e la scorta non si sovrascrive. Le righe gia'
- * scritte prima di quella non tornano indietro: per farle andare tutte o
- * nessuna serve una funzione del database, che non esiste ancora (nessuna
- * migrazione la crea: va scritta e firmata a parte).
+ * lascia la riga non trovata, e la scorta non si sovrascrive. Dal 12/11/2026
+ * (R08-008) le scritture vanno tutte o nessuna: vedi `salva_varianti` più sotto.
  */
 /**
  * Il controllo delle scorte, prima di scrivere qualunque cosa: se una taglia
@@ -121,6 +119,58 @@ export async function saveProductVariantsServer(
    */
   const vista = (id: string) => scorteViste === undefined || Object.prototype.hasOwnProperty.call(scorteViste, id);
   const toDelete = [...existingIds].filter((id) => !keepIds.has(id) && vista(id));
+
+  /**
+   * 12/11/2026 (R08-008) — TUTTE O NESSUNA.
+   *
+   * Prima qui c'erano tre giri separati (cancella, aggiorna una riga alla volta,
+   * inserisci): se a metà una scrittura condizionata trovava la scorta cambiata, le
+   * cancellazioni e gli aggiornamenti già fatti restavano, e il prodotto finiva mezzo
+   * salvato. Adesso i tre giri sono la funzione del database `salva_varianti`
+   * (migrations/323), una transazione sola, con le regole per riga di chi chiama: al
+   * primo conflitto torna indietro tutto. Se la funzione non c'è ancora (migrazione non
+   * applicata: PGRST202) si fanno i tre giri di prima, così il salvataggio non si rompe.
+   */
+  const { error: errRpc } = await supabase.rpc('salva_varianti', {
+    p_product_id: productId,
+    p_delete: toDelete,
+    p_update: toUpdate.map((u) => ({
+      id: u.id,
+      options: u.row.options,
+      label: u.row.label,
+      position: u.row.position,
+      ...('stock' in u.row ? { stock: u.row.stock } : {}),
+      ...(u.vista !== undefined ? { vista: u.vista } : {}),
+    })),
+    p_insert: toInsert.map((r) => ({ options: r.options, label: r.label, stock: r.stock, position: r.position })),
+  });
+  if (!errRpc) return;
+  if (funzioneMancante(errRpc)) {
+    await salvaInTreGiri(supabase, toDelete, toUpdate, toInsert);
+    return;
+  }
+  if (errRpc.message === 'scorta_cambiata') {
+    const u = toUpdate.find((x) => x.id === errRpc.details);
+    throw scortaVarianteCambiata(u?.label ?? 'una variante', u?.vista ?? 0, undefined);
+  }
+  throw errRpc;
+}
+
+/** La funzione del database non c'è (ancora): PostgREST risponde PGRST202, Postgres 42883. */
+function funzioneMancante(e: { code?: string }): boolean {
+  return e.code === 'PGRST202' || e.code === '42883';
+}
+
+/**
+ * Il salvataggio di prima della migrazione 323, in tre giri: resta solo come ripiego.
+ * Qui le righe già scritte prima di un conflitto non tornano indietro.
+ */
+async function salvaInTreGiri(
+  supabase: SupabaseClient,
+  toDelete: string[],
+  toUpdate: Array<{ id: string; row: Record<string, unknown>; vista?: number; label: string }>,
+  toInsert: Array<Record<string, unknown>>,
+): Promise<void> {
   if (toDelete.length > 0) {
     const { error } = await supabase.from('product_variants').delete().in('id', toDelete);
     if (error) throw error;

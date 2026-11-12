@@ -32,6 +32,7 @@ type Riga = Record<string, unknown>;
 function bancaDati(tabelle: Record<string, Riga[]>, dopoLaLettura?: () => void) {
   const scritture: Array<{ tavola: string; valori: Riga }> = [];
   const db = {
+    rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.salva_varianti' } }), // R08-008: la 323 non c'è, si prova il ripiego in tre giri
     from(tavola: string) {
       const righe = () => tabelle[tavola] ?? [];
       return {

@@ -21,6 +21,7 @@ type Riga = Record<string, unknown>;
 function bancaDati(varianti: Riga[]) {
   const cancellate: string[] = [];
   const client = {
+    rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.salva_varianti' } }), // R08-008: la 323 non c'è, si prova il ripiego in tre giri
     from(tavola: string) {
       if (tavola !== 'product_variants') throw new Error(`tavola inattesa: ${tavola}`);
       return {
