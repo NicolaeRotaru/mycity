@@ -1,6 +1,6 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-12 15:13",
+  "aggiornato": "2026-11-12 15:30",
   "finita": false,
   "testa": "",
   "verifica": {
@@ -226,6 +226,243 @@
       "cosa_ho_fatto": "In modifica le coordinate di partenza restano solo se via, città e CAP sono identici a quelli salvati; altrimenti partono vuote, e se la ricerca non trova la via (o non risponde) si salva null. Il cliente legge, oltre a «Indirizzo salvato», che la posizione non è stata trovata e che può ordinare lo stesso. Con coordinate null coordinateDaIndirizziSalvati salta la riga e le rotte d'ordine cercano la posizione da sé (lib/shipping-coordinate.ts non è servito toccarlo).",
       "verificato_da": "",
       "chiave": "qa-flussi|cambiando la via di un indirizzo salvato, se la ricerca della posizione non risponde restano le coordinate della via vecchia"
+    },
+    {
+      "id": "R03-015",
+      "esito": "riparato",
+      "commit": "aca036f7d53697ea84ccdb53b80fa54531668370",
+      "file_toccati": [
+        "app/rider/availability/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-turni-non-spengono-l-online.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-turni-non-spengono-l-online.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: page.tsx a aca036f7d53697ea84ccdb53b80fa54531668370^ → 2 rosse; a HEAD → verdi"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "save() scrive solo i campi cambiati: un turno manda solo rider_schedule, l'interruttore della pagina solo rider_is_online. «Preferenze salvate» parte dopo la scrittura riuscita; se cade, l'errore e la pagina torna ai valori di prima. app/rider/page.tsx (interruttore della bacheca) scriveva già solo rider_is_online: non è servito toccarlo.",
+      "verificato_da": "",
+      "chiave": "qa-flussi|salvando i turni il fattorino può tornare offline senza saperlo, e «preferenze salvate» compare prima di sapere se il salvataggio è riuscito"
+    },
+    {
+      "id": "R03-016",
+      "esito": "riparato",
+      "commit": "93c84c787ed44b4657a96808de000174b1957da3",
+      "file_toccati": [
+        "app/rider/onboarding/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-iscrizione-fattorino-senza-scadenze.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-iscrizione-fattorino-senza-scadenze.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: page.tsx a 93c84c787ed44b4657a96808de000174b1957da3^ → rossa (rider_license_expires_on '' nel corpo); a HEAD → verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "«Salva i dati» del passo 1 scrive solo i quattro campi anagrafici (data di nascita vuota → null); l'invio finale manda le tre date vuote come null invece di ''. Prova montata con un database finto che rifiuta '' sulle colonne data come Postgres (22007). Il portiere che rimanda alla home il fattorino non approvato (noto 85) resta un difetto a parte, non mio.",
+      "verificato_da": "",
+      "chiave": "qa-flussi|un fattorino nuovo non riesce a salvare i dati del primo passo se non ha già scritto le scadenze di patente e polizza"
+    },
+    {
+      "id": "R03-017",
+      "esito": "riparato",
+      "commit": "f31e857c23f817024f3ee4fcb03256325b1cae0f",
+      "file_toccati": [
+        "app/rider/profile/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-profilo-fattorino-nome-e-telefono.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-profilo-fattorino-nome-e-telefono.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: page.tsx a f31e857c23f817024f3ee4fcb03256325b1cae0f^ → 3 rosse; a HEAD → verdi"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Gli stati di nome e telefono partono da null (non toccato); il salvataggio scrive solo i campi cambiati rispetto al profilo letto, rifiuta il nome vuoto con un errore e, senza modifiche, dice «Nessuna modifica da salvare» senza scrivere. Prova montata: cambiando solo il telefono il corpo è {phone}, «Salva» a vuoto non scrive niente.",
+      "verificato_da": "",
+      "chiave": "qa-flussi|se il fattorino cambia solo il nome nel profilo, il suo telefono si cancella (e viceversa)"
+    },
+    {
+      "id": "R03-018",
+      "esito": "parziale",
+      "commit": "78cc20ef8a00cd07f52559f8940408748db108be",
+      "file_toccati": [
+        "migrations/270_patente_o_polizza_scadute_non_prendono_consegne.sql",
+        "app/rider/profile/page.tsx"
+      ],
+      "prova_file": [
+        "tests/sql/rls/riparazione-r03-scadenze-del-fattorino.test.sql",
+        "tests/unit/riparazione-r03-profilo-documento-scaduto.test.tsx"
+      ],
+      "prova_comando": "tests/sql/harness/apply.sh mycity_test && tests/sql/harness/run.sh mycity_test ; npx vitest run tests/unit/riparazione-r03-profilo-documento-scaduto.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente. SQL: database ricostruito senza la 270 su Postgres 16 locale → 3 controlli rossi (is_rider_approvato vero, prendi_ordine ok, scadenza riscritta); con la 270 → 6 verdi. Profilo: page.tsx a 78cc20ef8a00cd07f52559f8940408748db108be^ → 2 rosse; a HEAD → verdi"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Migrazione 270 (non applicata): is_rider_approvato() è falso se patente o polizza hanno una scadenza passata (giorno di Piacenza; vuota non blocca, per la bici), quindi prendi_ordine rifiuta; enforce_profile_update_rules() vieta al fattorino approvato di riscriversi le due scadenze (passano dal server con un documento nuovo). Il profilo mostra «Scaduto» in rosso con «non puoi prendere consegne» e il pulsante Carica, e «In attesa di verifica» invece di «Verificato» finché non è approvato.",
+      "cosa_resta": "L'avviso automatico agli admin 15 giorni prima della scadenza va nel giro operational-alerts (app/api/cron/operational-alerts), che non è fra i miei file.",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/cron/operational-alerts/route.ts",
+          "modifica": "nuovo tipo d'avviso SCADENZA_DOCUMENTI_RIDER: profili role='rider' e is_approved con rider_license_expires_on o rider_insurance_expires_on fra oggi e oggi+15 (giorno di Piacenza) → notifyAdmins una volta per profilo e data («La polizza RC di <nome> scade il <data>: chiedi il documento nuovo»)"
+        }
+      ],
+      "verificato_da": "",
+      "chiave": "qa-flussi|un fattorino con patente o assicurazione scaduta continua a prendere consegne, e il profilo gli dice solo «in scadenza»"
+    },
+    {
+      "id": "R03-019",
+      "esito": "riparato",
+      "commit": "87c0a88a87d5e736e8ba15fae4edd2314f70b1e1",
+      "file_toccati": [
+        "app/seller/products/import/csv.ts",
+        "app/seller/products/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-prezzo-con-il-punto-delle-migliaia.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-prezzo-con-il-punto-delle-migliaia.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: csv.ts a 87c0a88a87d5e736e8ba15fae4edd2314f70b1e1^ → rossa (1.500 → 1.5); a HEAD → verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "leggiPrezzo: senza virgola, un numero che comincia da 1-9 seguito da gruppi di esattamente tre cifre dopo il punto è letto come migliaia (1.500 → 1500, 1.234.567); «4.50», «1.5», «0.500» restano decimali. La modifica in blocco chiede conferma (confirmDialog, nome e due cifre) quando un prezzo nuovo è sotto il 30% di quello di prima, come propone la voce. La conferma non ha una prova montata sua (la pagina dell'elenco è pesante da montare): la prova copre la lettura del prezzo, che è il difetto.",
+      "verificato_da": "",
+      "chiave": "qa-flussi|nella modifica veloce dei prezzi «1.500» diventa 1,50 euro, e il sito dice «aggiornato»"
+    },
+    {
+      "id": "R03-021",
+      "esito": "parziale",
+      "commit": "f9f44757d30dd924745e12679e294f2008680d8b",
+      "file_toccati": [
+        "components/admin/AdminSidebar.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-campanella-nel-pannello.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-campanella-nel-pannello.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: AdminSidebar.tsx a f9f44757d30dd924745e12679e294f2008680d8b^ → 2 rosse; a HEAD → verdi"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nuova CampanellaAdmin (useNotificationsCount, come la barra del sito) con link a /notifications e contatore delle non lette: nel piede della barra laterale e nella barra in alto su telefono, con l'etichetta «Notifiche: N da leggere» per i lettori di schermo.",
+      "cosa_resta": "Il riquadro «Avvisi da gestire» in /admin/today, proposto dalla voce come secondo pezzo, sta in app/admin/today/page.tsx, che non è fra i miei file.",
+      "serve_file_altrui": [
+        {
+          "file": "app/admin/today/page.tsx",
+          "modifica": "aggiungere un riquadro «Avvisi da gestire» che legge da notifications le righe dell'amministratore con is_read=false e link che comincia per /admin (limit 10, ordine created_at desc), ognuna col titolo, il testo e il link"
+        }
+      ],
+      "verificato_da": "",
+      "chiave": "qa-flussi|dentro il pannello dell'amministratore non c'è la campanella: gli avvisi sui soldi da sistemare a mano si vedono solo uscendo dal pannello"
+    },
+    {
+      "id": "R03-022",
+      "esito": "riparato",
+      "commit": "7069b37049a66f06685b9285732fa2981b8d6fe2",
+      "file_toccati": [
+        "lib/products/schema.ts",
+        "components/seller/ProductForm.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-il-prezzo-all-italiana-nel-modulo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-il-prezzo-all-italiana-nel-modulo.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: schema.ts e ProductForm.tsx a 7069b37049a66f06685b9285732fa2981b8d6fe2^ → 2 rosse; a HEAD → verdi"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "«Prezzo (€)» e «Prezzo pieno» sono campi di testo con inputMode decimal; lo schema legge price e compareAtPrice con leggiPrezzo (corretto in R03-019 per il solo punto delle migliaia); anteprima e salvataggio leggono lo stesso numero (prezzoDelCampo). La conferma «Hai scritto 1.250,00 €: confermi?» per i casi ambigui/oltre 10 volte, proposta dalla voce come aggiunta, non l'ho messa: la lettura ora non è più ambigua per i formati italiani.",
+      "verificato_da": "",
+      "chiave": "qa-flussi|se il negoziante scrive il prezzo all'italiana col punto delle migliaia, «1.250,00», il prodotto va in vendita a 1,25 euro senza nessun avviso"
+    },
+    {
+      "id": "R03-023",
+      "esito": "riparato",
+      "commit": "b56e824128651ec26356cd919ec400acf7b83ecd",
+      "file_toccati": [
+        "components/SupportChatModal.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-assistenza-apre-la-chat.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-assistenza-apre-la-chat.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: SupportChatModal.tsx a b56e824128651ec26356cd919ec400acf7b83ecd^ → rossa (history.back chiamato 1 volta); a HEAD → verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "const navigatingRef = useCloseOnBack(open, onClose); nel ramo riuscito navigatingRef.current = true prima di onClose() e router.push, come MobileAccountSheet; più l'avviso «Messaggio inviato». La vista AI del negozio non naviga (setView) e con l'AI spenta non compare: niente da cambiare lì. components/hooks/useCloseOnBack.ts non è servito toccarlo. Prova montata con un involucro che chiude davvero la finestra.",
+      "verificato_da": "",
+      "chiave": "qa-flussi|dopo aver scritto all'assistenza la chat non si apre: il riquadro si chiude e il cliente resta sulla pagina senza nessuna conferma"
+    },
+    {
+      "id": "R03-024",
+      "esito": "parziale",
+      "commit": "d536463f4d38efa3a64d372e452f960165985114",
+      "file_toccati": [
+        "lib/admin/regole-approvazione.ts",
+        "app/rider/onboarding/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r03-fattorino-in-bici-si-approva.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r03-fattorino-in-bici-si-approva.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "rimessa equivalente: regole-approvazione.ts a d536463f4d38efa3a64d372e452f960165985114^ → 3 rosse; a HEAD → verdi"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Regola unica documentiObbligatoriDelFattorino(mezzo) in lib/admin/regole-approvazione.ts: BIKE/EBIKE → documento e selfie; SCOOTER/CAR (e mezzo non dichiarato) → anche patente e polizza; RC_OBBLIGATORIA_PER_LA_BICI = false, scelta scritta nel registro dei fatti (rischi.scelti-al-lancio, Nicola 1/11/2026: «la polizza infortuni più la responsabilità civile della bici arrivano DOPO»). rider_vehicle_type entra in COLONNE_PER_APPROVARE, quindi la rotta moderate (che usa motivoPerNonApprovare) approva il fattorino in bici senza toccarla. Le scadenze si guardano per i documenti chiesti dal mezzo e per quelli caricati. Il modulo d'iscrizione segna e pretende gli obbligatori con la stessa regola.",
+      "cosa_resta": "Due file non miei chiedono ancora patente e polizza a tutti: app/api/kyc/start-check/route.ts:77-83 (rifiuta la verifica) e lib/kyc/esame-rider.ts:60-61 (DOCUMENTI_RIDER obbligatorio:true, nella schermata dell'amministratore).",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/kyc/start-check/route.ts",
+          "modifica": "righe 77-83: al posto dei due if su rider_license_url e rider_insurance_url, leggere rider_vehicle_type dal profilo e per ogni d di documentiObbligatoriDelFattorino(profile.rider_vehicle_type) (da @/lib/admin/regole-approvazione) rispondere ApiErrors.invalidRequest('Carica ' + d.nome + '.') se profile[d.colonna] è vuoto"
+        },
+        {
+          "file": "lib/kyc/esame-rider.ts",
+          "modifica": "righe 60-61: patente e polizza obbligatorie solo se il mezzo le chiede: rendere DOCUMENTI_RIDER una funzione del mezzo (o calcolare obbligatorio con documentiObbligatoriDelFattorino(mezzo) di lib/admin/regole-approvazione.ts) e passare il mezzo da app/api/kyc/documenti-rider/[id]/route.ts e app/admin/users/page.tsx"
+        }
+      ],
+      "verificato_da": "",
+      "chiave": "qa-flussi|il fattorino in bici non può essere approvato senza patente di guida e polizza rc"
     },
     {
       "id": "R03-025",
