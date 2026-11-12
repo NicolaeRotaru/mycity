@@ -156,12 +156,16 @@ function VerifyEmailInner() {
                   ? `Puoi chiederne un altro fra ${attesa} s`
                   : 'Reinvia email di verifica'}
             </button>
-            {esito && (
+            {/* Collaudo K03 — la frase del freno conta insieme al bottone e, finita
+                l'attesa, sparisce: prima restava «fra 55 secondi» col bottone già acceso. */}
+            {esito && !(esito.esito === 'attendi' && attesa === 0) && (
               <p
                 role="status"
                 className={`text-center text-sm ${esito.esito === 'inviato' || esito.esito === 'attendi' ? 'text-olive-700' : 'text-rose-700'}`}
               >
-                {esito.messaggio}
+                {esito.esito === 'attendi'
+                  ? `Ti abbiamo già mandato un link poco fa: puoi chiederne un altro fra ${attesa} ${attesa === 1 ? 'secondo' : 'secondi'}. Intanto controlla anche lo spam.`
+                  : esito.messaggio}
               </p>
             )}
             {vista.mostraEsci ? (

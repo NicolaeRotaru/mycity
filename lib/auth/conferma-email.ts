@@ -229,7 +229,8 @@ function attesaDalFreno(error: { message?: string; code?: string; status?: numbe
     return {
       esito: 'errore',
       messaggio: 'Il servizio email è al limite in questo momento: riprova fra qualche minuto.',
-      attesaSecondi: ATTESA_FRA_DUE_LINK_SECONDI,
+      // «Qualche minuto»: il bottone resta spento tre minuti, non uno (collaudo K03).
+      attesaSecondi: 3 * ATTESA_FRA_DUE_LINK_SECONDI,
     };
   }
   return null;

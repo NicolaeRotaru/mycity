@@ -105,3 +105,42 @@ describe('R12-017 il singolare', () => {
     expect(esito.messaggio).toContain('fra 1 secondo.');
   });
 });
+
+describe('R12-017 collaudo K03: la frase conta col bottone', () => {
+  let radice: Root;
+  let c: HTMLDivElement;
+  beforeEach(() => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    vi.useFakeTimers();
+    sessionStorage.clear();
+    ricordaEmailDaConfermare(memoriaDellaScheda(), 'maria@example.com');
+    c = document.createElement('div');
+    document.body.appendChild(c);
+    radice = createRoot(c);
+  });
+  afterEach(() => {
+    act(() => radice.unmount());
+    c.remove();
+    vi.useRealTimers();
+  });
+
+  it('il freno di 55 secondi: la frase scende con il bottone e a zero sparisce', async () => {
+    stato.risposte = [{ error: { status: 429, code: 'over_email_send_rate_limit', message: 'For security purposes, you can only request this after 55 seconds.' } }];
+    await act(async () => { radice.render(createElement(VerifyEmailPage)); });
+    await act(async () => { (c.querySelector('button[type="submit"]') as HTMLButtonElement).click(); });
+    const stato_ = () => c.querySelector('[role="status"]')?.textContent ?? '';
+    expect(stato_()).toContain('fra 55 secondi');
+    for (let i = 0; i < 43; i++) await act(async () => { vi.advanceTimersByTime(1000); });
+    expect(stato_()).toContain('fra 12 secondi');
+    for (let i = 0; i < 12; i++) await act(async () => { vi.advanceTimersByTime(1000); });
+    expect(stato_(), 'il bottone è acceso e la frase dice ancora di aspettare').toBe('');
+  });
+
+  it('il tetto del progetto dice «qualche minuto» e il bottone resta spento più di un minuto', async () => {
+    const esito = await rimandaLinkDiConferma(
+      clientCon({ status: 429, code: 'over_email_send_rate_limit', message: 'email rate limit exceeded' }),
+      dati,
+    );
+    expect(esito.attesaSecondi ?? 0).toBeGreaterThan(60);
+  });
+});
