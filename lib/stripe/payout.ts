@@ -1363,6 +1363,7 @@ async function ilRimborsoDellaChiaveGiaUscito(
   }
   let uscito: Stripe.Refund | null = null;
   let totaleDellOrdineCents = 0;
+  const senzaOrdine: Stripe.Refund[] = [];
   let dopo: string | undefined;
   for (let pagina = 0; pagina < PAGINE_DI_RIMBORSI; pagina++) {
     const elenco = await stripe.refunds.list({
@@ -1375,16 +1376,64 @@ async function ilRimborsoDellaChiaveGiaUscito(
       if (r.status === 'failed' || r.status === 'canceled') continue;
       const m = (r.metadata ?? {}) as Record<string, string>;
       // Di un altro ordine dello stesso carrello: non e' nostro. Senza ordine (dal
-      // cruscotto, etichetta mancata) si conta: un carrello che lo deve dividere
-      // non arriva fin qui (`RimborsoInAttesaDellaDivisione`).
+      // cruscotto, etichetta mancata) si conta la parte di questo ordine, se una divisione
+      // l'ha scritta (`laParteDeiRimborsiSenzaOrdine`); un carrello che lo deve ancora
+      // dividere non arriva fin qui (`RimborsoInAttesaDellaDivisione`).
       if (m.order_id && m.order_id !== order.id) continue;
+      if (!m.order_id) {
+        senzaOrdine.push(r);
+        continue;
+      }
       totaleDellOrdineCents += r.amount ?? 0;
       if (!uscito && m.order_id === order.id && (m[METADATO_DELLA_CHIAVE] === chiave || (idDelReso && m.return_id === idDelReso))) uscito = r;
     }
-    if (!elenco?.has_more || righe.length === 0) return uscito ? { uscito, totaleDellOrdineCents } : null;
+    if (!elenco?.has_more || righe.length === 0) {
+      if (!uscito) return null;
+      totaleDellOrdineCents += await laParteDeiRimborsiSenzaOrdine(order, senzaOrdine);
+      return { uscito, totaleDellOrdineCents };
+    }
     dopo = righe[righe.length - 1].id;
   }
   throw new Error('refundOrder: troppi rimborsi sul pagamento, il controllo della chiave non si chiude');
+}
+
+/**
+ * 12/11/2026 (R03-006) — DEL RIMBORSO DIVISO CONTA SOLO LA PARTE DI QUESTO ORDINE.
+ *
+ * Un rimborso dal cruscotto non porta l'ordine. Su un carrello di due negozi chi amministra lo
+ * divide (lib/stripe/rimborsi-da-dividere.ts) e la divisione decisa resta scritta nel registro
+ * delle azioni, con la parte di ogni ordine. Qui si contava per intero: 30 € divisi 5 e 25, e
+ * per l'ordine da 5 il totale saliva di 30. Il reso ripreso dopo un guasto risultava «non
+ * contato», si registrava di nuovo e al negozio si toglieva la quota una seconda volta.
+ * Ora, per i rimborsi che una divisione ha scritto, si conta la parte di questo ordine; quelli
+ * che nessuna divisione ha scritto si contano per intero, come prima. Una lettura caduta lancia:
+ * niente è stato toccato, si riprova.
+ */
+async function laParteDeiRimborsiSenzaOrdine(
+  order: { id: string; stripe_payment_intent?: string | null },
+  senzaOrdine: ReadonlyArray<Stripe.Refund>,
+): Promise<number> {
+  if (senzaOrdine.length === 0) return 0;
+  const { data, error } = await getAdminSupabase()
+    .from('audit_logs')
+    .select('metadata')
+    .eq('action', 'order.refund')
+    .eq('target_table', 'orders');
+  if (error) throw new Error(`refundOrder: divisioni dei rimborsi dal cruscotto non lette: ${error.message}`);
+  const divisioni = ((data ?? []) as Array<{ metadata?: Record<string, unknown> | null }>)
+    .map((r) => r.metadata ?? {})
+    .filter((m) => m.origine === 'divisione_del_rimborso_dal_cruscotto' && m.pagamento === order.stripe_payment_intent);
+  let totale = 0;
+  const coperti = new Set<string>();
+  for (const d of divisioni) {
+    const rimborsi = Array.isArray(d.rimborsi) ? (d.rimborsi as unknown[]).map(String) : [];
+    if (!senzaOrdine.some((r) => rimborsi.includes(r.id))) continue;
+    rimborsi.forEach((id) => coperti.add(id));
+    const parte = (d.parti as Record<string, unknown> | undefined)?.[order.id];
+    totale += typeof parte === 'number' && Number.isFinite(parte) ? parte : 0;
+  }
+  for (const r of senzaOrdine) if (!coperti.has(r.id)) totale += r.amount ?? 0;
+  return totale;
 }
 
 /**
