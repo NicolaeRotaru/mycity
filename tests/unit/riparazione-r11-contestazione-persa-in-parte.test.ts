@@ -85,3 +85,12 @@ describe('R11-023 — dal controllo qa', () => {
     expect(stato.rpc).toContain('restore_stock_for_order');
   });
 });
+
+describe('R11-023 — collaudo K04', () => {
+  it('carrello pagato in parte col credito, contestazione persa per tutto il pagato con la carta: intera', async () => {
+    stato.ordini = [{ ...ordine('credito-ord', 5000, 'CONFIRMED'), wallet_applied_cents: 500 }];
+    await handleDisputeClosed(persa(4500));
+    expect(stato.scritture.some((v) => v.payment_status === 'REFUNDED'), 'sembra «di una parte» e la merce resta consegnabile').toBe(true);
+    expect(stato.rpc).toContain('restore_stock_for_order');
+  });
+});

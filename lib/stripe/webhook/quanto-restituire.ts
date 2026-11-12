@@ -73,11 +73,20 @@ export function contestazioneDiUnaParte(
   dispute: Pick<Stripe.Dispute, 'amount'>,
   orders: ReadonlyArray<object>,
 ): boolean {
-  const righe = orders as ReadonlyArray<{ gross_total_cents?: number | null; total_price?: number | string | null; refunded_amount_cents?: number | null }>;
+  const righe = orders as ReadonlyArray<{
+    gross_total_cents?: number | null; total_price?: number | string | null;
+    refunded_amount_cents?: number | null; wallet_applied_cents?: number | null;
+  }>;
   // QA 12/11 — dopo un rimborso la banca può contestare al massimo quello che resta: si confronta con
   // il lordo MENO i rimborsi, altrimenti una contestazione intera persa sembrava «di una parte».
   const lordo = righe.reduce(
-    (s, o) => s + Math.max(0, (o.gross_total_cents ?? Math.round(Number(o.total_price ?? 0) * 100)) - (o.refunded_amount_cents ?? 0)),
+    // Collaudo K04 — Stripe addebita solo la parte pagata con la carta: il credito MyCity usato
+    // non è contestabile. Col lordo pieno una contestazione intera su un carrello pagato in parte
+    // col credito sembrava «di una parte» (niente annullo, merce consegnabile già rimborsata).
+    (s, o) => {
+      const lordo = o.gross_total_cents ?? Math.round(Number(o.total_price ?? 0) * 100);
+      return s + Math.max(0, lordo - (o.wallet_applied_cents ?? 0) - (o.refunded_amount_cents ?? 0));
+    },
     0,
   );
   const contestato = dispute.amount ?? 0;

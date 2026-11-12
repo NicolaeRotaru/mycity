@@ -341,7 +341,7 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
   // vinta: il negozio si faceva ripagare 32,40 € invece di 27,40. Il database
   // finto delle prove restituiva la riga intera, e il difetto non si vedeva.
   // Sono colonne della 126: dove non c'è, `findOrdersForDispute` le toglie.
-  const orders = await findOrdersForDispute(dispute, 'id, seller_id, stripe_charge_id, stripe_transfer_group, gross_total_cents, total_price, refunded_amount_cents, dispute_status, delivery_status, payment_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, dispute_seller_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, dispute_rider_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
+  const orders = await findOrdersForDispute(dispute, 'id, seller_id, stripe_charge_id, stripe_transfer_group, gross_total_cents, total_price, refunded_amount_cents, wallet_applied_cents, dispute_status, delivery_status, payment_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, dispute_seller_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, dispute_rider_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
   if (orders.length === 0) return buonoDaRiattivareDopoLaVittoria(dispute); // R11-022
   const admin = getAdminSupabase();
   const ids = orders.map((o) => o.id);
