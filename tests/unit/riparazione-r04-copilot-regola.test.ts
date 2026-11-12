@@ -79,6 +79,20 @@ describe('una modifica su tutto il catalogo, anche oltre cento prodotti', () => 
     expect(corpo.changes.map((c) => c.product_id)).toEqual([PRODUCTS[0].id]);
   });
 
+  it('una percentuale oltre la banda del 30% non diventa una proposta di prezzo', async () => {
+    runMessageMock.mockResolvedValue({ toolInput: { reply: 'ok', regola: { product_ids: [PRODUCTS[0].id], prezzo_percentuale: 1e6 } } });
+    const corpo = (await (await chiedi('alza tutto')).json()) as Risposta;
+    expect(corpo.changes).toEqual([]);
+  });
+
+  it('un prodotto che passerebbe i 15 tag non riceve la proposta dei tag', async () => {
+    const pieno = { ...PRODUCTS[0], tags: Array.from({ length: 15 }, (_, i) => `t${i}`) };
+    PRODUCTS[0] = pieno;
+    runMessageMock.mockResolvedValue({ toolInput: { reply: 'ok', regola: { product_ids: [pieno.id], aggiungi_tag: ['natale'] } } });
+    const corpo = (await (await chiedi('aggiungi natale')).json()) as Risposta;
+    expect(corpo.changes).toEqual([]);
+  });
+
   it('il modello sa che puo\' usare la regola', async () => {
     runMessageMock.mockResolvedValue({ toolInput: { reply: 'ok' } });
     await chiedi('abbassa tutto');

@@ -1,5 +1,8 @@
 // lib/ai/regolaCopilot.ts
-import type { AiProductPatch } from '@/lib/products/aiPatch';
+import { BANDA_PREZZO_AI, type AiProductPatch } from '@/lib/products/aiPatch';
+
+/** Quanti tag tiene un prodotto (lo stesso tetto di resolveAiPatch). */
+const MAX_TAG = 15;
 
 /**
  * 12/11/2026 (R04-007) — UNA MODIFICA UGUALE SU TANTI PRODOTTI, DETTA UNA VOLTA.
@@ -48,8 +51,13 @@ export function espandiRegolaCopilot(
 ): { product_id: string; patch: AiProductPatch }[] {
   if (!regola || typeof regola !== 'object' || !Array.isArray(regola.product_ids)) return [];
   const perId = new Map(prodotti.map((p) => [p.id, p]));
+  // R04-007 (revisione) — Una percentuale oltre la banda del ±30% il server non
+  // la applica mai: non si propone nemmeno (prima si vedeva un prezzo assurdo,
+  // rifiutato solo dopo «Applica»).
   const pct =
-    typeof regola.prezzo_percentuale === 'number' && Number.isFinite(regola.prezzo_percentuale)
+    typeof regola.prezzo_percentuale === 'number' &&
+    Number.isFinite(regola.prezzo_percentuale) &&
+    Math.abs(regola.prezzo_percentuale) <= BANDA_PREZZO_AI * 100
       ? regola.prezzo_percentuale
       : null;
   const aggiungi = elencoTag(regola.aggiungi_tag);
@@ -75,7 +83,9 @@ export function espandiRegolaCopilot(
       const attuali = Array.isArray(p.tags) ? p.tags.filter((t): t is string => typeof t === 'string') : [];
       const nuovi = Array.from(new Set([...attuali.filter((t) => !togli.has(t.toLowerCase())), ...aggiungi]));
       const cambiati = nuovi.length !== attuali.length || nuovi.some((t, i) => t !== attuali[i]);
-      if (cambiati) patch.tags = nuovi;
+      // Oltre i 15 tag il server taglia gli ultimi, cioe' proprio quelli
+      // aggiunti, e dice «applicato»: su quel prodotto i tag non si propongono.
+      if (cambiati && nuovi.length <= MAX_TAG) patch.tags = nuovi;
     }
     if (stato) patch.status = stato;
     if (Object.keys(patch).length > 0) fuori.push({ product_id: id, patch });
