@@ -53,28 +53,22 @@ type RigaFascia = { id: string; name: string; price: string | number; images: st
 
 const COLONNE_FASCIA = 'id, name, price, images, seller_id';
 
-/** I prodotti piu' visti nelle ultime 24 ore; senza visite, gli ultimi pubblicati. */
+/**
+ * I prodotti piu' visti nelle ultime 24 ore. Senza visite, nessuno.
+ *
+ * 12/11/2026 (R12-008) — Qui c'era un ripiego: senza visite si leggevano gli
+ * ultimi 8 prodotti pubblicati, con `view_count: 0`. Ma il riquadro «Trending
+ * ora» (components/home/TrendingNow.tsx) scarta chi non ha almeno
+ * VISITE_MINIME_PER_LA_CLASSIFICA visite: quei prodotti non si vedevano mai, e
+ * la lettura (piu' quella dei negozi) era tempo e banda per niente.
+ */
 export async function leggiTendenze(supa: LettoreConFunzioni): Promise<Tendenza[]> {
   // Top prodotti per views nelle ultime 24h: aggregazione lato DB (RPC 052)
   // invece di scaricare fino a 500 righe di product_views e contare nel browser.
   const { data: trending } = await supa.rpc('trending_product_ids_24h', { p_limit: 8 });
   const rows = (trending ?? []) as { product_id: string; view_count: number | string }[];
 
-  if (rows.length === 0) {
-    // Fallback: ultimi 8 prodotti disponibili
-    const { data } = await supa
-      .from('products')
-      .select(COLONNE_FASCIA)
-      .eq('status', 'available')
-      .order('created_at', { ascending: false })
-      .limit(8);
-    const approvati = await conNegozioApprovato(supa, (data ?? []) as RigaFascia[], COLONNE_NEGOZIO_IN_VETRINA);
-    return approvati.map((p) => ({
-      product_id: p.id,
-      view_count: 0,
-      product: { id: p.id, name: p.name, price: Number(p.price), images: p.images, profiles: negozioInFascia(p.profiles) },
-    }));
-  }
+  if (rows.length === 0) return [];
 
   const counts = new Map<string, number>();
   for (const r of rows) counts.set(r.product_id, Number(r.view_count));

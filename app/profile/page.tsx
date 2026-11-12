@@ -115,7 +115,12 @@ export default function ProfilePage() {
           {initials}
         </span>
         <div className="min-w-0">
-          <p className="font-serif text-2xl font-bold text-ink-900">{displayName}</p>
+          {/* 12/11/2026 (R12-015) — Un nome lungo senza spazi allargava la pagina a 871 px su
+              un telefono da 360 e la faceva scorrere di lato; con gli spazi andava su 5 righe.
+              Ora va a capo dove serve, si ferma a due righe e il nome intero resta nel title. */}
+          <p className="font-serif text-2xl font-bold text-ink-900 [overflow-wrap:anywhere] line-clamp-2" title={displayName}>
+            {displayName}
+          </p>
           <p className="mt-0.5 text-sm text-ink-500">
             {since ? `Cliente dal ${since}` : profile.email}
           </p>

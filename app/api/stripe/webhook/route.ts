@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import { sessionePagata } from '@/lib/stripe/webhook/comune';
 import { scritturaObbligatoria, scritturaSenzaRipetere } from '@/lib/stripe/webhook/esito';
 import { segretiDelWebhook, verificaFirma } from '@/lib/stripe/webhook/firma';
-import { liberaIlTurno, prendiIlTurno } from '@/lib/stripe/webhook/registro-eventi';
+import { liberaIlTurno, prendiIlTurno, statoDellAvvisoOccupato } from '@/lib/stripe/webhook/registro-eventi';
 import { handleCheckoutCompleted, handleCheckoutExpired } from '@/lib/stripe/webhook/ordini';
 import { handleGiftCardPurchase } from '@/lib/stripe/webhook/giftcard';
 import { handleSponsoredPurchase } from '@/lib/stripe/webhook/sponsorizzati';
@@ -87,7 +87,14 @@ export async function POST(req: NextRequest) {
       const turno = await prendiIlTurno(admin, event.id);
       // Un guasto non è «turno già preso»: col 200 l'evento si perdeva.
       if (turno === 'guasto') return NextResponse.json({ error: 'idempotenza non disponibile' }, { status: 503 });
-      if (turno === 'occupato') return NextResponse.json({ received: true, duplicated: true }, { status: 200 });
+      if (turno === 'occupato') {
+        // R12-018 — Solo un avviso già lavorato è «già visto». Uno in corso (o di una consegna
+        // morta col turno in mano) risponde 409: Stripe riprova, invece di darlo per consegnato.
+        if ((await statoDellAvvisoOccupato(admin, event.id)) === 'lavorato') {
+          return NextResponse.json({ received: true, duplicated: true }, { status: 200 });
+        }
+        return NextResponse.json({ error: 'avviso in lavorazione: riprova più tardi' }, { status: 409 });
+      }
     } else {
       // 27/8/2026 (R031 · R137) — IL GUARDIANO SI APRIVA DA SOLO QUANDO SI
       // ROMPEVA: su un errore diverso dal doppione (colonna non ancora

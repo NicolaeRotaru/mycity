@@ -48,6 +48,36 @@ const PAROLE_DEL_MOTORE =
   /\b(syntax|constraint|relation|column|table|row|query|statement|varchar|varying|violates|null value|does not exist|out of range|deadlock|serializ|unrecognized|operator|integer|numeric|boolean|timestamp|jsonb|uuid|regclass)\b/i;
 
 /**
+ * 12/11/2026 (R12-012) — I RIFIUTI DELLA CASSA COMINCIANO COL NOME DEL NEGOZIO.
+ *
+ * «Bistrot La Table», «Caffè Row & Co», «1950 Pizzeria»: col filtro per parole il
+ * rifiuto finiva nel generico, e il cliente riprovava lo stesso ordine all'infinito.
+ * Vale SOLO per i messaggi che una nostra rotta ha messo nel corpo della risposta
+ * (vedi `MESSAGGI_DELLE_ROTTE`): un errore grezzo resta filtrato come prima.
+ */
+/**
+ * Collaudo K03 (12/11) — anche in minuscolo una parola sola sbagliava: «la table di
+ * nonna» è un nome di negozio. Per i messaggi delle nostre rotte si cercano le FRASI
+ * del motore, che un nome di negozio non scrive: «relation "…"», «column "…"»,
+ * «violates», «duplicate key», «SQLSTATE»…
+ */
+const FRASI_DEL_MOTORE =
+  /(relation\s+"|column\s+"|\bviolates\b|does not exist|syntax error|null value in|duplicate key|sqlstate|deadlock detected|out of range|invalid input syntax|permission denied for|could not find the function|schema cache|pgrst\d|\b\d{5}\b.*\berror\b)/i;
+
+/**
+ * I testi che `apiErrorMessage` ha letto dal corpo di una nostra risposta. La
+ * pagina li rimette in un `new Error(...)` e li passa a `friendlyError`: qui
+ * si ricordano, cosi' `friendlyError` sa che sono frasi scritte per l'utente e
+ * non indovina dalla forma. Pochi e recenti: basta l'ultimo giro.
+ */
+const MESSAGGI_DELLE_ROTTE = new Set<string>();
+function ricordaMessaggioDellaRotta(m: string): string {
+  if (MESSAGGI_DELLE_ROTTE.size >= 50) MESSAGGI_DELLE_ROTTE.clear();
+  MESSAGGI_DELLE_ROTTE.add(m);
+  return m;
+}
+
+/**
  * GLI ERRORI DI SUPABASE AUTH, IN ITALIANO — o `null` se non lo riconosco.
  *
  * PERCHÉ ESISTE QUI. Una funzione con lo stesso mestiere viveva dentro
@@ -93,8 +123,10 @@ export function traduciErroreAuth(msg: string): string | null {
   }
   if (m.includes('unable to validate email address') || m.includes('invalid email'))
     return 'Questa email non sembra valida. Controlla come l’hai scritta.';
+  // 12/11/2026 (R12-011) — È il tetto orario di tutto il progetto, non di un indirizzo:
+  // «troppe email a questo indirizzo» lo leggeva anche chi non ne aveva mai ricevuta una.
   if (m.includes('email rate limit exceeded'))
-    return 'Abbiamo già inviato troppe email a questo indirizzo. Riprova fra qualche minuto.';
+    return 'In questo momento non riusciamo a mandare email: riprova fra qualche minuto.';
   if (m.includes('new password should be different'))
     return 'La password nuova deve essere diversa da quella attuale';
   if (m.includes('same password'))
@@ -229,13 +261,15 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
         return 'Uno dei dati inseriti non è nel formato giusto: controlla numeri e date, poi riprova.';
       }
       trackErrorShown(e.code ?? 'unknown', e.message, context?.page);
+      // R12-012 — scritto da una nostra rotta per l'utente: le parentesi sono parte del motivo.
+      const dallaRotta = MESSAGGI_DELLE_ROTTE.has(e.message);
       // Strip technical details
       const cleaned = e.message
         .replace(/\b[A-Z_]+\s*=\s*[^\s,]+/g, '')
         // 1/11/2026 — Le parentesi coi soldi dentro sono il PERCHÉ di un rifiuto
         // («prezzo NON applicato (20.00 → 30.00 €: oltre il 30%, va deciso a
         // mano)»), non un dettaglio tecnico: restano. Le altre si tolgono.
-        .replace(/\(.*?\)/g, (parentesi) => (parentesi.includes('€') ? parentesi : ''))
+        .replace(/\(.*?\)/g, (parentesi) => (dallaRotta || parentesi.includes('€') ? parentesi : ''))
         .trim();
       // Le righe multiple sono un segnale forte di stack trace → scarta.
       // Il limite di lunghezza scarta i dump tecnici ma deve lasciar passare i
@@ -252,9 +286,11 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
         // nome del negozio («3 Archi», «'L Furnè», «Da Mario» fra virgolette) e finivano nel generico.
         /^[a-zA-ZÀ-ſ0-9«"'‘’“]/.test(cleaned) &&
         // ...ma non un codice tecnico in testa («500 Internal Server Error», «23505 …»).
-        !/^\d{3,5}\b/.test(cleaned) &&
+        // Collaudo K03 — tranne nei messaggi delle nostre rotte: «1950 Pizzeria adesso è
+        // chiuso» e «100 Montaditos…» sono nomi di negozio.
+        (dallaRotta ? !/^\d{3}\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s*$/.test(cleaned) : !/^\d{3,5}\b/.test(cleaned)) &&
         // ...e non parla come un motore. Vedi PAROLE_DEL_MOTORE in cima al file.
-        !PAROLE_DEL_MOTORE.test(cleaned)
+        !(dallaRotta ? FRASI_DEL_MOTORE : PAROLE_DEL_MOTORE).test(cleaned)
       ) {
         return cleaned;
       }
@@ -289,10 +325,10 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
 export function apiErrorMessage(body: unknown, fallback = 'Operazione non riuscita'): string {
   if (!body || typeof body !== 'object') return fallback;
   const e = (body as { error?: unknown }).error;
-  if (typeof e === 'string' && e.trim()) return e;
+  if (typeof e === 'string' && e.trim()) return ricordaMessaggioDellaRotta(e);
   if (e && typeof e === 'object' && 'message' in e) {
     const m = (e as { message?: unknown }).message;
-    if (typeof m === 'string' && m.trim()) return m;
+    if (typeof m === 'string' && m.trim()) return ricordaMessaggioDellaRotta(m);
   }
   return fallback;
 }

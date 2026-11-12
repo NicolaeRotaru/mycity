@@ -32,12 +32,23 @@ function VerifyEmailInner() {
   // filtro dei percorsi interni: nessun indirizzo esterno.
   const searchParams = useSearchParams();
   const returnTo = safeInternalPath(searchParams.get('returnTo') ?? '/', '/');
+  // R12-011 — Solo chi arriva dalla registrazione può avere già un account senza saperlo.
+  const daRegistrazione = searchParams.get('da') === 'registrazione';
   const [emailDellaSessione, setEmailDellaSessione] = useState<string | null>(null);
   const [emailRicordata, setEmailRicordata] = useState<string | null>(null);
   const [emailScritta, setEmailScritta] = useState('');
   const [verified, setVerified] = useState<boolean>(false);
   const [resending, setResending] = useState(false);
   const [esito, setEsito] = useState<EsitoReinvio | null>(null);
+  // 12/11/2026 (R12-017) — «Reinvia» si spegneva solo durante l'invio: chi lo
+  // ripremeva subito prendeva il freno di Supabase e un messaggio rosso. Dopo un
+  // invio, o dopo il freno, resta spento col conto alla rovescia.
+  const [attesa, setAttesa] = useState(0);
+  useEffect(() => {
+    if (attesa <= 0) return;
+    const t = setTimeout(() => setAttesa((s) => Math.max(0, s - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [attesa]);
 
   useEffect(() => {
     const ricordata = leggiEmailDaConfermare(memoriaDellaScheda());
@@ -55,12 +66,14 @@ function VerifyEmailInner() {
 
   async function resend(e?: React.FormEvent) {
     e?.preventDefault();
-    if (!vista.puoReinviare) return;
+    if (!vista.puoReinviare || attesa > 0) return;
     setResending(true);
     setEsito(null);
     try {
       const base = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
-      setEsito(await rimandaLinkDiConferma(supabase, { email: vista.emailPerIlReinvio, base, returnTo }));
+      const risposta = await rimandaLinkDiConferma(supabase, { email: vista.emailPerIlReinvio, base, returnTo });
+      setEsito(risposta);
+      if (risposta.attesaSecondi) setAttesa(risposta.attesaSecondi);
     } catch {
       setEsito({ esito: 'errore', messaggio: 'Non siamo riusciti a mandare l’email. Riprova tra qualche minuto.' });
     } finally {
@@ -85,11 +98,22 @@ function VerifyEmailInner() {
             <p className="mt-2 text-sm text-ink-600">
               Tutto a posto. Puoi continuare e usare l&apos;account.
             </p>
-          ) : emailDaMostrare ? (
+          ) : emailDaMostrare && (!daRegistrazione || emailDellaSessione) ? (
             <p className="mt-2 text-sm text-ink-600">
               Ti abbiamo inviato un link di conferma a{' '}
               <span className="font-medium text-ink-900">{emailDaMostrare}</span>.
               Cliccalo per attivare l&apos;account.
+            </p>
+          ) : emailDaMostrare ? (
+            // 12/11/2026 (R12-011) — Diceva «Ti abbiamo inviato un link» anche a chi si
+            // registrava con un'email che ha già un account: Supabase risponde «ok» per
+            // non rivelare chi è iscritto, ma l'email non parte. Il testo vale per tutti e
+            // due i casi, senza dire quale dei due è (nessuno scopre chi è iscritto), e
+            // indica la strada a chi l'account ce l'ha già.
+            <p className="mt-2 text-sm text-ink-600">
+              Se <span className="font-medium text-ink-900">{emailDaMostrare}</span> è un indirizzo nuovo,
+              ti abbiamo inviato un link di conferma: cliccalo per attivare l&apos;account. Se hai già un
+              account con questa email non ti arriverà nulla: accedi, oppure recupera la password.
             </p>
           ) : (
             <p className="mt-2 text-sm text-ink-600">
@@ -123,17 +147,25 @@ function VerifyEmailInner() {
             )}
             <button
               type="submit"
-              disabled={!vista.puoReinviare}
+              disabled={!vista.puoReinviare || attesa > 0}
               className="w-full rounded-lg bg-primary-700 px-4 py-2 text-sm font-medium text-white hover:bg-primary-800 disabled:opacity-50"
             >
-              {resending ? tStates('sending') : 'Reinvia email di verifica'}
+              {resending
+                ? tStates('sending')
+                : attesa > 0
+                  ? `Puoi chiederne un altro fra ${attesa} s`
+                  : 'Reinvia email di verifica'}
             </button>
-            {esito && (
+            {/* Collaudo K03 — la frase del freno conta insieme al bottone e, finita
+                l'attesa, sparisce: prima restava «fra 55 secondi» col bottone già acceso. */}
+            {esito && !(esito.esito === 'attendi' && attesa === 0) && (
               <p
                 role="status"
-                className={`text-center text-sm ${esito.esito === 'inviato' ? 'text-olive-700' : 'text-rose-700'}`}
+                className={`text-center text-sm ${esito.esito === 'inviato' || esito.esito === 'attendi' ? 'text-olive-700' : 'text-rose-700'}`}
               >
-                {esito.messaggio}
+                {esito.esito === 'attendi'
+                  ? `Ti abbiamo già mandato un link poco fa: puoi chiederne un altro fra ${attesa} ${attesa === 1 ? 'secondo' : 'secondi'}. Intanto controlla anche lo spam.`
+                  : esito.messaggio}
               </p>
             )}
             {vista.mostraEsci ? (
@@ -146,9 +178,13 @@ function VerifyEmailInner() {
               </button>
             ) : (
               <p className="text-center text-sm text-ink-600">
-                Hai già confermato?{' '}
+                Hai già un account o hai già confermato?{' '}
                 <Link href={accediHref} className="font-medium text-primary-700 hover:underline">
                   Accedi
+                </Link>
+                {' · '}
+                <Link href="/reset-password" className="font-medium text-primary-700 hover:underline">
+                  Password dimenticata?
                 </Link>
               </p>
             )}

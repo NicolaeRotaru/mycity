@@ -109,15 +109,37 @@ const chiedi = withAuthRateLimit({ name: 'account-delete', max: 3, windowMs: 60 
 
   const requestedAt = new Date().toISOString();
   // Si scrive solo se è ancora vuota: una seconda richiesta non sposta mai la prima.
-  const { error } = await admin
+  const { data: scritte, error } = await admin
     .from('profiles')
     .update({ deletion_requested_at: requestedAt })
     .eq('id', user.id)
-    .is('deletion_requested_at', null);
+    .is('deletion_requested_at', null)
+    .select('id');
 
   if (error) {
     logger.error('account delete request failed', error);
     return ApiErrors.internal('Impossibile registrare la richiesta. Contatta il supporto.');
+  }
+
+  // 12/11/2026 (R12-024) — DUE RICHIESTE QUASI INSIEME MANDAVANO DUE EMAIL.
+  // La seconda trovava ancora il campo vuoto alla lettura, la scrittura con
+  // `.is(null)` non toccava niente (l'aveva già scritto la prima), ma la rotta
+  // rispondeva «registrata» e spediva un secondo avviso con date non vere. Zero
+  // righe scritte = la richiesta c'era già: si risponde con quella, e niente email.
+  if (Array.isArray(scritte) && scritte.length === 0) {
+    const { data: giaScritto } = await admin
+      .from('profiles')
+      .select('deletion_requested_at')
+      .eq('id', user.id)
+      .single();
+    const quando = (giaScritto as { deletion_requested_at?: string | null } | null)?.deletion_requested_at;
+    if (quando) {
+      return NextResponse.json({
+        alreadyRequested: true,
+        ...(await statoDellaRichiesta(admin, user.id, quando)),
+      }, { status: 200 });
+    }
+    return ApiErrors.conflict('La richiesta è cambiata nel frattempo: ricarica la pagina.');
   }
 
   const effectiveAt = new Date(Date.now() + 7 * 86_400_000).toISOString();

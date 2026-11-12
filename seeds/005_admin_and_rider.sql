@@ -8,11 +8,15 @@ DECLARE
   rider_email   text := 'rider.demo@piacenza-demo.local';
   pwd text := crypt('PiacenzaDemo2025!', gen_salt('bf'));
 BEGIN
+  -- 12/11/2026 (R12-009) — La semina scrive con la stessa chiave delle prove SQL
+  -- (tests/sql/harness): il guardiano dei profili (119) lascia l'approvazione solo
+  -- allo staff, e qui chi scrive è la semina, non un utente. Vale per questa transazione.
+  PERFORM set_config('mycity.allow_profile_write', '1', true);
   ----------------------------------------------------------------
   -- 1) Promuovi il proprietario del marketplace ad admin
   ----------------------------------------------------------------
   UPDATE public.profiles
-  SET role = 'admin', is_approved = true
+  SET role = 'admin', is_approved = true, approval_status = 'approved'
   WHERE id = (SELECT id FROM auth.users WHERE email = 'nicolaflorea50@gmail.com');
 
   ----------------------------------------------------------------
@@ -82,11 +86,12 @@ BEGIN
   ----------------------------------------------------------------
   -- 4) Profilo del rider (in caso il trigger non l'abbia creato bene)
   ----------------------------------------------------------------
-  INSERT INTO public.profiles (id, role, is_approved, full_name, phone)
-  VALUES (rider_uuid, 'rider', true, 'Marco Bianchi', '3331234567')
+  INSERT INTO public.profiles (id, role, is_approved, approval_status, full_name, phone)
+  VALUES (rider_uuid, 'rider', true, 'approved', 'Marco Bianchi', '3331234567')
   ON CONFLICT (id) DO UPDATE
     SET role = 'rider',
         is_approved = true,
+        approval_status = 'approved',
         full_name = COALESCE(public.profiles.full_name, 'Marco Bianchi'),
         phone     = COALESCE(public.profiles.phone,     '3331234567');
 

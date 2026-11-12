@@ -1,7 +1,3 @@
-import { EXPRESS_ETA_LABEL } from './delivery';
-import { formatPrice } from './format';
-// promessa-consegna non importa questo file (né i suoi: store-hours, quando-arriva, delivery): niente giro.
-import { QUANDO_SI_PUO_LA_VELOCE } from './promessa-consegna';
 export const LOW_STOCK_THRESHOLD = 5;
 export const NEW_PRODUCT_DAYS = 14;
 
@@ -170,20 +166,7 @@ export function commissioneCents(merceCents: number): number {
   return Math.round((merceCents * MARKETPLACE_FEE_BPS) / 10000);
 }
 
-// Riferimenti per icone (nomi lucide-react). Componenti li importano e
-// renderizzano per evitare di sparare emoji nelle UI strutturali.
-// 27/10/2026 — La prima promessa diceva «Spedizione gratuita sopra 30 € per negozio · 3,00 € di
-// consegna». La soglia non esiste più: si paga solo la consegna, per negozio, e il confine è quello
-// della cassa. Le due cifre nascono dalle costanti qui sopra. Le parole della vetrina le decide
-// `promessaSpedizione()` in lib/promesse-pubbliche (qui non si può chiamare: quel file importa
-// questo, e il giro si chiuderebbe su se stesso); una prova tiene le frasi allineate.
-// I minuti della quarta promessa vengono da lib/delivery, dove il numero è deciso.
-export const VALUE_PROPS = [
-  { icon: 'Truck',      title: 'Consegna a casa',          subtitle: PLATFORM_DELIVERY_FEE_CENTS > 0 ? `da ${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} per tutto il carrello, entro ${RAGGIO_CONSEGNA_KM} km` : `gratuita, entro ${RAGGIO_CONSEGNA_KM} km` },
-  { icon: 'BanknoteArrowUp', title: 'Pagamento alla consegna', subtitle: 'in contanti, zero rischi' },
-  { icon: 'Store',      title: '100% locale',              subtitle: 'venditori della tua città' },
-  // 30/10/2026 — Diceva «Consegna rapida in 30-60 min dalla conferma» come cosa certa: la veloce c'è
-  // solo coi negozi aperti e un fattorino in servizio (lib/ordini/consegna-veloce.ts, veloceSiPuo).
-  // 30/10/2026 (ondata 18) — Ne diceva una sola su tre: le condizioni vengono da QUANDO_SI_PUO_LA_VELOCE.
-  { icon: 'Zap',        title: 'Consegna rapida',          subtitle: `in ${EXPRESS_ETA_LABEL}, ${QUANDO_SI_PUO_LA_VELOCE}; se no all'ora che scegli` },
-] as const;
+// 12/11/2026 (R12-007) — Qui c'era VALUE_PROPS, le «quattro promesse» con le icone. Nessuna
+// pagina le mostrava (la home disegna DEFAULT_TRUST_BULLETS in HomeSectionRenderer): le
+// correggevano solo le prove, e chi le leggeva credeva di sapere cosa vede il cliente. Tolte,
+// insieme alle asserzioni che le guardavano. Le frasi vere stanno in lib/promesse-pubbliche.

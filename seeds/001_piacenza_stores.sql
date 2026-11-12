@@ -44,6 +44,10 @@ DECLARE
   c_sport   uuid;
 
 BEGIN
+  -- 12/11/2026 (R12-009) — La semina scrive con la stessa chiave delle prove SQL
+  -- (tests/sql/harness): il guardiano dei profili (119) lascia l'approvazione solo
+  -- allo staff, e qui chi scrive è la semina, non un utente. Vale per questa transazione.
+  PERFORM set_config('mycity.allow_profile_write', '1', true);
   SELECT id INTO c_aliment FROM categories WHERE slug = 'alimentari';
   SELECT id INTO c_abbigl  FROM categories WHERE slug = 'abbigliamento';
   SELECT id INTO c_casa    FROM categories WHERE slug = 'casa';
@@ -83,8 +87,8 @@ BEGIN
   -- 2) Sicurezza: se per qualche motivo il trigger non ha creato il profilo
   --    (es. e' stato disabilitato), lo creiamo noi.
   ----------------------------------------------------------------
-  INSERT INTO profiles (id, role, is_approved)
-  SELECT u.id, 'seller', true
+  INSERT INTO profiles (id, role, is_approved, approval_status)
+  SELECT u.id, 'seller', true, 'approved'
   FROM auth.users u
   WHERE u.email LIKE '%@piacenza-demo.local'
     AND NOT EXISTS (SELECT 1 FROM profiles p WHERE p.id = u.id)
@@ -93,22 +97,22 @@ BEGIN
   ----------------------------------------------------------------
   -- 3) Aggiorna i profili con dati negozio
   ----------------------------------------------------------------
-  UPDATE profiles SET store_name='Salumeria del Borgo',   full_name='Salumeria del Borgo',   store_phone='0523123401', store_address='Via Calzolai 12, Piacenza',         store_lat=45.0498, store_lng=9.6968, role='seller', is_approved=true WHERE id=s_aliment1;
-  UPDATE profiles SET store_name='Frutteto Verde',        full_name='Frutteto Verde',        store_phone='0523123402', store_address='Via XX Settembre 45, Piacenza',     store_lat=45.0541, store_lng=9.6892, role='seller', is_approved=true WHERE id=s_aliment2;
-  UPDATE profiles SET store_name='Boutique Eleganza',     full_name='Boutique Eleganza',     store_phone='0523123403', store_address='Corso Vittorio Emanuele 22, Piacenza', store_lat=45.0517, store_lng=9.6951, role='seller', is_approved=true WHERE id=s_abbigl1;
-  UPDATE profiles SET store_name='Stile Urbano',          full_name='Stile Urbano',          store_phone='0523123404', store_address='Via Garibaldi 18, Piacenza',        store_lat=45.0509, store_lng=9.6925, role='seller', is_approved=true WHERE id=s_abbigl2;
-  UPDATE profiles SET store_name='Casa Linda',            full_name='Casa Linda',            store_phone='0523123405', store_address='Via Roma 56, Piacenza',             store_lat=45.0532, store_lng=9.6914, role='seller', is_approved=true WHERE id=s_casa1;
-  UPDATE profiles SET store_name='Cucina Plus',           full_name='Cucina Plus',           store_phone='0523123406', store_address='Via Sopramuro 8, Piacenza',         store_lat=45.0489, store_lng=9.6940, role='seller', is_approved=true WHERE id=s_casa2;
-  UPDATE profiles SET store_name='TechZone Piacenza',     full_name='TechZone Piacenza',     store_phone='0523123407', store_address='Via Mazzini 33, Piacenza',          store_lat=45.0521, store_lng=9.6973, role='seller', is_approved=true WHERE id=s_elettr1;
-  UPDATE profiles SET store_name='Smart Store',           full_name='Smart Store',           store_phone='0523123408', store_address='Piazza Cavalli 5, Piacenza',        store_lat=45.0526, store_lng=9.6953, role='seller', is_approved=true WHERE id=s_elettr2;
-  UPDATE profiles SET store_name='Libreria Romana',       full_name='Libreria Romana',       store_phone='0523123409', store_address='Via San Antonino 14, Piacenza',     store_lat=45.0501, store_lng=9.6960, role='seller', is_approved=true WHERE id=s_libri1;
-  UPDATE profiles SET store_name='Cartoleria Centrale',   full_name='Cartoleria Centrale',   store_phone='0523123410', store_address='Via Cavour 27, Piacenza',           store_lat=45.0512, store_lng=9.6938, role='seller', is_approved=true WHERE id=s_libri2;
-  UPDATE profiles SET store_name='Verde Casa',            full_name='Verde Casa',            store_phone='0523123411', store_address='Via Emilia Pavese 88, Piacenza',    store_lat=45.0445, store_lng=9.6788, role='seller', is_approved=true WHERE id=s_giard1;
-  UPDATE profiles SET store_name='Giardino Bello',        full_name='Giardino Bello',        store_phone='0523123412', store_address='Strada Caorsana 102, Piacenza',     store_lat=45.0658, store_lng=9.7102, role='seller', is_approved=true WHERE id=s_giard2;
-  UPDATE profiles SET store_name='Bellezza Naturale',     full_name='Bellezza Naturale',     store_phone='0523123413', store_address='Via Legnano 9, Piacenza',           store_lat=45.0489, store_lng=9.6892, role='seller', is_approved=true WHERE id=s_bellez1;
-  UPDATE profiles SET store_name='Profumeria Charme',     full_name='Profumeria Charme',     store_phone='0523123414', store_address='Via Borghetto 11, Piacenza',        store_lat=45.0535, store_lng=9.6948, role='seller', is_approved=true WHERE id=s_bellez2;
-  UPDATE profiles SET store_name='SportFit Piacenza',     full_name='SportFit Piacenza',     store_phone='0523123415', store_address='Via Manfredi 41, Piacenza',         store_lat=45.0561, store_lng=9.6991, role='seller', is_approved=true WHERE id=s_sport1;
-  UPDATE profiles SET store_name='Outdoor Avventura',     full_name='Outdoor Avventura',     store_phone='0523123416', store_address='Strada Val Nure 15, Piacenza',      store_lat=45.0398, store_lng=9.7185, role='seller', is_approved=true WHERE id=s_sport2;
+  UPDATE profiles SET store_name='Salumeria del Borgo',   full_name='Salumeria del Borgo',   store_phone='0523123401', store_address='Via Calzolai 12, Piacenza',         store_lat=45.0498, store_lng=9.6968, role='seller', is_approved=true, approval_status='approved' WHERE id=s_aliment1;
+  UPDATE profiles SET store_name='Frutteto Verde',        full_name='Frutteto Verde',        store_phone='0523123402', store_address='Via XX Settembre 45, Piacenza',     store_lat=45.0541, store_lng=9.6892, role='seller', is_approved=true, approval_status='approved' WHERE id=s_aliment2;
+  UPDATE profiles SET store_name='Boutique Eleganza',     full_name='Boutique Eleganza',     store_phone='0523123403', store_address='Corso Vittorio Emanuele 22, Piacenza', store_lat=45.0517, store_lng=9.6951, role='seller', is_approved=true, approval_status='approved' WHERE id=s_abbigl1;
+  UPDATE profiles SET store_name='Stile Urbano',          full_name='Stile Urbano',          store_phone='0523123404', store_address='Via Garibaldi 18, Piacenza',        store_lat=45.0509, store_lng=9.6925, role='seller', is_approved=true, approval_status='approved' WHERE id=s_abbigl2;
+  UPDATE profiles SET store_name='Casa Linda',            full_name='Casa Linda',            store_phone='0523123405', store_address='Via Roma 56, Piacenza',             store_lat=45.0532, store_lng=9.6914, role='seller', is_approved=true, approval_status='approved' WHERE id=s_casa1;
+  UPDATE profiles SET store_name='Cucina Plus',           full_name='Cucina Plus',           store_phone='0523123406', store_address='Via Sopramuro 8, Piacenza',         store_lat=45.0489, store_lng=9.6940, role='seller', is_approved=true, approval_status='approved' WHERE id=s_casa2;
+  UPDATE profiles SET store_name='TechZone Piacenza',     full_name='TechZone Piacenza',     store_phone='0523123407', store_address='Via Mazzini 33, Piacenza',          store_lat=45.0521, store_lng=9.6973, role='seller', is_approved=true, approval_status='approved' WHERE id=s_elettr1;
+  UPDATE profiles SET store_name='Smart Store',           full_name='Smart Store',           store_phone='0523123408', store_address='Piazza Cavalli 5, Piacenza',        store_lat=45.0526, store_lng=9.6953, role='seller', is_approved=true, approval_status='approved' WHERE id=s_elettr2;
+  UPDATE profiles SET store_name='Libreria Romana',       full_name='Libreria Romana',       store_phone='0523123409', store_address='Via San Antonino 14, Piacenza',     store_lat=45.0501, store_lng=9.6960, role='seller', is_approved=true, approval_status='approved' WHERE id=s_libri1;
+  UPDATE profiles SET store_name='Cartoleria Centrale',   full_name='Cartoleria Centrale',   store_phone='0523123410', store_address='Via Cavour 27, Piacenza',           store_lat=45.0512, store_lng=9.6938, role='seller', is_approved=true, approval_status='approved' WHERE id=s_libri2;
+  UPDATE profiles SET store_name='Verde Casa',            full_name='Verde Casa',            store_phone='0523123411', store_address='Via Emilia Pavese 88, Piacenza',    store_lat=45.0445, store_lng=9.6788, role='seller', is_approved=true, approval_status='approved' WHERE id=s_giard1;
+  UPDATE profiles SET store_name='Giardino Bello',        full_name='Giardino Bello',        store_phone='0523123412', store_address='Strada Caorsana 102, Piacenza',     store_lat=45.0658, store_lng=9.7102, role='seller', is_approved=true, approval_status='approved' WHERE id=s_giard2;
+  UPDATE profiles SET store_name='Bellezza Naturale',     full_name='Bellezza Naturale',     store_phone='0523123413', store_address='Via Legnano 9, Piacenza',           store_lat=45.0489, store_lng=9.6892, role='seller', is_approved=true, approval_status='approved' WHERE id=s_bellez1;
+  UPDATE profiles SET store_name='Profumeria Charme',     full_name='Profumeria Charme',     store_phone='0523123414', store_address='Via Borghetto 11, Piacenza',        store_lat=45.0535, store_lng=9.6948, role='seller', is_approved=true, approval_status='approved' WHERE id=s_bellez2;
+  UPDATE profiles SET store_name='SportFit Piacenza',     full_name='SportFit Piacenza',     store_phone='0523123415', store_address='Via Manfredi 41, Piacenza',         store_lat=45.0561, store_lng=9.6991, role='seller', is_approved=true, approval_status='approved' WHERE id=s_sport1;
+  UPDATE profiles SET store_name='Outdoor Avventura',     full_name='Outdoor Avventura',     store_phone='0523123416', store_address='Strada Val Nure 15, Piacenza',      store_lat=45.0398, store_lng=9.7185, role='seller', is_approved=true, approval_status='approved' WHERE id=s_sport2;
 
   ----------------------------------------------------------------
   -- 4) Prodotti (15 per negozio = 240 totali)
@@ -123,39 +127,39 @@ BEGIN
 
   -- ALIMENTARI 1: Salumeria del Borgo
   INSERT INTO products (seller_id, category_id, name, description, price, status, stock, images) VALUES
-    (s_aliment1, c_aliment, 'Coppa piacentina DOP 200g',     'Coppa stagionata 6 mesi, sapore intenso e morbido.',           8.50,  'available', 30, '["https://placehold.co/400x400/fee2e2/dc2626?text=Coppa+DOP"]'::jsonb),
-    (s_aliment1, c_aliment, 'Pancetta piacentina DOP 250g',  'Pancetta arrotolata, stagionatura tradizionale.',              7.20,  'available', 25, '["https://placehold.co/400x400/fee2e2/dc2626?text=Pancetta"]'::jsonb),
-    (s_aliment1, c_aliment, 'Salame piacentino DOP 300g',    'Salame DOP, carne suina selezionata, stagionato 4 mesi.',      9.80,  'available', 40, '["https://placehold.co/400x400/fee2e2/dc2626?text=Salame"]'::jsonb),
-    (s_aliment1, c_aliment, 'Grana Padano stagionato 1kg',   'Stagionatura 24 mesi, sapore deciso.',                         18.50, 'available', 15, '["https://placehold.co/400x400/fef3c7/d97706?text=Grana"]'::jsonb),
-    (s_aliment1, c_aliment, 'Provolone Valpadana 500g',      'Provolone DOP dolce, ideale per panini.',                      6.90,  'available', 20, '["https://placehold.co/400x400/fef3c7/d97706?text=Provolone"]'::jsonb),
-    (s_aliment1, c_aliment, 'Mortadella Bologna IGP 200g',   'Mortadella affettata fresca, ricetta tradizionale.',           5.20,  'available', 35, '["https://placehold.co/400x400/fee2e2/dc2626?text=Mortadella"]'::jsonb),
-    (s_aliment1, c_aliment, 'Prosciutto crudo Parma 200g',   'Prosciutto di Parma DOP, stagionatura 18 mesi.',              11.00, 'available', 30, '["https://placehold.co/400x400/fee2e2/dc2626?text=Prosciutto"]'::jsonb),
-    (s_aliment1, c_aliment, 'Bresaola della Valtellina 150g','Bresaola IGP, magra e saporita.',                              9.50,  'available', 22, '["https://placehold.co/400x400/fee2e2/dc2626?text=Bresaola"]'::jsonb),
-    (s_aliment1, c_aliment, 'Pecorino Romano DOP 300g',      'Formaggio stagionato dal gusto deciso.',                       10.80, 'available', 18, '["https://placehold.co/400x400/fef3c7/d97706?text=Pecorino"]'::jsonb),
-    (s_aliment1, c_aliment, 'Salame Milano 250g',            'Salame classico, grana fine, ottimo per antipasti.',           7.50,  'available', 28, '["https://placehold.co/400x400/fee2e2/dc2626?text=Salame+MI"]'::jsonb),
-    (s_aliment1, c_aliment, 'Speck Alto Adige IGP 200g',     'Speck affumicato, sapore aromatico.',                          8.20,  'available', 24, '["https://placehold.co/400x400/fee2e2/dc2626?text=Speck"]'::jsonb),
-    (s_aliment1, c_aliment, 'Stracchino 250g',               'Formaggio fresco cremoso, perfetto per la piadina.',           4.50,  'available', 40, '["https://placehold.co/400x400/fef3c7/d97706?text=Stracchino"]'::jsonb),
-    (s_aliment1, c_aliment, 'Gorgonzola dolce DOP 300g',     'Gorgonzola dolce e cremoso, stagionatura 60 giorni.',          7.80,  'available', 20, '["https://placehold.co/400x400/fef3c7/d97706?text=Gorgonzola"]'::jsonb),
-    (s_aliment1, c_aliment, 'Tortelli con la coda 500g',     'Pasta fresca ripiena di ricotta e spinaci.',                   6.90,  'available', 25, '["https://placehold.co/400x400/fef3c7/d97706?text=Tortelli"]'::jsonb),
-    (s_aliment1, c_aliment, 'Anolini in brodo 500g',         'Pasta ripiena tradizionale piacentina.',                       7.20,  'available', 20, '["https://placehold.co/400x400/fef3c7/d97706?text=Anolini"]'::jsonb);
+    (s_aliment1, c_aliment, 'Coppa piacentina DOP 200g',     'Coppa stagionata 6 mesi, sapore intenso e morbido.',           8.50,  'draft', 30, '["https://placehold.co/400x400/fee2e2/dc2626?text=Coppa+DOP"]'::jsonb),
+    (s_aliment1, c_aliment, 'Pancetta piacentina DOP 250g',  'Pancetta arrotolata, stagionatura tradizionale.',              7.20,  'draft', 25, '["https://placehold.co/400x400/fee2e2/dc2626?text=Pancetta"]'::jsonb),
+    (s_aliment1, c_aliment, 'Salame piacentino DOP 300g',    'Salame DOP, carne suina selezionata, stagionato 4 mesi.',      9.80,  'draft', 40, '["https://placehold.co/400x400/fee2e2/dc2626?text=Salame"]'::jsonb),
+    (s_aliment1, c_aliment, 'Grana Padano stagionato 1kg',   'Stagionatura 24 mesi, sapore deciso.',                         18.50, 'draft', 15, '["https://placehold.co/400x400/fef3c7/d97706?text=Grana"]'::jsonb),
+    (s_aliment1, c_aliment, 'Provolone Valpadana 500g',      'Provolone DOP dolce, ideale per panini.',                      6.90,  'draft', 20, '["https://placehold.co/400x400/fef3c7/d97706?text=Provolone"]'::jsonb),
+    (s_aliment1, c_aliment, 'Mortadella Bologna IGP 200g',   'Mortadella affettata fresca, ricetta tradizionale.',           5.20,  'draft', 35, '["https://placehold.co/400x400/fee2e2/dc2626?text=Mortadella"]'::jsonb),
+    (s_aliment1, c_aliment, 'Prosciutto crudo Parma 200g',   'Prosciutto di Parma DOP, stagionatura 18 mesi.',              11.00, 'draft', 30, '["https://placehold.co/400x400/fee2e2/dc2626?text=Prosciutto"]'::jsonb),
+    (s_aliment1, c_aliment, 'Bresaola della Valtellina 150g','Bresaola IGP, magra e saporita.',                              9.50,  'draft', 22, '["https://placehold.co/400x400/fee2e2/dc2626?text=Bresaola"]'::jsonb),
+    (s_aliment1, c_aliment, 'Pecorino Romano DOP 300g',      'Formaggio stagionato dal gusto deciso.',                       10.80, 'draft', 18, '["https://placehold.co/400x400/fef3c7/d97706?text=Pecorino"]'::jsonb),
+    (s_aliment1, c_aliment, 'Salame Milano 250g',            'Salame classico, grana fine, ottimo per antipasti.',           7.50,  'draft', 28, '["https://placehold.co/400x400/fee2e2/dc2626?text=Salame+MI"]'::jsonb),
+    (s_aliment1, c_aliment, 'Speck Alto Adige IGP 200g',     'Speck affumicato, sapore aromatico.',                          8.20,  'draft', 24, '["https://placehold.co/400x400/fee2e2/dc2626?text=Speck"]'::jsonb),
+    (s_aliment1, c_aliment, 'Stracchino 250g',               'Formaggio fresco cremoso, perfetto per la piadina.',           4.50,  'draft', 40, '["https://placehold.co/400x400/fef3c7/d97706?text=Stracchino"]'::jsonb),
+    (s_aliment1, c_aliment, 'Gorgonzola dolce DOP 300g',     'Gorgonzola dolce e cremoso, stagionatura 60 giorni.',          7.80,  'draft', 20, '["https://placehold.co/400x400/fef3c7/d97706?text=Gorgonzola"]'::jsonb),
+    (s_aliment1, c_aliment, 'Tortelli con la coda 500g',     'Pasta fresca ripiena di ricotta e spinaci.',                   6.90,  'draft', 25, '["https://placehold.co/400x400/fef3c7/d97706?text=Tortelli"]'::jsonb),
+    (s_aliment1, c_aliment, 'Anolini in brodo 500g',         'Pasta ripiena tradizionale piacentina.',                       7.20,  'draft', 20, '["https://placehold.co/400x400/fef3c7/d97706?text=Anolini"]'::jsonb);
 
   -- ALIMENTARI 2: Frutteto Verde
   INSERT INTO products (seller_id, category_id, name, description, price, status, stock, images) VALUES
-    (s_aliment2, c_aliment, 'Pomodori ciliegino bio 500g',   'Pomodorini biologici, raccolti a mano nella pianura.',         3.80,  'available', 60, '["https://placehold.co/400x400/fee2e2/dc2626?text=Pomodori"]'::jsonb),
-    (s_aliment2, c_aliment, 'Insalata mista bio 300g',       'Mix di insalate fresche bio, pronta da consumare.',            2.90,  'available', 50, '["https://placehold.co/400x400/dcfce7/16a34a?text=Insalata"]'::jsonb),
-    (s_aliment2, c_aliment, 'Carote bio 1kg',                'Carote dolci e croccanti, coltivazione biologica.',            2.50,  'available', 80, '["https://placehold.co/400x400/fed7aa/ea580c?text=Carote"]'::jsonb),
-    (s_aliment2, c_aliment, 'Patate novelle bio 2kg',        'Patate a buccia sottile, ideali al forno.',                    4.20,  'available', 45, '["https://placehold.co/400x400/fef3c7/d97706?text=Patate"]'::jsonb),
-    (s_aliment2, c_aliment, 'Mele Golden bio 1kg',           'Mele dolci e succose, coltivate in Val di Non.',               3.50,  'available', 55, '["https://placehold.co/400x400/fef3c7/d97706?text=Mele"]'::jsonb),
-    (s_aliment2, c_aliment, 'Banane biologiche 1kg',         'Banane equo-solidali bio, mature al punto giusto.',            2.80,  'available', 70, '["https://placehold.co/400x400/fef3c7/d97706?text=Banane"]'::jsonb),
-    (s_aliment2, c_aliment, 'Arance siciliane 2kg',          'Arance tarocco bio dalla Sicilia, succose.',                   4.50,  'available', 40, '["https://placehold.co/400x400/fed7aa/ea580c?text=Arance"]'::jsonb),
-    (s_aliment2, c_aliment, 'Limoni bio 500g',               'Limoni non trattati, ottimi per ricette e bibite.',            3.20,  'available', 35, '["https://placehold.co/400x400/fef3c7/d97706?text=Limoni"]'::jsonb),
-    (s_aliment2, c_aliment, 'Zucchine bio 1kg',              'Zucchine fresche bio, raccolte di mattina.',                   3.40,  'available', 50, '["https://placehold.co/400x400/dcfce7/16a34a?text=Zucchine"]'::jsonb),
-    (s_aliment2, c_aliment, 'Melanzane bio 1kg',             'Melanzane lunghe, polpa soda e saporita.',                     3.10,  'available', 40, '["https://placehold.co/400x400/e9d5ff/9333ea?text=Melanzane"]'::jsonb),
-    (s_aliment2, c_aliment, 'Peperoni misti bio 1kg',        'Peperoni rossi, gialli e verdi, bio.',                         4.20,  'available', 35, '["https://placehold.co/400x400/fee2e2/dc2626?text=Peperoni"]'::jsonb),
-    (s_aliment2, c_aliment, 'Fragole bio 500g',              'Fragole dolci di stagione, profumate.',                        4.80,  'available', 30, '["https://placehold.co/400x400/fee2e2/dc2626?text=Fragole"]'::jsonb),
-    (s_aliment2, c_aliment, 'Uva nera bio 1kg',              'Uva senza semi, polpa dolce.',                                 5.50,  'available', 25, '["https://placehold.co/400x400/e9d5ff/9333ea?text=Uva"]'::jsonb),
-    (s_aliment2, c_aliment, 'Pere Williams bio 1kg',         'Pere succose e profumate.',                                    3.90,  'available', 40, '["https://placehold.co/400x400/dcfce7/16a34a?text=Pere"]'::jsonb),
-    (s_aliment2, c_aliment, 'Cipolle dolci bio 1kg',         'Cipolle dolci di Tropea bio.',                                 2.20,  'available', 60, '["https://placehold.co/400x400/e9d5ff/9333ea?text=Cipolle"]'::jsonb);
+    (s_aliment2, c_aliment, 'Pomodori ciliegino bio 500g',   'Pomodorini biologici, raccolti a mano nella pianura.',         3.80,  'draft', 60, '["https://placehold.co/400x400/fee2e2/dc2626?text=Pomodori"]'::jsonb),
+    (s_aliment2, c_aliment, 'Insalata mista bio 300g',       'Mix di insalate fresche bio, pronta da consumare.',            2.90,  'draft', 50, '["https://placehold.co/400x400/dcfce7/16a34a?text=Insalata"]'::jsonb),
+    (s_aliment2, c_aliment, 'Carote bio 1kg',                'Carote dolci e croccanti, coltivazione biologica.',            2.50,  'draft', 80, '["https://placehold.co/400x400/fed7aa/ea580c?text=Carote"]'::jsonb),
+    (s_aliment2, c_aliment, 'Patate novelle bio 2kg',        'Patate a buccia sottile, ideali al forno.',                    4.20,  'draft', 45, '["https://placehold.co/400x400/fef3c7/d97706?text=Patate"]'::jsonb),
+    (s_aliment2, c_aliment, 'Mele Golden bio 1kg',           'Mele dolci e succose, coltivate in Val di Non.',               3.50,  'draft', 55, '["https://placehold.co/400x400/fef3c7/d97706?text=Mele"]'::jsonb),
+    (s_aliment2, c_aliment, 'Banane biologiche 1kg',         'Banane equo-solidali bio, mature al punto giusto.',            2.80,  'draft', 70, '["https://placehold.co/400x400/fef3c7/d97706?text=Banane"]'::jsonb),
+    (s_aliment2, c_aliment, 'Arance siciliane 2kg',          'Arance tarocco bio dalla Sicilia, succose.',                   4.50,  'draft', 40, '["https://placehold.co/400x400/fed7aa/ea580c?text=Arance"]'::jsonb),
+    (s_aliment2, c_aliment, 'Limoni bio 500g',               'Limoni non trattati, ottimi per ricette e bibite.',            3.20,  'draft', 35, '["https://placehold.co/400x400/fef3c7/d97706?text=Limoni"]'::jsonb),
+    (s_aliment2, c_aliment, 'Zucchine bio 1kg',              'Zucchine fresche bio, raccolte di mattina.',                   3.40,  'draft', 50, '["https://placehold.co/400x400/dcfce7/16a34a?text=Zucchine"]'::jsonb),
+    (s_aliment2, c_aliment, 'Melanzane bio 1kg',             'Melanzane lunghe, polpa soda e saporita.',                     3.10,  'draft', 40, '["https://placehold.co/400x400/e9d5ff/9333ea?text=Melanzane"]'::jsonb),
+    (s_aliment2, c_aliment, 'Peperoni misti bio 1kg',        'Peperoni rossi, gialli e verdi, bio.',                         4.20,  'draft', 35, '["https://placehold.co/400x400/fee2e2/dc2626?text=Peperoni"]'::jsonb),
+    (s_aliment2, c_aliment, 'Fragole bio 500g',              'Fragole dolci di stagione, profumate.',                        4.80,  'draft', 30, '["https://placehold.co/400x400/fee2e2/dc2626?text=Fragole"]'::jsonb),
+    (s_aliment2, c_aliment, 'Uva nera bio 1kg',              'Uva senza semi, polpa dolce.',                                 5.50,  'draft', 25, '["https://placehold.co/400x400/e9d5ff/9333ea?text=Uva"]'::jsonb),
+    (s_aliment2, c_aliment, 'Pere Williams bio 1kg',         'Pere succose e profumate.',                                    3.90,  'draft', 40, '["https://placehold.co/400x400/dcfce7/16a34a?text=Pere"]'::jsonb),
+    (s_aliment2, c_aliment, 'Cipolle dolci bio 1kg',         'Cipolle dolci di Tropea bio.',                                 2.20,  'draft', 60, '["https://placehold.co/400x400/e9d5ff/9333ea?text=Cipolle"]'::jsonb);
 
   -- ABBIGLIAMENTO 1: Boutique Eleganza
   INSERT INTO products (seller_id, category_id, name, description, price, status, stock, images) VALUES
@@ -408,6 +412,16 @@ BEGIN
     (s_sport2, c_sport, 'Kit pronto soccorso outdoor',      'Kit con 65 pezzi, custodia impermeabile.',                       22.00,  'available', 30, '["https://placehold.co/400x400/dc2626/fee2e2?text=Kit"]'::jsonb),
     (s_sport2, c_sport, 'Ramponi ghiaccio',                 'Ramponi 10 punte, attacco universale.',                          38.00,  'available', 18, '["https://placehold.co/400x400/4b5563/f3f4f6?text=Ramponi"]'::jsonb),
     (s_sport2, c_sport, 'Borraccia idratante 2L',           'Sacca idratante con tubo per zaino.',                            19.00,  'available', 32, '["https://placehold.co/400x400/dbeafe/1e3a8a?text=Idratante"]'::jsonb);
+
+
+  ----------------------------------------------------------------
+  -- 5) 12/11/2026 (R12-009) — Gli alimenti si pubblicano solo con allergeni e
+  --    ingredienti veri (Reg. UE 1169/2011, guardiano della 195). Una semina
+  --    non li conosce, e scrivere testi segnaposto vorrebbe dire mettere in
+  --    vendita cibo senza dichiarazione se la semina girasse su un database
+  --    vero (collaudo del 12/11). Restano BOZZE: il negozio di prova li
+  --    completa e li pubblica dal modulo, come farebbe un negozio vero.
+  ----------------------------------------------------------------
 
 END $$;
 

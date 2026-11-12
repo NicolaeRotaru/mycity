@@ -47,10 +47,18 @@ const ToastProvider = () => {
    * l'informazione. Le classi vincono di sicuro: sonner avvolge le sue regole in
    * `:where(...)`, che pesa zero nel foglio di stile.
    */
+  /*
+   * 12/11/2026 (R12-003) — Gli avvisi sparivano da soli dopo 4 secondi (il
+   * default di sonner) e non avevano la X: un cliente che legge piano perdeva
+   * l'errore prima di finirlo, senza modo di riaprirlo. Ora restano 8 secondi
+   * (qui sonner non distingue la durata per tipo) e si chiudono con la X.
+   */
   return (
     <Toaster
       position="top-right"
+      closeButton
       toastOptions={{
+        duration: DURATA_AVVISI_MS,
         classNames: {
           success: 'bg-olive-50 text-olive-800 border-olive-200',
           error: 'bg-secondary-50 text-secondary-800 border-secondary-200',
@@ -61,5 +69,8 @@ const ToastProvider = () => {
     />
   );
 };
+
+/** Quanto resta a schermo un avviso: abbastanza per leggere una frase con calma. */
+export const DURATA_AVVISI_MS = 8000;
 
 export default ToastProvider;

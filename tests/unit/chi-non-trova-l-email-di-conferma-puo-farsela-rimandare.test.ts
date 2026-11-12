@@ -170,7 +170,10 @@ describe('② la pagina «Verifica la tua email», senza sessione', () => {
     const resend = vi.fn(async () => ({ error: { message: 'Email rate limit exceeded' } }));
     const esito = await rimandaLinkDiConferma({ auth: { resend } }, { email: 'maria@esempio.it', base: 'https://mycity.test' });
     expect(esito.esito).toBe('errore');
-    expect(esito.messaggio).toMatch(/troppe email/i);
+    // 12/11/2026 (R12-017) — il tetto è di tutto il progetto, non dell'indirizzo: «troppe email a
+    // questo indirizzo» era falso. Resta in italiano e dice cosa fare.
+    expect(esito.messaggio).toMatch(/al limite/i);
+    expect(esito.messaggio).toMatch(/riprova/i);
   });
 
   it('con un’email che non sta in piedi non si chiama nemmeno Supabase', async () => {

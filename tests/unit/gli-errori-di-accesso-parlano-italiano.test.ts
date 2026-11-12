@@ -26,7 +26,8 @@ const DALL_INGLESE: Array<[string, RegExp]> = [
   ['User already registered', /esiste già un account/i],
   ['Password should be at least 6 characters', /almeno 6 caratteri/i],
   ['Unable to validate email address: invalid format', /email non sembra valida/i],
-  ['Email rate limit exceeded', /troppe email/i],
+  // 12/11/2026 (R12-011) — il tetto è del progetto, non dell'indirizzo: niente più «troppe email a questo indirizzo».
+  ['Email rate limit exceeded', /non riusciamo a mandare email/i],
   ['Invalid login credentials', /email o password non corrette/i],
   ['Email not confirmed', /email non confermata/i],
   ['New password should be different from the old password', /diversa da quella attuale/i],
@@ -100,7 +101,8 @@ describe('non ruba i casi che avevano già una casa', () => {
   });
 
   it('ma «email rate limit exceeded» sì: quello è di Auth', () => {
-    expect(traduciErroreAuth('Email rate limit exceeded')).toMatch(/troppe email/i);
+    expect(traduciErroreAuth('Email rate limit exceeded')).toMatch(/non riusciamo a mandare email/i);
+    expect(traduciErroreAuth('Email rate limit exceeded')).not.toMatch(/questo indirizzo/i);
   });
 
   it('sign-in tiene la sua rete larga sui tentativi, dov’era prima', () => {
