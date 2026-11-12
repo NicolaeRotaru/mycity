@@ -13,6 +13,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const stato = vi.hoisted(() => ({
   carica: 'ch_1' as unknown,
+  rimborsi: [] as Array<{ amount: number; status: string; metadata: Record<string, string> }>,
+  allineamentoCade: false,
   pendingStatus: 'PENDING',
   inseriti: [] as Array<{ tabella: string; valori: Record<string, unknown> }>,
   aggiornati: [] as Array<{ tabella: string; valori: Record<string, unknown> }>,
@@ -30,7 +32,10 @@ vi.mock('@/lib/email/templates', () => ({
 }));
 vi.mock('@/lib/analytics/server', () => ({ analyticsConsentita: async () => true, contaAcquisto: async () => {} }));
 vi.mock('@/lib/stripe/client', () => ({
-  getStripe: () => ({ paymentIntents: { retrieve: async () => ({ latest_charge: stato.carica }) } }),
+  getStripe: () => ({
+    paymentIntents: { retrieve: async () => ({ latest_charge: stato.carica }) },
+    refunds: { list: async () => ({ data: stato.rimborsi, has_more: false }) },
+  }),
   computeOrderSplit: () => ({ applicationFeeCents: 300, sellerPayoutCents: 2700 }),
 }));
 
@@ -63,6 +68,12 @@ vi.mock('@/lib/supabase/server', () => {
         };
         c.update = (valori: Record<string, unknown>) => {
           stato.aggiornati.push({ tabella, valori });
+          if (stato.allineamentoCade && tabella === 'orders' && valori.payout_status === 'REFUNDED') {
+            const rotta: Record<string, unknown> = {};
+            for (const m of ['eq', 'in', 'is']) rotta[m] = () => rotta;
+            rotta.then = (r: (v: unknown) => unknown) => Promise.resolve({ data: null, error: { message: 'timeout' } }).then(r);
+            return rotta;
+          }
           return catena(tabella);
         };
         c.upsert = () => catena(tabella);
@@ -76,6 +87,7 @@ vi.mock('@/lib/supabase/server', () => {
 });
 
 import { handleCheckoutCompleted } from '@/lib/stripe/webhook/ordini';
+import { PAUSA_RIMBORSO_DA_DIVIDERE } from '@/lib/stripe/webhook/rimborsi-da-fuori';
 
 const sessione = {
   id: 'cs_1', payment_status: 'paid', client_reference_id: 'pc_1', amount_total: 3000, payment_intent: 'pi_1',
@@ -89,12 +101,18 @@ beforeEach(() => {
   stato.inseriti.length = 0;
   stato.aggiornati.length = 0;
   stato.pendingStatus = 'PENDING';
-  stato.carica = { id: 'ch_1', refunded: false, amount_refunded: 0, disputed: false };
+  stato.allineamentoCade = false;
+  stato.rimborsi = [];
+  stato.carica = { id: 'ch_1', refunded: false, amount_refunded: 0, amount: 3000, amount_captured: 3000, disputed: false };
 });
+
+/** Un rimborso fatto dal cruscotto: nessun ordine, nessun carrello nei metadati. */
+const dalCruscotto = (amount: number) => ({ amount, status: 'succeeded', metadata: {} });
 
 describe('R03-008 — la carta tornata prima dell ordine', () => {
   it('rimborso dal cruscotto arrivato prima: l ordine nasce annullato, non pagabile al negozio, e Nicola è avvisato', async () => {
-    stato.carica = { id: 'ch_1', refunded: true, amount_refunded: 3000, disputed: false };
+    stato.carica = { id: 'ch_1', refunded: true, amount_refunded: 3000, amount: 3000, amount_captured: 3000, disputed: false };
+    stato.rimborsi = [dalCruscotto(3000)];
     await handleCheckoutCompleted(sessione);
     const [o] = ordini();
     expect(o, 'l ordine deve restare come traccia').toBeTruthy();
@@ -107,7 +125,7 @@ describe('R03-008 — la carta tornata prima dell ordine', () => {
   });
 
   it('pagamento contestato con la banca: stessa cosa', async () => {
-    stato.carica = { id: 'ch_1', refunded: false, amount_refunded: 0, disputed: true };
+    stato.carica = { id: 'ch_1', refunded: false, amount_refunded: 0, amount: 3000, amount_captured: 3000, disputed: true };
     await handleCheckoutCompleted(sessione);
     expect(ordini()[0].payout_status).not.toBe('HELD');
     expect(ordini()[0].delivery_status).toBe('CANCELED');
@@ -130,10 +148,42 @@ describe('R03-008 — la carta tornata prima dell ordine', () => {
   });
 
   it('collaudo: l ordine nato in un tentativo di prima (ancora HELD) si allinea anche lui', async () => {
-    stato.carica = { id: 'ch_1', refunded: true, amount_refunded: 3000, disputed: false };
+    stato.carica = { id: 'ch_1', refunded: true, amount_refunded: 3000, amount: 3000, amount_captured: 3000, disputed: false };
+    stato.rimborsi = [dalCruscotto(3000)];
     await handleCheckoutCompleted(sessione);
     const allineati = stato.aggiornati.filter((a) => a.tabella === 'orders' && a.valori.payout_status === 'REFUNDED');
     expect(allineati.length, 'gli ordini già nati restano pagabili al negozio').toBeGreaterThan(0);
     expect(allineati[0].valori.delivery_status).toBe('CANCELED');
+  });
+
+  it('collaudo K04: un rimborso fatto dal SITO (ordine o carrello nei metadati) non annulla niente', async () => {
+    stato.carica = { id: 'ch_1', refunded: false, amount_refunded: 1000, amount: 3000, amount_captured: 3000, disputed: false };
+    stato.rimborsi = [
+      { amount: 600, status: 'succeeded', metadata: { order_id: 'ordine-a' } },
+      { amount: 400, status: 'succeeded', metadata: { pending_checkout_id: 'pc_1' } },
+    ];
+    await handleCheckoutCompleted(sessione);
+    expect(ordini()[0].payment_status).toBe('PAID');
+    expect(ordini()[0].payout_status).toBe('HELD');
+    expect(ordini()[0].delivery_status).toBe('NEW');
+    expect(stato.aggiornati.some((a) => a.tabella === 'orders' && a.valori.payout_status === 'REFUNDED'), 'l ordine del tentativo di prima viene annullato').toBe(false);
+  });
+
+  it('collaudo K04: un rimborso parziale dal cruscotto fa nascere gli ordini coi bonifici fermi da dividere', async () => {
+    stato.carica = { id: 'ch_1', refunded: false, amount_refunded: 1000, amount: 3000, amount_captured: 3000, disputed: false };
+    stato.rimborsi = [dalCruscotto(1000)];
+    await handleCheckoutCompleted(sessione);
+    const [o] = ordini();
+    expect(o.delivery_status).toBe('NEW');
+    expect(o.payout_status).toBe('HELD');
+    expect(o.internal_dispute_status).toBe(PAUSA_RIMBORSO_DA_DIVIDERE);
+  });
+
+  it('collaudo K04: se l allineamento degli ordini di prima cade, il carrello non si chiude (Stripe riconsegna)', async () => {
+    stato.carica = { id: 'ch_1', refunded: true, amount_refunded: 3000, amount: 3000, amount_captured: 3000, disputed: false };
+    stato.rimborsi = [dalCruscotto(3000)];
+    stato.allineamentoCade = true;
+    await expect(handleCheckoutCompleted(sessione)).rejects.toThrow();
+    expect(stato.aggiornati.some((a) => a.tabella === 'pending_checkouts' && a.valori.status === 'COMPLETED')).toBe(false);
   });
 });

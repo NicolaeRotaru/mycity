@@ -33,7 +33,7 @@ import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { motivoFasciaRifiutata } from '@/lib/quando-arriva';
 import { fasciaAlGiornoDellOrdine } from '@/lib/ordini/fascia-leggibile';
 import { orariDeiNegozi, rimborsaLaFasciaPersa, diciAlClienteDelCarrelloRimborsato } from './fascia-al-pagamento';
-import { campiSeLaCartaETornata, chiudiIlCarrelloDellaCartaTornata, leggiIlPagamento } from './carta-gia-tornata';
+import { avvisaDelRimborsoDaDividere, campiSeLaCartaETornata, chiudiIlCarrelloDellaCartaTornata, leggiIlPagamento } from './carta-gia-tornata';
 
 export type PendingGroup = {
   sellerId: string;
@@ -256,7 +256,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
   const transferGroup = `mc_${pendingCheckoutId}`;
 
   // stripe_charge_id (052) e la carta già tornata al cliente (R03-008): lib/stripe/webhook/carta-gia-tornata.ts.
-  const { stripeChargeId, cartaTornata } = await leggiIlPagamento(stripe, paymentIntent, session.id);
+  const { stripeChargeId, cartaTornata } = await leggiIlPagamento(stripe, paymentIntent, session.id, pendingCheckoutId);
 
   // 31/10/2026 — LA FASCIA SI GUARDA QUANDO SI PAGA, E SI SCRIVE DAL GIORNO DELL'ORDINE.
   // La rotta la controlla quando apre la pagina di Stripe, che resta pagabile per ore; l'ordine
@@ -438,7 +438,8 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     });
     throw new Error(`partial checkout: ${createdOrderIds.length}/${groups.length} orders created`);
   }
-  if (cartaTornata) return chiudiIlCarrelloDellaCartaTornata(admin, pendingCheckoutId, paymentIntent, createdOrderIds, cartaTornata);
+  if (cartaTornata?.azione === 'annulla') return chiudiIlCarrelloDellaCartaTornata(admin, pendingCheckoutId, paymentIntent, createdOrderIds, cartaTornata);
+  if (cartaTornata) await avvisaDelRimborsoDaDividere(admin, pendingCheckoutId, createdOrderIds, cartaTornata);
 
   // NB: il coupon è già stato claimato atomicamente in /api/stripe/checkout (claim_coupon, fix #36).
   // Non richiamiamo increment_coupon_usage qui per evitare doppio conteggio.

@@ -21,21 +21,57 @@ import { scritturaObbligatoria } from './esito';
  */
 
 export type CartaTornata = {
-  /** Centesimi già restituiti sulla carta. */
+  /** Centesimi già restituiti sulla carta da FUORI (cruscotto), esclusi i rimborsi del sito. */
   rimborsatiCents: number;
-  /** Tutto restituito. */
+  /** Il rimborso da fuori copre tutto il pagamento. */
   pieno: boolean;
   /** Contestata dal cliente con la banca. */
   contestata: boolean;
+  /**
+   * Collaudo K04 — cosa fare. «annulla»: contestazione, o rimborso da fuori che copre il
+   * pagamento → gli ordini nascono annullati. «dividi»: rimborso da fuori parziale → gli ordini
+   * nascono come sempre ma coi bonifici fermi, e chi amministra divide il rimborso fra i negozi
+   * dal pannello (la stessa pausa del rimborso dal cruscotto su un carrello: rimborsi-da-fuori.ts).
+   */
+  azione: 'annulla' | 'dividi';
 };
 
-/** La carta del pagamento è già tornata al cliente (rimborso o contestazione)? `null` se no. */
-export function cartaGiaTornata(carica: string | Stripe.Charge | null | undefined): CartaTornata | null {
+/**
+ * La pausa dei bonifici che aspettano la divisione di un rimborso dal cruscotto. È la stessa di
+ * lib/stripe/webhook/rimborsi-da-fuori.ts (PAUSA_RIMBORSO_DA_DIVIDERE): ripetuta qui per non
+ * caricare tutto il modulo dei rimborsi nel gestore degli ordini; una prova le tiene uguali.
+ */
+export const PAUSA_DEL_RIMBORSO_DA_DIVIDERE = 'RIMBORSO_DA_RIPARTIRE';
+
+type RimborsoLetto = { amount?: number | null; status?: string | null; metadata?: Record<string, string> | null };
+
+/**
+ * Un rimborso partito da FUORI: non del sito. I rimborsi del sito portano l'ordine
+ * (`metadata.order_id`: refundOrder) o il carrello di questo tentativo (`pending_checkout_id`:
+ * riserva scaduta, fascia persa, quadratura), o l'etichetta di un rimborso da fuori già scritto.
+ */
+function daFuori(r: RimborsoLetto, pendingCheckoutId: string): boolean {
+  if (r.status === 'failed' || r.status === 'canceled') return false;
+  const m = r.metadata ?? {};
+  if ((m.order_id ?? '').trim()) return false;
+  if ((m.registrato_da_fuori ?? '').trim()) return false;
+  if ((m.pending_checkout_id ?? '').trim() === pendingCheckoutId) return false;
+  return true;
+}
+
+/** La carta del pagamento è già tornata al cliente da fuori (rimborso o contestazione)? `null` se no. */
+export function cartaGiaTornata(
+  carica: string | Stripe.Charge | null | undefined,
+  rimborsi: ReadonlyArray<RimborsoLetto>,
+  pendingCheckoutId: string,
+): CartaTornata | null {
   if (!carica || typeof carica === 'string') return null;
-  const rimborsatiCents = Math.max(0, Number(carica.amount_refunded ?? 0));
   const contestata = carica.disputed === true;
-  if (rimborsatiCents <= 0 && carica.refunded !== true && !contestata) return null;
-  return { rimborsatiCents, pieno: carica.refunded === true, contestata };
+  const rimborsatiCents = rimborsi.filter((r) => daFuori(r, pendingCheckoutId)).reduce((s, r) => s + Math.max(0, Number(r.amount ?? 0)), 0);
+  if (!contestata && rimborsatiCents <= 0) return null;
+  const pagato = Math.max(0, Number(carica.amount_captured ?? carica.amount ?? 0));
+  const pieno = rimborsatiCents > 0 && rimborsatiCents >= pagato;
+  return { rimborsatiCents, pieno, contestata, azione: contestata || pieno ? 'annulla' : 'dividi' };
 }
 
 /**
@@ -49,14 +85,22 @@ export async function leggiIlPagamento(
   stripe: Stripe,
   paymentIntent: string | null,
   sessionId: string,
+  pendingCheckoutId: string,
 ): Promise<{ stripeChargeId: string | null; cartaTornata: CartaTornata | null }> {
   if (!paymentIntent) return { stripeChargeId: null, cartaTornata: null };
   try {
     const pi = await stripe.paymentIntents.retrieve(paymentIntent, { expand: ['latest_charge'] });
-    const lc = pi.latest_charge;
+    const lc = pi.latest_charge as string | Stripe.Charge | null;
+    const carica = lc && typeof lc !== 'string' ? lc : null;
+    // I rimborsi si leggono solo se ce ne sono: per sapere chi li ha fatti.
+    let rimborsi: RimborsoLetto[] = [];
+    if (carica && Number(carica.amount_refunded ?? 0) > 0) {
+      const elenco = await stripe.refunds.list({ payment_intent: paymentIntent, limit: 100 });
+      rimborsi = (elenco?.data ?? []) as RimborsoLetto[];
+    }
     return {
       stripeChargeId: typeof lc === 'string' ? lc : (lc?.id ?? null),
-      cartaTornata: cartaGiaTornata(lc as string | Stripe.Charge | null),
+      cartaTornata: cartaGiaTornata(carica, rimborsi, pendingCheckoutId),
     };
   } catch (e) {
     logger.error('[stripe] retrieve PI per charge_id fallita: evento respinto per riconsegna', {
@@ -66,15 +110,46 @@ export async function leggiIlPagamento(
   }
 }
 
-/** I campi dell'ordine che nasce su una carta già tornata: annullato, mai da pagare al negozio. */
+/**
+ * I campi dell'ordine che nasce su una carta già tornata. Annullato e mai da pagare al negozio;
+ * oppure, per un rimborso parziale da fuori, come sempre ma col bonifico fermo da dividere.
+ */
 export function campiSeLaCartaETornata(carta: CartaTornata | null, totaleCents: number): Record<string, unknown> {
   if (!carta) return {};
+  if (carta.azione === 'dividi') return { internal_dispute_status: PAUSA_DEL_RIMBORSO_DA_DIVIDERE };
   return {
     delivery_status: 'CANCELED',
     canceled_at: new Date().toISOString(),
     payout_status: 'REFUNDED',
     ...(carta.pieno ? { payment_status: 'REFUNDED', refunded_amount_cents: totaleCents } : {}),
   };
+}
+
+/** Rimborso parziale da fuori prima dell'ordine: gli ordini sono nati coi bonifici fermi. */
+export async function avvisaDelRimborsoDaDividere(
+  admin: ReturnType<typeof getAdminSupabase>,
+  pendingCheckoutId: string,
+  ordini: ReadonlyArray<{ orderId: string }>,
+  carta: CartaTornata,
+): Promise<void> {
+  // Anche gli ordini nati in un tentativo di prima si fermano (quelli nuovi nascono già fermi).
+  const { error } = await admin
+    .from('orders')
+    .update({ internal_dispute_status: PAUSA_DEL_RIMBORSO_DA_DIVIDERE })
+    .in('id', ordini.map((o) => o.orderId))
+    .is('internal_dispute_status', null);
+  if (error) throw new Error(`bonifici del carrello ${pendingCheckoutId} non fermati per il rimborso da dividere: ${error.message}`);
+  try {
+    await notifyAdmins(
+      '⚠️ Rimborso dal cruscotto da dividere',
+      `Sul pagamento del carrello ${pendingCheckoutId} erano già usciti ${formatPriceFromCents(carta.rimborsatiCents)} di rimborso ` +
+        "dal cruscotto quando è arrivato l'avviso del pagamento. Gli ordini sono nati con i bonifici fermi: dividi il rimborso fra i negozi dal pannello.",
+      '/admin/orders',
+      { unaVoltaPer: `carta-tornata-da-dividere:${pendingCheckoutId}` },
+    );
+  } catch (e) {
+    logger.error('[stripe] avviso del rimborso da dividere non partito', { pendingCheckoutId, e });
+  }
 }
 
 /**
@@ -95,8 +170,10 @@ export async function chiudiIlCarrelloDellaCartaTornata(
     .update({ delivery_status: 'CANCELED', canceled_at: new Date().toISOString(), payout_status: 'REFUNDED', ...(carta.pieno ? { payment_status: 'REFUNDED' } : {}) })
     .in('id', ordini.map((o) => o.orderId))
     .eq('payout_status', 'HELD');
+  // Se l'allineamento cade il carrello NON si chiude: Stripe riconsegna e si riprova (collaudo K04).
   if (errAllinea) {
     logger.error('[stripe] ordini di un tentativo precedente non allineati alla carta tornata', { pendingCheckoutId, message: errAllinea.message });
+    throw new Error(`ordini del carrello ${pendingCheckoutId} non allineati alla carta tornata: ${errAllinea.message}`);
   }
   const totale = ordini.reduce((s, o) => s + o.totalCents, 0);
   const come = carta.contestata
