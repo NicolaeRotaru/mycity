@@ -40,7 +40,8 @@ fi
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
-MIG="$ROOT/migrations"
+# La cartella si puo' cambiare solo per le prove (CARTELLA_MIGRAZIONI): il rilascio non la imposta.
+MIG="${CARTELLA_MIGRAZIONI:-$ROOT/migrations}"
 
 # 15/10/2026 (R53) — Il primo contatto col database. Se non va, si dice dove
 # guardare: dalla CI il segreto SUPABASE_DB_URL e' rimasto per due mesi sulla
@@ -201,8 +202,29 @@ fi
 # Il primo giro guarda soltanto: quali file il registro non conosce. Il secondo
 # applica. In mezzo c'e' il tetto qui sotto, che decide prima di qualsiasi
 # scrittura.
+# R01-022 (12/11/2026) — L'AVVISO USCIVA DA UNA PORTA CHE NESSUNO LEGGEVA.
+#
+# Gli avvisi sulle migrazioni andavano solo sullo standard error, e il rilascio
+# (deploy-dopo-ci.yml) tiene e riassume solo lo standard output: nel riepilogo
+# del rilascio non comparivano mai. Adesso escono da tutte e due le porte, e su
+# quella d'uscita con la forma «::warning::», che GitHub mostra in cima al lavoro.
+avviso_migrazione() {
+  echo "  $1" >&2
+  echo "::warning::$1"
+}
+
 saltate=0
 DA_APPLICARE=()
+# R01-024 (12/11/2026) — UN NOME UGUALE NON VUOL DIRE «GIA' APPLICATA».
+#
+# Il registro si interroga per numero OPPURE per nome, perche' i due elenchi storici non sono
+# allineati al 100% (migrazioni rinumerate). Ma una migrazione NUOVA con lo stesso nome di una
+# vecchia (per esempio 250_minori.sql dopo 127_minori.sql) trovava la riga della vecchia e si
+# saltava per sempre, con tutti i controlli verdi. Adesso il nome conta solo se il numero di
+# quella riga NON e' il numero di un altro file della cartella: cioe' solo per una rinumerazione
+# vera, mai per un omonimo.
+PREFISSI_DEL_DEPOSITO="$(for g in "$MIG"/*.sql; do b="$(basename "$g")"; printf "'%s'," "${b%%_*}"; done)"
+PREFISSI_DEL_DEPOSITO="${PREFISSI_DEL_DEPOSITO%,}"
 # 5/11/2026 — Lo stesso ordine della ricostruzione della CI e del generatore dei tipi: byte per
 # byte (LC_ALL=C), cosi' 108_ viene prima di 108b_ (sort -V faceva il contrario).
 for f in $(ls "$MIG"/*.sql | LC_ALL=C sort); do
@@ -212,7 +234,8 @@ for f in $(ls "$MIG"/*.sql | LC_ALL=C sort); do
 
   gia="$(psql "$DB" -X -A -t -v ON_ERROR_STOP=1 \
     -c "SELECT 1 FROM supabase_migrations.schema_migrations
-         WHERE version = '$versione' OR name = '$descrizione' LIMIT 1")"
+         WHERE version = '$versione'
+            OR (name = '$descrizione' AND version NOT IN ($PREFISSI_DEL_DEPOSITO)) LIMIT 1")"
   if [ -n "$gia" ]; then
     saltate=$((saltate + 1))
     continue
@@ -284,7 +307,8 @@ for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
   # diverso), lo si salta invece di riapplicarlo.
   gia="$(psql "$DB" -X -A -t -v ON_ERROR_STOP=1 \
     -c "SELECT 1 FROM supabase_migrations.schema_migrations
-         WHERE version = '$versione' OR name = '$descrizione' LIMIT 1")"
+         WHERE version = '$versione'
+            OR (name = '$descrizione' AND version NOT IN ($PREFISSI_DEL_DEPOSITO)) LIMIT 1")"
   if [ -n "$gia" ]; then
     saltate=$((saltate + 1))
     continue
@@ -300,11 +324,13 @@ for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
   # 1) --single-transaction avvolge il file in una transazione, ma se il file ne
   #    apre una sua con BEGIN e la chiude con COMMIT, quel COMMIT chiude la
   #    transazione del wrapper: tutto quello che segue viene eseguito e
-  #    confermato per conto suo. Oggi succede in 23 migrazioni sulle 149 in cartella (fra cui
-  #    153 e 154) e il danno e' nullo, perche' dopo il loro COMMIT resta solo
-  #    NOTIFY. La prima che mettera' del lavoro vero dopo il proprio COMMIT si
-  #    applichera' a meta', in silenzio. Per questo sotto c'e' un avviso: dice
-  #    quali file non godono della garanzia, prima di applicarli.
+  #    confermato per conto suo. Succede in una ventina di migrazioni. In quasi
+  #    tutte dopo il COMMIT resta solo NOTIFY, e li' il danno e' nullo; ma non
+  #    in tutte: la 115 e la 117 (contate il 12/11/2026, R01-023) dopo il COMMIT
+  #    aprono un altro BEGIN e fanno lavoro vero, e se quel pezzo si rompe la
+  #    prima meta' resta applicata e la migrazione non si registra. Per questo
+  #    sotto ci sono due avvisi diversi: uno leggero quando dopo il COMMIT c'e'
+  #    solo NOTIFY, uno forte quando c'e' altro.
   # 2) L'applicazione e la registrazione sono due comandi psql, cioe' due
   #    connessioni. Un intoppo di rete fra le due lascia la migrazione applicata
   #    ma non registrata, e al rilascio dopo viene riapplicata. Unirle in un
@@ -312,7 +338,15 @@ for f in ${DA_APPLICARE[@]+"${DA_APPLICARE[@]}"}; do
   #    produzione: e' una modifica che va decisa e firmata a parte, non
   #    infilata in una riparazione minore.
   if grep -qE '^[[:space:]]*COMMIT[[:space:]]*;' "$f"; then
-    echo "  ⚠ $name contiene un COMMIT suo: da quel punto in giu' la garanzia della transazione unica non vale." >&2
+    # R01-023 — Cosa c'e' DOPO il primo COMMIT: righe vuote, commenti, NOTIFY e altri COMMIT non
+    # fanno danni; qualunque altra istruzione si applica fuori dalla transazione del wrapper.
+    dopo="$(awk 'trovato && NF && $0 !~ /^[[:space:]]*--/ && toupper($0) !~ /^[[:space:]]*(NOTIFY|COMMIT)[[:space:];]/ { print; exit }
+                 toupper($0) ~ /^[[:space:]]*COMMIT[[:space:]]*;/ { trovato = 1 }' "$f")"
+    if [ -n "$dopo" ]; then
+      avviso_migrazione "⚠⚠ $name dopo il suo COMMIT fa altro lavoro («$(printf '%s' "$dopo" | head -c 60)»): se si rompe li', la prima parte resta applicata e la migrazione non si registra. Controlla lo schema a mano se questo passo fallisce."
+    else
+      avviso_migrazione "⚠ $name contiene un COMMIT suo: dopo resta solo NOTIFY, quindi una rottura a meta' non lascia lavoro a meta'."
+    fi
   fi
   psql "$DB" -q -v ON_ERROR_STOP=1 --single-transaction -f "$f"
   psql "$DB" -q -v ON_ERROR_STOP=1 \

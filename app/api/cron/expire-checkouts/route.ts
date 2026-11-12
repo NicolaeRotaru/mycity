@@ -53,42 +53,66 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   //
   // Adesso si guarda prima: si prendono i candidati, si tolgono quelli che
   // hanno gia' un ordine, e solo il resto scade.
-  const { data: candidati, error: errLettura } = await admin
-    .from('pending_checkouts')
-    .select('id, groups, coupon_code, stripe_session_id')
-    .eq('status', 'PENDING')
-    .lt('expires_at', new Date().toISOString())
-    // 22/8/2026 — non c'era nessun tetto. Se per un guasto restassero
-    // diecimila carrelli scaduti, questo giro proverebbe a chiuderli tutti in
-    // un colpo: il tempo massimo del lavoro scade a metà, e il giro dopo
-    // ricomincia dallo stesso punto senza mai arrivare in fondo. Duecento per
-    // volta, ogni trenta minuti, sono quattrocento all'ora: il resto lo prende
-    // il giro successivo, e prima o poi la coda si svuota davvero.
-    .limit(200);
-
-  if (errLettura) {
-    logger.error('[cron] expire-checkouts: lettura fallita', errLettura);
-    return NextResponse.json({ ok: false, error: errLettura.message }, { status: 500 });
-  }
-
-  const sessioni = (candidati ?? [])
-    .map((c) => (c as { stripe_session_id?: string | null }).stripe_session_id)
-    .filter((x): x is string => !!x);
+  // R01-016 (12/11/2026) — DUECENTO CARRELLI PAGATI A META' FERMAVANO LA PULIZIA PER SEMPRE.
+  //
+  // I carrelli pagati a meta' restano PENDING (non si toccano: vanno guardati a mano), quindi
+  // tornano fra i candidati a ogni giro. Con il tetto a duecento e nessun ordine, bastavano
+  // duecento casi cosi' per occupare tutti i posti: ogni giro leggeva sempre gli stessi, non ne
+  // scadeva nessuno, e i carrelli scaduti dietro tenevano la merce bloccata per sempre.
+  // Adesso si legge a pagine (dalla scadenza piu' recente indietro): se una pagina e' piena
+  // solo di carrelli pagati a meta', si passa alla successiva, fino a PAGINE_MASSIME.
+  const PAGINA = 200;
+  const PAGINE_MASSIME = 5;
+  type Candidato = { id: string; groups: unknown; coupon_code: string | null; stripe_session_id: string | null; expires_at?: string };
+  const candidati: Candidato[] = [];
   const conOrdini = new Set<string>();
-  if (sessioni.length > 0) {
-    const { data: ordini, error: errOrdini } = await admin
-      .from('orders')
-      .select('stripe_session_id')
-      .in('stripe_session_id', sessioni);
-    if (errOrdini) {
-      // Meglio non scadere niente che ripristinare merce gia' venduta.
-      logger.error('[cron] expire-checkouts: controllo ordini fallito, nessuna scadenza applicata', errOrdini);
-      return NextResponse.json({ ok: false, error: errOrdini.message }, { status: 500 });
+  let cursore = new Date().toISOString();
+  for (let pagina = 0; pagina < PAGINE_MASSIME; pagina++) {
+    const { data: lette, error: errLettura } = await admin
+      .from('pending_checkouts')
+      .select('id, groups, coupon_code, stripe_session_id, expires_at')
+      .eq('status', 'PENDING')
+      .lt('expires_at', cursore)
+      .order('expires_at', { ascending: false })
+      // 22/8/2026 — non c'era nessun tetto. Se per un guasto restassero
+      // diecimila carrelli scaduti, questo giro proverebbe a chiuderli tutti in
+      // un colpo: il tempo massimo del lavoro scade a metà, e il giro dopo
+      // ricomincia dallo stesso punto senza mai arrivare in fondo. Duecento per
+      // pagina, ogni trenta minuti: il resto lo prende il giro successivo.
+      .limit(PAGINA);
+
+    if (errLettura) {
+      logger.error('[cron] expire-checkouts: lettura fallita', errLettura);
+      return NextResponse.json({ ok: false, error: errLettura.message }, { status: 500 });
     }
-    for (const o of ordini ?? []) {
-      const sid = (o as { stripe_session_id?: string | null }).stripe_session_id;
-      if (sid) conOrdini.add(sid);
+    const righe = (lette ?? []) as Candidato[];
+    candidati.push(...righe);
+
+    const sessioni = righe.map((c) => c.stripe_session_id).filter((x): x is string => !!x);
+    let salvatiQui = 0;
+    if (sessioni.length > 0) {
+      const { data: ordini, error: errOrdini } = await admin
+        .from('orders')
+        .select('stripe_session_id')
+        .in('stripe_session_id', sessioni);
+      if (errOrdini) {
+        // Meglio non scadere niente che ripristinare merce gia' venduta.
+        logger.error('[cron] expire-checkouts: controllo ordini fallito, nessuna scadenza applicata', errOrdini);
+        return NextResponse.json({ ok: false, error: errOrdini.message }, { status: 500 });
+      }
+      for (const o of ordini ?? []) {
+        const sid = (o as { stripe_session_id?: string | null }).stripe_session_id;
+        if (sid) conOrdini.add(sid);
+      }
+      salvatiQui = righe.filter((c) => !!c.stripe_session_id && conOrdini.has(c.stripe_session_id)).length;
     }
+
+    // Pagina non piena: non c'e' altro da leggere. Pagina con almeno un carrello da scadere:
+    // il lavoro di questo giro c'e', il resto lo prende il giro dopo.
+    if (righe.length < PAGINA || salvatiQui < righe.length) break;
+    const ultima = righe[righe.length - 1]?.expires_at;
+    if (!ultima || ultima >= cursore) break;
+    cursore = ultima;
   }
 
   /** Perche' l'avviso agli amministratori non e' partito: `null` = e' partito, o non serviva. */
@@ -106,13 +130,22 @@ export const POST = withCronAuth(async (req): Promise<NextResponse> => {
   if (daSalvare.length > 0) {
     try {
       const soglia = new Date(Date.now() - ORE_SILENZIO_CARRELLO * 3_600_000).toISOString();
-      const { data: gia, error: errGia } = await admin
-        .from('operational_alert_log')
-        .select('alert_key')
-        .in('alert_key', daSalvare.map((c) => chiaveCarrello(c.id as string)))
-        .gte('last_sent_at', soglia);
-      if (!errGia) {
-        const giaAvvisati = new Set((gia ?? []).map((r) => (r as { alert_key: string }).alert_key));
+      // R01-016 — Con le pagine i carrelli pagati a meta' possono essere fino a mille: le chiavi si
+      // chiedono a blocchi di cento, perche' mille chiavi in una sola richiesta fanno un indirizzo
+      // troppo lungo, la lettura cade e si riavviserebbe tutto a ogni giro.
+      const chiavi = daSalvare.map((c) => chiaveCarrello(c.id as string));
+      const giaAvvisati = new Set<string>();
+      let letturaRiuscita = true;
+      for (let i = 0; i < chiavi.length && letturaRiuscita; i += 100) {
+        const { data: gia, error: errGia } = await admin
+          .from('operational_alert_log')
+          .select('alert_key')
+          .in('alert_key', chiavi.slice(i, i + 100))
+          .gte('last_sent_at', soglia);
+        if (errGia) letturaRiuscita = false;
+        else for (const r of gia ?? []) giaAvvisati.add((r as { alert_key: string }).alert_key);
+      }
+      if (letturaRiuscita) {
         daAvvisare = daSalvare.filter((c) => !giaAvvisati.has(chiaveCarrello(c.id as string)));
       }
     } catch (e) {

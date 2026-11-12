@@ -1,0 +1,550 @@
+{
+  "sessione": "R01",
+  "aggiornato": "2026-11-12 16:00",
+  "finita": true,
+  "testa": "8781907018ebaa1cc1b1654b236bdf74d78b9c42",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "verde",
+    "nota": "tsc + lint + tutte le prove verdi sulla punta, dopo il giro del collaudo K01 (servizio PostgreSQL locale acceso, come la CI dopo R01-011)."
+  },
+  "voci": [
+    {
+      "id": "R01-001",
+      "esito": "non_codice",
+      "nota": "Il codice che applica le migrazioni prima di pubblicare c e gia: deploy-dopo-ci.yml, passo «Applica le migrazioni al database, prima di pubblicare» (scripts/applica-migrazioni-mancanti.sh, si ferma se manca SUPABASE_DB_URL o se mancano piu di 20 migrazioni). Non gira perche mancano le chiavi Vercel (vedi R01-002) e Vercel pubblica da solo. render.yaml non esiste piu. Cosa fa Nicola: i segreti VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID e SUPABASE_DB_URL (Session pooler) su GitHub, poi R01-002.",
+      "chiave": "deploy-sre|il rilascio non applica le migrazioni: il codice nuovo arriva su un database vecchio"
+    },
+    {
+      "id": "R01-002",
+      "esito": "non_codice",
+      "nota": "Letta l ultima esecuzione di «Rilascio dopo CI verde»: id 42126074803 (commit db5164c5, 5/11/2026 22:59), conclusione failure, nel log PRONTO: false e il verdetto «Mancano le chiavi di Vercel, quindi da qui non e uscito nessun rilascio». Le esecuzioni 53 e 52 sono skipped. Quindi il rilascio controllato non ha mai pubblicato: vercel.json NON e stato toccato (con main:false oggi il sito smetterebbe di aggiornarsi). Cosa fa Nicola: 1) i tre segreti Vercel e SUPABASE_DB_URL su GitHub; 2) un rilascio di prova da questo lavoro; 3) solo dopo, in vercel.json git.deploymentEnabled.main da true a false.",
+      "prova": "run 42126074803: PRONTO=false, PASSO_RILASCIO=skipped",
+      "chiave": "deploy-sre|ogni unione su main pubblica in produzione senza aspettare la ci"
+    },
+    {
+      "id": "R01-003",
+      "esito": "non_codice",
+      "nota": "Il codice gestisce gia la chiave mancante (lib/api/middleware.ts:247-262, opzione seMancaLaChiave, e la rotta risponde 503 invece di rompersi). Cosa fa Nicola: Vercel → progetto mycity → Settings → Environment Variables → SUPABASE_SERVICE_ROLE_KEY per Production (Supabase → Project Settings → API → service_role), poi un nuovo rilascio.",
+      "chiave": "deploy-sre|oggi nessun cliente può ordinare: al sito vero manca la chiave di servizio del database"
+    },
+    {
+      "id": "R01-004",
+      "esito": "riparato",
+      "commit": "2bc80f4858e1776ebca229f38de770f03ffb5148",
+      "file_toccati": [
+        "app/api/rider/sos/avvisa/route.ts",
+        "components/rider/SOSButton.tsx",
+        "components/rider/RiderShell.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-sos-avviso.test.tsx",
+        "tests/unit/riparazione-r01-sos-guscio.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-sos-avviso.test.tsx tests/unit/riparazione-r01-sos-guscio.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2bc80f48^ --file components/rider/SOSButton.tsx,components/rider/RiderShell.tsx --prove tests/unit/riparazione-r01-sos-avviso.test.tsx,tests/unit/riparazione-r01-sos-guscio.test.tsx --json",
+        "nota": "Lanciata da HEAD: il pulsante e il guscio alla base sono rossi sul comportamento. La rotta nuova app/api/rider/sos/avvisa/route.ts non c'era alla base, quindi da sola esce 3 (rimessa_rotta_nuova): il difetto com'e' scritto e' proprio che quella strada non esisteva."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nuova rotta /api/rider/sos/avvisa: rilegge l'ultimo SOS aperto di chi chiama (solo fattorini) e manda subito un push ad alta urgenza a ogni admin. SOSButton la chiama dopo l'insert senza bloccare il 112; RiderShell passa l'orderId della consegna in corso; il dialogo dice che gli admin ricevono l'avviso sul telefono. Il testo «alert immediato» era gia' stato tolto prima. Se VAPID non e' configurato la rotta risponde 503 e lo scrive nel registro (resta il pannello). Dopo il controllo qa: se la riga con l'ordine viene rifiutata (id non valido, ordine cancellato) l'SOS si riscrive senza ordine; triggered_at lo decide il database (DEFAULT now()), non l'orologio del telefono; il dialogo dice «se hanno le notifiche attive». Dopo il collaudo K01: la rotta dell'avviso SOS controlla l'approvazione e avvisa una volta per SOS (segno atomico in operational_alert_log).",
+      "chiave": "api-backend|l'sos del fattorino non arriva davvero a nessuno: solo una notifica nel pannello, mentre a lui diciamo «alert immediato»",
+      "commit_seguito": [
+        "a782c6c43141498012622394ec3cd06917a2e46c",
+        "8781907018ebaa1cc1b1654b236bdf74d78b9c42"
+      ],
+      "verificato_da": "qa (subagente): rilanciate le 3 prove + 5 file vicini; ruolo, limite 5/min, id SOS mai dal client, 503/0 admin/500 gestiti, 112 sincrono per primo, regex RiderShell. Riserve (orologio del telefono, order_id non valido che faceva perdere l'SOS, testo troppo sicuro) chiuse nel commit a782c6c4.",
+      "rimessa_seguito": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a782c6c43141498012622394ec3cd06917a2e46c^ --file components/rider/SOSButton.tsx --prove tests/unit/riparazione-r01-sos-avviso.test.tsx --json"
+      },
+      "rimessa_rotta_nuova": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2bc80f4858e1776ebca229f38de770f03ffb5148^ --file app/api/rider/sos/avvisa/route.ts,components/rider/SOSButton.tsx,components/rider/RiderShell.tsx --prove tests/unit/riparazione-r01-sos-avviso.test.tsx,tests/unit/riparazione-r01-sos-guscio.test.tsx --json",
+        "nota": "SOSButton e RiderShell alla base: rosse sul comportamento. La rotta e' un file nuovo (alla base non esiste, cioe' il difetto com'e' scritto: nessun push immediato), quindi la sua parte e' rossa solo per struttura."
+      },
+      "rimessa_collaudo": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 8781907018ebaa1cc1b1654b236bdf74d78b9c42^ --file app/api/rider/sos/avvisa/route.ts --prove tests/unit/riparazione-r01-sos-avviso.test.tsx --json"
+      }
+    },
+    {
+      "id": "R01-005",
+      "esito": "non_codice",
+      "nota": "E un impostazione di GitHub, non codice: ruleset «Main» (id 16879481). Il controllo «Main» esiste gia (ultimo lavoro di ci.yml, cancello-main). Cosa fa Nicola, passi gia scritti in deploy-dopo-ci.yml:105-123: Target branches → Include default branch; Require status checks → «Main»; Enforcement → Active; poi gh api repos/NicolaeRotaru/mycity/rulesets/16879481 | node scripts/controlla-regola-main.mjs deve dire ✅.",
+      "chiave": "deploy-sre|la regola che dovrebbe fermare il codice rosso esiste su github ma è spenta, non guarda nessun ramo e aspetta un controllo che non esiste"
+    },
+    {
+      "id": "R01-006",
+      "esito": "parziale",
+      "commit": "efe6604723ad686d71da243057a95a015a9116fe",
+      "file_toccati": [
+        "app/admin/sos/page.tsx",
+        "app/admin/sos/lettura-degli-sos.ts",
+        "components/rider/RiderShell.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-sos-consegna.test.tsx",
+        "tests/unit/riparazione-r01-sos-guscio.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-sos-consegna.test.tsx tests/unit/riparazione-r01-sos-guscio.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "insieme_a": [
+        "R01-004"
+      ],
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base efe6604723ad686d71da243057a95a015a9116fe^ --file app/admin/sos/page.tsx --prove tests/unit/riparazione-r01-sos-consegna.test.tsx --json",
+        "nota": "Con anche lettura-degli-sos.ts in --file esce 3: quel file da solo alla base toglie la funzione nuova consegnaDellSOS (rossa per struttura). La pagina alla base e' rossa sul comportamento. La parte RiderShell (orderId passato al pulsante) sta nel commit di R01-004, provata da riparazione-r01-sos-guscio."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La scheda dell'SOS attivo mostra «Consegna #xxxxxxxx» con link a /admin/orders/<id> (o «Fuori da una consegna»), e lo storico mostra la consegna. Il guscio del fattorino ora passa l'orderId (commit di R01-004).",
+      "chiave": "frontend-ux|la consolle sos non mostra da quale consegna parte l'allarme: l'order_id ora scritto non si vede da nessuna parte",
+      "verificato_da": "qa (subagente): /admin/orders/[id] esiste e accetta uuid; null/vuoto/spazi gestiti; encodeURIComponent + escape React; link negli attivi e nello storico; la policy di inserimento di rider_sos_events (037) accetta order_id. Rischio order_id non valido chiuso nel seguito di R01-004.",
+      "cosa_resta": "Il guscio ricava l'ordine solo dall'indirizzo /rider/orders/<id>: se il fattorino preme l'SOS da /rider (o da Guadagni, Turni, Profilo) mentre ha una consegna in corso, l'SOS parte senza order_id e la consolle dice «Fuori da una consegna» anche se una consegna c'e'. Serve ricavare la consegna in corso dal database (ordine assegnato a lui e non chiuso), non dall'indirizzo."
+    },
+    {
+      "id": "R01-007",
+      "chiave": "microcopy|il sos del fattorino dice «stiamo chiamando il 112», ma l'app apre solo il tastierino",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "components/rider/SOSButton.tsx",
+          "modifica": "nel dialogo di conferma (riga ~205) sostituire `<span>Verrà avviata la chiamata al <strong>112 (numero unico emergenze)</strong></span>` con `<span>Si aprirà il tastierino con il <strong>112 (numero unico emergenze)</strong> già composto: la chiamata parte quando premi CHIAMA</span>`; e nel commento sopra `window.location.href = 'tel:112'` (righe ~113-114) sostituire le due righe «Venti righe piu' in basso il dialogo di conferma lo diceva gia' giusto: «Verra' avviata la chiamata al 112». Il testo esatto era li' dentro, e questi due non l'avevano preso.» con «Anche il dialogo di conferma diceva «Verra' avviata la chiamata al 112»: va detto che si apre il tastierino e che la chiamata parte premendo CHIAMA.»"
+        },
+        {
+          "file": "tests/unit/il-testo-dice-quello-che-succede-davvero.test.ts",
+          "modifica": "righe 65-68: sostituire l'it «il dialogo di conferma resta al futuro, com'era giusto» (che pretende `expect(sos).toContain('Verrà avviata la chiamata al')`, cioe' il difetto) con: `it('il dialogo di conferma dice che si apre il tastierino, non che parte la chiamata', () => { expect(sos).not.toContain('Verrà avviata la chiamata al'); expect(sos).toContain('Si aprirà il tastierino con il'); expect(sos).toContain('la chiamata parte quando premi CHIAMA'); });`. Le due modifiche vanno insieme: da sola la prima fa diventare rossa questa prova."
+        }
+      ],
+      "nota": "Decisione della regista (B): la frase e la prova esistente cambiano insieme nell'onda 2, dove la prova avra' un padrone. Su questo ramo il dialogo e' tornato alla frase della base (commit 5d829f31) e la mia prova riparazione-r01-sos-testo-112 e' tolta. I due toast erano gia' corretti prima della campagna. Una versione gia' provata della modifica c'e' nella storia del ramo (b43aa474 + 80db80ae), verificata dal qa con un grep di tutto il flusso SOS.",
+      "commit": [
+        "b43aa4742969b23f33014e183229733346e79472",
+        "80db80ae83ea5edab3aadeb4147d2a99c86bb686",
+        "dda495dd3959d417ca76e106d09b7796a8707a98",
+        "5d829f316e3ca25263d8b626a1e56a1b9abb840c"
+      ]
+    },
+    {
+      "id": "R01-008",
+      "esito": "non_fatto",
+      "chiave": "qa-flussi|le tre prove automatiche dell'acquisto vero sono vuote: passano in tre millesimi senza aprire niente",
+      "nota": "Correzione del collaudo K01: alla base le tre prove e2e dell'acquisto vero (tests/e2e/12-la-cassa-dal-carrello-al-pagamento.spec.ts) sono ancora gusci senza corpo. Oggi si saltano sempre col motivo scritto invece di passare a vuoto, ma nessun ordine nasce davvero in CI. Non l'ho fatto: il file spec non e' nel mio territorio e serve un ambiente di prova.",
+      "cosa_resta": "Scrivere il corpo vero delle tre prove (cassa → ordine con contrassegno, pagamento con carta in modalita' prova, ordine visto dal negozio) nel file spec, non mio. In ci.yml serve un ambiente con E2E_DATI_DI_PROVA: database di prova con negozio approvato, prodotto e cliente, e chiavi Stripe di prova. Poi va aggiornata tests/unit/le-prove-della-cassa-non-passano-senza-aver-guardato.test.ts."
+    },
+    {
+      "id": "R01-009",
+      "esito": "riparato",
+      "commit": "e1f9ea9929319df487e5b6f984375ac4d78b7b07",
+      "file_toccati": [
+        "app/admin/sos/page.tsx",
+        "app/admin/sos/lettura-degli-sos.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-sos-consolle.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-sos-consolle.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e1f9ea9929319df487e5b6f984375ac4d78b7b07^ --file app/admin/sos/page.tsx --prove tests/unit/riparazione-r01-sos-consolle.test.tsx --json",
+        "nota": "lettura-degli-sos.ts aggiunge solo la funzione nuova unisciGliAperti (da sola alla base sarebbe rossa per struttura)."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La consolle legge gli ultimi 50 per lo storico e a parte tutti gli SOS aperti (resolved_at null, tetto 500), uniti senza doppioni: un SOS aperto vecchio non esce piu' dagli attivi e il «tutto tranquillo» non compare con un'emergenza aperta.",
+      "chiave": "api-backend|la consolle degli sos può dire «tutto tranquillo» con un'emergenza ancora aperta",
+      "verificato_da": "qa (subagente): unisciGliAperti toglie i doppioni e ordina; la query degli aperti coincide con quella di lib/queries/cruscotto-oggi.ts. Limite: oltre 500 SOS aperti insieme i piu' vecchi restano fuori."
+    },
+    {
+      "id": "R01-010",
+      "esito": "riparato",
+      "commit": "cdcf31591e550a43cbd9f0da896481f0ed294677",
+      "file_toccati": [
+        "lib/api/middleware.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-battito-rifiutato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-battito-rifiutato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cdcf31591e550a43cbd9f0da896481f0ed294677^ --file lib/api/middleware.ts --prove tests/unit/riparazione-r01-battito-rifiutato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "recordCronHeartbeat legge l'{error} dell'upsert (supabase-js non lancia) e scrive logger.warn con il nome del lavoro e il messaggio: «battito non registrato … ma il lavoro e' partito», cosi' l'allarme successivo ha la diagnosi giusta.",
+      "chiave": "api-backend|se il battito di un lavoro non si scrive, nessuna riga lo dice, e l'allarme che segue ha la diagnosi sbagliata",
+      "verificato_da": "qa (subagente): {error} letto e scritto; e' l'unico upsert dei battiti; il lavoro non fallisce mai per il battito."
+    },
+    {
+      "id": "R01-011",
+      "esito": "parziale",
+      "commit": "1918a8f463d51788ff8290b16153e61d563929d6",
+      "file_toccati": [
+        ".github/workflows/ci.yml"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-prove-col-database-in-ci.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-prove-col-database-in-ci.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 1918a8f463d51788ff8290b16153e61d563929d6^ --file .github/workflows/ci.yml --prove tests/unit/riparazione-r01-prove-col-database-in-ci.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nel lavoro «Unit tests» della CI: installa e accende PostgreSQL (servizio su /var/run/postgresql, ruolo superutente per l'utente del runner, PGHOST/PGUSER nell'ambiente), poi un passo che si ferma rosso se initdb manca o psql non risponde, prima di npm run test; tetto 15 minuti; PROVE_POSTGRES_OBBLIGATORIE=1 nell'ambiente delle prove. Provato in locale con il servizio acceso: un-invito-scritto-a-mano-non-paga non si salta piu' e passa. Non ho potuto far girare la CI vera.",
+      "cosa_resta": "Fuori dalla CI i file di prova saltano ancora in silenzio, e in CI si salterebbero se la guardia venisse tolta: la cura dentro i file sta in file non miei.",
+      "serve_file_altrui": [
+        {
+          "file": "tests/unit/postgres-usa-e-getta.ts",
+          "modifica": "dopo `export const BIN_POSTGRES = cartellaDeiProgrammi();` aggiungere: `if (!BIN_POSTGRES && process.env.PROVE_POSTGRES_OBBLIGATORIE === '1') throw new Error('PROVE_POSTGRES_OBBLIGATORIE=1 ma PostgreSQL non c e: le prove col database vero non possono saltarsi');`"
+        },
+        {
+          "file": "tests/unit/un-invito-scritto-a-mano-non-paga.test.ts",
+          "modifica": "dopo la costante `postgresRaggiungibile` aggiungere: `if (!postgresRaggiungibile && process.env.PROVE_POSTGRES_OBBLIGATORIE === '1') throw new Error('PROVE_POSTGRES_OBBLIGATORIE=1 ma PostgreSQL non risponde su PGHOST');`"
+        }
+      ],
+      "chiave": "architettura|se sulla macchina delle prove manca postgres, sette file di prova si saltano in silenzio e la verifica esce verde lo stesso",
+      "verificato_da": "qa (subagente): YAML valido, 118/118 prove che leggono ci.yml, 19 file col database con l'ambiente della CI 171/171 senza salti; PGHOST/PGUSER non rompono niente. Conferma il parziale: PROVE_POSTGRES_OBBLIGATORIE non lo legge ancora nessun file (serve_file_altrui).",
+      "commit_seguito": [
+        "90da623b9876c0bad7e0fdb1063bbf6a08c4fb1f"
+      ],
+      "nota_skip": "Le prove col database vero non usano piu' skipIf: senza PostgreSQL falliscono con un messaggio chiaro (richiesta della regista, sorveglianza 16:13)."
+    },
+    {
+      "id": "R01-012",
+      "esito": "riparato",
+      "commit": "3f33e7978c86084ceb03f99fe0eeea1603ac67d8",
+      "file_toccati": [
+        ".github/workflows/backup-db.yml"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-ripristino-con-le-regole.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-ripristino-con-le-regole.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 3f33e7978c86084ceb03f99fe0eeea1603ac67d8^ --file .github/workflows/backup-db.yml --prove tests/unit/riparazione-r01-ripristino-con-le-regole.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nella prova mensile gli errori di pg_restore non si buttano: vanno in un file, si contano, avviso ::warning:: e i primi 20 nel riepilogo (pg_restore resta non bloccante per il rumore dei ruoli/schemi del fornitore). Dopo il conto delle righe, la prova fallisce se una tabella di public torna con la RLS spenta o se pg_policies e' vuota. Verificato che sullo schema ricostruito dalle migrazioni le 76 tabelle di public hanno tutte la RLS (132 regole), quindi il controllo non da' falsi rossi. Dopo il controllo qa (che l'aveva giudicata parziale): il ripristino monta prima l'impalcatura di Supabase (tests/sql/harness/00_shim_supabase.sql: ruoli anon/authenticated, auth.uid), poi gli utenti senza trigger, poi il resto, poi i trigger degli utenti; la soglia delle regole passa da «piu' di zero» ad «almeno 100»; l'elenco degli errori usa sed e non head (niente SIGPIPE, uscita 141). Misurato su un Postgres vero con lo schema delle 179 migrazioni: col ripristino vecchio tornavano 36 regole su 132 (e la prova diceva «si riapre»), col nuovo 132 su 132, i 2 trigger di auth e gli utenti, con 4 errori innocui (doppioni dell'impalcatura).",
+      "chiave": "deploy-sre|la prova mensile di ripristino ingoia gli errori e conta solo le righe: direbbe «si riapre» anche se tornano tabelle senza regole di accesso",
+      "commit_seguito": [
+        "111a5ac82ac304acd9515731da88bad84d9ad9ee"
+      ],
+      "verificato_da": "qa (subagente): RLS resta accesa dopo pg_restore --no-acl (provato su PG16); ha trovato che su Postgres nudo le regole con auth.uid()/TO authenticated cadevano (~16 su ~154 sopravvivevano) e il SIGPIPE oltre ~450 errori: tutti e due chiusi nel commit 111a5ac8, rimisurati su un database vero.",
+      "rimessa_seguito": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 111a5ac82ac304acd9515731da88bad84d9ad9ee^ --file .github/workflows/backup-db.yml --prove tests/unit/riparazione-r01-ripristino-con-le-regole.test.ts --json"
+      }
+    },
+    {
+      "id": "R01-013",
+      "esito": "non_codice",
+      "nota": "Il passo della copia foto (backup-db.yml, copia-foto) esce rosso e lo dice quando manca SUPABASE_SERVICE_ROLE_KEY. Cosa fa Nicola: GitHub → Settings → Secrets and variables → Actions → New secret SUPABASE_SERVICE_ROLE_KEY (la chiave service_role di Supabase), piu le variabili STORAGE_SYNC_SOURCE/DEST se non ci sono.",
+      "chiave": "deploy-sre|le foto dei negozi non sono ancora in nessuna copia di sicurezza: manca una chiave nei segreti"
+    },
+    {
+      "id": "R01-014",
+      "esito": "riparato",
+      "commit": "2b7c8b7d5764fe3aa37fd62cfd07db101be1c1c2",
+      "file_toccati": [
+        ".github/workflows/deploy-dopo-ci.yml"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-migrazioni-a-meta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-migrazioni-a-meta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2b7c8b7d5764fe3aa37fd62cfd07db101be1c1c2^ --file .github/workflows/deploy-dopo-ci.yml --prove tests/unit/riparazione-r01-migrazioni-a-meta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel passo delle migrazioni del rilascio, se lo script esce con errore dopo aver iniziato ad applicare (non per il tetto, uscita 4), il riepilogo dice che il database e' avanti: elenca le migrazioni applicate prima del guasto e quella rotta, e scrive fermo=migrazioni-a-meta. Prova: il passo vero gira contro un Postgres usa e getta con la seconda di tre migrazioni rotta.",
+      "chiave": "deploy-sre|il database avanti si scopre solo se cade la prova di fumo, non se cadono le migrazioni",
+      "verificato_da": "qa (subagente): logica corretta sotto bash -e/pipefail, escape giusto, YAML valido. Caso limite: se cade la domanda «gia' applicata?» per la N+1, il riepilogo nomina come rotta la N (applicata davvero) e la toglie dall'elenco.",
+      "cosa_resta_minore": "il caso limite della domanda al registro che cade fra due migrazioni (vedi verificato_da).",
+      "commit_seguito": [
+        "81c9cee96d6e7196cd7c94e90b0bc4189fc54cc3"
+      ],
+      "nota_skip": "Le prove col database vero non usano piu' skipIf: senza PostgreSQL falliscono con un messaggio chiaro (richiesta della regista, sorveglianza 16:13)."
+    },
+    {
+      "id": "R01-015",
+      "esito": "parziale",
+      "commit": "82607ab5ebf3610578c9ad5b0e187a6d5b9a1c9c",
+      "file_toccati": [
+        ".github/workflows/deploy-dopo-ci.yml"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-ritorno-con-database-avanti.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-ritorno-con-database-avanti.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 82607ab5ebf3610578c9ad5b0e187a6d5b9a1c9c^ --file .github/workflows/deploy-dopo-ci.yml --prove tests/unit/riparazione-r01-ritorno-con-database-avanti.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nel passo «Torna indietro» il riepilogo non chiede piu' a una persona di cercare DROP/RENAME: guarda da se' le migrazioni applicate in quel giro e nomina file e righe con DROP COLUMN, DROP TABLE o RENAME (es. la 105), dicendo che il sito tornato indietro puo' essere rotto e che si va avanti con una correzione; se non ce ne sono, lo dice.",
+      "cosa_resta": "Il codice resta tornato indietro su un database avanti. La cura vera e' una scelta: migrazioni «espandi e poi contrai» (mai togliere nello stesso rilascio che smette di usare), oppure nessun ritorno automatico quando una migrazione del giro toglie qualcosa.",
+      "domanda": "Per le migrazioni che tolgono qualcosa: regola «espandi/contrai» (si toglie solo un rilascio dopo), o il rilascio non torna indietro da solo quando il giro contiene DROP/RENAME?",
+      "chiave": "deploy-sre|se il sito nuovo non risponde si torna indietro col codice ma il database resta avanti",
+      "verificato_da": "qa (subagente): sicuro sotto set -euo pipefail; sulle 179 migrazioni segnala solo 105, 134 e 161, tutte vere. Non coperti: commenti in coda o /* */ (falsi positivi possibili), ALTER TABLE … DROP col senza COLUMN, DROP VIEW/FUNCTION/TYPE."
+    },
+    {
+      "id": "R01-016",
+      "esito": "riparato",
+      "commit": "f3d113d88870cd157e91a35826f7a371906646c5",
+      "file_toccati": [
+        "app/api/cron/expire-checkouts/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-carrelli-scaduti.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-carrelli-scaduti.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f3d113d88870cd157e91a35826f7a371906646c5^ --file app/api/cron/expire-checkouts/route.ts --prove tests/unit/riparazione-r01-carrelli-scaduti.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il giro legge i candidati a pagine di 200 ordinate per scadenza (dalla piu' recente indietro, cursore su expires_at): se una pagina e' piena solo di carrelli pagati a meta' passa alla successiva, fino a 5 pagine. Il controllo ordini si fa pagina per pagina. Limite noto: carrelli con expires_at identico al bordo di pagina li prende il giro dopo. Dopo il controllo qa: la memoria degli avvisi (operational_alert_log) si legge a blocchi di 100 chiavi, perche' con le pagine i carrelli pagati a meta' possono arrivare a 1000.",
+      "chiave": "deploy-sre|duecento carrelli pagati a metà bastano a fermare per sempre la pulizia dei carrelli scaduti",
+      "commit_seguito": [
+        "1443a0fbf09dfcf1a7932f1bf8c9c183aa00c4bf"
+      ],
+      "verificato_da": "qa (subagente): cursore corretto, nessun ciclo infinito, la lista dei candidati e' usata bene a valle. Il rischio dell'indirizzo troppo lungo (fino a 1000 chiavi in un solo .in) e' chiuso nel commit 1443a0fb. Limiti dichiarati: carrelli a pari expires_at sul bordo; oltre 1000 carrelli pagati a meta' la pulizia si ferma di nuovo."
+    },
+    {
+      "id": "R01-017",
+      "esito": "riparato",
+      "commit": "cf6a3851d9ef4dc955329d31658eb57f1e0eda44",
+      "file_toccati": [
+        "app/robots.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-robots-anteprime.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-robots-anteprime.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cf6a3851d9ef4dc955329d31658eb57f1e0eda44^ --file app/robots.ts --prove tests/unit/riparazione-r01-robots-anteprime.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Con VERCEL_ENV (o NEXT_PUBLIC_VERCEL_ENV) uguale a preview o development, robots.txt risponde disallow: '/' per tutti; in produzione resta com'era.",
+      "chiave": "deploy-sre|sulle anteprime il file per i motori di ricerca apre tutto il sito invece di chiuderlo",
+      "verificato_da": "qa (subagente): app/robots.ts e' statico, costruito al build; Vercel imposta VERCEL_ENV nel build di ogni anteprima, quindi l'anteprima riceve disallow '/'."
+    },
+    {
+      "id": "R01-018",
+      "esito": "non_codice",
+      "nota": "Il codice distingue gia il guasto dal «non trovato»: app/u/[handle]/page.tsx:35-55 scrive l errore e lancia (pagina d errore con Riprova), app/api/profili-pubblici/route.ts risponde 500 con messaggio. La cura e la stessa di R01-003: SUPABASE_SERVICE_ROLE_KEY su Vercel Production.",
+      "chiave": "deploy-sre|senza la chiave di servizio del database in produzione, il profilo pubblico dice «non trovato» e le liste non mostrano chi le ha create"
+    },
+    {
+      "id": "R01-019",
+      "esito": "parziale",
+      "commit": "a09271244dccfc22319d44d5a095f9890de69202",
+      "file_toccati": [
+        "migrations/250_battiti_iniziali_dei_lavori_nuovi.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-battiti-iniziali.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-battiti-iniziali.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a09271244dccfc22319d44d5a095f9890de69202^ --file migrations/250_battiti_iniziali_dei_lavori_nuovi.sql --prove tests/unit/riparazione-r01-battiti-iniziali.test.ts --json",
+        "nota": "La cura e' un file nuovo (migrazione 250), quindi la macchina non decide. Nel log, senza il file le prove cadono su asserzioni di comportamento: «expected ['external-price-alerts', …(2)] to deeply equal []» (lavori senza riga iniziale) e lavoriFermi segnala veloce-non-confermata come mai partito."
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nuova migrazione 250 (non applicata: lo decide Nicola, la applica il rilascio controllato) che semina in cron_heartbeats la riga iniziale di external-price-alerts, riquadra-casse e veloce-non-confermata, come la 095 per i lavori di allora, senza sovrascrivere un battito vero (ON CONFLICT DO NOTHING). lib/cron-health.ts non toccato: con le righe seminate il ramo «mai partito» non scatta piu' dopo il rilascio. Prova anche su un Postgres usa e getta.",
+      "chiave": "deploy-sre|dopo il deploy il freno della veloce può risultare «mai partito» per un attimo, con un falso allarme agli amministratori",
+      "verificato_da": "qa (subagente): ricostruzione completa con apply.sh su PG16 «applicate 179 · fallite 0», cron_heartbeats con 11 righe; nessuna prova conta le migrazioni. Un lavoro nuovo senza riga di seme fa diventare rossa riparazione-r01-battiti-iniziali.",
+      "cosa_resta": "La radice sta in lib/cron-health.ts (lavoriFermi): la finestra di prima accensione si misura dal battito piu' vecchio, non dalla nascita del lavoro, e nei dati non c'e' una data di nascita da usare. Quindi ogni lavoro nuovo ha bisogno della sua riga di seme in una migrazione. Questo lo pretende riparazione-r01-battiti-iniziali (un lavoro con una soglia senza seme fa diventare rossa la prova). La cura e' tutta in una migrazione nuova (250): la prova rimessa esce 3 perche' la macchina non decide su un file nuovo, e decide il collaudo.",
+      "commit_seguito": [
+        "64c8a5c4ef46072009e72aaddeadd5cad05afa9b"
+      ],
+      "nota_skip": "Le prove col database vero non usano piu' skipIf: senza PostgreSQL falliscono con un messaggio chiaro (richiesta della regista, sorveglianza 16:13)."
+    },
+    {
+      "id": "R01-020",
+      "esito": "scelta_di_nicola",
+      "domanda": "La 191 e' gia' applicata in produzione? Se si', il difetto non si presenta piu' e basta segnarlo chiuso. Se no, autorizzi a correggere la migrazione esistente 191, unica eccezione alla regola, aggiungendo `SELECT set_config('mycity.allow_order_write', '1', true);` prima dell'UPDATE di riempimento (r.45)? Una migrazione nuova nella mia fascia arriverebbe dopo la 191 e non la sblocca.",
+      "nota": "Verificato sulla base: l'UPDATE di riempimento della 191 (r.45-48) gira come l'utente postgres del pooler. Il trigger di 127/179 considera privilegiati solo service_role o la variabile mycity.allow_order_write (179 r.60-65), quindi su un ordine chiuso con posizione e rider_id NULL alza «la posizione la scrive solo il fattorino assegnato» e la migrazione si ferma a meta'. Non ho toccato ne' la 191 ne' tests/sql/harness/migrazione-su-database-pieno.sh (non sono miei).",
+      "chiave": "deploy-sre|il pulsante delle migrazioni si ferma a metà se nel database c'è anche un solo ordine chiuso con la posizione del fattorino rimasta e senza fattorino"
+    },
+    {
+      "id": "R01-021",
+      "esito": "non_codice",
+      "nota": "Il rilascio controllato applica gia la 191 prima di pubblicare (deploy-dopo-ci.yml, passo migrazioni), ma oggi non gira (R01-002). Cosa fa Nicola: applicare la 191 in produzione insieme al rilascio che la usa: o accendendo il rilascio controllato (R01-002), o a mano con il lavoro «migrazioni-a-mano» prima di unire. Vedi anche R01-020.",
+      "chiave": "deploy-sre|la nuova regola del database sulla posizione va applicata insieme al rilascio: senza, un fattorino con la pagina vecchia aperta può ancora scrivere la posizione su un ordine annullato"
+    },
+    {
+      "id": "R01-022",
+      "esito": "riparato",
+      "commit": "ec36250925b93dc2b6e769ab7543573d07197bba",
+      "file_toccati": [
+        "scripts/applica-migrazioni-mancanti.sh",
+        ".github/workflows/deploy-dopo-ci.yml"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-avviso-nel-riepilogo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-avviso-nel-riepilogo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ec36250925b93dc2b6e769ab7543573d07197bba^ --file scripts/applica-migrazioni-mancanti.sh,.github/workflows/deploy-dopo-ci.yml --prove tests/unit/riparazione-r01-avviso-nel-riepilogo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Gli avvisi sulle migrazioni escono sia su stderr sia su stdout come ::warning:: (annotazione GitHub); il passo delle migrazioni del rilascio copia le righe ::warning:: del diario nel riepilogo, prima di uscire anche quando lo script fallisce.",
+      "chiave": "deploy-sre|l'avviso sul commit esce da una porta che il riepilogo del rilascio non legge",
+      "verificato_da": "qa (subagente): ::warning:: su stdout passa per tee nel DIARIO e il blocco nuovo lo copia nel riepilogo prima dell'uscita.",
+      "commit_seguito": [
+        "a0eaa3e3a2cf2c1e57bcace8c6e09747d5ea4b99"
+      ],
+      "nota_skip": "Le prove col database vero non usano piu' skipIf: senza PostgreSQL falliscono con un messaggio chiaro (richiesta della regista, sorveglianza 16:13)."
+    },
+    {
+      "id": "R01-023",
+      "esito": "riparato",
+      "commit": "7af86e7832b3d64b73a7e8924de85ead600cb9de",
+      "file_toccati": [
+        "scripts/applica-migrazioni-mancanti.sh"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-commit-nelle-migrazioni.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-commit-nelle-migrazioni.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7af86e7832b3d64b73a7e8924de85ead600cb9de^ --file scripts/applica-migrazioni-mancanti.sh --prove tests/unit/riparazione-r01-commit-nelle-migrazioni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il commento non promette piu' «danno nullo» per tutti: nomina la 115 e la 117. L'avviso guarda cosa c'e' dopo il primo COMMIT: se e' solo NOTIFY/commenti avviso leggero, se c'e' altro lavoro avviso forte (⚠⚠) con la prima istruzione. Sulla cartella vera l'avviso forte tocca solo 115 e 117 (31 file con COMMIT).",
+      "chiave": "deploy-sre|lo script delle migrazioni promette che il danno e' nullo, e in due file su ventitre' non lo e'",
+      "verificato_da": "qa (subagente): awk lanciato sulle 31 migrazioni con COMMIT: avviso forte solo per 115 e 117, leggero per le altre 29. Minori: cita «BEGIN;» come lavoro; head -c 60 puo' tagliare un carattere multibyte.",
+      "commit_seguito": [
+        "189e62074478953db70712918576a3d7beb1f700"
+      ],
+      "nota_skip": "Le prove col database vero non usano piu' skipIf: senza PostgreSQL falliscono con un messaggio chiaro (richiesta della regista, sorveglianza 16:13)."
+    },
+    {
+      "id": "R01-024",
+      "esito": "riparato",
+      "commit": "909c4b0f3062eb9d517c42cea0a7a2b979c829d8",
+      "file_toccati": [
+        "scripts/applica-migrazioni-mancanti.sh",
+        "scripts/check-migration-drift.mjs"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-nomi-migrazioni.test.ts",
+        "tests/unit/riparazione-r01-pg.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-nomi-migrazioni.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 909c4b0f3062eb9d517c42cea0a7a2b979c829d8^ --file scripts/applica-migrazioni-mancanti.sh,scripts/check-migration-drift.mjs --prove tests/unit/riparazione-r01-nomi-migrazioni.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nello script del rilascio (le due interrogazioni del registro) e in esitoDelConfronto il nome conta come «gia' applicata» solo se il numero di quella riga NON e' il prefisso di un altro file del deposito (rinumerazione vera, non omonimo). conta-migrazioni-mancanti.sh usa lo script e si sistema da solo. Nuova prova: nessun nome doppio in migrations/, e lo script, su un Postgres usa e getta, applica davvero 250_minori dopo 127_minori. Lo script accetta CARTELLA_MIGRAZIONI solo per le prove. Rischio da guardare: se in produzione una riga storica ha il numero di un altro file con lo stesso nome, il controllo della deriva ora la segnala come mancante (rumore, non un buco). tests/unit/migrations-integrity.test.ts non toccato (non importa file miei).",
+      "chiave": "deploy-sre|una migrazione nuova con lo stesso nome di una vecchia non arriva mai in produzione, e tutti e tre i controlli dicono verde",
+      "verificato_da": "qa (subagente): su un database ricostruito per intero, un omonimo (251_…) risulta mancante, una rinumerazione con versione a timestamp resta applicata, la deriva dice «tutte le 179». Una rinumerazione il cui numero vecchio e' ora di un altro file sarebbe segnalata come mancante: nel deposito non ce n'e'.",
+      "commit_seguito": [
+        "b91e13dfe8dfbe4612c29a97a21497cbc5e866c3"
+      ],
+      "nota_skip": "Le prove col database vero non usano piu' skipIf: senza PostgreSQL falliscono con un messaggio chiaro (richiesta della regista, sorveglianza 16:13)."
+    },
+    {
+      "id": "R01-025",
+      "esito": "riparato",
+      "commit": "eb3797f67afd83100d30f3f1342f1f7dd0547bba",
+      "file_toccati": [
+        "scripts/backup-db.sh"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r01-backup-senza-passphrase.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r01-backup-senza-passphrase.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base eb3797f67afd83100d30f3f1342f1f7dd0547bba^ --file scripts/backup-db.sh --prove tests/unit/riparazione-r01-backup-senza-passphrase.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Senza BACKUP_PASSPHRASE il dump degli utenti copia solo auth.users e auth.identities, non auth.mfa_factors, e lo scrive nel log e nel riepilogo del lavoro; con la passphrase copia anche mfa_factors e cifra come prima. Scelta approvata dalla regista. Resta una scelta di Nicola l'alternativa piu' severa: «senza passphrase niente backup».",
+      "chiave": "deploy-sre|il backup adesso porta con se' i semi della doppia verifica, e senza passphrase resta in chiaro",
+      "verificato_da": "qa (subagente): senza passphrase TABELLE_UTENTI esclude auth.mfa_factors; la prova mensile decifra sempre, quindi ha la tabella. Trovata una lacuna nella documentazione (file non mio).",
+      "serve_file_altrui": [
+        {
+          "file": "docs/backup-restore.md",
+          "modifica": "alle righe ~375-390: dire che il file degli utenti contiene auth.mfa_factors SOLO se la copia e' cifrata (BACKUP_PASSPHRASE impostata); su una copia in chiaro la tabella non c'e', e «zero fattori» li' e' l'atteso, non un ripristino a meta'."
+        }
+      ]
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "un fattorino puo' legare il suo SOS a un ordine che non e' suo",
+      "dimensione": "api-backend",
+      "severita": "minore",
+      "file": "migrations/037_rider_sos_admin_dashboard.sql:27",
+      "descrizione": "La regola di inserimento di rider_sos_events controlla solo auth.uid() = rider_id: order_id puo' essere un ordine qualunque esistente, e la consolle mostrerebbe una consegna fuorviante. Cura: una migrazione che nella policy (o in un trigger) pretenda order_id NULL oppure un ordine con rider_id = auth.uid()."
+    }
+  ],
+  "domande_per_nicola": [
+    "R01-025: oggi senza BACKUP_PASSPHRASE il backup esce in chiaro ma senza auth.mfa_factors. Preferisci invece che senza passphrase il backup non parta proprio (piu' sicuro, ma niente copia finche' la passphrase non c'e')?",
+    "R01-015: per le migrazioni che tolgono qualcosa (DROP/RENAME), preferisci la regola «espandi e poi contrai» (si toglie solo un rilascio dopo) o che il rilascio non torni indietro da solo quando il giro contiene DROP/RENAME?",
+    "R01-020: la migrazione 191 e' gia' applicata in produzione? Se no, autorizzi a correggerla (set_config('mycity.allow_order_write','1',true) prima dell'UPDATE di riempimento), unica eccezione alla regola «mai modificare una migrazione esistente»?",
+    "R01-002: per accendere il rilascio controllato servono i segreti VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID e SUPABASE_DB_URL su GitHub. Solo dopo un rilascio di prova riuscito si mette main:false in vercel.json (ultima esecuzione letta: 42126074803, chiavi assenti)."
+  ],
+  "conto": {
+    "agenti": 6,
+    "nota": "6 subagenti qa (tre gravi da soli, due gruppi da sei minori, R01-011 da solo)"
+  }
+}

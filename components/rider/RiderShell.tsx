@@ -50,6 +50,9 @@ export default function RiderShell({
   // sticky proprio. Nascondiamo la tab bar (come Glovo durante la consegna) per
   // non avere due barre in fondo, e togliamo il padding-bottom dedicato.
   const isActiveDelivery = /^\/rider\/orders\/[^/]+/.test(pathname);
+  // R01-004/006 — L'SOS premuto durante una consegna porta con se' l'ordine: la consolle degli
+  // admin sa da quale consegna parte l'allarme. Prima il pulsante nasceva sempre senza orderId.
+  const ordineInCorso = /^\/rider\/orders\/([^/?#]+)/.exec(pathname)?.[1];
 
   return (
     <div className="min-h-screen w-full bg-cream-100">
@@ -64,7 +67,7 @@ export default function RiderShell({
         </div>
 
         {/* SOS sempre raggiungibile: flottante, sopra la tab bar (P0-7). */}
-        {showSOS && <SOSButton />}
+        {showSOS && <SOSButton orderId={ordineInCorso} />}
 
         {/* BOTTOM TAB BAR fissa — ancorata alla colonna phone-width. */}
         {!isActiveDelivery && (

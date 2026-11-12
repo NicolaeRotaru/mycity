@@ -23,7 +23,7 @@ import { captureError } from '@/lib/analytics/sentry';
  *   2. Conferma → subito il tastierino col 112 (tel:), sincrono, senza attese
  *   3. Poi, con un tempo massimo: insert in rider_sos_events con posizione GPS
  *      → il trigger del database crea una notifica nel pannello per gli admin
- *      (nessun push/SMS immediato: il push parte dal lavoro periodico send-push)
+ *      e /api/rider/sos/avvisa manda subito un push agli admin (R01-004)
  */
 
 type Props = {
@@ -72,14 +72,26 @@ async function inviaAvvisoSOS(orderId: string | undefined): Promise<boolean> {
   const [{ data: { session } }, posizione] = await Promise.all([supabase.auth.getSession(), leggiPosizione()]);
   const user = session?.user;
   if (!user) return false;
-  const { error } = await supabase.from('rider_sos_events').insert({
+  const riga = {
     rider_id: user.id,
     order_id: orderId ?? null,
     lat: posizione?.lat ?? null,
     lng: posizione?.lng ?? null,
-    triggered_at: new Date().toISOString(),
-  });
+    // R01-004 — `triggered_at` lo scrive il database (DEFAULT now()), non l'orologio del telefono:
+    // con un telefono indietro di dieci minuti la rotta dell'avviso immediato non ritrovava l'SOS.
+  };
+  let { error } = await supabase.from('rider_sos_events').insert(riga);
+  // R01-004 — L'ordine e' un'informazione in piu', mai una condizione: se la riga con l'ordine viene
+  // rifiutata (id non valido, ordine cancellato), l'SOS si scrive comunque, senza ordine.
+  if (error && riga.order_id) {
+    captureError(error, { context: 'SOSButton.ordine-rifiutato' });
+    ({ error } = await supabase.from('rider_sos_events').insert({ ...riga, order_id: null }));
+  }
   if (error) throw error;
+  // R01-004 — Il trigger crea solo la notifica nel pannello, e il push periodico parte ogni cinque
+  // minuti. Questa chiamata fa suonare SUBITO il telefono degli amministratori. Non si aspetta:
+  // l'evento e' gia' scritto, e se la chiamata cade restano il pannello e il giro periodico.
+  void fetch('/api/rider/sos/avvisa', { method: 'POST' }).catch((e) => captureError(e, { context: 'SOSButton.avvisa' }));
   return true;
 }
 
@@ -204,7 +216,7 @@ export default function SOSButton({ orderId }: Props) {
                 </li>
                 <li className="flex items-start gap-2">
                   <AlertTriangle size={16} className="text-rose-600 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
-                  <span>Gli amministratori MyCity vedranno l&apos;avviso nel loro pannello, se il telefono è connesso. Non aspettare loro: per l&apos;aiuto subito c&apos;è il 112</span>
+                  <span>Gli amministratori MyCity ricevono subito un avviso nel pannello e, se hanno le notifiche attive, sul telefono, se il tuo telefono è connesso. Non aspettare loro: per l&apos;aiuto subito c&apos;è il 112</span>
                 </li>
               </ul>
               <p className="text-xs text-ink-500">

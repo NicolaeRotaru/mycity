@@ -546,6 +546,33 @@ jobs:
               echo "**Cosa fare:** il riallineamento si fa a mano, una volta, seguendo \`docs/migrazioni-baseline-produzione.md\` (con la firma di Nicola). Dopo, questo lavoro riparte da solo alla prossima unione su \`main\`."
             } >> "$GITHUB_STEP_SUMMARY"
           fi
+          # R01-022 — Gli avvisi sulle migrazioni (COMMIT dentro il file) nel riepilogo, dove si guarda.
+          if grep -q '^::warning::' "$DIARIO"; then
+            {
+              echo "## ⚠️ Avvisi sulle migrazioni applicate"
+              echo ""
+              grep '^::warning::' "$DIARIO" | sed 's/^::warning::/- /'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # R01-014 (12/11/2026) — IL DATABASE AVANTI SI DICE ANCHE QUANDO CADONO LE MIGRAZIONI.
+          # Il conto delle migrazioni applicate si scriveva solo se lo script finiva bene, e lo
+          # leggeva solo il passo del ritorno indietro (dopo una prova di fumo caduta). Se lo
+          # script si ferma a meta', le migrazioni prima di quella rotta restano applicate e
+          # registrate, e il sito online non le conosce: qui lo si scrive nel riepilogo.
+          if [ "$USCITA" != "0" ] && [ "$USCITA" != "4" ] && grep -q '^▶ applico ' "$DIARIO"; then
+            ROTTA="$(grep '^▶ applico ' "$DIARIO" | tail -n 1 | sed 's/^▶ applico //')"
+            PRIMA="$(grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico //' | sed '$d' | tr '\n' ' ')"
+            echo "fermo=migrazioni-a-meta" >> "$GITHUB_OUTPUT"
+            {
+              echo "## ⛔ Le migrazioni si sono fermate a meta': il database e' avanti rispetto al sito online"
+              echo ""
+              echo "Non ho pubblicato niente, ma il database e' gia' cambiato."
+              echo "- Applicate e registrate prima del guasto: ${PRIMA:-nessuna}"
+              echo "- Quella che si e' rotta: \`$ROTTA\` (se contiene un COMMIT suo puo' essere rimasta a meta': guarda gli avvisi qui sopra)"
+              echo ""
+              echo "**Cosa fare:** il sito online gira sul codice di prima con queste migrazioni gia' dentro. Se una di quelle applicate TOGLIE qualcosa (DROP, RENAME), il sito puo' gia' essere rotto: controllalo subito. Poi correggi la migrazione rotta e unisci la correzione: il rilascio riparte dalla prima che manca."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ "$USCITA" != "0" ]; then exit "$USCITA"; fi
           QUANTE="$(grep -c '^▶ applico ' "$DIARIO" || true)"
           ELENCO="$(grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico //' | tr '\n' ' ' || true)"
@@ -753,7 +780,24 @@ jobs:
               echo "**Attenzione: il database e' avanti di $QUANTE migrazioni rispetto al sito che e' online adesso.**"
               echo "Applicate prima di pubblicare: ${MIGRAZIONI_ELENCO:-non so quali}."
               echo "Il ritorno indietro rimette il CODICE di prima, non lo schema. Se una di quelle migrazioni TOGLIE qualcosa (DROP COLUMN, DROP TABLE, RENAME), il sito online puo' chiedere una colonna che non c'e' piu' — e il sito resta rotto anche se qui sopra e' scritto che si e' tornati indietro."
-              echo "Prima di considerare chiusa la cosa: apri quelle migrazioni e guarda se contengono DROP o RENAME."
+              # R01-015 (12/11/2026) — Prima qui si chiedeva a una persona di aprire i file e cercare
+              # DROP o RENAME. Lo si fa da qui, e si nominano i file e le righe.
+              DISTRUTTIVE=""
+              for m in ${MIGRAZIONI_ELENCO:-}; do
+                [ -f "migrations/$m" ] || continue
+                RIGHE="$(grep -niE 'DROP[[:space:]]+(COLUMN|TABLE)|RENAME[[:space:]]' "migrations/$m" | grep -vE '^[0-9]+:[[:space:]]*--' | head -n 3 | sed 's/^\([0-9]*\):[[:space:]]*/riga \1: /' | tr '\n' ';' || true)"
+                if [ -n "$RIGHE" ]; then
+                  DISTRUTTIVE="${DISTRUTTIVE}"$'\n'"- \`$m\`: ${RIGHE}"
+                fi
+              done
+              if [ -n "$DISTRUTTIVE" ]; then
+                echo ""
+                echo "**⛔ Queste migrazioni TOLGONO o RINOMINANO qualcosa: il sito tornato indietro puo' essere rotto adesso.**${DISTRUTTIVE}"
+                echo ""
+                echo "Controlla subito il sito. Se e' rotto, la strada e' andare AVANTI con una correzione, non tornare piu' indietro."
+              else
+                echo "Ho guardato quelle migrazioni: nessuna contiene DROP COLUMN, DROP TABLE o RENAME, quindi il codice di prima dovrebbe trovare ancora tutto quello che gli serve."
+              fi
             fi
           }
 
