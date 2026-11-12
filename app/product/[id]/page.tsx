@@ -313,7 +313,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     queryKey: queryKeys.products.activeDiscount(id),
     queryFn: async () => {
       const { data, error } = await supabase.rpc('product_active_discount', { p_product: id });
-      if (error) return 0;
+      // 12/11/2026 (R02-011) — Una lettura caduta non è «nessuno sconto»: con `return 0` lo zero
+      // restava in memoria per un minuto (stessa chiave della scheda) e si mostrava il prezzo pieno,
+      // mentre la cassa applica lo sconto. Si lancia: React Query riprova, e non si salva lo zero.
+      if (error) throw error;
       return Number(data) || 0;
     },
     staleTime: 60_000,
