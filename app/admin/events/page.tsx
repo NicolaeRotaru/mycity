@@ -102,7 +102,11 @@ export default function AdminEventsPage() {
         cover_image_url: form.cover_image_url?.trim() || null,
         starts_at: isoDaCampo(form.starts_at),
         ends_at: isoDaCampo(form.ends_at),
-        discount_percent: form.discount_percent ?? null,
+        // 12/11/2026 (R02-002) — Lo sconto di un evento compariva ai clienti come «-20%», ma nessun
+        // calcolo del prezzo lo applica: la cassa faceva pagare il prezzo pieno. Finché in
+        // lib/ordini/prezzi.ts non esiste uno sconto per evento, si salva sempre vuoto (e chi
+        // riapre un evento vecchio lo ripulisce).
+        discount_percent: null,
         cta_label: form.cta_label?.trim() || 'Partecipa',
         cta_url: form.cta_url?.trim() || null,
         status: form.status ?? 'scheduled',
@@ -335,10 +339,10 @@ export default function AdminEventsPage() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-semibold mb-1">Sconto % (opz.)</label>
-                  <input value={editing.discount_percent ?? ''} onChange={(e) => setEditing({ ...editing, discount_percent: e.target.value ? Number(e.target.value) : null })} type="number" min={0} max={80} className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm" />
-                </div>
+                <p className="text-xs text-ink-500 self-end">
+                  Niente sconto sugli eventi: la cassa non lo applicherebbe, e ai clienti comparirebbe un
+                  «-%» che poi non pagano. Per uno sconto usa le promozioni del negozio.
+                </p>
                 <div>
                   <label className="block text-sm font-semibold mb-1">CTA label</label>
                   <input value={editing.cta_label ?? 'Partecipa'} onChange={(e) => setEditing({ ...editing, cta_label: e.target.value })} className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm" />
