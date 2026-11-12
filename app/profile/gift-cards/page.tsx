@@ -45,8 +45,9 @@ type GiftCard = {
 function statoDelBuono(c: Pick<GiftCard, 'redeemed_at' | 'expires_at' | 'voided_at'>, adesso = new Date()):
   'annullato' | 'scaduto' | 'riscattato' | 'disponibile' {
   if (c.voided_at) return 'annullato';
-  if (c.expires_at && new Date(c.expires_at).getTime() < adesso.getTime()) return 'scaduto';
+  // Già riscattato nel credito: la scadenza del codice non conta più (dal controllo qa).
   if (c.redeemed_at) return 'riscattato';
+  if (c.expires_at && new Date(c.expires_at).getTime() < adesso.getTime()) return 'scaduto';
   return 'disponibile';
 }
 

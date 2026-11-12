@@ -62,3 +62,15 @@ describe('R11-018 — buono annullato o scaduto', () => {
     expect(testo).not.toContain('SCADUTO-5678');
   });
 });
+
+describe('R11-018 — dal controllo qa', () => {
+  it('un buono già riscattato e poi oltre la scadenza resta «Riscattata», non «Scaduta»', async () => {
+    stato.buoni = [buono('RISCATTATO-9', { redeemed_at: '2025-06-01T00:00:00Z', expires_at: '2026-01-01T00:00:00Z' })];
+    const mod = (await import('@/app/profile/gift-cards/page')) as { default: () => ReactNode };
+    const r = await disegna(createElement(mod.default));
+    chiudi = r.chiudi;
+    await act(async () => { await new Promise((ok) => setTimeout(ok, 20)); });
+    expect(r.host.textContent).toMatch(/Riscattata/);
+    expect(r.host.textContent).not.toMatch(/Scaduta/);
+  });
+});
