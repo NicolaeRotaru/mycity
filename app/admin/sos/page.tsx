@@ -12,6 +12,7 @@ import {
   consegnaDellSOS,
   puoDireTuttoTranquillo,
   statoDellaConsolle,
+  unisciGliAperti,
   type EventoSOS,
 } from './lettura-degli-sos';
 
@@ -31,18 +32,24 @@ export default function AdminSOSPage() {
   const { data: sosList, isError, isLoading, isFetching, refetch } = useQuery({
     queryKey: queryKeys.admin.sos,
     queryFn: async (): Promise<EventoSOS[]> => {
-      const { data, error } = await supabase
-        .from('rider_sos_events')
-        .select(`
+      const colonne = `
           id, rider_id, order_id, lat, lng, triggered_at, resolved_at, resolution_note,
           rider:profiles!rider_sos_events_rider_id_fkey ( full_name, phone )
-        `)
-        .order('triggered_at', { ascending: false })
-        .limit(50);
-      // L'errore va sollevato, non ingoiato: se resta dentro, «non ho letto»
-      // e «non c'e' niente» arrivano a schermo come la stessa cosa.
-      if (error) throw error;
-      return (data ?? []) as unknown as EventoSOS[];
+        `;
+      // R01-009 — Gli ultimi 50 per lo storico, e a parte TUTTI quelli ancora aperti: un SOS
+      // aperto piu' vecchio dei cinquanta piu' recenti non deve sparire dagli «attivi».
+      const leggi = async (soloAperti: boolean): Promise<EventoSOS[]> => {
+        const base = supabase.from('rider_sos_events').select(colonne);
+        const { data, error } = await (soloAperti ? base.is('resolved_at', null) : base)
+          .order('triggered_at', { ascending: false })
+          .limit(soloAperti ? 500 : 50);
+        // L'errore va sollevato, non ingoiato: se resta dentro, «non ho letto»
+        // e «non c'e' niente» arrivano a schermo come la stessa cosa.
+        if (error) throw error;
+        return (data ?? []) as unknown as EventoSOS[];
+      };
+      const [ultimi, aperti] = await Promise.all([leggi(false), leggi(true)]);
+      return unisciGliAperti(ultimi, aperti);
     },
     refetchInterval: 10_000,
   });

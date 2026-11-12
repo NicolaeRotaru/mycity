@@ -95,3 +95,17 @@ export function consegnaDellSOS(s: Pick<EventoSOS, 'order_id'>): { etichetta: st
   if (!id) return null;
   return { etichetta: `Consegna #${id.slice(0, 8)}`, href: `/admin/orders/${encodeURIComponent(id)}` };
 }
+
+/**
+ * R01-009 (12/11/2026) — UN SOS APERTO NON ESCE DALL'ELENCO PERCHE' E' VECCHIO.
+ *
+ * La consolle leggeva solo gli ultimi 50 eventi. Con cinquanta SOS piu' recenti (anche gia'
+ * risolti, anche falsi allarmi) un'emergenza ancora aperta restava fuori, e con zero «attivi»
+ * la pagina diceva «Nessun SOS attivo. Tutto tranquillo.». Adesso si leggono anche TUTTI gli
+ * aperti, a parte, e si uniscono qui: ogni evento una volta sola, dal piu' recente.
+ */
+export function unisciGliAperti(ultimi: EventoSOS[], aperti: EventoSOS[]): EventoSOS[] {
+  const perId = new Map<string, EventoSOS>();
+  for (const s of [...aperti, ...ultimi]) perId.set(s.id, s);
+  return [...perId.values()].sort((a, b) => b.triggered_at.localeCompare(a.triggered_at));
+}
