@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 
 const MAX_ROWS = Number(/max_rows\s*=\s*(\d+)/.exec(readFileSync('supabase/config.toml', 'utf8'))?.[1]);
 const righePer: Record<string, number> = {};
+const senzaOrdine: string[] = [];
 
 function righe(n: number) {
   return Array.from({ length: n }, (_, i) => ({ id: i }));
@@ -25,9 +26,11 @@ vi.mock('@/lib/supabase/server', () => ({
       let da = 0;
       let quante = Infinity;
       const q: Record<string, unknown> = {};
-      for (const m of ['select', 'eq', 'or', 'order']) q[m] = () => q;
+      let ordinata = false;
+      for (const m of ['select', 'eq', 'or']) q[m] = () => q;
+      q.order = () => { ordinata = true; return q; };
       q.limit = (n: number) => { quante = n; return q; };
-      q.range = (a: number, b: number) => { da = a; quante = b - a + 1; return q; };
+      q.range = (a: number, b: number) => { if (!ordinata) senzaOrdine.push(tabella); da = a; quante = b - a + 1; return q; };
       q.single = async () => ({ data: { id: 'u-1' }, error: null });
       q.then = (ok: (v: unknown) => unknown) => {
         const tutte = righe(righePer[tabella] ?? 0);
@@ -77,5 +80,12 @@ describe('R02-004 · lo scarico dei dati oltre le mille righe', () => {
     const corpo = await (await chiama()).json();
     expect(corpo.prodotti_visti).toHaveLength(5000);
     expect(corpo.sezioni_al_tetto).toEqual([]);
+  });
+
+  it('ogni lettura a finestre è ordinata: senza ordine Postgres può dare doppioni o buchi fra un blocco e l altro', async () => {
+    senzaOrdine.length = 0;
+    righePer.notifications = 1500;
+    await chiama();
+    expect([...new Set(senzaOrdine)]).toEqual([]);
   });
 });

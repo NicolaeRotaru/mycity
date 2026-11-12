@@ -23,6 +23,10 @@ const TETTO_PER_SEZIONE = 5000;
  * al tetto, e «al tetto» vuol dire che dopo il tetto c'è davvero almeno un'altra riga.
  */
 const FINESTRA = 1000;
+// Le finestre sono richieste separate (OFFSET): senza un ordine stabile Postgres può restituire le
+// righe in un ordine diverso da una richiesta all'altra, con doppioni o buchi fra un blocco e
+// l'altro. Ogni sezione si legge quindi ordinata per la sua chiave (id, o la chiave vera della
+// tabella quando non ha un id).
 
 /** Una risposta di Supabase ridotta all'osso: i dati, l'eventuale guasto e se si è fermata al tetto. */
 type Lettura = { data: unknown; error: unknown; alTetto?: boolean };
@@ -138,35 +142,35 @@ const scarica = withAuthRateLimit(
     consents,
   ] = await Promise.all([
     admin.from('profiles').select('*').eq('id', userId).single(),
-    tutta((da, a) => admin.from('user_addresses').select('*').eq('user_id', userId).range(da, a)),
-    tutta((da, a) => admin.from('orders').select('*, order_items(*)').eq('user_id', userId).range(da, a)),
-    tutta((da, a) => admin.from('orders').select('id, created_at, total_price, delivery_status').eq('seller_id', userId).range(da, a)),
-    tutta((da, a) => admin.from('orders').select('id, created_at, delivered_at, shipping_cost').eq('rider_id', userId).range(da, a)),
-    tutta((da, a) => admin.from('reviews').select('*').eq('user_id', userId).range(da, a)),
+    tutta((da, a) => admin.from('user_addresses').select('*').eq('user_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('orders').select('*, order_items(*)').eq('user_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('orders').select('id, created_at, total_price, delivery_status').eq('seller_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('orders').select('id, created_at, delivered_at, shipping_cost').eq('rider_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('reviews').select('*').eq('user_id', userId).order('id').range(da, a)),
     // 🟡-13: store_reviews/rider_reviews usano user_id (non reviewer_id): prima
     // l'export interrogava una colonna inesistente e ometteva queste recensioni.
-    tutta((da, a) => admin.from('store_reviews').select('*').eq('user_id', userId).range(da, a)),
-    tutta((da, a) => admin.from('rider_reviews').select('*').eq('user_id', userId).range(da, a)),
-    tutta((da, a) => admin.from('favorites').select('*').eq('user_id', userId).range(da, a)),
-    tutta((da, a) => admin.from('referrals').select('*').eq('referrer_id', userId).range(da, a)),
-    tutta((da, a) => admin.from('referrals').select('*').eq('referred_id', userId).range(da, a)),
-    tutta((da, a) => admin.from('notifications').select('*').eq('user_id', userId).range(da, a)),
+    tutta((da, a) => admin.from('store_reviews').select('*').eq('user_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('rider_reviews').select('*').eq('user_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('favorites').select('*').eq('user_id', userId).order('product_id').range(da, a)),
+    tutta((da, a) => admin.from('referrals').select('*').eq('referrer_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('referrals').select('*').eq('referred_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('notifications').select('*').eq('user_id', userId).order('id').range(da, a)),
     // 🟡-13: chat e contact form fanno parte dei dati personali (Art. 15/20).
-    tutta((da, a) => admin.from('conversations').select('*').or(`buyer_id.eq.${userId},seller_id.eq.${userId}`).range(da, a)),
-    tutta((da, a) => admin.from('messages').select('*').eq('sender_id', userId).range(da, a)),
-    tutta((da, a) => admin.from('contact_messages').select('*').eq('user_id', userId).range(da, a)),
+    tutta((da, a) => admin.from('conversations').select('*').or(`buyer_id.eq.${userId},seller_id.eq.${userId}`).order('id').range(da, a)),
+    tutta((da, a) => admin.from('messages').select('*').eq('sender_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('contact_messages').select('*').eq('user_id', userId).order('id').range(da, a)),
     // Mancavano all'appello, e sono i dati con cui una persona viene profilata:
     // il registro delle azioni (con indirizzo di rete e browser), le cose
     // guardate, i dispositivi registrati per le notifiche, l'iscrizione alle
     // novità, i resi, le contestazioni e lo storico dei consensi.
-    tutta((da, a) => admin.from('activity_events').select('*').or(`user_id.eq.${userId},actor_id.eq.${userId}`).range(da, a)),
-    tutta((da, a) => admin.from('recently_viewed').select('*').eq('user_id', userId).range(da, a)),
-    tutta((da, a) => admin.from('product_views').select('*').eq('user_id', userId).range(da, a)),
-    tutta((da, a) => admin.from('push_subscriptions').select('*').eq('user_id', userId).range(da, a)),
-    tutta((da, a) => admin.from('newsletter_subscribers').select('*').eq('email', userEmail ?? '').range(da, a)),
-    tutta((da, a) => admin.from('returns').select('*').eq('buyer_id', userId).range(da, a)),
-    tutta((da, a) => admin.from('disputes').select('*').or(`opener_id.eq.${userId},against_id.eq.${userId}`).range(da, a)),
-    tutta((da, a) => admin.from('consent_log').select('*').eq('user_id', userId).range(da, a)),
+    tutta((da, a) => admin.from('activity_events').select('*').or(`user_id.eq.${userId},actor_id.eq.${userId}`).order('id').range(da, a)),
+    tutta((da, a) => admin.from('recently_viewed').select('*').eq('user_id', userId).order('product_id').range(da, a)),
+    tutta((da, a) => admin.from('product_views').select('*').eq('user_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('push_subscriptions').select('*').eq('user_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('newsletter_subscribers').select('*').eq('email', userEmail ?? '').order('id').range(da, a)),
+    tutta((da, a) => admin.from('returns').select('*').eq('buyer_id', userId).order('id').range(da, a)),
+    tutta((da, a) => admin.from('disputes').select('*').or(`opener_id.eq.${userId},against_id.eq.${userId}`).order('id').range(da, a)),
+    tutta((da, a) => admin.from('consent_log').select('*').eq('user_id', userId).order('id').range(da, a)),
   ]);
 
   /**
@@ -189,45 +193,45 @@ const scarica = withAuthRateLimit(
    * prossima tabella nuova non può più nascere fuori dall'export in silenzio.
    */
   const altreTabelle = {
-    portafoglio: tutta((da, a) => admin.from('wallet_ledger').select('*').eq('user_id', userId).range(da, a)),
-    punti_fedelta: tutta((da, a) => admin.from('loyalty_accounts').select('*').eq('user_id', userId).range(da, a)),
-    punti_movimenti: tutta((da, a) => admin.from('loyalty_transactions').select('*').eq('user_id', userId).range(da, a)),
-    buoni_regalo: tutta((da, a) => admin.from('gift_cards').select('*').or(`buyer_id.eq.${userId},redeemed_by.eq.${userId}`).range(da, a)),
+    portafoglio: tutta((da, a) => admin.from('wallet_ledger').select('*').eq('user_id', userId).order('id').range(da, a)),
+    punti_fedelta: tutta((da, a) => admin.from('loyalty_accounts').select('*').eq('user_id', userId).order('user_id').range(da, a)),
+    punti_movimenti: tutta((da, a) => admin.from('loyalty_transactions').select('*').eq('user_id', userId).order('id').range(da, a)),
+    buoni_regalo: tutta((da, a) => admin.from('gift_cards').select('*').or(`buyer_id.eq.${userId},redeemed_by.eq.${userId}`).order('code').range(da, a)),
     domande_sui_prodotti: tutta((da, a) => admin
       .from('product_questions')
       .select('*')
-      .or(`author_id.eq.${userId},answered_by.eq.${userId}`).range(da, a)),
-    sos_del_fattorino: tutta((da, a) => admin.from('rider_sos_events').select('*').eq('rider_id', userId).range(da, a)),
-    carrello_salvato: tutta((da, a) => admin.from('user_carts').select('*').eq('user_id', userId).range(da, a)),
-    carrelli_abbandonati: tutta((da, a) => admin.from('abandoned_carts').select('*').eq('user_id', userId).range(da, a)),
-    iscrizioni_agli_eventi: tutta((da, a) => admin.from('event_rsvps').select('*').eq('user_id', userId).range(da, a)),
-    negozi_seguiti: tutta((da, a) => admin.from('follows').select('*').eq('user_id', userId).range(da, a)),
-    liste_di_prodotti: tutta((da, a) => admin.from('product_lists').select('*').eq('owner_id', userId).range(da, a)),
+      .or(`author_id.eq.${userId},answered_by.eq.${userId}`).order('id').range(da, a)),
+    sos_del_fattorino: tutta((da, a) => admin.from('rider_sos_events').select('*').eq('rider_id', userId).order('id').range(da, a)),
+    carrello_salvato: tutta((da, a) => admin.from('user_carts').select('*').eq('user_id', userId).order('user_id').range(da, a)),
+    carrelli_abbandonati: tutta((da, a) => admin.from('abandoned_carts').select('*').eq('user_id', userId).order('user_id').range(da, a)),
+    iscrizioni_agli_eventi: tutta((da, a) => admin.from('event_rsvps').select('*').eq('user_id', userId).order('event_id').range(da, a)),
+    negozi_seguiti: tutta((da, a) => admin.from('follows').select('*').eq('user_id', userId).order('store_id').range(da, a)),
+    liste_di_prodotti: tutta((da, a) => admin.from('product_lists').select('*').eq('owner_id', userId).order('id').range(da, a)),
     ordini_di_gruppo: tutta((da, a) => admin
       .from('group_orders')
       .select('*')
-      .or(`organizer_id.eq.${userId},seller_id.eq.${userId}`).range(da, a)),
-    partecipazioni_di_gruppo: tutta((da, a) => admin.from('group_participants').select('*').eq('user_id', userId).range(da, a)),
+      .or(`organizer_id.eq.${userId},seller_id.eq.${userId}`).order('id').range(da, a)),
+    partecipazioni_di_gruppo: tutta((da, a) => admin.from('group_participants').select('*').eq('user_id', userId).order('id').range(da, a)),
     ordini_ricorrenti: tutta((da, a) => admin
       .from('subscription_orders')
       .select('*')
-      .or(`user_id.eq.${userId},seller_id.eq.${userId}`).range(da, a)),
-    tentativi_di_pagamento: tutta((da, a) => admin.from('payment_attempts').select('*').eq('user_id', userId).range(da, a)),
-    casse_aperte: tutta((da, a) => admin.from('pending_checkouts').select('*').eq('buyer_id', userId).range(da, a)),
-    casse_contanti: tutta((da, a) => admin.from('cod_checkout_attempts').select('*').eq('user_id', userId).range(da, a)),
-    email_in_coda: tutta((da, a) => admin.from('email_queue').select('*').eq('user_id', userId).range(da, a)),
-    segnalazioni_fatte: tutta((da, a) => admin.from('segnalazioni').select('*').eq('segnalante_id', userId).range(da, a)),
-    cashback_riscosso: tutta((da, a) => admin.from('cashback_redemptions').select('*').eq('user_id', userId).range(da, a)),
-    codici_di_zona_usati: tutta((da, a) => admin.from('zone_code_uses').select('*').eq('user_id', userId).range(da, a)),
-    recensioni_votate_utili: tutta((da, a) => admin.from('review_helpful').select('*').eq('user_id', userId).range(da, a)),
-    storie_guardate: tutta((da, a) => admin.from('seller_story_views').select('*').eq('user_id', userId).range(da, a)),
-    voti_negozio_del_mese: tutta((da, a) => admin.from('shop_of_month_votes').select('*').eq('voter_id', userId).range(da, a)),
-    traguardi: tutta((da, a) => admin.from('user_achievements').select('*').eq('user_id', userId).range(da, a)),
+      .or(`user_id.eq.${userId},seller_id.eq.${userId}`).order('id').range(da, a)),
+    tentativi_di_pagamento: tutta((da, a) => admin.from('payment_attempts').select('*').eq('user_id', userId).order('id').range(da, a)),
+    casse_aperte: tutta((da, a) => admin.from('pending_checkouts').select('*').eq('buyer_id', userId).order('id').range(da, a)),
+    casse_contanti: tutta((da, a) => admin.from('cod_checkout_attempts').select('*').eq('user_id', userId).order('chiave').range(da, a)),
+    email_in_coda: tutta((da, a) => admin.from('email_queue').select('*').eq('user_id', userId).order('id').range(da, a)),
+    segnalazioni_fatte: tutta((da, a) => admin.from('segnalazioni').select('*').eq('segnalante_id', userId).order('id').range(da, a)),
+    cashback_riscosso: tutta((da, a) => admin.from('cashback_redemptions').select('*').eq('user_id', userId).order('campaign_id').order('order_id').range(da, a)),
+    codici_di_zona_usati: tutta((da, a) => admin.from('zone_code_uses').select('*').eq('user_id', userId).order('id').range(da, a)),
+    recensioni_votate_utili: tutta((da, a) => admin.from('review_helpful').select('*').eq('user_id', userId).order('review_id').range(da, a)),
+    storie_guardate: tutta((da, a) => admin.from('seller_story_views').select('*').eq('user_id', userId).order('story_id').order('viewed_at').range(da, a)),
+    voti_negozio_del_mese: tutta((da, a) => admin.from('shop_of_month_votes').select('*').eq('voter_id', userId).order('id').range(da, a)),
+    traguardi: tutta((da, a) => admin.from('user_achievements').select('*').eq('user_id', userId).order('achievement_id').range(da, a)),
     // 12/11/2026 (R02-025) — IL FATTORINO. Le recensioni che RICEVE stanno su rider_id (quelle
     // che scrive su user_id, già in «reviews.riders»), e le sue giornate di cassa sono dati suoi:
     // chi ha consegnato, quanto contante, quando l'ha rimesso.
-    recensioni_ricevute_come_fattorino: tutta((da, a) => admin.from('rider_reviews').select('*').eq('rider_id', userId).range(da, a)),
-    giornate_di_cassa_del_fattorino: tutta((da, a) => admin.from('cod_reconciliations').select('*').eq('rider_id', userId).range(da, a)),
+    recensioni_ricevute_come_fattorino: tutta((da, a) => admin.from('rider_reviews').select('*').eq('rider_id', userId).order('id').range(da, a)),
+    giornate_di_cassa_del_fattorino: tutta((da, a) => admin.from('cod_reconciliations').select('*').eq('rider_id', userId).order('id').range(da, a)),
   };
 
   /**
