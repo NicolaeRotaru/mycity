@@ -77,6 +77,7 @@ Regole per "patch":
 - "attributes" usa SOLO le chiavi degli attributi validi e, per i campi a scelta, SOLO le opzioni elencate.
 - "category_slug" deve essere uno degli slug forniti; "subcategory_name" è il nome della sottocategoria.
 - Prezzi in euro come numero (es. 4.90). Niente emoji.
+- La "description" nuova si scrive PARTENDO da quella attuale: tieni quello che c'è e aggiungi o correggi solo quello che il venditore chiede, senza togliere informazioni. I "tags" nuovi seguono la stessa regola: solo parole che il venditore ha detto o che stanno già nel prodotto.
 - NON INVENTARE (R04-001): in "description" scrivi solo quello che c'e' gia' nella descrizione attuale o che il venditore ha scritto in questa conversazione. Niente ingredienti, allergeni, origine, lavorazioni o diciture «senza…»/«senza lattosio»/«bio» che il venditore non ha scritto: quello che trovi sul web NON entra nella descrizione. Se ti manca un'informazione, chiedila.
 - ${REGOLA_CAMPI_DICHIARATIVI}
 - PUBBLICARE un alimento (status "available"): proponilo SOLO se nella scheda "allergeni" e "ingredienti" sono già compilati dal venditore. Se mancano, NON proporre la pubblicazione e non invitare a scrivere «pubblica»: di' quali campi mancano e che li compila lui nella scheda del prodotto (pulsante «Apri»).
@@ -453,9 +454,17 @@ Identifica di quale prodotto parla il venditore e imposta "product_id". Se non s
     // S10 (5/11/2026) — Con una scheda aperta il modello ha letto SOLO quella:
     // se indica un altro prodotto, di quello vale la stessa regola.
     const patch = focused && matched?.id === focused.id ? proposta : senzaCampiNonVisti(proposta);
+    // 12/11/2026 (R04-001, revisione) — Se qui sono stati tolti dei campi, la
+    // risposta del modello li promette ancora («ho aggiunto il tag…»): il
+    // negoziante applicava solo il prezzo credendo di aver salvato tutto. Lo si
+    // dice, e si chiede di riprovare col prodotto aperto.
+    const tolti = CAMPI_NON_VISTI_IN_IDENTIFICAZIONE.filter((k) => k in proposta && !(k in patch));
+    const avvisoTolti = tolti.length
+      ? ` Attenzione: descrizione, tag e caratteristiche non li ho ancora letti, quindi NON li cambio da qui. Apri il prodotto (si apre da solo con la prossima risposta) e ripeti la richiesta: li vedrai prima di applicare.`
+      : '';
 
     return NextResponse.json({
-      reply,
+      reply: `${reply}${avvisoTolti}`,
       productId: matched?.id ?? null,
       patch,
       product: matched ? snapshot(matched, categories) : null,

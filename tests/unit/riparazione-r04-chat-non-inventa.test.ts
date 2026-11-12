@@ -62,5 +62,23 @@ describe('la chat Assistenza: nel prompt c\'e\' la regola «non inventare»', ()
     expect(system).toMatch(/allergeni/);
     expect(system).toMatch(/senza/);
     expect(system).toMatch(/origine/);
+    expect(system).toMatch(/PARTENDO da quella attuale/);
+  });
+
+  it('in identificazione, se i campi della proposta vengono tolti, la risposta lo dice', async () => {
+    runMessageMock.mockResolvedValue({
+      text: '',
+      toolInput: { reply: 'Ho aggiunto il tag e aggiornato la descrizione: premi Applica.', product_id: PANETTONE.id, patch: { price: 27, tags: ['senza canditi'], description: 'Panettone senza canditi.' } },
+    });
+    const res = await POST(
+      new Request('http://localhost/api/ai/catalog-chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ history: [{ role: 'user', content: 'aggiungi il tag senza canditi al panettone e mettilo a 27' }] }),
+      }) as never,
+    );
+    const corpo = (await res.json()) as { reply: string; patch: Record<string, unknown> };
+    expect(corpo.patch).toEqual({ price: 27 });
+    expect(corpo.reply).toMatch(/NON li cambio da qui/);
   });
 });
