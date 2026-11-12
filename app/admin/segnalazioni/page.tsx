@@ -158,7 +158,8 @@ function SchedaSegnalazione({ s }: { s: Segnalazione }) {
           {NOME_STATO[s.stato] ?? s.stato} · ricevuta il {formatDate(s.created_at)}
         </span>
       </div>
-      {s.dettaglio && <p className="mt-2 whitespace-pre-line text-ink-700">{s.dettaglio}</p>}
+      {/* R02-021 — Un link lungo incollato da chi segnala usciva dalla scheda e allargava la pagina sul telefono. */}
+      {s.dettaglio && <p className="mt-2 whitespace-pre-line break-words [overflow-wrap:anywhere] text-ink-700">{s.dettaglio}</p>}
       <p className="mt-1 text-xs text-ink-500">
         Chi ha segnalato: {s.segnalante_id ? 'utente registrato' : 'senza account'}
         {s.email_contatto ? ` · ${s.email_contatto}` : ''}
