@@ -29,8 +29,11 @@ const FRENO = { max: 30, windowMs: 60_000 } as const;
  * carrello e la cassa ricevevano 429 → «Adesso non riesco a confermare la consegna veloce».
  * Adesso le stesse domande ripetute (lo stesso carrello, la stessa scheda) hanno ancora 30 al
  * minuto, ma una lista lunga non toglie niente al carrello. Contro chi gira gli id per
- * aggirarlo resta un tetto per indirizzo, piu' largo. La cura vera — una domanda sola per
- * tutta la lista — sta nel gancio (components/ui/DeliveryCutoff.tsx).
+ * aggirarlo resta un tetto per indirizzo, piu' largo. ATTENZIONE: e' una cura a meta'. Il tetto
+ * e' condiviso col carrello, e /stores e /near mostrano fino a 200 schede: lì il carrello puo'
+ * ancora ricevere 429. La cura vera — una domanda sola per tutta la lista — andrebbe fatta nel
+ * gancio (components/ui/DeliveryCutoff.tsx, useVeloceDelNegozio), che oggi chiede ancora un
+ * negozio per volta.
  */
 const TETTO_PER_INDIRIZZO = { max: 120, windowMs: 60_000 } as const;
 const NON_RIESCO: EsitoVeloce = {
