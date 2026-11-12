@@ -45,6 +45,9 @@ export default function BannerFields({ section, onChange }: { section: BannerSec
     },
   });
 
+  const idScelto = c.cta?.target.kind === 'product' ? c.cta.target.productId : '';
+  const prodottoSceltoFuori = idScelto ? products.find((p) => p.id === idScelto && p.status !== 'available') : undefined;
+
   return (
     <div className="space-y-4">
       <div>
@@ -128,6 +131,13 @@ export default function BannerFields({ section, onChange }: { section: BannerSec
                   );
                 })}
               </Select>
+            )}
+            {/* 12/11/2026 (R07-023) — un prodotto scelto quando era in vendita e poi messo in bozza:
+                prima restava la destinazione senza dire niente, ora il negozio lo sa. */}
+            {prodottoSceltoFuori && (
+              <p role="status" className="text-sm text-ink-600">
+                «{prodottoSceltoFuori.name}» non è in vendita: i clienti non vedono il pulsante finché non lo rimetti in vendita o scegli un altro prodotto.
+              </p>
             )}
           </>
         )}

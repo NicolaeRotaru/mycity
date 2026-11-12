@@ -4,11 +4,30 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { sizedImage } from '@/lib/image-url';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase/client';
 import { ctaHref } from '@/lib/store-site';
 import type { SectionConfig, SectionContext } from './SectionContext';
 
 /** Banner: immagine grande con titolo, sottotitolo e pulsante CTA (link interno/esterno). */
 export default function BannerSection({ config, ctx }: { config: SectionConfig<'banner'>; ctx: SectionContext }) {
+  // 12/11/2026 (R07-023) — Il pulsante può puntare a un prodotto scelto quando era in vendita
+  // e poi messo in bozza: il cliente arrivava su una scheda che non si apre. Si chiede al
+  // database se il prodotto è ancora in vetrina (`prodotto_in_vetrina`, migrazione 129, aperta
+  // ad anon) e, se non lo è, il pulsante non c'è. Se la domanda non riesce si lascia com'era.
+  const prodottoDelPulsante = config.cta?.target.kind === 'product' ? config.cta.target.productId || null : null;
+  const inVetrina = useQuery({
+    queryKey: ['prodotto-in-vetrina', prodottoDelPulsante],
+    enabled: !!prodottoDelPulsante,
+    staleTime: 60_000,
+    queryFn: async (): Promise<boolean> => {
+      const { data, error } = await supabase.rpc('prodotto_in_vetrina', { p_id: prodottoDelPulsante });
+      if (error) throw error;
+      return data === true;
+    },
+  });
+  const prodottoFuoriVetrina = !!prodottoDelPulsante && inVetrina.data === false;
+
   if (!config.imageUrl) return null;
 
   const overlay = config.overlay ?? 'dark';
@@ -34,7 +53,7 @@ export default function BannerSection({ config, ctx }: { config: SectionConfig<'
       <div className={`absolute inset-0 flex flex-col items-start justify-end gap-2 p-6 ${textClass}`}>
         {config.heading && <h2 className="text-2xl sm:text-3xl font-bold font-serif drop-shadow">{config.heading}</h2>}
         {config.subheading && <p className="text-sm sm:text-base max-w-xl drop-shadow">{config.subheading}</p>}
-        {config.cta && href && (
+        {config.cta && href && !prodottoFuoriVetrina && (
           external ? (
             <a href={href} target="_blank" rel="noopener noreferrer nofollow" className={ctaClass} style={ctaStyle}>
               {config.cta.label}
