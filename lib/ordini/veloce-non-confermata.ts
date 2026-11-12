@@ -691,7 +691,7 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
   let giaScaduti = 0;
   // 5/11/2026 — I guasti che non hanno fatto niente (per esempio il database giù alla prima lettura)
   // vanno in UN avviso per giro, non uno per ordine: un guasto passeggero ne mandava fino a 100.
-  const fermiSenzaNiente: Array<{ id: string; perche: string }> = [];
+  const fermiSenzaNiente: Array<{ id: string; perche: string; giaResiCents: number }> = [];
   const visti = new Set<string>();
   for (const o of (data ?? []) as unknown as RigaVeloce[]) {
     if (visti.has(o.id) || o.pickup_in_store) continue;
@@ -719,7 +719,9 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
       const perche = err instanceof Error ? err.message : String(err);
       logger.error('[veloce-non-confermata] carrello NON spostato', { orderId: o.id, err, fatto });
       if (fatto.length === 0) {
-        fermiSenzaNiente.push({ id: o.id, perche });
+        // 12/11/2026 (R09-025) — «Niente in questo giro» non vuol dire «niente sull'ordine»: un giro di
+        // prima può aver già reso l'euro. Lo stato vero è quello letto dalla ricerca di questo giro.
+        fermiSenzaNiente.push({ id: o.id, perche, giaResiCents: Number(o.refunded_amount_cents ?? 0) });
         continue;
       }
       // 5/11/2026 — Se un ordine è già passato alla fascia, cliente e negozi NON sono stati avvisati
@@ -728,7 +730,9 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
       await notifyAdmins(
         '⚠️ Freno della veloce fermo a metà',
         `Il freno della veloce non è riuscito a finire il carrello dell'ordine ${codiceDi(o.id)}: ${perche}. ` +
-          `Già fatto in questo giro: ${fatto.join('; ')}. ` +
+          // 12/11/2026 (R09-025) — Le frasi dicono lo stato dell'ordine (anche quello lasciato da un giro di
+          // prima), non solo cosa ha fatto questo giro: «in questo giro» era falso.
+          `Lo stato adesso: ${fatto.join('; ')}. ` +
           (unoGiaSpostato
             ? 'Cliente, negozi e fattorino NON sono stati avvisati del cambio di fascia: avvisali tu, e metti nella stessa fascia gli ordini del carrello rimasti «Adesso». '
             : '') +
@@ -744,7 +748,11 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
     await notifyAdmins(
       '⚠️ Freno della veloce fermo prima di cominciare',
       `In questo giro il freno della veloce non ha potuto lavorare ${fermiSenzaNiente.length === 1 ? "sull'ordine" : 'sugli ordini'} ${codici.join(', ')}: ${fermiSenzaNiente[0].perche}. ` +
-        'In questo giro non ha fatto niente su quegli ordini (un giro di prima può aver già reso l’euro: guarda l’ordine). Riprova da solo ogni 5 minuti; se gli ordini restano «Adesso», senti i negozi.',
+        'In questo giro non ha fatto niente su quegli ordini. ' +
+        fermiSenzaNiente.map((f) => f.giaResiCents > 0
+          ? `Sull’ordine ${codiceDi(f.id)} risultano già resi ${formatPriceFromCents(f.giaResiCents)} sulla carta: non vanno resi di nuovo. `
+          : `Sull’ordine ${codiceDi(f.id)} non risulta nessun rimborso. `).join('') +
+        'Riprova da solo ogni 5 minuti; se gli ordini restano «Adesso», senti i negozi.',
       '/admin/orders',
       // Una volta l'ora: con un guasto che dura e ordini nuovi che entrano, l'insieme degli id cambia a ogni giro.
       { unaVoltaPer: `veloce-fermo-${adesso.toISOString().slice(0, 13)}` },
