@@ -1,0 +1,255 @@
+{
+  "sessione": "R10",
+  "aggiornato": "2026-11-12 14:59",
+  "finita": false,
+  "testa": "",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R10-001",
+      "esito": "riparato",
+      "commit": "36814a6ebfcbceb9aee9c4f5520414095d029695",
+      "file_toccati": [
+        "app/layout.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-manifest-nel-head.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-manifest-nel-head.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 36814a6e^ --file app/layout.tsx --prove tests/unit/riparazione-r10-manifest-nel-head.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Manifest (sotto APP_INSTALLABILE_ACCESA) e apple-touch-icon spostati dai metadata, che con force-dynamic finiscono nel body, al <head> scritto a mano del layout. Niente htmlLimitedBots. Il <title> resta nei metadata: Chrome non lo usa per l'installabilità. La condizione resta scritta `APP_INSTALLABILE_ACCESA ? { manifest: '/manifest.json' }` (costante MANIFEST), come chiede la prova esistente al-lancio-carta-abbonamento-…, che non ho toccato.",
+      "chiave": "mobile-pwa|chrome non trova il file che rende mycity installabile: su android l'app non si può mettere in home"
+    },
+    {
+      "id": "R10-002",
+      "esito": "non_codice",
+      "nota": "La parte di codice c'è già sulla base: app/auth/confirm/route.ts verifica il token_hash con verifyOtp (funziona da qualunque dispositivo), app/reset-password/page.tsx:206-219 + lib/auth/link-email.ts:308-336 dicono «Questo link va aperto dove l'hai chiesto» (motivo altro-browser, pkce_code_verifier_not_found), /sign-in legge `error`. Prove esistenti verdi: npx vitest run tests/unit/il-link-della-password-si-apre-da-qualunque-dispositivo.test.ts tests/unit/minori-s10-nuova-password.test.ts (35 passate). Cosa deve fare Nicola, su Supabase: 1) Authentication → URL Configuration: Site URL = l'indirizzo pubblico del sito. 2) Email Templates → «Reset password»: link = {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery. 3) «Confirm signup»: {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next={{ .RedirectTo }}. 4) Subito dopo, prova a mano: reset chiesto dal computer, email aperta dal telefono e dall'app Gmail, password cambiata; poi un'iscrizione confermata da un altro dispositivo. Se fallisce, rimettere i modelli di prima.",
+      "prova": "tests/unit/il-link-della-password-si-apre-da-qualunque-dispositivo.test.ts (verde sulla base)",
+      "chiave": "sicurezza-auth|chi chiede la nuova password dal computer e apre l'email dal telefono non riesce a cambiarla, e la pagina non dice perché"
+    },
+    {
+      "id": "R10-004",
+      "esito": "riparato",
+      "commit": "408eee62a3a0527927d1aba47b2ddc3ae4936bdf",
+      "file_toccati": [
+        "app/seller/products/new/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-spunta-recesso-dopo-una-lettura-caduta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-spunta-recesso-dopo-una-lettura-caduta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 408eee62a3a0527927d1aba47b2ddc3ae4936bdf^ --file app/seller/products/new/page.tsx --prove tests/unit/riparazione-r10-spunta-recesso-dopo-una-lettura-caduta.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nella domanda «la colonna del recesso c'è?» una lettura caduta ora lancia l'errore (React Query riprova) invece di rispondere false, e staleTime passa da Infinity a 5 minuti. Finché non si sa, il ripiego resta «spunta nascosta». lib/ordini/recesso.ts non serviva toccarlo.",
+      "chiave": "api-backend|nel nuovo prodotto la spunta «escluso dal recesso» sparisce per tutta la sessione dopo una lettura caduta"
+    },
+    {
+      "id": "R10-005",
+      "esito": "riparato",
+      "commit": "38851d0cc7adabacddae7bc497ba3a8c0f4343f4",
+      "file_toccati": [
+        "app/seller/earnings/commissione.ts",
+        "app/api/seller/subscription/checkout/route.ts",
+        "components/seller/SubscriptionBanner.tsx",
+        "components/SellerApplicationForm.tsx",
+        "lib/stripe/webhook/abbonamenti.ts",
+        "tests/unit/ai-negozi-diciamo-un-prezzo-solo.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-un-prezzo-abbonamento.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-un-prezzo-abbonamento.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 38851d0cc7adabacddae7bc497ba3a8c0f4343f4^ --file app/api/seller/subscription/checkout/route.ts,components/seller/SubscriptionBanner.tsx,components/SellerApplicationForm.tsx --prove tests/unit/riparazione-r10-un-prezzo-abbonamento.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Fonte unica in app/seller/earnings/commissione.ts: ABBONAMENTO_CENTESIMI_MESE=5000, da cui si ricava PREZZO_ABBONAMENTO_MESE. La usano la cassa (unit_amount e descrizione), il banner, il modulo di richiesta e la campanella «abbonamento attivo» del webhook. La prova esistente ai-negozi-diciamo-un-prezzo-solo (importa commissione.ts) ora legge il prezzo dalla costante; la prova nuova finge un prezzo di 60 € e controlla l'addebito vero.",
+      "chiave": "architettura|il prezzo dell'abbonamento dei negozi è scritto a mano in sei posti, e la prova che dovrebbe tenerli uguali non se ne accorge se l'addebito cambia",
+      "prova_esistente_modificata": "tests/unit/ai-negozi-diciamo-un-prezzo-solo.test.tsx (importa app/seller/earnings/commissione.ts): il canone atteso si costruisce da PREZZO_ABBONAMENTO_MESE invece di «€50» scritto a mano; nessuna asserzione tolta o indebolita."
+    },
+    {
+      "id": "R10-006",
+      "esito": "riparato",
+      "commit": "974d9750e61fc1e8d81948f00e6c786bfa4065dc",
+      "file_toccati": [
+        "app/api/consegna/veloce/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-la-lista-dei-negozi-non-frena-il-carrello.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-la-lista-dei-negozi-non-frena-il-carrello.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 974d9750e61fc1e8d81948f00e6c786bfa4065dc^ --file app/api/consegna/veloce/route.ts --prove tests/unit/riparazione-r10-la-lista-dei-negozi-non-frena-il-carrello.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il freno da 30 al minuto si conta per indirizzo + insieme di negozi chiesti, più un tetto di 120 al minuto per indirizzo contro chi gira gli id. Con 40 schede in lista, il carrello e la cassa hanno ancora la loro risposta. StoreListRow e StorePreviewCard non serviva toccarli. Miglioria possibile, non necessaria per chiudere la voce: una domanda sola per tutta la lista nel gancio useVeloceDelNegozio (components/ui/DeliveryCutoff.tsx, non mio). La rotta accetta già fino a 20 negozi per domanda.",
+      "chiave": "architettura|ogni scheda dell elenco dei negozi chiede la veloce da sola: oltre 30 negozi consumano il limite di 30 domande al minuto per indirizzo, lo stesso che serve al carrello e alla cassa"
+    },
+    {
+      "id": "R10-007",
+      "esito": "riparato",
+      "commit": "87a5be051b55668627f58b244938b1500061672b",
+      "file_toccati": [
+        "components/admin/home/HomeSectionsEditor.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-pannello-home-sezioni-spente.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-pannello-home-sezioni-spente.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 87a5be051b55668627f58b244938b1500061672b^ --file components/admin/home/HomeSectionsEditor.tsx --prove tests/unit/riparazione-r10-pannello-home-sezioni-spente.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel pannello una sezione attiva ma spenta al lancio (sezioneAccesa=false) porta «spenta al lancio · non appare in home» e il riquadro grigio come le nascoste. Il menu «Aggiungi sezione» filtra HOME_SECTION_CATALOG con sezioneAccesa. lib/home-site.ts non serviva toccarlo.",
+      "chiave": "architettura|nel pannello /admin/home «drop del giorno» e «newsletter» risultano visibili, ma la home non le disegna"
+    },
+    {
+      "id": "R10-019",
+      "esito": "riparato",
+      "commit": "a47ea68b2f40410356e6de888a58f8e1b85acad6",
+      "file_toccati": [
+        "app/api/seller/subscription/checkout/route.ts",
+        "lib/stripe/webhook/abbonamenti.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-abbonamento-doppio.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-abbonamento-doppio.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a47ea68b2f40410356e6de888a58f8e1b85acad6^ --file app/api/seller/subscription/checkout/route.ts,lib/stripe/webhook/abbonamenti.ts --prove tests/unit/riparazione-r10-abbonamento-doppio.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La cassa passa a Stripe una idempotencyKey per negozio e finestra di 10 minuti: due schede ricevono la stessa sessione, anche al primo abbonamento senza stripe_customer_id. Il webhook, se il profilo ha già un altro abbonamento ancora in corso su Stripe, non lo sovrascrive: annulla subito il doppione e scrive un log per l'admin. Il rimborso del doppione non è automatico (domanda a Nicola). Il portale (portal/route.ts:47) non serviva toccarlo: con il primo abbonamento sul profilo si disdice dal sito.",
+      "chiave": "pagamenti-stripe|con l'abbonamento acceso, due schede aperte creano due abbonamenti da 50 euro, e il primo resta orfano e non si disdice dal sito"
+    },
+    {
+      "id": "R10-020",
+      "esito": "riparato",
+      "commit": "5bd9e7afcfccadf77bce5590eedca503fd69417a",
+      "file_toccati": [
+        "app/api/seller/subscription/checkout/route.ts",
+        "components/SellerApplicationForm.tsx",
+        "tests/unit/riparazione-r10-abbonamento-doppio.test.ts",
+        "tests/unit/riparazione-r10-un-prezzo-abbonamento.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-abbonamento-dopo-il-primo-incasso.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-abbonamento-dopo-il-primo-incasso.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5bd9e7afcfccadf77bce5590eedca503fd69417a^ --file app/api/seller/subscription/checkout/route.ts --prove tests/unit/riparazione-r10-abbonamento-dopo-il-primo-incasso.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La frase di commissione.ts:98-102 diceva già «dopo il tuo primo incasso»; il comportamento no. Ora la cassa risponde 403 «L'abbonamento parte solo dopo il tuo primo incasso con MyCity» finché il negozio non ha un ordine PAID o in contanti DELIVERED; se gli incassi non si leggono, risponde 503. Nel modulo di richiesta il riquadro e il consenso dicevano «all'approvazione»: ora dicono «dopo il primo incasso». Definizione approvata dalla regista, in domande_per_nicola. L'interruttore resta spento.",
+      "chiave": "pagamenti-stripe|quando si accenderà l'abbonamento, il negozio pagherà 50 euro subito dopo l'approvazione invece che dopo i primi incassi",
+      "nota": "Le due prove R10 sulla cassa (abbonamento-doppio, un-prezzo) hanno ora un finto `orders` con un incasso, perché la cassa legge gli ordini."
+    },
+    {
+      "id": "R10-021",
+      "esito": "riparato",
+      "commit": "d64e7d95e61e4e5f61ec87ee893d134f67c20dd1",
+      "file_toccati": [
+        "components/seller/GestisciAbbonamento.tsx",
+        "app/api/seller/subscription/portal/route.ts",
+        "lib/abbonamento-portale.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-gestisci-abbonamento.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-gestisci-abbonamento.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d64e7d95e61e4e5f61ec87ee893d134f67c20dd1^ --file components/seller/GestisciAbbonamento.tsx --prove tests/unit/riparazione-r10-gestisci-abbonamento.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La regola «chi può aprire il portale» sta in un file nuovo, lib/abbonamento-portale.ts. La usano il bottone GestisciAbbonamento (a funzione spenta sparisce per un abbonamento disdetto) e la rotta del portale (stesso comportamento di prima, la regola ora sta lì). Il webhook non serviva toccarlo.",
+      "chiave": "pagamenti-stripe|un negozio con l'abbonamento disdetto vede ancora «gestisci l'abbonamento», e il tasto risponde che l'abbonamento non è attivo"
+    },
+    {
+      "id": "R10-022",
+      "esito": "riparato",
+      "commit": "39f45396dbf6819b0b5b8130b5b841725c073902",
+      "file_toccati": [
+        "components/seller/SubscriptionBanner.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-aggiorna-pagamento.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-aggiorna-pagamento.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 39f45396dbf6819b0b5b8130b5b841725c073902^ --file components/seller/SubscriptionBanner.tsx --prove tests/unit/riparazione-r10-aggiorna-pagamento.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Con past_due il tasto del banner chiama /api/seller/subscription/portal (dove si aggiorna la carta) invece della cassa, che su un abbonamento esistente risponde 409. Senza abbonamento chiama la cassa come prima.",
+      "chiave": "pagamenti-stripe|quando il pagamento dell'abbonamento non va a buon fine, il tasto «aggiorna pagamento» risponde con un errore invece di aprire il portale"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Con l'abbonamento acceso, il banner invita ad «Attiva €50/mese» anche il negozio che non ha ancora incassato: il tasto risponde «parte solo dopo il tuo primo incasso»",
+      "dimensione": "pagamenti-stripe",
+      "severita": "minore",
+      "file": "components/seller/SubscriptionBanner.tsx:28",
+      "descrizione": "Dopo R10-020 la cassa rifiuta chi non ha incassato, ma il banner non lo sa (riceve solo lo stato dell'abbonamento). Oggi non si vede: l'interruttore è spento. Cura: passare al banner se il negozio ha già incassato (app/seller/layout.tsx) e nasconderlo fino ad allora."
+    },
+    {
+      "titolo": "L'elenco dei negozi fa una domanda sulla consegna veloce per ogni scheda, invece di una sola per tutta la lista",
+      "dimensione": "performance",
+      "severita": "minore",
+      "file": "components/ui/DeliveryCutoff.tsx:56",
+      "descrizione": "Dopo R10-006 non consuma più il freno del carrello, ma resta una richiesta per negozio. useVeloceDelNegozio potrebbe raggrupparle (la rotta accetta già ?negozi=a,b,… fino a 20)."
+    }
+  ],
+  "domande_per_nicola": [
+    "R10-019 — Quando arriva un secondo abbonamento da 50 € mentre il primo è in corso, ora il doppione si annulla subito, ma la prima fattura pagata NON viene rimborsata in automatico (lo vede l'admin nel log «abbonamento doppio annullato»). Vuoi il rimborso automatico del doppione?",
+    "R10-020 — Definizione approvata dalla regista, da confermare all'unione: il negozio può attivare l'abbonamento solo dopo il «primo incasso» = almeno un suo ordine pagato con carta (payment_status='paid') oppure un ordine in contanti consegnato. L'interruttore ABBONAMENTO_NEGOZI_ACCESO resta spento. Confermi?"
+  ],
+  "conto": {
+    "agenti": 0,
+    "nota": ""
+  }
+}
