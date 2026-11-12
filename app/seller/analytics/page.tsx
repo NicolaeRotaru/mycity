@@ -370,7 +370,7 @@ export default function SellerAnalyticsPage() {
             analytics.visiteIgnote
               ? 'Non sono riuscito a leggere le recensioni'
               : analytics.reviewCount != null && analytics.reviewCount > 0
-                ? `${analytics.reviewCount} recensioni`
+                ? `${analytics.reviewCount} ${analytics.reviewCount === 1 ? 'recensione' : 'recensioni'} del negozio e dei prodotti`
                 : 'Nessuna recensione'
           }
           color="accent"

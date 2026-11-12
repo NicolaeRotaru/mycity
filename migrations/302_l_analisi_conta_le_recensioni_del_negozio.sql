@@ -7,9 +7,11 @@
 -- Recensioni. Un negozio con tre recensioni leggeva in Analisi «Nessuna
 -- recensione», mentre la pagina accanto ne contava tre.
 --
--- LA CORREZIONE. Voto medio e recensioni si prendono da store_reviews con
--- store_id = auth.uid(), come la pagina Recensioni. Tutto il resto della
--- funzione (le visite) è identico alla 141. Permessi ripetuti come nella 141.
+-- LA CORREZIONE. Voto medio e recensioni contano anche store_reviews con
+-- store_id = auth.uid(), come la pagina Recensioni, insieme ai voti ai prodotti
+-- che contava già la 141 (la prova 22 li pretende): la pagina Analisi scrive
+-- «recensioni del negozio e dei prodotti». Tutto il resto della funzione (le
+-- visite) è identico alla 141. Permessi ripetuti come nella 141.
 --
 -- RITORNO INDIETRO (down): rieseguire il CREATE OR REPLACE FUNCTION
 -- public.andamento_del_negozio della migrazione 141. Nessun dato viene toccato.
@@ -44,6 +46,13 @@ AS $$
       FROM public.product_views v
       JOIN miei m ON m.id = v.product_id, confini c
      WHERE v.viewed_at >= c.da30
+  ),
+  -- I voti al negozio (quelli che legge la pagina Recensioni) e quelli ai suoi
+  -- prodotti, insieme: la pagina lo dice sotto il numero.
+  voti AS (
+    SELECT r.rating FROM public.store_reviews r WHERE r.store_id = (SELECT auth.uid())
+    UNION ALL
+    SELECT r.rating FROM public.reviews r JOIN miei m ON m.id = r.product_id
   )
   SELECT
     (SELECT count(*) FROM visite)::bigint,
@@ -51,8 +60,8 @@ AS $$
     (SELECT count(*) FROM visite, confini c WHERE visite.viewed_at >= c.inizio_oggi)::bigint,
     coalesce((SELECT jsonb_object_agg(product_id::text, n)
                 FROM (SELECT product_id, count(*) AS n FROM visite GROUP BY product_id) x), '{}'::jsonb),
-    (SELECT round(avg(r.rating)::numeric, 2) FROM public.store_reviews r WHERE r.store_id = (SELECT auth.uid())),
-    (SELECT count(*) FROM public.store_reviews r WHERE r.store_id = (SELECT auth.uid()))::bigint;
+    (SELECT round(avg(voti.rating)::numeric, 2) FROM voti),
+    (SELECT count(*) FROM voti)::bigint;
 $$;
 
 REVOKE ALL ON FUNCTION public.andamento_del_negozio() FROM PUBLIC, anon;
