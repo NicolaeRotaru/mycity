@@ -530,8 +530,8 @@ export interface Database {
       conversations: {
         Row: {
           id: string;
-          buyer_id: string;
-          seller_id: string;
+          buyer_id: string | null;
+          seller_id: string | null;
           last_message_at: string;
           last_message_preview: string | null;
           buyer_unread_count: number;
@@ -540,8 +540,8 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          buyer_id: string;
-          seller_id: string;
+          buyer_id?: string | null;
+          seller_id?: string | null;
           last_message_at?: string;
           last_message_preview?: string | null;
           buyer_unread_count?: number;
@@ -550,8 +550,8 @@ export interface Database {
         };
         Update: {
           id?: string;
-          buyer_id?: string;
-          seller_id?: string;
+          buyer_id?: string | null;
+          seller_id?: string | null;
           last_message_at?: string;
           last_message_preview?: string | null;
           buyer_unread_count?: number;
@@ -693,7 +693,7 @@ export interface Database {
         Row: {
           id: string;
           order_id: string;
-          opener_id: string;
+          opener_id: string | null;
           against_id: string | null;
           reason: string;
           description: string;
@@ -707,7 +707,7 @@ export interface Database {
         Insert: {
           id?: string;
           order_id: string;
-          opener_id: string;
+          opener_id?: string | null;
           against_id?: string | null;
           reason: string;
           description: string;
@@ -721,7 +721,7 @@ export interface Database {
         Update: {
           id?: string;
           order_id?: string;
-          opener_id?: string;
+          opener_id?: string | null;
           against_id?: string | null;
           reason?: string;
           description?: string;
@@ -1349,7 +1349,7 @@ export interface Database {
           delivery_notes: string | null;
           delivery_lat: number | null;
           delivery_lng: number | null;
-          shipping_cost: number | null;
+          shipping_cost: number;
           rider_lat: number | null;
           rider_lng: number | null;
           rider_position_updated_at: string | null;
@@ -1422,7 +1422,7 @@ export interface Database {
           delivery_notes?: string | null;
           delivery_lat?: number | null;
           delivery_lng?: number | null;
-          shipping_cost?: number | null;
+          shipping_cost?: number;
           rider_lat?: number | null;
           rider_lng?: number | null;
           rider_position_updated_at?: string | null;
@@ -1495,7 +1495,7 @@ export interface Database {
           delivery_notes?: string | null;
           delivery_lat?: number | null;
           delivery_lng?: number | null;
-          shipping_cost?: number | null;
+          shipping_cost?: number;
           rider_lat?: number | null;
           rider_lng?: number | null;
           rider_position_updated_at?: string | null;
@@ -2217,7 +2217,7 @@ export interface Database {
         Row: {
           id: string;
           referrer_id: string;
-          referred_id: string;
+          referred_id: string | null;
           reward_amount: number;
           rewarded: boolean | null;
           rewarded_at: string | null;
@@ -2231,7 +2231,7 @@ export interface Database {
         Insert: {
           id?: string;
           referrer_id: string;
-          referred_id: string;
+          referred_id?: string | null;
           reward_amount?: number;
           rewarded?: boolean | null;
           rewarded_at?: string | null;
@@ -2245,7 +2245,7 @@ export interface Database {
         Update: {
           id?: string;
           referrer_id?: string;
-          referred_id?: string;
+          referred_id?: string | null;
           reward_amount?: number;
           rewarded?: boolean | null;
           rewarded_at?: string | null;
@@ -2263,8 +2263,8 @@ export interface Database {
           id: string;
           order_id: string;
           order_item_id: string | null;
-          buyer_id: string;
-          seller_id: string;
+          buyer_id: string | null;
+          seller_id: string | null;
           reason: string;
           notes: string | null;
           photo_urls: Json | null;
@@ -2283,8 +2283,8 @@ export interface Database {
           id?: string;
           order_id: string;
           order_item_id?: string | null;
-          buyer_id: string;
-          seller_id: string;
+          buyer_id?: string | null;
+          seller_id?: string | null;
           reason: string;
           notes?: string | null;
           photo_urls?: Json | null;
@@ -2303,8 +2303,8 @@ export interface Database {
           id?: string;
           order_id?: string;
           order_item_id?: string | null;
-          buyer_id?: string;
-          seller_id?: string;
+          buyer_id?: string | null;
+          seller_id?: string | null;
           reason?: string;
           notes?: string | null;
           photo_urls?: Json | null;

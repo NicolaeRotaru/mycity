@@ -182,12 +182,24 @@ function buildSchema() {
     while ((a = alterStmtRe.exec(sql)) !== null) {
       const table = a[1];
       const corpo = a[2];
-      const addColRe = /add\s+column\s+(?:if\s+not\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?\s+([^,]+)/gi;
+      // R11-009 — «numeric(10, 2) DEFAULT 0 NOT NULL»: la virgola dentro le parentesi chiudeva la
+      // clausola e il NOT NULL si perdeva (orders.shipping_cost «| null» ma obbligatoria).
+      const addColRe = /add\s+column\s+(?:if\s+not\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?\s+((?:\([^)]*\)|[^,(])+)/gi;
       let c;
       while ((c = addColRe.exec(corpo)) !== null) {
         if (!tables[table]) tables[table] = {};
         const parsed = parseColumnLine(`${c[1]} ${c[2]}`);
         if (parsed) tables[table][parsed.name] = { tsType: parsed.tsType, nullable: parsed.nullable, hasDefault: parsed.hasDefault };
+      }
+      // R11-009 — «Può restare vuota» si decideva solo dalla CREATE TABLE: gli
+      // `ALTER COLUMN … DROP NOT NULL` / `SET NOT NULL` delle migrazioni dopo non
+      // si leggevano, e 7 colonne avevano il tipo sbagliato (conversations.buyer_id
+      // «string» ma può essere vuota, orders.shipping_cost «| null» ma è obbligatoria).
+      const nullRe = /alter\s+column\s+"?([a-z_][a-z0-9_]*)"?\s+(set|drop)\s+not\s+null/gi;
+      let n;
+      while ((n = nullRe.exec(corpo)) !== null) {
+        const col = tables[table]?.[n[1]];
+        if (col) col.nullable = n[2].toLowerCase() === 'drop';
       }
     }
 
