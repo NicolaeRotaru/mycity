@@ -27,6 +27,7 @@ export type RigaDalFile = {
 };
 
 export const MASSIMO_RIGHE_DAL_FILE = 500;
+export const MASSIMO_DESCRIZIONE_DAL_FILE = 5000;
 
 /** Bozza o in vendita, e cosa manca: la stessa regola del modulo «Nuovo prodotto». */
 export function statoDellaRiga(
@@ -46,18 +47,30 @@ export function statoDellaRiga(
   return { status: mancanti.length > 0 ? 'draft' : 'available', mancanti };
 }
 
-/** I controlli di una riga che il database non deve mai ricevere. Vuoto = la riga va bene. */
-export function erroriDellaRiga(r: Partial<RigaDalFile> | null | undefined): string[] {
+/**
+ * I controlli di una riga che il database non deve mai ricevere. Vuoto = la riga va bene.
+ * `categorie`, se c'è, sono quelle vere: una categoria che non è fra loro è un errore.
+ */
+export function erroriDellaRiga(r: Partial<RigaDalFile> | null | undefined, categorie?: CategoriaDelFile[]): string[] {
   const errori: string[] = [];
   const nome = typeof r?.name === 'string' ? r.name.trim() : '';
   if (!nome) errori.push('Nome mancante');
   if (nome.length > 200) errori.push('Nome troppo lungo (max 200)');
-  const prezzo = Number(r?.price);
+  // Numeri veri: «12», true o [5] non sono un prezzo, anche se Number() li accetterebbe.
+  const prezzo = typeof r?.price === 'number' ? r.price : NaN;
   if (!Number.isFinite(prezzo) || prezzo <= 0) errori.push('Prezzo non valido');
   if (prezzo > 10000) errori.push('Prezzo eccessivo (max 10.000 €)');
-  const pezzi = Number(r?.stock);
+  const pezzi = typeof r?.stock === 'number' ? r.stock : NaN;
   if (!Number.isInteger(pezzi) || pezzi < 0 || pezzi > 99999) errori.push('Stock non valido');
   if (r?.description != null && typeof r.description !== 'string') errori.push('Descrizione non valida');
+  if (typeof r?.description === 'string' && r.description.length > MASSIMO_DESCRIZIONE_DAL_FILE) {
+    errori.push(`Descrizione troppo lunga (max ${MASSIMO_DESCRIZIONE_DAL_FILE})`);
+  }
+  const categoria = r?.category_id;
+  if (categoria != null && categoria !== '') {
+    if (typeof categoria !== 'string') errori.push('Categoria non valida');
+    else if (categorie && !categorie.some((c) => c.id === categoria)) errori.push('Categoria inesistente');
+  }
   if (r?.attributes != null && (typeof r.attributes !== 'object' || Array.isArray(r.attributes))) errori.push('Attributi non validi');
   return errori;
 }

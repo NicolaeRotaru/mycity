@@ -66,6 +66,21 @@ describe('R09-006 · il caricamento da file passa da una rotta col freno', () =>
     expect(stato.scritte).toHaveLength(0);
   });
 
+  it('categoria inesistente o di un altro tipo, numeri che non sono numeri, descrizione enorme: 400, non 500', async () => {
+    stato.acceso = true;
+    for (const sbagliata of [
+      { ...RIGA, category_id: 'cat-che-non-c-e' },
+      { ...RIGA, category_id: { id: 'cat-abb' } },
+      { ...RIGA, price: '12' },
+      { ...RIGA, stock: true },
+      { ...RIGA, description: 'x'.repeat(5001) },
+    ]) {
+      const { status } = await manda([sbagliata]);
+      expect(status, JSON.stringify(sbagliata).slice(0, 80)).toBe(400);
+    }
+    expect(stato.scritte).toHaveLength(0);
+  });
+
   it('la pagina non scrive più i prodotti dal browser', () => {
     const pagina = readFileSync('app/seller/products/import/page.tsx', 'utf8');
     expect(pagina).not.toMatch(/from\('products'\)\.insert\(/);

@@ -177,7 +177,8 @@ function CaricamentoDaFile() {
       });
       // 12/11/2026 (R09-006) — Prima l'inserimento nel catalogo partiva dal browser, senza una
       // rotta in cui mettere il freno. Adesso passa da POST /api/seller/products/import, che ha
-      // l'interruttore, ricontrolla ogni riga e lascia la traccia.
+      // l'interruttore, ricontrolla ogni riga e lascia la traccia. (La regola di scrittura dei prodotti nel
+      // database resta larga finché non si chiude la voce R09-002: il freno vale per questa porta.)
       await caricaSulServer(payload);
       toast.success(
         bozze > 0

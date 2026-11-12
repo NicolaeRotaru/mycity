@@ -24,10 +24,13 @@ export const runtime = 'nodejs';
  * l'interruttore `CARICAMENTO_DA_FILE_ACCESO` poteva solo nascondere la pagina, e lo stato
  * «in vendita» lo decideva il browser. Qui:
  *  ① con l'interruttore spento la rotta risponde no, qualunque cosa mandi il browser;
- *  ② ogni riga si ricontrolla, e bozza o in vendita lo decide la regola del modulo
- *    (`statoDellaRiga`): lo stato che arriva dal browser non conta;
+ *  ② ogni riga si ricontrolla (tipi, categoria vera) e lo stato lo decide la regola del modulo
+ *    (`statoDellaRiga`): lo stato che arriva dal browser non conta. Il file non porta foto, quindi
+ *    oggi ogni riga nasce bozza;
  *  ③ si scrive col client di chi chiama (le regole per riga del database valgono uguale) e
  *    nel registro delle azioni resta chi ha caricato e quanti prodotti.
+ * Il freno vale per questa porta. Finché la regola di scrittura dei prodotti nel database resta
+ * larga (voce R09-002), da sola non basta a impedire una scrittura dal browser.
  */
 async function handler(req: NextRequest, user: { id: string }, db: ClientDiChiChiama): Promise<NextResponse> {
   if (!CARICAMENTO_DA_FILE_ACCESO) return ApiErrors.unavailable('Il caricamento da file non è ancora attivo.');
@@ -44,17 +47,16 @@ async function handler(req: NextRequest, user: { id: string }, db: ClientDiChiCh
   if (righe.length > MASSIMO_RIGHE_DAL_FILE) {
     return ApiErrors.invalidRequest(`Al massimo ${MASSIMO_RIGHE_DAL_FILE} righe per caricamento.`);
   }
-  const sbagliata = righe.findIndex((r) => erroriDellaRiga(r).length > 0);
-  if (sbagliata >= 0) {
-    return ApiErrors.invalidRequest(`Riga ${sbagliata + 1}: ${erroriDellaRiga(righe[sbagliata]).join(', ')}.`);
-  }
-
   const { data: categorie, error: erroreCategorie } = await db.from('categories').select('id, slug, parent_id');
   if (erroreCategorie) {
     logger.error('[seller-products-import] categorie non lette', { userId: user.id, message: erroreCategorie.message });
     return ApiErrors.internal('Non sono riuscito a leggere le categorie. Riprova.');
   }
   const elenco = (categorie ?? []) as CategoriaDelFile[];
+  const sbagliata = righe.findIndex((r) => erroriDellaRiga(r, elenco).length > 0);
+  if (sbagliata >= 0) {
+    return ApiErrors.invalidRequest(`Riga ${sbagliata + 1}: ${erroriDellaRiga(righe[sbagliata], elenco).join(', ')}.`);
+  }
 
   let bozze = 0;
   const perMotivo: Record<string, number> = {};
