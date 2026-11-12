@@ -175,7 +175,9 @@ function SignUpInner() {
       // persona finiva contata due volte (qui e al rientro dal link) e chi non
       // confermava mai risultava iscritto lo stesso. La sorgente unica e' il
       // rientro da /auth/callback, dove l'iscrizione e' un fatto.
-      toast.success('Registrazione completata! Controlla la tua email per confermare.');
+      // 12/11/2026 (R12-011) — «Registrazione completata!» anche a chi aveva già un account
+      // (Supabase non lo dice, per non rivelare chi è iscritto): una frase vera in tutti e due i casi.
+      toast.success('Ci siamo quasi: controlla la tua email per confermare l’indirizzo.');
       // 15/10/2026 (R43) — Con la conferma accesa qui non c'e' ancora una
       // sessione, e la pagina di verifica cercava l'email solo li': «Reinvia»
       // restava spento. L'email le arriva dalla memoria della scheda, non

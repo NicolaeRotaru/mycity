@@ -157,7 +157,9 @@ describe('② «Verifica la tua email» con l’email lasciata dalla registrazio
     const s = apri(Verifica, '/auth/verify-email?returnTo=/checkout');
     await aspettaChe(() => testoVisibile(s.radice).includes('maria.rossi@esempio.it'));
 
-    expect(testoVisibile(s.radice)).toContain('Ti abbiamo inviato un link di conferma a maria.rossi@esempio.it');
+    // 12/11/2026 (R12-011) — il testo vale anche per chi ha già un account (nessuna email parte).
+    expect(testoVisibile(s.radice)).toContain('maria.rossi@esempio.it');
+    expect(testoVisibile(s.radice)).toContain('link di conferma');
     const reinvia = pulsante(s.radice, /Reinvia/);
     expect(reinvia, 'il pulsante «Reinvia» non c’è').not.toBeNull();
     expect(reinvia!.disabled, '«Reinvia» è grigio: è il difetto R43, Maria resta chiusa fuori').toBe(false);

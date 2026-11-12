@@ -97,10 +97,15 @@ function VerifyEmailInner() {
               Tutto a posto. Puoi continuare e usare l&apos;account.
             </p>
           ) : emailDaMostrare ? (
+            // 12/11/2026 (R12-011) — Diceva «Ti abbiamo inviato un link» anche a chi si
+            // registrava con un'email che ha già un account: Supabase risponde «ok» per
+            // non rivelare chi è iscritto, ma l'email non parte. Il testo vale per tutti e
+            // due i casi, senza dire quale dei due è (nessuno scopre chi è iscritto), e
+            // indica la strada a chi l'account ce l'ha già.
             <p className="mt-2 text-sm text-ink-600">
-              Ti abbiamo inviato un link di conferma a{' '}
-              <span className="font-medium text-ink-900">{emailDaMostrare}</span>.
-              Cliccalo per attivare l&apos;account.
+              Se <span className="font-medium text-ink-900">{emailDaMostrare}</span> è un indirizzo nuovo,
+              ti abbiamo inviato un link di conferma: cliccalo per attivare l&apos;account. Se hai già un
+              account con questa email non ti arriverà nulla: accedi, oppure recupera la password.
             </p>
           ) : (
             <p className="mt-2 text-sm text-ink-600">
@@ -161,9 +166,13 @@ function VerifyEmailInner() {
               </button>
             ) : (
               <p className="text-center text-sm text-ink-600">
-                Hai già confermato?{' '}
+                Hai già un account o hai già confermato?{' '}
                 <Link href={accediHref} className="font-medium text-primary-700 hover:underline">
                   Accedi
+                </Link>
+                {' · '}
+                <Link href="/reset-password" className="font-medium text-primary-700 hover:underline">
+                  Password dimenticata?
                 </Link>
               </p>
             )}
