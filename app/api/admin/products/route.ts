@@ -3,7 +3,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
-import { controllaScorteVarianti, saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
+import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
 import { DaCompletare } from '@/lib/products/salvataggio-tracciato';
 import { type ProductVariant } from '@/lib/products/variants';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -190,20 +190,6 @@ export const PATCH = withAdminAuth(async ({ user, req }) => {
   if (patch.stock !== undefined && scortaVista !== undefined) {
     if (patch.stock === scortaVista) delete patch.stock;
     else condizione = scortaVista;
-  }
-
-  // 12/11/2026 (R07-019) — LE VARIANTI SI CONTROLLANO PRIMA DI SCRIVERE IL PRODOTTO.
-  // Il prodotto si scriveva prima, le varianti dopo: se una taglia era stata venduta
-  // mentre la scheda era aperta, nome e prezzo restavano salvati e le varianti no, con
-  // un messaggio che diceva di riaprire. La pagina del negozio fa già questo controllo
-  // prima di salvare; qui lo fa anche la porta, prima di qualunque scrittura.
-  if (variants) {
-    try {
-      await controllaScorteVarianti(admin, id, variants as ProductVariant[], scorteViste);
-    } catch (errore) {
-      if (errore instanceof DaCompletare) return ApiErrors.conflict(errore.message);
-      return ApiErrors.internal('Errore nel controllo delle varianti');
-    }
   }
 
   if (Object.keys(patch).length > 0) {
