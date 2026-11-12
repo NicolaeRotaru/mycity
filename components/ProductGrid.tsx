@@ -23,8 +23,6 @@ import { cEUnAltraPagina, finestraDellaPagina, pagineSuccessiva, unisciPagine } 
 import { trackSearchPerformed } from '@/lib/analytics/events';
 import { discountedUnitCents, fetchActiveDiscounts } from '@/lib/promotions';
 
-/** La promozione più forte che un negozio può fare (CHECK di seller_promotions, migrazione 031). */
-const SCONTO_PROMO_MASSIMO = 70;
 
 /**
  * L'ordinamento della griglia. Vive con la lettura, in `lib/queries/griglia-prodotti.ts`: chi
@@ -222,12 +220,13 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // quasi vuota si chiede il doppio, ma resta una finestra, non un tetto che
   // cresce.
   const righePerPagina = onlyPromo ? Math.min(dimensionePagina * 2, 300) : dimensionePagina;
-  // 12/11/2026 (R07-016) — Con «sotto la soglia» il database legge anche i prodotti che a
-  // prezzo pieno la superano ma in promozione ci stanno sotto: la promozione di un negozio
-  // arriva al massimo al 70% (migrazione 031, seller_promotions). Il taglio vero, sul prezzo
-  // che si paga e a soglia esclusa, lo fa il filtro qui sotto.
+  // 12/11/2026 (R07-016) — Con «sotto la soglia» il database taglia già sul prezzo pieno,
+  // soglia esclusa (il prezzo è in euro con due decimali: mezzo centesimo sotto basta).
+  // Allargare la lettura ai prezzi pieni che solo in promozione scendono sotto la soglia
+  // riempiva la finestra di righe da scartare: con «prezzo decrescente» la pagina restava
+  // vuota. Quei prodotti restano fuori (vedi il referto di R07-016).
   const maxPrice = prezzoSotto !== undefined
-    ? Math.min(maxPricePieno ?? Infinity, prezzoSotto / (1 - SCONTO_PROMO_MASSIMO / 100))
+    ? Math.min(maxPricePieno ?? Infinity, prezzoSotto - 0.005)
     : maxPricePieno;
 
   const domanda = useInfiniteQuery({
@@ -393,8 +392,8 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       });
     }
     if (prezzoSotto !== undefined) {
-      // Il prezzo che si paga, calcolato come lo calcola la cassa. Finché gli sconti non
-      // sono arrivati, un prodotto che a prezzo pieno supera la soglia non si mostra.
+      // Il prezzo che si paga, calcolato come lo calcola la cassa (rete di sicurezza: il
+      // database ha già tagliato sul prezzo pieno, e uno sconto lo abbassa soltanto).
       arr = arr.filter((p) => discountedUnitCents(Number(p.price), scontiPromo?.get(p.id) ?? 0) < Math.round(prezzoSotto * 100));
     }
     if (onlyInStock) {

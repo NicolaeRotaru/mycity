@@ -4,9 +4,9 @@
 /**
  * R07-016 (12/11/2026) — la pagina «Sotto i 10 €» chiedeva `price <= 10` sul prezzo pieno:
  * mostrava i prodotti da 10,00 € e nascondeva quelli che in promozione costano meno di 10.
- * Ora la griglia taglia sul prezzo che si paga (come la cassa), soglia esclusa, e chiede al
- * database anche i prodotti che solo con la promozione ci stanno sotto.
- * (Il contatore che passa le righe caricate e non il totale resta a un'altra voce.)
+ * Ora la soglia è esclusa, sia nel database sia sul prezzo
+ * che si paga. Restano fuori (parziale) i prodotti che solo in promozione scendono sotto 10,
+ * e il contatore delle righe caricate, che è di un'altra voce.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, createElement } from 'react';
@@ -30,7 +30,9 @@ vi.mock('@/lib/queries/griglia-prodotti', () => ({
   leggiProdottiDellaGriglia: async (_s: unknown, d: Record<string, unknown>) => {
     mondo.domande.push(d);
     if (mondo.grigliaInErrore) throw new Error('rete giù');
-    return mondo.prodotti;
+    // Come il database: `price <= maxPrice`.
+    const tetto = d.maxPrice === undefined ? Infinity : Number(d.maxPrice);
+    return (mondo.prodotti as Array<{ price: number }>).filter((p) => p.price <= tetto);
   },
 }));
 vi.mock('@/components/ProductCard', () => ({
@@ -76,23 +78,23 @@ beforeEach(() => {
 });
 
 describe('R07-016 · «sotto i 10 €» guarda il prezzo che si paga, 10 escluso', () => {
-  it('10,00 € fuori, 9,50 € dentro, 12 € con −25% (9 €) dentro, 30 € fuori', async () => {
+  it('10,00 € fuori, 9,50 € dentro', async () => {
     const conti: number[] = [];
     const g = await monta({ limit: 40, prezzoSotto: 10, sort: 'price_asc', maxColumns: 4, onCount: (n: number) => conti.push(n) });
     const ultime = new Set(mondo.schede.slice(-10).map((s) => s.id));
     const visti = Array.from(ultime);
     expect(visti).toContain('nove-e-mezzo');
-    expect(visti).toContain('dodici-in-promo');
     expect(visti).not.toContain('dieci-tondi');
     expect(visti).not.toContain('trenta');
-    expect(conti.at(-1)).toBe(2);
+    expect(conti.at(-1)).toBe(1);
     g.smonta();
   });
 
-  it('al database si chiedono anche i prezzi pieni che solo in promozione scendono sotto 10', async () => {
-    const g = await monta({ limit: 40, prezzoSotto: 10, sort: 'price_asc', maxColumns: 4 });
+  it('al database si chiede «sotto 10», 10 escluso: la finestra non si riempie di righe da scartare', async () => {
+    const g = await monta({ limit: 40, prezzoSotto: 10, sort: 'price_desc', maxColumns: 4 });
     const tetto = Number(mondo.domande.at(-1)?.maxPrice);
-    expect(tetto).toBeGreaterThan(30);
+    expect(tetto).toBeLessThan(10);
+    expect(tetto).toBeGreaterThan(9.99);
     g.smonta();
   });
 });
