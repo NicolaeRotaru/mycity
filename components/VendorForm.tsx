@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,7 +12,6 @@ import StoreLocationPicker, { StoreLocation } from './StoreLocationPickerLazy';
 import StoreAvatar from './StoreAvatar';
 import StoreMediaManager from './StoreMediaManager';
 import { supabase } from '@/lib/supabase/client';
-import { useAvvisoModificheNonSalvate } from '@/components/hooks/useAvvisoModificheNonSalvate';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Input, Textarea } from '@/components/ui/Field';
@@ -65,39 +64,13 @@ export type VendorFormData = SchemaData & {
 type VendorFormMode = 'all' | 'branding' | 'contact';
 
 interface Props {
-  /** Se restituisce una promessa, l'avviso d'uscita si spegne solo quando il salvataggio riesce. */
-  onSubmit: (data: VendorFormData) => unknown;
-  /** R11-015 — avvisa il genitore quando ci sono modifiche non salvate (per chiedere conferma prima di uscire). */
-  onSporcoChange?: (sporco: boolean) => void;
+  onSubmit: (data: VendorFormData) => void;
   isLoading?: boolean;
   defaultValues?: Partial<VendorFormData>;
   mode?: VendorFormMode;
 }
 
-/**
- * Collaudo K04 — la fotografia del modulo non deve dipendere dall'ordine dei campi: lo stato li tiene
- * nell'ordine in cui la persona li scrive, i dati controllati da zod nell'ordine dello schema. Con
- * JSON.stringify semplice, dopo un salvataggio riuscito l'avviso «non salvate» restava acceso.
- * Chiavi in ordine, valori vuoti (undefined, '') trattati come assenti.
- */
-function fotografiaStabile(valore: unknown): string {
-  const pulisci = (v: unknown): unknown => {
-    if (Array.isArray(v)) return v.map(pulisci);
-    if (v && typeof v === 'object') {
-      const fuori: Record<string, unknown> = {};
-      for (const k of Object.keys(v as Record<string, unknown>).sort()) {
-        const x = (v as Record<string, unknown>)[k];
-        if (x === undefined || x === '') continue;
-        fuori[k] = pulisci(x);
-      }
-      return fuori;
-    }
-    return v;
-  };
-  return JSON.stringify(pulisci(valore));
-}
-
-const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', onSporcoChange }: Props) => {
+const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }: Props) => {
   const tStates = useTranslations('states');
   const tForms = useTranslations('forms');
   // Un identificativo generato: questo modulo puo' comparire piu' volte nella stessa pagina, e
@@ -124,7 +97,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
     [showBranding, showContact],
   );
 
-  const { register, handleSubmit, watch, formState: { errors, isDirty }, reset } = useForm<SchemaData>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<SchemaData>({
     resolver: zodResolver(schema),
     defaultValues: {
       storeName:  defaultValues?.storeName  ?? '',
@@ -140,9 +113,6 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
     confermata: false,
   });
   const [locationError, setLocationError] = useState<string | null>(null);
-  // La prima notizia dalla mappa è il suo allineamento all'apertura, non un gesto della persona.
-  const primaNotiziaDallaMappa = useRef(true);
-  const [posizioneToccata, setPosizioneToccata] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(defaultValues?.storeLogo ?? null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   // Mentre sale una foto della copertina l'invio aspetta: partirebbe senza quella foto.
@@ -201,20 +171,6 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
       }
     },
   });
-
-  // R11-015 — Modifiche non salvate: i campi del modulo più quelli tenuti a parte (logo, foto,
-  // descrizione, orari, posizione, personalizzazione). La fotografia di partenza si rifà al salvataggio.
-  const fotografiaDi = (personalizzazione: StoreCustomization) =>
-    // Dal controllo qa: la posizione conta solo dopo che la persona l'ha toccata. All'apertura la mappa
-    // rimanda al modulo il suo punto di partenza (anche quello di Roma o le coordinate non valide):
-    // non è una modifica, e l'avviso d'uscita non deve comparire senza che nessuno abbia scritto niente.
-    fotografiaStabile({ logoUrl, media, description, hours, custom: personalizzazione,
-      ...(posizioneToccata ? { a: location.address, la: location.lat, lo: location.lng } : {}) });
-  const fotografia = fotografiaDi(custom);
-  const [fotografiaSalvata, setFotografiaSalvata] = useState(fotografia);
-  const sporco = isDirty || fotografia !== fotografiaSalvata;
-  useAvvisoModificheNonSalvate(sporco);
-  useEffect(() => { onSporcoChange?.(sporco); }, [sporco, onSporcoChange]);
 
   const handleFormSubmit = (data: SchemaData) => {
     if (showContact) {
@@ -275,7 +231,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
       customData = parsed.data;
     }
     setCustomError(null);
-    const esito = onSubmit({
+    onSubmit({
       storeName: data.storeName,
       storePhone: normalizzaTelefonoNegozio(data.storePhone),
       storeAddress: location.address,
@@ -287,18 +243,6 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
       storeHours: hours,
       storeCustomization: customData,
     });
-    // R11-015 — Inviato: quello che c'è ora diventa il punto di partenza (niente più avviso d'uscita).
-    const salvata = fotografiaDi(customData);
-    const segnaSalvato = () => {
-      reset(data);
-      setFotografiaSalvata(salvata);
-    };
-    // Dal controllo qa: col salvataggio fallito le modifiche restano «non salvate» (prima l'avviso spariva).
-    if (esito && typeof (esito as Promise<unknown>).then === 'function') {
-      (esito as Promise<unknown>).then(segnaSalvato, () => {});
-    } else {
-      segnaSalvato();
-    }
   };
 
   return (
@@ -382,8 +326,6 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
             }}
             onChange={(loc) => {
               setLocation(loc);
-              if (primaNotiziaDallaMappa.current) primaNotiziaDallaMappa.current = false;
-              else setPosizioneToccata(true);
               if (loc.address.trim()) setLocationError(null);
             }}
           />

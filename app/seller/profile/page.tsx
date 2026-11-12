@@ -154,7 +154,7 @@ export default function SellerProfilePage() {
                             ? (profile.store_hours as StoreHours)
                             : {},
           }}
-          onSubmit={(d) => updateContact.mutateAsync(d)}
+          onSubmit={(d) => updateContact.mutate(d)}
           isLoading={updateContact.isPending}
         />
       </div>
