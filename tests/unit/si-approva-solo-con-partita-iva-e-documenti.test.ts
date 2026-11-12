@@ -48,7 +48,7 @@ vi.mock('@/lib/supabase/server', () => ({
             },
             update: (patch: Record<string, unknown>) => {
               aggiornamenti.push(patch);
-              return { eq: () => Promise.resolve({ error: null }) };
+              const b: Record<string, unknown> = { eq: () => b, is: () => b, then: (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve({ error: null, count: 1 }).then(ok, ko) }; return b;
             },
           }
         : { insert: () => Promise.resolve({ error: null }) },

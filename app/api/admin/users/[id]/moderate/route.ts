@@ -134,6 +134,27 @@ async function mandaEmailDellEsito(
   }
 }
 
+/** Lo stato «in attesa»: `pending`, o vuoto per le righe nate prima della colonna (migrations/021). */
+function inAttesa(stato: unknown): boolean {
+  return stato == null || stato === 'pending';
+}
+
+/**
+ * L'update condizionato allo stato letto. `count` dice quante righe ha toccato:
+ * 0 vuol dire che un'altra decisione è arrivata prima.
+ */
+async function scriviSeLoStatoENoto(
+  admin: ReturnType<typeof getAdminSupabase>,
+  id: string,
+  statoLetto: unknown,
+  patch: Record<string, unknown>,
+): Promise<{ error: { message: string; code?: string } | null; count: number | null }> {
+  const base = admin.from('profiles').update(patch, { count: 'exact' }).eq('id', id);
+  const q = statoLetto == null ? base.is('approval_status', null) : base.eq('approval_status', String(statoLetto));
+  const { error, count } = await q;
+  return { error, count: count ?? null };
+}
+
 async function handler(req: NextRequest, user: { id: string }, params: { id: string }): Promise<NextResponse> {
   let body: z.infer<typeof Body>;
   try {
@@ -212,8 +233,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
    * pannello mostra «Sospendi» solo agli approvati, ma il controllo vero e'
    * questo, non il bottone.
    */
+  // 12/11/2026 (R08-005) — 409, non 400: la richiesta era giusta, è lo stato che è cambiato.
   if (body.action === 'suspend' && target.approval_status === 'suspended') {
-    return ApiErrors.invalidRequest('Questo profilo è già sospeso.');
+    return ApiErrors.conflict('Questo profilo è già sospeso.');
   }
   if (body.action === 'suspend' && target.approval_status !== 'approved') {
     return ApiErrors.invalidRequest(
@@ -228,6 +250,16 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     return ApiErrors.invalidRequest('Si riattiva solo un profilo sospeso: chi è in attesa o respinto si esamina dalla sua scheda («Esamina»).');
   }
 
+  // 12/11/2026 (R08-004) — «Approva» e «Rifiuta» decidono una richiesta in attesa, e
+  // solo quella. Prima passavano da qualunque stato: una scheda vecchia rimasta aperta
+  // rifiutava un negozio appena approvato da un altro amministratore, e il negozio
+  // riceveva tutti e due gli esiti. Il pannello li mostra solo a chi è «in attesa».
+  if ((body.action === 'approve' || body.action === 'reject') && !inAttesa(target.approval_status)) {
+    return ApiErrors.conflict(
+      'Questa richiesta è già stata decisa (o lo stato è cambiato nel frattempo): ricarica la pagina e guarda lo stato attuale.',
+    );
+  }
+
   if (approva) {
     const motivo = motivoPerNonApprovare(target, body.action === 'reactivate' ? 'reactivate' : 'approve', giornoPiacenza());
     if (motivo) return ApiErrors.invalidRequest(motivo);
@@ -235,8 +267,18 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 
   const { patch, note, audit } = buildModeration(body.action, body.reason?.trim(), user.id, target.role);
 
-  const { error: updErr } = await admin.from('profiles').update(patch).eq('id', params.id);
+  // 12/11/2026 (R08-004, R08-005) — LA SCRITTURA VALE SOLO SE LO STATO E' ANCORA QUELLO LETTO.
+  //
+  // Fra la lettura qui sopra e questa scrittura un altro amministratore (o un doppio
+  // clic) può aver già deciso. Prima l'update filtrava solo per id: due sospensioni
+  // insieme passavano tutte e due, con due campanelle, due email e due righe nel
+  // registro. Ora una sola tocca la riga; l'altra trova zero righe e riceve 409, e
+  // da quel ramo non parte niente.
+  const { error: updErr, count } = await scriviSeLoStatoENoto(admin, params.id, target.approval_status, patch);
   if (updErr) return ApiErrors.internal('Aggiornamento fallito.');
+  if (count === 0) {
+    return ApiErrors.conflict('Lo stato di questo profilo è cambiato nel frattempo: ricarica la pagina e riprova.');
+  }
 
   // L'esito della notifica si guarda: chi e' rifiutato deve ricevere il motivo,
   // e se non parte chi ha premuto il pulsante lo deve sapere.
