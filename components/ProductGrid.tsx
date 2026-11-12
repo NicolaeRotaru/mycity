@@ -88,6 +88,8 @@ interface Props {
    * stare sotto la soglia, soglia esclusa. `maxPrice` guarda il prezzo pieno e la comprende.
    */
   prezzoSotto?: number;
+  /** 12/11/2026 (R07-009) — l'h2 invisibile per le pagine che non ne hanno uno sopra la griglia. */
+  titoloNascosto?: string;
   onlyOpenStores?: boolean;
   /** Mostra solo prodotti in promo (promozione attiva del negozio) o scontati
    *  (prezzo pieno barrato > prezzo attuale). */
@@ -136,7 +138,7 @@ interface Props {
   maxColumns?: GridMaxColumns;
 }
 
-const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice: maxPricePieno, minPrice, prezzoSotto, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, prioritaPrimeFoto = true, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
+const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice: maxPricePieno, minPrice, prezzoSotto, titoloNascosto, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, prioritaPrimeFoto = true, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
   /**
    * #127 — Il catalogo si fermava a 96 prodotti e non lo diceva.
    *
@@ -691,8 +693,10 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       <BarraSiAggiorna acceso={stoAggiornando} />
       {/* 12/11/2026 (R07-009) — nelle pagine collezione (Regali, Novità, I più recensiti)
           dall'h1 della testata si saltava all'h3 del nome di ogni prodotto: il lettore di
-          schermo perdeva un livello. La griglia porta il suo h2, invisibile. */}
-      <h2 className="sr-only">{title ?? 'Prodotti'}</h2>
+          schermo perdeva un livello. Chi non ha già un h2 sopra la griglia (le pagine
+          collezione) le dà il suo, invisibile; la vetrina del negozio e le collezioni hanno
+          già il loro, e un secondo h2 lì staccherebbe i prodotti dal loro titolo. */}
+      {titoloNascosto && <h2 className="sr-only">{titoloNascosto}</h2>}
       <div
         className={classiDellaGriglia}
         aria-busy={stoAggiornando}

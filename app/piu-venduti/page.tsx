@@ -49,7 +49,7 @@ export default function PiuVendutiPage() {
         </div>
       </CollectionHeader>
 
-      <ProductGrid limit={40} sort={sort} maxColumns={4} onCount={setCount} />
+      <ProductGrid limit={40} sort={sort} maxColumns={4} onCount={setCount} titoloNascosto="I prodotti più recensiti" />
     </div>
   );
 }
