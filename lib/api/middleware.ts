@@ -546,9 +546,18 @@ async function recordCronHeartbeat(req: NextRequest): Promise<void> {
     const name = nomeDelLavoro(req);
     if (!name) return;
     const { getAdminSupabase } = await import('@/lib/supabase/server');
-    await getAdminSupabase()
+    // R01-010 (12/11/2026) — supabase-js NON lancia: una scrittura rifiutata (tabella, permessi,
+    // database giu') torna come `{ error }`, e qui nessuno la leggeva. Il battito spariva senza una
+    // riga, e l'allarme «lavoro fermo» che seguiva aveva la diagnosi sbagliata.
+    const { error } = await getAdminSupabase()
       .from('cron_heartbeats')
       .upsert({ name, last_run_at: new Date().toISOString() }, { onConflict: 'name' });
+    if (error) {
+      logger.warn('[cron] battito non registrato: il sorvegliante lo vedra come fermo, ma il lavoro e\' partito', {
+        lavoro: name,
+        message: error.message,
+      });
+    }
   } catch (e) {
     // Il battito non deve MAI far fallire il lavoro: il lavoro e' andato, e
     // questa e' solo la sua ricevuta. Ma non deve nemmeno sparire in silenzio —
