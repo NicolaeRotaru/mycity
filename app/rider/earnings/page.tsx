@@ -186,11 +186,11 @@ export default function RiderEarningsPage() {
               <p className="text-[13px] font-bold text-olive-900">Compensi sul tuo IBAN</p>
               <p className="mt-1 text-xs leading-relaxed text-olive-800">
                 <strong>{formatPrice(paid)}</strong> già versati · <strong>{formatPrice(pending)}</strong> in arrivo
-                (consegne con carta) · <strong>{formatPrice(inContanti)}</strong> tenuti in contanti alla consegna.
+                (consegne pagate con carta, o col credito MyCity sopra i contanti) · <strong>{formatPrice(inContanti)}</strong> tenuti in contanti alla consegna.
               </p>
               {/* 12/11/2026 (R09-020) — «In arrivo» non diceva quando, né che senza IBAN collegato non arriva niente. */}
               <p className="mt-1 text-[11px] leading-relaxed text-olive-700">
-                Il bonifico di una consegna con carta parte {fraseAttesaBonifico()}, ma solo se hai collegato il tuo IBAN qui sotto: finché non è collegato i compensi restano in attesa.
+                I compensi in arrivo passano sul tuo conto di pagamento {fraseAttesaBonifico()}; da lì alla tua banca servono alcuni giorni lavorativi, col calendario dei versamenti di Stripe. Arrivano solo se hai collegato il tuo IBAN qui sotto: finché non è collegato restano in attesa.
               </p>
               <p className="mt-1 text-[11px] leading-relaxed text-olive-700">
                 Sulle consegne in contanti il compenso te lo tieni tu dall&apos;incasso: rimetti in

@@ -9,7 +9,10 @@ describe('R09-020 · i guadagni del fattorino dicono quando arriva il bonifico',
   const s = readFileSync('app/rider/earnings/page.tsx', 'utf8');
   it('il riquadro usa fraseAttesaBonifico, non un tempo scritto a mano', () => {
     expect(s).toContain("import { fraseAttesaBonifico } from '@/lib/stripe/tempi-bonifico';");
-    expect(s).toMatch(/Il bonifico di una consegna con carta parte \{fraseAttesaBonifico\(\)\}/);
+    expect(s).toMatch(/I compensi in arrivo passano sul tuo conto di pagamento \{fraseAttesaBonifico\(\)\}/);
+    // Un'ora dopo parte il passaggio interno a Stripe, non il bonifico in banca (lib/stripe/tempi-bonifico.ts).
+    expect(s).toMatch(/alla tua banca servono alcuni giorni lavorativi/);
+    expect(s).not.toMatch(/Il bonifico di una consegna con carta parte/);
     expect(fraseAttesaBonifico()).toMatch(/dopo la consegna/);
   });
   it('dice che senza IBAN collegato i compensi restano in attesa', () => {
