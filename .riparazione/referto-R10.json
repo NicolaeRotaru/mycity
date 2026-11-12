@@ -1,6 +1,6 @@
 {
   "sessione": "R10",
-  "aggiornato": "2026-11-12 14:59",
+  "aggiornato": "2026-11-12 15:28",
   "finita": false,
   "testa": "",
   "verifica": {
@@ -37,6 +37,28 @@
       "nota": "La parte di codice c'è già sulla base: app/auth/confirm/route.ts verifica il token_hash con verifyOtp (funziona da qualunque dispositivo), app/reset-password/page.tsx:206-219 + lib/auth/link-email.ts:308-336 dicono «Questo link va aperto dove l'hai chiesto» (motivo altro-browser, pkce_code_verifier_not_found), /sign-in legge `error`. Prove esistenti verdi: npx vitest run tests/unit/il-link-della-password-si-apre-da-qualunque-dispositivo.test.ts tests/unit/minori-s10-nuova-password.test.ts (35 passate). Cosa deve fare Nicola, su Supabase: 1) Authentication → URL Configuration: Site URL = l'indirizzo pubblico del sito. 2) Email Templates → «Reset password»: link = {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery. 3) «Confirm signup»: {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next={{ .RedirectTo }}. 4) Subito dopo, prova a mano: reset chiesto dal computer, email aperta dal telefono e dall'app Gmail, password cambiata; poi un'iscrizione confermata da un altro dispositivo. Se fallisce, rimettere i modelli di prima.",
       "prova": "tests/unit/il-link-della-password-si-apre-da-qualunque-dispositivo.test.ts (verde sulla base)",
       "chiave": "sicurezza-auth|chi chiede la nuova password dal computer e apre l'email dal telefono non riesce a cambiarla, e la pagina non dice perché"
+    },
+    {
+      "id": "R10-003",
+      "esito": "riparato",
+      "commit": "85b35a51366b060e6479b6b215af12b9bb11b599",
+      "file_toccati": [
+        "app/sign-in/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-password-dimenticata-per-il-pollice.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-password-dimenticata-per-il-pollice.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 85b35a51366b060e6479b6b215af12b9bb11b599^ --file app/sign-in/page.tsx --prove tests/unit/riparazione-r10-password-dimenticata-per-il-pollice.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il bottone «Password dimenticata?» ha ora inline-flex, min-h-[44px] e px-2. L'area cresce verso l'alto (-mt-3) e non si sovrappone al campo; con mb-1 fra bottone e campo restano 8 px. È uno stile: prova leggera sul sorgente.",
+      "chiave": "accessibilita|il link «password dimenticata?» nella pagina di accesso è alto 16 pixel, troppo piccolo per il pollice"
     },
     {
       "id": "R10-004",
@@ -133,6 +155,244 @@
       "chiave": "architettura|nel pannello /admin/home «drop del giorno» e «newsletter» risultano visibili, ma la home non le disegna"
     },
     {
+      "id": "R10-008",
+      "esito": "riparato",
+      "commit": "f807317fda35976d399b5c0587efd0475ffeb1fe",
+      "file_toccati": [
+        "app/api/ai/catalog-apply/route.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-traccia-del-prezzo-una-forma.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-traccia-del-prezzo-una-forma.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f807317fda35976d399b5c0587efd0475ffeb1fe^ --file app/api/ai/catalog-apply/route.ts --prove tests/unit/riparazione-r10-traccia-del-prezzo-una-forma.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "catalog-apply non scrive più la voce del registro a mano: la costruisce tracciaDellaModifica (la stessa del modulo del prodotto), con prima=riga corrente, dopo=update, origine 'ai-copilot' e daAi = i campi proposti. Nel registro finiscono solo i campi davvero cambiati.",
+      "chiave": "architettura|la traccia «chi ha cambiato il prezzo» esce in due forme diverse a seconda della porta"
+    },
+    {
+      "id": "R10-009",
+      "esito": "parziale",
+      "commit": "11d7c307e61a0e87bc36810abfa1bd47a4c14083",
+      "file_toccati": [
+        "package-lock.json"
+      ],
+      "prova_file": [],
+      "prova_comando": "npm audit --json ; npm audit --omit=dev --json ; npm run verify",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "audit": {
+        "prima": {
+          "tutte": {
+            "low": 8,
+            "moderate": 20,
+            "high": 13,
+            "critical": 4,
+            "total": 45
+          },
+          "solo_produzione": {
+            "low": 2,
+            "moderate": 12,
+            "high": 5,
+            "critical": 3,
+            "total": 22
+          }
+        },
+        "dopo": {
+          "tutte": {
+            "low": 8,
+            "moderate": 14,
+            "high": 5,
+            "critical": 0,
+            "total": 27
+          },
+          "solo_produzione": {
+            "low": 2,
+            "moderate": 9,
+            "high": 2,
+            "critical": 0,
+            "total": 13
+          }
+        }
+      },
+      "cosa_ho_fatto": "npm audit fix senza --force, in un commit da solo con il solo package-lock.json (package.json non è cambiato). Tutti gli aggiornamenti restano nei limiti già scritti in package.json: next 15.5.25→15.5.29, @sentry/nextjs 10.60→10.78, storybook e @storybook/* 10.4.6→10.6.7, vitest 4.1.7→4.1.12. Falle da 45 a 27 e critiche da 4 a 0; solo produzione da 22 a 13, critiche da 3 a 0. npm run verify subito dopo il commit: verde (1214 file di prova, 8935 prove passate, 1 saltata già prima).",
+      "cosa_resta": "Restano 5 alte: webpack-dev-middleware via @storybook/builder-webpack5 (nessuna correzione disponibile in 10.x: va tolto o sostituito il builder webpack di Storybook), brace-expansion (strumenti), zod (la correzione è zod 4, un salto di versione che cambia l'API). Overrides, salti di versione e il cancello in CI sono in file non miei: vedi serve_file_altrui.",
+      "serve_file_altrui": [
+        {
+          "file": "package.json",
+          "modifica": "Aggiungere \"overrides\" per le transitive con correzione dentro la stessa major (undici, js-yaml, fast-uri, brace-expansion), poi npm install e npm audit. Valutare a parte zod 3→4 (cambia l'API: è una scelta) e Storybook con @storybook/nextjs-vite invece del builder webpack, che porta webpack-dev-middleware."
+        },
+        {
+          "file": ".github/workflows (il file della CI)",
+          "modifica": "Aggiungere il passo «npm audit --omit=dev --audit-level=high» come cancello, così le falle degli strumenti di sviluppo non coprono quelle del sito."
+        }
+      ],
+      "chiave": "architettura|gli strumenti degli sviluppatori portano altre 19 falle note, 10 alte, ma nessuna arriva al sito"
+    },
+    {
+      "id": "R10-010",
+      "esito": "parziale",
+      "commit": "90e765a5d7f62934e1cc0ce5c9536fbd9324761f",
+      "file_toccati": [
+        "components/ui/Card.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-card-raggio-per-contesto.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-card-raggio-per-contesto.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 90e765a5d7f62934e1cc0ce5c9536fbd9324761f^ --file components/ui/Card.tsx --prove tests/unit/riparazione-r10-card-raggio-per-contesto.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "La regola del raggio sta nella primitiva: prop radius ('xl' di base = 16px per il contenuto, '2xl' = 20px per prodotti e negozi, 'lg' = 12px per i riquadri interni). La base passa da 12px a 16px: i 10 file che usano <Card> guadagnano 4px di raggio, la variante funnel resta a 16px.",
+      "cosa_resta": "Portare su <Card> almeno le pagine del percorso d'acquisto (carrello, cassa) e poi le altre ~140 card scritte a mano con bg-white border cream-300/surface-200: sono tutte in file non miei. La regola per contesto va scritta anche nel design system (documento), come chiede la voce.",
+      "chiave": "coerenza-brand|la primitiva card è usata in 10 file, mentre 141 card sono ridisegnate a mano con quattro raggi diversi"
+    },
+    {
+      "id": "R10-011",
+      "esito": "gia_riparato_prima",
+      "prova": "Il carrello non ha la scelta del ritiro: si fa in cassa, e oggi è spento ovunque (RITIRO_IN_NEGOZIO_ATTIVO=false, lib/constants; la radiografia S01 2594 lo conferma). L'avviso del carrello (app/cart/page.tsx:591-616) usa motivoFuoriZona (lib/ordini/zona-di-consegna.ts:61-68), che con il ritiro acceso dice già «… troppo lontano. Puoi ritirare in negozio.»: un'offerta per chi sceglierà il ritiro, non un muro. Con il ritiro spento l'avviso è giusto per tutti. Passare pickupInStore non si può: nel carrello non c'è ancora una scelta da passare.",
+      "chiave": "flussi-conversione|il carrello avvisa «fuori zona» anche chi poi sceglierà il ritiro in negozio"
+    },
+    {
+      "id": "R10-012",
+      "esito": "gia_riparato_prima",
+      "prova": "Sulla base app/cart/page.tsx:621-626 e app/orders/page.tsx:353,382 usano già loader={caricatoreFotoRemote} (lib/image-loader.ts) e nessun `unoptimized`: grep -c unoptimized app/cart/page.tsx = 0, e lo stesso per app/orders/page.tsx. srcSet e sizes tornano. I tre `unoptimized` che restano (app/shared-cart/page.tsx, app/seller/products/page.tsx, app/orders/[id]/page.tsx) sono in file non miei: li ho messi in nuovi_difetti_visti.",
+      "chiave": "frontend-ux|foto sgranate nel carrello e negli ordini: `unoptimized` spegne il `sizes` scritto lì accanto"
+    },
+    {
+      "id": "R10-013",
+      "esito": "riparato",
+      "commit": "379dc98988c460259a78b7a0871b055a6ede04fe",
+      "file_toccati": [
+        "app/orders/page.tsx",
+        "lib/ordini/tetto-ordini.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-oltre-il-centesimo-ordine.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-oltre-il-centesimo-ordine.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 379dc98988c460259a78b7a0871b055a6ede04fe^ --file app/orders/page.tsx --prove tests/unit/riparazione-r10-oltre-il-centesimo-ordine.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il tetto (100) e le sue parole stanno in un file nuovo, lib/ordini/tetto-ordini.ts. La lettura usa TETTO_ORDINI; con il tetto pieno l'intestazione dice «ultimi 100 ordini» e sotto la lista compare «Qui vedi solo gli ultimi 100 ordini…» con il link all'assistenza (/help). Niente paginazione: la voce chiedeva paginazione oppure la frase, ho scelto la frase.",
+      "chiave": "frontend-ux|nella pagina dei miei ordini, dopo il centesimo gli ordini vecchi spariscono senza avviso"
+    },
+    {
+      "id": "R10-014",
+      "esito": "riparato",
+      "commit": "585a8bcf194e8f276ea413d9daf11a5d8be3f2c5",
+      "file_toccati": [
+        "components/admin/home/HomeSectionConfigForm.tsx",
+        "lib/home-site.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-testo-lungo-non-si-taglia.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-testo-lungo-non-si-taglia.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 585a8bcf194e8f276ea413d9daf11a5d8be3f2c5^ --file components/admin/home/HomeSectionConfigForm.tsx,lib/home-site.ts --prove tests/unit/riparazione-r10-testo-lungo-non-si-taglia.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Tolto maxLength={4000} dal campo del blocco di testo (lo usano sia /admin/home sia le pagine CMS), che tagliava in silenzio quello che si incollava. Al suo posto un contatore «n/4000 caratteri» e, oltre il limite, un errore visibile (aria-invalid) che dice cosa fare. Lo schema (lib/home-site.ts) rifiuta con un messaggio che dice il limite: è quello che rispondono la rotta app/api/admin/cms/[slug] e il salvataggio della home, e la rotta non serviva toccarla.",
+      "chiave": "frontend-ux|un testo lungo incollato in una pagina del sito viene tagliato a 4.000 caratteri senza avvisare, e la pagina pubblicata resta monca"
+    },
+    {
+      "id": "R10-015",
+      "esito": "riparato",
+      "commit": "74b55ed4400e27c6466ebebbad0d2deae2e6c39b",
+      "file_toccati": [
+        "app/admin/orders/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-dettaglio-ordine-non-scorre-di-lato.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-dettaglio-ordine-non-scorre-di-lato.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 74b55ed4400e27c6466ebebbad0d2deae2e6c39b^ --file app/admin/orders/[id]/page.tsx --prove tests/unit/riparazione-r10-dettaglio-ordine-non-scorre-di-lato.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Al <dd> della riga del dettaglio ordine aggiunti min-w-0, break-words e [overflow-wrap:anywhere]: un link incollato nelle note va a capo invece di allargare la pagina. È uno stile: prova leggera sul sorgente.",
+      "chiave": "layout-responsive|il dettaglio ordine sul telefono scorre di lato se il cliente incolla un link nelle note di consegna"
+    },
+    {
+      "id": "R10-016",
+      "esito": "riparato",
+      "commit": "533f6a7eac4e421071a3d1ffddbafec59c8b91bc",
+      "file_toccati": [
+        "app/reset-password/page.tsx",
+        "lib/auth/errori-nuova-password.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-password-rubata-consiglio-giusto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-password-rubata-consiglio-giusto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 533f6a7eac4e421071a3d1ffddbafec59c8b91bc^ --file app/reset-password/page.tsx --prove tests/unit/riparazione-r10-password-rubata-consiglio-giusto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La traduzione degli errori va in un file nuovo, lib/auth/errori-nuova-password.ts, e legge il motivo del rifiuto di Supabase (reasons): password rubata (pwned), troppo corta (length), troppo semplice (characters), ognuna con il suo consiglio. Il motivo resta sotto il campo «Nuova password» (prop error) oltre all'avviso, e sparisce quando si riscrive. La frase introduttiva aggiunge «che non usi già altrove».",
+      "chiave": "microcopy|sulla pagina della nuova password, una password già finita in rete viene rifiutata con un consiglio sbagliato che sparisce dopo pochi secondi"
+    },
+    {
+      "id": "R10-017",
+      "esito": "riparato",
+      "commit": "aa88b5da38eadc57f108c81ef5e0405b250cb3a7",
+      "file_toccati": [
+        "app/orders/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-bottoni-degli-ordini-per-il-pollice.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-bottoni-degli-ordini-per-il-pollice.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base aa88b5da38eadc57f108c81ef5e0405b250cb3a7^ --file app/orders/page.tsx --prove tests/unit/riparazione-r10-bottoni-degli-ordini-per-il-pollice.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "I due bottoni passano da size sm (32 px) a md (min-h 44 px), con gap-3 e flex-wrap. components/ui/Button.tsx non l'ho toccato: ingrandire la sm cambierebbe anche le tabelle fitte dell'amministrazione.",
+      "chiave": "mobile-pwa|nella lista ordini i bottoni «traccia» e «riordina» sono troppo piccoli per il pollice"
+    },
+    {
+      "id": "R10-018",
+      "esito": "parziale",
+      "prova": "public/manifest.json sulla base: «orientation» non c'è più, «id»: \"/\" e «display_override»: [\"standalone\",\"minimal-ui\"] ci sono già (punti ① e metà del ②, sistemati prima di questa campagna).",
+      "cosa_ho_fatto": "Niente da cambiare nel codice: tre richieste su quattro erano già fatte sulla base.",
+      "cosa_resta": "Il campo «screenshots» (2-3 immagini form_factor «narrow» e una «wide») vuole catture vere del sito online, con negozi e prodotti veri: non le posso produrre qui. Quando ci sono: metterle in public/ (es. public/screenshots/home-telefono.png 1080x1920) e aggiungere a public/manifest.json \"screenshots\": [{\"src\":\"/screenshots/home-telefono.png\",\"sizes\":\"1080x1920\",\"type\":\"image/png\",\"form_factor\":\"narrow\",\"label\":\"La vetrina dei negozi di Piacenza\"}, …]. L'id resta \"/\": cambiarlo creerebbe una seconda installazione per chi l'ha già.",
+      "chiave": "mobile-pwa|il manifest blocca l'app in verticale e non ha le schermate per la finestra d'installazione"
+    },
+    {
       "id": "R10-019",
       "esito": "riparato",
       "commit": "a47ea68b2f40410356e6de888a58f8e1b85acad6",
@@ -226,6 +486,47 @@
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Con past_due il tasto del banner chiama /api/seller/subscription/portal (dove si aggiorna la carta) invece della cassa, che su un abbonamento esistente risponde 409. Senza abbonamento chiama la cassa come prima.",
       "chiave": "pagamenti-stripe|quando il pagamento dell'abbonamento non va a buon fine, il tasto «aggiorna pagamento» risponde con un errore invece di aprire il portale"
+    },
+    {
+      "id": "R10-023",
+      "esito": "serve_file_altrui",
+      "nota": "Inter corsivo NON si può togliere: lo usano le note in corsivo senza grazie (app/orders/[id]/page.tsx:865, app/seller/orders/[id]/page.tsx:641, app/profile/addresses/page.tsx:232, app/profile/gift-cards/page.tsx:375, app/lists/[id]/page.tsx:353, components/ProductQA.tsx:263 …): senza il file tornerebbe il corsivo finto. Per togliere il preload ai corsivi servono due istanze di next/font (una famiglia diversa) e una regola CSS che dica al corsivo quale famiglia usare. La regola va in app/globals.css, che non è mio. Cambiare il layout da solo rimetterebbe il corsivo finto ovunque, quindi le due modifiche vanno nello stesso commit: le scrivo tutte e due qui (app/layout.tsx è mio, ma non lo tocco da solo). Dopo, va rimisurato con lo script della voce.",
+      "serve_file_altrui": [
+        {
+          "file": "app/layout.tsx",
+          "modifica": "Righe 36-48: Inter e Fraunces con style: ['normal'] (preload come oggi). Aggiungere due istanze: const interCorsivo = Inter({ subsets: ['latin'], variable: '--font-inter-italic', display: 'swap', style: ['italic'], preload: false }); const frauncesCorsivo = Fraunces({ subsets: ['latin'], variable: '--font-serif-italic', display: 'swap', weight: ['400','500','600','700','800'], style: ['italic'], preload: false }); e nell'<html> className aggiungere ${interCorsivo.variable} ${frauncesCorsivo.variable}. Da fare SOLO insieme alla regola di app/globals.css."
+        },
+        {
+          "file": "app/globals.css",
+          "modifica": "Dopo le regole di h1/h2/h3 (riga ~217): `.italic, em, i { font-family: var(--font-inter-italic), var(--font-sans); }` e `:is(h1, h2, h3, .font-serif, .font-serif-display, .font-display) :is(.italic, em, i), :is(h1, h2, h3, .font-serif, .font-serif-display, .font-display):is(.italic, em, i) { font-family: var(--font-serif-italic), var(--font-serif); }`. Poi controllare a occhio «veri» nel titolone della home (app/page.tsx:27), in come-funziona (app/come-funziona/page.tsx:54) e in AuthShell (components/ui/AuthShell.tsx:84): devono restare in Fraunces corsivo vero."
+        }
+      ],
+      "chiave": "performance|ogni pagina scarica due caratteri in corsivo che quasi nessuna pagina usa"
+    },
+    {
+      "id": "R10-024",
+      "esito": "non_codice",
+      "nota": "Il codice c'è già. La regola nuova (migrations/155_il_registro_attivita_oscura_per_difetto.sql:61-70, activity_key_sensibile) riconosce first_name/last_name, recipient e message, e vale per le righe nuove. La pulizia delle righe vecchie è migrations/183_il_registro_non_copia_i_nomi_legali.sql:40-63: un UPDATE idempotente che oscura con la stessa regola i nomi legali e i biglietti dei buoni regalo già scritti. La 115 è la regola vecchia, superata dalla 155: non va toccata. Cosa deve fare Nicola: applicare sul database vero la 155 (se non c'è già) e poi la 183. Prima, una copia del database. Nessuna migrazione nuova: rifarebbe la 183.",
+      "prova": "migrations/183_il_registro_non_copia_i_nomi_legali.sql:40-63",
+      "chiave": "privacy-legale|nel registro delle attività restano in chiaro i nomi legali di negozianti e fattorini e i biglietti dei buoni regalo scritti prima della correzione"
+    },
+    {
+      "id": "R10-025",
+      "esito": "parziale",
+      "commit": "0b2167a34ba4062621fc95f835d2005d9237e752",
+      "file_toccati": [
+        "tests/unit/riparazione-r10-carrello-conto-consegna.test.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r10-carrello-conto-consegna.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r10-carrello-conto-consegna.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Il file di collaudo originale non c'è più, quindi ho rifatto a mano 9 mutanti sul conto della consegna di app/cart/page.tsx contro tutte le 20 prove che importano il carrello. Prima: M2 (spedizione tolta dal totale), M3 (subtotale per negozio con Math.floor), M4 (avviso «spesa sotto i 10 €» letto sempre dal primo negozio) e M5 (lat/lng del negozio scambiate nel conto) restavano verdi. La prova nuova monta il carrello vero con due negozi, un prezzo da 1,15 € e coordinate vere (client Supabase vero su rete finta): M3 e M4 ora diventano rosse; M1, M6, M7, M8, M9 erano già rosse. Nessuna modifica al codice del carrello.",
+      "cosa_resta": "M2 e M5 restano verdi, ma oggi sono equivalenti: al lancio la spedizione per distanza vale zero (shippingForEuro, lib/ordini/prezzi.ts), quindi togliere la spedizione o scambiare le coordinate nel conto non cambia nessun numero. Diventeranno rosse con una prova sul conto il giorno che la spedizione torna a dipendere dalla distanza. Le altre mutanti del collaudo originale non si possono rifare senza il suo file.",
+      "chiave": "qa-flussi|buco nelle prove del carrello: alcune mutanti del collaudo sul conto della consegna restano verdi"
     }
   ],
   "nuovi_difetti_visti": [
@@ -242,6 +543,20 @@
       "severita": "minore",
       "file": "components/ui/DeliveryCutoff.tsx:56",
       "descrizione": "Dopo R10-006 non consuma più il freno del carrello, ma resta una richiesta per negozio. useVeloceDelNegozio potrebbe raggrupparle (la rotta accetta già ?negozi=a,b,… fino a 20)."
+    },
+    {
+      "titolo": "Le altre due porte dell'AI sul catalogo scrivono ancora la traccia a mano, nella forma vecchia",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "app/api/ai/catalog-apply-bulk/route.ts:217 · app/api/ai/catalog-batch/apply",
+      "descrizione": "Come catalog-apply prima di R10-008: tutte le chiavi mandate e nessun daAi. Cura: usare tracciaDellaModifica (lib/products/salvataggio-tracciato.ts) anche lì. File non miei."
+    },
+    {
+      "titolo": "Restano tre pagine con le foto sgranate perché `unoptimized` spegne srcSet e sizes",
+      "dimensione": "frontend-ux",
+      "severita": "minore",
+      "file": "app/shared-cart/page.tsx · app/seller/products/page.tsx · app/orders/[id]/page.tsx",
+      "descrizione": "Come carrello e ordini prima della cura #99: sostituire `unoptimized` con loader={caricatoreFotoRemote}. Si può anche estendere tests/unit/la-foto-chiesta-piu-piccola-del-riquadro.test.ts con un fattore di densità 2. File non miei."
     }
   ],
   "domande_per_nicola": [
