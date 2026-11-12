@@ -58,7 +58,13 @@ export const TIPI_RRWEB_CHE_PORTANO_IL_DOM: ReadonlySet<number> = new Set([2, 3]
  * con dei parametri (`/search?q=…`). Un percorso senza parametri non si tocca:
  * della strada si tiene tutto, e' la regola comune di tutto il sito.
  */
-const UN_INDIRIZZO_DENTRO_IL_TESTO = /https?:\/\/[^\s"'<>()\\]+|\/[^\s"'<>()\\]*\?[^\s"'<>()\\]*/g;
+// 12/11/2026 (R06-018) — Le parentesi NON sono un confine: encodeURIComponent e il
+// browser le lasciano in chiaro dentro l'indirizzo (`/search?q=pane%20(mario…)`), e
+// fermarsi li' lasciava uscire in chiaro tutto quello che seguiva la parentesi.
+// Lo stesso vale per l'apostrofo: encodeURIComponent lascia in chiaro ( ) ! * ~ '.
+// L'indirizzo finisce a uno spazio, alle virgolette doppie, a < > o a una barra
+// rovescia: nel dubbio si nasconde un carattere in piu', non un dato in meno.
+const UN_INDIRIZZO_DENTRO_IL_TESTO = /https?:\/\/[^\s"<>\\]+|\/[^\s"<>\\]*\?[^\s"<>\\]*/g;
 
 /** Oltre questo un testo non arriva da una navigazione vera: si nasconde intero. */
 const TESTO_TROPPO_LUNGO = 50_000;
