@@ -1,19 +1,19 @@
 {
   "sessione": "R04",
-  "aggiornato": "2026-11-12 15:22",
-  "finita": false,
-  "testa": "747a458b735134ff745c63b65e14bbd68ba2d3dc",
+  "aggiornato": "2026-11-12 15:45",
+  "finita": true,
+  "testa": "a8bb0383f1859b1216e805927eaf14661114dca3",
   "verifica": {
     "comando": "npm run verify",
-    "esito": "",
-    "nota": ""
+    "esito": "verde",
+    "nota": "1224 file di prova passati (1 saltato gia' sulla base), 8977 test; typecheck e lint verdi. La prova rimessa e' stata fatta a mano per ogni voce (git checkout <commit>^ dei file corretti → prova rossa → ripristino → verde) perche' l'esecuzione di cervello/prova-rimessa.mjs dal clone di ad-mycity e' stata bloccata dal classificatore dei permessi di questa sessione."
   },
   "voci": [
     {
       "id": "R04-001",
       "chiave": "ai-endpoints|nella chat assistenza il negoziante approva una descrizione nuova senza poterla leggere, e al primo messaggio l'assistente riscrive tag e descrizione senza aver visto quelli che ci sono",
       "esito": "parziale",
-      "commit": "307fd9a4619cfaaf9344bb187a3ddbfce0150980",
+      "commit": "989d26f372d84433a1c9f70a1eac52c313a24855",
       "file_toccati": [
         "app/api/ai/catalog-chat/route.ts"
       ],
@@ -26,10 +26,10 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/catalog-chat/route.ts -> prova rossa; ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/catalog-chat/route.ts -> prova rossa; ripristino -> verde · revisione 989d26f37: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Punto 2 del fix era gia' sulla base (in identificazione la rotta toglie tag/descrizione/caratteristiche dalla proposta, prova al-primo-messaggio-...). Aggiunto il punto 3: regola «NON INVENTARE» nel prompt della chat (niente ingredienti, allergeni, origine, diciture «senza…» non scritte dal venditore).",
+      "cosa_ho_fatto": "Punto 2 del fix era gia' sulla base (in identificazione la rotta toglie tag/descrizione/caratteristiche dalla proposta, prova al-primo-messaggio-...). Aggiunto il punto 3: regola «NON INVENTARE» nel prompt della chat (niente ingredienti, allergeni, origine, diciture «senza…» non scritte dal venditore). REVISIONE DOPO IL QA: in identificazione, se la rotta toglie descrizione/tag/caratteristiche, la risposta lo dice e chiede di ripetere col prodotto aperto (prima prometteva modifiche non arrivate); il prompt chiede di riscrivere la descrizione partendo da quella attuale e di non inventare tag.",
       "cosa_resta": "Punto 1: la scheda della proposta deve mostrare il testo della descrizione nuova e i tag tolti. Sta in lib/products/prontoPerLaVendita.ts (righeDellaProposta), non e' di R04.",
       "serve_file_altrui": [
         {
@@ -37,13 +37,16 @@
           "modifica": "in righeDellaProposta aggiungere un terzo parametro opzionale al prodotto { tags?: string[] | null }; sostituire 'Descrizione aggiornata' con 'Descrizione nuova: «' + (patch.description.length > 200 ? patch.description.slice(0,200) + '…' : patch.description) + '»' (il componente puo' aggiungere «leggi tutto» col testo intero); per i tag, calcolare tolti = (prodotto.tags ?? []).filter(t => !patch.tags.includes(t)) e, se non vuoto, aggiungere la riga 'Tag tolti: ' + tolti.join(', '). Il chiamante in components/... (SupportProductAssistant.tsx) deve passare tags del prodotto aperto."
         }
       ],
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g1): rilanciate le prove, scenario panettone; trovati risposta che prometteva campi tolti e prompt senza «parti dalla descrizione attuale», corretti nella revisione. Il punto 1 (scheda) resta serve_file_altrui.",
+      "commit_revisione": [
+        "989d26f372d84433a1c9f70a1eac52c313a24855"
+      ]
     },
     {
       "id": "R04-002",
       "chiave": "ai-endpoints|il modello ai che legge le foto e scrive le schede si spegne il 30 novembre: dodici funzioni smetteranno di rispondere",
       "esito": "riparato",
-      "commit": "b51060dd2a66603818c0a93f28decc3fbbb46062",
+      "commit": "0cb6eeb694c6f418942099970ad8e2570b11a67d",
       "file_toccati": [
         "lib/ai/client.ts",
         "lib/ai/run.ts",
@@ -58,23 +61,27 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano (prova-rimessa.mjs bloccato dal classificatore): git checkout HEAD^ -- lib/ai/client.ts lib/ai/run.ts; npx vitest run tests/unit/riparazione-r04-modello-ritirato.test.ts -> 2 rosse; ripristino -> verde"
+        "comando": "rimessa a mano (prova-rimessa.mjs bloccato dal classificatore): git checkout HEAD^ -- lib/ai/client.ts lib/ai/run.ts; npx vitest run tests/unit/riparazione-r04-modello-ritirato.test.ts -> 2 rosse; ripristino -> verde · revisione 0cb6eeb69: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "MODELLO_PREDEFINITO passa da claude-sonnet-4-5 (spento il 30/11) a claude-sonnet-4-6, stesso prezzo: CAMBIA IL MODELLO IN PRODUZIONE. mapAiError trasforma un 404 del fornitore in 503 «Funzione AI momentaneamente non disponibile» con logger.error. Aggiornata la prova esistente il-modello-grande-si-cambia-senza-rilascio (importa lib/ai/client.ts) al nuovo default.",
-      "verificato_da": ""
+      "cosa_ho_fatto": "MODELLO_PREDEFINITO passa da claude-sonnet-4-5 (spento il 30/11) a claude-sonnet-4-6, stesso prezzo: CAMBIA IL MODELLO IN PRODUZIONE. mapAiError trasforma un 404 del fornitore in 503 «Funzione AI momentaneamente non disponibile» con logger.error. Aggiornata la prova esistente il-modello-grande-si-cambia-senza-rilascio (importa lib/ai/client.ts) al nuovo default. REVISIONE DOPO IL QA: modelloDaAmbiente, dal giorno dello spegnimento, rifiuta un modello ritirato scritto in AI_MODELLO_VISION/SMART e torna al predefinito attivo. Resta fuori (fuori voce, solo admin/cron): external-refresh e il cron prezzi esterni trasformano un 404 in un messaggio generico.",
+      "verificato_da": "qa (subagente g2): rimessa ripetuta (2/4 rosse), grep del modello ritirato in app/lib/components, chiamanti senza mapAiError; trovata la variabile d'ambiente che accettava ancora il modello ritirato, corretta nella revisione.",
+      "commit_revisione": [
+        "0cb6eeb694c6f418942099970ad8e2570b11a67d"
+      ]
     },
     {
       "id": "R04-003",
       "chiave": "ai-endpoints|il tetto giornaliero di spesa ai in produzione non è condiviso: ogni copia del sito conta per sé",
       "esito": "non_codice",
-      "nota": "Sulla base il codice fa gia' quello che puo': con il conto condiviso assente (PGRST202/42883) decidiSpesaAi stringe subito la quota di ogni copia a tetto/AI_COPIE_ATTESE (lib/ai/decisioneTettoSpesa.ts:92-98, prova tests/unit/il-tetto-di-spesa-ai-non-si-moltiplica-per-le-copie.test.ts verde). Il tetto torna condiviso solo con il database: Nicola deve applicare in produzione migrations/158_il_conto_della_spesa_ai_esiste_anche_in_produzione.sql (idempotente, stessa casa della 131) e impostare su Vercel AI_COPIE_ATTESE al numero vero di copie. L'allarme rosso nel cron degli avvisi non e' cablato: sondaContoCondiviso/allarmiTettoSpesaAi non sono chiamati da nessuna parte (grep su app/ e lib/).",
+      "nota": "Sulla base il codice fa gia' quello che puo': con il conto condiviso assente (PGRST202/42883) decidiSpesaAi stringe subito la quota di ogni copia a tetto/AI_COPIE_ATTESE (lib/ai/decisioneTettoSpesa.ts:92-98, prova tests/unit/il-tetto-di-spesa-ai-non-si-moltiplica-per-le-copie.test.ts verde). Il tetto torna condiviso solo con il database: Nicola deve applicare in produzione migrations/158_il_conto_della_spesa_ai_esiste_anche_in_produzione.sql (idempotente, stessa casa della 131) e impostare su Vercel AI_COPIE_ATTESE al numero vero di copie. L'allarme rosso nel cron degli avvisi non e' cablato: sondaContoCondiviso/allarmiTettoSpesaAi non sono chiamati da nessuna parte (grep su app/ e lib/). Limite in piu' (dal QA): il conto di ripiego vive nella memoria di ogni copia, e su Vercel le copie si spengono e si ricreano durante la giornata ripartendo da zero: AI_COPIE_ATTESE conta le copie accese insieme, non quelle create nel giorno, quindi senza la 158 la somma puo' superare il tetto anche con la quota divisa. Si chiude solo applicando la 158.",
       "serve_file_altrui": [
         {
           "file": "app/api/cron/operational-alerts/route.ts",
           "modifica": "a ogni passata: const conto = await sondaContoCondiviso(undefined, <primo_visto in ms dell'ultima riga operational_alert_log con type TIPO_ALLARME_TETTO_AI, se c'e'>); alerts.push(...allarmiTettoSpesaAi(conto, { tettoEur: Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0), copieAttese: leggiCopieAttese(process.env.AI_COPIE_ATTESE) })) — import da '@/lib/ai/tettoSpesa'. Il secondo argomento della sonda arriva con R04-018."
         }
-      ]
+      ],
+      "verificato_da": "qa (subagente g2): verificata l'affermazione sul codice (eseguiRpc -> permanente, decidiSpesaAi divide per AI_COPIE_ATTESE), 21/21 prove del tetto verdi; segnalato il limite delle copie che si ricreano."
     },
     {
       "id": "R04-004",
@@ -97,12 +104,12 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Aggiunto focus-visible:outline-white al Link «Contattaci» nel riquadro terracotta delle FAQ, come gia' fanno le barre in alto (Navbar). La regola unica in globals.css per tutti i fondi terracotta/vino (voce 1760) non l'ho fatta: fuori dalla voce.",
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g6): specificita' di .focus-visible:outline-white (0,2,0) sopra la regola globale (0,1,0) e white disponibile in Tailwind: regge."
     },
     {
       "id": "R04-005",
       "chiave": "ai-endpoints|un lotto ai partito ma non agganciato resta «in invio» per sempre, e la pagina del negozio non mostra né rotella né pulsante",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "f9dca2800e589b277c41b131a8016ea0eed739e9",
       "insieme_a": [
         "R04-013"
@@ -125,9 +132,10 @@
         "uscita": 0,
         "comando": "rimessa a mano: git checkout HEAD^ -- status/route.ts start/route.ts ai-batch/page.tsx -> 4 rosse su queste prove; ripristino -> verde"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "start ritenta l'aggancio del lotto e, se non riesce, risponde status 'submitting' (lo stato vero). status: un 'submitting' senza lotto oltre 15 minuti diventa 'failed' col motivo; uno con batch_id si interroga come 'processing'; la risposta porta error. Pagina: tipo Job con tutti gli stati, rotella e testo per 'submitting', riquadro con testo e pulsante «Avvia» per failed/error/canceled, e il lavoro fallito si dimentica (lib/ai/statoLavoroCatalogo.ts, file nuovo). La ricerca del lotto presso Anthropic per un invio scaduto non c'e' (vedi R04-014).",
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g3): pagina con tutti gli stati verificata; segnalato che l'esito «riparato» era sovrastimato sul caso esatto della voce: portato a parziale.",
+      "cosa_resta": "Il caso esatto della voce (lotto partito ma non agganciato perche' l'update fallisce due volte) lascia la riga senza batch_id: il ramo «submitting con batch_id» non si raggiunge da li', e dopo 15 minuti la riga diventa 'failed'. Il lotto pagato resta recuperabile solo dal registro (batchId nel log). Manca la ricerca del lotto presso Anthropic (stesso limite di R04-014: agganciare per ora e numero di richieste rischia il lotto di un altro negozio)."
     },
     {
       "id": "R04-006",
@@ -155,13 +163,13 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "In testa alla rotta, prima del freno e del corpo, 503 «Gli strumenti AI per i negozi non sono ancora attivi.» con AI_NEGOZI_ACCESA spento. Nel ciclo un AiConfigError del filtro rende 503 tutta la richiesta; «riprova fra poco» resta solo per i guasti passeggeri. Le cinque prove esistenti che importano la rotta ora simulano la funzione accesa (come le sorelle di catalog-batch). Il «meglio ancora» della voce (catalog-apply e catalog-apply-bulk) e' fuori dai miei file: vedi nuovi_difetti_visti.",
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g4): 503 in testa e AiConfigError → 503 per tutta la richiesta; 31 file/190 test vicini verdi: regge."
     },
     {
       "id": "R04-007",
       "chiave": "ai-endpoints|il copilot non riesce a preparare una modifica su tutto il catalogo oltre circa cento prodotti: risponde «riprova» e fallisce ogni volta",
       "esito": "riparato",
-      "commit": "3caab0b190dc8bc195ad659ed19651543215b0ac",
+      "commit": "41cea089ea0b7307cb45caa59af649e22ccc6109",
       "file_toccati": [
         "app/api/ai/copilot/route.ts",
         "lib/ai/regolaCopilot.ts"
@@ -175,11 +183,14 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/copilot/route.ts -> 4 rosse; ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/copilot/route.ts -> 4 rosse; ripristino -> verde · revisione 41cea089e: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La «soluzione piu' solida» della voce: lo strumento bulk_edit accetta 'regola' {product_ids, prezzo_percentuale, aggiungi_tag, togli_tag, status}; il prompt dice di usarla quando la stessa operazione vale per piu' di 20 prodotti. Il server (lib/ai/regolaCopilot.ts, nuovo) espande la regola sui prodotti veri del venditore: prezzo con la percentuale arrotondato al centesimo, tag partendo da quelli attuali (che il modello non vede), stato fra quelli ammessi; le voci singole sullo stesso prodotto si sommano sopra. Un id ~20-25 token contro 35-55 di una voce: 200 prodotti stanno nel tetto di 6000. La banda del ±30% sul prezzo resta applicata da catalog-apply-bulk come prima.",
-      "verificato_da": ""
+      "cosa_ho_fatto": "La «soluzione piu' solida» della voce: lo strumento bulk_edit accetta 'regola' {product_ids, prezzo_percentuale, aggiungi_tag, togli_tag, status}; il prompt dice di usarla quando la stessa operazione vale per piu' di 20 prodotti. Il server (lib/ai/regolaCopilot.ts, nuovo) espande la regola sui prodotti veri del venditore: prezzo con la percentuale arrotondato al centesimo, tag partendo da quelli attuali (che il modello non vede), stato fra quelli ammessi; le voci singole sullo stesso prodotto si sommano sopra. Un id ~20-25 token contro 35-55 di una voce: 200 prodotti stanno nel tetto di 6000. La banda del ±30% sul prezzo resta applicata da catalog-apply-bulk come prima. REVISIONE DOPO IL QA: una percentuale oltre la banda del ±30% (BANDA_PREZZO_AI) non diventa proposta; su un prodotto che passerebbe i 15 tag i tag non si propongono (il server taglierebbe proprio quelli aggiunti dicendo «applicato»). Resta una stima, non misurata: 200 id stanno vicini al tetto di 6000 token.",
+      "verificato_da": "qa (subagente g4): provato regola -50% → rifiutata dalla banda in catalog-apply-bulk; trovati tag oltre 15 e percentuale senza limite, corretti nella revisione.",
+      "commit_revisione": [
+        "41cea089ea0b7307cb45caa59af649e22ccc6109"
+      ]
     },
     {
       "id": "R04-008",
@@ -202,7 +213,7 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Come dice il fix: tolto history dalla rotta (nessuna pagina lo manda, CatalogCopilot.tsx invia solo instruction). Al modello arrivano il catalogo e l'istruzione recintata, che e' l'unico testo del venditore ed e' gia' passato da assertSafeText. CatalogCopilot.tsx non serviva toccarlo.",
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g4): history tolto, unico chiamante CatalogCopilot.tsx invia solo instruction: regge."
     },
     {
       "id": "R04-009",
@@ -226,7 +237,7 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "In entrambe le chat il filtro anti-contenuti riceve tutta la cronologia che va al modello (turni user e assistant), non solo i turni user. Se il rifiuto viene da un turno vecchio (anche un assistant inventato), resta il ripiego gia' esistente: si controlla l'ultimo messaggio e al modello va solo lui.",
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g4): ripiego ancora corretto (l'ultimo turno e' sempre user); effetto collaterale noto: se una risposta vera del modello nella storia fa scattare il filtro, la conversazione perde il contesto."
     },
     {
       "id": "R04-010",
@@ -249,30 +260,36 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Il tetto per elemento e lo scarto dei null c'erano gia' sulla base (S10: voceCorta/opzioniCorte, filtro sugli oggetti). Mancava il resto: le righe di categorie e caratteristiche ora passano da assertSafeText insieme al dettato (prima della chiamata al modello) e nel prompt stanno dentro i recinti <categorie> e <attributi>.",
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g4): elenchi nel filtro e nei recinti, REGOLA_TESTO_DI_TERZI presente: regge (nota costo: il filtro riceve fino a ~100 KB per chiamata)."
     },
     {
       "id": "R04-011",
       "chiave": "ai-endpoints|con l'ai spenta, chi guarda un prodotto importato da un altro sito lo fa segnare come «aggiornato adesso» anche se nessun dato è arrivato",
       "esito": "riparato",
-      "commit": "988f306fab2f312a10394ad7b8218981dd717d3c",
+      "commit": "dad5a6d38ba7d6890ec4478d81fbd720e5d18918",
       "file_toccati": [
-        "app/api/products/[id]/external-refresh/route.ts"
+        "app/api/cron/external-price-alerts/route.ts",
+        "app/api/products/[id]/external-refresh/route.ts",
+        "lib/products/externalSync.ts"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r04-prezzo-esterno-ai-spenta.test.ts"
+        "tests/unit/riparazione-r04-prezzo-esterno-ai-spenta.test.ts",
+        "tests/unit/riparazione-r04-cron-prezzi-esterni-errore.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r04-prezzo-esterno-ai-spenta.test.ts",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r04-prezzo-esterno-ai-spenta.test.ts tests/unit/riparazione-r04-cron-prezzi-esterni-errore.test.ts",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/products/[id]/external-refresh/route.ts -> 2 rosse; ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/products/[id]/external-refresh/route.ts -> 2 rosse; ripristino -> verde · revisione dad5a6d38: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nel GET, con AI_NEGOZI_ACCESA spento, si restituiscono i dati salvati (con stale vero) senza scrivere 'pending' ne' lanciare il refresh. Nel catch di doRefresh si scrive solo external_sync_status='error', non external_synced_at=adesso; il freno resta il cancello di 30 minuti per prodotto. Il cron external-price-alerts legge gia' l'interruttore: non toccato.",
-      "verificato_da": ""
+      "cosa_ho_fatto": "Nel GET, con AI_NEGOZI_ACCESA spento, si restituiscono i dati salvati (con stale vero) senza scrivere 'pending' ne' lanciare il refresh. Nel catch di doRefresh si scrive solo external_sync_status='error', non external_synced_at=adesso; il freno resta il cancello di 30 minuti per prodotto. Il cron external-price-alerts legge gia' l'interruttore: non toccato. REVISIONE DOPO IL QA: il freno contro i ritentativi non e' piu' external_synced_at=adesso ma ritentoDopoErroreConsentito (lib/products/externalSync.ts): un prodotto in errore si ritenta al massimo ogni 6 ore (il ritmo di prima), dalla vista e dal cron. Anche il cron external-price-alerts non scrive piu' external_synced_at su errore. Limite: il cancello usa rate-limit (Upstash, in memoria se Upstash manca).",
+      "verificato_da": "qa (subagente g4): 31 file/190 test vicini verdi; trovati il freno sceso da 6 h a 30 min e il cron che segnava ancora «aggiornato adesso», corretti nella revisione.",
+      "commit_revisione": [
+        "dad5a6d38ba7d6890ec4478d81fbd720e5d18918"
+      ]
     },
     {
       "id": "R04-012",
@@ -295,13 +312,13 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "policy_reason si usa solo se e' una stringa (altrimenti il messaggio generico, 400 invece di 500); name, description e category_slug escono solo se stringhe, suggested_price solo se numero finito > 0 (altrimenti null), come in extract-products.",
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g5): controlli di tipo su tutte le uscite usate: regge."
     },
     {
       "id": "R04-013",
       "chiave": "ai-endpoints|se il negoziante esce dalla pagina mentre «migliora tutto il catalogo» lavora, il lavoro è pagato e non si ritrova più",
       "esito": "riparato",
-      "commit": "f9dca2800e589b277c41b131a8016ea0eed739e9",
+      "commit": "f30f5236789f7f3f6f7e05b60d2398093a3c3277",
       "insieme_a": [
         "R04-005"
       ],
@@ -320,24 +337,29 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- status/route.ts ai-batch/page.tsx -> 3 rosse; ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- status/route.ts ai-batch/page.tsx -> 3 rosse; ripristino -> verde · revisione f30f52367: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La rotta dello stato chiamata senza jobId restituisce l'ultimo lavoro aperto del venditore (submitting/processing/ready) o null; la pagina, se questo browser non ricorda un lavoro, lo chiede al server all'apertura, e lo riprende anche dopo un avvio rifiutato. Il secondo avvio con un lavoro aperto e' rifiutato (R04-025, commit precedente), quindi non si paga di nuovo.",
-      "verificato_da": ""
+      "cosa_ho_fatto": "La rotta dello stato chiamata senza jobId restituisce l'ultimo lavoro aperto del venditore (submitting/processing/ready) o null; la pagina, se questo browser non ricorda un lavoro, lo chiede al server all'apertura, e lo riprende anche dopo un avvio rifiutato. Il secondo avvio con un lavoro aperto e' rifiutato (R04-025, commit precedente), quindi non si paga di nuovo. REVISIONE DOPO IL QA: se il lavoro ricordato dal browser risponde 403 o 404 (cancellato, o di un altro account sullo stesso browser) la pagina lo dimentica e chiede al server l'ultimo lavoro aperto (prima restava bloccata sul vecchio id). Prova della pagina leggera (testo del sorgente), quella della rotta e' comportamentale.",
+      "verificato_da": "qa (subagente g3): la rotta senza jobId filtra per venditore (nessuna esposizione); trovato l'id ricordato 403/404 mai dimenticato, corretto nella revisione.",
+      "commit_revisione": [
+        "f30f5236789f7f3f6f7e05b60d2398093a3c3277"
+      ]
     },
     {
       "id": "R04-014",
       "chiave": "ai-endpoints|se l'invio di un lotto ai resta senza risposta, il sito lo rimanda e anthropic ne esegue due, uno pagato e mai visto",
       "esito": "parziale",
-      "commit": "81e1507e7cb40f3d960d37ece5c94d5aa1bea555",
+      "commit": "810883a467a22aae46e060cdb57046696d718581",
       "file_toccati": [
-        "lib/ai/batch.ts",
-        "app/api/ai/catalog-batch/start/route.ts"
+        "app/api/ai/catalog-batch/start/route.ts",
+        "app/api/ai/catalog-batch/status/route.ts",
+        "lib/ai/batch.ts"
       ],
       "prova_file": [
         "tests/unit/riparazione-r04-lotto-senza-doppione.test.ts",
-        "tests/unit/riparazione-r04-lotto-invio-incerto.test.ts"
+        "tests/unit/riparazione-r04-lotto-invio-incerto.test.ts",
+        "tests/unit/riparazione-r04-lavoro-in-invio.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r04-lotto-senza-doppione.test.ts tests/unit/riparazione-r04-lotto-invio-incerto.test.ts",
       "prova_tipo": "comando",
@@ -345,12 +367,15 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano, un file per volta: lib/ai/batch.ts -> rossa (maxRetries assente); app/api/ai/catalog-batch/start/route.ts -> rossa (502 invece di 503, riga failed)"
+        "comando": "rimessa a mano, un file per volta: lib/ai/batch.ts -> rossa (maxRetries assente); app/api/ai/catalog-batch/start/route.ts -> rossa (502 invece di 503, riga failed) · revisione 810883a46: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "submitBatch crea il lotto con { maxRetries: 0 }: niente secondo invio automatico, quindi niente lotto doppio. Un errore di connessione/timeout (invioIncerto) non segna la riga 'failed': resta 'submitting' con error «da verificare», blocca un secondo avvio (R04-025) e il negoziante legge di non riavviare.",
+      "cosa_ho_fatto": "submitBatch crea il lotto con { maxRetries: 0 }: niente secondo invio automatico, quindi niente lotto doppio. Un errore di connessione/timeout (invioIncerto) non segna la riga 'failed': resta 'submitting' con error «da verificare», blocca un secondo avvio (R04-025) e il negoziante legge di non riavviare. REVISIONE DOPO IL QA: la regola dei 15 minuti dello stato (R04-005) non chiude piu' una riga con il motivo INVIO_SENZA_RISPOSTA: resta 'submitting' (e quindi blocca un secondo avvio) per 24 ore, poi si chiude dicendo di chiedere all'assistenza prima di ripartire; e su un invio incerto la stima del lotto si registra nel conto.",
       "cosa_resta": "La ricerca del lotto con batches.list dopo un timeout non l'ho fatta: l'elenco dei lotti e' di tutto l'account Anthropic, e agganciare per ora e numero di richieste puo' prendere il lotto di un altro negozio (risultati di prodotti altrui). Serve un legame sicuro (per esempio il primo custom_id = id prodotto controllato sui risultati) prima di farlo.",
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g3): trovato che la chiusura a 15 minuti annullava la protezione e che la spesa di un invio incerto non si contava; corretti nella revisione. Resta la ricerca del lotto presso Anthropic (cosa_resta).",
+      "commit_revisione": [
+        "810883a467a22aae46e060cdb57046696d718581"
+      ]
     },
     {
       "id": "R04-015",
@@ -376,13 +401,13 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Sulla base buildProductContext e rigaAttributoPerIlModello avevano gia' il tetto per testo (30 opzioni, 80 caratteri, S10). Restavano: improve-product (righe degli attributi senza tetto), e le righe delle categorie in improve-product, product-chat e barcode-lookup; ora usano voceCorta/opzioniCorte. In piu' tutte e quattro tengono solo gli elementi oggetto (un null faceva cadere la rotta con 500). Non ho ricostruito gli attributi sul server dalla categoria (il «meglio ancora»): resta come miglioria.",
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g5): tetto per testo nelle 3 rotte e in buildProductContext, scarto dei non-oggetti; 622 test vicini verdi: regge."
     },
     {
       "id": "R04-016",
       "chiave": "ai-endpoints|se si riaccende «traduci», una descrizione lunga torna tradotta solo all'inizio e il modulo la presenta come intera",
       "esito": "riparato",
-      "commit": "19162a9952d2064ef18a256f097ec61f60bbb507",
+      "commit": "1ade5d90c99e4e7f52d5baf29cb4d7a4c6244e20",
       "file_toccati": [
         "app/api/ai/translate/route.ts",
         "lib/ai/productContext.ts"
@@ -396,11 +421,14 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/translate/route.ts -> rossa; ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/translate/route.ts -> rossa; ripristino -> verde · revisione 1ade5d90c: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "productContext espone MAX_PRODUCT_JSON e schedaTagliataNelContesto(). La rotta di traduzione, prima di chiamare il modello, rifiuta con 400 «Descrizione troppo lunga per la traduzione automatica: massimo 2500 caratteri fra nome e descrizione» se la scheda arriverebbe tagliata o il testo supera 2500 caratteri; max_tokens d'uscita da 1024 a 2048 perche' 2500 caratteri tradotti ci stiano larghi (un'uscita tagliata la rifiutava gia' runMessage). QuickAiTools non serve toccarlo: il 400 arriva come errore e la scritta «Annuncio tradotto» non compare. La traduzione resta spenta (TRADUCI_ACCESO=false).",
-      "verificato_da": ""
+      "cosa_ho_fatto": "productContext espone MAX_PRODUCT_JSON e schedaTagliataNelContesto(). La rotta di traduzione, prima di chiamare il modello, rifiuta con 400 «Descrizione troppo lunga per la traduzione automatica: massimo 2500 caratteri fra nome e descrizione» se la scheda arriverebbe tagliata o il testo supera 2500 caratteri; max_tokens d'uscita da 1024 a 2048 perche' 2500 caratteri tradotti ci stiano larghi (un'uscita tagliata la rifiutava gia' runMessage). QuickAiTools non serve toccarlo: il 400 arriva come errore e la scritta «Annuncio tradotto» non compare. La traduzione resta spenta (TRADUCI_ACCESO=false). REVISIONE DOPO IL QA: il taglio si misura e il contesto si costruisce solo su nome, descrizione e tag (prima tutta la scheda: un alimento con descrizione corta e ingredienti lunghi veniva rifiutato), e il rifiuto avviene prima del filtro sui contenuti, che e' una chiamata a pagamento.",
+      "verificato_da": "qa (subagente g5): trovato il falso rifiuto per schede con attributi lunghi e il controllo dopo la moderazione; corretti nella revisione.",
+      "commit_revisione": [
+        "1ade5d90c99e4e7f52d5baf29cb4d7a4c6244e20"
+      ]
     },
     {
       "id": "R04-017",
@@ -425,7 +453,7 @@
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "controllaTettoSpesaAi(feature, stimaCents) decide su speso + in volo + stima e prenota la stima nello stesso passo sincrono (nessun await fra decisione e prenotazione); runMessage stima il costo massimo (ingresso dal testo, immagini a 1600 token, uscita = max_tokens) e libera la prenotazione a spesa registrata, anche se la chiamata fallisce. Il lotto passa la sua stima al controllo e registra la spesa prima di liberare la prenotazione.",
       "cosa_resta": "La prenotazione vale dentro una copia. Fra copie diverse serve un'istruzione SQL atomica (prenota se speso + stima <= tetto, poi conguaglio anche negativo): una migrazione nuova 280 con due funzioni. Non l'ho scritta perche' in produzione manca ancora il conto condiviso stesso (158, R04-003): finche' non c'e', l'atomicita' SQL non verrebbe usata. Va fatta dopo la 158, se Nicola la vuole.",
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g3): prenotazione liberata sempre (try/finally, anche su errore 500 e su errore sincrono: __inVoloSpesaAiCents torna 0); stima massima reale ~9 cent: regge, parziale per il limite fra copie."
     },
     {
       "id": "R04-018",
@@ -455,13 +483,13 @@
           "modifica": "leggere da operational_alert_log la riga piu' vecchia ancora aperta con type = TIPO_ALLARME_TETTO_AI (created_at/primo invio) e chiamare sondaContoCondiviso(undefined, Date.parse(primoVisto)); poi alerts.push(...allarmiTettoSpesaAi(conto, { tettoEur, copieAttese })). Stesso innesto di R04-003."
         }
       ],
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g3): sonda con ripiegoNotoDaMs corretta, ma nessuno la chiama finche' il cron non viene cablato: parziale onesto."
     },
     {
       "id": "R04-019",
       "chiave": "ai-endpoints|nella chat assistenza la scheda della proposta promette caratteristiche che il server butta via, e dopo «applica» dice «modifiche salvate» senza aver cambiato niente",
       "esito": "parziale",
-      "commit": "ba99a985246bd80778c31cdc2cc7b30ac38159c9",
+      "commit": "2f34c212edba88c6c1c19f8655d7b3c191272225",
       "file_toccati": [
         "lib/products/aiPatch.ts",
         "app/api/ai/catalog-chat/route.ts"
@@ -475,10 +503,10 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- lib/products/aiPatch.ts app/api/ai/catalog-chat/route.ts -> 3 rosse; ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- lib/products/aiPatch.ts app/api/ai/catalog-chat/route.ts -> 3 rosse; ripristino -> verde · revisione 2f34c212e: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Punto 1: propostaPerLaChat riceve la categoria attuale (la rotta passa matched.category_id) e tiene una caratteristica solo se il campo esiste nella categoria che il prodotto avra' dopo la proposta e, per le scelte, se il valore e' ammesso; attributes_remove tiene solo testi che nominano un campo della scheda. Le dichiarazioni restano (la scheda le spiega, il server le toglie). Punto 3 era gia' sulla base: resolveAiPatch non mette attributes in update se nulla e' entrato (1687) e catalog-apply risponde «Nessuna modifica valida da applicare.» (route.ts:119).",
+      "cosa_ho_fatto": "Punto 1: propostaPerLaChat riceve la categoria attuale (la rotta passa matched.category_id) e tiene una caratteristica solo se il campo esiste nella categoria che il prodotto avra' dopo la proposta e, per le scelte, se il valore e' ammesso; attributes_remove tiene solo testi che nominano un campo della scheda. Le dichiarazioni restano (la scheda le spiega, il server le toglie). Punto 3 era gia' sulla base: resolveAiPatch non mette attributes in update se nulla e' entrato (1687) e catalog-apply risponde «Nessuna modifica valida da applicare.» (route.ts:119). REVISIONE DOPO IL QA: la proposta riceve anche gli attributi attuali e, come il server, tiene la rimozione di un attributo presente nel prodotto anche se non e' un campo della categoria; un valore di soli spazi non si promette.",
       "cosa_resta": "Punto 2: righeDellaProposta in lib/products/prontoPerLaVendita.ts (non di R04) non filtra ancora le caratteristiche normali coi campi della categoria; con la proposta gia' pulita dalla rotta il caso della chat e' chiuso, ma la funzione resta permissiva per altri chiamanti.",
       "serve_file_altrui": [
         {
@@ -486,14 +514,21 @@
           "modifica": "in righeDellaProposta, per le caratteristiche non dichiarative, mostrare la riga solo se attributoCheEntra(campiDellaCategoriaDopoLaProposta, k, v) e' vero (altrimenti omettere o scrivere «NON si applica: la scheda non ha questo campo / valore non ammesso»); per attributes_remove mostrare solo chiavi che sono campi della categoria."
         }
       ],
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g5): confronto propostaPerLaChat/resolveAiPatch con categoria nulla e alimentari; trovate le rimozioni fuori categoria e i valori vuoti diversi dal server, corretti nella revisione (commit insieme a R04-020).",
+      "commit_revisione": [
+        "2f34c212edba88c6c1c19f8655d7b3c191272225"
+      ],
+      "insieme_a": [
+        "R04-020"
+      ]
     },
     {
       "id": "R04-020",
       "chiave": "architettura|il modulo del prodotto applica le proposte dell'assistente con una seconda copia delle regole del server, e le due copie sono già diverse",
       "esito": "parziale",
-      "commit": "3052345079a61b743a8397bc0a9ecca810dd3acf",
+      "commit": "2f34c212edba88c6c1c19f8655d7b3c191272225",
       "file_toccati": [
+        "app/api/ai/catalog-chat/route.ts",
         "lib/products/aiPatch.ts"
       ],
       "prova_file": [
@@ -505,10 +540,10 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- lib/products/aiPatch.ts -> 2 rosse; ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- lib/products/aiPatch.ts -> 2 rosse; ripristino -> verde · revisione 2f34c212e: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Il taglio di nome e descrizione era gia' condiviso sulla base. Le due divergenze rimaste ora hanno una sola funzione usata da resolveAiPatch e da pianoPatchPerIlModulo: disponibilitaDalPatch (niente disponibilita' sui prodotti con varianti) e attributiDaTogliere (si toglie e si conta solo un attributo che c'e' davvero). pianoPatchPerIlModulo accetta ctx.haVarianti e ctx.attributiAttuali. Non ho rifatto tutta la funzione unica «che cosa scrive questo patch» proposta dal fix: le altre regole erano gia' allineate.",
+      "cosa_ho_fatto": "Il taglio di nome e descrizione era gia' condiviso sulla base. Le due divergenze rimaste ora hanno una sola funzione usata da resolveAiPatch e da pianoPatchPerIlModulo: disponibilitaDalPatch (niente disponibilita' sui prodotti con varianti) e attributiDaTogliere (si toglie e si conta solo un attributo che c'e' davvero). pianoPatchPerIlModulo accetta ctx.haVarianti e ctx.attributiAttuali. Non ho rifatto tutta la funzione unica «che cosa scrive questo patch» proposta dal fix: le altre regole erano gia' allineate. REVISIONE DOPO IL QA: il server (resolveAiPatch) torna a togliere anche una chiave rimasta vuota nel JSON (prima della revisione non la contava piu'); il modulo conta solo un campo pieno.",
       "cosa_resta": "Il modulo vero deve passare i due dati nuovi: senza, pianoPatchPerIlModulo si comporta come prima (attributiAttuali assente = toglie tutto, haVarianti assente = senza varianti).",
       "serve_file_altrui": [
         {
@@ -516,7 +551,13 @@
           "modifica": "nella chiamata pianoPatchPerIlModulo(proposta, {...}) (riga ~491) aggiungere haVarianti: hasVariants, attributiAttuali: attributes"
         }
       ],
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g5): catalog-apply e catalog-apply-bulk verdi; trovato il cambio sulle chiavi vuote nel server, corretto nella revisione (commit insieme a R04-019).",
+      "commit_revisione": [
+        "2f34c212edba88c6c1c19f8655d7b3c191272225"
+      ],
+      "insieme_a": [
+        "R04-019"
+      ]
     },
     {
       "id": "R04-021",
@@ -540,15 +581,16 @@
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Nuova regolaConsegnaPerAi() in economics.ts, con le cifre prese da tariffaConsegnaCents (3 € da 10 € in su, 4 € sotto): il prompt di improve-product dice la regola del carrello invece di «Fee di consegna: €4.00» (o €0.00 senza prezzo) per il singolo prodotto. Il campo deliveryFee resta per la UI, con il commento che ha gia'.",
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g5): regola del carrello con cifre da tariffaConsegnaCents: regge (la soglia «10 €» nel testo e' scritta a mano)."
     },
     {
       "id": "R04-022",
       "chiave": "layout-responsive|in fondo a ogni pagina mobile restano ~14px di vuoto: l'altezza della barra a schede e' dichiarata piu' alta di quella vera",
       "esito": "parziale",
-      "commit": "90fe9ca18b47ac8d06dbdd7e1910f4714f0401ac",
+      "commit": "e0a88afffc2c1fc3c4676cd1c3109330f9278cdd",
       "file_toccati": [
-        "app/globals.css"
+        "app/globals.css",
+        "tests/unit/una-pagina-corta-non-scorre-a-vuoto.test.ts"
       ],
       "prova_file": [
         "tests/unit/riparazione-r04-fondo-pagina-mobile.test.ts"
@@ -559,10 +601,10 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- app/globals.css -> rossa; ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/globals.css -> rossa; ripristino -> verde · revisione e0a88afff: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Nuova variabile --tabbar-altezza-vera: 58px (57,5 dalle classi della barra), a 0 sopra i 768px e con body.senza-tabbar; il padding in fondo al body usa questa: la striscia vuota di ~14px sparisce. --tabbar-height resta 72 perche' il commento in globals.css (e la prova i-pulsanti-che-galleggiano-non-coprono-chi-compra) legano quel numero al pavimento di lib/ui/barra-in-fondo.ts.",
+      "cosa_ho_fatto": "Nuova variabile --tabbar-altezza-vera: 58px (57,5 dalle classi della barra), a 0 sopra i 768px e con body.senza-tabbar; il padding in fondo al body usa questa: la striscia vuota di ~14px sparisce. --tabbar-height resta 72 perche' il commento in globals.css (e la prova i-pulsanti-che-galleggiano-non-coprono-chi-compra) legano quel numero al pavimento di lib/ui/barra-in-fondo.ts. REVISIONE DOPO IL QA: .contenuto-almeno-una-schermata ora toglie --tabbar-altezza-vera (prima 72px: il piè di pagina spuntava 14px sopra la barra); aggiornata la prova esistente una-pagina-corta-non-scorre-a-vuoto, che legge globals.css. Rischio dichiarato: a 58px non resta scorta se l'etichetta va su due righe (testo di sistema ingrandito); il margine sopra le barre fisse del carrello/cassa scende da ~27 a ~13px.",
       "cosa_resta": "La barra d'acquisto e gli altri elementi che galleggiano usano ancora --tabbar-height = 72, quindi stanno 14px sopra la barra a schede invece di appoggiarcisi. Per abbassarla serve prima cambiare il pavimento in lib/ui/barra-in-fondo.ts (non di R04).",
       "serve_file_altrui": [
         {
@@ -570,13 +612,16 @@
           "modifica": "in fondoDiChiGalleggia applicare il pavimento (--fondo-minimo) una volta sola in fondo alla pila delle corsie invece che con un max(...) per ogni elemento; dopo, in app/globals.css (file di R04) --tabbar-height si porta a 58px e --fondo-minimo si ritara, e la prova i-pulsanti-che-galleggiano-non-coprono-chi-compra va aggiornata al nuovo numero."
         }
       ],
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g6): verificato che nessuno dipendeva dal padding del body; trovata la classe della pagina corta ancora a 72, corretta nella revisione.",
+      "commit_revisione": [
+        "e0a88afffc2c1fc3c4676cd1c3109330f9278cdd"
+      ]
     },
     {
       "id": "R04-023",
       "chiave": "privacy-legale|il business plan e i conti unitari nei documenti del sito dicono ancora commissione all'8%, abbonamento a 15 €, piano gratis e mancia al fattorino",
       "esito": "riparato",
-      "commit": "cea9551614225a4bfca4a5ad899493a299471218",
+      "commit": "3cc56a56c7cfee23568ef00284f1ac8fae516e24",
       "file_toccati": [
         "docs/business-plan.md",
         "docs/unit-economics.md"
@@ -590,17 +635,20 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- docs/business-plan.md docs/unit-economics.md -> 3 rosse; ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- docs/business-plan.md docs/unit-economics.md -> 3 rosse; ripristino -> verde · revisione 3cc56a56c: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Tutte e due le strade del fix: in testa ai due documenti l'avviso «superato in parte» con i numeri vivi e dove stanno nel codice (MARKETPLACE_FEE_BPS 10%, abbonamento 50 €/mese spento, nessun piano gratuito, mancia vietata), e corrette le righe indicate (business-plan 60-64 e 71-72, unit-economics 14-16). Le stime derivate (ricavi, margini, la riga di spedizione a 4,90 €) non le ho ricalcolate: l'avviso dice che vanno rifatte.",
-      "verificato_da": ""
+      "cosa_ho_fatto": "Tutte e due le strade del fix: in testa ai due documenti l'avviso «superato in parte» con i numeri vivi e dove stanno nel codice (MARKETPLACE_FEE_BPS 10%, abbonamento 50 €/mese spento, nessun piano gratuito, mancia vietata), e corrette le righe indicate (business-plan 60-64 e 71-72, unit-economics 14-16). Le stime derivate (ricavi, margini, la riga di spedizione a 4,90 €) non le ho ricalcolate: l'avviso dice che vanno rifatte. REVISIONE DOPO IL QA: l'avviso in testa diceva che tutte le righe erano corrette e non era vero: corrette anche le righe restanti con 8%/PRO/15 € (business-plan rischi e domande aperte, unit-economics LTV e decisioni), e le sezioni con conti derivati (margini, breakeven, scenari) portano un riquadro «Numeri vecchi (R04-023)»; l'avviso ora lo dice.",
+      "verificato_da": "qa (subagente g6): trovato l'avviso che dichiarava corrette righe ancora vecchie (unit-economics 42-51, 107, 125-128; business-plan 199, 241-242) e la prova che non guardava i conti unitari; corretti nella revisione.",
+      "commit_revisione": [
+        "3cc56a56c7cfee23568ef00284f1ac8fae516e24"
+      ]
     },
     {
       "id": "R04-024",
       "chiave": "privacy-legale|con il fornitore onfido acceso, ogni chiamata (fino a 5 l'ora) crea da onfido una nuova scheda con nome, email e data di nascita, ma senza caricare i documenti. restano schede orfane con dati personali, e alla cancellazione dell'account nessuno le toglie",
       "esito": "parziale",
-      "commit": "747a458b735134ff745c63b65e14bbd68ba2d3dc",
+      "commit": "a8bb0383f1859b1216e805927eaf14661114dca3",
       "file_toccati": [
         "lib/kyc/providers.ts"
       ],
@@ -613,10 +661,10 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- lib/kyc/providers.ts -> 2 rosse; ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- lib/kyc/providers.ts -> 2 rosse; ripristino -> verde · revisione a8bb0383f: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": false,
-      "cosa_ho_fatto": "Sulla base start-check gia' non apre una seconda verifica mentre una e' PENDING (S05). In OnfidoProvider.startCheck: dopo la scheda (applicant) si caricano davvero il documento fronte/retro (POST /documents) e il selfie (POST /live_photos) dagli URL firmati, poi il controllo; se un passo dopo la scheda fallisce (o va in errore di rete) la scheda con nome, email e data di nascita si cancella con DELETE /applicants/{id}. Non verificato contro l'API vera di Onfido: il tipo documento e' fisso a national_identity_card.",
+      "cosa_ho_fatto": "Sulla base start-check gia' non apre una seconda verifica mentre una e' PENDING (S05). In OnfidoProvider.startCheck: dopo la scheda (applicant) si caricano davvero il documento fronte/retro (POST /documents) e il selfie (POST /live_photos) dagli URL firmati, poi il controllo; se un passo dopo la scheda fallisce (o va in errore di rete) la scheda con nome, email e data di nascita si cancella con DELETE /applicants/{id}. Non verificato contro l'API vera di Onfido: il tipo documento e' fisso a national_identity_card. REVISIONE DOPO IL QA: togliScheda controlla la risposta del DELETE e, se la cancellazione non riesce, scrive nel registro l'id della scheda da togliere a mano; il file caricato prende l'estensione dal suo tipo vero (jpg/png, e pdf per il documento) e un formato che Onfido non accetta (es. webp) ferma la verifica con un motivo chiaro, togliendo la scheda. Nota: su Onfido il DELETE e' una cancellazione programmata, non immediata.",
       "cosa_resta": "Alla cancellazione dell'account la scheda Onfido di una verifica riuscita o in attesa non si toglie: serve in lib/account/cancellazione.ts (non di R04). Inoltre il KycCheckResult (lib/kyc/types.ts, non di R04) porta solo l'id del controllo, non quello della scheda.",
       "serve_file_altrui": [
         {
@@ -624,19 +672,25 @@
           "modifica": "se profiles.kyc_provider_check_id esiste e non comincia con 'manual_'/'mock_' e KYC_PROVIDER=onfido: GET https://api.eu.onfido.com/v3.6/checks/{id} per leggere applicant_id, poi DELETE /v3.6/applicants/{applicant_id} (Authorization: Token token=KYC_API_KEY), con timeout 10 s e senza far fallire la cancellazione se Onfido non risponde (riga nel registro)."
         }
       ],
-      "verificato_da": ""
+      "verificato_da": "qa (subagente g6): provate varianti (422, 403 sul retro, rete giu' sul selfie, 502 HTML): la scheda si toglie sempre; trovati il DELETE senza traccia e il nome file fisso .jpg, corretti nella revisione.",
+      "commit_revisione": [
+        "a8bb0383f1859b1216e805927eaf14661114dca3"
+      ]
     },
     {
       "id": "R04-025",
       "chiave": "qa-flussi|la rotta del lavoro ai sul catalogo non rifiuta un secondo lavoro",
       "esito": "riparato",
-      "commit": "da6634791cce5ce48d00756e04fd98599918e15a",
+      "commit": "b66ab3f422d2a7d8b4df4570aea748fa65170edd",
       "file_toccati": [
+        "app/api/ai/catalog-batch/cancel/route.ts",
         "app/api/ai/catalog-batch/start/route.ts",
+        "app/seller/products/ai-batch/page.tsx",
         "tests/unit/la-spesa-del-lotto-si-conta-quando-parte.test.ts"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r04-lotto-aperto.test.ts"
+        "tests/unit/riparazione-r04-lotto-aperto.test.ts",
+        "tests/unit/riparazione-r04-scarta-lavoro.test.ts"
       ],
       "prova_comando": "npx vitest run tests/unit/riparazione-r04-lotto-aperto.test.ts",
       "prova_tipo": "comando",
@@ -644,11 +698,14 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/catalog-batch/start/route.ts -> 2 rosse; ripristino -> verde"
+        "comando": "rimessa a mano: git checkout HEAD^ -- app/api/ai/catalog-batch/start/route.ts -> 2 rosse; ripristino -> verde · revisione b66ab3f42: rimessa a mano sul commit di revisione -> rossa, ripristino -> verde"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Prima di aprire un lavoro la rotta cerca un lavoro del venditore in submitting/processing/ready: se c'e' risponde 409 CONFLICT con details {jobId,status}, senza lotto, spesa o riga nuova. Aggiornato il database finto della prova esistente la-spesa-del-lotto-si-conta-quando-parte (importa la rotta).",
-      "verificato_da": ""
+      "cosa_ho_fatto": "Prima di aprire un lavoro la rotta cerca un lavoro del venditore in submitting/processing/ready: se c'e' risponde 409 CONFLICT con details {jobId,status}, senza lotto, spesa o riga nuova. Aggiornato il database finto della prova esistente la-spesa-del-lotto-si-conta-quando-parte (importa la rotta). REVISIONE DOPO IL QA: il 409 dice «applicalo o scartalo», ma scartare non si poteva: nuova rotta app/api/ai/catalog-batch/cancel/route.ts (file nuovo) che annulla solo un lavoro 'ready' del venditore, e pulsante «Scarta» accanto ad «Applica» nella pagina. Resta (vedi domande): due avvii simultanei possono passare entrambi, perche' manca un indice unico parziale sui lavori aperti; servirebbe una migrazione.",
+      "verificato_da": "qa (subagente g3): 409 verificato su avvii in sequenza; trovati il «scartalo» impossibile (corretto nella revisione) e la corsa fra due avvii simultanei (in domande_per_nicola).",
+      "commit_revisione": [
+        "b66ab3f422d2a7d8b4df4570aea748fa65170edd"
+      ]
     }
   ],
   "nuovi_difetti_visti": [
@@ -658,11 +715,36 @@
       "severita": "minore",
       "file": "app/api/ai/catalog-apply/route.ts · app/api/ai/catalog-apply-bulk/route.ts",
       "descrizione": "Segnalato nel fix della voce R04-006: a interruttore spento le due rotte di applicazione scrivono ancora sul catalogo. Fuori dai file di R04: non toccate, non verificate a fondo."
+    },
+    {
+      "titolo": "la lettura da foto accetta il testo «false» del modello come prodotto ammesso",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/vision/extract-product/route.ts:412",
+      "descrizione": "Il blocco dei prodotti vietati scatta solo con policy_ok === false (booleano): se il modello scrive \"false\" come testo il prodotto passa. Visto dal QA di R04-012, fuori dalla voce, non toccato."
+    },
+    {
+      "titolo": "un 404 del fornitore nell'aggiornamento dei prezzi esterni diventa un generico «Aggiornamento non riuscito»",
+      "dimensione": "ai-endpoints",
+      "severita": "minore",
+      "file": "app/api/products/[id]/external-refresh/route.ts:142 · app/api/cron/external-price-alerts/route.ts:109",
+      "descrizione": "Visto dal QA di R04-002: solo admin e cron, e solo se si imposta un modello spento; nessun allarme dedicato."
+    },
+    {
+      "titolo": "nella regola della consegna per l'AI la soglia dei 10 € e' scritta a mano",
+      "dimensione": "architettura",
+      "severita": "minore",
+      "file": "lib/products/economics.ts (regolaConsegnaPerAi)",
+      "descrizione": "Le cifre vengono da tariffaConsegnaCents, ma la soglia nel testo e' fissa: se la tariffa cambia soglia, il testo per l'AI resta indietro."
     }
   ],
-  "domande_per_nicola": [],
+  "domande_per_nicola": [
+    "Lavori AI sul catalogo: due avvii nello stesso istante (doppio tocco, due schede) possono creare due lotti pagati, perche' il controllo del lavoro aperto avviene prima dell'inserimento. Serve un indice unico parziale su catalog_ai_jobs(seller_id) per gli stati aperti (submitting/processing/ready): lo scrivo come migrazione nuova nella fascia 280-289 (da applicare a mano, dopo aver chiuso eventuali doppioni gia' presenti)?",
+    "Tetto di spesa AI: in produzione manca il conto condiviso (migrazione 158 da applicare) e il cron degli avvisi non chiama ancora la sonda (serve_file_altrui su app/api/cron/operational-alerts/route.ts). Finche' non ci sono tutte e due, il tetto vale per copia e su Vercel le copie si ricreano durante il giorno.",
+    "R04-002 cambia il modello AI di produzione da claude-sonnet-4-5 (spento il 30/11) a claude-sonnet-4-6, stesso prezzo: da sapere prima del rilascio."
+  ],
   "conto": {
-    "agenti": 0,
-    "nota": ""
+    "agenti": 6,
+    "nota": "6 subagenti qa (gravi da soli: g1 R04-001, g2 R04-002/003; poi gruppi da 6 al massimo). Le loro obiezioni dentro i file di R04 sono state corrette nei commit di revisione (commit_revisione nelle voci)."
   }
 }
