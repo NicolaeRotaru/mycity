@@ -773,6 +773,43 @@ function dichiarazioniDaRivedere(proposta: AiProductPatch): AiProductPatch {
  * va in `avvisi` o in `proposte`, che il modulo mostra a parte. Le regole sui
  * campi sono quelle che il modulo applicava gia'.
  */
+/**
+ * 12/11/2026 (R04-020) — LE DUE REGOLE CHE IL MODULO E IL SERVER SCRIVEVANO
+ * IN DUE COPIE DIVERSE, ADESSO IN UNA.
+ *
+ * ① La disponibilita' di un prodotto con varianti e' la somma delle varianti:
+ *   il server ignorava quella proposta, il modulo la scriveva e diceva
+ *   «aggiornata» (al salvataggio la somma la sostituiva).
+ * ② Togliere un attributo che non c'e' non cambia niente: il server non lo
+ *   contava, il modulo diceva «aggiornato».
+ */
+export function disponibilitaDalPatch(
+  patch: AiProductPatch,
+  haVarianti: boolean | null | undefined,
+): { valore: number | null } | null {
+  if (haVarianti) return null;
+  if (patch.unlimited_stock === true) return { valore: null };
+  if (typeof patch.stock === 'number' && patch.stock >= 0) return { valore: Math.trunc(patch.stock) };
+  return null;
+}
+
+/** Le chiavi da togliere che ci sono davvero (`attuali` assente = non si sa: tutte). */
+export function attributiDaTogliere(
+  patch: AiProductPatch,
+  attuali: Record<string, unknown> | null | undefined,
+): string[] {
+  if (!Array.isArray(patch.attributes_remove)) return [];
+  const fuori: string[] = [];
+  for (const key of patch.attributes_remove) {
+    const targetKey = chiaveCampo(String(key));
+    if (fuori.includes(targetKey)) continue;
+    if (attuali === undefined) { fuori.push(targetKey); continue; }
+    const v = attuali?.[targetKey];
+    if (attuali && targetKey in attuali && v !== '' && v !== null && v !== undefined) fuori.push(targetKey);
+  }
+  return fuori;
+}
+
 export function pianoPatchPerIlModulo(
   suggerimento: AiProductPatch,
   ctx: {
@@ -780,6 +817,10 @@ export function pianoPatchPerIlModulo(
     categorie: CategoryRow[];
     categoriaAttuale: string | null | undefined;
     modo: 'create' | 'edit';
+    /** R04-020 — Il prodotto ha varianti: la disponibilita' non si scrive. */
+    haVarianti?: boolean;
+    /** R04-020 — Gli attributi nel modulo adesso: si «toglie» solo cio' che c'e'. */
+    attributiAttuali?: Record<string, unknown> | null;
   },
 ): PianoPatchModulo {
   // Come il server: la proposta si legge con `propostaLeggibile`, e le
@@ -826,11 +867,8 @@ export function pianoPatchPerIlModulo(
       else if (valore !== '') scritture.push({ campo: 'condition', valore, etichetta: 'condizione' });
     }
   }
-  if (patch.unlimited_stock === true) {
-    scritture.push({ campo: 'stock', valore: null, etichetta: 'disponibilità' });
-  } else if (typeof patch.stock === 'number' && patch.stock >= 0) {
-    scritture.push({ campo: 'stock', valore: Math.trunc(patch.stock), etichetta: 'disponibilità' });
-  }
+  const disponibilita = disponibilitaDalPatch(patch, ctx.haVarianti);
+  if (disponibilita) scritture.push({ campo: 'stock', valore: disponibilita.valore, etichetta: 'disponibilità' });
 
   // Categoria → slug/sottocategoria su category_id.
   if (patch.category_slug) {
@@ -861,11 +899,8 @@ export function pianoPatchPerIlModulo(
       scritture.push({ campo: 'attributo', chiave: targetKey, valore, etichetta: field.label });
     }
   }
-  if (Array.isArray(patch.attributes_remove)) {
-    for (const key of patch.attributes_remove) {
-      const targetKey = chiaveCampo(String(key));
-      scritture.push({ campo: 'attributo', chiave: targetKey, valore: '', etichetta: `rimosso ${targetKey}` });
-    }
+  for (const targetKey of attributiDaTogliere(patch, ctx.attributiAttuali)) {
+    scritture.push({ campo: 'attributo', chiave: targetKey, valore: '', etichetta: `rimosso ${targetKey}` });
   }
 
   if (ctx.modo === 'edit' && patch.status && (SELLER_STATUSES as readonly string[]).includes(patch.status)) {
@@ -1158,14 +1193,10 @@ export function resolveAiPatch(opts: {
 
   // Stock: ignorato sui prodotti con varianti (lo stock è la somma delle
   // varianti, riallineato dal trigger DB).
-  if (!current.has_variants) {
-    if (patch.unlimited_stock === true) {
-      update.stock = null;
-      changed.push('disponibilità');
-    } else if (typeof patch.stock === 'number' && patch.stock >= 0) {
-      update.stock = Math.trunc(patch.stock);
-      changed.push('disponibilità');
-    }
+  const disponibilita = disponibilitaDalPatch(patch, current.has_variants);
+  if (disponibilita) {
+    update.stock = disponibilita.valore;
+    changed.push('disponibilità');
   }
 
   // Categoria → risolvi slug/sottocategoria su category_id. Gli attributi si
@@ -1210,12 +1241,9 @@ export function resolveAiPatch(opts: {
       }
     }
     if (hasAttrRemove) {
-      for (const key of patch.attributes_remove!) {
-        const targetKey = chiaveCampo(String(key));
-        if (targetKey in merged) {
-          delete merged[targetKey];
-          changed.push(`rimosso ${targetKey}`);
-        }
+      for (const targetKey of attributiDaTogliere(patch, merged)) {
+        delete merged[targetKey];
+        changed.push(`rimosso ${targetKey}`);
       }
     }
     // 1687 — Senza nessuna caratteristica entrata, attributes non va in update:
