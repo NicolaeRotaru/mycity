@@ -90,8 +90,13 @@ export function buildProductContext(
   // #201 — I tagli. Questi due elenchi arrivano dal client e finivano interi
   // dentro il prompt: un elenco gonfiato apposta faceva pagare a noi la
   // differenza, e spingeva fuori dalla finestra il contenuto che conta.
-  const attributeSchema = (Array.isArray(input.attributeSchema) ? input.attributeSchema : []).slice(0, 40);
-  const topCategories = (Array.isArray(input.topCategories) ? input.topCategories : []).slice(0, 30);
+  // R04-015 — Solo oggetti: un elemento null faceva cadere la rotta (f.options su null).
+  const attributeSchema = (Array.isArray(input.attributeSchema) ? input.attributeSchema : [])
+    .filter((f): f is NonNullable<typeof f> => !!f && typeof f === 'object')
+    .slice(0, 40);
+  const topCategories = (Array.isArray(input.topCategories) ? input.topCategories : [])
+    .filter((c): c is NonNullable<typeof c> => !!c && typeof c === 'object')
+    .slice(0, 30);
 
   const attrLines = attributeSchema
     .map((f) => {
