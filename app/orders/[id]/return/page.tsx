@@ -408,9 +408,13 @@ export default function NewReturnPage() {
                 type="button"
                 onClick={() => setPhotos((tutte) => tutte.filter((x) => x !== p))}
                 aria-label={`Togli la foto ${i + 1}`}
-                className="absolute -right-2 -top-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-ink-900 text-xs font-bold text-white shadow-sm-neutral"
+                // 12/11/2026 (R07-008) — il tasto era 24 px, la metà dei 44 minimi: ora l'area
+                // che si tocca è 44 px e dentro resta il pallino visibile da 24.
+                className="absolute -right-3 -top-3 inline-flex h-11 w-11 items-center justify-center rounded-full"
               >
-                ×
+                <span aria-hidden="true" className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-ink-900 text-xs font-bold text-white shadow-sm-neutral">
+                  ×
+                </span>
               </button>
             </div>
           ))}
