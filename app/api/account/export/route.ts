@@ -229,8 +229,9 @@ const scarica = withAuthRateLimit(
     traguardi: tutta((da, a) => admin.from('user_achievements').select('*').eq('user_id', userId).order('achievement_id').range(da, a)),
     // 12/11/2026 (R02-025) — IL FATTORINO. Le recensioni che RICEVE stanno su rider_id (quelle
     // che scrive su user_id, già in «reviews.riders»), e le sue giornate di cassa sono dati suoi:
-    // chi ha consegnato, quanto contante, quando l'ha rimesso.
-    recensioni_ricevute_come_fattorino: tutta((da, a) => admin.from('rider_reviews').select('*').eq('rider_id', userId).order('id').range(da, a)),
+    // chi ha consegnato, quanto contante, quando l'ha rimesso. Delle recensioni ricevute non esce
+    // chi le ha scritte (user_id): è un dato di un'altra persona (art. 15.4 GDPR).
+    recensioni_ricevute_come_fattorino: tutta((da, a) => admin.from('rider_reviews').select('id, rider_id, order_id, rating, comment, created_at').eq('rider_id', userId).order('id').range(da, a)),
     giornate_di_cassa_del_fattorino: tutta((da, a) => admin.from('cod_reconciliations').select('*').eq('rider_id', userId).order('id').range(da, a)),
   };
 

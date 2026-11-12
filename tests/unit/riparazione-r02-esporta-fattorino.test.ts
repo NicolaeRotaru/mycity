@@ -24,11 +24,16 @@ vi.mock('@/lib/supabase/server', () => ({
     from: (tabella: string) => {
       const filtri: Array<[string, unknown]> = [];
       const q: Record<string, unknown> = {};
-      for (const m of ['select', 'or', 'order', 'limit', 'range']) q[m] = () => q;
+      let colonne = '*';
+      for (const m of ['or', 'order', 'limit', 'range']) q[m] = () => q;
+      q.select = (c: string) => { colonne = c; return q; };
       q.eq = (col: string, val: unknown) => { filtri.push([col, val]); return q; };
       q.single = async () => ({ data: { id: RIDER }, error: null });
       q.then = (ok: (v: unknown) => unknown) => {
-        const righe = (nelDb[tabella] ?? []).filter((r) => filtri.every(([c, v]) => r[c] === v));
+        const scelte = colonne === '*' ? null : colonne.split(',').map((c) => c.trim());
+        const righe = (nelDb[tabella] ?? [])
+          .filter((r) => filtri.every(([c, v]) => r[c] === v))
+          .map((r) => (scelte ? Object.fromEntries(scelte.map((c) => [c, r[c]])) : r));
         return Promise.resolve({ data: righe, error: null }).then(ok);
       };
       return q;
@@ -46,5 +51,11 @@ describe('R02-025 · lo scarico dei dati del fattorino', () => {
     expect(tutto, 'la sua giornata di cassa').toContain('cassa-1');
     // Quella che ha scritto lui resta dov'era.
     expect(corpo.reviews.riders.map((r: { id: string }) => r.id)).toEqual(['rv-scritta']);
+  });
+
+  it('della recensione ricevuta non esce chi l ha scritta', async () => {
+    const corpo = await (await (GET as unknown as () => Promise<Response>)()).json();
+    const ricevuta = corpo.recensioni_ricevute_come_fattorino?.[0] ?? {};
+    expect(ricevuta).not.toHaveProperty('user_id');
   });
 });
