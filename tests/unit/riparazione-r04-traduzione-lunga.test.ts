@@ -15,9 +15,10 @@ vi.mock('@/lib/funzioni-al-lancio', async (originale) => ({
 vi.mock('@/lib/api/middleware', () => ({
   withSellerAuth: (h: (ctx: { user: typeof FAKE_USER; req: Request }) => unknown) => (req: Request) => h({ user: FAKE_USER, req }),
 }));
+const filtroMock = vi.fn(async () => undefined);
 vi.mock('@/lib/ai/moderation', async (importActual) => {
   const actual = await importActual<typeof import('@/lib/ai/moderation')>();
-  return { ...actual, assertSafeText: async () => undefined };
+  return { ...actual, assertSafeText: () => filtroMock() };
 });
 const runMessageMock = vi.fn();
 vi.mock('@/lib/ai/run', async (importActual) => {
@@ -28,10 +29,10 @@ vi.mock('@/lib/ai/run', async (importActual) => {
 import { POST } from '@/app/api/ai/translate/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 
-const chiedi = (description: string) =>
+const chiedi = (description: string, extra: Record<string, unknown> = {}) =>
   POST(new Request('http://localhost/api/ai/translate', {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ targetLang: 'en', product: { name: 'Focaccia', description } }),
+    body: JSON.stringify({ targetLang: 'en', product: { name: 'Focaccia', description, ...extra } }),
   }) as never);
 
 describe('traduzione di una descrizione lunga', () => {
@@ -48,6 +49,17 @@ describe('traduzione di una descrizione lunga', () => {
     expect(res.status).toBe(400);
     expect(JSON.stringify(await res.json())).toMatch(/troppo lunga per la traduzione automatica/);
     expect(runMessageMock).not.toHaveBeenCalled();
+    // Rifiutata prima anche del filtro sui contenuti (che e' una chiamata a pagamento).
+    expect(filtroMock).not.toHaveBeenCalled();
+  });
+
+  it('un alimento con descrizione corta ma ingredienti lunghi si traduce (si misura solo cio\' che si traduce)', async () => {
+    const res = await chiedi('Focaccia genovese alta e morbida.', {
+      attributes: { ingredienti: 'farina, acqua, olio, sale, lievito, '.repeat(120), valori_nutrizionali: 'x'.repeat(2000) },
+    });
+    expect(res.status).toBe(200);
+    const testo = JSON.stringify(runMessageMock.mock.calls[0][0].messages);
+    expect(testo).not.toContain('valori_nutrizionali');
   });
 
   it('una descrizione normale si traduce come prima', async () => {
