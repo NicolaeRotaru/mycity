@@ -8,10 +8,10 @@ import { formatDate, formatPriceFromCents } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
+import type { EsitoDelControllo } from '@/lib/rimborsi/credito-da-controllare';
 
 /** 12/11/2026 (R09-017) — Con la rete caduta il browser dice «Failed to fetch»: a schermo va in italiano. */
 const FRASE_SENZA_RETE = 'Non riesco a collegarmi: controlla la connessione e riprova.';
-import type { EsitoDelControllo } from '@/lib/rimborsi/credito-da-controllare';
 
 /**
  * IL CONTROLLO DEL CREDITO DI UN RIMBORSO (riesame del 16/10, quarto giro).

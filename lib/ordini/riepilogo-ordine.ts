@@ -32,8 +32,9 @@ export type VoceRiepilogo = {
   centesimi: number;
   segno: SegnoVoce;
   /**
-   * Solo sulla riga «Spedizione», e solo se per farsi portare la spesa il cliente non ha pagato
-   * niente: né spedizione né consegna. È l'unico caso in cui la pagina può scrivere «GRATUITA».
+   * Solo sulla riga della consegna (VOCE_CONSEGNA), e solo se per farsi portare la spesa il cliente
+   * non ha pagato niente: né spedizione né consegna. È l'unico caso in cui la pagina scrive «Gratis»
+   * (12/11/2026, R09-023: lo stesso nome e la stessa parola della cassa).
    */
   gratis?: boolean;
 };
