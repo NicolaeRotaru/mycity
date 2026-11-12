@@ -163,10 +163,13 @@ Per ogni decisione:
 - **Stato**: superseded (12/11/2026)
 - **Decisore**: Founder
 
-> **Superata.** La decisione presa è la commissione del **10% su tutti gli ordini**, firmata il
-> 26/10/2026 (registro dei fatti, `pricing.commissione`; nel codice `MARKETPLACE_FEE_BPS = 1000` in
-> `lib/constants.ts`). Il piano PRO a 15 €/mese non è mai nato. Il testo qui sotto resta com'era
-> perché un ADR non si riscrive: è la storia di come si è arrivati alla scelta, non la scelta.
+> **Superata.** Il prezzo per i negozi firmato il 26/10/2026 (registro dei fatti,
+> `pricing.commissione` e `pricing.abbonamento`) è: commissione del **10% IVA inclusa, solo sul
+> venduto tramite MyCity** (nel codice `MARKETPLACE_FEE_BPS = 1000` in `lib/constants.ts`), più un
+> **abbonamento di listino di 50 € al mese, sospeso finché il negozio non incassa con MyCity**
+> (`app/seller/earnings/commissione.ts`, interruttore `ABBONAMENTO_NEGOZI_ACCESO` in `lib/funzioni-al-lancio.ts`). Il piano PRO
+> a 15 €/mese non è mai nato. Il testo qui sotto resta com'era perché un ADR non si riscrive: è
+> la storia di come si è arrivati alla scelta, non la scelta.
 
 **Contesto**: Devo decidere commissione marketplace.
 

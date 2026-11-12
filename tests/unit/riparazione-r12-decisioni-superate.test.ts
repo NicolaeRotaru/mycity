@@ -25,3 +25,11 @@ describe('R12-006 le decisioni superate lo dicono', () => {
     expect(sezione('## ADR-007')).toMatch(/\*\*Stato\*\*: superseded/);
   });
 });
+
+describe('R12-006 la nota dice il prezzo intero firmato il 26/10', () => {
+  it('nomina anche l abbonamento sospeso e l IVA inclusa', () => {
+    const s = sezione('## ADR-006');
+    expect(s).toMatch(/50 € al mese/);
+    expect(s).toMatch(/IVA inclusa/);
+  });
+});
