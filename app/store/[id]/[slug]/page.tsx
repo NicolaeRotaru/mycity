@@ -2,7 +2,6 @@
 import { use } from 'react';
 
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Megaphone, EyeOff, FileQuestion } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -19,11 +18,9 @@ import { ErrorState } from '@/components/ui/ErrorState';
 
 export default function StoreCustomPage(props: { params: Promise<{ id: string; slug: string }> }) {
   const { id, slug } = use(props.params);
-  const searchParams = useSearchParams();
-  const preview = searchParams.get('preview') === '1';
   const data = useStorePageData(id);
 
-  // Solo per l'anteprima del proprietario di pagine nascoste.
+  // Solo per gli avvisi al proprietario (pagina nascosta dal menu, «Aggiungi sezioni»).
   const { data: viewerId } = useQuery({
     queryKey: ['store-viewer-uid'],
     queryFn: async () => (await supabase.auth.getUser()).data.user?.id ?? null,
@@ -72,8 +69,15 @@ export default function StoreCustomPage(props: { params: Promise<{ id: string; s
   if (!page || page.slug === '') return notFound;
 
   const isOwner = Boolean(viewerId && viewerId === store.id);
+  // 12/11/2026 (R08-014) — «Nascosta» vuol dire fuori dal menu, non chiusa. La casella
+  // dell'editor lo promette («raggiungibile solo con il link diretto, non nel menu»), e
+  // il fornaio che manda il link della pagina «Ordini per le feste» ai clienti fedeli si
+  // aspetta che la vedano. Prima chi non era il proprietario in anteprima riceveva «Pagina
+  // non trovata». Il contenuto delle pagine nascoste era già pubblico (la vista
+  // seller_public_profiles restituisce tutto store_site anche all'anonimo: prova in
+  // tests/sql/rls/riparazione-r08-la-pagina-nascosta-e-gia-nei-dati-pubblici.test.sql),
+  // quindi aprirla col link non espone niente di nuovo.
   const hidden = page.visibility !== 'public';
-  if (hidden && !(isOwner && preview)) return notFound;
 
   const showAnnouncement = announcementActive(custom);
   const sections = enabledSections(page);
@@ -98,9 +102,9 @@ export default function StoreCustomPage(props: { params: Promise<{ id: string; s
           Google, non trovavano l'h1 di «Chi siamo», «Orari», «Contatti». */}
       <h1 className="font-serif text-2xl md:text-3xl font-bold text-ink-900">{page.title}</h1>
 
-      {hidden && (
+      {hidden && isOwner && (
         <div className="flex items-center gap-2 rounded-xl bg-accent-50 border border-accent-200 px-4 py-2.5 text-sm text-accent-800">
-          <EyeOff size={16} aria-hidden /> Anteprima: questa pagina è nascosta e non è visibile al pubblico.
+          <EyeOff size={16} aria-hidden /> Questa pagina è nascosta dal menu: la vede solo chi ha il link.
         </div>
       )}
 

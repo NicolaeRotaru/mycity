@@ -84,3 +84,22 @@ describe('R08-003 — la pagina in più ha il suo titolo principale', () => {
     expect(html).not.toMatch(/<h3[^>]*>Pagina non trovata/);
   });
 });
+
+describe('R08-014 — la pagina nascosta si apre col link diretto', () => {
+  it('un visitatore col link vede la pagina, e nessun banner da anteprima', () => {
+    const html = disegna('ordini-per-le-feste');
+    expect(html).not.toContain('Pagina non trovata');
+    expect(h1(html)).toEqual(['Ordini per le feste']);
+    expect(html).toContain('La nostra storia');
+    expect(html).not.toMatch(/non è visibile al pubblico/);
+    expect(html).not.toMatch(/Anteprima/);
+  });
+
+  it('il proprietario vede l’avviso che la pagina è fuori dal menu e la vede solo chi ha il link', () => {
+    stato.viewerId = NEGOZIO;
+    const html = disegna('ordini-per-le-feste');
+    expect(html).toMatch(/nascosta dal menu/);
+    expect(html).toMatch(/solo chi ha il link/);
+    expect(html).not.toMatch(/non è visibile al pubblico/);
+  });
+});
