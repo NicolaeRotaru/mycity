@@ -2,6 +2,13 @@
 
 > Versione 1.0 · maggio 2026 · ultima revisione: stadio MVP pre-launch
 
+> ⚠️ **Documento superato in parte (12/11/2026, R04-023).** I numeri vivi stanno nel codice:
+> commissione **10% su tutto** (`MARKETPLACE_FEE_BPS = 1000` in `lib/constants.ts`), abbonamento dei negozi
+> **50 € al mese, oggi spento** (`ABBONAMENTO_NEGOZI_ACCESO = false` in `lib/funzioni-al-lancio.ts`),
+> **nessun piano gratuito** con commissione diversa, **mancia al fattorino vietata** (compenso fisso per
+> consegna, `app/rider/help/page.tsx`). Le righe qui sotto con quei numeri sono state corrette; le stime
+> derivate (ricavi, margini) erano calcolate sui numeri vecchi e vanno rifatte.
+
 ---
 
 ## 1. Vision & Mission
@@ -57,19 +64,19 @@ commercianti uno strumento di vendita digitale a basso costo e bassa friction.
 
 | Stream | Take rate / pricing | Stima anno 1 |
 |---|---|---|
-| Commissione transazione | 8% sul GMV venditore | €5-25k |
-| Abbonamento seller (PRO) | €15/mese (opzionale, sblocca analytics + AI + promo wizard) | €1-4k |
+| Commissione transazione | 10% sul GMV venditore | €5-25k |
+| Abbonamento negozi | €50/mese (oggi spento al lancio) | da rifare |
 | Sponsored listings | €0,50-2/giorno per placement | €0,5-2k |
 | Featured "Negozio del mese" | €100/mese (1 slot) | €1-2k |
-| Tip rider (opzionale) | 10% tip → rider, no take | €0 |
+| Mancia al fattorino | vietata: compenso fisso per consegna | €0 |
 
 **Stima revenue anno 1**: €7-33k (sostenibilità infrastruttura, no salario founder)
 **Stima revenue anno 2**: €30-100k (post-PMF se confermato)
 
 ### Pricing seller (decisione strategica)
 
-- **Free tier**: pubblicazione fino 50 prodotti, 8% commissione, no AI, no analytics avanzata
-- **PRO €15/mese**: prodotti illimitati, AI description, analytics, promo wizard, support prioritario
+- **Commissione unica**: 10% su tutto, nessun piano gratuito con una commissione diversa
+- **Abbonamento €50/mese**: previsto, oggi spento al lancio (`ABBONAMENTO_NEGOZI_ACCESO`)
 
 Razionale: subscription bassa = barriera basso → adoption ampia. Commissione moderata
 = sostenibilità senza spaventare seller. Hybrid model copre fisso (sub) + variabile (comm).

@@ -2,6 +2,13 @@
 
 > Versione 1.0 · numeri target da validare con i primi 50 ordini reali.
 
+> ⚠️ **Documento superato in parte (12/11/2026, R04-023).** I numeri vivi stanno nel codice:
+> commissione **10% su tutto** (`MARKETPLACE_FEE_BPS = 1000` in `lib/constants.ts`), abbonamento dei negozi
+> **50 € al mese, oggi spento** (`ABBONAMENTO_NEGOZI_ACCESO = false` in `lib/funzioni-al-lancio.ts`),
+> **nessun piano gratuito** con commissione diversa, **mancia al fattorino vietata** (compenso fisso per
+> consegna, `app/rider/help/page.tsx`). Le righe qui sotto con quei numeri sono state corrette; le stime
+> derivate (ricavi, margini) erano calcolate sui numeri vecchi e vanno rifatte.
+
 ---
 
 ## Schema base per ordine
@@ -11,9 +18,9 @@
 | Voce | Importo | Note |
 |---|---|---|
 | GMV medio per ordine | €25 | Target alimentari + cross categoria |
-| Take rate commissione | 8% | Standard marketplace local |
-| **Revenue commissione** | **€2,00** | |
-| Tip rider opzionale 10% | €2,50 | Va al rider, no MyCity |
+| Take rate commissione | 10% | `MARKETPLACE_FEE_BPS` |
+| **Revenue commissione** | **€2,50** | |
+| Mancia al fattorino | vietata | Compenso fisso per consegna |
 | Spedizione pagata dal buyer (sotto €30) | €4,90 | Va al rider, no MyCity |
 
 ### Costi per ordine (lato MyCity)
