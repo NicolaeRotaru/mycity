@@ -560,6 +560,30 @@ export interface Database {
         };
         Relationships: [];
       };
+      coupon_redemptions: {
+        Row: {
+          id: string;
+          coupon_id: string;
+          user_id: string;
+          claimed_at: string;
+          released_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          coupon_id: string;
+          user_id: string;
+          claimed_at?: string;
+          released_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          coupon_id?: string;
+          user_id?: string;
+          claimed_at?: string;
+          released_at?: string | null;
+        };
+        Relationships: [];
+      };
       coupons: {
         Row: {
           id: string;
@@ -1986,6 +2010,7 @@ export interface Database {
           stripe_customer_id: string | null;
           stripe_subscription_id: string | null;
           founded_year: number | null;
+          rejected_at: string | null;
         };
         Insert: {
           id: string;
@@ -2074,6 +2099,7 @@ export interface Database {
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
           founded_year?: number | null;
+          rejected_at?: string | null;
         };
         Update: {
           id?: string;
@@ -2162,6 +2188,7 @@ export interface Database {
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
           founded_year?: number | null;
+          rejected_at?: string | null;
         };
         Relationships: [];
       };
@@ -3151,7 +3178,7 @@ export interface Database {
           seller_id: string | null;
           store_name: string | null;
           store_logo: string | null;
-          month: string | null;
+          month: Json | null;
           vote_count: number | null;
         };
         Relationships: [];
