@@ -759,9 +759,12 @@ export async function frenoDellaVeloce(admin: SupabaseClient, adesso: Date = new
       '⚠️ Freno della veloce fermo prima di cominciare',
       `In questo giro il freno della veloce non ha potuto lavorare ${fermiSenzaNiente.length === 1 ? "sull'ordine" : 'sugli ordini'} ${codici.join(', ')}: ${fermiSenzaNiente[0].perche}. ` +
         'In questo giro non ha fatto niente su quegli ordini. ' +
+        // 12/11/2026 (R09-025, collaudo) — Si dice solo quello che la riga letta sa: i rimborsi sulla carta
+        // di QUESTO ordine, per qualunque motivo. L'euro tornato sul credito MyCity o su un altro ordine
+        // dello stesso carrello qui non si vede: lo si dice, invece di scrivere «nessun rimborso».
         fermiSenzaNiente.map((f) => f.giaResiCents > 0
-          ? `Sull’ordine ${codiceDi(f.id)} risultano già resi ${formatPriceFromCents(f.giaResiCents)} sulla carta: non vanno resi di nuovo. `
-          : `Sull’ordine ${codiceDi(f.id)} non risulta nessun rimborso. `).join('') +
+          ? `Sull’ordine ${codiceDi(f.id)} risultano già resi ${formatPriceFromCents(f.giaResiCents)} sulla carta (per qualunque motivo, anche l’euro della veloce di un giro di prima): guarda l’ordine prima di rendere altro. `
+          : `Sull’ordine ${codiceDi(f.id)} non risultano rimborsi sulla carta; l’euro della veloce può essere già tornato sul credito MyCity o stare su un altro ordine dello stesso carrello: guarda il carrello prima di rendere qualcosa. `).join('') +
         'Riprova da solo ogni 5 minuti; se gli ordini restano «Adesso», senti i negozi.',
       '/admin/orders',
       // Una volta l'ora: con un guasto che dura e ordini nuovi che entrano, l'insieme degli id cambia a ogni giro.

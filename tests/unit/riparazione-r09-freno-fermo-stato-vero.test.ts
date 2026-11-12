@@ -138,6 +138,7 @@ describe("R09-025 · l'avviso del freno fermo dice lo stato vero", () => {
     await giro("2026-10-30T17:21:00.000Z");
     const secondo = avvisi().find((a) => /prima di cominciare/.test(a.titolo));
     expect(secondo?.corpo).toMatch(/risultano già resi 1,00\s€ sulla carta/);
+    expect(secondo?.corpo).toContain("guarda l’ordine prima di rendere altro");
     expect(refundOrderMock).toHaveBeenCalledTimes(1);
   });
 
@@ -147,6 +148,7 @@ describe("R09-025 · l'avviso del freno fermo dice lo stato vero", () => {
     guasto.sessione = true;
     await giro("2026-10-30T17:16:00.000Z");
     const fermo = avvisi().find((a) => /prima di cominciare/.test(a.titolo));
-    expect(fermo?.corpo).toContain("non risulta nessun rimborso");
+    expect(fermo?.corpo).toContain("non risultano rimborsi sulla carta");
+    expect(fermo?.corpo).toContain("credito MyCity");
   });
 });
