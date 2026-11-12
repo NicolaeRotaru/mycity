@@ -1,4 +1,5 @@
 import { env } from '@/lib/env';
+import { logger } from '@/lib/logger';
 import type { KycProvider, KycSubject, KycDocs, KycCheckResult } from './types';
 
 /** Timeout per le fetch verso provider esterni KYC/VIES (audit 🟠-14). */
@@ -38,6 +39,12 @@ class MockKycProvider implements KycProvider {
  */
 const ONFIDO = 'https://api.eu.onfido.com/v3.6';
 
+/** I formati che Onfido accetta, per strada, con l'estensione da dare al file. */
+const ESTENSIONI_ONFIDO: Record<'/documents' | '/live_photos', Record<string, string>> = {
+  '/documents': { 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'application/pdf': 'pdf' },
+  '/live_photos': { 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png' },
+};
+
 class OnfidoProvider implements KycProvider {
   constructor(private apiKey: string) {}
 
@@ -59,10 +66,16 @@ class OnfidoProvider implements KycProvider {
   ): Promise<string | null> {
     const file = await fetch(url, { signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS) });
     if (!file.ok) return `file non leggibile (HTTP ${file.status})`;
+    // R04-024 (revisione) — Il nome del file segue il tipo vero: un PNG o un PDF
+    // chiamato «.jpg» Onfido lo puo' rifiutare. Il selfie accetta solo jpg/png,
+    // il documento anche pdf; un webp non lo accetta nessuno dei due.
+    const tipo = (file.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+    const estensione = ESTENSIONI_ONFIDO[percorso][tipo];
+    if (!estensione) return `formato ${tipo || 'sconosciuto'} non accettato da Onfido: carica una foto JPG o PNG`;
     const corpo = new FormData();
     corpo.append('applicant_id', applicantId);
     for (const [k, v] of Object.entries(campi)) corpo.append(k, v);
-    corpo.append('file', await file.blob(), percorso === '/live_photos' ? 'selfie.jpg' : 'documento.jpg');
+    corpo.append('file', await file.blob(), `${percorso === '/live_photos' ? 'selfie' : 'documento'}.${estensione}`);
     const res = await fetch(`${ONFIDO}${percorso}`, {
       method: 'POST',
       headers: this.intestazioni(false),
@@ -74,16 +87,26 @@ class OnfidoProvider implements KycProvider {
     return errore?.error?.message ?? `HTTP ${res.status}`;
   }
 
-  /** Toglie da Onfido la scheda con i dati personali. Non lancia mai. */
+  /**
+   * Toglie da Onfido la scheda con i dati personali. Non lancia mai, ma se non
+   * ci riesce lo dice nel registro con l'id: una scheda orfana deve lasciare
+   * una traccia per toglierla a mano.
+   */
   private async togliScheda(applicantId: string): Promise<void> {
     try {
-      await fetch(`${ONFIDO}/applicants/${encodeURIComponent(applicantId)}`, {
+      const res = await fetch(`${ONFIDO}/applicants/${encodeURIComponent(applicantId)}`, {
         method: 'DELETE',
         headers: this.intestazioni(false),
         signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS),
       });
-    } catch {
-      /* best effort: il registro di start-check dice gia' che la verifica e' fallita */
+      if (!res.ok && res.status !== 404) {
+        logger.error('[kyc] scheda Onfido non cancellata: va tolta a mano', { applicantId, status: res.status });
+      }
+    } catch (err) {
+      logger.error('[kyc] scheda Onfido non cancellata: va tolta a mano', {
+        applicantId,
+        status: err instanceof Error ? err.name : 'errore',
+      });
     }
   }
 
