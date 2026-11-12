@@ -22,6 +22,8 @@ export const runtime = 'nodejs';
  * Rate limit: 10 / 10 min per utente.
  */
 const SELLER_SUBSCRIPTION_CENTS = 5000; // €50,00 / mese
+/** R10-019 — Le richieste dello stesso negozio dentro questa finestra ricevono la stessa cassa. */
+const FINESTRA_CASSA_MS = 10 * 60_000;
 
 export const POST = withAuthRateLimit(
   { name: 'seller-subscription-checkout', max: 10, windowMs: 10 * 60_000 },
@@ -81,6 +83,11 @@ export const POST = withAuthRateLimit(
         logger.warn('[subscription] verifica su Stripe non riuscita, si prosegue', { err });
       }
     }
+    // 12/11/2026 (R10-019) — Il controllo qui sopra non vede le casse ancora aperte: con due
+    // schede (o senza `stripe_customer_id`, al primo abbonamento) nascevano due sessioni e due
+    // abbonamenti. La chiave di idempotenza fa rispondere a Stripe con LA STESSA sessione a
+    // tutte le richieste dello stesso negozio nella stessa finestra di 10 minuti.
+    const chiaveDellaCassa = `abbonamento-negozio:${user.id}:${Math.floor(Date.now() / FINESTRA_CASSA_MS)}`;
     try {
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',
@@ -113,7 +120,7 @@ export const POST = withAuthRateLimit(
         },
         success_url: `${env.appUrl()}/seller/dashboard?subscription=success`,
         cancel_url: `${env.appUrl()}/seller/dashboard?subscription=canceled`,
-      });
+      }, { idempotencyKey: chiaveDellaCassa });
       return NextResponse.json({ url: session.url }, { status: 200 });
     } catch (e) {
       logger.error('[seller-subscription] creazione sessione Stripe fallita', e);

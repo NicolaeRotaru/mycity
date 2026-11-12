@@ -116,6 +116,30 @@ export async function handleSellerSubscription(session: Stripe.Checkout.Session)
   // si lancia e Stripe riprova: meglio qualche minuto di ritardo che uno stato inventato.
   const { subscription_status: stato, subscription_renews_at: renewsAt } = await statoDaStripe(subscriptionId);
 
+  // 12/11/2026 (R10-019) — DUE SCHEDE, DUE ABBONAMENTI: IL SECONDO NON COPRE IL PRIMO.
+  // Se il profilo ha gia' un ALTRO abbonamento ancora in corso su Stripe, questo e' un
+  // doppione (due cassa aperte e pagate). Prima lo si scriveva sopra al primo: il primo
+  // restava orfano, si pagava ogni mese e dal sito non si disdiceva piu'. Adesso il primo
+  // resta, il doppione si annulla subito e l'admin lo vede nel log. Il rimborso del
+  // doppione NON e' automatico: e' una decisione sui soldi (domanda a Nicola, R10).
+  if (stato !== 'canceled') {
+    const { data: giaSalvato, error: erroreLettura } = await admin
+      .from('profiles')
+      .select('stripe_subscription_id')
+      .eq('id', sellerId)
+      .maybeSingle();
+    // Una lettura caduta non vale «nessun abbonamento»: Stripe riprova.
+    if (erroreLettura) throw new Error(`[stripe] abbonamento del negozio non letto: ${erroreLettura.message}`);
+    const precedente = (giaSalvato as { stripe_subscription_id?: string | null } | null)?.stripe_subscription_id ?? null;
+    if (precedente && precedente !== subscriptionId && (await statoDaStripe(precedente)).subscription_status !== 'canceled') {
+      await getStripe().subscriptions.cancel(subscriptionId);
+      logger.error('[stripe] abbonamento doppio annullato: resta il primo, il doppione va rimborsato a mano', {
+        sellerId, primo: precedente, doppione: subscriptionId, sessionId: session.id,
+      });
+      return;
+    }
+  }
+
   // R81 — Il negozio ha pagato 50 €: se l'attivazione non si scrive, Stripe
   // deve riprovare. Prima il gestore finiva «bene» e l'abbonamento pagato
   // restava spento. Riscrivere gli stessi valori a ogni tentativo è innocuo.
