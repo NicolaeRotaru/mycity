@@ -18,21 +18,10 @@ import { STATI_VERSATI, daVersareLunedi, ordiniDaVersareLunedi, gruppoDelPannell
  * pagina dice quanto versare a ogni negozio («Da versare lunedì») e il tasto
  * «Bonifico fatto» lo registra (migrazione 350). La carta resta automatica.
  *
- * Mostra lo stato reale dei bonifici ai venditori leggendo direttamente la
- * tabella `orders` (colonne payout: seller_payout_cents, payout_status,
- * payout_at, stripe_transfer_id) e raggruppando per venditore.
- *
- * IMPORTANTE: nessuna azione di pagamento qui. Il payout reale avviene in modo
- * automatico via cron `release-payouts` (carta: ~1h dopo la consegna; COD: dopo
- * la conferma rimessa contanti del rider). Questa pagina è una vista di
- * riconciliazione per il founder, coerente col mockup admin v2 (40-ops).
- *
- * Stati payout (orders.payout_status), allineati a app/seller/earnings:
- *  - HELD / PENDING_SELLER_ONBOARDING → "In sospeso" (in attesa del cron/onboarding)
- *  - TRANSFERRED                      → "Pagato"
- *  - REVERSED / REFUNDED / FAILED     → esclusi dai totali "da pagare"/"pagato"
- * Gli ordini consegnati ma non ancora HELD (es. card freschi pre-cron) appaiono
- * come "Pronto" quando seller_payout_cents è valorizzato.
+ * Legge la tabella `orders` (netto, storni, stato del bonifico) e raggruppa per negozio. La regola
+ * degli stati sta in lib/guadagni/negozio.ts (`gruppoDelPannello`): contanti con la rimessa
+ * confermata = «Da versare»; contanti ancora dal fattorino, carta in attesa del giro, IBAN da
+ * verificare = «In sospeso»; ritiri al banco, storni e rimborsi = fuori dai totali.
  */
 
 type PayoutOrder = {
