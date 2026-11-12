@@ -89,6 +89,7 @@ function tabellaDelleVarianti() {
   ]);
   const aggiornamenti: Array<{ id: string; riga: Record<string, unknown> }> = [];
   const client = {
+    rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.salva_varianti' } }), // R08-008: la 323 non c'è, si prova il ripiego in tre giri
     from: (tavola: string) => {
       expect(tavola, 'il salvataggio scrive su una tavola che la prova non conosce').toBe('product_variants');
       return {
