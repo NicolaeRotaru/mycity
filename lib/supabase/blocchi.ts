@@ -71,14 +71,20 @@ const TETTO_DURO = 20_000;
 
 export async function leggiTutteLeRighe<T>(
   chiedi: (da: number, a: number) => PromiseLike<{ data: T[] | null; error: { message?: string } | null }>,
+  /**
+   * 12/11/2026 (R06-021) — Un tetto piu' basso per chi legge un campione voluto
+   * (per esempio le ultime 3000 righe dell'attivita'): si legge comunque a
+   * finestre, e `troncato` dice se il tetto e' scattato.
+   */
+  tetto: number = TETTO_DURO,
 ): Promise<{ data: T[]; error: { message?: string } | null; troncato: boolean }> {
   const tutte: T[] = [];
-  for (let da = 0; da < TETTO_DURO; da += FINESTRA) {
-    const { data, error } = await chiedi(da, da + FINESTRA - 1);
+  for (let da = 0; da < tetto; da += FINESTRA) {
+    const { data, error } = await chiedi(da, Math.min(da + FINESTRA, tetto) - 1);
     if (error) return { data: tutte, error, troncato: false };
     const righe = data ?? [];
     tutte.push(...righe);
-    if (righe.length < FINESTRA) return { data: tutte, error: null, troncato: false };
+    if (righe.length < Math.min(FINESTRA, tetto - da)) return { data: tutte, error: null, troncato: false };
   }
   return { data: tutte, error: null, troncato: true };
 }

@@ -380,9 +380,10 @@ export default function AdminFunnelPage() {
               Attenzione: campione, non totale — lette le prime {data.iscrittiLetti} righe
             </p>
             <p className="mt-0.5 text-sm leading-normal text-ink-700">
-              Gli iscritti sono più di quanti se ne possano leggere in una volta sola. Le
-              percentuali e le coorti qui sotto sono calcolate su queste {data.iscrittiLetti}
-              {' '}righe: i numeri veri sono più alti, non più bassi.
+              Gli iscritti, o i loro ordini, sono più di quanti se ne possano leggere in una
+              volta sola. Le percentuali e le coorti qui sotto sono calcolate su queste
+              {' '}{data.iscrittiLetti}{' '}righe di iscritti e sugli ordini letti: i numeri veri
+              sono più alti, non più bassi.
             </p>
           </div>
         </div>

@@ -7,6 +7,7 @@ import {
   LogIn, ShoppingBag, Package, MessageSquare, ShieldAlert, Cpu, Radio, User,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 
@@ -110,24 +111,34 @@ export default function AdminActivityPage() {
   });
 
   // ---- Sintesi ultime 24h (aggregazione client-side) --------------------------
-  const { data: recent = [], isError: sintesiCaduta } = useQuery({
+  const { data: sintesi, isError: sintesiCaduta } = useQuery({
     queryKey: queryKeys.admin.activitySummary,
     refetchInterval: 30_000,
-    queryFn: async (): Promise<EventRow[]> => {
+    queryFn: async (): Promise<{ righe: EventRow[]; campione: boolean }> => {
       const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-      const { data, error } = await supabase
-        .from('activity_events')
-        .select(SELECT)
-        .gte('created_at', since)
-        .order('created_at', { ascending: false })
-        .limit(3000);
-      if (error) throw error;
       // Il taglio a 3000 righe resta (è una pagina, non un rendiconto), ma va
       // detto: prima le 24 ore sembravano complete anche quando erano un
       // troncone. Chi legge deve sapere che sta guardando un campione.
-      return (data ?? []) as unknown as EventRow[];
+      // 12/11/2026 (R06-021) — `.limit(3000)` non bastava: il database ne
+      // consegna al massimo mille per richiesta, quindi i «Visitatori 24h» si
+      // contavano sulle ultime mille righe e l'avviso del campione (che
+      // aspettava 3000 righe) non compariva mai. Ora si legge a finestre fino a
+      // 3000, e `campione` dice se il tetto e' scattato.
+      const { data, error, troncato } = await leggiTutteLeRighe<EventRow>(
+        (da, a) =>
+          supabase
+            .from('activity_events')
+            .select(SELECT)
+            .gte('created_at', since)
+            .order('created_at', { ascending: false })
+            .range(da, a) as unknown as PromiseLike<{ data: EventRow[] | null; error: { message?: string } | null }>,
+        3000,
+      );
+      if (error) throw error;
+      return { righe: data, campione: troncato };
     },
   });
+  const recent = useMemo(() => sintesi?.righe ?? [], [sintesi]);
 
   // Il registro sta salvando? Senza la chiave di servizio /api/track risponde
   // ma non scrive niente: qui lo si dice, invece di mostrare zero visitatori.
@@ -278,7 +289,7 @@ export default function AdminActivityPage() {
       {/* KPI in tempo reale */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Kpi icon={Radio} label="Online ora" value={numeriNonLetti ? '—' : summary.online} color="olive" hint="ultimi 5 min" />
-        <Kpi icon={Users} label="Visitatori 24h" value={numeriNonLetti ? '—' : summary.uniqueVisitors} color="primary" hint={recent.length >= 3000 ? 'unici — campione: ultime 3000 righe' : 'unici'} />
+        <Kpi icon={Users} label="Visitatori 24h" value={numeriNonLetti ? '—' : summary.uniqueVisitors} color="primary" hint={sintesi?.campione ? `unici — campione: ultime ${recent.length} righe` : 'unici'} />
         <Kpi icon={LogIn} label="Accessi 24h" value={numeriNonLetti ? '—' : summary.logins} color="accent" />
         <Kpi icon={Globe} label="Viste anonime" value={numeriNonLetti ? '—' : summary.anonViews} color="primary" />
         <Kpi icon={Activity} label="Viste loggati" value={numeriNonLetti ? '—' : summary.loggedInViews} color="secondary" />
