@@ -38,12 +38,26 @@ describe('R02-023 · la vetrina del negozio', () => {
     const box = document.createElement('div');
     document.body.appendChild(box);
     const root = createRoot(box);
-    const ctx = { reviews: [], accent: '#7A8B3C', recensioniInErrore: false, riepilogoRecensioni: null };
+    const ctx = { reviews: [], accent: '#7A8B3C', recensioniInErrore: false, riepilogoRecensioni: { media: 0, totale: 0 } };
     await act(async () => {
       root.render(createElement(QueryClientProvider, { client: new QueryClient() }, createElement(ReviewsSection, { ctx: ctx as never })));
     });
     expect(box.textContent).toContain('Ancora nessuna recensione');
     act(() => root.unmount());
+  });
+
+  it('dopo il collaudo: mentre la lettura è in corso (conto non ancora arrivato, o 12 recensioni in arrivo) non dice «nessuna»', async () => {
+    for (const riepilogo of [null, { media: 4.5, totale: 12 }]) {
+      const box = document.createElement('div');
+      document.body.appendChild(box);
+      const root = createRoot(box);
+      const ctx = { reviews: [], accent: '#7A8B3C', recensioniInErrore: false, riepilogoRecensioni: riepilogo };
+      await act(async () => {
+        root.render(createElement(QueryClientProvider, { client: new QueryClient() }, createElement(ReviewsSection, { ctx: ctx as never })));
+      });
+      expect(box.textContent).not.toContain('Ancora nessuna recensione');
+      act(() => root.unmount());
+    }
   });
 
   it('il pannello nascosto non porta classi di impaginazione', () => {
