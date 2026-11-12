@@ -236,11 +236,16 @@ describe('chi puo registrare quale incasso', () => {
     expect(statiAmmessi(fattorino)).toEqual(['OUT_FOR_DELIVERY', 'DELIVERED']);
   });
 
-  it('l amministratore: solo a consegna chiusa, perche in strada i contanti li ha il fattorino', () => {
+  // 12/11/2026 (R12-001) — Dalla migrazione 163 un ordine in contanti non diventa «consegnato» senza
+  // l'incasso: la regola vecchia («solo a consegna chiusa») lasciava l'ordine in strada per sempre se il
+  // fattorino spariva. L'amministratore registra dalla partenza della merce in poi, mai prima.
+  it('l amministratore: da quando la merce e partita, anche se il fattorino e sparito in strada', () => {
     expect(motivoPerNonRegistrare(base, amministratore)).toBeNull();
-    expect(motivoPerNonRegistrare({ ...base, delivery_status: 'OUT_FOR_DELIVERY' }, amministratore)).toBe('NON_ANCORA_CONSEGNATO');
+    expect(motivoPerNonRegistrare({ ...base, delivery_status: 'OUT_FOR_DELIVERY' }, amministratore)).toBeNull();
+    expect(motivoPerNonRegistrare({ ...base, delivery_status: 'PICKED_UP' }, amministratore)).toBeNull();
+    expect(motivoPerNonRegistrare({ ...base, delivery_status: 'ACCEPTED' }, amministratore)).toBe('NON_ANCORA_CONSEGNATO');
     expect(motivoPerNonRegistrare({ ...base, rider_id: null }, amministratore)).toBe('SENZA_FATTORINO');
-    expect(statiAmmessi(amministratore)).toEqual(['DELIVERED']);
+    expect(statiAmmessi(amministratore)).toEqual(['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']);
   });
 
   it('per nessuno: un ordine con la carta, o gia incassato', () => {
@@ -333,8 +338,18 @@ describe('l amministratore registra l incasso dichiarato', () => {
     expect(stato.quadrature[0]?.for_date).toBe('2026-10-06');
   });
 
-  it('mentre la consegna e in strada no: i contanti li ha in mano il fattorino', async () => {
+  // 12/11/2026 (R12-001) — Era «in strada no»: ma l'ordine in contanti non si chiude senza incasso
+  // (163), e un fattorino sparito lo lasciava in consegna per sempre. Prima della partenza resta no.
+  it('mentre la consegna e in strada si: il fattorino sparito non blocca l ordine per sempre', async () => {
     stato.ordine = consegnatoSenzaIncasso({ delivery_status: 'OUT_FOR_DELIVERY', delivered_at: null });
+    const res = await registra({ orderId: ID, cashCollectedCents: 2200, nota: 'Luca al telefono' });
+    expect(res.status).toBe(200);
+    expect(stato.ordine?.cash_confirmed_at).toBeTruthy();
+    expect(stato.registro).toHaveLength(1);
+  });
+
+  it('prima che la merce parta no: i contanti non sono ancora passati di mano', async () => {
+    stato.ordine = consegnatoSenzaIncasso({ delivery_status: 'ACCEPTED', delivered_at: null });
     const res = await registra({ orderId: ID, cashCollectedCents: 2200, nota: 'Luca al telefono' });
     expect(res.status).toBe(409);
     expect(stato.ordine?.cash_confirmed_at).toBeNull();
@@ -354,10 +369,10 @@ describe('l amministratore registra l incasso dichiarato', () => {
     expect(stato.ordine?.cash_collected_cents).toBe(2200);
   });
 
-  it('la scrittura stessa, nel database, accetta solo un ordine consegnato', async () => {
+  it('la scrittura stessa, nel database, accetta solo un ordine partito', async () => {
     await registra({ orderId: ID, cashCollectedCents: 2200, nota: 'Luca al telefono' });
     const filtri = stato.scritture[0]?.filtri ?? [];
-    expect(filtri).toContainEqual(['in', 'delivery_status', ['DELIVERED']]);
+    expect(filtri).toContainEqual(['in', 'delivery_status', ['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']]);
     expect(filtri).toContainEqual(['is', 'cash_confirmed_at', null]);
     expect(filtri).toContainEqual(['eq', 'rider_id', 'fattorino-1']);
   });

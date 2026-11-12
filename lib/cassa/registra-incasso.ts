@@ -41,6 +41,9 @@ export type OrdineDaIncassare = {
 export const COLONNE_ORDINE_DA_INCASSARE =
   'id, rider_id, total_price, rider_fee_cents, shipping_cost, pickup_in_store, payment_method, payment_status, delivery_status, cash_confirmed_at, delivered_at';
 
+/** Dove l'amministratore puo' registrare l'incasso: dalla partenza della merce in poi. */
+export const STATI_DELL_AMMINISTRATORE: readonly string[] = ['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+
 export type ChiRegistra =
   | { chi: 'fattorino'; userId: string }
   | { chi: 'amministratore'; userId: string };
@@ -61,9 +64,17 @@ export type MotivoRifiuto =
  * gli mostra i recapiti del cliente: l'incasso non e' un recapito, e un
  * incasso non dichiarato e' un negozio non pagato.
  *
- * L'amministratore: solo un ordine gia' consegnato da un fattorino. Mentre
- * l'ordine e' in strada i contanti li ha in mano il fattorino, ed e' lui che
- * li deve dichiarare.
+ * L'amministratore: un ordine con un fattorino, da quando la merce e' partita
+ * (ritirata, in strada o consegnata).
+ *
+ * 12/11/2026 (R12-001) — Prima l'amministratore poteva registrare solo un
+ * ordine gia' «consegnato». Ma dalla migrazione 163 un ordine in contanti non
+ * diventa consegnato senza l'incasso: se il fattorino spariva senza dichiarare
+ * i contanti, l'ordine restava «in consegna» per sempre e la rotta di
+ * soccorso non serviva a niente. Ora l'amministratore registra i contanti
+ * dichiarati a voce anche mentre l'ordine e' in strada (nota obbligatoria
+ * nella rotta), e poi chiude la consegna con `admin_chiudi_consegna`
+ * (migrazione 360).
  */
 export function motivoPerNonRegistrare(
   ordine: OrdineDaIncassare | null,
@@ -75,7 +86,7 @@ export function motivoPerNonRegistrare(
   if (ordine.cash_confirmed_at) return 'GIA_CONFERMATO';
   if (chi.chi === 'amministratore') {
     if (!ordine.rider_id) return 'SENZA_FATTORINO';
-    if (ordine.delivery_status !== 'DELIVERED') return 'NON_ANCORA_CONSEGNATO';
+    if (!STATI_DELL_AMMINISTRATORE.includes(ordine.delivery_status)) return 'NON_ANCORA_CONSEGNATO';
   }
   return null;
 }
@@ -83,10 +94,11 @@ export function motivoPerNonRegistrare(
 /**
  * Gli stati dentro cui la scrittura e' ammessa, decisi dal database nella
  * stessa UPDATE: per il fattorino quelli in cui ha la merce, per
- * l'amministratore solo «consegnato».
+ * l'amministratore anche «ritirato» (il fattorino che sparisce subito dopo il
+ * ritiro) — vedi motivoPerNonRegistrare.
  */
 export function statiAmmessi(chi: ChiRegistra): readonly string[] {
-  return chi.chi === 'amministratore' ? ['DELIVERED'] : STATI_IN_CUI_SI_INCASSA;
+  return chi.chi === 'amministratore' ? STATI_DELL_AMMINISTRATORE : STATI_IN_CUI_SI_INCASSA;
 }
 
 /** Sopra questa cifra il contante dichiarato e' un errore di battitura, non un incasso. */
