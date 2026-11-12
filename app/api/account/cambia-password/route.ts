@@ -6,7 +6,7 @@ import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { logger } from '@/lib/logger';
-import { LUNGHEZZA_MINIMA } from '@/lib/account/cambio-password';
+import { LUNGHEZZA_MINIMA, PASSWORD_UGUALE } from '@/lib/account/cambio-password';
 import { esitoErroreDiAccesso } from '@/lib/auth/errore-di-accesso';
 
 export const runtime = 'nodejs';
@@ -59,6 +59,12 @@ export const POST = withAuthRateLimit(
       return ApiErrors.invalidRequest(
         `La nuova password deve essere di almeno ${LUNGHEZZA_MINIMA} caratteri.`,
       );
+    }
+
+    // 12/11/2026 (R02-010) — La stessa password di prima non è un cambio: si dice, e non si
+    // riscrive niente. Prima di provare la password, così non costa un tentativo.
+    if (corpo.nuovaPassword === corpo.passwordAttuale) {
+      return ApiErrors.invalidRequest(PASSWORD_UGUALE);
     }
 
     const email = user.email?.trim();
