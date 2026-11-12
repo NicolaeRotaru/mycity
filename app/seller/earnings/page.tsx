@@ -56,6 +56,7 @@ function payoutBadge(o: OrderRow): { label: string; cls: string } {
   if (o.payment_method === 'cod') {
     switch (o.payout_status) {
       case 'TRANSFERRED':
+      case 'PAID_MANUALLY': // R11-004 — il bonifico del lunedì fatto a mano
         return { label: o.payout_at ? `Pagato ${fmtDate(o.payout_at)}` : 'Pagato', cls: 'bg-olive-100 text-olive-800' };
       case 'AWAITING_REMITTANCE':
         return { label: 'Attesa cassa fattorino', cls: 'bg-accent-100 text-accent-800' };

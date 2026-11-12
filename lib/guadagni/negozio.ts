@@ -69,7 +69,17 @@ export function nettoDopoStorni(o: OrdineNegozio): number {
  * (`CASH_IN_STORE`, `AWAITING_REMITTANCE`): li' un bonifico non e' ancora
  * partito, e metterli fra i versati sarebbe la stessa bugia al contrario.
  */
-const STATI_CON_BONIFICO = ['TRANSFERRED', 'HELD', 'PENDING_SELLER_ONBOARDING', 'PROCESSING'];
+const STATI_CON_BONIFICO = ['TRANSFERRED', 'PAID_MANUALLY', 'HELD', 'PENDING_SELLER_ONBOARDING', 'PROCESSING'];
+
+/**
+ * R11-004 — IL BONIFICO DEL LUNEDÌ FATTO A MANO È UN BONIFICO VERSATO.
+ *
+ * Al lancio i contanti li versa Nicola a mano, ogni lunedì: l'ordine passa da
+ * HELD a PAID_MANUALLY (migrazione 350, `segna_bonifico_manuale`). Prima non
+ * esisteva nessuno stato per quel bonifico: restava HELD, e il negozio leggeva
+ * «0,00 € già versati» con l'«in arrivo» che cresceva ogni settimana.
+ */
+export const STATI_VERSATI = ['TRANSFERRED', 'PAID_MANUALLY'];
 
 export function riepilogoNegozio(ordini: OrdineNegozio[]): RiepilogoNegozio {
   const conCarta = ordini.filter((o) => o.payment_method !== 'cod');
@@ -85,7 +95,7 @@ export function riepilogoNegozio(ordini: OrdineNegozio[]): RiepilogoNegozio {
   return {
     lordoCents: attivi.reduce((s, o) => s + incassatoDellOrdineCents(o), 0),
     commissioniCents: attivi.reduce((s, o) => s + (o.application_fee_cents ?? 0), 0),
-    versatiCents: somma(conBonifico.filter((o) => o.payout_status === 'TRANSFERRED')),
+    versatiCents: somma(conBonifico.filter((o) => STATI_VERSATI.includes(o.payout_status ?? ''))),
     inArrivoCents: somma(
       conBonifico.filter((o) =>
         ['HELD', 'PENDING_SELLER_ONBOARDING', 'PROCESSING'].includes(o.payout_status ?? ''),
@@ -117,7 +127,7 @@ export function riepilogoContanti(ordini: OrdineNegozio[], consegnato: (o: Ordin
     incassatoDalFattorinoCents: contanti.reduce((s, o) => s + Math.round(Number(o.total_price || 0) * 100), 0),
     nettoAlNegozioCents: contanti.reduce((s, o) => s + nettoDopoStorni(o), 0),
     giaVersatoCents: contanti
-      .filter((o) => o.payout_status === 'TRANSFERRED')
+      .filter((o) => STATI_VERSATI.includes(o.payout_status ?? ''))
       .reduce((s, o) => s + nettoDopoStorni(o), 0),
   };
 }

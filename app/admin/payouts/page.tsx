@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Banknote, Clock, CheckCircle2, Store, Info, AlertTriangle } from 'lucide-react';
@@ -9,6 +9,7 @@ import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { AdminPageTitle, AdminStatCard } from '@/components/admin/AdminUI';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { STATI_VERSATI } from '@/lib/guadagni/negozio';
 
 /**
  * Payout venditori (admin · Trust & Safety) — SOLA LETTURA.
@@ -52,6 +53,9 @@ function payoutTone(o: PayoutOrder): { tone: PayoutTone; label: string; cls: str
   switch (o.payout_status) {
     case 'TRANSFERRED':
       return { tone: 'paid', label: 'Pagato', cls: 'bg-cream-200 text-ink-600' };
+    case 'PAID_MANUALLY':
+      // R11-004 — il bonifico del lunedì fatto a mano (migrazione 350).
+      return { tone: 'paid', label: o.payout_at ? `Bonifico fatto ${fmtDate(o.payout_at)}` : 'Bonifico fatto', cls: 'bg-cream-200 text-ink-600' };
     case 'HELD':
     case 'PENDING_SELLER_ONBOARDING':
       return { tone: 'hold', label: 'In sospeso', cls: 'bg-accent-100 text-accent-800' };
@@ -92,6 +96,56 @@ function maskIban(iban: string | null): string | null {
  * solo quello che e' stato letto: la pagina lo dice, invece di spacciare un totale parziale.
  */
 const TETTO_PAYOUT = 1000;
+
+/**
+ * R11-004 — «Bonifico fatto»: segna come pagati a mano i contanti con la rimessa
+ * confermata (HELD) di un negozio. Lo scrive `segna_bonifico_manuale` (migrazione
+ * 350), riservata agli amministratori: da qui parte solo la richiesta.
+ */
+function BonificoFatto({ sellerId, storeName, ordini, quandoFatto }: {
+  sellerId: string;
+  storeName: string;
+  ordini: PayoutOrder[];
+  quandoFatto: () => void;
+}) {
+  const [stato, setStato] = useState<'pronto' | 'invio' | 'errore'>('pronto');
+  const daSegnare = ordini.filter((o) => o.payment_method === 'cod' && o.payout_status === 'HELD');
+  if (daSegnare.length === 0) return null;
+  const totale = daSegnare.reduce((s, o) => s + (o.seller_payout_cents ?? 0), 0);
+  const segna = async () => {
+    const riferimento = window.prompt(
+      `Bonifico a ${storeName}: ${formatPrice(totale / 100)} per ${daSegnare.length} ordini in contanti.\nScrivi il riferimento del bonifico (CRO/TRN o data):`,
+    );
+    if (!riferimento || riferimento.trim().length < 3) return;
+    setStato('invio');
+    const { error } = await supabase.rpc('segna_bonifico_manuale', {
+      p_seller: sellerId,
+      p_order_ids: daSegnare.map((o) => o.id),
+      p_riferimento: riferimento.trim(),
+    } as never);
+    if (error) {
+      setStato('errore');
+      return;
+    }
+    setStato('pronto');
+    quandoFatto();
+  };
+  return (
+    <div className="mt-1.5">
+      <button
+        type="button"
+        onClick={() => void segna()}
+        disabled={stato === 'invio'}
+        className="rounded-lg border border-olive-300 bg-white px-3 py-1 text-xs font-semibold text-olive-800 hover:bg-olive-50 disabled:opacity-50"
+      >
+        {stato === 'invio' ? 'Segno…' : `Bonifico fatto · ${formatPrice(totale / 100)}`}
+      </button>
+      {stato === 'errore' && (
+        <p role="alert" className="mt-1 text-xs text-secondary-700">Non sono riuscito a segnarlo: riprova.</p>
+      )}
+    </div>
+  );
+}
 
 export default function AdminPayoutsPage() {
   const { data: letti = [], isLoading, isError, refetch } = useQuery({
@@ -135,7 +189,7 @@ export default function AdminPayoutsPage() {
       g.orders.push(o);
       const cents = o.seller_payout_cents ?? 0;
       const t = payoutTone(o);
-      if (t.tone === 'paid' && o.payout_status === 'TRANSFERRED') g.paidCents += cents;
+      if (t.tone === 'paid' && STATI_VERSATI.includes(o.payout_status ?? '')) g.paidCents += cents;
       else if (t.tone === 'ready' || t.tone === 'hold') g.dueCents += cents;
       map.set(o.seller_id, g);
     }
@@ -152,7 +206,7 @@ export default function AdminPayoutsPage() {
       const t = payoutTone(o);
       if (t.tone === 'ready') due += cents;
       else if (t.tone === 'hold') hold += cents;
-      else if (o.payout_status === 'TRANSFERRED') paid += cents;
+      else if (STATI_VERSATI.includes(o.payout_status ?? '')) paid += cents;
     }
     return { dueCents: due, holdCents: hold, paidCents: paid };
   }, [orders]);
@@ -238,6 +292,7 @@ export default function AdminPayoutsPage() {
                   {g.paidCents > 0 && (
                     <p className="text-xs text-ink-500">{formatPrice(g.paidCents / 100)} già pagati</p>
                   )}
+                  <BonificoFatto sellerId={g.sellerId} storeName={g.storeName} ordini={g.orders} quandoFatto={() => void refetch()} />
                 </div>
               </div>
 
