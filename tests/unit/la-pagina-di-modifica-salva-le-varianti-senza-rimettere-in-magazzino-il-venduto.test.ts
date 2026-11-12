@@ -4,6 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { monta } from './aiuti/monta-componente';
 import { accendi, attendi, clicca } from './aiuti/schermo';
+import { salvaVariantiFinta } from './aiuti/salva-varianti-finta';
 
 /**
  * 28/10/2026 — LA PAGINA DI MODIFICA, FINO AL DATABASE.
@@ -89,7 +90,8 @@ function tabellaDelleVarianti() {
   ]);
   const aggiornamenti: Array<{ id: string; riga: Record<string, unknown> }> = [];
   const client = {
-    rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.salva_varianti' } }), // R08-008: la 323 non c'è, si prova il ripiego in tre giri
+    // R08-008: la salva_varianti finta esegue il carico vero su questa banca dati (il ripiego PGRST202 ha la sua prova).
+    rpc(nome: string, carico: never) { return salvaVariantiFinta(this as never)(nome, carico); },
     from: (tavola: string) => {
       expect(tavola, 'il salvataggio scrive su una tavola che la prova non conosce').toBe('product_variants');
       return {

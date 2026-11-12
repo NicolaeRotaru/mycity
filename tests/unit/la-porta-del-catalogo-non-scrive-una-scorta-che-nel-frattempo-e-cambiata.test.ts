@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { salvaProdottoTracciato, type ClientDelCatalogo } from '@/lib/products/salvataggio-tracciato';
 import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
+import { salvaVariantiFinta } from './aiuti/salva-varianti-finta';
 
 /**
  * 31/10/2026 — LA SCORTA SI SCRIVE SOLO SE IN BANCA DATI C'E' ANCORA QUELLA VISTA.
@@ -32,7 +33,8 @@ type Riga = Record<string, unknown>;
 function bancaDati(tabelle: Record<string, Riga[]>, dopoLaLettura?: () => void) {
   const scritture: Array<{ tavola: string; valori: Riga }> = [];
   const db = {
-    rpc: async () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function public.salva_varianti' } }), // R08-008: la 323 non c'è, si prova il ripiego in tre giri
+    // R08-008: la salva_varianti finta esegue il carico vero su questa banca dati (il ripiego PGRST202 ha la sua prova).
+    rpc(nome: string, carico: never) { return salvaVariantiFinta(this as never)(nome, carico); },
     from(tavola: string) {
       const righe = () => tabelle[tavola] ?? [];
       return {
