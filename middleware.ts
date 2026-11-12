@@ -31,11 +31,11 @@ import {
   PAGINA_ATTESA_NEGOZIO,
 } from '@/lib/auth/decisione-portiere';
 import {
-  TETTO_RINNOVO_MS,
   chiediConTettoSuScritturaDiSessione,
   creaRaccoglitoreCookie,
   eCookieDiSessione,
   sessioneDaRinnovare,
+  tettoPerGetUser,
   travasaCookie,
   conDurataMassima,
 } from '@/lib/auth/cookie-di-sessione';
@@ -521,7 +521,8 @@ export async function middleware(req: NextRequest) {
   } = await chiediConTettoSuScritturaDiSessione(
     () => supabase.auth.getUser(),
     raccoglitore,
-    staRinnovando ? TETTO_RINNOVO_MS : TETTO_PORTIERE_MS,
+    // 12/11/2026 (R06-008) — La scelta 3/10 secondi sta nel modulo, provata.
+    tettoPerGetUser(req.cookies.getAll(), Date.now()),
   );
   if (staRinnovando && consegna.registra) {
     logger.warn(consegna.registra, { percorso: pathname, motivo: motivoLeggibile(rispostaUtente) });
