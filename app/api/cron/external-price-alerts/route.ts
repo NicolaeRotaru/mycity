@@ -61,22 +61,42 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   }
 
   // Candidati: prodotti importati, dal meno recente. Filtro "stale" in codice.
-  const { data, error } = await supa
+  // 12/11/2026 (R04-011, revisione K02) — I FALLITI NON OCCUPANO LA TESTA DELLA FILA.
+  // Da quando un fallimento non sposta piu' external_synced_at (quella data dice
+  // solo «dati arrivati»), i prodotti sempre in errore restavano i piu' vecchi e
+  // riempivano ogni giro: i sani non si controllavano piu'. Adesso si prendono
+  // prima i prodotti non in errore; i falliti solo nei posti che restano, e solo
+  // se il loro freno di sei ore lo consente.
+  const colonne = 'id, name, seller_id, external_marketplace, external_data, external_source_url, external_synced_at, external_sync_status';
+  const { data: sani, error } = await supa
     .from('products')
-    .select('id, name, seller_id, external_marketplace, external_data, external_source_url, external_synced_at, external_sync_status')
+    .select(colonne)
     .not('external_source_url', 'is', null)
+    .or('external_sync_status.is.null,external_sync_status.neq.error')
     .order('external_synced_at', { ascending: true, nullsFirst: true })
     .limit(BATCH * 3);
   if (error) return ApiErrors.internal(error.message);
 
-  const rows = ((data ?? []) as Row[]).filter((r) => isStale(r.external_synced_at)).slice(0, BATCH);
+  const rows = ((sani ?? []) as Row[]).filter((r) => isStale(r.external_synced_at)).slice(0, BATCH);
+  if (rows.length < BATCH) {
+    const { data: falliti } = await supa
+      .from('products')
+      .select(colonne)
+      .not('external_source_url', 'is', null)
+      .eq('external_sync_status', 'error')
+      .order('external_synced_at', { ascending: true, nullsFirst: true })
+      .limit(BATCH * 3);
+    for (const r of (falliti ?? []) as Row[]) {
+      if (rows.length >= BATCH) break;
+      if (!isStale(r.external_synced_at)) continue;
+      if (await ritentoDopoErroreConsentito(r.id)) rows.push(r);
+    }
+  }
 
   let checked = 0, alerts = 0, errors = 0;
   const now = new Date().toISOString();
 
   for (const r of rows) {
-    // R04-011 — Un prodotto in errore si ritenta al massimo ogni sei ore.
-    if (r.external_sync_status === 'error' && !(await ritentoDopoErroreConsentito(r.id))) continue;
     const prev = r.external_data;
     const query = prev?.source_title || r.name || '';
     if (!query) continue;
