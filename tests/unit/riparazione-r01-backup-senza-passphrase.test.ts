@@ -25,14 +25,14 @@ function lancia(passphrase: string | undefined) {
     'out=""; prev=""; for a in "$@"; do [ "$prev" = "--output" ] && out="$a"; prev="$a"; done; echo cifrato > "$out"\n');
   chmodSync(join(finti, 'pg_dump'), 0o755);
   chmodSync(join(finti, 'gpg'), 0o755);
-  const env: Record<string, string> = {
+  const env: Record<string, string | undefined> = {
     PATH: `${finti}:${process.env.PATH ?? ''}`,
     HOME: base,
     SUPABASE_DB_URL: 'postgresql://utente:segreto@db.example.com:5432/postgres',
     BACKUP_DIR: join(base, 'copie'),
   };
   if (passphrase) env.BACKUP_PASSPHRASE = passphrase;
-  const r = spawnSync('bash', [join(process.cwd(), 'scripts/backup-db.sh')], { env, encoding: 'utf8' });
+  const r = spawnSync('bash', [join(process.cwd(), 'scripts/backup-db.sh')], { env: env as NodeJS.ProcessEnv, encoding: 'utf8' });
   const chiamate = existsSync(diario) ? readFileSync(diario, 'utf8') : '';
   return { r, chiamate };
 }
