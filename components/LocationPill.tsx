@@ -95,6 +95,9 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
         // alzare la barra.
         className="relative inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 rounded-full text-xs font-medium ring-1 ring-white/15 transition-colors focus-visible:outline-white before:absolute before:inset-x-0 before:-inset-y-2 before:content-['']"
         title="Cambia indirizzo di consegna"
+        // 12/11/2026 (R09-016, collaudo) — Fra 768 e 1023 px si vede solo il CAP, e il lettore di schermo
+        // leggeva «29121». Il nome dice tutto, a ogni larghezza.
+        aria-label={`Consegna a ${loc.city} ${loc.zip}: cambia indirizzo`}
       >
         <MapPin size={14} strokeWidth={2.2} className="text-accent-300" />
         {compact ? (

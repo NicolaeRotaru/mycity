@@ -24,4 +24,9 @@ describe('R09-016 · su tablet la ricerca della testata ha spazio', () => {
     expect(navbar).toMatch(/<div className="min-w-0 flex-1 max-w-2xl">\s*<SearchBar \/>/);
     expect(navbar).toContain('className="flex items-center gap-3 lg:gap-4"');
   });
+
+  it('la pillola ha un nome completo anche quando mostra solo il CAP, e «Registrati» icona è alto 44', () => {
+    expect(pillola).toContain('aria-label={`Consegna a ${loc.city} ${loc.zip}: cambia indirizzo`}');
+    expect(navbar).toMatch(/<Link href="\/sign-up" title="Registrati" className="inline-flex min-h-11 min-w-11 /);
+  });
 });

@@ -168,7 +168,7 @@ export default function Navbar() {
                       (il bianco su quel fondo stacca 6,7 volte, ne bastano 4,5) ma non
                       compete più col carrello.
                     */}
-                    <Link href="/sign-up" className="inline-flex items-center gap-1.5 border border-white/70 hover:border-white hover:bg-white/10 text-white hover:text-white px-2.5 lg:px-4 py-2 rounded-full font-semibold transition-colors focus-visible:outline-white">
+                    <Link href="/sign-up" title="Registrati" className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 border border-white/70 hover:border-white hover:bg-white/10 text-white hover:text-white px-2.5 lg:px-4 py-2 rounded-full font-semibold transition-colors focus-visible:outline-white">
                       <UserPlus size={16} strokeWidth={2.2} aria-hidden className="lg:hidden" />
                       <span className="sr-only lg:not-sr-only">Registrati</span>
                     </Link>
