@@ -39,21 +39,44 @@ function riassunto(s: Segnalazione): Record<string, string> {
   };
 }
 
+/** Legge il corpo fermandosi al tetto: oltre, torna null senza scaricare il resto. */
+async function leggiFinoA(req: Request, tetto: number): Promise<string | null> {
+  if (!req.body) return null;
+  const lettore = req.body.getReader();
+  const pezzi: Uint8Array[] = [];
+  let letti = 0;
+  try {
+    for (;;) {
+      const { done, value } = await lettore.read();
+      if (done) break;
+      letti += value.byteLength;
+      if (letti > tetto) {
+        await lettore.cancel().catch(() => {});
+        return null;
+      }
+      pezzi.push(value);
+    }
+  } catch {
+    return null;
+  }
+  const tutto = new Uint8Array(letti);
+  let da = 0;
+  for (const p of pezzi) { tutto.set(p, da); da += p.byteLength; }
+  return new TextDecoder().decode(tutto);
+}
+
 export async function POST(req: Request): Promise<Response> {
   const vuota = new NextResponse(null, { status: 204 });
   const lunghezza = Number(req.headers.get('content-length') ?? '0');
-  if (lunghezza > CORPO_MASSIMO) return vuota;
+  if (!Number.isFinite(lunghezza) || lunghezza > CORPO_MASSIMO) return vuota;
 
   const freno = await rateLimitAsync({ key: `csp-report:${getClientIp(req)}`, max: 30, windowMs: 60_000 });
   if (!freno.allowed) return vuota;
 
-  let testo = '';
-  try {
-    testo = await req.text();
-  } catch {
-    return vuota;
-  }
-  if (!testo || testo.length > CORPO_MASSIMO) return vuota;
+  // Il tetto vale anche mentre si legge: un corpo senza content-length (o con uno
+  // falso) non si scarica intero prima del controllo.
+  const testo = await leggiFinoA(req, CORPO_MASSIMO);
+  if (!testo) return vuota;
 
   let corpo: unknown;
   try {
@@ -65,7 +88,10 @@ export async function POST(req: Request): Promise<Response> {
   const elenco = (Array.isArray(corpo) ? corpo : [corpo]).slice(0, 10) as Segnalazione[];
   for (const s of elenco) {
     if (!s || typeof s !== 'object') continue;
-    logger.warn('[csp] il browser ha bloccato una risorsa', riassunto(s));
+    const r = riassunto(s);
+    // Una segnalazione senza nessun campo utile e' rumore, non si scrive.
+    if (!r.regola && !r.bloccato && !r.pagina) continue;
+    logger.warn('[csp] il browser ha bloccato una risorsa', r);
   }
   return vuota;
 }

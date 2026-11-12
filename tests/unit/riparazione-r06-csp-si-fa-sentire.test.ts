@@ -77,4 +77,36 @@ describe('R06-025 · la politica di sicurezza dice dove segnalare', () => {
     expect(rotto.status).toBe(204);
     expect(avvisi.length).toBe(0);
   });
+
+  it('anche i rimandi portano la politica e il punto di raccolta', async () => {
+    for (const percorso of ['/admin', '/seller/orders']) {
+      const r = await middleware(new NextRequest(new URL(`https://mycity.test${percorso}`)));
+      expect(r.status, `${percorso} non rimanda a chi non e' entrato: la prova non misura piu' i rimandi`).toBeGreaterThanOrEqual(300);
+      expect(r.headers.get('Content-Security-Policy') ?? '').toContain('report-uri /api/csp-report');
+      expect(r.headers.get('Reporting-Endpoints'), `il rimando di ${percorso} non dice dove segnalare`).toBe('csp="/api/csp-report"');
+    }
+  });
+
+  it('un corpo in arrivo a pezzi, senza content-length, si ferma al tetto', async () => {
+    const { POST } = await import('@/app/api/csp-report/route');
+    let mandati = 0;
+    const flusso = new ReadableStream<Uint8Array>({
+      pull(c) {
+        if (mandati >= 1000) { c.close(); return; }
+        mandati += 1;
+        c.enqueue(new TextEncoder().encode('x'.repeat(1024)));
+      },
+    });
+    const r = await POST(new Request('https://mycity.test/api/csp-report', { method: 'POST', body: flusso, duplex: 'half' } as RequestInit));
+    expect(r.status).toBe(204);
+    expect(mandati, 'Il corpo e\' stato letto tutto prima del controllo dei 10 KB').toBeLessThan(100);
+    expect(avvisi.length).toBe(0);
+  });
+
+  it('una segnalazione senza campi utili non riempie i log', async () => {
+    const { POST } = await import('@/app/api/csp-report/route');
+    const r = await POST(new Request('https://mycity.test/api/csp-report', { method: 'POST', body: JSON.stringify([[], {}, { 'csp-report': 'testo' }]) }));
+    expect(r.status).toBe(204);
+    expect(avvisi.length).toBe(0);
+  });
 });
