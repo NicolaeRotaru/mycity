@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { Check, ArrowLeft } from 'lucide-react';
 import { controlloEta } from '@/lib/maggiore-eta';
+import { documentiObbligatoriDelFattorino } from '@/lib/admin/regole-approvazione';
 
 type DocKind = 'id_front' | 'id_back' | 'selfie' | 'rider_license' | 'rider_insurance' | 'rider_haccp';
 
@@ -219,7 +220,13 @@ export default function RiderOnboardingPage() {
     }
   }
 
-  const allRequiredUploaded = DOCS.filter((d) => d.required).every((d) => profile?.[columnForKind(d.kind)]);
+  // 12/11/2026 (R03-024) — Obbligatori secondo il mezzo, con la regola dell'approvazione
+  // (lib/admin/regole-approvazione.ts): in bici bastano documento e selfie.
+  const colonneObbligatorie = new Set<string>(
+    documentiObbligatoriDelFattorino(form.rider_vehicle_type).map((d) => d.colonna),
+  );
+  const obbligatorio = (d: DocDef) => colonneObbligatorie.has(columnForKind(d.kind));
+  const allRequiredUploaded = DOCS.filter(obbligatorio).every((d) => profile?.[columnForKind(d.kind)]);
 
   return (
     <div className="pb-6">
@@ -317,7 +324,7 @@ export default function RiderOnboardingPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-medium text-ink-900">
-                      {d.label} {d.required && <span className="text-secondary-600">*</span>}
+                      {d.label} {obbligatorio(d) && <span className="text-secondary-600">*</span>}
                     </div>
                     <div className="text-xs text-ink-500 mt-0.5">{d.hint}</div>
                     {uploaded && <div className="mt-1 text-xs text-olive-700 flex items-center gap-1.5"><Check size={14} strokeWidth={2.2} aria-hidden /> Caricato</div>}
