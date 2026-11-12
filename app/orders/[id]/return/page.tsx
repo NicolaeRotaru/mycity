@@ -15,7 +15,7 @@ import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { attributoAccept } from '@/lib/storage/regole-secchi';
 import { recessoAperto, ultimoGiornoDelRecesso } from '@/lib/ordini/termine-del-recesso';
-import { MOTIVO_RIPENSAMENTO, prodottiDelleRighe, rifiutoDelRecesso, type ProdottoPerIlRecesso, type RigaPerIlRecesso } from '@/lib/ordini/recesso';
+import { MOTIVO_RIPENSAMENTO } from '@/lib/ordini/recesso';
 import { useTranslations } from 'next-intl';
 import { Package, RefreshCw, AlertTriangle, MessageSquare, Clock, Pencil, type LucideIcon } from 'lucide-react';
 
@@ -82,32 +82,31 @@ export default function NewReturnPage() {
     })();
   }, [params.id, tentativo]);
 
-  // 12/11/2026 (R07-002) — «Ho cambiato idea» si spegne quando tutti i prodotti
+  // 12/11/2026 (R07-002) — «Ho cambiato idea» non vale quando tutti i prodotti
   // dell'ordine sono esclusi dal recesso (pane, freschi, su ordinazione). Il server
-  // lo rifiutava già: la pagina lo offriva comunque, e il cliente lo scopriva solo
-  // dopo aver compilato tutto. Stessa regola del server (lib/ordini/recesso.ts),
-  // prodotti letti con `*` come carrello e scheda. Se la lettura cade, la pagina
-  // non decide al buio: lascia la scelta e il server risponde.
+  // lo rifiutava già: la pagina lo accettava, e il cliente lo scopriva solo dopo aver
+  // compilato tutto. Appena il cliente sceglie quel motivo, la pagina chiede l'esito
+  // al server (/api/returns/ripensamento), che legge come returns/create: il client
+  // del cliente non vede i prodotti tolti dalla vetrina dopo l'ordine (il pane segnato
+  // esaurito la sera) e li avrebbe contati come recedibili. Se c'è un rifiuto la scelta
+  // si toglie, si spegne e la pagina dice perché. Se la domanda cade, la pagina non
+  // decide al buio: lascia la scelta e il server risponde all'invio.
   const [rifiutoRipensamento, setRifiutoRipensamento] = useState<string | null>(null);
+  const [ripensamentoChiesto, setRipensamentoChiesto] = useState(false);
   useEffect(() => {
-    if (!order?.id) return;
-    let vivo = true;
+    if (!order?.id || reason !== MOTIVO_RIPENSAMENTO || ripensamentoChiesto) return;
+    setRipensamentoChiesto(true);
     (async () => {
       try {
-        const { data: righe } = await supabase.from('order_items').select('product_id, product_name').eq('order_id', order.id);
-        const righeOrdine = (Array.isArray(righe) ? righe : []) as RigaPerIlRecesso[];
-        const ids = [...new Set(righeOrdine.map((r) => r.product_id).filter((x): x is string => typeof x === 'string'))];
-        if (ids.length === 0) return;
-        const { data: prodotti, error } = await supabase.from('products').select('*').in('id', ids);
-        if (error || !vivo) return;
-        const perRiga = prodottiDelleRighe(righeOrdine, (prodotti ?? []) as Array<ProdottoPerIlRecesso & { id?: string }>);
-        setRifiutoRipensamento(rifiutoDelRecesso(MOTIVO_RIPENSAMENTO, perRiga));
+        const r = await fetch(`/api/returns/ripensamento?orderId=${encodeURIComponent(order.id)}`);
+        if (!r.ok) return;
+        const json = (await r.json()) as { rifiuto?: string | null };
+        setRifiutoRipensamento(typeof json.rifiuto === 'string' ? json.rifiuto : null);
       } catch {
-        /* lettura non riuscita: decide il server */
+        /* domanda non riuscita: decide il server all'invio */
       }
     })();
-    return () => { vivo = false; };
-  }, [order?.id]);
+  }, [order?.id, reason, ripensamentoChiesto]);
   useEffect(() => {
     if (rifiutoRipensamento && reason === MOTIVO_RIPENSAMENTO) setReason('');
   }, [rifiutoRipensamento, reason]);
