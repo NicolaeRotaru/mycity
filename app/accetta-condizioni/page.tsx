@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
-import { friendlyError } from '@/lib/errors';
+import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { safeInternalPath } from '@/lib/safe-redirect';
 import { COSA_CAMBIA_NEI_TERMINI, TERMINI_IN_VIGORE_DAL, VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 
@@ -31,7 +31,22 @@ function Contenuto() {
     setInCorso(true);
     try {
       const res = await fetch('/api/account/accetta-condizioni', { method: 'POST' });
-      if (!res.ok) throw new Error('Registrazione non riuscita');
+      // 12/11/2026 (R12-016) — Ogni risposta non buona diventava «Registrazione
+      // non riuscita»: chi aveva perso la sessione leggeva di una registrazione
+      // che non stava facendo, e restava davanti al muro senza la strada per
+      // rientrare. Si legge lo stato.
+      if (res.status === 401) {
+        toast.error('La sessione è scaduta: accedi di nuovo per continuare.');
+        const quiDopo = `/accetta-condizioni?next=${encodeURIComponent(dove)}`;
+        router.replace(`/sign-in?returnTo=${encodeURIComponent(quiDopo)}`);
+        setInCorso(false);
+        return;
+      }
+      if (res.status === 429) throw new Error('Troppi tentativi in poco tempo: riprova fra un minuto.');
+      if (!res.ok) {
+        const corpo = await res.json().catch(() => ({}));
+        throw new Error(apiErrorMessage(corpo, 'Non siamo riusciti a salvare la tua accettazione. Riprova.'));
+      }
       router.replace(dove);
     } catch (e) {
       toast.error(friendlyError(e));
