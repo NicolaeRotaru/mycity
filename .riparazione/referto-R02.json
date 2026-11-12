@@ -1,8 +1,8 @@
 {
   "sessione": "R02",
-  "aggiornato": "2026-11-12 14:54",
+  "aggiornato": "2026-11-12 15:13",
   "finita": false,
-  "testa": "31030bbd828366d0d5483cea1e2cdbb5ee58045d",
+  "testa": "ede785a50937cbde164dbbefe8fa32480efa32f5",
   "verifica": {
     "comando": "npm run verify",
     "esito": "",
@@ -162,16 +162,358 @@
       "chiave": "privacy-legale|la pulizia notturna dei documenti d'identità lasciati a metà iscrizione fallisce ogni notte nel database vero"
     },
     {
+      "id": "R02-008",
+      "esito": "riparato",
+      "commit": "ede785a50937cbde164dbbefe8fa32480efa32f5",
+      "file_toccati": [
+        "app/product/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-variante-esaurita-a11y.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-variante-esaurita-a11y.test.ts",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base ede785a50937cbde164dbbefe8fa32480efa32f5^ --file app/product/[id]/page.tsx --prove tests/unit/riparazione-r02-variante-esaurita-a11y.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La regione role=status c'era già (5/11). Ora il pulsante «Aggiungi al carrello» usa aria-disabled invece di disabled (resta nel giro del Tab, con aria-describedby sul messaggio della disponibilità) e handleAdd, su un prodotto o una combinazione esaurita, avvisa invece di aggiungere. I pulsanti delle opzioni che portano solo a combinazioni esaurite si chiamano «<valore>, esaurito».",
+      "nota": "Prova leggera sul sorgente: non è stata rifatta con un lettore di schermo vero o con Playwright. Il pulsante della barra in fondo e «Compra ora» usano ancora disabled.",
+      "verificato_da": "",
+      "chiave": "accessibilita|se scegli una variante esaurita il lettore di schermo non dice niente, e il pulsante d'acquisto sparisce dal giro del tab"
+    },
+    {
+      "id": "R02-009",
+      "esito": "riparato",
+      "commit": "b7689d2060ef85ca6bf8f0879455731c2a850129",
+      "file_toccati": [
+        "app/api/account/cambia-password/route.ts",
+        "app/profile/settings/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-cambio-password-errori.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-cambio-password-errori.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b7689d2060ef85ca6bf8f0879455731c2a850129^ --file app/api/account/cambia-password/route.ts --prove tests/unit/riparazione-r02-cambio-password-errori.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La rotta legge l'errore di signInWithPassword con esitoErroreDiAccesso, come l'accesso: freno → 429, servizio giù → 503, solo le credenziali sbagliate → 401. La pagina, senza un messaggio dal server, non dice più «password attuale non corretta».",
+      "verificato_da": "",
+      "chiave": "api-backend|se il servizio di accesso frena o e' guasto, il cambio password dice «password attuale non corretta»"
+    },
+    {
+      "id": "R02-010",
+      "esito": "riparato",
+      "commit": "6c4c1ae21cde0385dbabfea621aad05e265f6c15",
+      "file_toccati": [
+        "app/api/account/cambia-password/route.ts",
+        "lib/account/cambio-password.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-password-uguale.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-password-uguale.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6c4c1ae21cde0385dbabfea621aad05e265f6c15^ --file app/api/account/cambia-password/route.ts,lib/account/cambio-password.ts --prove tests/unit/riparazione-r02-password-uguale.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "perchePasswordNonCambiabile e la rotta rifiutano una nuova password uguale all'attuale (400, «deve essere diversa»), prima di provare l'accesso e senza riscrivere niente.",
+      "verificato_da": "",
+      "chiave": "api-backend|si puo' «cambiare» la password con la stessa di prima e il sito dice «aggiornata»"
+    },
+    {
+      "id": "R02-011",
+      "esito": "riparato",
+      "commit": "6b97d01ae5e4b9168d3b2b125a2f048a919431cf",
+      "file_toccati": [
+        "components/ActivePromoBadge.tsx",
+        "app/product/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-sconto-promo-lettura.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-sconto-promo-lettura.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6b97d01ae5e4b9168d3b2b125a2f048a919431cf^ --file components/ActivePromoBadge.tsx --prove tests/unit/riparazione-r02-sconto-promo-lettura.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nelle due letture di product_active_discount (scheda :316 e ActivePromoBadge :33) «if (error) return 0» è diventato «throw error»: lo zero non resta in memoria per 60 secondi e React Query riprova. La prova copre il riquadro della promo; la lettura nella scheda è identica e usa la stessa chiave.",
+      "verificato_da": "",
+      "chiave": "api-backend|sulla scheda prodotto lo sconto della promozione vale zero se la lettura cade, poi la cassa lo applica"
+    },
+    {
+      "id": "R02-012",
+      "esito": "riparato",
+      "commit": "f217d4dcc5fed3e5793223d9ad11ae4b9c89f4c1",
+      "file_toccati": [],
+      "prova_file": [
+        "tests/unit/riparazione-r02-cambio-password-pagina.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-cambio-password-pagina.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "non_applicabile",
+        "uscita": null,
+        "comando": "(voce di sola prova: nessun file di codice corretto) mutazione a mano: nella pagina il blocco getSession+fetch sostituito da supabase.auth.updateUser({password: newPassword}) col vecchio percorso in un commento → la prova nuova è ROSSA; pagina rimessa → verde"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Prova di comportamento nuova: monta la pagina delle impostazioni con un Supabase finto, compila e invia il modulo, pretende una sola POST a /api/account/cambia-password con passwordAttuale e nessuna auth.updateUser con password. Verde sul codice vero, rossa sulla mutazione descritta nella voce.",
+      "nota": "La regola di lint in più (no-restricted-syntax contro auth.updateUser con password in app/profile/settings/page.tsx) va nella configurazione eslint, che non è un mio file: è un rinforzo, non serve a chiudere la voce.",
+      "verificato_da": "",
+      "chiave": "architettura|la prova del cambio password legge la pagina come testo: se la pagina tornasse a cambiarla senza chiedere quella vecchia, tutte le prove resterebbero verdi"
+    },
+    {
       "id": "R02-013",
       "esito": "non_codice",
       "nota": "Creare la casella email per la privacy e impostare NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY su Vercel produzione: lib/legal/titolare.ts:144-145 la usa già al posto del modulo /contact. Per un secondo canale, la posta, serve l indirizzo della sede (vedi R02-001).",
       "chiave": "architettura|senza la casella vera, l'unico recapito del titolare nell'informativa e nella cookie policy è il modulo web"
     },
     {
+      "id": "R02-014",
+      "esito": "riparato",
+      "commit": "5bb38d8e01c4d12ea9b06d7b7274a9edab0a3fe9",
+      "file_toccati": [
+        "components/ProductViewTracker.tsx",
+        "app/product/[id]/page.tsx",
+        "migrations/260_le_visite_del_negoziante_non_sono_clienti.sql"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-visite-admin.test.tsx",
+        "tests/sql/rls/riparazione-r02-visite.test.sql"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-visite-admin.test.tsx && tests/sql/harness/apply.sh mycity_test && psql -d mycity_test -v ON_ERROR_STOP=1 -f tests/sql/rls/riparazione-r02-visite.test.sql",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5bb38d8e01c4d12ea9b06d7b7274a9edab0a3fe9^ --file components/ProductViewTracker.tsx --prove tests/unit/riparazione-r02-visite-admin.test.tsx --json ; parte SQL a mano: senza la 260 (database ricostruito senza) 3 controlli su 4 ROTTI, con la 260 4 su 4 verdi"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il tracciatore escludeva già il negoziante; ora salta anche l'amministratore (prop chiGuardaEAdmin, che la scheda passa da useProfile). Migrazione 260, NON applicata: trending_product_ids_24h e andamento_del_negozio scartano le righe del venditore del prodotto e degli admin (le visite anonime restano), così si tolgono anche quelle già scritte.",
+      "nota": "La migrazione 260 va applicata da Nicola.",
+      "verificato_da": "",
+      "chiave": "dati-analytics|le visite che il negoziante fa ai suoi prodotti contano come visite di clienti, e anche nei più visti in home"
+    },
+    {
+      "id": "R02-015",
+      "esito": "riparato",
+      "commit": "4dc0c86de3a224d2baa598847f433269e80cb064",
+      "file_toccati": [
+        "lib/analytics/visita-prodotto.ts",
+        "components/ProductViewTracker.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-visita-una-all-ora.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-visita-una-all-ora.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 4dc0c86de3a224d2baa598847f433269e80cb064^ --file lib/analytics/visita-prodotto.ts,components/ProductViewTracker.tsx --prove tests/unit/riparazione-r02-visita-una-all-ora.test.ts --json  → 3 (nomi nuovi). Difetto rimesso a mano com'è nella voce (freno per scheda senza ora, impronta senza scadenza): 2 casi su 3 ROSSI; il terzo è rosso sulla base perché il tracciatore usava sessionStorage. Codice rimesso: verde."
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Una definizione sola: una visita per prodotto all'ora, come il trigger product_views_dedup. Il freno del browser (frenoOrario) passa da sessionStorage per scheda a localStorage con l'ora, condiviso fra le schede; l'impronta degli anonimi (improntaOraria) è la stessa per un'ora in tutte le schede, poi cambia. PostHog e product_views contano con la stessa regola sullo stesso browser.",
+      "nota": "Fra due dispositivi dello stesso utente il database ne conta una e PostHog due: per allinearli anche lì servirebbe la RPC «contata/scartata», cioè una migrazione. Va scritta la definizione nel GLOSSARIO-KPI (non è un mio file).",
+      "verificato_da": "",
+      "chiave": "dati-analytics|le visite al prodotto si contano con due regole diverse: posthog conta ogni nuova scheda, il database una per persona all'ora"
+    },
+    {
+      "id": "R02-016",
+      "esito": "riparato",
+      "commit": "585c6e0e96dfa6ccf631df27543908b73159e033",
+      "file_toccati": [
+        "components/StickyAddToCart.tsx",
+        "app/product/[id]/page.tsx",
+        "lib/ui/freno-doppio-tocco.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-aggiungi-e-barra.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-aggiungi-e-barra.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 585c6e0e96dfa6ccf631df27543908b73159e033^ --file components/StickyAddToCart.tsx,app/product/[id]/page.tsx --prove tests/unit/riparazione-r02-aggiungi-e-barra.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La barra in fondo segue il pulsante d'acquisto vero (IntersectionObserver su id acquisto-principale): appena aperta la scheda al telefono, con il pulsante sotto la piega, la barra con prezzo e «Aggiungi» c'è già; quando il pulsante si vede, sparisce. handleAdd ha un freno sincrono di 1 s (lib/ui/freno-doppio-tocco.ts) dopo i controlli e prima di addToCart, che vale per la scheda e per la barra.",
+      "nota": "Non provato in un browser vero a 390x844: la prova monta la barra con un IntersectionObserver finto. La galleria non è stata accorciata: prezzo e pulsante nella prima schermata li dà la barra.",
+      "verificato_da": "",
+      "chiave": "flussi-conversione|sulla scheda prodotto al telefono prezzo e «aggiungi al carrello» non si vedono senza scorrere, e un doppio tocco su «aggiungi al carrello» mette due pezzi"
+    },
+    {
+      "id": "R02-017",
+      "esito": "riparato",
+      "commit": "25bb5c911f081073b43005bea1549aad84d97c46",
+      "file_toccati": [
+        "app/profile/settings/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-interruttore-notifiche.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-interruttore-notifiche.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 25bb5c911f081073b43005bea1549aad84d97c46^ --file app/profile/settings/page.tsx --prove tests/unit/riparazione-r02-interruttore-notifiche.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "updatePref ricorda il valore di prima e, se il database rifiuta il salvataggio, lo rimette (solo se nel frattempo nessuno l'ha cambiato di nuovo) e lo dice nell'avviso.",
+      "verificato_da": "",
+      "chiave": "frontend-ux|se un'impostazione delle notifiche non si salva, l'interruttore resta nella posizione nuova"
+    },
+    {
+      "id": "R02-018",
+      "esito": "serve_file_altrui",
+      "prova": "La barra d acquisto è già a posto sulla base: app/product/[id]/page.tsx:477 calcola price con discountedUnitCents(prezzoPieno, scontoPromo) e lo passa a <StickyAddToCart price={price}> (riga ~1480), quindi «qty × prezzo» e il totale della barra sono già scontati.",
+      "serve_file_altrui": [
+        {
+          "file": "components/SimilarProducts.tsx",
+          "modifica": "riga ~94: come ProductCard.tsx:55-61, leggere fetchActiveDiscounts per i prodotti del carosello e stampare discountedUnitCents(price, sconto)/100 al posto di price (con il pieno barrato se c è lo sconto)"
+        },
+        {
+          "file": "components/RecentlyViewed.tsx",
+          "modifica": "riga ~73: stessa modifica"
+        },
+        {
+          "file": "components/SponsoredCarousel.tsx",
+          "modifica": "riga ~122: stessa modifica"
+        },
+        {
+          "file": "components/SearchBar.tsx",
+          "modifica": "riga ~242: stessa modifica nei suggerimenti"
+        }
+      ],
+      "nota": "Della voce, la parte nei miei file (la barra) era già riparata prima; restano i caroselli, che non sono miei.",
+      "chiave": "frontend-ux|con una promozione attiva la barra d'acquisto e i caroselli mostrano il prezzo pieno, mentre sopra c'è quello scontato"
+    },
+    {
       "id": "R02-019",
       "esito": "gia_riparato_prima",
       "prova": "components/store-sections/ReviewsSection.tsx:190 (const mostrate = tutte ? reviews : reviews.slice(0, RECENSIONI_SUBITO)) e :239-245 («Mostra altre recensioni»); coperto da tests/unit/minori-s09-vetrina-recensioni.test.ts (caso 325). Il numero della linguetta usa il riepilogo vero (SectionRenderer.tsx:116, riepilogoRecensioni(ctx)?.totale).",
       "chiave": "frontend-ux|la vetrina dice «recensioni · 20» ma ne fa leggere solo sei, senza modo di vedere le altre"
+    },
+    {
+      "id": "R02-020",
+      "esito": "riparato",
+      "commit": "cdd22f2e2e905ad1972b709580f28e113fc20a77",
+      "file_toccati": [
+        "app/admin/events/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-eventi-stati-e-titoli.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-eventi-stati-e-titoli.test.tsx",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base cdd22f2e2e905ad1972b709580f28e113fc20a77^ --file app/admin/events/page.tsx --prove tests/unit/riparazione-r02-eventi-stati-e-titoli.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Stati tradotti (In programma, In corso, Concluso, Annullato) nei due badge; il titolo va a capo (min-w-0, break-words, overflow-wrap:anywhere) nella card del telefono e nella cella della tabella; il contenitore della tabella passa da overflow-hidden a overflow-x-auto, così i pulsanti Modifica ed Elimina restano raggiungibili.",
+      "nota": "Prova sulle classi in jsdom, non misurata in un browser a 360 px.",
+      "verificato_da": "",
+      "chiave": "layout-responsive|nella pagina eventi gli stati sono in inglese, e un titolo lungo senza spazi allarga la pagina sul telefono"
+    },
+    {
+      "id": "R02-021",
+      "esito": "riparato",
+      "commit": "fb1d85ea838d6f767e2b56f4c8c83920c7281cd3",
+      "file_toccati": [
+        "app/admin/segnalazioni/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-segnalazione-link-lungo.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-segnalazione-link-lungo.test.tsx",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base fb1d85ea838d6f767e2b56f4c8c83920c7281cd3^ --file app/admin/segnalazioni/page.tsx --prove tests/unit/riparazione-r02-segnalazione-link-lungo.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il paragrafo del dettaglio ha break-words e overflow-wrap:anywhere: link ed email lunghi vanno a capo dentro la scheda.",
+      "nota": "Prova sulla classe in jsdom, non misurata in un browser a 360 px.",
+      "verificato_da": "",
+      "chiave": "layout-responsive|nelle segnalazioni, un link lungo incollato da chi segnala esce dalla scheda e fa scorrere la pagina di lato sul telefono"
+    },
+    {
+      "id": "R02-022",
+      "esito": "riparato",
+      "commit": "6e29fdf6dafb07df6b70edbdfad0a8ead995c54a",
+      "file_toccati": [
+        "app/profile/settings/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-impostazioni-larghezza.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-impostazioni-larghezza.test.ts",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6e29fdf6dafb07df6b70edbdfad0a8ead995c54a^ --file app/profile/settings/page.tsx --prove tests/unit/riparazione-r02-impostazioni-larghezza.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Tolto il px-6 della pagina (la cornice la dà AccountShell, px-4 sm:px-6); le sezioni Notifiche, Privacy e Zona pericolosa passano a p-4 sm:p-6 con min-w-0; il riquadro rosso a p-4 sm:p-5 con break-words; il bottone «Richiedi eliminazione» a tutta larghezza sotto sm. AccountShell non è cambiato.",
+      "nota": "Prova leggera sulle classi. Non misurato in un browser a 360x740 con il carattere al 130%: va confermato scrollWidth = 360. Le righe delle notifiche sono components/ui/Toggle.tsx (non mio): il loro testo non ha min-w-0; se a 130% ancora sforano, serve min-w-0 sul primo div di Toggle.",
+      "verificato_da": "",
+      "chiave": "layout-responsive|con i caratteri grandi del telefono, le schede notifiche e zona pericolosa delle impostazioni scorrono di lato"
+    },
+    {
+      "id": "R02-023",
+      "esito": "riparato",
+      "commit": "941948d9e37e3577ed00a386abbf8f14c287ce6b",
+      "file_toccati": [
+        "components/store-sections/SectionRenderer.tsx",
+        "components/store-sections/ReviewsSection.tsx",
+        "components/store-sections/HeroSection.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r02-vetrina-negozio.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r02-vetrina-negozio.test.tsx",
+      "prova_tipo": "leggera",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 941948d9e37e3577ed00a386abbf8f14c287ce6b^ --file components/store-sections/SectionRenderer.tsx,components/store-sections/ReviewsSection.tsx,components/store-sections/HeroSection.tsx --prove tests/unit/riparazione-r02-vetrina-negozio.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "SectionRenderer: il pannello non attivo ha solo la classe hidden (grid non vince più sull'attributo hidden). ReviewsSection: con zero recensioni e nessun errore scrive «Ancora nessuna recensione per questo negozio». HeroSection: la riga logo+nome non va più a capo (flex-nowrap, nome min-w-0 con overflow-wrap:anywhere), così il logo resta in basso nella copertina e non sale sotto la pillola «Indietro».",
+      "nota": "Non misurato in Playwright a 360/390. Con un nome lunghissimo (80 caratteri) il nome cresce verso l'alto dentro la copertina ad altezza fissa (h-60, in misure-vetrina.ts che non è mio): il logo non si sposta più, ma le ultime righe del nome possono avvicinarsi alla pillola.",
+      "verificato_da": "",
+      "chiave": "layout-responsive|nella vetrina del negozio, sul telefono il logo resta coperto dal tasto indietro e la scheda recensioni mostra gli orari"
     },
     {
       "id": "R02-024",
