@@ -19,6 +19,8 @@ const stato = vi.hoisted(() => ({
   ordine: { data: null as unknown, error: null as unknown },
   recensioni: {} as Record<string, unknown[]>,
   inserite: [] as string[],
+  letturaCaduta: '' as string,
+  erroriInsert: {} as Record<string, unknown>,
   erroreInsert: null as unknown,
   toast: [] as string[],
 }));
@@ -40,8 +42,17 @@ vi.mock('@/lib/supabase/client', () => ({
       t === 'orders'
         ? { select: () => ({ eq: () => ({ maybeSingle: async () => stato.ordine }) }) }
         : {
-            select: () => ({ eq: () => ({ limit: async () => ({ data: stato.recensioni[t] ?? [], error: null }) }) }),
-            insert: async () => { stato.inserite.push(t); return { error: stato.erroreInsert }; },
+            select: () => ({
+              eq: () => ({
+                limit: async () => (stato.letturaCaduta === t ? { data: null, error: { message: 'rete giù' } } : { data: stato.recensioni[t] ?? [], error: null }),
+              }),
+            }),
+            insert: async () => {
+              stato.inserite.push(t);
+              const errore = stato.erroriInsert[t] ?? stato.erroreInsert;
+              if (!errore) stato.recensioni[t] = [...(stato.recensioni[t] ?? []), { id: `nuova-${t}` }];
+              return { error: errore };
+            },
           },
   },
 }));
@@ -68,6 +79,8 @@ beforeEach(() => {
   stato.ordine = { data: { id: 'o1', delivery_status: 'DELIVERED', seller_id: 's1', rider_id: 'r1' }, error: null };
   stato.recensioni = {};
   stato.inserite = [];
+  stato.letturaCaduta = '';
+  stato.erroriInsert = {};
   stato.erroreInsert = null;
   stato.toast = [];
 });
@@ -103,5 +116,36 @@ describe('R07-015 · negozio recensito, fattorino no: il fattorino si può ancor
     await monta();
     expect(c.textContent).toContain('Pane Quotidiano');
     expect(c.textContent).toContain('Marco');
+  });
+
+  it('la lettura delle recensioni al fattorino cade: non chiede di nuovo il voto, offre di riprovare', async () => {
+    stato.recensioni = { store_reviews: [{ id: 'sr1' }] };
+    stato.letturaCaduta = 'rider_reviews';
+    await monta();
+    expect(c.textContent).toContain('Non riesco a caricare');
+    expect(c.textContent).not.toContain('Marco');
+  });
+
+  it('nella stessa visita: il negozio entra, il fattorino cade; al secondo invio non dice «avevi già recensito»', async () => {
+    stato.erroriInsert = { rider_reviews: { code: '08006', message: 'rete giù' } };
+    await monta();
+    const vota = async (gruppo: string) => {
+      const stelle = c.querySelectorAll(`[role=group][aria-label="${gruppo}"] button`);
+      await act(async () => { (stelle[stelle.length - 1] as HTMLElement).click(); });
+    };
+    await vota('Il tuo voto sul negozio');
+    await vota('Il tuo voto sul fattorino');
+    await act(async () => { invia().click(); });
+    for (let i = 0; i < 6; i++) await pausa();
+    // L'ordine si rilegge: il negozio è recensito, il modulo chiede solo il fattorino.
+    expect(c.textContent).not.toContain('Pane Quotidiano');
+    expect(c.textContent).toContain('Marco');
+    stato.erroriInsert = {};
+    await vota('Il tuo voto sul fattorino');
+    await act(async () => { invia().click(); });
+    for (let i = 0; i < 6; i++) await pausa();
+    expect(stato.toast.some((m) => m.startsWith('info:') && /già recensito/.test(m))).toBe(false);
+    expect(stato.toast.some((m) => m.startsWith('ok:'))).toBe(true);
+    expect(stato.inserite).toEqual(['store_reviews', 'rider_reviews', 'rider_reviews']);
   });
 });

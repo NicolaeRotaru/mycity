@@ -105,11 +105,14 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
       // entrava e quella al fattorino no (rete caduta fra le due scritture), la pagina
       // diceva «già recensito» e il fattorino non si poteva più votare. Ora si guardano
       // tutte e due, e il modulo chiede solo quella che manca.
-      const { data: gia } = await supabase.from('store_reviews').select('id').eq('order_id', id).limit(1);
+      // Una lettura che cade non vuol dire «non recensito»: sale l'errore, e la pagina offre Riprova.
+      const { data: gia, error: erroreGia } = await supabase.from('store_reviews').select('id').eq('order_id', id).limit(1);
+      if (erroreGia) throw erroreGia;
       const giaNegozio = ((gia as unknown[] | null) ?? []).length > 0;
       let giaFattorino = false;
       if (data.rider_id) {
-        const { data: giaR } = await supabase.from('rider_reviews').select('id').eq('order_id', id).limit(1);
+        const { data: giaR, error: erroreGiaR } = await supabase.from('rider_reviews').select('id').eq('order_id', id).limit(1);
+        if (erroreGiaR) throw erroreGiaR;
         giaFattorino = ((giaR as unknown[] | null) ?? []).length > 0;
       }
       return {
@@ -129,7 +132,10 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
       const chiediNegozio = !order.giaNegozio;
       const chiediFattorino = !!order.rider_id && !order.giaFattorino;
       if ((chiediNegozio && storeRating < 1) || (chiediFattorino && riderRating < 1)) throw new Error('Tocca le stelle per votare');
-      let doppione = false;
+      // «Avevi già recensito» solo se non è entrata nessuna recensione nuova: se il negozio
+      // urta il doppione ma il fattorino entra, il voto nuovo c'è e va ringraziato.
+      let doppioni = 0;
+      let nuove = 0;
 
       if (order.seller_id && chiediNegozio) {
         const { error: e1 } = await supabase.from('store_reviews').insert({
@@ -140,7 +146,7 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
           comment: storeComment.trim() || null,
         });
         if (e1 && e1.code !== '23505') throw e1;
-        if (e1) doppione = true;
+        if (e1) doppioni += 1; else nuove += 1;
       }
       if (order.rider_id && chiediFattorino) {
         const { error: e2 } = await supabase.from('rider_reviews').insert({
@@ -151,16 +157,18 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
           comment: riderComment.trim() || null,
         });
         if (e2 && e2.code !== '23505') throw e2;
-        if (e2) doppione = true;
+        if (e2) doppioni += 1; else nuove += 1;
       }
-      return { doppione };
+      return { doppione: doppioni > 0 && nuove === 0 };
     },
     onSuccess: ({ doppione }) => {
       if (doppione) toast.info('Avevi già recensito questo ordine: la recensione di prima resta quella valida.');
       else toast.success('Grazie per la recensione!');
       router.push(`/orders/${id}`);
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    // Una delle due scritture può essere già entrata: si rilegge l'ordine, e il modulo chiede
+    // solo quella che manca.
+    onError: (err: unknown) => { toast.error(friendlyError(err)); void refetch(); },
   });
 
   if (isLoading) return <LoadingState />;
