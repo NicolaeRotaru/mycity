@@ -129,7 +129,10 @@ export default function CheckoutPage() {
   // Raggruppa il carrello per seller. Usa il sellerId gia' presente nel CartItem
   // (formato nuovo). Per gli item vecchi senza sellerId, fa un lookup sui products.
   const { data: cartData, isLoading: loadingGroups, refetch: rileggiLaCassa } = useQuery({
-    queryKey: queryKeys.checkout.groups(cart.map((c) => `${c.id}:${c.sellerId ?? ''}`).join(',')),
+    // 12/11/2026 (R03-012) — La lettura restituisce le righe intere (quantità e variante): nella
+    // chiave ci sono anche loro. Con solo `id:sellerId`, tornare al carrello, passare da 1 a 3
+    // filoni e rientrare entro mezzo minuto riusava la copia vecchia, e l'ordine partiva con 1.
+    queryKey: queryKeys.checkout.groups(cart.map((c) => `${c.id}:${c.variantId ?? ''}:${c.quantity}:${c.sellerId ?? ''}`).join(',')),
     enabled: cart.length > 0,
     queryFn: async () => {
       // Valida TUTTI gli item del carrello contro il DB (non solo i legacy
