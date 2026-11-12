@@ -1,6 +1,6 @@
 {
   "sessione": "R01",
-  "aggiornato": "2026-11-12 15:24",
+  "aggiornato": "2026-11-12 15:25",
   "finita": true,
   "testa": "111a5ac82ac304acd9515731da88bad84d9ad9ee",
   "verifica": {
@@ -45,10 +45,10 @@
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
-        "esito": "rosso_strutturale",
-        "uscita": 3,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2bc80f4858e1776ebca229f38de770f03ffb5148^ --file app/api/rider/sos/avvisa/route.ts,components/rider/SOSButton.tsx,components/rider/RiderShell.tsx --prove tests/unit/riparazione-r01-sos-avviso.test.tsx,tests/unit/riparazione-r01-sos-guscio.test.tsx --json",
-        "nota": "SOSButton e RiderShell alla base: rosse sul comportamento. La rotta e' un file nuovo (alla base non esiste, cioe' il difetto com'e' scritto: nessun push immediato), quindi la sua parte e' rossa solo per struttura."
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2bc80f48^ --file components/rider/SOSButton.tsx,components/rider/RiderShell.tsx --prove tests/unit/riparazione-r01-sos-avviso.test.tsx,tests/unit/riparazione-r01-sos-guscio.test.tsx --json",
+        "nota": "Lanciata da HEAD: il pulsante e il guscio alla base sono rossi sul comportamento. La rotta nuova app/api/rider/sos/avvisa/route.ts non c'era alla base, quindi da sola esce 3 (rimessa_rotta_nuova): il difetto com'e' scritto e' proprio che quella strada non esisteva."
       },
       "copre_tutta_la_voce": true,
       "cosa_ho_fatto": "Nuova rotta /api/rider/sos/avvisa: rilegge l'ultimo SOS aperto di chi chiama (solo fattorini) e manda subito un push ad alta urgenza a ogni admin. SOSButton la chiama dopo l'insert senza bloccare il 112; RiderShell passa l'orderId della consegna in corso; il dialogo dice che gli admin ricevono l'avviso sul telefono. Il testo «alert immediato» era gia' stato tolto prima. Se VAPID non e' configurato la rotta risponde 503 e lo scrive nel registro (resta il pannello). Dopo il controllo qa: se la riga con l'ordine viene rifiutata (id non valido, ordine cancellato) l'SOS si riscrive senza ordine; triggered_at lo decide il database (DEFAULT now()), non l'orologio del telefono; il dialogo dice «se hanno le notifiche attive».",
@@ -61,6 +61,12 @@
         "esito": "regge",
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a782c6c43141498012622394ec3cd06917a2e46c^ --file components/rider/SOSButton.tsx --prove tests/unit/riparazione-r01-sos-avviso.test.tsx --json"
+      },
+      "rimessa_rotta_nuova": {
+        "esito": "rosso_strutturale",
+        "uscita": 3,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2bc80f4858e1776ebca229f38de770f03ffb5148^ --file app/api/rider/sos/avvisa/route.ts,components/rider/SOSButton.tsx,components/rider/RiderShell.tsx --prove tests/unit/riparazione-r01-sos-avviso.test.tsx,tests/unit/riparazione-r01-sos-guscio.test.tsx --json",
+        "nota": "SOSButton e RiderShell alla base: rosse sul comportamento. La rotta e' un file nuovo (alla base non esiste, cioe' il difetto com'e' scritto: nessun push immediato), quindi la sua parte e' rossa solo per struttura."
       }
     },
     {
@@ -360,7 +366,7 @@
     },
     {
       "id": "R01-019",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "a09271244dccfc22319d44d5a095f9890de69202",
       "file_toccati": [
         "migrations/250_battiti_iniziali_dei_lavori_nuovi.sql"
@@ -377,10 +383,11 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base a09271244dccfc22319d44d5a095f9890de69202^ --file migrations/250_battiti_iniziali_dei_lavori_nuovi.sql --prove tests/unit/riparazione-r01-battiti-iniziali.test.ts --json",
         "nota": "La cura e' un file nuovo (migrazione 250), quindi la macchina non decide. Nel log, senza il file le prove cadono su asserzioni di comportamento: «expected ['external-price-alerts', …(2)] to deeply equal []» (lavori senza riga iniziale) e lavoriFermi segnala veloce-non-confermata come mai partito."
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Nuova migrazione 250 (non applicata: lo decide Nicola, la applica il rilascio controllato) che semina in cron_heartbeats la riga iniziale di external-price-alerts, riquadra-casse e veloce-non-confermata, come la 095 per i lavori di allora, senza sovrascrivere un battito vero (ON CONFLICT DO NOTHING). lib/cron-health.ts non toccato: con le righe seminate il ramo «mai partito» non scatta piu' dopo il rilascio. Prova anche su un Postgres usa e getta.",
       "chiave": "deploy-sre|dopo il deploy il freno della veloce può risultare «mai partito» per un attimo, con un falso allarme agli amministratori",
-      "verificato_da": "qa (subagente): ricostruzione completa con apply.sh su PG16 «applicate 179 · fallite 0», cron_heartbeats con 11 righe; nessuna prova conta le migrazioni. Un lavoro nuovo senza riga di seme fa diventare rossa riparazione-r01-battiti-iniziali."
+      "verificato_da": "qa (subagente): ricostruzione completa con apply.sh su PG16 «applicate 179 · fallite 0», cron_heartbeats con 11 righe; nessuna prova conta le migrazioni. Un lavoro nuovo senza riga di seme fa diventare rossa riparazione-r01-battiti-iniziali.",
+      "cosa_resta": "La radice sta in lib/cron-health.ts (lavoriFermi): la finestra di prima accensione si misura dal battito piu' vecchio, non dalla nascita del lavoro, e nei dati non c'e' una data di nascita da usare. Quindi ogni lavoro nuovo ha bisogno della sua riga di seme in una migrazione. Questo lo pretende riparazione-r01-battiti-iniziali (un lavoro con una soglia senza seme fa diventare rossa la prova). La cura e' tutta in una migrazione nuova (250): la prova rimessa esce 3 perche' la macchina non decide su un file nuovo, e decide il collaudo."
     },
     {
       "id": "R01-020",
