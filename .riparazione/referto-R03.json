@@ -1,12 +1,12 @@
 {
   "sessione": "R03",
-  "aggiornato": "2026-11-12 16:01",
+  "aggiornato": "2026-11-12 16:24",
   "finita": true,
-  "testa": "455f498eda917ed3aecc30622c17bf48b9e7c8f1",
+  "testa": "b44f9b7f7d46dc6393085118d5407ac517f4d90b",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "nota": "typecheck + lint + 1219 file di prova (8950 test) verdi dopo le correzioni del collaudo; prove SQL: tests/sql/harness/apply.sh + run.sh verdi su Postgres 16 locale con le migrazioni 270-272"
+    "nota": "dopo il giro del collaudo K04: typecheck + lint + 1220 file (8958 test) verdi; prove SQL verdi su Postgres 16 locale con 270-272"
   },
   "voci": [
     {
@@ -42,7 +42,11 @@
           "perche": "importa ShippingAddressForm e leggeva la frase a testo libero dal sorgente di lib/geocodifica.ts; ora la domanda del server è strutturata, la prova controlla che via, città e CAP della cassa arrivino alla ricerca"
         }
       ],
-      "rimessa_correzione": "la prova aggiunta col collaudo è rossa sul codice prima della correzione e verde dopo (verificato a mano)"
+      "rimessa_correzione": "la prova aggiunta col collaudo è rossa sul codice prima della correzione e verde dopo (verificato a mano)",
+      "commit_collaudo_k04": [
+        "ea3d79c1"
+      ],
+      "nota_collaudo_k04": "Frazioni scritte come città (Montale, Borgotrebbia, «S. Nicolò») accettate se OSM le mette in suburb/hamlet/quarter con lo stesso CAP; prova aggiunta, rossa sul codice di prima."
     },
     {
       "id": "R03-002",
@@ -52,7 +56,7 @@
     },
     {
       "id": "R03-003",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "260658c7a696062497df0f26b8f6c1a7cba42abd",
       "file_toccati": [
         "lib/stripe/webhook/comune.ts",
@@ -73,12 +77,14 @@
         "uscita": 0,
         "comando": "rimessa equivalente: comune.ts a 260658c7a696062497df0f26b8f6c1a7cba42abd^ e posta-non-partita.ts tolto → 2 rosse; a HEAD → verdi"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Nuova avvisaSeLaPostaNonParte (lib/stripe/webhook/posta-non-partita.ts): su {ok:false} non skipped scrive logger.error con orderId/sellerId e manda notifyAdmins una volta per invio (unaVoltaPer posta-non-partita:<cosa>:<ordine>). provaAMandare legge l'esito; l'avviso al negozio della carta ora restituisce l'esito di sendEmail; la cassa in contanti (negozio e cliente), l'email di rimborso dal cruscotto (rimborsi.ts) e i buoni regalo leggono l'esito. L'email per l'IBAN in payout.ts era già coperta dal 5/11 (avviso «Email al cliente per l IBAN non partita»). La posta spenta per configurazione (skipped) resta al semaforo /api/health (voce R03-004). Il modulo è separato da comune.ts perché molte prove esistenti fanno il mock di comune.ts senza la funzione nuova.",
       "verificato_da": "qa soldi A e B: regge — import circolare innocuo, notifyAdmins che lancia intercettato; lente B ha trovato il riferimento senza pendingCheckoutId (un avviso solo per sempre), corretto in b93a2424 con prova. Resta cieca la newsletter, fuori dalla voce",
       "chiave": "api-backend|se l'email «nuovo ordine» al negozio non parte, nessuno se ne accorge e nessuno la rimanda",
       "commit_correzione": "b93a2424",
-      "rimessa_correzione": "la prova aggiunta col collaudo è rossa sul codice prima della correzione e verde dopo (verificato a mano)"
+      "rimessa_correzione": "la prova aggiunta col collaudo è rossa sul codice prima della correzione e verde dopo (verificato a mano)",
+      "cosa_resta": "C'è l'avviso agli amministratori con il numero d'ordine, ma nessuno rimanda la posta in automatico: la voce chiede anche il nuovo tentativo. Servirebbe accodare l'email fallita in email_queue con un modello «nuovo ordine» che il giro send-emails sappia spedire (app/api/cron/send-emails/route.ts è fra i miei file, ma serve un modello nuovo e la sua prova: non fatto in questo giro).",
+      "nota_collaudo_k04": "Collaudo K04: non regge come riparato → parziale."
     },
     {
       "id": "R03-004",
@@ -155,9 +161,13 @@
       },
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Su un ordine in contanti con la rimessa confermata (HELD, cioè contanti già da Nicola e bonifico del lunedì a mano) refundOrder manda agli amministratori, una volta per chiave, l'avviso «💶 Togli 18,00 € dal prossimo bonifico a Pane Quotidiano» con ordine e cifra. La quota resta anche sull'ordine come prima.",
-      "cosa_resta": "Nel codice non esiste né un segno «pagato a mano» sull'ordine né una pagina «Da versare lunedì» (app/admin/payouts dice «niente azioni manuali»): il registro dei debiti del negozio sottratto in automatico al bonifico successivo, chiesto dalla voce, ha bisogno di quella pagina, che non è fra i miei file. Serve una decisione su come Nicola registra i bonifici a mano (pagina admin + colonna/registro), poi una migrazione e la sottrazione.",
+      "cosa_resta": "Nel codice non esiste né un segno «pagato a mano» sull'ordine né una pagina «Da versare lunedì» (app/admin/payouts dice «niente azioni manuali»): il registro dei debiti del negozio sottratto in automatico al bonifico successivo, chiesto dalla voce, ha bisogno di quella pagina, che non è fra i miei file. Serve una decisione su come Nicola registra i bonifici a mano (pagina admin + colonna/registro), poi una migrazione e la sottrazione. La promessa della pagina Guadagni (app/seller/earnings/commissione.ts:137, «In caso di reso o contestazione la quota corrispondente viene trattenuta o recuperata») per i bonifici a mano resta mantenuta solo da una persona che legge l'avviso: finché non c'è il registro dei debiti, la frase andrebbe riscritta o il registro costruito (file non mio).",
       "verificato_da": "qa soldi A e B: parziale come dichiarato — l'avviso parte una volta per chiave; nota: usa sellerShare e non i centesimi addebitati davvero (con molti rimborsi parziali può chiedere un po' di più), e se cade non lo recupera nessuna ripresa",
-      "chiave": "pagamenti-stripe|un rimborso arrivato dopo il bonifico del lunedì non viene mai ripreso al negozio"
+      "chiave": "pagamenti-stripe|un rimborso arrivato dopo il bonifico del lunedì non viene mai ripreso al negozio",
+      "commit_collaudo_k04": [
+        "f6b9c70b"
+      ],
+      "nota_collaudo_k04": "L'avviso parte solo se i contanti di quell'ordine NON li paga Stripe (contantiPagabiliDaStripe: lì releaseOrderPayout scala già la quota); se l'avviso agli admin cade arriva per email a info. Prove aggiunte, rosse sul codice di prima."
     },
     {
       "id": "R03-008",
@@ -183,12 +193,16 @@
       "verificato_da": "qa soldi A e B: parziale — ordini nati in un tentativo di prima restavano PAID/HELD (corretto in 455f498e con prova); rimborso parziale e carrello CANCELED in cosa_resta",
       "chiave": "pagamenti-stripe|se il cliente viene rimborsato prima che il suo ordine nasca, l'ordine nasce lo stesso come pagato e il negozio viene pagato",
       "commit_correzione": "455f498e",
-      "cosa_resta": "Rimborso PARZIALE dal cruscotto prima che l'ordine nasca: tutti gli ordini del carrello nascono annullati (anche quelli di un negozio non rimborsato) e il rimborso non è scritto su nessun ordine (refunded_amount_cents 0): un refundOrder successivo potrebbe chiedere fino al lordo. Va deciso con Nicola se un rimborso parziale annulla o fa nascere pagato con la divisione dal pannello. Carrello CANCELED ora saltato in silenzio: se la sessione Stripe nasceva in un timeout (stripe/checkout 966-973) un pagamento arriverebbe senza ordine né avviso (raro). rimborsi.ts non toccato: una piccola finestra fra rilettura e insert resta.",
-      "rimessa_correzione": "la prova aggiunta col collaudo è rossa sul codice prima della correzione e verde dopo (verificato a mano)"
+      "cosa_resta": "Carrello CANCELED saltato in silenzio: se la sessione Stripe nasceva in un timeout (stripe/checkout 966-973) un pagamento arriverebbe senza ordine né avviso (raro). rimborsi.ts non toccato: resta una piccola finestra fra rilettura e insert.",
+      "rimessa_correzione": "la prova aggiunta col collaudo è rossa sul codice prima della correzione e verde dopo (verificato a mano)",
+      "commit_collaudo_k04": [
+        "b44f9b7f"
+      ],
+      "nota_collaudo_k04": "Contano solo i rimborsi da FUORI (senza order_id, senza il pending_checkout_id di questo tentativo, senza etichetta): un rimborso fatto dal sito non annulla niente. Annullo solo per contestazione o rimborso da fuori che copre il pagamento; il parziale fa nascere gli ordini con la pausa RIMBORSO_DA_RIPARTIRE (divisione dal pannello) e avvisa. Se l'allineamento degli ordini di prima cade, si lancia e il carrello non si chiude COMPLETED. Prove aggiunte (3 rosse sul codice di prima)."
     },
     {
       "id": "R03-009",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "09ca536a033fa45f91008e0e3b56d8e7af6fd415",
       "file_toccati": [
         "migrations/271_la_vetrina_dal_vivo_non_scrive_la_citta_del_cliente.sql",
@@ -206,10 +220,12 @@
         "uscita": 0,
         "comando": "rimessa equivalente. SQL: database ricostruito senza la 271 → 2 rossi (l'anonimo legge «Quarto, via Verdi 10 citofono Rossi»); con la 271 → 3 verdi. Componente: LiveActivityFeed.tsx a 09ca536a033fa45f91008e0e3b56d8e7af6fd415^ → rossa; a HEAD → verde"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Migrazione 271 (non applicata): live_activity_public ricreata con delivery_city fisso a 'Piacenza' (stesso nome e tipo, così il sito già pubblicato non si rompe), con security_invoker off e security_barrier come la 142/152, stessi permessi. Il riquadro scrive sempre «Qualcuno a Piacenza». L'ordine di pubblicazione non conta: la colonna resta. Il campo città della cassa a elenco chiuso (proposto «a parte» dalla voce) non l'ho fatto.",
       "verificato_da": "qa (privacy/reclami/admin/chat): regge — prova unit e SQL verdi, anche la 23; reloptions security_invoker=off,security_barrier=true messe esplicite; grant solo SELECT; nessuna migrazione dopo la 271 ridefinisce la vista; il componente scrive sempre Piacenza qualunque cosa arrivi",
-      "chiave": "privacy-legale|quello che il cliente scrive nel campo «città» compare a tutti nel riquadro dal vivo della home, accanto al nome del negozio"
+      "chiave": "privacy-legale|quello che il cliente scrive nel campo «città» compare a tutti nel riquadro dal vivo della home, accanto al nome del negozio",
+      "cosa_resta": "La difesa vera è la migrazione 271 nuova, non applicata: finché Nicola non la applica la vista pubblica legge ancora delivery_city grezza (il componente scrive già «Piacenza», ma la vista resta interrogabile da chiunque). Regola della campagna: con la sola migrazione nuova la voce resta parziale.",
+      "nota_collaudo_k04": "Collaudo K04: parziale per la regola della campagna."
     },
     {
       "id": "R03-010",
@@ -542,7 +558,11 @@
       "chiave": "qa-flussi|se il negoziante scrive il prezzo all'italiana col punto delle migliaia, «1.250,00», il prodotto va in vendita a 1,25 euro senza nessun avviso",
       "commit_correzione": "f04e706f",
       "cosa_resta": "La conferma «Hai scritto 1.250,00 €: confermi?» per letture ambigue o prezzi oltre 10 volte il precedente non c'è: ora che il campo è di testo, il formato inglese «1,234.56» entra come 1,23 € senza avviso.",
-      "rimessa_correzione": "la prova aggiunta col collaudo è rossa sul codice prima della correzione e verde dopo (verificato a mano)"
+      "rimessa_correzione": "la prova aggiunta col collaudo è rossa sul codice prima della correzione e verde dopo (verificato a mano)",
+      "commit_collaudo_k04": [
+        "f1ad16d5"
+      ],
+      "nota_collaudo_k04": "Il freno del 30% dell'assistente (ProductForm.tsx:384 e :500) riceve prezzoDelCampo(...) invece del testo «12,50»; prova aggiunta, rossa sul codice di prima."
     },
     {
       "id": "R03-023",
