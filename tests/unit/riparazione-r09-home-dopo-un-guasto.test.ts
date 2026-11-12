@@ -61,5 +61,6 @@ describe('R09-004 · un guasto del database non mette in memoria la home di fabb
     stato.guasto = false;
     const secondo = await Home();
     expect(sezioniDi(secondo)).toEqual(homeEnabledSections(salvata as ReturnType<typeof defaultHomeSite>).map((s) => s.id));
-  });
+    // L'import della pagina vera è pesante: con molte prove in parallelo supera i 5 secondi di base.
+  }, 30_000);
 });
