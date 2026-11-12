@@ -1,12 +1,12 @@
 {
   "sessione": "R09",
-  "aggiornato": "2026-11-12 15:40",
+  "aggiornato": "2026-11-12 16:06",
   "finita": true,
-  "testa": "83471f6962e5a94654af674127f41de8bb729a19",
+  "testa": "0a116efb86f62a506f3a7bdf024dd6637829899e",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "nota": "typecheck, lint e 8937 prove verdi dopo gli ultimi commit."
+    "nota": "typecheck, lint e 8941 prove verdi dopo il giro di correzione K01."
   },
   "voci": [
     {
@@ -17,9 +17,10 @@
         "lib/ordini/veloce-non-confermata.ts"
       ],
       "prova_file": [
-        "tests/unit/riparazione-r09-freno-annullo.test.ts"
+        "tests/unit/riparazione-r09-freno-annullo.test.ts",
+        "tests/unit/riparazione-r09-freno-annullo-dal-giro.test.ts"
       ],
-      "prova_comando": "npx vitest run tests/unit/riparazione-r09-freno-annullo.test.ts",
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-freno-annullo.test.ts tests/unit/riparazione-r09-freno-annullo-dal-giro.test.ts",
       "prova_tipo": "comando",
       "prova_eseguita": true,
       "rimessa": {
@@ -28,12 +29,19 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 60d898958e527c4d600103f1e8f0ac3601ba400c^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r09-freno-annullo.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La frase del limite all'annullo c'era già (finché il negozio non lo conferma, e l'email con CHIUSURA_ANNULLO_EMAIL). Restava il carrello con più negozi: ora fraseDelFreno riceve quanti ordini spostati erano già confermati e lo dice prima della chiusura, nella campanella e nell'email.",
+      "cosa_ho_fatto": "La frase del limite all'annullo c'era già (finché il negozio non lo conferma, e l'email con CHIUSURA_ANNULLO_EMAIL). Restava il carrello con più negozi: ora fraseDelFreno riceve quanti ordini spostati erano già confermati e lo dice prima della chiusura, nella campanella e nell'email. Collaudo K01: il conteggio sta in confermatiSpostati e conta anche gli ordini confermati spostati da un giro di prima caduto a metà, che sono già in fascia e il cui cliente non era stato avvisato. La prova nuova passa dal giro vero (rotta del cron, database finto) con un carrello misto e con un giro caduto a metà. Mettendo giaConfermati: 0 diventa rossa (2 su 3).",
       "chiave": "microcopy|il messaggio del freno promette «puoi annullare senza costi», ma appena il negozio accetta la fascia nuova l annullo non si può più",
-      "verificato_da": "qa (subagente): 12 combinazioni euro×confermati, la chiusura resta l'ultima frase e l'email la sostituisce; conteggio degli stati verificato; 194 prove del freno verdi; nessun'altra promessa «senza costi» incondizionata. Trovata una concordanza sbagliata al singolare, corretta dopo.",
+      "verificato_da": "qa (subagente): 12 combinazioni euro×confermati, la chiusura resta l'ultima frase e l'email la sostituisce; conteggio degli stati verificato; 194 prove del freno verdi; nessun'altra promessa «senza costi» incondizionata. Trovata una concordanza sbagliata al singolare, corretta dopo. Collaudo K01: la prova vecchia non mordeva sulla chiamata. Coperto dalla prova dal giro vero.",
       "commit_successivi": [
-        "df6f64f7"
-      ]
+        "df6f64f7",
+        "80020a75"
+      ],
+      "rimessa_successiva": {
+        "esito": "regge",
+        "uscita": 0,
+        "commit": "80020a75",
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 80020a75^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r09-freno-annullo-dal-giro.test.ts --json"
+      }
     },
     {
       "id": "R09-002",
@@ -169,11 +177,12 @@
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 346e8147896b2bb4680a92a521d9404a4308110a^ --file app/seller/products/import/page.tsx --prove tests/unit/riparazione-r09-caricamento-da-file-passa-dal-server.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Nuova rotta POST /api/seller/products/import (withSellerAuthRateLimit). Con CARICAMENTO_DA_FILE_ACCESO spento risponde 503 e non scrive. Ricontrolla ogni riga e decide bozza o in vendita con la regola del modulo, in lib/products/righe-dal-file.ts (nuovo, usato anche dalla pagina): lo stato e il negozio mandati dal browser non contano. Scrive col client di chi chiama e lascia una riga in audit_logs (product.create, origine caricamento-da-file). La pagina non inserisce più dal browser: manda le righe alla rotta. Aggiornate sei prove esistenti del caricamento che importano la pagina: catturavano l'insert dal browser, ora catturano quello che la pagina manda alla rotta (stesse righe, stesse verifiche). La prova rimessa regge sulla pagina (uscita 0). Sui due file nuovi esce 3 (alla base non esistevano: la rotta assente era il difetto). Resta aperta la regola di scrittura dei prodotti larga, che è R09-002.",
+      "cosa_ho_fatto": "Nuova rotta POST /api/seller/products/import (withSellerAuthRateLimit). Con CARICAMENTO_DA_FILE_ACCESO spento risponde 503 e non scrive. Ricontrolla ogni riga e decide bozza o in vendita con la regola del modulo, in lib/products/righe-dal-file.ts (nuovo, usato anche dalla pagina): lo stato e il negozio mandati dal browser non contano. Scrive col client di chi chiama e lascia una riga in audit_logs (product.create, origine caricamento-da-file). La pagina non inserisce più dal browser: manda le righe alla rotta. Aggiornate sei prove esistenti del caricamento che importano la pagina: catturavano l'insert dal browser, ora catturano quello che la pagina manda alla rotta (stesse righe, stesse verifiche). La prova rimessa regge sulla pagina (uscita 0). Sui due file nuovi esce 3 (alla base non esistevano: la rotta assente era il difetto). Resta aperta la regola di scrittura dei prodotti larga, che è R09-002. Collaudo K01: aggiunta la prova del tetto di 500 righe (con 501 risponde 400 e non scrive niente, con 500 scrive). Il commit 0a116efb aggiunge solo la prova, quindi la prova rimessa contro il suo genitore non ha una correzione da togliere. Controllo a mano: togliendo il blocco del tetto dalla rotta la prova diventa rossa, rimettendolo torna verde.",
       "chiave": "architettura|il caricamento da file scrive i prodotti direttamente dal browser: non esiste una rotta in cui mettere il freno di caricamento_da_file_acceso",
       "verificato_da": "qa (subagente): colonne in più scartate, freno a 503, tipi sbagliati di nome/descrizione danno 400; trovati category_id non controllato (500 invece di 400), numeri non numeri accettati, descrizione senza tetto e un commento troppo ottimista: corretti nel commit successivo, con prova.",
       "commit_successivi": [
-        "b2498253"
+        "b2498253",
+        "0a116efb"
       ]
     },
     {
@@ -203,7 +212,7 @@
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Se cade la scrittura di un ordine dopo che altri del carrello sono già passati alla fascia, i loro negozi e il fattorino vengono avvisati subito. Al giro dopo il freno riusa la fascia già scritta su un ordine fratello invece di ricalcolarla con l'ora nuova, e il cliente viene avvisato in quel giro. Aggiornata la prova esistente minori-s02-freno-della-veloce.test.ts (2367), che legge questo file: ora pretende la frase nuova dell'avviso.",
       "chiave": "architettura|carrello di più negozi: se cade la scrittura del secondo ordine, il primo resta spostato in silenzio",
-      "cosa_resta": "Se l'ordine rimasto «Adesso» è già confermato dal suo negozio (non NEW), il freno non lo trova più (cerca solo i NEW) e resta agli amministratori: l'avviso lo dice. Il cliente è avvisato al giro dopo, non nello stesso giro del guasto.",
+      "cosa_resta": "Se l'ordine rimasto «Adesso» dopo un giro caduto a metà è già confermato dal suo negozio (non NEW), il freno non lo trova più, perché cerca solo i NEW. Resta agli amministratori, e l'avviso lo dice. Il cliente non viene avvisato del cambio di fascia degli ordini già spostati: dopo un giro caduto a metà lo avvisa il giro dopo, e solo se resta un ordine NEW da spostare.",
       "verificato_da": "qa (subagente): il rischio di scambiare una fascia scelta dal cliente non c'è (cassa e webhook scrivono una fascia sola per il carrello); trovato che la fascia del carrello si riusava anche se già finita: corretto nel commit successivo (si riusa solo se ancora in tempo).",
       "commit_successivi": [
         "414e5c4a"
@@ -569,12 +578,12 @@
       "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "L'anteprima del prodotto (opengraph-image), il messaggio di «Condividi il carrello» e i punti fedeltà usano formatPrice («12,50 €») invece di «€»+toFixed(2). I filtri del prezzo in messages/it.json mettono l'euro dopo la cifra. Nei miei file shipping/page.tsx, HomeSectionRenderer.tsx e lib/email/templates.ts l'euro scritto a mano non c'era già più (resta solo nei commenti).",
       "chiave": "microcopy|in tanti punti l'euro è ancora scritto all'inglese: «€12.50», «€0 – €500+», «€ 2,50»",
-      "cosa_resta": "Restano circa 48 righe con l'euro scritto a mano fuori dai miei file (grep \"€ ?[0-9]|€${\" in app/components/lib, senza commenti). Le più visibili: app/profile/referral, app/sign-up, app/profile/gift-cards, components/seller/SubscriptionBanner, e le rotte AI/gift-card/reject/cash-confirm. Lo cura un'altra sessione col proprio territorio.",
+      "cosa_resta": "Restano circa 48 righe con l'euro scritto a mano fuori dai miei file (grep \"€ ?[0-9]|€${\" in app/components/lib, senza commenti). Le più visibili: app/profile/referral, app/sign-up, app/profile/gift-cards, components/seller/SubscriptionBanner, e le rotte AI/gift-card/reject/cash-confirm. Lo cura un'altra sessione col proprio territorio. Fra questi c'è il titolo del filtro prezzo «€0 – €500+» in app/category/[slug]/page.tsx:220 (anche app/search/page.tsx ha il suo).",
       "verificato_da": "qa (subagente): formatPrice usa solo Intl e funziona sul runtime edge; il carattere dell'anteprima ha NBSP, € e virgola; en.json intatto, chiavi it/en allineate a tutti i livelli. Regge sui file toccati."
     },
     {
       "id": "R09-025",
-      "esito": "riparato",
+      "esito": "parziale",
       "commit": "bb9ba8849975207a24b4d0a997467aaefc8106bd",
       "file_toccati": [
         "lib/ordini/veloce-non-confermata.ts"
@@ -590,13 +599,14 @@
         "uscita": 0,
         "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bb9ba8849975207a24b4d0a997467aaefc8106bd^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r09-freno-fermo-stato-vero.test.ts --json"
       },
-      "copre_tutta_la_voce": true,
+      "copre_tutta_la_voce": false,
       "cosa_ho_fatto": "Il rimborso di un'altra causa ha già una frase sua (non è «già reso»): c'era prima. Restavano due cose. L'avviso «fermo a metà» diceva «Già fatto in questo giro» anche per un rimborso di un giro di prima: ora dice «Lo stato adesso». L'avviso «fermo prima di cominciare» diceva solo «niente»: ora dice, ordine per ordine, se risultano già resi soldi sulla carta (dalla riga letta in questo giro) e che non vanno resi di nuovo.",
       "chiave": "microcopy|l avviso «freno fermo a metà» elenca cosa ha fatto quel giro e non lo stato vero: un rimborso di un altra causa compare come «già reso sulla carta», e al secondo guasto può dire «niente» con l euro già reso",
       "verificato_da": "qa (subagente): trovati due casi in cui «nessun rimborso» era falso (euro tornato sul credito, euro su un ordine fratello) e un rimborso d'altra causa presentato come euro della veloce: frasi corrette nel commit successivo (dicono solo quello che la riga letta sa, e chiedono di guardare l'ordine/il carrello).",
       "commit_successivi": [
         "b8f6f9cb"
-      ]
+      ],
+      "cosa_resta": "Dopo un giro caduto a metà l'avviso legge solo la riga dell'ordine cercato: l'euro tornato sul credito MyCity o su un altro ordine dello stesso carrello non si vede. L'avviso lo dice e manda a guardare il carrello, ma non dà lo stato vero dell'intero carrello."
     }
   ],
   "nuovi_difetti_visti": [
