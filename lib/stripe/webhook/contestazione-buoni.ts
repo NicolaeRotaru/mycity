@@ -30,7 +30,7 @@ export async function richiestaSulBuonoSoloAvviso(dispute: Stripe.Dispute): Prom
   if (!eUnaRichiestaDiInformazioni(dispute)) return false;
   await notifyAdmins(
     'ℹ️ La banca chiede informazioni su un pagamento',
-    `Richiesta di informazioni ${dispute.id} su un pagamento senza ordini (forse un buono regalo) — ${formatPriceFromCents(dispute.amount ?? 0)}. Nessun soldo tolto: il buono resta valido.`,
+    `Richiesta di informazioni ${dispute.id} su un pagamento senza ordini (forse un buono regalo) — ${formatPriceFromCents(dispute.amount ?? 0)}. Per ora nessun soldo tolto e il buono resta valido: se la banca la trasforma in una contestazione vera, il buono va annullato a mano.`,
     '/admin/disputes',
   );
   return true;
