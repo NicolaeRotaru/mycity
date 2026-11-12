@@ -1,12 +1,12 @@
 {
   "sessione": "R10",
-  "aggiornato": "2026-11-12 15:47",
+  "aggiornato": "2026-11-12 16:23",
   "finita": true,
-  "testa": "2df6e8cd6d29468f9bc0c93a10a98c9494a64539",
+  "testa": "6243926fdf53beef32dbb79ea5285c690003e7d6",
   "verifica": {
     "comando": "npm run verify",
     "esito": "verde",
-    "nota": "Dopo l'ultimo commit di codice (2df6e8cd): typecheck, lint, 1214 file di prova, 8943 prove passate, 1 saltata già prima."
+    "nota": "Dopo l'ultimo commit di codice (6243926f): typecheck, lint, 1214 file di prova, 8947 prove passate, 1 saltata già prima."
   },
   "voci": [
     {
@@ -352,7 +352,7 @@
     {
       "id": "R10-014",
       "esito": "riparato",
-      "commit": "e75482dbc1e2c5038e1b32989810be9b732bbdb9",
+      "commit": "c2118e58b5d05fdbc13488a57fa94bff7e425d98",
       "file_toccati": [
         "components/admin/home/HomeSectionConfigForm.tsx",
         "lib/home-site.ts",
@@ -367,12 +367,12 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base e75482dbc1e2c5038e1b32989810be9b732bbdb9^ --file lib/home-site.ts,components/admin/home/HomeSectionConfigForm.tsx --prove tests/unit/riparazione-r10-testo-lungo-non-si-taglia.test.tsx --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c2118e58b5d05fdbc13488a57fa94bff7e425d98^ --file lib/testo-visibile.ts --prove tests/unit/riparazione-r10-testo-lungo-non-si-taglia.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "Tolto maxLength={4000} dal campo del blocco di testo (lo usano sia /admin/home sia le pagine CMS), che tagliava in silenzio quello che si incollava. Al suo posto un contatore «n/4000 caratteri» e, oltre il limite, un errore visibile (aria-invalid) che dice cosa fare. Lo schema (lib/home-site.ts) rifiuta con un messaggio che dice il limite: è quello che rispondono la rotta app/api/admin/cms/[slug] e il salvataggio della home, e la rotta non serviva toccarla. Dopo il controllo qa, secondo commit e75482db (il primo era 585a8bcf). Le rotte controllano e POI sanitizzano, e la sanitizzazione allunga (attributi sui link, &lt;): un testo da 3.960 caratteri si salvava da 10.000 e alla rilettura leggiHomeSite scartava il blocco senza avviso. Ora il limite si conta sul testo visibile (lib/testo-visibile.ts: senza tag, un'entità vale un carattere), uguale prima e dopo la sanitizzazione, con un tetto di 16.000 sull'HTML grezzo. Il contatore del modulo conta allo stesso modo.",
+      "cosa_ho_fatto": "Tolto maxLength={4000} dal campo del blocco di testo (lo usano sia /admin/home sia le pagine CMS), che tagliava in silenzio quello che si incollava. Al suo posto un contatore «n/4000 caratteri» e, oltre il limite, un errore visibile (aria-invalid) che dice cosa fare. Lo schema (lib/home-site.ts) rifiuta con un messaggio che dice il limite: è quello che rispondono la rotta app/api/admin/cms/[slug] e il salvataggio della home, e la rotta non serviva toccarla. Dopo il controllo qa, secondo commit e75482db (il primo era 585a8bcf). Le rotte controllano e POI sanitizzano, e la sanitizzazione allunga (attributi sui link, &lt;): un testo da 3.960 caratteri si salvava da 10.000 e alla rilettura leggiHomeSite scartava il blocco senza avviso. Ora il limite si conta sul testo visibile (lib/testo-visibile.ts: senza tag, un'entità vale un carattere), uguale prima e dopo la sanitizzazione, con un tetto di 16.000 sull'HTML grezzo. Il contatore del modulo conta allo stesso modo. Collaudo K03 (non reggeva), terzo commit c2118e58: lunghezzaDelTesto toglieva con un'espressione tutto ciò che stava fra «<» e «>». Un testo con quei simboli scritti a mano valeva pochi caratteri, passava, e alla rilettura il blocco spariva intero. Ora si misura sull'HTML già sanitizzato (i simboli letterali diventano entità, i tag restano solo quelli veri). Anche il tetto sull'HTML (16.000) si conta sull'HTML come verrà salvato, quindi tanti link vengono rifiutati al salvataggio con un messaggio e non spariscono dopo. Il freno sul testo grezzo è a 32.000.",
       "chiave": "frontend-ux|un testo lungo incollato in una pagina del sito viene tagliato a 4.000 caratteri senza avvisare, e la pagina pubblicata resta monca",
-      "verificato_da": "qa (subagente separato): il messaggio dello schema arriva a chi salva sia su /admin/home sia su /admin/pages. Ha però misurato che la sanitizzazione allunga il testo e fa sparire il blocco alla rilettura. Chiuso nel commit e75482db, con una prova che sanitizza un testo da 3.900 caratteri con link e «<» e lo rilegge; la prova rimessa regge. Lo stesso maxLength={4000} c'è sulla pagina del negozio (components/seller/SectionConfigForm.tsx:119, non mio): in nuovi_difetti_visti."
+      "verificato_da": "qa (subagente separato): il messaggio dello schema arriva a chi salva sia su /admin/home sia su /admin/pages. Ha però misurato che la sanitizzazione allunga il testo e fa sparire il blocco alla rilettura. Chiuso nel commit e75482db, con una prova che sanitizza un testo da 3.900 caratteri con link e «<» e lo rilegge; la prova rimessa regge. Lo stesso maxLength={4000} c'è sulla pagina del negozio (components/seller/SectionConfigForm.tsx:119, non mio): in nuovi_difetti_visti. Collaudo K03: non reggeva («<»/«>» letterali, tetto HTML contato prima della sanitizzazione). Chiuso nel commit c2118e58, con due prove che ripetono i casi del collaudo; la prova rimessa regge."
     },
     {
       "id": "R10-015",
@@ -424,7 +424,7 @@
     {
       "id": "R10-017",
       "esito": "riparato",
-      "commit": "d26e520703b19fff29037feb8f75675eb7deee76",
+      "commit": "6243926fdf53beef32dbb79ea5285c690003e7d6",
       "file_toccati": [
         "app/orders/page.tsx"
       ],
@@ -437,12 +437,12 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d26e520703b19fff29037feb8f75675eb7deee76^ --file app/orders/page.tsx --prove tests/unit/riparazione-r10-bottoni-degli-ordini-per-il-pollice.test.tsx --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6243926fdf53beef32dbb79ea5285c690003e7d6^ --file app/orders/page.tsx --prove tests/unit/riparazione-r10-bottoni-degli-ordini-per-il-pollice.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "I due bottoni passano da size sm (32 px) a md (min-h 44 px), con gap-3 e flex-wrap. components/ui/Button.tsx non l'ho toccato: ingrandire la sm cambierebbe anche le tabelle fitte dell'amministrazione. Dopo il controllo qa, secondo commit d26e5207 (il primo era aa88b5da). Con i bottoni da 44 px il blocco di miniature e prezzo (min-w-0 flex-1, base 0) si stringeva a 57 px a 360, e «Traccia» copriva il prezzo. Ora quel blocco ha basis-56: quando lo spazio non basta, sono i bottoni ad andare sulla riga sotto.",
+      "cosa_ho_fatto": "I due bottoni passano da size sm (32 px) a md (min-h 44 px), con gap-3 e flex-wrap. components/ui/Button.tsx non l'ho toccato: ingrandire la sm cambierebbe anche le tabelle fitte dell'amministrazione. Dopo il controllo qa, secondo commit d26e5207 (il primo era aa88b5da). Con i bottoni da 44 px il blocco di miniature e prezzo (min-w-0 flex-1, base 0) si stringeva a 57 px a 360, e «Traccia» copriva il prezzo. Ora quel blocco ha basis-56: quando lo spazio non basta, sono i bottoni ad andare sulla riga sotto. Collaudo K03, terzo commit 6243926f: con 4 miniature più «+N» (~264 px) anche la base di 14rem lasciava il prezzo sotto i bottoni fino a 600 px. Ora miniature e prezzo prendono la riga intera e i bottoni vanno sotto, fino a lg; le miniature vanno a capo invece di uscire dalla card. Misurato con Playwright sul CSS compilato del progetto (replica della card, 4 miniature + «+3»): a 320, 360, 560, 600, 768, 1024 e 1280 px nessuna sovrapposizione fra prezzo, miniature e bottoni, e nessuno scorrimento di lato.",
       "chiave": "mobile-pwa|nella lista ordini i bottoni «traccia» e «riordina» sono troppo piccoli per il pollice",
-      "verificato_da": "qa (subagente separato): ha compilato il CSS del progetto e misurato con Playwright a 320 e 360 px. La pagina non scorre di lato e i bottoni sono alti 44 px, ma i bottoni coprivano il prezzo (schermate prima e dopo). Chiuso nel commit d26e5207 con la prova sulla base del blocco; la prova rimessa regge."
+      "verificato_da": "qa (subagente separato): ha compilato il CSS del progetto e misurato con Playwright a 320 e 360 px. La pagina non scorre di lato e i bottoni sono alti 44 px, ma i bottoni coprivano il prezzo (schermate prima e dopo). Chiuso nel commit d26e5207 con la prova sulla base del blocco; la prova rimessa regge. Collaudo K03: prezzo coperto negli ordini con 5 o più prodotti (8 px a 600, 48 px a 560). Chiuso nel commit 6243926f, misurato da 320 a 1280 px."
     },
     {
       "id": "R10-018",
@@ -456,7 +456,7 @@
     {
       "id": "R10-019",
       "esito": "riparato",
-      "commit": "501d46a89cf7632de4c8ea0ebd95f90d25cf5edc",
+      "commit": "6850e1d9d67614bd66c0f74dabe76bd35e3f7abf",
       "file_toccati": [
         "app/api/seller/subscription/checkout/route.ts",
         "lib/stripe/webhook/abbonamenti.ts"
@@ -470,22 +470,26 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 501d46a89cf7632de4c8ea0ebd95f90d25cf5edc^ --file lib/stripe/webhook/abbonamenti.ts --prove tests/unit/riparazione-r10-abbonamento-doppio.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 6850e1d9d67614bd66c0f74dabe76bd35e3f7abf^ --file lib/stripe/webhook/abbonamenti.ts --prove tests/unit/riparazione-r10-abbonamento-doppio.test.ts --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La cassa passa a Stripe una idempotencyKey per negozio e finestra di 10 minuti: due schede ricevono la stessa sessione, anche al primo abbonamento senza stripe_customer_id. Il webhook, se il profilo ha già un altro abbonamento ancora in corso su Stripe, non lo sovrascrive: annulla subito il doppione e scrive un log per l'admin. Il rimborso del doppione non è automatico (domanda a Nicola). Il portale (portal/route.ts:47) non serviva toccarlo: con il primo abbonamento sul profilo si disdice dal sito. Dopo il controllo qa, secondo commit 501d46a8 (il primo era a47ea68b): la guardia del webhook ora vale anche quando il doppione è già annullato. Prima, se l'annullamento riusciva su Stripe ma la risposta si perdeva, al ritentativo il doppione si scriveva sopra al primo. Se il primo è in ritardo di pagamento e il nuovo è pagato, si annulla il primo, non quello pagato.",
+      "cosa_ho_fatto": "La cassa passa a Stripe una idempotencyKey per negozio e finestra di 10 minuti: due schede ricevono la stessa sessione, anche al primo abbonamento senza stripe_customer_id. Il webhook, se il profilo ha già un altro abbonamento ancora in corso su Stripe, non lo sovrascrive: annulla subito il doppione e scrive un log per l'admin. Il rimborso del doppione non è automatico (domanda a Nicola). Il portale (portal/route.ts:47) non serviva toccarlo: con il primo abbonamento sul profilo si disdice dal sito. Dopo il controllo qa, secondo commit 501d46a8 (il primo era a47ea68b): la guardia del webhook ora vale anche quando il doppione è già annullato. Prima, se l'annullamento riusciva su Stripe ma la risposta si perdeva, al ritentativo il doppione si scriveva sopra al primo. Se il primo è in ritardo di pagamento e il nuovo è pagato, si annulla il primo, non quello pagato. Collaudo K03, terzo commit 6850e1d9: se subscriptions.retrieve del precedente fallisce (cancellato, id di prova, rete), prima il webhook lanciava, Stripe riceveva 500 a ogni ritentativo e l'abbonamento appena pagato non si attivava mai. Ora si scrive il nuovo e l'admin lo vede nel log.",
       "chiave": "pagamenti-stripe|con l'abbonamento acceso, due schede aperte creano due abbonamenti da 50 euro, e il primo resta orfano e non si disdice dal sito",
-      "verificato_da": "qa (subagente separato): 4 prove + 63 file vicini (449 prove) verdi. Ha trovato due buchi: il ritentativo dopo un annullamento con la risposta persa sovrascriveva il primo, e con il primo past_due si annullava l'abbonamento appena pagato. Tutti e due chiusi nel commit 501d46a8, con le prove che li riproducono (la prova rimessa regge). Restano, dichiarati: due avvisi in contemporanea su un profilo vuoto (nessun blocco per riga; raro); la chiave a finestre fisse protegge dal doppio clic, non da due schede a distanza (lì difende il webhook); nessun rimborso automatico (domanda a Nicola)."
+      "verificato_da": "qa (subagente separato): 4 prove + 63 file vicini (449 prove) verdi. Ha trovato due buchi: il ritentativo dopo un annullamento con la risposta persa sovrascriveva il primo, e con il primo past_due si annullava l'abbonamento appena pagato. Tutti e due chiusi nel commit 501d46a8, con le prove che li riproducono (la prova rimessa regge). Restano, dichiarati: due avvisi in contemporanea su un profilo vuoto (nessun blocco per riga; raro); la chiave a finestre fisse protegge dal doppio clic, non da due schede a distanza (lì difende il webhook); nessun rimborso automatico (domanda a Nicola). Collaudo K03: si rompeva se Stripe non sapeva dire com'era il precedente. Chiuso nel commit 6850e1d9 con la prova che lo ripete.",
+      "nota": "Resta, dichiarato: la chiave di idempotenza va a finestre fisse di 10 minuti. Protegge dal doppio clic, ma due schede aperte a cavallo della finestra, o la seconda dopo più di 10 minuti, creano due sessioni di cassa, e il doppione può nascere ed essere pagato. Il webhook lo annulla subito, ma la prima fattura del doppione non si rimborsa in automatico (domanda per Nicola). Due avvisi in contemporanea su un profilo vuoto restano senza blocco per riga."
     },
     {
       "id": "R10-020",
       "esito": "riparato",
-      "commit": "45b6c48b8967dcc09e0a3dca45adcef664c82e33",
+      "commit": "d78619dd89b5decf5fb7497be86f0f7a0241e14d",
       "file_toccati": [
         "app/api/seller/subscription/checkout/route.ts",
         "components/SellerApplicationForm.tsx",
+        "components/seller/SubscriptionBanner.tsx",
+        "lib/abbonamento-primo-incasso.ts",
         "tests/unit/riparazione-r10-abbonamento-doppio.test.ts",
-        "tests/unit/riparazione-r10-un-prezzo-abbonamento.test.tsx"
+        "tests/unit/riparazione-r10-un-prezzo-abbonamento.test.tsx",
+        "tests/unit/riparazione-r10-aggiorna-pagamento.test.tsx"
       ],
       "prova_file": [
         "tests/unit/riparazione-r10-abbonamento-dopo-il-primo-incasso.test.ts"
@@ -496,13 +500,13 @@
       "rimessa": {
         "esito": "regge",
         "uscita": 0,
-        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 45b6c48b8967dcc09e0a3dca45adcef664c82e33^ --file app/api/seller/subscription/checkout/route.ts --prove tests/unit/riparazione-r10-abbonamento-dopo-il-primo-incasso.test.ts --json"
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d78619dd89b5decf5fb7497be86f0f7a0241e14d^ --file components/seller/SubscriptionBanner.tsx --prove tests/unit/riparazione-r10-aggiorna-pagamento.test.tsx --json"
       },
       "copre_tutta_la_voce": true,
-      "cosa_ho_fatto": "La frase di commissione.ts:98-102 diceva già «dopo il tuo primo incasso»; il comportamento no. Ora la cassa risponde 403 «L'abbonamento parte solo dopo il tuo primo incasso con MyCity» finché il negozio non ha un ordine PAID o in contanti DELIVERED; se gli incassi non si leggono, risponde 503. Nel modulo di richiesta il riquadro e il consenso dicevano «all'approvazione»: ora dicono «dopo il primo incasso». Definizione approvata dalla regista, in domande_per_nicola. L'interruttore resta spento. Dopo il controllo qa, secondo commit 45b6c48b (il primo era 5bd9e7af): conta come incasso anche un ordine pagato e poi rimborsato in parte (PARTIALLY_REFUNDED), come in migrations/215.",
+      "cosa_ho_fatto": "La frase di commissione.ts:98-102 diceva già «dopo il tuo primo incasso»; il comportamento no. Ora la cassa risponde 403 «L'abbonamento parte solo dopo il tuo primo incasso con MyCity» finché il negozio non ha un ordine PAID o in contanti DELIVERED; se gli incassi non si leggono, risponde 503. Nel modulo di richiesta il riquadro e il consenso dicevano «all'approvazione»: ora dicono «dopo il primo incasso». Definizione approvata dalla regista, in domande_per_nicola. L'interruttore resta spento. Dopo il controllo qa, secondo commit 45b6c48b (il primo era 5bd9e7af): conta come incasso anche un ordine pagato e poi rimborsato in parte (PARTIALLY_REFUNDED), come in migrations/215. Collaudo K03, terzo commit d78619dd: il banner invitava ad «Attiva €50/mese» anche chi non aveva incassato, e il tasto rispondeva 403. La regola ora sta in lib/abbonamento-primo-incasso.ts e la leggono la cassa e il banner, che chiede gli ordini del negozio (RLS: Sellers can view their store orders) e mostra l'invito solo dopo il primo incasso. Chi è in ritardo di pagamento vede sempre l'avviso.",
       "chiave": "pagamenti-stripe|quando si accenderà l'abbonamento, il negozio pagherà 50 euro subito dopo l'approvazione invece che dopo i primi incassi",
       "nota": "Le due prove R10 sulla cassa (abbonamento-doppio, un-prezzo) hanno ora un finto `orders` con un incasso, perché la cassa legge gli ordini.",
-      "verificato_da": "qa (subagente separato): ha controllato che la policy «Sellers can view their store orders» (migrations/011:109-111) lasci leggere gli ordini al negozio e che i valori del database siano PAID e DELIVERED in maiuscolo, cod in minuscolo. La sintassi PostgREST è giusta, e con la lettura caduta la cassa dà 503. La riserva sul rimborso parziale è chiusa in 45b6c48b. Quella sul banner, che invita ancora il negozio appena approvato, è già in nuovi_difetti_visti."
+      "verificato_da": "qa (subagente separato): ha controllato che la policy «Sellers can view their store orders» (migrations/011:109-111) lasci leggere gli ordini al negozio e che i valori del database siano PAID e DELIVERED in maiuscolo, cod in minuscolo. La sintassi PostgREST è giusta, e con la lettura caduta la cassa dà 503. La riserva sul rimborso parziale è chiusa in 45b6c48b. Quella sul banner, che invita ancora il negozio appena approvato, è già in nuovi_difetti_visti. Collaudo K03: il banner contraddiceva la cassa. Chiuso nel commit d78619dd con la prova (nessun incasso: niente invito; un incasso: l'invito c'è)."
     },
     {
       "id": "R10-021",
@@ -598,13 +602,6 @@
     }
   ],
   "nuovi_difetti_visti": [
-    {
-      "titolo": "Con l'abbonamento acceso, il banner invita ad «Attiva €50/mese» anche il negozio che non ha ancora incassato: il tasto risponde «parte solo dopo il tuo primo incasso»",
-      "dimensione": "pagamenti-stripe",
-      "severita": "minore",
-      "file": "components/seller/SubscriptionBanner.tsx:28",
-      "descrizione": "Dopo R10-020 la cassa rifiuta chi non ha incassato, ma il banner non lo sa (riceve solo lo stato dell'abbonamento). Oggi non si vede: l'interruttore è spento. Cura: passare al banner se il negozio ha già incassato (app/seller/layout.tsx) e nasconderlo fino ad allora."
-    },
     {
       "titolo": "L'elenco dei negozi fa una domanda sulla consegna veloce per ogni scheda, invece di una sola per tutta la lista",
       "dimensione": "performance",
