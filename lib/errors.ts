@@ -48,6 +48,32 @@ const PAROLE_DEL_MOTORE =
   /\b(syntax|constraint|relation|column|table|row|query|statement|varchar|varying|violates|null value|does not exist|out of range|deadlock|serializ|unrecognized|operator|integer|numeric|boolean|timestamp|jsonb|uuid|regclass)\b/i;
 
 /**
+ * 12/11/2026 (R12-012) — LO STESSO VOCABOLARIO, MA SCRITTO COME LO SCRIVE IL MOTORE.
+ *
+ * Il motore scrive in minuscolo («relation "orders" does not exist», «null value
+ * in column …»). Un nome di negozio scritto da una persona ha la maiuscola
+ * («Bistrot La Table», «Caffè Row & Co»): col confronto senza maiuscole il
+ * rifiuto della cassa che comincia col nome del negozio finiva nel generico, e
+ * il cliente riprovava lo stesso ordine all'infinito. Vale SOLO per i messaggi
+ * che una nostra rotta ha messo nel corpo della risposta (vedi
+ * `MESSAGGI_DELLE_ROTTE`): un errore grezzo resta filtrato come prima.
+ */
+const PAROLE_DEL_MOTORE_COME_LE_SCRIVE = new RegExp(PAROLE_DEL_MOTORE.source);
+
+/**
+ * I testi che `apiErrorMessage` ha letto dal corpo di una nostra risposta. La
+ * pagina li rimette in un `new Error(...)` e li passa a `friendlyError`: qui
+ * si ricordano, cosi' `friendlyError` sa che sono frasi scritte per l'utente e
+ * non indovina dalla forma. Pochi e recenti: basta l'ultimo giro.
+ */
+const MESSAGGI_DELLE_ROTTE = new Set<string>();
+function ricordaMessaggioDellaRotta(m: string): string {
+  if (MESSAGGI_DELLE_ROTTE.size >= 50) MESSAGGI_DELLE_ROTTE.clear();
+  MESSAGGI_DELLE_ROTTE.add(m);
+  return m;
+}
+
+/**
  * GLI ERRORI DI SUPABASE AUTH, IN ITALIANO — o `null` se non lo riconosco.
  *
  * PERCHÉ ESISTE QUI. Una funzione con lo stesso mestiere viveva dentro
@@ -229,13 +255,15 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
         return 'Uno dei dati inseriti non è nel formato giusto: controlla numeri e date, poi riprova.';
       }
       trackErrorShown(e.code ?? 'unknown', e.message, context?.page);
+      // R12-012 — scritto da una nostra rotta per l'utente: le parentesi sono parte del motivo.
+      const dallaRotta = MESSAGGI_DELLE_ROTTE.has(e.message);
       // Strip technical details
       const cleaned = e.message
         .replace(/\b[A-Z_]+\s*=\s*[^\s,]+/g, '')
         // 1/11/2026 — Le parentesi coi soldi dentro sono il PERCHÉ di un rifiuto
         // («prezzo NON applicato (20.00 → 30.00 €: oltre il 30%, va deciso a
         // mano)»), non un dettaglio tecnico: restano. Le altre si tolgono.
-        .replace(/\(.*?\)/g, (parentesi) => (parentesi.includes('€') ? parentesi : ''))
+        .replace(/\(.*?\)/g, (parentesi) => (dallaRotta || parentesi.includes('€') ? parentesi : ''))
         .trim();
       // Le righe multiple sono un segnale forte di stack trace → scarta.
       // Il limite di lunghezza scarta i dump tecnici ma deve lasciar passare i
@@ -254,7 +282,7 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
         // ...ma non un codice tecnico in testa («500 Internal Server Error», «23505 …»).
         !/^\d{3,5}\b/.test(cleaned) &&
         // ...e non parla come un motore. Vedi PAROLE_DEL_MOTORE in cima al file.
-        !PAROLE_DEL_MOTORE.test(cleaned)
+        !(dallaRotta ? PAROLE_DEL_MOTORE_COME_LE_SCRIVE : PAROLE_DEL_MOTORE).test(cleaned)
       ) {
         return cleaned;
       }
@@ -289,10 +317,10 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
 export function apiErrorMessage(body: unknown, fallback = 'Operazione non riuscita'): string {
   if (!body || typeof body !== 'object') return fallback;
   const e = (body as { error?: unknown }).error;
-  if (typeof e === 'string' && e.trim()) return e;
+  if (typeof e === 'string' && e.trim()) return ricordaMessaggioDellaRotta(e);
   if (e && typeof e === 'object' && 'message' in e) {
     const m = (e as { message?: unknown }).message;
-    if (typeof m === 'string' && m.trim()) return m;
+    if (typeof m === 'string' && m.trim()) return ricordaMessaggioDellaRotta(m);
   }
   return fallback;
 }
