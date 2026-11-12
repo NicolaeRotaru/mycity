@@ -25,6 +25,7 @@ import { colonnaNonTrovata, type ErroreDatabase } from '@/lib/db/migrazione-148'
 import { formatPriceFromCents } from '@/lib/format';
 import { findOrdersForDispute, notifyAdmins } from './comune';
 import { scritturaObbligatoria } from './esito';
+import { restituisciLeQuoteParziali } from './contestazione-parziale-vinta';
 import { eUnaRichiestaDiInformazioni, promemoriaOTotale, stornatoDaQuestaContestazione } from './quanto-restituire';
 
 export { promemoriaOTotale };
@@ -327,7 +328,7 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
   // vinta: il negozio si faceva ripagare 32,40 € invece di 27,40. Il database
   // finto delle prove restituiva la riga intera, e il difetto non si vedeva.
   // Sono colonne della 126: dove non c'è, `findOrdersForDispute` le toglie.
-  const orders = await findOrdersForDispute(dispute, 'id, dispute_status, delivery_status, payment_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, dispute_seller_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, dispute_rider_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
+  const orders = await findOrdersForDispute(dispute, 'id, seller_id, stripe_charge_id, stripe_transfer_group, dispute_status, delivery_status, payment_status, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, dispute_seller_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, dispute_rider_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
   if (orders.length === 0) return;
   const admin = getAdminSupabase();
   const ids = orders.map((o) => o.id);
@@ -413,6 +414,9 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
         ordini: daRipagare.length,
       });
     }
+
+    // R11-007 — la contestazione parziale vinta restituisce al negozio la sua quota.
+    await restituisciLeQuoteParziali(dispute, orders);
 
     // 158 — E IL FATTORINO? All'apertura della contestazione gli veniva
     // richiamato indietro il compenso (`reverseRiderTransfer`, poche righe
