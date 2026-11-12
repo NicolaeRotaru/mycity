@@ -8,7 +8,7 @@ import { AI_NEGOZI_ACCESA } from '@/lib/funzioni-al-lancio';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { AiConfigError } from '@/lib/ai/client';
-import { submitBatch } from '@/lib/ai/batch';
+import { invioIncerto, submitBatch } from '@/lib/ai/batch';
 import {
   buildCatalogBatchRequests,
   isCatalogOperation,
@@ -194,6 +194,19 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
     return NextResponse.json({ jobId: job.id, total: products.length, status: 'processing' });
   } catch (err) {
+    // R04-014 — Un invio rimasto senza risposta puo' essere partito: non lo si
+    // dichiara fallito (e non si rimanda). La riga resta «in invio» con il
+    // motivo, cosi' il lavoro aperto blocca un secondo avvio e si verifica.
+    if (invioIncerto(err)) {
+      await admin
+        .from('catalog_ai_jobs')
+        .update({ error: 'invio senza risposta: il lotto potrebbe essere partito, da verificare' })
+        .eq('id', job.id);
+      logger.error('catalog-batch start: invio del lotto senza risposta, da verificare', { sellerId: user.id, jobId: job.id });
+      return ApiErrors.unavailable(
+        'L\'invio non ha avuto risposta: il lavoro potrebbe essere partito. Non riavviarlo: ricarica la pagina fra qualche minuto.',
+      );
+    }
     await admin.from('catalog_ai_jobs').update({ status: 'failed' }).eq('id', job.id);
     if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
     logger.error('catalog-batch start: submit failed', { sellerId: user.id, jobId: job.id });
