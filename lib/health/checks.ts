@@ -4,6 +4,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
 import { checkTitolare } from './titolare-check';
+import { logger } from '@/lib/logger';
 
 /**
  * Health-check REALE dei servizi, usato dalla pagina pubblica /status.
@@ -135,6 +136,12 @@ async function checkEmail(): Promise<ServiceHealth> {
   if (!key) {
     return svc('email', 'Email transazionali', 'Resend (conferme ordine, recupero password)', 'unknown', null, 'Non configurato');
   }
+  // 12/11/2026 (R06-024) — Una chiave di SOLO INVIO (la piu' prudente, quella giusta
+  // per un sito) non puo' leggere l'elenco dei domini: Resend risponde 401
+  // `restricted_api_key`. Non e' un guasto: la chiave c'e' ed e' valida. Prima
+  // diventava «Non disponibile» sulla pagina pubblica, e il motivo vero (401,
+  // tempo scaduto) veniva buttato senza finire nemmeno nei log.
+  let soloInvio = false;
   const r = await timed(async () => {
     // GET read-only: verifica la raggiungibilità dell'API, non invia email.
     // Vedi checkAuth: `withTimeout` non chiude la chiamata, questo sì.
@@ -142,13 +149,23 @@ async function checkEmail(): Promise<ServiceHealth> {
       headers: { Authorization: `Bearer ${key}` },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
+    if (res.status === 401) {
+      const corpo = (await res.json().catch(() => null)) as { name?: unknown } | null;
+      if (corpo?.name === 'restricted_api_key') {
+        soloInvio = true;
+        return;
+      }
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   });
+  if (!r.ok) logger.warn('[salute] controllo della posta fallito', { motivo: r.error ?? 'sconosciuto' });
   return svc(
     'email', 'Email transazionali', 'Resend (conferme ordine, recupero password)',
     statusFromLatency(r.ok, r.latencyMs),
     r.ok ? r.latencyMs : null,
-    r.ok ? null : 'API non raggiungibile',
+    r.ok
+      ? (soloInvio ? 'Chiave di solo invio: raggiungibile' : null)
+      : `API non raggiungibile (${r.error ?? 'motivo sconosciuto'})`,
   );
 }
 
