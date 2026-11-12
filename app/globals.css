@@ -406,7 +406,10 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
  * invece di sparire. Meglio piu' corta che com'era.
  * ───────────────────────────────────────────────────────────────────────────── */
 .contenuto-almeno-una-schermata {
-  min-height: calc(100vh - var(--header-height) - var(--tabbar-height));
+  /* R04-022 (revisione) — si toglie l'altezza VERA della barra a schede, la
+     stessa che il body riserva in fondo: con i 72px il piè di pagina spuntava
+     14px sopra la barra. */
+  min-height: calc(100vh - var(--header-height) - var(--tabbar-altezza-vera));
 }
 
 /* A11y: reduced motion override per utenti con vestibolare disorders */

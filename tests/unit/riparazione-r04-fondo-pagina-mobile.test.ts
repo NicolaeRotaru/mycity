@@ -34,4 +34,8 @@ describe('il fondo della pagina mobile finisce dove finisce la barra', () => {
     expect(CSS).toMatch(/body\.senza-tabbar \{[^}]*--tabbar-altezza-vera: 0px/);
     expect(CSS).toMatch(/@media \(min-width: 768px\) \{\s*:root \{[^}]*--tabbar-altezza-vera: 0px/);
   });
+
+  it('la pagina corta toglie la stessa altezza vera che il body riserva', () => {
+    expect(CSS).toMatch(/min-height: calc\(100vh - var\(--header-height\) - var\(--tabbar-altezza-vera\)\)/);
+  });
 });
