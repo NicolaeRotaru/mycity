@@ -19,7 +19,6 @@ import {
   COMPENSO_RIDER_CENTS,
   PLATFORM_DELIVERY_FEE_CENTS,
   RAGGIO_CONSEGNA_KM,
-  VALUE_PROPS,
 } from '@/lib/constants';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { formatPrice } from '@/lib/format';
@@ -483,12 +482,8 @@ describe('le altre promesse parlano della stessa consegna', () => {
     expect(elenco).not.toMatch(/gratuit|gratis|sopra i? ?\d+\s*(€|euro)/i);
   });
 
-  it('le quattro promesse della home non dicono più «spedizione gratuita sopra 30 €»', () => {
-    const consegna = `${VALUE_PROPS[0].title} ${VALUE_PROPS[0].subtitle}`;
-    expect(consegna).not.toMatch(/gratuit|gratis|sopra/i);
-    expect(consegna).toContain(TRE_EURO);
-    expect(consegna).toContain(`${RAGGIO_CONSEGNA_KM} km`);
-  });
+  // 12/11/2026 (R12-007) — Qui si guardavano anche le «quattro promesse» di VALUE_PROPS: nessuna
+  // pagina le mostrava, e sono state tolte. Resta l'elenco che la home disegna davvero, qui sopra.
 });
 
 describe('«Vicino a te» non mostra negozi oltre il confine della consegna', () => {

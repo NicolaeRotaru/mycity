@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement } from 'react';
 import { fraseComeArriva, rispostaTempiDiConsegna } from '@/lib/promesse-pubbliche';
-import { VALUE_PROPS } from '@/lib/constants';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import PaginaConsegne from '@/app/admin/delivery/page';
 
@@ -30,9 +29,7 @@ describe('i minuti della veloce non sono una promessa fissa', () => {
     expect(a).toMatch(/8 alle 21/);
   });
 
-  it('le promesse in vetrina non vendono i 30-60 minuti come certi', () => {
-    for (const p of VALUE_PROPS) expect(promessaFissa(`${p.title} ${p.subtitle}`), p.subtitle).toBe(false);
-  });
+  // 12/11/2026 (R12-007) — «le promesse in vetrina» erano VALUE_PROPS, che nessuna pagina mostrava: tolte.
 
   it('la pagina consegne dell amministratore dice la regola, non «3,00 €–4,00 €» a consegna', () => {
     const html = renderToStaticMarkup(createElement(PaginaConsegne));

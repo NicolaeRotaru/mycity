@@ -30,7 +30,7 @@ import { join, sep } from 'node:path';
 import { promessaSpedizione, rispostaCostoSpedizione } from '@/lib/promesse-pubbliche';
 import { prezziDelCarrello } from '@/lib/ordini/prezzi';
 import { formatPrice } from '@/lib/format';
-import { PLATFORM_DELIVERY_FEE_CENTS, VALUE_PROPS } from '@/lib/constants';
+import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 
 const RADICE = process.cwd();
 const leggi = (f: string) => readFileSync(join(RADICE, f), 'utf8');
@@ -126,15 +126,8 @@ describe('le vetrine prendono le parole da lì, invece di riscriverle', () => {
     expect(() => leggi('components/ui/FreeShippingProgress.tsx')).toThrow();
   });
 
-  it('le quattro promesse del sito nominano la consegna finché si paga', () => {
-    const spedizione = VALUE_PROPS.find((v) => v.title === 'Consegna a casa');
-    expect(spedizione?.subtitle).toMatch(/per tutto il carrello/);
-    if (PLATFORM_DELIVERY_FEE_CENTS > 0) {
-      expect(spedizione?.subtitle, 'il titolo dice «gratuita» e il sottotitolo tace i 3 €').toContain(
-        formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100),
-      );
-    }
-  });
+  // 12/11/2026 (R12-007) — «le quattro promesse del sito» erano VALUE_PROPS, che nessuna pagina
+  // mostrava: tolte. Le parole vere le controllano le prove qui sopra e sotto.
 
   it('e la risposta della FAQ dice lo stesso numero', () => {
     // Sta nello stesso file della funzione: se la fee cambia, cambia anche questa.
