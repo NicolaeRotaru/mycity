@@ -161,7 +161,7 @@ export const POST = withAuthRateLimit(
     }
 
     const adesso = new Date().toISOString();
-    const { data: scritti, error } = await admin
+    const aggiorna = admin
       .from('profiles')
       .update({
         phone: f.contactPhone,
@@ -201,14 +201,27 @@ export const POST = withAuthRateLimit(
       .eq('id', user.id)
       .in('role', [...RUOLI_CHE_POSSONO_CHIEDERE])
       // NULL = profilo vecchio che non ha mai chiesto niente: può chiedere.
-      .or(`approval_status.is.null,approval_status.in.(${STATI_CHE_POSSONO_CHIEDERE.join(',')})`)
-      .select('id');
+      .or(`approval_status.is.null,approval_status.in.(${STATI_CHE_POSSONO_CHIEDERE.join(',')})`);
+    // R11-008 — Due invii partiti insieme leggevano lo stesso profilo e scrivevano tutti e due:
+    // due righe di consenso e due avvisi agli amministratori. La scrittura vale solo se la
+    // richiesta precedente è ancora quella letta: il secondo invio non tocca niente.
+    const richiestaLetta = (attuale as { approval_requested_at?: string | null }).approval_requested_at ?? null;
+    const { data: scritti, error } = await (richiestaLetta
+      ? aggiorna.eq('approval_requested_at', richiestaLetta)
+      : aggiorna.or('approval_requested_at.is.null')
+    ).select('id');
 
     if (error) {
       logger.error('[seller-apply] richiesta non salvata', { userId: user.id, code: error.code, message: error.message });
       return ApiErrors.internal('Non è stato possibile inviare la richiesta');
     }
     if (!scritti || scritti.length === 0) {
+      // R11-008 — Un altro invio della stessa richiesta è passato un attimo prima: è già arrivata.
+      const { data: dopo } = await admin.from('profiles').select('approval_status, approval_requested_at').eq('id', user.id).maybeSingle();
+      const giaArrivata = (dopo as { approval_status?: string | null; approval_requested_at?: string | null } | null);
+      if (giaArrivata?.approval_status === 'pending' && giaArrivata.approval_requested_at && giaArrivata.approval_requested_at !== richiestaLetta) {
+        return NextResponse.json({ ok: true }, { status: 200 });
+      }
       // Lo stato è cambiato fra la lettura e la scrittura (es. sospeso dallo staff).
       return ApiErrors.conflict('Lo stato del tuo account è appena cambiato: ricarica la pagina.');
     }
