@@ -53,6 +53,12 @@ INSERT INTO esiti SELECT '④ la vista conta il mese con mese_di_piacenza (colon
      FROM (SELECT pg_get_viewdef('public.shop_of_month_leaderboard'::regclass, true) AS d) x),
   (SELECT pg_get_viewdef('public.shop_of_month_leaderboard'::regclass, true));
 
+-- ⑤ il visitatore senza account legge la classifica (vista coi permessi del creatore), come prima
+SET LOCAL ROLE anon;
+INSERT INTO esiti SELECT '⑤ l anonimo legge il voto contato dalla vista',
+  coalesce((SELECT vote_count = 1 FROM public.shop_of_month_leaderboard WHERE seller_id = 'e3220000-0000-0000-0000-000000000001'), false), '';
+RESET ROLE;
+
 SET LOCAL TimeZone = 'Pacific/Kiritimati';
 INSERT INTO esiti SELECT '③ con la sessione a UTC+14 il mese resta quello di Piacenza',
   (SELECT bool_and(month = date_trunc('month', now() AT TIME ZONE 'Europe/Rome')::date) FROM public.shop_of_month_leaderboard), '';
