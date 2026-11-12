@@ -91,4 +91,16 @@ describe('R03-001 — la via del centro resta in centro', () => {
     nominatim([VIA_ROMA_PIACENZA]);
     expect(await coordinateDiUnIndirizzo({ address: 'Via Roma 10', city: 'Piacenza (PC)', zip: '29100' })).toEqual({ lat: 45.0517, lng: 9.699 });
   });
+
+  it('collaudo K04: la frazione scritta come città vale (Montale, Borgotrebbia, «S. Nicolò»)', async () => {
+    nominatim([{ lat: '45.0300', lon: '9.7300', address: { suburb: 'Montale', city: 'Piacenza', postcode: '29122' } }]);
+    expect(await coordinateDiUnIndirizzo({ address: 'Via Emilia Parmense 50', city: 'Montale', zip: '29122' })).toEqual({ lat: 45.03, lng: 9.73 });
+    nominatim([{ lat: '45.0700', lon: '9.6700', address: { hamlet: 'Borgotrebbia', city: 'Piacenza', postcode: '29121' } }]);
+    expect(await coordinateDiUnIndirizzo({ address: 'Via Trebbia 3', city: 'Borgotrebbia', zip: '29121' })).not.toBeNull();
+    nominatim([{ lat: '45.0600', lon: '9.6100', address: { village: 'San Nicolò', municipality: 'Rottofreno', postcode: '29010' } }]);
+    expect(await coordinateDiUnIndirizzo({ address: 'Via Agazzana 1', city: 'S. Nicolò', zip: '29010' })).not.toBeNull();
+    // Una frazione omonima con un altro CAP resta scartata.
+    nominatim([{ lat: '44.9000', lon: '9.5000', address: { hamlet: 'Montale', city: 'Altrove', postcode: '29020' } }]);
+    expect(await coordinateDiUnIndirizzo({ address: 'Via Emilia Parmense 50', city: 'Montale', zip: '29122' })).toBeNull();
+  });
 });

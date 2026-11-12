@@ -45,7 +45,9 @@ export function nomeDelComune(s: string | null | undefined): string {
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     // «Piacenza PC», «Piacenza (PC)»: la sigla della provincia non fa parte del comune.
-    .replace(/ pc$/, '');
+    .replace(/ pc$/, '')
+    // «S. Nicolò», «S Nicolò» = «San Nicolò».
+    .replace(/^s /, 'san ');
 }
 
 type RisultatoNominatim = {
@@ -58,6 +60,9 @@ type RisultatoNominatim = {
     municipality?: string;
     hamlet?: string;
     suburb?: string;
+    quarter?: string;
+    neighbourhood?: string;
+    city_district?: string;
     postcode?: string;
   };
 };
@@ -72,7 +77,11 @@ export function risultatoAffidabile(r: RisultatoNominatim, citta: string, cap: s
   if (!voluto) return false;
   const a = r.address ?? {};
   const comuni = [a.city, a.town, a.village, a.municipality].map(nomeDelComune).filter(Boolean);
-  if (!comuni.includes(voluto)) return false;
+  // Collaudo K04 — chi scrive come città la sua frazione («Montale», «Borgotrebbia»,
+  // «S. Nicolò») trova un risultato che OSM intesta al comune (city=Piacenza) e mette la
+  // frazione in suburb/hamlet/quarter: vale anche quella. Il CAP, qui sotto, resta il controllo.
+  const frazioni = [a.suburb, a.hamlet, a.quarter, a.neighbourhood, a.city_district].map(nomeDelComune).filter(Boolean);
+  if (!comuni.includes(voluto) && !frazioni.includes(voluto)) return false;
   const capScritto = cap.replace(/\D/g, '');
   const capTrovato = (a.postcode ?? '').replace(/\D/g, '');
   // Un CAP che finisce in «00» è quello generico di una città (29100 per Piacenza): vale per
