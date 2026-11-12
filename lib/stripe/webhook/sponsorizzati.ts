@@ -51,8 +51,13 @@ export async function handleSponsoredPurchase(session: Stripe.Checkout.Session) 
    * `giornoLocale()` è la stessa funzione con cui si quadra la cassa del
    * fattorino (lib/tempo/giorno-locale.ts): la giornata è una sola per tutti.
    */
+  // 12/11/2026 (R12-019) — LA SETTIMANA DURAVA OTTO GIORNI. La vetrina conta
+  // entrambi gli estremi (`start_date <= oggi <= end_date`, lib/queries/fasce-prodotti.ts):
+  // con la fine a «oggi + 7» lunedì 16 durava fino a lunedì 23 compreso, otto
+  // giorni di calendario per una settimana venduta. Ora l'ultimo giorno è
+  // «oggi + (giorni − 1)»: 16 → 22. L'avviso «fino al …» usa la stessa data.
   const oggi = new Date();
-  const fine = new Date(oggi.getTime() + days * 86_400_000);
+  const fine = new Date(oggi.getTime() + (days - 1) * 86_400_000);
   const startStr = giornoLocale(oggi);
   const endStr = giornoLocale(fine);
 

@@ -70,7 +70,8 @@ describe('una vetrina in primo piano comprata a notte fonda', () => {
       RIGA()?.start_date,
       'la vetrina risulta iniziata il giorno prima di quando è stata comprata',
     ).toBe('2026-09-04');
-    expect(RIGA()?.end_date, 'la vetrina finisce un giorno prima del dovuto').toBe('2026-09-11');
+    // 12/11/2026 (R12-019) — sette giorni con gli estremi compresi: dal 4 al 10, non all'11.
+    expect(RIGA()?.end_date, 'la vetrina finisce un giorno prima del dovuto').toBe('2026-09-10');
   });
 
   it('registra la spesa che Stripe ha davvero incassato, non quella dei metadati', async () => {
