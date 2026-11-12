@@ -1,0 +1,483 @@
+{
+  "sessione": "R09",
+  "aggiornato": "2026-11-12 15:12",
+  "finita": false,
+  "testa": "",
+  "verifica": {
+    "comando": "npm run verify",
+    "esito": "",
+    "nota": ""
+  },
+  "voci": [
+    {
+      "id": "R09-001",
+      "esito": "riparato",
+      "commit": "60d898958e527c4d600103f1e8f0ac3601ba400c",
+      "file_toccati": [
+        "lib/ordini/veloce-non-confermata.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-freno-annullo.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-freno-annullo.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 60d898958e527c4d600103f1e8f0ac3601ba400c^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r09-freno-annullo.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "La frase del limite all'annullo c'era già (finché il negozio non lo conferma, e l'email con CHIUSURA_ANNULLO_EMAIL). Restava il carrello con più negozi: ora fraseDelFreno riceve quanti ordini spostati erano già confermati e lo dice prima della chiusura, nella campanella e nell'email.",
+      "chiave": "microcopy|il messaggio del freno promette «puoi annullare senza costi», ma appena il negozio accetta la fascia nuova l annullo non si può più"
+    },
+    {
+      "id": "R09-002",
+      "esito": "serve_file_altrui",
+      "serve_file_altrui": [
+        {
+          "file": "app/api/seller/products/[id]/route.ts",
+          "modifica": "La scrittura del PATCH oggi usa il client di chi chiama (regola per riga). Dopo il controllo che il prodotto è del venditore (seller_id = utente), la scrittura passa al client amministrativo con il filtro esplicito .eq(\"seller_id\", user.id). Stessa cosa per la porta del Nascondi (lib/products/salva-dal-browser.ts → la stessa rotta)."
+        },
+        {
+          "file": "migrations/330_la_regola_di_scrittura_dei_prodotti_si_stringe.sql (fascia R09, da scrivere solo dopo il punto sopra)",
+          "modifica": "DROP POLICY \"Sellers can update their own products\" ON public.products, così i prodotti si scrivono solo dalle rotte del server, che lasciano la traccia e fanno i controlli. Non applicata: la applica Nicola."
+        }
+      ],
+      "nota": "Regola di scrittura dei prodotti troppo larga, già nota. Non chiusa in questo ramo: stringerla oggi romperebbe il salvataggio del modulo e il Nascondi, che passano da una rotta col client dell utente. Non ho aggiunto la prova SQL: nel harness ogni file rosso ferma la CI, e una prova verde che fissa il buco sarebbe sbagliata.",
+      "chiave": "rls-database|la regola per riga della migrazione 001 lascia scrivere i prodotti dal browser, senza traccia ne' controllo di vendibilita'"
+    },
+    {
+      "id": "R09-003",
+      "esito": "riparato",
+      "commit": "7843ad3c73824b041eb83ad5afc049868762946d",
+      "file_toccati": [
+        "components/Navbar.tsx",
+        "components/PromoTicker.tsx",
+        "components/CategoryBar.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-bersagli-della-testata.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-bersagli-della-testata.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 7843ad3c73824b041eb83ad5afc049868762946d^ --file components/Navbar.tsx,components/PromoTicker.tsx,components/CategoryBar.tsx --prove tests/unit/riparazione-r09-bersagli-della-testata.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il logo, sul computer e sul telefono, ha un'area di tocco invisibile (before:) di 12 px sopra e sotto. Per la pausa della striscia, il taglio overflow-hidden passa dalla barra al solo contenitore che scorre, e la sua area di tocco scende di 12 px sotto la striscia (z-10). Le voci delle categorie hanno min-h-11. Il CAP l'aveva già sistemato il 5/11. Misurato con elementFromPoint in Chromium sul sito acceso in locale (/shipping). A 390 px: logo 73x44, pausa 44x44, CAP 91x44, «Tutte le categorie» 182x44, «Tutti i negozi» 130x44. A 1280 px: logo 84x48, pausa 44x48, voci delle categorie 44 di altezza. Prima erano logo 20-24, pausa 32-36 e categorie 42.",
+      "chiave": "accessibilita|sul telefono sei pulsanti della testata sono sotto i 44 pixel: pausa della striscia, logo, cap e tre voci delle categorie"
+    },
+    {
+      "id": "R09-004",
+      "esito": "riparato",
+      "commit": "5a4f2825e3f70571c1debe62c990f8e4130af995",
+      "file_toccati": [
+        "app/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-home-dopo-un-guasto.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-home-dopo-un-guasto.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5a4f2825e3f70571c1debe62c990f8e4130af995^ --file app/page.tsx --prove tests/unit/riparazione-r09-home-dopo-un-guasto.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "leggiConfigurazioneHome ora lancia se la lettura di site_settings restituisce un errore, così unstable_cache non salva la home di fabbrica. loadHomeSite fa il ripiego sulla home di fabbrica solo per quella richiesta e scrive un avviso nei registri (logger.warn).",
+      "chiave": "api-backend|se il database ha un singhiozzo, la home torna per un minuto alla versione di fabbrica per tutti"
+    },
+    {
+      "id": "R09-005",
+      "esito": "parziale",
+      "commit": "221ef51fe249cbf1eee6a38de742288c010562fc",
+      "file_toccati": [
+        "app/admin/disputes/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-reclami.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-reclami.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 221ef51fe249cbf1eee6a38de742288c010562fc^ --file app/admin/disputes/page.tsx --prove tests/unit/riparazione-r09-reclami.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nella pagina dei reclami (mia) scheletro, errore e vuoto vengono da vistaDaQuery invece dei rami isLoading/isError/length scritti a mano. Il cruscotto di oggi lo usava già.",
+      "chiave": "architettura|sei rami iserror scritti a mano invece del presidio lib/vista-query.ts (vistadaquery): il difetto può tornare alla settima pagina",
+      "cosa_resta": "Le altre cinque pagine non sono mie: app/admin/cod-remittance, payouts, support, products e audit (page.tsx).",
+      "serve_file_altrui": [
+        {
+          "file": "app/admin/cod-remittance/page.tsx",
+          "modifica": "Sostituire i rami isLoading/isError/lista vuota scritti a mano con const vista = vistaDaQuery(query) e vista.mostraScheletro / mostraErrore / mostraVuoto, come in app/admin/today/page.tsx e app/admin/disputes/page.tsx."
+        },
+        {
+          "file": "app/admin/payouts/page.tsx",
+          "modifica": "Sostituire i rami isLoading/isError/lista vuota scritti a mano con const vista = vistaDaQuery(query) e vista.mostraScheletro / mostraErrore / mostraVuoto, come in app/admin/today/page.tsx e app/admin/disputes/page.tsx."
+        },
+        {
+          "file": "app/admin/support/page.tsx",
+          "modifica": "Sostituire i rami isLoading/isError/lista vuota scritti a mano con const vista = vistaDaQuery(query) e vista.mostraScheletro / mostraErrore / mostraVuoto, come in app/admin/today/page.tsx e app/admin/disputes/page.tsx."
+        },
+        {
+          "file": "app/admin/products/page.tsx",
+          "modifica": "Sostituire i rami isLoading/isError/lista vuota scritti a mano con const vista = vistaDaQuery(query) e vista.mostraScheletro / mostraErrore / mostraVuoto, come in app/admin/today/page.tsx e app/admin/disputes/page.tsx."
+        },
+        {
+          "file": "app/admin/audit/page.tsx",
+          "modifica": "Sostituire i rami isLoading/isError/lista vuota scritti a mano con const vista = vistaDaQuery(query) e vista.mostraScheletro / mostraErrore / mostraVuoto, come in app/admin/today/page.tsx e app/admin/disputes/page.tsx."
+        }
+      ],
+      "insieme_a": [
+        "R09-015"
+      ]
+    },
+    {
+      "id": "R09-008",
+      "esito": "parziale",
+      "commit": "c19a4acbcc9e17d183977f054653166097e9c025",
+      "file_toccati": [
+        "lib/ordini/veloce-non-confermata.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-carrello-spostato-a-meta.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-carrello-spostato-a-meta.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base c19a4acbcc9e17d183977f054653166097e9c025^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r09-carrello-spostato-a-meta.test.ts --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Se cade la scrittura di un ordine dopo che altri del carrello sono già passati alla fascia, i loro negozi e il fattorino vengono avvisati subito. Al giro dopo il freno riusa la fascia già scritta su un ordine fratello invece di ricalcolarla con l'ora nuova, e il cliente viene avvisato in quel giro. Aggiornata la prova esistente minori-s02-freno-della-veloce.test.ts (2367), che legge questo file: ora pretende la frase nuova dell'avviso.",
+      "chiave": "architettura|carrello di più negozi: se cade la scrittura del secondo ordine, il primo resta spostato in silenzio",
+      "cosa_resta": "Se l'ordine rimasto «Adesso» è già confermato dal suo negozio (non NEW), il freno non lo trova più (cerca solo i NEW) e resta agli amministratori: l'avviso lo dice. Il cliente è avvisato al giro dopo, non nello stesso giro del guasto."
+    },
+    {
+      "id": "R09-012",
+      "esito": "riparato",
+      "commit": "0d96baa7c3336d7fa9ce156d8a29cd9b5c71bcdb",
+      "file_toccati": [
+        "lib/queries/cruscotto-oggi.ts",
+        "app/admin/today/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-negozi-in-attesa.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-negozi-in-attesa.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 0d96baa7c3336d7fa9ce156d8a29cd9b5c71bcdb^ --file lib/queries/cruscotto-oggi.ts,app/admin/today/page.tsx --prove tests/unit/riparazione-r09-negozi-in-attesa.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il conteggio dei negozi in attesa filtra approval_status = 'pending' (come la pagina degli utenti a cui porta il riquadro) invece di is_approved = false, che contava anche i sospesi. L'etichetta del riquadro passa da «Seller pending» a «Negozi in attesa».",
+      "chiave": "dati-analytics|nel cruscotto di oggi i negozi «in attesa» comprendono anche quelli sospesi"
+    },
+    {
+      "id": "R09-013",
+      "esito": "riparato",
+      "commit": "5aec7511cb27cd7cbf53fbe6dff875af3882ef84",
+      "file_toccati": [
+        "lib/ordini/veloce-non-confermata.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-freno-scadenza-passata.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-freno-scadenza-passata.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5aec7511cb27cd7cbf53fbe6dff875af3882ef84^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r09-freno-scadenza-passata.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "In nonSiSposta, se la scadenza dell'ordine è già passata il freno non scrive né al cliente né agli amministratori e restituisce 'scaduto' (contato in giaScaduti): l'ordine lo annulla expire-stale-orders (ogni 30 minuti), che avvisa lui.",
+      "chiave": "deploy-sre|il giorno che si riaccendono i lavori, il cliente di un ordine veloce vecchio riceve una scadenza già passata"
+    },
+    {
+      "id": "R09-014",
+      "esito": "riparato",
+      "commit": "d91bd8208d9bd50d0975f0778f0e25f4a4c65dd4",
+      "file_toccati": [
+        "app/orders/[id]/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-tappe-nell-ora-di-piacenza.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-tappe-nell-ora-di-piacenza.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base d91bd8208d9bd50d0975f0778f0e25f4a4c65dd4^ --file app/orders/[id]/page.tsx --prove tests/unit/riparazione-r09-tappe-nell-ora-di-piacenza.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Le ore delle tappe in «Stato dell'ordine» si scrivono con timeZone Europe/Rome (FUSO_PIACENZA), giorno/mese e ore:minuti, senza secondi. Prima seguivano il fuso del telefono.",
+      "chiave": "frontend-ux|nel dettaglio dell'ordine gli orari delle tappe seguono il fuso del telefono invece dell'ora di piacenza"
+    },
+    {
+      "id": "R09-015",
+      "esito": "riparato",
+      "commit": "221ef51fe249cbf1eee6a38de742288c010562fc",
+      "file_toccati": [
+        "app/admin/disputes/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-reclami.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-reclami.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 221ef51fe249cbf1eee6a38de742288c010562fc^ --file app/admin/disputes/page.tsx --prove tests/unit/riparazione-r09-reclami.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il testo del reclamo e le note della risoluzione vanno a capo anche dentro un link lungo (break-words e overflow-wrap:anywhere). Quando la lettura torna 100 reclami (il limite, ora LIMITE_RECLAMI) la pagina dice che ce ne sono altri più vecchi e che i numeri contano solo questi. Le etichette dicono cliente e venditore invece di buyer e seller.",
+      "chiave": "layout-responsive|nei reclami, un link incollato dal cliente fa scorrere di lato tutta la pagina sul telefono, e oltre 100 reclami il conteggio si ferma a 100 senza dirlo",
+      "insieme_a": [
+        "R09-005"
+      ]
+    },
+    {
+      "id": "R09-016",
+      "esito": "riparato",
+      "commit": "f776588bc668a1d862404af2da79eca7e119c192",
+      "file_toccati": [
+        "components/Navbar.tsx",
+        "components/LocationPill.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-ricerca-della-testata-su-tablet.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-ricerca-della-testata-su-tablet.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base f776588bc668a1d862404af2da79eca7e119c192^ --file components/Navbar.tsx,components/LocationPill.tsx --prove tests/unit/riparazione-r09-ricerca-della-testata-su-tablet.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Fra md e lg la pillola dell'indirizzo mostra solo il CAP. «Registrati», «Ordini», «Consegne» e «Admin» diventano icone, col nome solo per i lettori di schermo. Il campo di ricerca ha min-w-0 flex-1 e lo spazio fra gli elementi scende a gap-3. Misurato in Chromium sul sito acceso in locale, pagina /shipping: il campo passa da 152 px a 357 px a 768, 820 e 1023 px (l'obiettivo era almeno 280). A 390 resta 366 px.",
+      "chiave": "layout-responsive|su tablet e telefono girato la ricerca nella testata è così stretta che si legge solo «ce»"
+    },
+    {
+      "id": "R09-017",
+      "esito": "riparato",
+      "commit": "9c8c671c6751d041a0c30820efb3fffec47b4919",
+      "file_toccati": [
+        "app/admin/credito-del-rimborso/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-credito-senza-rete.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-credito-senza-rete.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 9c8c671c6751d041a0c30820efb3fffec47b4919^ --file app/admin/credito-del-rimborso/page.tsx --prove tests/unit/riparazione-r09-credito-senza-rete.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Se fetch cade (rete assente) la pagina dice «Non riesco a collegarmi: controlla la connessione e riprova.» invece di «Failed to fetch». Una risposta che non è JSON non fa più crollare la lettura. L'errore si mostra con ErrorState e il suo pulsante Riprova, che rilegge (refetch).",
+      "chiave": "microcopy|se la rete cade, la pagina del controllo del credito di un rimborso mostra «failed to fetch» e nessun modo di riprovare"
+    },
+    {
+      "id": "R09-018",
+      "esito": "parziale",
+      "commit": "5fd36a19310b75d53a1dc0fc87c4b50481456808",
+      "file_toccati": [
+        "app/admin/sponsored/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-sponsorizzati-in-italiano.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-sponsorizzati-in-italiano.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 5fd36a19310b75d53a1dc0fc87c4b50481456808^ --file app/admin/sponsored/page.tsx --prove tests/unit/riparazione-r09-sponsorizzati-in-italiano.test.tsx --json"
+      },
+      "copre_tutta_la_voce": false,
+      "cosa_ho_fatto": "Nella tabella le intestazioni sono in italiano (Negozio, Posizione, Budget al giorno, Visualizzazioni, Clic su 100 visualizzazioni). Le posizioni sono tradotte (home_top → «In cima alla home», ecc.) e la percentuale ha la virgola.",
+      "chiave": "microcopy|nella pagina delle sponsorizzazioni colonne e valori sono in inglese e in codici del database",
+      "cosa_resta": "I quattro riquadri in cima («Impressions», «CTR medio 3.55%») li scrive lib/admin/vista-delle-campagne.ts, che non è mio.",
+      "serve_file_altrui": [
+        {
+          "file": "lib/admin/vista-delle-campagne.ts",
+          "modifica": "Riquadri (~righe 241-252): etichetta `Impressions${coda}` → `Visualizzazioni${coda}`; `${parziale ? 'CTR' : 'CTR medio'}` → `${parziale ? 'Clic su 100 visualizzazioni' : 'Clic su 100 visualizzazioni (media)'}`; valore `${numeri.ctr.toFixed(2)}%` → `${numeri.ctr.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`. Aggiornare i-riquadri-degli-sponsorizzati-non-chiamano-totale-un-pezzo.test.ts se fissa le etichette."
+        }
+      ]
+    },
+    {
+      "id": "R09-019",
+      "esito": "riparato",
+      "commit": "94832fd655ae3a4fa8dfe241592c4b13da4c5165",
+      "file_toccati": [
+        "app/profile/achievements/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-traguardi.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-traguardi.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 94832fd655ae3a4fa8dfe241592c4b13da4c5165^ --file app/profile/achievements/page.tsx --prove tests/unit/riparazione-r09-traguardi.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il livello si scrive con TIER_META[a.tier].label (Bronzo/Argento/Oro/Platino) da lib/loyalty.ts. Le due letture lanciano l'errore invece di scartarlo. Se una cade, la pagina mostra ErrorState con Riprova invece di «0 / 0 sbloccati · 0% completato».",
+      "chiave": "microcopy|nella pagina dei traguardi il livello compare in inglese («gold») e se la lettura fallisce dice «0 su 0»"
+    },
+    {
+      "id": "R09-020",
+      "esito": "riparato",
+      "commit": "b3fcb0ea2324d6a25ea170b84849b97be5b6acce",
+      "file_toccati": [
+        "app/rider/earnings/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-guadagni-del-fattorino.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-guadagni-del-fattorino.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base b3fcb0ea2324d6a25ea170b84849b97be5b6acce^ --file app/rider/earnings/page.tsx --prove tests/unit/riparazione-r09-guadagni-del-fattorino.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Sotto le cifre del riquadro «Compensi sul tuo IBAN» una riga dice quando parte il bonifico di una consegna con carta, presa da fraseAttesaBonifico (la stessa fonte della pagina Aiuto). Dice anche che senza IBAN collegato i compensi restano in attesa.",
+      "chiave": "microcopy|la pagina guadagni del fattorino non dice quando arriva il bonifico"
+    },
+    {
+      "id": "R09-021",
+      "esito": "riparato",
+      "commit": "05521e48033ee1de698b8ccf429870363f86d4c4",
+      "file_toccati": [
+        "app/seller/help/domande.ts",
+        "app/seller/help/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-aiuto-dei-negozi.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-aiuto-dei-negozi.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 05521e48033ee1de698b8ccf429870363f86d4c4^ --file app/seller/help/domande.ts,app/seller/help/page.tsx --prove tests/unit/riparazione-r09-aiuto-dei-negozi.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nelle risposte «rider» diventa «fattorino», «evaderlo» diventa «prepararlo» e «compensato sul payout successivo» diventa «tolto dal prossimo pagamento che ti facciamo». La frase sulle sponsorizzate compare solo con ABBONAMENTO_NEGOZI_ACCESO. Le domande (<summary>) hanno min-h-11 e un po' di spazio in verticale. Resta «Pronto per il rider» fra virgolette, perché è l'etichetta vera del pulsante (lib/order-status.ts, non mio): è in nuovi_difetti_visti.",
+      "chiave": "microcopy|nell'aiuto per i negozi restano «payout» ed «evaderlo», e una risposta parla di prodotti sponsorizzati che oggi sono sospesi"
+    },
+    {
+      "id": "R09-022",
+      "esito": "riparato",
+      "commit": "2070f1c171c3068f024423e753e7aed433eb7123",
+      "file_toccati": [
+        "app/seller/help/page.tsx"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-aiuto-senza-academy.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-aiuto-senza-academy.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 2070f1c171c3068f024423e753e7aed433eb7123^ --file app/seller/help/page.tsx --prove tests/unit/riparazione-r09-aiuto-senza-academy.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il riquadro «Guide approfondite (prossimamente) · academy con video tutorial» diventa «Non trovi la risposta? Per qualunque dubbio scrivi all'assistenza.»",
+      "chiave": "microcopy|l'aiuto per i negozi promette un'«academy con video tutorial» che nessun piano prevede"
+    },
+    {
+      "id": "R09-023",
+      "esito": "riparato",
+      "commit": "621e45e92bc6f28357ab18594af430b0eb356f16",
+      "file_toccati": [
+        "lib/ordini/riepilogo-ordine.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-un-nome-per-la-consegna-regalata.test.tsx"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-un-nome-per-la-consegna-regalata.test.tsx",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base 621e45e92bc6f28357ab18594af430b0eb356f16^ --file lib/ordini/riepilogo-ordine.ts --prove tests/unit/riparazione-r09-un-nome-per-la-consegna-regalata.test.tsx --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Nel riepilogo dell'ordine, con spedizione e consegna a zero la riga si chiama VOCE_CONSEGNA («Consegna MyCity») e la cifra è «Gratis», come in cassa (OrderSummary). Prima era «Spedizione GRATUITA». Aggiornate tre prove esistenti che importano riepilogo-ordine e fissavano la scritta vecchia: la-consegna-da-3-euro-ha-un-nome-solo-e-non-e-mai-gratis.test.tsx, i-conti-dell-ordine-non-tornavano.test.ts e minori-s02-riepilogo.test.ts. Dove dicevano «niente GRATUITA» ora dicono «niente GRATUITA né Gratis», quindi non si indeboliscono.",
+      "chiave": "microcopy|con la consegna regalata la cassa la chiama «consegna mycity · gratis» e la pagina dell'ordine «spedizione gratuita»: due nomi per la stessa riga"
+    },
+    {
+      "id": "R09-025",
+      "esito": "riparato",
+      "commit": "bb9ba8849975207a24b4d0a997467aaefc8106bd",
+      "file_toccati": [
+        "lib/ordini/veloce-non-confermata.ts"
+      ],
+      "prova_file": [
+        "tests/unit/riparazione-r09-freno-fermo-stato-vero.test.ts"
+      ],
+      "prova_comando": "npx vitest run tests/unit/riparazione-r09-freno-fermo-stato-vero.test.ts",
+      "prova_tipo": "comando",
+      "prova_eseguita": true,
+      "rimessa": {
+        "esito": "regge",
+        "uscita": 0,
+        "comando": "node ../ad-mycity/cervello/prova-rimessa.mjs --repo . --base bb9ba8849975207a24b4d0a997467aaefc8106bd^ --file lib/ordini/veloce-non-confermata.ts --prove tests/unit/riparazione-r09-freno-fermo-stato-vero.test.ts --json"
+      },
+      "copre_tutta_la_voce": true,
+      "cosa_ho_fatto": "Il rimborso di un'altra causa ha già una frase sua (non è «già reso»): c'era prima. Restavano due cose. L'avviso «fermo a metà» diceva «Già fatto in questo giro» anche per un rimborso di un giro di prima: ora dice «Lo stato adesso». L'avviso «fermo prima di cominciare» diceva solo «niente»: ora dice, ordine per ordine, se risultano già resi soldi sulla carta (dalla riga letta in questo giro) e che non vanno resi di nuovo.",
+      "chiave": "microcopy|l avviso «freno fermo a metà» elenca cosa ha fatto quel giro e non lo stato vero: un rimborso di un altra causa compare come «già reso sulla carta», e al secondo guasto può dire «niente» con l euro già reso"
+    }
+  ],
+  "nuovi_difetti_visti": [
+    {
+      "titolo": "Il pulsante del negozio dice «Pronto per il rider»: in tutto il resto del sito è «fattorino»",
+      "dimensione": "microcopy",
+      "severita": "minore",
+      "file": "lib/order-status.ts:45",
+      "descrizione": "etichettaPronto(false) restituisce «Pronto per il rider», e ASSIGNED si chiama «Rider in arrivo» (:52). L aiuto per i negozi deve citare l etichetta vera, quindi «rider» resta lì finché non cambia l etichetta."
+    }
+  ],
+  "domande_per_nicola": [
+    "R09-002: la regola di scrittura dei prodotti troppo larga si chiude in due passi, in quest ordine: prima la rotta del salvataggio prodotto (app/api/seller/products/[id]) scrive col client amministrativo dopo il controllo del proprietario, poi una migrazione nella fascia 330 toglie la regola. Va bene questo ordine, e in quale onda?"
+  ],
+  "conto": {
+    "agenti": 0,
+    "nota": ""
+  }
+}
