@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { APIConnectionTimeoutError } from '@anthropic-ai/sdk';
 
 /** R04-005 — se il lotto parte ma la riga non si aggancia, la rotta dice lo stato vero. */
 
