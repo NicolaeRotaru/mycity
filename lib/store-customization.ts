@@ -256,10 +256,14 @@ export type SocialLink = { key: string; label: string; href: string };
 function handleDaLink(v: string | undefined, dominio: RegExp): string | undefined {
   if (v === undefined) return v;
   const t = v.trim();
-  const m = t.match(new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${dominio.source}\\/@?([A-Za-z0-9._-]+)`, 'i'));
+  // R11-016 — Il link copiato dall'app («…/panequotidiano?igsh=…») porta dietro un pezzo dopo il
+  // «?»: prima bloccava tutto. Per un link di profilo il pezzo dopo «?» o «#» non serve.
+  const senzaCoda = t.replace(/[?#].*$/, '');
+  const m = senzaCoda.match(new RegExp(`^(?:https?:\\/\\/)?(?:www\\.|m\\.)?${dominio.source}\\/@?([A-Za-z0-9._-]+)\\/?$`, 'i'));
   // «profile.php?id=…», «/p/…», «/reel/…», «/share/…» non sono il nome del profilo: si lascia
   // il valore com'è, e il controllo lo ferma invece di salvare un link sbagliato.
-  if (m && (/^(profile\.php|p|reel|reels|share|groups|pages|watch)$/i.test(m[1]) || /\?/.test(t))) return t;
+  if (m && /^(profile\.php|p|reel|reels|share|groups|pages|watch)$/i.test(m[1])) return t;
+  if (!m && dominio.test(t)) return t; // un link con altro dopo il nome (/p/…, /reel/…): lo ferma il controllo
   return (m ? m[1] : t).replace(/^@+/, '');
 }
 
@@ -295,6 +299,31 @@ export function normalizzaSocials(s: StoreCustomization['socials']): StoreCustom
     out.whatsapp = s.whatsapp.trim() ? (n ? `+${n}` : s.whatsapp.trim()) : '';
   }
   return out;
+}
+
+/**
+ * R11-016 — UN SOCIAL SCRITTO MALE NON FERMA TUTTA LA VETRINA.
+ *
+ * Se fallisce un campo social, prima non partiva niente: ne' nome, ne' logo, ne'
+ * descrizione, ne' colore. Qui si tolgono solo i campi social che non vanno,
+ * dicendo quali e perche'; il resto si salva.
+ */
+export function separaSocialSbagliati(c: StoreCustomization): {
+  pulita: StoreCustomization;
+  scartati: Partial<Record<keyof NonNullable<StoreCustomization['socials']>, string>>;
+} {
+  const esito = storeCustomizationSchema.safeParse(c);
+  if (esito.success) return { pulita: esito.data, scartati: {} };
+  const scartati: Partial<Record<keyof NonNullable<StoreCustomization['socials']>, string>> = {};
+  for (const problema of esito.error.issues) {
+    if (problema.path[0] !== 'socials' || typeof problema.path[1] !== 'string') {
+      return { pulita: c, scartati: {} };
+    }
+    scartati[problema.path[1] as keyof NonNullable<StoreCustomization['socials']>] ??= problema.message;
+  }
+  const socials = { ...(c.socials ?? {}) } as Record<string, unknown>;
+  for (const k of Object.keys(scartati)) delete socials[k];
+  return { pulita: { ...c, socials: socials as StoreCustomization['socials'] }, scartati };
 }
 
 /** Il campo della personalizzazione a cui si riferisce un errore, detto in parole. */

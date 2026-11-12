@@ -19,7 +19,7 @@ import { Input, Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { StoreHours } from '@/lib/store-hours';
-import { campoDellErrore, normalizzaSocials, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
+import { campoDellErrore, normalizzaSocials, separaSocialSbagliati, storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
 import CustomizationSection from './seller/CustomizationSection';
 import AccentPicker from './seller/AccentPicker';
 import CoverPicker from './seller/CoverPicker';
@@ -125,6 +125,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
   const [hours, setHours] = useState<StoreHours>(defaultValues?.storeHours ?? {});
   const [custom, setCustom] = useState<StoreCustomization>(defaultValues?.storeCustomization ?? {});
   const [customError, setCustomError] = useState<string | null>(null);
+  const [socialSbagliati, setSocialSbagliati] = useState<Partial<Record<string, string>>>({});
 
   const storeName = watch('storeName');
 
@@ -216,13 +217,21 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
       // Link incollati, @, sito senza https e WhatsApp senza +39 si correggono da soli.
       const corretta: StoreCustomization = { ...custom, socials: normalizzaSocials(custom.socials) };
       setCustom(corretta);
-      const parsed = storeCustomizationSchema.safeParse(corretta);
+      // R11-016 — Un social scritto male non ferma più tutta la vetrina: quel campo si toglie,
+      // il motivo compare sotto il campo e la sezione si apre; il resto si salva.
+      const { pulita, scartati } = separaSocialSbagliati(corretta);
+      setSocialSbagliati(scartati);
+      const parsed = storeCustomizationSchema.safeParse(pulita);
       if (!parsed.success) {
         const problema = parsed.error.issues[0];
         const campo = problema ? campoDellErrore(problema.path) : null;
         // Il messaggio dice quale campo: prima arrivava «Handle non valido» e basta.
         setCustomError(`${campo ? `${campo}: ` : ''}${problema?.message ?? 'Personalizzazione non valida'}`);
         return;
+      }
+      const nomiScartati = Object.keys(scartati).map((k) => campoDellErrore(['socials', k]) ?? k);
+      if (nomiScartati.length > 0) {
+        toast.warning(`${nomiScartati.join(', ')}: non salvato, il resto sì. Guarda sotto il campo.`);
       }
       customData = parsed.data;
     }
@@ -374,8 +383,9 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all', 
             title="Social e contatti"
             description="Instagram, Facebook, TikTok, WhatsApp, sito"
             icon={<Share2 size={18} />}
+            apri={Object.keys(socialSbagliati).length > 0}
           >
-            <SocialLinksFields value={custom.socials} onChange={(next) => setCustom({ ...custom, socials: next })} />
+            <SocialLinksFields value={custom.socials} errori={socialSbagliati} onChange={(next) => setCustom({ ...custom, socials: next })} />
           </CustomizationSection>
 
           <CustomizationSection title="Vetrina prodotti" description="Prodotti in evidenza, annuncio e badge" icon={<Store size={18} />}>
