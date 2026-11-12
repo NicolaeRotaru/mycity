@@ -110,8 +110,8 @@ export default function SOSButton({ orderId }: Props) {
     // squillando. Un fattorino che ha appena premuto SOS puo' restare ad aspettare una
     // chiamata che nessuno ha fatto partire, nel momento in cui conta di piu'.
     //
-    // Venti righe piu' in basso il dialogo di conferma lo diceva gia' giusto: «Verra' avviata
-    // la chiamata al 112». Il testo esatto era li' dentro, e questi due non l'avevano preso.
+    // R01-007 (12/11/2026) — Anche il dialogo di conferma diceva «Verra' avviata la chiamata al
+    // 112»: adesso dice che si apre il tastierino e che la chiamata parte premendo CHIAMA.
     window.location.href = 'tel:112';
     setSending(true);
 
