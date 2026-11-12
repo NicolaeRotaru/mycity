@@ -28,6 +28,10 @@ function databaseCon361() {
     chiamate,
     rpc: async (nome: string, args: Record<string, unknown>) => {
       chiamate.push({ nome, ...args });
+      if (nome === 'chiudi_rivendicazioni_del_cliente') {
+        rivendicati.delete(`${args.p_code}|${args.p_user_id}`);
+        return { data: 1, error: null };
+      }
       if (nome !== 'claim_coupon') return { data: null, error: { message: 'inatteso' } };
       if (!('p_user_id' in args)) return { data: true, error: null }; // firma vecchia: non sa chi
       const chiave = `${args.p_code}|${args.p_user_id}`;
@@ -75,5 +79,12 @@ describe('R12-004 il benvenuto non si prende due volte con due schede', () => {
     const esito = await rivendicaIlCodiceSconto(libere, { admin: vecchio, lettura }, richiesta('maria'));
     expect(esito.ok).toBe(true);
     expect(vecchio.chiamate).toHaveLength(2);
+  });
+
+  it('chi torna indietro dalla pagina di pagamento (cassa abbandonata liberata) riprende il benvenuto', async () => {
+    const a = await rivendicaIlCodiceSconto(libere, { admin: db, lettura }, richiesta('maria'));
+    const tornata = { liberati: ['cs_abbandonata'], ancoraPagabili: [] };
+    const b = await rivendicaIlCodiceSconto(tornata, { admin: db, lettura }, richiesta('maria'));
+    expect(a.ok && b.ok, 'resta bloccata due ore con «Coupon non disponibile»').toBe(true);
   });
 });

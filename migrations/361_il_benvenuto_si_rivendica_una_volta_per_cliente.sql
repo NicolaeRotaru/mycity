@@ -36,7 +36,11 @@
 CREATE TABLE IF NOT EXISTS public.coupon_redemptions (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   coupon_id   uuid NOT NULL REFERENCES public.coupons(id) ON DELETE CASCADE,
-  user_id     uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  -- Nessuna chiave verso auth.users apposta: la riga e' un lucchetto di due ore,
+  -- non un dato da conservare. Le righe di piu' di un giorno le cancella la
+  -- rivendicazione stessa (vedi claim_coupon), quindi non resta niente da
+  -- esportare ne' da cancellare con l'account.
+  user_id     uuid NOT NULL,
   claimed_at  timestamptz NOT NULL DEFAULT now(),
   released_at timestamptz
 );
@@ -83,6 +87,9 @@ BEGIN
   END IF;
 
   UPDATE public.coupons SET uses_count = coalesce(uses_count, 0) + 1 WHERE id = v_id;
+
+  -- Pulizia: un lucchetto di piu' di un giorno non serve piu' a niente.
+  DELETE FROM public.coupon_redemptions WHERE claimed_at < now() - interval '1 day';
 
   IF v_primo AND p_user_id IS NOT NULL THEN
     INSERT INTO public.coupon_redemptions (coupon_id, user_id) VALUES (v_id, p_user_id);
@@ -141,3 +148,37 @@ BEGIN
   RETURN coalesce(nuovo, 0);
 END;
 $function$;
+
+-- 12/11/2026 (collaudo R12-004) — I rilasci che non conoscono l'ordine
+-- (`release_coupon(p_code)`: cassa con la carta abbandonata, tetto dei contanti,
+-- carrello scaduto) scalano il contatore ma non sanno di chi era la
+-- rivendicazione: chi tornava indietro dalla pagina di Stripe e riapriva la cassa
+-- restava senza benvenuto per due ore. Il sito, quando ha appena liberato le
+-- casse abbandonate DI QUEL CLIENTE, chiude le sue rivendicazioni aperte del
+-- codice prima di rivendicarlo di nuovo.
+CREATE OR REPLACE FUNCTION public.chiudi_rivendicazioni_del_cliente(p_code text, p_user_id uuid)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE chiuse int;
+BEGIN
+  IF p_code IS NULL OR p_user_id IS NULL THEN
+    RETURN 0;
+  END IF;
+  UPDATE public.coupon_redemptions r
+     SET released_at = now()
+    FROM public.coupons c
+   WHERE r.coupon_id = c.id
+     AND c.code = upper(trim(p_code))
+     AND r.user_id = p_user_id
+     AND r.released_at IS NULL;
+  GET DIAGNOSTICS chiuse = ROW_COUNT;
+  RETURN chiuse;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.chiudi_rivendicazioni_del_cliente(text, uuid) FROM public;
+REVOKE EXECUTE ON FUNCTION public.chiudi_rivendicazioni_del_cliente(text, uuid) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.chiudi_rivendicazioni_del_cliente(text, uuid) FROM authenticated;

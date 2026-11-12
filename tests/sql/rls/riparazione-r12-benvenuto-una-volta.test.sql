@@ -67,6 +67,25 @@ SELECT public.release_coupon('BENVENUTO-R12', 'e1240000-0000-0000-0000-000000000
 INSERT INTO esiti SELECT '5 dopo l annullo il codice torna a Maria',
   public.claim_coupon('BENVENUTO-R12', 'e1240000-0000-0000-0000-000000000002'), '';
 
+-- ⑤b cassa abbandonata: il rilascio senza ordine scala il contatore ma non sa
+--     di chi era; il sito chiude le rivendicazioni di quel cliente e lui riprende
+SELECT public.claim_coupon('BENVENUTO-R12', 'e1240000-0000-0000-0000-000000000003') AS gia_preso;
+SELECT public.release_coupon('BENVENUTO-R12');
+INSERT INTO esiti SELECT '5b senza chiudere la sua rivendicazione resta bloccato',
+  NOT public.claim_coupon('BENVENUTO-R12', 'e1240000-0000-0000-0000-000000000003'), '';
+SELECT public.chiudi_rivendicazioni_del_cliente('BENVENUTO-R12', 'e1240000-0000-0000-0000-000000000003');
+INSERT INTO esiti SELECT '5c chiusa la sua rivendicazione dopo la cassa abbandonata riprende il benvenuto',
+  public.claim_coupon('BENVENUTO-R12', 'e1240000-0000-0000-0000-000000000003'), '';
+
+-- ⑤d pulizia: le righe di più di un giorno spariscono alla prossima rivendicazione
+INSERT INTO public.coupon_redemptions (coupon_id, user_id, claimed_at)
+SELECT id, 'e1240000-0000-0000-0000-000000000004', now() - interval '3 days'
+  FROM public.coupons WHERE code = 'BENVENUTO-R12';
+SELECT public.claim_coupon('ESTATE-R12', 'e1240000-0000-0000-0000-000000000004');
+SELECT public.claim_coupon('BENVENUTO-R12', 'e1240000-0000-0000-0000-000000000001');
+INSERT INTO esiti SELECT '5d nessuna rivendicazione resta più di un giorno', count(*) = 0, count(*)::text
+  FROM public.coupon_redemptions WHERE claimed_at < now() - interval '1 day';
+
 -- ⑥ un codice normale
 INSERT INTO esiti SELECT '6 un codice normale si rivendica ancora',
   public.claim_coupon('ESTATE-R12', 'e1240000-0000-0000-0000-000000000002')
@@ -80,7 +99,8 @@ INSERT INTO esiti SELECT '7 i clienti non leggono le rivendicazioni',
   AND NOT has_table_privilege('anon', 'public.coupon_redemptions', 'SELECT'), '';
 INSERT INTO esiti SELECT '7b i clienti non chiamano la rivendicazione',
   NOT has_function_privilege('authenticated', 'public.claim_coupon(text, uuid)', 'EXECUTE')
-  AND NOT has_function_privilege('anon', 'public.claim_coupon(text, uuid)', 'EXECUTE'), '';
+  AND NOT has_function_privilege('anon', 'public.claim_coupon(text, uuid)', 'EXECUTE')
+  AND NOT has_function_privilege('authenticated', 'public.chiudi_rivendicazioni_del_cliente(text, uuid)', 'EXECUTE'), '';
 
 SELECT nome, CASE WHEN ok THEN 'ok' ELSE 'ROTTO' END AS esito, dettaglio FROM esiti ORDER BY nome;
 

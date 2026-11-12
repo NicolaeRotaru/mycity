@@ -158,6 +158,18 @@ export async function rivendicaIlCodiceSconto(
   // funzione a due argomenti (migrazione 361) blocca la seconda rivendicazione
   // dello stesso cliente. Finché la 361 non è applicata, PostgREST risponde
   // PGRST202 («funzione inesistente») e si torna alla firma di prima.
+  //
+  // Collaudo del 12/11 — le casse abbandonate appena liberate al passo ① erano
+  // di questo cliente, e il loro rilascio (`release_coupon(p_code)`) non sa di
+  // chi era la rivendicazione: senza questa riga chi tornava indietro dalla
+  // pagina di pagamento restava senza benvenuto per due ore. Se la funzione
+  // non c'è (361 non applicata) non c'è nemmeno il lucchetto: si va avanti.
+  if (esito.coupon.first_order_only && richiesta.userId && (riserveLiberate?.liberati ?? []).length > 0) {
+    await clienti.admin.rpc('chiudi_rivendicazioni_del_cliente', {
+      p_code: esito.coupon.code,
+      p_user_id: richiesta.userId,
+    });
+  }
   let { data: preso, error } = await clienti.admin.rpc('claim_coupon', {
     p_code: esito.coupon.code,
     p_user_id: richiesta.userId,
